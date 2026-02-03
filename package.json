@@ -28,6 +28,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.24.0",
+    "@inquirer/prompts": "^8.2.0",
     "@mariozechner/pi-ai": "^0.51.2",
     "@sinclair/typebox": "^0.34.48",
     "@whiskeysockets/baileys": "^6.5.0",
@@ -49,7 +50,7 @@
   },
   "devDependencies": {
     "@types/mime-types": "^2.1.4",
-    "@types/node": "^20.14.0",
+    "@types/node": "^20.19.31",
     "@types/node-cron": "^3.0.11",
     "@types/uuid": "^9.0.0",
     "@types/ws": "^8.5.10",

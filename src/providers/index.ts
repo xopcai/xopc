@@ -8,8 +8,9 @@
 import * as PiAI from '@mariozechner/pi-ai';
 import type { LLMProvider } from '../types/index.js';
 import type { Model, Api, KnownProvider } from '@mariozechner/pi-ai';
+import { createPiAIProvider } from './pi-ai.js';
 
-export { PiAI };
+export { PiAI, createPiAIProvider };
 export type { LLMProvider, Model, Api, KnownProvider };
 
 /**
@@ -18,7 +19,5 @@ export type { LLMProvider, Model, Api, KnownProvider };
 export function createProvider(config: { providers?: Record<string, any>; agents?: { defaults?: { model?: string } } }): LLMProvider {
   const providers = config.providers || {};
   const model = config.agents?.defaults?.model || 'gpt-4o';
-
-  const { createPiAIProvider } = require('./pi-ai.js');
   return createPiAIProvider(providers, model);
 }

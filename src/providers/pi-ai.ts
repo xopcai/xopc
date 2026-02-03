@@ -25,6 +25,13 @@ const MODEL_TO_PROVIDER: Record<string, PiAI.KnownProvider> = {
   'command-r-': 'cerebras', 'minimax-': 'minimax',
 };
 
+// Known models with correct casing (pi-ai uses specific casing)
+const KNOWN_MODEL_IDS: Record<string, string> = {
+  'minimax-m2.1': 'MiniMax-M2.1',
+  'minimax-m2': 'MiniMax-M2',
+  'minimax-m1': 'MiniMax-M1',
+};
+
 // ============================================================================
 // Utility Functions
 // ============================================================================
@@ -41,9 +48,14 @@ function detectProvider(modelId: string): PiAI.KnownProvider {
 function parseModelId(fullModelId: string): { modelId: string; provider: PiAI.KnownProvider } {
   if (fullModelId.includes('/')) {
     const [provider, modelId] = fullModelId.split('/');
-    return { modelId, provider: provider as PiAI.KnownProvider };
+    // Use known model ID mapping for correct casing
+    const normalizedModelId = KNOWN_MODEL_IDS[modelId.toLowerCase()] || modelId;
+    return { modelId: normalizedModelId, provider: provider as PiAI.KnownProvider };
   }
-  return { modelId: fullModelId, provider: detectProvider(fullModelId) };
+  const detectedProvider = detectProvider(fullModelId);
+  // Use known model ID mapping for correct casing
+  const normalizedModelId = KNOWN_MODEL_IDS[fullModelId.toLowerCase()] || fullModelId;
+  return { modelId: normalizedModelId, provider: detectedProvider };
 }
 
 // ============================================================================
