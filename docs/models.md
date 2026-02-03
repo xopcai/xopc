@@ -1,8 +1,6 @@
 # 模型配置
 
-xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供商和数百种模型。
-
-数据来源：[models.dev](https://models.dev) - AI 模型开放数据库
+xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供商。
 
 ## 配置文件
 
@@ -39,7 +37,7 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 | `claude-`、`sonnet`、`haiku` | Anthropic |
 | `gemini-`、`gemma-` | Google |
 | `mistral-`、`mixtral-`、`ministral-` | Mistral |
-| `llama-` | Meta (via Groq/AIHubMix) |
+| `llama-` | Meta (via Groq) |
 | `doubao-` | ByteDance |
 | `glm-`、`chatglm-` | Zhipu (智谱) |
 | `qwen-`、`qwq-`、`qvq-` | Alibaba |
@@ -53,22 +51,18 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 ## OpenAI
 
-| 模型 | 输入 ($/M) | 输出 ($/M) | 上下文 | Reasoning |
-|------|-----------|-----------|--------|-----------|
-| `gpt-4o` | $2.50 | $10.00 | 128K | ❌ |
-| `gpt-4o-mini` | $0.15 | $0.60 | 128K | ❌ |
-| `gpt-4o-audio-preview` | - | - | 128K | ❌ |
-| `gpt-4.1` | $2.00 | $8.00 | 1M | ❌ |
-| `gpt-4.1-mini` | $0.40 | $1.60 | 1M | ❌ |
-| `gpt-4.1-nano` | $0.10 | $0.40 | 1M | ❌ |
-| `gpt-5` | $1.25 | $10.00 | 400K | ✅ |
-| `gpt-5-mini` | $0.25 | $2.00 | 400K | ✅ |
-| `gpt-5-pro` | $15.00 | $120.00 | 400K | ✅ |
-| `o1` | $15.00 | $60.00 | 200K | ✅ |
-| `o1-mini` | $1.10 | $4.40 | 200K | ✅ |
-| `o3` | $2.00 | $8.00 | 200K | ✅ |
-| `o3-mini` | $1.10 | $4.40 | 200K | ✅ |
-| `o4-mini` | $1.10 | $4.40 | 200K | ✅ |
+| 模型 | 上下文 | Reasoning |
+|------|--------|-----------|
+| `gpt-4o` | 128K | ❌ |
+| `gpt-4o-mini` | 128K | ❌ |
+| `gpt-4.1` | 1M | ❌ |
+| `gpt-4.1-mini` | 1M | ❌ |
+| `gpt-5` | 400K | ✅ |
+| `gpt-5.1` | 400K | ✅ |
+| `gpt-5.2` | 400K | ✅ |
+| `o1` | 200K | ✅ |
+| `o3` | 200K | ✅ |
+| `o3-mini` | 200K | ✅ |
 
 ### OpenAI 配置
 
@@ -91,16 +85,16 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 ## Anthropic
 
-| 模型 | 输入 ($/M) | 输出 ($/M) | 上下文 | Reasoning |
-|------|-----------|-----------|--------|-----------|
-| `claude-haiku-4-5` | $1.00 | $5.00 | 200K | ✅ |
-| `claude-sonnet-4-5` | $3.00 | $15.00 | 200K | ✅ |
-| `claude-opus-4-5` | $5.00 | $25.00 | 200K | ✅ |
-| `claude-sonnet-4` | $3.00 | $15.00 | 200K | ✅ |
-| `claude-opus-4-1` | $15.00 | $75.00 | 200K | ✅ |
-| `claude-3-7-sonnet` | $3.00 | $15.00 | 200K | ✅ |
-| `claude-3-5-sonnet` | $3.00 | $15.00 | 200K | ❌ |
-| `claude-3-haiku` | $0.25 | $1.25 | 200K | ❌ |
+| 模型 | 上下文 | Reasoning |
+|------|--------|-----------|
+| `claude-haiku-4-5` | 200K | ✅ |
+| `claude-sonnet-4-5` | 200K | ✅ |
+| `claude-opus-4-5` | 200K | ✅ |
+| `claude-sonnet-4` | 200K | ✅ |
+| `claude-opus-4-1` | 200K | ✅ |
+| `claude-3-7-sonnet` | 200K | ✅ |
+| `claude-3-5-sonnet` | 200K | ❌ |
+| `claude-3-haiku` | 200K | ❌ |
 
 ### Anthropic 配置
 
@@ -123,15 +117,13 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 ## Google Gemini
 
-| 模型 | 输入 ($/M) | 输出 ($/M) | 上下文 | Reasoning |
-|------|-----------|-----------|--------|-----------|
-| `gemini-2.5-pro` | $1.25 | $10.00 | 1M | ✅ |
-| `gemini-2.5-flash` | $0.30 | $2.50 | 1M | ✅ |
-| `gemini-2.5-flash-lite` | $0.07 | $0.30 | 2M | ❌ |
-| `gemini-2.0-flash-exp` | $0.10 | $0.40 | 1M | ❌ |
-| `gemini-2.0-pro-exp` | - | - | 2M | ✅ |
-| `gemini-3-pro-preview` | $2.00 | $12.00 | 1M | ✅ |
-| `gemma-3-27b` | $0.12 | $0.20 | 200K | ❌ |
+| 模型 | 上下文 | Reasoning |
+|------|--------|-----------|
+| `gemini-2.5-pro` | 1M | ✅ |
+| `gemini-2.5-flash` | 1M | ✅ |
+| `gemini-2.0-flash-exp` | 1M | ❌ |
+| `gemini-3-pro-preview` | 1M | ✅ |
+| `gemma-3-27b` | 200K | ❌ |
 
 ### Google 配置
 
@@ -154,12 +146,11 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 ## DeepSeek
 
-| 模型 | 输入 ($/M) | 输出 ($/M) | 上下文 | Reasoning |
-|------|-----------|-----------|--------|-----------|
-| `deepseek-chat` | $0.14 | $0.28 | 128K | ❌ |
-| `deepseek-reasoner` | $0.14 | $0.28 | 128K | ✅ |
-| `deepseek-v3` | $0.14 | $0.28 | 128K | ❌ |
-| `deepseek-v3.1` | $0.14 | $0.28 | 131K | ✅ |
+| 模型 | 上下文 | Reasoning |
+|------|--------|-----------|
+| `deepseek-chat` | 128K | ❌ |
+| `deepseek-reasoner` | 128K | ✅ |
+| `deepseek-v3` | 128K | ❌ |
 
 ### DeepSeek 配置
 
@@ -183,11 +174,11 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 ## MiniMax
 
-| 模型 | 输入 ($/M) | 输出 ($/M) | 上下文 | Reasoning |
-|------|-----------|-----------|--------|-----------|
-| `minimax-m2.1` | $0.30 | $1.20 | 1M | ❌ |
-| `minimax-m2` | $0.33 | $1.32 | 1M | ❌ |
-| `minimax-m1` | $0.13 | $1.25 | 1M | ❌ |
+| 模型 | 上下文 |
+|------|--------|
+| `minimax-m2.1` | 1M |
+| `minimax-m2` | 1M |
+| `minimax-m1` | 1M |
 
 ### MiniMax 配置
 
@@ -210,16 +201,14 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 ## Qwen (阿里巴巴)
 
-| 模型 | 输入 ($/M) | 输出 ($/M) | 上下文 | Reasoning |
-|------|-----------|-----------|--------|-----------|
-| `qwen-plus` | $0.12 | $1.20 | 1M | ❌ |
-| `qwen-max` | $0.34 | $1.37 | 131K | ❌ |
-| `qwen-flash` | $0.02 | $0.22 | 1M | ❌ |
-| `qwen3-32b` | $0.09 | $0.29 | 128K | ✅ |
-| `qwen3-235b-a22b` | $0.29 | $1.14 | 128K | ✅ |
-| `qwen3-coder-480b` | $0.86 | $3.43 | 262K | ❌ |
-| `qwq-plus` | $0.80 | $2.40 | 131K | ✅ |
-| `qvq-max` | $1.20 | $4.80 | 131K | ✅ |
+| 模型 | 上下文 | Reasoning |
+|------|--------|-----------|
+| `qwen-plus` | 1M | ❌ |
+| `qwen-max` | 131K | ❌ |
+| `qwen-flash` | 1M | ❌ |
+| `qwen3-32b` | 128K | ✅ |
+| `qwen3-235b-a22b` | 128K | ✅ |
+| `qwq-plus` | 131K | ✅ |
 
 ### Qwen 配置
 
@@ -243,11 +232,12 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 ## Kimi (月之暗面)
 
-| 模型 | 输入 ($/M) | 输出 ($/M) | 上下文 | Reasoning |
-|------|-----------|-----------|--------|-----------|
-| `kimi-k2` | $0.55 | $2.19 | 262K | ❌ |
-| `kimi-k2-thinking` | $0.57 | $2.30 | 262K | ✅ |
-| `kimi-k2.5` | $0.60 | $3.00 | 262K | ✅ |
+| 模型 | 上下文 | Reasoning |
+|------|--------|-----------|
+| `kimi-k2` | 262K | ❌ |
+| `kimi-k2-thinking` | 262K | ✅ |
+| `kimi-k2.5` | 262K | ✅ |
+| `kimi-2.5` | 262K | ❌ |
 
 ### Kimi 配置
 
@@ -261,7 +251,7 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
   },
   "agents": {
     "defaults": {
-      "model": "kimi/kimi-k2-thinking"
+      "model": "kimi/kimi-2.5"
     }
   }
 }
@@ -271,12 +261,12 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 ## Groq
 
-| 模型 | 输入 ($/M) | 输出 ($/M) | 上下文 | Reasoning |
-|------|-----------|-----------|--------|-----------|
-| `llama-3.3-70b-versatile` | $0.59 | $0.79 | 128K | ❌ |
-| `llama-3.1-70b-instruct` | $0.40 | $0.40 | 128K | ❌ |
-| `llama-3.1-8b-instruct` | $0.02 | $0.05 | 128K | ❌ |
-| `mixtral-8x7b-32768` | $0.27 | $0.27 | 32K | ❌ |
+| 模型 | 上下文 |
+|------|--------|
+| `llama-3.3-70b-versatile` | 128K |
+| `llama-3.1-70b-instruct` | 128K |
+| `llama-3.1-8b-instruct` | 128K |
+| `mixtral-8x7b-32768` | 32K |
 
 ### Groq 配置
 
@@ -299,12 +289,11 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 ## xAI (Grok)
 
-| 模型 | 输入 ($/M) | 输出 ($/M) | 上下文 | Reasoning |
-|------|-----------|-----------|--------|-----------|
-| `grok-4` | $3.00 | $15.00 | 256K | ✅ |
-| `grok-4-fast` | $0.20 | $0.50 | 2M | ✅ |
-| `grok-4.1` | $2.00 | $10.00 | 200K | ❌ |
-| `grok-4.1-fast` | $0.20 | $0.50 | 2M | ✅ |
+| 模型 | 上下文 | Reasoning |
+|------|--------|-----------|
+| `grok-4` | 256K | ✅ |
+| `grok-4-fast` | 2M | ✅ |
+| `grok-4.1` | 200K | ❌ |
 
 ### xAI 配置
 
@@ -327,12 +316,11 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 ## GLM (智谱 AI)
 
-| 模型 | 输入 ($/M) | 输出 ($/M) | 上下文 | Reasoning |
-|------|-----------|-----------|--------|-----------|
-| `glm-4.7` | $0.29 | $1.14 | 200K | ❌ |
-| `glm-4.6` | $0.29 | $1.14 | 200K | ❌ |
-| `glm-4.5` | $0.29 | $1.14 | 128K | ❌ |
-| `glm-4.6v` | $0.14 | $0.43 | 128K | ❌ |
+| 模型 | 上下文 |
+|------|--------|
+| `glm-4.7` | 200K |
+| `glm-4.6` | 200K |
+| `glm-4.5` | 128K |
 
 ### GLM 配置
 
@@ -372,36 +360,14 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 API Key 也可通过环境变量设置：
 
-| 提供商 | 环境变量 |
+| 配置项 | 环境变量 |
 |--------|----------|
-| OpenAI | `OPENAI_API_KEY` |
-| Anthropic | `ANTHROPIC_API_KEY` |
-| Google | `GOOGLE_API_KEY` |
-| MiniMax | `MINIMAX_API_KEY` |
-| Groq | `GROQ_API_KEY` |
-| xAI | `XAI_API_KEY` |
-| DeepSeek | `DEEPSEEK_API_KEY` |
-
----
-
-## 成本追踪
-
-pi-ai 自动计算 API 调用成本：
-
-```typescript
-import { createProvider } from '../providers/index.js';
-
-const provider = createProvider(config);
-const response = await provider.chat(messages, tools, model);
-
-if (response.usage) {
-  const cost = provider.calculateCost({
-    input: response.usage.prompt_tokens,
-    output: response.usage.completion_tokens
-  });
-  console.log(`本次调用成本: $${cost.toFixed(6)}`);
-}
-```
+| OpenAI API Key | `OPENAI_API_KEY` |
+| Anthropic API Key | `ANTHROPIC_API_KEY` |
+| Google API Key | `GOOGLE_API_KEY` |
+| MiniMax API Key | `MINIMAX_API_KEY` |
+| Groq API Key | `GROQ_API_KEY` |
+| xAI API Key | `XAI_API_KEY` |
 
 ---
 

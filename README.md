@@ -163,16 +163,19 @@ See [Plugins Guide](docs/plugins.md) for details.
 
 ## 🔌 Supported LLM Providers
 
-| Provider | Models | Env Var |
-|----------|--------|---------|
-| OpenAI | gpt-4o, o1, o3 | `OPENAI_API_KEY` |
-| Anthropic | claude-3-5-sonnet | `ANTHROPIC_API_KEY` |
-| Google | gemini-1.5-pro | `GOOGLE_API_KEY` |
-| MiniMax | minimax-abab6.5s | `MINIMAX_API_KEY` |
-| Groq | llama-3.3-70b | `GROQ_API_KEY` |
-| xAI | grok-2 | `XAI_API_KEY` |
-| OpenRouter | deepseek, qwen, moonshot | `OPENROUTER_API_KEY` |
-| + More | via pi-ai | - |
+| Provider | Example Models | Env Var |
+|----------|----------------|---------|
+| OpenAI | gpt-5.2, o3, gpt-4o | `OPENAI_API_KEY` |
+| Anthropic | claude-sonnet-4-5, claude-opus-4-5 | `ANTHROPIC_API_KEY` |
+| Google | gemini-2.5-pro, gemini-2.5-flash | `GOOGLE_API_KEY` |
+| DeepSeek | deepseek-chat, deepseek-reasoner | - |
+| MiniMax | minimax-m2.1, minimax-m2 | `MINIMAX_API_KEY` |
+| Qwen | qwen-plus, qwen3-235b-a22b | - |
+| Kimi | kimi-2.5, kimi-k2.5 | - |
+| Groq | llama-3.3-70b-versatile | `GROQ_API_KEY` |
+| xAI | grok-4, grok-4-fast | `XAI_API_KEY` |
+| GLM | glm-4.7, glm-4.6 | - |
+| + More | via pi-ai (20+ providers) | - |
 
 See [Models Guide](docs/models.md) for full list.
 
