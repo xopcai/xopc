@@ -234,10 +234,10 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 | 模型 | 上下文 | Reasoning |
 |------|--------|-----------|
-| `kimi-k2` | 262K | ❌ |
-| `kimi-k2-thinking` | 262K | ✅ |
 | `kimi-k2.5` | 262K | ✅ |
-| `kimi-2.5` | 262K | ❌ |
+| `kimi-k2-thinking` | 262K | ✅ |
+| `kimi-k2-turbo` | 262K | ❌ |
+| `kimi-k2` | 262K | ❌ |
 
 ### Kimi 配置
 
@@ -251,7 +251,7 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
   },
   "agents": {
     "defaults": {
-      "model": "kimi/kimi-2.5"
+      "model": "kimi/kimi-k2.5"
     }
   }
 }

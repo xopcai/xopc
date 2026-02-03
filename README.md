@@ -169,12 +169,12 @@ See [Plugins Guide](docs/plugins.md) for details.
 | Anthropic | claude-sonnet-4-5, claude-opus-4-5 | `ANTHROPIC_API_KEY` |
 | Google | gemini-2.5-pro, gemini-2.5-flash | `GOOGLE_API_KEY` |
 | DeepSeek | deepseek-chat, deepseek-reasoner | - |
-| MiniMax | minimax-m2.1, minimax-m2 | `MINIMAX_API_KEY` |
+| MiniMax | minimax-m2.1 | `MINIMAX_API_KEY` |
 | Qwen | qwen-plus, qwen3-235b-a22b | - |
-| Kimi | kimi-2.5, kimi-k2.5 | - |
+| Kimi | kimi-k2.5, kimi-k2-thinking | - |
 | Groq | llama-3.3-70b-versatile | `GROQ_API_KEY` |
 | xAI | grok-4, grok-4-fast | `XAI_API_KEY` |
-| GLM | glm-4.7, glm-4.6 | - |
+| GLM | glm-4.7 | - |
 | + More | via pi-ai (20+ providers) | - |
 
 See [Models Guide](docs/models.md) for full list.
