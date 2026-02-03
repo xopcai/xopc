@@ -56,6 +56,21 @@ export interface ToolParameters {
 }
 
 // LLM Types
+export interface LLMProvider {
+  chat(
+    messages: LLMMessage[],
+    tools?: Array<{
+      name: string;
+      description: string;
+      parameters: Record<string, unknown>;
+    }>,
+    model?: string,
+    maxTokens?: number,
+    temperature?: number
+  ): Promise<LLMResponse>;
+  getDefaultModel(): string;
+}
+
 export interface LLMMessage {
   role: 'system' | 'user' | 'assistant' | 'tool';
   content: string | null;
