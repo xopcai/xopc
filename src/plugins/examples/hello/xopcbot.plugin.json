@@ -1,0 +1,22 @@
+{
+  "id": "hello",
+  "name": "Hello World",
+  "description": "A simple example plugin that demonstrates the plugin system",
+  "version": "1.0.0",
+  "main": "index.js",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "greeting": {
+        "type": "string",
+        "default": "Hello",
+        "description": "Greeting message prefix"
+      },
+      "verbose": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable verbose logging"
+      }
+    }
+  }
+}

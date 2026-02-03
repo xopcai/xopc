@@ -1,0 +1,27 @@
+{
+  "id": "echo",
+  "name": "Echo Plugin",
+  "description": "Echoes messages back with modifications",
+  "version": "1.0.0",
+  "main": "index.js",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "prefix": {
+        "type": "string",
+        "default": "[Echo]",
+        "description": "Prefix to add to messages"
+      },
+      "uppercase": {
+        "type": "boolean",
+        "default": false,
+        "description": "Convert message to uppercase"
+      },
+      "reverse": {
+        "type": "boolean",
+        "default": false,
+        "description": "Reverse the message"
+      }
+    }
+  }
+}
