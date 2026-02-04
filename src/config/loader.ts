@@ -3,6 +3,9 @@ import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { Config, ConfigSchema } from './schema.js';
 import { config } from 'dotenv';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('ConfigLoader');
 
 export function loadConfig(configPath?: string): Config {
   // Load from .env first
@@ -17,7 +20,9 @@ export function loadConfig(configPath?: string): Config {
       const json = JSON.parse(content);
       return ConfigSchema.parse(json);
     } catch (error) {
-      console.error(`Failed to load config from ${path}:`, error);
+      log.error({ err: error, path }, `Failed to load config`);
+      // Return default config on error
+      return ConfigSchema.parse({});
     }
   }
 

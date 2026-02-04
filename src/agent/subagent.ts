@@ -6,6 +6,9 @@ import { WebSearchTool, WebFetchTool } from './tools/index.js';
 import { InboundMessage, LLMMessage } from '../types/index.js';
 import { MessageBus } from '../bus/index.js';
 import { LLMProvider } from '../providers/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('SubagentManager');
 
 export class SubagentManager {
   private runningTasks: Map<string, ReturnType<typeof setTimeout>> = new Map();
@@ -91,7 +94,7 @@ export class SubagentManager {
           });
 
           for (const tc of response.tool_calls) {
-            console.log(`Subagent [${taskId}] executing: ${tc.function.name}`);
+            log.debug({ tool: tc.function.name, taskId }, 'Executing tool');
             let args: Record<string, unknown> = {};
             try {
               args = JSON.parse(tc.function.arguments);
@@ -182,7 +185,7 @@ When you have completed the task, provide a clear summary.`;
   private handleTimeout(taskId: string, label: string): void {
     if (this.runningTasks.has(taskId)) {
       this.runningTasks.delete(taskId);
-      console.error(`Subagent [${label}] (${taskId}) timed out`);
+      log.warn({ taskId, label }, 'Subagent timed out');
     }
   }
 

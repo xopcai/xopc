@@ -1,7 +1,10 @@
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync as fsUnlinkSync, readdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { Message, Session } from '../types/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('SessionManager');
 
 function getSessionsDir(): string {
   return join(homedir(), '.xopcbot', 'sessions');
@@ -90,7 +93,7 @@ export class SessionManager {
         metadata,
       };
     } catch (error) {
-      console.error(`Failed to load session ${key}:`, error);
+      log.error({ err: error, key }, `Failed to load session`);
       return null;
     }
   }
@@ -128,7 +131,7 @@ export class SessionManager {
     
     if (existsSync(path)) {
       try {
-        unlinkSync(path);
+        fsUnlinkSync(path);
         return true;
       } catch {
         return false;
@@ -174,10 +177,3 @@ export class SessionManager {
     return join(this.sessionsDir, `${safeKey}.jsonl`);
   }
 }
-
-// Helper function for unlinkSync
-function unlinkSync(path: string): void {
-  import('fs').then(({ unlinkSync }) => unlinkSync(path));
-}
-
-import { readdirSync } from 'fs';

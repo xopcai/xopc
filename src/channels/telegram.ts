@@ -2,6 +2,9 @@ import TelegramBot from 'node-telegram-bot-api';
 import { BaseChannel } from './base.js';
 import { OutboundMessage } from '../types/index.js';
 import { MessageBus } from '../bus/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('TelegramChannel');
 
 export class TelegramChannel extends BaseChannel {
   name = 'telegram';
@@ -36,7 +39,7 @@ export class TelegramChannel extends BaseChannel {
     });
 
     this.running = true;
-    console.log('✅ Telegram channel started');
+    log.info('Telegram channel started');
   }
 
   async stop(): Promise<void> {
@@ -52,12 +55,12 @@ export class TelegramChannel extends BaseChannel {
       this.bot = null;
     }
 
-    console.log('🛑 Telegram channel stopped');
+    log.info('Telegram channel stopped');
   }
 
   async send(msg: OutboundMessage): Promise<void> {
     if (!this.bot) {
-      console.error('Telegram bot not initialized');
+      log.error('Telegram bot not initialized');
       return;
     }
 
@@ -66,12 +69,12 @@ export class TelegramChannel extends BaseChannel {
         parse_mode: 'Markdown',
       });
     } catch (error) {
-      console.error('Failed to send Telegram message:', error);
+      log.error({ err: error }, 'Failed to send Telegram message');
       // Try without markdown if it fails
       try {
         await this.bot?.sendMessage(msg.chat_id, msg.content);
       } catch {
-        console.error('Failed to send Telegram message (plain text)');
+        log.error('Failed to send Telegram message (plain text)');
       }
     }
   }

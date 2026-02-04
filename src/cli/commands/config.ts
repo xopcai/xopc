@@ -3,6 +3,9 @@ import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { loadConfig } from '../../config/index.js';
+import { createLogger } from '../../utils/logger.js';
+
+const log = createLogger('ConfigCommand');
 
 // Helper to get nested value by dot notation
 function getNestedValue(obj: any, path: string): any {
@@ -48,7 +51,7 @@ export function createConfigCommand(): Command {
       const configPath = join(homedir(), '.xopcbot', 'config.json');
       
       if (!existsSync(configPath)) {
-        console.error('❌ Config file not found. Run: xopcbot configure');
+        log.error('Config file not found. Run: xopcbot configure');
         process.exit(1);
       }
 
@@ -56,7 +59,7 @@ export function createConfigCommand(): Command {
       const value = getNestedValue(config, path);
 
       if (value === undefined) {
-        console.error(`❌ Config path not found: ${path}`);
+        log.error({ path }, `Config path not found`);
         process.exit(1);
       }
 
@@ -71,7 +74,7 @@ export function createConfigCommand(): Command {
       const configPath = join(homedir(), '.xopcbot', 'config.json');
       
       if (!existsSync(configPath)) {
-        console.error('❌ Config file not found. Run: xopcbot configure');
+        log.error('Config file not found. Run: xopcbot configure');
         process.exit(1);
       }
 
@@ -89,7 +92,7 @@ export function createConfigCommand(): Command {
       // Save config (simple overwrite)
       writeFileSync(configPath, JSON.stringify(config, null, 2));
       
-      console.log(`✅ Updated: ${path}`);
+      log.info({ path }, `Config updated`);
     });
 
   // Config unset
@@ -100,7 +103,7 @@ export function createConfigCommand(): Command {
       const configPath = join(homedir(), '.xopcbot', 'config.json');
       
       if (!existsSync(configPath)) {
-        console.error('❌ Config file not found. Run: xopcbot configure');
+        log.error('Config file not found. Run: xopcbot configure');
         process.exit(1);
       }
 
@@ -114,9 +117,9 @@ export function createConfigCommand(): Command {
       if (target && typeof target === 'object' && lastKey in target) {
         delete target[lastKey];
         writeFileSync(configPath, JSON.stringify(config, null, 2));
-        console.log(`✅ Removed: ${path}`);
+        log.info({ path }, `Config removed`);
       } else {
-        console.error(`❌ Config path not found: ${path}`);
+        log.error({ path }, `Config path not found`);
         process.exit(1);
       }
     });
@@ -129,7 +132,7 @@ export function createConfigCommand(): Command {
       const configPath = join(homedir(), '.xopcbot', 'config.json');
       
       if (!existsSync(configPath)) {
-        console.log('⚠️  No config file found. Run: xopcbot configure');
+        log.warn('No config file found. Run: xopcbot configure');
         return;
       }
 

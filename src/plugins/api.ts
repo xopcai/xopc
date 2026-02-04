@@ -19,6 +19,7 @@ import type {
 import type { Config } from '../types/index.js';
 import type { MessageBus } from '../bus/index.js';
 import { EventEmitter } from 'events';
+import { createLogger } from '../utils/logger.js';
 
 export class PluginApiImpl implements PluginApi {
   private _tools: Map<string, PluginTool> = new Map();
@@ -125,11 +126,13 @@ export class PluginApiImpl implements PluginApi {
 // ============================================================================
 
 export function createPluginLogger(prefix: string): PluginLogger {
+  const childLogger = createLogger(`Plugin:${prefix}`);
+  
   return {
-    debug: (msg) => console.debug(`[${prefix}] DEBUG: ${msg}`),
-    info: (msg) => console.log(`[${prefix}] INFO: ${msg}`),
-    warn: (msg) => console.warn(`[${prefix}] WARN: ${msg}`),
-    error: (msg) => console.error(`[${prefix}] ERROR: ${msg}`),
+    debug: (msg: string) => childLogger.debug(msg),
+    info: (msg: string) => childLogger.info(msg),
+    warn: (msg: string) => childLogger.warn(msg),
+    error: (msg: string) => childLogger.error(msg),
   };
 }
 

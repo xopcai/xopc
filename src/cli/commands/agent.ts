@@ -3,6 +3,9 @@ import { AgentLoop } from '../../agent/index.js';
 import { createProvider } from '../../providers/index.js';
 import { loadConfig } from '../../config/index.js';
 import { MessageBus } from '../../bus/index.js';
+import { createLogger } from '../../utils/logger.js';
+
+const log = createLogger('AgentCommand');
 
 export function createAgentCommand(): Command {
   const cmd = new Command('agent')

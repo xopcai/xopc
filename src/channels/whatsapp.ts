@@ -1,6 +1,9 @@
-import { InboundMessage, OutboundMessage } from '../types/index.js';
 import { BaseChannel } from './base.js';
+import { OutboundMessage } from '../types/index.js';
 import { MessageBus } from '../bus/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('WhatsAppChannel');
 
 export class WhatsAppChannel extends BaseChannel {
   name = 'whatsapp';
@@ -15,12 +18,12 @@ export class WhatsAppChannel extends BaseChannel {
   async start(): Promise<void> {
     if (this.running) return;
 
-    console.log('⚠️  WhatsApp channel requires @whiskeysockets/baileys setup');
-    console.log('   Install: npm install @whiskeysockets/baileys');
-    console.log('   See: https://github.com/WhiskeySockets/Baileys');
+    log.warn('WhatsApp channel requires @whiskeysockets/baileys setup');
+    log.warn('Install: npm install @whiskeysockets/baileys');
+    log.warn('See: https://github.com/WhiskeySockets/Baileys');
     
     this.running = true;
-    console.log('✅ WhatsApp channel initialized (placeholder)');
+    log.info('WhatsApp channel initialized (placeholder)');
   }
 
   async stop(): Promise<void> {
@@ -31,10 +34,10 @@ export class WhatsAppChannel extends BaseChannel {
       this.reconnectTimeout = null;
     }
 
-    console.log('🛑 WhatsApp channel stopped');
+    log.info('WhatsApp channel stopped');
   }
 
   async send(msg: OutboundMessage): Promise<void> {
-    console.log(`[WhatsApp] Would send to ${msg.chat_id}: ${msg.content.substring(0, 50)}...`);
+    log.info(`Would send to ${msg.chat_id}: ${msg.content.substring(0, 50)}...`);
   }
 }

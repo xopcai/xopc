@@ -1,5 +1,8 @@
 import { Command } from 'commander';
 import http from 'http';
+import { createLogger } from '../../utils/logger.js';
+
+const log = createLogger('GatewayCommand');
 
 class Gateway {
   private server: http.Server | null = null;
@@ -66,7 +69,7 @@ export function createGatewayCommand(): Command {
           port: parseInt(options.port),
         });
       } catch (error) {
-        console.error('Failed to start gateway:', error);
+        log.error({ err: error }, 'Failed to start gateway');
         process.exit(1);
       }
     });

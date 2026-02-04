@@ -1,4 +1,7 @@
 import { CronService } from '../cron/service.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('HeartbeatService');
 
 export interface HeartbeatConfig {
   intervalMs: number;
@@ -15,11 +18,11 @@ export class HeartbeatService {
 
   start(config: HeartbeatConfig): void {
     if (!config.enabled) {
-      console.log('[Heartbeat] Disabled');
+      log.info('Heartbeat disabled');
       return;
     }
 
-    console.log(`[Heartbeat] Starting with interval ${config.intervalMs}ms`);
+    log.info({ intervalMs: config.intervalMs }, 'Starting heartbeat service');
 
     this.intervalId = setInterval(async () => {
       await this.checkAndWake();
@@ -33,9 +36,9 @@ export class HeartbeatService {
       
       // Log status
       const runningJobs = this.cronService.getRunningCount();
-      console.log(`[Heartbeat] Active - ${runningJobs} cron jobs running`);
+      log.info({ runningJobs }, 'Heartbeat active');
     } catch (error) {
-      console.error('[Heartbeat] Error:', error);
+      log.error({ err: error }, 'Heartbeat error');
     }
   }
 
@@ -43,7 +46,7 @@ export class HeartbeatService {
     if (this.intervalId) {
       clearInterval(this.intervalId);
       this.intervalId = null;
-      console.log('[Heartbeat] Stopped');
+      log.info('Heartbeat stopped');
     }
   }
 

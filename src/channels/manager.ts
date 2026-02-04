@@ -4,6 +4,9 @@ import { WhatsAppChannel } from './whatsapp.js';
 import { MessageBus } from '../bus/index.js';
 import { Config } from '../config/index.js';
 import { OutboundMessage } from '../types/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('ChannelManager');
 
 export class ChannelManager {
   private channels: Map<string, BaseChannel> = new Map();
@@ -30,9 +33,9 @@ export class ChannelManager {
 
     for (const [name, channel] of this.channels) {
       if (!channel.isRunning) {
-        console.log(`Starting ${name} channel...`);
+        log.info(`Starting ${name} channel...`);
         promises.push(channel.start().catch(err => {
-          console.error(`Failed to start ${name} channel:`, err);
+          log.error({ err }, `Failed to start ${name} channel`);
         }));
       }
     }
@@ -57,7 +60,7 @@ export class ChannelManager {
     if (channel) {
       await channel.send(msg);
     } else {
-      console.error(`Unknown channel: ${msg.channel}`);
+      log.error({ channel: msg.channel }, `Unknown channel: ${msg.channel}`);
     }
   }
 

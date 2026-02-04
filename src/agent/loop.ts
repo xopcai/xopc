@@ -10,6 +10,9 @@ import { ContextBuilder } from './context.js';
 import { SubagentManager } from './subagent.js';
 import { SessionManager } from '../session/index.js';
 import { InboundMessage, OutboundMessage, ToolCall } from '../types/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('AgentLoop');
 
 export class AgentLoop {
   private context: ContextBuilder;
@@ -58,14 +61,14 @@ export class AgentLoop {
 
   async run(): Promise<void> {
     this.running = true;
-    console.log('Agent loop started');
+    log.info('Agent loop started');
 
     while (this.running) {
       try {
         const msg = await this.bus.consumeInbound();
         await this.processMessage(msg);
       } catch (error) {
-        console.error('Error in agent loop:', error);
+        log.error({ err: error }, 'Error in agent loop');
         await new Promise(resolve => setTimeout(resolve, 1000));
       }
     }
@@ -73,7 +76,7 @@ export class AgentLoop {
 
   stop(): void {
     this.running = false;
-    console.log('Agent loop stopping');
+    log.info('Agent loop stopping');
   }
 
   async processMessage(msg: InboundMessage): Promise<OutboundMessage | null> {
@@ -81,7 +84,7 @@ export class AgentLoop {
       return this.processSystemMessage(msg);
     }
 
-    console.log(`Processing message from ${msg.channel}:${msg.sender_id}`);
+    log.info({ channel: msg.channel, senderId: msg.sender_id }, 'Processing message');
 
     const session = this.sessions.getOrCreate(msg.content || 'cli:direct');
 
@@ -126,7 +129,7 @@ export class AgentLoop {
         this.context.addAssistantMessage(messages, response.content || '', toolCallsForMessage);
 
         for (const tc of response.tool_calls) {
-          console.log(`Executing tool: ${tc.function.name}`);
+          log.debug({ tool: tc.function.name }, 'Executing tool');
           let args: Record<string, unknown> = {};
           try {
             args = JSON.parse(tc.function.arguments);
@@ -154,7 +157,7 @@ export class AgentLoop {
   }
 
   private async processSystemMessage(msg: InboundMessage): Promise<OutboundMessage | null> {
-    console.log(`Processing system message from ${msg.sender_id}`);
+    log.info({ senderId: msg.sender_id }, 'Processing system message');
 
     let originChannel = 'cli';
     let originChatId = msg.chat_id;

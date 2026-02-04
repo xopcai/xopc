@@ -5,6 +5,9 @@ import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
 import { CronJob } from '../types/index.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('CronService');
 
 interface JobData {
   id: string;
@@ -83,7 +86,7 @@ export class CronService {
     this.cancelJob(id);
 
     const task = cron.schedule(schedule, () => {
-      console.log(`[Cron] Job ${id} triggered: ${message}`);
+      log.info({ jobId: id, message }, `Job triggered`);
       // The actual message sending is handled by the gateway
     });
 
@@ -167,7 +170,7 @@ export class CronService {
       }
     }
 
-    console.log(`[Cron] Loaded ${this.tasks.size} jobs`);
+    log.info({ count: this.tasks.size }, `Loaded jobs`);
   }
 
   stopAll(): void {
@@ -175,7 +178,7 @@ export class CronService {
       task.stop();
     }
     this.tasks.clear();
-    console.log('[Cron] Stopped all jobs');
+    log.info(`Stopped all jobs`);
   }
 
   getRunningCount(): number {

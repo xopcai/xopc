@@ -22,8 +22,11 @@ import type {
   ResolvedPluginConfig,
 } from './types.js';
 import { PluginApiImpl, createPluginLogger, createPathResolver } from './api.js';
+import { createLogger, createServiceLogger } from '../utils/logger.js';
 
 const PLUGIN_MANIFEST_FILE = 'xopcbot.plugin.json';
+
+const log = createLogger('PluginLoader');
 
 // ============================================================================
 // Plugin Registry
@@ -76,7 +79,7 @@ export class PluginRegistryImpl implements PluginRegistry {
 
   addChannel(channel: ChannelPlugin): void {
     if (this.channels.has(channel.name)) {
-      console.warn(`Channel ${channel.name} already registered, overwriting`);
+      log.warn({ channel: channel.name }, `Channel already registered, overwriting`);
     }
     this.channels.set(channel.name, channel);
   }
@@ -87,7 +90,7 @@ export class PluginRegistryImpl implements PluginRegistry {
 
   addHttpRoute(path: string, handler: HttpRequestHandler): void {
     if (this.httpRoutes.has(path)) {
-      console.warn(`HTTP route ${path} already registered, overwriting`);
+      log.warn({ path }, `HTTP route already registered, overwriting`);
     }
     this.httpRoutes.set(path, handler);
   }
@@ -98,7 +101,7 @@ export class PluginRegistryImpl implements PluginRegistry {
 
   addCommand(command: PluginCommand): void {
     if (this.commands.has(command.name)) {
-      console.warn(`Command /${command.name} already registered, overwriting`);
+      log.warn({ command: command.name }, `Command already registered, overwriting`);
     }
     this.commands.set(command.name, command);
   }
@@ -109,7 +112,7 @@ export class PluginRegistryImpl implements PluginRegistry {
 
   addService(service: PluginService): void {
     if (this.services.has(service.id)) {
-      console.warn(`Service ${service.id} already registered, overwriting`);
+      log.warn({ service: service.id }, `Service already registered, overwriting`);
     }
     this.services.set(service.id, service);
   }
@@ -120,7 +123,7 @@ export class PluginRegistryImpl implements PluginRegistry {
 
   addGatewayMethod(method: string, handler: GatewayMethodHandler): void {
     if (this.gatewayMethods.has(method)) {
-      console.warn(`Gateway method ${method} already registered, overwriting`);
+      log.warn({ method }, `Gateway method already registered, overwriting`);
     }
     this.gatewayMethods.set(method, handler);
   }
@@ -174,7 +177,7 @@ export class PluginLoader {
 
       const manifest = await this.loadManifest(config.path);
       if (!manifest) {
-        console.error(`Failed to load manifest for plugin: ${config.id}`);
+        log.error({ pluginId: config.id }, `Failed to load manifest for plugin`);
         return null;
       }
 
@@ -185,7 +188,7 @@ export class PluginLoader {
       // Load plugin module
       const module = await this.loadModule(config.path, manifest);
       if (!module) {
-        console.error(`Failed to load module for plugin: ${config.id}`);
+        log.error({ pluginId: config.id }, `Failed to load module for plugin`);
         return null;
       }
 
@@ -202,11 +205,11 @@ export class PluginLoader {
       });
 
       this.pluginInstances.set(config.id, api);
-      console.log(`Loaded plugin: ${manifest.name} (${manifest.id})`);
+      log.info({ name: manifest.name, id: manifest.id }, `Loaded plugin`);
       
       return api;
     } catch (error) {
-      console.error(`Error loading plugin ${config.id}:`, error);
+      log.error({ err: error, pluginId: config.id }, `Error loading plugin`);
       return null;
     }
   }
@@ -242,7 +245,7 @@ export class PluginLoader {
       const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
       return manifest as PluginManifest;
     } catch (error) {
-      console.error(`Failed to parse manifest: ${manifestPath}`, error);
+      log.error({ err: error, manifestPath }, `Failed to parse manifest`);
       return null;
     }
   }
@@ -275,7 +278,7 @@ export class PluginLoader {
             return dynamicImport.default || dynamicImport;
           }
         } catch (error) {
-          console.warn(`Failed to load module ${fullPath}:`, error);
+          log.warn({ err: error, path: fullPath }, `Failed to load module`);
         }
       }
     }
@@ -321,21 +324,17 @@ export class PluginLoader {
     const services = Array.from(this.registry.services.values());
     
     for (const service of services) {
+      const serviceLog = createServiceLogger(service.id);
       try {
         await service.start({
           config: {} as any,  // Simplified
           workspaceDir: this.options.workspaceDir || '',
           stateDir: join(this.options.workspaceDir || '', '.state'),
-          logger: {
-            debug: (msg) => console.debug(`[${service.id}] DEBUG: ${msg}`),
-            info: (msg) => console.log(`[${service.id}] INFO: ${msg}`),
-            warn: (msg) => console.warn(`[${service.id}] WARN: ${msg}`),
-            error: (msg) => console.error(`[${service.id}] ERROR: ${msg}`),
-          },
+          logger: createPluginLogger(`[${service.id}]`),
         });
-        console.log(`Started service: ${service.id}`);
+        serviceLog.info(`Started service`);
       } catch (error) {
-        console.error(`Failed to start service ${service.id}:`, error);
+        serviceLog.error({ err: error }, `Failed to start service`);
       }
     }
   }
@@ -345,6 +344,7 @@ export class PluginLoader {
     
     for (const service of services) {
       if (service.stop) {
+        const serviceLog = createServiceLogger(service.id);
         try {
           await service.stop({
             config: {} as any,
@@ -357,9 +357,9 @@ export class PluginLoader {
               error: () => {},
             },
           });
-          console.log(`Stopped service: ${service.id}`);
+          serviceLog.info(`Stopped service`);
         } catch (error) {
-          console.error(`Failed to stop service ${service.id}:`, error);
+          serviceLog.error({ err: error }, `Failed to stop service`);
         }
       }
     }

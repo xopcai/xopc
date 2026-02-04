@@ -2,6 +2,9 @@
 import { readFileSync, existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
+import { createLogger } from './logger.js';
+
+const log = createLogger('GitHubUtils');
 
 interface GitHubConfig {
   github: {
@@ -21,7 +24,8 @@ export function getGitHubConfig(): GitHubConfig | null {
   try {
     const content = readFileSync(CONFIG_PATH, 'utf-8');
     return JSON.parse(content) as GitHubConfig;
-  } catch {
+  } catch (error) {
+    log.error({ err: error }, 'Failed to read GitHub config');
     return null;
   }
 }
@@ -38,12 +42,4 @@ export function getRepoInfo(): { owner: string; repo: string } | null {
     owner: config.github.owner,
     repo: config.github.repo,
   };
-}
-
-// Example usage:
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const token = getGitHubToken();
-  const repo = getRepoInfo();
-  console.log('GitHub Token:', token ? '✓ Saved' : '✗ Not found');
-  console.log('Repo:', repo ? `${repo.owner}/${repo.repo}` : 'Not configured');
 }
