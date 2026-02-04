@@ -61,6 +61,38 @@ const KNOWN_MODEL_IDS: Record<string, string> = {
 };
 
 // ============================================
+// Custom Model Factory
+// ============================================
+
+interface CustomModelConfig {
+  id: string;
+  name: string;
+  provider: string;
+  api: string;
+  baseUrl: string;
+  cost: { input: number; output: number; cacheRead?: number; cacheWrite?: number };
+  contextWindow: number;
+  maxTokens: number;
+  reasoning: boolean;
+  input: string[];
+}
+
+function createCustomModel(config: CustomModelConfig): PiAI.Model<PiAI.Api> {
+  return {
+    id: config.id,
+    name: config.name,
+    provider: config.provider,
+    api: config.api as PiAI.Api,
+    baseUrl: config.baseUrl,
+    cost: config.cost,
+    contextWindow: config.contextWindow,
+    maxTokens: config.maxTokens,
+    reasoning: config.reasoning,
+    input: config.input as ('text' | 'image')[],
+  } as PiAI.Model<PiAI.Api>;
+}
+
+// ============================================
 // Utility Functions
 // ============================================
 
@@ -116,30 +148,50 @@ export class PiAIProvider implements LLMProvider {
     
     let model: PiAI.Model<PiAI.Api> | null = null;
     
-    // Build model based on apiType
-    if (apiType === 'openai') {
-      if (apiBase) {
-        // Custom OpenAI-compatible API with custom base URL
-        // Use 'openai-responses' for modern OpenAI-compatible APIs
-        model = (PiAI.getModel as any)('openai-responses', parsedModelId, {
-          apiBase,
+    // Check if it's a custom provider/model
+    const isCustomProvider = config.models?.providers?.[providerPrefix];
+    
+    if (isCustomProvider && this.modelDefinition) {
+      // Create custom model for user-defined models
+      model = createCustomModel({
+        id: parsedModelId,
+        name: this.modelDefinition.name,
+        provider: providerPrefix,
+        api: apiType === 'anthropic' ? 'anthropic-messages' : 'openai-responses',
+        baseUrl: apiBase || '',
+        cost: {
+          input: this.modelDefinition.cost?.input || 0,
+          output: this.modelDefinition.cost?.output || 0,
+          cacheRead: this.modelDefinition.cost?.cacheRead,
+          cacheWrite: this.modelDefinition.cost?.cacheWrite,
+        },
+        contextWindow: this.modelDefinition.contextWindow || 131072,
+        maxTokens: this.modelDefinition.maxTokens || 4096,
+        reasoning: this.modelDefinition.reasoning || false,
+        input: this.modelDefinition.input || ['text'],
+      });
+    } else {
+      // Try to get from pi-ai's registry
+      if (apiType === 'openai') {
+        if (apiBase) {
+          model = (PiAI.getModel as any)('openai-responses', parsedModelId, {
+            apiBase,
+            apiKey,
+          });
+        } else {
+          model = (PiAI.getModel as any)('openai', parsedModelId);
+        }
+      } else if (apiType === 'anthropic') {
+        model = (PiAI.getModel as any)('anthropic-messages', parsedModelId, {
           apiKey,
         });
-      } else {
-        // Standard OpenAI
-        model = (PiAI.getModel as any)('openai', parsedModelId);
       }
-    } else if (apiType === 'anthropic') {
-      // Anthropic messages API
-      model = (PiAI.getModel as any)('anthropic-messages', parsedModelId, {
-        apiKey,
-      });
-    }
-    
-    if (!model) {
-      // Try fallback to detected provider
-      const detectedProvider = detectProvider(modelId);
-      model = (PiAI.getModel as any)(detectedProvider, parsedModelId);
+      
+      // Fallback to detected provider
+      if (!model) {
+        const detectedProvider = detectProvider(modelId);
+        model = (PiAI.getModel as any)(detectedProvider, parsedModelId);
+      }
     }
     
     if (!model) {
