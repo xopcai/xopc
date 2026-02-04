@@ -1,5 +1,5 @@
-import cron from 'node-cron';
-import cronParser from 'cron-parser';
+import nodeCron from 'node-cron';
+import { CronExpressionParser } from 'cron-parser';
 import { v4 as uuidv4 } from 'uuid';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
@@ -16,6 +16,10 @@ interface JobData {
   message: string;
   enabled: boolean;
   created_at: string;
+}
+
+interface ScheduledTask {
+  stop: () => void;
 }
 
 function getJobsPath(): string {
@@ -48,7 +52,7 @@ function saveJobs(data: { jobs: JobData[] }): void {
 }
 
 export class CronService {
-  private tasks: Map<string, cron.ScheduledTask> = new Map();
+  private tasks: Map<string, ScheduledTask> = new Map();
 
   async addJob(
     schedule: string,
@@ -56,7 +60,7 @@ export class CronService {
     name?: string
   ): Promise<{ id: string; schedule: string }> {
     // Validate cron expression
-    if (!cron.validate(schedule)) {
+    if (!nodeCron.validate(schedule)) {
       throw new Error(`Invalid cron expression: ${schedule}`);
     }
 
@@ -85,7 +89,7 @@ export class CronService {
     // Cancel existing if any
     this.cancelJob(id);
 
-    const task = cron.schedule(schedule, () => {
+    const task = nodeCron.schedule(schedule, () => {
       log.info({ jobId: id, message }, `Job triggered`);
       // The actual message sending is handled by the gateway
     });
@@ -99,7 +103,7 @@ export class CronService {
     return data.jobs.map(job => {
       let nextRun: string | undefined;
       try {
-        const interval = cronParser.parseExpression(job.schedule);
+        const interval = CronExpressionParser.parse(job.schedule);
         nextRun = interval.next().toISOString();
       } catch {
         // Invalid cron expression
