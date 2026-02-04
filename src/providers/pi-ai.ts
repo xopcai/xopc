@@ -3,11 +3,13 @@
  * 
  * Wraps @mariozechner/pi-ai to work with xopcbot's LLMProvider interface.
  * Supports 20+ LLM providers with unified API.
+ * Supports custom providers via models configuration.
  */
 
 import * as PiAI from '@mariozechner/pi-ai';
 import type { LLMProvider, LLMMessage, LLMResponse, ProviderConfig } from '../types/index.js';
-import { getApiBase } from '../config/schema.js';
+import type { Config, ModelDefinition } from '../config/schema.js';
+import { getApiBase, getApiKey, getApiType, getModelDefinition } from '../config/schema.js';
 
 export { PiAI };
 export type { LLMProvider };
@@ -71,16 +73,24 @@ function detectProvider(modelId: string): PiAI.KnownProvider {
   return 'openai'; // Default to OpenAI
 }
 
-function parseModelId(fullModelId: string): { modelId: string; provider: PiAI.KnownProvider } {
+function parseModelId(fullModelId: string): { modelId: string; provider: PiAI.KnownProvider; providerPrefix: string } {
   if (fullModelId.includes('/')) {
     const [provider, modelId] = fullModelId.split('/');
     const normalizedModelId = KNOWN_MODEL_IDS[modelId.toLowerCase()] || modelId;
-    return { modelId: normalizedModelId, provider: provider as PiAI.KnownProvider };
+    return { 
+      modelId: normalizedModelId, 
+      provider: provider as PiAI.KnownProvider,
+      providerPrefix: provider.toLowerCase() 
+    };
   }
   
   const detectedProvider = detectProvider(fullModelId);
   const normalizedModelId = KNOWN_MODEL_IDS[fullModelId.toLowerCase()] || fullModelId;
-  return { modelId: normalizedModelId, provider: detectedProvider };
+  return { 
+    modelId: normalizedModelId, 
+    provider: detectedProvider,
+    providerPrefix: fullModelId.toLowerCase()
+  };
 }
 
 // ============================================
@@ -89,26 +99,43 @@ function parseModelId(fullModelId: string): { modelId: string; provider: PiAI.Kn
 
 export class PiAIProvider implements LLMProvider {
   private model: PiAI.Model<PiAI.Api>;
-  private config: Record<string, ProviderConfig>;
+  private modelDefinition: ModelDefinition | null;
+  private config: Config;
 
-  constructor(config: Record<string, ProviderConfig>, modelId: string) {
+  constructor(config: Config, modelId: string) {
     this.config = config;
-    const { modelId: parsedModelId, provider } = parseModelId(modelId);
+    const { modelId: parsedModelId, provider, providerPrefix } = parseModelId(modelId);
+    
+    // Get custom model definition if exists
+    this.modelDefinition = getModelDefinition(config, modelId);
     
     // Get API base URL for OpenAI-compatible providers
-    const apiBase = getApiBase({ providers: config } as any, modelId);
+    const apiBase = getApiBase(config, modelId);
+    const apiType = getApiType(config, modelId);
+    
+    // Get API key
+    const apiKey = getApiKey(config, providerPrefix);
     
     // Build model with custom API base if needed
     let model: PiAI.Model<PiAI.Api> | null = null;
     
-    if (apiBase && provider === 'openai') {
+    if (apiBase && apiType === 'openai') {
       // Create OpenAI-compatible model with custom base URL
       model = (PiAI.getModel as any)('openai', parsedModelId, {
         apiBase,
+        apiKey,
+      });
+    }
+    
+    if (!model && apiType === 'anthropic') {
+      // Anthropic provider
+      model = (PiAI.getModel as any)('anthropic-messages', parsedModelId, {
+        apiKey,
       });
     }
     
     if (!model) {
+      // Try without custom base
       model = (PiAI.getModel as any)(provider, parsedModelId);
     }
     
@@ -141,7 +168,7 @@ export class PiAIProvider implements LLMProvider {
 
     try {
       const result = await (PiAI.complete as any)(this.model, context, {
-        maxTokens,
+        maxTokens: maxTokens || this.modelDefinition?.maxTokens,
         temperature: temperature ?? 0.7,
       });
 
@@ -178,6 +205,17 @@ export class PiAIProvider implements LLMProvider {
   }
 
   calculateCost(usage: { input: number; output: number; cacheRead?: number; cacheWrite?: number }): number {
+    // If custom cost is defined, use it
+    if (this.modelDefinition?.cost) {
+      const { input, output, cacheRead, cacheWrite } = this.modelDefinition.cost;
+      const inputCost = (usage.input / 1000000) * (input || 0);
+      const outputCost = (usage.output / 1000000) * (output || 0);
+      const cacheReadCost = ((usage.cacheRead || 0) / 1000000) * (cacheRead || 0);
+      const cacheWriteCost = ((usage.cacheWrite || 0) / 1000000) * (cacheWrite || 0);
+      return inputCost + outputCost + cacheReadCost + cacheWriteCost;
+    }
+    
+    // Fall back to pi-ai's cost calculation
     const cost = PiAI.calculateCost(this.model, {
       input: usage.input,
       output: usage.output,
@@ -195,8 +233,31 @@ export class PiAIProvider implements LLMProvider {
 // ============================================
 
 export function createPiAIProvider(
-  providersConfig: Record<string, ProviderConfig>,
+  config: Config,
   modelId: string
 ): PiAIProvider {
-  return new PiAIProvider(providersConfig, modelId);
+  return new PiAIProvider(config, modelId);
+}
+
+// ============================================
+// Helper: List available models
+// ============================================
+
+export function listAvailableModels(config: Config): Array<{ id: string; name: string; provider: string }> {
+  const models: Array<{ id: string; name: string; provider: string }> = [];
+  
+  // Add custom provider models
+  if (config.models?.providers) {
+    for (const [providerName, provider] of Object.entries(config.models.providers)) {
+      for (const model of provider.models) {
+        models.push({
+          id: `${providerName}/${model.id}`,
+          name: model.name,
+          provider: providerName,
+        });
+      }
+    }
+  }
+  
+  return models;
 }
