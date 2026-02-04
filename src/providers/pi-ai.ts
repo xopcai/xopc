@@ -104,43 +104,46 @@ export class PiAIProvider implements LLMProvider {
 
   constructor(config: Config, modelId: string) {
     this.config = config;
-    const { modelId: parsedModelId, provider, providerPrefix } = parseModelId(modelId);
+    const { modelId: parsedModelId, providerPrefix } = parseModelId(modelId);
     
     // Get custom model definition if exists
     this.modelDefinition = getModelDefinition(config, modelId);
     
-    // Get API base URL for OpenAI-compatible providers
+    // Get configuration
     const apiBase = getApiBase(config, modelId);
     const apiType = getApiType(config, modelId);
-    
-    // Get API key
     const apiKey = getApiKey(config, providerPrefix);
     
-    // Build model with custom API base if needed
     let model: PiAI.Model<PiAI.Api> | null = null;
     
-    if (apiBase && apiType === 'openai') {
-      // Create OpenAI-compatible model with custom base URL
-      model = (PiAI.getModel as any)('openai', parsedModelId, {
-        apiBase,
-        apiKey,
-      });
-    }
-    
-    if (!model && apiType === 'anthropic') {
-      // Anthropic provider
+    // Build model based on apiType
+    if (apiType === 'openai') {
+      if (apiBase) {
+        // Custom OpenAI-compatible API with custom base URL
+        // Use 'openai-responses' for modern OpenAI-compatible APIs
+        model = (PiAI.getModel as any)('openai-responses', parsedModelId, {
+          apiBase,
+          apiKey,
+        });
+      } else {
+        // Standard OpenAI
+        model = (PiAI.getModel as any)('openai', parsedModelId);
+      }
+    } else if (apiType === 'anthropic') {
+      // Anthropic messages API
       model = (PiAI.getModel as any)('anthropic-messages', parsedModelId, {
         apiKey,
       });
     }
     
     if (!model) {
-      // Try without custom base
-      model = (PiAI.getModel as any)(provider, parsedModelId);
+      // Try fallback to detected provider
+      const detectedProvider = detectProvider(modelId);
+      model = (PiAI.getModel as any)(detectedProvider, parsedModelId);
     }
     
     if (!model) {
-      throw new Error(`Model not found: ${modelId} (provider: ${provider})`);
+      throw new Error(`Model not found: ${modelId}`);
     }
     
     this.model = model;
