@@ -14,11 +14,11 @@ export function createAgentCommand(): Command {
     .option('-i, --interactive', 'Interactive chat mode')
     .action(async (options) => {
       const config = loadConfig();
-      const provider = createProvider(config);
+      const modelId = config.agents.defaults.model;
+      const provider = createProvider(config, modelId);
       const bus = new MessageBus();
       
       const workspace = config.agents.defaults.workspace;
-      const model = config.agents.defaults.model;
       const maxIterations = config.agents.defaults.max_tool_iterations;
       const braveApiKey = config.tools.web?.search?.api_key;
 
@@ -26,7 +26,7 @@ export function createAgentCommand(): Command {
         bus,
         provider,
         workspace,
-        model,
+        modelId,
         maxIterations,
         braveApiKey
       );
