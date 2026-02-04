@@ -9,7 +9,7 @@
 import * as PiAI from '@mariozechner/pi-ai';
 import type { LLMProvider, LLMMessage, LLMResponse, ProviderConfig, ToolCall } from '../types/index.js';
 import type { Config, ModelDefinition } from '../config/schema.js';
-import { getApiBase, getApiKey, getApiType, getModelDefinition } from '../config/schema.js';
+import { getApiBase, getApiKey, getApiType, getModelDefinition, BUILTIN_MODELS } from '../config/schema.js';
 
 export { PiAI };
 export type { LLMProvider };
@@ -44,12 +44,16 @@ const MODEL_TO_PROVIDER: Record<string, PiAI.KnownProvider> = {
   
   // MiniMax (OpenAI compatible)
   'minimax/': 'openai',
+  'minimax-': 'openai',
   
   // Qwen (OpenAI compatible)
   'qwen/': 'openai',
+  'qwen-': 'openai',
+  'qwq-': 'openai',
   
   // Kimi/Moonshot (OpenAI compatible)
   'kimi/': 'openai',
+  'kimi-': 'openai',
   'moonshotai/': 'openai',
 };
 
@@ -203,6 +207,24 @@ export class PiAIProvider implements LLMProvider {
         reasoning: this.modelDefinition.reasoning || false,
         input: this.modelDefinition.input || ['text'],
       });
+    } else if (this.modelDefinition) {
+      // Built-in model with custom definition
+      const providerInfo = detectProvider(modelId);
+      model = createCustomModel({
+        id: parsedModelId,
+        name: this.modelDefinition.name,
+        provider: providerPrefix,
+        api: apiType === 'anthropic' ? 'anthropic-messages' : 'openai-responses',
+        baseUrl: apiBase || '',
+        cost: {
+          input: this.modelDefinition.cost?.input || 0,
+          output: this.modelDefinition.cost?.output || 0,
+        },
+        contextWindow: this.modelDefinition.contextWindow || 131072,
+        maxTokens: this.modelDefinition.maxTokens || 4096,
+        reasoning: this.modelDefinition.reasoning || false,
+        input: this.modelDefinition.input || ['text'],
+      });
     } else {
       // Try to get from pi-ai's registry
       if (apiType === 'openai') {
@@ -341,10 +363,10 @@ export function createPiAIProvider(
 // Helper: List available models
 // ============================================
 
-export function listAvailableModels(config: Config): Array<{ id: string; name: string; provider: string }> {
+export function listAvailableModels(config: Config) {
   const models: Array<{ id: string; name: string; provider: string }> = [];
   
-  // Add custom provider models
+  // Add custom provider models first
   if (config.models?.providers) {
     for (const [providerName, provider] of Object.entries(config.models.providers)) {
       for (const model of provider.models) {
