@@ -3,20 +3,67 @@ import { input, confirm, select, password } from '@inquirer/prompts';
 import { existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { loadConfig, saveConfig, ConfigSchema } from '../../config/index.js';
+import { loadConfig, saveConfig, ConfigSchema, getApiBase } from '../../config/index.js';
 
-// Available providers for selection
-const PROVIDERS = [
-  { name: 'OpenAI', value: 'openai', models: ['openai/gpt-4o', 'openai/gpt-4o-mini', 'openai/gpt-5.2'] },
-  { name: 'Anthropic', value: 'anthropic', models: ['anthropic/claude-opus-4-5', 'anthropic/claude-sonnet-4-5', 'anthropic/claude-haiku-4-5'] },
-  { name: 'Google Gemini', value: 'gemini', models: ['google/gemini-2.5-pro', 'google/gemini-2.5-flash'] },
-  { name: 'DeepSeek', value: 'deepseek', models: ['deepseek/deepseek-chat', 'deepseek/deepseek-r1'] },
-  { name: 'OpenRouter', value: 'openrouter', models: ['anthropic/claude-opus-4-5', 'openai/gpt-4o', 'google/gemini-2.5-pro'] },
-  { name: 'Groq', value: 'groq', models: ['groq/llama-3.3-70b-versatile', 'groq/llama-3.1-70b-instruct'] },
-  { name: 'MiniMax', value: 'minimax', models: ['minimax/minimax-m2.1', 'minimax/minimax-m2'] },
-  { name: 'Qwen', value: 'qwen', models: ['qwen/qwen-plus', 'qwen/qwen3-235b-a22b'] },
-  { name: 'Kimi', value: 'kimi', models: ['moonshotai/kimi-k2.5', 'moonshotai/kimi-k2-thinking'] },
-  { name: 'GLM (智谱)', value: 'zhipu', models: ['z-ai/glm-4.7', 'z-ai/glm-4.6'] },
+// ============================================
+// Provider Options - Simplified for Quick Start
+// ============================================
+
+const PROVIDER_OPTIONS = [
+  { 
+    name: 'Anthropic Claude', 
+    value: 'anthropic', 
+    models: ['anthropic/claude-opus-4-5', 'anthropic/claude-sonnet-4-5', 'anthropic/claude-haiku-4-5'],
+    apiUrl: 'api.anthropic.com',
+  },
+  { 
+    name: 'OpenAI GPT-4', 
+    value: 'openai', 
+    models: ['openai/gpt-4o', 'openai/gpt-4o-mini'],
+    apiUrl: 'api.openai.com',
+  },
+  { 
+    name: 'Google Gemini', 
+    value: 'google', 
+    models: ['google/gemini-2.5-pro', 'google/gemini-2.5-flash'],
+    apiUrl: 'generativelanguage.googleapis.com',
+  },
+  { 
+    name: 'DeepSeek', 
+    value: 'deepseek', 
+    models: ['deepseek/deepseek-chat', 'deepseek/deepseek-r1'],
+    apiUrl: 'api.deepseek.com',
+  },
+  { 
+    name: 'Qwen (通义千问)', 
+    value: 'qwen', 
+    models: ['qwen/qwen-plus', 'qwen/qwen3-235b-a22b'],
+    apiUrl: 'dashscope.aliyuncs.com',
+  },
+  { 
+    name: 'Kimi (月之暗面)', 
+    value: 'kimi', 
+    models: ['kimi/kimi-k2.5', 'kimi/kimi-k2-thinking'],
+    apiUrl: 'api.moonshot.cn',
+  },
+  { 
+    name: 'MiniMax', 
+    value: 'minimax', 
+    models: ['minimax/minimax-m2.1'],
+    apiUrl: 'api.minimax.chat',
+  },
+  { 
+    name: 'OpenRouter', 
+    value: 'openrouter', 
+    models: ['anthropic/claude-opus-4-5', 'openai/gpt-4o', 'google/gemini-2.5-pro'],
+    apiUrl: 'openrouter.ai',
+  },
+  { 
+    name: 'Groq', 
+    value: 'groq', 
+    models: ['groq/llama-3.3-70b-versatile', 'groq/llama-3.1-70b-instruct'],
+    apiUrl: 'api.groq.com',
+  },
 ];
 
 export function createConfigureCommand(): Command {
@@ -24,15 +71,15 @@ export function createConfigureCommand(): Command {
     .description('Configure xopcbot interactively')
     .addHelpText(
       'after',
-      `\nExamples:
-  $ xopcbot configure                    # Interactive wizard
-  $ xopcbot configure --provider        # Configure LLM provider only
-  $ xopcbot configure --channel        # Configure channels only
+      `\nQuick Start:
+  $ xopcbot configure                    # Full wizard
+  $ xopcbot configure --provider        # Provider only
+  $ xopcbot configure --channel        # Channels only
 `
     )
     .option('--provider', 'Configure LLM provider')
     .option('--channel', 'Configure channels')
-    .option('--all', 'Configure everything (provider + channels)')
+    .option('--all', 'Configure everything')
     .action(async (opts) => {
       const configPath = join(homedir(), '.xopcbot', 'config.json');
       const existingConfig = existsSync(configPath)
@@ -41,148 +88,79 @@ export function createConfigureCommand(): Command {
 
       const doProvider = opts.provider || opts.all;
       const doChannel = opts.channel || opts.all;
-      
-      // If no options specified, run full wizard
       const runFullWizard = !doProvider && !doChannel;
 
-      console.log('\n🧙 xopcbot Configuration Wizard\n');
+      console.log('\n🧙 xopcbot Configuration\n');
       console.log('─'.repeat(40));
 
+      // ========================================
       // Step 1: Provider Configuration
+      // ========================================
       if (runFullWizard || doProvider) {
-        console.log('\n📦 Step 1: LLM Provider Configuration\n');
-        
-        const hasExistingProviders = Object.keys(existingConfig.providers || {}).length > 0;
-        
-        if (hasExistingProviders && !runFullWizard) {
-          console.log('⚠️  Provider config already exists. Updating...\n');
-        }
+        console.log('\n📦 Step 1: LLM Provider\n');
 
         const provider = await select({
           message: 'Select your LLM provider:',
-          choices: [
-            ...PROVIDERS.map(p => ({ value: p.value, name: p.name })),
-            { value: 'skip', name: 'Skip (configure later)' },
-          ],
+          choices: PROVIDER_OPTIONS.map(p => ({ value: p.value, name: `${p.name} (${p.apiUrl})` })),
         });
 
-        if (provider !== 'skip') {
-          const providerInfo = PROVIDERS.find(p => p.value === provider)!;
-          
-          console.log(`\nYou selected: ${providerInfo.name}`);
-          console.log(`Available models: ${providerInfo.models.join(', ')}\n`);
+        const providerInfo = PROVIDER_OPTIONS.find(p => p.value === provider)!;
+        console.log(`\n📌 ${providerInfo.name}`);
 
-          const apiKey = await password({
-            message: `Enter your ${providerInfo.name} API key:`,
-            validate: (value: string) => value.length > 0 || 'API key is required',
-          });
+        const apiKey = await password({
+          message: `Enter API key:`,
+          validate: (value: string) => value.length > 0 || 'API key is required',
+        });
 
-          // Handle different provider configurations
-          const updatedConfig = { ...existingConfig };
-          
-          switch (provider) {
-            case 'openai':
-              updatedConfig.providers = {
-                ...updatedConfig.providers,
-                openai: { api_key: apiKey },
-              };
-              break;
-            case 'anthropic':
-              updatedConfig.providers = {
-                ...updatedConfig.providers,
-                anthropic: { api_key: apiKey },
-              };
-              break;
-            case 'gemini':
-              updatedConfig.providers = {
-                ...updatedConfig.providers,
-                gemini: { api_key: apiKey },
-              };
-              break;
-            case 'deepseek':
-              updatedConfig.providers = {
-                ...updatedConfig.providers,
-                openrouter: { 
-                  api_key: apiKey,
-                  api_base: 'https://api.deepseek.com/v1',
-                },
-              };
-              break;
-            case 'openrouter':
-              updatedConfig.providers = {
-                ...updatedConfig.providers,
-                openrouter: { 
-                  api_key: apiKey,
-                  api_base: 'https://openrouter.ai/api/v1',
-                },
-              };
-              break;
-            case 'groq':
-              updatedConfig.providers = {
-                ...updatedConfig.providers,
-                groq: { api_key: apiKey },
-              };
-              break;
-            case 'minimax':
-              updatedConfig.providers = {
-                ...updatedConfig.providers,
-                openrouter: { 
-                  api_key: apiKey,
-                  api_base: 'https://api.minimax.chat/v1',
-                },
-              };
-              break;
-            case 'qwen':
-              updatedConfig.providers = {
-                ...updatedConfig.providers,
-                openrouter: { 
-                  api_key: apiKey,
-                  api_base: 'https://dashscope.aliyuncs.com/compatible-mode/v1',
-                },
-              };
-              break;
-            case 'kimi':
-              updatedConfig.providers = {
-                ...updatedConfig.providers,
-                openrouter: { 
-                  api_key: apiKey,
-                  api_base: 'https://api.moonshot.cn/v1',
-                },
-              };
-              break;
-            case 'zhipu':
-              updatedConfig.providers = {
-                ...updatedConfig.providers,
-                zhipu: { api_key: apiKey },
-              };
-              break;
-          }
-
-          // Select model
-          const model = await select({
-            message: 'Select default model:',
-            choices: providerInfo.models.map(m => ({ value: m, name: m })),
-          });
-
-          updatedConfig.agents = {
-            ...updatedConfig.agents,
-            defaults: {
-              ...updatedConfig.agents?.defaults,
-              model,
+        // Save config based on provider type
+        const updatedConfig = { ...existingConfig };
+        
+        if (provider === 'anthropic') {
+          updatedConfig.providers = {
+            ...updatedConfig.providers,
+            anthropic: { api_key: apiKey },
+          };
+        } else if (provider === 'google') {
+          updatedConfig.providers = {
+            ...updatedConfig.providers,
+            google: { api_key: apiKey },
+          };
+        } else {
+          // All OpenAI-compatible providers use openai config
+          const apiBase = getApiBase({ providers: { openai: { api_key: apiKey } } } as any, `${provider}/dummy`);
+          updatedConfig.providers = {
+            ...updatedConfig.providers,
+            openai: { 
+              api_key: apiKey,
+              ...(apiBase ? { api_base: apiBase } : {}),
             },
           };
-
-          // Save config
-          const finalConfig = ConfigSchema.parse(updatedConfig);
-          saveConfig(finalConfig, configPath);
-          console.log(`\n✅ Provider configured: ${providerInfo.name}`);
-          console.log(`   Model: ${model}`);
         }
+
+        // Select model
+        const model = await select({
+          message: 'Select model:',
+          choices: providerInfo.models.map(m => ({ value: m, name: m })),
+        });
+
+        updatedConfig.agents = {
+          ...updatedConfig.agents,
+          defaults: {
+            ...updatedConfig.agents?.defaults,
+            model,
+          },
+        };
+
+        const finalConfig = ConfigSchema.parse(updatedConfig);
+        saveConfig(finalConfig, configPath);
+        console.log(`\n✅ ${providerInfo.name} configured`);
       }
 
+      // ========================================
       // Step 2: Channel Configuration
+      // ========================================
       if (runFullWizard || doChannel) {
-        console.log('\n💬 Step 2: Channels Configuration\n');
+        console.log('\n💬 Step 2: Channels\n');
 
         const enableTelegram = await confirm({
           message: 'Enable Telegram?',
@@ -190,11 +168,7 @@ export function createConfigureCommand(): Command {
         });
 
         if (enableTelegram) {
-          const token = await password({
-            message: 'Enter Telegram Bot Token:',
-            validate: (value: string) => value.length > 0 || 'Token is required',
-          });
-
+          const token = await password({ message: 'Telegram Bot Token:' });
           const allowFrom = await input({
             message: 'Allowed user IDs (comma-separated, leave empty for all):',
             default: '',
@@ -211,9 +185,7 @@ export function createConfigureCommand(): Command {
                 : [],
             },
           };
-
-          const finalConfig = ConfigSchema.parse(updatedConfig);
-          saveConfig(finalConfig, configPath);
+          saveConfig(updatedConfig, configPath);
           console.log('\n✅ Telegram configured');
         }
 
@@ -225,12 +197,7 @@ export function createConfigureCommand(): Command {
         if (enableWhatsApp) {
           const bridgeUrl = await input({
             message: 'WhatsApp Bridge URL:',
-            default: existingConfig.channels?.whatsapp?.bridge_url || 'ws://localhost:3001',
-          });
-
-          const allowFrom = await input({
-            message: 'Allowed numbers (comma-separated, leave empty for all):',
-            default: '',
+            default: 'ws://localhost:3001',
           });
 
           const updatedConfig = existsSync(configPath) ? loadConfig(configPath) : ConfigSchema.parse({});
@@ -239,25 +206,17 @@ export function createConfigureCommand(): Command {
             whatsapp: {
               enabled: true,
               bridge_url: bridgeUrl,
-              allow_from: allowFrom
-                ? allowFrom.split(',').map((s: string) => s.trim())
-                : [],
+              allow_from: [],
             },
           };
-
-          const finalConfig = ConfigSchema.parse(updatedConfig);
-          saveConfig(finalConfig, configPath);
+          saveConfig(updatedConfig, configPath);
           console.log('\n✅ WhatsApp configured');
         }
       }
 
       console.log('\n' + '─'.repeat(40));
-      console.log('\n🎉 Configuration complete!');
       console.log(`\n📁 Config saved to: ${configPath}`);
-      console.log('\nNext steps:');
-      console.log('  • Run: xopcbot agent -m "Hello!"');
-      console.log('  • Edit config: xopcbot config get agents.defaults.model');
-      console.log('  • Full docs: See docs/configuration.md');
+      console.log('\nNext: xopcbot agent -m "Hello!"');
     });
 
   return cmd;

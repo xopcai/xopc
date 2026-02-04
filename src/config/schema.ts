@@ -1,28 +1,29 @@
 import { z } from 'zod';
 
-// Provider Config Schemas
-export const ProviderConfigSchema = z.object({
+// ============================================
+// Simplified Provider Configuration
+// ============================================
+// All OpenAI-compatible APIs use the same config structure
+// The model ID determines which actual provider is used
+
+export const OpenAIConfigSchema = z.object({
   api_key: z.string().default(''),
   api_base: z.string().optional(),
 });
 
-export const AnthropicConfigSchema = ProviderConfigSchema;
-export const OpenAIConfigSchema = ProviderConfigSchema;
-export const OpenRouterConfigSchema = ProviderConfigSchema;
-export const GroqConfigSchema = ProviderConfigSchema;
-export const ZhipuConfigSchema = ProviderConfigSchema;
-export const VLLMConfigSchema = ProviderConfigSchema;
-export const GeminiConfigSchema = ProviderConfigSchema;
+export const AnthropicConfigSchema = z.object({
+  api_key: z.string().default(''),
+});
 
-// Provider Aggregate
+export const GoogleConfigSchema = z.object({
+  api_key: z.string().default(''),
+});
+
+// Providers Config
 export const ProvidersConfigSchema = z.object({
-  anthropic: AnthropicConfigSchema.default({}),
   openai: OpenAIConfigSchema.default({}),
-  openrouter: OpenRouterConfigSchema.default({}),
-  groq: GroqConfigSchema.default({}),
-  zhipu: ZhipuConfigSchema.default({}),
-  vllm: VLLMConfigSchema.default({}),
-  gemini: GeminiConfigSchema.default({}),
+  anthropic: AnthropicConfigSchema.default({}),
+  google: GoogleConfigSchema.default({}),
 });
 
 // Channel Configs
@@ -46,7 +47,7 @@ export const ChannelsConfigSchema = z.object({
 // Agent Defaults
 export const AgentDefaultsSchema = z.object({
   workspace: z.string().default('~/.xopcbot/workspace'),
-  model: z.string().default('anthropic/claude-opus-4-5'),
+  model: z.string().default('anthropic/claude-sonnet-4-5'),
   max_tokens: z.number().default(8192),
   temperature: z.number().default(0.7),
   max_tool_iterations: z.number().default(20),
@@ -87,34 +88,49 @@ export const ConfigSchema = z.object({
 
 export type Config = z.infer<typeof ConfigSchema>;
 export type AgentDefaults = z.infer<typeof AgentDefaultsSchema>;
-export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
+export type ProviderConfig = z.infer<typeof OpenAIConfigSchema>;
 export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
 export type WhatsAppConfig = z.infer<typeof WhatsAppConfigSchema>;
 
-// Helper functions
+// ============================================
+// Helper Functions
+// ============================================
+
+// Known API base URLs for OpenAI-compatible providers
+const OPENAI_COMPATIBLE_BASES: Record<string, string> = {
+  'deepseek': 'https://api.deepseek.com/v1',
+  'minimax': 'https://api.minimax.chat/v1',
+  'qwen': 'https://dashscope.aliyuncs.com/compatible-mode/v1',
+  'kimi': 'https://api.moonshot.cn/v1',
+  'openrouter': 'https://openrouter.ai/api/v1',
+  'groq': 'https://api.groq.com/openai/v1',
+  'vllm': 'http://localhost:8000/v1',
+};
+
 export function getApiKey(config: Config): string | null {
+  // Priority: anthropic > openai > google
   return (
-    config.providers.openrouter?.api_key ||
     config.providers.anthropic?.api_key ||
     config.providers.openai?.api_key ||
-    config.providers.gemini?.api_key ||
-    config.providers.zhipu?.api_key ||
-    config.providers.groq?.api_key ||
-    config.providers.vllm?.api_key ||
+    config.providers.google?.api_key ||
     null
   );
 }
 
-export function getApiBase(config: Config): string | null {
-  if (config.providers.openrouter?.api_key) {
-    return config.providers.openrouter?.api_base || 'https://openrouter.ai/api/v1';
+export function getApiBase(config: Config, modelId: string): string | null {
+  // Extract provider prefix from model ID (e.g., "qwen/qwen-plus" -> "qwen")
+  const prefix = modelId.split('/')[0].toLowerCase();
+  
+  // Check if it's an OpenAI-compatible provider
+  if (OPENAI_COMPATIBLE_BASES[prefix]) {
+    return OPENAI_COMPATIBLE_BASES[prefix];
   }
-  if (config.providers.zhipu?.api_key) {
-    return config.providers.zhipu?.api_base || null;
+  
+  // Default to OpenAI if using gpt-* models
+  if (prefix.includes('gpt-')) {
+    return 'https://api.openai.com/v1';
   }
-  if (config.providers.vllm?.api_base) {
-    return config.providers.vllm?.api_base;
-  }
+  
   return null;
 }
 

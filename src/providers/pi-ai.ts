@@ -2,39 +2,65 @@
  * Pi-AI Provider Adapter
  * 
  * Wraps @mariozechner/pi-ai to work with xopcbot's LLMProvider interface.
- * Supports 20+ LLM providers with unified API, model discovery, and cost tracking.
+ * Supports 20+ LLM providers with unified API.
  */
 
 import * as PiAI from '@mariozechner/pi-ai';
 import type { LLMProvider, LLMMessage, LLMResponse, ProviderConfig } from '../types/index.js';
+import { getApiBase } from '../config/schema.js';
 
 export { PiAI };
 export type { LLMProvider };
 
-// ============================================================================
+// ============================================
 // Provider Mapping
-// ============================================================================
+// ============================================
+// Maps model ID prefixes to pi-ai providers
 
 const MODEL_TO_PROVIDER: Record<string, PiAI.KnownProvider> = {
-  'gpt-': 'openai', 'o1-': 'openai', 'o3-': 'openai',
-  'claude-': 'anthropic', 'sonnet': 'anthropic', 'haiku': 'anthropic',
-  'gemini-': 'google', 'gemma-': 'google',
-  'mistral-': 'mistral', 'mixtral-': 'mistral',
-  'llama-': 'groq', 'grok-': 'xai',
-  'deepseek-': 'openrouter',
-  'command-r-': 'cerebras', 'minimax-': 'minimax',
+  // OpenAI
+  'gpt-': 'openai',
+  'o1-': 'openai',
+  'o3-': 'openai',
+  'o4-': 'openai',
+  
+  // Anthropic
+  'claude-': 'anthropic',
+  'sonnet': 'anthropic',
+  'haiku': 'anthropic',
+  
+  // Google
+  'gemini-': 'google',
+  'gemma-': 'google',
+  
+  // Groq (uses OpenAI compatible API)
+  'groq/': 'openai',
+  'llama-': 'openai',
+  
+  // DeepSeek (OpenAI compatible)
+  'deepseek/': 'openai',
+  
+  // MiniMax (OpenAI compatible)
+  'minimax/': 'openai',
+  
+  // Qwen (OpenAI compatible)
+  'qwen/': 'openai',
+  
+  // Kimi/Moonshot (OpenAI compatible)
+  'kimi/': 'openai',
+  'moonshotai/': 'openai',
 };
 
-// Known models with correct casing (pi-ai uses specific casing)
+// Known models with correct casing
 const KNOWN_MODEL_IDS: Record<string, string> = {
   'minimax-m2.1': 'MiniMax-M2.1',
   'minimax-m2': 'MiniMax-M2',
   'minimax-m1': 'MiniMax-M1',
 };
 
-// ============================================================================
+// ============================================
 // Utility Functions
-// ============================================================================
+// ============================================
 
 function detectProvider(modelId: string): PiAI.KnownProvider {
   for (const [prefix, provider] of Object.entries(MODEL_TO_PROVIDER)) {
@@ -42,43 +68,61 @@ function detectProvider(modelId: string): PiAI.KnownProvider {
       return provider;
     }
   }
-  return 'openai';
+  return 'openai'; // Default to OpenAI
 }
 
 function parseModelId(fullModelId: string): { modelId: string; provider: PiAI.KnownProvider } {
   if (fullModelId.includes('/')) {
     const [provider, modelId] = fullModelId.split('/');
-    // Use known model ID mapping for correct casing
     const normalizedModelId = KNOWN_MODEL_IDS[modelId.toLowerCase()] || modelId;
     return { modelId: normalizedModelId, provider: provider as PiAI.KnownProvider };
   }
+  
   const detectedProvider = detectProvider(fullModelId);
-  // Use known model ID mapping for correct casing
   const normalizedModelId = KNOWN_MODEL_IDS[fullModelId.toLowerCase()] || fullModelId;
   return { modelId: normalizedModelId, provider: detectedProvider };
 }
 
-// ============================================================================
+// ============================================
 // Pi-AI Provider Implementation
-// ============================================================================
+// ============================================
 
 export class PiAIProvider implements LLMProvider {
   private model: PiAI.Model<PiAI.Api>;
+  private config: Record<string, ProviderConfig>;
 
-  constructor(private config: Record<string, ProviderConfig>, modelId: string) {
+  constructor(config: Record<string, ProviderConfig>, modelId: string) {
+    this.config = config;
     const { modelId: parsedModelId, provider } = parseModelId(modelId);
-    const model = (PiAI.getModel as any)(provider, parsedModelId);
+    
+    // Get API base URL for OpenAI-compatible providers
+    const apiBase = getApiBase({ providers: config } as any, modelId);
+    
+    // Build model with custom API base if needed
+    let model: PiAI.Model<PiAI.Api> | null = null;
+    
+    if (apiBase && provider === 'openai') {
+      // Create OpenAI-compatible model with custom base URL
+      model = (PiAI.getModel as any)('openai', parsedModelId, {
+        apiBase,
+      });
+    }
+    
+    if (!model) {
+      model = (PiAI.getModel as any)(provider, parsedModelId);
+    }
     
     if (!model) {
       throw new Error(`Model not found: ${modelId} (provider: ${provider})`);
     }
+    
     this.model = model;
   }
 
   async chat(
     messages: LLMMessage[],
     tools?: Array<{ name: string; description: string; parameters: Record<string, unknown> }>,
-    model?: string,
+    _model?: string,
     maxTokens?: number,
     temperature?: number
   ): Promise<LLMResponse> {
@@ -146,9 +190,9 @@ export class PiAIProvider implements LLMProvider {
   }
 }
 
-// ============================================================================
+// ============================================
 // Factory Function
-// ============================================================================
+// ============================================
 
 export function createPiAIProvider(
   providersConfig: Record<string, ProviderConfig>,
