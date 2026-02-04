@@ -57,11 +57,11 @@ const MODEL_TO_PROVIDER: Record<string, PiAI.KnownProvider> = {
   'moonshotai/': 'openai',
 };
 
-// Known models with correct casing
-const KNOWN_MODEL_IDS: Record<string, string> = {
-  'minimax-m2.1': 'MiniMax-M2.1',
-  'minimax-m2': 'MiniMax-M2',
-  'minimax-m1': 'MiniMax-M1',
+// Known models with correct casing (for pi-ai registry lookup)
+const DIRECT_MODEL_LOOKUP: Record<string, { provider: string; modelId: string }> = {
+  'minimax-m2.1': { provider: 'minimax', modelId: 'MiniMax-M2.1' },
+  'minimax-m2': { provider: 'minimax', modelId: 'MiniMax-M2' },
+  'minimax-m1': { provider: 'minimax', modelId: 'MiniMax-M1' },
 };
 
 // ============================================
@@ -110,9 +110,11 @@ function detectProvider(modelId: string): PiAI.KnownProvider {
 }
 
 function parseModelId(fullModelId: string): { modelId: string; provider: PiAI.KnownProvider; providerPrefix: string } {
+  // Handle format: "provider/model-id"
   if (fullModelId.includes('/')) {
     const [provider, modelId] = fullModelId.split('/');
-    const normalizedModelId = KNOWN_MODEL_IDS[modelId.toLowerCase()] || modelId;
+    const known = DIRECT_MODEL_LOOKUP[modelId.toLowerCase()];
+    const normalizedModelId = known?.modelId || modelId;
     return { 
       modelId: normalizedModelId, 
       provider: provider as PiAI.KnownProvider,
@@ -120,12 +122,23 @@ function parseModelId(fullModelId: string): { modelId: string; provider: PiAI.Kn
     };
   }
   
+  // Handle direct model ID without prefix (e.g., "minimax-m2.1")
+  const directLookup = DIRECT_MODEL_LOOKUP[fullModelId.toLowerCase()];
+  if (directLookup) {
+    return {
+      modelId: directLookup.modelId,
+      provider: directLookup.provider as PiAI.KnownProvider,
+      providerPrefix: directLookup.provider,
+    };
+  }
+  
   const detectedProvider = detectProvider(fullModelId);
-  const normalizedModelId = KNOWN_MODEL_IDS[fullModelId.toLowerCase()] || fullModelId;
+  const known = DIRECT_MODEL_LOOKUP[fullModelId.toLowerCase()];
+  const normalizedModelId = known?.modelId || fullModelId;
   return { 
     modelId: normalizedModelId, 
     provider: detectedProvider,
-    providerPrefix: fullModelId.toLowerCase()
+    providerPrefix: detectedProvider
   };
 }
 
