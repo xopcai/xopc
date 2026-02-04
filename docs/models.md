@@ -1,25 +1,226 @@
 # 模型配置
 
-xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供商。
+xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供商。同时也支持自定义模型配置。
+
+## 目录
+
+- [配置文件](#配置文件)
+- [自定义模型](#自定义模型)
+- [模型格式](#模型格式)
+- [内置提供商](#内置提供商)
+- [环境变量](#环境变量)
+
+---
 
 ## 配置文件
 
-配置文件位于 `~/.config/xopcbot/config.json`：
+配置文件位于 `~/.xopcbot/config.json`：
 
 ```json
 {
   "providers": {
     "openai": { "api_key": "sk-..." },
-    "anthropic": { "api_key": "sk-ant-..." },
-    "minimax": { "api_key": "..." }
+    "anthropic": { "api_key": "sk-ant-..." }
   },
   "agents": {
     "defaults": {
-      "model": "gpt-4o"
+      "model": "anthropic/claude-sonnet-4-5"
     }
   }
 }
 ```
+
+---
+
+## 自定义模型
+
+xopcbot 支持配置自定义模型提供商，包括自托管模型、私有部署等。
+
+### 配置结构
+
+```json
+{
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "<provider-name>": {
+        "baseUrl": "https://api.example.com/v1",
+        "apiKey": "sk-your-api-key",
+        "apiType": "openai",
+        "headers": {
+          "X-Custom-Header": "value"
+        },
+        "models": [
+          {
+            "id": "<model-id>",
+            "name": "Model Display Name",
+            "cost": {
+              "input": 10,
+              "output": 30,
+              "cacheRead": 2,
+              "cacheWrite": 10
+            },
+            "contextWindow": 131072,
+            "maxTokens": 8192,
+            "reasoning": false,
+            "input": ["text", "image"]
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "<provider-name>/<model-id>"
+    }
+  }
+}
+```
+
+### 字段说明
+
+| 字段 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `models.mode` | `merge` \| `replace` | 否 | `merge` 合并到内置模型，`replace` 替换全部 |
+| `models.providers.<name>.baseUrl` | string | 是 | API 基础地址 |
+| `models.providers.<name>.apiKey` | string | 否 | API 密钥 |
+| `models.providers.<name>.apiType` | `openai` \| `anthropic` | 否 | API 类型，默认 `openai` |
+| `models.providers.<name>.headers` | object | 否 | 自定义请求头 |
+| `models.providers.<name>.models[].id` | string | 是 | 模型 ID |
+| `models.providers.<name>.models[].name` | string | 是 | 模型显示名称 |
+| `models.providers.<name>.models[].cost` | object | 否 | 价格（每百万 tokens） |
+| `models.providers.<name>.models[].contextWindow` | number | 否 | 上下文窗口大小 |
+| `models.providers.<name>.models[].maxTokens` | number | 否 | 最大输出 tokens |
+| `models.providers.<name>.models[].reasoning` | boolean | 否 | 是否支持思考模型 |
+| `models.providers.<name>.models[].input` | string[] | 否 | 支持的输入类型 |
+
+### 示例：Qwen 自定义模型
+
+```json
+{
+  "models": {
+    "providers": {
+      "qwen-custom": {
+        "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
+        "apiKey": "sk-your-qwen-api-key",
+        "apiType": "openai",
+        "models": [
+          {
+            "id": "qwen-code-plus",
+            "name": "Qwen Code Plus",
+            "cost": { "input": 10, "output": 30 },
+            "contextWindow": 131072,
+            "maxTokens": 8192
+          },
+          {
+            "id": "qwen-code-max",
+            "name": "Qwen Code Max",
+            "cost": { "input": 20, "output": 60 },
+            "contextWindow": 131072,
+            "maxTokens": 16384
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "qwen-custom/qwen-code-plus"
+    }
+  }
+}
+```
+
+### 示例：Kimi 自定义模型
+
+```json
+{
+  "models": {
+    "providers": {
+      "kimi-custom": {
+        "baseUrl": "https://api.moonshot.cn/v1",
+        "apiKey": "sk-your-kimi-api-key",
+        "apiType": "openai",
+        "models": [
+          {
+            "id": "kimi-4.5",
+            "name": "Kimi 4.5",
+            "cost": { "input": 10, "output": 50 },
+            "contextWindow": 200000,
+            "maxTokens": 8192
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "kimi-custom/kimi-4.5"
+    }
+  }
+}
+```
+
+### 示例：自托管 vLLM
+
+```json
+{
+  "models": {
+    "providers": {
+      "local-llama": {
+        "baseUrl": "http://localhost:8000/v1",
+        "apiKey": "not-needed",
+        "apiType": "openai",
+        "models": [
+          {
+            "id": "llama-3.1-70b-instruct",
+            "name": "Local Llama 3.1",
+            "cost": { "input": 0, "output": 0 },
+            "contextWindow": 131072,
+            "maxTokens": 4096
+          }
+        ]
+      }
+    }
+  },
+  "agents": {
+    "defaults": {
+      "model": "local-llama/llama-3.1-70b-instruct"
+    }
+  }
+}
+```
+
+### 使用 CLI 管理模型
+
+```bash
+# 列出所有已配置的自定义模型
+xopcbot models list
+
+# JSON 格式输出
+xopcbot models list --json
+```
+
+输出示例：
+```
+📋 Available Models
+
+──────────────────────────────────────────────────
+
+🤖 Qwen Code Plus
+   ID: qwen-custom/qwen-code-plus
+   Provider: qwen-custom
+
+🤖 Qwen Code Max
+   ID: qwen-custom/qwen-code-max
+   Provider: qwen-custom
+
+──────────────────────────────────────────────────
+
+📌 Current default model: qwen-custom/qwen-code-plus
+```
+
+---
 
 ## 模型格式
 
@@ -28,6 +229,7 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 模型 ID 可以是：
 - **简短格式**（自动检测提供商）：`gpt-4o`、`claude-3-5-sonnet`
 - **完整格式**（指定提供商）：`openai/gpt-4o`、`anthropic/claude-3-5-sonnet`
+- **自定义格式**：`qwen-custom/qwen-code-plus`
 
 ### 自动检测规则
 
@@ -49,7 +251,9 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 
 ---
 
-## OpenAI
+## 内置提供商
+
+### OpenAI
 
 | 模型 | 上下文 | Reasoning |
 |------|--------|-----------|
@@ -58,93 +262,27 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 | `gpt-4.1` | 1M | ❌ |
 | `gpt-4.1-mini` | 1M | ❌ |
 | `gpt-5` | 400K | ✅ |
-| `gpt-5.1` | 400K | ✅ |
-| `gpt-5.2` | 400K | ✅ |
 | `o1` | 200K | ✅ |
 | `o3` | 200K | ✅ |
 | `o3-mini` | 200K | ✅ |
 
-### OpenAI 配置
-
-```json
-{
-  "providers": {
-    "openai": {
-      "api_key": "sk-..."
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "gpt-4o"
-    }
-  }
-}
-```
-
----
-
-## Anthropic
+### Anthropic
 
 | 模型 | 上下文 | Reasoning |
 |------|--------|-----------|
 | `claude-haiku-4-5` | 200K | ✅ |
 | `claude-sonnet-4-5` | 200K | ✅ |
 | `claude-opus-4-5` | 200K | ✅ |
-| `claude-sonnet-4` | 200K | ✅ |
-| `claude-opus-4-1` | 200K | ✅ |
-| `claude-3-7-sonnet` | 200K | ✅ |
 | `claude-3-5-sonnet` | 200K | ❌ |
-| `claude-3-haiku` | 200K | ❌ |
 
-### Anthropic 配置
-
-```json
-{
-  "providers": {
-    "anthropic": {
-      "api_key": "sk-ant-api03-..."
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "claude-sonnet-4-5"
-    }
-  }
-}
-```
-
----
-
-## Google Gemini
+### Google Gemini
 
 | 模型 | 上下文 | Reasoning |
 |------|--------|-----------|
 | `gemini-2.5-pro` | 1M | ✅ |
 | `gemini-2.5-flash` | 1M | ✅ |
-| `gemini-2.0-flash-exp` | 1M | ❌ |
-| `gemini-3-pro-preview` | 1M | ✅ |
-| `gemma-3-27b` | 200K | ❌ |
 
-### Google 配置
-
-```json
-{
-  "providers": {
-    "google": {
-      "api_key": "AIza..."
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "gemini-2.5-flash"
-    }
-  }
-}
-```
-
----
-
-## DeepSeek
+### DeepSeek
 
 | 模型 | 上下文 | Reasoning |
 |------|--------|-----------|
@@ -152,207 +290,33 @@ xopcbot 使用 `@mariozechner/pi-ai` 提供统一的 LLM API，支持 20+ 提供
 | `deepseek-reasoner` | 128K | ✅ |
 | `deepseek-v3` | 128K | ❌ |
 
-### DeepSeek 配置
-
-```json
-{
-  "providers": {
-    "openrouter": {
-      "api_key": "sk-or-...",
-      "api_base": "https://openrouter.ai/api/v1"
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "deepseek/deepseek-chat"
-    }
-  }
-}
-```
-
----
-
-## MiniMax
-
-| 模型 | 上下文 |
-|------|--------|
-| `minimax-m2.1` | 1M |
-| `minimax-m2` | 1M |
-| `minimax-m1` | 1M |
-
-### MiniMax 配置
-
-```json
-{
-  "providers": {
-    "minimax": {
-      "api_key": "..."
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "minimax-m2.1"
-    }
-  }
-}
-```
-
----
-
-## Qwen (阿里巴巴)
+### Qwen (阿里巴巴)
 
 | 模型 | 上下文 | Reasoning |
 |------|--------|-----------|
 | `qwen-plus` | 1M | ❌ |
 | `qwen-max` | 131K | ❌ |
-| `qwen-flash` | 1M | ❌ |
-| `qwen3-32b` | 128K | ✅ |
 | `qwen3-235b-a22b` | 128K | ✅ |
 | `qwq-plus` | 131K | ✅ |
 
-### Qwen 配置
-
-```json
-{
-  "providers": {
-    "openrouter": {
-      "api_key": "sk-or-...",
-      "api_base": "https://openrouter.ai/api/v1"
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "qwen/qwen-plus"
-    }
-  }
-}
-```
-
----
-
-## Kimi (月之暗面)
+### Kimi (月之暗面)
 
 | 模型 | 上下文 | Reasoning |
 |------|--------|-----------|
 | `kimi-k2.5` | 262K | ✅ |
 | `kimi-k2-thinking` | 262K | ✅ |
-| `kimi-k2-turbo` | 262K | ❌ |
-| `kimi-k2` | 262K | ❌ |
 
-### Kimi 配置
+### MiniMax
 
-```json
-{
-  "providers": {
-    "openrouter": {
-      "api_key": "sk-or-...",
-      "api_base": "https://openrouter.ai/api/v1"
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "kimi/kimi-k2.5"
-    }
-  }
-}
-```
+| 模型 | 上下文 |
+|------|--------|
+| `minimax-m2.1` | 1M |
 
----
-
-## Groq
+### Groq
 
 | 模型 | 上下文 |
 |------|--------|
 | `llama-3.3-70b-versatile` | 128K |
-| `llama-3.1-70b-instruct` | 128K |
-| `llama-3.1-8b-instruct` | 128K |
-| `mixtral-8x7b-32768` | 32K |
-
-### Groq 配置
-
-```json
-{
-  "providers": {
-    "groq": {
-      "api_key": "gsk_..."
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "llama-3.3-70b-versatile"
-    }
-  }
-}
-```
-
----
-
-## xAI (Grok)
-
-| 模型 | 上下文 | Reasoning |
-|------|--------|-----------|
-| `grok-4` | 256K | ✅ |
-| `grok-4-fast` | 2M | ✅ |
-| `grok-4.1` | 200K | ❌ |
-
-### xAI 配置
-
-```json
-{
-  "providers": {
-    "xai": {
-      "api_key": "xai-..."
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "grok-4"
-    }
-  }
-}
-```
-
----
-
-## GLM (智谱 AI)
-
-| 模型 | 上下文 |
-|------|--------|
-| `glm-4.7` | 200K |
-| `glm-4.6` | 200K |
-| `glm-4.5` | 128K |
-
-### GLM 配置
-
-```json
-{
-  "providers": {
-    "zhipu": {
-      "api_key": "...",
-      "api_base": "https://open.bigmodel.cn/api/paas/v4"
-    }
-  },
-  "agents": {
-    "defaults": {
-      "model": "glm-4.7"
-    }
-  }
-}
-```
-
----
-
-## 推理模型推荐
-
-需要复杂推理任务时，推荐使用以下模型：
-
-| 场景 | 推荐模型 | 提供商 |
-|------|----------|--------|
-| 数学推理 | `o3-mini` | OpenAI |
-| 代码生成 | `claude-sonnet-4-5` | Anthropic |
-| 长文本分析 | `gemini-2.5-pro` | Google |
-| 深度思考 | `deepseek-reasoner` | DeepSeek |
-| 快速推理 | `qwen3-235b-a22b` | Alibaba |
 
 ---
 
@@ -374,34 +338,41 @@ API Key 也可通过环境变量设置：
 ## 快速参考
 
 ```bash
-# 查看支持的模型列表
-node -e "const {getProviders, getModels} = require('./dist/providers/index.js'); console.log(getProviders())"
+# 列出自定义模型
+xopcbot models list
+
+# 使用自定义模型
+xopcbot agent -m "Hello"
 ```
 
 ---
 
 ## 常见问题
 
-### Q: 模型不存在错误
+### Q: 自定义模型无法连接
 
+1. 检查 `baseUrl` 是否正确
+2. 确认 API 服务正在运行
+3. 检查网络连接和防火墙
+
+### Q: 如何调试自定义模型
+
+使用 `DEBUG=* xopcbot agent -m "test"` 查看详细日志。
+
+### Q: 价格计算不准确
+
+在模型配置中设置 `cost` 字段来自定义价格：
+```json
+{
+  "models": {
+    "providers": {
+      "custom": {
+        "models": [{
+          "id": "my-model",
+          "cost": { "input": 10, "output": 30 }
+        }]
+      }
+    }
+  }
+}
 ```
-Error: Model not found: gpt-5 (provider: openai)
-```
-
-检查模型 ID 是否正确，确保拼写与官方一致。
-
-### Q: 如何选择推理模型
-
-- **高强度推理** (`o3`, `claude-opus-4-5`): 数学证明、复杂分析
-- **平衡型** (`claude-sonnet-4-5`, `qwen3-235b`): 日常任务
-- **快速响应** (`o1-mini`, `qwen-flash`): 简单问答
-
-### Q: 上下文窗口选择
-
-- **200K+**: 长文档分析、代码库理解
-- **128K**: 复杂对话、长篇文章
-- **32K-64K**: 标准对话
-
-### Q: API Key 无效
-
-确保 API Key 正确且有足够权限，检查是否过期。
