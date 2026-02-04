@@ -5,7 +5,8 @@
  * Provides structured logging with levels, prefixes, and child loggers.
  */
 
-import pino, { Logger } from 'pino';
+import pino from 'pino';
+import type { Logger } from 'pino';
 import path from 'path';
 import { fileURLToPath } from 'url';
 
@@ -34,8 +35,8 @@ const baseLogger = pino({
 });
 
 // Aliases for compatibility
-export { baseLogger as logger, pino as Pino };
-export { Logger };
+export const logger = baseLogger;
+export { pino as Pino };
 
 /**
  * Create a child logger with a specific prefix
@@ -114,3 +115,6 @@ export function setLogLevel(level: LogLevel): void {
 export function getLogLevel(): string {
   return baseLogger.level;
 }
+
+// Re-export pino types for convenience
+export type { Logger };
