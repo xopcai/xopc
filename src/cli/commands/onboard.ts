@@ -1,71 +1,233 @@
 import { Command } from 'commander';
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import { homedir } from 'os';
-import { loadConfig, saveConfig, ConfigSchema } from '../../config/index.js';
+import { input, password, select, confirm } from '@inquirer/prompts';
+import { loadConfig, saveConfig, ConfigSchema, PROVIDER_NAMES, listBuiltinModels, BUILTIN_MODELS, isProviderConfigured } from '../../config/index.js';
+
+const PROVIDER_OPTIONS = [
+  { name: 'OpenAI (GPT-4, o1)', value: 'openai', envKey: 'OPENAI_API_KEY', models: ['gpt-4o', 'gpt-4o-mini', 'gpt-5', 'o1', 'o3'] },
+  { name: 'Anthropic (Claude)', value: 'anthropic', envKey: 'ANTHROPIC_API_KEY', models: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-5'] },
+  { name: 'Google (Gemini)', value: 'google', envKey: 'GOOGLE_API_KEY', models: ['gemini-2.5-pro', 'gemini-2.5-flash'] },
+  { name: 'Qwen (通义千问)', value: 'qwen', envKey: 'QWEN_API_KEY', models: ['qwen-plus', 'qwen-max', 'qwen3-235b-a22b'] },
+  { name: 'Kimi (月之暗面)', value: 'kimi', envKey: 'KIMI_API_KEY', models: ['kimi-k2.5', 'kimi-k2-thinking'] },
+  { name: 'MiniMax', value: 'minimax', envKey: 'MINIMAX_API_KEY', models: ['minimax-m2.1', 'minimax-m2'] },
+  { name: 'DeepSeek', value: 'deepseek', envKey: 'DEEPSEEK_API_KEY', models: ['deepseek-chat', 'deepseek-reasoner'] },
+  { name: 'Groq', value: 'groq', envKey: 'GROQ_API_KEY', models: ['llama-3.3-70b-versatile'] },
+];
 
 export function createOnboardCommand(): Command {
   const cmd = new Command('onboard')
-    .description('Initialize xopcbot configuration and workspace')
-    .action(async () => {
-      console.log('🧙 Starting xopcbot onboarding...\n');
+    .description('Initialize xopcbot with interactive configuration')
+    .addHelpText(
+      'after',
+      `
+Examples:
+  $ xopcbot onboard                 # Full interactive setup
+  $ xopcbot onboard --model-only   # Configure model only
+  $ xopcbot onboard --skip-env     # Skip env var check
+`
+    )
+    .option('--model-only', 'Configure model only')
+    .option('--skip-env', 'Skip environment variable check')
+    .action(async (options) => {
+      console.log('🧙 xopcbot Setup Wizard\n');
+      console.log('═'.repeat(50));
 
+      const workspacePath = join(homedir(), '.xopcbot', 'workspace');
       const configPath = join(homedir(), '.xopcbot', 'config.json');
 
-      // Create config
-      if (existsSync(configPath)) {
-        console.log(`⚠️  Config already exists at ${configPath}`);
-        const overwrite = process.env.OVERWRITE_CONFIG === 'true' || 
-          process.argv.includes('--overwrite');
+      // Step 1: Workspace setup
+      if (!options.modelOnly) {
+        console.log('\n📁 Step 1: Workspace\n');
         
-        if (!overwrite) {
-          console.log('Skipping config creation.\n');
+        if (!existsSync(workspacePath)) {
+          mkdirSync(workspacePath, { recursive: true });
+          console.log('✅ Created workspace:', workspacePath);
         } else {
-          const config = ConfigSchema.parse({});
-          saveConfig(config, configPath);
-          console.log('✅  Created default config');
+          console.log('ℹ️  Workspace already exists:', workspacePath);
+        }
+
+        createBootstrapFiles(workspacePath);
+      }
+
+      // Step 2: Model configuration
+      console.log('\n🤖 Step 2: Choose Your Model\n');
+
+      // Check existing config
+      const existingConfig = existsSync(configPath) ? loadConfig(configPath) : null;
+      const currentModel = existingConfig?.agents?.defaults?.model;
+      
+      if (currentModel) {
+        console.log('Current model:', currentModel);
+        const useCurrent = await confirm({
+          message: 'Keep using this model?',
+          default: true,
+        });
+        
+        if (useCurrent) {
+          console.log('✅ Keeping current model:', currentModel);
+        } else {
+          await configureModel(configPath, existingConfig);
         }
       } else {
-        const config = ConfigSchema.parse({});
-        saveConfig(config, configPath);
-        console.log('✅  Created config at', configPath);
+        await configureModel(configPath, existingConfig);
       }
 
-      // Create workspace
-      const workspacePath = join(homedir(), '.xopcbot', 'workspace');
-      if (!existsSync(workspacePath)) {
-        mkdirSync(workspacePath, { recursive: true });
-        console.log('✅  Created workspace at', workspacePath);
-      } else {
-        console.log('⚠️  Workspace already exists at', workspacePath);
+      // Step 3: API Key status
+      if (!options.skipEnv && !options.modelOnly) {
+        console.log('\n🔑 Step 3: API Key Status\n');
+        
+        let hasKey = false;
+        const allProviders = ['OPENAI_API_KEY', 'ANTHROPIC_API_KEY', 'GOOGLE_API_KEY', 
+          'QWEN_API_KEY', 'KIMI_API_KEY', 'MINIMAX_API_KEY', 'DEEPSEEK_API_KEY', 'GROQ_API_KEY'];
+        
+        for (const key of allProviders) {
+          if (process.env[key]) {
+            console.log(`✅ ${key} is set`);
+            hasKey = true;
+          }
+        }
+        
+        if (!hasKey) {
+          console.log('\n⚠️  No API keys found in environment.');
+          console.log('You can set them before running:');
+          console.log('  export OPENAI_API_KEY="sk-..."');
+          console.log('  export QWEN_API_KEY="sk-..."');
+          console.log('\nOr add them to config.json:');
+          console.log('  "providers": { "qwen": { "api_key": "sk-..." } }');
+        }
       }
 
-      // Create default bootstrap files
-      createBootstrapFiles(workspacePath);
-
-      console.log('\n🎉  xopcbot is ready!');
-      console.log('\nNext steps:');
-      console.log('  1. Add your API key to ~/.xopcbot/config.json');
-      console.log('     Get one at: https://openrouter.ai/keys');
-      console.log('  2. Chat: xopcbot agent -m "Hello!"');
-      console.log('\nWant Telegram/WhatsApp? See: https://github.com/your-repo');
+      console.log('\n' + '═'.repeat(50));
+      console.log('\n🎉 Setup Complete!\n');
+      
+      console.log('📝 Usage:');
+      console.log('  xopcbot agent -m "Hello"           # Quick chat');
+      console.log('  xopcbot agent -i                    # Interactive mode');
+      console.log('  xopcbot models list                 # List models');
+      
+      console.log('\n🔧 Configuration:');
+      console.log('  Config:', configPath);
+      console.log('  Workspace:', workspacePath);
     });
 
   return cmd;
+}
+
+async function configureModel(configPath: string, existingConfig: any): Promise<void> {
+  // Check for existing API keys in environment
+  const envProviderMap: Record<string, string> = {
+    'OPENAI_API_KEY': 'openai',
+    'ANTHROPIC_API_KEY': 'anthropic',
+    'GOOGLE_API_KEY': 'google',
+    'QWEN_API_KEY': 'qwen',
+    'KIMI_API_KEY': 'kimi',
+    'MINIMAX_API_KEY': 'minimax',
+    'DEEPSEEK_API_KEY': 'deepseek',
+    'GROQ_API_KEY': 'groq',
+  };
+
+  let detectedProvider: string | null = null;
+  for (const [envKey, provider] of Object.entries(envProviderMap)) {
+    if (process.env[envKey]) {
+      detectedProvider = provider;
+      break;
+    }
+  }
+
+  // Step 2.1: Select provider
+  let provider: string;
+  
+  if (detectedProvider) {
+    console.log(`\n🔍 Detected ${envProviderMap[Object.keys(envProviderMap).find(k => envProviderMap[k] === detectedProvider)!]} API key in environment`);
+    const useDetected = await confirm({
+      message: `Use ${detectedProvider}?`,
+      default: true,
+    });
+    provider = useDetected ? detectedProvider : await selectProvider();
+  } else {
+    provider = await selectProvider();
+  }
+
+  // Step 2.2: Enter API key if not in env
+  const providerInfo = PROVIDER_OPTIONS.find(p => p.value === provider)!;
+  let apiKey = process.env[`${providerInfo.envKey}`];
+  
+  if (!apiKey) {
+    console.log(`\n🔑 Enter API key for ${providerInfo.name}`);
+    apiKey = await password({
+      message: `API Key for ${providerInfo.name}:`,
+      validate: (value: string) => value.length > 0 || 'API key is required',
+    });
+  } else {
+    console.log(`✅ API key found in ${providerInfo.envKey}`);
+  }
+
+  // Step 2.3: Select model
+  console.log(`\n📋 Available models for ${providerInfo.name}:`);
+  const model = await select({
+    message: 'Select a model:',
+    choices: providerInfo.models.map(m => ({
+      value: `${provider}/${m}`,
+      name: m,
+    })),
+  });
+
+  // Step 2.4: Save config
+  const config = existingConfig ? { ...existingConfig } : {};
+  
+  // Ensure providers object exists
+  if (!config.providers) {
+    config.providers = {};
+  }
+  
+  // Save API key to config (or keep empty if in env)
+  if (apiKey) {
+    config.providers[provider] = {
+      api_key: apiKey,
+    };
+  }
+
+  // Set default model
+  config.agents = {
+    defaults: {
+      model,
+    },
+  };
+
+  // Create default workspace
+  config.agents.defaults.workspace = join(homedir(), '.xopcbot', 'workspace');
+
+  saveConfig(config, configPath);
+  console.log('\n✅ Configuration saved!');
+  console.log(`   Model: ${model}`);
+  console.log(`   Provider: ${provider}`);
+}
+
+async function selectProvider(): Promise<string> {
+  const choices = PROVIDER_OPTIONS.map(p => ({
+    value: p.value,
+    name: `${p.name} (${p.envKey})`,
+  }));
+  
+  return await select({
+    message: 'Select a model provider:',
+    choices,
+  });
 }
 
 function createBootstrapFiles(workspace: string): void {
   const files: Record<string, string> = {
     'AGENTS.md': `# Agent Instructions
 
-You are a helpful AI assistant. Be concise, accurate, and friendly.
+You are xopcbot, a helpful AI assistant.
 
 ## Guidelines
 
-- Always explain what you're doing before taking actions
-- Ask for clarification when the request is ambiguous
-- Use tools to help accomplish tasks
-- Remember important information in your memory files
+- Be concise and helpful
+- Use tools when appropriate
+- Ask for clarification when needed
 `,
     'SOUL.md': `# Soul
 
@@ -75,15 +237,14 @@ I am xopcbot, a lightweight AI assistant.
 
 - Helpful and friendly
 - Concise and to the point
-- Curious and eager to learn
 `,
     'USER.md': `# User
 
-*Learn about the person you're helping. Update this as you go.*
+*Learn about the person you're helping.*
 
-## Context
+## Notes
 
-*(What do they care about? What projects are they working on?)*
+*(Update as you learn more about the user)*
 `,
     'TOOLS.md': `# Tools
 
@@ -91,12 +252,9 @@ I am xopcbot, a lightweight AI assistant.
 
 ## What Goes Here
 
-- Camera names and locations
-- SSH hosts and aliases
-- Preferred voices for TTS
+- SSH hosts
 - Device nicknames
-
----
+- Preferred settings
 `,
   };
 
@@ -109,14 +267,7 @@ I am xopcbot, a lightweight AI assistant.
     const path = join(workspace, filename);
     if (!existsSync(path)) {
       writeFileSync(path, content, 'utf-8');
-      console.log('✅  Created', filename);
+      console.log('✅ Created', filename);
     }
-  }
-
-  // Create MEMORY.md
-  const memoryPath = join(workspace, 'memory', 'MEMORY.md');
-  if (!existsSync(memoryPath)) {
-    writeFileSync(memoryPath, '# Long-term Memory\n\n*Add important memories here.*\n', 'utf-8');
-    console.log('✅  Created memory/MEMORY.md');
   }
 }
