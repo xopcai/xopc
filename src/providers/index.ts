@@ -1,7 +1,7 @@
 /**
  * Provider Factory
  * 
- * Uses @mariozechner/pi-ai for unified LLM access.
+ * Unified LLM provider for xopcbot.
  */
 
 import { createProvider, getAvailableModels } from './pi-ai.js';
