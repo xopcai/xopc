@@ -7,7 +7,7 @@
  */
 
 import * as PiAI from '@mariozechner/pi-ai';
-import type { LLMProvider, LLMMessage, LLMResponse, ProviderConfig } from '../types/index.js';
+import type { LLMProvider, LLMMessage, LLMResponse, ProviderConfig, ToolCall } from '../types/index.js';
 import type { Config, ModelDefinition } from '../config/schema.js';
 import { getApiBase, getApiKey, getApiType, getModelDefinition } from '../config/schema.js';
 
@@ -126,6 +126,39 @@ function parseModelId(fullModelId: string): { modelId: string; provider: PiAI.Kn
 }
 
 // ============================================
+// Message Conversion
+// ============================================
+
+interface PiAIMessage {
+  role: 'user' | 'assistant' | 'tool' | 'toolResult';
+  content: string | Array<{ type: string; text?: string; id?: string; name?: string; arguments?: Record<string, unknown> }>;
+  timestamp: number;
+  toolCallId?: string;
+  toolName?: string;
+  isError?: boolean;
+}
+
+function buildPiAIMessages(messages: LLMMessage[]): PiAIMessage[] {
+  return messages.map(m => {
+    const msg: PiAIMessage = {
+      role: m.role as 'user' | 'assistant' | 'tool',
+      content: typeof m.content === 'string' ? m.content : '',
+      timestamp: Date.now(),
+    };
+
+    if (m.role === 'tool' && m.tool_call_id) {
+      msg.role = 'toolResult';
+      msg.toolCallId = m.tool_call_id;
+      msg.toolName = m.name || 'unknown';
+      msg.content = typeof m.content === 'string' ? m.content : '';
+      msg.isError = false;
+    }
+
+    return msg;
+  });
+}
+
+// ============================================
 // Pi-AI Provider Implementation
 // ============================================
 
@@ -208,12 +241,11 @@ export class PiAIProvider implements LLMProvider {
     maxTokens?: number,
     temperature?: number
   ): Promise<LLMResponse> {
+    // Build pi-ai compatible messages
+    const piAiMessages = buildPiAIMessages(messages);
+
     const context = {
-      messages: messages.map(m => ({
-        role: m.role as 'user' | 'assistant' | 'tool',
-        content: typeof m.content === 'string' ? m.content : '',
-        timestamp: Date.now(),
-      })),
+      messages: piAiMessages,
       tools: tools?.map(t => ({
         name: t.name,
         description: t.description,
@@ -227,23 +259,34 @@ export class PiAIProvider implements LLMProvider {
         temperature: temperature ?? 0.7,
       });
 
+      // Extract text content
+      const textContent = (result.content || [])
+        .filter((c: any) => c.type === 'text')
+        .map((c: any) => c.text)
+        .join('');
+
+      // Extract tool calls
+      const toolCalls: ToolCall[] = (result.content || [])
+        .filter((c: any) => c.type === 'toolCall')
+        .map((tc: any) => ({
+          id: tc.id || '',
+          type: 'function' as const,
+          function: { 
+            name: tc.name || '', 
+            arguments: typeof tc.arguments === 'string' 
+              ? tc.arguments 
+              : JSON.stringify(tc.arguments || {}) 
+          },
+        }));
+
       return {
-        content: (result.content || [])
-          .filter((c: any) => c.type === 'text')
-          .map((c: any) => c.text)
-          .join('') || null,
-        tool_calls: (result.content || [])
-          .filter((c: any) => c.type === 'toolCall')
-          .map((tc: any) => ({
-            id: tc.id,
-            type: 'function' as const,
-            function: { name: tc.name, arguments: JSON.stringify(tc.arguments) },
-          })),
-        finish_reason: result.stopReason,
+        content: textContent || null,
+        tool_calls: toolCalls,
+        finish_reason: result.stopReason || 'stop',
         usage: result.usage ? {
-          prompt_tokens: result.usage.input,
-          completion_tokens: result.usage.output,
-          total_tokens: result.usage.totalTokens,
+          prompt_tokens: result.usage.input || 0,
+          completion_tokens: result.usage.output || 0,
+          total_tokens: result.usage.totalTokens || 0,
         } : undefined,
       };
     } catch (error) {
