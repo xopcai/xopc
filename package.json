@@ -28,7 +28,7 @@
   },
   "dependencies": {
     "@inquirer/prompts": "^8.2.0",
-    "@mariozechner/pi-ai": "^0.51.5",
+    "@mariozechner/pi-ai": "^0.51.6",
     "@whiskeysockets/baileys": "7.0.0-rc.9",
     "commander": "^14.0.3",
     "cron-parser": "^5.5.0",

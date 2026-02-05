@@ -174,8 +174,12 @@ Always be helpful, accurate, and concise.`;
     result: string
   ): LLMMessage[] {
     messages.push({
-      role: 'tool',
-      content: result,
+      role: 'toolResult' as const,
+      toolCallId,
+      toolName,
+      content: [{ type: 'text' as const, text: result }],
+      isError: false,
+      timestamp: Date.now(),
     });
     return messages;
   }

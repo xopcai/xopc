@@ -23,10 +23,12 @@ export const ProvidersConfigSchema = z.object({
   kimi: OpenAIProviderSchema.default({}),
   moonshot: OpenAIProviderSchema.default({}),
   minimax: OpenAIProviderSchema.default({}),
+  'minimax-cn': OpenAIProviderSchema.default({}), // MiniMax 中国版
   deepseek: OpenAIProviderSchema.default({}),
   groq: OpenAIProviderSchema.default({}),
   openrouter: OpenAIProviderSchema.default({}),
   xai: OpenAIProviderSchema.default({}),
+  bedrock: OpenAIProviderSchema.default({}),
   
   // Native providers
   anthropic: AnthropicProviderSchema.default({}),
@@ -119,7 +121,7 @@ export type WhatsAppConfig = z.infer<typeof WhatsAppConfigSchema>;
 // Provider Defaults
 // ============================================
 
-// OpenAI-compatible providers (use openai-responses API)
+// OpenAI-compatible providers (use openai-completions API)
 const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { api_base: string; env_key: string[] }> = {
   'openai': { api_base: 'https://api.openai.com/v1', env_key: ['OPENAI_API_KEY'] },
   'qwen': { api_base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', env_key: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'] },
@@ -129,11 +131,13 @@ const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { api_base: string; env_key: s
   'groq': { api_base: 'https://api.groq.com/openai/v1', env_key: ['GROQ_API_KEY'] },
   'openrouter': { api_base: 'https://openrouter.ai/api/v1', env_key: ['OPENROUTER_API_KEY'] },
   'xai': { api_base: 'https://api.x.ai/v1', env_key: ['XAI_API_KEY'] },
+  'bedrock': { api_base: '', env_key: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'] }, // Bedrock uses AWS credentials
 };
 
 // Anthropic-compatible providers (use anthropic-messages API)
 const ANTHROPIC_COMPATIBLE_PROVIDERS: Record<string, { api_base: string; env_key: string[] }> = {
   'minimax': { api_base: 'https://api.minimax.io/anthropic', env_key: ['MINIMAX_API_KEY'] },
+  'minimax-cn': { api_base: 'https://api.minimaxi.com/anthropic', env_key: ['MINIMAX_CN_API_KEY', 'MINIMAX_API_KEY'] }, // MiniMax 中国版
 };
 
 // Native providers (use their own APIs)
@@ -216,64 +220,119 @@ export function isAnthropicCompatible(provider: string): boolean {
  * Model ID normalization table
  * Maps user input to the format expected by pi-ai
  */
-const MODEL_NAME_NORMALIZATION: Record<string, string> = {
-  // MiniMax (full ID format)
-  'minimax/m2.1': 'MiniMax-M2.1',
-  'minimax/m2': 'MiniMax-M2',
-  'minimax/m1': 'MiniMax-M1',
-  // MiniMax (short format)
-  'minimax-m2.1': 'MiniMax-M2.1',
-  'minimax-m2': 'MiniMax-M2',
-  'minimax-m1': 'MiniMax-M1',
+const MODEL_NAME_NORMALIZATION: Record<string, { provider: string; model: string }> = {
+  // MiniMax International (full ID format - pi-ai uses "MiniMax-M2" not "minimax-m2")
+  'minimax/m2.1': { provider: 'minimax', model: 'MiniMax-M2.1' },
+  'minimax/m2': { provider: 'minimax', model: 'MiniMax-M2' },
+  'minimax/m1': { provider: 'minimax', model: 'MiniMax-M1' },
+  
+  // MiniMax China (must be normalized BEFORE general minimax patterns)
+  'minimax-cn/m2.1': { provider: 'minimax-cn', model: 'MiniMax-M2.1' },
+  'minimax-cn/m2': { provider: 'minimax-cn', model: 'MiniMax-M2' },
+  'minimax-cn/m1': { provider: 'minimax-cn', model: 'MiniMax-M1' },
+  
+  // MiniMax (short format) - defaults to international
+  'minimax-m2.1': { provider: 'minimax', model: 'MiniMax-M2.1' },
+  'minimax-m2': { provider: 'minimax', model: 'MiniMax-M2' },
+  'minimax-m1': { provider: 'minimax', model: 'MiniMax-M1' },
+  
+  // Qwen 3.x 系列 (pi-ai uses various model IDs)
+  'qwen3': { provider: 'qwen', model: 'qwen.qwen3-235b-a22b-2507-v1:0' },
+  'qwen3-32b': { provider: 'qwen', model: 'qwen.qwen3-32b-v1:0' },
+  'qwen3-coder': { provider: 'qwen', model: 'qwen.qwen3-coder-30b-a3b-v1:0' },
+  'qwen3-coder-plus': { provider: 'qwen', model: 'qwen/qwen3-coder-plus' }, // OpenRouter
+  'qwen-qwq': { provider: 'groq', model: 'qwen-qwq-32b' }, // Groq variant
+  'qwq-32b': { provider: 'groq', model: 'qwen-qwq-32b' },
+  
+  // Qwen 2.5 系列 (via OpenRouter)
+  'qwen-max': { provider: 'qwen', model: 'qwen/qwen-max' },
+  'qwen-plus': { provider: 'qwen', model: 'qwen/qwen-plus' },
+  'qwen-plus-2025': { provider: 'qwen', model: 'qwen/qwen-plus-2025-07-28' },
+  'qwen-2.5-72b': { provider: 'qwen', model: 'qwen/qwen-2.5-72b-instruct' },
+  'qwen-2.5-7b': { provider: 'qwen', model: 'qwen/qwen-2.5-7b-instruct' },
+  
+  // Kimi (pi-ai uses moonshot provider or amazon-bedrock)
+  'kimi-k2': { provider: 'kimi', model: 'moonshotai/kimi-k2-instruct' },
+  'kimi-k2-thinking': { provider: 'moonshot', model: 'moonshot.kimi-k2-thinking' }, // Bedrock variant
+  'moonshot/kimi-k2': { provider: 'moonshot', model: 'moonshotai/kimi-k2-instruct' },
 };
 
 /**
  * Parse model ID and return provider + model
  */
 export function parseModelId(modelId: string): { provider: string; model: string } {
-  // First check if the entire model ID needs normalization (e.g., "minimax/m2.1" -> "minimax/MiniMax-M2.1")
-  const normalizedFullId = MODEL_NAME_NORMALIZATION[modelId.toLowerCase()] || modelId;
-  if (normalizedFullId !== modelId) {
-    // The full ID was normalized
-    return parseModelId(normalizedFullId);
+  // First check if the entire model ID needs normalization
+  const normalization = MODEL_NAME_NORMALIZATION[modelId.toLowerCase()];
+  if (normalization) {
+    return normalization;
   }
   
+  // Check for provider/model format
   if (modelId.includes('/')) {
     const [provider, model] = modelId.split('/');
-    const normalizedModel = MODEL_NAME_NORMALIZATION[model.toLowerCase()] || model;
-    return { provider: provider.toLowerCase(), model: normalizedModel };
+    
+    // Check for minimax-cn short format (e.g., "minimax-cn-MiniMax-M2.1")
+    if (provider.toLowerCase() === 'minimax-cn') {
+      // Normalize the model part
+      let normalizedModel = model;
+      for (const [key, value] of Object.entries(MODEL_NAME_NORMALIZATION)) {
+        if (key.startsWith('minimax-cn/') && value.model === model) {
+          normalizedModel = value.model;
+          break;
+        }
+      }
+      return { provider: 'minimax-cn', model: normalizedModel };
+    }
+    
+    return { provider: provider.toLowerCase(), model: model };
   }
   
   // Auto-detect provider from model name
-  const modelLower = normalizedFullId.toLowerCase();
+  const modelLower = modelId.toLowerCase();
   
-  if (modelLower.startsWith('gpt-') || modelLower.startsWith('o1') || modelLower.startsWith('o3')) {
-    return { provider: 'openai', model: normalizedFullId };
+  // Known provider prefixes (Bedrock-style IDs like "qwen.qwen3-235b-a22b-2507-v1:0")
+  const providerPrefix = modelLower.split('.')[0];
+  const bedrockProviders = ['anthropic', 'moonshot', 'qwen', 'minimax'];
+  
+  if (bedrockProviders.includes(providerPrefix) && modelLower.includes('.')) {
+    return { provider: providerPrefix, model: modelId };
   }
-  if (modelLower.startsWith('claude-') || modelLower.includes('sonnet') || modelLower.includes('haiku')) {
-    return { provider: 'anthropic', model: normalizedFullId };
+  
+  // Check for minimax-cn short format
+  if (modelLower.startsWith('minimax-cn') || modelLower.startsWith('minimaxi')) {
+    return { provider: 'minimax-cn', model: modelId };
+  }
+  
+  if (modelLower.startsWith('gpt-') || modelLower.startsWith('o1') || modelLower.startsWith('o3') || modelLower.startsWith('o4')) {
+    return { provider: 'openai', model: modelId };
+  }
+  if (modelLower.startsWith('claude-') || modelLower.includes('sonnet') || modelLower.includes('haiku') || modelLower.includes('opus')) {
+    return { provider: 'anthropic', model: modelId };
   }
   if (modelLower.startsWith('gemini-') || modelLower.startsWith('gemma-')) {
-    return { provider: 'google', model: normalizedFullId };
+    return { provider: 'google', model: modelId };
   }
   if (modelLower.startsWith('qwen') || modelLower.startsWith('qwq')) {
-    return { provider: 'qwen', model: normalizedFullId };
+    return { provider: 'qwen', model: modelId };
   }
   if (modelLower.startsWith('kimi')) {
-    return { provider: 'kimi', model: normalizedFullId };
+    return { provider: 'kimi', model: modelId };
+  }
+  if (modelLower.startsWith('moonshot')) {
+    return { provider: 'moonshot', model: modelId };
   }
   if (modelLower.startsWith('minimax')) {
-    return { provider: 'minimax', model: normalizedFullId };
+    return { provider: 'minimax', model: modelId };
   }
   if (modelLower.startsWith('deepseek') || modelLower.startsWith('r1')) {
-    return { provider: 'deepseek', model: normalizedFullId };
+    return { provider: 'deepseek', model: modelId };
   }
-  if (modelLower.startsWith('llama') || modelLower.startsWith('mixtral')) {
-    return { provider: 'groq', model: normalizedFullId };
+  if (modelLower.startsWith('llama') || modelLower.startsWith('mixtral') || modelLower.startsWith('gemma')) {
+    return { provider: 'groq', model: modelId };
   }
   
   // Default to openai
-  return { provider: 'openai', model: normalizedFullId };
+  return { provider: 'openai', model: modelId };
 }
 
 /**

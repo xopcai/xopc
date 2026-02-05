@@ -12,8 +12,8 @@ importers:
         specifier: ^8.2.0
         version: 8.2.0(@types/node@25.2.0)
       '@mariozechner/pi-ai':
-        specifier: ^0.51.5
-        version: 0.51.5(ws@8.19.0)(zod@3.22.4)
+        specifier: ^0.51.6
+        version: 0.51.6(ws@8.19.0)(zod@3.22.4)
       '@whiskeysockets/baileys':
         specifier: 7.0.0-rc.9
         version: 7.0.0-rc.9(audio-decode@2.2.3)(sharp@0.34.5)
@@ -779,8 +779,8 @@ packages:
   '@keyv/serialize@1.1.1':
     resolution: {integrity: sha512-dXn3FZhPv0US+7dtJsIi2R+c7qWYiReoEh5zUntWCf4oSpMNib8FDhSoed6m3QyZdx5hK7iLFkYk3rNxwt8vTA==}
 
-  '@mariozechner/pi-ai@0.51.5':
-    resolution: {integrity: sha512-YmtTWAKT4jyl5Gtn6VMyUvOI9Q4ngvNjtZj1juTyiNcKv1rcVhEmNSjCe2h4S1kSv15SDqOLj/n9cf3Cw4o3JA==}
+  '@mariozechner/pi-ai@0.51.6':
+    resolution: {integrity: sha512-vzB7M2NPpjQmAZEtSN+v5rgYVhDUBoshtmXUGuHwx4SLIaHl1Z9eSeJg+HwclQPjesNuxhdBiHAHg8CEZ+3Dfg==}
     engines: {node: '>=20.0.0'}
     hasBin: true
 
@@ -3907,7 +3907,7 @@ snapshots:
 
   '@keyv/serialize@1.1.1': {}
 
-  '@mariozechner/pi-ai@0.51.5(ws@8.19.0)(zod@3.22.4)':
+  '@mariozechner/pi-ai@0.51.6(ws@8.19.0)(zod@3.22.4)':
     dependencies:
       '@anthropic-ai/sdk': 0.71.2(zod@3.22.4)
       '@aws-sdk/client-bedrock-runtime': 3.982.0

@@ -19,11 +19,14 @@ export interface OutboundMessage {
 }
 
 export interface Message {
-  role: 'system' | 'user' | 'assistant' | 'tool';
+  role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
   content: string;
   timestamp?: string;
   tool_call_id?: string;
   tool_calls?: ToolCall[];
+  tool_call_id$?: string; // pi-ai format
+  toolName?: string; // pi-ai format
+  isError?: boolean; // pi-ai format
   name?: string;
 }
 
@@ -72,11 +75,15 @@ export interface LLMProvider {
 }
 
 export interface LLMMessage {
-  role: 'system' | 'user' | 'assistant' | 'tool';
-  content: string | null;
+  role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
+  content: string | null | Array<{ type: string; text?: string; data?: string; mimeType?: string }>;
   tool_calls?: ToolCall[];
   tool_call_id?: string;
+  toolCallId?: string; // pi-ai format
+  toolName?: string;
+  isError?: boolean;
   name?: string;
+  timestamp?: number;
 }
 
 export interface LLMResponse {
