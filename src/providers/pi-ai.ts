@@ -26,8 +26,10 @@ export class LLMProviderImpl implements LLMProvider {
 	private model: PiAI.Model<PiAI.Api>;
 	private modelId: string;
 	private registry: ModelRegistry;
+	private config: Config;
 
 	constructor(config: Config, modelId: string, modelsJsonPath?: string) {
+		this.config = config;
 		this.modelId = modelId;
 		this.registry = new ModelRegistry(modelsJsonPath);
 
@@ -44,10 +46,10 @@ export class LLMProviderImpl implements LLMProvider {
 	/**
 	 * Get API key for the current model
 	 */
-	protected getApiKey(): string | undefined {
+	private getApiKey(): string | undefined {
 		// Try config first (legacy support)
-		if ('providers' in config) {
-			const providerConfig = (config as any).providers?.[this.model.provider];
+		if ('providers' in this.config) {
+			const providerConfig = (this.config as any).providers?.[this.model.provider];
 			if (providerConfig?.api_key) {
 				return providerConfig.api_key;
 			}
