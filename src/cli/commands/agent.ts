@@ -19,7 +19,7 @@ export function createAgentCommand(): Command {
       const bus = new MessageBus();
       
       const workspace = config.agents.defaults.workspace;
-      const maxIterations = config.agents.defaults.max_tool_iterations;
+      const maxIterations = config.agents.defaults.maxToolIterations;
       const braveApiKey = config.tools.web?.search?.apiKey;
 
       const agent = new AgentLoop(

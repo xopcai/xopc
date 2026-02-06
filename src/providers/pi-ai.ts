@@ -13,7 +13,8 @@
 import * as PiAI from '@mariozechner/pi-ai';
 import type { LLMProvider } from '../types/index.js';
 import type { Config } from '../config/schema.js';
-import { ModelRegistry, getApiKey as getRegistryApiKey } from './registry.js';
+import { getApiKey } from '../config/schema.js';
+import { ModelRegistry } from './registry.js';
 
 export { PiAI };
 export type { LLMProvider };
@@ -28,10 +29,10 @@ export class LLMProviderImpl implements LLMProvider {
 	private registry: ModelRegistry;
 	private config: Config;
 
-	constructor(config: Config, modelId: string, modelsJsonPath?: string) {
+	constructor(config: Config, modelId: string) {
 		this.config = config;
 		this.modelId = modelId;
-		this.registry = new ModelRegistry(modelsJsonPath);
+		this.registry = new ModelRegistry(config);
 
 		// Parse model ref (provider/modelId format)
 		const model = this.registry.findByRef(modelId);
@@ -47,16 +48,7 @@ export class LLMProviderImpl implements LLMProvider {
 	 * Get API key for the current model
 	 */
 	private getApiKey(): string | undefined {
-		// Try config first (legacy support)
-		if ('providers' in this.config) {
-			const providerConfig = (this.config as any).providers?.[this.model.provider];
-			if (providerConfig?.apiKey) {
-				return providerConfig.apiKey;
-			}
-		}
-
-		// Use registry's auth resolution
-		return getRegistryApiKey(this.model.provider);
+		return getApiKey(this.config, this.model.provider);
 	}
 
 	async chat(
@@ -236,23 +228,23 @@ export class LLMProviderImpl implements LLMProvider {
 // ============================================
 
 /**
- * Create a provider instance (legacy interface)
+ * Create a provider instance
  */
-export function createProvider(config: Config, modelId: string, modelsJsonPath?: string): LLMProviderImpl {
-	return new LLMProviderImpl(config, modelId, modelsJsonPath);
+export function createProvider(config: Config, modelId: string): LLMProviderImpl {
+	return new LLMProviderImpl(config, modelId);
 }
 
 /**
  * Get list of available models
  */
-export function getAvailableModels(config: Config, modelsJsonPath?: string) {
-	const registry = new ModelRegistry(modelsJsonPath);
+export function getAvailableModels(config: Config) {
+	const registry = new ModelRegistry(config);
 	const models = registry.getAll();
 
 	// Filter to only models with configured auth
 	const available = models.filter((m) => {
-		const apiKey = getRegistryApiKey(m.provider);
-		return !!apiKey;
+		const apiKey = getApiKey(config, m.provider);
+		return !!apiKey || m.provider === 'ollama';
 	});
 
 	return available.map((m) => ({
@@ -269,8 +261,8 @@ export function getAvailableModels(config: Config, modelsJsonPath?: string) {
 /**
  * List all models (including unavailable ones)
  */
-export function listAllModels(modelsJsonPath?: string) {
-	const registry = new ModelRegistry(modelsJsonPath);
+export function listAllModels(config: Config) {
+	const registry = new ModelRegistry(config);
 	const models = registry.getAll();
 
 	// Group by provider
