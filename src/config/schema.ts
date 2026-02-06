@@ -1,18 +1,18 @@
 import { z } from 'zod';
 
 // ============================================
-// Provider Configuration
+// Provider Configuration (camelCase)
 // ============================================
 
 // OpenAI-compatible provider schema
 export const OpenAIProviderSchema = z.object({
-  api_key: z.string().default(''),
-  api_base: z.string().optional(),
+  apiKey: z.string().default(''),
+  apiBase: z.string().optional(),
 }).strict();
 
 // Anthropic provider schema
 export const AnthropicProviderSchema = z.object({
-  api_key: z.string().default(''),
+  apiKey: z.string().default(''),
 }).strict();
 
 // Unified providers config
@@ -23,7 +23,7 @@ export const ProvidersConfigSchema = z.object({
   kimi: OpenAIProviderSchema.default({}),
   moonshot: OpenAIProviderSchema.default({}),
   minimax: OpenAIProviderSchema.default({}),
-  'minimax-cn': OpenAIProviderSchema.default({}), // MiniMax 中国版
+  'minimax-cn': OpenAIProviderSchema.default({}),
   deepseek: OpenAIProviderSchema.default({}),
   groq: OpenAIProviderSchema.default({}),
   openrouter: OpenAIProviderSchema.default({}),
@@ -36,15 +36,15 @@ export const ProvidersConfigSchema = z.object({
 }).strict();
 
 // ============================================
-// Agent Configs
+// Agent Configs (camelCase)
 // ============================================
 
 export const AgentDefaultsSchema = z.object({
   workspace: z.string().default('~/.xopcbot/workspace'),
   model: z.string().default('anthropic/claude-sonnet-4-5'),
-  max_tokens: z.number().default(8192),
+  maxTokens: z.number().default(8192),
   temperature: z.number().default(0.7),
-  max_tool_iterations: z.number().default(20),
+  maxToolIterations: z.number().default(20),
 });
 
 export const AgentsConfigSchema = z.object({
@@ -52,19 +52,19 @@ export const AgentsConfigSchema = z.object({
 });
 
 // ============================================
-// Channel Configs
+// Channel Configs (camelCase)
 // ============================================
 
 export const TelegramConfigSchema = z.object({
   enabled: z.boolean().default(false),
   token: z.string().default(''),
-  allow_from: z.array(z.string()).default([]),
+  allowFrom: z.array(z.string()).default([]),
 });
 
 export const WhatsAppConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  bridge_url: z.string().default('ws://localhost:3001'),
-  allow_from: z.array(z.string()).default([]),
+  bridgeUrl: z.string().default('ws://localhost:3001'),
+  allowFrom: z.array(z.string()).default([]),
 });
 
 export const ChannelsConfigSchema = z.object({
@@ -73,12 +73,12 @@ export const ChannelsConfigSchema = z.object({
 });
 
 // ============================================
-// Tools Config
+// Tools Config (camelCase)
 // ============================================
 
 export const WebSearchConfigSchema = z.object({
-  api_key: z.string().default(''),
-  max_results: z.number().default(5),
+  apiKey: z.string().default(''),
+  maxResults: z.number().default(5),
 });
 
 export const WebToolsConfigSchema = z.object({
@@ -90,7 +90,7 @@ export const ToolsConfigSchema = z.object({
 });
 
 // ============================================
-// Gateway
+// Gateway (camelCase)
 // ============================================
 
 export const GatewayConfigSchema = z.object({
@@ -118,63 +118,53 @@ export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
 export type WhatsAppConfig = z.infer<typeof WhatsAppConfigSchema>;
 
 // ============================================
-// Provider Defaults
+// Provider Defaults (camelCase)
 // ============================================
 
-// OpenAI-compatible providers (use openai-completions API)
-const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { api_base: string; env_key: string[] }> = {
-  'openai': { api_base: 'https://api.openai.com/v1', env_key: ['OPENAI_API_KEY'] },
-  'qwen': { api_base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', env_key: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'] },
-  'kimi': { api_base: 'https://api.moonshot.cn/v1', env_key: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'] },
-  'moonshot': { api_base: 'https://api.moonshot.ai/v1', env_key: ['MOONSHOT_API_KEY'] },
-  'deepseek': { api_base: 'https://api.deepseek.com/v1', env_key: ['DEEPSEEK_API_KEY'] },
-  'groq': { api_base: 'https://api.groq.com/openai/v1', env_key: ['GROQ_API_KEY'] },
-  'openrouter': { api_base: 'https://openrouter.ai/api/v1', env_key: ['OPENROUTER_API_KEY'] },
-  'xai': { api_base: 'https://api.x.ai/v1', env_key: ['XAI_API_KEY'] },
-  'bedrock': { api_base: '', env_key: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'] }, // Bedrock uses AWS credentials
+const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { apiBase: string; envKey: string[] }> = {
+  'openai': { apiBase: 'https://api.openai.com/v1', envKey: ['OPENAI_API_KEY'] },
+  'qwen': { apiBase: 'https://dashscope.aliyuncs.com/compatible-mode/v1', envKey: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'] },
+  'kimi': { apiBase: 'https://api.moonshot.cn/v1', envKey: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'] },
+  'moonshot': { apiBase: 'https://api.moonshot.ai/v1', envKey: ['MOONSHOT_API_KEY'] },
+  'deepseek': { apiBase: 'https://api.deepseek.com/v1', envKey: ['DEEPSEEK_API_KEY'] },
+  'groq': { apiBase: 'https://api.groq.com/openai/v1', envKey: ['GROQ_API_KEY'] },
+  'openrouter': { apiBase: 'https://openrouter.ai/api/v1', envKey: ['OPENROUTER_API_KEY'] },
+  'xai': { apiBase: 'https://api.x.ai/v1', envKey: ['XAI_API_KEY'] },
+  'bedrock': { apiBase: '', envKey: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'] },
 };
 
-// Anthropic-compatible providers (use anthropic-messages API)
-const ANTHROPIC_COMPATIBLE_PROVIDERS: Record<string, { api_base: string; env_key: string[] }> = {
-  'minimax': { api_base: 'https://api.minimax.io/anthropic', env_key: ['MINIMAX_API_KEY'] },
-  'minimax-cn': { api_base: 'https://api.minimaxi.com/anthropic', env_key: ['MINIMAX_CN_API_KEY', 'MINIMAX_API_KEY'] }, // MiniMax 中国版
+const ANTHROPIC_COMPATIBLE_PROVIDERS: Record<string, { apiBase: string; envKey: string[] }> = {
+  'minimax': { apiBase: 'https://api.minimax.io/anthropic', envKey: ['MINIMAX_API_KEY'] },
+  'minimax-cn': { apiBase: 'https://api.minimaxi.com/anthropic', envKey: ['MINIMAX_CN_API_KEY', 'MINIMAX_API_KEY'] },
 };
 
-// Native providers (use their own APIs)
-const NATIVE_PROVIDERS: Record<string, { env_key: string[] }> = {
-  'anthropic': { env_key: ['ANTHROPIC_API_KEY'] },
-  'google': { env_key: ['GOOGLE_API_KEY', 'GEMINI_API_KEY'] },
+const NATIVE_PROVIDERS: Record<string, { envKey: string[] }> = {
+  'anthropic': { envKey: ['ANTHROPIC_API_KEY'] },
+  'google': { envKey: ['GOOGLE_API_KEY', 'GEMINI_API_KEY'] },
 };
 
 // ============================================
 // Helper Functions
 // ============================================
 
-/**
- * Get API key from config or environment
- */
 export function getApiKey(config: Config, provider: string): string | null {
-  // Check config first
-  const configKey = (config.providers as any)?.[provider]?.api_key;
+  const configKey = (config.providers as any)?.[provider]?.apiKey;
   if (configKey) return configKey;
   
-  // Check Anthropic-compatible first (they have special API)
   if (ANTHROPIC_COMPATIBLE_PROVIDERS[provider]) {
-    for (const envKey of ANTHROPIC_COMPATIBLE_PROVIDERS[provider].env_key) {
+    for (const envKey of ANTHROPIC_COMPATIBLE_PROVIDERS[provider].envKey) {
       if (process.env[envKey]) return process.env[envKey]!;
     }
   }
   
-  // Check OpenAI-compatible
   if (OPENAI_COMPATIBLE_PROVIDERS[provider]) {
-    for (const envKey of OPENAI_COMPATIBLE_PROVIDERS[provider].env_key) {
+    for (const envKey of OPENAI_COMPATIBLE_PROVIDERS[provider].envKey) {
       if (process.env[envKey]) return process.env[envKey]!;
     }
   }
   
-  // Check native providers
   if (NATIVE_PROVIDERS[provider]) {
-    for (const envKey of NATIVE_PROVIDERS[provider].env_key) {
+    for (const envKey of NATIVE_PROVIDERS[provider].envKey) {
       if (process.env[envKey]) return process.env[envKey]!;
     }
   }
@@ -182,115 +172,48 @@ export function getApiKey(config: Config, provider: string): string | null {
   return null;
 }
 
-/**
- * Get API base URL for a provider
- */
 export function getApiBase(config: Config, provider: string): string | null {
-  const configBase = (config.providers as any)?.[provider]?.api_base;
+  const configBase = (config.providers as any)?.[provider]?.apiBase;
   if (configBase) return configBase;
   
-  // Check Anthropic-compatible first
   if (ANTHROPIC_COMPATIBLE_PROVIDERS[provider]) {
-    return ANTHROPIC_COMPATIBLE_PROVIDERS[provider].api_base;
+    return ANTHROPIC_COMPATIBLE_PROVIDERS[provider].apiBase;
   }
   
-  // Check OpenAI-compatible
   if (OPENAI_COMPATIBLE_PROVIDERS[provider]) {
-    return OPENAI_COMPATIBLE_PROVIDERS[provider].api_base;
+    return OPENAI_COMPATIBLE_PROVIDERS[provider].apiBase;
   }
   
   return null;
 }
 
-/**
- * Check if provider uses OpenAI-compatible API
- */
 export function isOpenAICompatible(provider: string): boolean {
   return provider in OPENAI_COMPATIBLE_PROVIDERS;
 }
 
-/**
- * Check if provider uses Anthropic-compatible API
- */
 export function isAnthropicCompatible(provider: string): boolean {
   return provider in ANTHROPIC_COMPATIBLE_PROVIDERS;
 }
 
-/**
- * Model ID normalization table
- * Maps user input to the format expected by pi-ai
- */
-const MODEL_NAME_NORMALIZATION: Record<string, { provider: string; model: string }> = {
-  // MiniMax International (full ID format - pi-ai uses "MiniMax-M2" not "minimax-m2")
-  'minimax/m2.1': { provider: 'minimax', model: 'MiniMax-M2.1' },
-  'minimax/m2': { provider: 'minimax', model: 'MiniMax-M2' },
-  'minimax/m1': { provider: 'minimax', model: 'MiniMax-M1' },
-  
-  // MiniMax China (must be normalized BEFORE general minimax patterns)
-  'minimax-cn/m2.1': { provider: 'minimax-cn', model: 'MiniMax-M2.1' },
-  'minimax-cn/m2': { provider: 'minimax-cn', model: 'MiniMax-M2' },
-  'minimax-cn/m1': { provider: 'minimax-cn', model: 'MiniMax-M1' },
-  
-  // MiniMax (short format) - defaults to international
-  'minimax-m2.1': { provider: 'minimax', model: 'MiniMax-M2.1' },
-  'minimax-m2': { provider: 'minimax', model: 'MiniMax-M2' },
-  'minimax-m1': { provider: 'minimax', model: 'MiniMax-M1' },
-  
-  // Qwen 3.x 系列 (pi-ai uses various model IDs)
-  'qwen3': { provider: 'qwen', model: 'qwen.qwen3-235b-a22b-2507-v1:0' },
-  'qwen3-32b': { provider: 'qwen', model: 'qwen.qwen3-32b-v1:0' },
-  'qwen3-coder': { provider: 'qwen', model: 'qwen.qwen3-coder-30b-a3b-v1:0' },
-  'qwen3-coder-plus': { provider: 'qwen', model: 'qwen/qwen3-coder-plus' }, // OpenRouter
-  'qwen-qwq': { provider: 'groq', model: 'qwen-qwq-32b' }, // Groq variant
-  'qwq-32b': { provider: 'groq', model: 'qwen-qwq-32b' },
-  
-  // Qwen 2.5 系列 (via OpenRouter)
-  'qwen-max': { provider: 'qwen', model: 'qwen/qwen-max' },
-  'qwen-plus': { provider: 'qwen', model: 'qwen/qwen-plus' },
-  'qwen-plus-2025': { provider: 'qwen', model: 'qwen/qwen-plus-2025-07-28' },
-  'qwen-2.5-72b': { provider: 'qwen', model: 'qwen/qwen-2.5-72b-instruct' },
-  'qwen-2.5-7b': { provider: 'qwen', model: 'qwen/qwen-2.5-7b-instruct' },
-  
-  // Kimi (pi-ai uses moonshot provider or amazon-bedrock)
-  'kimi-k2': { provider: 'kimi', model: 'moonshotai/kimi-k2-instruct' },
-  'kimi-k2-thinking': { provider: 'moonshot', model: 'moonshot.kimi-k2-thinking' }, // Bedrock variant
-  'moonshot/kimi-k2': { provider: 'moonshot', model: 'moonshotai/kimi-k2-instruct' },
-};
+export interface ParsedModelRef {
+  provider: string;
+  model: string;
+}
 
-/**
- * Parse model ID and return provider + model
- */
-export function parseModelId(modelId: string): { provider: string; model: string } {
-  // First check if the entire model ID needs normalization
-  const normalization = MODEL_NAME_NORMALIZATION[modelId.toLowerCase()];
-  if (normalization) {
-    return normalization;
-  }
-  
+export function parseModelId(modelId: string): ParsedModelRef {
   // Check for provider/model format
   if (modelId.includes('/')) {
     const [provider, model] = modelId.split('/');
     
-    // Check for minimax-cn short format (e.g., "minimax-cn-MiniMax-M2.1")
     if (provider.toLowerCase() === 'minimax-cn') {
-      // Normalize the model part
-      let normalizedModel = model;
-      for (const [key, value] of Object.entries(MODEL_NAME_NORMALIZATION)) {
-        if (key.startsWith('minimax-cn/') && value.model === model) {
-          normalizedModel = value.model;
-          break;
-        }
-      }
-      return { provider: 'minimax-cn', model: normalizedModel };
+      return { provider: 'minimax-cn', model: model };
     }
     
     return { provider: provider.toLowerCase(), model: model };
   }
   
-  // Auto-detect provider from model name
+  // Auto-detect from model name
   const modelLower = modelId.toLowerCase();
-  
-  // Known provider prefixes (Bedrock-style IDs like "qwen.qwen3-235b-a22b-2507-v1:0")
   const providerPrefix = modelLower.split('.')[0];
   const bedrockProviders = ['anthropic', 'moonshot', 'qwen', 'minimax'];
   
@@ -298,7 +221,6 @@ export function parseModelId(modelId: string): { provider: string; model: string
     return { provider: providerPrefix, model: modelId };
   }
   
-  // Check for minimax-cn short format
   if (modelLower.startsWith('minimax-cn') || modelLower.startsWith('minimaxi')) {
     return { provider: 'minimax-cn', model: modelId };
   }
@@ -331,24 +253,15 @@ export function parseModelId(modelId: string): { provider: string; model: string
     return { provider: 'groq', model: modelId };
   }
   
-  // Default to openai
   return { provider: 'openai', model: modelId };
 }
 
-/**
- * Check if provider is configured
- */
 export function isProviderConfigured(config: Config, provider: string): boolean {
   return !!getApiKey(config, provider);
 }
 
-/**
- * List all configured providers
- */
 export function listConfiguredProviders(config: Config): string[] {
   const configured: string[] = [];
-  
-  // Check all providers
   const allProviders = { ...OPENAI_COMPATIBLE_PROVIDERS, ...NATIVE_PROVIDERS };
   
   for (const provider of Object.keys(allProviders)) {
@@ -360,9 +273,6 @@ export function listConfiguredProviders(config: Config): string[] {
   return configured;
 }
 
-/**
- * Get workspace path
- */
 export function getWorkspacePath(config: Config): string {
   return config.agents.defaults.workspace;
 }
@@ -378,44 +288,27 @@ export interface BuiltinModel {
 }
 
 export const BUILTIN_MODELS: BuiltinModel[] = [
-  // OpenAI
   { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai' },
   { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai' },
   { id: 'openai/gpt-4.1', name: 'GPT-4.1', provider: 'openai' },
   { id: 'openai/gpt-5', name: 'GPT-5', provider: 'openai' },
   { id: 'openai/o1', name: 'o1', provider: 'openai' },
   { id: 'openai/o3', name: 'o3', provider: 'openai' },
-  
-  // Anthropic
   { id: 'anthropic/claude-sonnet-4-5', name: 'Claude Sonnet 4.5', provider: 'anthropic' },
   { id: 'anthropic/claude-haiku-4-5', name: 'Claude Haiku 4.5', provider: 'anthropic' },
   { id: 'anthropic/claude-opus-4-5', name: 'Claude Opus 4.5', provider: 'anthropic' },
-  
-  // Google
   { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'google' },
   { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'google' },
-  
-  // Qwen (OpenAI-compatible)
   { id: 'qwen/qwen-plus', name: 'Qwen Plus', provider: 'qwen' },
   { id: 'qwen/qwen-max', name: 'Qwen Max', provider: 'qwen' },
   { id: 'qwen/qwen3-235b', name: 'Qwen3 235B', provider: 'qwen' },
-  
-  // Kimi (OpenAI-compatible)
   { id: 'kimi/kimi-k2.5', name: 'Kimi K2.5', provider: 'kimi' },
   { id: 'kimi/kimi-k2-thinking', name: 'Kimi K2 Thinking', provider: 'kimi' },
-  
-  // MiniMax (OpenAI-compatible)
   { id: 'minimax/minimax-m2.1', name: 'MiniMax M2.1', provider: 'minimax' },
   { id: 'minimax/minimax-m2', name: 'MiniMax M2', provider: 'minimax' },
-  
-  // DeepSeek (OpenAI-compatible)
   { id: 'deepseek/deepseek-chat', name: 'DeepSeek Chat', provider: 'deepseek' },
   { id: 'deepseek/deepseek-reasoner', name: 'DeepSeek Reasoner', provider: 'deepseek' },
-  
-  // Groq
   { id: 'groq/llama-3.3-70b', name: 'Llama 3.3 70B', provider: 'groq' },
-  
-  // OpenRouter
   { id: 'openrouter/openai/gpt-4o', name: 'GPT-4o (OpenRouter)', provider: 'openrouter' },
 ];
 
@@ -423,9 +316,6 @@ export function listBuiltinModels(): BuiltinModel[] {
   return BUILTIN_MODELS;
 }
 
-/**
- * Get provider display name
- */
 export const PROVIDER_NAMES: Record<string, string> = {
   'openai': 'OpenAI',
   'anthropic': 'Anthropic',
@@ -440,9 +330,6 @@ export const PROVIDER_NAMES: Record<string, string> = {
   'xai': 'xAI (Grok)',
 };
 
-/**
- * Provider options for CLI selection
- */
 export interface ProviderOption {
   name: string;
   value: string;

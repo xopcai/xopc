@@ -65,20 +65,7 @@
       "baseUrl": "http://127.0.0.1:11434/v1",
       "apiKey": "",
       "api": "openai-completions",
-      "models": [
-        {
-          "id": "llama3.3",
-          "name": "Llama 3.3 70B",
-          "contextWindow": 131072,
-          "maxTokens": 8192
-        },
-        {
-          "id": "qwen2.5-coder:7b",
-          "name": "Qwen2.5 Coder 7B",
-          "contextWindow": 131072,
-          "maxTokens": 8192
-        }
-      ]
+      "models": []
     },
     "openrouter": {
       "baseUrl": "https://openrouter.ai/api/v1",

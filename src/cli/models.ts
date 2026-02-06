@@ -112,15 +112,15 @@ function createAddCommand() {
 	return new Command('add')
 		.description('Add a custom provider or model')
 		.option('--provider <name>', 'Provider name')
-		.option('--base-url <url>', 'API base URL')
-		.option('--api-key <key>', 'API key (or ${ENV_VAR})')
+		.option('--baseUrl <url>', 'API base URL')
+		.option('--apiKey <key>', 'API key (or ${ENV_VAR})')
 		.option('--api <type>', 'API type (openai-completions, anthropic-messages)')
-		.option('--model-id <id>', 'Model ID')
-		.option('--model-name <name>', 'Model display name')
-		.option('--context-window <number>', 'Context window size')
-		.option('--max-tokens <number>', 'Max output tokens')
+		.option('--modelId <id>', 'Model ID')
+		.option('--modelName <name>', 'Model display name')
+		.option('--contextWindow <number>', 'Context window size')
+		.option('--maxTokens <number>', 'Max output tokens')
 		.option('--reasoning', 'Model supports reasoning')
-		.option('--models-json <path>', 'Path to models.json')
+		.option('--modelsJson <path>', 'Path to models.json')
 		.action(async (options) => {
 			const modelsJsonPath = options.modelsJson ?? './models.json';
 
@@ -217,7 +217,7 @@ function createAuthCommand() {
 		.addCommand(new Command('set')
 			.description('Set API key for a provider')
 			.argument('<provider>', 'Provider name')
-			.argument('<api-key>', 'API key (or ${ENV_VAR})')
+			.argument('<apiKey>', 'API key (or ${ENV_VAR})')
 			.option('--file <path>', 'Auth file path')
 			.action(async (provider, apiKey, options) => {
 				saveApiKey(provider, apiKey, options.file);
