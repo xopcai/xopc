@@ -121,7 +121,7 @@ async function setupModel(configPath: string, existingConfig: any): Promise<void
   // Save config
   const config = existingConfig || {};
   config.providers = config.providers || {};
-  config.providers[provider] = { api_key: apiKey };
+  config.providers[provider] = { apiKey };
   config.agents = {
     defaults: {
       model,
@@ -153,7 +153,7 @@ async function setupChannels(configPath: string, existingConfig: any): Promise<v
     config.channels.telegram = {
       enabled: true,
       token,
-      allow_from: [],
+      allowFrom: [],
     };
 
     saveConfig(config, configPath);

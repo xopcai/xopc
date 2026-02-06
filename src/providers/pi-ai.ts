@@ -50,8 +50,8 @@ export class LLMProviderImpl implements LLMProvider {
 		// Try config first (legacy support)
 		if ('providers' in this.config) {
 			const providerConfig = (this.config as any).providers?.[this.model.provider];
-			if (providerConfig?.api_key) {
-				return providerConfig.api_key;
+			if (providerConfig?.apiKey) {
+				return providerConfig.apiKey;
 			}
 		}
 

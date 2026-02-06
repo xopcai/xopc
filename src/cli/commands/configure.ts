@@ -118,21 +118,21 @@ export function createConfigureCommand(): Command {
         if (provider === 'anthropic') {
           updatedConfig.providers = {
             ...updatedConfig.providers,
-            anthropic: { api_key: apiKey },
+            anthropic: { apiKey: apiKey },
           };
         } else if (provider === 'google') {
           updatedConfig.providers = {
             ...updatedConfig.providers,
-            google: { api_key: apiKey },
+            google: { apiKey: apiKey },
           };
         } else {
           // All OpenAI-compatible providers use openai config
-          const apiBase = getApiBase({ providers: { openai: { api_key: apiKey } } } as any, `${provider}/dummy`);
+          const apiBase = getApiBase({ providers: { openai: { apiKey: apiKey } } } as any, `${provider}/dummy`);
           updatedConfig.providers = {
             ...updatedConfig.providers,
             openai: { 
-              api_key: apiKey,
-              ...(apiBase ? { api_base: apiBase } : {}),
+              apiKey: apiKey,
+              ...(apiBase ? { apiBase } : {}),
             },
           };
         }
@@ -180,7 +180,7 @@ export function createConfigureCommand(): Command {
             telegram: {
               enabled: true,
               token,
-              allow_from: allowFrom
+              allowFrom: allowFrom
                 ? allowFrom.split(',').map((s: string) => s.trim())
                 : [],
             },
@@ -205,8 +205,8 @@ export function createConfigureCommand(): Command {
             ...updatedConfig.channels,
             whatsapp: {
               enabled: true,
-              bridge_url: bridgeUrl,
-              allow_from: [],
+              bridgeUrl: bridgeUrl,
+              allowFrom: [],
             },
           };
           saveConfig(updatedConfig, configPath);

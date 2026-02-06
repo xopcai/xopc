@@ -129,7 +129,7 @@ export interface AgentsConfig {
 export interface AgentDefaults {
   workspace?: string;
   model?: string;
-  max_tokens?: number;
+  maxTokens?: number;
   temperature?: number;
   max_tool_iterations?: number;
 }
@@ -142,13 +142,13 @@ export interface ChannelsConfig {
 export interface TelegramConfig {
   enabled?: boolean;
   token?: string;
-  allow_from?: string[];
+  allowFrom?: string[];
 }
 
 export interface WhatsAppConfig {
   enabled?: boolean;
-  bridge_url?: string;
-  allow_from?: string[];
+  bridgeUrl?: string;
+  allowFrom?: string[];
 }
 
 export interface ProvidersConfig {
@@ -162,8 +162,8 @@ export interface ProvidersConfig {
 }
 
 export interface ProviderConfig {
-  api_key?: string;
-  api_base?: string;
+  apiKey?: string;
+  apiBase?: string;
 }
 
 export interface GatewayConfig {
@@ -180,8 +180,8 @@ export interface WebToolsConfig {
 }
 
 export interface WebSearchConfig {
-  api_key?: string;
-  max_results?: number;
+  apiKey?: string;
+  maxResults?: number;
 }
 
 // Cron Types

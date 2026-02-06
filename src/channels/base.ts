@@ -14,7 +14,7 @@ export abstract class BaseChannel {
   abstract send(msg: OutboundMessage): Promise<void>;
 
   protected isAllowed(senderId: string): boolean {
-    const allowList = (this.config.allow_from as string[]) || [];
+    const allowList = (this.config.allowFrom as string[]) || [];
     
     // If no allow list, allow everyone
     if (allowList.length === 0) {
