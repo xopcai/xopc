@@ -7,7 +7,7 @@ import { z } from 'zod';
 // OpenAI-compatible provider schema
 export const OpenAIProviderSchema = z.object({
   apiKey: z.string().default(''),
-  apiBase: z.string().optional(),
+  baseUrl: z.string().optional(),
 }).strict();
 
 // Anthropic provider schema
@@ -121,21 +121,21 @@ export type WhatsAppConfig = z.infer<typeof WhatsAppConfigSchema>;
 // Provider Defaults (camelCase)
 // ============================================
 
-const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { apiBase: string; envKey: string[] }> = {
-  'openai': { apiBase: 'https://api.openai.com/v1', envKey: ['OPENAI_API_KEY'] },
-  'qwen': { apiBase: 'https://dashscope.aliyuncs.com/compatible-mode/v1', envKey: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'] },
-  'kimi': { apiBase: 'https://api.moonshot.cn/v1', envKey: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'] },
-  'moonshot': { apiBase: 'https://api.moonshot.ai/v1', envKey: ['MOONSHOT_API_KEY'] },
-  'deepseek': { apiBase: 'https://api.deepseek.com/v1', envKey: ['DEEPSEEK_API_KEY'] },
-  'groq': { apiBase: 'https://api.groq.com/openai/v1', envKey: ['GROQ_API_KEY'] },
-  'openrouter': { apiBase: 'https://openrouter.ai/api/v1', envKey: ['OPENROUTER_API_KEY'] },
-  'xai': { apiBase: 'https://api.x.ai/v1', envKey: ['XAI_API_KEY'] },
-  'bedrock': { apiBase: '', envKey: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'] },
+const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { baseUrl: string; envKey: string[] }> = {
+  'openai': { baseUrl: 'https://api.openai.com/v1', envKey: ['OPENAI_API_KEY'] },
+  'qwen': { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', envKey: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'] },
+  'kimi': { baseUrl: 'https://api.moonshot.cn/v1', envKey: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'] },
+  'moonshot': { baseUrl: 'https://api.moonshot.ai/v1', envKey: ['MOONSHOT_API_KEY'] },
+  'deepseek': { baseUrl: 'https://api.deepseek.com/v1', envKey: ['DEEPSEEK_API_KEY'] },
+  'groq': { baseUrl: 'https://api.groq.com/openai/v1', envKey: ['GROQ_API_KEY'] },
+  'openrouter': { baseUrl: 'https://openrouter.ai/api/v1', envKey: ['OPENROUTER_API_KEY'] },
+  'xai': { baseUrl: 'https://api.x.ai/v1', envKey: ['XAI_API_KEY'] },
+  'bedrock': { baseUrl: '', envKey: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'] },
 };
 
-const ANTHROPIC_COMPATIBLE_PROVIDERS: Record<string, { apiBase: string; envKey: string[] }> = {
-  'minimax': { apiBase: 'https://api.minimax.io/anthropic', envKey: ['MINIMAX_API_KEY'] },
-  'minimax-cn': { apiBase: 'https://api.minimaxi.com/anthropic', envKey: ['MINIMAX_CN_API_KEY', 'MINIMAX_API_KEY'] },
+const ANTHROPIC_COMPATIBLE_PROVIDERS: Record<string, { baseUrl: string; envKey: string[] }> = {
+  'minimax': { baseUrl: 'https://api.minimax.io/anthropic', envKey: ['MINIMAX_API_KEY'] },
+  'minimax-cn': { baseUrl: 'https://api.minimaxi.com/anthropic', envKey: ['MINIMAX_CN_API_KEY', 'MINIMAX_API_KEY'] },
 };
 
 const NATIVE_PROVIDERS: Record<string, { envKey: string[] }> = {
@@ -173,15 +173,15 @@ export function getApiKey(config: Config, provider: string): string | null {
 }
 
 export function getApiBase(config: Config, provider: string): string | null {
-  const configBase = (config.providers as any)?.[provider]?.apiBase;
+  const configBase = (config.providers as any)?.[provider]?.baseUrl;
   if (configBase) return configBase;
   
   if (ANTHROPIC_COMPATIBLE_PROVIDERS[provider]) {
-    return ANTHROPIC_COMPATIBLE_PROVIDERS[provider].apiBase;
+    return ANTHROPIC_COMPATIBLE_PROVIDERS[provider].baseUrl;
   }
   
   if (OPENAI_COMPATIBLE_PROVIDERS[provider]) {
-    return OPENAI_COMPATIBLE_PROVIDERS[provider].apiBase;
+    return OPENAI_COMPATIBLE_PROVIDERS[provider].baseUrl;
   }
   
   return null;
