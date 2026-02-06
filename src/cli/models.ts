@@ -10,8 +10,9 @@
  */
 
 import { Command } from 'commander';
-import { ModelRegistry, getApiKey, saveApiKey } from '../providers/registry.js';
-import { listAllModels } from '../providers/pi-ai.js';
+import { ModelRegistry, resolveConfigValue } from '../providers/registry.js';
+import { Config, ConfigSchema, getWorkspacePath, listBuiltinModels, parseModelId } from '../config/schema.js';
+import { loadConfig, saveConfig } from '../config/index.js';
 import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
@@ -27,14 +28,43 @@ export function createModelsCommand() {
 	return cmd;
 }
 
+function getConfigPath(): string {
+	return join(getWorkspacePath(ConfigSchema.parse({})), 'config.json');
+}
+
+function loadUserConfig(): Config {
+	const configPath = getConfigPath();
+	if (existsSync(configPath)) {
+		try {
+			const content = readFileSync(configPath, 'utf-8');
+			const parsed = JSON.parse(content);
+			return ConfigSchema.parse(parsed);
+		} catch (e) {
+			console.warn('Failed to load config, using defaults');
+		}
+	}
+	return ConfigSchema.parse({});
+}
+
+function saveUserConfig(config: Config): void {
+	const configPath = getConfigPath();
+	const dir = require('path').dirname(configPath);
+	if (!existsSync(dir)) {
+		require('fs').mkdirSync(dir, { recursive: true });
+	}
+	// 保留注释和格式
+	let content = JSON.stringify(config, null, 2);
+	writeFileSync(configPath, content);
+}
+
 function createListCommand() {
 	return new Command('list')
 		.description('List available models')
 		.option('-a, --all', 'Show all models including unavailable')
 		.option('-j, --json', 'Output as JSON')
-		.option('--models-json <path>', 'Path to models.json')
 		.action(async (options) => {
-			const registry = new ModelRegistry(options.modelsJson);
+			const config = loadUserConfig();
+			const registry = new ModelRegistry(config);
 			const models = registry.getAll();
 
 			if (options.json) {
@@ -62,7 +92,7 @@ function createListCommand() {
 
 			const availableProviders = new Set<string>();
 			for (const model of models) {
-				if (getApiKey(model.provider)) {
+				if (registry.hasAuth(model.provider)) {
 					availableProviders.add(model.provider);
 				}
 			}
@@ -74,14 +104,13 @@ function createListCommand() {
 				console.log(`  ${status} ${provider}`);
 
 				for (const model of providerModels) {
-					const hasAuth = getApiKey(provider);
-					const icon = hasAuth ? '  •' : '   ';
+					const icon = '  •';
 					const reasoning = model.reasoning ? ' 🧠' : '';
 					console.log(`${icon} ${model.id}${reasoning}`);
 				}
 			}
 
-			console.log('\n💡 Tip: Set API key in environment or auth.json to enable models');
+			console.log('\n💡 Tip: Set API key in environment or config.json to enable models');
 			console.log('   Example: export OPENAI_API_KEY="sk-..."');
 		});
 }
@@ -90,9 +119,9 @@ function createSetCommand() {
 	return new Command('set')
 		.description('Set the default model')
 		.argument('<model-ref>', 'Model reference (e.g., openai/gpt-4o)')
-		.option('--models-json <path>', 'Path to models.json')
-		.action(async (modelRef, options) => {
-			const registry = new ModelRegistry(options.modelsJson);
+		.action(async (modelRef) => {
+			const config = loadUserConfig();
+			const registry = new ModelRegistry(config);
 			const model = registry.findByRef(modelRef);
 
 			if (!model) {
@@ -100,6 +129,9 @@ function createSetCommand() {
 				console.log('\nAvailable models: xopcbot models list');
 				process.exit(1);
 			}
+
+			config.agents.defaults.model = `${model.provider}/${model.id}`;
+			saveUserConfig(config);
 
 			console.log(`✅ Set default model to: ${model.provider}/${model.id}`);
 			console.log(`   Context Window: ${model.contextWindow.toLocaleString()} tokens`);
@@ -110,104 +142,96 @@ function createSetCommand() {
 
 function createAddCommand() {
 	return new Command('add')
-		.description('Add a custom provider or model')
+		.description('Add a custom model to provider config')
 		.option('--provider <name>', 'Provider name')
-		.option('--baseUrl <url>', 'API base URL')
+		.option('--baseUrl <url>', 'API base URL (optional)')
 		.option('--apiKey <key>', 'API key (or ${ENV_VAR})')
 		.option('--api <type>', 'API type (openai-completions, anthropic-messages)')
-		.option('--modelId <id>', 'Model ID')
-		.option('--modelName <name>', 'Model display name')
-		.option('--contextWindow <number>', 'Context window size')
-		.option('--maxTokens <number>', 'Max output tokens')
-		.option('--reasoning', 'Model supports reasoning')
-		.option('--modelsJson <path>', 'Path to models.json')
+		.option('--model <id>', 'Model ID to add')
 		.action(async (options) => {
-			const modelsJsonPath = options.modelsJson ?? './models.json';
-
-			// Load existing config
-			let config = { providers: {} as Record<string, any> };
-			if (existsSync(modelsJsonPath)) {
-				try {
-					config = JSON.parse(readFileSync(modelsJsonPath, 'utf-8'));
-				} catch (e) {
-					console.error('Failed to parse models.json:', e);
-					process.exit(1);
-				}
-			}
-
-			// Build provider config
+			const config = loadUserConfig();
 			const providerName = options.provider;
+
 			if (!providerName) {
 				console.error('❌ --provider is required');
 				process.exit(1);
 			}
 
+			const modelId = options.model;
+			if (!modelId) {
+				console.error('❌ --model is required');
+				process.exit(1);
+			}
+
+			// Ensure provider exists
 			if (!config.providers[providerName]) {
-				config.providers[providerName] = {
-					baseUrl: options.baseUrl,
-					apiKey: options.apiKey,
-					api: options.api ?? 'openai-completions',
-					models: [],
-				};
+				(config.providers as Record<string, any>)[providerName] = {};
 			}
 
-			// Add model if specified
-			if (options.modelId) {
-				config.providers[providerName].models.push({
-					id: options.modelId,
-					name: options.modelName ?? options.modelId,
-					contextWindow: options.contextWindow ? parseInt(options.contextWindow) : 128000,
-					maxTokens: options.maxTokens ? parseInt(options.maxTokens) : 16384,
-					reasoning: options.reasoning ?? false,
-					input: ['text'],
-					cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-				});
+			const providerConfig = (config.providers as Record<string, any>)[providerName];
+
+			// Update baseUrl if provided
+			if (options.baseUrl) {
+				providerConfig.baseUrl = resolveConfigValue(options.baseUrl);
 			}
 
-			// Save config
-			writeFileSync(modelsJsonPath, JSON.stringify(config, null, 2));
-			console.log(`✅ Added/updated provider: ${providerName}`);
-			console.log(`   Config saved to: ${modelsJsonPath}`);
+			// Update apiKey if provided
+			if (options.apiKey) {
+				providerConfig.apiKey = resolveConfigValue(options.apiKey);
+			}
+
+			// Update api type if provided
+			if (options.api) {
+				providerConfig.api = options.api;
+			}
+
+			// Add model to list
+			if (!providerConfig.models) {
+				providerConfig.models = [];
+			}
+
+			if (!providerConfig.models.includes(modelId)) {
+				providerConfig.models.push(modelId);
+			}
+
+			saveUserConfig(config);
+			console.log(`✅ Added model "${modelId}" to provider: ${providerName}`);
+			console.log(`   Config saved to: ${getConfigPath()}`);
 		});
 }
 
 function createRemoveCommand() {
 	return new Command('remove')
-		.description('Remove a custom provider or model')
+		.description('Remove a custom model from provider config')
 		.argument('<target>', 'Provider or model to remove (provider or provider/model)')
-		.option('--models-json <path>', 'Path to models.json')
-		.action(async (target, options) => {
-			const modelsJsonPath = options.modelsJson ?? './models.json';
+		.action(async (target) => {
+			const config = loadUserConfig();
+			const [provider, modelId] = target.split('/');
 
-			if (!existsSync(modelsJsonPath)) {
-				console.error('❌ models.json not found');
+			if (!config.providers[provider]) {
+				console.error(`❌ Provider not found: ${provider}`);
 				process.exit(1);
 			}
 
-			const config = JSON.parse(readFileSync(modelsJsonPath, 'utf-8'));
-			const [provider, modelId] = target.split('/');
+			const providerConfig = (config.providers as Record<string, any>)[provider];
 
 			if (modelId) {
 				// Remove specific model
-				const models = config.providers[provider]?.models ?? [];
-				const filtered = models.filter((m: any) => m.id !== modelId);
+				const models = providerConfig.models ?? [];
+				const filtered = models.filter((m: string) => m !== modelId);
 				if (models.length === filtered.length) {
 					console.error(`❌ Model not found: ${target}`);
 					process.exit(1);
 				}
-				config.providers[provider].models = filtered;
+				providerConfig.models = filtered;
 				console.log(`✅ Removed model: ${target}`);
 			} else {
-				// Remove entire provider
-				if (!config.providers[provider]) {
-					console.error(`❌ Provider not found: ${provider}`);
-					process.exit(1);
-				}
+				// Remove entire provider (reset to default)
 				delete config.providers[provider];
-				console.log(`✅ Removed provider: ${provider}`);
+				console.log(`✅ Removed provider config: ${provider}`);
 			}
 
-			writeFileSync(modelsJsonPath, JSON.stringify(config, null, 2));
+			saveUserConfig(config);
 		});
 }
 
@@ -218,22 +242,34 @@ function createAuthCommand() {
 			.description('Set API key for a provider')
 			.argument('<provider>', 'Provider name')
 			.argument('<apiKey>', 'API key (or ${ENV_VAR})')
-			.option('--file <path>', 'Auth file path')
-			.action(async (provider, apiKey, options) => {
-				saveApiKey(provider, apiKey, options.file);
+			.action(async (provider, apiKey) => {
+				const config = loadUserConfig();
+				const resolvedKey = resolveConfigValue(apiKey);
+
+				if (!config.providers[provider]) {
+					(config.providers as Record<string, any>)[provider] = {};
+				}
+				(config.providers as Record<string, any>)[provider].apiKey = resolvedKey;
+
+				saveUserConfig(config);
 				console.log(`✅ Set API key for: ${provider}`);
 			}))
 		.addCommand(new Command('list')
 			.description('List configured auth')
-			.option('--file <path>', 'Auth file path')
-			.action(async (options) => {
-				const { AuthStorage } = await import('../auth/storage.js');
-				const storage = new AuthStorage({ dataDir: options.file ? '.' : './data', filename: options.file });
-				const configured = storage.getConfiguredProviders();
+			.action(async () => {
+				const config = loadUserConfig();
 				console.log('\n🔐 Configured Providers:\n');
-				for (const provider of configured) {
-					const hasAuth = storage.hasAuth(provider);
-					console.log(`  ${hasAuth ? '✅' : '❌'} ${provider}`);
+
+				const providers = Object.keys(config.providers);
+				if (providers.length === 0) {
+					console.log('   No providers configured in config.json');
+					console.log('   Use environment variables or set via: xopcbot models auth set <provider> <key>');
+					return;
+				}
+
+				for (const provider of providers) {
+					const hasKey = !!(config.providers as Record<string, any>)[provider]?.apiKey;
+					console.log(`  ${hasKey ? '✅' : '❌'} ${provider}`);
 				}
 			}));
 }

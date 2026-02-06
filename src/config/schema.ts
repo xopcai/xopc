@@ -8,12 +8,23 @@ import { z } from 'zod';
 export const OpenAIProviderSchema = z.object({
   apiKey: z.string().default(''),
   baseUrl: z.string().optional(),
+  api: z.enum(['openai-completions', 'anthropic-messages', 'google-generative-ai', 'github-copilot']).optional(),
+  models: z.array(z.string()).optional(),
 });
 
 // Anthropic provider schema
 export const AnthropicProviderSchema = z.object({
   apiKey: z.string().default(''),
+  models: z.array(z.string()).optional(),
 });
+
+// Ollama provider schema
+export const OllamaProviderSchema = z.object({
+  enabled: z.boolean().default(true),
+  baseUrl: z.string().default('http://127.0.0.1:11434/v1'),
+  models: z.array(z.string()).optional(),
+  autoDiscovery: z.boolean().default(true),
+}).strict();
 
 // Unified providers config
 export const ProvidersConfigSchema = z.object({
@@ -33,6 +44,9 @@ export const ProvidersConfigSchema = z.object({
   // Native providers
   anthropic: AnthropicProviderSchema.default({}),
   google: AnthropicProviderSchema.default({}),
+  
+  // Local providers
+  ollama: OllamaProviderSchema.default({}),
 }).strict();
 
 // ============================================
