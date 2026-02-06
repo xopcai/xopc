@@ -1,5 +1,6 @@
 import { existsSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
+import { join, dirname, resolve, isAbsolute } from 'path';
+import { homedir } from 'os';
 
 export function ensureDir(path: string): void {
   if (!existsSync(dirname(path))) {
@@ -17,7 +18,25 @@ export function todayDate(): string {
 
 export function getWorkspacePath(customPath?: string): string {
   if (customPath) {
-    return customPath.replace(/^~/, require('os').homedir());
+    return customPath.replace(/^~/, homedir());
   }
-  return join(require('os').homedir(), '.xopcbot', 'workspace');
+  return join(homedir(), '.xopcbot', 'workspace');
+}
+
+// Path Resolver
+// ============================================================================
+
+export function createPathResolver(pluginDir: string, workspaceDir: string) {
+  return (input: string): string => {
+    if (input.startsWith('~')) {
+      return input.replace('~', process.env.HOME || '');
+    }
+    if (input.startsWith('.')) {
+      return resolve(pluginDir, input);
+    }
+    if (!isAbsolute(input)) {
+      return resolve(workspaceDir, input);
+    }
+    return input;
+  };
 }

@@ -18,6 +18,7 @@ import type {
 } from './types.js';
 import type { Config } from '../types/index.js';
 import type { MessageBus } from '../bus/index.js';
+import { resolve, isAbsolute } from 'path';
 import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';
 
@@ -146,10 +147,10 @@ export function createPathResolver(pluginDir: string, workspaceDir: string) {
       return input.replace('~', process.env.HOME || '');
     }
     if (input.startsWith('.')) {
-      return require('path').resolve(pluginDir, input);
+      return resolve(pluginDir, input);
     }
-    if (!require('path').isAbsolute(input)) {
-      return require('path').resolve(workspaceDir, input);
+    if (!isAbsolute(input)) {
+      return resolve(workspaceDir, input);
     }
     return input;
   };

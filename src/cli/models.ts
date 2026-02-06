@@ -13,7 +13,8 @@ import { Command } from 'commander';
 import { ModelRegistry, resolveConfigValue } from '../providers/registry.js';
 import { Config, ConfigSchema, getWorkspacePath, listBuiltinModels, parseModelId } from '../config/schema.js';
 import { loadConfig, saveConfig } from '../config/index.js';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
+import { dirname } from 'path';
 import { join } from 'path';
 
 export function createModelsCommand() {
@@ -48,9 +49,9 @@ function loadUserConfig(): Config {
 
 function saveUserConfig(config: Config): void {
 	const configPath = getConfigPath();
-	const dir = require('path').dirname(configPath);
+	const dir = dirname(configPath);
 	if (!existsSync(dir)) {
-		require('fs').mkdirSync(dir, { recursive: true });
+		mkdirSync(dir, { recursive: true });
 	}
 	// 保留注释和格式
 	let content = JSON.stringify(config, null, 2);
