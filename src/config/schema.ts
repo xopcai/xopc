@@ -8,12 +8,12 @@ import { z } from 'zod';
 export const OpenAIProviderSchema = z.object({
   apiKey: z.string().default(''),
   baseUrl: z.string().optional(),
-}).strict();
+});
 
 // Anthropic provider schema
 export const AnthropicProviderSchema = z.object({
   apiKey: z.string().default(''),
-}).strict();
+});
 
 // Unified providers config
 export const ProvidersConfigSchema = z.object({
