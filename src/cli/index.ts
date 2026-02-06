@@ -5,6 +5,7 @@ import { createGatewayCommand } from './commands/gateway.js';
 import { createCronCommand } from './commands/cron.js';
 import { createConfigureCommand } from './commands/configure.js';
 import { createConfigCommand } from './commands/config.js';
+import { createModelsCommand } from './models.js';
 
 const program = createCLI();
 
@@ -14,6 +15,7 @@ program.addCommand(createGatewayCommand());
 program.addCommand(createCronCommand());
 program.addCommand(createConfigureCommand());
 program.addCommand(createConfigCommand());
+program.addCommand(createModelsCommand());
 
 // Handle --version flag
 program.parse(process.argv);

@@ -202,3 +202,6 @@ export interface SubagentResult {
   result: string;
   status: 'ok' | 'error';
 }
+
+// Re-export provider types
+export * from './providers.js';
