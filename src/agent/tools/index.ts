@@ -5,6 +5,7 @@ export * from './write.js';
 export * from './edit.js';
 export * from './listdir.js';
 export * from './shell.js';
+export * from './spawn.js';
 export * from './web_search.js';
 export * from './web_fetch.js';
 export * from './message.js';
