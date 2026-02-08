@@ -4,13 +4,22 @@ import { createProvider } from '../../providers/index.js';
 import { loadConfig } from '../../config/index.js';
 import { MessageBus } from '../../bus/index.js';
 import { createLogger } from '../../utils/logger.js';
+import { register, formatExamples, type CLIContext } from '../registry.js';
 
 const log = createLogger('AgentCommand');
 
-export function createAgentCommand(): Command {
+function createAgentCommand(ctx: CLIContext): Command {
   const cmd = new Command('agent')
-    .description('Chat with the agent')
-    .option('-m, --message <text>', 'Message to send')
+    .description('Chat with the AI agent')
+    .addHelpText(
+      'after',
+      formatExamples([
+        'xopcbot agent -m "Hello"          # Single message',
+        'xopcbot agent -i                  # Interactive mode',
+        'xopcbot agent --message "Hello"   # Long form',
+      ])
+    )
+    .option('-m, --message <text>', 'Single message to send')
     .option('-i, --interactive', 'Interactive chat mode')
     .action(async (options) => {
       const config = loadConfig();
@@ -21,6 +30,10 @@ export function createAgentCommand(): Command {
       const workspace = config.agents.defaults.workspace;
       const maxIterations = config.agents.defaults.maxToolIterations;
       const braveApiKey = config.tools.web?.search?.apiKey;
+
+      if (ctx.isVerbose) {
+        log.info({ model: modelId, workspace }, 'Starting agent');
+      }
 
       const agent = new AgentLoop(
         bus,
@@ -66,3 +79,18 @@ export function createAgentCommand(): Command {
 
   return cmd;
 }
+
+// 自注册到命令注册表
+register({
+  id: 'agent',
+  name: 'agent',
+  description: 'Chat with the AI agent',
+  factory: createAgentCommand,
+  metadata: {
+    category: 'runtime',
+    examples: [
+      'xopcbot agent -m "Hello"',
+      'xopcbot agent -i',
+    ],
+  },
+});

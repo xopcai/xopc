@@ -1,5 +1,3 @@
-export * from './onboard.js';
-export * from './agent.js';
-export * from './gateway.js';
-export * from './cron.js';
-export * from './models.js';
+// CLI 命令模块
+// 所有命令通过 registry.ts 自注册，无需显式导出
+// 导入本模块即可注册所有命令

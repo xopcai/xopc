@@ -4,6 +4,7 @@ import { existsSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 import { loadConfig, saveConfig, ConfigSchema, getApiBase } from '../../config/index.js';
+import { register, formatExamples, type CLIContext } from '../registry.js';
 
 // ============================================
 // Provider Options - Simplified for Quick Start
@@ -66,22 +67,22 @@ const PROVIDER_OPTIONS = [
   },
 ];
 
-export function createConfigureCommand(): Command {
+function createConfigureCommand(ctx: CLIContext): Command {
   const cmd = new Command('configure')
     .description('Configure xopcbot interactively')
     .addHelpText(
       'after',
-      `\nQuick Start:
-  $ xopcbot configure                    # Full wizard
-  $ xopcbot configure --provider        # Provider only
-  $ xopcbot configure --channel        # Channels only
-`
+      formatExamples([
+        'xopcbot configure                    # Full wizard',
+        'xopcbot configure --provider         # Provider only',
+        'xopcbot configure --channel          # Channels only',
+      ])
     )
     .option('--provider', 'Configure LLM provider')
     .option('--channel', 'Configure channels')
     .option('--all', 'Configure everything')
     .action(async (opts) => {
-      const configPath = join(homedir(), '.xopcbot', 'config.json');
+      const configPath = ctx.configPath;
       const existingConfig = existsSync(configPath)
         ? loadConfig(configPath)
         : ConfigSchema.parse({});
@@ -221,3 +222,18 @@ export function createConfigureCommand(): Command {
 
   return cmd;
 }
+
+// 自注册到命令注册表（与 onboard 功能类似，但保持独立以向后兼容）
+register({
+  id: 'configure',
+  name: 'configure',
+  description: 'Configure xopcbot interactively',
+  factory: createConfigureCommand,
+  metadata: {
+    category: 'setup',
+    examples: [
+      'xopcbot configure',
+      'xopcbot configure --provider',
+    ],
+  },
+});

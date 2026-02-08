@@ -4,17 +4,17 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { input, password, select, confirm } from '@inquirer/prompts';
 import { loadConfig, saveConfig, ConfigSchema, PROVIDER_OPTIONS } from '../../config/index.js';
+import { register, formatExamples, type CLIContext } from '../registry.js';
 
-export function createOnboardCommand(): Command {
+function createOnboardCommand(ctx: CLIContext): Command {
   const cmd = new Command('onboard')
     .description('Interactive setup wizard for xopcbot')
     .addHelpText(
       'after',
-      `
-Examples:
-  $ xopcbot onboard              # Full interactive setup
-  $ xopcbot onboard --quick       # Quick model setup only
-`
+      formatExamples([
+        'xopcbot onboard              # Full interactive setup',
+        'xopcbot onboard --quick       # Quick model setup only',
+      ])
     )
     .option('--quick', 'Quick setup (model only)')
     .action(async (options) => {
@@ -219,3 +219,18 @@ I am xopcbot, a lightweight AI assistant.
     }
   }
 }
+
+// 自注册到命令注册表
+register({
+  id: 'onboard',
+  name: 'onboard',
+  description: 'Interactive setup wizard for xopcbot',
+  factory: createOnboardCommand,
+  metadata: {
+    category: 'setup',
+    examples: [
+      'xopcbot onboard',
+      'xopcbot onboard --quick',
+    ],
+  },
+});

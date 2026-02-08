@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { loadConfig, listBuiltinModels, PROVIDER_NAMES, listConfiguredProviders } from '../../config/index.js';
 import { createLogger } from '../../utils/logger.js';
+import { register, formatExamples, type CLIContext } from '../registry.js';
 
 const log = createLogger('ModelsCommand');
 
@@ -17,17 +18,16 @@ function groupModelsByProvider(models: Array<{ id: string; name: string; provide
   return groups;
 }
 
-export function createModelsCommand(): Command {
+function createModelsCommand(ctx: CLIContext): Command {
   const cmd = new Command('models')
     .description('List and manage available models')
     .addHelpText(
       'after',
-      `
-Examples:
-  $ xopcbot models list              # List all models
-  $ xopcbot models list --builtin   # Show built-in models
-  $ xopcbot models list --json      # Output as JSON
-`
+      formatExamples([
+        'xopcbot models list              # List all models',
+        'xopcbot models list --builtin    # Show built-in models',
+        'xopcbot models list --json       # Output as JSON',
+      ])
     )
     .option('--json', 'Output as JSON', false)
     .option('--builtin', 'Show built-in models only', false)
@@ -80,3 +80,18 @@ Examples:
 
   return cmd;
 }
+
+// 自注册到命令注册表
+register({
+  id: 'models',
+  name: 'models',
+  description: 'List and manage available models',
+  factory: createModelsCommand,
+  metadata: {
+    category: 'utility',
+    examples: [
+      'xopcbot models list',
+      'xopcbot models list --builtin',
+    ],
+  },
+});

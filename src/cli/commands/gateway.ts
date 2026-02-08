@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import http from 'http';
 import { createLogger } from '../../utils/logger.js';
+import { register, formatExamples, type CLIContext } from '../registry.js';
 
 const log = createLogger('GatewayCommand');
 
@@ -45,9 +46,17 @@ class Gateway {
   }
 }
 
-export function createGatewayCommand(): Command {
+function createGatewayCommand(ctx: CLIContext): Command {
   const cmd = new Command('gateway')
     .description('Start the xopcbot gateway server')
+    .addHelpText(
+      'after',
+      formatExamples([
+        'xopcbot gateway                   # Start with default port',
+        'xopcbot gateway --port 8080       # Custom port',
+        'xopcbot gateway --host 127.0.0.1  # Bind to localhost only',
+      ])
+    )
     .option('--host <address>', 'Host to bind to', '0.0.0.0')
     .option('--port <number>', 'Port to listen on', '18790')
     .action(async (options) => {
@@ -63,10 +72,14 @@ export function createGatewayCommand(): Command {
       process.on('SIGINT', shutdown);
       process.on('SIGTERM', shutdown);
       
+      if (ctx.isVerbose) {
+        log.info({ host: options.host, port: options.port }, 'Starting gateway');
+      }
+
       try {
         await gateway.start({
           host: options.host,
-          port: parseInt(options.port),
+          port: parseInt(options.port, 10),
         });
       } catch (error) {
         log.error({ err: error }, 'Failed to start gateway');
@@ -76,3 +89,18 @@ export function createGatewayCommand(): Command {
 
   return cmd;
 }
+
+// 自注册到命令注册表
+register({
+  id: 'gateway',
+  name: 'gateway',
+  description: 'Start the xopcbot gateway server',
+  factory: createGatewayCommand,
+  metadata: {
+    category: 'runtime',
+    examples: [
+      'xopcbot gateway',
+      'xopcbot gateway --port 8080',
+    ],
+  },
+});

@@ -4,6 +4,7 @@ import { join } from 'path';
 import { homedir } from 'os';
 import { loadConfig } from '../../config/index.js';
 import { createLogger } from '../../utils/logger.js';
+import { register, formatExamples, type CLIContext } from '../registry.js';
 
 const log = createLogger('ConfigCommand');
 
@@ -31,16 +32,17 @@ function setNestedValue(obj: any, path: string, value: any): any {
   return obj;
 }
 
-export function createConfigCommand(): Command {
+function createConfigCommand(ctx: CLIContext): Command {
   const cmd = new Command('config')
     .description('View and edit configuration')
     .addHelpText(
       'after',
-      `\nExamples:
-  $ xopcbot config get agents.defaults.model
-  $ xopcbot config set agents.defaults.temperature 0.8
-  $ xopcbot config unset agents.defaults.max_tokens
-`
+      formatExamples([
+        'xopcbot config get agents.defaults.model',
+        'xopcbot config set agents.defaults.temperature 0.8',
+        'xopcbot config unset agents.defaults.max_tokens',
+        'xopcbot config show',
+      ])
     );
 
   // Config get
@@ -48,14 +50,12 @@ export function createConfigCommand(): Command {
     .command('get <path>')
     .description('Get a config value by dot path')
     .action((path: string) => {
-      const configPath = join(homedir(), '.xopcbot', 'config.json');
-      
-      if (!existsSync(configPath)) {
-        log.error('Config file not found. Run: xopcbot configure');
+      if (!existsSync(ctx.configPath)) {
+        log.error('Config file not found. Run: xopcbot onboard');
         process.exit(1);
       }
 
-      const config = loadConfig(configPath);
+      const config = loadConfig(ctx.configPath);
       const value = getNestedValue(config, path);
 
       if (value === undefined) {
@@ -71,10 +71,8 @@ export function createConfigCommand(): Command {
     .command('set <path> <value>')
     .description('Set a config value by dot path')
     .action((path: string, value: string) => {
-      const configPath = join(homedir(), '.xopcbot', 'config.json');
-      
-      if (!existsSync(configPath)) {
-        log.error('Config file not found. Run: xopcbot configure');
+      if (!existsSync(ctx.configPath)) {
+        log.error('Config file not found. Run: xopcbot onboard');
         process.exit(1);
       }
 
@@ -86,11 +84,11 @@ export function createConfigCommand(): Command {
         parsedValue = value;
       }
 
-      const config = loadConfig(configPath);
+      const config = loadConfig(ctx.configPath);
       setNestedValue(config, path, parsedValue);
 
       // Save config (simple overwrite)
-      writeFileSync(configPath, JSON.stringify(config, null, 2));
+      writeFileSync(ctx.configPath, JSON.stringify(config, null, 2));
       
       log.info({ path }, `Config updated`);
     });
@@ -100,14 +98,12 @@ export function createConfigCommand(): Command {
     .command('unset <path>')
     .description('Remove a config value by dot path')
     .action((path: string) => {
-      const configPath = join(homedir(), '.xopcbot', 'config.json');
-      
-      if (!existsSync(configPath)) {
-        log.error('Config file not found. Run: xopcbot configure');
+      if (!existsSync(ctx.configPath)) {
+        log.error('Config file not found. Run: xopcbot onboard');
         process.exit(1);
       }
 
-      const config = loadConfig(configPath);
+      const config = loadConfig(ctx.configPath);
       const keys = path.split('.');
       const lastKey = keys.pop()!;
       const target = keys.reduce((current: any, key: string) => {
@@ -116,7 +112,7 @@ export function createConfigCommand(): Command {
 
       if (target && typeof target === 'object' && lastKey in target) {
         delete target[lastKey];
-        writeFileSync(configPath, JSON.stringify(config, null, 2));
+        writeFileSync(ctx.configPath, JSON.stringify(config, null, 2));
         log.info({ path }, `Config removed`);
       } else {
         log.error({ path }, `Config path not found`);
@@ -127,16 +123,14 @@ export function createConfigCommand(): Command {
   // Config show
   cmd
     .command('show')
-    .description('Show full configuration')
+    .description('Show full configuration (sensitive values masked)')
     .action(() => {
-      const configPath = join(homedir(), '.xopcbot', 'config.json');
-      
-      if (!existsSync(configPath)) {
-        log.warn('No config file found. Run: xopcbot configure');
+      if (!existsSync(ctx.configPath)) {
+        log.warn('No config file found. Run: xopcbot onboard');
         return;
       }
 
-      const config = loadConfig(configPath);
+      const config = loadConfig(ctx.configPath);
       
       // Mask sensitive values
       const maskedConfig = JSON.stringify(config, (key, value) => {
@@ -149,5 +143,29 @@ export function createConfigCommand(): Command {
       console.log(maskedConfig);
     });
 
+  // Config path
+  cmd
+    .command('path')
+    .description('Show configuration file path')
+    .action(() => {
+      console.log(ctx.configPath);
+    });
+
   return cmd;
 }
+
+// 自注册到命令注册表
+register({
+  id: 'config',
+  name: 'config',
+  description: 'View and edit configuration',
+  factory: createConfigCommand,
+  metadata: {
+    category: 'utility',
+    examples: [
+      'xopcbot config get agents.defaults.model',
+      'xopcbot config set agents.defaults.temperature 0.8',
+      'xopcbot config show',
+    ],
+  },
+});
