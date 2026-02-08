@@ -1,16 +1,18 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { loadConfig, saveConfig, getConfigPath } from '../loader.js';
 import { ConfigSchema } from '../schema.js';
-import fs from 'fs';
-import os from 'os';
 
 // Mock fs module
-vi.mock('fs', () => ({
-  existsSync: vi.fn(),
-  readFileSync: vi.fn(),
-  writeFileSync: vi.fn(),
-  mkdirSync: vi.fn(),
-}));
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return {
+    ...actual,
+    existsSync: vi.fn(),
+    readFileSync: vi.fn(),
+    writeFileSync: vi.fn(),
+    mkdirSync: vi.fn(),
+  };
+});
 
 // Mock os module
 vi.mock('os', () => ({
@@ -21,6 +23,8 @@ vi.mock('os', () => ({
 vi.mock('dotenv', () => ({
   config: vi.fn(),
 }));
+
+import * as fs from 'fs';
 
 describe('loadConfig', () => {
   beforeEach(() => {
@@ -85,6 +89,8 @@ describe('loadConfig', () => {
 
     expect(fs.readFileSync).toHaveBeenCalledWith(envPath, 'utf-8');
     expect(config.agents?.defaults?.model).toBe('env-model');
+
+    delete process.env.CONFIG_PATH;
   });
 
   it('should return default config when file has invalid JSON', () => {
@@ -122,6 +128,8 @@ describe('saveConfig', () => {
     });
 
     vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
+    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
     saveConfig(config);
 
@@ -136,6 +144,8 @@ describe('saveConfig', () => {
     const config = ConfigSchema.parse({});
 
     vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
+    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
     saveConfig(config);
 
@@ -148,6 +158,8 @@ describe('saveConfig', () => {
     const config = ConfigSchema.parse({});
 
     vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
+    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
     saveConfig(config, customPath);
 
@@ -158,6 +170,8 @@ describe('saveConfig', () => {
     const config = ConfigSchema.parse({ agents: { defaults: { model: 'test' } } });
 
     vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
+    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
     saveConfig(config);
 
@@ -182,5 +196,7 @@ describe('getConfigPath', () => {
     process.env.CONFIG_PATH = '/env/config.json';
     const path = getConfigPath();
     expect(path).toBe('/env/config.json');
+
+    delete process.env.CONFIG_PATH;
   });
 });

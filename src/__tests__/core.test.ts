@@ -8,11 +8,13 @@ describe('xopcbot core tests', () => {
     const { SessionManager } = await import('../session/index.js');
     const { MessageBus } = await import('../bus/index.js');
     const { createProvider } = await import('../providers/index.js');
+    const { CommandRegistry } = await import('../cli/registry.js');
     
     expect(AgentLoop).toBeDefined();
     expect(SessionManager).toBeDefined();
     expect(MessageBus).toBeDefined();
     expect(createProvider).toBeDefined();
+    expect(CommandRegistry).toBeDefined();
   });
 
   it('should have tool classes', async () => {
@@ -24,11 +26,10 @@ describe('xopcbot core tests', () => {
     expect(ExecTool).toBeDefined();
   });
 
-  it('should have CLI commands', async () => {
-    const { createOnboardCommand, createAgentCommand, createCronCommand } = await import('../cli/commands/index.js');
+  it('should have config functions', async () => {
+    const { loadConfig, saveConfig } = await import('../config/index.js');
     
-    expect(createOnboardCommand).toBeDefined();
-    expect(createAgentCommand).toBeDefined();
-    expect(createCronCommand).toBeDefined();
+    expect(loadConfig).toBeDefined();
+    expect(saveConfig).toBeDefined();
   });
 });
