@@ -1,11 +1,16 @@
-export * from './base.js';
-export * from './registry.js';
-export * from './filesystem.js';
-export * from './write.js';
-export * from './edit.js';
-export * from './listdir.js';
-export * from './shell.js';
-export * from './spawn.js';
-export * from './web_search.js';
-export * from './web_fetch.js';
-export * from './message.js';
+// Export all agent tools
+export {
+  readFileTool,
+  writeFileTool,
+  editFileTool,
+  listDirTool,
+  createShellTool,
+} from './filesystem.js';
+
+export { createWebSearchTool, webFetchTool } from './web.js';
+
+export {
+  createMessageTool,
+  createSpawnTool,
+  type SubagentResult,
+} from './communication.js';

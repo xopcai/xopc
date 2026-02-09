@@ -95,7 +95,7 @@ describe('SessionManager', () => {
       vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
       const session = manager.getOrCreate('test-session');
-      session.messages.push({ role: 'user', content: 'Hello', timestamp: Date.now() });
+      session.messages.push({ role: 'user', content: 'Hello', timestamp: new Date().toISOString() });
       manager.save(session);
 
       const writeCall = vi.mocked(fs.writeFileSync).mock.calls[0];

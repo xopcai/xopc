@@ -7,8 +7,8 @@ import { describe, it, expect } from 'vitest';
 describe('xopcbot integration tests', () => {
   it('should load all core modules without errors', async () => {
     // Agent modules
-    const { AgentLoop } = await import('../agent/index.js');
-    expect(AgentLoop).toBeDefined();
+    const { AgentService } = await import('../agent/index.js');
+    expect(AgentService).toBeDefined();
 
     // Config modules
     const { loadConfig, saveConfig, ConfigSchema } = await import('../config/index.js');
@@ -40,26 +40,24 @@ describe('xopcbot integration tests', () => {
   it('should instantiate core classes', async () => {
     const { CommandRegistry } = await import('../cli/registry.js');
     const { SessionManager } = await import('../session/index.js');
-    const { ToolRegistry } = await import('../agent/tools/registry.js');
 
     // Should be able to instantiate
     expect(() => new CommandRegistry()).not.toThrow();
     expect(() => new SessionManager()).not.toThrow();
-    expect(() => new ToolRegistry()).not.toThrow();
   });
 
-  it('should have all tool classes available', async () => {
+  it('should have all tool functions available', async () => {
     const tools = await import('../agent/tools/index.js');
 
-    expect(tools.ReadFileTool).toBeDefined();
-    expect(tools.WriteFileTool).toBeDefined();
-    expect(tools.EditFileTool).toBeDefined();
-    expect(tools.ListDirTool).toBeDefined();
-    expect(tools.ExecTool).toBeDefined();
-    expect(tools.WebSearchTool).toBeDefined();
-    expect(tools.WebFetchTool).toBeDefined();
-    expect(tools.MessageTool).toBeDefined();
-    expect(tools.SpawnTool).toBeDefined();
+    expect(tools.readFileTool).toBeDefined();
+    expect(tools.writeFileTool).toBeDefined();
+    expect(tools.editFileTool).toBeDefined();
+    expect(tools.listDirTool).toBeDefined();
+    expect(tools.createShellTool).toBeDefined();
+    expect(tools.createWebSearchTool).toBeDefined();
+    expect(tools.webFetchTool).toBeDefined();
+    expect(tools.createMessageTool).toBeDefined();
+    expect(tools.createSpawnTool).toBeDefined();
   });
 
   it('should have all CLI commands registered', async () => {

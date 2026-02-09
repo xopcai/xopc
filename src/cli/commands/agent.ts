@@ -1,6 +1,5 @@
 import { Command } from 'commander';
-import { AgentLoop } from '../../agent/index.js';
-import { createProvider } from '../../providers/index.js';
+import { AgentService } from '../../agent/index.js';
 import { loadConfig } from '../../config/index.js';
 import { MessageBus } from '../../bus/index.js';
 import { createLogger } from '../../utils/logger.js';
@@ -23,26 +22,21 @@ function createAgentCommand(ctx: CLIContext): Command {
     .option('-i, --interactive', 'Interactive chat mode')
     .action(async (options) => {
       const config = loadConfig();
-      const modelId = config.agents.defaults.model;
-      const provider = createProvider(config, modelId);
+      const modelId = config.agents?.defaults?.model;
       const bus = new MessageBus();
-      
-      const workspace = config.agents.defaults.workspace;
-      const maxIterations = config.agents.defaults.maxToolIterations;
-      const braveApiKey = config.tools.web?.search?.apiKey;
+
+      const workspace = config.agents?.defaults?.workspace || process.cwd();
+      const braveApiKey = config.tools?.web?.search?.apiKey;
 
       if (ctx.isVerbose) {
         log.info({ model: modelId, workspace }, 'Starting agent');
       }
 
-      const agent = new AgentLoop(
-        bus,
-        provider,
+      const agent = new AgentService(bus, {
         workspace,
-        modelId,
-        maxIterations,
-        braveApiKey
-      );
+        model: modelId,
+        braveApiKey,
+      });
 
       if (options.message) {
         // Single message mode
@@ -51,7 +45,7 @@ function createAgentCommand(ctx: CLIContext): Command {
       } else if (options.interactive) {
         // Interactive mode
         console.log('🧠 Interactive chat mode (Ctrl+C to exit)\n');
-        
+
         const readline = await import('readline');
         const rl = readline.createInterface({
           input: process.stdin,
