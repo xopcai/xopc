@@ -87,9 +87,9 @@ export class DefaultJobExecutor implements JobExecutor {
    * Cancel a running job
    */
   cancelJob(jobId: string): boolean {
-    const controller = this.runningJobs.get(jobId);
-    if (controller) {
-      controller.abort();
+    const _controller = this.runningJobs.get(jobId);
+    if (_controller) {
+      _controller.abort();
       this.runningJobs.delete(jobId);
       return true;
     }
@@ -109,7 +109,7 @@ export class DefaultJobExecutor implements JobExecutor {
    */
   getRunningExecutions(): JobExecution[] {
     const result: JobExecution[] = [];
-    for (const [jobId, controller] of this.runningJobs) {
+    for (const [jobId, _controller] of this.runningJobs) {
       // Find the running execution
       const history = this.history.get(jobId);
       if (history) {

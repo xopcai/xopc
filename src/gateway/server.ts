@@ -1,4 +1,3 @@
-import type { Server } from 'node:http';
 import { serve, type ServerType } from '@hono/node-server';
 import { createNodeWebSocket } from '@hono/node-ws';
 import { createLogger } from '../utils/logger.js';

@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
 import { password, select, confirm } from '@inquirer/prompts';
 import { loadConfig, saveConfig, PROVIDER_OPTIONS } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';

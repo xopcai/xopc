@@ -1,12 +1,10 @@
 // AgentService - Main agent implementation using @mariozechner/pi-agent-core
-import crypto from 'crypto';
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { MessageBus, InboundMessage } from '../bus/index.js';
 import type { Config } from '../config/schema.js';
 import { getApiKey as getConfigApiKey } from '../config/schema.js';
-import { MemoryStore, type CompactionResult } from './memory/store.js';
-import { buildSummaryPrompt, estimateTokens } from './memory/compaction.js';
+import { MemoryStore } from './memory/store.js';
 import {
   readFileTool,
   writeFileTool,
@@ -29,7 +27,7 @@ interface AgentServiceConfig {
   model?: string;
   braveApiKey?: string;
   spawnSubagent?: (task: string, label?: string) => Promise<SubagentResult>;
-  config?: Config;  // Full config for provider/model registration
+  config?: Config;
 }
 
 export class AgentService {
@@ -38,14 +36,9 @@ export class AgentService {
   private unsubscribe?: () => void;
   private running = false;
   private currentContext: { channel: string; chatId: string } | null = null;
-  private pendingOutbound: string[] = [];
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
-    // Get compaction/pruning config from agent defaults
-    const compactionConfig = config.config?.agents?.defaults?.compaction;
-    const pruningConfig = config.config?.agents?.defaults?.pruning;
-
-    this.memory = new MemoryStore(config.workspace, compactionConfig, pruningConfig);
+    this.memory = new MemoryStore(config.workspace);
 
     // Initialize agent with tools
     const tools: AgentTool<any, any>[] = [
@@ -59,12 +52,10 @@ export class AgentService {
       createMessageTool(bus, () => this.currentContext),
     ];
 
-    // Add spawn tool if handler provided
     if (config.spawnSubagent) {
       tools.push(createSpawnTool(config.spawnSubagent));
     }
 
-    // Resolve model using registry (pass config for custom models)
     const registry = new ModelRegistry(config.config ?? null, { ollamaEnabled: false });
     let model: Model<Api>;
     
@@ -73,7 +64,6 @@ export class AgentService {
       if (found) {
         model = found;
       } else {
-        // Fallback to gemini flash lite
         log.warn({ model: config.model }, 'Model not found, using default');
         model = registry.find('google', 'gemini-2.5-flash-lite-preview-06-17')!;
       }
@@ -88,7 +78,6 @@ export class AgentService {
         tools,
         messages: [],
       },
-      // Resolve API key from config for each provider
       getApiKey: (provider: string) => {
         if (config.config) {
           return getConfigApiKey(config.config, provider) ?? undefined;
@@ -97,7 +86,6 @@ export class AgentService {
       },
     });
 
-    // Subscribe to agent events
     this.unsubscribe = this.agent.subscribe((event) => this.handleEvent(event));
   }
 
@@ -124,14 +112,10 @@ export class AgentService {
   }
 
   private async handleInboundMessage(msg: InboundMessage): Promise<void> {
-    // Set context for tools
     this.currentContext = {
       channel: msg.channel,
       chatId: msg.chat_id,
     };
-
-    // Clear pending outbound
-    this.pendingOutbound = [];
 
     try {
       if (msg.channel === 'system') {
@@ -148,14 +132,9 @@ export class AgentService {
     const sessionKey = `${msg.channel}:${msg.chat_id}`;
     log.info({ channel: msg.channel, senderId: msg.sender_id }, 'Processing message');
 
-    // Check and apply compaction if needed
-    await this.checkAndCompact(sessionKey);
-
-    // Load session history
     const history = await this.memory.load(sessionKey);
     this.agent.replaceMessages(history);
 
-    // Send prompt
     const userMessage: AgentMessage = {
       role: 'user',
       content: [{ type: 'text', text: msg.content }],
@@ -165,7 +144,6 @@ export class AgentService {
     await this.agent.prompt(userMessage);
     await this.agent.waitForIdle();
 
-    // Send final response if any content was generated
     const finalContent = this.getLastAssistantContent();
     if (finalContent) {
       await this.bus.publishOutbound({
@@ -175,14 +153,12 @@ export class AgentService {
       });
     }
 
-    // Save session
     await this.memory.save(sessionKey, this.agent.state.messages);
   }
 
   private async handleSystemMessage(msg: InboundMessage): Promise<void> {
     log.info({ senderId: msg.sender_id }, 'Processing system message');
 
-    // Parse origin from chat_id (format: "channel:chatId")
     let originChannel = 'cli';
     let originChatId = msg.chat_id;
     if (msg.chat_id.includes(':')) {
@@ -192,15 +168,9 @@ export class AgentService {
     }
 
     const sessionKey = `${originChannel}:${originChatId}`;
-
-    // Check and apply compaction if needed
-    await this.checkAndCompact(sessionKey);
-
-    // Load session
     const history = await this.memory.load(sessionKey);
     this.agent.replaceMessages(history);
 
-    // Send system prompt as user message with prefix
     const systemMessage: AgentMessage = {
       role: 'user',
       content: [{ type: 'text', text: `[System: ${msg.sender_id}] ${msg.content}` }],
@@ -210,7 +180,6 @@ export class AgentService {
     await this.agent.prompt(systemMessage);
     await this.agent.waitForIdle();
 
-    // Send response
     const finalContent = this.getLastAssistantContent();
     if (finalContent) {
       await this.bus.publishOutbound({
@@ -220,130 +189,7 @@ export class AgentService {
       });
     }
 
-    // Save session
     await this.memory.save(sessionKey, this.agent.state.messages);
-  }
-
-  /**
-   * Check if session needs compaction and apply if needed
-   */
-  private async checkAndCompact(sessionKey: string): Promise<void> {
-    const compactionConfig = this.config.config?.agents?.defaults?.compaction;
-    if (!compactionConfig?.enabled) return;
-
-    const contextWindow = this.getContextWindow();
-    const prep = await this.memory.prepareCompaction(sessionKey, contextWindow);
-
-    if (!prep.needsCompaction) return;
-
-    log.info({ sessionKey, tokenCount: estimateTokens(prep.messages) }, 'Session needs compaction');
-
-    try {
-      // Generate summary using the agent itself
-      const summary = await this.generateSummary(prep.messages);
-
-      const result: CompactionResult = {
-        summary,
-        firstKeptIndex: Math.max(0, prep.messages.length - compactionConfig.keepRecentMessages),
-        tokensBefore: estimateTokens(prep.messages),
-        tokensAfter: 0, // Will be calculated after apply
-        compacted: true,
-      };
-
-      // Calculate tokens after
-      const keptMessages = prep.messages.slice(result.firstKeptIndex);
-      const summaryMessage: AgentMessage = {
-        role: 'user',
-        content: [{ type: 'text', text: `[Previous conversation summary]: ${summary}` }],
-        timestamp: Date.now(),
-      };
-      result.tokensAfter = estimateTokens([summaryMessage, ...keptMessages]);
-
-      await this.memory.applyCompaction(sessionKey, result);
-    } catch (error) {
-      log.error({ err: error, sessionKey }, 'Failed to compact session');
-      
-      // Fallback: emergency trim
-      await this.memory.emergencyTrim(sessionKey, 20);
-    }
-  }
-
-  /**
-   * Generate summary of conversation using LLM
-   */
-  private async generateSummary(messages: AgentMessage[]): Promise<string> {
-    // Build summary prompt
-    const userMessages = messages
-      .filter(m => m.role === 'user')
-      .slice(-5)
-      .map(m => typeof m.content === 'string' ? m.content : '...')
-      .join('; ');
-    
-    const assistantMessages = messages
-      .filter(m => m.role === 'assistant')
-      .slice(-3)
-      .map(m => typeof m.content === 'string' 
-        ? (m.content as string).slice(0, 100) 
-        : '...')
-      .join('; ');
-
-    return `Recent user topics: ${userMessages.slice(0, 200)}... ` +
-           `Assistant responses covered: ${assistantMessages.slice(0, 200)}...`;
-  }
-
-  /**
-   * Get model context window
-   */
-  private getContextWindow(): number {
-    // Get from config or use default
-    return this.config.config?.agents?.defaults?.maxTokens 
-      ? this.config.config.agents.defaults.maxTokens * 4  // Rough estimate
-      : 128000;  // Default to 128k
-  }
-
-  /**
-   * Manual compaction - can be triggered by user command
-   */
-  async compactSession(sessionKey: string, instructions?: string): Promise<CompactionResult | null> {
-    const contextWindow = this.getContextWindow();
-    const prep = await this.memory.prepareCompaction(sessionKey, contextWindow);
-
-    if (!prep.needsCompaction && !instructions) {
-      log.info({ sessionKey }, 'Session does not need compaction');
-      return null;
-    }
-
-    const summary = await this.generateSummary(prep.messages);
-    const compactionConfig = this.config.config?.agents?.defaults?.compaction;
-
-    const result: CompactionResult = {
-      summary,
-      firstKeptIndex: Math.max(0, prep.messages.length - (compactionConfig?.keepRecentMessages || 5)),
-      tokensBefore: estimateTokens(prep.messages),
-      tokensAfter: 0,
-      compacted: true,
-    };
-
-    const keptMessages = prep.messages.slice(result.firstKeptIndex);
-    const summaryMessage: AgentMessage = {
-      role: 'user',
-      content: [{ type: 'text', text: `[Previous conversation summary]: ${summary}` }],
-      timestamp: Date.now(),
-    };
-    result.tokensAfter = estimateTokens([summaryMessage, ...keptMessages]);
-
-    await this.memory.applyCompaction(sessionKey, result);
-    return result;
-  }
-
-  /**
-   * Get compaction stats for a session
-   */
-  getSessionStats(sessionKey: string) {
-    return {
-      compactionStats: this.memory.getCompactionStats(sessionKey),
-      tokenEstimate: this.memory.estimateTokenUsage(sessionKey),
-    };
   }
 
   private handleEvent(event: AgentEvent): void {
@@ -351,43 +197,32 @@ export class AgentService {
       case 'agent_start':
         log.debug('Agent turn started');
         break;
-
       case 'turn_start':
         log.debug('Turn started');
         break;
-
       case 'message_start':
         if (event.message.role === 'assistant') {
           log.debug('Assistant response starting');
         }
         break;
-
-      case 'message_update':
-        // Stream updates - could be used for real-time UI updates
-        break;
-
       case 'message_end':
         if (event.message.role === 'assistant') {
           const text = this.extractTextContent(event.message.content);
           log.debug({ contentLength: text.length }, 'Assistant response complete');
         }
         break;
-
       case 'tool_execution_start':
         log.debug({ tool: event.toolName }, 'Tool execution started');
         break;
-
       case 'tool_execution_end':
         log.debug(
           { tool: event.toolName, isError: event.isError },
           'Tool execution complete'
         );
         break;
-
       case 'turn_end':
         log.debug('Turn complete');
         break;
-
       case 'agent_end':
         log.debug('Agent turn ended');
         break;
@@ -434,13 +269,10 @@ Guidelines:
 Current working directory is set automatically for shell commands.`;
   }
 
-  // Direct processing method for CLI/non-bus usage
   async processDirect(content: string, sessionKey = 'cli:direct'): Promise<string> {
-    // Load session
     const history = await this.memory.load(sessionKey);
     this.agent.replaceMessages(history);
 
-    // Send prompt
     await this.agent.prompt({
       role: 'user',
       content: [{ type: 'text', text: content }],
@@ -448,10 +280,7 @@ Current working directory is set automatically for shell commands.`;
     });
     await this.agent.waitForIdle();
 
-    // Get response
     const response = this.getLastAssistantContent() || '';
-
-    // Save session
     await this.memory.save(sessionKey, this.agent.state.messages);
 
     return response;

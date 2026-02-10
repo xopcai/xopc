@@ -22,7 +22,7 @@ class MessageJobExecutor extends DefaultJobExecutor {
     super();
   }
 
-  protected async performJob(job: JobData, signal: AbortSignal): Promise<void> {
+  protected async performJob(job: JobData, _signal: AbortSignal): Promise<void> {
     // Send the scheduled message through the appropriate channel
     // Parse channel and chat_id from job message format: "channel:chat_id:message"
     const parts = job.message.split(':', 3);
@@ -165,10 +165,6 @@ export class GatewayService {
       log.info('Reloading configuration...');
       const newConfig = loadConfig(this.configPath);
       
-      // Check if channels config changed
-      const oldChannels = this.config.channels;
-      const newChannels = newConfig.channels;
-      
       // Update config
       this.config = newConfig;
       
@@ -272,7 +268,6 @@ export class GatewayService {
     enabled: boolean;
     connected: boolean;
   }> {
-    const allChannels = this.channelManager.getAllChannels();
     const runningChannels = new Set(this.channelManager.getRunningChannels());
 
     // Check which channels are configured

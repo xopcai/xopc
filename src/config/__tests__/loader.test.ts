@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { loadConfig, saveConfig } from '../loader.js';
-import { getDefaultConfigPath, DEFAULT_PATHS } from '../paths.js';
+import { getDefaultConfigPath } from '../paths.js';
 import { ConfigSchema } from '../schema.js';
 
 // Mock fs module

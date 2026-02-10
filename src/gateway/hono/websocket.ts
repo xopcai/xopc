@@ -3,7 +3,6 @@ import type { GatewayService } from '../service.js';
 import { createLogger } from '../../utils/logger.js';
 import {
   type GatewayRequest,
-  type GatewayEvent,
   isGatewayRequest,
   createResponse,
   createEvent,
