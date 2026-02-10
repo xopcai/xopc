@@ -3,8 +3,10 @@
  */
 
 import { existsSync, readFileSync } from 'fs';
-import { join, dirname, isAbsolute } from 'path';
-import { createRequire } from 'module';
+import { join, dirname, isAbsolute, resolve } from 'path';
+import { fileURLToPath } from 'node:url';
+import { createRequire } from 'node:module';
+import { createJiti } from 'jiti';
 import { DEFAULT_PATHS } from '../config/paths.js';
 import type {
   ChannelPlugin,
@@ -147,6 +149,7 @@ export class PluginLoader {
   private registry: PluginRegistryImpl;
   private options: PluginLoaderOptions;
   private pluginInstances: Map<string, PluginApi> = new Map();
+  private jiti: ReturnType<typeof createJiti>;
 
   constructor(options?: PluginLoaderOptions) {
     this.registry = new PluginRegistryImpl();
@@ -154,6 +157,12 @@ export class PluginLoader {
       workspaceDir: DEFAULT_PATHS.workspace,
       pluginsDir: DEFAULT_PATHS.plugins,
     };
+
+    // Initialize jiti with TypeScript support
+    this.jiti = createJiti(fileURLToPath(import.meta.url), {
+      interopDefault: true,
+      extensions: ['.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', '.cjs', '.json'],
+    });
   }
 
   getRegistry(): PluginRegistryImpl {
@@ -175,18 +184,23 @@ export class PluginLoader {
         return this.pluginInstances.get(config.id)!;
       }
 
-      const manifest = await this.loadManifest(config.path);
+      // Resolve plugin path to absolute path
+      const pluginPath = isAbsolute(config.path)
+        ? config.path
+        : resolve(this.options.workspaceDir || process.cwd(), config.path);
+
+      const manifest = await this.loadManifest(pluginPath);
       if (!manifest) {
         log.error({ pluginId: config.id }, `Failed to load manifest for plugin`);
         return null;
       }
 
       // Create plugin API
-      const pluginDir = dirname(config.path);
+      const pluginDir = dirname(pluginPath);
       const api = this.createPluginApi(manifest, config, pluginDir);
 
       // Load plugin module
-      const module = await this.loadModule(config.path, manifest);
+      const module = await this.loadModule(pluginPath, manifest);
       if (!module) {
         log.error({ pluginId: config.id }, `Failed to load module for plugin`);
         return null;
@@ -199,14 +213,14 @@ export class PluginLoader {
       this.registry.addPlugin({
         definition: manifest,
         module,
-        source: config.path,
+        source: pluginPath,
         enabled: true,
         loaded: true,
       });
 
       this.pluginInstances.set(config.id, api);
       log.info({ name: manifest.name, id: manifest.id }, `Loaded plugin`);
-      
+
       return api;
     } catch (error) {
       log.error({ err: error, pluginId: config.id }, `Error loading plugin`);
@@ -216,7 +230,7 @@ export class PluginLoader {
 
   private async loadManifest(pluginPath: string): Promise<PluginManifest | null> {
     const manifestPath = join(pluginPath, PLUGIN_MANIFEST_FILE);
-    
+
     if (!existsSync(manifestPath)) {
       // Try to infer from package.json
       const packagePath = join(pluginPath, 'package.json');
@@ -251,32 +265,23 @@ export class PluginLoader {
   }
 
   private async loadModule(pluginPath: string, manifest: PluginManifest): Promise<PluginModule | null> {
-    const _require = createRequire(import.meta.url);
-    
-    // Determine entry point
+    // Determine entry point - .ts files prioritized for development
     const entryPoints = [
       manifest.main,
-      'index.js',
       'index.ts',
-      'plugin.js',
+      'index.js',
       'plugin.ts',
+      'plugin.js',
     ].filter(Boolean) as string[];
 
     for (const entry of entryPoints) {
       const fullPath = isAbsolute(entry) ? entry : join(pluginPath, entry);
-      
+
       if (existsSync(fullPath)) {
         try {
-          // Dynamic import for ESM
-          if (fullPath.endsWith('.ts')) {
-            // For TypeScript, we need to use the tsx or ts-node
-            // In production, plugins should be pre-compiled
-            const dynamicImport = await import(fullPath);
-            return dynamicImport.default || dynamicImport;
-          } else {
-            const dynamicImport = await import(fullPath);
-            return dynamicImport.default || dynamicImport;
-          }
+          // Use jiti to load both .ts and .js files
+          const mod = this.jiti(fullPath);
+          return mod.default || mod;
         } catch (error) {
           log.warn({ err: error, path: fullPath }, `Failed to load module`);
         }
@@ -322,7 +327,7 @@ export class PluginLoader {
 
   async startServices(): Promise<void> {
     const services = Array.from(this.registry.services.values());
-    
+
     for (const service of services) {
       const serviceLog = createServiceLogger(service.id);
       try {
@@ -341,7 +346,7 @@ export class PluginLoader {
 
   async stopServices(): Promise<void> {
     const services = Array.from(this.registry.services.values()).reverse();
-    
+
     for (const service of services) {
       if (service.stop) {
         const serviceLog = createServiceLogger(service.id);
@@ -372,17 +377,17 @@ export class PluginLoader {
 
 export function resolvePluginPath(id: string, options: PluginLoaderOptions): string | null {
   const { pluginsDir } = options;
-  
+
   if (!pluginsDir) return null;
-  
+
   // Check if it's a built-in plugin
   const builtinPath = join(__dirname, '..', '..', 'plugins', id);
   if (existsSync(builtinPath)) return builtinPath;
-  
+
   // Check plugins directory
   const pluginPath = join(pluginsDir, id);
   if (existsSync(pluginPath)) return pluginPath;
-  
+
   // Check if it's an npm package
   try {
     const require = createRequire(import.meta.url);
@@ -397,10 +402,10 @@ export function normalizePluginConfig(
   rawConfig: Record<string, unknown>,
 ): ResolvedPluginConfig[] {
   const plugins: ResolvedPluginConfig[] = [];
-  
+
   const enabled = (rawConfig.enabled as string[]) || [];
   const disabled = (rawConfig.disabled as string[]) || [];
-  
+
   // Parse enabled plugins
   for (const id of enabled) {
     const config = (rawConfig[id] as Record<string, unknown>) || {};
@@ -412,7 +417,7 @@ export function normalizePluginConfig(
       config,
     });
   }
-  
+
   // Parse disabled plugins
   for (const id of disabled) {
     if (!plugins.find(p => p.id === id)) {
@@ -426,6 +431,6 @@ export function normalizePluginConfig(
       });
     }
   }
-  
+
   return plugins;
 }
