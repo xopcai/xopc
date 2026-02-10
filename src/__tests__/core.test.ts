@@ -20,9 +20,9 @@ describe('xopcbot integration tests', () => {
     const { CommandRegistry } = await import('../cli/registry.js');
     expect(CommandRegistry).toBeDefined();
 
-    // Session modules
-    const { SessionManager } = await import('../session/index.js');
-    expect(SessionManager).toBeDefined();
+    // Memory modules
+    const { MemoryStore } = await import('../agent/memory/store.js');
+    expect(MemoryStore).toBeDefined();
 
     // Cron modules
     const { CronService } = await import('../cron/index.js');
@@ -39,11 +39,11 @@ describe('xopcbot integration tests', () => {
 
   it('should instantiate core classes', async () => {
     const { CommandRegistry } = await import('../cli/registry.js');
-    const { SessionManager } = await import('../session/index.js');
+    const { MemoryStore } = await import('../agent/memory/store.js');
 
     // Should be able to instantiate
     expect(() => new CommandRegistry()).not.toThrow();
-    expect(() => new SessionManager()).not.toThrow();
+    expect(() => new MemoryStore('/tmp/test')).not.toThrow();
   });
 
   it('should have all tool functions available', async () => {
