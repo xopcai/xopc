@@ -147,6 +147,11 @@ export class GatewayService {
       log.error({ err }, 'Agent service error');
     });
 
+    // Start outbound message processor
+    this.startOutboundProcessor().catch((err) => {
+      log.error({ err }, 'Outbound processor error');
+    });
+
     // Setup config hot reload
     if (this.serviceConfig.enableHotReload !== false) {
       this.setupConfigWatcher();
@@ -183,6 +188,22 @@ export class GatewayService {
 
     this.running = false;
     log.info('Gateway service stopped');
+  }
+
+  /**
+   * Start processing outbound messages and send through channels
+   */
+  private async startOutboundProcessor(): Promise<void> {
+    log.info('Starting outbound message processor');
+    while (this.running) {
+      try {
+        const msg = await this.bus.consumeOutbound();
+        await this.channelManager.send(msg);
+      } catch (error) {
+        log.error({ err: error }, 'Error processing outbound message');
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
   }
 
   /**
