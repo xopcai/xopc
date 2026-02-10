@@ -1,13 +1,24 @@
 /**
  * Plugin Loader and Registry
+ * 
+ * Supports three-tier plugin storage:
+ * 1. Workspace level (workspace/.plugins/) - highest priority
+ * 2. Global level (~/.xopcbot/plugins/) - shared across workspaces
+ * 3. Bundled level (xopcbot/plugins/) - shipped with xopcbot
  */
 
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join, dirname, isAbsolute, resolve } from 'path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createJiti } from 'jiti';
-import { DEFAULT_PATHS } from '../config/paths.js';
+import {
+  DEFAULT_PATHS,
+  getGlobalPluginsDir,
+  getWorkspacePluginsDir,
+  getBundledPluginsDir,
+  resolvePluginSdkPath,
+} from '../config/paths.js';
 import type {
   ChannelPlugin,
   GatewayMethodHandler,
@@ -29,6 +40,16 @@ import { createLogger, createServiceLogger } from '../utils/logger.js';
 const PLUGIN_MANIFEST_FILE = 'xopcbot.plugin.json';
 
 const log = createLogger('PluginLoader');
+
+// Plugin source origin for debugging
+export type PluginSourceOrigin = 'workspace' | 'global' | 'bundled' | 'config';
+
+interface DiscoveredPlugin {
+  id: string;
+  path: string;
+  origin: PluginSourceOrigin;
+  manifest: PluginManifest;
+}
 
 // ============================================================================
 // Plugin Registry
@@ -52,10 +73,15 @@ export class PluginRegistryImpl implements PluginRegistry {
   }
 
   getEnabledPlugins(): PluginRecord[] {
-    return Array.from(this.plugins.values()).filter(p => p.enabled);
+    return Array.from(this.plugins.values()).filter((p) => p.enabled);
   }
 
-  addHook(event: PluginHookEvent, handler: PluginHookHandler, pluginId: string, priority = 0): void {
+  addHook(
+    event: PluginHookEvent,
+    handler: PluginHookHandler,
+    pluginId: string,
+    priority = 0,
+  ): void {
     if (!this.hooks.has(event)) {
       this.hooks.set(event, []);
     }
@@ -63,8 +89,8 @@ export class PluginRegistryImpl implements PluginRegistry {
     const priorityHandler: PluginHookHandler = async (eventData: unknown, context: unknown) => {
       return handler(eventData, context);
     };
-    (priorityHandler as any)[Symbol.for('pluginId')] = pluginId;
-    (priorityHandler as any)[Symbol.for('priority')] = priority;
+    (priorityHandler as unknown as Record<symbol, unknown>)[Symbol.for('pluginId')] = pluginId;
+    (priorityHandler as unknown as Record<symbol, unknown>)[Symbol.for('priority')] = priority;
     this.hooks.get(event)!.push(priorityHandler);
   }
 
@@ -73,8 +99,10 @@ export class PluginRegistryImpl implements PluginRegistry {
     if (!handlers) return [];
     // Sort by priority (descending)
     return handlers.slice().sort((a, b) => {
-      const pa = ((a as any)[Symbol.for('priority')] as number) || 0;
-      const pb = ((b as any)[Symbol.for('priority')] as number) || 0;
+      const pa =
+        ((a as unknown as Record<symbol, unknown>)[Symbol.for('priority')] as number) || 0;
+      const pb =
+        ((b as unknown as Record<symbol, unknown>)[Symbol.for('priority')] as number) || 0;
       return pb - pa;
     });
   }
@@ -142,7 +170,7 @@ export class PluginRegistryImpl implements PluginRegistry {
 export interface PluginLoaderOptions {
   workspaceDir?: string;
   pluginsDir?: string;
-  bundedPlugins?: string[];
+  bundledPlugins?: string[];
 }
 
 export class PluginLoader {
@@ -158,15 +186,133 @@ export class PluginLoader {
       pluginsDir: DEFAULT_PATHS.plugins,
     };
 
-    // Initialize jiti with TypeScript support
+    // Build jiti alias for plugin-sdk
+    const alias: Record<string, string> = {};
+    const sdkPath = resolvePluginSdkPath();
+    if (sdkPath) {
+      alias['xopcbot/plugin-sdk'] = sdkPath;
+    }
+
+    // Initialize jiti with TypeScript support and SDK alias
     this.jiti = createJiti(fileURLToPath(import.meta.url), {
       interopDefault: true,
       extensions: ['.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', '.cjs', '.json'],
+      alias,
     });
   }
 
   getRegistry(): PluginRegistryImpl {
     return this.registry;
+  }
+
+  /**
+   * Discover plugins from all three tiers:
+   * 1. Workspace (.plugins/) - highest priority
+   * 2. Global (~/.xopcbot/plugins/) - shared
+   * 3. Bundled (xopcbot/plugins/) - lowest priority
+   */
+  discoverPlugins(): DiscoveredPlugin[] {
+    const discovered = new Map<string, DiscoveredPlugin>();
+
+    // Priority 3: Bundled plugins (lowest)
+    const bundledDir = getBundledPluginsDir();
+    if (bundledDir) {
+      this.discoverInDirectory(bundledDir, 'bundled', discovered);
+    }
+
+    // Priority 2: Global plugins
+    const globalDir = getGlobalPluginsDir();
+    this.discoverInDirectory(globalDir, 'global', discovered);
+
+    // Priority 1: Workspace plugins (highest, can override)
+    const workspaceDir = this.options.workspaceDir || DEFAULT_PATHS.workspace;
+    const workspacePluginsDir = getWorkspacePluginsDir(workspaceDir);
+    this.discoverInDirectory(workspacePluginsDir, 'workspace', discovered);
+
+    return Array.from(discovered.values());
+  }
+
+  private discoverInDirectory(
+    dir: string,
+    origin: PluginSourceOrigin,
+    discovered: Map<string, DiscoveredPlugin>,
+  ): void {
+    if (!existsSync(dir)) {
+      return;
+    }
+
+    let entries: string[];
+    try {
+      entries = readdirSync(dir);
+    } catch {
+      return;
+    }
+
+    for (const entry of entries) {
+      const pluginPath = join(dir, entry);
+
+      // Check if it's a directory
+      try {
+        const stat = existsSync(pluginPath);
+        if (!stat) continue;
+      } catch {
+        continue;
+      }
+
+      // Try to load manifest
+      const manifest = this.loadManifest(pluginPath);
+      if (!manifest) continue;
+
+      const pluginId = manifest.id || entry;
+
+      // Higher priority origins can override lower ones
+      const existing = discovered.get(pluginId);
+      if (existing) {
+        const priority = { workspace: 3, global: 2, bundled: 1, config: 0 };
+        if (priority[origin] <= priority[existing.origin]) {
+          log.debug(
+            { pluginId, from: origin, existing: existing.origin },
+            'Skipping lower priority plugin',
+          );
+          continue;
+        }
+        log.info(
+          { pluginId, from: origin, overriding: existing.origin },
+          'Plugin override by higher priority source',
+        );
+      }
+
+      discovered.set(pluginId, {
+        id: pluginId,
+        path: pluginPath,
+        origin,
+        manifest,
+      });
+    }
+  }
+
+  /**
+   * Load all discovered plugins
+   */
+  async loadAllPlugins(enabledIds?: string[]): Promise<void> {
+    const plugins = this.discoverPlugins();
+
+    for (const plugin of plugins) {
+      // If enabledIds specified, only load those
+      if (enabledIds && !enabledIds.includes(plugin.id)) {
+        continue;
+      }
+
+      const config: ResolvedPluginConfig = {
+        id: plugin.id,
+        origin: plugin.origin,
+        path: plugin.path,
+        enabled: true,
+        config: {},
+      };
+
+      await this.loadPlugin(config);
+    }
   }
 
   async loadPlugins(configs: ResolvedPluginConfig[]): Promise<void> {
@@ -219,7 +365,7 @@ export class PluginLoader {
       });
 
       this.pluginInstances.set(config.id, api);
-      log.info({ name: manifest.name, id: manifest.id }, `Loaded plugin`);
+      log.info({ name: manifest.name, id: manifest.id, origin: config.origin }, `Loaded plugin`);
 
       return api;
     } catch (error) {
@@ -228,7 +374,7 @@ export class PluginLoader {
     }
   }
 
-  private async loadManifest(pluginPath: string): Promise<PluginManifest | null> {
+  loadManifest(pluginPath: string): PluginManifest | null {
     const manifestPath = join(pluginPath, PLUGIN_MANIFEST_FILE);
 
     if (!existsSync(manifestPath)) {
@@ -264,7 +410,10 @@ export class PluginLoader {
     }
   }
 
-  private async loadModule(pluginPath: string, manifest: PluginManifest): Promise<PluginModule | null> {
+  private async loadModule(
+    pluginPath: string,
+    manifest: PluginManifest,
+  ): Promise<PluginModule | null> {
     // Determine entry point - .ts files prioritized for development
     const entryPoints = [
       manifest.main,
@@ -304,7 +453,7 @@ export class PluginLoader {
       manifest.name,
       manifest.version,
       pluginDir,
-      config.config as any,  // Simplified for now
+      config.config as unknown as Record<string, unknown>,
       config.config,
       logger,
       resolvePath,
@@ -332,7 +481,7 @@ export class PluginLoader {
       const serviceLog = createServiceLogger(service.id);
       try {
         await service.start({
-          config: {} as any,  // Simplified
+          config: {} as unknown as Record<string, unknown>,
           workspaceDir: this.options.workspaceDir || '',
           stateDir: join(this.options.workspaceDir || '', '.state'),
           logger: createPluginLogger(`[${service.id}]`),
@@ -352,7 +501,7 @@ export class PluginLoader {
         const serviceLog = createServiceLogger(service.id);
         try {
           await service.stop({
-            config: {} as any,
+            config: {} as unknown as Record<string, unknown>,
             workspaceDir: this.options.workspaceDir || '',
             stateDir: join(this.options.workspaceDir || '', '.state'),
             logger: {
@@ -376,17 +525,21 @@ export class PluginLoader {
 // ============================================================================
 
 export function resolvePluginPath(id: string, options: PluginLoaderOptions): string | null {
-  const { pluginsDir } = options;
+  // Priority 1: Workspace
+  const workspaceDir = options.workspaceDir || DEFAULT_PATHS.workspace;
+  const workspacePath = join(getWorkspacePluginsDir(workspaceDir), id);
+  if (existsSync(workspacePath)) return workspacePath;
 
-  if (!pluginsDir) return null;
+  // Priority 2: Global
+  const globalPath = join(getGlobalPluginsDir(), id);
+  if (existsSync(globalPath)) return globalPath;
 
-  // Check if it's a built-in plugin
-  const builtinPath = join(__dirname, '..', '..', 'plugins', id);
-  if (existsSync(builtinPath)) return builtinPath;
-
-  // Check plugins directory
-  const pluginPath = join(pluginsDir, id);
-  if (existsSync(pluginPath)) return pluginPath;
+  // Priority 3: Bundled
+  const bundledDir = getBundledPluginsDir();
+  if (bundledDir) {
+    const bundledPath = join(bundledDir, id);
+    if (existsSync(bundledPath)) return bundledPath;
+  }
 
   // Check if it's an npm package
   try {
@@ -420,7 +573,7 @@ export function normalizePluginConfig(
 
   // Parse disabled plugins
   for (const id of disabled) {
-    if (!plugins.find(p => p.id === id)) {
+    if (!plugins.find((p) => p.id === id)) {
       const config = (rawConfig[id] as Record<string, unknown>) || {};
       plugins.push({
         id,

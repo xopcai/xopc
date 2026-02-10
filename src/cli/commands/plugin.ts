@@ -1,14 +1,18 @@
 // Plugin Management Commands
 import { Command } from 'commander';
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
-import { join, isAbsolute, resolve } from 'path';
-import { DEFAULT_PATHS } from '../../config/index.js';
+import { join } from 'path';
+import {
+  DEFAULT_PATHS,
+  getDefaultWorkspacePath,
+} from '../../config/paths.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import {
   installFromNpm,
   installFromLocal,
   removePlugin,
-  listPlugins,
+  listAllPlugins,
+  resolvePluginsDir,
 } from '../../plugins/install.js';
 
 function createPluginCommand(_ctx: CLIContext): Command {
@@ -18,41 +22,63 @@ function createPluginCommand(_ctx: CLIContext): Command {
       'after',
       formatExamples([
         'xopcbot plugin list                           # List all plugins',
-        'xopcbot plugin install my-plugin              # Install from npm',
+        'xopcbot plugin install my-plugin              # Install from npm to workspace',
+        'xopcbot plugin install my-plugin --global     # Install to global (~/.xopcbot/plugins/)',
         'xopcbot plugin install ./my-local-plugin      # Install from local directory',
-        'xopcbot plugin install @scope/my-plugin       # Install scoped npm package',
         'xopcbot plugin remove my-plugin               # Remove a plugin',
         'xopcbot plugin create my-plugin               # Create a new plugin',
-      ])
+      ]),
     );
 
   // Plugin list command
   cmd
     .command('list')
-    .description('List all installed plugins')
+    .description('List all installed plugins from all tiers')
     .action(async () => {
-      const pluginsDir = join(DEFAULT_PATHS.workspace, '.plugins');
-      const plugins = listPlugins(pluginsDir);
+      const workspaceDir = getDefaultWorkspacePath();
+      const plugins = listAllPlugins(workspaceDir);
 
       console.log('\n📦 Installed Plugins\n');
-      console.log('═'.repeat(60));
+      console.log('═'.repeat(70));
 
       if (plugins.length === 0) {
-        console.log('No plugins installed.\n');
+        console.log('\nNo plugins installed.\n');
         console.log('Install a plugin:');
         console.log('  xopcbot plugin install <plugin-name>');
+        console.log('  xopcbot plugin install --global <plugin-name>');
         console.log('  xopcbot plugin install ./local-plugin-dir\n');
         return;
       }
 
-      for (const plugin of plugins) {
-        const displayName = plugin.name || plugin.id;
-        console.log(`\n  📁 ${displayName}`);
-        console.log(`     ID: ${plugin.id}`);
-        if (plugin.version) {
-          console.log(`     Version: ${plugin.version}`);
+      // Group by origin
+      const byOrigin = {
+        workspace: plugins.filter((p) => p.origin === 'workspace'),
+        global: plugins.filter((p) => p.origin === 'global'),
+        bundled: plugins.filter((p) => p.origin === 'bundled'),
+      };
+
+      if (byOrigin.workspace.length > 0) {
+        console.log('\n  📁 Workspace (./.plugins/)');
+        for (const plugin of byOrigin.workspace) {
+          console.log(`    • ${plugin.name || plugin.id}${plugin.version ? ` @ ${plugin.version}` : ''}`);
+          console.log(`      ID: ${plugin.id}`);
         }
-        console.log(`     Path: ${plugin.path}`);
+      }
+
+      if (byOrigin.global.length > 0) {
+        console.log('\n  🌐 Global (~/.xopcbot/plugins/)');
+        for (const plugin of byOrigin.global) {
+          console.log(`    • ${plugin.name || plugin.id}${plugin.version ? ` @ ${plugin.version}` : ''}`);
+          console.log(`      ID: ${plugin.id}`);
+        }
+      }
+
+      if (byOrigin.bundled.length > 0) {
+        console.log('\n  📦 Bundled (built-in)');
+        for (const plugin of byOrigin.bundled) {
+          console.log(`    • ${plugin.name || plugin.id}${plugin.version ? ` @ ${plugin.version}` : ''}`);
+          console.log(`      ID: ${plugin.id}`);
+        }
       }
 
       console.log('\n');
@@ -62,6 +88,7 @@ function createPluginCommand(_ctx: CLIContext): Command {
   cmd
     .command('install [pluginId]')
     .description('Install a plugin from npm or local path')
+    .option('--global', 'Install to global directory (~/.xopcbot/plugins/)')
     .option('--timeout <ms>', 'Installation timeout in milliseconds', '120000')
     .action(async (pluginId, options) => {
       console.log('');
@@ -69,17 +96,21 @@ function createPluginCommand(_ctx: CLIContext): Command {
       if (!pluginId) {
         console.log('❌ Error: Missing plugin identifier');
         console.log('\nUsage:');
-        console.log('  xopcbot plugin install <npm-package-name>');
-        console.log('  xopcbot plugin install ./local-directory-path');
+        console.log('  xopcbot plugin install <npm-package-name> [--global]');
+        console.log('  xopcbot plugin install ./local-directory-path [--global]');
         console.log('\nExamples:');
         console.log('  xopcbot plugin install my-xopcbot-plugin');
         console.log('  xopcbot plugin install @scope/my-plugin');
         console.log('  xopcbot plugin install ./plugins/my-plugin');
+        console.log('  xopcbot plugin install my-plugin --global');
         console.log('');
         process.exit(1);
       }
 
-      const pluginsDir = join(DEFAULT_PATHS.workspace, '.plugins');
+      const isGlobal = options.global === true;
+      const workspaceDir = getDefaultWorkspacePath();
+      const pluginsDir = resolvePluginsDir(workspaceDir, isGlobal);
+
       if (!existsSync(pluginsDir)) {
         mkdirSync(pluginsDir, { recursive: true });
       }
@@ -89,17 +120,19 @@ function createPluginCommand(_ctx: CLIContext): Command {
         pluginId.startsWith('./') ||
         pluginId.startsWith('../') ||
         pluginId.startsWith('/') ||
-        (isAbsolute(pluginId) && existsSync(resolve(pluginId)));
+        (pluginId.length > 0 && existsSync(resolveAbsolutePath(pluginId)));
 
       const timeoutMs = parseInt(options.timeout, 10) || 120000;
 
       let result;
 
       if (isLocalPath) {
-        console.log(`📦 Installing plugin from local path: ${pluginId}\n`);
+        const source = isGlobal ? 'global' : 'workspace';
+        console.log(`📦 Installing plugin from local path to ${source}: ${pluginId}\n`);
         result = await installFromLocal(pluginId, pluginsDir);
       } else {
-        console.log(`📦 Installing plugin from npm: ${pluginId}\n`);
+        const source = isGlobal ? 'global' : 'workspace';
+        console.log(`📦 Installing plugin from npm to ${source}: ${pluginId}\n`);
         result = await installFromNpm(pluginId, pluginsDir, timeoutMs);
       }
 
@@ -116,19 +149,20 @@ function createPluginCommand(_ctx: CLIContext): Command {
   cmd
     .command('remove <pluginId>')
     .alias('uninstall')
-    .description('Remove an installed plugin')
+    .description('Remove an installed plugin (from workspace or global)')
     .action(async (pluginId) => {
       console.log('');
 
-      const pluginsDir = join(DEFAULT_PATHS.workspace, '.plugins');
-      const result = removePlugin(pluginId, pluginsDir);
+      const workspaceDir = getDefaultWorkspacePath();
+      const result = removePlugin(pluginId, workspaceDir);
 
       if (!result.ok) {
         console.log(`❌ Error: ${result.error}\n`);
         process.exit(1);
       }
 
-      console.log(`✅ Plugin ${pluginId} has been removed.\n`);
+      const location = result.removedFrom === 'global' ? 'global' : 'workspace';
+      console.log(`✅ Plugin ${pluginId} has been removed from ${location}.\n`);
       console.log('Note: If the plugin was enabled in config, you should also remove it from your configuration file.\n');
     });
 
@@ -187,14 +221,14 @@ function createPluginCommand(_ctx: CLIContext): Command {
 
       writeFileSync(join(pluginDir, 'package.json'), JSON.stringify(packageJson, null, 2));
 
-      // Create index.ts template
+      // Create index.ts template using xopcbot/plugin-sdk
       const indexContent = `/**
  * ${name} - A xopcbot plugin
  *
  * ${description}
  */
 
-import type { PluginApi, PluginDefinition } from 'xopcbot/plugins';
+import type { PluginApi, PluginDefinition } from 'xopcbot/plugin-sdk';
 
 export const plugin: PluginDefinition = {
   id: '${pluginId}',
@@ -247,7 +281,11 @@ ${description}
 ## Installation
 
 \`\`\`bash
+# Install from npm
 xopcbot plugin install ${pluginId}
+
+# Or install from local directory
+xopcbot plugin install ./${pluginId}
 \`\`\`
 
 ## Configuration
@@ -278,7 +316,7 @@ MIT
       console.log(`✅ Plugin created: ${pluginDir}\n`);
       console.log('Files created:');
       console.log(`  - package.json`);
-      console.log(`  - index.ts`);
+      console.log(`  - index.ts (using xopcbot/plugin-sdk)`);
       console.log(`  - xopcbot.plugin.json`);
       console.log(`  - README.md`);
       console.log(`\nTo enable this plugin, add to your config:`);
@@ -295,15 +333,16 @@ MIT
     .action(async (pluginId) => {
       console.log('');
 
-      const pluginsDir = join(DEFAULT_PATHS.workspace, '.plugins');
-      const pluginDir = join(pluginsDir, pluginId);
+      const workspaceDir = getDefaultWorkspacePath();
+      const plugins = listAllPlugins(workspaceDir);
+      const plugin = plugins.find((p) => p.id === pluginId);
 
-      if (!existsSync(pluginDir)) {
+      if (!plugin) {
         console.log(`❌ Plugin not found: ${pluginId}\n`);
         process.exit(1);
       }
 
-      const manifestPath = join(pluginDir, 'xopcbot.plugin.json');
+      const manifestPath = join(plugin.path, 'xopcbot.plugin.json');
       let manifest: { id?: string; name?: string; version?: string; description?: string; kind?: string } | null = null;
 
       if (existsSync(manifestPath)) {
@@ -314,16 +353,29 @@ MIT
         }
       }
 
-      console.log(`📦 Plugin: ${manifest?.name || pluginId}\n`);
+      const originLabel =
+        plugin.origin === 'workspace'
+          ? '📁 Workspace'
+          : plugin.origin === 'global'
+            ? '🌐 Global'
+            : '📦 Bundled';
+
+      console.log(`📦 Plugin: ${manifest?.name || plugin.name || pluginId}\n`);
+      console.log(`  Origin: ${originLabel}`);
       console.log(`  ID: ${manifest?.id || pluginId}`);
-      if (manifest?.version) console.log(`  Version: ${manifest.version}`);
-      if (manifest?.kind) console.log(`  Kind: ${manifest.kind}`);
-      if (manifest?.description) console.log(`  Description: ${manifest.description}`);
-      console.log(`  Path: ${pluginDir}`);
+      if (manifest?.version || plugin.version) console.log(`  Version: ${manifest?.version || plugin.version}`);
+      if (manifest?.kind || plugin.kind) console.log(`  Kind: ${manifest?.kind || plugin.kind}`);
+      if (manifest?.description || plugin.name) console.log(`  Description: ${manifest?.description || plugin.name}`);
+      console.log(`  Path: ${plugin.path}`);
       console.log('');
     });
 
   return cmd;
+}
+
+function resolveAbsolutePath(input: string): string {
+  if (input.startsWith('/')) return input;
+  return join(process.cwd(), input);
 }
 
 register({
@@ -337,6 +389,7 @@ register({
       'xopcbot plugin list',
       'xopcbot plugin create my-plugin',
       'xopcbot plugin install my-plugin',
+      'xopcbot plugin install my-plugin --global',
       'xopcbot plugin remove my-plugin',
     ],
   },

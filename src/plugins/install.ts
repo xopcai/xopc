@@ -1,6 +1,7 @@
 /**
  * Plugin Installation Module
  * Supports installing from npm packages and local directories
+ * Supports three-tier storage: workspace, global, bundled
  */
 
 import { execSync } from 'child_process';
@@ -14,18 +15,34 @@ import {
 } from 'fs';
 import { join, isAbsolute, resolve } from 'path';
 import { tmpdir } from 'os';
+import {
+  getGlobalPluginsDir,
+  getWorkspacePluginsDir,
+  getBundledPluginsDir,
+} from '../config/paths.js';
 
 export interface InstallOptions {
   source: 'npm' | 'local';
   targetDir: string;
   timeoutMs?: number;
+  global?: boolean;
 }
 
 export interface InstallResult {
   ok: boolean;
   pluginId?: string;
   targetDir?: string;
+  origin?: 'workspace' | 'global';
   error?: string;
+}
+
+export interface ListedPlugin {
+  id: string;
+  name?: string;
+  version?: string;
+  kind?: string;
+  path: string;
+  origin: 'workspace' | 'global' | 'bundled';
 }
 
 interface PluginManifest {
@@ -36,12 +53,27 @@ interface PluginManifest {
 }
 
 /**
+ * Resolve target plugins directory based on options
+ */
+export function resolvePluginsDir(
+  workspaceDir: string,
+  global = false,
+): string {
+  if (global) {
+    const globalDir = getGlobalPluginsDir();
+    mkdirSync(globalDir, { recursive: true });
+    return globalDir;
+  }
+  return getWorkspacePluginsDir(workspaceDir);
+}
+
+/**
  * Install plugin from npm package
  */
 export async function installFromNpm(
   packageSpec: string,
   pluginsDir: string,
-  timeoutMs = 120000
+  timeoutMs = 120000,
 ): Promise<InstallResult> {
   const tmpDir = join(tmpdir(), `xopcbot-install-${Date.now()}`);
 
@@ -97,7 +129,7 @@ export async function installFromNpm(
  */
 export async function installFromLocal(
   localPath: string,
-  pluginsDir: string
+  pluginsDir: string,
 ): Promise<InstallResult> {
   // Resolve to absolute path
   const sourceDir = isAbsolute(localPath) ? localPath : resolve(process.cwd(), localPath);
@@ -116,7 +148,7 @@ export async function installFromLocal(
  */
 async function installFromDirectory(
   sourceDir: string,
-  pluginsDir: string
+  pluginsDir: string,
 ): Promise<InstallResult> {
   // Validate manifest
   const manifestPath = join(sourceDir, 'xopcbot.plugin.json');
@@ -149,8 +181,7 @@ async function installFromDirectory(
   if (!pluginId) {
     return {
       ok: false,
-      error:
-        'Plugin must have an id in xopcbot.plugin.json or name in package.json',
+      error: 'Plugin must have an id in xopcbot.plugin.json or name in package.json',
     };
   }
 
@@ -203,6 +234,8 @@ async function installFromDirectory(
     }
   }
 
+  const origin = pluginsDir.includes('.xopcbot/plugins') ? 'global' : 'workspace';
+
   console.log(`✅ Plugin ${pluginId} installed successfully!`);
   console.log(`\nTo enable the plugin, add to your config:`);
   console.log(`  plugins:`);
@@ -210,40 +243,162 @@ async function installFromDirectory(
   console.log(`    ${pluginId}:`);
   console.log(`      # your plugin options here\n`);
 
-  return { ok: true, pluginId, targetDir };
+  return { ok: true, pluginId, targetDir, origin };
 }
 
 /**
- * Remove installed plugin
+ * Remove installed plugin from all tiers
  */
-export function removePlugin(pluginId: string, pluginsDir: string): InstallResult {
-  const targetDir = join(pluginsDir, pluginId);
+export function removePlugin(
+  pluginId: string,
+  workspaceDir: string,
+): { ok: boolean; removedFrom?: string; error?: string } {
+  // Try workspace first
+  const workspaceDir_ = getWorkspacePluginsDir(workspaceDir);
+  const workspacePlugin = join(workspaceDir_, pluginId);
 
-  if (!existsSync(targetDir)) {
-    return { ok: false, error: `Plugin not found: ${pluginId}` };
+  if (existsSync(workspacePlugin)) {
+    try {
+      rmSync(workspacePlugin, { recursive: true, force: true });
+      return { ok: true, removedFrom: 'workspace' };
+    } catch (error) {
+      return {
+        ok: false,
+        error: `Failed to remove from workspace: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
+  // Try global
+  const globalDir = getGlobalPluginsDir();
+  const globalPlugin = join(globalDir, pluginId);
+
+  if (existsSync(globalPlugin)) {
+    try {
+      rmSync(globalPlugin, { recursive: true, force: true });
+      return { ok: true, removedFrom: 'global' };
+    } catch (error) {
+      return {
+        ok: false,
+        error: `Failed to remove from global: ${error instanceof Error ? error.message : String(error)}`,
+      };
+    }
+  }
+
+  return { ok: false, error: `Plugin not found: ${pluginId}` };
+}
+
+/**
+ * List installed plugins from all tiers
+ */
+export function listAllPlugins(workspaceDir: string): ListedPlugin[] {
+  const plugins: ListedPlugin[] = [];
+  const seen = new Set<string>();
+
+  // Priority 1: Workspace (highest)
+  const workspacePluginsDir = getWorkspacePluginsDir(workspaceDir);
+  if (existsSync(workspacePluginsDir)) {
+    for (const entry of readdirSync(workspacePluginsDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+
+      const pluginDir = join(workspacePluginsDir, entry.name);
+      const manifest = readManifest(pluginDir);
+
+      if (manifest) {
+        seen.add(entry.name);
+        plugins.push({
+          id: entry.name,
+          name: manifest.name,
+          version: manifest.version,
+          path: pluginDir,
+          origin: 'workspace',
+        });
+      }
+    }
+  }
+
+  // Priority 2: Global
+  const globalDir = getGlobalPluginsDir();
+  if (existsSync(globalDir)) {
+    for (const entry of readdirSync(globalDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (seen.has(entry.name)) continue; // Skip if already in workspace
+
+      const pluginDir = join(globalDir, entry.name);
+      const manifest = readManifest(pluginDir);
+
+      if (manifest) {
+        seen.add(entry.name);
+        plugins.push({
+          id: entry.name,
+          name: manifest.name,
+          version: manifest.version,
+          path: pluginDir,
+          origin: 'global',
+        });
+      }
+    }
+  }
+
+  // Priority 3: Bundled (lowest)
+  const bundledDir = getBundledPluginsDir();
+  if (bundledDir && existsSync(bundledDir)) {
+    for (const entry of readdirSync(bundledDir, { withFileTypes: true })) {
+      if (!entry.isDirectory()) continue;
+      if (seen.has(entry.name)) continue;
+
+      const pluginDir = join(bundledDir, entry.name);
+      const manifest = readManifest(pluginDir);
+
+      if (manifest) {
+        plugins.push({
+          id: entry.name,
+          name: manifest.name,
+          version: manifest.version,
+          path: pluginDir,
+          origin: 'bundled',
+        });
+      }
+    }
+  }
+
+  return plugins;
+}
+
+function readManifest(pluginDir: string): PluginManifest | null {
+  const manifestPath = join(pluginDir, 'xopcbot.plugin.json');
+
+  if (!existsSync(manifestPath)) {
+    // Try package.json
+    const packagePath = join(pluginDir, 'package.json');
+    if (existsSync(packagePath)) {
+      try {
+        const pkg = JSON.parse(readFileSync(packagePath, 'utf-8'));
+        return {
+          id: pkg.name,
+          name: pkg.xopcbot?.plugin?.name || pkg.name,
+          version: pkg.version,
+        };
+      } catch {
+        return null;
+      }
+    }
+    return null;
   }
 
   try {
-    rmSync(targetDir, { recursive: true, force: true });
-    console.log(`✅ Plugin ${pluginId} removed successfully`);
-    return { ok: true, pluginId };
-  } catch (error) {
-    return {
-      ok: false,
-      error: `Failed to remove plugin: ${error instanceof Error ? error.message : String(error)}`,
-    };
+    return JSON.parse(readFileSync(manifestPath, 'utf-8')) as PluginManifest;
+  } catch {
+    return null;
   }
 }
 
 /**
- * List installed plugins
+ * Legacy: List plugins from single directory (for backward compatibility)
  */
-export function listPlugins(pluginsDir: string): Array<{
-  id: string;
-  name?: string;
-  version?: string;
-  path: string;
-}> {
+export function listPlugins(
+  pluginsDir: string,
+): Array<{ id: string; name?: string; version?: string; path: string }> {
   if (!existsSync(pluginsDir)) {
     return [];
   }
@@ -254,25 +409,12 @@ export function listPlugins(pluginsDir: string): Array<{
     if (!entry.isDirectory()) continue;
 
     const pluginDir = join(pluginsDir, entry.name);
-    const manifestPath = join(pluginDir, 'xopcbot.plugin.json');
-
-    let name: string | undefined;
-    let version: string | undefined;
-
-    if (existsSync(manifestPath)) {
-      try {
-        const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as PluginManifest;
-        name = manifest.name;
-        version = manifest.version;
-      } catch {
-        // Ignore parse errors
-      }
-    }
+    const manifest = readManifest(pluginDir);
 
     plugins.push({
       id: entry.name,
-      name,
-      version,
+      name: manifest?.name,
+      version: manifest?.version,
       path: pluginDir,
     });
   }
