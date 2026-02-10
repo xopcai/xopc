@@ -26,6 +26,7 @@ export interface GatewayServerConfig {
   token?: string;
   verbose?: boolean;
   configPath?: string;
+  enableHotReload?: boolean;
 }
 
 export class GatewayServer {
@@ -37,7 +38,10 @@ export class GatewayServer {
 
   constructor(config: GatewayServerConfig) {
     this.config = config;
-    this.service = new GatewayService({ configPath: config.configPath });
+    this.service = new GatewayService({
+      configPath: config.configPath,
+      enableHotReload: config.enableHotReload,
+    });
   }
 
   async start(): Promise<void> {
@@ -85,7 +89,7 @@ export class GatewayServer {
             'GET /health',
             'WS / (WebSocket protocol)',
           ],
-          methods: ['health', 'status', 'agent', 'send', 'channels.status'],
+          methods: ['health', 'status', 'agent', 'send', 'channels.status', 'config.reload', 'config.get'],
         }));
         return;
       }
@@ -229,6 +233,27 @@ export class GatewayServer {
         case 'channels.status': {
           const channels = this.service.getChannelsStatus();
           client.ws.send(JSON.stringify(createResponse(id, { channels })));
+          break;
+        }
+
+        case 'config.reload': {
+          const result = await this.service.reloadConfig();
+          client.ws.send(JSON.stringify(createResponse(id, result)));
+          break;
+        }
+
+        case 'config.get': {
+          const config = this.service.currentConfig;
+          // Return only safe config (no API keys)
+          const safeConfig = {
+            agents: config.agents,
+            channels: {
+              telegram: { enabled: config.channels?.telegram?.enabled },
+              whatsapp: { enabled: config.channels?.whatsapp?.enabled },
+            },
+            gateway: config.gateway,
+          };
+          client.ws.send(JSON.stringify(createResponse(id, { config: safeConfig })));
           break;
         }
 

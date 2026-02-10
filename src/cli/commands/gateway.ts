@@ -16,11 +16,13 @@ function createGatewayCommand(_ctx: CLIContext): Command {
         'xopcbot gateway --port 8080       # Custom port',
         'xopcbot gateway --host 127.0.0.1  # Bind to localhost only',
         'xopcbot gateway --token secret    # Enable authentication',
+        'xopcbot gateway --no-hot-reload   # Disable config hot reload',
       ])
     )
     .option('--host <address>', 'Host to bind to', '0.0.0.0')
     .option('--port <number>', 'Port to listen on', '18790')
     .option('--token <token>', 'Authentication token')
+    .option('--no-hot-reload', 'Disable config hot reload')
     .action(async (options) => {
       const ctx = getContextWithOpts();
       
@@ -30,6 +32,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
         token: options.token,
         verbose: ctx.isVerbose,
         configPath: ctx.configPath,
+        enableHotReload: options.hotReload,
       });
 
       const shutdown = async (signal: string) => {
@@ -41,6 +44,16 @@ function createGatewayCommand(_ctx: CLIContext): Command {
 
       process.on('SIGINT', () => shutdown('SIGINT'));
       process.on('SIGTERM', () => shutdown('SIGTERM'));
+
+      // Handle uncaught errors
+      process.on('uncaughtException', (err) => {
+        log.error({ err }, 'Uncaught exception');
+        shutdown('uncaughtException');
+      });
+
+      process.on('unhandledRejection', (reason) => {
+        log.error({ reason }, 'Unhandled rejection');
+      });
 
       if (ctx.isVerbose) {
         log.info({ host: options.host, port: options.port }, 'Starting gateway');
