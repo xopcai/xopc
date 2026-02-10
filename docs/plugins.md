@@ -2,6 +2,13 @@
 
 xopcbot 提供了一个轻量级但功能强大的插件系统，灵感来自 [OpenClaw](https://github.com/openclaw/openclaw)。
 
+## 特性
+
+- 🏗️ **三级存储架构** - Workspace / Global / Bundled
+- 🔌 **Plugin SDK** - 官方 SDK，统一导入路径
+- ⚡ **TypeScript 原生** - 通过 jiti 即时加载，无需编译
+- 📦 **多源安装** - 支持 npm、本地目录、Git 仓库
+
 ## 快速开始
 
 ### 安装插件
@@ -9,10 +16,13 @@ xopcbot 提供了一个轻量级但功能强大的插件系统，灵感来自 [O
 **方式一：使用 CLI（推荐）**
 
 ```bash
-# 从 npm 安装
+# 从 npm 安装到 workspace
 xopcbot plugin install xopcbot-plugin-hello
 
-# 或从本地目录安装
+# 安装到 global（跨项目共享）
+xopcbot plugin install xopcbot-plugin-hello --global
+
+# 从本地目录安装
 xopcbot plugin install ./my-local-plugin
 
 # 查看已安装插件
@@ -25,7 +35,12 @@ xopcbot plugin remove hello
 **方式二：手动安装**
 
 ```bash
+# Global 目录
 cd ~/.xopcbot/plugins
+git clone https://github.com/your/plugin.git
+
+# 或 Workspace 目录
+cd workspace/.plugins
 git clone https://github.com/your/plugin.git
 ```
 
@@ -48,6 +63,118 @@ git clone https://github.com/your/plugin.git
 xopcbot plugin create my-plugin --name "My Plugin" --kind utility
 
 # 支持的 kind: channel|provider|memory|tool|utility
+```
+
+这将创建：
+- `package.json` - npm 配置
+- `index.ts` - 插件入口（TypeScript，使用 xopcbot/plugin-sdk）
+- `xopcbot.plugin.json` - 插件清单
+- `README.md` - 文档模板
+
+---
+
+## 三级存储架构
+
+xopcbot 支持三级插件存储，按优先级从高到低：
+
+| 级别 | 路径 | 用途 | 优先级 |
+|------|------|------|--------|
+| **Workspace** | `workspace/.plugins/` | 项目私有插件 | ⭐⭐⭐ 最高 |
+| **Global** | `~/.xopcbot/plugins/` | 用户级共享插件 | ⭐⭐ 中 |
+| **Bundled** | `xopcbot/plugins/` | 内置插件 | ⭐ 最低 |
+
+### 优先级规则
+
+- **Workspace** 插件可以覆盖 **Global** 和 **Bundled** 同名插件
+- **Global** 插件可以覆盖 **Bundled** 同名插件
+- 适合场景：
+  - Workspace：项目特定的定制插件
+  - Global：常用的共享插件（如 telegram-channel）
+  - Bundled：随 xopcbot 发布的官方插件
+
+### Global 插件目录
+
+```bash
+# 默认位置
+~/.xopcbot/plugins/
+
+# 自定义位置（环境变量）
+export XOPCBOT_GLOBAL_PLUGINS=/path/to/global/plugins
+```
+
+---
+
+## Plugin SDK
+
+xopcbot 提供官方 Plugin SDK，统一导出所有插件开发所需的类型和接口。
+
+### 使用 SDK
+
+```typescript
+// 推荐方式：使用官方 SDK
+import type { PluginApi, PluginDefinition } from 'xopcbot/plugin-sdk';
+
+// 不推荐使用内部路径
+// import type { ... } from 'xopcbot/plugins';  ❌
+```
+
+### 导出的类型
+
+```typescript
+// 核心类型
+import type {
+  PluginDefinition,      // 插件定义
+  PluginApi,             // 插件 API
+  PluginLogger,          // 日志接口
+} from 'xopcbot/plugin-sdk';
+
+// 工具
+import type {
+  PluginTool,            // 工具定义
+  PluginToolContext,     // 工具上下文
+} from 'xopcbot/plugin-sdk';
+
+// 钩子
+import type {
+  PluginHookEvent,       // 钩子事件类型
+  PluginHookHandler,     // 钩子处理器
+  HookOptions,           // 钩子选项
+} from 'xopcbot/plugin-sdk';
+
+// 通道
+import type {
+  ChannelPlugin,         // 通道插件
+  OutboundMessage,       // 出站消息
+} from 'xopcbot/plugin-sdk';
+
+// 命令
+import type {
+  PluginCommand,         // 命令定义
+  CommandContext,        // 命令上下文
+  CommandResult,         // 命令结果
+} from 'xopcbot/plugin-sdk';
+
+// 服务
+import type {
+  PluginService,         // 服务定义
+  ServiceContext,        // 服务上下文
+} from 'xopcbot/plugin-sdk';
+```
+
+### SDK 路径解析
+
+在底层，xopcbot 使用 jiti 配置路径别名：
+
+```typescript
+// jiti 配置
+{
+  alias: {
+    'xopcbot/plugin-sdk': './src/plugin-sdk/index.ts'
+  }
+}
+```
+
+这意味着插件开发时无需关心 xopcbot 源码位置，SDK 路径会自动解析。
 ```
 
 这将创建：

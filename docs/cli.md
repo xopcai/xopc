@@ -181,7 +181,7 @@ npm run dev -- cron trigger <task-id>
 
 ## plugin
 
-管理插件。
+管理插件。支持三级存储：workspace (./.plugins/) → global (~/.xopcbot/plugins/) → bundled。
 
 ### 列出插件
 
@@ -193,22 +193,24 @@ npm run dev -- plugin list
 ```
 📦 Installed Plugins
 
-════════════════════════════════════════════════════════════
+══════════════════════════════════════════════════════════════════════
 
-  📁 Telegram Channel
-     ID: telegram-channel
-     Version: 1.2.0
-     Path: /home/user/.xopcbot/workspace/.plugins/telegram-channel
+  📁 Workspace (./.plugins/)
+    • My Custom Plugin @ 0.1.0
+      ID: my-custom-plugin
 
-  📁 Weather Tool
-     ID: weather-tool
-     Version: 0.1.0
-     Path: /home/user/.xopcbot/workspace/.plugins/weather-tool
+  🌐 Global (~/.xopcbot/plugins/)
+    • Telegram Channel @ 1.2.0
+      ID: telegram-channel
+
+  📦 Bundled (built-in)
+    • Discord Channel @ 2.0.0
+      ID: discord-channel
 ```
 
 ### 安装插件
 
-**从 npm 安装**：
+**从 npm 安装到 workspace**（默认）：
 ```bash
 npm run dev -- plugin install <package-name>
 
@@ -218,23 +220,40 @@ npm run dev -- plugin install @scope/my-plugin
 npm run dev -- plugin install my-plugin@1.0.0
 ```
 
+**安装到 global**（跨项目共享）：
+```bash
+npm run dev -- plugin install <package-name> --global
+
+# 示例
+npm run dev -- plugin install xopcbot-plugin-telegram --global
+```
+
 **从本地目录安装**：
 ```bash
+# 安装到 workspace
 npm run dev -- plugin install ./my-local-plugin
-npm run dev -- plugin install /absolute/path/to/plugin
+
+# 安装到 global
+npm run dev -- plugin install ./my-local-plugin --global
 ```
 
 **参数**：
 
 | 参数 | 描述 |
 |------|------|
+| `--global` | 安装到全局目录 (~/.xopcbot/plugins/) |
 | `--timeout <ms>` | 安装超时时间（默认 120000ms） |
 
 **安装流程**：
 1. 下载/复制插件文件
 2. 验证 `xopcbot.plugin.json` 清单
 3. 安装依赖（如有 `package.json` 依赖）
-4. 复制到工作区 `.plugins/` 目录
+4. 复制到目标目录 (workspace/.plugins/ 或 ~/.xopcbot/plugins/)
+
+**三级存储说明**：
+- Workspace (./.plugins/)：项目私有，优先级最高
+- Global (~/.xopcbot/plugins/)：用户级共享
+- Bundled：内置插件，优先级最低
 
 ### 移除插件
 
@@ -249,7 +268,9 @@ npm run dev -- plugin uninstall <plugin-id>
 npm run dev -- plugin remove telegram-channel
 ```
 
-**注意**：移除后如果已启用，还需要从配置文件中删除。
+**注意**：
+- 优先从 workspace 移除，如不存在则从 global 移除
+- 移除后如果已启用，还需要从配置文件中删除
 
 ### 查看插件详情
 
