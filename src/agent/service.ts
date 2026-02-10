@@ -2,9 +2,10 @@
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { MessageBus, InboundMessage } from '../bus/index.js';
-import type { Config } from '../config/schema.js';
+import type { Config, AgentDefaults } from '../config/schema.js';
 import { getApiKey as getConfigApiKey } from '../config/schema.js';
-import { MemoryStore } from './memory/store.js';
+import { MemoryStore, type CompactionConfig, type WindowConfig } from './memory/store.js';
+import { SessionCompactor } from './memory/compaction.js';
 import {
   readFileTool,
   writeFileTool,
@@ -28,17 +29,38 @@ interface AgentServiceConfig {
   braveApiKey?: string;
   spawnSubagent?: (task: string, label?: string) => Promise<SubagentResult>;
   config?: Config;
+  agentDefaults?: AgentDefaults;
 }
 
 export class AgentService {
   private agent: Agent;
   private memory: MemoryStore;
+  private compactor: SessionCompactor;
   private unsubscribe?: () => void;
   private running = false;
   private currentContext: { channel: string; chatId: string } | null = null;
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
-    this.memory = new MemoryStore(config.workspace);
+    const defaults = config.agentDefaults || config.config?.agents?.defaults;
+    
+    // Initialize memory store with configs
+    const windowConfig: Partial<WindowConfig> = {
+      maxMessages: 100,
+      keepRecentMessages: defaults?.maxToolIterations || 20,
+      preserveSystemMessages: true,
+    };
+    
+    const compactionConfig: Partial<CompactionConfig> = {
+      enabled: defaults?.compaction?.enabled ?? true,
+      mode: defaults?.compaction?.mode || 'default',
+      reserveTokens: defaults?.compaction?.reserveTokens || 8000,
+      triggerThreshold: defaults?.compaction?.triggerThreshold || 0.8,
+      minMessagesBeforeCompact: defaults?.compaction?.minMessagesBeforeCompact || 10,
+      keepRecentMessages: defaults?.compaction?.keepRecentMessages || 10,
+    };
+    
+    this.memory = new MemoryStore(config.workspace, windowConfig, compactionConfig);
+    this.compactor = new SessionCompactor(compactionConfig);
 
     // Initialize agent with tools
     const tools: AgentTool<any, any>[] = [
@@ -132,8 +154,21 @@ export class AgentService {
     const sessionKey = `${msg.channel}:${msg.chat_id}`;
     log.info({ channel: msg.channel, senderId: msg.sender_id }, 'Processing message');
 
-    const history = await this.memory.load(sessionKey);
-    this.agent.replaceMessages(history);
+    let messages = await this.memory.load(sessionKey);
+
+    // Apply sliding window trim (save is done in load if needed)
+    const windowStats = this.memory.getWindowStats(messages);
+    if (windowStats.needsTrim) {
+      log.debug({ sessionKey, ...windowStats }, 'Messages will be trimmed on save');
+    }
+
+    // Check and apply compaction
+    const contextWindow = this.getContextWindow();
+    await this.checkAndCompact(sessionKey, messages, contextWindow);
+
+    // Reload after potential compaction
+    messages = await this.memory.load(sessionKey);
+    this.agent.replaceMessages(messages);
 
     const userMessage: AgentMessage = {
       role: 'user',
@@ -168,8 +203,20 @@ export class AgentService {
     }
 
     const sessionKey = `${originChannel}:${originChatId}`;
-    const history = await this.memory.load(sessionKey);
-    this.agent.replaceMessages(history);
+    let messages = await this.memory.load(sessionKey);
+
+    // Apply sliding window
+    const windowStats = this.memory.getWindowStats(messages);
+    if (windowStats.needsTrim) {
+      messages = await this.memory.load(sessionKey);
+    }
+
+    // Check compaction
+    const contextWindow = this.getContextWindow();
+    await this.checkAndCompact(sessionKey, messages, contextWindow);
+
+    messages = await this.memory.load(sessionKey);
+    this.agent.replaceMessages(messages);
 
     const systemMessage: AgentMessage = {
       role: 'user',
@@ -190,6 +237,75 @@ export class AgentService {
     }
 
     await this.memory.save(sessionKey, this.agent.state.messages);
+  }
+
+  /**
+   * Check if session needs compaction and apply if needed
+   */
+  private async checkAndCompact(
+    sessionKey: string,
+    messages: AgentMessage[],
+    contextWindow: number
+  ): Promise<void> {
+    const prep = this.memory.prepareCompaction(sessionKey, messages, contextWindow);
+    
+    if (!prep.needsCompaction) {
+      return;
+    }
+
+    log.info({ 
+      sessionKey, 
+      reason: prep.stats?.reason,
+      usagePercent: prep.stats?.usagePercent 
+    }, 'Session needs compaction');
+
+    try {
+      const result = await this.memory.compact(sessionKey, messages, contextWindow);
+      
+      log.info({
+        sessionKey,
+        tokensBefore: result.tokensBefore,
+        tokensAfter: result.tokensAfter,
+        savedTokens: result.tokensBefore - result.tokensAfter,
+      }, 'Session compacted');
+    } catch (error) {
+      log.error({ err: error, sessionKey }, 'Failed to compact session');
+    }
+  }
+
+  /**
+   * Get model context window
+   */
+  private getContextWindow(): number {
+    const defaults = this.config.agentDefaults || this.config.config?.agents?.defaults;
+    return defaults?.maxTokens ? defaults.maxTokens * 4 : 128000;
+  }
+
+  /**
+   * Manual compaction command
+   */
+  async compactSession(sessionKey: string, instructions?: string): Promise<void> {
+    const messages = await this.memory.load(sessionKey);
+    const contextWindow = this.getContextWindow();
+    
+    const result = await this.memory.compact(sessionKey, messages, contextWindow, instructions);
+    
+    if (result.compacted) {
+      await this.memory.save(sessionKey, await this.memory.load(sessionKey));
+    }
+    
+    log.info({ sessionKey, result }, 'Manual compaction complete');
+  }
+
+  /**
+   * Get session stats
+   */
+  getSessionStats(sessionKey: string, messages: AgentMessage[]) {
+    return {
+      windowStats: this.memory.getWindowStats(messages),
+      compactionStats: this.memory.getCompactionStats(sessionKey),
+      tokenEstimate: this.memory.estimateTokenUsage(sessionKey, messages),
+    };
   }
 
   private handleEvent(event: AgentEvent): void {
@@ -270,8 +386,8 @@ Current working directory is set automatically for shell commands.`;
   }
 
   async processDirect(content: string, sessionKey = 'cli:direct'): Promise<string> {
-    const history = await this.memory.load(sessionKey);
-    this.agent.replaceMessages(history);
+    const messages = await this.memory.load(sessionKey);
+    this.agent.replaceMessages(messages);
 
     await this.agent.prompt({
       role: 'user',
