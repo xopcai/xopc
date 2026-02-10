@@ -1,50 +1,12 @@
 import { Command } from 'commander';
-import http from 'http';
+import { GatewayServer } from '../../gateway/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
+import { getContextWithOpts } from '../index.js';
 
 const log = createLogger('GatewayCommand');
 
-class Gateway {
-  private server: http.Server | null = null;
-
-  async start(config: { host: string; port: number }): Promise<void> {
-    this.server = http.createServer((req, res) => {
-      if (req.url === '/health' && req.method === 'GET') {
-        res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({ status: 'ok', service: 'xopcbot' }));
-        return;
-      }
-
-      res.writeHead(200, { 'Content-Type': 'application/json' });
-      res.end(JSON.stringify({
-        status: 'ok',
-        service: 'xopcbot-gateway',
-        version: '0.1.0',
-        endpoints: ['GET /health'],
-      }));
-    });
-
-    return new Promise((resolve) => {
-      this.server!.listen(config.port, config.host, () => {
-        console.log(`🚀 xopcbot Gateway running at http://${config.host}:${config.port}`);
-        resolve();
-      });
-    });
-  }
-
-  async stop(): Promise<void> {
-    return new Promise((resolve) => {
-      if (this.server) {
-        this.server.close(() => resolve());
-      } else {
-        resolve();
-      }
-    });
-  }
-}
-
-function createGatewayCommand(ctx: CLIContext): Command {
+function createGatewayCommand(_ctx: CLIContext): Command {
   const cmd = new Command('gateway')
     .description('Start the xopcbot gateway server')
     .addHelpText(
@@ -53,32 +15,38 @@ function createGatewayCommand(ctx: CLIContext): Command {
         'xopcbot gateway                   # Start with default port',
         'xopcbot gateway --port 8080       # Custom port',
         'xopcbot gateway --host 127.0.0.1  # Bind to localhost only',
+        'xopcbot gateway --token secret    # Enable authentication',
       ])
     )
     .option('--host <address>', 'Host to bind to', '0.0.0.0')
     .option('--port <number>', 'Port to listen on', '18790')
+    .option('--token <token>', 'Authentication token')
     .action(async (options) => {
-      const gateway = new Gateway();
+      const ctx = getContextWithOpts();
       
-      const shutdown = async () => {
-        console.log('\n🛑 Shutting down gateway...');
-        await gateway.stop();
+      const server = new GatewayServer({
+        host: options.host,
+        port: parseInt(options.port, 10),
+        token: options.token,
+        verbose: ctx.isVerbose,
+      });
+
+      const shutdown = async (signal: string) => {
+        console.log(`\\n🛑 Received ${signal}, shutting down...`);
+        await server.stop();
         console.log('✅ Gateway stopped');
         process.exit(0);
       };
-      
-      process.on('SIGINT', shutdown);
-      process.on('SIGTERM', shutdown);
-      
+
+      process.on('SIGINT', () => shutdown('SIGINT'));
+      process.on('SIGTERM', () => shutdown('SIGTERM'));
+
       if (ctx.isVerbose) {
         log.info({ host: options.host, port: options.port }, 'Starting gateway');
       }
 
       try {
-        await gateway.start({
-          host: options.host,
-          port: parseInt(options.port, 10),
-        });
+        await server.start();
       } catch (error) {
         log.error({ err: error }, 'Failed to start gateway');
         process.exit(1);
@@ -98,6 +66,7 @@ register({
     examples: [
       'xopcbot gateway',
       'xopcbot gateway --port 8080',
+      'xopcbot gateway --token my-secret-token',
     ],
   },
 });
