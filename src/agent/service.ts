@@ -1,7 +1,7 @@
 // AgentService - Main agent implementation using @mariozechner/pi-agent-core
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
-import type { MessageBus, InboundMessage, OutboundMessage } from '../bus/index.js';
+import type { MessageBus, InboundMessage } from '../bus/index.js';
 import type { Config } from '../config/schema.js';
 import { getApiKey as getConfigApiKey } from '../config/schema.js';
 import { MemoryStore } from './memory/store.js';

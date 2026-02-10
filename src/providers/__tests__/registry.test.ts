@@ -1,6 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { ModelRegistry } from '../registry.js';
-import * as piAi from '@mariozechner/pi-ai';
 
 // Mock pi-ai module
 vi.mock('@mariozechner/pi-ai', async () => {

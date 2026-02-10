@@ -13,7 +13,7 @@
     "dev": "tsx src/cli/index.ts",
     "start": "node dist/cli/index.js",
     "test": "vitest",
-    "lint": "eslint src --ext .ts"
+    "lint": "eslint 'src/**/*.ts' --ignore-pattern '**/examples/**'"
   },
   "keywords": [
     "ai",

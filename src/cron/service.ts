@@ -4,7 +4,6 @@ import { v4 as uuidv4 } from 'uuid';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { join, dirname } from 'path';
 import { homedir } from 'os';
-import { CronJob } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('CronService');

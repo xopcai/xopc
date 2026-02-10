@@ -29,7 +29,7 @@ export function createMessageTool(
     async execute(
       toolCallId: string,
       params: Static<typeof MessageSendSchema>,
-      signal?: AbortSignal
+      _signal?: AbortSignal
     ): Promise<AgentToolResult<{}>> {
       const ctx = getContext();
       if (!ctx) {
@@ -95,7 +95,7 @@ export function createSpawnTool(
     async execute(
       toolCallId: string,
       params: Static<typeof SpawnSchema>,
-      signal?: AbortSignal
+      _signal?: AbortSignal
     ): Promise<AgentToolResult<SubagentResult>> {
       try {
         const result = await spawnFn(params.task, params.label);

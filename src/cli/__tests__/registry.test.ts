@@ -11,7 +11,7 @@ describe('CommandRegistry', () => {
 
   describe('register', () => {
     it('should register a command successfully', () => {
-      const factory = (ctx: CLIContext) => new Command('test');
+      const factory = (_ctx: CLIContext) => new Command('test');
 
       registry.register({
         id: 'test-cmd',
@@ -25,7 +25,7 @@ describe('CommandRegistry', () => {
     });
 
     it('should throw on duplicate id', () => {
-      const factory = (ctx: CLIContext) => new Command('test');
+      const factory = (_ctx: CLIContext) => new Command('test');
 
       registry.register({
         id: 'test-cmd',
@@ -45,7 +45,7 @@ describe('CommandRegistry', () => {
     });
 
     it('should throw on duplicate name', () => {
-      const factory = (ctx: CLIContext) => new Command('test');
+      const factory = (_ctx: CLIContext) => new Command('test');
 
       registry.register({
         id: 'test-cmd-1',

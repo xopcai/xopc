@@ -32,7 +32,7 @@ export class HeartbeatService {
   private async checkAndWake(): Promise<void> {
     try {
       // Check for scheduled jobs that might need to be triggered
-      const jobs = this.cronService.listJobs();
+      const _jobs = this.cronService.listJobs();
       
       // Log status
       const runningJobs = this.cronService.getRunningCount();

@@ -3,7 +3,7 @@
  */
 
 import { existsSync, readFileSync } from 'fs';
-import { join, dirname, basename, isAbsolute } from 'path';
+import { join, dirname, isAbsolute } from 'path';
 import { createRequire } from 'module';
 import type {
   ChannelPlugin,
@@ -11,7 +11,6 @@ import type {
   HttpRequestHandler,
   PluginApi,
   PluginCommand,
-  PluginDefinition,
   PluginHookEvent,
   PluginHookHandler,
   PluginManifest,
@@ -251,7 +250,7 @@ export class PluginLoader {
   }
 
   private async loadModule(pluginPath: string, manifest: PluginManifest): Promise<PluginModule | null> {
-    const require = createRequire(import.meta.url);
+    const _require = createRequire(import.meta.url);
     
     // Determine entry point
     const entryPoints = [
@@ -309,7 +308,7 @@ export class PluginLoader {
   private async initializePlugin(
     module: PluginModule,
     api: PluginApi,
-    manifest: PluginManifest,
+    _manifest: PluginManifest,
   ): Promise<void> {
     if (typeof module === 'function') {
       // Module is a function that receives the API

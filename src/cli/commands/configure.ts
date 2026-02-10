@@ -1,8 +1,6 @@
 import { Command } from 'commander';
 import { input, confirm, select, password } from '@inquirer/prompts';
-import { existsSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
+import { existsSync } from 'fs';
 import { loadConfig, saveConfig, ConfigSchema, getApiBase } from '../../config/index.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 

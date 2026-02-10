@@ -4,12 +4,8 @@
 
 import type {
   ChannelPlugin,
-  GatewayContext,
   GatewayMethodHandler,
-  HttpRequest,
   HttpRequestHandler,
-  HttpResponse,
-  OutboundMessage,
   PluginApi,
   PluginCommand,
   PluginLogger,
@@ -17,7 +13,6 @@ import type {
   PluginTool,
 } from './types.js';
 import type { Config } from '../types/index.js';
-import type { MessageBus } from '../bus/index.js';
 import { resolve, isAbsolute } from 'path';
 import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';

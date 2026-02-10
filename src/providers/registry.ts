@@ -13,9 +13,6 @@ import {
 	type Model,
 	type KnownProvider,
 } from '@mariozechner/pi-ai';
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
-import { dirname, join } from 'path';
-import { fileURLToPath } from 'url';
 import { getApiKey as getConfigApiKey, getApiBase } from '../config/schema.js';
 import type { Config } from '../config/schema.js';
 

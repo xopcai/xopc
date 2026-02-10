@@ -2,11 +2,12 @@ import { Command } from 'commander';
 import { existsSync, mkdirSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
-import { input, password, select, confirm } from '@inquirer/prompts';
-import { loadConfig, saveConfig, ConfigSchema, PROVIDER_OPTIONS } from '../../config/index.js';
-import { register, formatExamples, type CLIContext } from '../registry.js';
+import { password, select, confirm } from '@inquirer/prompts';
+import { loadConfig, saveConfig, PROVIDER_OPTIONS } from '../../config/index.js';
+import { register, formatExamples } from '../registry.js';
+import type { CLIContext } from '../registry.js';
 
-function createOnboardCommand(ctx: CLIContext): Command {
+function createOnboardCommand(_ctx: CLIContext): Command {
   const cmd = new Command('onboard')
     .description('Interactive setup wizard for xopcbot')
     .addHelpText(

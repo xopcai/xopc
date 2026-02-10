@@ -1,7 +1,5 @@
 import { Command } from 'commander';
-import { existsSync, readFileSync, writeFileSync } from 'fs';
-import { join } from 'path';
-import { homedir } from 'os';
+import { existsSync, writeFileSync } from 'fs';
 import { loadConfig } from '../../config/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';

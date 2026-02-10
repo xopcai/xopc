@@ -4,7 +4,6 @@
 
 import type {
   PluginHookEvent,
-  PluginHookHandler,
   PluginRegistry,
 } from './types.js';
 

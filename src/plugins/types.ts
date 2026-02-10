@@ -4,7 +4,6 @@
  * A lightweight plugin system inspired by OpenClaw.
  */
 
-import type { MessageBus } from '../bus/index.js';
 import type { Config } from '../types/index.js';
 
 // ============================================================================

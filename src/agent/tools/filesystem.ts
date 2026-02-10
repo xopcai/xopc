@@ -1,8 +1,8 @@
 // Filesystem tools - read, write, edit files
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
-import { readFile, writeFile, mkdir, readdir, access } from 'fs/promises';
-import { dirname, join } from 'path';
+import { readFile, writeFile, mkdir, readdir } from 'fs/promises';
+import { dirname } from 'path';
 import { spawn } from 'child_process';
 
 // =============================================================================
@@ -21,7 +21,7 @@ export const readFileTool: AgentTool<typeof ReadFileSchema, {} > = {
   async execute(
     toolCallId: string,
     params: Static<typeof ReadFileSchema>,
-    signal?: AbortSignal
+    _signal?: AbortSignal
   ): Promise<AgentToolResult<{}>> {
     try {
       const content = await readFile(params.path, 'utf-8');
@@ -60,7 +60,7 @@ export const writeFileTool: AgentTool<typeof WriteFileSchema, {} > = {
   async execute(
     toolCallId: string,
     params: Static<typeof WriteFileSchema>,
-    signal?: AbortSignal
+    _signal?: AbortSignal
   ): Promise<AgentToolResult<{}>> {
     try {
       const dir = dirname(params.path);
@@ -102,7 +102,7 @@ export const editFileTool: AgentTool<typeof EditFileSchema, {} > = {
   async execute(
     toolCallId: string,
     params: Static<typeof EditFileSchema>,
-    signal?: AbortSignal
+    _signal?: AbortSignal
   ): Promise<AgentToolResult<{}>> {
     try {
       const content = await readFile(params.path, 'utf-8');
@@ -153,7 +153,7 @@ export const listDirTool: AgentTool<typeof ListDirSchema, {} > = {
   async execute(
     toolCallId: string,
     params: Static<typeof ListDirSchema>,
-    signal?: AbortSignal
+    _signal?: AbortSignal
   ): Promise<AgentToolResult<{}>> {
     try {
       const entries = await readdir(params.path, { withFileTypes: true });

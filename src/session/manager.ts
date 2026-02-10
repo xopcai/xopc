@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync as fsUnlinkSync, readdirSync } from 'fs';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import { homedir } from 'os';
 import { Message, Session } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';

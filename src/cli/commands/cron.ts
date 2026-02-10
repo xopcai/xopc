@@ -1,7 +1,8 @@
 import { Command } from 'commander';
-import { register, formatExamples, type CLIContext } from '../registry.js';
+import { register, formatExamples } from '../registry.js';
+import type { CLIContext } from '../registry.js';
 
-function createCronCommand(ctx: CLIContext): Command {
+function createCronCommand(_ctx: CLIContext): Command {
   const cmd = new Command('cron')
     .description('Manage scheduled tasks')
     .addHelpText(
@@ -17,7 +18,6 @@ function createCronCommand(ctx: CLIContext): Command {
     new Command('list')
       .description('List all scheduled tasks')
       .action(async () => {
-        const { loadConfig } = await import('../../config/index.js');
         const { CronService } = await import('../../cron/index.js');
         
         const cronService = new CronService();
