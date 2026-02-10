@@ -1,7 +1,6 @@
 import { Command } from 'commander';
-import { AgentService } from '../../agent/index.js';
+import { GatewayServer } from '../../gateway/index.js';
 import { loadConfig } from '../../config/index.js';
-import { MessageBus } from '../../bus/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
@@ -25,25 +24,35 @@ function createAgentCommand(_ctx: CLIContext): Command {
       const ctx = getContextWithOpts();
       const config = loadConfig(ctx.configPath);
       const modelId = config.agents?.defaults?.model;
-      const bus = new MessageBus();
 
       const workspace = config.agents?.defaults?.workspace || ctx.workspacePath;
-      const braveApiKey = config.tools?.web?.search?.apiKey;
 
       if (ctx.isVerbose) {
         log.info({ model: modelId, workspace }, 'Starting agent');
       }
 
-      const agent = new AgentService(bus, {
-        workspace,
-        model: modelId,
-        braveApiKey,
-        config,  // Pass full config for custom model registration
+      // Use GatewayServer to ensure full message routing (including outbound)
+      const server = new GatewayServer({
+        host: '127.0.0.1',  // localhost only for CLI mode
+        port: 0,            // random port, not used in CLI mode
+        configPath: ctx.configPath,
+        enableHotReload: false,
       });
+
+      await server.start();
+      const agent = server.serviceInstance;
+
+      const shutdown = async () => {
+        await server.stop();
+      };
+
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
 
       if (options.message) {
         const response = await agent.processDirect(options.message);
         console.log('\n🤖:', response);
+        await shutdown();
       } else if (options.interactive) {
         console.log('🧠 Interactive chat mode (Ctrl+C to exit)\n');
 
@@ -59,14 +68,16 @@ function createAgentCommand(_ctx: CLIContext): Command {
           rl.prompt();
         });
 
-        rl.on('close', () => {
+        rl.on('close', async () => {
           console.log('\n👋 Goodbye!');
+          await shutdown();
           process.exit(0);
         });
 
         rl.setPrompt('You: ');
         rl.prompt();
       } else {
+        await shutdown();
         cmd.help();
       }
     });

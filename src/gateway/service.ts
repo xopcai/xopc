@@ -394,4 +394,11 @@ export class GatewayService {
   get cronServiceInstance(): CronService {
     return this.cronService;
   }
+
+  /**
+   * Process a message directly through the agent (for CLI mode)
+   */
+  async processDirect(content: string, sessionKey = 'cli:direct'): Promise<string> {
+    return this.agentService.processDirect(content, sessionKey);
+  }
 }
