@@ -126,6 +126,7 @@ export class GatewayService {
 
     log.info('Starting gateway service...');
     this.startTime = Date.now();
+    this.running = true;
 
     // Start channels
     await this.channelManager.startAll();
@@ -157,7 +158,6 @@ export class GatewayService {
       this.setupConfigWatcher();
     }
 
-    this.running = true;
     log.info('Gateway service started');
   }
 
