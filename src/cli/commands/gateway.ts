@@ -29,6 +29,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
         port: parseInt(options.port, 10),
         token: options.token,
         verbose: ctx.isVerbose,
+        configPath: ctx.configPath,
       });
 
       const shutdown = async (signal: string) => {

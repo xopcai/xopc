@@ -1,17 +1,15 @@
 import http from 'http';
 import { WebSocketServer, WebSocket } from 'ws';
 import { createLogger } from '../utils/logger.js';
+import { GatewayService, type GatewayServiceConfig } from './service.js';
 import {
-  type GatewayConfig,
   type GatewayRequest,
   type GatewayResponse,
   type GatewayEvent,
-  type RequestContext,
   isGatewayRequest,
   createResponse,
   createEvent,
 } from './protocol.js';
-import { Router } from './router.js';
 import { createAuthMiddleware, logRequest, logWsConnection, handleError } from './middleware/index.js';
 
 const log = createLogger('GatewayServer');
@@ -22,20 +20,31 @@ interface ClientConnection {
   authenticated: boolean;
 }
 
+export interface GatewayServerConfig {
+  host: string;
+  port: number;
+  token?: string;
+  verbose?: boolean;
+  configPath?: string;
+}
+
 export class GatewayServer {
   private httpServer: http.Server | null = null;
   private wss: WebSocketServer | null = null;
-  private router: Router;
   private clients = new Map<WebSocket, ClientConnection>();
-  private config: GatewayConfig;
+  private config: GatewayServerConfig;
+  private service: GatewayService;
 
-  constructor(config: GatewayConfig) {
+  constructor(config: GatewayServerConfig) {
     this.config = config;
-    this.router = new Router();
+    this.service = new GatewayService({ configPath: config.configPath });
   }
 
   async start(): Promise<void> {
     const authenticate = createAuthMiddleware({ token: this.config.token });
+
+    // Start the underlying service
+    await this.service.start();
 
     this.httpServer = http.createServer((req, res) => {
       logRequest(req);
@@ -53,13 +62,9 @@ export class GatewayServer {
 
       // Health endpoint (no auth required)
       if (req.url === '/health' && req.method === 'GET') {
+        const health = this.service.getHealth();
         res.writeHead(200, { 'Content-Type': 'application/json' });
-        res.end(JSON.stringify({
-          status: 'ok',
-          service: 'xopcbot-gateway',
-          version: '0.1.0',
-          uptime: process.uptime(),
-        }));
+        res.end(JSON.stringify(health));
         return;
       }
 
@@ -80,7 +85,7 @@ export class GatewayServer {
             'GET /health',
             'WS / (WebSocket protocol)',
           ],
-          methods: this.router.list(),
+          methods: ['health', 'status', 'agent', 'send', 'channels.status'],
         }));
         return;
       }
@@ -136,7 +141,7 @@ export class GatewayServer {
     return new Promise((resolve) => {
       this.httpServer!.listen(this.config.port, this.config.host, () => {
         log.info(
-          { host: this.config.port, port: this.config.port },
+          { host: this.config.host, port: this.config.port },
           `Gateway server running at http://${this.config.host}:${this.config.port}`
         );
         resolve();
@@ -150,52 +155,90 @@ export class GatewayServer {
   ): Promise<void> {
     const { id, method, params } = request;
 
-    const handler = this.router.get(method);
-    if (!handler) {
-      client.ws.send(JSON.stringify(createResponse(
-        id,
-        undefined,
-        { code: 'NOT_FOUND', message: `Method not found: ${method}` }
-      )));
-      return;
-    }
-
-    const ctx: RequestContext = {
-      clientId: client.id,
-      isAuthenticated: client.authenticated,
-      sendEvent: (event) => {
-        client.ws.send(JSON.stringify(event));
-      },
-    };
-
     try {
-      const result = handler(params, ctx);
-
-      // Check if result is async generator (streaming)
-      if (result && typeof result[Symbol.asyncIterator] === 'function') {
-        const generator = result as AsyncGenerator<GatewayEvent, unknown, unknown>;
-        
-        try {
-          // Stream events until generator completes
-          while (true) {
-            const { done, value } = await generator.next();
-            
-            if (done) {
-              // Final response with return value
-              client.ws.send(JSON.stringify(createResponse(id, value)));
-              break;
-            } else {
-              // Stream event
-              client.ws.send(JSON.stringify(value));
-            }
-          }
-        } catch (error) {
-          client.ws.send(JSON.stringify(handleError(error, id)));
+      switch (method) {
+        case 'health': {
+          const health = this.service.getHealth();
+          client.ws.send(JSON.stringify(createResponse(id, health)));
+          break;
         }
-      } else {
-        // Regular promise
-        const value = await result;
-        client.ws.send(JSON.stringify(createResponse(id, value)));
+
+        case 'status': {
+          const status = this.service.getHealth();
+          client.ws.send(JSON.stringify(createResponse(id, {
+            status: status.status,
+            version: status.version,
+            channels: status.channels,
+          })));
+          break;
+        }
+
+        case 'agent': {
+          const message = params.message as string;
+          const channel = (params.channel as string) || 'gateway';
+          const chatId = (params.chatId as string) || 'default';
+
+          if (!message) {
+            client.ws.send(JSON.stringify(createResponse(
+              id,
+              undefined,
+              { code: 'BAD_REQUEST', message: 'Missing required param: message' }
+            )));
+            return;
+          }
+
+          // Stream agent events
+          const generator = this.service.runAgent(message, channel, chatId);
+
+          try {
+            while (true) {
+              const { done, value } = await generator.next();
+
+              if (done) {
+                client.ws.send(JSON.stringify(createResponse(id, value)));
+                break;
+              } else {
+                client.ws.send(JSON.stringify(createEvent('agent', value)));
+              }
+            }
+          } catch (error) {
+            client.ws.send(JSON.stringify(handleError(error, id)));
+          }
+          break;
+        }
+
+        case 'send': {
+          const channel = params.channel as string;
+          const chatId = params.chatId as string;
+          const content = params.content as string;
+
+          if (!channel || !chatId || !content) {
+            client.ws.send(JSON.stringify(createResponse(
+              id,
+              undefined,
+              { code: 'BAD_REQUEST', message: 'Missing required params: channel, chatId, content' }
+            )));
+            return;
+          }
+
+          const result = await this.service.sendMessage(channel, chatId, content);
+          client.ws.send(JSON.stringify(createResponse(id, result)));
+          break;
+        }
+
+        case 'channels.status': {
+          const channels = this.service.getChannelsStatus();
+          client.ws.send(JSON.stringify(createResponse(id, { channels })));
+          break;
+        }
+
+        default: {
+          client.ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'NOT_FOUND', message: `Method not found: ${method}` }
+          )));
+        }
       }
     } catch (error) {
       client.ws.send(JSON.stringify(handleError(error, id)));
@@ -220,13 +263,16 @@ export class GatewayServer {
       this.wss = null;
     }
 
-    // Close HTTP server
+    // Stop HTTP server
     if (this.httpServer) {
       await new Promise<void>((resolve) => {
         this.httpServer!.close(() => resolve());
       });
       this.httpServer = null;
     }
+
+    // Stop underlying service
+    await this.service.stop();
 
     log.info('Gateway server stopped');
   }
