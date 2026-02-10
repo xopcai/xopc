@@ -87,6 +87,8 @@ export const TelegramConfigSchema = z.object({
   enabled: z.boolean().default(false),
   token: z.string().default(''),
   allowFrom: z.array(z.string()).default([]),
+  apiRoot: z.string().optional(),
+  debug: z.boolean().default(false),
 });
 
 export const WhatsAppConfigSchema = z.object({

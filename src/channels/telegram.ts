@@ -11,9 +11,11 @@ export class TelegramChannel extends BaseChannel {
   name = 'telegram';
   private bot: Bot | null = null;
   private runner: ReturnType<typeof run> | null = null;
+  private debug: boolean;
 
   constructor(config: Record<string, unknown>, bus: MessageBus) {
     super(config, bus);
+    this.debug = (config.debug as boolean) ?? false;
   }
 
   async start(): Promise<void> {
@@ -24,7 +26,12 @@ export class TelegramChannel extends BaseChannel {
       throw new Error('Telegram token not configured');
     }
 
-    this.bot = new Bot(token);
+    log.info({ apiRoot: this.config.apiRoot || 'https://api.telegram.org (default)' }, 'Initializing Telegram bot');
+
+    const botConfig = this.config.apiRoot
+      ? { client: { apiRoot: this.config.apiRoot as string } }
+      : undefined;
+    this.bot = new Bot(token, botConfig);
 
     this.bot.use(this.allowListMiddleware.bind(this));
 
@@ -77,6 +84,16 @@ export class TelegramChannel extends BaseChannel {
 
     this.runner = run(this.bot);
     this.running = true;
+    
+    // 验证 API 连接
+    try {
+      const me = await this.bot.api.getMe();
+      log.info({ username: me.username, apiRoot: this.config.apiRoot || 'default' }, 'Telegram API connection verified');
+    } catch (err) {
+      log.error({ err, apiRoot: this.config.apiRoot }, 'Failed to verify Telegram API connection');
+      throw err;
+    }
+    
     log.info('Telegram channel started with Grammy');
   }
 
@@ -107,16 +124,54 @@ export class TelegramChannel extends BaseChannel {
     log.info('Telegram channel stopped');
   }
 
+  /**
+   * Test connection to Telegram API via getMe
+   */
+  async testConnection(): Promise<{ success: boolean; botInfo?: { id: number; username: string; first_name: string }; error?: string }> {
+    if (!this.bot) {
+      return { success: false, error: 'Bot not initialized' };
+    }
+
+    try {
+      const me = await this.bot.api.getMe();
+      log.info({ 
+        id: me.id, 
+        username: me.username, 
+        first_name: me.first_name,
+        apiRoot: this.config.apiRoot || 'default'
+      }, 'getMe test successful');
+      return { 
+        success: true, 
+        botInfo: { 
+          id: me.id, 
+          username: me.username, 
+          first_name: me.first_name 
+        } 
+      };
+    } catch (err) {
+      const errorMsg = err instanceof Error ? err.message : String(err);
+      log.error({ err, apiRoot: this.config.apiRoot }, 'getMe test failed');
+      return { success: false, error: errorMsg };
+    }
+  }
+
   async send(msg: OutboundMessage): Promise<void> {
     if (!this.bot) {
       log.error('Telegram bot not initialized');
       return;
     }
 
+    if (this.debug) {
+      log.debug({ chatId: msg.chat_id, contentLength: msg.content.length }, 'Sending message');
+    }
+
     try {
       await this.bot.api.sendMessage(msg.chat_id, msg.content, {
         parse_mode: 'Markdown',
       });
+      if (this.debug) {
+        log.debug({ chatId: msg.chat_id }, 'Message sent successfully');
+      }
     } catch (error) {
       if (error instanceof GrammyError) {
         log.error({ description: error.description }, 'Telegram API error');

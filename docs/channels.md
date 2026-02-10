@@ -14,7 +14,9 @@ xopcbot 支持多种通信通道：Telegram、WhatsApp。
     "telegram": {
       "enabled": true,
       "token": "YOUR_BOT_TOKEN",
-      "allow_from": ["@username1", "@username2"]
+      "allowFrom": ["@username1", "@username2"],
+      "apiRoot": "https://api.telegram.org",
+      "debug": false
     }
   }
 }
@@ -33,7 +35,9 @@ xopcbot 支持多种通信通道：Telegram、WhatsApp。
 |------|------|------|
 | `enabled` | boolean | 是否启用通道 |
 | `token` | string | Bot Token |
-| `allow_from` | string[] | 白名单用户 (用户名或 ID) |
+| `allowFrom` | string[] | 白名单用户 (用户名或 ID) |
+| `apiRoot` | string | 自定义 Telegram API 地址，默认 `https://api.telegram.org` |
+| `debug` | boolean | 是否启用调试日志 |
 
 ### 使用限制
 
@@ -57,16 +61,54 @@ npm run dev -- gateway --port 18790
 - 检查网络连接
 
 **Q: 如何添加管理员？**
-修改 `allow_from` 数组：
+修改 `allowFrom` 数组：
 
 ```json
 {
   "channels": {
     "telegram": {
       "token": "...",
-      "allow_from": ["@admin1", "123456789"]
+      "allowFrom": ["@admin1", "123456789"]
     }
   }
+}
+```
+
+### 反向代理配置
+
+在某些网络环境下，可能需要使用反向代理访问 Telegram API。
+
+**1. 配置反向代理**
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "token": "YOUR_BOT_TOKEN",
+      "apiRoot": "https://your-proxy-domain.com",
+      "debug": true
+    }
+  }
+}
+```
+
+**2. 验证连接**
+
+启动时会自动调用 `getMe` 验证连接：
+
+```
+[INFO] Telegram API connection verified: {"username":"your_bot","apiRoot":"https://your-proxy-domain.com"}
+```
+
+**手动测试连接** (代码方式):
+
+```typescript
+const result = await channel.testConnection();
+if (result.success) {
+  console.log('Bot info:', result.botInfo);
+} else {
+  console.error('Connection failed:', result.error);
 }
 ```
 
@@ -82,7 +124,7 @@ npm run dev -- gateway --port 18790
     "whatsapp": {
       "enabled": true,
       "bridge_url": "ws://localhost:3001",
-      "allow_from": []
+      "allowFrom": []
     }
   }
 }
@@ -94,7 +136,7 @@ npm run dev -- gateway --port 18790
 |------|------|------|
 | `enabled` | boolean | 是否启用 |
 | `bridge_url` | string | WA Bridge WebSocket 地址 |
-| `allow_from` | string[] | 白名单用户 |
+| `allowFrom` | string[] | 白名单用户 |
 
 ### 当前状态
 
@@ -199,15 +241,18 @@ api.registerHook('message_sending', async (event, ctx) => {
     "telegram": {
       "enabled": true,
       "token": "...",
-      "allow_from": ["@username"]
+      "allowFrom": ["@username"],
+      "apiRoot": "https://api.telegram.org",
+      "debug": false
     },
     "whatsapp": {
       "enabled": true,
       "bridge_url": "ws://localhost:3001",
-      "allow_from": []
+      "allowFrom": []
     }
   }
 }
+```
 ```
 
 机器人会同时监听两个通道的消息。
