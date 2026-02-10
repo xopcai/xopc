@@ -1,12 +1,13 @@
 import crypto from 'crypto';
 import { watch, type FSWatcher } from 'fs';
-import { dirname } from 'path';
+import { dirname, join } from 'path';
 import { AgentService } from '../agent/index.js';
 import { ChannelManager } from '../channels/manager.js';
 import { MessageBus } from '../bus/index.js';
 import { loadConfig, saveConfig, DEFAULT_PATHS } from '../config/index.js';
 import { createLogger } from '../utils/logger.js';
 import { CronService, DefaultJobExecutor } from '../cron/index.js';
+import { PluginLoader, normalizePluginConfig } from '../plugins/index.js';
 import type { Config } from '../config/schema.js';
 import type { JobData } from '../cron/types.js';
 
@@ -49,6 +50,7 @@ export class GatewayService {
   private agentService: AgentService;
   private channelManager: ChannelManager;
   private cronService: CronService;
+  private pluginLoader: PluginLoader | null = null;
   private running = false;
   private configWatcher: FSWatcher | null = null;
   private reloadDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -62,12 +64,16 @@ export class GatewayService {
     // Initialize channel manager
     this.channelManager = new ChannelManager(this.config, this.bus);
 
-    // Initialize agent service
+    // Initialize plugin loader
+    this.initializePlugins();
+
+    // Initialize agent service with plugin registry
     this.agentService = new AgentService(this.bus, {
       workspace: this.config.agents?.defaults?.workspace || './workspace',
       model: this.config.agents?.defaults?.model,
       braveApiKey: this.config.tools?.web?.search?.apiKey,
       config: this.config,
+      pluginRegistry: this.pluginLoader?.getRegistry(),
     });
 
     // Initialize cron service with custom executor
@@ -76,6 +82,38 @@ export class GatewayService {
       DEFAULT_PATHS.cronJobs,
       cronExecutor
     );
+  }
+
+  /**
+   * Initialize plugins from config
+   */
+  private initializePlugins(): void {
+    try {
+      const pluginsConfig = (this.config as any).plugins;
+      if (!pluginsConfig) {
+        log.debug('No plugins configured');
+        return;
+      }
+
+      const resolvedConfigs = normalizePluginConfig(pluginsConfig);
+      
+      this.pluginLoader = new PluginLoader({
+        workspaceDir: this.config.agents?.defaults?.workspace || './workspace',
+        pluginsDir: join(this.config.agents?.defaults?.workspace || './workspace', '.plugins'),
+      });
+
+      // Load enabled plugins
+      const enabledPlugins = resolvedConfigs.filter(c => c.enabled);
+      if (enabledPlugins.length > 0) {
+        this.pluginLoader.loadPlugins(enabledPlugins).then(() => {
+          log.info({ count: enabledPlugins.length }, 'Plugins loaded');
+        }).catch(err => {
+          log.warn({ err }, 'Failed to load some plugins');
+        });
+      }
+    } catch (error) {
+      log.warn({ err: error }, 'Failed to initialize plugins');
+    }
   }
 
   async start(): Promise<void> {

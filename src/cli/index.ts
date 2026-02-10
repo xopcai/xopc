@@ -10,6 +10,7 @@ import './commands/gateway.js';
 import './commands/cron.js';
 import './commands/config.js';
 import './commands/models.js';
+import './commands/plugin.js';
 
 // Global parsed options - updated before each command
 export let parsedOpts: { config?: string; workspace?: string; verbose?: boolean } = {};

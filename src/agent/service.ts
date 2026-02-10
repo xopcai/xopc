@@ -20,6 +20,7 @@ import {
 import type { SubagentResult } from './tools/communication.js';
 import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
+import { PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
 
 const log = createLogger('AgentService');
 
@@ -30,17 +31,21 @@ interface AgentServiceConfig {
   spawnSubagent?: (task: string, label?: string) => Promise<SubagentResult>;
   config?: Config;
   agentDefaults?: AgentDefaults;
+  pluginRegistry?: PluginRegistry;
 }
 
 export class AgentService {
   private agent: Agent;
   private memory: MemoryStore;
   private compactor: SessionCompactor;
+  private hookRunner?: HookRunner;
   private unsubscribe?: () => void;
   private running = false;
-  private currentContext: { channel: string; chatId: string } | null = null;
+  private currentContext: { channel: string; chatId: string; sessionKey: string } | null = null;
+  private agentId: string;
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
+    this.agentId = `agent-${Date.now()}`;
     const defaults = config.agentDefaults || config.config?.agents?.defaults;
     
     // Initialize memory store with configs
@@ -61,6 +66,18 @@ export class AgentService {
     
     this.memory = new MemoryStore(config.workspace, windowConfig, compactionConfig);
     this.compactor = new SessionCompactor(compactionConfig);
+
+    // Initialize hook runner if plugin registry provided
+    if (config.pluginRegistry) {
+      this.hookRunner = new HookRunner(config.pluginRegistry, {
+        catchErrors: true,
+        logger: {
+          info: (msg) => log.info({ hook: true }, msg),
+          warn: (msg) => log.warn({ hook: true }, msg),
+          error: (msg) => log.error({ hook: true }, msg),
+        },
+      });
+    }
 
     // Initialize agent with tools
     const tools: AgentTool<any, any>[] = [
@@ -113,7 +130,14 @@ export class AgentService {
 
   async start(): Promise<void> {
     this.running = true;
+    
+    // Trigger gateway_start hook
+    await this.triggerHook('gateway_start', { port: 0, host: 'cli' });
+    
     log.info('Agent service started');
+
+    // Trigger session_start hook
+    await this.triggerHook('session_start', { sessionId: this.agentId });
 
     while (this.running) {
       try {
@@ -124,22 +148,64 @@ export class AgentService {
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
+
+    // Trigger session_end hook
+    await this.triggerHook('session_end', { 
+      sessionId: this.agentId,
+      messageCount: this.agent.state.messages.length,
+    });
   }
 
-  stop(): void {
+  stop(): Promise<void> {
     this.running = false;
     this.agent.abort();
     this.unsubscribe?.();
+    
+    // Trigger gateway_stop hook
+    this.triggerHook('gateway_stop', { reason: 'stopped' });
+    
     log.info('Agent service stopped');
+    return Promise.resolve();
+  }
+
+  /**
+   * Trigger a hook event
+   */
+  private async triggerHook(event: string, eventData: Record<string, unknown>): Promise<void> {
+    if (!this.hookRunner) return;
+    
+    const ctx = createHookContext({
+      pluginId: undefined,
+      sessionKey: this.currentContext?.sessionKey,
+      agentId: this.agentId,
+      timestamp: new Date(),
+    });
+    
+    try {
+      await this.hookRunner.runHooks(event as any, eventData, ctx);
+    } catch (error) {
+      log.warn({ event, err: error }, 'Hook execution failed');
+    }
   }
 
   private async handleInboundMessage(msg: InboundMessage): Promise<void> {
+    const sessionKey = `${msg.channel}:${msg.chat_id}`;
+    
     this.currentContext = {
       channel: msg.channel,
       chatId: msg.chat_id,
+      sessionKey,
     };
 
     try {
+      // Trigger message_received hook
+      await this.triggerHook('message_received', {
+        channelId: msg.channel,
+        from: msg.sender_id,
+        content: msg.content,
+        timestamp: new Date(),
+      });
+
       if (msg.channel === 'system') {
         await this.handleSystemMessage(msg);
       } else {
@@ -154,9 +220,14 @@ export class AgentService {
     const sessionKey = `${msg.channel}:${msg.chat_id}`;
     log.info({ channel: msg.channel, senderId: msg.sender_id }, 'Processing message');
 
+    // Trigger before_agent_start hook
+    await this.triggerHook('before_agent_start', {
+      prompt: msg.content,
+    });
+
     let messages = await this.memory.load(sessionKey);
 
-    // Apply sliding window trim (save is done in load if needed)
+    // Apply sliding window trim
     const windowStats = this.memory.getWindowStats(messages);
     if (windowStats.needsTrim) {
       log.debug({ sessionKey, ...windowStats }, 'Messages will be trimmed on save');
@@ -164,6 +235,13 @@ export class AgentService {
 
     // Check and apply compaction
     const contextWindow = this.getContextWindow();
+    
+    // Trigger before_compaction hook
+    await this.triggerHook('before_compaction', {
+      messageCount: messages.length,
+      tokenCount: await this.memory.estimateTokenUsage(sessionKey, messages),
+    });
+
     await this.checkAndCompact(sessionKey, messages, contextWindow);
 
     // Reload after potential compaction
@@ -176,19 +254,46 @@ export class AgentService {
       timestamp: Date.now(),
     };
 
+    // Trigger before_tool_call for any tools that will be executed
+    await this.triggerHook('before_tool_call', {
+      toolName: 'user_message',
+      params: { content: msg.content },
+    });
+
     await this.agent.prompt(userMessage);
     await this.agent.waitForIdle();
 
     const finalContent = this.getLastAssistantContent();
     if (finalContent) {
-      await this.bus.publishOutbound({
-        channel: msg.channel,
-        chat_id: msg.chat_id,
-        content: finalContent,
-      });
+      // Trigger message_sending hook
+      const sendResult = await this.runMessageSendingHook(msg.chat_id, finalContent);
+      
+      if (!sendResult.send) {
+        log.debug({ reason: sendResult.reason }, 'Message sending cancelled by hook');
+      } else {
+        await this.bus.publishOutbound({
+          channel: msg.channel,
+          chat_id: msg.chat_id,
+          content: sendResult.content || finalContent,
+        });
+
+        // Trigger message_sent hook
+        await this.triggerHook('message_sent', {
+          to: msg.chat_id,
+          content: sendResult.content || finalContent,
+          success: true,
+        });
+      }
     }
 
     await this.memory.save(sessionKey, this.agent.state.messages);
+
+    // Trigger agent_end hook
+    await this.triggerHook('agent_end', {
+      messages: this.agent.state.messages,
+      success: true,
+      durationMs: 0,
+    });
   }
 
   private async handleSystemMessage(msg: InboundMessage): Promise<void> {
@@ -240,6 +345,47 @@ export class AgentService {
   }
 
   /**
+   * Run message_sending hooks and get result
+   */
+  private async runMessageSendingHook(
+    to: string,
+    content: string
+  ): Promise<{ send: boolean; content?: string; reason?: string }> {
+    if (!this.hookRunner) {
+      return { send: true, content };
+    }
+
+    const ctx = createHookContext({
+      sessionKey: this.currentContext?.sessionKey,
+      agentId: this.agentId,
+      timestamp: new Date(),
+    });
+
+    try {
+      const result = await this.hookRunner.runHooks('message_sending' as any, { to, content }, ctx);
+      
+      // Check if any hook cancelled
+      for (const r of result.results) {
+        const typed = r as { result?: Record<string, unknown> };
+        if (typed.result) {
+          const resultObj = typed.result;
+          if (resultObj.cancel === true) {
+            return { send: false, reason: resultObj.cancelReason as string | undefined, content: resultObj.content as string | undefined };
+          }
+          if (typeof resultObj.content === 'string') {
+            content = resultObj.content;
+          }
+        }
+      }
+      
+      return { send: true, content };
+    } catch (error) {
+      log.warn({ err: error }, 'message_sending hook failed');
+      return { send: true, content };
+    }
+  }
+
+  /**
    * Check if session needs compaction and apply if needed
    */
   private async checkAndCompact(
@@ -262,6 +408,13 @@ export class AgentService {
     try {
       const result = await this.memory.compact(sessionKey, messages, contextWindow);
       
+      // Trigger after_compaction hook
+      await this.triggerHook('after_compaction', {
+        messageCount: messages.length,
+        tokenCount: result.tokensBefore,
+        compactedCount: messages.length - result.firstKeptIndex,
+      });
+
       log.info({
         sessionKey,
         tokensBefore: result.tokensBefore,
