@@ -1,3 +1,3 @@
-// CLI 命令模块
-// 所有命令通过 registry.ts 自注册，无需显式导出
-// 导入本模块即可注册所有命令
+// CLI command modules
+// All commands self-register via registry.ts, no explicit exports needed
+// Import this module to register all commands

@@ -221,7 +221,7 @@ I am xopcbot, a lightweight AI assistant.
   }
 }
 
-// 自注册到命令注册表
+// Self-register to command registry
 register({
   id: 'onboard',
   name: 'onboard',

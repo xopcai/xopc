@@ -152,7 +152,7 @@ function createConfigCommand(ctx: CLIContext): Command {
   return cmd;
 }
 
-// 自注册到命令注册表
+// Self-register to command registry
 register({
   id: 'config',
   name: 'config',

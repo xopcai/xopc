@@ -221,7 +221,7 @@ function createConfigureCommand(ctx: CLIContext): Command {
   return cmd;
 }
 
-// 自注册到命令注册表（与 onboard 功能类似，但保持独立以向后兼容）
+// Self-register to command registry (similar to onboard, kept separate for backward compatibility)
 register({
   id: 'configure',
   name: 'configure',

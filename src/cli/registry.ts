@@ -3,21 +3,21 @@ import { homedir } from 'os';
 import { join } from 'path';
 
 /**
- * CLI 上下文 - 传递给所有命令的共享状态
+ * CLI Context - shared state passed to all commands
  */
 export interface CLIContext {
-  /** 配置文件路径 */
+  /** Config file path */
   configPath: string;
-  /** 工作空间目录 */
+  /** Workspace directory */
   workspacePath: string;
-  /** 是否详细模式 */
+  /** Verbose mode flag */
   isVerbose: boolean;
-  /** 原始命令行参数 */
+  /** Raw command line arguments */
   argv: string[];
 }
 
 /**
- * 创建默认上下文
+ * Create default context
  */
 export function createDefaultContext(argv: string[] = process.argv): CLIContext {
   return {
@@ -29,32 +29,32 @@ export function createDefaultContext(argv: string[] = process.argv): CLIContext 
 }
 
 /**
- * 命令元数据
+ * Command metadata
  */
 export interface CommandMetadata {
-  /** 命令分类 */
+  /** Command category */
   category?: 'setup' | 'runtime' | 'maintenance' | 'utility';
-  /** 是否隐藏命令（内部使用） */
+  /** Whether to hide command (internal use) */
   hidden?: boolean;
-  /** 是否实验性功能 */
+  /** Whether experimental feature */
   unstable?: boolean;
-  /** 示例用法 */
+  /** Example usage */
   examples?: string[];
 }
 
 /**
- * 命令定义
+ * Command definition
  */
 export interface CommandDefinition {
-  /** 唯一标识 */
+  /** Unique identifier */
   id: string;
-  /** 命令名称 */
+  /** Command name */
   name: string;
-  /** 描述 */
+  /** Description */
   description: string;
-  /** 创建 Commander 命令对象的工厂函数 */
+  /** Factory function to create Commander command object */
   factory: (ctx: CLIContext) => Command;
-  /** 元数据 */
+  /** Metadata */
   metadata?: CommandMetadata;
 }
 
@@ -73,13 +73,13 @@ export class CommandRegistry {
       console.warn(`Warning: Command "${def.id}" registered after initialization`);
     }
 
-    // 检查重复 ID
+    // Check for duplicate ID
     const existing = this.commands.find(c => c.id === def.id);
     if (existing) {
       throw new Error(`Command with id "${def.id}" already registered (name: ${existing.name})`);
     }
 
-    // 检查重复名称
+    // Check for duplicate name
     const existingName = this.commands.find(c => c.name === def.name);
     if (existingName) {
       throw new Error(`Command with name "${def.name}" already registered (id: ${existingName.id})`);
@@ -89,7 +89,7 @@ export class CommandRegistry {
   }
 
   /**
-   * 批量注册命令
+   * Register multiple commands
    */
   registerAll(defs: CommandDefinition[]): void {
     for (const def of defs) {
@@ -98,40 +98,40 @@ export class CommandRegistry {
   }
 
   /**
-   * 获取所有已注册命令
+   * Get all registered commands
    */
   getCommands(): ReadonlyArray<CommandDefinition> {
     return this.commands;
   }
 
   /**
-   * 按分类获取命令
+   * Get commands by category
    */
   getCommandsByCategory(category: CommandMetadata['category']): ReadonlyArray<CommandDefinition> {
     return this.commands.filter(c => c.metadata?.category === category);
   }
 
   /**
-   * 根据 ID 查找命令
+   * Find command by ID
    */
   findById(id: string): CommandDefinition | undefined {
     return this.commands.find(c => c.id === id);
   }
 
   /**
-   * 根据名称查找命令
+   * Find command by name
    */
   findByName(name: string): CommandDefinition | undefined {
     return this.commands.find(c => c.name === name);
   }
 
   /**
-   * 安装所有命令到 Commander program
+   * Install all commands to Commander program
    */
   install(program: Command, ctx: CLIContext): void {
     this.initialized = true;
 
-    // 按分类排序：setup -> runtime -> maintenance -> utility
+    // Sort by category: setup -> runtime -> maintenance -> utility
     const categoryOrder = { setup: 0, runtime: 1, maintenance: 2, utility: 3 };
     const sorted = [...this.commands].sort((a, b) => {
       const orderA = categoryOrder[a.metadata?.category ?? 'utility'];
@@ -147,13 +147,13 @@ export class CommandRegistry {
         program.addCommand(cmd);
       } catch (error) {
         console.error(`Failed to register command "${def.id}":`, error);
-        // 继续注册其他命令，不中断
+        // Continue registering other commands, don't break
       }
     }
   }
 
   /**
-   * 获取注册统计信息
+   * Get registration statistics
    */
   getStats(): { total: number; byCategory: Record<string, number> } {
     const byCategory: Record<string, number> = {};

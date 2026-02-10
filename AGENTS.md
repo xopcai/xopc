@@ -11,6 +11,25 @@ _This file guides AI assistants working on the xopcbot codebase._
 - 99+ unit tests
 - 20+ LLM providers via `@mariozechner/pi-ai`
 
+## Code Style Guidelines
+
+### Comments
+- **All comments must be in English** (both inline comments and JSDoc)
+- Use clear, concise language
+- JSDoc format for public APIs: `/** Description */`
+- Inline comments for complex logic: `// Explanation`
+
+### Naming Conventions
+- `camelCase` for variables, functions, methods
+- `PascalCase` for classes, interfaces, types
+- `UPPER_SNAKE_CASE` for constants
+- Prefix unused params with underscore: `_unusedParam`
+
+### Import Organization
+1. External dependencies
+2. Internal absolute imports
+3. Relative imports (sibling files last)
+
 ## Architecture
 
 ```
