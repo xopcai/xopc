@@ -36,3 +36,6 @@ coverage/
 # Misc
 *.pem
 .cache/
+
+# Memory (local notes, not for git)
+memory/

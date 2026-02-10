@@ -1,4 +1,5 @@
-import TelegramBot from 'node-telegram-bot-api';
+import { Bot, GrammyError, HttpError, type Context, type NextFunction } from 'grammy';
+import { run } from '@grammyjs/runner';
 import { BaseChannel } from './base.js';
 import { OutboundMessage } from '../types/index.js';
 import { MessageBus } from '../bus/index.js';
@@ -8,8 +9,8 @@ const log = createLogger('TelegramChannel');
 
 export class TelegramChannel extends BaseChannel {
   name = 'telegram';
-  private bot: TelegramBot | null = null;
-  private pollInterval: ReturnType<typeof setInterval> | null = null;
+  private bot: Bot | null = null;
+  private runner: ReturnType<typeof run> | null = null;
 
   constructor(config: Record<string, unknown>, bus: MessageBus) {
     super(config, bus);
@@ -23,35 +24,83 @@ export class TelegramChannel extends BaseChannel {
       throw new Error('Telegram token not configured');
     }
 
-    // Create bot
-    this.bot = new TelegramBot(token, { polling: true });
+    this.bot = new Bot(token);
 
-    // Handle messages
-    this.bot.on('message', async (msg) => {
-      if (!msg.text && !msg.photo) return;
-      
-      const chatId = msg.chat.id;
-      const senderId = String(msg.from?.id);
-      const content = msg.text || '[media]';
-      const media = msg.photo?.map(p => p.file_id) || [];
+    this.bot.use(this.allowListMiddleware.bind(this));
 
-      await this.handleMessage(senderId, String(chatId), content, media.length > 0 ? media : undefined);
+    this.bot.on('message:text', async (ctx) => {
+      const senderId = String(ctx.from?.id);
+      const chatId = String(ctx.chat.id);
+      const content = ctx.message.text || '';
+
+      await this.handleMessage(senderId, chatId, content);
     });
 
+    this.bot.on('message:photo', async (ctx) => {
+      const photos = ctx.message.photo;
+      const fileIds = photos.map((p) => p.file_id);
+      const caption = ctx.message.caption || '[photo]';
+
+      await this.handleMessage(
+        String(ctx.from?.id),
+        String(ctx.chat.id),
+        caption,
+        fileIds
+      );
+    });
+
+    this.bot.on('message:document', async (ctx) => {
+      const fileId = ctx.message.document?.file_id;
+      const caption = ctx.message.caption || ctx.message.document?.file_name || '[document]';
+
+      await this.handleMessage(
+        String(ctx.from?.id),
+        String(ctx.chat.id),
+        caption,
+        fileId ? [fileId] : undefined
+      );
+    });
+
+    this.bot.catch((err) => {
+      const ctx = err.ctx;
+      log.error(`Error while handling update ${ctx.update.update_id}:`);
+
+      const e = err.error;
+      if (e instanceof GrammyError) {
+        log.error({ description: e.description }, 'Grammy error');
+      } else if (e instanceof HttpError) {
+        log.error('HTTP error when contacting Telegram');
+      } else {
+        log.error({ err: e }, 'Unknown error');
+      }
+    });
+
+    this.runner = run(this.bot);
     this.running = true;
-    log.info('Telegram channel started');
+    log.info('Telegram channel started with Grammy');
+  }
+
+  private async allowListMiddleware(ctx: Context, next: NextFunction): Promise<void> {
+    const senderId = String(ctx.from?.id);
+
+    if (!this.isAllowed(senderId)) {
+      log.debug({ senderId }, 'Message from unauthorized user ignored');
+      return;
+    }
+
+    await next();
   }
 
   async stop(): Promise<void> {
     this.running = false;
-    
-    if (this.pollInterval) {
-      clearInterval(this.pollInterval);
-      this.pollInterval = null;
+
+    if (this.runner) {
+      await this.runner.stop();
+      this.runner = null;
     }
 
     if (this.bot) {
-      this.bot.stopPolling();
+      this.bot.stop();
       this.bot = null;
     }
 
@@ -65,17 +114,35 @@ export class TelegramChannel extends BaseChannel {
     }
 
     try {
-      await this.bot.sendMessage(msg.chat_id, msg.content, {
+      await this.bot.api.sendMessage(msg.chat_id, msg.content, {
         parse_mode: 'Markdown',
       });
     } catch (error) {
-      log.error({ err: error }, 'Failed to send Telegram message');
-      // Try without markdown if it fails
-      try {
-        await this.bot?.sendMessage(msg.chat_id, msg.content);
-      } catch {
-        log.error('Failed to send Telegram message (plain text)');
+      if (error instanceof GrammyError) {
+        log.error({ description: error.description }, 'Telegram API error');
+
+        try {
+          await this.bot.api.sendMessage(msg.chat_id, msg.content);
+        } catch {
+          log.error('Failed to send plain text message');
+        }
+      } else if (error instanceof HttpError) {
+        log.error('HTTP error');
+      } else {
+        log.error({ err: error }, 'Failed to send message');
       }
+    }
+  }
+
+  async react(chatId: string, messageId: number, emoji: string): Promise<void> {
+    if (!this.bot) return;
+
+    try {
+      await this.bot.api.setMessageReaction(chatId, messageId, [
+        { type: 'emoji', emoji: emoji as '👍' },
+      ]);
+    } catch (error) {
+      log.error({ err: error }, 'Failed to set reaction');
     }
   }
 }

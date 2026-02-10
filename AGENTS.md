@@ -65,27 +65,50 @@ src/
 
 ## Development Workflow
 
+### Package Manager
+
+**Use pnpm, NOT npm.**
+
+```bash
+# Install dependencies
+pnpm install
+
+# Add new dependency
+pnpm add <package>
+
+# Add dev dependency
+pnpm add -D <package>
+
+# Remove dependency
+pnpm remove <package>
+
+# Update lockfile
+pnpm install --frozen-lockfile
+```
+
+⚠️ **Never commit `package-lock.json`** - This project uses `pnpm-lock.yaml`.
+
 ### Running Locally
 
 ```bash
 # Install dependencies
-npm install
+pnpm install
 
 # Run CLI command (no build needed)
-npm run dev -- <command>
+pnpm run dev -- <command>
 
 # Example: Interactive agent
-npm run dev -- agent -i
+pnpm run dev -- agent -i
 
 # Example: Single message
-npm run dev -- agent -m "Hello"
+pnpm run dev -- agent -m "Hello"
 ```
 
 ### Building
 
 ```bash
 # Type check and compile
-npm run build
+pnpm run build
 
 # Output goes to dist/
 ```
@@ -94,13 +117,13 @@ npm run build
 
 ```bash
 # Run all tests
-npm test
+pnpm test
 
 # Run specific test file
-npx vitest run src/agent/tools/__tests__/filesystem.test.ts
+pnpm vitest run src/agent/tools/__tests__/filesystem.test.ts
 
 # Watch mode
-npx vitest --watch
+pnpm vitest --watch
 ```
 
 ## Key Patterns
@@ -238,7 +261,7 @@ Key sections:
 
 ```bash
 # Full verification
-npm run build && npm test
+pnpm run build && pnpm test
 
 # The compiled output in dist/ is not committed to git
 ```
