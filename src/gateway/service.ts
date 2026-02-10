@@ -136,9 +136,10 @@ export class GatewayService {
     }
 
     // Start heartbeat service
+    const heartbeatConfig = this.config.gateway?.heartbeat;
     this.heartbeatService.start({
-      intervalMs: 60000, // 1 minute default
-      enabled: true,
+      intervalMs: heartbeatConfig?.intervalMs || 60000,
+      enabled: heartbeatConfig?.enabled ?? true,
     });
 
     // Start agent service (runs in background)

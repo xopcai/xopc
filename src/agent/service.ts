@@ -1,8 +1,10 @@
 // AgentService - Main agent implementation using @mariozechner/pi-agent-core
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
+import type { AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { MessageBus, InboundMessage } from '../bus/index.js';
 import type { Config, AgentDefaults } from '../config/schema.js';
+import type { PluginTool } from '../plugins/types.js';
 import { getApiKey as getConfigApiKey } from '../config/schema.js';
 import { MemoryStore, type CompactionConfig, type WindowConfig } from './memory/store.js';
 import { SessionCompactor } from './memory/compaction.js';
@@ -198,7 +200,7 @@ export class AgentService {
   /**
    * Convert plugin tools to AgentTool format
    */
-  private convertPluginTools(pluginTools: import('../plugins/types.js').PluginTool[]): AgentTool<any, any>[] {
+  private convertPluginTools(pluginTools: PluginTool[]): AgentTool<any, any>[] {
     return pluginTools.map((tool) => ({
       name: tool.name,
       description: tool.description,
@@ -209,7 +211,7 @@ export class AgentService {
         toolCallId: string,
         params: Record<string, unknown>,
         _signal?: AbortSignal
-      ): Promise<import('@mariozechner/pi-agent-core').AgentToolResult<{}>> {
+      ): Promise<AgentToolResult<{}>> {
         try {
           const result = await tool.execute(params);
           return {

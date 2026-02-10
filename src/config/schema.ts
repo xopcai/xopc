@@ -113,9 +113,15 @@ export const ToolsConfigSchema = z.object({
   web: WebToolsConfigSchema.default({}),
 });
 
+export const HeartbeatConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  intervalMs: z.number().default(60000),
+});
+
 export const GatewayConfigSchema = z.object({
   host: z.string().default('0.0.0.0'),
   port: z.number().default(18790),
+  heartbeat: HeartbeatConfigSchema.default({}),
 });
 
 export const CronConfigSchema = z.object({
