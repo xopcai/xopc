@@ -3,7 +3,8 @@
   "name": "Echo Plugin",
   "description": "Echoes messages back with modifications",
   "version": "1.0.0",
-  "main": "index.js",
+  "kind": "utility",
+  "main": "index.ts",
   "configSchema": {
     "type": "object",
     "properties": {

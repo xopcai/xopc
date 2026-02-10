@@ -3,7 +3,8 @@
   "name": "Hello World",
   "description": "A simple example plugin that demonstrates the plugin system",
   "version": "1.0.0",
-  "main": "index.js",
+  "kind": "utility",
+  "main": "index.ts",
   "configSchema": {
     "type": "object",
     "properties": {

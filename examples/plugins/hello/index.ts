@@ -6,9 +6,15 @@
  * - Hook registration
  * - Command registration
  * - Configuration usage
+ * 
+ * Installation:
+ *   xopcbot plugin install ./examples/plugins/hello
+ * 
+ * Or copy to your workspace:
+ *   cp -r examples/plugins/hello workspace/.plugins/
  */
 
-import type { PluginApi } from '../../../types.js';
+import type { PluginApi } from 'xopcbot/plugin-sdk';
 
 // Plugin definition
 const plugin = {
@@ -27,7 +33,9 @@ const plugin = {
     const verbose = api.pluginConfig.verbose as boolean;
     
     api.logger.info(`Greeting: ${greeting}`);
-    api.logger.info(`Verbose: ${verbose}`);
+    if (verbose) {
+      api.logger.info(`Verbose mode enabled`);
+    }
 
     // Register a custom tool
     api.registerTool({
@@ -69,7 +77,7 @@ const plugin = {
       description: 'Send a greeting',
       acceptsArgs: true,
       requireAuth: false,
-      handler: async (args, context) => {
+      handler: async (args, _context) => {
         const name = args || 'World';
         const greeting = (api.pluginConfig.greeting as string) || 'Hello';
         return {
@@ -80,18 +88,18 @@ const plugin = {
     });
 
     // Register hooks
-    api.registerHook('before_tool_call', async (event, ctx) => {
+    api.registerHook('before_tool_call', async (event, _ctx) => {
       const toolCall = event as { toolName: string; params: Record<string, unknown> };
       api.logger.info(`Tool called: ${toolCall.toolName}`);
     });
 
-    api.registerHook('after_tool_call', async (event, ctx) => {
+    api.registerHook('after_tool_call', async (event, _ctx) => {
       const toolCall = event as { toolName: string; durationMs?: number };
       api.logger.info(`Tool completed: ${toolCall.toolName} (${toolCall.durationMs || 0}ms)`);
     });
 
     // Register a simple HTTP route
-    api.registerHttpRoute('/hello', async (req, res) => {
+    api.registerHttpRoute('/hello', async (_req, res) => {
       const greeting = (api.pluginConfig.greeting as string) || 'Hello';
       res.json({ message: greeting, plugin: 'hello' });
     });

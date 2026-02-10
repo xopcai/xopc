@@ -2,15 +2,19 @@
  * Echo Plugin Example
  * 
  * Demonstrates message modification hooks and message processing.
+ * 
+ * Installation:
+ *   xopcbot plugin install ./examples/plugins/echo
  */
 
-import type { PluginApi } from '../../../types.js';
+import type { PluginApi } from 'xopcbot/plugin-sdk';
 
 const plugin = {
   id: 'echo',
   name: 'Echo Plugin',
   description: 'Echoes messages back with modifications',
   version: '1.0.0',
+  kind: 'utility' as const,
 
   register(api: PluginApi) {
     api.logger.info('Echo plugin registered');
@@ -44,8 +48,8 @@ const plugin = {
       async execute(params) {
         let message = params.message as string;
         const prefix = (params.prefix || api.pluginConfig.prefix) as string;
-        const uppercase = params.uppercase ?? api.pluginConfig.uppercase;
-        const reverse = params.reverse ?? api.pluginConfig.reverse;
+        const uppercase = (params.uppercase ?? api.pluginConfig.uppercase) as boolean;
+        const reverse = (params.reverse ?? api.pluginConfig.reverse) as boolean;
 
         if (uppercase) {
           message = message.toUpperCase();
@@ -64,7 +68,7 @@ const plugin = {
     });
 
     // Modify outgoing messages
-    api.registerHook('message_sending', async (event, ctx) => {
+    api.registerHook('message_sending', async (event, _ctx) => {
       const messageEvent = event as {
         to: string;
         content: string;
@@ -80,7 +84,7 @@ const plugin = {
     });
 
     // Log received messages
-    api.registerHook('message_received', async (event, ctx) => {
+    api.registerHook('message_received', async (event, _ctx) => {
       const receivedEvent = event as {
         from: string;
         content: string;
