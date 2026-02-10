@@ -10,6 +10,7 @@ xopcbot 提供丰富的 CLI 命令用于管理、对话和配置。
 | `agent` | 与 Agent 对话 |
 | `gateway` | 启动 REST 网关 |
 | `cron` | 管理定时任务 |
+| `plugin` | 管理插件 |
 
 ---
 
@@ -178,6 +179,143 @@ npm run dev -- cron trigger <task-id>
 
 ---
 
+## plugin
+
+管理插件。
+
+### 列出插件
+
+```bash
+npm run dev -- plugin list
+```
+
+**输出示例**：
+```
+📦 Installed Plugins
+
+════════════════════════════════════════════════════════════
+
+  📁 Telegram Channel
+     ID: telegram-channel
+     Version: 1.2.0
+     Path: /home/user/.xopcbot/workspace/.plugins/telegram-channel
+
+  📁 Weather Tool
+     ID: weather-tool
+     Version: 0.1.0
+     Path: /home/user/.xopcbot/workspace/.plugins/weather-tool
+```
+
+### 安装插件
+
+**从 npm 安装**：
+```bash
+npm run dev -- plugin install <package-name>
+
+# 示例
+npm run dev -- plugin install xopcbot-plugin-telegram
+npm run dev -- plugin install @scope/my-plugin
+npm run dev -- plugin install my-plugin@1.0.0
+```
+
+**从本地目录安装**：
+```bash
+npm run dev -- plugin install ./my-local-plugin
+npm run dev -- plugin install /absolute/path/to/plugin
+```
+
+**参数**：
+
+| 参数 | 描述 |
+|------|------|
+| `--timeout <ms>` | 安装超时时间（默认 120000ms） |
+
+**安装流程**：
+1. 下载/复制插件文件
+2. 验证 `xopcbot.plugin.json` 清单
+3. 安装依赖（如有 `package.json` 依赖）
+4. 复制到工作区 `.plugins/` 目录
+
+### 移除插件
+
+```bash
+npm run dev -- plugin remove <plugin-id>
+# 或
+npm run dev -- plugin uninstall <plugin-id>
+```
+
+**示例**：
+```bash
+npm run dev -- plugin remove telegram-channel
+```
+
+**注意**：移除后如果已启用，还需要从配置文件中删除。
+
+### 查看插件详情
+
+```bash
+npm run dev -- plugin info <plugin-id>
+```
+
+**示例**：
+```bash
+npm run dev -- plugin info telegram-channel
+```
+
+**输出**：
+```
+📦 Plugin: Telegram Channel
+
+  ID: telegram-channel
+  Version: 1.2.0
+  Kind: channel
+  Description: Telegram channel integration
+  Path: /home/user/.xopcbot/workspace/.plugins/telegram-channel
+```
+
+### 创建插件
+
+创建新插件脚手架。
+
+```bash
+npm run dev -- plugin create <plugin-id> [options]
+```
+
+**参数**：
+
+| 参数 | 描述 |
+|------|------|
+| `--name <name>` | 插件显示名称 |
+| `--description <desc>` | 插件描述 |
+| `--kind <kind>` | 插件类型: `channel`, `provider`, `memory`, `tool`, `utility` |
+
+**示例**：
+
+```bash
+# 创建工具类插件
+npm run dev -- plugin create weather-tool --name "Weather Tool" --kind tool
+
+# 创建通道类插件
+npm run dev -- plugin create discord-channel --name "Discord Channel" --kind channel
+
+# 创建内存类插件
+npm run dev -- plugin create redis-memory --name "Redis Memory" --kind memory
+```
+
+**生成的文件**：
+```
+.plugins/
+└── my-plugin/
+    ├── package.json          # npm 配置
+    ├── index.ts              # 插件入口（TypeScript）
+    ├── xopcbot.plugin.json   # 插件清单
+    └── README.md             # 文档模板
+```
+
+**注意**：创建的插件使用 TypeScript，通过 [jiti](https://github.com/unjs/jiti) 即时加载，无需预编译。
+
+---
+
 ## 全局选项
 
 ### 工作区路径
@@ -204,6 +342,7 @@ npm run dev -- cron trigger <task-id>
 npm run dev -- --help
 npm run dev -- agent --help
 npm run dev -- gateway --help
+npm run dev -- plugin --help
 ```
 
 ---
@@ -229,8 +368,12 @@ case "$1" in
     shift
     npm run dev -- cron "$@"
     ;;
+  plugin)
+    shift
+    npm run dev -- plugin "$@"
+    ;;
   *)
-    echo "Usage: bot {chat|shell|start|cron}"
+    echo "Usage: bot {chat|shell|start|cron|plugin}"
     ;;
 esac
 ```
@@ -241,6 +384,8 @@ esac
 bot chat Hello!
 bot start
 bot cron list
+bot plugin list
+bot plugin install xopcbot-plugin-telegram
 ```
 
 ---

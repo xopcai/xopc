@@ -19,6 +19,7 @@
 | Feature | Description |
 |---------|-------------|
 | **🤖 Unified LLM API** | 20+ providers via `@mariozechner/pi-ai` (OpenAI, Anthropic, Google, Groq, MiniMax, etc.) |
+| **🔌 Plugin System** | TypeScript-first plugins with jiti hot-loading, hooks, tools, and custom commands |
 | **🔧 Command Registry** | Self-registering CLI commands with metadata support |
 | **📱 Multi-Channel** | Telegram and WhatsApp support |
 | **⏰ Scheduled Tasks** | Cron-based message scheduling |
@@ -61,6 +62,32 @@ npm run dev -- agent -i
 npm run dev -- gateway --port 18790
 ```
 
+### 5. Install & Use Plugins
+
+```bash
+# List installed plugins
+npm run dev -- plugin list
+
+# Install from npm
+npm run dev -- plugin install xopcbot-plugin-telegram
+
+# Or install from local directory
+npm run dev -- plugin install ./my-custom-plugin
+
+# Create your own plugin
+npm run dev -- plugin create my-plugin --kind tool
+```
+
+Enable plugins in `~/.xopcbot/config.json`:
+
+```json
+{
+  "plugins": {
+    "enabled": ["my-plugin"]
+  }
+}
+```
+
 ## 🛠️ CLI Commands
 
 | Command | Description |
@@ -77,6 +104,10 @@ npm run dev -- gateway --port 18790
 | `cron list` | List scheduled tasks |
 | `cron add --schedule "0 9 * * *" --message "..."` | Add task |
 | `cron remove <id>` | Remove task |
+| **`plugin list`** | **List installed plugins** |
+| **`plugin install <name>`** | **Install plugin from npm/local** |
+| **`plugin remove <id>`** | **Remove a plugin** |
+| **`plugin create <id>`** | **Create plugin scaffold** |
 
 ## ⚙️ Configuration
 
@@ -230,8 +261,10 @@ npm run test
 |-------|-------------|
 | [Getting Started](docs/getting-started.md) | First-time setup guide |
 | [Configuration](docs/configuration.md) | Complete config reference |
+| [CLI Reference](docs/cli.md) | All CLI commands |
 | [Models](docs/models.md) | LLM model setup for 20+ providers |
 | [Channels](docs/channels.md) | Telegram & WhatsApp setup |
+| [Plugins](docs/plugins.md) | Plugin development guide |
 | [Tools](docs/tools.md) | Built-in tool reference |
 
 ## 📝 License

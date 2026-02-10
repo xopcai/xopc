@@ -6,11 +6,25 @@ xopcbot 提供了一个轻量级但功能强大的插件系统，灵感来自 [O
 
 ### 安装插件
 
+**方式一：使用 CLI（推荐）**
+
 ```bash
 # 从 npm 安装
-npm install xopcbot-plugin-hello
+xopcbot plugin install xopcbot-plugin-hello
 
-# 或从本地路径安装
+# 或从本地目录安装
+xopcbot plugin install ./my-local-plugin
+
+# 查看已安装插件
+xopcbot plugin list
+
+# 移除插件
+xopcbot plugin remove hello
+```
+
+**方式二：手动安装**
+
+```bash
 cd ~/.xopcbot/plugins
 git clone https://github.com/your/plugin.git
 ```
@@ -27,10 +41,112 @@ git clone https://github.com/your/plugin.git
 }
 ```
 
-### 使用插件工具
+### 创建新插件
 
+```bash
+# 创建插件脚手架
+xopcbot plugin create my-plugin --name "My Plugin" --kind utility
+
+# 支持的 kind: channel|provider|memory|tool|utility
 ```
-/hello World
+
+这将创建：
+- `package.json` - npm 配置
+- `index.ts` - 插件入口（TypeScript，支持 jiti 即时加载）
+- `xopcbot.plugin.json` - 插件清单
+- `README.md` - 文档模板
+
+## CLI 命令参考
+
+### plugin install
+
+安装插件。
+
+```bash
+# 从 npm 安装
+xopcbot plugin install <package-name>
+
+# 安装特定版本
+xopcbot plugin install my-plugin@1.0.0
+
+# 从本地目录安装
+xopcbot plugin install ./local-plugin-dir
+xopcbot plugin install /absolute/path/to/plugin
+
+# 设置超时时间（默认 120 秒）
+xopcbot plugin install slow-plugin --timeout 300000
+```
+
+**安装流程**：
+1. 下载/复制插件文件
+2. 验证 `xopcbot.plugin.json` 清单
+3. 安装依赖（如有 `package.json` 依赖）
+4. 复制到工作区 `.plugins/` 目录
+
+### plugin list
+
+列出所有已安装插件。
+
+```bash
+xopcbot plugin list
+```
+
+**输出示例**：
+```
+📦 Installed Plugins
+
+════════════════════════════════════════════════════════════
+
+  📁 Telegram Channel
+     ID: telegram-channel
+     Version: 1.2.0
+     Path: /home/user/.xopcbot/workspace/.plugins/telegram-channel
+
+  📁 My Custom Plugin
+     ID: my-custom-plugin
+     Version: 0.1.0
+     Path: /home/user/.xopcbot/workspace/.plugins/my-custom-plugin
+```
+
+### plugin remove / uninstall
+
+移除已安装插件。
+
+```bash
+xopcbot plugin remove <plugin-id>
+xopcbot plugin uninstall <plugin-id>
+```
+
+**注意**：移除插件后，如果已启用，还需要从配置文件中删除。
+
+### plugin info
+
+查看插件详情。
+
+```bash
+xopcbot plugin info <plugin-id>
+```
+
+### plugin create
+
+创建新插件脚手架。
+
+```bash
+xopcbot plugin create <plugin-id> [options]
+
+Options:
+  --name <name>           插件显示名称
+  --description <desc>    插件描述
+  --kind <kind>          插件类型: channel|provider|memory|tool|utility
+```
+
+**示例**：
+```bash
+# 创建一个工具类插件
+xopcbot plugin create weather-tool --name "Weather Tool" --kind tool
+
+# 创建一个通道类插件
+xopcbot plugin create discord-channel --name "Discord Channel" --kind channel
 ```
 
 ## 插件结构
