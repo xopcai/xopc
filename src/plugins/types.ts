@@ -246,7 +246,11 @@ export interface PluginRegistry {
   commands: Map<string, PluginCommand>;
   services: Map<string, PluginService>;
   gatewayMethods: Map<string, GatewayMethodHandler>;
+  tools: Map<string, PluginTool>;
   getHooks(event: PluginHookEvent): PluginHookHandler[];
+  getTool(name: string): PluginTool | undefined;
+  getAllTools(): PluginTool[];
+  addTool(tool: PluginTool): void;
 }
 
 export interface PluginRecord {

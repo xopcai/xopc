@@ -95,6 +95,13 @@ export class AgentService {
       tools.push(createSpawnTool(config.spawnSubagent));
     }
 
+    // Add plugin tools from registry
+    if (config.pluginRegistry) {
+      const pluginTools = this.convertPluginTools(config.pluginRegistry.getAllTools());
+      tools.push(...pluginTools);
+      log.info({ count: pluginTools.length }, 'Loaded plugin tools');
+    }
+
     const registry = new ModelRegistry(config.config ?? null, { ollamaEnabled: false });
     let model: Model<Api>;
     
@@ -186,6 +193,42 @@ export class AgentService {
     } catch (error) {
       log.warn({ event, err: error }, 'Hook execution failed');
     }
+  }
+
+  /**
+   * Convert plugin tools to AgentTool format
+   */
+  private convertPluginTools(pluginTools: import('../plugins/types.js').PluginTool[]): AgentTool<any, any>[] {
+    return pluginTools.map((tool) => ({
+      name: tool.name,
+      description: tool.description,
+      parameters: tool.parameters,
+      label: `🔌 ${tool.name}`,
+
+      async execute(
+        toolCallId: string,
+        params: Record<string, unknown>,
+        _signal?: AbortSignal
+      ): Promise<import('@mariozechner/pi-agent-core').AgentToolResult<{}>> {
+        try {
+          const result = await tool.execute(params);
+          return {
+            content: [{ type: 'text', text: result }],
+            details: {},
+          };
+        } catch (error) {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: `Error executing tool ${tool.name}: ${error instanceof Error ? error.message : String(error)}`,
+              },
+            ],
+            details: {},
+          };
+        }
+      },
+    }));
   }
 
   private async handleInboundMessage(msg: InboundMessage): Promise<void> {

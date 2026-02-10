@@ -11,6 +11,7 @@ import type {
   PluginLogger,
   PluginService,
   PluginTool,
+  PluginRegistry,
 } from './types.js';
 import type { Config } from '../types/index.js';
 import { resolve, isAbsolute } from 'path';
@@ -21,7 +22,7 @@ export class PluginApiImpl implements PluginApi {
   private _tools: Map<string, PluginTool> = new Map();
   private _hooks: Map<string, Set<Function>> = new Map();
   private _eventBus = new EventEmitter();
-  
+
   constructor(
     public readonly id: string,
     public readonly name: string,
@@ -31,6 +32,7 @@ export class PluginApiImpl implements PluginApi {
     public readonly pluginConfig: Record<string, unknown>,
     private readonly _logger: PluginLogger,
     private readonly _resolvePath: (input: string) => string,
+    private readonly _registry?: PluginRegistry,
   ) {}
 
   get logger(): PluginLogger {
@@ -42,6 +44,12 @@ export class PluginApiImpl implements PluginApi {
       this._logger.warn(`Tool ${tool.name} already registered, overwriting`);
     }
     this._tools.set(tool.name, tool);
+    
+    // Sync to registry if available
+    if (this._registry) {
+      this._registry.addTool(tool);
+    }
+    
     this._logger.info(`Registered tool: ${tool.name}`);
   }
 
@@ -50,7 +58,7 @@ export class PluginApiImpl implements PluginApi {
       this._hooks.set(event, new Set());
     }
     this._hooks.get(event)!.add(handler);
-    
+
     if (opts?.once) {
       const wrapper = async (...args: unknown[]) => {
         await handler(...args);
@@ -58,7 +66,7 @@ export class PluginApiImpl implements PluginApi {
       };
       this._hooks.get(event)!.add(wrapper);
     }
-    
+
     this._logger.info(`Registered hook: ${event}`);
   }
 
@@ -123,7 +131,7 @@ export class PluginApiImpl implements PluginApi {
 
 export function createPluginLogger(prefix: string): PluginLogger {
   const childLogger = createLogger(`Plugin:${prefix}`);
-  
+
   return {
     debug: (msg: string) => childLogger.debug(msg),
     info: (msg: string) => childLogger.info(msg),

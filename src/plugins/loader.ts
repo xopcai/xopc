@@ -32,6 +32,7 @@ import type {
   PluginRecord,
   PluginRegistry,
   PluginService,
+  PluginTool,
   ResolvedPluginConfig,
 } from './types.js';
 import { PluginApiImpl, createPluginLogger, createPathResolver } from './api.js';
@@ -63,6 +64,7 @@ export class PluginRegistryImpl implements PluginRegistry {
   commands = new Map<string, PluginCommand>();
   services = new Map<string, PluginService>();
   gatewayMethods = new Map<string, GatewayMethodHandler>();
+  tools = new Map<string, PluginTool>();
 
   addPlugin(record: PluginRecord): void {
     this.plugins.set(record.definition.id, record);
@@ -160,6 +162,22 @@ export class PluginRegistryImpl implements PluginRegistry {
 
   getGatewayMethod(method: string): GatewayMethodHandler | undefined {
     return this.gatewayMethods.get(method);
+  }
+
+  // Tools
+  addTool(tool: PluginTool): void {
+    if (this.tools.has(tool.name)) {
+      log.warn({ tool: tool.name }, `Tool already registered, overwriting`);
+    }
+    this.tools.set(tool.name, tool);
+  }
+
+  getTool(name: string): PluginTool | undefined {
+    return this.tools.get(name);
+  }
+
+  getAllTools(): PluginTool[] {
+    return Array.from(this.tools.values());
   }
 }
 
@@ -457,6 +475,7 @@ export class PluginLoader {
       config.config,
       logger,
       resolvePath,
+      this.registry, // Pass registry to sync tools
     );
   }
 
