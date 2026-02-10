@@ -2,6 +2,7 @@
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { MessageBus, InboundMessage, OutboundMessage } from '../bus/index.js';
+import type { Config } from '../config/schema.js';
 import { MemoryStore } from './memory/store.js';
 import {
   readFileTool,
@@ -25,6 +26,7 @@ interface AgentServiceConfig {
   model?: string;
   braveApiKey?: string;
   spawnSubagent?: (task: string, label?: string) => Promise<SubagentResult>;
+  config?: Config;  // Full config for provider/model registration
 }
 
 export class AgentService {
@@ -55,8 +57,8 @@ export class AgentService {
       tools.push(createSpawnTool(config.spawnSubagent));
     }
 
-    // Resolve model using registry
-    const registry = new ModelRegistry();
+    // Resolve model using registry (pass config for custom models)
+    const registry = new ModelRegistry(config.config ?? null, { ollamaEnabled: false });
     let model: Model<Api>;
     
     if (config.model) {

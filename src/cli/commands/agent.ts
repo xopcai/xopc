@@ -36,6 +36,7 @@ function createAgentCommand(ctx: CLIContext): Command {
         workspace,
         model: modelId,
         braveApiKey,
+        config,  // Pass full config for custom model registration
       });
 
       if (options.message) {
