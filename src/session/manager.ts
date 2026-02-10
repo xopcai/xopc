@@ -1,13 +1,13 @@
 import { readFileSync, writeFileSync, existsSync, mkdirSync, unlinkSync as fsUnlinkSync, readdirSync } from 'fs';
 import { join } from 'path';
-import { homedir } from 'os';
+import { DEFAULT_PATHS } from '../config/paths.js';
 import { Message, Session } from '../types/index.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('SessionManager');
 
 function getSessionsDir(): string {
-  return join(homedir(), '.xopcbot', 'sessions');
+  return DEFAULT_PATHS.sessions;
 }
 
 function ensureSessionsDir(): void {

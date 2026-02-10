@@ -2,8 +2,8 @@ import nodeCron from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
 import { v4 as uuidv4 } from 'uuid';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { join, dirname } from 'path';
-import { homedir } from 'os';
+import { dirname } from 'path';
+import { DEFAULT_PATHS } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('CronService');
@@ -22,7 +22,7 @@ interface ScheduledTask {
 }
 
 function getJobsPath(): string {
-  return join(homedir(), '.xopcbot', 'cron-jobs.json');
+  return DEFAULT_PATHS.cronJobs;
 }
 
 function ensureJobsFile(): void {

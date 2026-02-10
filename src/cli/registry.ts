@@ -1,6 +1,5 @@
 import type { Command } from 'commander';
-import { homedir } from 'os';
-import { join } from 'path';
+import { DEFAULT_PATHS } from '../config/paths.js';
 
 export interface CLIContext {
   configPath: string;
@@ -14,8 +13,8 @@ export function createDefaultContext(
   opts?: { config?: string; workspace?: string; verbose?: boolean }
 ): CLIContext {
   return {
-    configPath: opts?.config || process.env.XOPCBOT_CONFIG || join(homedir(), '.xopcbot', 'config.json'),
-    workspacePath: opts?.workspace || process.env.XOPCBOT_WORKSPACE || join(homedir(), '.xopcbot', 'workspace'),
+    configPath: opts?.config || process.env.XOPCBOT_CONFIG || DEFAULT_PATHS.config,
+    workspacePath: opts?.workspace || process.env.XOPCBOT_WORKSPACE || DEFAULT_PATHS.workspace,
     isVerbose: (opts?.verbose ?? (argv.includes('--verbose') || argv.includes('-v'))),
     argv,
   };

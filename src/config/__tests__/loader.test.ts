@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { loadConfig, saveConfig, getConfigPath } from '../loader.js';
+import { loadConfig, saveConfig } from '../loader.js';
+import { getDefaultConfigPath, DEFAULT_PATHS } from '../paths.js';
 import { ConfigSchema } from '../schema.js';
 
 // Mock fs module
@@ -182,21 +183,21 @@ describe('saveConfig', () => {
   });
 });
 
-describe('getConfigPath', () => {
+describe('getDefaultConfigPath', () => {
   beforeEach(() => {
-    delete process.env.CONFIG_PATH;
+    delete process.env.XOPCBOT_CONFIG;
   });
 
   it('should return default path', () => {
-    const path = getConfigPath();
+    const path = getDefaultConfigPath();
     expect(path).toBe('/tmp/test-home/.xopcbot/config.json');
   });
 
   it('should return env var path when set', () => {
-    process.env.CONFIG_PATH = '/env/config.json';
-    const path = getConfigPath();
+    process.env.XOPCBOT_CONFIG = '/env/config.json';
+    const path = getDefaultConfigPath();
     expect(path).toBe('/env/config.json');
 
-    delete process.env.CONFIG_PATH;
+    delete process.env.XOPCBOT_CONFIG;
   });
 });

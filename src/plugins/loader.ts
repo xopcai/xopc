@@ -5,6 +5,7 @@
 import { existsSync, readFileSync } from 'fs';
 import { join, dirname, isAbsolute } from 'path';
 import { createRequire } from 'module';
+import { DEFAULT_PATHS } from '../config/paths.js';
 import type {
   ChannelPlugin,
   GatewayMethodHandler,
@@ -150,8 +151,8 @@ export class PluginLoader {
   constructor(options?: PluginLoaderOptions) {
     this.registry = new PluginRegistryImpl();
     this.options = options || {
-      workspaceDir: join(process.env.HOME || '', '.xopcbot', 'workspace'),
-      pluginsDir: join(process.env.HOME || '', '.xopcbot', 'plugins'),
+      workspaceDir: DEFAULT_PATHS.workspace,
+      pluginsDir: DEFAULT_PATHS.plugins,
     };
   }
 
