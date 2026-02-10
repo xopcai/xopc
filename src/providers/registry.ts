@@ -16,10 +16,6 @@ import {
 import { getApiKey as getConfigApiKey, getApiBase } from '../config/schema.js';
 import type { Config } from '../config/schema.js';
 
-// ============================================
-// Ollama Auto-Discovery
-// ============================================
-
 const OLLAMA_API_BASE = 'http://127.0.0.1:11434';
 const OLLAMA_TAGS_URL = `${OLLAMA_API_BASE}/api/tags`;
 
@@ -40,9 +36,6 @@ interface OllamaTagsResponse {
 	models: OllamaModel[];
 }
 
-/**
- * Discover locally running Ollama models
- */
 async function discoverOllamaModels(): Promise<Model<Api>[]> {
 	try {
 		const response = await fetch(OLLAMA_TAGS_URL, { signal: AbortSignal.timeout(5000) });
@@ -70,9 +63,6 @@ async function discoverOllamaModels(): Promise<Model<Api>[]> {
 	}
 }
 
-/**
- * Check if Ollama is running locally
- */
 async function isOllamaRunning(): Promise<boolean> {
 	try {
 		const response = await fetch(OLLAMA_TAGS_URL, { signal: AbortSignal.timeout(2000) });
@@ -81,10 +71,6 @@ async function isOllamaRunning(): Promise<boolean> {
 		return false;
 	}
 }
-
-// ============================================
-// Model Registry
-// ============================================
 
 export interface ProviderOverride {
 	baseUrl?: string;
@@ -109,10 +95,8 @@ export class ModelRegistry {
 	}
 
 	private loadModels(): void {
-		// 1. Load built-in models from pi-ai
 		this.loadBuiltInModels();
 
-		// 2. Apply provider overrides from config
 		if (this.config) {
 			this.applyProviderOverrides();
 		}
@@ -141,7 +125,6 @@ export class ModelRegistry {
 		const providers = this.config.providers as Record<string, ProviderOverride>;
 
 		for (const [providerName, providerConfig] of Object.entries(providers)) {
-			// Override baseUrl if specified
 			if (providerConfig.baseUrl) {
 				this.models = this.models.map((m) => {
 					if (m.provider === providerName) {
@@ -151,13 +134,11 @@ export class ModelRegistry {
 				});
 			}
 
-			// Add custom models if specified
 			if (providerConfig.models && providerConfig.models.length > 0) {
 				const api = (providerConfig.api ?? 'openai-completions') as Api;
 				const baseUrl = providerConfig.baseUrl ?? getApiBase(this.config, providerName) ?? '';
 
 				for (const modelId of providerConfig.models) {
-					// Check if model already exists
 					const exists = this.models.some((m) => m.provider === providerName && m.id === modelId);
 					if (!exists) {
 						this.models.push({
@@ -182,7 +163,6 @@ export class ModelRegistry {
 		try {
 			this.ollamaModels = await discoverOllamaModels();
 			if (this.ollamaModels.length > 0) {
-				// Filter out duplicates (if already defined)
 				const existingIds = new Set(this.models.filter((m) => m.provider === 'ollama').map((m) => m.id));
 				const newModels = this.ollamaModels.filter((m) => !existingIds.has(m.id));
 				this.models.push(...newModels);
@@ -192,7 +172,6 @@ export class ModelRegistry {
 		}
 	}
 
-	/** Update config and reload */
 	updateConfig(config: Config): void {
 		this.config = config;
 		this.models = [];
@@ -200,7 +179,6 @@ export class ModelRegistry {
 		this.loadModels();
 	}
 
-	/** Async refresh that includes discovery */
 	async refreshAsync(): Promise<void> {
 		this.models = [];
 		this._error = undefined;
@@ -228,7 +206,6 @@ export class ModelRegistry {
 		});
 	}
 
-	/** Find a model by provider and ID */
 	find(provider: string, modelId: string): Model<Api> | undefined {
 		return this.models.find(
 			(m) =>
@@ -237,7 +214,6 @@ export class ModelRegistry {
 		);
 	}
 
-	/** Find a model by ref (provider/modelId format) */
 	findByRef(ref: string): Model<Api> | undefined {
 		const slashIndex = ref.indexOf('/');
 		if (slashIndex === -1) {
@@ -248,24 +224,20 @@ export class ModelRegistry {
 		return this.find(provider, modelId);
 	}
 
-	/** Get any error */
 	getError(): string | undefined {
 		return this._error;
 	}
 
-	/** Refresh models from current config */
 	refresh(): void {
 		this.models = [];
 		this._error = undefined;
 		this.loadModels();
 	}
 
-	/** Check if Ollama is available */
 	async isOllamaAvailable(): Promise<boolean> {
 		return isOllamaRunning();
 	}
 
-	/** Get Ollama models (fresh discovery) */
 	async getOllamaModels(): Promise<Model<Api>[]> {
 		return discoverOllamaModels();
 	}
@@ -277,11 +249,6 @@ export class ModelRegistry {
 	}
 }
 
-// ============================================
-// Utility Functions
-// ============================================
-
-/** Resolve environment variable in config value (${VAR_NAME} syntax) */
 export function resolveConfigValue(value: string): string {
 	const match = /^\$\{([A-Z0-9_]+)\}$/.exec(value);
 	return match ? process.env[match[1]] ?? value : value;

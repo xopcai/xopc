@@ -4,10 +4,6 @@ import { existsSync } from 'fs';
 import { loadConfig, saveConfig, ConfigSchema, getApiBase } from '../../config/index.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 
-// ============================================
-// Provider Options - Simplified for Quick Start
-// ============================================
-
 const PROVIDER_OPTIONS = [
   { 
     name: 'Anthropic Claude', 
@@ -111,7 +107,6 @@ function createConfigureCommand(ctx: CLIContext): Command {
           validate: (value: string) => value.length > 0 || 'API key is required',
         });
 
-        // Save config based on provider type
         const updatedConfig = { ...existingConfig };
         
         if (provider === 'anthropic') {
@@ -125,7 +120,6 @@ function createConfigureCommand(ctx: CLIContext): Command {
             google: { apiKey: apiKey },
           };
         } else {
-          // All OpenAI-compatible providers use openai config
           const apiBase = getApiBase({ providers: { openai: { apiKey: apiKey } } } as any, `${provider}/dummy`);
           updatedConfig.providers = {
             ...updatedConfig.providers,
@@ -136,7 +130,6 @@ function createConfigureCommand(ctx: CLIContext): Command {
           };
         }
 
-        // Select model
         const model = await select({
           message: 'Select model:',
           choices: providerInfo.models.map(m => ({ value: m, name: m })),
@@ -155,9 +148,6 @@ function createConfigureCommand(ctx: CLIContext): Command {
         console.log(`\n✅ ${providerInfo.name} configured`);
       }
 
-      // ========================================
-      // Step 2: Channel Configuration
-      // ========================================
       if (runFullWizard || doChannel) {
         console.log('\n💬 Step 2: Channels\n');
 
@@ -221,7 +211,6 @@ function createConfigureCommand(ctx: CLIContext): Command {
   return cmd;
 }
 
-// Self-register to command registry (similar to onboard, kept separate for backward compatibility)
 register({
   id: 'configure',
   name: 'configure',

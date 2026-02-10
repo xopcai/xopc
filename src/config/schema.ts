@@ -86,10 +86,6 @@ export const ChannelsConfigSchema = z.object({
   whatsapp: WhatsAppConfigSchema.default({}),
 });
 
-// ============================================
-// Tools Config (camelCase)
-// ============================================
-
 export const WebSearchConfigSchema = z.object({
   apiKey: z.string().default(''),
   maxResults: z.number().default(5),
@@ -102,10 +98,6 @@ export const WebToolsConfigSchema = z.object({
 export const ToolsConfigSchema = z.object({
   web: WebToolsConfigSchema.default({}),
 });
-
-// ============================================
-// Gateway (camelCase)
-// ============================================
 
 export const GatewayConfigSchema = z.object({
   host: z.string().default('0.0.0.0'),
@@ -130,10 +122,6 @@ export type OpenAIProviderConfig = z.infer<typeof OpenAIProviderSchema>;
 export type AnthropicProviderConfig = z.infer<typeof AnthropicProviderSchema>;
 export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
 export type WhatsAppConfig = z.infer<typeof WhatsAppConfigSchema>;
-
-// ============================================
-// Provider Defaults (camelCase)
-// ============================================
 
 const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { baseUrl: string; envKey: string[] }> = {
   'openai': { baseUrl: 'https://api.openai.com/v1', envKey: ['OPENAI_API_KEY'] },
@@ -226,7 +214,6 @@ export function parseModelId(modelId: string): ParsedModelRef {
     return { provider: provider.toLowerCase(), model: model };
   }
   
-  // Auto-detect from model name
   const modelLower = modelId.toLowerCase();
   const providerPrefix = modelLower.split('.')[0];
   const bedrockProviders = ['anthropic', 'moonshot', 'qwen', 'minimax'];

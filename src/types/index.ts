@@ -1,8 +1,3 @@
-// ============================================
-// xopcbot Core Types
-// ============================================
-
-// Message Types
 export interface InboundMessage {
   channel: string;
   sender_id: string;
@@ -30,7 +25,6 @@ export interface Message {
   name?: string;
 }
 
-// Tool Types
 export interface ToolCall {
   id: string;
   type: 'function';
@@ -58,7 +52,6 @@ export interface ToolParameters {
   required?: string[];
 }
 
-// LLM Types
 export interface LLMProvider {
   chat(
     messages: LLMMessage[],
@@ -97,7 +90,6 @@ export interface LLMResponse {
   };
 }
 
-// Session Types
 export interface Session {
   key: string;
   messages: Message[];
@@ -113,7 +105,6 @@ export interface SessionInfo {
   path: string;
 }
 
-// Config Types - all optional for flexibility
 export interface Config {
   agents?: AgentsConfig;
   channels?: ChannelsConfig;
@@ -184,7 +175,6 @@ export interface WebSearchConfig {
   maxResults?: number;
 }
 
-// Cron Types
 export interface CronJob {
   id: string;
   name?: string;
@@ -194,7 +184,6 @@ export interface CronJob {
   created_at: string;
 }
 
-// Subagent Types
 export interface SubagentResult {
   task_id: string;
   label: string;

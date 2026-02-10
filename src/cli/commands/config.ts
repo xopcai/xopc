@@ -6,7 +6,6 @@ import { register, formatExamples, type CLIContext } from '../registry.js';
 
 const log = createLogger('ConfigCommand');
 
-// Helper to get nested value by dot notation
 function getNestedValue(obj: any, path: string): any {
   return path.split('.').reduce((current: any, key: string) => {
     if (current && typeof current === 'object' && key in current) {
@@ -16,7 +15,6 @@ function getNestedValue(obj: any, path: string): any {
   }, obj);
 }
 
-// Helper to set nested value by dot notation
 function setNestedValue(obj: any, path: string, value: any): any {
   const keys = path.split('.');
   const lastKey = keys.pop()!;
@@ -43,7 +41,6 @@ function createConfigCommand(ctx: CLIContext): Command {
       ])
     );
 
-  // Config get
   cmd
     .command('get <path>')
     .description('Get a config value by dot path')
@@ -64,7 +61,6 @@ function createConfigCommand(ctx: CLIContext): Command {
       console.log(typeof value === 'object' ? JSON.stringify(value, null, 2) : value);
     });
 
-  // Config set
   cmd
     .command('set <path> <value>')
     .description('Set a config value by dot path')
@@ -74,7 +70,6 @@ function createConfigCommand(ctx: CLIContext): Command {
         process.exit(1);
       }
 
-      // Try to parse as JSON, otherwise use string
       let parsedValue: any;
       try {
         parsedValue = JSON.parse(value);
@@ -85,13 +80,11 @@ function createConfigCommand(ctx: CLIContext): Command {
       const config = loadConfig(ctx.configPath);
       setNestedValue(config, path, parsedValue);
 
-      // Save config (simple overwrite)
       writeFileSync(ctx.configPath, JSON.stringify(config, null, 2));
       
       log.info({ path }, `Config updated`);
     });
 
-  // Config unset
   cmd
     .command('unset <path>')
     .description('Remove a config value by dot path')
@@ -118,7 +111,6 @@ function createConfigCommand(ctx: CLIContext): Command {
       }
     });
 
-  // Config show
   cmd
     .command('show')
     .description('Show full configuration (sensitive values masked)')
@@ -130,7 +122,6 @@ function createConfigCommand(ctx: CLIContext): Command {
 
       const config = loadConfig(ctx.configPath);
       
-      // Mask sensitive values
       const maskedConfig = JSON.stringify(config, (key, value) => {
         if (key === 'api_key' || key === 'token') {
           return value ? '********' : value;
@@ -141,7 +132,6 @@ function createConfigCommand(ctx: CLIContext): Command {
       console.log(maskedConfig);
     });
 
-  // Config path
   cmd
     .command('path')
     .description('Show configuration file path')
@@ -152,7 +142,6 @@ function createConfigCommand(ctx: CLIContext): Command {
   return cmd;
 }
 
-// Self-register to command registry
 register({
   id: 'config',
   name: 'config',

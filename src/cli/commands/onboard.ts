@@ -25,23 +25,18 @@ function createOnboardCommand(_ctx: CLIContext): Command {
       const workspacePath = join(homedir(), '.xopcbot', 'workspace');
       const configPath = join(homedir(), '.xopcbot', 'config.json');
 
-      // Load existing config
       const existingConfig = existsSync(configPath) ? loadConfig(configPath) : null;
 
-      // Step 1: Workspace
       if (!options.quick) {
         await setupWorkspace(workspacePath);
       }
 
-      // Step 2: Model
       await setupModel(configPath, existingConfig);
 
-      // Step 3: Channels
       if (!options.quick) {
         await setupChannels(configPath, existingConfig);
       }
 
-      // Summary
       console.log('\n' + '═'.repeat(50));
       console.log('\n🎉 Setup Complete!\n');
       
@@ -109,7 +104,6 @@ async function setupModel(configPath: string, existingConfig: any): Promise<void
     console.log(`✅ Found ${providerInfo.envKey} in environment`);
   }
 
-  // Select model
   console.log(`\n📋 Available models:`);
   const model = await select({
     message: 'Select model:',
@@ -119,7 +113,6 @@ async function setupModel(configPath: string, existingConfig: any): Promise<void
     })),
   });
 
-  // Save config
   const config = existingConfig || {};
   config.providers = config.providers || {};
   config.providers[provider] = { apiKey };
@@ -137,7 +130,6 @@ async function setupModel(configPath: string, existingConfig: any): Promise<void
 async function setupChannels(configPath: string, existingConfig: any): Promise<void> {
   console.log('\n💬 Step 3: Channels (Optional)\n');
 
-  // Telegram
   const enableTelegram = await confirm({
     message: 'Enable Telegram?',
     default: false,
@@ -161,7 +153,6 @@ async function setupChannels(configPath: string, existingConfig: any): Promise<v
     console.log('✅ Telegram enabled');
   }
 
-  // Summary
   const hasTelegram = existingConfig?.channels?.telegram?.enabled;
   if (hasTelegram) {
     console.log('✅ Telegram already configured');
@@ -221,7 +212,6 @@ I am xopcbot, a lightweight AI assistant.
   }
 }
 
-// Self-register to command registry
 register({
   id: 'onboard',
   name: 'onboard',

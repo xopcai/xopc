@@ -40,11 +40,9 @@ function createAgentCommand(ctx: CLIContext): Command {
       });
 
       if (options.message) {
-        // Single message mode
         const response = await agent.processDirect(options.message);
         console.log('\n🤖:', response);
       } else if (options.interactive) {
-        // Interactive mode
         console.log('🧠 Interactive chat mode (Ctrl+C to exit)\n');
 
         const readline = await import('readline');
@@ -67,7 +65,6 @@ function createAgentCommand(ctx: CLIContext): Command {
         rl.setPrompt('You: ');
         rl.prompt();
       } else {
-        // Show help
         cmd.help();
       }
     });
@@ -75,7 +72,6 @@ function createAgentCommand(ctx: CLIContext): Command {
   return cmd;
 }
 
-// Self-register to command registry
 register({
   id: 'agent',
   name: 'agent',

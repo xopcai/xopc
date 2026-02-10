@@ -19,10 +19,6 @@ import { ModelRegistry } from './registry.js';
 export { PiAI };
 export type { LLMProvider };
 
-// ============================================
-// Provider Implementation (New Architecture)
-// ============================================
-
 export class LLMProviderImpl implements LLMProvider {
 	private model: PiAI.Model<PiAI.Api>;
 	private modelId: string;
@@ -34,7 +30,6 @@ export class LLMProviderImpl implements LLMProvider {
 		this.modelId = modelId;
 		this.registry = new ModelRegistry(config);
 
-		// Parse model ref (provider/modelId format)
 		const model = this.registry.findByRef(modelId);
 
 		if (!model) {
@@ -44,9 +39,6 @@ export class LLMProviderImpl implements LLMProvider {
 		this.model = model;
 	}
 
-	/**
-	 * Get API key for the current model
-	 */
 	private getApiKey(): string | undefined {
 		return getApiKey(this.config, this.model.provider);
 	}
@@ -68,7 +60,6 @@ export class LLMProviderImpl implements LLMProvider {
 				temperature: temperature ?? 0.7,
 			};
 
-			// Add provider-specific options based on API type
 			if (this.model.api === 'anthropic-messages') {
 				options.thinkingEnabled = this.model.reasoning;
 				options.thinkingBudgetTokens = maxTokens ? Math.min(maxTokens, 8192) : 8192;
@@ -88,7 +79,6 @@ export class LLMProviderImpl implements LLMProvider {
 
 			const result = await (PiAI.complete as any)(this.model, context, options);
 
-			// Handle errors
 			if (result.stopReason === 'error' || result.stopReason === 'aborted') {
 				return {
 					content: null,

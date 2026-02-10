@@ -4,10 +4,6 @@
  * Type definitions for LLM providers, models, and registry.
  */
 
-// ============================================
-// Provider Types
-// ============================================
-
 export type ProviderType = 'openai-completions' | 'anthropic-messages' | 'google-generative-ai' | 'bedrock-converse-stream';
 
 export interface ProviderInfo {
@@ -38,10 +34,6 @@ export interface CostInfo {
   cacheWrite: number;
 }
 
-// ============================================
-// Registry Types
-// ============================================
-
 export interface ModelRegistryOptions {
   configPath?: string;
   enableDiscovery?: boolean;
@@ -53,10 +45,6 @@ export interface ModelSearchOptions {
   input?: ('text' | 'image')[];
   minContextWindow?: number;
 }
-
-// ============================================
-// LLM Provider Types
-// ============================================
 
 export interface ChatOptions {
   maxTokens?: number;

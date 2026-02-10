@@ -85,7 +85,6 @@ function createCronCommand(_ctx: CLIContext): Command {
   return cmd;
 }
 
-// Self-register to command registry
 register({
   id: 'cron',
   name: 'cron',

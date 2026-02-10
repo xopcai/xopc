@@ -45,7 +45,6 @@ function createModelsCommand(_ctx: CLIContext): Command {
       console.log('\n🤖 Available Models\n');
       console.log('═'.repeat(60));
 
-      // Show configured providers
       if (configuredProviders.length > 0) {
         console.log('\n📦 Configured Providers\n');
         for (const provider of configuredProviders) {
@@ -54,7 +53,6 @@ function createModelsCommand(_ctx: CLIContext): Command {
         console.log('');
       }
 
-      // Show built-in models
       if (!options.builtin || configuredProviders.length === 0) {
         console.log('\n📚 Built-in Models\n');
         const groups = groupModelsByProvider(builtinModels);
@@ -79,7 +77,6 @@ function createModelsCommand(_ctx: CLIContext): Command {
   return cmd;
 }
 
-// Self-register to command registry
 register({
   id: 'models',
   name: 'models',

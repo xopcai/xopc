@@ -10,14 +10,12 @@ class Gateway {
 
   async start(config: { host: string; port: number }): Promise<void> {
     this.server = http.createServer((req, res) => {
-      // Simple health check endpoint
       if (req.url === '/health' && req.method === 'GET') {
         res.writeHead(200, { 'Content-Type': 'application/json' });
         res.end(JSON.stringify({ status: 'ok', service: 'xopcbot' }));
         return;
       }
 
-      // Default response
       res.writeHead(200, { 'Content-Type': 'application/json' });
       res.end(JSON.stringify({
         status: 'ok',
@@ -90,7 +88,6 @@ function createGatewayCommand(ctx: CLIContext): Command {
   return cmd;
 }
 
-// Self-register to command registry
 register({
   id: 'gateway',
   name: 'gateway',
