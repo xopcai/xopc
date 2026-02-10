@@ -8,6 +8,7 @@ import { loadConfig, saveConfig, DEFAULT_PATHS } from '../config/index.js';
 import { createLogger } from '../utils/logger.js';
 import { CronService, DefaultJobExecutor } from '../cron/index.js';
 import { PluginLoader, normalizePluginConfig } from '../plugins/index.js';
+import { HeartbeatService } from '../heartbeat/index.js';
 import type { Config } from '../config/schema.js';
 import type { JobData } from '../cron/types.js';
 
@@ -51,6 +52,7 @@ export class GatewayService {
   private channelManager: ChannelManager;
   private cronService: CronService;
   private pluginLoader: PluginLoader | null = null;
+  private heartbeatService: HeartbeatService;
   private running = false;
   private configWatcher: FSWatcher | null = null;
   private reloadDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -82,6 +84,9 @@ export class GatewayService {
       DEFAULT_PATHS.cronJobs,
       cronExecutor
     );
+
+    // Initialize heartbeat service
+    this.heartbeatService = new HeartbeatService(this.cronService);
   }
 
   /**
@@ -130,6 +135,12 @@ export class GatewayService {
       await this.cronService.initialize();
     }
 
+    // Start heartbeat service
+    this.heartbeatService.start({
+      intervalMs: 60000, // 1 minute default
+      enabled: true,
+    });
+
     // Start agent service (runs in background)
     this.agentService.start().catch((err) => {
       log.error({ err }, 'Agent service error');
@@ -159,6 +170,9 @@ export class GatewayService {
       clearTimeout(this.reloadDebounce);
       this.reloadDebounce = null;
     }
+
+    // Stop heartbeat service
+    this.heartbeatService.stop();
 
     this.agentService.stop();
     await this.channelManager.stopAll();
