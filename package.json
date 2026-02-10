@@ -8,21 +8,39 @@
   "bin": {
     "xopcbot": "./dist/cli/index.js"
   },
+  "files": [
+    "dist"
+  ],
   "scripts": {
     "build": "tsc",
     "dev": "tsx src/cli/index.ts",
     "start": "node dist/cli/index.js",
     "test": "vitest",
-    "lint": "eslint 'src/**/*.ts' --ignore-pattern '**/examples/**'"
+    "lint": "eslint 'src/**/*.ts' --ignore-pattern '**/examples/**'",
+    "prepublishOnly": "npm run build && npm test"
   },
   "keywords": [
     "ai",
     "agent",
     "chatbot",
-    "personal-assistant"
+    "personal-assistant",
+    "llm",
+    "openai",
+    "claude",
+    "telegram",
+    "whatsapp",
+    "automation"
   ],
-  "author": "xopcbot contributors",
+  "author": "Xu Micjoyce <micjoyce@gmail.com>",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/xopcai/xopcbot.git"
+  },
+  "bugs": {
+    "url": "https://github.com/xopcai/xopcbot/issues"
+  },
+  "homepage": "https://github.com/xopcai/xopcbot#readme",
   "engines": {
     "node": ">=22.0.0"
   },
