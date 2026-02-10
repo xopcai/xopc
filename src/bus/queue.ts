@@ -25,27 +25,33 @@ class MessageBus extends EventEmitter {
 
   async consumeInbound(): Promise<InboundMessage> {
     return new Promise((resolve) => {
-      const check = () => {
-        if (this.inboundQueue.length > 0) {
-          resolve(this.inboundQueue.shift()!);
-        } else {
-          setTimeout(check, 100);
-        }
+      const onInbound = (msg: InboundMessage) => {
+        this.off('inbound', onInbound);
+        resolve(msg);
       };
-      check();
+      
+      this.on('inbound', onInbound);
+      
+      if (this.inboundQueue.length > 0) {
+        this.off('inbound', onInbound);
+        resolve(this.inboundQueue.shift()!);
+      }
     });
   }
 
   async consumeOutbound(): Promise<OutboundMessage> {
     return new Promise((resolve) => {
-      const check = () => {
-        if (this.outboundQueue.length > 0) {
-          resolve(this.outboundQueue.shift()!);
-        } else {
-          setTimeout(check, 100);
-        }
+      const onOutbound = (msg: OutboundMessage) => {
+        this.off('outbound', onOutbound);
+        resolve(msg);
       };
-      check();
+      
+      this.on('outbound', onOutbound);
+      
+      if (this.outboundQueue.length > 0) {
+        this.off('outbound', onOutbound);
+        resolve(this.outboundQueue.shift()!);
+      }
     });
   }
 
