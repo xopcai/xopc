@@ -8,12 +8,11 @@ import {
   existsSync,
   mkdirSync,
   readFileSync,
-  writeFileSync,
   cpSync,
   rmSync,
   readdirSync,
 } from 'fs';
-import { join, basename, isAbsolute, resolve } from 'path';
+import { join, isAbsolute, resolve } from 'path';
 import { tmpdir } from 'os';
 
 export interface InstallOptions {
