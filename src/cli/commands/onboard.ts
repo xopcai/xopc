@@ -31,19 +31,19 @@ function createOnboardCommand(_ctx: CLIContext): Command {
         await setupWorkspace(workspacePath);
       }
 
-      await setupModel(configPath, existingConfig);
+      const updatedConfig = await setupModel(configPath, existingConfig);
 
       if (!options.quick) {
-        await setupChannels(configPath, existingConfig);
+        await setupChannels(configPath, updatedConfig);
       }
 
       console.log('\n' + '═'.repeat(50));
       console.log('\n🎉 Setup Complete!\n');
-      
+
       console.log('📝 Usage:');
       console.log('  xopcbot agent -m "Hello"    # Chat with AI');
       console.log('  xopcbot models list         # List models');
-      
+
       console.log('\n📁 Files:');
       console.log('  Config:', configPath);
       console.log('  Workspace:', workspacePath);
@@ -54,7 +54,7 @@ function createOnboardCommand(_ctx: CLIContext): Command {
 
 async function setupWorkspace(workspacePath: string): Promise<void> {
   console.log('\n📁 Step 1: Workspace\n');
-  
+
   if (!existsSync(workspacePath)) {
     mkdirSync(workspacePath, { recursive: true });
     console.log('✅ Created workspace:', workspacePath);
@@ -65,7 +65,7 @@ async function setupWorkspace(workspacePath: string): Promise<void> {
   createBootstrapFiles(workspacePath);
 }
 
-async function setupModel(configPath: string, existingConfig: any): Promise<void> {
+async function setupModel(configPath: string, existingConfig: any): Promise<any> {
   console.log('\n🤖 Step 2: AI Model\n');
 
   const currentModel = existingConfig?.agents?.defaults?.model;
@@ -77,11 +77,10 @@ async function setupModel(configPath: string, existingConfig: any): Promise<void
     });
     if (keepCurrent) {
       console.log('✅ Keeping:', currentModel);
-      return;
+      return existingConfig;
     }
   }
 
-  // Select provider
   const provider = await select({
     message: 'Select provider:',
     choices: PROVIDER_OPTIONS.map(p => ({
@@ -90,10 +89,9 @@ async function setupModel(configPath: string, existingConfig: any): Promise<void
     })),
   });
 
-  // Check for API key in env
   const providerInfo = PROVIDER_OPTIONS.find(p => p.value === provider)!;
   let apiKey = process.env[`${providerInfo.envKey}`];
-  
+
   if (!apiKey) {
     console.log(`\n🔑 Enter API key for ${providerInfo.name}`);
     apiKey = await password({
@@ -125,9 +123,10 @@ async function setupModel(configPath: string, existingConfig: any): Promise<void
 
   saveConfig(config, configPath);
   console.log('\n✅ Model configured:', model);
+  return config;
 }
 
-async function setupChannels(configPath: string, existingConfig: any): Promise<void> {
+async function setupChannels(configPath: string, config: any): Promise<void> {
   console.log('\n💬 Step 3: Channels (Optional)\n');
 
   const enableTelegram = await confirm({
@@ -141,7 +140,6 @@ async function setupChannels(configPath: string, existingConfig: any): Promise<v
       validate: (v: string) => v.length > 0 || 'Required',
     });
 
-    const config = existingConfig || {};
     config.channels = config.channels || {};
     config.channels.telegram = {
       enabled: true,
@@ -153,7 +151,7 @@ async function setupChannels(configPath: string, existingConfig: any): Promise<v
     console.log('✅ Telegram enabled');
   }
 
-  const hasTelegram = existingConfig?.channels?.telegram?.enabled;
+  const hasTelegram = config?.channels?.telegram?.enabled;
   if (hasTelegram) {
     console.log('✅ Telegram already configured');
   }
