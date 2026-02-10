@@ -14,10 +14,13 @@ _This file guides AI assistants working on the xopcbot codebase._
 ## Code Style Guidelines
 
 ### Comments
-- **All comments must be in English** (both inline comments and JSDoc)
-- Use clear, concise language
-- JSDoc format for public APIs: `/** Description */`
-- Inline comments for complex logic: `// Explanation`
+- **All comments must be in English** when used
+- **Keep comments minimal** - only add when necessary:
+  - Complex logic that isn't self-explanatory
+  - Non-obvious business rules or edge cases
+  - Public API documentation (JSDoc for exported functions)
+- **Avoid obvious comments** - don't state what the code already shows
+- Prefer self-documenting code with clear variable/function names
 
 ### Naming Conventions
 - `camelCase` for variables, functions, methods
