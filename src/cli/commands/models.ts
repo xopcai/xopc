@@ -2,6 +2,7 @@ import { Command } from 'commander';
 import { loadConfig, listBuiltinModels, PROVIDER_NAMES, listConfiguredProviders } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import type { CLIContext } from '../registry.js';
+import { getContextWithOpts } from '../index.js';
 
 function groupModelsByProvider(models: Array<{ id: string; name: string; provider: string }>) {
   const groups: Record<string, Array<{ id: string; name: string }>> = {};
@@ -30,7 +31,8 @@ function createModelsCommand(_ctx: CLIContext): Command {
     .option('--json', 'Output as JSON', false)
     .option('--builtin', 'Show built-in models only', false)
     .action(async (options) => {
-      const config = loadConfig();
+      const ctx = getContextWithOpts();
+      const config = loadConfig(ctx.configPath);
       const builtinModels = listBuiltinModels();
       const configuredProviders = listConfiguredProviders(config);
 

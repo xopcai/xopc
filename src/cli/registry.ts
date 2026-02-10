@@ -9,11 +9,14 @@ export interface CLIContext {
   argv: string[];
 }
 
-export function createDefaultContext(argv: string[] = process.argv): CLIContext {
+export function createDefaultContext(
+  argv: string[] = process.argv,
+  opts?: { config?: string; workspace?: string; verbose?: boolean }
+): CLIContext {
   return {
-    configPath: process.env.XOPCBOT_CONFIG || join(homedir(), '.xopcbot', 'config.json'),
-    workspacePath: process.env.XOPCBOT_WORKSPACE || join(homedir(), '.xopcbot', 'workspace'),
-    isVerbose: argv.includes('--verbose') || argv.includes('-v'),
+    configPath: opts?.config || process.env.XOPCBOT_CONFIG || join(homedir(), '.xopcbot', 'config.json'),
+    workspacePath: opts?.workspace || process.env.XOPCBOT_WORKSPACE || join(homedir(), '.xopcbot', 'workspace'),
+    isVerbose: (opts?.verbose ?? (argv.includes('--verbose') || argv.includes('-v'))),
     argv,
   };
 }
@@ -29,7 +32,7 @@ export interface CommandDefinition {
   id: string;
   name: string;
   description: string;
-  factory: (ctx: CLIContext) => Command;
+  factory: (ctx: CLIContext, getCtx?: () => CLIContext) => Command;
   metadata?: CommandMetadata;
 }
 
@@ -77,7 +80,7 @@ export class CommandRegistry {
     return this.commands.find(c => c.name === name);
   }
 
-  install(program: Command, ctx: CLIContext): void {
+  install(program: Command, ctx: CLIContext, getCtx?: () => CLIContext): void {
     this.initialized = true;
 
     const categoryOrder = { setup: 0, runtime: 1, maintenance: 2, utility: 3 };
@@ -91,7 +94,7 @@ export class CommandRegistry {
       if (def.metadata?.hidden) continue;
 
       try {
-        const cmd = def.factory(ctx);
+        const cmd = def.factory(ctx, getCtx);
         program.addCommand(cmd);
       } catch (error) {
         console.error(`Failed to register command "${def.id}":`, error);

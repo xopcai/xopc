@@ -4,10 +4,11 @@ import { loadConfig } from '../../config/index.js';
 import { MessageBus } from '../../bus/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
+import { getContextWithOpts } from '../index.js';
 
 const log = createLogger('AgentCommand');
 
-function createAgentCommand(ctx: CLIContext): Command {
+function createAgentCommand(_ctx: CLIContext): Command {
   const cmd = new Command('agent')
     .description('Chat with the AI agent')
     .addHelpText(
@@ -21,11 +22,12 @@ function createAgentCommand(ctx: CLIContext): Command {
     .option('-m, --message <text>', 'Single message to send')
     .option('-i, --interactive', 'Interactive chat mode')
     .action(async (options) => {
-      const config = loadConfig();
+      const ctx = getContextWithOpts();
+      const config = loadConfig(ctx.configPath);
       const modelId = config.agents?.defaults?.model;
       const bus = new MessageBus();
 
-      const workspace = config.agents?.defaults?.workspace || process.cwd();
+      const workspace = config.agents?.defaults?.workspace || ctx.workspacePath;
       const braveApiKey = config.tools?.web?.search?.apiKey;
 
       if (ctx.isVerbose) {

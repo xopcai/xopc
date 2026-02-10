@@ -271,9 +271,9 @@ describe('CommandRegistry', () => {
         factory: factorySpy,
       });
 
-      registry.install(program, ctx);
+      registry.install(program, ctx, () => ctx);
 
-      expect(factorySpy).toHaveBeenCalledWith(ctx);
+      expect(factorySpy).toHaveBeenCalledWith(ctx, expect.any(Function));
       expect(ctx.isVerbose).toBe(true);
     });
 

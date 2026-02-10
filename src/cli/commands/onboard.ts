@@ -7,7 +7,7 @@ import { loadConfig, saveConfig, PROVIDER_OPTIONS } from '../../config/index.js'
 import { register, formatExamples } from '../registry.js';
 import type { CLIContext } from '../registry.js';
 
-function createOnboardCommand(_ctx: CLIContext): Command {
+function createOnboardCommand(ctx: CLIContext): Command {
   const cmd = new Command('onboard')
     .description('Interactive setup wizard for xopcbot')
     .addHelpText(
@@ -22,8 +22,8 @@ function createOnboardCommand(_ctx: CLIContext): Command {
       console.log('🧙 xopcbot Setup Wizard\n');
       console.log('═'.repeat(50));
 
-      const workspacePath = join(homedir(), '.xopcbot', 'workspace');
-      const configPath = join(homedir(), '.xopcbot', 'config.json');
+      const workspacePath = ctx.workspacePath;
+      const configPath = ctx.configPath;
 
       const existingConfig = existsSync(configPath) ? loadConfig(configPath) : null;
 
@@ -31,7 +31,7 @@ function createOnboardCommand(_ctx: CLIContext): Command {
         await setupWorkspace(workspacePath);
       }
 
-      const updatedConfig = await setupModel(configPath, existingConfig);
+      const updatedConfig = await setupModel(configPath, existingConfig, ctx);
 
       if (!options.quick) {
         await setupChannels(configPath, updatedConfig);
@@ -65,7 +65,7 @@ async function setupWorkspace(workspacePath: string): Promise<void> {
   createBootstrapFiles(workspacePath);
 }
 
-async function setupModel(configPath: string, existingConfig: any): Promise<any> {
+async function setupModel(configPath: string, existingConfig: any, ctx: CLIContext): Promise<any> {
   console.log('\n🤖 Step 2: AI Model\n');
 
   const currentModel = existingConfig?.agents?.defaults?.model;
@@ -117,7 +117,7 @@ async function setupModel(configPath: string, existingConfig: any): Promise<any>
   config.agents = {
     defaults: {
       model,
-      workspace: join(homedir(), '.xopcbot', 'workspace'),
+      workspace: ctx.workspacePath,
     },
   };
 
