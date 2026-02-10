@@ -21,7 +21,9 @@ function createCronCommand(_ctx: CLIContext): Command {
         const { CronService } = await import('../../cron/index.js');
         
         const cronService = new CronService();
-        const jobs = cronService.listJobs();
+        await cronService.initialize();
+        
+        const jobs = await cronService.listJobs();
         
         if (jobs.length === 0) {
           console.log('No scheduled tasks.');
@@ -35,6 +37,8 @@ function createCronCommand(_ctx: CLIContext): Command {
           console.log(`     Next: ${job.next_run || 'N/A'}`);
           console.log();
         }
+        
+        await cronService.stop();
       })
   );
 
@@ -52,15 +56,18 @@ function createCronCommand(_ctx: CLIContext): Command {
         
         const { CronService } = await import('../../cron/index.js');
         const cronService = new CronService();
+        await cronService.initialize();
         
         const result = await cronService.addJob(
           options.schedule,
           options.message,
-          options.name
+          { name: options.name }
         );
         
         console.log(`✅ Added job ${result.id}`);
         console.log(`   Schedule: ${result.schedule}`);
+        
+        await cronService.stop();
       })
   );
 
@@ -71,8 +78,12 @@ function createCronCommand(_ctx: CLIContext): Command {
       .action(async (id) => {
         const { CronService } = await import('../../cron/index.js');
         const cronService = new CronService();
+        await cronService.initialize();
         
         const success = await cronService.removeJob(id);
+        
+        await cronService.stop();
+        
         if (success) {
           console.log(`✅ Removed job ${id}`);
         } else {

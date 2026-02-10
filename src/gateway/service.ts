@@ -4,9 +4,11 @@ import { dirname } from 'path';
 import { AgentService } from '../agent/index.js';
 import { ChannelManager } from '../channels/manager.js';
 import { MessageBus } from '../bus/index.js';
-import { loadConfig, saveConfig } from '../config/index.js';
+import { loadConfig, saveConfig, DEFAULT_PATHS } from '../config/index.js';
 import { createLogger } from '../utils/logger.js';
+import { CronService, DefaultJobExecutor } from '../cron/index.js';
 import type { Config } from '../config/schema.js';
+import type { JobData } from '../cron/types.js';
 
 const log = createLogger('GatewayService');
 
@@ -15,12 +17,38 @@ export interface GatewayServiceConfig {
   enableHotReload?: boolean;
 }
 
+class MessageJobExecutor extends DefaultJobExecutor {
+  constructor(private channelManager: ChannelManager) {
+    super();
+  }
+
+  protected async performJob(job: JobData, signal: AbortSignal): Promise<void> {
+    // Send the scheduled message through the appropriate channel
+    // Parse channel and chat_id from job message format: "channel:chat_id:message"
+    const parts = job.message.split(':', 3);
+    if (parts.length >= 3) {
+      const [channel, chatId, ...messageParts] = parts;
+      const content = messageParts.join(':');
+      
+      await this.channelManager.send({
+        channel,
+        chat_id: chatId,
+        content,
+      });
+    } else {
+      // Fallback: send as is
+      log.warn({ jobId: job.id }, 'Job message format invalid, expected "channel:chat_id:message"');
+    }
+  }
+}
+
 export class GatewayService {
   private bus: MessageBus;
   private config: Config;
   private configPath: string;
   private agentService: AgentService;
   private channelManager: ChannelManager;
+  private cronService: CronService;
   private running = false;
   private configWatcher: FSWatcher | null = null;
   private reloadDebounce: ReturnType<typeof setTimeout> | null = null;
@@ -28,7 +56,7 @@ export class GatewayService {
 
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
-    this.configPath = serviceConfig.configPath || './config.json';
+    this.configPath = serviceConfig.configPath || DEFAULT_PATHS.config;
     this.config = loadConfig(this.configPath);
 
     // Initialize channel manager
@@ -41,6 +69,13 @@ export class GatewayService {
       braveApiKey: this.config.tools?.web?.search?.apiKey,
       config: this.config,
     });
+
+    // Initialize cron service with custom executor
+    const cronExecutor = new MessageJobExecutor(this.channelManager);
+    this.cronService = new CronService(
+      DEFAULT_PATHS.cronJobs,
+      cronExecutor
+    );
   }
 
   async start(): Promise<void> {
@@ -51,6 +86,11 @@ export class GatewayService {
 
     // Start channels
     await this.channelManager.startAll();
+
+    // Start cron service
+    if (this.config.cron?.enabled !== false) {
+      await this.cronService.initialize();
+    }
 
     // Start agent service (runs in background)
     this.agentService.start().catch((err) => {
@@ -84,6 +124,9 @@ export class GatewayService {
 
     this.agentService.stop();
     await this.channelManager.stopAll();
+    
+    // Stop cron service
+    await this.cronService.stop();
 
     this.running = false;
     log.info('Gateway service stopped');
@@ -277,5 +320,9 @@ export class GatewayService {
 
   get currentConfig(): Config {
     return this.config;
+  }
+
+  get cronServiceInstance(): CronService {
+    return this.cronService;
   }
 }

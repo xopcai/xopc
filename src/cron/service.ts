@@ -1,111 +1,117 @@
+// CronService - Optimized with async I/O, caching, and execution tracking
 import nodeCron from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
 import { v4 as uuidv4 } from 'uuid';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
 import { DEFAULT_PATHS } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
+import { CronPersistence } from './persistence.js';
+import { DefaultJobExecutor } from './executor.js';
+import { AddJobRequestSchema, UpdateJobRequestSchema } from './validation.js';
+import type {
+  JobData,
+  JobExecution,
+  JobExecutor,
+  CronMetrics,
+  CronHealth,
+  AddJobOptions,
+  JobWithNextRun,
+} from './types.js';
 
 const log = createLogger('CronService');
-
-interface JobData {
-  id: string;
-  name?: string;
-  schedule: string;
-  message: string;
-  enabled: boolean;
-  created_at: string;
-}
 
 interface ScheduledTask {
   stop: () => void;
 }
 
-function getJobsPath(): string {
-  return DEFAULT_PATHS.cronJobs;
-}
-
-function ensureJobsFile(): void {
-  const path = getJobsPath();
-  if (!existsSync(dirname(path))) {
-    mkdirSync(dirname(path), { recursive: true });
-  }
-  if (!existsSync(path)) {
-    writeFileSync(path, JSON.stringify({ jobs: [] }, null, 2));
-  }
-}
-
-function loadJobs(): { jobs: JobData[] } {
-  ensureJobsFile();
-  try {
-    const content = readFileSync(getJobsPath(), 'utf-8');
-    return JSON.parse(content);
-  } catch {
-    return { jobs: [] };
-  }
-}
-
-function saveJobs(data: { jobs: JobData[] }): void {
-  ensureJobsFile();
-  writeFileSync(getJobsPath(), JSON.stringify(data, null, 2));
-}
-
 export class CronService {
+  private persistence: CronPersistence;
+  private executor: JobExecutor;
   private tasks: Map<string, ScheduledTask> = new Map();
+  private initialized = false;
 
+  constructor(
+    filePath: string = DEFAULT_PATHS.cronJobs,
+    executor?: JobExecutor
+  ) {
+    this.persistence = new CronPersistence(filePath);
+    this.executor = executor || new DefaultJobExecutor();
+  }
+
+  /**
+   * Initialize the service and load all jobs
+   */
+  async initialize(): Promise<void> {
+    if (this.initialized) return;
+
+    await this.persistence.initialize();
+    await this.loadAllJobs();
+    
+    this.initialized = true;
+    log.info('CronService initialized');
+  }
+
+  /**
+   * Add a new job
+   */
   async addJob(
     schedule: string,
     message: string,
-    name?: string
+    options?: AddJobOptions
   ): Promise<{ id: string; schedule: string }> {
-    // Validate cron expression
-    if (!nodeCron.validate(schedule)) {
-      throw new Error(`Invalid cron expression: ${schedule}`);
+    // Validate input
+    const validation = AddJobRequestSchema.safeParse({
+      schedule,
+      message,
+      ...options,
+    });
+
+    if (!validation.success) {
+      throw new Error(`Validation failed: ${validation.error.errors.map((e) => e.message).join(', ')}`);
     }
 
     const id = uuidv4().slice(0, 8);
+    const now = new Date().toISOString();
+    
     const job: JobData = {
       id,
-      name,
+      name: options?.name,
       schedule,
       message,
       enabled: true,
-      created_at: new Date().toISOString(),
+      timezone: options?.timezone,
+      maxRetries: options?.maxRetries ?? 3,
+      timeout: options?.timeout ?? 60000,
+      created_at: now,
+      updated_at: now,
     };
 
-    // Save to file
-    const data = loadJobs();
-    data.jobs.push(job);
-    saveJobs(data);
+    // Save to persistence
+    await this.persistence.addJob(job);
 
     // Schedule the job
-    this.scheduleJob(id, schedule, message);
+    this.scheduleJob(job);
 
+    log.info({ jobId: id, name: options?.name }, 'Job added');
     return { id, schedule };
   }
 
-  private scheduleJob(id: string, schedule: string, message: string): void {
-    // Cancel existing if any
-    this.cancelJob(id);
+  /**
+   * List all jobs with next run time
+   */
+  async listJobs(): Promise<JobWithNextRun[]> {
+    const jobs = await this.persistence.getJobs();
 
-    const task = nodeCron.schedule(schedule, () => {
-      log.info({ jobId: id, message }, `Job triggered`);
-      // The actual message sending is handled by the gateway
-    });
-
-    this.tasks.set(id, task);
-  }
-
-  listJobs(): Array<Omit<JobData, 'created_at'> & { enabled: boolean; next_run?: string }> {
-    const data = loadJobs();
-    
-    return data.jobs.map(job => {
+    return jobs.map((job) => {
       let nextRun: string | undefined;
-      try {
-        const interval = CronExpressionParser.parse(job.schedule);
-        nextRun = interval.next().toISOString();
-      } catch {
-        // Invalid cron expression
+      
+      if (job.enabled) {
+        try {
+          const options = job.timezone ? { tz: job.timezone } : undefined;
+          const interval = CronExpressionParser.parse(job.schedule, options);
+          nextRun = interval.next().toISOString();
+        } catch (err) {
+          log.debug({ jobId: job.id, err }, 'Failed to parse cron for next run');
+        }
       }
 
       return {
@@ -114,77 +120,279 @@ export class CronService {
         schedule: job.schedule,
         message: job.message,
         enabled: job.enabled,
+        timezone: job.timezone,
+        maxRetries: job.maxRetries,
+        timeout: job.timeout,
         next_run: nextRun,
       };
     });
   }
 
-  getJob(id: string): JobData | null {
-    const data = loadJobs();
-    return data.jobs.find(j => j.id === id) || null;
+  /**
+   * Get a single job
+   */
+  async getJob(id: string): Promise<JobData | null> {
+    return this.persistence.getJob(id);
   }
 
-  async removeJob(id: string): Promise<boolean> {
-    // Cancel task
-    this.cancelJob(id);
-
-    // Remove from file
-    const data = loadJobs();
-    const index = data.jobs.findIndex(j => j.id === id);
-    if (index === -1) return false;
-
-    data.jobs.splice(index, 1);
-    saveJobs(data);
-
-    return true;
-  }
-
-  async toggleJob(id: string, enabled: boolean): Promise<boolean> {
-    const data = loadJobs();
-    const job = data.jobs.find(j => j.id === id);
-    if (!job) return false;
-
-    job.enabled = enabled;
-    saveJobs(data);
-
-    if (enabled) {
-      this.scheduleJob(id, job.schedule, job.message);
-    } else {
-      this.cancelJob(id);
+  /**
+   * Update a job
+   */
+  async updateJob(id: string, updates: Partial<Omit<JobData, 'id' | 'created_at' | 'updated_at'>>): Promise<boolean> {
+    // Validate updates
+    const validation = UpdateJobRequestSchema.safeParse(updates);
+    if (!validation.success) {
+      throw new Error(`Validation failed: ${validation.error.errors.map((e) => e.message).join(', ')}`);
     }
 
+    const job = await this.persistence.getJob(id);
+    if (!job) return false;
+
+    // Cancel existing task if schedule changes
+    if (updates.schedule && updates.schedule !== job.schedule) {
+      this.cancelTask(id);
+    }
+
+    // Update persistence
+    await this.persistence.updateJob(id, updates);
+
+    // Re-schedule if needed
+    const updated = await this.persistence.getJob(id);
+    if (updated && updated.enabled) {
+      this.scheduleJob(updated);
+    }
+
+    log.info({ jobId: id }, 'Job updated');
     return true;
   }
 
-  private cancelJob(id: string): void {
+  /**
+   * Remove a job
+   */
+  async removeJob(id: string): Promise<boolean> {
+    // Cancel task
+    this.cancelTask(id);
+
+    // Remove from persistence
+    const removed = await this.persistence.removeJob(id);
+    
+    if (removed) {
+      log.info({ jobId: id }, 'Job removed');
+    }
+    
+    return removed;
+  }
+
+  /**
+   * Toggle job enabled state
+   */
+  async toggleJob(id: string, enabled: boolean): Promise<boolean> {
+    const job = await this.persistence.getJob(id);
+    if (!job) return false;
+
+    await this.persistence.updateJob(id, { enabled });
+
+    if (enabled) {
+      const updated = await this.persistence.getJob(id);
+      if (updated) this.scheduleJob(updated);
+    } else {
+      this.cancelTask(id);
+    }
+
+    log.info({ jobId: id, enabled }, 'Job toggled');
+    return true;
+  }
+
+  /**
+   * Get execution history for a job
+   */
+  getJobHistory(jobId: string, limit?: number): JobExecution[] {
+    if (this.executor instanceof DefaultJobExecutor) {
+      return this.executor.getHistory(jobId, limit);
+    }
+    return [];
+  }
+
+  /**
+   * Get service metrics
+   */
+  async getMetrics(): Promise<CronMetrics> {
+    const jobs = await this.persistence.getJobs();
+    const enabled = jobs.filter((j) => j.enabled);
+
+    let nextScheduledJob: CronMetrics['nextScheduledJob'] | undefined;
+    
+    for (const job of enabled) {
+      try {
+        const options = job.timezone ? { tz: job.timezone } : undefined;
+        const interval = CronExpressionParser.parse(job.schedule, options);
+        const next = interval.next();
+        
+        if (!nextScheduledJob || next.getTime() < nextScheduledJob.runAt.getTime()) {
+          nextScheduledJob = {
+            id: job.id,
+            name: job.name,
+            runAt: next.toDate(),
+          };
+        }
+      } catch {
+        // Skip invalid schedules
+      }
+    }
+
+    return {
+      totalJobs: jobs.length,
+      runningJobs: this.tasks.size,
+      enabledJobs: enabled.length,
+      failedLastHour: 0, // TODO: track from executor
+      avgExecutionTime: 0, // TODO: track from executor
+      nextScheduledJob,
+    };
+  }
+
+  /**
+   * Health check
+   */
+  async healthCheck(): Promise<CronHealth> {
+    const issues: string[] = [];
+
+    // Check if initialized
+    if (!this.initialized) {
+      issues.push('Service not initialized');
+    }
+
+    // Check for jobs with invalid schedules
+    const jobs = await this.persistence.getJobs();
+    for (const job of jobs) {
+      if (!nodeCron.validate(job.schedule)) {
+        issues.push(`Job ${job.id} has invalid schedule`);
+      }
+    }
+
+    // Determine status
+    let status: CronHealth['status'] = 'healthy';
+    if (issues.length > 0) {
+      status = issues.length > 5 ? 'unhealthy' : 'degraded';
+    }
+
+    return { status, issues };
+  }
+
+  /**
+   * Run a job immediately (manual trigger)
+   */
+  async runJobNow(id: string): Promise<void> {
+    const job = await this.persistence.getJob(id);
+    if (!job) throw new Error(`Job not found: ${id}`);
+    if (!job.enabled) throw new Error(`Job is disabled: ${id}`);
+
+    await this.executeJob(job);
+  }
+
+  /**
+   * Stop all jobs and cleanup
+   */
+  async stop(options?: { waitForRunning?: boolean; timeout?: number }): Promise<void> {
+    const timeout = options?.timeout ?? 30000;
+
+    // Cancel all scheduled tasks
+    for (const [id, task] of this.tasks) {
+      task.stop();
+      
+      // Cancel running executions
+      if (this.executor instanceof DefaultJobExecutor) {
+        this.executor.cancelJob(id);
+      }
+    }
+    this.tasks.clear();
+
+    // Wait for running jobs if requested
+    if (options?.waitForRunning && this.executor instanceof DefaultJobExecutor) {
+      const start = Date.now();
+      while (Date.now() - start < timeout) {
+        const running = this.executor.getRunningExecutions();
+        if (running.length === 0) break;
+        await new Promise((r) => setTimeout(r, 100));
+      }
+    }
+
+    // Flush any pending writes
+    await this.persistence.flush();
+
+    log.info('CronService stopped');
+  }
+
+  /**
+   * Load and schedule all enabled jobs
+   */
+  private async loadAllJobs(): Promise<void> {
+    const jobs = await this.persistence.getJobs();
+
+    for (const job of jobs) {
+      if (job.enabled) {
+        this.scheduleJob(job);
+      }
+    }
+
+    log.info({ count: this.tasks.size }, 'Jobs loaded');
+  }
+
+  /**
+   * Schedule a job with node-cron
+   */
+  private scheduleJob(job: JobData): void {
+    // Cancel existing if any
+    this.cancelTask(job.id);
+
+    // Validate schedule
+    if (!nodeCron.validate(job.schedule)) {
+      log.error({ jobId: job.id, schedule: job.schedule }, 'Invalid cron expression');
+      return;
+    }
+
+    const options = job.timezone ? { timezone: job.timezone } : undefined;
+    
+    const task = nodeCron.schedule(
+      job.schedule,
+      async () => {
+        await this.executeJob(job);
+      },
+      options
+    );
+
+    this.tasks.set(job.id, task);
+    log.debug({ jobId: job.id, schedule: job.schedule }, 'Job scheduled');
+  }
+
+  /**
+   * Execute a job with retry logic
+   */
+  private async executeJob(job: JobData): Promise<void> {
+    // Prevent overlapping executions
+    if (this.executor instanceof DefaultJobExecutor && this.executor.isRunning(job.id)) {
+      log.warn({ jobId: job.id }, 'Job already running, skipping');
+      return;
+    }
+
+    const controller = new AbortController();
+    
+    try {
+      await this.executor.execute(job, controller.signal);
+    } catch (error) {
+      log.error({ jobId: job.id, err: error }, 'Job execution failed');
+      // Retry logic is handled by the executor
+    }
+  }
+
+  /**
+   * Cancel a scheduled task
+   */
+  private cancelTask(id: string): void {
     const task = this.tasks.get(id);
     if (task) {
       task.stop();
       this.tasks.delete(id);
+      log.debug({ jobId: id }, 'Task cancelled');
     }
-  }
-
-  loadAllJobs(): void {
-    const data = loadJobs();
-    
-    for (const job of data.jobs) {
-      if (job.enabled) {
-        this.scheduleJob(job.id, job.schedule, job.message);
-      }
-    }
-
-    log.info({ count: this.tasks.size }, `Loaded jobs`);
-  }
-
-  stopAll(): void {
-    for (const task of this.tasks.values()) {
-      task.stop();
-    }
-    this.tasks.clear();
-    log.info(`Stopped all jobs`);
-  }
-
-  getRunningCount(): number {
-    return this.tasks.size;
   }
 }

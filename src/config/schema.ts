@@ -118,6 +118,14 @@ export const GatewayConfigSchema = z.object({
   port: z.number().default(18790),
 });
 
+export const CronConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  maxConcurrentJobs: z.number().default(5),
+  defaultTimezone: z.string().default('UTC'),
+  historyRetentionDays: z.number().default(7),
+  enableMetrics: z.boolean().default(true),
+});
+
 // ============================================
 // Root Config
 // ============================================
@@ -128,6 +136,7 @@ export const ConfigSchema = z.object({
   providers: ProvidersConfigSchema.default({}),
   gateway: GatewayConfigSchema.default({}),
   tools: ToolsConfigSchema.default({}),
+  cron: CronConfigSchema.default({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
