@@ -3,6 +3,7 @@ import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mari
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { MessageBus, InboundMessage, OutboundMessage } from '../bus/index.js';
 import type { Config } from '../config/schema.js';
+import { getApiKey as getConfigApiKey } from '../config/schema.js';
 import { MemoryStore } from './memory/store.js';
 import {
   readFileTool,
@@ -80,6 +81,13 @@ export class AgentService {
         model,
         tools,
         messages: [],
+      },
+      // Resolve API key from config for each provider
+      getApiKey: (provider: string) => {
+        if (config.config) {
+          return getConfigApiKey(config.config, provider) ?? undefined;
+        }
+        return undefined;
       },
     });
 
