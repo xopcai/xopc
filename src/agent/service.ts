@@ -1,10 +1,12 @@
 // AgentService - Main agent implementation using @mariozechner/pi-agent-core
+import crypto from 'crypto';
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { MessageBus, InboundMessage } from '../bus/index.js';
 import type { Config } from '../config/schema.js';
 import { getApiKey as getConfigApiKey } from '../config/schema.js';
-import { MemoryStore } from './memory/store.js';
+import { MemoryStore, type CompactionResult } from './memory/store.js';
+import { buildSummaryPrompt, estimateTokens } from './memory/compaction.js';
 import {
   readFileTool,
   writeFileTool,
@@ -39,7 +41,11 @@ export class AgentService {
   private pendingOutbound: string[] = [];
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
-    this.memory = new MemoryStore(config.workspace);
+    // Get compaction/pruning config from agent defaults
+    const compactionConfig = config.config?.agents?.defaults?.compaction;
+    const pruningConfig = config.config?.agents?.defaults?.pruning;
+
+    this.memory = new MemoryStore(config.workspace, compactionConfig, pruningConfig);
 
     // Initialize agent with tools
     const tools: AgentTool<any, any>[] = [
@@ -142,6 +148,9 @@ export class AgentService {
     const sessionKey = `${msg.channel}:${msg.chat_id}`;
     log.info({ channel: msg.channel, senderId: msg.sender_id }, 'Processing message');
 
+    // Check and apply compaction if needed
+    await this.checkAndCompact(sessionKey);
+
     // Load session history
     const history = await this.memory.load(sessionKey);
     this.agent.replaceMessages(history);
@@ -184,6 +193,9 @@ export class AgentService {
 
     const sessionKey = `${originChannel}:${originChatId}`;
 
+    // Check and apply compaction if needed
+    await this.checkAndCompact(sessionKey);
+
     // Load session
     const history = await this.memory.load(sessionKey);
     this.agent.replaceMessages(history);
@@ -210,6 +222,128 @@ export class AgentService {
 
     // Save session
     await this.memory.save(sessionKey, this.agent.state.messages);
+  }
+
+  /**
+   * Check if session needs compaction and apply if needed
+   */
+  private async checkAndCompact(sessionKey: string): Promise<void> {
+    const compactionConfig = this.config.config?.agents?.defaults?.compaction;
+    if (!compactionConfig?.enabled) return;
+
+    const contextWindow = this.getContextWindow();
+    const prep = await this.memory.prepareCompaction(sessionKey, contextWindow);
+
+    if (!prep.needsCompaction) return;
+
+    log.info({ sessionKey, tokenCount: estimateTokens(prep.messages) }, 'Session needs compaction');
+
+    try {
+      // Generate summary using the agent itself
+      const summary = await this.generateSummary(prep.messages);
+
+      const result: CompactionResult = {
+        summary,
+        firstKeptIndex: Math.max(0, prep.messages.length - compactionConfig.keepRecentMessages),
+        tokensBefore: estimateTokens(prep.messages),
+        tokensAfter: 0, // Will be calculated after apply
+        compacted: true,
+      };
+
+      // Calculate tokens after
+      const keptMessages = prep.messages.slice(result.firstKeptIndex);
+      const summaryMessage: AgentMessage = {
+        role: 'user',
+        content: [{ type: 'text', text: `[Previous conversation summary]: ${summary}` }],
+        timestamp: Date.now(),
+      };
+      result.tokensAfter = estimateTokens([summaryMessage, ...keptMessages]);
+
+      await this.memory.applyCompaction(sessionKey, result);
+    } catch (error) {
+      log.error({ err: error, sessionKey }, 'Failed to compact session');
+      
+      // Fallback: emergency trim
+      await this.memory.emergencyTrim(sessionKey, 20);
+    }
+  }
+
+  /**
+   * Generate summary of conversation using LLM
+   */
+  private async generateSummary(messages: AgentMessage[]): Promise<string> {
+    // Build summary prompt
+    const userMessages = messages
+      .filter(m => m.role === 'user')
+      .slice(-5)
+      .map(m => typeof m.content === 'string' ? m.content : '...')
+      .join('; ');
+    
+    const assistantMessages = messages
+      .filter(m => m.role === 'assistant')
+      .slice(-3)
+      .map(m => typeof m.content === 'string' 
+        ? (m.content as string).slice(0, 100) 
+        : '...')
+      .join('; ');
+
+    return `Recent user topics: ${userMessages.slice(0, 200)}... ` +
+           `Assistant responses covered: ${assistantMessages.slice(0, 200)}...`;
+  }
+
+  /**
+   * Get model context window
+   */
+  private getContextWindow(): number {
+    // Get from config or use default
+    return this.config.config?.agents?.defaults?.maxTokens 
+      ? this.config.config.agents.defaults.maxTokens * 4  // Rough estimate
+      : 128000;  // Default to 128k
+  }
+
+  /**
+   * Manual compaction - can be triggered by user command
+   */
+  async compactSession(sessionKey: string, instructions?: string): Promise<CompactionResult | null> {
+    const contextWindow = this.getContextWindow();
+    const prep = await this.memory.prepareCompaction(sessionKey, contextWindow);
+
+    if (!prep.needsCompaction && !instructions) {
+      log.info({ sessionKey }, 'Session does not need compaction');
+      return null;
+    }
+
+    const summary = await this.generateSummary(prep.messages);
+    const compactionConfig = this.config.config?.agents?.defaults?.compaction;
+
+    const result: CompactionResult = {
+      summary,
+      firstKeptIndex: Math.max(0, prep.messages.length - (compactionConfig?.keepRecentMessages || 5)),
+      tokensBefore: estimateTokens(prep.messages),
+      tokensAfter: 0,
+      compacted: true,
+    };
+
+    const keptMessages = prep.messages.slice(result.firstKeptIndex);
+    const summaryMessage: AgentMessage = {
+      role: 'user',
+      content: [{ type: 'text', text: `[Previous conversation summary]: ${summary}` }],
+      timestamp: Date.now(),
+    };
+    result.tokensAfter = estimateTokens([summaryMessage, ...keptMessages]);
+
+    await this.memory.applyCompaction(sessionKey, result);
+    return result;
+  }
+
+  /**
+   * Get compaction stats for a session
+   */
+  getSessionStats(sessionKey: string) {
+    return {
+      compactionStats: this.memory.getCompactionStats(sessionKey),
+      tokenEstimate: this.memory.estimateTokenUsage(sessionKey),
+    };
   }
 
   private handleEvent(event: AgentEvent): void {
@@ -272,8 +406,8 @@ export class AgentService {
   }
 
   private extractTextContent(
-    content: Array<{ type: string; text?: string }
-  >): string {
+    content: Array<{ type: string; text?: string }>
+  ): string {
     return content
       .filter((c) => c.type === 'text')
       .map((c) => c.text || '')

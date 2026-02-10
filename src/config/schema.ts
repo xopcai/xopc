@@ -59,6 +59,20 @@ export const AgentDefaultsSchema = z.object({
   maxTokens: z.number().default(8192),
   temperature: z.number().default(0.7),
   maxToolIterations: z.number().default(20),
+  compaction: z.object({
+    enabled: z.boolean().default(true),
+    mode: z.enum(['default', 'safeguard']).default('default'),
+    reserveTokens: z.number().default(8000),
+    triggerThreshold: z.number().min(0.5).max(0.95).default(0.8),
+    minMessagesBeforeCompact: z.number().default(10),
+    keepRecentMessages: z.number().default(5),
+  }).default({}),
+  pruning: z.object({
+    enabled: z.boolean().default(true),
+    maxToolResultChars: z.number().default(10000),
+    headKeepRatio: z.number().default(0.3),
+    tailKeepRatio: z.number().default(0.3),
+  }).default({}),
 });
 
 export const AgentsConfigSchema = z.object({
