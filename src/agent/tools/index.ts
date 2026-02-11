@@ -7,6 +7,9 @@ export {
   createShellTool,
 } from './filesystem.js';
 
+export { grepTool } from './grep.js';
+export { findTool } from './find.js';
+
 export { createWebSearchTool, webFetchTool } from './web.js';
 
 export {
