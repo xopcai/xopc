@@ -175,7 +175,7 @@ function loadSkillsFromDir(skillsDir: string, origin: SkillDefinition['origin'])
 export function loadSkills(options: SkillLoaderOptions = {}): AgentTool<any, any>[] {
   const discovered = new Map<string, SkillDefinition>();
   
-  const builtinDir = options.builtinDir || join(import.meta.dirname || '', '../skills');
+  const builtinDir = options.builtinDir || join(import.meta.dirname || '', '../../skills');
   const workspaceDir = options.workspaceDir;
 
   // Priority 1: Global skills
@@ -219,7 +219,7 @@ export function loadSkills(options: SkillLoaderOptions = {}): AgentTool<any, any
  * Get skill metadata for display
  */
 export function listSkills(options: SkillLoaderOptions = {}): Array<{ name: string; description: string; origin: string }> {
-  const builtinDir = options.builtinDir || join(import.meta.dirname || '', '../skills');
+  const builtinDir = options.builtinDir || join(import.meta.dirname || '', '../../skills');
   const workspaceDir = options.workspaceDir;
 
   // Collect from all sources
