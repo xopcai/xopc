@@ -30,6 +30,7 @@ import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
 import { PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
 import { PromptBuilder } from './prompt/index.js';
+import type { PromptSection } from './prompt/index.js';
 
 const log = createLogger('AgentService');
 

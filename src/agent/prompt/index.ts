@@ -39,8 +39,16 @@ export interface PromptSection {
 
 export function buildIdentitySection(name: string, emoji: string): PromptSection {
   return {
-    content: `You are ${name}, running inside xopcbot.`,
+    content: `You are ${name} ${emoji}, running inside xopcbot.`,
     priority: 0,
+  };
+}
+
+export function buildVersionSection(version: string = '1.0.0'): PromptSection {
+  return {
+    header: '## Version',
+    content: `xopcbot v${version}`,
+    priority: 1,
   };
 }
 
@@ -57,22 +65,35 @@ export function buildToolSection(availableTools: string[]): PromptSection {
       '',
       toolsList,
       '',
-      'TOOLS.md does not control tool availability; it is user guidance for how to use external tools.',
       'If a task is more complex or takes longer, spawn a sub-agent.',
     ].join('\n'),
     priority: 10,
   };
 }
 
-export function buildToolCallStyleSection(): PromptSection {
-  return {
-    header: '## Tool Call Style',
-    content: [
+export function buildToolCallStyleSection(style: 'verbose' | 'brief' | 'minimal' = 'brief'): PromptSection {
+  const content = {
+    verbose: [
+      '## Tool Call Style',
+      'Always narrate your tool calls to help the user understand your process.',
+      'Explain what you are doing before and after each tool call.',
+      'Provide context for complex operations.',
+    ].join('\n'),
+    brief: [
+      '## Tool Call Style',
       'Default: do not narrate routine, low-risk tool calls (just call the tool).',
       'Narrate only when it helps: multi-step work, complex problems, or when the user asks.',
       'Keep narration brief and value-dense.',
-      'Use plain human language unless in a technical context.',
     ].join('\n'),
+    minimal: [
+      '## Tool Call Style',
+      'Call tools as needed without narration.',
+    ].join('\n'),
+  };
+
+  return {
+    header: '## Tool Call Style',
+    content: content[style],
     priority: 15,
   };
 }
@@ -124,10 +145,10 @@ export function buildWorkspaceSection(workspaceDir: string, notes: string[] = []
   };
 }
 
-export function buildSkillsSection(hasSkills: boolean = false): PromptSection {
+export function buildSkillsSection(hasSkills: boolean = false, skillsCount: number = 0): PromptSection {
   if (!hasSkills) {
     return {
-      content: 'Skills system available but no custom skills installed.',
+      content: 'Skills system available.',
       priority: 50,
     };
   }
@@ -136,11 +157,27 @@ export function buildSkillsSection(hasSkills: boolean = false): PromptSection {
     header: '## Skills',
     content: [
       'Skills are modular packages that extend your capabilities.',
+      `Currently loaded: ${skillsCount} skill(s).`,
       'Use skills when the user needs specialized functionality.',
       'Skills are loaded from: `skills/` directory.',
-      'To discover new skills, ask the user or browse https://skills.sh/',
     ].join('\n'),
     priority: 50,
+  };
+}
+
+export function buildSubagentSection(): PromptSection {
+  return {
+    header: '## Subagents',
+    content: [
+      'For complex/long-running tasks, spawn a sub-agent session.',
+      'Sub-agents work independently and ping you when done.',
+      'Available sub-agent tools:',
+      '- sessions_spawn: Create a new isolated session',
+      '- sessions_send: Send message to another session',
+      '- sessions_list: List all active sessions',
+      '- sessions_history: Fetch session history',
+    ].join('\n'),
+    priority: 55,
   };
 }
 
@@ -156,6 +193,19 @@ export function buildMessagingSection(channels: string[] = []): PromptSection {
       'Never use exec/curl for provider messaging.',
     ].join('\n'),
     priority: 60,
+  };
+}
+
+export function buildReplyTagsSection(): PromptSection {
+  return {
+    header: '## Reply Tags',
+    content: [
+      'Use reply tags for quoted responses on supported surfaces:',
+      '- `[[reply_to_current]]` - reply to triggering message',
+      '- `[[reply_to:<id>]]` - reply to specific message',
+      'Tags are stripped before sending.',
+    ].join('\n'),
+    priority: 65,
   };
 }
 
@@ -177,6 +227,7 @@ export function buildHeartbeatSection(enabled: boolean, prompt?: string): Prompt
 }
 
 export function buildRuntimeSection(runtime: {
+  version?: string;
   os?: string;
   node?: string;
   model?: string;
@@ -185,6 +236,7 @@ export function buildRuntimeSection(runtime: {
 }): PromptSection {
   const parts: string[] = [];
   
+  if (runtime.version) parts.push(`v${runtime.version}`);
   if (runtime.os) parts.push(`os=${runtime.os}`);
   if (runtime.node) parts.push(`node=${runtime.node}`);
   if (runtime.model) parts.push(`model=${runtime.model}`);
@@ -193,37 +245,8 @@ export function buildRuntimeSection(runtime: {
 
   return {
     header: '## Runtime',
-    content: `Runtime: ${parts.join(' | ')}`,
+    content: `xopcbot ${parts.join(' | ')}`,
     priority: 80,
-  };
-}
-
-export function buildSubagentSection(): PromptSection {
-  return {
-    header: '## Subagents',
-    content: [
-      'For complex/long-running tasks, spawn a sub-agent session.',
-      'Sub-agents work independently and ping you when done.',
-      'Available sub-agent tools:',
-      '- sessions_spawn: Create a new isolated session',
-      '- sessions_send: Send message to another session',
-      '- sessions_list: List all active sessions',
-      '- sessions_history: Fetch session history',
-    ].join('\n'),
-    priority: 55,
-  };
-}
-
-export function buildReplyTagsSection(): PromptSection {
-  return {
-    header: '## Reply Tags',
-    content: [
-      'Use reply tags for quoted responses on supported surfaces:',
-      '- `[[reply_to_current]]` - reply to triggering message',
-      '- `[[reply_to:<id>]]` - reply to specific message',
-      'Tags are stripped before sending.',
-    ].join('\n'),
-    priority: 65,
   };
 }
 
@@ -244,10 +267,6 @@ export class PromptBuilder {
   build(): string {
     const lines: string[] = [];
 
-    // Build identity first
-    const identity = buildIdentitySection('Cipher', '🎯');
-    lines.push(identity.content, '');
-
     // Sort sections by priority and build
     const sortedSections = Array.from(this.sections.values())
       .sort((a, b) => a.priority - b.priority);
@@ -263,24 +282,52 @@ export class PromptBuilder {
     return lines.filter(Boolean).join('\n');
   }
 
-  static createFullPrompt(config: Omit<PromptConfig, 'mode'>): string {
+  static createFullPrompt(
+    config: Omit<PromptConfig, 'mode'>,
+    options: {
+      identity?: { name: string; emoji: string };
+      version?: string;
+      tools?: string[];
+      channels?: string[];
+      skills?: { enabled: boolean; count: number };
+    } = {}
+  ): string {
     const builder = new PromptBuilder({ ...config, mode: 'full' });
     
+    // Identity
+    const identity = options.identity || { name: 'Cipher', emoji: '🎯' };
+    builder.addSection(buildIdentitySection(identity.name, identity.emoji));
+
+    // Version
+    if (options.version) {
+      builder.addSection(buildVersionSection(options.version));
+    }
+
     return builder
-      .addSection(buildToolCallStyleSection())
+      .addSection(buildToolCallStyleSection('brief'))
       .addSection(buildSafetySection())
       .addSection(buildMemorySection())
       .addSection(buildWorkspaceSection(config.workspaceDir, config.workspaceNotes))
-      .addSection(buildSkillsSection())
+      .addSection(buildSkillsSection(options.skills?.enabled ?? false, options.skills?.count ?? 0))
       .addSection(buildSubagentSection())
-      .addSection(buildMessagingSection())
+      .addSection(buildMessagingSection(options.channels || []))
       .addSection(buildReplyTagsSection())
       .addSection(buildHeartbeatSection(config.heartbeatEnabled ?? true, config.heartbeatPrompt))
+      .addSection(buildRuntimeSection({ 
+        version: options.version,
+        thinking: 'off',
+      }))
       .build();
   }
 
-  static createMinimalPrompt(config: Omit<PromptConfig, 'mode'>): string {
+  static createMinimalPrompt(
+    config: Omit<PromptConfig, 'mode'>,
+    options: { identity?: { name: string; emoji: string } } = {}
+  ): string {
     const builder = new PromptBuilder({ ...config, mode: 'minimal' });
+    
+    const identity = options.identity || { name: 'Cipher', emoji: '🎯' };
+    builder.addSection(buildIdentitySection(identity.name, identity.emoji));
     
     return builder
       .addSection(buildSafetySection())
@@ -288,23 +335,36 @@ export class PromptBuilder {
       .build();
   }
 
-  static createSubagentPrompt(task: string, workspaceDir: string): string {
-    const builder = new PromptBuilder({ 
-      mode: 'subagent', 
-      workspaceDir,
-      heartbeatEnabled: false,
+  static createSubagentPrompt(
+    task: string,
+    workspaceDir: string,
+    options: {
+      identity?: { name: string; emoji: string };
+      version?: string;
+    } = {}
+  ): string {
+    const builder = new PromptBuilder({ mode: 'subagent', workspaceDir });
+    
+    const identity = options.identity || { name: 'Cipher', emoji: '🎯' };
+    builder.addSection(buildIdentitySection(identity.name, identity.emoji));
+    
+    builder.addSection({
+      header: '## Task',
+      content: task,
+      priority: 5,
     });
     
     return builder
-      .addSection(buildToolCallStyleSection())
+      .addSection(buildToolCallStyleSection('minimal'))
       .addSection(buildSafetySection())
-      .addSection({
-        header: '## Task',
-        content: task,
-        priority: 5,
-      })
       .addSection(buildMemorySection())
       .addSection(buildWorkspaceSection(workspaceDir))
+      .addSection(buildSubagentSection())
       .build();
+  }
+
+  static createNonePrompt(options: { identity?: { name: string; emoji: string } } = {}): string {
+    const identity = options.identity || { name: 'Cipher', emoji: '🎯' };
+    return `You are ${identity.name} ${identity.emoji}, running inside xopcbot.`;
   }
 }
