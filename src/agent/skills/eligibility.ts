@@ -54,7 +54,9 @@ export function checkEligibility(
   skill: Skill,
   context: EligibilityContext = createDefaultEligibilityContext()
 ): EligibilityResult {
-  const requires = skill.metadata?.requires;
+  // Check xopcbot-metadata for requirements (deprecated but still used)
+  const xopcbotMeta = skill.frontmatter['xopcbot-metadata'] as { requires?: { bins?: string[]; env?: string[] } } | undefined;
+  const requires = xopcbotMeta?.requires;
 
   if (!requires) {
     return { eligible: true };
