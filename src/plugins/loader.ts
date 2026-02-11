@@ -348,14 +348,26 @@ export class PluginLoader {
         return this.pluginInstances.get(config.id)!;
       }
 
-      // Resolve plugin path to absolute path
-      const pluginPath = isAbsolute(config.path)
-        ? config.path
-        : resolve(this.options.workspaceDir || process.cwd(), config.path);
+      // Resolve plugin path using resolvePluginPath
+      let pluginPath: string | null;
+      if (isAbsolute(config.path)) {
+        pluginPath = config.path;
+      } else {
+        // Try to resolve plugin ID to actual path
+        pluginPath = resolvePluginPath(config.path, this.options) ||
+                     resolvePluginPath(config.id, this.options);
+      }
+      
+      if (!pluginPath) {
+        log.error({ pluginId: config.id, path: config.path }, `Could not resolve plugin path`);
+        return null;
+      }
+
+      log.debug({ pluginId: config.id, pluginPath }, 'Resolved plugin path');
 
       const manifest = await this.loadManifest(pluginPath);
       if (!manifest) {
-        log.error({ pluginId: config.id }, `Failed to load manifest for plugin`);
+        log.error({ pluginId: config.id, pluginPath }, `Failed to load manifest for plugin`);
         return null;
       }
 
