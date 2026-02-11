@@ -188,7 +188,7 @@ describe('Skill Eligibility', () => {
 
     it('should reject skill with missing binary', () => {
       const skill = createTestSkill({
-        metadata: { requires: { bins: ['non-existent-binary-xyz'] } }
+        frontmatter: { 'xopcbot-metadata': { requires: { bins: ['non-existent-binary-xyz'] } } }
       });
       const result = checkEligibility(skill);
       expect(result.eligible).toBe(false);
@@ -197,7 +197,7 @@ describe('Skill Eligibility', () => {
 
     it('should reject skill with missing env var', () => {
       const skill = createTestSkill({
-        metadata: { requires: { env: ['NON_EXISTENT_VAR_XYZ'] } }
+        frontmatter: { 'xopcbot-metadata': { requires: { env: ['NON_EXISTENT_VAR_XYZ'] } } }
       });
       const result = checkEligibility(skill);
       expect(result.eligible).toBe(false);
@@ -207,7 +207,7 @@ describe('Skill Eligibility', () => {
     it('should pass skill with existing env var', () => {
       process.env.TEST_API_KEY = 'secret';
       const skill = createTestSkill({
-        metadata: { requires: { env: ['TEST_API_KEY'] } }
+        frontmatter: { 'xopcbot-metadata': { requires: { env: ['TEST_API_KEY'] } } }
       });
       const result = checkEligibility(skill);
       expect(result.eligible).toBe(true);
