@@ -1,6 +1,12 @@
 /**
  * Skill system for xopcbot
  * Unified exports for skill management
+ * 
+ * Follows Agent Skills specification: https://agentskills.io/specification
+ * 
+ * Core principle: SKILL.md is pure documentation. Skills are injected into
+ * system prompt via <available_skills> XML, and LLM uses read tool to load
+ * skill instructions when needed.
  */
 
 // Types
@@ -16,7 +22,6 @@ export type {
   EligibilityResult,
   DiscoveryOptions,
   DiscoveryResult,
-  ToolGenerationOptions,
   SkillLoaderOptions,
 } from './types.js';
 
@@ -58,20 +63,11 @@ export {
   formatSkillsSummary,
 } from './prompt.js';
 
-// Tools
-export {
-  createSkillTool,
-  createToolsFromSkills,
-  getCommandSkills,
-  createSkillCommand,
-} from './tools.js';
-
 // High-level API
 import { discoverSkillsFromMultiple } from './discovery.js';
 import { validateAllSkills } from './validation.js';
 import { filterEligibleSkills, createDefaultEligibilityContext } from './eligibility.js';
 import { formatSkillsForPrompt } from './prompt.js';
-import { createToolsFromSkills } from './tools.js';
 import type { Skill, SkillSource, SkillLoaderOptions } from './types.js';
 import { join } from 'path';
 import { getGlobalPluginsDir } from '../../config/paths.js';
@@ -85,12 +81,13 @@ const log = createLogger('Skills');
  * 2. Global (~/.xopcbot/skills/)
  * 3. Workspace (workspace/skills/) - highest priority
  * 
- * Backward compatible with existing loadSkills() API
+ * Returns skills metadata and formatted prompt section only.
+ * Skills are NOT converted to AgentTools - they are injected into
+ * the system prompt for LLM to discover and use via read tool.
  */
 export function loadSkills(options: SkillLoaderOptions = {}): {
   skills: Skill[];
   prompt: string;
-  tools: import('@mariozechner/pi-agent-core').AgentTool<any, any>[];
   diagnostics: import('./types.js').ValidationDiagnostic[];
 } {
   const configs: Array<{ dir: string; source: SkillSource }> = [];
@@ -138,11 +135,8 @@ export function loadSkills(options: SkillLoaderOptions = {}): {
     log.debug({ skill: skill.name, reason }, 'Skill not eligible');
   }
 
-  // Generate prompt
+  // Generate prompt with <available_skills> XML
   const prompt = formatSkillsForPrompt(eligible);
-
-  // Generate tools
-  const tools = createToolsFromSkills(eligible);
 
   // Combine diagnostics
   const allDiagnostics = [...discoveryDiagnostics, ...validationDiagnostics];
@@ -150,14 +144,12 @@ export function loadSkills(options: SkillLoaderOptions = {}): {
   log.info({ 
     total: skills.length, 
     valid: valid.length, 
-    eligible: eligible.length, 
-    tools: tools.length 
+    eligible: eligible.length 
   }, 'Skills loaded');
 
   return {
     skills: eligible,
     prompt,
-    tools,
     diagnostics: allDiagnostics,
   };
 }

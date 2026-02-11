@@ -46,6 +46,7 @@ export class AgentService {
   private running = false;
   private currentContext: { channel: string; chatId: string; sessionKey: string } | null = null;
   private agentId: string;
+  private skillPrompt: string = '';
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
     this.agentId = `agent-${Date.now()}`;
@@ -105,12 +106,10 @@ export class AgentService {
       log.info({ count: pluginTools.length }, 'Loaded plugin tools');
     }
 
-    // Load skills as tools
+    // Load skills for prompt injection (not as tools)
     const skillResult = loadSkills({ workspaceDir: config.workspace });
-    if (skillResult.tools.length > 0) {
-      tools.push(...skillResult.tools);
-      log.info({ count: skillResult.tools.length }, 'Loaded skills as tools');
-    }
+    this.skillPrompt = skillResult.prompt;
+    log.info({ count: skillResult.skills.length }, 'Skills loaded for prompt injection');
 
     const registry = new ModelRegistry(config.config ?? null, { ollamaEnabled: false });
     let model: Model<Api>;
@@ -572,7 +571,7 @@ export class AgentService {
   }
 
   private getSystemPrompt(): string {
-    return `You are xopcbot, an AI assistant that helps users with various tasks.
+    let prompt = `You are xopcbot, an AI assistant that helps users with various tasks.
 
 You have access to tools for:
 - File operations (read, write, edit, list)
@@ -589,6 +588,13 @@ Guidelines:
 5. Use web search for current information
 
 Current working directory is set automatically for shell commands.`;
+
+    // Inject skills prompt (Agent Skills spec)
+    if (this.skillPrompt) {
+      prompt += this.skillPrompt;
+    }
+
+    return prompt;
   }
 
   async processDirect(content: string, sessionKey = 'cli:direct'): Promise<string> {

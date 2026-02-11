@@ -129,14 +129,6 @@ export interface DiscoveryResult {
   diagnostics: ValidationDiagnostic[];
 }
 
-/** Tool generation options */
-export interface ToolGenerationOptions {
-  /** Infer parameters from bash examples */
-  inferParameters?: boolean;
-  /** Maximum examples to extract */
-  maxExamples?: number;
-}
-
 /** Skill loader options */
 export interface SkillLoaderOptions {
   /** Workspace directory for workspace skills */
