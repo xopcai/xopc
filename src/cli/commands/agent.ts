@@ -1,6 +1,7 @@
 import { Command } from 'commander';
-import { GatewayServer } from '../../gateway/index.js';
+import { AgentService } from '../../agent/index.js';
 import { loadConfig } from '../../config/index.js';
+import { MessageBus } from '../../bus/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
@@ -24,26 +25,46 @@ function createAgentCommand(_ctx: CLIContext): Command {
       const ctx = getContextWithOpts();
       const config = loadConfig(ctx.configPath);
       const modelId = config.agents?.defaults?.model;
+      const bus = new MessageBus();
 
       const workspace = config.agents?.defaults?.workspace || ctx.workspacePath;
+      const braveApiKey = config.tools?.web?.search?.apiKey;
 
       if (ctx.isVerbose) {
         log.info({ model: modelId, workspace }, 'Starting agent');
       }
 
-      // Use GatewayServer to ensure full message routing (including outbound)
-      const server = new GatewayServer({
-        host: '127.0.0.1',  // localhost only for CLI mode
-        port: 0,            // random port, not used in CLI mode
-        configPath: ctx.configPath,
-        enableHotReload: false,
+      const agent = new AgentService(bus, {
+        workspace,
+        model: modelId,
+        braveApiKey,
+        config,
       });
 
-      await server.start();
-      const agent = server.serviceInstance;
+      // Start agent service in background
+      agent.start().catch((err) => {
+        log.error({ err }, 'Agent service error');
+      });
+
+      // Start outbound message processor for CLI mode
+      // Just logs outbound messages to console (no channels in CLI mode)
+      let running = true;
+      const outboundProcessor = (async () => {
+        while (running) {
+          try {
+            const msg = await bus.consumeOutbound();
+            // In CLI mode, just log outbound messages
+            console.log(`\n📤 [${msg.channel}] ${msg.chat_id}: ${msg.content.slice(0, 100)}...`);
+          } catch (error) {
+            log.error({ err: error }, 'Error in outbound processor');
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+        }
+      })();
 
       const shutdown = async () => {
-        await server.stop();
+        running = false;
+        await agent.stop();
       };
 
       process.on('SIGINT', shutdown);
