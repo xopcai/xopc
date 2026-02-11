@@ -7,7 +7,7 @@
  * - Frontmatter follows Agent Skills spec
  */
 
-import { existsSync, readdirSync, realpathSync, statSync } from 'fs';
+import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'fs';
 import { dirname, join, sep } from 'path';
 import type { 
   DiscoveryOptions, 

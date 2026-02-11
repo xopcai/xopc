@@ -16,11 +16,11 @@ import {
   hasEnv, 
   checkEligibility 
 } from '../eligibility.js';
-import type { Skill } from '../types.js';
+import type { Skill, SkillFrontmatter } from '../types.js';
 
 // Helper to create test skills
 function createTestSkill(overrides: Partial<Skill> = {}): Skill {
-  return {
+  const skill: Skill = {
     name: 'test-skill',
     description: 'A test skill',
     filePath: '/test/skills/test-skill/SKILL.md',
@@ -28,9 +28,21 @@ function createTestSkill(overrides: Partial<Skill> = {}): Skill {
     source: 'builtin',
     disableModelInvocation: false,
     content: '# Test Skill\n\nContent',
-    frontmatter: {},
+    frontmatter: {
+      name: 'test-skill',
+      description: 'A test skill'
+    },
     ...overrides
   };
+  // Allow overriding frontmatter with proper type
+  if (overrides.frontmatter) {
+    skill.frontmatter = {
+      name: 'test-skill',
+      description: 'A test skill',
+      ...overrides.frontmatter
+    } as SkillFrontmatter;
+  }
+  return skill;
 }
 
 describe('Skill Validation', () => {
@@ -188,7 +200,7 @@ describe('Skill Eligibility', () => {
 
     it('should reject skill with missing binary', () => {
       const skill = createTestSkill({
-        frontmatter: { 'xopcbot-metadata': { requires: { bins: ['non-existent-binary-xyz'] } } }
+        frontmatter: { name: 'test', description: 'Test', 'xopcbot-metadata': { requires: { bins: ['non-existent-binary-xyz'] } } } as SkillFrontmatter
       });
       const result = checkEligibility(skill);
       expect(result.eligible).toBe(false);
@@ -197,7 +209,7 @@ describe('Skill Eligibility', () => {
 
     it('should reject skill with missing env var', () => {
       const skill = createTestSkill({
-        frontmatter: { 'xopcbot-metadata': { requires: { env: ['NON_EXISTENT_VAR_XYZ'] } } }
+        frontmatter: { name: 'test', description: 'Test', 'xopcbot-metadata': { requires: { env: ['NON_EXISTENT_VAR_XYZ'] } } } as SkillFrontmatter
       });
       const result = checkEligibility(skill);
       expect(result.eligible).toBe(false);
@@ -207,7 +219,7 @@ describe('Skill Eligibility', () => {
     it('should pass skill with existing env var', () => {
       process.env.TEST_API_KEY = 'secret';
       const skill = createTestSkill({
-        frontmatter: { 'xopcbot-metadata': { requires: { env: ['TEST_API_KEY'] } } }
+        frontmatter: { name: 'test', description: 'Test', 'xopcbot-metadata': { requires: { env: ['TEST_API_KEY'] } } } as SkillFrontmatter
       });
       const result = checkEligibility(skill);
       expect(result.eligible).toBe(true);
