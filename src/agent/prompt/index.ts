@@ -381,3 +381,6 @@ export * from './skills.js';
 // Re-export safety system
 export * from './safety.js';
 
+// Re-export heartbeat system
+export * from './heartbeat.js';
+
