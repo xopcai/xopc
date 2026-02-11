@@ -19,6 +19,7 @@ import {
   createMessageTool,
   createSpawnTool,
 } from './tools/index.js';
+import { loadSkills } from '../skills/loader.js';
 import type { SubagentResult } from './tools/communication.js';
 import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
@@ -102,6 +103,13 @@ export class AgentService {
       const pluginTools = this.convertPluginTools(config.pluginRegistry.getAllTools());
       tools.push(...pluginTools);
       log.info({ count: pluginTools.length }, 'Loaded plugin tools');
+    }
+
+    // Load skills as tools
+    const skillTools = loadSkills();
+    if (skillTools.length > 0) {
+      tools.push(...skillTools);
+      log.info({ count: skillTools.length }, 'Loaded skills as tools');
     }
 
     const registry = new ModelRegistry(config.config ?? null, { ollamaEnabled: false });
