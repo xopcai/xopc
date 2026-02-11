@@ -23,7 +23,7 @@ import {
 } from './tools/index.js';
 import { createSkillLoader, type Skill } from './skills/index.js';
 import type { SubagentResult } from './tools/communication.js';
-import { DEFAULT_BASE_DIR } from '../config/paths.js';
+import { DEFAULT_BASE_DIR, getBundledSkillsDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
 import { PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
@@ -112,10 +112,11 @@ export class AgentService {
     }
 
     // Load skills for prompt injection (not as tools)
-    // Priority: workspace > global (~/.xopcbot/skills) > builtin
+    // Priority: workspace > global (~/.xopcbot/skills) > builtin (xopcbot/skills)
     const skillResult = this.skillLoader.load({
       workspaceDir: config.workspace,
       globalDir: join(DEFAULT_BASE_DIR, 'skills'),
+      builtinDir: getBundledSkillsDir(),
     });
     this.skillPrompt = skillResult.prompt;
     this.skills = skillResult.skills;
@@ -642,6 +643,7 @@ Current working directory is set automatically for shell commands.`;
     const skillResult = this.skillLoader.reload({
       workspaceDir: this.config.workspace,
       globalDir: join(DEFAULT_BASE_DIR, 'skills'),
+      builtinDir: getBundledSkillsDir(),
     });
     
     this.skillPrompt = skillResult.prompt;

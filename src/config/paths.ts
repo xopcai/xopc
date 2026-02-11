@@ -58,6 +58,20 @@ export function getBundledPluginsDir(): string | null {
 }
 
 /**
+ * Get bundled skills directory (shipped with xopcbot)
+ */
+export function getBundledSkillsDir(): string | null {
+  try {
+    const currentFile = fileURLToPath(import.meta.url);
+    const srcDir = dirname(currentFile);
+    const bundledDir = join(srcDir, '..', '..', 'skills');
+    return bundledDir;
+  } catch {
+    return null;
+  }
+}
+
+/**
  * Get plugin SDK path for jiti alias
  */
 export function resolvePluginSdkPath(): string | null {
