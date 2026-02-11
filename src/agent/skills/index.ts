@@ -81,9 +81,9 @@ const log = createLogger('Skills');
 
 /**
  * Load skills from all sources with priority:
- * 1. Global (~/.xopcbot/skills/)
- * 2. Workspace (workspace/skills/)
- * 3. Built-in (./skills/) - lowest priority, can be overridden
+ * 1. Built-in (./skills/) - lowest priority
+ * 2. Global (~/.xopcbot/skills/)
+ * 3. Workspace (workspace/skills/) - highest priority
  * 
  * Backward compatible with existing loadSkills() API
  */
@@ -109,8 +109,11 @@ export function loadSkills(options: SkillLoaderOptions = {}): {
 
   // Priority 3: Workspace skills (highest)
   if (options.workspaceDir) {
-    const workspaceDir = join(options.workspaceDir, 'skills');
-    configs.push({ dir: workspaceDir, source: 'workspace' });
+    // Support both 'skills' and '.skills' directories for compatibility
+    const workspaceDir1 = join(options.workspaceDir, 'skills');
+    const workspaceDir2 = join(options.workspaceDir, '.skills');
+    configs.push({ dir: workspaceDir1, source: 'workspace' });
+    configs.push({ dir: workspaceDir2, source: 'workspace' });
   }
 
   // Discover all skills

@@ -100,7 +100,13 @@ function substituteParams(command: string, params: Record<string, string>): stri
   // Replace $VAR and ${VAR}
   for (const [key, value] of Object.entries(params)) {
     result = result.replace(new RegExp(`\\$\\{?${key}\\}?`, 'g'), value);
-    result = result.replace(new RegExp(`<${key}\>`, 'g'), value);
+    result = result.replace(new RegExp(`<${key}>`, 'g'), value);
+  }
+
+  // Replace common location/city patterns (London, New+York, etc.)
+  const cityPattern = /\b(London|New\+York|Berlin|Paris|Tokyo|Beijing|Shanghai|New York)\b/gi;
+  if (params.query && cityPattern.test(result)) {
+    result = result.replace(cityPattern, encodeURIComponent(params.query));
   }
 
   return result;
