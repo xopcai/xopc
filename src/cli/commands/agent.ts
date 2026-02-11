@@ -49,7 +49,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
       // Start outbound message processor for CLI mode
       // Just logs outbound messages to console (no channels in CLI mode)
       let running = true;
-      const outboundProcessor = (async () => {
+      const _outboundProcessor = (async () => {
         while (running) {
           try {
             const msg = await bus.consumeOutbound();

@@ -1,7 +1,6 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { MessageBus, InboundMessage, OutboundMessage } from '../../bus/index.js';
 import { TelegramChannel } from '../telegram.js';
-import { AgentService } from '../../agent/service.js';
 import type { Config } from '../../config/schema.js';
 
 /**
@@ -10,7 +9,7 @@ import type { Config } from '../../config/schema.js';
 describe('Telegram to Agent Integration', () => {
   let bus: MessageBus;
   let telegramConfig: Record<string, unknown>;
-  let agentConfig: Config;
+  let _agentConfig: Config;
 
   beforeEach(() => {
     bus = new MessageBus();
@@ -21,7 +20,7 @@ describe('Telegram to Agent Integration', () => {
       apiRoot: 'https://api.telegram.org',
       debug: false,
     };
-    agentConfig = {
+    __agentConfig = {
       agents: {
         defaults: {
           workspace: '/tmp/test-workspace',
@@ -66,7 +65,7 @@ describe('Telegram to Agent Integration', () => {
 
   it('should publish inbound message when Telegram receives message', async () => {
     // 创建 Telegram 通道
-    const telegram = new TelegramChannel(telegramConfig, bus);
+    const _telegram = new TelegramChannel(telegramConfig, bus);
 
     // 监听 inbound 事件
     const inboundMessages: InboundMessage[] = [];
@@ -202,7 +201,7 @@ describe('Telegram to Agent Integration', () => {
       allowFrom: ['999999999'], // 只允许这个用户
     };
 
-    const telegram = new TelegramChannel(restrictedConfig, bus);
+    const _telegram = new TelegramChannel(restrictedConfig, bus);
     const receivedMessages: InboundMessage[] = [];
 
     bus.on('inbound', (msg) => {
