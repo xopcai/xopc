@@ -2,6 +2,8 @@
  * Skill system for xopcbot
  * Simplified implementation following pi-mono/coding-agent
  * Follows Agent Skills specification: https://agentskills.io/specification
+ * 
+ * Priority: workspace > global > builtin
  */
 
 import { existsSync, readdirSync, readFileSync } from 'fs';
@@ -215,23 +217,32 @@ function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | '
 
 /**
  * Load skills from multiple directories with priority
+ * Priority: workspace > global > builtin
  */
 export function loadSkills(options: {
   workspaceDir?: string;
+  globalDir?: string;
   builtinDir?: string;
 }): LoadSkillsResult {
-  const { workspaceDir, builtinDir } = options;
+  const { workspaceDir, globalDir, builtinDir } = options;
 
   const skillMap = new Map<string, Skill>();
 
-  // Priority 1: Built-in skills
+  // Priority 1: Built-in skills (lowest)
   if (builtinDir) {
     for (const skill of discoverSkills(builtinDir, 'builtin')) {
       skillMap.set(skill.name, skill);
     }
   }
 
-  // Priority 2: Workspace skills (override built-in)
+  // Priority 2: Global skills
+  if (globalDir) {
+    for (const skill of discoverSkills(globalDir, 'global')) {
+      skillMap.set(skill.name, skill);
+    }
+  }
+
+  // Priority 3: Workspace skills (highest, overrides others)
   if (workspaceDir) {
     const workspaceSkills = discoverSkills(join(workspaceDir, 'skills'), 'workspace');
     for (const skill of workspaceSkills) {

@@ -1,5 +1,6 @@
 // AgentService - Main agent implementation using @mariozechner/pi-agent-core
 import { readFileSync } from 'fs';
+import { join } from 'path';
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { AgentToolResult } from '@mariozechner/pi-agent-core';
@@ -22,6 +23,7 @@ import {
 } from './tools/index.js';
 import { loadSkills, type Skill } from './skills/index.js';
 import type { SubagentResult } from './tools/communication.js';
+import { DEFAULT_BASE_DIR } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
 import { PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
@@ -109,7 +111,11 @@ export class AgentService {
     }
 
     // Load skills for prompt injection (not as tools)
-    const skillResult = loadSkills({ workspaceDir: config.workspace });
+    // Priority: workspace > global (~/.xopcbot/skills) > builtin
+    const skillResult = loadSkills({
+      workspaceDir: config.workspace,
+      globalDir: join(DEFAULT_BASE_DIR, 'skills'),
+    });
     this.skillPrompt = skillResult.prompt;
     this.skills = skillResult.skills;
     log.info({ count: skillResult.skills.length }, 'Skills loaded for prompt injection');
