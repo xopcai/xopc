@@ -106,7 +106,7 @@ export class AgentService {
     }
 
     // Load skills as tools
-    const skillTools = loadSkills();
+    const skillTools = loadSkills({ workspaceDir: config.workspace });
     if (skillTools.length > 0) {
       tools.push(...skillTools);
       log.info({ count: skillTools.length }, 'Loaded skills as tools');
