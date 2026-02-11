@@ -99,58 +99,6 @@ export function formatSkillsList(skills: Skill[]): string {
 }
 
 /**
- * Format skill details (for /skill info command)
- */
-export function formatSkillDetail(skill: Skill): string {
-  const oldMetadata = skill.frontmatter['xopcbot-metadata'];
-  const newMetadata = skill.metadata;
-
-  const lines = [
-    `# ${oldMetadata?.emoji || newMetadata?.emoji || '📄'} ${skill.name}`,
-    '',
-    `**Description:** ${skill.description}`,
-    `**Source:** ${skill.source}`,
-    `**Path:** \`${skill.filePath}\``,
-  ];
-
-  if (skill.frontmatter.license) {
-    lines.push(`**License:** ${skill.frontmatter.license}`);
-  }
-
-  if (skill.frontmatter.compatibility) {
-    lines.push(`**Compatibility:** ${skill.frontmatter.compatibility}`);
-  }
-
-  // Show deprecated xopcbot metadata if present
-  if (oldMetadata) {
-    lines.push('');
-    lines.push('**xopcbot config** (deprecated):');
-    
-    if (oldMetadata.category) {
-      lines.push(`- Category: ${oldMetadata.category}`);
-    }
-    if (oldMetadata.invoke_as) {
-      lines.push(`- Invoke as: ${oldMetadata.invoke_as}`);
-    }
-    if (oldMetadata.requires) {
-      if (oldMetadata.requires.bins?.length) {
-        lines.push(`- Requires binaries: ${oldMetadata.requires.bins.join(', ')}`);
-      }
-      if (oldMetadata.requires.env?.length) {
-        lines.push(`- Requires env vars: ${oldMetadata.requires.env.join(', ')}`);
-      }
-    }
-  }
-
-  if (skill.frontmatter['disable-model-invocation'] || skill.disableModelInvocation) {
-    lines.push('');
-    lines.push('*This skill is disabled for automatic model invocation.*');
-  }
-
-  return lines.join('\n');
-}
-
-/**
  * Create a compact skills summary for logging/debugging
  */
 export function formatSkillsSummary(skills: Skill[]): string {

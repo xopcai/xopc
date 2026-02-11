@@ -15,7 +15,6 @@ export type {
   SkillFrontmatter,
   DeprecatedXopcbotMetadata,
   SkillSource,
-  SkillCategory,
   ValidationDiagnostic,
   ValidationResult,
   EligibilityContext,
@@ -52,14 +51,12 @@ export {
   createDefaultEligibilityContext,
   checkEligibility,
   filterEligibleSkills,
-  getEligibilityDiagnostics,
 } from './eligibility.js';
 
 // Prompt formatting
 export {
   formatSkillsForPrompt,
   formatSkillsList,
-  formatSkillDetail,
   formatSkillsSummary,
 } from './prompt.js';
 
@@ -152,12 +149,4 @@ export function loadSkills(options: SkillLoaderOptions = {}): {
     prompt,
     diagnostics: allDiagnostics,
   };
-}
-
-/**
- * Simple skill list (for CLI/commands)
- */
-export function listSkills(options: SkillLoaderOptions = {}): Skill[] {
-  const { skills } = loadSkills(options);
-  return skills;
 }

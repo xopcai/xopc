@@ -141,10 +141,3 @@ export interface SkillLoaderOptions {
 export interface ValidatedSkill extends Skill {
   validation: ValidationResult;
 }
-
-/** Skill collision info */
-export interface SkillCollision {
-  name: string;
-  winnerPath: string;
-  loserPath: string;
-}

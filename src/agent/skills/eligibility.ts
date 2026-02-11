@@ -7,8 +7,7 @@ import { join, delimiter } from 'path';
 import type { 
   Skill, 
   EligibilityContext, 
-  EligibilityResult,
-  ValidationDiagnostic 
+  EligibilityResult
 } from './types.js';
 
 /**
@@ -111,28 +110,4 @@ export function filterEligibleSkills(
   }
 
   return { eligible, ineligible };
-}
-
-/**
- * Get eligibility diagnostics for all skills
- */
-export function getEligibilityDiagnostics(
-  skills: Skill[],
-  context?: EligibilityContext
-): ValidationDiagnostic[] {
-  const diagnostics: ValidationDiagnostic[] = [];
-  const ctx = context || createDefaultEligibilityContext();
-
-  for (const skill of skills) {
-    const result = checkEligibility(skill, ctx);
-    if (!result.eligible) {
-      diagnostics.push({
-        type: 'warning',
-        message: `Skill "${skill.name}" is not eligible: ${result.reason}`,
-        path: skill.filePath
-      });
-    }
-  }
-
-  return diagnostics;
 }
