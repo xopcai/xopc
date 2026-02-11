@@ -368,3 +368,7 @@ export class PromptBuilder {
     return `You are ${identity.name} ${identity.emoji}, running inside xopcbot.`;
   }
 }
+
+// Re-export memory system
+export * from './memory/index.js';
+
