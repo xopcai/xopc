@@ -375,3 +375,6 @@ export * from './memory/index.js';
 // Re-export subagent system
 export * from './subagent.js';
 
+// Re-export skills system
+export * from './skills.js';
+
