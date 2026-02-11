@@ -372,3 +372,6 @@ export class PromptBuilder {
 // Re-export memory system
 export * from './memory/index.js';
 
+// Re-export subagent system
+export * from './subagent.js';
+
