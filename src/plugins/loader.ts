@@ -365,7 +365,7 @@ export class PluginLoader {
 
       log.debug({ pluginId: config.id, pluginPath }, 'Resolved plugin path');
 
-      const manifest = await this.loadManifest(pluginPath);
+      const manifest = this.loadManifest(pluginPath);
       if (!manifest) {
         log.error({ pluginId: config.id, pluginPath }, `Failed to load manifest for plugin`);
         return null;
