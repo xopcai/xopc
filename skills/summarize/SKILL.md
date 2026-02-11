@@ -1,15 +1,7 @@
 ---
 name: summarize
 description: Summarize URLs, files, and YouTube videos.
-metadata:
-  {
-    "xopcbot":
-      {
-        "emoji": "📝",
-        "category": "ai",
-        "invoke_as": "tool",
-      },
-  }
+license: MIT
 ---
 
 # Summarize Skill

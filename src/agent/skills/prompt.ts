@@ -1,6 +1,8 @@
 /**
  * Skill prompt formatting - generate XML prompts for LLM
- * Follows Claude Code / Agent Skills standard format
+ * Follows Agent Skills specification (https://agentskills.io/specification)
+ * 
+ * Format: <available_skills> XML block for system prompts
  */
 
 import type { Skill } from './types.js';
@@ -19,6 +21,7 @@ function escapeXml(str: string): string {
 
 /**
  * Format a single skill for XML output
+ * Per Agent Skills spec: <skill><name>, <description>, <location></skill>
  */
 function formatSkillXml(skill: Skill): string {
   const lines = [
@@ -28,14 +31,14 @@ function formatSkillXml(skill: Skill): string {
     `    <location>${escapeXml(skill.filePath)}</location>`,
   ];
 
-  // Add metadata if present
-  if (skill.metadata) {
-    if (skill.metadata.emoji) {
-      lines.push(`    <emoji>${escapeXml(skill.metadata.emoji)}</emoji>`);
-    }
-    if (skill.metadata.category) {
-      lines.push(`    <category>${escapeXml(skill.metadata.category)}</category>`);
-    }
+  // Add optional license if present
+  if (skill.frontmatter.license) {
+    lines.push(`    <license>${escapeXml(skill.frontmatter.license)}</license>`);
+  }
+
+  // Add optional compatibility if present
+  if (skill.frontmatter.compatibility) {
+    lines.push(`    <compatibility>${escapeXml(skill.frontmatter.compatibility)}</compatibility>`);
   }
 
   lines.push('  </skill>');
@@ -46,22 +49,21 @@ function formatSkillXml(skill: Skill): string {
  * Format skills for inclusion in system prompt
  * Uses XML format per Agent Skills standard
  * 
- * Skills with disableModelInvocation=true are excluded
+ * Skills with frontmatter.disable-model-invocation=true are excluded
  */
 export function formatSkillsForPrompt(skills: Skill[]): string {
   // Filter out skills disabled for model invocation
-  const visibleSkills = skills.filter(s => !s.disableModelInvocation);
+  const visibleSkills = skills.filter(s => !s.frontmatter['disable-model-invocation']);
 
   if (visibleSkills.length === 0) {
     return '';
   }
 
   const lines = [
-    '\n\nThe following skills provide specialized instructions for specific tasks.',
+    '\n\n<available_skills>',
+    'Skills are folders of instructions, scripts, and resources.',
     'Use the read tool to load a skill\'s file when the task matches its description.',
-    'When a skill file references a relative path, resolve it against the skill directory (parent of SKILL.md / dirname of the path) and use that absolute path in tool commands.',
     '',
-    '<available_skills>',
   ];
 
   for (const skill of visibleSkills) {
@@ -74,7 +76,7 @@ export function formatSkillsForPrompt(skills: Skill[]): string {
 }
 
 /**
- * Format skills as a simple list (for commands like /skills)
+ * Format skills as a simple list (for CLI /skills command)
  */
 export function formatSkillsList(skills: Skill[]): string {
   if (skills.length === 0) {
@@ -84,8 +86,8 @@ export function formatSkillsList(skills: Skill[]): string {
   const lines = ['Available skills:'];
 
   for (const skill of skills) {
-    const emoji = skill.metadata?.emoji || '📄';
-    const status = skill.disableModelInvocation ? ' (manual only)' : '';
+    const emoji = skill.metadata?.emoji || skill.frontmatter['xopcbot-metadata']?.emoji || '📄';
+    const status = skill.frontmatter['disable-model-invocation'] ? ' (manual only)' : '';
     lines.push(`  ${emoji} **${skill.name}** - ${skill.description}${status}`);
   }
 
@@ -96,35 +98,47 @@ export function formatSkillsList(skills: Skill[]): string {
  * Format skill details (for /skill info command)
  */
 export function formatSkillDetail(skill: Skill): string {
+  const oldMetadata = skill.frontmatter['xopcbot-metadata'];
+  const newMetadata = skill.metadata;
+
   const lines = [
-    `# ${skill.metadata?.emoji || '📄'} ${skill.name}`,
+    `# ${oldMetadata?.emoji || newMetadata?.emoji || '📄'} ${skill.name}`,
     '',
     `**Description:** ${skill.description}`,
     `**Source:** ${skill.source}`,
     `**Path:** \`${skill.filePath}\``,
   ];
 
-  if (skill.metadata) {
+  if (skill.frontmatter.license) {
+    lines.push(`**License:** ${skill.frontmatter.license}`);
+  }
+
+  if (skill.frontmatter.compatibility) {
+    lines.push(`**Compatibility:** ${skill.frontmatter.compatibility}`);
+  }
+
+  // Show deprecated xopcbot metadata if present
+  if (oldMetadata) {
     lines.push('');
-    lines.push('**Metadata:**');
+    lines.push('**xopcbot config** (deprecated):');
     
-    if (skill.metadata.category) {
-      lines.push(`- Category: ${skill.metadata.category}`);
+    if (oldMetadata.category) {
+      lines.push(`- Category: ${oldMetadata.category}`);
     }
-    if (skill.metadata.invoke_as) {
-      lines.push(`- Invoke as: ${skill.metadata.invoke_as}`);
+    if (oldMetadata.invoke_as) {
+      lines.push(`- Invoke as: ${oldMetadata.invoke_as}`);
     }
-    if (skill.metadata.requires) {
-      if (skill.metadata.requires.bins?.length) {
-        lines.push(`- Requires binaries: ${skill.metadata.requires.bins.join(', ')}`);
+    if (oldMetadata.requires) {
+      if (oldMetadata.requires.bins?.length) {
+        lines.push(`- Requires binaries: ${oldMetadata.requires.bins.join(', ')}`);
       }
-      if (skill.metadata.requires.env?.length) {
-        lines.push(`- Requires env vars: ${skill.metadata.requires.env.join(', ')}`);
+      if (oldMetadata.requires.env?.length) {
+        lines.push(`- Requires env vars: ${oldMetadata.requires.env.join(', ')}`);
       }
     }
   }
 
-  if (skill.disableModelInvocation) {
+  if (skill.frontmatter['disable-model-invocation']) {
     lines.push('');
     lines.push('*This skill is disabled for automatic model invocation.*');
   }
@@ -137,7 +151,7 @@ export function formatSkillDetail(skill: Skill): string {
  */
 export function formatSkillsSummary(skills: Skill[]): string {
   return skills.map(s => {
-    const emoji = s.metadata?.emoji || '📄';
+    const emoji = s.metadata?.emoji || s.frontmatter['xopcbot-metadata']?.emoji || '📄';
     return `${emoji} ${s.name} (${s.source})`;
   }).join(', ');
 }

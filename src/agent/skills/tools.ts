@@ -1,11 +1,15 @@
 /**
  * Skill to Tool conversion - generate AgentTools from skills
- * Preserves xopcbot's existing tool generation capabilities
+ * 
+ * Key principles:
+ * - Skill = pure documentation (what and when)
+ * - Tool = code implementation (how)
+ * - Agent decides when to use based on skill description
  */
 
 import { Type } from '@sinclair/typebox';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
-import type { Skill, ToolGenerationOptions } from './types.js';
+import type { Skill, ToolGenerationOptions, DeprecatedXopcbotMetadata } from './types.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('SkillTools');
@@ -22,7 +26,6 @@ function extractBashExamples(content: string, maxExamples: number = 3): string[]
 
 /**
  * Extract parameter placeholders from command
- * Looks for patterns like $VAR, ${VAR}, <var>, etc.
  */
 function extractParameters(command: string): Array<{ name: string; type: string }> {
   const params: Array<{ name: string; type: string }> = [];
@@ -97,19 +100,45 @@ function inferParameters(skill: Skill): Record<string, any> {
 function substituteParams(command: string, params: Record<string, string>): string {
   let result = command;
 
-  // Replace $VAR and ${VAR}
   for (const [key, value] of Object.entries(params)) {
     result = result.replace(new RegExp(`\\$\\{?${key}\\}?`, 'g'), value);
     result = result.replace(new RegExp(`<${key}>`, 'g'), value);
   }
 
-  // Replace common location/city patterns (London, New+York, etc.)
+  // Replace common location/city patterns
   const cityPattern = /\b(London|New\+York|Berlin|Paris|Tokyo|Beijing|Shanghai|New York)\b/gi;
   if (params.query && cityPattern.test(result)) {
     result = result.replace(cityPattern, encodeURIComponent(params.query));
   }
 
   return result;
+}
+
+/**
+ * Get emoji from deprecated xopcbot metadata or metadata
+ */
+function getEmoji(skill: Skill): string {
+  const oldMeta = skill.frontmatter['xopcbot-metadata'];
+  if (oldMeta?.emoji) return oldMeta.emoji;
+  if (skill.metadata?.emoji) return skill.metadata.emoji;
+  return '🎯';
+}
+
+/**
+ * Should this skill generate a tool?
+ * (Agent decides based on description, we just provide the tool)
+ */
+function shouldGenerateTool(skill: Skill): boolean {
+  const oldMeta = skill.frontmatter['xopcbot-metadata'];
+  const invokeAs = oldMeta?.invoke_as;
+  
+  // Skip if explicitly command-only
+  if (invokeAs === 'command') return false;
+  
+  // Skip if model invocation is disabled
+  if (skill.frontmatter['disable-model-invocation']) return false;
+  
+  return true;
 }
 
 /**
@@ -124,7 +153,6 @@ export function createSkillTool(
   const parameters = inferParameters(skill);
 
   // Build description
-  const emoji = skill.metadata?.emoji || '🎯';
   let description = `${skill.description} [${skill.source}]`;
   
   if (examples.length > 0) {
@@ -136,14 +164,13 @@ export function createSkillTool(
     name: `skill_${skill.name}`,
     description,
     parameters,
-    label: `${emoji} ${skill.name}`,
+    label: `${getEmoji(skill)} ${skill.name}`,
 
     async execute(toolCallId: string, params: Record<string, string>) {
       try {
         // Find the best example to use as template
         let template = examples[0] || '';
         
-        // If no examples, create a generic response
         if (!template) {
           return {
             content: [{ 
@@ -182,20 +209,12 @@ export function createSkillTool(
 
 /**
  * Create tools from multiple skills
- * Filters out skills that are disabled for model invocation
  */
 export function createToolsFromSkills(
   skills: Skill[],
   options?: ToolGenerationOptions
 ): AgentTool<any, any>[] {
-  const eligibleSkills = skills.filter(s => {
-    const invokeAs = s.metadata?.invoke_as;
-    // Skip if explicitly set to command_only
-    if (invokeAs === 'command') return false;
-    // Skip if model invocation is disabled
-    if (s.disableModelInvocation) return false;
-    return true;
-  });
+  const eligibleSkills = skills.filter(shouldGenerateTool);
 
   log.info({ 
     total: skills.length, 
@@ -207,16 +226,19 @@ export function createToolsFromSkills(
 
 /**
  * Get skills that should be exposed as slash commands
+ * @deprecated Tool vs command is agent's decision, not skill's
  */
 export function getCommandSkills(skills: Skill[]): Skill[] {
   return skills.filter(s => {
-    const invokeAs = s.metadata?.invoke_as;
+    const oldMeta = s.frontmatter['xopcbot-metadata'];
+    const invokeAs = oldMeta?.invoke_as;
     return invokeAs === 'command' || invokeAs === 'both';
   });
 }
 
 /**
- * Create a skill invocation command
+ * Create a skill invocation command (for backward compatibility)
+ * @deprecated Use skill documentation directly
  */
 export function createSkillCommand(skill: Skill): {
   name: string;
@@ -227,7 +249,6 @@ export function createSkillCommand(skill: Skill): {
     name: skill.name,
     description: skill.description,
     async execute(args: string): Promise<string> {
-      // Simple implementation - could be enhanced
       return `Executing ${skill.name} with args: ${args}\n\nSee ${skill.filePath} for details.`;
     },
   };

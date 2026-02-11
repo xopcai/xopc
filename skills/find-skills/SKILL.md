@@ -1,16 +1,7 @@
 ---
 name: find-skills
-description: Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill that can...", or express interest in extending capabilities.
-metadata:
-  {
-    "xopcbot":
-      {
-        "emoji": "🔍",
-        "category": "utilities",
-        "requires": { "bins": ["npx"] },
-        "invoke_as": "tool",
-      },
-  }
+description: Helps users discover and install agent skills when they ask questions like "how do I do X", "find a skill for X", "is there a skill for X", or express interest in extending capabilities.
+license: MIT
 ---
 
 # Find Skills

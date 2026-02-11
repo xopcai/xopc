@@ -1,9 +1,13 @@
 /**
  * Skill discovery - find and load skills from directories
- * Implements Claude Code style discovery: root .md + subdirectory SKILL.md
+ * Implements Agent Skills specification (https://agentskills.io/specification)
+ * 
+ * Discovery format:
+ * - Subdirectories containing SKILL.md = skills
+ * - Frontmatter follows Agent Skills spec
  */
 
-import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'fs';
+import { existsSync, readdirSync, realpathSync, statSync } from 'fs';
 import { dirname, join, sep } from 'path';
 import type { 
   DiscoveryOptions, 
@@ -16,8 +20,7 @@ import type {
 import { parseFrontmatter } from '../../utils/frontmatter.js';
 
 /**
- * Check if a file/directory should be ignored based on simple rules
- * (node_modules, hidden files)
+ * Check if a file/directory should be ignored
  */
 function shouldIgnore(name: string, _isDir: boolean): boolean {
   if (name.startsWith('.')) return true;
@@ -41,7 +44,7 @@ function loadSkillFromFile(
     const skillDir = dirname(filePath);
     const parentDirName = skillDir.split(sep).pop() || '';
 
-    // Determine skill name
+    // Determine skill name (required per spec)
     const name = (frontmatter.name as string | undefined) || parentDirName || expectedName;
     
     if (!name) {
@@ -53,7 +56,7 @@ function loadSkillFromFile(
       return { skill: null, diagnostics };
     }
 
-    // Validate description exists
+    // Validate description exists (required per spec)
     const description = frontmatter.description as string | undefined;
     if (!description || description.trim() === '') {
       diagnostics.push({
@@ -64,8 +67,16 @@ function loadSkillFromFile(
       return { skill: null, diagnostics };
     }
 
-    // Extract xopcbot metadata
-    const metadata = (frontmatter.metadata as { xopcbot?: import('./types.js').XopcbotMetadata } | undefined)?.xopcbot;
+    // Extract metadata (platform-agnostic per Agent Skills spec)
+    // xopcbot-specific metadata is deprecated and ignored
+    const metadata: Record<string, string> = {};
+    if (frontmatter.metadata && typeof frontmatter.metadata === 'object') {
+      for (const [key, value] of Object.entries(frontmatter.metadata)) {
+        if (key !== 'xopcbot' && typeof value === 'string') {
+          metadata[key] = value;
+        }
+      }
+    }
 
     const skill: Skill = {
       name,
@@ -73,10 +84,9 @@ function loadSkillFromFile(
       filePath,
       baseDir: skillDir,
       source,
-      disableModelInvocation: frontmatter['disable-model-invocation'] === true,
-      metadata,
       content: content.trim(),
-      frontmatter: frontmatter as SkillFrontmatter
+      frontmatter: frontmatter as SkillFrontmatter,
+      metadata: Object.keys(metadata).length > 0 ? metadata : undefined
     };
 
     return { skill, diagnostics };
@@ -90,10 +100,9 @@ function loadSkillFromFile(
 /**
  * Discover skills from a directory
  * 
- * Discovery rules (Claude Code style):
- * - Root level .md files = skills
+ * Discovery format (Agent Skills spec):
  * - Subdirectories containing SKILL.md = skills
- * - Respects .gitignore patterns if respectIgnoreFiles is true
+ * - Each skill is a self-contained folder
  */
 export function discoverSkills(options: DiscoveryOptions): DiscoveryResult {
   const { dir, source, respectIgnoreFiles: _respectIgnoreFiles } = options;
@@ -105,7 +114,7 @@ export function discoverSkills(options: DiscoveryOptions): DiscoveryResult {
     return { skills, diagnostics };
   }
 
-  function scanDirectory(currentDir: string, isRoot: boolean) {
+  function scanDirectory(currentDir: string) {
     try {
       const entries = readdirSync(currentDir, { withFileTypes: true });
 
@@ -116,17 +125,15 @@ export function discoverSkills(options: DiscoveryOptions): DiscoveryResult {
 
         const fullPath = join(currentDir, entry.name);
 
-        // Handle symlinks - check if they point to valid locations
+        // Handle symlinks
         let isDirectory = entry.isDirectory();
-        let isFile = entry.isFile();
         
         if (entry.isSymbolicLink()) {
           try {
             const stats = statSync(fullPath);
             isDirectory = stats.isDirectory();
-            isFile = stats.isFile();
           } catch {
-            continue; // Broken symlink
+            continue;
           }
         }
 
@@ -141,12 +148,10 @@ export function discoverSkills(options: DiscoveryOptions): DiscoveryResult {
               try {
                 const realPath = realpathSync(result.skill.filePath);
                 if (seenRealPaths.has(realPath)) {
-                  continue; // Skip duplicate
+                  continue;
                 }
                 seenRealPaths.add(realPath);
-              } catch {
-                // If realpath fails, use filePath
-              }
+              } catch {}
               
               skills.push(result.skill);
             }
@@ -155,30 +160,7 @@ export function discoverSkills(options: DiscoveryOptions): DiscoveryResult {
           }
           
           // Continue scanning deeper
-          scanDirectory(fullPath, false);
-        } else if (isFile && isRoot && entry.name.endsWith('.md')) {
-          // Root-level .md file = skill
-          const result = loadSkillFromFile(fullPath, source);
-          
-          if (result.skill) {
-            // Derive name from filename for root-level skills
-            if (!result.skill.frontmatter.name) {
-              result.skill.name = entry.name.replace(/\.md$/, '');
-            }
-            
-            // Check for duplicate
-            try {
-              const realPath = realpathSync(result.skill.filePath);
-              if (seenRealPaths.has(realPath)) {
-                continue;
-              }
-              seenRealPaths.add(realPath);
-            } catch {}
-            
-            skills.push(result.skill);
-          }
-          
-          diagnostics.push(...result.diagnostics);
+          scanDirectory(fullPath);
         }
       }
     } catch (error) {
@@ -187,7 +169,7 @@ export function discoverSkills(options: DiscoveryOptions): DiscoveryResult {
     }
   }
 
-  scanDirectory(dir, true);
+  scanDirectory(dir);
   return { skills, diagnostics };
 }
 
