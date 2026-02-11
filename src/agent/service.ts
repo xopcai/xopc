@@ -1,4 +1,5 @@
 // AgentService - Main agent implementation using @mariozechner/pi-agent-core
+import { readFileSync } from 'fs';
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { AgentToolResult } from '@mariozechner/pi-agent-core';
@@ -19,7 +20,7 @@ import {
   createMessageTool,
   createSpawnTool,
 } from './tools/index.js';
-import { loadSkills } from './skills/index.js';
+import { loadSkills, type Skill } from './skills/index.js';
 import type { SubagentResult } from './tools/communication.js';
 import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
@@ -47,6 +48,7 @@ export class AgentService {
   private currentContext: { channel: string; chatId: string; sessionKey: string } | null = null;
   private agentId: string;
   private skillPrompt: string = '';
+  private skills: Skill[] = [];
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
     this.agentId = `agent-${Date.now()}`;
@@ -109,6 +111,7 @@ export class AgentService {
     // Load skills for prompt injection (not as tools)
     const skillResult = loadSkills({ workspaceDir: config.workspace });
     this.skillPrompt = skillResult.prompt;
+    this.skills = skillResult.skills;
     log.info({ count: skillResult.skills.length }, 'Skills loaded for prompt injection');
 
     const registry = new ModelRegistry(config.config ?? null, { ollamaEnabled: false });
@@ -272,9 +275,12 @@ export class AgentService {
     const sessionKey = `${msg.channel}:${msg.chat_id}`;
     log.info({ channel: msg.channel, senderId: msg.sender_id }, 'Processing message');
 
+    // Expand skill commands (/skill:name args)
+    const expandedContent = this.expandSkillCommand(msg.content);
+
     // Trigger before_agent_start hook
     await this.triggerHook('before_agent_start', {
-      prompt: msg.content,
+      prompt: expandedContent,
     });
 
     let messages = await this.memory.load(sessionKey);
@@ -302,14 +308,14 @@ export class AgentService {
 
     const userMessage: AgentMessage = {
       role: 'user',
-      content: [{ type: 'text', text: msg.content }],
+      content: [{ type: 'text', text: expandedContent }],
       timestamp: Date.now(),
     };
 
     // Trigger before_tool_call for any tools that will be executed
     await this.triggerHook('before_tool_call', {
       toolName: 'user_message',
-      params: { content: msg.content },
+      params: { content: expandedContent },
     });
 
     await this.agent.prompt(userMessage);
@@ -595,6 +601,47 @@ Current working directory is set automatically for shell commands.`;
     }
 
     return prompt;
+  }
+
+  // ============================================================================
+  // Skill Command Support
+  // ============================================================================
+
+  /** Parsed skill block from a user message */
+  private parseSkillBlock(text: string): { name: string; location: string; content: string; userMessage: string | undefined } | null {
+    const match = text.match(/^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/);
+    if (!match) return null;
+    return {
+      name: match[1],
+      location: match[2],
+      content: match[3],
+      userMessage: match[4]?.trim() || undefined,
+    };
+  }
+
+  /**
+   * Expand skill commands (/skill:name args) to their full content.
+   * Returns the expanded text, or the original text if not a skill command or skill not found.
+   */
+  private expandSkillCommand(text: string): string {
+    if (!text.startsWith('/skill:')) return text;
+
+    const spaceIndex = text.indexOf(' ');
+    const skillName = spaceIndex === -1 ? text.slice(7) : text.slice(7, spaceIndex);
+    const args = spaceIndex === -1 ? undefined : text.slice(spaceIndex + 1).trim();
+
+    const skill = this.skills.find((s) => s.name === skillName);
+    if (!skill) return text; // Unknown skill, pass through
+
+    try {
+      const rawContent = readFileSync(skill.filePath, 'utf-8');
+      // Strip frontmatter
+      const body = rawContent.replace(/^---[\s\S]*?---\n*/, '');
+      const skillBlock = `<skill name="${skill.name}" location="${skill.filePath}">\nReferences are relative to ${skill.baseDir}.\n\n${body}\n</skill>`;
+      return args ? `${skillBlock}\n\n${args}` : skillBlock;
+    } catch {
+      return text; // Failed to read, pass through
+    }
   }
 
   async processDirect(content: string, sessionKey = 'cli:direct'): Promise<string> {
