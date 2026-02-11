@@ -135,6 +135,21 @@ export const CronConfigSchema = z.object({
 });
 
 // ============================================
+// Plugin Configs
+// ============================================
+
+export const PluginConfigEntrySchema = z.object({
+  enabled: z.boolean().default(true),
+  config: z.record(z.unknown()).default({}),
+  path: z.string().optional(),
+});
+
+export const PluginsConfigSchema = z.record(
+  z.string(),
+  z.union([z.boolean(), PluginConfigEntrySchema])
+).default({});
+
+// ============================================
 // Root Config
 // ============================================
 
@@ -145,6 +160,7 @@ export const ConfigSchema = z.object({
   gateway: GatewayConfigSchema.default({}),
   tools: ToolsConfigSchema.default({}),
   cron: CronConfigSchema.default({}),
+  plugins: PluginsConfigSchema.default({}),
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
