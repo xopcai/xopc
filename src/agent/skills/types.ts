@@ -81,6 +81,8 @@ export interface Skill {
   frontmatter: SkillFrontmatter;
   /** @deprecated Metadata is now platform-agnostic */
   metadata?: Record<string, string>;
+  /** Disable automatic model invocation (top-level override) */
+  disableModelInvocation?: boolean;
 }
 
 /** Validation error/warning */

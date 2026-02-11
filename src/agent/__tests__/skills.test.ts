@@ -20,13 +20,13 @@ describe('Skills Loader', () => {
 
   describe('loadSkills', () => {
     it('should return empty tools when skills directory does not exist', () => {
-      const nonExistentDir = loadSkills({, 'non-existent');
-      const result = join(testDir builtinDir: nonExistentDir });
-      expect(result.tools).toHaveLength builtin directory', ()(0);
+      const nonExistentDir = join(testDir, 'non-existent');
+      const result = loadSkills({ builtinDir: nonExistentDir });
+      expect(result.tools).toHaveLength(0);
     });
 
-    it(' => {
-      constshould load skills from skillDir = join(testDir, 'weather');
+    it('should load skills from builtin directory', () => {
+      const skillDir = join(testDir, 'weather');
       mkdirSync(skillDir, { recursive: true });
       
       writeFileSync(

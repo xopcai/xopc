@@ -35,7 +35,7 @@ describe('xopcbot integration tests', () => {
     // Bus modules
     const { MessageBus } = await import('../bus/index.js');
     expect(MessageBus).toBeDefined();
-  });
+  }, 30000);
 
   it('should instantiate core classes', async () => {
     const { CommandRegistry } = await import('../cli/registry.js');

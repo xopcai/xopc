@@ -49,11 +49,13 @@ function formatSkillXml(skill: Skill): string {
  * Format skills for inclusion in system prompt
  * Uses XML format per Agent Skills standard
  * 
- * Skills with frontmatter.disable-model-invocation=true are excluded
+ * Skills with frontmatter.disable-model-invocation=true or top-level disableModelInvocation are excluded
  */
 export function formatSkillsForPrompt(skills: Skill[]): string {
-  // Filter out skills disabled for model invocation
-  const visibleSkills = skills.filter(s => !s.frontmatter['disable-model-invocation']);
+  // Filter out skills disabled for model invocation (check both frontmatter and top-level)
+  const visibleSkills = skills.filter(s => 
+    !s.frontmatter['disable-model-invocation'] && !s.disableModelInvocation
+  );
 
   if (visibleSkills.length === 0) {
     return '';
@@ -87,7 +89,9 @@ export function formatSkillsList(skills: Skill[]): string {
 
   for (const skill of skills) {
     const emoji = skill.metadata?.emoji || skill.frontmatter['xopcbot-metadata']?.emoji || '📄';
-    const status = skill.frontmatter['disable-model-invocation'] ? ' (manual only)' : '';
+    // Check both frontmatter and top-level disableModelInvocation
+    const isManualOnly = skill.frontmatter['disable-model-invocation'] || skill.disableModelInvocation;
+    const status = isManualOnly ? ' (manual only)' : '';
     lines.push(`  ${emoji} **${skill.name}** - ${skill.description}${status}`);
   }
 
@@ -138,7 +142,7 @@ export function formatSkillDetail(skill: Skill): string {
     }
   }
 
-  if (skill.frontmatter['disable-model-invocation']) {
+  if (skill.frontmatter['disable-model-invocation'] || skill.disableModelInvocation) {
     lines.push('');
     lines.push('*This skill is disabled for automatic model invocation.*');
   }

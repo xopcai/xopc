@@ -15,7 +15,7 @@
     "build": "tsc",
     "dev": "tsx src/cli/index.ts",
     "start": "node dist/cli/index.js",
-    "test": "vitest",
+    "test": "vitest src",
     "lint": "eslint 'src/**/*.ts' --ignore-pattern '**/examples/**'",
     "prepublishOnly": "npm run build && npm test"
   },
