@@ -25,6 +25,7 @@ const baseLogger = pino({
       colorize: true,
       translateTime: 'SYS:standard',
       ignore: 'pid,hostname',
+      singleLine: true,
     },
   } : undefined,
   base: {
