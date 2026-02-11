@@ -51,10 +51,44 @@ git clone https://github.com/your/plugin.git
 ```json
 {
   "plugins": {
-    "enabled": ["hello", "echo"]
+    "enabled": ["hello", "echo"],
+    "hello": { "greeting": "Hi there!" },
+    "echo": true
   }
 }
 ```
+
+**配置格式说明：**
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `enabled` | `string[]` | 要启用的插件 ID 列表 |
+| `disabled` | `string[]` | （可选）禁用的插件 ID 列表 |
+| `[plugin-id]` | `object \| boolean` | 插件特定配置 |
+
+**示例配置：**
+
+```json
+{
+  "plugins": {
+    "enabled": ["telegram-channel", "weather-tool", "echo"],
+    "disabled": ["deprecated-plugin"],
+    "telegram-channel": {
+      "token": "bot-token-here",
+      "webhookUrl": "https://example.com/webhook"
+    },
+    "weather-tool": {
+      "apiKey": "weather-api-key",
+      "defaultCity": "Beijing"
+    },
+    "echo": true
+  }
+}
+```
+
+- `enabled` 数组中的插件会被加载
+- 插件 ID 作为 key 可以配置插件特定的选项
+- 如果插件不需要配置，可以设为 `true`
 
 ### 创建新插件
 

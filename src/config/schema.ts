@@ -138,15 +138,24 @@ export const CronConfigSchema = z.object({
 // Plugin Configs
 // ============================================
 
-export const PluginConfigEntrySchema = z.object({
-  enabled: z.boolean().default(true),
-  config: z.record(z.unknown()).default({}),
-  path: z.string().optional(),
-});
-
+/**
+ * Plugin configuration format:
+ * {
+ *   "plugins": {
+ *     "enabled": ["plugin-a", "plugin-b"],
+ *     "disabled": ["plugin-c"],
+ *     "plugin-a": { "key": "value" },
+ *     "plugin-b": true
+ *   }
+ * }
+ */
 export const PluginsConfigSchema = z.record(
   z.string(),
-  z.union([z.boolean(), PluginConfigEntrySchema])
+  z.union([
+    z.boolean(),
+    z.array(z.string()),
+    z.record(z.unknown())
+  ])
 ).default({});
 
 // ============================================
