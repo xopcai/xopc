@@ -19,7 +19,7 @@ import {
   createMessageTool,
   createSpawnTool,
 } from './tools/index.js';
-import { loadSkills } from '../skills/loader.js';
+import { loadSkills } from './skills.js';
 import type { SubagentResult } from './tools/communication.js';
 import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
