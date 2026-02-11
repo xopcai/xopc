@@ -3,7 +3,7 @@ import type { AgentTool } from '@mariozechner/pi-agent-core';
 import { readFileSync, readdirSync, existsSync } from 'fs';
 import { join } from 'path';
 import { createLogger } from '../utils/logger.js';
-import { getWorkspacePluginsDir, getGlobalPluginsDir } from '../config/paths.js';
+import { getGlobalPluginsDir } from '../config/paths.js';
 
 const log = createLogger('SkillsLoader');
 
@@ -219,8 +219,6 @@ export function loadSkills(options: SkillLoaderOptions = {}): AgentTool<any, any
  * Get skill metadata for display
  */
 export function listSkills(options: SkillLoaderOptions = {}): Array<{ name: string; description: string; origin: string }> {
-  const skills: Array<{ name: string; description: string; origin: string }> = [];
-  
   const builtinDir = options.builtinDir || join(import.meta.dirname || '', '../skills');
   const workspaceDir = options.workspaceDir;
 

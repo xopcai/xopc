@@ -8,7 +8,7 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from 'fs';
-import { join, dirname, isAbsolute, resolve } from 'path';
+import { join, dirname, isAbsolute } from 'path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createJiti } from 'jiti';
