@@ -19,7 +19,7 @@ import {
   createMessageTool,
   createSpawnTool,
 } from './tools/index.js';
-import { loadSkills } from './skills.js';
+import { loadSkills } from './skills/index.js';
 import type { SubagentResult } from './tools/communication.js';
 import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
@@ -106,10 +106,10 @@ export class AgentService {
     }
 
     // Load skills as tools
-    const skillTools = loadSkills({ workspaceDir: config.workspace });
-    if (skillTools.length > 0) {
-      tools.push(...skillTools);
-      log.info({ count: skillTools.length }, 'Loaded skills as tools');
+    const skillResult = loadSkills({ workspaceDir: config.workspace });
+    if (skillResult.tools.length > 0) {
+      tools.push(...skillResult.tools);
+      log.info({ count: skillResult.tools.length }, 'Loaded skills as tools');
     }
 
     const registry = new ModelRegistry(config.config ?? null, { ollamaEnabled: false });

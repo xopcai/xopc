@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { loadSkills, listSkills } from '../skills.js';
+import { loadSkills, listSkills } from '../skills/index.js';
 import { mkdirSync, writeFileSync, rmSync, existsSync } from 'fs';
 import { join } from 'path';
 import { tmpdir } from 'os';
@@ -19,14 +19,14 @@ describe('Skills Loader', () => {
   });
 
   describe('loadSkills', () => {
-    it('should return empty array when skills directory does not exist', () => {
-      const nonExistentDir = join(testDir, 'non-existent');
-      const skills = loadSkills({ builtinDir: nonExistentDir });
-      expect(skills).toHaveLength(0);
+    it('should return empty tools when skills directory does not exist', () => {
+      const nonExistentDir = loadSkills({, 'non-existent');
+      const result = join(testDir builtinDir: nonExistentDir });
+      expect(result.tools).toHaveLength builtin directory', ()(0);
     });
 
-    it('should load skills from builtin directory', () => {
-      const skillDir = join(testDir, 'weather');
+    it(' => {
+      constshould load skills from skillDir = join(testDir, 'weather');
       mkdirSync(skillDir, { recursive: true });
       
       writeFileSync(
@@ -34,9 +34,10 @@ describe('Skills Loader', () => {
         `---\nname: weather\ndescription: Get weather information\n---\n\n## Usage\n\`\`\`bash\ncurl -s "wttr.in/London"\n\`\`\``
       );
 
-      const skills = loadSkills({ builtinDir: testDir });
+      const result = loadSkills({ builtinDir: testDir });
       
-      expect(skills.some(s => s.name === 'skill_weather')).toBe(true);
+      expect(result.skills.some(s => s.name === 'weather')).toBe(true);
+      expect(result.tools.some(t => t.name === 'skill_weather')).toBe(true);
     });
 
     it('should load skills from workspace directory', () => {
@@ -49,9 +50,10 @@ describe('Skills Loader', () => {
         `---\nname: custom-skill\ndescription: A custom workspace skill\n---\n\n## Usage\n\`\`\`bash\necho "hello"\n\`\`\``
       );
 
-      const skills = loadSkills({ workspaceDir });
+      const result = loadSkills({ workspaceDir });
       
-      expect(skills.some(s => s.name === 'skill_custom-skill')).toBe(true);
+      expect(result.skills.some(s => s.name === 'custom-skill')).toBe(true);
+      expect(result.tools.some(t => t.name === 'skill_custom-skill')).toBe(true);
     });
 
     it('should prioritize workspace skills over builtin skills', () => {
@@ -72,13 +74,13 @@ describe('Skills Loader', () => {
         `---\nname: weather\ndescription: Custom weather skill\n---\n\n## Usage\n\`\`\`bash\ncurl custom-weather.com\n\`\`\``
       );
 
-      const skills = loadSkills({ 
+      const result = loadSkills({ 
         builtinDir: join(testDir, 'builtin'),
         workspaceDir 
       });
       
       // Should only have one weather skill (workspace overrides builtin)
-      const weatherSkills = skills.filter(s => s.name === 'skill_weather');
+      const weatherSkills = result.skills.filter(s => s.name === 'weather');
       expect(weatherSkills).toHaveLength(1);
       expect(weatherSkills[0].description).toContain('Custom weather skill');
     });
@@ -88,9 +90,9 @@ describe('Skills Loader', () => {
       mkdirSync(skillDir, { recursive: true });
       writeFileSync(join(skillDir, 'README.md'), 'No SKILL.md here');
 
-      const skills = loadSkills({ builtinDir: testDir });
+      const result = loadSkills({ builtinDir: testDir });
       
-      expect(skills).toHaveLength(0);
+      expect(result.skills).toHaveLength(0);
     });
 
     it('should skip invalid SKILL.md files', () => {
@@ -101,9 +103,9 @@ describe('Skills Loader', () => {
         'This is not a valid SKILL.md - no frontmatter'
       );
 
-      const skills = loadSkills({ builtinDir: testDir });
+      const result = loadSkills({ builtinDir: testDir });
       
-      expect(skills).toHaveLength(0);
+      expect(result.skills).toHaveLength(0);
     });
   });
 
@@ -117,12 +119,12 @@ describe('Skills Loader', () => {
         `---\nname: test\ndescription: A test skill\n---\n\n## Usage\n\`\`\`bash\ncurl "https://api.example.com?q=London"\n\`\`\``
       );
 
-      const skills = loadSkills({ builtinDir: testDir });
+      const result = loadSkills({ builtinDir: testDir });
       
-      expect(skills.some(s => s.name === 'skill_test')).toBe(true);
-      const skill = skills.find(s => s.name === 'skill_test')!;
-      expect(skill.label).toBe('🎯 test');
-      expect(skill.parameters).toBeDefined();
+      expect(result.tools.some(t => t.name === 'skill_test')).toBe(true);
+      const tool = result.tools.find(t => t.name === 'skill_test')!;
+      expect(tool.label).toBe('🎯 test');
+      expect(tool.parameters).toBeDefined();
     });
 
     it('should execute skill tool and return command with query replaced', async () => {
@@ -134,12 +136,12 @@ describe('Skills Loader', () => {
         `---\nname: weather\ndescription: Get weather\n---\n\n## Usage\n\`\`\`bash\ncurl -s "wttr.in/London?format=3"\n\`\`\``
       );
 
-      const skills = loadSkills({ builtinDir: testDir });
-      const skill = skills.find(s => s.name === 'skill_weather')!;
-      const result = await skill.execute('test-id', { query: 'Beijing' });
+      const result = loadSkills({ builtinDir: testDir });
+      const tool = result.tools.find(t => t.name === 'skill_weather')!;
+      const executionResult = await tool.execute('test-id', { query: 'Beijing' });
       
-      expect(result.content[0].type).toBe('text');
-      const textContent = result.content[0] as { type: 'text'; text: string };
+      expect(executionResult.content[0].type).toBe('text');
+      const textContent = executionResult.content[0] as { type: 'text'; text: string };
       expect(textContent.text).toContain('wttr.in/Beijing');
       expect(textContent.text).toContain('curl');
     });
@@ -158,7 +160,7 @@ describe('Skills Loader', () => {
         builtinDir: join(testDir, 'builtin'),
       });
       
-      expect(skills.some(s => s.name === 'skill1' && s.origin === 'builtin')).toBe(true);
+      expect(skills.some(s => s.name === 'skill1' && s.source === 'builtin')).toBe(true);
     });
 
     it('should include workspace skills', () => {
@@ -172,7 +174,7 @@ describe('Skills Loader', () => {
 
       const skills = listSkills({ workspaceDir });
       
-      expect(skills.some(s => s.name === 'workspace-skill' && s.origin === 'workspace')).toBe(true);
+      expect(skills.some(s => s.name === 'workspace-skill' && s.source === 'workspace')).toBe(true);
     });
 
     it('should return empty array when no skills exist', () => {

@@ -7,7 +7,7 @@
 export type {
   Skill,
   SkillFrontmatter,
-  XopcbotMetadata,
+  DeprecatedXopcbotMetadata,
   SkillSource,
   SkillCategory,
   ValidationDiagnostic,
