@@ -1,164 +1,223 @@
-/**
- * Grep tool - Search file contents for patterns
- * Based on pi-coding-agent implementation
- */
-
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
-import { spawn } from 'child_process';
-import { existsSync } from 'fs';
+import { readFileSync, existsSync, statSync } from 'fs';
+import { globSync } from 'glob';
+import path from 'path';
+import {
+	DEFAULT_MAX_BYTES,
+	formatSize,
+	GREP_MAX_LINE_LENGTH,
+	type TruncationResult,
+	truncateHead,
+	truncateLine,
+} from './truncate.js';
+import { resolveToCwd } from './path-utils.js';
 
-const GREPSchema = Type.Object({
-  pattern: Type.String({ description: 'Search pattern (regex or literal string)' }),
-  path: Type.Optional(Type.String({ description: 'Directory to search (default: current directory)' })),
-  glob: Type.Optional(Type.String({ description: 'Filter files by glob pattern (e.g., *.ts, **/*.js)' })),
-  ignoreCase: Type.Optional(Type.Boolean({ description: 'Case-insensitive search (default: false)' })),
-  literal: Type.Optional(Type.Boolean({ description: 'Treat pattern as literal string (default: false)' })),
-  context: Type.Optional(Type.Number({ description: 'Number of lines before/after match (default: 0)' })),
-  limit: Type.Optional(Type.Number({ description: 'Maximum number of matches (default: 100)' })),
+const grepSchema = Type.Object({
+	pattern: Type.String({ description: 'Search pattern (regex or literal string)' }),
+	path: Type.Optional(Type.String({ description: 'Directory or file to search (default: current directory)' })),
+	glob: Type.Optional(Type.String({ description: "Filter files by glob pattern, e.g. '*.ts'" })),
+	ignoreCase: Type.Optional(Type.Boolean({ description: 'Case-insensitive search (default: false)' })),
+	literal: Type.Optional(Type.Boolean({ description: 'Treat pattern as literal string instead of regex (default: false)' })),
+	context: Type.Optional(Type.Number({ description: 'Number of lines to show before and after each match (default: 0)' })),
+	limit: Type.Optional(Type.Number({ description: 'Maximum number of matches to return (default: 100)' })),
 });
 
-const DEFAULT_LIMIT = 100;
-const MAX_LINE_LENGTH = 500;
+export type GrepToolInput = Static<typeof grepSchema>;
 
-interface GrepResult {
-  truncation?: {
-    totalMatches: number;
-    limit: number;
-  };
+const DEFAULT_LIMIT = 100;
+
+export interface GrepToolDetails {
+	truncation?: TruncationResult;
+	matchLimitReached?: number;
+	linesTruncated?: boolean;
 }
 
-export const grepTool: AgentTool<typeof GREPSchema, GrepResult> = {
-  name: 'grep',
-  label: '🔍 Grep',
-  description: `Search file contents for a pattern. Respects .gitignore. Output shows file paths and line numbers. Limited to ${DEFAULT_LIMIT} matches.`,
-  parameters: GREPSchema,
+/**
+ * Simple grep implementation using Node.js regex
+ */
+function simpleGrep(
+	content: string,
+	pattern: string,
+	options: { ignoreCase: boolean; literal: boolean }
+): Array<{ lineNumber: number; line: string }> {
+	const matches: Array<{ lineNumber: number; line: string }> = [];
+	const lines = content.split('\n');
+	const regexPattern = options.literal
+		? pattern.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
+		: pattern;
+	const flags = options.ignoreCase ? 'i' : '';
+	const regex = new RegExp(regexPattern, flags);
 
-  async execute(
-    toolCallId: string,
-    params: Static<typeof GREPSchema>,
-    _signal?: AbortSignal
-  ): Promise<AgentToolResult<GrepResult>> {
-    try {
-      const searchDir = params.path || '.';
-      const limit = params.limit || DEFAULT_LIMIT;
-      
-      if (!existsSync(searchDir)) {
-        return {
-          content: [{ type: 'text', text: `Directory not found: ${searchDir}` }],
-          details: {},
-        };
-      }
+	for (let i = 0; i < lines.length; i++) {
+		if (regex.test(lines[i])) {
+			matches.push({ lineNumber: i + 1, line: lines[i] });
+		}
+	}
 
-      // Build ripgrep command
-      const rgArgs: string[] = [
-        '--line-number',
-        '--color', 'never',
-      ];
+	return matches;
+}
 
-      if (params.ignoreCase) {
-        rgArgs.push('--ignore-case');
-      }
-      if (params.literal) {
-        rgArgs.push('--fixed-strings');
-      }
-      if (params.context > 0) {
-        rgArgs.push(`--context=${params.context}`);
-      }
-      if (params.glob) {
-        rgArgs.push('--glob', params.glob);
-      }
-      
-      // Limit matches per file
-      rgArgs.push('--max-count', String(limit));
+/**
+ * Grep tool - Search file contents for a pattern
+ */
+export function createGrepTool(cwd: string): AgentTool<typeof grepSchema> {
+	return {
+		name: 'grep',
+		label: '🔍 grep',
+		description: `Search file contents for a pattern. Returns matching lines with file paths and line numbers. Output is truncated to ${DEFAULT_LIMIT} matches or ${DEFAULT_MAX_BYTES / 1024}KB. Long lines are truncated to ${GREP_MAX_LINE_LENGTH} chars.`,
+		parameters: grepSchema,
+		execute: async (
+			_toolCallId: string,
+			params: Static<typeof grepSchema>,
+			signal?: AbortSignal
+		): Promise<AgentToolResult<GrepToolDetails>> => {
+			try {
+				const searchPath = resolveToCwd(params.path || '.', cwd);
+				
+				if (!existsSync(searchPath)) {
+					return {
+						content: [{ type: 'text', text: `Error: Path not found: ${searchPath}` }],
+						details: {},
+					};
+				}
 
-      rgArgs.push(params.pattern);
-      rgArgs.push(searchDir);
+				const isDirectory = statSync(searchPath).isDirectory();
+				const context = params.context || 0;
+				const effectiveLimit = params.limit || DEFAULT_LIMIT;
+				const files: string[] = [];
 
-      const proc = spawn('rg', rgArgs, {
-        cwd: searchDir,
-        env: process.env,
-      });
+				// Collect files to search
+				if (isDirectory) {
+					const globPattern = params.glob || '**/*';
+					const filePaths = globSync(globPattern, {
+						cwd: searchPath,
+						dot: true,
+						ignore: ['**/node_modules/**', '**/.git/**'],
+					});
+					files.push(...filePaths.map(f => path.join(searchPath, f)));
+				} else {
+					files.push(searchPath);
+				}
 
-      let output = '';
+				const matches: Array<{ file: string; lineNumber: number; line: string }> = [];
+				let matchCount = 0;
+				let linesTruncated = false;
 
-      proc.stdout.on('data', (data: Buffer) => {
-        output += data.toString();
-      });
+				// Search each file
+				for (const filePath of files) {
+					if (signal?.aborted) {
+						return {
+							content: [{ type: 'text', text: 'Operation aborted' }],
+							details: {},
+						};
+					}
 
-      proc.stderr.on('data', (data: Buffer) => {
-        const text = data.toString();
-        // Ignore "No files searched" messages
-        if (!text.includes('No files searched')) {
-          output += text;
-        }
-      });
+					try {
+						if (!existsSync(filePath)) continue;
+						const content = readFileSync(filePath, 'utf-8');
+						const fileMatches = simpleGrep(content, params.pattern, {
+							ignoreCase: params.ignoreCase || false,
+							literal: params.literal || false,
+						});
 
-      return new Promise((resolve) => {
-        proc.on('close', (code) => {
-          // Truncate long lines
-          const lines = output.split('\n').filter(Boolean);
-          const truncatedLines: string[] = [];
-          let totalMatches = 0;
+						for (const match of fileMatches) {
+							if (matchCount >= effectiveLimit) break;
+							matches.push({ file: filePath, ...match });
+							matchCount++;
+						}
+					} catch {
+						// Skip files that can't be read
+					}
 
-          for (const line of lines) {
-            // Count matches in this line
-            totalMatches += 1;
-            
-            if (totalMatches > limit) {
-              break;
-            }
+					if (matchCount >= effectiveLimit) break;
+				}
 
-            // Truncate long lines
-            if (line.length > MAX_LINE_LENGTH) {
-              truncatedLines.push(line.slice(0, MAX_LINE_LENGTH) + '...');
-            } else {
-              truncatedLines.push(line);
-            }
-          }
+				if (matches.length === 0) {
+					return {
+						content: [{ type: 'text', text: 'No matches found' }],
+						details: {},
+					};
+				}
 
-          const truncatedOutput = truncatedLines.join('\n');
-          const wasTruncated = totalMatches > limit || lines.length > limit;
+				// Format output
+				const outputLines: string[] = [];
+				const basePath = isDirectory ? searchPath : path.dirname(searchPath);
 
-          if (code === 0 && !output) {
-            resolve({
-              content: [{ type: 'text', text: 'No matches found' }],
-              details: {},
-            });
-            return;
-          }
+				for (const match of matches) {
+					const relativePath = path.relative(basePath, match.file);
+					const { text: truncatedLine, wasTruncated } = truncateLine(match.line);
+					if (wasTruncated) linesTruncated = true;
 
-          if (code !== 0 && !output.includes('No files')) {
-            resolve({
-              content: [{ type: 'text', text: `Search failed: ${output || 'unknown error'}` }],
-              details: {},
-            });
-            return;
-          }
+					if (context > 0) {
+						// Add context lines
+						try {
+							const content = readFileSync(match.file, 'utf-8');
+							const allLines = content.split('\n');
+							const start = Math.max(1, match.lineNumber - context);
+							const end = Math.min(allLines.length, match.lineNumber + context);
 
-          resolve({
-            content: [{ type: 'text', text: truncatedOutput || 'No matches found' }],
-            details: {
-              truncation: wasTruncated ? { totalMatches, limit } : undefined,
-            },
-          });
-        });
+							for (let i = start; i <= end; i++) {
+								const lineText = allLines[i - 1] || '';
+								const { text: truncatedContextLine } = truncateLine(lineText);
+								if (i === match.lineNumber) {
+									outputLines.push(`${relativePath}:${i}: ${truncatedContextLine}`);
+								} else {
+									outputLines.push(`${relativePath}-${i}- ${truncatedContextLine}`);
+								}
+							}
+						} catch {
+							outputLines.push(`${relativePath}:${match.lineNumber}: ${truncatedLine}`);
+						}
+					} else {
+						outputLines.push(`${relativePath}:${match.lineNumber}: ${truncatedLine}`);
+					}
+				}
 
-        proc.on('error', (error) => {
-          resolve({
-            content: [{ type: 'text', text: `Error running grep: ${error.message}` }],
-            details: {},
-          });
-        });
-      });
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error: ${error instanceof Error ? error.message : String(error)}`,
-        }],
-        details: {},
-      };
-    }
-  },
-};
+				const rawOutput = outputLines.join('\n');
+				const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
+
+				let output = truncation.content;
+				const details: GrepToolDetails = {};
+				const notices: string[] = [];
+
+				if (matches.length >= effectiveLimit) {
+					notices.push(`${effectiveLimit} matches limit reached`);
+					details.matchLimitReached = effectiveLimit;
+				}
+
+				if (truncation.truncated) {
+					notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
+					details.truncation = truncation;
+				}
+
+				if (linesTruncated) {
+					notices.push(`Some lines truncated to ${GREP_MAX_LINE_LENGTH} chars`);
+					details.linesTruncated = true;
+				}
+
+				if (notices.length > 0) {
+					output += `\n\n[${notices.join('. ')}]`;
+				}
+
+				return {
+					content: [{ type: 'text', text: output }],
+					details: Object.keys(details).length > 0 ? details : undefined,
+				};
+			} catch (error) {
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `Error during grep: ${error instanceof Error ? error.message : String(error)}`,
+						},
+					],
+					details: {},
+				};
+			}
+		},
+	};
+}
+
+/** Default grep tool using process.cwd() */
+export const grepTool = createGrepTool(process.cwd());

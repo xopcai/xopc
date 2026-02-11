@@ -1,118 +1,125 @@
-/**
- * Find tool - Find files by glob pattern
- * Based on pi-coding-agent implementation
- */
-
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
-import { spawn } from 'child_process';
 import { existsSync } from 'fs';
+import { globSync } from 'glob';
+import path from 'path';
+import { DEFAULT_MAX_BYTES, formatSize, type TruncationResult, truncateHead } from './truncate.js';
+import { resolveToCwd } from './path-utils.js';
 
-const FindSchema = Type.Object({
-  pattern: Type.String({ description: 'Glob pattern (e.g., **/*.ts, *.js, src/**/*.json)' }),
-  path: Type.Optional(Type.String({ description: 'Directory to search (default: current directory)' })),
-  limit: Type.Optional(Type.Number({ description: 'Maximum number of results (default: 100)' })),
+const findSchema = Type.Object({
+	pattern: Type.String({
+		description: "Glob pattern to match files, e.g. '*.ts', '**/*.json', or 'src/**/*.spec.ts'",
+	}),
+	path: Type.Optional(Type.String({ description: 'Directory to search in (default: current directory)' })),
+	limit: Type.Optional(Type.Number({ description: 'Maximum number of results (default: 1000)' })),
 });
 
-const DEFAULT_LIMIT = 100;
+export type FindToolInput = Static<typeof findSchema>;
 
-interface FindResult {
-  truncation?: {
-    totalFiles: number;
-    limit: number;
-  };
+const DEFAULT_LIMIT = 1000;
+
+export interface FindToolDetails {
+	truncation?: TruncationResult;
+	resultLimitReached?: number;
 }
 
-export const findTool: AgentTool<typeof FindSchema, FindResult> = {
-  name: 'find',
-  label: '📂 Find',
-  description: 'Find files matching a glob pattern. Respects .gitignore. Returns file paths.',
-  parameters: FindSchema,
+/**
+ * Find tool - Search for files by glob pattern
+ */
+export function createFindTool(cwd: string): AgentTool<typeof findSchema> {
+	return {
+		name: 'find',
+		label: '📁 find',
+		description: `Search for files by glob pattern. Returns matching file paths relative to the search directory. Output is truncated to ${DEFAULT_LIMIT} results or ${DEFAULT_MAX_BYTES / 1024}KB.`,
+		parameters: findSchema,
+		execute: async (
+			_toolCallId: string,
+			params: Static<typeof findSchema>,
+			signal?: AbortSignal
+		): Promise<AgentToolResult<FindToolDetails>> => {
+			try {
+				const searchPath = resolveToCwd(params.path || '.', cwd);
+				const effectiveLimit = params.limit || DEFAULT_LIMIT;
 
-  async execute(
-    toolCallId: string,
-    params: Static<typeof FindSchema>,
-    _signal?: AbortSignal
-  ): Promise<AgentToolResult<FindResult>> {
-    try {
-      const searchDir = params.path || '.';
-      const limit = params.limit || DEFAULT_LIMIT;
+				if (!existsSync(searchPath)) {
+					return {
+						content: [{ type: 'text', text: `Error: Path not found: ${searchPath}` }],
+						details: {},
+					};
+				}
 
-      if (!existsSync(searchDir)) {
-        return {
-          content: [{ type: 'text', text: `Directory not found: ${searchDir}` }],
-          details: {},
-        };
-      }
+				if (signal?.aborted) {
+					return {
+						content: [{ type: 'text', text: 'Operation aborted' }],
+						details: {},
+					};
+				}
 
-      // Use fd (fd) if available, otherwise use find
-      const useFd = false; // Check if fd is available
-      
-      let output = '';
+				const filePaths = globSync(params.pattern, {
+					cwd: searchPath,
+					dot: true,
+					ignore: ['**/node_modules/**', '**/.git/**'],
+				});
 
-      if (useFd) {
-        // Use fd for better performance
-        const proc = spawn('fd', [
-          '--type', 'f',
-          '--no-ignore',
-          '--max-results', String(limit),
-          params.pattern,
-          searchDir,
-        ], { cwd: searchDir });
+				if (filePaths.length === 0) {
+					return {
+						content: [{ type: 'text', text: 'No files found matching pattern' }],
+						details: {},
+					};
+				}
 
-        output = await new Promise<string>((resolve, reject) => {
-          let data = '';
-          proc.stdout.on('data', (d: Buffer) => data += d.toString());
-          proc.stderr.on('data', (d: Buffer) => data += d.toString());
-          proc.on('close', (_code) => resolve(data));
-          proc.on('error', reject);
-        });
-      } else {
-        // Fallback to find command
-        const proc = spawn('find', [
-          searchDir,
-          '-type', 'f',
-          '-name', params.pattern,
-          '-print0',
-        ], { cwd: searchDir });
+				// Relativize paths
+				const relativized = filePaths.map((p) => {
+					if (p.startsWith(searchPath)) {
+						return p.slice(searchPath.length + 1);
+					}
+					return path.relative(searchPath, p);
+				});
 
-        output = await new Promise<string>((resolve, reject) => {
-          let data = '';
-          proc.stdout.on('data', (d: Buffer) => data += d.toString());
-          proc.stderr.on('data', (d: Buffer) => data += d.toString());
-          proc.on('close', () => resolve(data));
-          proc.on('error', reject);
-        });
-      }
+				// Sort results
+				relativized.sort();
 
-      // Parse null-terminated output
-      const files = output.split('\0').filter(Boolean);
-      const truncatedFiles = files.slice(0, limit);
-      const wasTruncated = files.length > limit;
+				const resultLimitReached = relativized.length >= effectiveLimit;
+				const outputLines = resultLimitReached ? relativized.slice(0, effectiveLimit) : relativized;
+				const rawOutput = outputLines.join('\n');
+				const truncation = truncateHead(rawOutput, { maxLines: Number.MAX_SAFE_INTEGER });
 
-      if (files.length === 0 || truncatedFiles.length === 0) {
-        return {
-          content: [{ type: 'text', text: 'No files found' }],
-          details: {},
-        };
-      }
+				let resultOutput = truncation.content;
+				const details: FindToolDetails = {};
+				const notices: string[] = [];
 
-      const resultText = truncatedFiles.join('\n');
+				if (resultLimitReached) {
+					notices.push(`${effectiveLimit} results limit reached`);
+					details.resultLimitReached = effectiveLimit;
+				}
 
-      return {
-        content: [{ type: 'text', text: resultText }],
-        details: {
-          truncation: wasTruncated ? { totalFiles: files.length, limit } : undefined,
-        },
-      };
-    } catch (error) {
-      return {
-        content: [{
-          type: 'text',
-          text: `Error: ${error instanceof Error ? error.message : String(error)}`,
-        }],
-        details: {},
-      };
-    }
-  },
-};
+				if (truncation.truncated) {
+					notices.push(`${formatSize(DEFAULT_MAX_BYTES)} limit reached`);
+					details.truncation = truncation;
+				}
+
+				if (notices.length > 0) {
+					resultOutput += `\n\n[${notices.join('. ')}]`;
+				}
+
+				return {
+					content: [{ type: 'text', text: resultOutput }],
+					details: Object.keys(details).length > 0 ? details : undefined,
+				};
+			} catch (error) {
+				return {
+					content: [
+						{
+							type: 'text',
+							text: `Error during find: ${error instanceof Error ? error.message : String(error)}`,
+						},
+					],
+					details: {},
+				};
+			}
+		},
+	};
+}
+
+/** Default find tool using process.cwd() */
+export const findTool = createFindTool(process.cwd());
