@@ -10,15 +10,13 @@ import {
 } from '../validation.js';
 import { 
   formatSkillsForPrompt, 
-  formatSkillsList,
-  formatSkillDetail 
+  formatSkillsList
 } from '../prompt.js';
 import { 
-  hasBinary, 
   hasEnv, 
   checkEligibility 
 } from '../eligibility.js';
-import type { Skill, XopcbotMetadata } from '../types.js';
+import type { Skill } from '../types.js';
 
 // Helper to create test skills
 function createTestSkill(overrides: Partial<Skill> = {}): Skill {

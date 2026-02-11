@@ -3,8 +3,6 @@
  * Based on Claude Code + OpenClaw best practices
  */
 
-import type { AgentTool } from '@mariozechner/pi-agent-core';
-
 /** Max name length per Agent Skills spec */
 export const MAX_SKILL_NAME_LENGTH = 64;
 

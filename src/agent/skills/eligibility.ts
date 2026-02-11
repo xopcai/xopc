@@ -2,7 +2,7 @@
  * Skill eligibility - check if a skill can be used in current environment
  */
 
-import { existsSync, accessSync, constants } from 'fs';
+import { accessSync, constants } from 'fs';
 import { join, delimiter } from 'path';
 import type { 
   Skill, 

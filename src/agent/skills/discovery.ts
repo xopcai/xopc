@@ -4,7 +4,7 @@
  */
 
 import { existsSync, readdirSync, readFileSync, realpathSync, statSync } from 'fs';
-import { dirname, join, relative, resolve, sep } from 'path';
+import { dirname, join, sep } from 'path';
 import type { 
   DiscoveryOptions, 
   DiscoveryResult, 
@@ -19,7 +19,7 @@ import { parseFrontmatter } from '../../utils/frontmatter.js';
  * Check if a file/directory should be ignored based on simple rules
  * (node_modules, hidden files)
  */
-function shouldIgnore(name: string, isDir: boolean): boolean {
+function shouldIgnore(name: string, _isDir: boolean): boolean {
   if (name.startsWith('.')) return true;
   if (name === 'node_modules') return true;
   return false;
@@ -96,7 +96,7 @@ function loadSkillFromFile(
  * - Respects .gitignore patterns if respectIgnoreFiles is true
  */
 export function discoverSkills(options: DiscoveryOptions): DiscoveryResult {
-  const { dir, source, respectIgnoreFiles = true } = options;
+  const { dir, source, respectIgnoreFiles: _respectIgnoreFiles } = options;
   const skills: Skill[] = [];
   const diagnostics: ValidationDiagnostic[] = [];
   const seenRealPaths = new Set<string>();

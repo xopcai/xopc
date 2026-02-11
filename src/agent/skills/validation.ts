@@ -6,9 +6,7 @@ import { basename, dirname } from 'path';
 import type { 
   Skill, 
   ValidationResult, 
-  ValidationDiagnostic,
-  MAX_SKILL_NAME_LENGTH,
-  MAX_SKILL_DESCRIPTION_LENGTH 
+  ValidationDiagnostic
 } from './types.js';
 
 /** Valid name pattern: lowercase letters, numbers, hyphens */

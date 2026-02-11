@@ -7,11 +7,9 @@
 import { 
   loadSkills as loadSkillsNew, 
   listSkills as listSkillsNew,
-  createToolsFromSkills,
   type SkillLoaderOptions 
 } from './skills/index.js';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
-import type { Skill } from './skills/types.js';
 
 /**
  * Backward compatible loadSkills - returns tools array

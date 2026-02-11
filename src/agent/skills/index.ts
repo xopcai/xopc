@@ -72,7 +72,7 @@ import { validateAllSkills } from './validation.js';
 import { filterEligibleSkills, createDefaultEligibilityContext } from './eligibility.js';
 import { formatSkillsForPrompt } from './prompt.js';
 import { createToolsFromSkills } from './tools.js';
-import type { Skill, SkillSource, SkillLoaderOptions, DiscoveryResult } from './types.js';
+import type { Skill, SkillSource, SkillLoaderOptions } from './types.js';
 import { join } from 'path';
 import { getGlobalPluginsDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
