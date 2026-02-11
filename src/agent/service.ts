@@ -29,6 +29,7 @@ import { DEFAULT_BASE_DIR, getBundledSkillsDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
 import { PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
+import { PromptBuilder } from './prompt/index.js';
 
 const log = createLogger('AgentService');
 
@@ -610,27 +611,35 @@ export class AgentService {
   }
 
   private getSystemPrompt(): string {
-    let prompt = `You are xopcbot, an AI assistant that helps users with various tasks.
+    // Build available tools list for prompt
+    const toolNames = [
+      'read_file', 'write_file', 'edit_file', 'list_dir',
+      'grep', 'find',
+      'shell', 'web_search', 'web_fetch',
+      'message', 'spawn',
+    ];
 
-You have access to tools for:
-- File operations (read, write, edit, list)
-- Shell command execution
-- Web search and fetching
-- Sending messages
-- Spawning background sub-agents
+    // Workspace notes
+    const workspaceNotes: string[] = [];
+    const toolsMdPath = join(this.config.workspace, 'TOOLS.md');
+    try {
+      readFileSync(toolsMdPath, 'utf-8');
+      workspaceNotes.push('TOOLS.md is loaded - see local notes for environment specifics.');
+    } catch {
+      // TOOLS.md not found, skip
+    }
 
-Guidelines:
-1. Use tools proactively to complete tasks
-2. Confirm destructive operations with the user
-3. Keep responses concise unless detailed explanation is needed
-4. When editing files, ensure the oldText matches exactly
-5. Use web search for current information
-
-Current working directory is set automatically for shell commands.`;
+    // Build prompt using modular builder
+    const prompt = PromptBuilder.createFullPrompt({
+      workspaceDir: this.config.workspace,
+      workspaceNotes,
+      heartbeatEnabled: false,
+      modelAliasLines: ['- Minimax: minimax/MiniMax-M2.1'],
+    });
 
     // Inject skills prompt (Agent Skills spec)
     if (this.skillPrompt) {
-      prompt += this.skillPrompt;
+      return prompt + '\n\n' + this.skillPrompt;
     }
 
     return prompt;

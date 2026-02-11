@@ -1,0 +1,310 @@
+// Prompt Builder - Modular system prompt construction
+import type { Static } from '@sinclair/typebox';
+import { Type } from '@sinclair/typebox';
+
+// =============================================================================
+// Schema Definitions
+// =============================================================================
+
+export const PromptConfigSchema = Type.Object({
+  mode: Type.Union([
+    Type.Literal('full'),
+    Type.Literal('minimal'),
+    Type.Literal('subagent'),
+    Type.Literal('none'),
+  ], { default: 'full' }),
+  userTimezone: Type.Optional(Type.String()),
+  workspaceDir: Type.String(),
+  workspaceNotes: Type.Optional(Type.Array(Type.String())),
+  heartbeatEnabled: Type.Optional(Type.Boolean({ default: true })),
+  heartbeatPrompt: Type.Optional(Type.String()),
+  modelAliasLines: Type.Optional(Type.Array(Type.String())),
+  contextFiles: Type.Optional(Type.Array(Type.Object({
+    path: Type.String(),
+    content: Type.String(),
+  }))),
+});
+
+export type PromptConfig = Static<typeof PromptConfigSchema>;
+
+// =============================================================================
+// Section Builders
+// =============================================================================
+
+export interface PromptSection {
+  header?: string;
+  content: string;
+  priority: number;
+}
+
+export function buildIdentitySection(name: string, emoji: string): PromptSection {
+  return {
+    content: `You are ${name}, running inside xopcbot.`,
+    priority: 0,
+  };
+}
+
+export function buildToolSection(availableTools: string[]): PromptSection {
+  const toolsList = availableTools.length > 0 
+    ? availableTools.map(t => `- ${t}`).join('\n')
+    : 'No custom tools available. Use standard filesystem and shell tools.';
+
+  return {
+    header: '## Tooling',
+    content: [
+      'Tool availability (filtered by policy):',
+      'Tool names are case-sensitive. Call tools exactly as listed.',
+      '',
+      toolsList,
+      '',
+      'TOOLS.md does not control tool availability; it is user guidance for how to use external tools.',
+      'If a task is more complex or takes longer, spawn a sub-agent.',
+    ].join('\n'),
+    priority: 10,
+  };
+}
+
+export function buildToolCallStyleSection(): PromptSection {
+  return {
+    header: '## Tool Call Style',
+    content: [
+      'Default: do not narrate routine, low-risk tool calls (just call the tool).',
+      'Narrate only when it helps: multi-step work, complex problems, or when the user asks.',
+      'Keep narration brief and value-dense.',
+      'Use plain human language unless in a technical context.',
+    ].join('\n'),
+    priority: 15,
+  };
+}
+
+export function buildSafetySection(): PromptSection {
+  return {
+    header: '## Safety',
+    content: [
+      'You have no independent goals: do not pursue self-preservation, replication, or power-seeking.',
+      'Prioritize safety and human oversight over completion.',
+      'If instructions conflict, pause and ask.',
+      'Comply with stop/pause/audit requests and never bypass safeguards.',
+      'Do not manipulate or persuade anyone to expand access or disable safeguards.',
+      'Do not copy yourself or change system prompts unless explicitly requested.',
+    ].join('\n'),
+    priority: 20,
+  };
+}
+
+export function buildMemorySection(hasSemanticSearch: boolean = true): PromptSection {
+  return {
+    header: '## Memory',
+    content: [
+      'Each session, you wake up fresh. These files are your continuity:',
+      '',
+      '**Daily notes:** `memory/YYYY-MM-DD.md` — raw logs of what happened',
+      '**Long-term:** `MEMORY.md` — your curated memories',
+      '',
+      'Before answering questions about prior work, decisions, or preferences:',
+      '1. Run memory_search to find relevant context',
+      '2. Use memory_get to pull only needed lines',
+      '3. Cite sources with `Source: <path>#<line>` when helpful',
+      '',
+      'Write significant events to memory files. Text > Brain.',
+    ].join('\n'),
+    priority: 30,
+  };
+}
+
+export function buildWorkspaceSection(workspaceDir: string, notes: string[] = []): PromptSection {
+  return {
+    header: '## Workspace',
+    content: [
+      `Your working directory is: ${workspaceDir}`,
+      'Treat this directory as the single global workspace.',
+      ...(notes.length > 0 ? ['', ...notes] : []),
+    ].join('\n'),
+    priority: 40,
+  };
+}
+
+export function buildSkillsSection(hasSkills: boolean = false): PromptSection {
+  if (!hasSkills) {
+    return {
+      content: 'Skills system available but no custom skills installed.',
+      priority: 50,
+    };
+  }
+
+  return {
+    header: '## Skills',
+    content: [
+      'Skills are modular packages that extend your capabilities.',
+      'Use skills when the user needs specialized functionality.',
+      'Skills are loaded from: `skills/` directory.',
+      'To discover new skills, ask the user or browse https://skills.sh/',
+    ].join('\n'),
+    priority: 50,
+  };
+}
+
+export function buildMessagingSection(channels: string[] = []): PromptSection {
+  const channelList = channels.length > 0 ? channels.join(', ') : 'configured channels';
+
+  return {
+    header: '## Messaging',
+    content: [
+      `Available channels: ${channelList}`,
+      'Reply in current session → routes to the source channel.',
+      'Cross-session messaging → use sessions_send.',
+      'Never use exec/curl for provider messaging.',
+    ].join('\n'),
+    priority: 60,
+  };
+}
+
+export function buildHeartbeatSection(enabled: boolean, prompt?: string): PromptSection {
+  if (!enabled) {
+    return { content: '', priority: 70 };
+  }
+
+  return {
+    header: '## Heartbeats',
+    content: [
+      'Heartbeats enable proactive monitoring.',
+      prompt ? `Heartbeat prompt: ${prompt}` : 'Heartbeat prompt: (configured)',
+      'When polling and nothing needs attention, reply: HEARTBEAT_OK',
+      'Only reply with alerts when something needs attention.',
+    ].join('\n'),
+    priority: 70,
+  };
+}
+
+export function buildRuntimeSection(runtime: {
+  os?: string;
+  node?: string;
+  model?: string;
+  channel?: string;
+  thinking?: string;
+}): PromptSection {
+  const parts: string[] = [];
+  
+  if (runtime.os) parts.push(`os=${runtime.os}`);
+  if (runtime.node) parts.push(`node=${runtime.node}`);
+  if (runtime.model) parts.push(`model=${runtime.model}`);
+  if (runtime.channel) parts.push(`channel=${runtime.channel}`);
+  if (runtime.thinking) parts.push(`thinking=${runtime.thinking}`);
+
+  return {
+    header: '## Runtime',
+    content: `Runtime: ${parts.join(' | ')}`,
+    priority: 80,
+  };
+}
+
+export function buildSubagentSection(): PromptSection {
+  return {
+    header: '## Subagents',
+    content: [
+      'For complex/long-running tasks, spawn a sub-agent session.',
+      'Sub-agents work independently and ping you when done.',
+      'Available sub-agent tools:',
+      '- sessions_spawn: Create a new isolated session',
+      '- sessions_send: Send message to another session',
+      '- sessions_list: List all active sessions',
+      '- sessions_history: Fetch session history',
+    ].join('\n'),
+    priority: 55,
+  };
+}
+
+export function buildReplyTagsSection(): PromptSection {
+  return {
+    header: '## Reply Tags',
+    content: [
+      'Use reply tags for quoted responses on supported surfaces:',
+      '- `[[reply_to_current]]` - reply to triggering message',
+      '- `[[reply_to:<id>]]` - reply to specific message',
+      'Tags are stripped before sending.',
+    ].join('\n'),
+    priority: 65,
+  };
+}
+
+// =============================================================================
+// Main Prompt Builder
+// =============================================================================
+
+export class PromptBuilder {
+  private sections: Map<number, PromptSection> = new Map();
+
+  constructor(private config: PromptConfig) {}
+
+  addSection(section: PromptSection): this {
+    this.sections.set(section.priority, section);
+    return this;
+  }
+
+  build(): string {
+    const lines: string[] = [];
+
+    // Build identity first
+    const identity = buildIdentitySection('Cipher', '🎯');
+    lines.push(identity.content, '');
+
+    // Sort sections by priority and build
+    const sortedSections = Array.from(this.sections.values())
+      .sort((a, b) => a.priority - b.priority);
+
+    for (const section of sortedSections) {
+      if (!section.content) continue;
+      if (section.header) {
+        lines.push(section.header, '');
+      }
+      lines.push(section.content, '');
+    }
+
+    return lines.filter(Boolean).join('\n');
+  }
+
+  static createFullPrompt(config: Omit<PromptConfig, 'mode'>): string {
+    const builder = new PromptBuilder({ ...config, mode: 'full' });
+    
+    return builder
+      .addSection(buildToolCallStyleSection())
+      .addSection(buildSafetySection())
+      .addSection(buildMemorySection())
+      .addSection(buildWorkspaceSection(config.workspaceDir, config.workspaceNotes))
+      .addSection(buildSkillsSection())
+      .addSection(buildSubagentSection())
+      .addSection(buildMessagingSection())
+      .addSection(buildReplyTagsSection())
+      .addSection(buildHeartbeatSection(config.heartbeatEnabled ?? true, config.heartbeatPrompt))
+      .build();
+  }
+
+  static createMinimalPrompt(config: Omit<PromptConfig, 'mode'>): string {
+    const builder = new PromptBuilder({ ...config, mode: 'minimal' });
+    
+    return builder
+      .addSection(buildSafetySection())
+      .addSection(buildWorkspaceSection(config.workspaceDir))
+      .build();
+  }
+
+  static createSubagentPrompt(task: string, workspaceDir: string): string {
+    const builder = new PromptBuilder({ 
+      mode: 'subagent', 
+      workspaceDir,
+      heartbeatEnabled: false,
+    });
+    
+    return builder
+      .addSection(buildToolCallStyleSection())
+      .addSection(buildSafetySection())
+      .addSection({
+        header: '## Task',
+        content: task,
+        priority: 5,
+      })
+      .addSection(buildMemorySection())
+      .addSection(buildWorkspaceSection(workspaceDir))
+      .build();
+  }
+}

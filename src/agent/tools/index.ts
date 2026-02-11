@@ -5,18 +5,7 @@ export { editFileTool, type EditToolDetails } from './edit.js';
 export { listDirTool } from './list-dir.js';
 export { createShellTool } from './shell.js';
 
-export { grepTool } from './grep.js';
-export { findTool } from './find.js';
-
-export { createWebSearchTool, webFetchTool } from './web.js';
-
-export {
-  createMessageTool,
-  createSpawnTool,
-  type SubagentResult,
-} from './communication.js';
-
-// New tools: grep and find
+// Grep and Find tools
 export {
   grepTool,
   createGrepTool,
@@ -30,6 +19,14 @@ export {
   type FindToolInput,
   type FindToolDetails,
 } from './find.js';
+
+export { createWebSearchTool, webFetchTool } from './web.js';
+
+export {
+  createMessageTool,
+  createSpawnTool,
+  type SubagentResult,
+} from './communication.js';
 
 // Utility exports
 export {
