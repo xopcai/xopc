@@ -68,7 +68,6 @@
   "devDependencies": {
     "@types/node": "^25.2.0",
     "@types/node-cron": "^3.0.11",
-    "@types/uuid": "^11.0.0",
     "@types/ws": "^8.18.1",
     "eslint": "^9.39.2",
     "pino-pretty": "^13.1.3",
