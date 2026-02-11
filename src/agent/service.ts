@@ -21,7 +21,7 @@ import {
   createMessageTool,
   createSpawnTool,
 } from './tools/index.js';
-import { loadSkills, type Skill } from './skills/index.js';
+import { createSkillLoader, type Skill } from './skills/index.js';
 import type { SubagentResult } from './tools/communication.js';
 import { DEFAULT_BASE_DIR } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
@@ -51,6 +51,7 @@ export class AgentService {
   private agentId: string;
   private skillPrompt: string = '';
   private skills: Skill[] = [];
+  private skillLoader = createSkillLoader();
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
     this.agentId = `agent-${Date.now()}`;
@@ -112,12 +113,22 @@ export class AgentService {
 
     // Load skills for prompt injection (not as tools)
     // Priority: workspace > global (~/.xopcbot/skills) > builtin
-    const skillResult = loadSkills({
+    const skillResult = this.skillLoader.load({
       workspaceDir: config.workspace,
       globalDir: join(DEFAULT_BASE_DIR, 'skills'),
     });
     this.skillPrompt = skillResult.prompt;
     this.skills = skillResult.skills;
+    
+    // Log diagnostics
+    for (const diag of skillResult.diagnostics) {
+      if (diag.type === 'collision') {
+        log.warn({ skill: diag.skillName, message: diag.message }, 'Skill collision');
+      } else if (diag.type === 'warning') {
+        log.warn({ skill: diag.skillName, message: diag.message }, 'Skill warning');
+      }
+    }
+    
     log.info({ count: skillResult.skills.length }, 'Skills loaded for prompt injection');
 
     const registry = new ModelRegistry(config.config ?? null, { ollamaEnabled: false });
@@ -280,6 +291,17 @@ export class AgentService {
   private async handleUserMessage(msg: InboundMessage): Promise<void> {
     const sessionKey = `${msg.channel}:${msg.chat_id}`;
     log.info({ channel: msg.channel, senderId: msg.sender_id }, 'Processing message');
+
+    // Handle /skills reload command
+    if (msg.content.trim() === '/skills reload') {
+      this.reloadSkills();
+      await this.bus.publishOutbound({
+        channel: msg.channel,
+        chat_id: msg.chat_id,
+        content: '✅ Skills reloaded successfully',
+      });
+      return;
+    }
 
     // Expand skill commands (/skill:name args)
     const expandedContent = this.expandSkillCommand(msg.content);
@@ -607,6 +629,34 @@ Current working directory is set automatically for shell commands.`;
     }
 
     return prompt;
+  }
+
+  // ============================================================================
+  // Skill Reload Support
+  // ============================================================================
+
+  /**
+   * Reload skills (hot reload)
+   */
+  private reloadSkills(): void {
+    const skillResult = this.skillLoader.reload({
+      workspaceDir: this.config.workspace,
+      globalDir: join(DEFAULT_BASE_DIR, 'skills'),
+    });
+    
+    this.skillPrompt = skillResult.prompt;
+    this.skills = skillResult.skills;
+    
+    // Log diagnostics
+    for (const diag of skillResult.diagnostics) {
+      if (diag.type === 'collision') {
+        log.warn({ skill: diag.skillName, message: diag.message }, 'Skill collision');
+      } else if (diag.type === 'warning') {
+        log.warn({ skill: diag.skillName, message: diag.message }, 'Skill warning');
+      }
+    }
+    
+    log.info({ count: skillResult.skills.length, diagnostics: skillResult.diagnostics.length }, 'Skills reloaded');
   }
 
   // ============================================================================
