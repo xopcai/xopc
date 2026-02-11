@@ -20,7 +20,7 @@ describe('Telegram to Agent Integration', () => {
       apiRoot: 'https://api.telegram.org',
       debug: false,
     };
-    __agentConfig = {
+    _agentConfig = {
       agents: {
         defaults: {
           workspace: '/tmp/test-workspace',

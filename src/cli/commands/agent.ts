@@ -5,6 +5,8 @@ import { MessageBus } from '../../bus/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
+import { PluginLoader, normalizePluginConfig } from '../../plugins/index.js';
+import { join } from 'path';
 
 const log = createLogger('AgentCommand');
 
@@ -34,11 +36,33 @@ function createAgentCommand(_ctx: CLIContext): Command {
         log.info({ model: modelId, workspace }, 'Starting agent');
       }
 
+      // Initialize plugin loader
+      let pluginLoader: PluginLoader | null = null;
+      try {
+        const pluginsConfig = (config as any).plugins;
+        if (pluginsConfig) {
+          const resolvedConfigs = normalizePluginConfig(pluginsConfig);
+          const enabledPlugins = resolvedConfigs.filter(c => c.enabled);
+          
+          if (enabledPlugins.length > 0) {
+            pluginLoader = new PluginLoader({
+              workspaceDir: workspace,
+              pluginsDir: join(workspace, '.plugins'),
+            });
+            await pluginLoader.loadPlugins(enabledPlugins);
+            log.info({ count: enabledPlugins.length }, 'Plugins loaded');
+          }
+        }
+      } catch (error) {
+        log.warn({ err: error }, 'Failed to load plugins');
+      }
+
       const agent = new AgentService(bus, {
         workspace,
         model: modelId,
         braveApiKey,
         config,
+        pluginRegistry: pluginLoader?.getRegistry(),
       });
 
       // Start agent service in background
