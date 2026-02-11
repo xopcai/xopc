@@ -1,152 +1,246 @@
 /**
  * Skill system for xopcbot
- * Unified exports for skill management
- * 
+ * Simplified implementation following pi-mono/coding-agent
  * Follows Agent Skills specification: https://agentskills.io/specification
- * 
- * Core principle: SKILL.md is pure documentation. Skills are injected into
- * system prompt via <available_skills> XML, and LLM uses read tool to load
- * skill instructions when needed.
  */
 
-// Types
-export type {
-  Skill,
-  SkillFrontmatter,
-  DeprecatedXopcbotMetadata,
-  SkillSource,
-  ValidationDiagnostic,
-  ValidationResult,
-  EligibilityContext,
-  EligibilityResult,
-  DiscoveryOptions,
-  DiscoveryResult,
-  SkillLoaderOptions,
-} from './types.js';
+import { existsSync, readdirSync, readFileSync } from 'fs';
+import { basename, dirname, join } from 'path';
+import { parseFrontmatter } from '../../utils/frontmatter.js';
 
-export {
-  MAX_SKILL_NAME_LENGTH,
-  MAX_SKILL_DESCRIPTION_LENGTH,
-} from './types.js';
+/** Max name length per spec */
+const MAX_NAME_LENGTH = 64;
 
-// Discovery
-export { 
-  discoverSkills,
-  discoverSkillsFromMultiple 
-} from './discovery.js';
+/** Max description length per spec */
+const MAX_DESCRIPTION_LENGTH = 1024;
 
-// Validation
-export {
-  validateName,
-  validateDescription,
-  validateMetadata,
-  validateSkill,
-  validateAllSkills,
-} from './validation.js';
+/** Skill frontmatter per Agent Skills spec */
+export interface SkillFrontmatter {
+  name?: string;
+  description?: string;
+  license?: string;
+  compatibility?: string;
+  'allowed-tools'?: string;
+  metadata?: Record<string, string>;
+  'disable-model-invocation'?: boolean;
+  [key: string]: unknown;
+}
 
-// Eligibility
-export {
-  hasBinary,
-  hasEnv,
-  createDefaultEligibilityContext,
-  checkEligibility,
-  filterEligibleSkills,
-} from './eligibility.js';
+/** Core skill interface */
+export interface Skill {
+  name: string;
+  description: string;
+  filePath: string;
+  baseDir: string;
+  source: 'builtin' | 'workspace' | 'global';
+  disableModelInvocation: boolean;
+}
 
-// Prompt formatting
-export {
-  formatSkillsForPrompt,
-  formatSkillsList,
-  formatSkillsSummary,
-} from './prompt.js';
-
-// High-level API
-import { discoverSkillsFromMultiple } from './discovery.js';
-import { validateAllSkills } from './validation.js';
-import { filterEligibleSkills, createDefaultEligibilityContext } from './eligibility.js';
-import { formatSkillsForPrompt } from './prompt.js';
-import type { Skill, SkillSource, SkillLoaderOptions } from './types.js';
-import { join } from 'path';
-import { getGlobalPluginsDir } from '../../config/paths.js';
-import { createLogger } from '../../utils/logger.js';
-
-const log = createLogger('Skills');
-
-/**
- * Load skills from all sources with priority:
- * 1. Built-in (./skills/) - lowest priority
- * 2. Global (~/.xopcbot/skills/)
- * 3. Workspace (workspace/skills/) - highest priority
- * 
- * Returns skills metadata and formatted prompt section only.
- * Skills are NOT converted to AgentTools - they are injected into
- * the system prompt for LLM to discover and use via read tool.
- */
-export function loadSkills(options: SkillLoaderOptions = {}): {
+/** Load skills result */
+export interface LoadSkillsResult {
   skills: Skill[];
   prompt: string;
-  diagnostics: import('./types.js').ValidationDiagnostic[];
-} {
-  const configs: Array<{ dir: string; source: SkillSource }> = [];
+}
 
-  // Priority 1: Built-in skills (lowest)
-  const builtinDir = options.builtinDir || join(import.meta.dirname || '', '../../../skills');
-  configs.push({ dir: builtinDir, source: 'builtin' });
+/**
+ * Validate skill name
+ */
+// NOTE: Name validation is deferred to discovery time
+function _validateName(name: string, parentDirName: string): string[] {
+  const errors: string[] = [];
 
-  // Priority 2: Global skills
-  try {
-    const globalDir = join(getGlobalPluginsDir(), '..', 'skills');
-    configs.push({ dir: globalDir, source: 'global' });
-  } catch {
-    // Global dir may not exist
+  if (name !== parentDirName) {
+    errors.push(`name "${name}" does not match parent directory "${parentDirName}"`);
   }
 
-  // Priority 3: Workspace skills (highest)
-  if (options.workspaceDir) {
-    // Support both 'skills' and '.skills' directories for compatibility
-    const workspaceDir1 = join(options.workspaceDir, 'skills');
-    const workspaceDir2 = join(options.workspaceDir, '.skills');
-    configs.push({ dir: workspaceDir1, source: 'workspace' });
-    configs.push({ dir: workspaceDir2, source: 'workspace' });
+  if (name.length > MAX_NAME_LENGTH) {
+    errors.push(`name exceeds ${MAX_NAME_LENGTH} characters (${name.length})`);
   }
 
-  // Discover all skills
-  const { skills, diagnostics: discoveryDiagnostics } = discoverSkillsFromMultiple(configs);
+  if (!/^[a-z0-9-]+$/.test(name)) {
+    errors.push(`name contains invalid characters (must be lowercase a-z, 0-9, hyphens only)`);
+  }
 
-  // Validate
-  const { valid, invalid, allDiagnostics: validationDiagnostics } = validateAllSkills(skills);
-  
-  // Log invalid skills
-  for (const { skill, result } of invalid) {
-    for (const error of result.errors) {
-      log.warn({ skill: skill.name, error: error.message }, 'Invalid skill');
+  if (name.startsWith('-') || name.endsWith('-')) {
+    errors.push('name must not start or end with a hyphen');
+  }
+
+  if (name.includes('--')) {
+    errors.push('name must not contain consecutive hyphens');
+  }
+
+  return errors;
+}
+
+/**
+ * Validate skill description
+ */
+// NOTE: Description validation is deferred to discovery time
+function _validateDescription(description: string | undefined): string[] {
+  const errors: string[] = [];
+
+  if (!description || description.trim() === '') {
+    errors.push('description is required');
+  } else if (description.length > MAX_DESCRIPTION_LENGTH) {
+    errors.push(`description exceeds ${MAX_DESCRIPTION_LENGTH} characters (${description.length})`);
+  }
+
+  return errors;
+}
+
+/**
+ * Escape XML special characters
+ */
+function escapeXml(str: string): string {
+  return str
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;')
+    .replace(/"/g, '&quot;')
+    .replace(/'/g, '&apos;');
+}
+
+/**
+ * Format skill as XML
+ */
+function formatSkillXml(skill: Skill): string {
+  return [
+    '  <skill>',
+    `    <name>${escapeXml(skill.name)}</name>`,
+    `    <description>${escapeXml(skill.description)}</description>`,
+    `    <location>${escapeXml(skill.filePath)}</location>`,
+    '  </skill>',
+  ].join('\n');
+}
+
+/**
+ * Format skills for system prompt
+ */
+function formatSkillsForPrompt(skills: Skill[]): string {
+  const visibleSkills = skills.filter(s => !s.disableModelInvocation);
+
+  if (visibleSkills.length === 0) {
+    return '';
+  }
+
+  const lines = [
+    '\n\n<available_skills>',
+    'Skills are folders of instructions, scripts, and resources.',
+    'Use the read tool to load a skill\'s file when the task matches its description.',
+    '',
+  ];
+
+  for (const skill of visibleSkills) {
+    lines.push(formatSkillXml(skill));
+  }
+
+  lines.push('</available_skills>');
+
+  return lines.join('\n');
+}
+
+/**
+ * Discover skills from a directory
+ */
+function discoverSkills(dir: string, source: 'builtin' | 'workspace' | 'global'): Skill[] {
+  const skills: Skill[] = [];
+
+  if (!existsSync(dir)) {
+    return skills;
+  }
+
+  function scan(currentDir: string) {
+    try {
+      const entries = readdirSync(currentDir, { withFileTypes: true });
+
+      for (const entry of entries) {
+        if (entry.name.startsWith('.')) continue;
+        if (entry.name === 'node_modules') continue;
+
+        const fullPath = join(currentDir, entry.name);
+
+        // Handle directories
+        if (entry.isDirectory()) {
+          const skillMdPath = join(fullPath, 'SKILL.md');
+          if (existsSync(skillMdPath)) {
+            const skill = loadSkillFromFile(skillMdPath, source);
+            if (skill) {
+              skills.push(skill);
+            }
+          }
+          // Recurse into subdirectories
+          scan(fullPath);
+        }
+      }
+    } catch {
+      // Ignore directory read errors
     }
   }
 
-  // Filter to eligible skills
-  const context = createDefaultEligibilityContext();
-  const { eligible, ineligible } = filterEligibleSkills(valid, context);
+  scan(dir);
+  return skills;
+}
 
-  // Log ineligible skills
-  for (const { skill, reason } of ineligible) {
-    log.debug({ skill: skill.name, reason }, 'Skill not eligible');
+/**
+ * Load a skill from a markdown file
+ */
+function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | 'global'): Skill | null {
+  try {
+    const rawContent = readFileSync(filePath, 'utf-8');
+    const { frontmatter } = parseFrontmatter<SkillFrontmatter>(rawContent);
+    const skillDir = dirname(filePath);
+    const parentDirName = basename(skillDir);
+
+    // Get name (frontmatter or directory name)
+    const name = (frontmatter.name as string | undefined) || parentDirName;
+
+    // Get description (required)
+    const description = frontmatter.description as string | undefined;
+    if (!description || description.trim() === '') {
+      return null;
+    }
+
+    return {
+      name,
+      description: description.trim(),
+      filePath,
+      baseDir: skillDir,
+      source,
+      disableModelInvocation: frontmatter['disable-model-invocation'] === true,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Load skills from multiple directories with priority
+ */
+export function loadSkills(options: {
+  workspaceDir?: string;
+  builtinDir?: string;
+}): LoadSkillsResult {
+  const { workspaceDir, builtinDir } = options;
+
+  const skillMap = new Map<string, Skill>();
+
+  // Priority 1: Built-in skills
+  if (builtinDir) {
+    for (const skill of discoverSkills(builtinDir, 'builtin')) {
+      skillMap.set(skill.name, skill);
+    }
   }
 
-  // Generate prompt with <available_skills> XML
-  const prompt = formatSkillsForPrompt(eligible);
+  // Priority 2: Workspace skills (override built-in)
+  if (workspaceDir) {
+    const workspaceSkills = discoverSkills(join(workspaceDir, 'skills'), 'workspace');
+    for (const skill of workspaceSkills) {
+      skillMap.set(skill.name, skill);
+    }
+  }
 
-  // Combine diagnostics
-  const allDiagnostics = [...discoveryDiagnostics, ...validationDiagnostics];
+  const skills = Array.from(skillMap.values());
+  const prompt = formatSkillsForPrompt(skills);
 
-  log.info({ 
-    total: skills.length, 
-    valid: valid.length, 
-    eligible: eligible.length 
-  }, 'Skills loaded');
-
-  return {
-    skills: eligible,
-    prompt,
-    diagnostics: allDiagnostics,
-  };
+  return { skills, prompt };
 }
