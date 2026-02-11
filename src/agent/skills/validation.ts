@@ -94,7 +94,9 @@ export function validateDescription(description: string | undefined): Validation
  */
 export function validateMetadata(skill: Skill): ValidationDiagnostic[] {
   const errors: ValidationDiagnostic[] = [];
-  const metadata = skill.metadata;
+  
+  // Use xopcbot-metadata for validation (deprecated field)
+  const metadata = skill.frontmatter['xopcbot-metadata'];
 
   if (!metadata) {
     return errors; // Metadata is optional
@@ -126,14 +128,15 @@ export function validateMetadata(skill: Skill): ValidationDiagnostic[] {
 
   // Validate requires structure
   if (metadata.requires) {
-    if (metadata.requires.bins && !Array.isArray(metadata.requires.bins)) {
+    const requires = metadata.requires as { bins?: unknown; env?: unknown };
+    if (requires.bins && !Array.isArray(requires.bins)) {
       errors.push({
         type: 'error',
         message: 'requires.bins must be an array of strings',
         path: skill.filePath
       });
     }
-    if (metadata.requires.env && !Array.isArray(metadata.requires.env)) {
+    if (requires.env && !Array.isArray(requires.env)) {
       errors.push({
         type: 'error',
         message: 'requires.env must be an array of strings',
