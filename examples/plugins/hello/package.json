@@ -1,0 +1,17 @@
+{
+  "name": "xopcbot-plugin-hello",
+  "version": "1.0.0",
+  "description": "A simple example plugin that demonstrates the plugin system",
+  "main": "index.ts",
+  "xopcbot": {
+    "plugin": true,
+    "id": "hello",
+    "name": "Hello World",
+    "kind": "utility"
+  },
+  "keywords": [
+    "xopcbot",
+    "xopcbot-plugin"
+  ],
+  "license": "MIT"
+}

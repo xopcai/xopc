@@ -395,37 +395,55 @@ export class PluginLoader {
   loadManifest(pluginPath: string): PluginManifest | null {
     const manifestPath = join(pluginPath, PLUGIN_MANIFEST_FILE);
 
-    if (!existsSync(manifestPath)) {
-      // Try to infer from package.json
-      const packagePath = join(pluginPath, 'package.json');
-      if (existsSync(packagePath)) {
-        try {
-          const packageJson = JSON.parse(readFileSync(packagePath, 'utf-8'));
-          if (packageJson.xopcbot?.plugin) {
-            return {
-              id: packageJson.name,
-              name: packageJson.xopcbot.name || packageJson.name,
-              description: packageJson.description,
-              version: packageJson.version,
-              main: packageJson.main,
-              configSchema: packageJson.xopcbot.configSchema,
-              ...packageJson.xopcbot,
-            };
-          }
-        } catch {
-          // Ignore
-        }
+    // First try to load xopcbot.plugin.json
+    if (existsSync(manifestPath)) {
+      try {
+        const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+        return manifest as PluginManifest;
+      } catch (error) {
+        log.error({ err: error, manifestPath }, `Failed to parse manifest`);
+        return null;
       }
-      return null;
     }
 
-    try {
-      const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-      return manifest as PluginManifest;
-    } catch (error) {
-      log.error({ err: error, manifestPath }, `Failed to parse manifest`);
-      return null;
+    // Fallback to package.json
+    const packagePath = join(pluginPath, 'package.json');
+    if (existsSync(packagePath)) {
+      try {
+        const packageJson = JSON.parse(readFileSync(packagePath, 'utf-8'));
+        
+        // Check for xopcbot.plugin marker
+        if (packageJson.xopcbot?.plugin) {
+          const xopcbotConfig = packageJson.xopcbot;
+          return {
+            id: xopcbotConfig.id || packageJson.name,
+            name: xopcbotConfig.name || packageJson.name,
+            description: xopcbotConfig.description || packageJson.description,
+            version: xopcbotConfig.version || packageJson.version || '1.0.0',
+            kind: xopcbotConfig.kind || 'utility',
+            main: xopcbotConfig.main || packageJson.main || 'index.js',
+            configSchema: xopcbotConfig.configSchema,
+          };
+        }
+        
+        // Also support xopcbot-plugin-* naming convention
+        if (packageJson.name?.startsWith('xopcbot-plugin-')) {
+          const id = packageJson.name.replace('xopcbot-plugin-', '');
+          return {
+            id,
+            name: packageJson.name,
+            description: packageJson.description,
+            version: packageJson.version || '1.0.0',
+            kind: 'utility',
+            main: packageJson.main || 'index.js',
+          };
+        }
+      } catch (error) {
+        log.error({ err: error, packagePath }, `Failed to parse package.json`);
+      }
     }
+
+    return null;
   }
 
   private async loadModule(
