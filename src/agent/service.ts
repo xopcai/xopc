@@ -46,14 +46,11 @@ const BOOTSTRAP_FILES = [
 // Subagent allowed files (only AGENTS.md and TOOLS.md)
 const SUBAGENT_ALLOWLIST = new Set(['AGENTS.md', 'TOOLS.md']);
 
-// Get current directory for bootstrap files (where SOUL.md, USER.md etc. are located)
-function getBootstrapDir(): string {
-  // Try to use configured workspace, fall back to current directory or xopcbot parent
-  return process.env.XOPCBOT_BOOTSTRAP_DIR || 
-         process.cwd();
+// Get directory for bootstrap files (SOUL.md, USER.md, etc.)
+// Bootstrap files are loaded from the configured workspace directory
+function getBootstrapDir(workspace: string): string {
+  return workspace;
 }
-
-// Subagent allowed files (only AGENTS.md and TOOLS.md)
 
 interface AgentServiceConfig {
   workspace: string;
@@ -86,8 +83,8 @@ export class AgentService {
     this.workspaceDir = config.workspace;
 
     // Load workspace bootstrap files (SOUL.md, USER.md, TOOLS.md, etc.)
-    // Bootstrap files are loaded from current working directory or XOPCBOT_BOOTSTRAP_DIR env var
-    const bootstrapDir = getBootstrapDir();
+    // Bootstrap files are loaded from the configured workspace directory
+    const bootstrapDir = getBootstrapDir(config.workspace);
     this.loadBootstrapFiles(bootstrapDir);
 
     const defaults = config.agentDefaults || config.config?.agents?.defaults;
