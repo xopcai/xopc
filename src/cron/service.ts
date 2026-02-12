@@ -110,7 +110,7 @@ export class CronService {
           const interval = CronExpressionParser.parse(job.schedule, options);
           nextRun = interval.next().toISOString();
         } catch (err) {
-          log.debug({ jobId: job.id, err }, 'Failed to parse cron for next run');
+          log.debug({ jobId: job.id, err: err as Error }, 'Failed to parse cron for next run');
         }
       }
 
@@ -379,7 +379,7 @@ export class CronService {
     try {
       await this.executor.execute(job, controller.signal);
     } catch (error) {
-      log.error({ jobId: job.id, err: error }, 'Job execution failed');
+      log.error({ jobId: job.id, err: error as Error }, 'Job execution failed');
       // Retry logic is handled by the executor
     }
   }
