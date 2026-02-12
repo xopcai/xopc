@@ -249,7 +249,7 @@ export function buildSafetySection(
   config?: Partial<SafetyConfig>,
   includeDetailed: boolean = false
 ): string {
-  const evaluator = new SafetyEvaluator(config);
+  // SafetyEvaluator(config); // Ready for future use
   
   const lines = [
     '## Safety',

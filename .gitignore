@@ -40,4 +40,6 @@ coverage/
 .cache/
 
 # Memory (local notes, not for git)
+# Note: Only root-level memory/, not src/agent/prompt/memory/
 memory/
+!src/agent/prompt/memory/

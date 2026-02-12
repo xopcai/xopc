@@ -1,5 +1,5 @@
 // Heartbeat System - Proactive monitoring and intelligent checks
-import { existsSync, mkdirSync, promises as fs } from 'fs';
+import { existsSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
 
 // =============================================================================
@@ -95,7 +95,7 @@ export class HeartbeatManager {
   private loadState(): HeartbeatState {
     if (existsSync(this.statePath)) {
       try {
-        const content = fs.readFileSync(this.statePath, 'utf-8');
+        const content = readFileSync(this.statePath, 'utf-8');
         return JSON.parse(content);
       } catch {
         return { lastChecks: {}, lastResults: {} };
@@ -109,7 +109,7 @@ export class HeartbeatManager {
    */
   private saveState(): void {
     const content = JSON.stringify(this.state, null, 2);
-    fs.writeFileSync(this.statePath, content, 'utf-8');
+    writeFileSync(this.statePath, content, 'utf-8');
   }
 
   /**
@@ -149,8 +149,6 @@ export class HeartbeatManager {
    * Execute a single check
    */
   async executeCheck(check: HeartbeatCheck): Promise<HeartbeatResult> {
-    const startTime = Date.now();
-
     try {
       let result: HeartbeatResult;
 

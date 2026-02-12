@@ -1,6 +1,6 @@
 // Skills System - Dynamic skill loading and management
 import { readFileSync, existsSync, promises as fs } from 'fs';
-import { join, relative } from 'path';
+import { join } from 'path';
 
 // =============================================================================
 // Types

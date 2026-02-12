@@ -1,5 +1,4 @@
 // SubAgent Management - Spawn and manage sub-agent sessions
-import { v4 as uuidv4 } from 'crypto';
 
 // =============================================================================
 // Types
@@ -24,7 +23,11 @@ export interface SubAgentResult {
 }
 
 export interface SubAgentRegistry {
-  [sessionKey: string]: SubAgentResult;
+  get(sessionKey: string): SubAgentResult | undefined;
+  update(sessionKey: string, updates: Partial<SubAgentResult>): boolean;
+  delete(sessionKey: string): boolean;
+  list(): SubAgentResult[];
+  clear(): void;
 }
 
 // =============================================================================
@@ -112,10 +115,15 @@ class SubAgentRegistryImpl implements SubAgentRegistry {
 
   private cleanup(): void {
     const cutoff = Date.now() - this.maxAge;
-    for (const [key, value] of this.registry) {
+    const toDelete: string[] = [];
+    for (const key of Array.from(this.registry.keys())) {
+      const value = this.registry.get(key)!;
       if (value.createdAt.getTime() < cutoff) {
-        this.registry.delete(key);
+        toDelete.push(key);
       }
+    }
+    for (const key of toDelete) {
+      this.registry.delete(key);
     }
   }
 }

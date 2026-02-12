@@ -113,7 +113,7 @@ export function buildSafetySection(): PromptSection {
   };
 }
 
-export function buildMemorySection(hasSemanticSearch: boolean = true): PromptSection {
+export function buildMemorySection(): PromptSection {
   return {
     header: '## Memory',
     content: [

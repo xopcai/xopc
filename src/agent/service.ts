@@ -30,7 +30,6 @@ import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
 import { PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
 import { PromptBuilder } from './prompt/index.js';
-import type { PromptSection } from './prompt/index.js';
 
 const log = createLogger('AgentService');
 
@@ -612,14 +611,6 @@ export class AgentService {
   }
 
   private getSystemPrompt(): string {
-    // Build available tools list for prompt
-    const toolNames = [
-      'read_file', 'write_file', 'edit_file', 'list_dir',
-      'grep', 'find',
-      'shell', 'web_search', 'web_fetch',
-      'message', 'spawn',
-    ];
-
     // Workspace notes
     const workspaceNotes: string[] = [];
     const toolsMdPath = join(this.config.workspace, 'TOOLS.md');
