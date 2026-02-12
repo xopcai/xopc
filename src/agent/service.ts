@@ -1,7 +1,6 @@
 // AgentService - Main agent implementation using @mariozechner/pi-agent-core
 import { readFileSync, existsSync } from 'fs';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
+import { join } from 'path';
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { AgentToolResult } from '@mariozechner/pi-agent-core';
