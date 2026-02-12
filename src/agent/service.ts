@@ -684,13 +684,14 @@ export class AgentService {
 
   private getSystemPrompt(): string {
     // Build prompt with bootstrap files
-    const prompt = PromptBuilder.createFullPrompt({
-      workspaceDir: this.config.workspace,
-      workspaceNotes: [],
-      heartbeatEnabled: false,
-      modelAliasLines: [`- Model: ${this.currentModelName}`],
-      contextFiles: this.bootstrapFiles,
-    });
+    const prompt = PromptBuilder.createFullPrompt(
+      { workspaceDir: this.config.workspace },
+      {
+        heartbeatEnabled: false,
+        modelAliasLines: [`- Model: ${this.currentModelName}`],
+        contextFiles: this.bootstrapFiles,
+      }
+    );
 
     // Inject skills prompt (Agent Skills spec)
     if (this.skillPrompt) {

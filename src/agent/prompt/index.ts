@@ -313,7 +313,7 @@ export class PromptBuilder {
   }
 
   static createFullPrompt(
-    config: Omit<PromptConfig, 'mode'>,
+    config: { workspaceDir: string },
     options: {
       identity?: { name: string; emoji: string };
       version?: string;
@@ -321,6 +321,10 @@ export class PromptBuilder {
       channels?: string[];
       skills?: { enabled: boolean; count: number };
       contextFiles?: Array<{ name: string; content: string }>;
+      workspaceNotes?: string[];
+      heartbeatEnabled?: boolean;
+      heartbeatPrompt?: string;
+      modelAliasLines?: string[];
     } = {}
   ): string {
     const builder = new PromptBuilder({ ...config, mode: 'full' });
@@ -338,12 +342,12 @@ export class PromptBuilder {
       .addSection(buildToolCallStyleSection('brief'))
       .addSection(buildSafetySection())
       .addSection(buildMemorySection())
-      .addSection(buildWorkspaceSection(config.workspaceDir, config.workspaceNotes))
+      .addSection(buildWorkspaceSection(config.workspaceDir, options.workspaceNotes ?? []))
       .addSection(buildSkillsSection(options.skills?.enabled ?? false, options.skills?.count ?? 0))
       .addSection(buildSubagentSection())
       .addSection(buildMessagingSection(options.channels || []))
       .addSection(buildReplyTagsSection())
-      .addSection(buildHeartbeatSection(config.heartbeatEnabled ?? true, config.heartbeatPrompt))
+      .addSection(buildHeartbeatSection(options.heartbeatEnabled ?? true, options.heartbeatPrompt))
       .addSection(buildRuntimeSection({ 
         version: options.version,
         thinking: 'off',
@@ -353,7 +357,7 @@ export class PromptBuilder {
   }
 
   static createMinimalPrompt(
-    config: Omit<PromptConfig, 'mode'>,
+    config: { workspaceDir: string },
     options: { 
       identity?: { name: string; emoji: string };
       contextFiles?: Array<{ name: string; content: string }>;
@@ -366,7 +370,7 @@ export class PromptBuilder {
     
     return builder
       .addSection(buildSafetySection())
-      .addSection(buildWorkspaceSection(config.workspaceDir))
+      .addSection(buildWorkspaceSection(config.workspaceDir, []))
       .addSection(buildContextFilesSection(options.contextFiles))
       .build();
   }
@@ -380,7 +384,7 @@ export class PromptBuilder {
       contextFiles?: Array<{ name: string; content: string }>;
     } = {}
   ): string {
-    const builder = new PromptBuilder({ mode: 'subagent', workspaceDir });
+    const builder = new PromptBuilder({ workspaceDir, mode: 'subagent' });
     
     const identity = options.identity || { name: 'Cipher', emoji: '🎯' };
     builder.addSection(buildIdentitySection(identity.name, identity.emoji));
@@ -395,7 +399,7 @@ export class PromptBuilder {
       .addSection(buildToolCallStyleSection('minimal'))
       .addSection(buildSafetySection())
       .addSection(buildMemorySection())
-      .addSection(buildWorkspaceSection(workspaceDir))
+      .addSection(buildWorkspaceSection(workspaceDir, []))
       .addSection(buildSubagentSection())
       .addSection(buildContextFilesSection(options.contextFiles))
       .build();
