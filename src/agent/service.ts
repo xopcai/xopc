@@ -55,6 +55,7 @@ export class AgentService {
   private skillPrompt: string = '';
   private skills: Skill[] = [];
   private skillLoader = createSkillLoader();
+  private currentModelName: string = 'minimax/MiniMax-M2.1';
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
     this.agentId = `agent-${Date.now()}`;
@@ -144,12 +145,15 @@ export class AgentService {
       const found = registry.findByRef(config.model);
       if (found) {
         model = found;
+        this.currentModelName = found.name || config.model;
       } else {
         log.warn({ model: config.model }, 'Model not found, using default');
         model = registry.find('google', 'gemini-2.5-flash-lite-preview-06-17')!;
+        this.currentModelName = model.name || 'gemini-2.5-flash-lite';
       }
     } else {
       model = registry.find('google', 'gemini-2.5-flash-lite-preview-06-17')!;
+      this.currentModelName = model.name || 'gemini-2.5-flash-lite';
     }
 
     this.agent = new Agent({
@@ -626,7 +630,7 @@ export class AgentService {
       workspaceDir: this.config.workspace,
       workspaceNotes,
       heartbeatEnabled: false,
-      modelAliasLines: ['- Minimax: minimax/MiniMax-M2.1'],
+      modelAliasLines: [`- Model: ${this.currentModelName}`],
     });
 
     // Inject skills prompt (Agent Skills spec)
