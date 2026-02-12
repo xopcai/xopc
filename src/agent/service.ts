@@ -21,12 +21,10 @@ import {
   createWebSearchTool,
   webFetchTool,
   createMessageTool,
-  createSpawnTool,
   createMemorySearchTool,
   createMemoryGetTool,
 } from './tools/index.js';
 import { createSkillLoader, type Skill } from './skills/index.js';
-import type { SubagentResult } from './tools/communication.js';
 import { DEFAULT_BASE_DIR, getBundledSkillsDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
@@ -44,9 +42,6 @@ const BOOTSTRAP_FILES = [
   'AGENTS.md',
 ];
 
-// Subagent allowed files (only AGENTS.md and TOOLS.md)
-const SUBAGENT_ALLOWLIST = new Set(['AGENTS.md', 'TOOLS.md']);
-
 // Get directory for bootstrap files (SOUL.md, USER.md, etc.)
 // Bootstrap files are loaded from the configured workspace directory
 function getBootstrapDir(workspace: string): string {
@@ -57,7 +52,6 @@ interface AgentServiceConfig {
   workspace: string;
   model?: string;
   braveApiKey?: string;
-  spawnSubagent?: (task: string, label?: string) => Promise<SubagentResult>;
   config?: Config;
   agentDefaults?: AgentDefaults;
   pluginRegistry?: PluginRegistry;
@@ -136,10 +130,6 @@ export class AgentService {
       createMemorySearchTool(config.workspace),
       createMemoryGetTool(config.workspace),
     ];
-
-    if (config.spawnSubagent) {
-      tools.push(createSpawnTool(config.spawnSubagent));
-    }
 
     // Add plugin tools from registry
     if (config.pluginRegistry) {
@@ -669,17 +659,6 @@ export class AgentService {
 
     this.bootstrapFiles = files;
     log.info({ count: files.length, dir: bootstrapDir }, 'Workspace bootstrap files loaded');
-  }
-
-  /**
-   * Get bootstrap files filtered for subagent (only AGENTS.md and TOOLS.md)
-   */
-  private getBootstrapFilesForContext(isSubagent: boolean = false): Array<{ name: string; content: string }> {
-    if (!isSubagent) {
-      return this.bootstrapFiles;
-    }
-    // Subagents only get AGENTS.md and TOOLS.md (matching OpenClaw)
-    return this.bootstrapFiles.filter(f => SUBAGENT_ALLOWLIST.has(f.name));
   }
 
   private getSystemPrompt(): string {

@@ -155,7 +155,6 @@ xopcbot/
 │   │   ├── loop.ts     #   Agent loop (LLM ↔ tools)
 │   │   ├── tools/      #   Built-in tools (read, write, exec, web, etc.)
 │   │   ├── skills.ts   #   Skill system
-│   │   └── subagent.ts #   Background tasks
 │   ├── bus/            # 🚌 Event bus
 │   ├── channels/       # 📱 Chat channels (Telegram, WhatsApp)
 │   ├── cli/            # 🖥️ CLI commands

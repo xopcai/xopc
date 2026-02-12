@@ -57,7 +57,6 @@ describe('xopcbot integration tests', () => {
     expect(tools.createWebSearchTool).toBeDefined();
     expect(tools.webFetchTool).toBeDefined();
     expect(tools.createMessageTool).toBeDefined();
-    expect(tools.createSpawnTool).toBeDefined();
   });
 
   it('should have all CLI commands registered', async () => {

@@ -25,11 +25,7 @@ export {
 
 export { createWebSearchTool, webFetchTool } from './web.js';
 
-export {
-  createMessageTool,
-  createSpawnTool,
-  type SubagentResult,
-} from './communication.js';
+export { createMessageTool } from './communication.js';
 
 // Utility exports
 export {

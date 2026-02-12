@@ -162,22 +162,6 @@ export function buildSkillsSection(hasSkills: boolean = false, skillsCount: numb
   };
 }
 
-export function buildSubagentSection(): PromptSection {
-  return {
-    header: '## Subagents',
-    content: [
-      'For complex/long-running tasks, spawn a sub-agent session.',
-      'Sub-agents work independently and ping you when done.',
-      'Available sub-agent tools:',
-      '- sessions_spawn: Create a new isolated session',
-      '- sessions_send: Send message to another session',
-      '- sessions_list: List all active sessions',
-      '- sessions_history: Fetch session history',
-    ].join('\n'),
-    priority: 55,
-  };
-}
-
 export function buildMessagingSection(channels: string[] = []): PromptSection {
   const channelList = channels.length > 0 ? channels.join(', ') : 'configured channels';
 
@@ -186,7 +170,6 @@ export function buildMessagingSection(channels: string[] = []): PromptSection {
     content: [
       `Available channels: ${channelList}`,
       'Reply in current session → routes to the source channel.',
-      'Cross-session messaging → use sessions_send.',
       'Never use exec/curl for provider messaging.',
     ].join('\n'),
     priority: 60,
@@ -339,7 +322,6 @@ export class PromptBuilder {
       .addSection(buildMemorySection())
       .addSection(buildWorkspaceSection(config.workspaceDir, options.workspaceNotes ?? []))
       .addSection(buildSkillsSection(options.skills?.enabled ?? false, options.skills?.count ?? 0))
-      .addSection(buildSubagentSection())
       .addSection(buildMessagingSection(options.channels || []))
       .addSection(buildReplyTagsSection())
       .addSection(buildHeartbeatSection(options.heartbeatEnabled ?? true, options.heartbeatPrompt))
@@ -368,34 +350,6 @@ export class PromptBuilder {
       .build();
   }
 
-  static createSubagentPrompt(
-    task: string,
-    workspaceDir: string,
-    options: {
-      version?: string;
-      contextFiles?: Array<{ name: string; content: string }>;
-    } = {}
-  ): string {
-    const builder = new PromptBuilder({ workspaceDir, mode: 'subagent' });
-    
-    builder.addSection(buildIdentitySection());
-    
-    builder.addSection({
-      header: '## Task',
-      content: task,
-      priority: 5,
-    });
-    
-    return builder
-      .addSection(buildToolCallStyleSection('minimal'))
-      .addSection(buildSafetySection())
-      .addSection(buildMemorySection())
-      .addSection(buildWorkspaceSection(workspaceDir, []))
-      .addSection(buildSubagentSection())
-      .addSection(buildContextFilesSection(options.contextFiles))
-      .build();
-  }
-
   static createNonePrompt(): string {
     return `You are a personal assistant running in xopcbot.`;
   }
@@ -403,9 +357,6 @@ export class PromptBuilder {
 
 // Re-export memory system
 export * from './memory/index.js';
-
-// Re-export subagent system
-export * from './subagent.js';
 
 // Re-export skills system
 export * from './skills.js';

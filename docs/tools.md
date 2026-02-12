@@ -14,7 +14,6 @@ xopcbot 内置了一组工具供 Agent 调用，覆盖文件系统、Shell 命�
 | 🔍 网页搜索 | `web_search` | 使用 Brave Search |
 | 📄 网页抓取 | `web_fetch` | 获取网页内容 |
 | 📨 发送消息 | `send_message` | 发送消息到通道 |
-| 👶 子代理 | `subagent` | 启动子代理任务 |
 
 ---
 
@@ -202,27 +201,6 @@ Result: <html>...
 Agent: 发送消息到 Telegram
 Tool: send_message({ "message": "Hello from agent!", "channel": "telegram" })
 Result: Message sent.
-```
-
----
-
-## 👶 subagent
-
-启动后台子代理任务。
-
-### 参数
-
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `task` | string | ✅ | 任务描述 |
-| `label` | string | ❌ | 任务标签 |
-
-### 示例
-
-```
-Agent: 在后台搜索资料
-Tool: subagent({ "task": "Search for latest AI news", "label": "research" })
-Result: Task started with ID: abc123
 ```
 
 ---

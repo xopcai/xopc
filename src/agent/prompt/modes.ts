@@ -1,4 +1,4 @@
-// Layered Prompt Modes - Support for full/minimal/subagent/none modes
+// Layered Prompt Modes - Support for full/minimal/none modes
 import { PromptBuilder, PromptConfig } from './index.js';
 
 // =============================================================================
@@ -8,7 +8,7 @@ import { PromptBuilder, PromptConfig } from './index.js';
 export interface ModeConfig {
   name: string;
   description: string;
-  sections: ('tools' | 'safety' | 'memory' | 'workspace' | 'skills' | 'subagents' | 'messaging' | 'heartbeat' | 'replyTags' | 'runtime')[];
+  sections: ('tools' | 'safety' | 'memory' | 'workspace' | 'skills' | 'messaging' | 'heartbeat' | 'replyTags' | 'runtime')[];
   toolCallStyle: 'verbose' | 'brief' | 'minimal';
   includeReasoning: boolean;
   includeReplyTags: boolean;
@@ -18,7 +18,7 @@ export const PROMPT_MODES: Record<string, ModeConfig> = {
   full: {
     name: 'full',
     description: 'Complete prompt with all features enabled',
-    sections: ['tools', 'safety', 'memory', 'workspace', 'skills', 'subagents', 'messaging', 'heartbeat', 'replyTags', 'runtime'],
+    sections: ['tools', 'safety', 'memory', 'workspace', 'skills', 'messaging', 'heartbeat', 'replyTags', 'runtime'],
     toolCallStyle: 'brief',
     includeReasoning: true,
     includeReplyTags: true,
@@ -28,14 +28,6 @@ export const PROMPT_MODES: Record<string, ModeConfig> = {
     description: 'Lightweight prompt for quick interactions',
     sections: ['tools', 'safety', 'workspace'],
     toolCallStyle: 'brief',
-    includeReasoning: false,
-    includeReplyTags: false,
-  },
-  subagent: {
-    name: 'subagent',
-    description: 'Task-focused prompt for sub-agent sessions',
-    sections: ['tools', 'safety', 'memory', 'workspace', 'subagents'],
-    toolCallStyle: 'minimal',
     includeReasoning: false,
     includeReplyTags: false,
   },
@@ -54,8 +46,8 @@ export const PROMPT_MODES: Record<string, ModeConfig> = {
 // =============================================================================
 
 export class ModePromptBuilder {
-  private name: string = 'Cipher';
-  private emoji: string = '🎯';
+  private name: string = 'personal';
+  private emoji: string = '🤖';
   private version: string = '1.0.0';
 
   setIdentity(name: string, emoji: string): this {
@@ -130,13 +122,6 @@ export class ModePromptBuilder {
             priority: 50,
           });
           break;
-        case 'subagents':
-          builder.addSection({
-            header: '## Subagents',
-            content: 'Use spawn for complex/long-running tasks.',
-            priority: 55,
-          });
-          break;
         case 'messaging':
           builder.addSection({
             header: '## Messaging',
@@ -189,67 +174,6 @@ export class ModePromptBuilder {
    */
   buildMinimal(config: Omit<PromptConfig, 'mode'>): string {
     return this.buildForMode('minimal', config);
-  }
-
-  /**
-   * Build subagent mode prompt
-   */
-  buildSubagent(task: string, config: Omit<PromptConfig, 'mode'>): string {
-    const modeConfig = PROMPT_MODES['subagent'];
-    const builder = new PromptBuilder({ ...config, mode: 'subagent' });
-
-    builder.addSection({
-      content: `You are ${this.name} ${this.emoji}, running inside xopcbot v${this.version}.`,
-      priority: 0,
-    });
-
-    builder.addSection({
-      header: '## Task',
-      content: task,
-      priority: 5,
-    });
-
-    for (const section of modeConfig.sections) {
-      switch (section) {
-        case 'tools':
-          builder.addSection({
-            header: '## Tooling',
-            content: 'Execute the task using available tools.',
-            priority: 10,
-          });
-          break;
-        case 'safety':
-          builder.addSection({
-            header: '## Safety',
-            content: 'Prioritize safety and human oversight.',
-            priority: 20,
-          });
-          break;
-        case 'memory':
-          builder.addSection({
-            header: '## Memory',
-            content: 'Use memory for session continuity.',
-            priority: 30,
-          });
-          break;
-        case 'workspace':
-          builder.addSection({
-            header: '## Workspace',
-            content: `Working directory: ${config.workspaceDir}`,
-            priority: 40,
-          });
-          break;
-        case 'subagents':
-          builder.addSection({
-            header: '## Subagents',
-            content: 'Spawn subagents if needed.',
-            priority: 55,
-          });
-          break;
-      }
-    }
-
-    return builder.build();
   }
 
   /**

@@ -62,7 +62,6 @@ src/agent/
 ├── context.ts      # 上下文构建
 ├── memory.ts       # 记忆存储
 ├── skills.ts       # 技能加载
-├── subagent.ts     # 子代理任务
 └── tools/          # 内置工具
     ├── base.ts
     ├── registry.ts
