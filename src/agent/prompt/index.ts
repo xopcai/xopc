@@ -20,7 +20,7 @@ export const PromptConfigSchema = Type.Object({
   heartbeatPrompt: Type.Optional(Type.String()),
   modelAliasLines: Type.Optional(Type.Array(Type.String())),
   contextFiles: Type.Optional(Type.Array(Type.Object({
-    path: Type.String(),
+    name: Type.String(),
     content: Type.String(),
   }))),
 });
