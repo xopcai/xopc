@@ -667,7 +667,6 @@ export class AgentService {
       { workspaceDir: this.config.workspace },
       {
         heartbeatEnabled: false,
-        modelAliasLines: [`- Model: ${this.currentModelName}`],
         contextFiles: this.bootstrapFiles,
       }
     );

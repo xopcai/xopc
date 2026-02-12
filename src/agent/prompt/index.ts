@@ -10,15 +10,11 @@ export const PromptConfigSchema = Type.Object({
   mode: Type.Union([
     Type.Literal('full'),
     Type.Literal('minimal'),
-    Type.Literal('subagent'),
     Type.Literal('none'),
   ], { default: 'full' }),
-  userTimezone: Type.Optional(Type.String()),
   workspaceDir: Type.String(),
-  workspaceNotes: Type.Optional(Type.Array(Type.String())),
   heartbeatEnabled: Type.Optional(Type.Boolean({ default: true })),
   heartbeatPrompt: Type.Optional(Type.String()),
-  modelAliasLines: Type.Optional(Type.Array(Type.String())),
   contextFiles: Type.Optional(Type.Array(Type.Object({
     name: Type.String(),
     content: Type.String(),
@@ -64,8 +60,6 @@ export function buildToolSection(availableTools: string[]): PromptSection {
       'Tool names are case-sensitive. Call tools exactly as listed.',
       '',
       toolsList,
-      '',
-      'If a task is more complex or takes longer, spawn a sub-agent.',
     ].join('\n'),
     priority: 10,
   };
@@ -130,14 +124,10 @@ export function buildMemorySection(): PromptSection {
   };
 }
 
-export function buildWorkspaceSection(workspaceDir: string, notes: string[] = []): PromptSection {
+export function buildWorkspaceSection(workspaceDir: string): PromptSection {
   return {
     header: '## Workspace',
-    content: [
-      `Your working directory is: ${workspaceDir}`,
-      'Treat this directory as the single global workspace.',
-      ...(notes.length > 0 ? ['', ...notes] : []),
-    ].join('\n'),
+    content: `Your working directory is: ${workspaceDir}`,
     priority: 40,
   };
 }
@@ -283,14 +273,11 @@ export class PromptBuilder {
     config: { workspaceDir: string },
     options: {
       version?: string;
-      tools?: string[];
       channels?: string[];
       skills?: { enabled: boolean; count: number };
       contextFiles?: Array<{ name: string; content: string }>;
-      workspaceNotes?: string[];
       heartbeatEnabled?: boolean;
       heartbeatPrompt?: string;
-      modelAliasLines?: string[];
     } = {}
   ): string {
     const builder = new PromptBuilder({ ...config, mode: 'full' });
@@ -307,7 +294,7 @@ export class PromptBuilder {
       .addSection(buildToolCallStyleSection('brief'))
       .addSection(buildSafetySection())
       .addSection(buildMemorySection())
-      .addSection(buildWorkspaceSection(config.workspaceDir, options.workspaceNotes ?? []))
+      .addSection(buildWorkspaceSection(config.workspaceDir))
       .addSection(buildSkillsSection(options.skills?.enabled ?? false, options.skills?.count ?? 0))
       .addSection(buildMessagingSection(options.channels || []))
       .addSection(buildHeartbeatSection(options.heartbeatEnabled ?? true, options.heartbeatPrompt))
@@ -331,7 +318,7 @@ export class PromptBuilder {
     
     return builder
       .addSection(buildSafetySection())
-      .addSection(buildWorkspaceSection(config.workspaceDir, []))
+      .addSection(buildWorkspaceSection(config.workspaceDir))
       .addSection(buildContextFilesSection(options.contextFiles))
       .build();
   }
@@ -341,15 +328,6 @@ export class PromptBuilder {
   }
 }
 
-// Re-export memory system
+// Re-export memory system (for memory_search/memory_get tools)
 export * from './memory/index.js';
-
-// Re-export skills system
-export * from './skills.js';
-
-// Re-export safety system
-export * from './safety.js';
-
-// Re-export heartbeat system
-export * from './heartbeat.js';
 
