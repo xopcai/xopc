@@ -1,6 +1,7 @@
 // AgentService - Main agent implementation using @mariozechner/pi-agent-core
 import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { join, dirname } from 'path';
+import { fileURLToPath } from 'url';
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { AgentToolResult } from '@mariozechner/pi-agent-core';
@@ -34,7 +35,6 @@ import { PromptBuilder } from './prompt/index.js';
 const log = createLogger('AgentService');
 
 // Bootstrap file names (matching OpenClaw convention)
-// Note: HEARTBEAT.md is loaded separately by HeartbeatService, not as bootstrap
 const BOOTSTRAP_FILES = [
   'SOUL.md',
   'IDENTITY.md',
@@ -45,6 +45,15 @@ const BOOTSTRAP_FILES = [
 
 // Subagent allowed files (only AGENTS.md and TOOLS.md)
 const SUBAGENT_ALLOWLIST = new Set(['AGENTS.md', 'TOOLS.md']);
+
+// Get current directory for bootstrap files (where SOUL.md, USER.md etc. are located)
+function getBootstrapDir(): string {
+  // Try to use configured workspace, fall back to current directory or xopcbot parent
+  return process.env.XOPCBOT_BOOTSTRAP_DIR || 
+         process.cwd();
+}
+
+// Subagent allowed files (only AGENTS.md and TOOLS.md)
 
 interface AgentServiceConfig {
   workspace: string;
@@ -77,7 +86,9 @@ export class AgentService {
     this.workspaceDir = config.workspace;
 
     // Load workspace bootstrap files (SOUL.md, USER.md, TOOLS.md, etc.)
-    this.loadBootstrapFiles();
+    // Bootstrap files are loaded from current working directory or XOPCBOT_BOOTSTRAP_DIR env var
+    const bootstrapDir = getBootstrapDir();
+    this.loadBootstrapFiles(bootstrapDir);
 
     const defaults = config.agentDefaults || config.config?.agents?.defaults;
     
@@ -636,19 +647,19 @@ export class AgentService {
 
   /**
    * Load workspace bootstrap files (SOUL.md, USER.md, TOOLS.md, etc.)
-   * Follows OpenClaw convention - files are loaded from workspace root.
+   * Follows OpenClaw convention - files are loaded from the bootstrap directory.
    */
-  private loadBootstrapFiles(): void {
+  private loadBootstrapFiles(bootstrapDir: string): void {
     const files: Array<{ name: string; content: string }> = [];
 
     for (const filename of BOOTSTRAP_FILES) {
-      const filePath = join(this.workspaceDir, filename);
+      const filePath = join(bootstrapDir, filename);
       if (existsSync(filePath)) {
         try {
           const content = readFileSync(filePath, 'utf-8').trim();
           if (content) {
             files.push({ name: filename, content });
-            log.debug({ file: filename }, 'Bootstrap file loaded');
+            log.debug({ file: filename, path: filePath }, 'Bootstrap file loaded');
           }
         } catch (err) {
           log.warn({ file: filename, err }, 'Failed to load bootstrap file');
@@ -657,7 +668,7 @@ export class AgentService {
     }
 
     this.bootstrapFiles = files;
-    log.info({ count: files.length }, 'Workspace bootstrap files loaded');
+    log.info({ count: files.length, dir: bootstrapDir }, 'Workspace bootstrap files loaded');
   }
 
   /**
