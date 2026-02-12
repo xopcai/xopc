@@ -34,13 +34,13 @@ import { PromptBuilder } from './prompt/index.js';
 const log = createLogger('AgentService');
 
 // Bootstrap file names (matching OpenClaw convention)
+// Note: HEARTBEAT.md is loaded separately by HeartbeatService, not as bootstrap
 const BOOTSTRAP_FILES = [
   'SOUL.md',
   'IDENTITY.md',
   'USER.md',
   'TOOLS.md',
   'AGENTS.md',
-  'HEARTBEAT.md',
 ];
 
 // Subagent allowed files (only AGENTS.md and TOOLS.md)
