@@ -7,16 +7,16 @@ import { memorySearch, memoryGet } from '../prompt/memory/index.js';
 // Memory Search Tool
 // =============================================================================
 const MemorySearchSchema = Type.Object({
-  query: Type.String({ description: 'Search query for memory files' }),
-  maxResults: Type.Optional(Type.Number({ description: 'Maximum results to return' })),
-  minScore: Type.Optional(Type.Number({ description: 'Minimum match score' })),
+  query: Type.String(),
+  maxResults: Type.Optional(Type.Number()),
+  minScore: Type.Optional(Type.Number()),
 });
 
 export function createMemorySearchTool(workspaceDir: string): AgentTool<typeof MemorySearchSchema, {}> {
   return {
     name: 'memory_search',
     label: '🔍 Memory Search',
-    description: 'Search MEMORY.md and memory/*.md files for relevant context.',
+    description: 'Mandatory recall step: semantically search MEMORY.md + memory/*.md before answering questions about prior work, decisions, dates, people, preferences, or todos; returns top snippets with path + lines.',
     parameters: MemorySearchSchema,
 
     async execute(
@@ -53,16 +53,16 @@ export function createMemorySearchTool(workspaceDir: string): AgentTool<typeof M
 // Memory Get Tool
 // =============================================================================
 const MemoryGetSchema = Type.Object({
-  path: Type.String({ description: 'File path (e.g., MEMORY.md or memory/2024-01-15.md)' }),
-  from: Type.Optional(Type.Number({ description: 'Starting line number (1-indexed)' })),
-  lines: Type.Optional(Type.Number({ description: 'Number of lines to read' })),
+  path: Type.String(),
+  from: Type.Optional(Type.Number()),
+  lines: Type.Optional(Type.Number()),
 });
 
 export function createMemoryGetTool(workspaceDir: string): AgentTool<typeof MemoryGetSchema, {}> {
   return {
     name: 'memory_get',
     label: '📄 Memory Get',
-    description: 'Read a specific snippet from memory files.',
+    description: 'Safe snippet read from MEMORY.md or memory/*.md with optional from/lines; use after memory_search to pull only the needed lines and keep context small.',
     parameters: MemoryGetSchema,
 
     async execute(
