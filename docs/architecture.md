@@ -17,16 +17,19 @@
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │                     Core                            │   │
-│  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │   │
-│  │  │ Agent   │ │ Session  │ │ Memory  │ │ Subagent│   │   │
-│  │  │ Loop    │ │ Manager  │ │ Store   │ │         │   │   │
-│  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘   │   │
+│  │                     Core                              │   │
+│  │  ┌─────────────────────────────────────────────┐   │   │
+│  │  │              AgentService                    │   │   │
+│  │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐      │   │   │
+│  │  │  │ Prompt  │ │ Memory  │ │ Skills  │      │   │   │
+│  │  │  │ Builder │ │ Search  │ │         │      │   │   │
+│  │  │  └─────────┘ └─────────┘ └─────────┘      │   │   │
+│  │  └─────────────────────────────────────────────┘   │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │                    Providers                        │   │
-│  │            @mariozechner/pi-ai (20+ providers)      │   │
+│  │                    Providers                          │   │
+│  │            @mariozechner/pi-ai (20+ providers)       │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │
 └────────────────────────────┼────────────────────────────────┘
@@ -35,166 +38,95 @@
         │                    │                    │
         ▼                    ▼                    ▼
   ┌──────────┐        ┌──────────┐        ┌──────────┐
-  │Telegram  │        │WhatsApp  │        │ Gateway  │
-  │ Channel  │        │ Channel  │        │   API   │
+  │Telegram │        │  Cron    │        │ Gateway  │
+  │ Channel │        │ Scheduler │        │   API    │
   └──────────┘        └──────────┘        └──────────┘
 ```
 
-## 模块说明
+## 核心模块
 
-### CLI Layer (`src/cli/`)
+### Agent Service (`src/agent/service.ts`)
 
-命令行入口，负责解析和分发命令。
+AgentService 是核心编排器，负责：
 
-| 模块 | 职责 |
-|------|------|
-| `core.ts` | CLI 核心逻辑 |
-| `commands/` | 具体命令实现 |
-| `index.ts` | 入口点 |
+1. **消息处理** - 接收用户消息，调用 LLM，处理工具调用
+2. **Prompt 构建** - 从 SOUL.md/USER.md/AGENTS.md/TOOLS.md 构建系统 Prompt
+3. **内存管理** - 会话消息存储和上下文压缩
+4. **工具执行** - 内置工具 + 插件工具的统一执行
+5. **插件集成** - 插件工具和 Hook 的加载
 
-### Agent Core (`src/agent/`)
+### Prompt Builder (`src/agent/prompt/`)
 
-核心 Agent 逻辑。
-
-```
-src/agent/
-├── loop.ts         # Agent 主循环 (LLM ↔ 工具)
-├── context.ts      # 上下文构建
-├── memory.ts       # 记忆存储
-├── skills.ts       # 技能加载
-└── tools/          # 内置工具
-    ├── base.ts
-    ├── registry.ts
-    ├── filesystem.ts
-    ├── shell.ts
-    ├── web_search.ts
-    ├── web_fetch.ts
-    └── ...
-```
-
-**Agent Loop 流程**：
+模块化 Prompt 构建系统：
 
 ```
-1. 接收用户消息
-       ↓
-2. 构建上下文 (消息历史 + 技能)
-       ↓
-3. 调用 LLM (pi-ai)
-       ↓
-4. LLM 返回响应
-       ↓
-5. 解析工具调用 (如有)
-       ↓
-6. 执行工具
-       ↓
-7. 返回结果给 LLM
-       ↓
-8. 返回最终回复
+src/agent/prompt/
+├── index.ts         # PromptBuilder - 主构建器
+│                    # buildIdentitySection, buildMemorySection 等
+├── modes.ts         # Prompt 模式 (full/minimal/none)
+├── memory/
+│   └── index.ts     # memory_search, memory_get 工具
+│                    # 语义搜索 MEMORY.md 和 memory/*.md
+└── skills.ts        # Skills 加载系统
 ```
 
-### Providers (`src/providers/`)
+**Prompt Sections**：
 
-LLM 提供商抽象层，基于 `@mariozechner/pi-ai`。
+| Section | 描述 |
+|---------|------|
+| Identity | "You are a personal assistant running in xopcbot" |
+| Version | xopcbot 版本信息 |
+| Tool Call Style | 工具调用风格 (verbose/brief/minimal) |
+| Safety | 安全原则 |
+| Memory | memory_search/memory_get 使用指南 |
+| Workspace | 工作目录 |
+| Skills | 技能系统 |
+| Messaging | 消息发送 |
+| Heartbeats | 心跳监控 |
+| Runtime | 运行时信息 |
 
-```
-src/providers/
-└── pi-ai.ts        # PiAIProvider 适配器
-```
+### 内置工具 (`src/agent/tools/`)
 
-**支持的提供商**：
+| 工具 | 文件 | 描述 |
+|------|------|------|
+| `read_file` | read.ts | 读取文件内容 |
+| `write_file` | write.ts | 创建/覆盖文件 |
+| `edit_file` | edit.ts | 精确编辑文件 |
+| `list_dir` | list-dir.ts | 列出目录内容 |
+| `shell` | shell.ts | 执行 Shell 命令 |
+| `grep` | grep.ts | 文本搜索 |
+| `find` | find.ts | 文件查找 |
+| `web_search` | web.ts | 网页搜索 |
+| `web_fetch` | web.ts | 网页抓取 |
+| `send_message` | communication.ts | 发送消息 |
+| `memory_search` | memory-tool.ts | 搜索记忆文件 |
+| `memory_get` | memory-tool.ts | 读取记忆片段 |
 
-| 提供商 | 类型 |
-|--------|------|
-| OpenAI | 官方 API |
-| Anthropic | 官方 API |
-| Google | Gemini API |
-| Groq | OpenAI 兼容 |
-| MiniMax | 官方 API |
-| OpenRouter | OpenAI 兼容 |
-| + 更多 | via pi-ai |
-
-### Channels (`src/channels/`)
-
-通信通道实现。
-
-```
-src/channels/
-├── base.ts         # 通道基类
-├── manager.ts      # 通道管理
-├── telegram.ts     # Telegram 实现
-└── whatsapp.ts     # WhatsApp 实现 (占位)
-```
-
-### Services (`src/`)
-
-后台服务。
+### 会话内存 (`src/agent/memory/`)
 
 ```
-src/
-├── cron/           # 定时任务
-│   ├── service.ts
-│   └── index.ts
-├── heartbeat/      # 心跳监控
-│   ├── service.ts
-│   └── index.ts
-└── bus/            # 事件总线
-    └── index.ts
+src/agent/memory/
+├── store.ts       # MemoryStore - 会话消息存储
+└── compaction.ts  # SessionCompactor - 上下文压缩
+                  # 支持 extractive/abstractive/structured 模式
 ```
 
-### Session (`src/session/`)
-
-会话管理。
-
-```
-src/session/
-├── manager.ts      # 会话管理器
-└── index.ts
-```
-
-### Plugins (`src/plugins/`)
-
-插件系统。
+### 插件系统 (`src/plugins/`)
 
 ```
 src/plugins/
-├── types.ts        # 类型定义
-├── api.ts          # Plugin API
-├── loader.ts       # 插件加载器
-├── hooks.ts        # Hook 系统
-└── index.ts       # 导出
+├── types.ts       # 插件类型定义
+├── api.ts         # Plugin API
+├── loader.ts      # 插件加载器
+├── hooks.ts       # Hook 系统
+└── index.ts      # 导出
 ```
 
 **Hook 生命周期**：
 
 ```
-┌────────────────────────────────────────────────┐
-│                  Lifecycle                     │
-├────────────────────────────────────────────────┤
-│ before_agent_start                            │
-│      ↓                                        │
-│ agent_end                                     │
-│      ↓                                        │
-│ message_received                              │
-│      ↓                                        │
-│ before_tool_call                              │
-│      ↓                                        │
-│ after_tool_call                               │
-│      ↓                                        │
-│ message_sending                                │
-│      ↓                                        │
-│ session_end                                    │
-└────────────────────────────────────────────────┘
-```
-
-### Config (`src/config/`)
-
-配置管理。
-
-```
-src/config/
-├── loader.ts       # 配置加载
-├── schema.ts       # Zod Schema
-└── index.ts
+before_agent_start → agent_end → message_received → 
+before_tool_call → after_tool_call → message_sending → session_end
 ```
 
 ## 数据流
@@ -202,7 +134,7 @@ src/config/
 ### 对话流程
 
 ```
-User (Telegram/WhatsApp/API)
+User (Telegram/Gateway)
         │
         ▼
 ┌─────────────────────┐
@@ -211,14 +143,13 @@ User (Telegram/WhatsApp/API)
            │
            ▼
 ┌─────────────────────┐
-│   Session Manager   │  ← Load history
-└──────────┬──────────┘
-           │
-           ▼
-┌─────────────────────┐
-│   Agent Loop        │
+│   AgentService      │
 │  ┌───────────────┐  │
-│  │ Build Context │  │
+│  │ Load Bootstrap │  │ ← SOUL.md, USER.md, TOOLS.md, AGENTS.md
+│  └───────┬───────┘  │
+│          ▼          │
+│  ┌───────────────┐  │
+│  │ Build Prompt  │  │ ← memory_search/memory_get
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │
@@ -226,7 +157,8 @@ User (Telegram/WhatsApp/API)
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │
-│  │ Execute Tools │  │  ← Tools (filesystem, shell, web...)
+│  │ Execute Tools │  │ ← Tools (filesystem, shell, web, memory...)
+│  │ + Plugins     │  │
 │  └───────┬───────┘  │
 └──────────┬──────────┘
            │
@@ -236,64 +168,40 @@ User (Telegram/WhatsApp/API)
 └──────────┬──────────┘
            │
            ▼
-User Reply
+User Reply / Channel Response
 ```
 
-### 文件结构
+## CLI 命令注册模式
 
+xopcbot 使用自注册模式：
+
+```typescript
+// src/cli/commands/mycommand.ts
+import { register } from '../registry.js';
+
+function createMyCommand(ctx: CLIContext): Command {
+  return new Command('mycommand')
+    .description('My command')
+    .action(async () => { ... });
+}
+
+register({
+  id: 'mycommand',
+  name: 'mycommand',
+  description: 'My command',
+  factory: createMyCommand,
+  metadata: { category: 'utility' },
+});
 ```
-xopcbot/
-├── src/
-│   ├── agent/          # 核心 Agent
-│   │   ├── loop.ts    #   主循环
-│   │   ├── context.ts #   上下文
-│   │   ├── tools/     #   工具
-│   │   └── skills/    #   技能
-│   ├── bus/           # 事件总线
-│   ├── channels/      # 通道
-│   ├── cli/           # CLI
-│   ├── config/        # 配置
-│   ├── cron/          # 定时任务
-│   ├── heartbeat/     # 心跳
-│   ├── plugins/       # 插件
-│   ├── providers/     # LLM
-│   ├── session/       # 会话
-│   ├── types/         # 类型
-│   └── main.ts        # 入口
-├── docs/              # 文档
-├── scripts/           # 脚本
-├── package.json
-└── tsconfig.json
-```
-
-## 技术栈
-
-| 层级 | 技术 |
-|------|------|
-| 运行时 | Node.js 22+ |
-| 语言 | TypeScript 5.x |
-| LLM SDK | @mariozechner/pi-ai |
-| CLI | Commander.js |
-| Telegram | node-telegram-bot-api |
-| 验证 | Zod |
-| 日志 | Pino |
-| 定时任务 | node-cron |
-| HTTP Server | Hono |
 
 ## 扩展点
 
-### 添加新通道
-
-1. 继承 `BaseChannel` 类
-2. 实现 `start()`, `stop()`, `send()` 方法
-3. 注册到 Channel Manager
-
 ### 添加新工具
 
-1. 继承 `Tool` 类
-2. 实现 `name`, `description`, `parameters`
-3. 实现 `execute()` 方法
-4. 注册到 Tool Registry
+1. 在 `src/agent/tools/` 创建新文件
+2. 实现 `AgentTool` 接口
+3. 导出并在 `src/agent/tools/index.ts` 注册
+4. 在 `AgentService` 中添加到 tools 数组
 
 ### 添加 Hook
 
@@ -309,3 +217,17 @@ api.registerHook('before_tool_call', async (event, ctx) => {
 1. 创建 `xopcbot.plugin.json` manifest
 2. 实现 `register(api)` 函数
 3. 发布或本地加载
+
+## 技术栈
+
+| 层级 | 技术 |
+|------|------|
+| 运行时 | Node.js 22+ |
+| 语言 | TypeScript 5.x |
+| LLM SDK | @mariozechner/pi-ai |
+| CLI | Commander.js |
+| Telegram | node-telegram-bot-api |
+| 验证 | Zod + TypeBox |
+| 日志 | Pino |
+| 定时任务 | node-cron |
+| HTTP Server | Hono |
