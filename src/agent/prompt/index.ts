@@ -37,9 +37,9 @@ export interface PromptSection {
   priority: number;
 }
 
-export function buildIdentitySection(name: string, emoji: string): PromptSection {
+export function buildIdentitySection(): PromptSection {
   return {
-    content: `You are ${name} ${emoji}, running inside xopcbot.`,
+    content: `You are a personal assistant running in xopcbot.`,
     priority: 0,
   };
 }
@@ -74,19 +74,16 @@ export function buildToolSection(availableTools: string[]): PromptSection {
 export function buildToolCallStyleSection(style: 'verbose' | 'brief' | 'minimal' = 'brief'): PromptSection {
   const content = {
     verbose: [
-      '## Tool Call Style',
       'Always narrate your tool calls to help the user understand your process.',
       'Explain what you are doing before and after each tool call.',
       'Provide context for complex operations.',
     ].join('\n'),
     brief: [
-      '## Tool Call Style',
       'Default: do not narrate routine, low-risk tool calls (just call the tool).',
       'Narrate only when it helps: multi-step work, complex problems, or when the user asks.',
       'Keep narration brief and value-dense.',
     ].join('\n'),
     minimal: [
-      '## Tool Call Style',
       'Call tools as needed without narration.',
     ].join('\n'),
   };
@@ -315,7 +312,6 @@ export class PromptBuilder {
   static createFullPrompt(
     config: { workspaceDir: string },
     options: {
-      identity?: { name: string; emoji: string };
       version?: string;
       tools?: string[];
       channels?: string[];
@@ -330,8 +326,7 @@ export class PromptBuilder {
     const builder = new PromptBuilder({ ...config, mode: 'full' });
     
     // Identity
-    const identity = options.identity || { name: 'Cipher', emoji: '🎯' };
-    builder.addSection(buildIdentitySection(identity.name, identity.emoji));
+    builder.addSection(buildIdentitySection());
 
     // Version
     if (options.version) {
@@ -359,14 +354,12 @@ export class PromptBuilder {
   static createMinimalPrompt(
     config: { workspaceDir: string },
     options: { 
-      identity?: { name: string; emoji: string };
       contextFiles?: Array<{ name: string; content: string }>;
     } = {}
   ): string {
     const builder = new PromptBuilder({ ...config, mode: 'minimal' });
     
-    const identity = options.identity || { name: 'Cipher', emoji: '🎯' };
-    builder.addSection(buildIdentitySection(identity.name, identity.emoji));
+    builder.addSection(buildIdentitySection());
     
     return builder
       .addSection(buildSafetySection())
@@ -379,15 +372,13 @@ export class PromptBuilder {
     task: string,
     workspaceDir: string,
     options: {
-      identity?: { name: string; emoji: string };
       version?: string;
       contextFiles?: Array<{ name: string; content: string }>;
     } = {}
   ): string {
     const builder = new PromptBuilder({ workspaceDir, mode: 'subagent' });
     
-    const identity = options.identity || { name: 'Cipher', emoji: '🎯' };
-    builder.addSection(buildIdentitySection(identity.name, identity.emoji));
+    builder.addSection(buildIdentitySection());
     
     builder.addSection({
       header: '## Task',
@@ -405,9 +396,8 @@ export class PromptBuilder {
       .build();
   }
 
-  static createNonePrompt(options: { identity?: { name: string; emoji: string } } = {}): string {
-    const identity = options.identity || { name: 'Cipher', emoji: '🎯' };
-    return `You are ${identity.name} ${identity.emoji}, running inside xopcbot.`;
+  static createNonePrompt(): string {
+    return `You are a personal assistant running in xopcbot.`;
   }
 }
 

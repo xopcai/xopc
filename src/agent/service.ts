@@ -22,6 +22,8 @@ import {
   webFetchTool,
   createMessageTool,
   createSpawnTool,
+  createMemorySearchTool,
+  createMemoryGetTool,
 } from './tools/index.js';
 import { createSkillLoader, type Skill } from './skills/index.js';
 import type { SubagentResult } from './tools/communication.js';
@@ -131,6 +133,8 @@ export class AgentService {
       createWebSearchTool(config.braveApiKey),
       webFetchTool,
       createMessageTool(bus, () => this.currentContext),
+      createMemorySearchTool(config.workspace),
+      createMemoryGetTool(config.workspace),
     ];
 
     if (config.spawnSubagent) {

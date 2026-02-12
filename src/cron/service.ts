@@ -6,6 +6,7 @@ import { DEFAULT_PATHS } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { CronPersistence } from './persistence.js';
 import { DefaultJobExecutor } from './executor.js';
+import { z } from 'zod';
 import { AddJobRequestSchema, UpdateJobRequestSchema } from './validation.js';
 import type {
   JobData,
@@ -66,7 +67,8 @@ export class CronService {
     });
 
     if (!validation.success) {
-      throw new Error(`Validation failed: ${validation.error.errors.map((e) => e.message).join(', ')}`);
+      const error = validation.error as z.ZodError;
+      throw new Error(`Validation failed: ${error.errors.map((e) => e.message).join(', ')}`);
     }
 
     const id = uuidv4().slice(0, 8);
@@ -142,7 +144,8 @@ export class CronService {
     // Validate updates
     const validation = UpdateJobRequestSchema.safeParse(updates);
     if (!validation.success) {
-      throw new Error(`Validation failed: ${validation.error.errors.map((e) => e.message).join(', ')}`);
+      const error = validation.error as z.ZodError;
+      throw new Error(`Validation failed: ${error.errors.map((e) => e.message).join(', ')}`);
     }
 
     const job = await this.persistence.getJob(id);

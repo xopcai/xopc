@@ -5,6 +5,9 @@ export { editFileTool, type EditToolDetails } from './edit.js';
 export { listDirTool } from './list-dir.js';
 export { createShellTool } from './shell.js';
 
+// Memory tools
+export { createMemorySearchTool, createMemoryGetTool } from './memory-tool.js';
+
 // Grep and Find tools
 export {
   grepTool,
