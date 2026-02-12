@@ -1,5 +1,5 @@
 // AgentService - Main agent implementation using @mariozechner/pi-agent-core
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
@@ -33,6 +33,19 @@ import { PromptBuilder } from './prompt/index.js';
 
 const log = createLogger('AgentService');
 
+// Bootstrap file names (matching OpenClaw convention)
+const BOOTSTRAP_FILES = [
+  'SOUL.md',
+  'IDENTITY.md',
+  'USER.md',
+  'TOOLS.md',
+  'AGENTS.md',
+  'HEARTBEAT.md',
+];
+
+// Subagent allowed files (only AGENTS.md and TOOLS.md)
+const SUBAGENT_ALLOWLIST = new Set(['AGENTS.md', 'TOOLS.md']);
+
 interface AgentServiceConfig {
   workspace: string;
   model?: string;
@@ -56,9 +69,16 @@ export class AgentService {
   private skills: Skill[] = [];
   private skillLoader = createSkillLoader();
   private currentModelName: string = 'minimax/MiniMax-M2.1';
+  private workspaceDir: string;
+  private bootstrapFiles: Array<{ name: string; content: string }> = [];
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
     this.agentId = `agent-${Date.now()}`;
+    this.workspaceDir = config.workspace;
+
+    // Load workspace bootstrap files (SOUL.md, USER.md, TOOLS.md, etc.)
+    this.loadBootstrapFiles();
+
     const defaults = config.agentDefaults || config.config?.agents?.defaults;
     
     // Initialize memory store with configs
@@ -614,23 +634,51 @@ export class AgentService {
       .join('');
   }
 
-  private getSystemPrompt(): string {
-    // Workspace notes
-    const workspaceNotes: string[] = [];
-    const toolsMdPath = join(this.config.workspace, 'TOOLS.md');
-    try {
-      readFileSync(toolsMdPath, 'utf-8');
-      workspaceNotes.push('TOOLS.md is loaded - see local notes for environment specifics.');
-    } catch {
-      // TOOLS.md not found, skip
+  /**
+   * Load workspace bootstrap files (SOUL.md, USER.md, TOOLS.md, etc.)
+   * Follows OpenClaw convention - files are loaded from workspace root.
+   */
+  private loadBootstrapFiles(): void {
+    const files: Array<{ name: string; content: string }> = [];
+
+    for (const filename of BOOTSTRAP_FILES) {
+      const filePath = join(this.workspaceDir, filename);
+      if (existsSync(filePath)) {
+        try {
+          const content = readFileSync(filePath, 'utf-8').trim();
+          if (content) {
+            files.push({ name: filename, content });
+            log.debug({ file: filename }, 'Bootstrap file loaded');
+          }
+        } catch (err) {
+          log.warn({ file: filename, err }, 'Failed to load bootstrap file');
+        }
+      }
     }
 
-    // Build prompt using modular builder
+    this.bootstrapFiles = files;
+    log.info({ count: files.length }, 'Workspace bootstrap files loaded');
+  }
+
+  /**
+   * Get bootstrap files filtered for subagent (only AGENTS.md and TOOLS.md)
+   */
+  private getBootstrapFilesForContext(isSubagent: boolean = false): Array<{ name: string; content: string }> {
+    if (!isSubagent) {
+      return this.bootstrapFiles;
+    }
+    // Subagents only get AGENTS.md and TOOLS.md (matching OpenClaw)
+    return this.bootstrapFiles.filter(f => SUBAGENT_ALLOWLIST.has(f.name));
+  }
+
+  private getSystemPrompt(): string {
+    // Build prompt with bootstrap files
     const prompt = PromptBuilder.createFullPrompt({
       workspaceDir: this.config.workspace,
-      workspaceNotes,
+      workspaceNotes: [],
       heartbeatEnabled: false,
       modelAliasLines: [`- Model: ${this.currentModelName}`],
+      contextFiles: this.bootstrapFiles,
     });
 
     // Inject skills prompt (Agent Skills spec)

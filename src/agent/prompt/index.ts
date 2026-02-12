@@ -209,6 +209,36 @@ export function buildReplyTagsSection(): PromptSection {
   };
 }
 
+export function buildContextFilesSection(
+  contextFiles?: Array<{ name: string; content: string }>
+): PromptSection {
+  if (!contextFiles || contextFiles.length === 0) {
+    return { content: '', priority: 90 };
+  }
+
+  const hasSoul = contextFiles.some(f => f.name.toLowerCase() === 'soul.md');
+
+  const lines: string[] = [];
+  lines.push('# Project Context', '');
+  lines.push('The following project context files have been loaded:');
+
+  if (hasSoul) {
+    lines.push('If SOUL.md is present, embody its persona and tone.');
+  }
+
+  lines.push('');
+
+  for (const file of contextFiles) {
+    lines.push(`## ${file.name}`, '', file.content, '');
+  }
+
+  return {
+    header: '',
+    content: lines.join('\n'),
+    priority: 90,
+  };
+}
+
 export function buildHeartbeatSection(enabled: boolean, prompt?: string): PromptSection {
   if (!enabled) {
     return { content: '', priority: 70 };
@@ -290,6 +320,7 @@ export class PromptBuilder {
       tools?: string[];
       channels?: string[];
       skills?: { enabled: boolean; count: number };
+      contextFiles?: Array<{ name: string; content: string }>;
     } = {}
   ): string {
     const builder = new PromptBuilder({ ...config, mode: 'full' });
@@ -317,12 +348,16 @@ export class PromptBuilder {
         version: options.version,
         thinking: 'off',
       }))
+      .addSection(buildContextFilesSection(options.contextFiles))
       .build();
   }
 
   static createMinimalPrompt(
     config: Omit<PromptConfig, 'mode'>,
-    options: { identity?: { name: string; emoji: string } } = {}
+    options: { 
+      identity?: { name: string; emoji: string };
+      contextFiles?: Array<{ name: string; content: string }>;
+    } = {}
   ): string {
     const builder = new PromptBuilder({ ...config, mode: 'minimal' });
     
@@ -332,6 +367,7 @@ export class PromptBuilder {
     return builder
       .addSection(buildSafetySection())
       .addSection(buildWorkspaceSection(config.workspaceDir))
+      .addSection(buildContextFilesSection(options.contextFiles))
       .build();
   }
 
@@ -341,6 +377,7 @@ export class PromptBuilder {
     options: {
       identity?: { name: string; emoji: string };
       version?: string;
+      contextFiles?: Array<{ name: string; content: string }>;
     } = {}
   ): string {
     const builder = new PromptBuilder({ mode: 'subagent', workspaceDir });
@@ -360,6 +397,7 @@ export class PromptBuilder {
       .addSection(buildMemorySection())
       .addSection(buildWorkspaceSection(workspaceDir))
       .addSection(buildSubagentSection())
+      .addSection(buildContextFilesSection(options.contextFiles))
       .build();
   }
 
