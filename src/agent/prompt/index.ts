@@ -176,19 +176,6 @@ export function buildMessagingSection(channels: string[] = []): PromptSection {
   };
 }
 
-export function buildReplyTagsSection(): PromptSection {
-  return {
-    header: '## Reply Tags',
-    content: [
-      'Use reply tags for quoted responses on supported surfaces:',
-      '- `[[reply_to_current]]` - reply to triggering message',
-      '- `[[reply_to:<id>]]` - reply to specific message',
-      'Tags are stripped before sending.',
-    ].join('\n'),
-    priority: 65,
-  };
-}
-
 export function buildContextFilesSection(
   contextFiles?: Array<{ name: string; content: string }>
 ): PromptSection {
@@ -323,7 +310,6 @@ export class PromptBuilder {
       .addSection(buildWorkspaceSection(config.workspaceDir, options.workspaceNotes ?? []))
       .addSection(buildSkillsSection(options.skills?.enabled ?? false, options.skills?.count ?? 0))
       .addSection(buildMessagingSection(options.channels || []))
-      .addSection(buildReplyTagsSection())
       .addSection(buildHeartbeatSection(options.heartbeatEnabled ?? true, options.heartbeatPrompt))
       .addSection(buildRuntimeSection({ 
         version: options.version,

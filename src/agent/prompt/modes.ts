@@ -8,20 +8,18 @@ import { PromptBuilder, PromptConfig } from './index.js';
 export interface ModeConfig {
   name: string;
   description: string;
-  sections: ('tools' | 'safety' | 'memory' | 'workspace' | 'skills' | 'messaging' | 'heartbeat' | 'replyTags' | 'runtime')[];
+  sections: ('tools' | 'safety' | 'memory' | 'workspace' | 'skills' | 'messaging' | 'heartbeat' | 'runtime')[];
   toolCallStyle: 'verbose' | 'brief' | 'minimal';
   includeReasoning: boolean;
-  includeReplyTags: boolean;
 }
 
 export const PROMPT_MODES: Record<string, ModeConfig> = {
   full: {
     name: 'full',
     description: 'Complete prompt with all features enabled',
-    sections: ['tools', 'safety', 'memory', 'workspace', 'skills', 'messaging', 'heartbeat', 'replyTags', 'runtime'],
+    sections: ['tools', 'safety', 'memory', 'workspace', 'skills', 'messaging', 'heartbeat', 'runtime'],
     toolCallStyle: 'brief',
     includeReasoning: true,
-    includeReplyTags: true,
   },
   minimal: {
     name: 'minimal',
@@ -29,7 +27,6 @@ export const PROMPT_MODES: Record<string, ModeConfig> = {
     sections: ['tools', 'safety', 'workspace'],
     toolCallStyle: 'brief',
     includeReasoning: false,
-    includeReplyTags: false,
   },
   none: {
     name: 'none',
@@ -37,7 +34,6 @@ export const PROMPT_MODES: Record<string, ModeConfig> = {
     sections: [],
     toolCallStyle: 'minimal',
     includeReasoning: false,
-    includeReplyTags: false,
   },
 };
 
@@ -128,15 +124,6 @@ export class ModePromptBuilder {
             content: 'Reply in current session.',
             priority: 60,
           });
-          break;
-        case 'replyTags':
-          if (modeConfig.includeReplyTags) {
-            builder.addSection({
-              header: '## Reply Tags',
-              content: 'Use [[reply_to_current]] for quoted replies.',
-              priority: 65,
-            });
-          }
           break;
         case 'heartbeat':
           if (config.heartbeatEnabled) {
