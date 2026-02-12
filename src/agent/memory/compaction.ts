@@ -1,6 +1,6 @@
 // Session Compaction - Compress old messages using LLM summary
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import type { Model, Api } from '@mariozechner/pi-ai';
+import { complete, type Model, type Api } from '@mariozechner/pi-ai';
 
 export interface CompactionResult {
   summary: string;
@@ -12,20 +12,22 @@ export interface CompactionResult {
 
 export interface CompactionConfig {
   enabled: boolean;
-  mode: 'default' | 'safeguard';
+  mode: 'extractive' | 'abstractive' | 'structured';
   reserveTokens: number;
   triggerThreshold: number;
   minMessagesBeforeCompact: number;
   keepRecentMessages: number;
+  summaryMaxTokens: number;
 }
 
 const DEFAULT_CONFIG: CompactionConfig = {
   enabled: true,
-  mode: 'default',
+  mode: 'abstractive',
   reserveTokens: 8000,
   triggerThreshold: 0.8,
   minMessagesBeforeCompact: 10,
   keepRecentMessages: 10,
+  summaryMaxTokens: 500,
 };
 
 // Rough token estimation (4 chars per token average)
@@ -51,7 +53,7 @@ function estimateMessageTokens(msg: AgentMessage): number {
 export class SessionCompactor {
   constructor(
     private config: Partial<CompactionConfig> = {},
-    private _model?: Model<Api>
+    private model?: Model<Api>
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
@@ -123,11 +125,116 @@ export class SessionCompactor {
   }
 
   /**
-   * Generate summary using LLM or fallback
+   * Generate summary based on configured mode
    */
   private async generateSummary(messages: AgentMessage[]): Promise<string> {
-    // Fallback: simple extractive summary
+    // Use LLM if available and mode is abstractive/structured
+    if (this.model && (this.config.mode === 'abstractive' || this.config.mode === 'structured')) {
+      try {
+        if (this.config.mode === 'abstractive') {
+          return await this.llmAbstractiveSummary(messages);
+        } else {
+          return await this.llmStructuredSummary(messages);
+        }
+      } catch (err) {
+        console.warn('[Compactor] LLM summarization failed, falling back to extractive', err);
+      }
+    }
+
+    // Fallback to extractive summary
     return this.extractiveSummary(messages);
+  }
+
+  /**
+   * LLM-based abstractive summary (natural language summary)
+   */
+  private async llmAbstractiveSummary(messages: AgentMessage[]): Promise<string> {
+    if (!this.model) {
+      throw new Error('Model not available');
+    }
+
+    const conversation = this.formatMessages(messages);
+    const prompt = `Summarize the following conversation in 2-3 concise sentences. Focus on:
+1. What the user was trying to accomplish
+2. Key decisions, outcomes, or solutions
+3. Any important context that should be preserved
+
+Conversation:
+${conversation}
+
+Summary:`;
+
+    const result = await complete(this.model, { 
+      messages: [{ role: 'user', content: prompt }] as any 
+    }, {
+      maxTokens: this.config.summaryMaxTokens,
+      temperature: 0.3,
+    });
+
+    const text = Array.isArray(result.content)
+      ? result.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('')
+      : '';
+
+    return text.trim();
+  }
+
+  /**
+   * LLM-based structured extraction (structured memory)
+   */
+  private async llmStructuredSummary(messages: AgentMessage[]): Promise<string> {
+    if (!this.model) {
+      throw new Error('Model not available');
+    }
+
+    const conversation = this.formatMessages(messages);
+    const prompt = `Extract key information from this conversation in a structured format:
+
+${conversation}
+
+Output JSON format:
+{
+  "task": "What the user was trying to do",
+  "decisions": ["Key decisions made"],
+  "preferences": ["User preferences mentioned"],
+  "context": ["Technical context or setup"],
+  "pending": ["Any open tasks or follow-ups"]
+}
+
+JSON:`;
+
+    const result = await complete(this.model, { 
+      messages: [{ role: 'user', content: prompt }] as any 
+    }, {
+      maxTokens: this.config.summaryMaxTokens,
+      temperature: 0.2,
+    });
+
+    const text = Array.isArray(result.content)
+      ? result.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('')
+      : '';
+    
+    // Try to parse as JSON, fallback to plain text
+    try {
+      const parsed = JSON.parse(text);
+      return JSON.stringify(parsed, null, 2);
+    } catch {
+      return text.trim();
+    }
+  }
+
+  /**
+   * Format messages for LLM consumption
+   */
+  private formatMessages(messages: AgentMessage[]): string {
+    return messages
+      .map(m => {
+        const role = m.role;
+        const content = typeof m.content === 'string' 
+          ? m.content 
+          : (m.content as any[]).filter(c => c.type === 'text').map(c => c.text || '').join('\n');
+        return `[${role}]: ${content}`;
+      })
+      .join('\n\n');
   }
 
   /**

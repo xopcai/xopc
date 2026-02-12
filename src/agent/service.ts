@@ -69,7 +69,7 @@ export class AgentService {
     
     const compactionConfig: Partial<CompactionConfig> = {
       enabled: defaults?.compaction?.enabled ?? true,
-      mode: defaults?.compaction?.mode || 'default',
+      mode: (defaults?.compaction?.mode as 'extractive' | 'abstractive' | 'structured') || 'abstractive',
       reserveTokens: defaults?.compaction?.reserveTokens || 8000,
       triggerThreshold: defaults?.compaction?.triggerThreshold || 0.8,
       minMessagesBeforeCompact: defaults?.compaction?.minMessagesBeforeCompact || 10,
