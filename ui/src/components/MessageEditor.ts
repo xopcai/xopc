@@ -101,7 +101,7 @@ export class MessageEditor extends LitElement {
       <div class="flex flex-col gap-3">
         ${this.attachments.length > 0 ? this._renderAttachments() : ''}
         
-        <div class="flex items-end gap-2 p-3 border rounded-xl bg-secondary ${this._isDragging ? 'border-accent bg-accent-light' : 'border-border'} transition-all">
+        <div class="flex items-end gap-2 p-3 border rounded-xl bg-secondary ${this._isDragging ? 'border-accent bg-accent-light' : ''} transition-all">
           ${this.showAttachmentButton ? this._renderAttachmentButton() : ''}
           
           <div class="flex-1 relative">
