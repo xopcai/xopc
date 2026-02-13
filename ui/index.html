@@ -26,11 +26,12 @@
       if (app) {
         // Get gateway URL from current location or use default
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.host || 'localhost:3000';
-        const gatewayUrl = window.location.search.get('gateway') || `${protocol}//${host}/gateway`;
+        const host = window.location.host || 'localhost:18790';
+        const urlParams = new URLSearchParams(window.location.search);
+        const gatewayUrl = urlParams.get('gateway') || `${protocol}//${host}/ws`;
         
         // Get token from URL if provided
-        const token = window.location.search.get('token') || undefined;
+        const token = urlParams.get('token') || undefined;
 
         app.gatewayConfig = {
           url: gatewayUrl,
@@ -49,7 +50,7 @@
                 label: 'Gateway URL',
                 type: 'text',
                 description: 'WebSocket URL for the gateway server',
-                placeholder: 'ws://localhost:3000/gateway'
+                placeholder: 'ws://localhost:18790/ws'
               },
               {
                 key: 'token',
