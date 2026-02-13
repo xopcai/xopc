@@ -76,7 +76,6 @@ export class XopcbotGatewayChat extends LitElement {
   @property({ attribute: false }) config?: GatewayClientConfig;
   @property({ type: Boolean }) enableAttachments = true;
   @property({ type: Boolean }) enableModelSelector = true;
-  @property({ type: Boolean }) enableThinkingSelector = true;
 
   @query('message-editor') private _messageEditor!: MessageEditor;
 
@@ -694,7 +693,6 @@ export class XopcbotGatewayChat extends LitElement {
         .isStreaming=${this._isStreaming}
         .showAttachmentButton=${this.enableAttachments}
         .showModelSelector=${this.enableModelSelector}
-        .showThinkingSelector=${this.enableThinkingSelector}
         .onSend=${(input: string, attachments: Attachment[]) => this._handleSend(input, attachments)}
         .onAbort=${() => this.abort()}
       ></message-editor>

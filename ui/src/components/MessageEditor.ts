@@ -1,7 +1,36 @@
 import { html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
-import { Paperclip, Send, Square, X, FileText, Image, File, Brain } from 'lucide';
+import { unsafeHTML } from 'lit/directives/unsafe-html.js';
+import { Paperclip, Send, Square, X, FileText, Image, File } from 'lucide';
+
+// Convert lucide icon array format to SVG string
+function iconToSvg(iconData: unknown, className = ''): string {
+  if (!iconData || !Array.isArray(iconData)) return '';
+
+  const [_tag, attrs, children] = iconData as [string, Record<string, string>, unknown[]];
+
+  const attrStr = Object.entries(attrs || {})
+    .map(([k, v]) => `${k}="${v}"`)
+    .join(' ');
+
+  const childrenStr = Array.isArray(children)
+    ? children.map(child => {
+        if (Array.isArray(child)) {
+          const [cTag, cAttrs] = child;
+          const cAttrStr = Object.entries(cAttrs || {})
+            .map(([k, v]) => `${k}="${v}"`)
+            .join(' ');
+          return `<${cTag} ${cAttrStr} />`;
+        }
+        return '';
+      }).join('')
+    : '';
+
+  const finalAttrs = className ? `${attrStr} class="${className}"` : attrStr;
+
+  return `<svg ${finalAttrs}>${childrenStr}</svg>`;
+}
 import { i18n, t } from '../utils/i18n';
 
 export interface Attachment {
@@ -22,14 +51,11 @@ export class MessageEditor extends LitElement {
   @property({ type: Boolean }) isStreaming = false;
   @property({ type: Boolean }) showAttachmentButton = true;
   @property({ type: Boolean }) showModelSelector = true;
-  @property({ type: Boolean }) showThinkingSelector = true;
   @property({ attribute: false }) currentModel?: { id: string; provider: string };
-  @property({ attribute: false }) thinkingLevel?: 'off' | 'minimal' | 'low' | 'medium' | 'high';
 
   @property({ attribute: false }) onSend?: (input: string, attachments: Attachment[]) => void;
   @property({ attribute: false }) onAbort?: () => void;
   @property({ attribute: false }) onModelSelect?: () => void;
-  @property({ attribute: false }) onThinkingChange?: (level: 'off' | 'minimal' | 'low' | 'medium' | 'high') => void;
 
   @state() private _isComposing = false;
   @state() private _isDragging = false;
@@ -88,8 +114,14 @@ export class MessageEditor extends LitElement {
   };
 
   private _handleOutsideClick = (e: MouseEvent) => {
-    const menu = this.menuRef.value;
-    const button = this.shadowRoot?.querySelector('.attach-menu-btn');
+    // Try ref first, fallback to querySelector for light DOM
+    let menu: Element | null | undefined = this.menuRef.value;
+    if (!menu) {
+      menu = this.querySelector('.attach-menu');
+    }
+
+    const button = this.querySelector('.attach-btn');
+
     if (menu && !menu.contains(e.target as Node) && button !== e.target) {
       this._showAttachMenu = false;
     }
@@ -117,7 +149,6 @@ export class MessageEditor extends LitElement {
           ></textarea>
 
           <div class="input-actions">
-            ${this.showThinkingSelector ? this._renderThinkingSelector() : ''}
             ${this._renderSendButton()}
           </div>
         </div>
@@ -136,12 +167,12 @@ export class MessageEditor extends LitElement {
               ${att.mimeType.startsWith('image/') ? html`
                 <img src="${att.content}" alt="${att.name}" />
               ` : html`
-                <FileText class="w-4 h-4" />
+                ${unsafeHTML(iconToSvg(FileText, 'w-4 h-4'))}
               `}
             </div>
             <span class="attachment-name">${att.name}</span>
             <button type="button" class="attachment-remove" @click=${() => this._removeAttachment(index)}>
-              <X class="w-3 h-3" />
+              ${unsafeHTML(iconToSvg(X, 'w-3 h-3'))}
             </button>
           </div>
         `)}
@@ -153,21 +184,21 @@ export class MessageEditor extends LitElement {
     return html`
       <div class="attach-wrapper">
         <button type="button" class="attach-btn" @click=${this._toggleAttachMenu} title=${i18n('Attach file')}>
-          <Paperclip class="w-4 h-4" />
+          ${unsafeHTML(iconToSvg(Paperclip, 'w-4 h-4'))}
         </button>
         
         ${this._showAttachMenu ? html`
           <div ${ref(this.menuRef)} class="attach-menu">
             <button type="button" class="menu-item" @click=${() => this._triggerFileSelect('image')}>
-              <Image class="w-4 h-4" />
+              ${unsafeHTML(iconToSvg(Image, 'w-4 h-4'))}
               <span>Image</span>
             </button>
             <button type="button" class="menu-item" @click=${() => this._triggerFileSelect('document')}>
-              <FileText class="w-4 h-4" />
+              ${unsafeHTML(iconToSvg(FileText, 'w-4 h-4'))}
               <span>Document</span>
             </button>
             <button type="button" class="menu-item" @click=${() => this._triggerFileSelect('all')}>
-              <File class="w-4 h-4" />
+              ${unsafeHTML(iconToSvg(File, 'w-4 h-4'))}
               <span>All Files</span>
             </button>
           </div>
@@ -185,37 +216,13 @@ export class MessageEditor extends LitElement {
     `;
   }
 
-  private _renderThinkingSelector(): unknown {
-    return html`
-      <div class="thinking-wrapper">
-        <div class="thinking-icon">
-          <Brain class="w-3.5 h-3.5" />
-        </div>
-        <select
-          class="thinking-select"
-          .value=${this.thinkingLevel || 'off'}
-          @change=${(e: Event) => {
-            const target = e.target as HTMLSelectElement;
-            this.onThinkingChange?.(target.value as any);
-          }}
-        >
-          <option value="off">${t('chat.thinkingLevelNone')}</option>
-          <option value="minimal">Lv.1</option>
-          <option value="low">Lv.2</option>
-          <option value="medium">Lv.3</option>
-          <option value="high">Lv.4</option>
-        </select>
-      </div>
-    `;
-  }
-
   private _renderSendButton(): unknown {
     const canSend = this.value.trim() || this.attachments.length > 0;
 
     if (this.isStreaming) {
       return html`
         <button type="button" class="stop-btn" @click=${() => this.onAbort?.()} title=${i18n('Abort')}>
-          <Square class="w-4 h-4" fill="currentColor" />
+          ${unsafeHTML(iconToSvg(Square, 'w-4 h-4'))}
         </button>
       `;
     }
@@ -228,7 +235,7 @@ export class MessageEditor extends LitElement {
         @click=${this._send}
         title=${i18n('Send message')}
       >
-        <Send class="w-4 h-4" />
+        ${unsafeHTML(iconToSvg(Send, 'w-4 h-4'))}
       </button>
     `;
   }
@@ -247,10 +254,20 @@ export class MessageEditor extends LitElement {
 
   private _triggerFileSelect(type: 'image' | 'document' | 'all'): void {
     this._showAttachMenu = false;
-    
-    const input = this.fileInputRef.value;
-    if (!input) return;
-    
+
+    // Try ref first
+    let input: HTMLInputElement | null | undefined = this.fileInputRef.value;
+
+    // Fallback: query selector since we're using light DOM
+    if (!input) {
+      input = this.querySelector('input[type="file"]') as HTMLInputElement | null;
+    }
+
+    if (!input) {
+      console.warn('File input not found');
+      return;
+    }
+
     if (type === 'image') {
       input.accept = 'image/*';
     } else if (type === 'document') {
@@ -258,7 +275,7 @@ export class MessageEditor extends LitElement {
     } else {
       input.accept = this.acceptedTypes;
     }
-    
+
     input.click();
   }
 

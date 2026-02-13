@@ -670,37 +670,7 @@ html, body {
   border-color: var(--accent-error);
 }
 
-/* Thinking Selector */
-.thinking-wrapper {
-  display: flex;
-  align-items: center;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  padding: 0 0.5rem;
-  height: 2.25rem;
-}
-
-.thinking-icon {
-  display: flex;
-  align-items: center;
-  color: var(--text-muted);
-  margin-right: 0.25rem;
-}
-
-.thinking-select {
-  background: transparent;
-  border: none;
-  font-size: 0.8125rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  outline: none;
-  cursor: pointer;
-}
-
-/* --------------------------------------------
-   EMPTY STATE
-   -------------------------------------------- */
+/* Buttons */
 .empty-state {
   display: flex;
   flex-direction: column;
@@ -766,17 +736,6 @@ html, body {
     justify-content: flex-end;
     gap: 0.5rem;
     padding-bottom: 0;
-  }
-
-  .thinking-wrapper {
-    flex: 1;
-    max-width: 6.5rem;
-    height: 2rem;
-  }
-
-  .thinking-select {
-    width: 100%;
-    font-size: 0.75rem;
   }
 
   .attach-btn, .send-btn, .stop-btn {
