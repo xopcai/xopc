@@ -166,27 +166,52 @@ export function buildMessagingSection(channels: string[] = []): PromptSection {
   };
 }
 
+export interface ContextFile {
+  name: string;
+  content: string;
+  missing?: boolean;
+}
+
 export function buildContextFilesSection(
-  contextFiles?: Array<{ name: string; content: string }>
+  contextFiles?: ContextFile[]
 ): PromptSection {
   if (!contextFiles || contextFiles.length === 0) {
     return { content: '', priority: 90 };
   }
 
-  const hasSoul = contextFiles.some(f => f.name.toLowerCase() === 'soul.md');
+  const loadedFiles = contextFiles.filter(f => !f.missing);
+  const missingFiles = contextFiles.filter(f => f.missing);
+  const hasSoul = loadedFiles.some(f => f.name.toLowerCase() === 'soul.md');
 
   const lines: string[] = [];
   lines.push('# Project Context', '');
-  lines.push('The following project context files have been loaded:');
 
-  if (hasSoul) {
-    lines.push('If SOUL.md is present, embody its persona and tone.');
+  if (loadedFiles.length > 0) {
+    lines.push('The following project context files have been loaded:');
+
+    if (hasSoul) {
+      lines.push('If SOUL.md is present, embody its persona and tone.');
+    }
+
+    lines.push('');
+
+    for (const file of loadedFiles) {
+      lines.push(`## ${file.name}`, '', file.content, '');
+    }
   }
 
-  lines.push('');
+  if (missingFiles.length > 0) {
+    if (loadedFiles.length > 0) {
+      lines.push('');
+    }
+    lines.push('## Missing Files', '');
+    lines.push('The following files are not yet created (run `xopcbot onboard` or create them manually):');
+    lines.push('');
 
-  for (const file of contextFiles) {
-    lines.push(`## ${file.name}`, '', file.content, '');
+    for (const file of missingFiles) {
+      lines.push(`- ${file.name}: ${file.content}`);
+    }
+    lines.push('');
   }
 
   return {
@@ -275,7 +300,7 @@ export class PromptBuilder {
       version?: string;
       channels?: string[];
       skills?: { enabled: boolean; count: number };
-      contextFiles?: Array<{ name: string; content: string }>;
+      contextFiles?: ContextFile[];
       heartbeatEnabled?: boolean;
       heartbeatPrompt?: string;
     } = {}
@@ -308,8 +333,8 @@ export class PromptBuilder {
 
   static createMinimalPrompt(
     config: { workspaceDir: string },
-    options: { 
-      contextFiles?: Array<{ name: string; content: string }>;
+    options: {
+      contextFiles?: ContextFile[];
     } = {}
   ): string {
     const builder = new PromptBuilder({ ...config, mode: 'minimal' });

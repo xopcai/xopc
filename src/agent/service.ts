@@ -127,7 +127,7 @@ export class AgentService {
   private currentModelName: string = 'minimax/MiniMax-M2.1';
   private currentProvider: string = 'google';
   private workspaceDir: string;
-  private bootstrapFiles: Array<{ name: string; content: string }> = [];
+  private bootstrapFiles: Array<{ name: string; content: string; missing?: boolean }> = [];
   private modelRegistry: ModelRegistry;
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
@@ -761,7 +761,9 @@ export class AgentService {
   }
 
   private loadBootstrapFiles(bootstrapDir: string): void {
-    const files: Array<{ name: string; content: string }> = [];
+    const files: Array<{ name: string; content: string; missing?: boolean }> = [];
+    let loadedCount = 0;
+    let missingCount = 0;
 
     for (const filename of BOOTSTRAP_FILES) {
       const filePath = join(bootstrapDir, filename);
@@ -777,6 +779,7 @@ export class AgentService {
           
           if (result.content) {
             files.push({ name: filename, content: result.content });
+            loadedCount++;
             
             if (result.truncated) {
               log.warn(
@@ -794,11 +797,23 @@ export class AgentService {
         } catch (err) {
           log.warn({ file: filename, err }, 'Failed to load bootstrap file');
         }
+      } else {
+        // Mark file as missing - will be shown in system prompt
+        files.push({ 
+          name: filename, 
+          content: `[MISSING] Create this file at: ${filePath}`,
+          missing: true 
+        });
+        missingCount++;
+        log.debug({ file: filename }, 'Bootstrap file missing');
       }
     }
 
     this.bootstrapFiles = files;
-    log.info({ count: files.length, dir: bootstrapDir }, 'Workspace bootstrap files loaded');
+    log.info(
+      { loaded: loadedCount, missing: missingCount, dir: bootstrapDir }, 
+      'Workspace bootstrap files loaded'
+    );
   }
 
   private getSystemPrompt(): string {
