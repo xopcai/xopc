@@ -355,6 +355,101 @@ html, body {
   @apply relative;
 }
 
+/* Input Row */
+.input-row {
+  @apply flex items-end gap-2 p-2 bg-secondary rounded-xl;
+  min-height: 48px;
+}
+
+.input-row.dragging {
+  @apply ring-2 ring-primary ring-opacity-50;
+}
+
+.text-input {
+  @apply flex-1 bg-transparent border-none outline-none resize-none text-sm py-2 px-0;
+  @apply placeholder:text-muted;
+  min-height: 24px;
+  max-height: 200px;
+}
+
+.text-input::placeholder {
+  color: var(--text-muted);
+}
+
+.input-actions {
+  @apply flex items-center gap-2 shrink-0;
+}
+
+/* Attachment Button */
+.attach-wrapper {
+  @apply relative;
+}
+
+.attach-btn {
+  @apply p-2 rounded-lg text-muted hover:text-primary hover:bg-tertiary transition-colors;
+}
+
+/* Attachment Menu */
+.attach-menu {
+  @apply absolute bottom-full left-0 mb-2 bg-background border border-border rounded-lg shadow-lg py-1 min-w-32;
+}
+
+.attach-menu .menu-item {
+  @apply flex items-center gap-2 w-full px-3 py-2 text-sm text-muted hover:bg-secondary hover:text-primary transition-colors;
+}
+
+/* Attachments Row */
+.attachments-row {
+  @apply flex flex-wrap gap-2 mb-2;
+}
+
+.attachment-chip {
+  @apply flex items-center gap-2 px-2 py-1 bg-tertiary rounded-lg;
+}
+
+.attachment-preview {
+  @apply w-8 h-8 rounded overflow-hidden bg-secondary flex items-center justify-center;
+}
+
+.attachment-preview img {
+  @apply w-full h-full object-cover;
+}
+
+.attachment-name {
+  @apply text-sm text-muted truncate max-w-32;
+}
+
+.attachment-remove {
+  @apply p-1 rounded text-muted hover:text-red-500 hover:bg-red-50 transition-colors;
+}
+
+/* Thinking Selector */
+.thinking-select {
+  @apply bg-tertiary border-none rounded px-2 py-1 text-xs text-muted cursor-pointer;
+  @apply hover:bg-secondary transition-colors;
+  outline: none;
+}
+
+/* Send Button */
+.send-btn {
+  @apply p-2 rounded-lg bg-primary text-white;
+  @apply hover:bg-primary-hover transition-colors;
+  @apply disabled:opacity-50 disabled:cursor-not-allowed;
+}
+
+.send-btn.stop-btn {
+  @apply bg-red-500 hover:bg-red-600;
+}
+
+/* Drop Overlay */
+.drop-overlay {
+  @apply absolute inset-0 bg-primary/10 border-2 border-dashed border-primary rounded-xl flex items-center justify-center z-10;
+}
+
+.drop-overlay-text {
+  @apply text-primary font-medium;
+}
+
 /* Dialog */
 .dialog-overlay {
   @apply fixed inset-0 bg-black/50 flex items-center justify-center z-50;

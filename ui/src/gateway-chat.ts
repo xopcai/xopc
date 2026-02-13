@@ -2,7 +2,6 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import './components/MessageEditor';
 import './components/MessageList';
-import './components/Messages';
 import './components/StreamingMessageContainer';
 import { t, initI18n } from './utils/i18n';
 import type { Attachment } from './utils/attachment-utils';
@@ -342,6 +341,7 @@ export class XopcbotGatewayChat extends LitElement {
     }
     this._isStreaming = true;
     this._streamingContent = content;
+    this.requestUpdate();
   }
 
   private _finalizeMessage(): void {
@@ -352,6 +352,7 @@ export class XopcbotGatewayChat extends LitElement {
     }
     this._isStreaming = false;
     this._streamingContent = '';
+    this.requestUpdate();
   }
 
   private _sendRaw(request: GatewayRequest): void {
@@ -391,6 +392,7 @@ export class XopcbotGatewayChat extends LitElement {
         timestamp: Date.now(),
       },
     ];
+    this.requestUpdate();
 
     // Send to gateway
     try {

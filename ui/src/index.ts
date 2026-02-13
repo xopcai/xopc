@@ -1,10 +1,8 @@
 import { html, LitElement } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { Agent, type AgentEvent } from '@mariozechner/pi-agent-core';
-import type { Model } from '@mariozechner/pi-ai';
 import './components/MessageEditor';
 import './components/MessageList';
-import './components/Messages';
 import './components/StreamingMessageContainer';
 import './gateway-chat';
 import './app';
@@ -35,7 +33,6 @@ export type {
 export { StreamingMessageContainer } from './components/StreamingMessageContainer';
 
 // Dialogs
-export { XopcbotConfig, type ConfigSection, type ConfigField } from './dialogs/ConfigDialog';
 export { XopcbotSettings, type SettingsSection, type SettingsField, type SettingsValue } from './dialogs/SettingsDialog';
 
 // Gateway Chat - with type-safe events
