@@ -1,5 +1,5 @@
 import { serve, type ServerType } from '@hono/node-server';
-import { createNodeWebSocket } from '@hono/node-ws';
+import { createNodeWebSocket, type NodeWebSocket } from '@hono/node-ws';
 import { createLogger } from '../utils/logger.js';
 import { GatewayService } from './service.js';
 import { createHonoApp } from './hono/app.js';
@@ -20,6 +20,8 @@ export class GatewayServer {
   private server?: ServerType;
   private config: GatewayServerConfig;
   private service: GatewayService;
+  private wsServer?: NodeWebSocket['wss'];
+  private closeWsConnections?: () => void;
 
   constructor(config: GatewayServerConfig) {
     this.config = config;
@@ -48,7 +50,7 @@ export class GatewayServer {
     });
 
     // Setup WebSocket integration
-    const { injectWebSocket, upgradeWebSocket } = createNodeWebSocket({
+    const { injectWebSocket, upgradeWebSocket, wss } = createNodeWebSocket({
       app,
     });
 
@@ -69,10 +71,20 @@ export class GatewayServer {
 
     // Inject WebSocket handler into the server
     injectWebSocket(this.server);
+    
+    // Store WebSocket server and close function for cleanup
+    this.wsServer = wss;
   }
 
   async stop(): Promise<void> {
     log.info('Stopping gateway server...');
+
+    // Close all WebSocket connections first
+    if (this.wsServer) {
+      this.wsServer.clients.forEach((ws) => {
+        ws.close(1001, 'Server shutting down');
+      });
+    }
 
     // Stop the HTTP server
     if (this.server) {
