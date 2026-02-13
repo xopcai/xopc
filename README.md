@@ -6,7 +6,6 @@
   </p>
   <p>
     <a href="https://github.com/xopcai/xopcbot"><img src="https://img.shields.io/badge/xopcai-xopcbot-blue" alt="GitHub"></a>
-    <a href="#"><img src="https://img.shields.io/badge/pnpm-10.x-orange" alt="pnpm"></a>
     <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen" alt="Node"></a>
     <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.x-blue" alt="TypeScript"></a>
     <a href="#"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
@@ -34,25 +33,26 @@ This guide will get you from zero to your first AI response in minutes.
 ### Prerequisites
 
 - **Node.js**: Version 22.0.0 or higher.
-- **pnpm**: This project uses `pnpm` for package management. Install it with `npm install -g pnpm`.
+- **npm** or **pnpm**: Package manager of your choice.
 
 ### 1. Installation
 
-First, clone the repository and install dependencies using `pnpm`.
+Clone the repository and install dependencies.
 
 ```bash
 git clone https://github.com/xopcai/xopcbot.git
 cd xopcbot
-pnpm install
+npm install
+# or: pnpm install
 ```
-⚠️ **Important**: Do not use `npm` or `yarn`, as this project requires `pnpm`.
 
 ### 2. Configuration
 
 Run the interactive setup command. This will create your configuration file at `~/.xopcbot/config.json` and prompt you to add an LLM provider API key.
 
 ```bash
-pnpm run dev -- configure
+npm run dev -- configure
+# or: pnpm run dev -- configure
 ```
 
 ### 3. Chat!
@@ -61,10 +61,13 @@ You can now chat with your agent directly from the command line.
 
 ```bash
 # Send a single message
-pnpm run dev -- agent -m "Hello, world! What can you do?"
+npm run dev -- agent -m "Hello, world! What can you do?"
 
 # Start an interactive session
-pnpm run dev -- agent -i
+npm run dev -- agent -i
+
+# or use pnpm
+pnpm run dev -- agent -m "Hello, world!"
 ```
 
 ---
@@ -81,10 +84,10 @@ For more detailed information, check out the full documentation:
 
 ## 🛠️ Development
 
-- **Run Commands**: `pnpm run dev -- <command>`
-- **Type Check & Build**: `pnpm run build`
-- **Run Tests**: `pnpm test`
-- **Lint Code**: `pnpm run lint`
+- **Run Commands**: `npm run dev -- <command>` (or `pnpm run dev -- <command>`)
+- **Type Check & Build**: `npm run build`
+- **Run Tests**: `npm test`
+- **Lint Code**: `npm run lint`
 
 ## 🙏 Credits
 

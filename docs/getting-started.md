@@ -7,29 +7,26 @@ This guide provides a complete walkthrough for setting up **xopcbot** for the fi
 Before you begin, ensure you have the following installed:
 
 - **Node.js**: You need version **22.0.0** or newer. You can check your version with `node -v`.
-- **pnpm**: This project uses `pnpm` as its package manager. If you don't have it, install it globally via npm:
-  ```bash
-  npm install -g pnpm
-  ```
+- **npm** or **pnpm**: Your preferred package manager.
 
 ## 2. Installation
 
-Clone the repository from GitHub and install the dependencies using `pnpm`.
+Clone the repository from GitHub and install the dependencies.
 
 ```bash
 git clone https://github.com/xopcai/xopcbot.git
 cd xopcbot
-pnpm install
+npm install
+# or: pnpm install
 ```
-
-> **Note**: It is crucial to use `pnpm install`. Using `npm install` or `yarn` will not work correctly due to the project's dependency structure.
 
 ## 3. Configuration
 
 The easiest way to set up your configuration is with the interactive `configure` command.
 
 ```bash
-pnpm run dev -- configure
+npm run dev -- configure
+# or: pnpm run dev -- configure
 ```
 
 This command will:
@@ -48,7 +45,8 @@ Once configured, you can immediately start interacting with your agent through t
 Use the `-m` flag to send a single message and receive a response.
 
 ```bash
-pnpm run dev -- agent -m "Explain what an LLM is in one sentence."
+npm run dev -- agent -m "Explain what an LLM is in one sentence."
+# or: pnpm run dev -- agent -m "Explain what an LLM is in one sentence."
 ```
 
 #### Interactive Mode
@@ -56,7 +54,8 @@ pnpm run dev -- agent -m "Explain what an LLM is in one sentence."
 For a continuous conversation, use the `-i` flag to enter interactive mode.
 
 ```bash
-pnpm run dev -- agent -i
+npm run dev -- agent -i
+# or: pnpm run dev -- agent -i
 ```
 
 You'll be presented with a `You:` prompt. Type your messages and press Enter. To exit, press `Ctrl+C`.
@@ -90,7 +89,8 @@ See the [Channels documentation](channels.md) for more details.
 Run the `gateway` command. This starts a long-running process that connects to your configured channels and listens for messages.
 
 ```bash
-pnpm run dev -- gateway
+npm run dev -- gateway
+# or: pnpm run dev -- gateway
 ```
 
 You can now open your Telegram client and start a conversation with your bot. Any messages you send will be processed by the agent.
