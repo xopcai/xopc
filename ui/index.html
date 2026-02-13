@@ -18,11 +18,9 @@
     // Initialize with gateway config
     const chatElement = document.getElementById('chat');
     
-    // Configure gateway connection - use current host
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host || 'localhost:18790';
+    // Configure gateway connection
     chatElement.config = {
-      url: `${protocol}//${host}/ws`,
+      url: 'ws://localhost:18790/ws',
       token: '' // Add token if required
     };
     
