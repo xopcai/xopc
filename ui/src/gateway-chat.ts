@@ -193,6 +193,7 @@ export class XopcbotGatewayChat extends LitElement {
       this._ws.onmessage = (e) => {
         try {
           const frame = JSON.parse(e.data) as GatewayResponse | GatewayEvent;
+          console.log('[GatewayChat] Received frame:', frame);
           this._handleMessage(frame);
         } catch (err) {
           console.error('[GatewayChat] Failed to parse message:', err);
@@ -289,6 +290,7 @@ export class XopcbotGatewayChat extends LitElement {
   }
 
   private _handleEvent(event: GatewayEvent): void {
+    console.log('[GatewayChat] Handling event:', event);
     switch (event.event) {
       case 'chat':
         this._handleChatEvent(event.payload);
@@ -309,6 +311,7 @@ export class XopcbotGatewayChat extends LitElement {
   }
 
   private _handleChatEvent(data: ChatPayload): void {
+    console.log('[GatewayChat] Chat event data:', data);
     if (data.type === 'status') {
       // Agent started
       this._isStreaming = true;
