@@ -1,6 +1,14 @@
 import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
+interface MessageContent {
+  type: string;
+  text?: string;
+  name?: string;
+  input?: any;
+  function?: { name?: string; arguments?: any };
+}
+
 @customElement('streaming-message-container')
 export class StreamingMessageContainer extends LitElement {
   @property({ attribute: false }) tools: Map<string, any> = new Map();
@@ -23,15 +31,19 @@ export class StreamingMessageContainer extends LitElement {
     if (!this._currentMessage) return null;
 
     return html`
-      <div class="flex gap-3">
-        <div class="w-8 h-8 rounded-full bg-green-500 text-white flex items-center justify-center shrink-0">
-          🤖
+      <div class="flex gap-3 message-item">
+        <div class="avatar assistant">
+          AI
         </div>
         
-        <div class="flex flex-col gap-1 max-w-[80%]">
-          <div class="text-xs text-muted-foreground">Assistant · streaming...</div>
+        <div class="flex flex-col gap-1 max-w-[85%]">
+          <div class="flex items-center gap-2 text-xs text-muted">
+            <span class="font-medium">Assistant</span>
+            <span>·</span>
+            <span class="text-accent animate-pulse">thinking...</span>
+          </div>
           
-          <div class="rounded-lg p-3 bg-muted">
+          <div class="rounded-xl p-3 bg-secondary">
             ${this.renderStreamingContent()}
           </div>
         </div>
@@ -43,32 +55,36 @@ export class StreamingMessageContainer extends LitElement {
     const content = this._currentMessage?.content || [];
     
     return html`
-      <div class="prose prose-sm dark:prose-invert">
-        ${content.map((block: any) => {
+      <div class="markdown-content">
+        ${content.map((block: MessageContent) => {
           if (block.type === 'text') {
-            return html`<p class="whitespace-pre-wrap">${this._escapeHtml(block.text || '')}</p>`;
+            return html`<p class="whitespace-pre-wrap">${this._escapeHtml(block.text || '')}<span class="streaming-cursor"></span></p>`;
           }
           if (block.type === 'tool_use') {
             return this.renderToolUse(block);
           }
           return '';
         })}
-        ${this.isStreaming ? html`<span class="animate-pulse">▌</span>` : ''}
+        ${this.isStreaming && (!content.length || content[content.length - 1]?.type !== 'text') ? html`<span class="streaming-cursor"></span>` : ''}
       </div>
     `;
   }
 
-  private renderToolUse(block: any): unknown {
+  private renderToolUse(block: MessageContent): unknown {
     const name = block.name || block.function?.name;
     const input = block.input || block.function?.arguments || {};
     
+    const inputStr = typeof input === 'string' ? input : JSON.stringify(input, null, 2);
+    
     return html`
-      <div class="rounded border bg-yellow-50 dark:bg-yellow-900/20 p-2 text-sm">
-        <div class="font-semibold flex items-center gap-1">
-          <span>🔧</span>
+      <div class="tool-call">
+        <div class="name">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+          </svg>
           <span>${name}</span>
         </div>
-        <pre class="mt-1 text-xs overflow-x-auto">${JSON.stringify(input, null, 2)}</pre>
+        <pre class="input">${inputStr}</pre>
       </div>
     `;
   }

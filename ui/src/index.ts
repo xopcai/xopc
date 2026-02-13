@@ -20,6 +20,7 @@ export { MessageList } from './components/MessageList.js';
 export type { MessageList as MessageListComponent } from './components/MessageList.js';
 export { StreamingMessageContainer } from './components/StreamingMessageContainer.js';
 export { XopcbotConfig, type ConfigSection, type ConfigField } from './dialogs/ConfigDialog.js';
+export { XopcbotSettings, type SettingsSection, type SettingsField, type SettingsValue } from './dialogs/SettingsDialog.js';
 export { XopcbotGatewayChat, type GatewayClientConfig } from './gateway-chat.js';
 
 @customElement('xopcbot-chat')
