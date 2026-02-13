@@ -17,7 +17,10 @@
     "start": "node dist/cli/index.js",
     "test": "vitest src",
     "lint": "eslint 'src/**/*.ts' --ignore-pattern '**/examples/**'",
-    "prepublishOnly": "npm run build && npm test"
+    "prepublishOnly": "npm run build && npm test",
+    "docs:dev": "vitepress dev docs",
+    "docs:build": "vitepress build docs",
+    "docs:preview": "vitepress preview docs"
   },
   "keywords": [
     "ai",
@@ -75,6 +78,8 @@
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.54.0",
-    "vitest": "^4.0.18"
+    "vitepress": "^1.6.4",
+    "vitest": "^4.0.18",
+    "vue": "^3.5.28"
   }
 }
