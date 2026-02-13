@@ -1,5 +1,5 @@
 import crypto from 'crypto';
-import { dirname, join } from 'path';
+import { join } from 'path';
 import { AgentService } from '../agent/index.js';
 import { ChannelManager } from '../channels/manager.js';
 import { MessageBus } from '../bus/index.js';

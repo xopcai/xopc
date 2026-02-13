@@ -24,11 +24,11 @@ import {
   createMemoryGetTool,
 } from './tools/index.js';
 import { createSkillLoader, type Skill } from './skills/index.js';
-import { DEFAULT_BASE_DIR, getBundledSkillsDir } from '../config/paths.js';
+import { getBundledSkillsDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
 import { PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
-import { runWithModelFallback, isFailoverError, describeFailoverError, resolveFallbackCandidates } from './fallback/index.js';
+import { isFailoverError, describeFailoverError, resolveFallbackCandidates } from './fallback/index.js';
 import { PromptBuilder } from './prompt/index.js';
 import { createTypingController } from './typing.js';
 

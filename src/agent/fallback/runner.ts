@@ -1,6 +1,6 @@
-import { classifyFailoverReason, type FailoverReason } from './reason.js';
-import { FailoverError, isFailoverError, describeFailoverError } from './error.js';
-import { resolveFallbackCandidates, type ModelCandidate, type FallbackAttempt } from './candidates.js';
+import { classifyFailoverReason } from './reason.js';
+import { FailoverError, describeFailoverError } from './error.js';
+import { resolveFallbackCandidates, type FallbackAttempt } from './candidates.js';
 import type { Config } from '../../config/schema.js';
 
 export interface FallbackResult<T> {

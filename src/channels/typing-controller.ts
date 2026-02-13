@@ -51,7 +51,7 @@ export class TypingController {
 
       try {
         await sendTyping(threadId);
-      } catch (error) {
+      } catch {
         // Silently continue - typing failures shouldn't break the flow
       }
     }, this.typingIntervalMs);

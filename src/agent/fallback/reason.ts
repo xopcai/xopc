@@ -6,15 +6,6 @@ export type FailoverReason =
   | 'timeout'
   | 'unknown';
 
-const PATTERNS = {
-  rateLimit: [/rate[_ ]?limit|too many requests|429/i, 'exceeded your current quota', 'resource has been exhausted'],
-  overloaded: [/overloaded_error/i, 'overloaded'],
-  timeout: ['timeout', 'timed out', 'deadline exceeded'],
-  billing: [/\b402\b/, 'payment required', 'insufficient credits', 'credit balance'],
-  auth: [/invalid[_ ]?api[_ ]?key|unauthorized|forbidden/i, 'authentication', 'token has expired', /\b401\b/, /\b403\b/],
-  format: ['invalid request format', 'tool_use.id'],
-} as const;
-
 export function isRateLimitErrorMessage(raw: string): boolean {
   return raw.toLowerCase().includes('rate limit') || /429/i.test(raw);
 }
