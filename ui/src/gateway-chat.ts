@@ -292,6 +292,7 @@ export class XopcbotGatewayChat extends LitElement {
   private _handleEvent(event: GatewayEvent): void {
     console.log('[GatewayChat] Handling event:', event);
     switch (event.event) {
+      case 'agent':
       case 'chat':
         this._handleChatEvent(event.payload);
         break;
