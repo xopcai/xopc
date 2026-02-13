@@ -6,12 +6,7 @@
  * Check if value is a plain object
  */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
-  return Boolean(
-    value &&
-    typeof value === 'object' &&
-    !Array.isArray(value) &&
-    Object.prototype.toString.call(value) === '[object Object]',
-  );
+  return Object.getPrototypeOf(value) === Object.prototype;
 }
 
 /**
@@ -51,11 +46,4 @@ export function diffConfigPaths(prev: unknown, next: unknown, prefix = ''): stri
 
   // Primitive or other types changed
   return [prefix || '<root>'];
-}
-
-/**
- * Check if a specific path has changed
- */
-export function hasConfigChanged(paths: string[], targetPath: string): boolean {
-  return paths.some(p => p === targetPath || p.startsWith(`${targetPath}.`));
 }

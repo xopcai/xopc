@@ -68,17 +68,23 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'tools', kind: 'hot', description: 'Tools configuration' },
 ];
 
+// Map for O(1) prefix lookup
+const rulesMap = new Map(BASE_RELOAD_RULES.map(r => [r.prefix, r]));
+
 /**
  * Find matching rule for a config path
  */
 export function matchReloadRule(path: string): ReloadRule | null {
-  // Check exact match first, then prefix match
-  for (const rule of BASE_RELOAD_RULES) {
-    if (path === rule.prefix || path.startsWith(`${rule.prefix}.`)) {
+  // Check exact match first
+  if (rulesMap.has(path)) {
+    return rulesMap.get(path)!;
+  }
+  // Then check prefix match
+  for (const [prefix, rule] of rulesMap) {
+    if (path.startsWith(`${prefix}.`)) {
       return rule;
     }
   }
-  // Default: require restart for unknown paths
   return null;
 }
 
