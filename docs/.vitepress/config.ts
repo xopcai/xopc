@@ -3,10 +3,11 @@ import { defineConfig } from 'vitepress'
 export default defineConfig({
   title: 'xopcbot',
   description: 'Ultra-Lightweight Personal AI Assistant',
+  base: '/xopcbot/',
   cleanUrls: true,
   ignoreDeadLinks: true,
   head: [
-    ['link', { rel: 'icon', href: '/favicon.ico' }]
+    ['link', { rel: 'icon', href: '/xopcbot/favicon.ico' }]
   ],
   locales: {
     root: {
@@ -14,7 +15,7 @@ export default defineConfig({
       lang: 'en',
       themeConfig: {
         siteTitle: 'xopcbot',
-        logo: '/logo.svg',
+        logo: '/xopcbot/logo.svg',
         nav: [
           { text: 'Home', link: '/' },
           { text: 'Guide', link: '/getting-started' },
@@ -69,7 +70,7 @@ export default defineConfig({
       link: '/zh/',
       themeConfig: {
         siteTitle: 'xopcbot',
-        logo: '/logo.svg',
+        logo: '/xopcbot/logo.svg',
         nav: [
           { text: '首页', link: '/zh/' },
           { text: '指南', link: '/zh/getting-started' },
