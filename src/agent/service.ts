@@ -40,7 +40,68 @@ const BOOTSTRAP_FILES = [
   'USER.md',
   'TOOLS.md',
   'AGENTS.md',
+  'HEARTBEAT.md',
+  'MEMORY.md',
 ];
+
+/** Maximum characters to inject from workspace files into system prompt */
+const BOOTSTRAP_MAX_CHARS = 20_000;
+
+/**
+ * Strip YAML front matter from markdown content.
+ * Removes the ---
+ * key: value
+ * --- header if present.
+ */
+function stripFrontMatter(content: string): string {
+  if (!content.startsWith('---')) {
+    return content;
+  }
+  const endIndex = content.indexOf('\n---', 3);
+  if (endIndex === -1) {
+    return content;
+  }
+  return content.slice(endIndex + 4).replace(/^\s+/, '');
+}
+
+interface TruncateResult {
+  content: string;
+  truncated: boolean;
+  originalLength: number;
+}
+
+/**
+ * Truncate workspace file content to prevent token overflow.
+ * Keeps head (70%) and tail (20%) with a truncation marker in between.
+ */
+function truncateBootstrapContent(content: string, maxChars: number): TruncateResult {
+  const trimmed = content.trimEnd();
+  if (trimmed.length <= maxChars) {
+    return {
+      content: trimmed,
+      truncated: false,
+      originalLength: trimmed.length,
+    };
+  }
+
+  const headChars = Math.floor(maxChars * 0.7);
+  const tailChars = Math.floor(maxChars * 0.2);
+  const head = trimmed.slice(0, headChars);
+  const tail = trimmed.slice(-tailChars);
+
+  const marker = [
+    '',
+    '[...content truncated, read the full file for complete content...]',
+    `...(truncated: kept ${headChars}+${tailChars} chars of ${trimmed.length})...`,
+    '',
+  ].join('\n');
+
+  return {
+    content: head + marker + tail,
+    truncated: true,
+    originalLength: trimmed.length,
+  };
+}
 
 interface AgentServiceConfig {
   workspace: string;
@@ -706,10 +767,29 @@ export class AgentService {
       const filePath = join(bootstrapDir, filename);
       if (existsSync(filePath)) {
         try {
-          const content = readFileSync(filePath, 'utf-8').trim();
-          if (content) {
-            files.push({ name: filename, content });
-            log.debug({ file: filename, path: filePath }, 'Bootstrap file loaded');
+          let content = readFileSync(filePath, 'utf-8');
+          
+          // Strip YAML front matter (template metadata)
+          content = stripFrontMatter(content);
+          
+          // Truncate if too long to prevent token overflow
+          const result = truncateBootstrapContent(content, BOOTSTRAP_MAX_CHARS);
+          
+          if (result.content) {
+            files.push({ name: filename, content: result.content });
+            
+            if (result.truncated) {
+              log.warn(
+                { 
+                  file: filename, 
+                  originalLength: result.originalLength,
+                  keptLength: result.content.length 
+                }, 
+                'Bootstrap file truncated in system prompt (too long)'
+              );
+            } else {
+              log.debug({ file: filename, path: filePath }, 'Bootstrap file loaded');
+            }
           }
         } catch (err) {
           log.warn({ file: filename, err }, 'Failed to load bootstrap file');
