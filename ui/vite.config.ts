@@ -37,7 +37,8 @@ export default defineConfig(({ mode }) => {
   return {
     root: '.',
     build: {
-      outDir: 'dist/app',
+      outDir: '../dist/gateway/static/root',
+      emptyOutDir: true,
       rollupOptions: {
         input: {
           main: 'index.html',

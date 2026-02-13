@@ -1,11 +1,41 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { readFileSync } from 'node:fs';
 import { logger } from './middleware/logger.js';
 import { auth } from './middleware/auth.js';
 import type { GatewayService } from '../service.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('HonoApp');
+
+const UI_STATIC_ROOT = './gateway/static/root';
+
+// MIME type mapping for static assets
+const MIME_TYPES: Record<string, string> = {
+  js: 'application/javascript',
+  css: 'text/css',
+  json: 'application/json',
+  html: 'text/html',
+  svg: 'image/svg+xml',
+  png: 'image/png',
+  jpg: 'image/jpeg',
+  ico: 'image/x-icon',
+};
+
+// Serve a static file from UI static root
+function serveStaticFile(relativePath: string): Response | null {
+  const filePath = `${UI_STATIC_ROOT}/${relativePath}`;
+  try {
+    const content = readFileSync(filePath);
+    const ext = relativePath.split('.').pop() || '';
+    const contentType = MIME_TYPES[ext] || 'application/octet-stream';
+    return new Response(content, {
+      headers: { 'Content-Type': contentType },
+    });
+  } catch {
+    return null;
+  }
+}
 
 export interface HonoAppConfig {
   service: GatewayService;
@@ -63,6 +93,29 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   // Mount authenticated routes
   app.route('/', authenticated);
+
+  // UI static files
+  app.get('/ui', (c) => c.redirect('/ui/'));
+
+  app.get('/ui/', (c) => {
+    const response = serveStaticFile('index.html');
+    if (response) return response;
+    return c.text('UI not found', 404);
+  });
+
+  app.get('/ui/assets/*', (c) => {
+    const path = c.req.path.replace('/ui/assets/', '');
+    const response = serveStaticFile(`assets/${path}`);
+    if (response) return response;
+    return c.text('Not found', 404);
+  });
+
+  app.get('/assets/*', (c) => {
+    const path = c.req.path.replace('/assets/', '');
+    const response = serveStaticFile(`assets/${path}`);
+    if (response) return response;
+    return c.text('Not found', 404);
+  });
 
   // 404 handler
   app.notFound((c) => {
