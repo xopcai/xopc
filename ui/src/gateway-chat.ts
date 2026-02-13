@@ -118,10 +118,7 @@ export class XopcbotGatewayChat extends LitElement {
 
   override async connectedCallback(): Promise<void> {
     super.connectedCallback();
-    this.style.display = 'flex';
-    this.style.flexDirection = 'column';
-    this.style.height = '100%';
-    this.style.minHeight = '0';
+    this.classList.add('chat-container');
     
     // Initialize i18n
     await initI18n('en');
@@ -448,19 +445,17 @@ export class XopcbotGatewayChat extends LitElement {
 
   override render(): unknown {
     return html`
-      <div class="chat-container">
-        ${this._renderStatus()}
+      ${this._renderStatus()}
 
-        <div class="chat-messages">
-          <div class="chat-messages-inner">
-            ${this._renderMessages()}
-          </div>
+      <div class="chat-messages">
+        <div class="chat-messages-inner">
+          ${this._renderMessages()}
         </div>
+      </div>
 
-        <div class="chat-input-container">
-          <div class="chat-input-inner">
-            ${this._renderInput()}
-          </div>
+      <div class="chat-input-container">
+        <div class="chat-input-inner">
+          ${this._renderInput()}
         </div>
       </div>
     `;
@@ -541,17 +536,17 @@ export class XopcbotGatewayChat extends LitElement {
     return html`
       <div class="message-item ${isUser ? 'flex-row-reverse' : ''}">
         <div class="avatar ${isUser ? 'user' : 'assistant'}">
-          ${isUser ? t('chat.you').charAt(0) : t('chat.assistant').charAt(0)}
+          ${isUser ? t('chat.you').charAt(0) : 'X'}
         </div>
         
-        <div class="flex flex-col gap-1 max-w-[85%]">
-          <div class="flex items-center gap-2 text-xs text-muted">
+        <div class="flex flex-col gap-1 max-w-[calc(100%-3rem)]">
+          <div class="flex items-center gap-2 text-xs text-muted ${isUser ? 'flex-row-reverse' : ''}">
             <span class="font-medium">${isUser ? t('chat.you') : t('chat.assistant')}</span>
             <span>·</span>
             <span>${this._formatTime(message.timestamp)}</span>
           </div>
           
-          <div class="message-bubble ${isUser ? 'bg-primary-light' : 'bg-secondary'}">
+          <div class="message-bubble ${isUser ? 'user' : 'assistant'}">
             ${this._renderMessageContent(message.content)}
             ${message.attachments?.length ? this._renderAttachments(message.attachments) : ''}
           </div>
@@ -566,17 +561,17 @@ export class XopcbotGatewayChat extends LitElement {
     return html`
       <div class="message-item">
         <div class="avatar assistant">
-          ${t('chat.assistant').charAt(0)}
+          X
         </div>
         
-        <div class="flex flex-col gap-1 max-w-[85%]">
+        <div class="flex flex-col gap-1 max-w-[calc(100%-3rem)]">
           <div class="flex items-center gap-2 text-xs text-muted">
             <span class="font-medium">${t('chat.assistant')}</span>
             <span>·</span>
             <span class="text-primary animate-pulse">${t('chat.thinking')}</span>
           </div>
           
-          <div class="message-bubble bg-secondary">
+          <div class="message-bubble assistant">
             <div class="markdown-content">
               ${content.map((block) => {
                 if (block.type === 'text' && block.text) {

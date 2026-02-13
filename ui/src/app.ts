@@ -193,7 +193,7 @@ export class XopcbotApp extends LitElement {
           </aside>
 
           <!-- Main Content -->
-          <main class="content ${this._activeTab === 'chat' ? 'content--chat' : ''}>
+          <main class="content ${this._activeTab === 'chat' ? 'content--chat' : ''}">
             <section class="content-header">
               <div>
                 <div class="page-title">${titleForTab(this._activeTab)}</div>

@@ -1,8 +1,8 @@
 import { html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
-import { Paperclip, Send, Square, X, FileText, Image, File } from 'lucide';
-import { i18n } from '../utils/i18n';
+import { Paperclip, Send, Square, X, FileText, Image, File, Brain } from 'lucide';
+import { i18n, t } from '../utils/i18n';
 
 export interface Attachment {
   id: string;
@@ -187,20 +187,25 @@ export class MessageEditor extends LitElement {
 
   private _renderThinkingSelector(): unknown {
     return html`
-      <select
-        class="thinking-select"
-        .value=${this.thinkingLevel || 'off'}
-        @change=${(e: Event) => {
-          const target = e.target as HTMLSelectElement;
-          this.onThinkingChange?.(target.value as any);
-        }}
-      >
-        <option value="off">🚫</option>
-        <option value="minimal">1</option>
-        <option value="low">2</option>
-        <option value="medium">3</option>
-        <option value="high">4</option>
-      </select>
+      <div class="thinking-wrapper">
+        <div class="thinking-icon">
+          <Brain class="w-3.5 h-3.5" />
+        </div>
+        <select
+          class="thinking-select"
+          .value=${this.thinkingLevel || 'off'}
+          @change=${(e: Event) => {
+            const target = e.target as HTMLSelectElement;
+            this.onThinkingChange?.(target.value as any);
+          }}
+        >
+          <option value="off">${t('chat.thinkingLevelNone')}</option>
+          <option value="minimal">Lv.1</option>
+          <option value="low">Lv.2</option>
+          <option value="medium">Lv.3</option>
+          <option value="high">Lv.4</option>
+        </select>
+      </div>
     `;
   }
 
@@ -362,7 +367,7 @@ export class MessageEditor extends LitElement {
     return new Promise((resolve, reject) => {
       const reader = new FileReader();
       reader.onload = () => resolve(reader.result as string);
-      reader.error = reject;
+      reader.onerror = () => reject(reader.error);
       reader.readAsDataURL(file);
     });
   }
