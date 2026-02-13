@@ -1722,3 +1722,267 @@ select:focus {
     display: none;
   }
 }
+
+/* ============================================
+   Message Editor - Clean & Modern Design
+   ============================================ */
+
+.editor-container {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Attachments row */
+.attachments-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0 0.25rem;
+}
+
+.attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.375rem 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  max-width: 200px;
+}
+
+.attachment-preview {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+
+.attachment-preview img {
+  width: 24px;
+  height: 24px;
+  object-fit: cover;
+  border-radius: var(--radius-sm);
+}
+
+.attachment-name {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.attachment-remove {
+  width: 18px;
+  height: 18px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-red);
+  color: white;
+  border-radius: var(--radius-full);
+  flex-shrink: 0;
+  opacity: 0.7;
+  transition: opacity var(--transition-fast);
+}
+
+.attachment-remove:hover {
+  opacity: 1;
+}
+
+/* Input row */
+.input-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.5rem;
+  padding: 0.5rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-xl);
+  transition: all var(--transition-fast);
+}
+
+.input-row:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 3px var(--accent-primary-light);
+}
+
+.input-row.dragging {
+  border-color: var(--accent-primary);
+  background: var(--accent-primary-light);
+}
+
+/* Text input */
+.text-input {
+  flex: 1;
+  min-height: 36px;
+  max-height: 200px;
+  padding: 0.5rem 0;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  background: transparent;
+  border: none;
+  color: var(--text-primary);
+  resize: none;
+  field-sizing: content;
+}
+
+.text-input::placeholder {
+  color: var(--text-muted);
+}
+
+.text-input:focus {
+  outline: none;
+}
+
+/* Attach button */
+.attach-wrapper {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.attach-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.attach-btn:hover {
+  color: var(--text-primary);
+  background: var(--bg-hover);
+}
+
+/* Attach menu */
+.attach-menu {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 0.5rem;
+  min-width: 160px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+  z-index: 50;
+  animation: slideUp 0.15s ease;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  gap: 0.625rem;
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  text-align: left;
+  transition: all var(--transition-fast);
+}
+
+.menu-item:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+}
+
+/* Input actions */
+.input-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-shrink: 0;
+}
+
+/* Thinking selector */
+.thinking-select {
+  height: 36px;
+  padding: 0 0.5rem;
+  font-size: 0.75rem;
+  background: var(--bg-tertiary);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.thinking-select:hover {
+  background: var(--bg-hover);
+}
+
+.thinking-select:focus {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-primary-light);
+}
+
+/* Send button */
+.send-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg-tertiary);
+  border-radius: var(--radius-md);
+  color: var(--text-muted);
+  transition: all var(--transition-fast);
+}
+
+.send-btn.active {
+  background: var(--accent-primary);
+  color: white;
+}
+
+.send-btn.active:hover {
+  background: var(--accent-primary-hover);
+}
+
+.send-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+/* Stop button */
+.stop-btn {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-red);
+  color: white;
+  border-radius: var(--radius-md);
+  transition: all var(--transition-fast);
+}
+
+.stop-btn:hover {
+  background: #dc2626;
+}
+
+/* Drop overlay */
+.drop-overlay {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent-primary-light);
+  border: 2px dashed var(--accent-primary);
+  border-radius: var(--radius-xl);
+  z-index: 50;
+}
+
+.drop-overlay span {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--accent-primary);
+}
