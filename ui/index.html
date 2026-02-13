@@ -9,16 +9,21 @@
 </head>
 <body class="h-screen">
   <div id="app" class="h-full">
-    <xopcbot-chat id="chat"></xopcbot-chat>
+    <xopcbot-gateway-chat id="chat"></xopcbot-gateway-chat>
   </div>
 
   <script type="module">
-    import { XopcbotChat } from './src/index.ts';
+    import { XopcbotGatewayChat } from './src/gateway-chat.ts';
     
-    // Initialize with agent
+    // Initialize with gateway config
     const chatElement = document.getElementById('chat');
     
-    // Example: Chat will be populated by the parent application
+    // Configure gateway connection
+    chatElement.config = {
+      url: 'ws://localhost:3000/ws',
+      token: '' // Add token if required
+    };
+    
     console.log('xopcbot UI initialized');
   </script>
 </body>

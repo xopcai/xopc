@@ -6,6 +6,7 @@ import './components/MessageEditor.js';
 import './components/MessageList.js';
 import './components/Messages.js';
 import './components/StreamingMessageContainer.js';
+import './gateway-chat.js';
 import { i18n, setLanguage, translations } from './utils/i18n.js';
 import type { Attachment } from './utils/attachment-utils.js';
 import type { MessageEditor } from './components/MessageEditor.js';
