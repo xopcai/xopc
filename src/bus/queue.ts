@@ -9,13 +9,16 @@ interface MessageBusEvents {
 class MessageBus extends EventEmitter {
   private inboundQueue: InboundMessage[] = [];
   private outboundQueue: OutboundMessage[] = [];
-  private inboundConsumer: ((msg: InboundMessage) => void) | null = null;
-  private outboundConsumer: ((msg: OutboundMessage) => void) | null = null;
+  private inboundConsumers: ((msg: InboundMessage) => void)[] = [];
+  private outboundConsumers: ((msg: OutboundMessage) => void)[] = [];
 
   async publishInbound(msg: InboundMessage): Promise<void> {
-    if (this.inboundConsumer) {
-      const consumer = this.inboundConsumer;
-      this.inboundConsumer = null;
+    // Emit event for listeners
+    this.emit('inbound', msg);
+
+    // Handle waiting consumers
+    if (this.inboundConsumers.length > 0) {
+      const consumer = this.inboundConsumers.shift()!;
       consumer(msg);
     } else {
       this.inboundQueue.push(msg);
@@ -23,9 +26,12 @@ class MessageBus extends EventEmitter {
   }
 
   async publishOutbound(msg: OutboundMessage): Promise<void> {
-    if (this.outboundConsumer) {
-      const consumer = this.outboundConsumer;
-      this.outboundConsumer = null;
+    // Emit event for listeners
+    this.emit('outbound', msg);
+
+    // Handle waiting consumers
+    if (this.outboundConsumers.length > 0) {
+      const consumer = this.outboundConsumers.shift()!;
       consumer(msg);
     } else {
       this.outboundQueue.push(msg);
@@ -37,7 +43,7 @@ class MessageBus extends EventEmitter {
       if (this.inboundQueue.length > 0) {
         return resolve(this.inboundQueue.shift()!);
       }
-      this.inboundConsumer = resolve;
+      this.inboundConsumers.push(resolve);
     });
   }
 
@@ -46,7 +52,7 @@ class MessageBus extends EventEmitter {
       if (this.outboundQueue.length > 0) {
         return resolve(this.outboundQueue.shift()!);
       }
-      this.outboundConsumer = resolve;
+      this.outboundConsumers.push(resolve);
     });
   }
 
@@ -54,8 +60,8 @@ class MessageBus extends EventEmitter {
   clear(): void {
     this.inboundQueue = [];
     this.outboundQueue = [];
-    this.inboundConsumer = null;
-    this.outboundConsumer = null;
+    this.inboundConsumers = [];
+    this.outboundConsumers = [];
   }
 }
 
