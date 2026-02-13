@@ -60,7 +60,7 @@ export default defineConfig({
         ],
         footer: {
           message: 'Released under the MIT License.',
-          copyright: 'Copyright © 2024-present xopcbot'
+          copyright: 'Copyright © 2026-present xopcbot'
         }
       }
     },
@@ -115,7 +115,7 @@ export default defineConfig({
         ],
         footer: {
           message: '基于 MIT 许可证发布',
-          copyright: '版权所有 © 2024-present xopcbot'
+          copyright: '版权所有 © 2026-present xopcbot'
         }
       }
     }
