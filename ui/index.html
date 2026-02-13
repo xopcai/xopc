@@ -4,27 +4,163 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>xopcbot UI</title>
-  <link rel="stylesheet" href="./src/styles.css">
   <script type="module" src="./src/index.ts"></script>
+  <link rel="stylesheet" href="./src/styles.css">
+  <style>
+    /* Prevent flash of unstyled content */
+    html { background: #0f172a; }
+    @media (prefers-color-scheme: light) {
+      html { background: #ffffff; }
+    }
+  </style>
 </head>
 <body class="h-screen">
   <div id="app" class="h-full">
-    <xopcbot-gateway-chat id="chat"></xopcbot-gateway-chat>
+    <xopcbot-app id="app-root"></xopcbot-app>
   </div>
 
-  <script type="module">
-    import { XopcbotGatewayChat } from './src/gateway-chat.ts';
-    
-    // Initialize with gateway config
-    const chatElement = document.getElementById('chat');
-    
-    // Configure gateway connection
-    chatElement.config = {
-      url: 'ws://localhost:18790/ws',
-      token: '' // Add token if required
-    };
-    
-    console.log('xopcbot UI initialized');
+  <script>
+    // Initialize the app with gateway config
+    document.addEventListener('DOMContentLoaded', () => {
+      const app = document.getElementById('app-root');
+      if (app) {
+        // Get gateway URL from current location or use default
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host || 'localhost:3000';
+        const gatewayUrl = window.location.search.get('gateway') || `${protocol}//${host}/gateway`;
+        
+        // Get token from URL if provided
+        const token = window.location.search.get('token') || undefined;
+
+        app.gatewayConfig = {
+          url: gatewayUrl,
+          token: token
+        };
+
+        // Default settings sections
+        app.settingsSections = [
+          {
+            id: 'connection',
+            title: 'Connection',
+            icon: 'plug',
+            fields: [
+              {
+                key: 'gatewayUrl',
+                label: 'Gateway URL',
+                type: 'text',
+                description: 'WebSocket URL for the gateway server',
+                placeholder: 'ws://localhost:3000/gateway'
+              },
+              {
+                key: 'token',
+                label: 'Auth Token',
+                type: 'password',
+                description: 'Optional authentication token'
+              }
+            ]
+          },
+          {
+            id: 'appearance',
+            title: 'Appearance',
+            icon: 'palette',
+            fields: [
+              {
+                key: 'theme',
+                label: 'Theme',
+                type: 'select',
+                description: 'Choose your preferred color scheme',
+                options: [
+                  { value: 'system', label: 'System' },
+                  { value: 'light', label: 'Light' },
+                  { value: 'dark', label: 'Dark' }
+                ]
+              }
+            ]
+          },
+          {
+            id: 'chat',
+            title: 'Chat',
+            icon: 'messageSquare',
+            fields: [
+              {
+                key: 'enableAttachments',
+                label: 'Enable Attachments',
+                type: 'boolean',
+                description: 'Allow file attachments in chat'
+              },
+              {
+                key: 'enableModelSelector',
+                label: 'Show Model Selector',
+                type: 'boolean',
+                description: 'Display model selection dropdown'
+              },
+              {
+                key: 'enableThinkingSelector',
+                label: 'Show Thinking Selector',
+                type: 'boolean',
+                description: 'Display thinking level selection'
+              }
+            ]
+          }
+        ];
+
+        // Default settings values
+        app.settingsValues = {
+          gatewayUrl: gatewayUrl,
+          token: token,
+          theme: 'system',
+          enableAttachments: true,
+          enableModelSelector: true,
+          enableThinkingSelector: true
+        };
+
+        // Handle settings save
+        app.onSettingsSave = (values) => {
+          console.log('Settings saved:', values);
+          
+          // Update gateway config if changed
+          if (values.gatewayUrl && values.gatewayUrl !== app.gatewayConfig?.url) {
+            app.gatewayConfig = {
+              url: values.gatewayUrl,
+              token: values.token
+            };
+          }
+          
+          // Save to localStorage
+          localStorage.setItem('xopcbot-settings', JSON.stringify(values));
+        };
+
+        // Load saved settings
+        const savedSettings = localStorage.getItem('xopcbot-settings');
+        if (savedSettings) {
+          try {
+            const parsed = JSON.parse(savedSettings);
+            Object.assign(app.settingsValues, parsed);
+            
+            // Apply saved gateway config
+            if (parsed.gatewayUrl) {
+              app.gatewayConfig = {
+                url: parsed.gatewayUrl,
+                token: parsed.token
+              };
+            }
+          } catch (e) {
+            console.error('Failed to load saved settings:', e);
+          }
+        }
+
+        // Add keyboard shortcut to open settings
+        document.addEventListener('keydown', (e) => {
+          if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+            e.preventDefault();
+            app.showSettings();
+          }
+        });
+
+        // Expose app to window for debugging
+        window.xopcbotApp = app;
+      }
+    });
   </script>
 </body>
 </html>

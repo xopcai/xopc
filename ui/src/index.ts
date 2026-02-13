@@ -7,6 +7,7 @@ import './components/MessageList.js';
 import './components/Messages.js';
 import './components/StreamingMessageContainer.js';
 import './gateway-chat.js';
+import './app.js';
 import { i18n, setLanguage, translations } from './utils/i18n.js';
 import type { Attachment } from './utils/attachment-utils.js';
 import type { MessageEditor } from './components/MessageEditor.js';
@@ -22,6 +23,7 @@ export { StreamingMessageContainer } from './components/StreamingMessageContaine
 export { XopcbotConfig, type ConfigSection, type ConfigField } from './dialogs/ConfigDialog.js';
 export { XopcbotSettings, type SettingsSection, type SettingsField, type SettingsValue } from './dialogs/SettingsDialog.js';
 export { XopcbotGatewayChat, type GatewayClientConfig } from './gateway-chat.js';
+export { XopcbotApp, type Tab, type AppSettings } from './app.js';
 
 @customElement('xopcbot-chat')
 export class XopcbotChat extends LitElement {
