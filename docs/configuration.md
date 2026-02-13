@@ -1,8 +1,8 @@
-# 配置参考
+# Configuration Reference
 
-xopcbot 的所有配置都集中在 `~/.config/xopcbot/config.json` 文件中。
+All xopcbot configuration is centralized in the `~/.config/xopcbot/config.json` file.
 
-## 完整配置示例
+## Full Configuration Example
 
 ```json
 {
@@ -74,25 +74,25 @@ xopcbot 的所有配置都集中在 `~/.config/xopcbot/config.json` 文件中。
 }
 ```
 
-## 配置项详解
+## Configuration Options
 
 ### agents
 
-Agent 的默认配置。
+Default configuration for agents.
 
-| 字段 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `workspace` | string | `~/.xopcbot/workspace` | 工作区目录 |
-| `model` | string / object | `anthropic/claude-sonnet-4-5` | 默认模型 |
-| `max_tokens` | number | `8192` | 最大输出 token |
-| `temperature` | number | `0.7` | 温度参数 (0-2) |
-| `max_tool_iterations` | number | `20` | 最大工具调用次数 |
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `workspace` | string | `~/.xopcbot/workspace` | Workspace directory |
+| `model` | string / object | `anthropic/claude-sonnet-4-5` | Default model |
+| `max_tokens` | number | `8192` | Maximum output tokens |
+| `temperature` | number | `0.7` | Temperature parameter (0-2) |
+| `max_tool_iterations` | number | `20` | Maximum tool call iterations |
 
 ### agents.defaults.model
 
-模型配置支持两种格式：
+Model configuration supports two formats:
 
-**简单格式（单个模型）：**
+**Simple format (single model):**
 ```json
 {
   "agents": {
@@ -103,7 +103,7 @@ Agent 的默认配置。
 }
 ```
 
-**完整格式（主模型 + 备用模型）：**
+**Full format (primary + fallbacks):**
 ```json
 {
   "agents": {
@@ -121,30 +121,30 @@ Agent 的默认配置。
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `primary` | string | 主要模型 (provider/model 格式) |
-| `fallbacks` | string[] | 备用模型列表，当主模型失败时自动切换 |
+| Field | Type | Description |
+|-------|------|-------------|
+| `primary` | string | Primary model (provider/model format) |
+| `fallbacks` | string[] | Fallback models, used when primary fails |
 
-#### 模型回退机制
+#### Model Fallback Mechanism
 
-当主模型调用失败时，xopcbot 会自动尝试备用模型列表中的模型：
+When the primary model fails, xopcbot automatically tries fallback models:
 
-1. **支持的失败类型**：
-   - `auth` - 认证失败 (401, 403)
-   - `rate_limit` - 速率限制 (429)
-   - `billing` - 账单/配额问题 (402)
-   - `timeout` - 请求超时
-   - `format` - 请求格式错误 (400)
+1. **Supported failure types**:
+   - `auth` - Authentication failure (401, 403)
+   - `rate_limit` - Rate limit exceeded (429)
+   - `billing` - Billing/quota issues (402)
+   - `timeout` - Request timeout
+   - `format` - Request format error (400)
 
-2. **回退流程**：
-   - 主模型调用失败
-   - 检测失败原因
-   - 按顺序尝试备用模型
-   - 任意模型成功则返回结果
-   - 所有模型失败则抛出错误
+2. **Fallback flow**:
+   - Primary model call fails
+   - Detect failure reason
+   - Try fallbacks in order
+   - Return result if any succeeds
+   - Throw error if all fail
 
-3. **示例配置**：
+3. **Example configuration**:
 ```json
 {
   "agents": {
@@ -166,13 +166,13 @@ Agent 的默认配置。
 }
 ```
 
-模型 ID 格式：
-- **简短格式**：`gpt-4o` (使用默认 provider)
-- **完整格式**：`anthropic/claude-sonnet-4-5`
+Model ID formats:
+- **Short format**: `gpt-4o` (uses default provider)
+- **Full format**: `anthropic/claude-sonnet-4-5`
 
 ### providers
 
-LLM 提供商配置。
+LLM provider configurations.
 
 #### openai
 
@@ -187,10 +187,10 @@ LLM 提供商配置。
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
+| Field | Type | Description |
+|-------|------|-------------|
 | `api_key` | string | OpenAI API Key |
-| `api_base` | string | (可选) 自定义 API 地址 |
+| `api_base` | string | (Optional) Custom API endpoint |
 
 #### anthropic
 
@@ -254,7 +254,7 @@ LLM 提供商配置。
 }
 ```
 
-#### vllm (本地部署)
+#### vllm (Local deployment)
 
 ```json
 {
@@ -269,7 +269,7 @@ LLM 提供商配置。
 
 ### channels
 
-通信通道配置。
+Communication channel configurations.
 
 #### telegram
 
@@ -285,13 +285,13 @@ LLM 提供商配置。
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `enabled` | boolean | 是否启用 |
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | boolean | Enable channel |
 | `token` | string | Bot Token |
-| `allow_from` | string[] | 白名单用户 |
+| `allow_from` | string[] | Whitelist users |
 
-获取 Token：[@BotFather](https://t.me/BotFather)
+Get Token: [@BotFather](https://t.me/BotFather)
 
 #### whatsapp
 
@@ -307,15 +307,15 @@ LLM 提供商配置。
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `enabled` | boolean | 是否启用 |
-| `bridge_url` | string | WA Bridge WebSocket 地址 |
-| `allow_from` | string[] | 白名单用户 |
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | boolean | Enable channel |
+| `bridge_url` | string | WA Bridge WebSocket URL |
+| `allow_from` | string[] | Whitelist users |
 
 ### gateway
 
-REST 网关配置。
+REST gateway configuration.
 
 ```json
 {
@@ -326,14 +326,14 @@ REST 网关配置。
 }
 ```
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `host` | string | 绑定地址 |
-| `port` | number | 端口号 |
+| Field | Type | Description |
+|-------|------|-------------|
+| `host` | string | Bind address |
+| `port` | number | Port number |
 
 ### tools
 
-内置工具配置。
+Built-in tool configurations.
 
 ```json
 {
@@ -348,12 +348,12 @@ REST 网关配置。
 }
 ```
 
-## 环境变量
+## Environment Variables
 
-配置也可以通过环境变量设置，会覆盖配置文件：
+Configuration can also be set via environment variables, which override config file:
 
-| 配置项 | 环境变量 |
-|--------|----------|
+| Config | Environment Variable |
+|--------|---------------------|
 | OpenAI API Key | `OPENAI_API_KEY` |
 | Anthropic API Key | `ANTHROPIC_API_KEY` |
 | OpenRouter API Key | `OPENROUTER_API_KEY` |
@@ -364,7 +364,7 @@ REST 网关配置。
 | Brave Search API Key | `BRAVE_API_KEY` |
 | Telegram Bot Token | `TELEGRAM_BOT_TOKEN` |
 
-示例：
+Example:
 
 ```bash
 export OPENAI_API_KEY="sk-..."
@@ -373,35 +373,35 @@ export MINIMAX_API_KEY="..."
 export DEEPSEEK_API_KEY="..."
 ```
 
-## 配置文件位置
+## Config File Locations
 
-| 用途 | 位置 |
-|------|------|
-| 配置文件 | `~/.config/xopcbot/config.json` |
-| 工作区 | `~/.xopcbot/workspace/` |
-| 会话数据 | `~/.xopcbot/workspace/sessions/` |
+| Purpose | Location |
+|---------|----------|
+| Config file | `~/.config/xopcbot/config.json` |
+| Workspace | `~/.xopcbot/workspace/` |
+| Session data | `~/.xopcbot/workspace/sessions/` |
 
-## 验证配置
+## Verify Configuration
 
-运行命令检查配置：
+Run commands to test configuration:
 
 ```bash
-# 测试 Provider 连接
+# Test provider connection
 npm run dev -- agent -m "Hello"
 
-# 列出定时任务
+# List cron jobs
 npm run dev -- cron list
 ```
 
-## 常见问题
+## FAQ
 
-### Q: 修改配置后需要重启吗？
+### Q: Need to restart after config changes?
 
-是的，修改 `config.json` 后需要重启服务。
+Yes, restart the service after modifying `config.json`.
 
-### Q: 如何使用多个提供商？
+### Q: How to use multiple providers?
 
-配置多个 provider，agent 会根据模型名称自动选择：
+Configure multiple providers, agent automatically selects based on model name:
 
 ```json
 {
@@ -412,10 +412,10 @@ npm run dev -- cron list
 }
 ```
 
-设置不同模型使用不同提供商。
+Set different models to use different providers.
 
-### Q: API Key 安全性
+### Q: API Key Security
 
-- 不要将配置文件提交到 Git
-- 使用环境变量存储敏感信息
-- 配置文件的权限应设为 `600`
+- Don't commit config files to Git
+- Use environment variables for sensitive data
+- Set config file permissions to `600`

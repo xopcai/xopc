@@ -43,3 +43,4 @@ coverage/
 # Note: Only root-level memory/, not src/agent/prompt/memory/
 memory/
 !src/agent/prompt/memory/
+docs/.vitepress/cache/

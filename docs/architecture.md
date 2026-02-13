@@ -1,8 +1,8 @@
-# 架构设计
+# Architecture Design
 
-本文档介绍 xopcbot 的整体架构设计和模块关系。
+This document describes xopcbot's overall architecture and module relationships.
 
-## 系统架构
+## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -43,95 +43,95 @@
   └──────────┘        └──────────┘        └──────────┘
 ```
 
-## 核心模块
+## Core Modules
 
 ### Agent Service (`src/agent/service.ts`)
 
-AgentService 是核心编排器，负责：
+AgentService is the core orchestrator responsible for:
 
-1. **消息处理** - 接收用户消息，调用 LLM，处理工具调用
-2. **Prompt 构建** - 从 SOUL.md/USER.md/AGENTS.md/TOOLS.md 构建系统 Prompt
-3. **内存管理** - 会话消息存储和上下文压缩
-4. **工具执行** - 内置工具 + 插件工具的统一执行
-5. **插件集成** - 插件工具和 Hook 的加载
+1. **Message Processing** - Receive user messages, call LLM, handle tool calls
+2. **Prompt Building** - Build system prompt from SOUL.md/USER.md/AGENTS.md/TOOLS.md
+3. **Memory Management** - Session message storage and context compression
+4. **Tool Execution** - Unified execution of built-in tools + plugin tools
+5. **Plugin Integration** - Load plugin tools and hooks
 
 ### Prompt Builder (`src/agent/prompt/`)
 
-模块化 Prompt 构建系统：
+Modular prompt building system:
 
 ```
 src/agent/prompt/
-├── index.ts         # PromptBuilder - 主构建器
-│                    # buildIdentitySection, buildMemorySection 等
-├── modes.ts         # Prompt 模式 (full/minimal/none)
+├── index.ts         # PromptBuilder - main builder
+│                    # buildIdentitySection, buildMemorySection, etc.
+├── modes.ts         # Prompt modes (full/minimal/none)
 ├── memory/
-│   └── index.ts     # memory_search, memory_get 工具
-│                    # 语义搜索 MEMORY.md 和 memory/*.md
-└── skills.ts        # Skills 加载系统
+│   └── index.ts     # memory_search, memory_get tools
+│                    # Semantic search of MEMORY.md and memory/*.md
+└── skills.ts        # Skills loading system
 ```
 
-**Prompt Sections**：
+**Prompt Sections**:
 
-| Section | 描述 |
-|---------|------|
+| Section | Description |
+|---------|-------------|
 | Identity | "You are a personal assistant running in xopcbot" |
-| Version | xopcbot 版本信息 |
-| Tool Call Style | 工具调用风格 (verbose/brief/minimal) |
-| Safety | 安全原则 |
-| Memory | memory_search/memory_get 使用指南 |
-| Workspace | 工作目录 |
-| Skills | 技能系统 |
-| Messaging | 消息发送 |
-| Heartbeats | 心跳监控 |
-| Runtime | 运行时信息 |
+| Version | xopcbot version info |
+| Tool Call Style | Tool calling style (verbose/brief/minimal) |
+| Safety | Safety principles |
+| Memory | memory_search/memory_get usage guide |
+| Workspace | Working directory |
+| Skills | Skills system |
+| Messaging | Message sending |
+| Heartbeats | Heartbeat monitoring |
+| Runtime | Runtime info |
 
-### 内置工具 (`src/agent/tools/`)
+### Built-in Tools (`src/agent/tools/`)
 
-| 工具 | 文件 | 描述 |
-|------|------|------|
-| `read_file` | read.ts | 读取文件内容 |
-| `write_file` | write.ts | 创建/覆盖文件 |
-| `edit_file` | edit.ts | 精确编辑文件 |
-| `list_dir` | list-dir.ts | 列出目录内容 |
-| `shell` | shell.ts | 执行 Shell 命令 |
-| `grep` | grep.ts | 文本搜索 |
-| `find` | find.ts | 文件查找 |
-| `web_search` | web.ts | 网页搜索 |
-| `web_fetch` | web.ts | 网页抓取 |
-| `send_message` | communication.ts | 发送消息 |
-| `memory_search` | memory-tool.ts | 搜索记忆文件 |
-| `memory_get` | memory-tool.ts | 读取记忆片段 |
+| Tool | File | Description |
+|------|------|-------------|
+| `read_file` | read.ts | Read file content |
+| `write_file` | write.ts | Create/overwrite file |
+| `edit_file` | edit.ts | Precise file editing |
+| `list_dir` | list-dir.ts | List directory contents |
+| `shell` | shell.ts | Execute shell commands |
+| `grep` | grep.ts | Text search |
+| `find` | find.ts | File search |
+| `web_search` | web.ts | Web search |
+| `web_fetch` | web.ts | Web scraping |
+| `send_message` | communication.ts | Send messages |
+| `memory_search` | memory-tool.ts | Search memory files |
+| `memory_get` | memory-tool.ts | Read memory snippets |
 
-### 会话内存 (`src/agent/memory/`)
+### Session Memory (`src/agent/memory/`)
 
 ```
 src/agent/memory/
-├── store.ts       # MemoryStore - 会话消息存储
-└── compaction.ts  # SessionCompactor - 上下文压缩
-                  # 支持 extractive/abstractive/structured 模式
+├── store.ts       # MemoryStore - session message storage
+└── compaction.ts  # SessionCompactor - context compression
+                  # Supports extractive/abstractive/structured modes
 ```
 
-### 插件系统 (`src/plugins/`)
+### Plugin System (`src/plugins/`)
 
 ```
 src/plugins/
-├── types.ts       # 插件类型定义
+├── types.ts       # Plugin type definitions
 ├── api.ts         # Plugin API
-├── loader.ts      # 插件加载器
-├── hooks.ts       # Hook 系统
-└── index.ts      # 导出
+├── loader.ts      # Plugin loader
+├── hooks.ts       # Hook system
+└── index.ts      # Exports
 ```
 
-**Hook 生命周期**：
+**Hook Lifecycle**:
 
 ```
 before_agent_start → agent_end → message_received → 
 before_tool_call → after_tool_call → message_sending → session_end
 ```
 
-## 数据流
+## Data Flow
 
-### 对话流程
+### Conversation Flow
 
 ```
 User (Telegram/Gateway)
@@ -171,9 +171,9 @@ User (Telegram/Gateway)
 User Reply / Channel Response
 ```
 
-## CLI 命令注册模式
+## CLI Command Registration Pattern
 
-xopcbot 使用自注册模式：
+xopcbot uses self-registration pattern:
 
 ```typescript
 // src/cli/commands/mycommand.ts
@@ -194,40 +194,40 @@ register({
 });
 ```
 
-## 扩展点
+## Extension Points
 
-### 添加新工具
+### Adding New Tools
 
-1. 在 `src/agent/tools/` 创建新文件
-2. 实现 `AgentTool` 接口
-3. 导出并在 `src/agent/tools/index.ts` 注册
-4. 在 `AgentService` 中添加到 tools 数组
+1. Create new file in `src/agent/tools/`
+2. Implement `AgentTool` interface
+3. Export and register in `src/agent/tools/index.ts`
+4. Add to tools array in `AgentService`
 
-### 添加 Hook
+### Adding Hooks
 
 ```typescript
 api.registerHook('before_tool_call', async (event, ctx) => {
-  // 拦截工具调用
+  // Intercept tool calls
   return { modified: true };
 });
 ```
 
-### 添加插件
+### Adding Plugins
 
-1. 创建 `xopcbot.plugin.json` manifest
-2. 实现 `register(api)` 函数
-3. 发布或本地加载
+1. Create `xopcbot.plugin.json` manifest
+2. Implement `register(api)` function
+3. Publish or load locally
 
-## 技术栈
+## Tech Stack
 
-| 层级 | 技术 |
-|------|------|
-| 运行时 | Node.js 22+ |
-| 语言 | TypeScript 5.x |
+| Layer | Technology |
+|-------|------------|
+| Runtime | Node.js 22+ |
+| Language | TypeScript 5.x |
 | LLM SDK | @mariozechner/pi-ai |
 | CLI | Commander.js |
 | Telegram | node-telegram-bot-api |
-| 验证 | Zod + TypeBox |
-| 日志 | Pino |
-| 定时任务 | node-cron |
+| Validation | Zod + TypeBox |
+| Logging | Pino |
+| Cron | node-cron |
 | HTTP Server | Hono |
