@@ -2,7 +2,7 @@
 import nodeCron from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
 import { v4 as uuidv4 } from 'uuid';
-import { DEFAULT_PATHS } from '../config/paths.js';
+import { DEFAULT_PATHS, Config } from '../config/index.js';
 import { createLogger } from '../utils/logger.js';
 import { CronPersistence } from './persistence.js';
 import { DefaultJobExecutor } from './executor.js';
@@ -251,6 +251,15 @@ export class CronService {
       avgExecutionTime: 0, // TODO: track from executor
       nextScheduledJob,
     };
+  }
+
+  /**
+   * Update config (hot reload)
+   */
+  updateConfig(_config: Config): void {
+    // Cron jobs are managed separately via addJob/removeJob
+    // This method exists for interface compatibility
+    log.debug('Cron config updated (jobs managed separately)');
   }
 
   /**

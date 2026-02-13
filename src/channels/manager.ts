@@ -55,6 +55,37 @@ export class ChannelManager {
     await Promise.all(promises);
   }
 
+  /**
+   * Update channel configuration (hot reload)
+   */
+  updateConfig(config: Config): void {
+    // Update Telegram config if enabled
+    if (config.channels.telegram?.enabled) {
+      const telegram = this.channels.get('telegram');
+      if (telegram && 'updateConfig' in telegram) {
+        (telegram as any).updateConfig(config.channels.telegram);
+      } else {
+        // Create new instance if not exists
+        const newTelegram = new TelegramChannel(config.channels.telegram, this.bus);
+        this.channels.set('telegram', newTelegram);
+      }
+    }
+
+    // Update WhatsApp config if enabled
+    if (config.channels.whatsapp?.enabled) {
+      const whatsapp = this.channels.get('whatsapp');
+      if (whatsapp && 'updateConfig' in whatsapp) {
+        (whatsapp as any).updateConfig(config.channels.whatsapp);
+      } else {
+        // Create new instance if not exists
+        const newWhatsApp = new WhatsAppChannel(config.channels.whatsapp, this.bus);
+        this.channels.set('whatsapp', newWhatsApp);
+      }
+    }
+
+    log.info('Channel config updated');
+  }
+
   async send(msg: OutboundMessage): Promise<void> {
     const channel = this.channels.get(msg.channel);
     if (channel) {

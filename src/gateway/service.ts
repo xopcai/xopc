@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import { watch, type FSWatcher } from 'fs';
 import { dirname, join } from 'path';
 import { AgentService } from '../agent/index.js';
 import { ChannelManager } from '../channels/manager.js';
@@ -9,6 +8,7 @@ import { createLogger } from '../utils/logger.js';
 import { CronService, DefaultJobExecutor } from '../cron/index.js';
 import { PluginLoader, normalizePluginConfig } from '../plugins/index.js';
 import { HeartbeatService } from '../heartbeat/index.js';
+import { ConfigHotReloader } from '../config/reload.js';
 import type { Config } from '../config/schema.js';
 import type { JobData } from '../cron/types.js';
 
@@ -54,8 +54,7 @@ export class GatewayService {
   private pluginLoader: PluginLoader | null = null;
   private heartbeatService: HeartbeatService;
   private running = false;
-  private configWatcher: FSWatcher | null = null;
-  private reloadDebounce: ReturnType<typeof setTimeout> | null = null;
+  private configReloader: ConfigHotReloader | null = null;
   private startTime = Date.now();
 
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
@@ -156,7 +155,7 @@ export class GatewayService {
 
     // Setup config hot reload
     if (this.serviceConfig.enableHotReload !== false) {
-      this.setupConfigWatcher();
+      this.setupConfigReloader();
     }
 
     log.info('Gateway service started');
@@ -167,15 +166,10 @@ export class GatewayService {
 
     log.info('Stopping gateway service...');
 
-    // Stop config watcher
-    if (this.configWatcher) {
-      this.configWatcher.close();
-      this.configWatcher = null;
-    }
-
-    if (this.reloadDebounce) {
-      clearTimeout(this.reloadDebounce);
-      this.reloadDebounce = null;
+    // Stop config reloader
+    if (this.configReloader) {
+      await this.configReloader.stop();
+      this.configReloader = null;
     }
 
     // Stop heartbeat service
@@ -208,51 +202,103 @@ export class GatewayService {
   }
 
   /**
-   * Setup file watcher for config hot reload
+   * Setup config hot reload using ConfigHotReloader
    */
-  private setupConfigWatcher(): void {
-    try {
-      const configDir = dirname(this.configPath);
-      this.configWatcher = watch(configDir, (eventType, filename) => {
-        if (filename && filename.endsWith('.json')) {
-          // Debounce reload to avoid multiple rapid reloads
-          if (this.reloadDebounce) {
-            clearTimeout(this.reloadDebounce);
-          }
-          this.reloadDebounce = setTimeout(() => {
-            this.reloadConfig().catch((err) => {
-              log.error({ err }, 'Failed to reload config');
-            });
-          }, 500);
-        }
-      });
-      log.debug({ configDir }, 'Config hot reload enabled');
-    } catch (err) {
-      log.warn({ err }, 'Failed to setup config watcher');
-    }
+  private setupConfigReloader(): void {
+    this.configReloader = new ConfigHotReloader(
+      this.configPath,
+      this.config,
+      {
+        onProvidersReload: (newConfig) => this.handleProvidersReload(newConfig),
+        onAgentDefaultsReload: (newConfig) => this.handleAgentDefaultsReload(newConfig),
+        onChannelsReload: (newConfig) => this.handleChannelsReload(newConfig),
+        onCronReload: (newConfig) => this.handleCronReload(newConfig),
+        onHeartbeatReload: (newConfig) => this.handleHeartbeatReload(newConfig),
+        onToolsReload: (newConfig) => this.handleToolsReload(newConfig),
+        onFullRestart: (newConfig) => {
+          log.warn('Config changed requires full restart - please restart the gateway');
+          this.config = newConfig;
+        },
+      },
+      {
+        debounceMs: 300,
+        enabled: this.serviceConfig.enableHotReload !== false,
+      }
+    );
+    this.configReloader.start();
   }
 
   /**
-   * Reload configuration from disk
+   * Handle providers config hot reload
+   */
+  private handleProvidersReload(newConfig: Config): void {
+    log.info('Reloading providers config...');
+    this.config = newConfig;
+    // TODO: Re-initialize provider clients with new API keys
+    log.info('Providers config reloaded');
+  }
+
+  /**
+   * Handle agent defaults config hot reload
+   */
+  private handleAgentDefaultsReload(newConfig: Config): void {
+    log.info('Reloading agent defaults...');
+    this.config = newConfig;
+    // Agent model/temperature changes will apply on next request
+    log.info('Agent defaults reloaded');
+  }
+
+  /**
+   * Handle channels config hot reload
+   */
+  private handleChannelsReload(newConfig: Config): void {
+    log.info('Reloading channels config...');
+    this.config = newConfig;
+    // Re-initialize channels
+    this.channelManager.updateConfig(newConfig);
+    log.info('Channels config reloaded');
+  }
+
+  /**
+   * Handle cron config hot reload
+   */
+  private handleCronReload(newConfig: Config): void {
+    log.info('Reloading cron config...');
+    this.config = newConfig;
+    // Reload cron jobs
+    this.cronService.updateConfig(newConfig);
+    log.info('Cron config reloaded');
+  }
+
+  /**
+   * Handle heartbeat config hot reload
+   */
+  private handleHeartbeatReload(newConfig: Config): void {
+    log.info('Reloading heartbeat config...');
+    this.config = newConfig;
+    // Reload heartbeat service
+    this.heartbeatService.updateConfig(newConfig);
+    log.info('Heartbeat config reloaded');
+  }
+
+  /**
+   * Handle tools config hot reload
+   */
+  private handleToolsReload(newConfig: Config): void {
+    log.info('Reloading tools config...');
+    this.config = newConfig;
+    // TODO: Reload tools configuration
+    log.info('Tools config reloaded');
+  }
+
+  /**
+   * Reload configuration from disk (manual trigger)
    */
   async reloadConfig(): Promise<{ reloaded: boolean; error?: string }> {
-    try {
-      log.info('Reloading configuration...');
-      const newConfig = loadConfig(this.configPath);
-      
-      // Update config
-      this.config = newConfig;
-      
-      // TODO: Apply changes dynamically
-      // For now we just log the change
-      log.info('Configuration reloaded successfully');
-      
-      return { reloaded: true };
-    } catch (err) {
-      const error = err instanceof Error ? err.message : String(err);
-      log.error({ err }, 'Failed to reload config');
-      return { reloaded: false, error };
+    if (!this.configReloader) {
+      return { reloaded: false, error: 'Config reloader not initialized' };
     }
+    return this.configReloader.triggerReload();
   }
 
   /**

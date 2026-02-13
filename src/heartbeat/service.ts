@@ -1,4 +1,5 @@
 import { CronService } from '../cron/service.js';
+import { Config } from '../config/index.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('HeartbeatService');
@@ -50,6 +51,25 @@ export class HeartbeatService {
       this.intervalId = null;
       log.info('Heartbeat stopped');
     }
+  }
+
+  /**
+   * Update heartbeat configuration (hot reload)
+   */
+  updateConfig(config: Config): void {
+    const heartbeatConfig = config.heartbeat;
+    if (!heartbeatConfig?.enabled) {
+      this.stop();
+      return;
+    }
+
+    // Restart with new config
+    this.stop();
+    this.start({
+      intervalMs: heartbeatConfig.intervalMs || 60000,
+      enabled: heartbeatConfig.enabled !== false,
+    });
+    log.info('Heartbeat config updated');
   }
 
   isRunning(): boolean {
