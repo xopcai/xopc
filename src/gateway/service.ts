@@ -290,7 +290,27 @@ export class GatewayService {
     yield { type: 'status', status: 'accepted', runId };
 
     try {
-      // Send message through bus
+      // For 'gateway' channel (web UI), process through agent service
+      if (channel === 'gateway') {
+        const sessionKey = `gateway:${chatId}`;
+        
+        yield { type: 'token', content: 'Thinking...\n' };
+        
+        try {
+          // Process message through the LLM
+          const response = await this.agentService.processDirect(message, sessionKey);
+          
+          yield { type: 'token', content: response };
+          
+          return { status: 'ok', summary: 'Message processed successfully' };
+        } catch (error) {
+          log.error({ err: error }, 'Agent processing failed');
+          yield { type: 'error', content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` };
+          return { status: 'error', summary: error instanceof Error ? error.message : 'Unknown error' };
+        }
+      }
+
+      // Send message through bus for other channels (telegram, whatsapp, etc.)
       await this.bus.publishInbound({
         channel,
         sender_id: 'gateway',
@@ -300,12 +320,12 @@ export class GatewayService {
 
       // Wait for and collect response
       // This is simplified - in production we'd need proper session tracking
-      yield { type: 'token', content: 'Processing...\\n' };
+      yield { type: 'token', content: 'Processing...\n' };
 
       // Simulate processing delay
       await new Promise((resolve) => setTimeout(resolve, 1000));
 
-      yield { type: 'token', content: 'Done\\n' };
+      yield { type: 'token', content: 'Done\n' };
 
       return { status: 'ok', summary: 'Message processed' };
     } catch (error) {
