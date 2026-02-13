@@ -15,17 +15,16 @@ export default defineConfig({
         main: 'index.html',
       },
       output: {
+        dir: 'dist',
         globals: {
           lit: 'LitElement',
-          '@mariozechner/pi-agent-core': 'piAgentCore',
-          '@mariozechner/pi-ai': 'piAI',
         },
       },
     },
   },
   server: {
     port: 3000,
-    open: true,
+    open: false,
   },
   css: {
     postcss: false,
