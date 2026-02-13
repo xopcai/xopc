@@ -65,18 +65,29 @@ export class XopcbotApp extends LitElement {
   }
 
   private _applyTheme(): void {
+    const html = document.documentElement;
+    
+    // Remove both classes first
+    html.classList.remove('light', 'dark');
+    
     let isDark = false;
     if (this._theme === 'dark') {
       isDark = true;
     } else if (this._theme === 'system') {
       isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
+    // For 'light' or when system is light, isDark remains false
     
     if (isDark) {
-      document.documentElement.classList.add('dark');
+      html.classList.add('dark');
     } else {
-      document.documentElement.classList.remove('dark');
+      html.classList.add('light');
     }
+    
+    // Dispatch event for other components
+    window.dispatchEvent(new CustomEvent('themechange', { 
+      detail: { theme: isDark ? 'dark' : 'light' } 
+    }));
   }
 
   private _toggleTheme(): void {

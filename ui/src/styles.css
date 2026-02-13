@@ -38,6 +38,21 @@
   --gradient-danger: linear-gradient(135deg, #ef4444, #dc2626);
 }
 
+/* Explicit light theme class - same as :root but with higher specificity */
+html.light {
+  --bg-primary: #ffffff;
+  --bg-secondary: #f8fafc;
+  --bg-tertiary: #f1f5f9;
+  --bg-hover: #e2e8f0;
+  
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  
+  --border-color: #e2e8f0;
+  --border-strong: #cbd5e1;
+}
+
 /* Dark theme */
 .dark {
   --bg-primary: #0f172a;
@@ -53,9 +68,9 @@
   --border-strong: #475569;
 }
 
-/* System dark mode (fallback) */
+/* System dark mode (fallback when no explicit class is set) */
 @media (prefers-color-scheme: dark) {
-  :root:not(.light) {
+  :root:not(.light):not(.dark) {
     --bg-primary: #0f172a;
     --bg-secondary: #1e293b;
     --bg-tertiary: #334155;

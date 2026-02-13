@@ -7,10 +7,11 @@
   <script type="module" src="./src/index.ts"></script>
   <link rel="stylesheet" href="./src/styles.css">
   <style>
-    /* Prevent flash of unstyled content */
-    html { background: #0f172a; }
-    @media (prefers-color-scheme: light) {
-      html { background: #ffffff; }
+    /* Prevent flash of unstyled content - default to light theme */
+    html { background: #ffffff; }
+    html.dark { background: #0f172a; }
+    @media (prefers-color-scheme: dark) {
+      html:not(.light) { background: #0f172a; }
     }
   </style>
 </head>
