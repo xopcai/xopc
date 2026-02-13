@@ -1,7 +1,10 @@
 export interface Attachment {
+  id: string;
   name: string;
   type: string;
-  content: string;
+  mimeType: string;
+  size: number;
+  content: string; // base64
 }
 
 export function loadAttachment(file: File): Promise<Attachment> {
@@ -9,8 +12,11 @@ export function loadAttachment(file: File): Promise<Attachment> {
     const reader = new FileReader();
     reader.onload = () => {
       resolve({
+        id: crypto.randomUUID(),
         name: file.name,
-        type: file.type,
+        type: file.type.startsWith('image/') ? 'image' : 'document',
+        mimeType: file.type,
+        size: file.size,
         content: reader.result as string,
       });
     };
