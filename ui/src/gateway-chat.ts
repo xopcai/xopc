@@ -93,15 +93,20 @@ export class XopcbotGatewayChat extends LitElement {
       url.searchParams.set('token', this.config.token);
     }
 
+    console.log('[GatewayChat] Connecting to:', url.toString());
+    
     this._ws = new WebSocket(url.toString());
     
     this._ws.onopen = () => {
+      console.log('[GatewayChat] Connected!');
       this._connected = true;
       this._error = null;
       this.requestUpdate();
     };
     
     this._ws.onclose = (e) => {
+      console.log('[GatewayChat] Closed:', e.code, e.reason);
+      this._connected = false;
       this._connected = false;
       if (e.code !== 1000) {
         this._error = `Disconnected (${e.code})`;
@@ -109,7 +114,8 @@ export class XopcbotGatewayChat extends LitElement {
       this.requestUpdate();
     };
     
-    this._ws.onerror = () => {
+    this._ws.onerror = (e) => {
+      console.error('[GatewayChat] Error:', e);
       this._error = 'Connection error';
       this.requestUpdate();
     };
