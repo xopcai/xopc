@@ -1,12 +1,12 @@
 import { html, LitElement } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
-import './components/MessageEditor.js';
-import './components/MessageList.js';
-import './components/Messages.js';
-import './components/StreamingMessageContainer.js';
-import { t, initI18n } from './utils/i18n.js';
-import type { Attachment } from './utils/attachment-utils.js';
-import type { MessageEditor } from './components/MessageEditor.js';
+import './components/MessageEditor';
+import './components/MessageList';
+import './components/Messages';
+import './components/StreamingMessageContainer';
+import { t, initI18n } from './utils/i18n';
+import type { Attachment } from './utils/attachment-utils';
+import type { MessageEditor } from './components/MessageEditor';
 
 // Type-safe Gateway Events using discriminated unions
 export type ChatPayload = {

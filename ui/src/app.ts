@@ -1,20 +1,20 @@
 import { html, LitElement, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
-import './gateway-chat.js';
-import './dialogs/SettingsDialog.js';
+import './gateway-chat';
+import './dialogs/SettingsDialog';
 import { 
   TAB_GROUPS, 
   type Tab, 
   titleForTab, 
   subtitleForTab, 
   renderNavItem
-} from './navigation.js';
-import { getIcon } from './utils/icons.js';
-import { t } from './utils/i18n.js';
-import type { XopcbotGatewayChat } from './gateway-chat.js';
-import type { XopcbotSettings, SettingsSection, SettingsValue } from './dialogs/SettingsDialog.js';
+} from './navigation';
+import { getIcon } from './utils/icons';
+import { t } from './utils/i18n';
+import type { XopcbotGatewayChat } from './gateway-chat';
+import type { XopcbotSettings, SettingsSection, SettingsValue } from './dialogs/SettingsDialog';
 
-export type { Tab } from './navigation.js';
+export type { Tab } from './navigation';
 
 export interface AppSettings {
   navCollapsed: boolean;

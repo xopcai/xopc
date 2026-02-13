@@ -2,7 +2,7 @@ import { html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { Paperclip, Send, Square, X, FileText, Image, File } from 'lucide';
-import { i18n } from '../utils/i18n.js';
+import { i18n } from '../utils/i18n';
 
 export interface Attachment {
   id: string;

@@ -1,9 +1,9 @@
 import { html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { t } from '../../utils/i18n.js';
-import type { Message, MessageContent } from './types.js';
-import './AttachmentRenderer.js';
-import './UsageBadge.js';
+import { t } from '../../utils/i18n';
+import type { Message, MessageContent } from './types';
+import './AttachmentRenderer';
+import './UsageBadge';
 
 @customElement('message-bubble')
 export class MessageBubble extends LitElement {

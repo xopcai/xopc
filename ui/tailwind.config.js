@@ -18,10 +18,19 @@ export default {
           secondary: 'var(--bg-secondary)',
           tertiary: 'var(--bg-tertiary)',
         },
+        tertiary: {
+          DEFAULT: 'var(--bg-tertiary)',
+        },
         foreground: {
           DEFAULT: 'var(--text-primary)',
           secondary: 'var(--text-secondary)',
           muted: 'var(--text-muted)',
+        },
+        muted: {
+          DEFAULT: 'var(--text-muted)',
+        },
+        secondary: {
+          DEFAULT: 'var(--text-secondary)',
         },
         border: {
           DEFAULT: 'var(--border-color)',

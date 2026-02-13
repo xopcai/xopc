@@ -1,8 +1,8 @@
 import { html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { getDocumentIcon } from '../../utils/icons.js';
-import { t } from '../../utils/i18n.js';
-import type { Attachment } from './types.js';
+import { getDocumentIcon } from '../../utils/icons';
+import { t } from '../../utils/i18n';
+import type { Attachment } from './types';
 
 @customElement('attachment-renderer')
 export class AttachmentRenderer extends LitElement {

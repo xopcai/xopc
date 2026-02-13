@@ -1,8 +1,8 @@
 import { html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { t } from '../../utils/i18n.js';
-import type { Message } from './types.js';
-import './MessageBubble.js';
+import { t } from '../../utils/i18n';
+import type { Message } from './types';
+import './MessageBubble';
 
 @customElement('message-list')
 export class MessageList extends LitElement {

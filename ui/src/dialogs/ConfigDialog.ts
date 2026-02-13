@@ -1,6 +1,6 @@
 import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { i18n } from '../utils/i18n.js';
+import { i18n } from '../utils/i18n';
 
 export interface ConfigSection {
   id: string;

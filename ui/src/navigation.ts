@@ -1,7 +1,7 @@
 import { html, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
-import { t } from './utils/i18n.js';
-import { getIcon } from './utils/icons.js';
+import { t } from './utils/i18n';
+import { getIcon } from './utils/icons';
 
 // Tab groups configuration
 export const TAB_GROUPS = [

@@ -2,41 +2,41 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { Agent, type AgentEvent } from '@mariozechner/pi-agent-core';
 import type { Model } from '@mariozechner/pi-ai';
-import './components/MessageEditor.js';
-import './components/MessageList.js';
-import './components/Messages.js';
-import './components/StreamingMessageContainer.js';
-import './gateway-chat.js';
-import './app.js';
-import { i18n, setLanguage, translations } from './utils/i18n.js';
-import type { Attachment } from './utils/attachment-utils.js';
-import type { MessageEditor } from './components/MessageEditor.js';
-import type { StreamingMessageContainer } from './components/StreamingMessageContainer.js';
+import './components/MessageEditor';
+import './components/MessageList';
+import './components/Messages';
+import './components/StreamingMessageContainer';
+import './gateway-chat';
+import './app';
+import { i18n, setLanguage, translations } from './utils/i18n';
+import type { Attachment } from './utils/attachment-utils';
+import type { MessageEditor } from './components/MessageEditor';
+import type { StreamingMessageContainer } from './components/StreamingMessageContainer';
 
 // Utils
-export { t, i18n, setLanguage, getCurrentLanguage, initI18n, type Language } from './utils/i18n.js';
-export type { Attachment } from './utils/attachment-utils.js';
-export { formatUsage, formatTokenCount, formatCost } from './utils/format.js';
-export { getIcon, loadIcon, getDocumentIcon } from './utils/icons.js';
+export { t, i18n, setLanguage, getCurrentLanguage, initI18n, type Language } from './utils/i18n';
+export type { Attachment } from './utils/attachment-utils';
+export { formatUsage, formatTokenCount, formatCost } from './utils/format';
+export { getIcon, loadIcon, getDocumentIcon } from './utils/icons';
 
 // Components
-export { MessageEditor } from './components/MessageEditor.js';
+export { MessageEditor } from './components/MessageEditor';
 export { 
   MessageList, 
   MessageBubble, 
   AttachmentRenderer, 
   UsageBadge 
-} from './components/index.js';
+} from './components/index';
 export type { 
   Attachment as MessageAttachment, 
   Message, 
   MessageContent 
-} from './components/MessageList/types.js';
-export { StreamingMessageContainer } from './components/StreamingMessageContainer.js';
+} from './components/MessageList/types';
+export { StreamingMessageContainer } from './components/StreamingMessageContainer';
 
 // Dialogs
-export { XopcbotConfig, type ConfigSection, type ConfigField } from './dialogs/ConfigDialog.js';
-export { XopcbotSettings, type SettingsSection, type SettingsField, type SettingsValue } from './dialogs/SettingsDialog.js';
+export { XopcbotConfig, type ConfigSection, type ConfigField } from './dialogs/ConfigDialog';
+export { XopcbotSettings, type SettingsSection, type SettingsField, type SettingsValue } from './dialogs/SettingsDialog';
 
 // Gateway Chat - with type-safe events
 export { 
@@ -48,10 +48,10 @@ export {
   type ErrorPayload,
   type GatewayResponse,
   type GatewayRequest
-} from './gateway-chat.js';
+} from './gateway-chat';
 
 // App
-export { XopcbotApp, type Tab, type AppSettings } from './app.js';
+export { XopcbotApp, type Tab, type AppSettings } from './app';
 
 @customElement('xopcbot-chat')
 export class XopcbotChat extends LitElement {

@@ -452,7 +452,7 @@ html, body {
 
 /* Reconnect overlay */
 .reconnect-overlay {
-  @apply fixed inset-0 bg-background/90 flex flex-col items-center justify-center z-40;
+  @apply fixed inset-0 bg-slate-900/90 flex flex-col items-center justify-center z-40;
 }
 
 .reconnect-overlay .spinner {

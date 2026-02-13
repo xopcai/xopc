@@ -1,6 +1,6 @@
 import { html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import type { MessageContent } from './types.js';
+import type { MessageContent } from './types';
 
 @customElement('usage-badge')
 export class UsageBadge extends LitElement {

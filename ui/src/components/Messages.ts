@@ -1,6 +1,6 @@
-export { MessageList } from './MessageList.js';
-export { MessageEditor } from './MessageEditor.js';
-export { StreamingMessageContainer } from './StreamingMessageContainer.js';
+export { MessageList } from './MessageList';
+export { MessageEditor } from './MessageEditor';
+export { StreamingMessageContainer } from './StreamingMessageContainer';
 
 export interface Attachment {
   name: string;
