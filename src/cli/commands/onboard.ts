@@ -1,11 +1,27 @@
 import { Command } from 'commander';
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
-import { join } from 'path';
+import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { join, dirname } from 'path';
 import { input, select, confirm } from '@inquirer/prompts';
-import { loadConfig, saveConfig, PROVIDER_OPTIONS } from '../../config/index.js';
+import { saveConfig, PROVIDER_OPTIONS } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import { loadAllTemplates, type TemplateFile } from '../templates.js';
 import type { CLIContext } from '../registry.js';
+
+/**
+ * Load raw config without schema parsing to avoid default values being added.
+ * This preserves the user's original config structure during onboard.
+ */
+function loadRawConfig(configPath: string): any {
+  if (!existsSync(configPath)) {
+    return null;
+  }
+  try {
+    const content = readFileSync(configPath, 'utf-8');
+    return JSON.parse(content);
+  } catch {
+    return null;
+  }
+}
 
 function isInteractive(): boolean {
   return process.stdin.isTTY && process.stdout.isTTY;
@@ -34,7 +50,8 @@ function createOnboardCommand(ctx: CLIContext): Command {
       const workspacePath = ctx.workspacePath;
       const configPath = ctx.configPath;
 
-      const existingConfig = existsSync(configPath) ? loadConfig(configPath) : null;
+      // Use raw config loading to avoid schema defaults being added
+      const existingConfig = loadRawConfig(configPath);
 
       if (!options.quick) {
         await setupWorkspace(workspacePath, isInteractive());
