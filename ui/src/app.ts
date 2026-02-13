@@ -2,11 +2,11 @@ import { html, LitElement, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import './gateway-chat';
 import './dialogs/SettingsDialog';
-import { 
-  TAB_GROUPS, 
-  type Tab, 
-  titleForTab, 
-  subtitleForTab, 
+import {
+  TAB_GROUPS,
+  type Tab,
+  titleForTab,
+  subtitleForTab,
   renderNavItem
 } from './navigation';
 import { getIcon } from './utils/icons';
@@ -27,13 +27,14 @@ export class XopcbotApp extends LitElement {
     url: string;
     token?: string;
   };
-  
+
   @property({ attribute: false }) settingsSections: SettingsSection[] = [];
   @property({ attribute: false }) settingsValues: SettingsValue = {};
   @property({ attribute: false }) onSettingsSave?: (values: SettingsValue) => void;
-  
+
   @state() private _activeTab: Tab = 'chat';
   @state() private _navCollapsed = false;
+  @state() private _navMobileOpen = false; // Mobile overlay state
   @state() private _theme: 'light' | 'dark' | 'system' = 'system';
   @state() private _showSettings = false;
 
@@ -47,7 +48,7 @@ export class XopcbotApp extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this._loadTheme();
-    
+
     // Listen for system theme changes
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
       if (this._theme === 'system') {
@@ -66,10 +67,10 @@ export class XopcbotApp extends LitElement {
 
   private _applyTheme(): void {
     const html = document.documentElement;
-    
+
     // Remove both classes first
     html.classList.remove('light', 'dark');
-    
+
     let isDark = false;
     if (this._theme === 'dark') {
       isDark = true;
@@ -77,16 +78,16 @@ export class XopcbotApp extends LitElement {
       isDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
     }
     // For 'light' or when system is light, isDark remains false
-    
+
     if (isDark) {
       html.classList.add('dark');
     } else {
       html.classList.add('light');
     }
-    
+
     // Dispatch event for other components
-    window.dispatchEvent(new CustomEvent('themechange', { 
-      detail: { theme: isDark ? 'dark' : 'light' } 
+    window.dispatchEvent(new CustomEvent('themechange', {
+      detail: { theme: isDark ? 'dark' : 'light' }
     }));
   }
 
@@ -99,7 +100,18 @@ export class XopcbotApp extends LitElement {
   }
 
   private _toggleNav(): void {
-    this._navCollapsed = !this._navCollapsed;
+    const isMobile = window.innerWidth < 768;
+    if (isMobile) {
+      // Mobile: toggle overlay
+      this._navMobileOpen = !this._navMobileOpen;
+    } else {
+      // Desktop: toggle collapsed state
+      this._navCollapsed = !this._navCollapsed;
+    }
+  }
+
+  private _closeNavMobile(): void {
+    this._navMobileOpen = false;
   }
 
   override render(): unknown {
@@ -108,7 +120,7 @@ export class XopcbotApp extends LitElement {
         <!-- Topbar -->
         <header class="topbar">
           <div class="topbar-left">
-            <button 
+            <button
               class="nav-collapse-toggle"
               @click=${this._toggleNav}
               title="${this._navCollapsed ? 'Expand sidebar' : 'Collapse sidebar'}"
@@ -116,7 +128,7 @@ export class XopcbotApp extends LitElement {
             >
               <span class="nav-collapse-toggle__icon">${getIcon('menu')}</span>
             </button>
-            
+
             <div class="brand">
               <div class="brand-logo">
                 <svg width="28" height="28" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -136,9 +148,9 @@ export class XopcbotApp extends LitElement {
               </div>
             </div>
           </div>
-          
+
           <div class="topbar-status">
-            <button 
+            <button
               class="theme-toggle"
               @click=${this._toggleTheme}
               title="Toggle theme (current: ${this._theme})"
@@ -148,9 +160,14 @@ export class XopcbotApp extends LitElement {
           </div>
         </header>
 
+        <!-- Mobile Overlay Backdrop -->
+        ${this._navMobileOpen ? html`
+          <div class="nav-overlay" @click=${this._closeNavMobile}></div>
+        ` : nothing}
+
         <div class="shell-main">
           <!-- Sidebar Navigation -->
-          <aside class="nav ${this._navCollapsed ? 'nav--collapsed' : ''}">
+          <aside class="nav ${this._navCollapsed ? 'nav--collapsed' : ''} ${this._navMobileOpen ? 'nav--mobile-open' : ''}">
             ${TAB_GROUPS.map((group) => {
               const hasActiveTab = group.tabs.some((tab) => tab === this._activeTab);
               return html`
@@ -159,11 +176,14 @@ export class XopcbotApp extends LitElement {
                     <span class="nav-label__text">${group.label}</span>
                   </div>
                   <div class="nav-group__items">
-                    ${group.tabs.map((tab) => 
+                    ${group.tabs.map((tab) =>
                       renderNavItem(
-                        tab, 
-                        this._activeTab === tab, 
-                        () => this._activeTab = tab
+                        tab,
+                        this._activeTab === tab,
+                        () => {
+                          this._activeTab = tab;
+                          this._closeNavMobile();
+                        }
                       )
                     )}
                   </div>
@@ -173,7 +193,7 @@ export class XopcbotApp extends LitElement {
           </aside>
 
           <!-- Main Content -->
-          <main class="content ${this._activeTab === 'chat' ? 'content--chat' : ''}">
+          <main class="content ${this._activeTab === 'chat' ? 'content--chat' : ''}>
             <section class="content-header">
               <div>
                 <div class="page-title">${titleForTab(this._activeTab)}</div>

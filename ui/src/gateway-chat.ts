@@ -150,7 +150,6 @@ export class XopcbotGatewayChat extends LitElement {
       url.searchParams.set('token', this.config.token);
     }
 
-    console.log('[GatewayChat] Connecting to:', url.toString());
     this._connectionState = 'connecting';
     this._error = null;
     this.requestUpdate();
@@ -159,7 +158,6 @@ export class XopcbotGatewayChat extends LitElement {
       this._ws = new WebSocket(url.toString());
       
       this._ws.onopen = () => {
-        console.log('[GatewayChat] Connected!');
         this._connectionState = 'connected';
         this._error = null;
         this._reconnectCount = 0;
@@ -169,10 +167,17 @@ export class XopcbotGatewayChat extends LitElement {
       };
       
       this._ws.onclose = (e) => {
-        console.log('[GatewayChat] Closed:', e.code, e.reason);
         const wasConnected = this._connectionState === 'connected';
         this._connectionState = 'disconnected';
-        
+
+        // Reset streaming states on disconnect
+        if (this._isStreaming) {
+          this._isStreaming = false;
+          this._isSending = false;
+          this._streamingContent = '';
+          this._streamingMessage = null;
+        }
+
         if (e.code !== 1000 && e.code !== 1001 && this._shouldReconnect && this._autoReconnect) {
           if (wasConnected || this._reconnectCount < this._maxReconnectAttempts) {
             this._scheduleReconnect();
@@ -184,8 +189,7 @@ export class XopcbotGatewayChat extends LitElement {
         this.requestUpdate();
       };
       
-      this._ws.onerror = (e) => {
-        console.error('[GatewayChat] Error:', e);
+      this._ws.onerror = () => {
         this._error = t('errors.connectionError');
         this.requestUpdate();
       };
@@ -193,10 +197,9 @@ export class XopcbotGatewayChat extends LitElement {
       this._ws.onmessage = (e) => {
         try {
           const frame = JSON.parse(e.data) as GatewayResponse | GatewayEvent;
-          console.log('[GatewayChat] Received frame:', frame);
           this._handleMessage(frame);
         } catch (err) {
-          console.error('[GatewayChat] Failed to parse message:', err);
+          // Ignore parse errors
         }
       };
     } catch (err) {
@@ -210,18 +213,16 @@ export class XopcbotGatewayChat extends LitElement {
   // Exponential backoff reconnection
   private _scheduleReconnect(): void {
     if (!this._shouldReconnect || !this._autoReconnect) return;
-    
+
     this._reconnectCount++;
     this._connectionState = 'reconnecting';
-    
+
     // Exponential backoff: 1s, 2s, 4s, 8s... max 30s
     this._reconnectDelay = Math.min(
       this._baseReconnectDelay * Math.pow(2, this._reconnectCount - 1),
       30000
     );
-    
-    console.log(`[GatewayChat] Reconnecting in ${this._reconnectDelay}ms (attempt ${this._reconnectCount})`);
-    
+
     // Update countdown every second
     const updateCountdown = () => {
       if (this._reconnectDelay > 0 && this._connectionState === 'reconnecting') {
@@ -233,13 +234,13 @@ export class XopcbotGatewayChat extends LitElement {
       }
     };
     updateCountdown();
-    
+
     this._reconnectTimer = window.setTimeout(() => {
       if (this._shouldReconnect) {
         this.connect();
       }
     }, this._reconnectDelay);
-    
+
     this.requestUpdate();
   }
 
@@ -276,8 +277,18 @@ export class XopcbotGatewayChat extends LitElement {
         this._pendingRequests.delete(frame.id);
         if (frame.ok) {
           pending.resolve(frame.payload);
+          // If still streaming when response arrives, finalize the message
+          // This handles cases where server sends 'res' without 'status: complete'
+          if (this._isStreaming) {
+            this._finalizeMessage();
+          }
         } else {
           pending.reject(new Error(frame.error?.message || 'Request failed'));
+          // Reset streaming state on error response
+          this._isStreaming = false;
+          this._isSending = false;
+          this._streamingMessage = null;
+          this.requestUpdate();
         }
       }
       return;
@@ -290,29 +301,23 @@ export class XopcbotGatewayChat extends LitElement {
   }
 
   private _handleEvent(event: GatewayEvent): void {
-    console.log('[GatewayChat] Handling event:', event);
     switch (event.event) {
       case 'agent':
       case 'chat':
-        this._handleChatEvent(event.payload);
+        this._handleChatEvent(event.payload as ChatPayload);
         break;
       case 'config':
         // Handle config event
-        console.log('[GatewayChat] Config updated:', event.payload);
         break;
       case 'error':
-        console.error('[GatewayChat] Server error:', event.payload);
-        this._error = event.payload.message;
+        const errorPayload = event.payload as ErrorPayload;
+        this._error = errorPayload.message;
         break;
-      default:
-        // Unknown event type
-        console.log('[GatewayChat] Unknown event:', event);
     }
     this.requestUpdate();
   }
 
   private _handleChatEvent(data: ChatPayload): void {
-    console.log('[GatewayChat] Chat event data:', data);
     if (data.type === 'status') {
       // Agent started
       this._isStreaming = true;
@@ -322,7 +327,11 @@ export class XopcbotGatewayChat extends LitElement {
       this._finalizeMessage();
     } else if (data.status === 'error') {
       this._error = data.errorMessage || t('errors.sendFailed');
+      // Reset all states on error
       this._isStreaming = false;
+      this._isSending = false;
+      this._streamingMessage = null;
+      this.requestUpdate();
     }
   }
 
@@ -356,6 +365,7 @@ export class XopcbotGatewayChat extends LitElement {
     }
     this._isStreaming = false;
     this._streamingContent = '';
+    this._isSending = false;
     this.requestUpdate();
   }
 
@@ -365,18 +375,18 @@ export class XopcbotGatewayChat extends LitElement {
   }
 
   private _request<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-    return new Promise((resolve, reject) => {
+    return new Promise<unknown>((resolve, reject) => {
       const id = crypto.randomUUID();
       const request: GatewayRequest = { type: 'req', id, method, params };
-      
+
       const timeout = setTimeout(() => {
         this._pendingRequests.delete(id);
         reject(new Error(t('errors.requestTimeout')));
       }, 30000);
 
-      this._pendingRequests.set(id, { resolve, reject, timeout });
+      this._pendingRequests.set(id, { resolve: resolve as (value: unknown) => void, reject, timeout });
       this._sendRaw(request);
-    });
+    }) as Promise<T>;
   }
 
   async sendMessage(content: string, attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>): Promise<void> {
@@ -416,7 +426,10 @@ export class XopcbotGatewayChat extends LitElement {
   abort(): void {
     // Gateway doesn't support abort yet
     this._isStreaming = false;
+    this._isSending = false;
     this._streamingContent = '';
+    this._streamingMessage = null;
+    this.requestUpdate();
   }
 
   // Public API
@@ -435,17 +448,17 @@ export class XopcbotGatewayChat extends LitElement {
 
   override render(): unknown {
     return html`
-      <div class="flex flex-col h-full bg-background text-foreground">
+      <div class="chat-container">
         ${this._renderStatus()}
-        
-        <div class="flex-1 overflow-y-auto min-h-0">
-          <div class="max-w-3xl mx-auto p-4 pb-0">
+
+        <div class="chat-messages">
+          <div class="chat-messages-inner">
             ${this._renderMessages()}
           </div>
         </div>
 
-        <div class="shrink-0">
-          <div class="max-w-3xl mx-auto px-2 pb-4">
+        <div class="chat-input-container">
+          <div class="chat-input-inner">
             ${this._renderInput()}
           </div>
         </div>
