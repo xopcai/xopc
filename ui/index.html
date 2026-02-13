@@ -25,10 +25,13 @@
       const app = document.getElementById('app-root');
       if (app) {
         // Get gateway URL from current location or use default
-        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const host = window.location.host || 'localhost:18790';
+        // For dev (port 3000), default to 18790. For prod, use same port.
         const urlParams = new URLSearchParams(window.location.search);
-        const gatewayUrl = urlParams.get('gateway') || `${protocol}//${host}/ws`;
+        const currentHost = window.location.hostname || 'localhost';
+        const currentPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
+        // Default to 18790 (gateway port), but respect ?gateway= param
+        const defaultPort = currentPort === '3000' ? '18790' : currentPort;
+        const gatewayUrl = urlParams.get('gateway') || `${window.location.protocol}//${currentHost}:${defaultPort}/ws`;
         
         // Get token from URL if provided
         const token = urlParams.get('token') || undefined;
