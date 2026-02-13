@@ -127,24 +127,21 @@
             };
           }
           
-          // Save to localStorage
-          localStorage.setItem('xopcbot-settings', JSON.stringify(values));
+          // Save to localStorage (but don't store gatewayUrl/token for security)
+          const safeValues = { ...values };
+          delete safeValues.gatewayUrl;
+          delete safeValues.token;
+          localStorage.setItem('xopcbot-settings', JSON.stringify(safeValues));
         };
 
-        // Load saved settings
+        // Load saved settings (but ignore old gateway URLs to avoid port issues)
         const savedSettings = localStorage.getItem('xopcbot-settings');
         if (savedSettings) {
           try {
             const parsed = JSON.parse(savedSettings);
-            Object.assign(app.settingsValues, parsed);
-            
-            // Apply saved gateway config
-            if (parsed.gatewayUrl) {
-              app.gatewayConfig = {
-                url: parsed.gatewayUrl,
-                token: parsed.token
-              };
-            }
+            // Only apply non-connection settings from localStorage
+            const { gatewayUrl, token, ...otherSettings } = parsed;
+            Object.assign(app.settingsValues, otherSettings);
           } catch (e) {
             console.error('Failed to load saved settings:', e);
           }
