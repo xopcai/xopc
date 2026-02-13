@@ -1,7 +1,5 @@
 import { html, LitElement } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
-import { Agent, type AgentEvent } from '@mariozechner/pi-agent-core';
-import type { Model } from '@mariozechner/pi-ai';
 import './components/MessageEditor.js';
 import './components/MessageList.js';
 import './components/Messages.js';
@@ -16,14 +14,27 @@ export type GatewayClientConfig = {
 };
 
 export interface GatewayEvent {
+  type: 'event';
   event: string;
   payload: unknown;
 }
 
 export interface GatewayResponse<T = unknown> {
+  type: 'res';
+  id: string;
   ok: boolean;
-  data?: T;
-  error?: string;
+  payload?: T;
+  error?: {
+    code: string;
+    message: string;
+  };
+}
+
+export interface GatewayRequest {
+  type: 'req';
+  id: string;
+  method: string;
+  params: Record<string, unknown>;
 }
 
 @customElement('xopcbot-gateway-chat')
@@ -35,15 +46,23 @@ export class XopcbotGatewayChat extends LitElement {
 
   @query('message-editor') private _messageEditor!: MessageEditor;
 
-  @state() private _agent?: Agent;
   @state() private _connected = false;
   @state() private _error: string | null = null;
-  @state() private _messages: Array<any> = [];
+  @state() private _messages: Array<{
+    role: 'user' | 'assistant';
+    content: Array<{ type: string; text?: string }>;
+    attachments?: Array<{ type: string; mimeType?: string; data?: string }>;
+    timestamp: number;
+  }> = [];
   @state() private _isStreaming = false;
   @state() private _streamingContent = '';
 
   private _ws?: WebSocket;
-  private _eventHandlers: Map<string, Array<(payload: unknown) => void>> = new Map();
+  private _pendingRequests: Map<string, {
+    resolve: (value: unknown) => void;
+    reject: (reason: unknown) => void;
+    timeout: ReturnType<typeof setTimeout>;
+  }> = new Map();
 
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -75,11 +94,13 @@ export class XopcbotGatewayChat extends LitElement {
     }
 
     this._ws = new WebSocket(url.toString());
+    
     this._ws.onopen = () => {
       this._connected = true;
       this._error = null;
       this.requestUpdate();
     };
+    
     this._ws.onclose = (e) => {
       this._connected = false;
       if (e.code !== 1000) {
@@ -87,10 +108,12 @@ export class XopcbotGatewayChat extends LitElement {
       }
       this.requestUpdate();
     };
+    
     this._ws.onerror = () => {
       this._error = 'Connection error';
       this.requestUpdate();
     };
+    
     this._ws.onmessage = (e) => {
       this._handleMessage(JSON.parse(e.data));
     };
@@ -101,60 +124,53 @@ export class XopcbotGatewayChat extends LitElement {
     this._ws = undefined;
   }
 
-  private _handleMessage(frame: GatewayEvent): void {
-    const handlers = this._eventHandlers.get(frame.event);
-    handlers?.forEach(handler => handler(frame.payload));
-  }
-
-  private _send(event: string, payload?: unknown): void {
-    if (this._ws?.readyState !== WebSocket.OPEN) return;
-    this._ws.send(JSON.stringify({ event, payload }));
-  }
-
-  private _request<T>(event: string, payload?: unknown): Promise<T> {
-    return new Promise((resolve, reject) => {
-      const requestId = crypto.randomUUID();
-      
-      const handler = (response: unknown) => {
-        const resp = response as { requestId?: string; ok?: boolean; data?: T; error?: string };
-        if (resp.requestId === requestId) {
-          this._eventHandlers.delete(`response:${requestId}`);
-          if (resp.ok) {
-            resolve(resp.data!);
-          } else {
-            reject(new Error(resp.error || 'Request failed'));
-          }
+  private _handleMessage(frame: GatewayResponse | GatewayEvent): void {
+    // Handle response
+    if (frame.type === 'res') {
+      const pending = this._pendingRequests.get(frame.id);
+      if (pending) {
+        clearTimeout(pending.timeout);
+        this._pendingRequests.delete(frame.id);
+        if (frame.ok) {
+          pending.resolve(frame.payload);
+        } else {
+          pending.reject(new Error(frame.error?.message || 'Request failed'));
         }
-      };
+      }
+      return;
+    }
 
-      this._eventHandlers.set(`response:${requestId}`, [handler]);
-      this._send(event, { ...payload, requestId });
-      
-      setTimeout(() => {
-        this._eventHandlers.delete(`response:${requestId}`);
-        reject(new Error('Request timeout'));
-      }, 30000);
-    });
+    // Handle event
+    if (frame.type === 'event') {
+      this._handleEvent(frame.event, frame.payload);
+    }
   }
 
-  private _handleChatEvent(payload: any): void {
-    if (payload.state === 'delta' && payload.message) {
-      this._updateStreamingMessage(payload.message);
-    } else if (payload.state === 'final') {
-      this._finalizeMessage();
-    } else if (payload.state === 'error') {
-      this._error = payload.errorMessage || 'Chat error';
+  private _handleEvent(event: string, payload: unknown): void {
+    if (event === 'agent') {
+      const data = payload as { type?: string; content?: string; status?: string };
+      
+      if (data.type === 'status') {
+        // Agent started
+        this._isStreaming = true;
+      } else if (data.type === 'token' && data.content) {
+        this._updateStreamingMessage(data.content);
+      } else if (data.status === 'ok' || data.status === 'complete') {
+        this._finalizeMessage();
+      }
     }
     this.requestUpdate();
   }
 
-  private _updateStreamingMessage(message: any): void {
-    const content = message.content || '';
+  private _updateStreamingMessage(content: string): void {
     const lastMsg = this._messages[this._messages.length - 1];
     if (lastMsg?.role === 'assistant') {
-      lastMsg.content = lastMsg.content.map((block: any) => 
-        block.type === 'text' ? { ...block, text: (block.text || '') + content } : block
-      );
+      const textBlock = lastMsg.content.find(b => b.type === 'text');
+      if (textBlock) {
+        textBlock.text = (textBlock.text || '') + content;
+      } else {
+        lastMsg.content.push({ type: 'text', text: content });
+      }
     } else {
       this._messages = [
         ...this._messages,
@@ -174,9 +190,30 @@ export class XopcbotGatewayChat extends LitElement {
     this._streamingContent = '';
   }
 
+  private _sendRaw(request: GatewayRequest): void {
+    if (this._ws?.readyState !== WebSocket.OPEN) return;
+    this._ws.send(JSON.stringify(request));
+  }
+
+  private _request<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+    return new Promise((resolve, reject) => {
+      const id = crypto.randomUUID();
+      const request: GatewayRequest = { type: 'req', id, method, params };
+      
+      const timeout = setTimeout(() => {
+        this._pendingRequests.delete(id);
+        reject(new Error('Request timeout'));
+      }, 30000);
+
+      this._pendingRequests.set(id, { resolve, reject, timeout });
+      this._sendRaw(request);
+    });
+  }
+
   async sendMessage(content: string, attachments?: Array<{ type: string; mimeType?: string; data?: string }>): Promise<void> {
     if (!content.trim() && !attachments?.length) return;
 
+    // Add user message to UI
     this._messages = [
       ...this._messages,
       {
@@ -187,15 +224,21 @@ export class XopcbotGatewayChat extends LitElement {
       },
     ];
 
-    this._send('chat.send', {
-      message: content,
-      attachments,
-      idempotencyKey: crypto.randomUUID(),
-    });
+    // Send to gateway
+    try {
+      await this._request('agent', {
+        message: content,
+        channel: 'gateway',
+        chatId: 'default',
+      });
+    } catch (error) {
+      this._error = error instanceof Error ? error.message : 'Failed to send message';
+      this.requestUpdate();
+    }
   }
 
   abort(): void {
-    this._send('chat.abort');
+    // Gateway doesn't support abort yet
     this._isStreaming = false;
     this._streamingContent = '';
   }
@@ -248,12 +291,16 @@ export class XopcbotGatewayChat extends LitElement {
     `;
   }
 
-  private _renderMessage(message: any): unknown {
+  private _renderMessage(message: {
+    role: 'user' | 'assistant';
+    content: Array<{ type: string; text?: string }>;
+    attachments?: Array<{ type: string; mimeType?: string; data?: string }>;
+    timestamp: number;
+  }): unknown {
     const isUser = message.role === 'user';
-    const isAssistant = message.role === 'assistant';
 
     // Skip empty messages
-    const hasContent = message.content?.some((block: any) => block.text);
+    const hasContent = message.content?.some((block) => block.text);
     if (!hasContent && !message.attachments?.length) return null;
 
     return html`
@@ -266,7 +313,7 @@ export class XopcbotGatewayChat extends LitElement {
         
         <div class="flex flex-col gap-1 max-w-[80%]">
           <div class="text-xs text-muted-foreground">
-            ${isUser ? 'You' : 'Assistant'} · ${new Date(message.timestamp || Date.now()).toLocaleTimeString()}
+            ${isUser ? 'You' : 'Assistant'} · ${new Date(message.timestamp).toLocaleTimeString()}
           </div>
           
           <div class="rounded-lg p-3 ${isUser ? 'bg-primary/10' : 'bg-muted'}">
@@ -278,17 +325,14 @@ export class XopcbotGatewayChat extends LitElement {
     `;
   }
 
-  private _renderMessageContent(content: Array<any>): unknown {
+  private _renderMessageContent(content: Array<{ type: string; text?: string }>): unknown {
     if (!content || content.length === 0) return null;
     
     return html`
       <div class="prose prose-sm dark:prose-invert">
-        ${content.map((block: any) => {
+        ${content.map((block) => {
           if (block.type === 'text' && block.text) {
             return html`<p class="whitespace-pre-wrap">${block.text}</p>`;
-          }
-          if (block.type === 'image' && block.source?.data) {
-            return html`<img src="${block.source.data}" alt="Image" class="max-w-full rounded" />`;
           }
           return '';
         })}
@@ -296,10 +340,10 @@ export class XopcbotGatewayChat extends LitElement {
     `;
   }
 
-  private _renderAttachments(attachments: Array<any>): unknown {
+  private _renderAttachments(attachments: Array<{ type: string; mimeType?: string; data?: string }>): unknown {
     return html`
       <div class="mt-2 flex flex-wrap gap-2">
-        ${attachments.map((att: any) => {
+        ${attachments.map((att) => {
           if (att.type === 'image' || att.mimeType?.startsWith('image/')) {
             return html`<img src="${att.data}" alt="Attachment" class="max-w-[200px] rounded" />`;
           }
