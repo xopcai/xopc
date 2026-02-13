@@ -298,7 +298,8 @@ export class GatewayService {
     if (!this.configReloader) {
       return { reloaded: false, error: 'Config reloader not initialized' };
     }
-    return this.configReloader.triggerReload();
+    const result = await this.configReloader.triggerReload();
+    return { reloaded: result.success, error: result.error };
   }
 
   /**

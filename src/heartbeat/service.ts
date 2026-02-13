@@ -57,7 +57,7 @@ export class HeartbeatService {
    * Update heartbeat configuration (hot reload)
    */
   updateConfig(config: Config): void {
-    const heartbeatConfig = config.heartbeat;
+    const heartbeatConfig = config.gateway?.heartbeat;
     if (!heartbeatConfig?.enabled) {
       this.stop();
       return;
@@ -67,7 +67,7 @@ export class HeartbeatService {
     this.stop();
     this.start({
       intervalMs: heartbeatConfig.intervalMs || 60000,
-      enabled: heartbeatConfig.enabled !== false,
+      enabled: heartbeatConfig.enabled ?? true,
     });
     log.info('Heartbeat config updated');
   }

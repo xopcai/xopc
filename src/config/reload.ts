@@ -3,10 +3,11 @@
  */
 
 import { watch, type FSWatcher } from 'fs';
-import { loadConfig, type Config } from './schema.js';
+import { loadConfig } from './loader.js';
+import type { Config } from './schema.js';
 import { diffConfigPaths } from './diff.js';
 import { buildReloadPlan, type ReloadPlan } from './rules.js';
-import { log } from '../logger.js';
+import { logger as log } from '../utils/logger.js';
 
 export interface HotReloadConfig {
   debounceMs: number;
