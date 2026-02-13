@@ -74,8 +74,11 @@ export class XopcbotGatewayChat extends LitElement {
     this.style.flexDirection = 'column';
     this.style.height = '100%';
     this.style.minHeight = '0';
+  }
 
-    if (this.config) {
+  override updated(changedProperties: Map<string, unknown>): void {
+    super.updated(changedProperties);
+    if (changedProperties.has('config') && this.config && !this._connected) {
       this.connect();
     }
   }
