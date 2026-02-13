@@ -1000,6 +1000,13 @@ select:focus {
   overflow: hidden;
 }
 
+/* Shell main container - holds topbar + main area */
+.shell-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
 /* Topbar */
 .topbar {
   display: flex;

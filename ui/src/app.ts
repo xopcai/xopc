@@ -136,40 +136,42 @@ export class XopcbotApp extends LitElement {
           </div>
         </header>
 
-        <!-- Sidebar Navigation -->
-        <aside class="nav ${this._navCollapsed ? 'nav--collapsed' : ''}">
-          ${TAB_GROUPS.map((group) => {
-            const hasActiveTab = group.tabs.some((tab) => tab === this._activeTab);
-            return html`
-              <div class="nav-group">
-                <div class="nav-label nav-label--static">
-                  <span class="nav-label__text">${group.label}</span>
+        <div class="shell-main">
+          <!-- Sidebar Navigation -->
+          <aside class="nav ${this._navCollapsed ? 'nav--collapsed' : ''}">
+            ${TAB_GROUPS.map((group) => {
+              const hasActiveTab = group.tabs.some((tab) => tab === this._activeTab);
+              return html`
+                <div class="nav-group">
+                  <div class="nav-label nav-label--static">
+                    <span class="nav-label__text">${group.label}</span>
+                  </div>
+                  <div class="nav-group__items">
+                    ${group.tabs.map((tab) => 
+                      renderNavItem(
+                        tab, 
+                        this._activeTab === tab, 
+                        () => this._activeTab = tab
+                      )
+                    )}
+                  </div>
                 </div>
-                <div class="nav-group__items">
-                  ${group.tabs.map((tab) => 
-                    renderNavItem(
-                      tab, 
-                      this._activeTab === tab, 
-                      () => this._activeTab = tab
-                    )
-                  )}
-                </div>
+              `;
+            })}
+          </aside>
+
+          <!-- Main Content -->
+          <main class="content ${this._activeTab === 'chat' ? 'content--chat' : ''}">
+            <section class="content-header">
+              <div>
+                <div class="page-title">${titleForTab(this._activeTab)}</div>
+                <div class="page-sub">${subtitleForTab(this._activeTab)}</div>
               </div>
-            `;
-          })}
-        </aside>
+            </section>
 
-        <!-- Main Content -->
-        <main class="content ${this._activeTab === 'chat' ? 'content--chat' : ''}">
-          <section class="content-header">
-            <div>
-              <div class="page-title">${titleForTab(this._activeTab)}</div>
-              <div class="page-sub">${subtitleForTab(this._activeTab)}</div>
-            </div>
-          </section>
-
-          ${this._activeTab === 'chat' ? this._renderChat() : nothing}
-        </main>
+            ${this._activeTab === 'chat' ? this._renderChat() : nothing}
+          </main>
+        </div>
 
         <!-- Settings Dialog -->
         ${this._showSettings ? this._renderSettingsDialog() : nothing}
