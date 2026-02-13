@@ -60,15 +60,15 @@ export class CronService {
     options?: AddJobOptions
   ): Promise<{ id: string; schedule: string }> {
     // Validate input
-    const validation = AddJobRequestSchema.safeParse({
+    const validationResult = AddJobRequestSchema.safeParse({
       schedule,
       message,
       ...options,
     });
 
-    if (!validation.success) {
-      const error = validation.error as z.ZodError;
-      throw new Error(`Validation failed: ${error.errors.map((e) => e.message).join(', ')}`);
+    if (!validationResult.success) {
+      const errorMsg = (validationResult as { error?: { errors: z.ZodIssue[] } }).error?.errors.map((e) => e.message).join(', ') || 'Unknown validation error';
+      throw new Error(`Validation failed: ${errorMsg}`);
     }
 
     const id = uuidv4().slice(0, 8);
@@ -142,10 +142,10 @@ export class CronService {
    */
   async updateJob(id: string, updates: Partial<Omit<JobData, 'id' | 'created_at' | 'updated_at'>>): Promise<boolean> {
     // Validate updates
-    const validation = UpdateJobRequestSchema.safeParse(updates);
-    if (!validation.success) {
-      const error = validation.error as z.ZodError;
-      throw new Error(`Validation failed: ${error.errors.map((e) => e.message).join(', ')}`);
+    const validationResult = UpdateJobRequestSchema.safeParse(updates);
+    if (!validationResult.success) {
+      const errorMsg = (validationResult as { error?: { errors: z.ZodIssue[] } }).error?.errors.map((e) => e.message).join(', ') || 'Unknown validation error';
+      throw new Error(`Validation failed: ${errorMsg}`);
     }
 
     const job = await this.persistence.getJob(id);

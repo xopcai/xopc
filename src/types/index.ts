@@ -10,7 +10,10 @@ export interface InboundMessage {
 export interface OutboundMessage {
   channel: string;
   chat_id: string;
-  content: string;
+  content?: string;
+  type?: 'message' | 'typing_on' | 'typing_off';
+  mediaUrl?: string;
+  mediaType?: 'photo' | 'video' | 'audio' | 'document' | 'animation';
 }
 
 export interface Message {

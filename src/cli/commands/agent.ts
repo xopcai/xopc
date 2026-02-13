@@ -26,7 +26,8 @@ function createAgentCommand(_ctx: CLIContext): Command {
     .action(async (options) => {
       const ctx = getContextWithOpts();
       const config = loadConfig(ctx.configPath);
-      const modelId = config.agents?.defaults?.model;
+      const modelConfig = config.agents?.defaults?.model;
+      const modelId = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
       const bus = new MessageBus();
 
       const workspace = config.agents?.defaults?.workspace || ctx.workspacePath;

@@ -1,6 +1,7 @@
 import type { WSContext } from 'hono/ws';
 import type { GatewayService } from '../service.js';
 import { createLogger } from '../../utils/logger.js';
+import { validateWebSocketAuth } from './middleware/auth.js';
 import {
   type GatewayRequest,
   isGatewayRequest,
@@ -21,6 +22,21 @@ export interface WebSocketHandlerConfig {
   token?: string;
 }
 
+/**
+ * Get WebSocket auth result from connection parameters
+ */
+export function getWebSocketAuth(
+  url: URL,
+  authHeader: string | null,
+  token?: string
+): { authenticated: boolean; error?: string } {
+  const result = validateWebSocketAuth(url, authHeader, token);
+  if (result.valid) {
+    return { authenticated: true };
+  }
+  return { authenticated: false, error: result.error };
+}
+
 export function createWebSocketHandler(config: WebSocketHandlerConfig) {
   const { service, token } = config;
   const clients = new Map<WSContext, ClientConnection>();
@@ -31,18 +47,46 @@ export function createWebSocketHandler(config: WebSocketHandlerConfig) {
       return {
         onOpen: (_evt: Event, ws: WSContext) => {
           const clientId = crypto.randomUUID();
+
+          // Validate auth on connection
+          const url = new URL(ws.url);
+          const authHeader = url.searchParams.get('token') || null;
+          const auth = getWebSocketAuth(url, authHeader, token);
+
+          if (!auth.authenticated) {
+            log.warn({ clientId, error: auth.error }, 'WebSocket auth failed');
+            // Mark as unauthenticated - will be rejected on first message
+            clients.set(ws, {
+              ws,
+              id: clientId,
+              authenticated: false,
+            });
+            return;
+          }
+
           clients.set(ws, {
             ws,
             id: clientId,
-            authenticated: !token, // Auto-auth if no token configured
+            authenticated: true,
           });
-          log.info({ clientId }, 'WebSocket connected');
+          log.info({ clientId }, 'WebSocket connected and authenticated');
         },
 
         onMessage: async (evt: MessageEvent, ws: WSContext) => {
           const client = clients.get(ws);
           if (!client) {
             log.warn('Message from unknown client');
+            return;
+          }
+
+          // Reject requests from unauthenticated clients
+          if (!client.authenticated) {
+            ws.send(JSON.stringify(createResponse(
+              'unknown',
+              undefined,
+              { code: 'UNAUTHORIZED', message: 'Authentication required' }
+            )));
+            ws.close(4401, 'Unauthorized');
             return;
           }
 

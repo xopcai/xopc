@@ -1,6 +1,6 @@
 // Session memory store - persists agent messages to disk with compaction support
 import { type AgentMessage } from '@mariozechner/pi-agent-core';
-import { readFile, writeFile, mkdir } from 'fs/promises';
+import { readFile, writeFile, mkdir, unlink } from 'fs/promises';
 import { join } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import { SlidingWindow, type WindowConfig } from './window.js';
@@ -129,6 +129,22 @@ export class MemoryStore {
     }
     
     return result;
+  }
+
+  async delete(sessionKey: string): Promise<void> {
+    const path = this.getPath(sessionKey);
+    const metadataPath = this.getMetadataPath(sessionKey);
+    try {
+      await unlink(path);
+      await unlink(metadataPath);
+      this.sessionMetadata.delete(sessionKey);
+      log.debug({ sessionKey }, 'Session deleted');
+    } catch (error: any) {
+      // Ignore if file doesn't exist
+      if (error.code !== 'ENOENT') {
+        throw error;
+      }
+    }
   }
 
   /**

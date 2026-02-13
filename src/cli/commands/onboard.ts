@@ -6,16 +6,25 @@ import { loadConfig, saveConfig, PROVIDER_OPTIONS } from '../../config/index.js'
 import { register, formatExamples } from '../registry.js';
 import type { CLIContext } from '../registry.js';
 
+function isInteractive(): boolean {
+  return process.stdin.isTTY && process.stdout.isTTY;
+}
+
+async function setupNonInteractive(configPath: string, existingConfig: any): Promise<any> {
+  console.log('\n🤖 Step 2: AI Model (Non-Interactive Mode)\n');
+  console.log('Current config:', JSON.stringify(existingConfig?.agents?.defaults?.model, null, 2));
+  console.log('\n💡 To configure in interactive mode, run: xopcbot onboard');
+  console.log('💡 Or set up manually in:', configPath);
+  return existingConfig;
+}
+
 function createOnboardCommand(ctx: CLIContext): Command {
   const cmd = new Command('onboard')
     .description('Interactive setup wizard for xopcbot')
-    .addHelpText(
-      'after',
-      formatExamples([
-        'xopcbot onboard              # Full interactive setup',
-        'xopcbot onboard --quick       # Quick model setup only',
-      ])
-    )
+    .addHelpText('after', formatExamples([
+      'xopcbot onboard              # Full interactive setup',
+      'xopcbot onboard --quick       # Quick model setup only',
+    ]))
     .option('--quick', 'Quick setup (model only)')
     .action(async (options) => {
       console.log('🧙 xopcbot Setup Wizard\n');
@@ -28,6 +37,16 @@ function createOnboardCommand(ctx: CLIContext): Command {
 
       if (!options.quick) {
         await setupWorkspace(workspacePath);
+      }
+
+      if (!isInteractive()) {
+        const updatedConfig = await setupNonInteractive(configPath, existingConfig);
+        if (!options.quick) {
+          await setupChannels(configPath, updatedConfig);
+        }
+        console.log('\n' + '═'.repeat(50));
+        console.log('\n🎉 Setup Complete!\n');
+        return;
       }
 
       const updatedConfig = await setupModel(configPath, existingConfig, ctx);
@@ -67,7 +86,11 @@ async function setupWorkspace(workspacePath: string): Promise<void> {
 async function setupModel(configPath: string, existingConfig: any, ctx: CLIContext): Promise<any> {
   console.log('\n🤖 Step 2: AI Model\n');
 
-  const currentModel = existingConfig?.agents?.defaults?.model;
+  const currentModelConfig = existingConfig?.agents?.defaults?.model;
+  const currentModel = typeof currentModelConfig === 'string'
+    ? currentModelConfig
+    : currentModelConfig?.primary;
+
   if (currentModel) {
     console.log('Current model:', currentModel);
     const keepCurrent = await confirm({
@@ -113,12 +136,11 @@ async function setupModel(configPath: string, existingConfig: any, ctx: CLIConte
   const config = existingConfig || {};
   config.providers = config.providers || {};
   config.providers[provider] = { apiKey };
-  config.agents = {
-    defaults: {
-      model,
-      workspace: ctx.workspacePath,
-    },
-  };
+
+  config.agents = config.agents || {};
+  config.agents.defaults = config.agents.defaults || {};
+  config.agents.defaults.model = { primary: model, fallbacks: [] };
+  config.agents.defaults.workspace = ctx.workspacePath;
 
   saveConfig(config, configPath);
   console.log('\n✅ Model configured:', model);
@@ -126,6 +148,12 @@ async function setupModel(configPath: string, existingConfig: any, ctx: CLIConte
 }
 
 async function setupChannels(configPath: string, config: any): Promise<void> {
+  if (!isInteractive()) {
+    console.log('\n💬 Step 3: Channels (Optional)\n');
+    console.log('💡 To configure channels, edit the config file manually.');
+    return;
+  }
+
   console.log('\n💬 Step 3: Channels (Optional)\n');
 
   const enableTelegram = await confirm({
@@ -140,11 +168,7 @@ async function setupChannels(configPath: string, config: any): Promise<void> {
     });
 
     config.channels = config.channels || {};
-    config.channels.telegram = {
-      enabled: true,
-      token,
-      allowFrom: [],
-    };
+    config.channels.telegram = { enabled: true, token, allowFrom: [] };
 
     saveConfig(config, configPath);
     console.log('✅ Telegram enabled');
@@ -214,11 +238,8 @@ register({
   name: 'onboard',
   description: 'Interactive setup wizard for xopcbot',
   factory: createOnboardCommand,
-  metadata: {
-    category: 'setup',
-    examples: [
-      'xopcbot onboard',
-      'xopcbot onboard --quick',
-    ],
-  },
+  metadata: { category: 'setup', examples: [
+    'xopcbot onboard',
+    'xopcbot onboard --quick',
+  ]},
 });

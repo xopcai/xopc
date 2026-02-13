@@ -1,30 +1,10 @@
-/**
- * Skill system for xopcbot
- * Simplified implementation following pi-mono/coding-agent
- * Follows Agent Skills specification: https://agentskills.io/specification
- * 
- * Features:
- * - Priority: workspace > global > builtin
- * - .gitignore/.ignore/.fdignore support
- * - Skill collision detection
- * - Detailed diagnostics
- * - Hot reload support
- */
-
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { basename, dirname, join, relative, sep } from 'path';
 import { parseFrontmatter } from '../../utils/frontmatter.js';
+import { DEFAULT_BASE_DIR } from '../../config/paths.js';
 
-/** Max name length per spec */
-const MAX_NAME_LENGTH = 64;
+const IGNORE_FILES = ['.gitignore', '.ignore', '.fdignore'];
 
-/** Max description length per spec */
-const MAX_DESCRIPTION_LENGTH = 1024;
-
-/** Ignore file names */
-const IGNORE_FILE_NAMES = ['.gitignore', '.ignore', '.fdignore'];
-
-/** Skill diagnostic message */
 export interface SkillDiagnostic {
   type: 'warning' | 'collision' | 'error';
   skillName?: string;
@@ -32,19 +12,6 @@ export interface SkillDiagnostic {
   path?: string;
 }
 
-/** Skill frontmatter per Agent Skills spec */
-export interface SkillFrontmatter {
-  name?: string;
-  description?: string;
-  license?: string;
-  compatibility?: string;
-  'allowed-tools'?: string;
-  metadata?: Record<string, string>;
-  'disable-model-invocation'?: boolean;
-  [key: string]: unknown;
-}
-
-/** Core skill interface */
 export interface Skill {
   name: string;
   description: string;
@@ -54,23 +21,16 @@ export interface Skill {
   disableModelInvocation: boolean;
 }
 
-/** Load skills result with diagnostics */
 export interface LoadSkillsResult {
   skills: Skill[];
   prompt: string;
   diagnostics: SkillDiagnostic[];
 }
 
-/**
- * Convert path to posix format
- */
 function toPosixPath(p: string): string {
   return p.split(sep).join('/');
 }
 
-/**
- * Prefix ignore pattern with directory prefix
- */
 function prefixIgnorePattern(line: string, prefix: string): string | null {
   const trimmed = line.trim();
   if (!trimmed) return null;
@@ -94,53 +54,40 @@ function prefixIgnorePattern(line: string, prefix: string): string | null {
   return negated ? `!${prefixed}` : prefixed;
 }
 
-/**
- * Load ignore rules from .gitignore/.ignore files
- */
 function loadIgnoreRules(dir: string, rootDir: string): Set<string> {
   const ignoredPaths = new Set<string>();
   const relativeDir = relative(rootDir, dir);
   const prefix = relativeDir ? `${toPosixPath(relativeDir)}/` : '';
 
-  for (const filename of IGNORE_FILE_NAMES) {
+  for (const filename of IGNORE_FILES) {
     const ignorePath = join(dir, filename);
     if (!existsSync(ignorePath)) continue;
 
     try {
       const content = readFileSync(ignorePath, 'utf-8');
-      const lines = content.split(/\r?\n/);
-      
-      for (const line of lines) {
+      for (const line of content.split(/\r?\n/)) {
         const pattern = prefixIgnorePattern(line, prefix);
         if (pattern) {
-          const fullPattern = pattern.startsWith('!') 
+          const fullPattern = pattern.startsWith('!')
             ? `!${prefix}${pattern.slice(1)}`
             : `${prefix}${pattern}`;
           ignoredPaths.add(fullPattern);
         }
       }
-    } catch {
-      // Ignore file read errors
-    }
+    } catch {}
   }
 
   return ignoredPaths;
 }
 
-/**
- * Check if a path should be ignored
- */
 function shouldIgnore(path: string, ignoredPaths: Set<string>): boolean {
-  // Simple ignore check - check exact matches and prefixes
   for (const pattern of ignoredPaths) {
     if (pattern.startsWith('!')) {
-      // Negated pattern - this path is NOT ignored
-      const positivePattern = pattern.slice(1);
-      if (path === positivePattern || path.startsWith(`${positivePattern}/`)) {
+      const positive = pattern.slice(1);
+      if (path === positive || path.startsWith(`${positive}/`)) {
         return false;
       }
     } else {
-      // Positive pattern - this path IS ignored
       if (path === pattern || path.startsWith(`${pattern}/`)) {
         return true;
       }
@@ -149,55 +96,6 @@ function shouldIgnore(path: string, ignoredPaths: Set<string>): boolean {
   return false;
 }
 
-/**
- * Validate skill name
- */
-// NOTE: Reserved for future use
-export function _validateName(name: string, parentDirName: string): string[] {
-  const errors: string[] = [];
-
-  if (name !== parentDirName) {
-    errors.push(`name "${name}" does not match parent directory "${parentDirName}"`);
-  }
-
-  if (name.length > MAX_NAME_LENGTH) {
-    errors.push(`name exceeds ${MAX_NAME_LENGTH} characters (${name.length})`);
-  }
-
-  if (!/^[a-z0-9-]+$/.test(name)) {
-    errors.push('name contains invalid characters (must be lowercase a-z, 0-9, hyphens only)');
-  }
-
-  if (name.startsWith('-') || name.endsWith('-')) {
-    errors.push('name must not start or end with a hyphen');
-  }
-
-  if (name.includes('--')) {
-    errors.push('name must not contain consecutive hyphens');
-  }
-
-  return errors;
-}
-
-/**
- * Validate skill description
- */
-// NOTE: Reserved for future use
-export function _validateDescription(description: string | undefined): string[] {
-  const errors: string[] = [];
-
-  if (!description || description.trim() === '') {
-    errors.push('description is required');
-  } else if (description.length > MAX_DESCRIPTION_LENGTH) {
-    errors.push(`description exceeds ${MAX_DESCRIPTION_LENGTH} characters (${description.length})`);
-  }
-
-  return errors;
-}
-
-/**
- * Escape XML special characters
- */
 function escapeXml(str: string): string {
   return str
     .replace(/&/g, '&amp;')
@@ -207,9 +105,6 @@ function escapeXml(str: string): string {
     .replace(/'/g, '&apos;');
 }
 
-/**
- * Format skill as XML
- */
 function formatSkillXml(skill: Skill): string {
   return [
     '  <skill>',
@@ -220,15 +115,9 @@ function formatSkillXml(skill: Skill): string {
   ].join('\n');
 }
 
-/**
- * Format skills for system prompt
- */
 function formatSkillsForPrompt(skills: Skill[]): string {
   const visibleSkills = skills.filter(s => !s.disableModelInvocation);
-
-  if (visibleSkills.length === 0) {
-    return '';
-  }
+  if (visibleSkills.length === 0) return '';
 
   const lines = [
     '\n\n<available_skills>',
@@ -242,45 +131,29 @@ function formatSkillsForPrompt(skills: Skill[]): string {
   }
 
   lines.push('</available_skills>');
-
   return lines.join('\n');
 }
 
-/**
- * Discover skills from a directory with ignore support
- */
-function discoverSkills(
-  dir: string, 
-  source: 'builtin' | 'workspace' | 'global'
-): Skill[] {
+function discoverSkills(dir: string, source: 'builtin' | 'workspace' | 'global'): Skill[] {
   const skills: Skill[] = [];
-
-  if (!existsSync(dir)) {
-    return skills;
-  }
+  if (!existsSync(dir)) return skills;
 
   function scan(currentDir: string, currentIgnoredPaths: Set<string>) {
     try {
       const entries = readdirSync(currentDir, { withFileTypes: true });
 
       for (const entry of entries) {
-        if (entry.name.startsWith('.')) continue;
-        if (entry.name === 'node_modules') continue;
+        if (entry.name.startsWith('.') || entry.name === 'node_modules') continue;
 
         const fullPath = join(currentDir, entry.name);
         const relPath = toPosixPath(relative(dir, fullPath));
 
-        // Check if this path should be ignored
-        if (shouldIgnore(relPath, currentIgnoredPaths)) {
-          continue;
-        }
+        if (shouldIgnore(relPath, currentIgnoredPaths)) continue;
 
-        // Handle directories
         if (entry.isDirectory()) {
           const skillMdPath = join(fullPath, 'SKILL.md');
           const skillRelPath = `${relPath}/`;
-          
-          // Check for subdirectory ignore files
+
           const subIgnoredPaths = new Set(currentIgnoredPaths);
           const subIgnoreFile = join(fullPath, '.gitignore');
           if (existsSync(subIgnoreFile)) {
@@ -292,45 +165,29 @@ function discoverSkills(
 
           if (existsSync(skillMdPath) && !shouldIgnore(skillRelPath, currentIgnoredPaths)) {
             const skill = loadSkillFromFile(skillMdPath, source);
-            if (skill) {
-              skills.push(skill);
-            }
+            if (skill) skills.push(skill);
           }
-          
-          // Recurse into subdirectories
+
           scan(fullPath, subIgnoredPaths);
         }
       }
-    } catch {
-      // Ignore directory read errors
-    }
+    } catch {}
   }
 
-  // Load ignore rules from root directory
-  const rootIgnoredPaths = loadIgnoreRules(dir, dir);
-  scan(dir, rootIgnoredPaths);
-
+  scan(dir, loadIgnoreRules(dir, dir));
   return skills;
 }
 
-/**
- * Load a skill from a markdown file
- */
 function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | 'global'): Skill | null {
   try {
     const rawContent = readFileSync(filePath, 'utf-8');
-    const { frontmatter } = parseFrontmatter<SkillFrontmatter>(rawContent);
+    const { frontmatter } = parseFrontmatter(rawContent);
     const skillDir = dirname(filePath);
     const parentDirName = basename(skillDir);
 
-    // Get name (frontmatter or directory name)
     const name = (frontmatter.name as string | undefined) || parentDirName;
-
-    // Get description (required)
     const description = frontmatter.description as string | undefined;
-    if (!description || description.trim() === '') {
-      return null;
-    }
+    if (!description?.trim()) return null;
 
     return {
       name,
@@ -345,21 +202,16 @@ function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | '
   }
 }
 
-/**
- * Load skills from multiple directories with priority
- * Priority: workspace > global > builtin
- */
 export function loadSkills(options: {
   workspaceDir?: string;
   globalDir?: string;
   builtinDir?: string;
 }): LoadSkillsResult {
-  const { workspaceDir, globalDir, builtinDir } = options;
+  const { workspaceDir, builtinDir } = options;
 
   const skillMap = new Map<string, Skill>();
   const diagnostics: SkillDiagnostic[] = [];
 
-  // Priority 1: Built-in skills (lowest)
   if (builtinDir) {
     for (const skill of discoverSkills(builtinDir, 'builtin')) {
       const existing = skillMap.get(skill.name);
@@ -376,9 +228,14 @@ export function loadSkills(options: {
     }
   }
 
-  // Priority 2: Global skills
-  if (globalDir) {
-    for (const skill of discoverSkills(globalDir, 'global')) {
+  const globalDirs = [
+    options.globalDir,
+    join(DEFAULT_BASE_DIR, 'skills'),
+    join(process.env.HOME || '', '.agents', 'skills'),
+  ].filter((d): d is string => !!d && existsSync(d));
+
+  for (const dir of globalDirs) {
+    for (const skill of discoverSkills(dir, 'global')) {
       const existing = skillMap.get(skill.name);
       if (existing) {
         diagnostics.push({
@@ -393,7 +250,6 @@ export function loadSkills(options: {
     }
   }
 
-  // Priority 3: Workspace skills (highest, overrides others)
   if (workspaceDir) {
     const workspaceSkills = discoverSkills(join(workspaceDir, 'skills'), 'workspace');
     for (const skill of workspaceSkills) {
@@ -410,72 +266,32 @@ export function loadSkills(options: {
     }
   }
 
-  const skills = Array.from(skillMap.values());
-  const prompt = formatSkillsForPrompt(skills);
-
-  return { skills, prompt, diagnostics };
+  return {
+    skills: Array.from(skillMap.values()),
+    prompt: formatSkillsForPrompt(Array.from(skillMap.values())),
+    diagnostics,
+  };
 }
 
-/**
- * Create a skill loader with hot reload support
- */
 export function createSkillLoader() {
   let cachedSkills: Skill[] = [];
   let cachedPrompt: string = '';
   let cachedDiagnostics: SkillDiagnostic[] = [];
   let lastLoadTime = 0;
+  let workspaceDir: string | undefined;
+  let builtinDir: string | undefined;
 
   return {
-    /**
-     * Load skills (with caching)
-     */
-    load: (options: {
-      workspaceDir?: string;
-      globalDir?: string;
-      builtinDir?: string;
-    }): LoadSkillsResult => {
-      const result = loadSkills(options);
-      cachedSkills = result.skills;
-      cachedPrompt = result.prompt;
-      cachedDiagnostics = result.diagnostics;
-      lastLoadTime = Date.now();
-      return result;
+    init: (workspace: string, builtin: string | null) => {
+      workspaceDir = workspace;
+      builtinDir = builtin || undefined;
+      return loadSkills({ workspaceDir, builtinDir });
     },
-
-    /**
-     * Force reload skills (hot reload)
-     */
-    reload: (options: {
-      workspaceDir?: string;
-      globalDir?: string;
-      builtinDir?: string;
-    }): LoadSkillsResult => {
-      const result = loadSkills(options);
-      cachedSkills = result.skills;
-      cachedPrompt = result.prompt;
-      cachedDiagnostics = result.diagnostics;
-      lastLoadTime = Date.now();
-      return result;
-    },
-
-    /**
-     * Get cached skills
-     */
+    load: () => loadSkills({ workspaceDir, builtinDir }),
+    reload: () => loadSkills({ workspaceDir, builtinDir }),
     getSkills: () => cachedSkills,
-
-    /**
-     * Get cached prompt
-     */
     getPrompt: () => cachedPrompt,
-
-    /**
-     * Get cached diagnostics
-     */
     getDiagnostics: () => cachedDiagnostics,
-
-    /**
-     * Get last load time
-     */
     getLastLoadTime: () => lastLoadTime,
   };
 }

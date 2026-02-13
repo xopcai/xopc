@@ -1,4 +1,3 @@
-// AgentService - Main agent implementation using @mariozechner/pi-agent-core
 import { readFileSync, existsSync } from 'fs';
 import { join } from 'path';
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
@@ -29,11 +28,12 @@ import { DEFAULT_BASE_DIR, getBundledSkillsDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
 import { PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
+import { runWithModelFallback, isFailoverError, describeFailoverError, resolveFallbackCandidates } from './fallback/index.js';
 import { PromptBuilder } from './prompt/index.js';
+import { createTypingController } from './typing.js';
 
 const log = createLogger('AgentService');
 
-// Bootstrap file names (matching OpenClaw convention)
 const BOOTSTRAP_FILES = [
   'SOUL.md',
   'IDENTITY.md',
@@ -41,12 +41,6 @@ const BOOTSTRAP_FILES = [
   'TOOLS.md',
   'AGENTS.md',
 ];
-
-// Get directory for bootstrap files (SOUL.md, USER.md, etc.)
-// Bootstrap files are loaded from the configured workspace directory
-function getBootstrapDir(workspace: string): string {
-  return workspace;
-}
 
 interface AgentServiceConfig {
   workspace: string;
@@ -70,27 +64,25 @@ export class AgentService {
   private skills: Skill[] = [];
   private skillLoader = createSkillLoader();
   private currentModelName: string = 'minimax/MiniMax-M2.1';
+  private currentProvider: string = 'google';
   private workspaceDir: string;
   private bootstrapFiles: Array<{ name: string; content: string }> = [];
+  private modelRegistry: ModelRegistry;
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
     this.agentId = `agent-${Date.now()}`;
     this.workspaceDir = config.workspace;
 
-    // Load workspace bootstrap files (SOUL.md, USER.md, TOOLS.md, etc.)
-    // Bootstrap files are loaded from the configured workspace directory
-    const bootstrapDir = getBootstrapDir(config.workspace);
-    this.loadBootstrapFiles(bootstrapDir);
+    this.loadBootstrapFiles(config.workspace);
 
     const defaults = config.agentDefaults || config.config?.agents?.defaults;
-    
-    // Initialize memory store with configs
+
     const windowConfig: Partial<WindowConfig> = {
       maxMessages: 100,
       keepRecentMessages: defaults?.maxToolIterations || 20,
       preserveSystemMessages: true,
     };
-    
+
     const compactionConfig: Partial<CompactionConfig> = {
       enabled: defaults?.compaction?.enabled ?? true,
       mode: (defaults?.compaction?.mode as 'extractive' | 'abstractive' | 'structured') || 'abstractive',
@@ -99,11 +91,10 @@ export class AgentService {
       minMessagesBeforeCompact: defaults?.compaction?.minMessagesBeforeCompact || 10,
       keepRecentMessages: defaults?.compaction?.keepRecentMessages || 10,
     };
-    
+
     this.memory = new MemoryStore(config.workspace, windowConfig, compactionConfig);
     this.compactor = new SessionCompactor(compactionConfig);
 
-    // Initialize hook runner if plugin registry provided
     if (config.pluginRegistry) {
       this.hookRunner = new HookRunner(config.pluginRegistry, {
         catchErrors: true,
@@ -115,7 +106,6 @@ export class AgentService {
       });
     }
 
-    // Initialize agent with tools
     const tools: AgentTool<any, any>[] = [
       readFileTool,
       writeFileTool,
@@ -131,24 +121,16 @@ export class AgentService {
       createMemoryGetTool(config.workspace),
     ];
 
-    // Add plugin tools from registry
     if (config.pluginRegistry) {
       const pluginTools = this.convertPluginTools(config.pluginRegistry.getAllTools());
       tools.push(...pluginTools);
       log.info({ count: pluginTools.length }, 'Loaded plugin tools');
     }
 
-    // Load skills for prompt injection (not as tools)
-    // Priority: workspace > global (~/.xopcbot/skills) > builtin (xopcbot/skills)
-    const skillResult = this.skillLoader.load({
-      workspaceDir: config.workspace,
-      globalDir: join(DEFAULT_BASE_DIR, 'skills'),
-      builtinDir: getBundledSkillsDir(),
-    });
+    const skillResult = this.skillLoader.init(config.workspace, getBundledSkillsDir());
     this.skillPrompt = skillResult.prompt;
     this.skills = skillResult.skills;
-    
-    // Log diagnostics
+
     for (const diag of skillResult.diagnostics) {
       if (diag.type === 'collision') {
         log.warn({ skill: diag.skillName, message: diag.message }, 'Skill collision');
@@ -156,25 +138,29 @@ export class AgentService {
         log.warn({ skill: diag.skillName, message: diag.message }, 'Skill warning');
       }
     }
-    
-    log.info({ count: skillResult.skills.length }, 'Skills loaded for prompt injection');
+
+    log.info({ count: skillResult.skills.length }, 'Skills loaded');
 
     const registry = new ModelRegistry(config.config ?? null, { ollamaEnabled: false });
+    this.modelRegistry = registry;
     let model: Model<Api>;
-    
+
     if (config.model) {
       const found = registry.findByRef(config.model);
       if (found) {
         model = found;
-        this.currentModelName = found.name || config.model;
+        this.currentModelName = found.id || config.model;
+        this.currentProvider = found.provider || 'google';
       } else {
         log.warn({ model: config.model }, 'Model not found, using default');
         model = registry.find('google', 'gemini-2.5-flash-lite-preview-06-17')!;
-        this.currentModelName = model.name || 'gemini-2.5-flash-lite';
+        this.currentModelName = model.id || 'gemini-2.5-flash-lite';
+        this.currentProvider = 'google';
       }
     } else {
       model = registry.find('google', 'gemini-2.5-flash-lite-preview-06-17')!;
-      this.currentModelName = model.name || 'gemini-2.5-flash-lite';
+      this.currentModelName = model.id || 'gemini-2.5-flash-lite';
+      this.currentProvider = 'google';
     }
 
     this.agent = new Agent({
@@ -197,13 +183,10 @@ export class AgentService {
 
   async start(): Promise<void> {
     this.running = true;
-    
-    // Trigger gateway_start hook
+
     await this.triggerHook('gateway_start', { port: 0, host: 'cli' });
-    
     log.info('Agent service started');
 
-    // Trigger session_start hook
     await this.triggerHook('session_start', { sessionId: this.agentId });
 
     while (this.running) {
@@ -216,8 +199,7 @@ export class AgentService {
       }
     }
 
-    // Trigger session_end hook
-    await this.triggerHook('session_end', { 
+    await this.triggerHook('session_end', {
       sessionId: this.agentId,
       messageCount: this.agent.state.messages.length,
     });
@@ -227,27 +209,23 @@ export class AgentService {
     this.running = false;
     this.agent.abort();
     this.unsubscribe?.();
-    
-    // Trigger gateway_stop hook
+
     this.triggerHook('gateway_stop', { reason: 'stopped' });
-    
+
     log.info('Agent service stopped');
     return Promise.resolve();
   }
 
-  /**
-   * Trigger a hook event
-   */
   private async triggerHook(event: string, eventData: Record<string, unknown>): Promise<void> {
     if (!this.hookRunner) return;
-    
+
     const ctx = createHookContext({
       pluginId: undefined,
       sessionKey: this.currentContext?.sessionKey,
       agentId: this.agentId,
       timestamp: new Date(),
     });
-    
+
     try {
       await this.hookRunner.runHooks(event as any, eventData, ctx);
     } catch (error) {
@@ -255,9 +233,6 @@ export class AgentService {
     }
   }
 
-  /**
-   * Convert plugin tools to AgentTool format
-   */
   private convertPluginTools(pluginTools: PluginTool[]): AgentTool<any, any>[] {
     return pluginTools.map((tool) => ({
       name: tool.name,
@@ -293,7 +268,7 @@ export class AgentService {
 
   private async handleInboundMessage(msg: InboundMessage): Promise<void> {
     const sessionKey = `${msg.channel}:${msg.chat_id}`;
-    
+
     this.currentContext = {
       channel: msg.channel,
       chatId: msg.chat_id,
@@ -301,7 +276,6 @@ export class AgentService {
     };
 
     try {
-      // Trigger message_received hook
       await this.triggerHook('message_received', {
         channelId: msg.channel,
         from: msg.sender_id,
@@ -323,94 +297,202 @@ export class AgentService {
     const sessionKey = `${msg.channel}:${msg.chat_id}`;
     log.info({ channel: msg.channel, senderId: msg.sender_id }, 'Processing message');
 
-    // Handle /skills reload command
-    if (msg.content.trim() === '/skills reload') {
-      this.reloadSkills();
-      await this.bus.publishOutbound({
-        channel: msg.channel,
-        chat_id: msg.chat_id,
-        content: '✅ Skills reloaded successfully',
-      });
-      return;
-    }
-
-    // Expand skill commands (/skill:name args)
-    const expandedContent = this.expandSkillCommand(msg.content);
-
-    // Trigger before_agent_start hook
-    await this.triggerHook('before_agent_start', {
-      prompt: expandedContent,
-    });
-
-    let messages = await this.memory.load(sessionKey);
-
-    // Apply sliding window trim
-    const windowStats = this.memory.getWindowStats(messages);
-    if (windowStats.needsTrim) {
-      log.debug({ sessionKey, ...windowStats }, 'Messages will be trimmed on save');
-    }
-
-    // Check and apply compaction
-    const contextWindow = this.getContextWindow();
-    
-    // Trigger before_compaction hook
-    await this.triggerHook('before_compaction', {
-      messageCount: messages.length,
-      tokenCount: await this.memory.estimateTokenUsage(sessionKey, messages),
-    });
-
-    await this.checkAndCompact(sessionKey, messages, contextWindow);
-
-    // Reload after potential compaction
-    messages = await this.memory.load(sessionKey);
-    this.agent.replaceMessages(messages);
-
-    const userMessage: AgentMessage = {
-      role: 'user',
-      content: [{ type: 'text', text: expandedContent }],
-      timestamp: Date.now(),
-    };
-
-    // Trigger before_tool_call for any tools that will be executed
-    await this.triggerHook('before_tool_call', {
-      toolName: 'user_message',
-      params: { content: expandedContent },
-    });
-
-    await this.agent.prompt(userMessage);
-    await this.agent.waitForIdle();
-
-    const finalContent = this.getLastAssistantContent();
-    if (finalContent) {
-      // Trigger message_sending hook
-      const sendResult = await this.runMessageSendingHook(msg.chat_id, finalContent);
-      
-      if (!sendResult.send) {
-        log.debug({ reason: sendResult.reason }, 'Message sending cancelled by hook');
-      } else {
+    const typing = createTypingController({
+      onStart: async () => {
         await this.bus.publishOutbound({
           channel: msg.channel,
           chat_id: msg.chat_id,
-          content: sendResult.content || finalContent,
+          type: 'typing_on',
         });
+      },
+      onStop: async () => {
+        await this.bus.publishOutbound({
+          channel: msg.channel,
+          chat_id: msg.chat_id,
+          type: 'typing_off',
+        });
+      },
+    });
 
-        // Trigger message_sent hook
-        await this.triggerHook('message_sent', {
-          to: msg.chat_id,
-          content: sendResult.content || finalContent,
-          success: true,
+    try {
+      typing.start();
+
+      const command = msg.content.trim();
+      if (command === '/reset' || command === '/new') {
+        await this.memory.delete(sessionKey);
+        await this.bus.publishOutbound({
+          channel: msg.channel,
+          chat_id: msg.chat_id,
+          content: '✅ New session started.',
+          type: 'message',
         });
+        return;
+      }
+
+      if (command === '/skills reload') {
+        this.reloadSkills();
+        await this.bus.publishOutbound({
+          channel: msg.channel,
+          chat_id: msg.chat_id,
+          content: '✅ Skills reloaded successfully',
+          type: 'message',
+        });
+        return;
+      }
+
+      const expandedContent = this.expandSkillCommand(msg.content);
+
+      await this.triggerHook('before_agent_start', {
+        prompt: expandedContent,
+      });
+
+      let messages = await this.memory.load(sessionKey);
+
+      const windowStats = this.memory.getWindowStats(messages);
+      if (windowStats.needsTrim) {
+        log.debug({ sessionKey, ...windowStats }, 'Messages will be trimmed on save');
+      }
+
+      const contextWindow = this.getContextWindow();
+
+      await this.triggerHook('before_compaction', {
+        messageCount: messages.length,
+        tokenCount: await this.memory.estimateTokenUsage(sessionKey, messages),
+      });
+
+      await this.checkAndCompact(sessionKey, messages, contextWindow);
+
+      messages = await this.memory.load(sessionKey);
+      this.agent.replaceMessages(messages);
+
+      const userMessage: AgentMessage = {
+        role: 'user',
+        content: [{ type: 'text', text: expandedContent }],
+        timestamp: Date.now(),
+      };
+
+      await this.triggerHook('before_tool_call', {
+        toolName: 'user_message',
+        params: { content: expandedContent },
+      });
+
+      // Run agent with model fallback support
+      const finalContent = await this.runWithModelFallback(
+        sessionKey,
+        userMessage,
+        this.currentProvider,
+        this.currentModelName
+      );
+      if (finalContent) {
+        const sendResult = await this.runMessageSendingHook(msg.chat_id, finalContent);
+
+        if (!sendResult.send) {
+          log.debug({ reason: sendResult.reason }, 'Message sending cancelled by hook');
+        } else {
+          await this.bus.publishOutbound({
+            channel: msg.channel,
+            chat_id: msg.chat_id,
+            content: sendResult.content || finalContent,
+            type: 'message',
+          });
+
+          await this.triggerHook('message_sent', {
+            to: msg.chat_id,
+            content: sendResult.content || finalContent,
+            success: true,
+          });
+        }
+      }
+
+      await this.memory.save(sessionKey, this.agent.state.messages);
+
+      await this.triggerHook('agent_end', {
+        messages: this.agent.state.messages,
+        success: true,
+        durationMs: 0,
+      });
+    } finally {
+      typing.stop();
+    }
+  }
+
+  /**
+   * Run the agent with automatic model fallback on failure.
+   */
+  private async runWithModelFallback(
+    sessionKey: string,
+    userMessage: AgentMessage,
+    provider: string,
+    model: string
+  ): Promise<string | null> {
+    const candidates = resolveFallbackCandidates({
+      cfg: this.config.config ?? undefined,
+      provider,
+      model,
+    });
+
+    let lastError: unknown;
+
+    for (let i = 0; i < candidates.length; i++) {
+      const candidate = candidates[i];
+      const candidateModel = this.modelRegistry.find(candidate.provider, candidate.model);
+
+      if (!candidateModel) {
+        log.warn(
+          { provider: candidate.provider, model: candidate.model },
+          'Fallback model not found in registry'
+        );
+        continue;
+      }
+
+      log.info(
+        { attempt: i + 1, total: candidates.length, provider: candidate.provider, model: candidate.model },
+        'Attempting model'
+      );
+
+      try {
+        // Update the agent with the new model
+        this.agent.setModel(candidateModel);
+        this.currentProvider = candidate.provider;
+        this.currentModelName = candidate.model;
+
+        // Execute the prompt
+        await this.agent.prompt(userMessage);
+        await this.agent.waitForIdle();
+
+        return this.getLastAssistantContent();
+      } catch (err) {
+        lastError = err;
+
+        // Don't fallback on user abort
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          throw err;
+        }
+
+        if (isFailoverError(err)) {
+          const described = describeFailoverError(err);
+          log.warn(
+            { provider: candidate.provider, model: candidate.model, ...described },
+            'Model call failed, trying fallback'
+          );
+        } else {
+          log.warn(
+            { provider: candidate.provider, model: candidate.model, error: err },
+            'Model call failed with non-failover error'
+          );
+        }
+
+        // Continue to next candidate
+        continue;
       }
     }
 
-    await this.memory.save(sessionKey, this.agent.state.messages);
+    // All models failed
+    if (lastError) {
+      throw lastError;
+    }
 
-    // Trigger agent_end hook
-    await this.triggerHook('agent_end', {
-      messages: this.agent.state.messages,
-      success: true,
-      durationMs: 0,
-    });
+    return null;
   }
 
   private async handleSystemMessage(msg: InboundMessage): Promise<void> {
@@ -427,13 +509,11 @@ export class AgentService {
     const sessionKey = `${originChannel}:${originChatId}`;
     let messages = await this.memory.load(sessionKey);
 
-    // Apply sliding window
     const windowStats = this.memory.getWindowStats(messages);
     if (windowStats.needsTrim) {
       messages = await this.memory.load(sessionKey);
     }
 
-    // Check compaction
     const contextWindow = this.getContextWindow();
     await this.checkAndCompact(sessionKey, messages, contextWindow);
 
@@ -455,15 +535,13 @@ export class AgentService {
         channel: originChannel,
         chat_id: originChatId,
         content: finalContent,
+        type: 'message',
       });
     }
 
     await this.memory.save(sessionKey, this.agent.state.messages);
   }
 
-  /**
-   * Run message_sending hooks and get result
-   */
   private async runMessageSendingHook(
     to: string,
     content: string
@@ -480,8 +558,7 @@ export class AgentService {
 
     try {
       const result = await this.hookRunner.runHooks('message_sending' as any, { to, content }, ctx);
-      
-      // Check if any hook cancelled
+
       for (const r of result.results) {
         const typed = r as { result?: Record<string, unknown> };
         if (typed.result) {
@@ -494,7 +571,7 @@ export class AgentService {
           }
         }
       }
-      
+
       return { send: true, content };
     } catch (error) {
       log.warn({ err: error }, 'message_sending hook failed');
@@ -502,30 +579,26 @@ export class AgentService {
     }
   }
 
-  /**
-   * Check if session needs compaction and apply if needed
-   */
   private async checkAndCompact(
     sessionKey: string,
     messages: AgentMessage[],
     contextWindow: number
   ): Promise<void> {
     const prep = this.memory.prepareCompaction(sessionKey, messages, contextWindow);
-    
+
     if (!prep.needsCompaction) {
       return;
     }
 
-    log.info({ 
-      sessionKey, 
+    log.info({
+      sessionKey,
       reason: prep.stats?.reason,
-      usagePercent: prep.stats?.usagePercent 
+      usagePercent: prep.stats?.usagePercent,
     }, 'Session needs compaction');
 
     try {
       const result = await this.memory.compact(sessionKey, messages, contextWindow);
-      
-      // Trigger after_compaction hook
+
       await this.triggerHook('after_compaction', {
         messageCount: messages.length,
         tokenCount: result.tokensBefore,
@@ -543,33 +616,24 @@ export class AgentService {
     }
   }
 
-  /**
-   * Get model context window
-   */
   private getContextWindow(): number {
     const defaults = this.config.agentDefaults || this.config.config?.agents?.defaults;
     return defaults?.maxTokens ? defaults.maxTokens * 4 : 128000;
   }
 
-  /**
-   * Manual compaction command
-   */
   async compactSession(sessionKey: string, instructions?: string): Promise<void> {
     const messages = await this.memory.load(sessionKey);
     const contextWindow = this.getContextWindow();
-    
+
     const result = await this.memory.compact(sessionKey, messages, contextWindow, instructions);
-    
+
     if (result.compacted) {
       await this.memory.save(sessionKey, await this.memory.load(sessionKey));
     }
-    
+
     log.info({ sessionKey, result }, 'Manual compaction complete');
   }
 
-  /**
-   * Get session stats
-   */
   getSessionStats(sessionKey: string, messages: AgentMessage[]) {
     return {
       windowStats: this.memory.getWindowStats(messages),
@@ -635,10 +699,6 @@ export class AgentService {
       .join('');
   }
 
-  /**
-   * Load workspace bootstrap files (SOUL.md, USER.md, TOOLS.md, etc.)
-   * Follows OpenClaw convention - files are loaded from the bootstrap directory.
-   */
   private loadBootstrapFiles(bootstrapDir: string): void {
     const files: Array<{ name: string; content: string }> = [];
 
@@ -662,7 +722,6 @@ export class AgentService {
   }
 
   private getSystemPrompt(): string {
-    // Build prompt with bootstrap files
     const prompt = PromptBuilder.createFullPrompt(
       { workspaceDir: this.config.workspace },
       {
@@ -671,7 +730,6 @@ export class AgentService {
       }
     );
 
-    // Inject skills prompt (Agent Skills spec)
     if (this.skillPrompt) {
       return prompt + '\n\n' + this.skillPrompt;
     }
@@ -679,24 +737,12 @@ export class AgentService {
     return prompt;
   }
 
-  // ============================================================================
-  // Skill Reload Support
-  // ============================================================================
-
-  /**
-   * Reload skills (hot reload)
-   */
   private reloadSkills(): void {
-    const skillResult = this.skillLoader.reload({
-      workspaceDir: this.config.workspace,
-      globalDir: join(DEFAULT_BASE_DIR, 'skills'),
-      builtinDir: getBundledSkillsDir(),
-    });
-    
+    const skillResult = this.skillLoader.reload();
+
     this.skillPrompt = skillResult.prompt;
     this.skills = skillResult.skills;
-    
-    // Log diagnostics
+
     for (const diag of skillResult.diagnostics) {
       if (diag.type === 'collision') {
         log.warn({ skill: diag.skillName, message: diag.message }, 'Skill collision');
@@ -704,15 +750,10 @@ export class AgentService {
         log.warn({ skill: diag.skillName, message: diag.message }, 'Skill warning');
       }
     }
-    
+
     log.info({ count: skillResult.skills.length, diagnostics: skillResult.diagnostics.length }, 'Skills reloaded');
   }
 
-  // ============================================================================
-  // Skill Command Support
-  // ============================================================================
-
-  /** Parsed skill block from a user message */
   private parseSkillBlock(text: string): { name: string; location: string; content: string; userMessage: string | undefined } | null {
     const match = text.match(/^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/);
     if (!match) return null;
@@ -724,10 +765,6 @@ export class AgentService {
     };
   }
 
-  /**
-   * Expand skill commands (/skill:name args) to their full content.
-   * Returns the expanded text, or the original text if not a skill command or skill not found.
-   */
   private expandSkillCommand(text: string): string {
     if (!text.startsWith('/skill:')) return text;
 
@@ -736,16 +773,15 @@ export class AgentService {
     const args = spaceIndex === -1 ? undefined : text.slice(spaceIndex + 1).trim();
 
     const skill = this.skills.find((s) => s.name === skillName);
-    if (!skill) return text; // Unknown skill, pass through
+    if (!skill) return text;
 
     try {
       const rawContent = readFileSync(skill.filePath, 'utf-8');
-      // Strip frontmatter
       const body = rawContent.replace(/^---[\s\S]*?---\n*/, '');
       const skillBlock = `<skill name="${skill.name}" location="${skill.filePath}">\nReferences are relative to ${skill.baseDir}.\n\n${body}\n</skill>`;
       return args ? `${skillBlock}\n\n${args}` : skillBlock;
     } catch {
-      return text; // Failed to read, pass through
+      return text;
     }
   }
 

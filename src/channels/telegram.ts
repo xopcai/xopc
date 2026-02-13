@@ -1,9 +1,10 @@
-import { Bot, GrammyError, HttpError, type Context, type NextFunction } from 'grammy';
+import { Bot, GrammyError, HttpError, InputFile, type Context, type NextFunction } from 'grammy';
 import { run } from '@grammyjs/runner';
 import { BaseChannel } from './base.js';
 import { OutboundMessage } from '../types/index.js';
 import { MessageBus } from '../bus/index.js';
 import { createLogger } from '../utils/logger.js';
+import { TypingController } from './typing-controller.js';
 
 const log = createLogger('TelegramChannel');
 
@@ -12,10 +13,12 @@ export class TelegramChannel extends BaseChannel {
   private bot: Bot | null = null;
   private runner: ReturnType<typeof run> | null = null;
   private debug: boolean;
+  private typingController: TypingController;
 
   constructor(config: Record<string, unknown>, bus: MessageBus) {
     super(config, bus);
     this.debug = (config.debug as boolean) ?? false;
+    this.typingController = new TypingController(this.debug);
   }
 
   async start(): Promise<void> {
@@ -34,6 +37,12 @@ export class TelegramChannel extends BaseChannel {
     this.bot = new Bot(token, botConfig);
 
     this.bot.use(this.allowListMiddleware.bind(this));
+
+    await this.bot.api.setMyCommands([
+      { command: 'new', description: 'Start a new session' },
+      { command: 'reset', description: 'Alias for /new' },
+      { command: 'skills', description: 'Reload agent skills (e.g., /skills reload)' },
+    ]);
 
     this.bot.on('message:text', async (ctx) => {
       const senderId = String(ctx.from?.id);
@@ -111,6 +120,9 @@ export class TelegramChannel extends BaseChannel {
   async stop(): Promise<void> {
     this.running = false;
 
+    // Stop all typing indicators
+    this.typingController.stopAll();
+
     if (this.runner) {
       await this.runner.stop();
       this.runner = null;
@@ -161,12 +173,114 @@ export class TelegramChannel extends BaseChannel {
       return;
     }
 
-    if (this.debug) {
-      log.debug({ chatId: msg.chat_id, contentLength: msg.content.length }, 'Sending message');
+    if (msg.type === 'typing_on') {
+      try {
+        await this.bot.api.sendChatAction(msg.chat_id, 'typing');
+      } catch (error) {
+        log.warn({ err: error }, 'Failed to send typing action');
+      }
+      return;
     }
 
+    if (msg.type === 'typing_off') {
+      // Telegram handles this automatically
+      return;
+    }
+
+    if (this.debug) {
+      log.debug({ chatId: msg.chat_id, contentLength: msg.content?.length }, 'Sending message');
+    }
+
+    // Stop typing before sending the actual message
+    await this.typingController.stop(msg.chat_id);
+
+    // Handle media sending
+    if (msg.mediaUrl) {
+      await this.sendMedia(msg);
+      return;
+    }
+
+    // Regular text message
+    await this.sendText(msg);
+  }
+
+  private async sendMedia(msg: OutboundMessage): Promise<void> {
+    if (!this.bot || !msg.mediaUrl) return;
+
     try {
-      await this.bot.api.sendMessage(msg.chat_id, msg.content, {
+      const response = await fetch(msg.mediaUrl);
+      if (!response.ok) {
+        throw new Error(`Failed to fetch media: ${response.status} ${response.statusText}`);
+      }
+      const buffer = await response.arrayBuffer();
+      const mediaType = msg.mediaType || 'photo';
+      const fileName = this.getFileName(mediaType, msg.mediaUrl);
+      const file = new InputFile(Buffer.from(buffer), fileName);
+
+      const caption = msg.content || undefined;
+      const sendOptions: Record<string, unknown> = {
+        parse_mode: 'Markdown',
+      };
+
+      switch (mediaType) {
+        case 'photo':
+          await this.bot.api.sendPhoto(msg.chat_id, file, { ...sendOptions, caption });
+          break;
+        case 'video':
+          await this.bot.api.sendVideo(msg.chat_id, file, { ...sendOptions, caption });
+          break;
+        case 'audio':
+          await this.bot.api.sendAudio(msg.chat_id, file, { ...sendOptions, caption });
+          break;
+        case 'animation':
+          await this.bot.api.sendAnimation(msg.chat_id, file, { ...sendOptions, caption });
+          break;
+        case 'document':
+        default:
+          await this.bot.api.sendDocument(msg.chat_id, file, { ...sendOptions, caption });
+          break;
+      }
+
+      if (this.debug) {
+        log.debug({ chatId: msg.chat_id, mediaType }, 'Media sent successfully');
+      }
+    } catch (error) {
+      log.error({ err: error, mediaType: msg.mediaType }, 'Failed to send media');
+      // Fallback to text if media fails
+      await this.sendText(msg);
+    }
+  }
+
+  private getFileName(mediaType: string, url: string): string {
+    const extension = {
+      photo: 'jpg',
+      video: 'mp4',
+      audio: 'mp3',
+      animation: 'gif',
+      document: 'bin',
+    }[mediaType] || 'bin';
+
+    // Try to extract filename from URL
+    const urlParts = url.split('/');
+    const urlFileName = urlParts[urlParts.length - 1];
+    const queryIndex = urlFileName.indexOf('?');
+    if (queryIndex > 0) {
+      return urlFileName.substring(0, queryIndex);
+    }
+
+    // If URL has a proper extension, use it
+    if (urlFileName && urlFileName.includes('.')) {
+      return urlFileName;
+    }
+
+    return `file.${extension}`;
+  }
+
+  private async sendText(msg: OutboundMessage): Promise<void> {
+    if (!this.bot) return;
+
+    try {
+      await this.bot.api.sendMessage(msg.chat_id, msg.content || '', {
         parse_mode: 'Markdown',
       });
       if (this.debug) {
@@ -177,7 +291,8 @@ export class TelegramChannel extends BaseChannel {
         log.error({ description: error.description }, 'Telegram API error');
 
         try {
-          await this.bot.api.sendMessage(msg.chat_id, msg.content);
+          // Try to send plain text without markdown
+          await this.bot.api.sendMessage(msg.chat_id, msg.content || '');
         } catch {
           log.error('Failed to send plain text message');
         }

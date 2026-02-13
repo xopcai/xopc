@@ -9,71 +9,53 @@ interface MessageBusEvents {
 class MessageBus extends EventEmitter {
   private inboundQueue: InboundMessage[] = [];
   private outboundQueue: OutboundMessage[] = [];
-  private processing = false;
+  private inboundConsumer: ((msg: InboundMessage) => void) | null = null;
+  private outboundConsumer: ((msg: OutboundMessage) => void) | null = null;
 
   async publishInbound(msg: InboundMessage): Promise<void> {
-    this.inboundQueue.push(msg);
-    this.emit('inbound', msg);
-    this.processQueues();
+    if (this.inboundConsumer) {
+      const consumer = this.inboundConsumer;
+      this.inboundConsumer = null;
+      consumer(msg);
+    } else {
+      this.inboundQueue.push(msg);
+    }
   }
 
   async publishOutbound(msg: OutboundMessage): Promise<void> {
-    this.outboundQueue.push(msg);
-    this.emit('outbound', msg);
-    this.processQueues();
+    if (this.outboundConsumer) {
+      const consumer = this.outboundConsumer;
+      this.outboundConsumer = null;
+      consumer(msg);
+    } else {
+      this.outboundQueue.push(msg);
+    }
   }
 
   async consumeInbound(): Promise<InboundMessage> {
     return new Promise((resolve) => {
-      const onInbound = (msg: InboundMessage) => {
-        this.off('inbound', onInbound);
-        resolve(msg);
-      };
-      
-      this.on('inbound', onInbound);
-      
       if (this.inboundQueue.length > 0) {
-        this.off('inbound', onInbound);
-        resolve(this.inboundQueue.shift()!);
+        return resolve(this.inboundQueue.shift()!);
       }
+      this.inboundConsumer = resolve;
     });
   }
 
   async consumeOutbound(): Promise<OutboundMessage> {
     return new Promise((resolve) => {
-      const onOutbound = (msg: OutboundMessage) => {
-        this.off('outbound', onOutbound);
-        resolve(msg);
-      };
-      
-      this.on('outbound', onOutbound);
-      
       if (this.outboundQueue.length > 0) {
-        this.off('outbound', onOutbound);
-        resolve(this.outboundQueue.shift()!);
+        return resolve(this.outboundQueue.shift()!);
       }
+      this.outboundConsumer = resolve;
     });
-  }
-
-  private processQueues(): void {
-    if (this.processing) return;
-    this.processing = true;
-    
-    // Process outbound messages asynchronously
-    while (this.outboundQueue.length > 0) {
-      const msg = this.outboundQueue.shift();
-      if (msg) {
-        this.emit('outbound', msg);
-      }
-    }
-    
-    this.processing = false;
   }
 
   // For testing: drain all queues
   clear(): void {
     this.inboundQueue = [];
     this.outboundQueue = [];
+    this.inboundConsumer = null;
+    this.outboundConsumer = null;
   }
 }
 

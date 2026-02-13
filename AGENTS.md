@@ -39,17 +39,32 @@ _This file guides AI assistants working on the xopcbot codebase._
 src/
 ├── agent/              # Core agent logic (pi-agent-core based)
 │   ├── service.ts      #   Main AgentService class
-│   ├── memory/         #   Session persistence
+│   ├── memory/          #   Session persistence
 │   └── tools/          #   Built-in tools (Typebox schemas)
 ├── bus/                # Event bus for message routing
 ├── channels/           # Telegram & WhatsApp integrations
 ├── cli/                # CLI commands with self-registration
 ├── config/             # Configuration management
 ├── cron/               # Scheduled tasks
+├── gateway/            # HTTP/WebSocket gateway server
 ├── heartbeat/          # Proactive monitoring
 ├── providers/          # LLM provider registry
 ├── session/            # Conversation session management
-└── types/              # Shared TypeScript types
+├── types/              # Shared TypeScript types
+└── ui/                 # Web UI components (Lit-based)
+    └── src/
+        ├── index.ts            #   Main entry with XopcbotChat
+        ├── gateway-chat.ts    #   Gateway-connected chat component
+        ├── components/        #   UI components
+        │   ├── MessageEditor.ts
+        │   ├── MessageList.ts
+        │   └── StreamingMessageContainer.ts
+        ├── dialogs/           #   Dialog components
+        │   └── ConfigDialog.ts
+        └── utils/             #   Utilities
+            ├── i18n.ts
+            ├── format.ts
+            └── attachment-utils.ts
 ```
 
 ## Tech Stack
@@ -248,6 +263,113 @@ Key sections:
 | `@sinclair/typebox` | JSON Schema generation |
 | `commander` | CLI framework |
 | `zod` | Config validation |
+| `lit` | Web component library for UI |
+
+## Web UI (ui/)
+
+The `ui/` directory contains web-based UI components for xopcbot, inspired by [pi-mono/web-ui](https://github.com/mariozechner/pi-mono/tree/main/packages/web-ui) and [openclaw/ui](https://github.com/openclaw/openclaw/tree/main/ui).
+
+### Building the UI
+
+```bash
+# Install UI dependencies
+cd ui
+pnpm install
+
+# Development mode with hot reload
+pnpm run dev
+
+# Build for production
+pnpm run build
+```
+
+### UI Components
+
+#### XopcbotChat
+Main chat component that wraps an Agent instance:
+
+```typescript
+import { XopcbotChat } from '@xopcbot/web-ui';
+import { Agent } from '@mariozechner/pi-agent-core';
+
+const agent = new Agent({ /* config */ });
+const chat = document.querySelector('xopcbot-chat') as XopcbotChat;
+chat.agent = agent;
+```
+
+#### XopcbotGatewayChat
+WebSocket-connected chat component for remote gateway access:
+
+```typescript
+import { XopcbotGatewayChat } from '@xopcbot/web-ui';
+
+const chat = document.querySelector('xopcbot-gateway-chat') as XopcbotGatewayChat;
+chat.config = {
+  url: 'ws://localhost:3000/ws',
+  token: 'optional-auth-token',
+};
+```
+
+#### XopcbotConfig
+Configuration dialog component:
+
+```typescript
+import { XopcbotConfig } from '@xopcbot/web-ui';
+
+const config = document.querySelector('xopcbot-config') as XopcbotConfig;
+config.sections = [
+  {
+    id: 'general',
+    title: 'General',
+    fields: [
+      { key: 'language', label: 'Language', type: 'select', options: [
+        { value: 'en', label: 'English' },
+        { value: 'zh', label: '中文' },
+      ]},
+    ],
+  },
+];
+config.onSave = (values) => console.log('Save:', values);
+```
+
+### Integration with Gateway
+
+The UI connects to the gateway via WebSocket events:
+
+| Event | Direction | Purpose |
+|-------|-----------|---------|
+| `chat.send` | UI → Gateway | Send user message |
+| `chat.history` | UI → Gateway | Load chat history |
+| `chat` | Gateway → UI | Chat updates (delta/final/error) |
+| `config.get` | UI → Gateway | Load configuration |
+| `config.set` | UI → Gateway | Save configuration |
+
+### Styling
+
+UI components use CSS variables for theming:
+
+```css
+:root {
+  --background: #ffffff;
+  --foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b;
+  --primary: #3b82f6;
+  --primary-foreground: #ffffff;
+  --border: #e2e8f0;
+  --radius: 0.5rem;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --background: #0f172a;
+    --foreground: #f8fafc;
+    --muted: #1e293b;
+    --muted-foreground: #94a3b8;
+    --border: #334155;
+  }
+}
+```
 
 ## When Making Changes
 

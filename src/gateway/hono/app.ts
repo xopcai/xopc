@@ -48,7 +48,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   // Authenticated routes
   const authenticated = new Hono();
-  authenticated.use(auth(token));
+  authenticated.use(auth({ token }));
 
   // Protected status endpoint
   authenticated.get('/status', (c) => {

@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>xopcbot UI</title>
+  <link rel="stylesheet" href="./src/styles.css">
+  <script type="module" src="./src/index.ts"></script>
+</head>
+<body class="h-screen">
+  <div id="app" class="h-full">
+    <xopcbot-chat id="chat"></xopcbot-chat>
+  </div>
+
+  <script type="module">
+    import { XopcbotChat } from './src/index.ts';
+    
+    // Initialize with agent
+    const chatElement = document.getElementById('chat');
+    
+    // Example: Chat will be populated by the parent application
+    console.log('xopcbot UI initialized');
+  </script>
+</body>
+</html>

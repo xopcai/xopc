@@ -70,9 +70,10 @@ export class GatewayService {
     this.initializePlugins();
 
     // Initialize agent service with plugin registry
+    const modelConfig = this.config.agents?.defaults?.model;
     this.agentService = new AgentService(this.bus, {
       workspace: this.config.agents?.defaults?.workspace || './workspace',
-      model: this.config.agents?.defaults?.model,
+      model: typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary,
       braveApiKey: this.config.tools?.web?.search?.apiKey,
       config: this.config,
       pluginRegistry: this.pluginLoader?.getRegistry(),

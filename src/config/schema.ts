@@ -55,7 +55,13 @@ export const ProvidersConfigSchema = z.object({
 
 export const AgentDefaultsSchema = z.object({
   workspace: z.string().default('~/.xopcbot/workspace'),
-  model: z.string().default('anthropic/claude-sonnet-4-5'),
+  model: z.union([
+    z.string(),
+    z.object({
+      primary: z.string().optional(),
+      fallbacks: z.array(z.string()).optional(),
+    }).strict(),
+  ]).default('anthropic/claude-sonnet-4-5'),
   maxTokens: z.number().default(8192),
   temperature: z.number().default(0.7),
   maxToolIterations: z.number().default(20),

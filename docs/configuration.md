@@ -9,7 +9,10 @@ xopcbot 的所有配置都集中在 `~/.config/xopcbot/config.json` 文件中。
   "agents": {
     "defaults": {
       "workspace": "~/.xopcbot/workspace",
-      "model": "gpt-4o",
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-5",
+        "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
+      },
       "max_tokens": 8192,
       "temperature": 0.7,
       "max_tool_iterations": 20
@@ -18,28 +21,30 @@ xopcbot 的所有配置都集中在 `~/.config/xopcbot/config.json` 文件中。
   "providers": {
     "openai": {
       "api_key": "sk-...",
-      "api_base": "https://api.openai.com/v1"
+      "base_url": "https://api.openai.com/v1"
     },
     "anthropic": {
       "api_key": "sk-ant-..."
     },
+    "minimax": {
+      "api_key": "..."
+    },
     "openrouter": {
       "api_key": "sk-or-...",
-      "api_base": "https://openrouter.ai/api/v1"
+      "base_url": "https://openrouter.ai/api/v1"
     },
     "groq": {
       "api_key": "gsk_..."
     },
-    "gemini": {
+    "google": {
       "api_key": "AIza..."
     },
-    "zhipu": {
-      "api_key": "...",
-      "api_base": "https://open.bigmodel.cn/api/paas/v4"
+    "deepseek": {
+      "api_key": "..."
     },
-    "vllm": {
-      "api_key": "dummy",
-      "api_base": "http://localhost:8000/v1"
+    "ollama": {
+      "enabled": true,
+      "base_url": "http://127.0.0.1:11434/v1"
     }
   },
   "channels": {
@@ -78,16 +83,92 @@ Agent 的默认配置。
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
 | `workspace` | string | `~/.xopcbot/workspace` | 工作区目录 |
-| `model` | string | `anthropic/claude-opus-4-5` | 默认模型 |
+| `model` | string / object | `anthropic/claude-sonnet-4-5` | 默认模型 |
 | `max_tokens` | number | `8192` | 最大输出 token |
 | `temperature` | number | `0.7` | 温度参数 (0-2) |
 | `max_tool_iterations` | number | `20` | 最大工具调用次数 |
 
 ### agents.defaults.model
 
+模型配置支持两种格式：
+
+**简单格式（单个模型）：**
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-sonnet-4-5"
+    }
+  }
+}
+```
+
+**完整格式（主模型 + 备用模型）：**
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-5",
+        "fallbacks": [
+          "openai/gpt-4o",
+          "minimax/minimax-m2.1",
+          "google/gemini-2.5-flash"
+        ]
+      }
+    }
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `primary` | string | 主要模型 (provider/model 格式) |
+| `fallbacks` | string[] | 备用模型列表，当主模型失败时自动切换 |
+
+#### 模型回退机制
+
+当主模型调用失败时，xopcbot 会自动尝试备用模型列表中的模型：
+
+1. **支持的失败类型**：
+   - `auth` - 认证失败 (401, 403)
+   - `rate_limit` - 速率限制 (429)
+   - `billing` - 账单/配额问题 (402)
+   - `timeout` - 请求超时
+   - `format` - 请求格式错误 (400)
+
+2. **回退流程**：
+   - 主模型调用失败
+   - 检测失败原因
+   - 按顺序尝试备用模型
+   - 任意模型成功则返回结果
+   - 所有模型失败则抛出错误
+
+3. **示例配置**：
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": {
+        "primary": "anthropic/claude-sonnet-4-5",
+        "fallbacks": [
+          "openai/gpt-4o",
+          "minimax/minimax-m2.1"
+        ]
+      }
+    }
+  },
+  "providers": {
+    "anthropic": { "api_key": "sk-ant-..." },
+    "openai": { "api_key": "sk-..." },
+    "minimax": { "api_key": "..." }
+  }
+}
+```
+
 模型 ID 格式：
-- **简短格式**：`gpt-4o` (自动检测提供商)
-- **完整格式**：`anthropic/claude-opus-4-5`
+- **简短格式**：`gpt-4o` (使用默认 provider)
+- **完整格式**：`anthropic/claude-sonnet-4-5`
 
 ### providers
 
@@ -277,14 +358,19 @@ REST 网关配置。
 | Anthropic API Key | `ANTHROPIC_API_KEY` |
 | OpenRouter API Key | `OPENROUTER_API_KEY` |
 | Groq API Key | `GROQ_API_KEY` |
-| Gemini API Key | `GOOGLE_API_KEY` |
-| vLLM API Base | `VLLM_API_BASE` |
+| Google API Key | `GOOGLE_API_KEY` |
+| MiniMax API Key | `MINIMAX_API_KEY` |
+| DeepSeek API Key | `DEEPSEEK_API_KEY` |
+| Brave Search API Key | `BRAVE_API_KEY` |
+| Telegram Bot Token | `TELEGRAM_BOT_TOKEN` |
 
 示例：
 
 ```bash
 export OPENAI_API_KEY="sk-..."
 export ANTHROPIC_API_KEY="sk-ant-..."
+export MINIMAX_API_KEY="..."
+export DEEPSEEK_API_KEY="..."
 ```
 
 ## 配置文件位置
