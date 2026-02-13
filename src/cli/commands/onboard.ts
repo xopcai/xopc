@@ -44,59 +44,72 @@ function createOnboardCommand(ctx: CLIContext): Command {
     ]))
     .option('--quick', 'Quick setup (model only)')
     .action(async (options) => {
-      console.log('🧙 xopcbot Setup Wizard\n');
-      console.log('═'.repeat(50));
-
-      const workspacePath = ctx.workspacePath;
-      const configPath = ctx.configPath;
-
-      // Use raw config loading to avoid schema defaults being added
-      const existingConfig = loadRawConfig(configPath);
-
-      if (!options.quick) {
-        await setupWorkspace(workspacePath, isInteractive());
-      }
-
-      if (!isInteractive()) {
-        const updatedConfig = await setupNonInteractive(configPath, existingConfig);
-        if (!options.quick) {
-          await setupChannels(configPath, updatedConfig);
+      try {
+        await runOnboard(options, ctx);
+      } catch (error: any) {
+        // Handle user cancellation gracefully (Ctrl+C)
+        if (error?.name === 'ExitPromptError' || error?.code === 'EXIT_PROMPT') {
+          console.log('\n\n👋 Setup cancelled.');
+          process.exit(0);
         }
-        console.log('\n' + '═'.repeat(50));
-        console.log('\n🎉 Setup Complete!\n');
-        return;
-      }
-
-      const updatedConfig = await setupModel(configPath, existingConfig, ctx);
-
-      if (!options.quick) {
-        await setupChannels(configPath, updatedConfig);
-      }
-
-      console.log('\n' + '═'.repeat(50));
-      console.log('\n🎉 Setup Complete!\n');
-
-      if (!options.quick) {
-        console.log('🚀 Next Steps:');
-        console.log('  1. Read BOOTSTRAP.md in your workspace for first-run guidance');
-        console.log('  2. Chat with your assistant: xopcbot agent -i');
-        console.log('');
-      }
-
-      console.log('📝 Usage:');
-      console.log('  xopcbot agent -m "Hello"    # Chat with AI');
-      console.log('  xopcbot agent -i            # Interactive mode');
-      console.log('  xopcbot models list         # List models');
-
-      console.log('\n📁 Files:');
-      console.log('  Config:', configPath);
-      console.log('  Workspace:', workspacePath);
-      if (!options.quick) {
-        console.log('  Bootstrap:', join(workspacePath, 'BOOTSTRAP.md'));
+        throw error;
       }
     });
 
   return cmd;
+}
+
+async function runOnboard(options: { quick?: boolean }, ctx: CLIContext): Promise<void> {
+  console.log('🧙 xopcbot Setup Wizard\n');
+  console.log('═'.repeat(50));
+
+  const workspacePath = ctx.workspacePath;
+  const configPath = ctx.configPath;
+
+  // Use raw config loading to avoid schema defaults being added
+  const existingConfig = loadRawConfig(configPath);
+
+  if (!options.quick) {
+    await setupWorkspace(workspacePath, isInteractive());
+  }
+
+  if (!isInteractive()) {
+    const updatedConfig = await setupNonInteractive(configPath, existingConfig);
+    if (!options.quick) {
+      await setupChannels(configPath, updatedConfig);
+    }
+    console.log('\n' + '═'.repeat(50));
+    console.log('\n🎉 Setup Complete!\n');
+    return;
+  }
+
+  const updatedConfig = await setupModel(configPath, existingConfig, ctx);
+
+  if (!options.quick) {
+    await setupChannels(configPath, updatedConfig);
+  }
+
+  console.log('\n' + '═'.repeat(50));
+  console.log('\n🎉 Setup Complete!\n');
+
+  if (!options.quick) {
+    console.log('🚀 Next Steps:');
+    console.log('  1. Read BOOTSTRAP.md in your workspace for first-run guidance');
+    console.log('  2. Chat with your assistant: xopcbot agent -i');
+    console.log('');
+  }
+
+  console.log('📝 Usage:');
+  console.log('  xopcbot agent -m "Hello"    # Chat with AI');
+  console.log('  xopcbot agent -i            # Interactive mode');
+  console.log('  xopcbot models list         # List models');
+
+  console.log('\n📁 Files:');
+  console.log('  Config:', configPath);
+  console.log('  Workspace:', workspacePath);
+  if (!options.quick) {
+    console.log('  Bootstrap:', join(workspacePath, 'BOOTSTRAP.md'));
+  }
 }
 
 async function setupWorkspace(workspacePath: string, interactive: boolean): Promise<void> {
