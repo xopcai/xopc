@@ -13,16 +13,44 @@ import type { Attachment } from './utils/attachment-utils.js';
 import type { MessageEditor } from './components/MessageEditor.js';
 import type { StreamingMessageContainer } from './components/StreamingMessageContainer.js';
 
-export { i18n, setLanguage, translations } from './utils/i18n.js';
+// Utils
+export { t, i18n, setLanguage, getCurrentLanguage, initI18n, type Language } from './utils/i18n.js';
 export type { Attachment } from './utils/attachment-utils.js';
 export { formatUsage, formatTokenCount, formatCost } from './utils/format.js';
+export { getIcon, loadIcon, getDocumentIcon } from './utils/icons.js';
+
+// Components
 export { MessageEditor } from './components/MessageEditor.js';
-export { MessageList } from './components/MessageList.js';
-export type { MessageList as MessageListComponent } from './components/MessageList.js';
+export { 
+  MessageList, 
+  MessageBubble, 
+  AttachmentRenderer, 
+  UsageBadge 
+} from './components/index.js';
+export type { 
+  Attachment as MessageAttachment, 
+  Message, 
+  MessageContent 
+} from './components/MessageList/types.js';
 export { StreamingMessageContainer } from './components/StreamingMessageContainer.js';
+
+// Dialogs
 export { XopcbotConfig, type ConfigSection, type ConfigField } from './dialogs/ConfigDialog.js';
 export { XopcbotSettings, type SettingsSection, type SettingsField, type SettingsValue } from './dialogs/SettingsDialog.js';
-export { XopcbotGatewayChat, type GatewayClientConfig } from './gateway-chat.js';
+
+// Gateway Chat - with type-safe events
+export { 
+  XopcbotGatewayChat, 
+  type GatewayClientConfig,
+  type GatewayEvent,
+  type ChatPayload,
+  type ConfigPayload,
+  type ErrorPayload,
+  type GatewayResponse,
+  type GatewayRequest
+} from './gateway-chat.js';
+
+// App
 export { XopcbotApp, type Tab, type AppSettings } from './app.js';
 
 @customElement('xopcbot-chat')

@@ -1,0 +1,97 @@
+{
+  "app": {
+    "title": "XOPCBOT Gateway",
+    "brand": "XOPCBOT"
+  },
+  "nav": {
+    "chat": "Chat",
+    "settings": "Settings",
+    "chatSubtitle": "Chat with the gateway agent",
+    "settingsSubtitle": "Configure gateway settings"
+  },
+  "chat": {
+    "welcomeTitle": "Welcome to xopcbot",
+    "welcomeDescription": "Send a message to get started",
+    "emptyState": "No messages yet",
+    "emptyStateDescription": "Start a conversation by typing a message below",
+    "you": "You",
+    "assistant": "Assistant",
+    "tool": "Tool",
+    "thinking": "thinking...",
+    "typeMessage": "Type a message...",
+    "attachFile": "Attach file",
+    "sendMessage": "Send message",
+    "abort": "Abort",
+    "retry": "Retry",
+    "connecting": "Connecting...",
+    "disconnected": "Disconnected",
+    "connectionError": "Connection error",
+    "reconnecting": "Reconnecting in {{seconds}}s...",
+    "online": "Online",
+    "offline": "Offline"
+  },
+  "settings": {
+    "title": "Settings",
+    "save": "Save",
+    "cancel": "Cancel",
+    "close": "Close",
+    "connection": {
+      "title": "Connection",
+      "gatewayUrl": "Gateway URL",
+      "gatewayUrlDesc": "WebSocket URL for the gateway server",
+      "authToken": "Auth Token",
+      "authTokenDesc": "Optional authentication token"
+    },
+    "appearance": {
+      "title": "Appearance",
+      "theme": "Theme",
+      "themeDesc": "Choose your preferred color scheme",
+      "themeSystem": "System",
+      "themeLight": "Light",
+      "themeDark": "Dark"
+    },
+    "chat": {
+      "title": "Chat",
+      "enableAttachments": "Enable Attachments",
+      "enableAttachmentsDesc": "Allow file attachments in chat",
+      "showModelSelector": "Show Model Selector",
+      "showModelSelectorDesc": "Display model selection dropdown",
+      "showThinkingSelector": "Show Thinking Selector",
+      "showThinkingSelectorDesc": "Display thinking level selection"
+    }
+  },
+  "errors": {
+    "noSession": "No session available",
+    "noAgent": "No agent set",
+    "noModel": "No model set",
+    "requestTimeout": "Request timeout",
+    "sendFailed": "Failed to send message",
+    "invalidFileType": "Invalid file type",
+    "fileTooLarge": "File too large (max {{size}})",
+    "readFileFailed": "Failed to read file"
+  },
+  "fileUpload": {
+    "dropHere": "Drop files here",
+    "dragDrop": "Drag and drop files here",
+    "image": "Image",
+    "document": "Document",
+    "pdf": "PDF",
+    "word": "Word",
+    "excel": "Excel",
+    "powerpoint": "PowerPoint",
+    "text": "Text",
+    "code": "Code",
+    "archive": "Archive",
+    "unknown": "Unknown"
+  },
+  "shortcuts": {
+    "settings": "Open settings"
+  },
+  "config": {
+    "title": "Configuration",
+    "save": "Save Configuration",
+    "noResult": "No result",
+    "artifacts": "Artifacts",
+    "showArtifacts": "Show artifacts"
+  }
+}

@@ -7,9 +7,10 @@ import {
   type Tab, 
   titleForTab, 
   subtitleForTab, 
-  renderNavItem,
-  getIcon 
+  renderNavItem
 } from './navigation.js';
+import { getIcon } from './utils/icons.js';
+import { t } from './utils/i18n.js';
 import type { XopcbotGatewayChat } from './gateway-chat.js';
 import type { XopcbotSettings, SettingsSection, SettingsValue } from './dialogs/SettingsDialog.js';
 

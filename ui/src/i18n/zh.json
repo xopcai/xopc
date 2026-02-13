@@ -1,0 +1,97 @@
+{
+  "app": {
+    "title": "XOPCBOT 网关",
+    "brand": "XOPCBOT"
+  },
+  "nav": {
+    "chat": "对话",
+    "settings": "设置",
+    "chatSubtitle": "与网关代理对话",
+    "settingsSubtitle": "配置网关设置"
+  },
+  "chat": {
+    "welcomeTitle": "欢迎使用 xopcbot",
+    "welcomeDescription": "发送消息开始对话",
+    "emptyState": "暂无消息",
+    "emptyStateDescription": "在下方输入消息开始对话",
+    "you": "你",
+    "assistant": "助手",
+    "tool": "工具",
+    "thinking": "思考中...",
+    "typeMessage": "输入消息...",
+    "attachFile": "附加文件",
+    "sendMessage": "发送消息",
+    "abort": "中止",
+    "retry": "重试",
+    "connecting": "连接中...",
+    "disconnected": "已断开",
+    "connectionError": "连接错误",
+    "reconnecting": "{{seconds}}秒后重新连接...",
+    "online": "在线",
+    "offline": "离线"
+  },
+  "settings": {
+    "title": "设置",
+    "save": "保存",
+    "cancel": "取消",
+    "close": "关闭",
+    "connection": {
+      "title": "连接",
+      "gatewayUrl": "网关地址",
+      "gatewayUrlDesc": "网关服务器的 WebSocket 地址",
+      "authToken": "认证令牌",
+      "authTokenDesc": "可选的认证令牌"
+    },
+    "appearance": {
+      "title": "外观",
+      "theme": "主题",
+      "themeDesc": "选择你喜欢的配色方案",
+      "themeSystem": "跟随系统",
+      "themeLight": "浅色",
+      "themeDark": "深色"
+    },
+    "chat": {
+      "title": "对话",
+      "enableAttachments": "启用附件",
+      "enableAttachmentsDesc": "允许在对话中附加文件",
+      "showModelSelector": "显示模型选择器",
+      "showModelSelectorDesc": "显示模型选择下拉框",
+      "showThinkingSelector": "显示思考选择器",
+      "showThinkingSelectorDesc": "显示思考级别选择"
+    }
+  },
+  "errors": {
+    "noSession": "无可用会话",
+    "noAgent": "未设置代理",
+    "noModel": "未设置模型",
+    "requestTimeout": "请求超时",
+    "sendFailed": "发送消息失败",
+    "invalidFileType": "无效的文件类型",
+    "fileTooLarge": "文件过大（最大 {{size}}）",
+    "readFileFailed": "读取文件失败"
+  },
+  "fileUpload": {
+    "dropHere": "拖放文件到此处",
+    "dragDrop": "拖放文件到此处",
+    "image": "图片",
+    "document": "文档",
+    "pdf": "PDF",
+    "word": "Word",
+    "excel": "Excel",
+    "powerpoint": "PowerPoint",
+    "text": "文本",
+    "code": "代码",
+    "archive": "压缩包",
+    "unknown": "未知"
+  },
+  "shortcuts": {
+    "settings": "打开设置"
+  },
+  "config": {
+    "title": "配置",
+    "save": "保存配置",
+    "noResult": "无结果",
+    "artifacts": "产物",
+    "showArtifacts": "显示产物"
+  }
+}
