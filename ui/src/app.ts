@@ -17,7 +17,7 @@ import {
   type ChatRoute
 } from './navigation';
 import { getIcon } from './utils/icons';
-import { t } from './utils/i18n';
+import { t, setLanguage, getCurrentLanguage, initI18n } from './utils/i18n';
 import type { XopcbotGatewayChat } from './gateway-chat';
 
 export type { Tab } from './navigation';
@@ -40,6 +40,7 @@ export class XopcbotApp extends LitElement {
   @state() private _navCollapsed = false;
   @state() private _navMobileOpen = false; // Mobile overlay state
   @state() private _theme: 'light' | 'dark' | 'system' = 'system';
+  @state() private _language: 'en' | 'zh' = 'en';
   @state() private _chatRoute: ChatRoute = { type: 'recent' };
 
   @query('xopcbot-gateway-chat') private _chatElement!: XopcbotGatewayChat;
@@ -51,6 +52,7 @@ export class XopcbotApp extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this._loadTheme();
+    this._loadLanguage();
     this._loadRouteFromHash();
 
     // Listen for system theme changes
@@ -58,6 +60,11 @@ export class XopcbotApp extends LitElement {
       if (this._theme === 'system') {
         this._applyTheme();
       }
+    });
+
+    // Listen for language changes
+    window.addEventListener('languagechange', () => {
+      this.requestUpdate();
     });
 
     // Listen for hash changes (browser back/forward)
@@ -136,6 +143,14 @@ export class XopcbotApp extends LitElement {
     this._applyTheme();
   }
 
+  private _loadLanguage(): void {
+    const saved = localStorage.getItem('xopcbot-language') as 'en' | 'zh' | null;
+    if (saved) {
+      this._language = saved;
+      setLanguage(saved);
+    }
+  }
+
   private _applyTheme(): void {
     const html = document.documentElement;
 
@@ -162,12 +177,82 @@ export class XopcbotApp extends LitElement {
     }));
   }
 
-  private _toggleTheme(): void {
-    const themes: Array<'light' | 'dark' | 'system'> = ['light', 'dark', 'system'];
-    const currentIndex = themes.indexOf(this._theme);
-    this._theme = themes[(currentIndex + 1) % themes.length];
-    localStorage.setItem('xopcbot-theme', this._theme);
+  private _setTheme(theme: 'light' | 'dark' | 'system'): void {
+    this._theme = theme;
+    localStorage.setItem('xopcbot-theme', theme);
     this._applyTheme();
+  }
+
+  private _setLanguage(lang: 'en' | 'zh'): void {
+    this._language = lang;
+    setLanguage(lang);
+    localStorage.setItem('xopcbot-language', lang);
+    this.requestUpdate();
+  }
+
+  private _renderThemeToggle(): unknown {
+    return html`
+      <div class="pill-toggle">
+        <button
+          class="pill-btn ${this._theme === 'light' ? 'active' : ''}"
+          @click=${() => this._setTheme('light')}
+          title="Light"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="12" cy="12" r="5"></circle>
+            <line x1="12" y1="1" x2="12" y2="3"></line>
+            <line x1="12" y1="21" x2="12" y2="23"></line>
+            <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+            <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+            <line x1="1" y1="12" x2="3" y2="12"></line>
+            <line x1="21" y1="12" x2="23" y2="12"></line>
+            <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+            <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+          </svg>
+        </button>
+        <button
+          class="pill-btn ${this._theme === 'dark' ? 'active' : ''}"
+          @click=${() => this._setTheme('dark')}
+          title="Dark"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+          </svg>
+        </button>
+        <button
+          class="pill-btn ${this._theme === 'system' ? 'active' : ''}"
+          @click=${() => this._setTheme('system')}
+          title="System"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+            <line x1="8" y1="21" x2="16" y2="21"></line>
+            <line x1="12" y1="17" x2="12" y2="21"></line>
+          </svg>
+        </button>
+      </div>
+    `;
+  }
+
+  private _renderLanguageToggle(): unknown {
+    return html`
+      <div class="pill-toggle">
+        <button
+          class="pill-btn ${this._language === 'en' ? 'active' : ''}"
+          @click=${() => this._setLanguage('en')}
+          title="English"
+        >
+          EN
+        </button>
+        <button
+          class="pill-btn ${this._language === 'zh' ? 'active' : ''}"
+          @click=${() => this._setLanguage('zh')}
+          title="中文"
+        >
+          中
+        </button>
+      </div>
+    `;
   }
 
   private _toggleNav(): void {
@@ -221,13 +306,8 @@ export class XopcbotApp extends LitElement {
           </div>
 
           <div class="topbar-status">
-            <button
-              class="theme-toggle"
-              @click=${this._toggleTheme}
-              title="Toggle theme (current: ${this._theme})"
-            >
-              ${this._renderThemeIcon()}
-            </button>
+            ${this._renderLanguageToggle()}
+            ${this._renderThemeToggle()}
           </div>
         </header>
 
@@ -280,39 +360,6 @@ export class XopcbotApp extends LitElement {
           </main>
         </div>
       </div>
-    `;
-  }
-
-  private _renderThemeIcon(): unknown {
-    if (this._theme === 'light') {
-      return html`
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="12" cy="12" r="5"></circle>
-          <line x1="12" y1="1" x2="12" y2="3"></line>
-          <line x1="12" y1="21" x2="12" y2="23"></line>
-          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
-          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
-          <line x1="1" y1="12" x2="3" y2="12"></line>
-          <line x1="21" y1="12" x2="23" y2="12"></line>
-          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
-          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
-        </svg>
-      `;
-    }
-    if (this._theme === 'dark') {
-      return html`
-        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
-        </svg>
-      `;
-    }
-    // System
-    return html`
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
-        <line x1="8" y1="21" x2="16" y2="21"></line>
-        <line x1="12" y1="17" x2="12" y2="21"></line>
-      </svg>
     `;
   }
 

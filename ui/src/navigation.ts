@@ -58,49 +58,52 @@ export function getChatHash(route: ChatRoute): string {
   }
 }
 
-const TAB_CONFIG: Record<Tab, { label: string; icon: string; subtitle: string }> = {
-  chat: {
-    label: t('nav.chat'),
-    icon: 'messageSquare',
-    subtitle: t('nav.chatSubtitle'),
-  },
-  sessions: {
-    label: t('nav.sessions'),
-    icon: 'folderOpen',
-    subtitle: t('nav.sessionsSubtitle'),
-  },
-  subagents: {
-    label: t('nav.subagents'),
-    icon: 'bot',
-    subtitle: t('nav.subagentsSubtitle'),
-  },
-  cron: {
-    label: t('nav.cron'),
-    icon: 'clock',
-    subtitle: t('nav.cronSubtitle'),
-  },
-  logs: {
-    label: t('nav.logs'),
-    icon: 'fileText',
-    subtitle: t('nav.logsSubtitle'),
-  },
-  settings: {
-    label: t('nav.settings'),
-    icon: 'settings',
-    subtitle: t('nav.settingsSubtitle'),
-  },
-};
+// Get tab config dynamically (translates each time)
+function getTabConfig(): Record<Tab, { label: string; icon: string; subtitle: string }> {
+  return {
+    chat: {
+      label: t('nav.chat'),
+      icon: 'messageSquare',
+      subtitle: t('nav.chatSubtitle'),
+    },
+    sessions: {
+      label: t('nav.sessions'),
+      icon: 'folderOpen',
+      subtitle: t('nav.sessionsSubtitle'),
+    },
+    subagents: {
+      label: t('nav.subagents'),
+      icon: 'bot',
+      subtitle: t('nav.subagentsSubtitle'),
+    },
+    cron: {
+      label: t('nav.cron'),
+      icon: 'clock',
+      subtitle: t('nav.cronSubtitle'),
+    },
+    logs: {
+      label: t('nav.logs'),
+      icon: 'fileText',
+      subtitle: t('nav.logsSubtitle'),
+    },
+    settings: {
+      label: t('nav.settings'),
+      icon: 'settings',
+      subtitle: t('nav.settingsSubtitle'),
+    },
+  };
+}
 
 export function titleForTab(tab: Tab): string {
-  return TAB_CONFIG[tab]?.label || 'Unknown';
+  return getTabConfig()[tab]?.label || 'Unknown';
 }
 
 export function subtitleForTab(tab: Tab): string {
-  return TAB_CONFIG[tab]?.subtitle || '';
+  return getTabConfig()[tab]?.subtitle || '';
 }
 
 export function iconForTab(tab: Tab): string {
-  return TAB_CONFIG[tab]?.icon || 'folder';
+  return getTabConfig()[tab]?.icon || 'folder';
 }
 
 // Render navigation item
@@ -109,7 +112,7 @@ export function renderNavItem(
   isActive: boolean,
   onClick: () => void
 ): TemplateResult {
-  const config = TAB_CONFIG[tab];
+  const config = getTabConfig()[tab];
   
   return html`
     <button 
