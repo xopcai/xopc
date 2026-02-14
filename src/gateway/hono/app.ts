@@ -257,6 +257,101 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json(metrics);
   });
 
+  // ========== Cron REST API (/api/cron) - Frontend compatibility ==========
+
+  // GET /api/cron - List all jobs
+  authenticated.get('/api/cron', async (c) => {
+    const jobs = await service.cronServiceInstance.listJobs();
+    return c.json({ jobs });
+  });
+
+  // GET /api/cron/:id - Get single job
+  authenticated.get('/api/cron/:id', async (c) => {
+    const id = c.req.param('id');
+    const job = await service.cronServiceInstance.getJob(id);
+    if (!job) {
+      return c.json({ error: 'Job not found' }, 404);
+    }
+    return c.json({ job });
+  });
+
+  // POST /api/cron - Add new job
+  authenticated.post('/api/cron', async (c) => {
+    const body = await c.req.json();
+    const { schedule, message, name, timezone } = body;
+
+    if (!schedule || !message) {
+      return c.json({ error: 'Missing required fields: schedule, message' }, 400);
+    }
+
+    try {
+      const result = await service.cronServiceInstance.addJob(schedule, message, { name, timezone });
+      return c.json(result, 201);
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to add job' }, 400);
+    }
+  });
+
+  // PATCH /api/cron/:id - Update job
+  authenticated.patch('/api/cron/:id', async (c) => {
+    const id = c.req.param('id');
+    const body = await c.req.json();
+
+    try {
+      const result = await service.cronServiceInstance.updateJob(id, body);
+      return c.json({ updated: result });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to update job' }, 400);
+    }
+  });
+
+  // DELETE /api/cron/:id - Remove job
+  authenticated.delete('/api/cron/:id', async (c) => {
+    const id = c.req.param('id');
+    const result = await service.cronServiceInstance.removeJob(id);
+    return c.json({ removed: result });
+  });
+
+  // POST /api/cron/:id/toggle - Toggle job enabled
+  authenticated.post('/api/cron/:id/toggle', async (c) => {
+    const id = c.req.param('id');
+    const body = await c.req.json();
+    const { enabled } = body;
+
+    if (typeof enabled !== 'boolean') {
+      return c.json({ error: 'Missing required field: enabled' }, 400);
+    }
+
+    const result = await service.cronServiceInstance.toggleJob(id, enabled);
+    return c.json({ toggled: result });
+  });
+
+  // POST /api/cron/:id/run - Trigger job manually
+  authenticated.post('/api/cron/:id/run', async (c) => {
+    const id = c.req.param('id');
+
+    try {
+      await service.cronServiceInstance.runJobNow(id);
+      return c.json({ triggered: true });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to run job' }, 400);
+    }
+  });
+
+  // GET /api/cron/:id/history - Get job execution history
+  authenticated.get('/api/cron/:id/history', async (c) => {
+    const id = c.req.param('id');
+    const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!) : 10;
+    const history = service.cronServiceInstance.getJobHistory(id, limit);
+    return c.json({ history });
+  });
+
+  // GET /api/cron/metrics - Get cron metrics
+  authenticated.get('/api/cron/metrics', async (c) => {
+    const metrics = await service.cronServiceInstance.getMetrics();
+    return c.json(metrics);
+  });
+
   // ========== Session REST API ==========
   
   // POST /sessions - Create new session
