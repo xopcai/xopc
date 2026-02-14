@@ -49,11 +49,8 @@ export class CronManager extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     if (this.config?.url) {
-      // Convert WebSocket URL to HTTP URL for REST API
-      let httpUrl = this.config.url
-        .replace(/^ws:/i, 'http:')
-        .replace(/^wss:/i, 'https:')
-        .replace(/\/ws$/i, '');
+      // Use base HTTP URL directly (no WS conversion needed)
+      const httpUrl = this.config.url.replace(/\/+$/, '');
       this._api = new CronAPIClient(httpUrl, this.config.token);
       this._loadJobs();
       this._loadMetrics();

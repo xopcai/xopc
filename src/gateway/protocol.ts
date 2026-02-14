@@ -1,29 +1,32 @@
-// Gateway protocol types - Request/Response/Event format
-export interface GatewayRequest {
-  type: 'req';
-  id: string;
-  method: string;
-  params: Record<string, unknown>;
-}
+/**
+ * Gateway protocol types — Streamable HTTP / SSE transport.
+ *
+ * All client → server communication uses standard HTTP (POST/GET/PATCH/DELETE).
+ * Server → client streaming uses SSE (text/event-stream).
+ */
 
-export interface GatewayResponse {
-  type: 'res';
-  id: string;
+// ---------- HTTP response envelope ----------
+
+export interface ApiResponse<T = unknown> {
   ok: boolean;
-  payload?: unknown;
-  error?: {
-    code: string;
-    message: string;
-  };
+  payload?: T;
+  error?: ApiError;
 }
 
-export interface GatewayEvent {
-  type: 'event';
-  event: string;
-  payload: unknown;
+export interface ApiError {
+  code: string;
+  message: string;
 }
 
-export type GatewayMessage = GatewayRequest | GatewayResponse | GatewayEvent;
+// ---------- SSE event shape ----------
+
+export interface SSEEvent {
+  id: string;
+  event: string;        // e.g. "status", "token", "error", "result", "config.reload"
+  data: unknown;
+}
+
+// ---------- Gateway config ----------
 
 export interface GatewayConfig {
   host: string;
@@ -32,38 +35,12 @@ export interface GatewayConfig {
   verbose?: boolean;
 }
 
-export type RequestHandler = (
-  params: Record<string, unknown>,
-  ctx: RequestContext
-) => Promise<unknown> | AsyncGenerator<GatewayEvent, unknown, unknown>;
+// ---------- Helpers ----------
 
-export interface RequestContext {
-  clientId: string;
-  sendEvent: (event: GatewayEvent) => void;
-  isAuthenticated: boolean;
+export function apiOk<T>(payload: T): ApiResponse<T> {
+  return { ok: true, payload };
 }
 
-export function isGatewayRequest(msg: unknown): msg is GatewayRequest {
-  return (
-    typeof msg === 'object' &&
-    msg !== null &&
-    (msg as GatewayRequest).type === 'req' &&
-    typeof (msg as GatewayRequest).id === 'string' &&
-    typeof (msg as GatewayRequest).method === 'string'
-  );
-}
-
-export function createResponse(
-  id: string,
-  payload: unknown,
-  error?: { code: string; message: string }
-): GatewayResponse {
-  if (error) {
-    return { type: 'res', id, ok: false, error };
-  }
-  return { type: 'res', id, ok: true, payload };
-}
-
-export function createEvent(event: string, payload: unknown): GatewayEvent {
-  return { type: 'event', event, payload };
+export function apiError(code: string, message: string): ApiResponse<never> {
+  return { ok: false, error: { code, message } };
 }

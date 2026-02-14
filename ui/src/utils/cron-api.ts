@@ -85,13 +85,13 @@ export class CronAPIClient {
   // ========== Cron API Methods ==========
 
   async listJobs(): Promise<CronJob[]> {
-    const result = await this.request<{ jobs: CronJob[] }>('GET', '/cron');
+    const result = await this.request<{ jobs: CronJob[] }>('GET', '/api/cron');
     return result.jobs || [];
   }
 
   async getJob(id: string): Promise<CronJob | null> {
     try {
-      const result = await this.request<{ job: CronJob }>('GET', `/cron/${id}`);
+      const result = await this.request<{ job: CronJob }>('GET', `/api/cron/${id}`);
       return result.job || null;
     } catch (err) {
       if (err instanceof Error && err.message.includes('404')) {
@@ -102,7 +102,7 @@ export class CronAPIClient {
   }
 
   async addJob(schedule: string, message: string, options?: { name?: string; timezone?: string }): Promise<{ id: string; schedule: string }> {
-    return await this.request<{ id: string; schedule: string }>('POST', '/cron', {
+    return await this.request<{ id: string; schedule: string }>('POST', '/api/cron', {
       schedule,
       message,
       ...options,
@@ -110,30 +110,30 @@ export class CronAPIClient {
   }
 
   async updateJob(id: string, updates: CronJobUpdate): Promise<boolean> {
-    const result = await this.request<{ updated: boolean }>('PATCH', `/cron/${id}`, updates);
+    const result = await this.request<{ updated: boolean }>('PATCH', `/api/cron/${id}`, updates);
     return result.updated;
   }
 
   async removeJob(id: string): Promise<boolean> {
-    const result = await this.request<{ removed: boolean }>('DELETE', `/cron/${id}`);
+    const result = await this.request<{ removed: boolean }>('DELETE', `/api/cron/${id}`);
     return result.removed;
   }
 
   async toggleJob(id: string, enabled: boolean): Promise<boolean> {
-    const result = await this.request<{ toggled: boolean }>('POST', `/cron/${id}/toggle`, { enabled });
+    const result = await this.request<{ toggled: boolean }>('POST', `/api/cron/${id}/toggle`, { enabled });
     return result.toggled;
   }
 
   async runJob(id: string): Promise<void> {
-    await this.request<{ triggered: boolean }>('POST', `/cron/${id}/run`);
+    await this.request<{ triggered: boolean }>('POST', `/api/cron/${id}/run`);
   }
 
   async getHistory(id: string, limit = 10): Promise<CronJobExecution[]> {
-    const result = await this.request<{ history: CronJobExecution[] }>('GET', `/cron/${id}/history?limit=${limit}`);
+    const result = await this.request<{ history: CronJobExecution[] }>('GET', `/api/cron/${id}/history?limit=${limit}`);
     return result.history || [];
   }
 
   async getMetrics(): Promise<CronMetrics> {
-    return await this.request<CronMetrics>('GET', '/cron/metrics');
+    return await this.request<CronMetrics>('GET', '/api/cron/metrics');
   }
 }

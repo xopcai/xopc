@@ -1,2 +1,2 @@
 export { createHonoApp, type HonoAppConfig } from './app.js';
-export { createWebSocketHandler, type WebSocketHandlerConfig } from './websocket.js';
+export { createAgentSSEHandler, createSendHandler, createEventsSSEHandler, type SSEHandlerConfig } from './sse.js';

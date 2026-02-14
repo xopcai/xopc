@@ -50,11 +50,7 @@ export class SessionManager extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     if (this.config?.url) {
-      // Convert WebSocket URL to HTTP URL for REST API
-      let httpUrl = this.config.url
-        .replace(/^ws:/i, 'http:')
-        .replace(/^wss:/i, 'https:')
-        .replace(/\/ws$/i, '');
+      const httpUrl = this.config.url.replace(/\/+$/, '');
       this._api = new SessionAPIClient(httpUrl, this.config.token);
       this._loadSessions();
       this._loadStats();
@@ -63,7 +59,6 @@ export class SessionManager extends LitElement {
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
-    // No WebSocket to disconnect anymore
   }
 
   private async _loadSessions(reset = false): Promise<void> {

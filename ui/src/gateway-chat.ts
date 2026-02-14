@@ -7,7 +7,8 @@ import { t, initI18n } from './utils/i18n';
 import type { Attachment } from './utils/attachment-utils';
 import type { MessageEditor } from './components/MessageEditor';
 
-// Type-safe Gateway Events using discriminated unions
+// ---------- Types ----------
+
 export type ChatPayload = {
   type?: 'status' | 'token' | 'error';
   content?: string;
@@ -18,43 +19,13 @@ export type ChatPayload = {
   errorMessage?: string;
 };
 
-export type ConfigPayload = {
-  raw: string;
-  config: unknown;
-  valid: boolean;
-  issues?: Array<{ path: string; message: string }>;
-};
-
 export type ErrorPayload = {
   code: string;
   message: string;
 };
 
-export type GatewayEvent =
-  | { type: 'event'; event: 'chat'; payload: ChatPayload }
-  | { type: 'event'; event: 'config'; payload: ConfigPayload }
-  | { type: 'event'; event: 'error'; payload: ErrorPayload }
-  | { type: 'event'; event: string; payload: unknown };
-
-export interface GatewayResponse<T = unknown> {
-  type: 'res';
-  id: string;
-  ok: boolean;
-  payload?: T;
-  error?: {
-    code: string;
-    message: string;
-  };
-}
-
-export interface GatewayRequest {
-  type: 'req';
-  id: string;
-  method: string;
-  params: Record<string, unknown>;
-}
-
 export type GatewayClientConfig = {
+  /** Base HTTP URL, e.g. "http://localhost:3000" */
   url: string;
   token?: string;
   autoReconnect?: boolean;
@@ -70,6 +41,22 @@ interface Message {
 }
 
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error';
+
+// ---------- Helpers ----------
+
+/** Build an HTTP URL from the config (strip trailing slashes, ensure /api prefix). */
+function apiUrl(base: string, path: string): string {
+  const clean = base.replace(/\/+$/, '');
+  return `${clean}${path}`;
+}
+
+function authHeaders(token?: string): Record<string, string> {
+  const h: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) h['Authorization'] = `Bearer ${token}`;
+  return h;
+}
+
+// ---------- Component ----------
 
 @customElement('xopcbot-gateway-chat')
 export class XopcbotGatewayChat extends LitElement {
@@ -88,12 +75,10 @@ export class XopcbotGatewayChat extends LitElement {
   @state() private _reconnectCount = 0;
   @state() private _reconnectDelay = 0;
 
-  private _ws?: WebSocket;
-  private _pendingRequests: Map<string, {
-    resolve: (value: unknown) => void;
-    reject: (reason: unknown) => void;
-    timeout: ReturnType<typeof setTimeout>;
-  }> = new Map();
+  /** SSE event source for server-pushed events */
+  private _eventSource?: EventSource;
+  /** AbortController for the current agent POST request */
+  private _agentAbort?: AbortController;
   private _reconnectTimer?: number;
   private _shouldReconnect = true;
   private _isSending = false;
@@ -118,8 +103,6 @@ export class XopcbotGatewayChat extends LitElement {
   override async connectedCallback(): Promise<void> {
     super.connectedCallback();
     this.classList.add('chat-container');
-    
-    // Initialize i18n
     await initI18n('en');
   }
 
@@ -137,89 +120,93 @@ export class XopcbotGatewayChat extends LitElement {
     this.disconnect();
   }
 
-  // WebSocket Connection with Reconnection
+  // ========== Connection (SSE for server-push) ==========
+
   connect(): void {
     if (!this.config || this._connectionState === 'connecting') return;
-
-    const url = new URL(this.config.url);
-    if (this.config.token) {
-      url.searchParams.set('token', this.config.token);
-    }
 
     this._connectionState = 'connecting';
     this._error = null;
     this.requestUpdate();
-    
+
     try {
-      this._ws = new WebSocket(url.toString());
-      
-      this._ws.onopen = () => {
+      const eventsUrl = apiUrl(this.config.url, '/api/events');
+      const url = new URL(eventsUrl);
+      if (this.config.token) url.searchParams.set('token', this.config.token);
+
+      this._eventSource = new EventSource(url.toString());
+
+      this._eventSource.addEventListener('connected', () => {
         this._connectionState = 'connected';
         this._error = null;
         this._reconnectCount = 0;
         this._reconnectDelay = 0;
         this._clearReconnectTimer();
         this.requestUpdate();
-      };
-      
-      this._ws.onclose = (e) => {
-        const wasConnected = this._connectionState === 'connected';
-        this._connectionState = 'disconnected';
+      });
 
-        // Reset streaming states on disconnect
-        if (this._isStreaming) {
-          this._isStreaming = false;
-          this._isSending = false;
-          this._streamingContent = '';
-          this._streamingMessage = null;
-        }
-
-        if (e.code !== 1000 && e.code !== 1001 && this._shouldReconnect && this._autoReconnect) {
-          if (wasConnected || this._reconnectCount < this._maxReconnectAttempts) {
-            this._scheduleReconnect();
-          } else {
-            this._error = t('errors.connectionError');
-            this._connectionState = 'error';
-          }
-        }
-        this.requestUpdate();
-      };
-      
-      this._ws.onerror = () => {
-        this._error = t('errors.connectionError');
-        this.requestUpdate();
-      };
-      
-      this._ws.onmessage = (e) => {
+      this._eventSource.addEventListener('config.reload', (e: MessageEvent) => {
         try {
-          const frame = JSON.parse(e.data) as GatewayResponse | GatewayEvent;
-          this._handleMessage(frame);
-        } catch (err) {
-          // Ignore parse errors
+          const data = JSON.parse(e.data);
+          this.dispatchEvent(new CustomEvent('config-reload', { detail: data }));
+        } catch { /* ignore */ }
+      });
+
+      this._eventSource.addEventListener('channels.status', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          this.dispatchEvent(new CustomEvent('channels-status', { detail: data }));
+        } catch { /* ignore */ }
+      });
+
+      this._eventSource.addEventListener('message.sent', (e: MessageEvent) => {
+        try {
+          const data = JSON.parse(e.data);
+          this.dispatchEvent(new CustomEvent('message-sent', { detail: data }));
+        } catch { /* ignore */ }
+      });
+
+      this._eventSource.onerror = () => {
+        if (this._connectionState === 'connected' || this._connectionState === 'connecting') {
+          this._connectionState = 'disconnected';
+
+          if (this._isStreaming) {
+            this._isStreaming = false;
+            this._isSending = false;
+            this._streamingContent = '';
+            this._streamingMessage = null;
+          }
+
+          if (this._shouldReconnect && this._autoReconnect) {
+            if (this._reconnectCount < this._maxReconnectAttempts) {
+              this._scheduleReconnect();
+            } else {
+              this._error = t('errors.connectionError');
+              this._connectionState = 'error';
+            }
+          }
+          this.requestUpdate();
         }
       };
     } catch (err) {
-      console.error('[GatewayChat] Failed to create WebSocket:', err);
+      console.error('[GatewayChat] Failed to create EventSource:', err);
       this._connectionState = 'error';
       this._error = t('errors.connectionError');
       this.requestUpdate();
     }
   }
 
-  // Exponential backoff reconnection
   private _scheduleReconnect(): void {
     if (!this._shouldReconnect || !this._autoReconnect) return;
 
     this._reconnectCount++;
     this._connectionState = 'reconnecting';
 
-    // Exponential backoff: 1s, 2s, 4s, 8s... max 30s
     this._reconnectDelay = Math.min(
       this._baseReconnectDelay * Math.pow(2, this._reconnectCount - 1),
-      30000
+      30000,
     );
 
-    // Update countdown every second
     const updateCountdown = () => {
       if (this._reconnectDelay > 0 && this._connectionState === 'reconnecting') {
         this._reconnectDelay -= 1000;
@@ -232,9 +219,7 @@ export class XopcbotGatewayChat extends LitElement {
     updateCountdown();
 
     this._reconnectTimer = window.setTimeout(() => {
-      if (this._shouldReconnect) {
-        this.connect();
-      }
+      if (this._shouldReconnect) this.connect();
     }, this._reconnectDelay);
 
     this.requestUpdate();
@@ -250,12 +235,13 @@ export class XopcbotGatewayChat extends LitElement {
   disconnect(): void {
     this._shouldReconnect = false;
     this._clearReconnectTimer();
-    this._ws?.close(1000, 'Client disconnect');
-    this._ws = undefined;
+    this._eventSource?.close();
+    this._eventSource = undefined;
+    this._agentAbort?.abort();
+    this._agentAbort = undefined;
     this._connectionState = 'disconnected';
   }
 
-  // Manual reconnect
   reconnect(): void {
     this._shouldReconnect = true;
     this._reconnectCount = 0;
@@ -264,136 +250,15 @@ export class XopcbotGatewayChat extends LitElement {
     setTimeout(() => this.connect(), 100);
   }
 
-  private _handleMessage(frame: GatewayResponse | GatewayEvent): void {
-    // Handle response
-    if (frame.type === 'res') {
-      const pending = this._pendingRequests.get(frame.id);
-      if (pending) {
-        clearTimeout(pending.timeout);
-        this._pendingRequests.delete(frame.id);
-        if (frame.ok) {
-          pending.resolve(frame.payload);
-          // If still streaming when response arrives, finalize the message
-          // This handles cases where server sends 'res' without 'status: complete'
-          if (this._isStreaming) {
-            this._finalizeMessage();
-          }
-        } else {
-          pending.reject(new Error(frame.error?.message || 'Request failed'));
-          // Reset streaming state on error response
-          this._isStreaming = false;
-          this._isSending = false;
-          this._streamingMessage = null;
-          this.requestUpdate();
-        }
-      }
-      return;
-    }
+  // ========== Agent messaging (POST + SSE response) ==========
 
-    // Handle event with type safety
-    if (frame.type === 'event') {
-      this._handleEvent(frame as GatewayEvent);
-    }
-  }
-
-  private _handleEvent(event: GatewayEvent): void {
-    switch (event.event) {
-      case 'agent':
-      case 'chat':
-        this._handleChatEvent(event.payload as ChatPayload);
-        break;
-      case 'config':
-        // Handle config event
-        break;
-      case 'error':
-        const errorPayload = event.payload as ErrorPayload;
-        this._error = errorPayload.message;
-        break;
-    }
-    this.requestUpdate();
-  }
-
-  private _handleChatEvent(data: ChatPayload): void {
-    if (data.type === 'status') {
-      // Agent started
-      this._isStreaming = true;
-    } else if (data.type === 'token' && data.content) {
-      this._updateStreamingMessage(data.content);
-    } else if (data.status === 'ok' || data.status === 'complete') {
-      this._finalizeMessage();
-    } else if (data.status === 'error') {
-      this._error = data.errorMessage || t('errors.sendFailed');
-      // Reset all states on error
-      this._isStreaming = false;
-      this._isSending = false;
-      this._streamingMessage = null;
-      this.requestUpdate();
-    }
-  }
-
-  private _updateStreamingMessage(content: string): void {
-    if (this._streamingMessage) {
-      // Update existing streaming message
-      const textBlock = this._streamingMessage.content.find(b => b.type === 'text');
-      if (textBlock) {
-        textBlock.text = (textBlock.text || '') + content;
-      } else {
-        this._streamingMessage.content.push({ type: 'text', text: content });
-      }
-    } else {
-      // Create new streaming message
-      this._streamingMessage = {
-        role: 'assistant',
-        content: [{ type: 'text', text: content }],
-        timestamp: Date.now(),
-      };
-    }
-    this._isStreaming = true;
-    this._streamingContent = content;
-    this.requestUpdate();
-  }
-
-  private _finalizeMessage(): void {
-    // Add completed streaming message to main messages
-    if (this._streamingMessage) {
-      this._messages = [...this._messages, this._streamingMessage];
-      this._streamingMessage = null;
-    }
-    this._isStreaming = false;
-    this._streamingContent = '';
-    this._isSending = false;
-    this.requestUpdate();
-  }
-
-  private _sendRaw(request: GatewayRequest): void {
-    if (this._ws?.readyState !== WebSocket.OPEN) return;
-    this._ws.send(JSON.stringify(request));
-  }
-
-  private _request<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-    return new Promise<unknown>((resolve, reject) => {
-      const id = crypto.randomUUID();
-      const request: GatewayRequest = { type: 'req', id, method, params };
-
-      const timeout = setTimeout(() => {
-        this._pendingRequests.delete(id);
-        reject(new Error(t('errors.requestTimeout')));
-      }, 30000);
-
-      this._pendingRequests.set(id, { resolve: resolve as (value: unknown) => void, reject, timeout });
-      this._sendRaw(request);
-    }) as Promise<T>;
-  }
-
-  // Public API for external components
-  public request<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
-    return this._request<T>(method, params);
-  }
-
-  async sendMessage(content: string, attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>): Promise<void> {
-    // Prevent double-sending
+  async sendMessage(
+    content: string,
+    attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
+  ): Promise<void> {
     if (this._isSending || this._isStreaming) return;
     if (!content.trim() && !attachments?.length) return;
+    if (!this.config) return;
 
     this._isSending = true;
 
@@ -409,24 +274,207 @@ export class XopcbotGatewayChat extends LitElement {
     ];
     this.requestUpdate();
 
-    // Send to gateway
     try {
-      await this._request('agent', {
-        message: content,
-        channel: 'gateway',
-        chatId: 'default',
-        attachments: attachments,
+      this._agentAbort = new AbortController();
+      const url = apiUrl(this.config.url, '/api/agent');
+      const headers = {
+        ...authHeaders(this.config.token),
+        Accept: 'text/event-stream',
+      };
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({
+          message: content,
+          channel: 'gateway',
+          chatId: 'default',
+          attachments,
+        }),
+        signal: this._agentAbort.signal,
       });
+
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        throw new Error(body.error?.message || `HTTP ${res.status}`);
+      }
+
+      const contentType = res.headers.get('Content-Type') || '';
+
+      if (contentType.includes('text/event-stream') && res.body) {
+        // --- SSE stream ---
+        await this._consumeSSEStream(res.body);
+      } else {
+        // --- JSON fallback ---
+        const json = await res.json();
+        if (json.ok && json.payload?.content) {
+          this._updateStreamingMessage(json.payload.content);
+          this._finalizeMessage();
+        }
+      }
     } catch (error) {
+      if ((error as Error).name === 'AbortError') return; // user aborted
       this._error = error instanceof Error ? error.message : t('errors.sendFailed');
+      this._isStreaming = false;
+      this._isSending = false;
+      this._streamingMessage = null;
       this.requestUpdate();
     } finally {
+      this._agentAbort = undefined;
       this._isSending = false;
     }
   }
 
+  /** Consume a fetch ReadableStream as SSE events. */
+  private async _consumeSSEStream(body: ReadableStream<Uint8Array>): Promise<void> {
+    const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += value;
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || ''; // keep incomplete line
+
+        let currentEvent = '';
+        let currentData = '';
+
+        for (const line of lines) {
+          if (line.startsWith('event:')) {
+            currentEvent = line.slice(6).trim();
+          } else if (line.startsWith('data:')) {
+            currentData += line.slice(5).trim();
+          } else if (line === '') {
+            // End of SSE event
+            if (currentData) {
+              this._handleSSEEvent(currentEvent, currentData);
+            }
+            currentEvent = '';
+            currentData = '';
+          }
+        }
+      }
+
+      // Process remaining buffer
+      if (buffer.trim()) {
+        const lines = buffer.split('\n');
+        let currentEvent = '';
+        let currentData = '';
+        for (const line of lines) {
+          if (line.startsWith('event:')) currentEvent = line.slice(6).trim();
+          else if (line.startsWith('data:')) currentData += line.slice(5).trim();
+          else if (line === '' && currentData) {
+            this._handleSSEEvent(currentEvent, currentData);
+            currentEvent = '';
+            currentData = '';
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+    }
+  }
+
+  private _handleSSEEvent(event: string, data: string): void {
+    try {
+      const parsed = JSON.parse(data);
+
+      switch (event) {
+        case 'status':
+          this._isStreaming = true;
+          this.requestUpdate();
+          break;
+
+        case 'token':
+          if (parsed.content) {
+            this._updateStreamingMessage(parsed.content);
+          }
+          break;
+
+        case 'error':
+          this._error = parsed.content || parsed.error?.message || t('errors.sendFailed');
+          this._isStreaming = false;
+          this._isSending = false;
+          this._streamingMessage = null;
+          this.requestUpdate();
+          break;
+
+        case 'result':
+          this._finalizeMessage();
+          break;
+
+        default:
+          // Unknown event type — treat as token if it has content
+          if (parsed.content) {
+            this._updateStreamingMessage(parsed.content);
+          }
+          break;
+      }
+    } catch {
+      // Ignore parse errors
+    }
+  }
+
+  // ========== Streaming message helpers ==========
+
+  private _updateStreamingMessage(content: string): void {
+    if (this._streamingMessage) {
+      const textBlock = this._streamingMessage.content.find(b => b.type === 'text');
+      if (textBlock) {
+        textBlock.text = (textBlock.text || '') + content;
+      } else {
+        this._streamingMessage.content.push({ type: 'text', text: content });
+      }
+    } else {
+      this._streamingMessage = {
+        role: 'assistant',
+        content: [{ type: 'text', text: content }],
+        timestamp: Date.now(),
+      };
+    }
+    this._isStreaming = true;
+    this._streamingContent = content;
+    this.requestUpdate();
+  }
+
+  private _finalizeMessage(): void {
+    if (this._streamingMessage) {
+      this._messages = [...this._messages, this._streamingMessage];
+      this._streamingMessage = null;
+    }
+    this._isStreaming = false;
+    this._streamingContent = '';
+    this._isSending = false;
+    this.requestUpdate();
+  }
+
+  // ========== Public HTTP API ==========
+
+  /** Generic REST request helper for external components. */
+  public async request<T>(method: string, path: string, body?: unknown): Promise<T> {
+    if (!this.config) throw new Error('Not configured');
+
+    const url = apiUrl(this.config.url, path);
+    const res = await fetch(url, {
+      method,
+      headers: authHeaders(this.config.token),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: { message: `HTTP ${res.status}` } }));
+      throw new Error(err.error?.message || `HTTP ${res.status}`);
+    }
+
+    return res.json() as Promise<T>;
+  }
+
   abort(): void {
-    // Gateway doesn't support abort yet
+    this._agentAbort?.abort();
+    this._agentAbort = undefined;
     this._isStreaming = false;
     this._isSending = false;
     this._streamingContent = '';
@@ -434,7 +482,7 @@ export class XopcbotGatewayChat extends LitElement {
     this.requestUpdate();
   }
 
-  // Public API
+  // Public getters
   public get connectionState(): ConnectionState {
     return this._connectionState;
   }
@@ -447,6 +495,8 @@ export class XopcbotGatewayChat extends LitElement {
     this._messages = [];
     this.requestUpdate();
   }
+
+  // ========== Render ==========
 
   override render(): unknown {
     return html`
@@ -499,7 +549,6 @@ export class XopcbotGatewayChat extends LitElement {
   }
 
   private _renderIcon(name: string): unknown {
-    // Simple inline icon rendering
     const icons: Record<string, unknown> = {
       alertCircle: html`
         <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -533,8 +582,6 @@ export class XopcbotGatewayChat extends LitElement {
 
   private _renderMessage(message: Message): unknown {
     const isUser = message.role === 'user';
-
-    // Skip empty messages
     const hasContent = message.content?.some((block) => block.text);
     if (!hasContent && !message.attachments?.length) return null;
 
@@ -565,17 +612,13 @@ export class XopcbotGatewayChat extends LitElement {
     
     return html`
       <div class="message-item">
-        <div class="avatar assistant">
-          X
-        </div>
-        
+        <div class="avatar assistant">X</div>
         <div class="flex flex-col gap-1 max-w-[calc(100%-3rem)]">
           <div class="flex items-center gap-2 text-xs text-muted">
             <span class="font-medium">${t('chat.assistant')}</span>
             <span>·</span>
             <span class="text-primary animate-pulse">${t('chat.thinking')}</span>
           </div>
-          
           <div class="message-bubble assistant">
             <div class="markdown-content">
               ${content.map((block) => {
@@ -594,7 +637,6 @@ export class XopcbotGatewayChat extends LitElement {
 
   private _renderMessageContent(content: Array<{ type: string; text?: string }>): unknown {
     if (!content || content.length === 0) return null;
-    
     return html`
       <div class="markdown-content">
         ${content.map((block) => {
@@ -628,9 +670,7 @@ export class XopcbotGatewayChat extends LitElement {
     
     return html`
       <div class="image-gallery ${galleryClass}">
-        ${images.map((img) => html`
-          <img src="${img.data}" alt="${img.name || 'Image'}" />
-        `)}
+        ${images.map((img) => html`<img src="${img.data}" alt="${img.name || 'Image'}" />`)}
       </div>
     `;
   }
@@ -649,9 +689,7 @@ export class XopcbotGatewayChat extends LitElement {
     
     return html`
       <div class="document-preview">
-        <div class="icon">
-          ${this._getDocumentIcon(doc.mimeType || '')}
-        </div>
+        <div class="icon">${this._getDocumentIcon(doc.mimeType || '')}</div>
         <div class="info">
           <div class="name">${name}</div>
           <div class="meta">${size || doc.mimeType || 'File'}</div>
@@ -661,32 +699,13 @@ export class XopcbotGatewayChat extends LitElement {
   }
 
   private _getDocumentIcon(mimeType: string): unknown {
-    if (mimeType.includes('pdf')) {
-      return html`
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#ef4444" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14,2 14,8 20,8"/>
-        </svg>
-      `;
-    }
-    if (mimeType.includes('word') || mimeType.includes('document')) {
-      return html`
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#2563eb" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14,2 14,8 20,8"/>
-        </svg>
-      `;
-    }
-    if (mimeType.includes('sheet') || mimeType.includes('excel')) {
-      return html`
-        <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2">
-          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
-          <polyline points="14,2 14,8 20,8"/>
-        </svg>
-      `;
-    }
+    const color = mimeType.includes('pdf') ? '#ef4444'
+      : (mimeType.includes('word') || mimeType.includes('document')) ? '#2563eb'
+      : (mimeType.includes('sheet') || mimeType.includes('excel')) ? '#16a34a'
+      : 'currentColor';
+
     return html`
-      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+      <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2">
         <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
         <polyline points="14,2 14,8 20,8"/>
       </svg>

@@ -99,13 +99,13 @@ export class SessionAPIClient {
     if (query?.offset) params.set('offset', String(query.offset));
     
     const queryString = params.toString();
-    const path = `/sessions${queryString ? `?${queryString}` : ''}`;
+    const path = `/api/sessions${queryString ? `?${queryString}` : ''}`;
     return await this.request<PaginatedResult<SessionMetadata>>('GET', path);
   }
 
   async getSession(key: string): Promise<SessionDetail | null> {
     try {
-      const result = await this.request<{ session: SessionDetail }>('GET', `/sessions/${key}`);
+      const result = await this.request<{ session: SessionDetail }>('GET', `/api/sessions/${key}`);
       return result.session || null;
     } catch (err) {
       if (err instanceof Error && err.message.includes('404')) {
@@ -116,35 +116,35 @@ export class SessionAPIClient {
   }
 
   async deleteSession(key: string): Promise<{ deleted: boolean }> {
-    return await this.request<{ deleted: boolean }>('DELETE', `/sessions/${key}`);
+    return await this.request<{ deleted: boolean }>('DELETE', `/api/sessions/${key}`);
   }
 
   async archiveSession(key: string): Promise<{ archived: boolean }> {
-    return await this.request<{ archived: boolean }>('POST', `/sessions/${key}/archive`);
+    return await this.request<{ archived: boolean }>('POST', `/api/sessions/${key}/archive`);
   }
 
   async unarchiveSession(key: string): Promise<{ unarchived: boolean }> {
-    return await this.request<{ unarchived: boolean }>('POST', `/sessions/${key}/unarchive`);
+    return await this.request<{ unarchived: boolean }>('POST', `/api/sessions/${key}/unarchive`);
   }
 
   async pinSession(key: string): Promise<{ pinned: boolean }> {
-    return await this.request<{ pinned: boolean }>('POST', `/sessions/${key}/pin`);
+    return await this.request<{ pinned: boolean }>('POST', `/api/sessions/${key}/pin`);
   }
 
   async unpinSession(key: string): Promise<{ unpinned: boolean }> {
-    return await this.request<{ unpinned: boolean }>('POST', `/sessions/${key}/unpin`);
+    return await this.request<{ unpinned: boolean }>('POST', `/api/sessions/${key}/unpin`);
   }
 
   async renameSession(key: string, name: string): Promise<{ renamed: boolean }> {
-    return await this.request<{ renamed: boolean }>('POST', `/sessions/${key}/rename`, { name });
+    return await this.request<{ renamed: boolean }>('POST', `/api/sessions/${key}/rename`, { name });
   }
 
   async exportSession(key: string, format: ExportFormat = 'json'): Promise<string> {
-    const result = await this.request<{ content: string }>('GET', `/sessions/${key}/export?format=${format}`);
+    const result = await this.request<{ content: string }>('GET', `/api/sessions/${key}/export?format=${format}`);
     return result.content;
   }
 
   async getStats(): Promise<SessionStats> {
-    return await this.request<SessionStats>('GET', '/sessions/stats');
+    return await this.request<SessionStats>('GET', '/api/sessions/stats');
   }
 }

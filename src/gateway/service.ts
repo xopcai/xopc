@@ -16,6 +16,18 @@ import type { SessionListQuery, ExportFormat } from '../types/index.js';
 
 const log = createLogger('GatewayService');
 
+// ========== SSE Event System ==========
+
+export interface ServiceEvent {
+  id: string;
+  type: string;
+  payload: unknown;
+}
+
+type EventListener = (event: ServiceEvent) => Promise<void> | void;
+
+const EVENT_BUFFER_SIZE = 200; // ring buffer per subscriber for Last-Event-ID replay
+
 export interface GatewayServiceConfig {
   configPath?: string;
   enableHotReload?: boolean;
@@ -59,6 +71,11 @@ export class GatewayService {
   private running = false;
   private configReloader: ConfigHotReloader | null = null;
   private startTime = Date.now();
+
+  // SSE event system
+  private eventCounter = 0;
+  private subscribers = new Map<string, EventListener>();
+  private eventBuffers = new Map<string, ServiceEvent[]>();
 
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
@@ -233,6 +250,7 @@ export class GatewayService {
         onFullRestart: (newConfig) => {
           log.warn('Config changed requires full restart - please restart the gateway');
           this.config = newConfig;
+          this.emit('config.reload', { section: 'full', requiresRestart: true });
         },
       },
       {
@@ -249,7 +267,7 @@ export class GatewayService {
   private handleProvidersReload(newConfig: Config): void {
     log.info('Reloading providers config...');
     this.config = newConfig;
-    // TODO: Re-initialize provider clients with new API keys
+    this.emit('config.reload', { section: 'providers' });
     log.info('Providers config reloaded');
   }
 
@@ -259,7 +277,7 @@ export class GatewayService {
   private handleAgentDefaultsReload(newConfig: Config): void {
     log.info('Reloading agent defaults...');
     this.config = newConfig;
-    // Agent model/temperature changes will apply on next request
+    this.emit('config.reload', { section: 'agents' });
     log.info('Agent defaults reloaded');
   }
 
@@ -269,8 +287,9 @@ export class GatewayService {
   private handleChannelsReload(newConfig: Config): void {
     log.info('Reloading channels config...');
     this.config = newConfig;
-    // Re-initialize channels
     this.channelManager.updateConfig(newConfig);
+    this.emit('config.reload', { section: 'channels' });
+    this.emit('channels.status', { channels: this.getChannelsStatus() });
     log.info('Channels config reloaded');
   }
 
@@ -280,8 +299,8 @@ export class GatewayService {
   private handleCronReload(newConfig: Config): void {
     log.info('Reloading cron config...');
     this.config = newConfig;
-    // Reload cron jobs
     this.cronService.updateConfig(newConfig);
+    this.emit('config.reload', { section: 'cron' });
     log.info('Cron config reloaded');
   }
 
@@ -291,8 +310,8 @@ export class GatewayService {
   private handleHeartbeatReload(newConfig: Config): void {
     log.info('Reloading heartbeat config...');
     this.config = newConfig;
-    // Reload heartbeat service
     this.heartbeatService.updateConfig(newConfig);
+    this.emit('config.reload', { section: 'heartbeat' });
     log.info('Heartbeat config reloaded');
   }
 
@@ -302,7 +321,7 @@ export class GatewayService {
   private handleToolsReload(newConfig: Config): void {
     log.info('Reloading tools config...');
     this.config = newConfig;
-    // TODO: Reload tools configuration
+    this.emit('config.reload', { section: 'tools' });
     log.info('Tools config reloaded');
   }
 
@@ -417,7 +436,9 @@ export class GatewayService {
         chat_id: chatId,
         content,
       });
-      return { sent: true, messageId: `msg_${Date.now()}` };
+      const messageId = `msg_${Date.now()}`;
+      this.emit('message.sent', { channel, chatId, messageId });
+      return { sent: true, messageId };
     } catch (error) {
       log.error({ err: error, channel, chatId }, 'Failed to send message');
       throw error;
@@ -494,6 +515,66 @@ export class GatewayService {
    */
   async processDirect(content: string, sessionKey = 'cli:direct'): Promise<string> {
     return this.agentService.processDirect(content, sessionKey);
+  }
+
+  // ========== SSE Event System ==========
+
+  /**
+   * Subscribe to server-pushed events.
+   * Returns a cleanup function to unsubscribe.
+   */
+  subscribe(sessionId: string, listener: EventListener): () => void {
+    this.subscribers.set(sessionId, listener);
+    if (!this.eventBuffers.has(sessionId)) {
+      this.eventBuffers.set(sessionId, []);
+    }
+    log.debug({ sessionId }, 'Event subscriber added');
+
+    return () => {
+      this.subscribers.delete(sessionId);
+      // Keep buffer for a while in case they reconnect
+      setTimeout(() => {
+        if (!this.subscribers.has(sessionId)) {
+          this.eventBuffers.delete(sessionId);
+        }
+      }, 5 * 60_000); // 5 min grace
+      log.debug({ sessionId }, 'Event subscriber removed');
+    };
+  }
+
+  /**
+   * Emit an event to all subscribers.
+   */
+  emit(type: string, payload: unknown): void {
+    const id = String(++this.eventCounter);
+    const event: ServiceEvent = { id, type, payload };
+
+    for (const [sessionId, listener] of this.subscribers) {
+      // Buffer the event
+      const buf = this.eventBuffers.get(sessionId) || [];
+      buf.push(event);
+      if (buf.length > EVENT_BUFFER_SIZE) buf.shift();
+      this.eventBuffers.set(sessionId, buf);
+
+      // Deliver
+      try {
+        listener(event);
+      } catch (err) {
+        log.warn({ sessionId, err }, 'Failed to deliver event to subscriber');
+      }
+    }
+  }
+
+  /**
+   * Get events since a given event id (for Last-Event-ID reconnection).
+   */
+  getEventsSince(sessionId: string, lastEventId: string): ServiceEvent[] {
+    const buf = this.eventBuffers.get(sessionId);
+    if (!buf) return [];
+
+    const idx = buf.findIndex((e) => e.id === lastEventId);
+    if (idx === -1) return buf; // can't find cursor — send everything in buffer
+    return buf.slice(idx + 1);
   }
 
   // ========== Session Management API ==========

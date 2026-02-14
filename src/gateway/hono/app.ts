@@ -5,6 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { logger } from './middleware/logger.js';
 import { auth } from './middleware/auth.js';
+import { createAgentSSEHandler, createSendHandler, createEventsSSEHandler } from './sse.js';
 import type { GatewayService } from '../service.js';
 import { createLogger } from '../../utils/logger.js';
 
@@ -68,14 +69,18 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({
       service: 'xopcbot-gateway',
       version: '0.1.0',
+      transport: 'streamable-http',
       endpoints: [
-        'GET /health',
-        'WS / (WebSocket protocol)',
-      ],
-      methods: [
-        'health', 'status', 'agent', 'send',
-        'channels.status', 'config.reload', 'config.get',
-        'cron.list', 'cron.add', 'cron.remove', 'cron.toggle', 'cron.metrics',
+        'GET  /health',
+        'GET  /status',
+        'POST /api/agent           (SSE stream / JSON)',
+        'POST /api/send',
+        'GET  /api/events          (SSE stream)',
+        'GET  /api/channels/status',
+        'POST /api/config/reload',
+        'GET  /api/config',
+        '...  /api/cron/*',
+        '...  /api/sessions/*',
       ],
     });
   });
@@ -93,6 +98,46 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       channels: health.channels,
       uptime: health.uptime,
     });
+  });
+
+  // ========== Core SSE API ==========
+
+  const sseConfig = { service };
+
+  // POST /api/agent — Agent message (SSE stream or JSON fallback)
+  authenticated.post('/api/agent', createAgentSSEHandler(sseConfig));
+
+  // POST /api/send — Send a message through a channel
+  authenticated.post('/api/send', createSendHandler(sseConfig));
+
+  // GET /api/events — Server-pushed event stream
+  authenticated.get('/api/events', createEventsSSEHandler(sseConfig));
+
+  // GET /api/channels/status
+  authenticated.get('/api/channels/status', (c) => {
+    const channels = service.getChannelsStatus();
+    return c.json({ ok: true, payload: { channels } });
+  });
+
+  // POST /api/config/reload
+  authenticated.post('/api/config/reload', async (c) => {
+    const result = await service.reloadConfig();
+    return c.json({ ok: true, payload: result });
+  });
+
+  // GET /api/config
+  authenticated.get('/api/config', (c) => {
+    const config = service.currentConfig;
+    const safeConfig = {
+      agents: config.agents,
+      channels: {
+        telegram: { enabled: config.channels?.telegram?.enabled },
+        whatsapp: { enabled: config.channels?.whatsapp?.enabled },
+      },
+      gateway: config.gateway,
+      cron: { enabled: config.cron?.enabled },
+    };
+    return c.json({ ok: true, payload: { config: safeConfig } });
   });
 
   // ========== Cron REST API ==========
