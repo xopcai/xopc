@@ -1,6 +1,7 @@
 import { html, LitElement, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import './gateway-chat';
+import './pages/SessionManager';
 import './dialogs/SettingsDialog';
 import {
   TAB_GROUPS,
@@ -202,6 +203,7 @@ export class XopcbotApp extends LitElement {
             </section>
 
             ${this._activeTab === 'chat' ? this._renderChat() : nothing}
+            ${this._activeTab === 'sessions' ? this._renderSessions() : nothing}
           </main>
         </div>
 
@@ -252,6 +254,17 @@ export class XopcbotApp extends LitElement {
         .enableModelSelector=${true}
         .enableThinkingSelector=${true}
       ></xopcbot-gateway-chat>
+    `;
+  }
+
+  private _renderSessions(): unknown {
+    const url = this.gatewayConfig?.url || '';
+    const token = this.gatewayConfig?.token;
+    
+    return html`
+      <session-manager
+        .config=${{ url, token }}
+      ></session-manager>
     `;
   }
 

@@ -385,6 +385,11 @@ export class XopcbotGatewayChat extends LitElement {
     }) as Promise<T>;
   }
 
+  // Public API for external components
+  public request<T>(method: string, params: Record<string, unknown> = {}): Promise<T> {
+    return this._request<T>(method, params);
+  }
+
   async sendMessage(content: string, attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>): Promise<void> {
     // Prevent double-sending
     if (this._isSending || this._isStreaming) return;

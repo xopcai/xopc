@@ -5,8 +5,10 @@
   },
   "nav": {
     "chat": "Chat",
+    "sessions": "Sessions",
     "settings": "Settings",
     "chatSubtitle": "Chat with the gateway agent",
+    "sessionsSubtitle": "Manage conversation history",
     "settingsSubtitle": "Configure gateway settings"
   },
   "chat": {
