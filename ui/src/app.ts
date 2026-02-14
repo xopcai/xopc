@@ -4,6 +4,7 @@ import './gateway-chat';
 import './pages/SessionManager';
 import './pages/CronManager';
 import './pages/SubagentsManager';
+import './pages/LogManager';
 import './dialogs/SettingsDialog';
 import {
   TAB_GROUPS,
@@ -92,7 +93,7 @@ export class XopcbotApp extends LitElement {
     }
     
     const tab = hash as Tab;
-    const validTabs: Tab[] = ['sessions', 'subagents', 'cron', 'settings'];
+    const validTabs: Tab[] = ['sessions', 'subagents', 'cron', 'logs', 'settings'];
     
     if (validTabs.includes(tab)) {
       if (this._activeTab !== tab) {
@@ -279,6 +280,7 @@ export class XopcbotApp extends LitElement {
             ${this._activeTab === 'sessions' ? this._renderSessions() : nothing}
             ${this._activeTab === 'subagents' ? this._renderSubagents() : nothing}
             ${this._activeTab === 'cron' ? this._renderCron() : nothing}
+            ${this._activeTab === 'logs' ? this._renderLogs() : nothing}
           </main>
         </div>
 
@@ -364,6 +366,17 @@ export class XopcbotApp extends LitElement {
       <cron-manager
         .config=${{ url, token }}
       ></cron-manager>
+    `;
+  }
+
+  private _renderLogs(): unknown {
+    const url = this.gatewayConfig?.url || '';
+    const token = this.gatewayConfig?.token;
+    
+    return html`
+      <log-manager
+        .config=${{ url, token }}
+      ></log-manager>
     `;
   }
 

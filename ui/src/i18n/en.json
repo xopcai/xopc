@@ -8,11 +8,13 @@
     "sessions": "Sessions",
     "subagents": "Subagents",
     "cron": "Cron Jobs",
+    "logs": "Logs",
     "settings": "Settings",
     "chatSubtitle": "Chat with the gateway agent",
     "sessionsSubtitle": "Manage conversation history",
     "subagentsSubtitle": "View subagent sessions",
     "cronSubtitle": "Manage scheduled tasks",
+    "logsSubtitle": "View system logs",
     "settingsSubtitle": "Configure gateway settings"
   },
   "chat": {
