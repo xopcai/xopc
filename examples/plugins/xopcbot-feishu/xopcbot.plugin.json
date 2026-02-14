@@ -1,0 +1,67 @@
+{
+  "id": "xopcbot-feishu",
+  "name": "Xopcbot Feishu",
+  "description": "Feishu/Lark (飞书) channel plugin for xopcbot - WebSocket based messaging",
+  "version": "1.0.0",
+  "kind": "channel",
+  "main": "index.ts",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "default": false,
+        "description": "Enable Feishu channel"
+      },
+      "appId": {
+        "type": "string",
+        "description": "Feishu app ID (cli_xxxxxxxx)"
+      },
+      "appSecret": {
+        "type": "string",
+        "description": "Feishu app secret"
+      },
+      "domain": {
+        "type": "string",
+        "enum": ["feishu", "lark"],
+        "default": "feishu",
+        "description": "Domain: feishu (China) or lark (International)"
+      },
+      "dmPolicy": {
+        "type": "string",
+        "enum": ["open", "pairing", "allowlist"],
+        "default": "pairing",
+        "description": "Direct message policy"
+      },
+      "groupPolicy": {
+        "type": "string",
+        "enum": ["open", "allowlist", "disabled"],
+        "default": "allowlist",
+        "description": "Group chat policy"
+      },
+      "allowFrom": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "Allowed user OpenIDs for DM"
+      },
+      "groupAllowFrom": {
+        "type": "array",
+        "items": { "type": "string" },
+        "default": [],
+        "description": "Allowed chat IDs for groups"
+      },
+      "requireMention": {
+        "type": "boolean",
+        "default": true,
+        "description": "Require @mention in groups"
+      },
+      "mediaMaxMb": {
+        "type": "number",
+        "default": 30,
+        "description": "Max media size in MB"
+      }
+    },
+    "required": ["appId", "appSecret"]
+  }
+}
