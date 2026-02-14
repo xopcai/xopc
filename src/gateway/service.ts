@@ -342,7 +342,14 @@ export class GatewayService {
   async *runAgent(
     message: string,
     channel: string,
-    chatId: string
+    chatId: string,
+    attachments?: Array<{
+      type: string;
+      mimeType?: string;
+      data?: string;
+      name?: string;
+      size?: number;
+    }>
   ): AsyncGenerator<{ type: string; content?: string; status?: string; runId?: string }, { status: string; summary: string }, unknown> {
     const runId = crypto.randomUUID();
 
@@ -356,8 +363,8 @@ export class GatewayService {
         yield { type: 'token', content: 'Thinking...\n' };
         
         try {
-          // Process message through the LLM
-          const response = await this.agentService.processDirect(message, sessionKey);
+          // Process message through the LLM (with attachments if provided)
+          const response = await this.agentService.processDirect(message, sessionKey, attachments);
           
           yield { type: 'token', content: response };
           

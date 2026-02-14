@@ -879,19 +879,53 @@ export class AgentService {
     }
   }
 
-  async processDirect(content: string, sessionKey = 'cli:direct'): Promise<string> {
-    const messages = await this.sessionStore.load(sessionKey);
+  async processDirect(
+    content: string, 
+    sessionKey = 'cli:direct',
+    attachments?: Array<{
+      type: string;
+      mimeType?: string;
+      data?: string;
+      name?: string;
+      size?: number;
+    }>
+  ): Promise<string> {
+    const messages = await this.memory.load(sessionKey);
     this.agent.replaceMessages(messages);
+
+    // Build message content with text and attachments
+    const messageContent: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
+    
+    // Add text content if present
+    if (content.trim()) {
+      messageContent.push({ type: 'text', text: content });
+    }
+
+    // Add attachments (images as image blocks)
+    if (attachments && attachments.length > 0) {
+      for (const att of attachments) {
+        if (att.type === 'image' || att.mimeType?.startsWith('image/')) {
+          // Use base64 data URL directly
+          const mimeType = att.mimeType || 'image/png';
+          const data = att.data || '';
+          messageContent.push({ type: 'image', data, mimeType });
+        } else {
+          // For non-image files, include as text reference
+          const fileInfo = `[File: ${att.name || 'unknown'} (${att.mimeType || 'unknown type'}, ${att.size || 0} bytes)]`;
+          messageContent.push({ type: 'text', text: fileInfo });
+        }
+      }
+    }
 
     await this.agent.prompt({
       role: 'user',
-      content: [{ type: 'text', text: content }],
+      content: messageContent,
       timestamp: Date.now(),
     });
     await this.agent.waitForIdle();
 
     const response = this.getLastAssistantContent() || '';
-    await this.sessionStore.save(sessionKey, this.agent.state.messages);
+    await this.memory.save(sessionKey, this.agent.state.messages);
 
     return response;
   }

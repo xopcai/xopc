@@ -415,6 +415,7 @@ export class XopcbotGatewayChat extends LitElement {
         message: content,
         channel: 'gateway',
         chatId: 'default',
+        attachments: attachments,
       });
     } catch (error) {
       this._error = error instanceof Error ? error.message : t('errors.sendFailed');

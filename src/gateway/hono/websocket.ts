@@ -172,6 +172,13 @@ async function handleRequest(
         const message = params.message as string;
         const channel = (params.channel as string) || 'gateway';
         const chatId = (params.chatId as string) || 'default';
+        const attachments = params.attachments as Array<{
+          type: string;
+          mimeType?: string;
+          data?: string;
+          name?: string;
+          size?: number;
+        }> | undefined;
 
         if (!message) {
           ws.send(JSON.stringify(createResponse(
@@ -182,7 +189,7 @@ async function handleRequest(
           return;
         }
 
-        const generator = service.runAgent(message, channel, chatId);
+        const generator = service.runAgent(message, channel, chatId, attachments);
 
         try {
           while (true) {
