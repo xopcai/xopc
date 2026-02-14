@@ -2,6 +2,7 @@ import { html, LitElement, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import './gateway-chat';
 import './pages/SessionManager';
+import './pages/CronManager';
 import './dialogs/SettingsDialog';
 import {
   TAB_GROUPS,
@@ -239,6 +240,7 @@ export class XopcbotApp extends LitElement {
 
             ${this._activeTab === 'chat' ? this._renderChat() : nothing}
             ${this._activeTab === 'sessions' ? this._renderSessions() : nothing}
+            ${this._activeTab === 'cron' ? this._renderCron() : nothing}
           </main>
         </div>
 
@@ -300,6 +302,17 @@ export class XopcbotApp extends LitElement {
       <session-manager
         .config=${{ url, token }}
       ></session-manager>
+    `;
+  }
+
+  private _renderCron(): unknown {
+    const url = this.gatewayConfig?.url || '';
+    const token = this.gatewayConfig?.token;
+    
+    return html`
+      <cron-manager
+        .config=${{ url, token }}
+      ></cron-manager>
     `;
   }
 

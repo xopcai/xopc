@@ -329,6 +329,104 @@ async function handleRequest(
         break;
       }
 
+      case 'cron.get': {
+        const cronService = service.cronServiceInstance;
+        const jobId = params.id as string;
+
+        if (!jobId) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required param: id' }
+          )));
+          break;
+        }
+
+        const job = await cronService.getJob(jobId);
+        if (!job) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'NOT_FOUND', message: `Job not found: ${jobId}` }
+          )));
+          break;
+        }
+        ws.send(JSON.stringify(createResponse(id, { job })));
+        break;
+      }
+
+      case 'cron.update': {
+        const cronService = service.cronServiceInstance;
+        const jobId = params.id as string;
+        const updates = params.updates as Partial<{
+          name: string;
+          schedule: string;
+          message: string;
+          enabled: boolean;
+          timezone: string;
+          maxRetries: number;
+          timeout: number;
+        }>;
+
+        if (!jobId || !updates) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required params: id, updates' }
+          )));
+          break;
+        }
+
+        try {
+          const result = await cronService.updateJob(jobId, updates);
+          ws.send(JSON.stringify(createResponse(id, { updated: result })));
+        } catch (error) {
+          ws.send(JSON.stringify(createErrorResponse(error, id)));
+        }
+        break;
+      }
+
+      case 'cron.run': {
+        const cronService = service.cronServiceInstance;
+        const jobId = params.id as string;
+
+        if (!jobId) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required param: id' }
+          )));
+          break;
+        }
+
+        try {
+          await cronService.runJobNow(jobId);
+          ws.send(JSON.stringify(createResponse(id, { triggered: true })));
+        } catch (error) {
+          ws.send(JSON.stringify(createErrorResponse(error, id)));
+        }
+        break;
+      }
+
+      case 'cron.history': {
+        const cronService = service.cronServiceInstance;
+        const jobId = params.id as string;
+        const limit = params.limit as number | undefined;
+
+        if (!jobId) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required param: id' }
+          )));
+          break;
+        }
+
+        const history = cronService.getJobHistory(jobId, limit);
+        ws.send(JSON.stringify(createResponse(id, { history })));
+        break;
+      }
+
       // ========== Session Management ==========
 
       case 'session.list': {

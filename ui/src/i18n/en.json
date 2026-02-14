@@ -6,9 +6,11 @@
   "nav": {
     "chat": "Chat",
     "sessions": "Sessions",
+    "cron": "Cron Jobs",
     "settings": "Settings",
     "chatSubtitle": "Chat with the gateway agent",
     "sessionsSubtitle": "Manage conversation history",
+    "cronSubtitle": "Manage scheduled tasks",
     "settingsSubtitle": "Configure gateway settings"
   },
   "chat": {

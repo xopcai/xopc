@@ -6,11 +6,11 @@ import { getIcon } from './utils/icons';
 // Tab groups configuration
 export const TAB_GROUPS = [
   { label: 'Chat', tabs: ['chat'] },
-  { label: 'Management', tabs: ['sessions'] },
+  { label: 'Management', tabs: ['sessions', 'cron'] },
   { label: 'Settings', tabs: ['settings'] },
 ] as const;
 
-export type Tab = 'chat' | 'sessions' | 'settings';
+export type Tab = 'chat' | 'sessions' | 'cron' | 'settings';
 
 export interface NavItem {
   id: Tab;
@@ -28,6 +28,11 @@ const TAB_CONFIG: Record<Tab, { label: string; icon: string; subtitle: string }>
     label: t('nav.sessions'),
     icon: 'folderOpen',
     subtitle: t('nav.sessionsSubtitle'),
+  },
+  cron: {
+    label: t('nav.cron'),
+    icon: 'clock',
+    subtitle: t('nav.cronSubtitle'),
   },
   settings: {
     label: t('nav.settings'),
