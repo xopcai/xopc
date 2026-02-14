@@ -68,6 +68,11 @@ export class LogManager extends LitElement {
     this._stopAutoRefresh();
   }
 
+  override firstUpdated(): void {
+    // Ensure initialization happens even if config was set before connectedCallback
+    this._tryInitialize();
+  }
+
   private _tryInitialize(): void {
     if (this._initialized || !this.config?.url) {
       return;

@@ -1,9 +1,9 @@
 /**
  * Logger Module
- * 
+ *
  * Centralized logging system using pino.
  * Provides structured logging with levels, prefixes, and child loggers.
- * Supports both console and file output with rotation.
+ * Supports both console and file output.
  */
 
 import pino from 'pino';
@@ -11,7 +11,6 @@ import type { Logger } from 'pino';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, mkdirSync, createWriteStream } from 'fs';
-import { createWriteStream as createRotatingWriteStream } from 'fs';
 
 // Get __dirname equivalent in ESM
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -33,48 +32,35 @@ function getLogPath(type: 'app' | 'error' = 'app'): string {
 // Default log level from environment
 const LOG_LEVEL = process.env.LOG_LEVEL || (process.env.DEBUG ? 'debug' : 'info');
 
-// Create file write streams
+// Create file write streams (append mode)
 const appLogStream = createWriteStream(getLogPath('app'), { flags: 'a' });
 const errorLogStream = createWriteStream(getLogPath('error'), { flags: 'a' });
-
-// Custom transport that writes to file
-const fileTransport = {
-  write(chunk: string) {
-    try {
-      const data = JSON.parse(chunk);
-      
-      // Write error logs to error file
-      if (data.level >= 50) { // error or fatal
-        errorLogStream.write(chunk + '\n');
-      }
-      
-      // Write all logs to app file
-      appLogStream.write(chunk + '\n');
-    } catch {
-      // Not JSON, write as-is
-      appLogStream.write(chunk + '\n');
-    }
-  },
-};
 
 // Create the base logger instance
 const baseLogger = pino({
   level: LOG_LEVEL,
-  transport: process.env.NODE_ENV !== 'production' ? {
-    target: 'pino-pretty',
-    options: {
-      colorize: true,
-      translateTime: 'SYS:standard',
-      ignore: 'pid,hostname',
-      singleLine: true,
-    },
-  } : process.env.NODE_ENV === 'production' ? fileTransport : undefined,
   base: {
     service: 'xopcbot',
     version: '0.1.0',
   },
   timestamp: pino.stdTimeFunctions.isoTime,
-});
+}, pino.multistream([
+  // Console output
+  {
+    stream: process.stdout,
+    level: LOG_LEVEL,
+  },
+  // File output for log viewer (all logs)
+  {
+    stream: appLogStream,
+    level: LOG_LEVEL,
+  },
+  // Error file output (error and above)
+  {
+    stream: errorLogStream,
+    level: 'error',
+  },
+]));
 
 // Aliases for compatibility
 export const logger = baseLogger;
@@ -91,7 +77,7 @@ export function createLogger(prefix: string): Logger {
  * Create a logger for a specific module/component
  */
 export function createModuleLogger(moduleName: string, modulePath?: string): Logger {
-  const base = modulePath 
+  const base = modulePath
     ? path.relative(path.join(__dirname, '..'), modulePath).replace(/\.ts$/, '')
     : moduleName;
   return baseLogger.child({ module: base });
@@ -113,7 +99,7 @@ export interface PluginLogger {
  */
 export function createPluginLogger(prefix: string): PluginLogger {
   const child = baseLogger.child({ plugin: prefix });
-  
+
   return {
     debug: (msg: string) => child.debug(msg),
     info: (msg: string) => child.info(msg),
