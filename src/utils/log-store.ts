@@ -56,7 +56,7 @@ export function getLogFiles(): LogFile[] {
     .map(f => {
       const path = join(LOG_DIR, f);
       const stats = statSync(path);
-      const type = f.includes('error') ? 'error' : f.includes('audit') ? 'audit' : 'app';
+      const type: LogFile['type'] = f.includes('error') ? 'error' : f.includes('audit') ? 'audit' : 'app';
       return {
         name: f,
         path,
