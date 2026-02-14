@@ -84,8 +84,15 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json(service.getHealth());
   });
 
-  // API info (no auth required for basic info)
+  // Root path - serve UI
   app.get('/', (c) => {
+    const response = serveStaticFile('index.html');
+    if (response) return response;
+    return c.text('UI not found', 404);
+  });
+
+  // API info (no auth required for basic info)
+  app.get('/api', (c) => {
     return c.json({
       service: 'xopcbot-gateway',
       version: '0.1.0',
@@ -428,22 +435,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // Mount authenticated routes
   app.route('/', authenticated);
 
-  // UI static files
-  app.get('/ui', (c) => c.redirect('/ui/'));
-  
-  app.get('/ui/', (c) => {
-    const response = serveStaticFile('index.html');
-    if (response) return response;
-    return c.text('UI not found', 404);
-  });
-
-  app.get('/ui/assets/*', (c) => {
-    const path = c.req.path.replace('/ui/assets/', '');
-    const response = serveStaticFile(`assets/${path}`);
-    if (response) return response;
-    return c.text('Not found', 404);
-  });
-
+  // UI static files (served at root)
   app.get('/assets/*', (c) => {
     const path = c.req.path.replace('/assets/', '');
     const response = serveStaticFile(`assets/${path}`);
