@@ -353,8 +353,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json(result);
   });
 
-  // GET /subagents - List subagent sessions
-  authenticated.get('/subagents', async (c) => {
+  // ========== Subagent REST API (/api/subagents) ==========
+
+  // GET /api/subagents - List subagent sessions
+  authenticated.get('/api/subagents', async (c) => {
     const query = c.req.query();
     const result = await service.listSubagents({
       limit: query.limit ? parseInt(query.limit) : undefined,
@@ -363,8 +365,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json(result);
   });
 
-  // GET /subagents/:key - Get subagent session detail
-  authenticated.get('/subagents/:key', async (c) => {
+  // GET /api/subagents/:key - Get subagent session detail
+  authenticated.get('/api/subagents/:key', async (c) => {
     const key = c.req.param('key');
     // Verify it's a subagent session
     if (!key.startsWith('subagent:')) {
