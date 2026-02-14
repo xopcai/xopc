@@ -52,14 +52,18 @@ export class TelegramChannel extends BaseChannel {
     await this.bot.api.setMyCommands([
       { command: 'new', description: 'Start a new session' },
       { command: 'reset', description: 'Alias for /new' },
-      { command: 'skills', description: 'Reload agent skills (e.g., /skills reload)' },
       { command: 'models', description: 'Switch AI model' },
+      { command: 'usage', description: 'Show token usage stats' },
       { command: 'cleanup', description: 'Archive old sessions' },
     ]);
 
     // Handle commands
     this.bot.command('models', async (ctx) => {
       await this.showModelSelector(ctx);
+    });
+
+    this.bot.command('usage', async (ctx) => {
+      await this.showUsageStats(ctx);
     });
 
     this.bot.command('cleanup', async (ctx) => {
@@ -265,6 +269,33 @@ export class TelegramChannel extends BaseChannel {
       openrouter: ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet'],
     };
     return defaults[provider] || ['default'];
+  }
+
+  // ========== Usage Command ==========
+
+  private async showUsageStats(ctx: Context): Promise<void> {
+    try {
+      const chatId = String(ctx.chat?.id);
+      const sessionKey = `telegram:${chatId}`;
+
+      // Send system message to get usage stats
+      await this.bus.publishInbound({
+        channel: 'system',
+        sender_id: 'telegram:usage',
+        chat_id: chatId,
+        content: '/usage',
+        metadata: { sessionKey },
+      });
+
+      await ctx.reply(
+        '📊 *Token Usage Stats*\n\n' +
+        'Fetching usage statistics for this session...',
+        { parse_mode: 'Markdown' }
+      );
+    } catch (err) {
+      log.error({ err }, 'Failed to show usage stats');
+      await ctx.reply('❌ Failed to fetch usage statistics.');
+    }
   }
 
   // ========== Cleanup Command ==========

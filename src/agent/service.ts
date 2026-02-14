@@ -131,6 +131,7 @@ export class AgentService {
   private modelRegistry: ModelRegistry;
   private sessionModels: Map<string, string> = new Map(); // sessionKey -> modelId
   private channelManager?: any; // Reference to get session model from channel
+  private sessionUsage: Map<string, { prompt: number; completion: number; total: number }> = new Map(); // Track usage per session
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
     this.agentId = `agent-${Date.now()}`;
@@ -515,28 +516,48 @@ export class AgentService {
       });
 
       // Run agent with model fallback support
-      const finalContent = await this.runWithModelFallback(
+      const result = await this.runWithModelFallback(
         sessionKey,
         userMessage,
         this.currentProvider,
         this.currentModelName
       );
-      if (finalContent) {
-        const sendResult = await this.runMessageSendingHook(msg.chat_id, finalContent);
+      
+      if (result.content) {
+        // Track usage statistics
+        if (result.usage) {
+          const currentUsage = this.sessionUsage.get(sessionKey) || { prompt: 0, completion: 0, total: 0 };
+          currentUsage.prompt += result.usage.prompt_tokens || 0;
+          currentUsage.completion += result.usage.completion_tokens || 0;
+          currentUsage.total += result.usage.total_tokens || 0;
+          this.sessionUsage.set(sessionKey, currentUsage);
+        }
+
+        const sendResult = await this.runMessageSendingHook(msg.chat_id, result.content);
 
         if (!sendResult.send) {
           log.debug({ reason: sendResult.reason }, 'Message sending cancelled by hook');
         } else {
+          // Format usage info for display
+          let contentWithUsage = sendResult.content || result.content;
+          
+          // Add usage info to message (for Telegram and other channels that support it)
+          if (result.usage && msg.channel === 'telegram') {
+            const modelName = this.currentModelName.split('/').pop() || this.currentModelName;
+            const usageText = `\n\n📊 *${modelName}*  \`+${result.usage.prompt_tokens} → ${result.usage.completion_tokens} = ${result.usage.total_tokens}\``;
+            contentWithUsage += usageText;
+          }
+
           await this.bus.publishOutbound({
             channel: msg.channel,
             chat_id: msg.chat_id,
-            content: sendResult.content || finalContent,
+            content: contentWithUsage,
             type: 'message',
           });
 
           await this.triggerHook('message_sent', {
             to: msg.chat_id,
-            content: sendResult.content || finalContent,
+            content: sendResult.content || result.content,
             success: true,
           });
         }
@@ -562,7 +583,7 @@ export class AgentService {
     userMessage: AgentMessage,
     provider: string,
     model: string
-  ): Promise<string | null> {
+  ): Promise<{ content: string | null; usage?: { prompt_tokens: number; completion_tokens: number; total_tokens: number } }> {
     const candidates = resolveFallbackCandidates({
       cfg: this.config.config ?? undefined,
       provider,
@@ -598,7 +619,13 @@ export class AgentService {
         await this.agent.prompt(userMessage);
         await this.agent.waitForIdle();
 
-        return this.getLastAssistantContent();
+        // Get usage from agent state if available
+        const usage = (this.agent.state as any).lastUsage || undefined;
+
+        return {
+          content: this.getLastAssistantContent(),
+          usage,
+        };
       } catch (err) {
         lastError = err;
 
@@ -630,11 +657,40 @@ export class AgentService {
       throw lastError;
     }
 
-    return null;
+    return { content: null };
   }
 
   private async handleSystemMessage(msg: InboundMessage): Promise<void> {
     log.info({ senderId: msg.sender_id }, 'Processing system message');
+
+    // Handle usage command
+    if (msg.content === '/usage' && msg.sender_id === 'telegram:usage') {
+      const sessionKey = (msg.metadata?.sessionKey as string) || `telegram:${msg.chat_id}`;
+      const usage = this.sessionUsage.get(sessionKey);
+      
+      if (usage) {
+        const modelName = this.currentModelName.split('/').pop() || this.currentModelName;
+        await this.bus.publishOutbound({
+          channel: 'telegram',
+          chat_id: msg.chat_id,
+          content: 
+            '📊 *Session Token Usage*\n\n' +
+            `🤖 Model: ${modelName}\n` +
+            `📥 Prompt: ${usage.prompt.toLocaleString()} tokens\n` +
+            `📤 Completion: ${usage.completion.toLocaleString()} tokens\n` +
+            `📊 Total: ${usage.total.toLocaleString()} tokens`,
+          type: 'message',
+        });
+      } else {
+        await this.bus.publishOutbound({
+          channel: 'telegram',
+          chat_id: msg.chat_id,
+          content: '📊 No usage data available for this session yet.',
+          type: 'message',
+        });
+      }
+      return;
+    }
 
     let originChannel = 'cli';
     let originChatId = msg.chat_id;
