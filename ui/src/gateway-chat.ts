@@ -405,13 +405,22 @@ export class XopcbotGatewayChat extends LitElement {
         .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
       this._sessions = gatewaySessions;
-      
-      // Load the most recent session if exists
-      if (gatewaySessions.length > 0) {
+
+      // Find an existing empty session or load the most recent one
+      const emptySession = gatewaySessions.find((s: any) => s.messageCount === 0);
+
+      if (emptySession) {
+        // Load the empty session
+        this._currentSessionKey = emptySession.key;
+        this._messages = [];
+        this._lastLoadedSessionKey = emptySession.key;
+        this._updateUrlWithSession(emptySession.key);
+      } else if (gatewaySessions.length > 0) {
+        // Load the most recent session if exists
         const recentKey = gatewaySessions[0].key;
         await this._loadSession(recentKey, 0);
         this._lastLoadedSessionKey = recentKey;
-        
+
         // Update URL to reflect current session
         this._updateUrlWithSession(recentKey);
       } else {
@@ -435,6 +444,17 @@ export class XopcbotGatewayChat extends LitElement {
 
   async _createNewSession(): Promise<void> {
     if (!this.config) return;
+
+    // Check if there's already an empty session
+    const emptySession = this._sessions.find((s: any) => s.messageCount === 0);
+    if (emptySession) {
+      // Navigate to existing empty session instead of creating a new one
+      this._currentSessionKey = emptySession.key;
+      this._messages = [];
+      this._lastLoadedSessionKey = emptySession.key;
+      this._updateUrlWithSession(emptySession.key);
+      return;
+    }
 
     try {
       const url = apiUrl(this.config.url, '/api/sessions');
