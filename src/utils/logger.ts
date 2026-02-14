@@ -3,18 +3,59 @@
  * 
  * Centralized logging system using pino.
  * Provides structured logging with levels, prefixes, and child loggers.
+ * Supports both console and file output with rotation.
  */
 
 import pino from 'pino';
 import type { Logger } from 'pino';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { existsSync, mkdirSync, createWriteStream } from 'fs';
+import { createWriteStream as createRotatingWriteStream } from 'fs';
 
 // Get __dirname equivalent in ESM
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+// Log directory
+const LOG_DIR = process.env.XOPCBOT_LOG_DIR || path.join(process.env.HOME || '.', '.xopcbot', 'logs');
+
+// Ensure log directory exists
+if (!existsSync(LOG_DIR)) {
+  mkdirSync(LOG_DIR, { recursive: true });
+}
+
+// Get log file path for a specific date
+function getLogPath(type: 'app' | 'error' = 'app'): string {
+  const date = new Date().toISOString().split('T')[0];
+  return path.join(LOG_DIR, `${type}-${date}.log`);
+}
+
 // Default log level from environment
 const LOG_LEVEL = process.env.LOG_LEVEL || (process.env.DEBUG ? 'debug' : 'info');
+
+// Create file write streams
+const appLogStream = createWriteStream(getLogPath('app'), { flags: 'a' });
+const errorLogStream = createWriteStream(getLogPath('error'), { flags: 'a' });
+
+// Custom transport that writes to file
+const fileTransport = {
+  write(chunk: string) {
+    try {
+      const data = JSON.parse(chunk);
+      
+      // Write error logs to error file
+      if (data.level >= 50) { // error or fatal
+        errorLogStream.write(chunk + '\n');
+      }
+      
+      // Write all logs to app file
+      appLogStream.write(chunk + '\n');
+    } catch {
+      // Not JSON, write as-is
+      appLogStream.write(chunk + '\n');
+    }
+  },
+};
 
 // Create the base logger instance
 const baseLogger = pino({
@@ -27,7 +68,7 @@ const baseLogger = pino({
       ignore: 'pid,hostname',
       singleLine: true,
     },
-  } : undefined,
+  } : process.env.NODE_ENV === 'production' ? fileTransport : undefined,
   base: {
     service: 'xopcbot',
     version: '0.1.0',

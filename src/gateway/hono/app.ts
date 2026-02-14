@@ -8,6 +8,7 @@ import { auth } from './middleware/auth.js';
 import { createAgentSSEHandler, createSendHandler, createEventsSSEHandler } from './sse.js';
 import type { GatewayService } from '../service.js';
 import { createLogger } from '../../utils/logger.js';
+import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../utils/log-store.js';
 
 const log = createLogger('HonoApp');
 
@@ -379,11 +380,63 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ session });
   });
 
+  // ========== Logs REST API (/api/logs) ==========
+
+  // GET /api/logs - Query logs with filters
+  authenticated.get('/api/logs', async (c) => {
+    const query = c.req.query();
+    const result = await queryLogs({
+      level: query.level ? query.level.split(',') : undefined,
+      from: query.from,
+      to: query.to,
+      q: query.q,
+      module: query.module,
+      limit: query.limit ? parseInt(query.limit) : 100,
+      offset: query.offset ? parseInt(query.offset) : 0,
+    });
+    return c.json({ logs: result, count: result.length });
+  });
+
+  // GET /api/logs/files - List log files
+  authenticated.get('/api/logs/files', async (c) => {
+    const files = getLogFiles();
+    return c.json({ files });
+  });
+
+  // GET /api/logs/stats - Get log statistics
+  authenticated.get('/api/logs/stats', async (c) => {
+    const stats = getLogStats();
+    return c.json(stats);
+  });
+
+  // GET /api/logs/levels - Get available log levels
+  authenticated.get('/api/logs/levels', async (c) => {
+    return c.json({ levels: getLogLevels() });
+  });
+
+  // GET /api/logs/modules - Get available modules
+  authenticated.get('/api/logs/modules', async (c) => {
+    const modules = await getLogModules();
+    return c.json({ modules });
+  });
+
+  // GET /api/logs/dir - Get log directory path
+  authenticated.get('/api/logs/dir', async (c) => {
+    return c.json({ dir: LOG_DIR });
+  });
+
   // Mount authenticated routes
   app.route('/', authenticated);
 
   // UI static files
   app.get('/ui', (c) => c.redirect('/ui/'));
+  
+  // Logs viewer UI
+  app.get('/ui/logs', (c) => {
+    const response = serveStaticFile('logs.html');
+    if (response) return response;
+    return c.text('Log viewer not found', 404);
+  });
 
   app.get('/ui/', (c) => {
     const response = serveStaticFile('index.html');
