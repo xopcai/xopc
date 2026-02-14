@@ -2,7 +2,7 @@ import { html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
-import { Paperclip, Send, Square, X, FileText, Image, File } from 'lucide';
+import { Paperclip, Send, Square, X } from 'lucide';
 
 // Convert lucide icon array format to SVG string
 function iconToSvg(iconData: unknown, className = ''): string {
@@ -60,13 +60,10 @@ export class MessageEditor extends LitElement {
   @state() private _isComposing = false;
   @state() private _isDragging = false;
   @state() private _processingFiles = false;
-  @state() private _showAttachMenu = false;
   @state() private _isSending = false;
 
   private textareaRef = createRef<HTMLTextAreaElement>();
   private fileInputRef = createRef<HTMLInputElement>();
-  private menuRef = createRef<HTMLDivElement>();
-
   private readonly maxFileSize = 20 * 1024 * 1024; // 20MB
   private readonly acceptedTypes = 'image/*,application/pdf,.docx,.pptx,.xlsx,.xls,.txt,.md,.json,.xml,.html,.css,.js,.ts,.jsx,.tsx,.yml,.yaml,.zip';
 
@@ -110,20 +107,6 @@ export class MessageEditor extends LitElement {
     const files = e.dataTransfer?.files;
     if (files && files.length > 0) {
       await this._processFiles(Array.from(files));
-    }
-  };
-
-  private _handleOutsideClick = (e: MouseEvent) => {
-    // Try ref first, fallback to querySelector for light DOM
-    let menu: Element | null | undefined = this.menuRef.value;
-    if (!menu) {
-      menu = this.querySelector('.attach-menu');
-    }
-
-    const button = this.querySelector('.attach-btn');
-
-    if (menu && !menu.contains(e.target as Node) && button !== e.target) {
-      this._showAttachMenu = false;
     }
   };
 
@@ -182,37 +165,18 @@ export class MessageEditor extends LitElement {
 
   private _renderAttachmentButton(): unknown {
     return html`
-      <div class="attach-wrapper">
-        <button type="button" class="attach-btn" @click=${this._toggleAttachMenu} title=${i18n('Attach file')}>
-          ${unsafeHTML(iconToSvg(Paperclip, 'w-4 h-4'))}
-        </button>
-        
-        ${this._showAttachMenu ? html`
-          <div ${ref(this.menuRef)} class="attach-menu">
-            <button type="button" class="menu-item" @click=${() => this._triggerFileSelect('image')}>
-              ${unsafeHTML(iconToSvg(Image, 'w-4 h-4'))}
-              <span>Image</span>
-            </button>
-            <button type="button" class="menu-item" @click=${() => this._triggerFileSelect('document')}>
-              ${unsafeHTML(iconToSvg(FileText, 'w-4 h-4'))}
-              <span>Document</span>
-            </button>
-            <button type="button" class="menu-item" @click=${() => this._triggerFileSelect('all')}>
-              ${unsafeHTML(iconToSvg(File, 'w-4 h-4'))}
-              <span>All Files</span>
-            </button>
-          </div>
-        ` : ''}
-        
-        <input
-          ${ref(this.fileInputRef)}
-          type="file"
+      <button type="button" class="attach-btn" @click=${() => this._triggerFileSelect('all')} title=${i18n('Attach file')}>
+        ${unsafeHTML(iconToSvg(Paperclip, 'w-4 h-4'))}
+      </button>
+      
+      <input
+        ${ref(this.fileInputRef)}
+        type="file"
           multiple
           accept=${this.acceptedTypes}
           class="hidden"
           @change=${this._handleFileInputChange}
         />
-      </div>
     `;
   }
 
@@ -248,13 +212,7 @@ export class MessageEditor extends LitElement {
     `;
   }
 
-  private _toggleAttachMenu(): void {
-    this._showAttachMenu = !this._showAttachMenu;
-  }
-
   private _triggerFileSelect(type: 'image' | 'document' | 'all'): void {
-    this._showAttachMenu = false;
-
     // Try ref first
     let input: HTMLInputElement | null | undefined = this.fileInputRef.value;
 
