@@ -14,6 +14,8 @@
     "settingsSubtitle": "Configure gateway settings"
   },
   "chat": {
+    "title": "XopcBot",
+    "newSession": "New Chat",
     "welcomeTitle": "Welcome to xopcbot",
     "welcomeDescription": "Send a message to get started",
     "emptyState": "No messages yet",

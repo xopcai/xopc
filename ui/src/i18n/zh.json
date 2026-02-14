@@ -14,6 +14,8 @@
     "settingsSubtitle": "配置网关设置"
   },
   "chat": {
+    "title": "XopcBot",
+    "newSession": "新建对话",
     "welcomeTitle": "欢迎使用 xopcbot",
     "welcomeDescription": "发送消息开始对话",
     "emptyState": "暂无消息",
