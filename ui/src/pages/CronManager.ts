@@ -41,6 +41,7 @@ export class CronManager extends LitElement {
   @state() private _confirmAction: 'delete' | 'run' | null = null;
 
   private _api!: CronAPIClient;
+  private _initialized = false;
 
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -48,13 +49,25 @@ export class CronManager extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    if (this.config?.url) {
-      // Use base HTTP URL directly (no WS conversion needed)
-      const httpUrl = this.config.url.replace(/\/+$/, '');
-      this._api = new CronAPIClient(httpUrl, this.config.token);
-      this._loadJobs();
-      this._loadMetrics();
+    this._tryInitialize();
+  }
+
+  override willUpdate(changedProperties: Map<string, unknown>): void {
+    super.willUpdate(changedProperties);
+    if (changedProperties.has('config')) {
+      this._tryInitialize();
     }
+  }
+
+  private _tryInitialize(): void {
+    if (this._initialized || !this.config?.url) {
+      return;
+    }
+    const httpUrl = this.config.url.replace(/\/+$/, '');
+    this._api = new CronAPIClient(httpUrl, this.config.token);
+    this._initialized = true;
+    this._loadJobs();
+    this._loadMetrics();
   }
 
   override disconnectedCallback(): void {

@@ -42,6 +42,7 @@ export class SessionManager extends LitElement {
 
   private _api!: SessionAPIClient;
   private _limit = 20;
+  private _initialized = false;
 
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -49,12 +50,25 @@ export class SessionManager extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    if (this.config?.url) {
-      const httpUrl = this.config.url.replace(/\/+$/, '');
-      this._api = new SessionAPIClient(httpUrl, this.config.token);
-      this._loadSessions();
-      this._loadStats();
+    this._tryInitialize();
+  }
+
+  override willUpdate(changedProperties: Map<string, unknown>): void {
+    super.willUpdate(changedProperties);
+    if (changedProperties.has('config')) {
+      this._tryInitialize();
     }
+  }
+
+  private _tryInitialize(): void {
+    if (this._initialized || !this.config?.url) {
+      return;
+    }
+    const httpUrl = this.config.url.replace(/\/+$/, '');
+    this._api = new SessionAPIClient(httpUrl, this.config.token);
+    this._initialized = true;
+    this._loadSessions();
+    this._loadStats();
   }
 
   override disconnectedCallback(): void {

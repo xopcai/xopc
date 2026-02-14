@@ -21,6 +21,7 @@ export class SubagentsManager extends LitElement {
   @state() private _selectedSubagent: SessionMetadata | null = null;
 
   private _api?: SessionAPIClient;
+  private _initialized = false;
 
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -28,11 +29,24 @@ export class SubagentsManager extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    if (this.config?.url) {
-      const httpUrl = this.config.url.replace(/\/+$/, '');
-      this._api = new SessionAPIClient(httpUrl, this.config.token);
-      this._loadSubagents();
+    this._tryInitialize();
+  }
+
+  override willUpdate(changedProperties: Map<string, unknown>): void {
+    super.willUpdate(changedProperties);
+    if (changedProperties.has('config')) {
+      this._tryInitialize();
     }
+  }
+
+  private _tryInitialize(): void {
+    if (this._initialized || !this.config?.url) {
+      return;
+    }
+    const httpUrl = this.config.url.replace(/\/+$/, '');
+    this._api = new SessionAPIClient(httpUrl, this.config.token);
+    this._initialized = true;
+    this._loadSubagents();
   }
 
   private async _loadSubagents(): Promise<void> {
