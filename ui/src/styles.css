@@ -576,9 +576,10 @@ html, body {
 }
 
 .chat-messages-inner {
-  max-width: 48rem;
+  max-width: 80rem;
   margin: 0 auto;
   padding: 0 1rem;
+  width: 100%;
 }
 
 .chat-input-container {
@@ -587,8 +588,9 @@ html, body {
 }
 
 .chat-input-inner {
-  max-width: 48rem;
+  max-width: 80rem;
   margin: 0 auto;
+  width: 100%;
 }
 
 /* --------------------------------------------
