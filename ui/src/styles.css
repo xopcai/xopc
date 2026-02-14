@@ -93,58 +93,58 @@ html.light {
    Inspired by premium dark apps
    -------------------------------------------- */
 html.dark {
-  /* Primary backgrounds - deep charcoal with subtle warmth */
-  --bg-primary: #0c0a09;        /* Deep obsidian - main background */
-  --bg-secondary: #1c1917;      /* Elevated surface - cards, panels */
-  --bg-tertiary: #292524;       /* Higher elevation - hover, active */
-  --bg-hover: #44403c;          /* Interactive hover states */
+  /* Primary backgrounds - charcoal black */
+  --bg-primary: #121212;        /* Charcoal black - main background */
+  --bg-secondary: #1a1a1a;      /* Elevated surface - cards, panels */
+  --bg-tertiary: #242424;       /* Higher elevation - hover, active */
+  --bg-hover: #333333;          /* Interactive hover states */
   
   /* Text colors - soft, easy on the eyes */
-  --text-primary: #fafaf9;      /* Warm white - primary text */
-  --text-secondary: #a8a29e;    /* Muted warm gray - secondary */
-  --text-muted: #78716c;        /* Subtle - hints, placeholders */
-  --text-inverse: #1c1917;      /* For light backgrounds */
+  --text-primary: #E0E0E0;      /* Light gray - primary text */
+  --text-secondary: #B0B0B0;    /* Medium gray - secondary */
+  --text-muted: #707070;        /* Subtle - hints, placeholders */
+  --text-inverse: #121212;      /* For light backgrounds */
   
-  /* Accent colors - vibrant but refined */
-  --accent-primary: #818cf8;        /* Indigo 400 - brighter for dark */
-  --accent-primary-hover: #a5b4fc;  /* Indigo 300 - hover */
-  --accent-primary-light: #312e81;  /* Indigo 900 - subtle backgrounds */
-  --accent-primary-soft: #4338ca;   /* Indigo 700 - borders, highlights */
+  /* Accent colors - soft gray */
+  --accent-primary: #888888;        /* Soft gray - primary accent */
+  --accent-primary-hover: #a0a0a0;  /* Lighter gray - hover */
+  --accent-primary-light: #2a2a2a;  /* Subtle backgrounds */
+  --accent-primary-soft: #444444;   /* Borders, highlights */
   
   /* Semantic colors - adjusted for dark visibility */
-  --accent-success: #34d399;        /* Emerald 400 */
-  --accent-success-light: #064e3b;  /* Emerald 900 */
-  --accent-success-soft: #065f46;   /* Emerald 800 */
+  --accent-success: #6b9b6b;        /* Muted green */
+  --accent-success-light: #1a2e1a;  /* Dark green bg */
+  --accent-success-soft: #2a3f2a;   /* Medium green bg */
   
-  --accent-warning: #fbbf24;        /* Amber 400 */
-  --accent-warning-light: #78350f;  /* Amber 900 */
-  --accent-warning-soft: #92400e;   /* Amber 800 */
+  --accent-warning: #c4a35a;        /* Muted amber */
+  --accent-warning-light: #2a2515;  /* Dark amber bg */
+  --accent-warning-soft: #3f3520;   /* Medium amber bg */
   
-  --accent-error: #f87171;          /* Red 400 */
-  --accent-error-light: #7f1d1d;    /* Red 900 */
-  --accent-error-soft: #991b1b;     /* Red 800 */
+  --accent-error: #b55a5a;          /* Muted red */
+  --accent-error-light: #2a1515;    /* Dark red bg */
+  --accent-error-soft: #3f2020;     /* Medium red bg */
   
-  --accent-info: #22d3ee;           /* Cyan 400 */
-  --accent-info-light: #164e63;     /* Cyan 900 */
-  --accent-info-soft: #155e75;      /* Cyan 800 */
+  --accent-info: #5a8a9a;          /* Muted cyan */
+  --accent-info-light: #152a30;    /* Dark cyan bg */
+  --accent-info-soft: #203f4a;     /* Medium cyan bg */
   
-  /* Border colors - subtle definition in dark */
-  --border-color: #292524;          /* Very subtle - default */
-  --border-strong: #44403c;         /* More visible - emphasis */
-  --border-subtle: #1c1917;         /* Almost invisible - dividers */
+  /* Border colors - dark gray */
+  --border-color: #444444;          /* Dark gray - default */
+  --border-strong: #555555;         /* More visible - emphasis */
+  --border-subtle: #333333;         /* Subtle - dividers */
   
-  /* Shadows - softer, colored for depth in dark */
-  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
-  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
-  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.3);
-  --shadow-glow: 0 0 30px -5px rgb(129 140 248 / 0.25);  /* Indigo glow in dark */
+  /* Shadows - softer for dark */
+  --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+  --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+  --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+  --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+  --shadow-glow: 0 0 30px -5px rgb(136 136 136 / 0.15);  /* Gray glow in dark */
   
-  /* Special effects - richer in dark */
-  --gradient-primary: linear-gradient(135deg, #818cf8 0%, #a78bfa 50%, #f472b6 100%);
-  --gradient-surface: linear-gradient(180deg, #1c1917 0%, #0c0a09 100%);
-  --gradient-subtle: linear-gradient(180deg, rgba(28,25,23,0.8) 0%, rgba(12,10,9,0) 100%);
+  /* Special effects - subtle in dark */
+  --gradient-primary: linear-gradient(135deg, #888888 0%, #999999 50%, #777777 100%);
+  --gradient-surface: linear-gradient(180deg, #1a1a1a 0%, #121212 100%);
+  --gradient-subtle: linear-gradient(180deg, rgba(26,26,26,0.8) 0%, rgba(18,18,18,0) 100%);
 }
 
 /* --------------------------------------------
@@ -152,49 +152,49 @@ html.dark {
    -------------------------------------------- */
 @media (prefers-color-scheme: dark) {
   :root:not(.light):not(.dark) {
-    --bg-primary: #0c0a09;
-    --bg-secondary: #1c1917;
-    --bg-tertiary: #292524;
-    --bg-hover: #44403c;
+    --bg-primary: #121212;
+    --bg-secondary: #1a1a1a;
+    --bg-tertiary: #242424;
+    --bg-hover: #333333;
     
-    --text-primary: #fafaf9;
-    --text-secondary: #a8a29e;
-    --text-muted: #78716c;
-    --text-inverse: #1c1917;
+    --text-primary: #E0E0E0;
+    --text-secondary: #B0B0B0;
+    --text-muted: #707070;
+    --text-inverse: #121212;
     
-    --accent-primary: #818cf8;
-    --accent-primary-hover: #a5b4fc;
-    --accent-primary-light: #312e81;
-    --accent-primary-soft: #4338ca;
+    --accent-primary: #888888;
+    --accent-primary-hover: #a0a0a0;
+    --accent-primary-light: #2a2a2a;
+    --accent-primary-soft: #444444;
     
-    --accent-success: #34d399;
-    --accent-success-light: #064e3b;
-    --accent-success-soft: #065f46;
+    --accent-success: #6b9b6b;
+    --accent-success-light: #1a2e1a;
+    --accent-success-soft: #2a3f2a;
     
-    --accent-warning: #fbbf24;
-    --accent-warning-light: #78350f;
-    --accent-warning-soft: #92400e;
+    --accent-warning: #c4a35a;
+    --accent-warning-light: #2a2515;
+    --accent-warning-soft: #3f3520;
     
-    --accent-error: #f87171;
-    --accent-error-light: #7f1d1d;
-    --accent-error-soft: #991b1b;
+    --accent-error: #b55a5a;
+    --accent-error-light: #2a1515;
+    --accent-error-soft: #3f2020;
     
-    --accent-info: #22d3ee;
-    --accent-info-light: #164e63;
-    --accent-info-soft: #155e75;
+    --accent-info: #5a8a9a;
+    --accent-info-light: #152a30;
+    --accent-info-soft: #203f4a;
     
-    --border-color: #292524;
-    --border-strong: #44403c;
-    --border-subtle: #1c1917;
+    --border-color: #444444;
+    --border-strong: #555555;
+    --border-subtle: #333333;
     
-    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.3);
-    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.4), 0 1px 2px -1px rgb(0 0 0 / 0.3);
-    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4), 0 2px 4px -2px rgb(0 0 0 / 0.3);
-    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.4), 0 4px 6px -4px rgb(0 0 0 / 0.3);
-    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.4), 0 8px 10px -6px rgb(0 0 0 / 0.3);
-    --shadow-glow: 0 0 30px -5px rgb(129 140 248 / 0.25);
+    --shadow-xs: 0 1px 2px 0 rgb(0 0 0 / 0.4);
+    --shadow-sm: 0 1px 3px 0 rgb(0 0 0 / 0.5), 0 1px 2px -1px rgb(0 0 0 / 0.4);
+    --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.5), 0 2px 4px -2px rgb(0 0 0 / 0.4);
+    --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5), 0 4px 6px -4px rgb(0 0 0 / 0.4);
+    --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.5), 0 8px 10px -6px rgb(0 0 0 / 0.4);
+    --shadow-glow: 0 0 30px -5px rgb(136 136 136 / 0.15);
     
-    --gradient-primary: linear-gradient(135deg, #818cf8 0%, #a78bfa 50%, #f472b6 100%);
+    --gradient-primary: linear-gradient(135deg, #888888 0%, #999999 50%, #777777 100%);
     --gradient-surface: linear-gradient(180deg, #1c1917 0%, #0c0a09 100%);
     --gradient-subtle: linear-gradient(180deg, rgba(28,25,23,0.8) 0%, rgba(12,10,9,0) 100%);
   }
