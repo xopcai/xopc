@@ -3,6 +3,7 @@ import { customElement, property, state, query } from 'lit/decorators.js';
 import './gateway-chat';
 import './pages/SessionManager';
 import './pages/CronManager';
+import './pages/SubagentsManager';
 import './dialogs/SettingsDialog';
 import {
   TAB_GROUPS,
@@ -91,7 +92,7 @@ export class XopcbotApp extends LitElement {
     }
     
     const tab = hash as Tab;
-    const validTabs: Tab[] = ['sessions', 'cron', 'settings'];
+    const validTabs: Tab[] = ['sessions', 'subagents', 'cron', 'settings'];
     
     if (validTabs.includes(tab)) {
       if (this._activeTab !== tab) {
@@ -276,6 +277,7 @@ export class XopcbotApp extends LitElement {
 
             ${this._activeTab === 'chat' ? this._renderChat() : nothing}
             ${this._activeTab === 'sessions' ? this._renderSessions() : nothing}
+            ${this._activeTab === 'subagents' ? this._renderSubagents() : nothing}
             ${this._activeTab === 'cron' ? this._renderCron() : nothing}
           </main>
         </div>
@@ -340,6 +342,17 @@ export class XopcbotApp extends LitElement {
       <session-manager
         .config=${{ url, token }}
       ></session-manager>
+    `;
+  }
+
+  private _renderSubagents(): unknown {
+    const url = this.gatewayConfig?.url || '';
+    const token = this.gatewayConfig?.token;
+    
+    return html`
+      <subagents-manager
+        .config=${{ url, token }}
+      ></subagents-manager>
     `;
   }
 

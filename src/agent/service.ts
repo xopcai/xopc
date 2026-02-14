@@ -22,6 +22,8 @@ import {
   createMessageTool,
   createMemorySearchTool,
   createMemoryGetTool,
+  createSubagentTool,
+  createParallelSubagentTool,
 } from './tools/index.js';
 import { createSkillLoader, type Skill } from './skills/index.js';
 import { getBundledSkillsDir } from '../config/paths.js';
@@ -182,6 +184,8 @@ export class AgentService {
       createMessageTool(bus, () => this.currentContext),
       createMemorySearchTool(config.workspace),
       createMemoryGetTool(config.workspace),
+      createSubagentTool(this),  // Single subagent execution
+      createParallelSubagentTool(this),  // Parallel subagents execution
     ];
 
     if (config.pluginRegistry) {

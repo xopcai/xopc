@@ -5,6 +5,9 @@ export { editFileTool, type EditToolDetails } from './edit.js';
 export { listDirTool } from './list-dir.js';
 export { createShellTool } from './shell.js';
 
+// Subagent tool
+export { createSubagentTool, createParallelSubagentTool } from './subagent.js';
+
 // Memory tools
 export { createMemorySearchTool, createMemoryGetTool } from './memory-tool.js';
 

@@ -587,6 +587,14 @@ export class GatewayService {
   }
 
   /**
+   * List all subagent sessions.
+   * Subagent sessions have keys starting with 'subagent:'.
+   */
+  async listSubagents(query?: SessionListQuery) {
+    return this.sessionManager.listSubagents(query);
+  }
+
+  /**
    * Get a single session by key
    */
   async getSession(key: string) {

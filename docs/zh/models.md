@@ -1,10 +1,10 @@
-# Models Configuration
+# 模型配置
 
-xopcbot supports multiple LLM providers through a unified configuration system.
+xopcbot 通过统一的配置系统支持多个 LLM 提供商。
 
-## Configuration File
+## 配置文件
 
-All model configurations are stored in `~/.xopcbot/config.json`:
+所有模型配置存储在 `~/.xopcbot/config.json` 中：
 
 ```json
 {
@@ -38,38 +38,38 @@ All model configurations are stored in `~/.xopcbot/config.json`:
 }
 ```
 
-## Provider Configuration
+## 提供商配置
 
-### Common Options
+### 通用选项
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `apiKey` | string | No | API key, supports `${ENV_VAR}` syntax |
-| `baseUrl` | string | No | API base URL (optional, defaults built-in) |
-| `api` | string | No | API type: `openai-completions`, `anthropic-messages`, `google-generative-ai` |
-| `models` | string[] | No | Custom model list (extends built-in models) |
+| 字段 | 类型 | 必填 | 描述 |
+|------|------|------|------|
+| `apiKey` | string | 否 | API 密钥，支持 `${ENV_VAR}` 语法 |
+| `baseUrl` | string | 否 | API 基础 URL（可选，有默认值） |
+| `api` | string | 否 | API 类型：`openai-completions`、`anthropic-messages`、`google-generative-ai` |
+| `models` | string[] | 否 | 自定义模型列表（扩展内置模型） |
 
-### Built-in Providers
+### 内置提供商
 
-| Provider | apiKey Env | baseUrl | Notes |
-|----------|-----------|---------|-------|
+| 提供商 | API Key 环境变量 | 基础 URL | 备注 |
+|--------|------------------|----------|------|
 | `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | GPT-4, o1, o3 |
-| `anthropic` | `ANTHROPIC_API_KEY` | - | Claude models |
-| `google` | `GOOGLE_API_KEY` | - | Gemini models |
+| `anthropic` | `ANTHROPIC_API_KEY` | - | Claude 模型 |
+| `google` | `GOOGLE_API_KEY` | - | Gemini 模型 |
 | `qwen` | `QWEN_API_KEY` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 通义千问 |
 | `kimi` | `KIMI_API_KEY` | `https://api.moonshot.cn/v1` | 月之暗面 |
 | `moonshot` | `MOONSHOT_API_KEY` | `https://api.moonshot.ai/v1` | Moonshot AI |
 | `minimax` | `MINIMAX_API_KEY` | `https://api.minimax.io/anthropic` | MiniMax |
-| `minimax-cn` | `MINIMAX_CN_API_KEY` | `https://api.minimaxi.com/anthropic` | MiniMax CN |
+| `minimax-cn` | `MINIMAX_CN_API_KEY` | `https://api.minimaxi.com/anthropic` | MiniMax 国内版 |
 | `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1` | DeepSeek |
 | `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` | Llama, Mixtral |
-| `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` | Multi-provider |
+| `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` | 多提供商聚合 |
 | `xai` | `XAI_API_KEY` | `https://api.x.ai/v1` | Grok |
-| `bedrock` | AWS Credentials | - | Amazon Bedrock |
+| `bedrock` | AWS 凭证 | - | Amazon Bedrock |
 
-### Ollama Configuration
+### Ollama 配置
 
-Ollama is supported with auto-discovery by default:
+Ollama 默认支持自动发现：
 
 ```json
 {
@@ -84,18 +84,18 @@ Ollama is supported with auto-discovery by default:
 }
 ```
 
-**Options:**
+**选项：**
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable/disable Ollama provider |
-| `baseUrl` | string | `http://127.0.0.1:11434/v1` | Ollama server URL |
-| `autoDiscovery` | boolean | `true` | Auto-detect locally running models |
-| `models` | string[] | [] | Manually specify models |
+| 字段 | 类型 | 默认值 | 描述 |
+|------|------|--------|------|
+| `enabled` | boolean | `true` | 启用/禁用 Ollama 提供商 |
+| `baseUrl` | string | `http://127.0.0.1:11434/v1` | Ollama 服务器 URL |
+| `autoDiscovery` | boolean | `true` | 自动检测本地运行的模型 |
+| `models` | string[] | [] | 手动指定模型 |
 
-## Environment Variables
+## 环境变量
 
-Use `${ENV_VAR}` syntax in config to reference environment variables:
+在配置中使用 `${ENV_VAR}` 语法引用环境变量：
 
 ```json
 {
@@ -107,63 +107,63 @@ Use `${ENV_VAR}` syntax in config to reference environment variables:
 }
 ```
 
-Then set the environment variable:
+然后设置环境变量：
 ```bash
 export OPENAI_API_KEY="sk-..."
 ```
 
-## CLI Commands
+## CLI 命令
 
-### List Available Models
+### 列出可用模型
 
 ```bash
 xopcbot models list
-xopcbot models list --all    # Show all models
-xopcbot models list --json   # Output as JSON
+xopcbot models list --all    # 显示所有模型
+xopcbot models list --json   # 输出为 JSON
 ```
 
-### Set Default Model
+### 设置默认模型
 
 ```bash
 xopcbot models set openai/gpt-4o
 ```
 
-### Add Custom Model
+### 添加自定义模型
 
 ```bash
-# Add model to existing provider
+# 添加模型到现有提供商
 xopcbot models add --provider openai --model gpt-4.1
 
-# Add provider with custom base URL
+# 添加带自定义基础 URL 的提供商
 xopcbot models add --provider custom --baseUrl https://api.example.com/v1 --model my-model
 ```
 
-### Remove Model
+### 删除模型
 
 ```bash
-# Remove specific model
+# 删除特定模型
 xopcbot models remove openai/gpt-4o
 
-# Remove entire provider config
+# 删除整个提供商配置
 xopcbot models remove openai
 ```
 
-### Manage API Keys
+### 管理 API 密钥
 
 ```bash
-# Set API key
+# 设置 API 密钥
 xopcbot models auth set openai ${OPENAI_API_KEY}
 
-# List configured providers
+# 列出已配置的提供商
 xopcbot models auth list
 ```
 
-## Built-in Models
+## 内置模型
 
-The following models are available by default:
+以下模型默认可用：
 
-| Provider | Models |
-|----------|--------|
+| 提供商 | 模型 |
+|--------|------|
 | openai | gpt-4o, gpt-4o-mini, gpt-5, o1, o3 |
 | anthropic | claude-sonnet-4-5, claude-haiku-4-5, claude-opus-4-5 |
 | google | gemini-2.5-pro, gemini-2.5-flash |
@@ -173,14 +173,14 @@ The following models are available by default:
 | deepseek | deepseek-chat, deepseek-reasoner |
 | groq | llama-3.3-70b |
 
-## Model References
+## 模型引用
 
-Models are referenced using the `provider/model-id` format:
+使用 `提供商/模型ID` 格式引用模型：
 
 - `openai/gpt-4o`
 - `anthropic/claude-sonnet-4-5`
 - `qwen/qwen-plus`
 
-Or by ID only for auto-detection:
-- `gpt-4o` (auto-detects as openai)
-- `claude-sonnet-4-5` (auto-detects as anthropic)
+或者仅使用 ID 进行自动检测：
+- `gpt-4o` (自动检测为 openai)
+- `claude-sonnet-4-5` (自动检测为 anthropic)

@@ -292,6 +292,69 @@ xopcbot session list --limit 1000
 | `session.unarchive` | Unarchive session |
 | `session.pin` | Pin session |
 | `session.unpin` | Unpin session |
+
+## Subagents
+
+Subagents are special sessions created when the main agent invokes `call_subagent` or `call_subagents` tools. Each subagent runs in its own isolated session with independent state.
+
+### Subagent Session Key Format
+
+Subagent session keys follow the pattern:
+- Single subagent: `subagent:{name}:{timestamp}:{randomId}`
+- Parallel subagents: `subagent:parallel:{timestamp}:{index}:{randomId}`
+
+### Listing Subagents
+
+```bash
+# List all subagent sessions via API
+curl http://localhost:18790/api/subagents
+
+# Response
+{
+  "items": [
+    {
+      "key": "subagent:researcher:1234567890:abc123",
+      "status": "active",
+      "messageCount": 5,
+      "updatedAt": "2026-02-14T10:00:00Z"
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0,
+  "hasMore": false
+}
+```
+
+### Web UI
+
+Access the Subagents management page at `/ui/#subagents` to:
+- View all subagent sessions
+- See subagent execution status
+- Review subagent messages and results
+- Delete finished subagents
+
+### Subagent Lifecycle
+
+```
+1. Main agent calls call_subagent/call_subagents tool
+       ↓
+2. New session created with subagent: prefix
+       ↓
+3. Subagent executes task in isolated context
+       ↓
+4. Result returned to main agent
+       ↓
+5. Subagent session remains for review (until manually deleted)
+```
+
+### Best Practices
+
+1. **Review Results**: Check subagent outputs in Web UI
+2. **Clean Up**: Delete finished subagents to keep list manageable
+3. **Naming**: Use descriptive `subagent_name` for easy identification
+4. **Parallel Tasks**: Use `call_subagents` for independent parallel tasks
+
 | `session.search` | Search sessions |
 | `session.searchIn` | Search within session |
 | `session.export` | Export session |

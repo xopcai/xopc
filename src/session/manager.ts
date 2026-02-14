@@ -43,6 +43,30 @@ export class SessionManager extends EventEmitter {
     return this.store.list(query);
   }
 
+  /**
+   * List all subagent sessions.
+   * Subagent sessions have keys starting with 'subagent:'.
+   */
+  async listSubagents(query: SessionListQuery = {}): Promise<PaginatedResult<SessionMetadata>> {
+    // Filter for subagent sessions only
+    const subagentQuery: SessionListQuery = {
+      ...query,
+      search: query.search ? `subagent:${query.search}` : 'subagent:',
+    };
+    
+    const result = await this.store.list(subagentQuery);
+    
+    // Additional filtering to ensure only subagent sessions
+    const subagentSessions = result.items.filter((s) => s.key.startsWith('subagent:'));
+    
+    return {
+      ...result,
+      items: subagentSessions,
+      total: subagentSessions.length,
+      hasMore: false, // Simplified for now
+    };
+  }
+
   async getSession(key: string): Promise<SessionDetail | null> {
     const session = await this.store.get(key);
     if (session) {

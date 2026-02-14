@@ -147,4 +147,28 @@ export class SessionAPIClient {
   async getStats(): Promise<SessionStats> {
     return await this.request<SessionStats>('GET', '/api/sessions/stats');
   }
+
+  // ========== Subagent API Methods ==========
+
+  async listSubagents(query?: { limit?: number; offset?: number }): Promise<PaginatedResult<SessionMetadata>> {
+    const params = new URLSearchParams();
+    if (query?.limit) params.set('limit', String(query.limit));
+    if (query?.offset) params.set('offset', String(query.offset));
+    
+    const queryString = params.toString();
+    const path = `/api/subagents${queryString ? `?${queryString}` : ''}`;
+    return await this.request<PaginatedResult<SessionMetadata>>('GET', path);
+  }
+
+  async getSubagent(key: string): Promise<SessionDetail | null> {
+    try {
+      const result = await this.request<{ session: SessionDetail }>('GET', `/api/subagents/${key}`);
+      return result.session || null;
+    } catch (err) {
+      if (err instanceof Error && err.message.includes('404')) {
+        return null;
+      }
+      throw err;
+    }
+  }
 }

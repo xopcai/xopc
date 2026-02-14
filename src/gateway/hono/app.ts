@@ -346,10 +346,35 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // POST /api/sessions/:key/rename - Rename session
   authenticated.post('/api/sessions/:key/rename', async (c) => {
     const key = c.req.param('key');
+
     const body = await c.req.json();
     const { name } = body;
     const result = await service.renameSession(key, name);
     return c.json(result);
+  });
+
+  // GET /subagents - List subagent sessions
+  authenticated.get('/subagents', async (c) => {
+    const query = c.req.query();
+    const result = await service.listSubagents({
+      limit: query.limit ? parseInt(query.limit) : undefined,
+      offset: query.offset ? parseInt(query.offset) : undefined,
+    });
+    return c.json(result);
+  });
+
+  // GET /subagents/:key - Get subagent session detail
+  authenticated.get('/subagents/:key', async (c) => {
+    const key = c.req.param('key');
+    // Verify it's a subagent session
+    if (!key.startsWith('subagent:')) {
+      return c.json({ error: 'Not a subagent session' }, 400);
+    }
+    const session = await service.getSession(key);
+    if (!session) {
+      return c.json({ error: 'Subagent session not found' }, 404);
+    }
+    return c.json({ session });
   });
 
   // Mount authenticated routes

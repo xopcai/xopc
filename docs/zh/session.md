@@ -169,3 +169,65 @@ manager.clearSession('my-chat');
 - 确认会话未被意外清空
 - 检查消息压缩是否过度
 - 可能需要增加 `max_tokens` 配置
+
+## 子代理 (Subagents)
+
+子代理是主 Agent 调用 `call_subagent` 或 `call_subagents` 工具时创建的特殊会话。每个子代理在独立的会话中运行，拥有独立的状态。
+
+### 子代理会话键格式
+
+子代理会话键遵循以下格式：
+- 单个子代理：`subagent:{name}:{timestamp}:{randomId}`
+- 并行子代理：`subagent:parallel:{timestamp}:{index}:{randomId}`
+
+### 列出子代理
+
+```bash
+# 通过 API 列出所有子代理会话
+curl http://localhost:18790/api/subagents
+
+# 返回结果
+{
+  "items": [
+    {
+      "key": "subagent:researcher:1234567890:abc123",
+      "status": "active",
+      "messageCount": 5,
+      "updatedAt": "2026-02-14T10:00:00Z"
+    }
+  ],
+  "total": 1,
+  "limit": 50,
+  "offset": 0,
+  "hasMore": false
+}
+```
+
+### Web UI
+
+访问 `/ui/#subagents` 页面可以：
+- 查看所有子代理会话
+- 查看子代理执行状态
+- 审查子代理消息和结果
+- 删除已完成的子代理
+
+### 子代理生命周期
+
+```
+1. 主 Agent 调用 call_subagent/call_subagents 工具
+       ↓
+2. 创建以 subagent: 为前缀的新会话
+       ↓
+3. 子代理在独立上下文中执行任务
+       ↓
+4. 结果返回给主 Agent
+       ↓
+5. 子代理会话保留供审查（直到手动删除）
+```
+
+### 最佳实践
+
+1. **审查结果**：在 Web UI 中检查子代理输出
+2. **清理清理**：删除已完成的子代理以保持列表整洁
+3. **命名规范**：使用描述性的 `subagent_name` 便于识别
+4. **并行任务**：对独立任务使用 `call_subagents`

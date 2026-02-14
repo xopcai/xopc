@@ -6,10 +6,12 @@
   "nav": {
     "chat": "对话",
     "sessions": "会话",
+    "subagents": "子代理",
     "cron": "定时任务",
     "settings": "设置",
     "chatSubtitle": "与网关代理对话",
     "sessionsSubtitle": "管理对话历史",
+    "subagentsSubtitle": "查看子代理会话",
     "cronSubtitle": "管理定时任务",
     "settingsSubtitle": "配置网关设置"
   },
@@ -105,5 +107,18 @@
     "noResult": "无结果",
     "artifacts": "产物",
     "showArtifacts": "显示产物"
+  },
+  "subagents": {
+    "title": "子代理",
+    "empty": "暂无子代理会话",
+    "emptyDescription": "当主 Agent 调用 call_subagent 或 call_subagents 工具时会创建子代理会话",
+    "refresh": "刷新",
+    "loading": "加载中...",
+    "retry": "重试",
+    "back": "返回",
+    "sessionKey": "会话密钥",
+    "messages": "消息数",
+    "created": "创建时间",
+    "updated": "更新时间"
   }
 }

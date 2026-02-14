@@ -6,10 +6,12 @@
   "nav": {
     "chat": "Chat",
     "sessions": "Sessions",
+    "subagents": "Subagents",
     "cron": "Cron Jobs",
     "settings": "Settings",
     "chatSubtitle": "Chat with the gateway agent",
     "sessionsSubtitle": "Manage conversation history",
+    "subagentsSubtitle": "View subagent sessions",
     "cronSubtitle": "Manage scheduled tasks",
     "settingsSubtitle": "Configure gateway settings"
   },
@@ -105,5 +107,18 @@
     "noResult": "No result",
     "artifacts": "Artifacts",
     "showArtifacts": "Show artifacts"
+  },
+  "subagents": {
+    "title": "Subagents",
+    "empty": "No subagent sessions",
+    "emptyDescription": "Subagent sessions are created when the main agent calls call_subagent or call_subagents tools",
+    "refresh": "Refresh",
+    "loading": "Loading subagents...",
+    "retry": "Retry",
+    "back": "Back",
+    "sessionKey": "Session Key",
+    "messages": "Messages",
+    "created": "Created",
+    "updated": "Updated"
   }
 }
