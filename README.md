@@ -5,10 +5,21 @@
     <strong>An ultra-lightweight, plugin-driven personal AI assistant built with Node.js and TypeScript.</strong>
   </p>
   <p>
-    <a href="https://github.com/xopcai/xopcbot"><img src="https://img.shields.io/badge/xopcai-xopcbot-blue" alt="GitHub"></a>
-    <a href="#"><img src="https://img.shields.io/badge/node-%3E%3D22.0.0-brightgreen" alt="Node"></a>
-    <a href="#"><img src="https://img.shields.io/badge/TypeScript-5.x-blue" alt="TypeScript"></a>
-    <a href="#"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
+    <a href="https://github.com/xopcai/xopcbot">
+      <img src="https://img.shields.io/badge/GitHub-xopcai/xopcbot-blue" alt="GitHub">
+    </a>
+    <a href="https://xopcai.github.io/xopcbot/">
+      <img src="https://img.shields.io/badge/Docs-xopcai.github.io/xopcbot-brightgreen" alt="Docs">
+    </a>
+    <a href="#">
+      <img src="https://img.shields.io/badge/Node-%3E%3D22.0.0-brightgreen" alt="Node">
+    </a>
+    <a href="#">
+      <img src="https://img.shields.io/badge/TypeScript-5.x-blue" alt="TypeScript">
+    </a>
+    <a href="#">
+      <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
+    </a>
   </p>
 </div>
 
@@ -16,88 +27,89 @@
 
 ## ✨ Features
 
-- **🤖 Unified LLM API**: Supports 20+ providers (OpenAI, Anthropic, Google, Groq, etc.) via `@mariozechner/pi-ai`.
-- **🔌 Extensible Plugins**: Add custom tools, hooks, and commands with hot-reloading.
-- **📱 Multi-Channel Support**: Interact via Telegram, WhatsApp, or Web UI.
-- **🧠 Persistent Memory**: Maintains conversation history with automatic context compaction.
-- **📂 Session Management**: Browse, search, archive, and manage conversation history via CLI or Web UI.
-- **🔧 Rich Built-in Tools**: Filesystem access, shell execution, web search, and more.
-- **⏰ Scheduled Tasks**: Automate actions with a cron-based scheduler.
-- **🖥️ Powerful CLI**: Manage your agent, configuration, and plugins from the command line.
-- **🌐 Web UI**: Modern web interface for chat and session management.
+- **🤖 Unified LLM API** - Supports 20+ providers (OpenAI, Anthropic, Google, Groq, DeepSeek, MiniMax, Qwen, Kimi, etc.)
+- **🔌 Extensible Plugins** - Add custom tools, hooks, and commands with hot-reloading
+- **📱 Multi-Channel Support** - Telegram, WhatsApp, Feishu/Lark, or Web UI
+- **🧠 Persistent Memory** - Conversation history with automatic context compaction
+- **📂 Session Management** - Browse, search, archive, and manage conversations via CLI or Web UI
+- **🔧 Rich Built-in Tools** - Filesystem, shell, web search, grep, find, edit, and more
+- **⏰ Scheduled Tasks** - Cron-based automation
+- **🖥️ Powerful CLI** - Manage agent, config, and plugins from command line
+- **🌐 Modern Web UI** - Chat, sessions, cron, subagents, logs, and settings
 
 ---
 
-## 🚀 Getting Started
-
-This guide will get you from zero to your first AI response in minutes.
-
-### Prerequisites
-
-- **Node.js**: Version 22.0.0 or higher.
-- **npm** or **pnpm**: Package manager of your choice.
-
-### 1. Installation
-
-Clone the repository and install dependencies.
+## 🚀 Quick Start
 
 ```bash
+# Clone and install
 git clone https://github.com/xopcai/xopcbot.git
 cd xopcbot
-npm install
-# or: pnpm install
+pnpm install
+
+# Configure (interactive setup)
+pnpm run dev -- configure
+
+# Start chatting!
+pnpm run dev -- agent -i
 ```
 
-### 2. Configuration
-
-Run the interactive setup command. This will create your configuration file at `~/.xopcbot/config.json` and prompt you to add an LLM provider API key.
-
-```bash
-npm run dev -- configure
-# or: pnpm run dev -- configure
-```
-
-### 3. Chat!
-
-You can now chat with your agent directly from the command line.
-
-```bash
-# Send a single message
-npm run dev -- agent -m "Hello, world! What can you do?"
-
-# Start an interactive session
-npm run dev -- agent -i
-
-# List all conversation sessions
-npm run dev -- session list
-
-# View session statistics
-npm run dev -- session stats
-
-# or use pnpm
-pnpm run dev -- agent -m "Hello, world!"
-```
+> **Tip:** Run `pnpm run dev -- configure` to set up your LLM provider API key interactively.
 
 ---
 
-## 📚 Learn More
+## 📖 Documentation
 
-For more detailed information, check out the full documentation:
+Full documentation is available at **[xopcai.github.io/xopcbot](https://xopcai.github.io/xopcbot/)**
 
-- **[Getting Started Guide](docs/getting-started.md)**: A comprehensive walkthrough of setup and basic usage.
-- **[Configuration](docs/configuration.md)**: Full reference for `config.json`.
-- **[CLI Reference](docs/cli.md)**: Details on all available commands.
-- **[Architecture](docs/architecture.md)**: A look under the hood.
-- **[Plugin Development](docs/plugins.md)**: Learn how to build your own plugins.
+| Guide | Description |
+|-------|-------------|
+| [Getting Started](https://xopcai.github.io/xopcbot/getting-started) | Setup and basic usage |
+| [Configuration](https://xopcai.github.io/xopcbot/configuration) | Full config reference |
+| [CLI Reference](https://xopcai.github.io/xopcbot/cli) | All available commands |
+| [Channels](https://xopcai.github.io/xopcbot/channels) | Telegram, WhatsApp, Feishu setup |
+| [Plugins](https://xopcai.github.io/xopcbot/plugins) | Build your own plugins |
+| [Tools](https://xopcai.github.io/xopcbot/tools) | Built-in tools reference |
+| [Architecture](https://xopcai.github.io/xopcbot/architecture) | Under the hood |
+
+---
+
+## 💬 Supported Channels
+
+| Channel | Status | Description |
+|---------|--------|-------------|
+| Telegram | ✅ | Bot API with polling/webhook |
+| WhatsApp | ✅ | Baileys WebSocket |
+| Feishu/Lark | ✅ | WebSocket events |
+| Web UI | ✅ | Modern browser interface |
+
+---
 
 ## 🛠️ Development
 
-- **Run Commands**: `npm run dev -- <command>` (or `pnpm run dev -- <command>`)
-- **Type Check & Build**: `npm run build`
-- **Run Tests**: `npm test`
-- **Lint Code**: `npm run lint`
+```bash
+# Development
+pnpm run dev
+
+# Build
+pnpm run build
+
+# Test
+pnpm test
+
+# Lint
+pnpm run lint
+```
+
+---
 
 ## 🙏 Credits
 
-- Inspired by the architecture of [OpenClaw](https://github.com/openclaw/openclaw).
-- LLM provider integration powered by [@mariozechner/pi-ai](https://github.com/badlogic/pi-mono).
+- Inspired by [OpenClaw](https://github.com/openclaw/openclaw)
+- LLM providers via [@mariozechner/pi-ai](https://github.com/badlogic/pi-mono)
+
+---
+
+<div align="center">
+  <sub>Made with ❤️ by <a href="https://github.com/xopcai">xopcai</a></sub>
+</div>
