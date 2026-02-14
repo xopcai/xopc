@@ -65,6 +65,7 @@ export class XopcbotGatewayChat extends LitElement {
   @property({ type: Boolean }) enableModelSelector = true;
 
   @query('message-editor') private _messageEditor!: MessageEditor;
+  @query('.chat-messages') private _chatMessages!: HTMLElement;
 
   @state() private _connectionState: ConnectionState = 'disconnected';
   @state() private _error: string | null = null;
@@ -74,6 +75,7 @@ export class XopcbotGatewayChat extends LitElement {
   @state() private _streamingMessage: Message | null = null;
   @state() private _reconnectCount = 0;
   @state() private _reconnectDelay = 0;
+  @state() private _isAtBottom = true;
 
   /** SSE event source for server-pushed events */
   private _eventSource?: EventSource;
@@ -104,6 +106,7 @@ export class XopcbotGatewayChat extends LitElement {
     super.connectedCallback();
     this.classList.add('chat-container');
     await initI18n('en');
+    this.addEventListener('scroll', this._handleScroll as EventListener);
   }
 
   override updated(changedProperties: Map<string, unknown>): void {
@@ -118,6 +121,24 @@ export class XopcbotGatewayChat extends LitElement {
     this._shouldReconnect = false;
     this._clearReconnectTimer();
     this.disconnect();
+    this.removeEventListener('scroll', this._handleScroll as EventListener);
+  }
+
+  // ========== Scroll handling ==========
+
+  private _handleScroll = (): void => {
+    if (!this._chatMessages) return;
+    const { scrollTop, scrollHeight, clientHeight } = this._chatMessages;
+    const atBottom = scrollHeight - scrollTop - clientHeight < 50;
+    if (atBottom !== this._isAtBottom) {
+      this._isAtBottom = atBottom;
+    }
+  };
+
+  private _scrollToBottom(): void {
+    if (this._chatMessages) {
+      this._chatMessages.scrollTop = this._chatMessages.scrollHeight;
+    }
   }
 
   // ========== Connection (SSE for server-push) ==========
@@ -288,6 +309,7 @@ export class XopcbotGatewayChat extends LitElement {
         timestamp: Date.now(),
       },
     ];
+    this._scrollToBottom();
     this.requestUpdate();
 
     try {
@@ -464,6 +486,11 @@ export class XopcbotGatewayChat extends LitElement {
     this._isStreaming = false;
     this._streamingContent = '';
     this._isSending = false;
+    
+    // Auto-scroll to bottom if user is at bottom
+    if (this._isAtBottom) {
+      this._scrollToBottom();
+    }
     this.requestUpdate();
   }
 
@@ -522,6 +549,7 @@ export class XopcbotGatewayChat extends LitElement {
         <div class="chat-messages-inner">
           ${this._renderMessages()}
         </div>
+        ${!this._isAtBottom ? this._renderScrollToBottomButton() : ''}
       </div>
 
       <div class="chat-input-container">
@@ -573,8 +601,25 @@ export class XopcbotGatewayChat extends LitElement {
           <line x1="12" y1="16" x2="12.01" y2="16"/>
         </svg>
       `,
+      chevronDown: html`
+        <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      `,
     };
     return icons[name] || '';
+  }
+
+  private _renderScrollToBottomButton(): unknown {
+    return html`
+      <button 
+        class="scroll-to-bottom-btn"
+        @click=${this._scrollToBottom}
+        title="Scroll to bottom"
+      >
+        ${this._renderIcon('chevronDown')}
+      </button>
+    `;
   }
 
   private _renderMessages(): unknown {
