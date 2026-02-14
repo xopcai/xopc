@@ -1094,6 +1094,58 @@ html, body {
 }
 
 /* --------------------------------------------
+   IMAGE GALLERY
+   -------------------------------------------- */
+.image-gallery {
+  display: grid;
+  gap: 0.5rem;
+  max-width: 100%;
+  overflow: hidden;
+}
+
+.image-gallery img {
+  max-width: 100%;
+  max-height: 300px;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-lg);
+  cursor: pointer;
+}
+
+.image-gallery.single {
+  grid-template-columns: 1fr;
+}
+
+.image-gallery.single img {
+  max-height: 400px;
+}
+
+.image-gallery.double {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.image-gallery.double img {
+  max-height: 250px;
+}
+
+.image-gallery.triple {
+  grid-template-columns: repeat(3, 1fr);
+}
+
+.image-gallery.triple img {
+  max-height: 200px;
+}
+
+.image-gallery.quad {
+  grid-template-columns: repeat(2, 1fr);
+}
+
+.image-gallery.quad img {
+  max-height: 180px;
+}
+
+/* --------------------------------------------
    RESPONSIVE SETTINGS
    -------------------------------------------- */
 @media (max-width: 768px) {
