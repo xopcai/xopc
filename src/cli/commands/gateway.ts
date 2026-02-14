@@ -35,7 +35,12 @@ function createGatewayCommand(_ctx: CLIContext): Command {
         enableHotReload: options.hotReload,
       });
 
+      let shuttingDown = false;
+      
       const shutdown = async (signal: string) => {
+        if (shuttingDown) return;
+        shuttingDown = true;
+        
         console.log(`\n🛑 Received ${signal}, shutting down...`);
         
         // Force exit after 5 seconds if graceful shutdown fails
