@@ -2,6 +2,13 @@
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { spawn } from 'child_process';
+import { checkShellSafety } from '../prompt/safety.js';
+
+// Max allowed timeout (5 minutes)
+const MAX_SHELL_TIMEOUT = 300;
+
+// Max output size (1MB)
+const MAX_OUTPUT_SIZE = 1024 * 1024;
 
 const ShellSchema = Type.Object({
   command: Type.String({ description: 'The shell command to execute' }),
@@ -23,11 +30,22 @@ export function createShellTool(defaultWorkdir?: string): AgentTool<typeof Shell
       onUpdate?: (partial: AgentToolResult<{}>) => void
     ): Promise<AgentToolResult<{}>> {
       const command = params.command;
-      const timeout = params.timeout || 60;
+      const timeout = Math.min(params.timeout || 60, MAX_SHELL_TIMEOUT);
       const workdir = params.workdir || defaultWorkdir || process.cwd();
+
+      // Safety check - block dangerous commands
+      const safety = checkShellSafety(command);
+      if (!safety.allowed) {
+        return {
+          content: [{ type: 'text', text: `🚫 Command blocked by safety policy: ${safety.message}` }],
+          details: { blocked: true, reason: safety.message },
+        };
+      }
 
       return new Promise((resolve) => {
         const chunks: Buffer[] = [];
+        let outputSize = 0;
+        let truncated = false;
         const startTime = Date.now();
 
         const proc = spawn(command, {
@@ -37,6 +55,19 @@ export function createShellTool(defaultWorkdir?: string): AgentTool<typeof Shell
         });
 
         proc.stdout.on('data', (d: Buffer) => {
+          if (truncated) return;
+          
+          if (outputSize + d.length > MAX_OUTPUT_SIZE) {
+            truncated = true;
+            const remaining = MAX_OUTPUT_SIZE - outputSize;
+            if (remaining > 0) {
+              chunks.push(d.slice(0, remaining));
+            }
+            proc.kill('SIGTERM');
+            return;
+          }
+          
+          outputSize += d.length;
           chunks.push(d);
           if (onUpdate) {
             onUpdate({
@@ -50,7 +81,11 @@ export function createShellTool(defaultWorkdir?: string): AgentTool<typeof Shell
 
         proc.on('close', (code) => {
           const elapsed = ((Date.now() - startTime) / 1000).toFixed(2);
-          const output = Buffer.concat(chunks).toString('utf-8').trim();
+          let output = Buffer.concat(chunks).toString('utf-8').trim();
+
+          if (truncated) {
+            output += '\n\n[Output truncated - exceeded 1MB limit]';
+          }
 
           if (code === 0) {
             resolve({
@@ -62,7 +97,7 @@ export function createShellTool(defaultWorkdir?: string): AgentTool<typeof Shell
                     : `Success (${elapsed}s)`,
                 },
               ],
-              details: {},
+              details: { truncated },
             });
           } else {
             resolve({
@@ -72,7 +107,7 @@ export function createShellTool(defaultWorkdir?: string): AgentTool<typeof Shell
                   text: `Command failed (exit code ${code}) after ${elapsed}s:\n${output || 'no output'}`,
                 },
               ],
-              details: {},
+              details: { truncated },
             });
           }
         });

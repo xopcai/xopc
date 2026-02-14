@@ -1,7 +1,12 @@
 // Read File Tool
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
-import { readFile } from 'fs/promises';
+import { readFile, stat } from 'fs/promises';
+import { normalize } from 'path';
+import { checkFileSafety } from '../prompt/safety.js';
+
+// Max file size (10MB)
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const ReadFileSchema = Type.Object({
   path: Type.String({ description: 'The file path to read' }),
@@ -19,10 +24,31 @@ export const readFileTool: AgentTool<typeof ReadFileSchema, {} > = {
     _signal?: AbortSignal
   ): Promise<AgentToolResult<{}>> {
     try {
-      const content = await readFile(params.path, 'utf-8');
+      // Safety check - block sensitive paths
+      const safety = checkFileSafety('read', params.path);
+      if (!safety.allowed) {
+        return {
+          content: [{ type: 'text', text: `🚫 ${safety.message}` }],
+          details: { blocked: true, reason: safety.message },
+        };
+      }
+
+      // Path normalization to prevent traversal
+      const normalized = normalize(params.path);
+
+      // Check file size before reading
+      const stats = await stat(normalized);
+      if (stats.size > MAX_FILE_SIZE) {
+        return {
+          content: [{ type: 'text', text: `🚫 File too large: ${stats.size} bytes (max: ${MAX_FILE_SIZE})` }],
+          details: { blocked: true, reason: 'File size exceeded' },
+        };
+      }
+
+      const content = await readFile(normalized, 'utf-8');
       return {
         content: [{ type: 'text', text: content }],
-        details: {},
+        details: { size: stats.size },
       };
     } catch (error) {
       return {

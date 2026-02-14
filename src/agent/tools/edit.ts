@@ -1,7 +1,9 @@
 // Edit File Tool
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
-import { readFile, writeFile } from 'fs/promises';
+import { readFile, writeFile, stat } from 'fs/promises';
+import { normalize } from 'path';
+import { checkFileSafety } from '../prompt/safety.js';
 import {
   normalizeToLF,
   restoreLineEndings,
@@ -10,6 +12,9 @@ import {
   stripBom,
   generateDiffString,
 } from './edit-diff.js';
+
+// Max file size (10MB)
+const MAX_FILE_SIZE = 10 * 1024 * 1024;
 
 const EditFileSchema = Type.Object({
   path: Type.String({ description: 'The file path to edit' }),
@@ -43,7 +48,28 @@ export const editFileTool: AgentTool<typeof EditFileSchema, EditToolDetails> = {
     _signal?: AbortSignal
   ): Promise<AgentToolResult<EditToolDetails>> {
     try {
-      const rawContent = await readFile(params.path, 'utf-8');
+      // Safety check - block sensitive paths
+      const safety = checkFileSafety('write', params.path);
+      if (!safety.allowed) {
+        return {
+          content: [{ type: 'text', text: `🚫 ${safety.message}` }],
+          details: {},
+        };
+      }
+
+      // Path normalization to prevent traversal
+      const normalized = normalize(params.path);
+
+      // Check file size before reading
+      const stats = await stat(normalized);
+      if (stats.size > MAX_FILE_SIZE) {
+        return {
+          content: [{ type: 'text', text: `🚫 File too large: ${stats.size} bytes (max: ${MAX_FILE_SIZE})` }],
+          details: {},
+        };
+      }
+
+      const rawContent = await readFile(normalized, 'utf-8');
       const { text: content } = stripBom(rawContent);
       const lineEnding = detectLineEnding(rawContent);
 
