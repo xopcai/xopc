@@ -15,7 +15,7 @@
     "build": "tsc && pnpm --filter @xopcbot/web-ui run build",
     "dev": "tsx src/cli/index.ts",
     "start": "node dist/cli/index.js",
-    "test": "vitest src",
+    "test": "vitest run src",
     "lint": "eslint 'src/**/*.ts' --ignore-pattern '**/examples/**'",
     "prepublishOnly": "npm run build && npm test",
     "docs:dev": "vitepress dev docs",
