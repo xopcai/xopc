@@ -107,7 +107,13 @@ export class XopcbotGatewayChat extends LitElement {
     super.connectedCallback();
     this.classList.add('chat-container');
     await initI18n('en');
-    this.addEventListener('scroll', this._handleScroll as EventListener);
+  }
+
+  override firstUpdated(): void {
+    // Add scroll listener directly to chat messages element after render
+    if (this._chatMessages) {
+      this._chatMessages.addEventListener('scroll', this._handleScroll as EventListener);
+    }
   }
 
   override updated(changedProperties: Map<string, unknown>): void {
@@ -164,8 +170,6 @@ export class XopcbotGatewayChat extends LitElement {
   private async _loadSession(sessionKey: string, offset = 0): Promise<void> {
     if (!this.config) return;
 
-    console.log('[GatewayChat] Loading session:', sessionKey, 'offset:', offset);
-
     try {
       const url = apiUrl(this.config.url, `/api/sessions/${encodeURIComponent(sessionKey)}?offset=${offset}&limit=50`);
       const headers = authHeaders(this.config.token);
@@ -200,10 +204,10 @@ export class XopcbotGatewayChat extends LitElement {
       
       // Check if there are more messages to load
       this._hasMoreMessages = messages.length >= 50;
-      
-      // Scroll to bottom only on initial load
+
+      // Scroll to bottom only on initial load (instant scroll, no animation)
       if (offset === 0) {
-        this._scrollToBottom();
+        this._scrollToBottom(false);
       }
       this.requestUpdate();
     } catch (err) {
@@ -231,7 +235,10 @@ export class XopcbotGatewayChat extends LitElement {
     super.disconnectedCallback();
     this._shouldReconnect = false;
     this.disconnect();
-    this.removeEventListener('scroll', this._handleScroll as EventListener);
+    // Remove scroll listener from chat messages element
+    if (this._chatMessages) {
+      this._chatMessages.removeEventListener('scroll', this._handleScroll as EventListener);
+    }
   }
 
   // ========== Scroll handling ==========
@@ -240,22 +247,28 @@ export class XopcbotGatewayChat extends LitElement {
     if (!this._chatMessages) return;
     const { scrollTop, scrollHeight, clientHeight } = this._chatMessages;
     const atBottom = scrollHeight - scrollTop - clientHeight < 50;
-    
+
     // Update bottom state
     if (atBottom !== this._isAtBottom) {
       this._isAtBottom = atBottom;
     }
-    
+
     // Load more when scrolling to top
     if (scrollTop < 100 && !this._isAtBottom && this._hasMoreMessages && !this._isLoadingMore) {
       this._loadMoreMessages();
     }
   };
 
-  private _scrollToBottom(): void {
-    if (this._chatMessages) {
-      this._chatMessages.scrollTop = this._chatMessages.scrollHeight;
-    }
+  private _scrollToBottom(smooth = true): void {
+    // Wait for DOM update before scrolling to ensure messages are rendered
+    this.updateComplete.then(() => {
+      if (this._chatMessages) {
+        this._chatMessages.scrollTo({
+          top: this._chatMessages.scrollHeight,
+          behavior: smooth ? 'smooth' : 'auto'
+        });
+      }
+    });
   }
 
   // ========== Connection (SSE for server-push) ==========
@@ -373,32 +386,24 @@ export class XopcbotGatewayChat extends LitElement {
 
   private async _loadSessions(): Promise<void> {
     if (!this.config) {
-      console.warn('[GatewayChat] No config, skipping session load');
       return;
     }
-
-    console.log('[GatewayChat] Loading sessions from', this.config.url);
 
     try {
       const url = apiUrl(this.config.url, '/api/sessions?limit=20');
       const headers = authHeaders(this.config.token);
-      console.log('[GatewayChat] Fetching sessions with token:', !!this.config.token);
       const res = await fetch(url, { headers });
-      
-      console.log('[GatewayChat] Sessions response status:', res.status);
+
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      
+
       const data = await res.json();
-      console.log('[GatewayChat] Sessions data:', data);
       const sessions = data.items || [];
-      
+
       // Filter gateway sessions and sort by updatedAt (newest first)
       const gatewaySessions = sessions
         .filter((s: any) => s.key.startsWith('gateway:'))
         .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
-      console.log('[GatewayChat] Gateway sessions:', gatewaySessions);
-      
       this._sessions = gatewaySessions;
       
       // Load the most recent session if exists
@@ -672,6 +677,11 @@ export class XopcbotGatewayChat extends LitElement {
     this._isStreaming = true;
     this._streamingContent = content;
     this.requestUpdate();
+
+    // Auto-scroll to bottom while streaming if user is at bottom
+    if (this._isAtBottom) {
+      this._scrollToBottom();
+    }
   }
 
   private _finalizeMessage(): void {
@@ -746,8 +756,19 @@ export class XopcbotGatewayChat extends LitElement {
         <div class="chat-messages-inner">
           ${this._renderMessages()}
         </div>
-        ${!this._isAtBottom ? this._renderScrollToBottomButton() : ''}
       </div>
+
+      <!-- Scroll to bottom button - placed outside overflow container -->
+      ${!this._isAtBottom ? html`
+        <button
+          class="scroll-to-bottom-btn"
+          style="position: fixed; bottom: 100px; right: 24px; width: 48px; height: 48px; border-radius: 50%; background: #3b82f6; color: white; border: none; cursor: pointer; display: flex; align-items: center; justify-content: center; box-shadow: 0 4px 12px rgba(0,0,0,0.15); z-index: 100;"
+          @click=${this._scrollToBottom}
+          title="Scroll to bottom"
+        >
+          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+        </button>
+      ` : ''}
 
       <div class="chat-input-container">
         <div class="chat-input-inner">
@@ -832,12 +853,13 @@ export class XopcbotGatewayChat extends LitElement {
 
   private _renderScrollToBottomButton(): unknown {
     return html`
-      <button 
+      <button
         class="scroll-to-bottom-btn"
+        style="background: red !important; width: 60px; height: 60px; font-size: 24px;"
         @click=${this._scrollToBottom}
         title="Scroll to bottom"
       >
-        ${this._renderIcon('chevronDown')}
+        👇
       </button>
     `;
   }

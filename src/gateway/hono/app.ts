@@ -353,6 +353,101 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json(result);
   });
 
+  // ========== Session REST API (/api/sessions) - Frontend compatibility ==========
+
+  // POST /api/sessions - Create new session
+  authenticated.post('/api/sessions', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const channel = body.channel || 'gateway';
+    const chatId = body.chat_id || `chat_${Date.now()}`;
+    const sessionKey = `${channel}:${chatId}`;
+
+    await service.sessionManagerInstance.saveMessages(sessionKey, []);
+
+    const session = await service.getSession(sessionKey);
+    return c.json({ session }, 201);
+  });
+
+  // GET /api/sessions - List sessions
+  authenticated.get('/api/sessions', async (c) => {
+    const query = c.req.query();
+    const result = await service.listSessions({
+      status: query.status as any,
+      search: query.search,
+      limit: query.limit ? parseInt(query.limit) : undefined,
+      offset: query.offset ? parseInt(query.offset) : undefined,
+    });
+    return c.json(result);
+  });
+
+  // GET /api/sessions/:key - Get single session
+  authenticated.get('/api/sessions/:key', async (c) => {
+    const key = c.req.param('key');
+    const session = await service.getSession(key);
+    if (!session) {
+      return c.json({ error: 'Session not found' }, 404);
+    }
+    return c.json({ session });
+  });
+
+  // DELETE /api/sessions/:key - Delete session
+  authenticated.delete('/api/sessions/:key', async (c) => {
+    const key = c.req.param('key');
+    const result = await service.deleteSession(key);
+    return c.json(result);
+  });
+
+  // POST /api/sessions/:key/archive - Archive session
+  authenticated.post('/api/sessions/:key/archive', async (c) => {
+    const key = c.req.param('key');
+    const result = await service.archiveSession(key);
+    return c.json(result);
+  });
+
+  // POST /api/sessions/:key/unarchive - Unarchive session
+  authenticated.post('/api/sessions/:key/unarchive', async (c) => {
+    const key = c.req.param('key');
+    const result = await service.unarchiveSession(key);
+    return c.json(result);
+  });
+
+  // POST /api/sessions/:key/pin - Pin session
+  authenticated.post('/api/sessions/:key/pin', async (c) => {
+    const key = c.req.param('key');
+    const result = await service.pinSession(key);
+    return c.json(result);
+  });
+
+  // POST /api/sessions/:key/unpin - Unpin session
+  authenticated.post('/api/sessions/:key/unpin', async (c) => {
+    const key = c.req.param('key');
+    const result = await service.unpinSession(key);
+    return c.json(result);
+  });
+
+  // POST /api/sessions/:key/rename - Rename session
+  authenticated.post('/api/sessions/:key/rename', async (c) => {
+    const key = c.req.param('key');
+    const body = await c.req.json();
+    const { name } = body;
+    const result = await service.renameSession(key, name);
+    return c.json(result);
+  });
+
+  // GET /api/sessions/:key/export - Export session
+  authenticated.get('/api/sessions/:key/export', async (c) => {
+    const key = c.req.param('key');
+    const format = c.req.query('format') as any || 'json';
+    const result = await service.exportSession(key, format);
+    return c.json(result);
+  });
+
+  // GET /api/sessions/stats - Get session stats
+  authenticated.get('/api/sessions/stats', async (c) => {
+    const result = await service.getSessionStats();
+    return c.json(result);
+  });
+
   // Mount authenticated routes
   app.route('/', authenticated);
 
