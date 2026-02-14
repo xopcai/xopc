@@ -1115,6 +1115,245 @@ html, body {
   flex-shrink: 0;
 }
 
+/* --------------------------------------------
+   SETTINGS PAGE
+   -------------------------------------------- */
+.settings-page {
+  display: flex;
+  height: 100%;
+  background: var(--bg-primary);
+}
+
+.settings-page .settings-sidebar {
+  width: 200px;
+  border-right: 1px solid var(--border-color);
+  padding: 0;
+  flex-shrink: 0;
+}
+
+.settings-page .sidebar-header {
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-color);
+}
+
+.settings-page .sidebar-header h3 {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.settings-page .sidebar-nav {
+  padding: 0.75rem 0.5rem;
+}
+
+.settings-page .nav-item {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: 100%;
+  padding: 0.625rem 1rem;
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  background: transparent;
+  border: none;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+  margin-bottom: 0.25rem;
+}
+
+.settings-page .nav-item:hover {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+}
+
+.settings-page .nav-item.active {
+  background: var(--accent-primary-light);
+  color: var(--accent-primary);
+  font-weight: 600;
+}
+
+.settings-page .settings-main {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+  position: relative;
+}
+
+.settings-page .section-content {
+  max-width: 600px;
+}
+
+.settings-page .section-header {
+  margin-bottom: 2rem;
+}
+
+.settings-page .section-header h2 {
+  font-size: 1.5rem;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0 0 0.5rem 0;
+}
+
+.settings-page .section-desc {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.settings-page .fields-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.settings-page .field-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.settings-page .field-header {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-page .field-label {
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+}
+
+.settings-page .field-desc {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+  margin: 0;
+}
+
+.settings-page .text-input,
+.settings-page .select-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  font-size: 0.875rem;
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  transition: all var(--transition-fast);
+}
+
+.settings-page .text-input:focus,
+.settings-page .select-input:focus {
+  outline: none;
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-alpha);
+}
+
+.settings-page .toggle-label {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  cursor: pointer;
+}
+
+.settings-page .toggle-input {
+  display: none;
+}
+
+.settings-page .toggle-switch {
+  position: relative;
+  width: 44px;
+  height: 24px;
+  background: var(--bg-secondary);
+  border-radius: 12px;
+  transition: all var(--transition-fast);
+}
+
+.settings-page .toggle-switch::after {
+  content: '';
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  width: 20px;
+  height: 20px;
+  background: white;
+  border-radius: 50%;
+  transition: all var(--transition-fast);
+}
+
+.settings-page .toggle-input:checked + .toggle-switch {
+  background: var(--accent-primary);
+}
+
+.settings-page .toggle-input:checked + .toggle-switch::after {
+  transform: translateX(20px);
+}
+
+.settings-page .toggle-text {
+  font-size: 0.875rem;
+  color: var(--text-secondary);
+}
+
+.settings-page .loading-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  gap: 1rem;
+}
+
+.settings-page .loading-state .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--border-color);
+  border-top-color: var(--accent-primary);
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+.settings-page .loading-state p {
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+}
+
+.settings-page .floating-save {
+  position: absolute;
+  bottom: 2rem;
+  right: 2rem;
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 0.75rem 1rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-lg);
+}
+
+.settings-page .dirty-count {
+  font-size: 0.8125rem;
+  color: var(--text-secondary);
+}
+
+.settings-page .spinner-sm {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255,255,255,0.3);
+  border-top-color: white;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+  display: inline-block;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
 .btn {
   display: inline-flex;
   align-items: center;

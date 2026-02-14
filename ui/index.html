@@ -42,72 +42,9 @@
           token: token
         };
 
-        // Default settings sections
-        app.settingsSections = [
-          {
-            id: 'connection',
-            title: 'Connection',
-            icon: 'plug',
-            fields: [
-              {
-                key: 'gatewayUrl',
-                label: 'Gateway URL',
-                type: 'text',
-                description: 'HTTP URL for the gateway server',
-                placeholder: 'http://localhost:18790'
-              },
-              {
-                key: 'token',
-                label: 'Auth Token',
-                type: 'password',
-                description: 'Optional authentication token'
-              }
-            ]
-          },
-          {
-            id: 'appearance',
-            title: 'Appearance',
-            icon: 'palette',
-            fields: [
-              {
-                key: 'theme',
-                label: 'Theme',
-                type: 'select',
-                description: 'Choose your preferred color scheme',
-                options: [
-                  { value: 'system', label: 'System' },
-                  { value: 'light', label: 'Light' },
-                  { value: 'dark', label: 'Dark' }
-                ]
-              }
-            ]
-          },
-          {
-            id: 'chat',
-            title: 'Chat',
-            icon: 'messageSquare',
-            fields: [
-              {
-                key: 'enableAttachments',
-                label: 'Enable Attachments',
-                type: 'boolean',
-                description: 'Allow file attachments in chat'
-              },
-              {
-                key: 'enableModelSelector',
-                label: 'Show Model Selector',
-                type: 'boolean',
-                description: 'Display model selection dropdown'
-              },
-              {
-                key: 'enableThinkingSelector',
-                label: 'Show Thinking Selector',
-                type: 'boolean',
-                description: 'Display thinking level selection'
-              }
-            ]
-          }
-        ];
+        // Settings sections are now defined in app.ts by default
+        // Only override if you need custom sections
+        // app.settingsSections is already set by the component
 
         // Default settings values
         app.settingsValues = {
@@ -116,7 +53,18 @@
           theme: 'system',
           enableAttachments: true,
           enableModelSelector: true,
-          enableThinkingSelector: true
+          enableThinkingSelector: true,
+          // Agent settings
+          model: 'anthropic/claude-sonnet-4-5',
+          maxTokens: 8192,
+          temperature: 0.7,
+          maxToolIterations: 20,
+          // Channel settings
+          telegramEnabled: false,
+          whatsappEnabled: false,
+          // Gateway settings
+          heartbeatEnabled: true,
+          heartbeatIntervalMs: 60000
         };
 
         // Handle settings save

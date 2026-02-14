@@ -5,7 +5,7 @@ import './pages/SessionManager';
 import './pages/CronManager';
 import './pages/SubagentsManager';
 import './pages/LogManager';
-import './dialogs/SettingsDialog';
+import './pages/SettingsPage';
 import {
   TAB_GROUPS,
   type Tab,
@@ -19,7 +19,6 @@ import {
 import { getIcon } from './utils/icons';
 import { t } from './utils/i18n';
 import type { XopcbotGatewayChat } from './gateway-chat';
-import type { XopcbotSettings, SettingsSection, SettingsValue } from './dialogs/SettingsDialog';
 
 export type { Tab } from './navigation';
 
@@ -28,6 +27,8 @@ export interface AppSettings {
   theme: 'light' | 'dark' | 'system';
 }
 
+// SettingsPage component is imported at top
+
 @customElement('xopcbot-app')
 export class XopcbotApp extends LitElement {
   @property({ attribute: false }) gatewayConfig?: {
@@ -35,19 +36,13 @@ export class XopcbotApp extends LitElement {
     token?: string;
   };
 
-  @property({ attribute: false }) settingsSections: SettingsSection[] = [];
-  @property({ attribute: false }) settingsValues: SettingsValue = {};
-  @property({ attribute: false }) onSettingsSave?: (values: SettingsValue) => void;
-
   @state() private _activeTab: Tab = 'chat';
   @state() private _navCollapsed = false;
   @state() private _navMobileOpen = false; // Mobile overlay state
   @state() private _theme: 'light' | 'dark' | 'system' = 'system';
-  @state() private _showSettings = false;
   @state() private _chatRoute: ChatRoute = { type: 'recent' };
 
   @query('xopcbot-gateway-chat') private _chatElement!: XopcbotGatewayChat;
-  @query('xopcbot-settings') private _settingsElement!: XopcbotSettings;
 
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -281,11 +276,9 @@ export class XopcbotApp extends LitElement {
             ${this._activeTab === 'subagents' ? this._renderSubagents() : nothing}
             ${this._activeTab === 'cron' ? this._renderCron() : nothing}
             ${this._activeTab === 'logs' ? this._renderLogs() : nothing}
+            ${this._activeTab === 'settings' ? this._renderSettings() : nothing}
           </main>
         </div>
-
-        <!-- Settings Dialog -->
-        ${this._showSettings ? this._renderSettingsDialog() : nothing}
       </div>
     `;
   }
@@ -380,25 +373,15 @@ export class XopcbotApp extends LitElement {
     `;
   }
 
-  private _renderSettingsDialog(): unknown {
+  private _renderSettings(): unknown {
+    const url = this.gatewayConfig?.url || '';
+    const token = this.gatewayConfig?.token;
+    
     return html`
-      <xopcbot-settings
-        .sections=${this.settingsSections}
-        .values=${this.settingsValues}
-        .onSave=${(values: SettingsValue) => {
-          if (this.onSettingsSave) {
-            this.onSettingsSave(values);
-          }
-          this._showSettings = false;
-        }}
-        .onClose=${() => this._showSettings = false}
-      ></xopcbot-settings>
+      <settings-page
+        .config=${{ url, token }}
+      ></settings-page>
     `;
-  }
-
-  // Public method to show settings
-  public showSettings(): void {
-    this._showSettings = true;
   }
 
   // Public method to show chat

@@ -7,6 +7,7 @@ import { logger } from './middleware/logger.js';
 import { auth } from './middleware/auth.js';
 import { createAgentSSEHandler, createSendHandler, createEventsSSEHandler } from './sse.js';
 import type { GatewayService } from '../service.js';
+import type { Config } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../utils/log-store.js';
 
@@ -104,8 +105,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         'POST /api/send',
         'GET  /api/events          (SSE stream)',
         'GET  /api/channels/status',
-        'POST /api/config/reload',
         'GET  /api/config',
+        'PATCH /api/config',
+        'POST /api/config/reload',
         '...  /api/cron/*',
         '...  /api/sessions/*',
       ],
@@ -159,15 +161,169 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   authenticated.get('/api/config', (c) => {
     const config = service.currentConfig;
     const safeConfig = {
-      agents: config.agents,
-      channels: {
-        telegram: { enabled: config.channels?.telegram?.enabled },
-        whatsapp: { enabled: config.channels?.whatsapp?.enabled },
+      agents: {
+        defaults: {
+          model: config.agents?.defaults?.model,
+          maxTokens: config.agents?.defaults?.maxTokens,
+          temperature: config.agents?.defaults?.temperature,
+          maxToolIterations: config.agents?.defaults?.maxToolIterations,
+          workspace: config.agents?.defaults?.workspace,
+          compaction: config.agents?.defaults?.compaction,
+          pruning: config.agents?.defaults?.pruning,
+        },
       },
-      gateway: config.gateway,
+      channels: {
+        telegram: {
+          enabled: config.channels?.telegram?.enabled,
+          token: config.channels?.telegram?.token || '',
+          allowFrom: config.channels?.telegram?.allowFrom || [],
+          apiRoot: config.channels?.telegram?.apiRoot || '',
+          debug: config.channels?.telegram?.debug || false,
+        },
+        whatsapp: {
+          enabled: config.channels?.whatsapp?.enabled,
+          bridgeUrl: config.channels?.whatsapp?.bridgeUrl || 'ws://localhost:3001',
+          allowFrom: config.channels?.whatsapp?.allowFrom || [],
+        },
+      },
+      providers: {
+        openai: { apiKey: config.providers?.openai?.apiKey || '', baseUrl: config.providers?.openai?.baseUrl || '' },
+        anthropic: { apiKey: config.providers?.anthropic?.apiKey || '' },
+        google: { apiKey: config.providers?.google?.apiKey || '' },
+        qwen: { apiKey: config.providers?.qwen?.apiKey || '', baseUrl: config.providers?.qwen?.baseUrl || '' },
+        kimi: { apiKey: config.providers?.kimi?.apiKey || '', baseUrl: config.providers?.kimi?.baseUrl || '' },
+        minimax: { apiKey: config.providers?.minimax?.apiKey || '', baseUrl: config.providers?.minimax?.baseUrl || '' },
+        deepseek: { apiKey: config.providers?.deepseek?.apiKey || '', baseUrl: config.providers?.deepseek?.baseUrl || '' },
+        groq: { apiKey: config.providers?.groq?.apiKey || '', baseUrl: config.providers?.groq?.baseUrl || '' },
+        openrouter: { apiKey: config.providers?.openrouter?.apiKey || '', baseUrl: config.providers?.openrouter?.baseUrl || '' },
+        ollama: { 
+          enabled: config.providers?.ollama?.enabled ?? true, 
+          baseUrl: config.providers?.ollama?.baseUrl || 'http://127.0.0.1:11434/v1',
+          autoDiscovery: config.providers?.ollama?.autoDiscovery ?? true,
+        },
+      },
+      gateway: {
+        host: config.gateway?.host,
+        port: config.gateway?.port,
+        heartbeat: {
+          enabled: config.gateway?.heartbeat?.enabled,
+          intervalMs: config.gateway?.heartbeat?.intervalMs,
+        },
+      },
       cron: { enabled: config.cron?.enabled },
     };
     return c.json({ ok: true, payload: { config: safeConfig } });
+  });
+
+  // PATCH /api/config - Update partial config
+  authenticated.patch('/api/config', async (c) => {
+    const body = await c.req.json();
+    
+    // Merge updates into current config
+    const config: Config = service.currentConfig as Config;
+    
+    // Update agent defaults
+    if (body.agents?.defaults) {
+      if (!config.agents) config.agents = { defaults: {} };
+      if (!config.agents.defaults) config.agents.defaults = {} as any;
+      
+      if (body.agents.defaults.model !== undefined) {
+        config.agents.defaults.model = body.agents.defaults.model;
+      }
+      if (body.agents.defaults.maxTokens !== undefined) {
+        config.agents.defaults.maxTokens = body.agents.defaults.maxTokens;
+      }
+      if (body.agents.defaults.temperature !== undefined) {
+        config.agents.defaults.temperature = body.agents.defaults.temperature;
+      }
+      if (body.agents.defaults.maxToolIterations !== undefined) {
+        config.agents.defaults.maxToolIterations = body.agents.defaults.maxToolIterations;
+      }
+      if (body.agents.defaults.workspace !== undefined) {
+        config.agents.defaults.workspace = body.agents.defaults.workspace;
+      }
+    }
+    
+    // Update channels
+    if (body.channels?.telegram) {
+      if (!config.channels) config.channels = { telegram: {}, whatsapp: {} };
+      if (!config.channels.telegram) config.channels.telegram = {} as any;
+      
+      if (body.channels.telegram.enabled !== undefined) {
+        config.channels.telegram.enabled = body.channels.telegram.enabled;
+      }
+      if (body.channels.telegram.token !== undefined) {
+        config.channels.telegram.token = body.channels.telegram.token;
+      }
+      if (body.channels.telegram.allowFrom !== undefined) {
+        config.channels.telegram.allowFrom = body.channels.telegram.allowFrom;
+      }
+      if (body.channels.telegram.apiRoot !== undefined) {
+        config.channels.telegram.apiRoot = body.channels.telegram.apiRoot;
+      }
+      if (body.channels.telegram.debug !== undefined) {
+        config.channels.telegram.debug = body.channels.telegram.debug;
+      }
+    }
+    if (body.channels?.whatsapp) {
+      if (!config.channels) config.channels = { telegram: {}, whatsapp: {} };
+      if (!config.channels.whatsapp) config.channels.whatsapp = {} as any;
+      
+      if (body.channels.whatsapp.enabled !== undefined) {
+        config.channels.whatsapp.enabled = body.channels.whatsapp.enabled;
+      }
+      if (body.channels.whatsapp.bridgeUrl !== undefined) {
+        config.channels.whatsapp.bridgeUrl = body.channels.whatsapp.bridgeUrl;
+      }
+      if (body.channels.whatsapp.allowFrom !== undefined) {
+        config.channels.whatsapp.allowFrom = body.channels.whatsapp.allowFrom;
+      }
+    }
+    
+    // Update gateway
+    if (body.gateway?.heartbeat?.enabled !== undefined) {
+      if (!config.gateway) config.gateway = { heartbeat: {} };
+      if (!config.gateway.heartbeat) config.gateway.heartbeat = {} as any;
+      config.gateway.heartbeat.enabled = body.gateway.heartbeat.enabled;
+    }
+    if (body.gateway?.heartbeat?.intervalMs !== undefined) {
+      if (!config.gateway) config.gateway = { heartbeat: {} };
+      if (!config.gateway.heartbeat) config.gateway.heartbeat = {} as any;
+      config.gateway.heartbeat.intervalMs = body.gateway.heartbeat.intervalMs;
+    }
+    
+    // Update providers
+    if (body.providers) {
+      if (!config.providers) config.providers = {} as any;
+      
+      const providerKeys = ['openai', 'anthropic', 'google', 'qwen', 'kimi', 'minimax', 'deepseek', 'groq', 'openrouter', 'ollama', 'moonshot', 'xai', 'bedrock'];
+      for (const key of providerKeys) {
+        if (body.providers[key]) {
+          if (!config.providers[key]) config.providers[key] = {} as any;
+          
+          if (body.providers[key].apiKey !== undefined) {
+            config.providers[key].apiKey = body.providers[key].apiKey;
+          }
+          if (body.providers[key].baseUrl !== undefined) {
+            config.providers[key].baseUrl = body.providers[key].baseUrl || undefined;
+          }
+          if (body.providers[key].enabled !== undefined) {
+            config.providers[key].enabled = body.providers[key].enabled;
+          }
+          if (body.providers[key].autoDiscovery !== undefined) {
+            config.providers[key].autoDiscovery = body.providers[key].autoDiscovery;
+          }
+        }
+      }
+    }
+    
+    // Save config
+    const result = await service.saveConfig(config);
+    if (!result.saved) {
+      return c.json({ ok: false, error: result.error }, 500);
+    }
+    
+    return c.json({ ok: true, payload: { config } });
   });
 
   // ========== Cron REST API (/api/cron) ==========

@@ -337,6 +337,21 @@ export class GatewayService {
   }
 
   /**
+   * Save current config to disk
+   */
+  async saveConfig(config: Config): Promise<{ saved: boolean; error?: string }> {
+    try {
+      saveConfig(config, this.configPath);
+      this.config = config;
+      return { saved: true };
+    } catch (err) {
+      const error = err instanceof Error ? err.message : String(err);
+      log.error({ err }, 'Failed to save config');
+      return { saved: false, error };
+    }
+  }
+
+  /**
    * Update configuration and persist to disk
    */
   async updateConfig(updates: Partial<Config>): Promise<{ updated: boolean; error?: string }> {

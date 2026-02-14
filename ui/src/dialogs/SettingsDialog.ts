@@ -51,7 +51,19 @@ export class XopcbotSettings extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
-    this._activeSection = this.sections[0]?.id || '';
+    this._updateActiveSection();
+  }
+
+  override willUpdate(changedProperties: Map<string, unknown>): void {
+    if (changedProperties.has('sections')) {
+      this._updateActiveSection();
+    }
+  }
+
+  private _updateActiveSection(): void {
+    if (this.sections.length > 0 && !this._activeSection) {
+      this._activeSection = this.sections[0].id;
+    }
   }
 
   private _getIcon(iconName: string): TemplateResult {
