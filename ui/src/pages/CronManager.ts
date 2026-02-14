@@ -231,10 +231,10 @@ export class CronManager extends LitElement {
         <div class="cron-manager__header">
           <h1 class="page-title">${getIcon('clock')} Cron Jobs</h1>
           <div class="cron-manager__actions">
-            <button class="btn btn--secondary" @click=${this._loadJobs} ?disabled=${this._loading}>
+            <button class="btn btn-secondary" @click=${this._loadJobs} ?disabled=${this._loading}>
               ${getIcon('refresh')} Refresh
             </button>
-            <button class="btn btn--primary" @click=${this._openForm}>
+            <button class="btn btn-primary" @click=${this._openForm}>
               ${getIcon('plus')} Add Job
             </button>
           </div>
@@ -277,7 +277,7 @@ export class CronManager extends LitElement {
               <div class="empty-state">
                 <div class="empty-state__icon">${getIcon('clock')}</div>
                 <div class="empty-state__title">No cron jobs yet</div>
-                <button class="btn btn--primary" @click=${this._openForm}>Create your first job</button>
+                <button class="btn btn-primary" @click=${this._openForm}>Create your first job</button>
               </div>
             </div>
           ` : html`
@@ -299,7 +299,7 @@ export class CronManager extends LitElement {
                   ${this._jobs.map(job => html`
                     <tr>
                       <td>
-                        <button class="btn btn--link" @click=${() => this._openDetail(job)}>
+                        <button class="btn btn-link" @click=${() => this._openDetail(job)}>
                           ${job.name || job.id}
                         </button>
                       </td>
@@ -317,10 +317,10 @@ export class CronManager extends LitElement {
                       </td>
                       <td>
                         <div class="action-buttons">
-                          <button class="btn btn--icon btn--secondary" title="Run Now" @click=${() => this._showRunConfirm(job)}>
+                          <button class="btn btn-icon btn-secondary" title="Run Now" @click=${() => this._showRunConfirm(job)}>
                             ${getIcon('play')}
                           </button>
-                          <button class="btn btn--icon btn--danger" title="Delete" @click=${() => this._showDeleteConfirm(job)}>
+                          <button class="btn btn-icon btn-danger" title="Delete" @click=${() => this._showDeleteConfirm(job)}>
                             ${getIcon('trash')}
                           </button>
                         </div>
@@ -376,9 +376,9 @@ export class CronManager extends LitElement {
               </div>
             </div>
             <div class="modal__actions">
-              <button class="btn btn--secondary" @click=${this._closeForm}>Cancel</button>
+              <button class="btn btn-secondary" @click=${this._closeForm}>Cancel</button>
               <button 
-                class="btn btn--primary" 
+                class="btn btn-primary" 
                 @click=${this._submitForm}
                 ?disabled=${this._formSubmitting || !this._formSchedule || !this._formMessage}
               >

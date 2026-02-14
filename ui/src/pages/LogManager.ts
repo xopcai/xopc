@@ -278,13 +278,13 @@ export class LogManager extends LitElement {
         <h1 class="page-title">${getIcon('fileText')} Logs</h1>
         <div class="log-manager__actions">
           <button
-            class="btn ${this._autoRefresh ? 'btn--primary' : 'btn--secondary'}"
+            class="btn ${this._autoRefresh ? 'btn-primary' : 'btn-secondary'}"
             @click=${this._toggleAutoRefresh}
           >
             ${getIcon(this._autoRefresh ? 'pause' : 'play')}
             ${this._autoRefresh ? 'Pause' : 'Auto Refresh'}
           </button>
-          <button class="btn btn--secondary" @click=${() => this._loadLogs(true)}>
+          <button class="btn btn-secondary" @click=${() => this._loadLogs(true)}>
             ${getIcon('refreshCw')}
             Refresh
           </button>
@@ -351,7 +351,7 @@ export class LogManager extends LitElement {
             />
           </div>
 
-          <button class="btn btn--ghost" @click=${this._clearFilters}>
+          <button class="btn btn-ghost" @click=${this._clearFilters}>
             ${getIcon('x')}
             Clear
           </button>
@@ -432,7 +432,7 @@ export class LogManager extends LitElement {
 
         ${this._hasMore ? html`
           <div class="log-table__load-more">
-            <button class="btn btn--secondary" @click=${this._handleLoadMore} ?disabled=${this._loading}>
+            <button class="btn btn-secondary" @click=${this._handleLoadMore} ?disabled=${this._loading}>
               ${this._loading ? html`<span class="spinner"></span>` : getIcon('chevronDown')}
               Load More
             </button>

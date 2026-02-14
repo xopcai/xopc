@@ -118,9 +118,13 @@
     "loading": "加载中...",
     "retry": "重试",
     "back": "返回",
+    "details": "详细信息",
     "sessionKey": "会话密钥",
-    "messages": "消息数",
+    "messages": "条消息",
+    "status": "状态",
+    "tokens": "Token数",
     "created": "创建时间",
-    "updated": "更新时间"
+    "updated": "更新时间",
+    "tags": "标签"
   }
 }

@@ -51,7 +51,7 @@ export class SubagentsManager extends LitElement {
 
   private async _loadSubagents(): Promise<void> {
     if (!this._api || this._loading) return;
-    
+
     this._loading = true;
     this._error = null;
 
@@ -69,11 +69,11 @@ export class SubagentsManager extends LitElement {
   private _formatDate(dateStr: string): string {
     try {
       const date = new Date(dateStr);
-      return date.toLocaleString([], { 
-        month: 'short', 
+      return date.toLocaleString([], {
+        month: 'short',
         day: 'numeric',
-        hour: '2-digit', 
-        minute: '2-digit' 
+        hour: '2-digit',
+        minute: '2-digit'
       });
     } catch {
       return dateStr;
@@ -99,9 +99,9 @@ export class SubagentsManager extends LitElement {
 
   override render(): unknown {
     return html`
-      <div class="subagents-page">
+      <div class="subagents-manager">
         ${this._renderHeader()}
-        
+        ${this._error ? html`<div class="error-banner">${this._error}</div>` : ''}
         ${this._selectedSubagent ? this._renderDetail() : this._renderList()}
       </div>
     `;
@@ -109,42 +109,29 @@ export class SubagentsManager extends LitElement {
 
   private _renderHeader(): unknown {
     return html`
-      <div class="page-header">
-        <h2>${t('nav.subagents')}</h2>
-        <button class="btn btn-secondary" @click=${() => this._loadSubagents()}>
-          ${getIcon('refresh')} ${t('cron.refresh')}
+      <div class="subagents-manager__header">
+        <h1 class="page-title">${getIcon('bot')} ${t('nav.subagents')}</h1>
+        <button class="btn btn-secondary" @click=${() => this._loadSubagents()} ?disabled=${this._loading}>
+          ${this._loading ? html`<span class="spinner spinner--small"></span>` : getIcon('refreshCw')}
+          ${t('subagents.refresh')}
         </button>
       </div>
     `;
   }
 
   private _renderList(): unknown {
-    if (this._error) {
-      return html`
-        <div class="error-state">
-          <span class="error-icon">⚠️</span>
-          <p>${this._error}</p>
-          <button class="btn btn-primary" @click=${() => this._loadSubagents()}>
-            ${t('cron.retry')}
-          </button>
-        </div>
-      `;
-    }
-
-    if (this._loading) {
-      return html`
-        <div class="loading-state">
-          <div class="spinner"></div>
-          <p>${t('cron.loading')}</p>
-        </div>
-      `;
+    if (this._loading && this._subagents.length === 0) {
+      return this._renderLoading();
     }
 
     if (this._subagents.length === 0) {
       return html`
-        <div class="empty-state">
-          <span class="empty-icon">🤖</span>
-          <p>${t('subagents.empty')}</p>
+        <div class="subagents-manager__empty">
+          <div class="empty-state">
+            <div class="empty-state__icon">${getIcon('bot')}</div>
+            <div class="empty-state__title">${t('subagents.empty')}</div>
+            <div class="empty-state__description">${t('subagents.emptyDescription')}</div>
+          </div>
         </div>
       `;
     }
@@ -153,16 +140,21 @@ export class SubagentsManager extends LitElement {
       <div class="subagents-list">
         ${this._subagents.map(subagent => html`
           <div class="subagent-card" @click=${() => this._handleSelect(subagent)}>
-            <div class="subagent-icon">🤖</div>
-            <div class="subagent-info">
-              <div class="subagent-name">${this._formatKey(subagent.key)}</div>
-              <div class="subagent-meta">
-                <span>${subagent.messageCount} 条消息</span>
-                <span>·</span>
-                <span>${this._formatDate(subagent.updatedAt)}</span>
+            <div class="subagent-card__icon">
+              ${getIcon('bot')}
+            </div>
+            <div class="subagent-card__info">
+              <div class="subagent-card__name">${this._formatKey(subagent.key)}</div>
+              <div class="subagent-card__meta">
+                <span class="meta-item">
+                  ${getIcon('messageSquare')}
+                  ${subagent.messageCount} ${t('subagents.messages')}
+                </span>
+                <span class="meta-divider">·</span>
+                <span class="meta-item">${this._formatDate(subagent.updatedAt)}</span>
               </div>
             </div>
-            <div class="subagent-arrow">
+            <div class="subagent-card__arrow">
               ${getIcon('chevronRight')}
             </div>
           </div>
@@ -171,35 +163,92 @@ export class SubagentsManager extends LitElement {
     `;
   }
 
+  private _renderLoading(): unknown {
+    return html`
+      <div class="subagents-manager__loading">
+        <div class="skeleton-list">
+          ${Array.from({ length: 6 }).map(() => html`
+            <div class="skeleton-card">
+              <div class="skeleton skeleton--icon"></div>
+              <div class="skeleton skeleton--content">
+                <div class="skeleton skeleton--title"></div>
+                <div class="skeleton skeleton--meta"></div>
+              </div>
+            </div>
+          `)}
+        </div>
+      </div>
+    `;
+  }
+
   private _renderDetail(): unknown {
     if (!this._selectedSubagent) return nothing;
 
+    const subagent = this._selectedSubagent;
+
     return html`
-      <div class="detail-panel">
-        <div class="detail-header">
+      <div class="subagent-detail">
+        <div class="subagent-detail__header">
           <button class="btn btn-ghost" @click=${() => this._handleCloseDetail()}>
-            ${getIcon('arrowLeft')} ${t('sessions.back')}
+            ${getIcon('arrowLeft')}
+            ${t('subagents.back')}
           </button>
-          <h3>${this._formatKey(this._selectedSubagent.key)}</h3>
         </div>
-        
-        <div class="detail-content">
-          <div class="detail-row">
-            <span class="label">${t('sessions.sessionKey')}</span>
-            <span class="value code">${this._selectedSubagent.key}</span>
+
+        <div class="subagent-detail__content">
+          <div class="subagent-detail__title">
+            <div class="subagent-detail__icon">${getIcon('bot')}</div>
+            <h2>${this._formatKey(subagent.key)}</h2>
           </div>
-          <div class="detail-row">
-            <span class="label">${t('sessions.messages')}</span>
-            <span class="value">${this._selectedSubagent.messageCount}</span>
+
+          <div class="detail-section">
+            <h3 class="section-title">${t('subagents.details')}</h3>
+
+            <div class="detail-grid">
+              <div class="detail-item">
+                <span class="detail-item__label">${t('subagents.sessionKey')}</span>
+                <code class="detail-item__value detail-item__value--code">${subagent.key}</code>
+              </div>
+
+              <div class="detail-item">
+                <span class="detail-item__label">${t('subagents.status')}</span>
+                <span class="detail-item__value">
+                  <span class="status-badge status-badge--${subagent.status}">${subagent.status}</span>
+                </span>
+              </div>
+
+              <div class="detail-item">
+                <span class="detail-item__label">${t('subagents.messages')}</span>
+                <span class="detail-item__value">${subagent.messageCount}</span>
+              </div>
+
+              <div class="detail-item">
+                <span class="detail-item__label">${t('subagents.tokens')}</span>
+                <span class="detail-item__value">${subagent.estimatedTokens.toLocaleString()}</span>
+              </div>
+
+              <div class="detail-item">
+                <span class="detail-item__label">${t('subagents.created')}</span>
+                <span class="detail-item__value">${this._formatDate(subagent.createdAt)}</span>
+              </div>
+
+              <div class="detail-item">
+                <span class="detail-item__label">${t('subagents.updated')}</span>
+                <span class="detail-item__value">${this._formatDate(subagent.updatedAt)}</span>
+              </div>
+            </div>
           </div>
-          <div class="detail-row">
-            <span class="label">${t('sessions.created')}</span>
-            <span class="value">${this._formatDate(this._selectedSubagent.createdAt)}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">${t('sessions.updated')}</span>
-            <span class="value">${this._formatDate(this._selectedSubagent.updatedAt)}</span>
-          </div>
+
+          ${subagent.tags.length > 0 ? html`
+            <div class="detail-section">
+              <h3 class="section-title">${t('subagents.tags')}</h3>
+              <div class="tags-list">
+                ${subagent.tags.map(tag => html`
+                  <span class="tag">${tag}</span>
+                `)}
+              </div>
+            </div>
+          ` : ''}
         </div>
       </div>
     `;

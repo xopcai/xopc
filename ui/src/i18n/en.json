@@ -118,9 +118,13 @@
     "loading": "Loading subagents...",
     "retry": "Retry",
     "back": "Back",
+    "details": "Details",
     "sessionKey": "Session Key",
-    "messages": "Messages",
+    "messages": "messages",
+    "status": "Status",
+    "tokens": "Tokens",
     "created": "Created",
-    "updated": "Updated"
+    "updated": "Updated",
+    "tags": "Tags"
   }
 }
