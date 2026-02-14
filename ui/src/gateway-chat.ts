@@ -76,6 +76,8 @@ export class XopcbotGatewayChat extends LitElement {
   @state() private _reconnectCount = 0;
   @state() private _reconnectDelay = 0;
   @state() private _isAtBottom = true;
+  @state() private _currentSessionKey: string | null = null;
+  @state() private _sessions: Array<{ key: string; name?: string; updatedAt: string }> = [];
 
   /** SSE event source for server-pushed events */
   private _eventSource?: EventSource;
@@ -165,6 +167,8 @@ export class XopcbotGatewayChat extends LitElement {
         this._reconnectDelay = 0;
         this._clearReconnectTimer();
         this.requestUpdate();
+        // Load sessions after connection is established
+        this._loadSessions();
       };
 
       // Also listen for our custom 'connected' event from the server
@@ -285,6 +289,109 @@ export class XopcbotGatewayChat extends LitElement {
     this._clearReconnectTimer();
     this.disconnect();
     setTimeout(() => this.connect(), 100);
+  }
+
+  // ========== Session management ==========
+
+  private async _loadSessions(): Promise<void> {
+    if (!this.config) return;
+
+    try {
+      const url = apiUrl(this.config.url, '/api/sessions');
+      const headers = authHeaders(this.config.token);
+      const res = await fetch(url, { headers });
+      
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      
+      const data = await res.json();
+      const sessions = data.items || [];
+      
+      // Filter gateway sessions and sort by updatedAt (newest first)
+      const gatewaySessions = sessions
+        .filter((s: any) => s.key.startsWith('gateway:'))
+        .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+      
+      this._sessions = gatewaySessions;
+      
+      // Load the most recent session if exists
+      if (gatewaySessions.length > 0) {
+        await this._loadSession(gatewaySessions[0].key);
+      } else {
+        // No sessions, create a new one
+        await this._createNewSession();
+      }
+    } catch (err) {
+      console.error('[GatewayChat] Failed to load sessions:', err);
+    }
+  }
+
+  private async _loadSession(sessionKey: string): Promise<void> {
+    if (!this.config) return;
+
+    try {
+      const url = apiUrl(this.config.url, `/api/sessions/${encodeURIComponent(sessionKey)}`);
+      const headers = authHeaders(this.config.token);
+      const res = await fetch(url, { headers });
+      
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      
+      const data = await res.json();
+      const session = data.session;
+      
+      this._currentSessionKey = sessionKey;
+      
+      // Convert session messages to UI format
+      const messages = session.messages || [];
+      this._messages = messages.map((msg: any) => ({
+        role: msg.role,
+        content: msg.content || [],
+        attachments: msg.attachments,
+        timestamp: msg.timestamp || Date.now(),
+      }));
+      
+      this._scrollToBottom();
+      this.requestUpdate();
+    } catch (err) {
+      console.error('[GatewayChat] Failed to load session:', err);
+    }
+  }
+
+  async _createNewSession(): Promise<void> {
+    if (!this.config) return;
+
+    try {
+      const url = apiUrl(this.config.url, '/api/sessions');
+      const headers = {
+        ...authHeaders(this.config.token),
+        'Content-Type': 'application/json',
+      };
+      
+      const res = await fetch(url, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify({ channel: 'gateway' }),
+      });
+      
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      
+      const data = await res.json();
+      const session = data.session;
+      
+      this._currentSessionKey = session.key;
+      this._messages = [];
+      
+      // Add to sessions list
+      this._sessions = [{
+        key: session.key,
+        name: session.name,
+        updatedAt: session.updatedAt,
+      }, ...this._sessions];
+      
+      this._scrollToBottom();
+      this.requestUpdate();
+    } catch (err) {
+      console.error('[GatewayChat] Failed to create new session:', err);
+    }
   }
 
   // ========== Agent messaging (POST + SSE response) ==========
@@ -544,6 +651,7 @@ export class XopcbotGatewayChat extends LitElement {
   override render(): unknown {
     return html`
       ${this._renderStatus()}
+      ${this._renderHeader()}
 
       <div class="chat-messages">
         <div class="chat-messages-inner">
@@ -556,6 +664,23 @@ export class XopcbotGatewayChat extends LitElement {
         <div class="chat-input-inner">
           ${this._renderInput()}
         </div>
+      </div>
+    `;
+  }
+
+  private _renderHeader(): unknown {
+    return html`
+      <div class="chat-header">
+        <div class="chat-header-title">
+          <span class="font-semibold">${t('chat.title') || 'XopcBot'}</span>
+          ${this._currentSessionKey ? html`
+            <span class="text-xs text-muted ml-2">${this._sessions.find(s => s.key === this._currentSessionKey)?.name || this._currentSessionKey}</span>
+          ` : ''}
+        </div>
+        <button class="new-session-btn" @click=${() => this._createNewSession()}>
+          ${this._renderIcon('plus')}
+          <span>${t('chat.newSession') || 'New Chat'}</span>
+        </button>
       </div>
     `;
   }
@@ -604,6 +729,12 @@ export class XopcbotGatewayChat extends LitElement {
       chevronDown: html`
         <svg class="w-5 h-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
           <polyline points="6 9 12 15 18 9"/>
+        </svg>
+      `,
+      plus: html`
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <line x1="12" y1="5" x2="12" y2="19"/>
+          <line x1="5" y1="12" x2="19" y2="12"/>
         </svg>
       `,
     };

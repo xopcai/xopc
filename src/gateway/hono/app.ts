@@ -237,6 +237,20 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   // ========== Session REST API ==========
   
+  // POST /sessions - Create new session
+  authenticated.post('/sessions', async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const channel = body.channel || 'gateway';
+    const chatId = body.chat_id || `chat_${Date.now()}`;
+    const sessionKey = `${channel}:${chatId}`;
+    
+    // Initialize empty session
+    await service.sessionManagerInstance.saveMessages(sessionKey, []);
+    
+    const session = await service.getSession(sessionKey);
+    return c.json({ session }, 201);
+  });
+
   // GET /sessions - List sessions
   authenticated.get('/sessions', async (c) => {
     const query = c.req.query();
