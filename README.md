@@ -18,11 +18,13 @@
 
 - **🤖 Unified LLM API**: Supports 20+ providers (OpenAI, Anthropic, Google, Groq, etc.) via `@mariozechner/pi-ai`.
 - **🔌 Extensible Plugins**: Add custom tools, hooks, and commands with hot-reloading.
-- **📱 Multi-Channel Support**: Interact via Telegram, with more channels planned.
+- **📱 Multi-Channel Support**: Interact via Telegram, WhatsApp, or Web UI.
 - **🧠 Persistent Memory**: Maintains conversation history with automatic context compaction.
+- **📂 Session Management**: Browse, search, archive, and manage conversation history via CLI or Web UI.
 - **🔧 Rich Built-in Tools**: Filesystem access, shell execution, web search, and more.
 - **⏰ Scheduled Tasks**: Automate actions with a cron-based scheduler.
 - **🖥️ Powerful CLI**: Manage your agent, configuration, and plugins from the command line.
+- **🌐 Web UI**: Modern web interface for chat and session management.
 
 ---
 
@@ -65,6 +67,12 @@ npm run dev -- agent -m "Hello, world! What can you do?"
 
 # Start an interactive session
 npm run dev -- agent -i
+
+# List all conversation sessions
+npm run dev -- session list
+
+# View session statistics
+npm run dev -- session stats
 
 # or use pnpm
 pnpm run dev -- agent -m "Hello, world!"

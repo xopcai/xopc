@@ -1,27 +1,181 @@
-# 会话管理
+# Session Management
 
-xopcbot 会自动管理对话会话，保持上下文连贯性。
+xopcbot provides comprehensive session management for conversation history, available via both CLI and Web UI.
 
-## 会话存储
+## Overview
 
-| 类型 | 位置 |
-|------|------|
-| 存储目录 | `~/.xopcbot/sessions/` |
-| 文件格式 | JSON |
+| Feature | CLI | Web UI |
+|---------|-----|--------|
+| List sessions | ✅ | ✅ |
+| Search sessions | ✅ | ✅ |
+| View details | ✅ | ✅ |
+| Archive/Unarchive | ✅ | ✅ |
+| Pin/Unpin | ✅ | ✅ |
+| Export (JSON) | ✅ | ✅ |
+| Delete | ✅ | ✅ |
+| Search in session | ❌ | ✅ |
 
-## 会话结构
+## Session Storage
+
+| Property | Value |
+|----------|-------|
+| Storage directory | `workspace/.sessions/` |
+| Index file | `workspace/.sessions/index.json` |
+| File format | JSON |
+| Archive directory | `workspace/.sessions/archive/` |
+
+## Session States
+
+| Status | Description |
+|--------|-------------|
+| `active` | Currently active session (default) |
+| `pinned` | Pinned to top for quick access |
+| `archived` | Archived and moved to archive folder |
+
+## CLI Usage
+
+### List Sessions
+
+```bash
+# List all sessions
+xopcbot session list
+
+# Filter by status
+xopcbot session list --status active
+xopcbot session list --status archived
+xopcbot session list --status pinned
+
+# Search by name or content
+xopcbot session list --query "project"
+
+# Sort and limit
+xopcbot session list --sort updatedAt --order desc --limit 50
+```
+
+### View Session Details
+
+```bash
+# Show session info and recent messages
+xopcbot session info telegram:123456
+
+# Search within a session
+xopcbot session grep telegram:123456 "API design"
+```
+
+### Manage Sessions
+
+```bash
+# Rename a session
+xopcbot session rename telegram:123456 "Project Discussion"
+
+# Add tags
+xopcbot session tag telegram:123456 work important
+
+# Remove tags
+xopcbot session untag telegram:123456 important
+
+# Archive a session
+xopcbot session archive telegram:123456
+
+# Unarchive a session
+xopcbot session unarchive telegram:123456
+
+# Pin a session
+xopcbot session pin telegram:123456
+
+# Unpin a session
+xopcbot session unpin telegram:123456
+
+# Delete a session
+xopcbot session delete telegram:123456
+
+# Export session to JSON
+xopcbot session export telegram:123456 --format json --output backup.json
+```
+
+### Bulk Operations
+
+```bash
+# Delete multiple sessions by filter
+xopcbot session delete-many --status archived --force
+
+# Archive old sessions (30+ days inactive)
+xopcbot session cleanup --days 30
+```
+
+### Statistics
+
+```bash
+# View session statistics
+xopcbot session stats
+```
+
+Sample output:
+```
+📊 Session Statistics
+
+  Total Sessions:     42
+  Active:             28
+  Archived:           12
+  Pinned:             2
+  Total Messages:     1,847
+  Total Tokens:       452.3k
+
+  By Channel:
+    telegram: 35
+    gateway: 5
+    cli: 2
+```
+
+## Web UI
+
+The Web UI provides a visual interface for session management at `/ui/`.
+
+### Features
+
+1. **Session List**: Grid/list view with filtering
+2. **Search**: Real-time search across sessions
+3. **Filters**: Filter by status (All/Active/Pinned/Archived)
+4. **Statistics**: Visual stats cards
+5. **Detail Drawer**: Click any session to view:
+   - Full message history
+   - In-session search with highlighting
+   - Archive/Pin/Export/Delete actions
+
+### Accessing the UI
+
+```bash
+# Start the gateway
+xopcbot gateway start
+
+# Open in browser
+open http://localhost:18790/ui/
+```
+
+## Session Structure
 
 ```typescript
-interface Session {
-  key: string;           // 会话唯一标识
-  messages: Message[];    // 消息历史
-  created_at: string;    // 创建时间
-  updated_at: string;    // 更新时间
-  metadata?: Record<string, unknown>;  // 元数据
+interface SessionMetadata {
+  key: string;              // Unique identifier (e.g., "telegram:123456")
+  name?: string;            // Optional custom name
+  status: 'active' | 'idle' | 'archived' | 'pinned';
+  tags: string[];           // User-defined tags
+  createdAt: string;        // ISO timestamp
+  updatedAt: string;
+  lastAccessedAt: string;
+  messageCount: number;
+  estimatedTokens: number;
+  compactedCount: number;   // Number of times compressed
+  sourceChannel: string;    // telegram, whatsapp, gateway, cli
+  sourceChatId: string;
+}
+
+interface SessionDetail extends SessionMetadata {
+  messages: Message[];
 }
 
 interface Message {
-  role: 'system' | 'user' | 'assistant' | 'tool';
+  role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
   content: string;
   timestamp?: string;
   tool_call_id?: string;
@@ -30,142 +184,115 @@ interface Message {
 }
 ```
 
-## 使用会话
+## Session Index
 
-### 默认会话
+The `index.json` file maintains a cache of all session metadata for fast querying:
 
-```bash
-npm run dev -- agent -m "Hello"
+```json
+{
+  "version": "1.0",
+  "lastUpdated": "2026-02-14T10:00:00Z",
+  "sessions": [
+    {
+      "key": "telegram:123456",
+      "status": "active",
+      "tags": ["work"],
+      "messageCount": 42,
+      ...
+    }
+  ]
+}
 ```
 
-使用默认会话键进行对话。
+## Automatic Maintenance
 
-### 指定会话
+### Compaction
 
-```bash
-npm run dev -- agent -m "Hello" --session my-chat
-```
+When a session exceeds the context window limit, old messages are automatically summarized:
 
-### 交互模式
+1. Early messages are summarized using LLM
+2. Recent messages are preserved (default: last 10)
+3. System messages are always kept
 
-```bash
-npm run dev -- agent -i
-```
-
-按 `Ctrl+C` 退出交互模式。
-
-## 会话生命周期
-
-```
-1. 创建会话 (如不存在)
-       ↓
-2. 加载历史消息
-       ↓
-3. 添加用户消息
-       ↓
-4. Agent 处理
-       ↓
-5. 保存助手回复
-       ↓
-6. 持久化到磁盘
-```
-
-## 消息角色
-
-| 角色 | 用途 |
-|------|------|
-| `system` | 系统提示词 |
-| `user` | 用户消息 |
-| `assistant` | AI 回复 |
-| `tool` | 工具调用结果 |
-
-## 上下文窗口
-
-Agent 默认使用完整会话历史。可以通过配置限制：
+Configure in `config.json`:
 
 ```json
 {
   "agents": {
     "defaults": {
-      "max_tokens": 8192
+      "compaction": {
+        "enabled": true,
+        "mode": "abstractive",
+        "triggerThreshold": 0.8,
+        "keepRecentMessages": 10
+      }
     }
   }
 }
 ```
 
-当消息过长时会自动压缩（compaction）。
+### Sliding Window
 
-## 会话压缩
+To prevent memory issues, sessions also have a sliding window:
 
-当消息数量或 token 超过阈值时，会自动压缩：
+- Maximum messages: 100
+- Keeps recent messages when limit exceeded
+- Preserves system context
 
-1. **摘要早期消息**：保留关键信息
-2. **移除冗余**：合并相似消息
-3. **保留上下文**：确保对话连贯性
+## Best Practices
 
-## 清空会话
+1. **Use Tags**: Tag sessions by project or topic for easy filtering
+2. **Pin Important Sessions**: Keep frequently accessed sessions pinned
+3. **Archive Old Sessions**: Archive sessions you don't need regularly
+4. **Regular Cleanup**: Use `session cleanup` to archive old inactive sessions
+5. **Export Before Delete**: Export important sessions before deletion
 
-### 通过 CLI
+## Troubleshooting
+
+### Sessions Not Loading in Web UI
+
+- Check gateway is running: `xopcbot gateway status`
+- Verify WebSocket connection in browser console
+- Check for errors in gateway logs
+
+### Session Index Corrupted
+
+The index will be automatically rebuilt on next access. To force rebuild:
 
 ```bash
-# 删除指定会话
-rm ~/.xopcbot/sessions/<session-key>.json
+# Delete index file
+rm workspace/.sessions/index.json
 
-# 清空所有会话
-rm ~/.xopcbot/sessions/*.json
+# It will be rebuilt on next session list
+xopcbot session list
 ```
 
-### 通过代码
+### Missing Sessions
 
-```typescript
-import { SessionManager } from '../session/manager.js';
+If sessions exist in `.sessions/` but don't appear:
 
-const manager = new SessionManager();
-manager.clearSession('my-chat');
+```bash
+# Force index rebuild via migration
+xopcbot session list --limit 1000
 ```
 
-## 最佳实践
+## API Reference
 
-1. **定期清理**：删除不需要的历史会话
-2. **会话隔离**：不同项目使用不同会话键
-3. **敏感信息**：避免在会话中存储敏感数据
-4. **备份重要会话**：手动备份到安全位置
+### WebSocket API Methods
 
-## 文件格式
-
-会话文件示例 (`~/.xopcbot/sessions/default.json`)：
-
-```json
-{
-  "key": "default",
-  "messages": [
-    {
-      "role": "system",
-      "content": "You are a helpful assistant."
-    },
-    {
-      "role": "user",
-      "content": "Hello!"
-    },
-    {
-      "role": "assistant",
-      "content": "Hello! How can I help you today?"
-    }
-  ],
-  "created_at": "2026-02-03T12:00:00.000Z",
-  "updated_at": "2026-02-03T12:00:01.000Z",
-  "metadata": {}
-}
-```
-
-## 故障排除
-
-**会话丢失？**
-- 检查 `~/.xopcbot/sessions/` 目录存在
-- 确认文件权限正确
-- 查看日志中的错误信息
-
-**上下文不连贯？**
-- 确认会话未被意外清空
-- 检查消息压缩是否过度
-- 可能需要增加 `max_tokens` 配置
+| Method | Description |
+|--------|-------------|
+| `session.list` | List sessions with pagination |
+| `session.get` | Get session details |
+| `session.delete` | Delete a session |
+| `session.rename` | Rename a session |
+| `session.tag` | Add tags |
+| `session.untag` | Remove tags |
+| `session.archive` | Archive session |
+| `session.unarchive` | Unarchive session |
+| `session.pin` | Pin session |
+| `session.unpin` | Unpin session |
+| `session.search` | Search sessions |
+| `session.searchIn` | Search within session |
+| `session.export` | Export session |
+| `session.stats` | Get statistics |
