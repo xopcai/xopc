@@ -342,12 +342,16 @@ export class XopcbotGatewayChat extends LitElement {
       
       // Convert session messages to UI format
       const messages = session.messages || [];
-      this._messages = messages.map((msg: any) => ({
-        role: msg.role,
-        content: msg.content || [],
-        attachments: msg.attachments,
-        timestamp: msg.timestamp || Date.now(),
-      }));
+      this._messages = messages
+        .filter((msg: any) => msg.role === 'user' || msg.role === 'assistant')
+        .map((msg: any) => ({
+          role: msg.role,
+          content: typeof msg.content === 'string' 
+            ? [{ type: 'text', text: msg.content }] 
+            : (msg.content || []),
+          attachments: msg.attachments,
+          timestamp: msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now(),
+        }));
       
       this._scrollToBottom();
       this.requestUpdate();
