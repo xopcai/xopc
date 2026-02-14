@@ -4,6 +4,14 @@
  * Centralized logging system using pino.
  * Provides structured logging with levels, prefixes, and child loggers.
  * Supports both console and file output.
+ *
+ * Log Levels (in order of severity):
+ * - trace:   Most detailed, for development debugging only
+ * - debug:   Detailed info for troubleshooting
+ * - info:    General operational events (startup, shutdown, major state changes)
+ * - warn:    Unexpected but non-fatal issues
+ * - error:   Errors that affect functionality
+ * - fatal:   Critical errors that prevent operation
  */
 
 import pino from 'pino';
@@ -12,7 +20,6 @@ import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, mkdirSync, createWriteStream } from 'fs';
 
-// Get __dirname equivalent in ESM
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 // Log directory
@@ -45,17 +52,14 @@ const baseLogger = pino({
   },
   timestamp: pino.stdTimeFunctions.isoTime,
 }, pino.multistream([
-  // Console output
   {
     stream: process.stdout,
     level: LOG_LEVEL,
   },
-  // File output for log viewer (all logs)
   {
     stream: appLogStream,
     level: LOG_LEVEL,
   },
-  // Error file output (error and above)
   {
     stream: errorLogStream,
     level: 'error',
@@ -68,6 +72,7 @@ export { pino as Pino };
 
 /**
  * Create a child logger with a specific prefix
+ * Use for: Component-level logging
  */
 export function createLogger(prefix: string): Logger {
   return baseLogger.child({ prefix });
@@ -75,9 +80,10 @@ export function createLogger(prefix: string): Logger {
 
 /**
  * Create a logger for a specific module/component
+ * Use for: Module-level logging with file path info
  */
 export function createModuleLogger(moduleName: string, modulePath?: string): Logger {
-  const base = modulePath
+  const base = modulePath 
     ? path.relative(path.join(__dirname, '..'), modulePath).replace(/\.ts$/, '')
     : moduleName;
   return baseLogger.child({ module: base });
@@ -99,7 +105,7 @@ export interface PluginLogger {
  */
 export function createPluginLogger(prefix: string): PluginLogger {
   const child = baseLogger.child({ plugin: prefix });
-
+  
   return {
     debug: (msg: string) => child.debug(msg),
     info: (msg: string) => child.info(msg),
@@ -146,3 +152,40 @@ export function getLogLevel(): string {
 
 // Re-export pino types for convenience
 export type { Logger };
+
+/**
+ * Logging Best Practices:
+ * 
+ * 1. TRACE (development only):
+ *    - Function entry/exit
+ *    - Variable values during execution
+ *    - Loop iterations
+ * 
+ * 2. DEBUG:
+ *    - Detailed troubleshooting info
+ *    - Request/response details
+ *    - State changes
+ * 
+ * 3. INFO (default level):
+ *    - Service startup/shutdown
+ *    - Major state transitions
+ *    - Important business events
+ *    - Configuration changes
+ * 
+ * 4. WARN:
+ *    - Deprecated feature usage
+ *    - Recoverable errors
+ *    - Performance issues
+ *    - Missing optional configuration
+ * 
+ * 5. ERROR:
+ *    - Failed operations
+ *    - Unhandled exceptions
+ *    - Data corruption
+ *    - External service failures
+ * 
+ * 6. FATAL:
+ *    - System cannot continue
+ *    - Critical initialization failure
+ *    - Data loss
+ */
