@@ -51,13 +51,23 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   const { service, token } = config;
   const app = new Hono();
 
-  // CORS configuration from config
-  const corsOrigins = service.currentConfig.gateway.corsOrigins || ['*'];
+  // CORS configuration
+  // Development: allow all origins by default
+  // Production: use config, default to denying all if not configured
   const isProduction = process.env.NODE_ENV === 'production';
-  const effectiveOrigins = isProduction && corsOrigins.length > 0 ? corsOrigins : ['*'];
+  const configuredOrigins = service.currentConfig.gateway.corsOrigins;
+  
+  let corsOrigin: string | string[];
+  if (isProduction) {
+    // Production: use configured origins, or '*' if explicitly allowed
+    corsOrigin = configuredOrigins && configuredOrigins.length > 0 ? configuredOrigins : '*';
+  } else {
+    // Development: allow all origins by default
+    corsOrigin = '*';
+  }
 
   const CORS_OPTIONS = {
-    origin: effectiveOrigins,
+    origin: corsOrigin,
     allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Session-Id', 'Last-Event-ID'],
     credentials: true,
