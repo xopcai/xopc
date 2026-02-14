@@ -6,6 +6,7 @@ import './components/StreamingMessageContainer';
 import { t, initI18n } from './utils/i18n';
 import type { Attachment } from './utils/attachment-utils';
 import type { MessageEditor } from './components/MessageEditor';
+import type { ChatRoute } from './navigation';
 
 // ---------- Types ----------
 
@@ -61,6 +62,7 @@ function authHeaders(token?: string): Record<string, string> {
 @customElement('xopcbot-gateway-chat')
 export class XopcbotGatewayChat extends LitElement {
   @property({ attribute: false }) config?: GatewayClientConfig;
+  @property({ attribute: false }) route?: ChatRoute;
   @property({ type: Boolean }) enableAttachments = true;
   @property({ type: Boolean }) enableModelSelector = true;
 
@@ -77,6 +79,8 @@ export class XopcbotGatewayChat extends LitElement {
   @state() private _isAtBottom = true;
   @state() private _currentSessionKey: string | null = null;
   @state() private _sessions: Array<{ key: string; name?: string; updatedAt: string }> = [];
+  @state() private _hasMoreMessages = true; // For pagination
+  @state() private _isLoadingMore = false;
 
   /** SSE event source for server-pushed events */
   private _eventSource?: EventSource;
@@ -84,6 +88,7 @@ export class XopcbotGatewayChat extends LitElement {
   private _agentAbort?: AbortController;
   private _shouldReconnect = true;
   private _isSending = false;
+  private _lastLoadedSessionKey: string | null = null;
 
   // Configurable reconnection settings
   private get _maxReconnectAttempts(): number {
@@ -107,8 +112,118 @@ export class XopcbotGatewayChat extends LitElement {
 
   override updated(changedProperties: Map<string, unknown>): void {
     super.updated(changedProperties);
+    
+    // Connect when config changes and disconnected
     if (changedProperties.has('config') && this.config && this._connectionState === 'disconnected') {
       this.connect();
+    }
+    
+    // Reload session when route changes
+    if (changedProperties.has('route') && this.route) {
+      this._handleRouteChange();
+    }
+  }
+
+  /**
+   * Handle route changes - load appropriate session
+   */
+  private async _handleRouteChange(): Promise<void> {
+    const route = this.route;
+    if (!route) return;
+    
+    // Get target session key from route
+    let targetSessionKey: string | null = null;
+    
+    switch (route.type) {
+      case 'recent':
+        // Will load recent in _loadSessions
+        break;
+      case 'session':
+        targetSessionKey = route.sessionKey;
+        break;
+      case 'new':
+        await this._createNewSession();
+        return;
+    }
+    
+    // If we have a target session, load it directly
+    if (targetSessionKey) {
+      if (targetSessionKey !== this._lastLoadedSessionKey) {
+        await this._loadSession(targetSessionKey, 0); // Load with offset 0
+        this._lastLoadedSessionKey = targetSessionKey;
+      }
+    } else {
+      // Load recent sessions - this will load the most recent one
+      await this._loadSessions();
+    }
+  }
+
+  /**
+   * Load session with pagination support
+   */
+  private async _loadSession(sessionKey: string, offset = 0): Promise<void> {
+    if (!this.config) return;
+
+    console.log('[GatewayChat] Loading session:', sessionKey, 'offset:', offset);
+
+    try {
+      const url = apiUrl(this.config.url, `/api/sessions/${encodeURIComponent(sessionKey)}?offset=${offset}&limit=50`);
+      const headers = authHeaders(this.config.token);
+      const res = await fetch(url, { headers });
+      
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      
+      const data = await res.json();
+      const session = data.session;
+      
+      this._currentSessionKey = sessionKey;
+      
+      // Convert session messages to UI format
+      const messages = session.messages || [];
+      const newMessages = messages
+        .filter((msg: any) => msg.role === 'user' || msg.role === 'assistant')
+        .map((msg: any) => ({
+          role: msg.role,
+          content: typeof msg.content === 'string' 
+            ? [{ type: 'text', text: msg.content }] 
+            : (msg.content || []),
+          attachments: msg.attachments,
+          timestamp: msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now(),
+        }));
+      
+      // Handle pagination - prepend if loading older messages
+      if (offset > 0) {
+        this._messages = [...newMessages, ...this._messages];
+      } else {
+        this._messages = newMessages;
+      }
+      
+      // Check if there are more messages to load
+      this._hasMoreMessages = messages.length >= 50;
+      
+      // Scroll to bottom only on initial load
+      if (offset === 0) {
+        this._scrollToBottom();
+      }
+      this.requestUpdate();
+    } catch (err) {
+      console.error('[GatewayChat] Failed to load session:', err);
+    }
+  }
+
+  /**
+   * Load more messages when user scrolls to top
+   */
+  private async _loadMoreMessages(): Promise<void> {
+    if (!this._currentSessionKey || this._isLoadingMore || !this._hasMoreMessages) return;
+    
+    this._isLoadingMore = true;
+    const offset = this._messages.length;
+    
+    try {
+      await this._loadSession(this._currentSessionKey, offset);
+    } finally {
+      this._isLoadingMore = false;
     }
   }
 
@@ -125,8 +240,15 @@ export class XopcbotGatewayChat extends LitElement {
     if (!this._chatMessages) return;
     const { scrollTop, scrollHeight, clientHeight } = this._chatMessages;
     const atBottom = scrollHeight - scrollTop - clientHeight < 50;
+    
+    // Update bottom state
     if (atBottom !== this._isAtBottom) {
       this._isAtBottom = atBottom;
+    }
+    
+    // Load more when scrolling to top
+    if (scrollTop < 100 && !this._isAtBottom && this._hasMoreMessages && !this._isLoadingMore) {
+      this._loadMoreMessages();
     }
   };
 
@@ -258,7 +380,7 @@ export class XopcbotGatewayChat extends LitElement {
     console.log('[GatewayChat] Loading sessions from', this.config.url);
 
     try {
-      const url = apiUrl(this.config.url, '/api/sessions');
+      const url = apiUrl(this.config.url, '/api/sessions?limit=20');
       const headers = authHeaders(this.config.token);
       console.log('[GatewayChat] Fetching sessions with token:', !!this.config.token);
       const res = await fetch(url, { headers });
@@ -281,7 +403,12 @@ export class XopcbotGatewayChat extends LitElement {
       
       // Load the most recent session if exists
       if (gatewaySessions.length > 0) {
-        await this._loadSession(gatewaySessions[0].key);
+        const recentKey = gatewaySessions[0].key;
+        await this._loadSession(recentKey, 0);
+        this._lastLoadedSessionKey = recentKey;
+        
+        // Update URL to reflect current session
+        this._updateUrlWithSession(recentKey);
       } else {
         // No sessions, create a new one
         await this._createNewSession();
@@ -291,42 +418,13 @@ export class XopcbotGatewayChat extends LitElement {
     }
   }
 
-  private async _loadSession(sessionKey: string): Promise<void> {
-    if (!this.config) return;
-
-    console.log('[GatewayChat] Loading session:', sessionKey);
-
-    try {
-      const url = apiUrl(this.config.url, `/api/sessions/${encodeURIComponent(sessionKey)}`);
-      const headers = authHeaders(this.config.token);
-      const res = await fetch(url, { headers });
-      
-      console.log('[GatewayChat] Session response status:', res.status);
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      
-      const data = await res.json();
-      console.log('[GatewayChat] Session data keys:', Object.keys(data));
-      const session = data.session;
-      
-      this._currentSessionKey = sessionKey;
-      
-      // Convert session messages to UI format
-      const messages = session.messages || [];
-      this._messages = messages
-        .filter((msg: any) => msg.role === 'user' || msg.role === 'assistant')
-        .map((msg: any) => ({
-          role: msg.role,
-          content: typeof msg.content === 'string' 
-            ? [{ type: 'text', text: msg.content }] 
-            : (msg.content || []),
-          attachments: msg.attachments,
-          timestamp: msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now(),
-        }));
-      
-      this._scrollToBottom();
-      this.requestUpdate();
-    } catch (err) {
-      console.error('[GatewayChat] Failed to load session:', err);
+  /**
+   * Update URL hash with session key
+   */
+  private _updateUrlWithSession(sessionKey: string): void {
+    const newHash = `#/chat/${encodeURIComponent(sessionKey)}`;
+    if (location.hash !== newHash) {
+      history.replaceState(null, '', newHash);
     }
   }
 
@@ -360,6 +458,12 @@ export class XopcbotGatewayChat extends LitElement {
         name: session.name,
         updatedAt: session.updatedAt,
       }, ...this._sessions];
+      
+      this._currentSessionKey = session.key;
+      this._lastLoadedSessionKey = session.key;
+      
+      // Update URL to reflect new session
+      this._updateUrlWithSession(session.key);
       
       this._scrollToBottom();
       this.requestUpdate();

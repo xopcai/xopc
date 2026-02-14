@@ -18,6 +18,46 @@ export interface NavItem {
   icon: string;
 }
 
+// Chat route with optional session key
+export type ChatRoute = 
+  | { type: 'recent' }  // Most recent session
+  | { type: 'session'; sessionKey: string }
+  | { type: 'new' };    // Create new session
+
+// Parse hash to get chat route
+export function parseChatHash(hash: string): ChatRoute | null {
+  const cleanHash = hash.replace(/^#\/?chat\/?/, '');
+  
+  if (!cleanHash || cleanHash === '/') {
+    return { type: 'recent' };
+  }
+  
+  const path = cleanHash.replace(/^\/?/, '');
+  
+  if (path === 'new') {
+    return { type: 'new' };
+  }
+  
+  // Validate session key format (should be alphanumeric with colons)
+  if (path && path.length > 0) {
+    return { type: 'session', sessionKey: decodeURIComponent(path) };
+  }
+  
+  return { type: 'recent' };
+}
+
+// Get hash from chat route
+export function getChatHash(route: ChatRoute): string {
+  switch (route.type) {
+    case 'recent':
+      return '#/chat';
+    case 'new':
+      return '#/chat/new';
+    case 'session':
+      return `#/chat/${encodeURIComponent(route.sessionKey)}`;
+  }
+}
+
 const TAB_CONFIG: Record<Tab, { label: string; icon: string; subtitle: string }> = {
   chat: {
     label: t('nav.chat'),

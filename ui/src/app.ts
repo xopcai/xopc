@@ -9,7 +9,10 @@ import {
   type Tab,
   titleForTab,
   subtitleForTab,
-  renderNavItem
+  renderNavItem,
+  parseChatHash,
+  getChatHash,
+  type ChatRoute
 } from './navigation';
 import { getIcon } from './utils/icons';
 import { t } from './utils/i18n';
@@ -39,6 +42,7 @@ export class XopcbotApp extends LitElement {
   @state() private _navMobileOpen = false; // Mobile overlay state
   @state() private _theme: 'light' | 'dark' | 'system' = 'system';
   @state() private _showSettings = false;
+  @state() private _chatRoute: ChatRoute = { type: 'recent' };
 
   @query('xopcbot-gateway-chat') private _chatElement!: XopcbotGatewayChat;
   @query('xopcbot-settings') private _settingsElement!: XopcbotSettings;
@@ -69,12 +73,29 @@ export class XopcbotApp extends LitElement {
    * Load current tab from URL hash
    */
   private _loadRouteFromHash(): void {
-    const hash = location.hash.slice(1) as Tab;
-    const validTabs: Tab[] = ['chat', 'sessions', 'settings'];
+    const hash = location.hash.slice(1);
     
-    if (validTabs.includes(hash)) {
-      if (this._activeTab !== hash) {
-        this._activeTab = hash;
+    // Check if it's a chat route with session
+    if (hash.startsWith('chat')) {
+      const chatRoute = parseChatHash(hash);
+      if (chatRoute) {
+        if (this._activeTab !== 'chat') {
+          this._activeTab = 'chat';
+        }
+        // Only update if route changed
+        if (JSON.stringify(this._chatRoute) !== JSON.stringify(chatRoute)) {
+          this._chatRoute = chatRoute;
+        }
+      }
+      return;
+    }
+    
+    const tab = hash as Tab;
+    const validTabs: Tab[] = ['sessions', 'cron', 'settings'];
+    
+    if (validTabs.includes(tab)) {
+      if (this._activeTab !== tab) {
+        this._activeTab = tab;
       }
     }
   }
@@ -86,13 +107,28 @@ export class XopcbotApp extends LitElement {
     this._activeTab = tab;
     
     // Update URL hash without triggering hashchange
-    const newHash = `#${tab}`;
+    let newHash: string;
+    if (tab === 'chat') {
+      newHash = getChatHash(this._chatRoute);
+    } else {
+      newHash = `#${tab}`;
+    }
+    
     if (location.hash !== newHash) {
       history.pushState(null, '', newHash);
     }
     
     // Close mobile nav if open
     this._navMobileOpen = false;
+  }
+
+  /**
+   * Update chat route and URL
+   */
+  private _updateChatRoute(route: ChatRoute): void {
+    this._chatRoute = route;
+    const newHash = getChatHash(route);
+    history.pushState(null, '', newHash);
   }
 
   private _loadTheme(): void {
@@ -287,9 +323,11 @@ export class XopcbotApp extends LitElement {
     return html`
       <xopcbot-gateway-chat
         .config=${this.gatewayConfig}
+        .route=${this._chatRoute}
         .enableAttachments=${true}
         .enableModelSelector=${true}
         .enableThinkingSelector=${true}
+        @route-change=${(e: CustomEvent<ChatRoute>) => this._updateChatRoute(e.detail)}
       ></xopcbot-gateway-chat>
     `;
   }
