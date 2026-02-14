@@ -1,5 +1,7 @@
 # 🐈 xopcbot: Ultra-Lightweight Personal AI Assistant
 
+[中文](./README.zh-CN.md) | English
+
 <div align="center">
   <p>
     <strong>An ultra-lightweight, plugin-driven personal AI assistant built with Node.js and TypeScript.</strong>
