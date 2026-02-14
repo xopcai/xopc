@@ -1,6 +1,8 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
+import { dirname, join } from 'node:path';
 import { logger } from './middleware/logger.js';
 import { auth } from './middleware/auth.js';
 import type { GatewayService } from '../service.js';
@@ -8,7 +10,9 @@ import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('HonoApp');
 
-const UI_STATIC_ROOT = './gateway/static/root';
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const UI_STATIC_ROOT = join(__dirname, '../../gateway/static/root');
 
 // MIME type mapping for static assets
 const MIME_TYPES: Record<string, string> = {
