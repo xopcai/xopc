@@ -50,9 +50,16 @@ export default defineConfig(({ mode }) => {
       port: 3000,
       open: false,
       proxy: {
-        '/ws': {
-          target: 'ws://localhost:18790',
-          ws: true,
+        '/api': {
+          target: 'http://localhost:18790',
+          changeOrigin: true,
+        },
+        '/health': {
+          target: 'http://localhost:18790',
+          changeOrigin: true,
+        },
+        '/status': {
+          target: 'http://localhost:18790',
           changeOrigin: true,
         },
       },

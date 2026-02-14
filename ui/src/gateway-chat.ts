@@ -136,12 +136,20 @@ export class XopcbotGatewayChat extends LitElement {
 
       this._eventSource = new EventSource(url.toString());
 
-      this._eventSource.addEventListener('connected', () => {
+      // EventSource fires onopen when the connection is established (or re-established)
+      this._eventSource.onopen = () => {
         this._connectionState = 'connected';
         this._error = null;
         this._reconnectCount = 0;
         this._reconnectDelay = 0;
         this._clearReconnectTimer();
+        this.requestUpdate();
+      };
+
+      // Also listen for our custom 'connected' event from the server
+      this._eventSource.addEventListener('connected', () => {
+        this._connectionState = 'connected';
+        this._error = null;
         this.requestUpdate();
       });
 
@@ -166,8 +174,12 @@ export class XopcbotGatewayChat extends LitElement {
         } catch { /* ignore */ }
       });
 
+      // EventSource auto-reconnects on error. We just update UI state.
+      // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSED
       this._eventSource.onerror = () => {
-        if (this._connectionState === 'connected' || this._connectionState === 'connecting') {
+        // EventSource is auto-reconnecting (readyState=CONNECTING) or permanently closed (CLOSED)
+        if (this._eventSource?.readyState === EventSource.CLOSED) {
+          // Permanently closed — do manual reconnect with backoff
           this._connectionState = 'disconnected';
 
           if (this._isStreaming) {
@@ -185,8 +197,12 @@ export class XopcbotGatewayChat extends LitElement {
               this._connectionState = 'error';
             }
           }
-          this.requestUpdate();
+        } else {
+          // readyState=CONNECTING — EventSource is auto-reconnecting, just show status
+          this._connectionState = 'reconnecting';
+          this._reconnectCount++;
         }
+        this.requestUpdate();
       };
     } catch (err) {
       console.error('[GatewayChat] Failed to create EventSource:', err);

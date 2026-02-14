@@ -169,18 +169,14 @@ export function createEventsSSEHandler(config: SSEHandlerConfig) {
   const { service } = config;
 
   return async (c: Context) => {
-    const accept = c.req.header('Accept') || '';
-    if (!accept.includes('text/event-stream')) {
-      return c.json(
-        { ok: false, error: { code: 'BAD_REQUEST', message: 'Accept header must include text/event-stream' } },
-        406,
-      );
-    }
-
     const lastEventId = c.req.header('Last-Event-ID') || undefined;
-    const sessionId = c.req.header('X-Session-Id') || crypto.randomUUID();
+    const sessionId = c.req.header('X-Session-Id')
+      || c.req.query('sessionId')
+      || crypto.randomUUID();
 
     return streamSSE(c, async (stream) => {
+      let aborted = false;
+
       // Send a hello event so the client knows the stream is established
       await stream.writeSSE({
         id: '0',
@@ -190,6 +186,7 @@ export function createEventsSSEHandler(config: SSEHandlerConfig) {
 
       // Subscribe to service events
       const cleanup = service.subscribe(sessionId, async (event) => {
+        if (aborted) return;
         try {
           await stream.writeSSE({
             id: event.id,
@@ -215,6 +212,7 @@ export function createEventsSSEHandler(config: SSEHandlerConfig) {
 
       // Keep alive with periodic comments (every 30s)
       const keepAlive = setInterval(async () => {
+        if (aborted) { clearInterval(keepAlive); return; }
         try {
           await stream.writeSSE({ event: 'ping', data: '' });
         } catch {
@@ -222,16 +220,15 @@ export function createEventsSSEHandler(config: SSEHandlerConfig) {
         }
       }, 30_000);
 
-      // Cleanup on disconnect
-      stream.onAbort(() => {
-        clearInterval(keepAlive);
-        cleanup();
-        log.debug({ sessionId }, 'Event stream disconnected');
-      });
-
       // Block until aborted — streamSSE closes when the callback returns
       await new Promise<void>((resolve) => {
-        stream.onAbort(resolve);
+        stream.onAbort(() => {
+          aborted = true;
+          clearInterval(keepAlive);
+          cleanup();
+          log.debug({ sessionId }, 'Event stream disconnected');
+          resolve();
+        });
       });
     });
   };

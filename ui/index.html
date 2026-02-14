@@ -32,7 +32,7 @@
         const currentPort = window.location.port || (window.location.protocol === 'https:' ? '443' : '80');
         // Default to 18790 (gateway port), but respect ?gateway= param
         const defaultPort = currentPort === '3000' ? '18790' : currentPort;
-        const gatewayUrl = urlParams.get('gateway') || `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${currentHost}:${defaultPort}/ws`;
+        const gatewayUrl = urlParams.get('gateway') || `${window.location.protocol}//${currentHost}:${defaultPort}`;
         
         // Get token from URL if provided
         const token = urlParams.get('token') || undefined;
@@ -53,8 +53,8 @@
                 key: 'gatewayUrl',
                 label: 'Gateway URL',
                 type: 'text',
-                description: 'WebSocket URL for the gateway server',
-                placeholder: 'ws://localhost:18790/ws'
+                description: 'HTTP URL for the gateway server',
+                placeholder: 'http://localhost:18790'
               },
               {
                 key: 'token',

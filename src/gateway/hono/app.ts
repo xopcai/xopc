@@ -55,8 +55,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   app.use(logger());
   app.use(cors({
     origin: '*',
-    allowMethods: ['GET', 'POST', 'OPTIONS'],
-    allowHeaders: ['Content-Type', 'Authorization'],
+    allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
+    allowHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Session-Id', 'Last-Event-ID'],
   }));
 
   // Health endpoint (no auth required)
