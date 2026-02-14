@@ -49,6 +49,7 @@ export class XopcbotApp extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this._loadTheme();
+    this._loadRouteFromHash();
 
     // Listen for system theme changes
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -56,6 +57,41 @@ export class XopcbotApp extends LitElement {
         this._applyTheme();
       }
     });
+
+    // Listen for hash changes (browser back/forward)
+    window.addEventListener('hashchange', () => {
+      this._loadRouteFromHash();
+    });
+  }
+
+  /**
+   * Load current tab from URL hash
+   */
+  private _loadRouteFromHash(): void {
+    const hash = location.hash.slice(1) as Tab;
+    const validTabs: Tab[] = ['chat', 'sessions', 'settings'];
+    
+    if (validTabs.includes(hash)) {
+      if (this._activeTab !== hash) {
+        this._activeTab = hash;
+      }
+    }
+  }
+
+  /**
+   * Update URL hash when switching tabs
+   */
+  private _switchTab(tab: Tab): void {
+    this._activeTab = tab;
+    
+    // Update URL hash without triggering hashchange
+    const newHash = `#${tab}`;
+    if (location.hash !== newHash) {
+      history.pushState(null, '', newHash);
+    }
+    
+    // Close mobile nav if open
+    this._navMobileOpen = false;
   }
 
   private _loadTheme(): void {
@@ -182,8 +218,7 @@ export class XopcbotApp extends LitElement {
                         tab,
                         this._activeTab === tab,
                         () => {
-                          this._activeTab = tab;
-                          this._closeNavMobile();
+                          this._switchTab(tab);
                         }
                       )
                     )}
