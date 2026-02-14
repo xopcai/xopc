@@ -363,16 +363,19 @@ export class LogManager extends LitElement {
   private _renderStats(): unknown {
     if (!this._stats) return '';
 
+    const total = this._stats.total ?? 0;
+    const byLevel = this._stats.byLevel ?? {};
+
     return html`
       <div class="log-manager__stats">
         <div class="stat-card">
-          <div class="stat-value">${this._stats.total.toLocaleString()}</div>
+          <div class="stat-value">${total.toLocaleString()}</div>
           <div class="stat-label">Total Logs</div>
         </div>
-        ${Object.entries(this._stats.byLevel).map(([level, count]) => html`
+        ${Object.entries(byLevel).map(([level, count]) => html`
           <div class="stat-card stat-card--${level}">
             <div class="stat-value" style="color: ${LOG_LEVEL_COLORS[level as LogLevel]}">
-              ${count.toLocaleString()}
+              ${(count ?? 0).toLocaleString()}
             </div>
             <div class="stat-label">${level}</div>
           </div>

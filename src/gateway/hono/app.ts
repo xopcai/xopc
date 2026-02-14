@@ -431,13 +431,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // UI static files
   app.get('/ui', (c) => c.redirect('/ui/'));
   
-  // Logs viewer UI
-  app.get('/ui/logs', (c) => {
-    const response = serveStaticFile('logs.html');
-    if (response) return response;
-    return c.text('Log viewer not found', 404);
-  });
-
   app.get('/ui/', (c) => {
     const response = serveStaticFile('index.html');
     if (response) return response;

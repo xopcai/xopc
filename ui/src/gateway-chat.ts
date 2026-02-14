@@ -114,6 +114,9 @@ export class XopcbotGatewayChat extends LitElement {
     if (this._chatMessages) {
       this._chatMessages.addEventListener('scroll', this._handleScroll as EventListener);
     }
+
+    // Load session based on current route
+    this._handleRouteChange();
   }
 
   override updated(changedProperties: Map<string, unknown>): void {
@@ -136,14 +139,17 @@ export class XopcbotGatewayChat extends LitElement {
   private async _handleRouteChange(): Promise<void> {
     const route = this.route;
     if (!route) return;
-    
+
     // Get target session key from route
     let targetSessionKey: string | null = null;
-    
+
     switch (route.type) {
       case 'recent':
-        // Will load recent in _loadSessions
-        break;
+        // Reset last loaded key to force reload of most recent session
+        this._lastLoadedSessionKey = null;
+        // Load recent sessions - this will load the most recent one
+        await this._loadSessions();
+        return;
       case 'session':
         targetSessionKey = route.sessionKey;
         break;
@@ -151,16 +157,13 @@ export class XopcbotGatewayChat extends LitElement {
         await this._createNewSession();
         return;
     }
-    
+
     // If we have a target session, load it directly
     if (targetSessionKey) {
       if (targetSessionKey !== this._lastLoadedSessionKey) {
         await this._loadSession(targetSessionKey, 0); // Load with offset 0
         this._lastLoadedSessionKey = targetSessionKey;
       }
-    } else {
-      // Load recent sessions - this will load the most recent one
-      await this._loadSessions();
     }
   }
 
@@ -293,8 +296,10 @@ export class XopcbotGatewayChat extends LitElement {
         this._error = null;
         this._reconnectCount = 0;
         this.requestUpdate();
-        // Load sessions after connection is established
-        this._loadSessions();
+        // Load sessions after connection is established (only if not already loaded)
+        if (!this._lastLoadedSessionKey) {
+          this._loadSessions();
+        }
       };
 
       // Also listen for our custom 'connected' event from the server
@@ -406,25 +411,26 @@ export class XopcbotGatewayChat extends LitElement {
 
       this._sessions = gatewaySessions;
 
-      // Find an existing empty session or load the most recent one
-      const emptySession = gatewaySessions.find((s: any) => s.messageCount === 0);
+      // Filter out empty sessions and get sessions with messages
+      const sessionsWithMessages = gatewaySessions.filter((s: any) => s.messageCount > 0);
 
-      if (emptySession) {
-        // Load the empty session
-        this._currentSessionKey = emptySession.key;
-        this._messages = [];
-        this._lastLoadedSessionKey = emptySession.key;
-        this._updateUrlWithSession(emptySession.key);
-      } else if (gatewaySessions.length > 0) {
-        // Load the most recent session if exists
-        const recentKey = gatewaySessions[0].key;
+      if (sessionsWithMessages.length > 0) {
+        // Load the most recent session with messages
+        const recentKey = sessionsWithMessages[0].key;
         await this._loadSession(recentKey, 0);
         this._lastLoadedSessionKey = recentKey;
 
         // Update URL to reflect current session
         this._updateUrlWithSession(recentKey);
+      } else if (gatewaySessions.length > 0) {
+        // No sessions with messages, use the most recent empty session
+        const emptySession = gatewaySessions[0];
+        this._currentSessionKey = emptySession.key;
+        this._messages = [];
+        this._lastLoadedSessionKey = emptySession.key;
+        this._updateUrlWithSession(emptySession.key);
       } else {
-        // No sessions, create a new one
+        // No sessions at all, create a new one
         await this._createNewSession();
       }
     } catch (err) {

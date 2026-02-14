@@ -31,6 +31,7 @@ export class SessionStore {
   private archiveDir: string;
   private indexFile: string;
   private indexCache: SessionIndex | null = null;
+  private indexCacheTime: number = 0;
   private indexDirty = false;
   private window: SlidingWindow;
   private compactor: SessionCompactor;
@@ -66,16 +67,34 @@ export class SessionStore {
   // ========== Index Management ==========
 
   private async loadIndex(): Promise<SessionIndex> {
-    if (this.indexCache) return this.indexCache;
-
     try {
+      // Check if index file has been modified
+      const stats = await stat(this.indexFile);
+      const mtime = stats.mtime.getTime();
+
+      // If cache is valid and file hasn't changed, use cache
+      if (this.indexCache && mtime <= this.indexCacheTime) {
+        return this.indexCache;
+      }
+
+      // File has changed or cache is empty, reload
       const data = await readFile(this.indexFile, 'utf-8');
       this.indexCache = JSON.parse(data) as SessionIndex;
+      this.indexCacheTime = mtime;
       return this.indexCache;
     } catch {
       // Index corrupted or missing, rebuild
       return this.rebuildIndex();
     }
+  }
+
+  /**
+   * Force refresh the index cache from disk
+   */
+  async refreshIndex(): Promise<void> {
+    this.indexCache = null;
+    this.indexCacheTime = 0;
+    await this.loadIndex();
   }
 
   private async saveIndex(): Promise<void> {
@@ -84,6 +103,14 @@ export class SessionStore {
     this.indexCache.lastUpdated = new Date().toISOString();
     await writeFile(this.indexFile, JSON.stringify(this.indexCache, null, 2));
     this.indexDirty = false;
+    
+    // Update cache time after saving
+    try {
+      const stats = await stat(this.indexFile);
+      this.indexCacheTime = stats.mtime.getTime();
+    } catch {
+      this.indexCacheTime = Date.now();
+    }
   }
 
   private async rebuildIndex(): Promise<SessionIndex> {
@@ -115,6 +142,15 @@ export class SessionStore {
     };
 
     await this.saveIndex();
+    
+    // Update cache time after saving
+    try {
+      const stats = await stat(this.indexFile);
+      this.indexCacheTime = stats.mtime.getTime();
+    } catch {
+      this.indexCacheTime = Date.now();
+    }
+    
     log.info({ count: sessions.length }, 'Session index rebuilt');
 
     return this.indexCache;
