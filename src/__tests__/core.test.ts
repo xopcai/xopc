@@ -21,8 +21,8 @@ describe('xopcbot integration tests', () => {
     expect(CommandRegistry).toBeDefined();
 
     // Memory modules
-    const { MemoryStore } = await import('../agent/memory/store.js');
-    expect(MemoryStore).toBeDefined();
+    const { SessionStore } = await import('../session/index.js');
+    expect(SessionStore).toBeDefined();
 
     // Cron modules
     const { CronService } = await import('../cron/index.js');
@@ -39,11 +39,11 @@ describe('xopcbot integration tests', () => {
 
   it('should instantiate core classes', async () => {
     const { CommandRegistry } = await import('../cli/registry.js');
-    const { MemoryStore } = await import('../agent/memory/store.js');
+    const { SessionStore } = await import('../session/index.js');
 
     // Should be able to instantiate
     expect(() => new CommandRegistry()).not.toThrow();
-    expect(() => new MemoryStore('/tmp/test')).not.toThrow();
+    expect(() => new SessionStore('/tmp/test')).not.toThrow();
   });
 
   it('should have all tool functions available', async () => {
@@ -70,6 +70,7 @@ describe('xopcbot integration tests', () => {
     await import('../cli/commands/config.js');
     await import('../cli/commands/models.js');
     await import('../cli/commands/configure.js');
+    await import('../cli/commands/session.js');
 
     // Verify commands are registered
     expect(registry.findByName('onboard')).toBeDefined();
@@ -79,5 +80,6 @@ describe('xopcbot integration tests', () => {
     expect(registry.findByName('config')).toBeDefined();
     expect(registry.findByName('models')).toBeDefined();
     expect(registry.findByName('configure')).toBeDefined();
+    expect(registry.findByName('session')).toBeDefined();
   });
 });

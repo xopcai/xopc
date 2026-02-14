@@ -67,7 +67,7 @@ export function loadTemplate(name: TemplateFile): string {
     const content = readFileSync(templatePath, 'utf-8');
     templateCache.set(name, content);
     return content;
-  } catch (error) {
+  } catch {
     // Fallback: return a minimal default if template is missing
     console.warn(`Warning: Template ${name} not found at ${templatePath}`);
     return getFallbackTemplate(name);

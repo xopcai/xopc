@@ -1,10 +1,10 @@
 import { Command } from 'commander';
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import { input, select, confirm } from '@inquirer/prompts';
 import { saveConfig, PROVIDER_OPTIONS } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
-import { loadAllTemplates, type TemplateFile } from '../templates.js';
+import { loadAllTemplates } from '../templates.js';
 import type { CLIContext } from '../registry.js';
 
 /**

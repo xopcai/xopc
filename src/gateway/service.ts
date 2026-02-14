@@ -9,8 +9,10 @@ import { CronService, DefaultJobExecutor } from '../cron/index.js';
 import { PluginLoader, normalizePluginConfig } from '../plugins/index.js';
 import { HeartbeatService } from '../heartbeat/index.js';
 import { ConfigHotReloader } from '../config/reload.js';
+import { SessionManager } from '../session/index.js';
 import type { Config } from '../config/schema.js';
 import type { JobData } from '../cron/types.js';
+import type { SessionListQuery, ExportFormat } from '../types/index.js';
 
 const log = createLogger('GatewayService');
 
@@ -53,6 +55,7 @@ export class GatewayService {
   private cronService: CronService;
   private pluginLoader: PluginLoader | null = null;
   private heartbeatService: HeartbeatService;
+  private sessionManager: SessionManager;
   private running = false;
   private configReloader: ConfigHotReloader | null = null;
   private startTime = Date.now();
@@ -84,6 +87,11 @@ export class GatewayService {
       DEFAULT_PATHS.cronJobs,
       cronExecutor
     );
+
+    // Initialize session manager
+    this.sessionManager = new SessionManager({
+      workspace: this.config.agents?.defaults?.workspace || './workspace',
+    });
 
     // Initialize heartbeat service
     this.heartbeatService = new HeartbeatService(this.cronService);
@@ -130,6 +138,10 @@ export class GatewayService {
 
     // Start channels
     await this.channelManager.startAll();
+
+    // Initialize session manager
+    await this.sessionManager.initialize();
+    log.info('Session manager initialized');
 
     // Start cron service
     if (this.config.cron?.enabled !== false) {
@@ -463,10 +475,130 @@ export class GatewayService {
     return this.cronService;
   }
 
+  get sessionManagerInstance(): SessionManager {
+    return this.sessionManager;
+  }
+
   /**
    * Process a message directly through the agent (for CLI mode)
    */
   async processDirect(content: string, sessionKey = 'cli:direct'): Promise<string> {
     return this.agentService.processDirect(content, sessionKey);
+  }
+
+  // ========== Session Management API ==========
+
+  /**
+   * List sessions with query filters
+   */
+  async listSessions(query?: SessionListQuery) {
+    return this.sessionManager.listSessions(query);
+  }
+
+  /**
+   * Get a single session by key
+   */
+  async getSession(key: string) {
+    return this.sessionManager.getSession(key);
+  }
+
+  /**
+   * Delete a session
+   */
+  async deleteSession(key: string): Promise<{ deleted: boolean }> {
+    const result = await this.sessionManager.deleteSession(key);
+    return { deleted: result };
+  }
+
+  /**
+   * Delete multiple sessions
+   */
+  async deleteSessions(keys: string[]): Promise<{ success: string[]; failed: string[] }> {
+    return this.sessionManager.deleteSessions(keys);
+  }
+
+  /**
+   * Rename a session
+   */
+  async renameSession(key: string, name: string): Promise<{ renamed: boolean }> {
+    await this.sessionManager.renameSession(key, name);
+    return { renamed: true };
+  }
+
+  /**
+   * Tag a session
+   */
+  async tagSession(key: string, tags: string[]): Promise<{ tagged: boolean }> {
+    await this.sessionManager.tagSession(key, tags);
+    return { tagged: true };
+  }
+
+  /**
+   * Remove tags from a session
+   */
+  async untagSession(key: string, tags: string[]): Promise<{ untagged: boolean }> {
+    await this.sessionManager.untagSession(key, tags);
+    return { untagged: true };
+  }
+
+  /**
+   * Archive a session
+   */
+  async archiveSession(key: string): Promise<{ archived: boolean }> {
+    await this.sessionManager.archiveSession(key);
+    return { archived: true };
+  }
+
+  /**
+   * Unarchive a session
+   */
+  async unarchiveSession(key: string): Promise<{ unarchived: boolean }> {
+    await this.sessionManager.unarchiveSession(key);
+    return { unarchived: true };
+  }
+
+  /**
+   * Pin a session
+   */
+  async pinSession(key: string): Promise<{ pinned: boolean }> {
+    await this.sessionManager.pinSession(key);
+    return { pinned: true };
+  }
+
+  /**
+   * Unpin a session
+   */
+  async unpinSession(key: string): Promise<{ unpinned: boolean }> {
+    await this.sessionManager.unpinSession(key);
+    return { unpinned: true };
+  }
+
+  /**
+   * Search sessions
+   */
+  async searchSessions(query: string) {
+    return this.sessionManager.searchSessions(query);
+  }
+
+  /**
+   * Search within a session
+   */
+  async searchInSession(key: string, keyword: string) {
+    return this.sessionManager.searchInSession(key, keyword);
+  }
+
+  /**
+   * Export a session
+   */
+  async exportSession(key: string, format: ExportFormat): Promise<{ content: string }> {
+    const content = await this.sessionManager.exportSession(key, format);
+    return { content };
+  }
+
+  /**
+   * Get session statistics
+   */
+  async getSessionStats() {
+    return this.sessionManager.getStats();
   }
 }

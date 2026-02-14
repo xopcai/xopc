@@ -322,6 +322,229 @@ async function handleRequest(
         break;
       }
 
+      // ========== Session Management ==========
+
+      case 'session.list': {
+        const query = params.query as Parameters<typeof service.listSessions>[0];
+        const result = await service.listSessions(query);
+        ws.send(JSON.stringify(createResponse(id, result)));
+        break;
+      }
+
+      case 'session.get': {
+        const key = params.key as string;
+        if (!key) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required param: key' }
+          )));
+          break;
+        }
+        const session = await service.getSession(key);
+        if (!session) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'NOT_FOUND', message: `Session not found: ${key}` }
+          )));
+          break;
+        }
+        ws.send(JSON.stringify(createResponse(id, { session })));
+        break;
+      }
+
+      case 'session.delete': {
+        const key = params.key as string;
+        if (!key) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required param: key' }
+          )));
+          break;
+        }
+        const result = await service.deleteSession(key);
+        ws.send(JSON.stringify(createResponse(id, result)));
+        break;
+      }
+
+      case 'session.deleteMany': {
+        const keys = params.keys as string[];
+        if (!Array.isArray(keys) || keys.length === 0) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing or invalid param: keys (array expected)' }
+          )));
+          break;
+        }
+        const result = await service.deleteSessions(keys);
+        ws.send(JSON.stringify(createResponse(id, result)));
+        break;
+      }
+
+      case 'session.rename': {
+        const key = params.key as string;
+        const name = params.name as string;
+        if (!key || !name) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required params: key, name' }
+          )));
+          break;
+        }
+        const result = await service.renameSession(key, name);
+        ws.send(JSON.stringify(createResponse(id, result)));
+        break;
+      }
+
+      case 'session.tag': {
+        const key = params.key as string;
+        const tags = params.tags as string[];
+        if (!key || !Array.isArray(tags)) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing or invalid params: key, tags (array expected)' }
+          )));
+          break;
+        }
+        const result = await service.tagSession(key, tags);
+        ws.send(JSON.stringify(createResponse(id, result)));
+        break;
+      }
+
+      case 'session.untag': {
+        const key = params.key as string;
+        const tags = params.tags as string[];
+        if (!key || !Array.isArray(tags)) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing or invalid params: key, tags (array expected)' }
+          )));
+          break;
+        }
+        const result = await service.untagSession(key, tags);
+        ws.send(JSON.stringify(createResponse(id, result)));
+        break;
+      }
+
+      case 'session.archive': {
+        const key = params.key as string;
+        if (!key) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required param: key' }
+          )));
+          break;
+        }
+        const result = await service.archiveSession(key);
+        ws.send(JSON.stringify(createResponse(id, result)));
+        break;
+      }
+
+      case 'session.unarchive': {
+        const key = params.key as string;
+        if (!key) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required param: key' }
+          )));
+          break;
+        }
+        const result = await service.unarchiveSession(key);
+        ws.send(JSON.stringify(createResponse(id, result)));
+        break;
+      }
+
+      case 'session.pin': {
+        const key = params.key as string;
+        if (!key) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required param: key' }
+          )));
+          break;
+        }
+        const result = await service.pinSession(key);
+        ws.send(JSON.stringify(createResponse(id, result)));
+        break;
+      }
+
+      case 'session.unpin': {
+        const key = params.key as string;
+        if (!key) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required param: key' }
+          )));
+          break;
+        }
+        const result = await service.unpinSession(key);
+        ws.send(JSON.stringify(createResponse(id, result)));
+        break;
+      }
+
+      case 'session.search': {
+        const query = params.query as string;
+        if (!query) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required param: query' }
+          )));
+          break;
+        }
+        const sessions = await service.searchSessions(query);
+        ws.send(JSON.stringify(createResponse(id, { sessions })));
+        break;
+      }
+
+      case 'session.searchIn': {
+        const key = params.key as string;
+        const keyword = params.keyword as string;
+        if (!key || !keyword) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required params: key, keyword' }
+          )));
+          break;
+        }
+        const messages = await service.searchInSession(key, keyword);
+        ws.send(JSON.stringify(createResponse(id, { messages })));
+        break;
+      }
+
+      case 'session.export': {
+        const key = params.key as string;
+        const format = (params.format as 'json' | 'markdown') || 'json';
+        if (!key) {
+          ws.send(JSON.stringify(createResponse(
+            id,
+            undefined,
+            { code: 'BAD_REQUEST', message: 'Missing required param: key' }
+          )));
+          break;
+        }
+        const result = await service.exportSession(key, format);
+        ws.send(JSON.stringify(createResponse(id, result)));
+        break;
+      }
+
+      case 'session.stats': {
+        const stats = await service.getSessionStats();
+        ws.send(JSON.stringify(createResponse(id, stats)));
+        break;
+      }
+
       default: {
         ws.send(JSON.stringify(createResponse(
           id,

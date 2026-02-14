@@ -195,5 +195,17 @@ export interface SubagentResult {
   status: 'ok' | 'error';
 }
 
+// Re-export session types
+export {
+  SessionStatus,
+  type SessionMetadata,
+  type SessionDetail,
+  type SessionListQuery,
+  type PaginatedResult,
+  type SessionStats,
+  type ExportFormat,
+  type SessionExport,
+} from '../session/types.js';
+
 // Re-export provider types
 export * from './providers.js';

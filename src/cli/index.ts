@@ -7,6 +7,7 @@ import './commands/onboard.js';
 import './commands/configure.js';
 import './commands/agent.js';
 import './commands/gateway.js';
+import './commands/session.js';
 import './commands/cron.js';
 import './commands/config.js';
 import './commands/models.js';

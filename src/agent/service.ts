@@ -7,7 +7,7 @@ import type { MessageBus, InboundMessage } from '../bus/index.js';
 import type { Config, AgentDefaults } from '../config/schema.js';
 import type { PluginTool } from '../plugins/types.js';
 import { getApiKey as getConfigApiKey } from '../config/schema.js';
-import { MemoryStore, type CompactionConfig, type WindowConfig } from './memory/store.js';
+import { SessionStore, type CompactionConfig, type WindowConfig } from '../session/index.js';
 import { SessionCompactor } from './memory/compaction.js';
 import {
   readFileTool,
@@ -114,7 +114,7 @@ interface AgentServiceConfig {
 
 export class AgentService {
   private agent: Agent;
-  private memory: MemoryStore;
+  private sessionStore: SessionStore;
   private compactor: SessionCompactor;
   private hookRunner?: HookRunner;
   private unsubscribe?: () => void;
@@ -153,8 +153,7 @@ export class AgentService {
       keepRecentMessages: defaults?.compaction?.keepRecentMessages || 10,
     };
 
-    this.memory = new MemoryStore(config.workspace, windowConfig, compactionConfig);
-    this.compactor = new SessionCompactor(compactionConfig);
+    this.sessionStore = new SessionStore(config.workspace, windowConfig, compactionConfig);
 
     if (config.pluginRegistry) {
       this.hookRunner = new HookRunner(config.pluginRegistry, {
@@ -380,7 +379,7 @@ export class AgentService {
 
       const command = msg.content.trim();
       if (command === '/reset' || command === '/new') {
-        await this.memory.delete(sessionKey);
+        await this.sessionStore.deleteSession(sessionKey);
         await this.bus.publishOutbound({
           channel: msg.channel,
           chat_id: msg.chat_id,
@@ -407,9 +406,9 @@ export class AgentService {
         prompt: expandedContent,
       });
 
-      let messages = await this.memory.load(sessionKey);
+      let messages = await this.sessionStore.load(sessionKey);
 
-      const windowStats = this.memory.getWindowStats(messages);
+      const windowStats = this.sessionStore.getWindowStats(messages);
       if (windowStats.needsTrim) {
         log.debug({ sessionKey, ...windowStats }, 'Messages will be trimmed on save');
       }
@@ -418,12 +417,12 @@ export class AgentService {
 
       await this.triggerHook('before_compaction', {
         messageCount: messages.length,
-        tokenCount: await this.memory.estimateTokenUsage(sessionKey, messages),
+        tokenCount: await this.sessionStore.estimateTokenUsage(sessionKey, messages),
       });
 
       await this.checkAndCompact(sessionKey, messages, contextWindow);
 
-      messages = await this.memory.load(sessionKey);
+      messages = await this.sessionStore.load(sessionKey);
       this.agent.replaceMessages(messages);
 
       const userMessage: AgentMessage = {
@@ -465,7 +464,7 @@ export class AgentService {
         }
       }
 
-      await this.memory.save(sessionKey, this.agent.state.messages);
+      await this.sessionStore.save(sessionKey, this.agent.state.messages);
 
       await this.triggerHook('agent_end', {
         messages: this.agent.state.messages,
@@ -568,17 +567,17 @@ export class AgentService {
     }
 
     const sessionKey = `${originChannel}:${originChatId}`;
-    let messages = await this.memory.load(sessionKey);
+    let messages = await this.sessionStore.load(sessionKey);
 
-    const windowStats = this.memory.getWindowStats(messages);
+    const windowStats = this.sessionStore.getWindowStats(messages);
     if (windowStats.needsTrim) {
-      messages = await this.memory.load(sessionKey);
+      messages = await this.sessionStore.load(sessionKey);
     }
 
     const contextWindow = this.getContextWindow();
     await this.checkAndCompact(sessionKey, messages, contextWindow);
 
-    messages = await this.memory.load(sessionKey);
+    messages = await this.sessionStore.load(sessionKey);
     this.agent.replaceMessages(messages);
 
     const systemMessage: AgentMessage = {
@@ -600,7 +599,7 @@ export class AgentService {
       });
     }
 
-    await this.memory.save(sessionKey, this.agent.state.messages);
+    await this.sessionStore.save(sessionKey, this.agent.state.messages);
   }
 
   private async runMessageSendingHook(
@@ -645,7 +644,7 @@ export class AgentService {
     messages: AgentMessage[],
     contextWindow: number
   ): Promise<void> {
-    const prep = this.memory.prepareCompaction(sessionKey, messages, contextWindow);
+    const prep = this.sessionStore.prepareCompaction(sessionKey, messages, contextWindow);
 
     if (!prep.needsCompaction) {
       return;
@@ -658,7 +657,7 @@ export class AgentService {
     }, 'Session needs compaction');
 
     try {
-      const result = await this.memory.compact(sessionKey, messages, contextWindow);
+      const result = await this.sessionStore.compact(sessionKey, messages, contextWindow);
 
       await this.triggerHook('after_compaction', {
         messageCount: messages.length,
@@ -683,13 +682,13 @@ export class AgentService {
   }
 
   async compactSession(sessionKey: string, instructions?: string): Promise<void> {
-    const messages = await this.memory.load(sessionKey);
+    const messages = await this.sessionStore.load(sessionKey);
     const contextWindow = this.getContextWindow();
 
-    const result = await this.memory.compact(sessionKey, messages, contextWindow, instructions);
+    const result = await this.sessionStore.compact(sessionKey, messages, contextWindow, instructions);
 
     if (result.compacted) {
-      await this.memory.save(sessionKey, await this.memory.load(sessionKey));
+      await this.sessionStore.save(sessionKey, await this.sessionStore.load(sessionKey));
     }
 
     log.info({ sessionKey, result }, 'Manual compaction complete');
@@ -697,9 +696,9 @@ export class AgentService {
 
   getSessionStats(sessionKey: string, messages: AgentMessage[]) {
     return {
-      windowStats: this.memory.getWindowStats(messages),
-      compactionStats: this.memory.getCompactionStats(sessionKey),
-      tokenEstimate: this.memory.estimateTokenUsage(sessionKey, messages),
+      windowStats: this.sessionStore.getWindowStats(messages),
+      compactionStats: this.sessionStore.getCompactionStats(sessionKey),
+      tokenEstimate: this.sessionStore.estimateTokenUsage(sessionKey, messages),
     };
   }
 
@@ -881,7 +880,7 @@ export class AgentService {
   }
 
   async processDirect(content: string, sessionKey = 'cli:direct'): Promise<string> {
-    const messages = await this.memory.load(sessionKey);
+    const messages = await this.sessionStore.load(sessionKey);
     this.agent.replaceMessages(messages);
 
     await this.agent.prompt({
@@ -892,7 +891,7 @@ export class AgentService {
     await this.agent.waitForIdle();
 
     const response = this.getLastAssistantContent() || '';
-    await this.memory.save(sessionKey, this.agent.state.messages);
+    await this.sessionStore.save(sessionKey, this.agent.state.messages);
 
     return response;
   }
