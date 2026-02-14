@@ -30,6 +30,8 @@ import { getBundledSkillsDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { ModelRegistry } from '../providers/registry.js';
 import { PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
+import type { BeforeToolCallResult } from '../plugins/hooks.js';
+import type { CommandContext } from '../plugins/types.js';
 import { isFailoverError, describeFailoverError, resolveFallbackCandidates } from './fallback/index.js';
 import { PromptBuilder } from './prompt/index.js';
 import { createTypingController } from './typing.js';
@@ -373,6 +375,113 @@ export class AgentService {
     }
   }
 
+  /**
+   * Run before_tool_call hook with blocking support
+   * Returns { allowed, params, reason }
+   */
+  private async runBeforeToolCallHook(
+    toolName: string,
+    params: Record<string, unknown>
+  ): Promise<{ allowed: boolean; params?: Record<string, unknown>; reason?: string }> {
+    if (!this.hookRunner) {
+      return { allowed: true };
+    }
+
+    const ctx = createHookContext({
+      pluginId: undefined,
+      sessionKey: this.currentContext?.sessionKey,
+      agentId: this.agentId,
+      timestamp: new Date(),
+    });
+
+    const event = {
+      toolName,
+      params,
+      timestamp: new Date(),
+    };
+
+    const handlers = this.hookRunner.getRegistry().getHooks('before_tool_call');
+    let modifiedParams = { ...params };
+    let blocked = false;
+    let blockReason: string | undefined;
+
+    for (const handler of handlers) {
+      try {
+        const result = await handler(event, ctx) as BeforeToolCallResult | undefined;
+        if (result && typeof result === 'object') {
+          if (result.block) {
+            blocked = true;
+            blockReason = result.blockReason;
+          }
+          if (result.params) {
+            modifiedParams = result.params;
+          }
+        }
+      } catch (error) {
+        log.warn({ err: error, toolName }, 'before_tool_call hook error');
+      }
+    }
+
+    if (blocked) {
+      return { allowed: false, reason: blockReason };
+    }
+
+    return { allowed: true, params: modifiedParams };
+  }
+
+  /**
+   * Run message_sending hook with cancellation support
+   */
+  private async runMessageSendingHook(
+    to: string,
+    content: string
+  ): Promise<{ send: boolean; content?: string; reason?: string }> {
+    if (!this.hookRunner) {
+      return { send: true, content };
+    }
+
+    const ctx = createHookContext({
+      pluginId: undefined,
+      sessionKey: this.currentContext?.sessionKey,
+      agentId: this.agentId,
+      timestamp: new Date(),
+    });
+
+    const event = {
+      to,
+      content,
+      timestamp: new Date(),
+    };
+
+    const handlers = this.hookRunner.getRegistry().getHooks('message_sending');
+    let modifiedContent = content;
+    let cancelled = false;
+    let cancelReason: string | undefined;
+
+    for (const handler of handlers) {
+      try {
+        const result = await handler(event, ctx) as { cancel?: boolean; cancelReason?: string; content?: string } | undefined;
+        if (result && typeof result === 'object') {
+          if (result.cancel) {
+            cancelled = true;
+            cancelReason = result.cancelReason;
+          }
+          if (result.content) {
+            modifiedContent = result.content;
+          }
+        }
+      } catch (error) {
+        log.warn({ err: error, to }, 'message_sending hook error');
+      }
+    }
+
+    if (cancelled) {
+      return { send: false, reason: cancelReason };
+    }
+
+    return { send: true, content: modifiedContent };
+  }
+
   private convertPluginTools(pluginTools: PluginTool[]): AgentTool<any, any>[] {
     return pluginTools.map((tool) => ({
       name: tool.name,
@@ -385,8 +494,20 @@ export class AgentService {
         params: Record<string, unknown>,
         _signal?: AbortSignal
       ): Promise<AgentToolResult<{}>> {
+        // Check before_tool_call hook for blocking
+        const check = await this.runBeforeToolCallHook(tool.name, params);
+        if (!check.allowed) {
+          return {
+            content: [{ type: 'text', text: `🚫 Tool blocked: ${check.reason || 'Blocked by hook'}` }],
+            details: { blocked: true, reason: check.reason },
+          };
+        }
+
+        // Use modified params from hook if any
+        const finalParams = check.params || params;
+
         try {
-          const result = await tool.execute(params);
+          const result = await tool.execute(finalParams);
           return {
             content: [{ type: 'text', text: result }],
             details: {},
@@ -481,6 +602,32 @@ export class AgentService {
           type: 'message',
         });
         return;
+      }
+
+      // Check for plugin commands
+      if (msg.content.startsWith('/') && this.config.pluginRegistry) {
+        const commandName = command.slice(1).split(/\s+/)[0];
+        const pluginCommand = this.config.pluginRegistry.getCommand(commandName);
+        
+        if (pluginCommand) {
+          const ctx: CommandContext = {
+            senderId: msg.sender_id,
+            channel: msg.channel,
+            isAuthorized: true, // TODO: implement proper authorization
+            config: this.config.config as any,
+          };
+          
+          const args = command.replace(/^\/\w+\s*/, '');
+          const result = await pluginCommand.handler(args, ctx);
+          
+          await this.bus.publishOutbound({
+            channel: msg.channel,
+            chat_id: msg.chat_id,
+            content: result.content,
+            type: 'message',
+          });
+          return;
+        }
       }
 
       const expandedContent = this.expandSkillCommand(msg.content);
@@ -738,43 +885,6 @@ export class AgentService {
     }
 
     await this.sessionStore.save(sessionKey, this.agent.state.messages);
-  }
-
-  private async runMessageSendingHook(
-    to: string,
-    content: string
-  ): Promise<{ send: boolean; content?: string; reason?: string }> {
-    if (!this.hookRunner) {
-      return { send: true, content };
-    }
-
-    const ctx = createHookContext({
-      sessionKey: this.currentContext?.sessionKey,
-      agentId: this.agentId,
-      timestamp: new Date(),
-    });
-
-    try {
-      const result = await this.hookRunner.runHooks('message_sending' as any, { to, content }, ctx);
-
-      for (const r of result.results) {
-        const typed = r as { result?: Record<string, unknown> };
-        if (typed.result) {
-          const resultObj = typed.result;
-          if (resultObj.cancel === true) {
-            return { send: false, reason: resultObj.cancelReason as string | undefined, content: resultObj.content as string | undefined };
-          }
-          if (typeof resultObj.content === 'string') {
-            content = resultObj.content;
-          }
-        }
-      }
-
-      return { send: true, content };
-    } catch (error) {
-      log.warn({ err: error }, 'message_sending hook failed');
-      return { send: true, content };
-    }
   }
 
   private async checkAndCompact(

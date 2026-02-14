@@ -371,6 +371,49 @@ export class PluginLoader {
         return null;
       }
 
+      // Validate plugin config against schema (basic validation)
+      if (manifest.configSchema) {
+        try {
+          const schema = manifest.configSchema as Record<string, unknown>;
+          const pluginConfig = config.config as Record<string, unknown>;
+          
+          // Basic validation: check required fields and types
+          if (schema.type === 'object' && schema.properties) {
+            const props = schema.properties as Record<string, Record<string, unknown>>;
+            const required = (schema.required as string[]) || [];
+            
+            for (const field of required) {
+              if (pluginConfig[field] === undefined) {
+                log.error({ 
+                  pluginId: config.id, 
+                  field 
+                }, 'Plugin config validation failed: missing required field');
+                return null;
+              }
+            }
+            
+            for (const [key, value] of Object.entries(pluginConfig)) {
+              const propSchema = props[key];
+              if (propSchema) {
+                if (propSchema.type && !this.validateType(value, propSchema.type as string)) {
+                  log.error({ 
+                    pluginId: config.id, 
+                    field: key,
+                    expected: propSchema.type,
+                    actual: typeof value
+                  }, 'Plugin config validation failed: type mismatch');
+                  return null;
+                }
+              }
+            }
+          }
+          
+          log.debug({ pluginId: config.id }, 'Plugin config validated');
+        } catch (err) {
+          log.warn({ err, pluginId: config.id }, 'Config schema validation skipped');
+        }
+      }
+
       // Create plugin API
       const pluginDir = dirname(pluginPath);
       const api = this.createPluginApi(manifest, config, pluginDir);
@@ -566,6 +609,18 @@ export class PluginLoader {
         }
       }
     }
+  }
+
+  /**
+   * Basic type validation for config values
+   */
+  private validateType(value: unknown, expectedType: string): boolean {
+    if (expectedType === 'string') return typeof value === 'string';
+    if (expectedType === 'number' || expectedType === 'integer') return typeof value === 'number';
+    if (expectedType === 'boolean') return typeof value === 'boolean';
+    if (expectedType === 'array') return Array.isArray(value);
+    if (expectedType === 'object') return typeof value === 'object' && value !== null && !Array.isArray(value);
+    return true;
   }
 }
 

@@ -251,6 +251,7 @@ export interface PluginRegistry {
   getTool(name: string): PluginTool | undefined;
   getAllTools(): PluginTool[];
   addTool(tool: PluginTool): void;
+  getCommand(name: string): PluginCommand | undefined;
 }
 
 export interface PluginRecord {

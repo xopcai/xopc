@@ -39,6 +39,30 @@ export type {
   HookOptions,
 } from '../plugins/types.js';
 
+// Hook context types (from hooks.ts)
+export type {
+  HookContext,
+  BeforeAgentStartContext,
+  BeforeAgentStartResult,
+  AgentEndContext,
+  BeforeCompactionContext,
+  AfterCompactionContext,
+  MessageReceivedContext,
+  MessageSendingContext,
+  MessageSendingResult,
+  MessageSentContext,
+  BeforeToolCallContext,
+  BeforeToolCallResult,
+  AfterToolCallContext,
+  SessionStartContext,
+  SessionEndContext,
+  GatewayStartContext,
+  GatewayStopContext,
+} from '../plugins/hooks.js';
+
+// Export hook runner and utilities
+export { HookRunner, createHookContext, isHookEvent } from '../plugins/hooks.js';
+
 // Channels
 export type {
   ChannelPlugin,

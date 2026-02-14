@@ -211,6 +211,13 @@ export class HookRunner {
   }
 
   /**
+   * Get the plugin registry
+   */
+  getRegistry(): PluginRegistry {
+    return this.registry;
+  }
+
+  /**
    * Execute hooks for a specific event
    */
   async runHooks<K extends PluginHookEvent>(

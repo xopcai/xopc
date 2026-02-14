@@ -588,6 +588,67 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ dir: LOG_DIR });
   });
 
+  // ========== Plugin HTTP Routes ==========
+  const pluginRegistry = service.getPluginRegistry?.();
+  if (pluginRegistry) {
+    // Register plugin HTTP routes
+    const httpRoutes = pluginRegistry.httpRoutes;
+    for (const [path, handler] of httpRoutes) {
+      // POST handler
+      authenticated.post(path, async (c) => {
+        const req = {
+          method: c.req.method,
+          url: c.req.url,
+          headers: c.req.header(),
+          body: await c.req.json().catch(() => ({})),
+        };
+        const res = {
+          status: (code: number) => {
+            c.status(code as any);
+            return res;
+          },
+          json: (data: unknown) => c.json(data),
+          send: (data: string) => c.text(data),
+        };
+        await handler(req as any, res as any);
+        return c.text('');
+      });
+
+      // GET handler
+      authenticated.get(path, async (c) => {
+        const req = {
+          method: c.req.method,
+          url: c.req.url,
+          headers: c.req.header(),
+        };
+        const res = {
+          status: (code: number) => {
+            c.status(code as any);
+            return res;
+          },
+          json: (data: unknown) => c.json(data),
+          send: (data: string) => c.text(data),
+        };
+        await handler(req as any, res as any);
+        return c.text('');
+      });
+    }
+  }
+
+  // ========== Plugin Gateway Methods ==========
+
+  // POST /api/gateway/:method - Invoke a gateway method
+  authenticated.post('/api/gateway/:method', async (c) => {
+    const method = c.req.param('method');
+    const params = await c.req.json().catch(() => ({}));
+    try {
+      const result = await service.invokeGatewayMethod(method, params);
+      return c.json({ ok: true, result });
+    } catch (err) {
+      return c.json({ ok: false, error: err instanceof Error ? err.message : 'Unknown error' }, 400);
+    }
+  });
+
   // Mount authenticated routes
   app.route('/', authenticated);
 

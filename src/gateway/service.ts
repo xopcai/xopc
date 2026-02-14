@@ -513,6 +513,36 @@ export class GatewayService {
     return this.running;
   }
 
+  /**
+   * Get plugin registry for external access (HTTP routes, gateway methods)
+   */
+  getPluginRegistry() {
+    return this.pluginLoader?.getRegistry();
+  }
+
+  /**
+   * Invoke a gateway method registered by plugins
+   */
+  async invokeGatewayMethod(method: string, params: Record<string, unknown>): Promise<unknown> {
+    const registry = this.getPluginRegistry();
+    if (!registry) {
+      throw new Error('Plugin registry not available');
+    }
+
+    const handler = registry.getGatewayMethod(method);
+    if (!handler) {
+      throw new Error(`Gateway method not found: ${method}`);
+    }
+
+    const ctx = {
+      senderId: params._senderId as string | undefined,
+      channel: params._channel as string | undefined,
+      isAuthorized: true, // TODO: implement proper authorization
+    };
+
+    return await handler(params, ctx);
+  }
+
   get currentConfig(): Config {
     return this.config;
   }
