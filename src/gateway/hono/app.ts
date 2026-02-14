@@ -170,16 +170,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ jobs });
   });
 
-  // GET /api/cron/:id - Get single job
-  authenticated.get('/api/cron/:id', async (c) => {
-    const id = c.req.param('id');
-    const job = await service.cronServiceInstance.getJob(id);
-    if (!job) {
-      return c.json({ error: 'Job not found' }, 404);
-    }
-    return c.json({ job });
-  });
-
   // POST /api/cron - Add new job
   authenticated.post('/api/cron', async (c) => {
     const body = await c.req.json();
@@ -197,24 +187,20 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
   });
 
-  // PATCH /api/cron/:id - Update job
-  authenticated.patch('/api/cron/:id', async (c) => {
-    const id = c.req.param('id');
-    const body = await c.req.json();
-
-    try {
-      const result = await service.cronServiceInstance.updateJob(id, body);
-      return c.json({ updated: result });
-    } catch (err) {
-      return c.json({ error: err instanceof Error ? err.message : 'Failed to update job' }, 400);
-    }
+  // GET /api/cron/metrics - Get cron metrics (must be before /:id)
+  authenticated.get('/api/cron/metrics', async (c) => {
+    const metrics = await service.cronServiceInstance.getMetrics();
+    return c.json(metrics);
   });
 
-  // DELETE /api/cron/:id - Remove job
-  authenticated.delete('/api/cron/:id', async (c) => {
+  // GET /api/cron/:id - Get single job (must be after /metrics)
+  authenticated.get('/api/cron/:id', async (c) => {
     const id = c.req.param('id');
-    const result = await service.cronServiceInstance.removeJob(id);
-    return c.json({ removed: result });
+    const job = await service.cronServiceInstance.getJob(id);
+    if (!job) {
+      return c.json({ error: 'Job not found' }, 404);
+    }
+    return c.json({ job });
   });
 
   // POST /api/cron/:id/toggle - Toggle job enabled
@@ -251,10 +237,24 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ history });
   });
 
-  // GET /api/cron/metrics - Get cron metrics
-  authenticated.get('/api/cron/metrics', async (c) => {
-    const metrics = await service.cronServiceInstance.getMetrics();
-    return c.json(metrics);
+  // PATCH /api/cron/:id - Update job
+  authenticated.patch('/api/cron/:id', async (c) => {
+    const id = c.req.param('id');
+    const body = await c.req.json();
+
+    try {
+      const result = await service.cronServiceInstance.updateJob(id, body);
+      return c.json({ updated: result });
+    } catch (err) {
+      return c.json({ error: err instanceof Error ? err.message : 'Failed to update job' }, 400);
+    }
+  });
+
+  // DELETE /api/cron/:id - Remove job
+  authenticated.delete('/api/cron/:id', async (c) => {
+    const id = c.req.param('id');
+    const result = await service.cronServiceInstance.removeJob(id);
+    return c.json({ removed: result });
   });
 
   // ========== Session REST API (/api/sessions) ==========
@@ -284,7 +284,13 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json(result);
   });
 
-  // GET /api/sessions/:key - Get single session
+  // GET /api/sessions/stats - Get session stats (must be before /:key)
+  authenticated.get('/api/sessions/stats', async (c) => {
+    const result = await service.getSessionStats();
+    return c.json(result);
+  });
+
+  // GET /api/sessions/:key - Get single session (must be after /stats)
   authenticated.get('/api/sessions/:key', async (c) => {
     const key = c.req.param('key');
     const session = await service.getSession(key);
@@ -292,6 +298,14 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       return c.json({ error: 'Session not found' }, 404);
     }
     return c.json({ session });
+  });
+
+  // GET /api/sessions/:key/export - Export session (must be before /:key)
+  authenticated.get('/api/sessions/:key/export', async (c) => {
+    const key = c.req.param('key');
+    const format = c.req.query('format') as any || 'json';
+    const result = await service.exportSession(key, format);
+    return c.json(result);
   });
 
   // DELETE /api/sessions/:key - Delete session
@@ -335,20 +349,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     const body = await c.req.json();
     const { name } = body;
     const result = await service.renameSession(key, name);
-    return c.json(result);
-  });
-
-  // GET /api/sessions/:key/export - Export session
-  authenticated.get('/api/sessions/:key/export', async (c) => {
-    const key = c.req.param('key');
-    const format = c.req.query('format') as any || 'json';
-    const result = await service.exportSession(key, format);
-    return c.json(result);
-  });
-
-  // GET /api/sessions/stats - Get session stats
-  authenticated.get('/api/sessions/stats', async (c) => {
-    const result = await service.getSessionStats();
     return c.json(result);
   });
 
