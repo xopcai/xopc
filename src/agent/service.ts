@@ -848,17 +848,6 @@ export class AgentService {
     log.info({ count: skillResult.skills.length, diagnostics: skillResult.diagnostics.length }, 'Skills reloaded');
   }
 
-  private parseSkillBlock(text: string): { name: string; location: string; content: string; userMessage: string | undefined } | null {
-    const match = text.match(/^<skill name="([^"]+)" location="([^"]+)">\n([\s\S]*?)\n<\/skill>(?:\n\n([\s\S]+))?$/);
-    if (!match) return null;
-    return {
-      name: match[1],
-      location: match[2],
-      content: match[3],
-      userMessage: match[4]?.trim() || undefined,
-    };
-  }
-
   private expandSkillCommand(text: string): string {
     if (!text.startsWith('/skill:')) return text;
 
