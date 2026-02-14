@@ -129,6 +129,8 @@ export class AgentService {
   private workspaceDir: string;
   private bootstrapFiles: Array<{ name: string; content: string; missing?: boolean }> = [];
   private modelRegistry: ModelRegistry;
+  private sessionModels: Map<string, string> = new Map(); // sessionKey -> modelId
+  private channelManager?: any; // Reference to get session model from channel
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
     this.agentId = `agent-${Date.now()}`;
@@ -239,6 +241,79 @@ export class AgentService {
     });
 
     this.unsubscribe = this.agent.subscribe((event) => this.handleEvent(event));
+  }
+
+  // Set channel manager reference for accessing session-specific settings
+  setChannelManager(channelManager: any): void {
+    this.channelManager = channelManager;
+  }
+
+  // Switch model for a specific session
+  async switchModelForSession(sessionKey: string, modelId: string): Promise<boolean> {
+    try {
+      const found = this.modelRegistry.findByRef(modelId);
+      if (!found) {
+        log.warn({ modelId }, 'Model not found in registry');
+        return false;
+      }
+
+      this.sessionModels.set(sessionKey, modelId);
+      log.info({ sessionKey, modelId }, 'Model switched for session');
+      return true;
+    } catch (err) {
+      log.error({ err, sessionKey, modelId }, 'Failed to switch model');
+      return false;
+    }
+  }
+
+  // Get model for session, checking session override first
+  private getModelForSession(sessionKey: string): string {
+    // Check if there's a session-specific model override
+    const sessionModel = this.sessionModels.get(sessionKey);
+    if (sessionModel) {
+      return sessionModel;
+    }
+
+    // Check Telegram channel for session model
+    if (this.channelManager && sessionKey.startsWith('telegram:')) {
+      const telegram = this.channelManager.getChannel('telegram');
+      if (telegram?.getSessionModel) {
+        const tgModel = telegram.getSessionModel(sessionKey);
+        if (tgModel) {
+          // Cache it for future use
+          this.sessionModels.set(sessionKey, tgModel);
+          return tgModel;
+        }
+      }
+    }
+
+    // Fall back to default
+    return this.config.model || 'minimax/MiniMax-M2.5';
+  }
+
+  // Apply model to agent if different from current
+  private async applyModelForSession(sessionKey: string): Promise<void> {
+    const targetModelId = this.getModelForSession(sessionKey);
+    
+    if (targetModelId === this.currentModelName) {
+      return; // No change needed
+    }
+
+    try {
+      const found = this.modelRegistry.findByRef(targetModelId);
+      if (!found) {
+        log.warn({ modelId: targetModelId }, 'Model not found, keeping current');
+        return;
+      }
+
+      this.agent.setModel(found);
+      this.currentModelName = targetModelId;
+      this.currentProvider = found.provider || 'unknown';
+      
+      log.info({ sessionKey, modelId: targetModelId }, 'Applied model for session');
+    } catch (err) {
+      log.error({ err, sessionKey, modelId: targetModelId }, 'Failed to apply model');
+    }
   }
 
   async start(): Promise<void> {
@@ -356,6 +431,9 @@ export class AgentService {
   private async handleUserMessage(msg: InboundMessage): Promise<void> {
     const sessionKey = `${msg.channel}:${msg.chat_id}`;
     log.info({ channel: msg.channel, senderId: msg.sender_id }, 'Processing message');
+
+    // Apply session-specific model if different
+    await this.applyModelForSession(sessionKey);
 
     const typing = createTypingController({
       onStart: async () => {
@@ -879,7 +957,7 @@ export class AgentService {
       size?: number;
     }>
   ): Promise<string> {
-    const messages = await this.memory.load(sessionKey);
+    const messages = await this.sessionStore.load(sessionKey);
     this.agent.replaceMessages(messages);
 
     // Build message content with text and attachments
@@ -914,7 +992,7 @@ export class AgentService {
     await this.agent.waitForIdle();
 
     const response = this.getLastAssistantContent() || '';
-    await this.memory.save(sessionKey, this.agent.state.messages);
+    await this.sessionStore.save(sessionKey, this.agent.state.messages);
 
     return response;
   }

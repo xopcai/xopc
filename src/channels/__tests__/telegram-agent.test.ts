@@ -65,7 +65,7 @@ describe('Telegram to Agent Integration', () => {
 
   it('should publish inbound message when Telegram receives message', async () => {
     // 创建 Telegram 通道
-    const _telegram = new TelegramChannel(telegramConfig, bus);
+    const _telegram = new TelegramChannel(telegramConfig, bus, _agentConfig);
 
     // 监听 inbound 事件
     const inboundMessages: InboundMessage[] = [];
@@ -201,7 +201,7 @@ describe('Telegram to Agent Integration', () => {
       allowFrom: ['999999999'], // 只允许这个用户
     };
 
-    const _telegram = new TelegramChannel(restrictedConfig, bus);
+    const _telegram = new TelegramChannel(restrictedConfig, bus, _agentConfig);
     const receivedMessages: InboundMessage[] = [];
 
     bus.on('inbound', (msg) => {

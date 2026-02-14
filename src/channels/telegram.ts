@@ -1,12 +1,20 @@
-import { Bot, GrammyError, HttpError, InputFile, type Context, type NextFunction } from 'grammy';
+import { Bot, GrammyError, HttpError, InputFile, type Context, type NextFunction, InlineKeyboard } from 'grammy';
 import { run } from '@grammyjs/runner';
 import { BaseChannel } from './base.js';
 import { OutboundMessage } from '../types/index.js';
 import { MessageBus } from '../bus/index.js';
 import { createLogger } from '../utils/logger.js';
 import { TypingController } from './typing-controller.js';
+import type { Config } from '../config/index.js';
 
 const log = createLogger('TelegramChannel');
+
+// Model info interface
+interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+}
 
 export class TelegramChannel extends BaseChannel {
   name = 'telegram';
@@ -14,11 +22,14 @@ export class TelegramChannel extends BaseChannel {
   private runner: ReturnType<typeof run> | null = null;
   private debug: boolean;
   private typingController: TypingController;
+  private appConfig: Config;
+  private sessionModels: Map<string, string> = new Map(); // sessionKey -> modelId
 
-  constructor(config: Record<string, unknown>, bus: MessageBus) {
+  constructor(config: Record<string, unknown>, bus: MessageBus, appConfig: Config) {
     super(config, bus);
     this.debug = (config.debug as boolean) ?? false;
     this.typingController = new TypingController(this.debug);
+    this.appConfig = appConfig;
   }
 
   async start(): Promise<void> {
@@ -29,10 +40,10 @@ export class TelegramChannel extends BaseChannel {
       throw new Error('Telegram token not configured');
     }
 
-    log.info({ apiRoot: this.config.apiRoot || 'https://api.telegram.org (default)' }, 'Initializing Telegram bot');
+    log.info({ apiRoot: (this.config as any).apiRoot || 'https://api.telegram.org (default)' }, 'Initializing Telegram bot');
 
-    const botConfig = this.config.apiRoot
-      ? { client: { apiRoot: this.config.apiRoot as string } }
+    const botConfig = (this.config as any).apiRoot
+      ? { client: { apiRoot: (this.config as any).apiRoot as string } }
       : undefined;
     this.bot = new Bot(token, botConfig);
 
@@ -42,7 +53,32 @@ export class TelegramChannel extends BaseChannel {
       { command: 'new', description: 'Start a new session' },
       { command: 'reset', description: 'Alias for /new' },
       { command: 'skills', description: 'Reload agent skills (e.g., /skills reload)' },
+      { command: 'models', description: 'Switch AI model' },
+      { command: 'cleanup', description: 'Archive old sessions' },
     ]);
+
+    // Handle commands
+    this.bot.command('models', async (ctx) => {
+      await this.showModelSelector(ctx);
+    });
+
+    this.bot.command('cleanup', async (ctx) => {
+      await this.handleCleanup(ctx);
+    });
+
+    // Handle callback queries (inline keyboard)
+    this.bot.on('callback_query:data', async (ctx) => {
+      const data = ctx.callbackQuery.data;
+      
+      if (data.startsWith('model:')) {
+        await this.handleModelSelection(ctx);
+      } else if (data === 'cleanup:confirm') {
+        await this.handleCleanupConfirm(ctx);
+      } else if (data === 'cancel') {
+        await ctx.editMessageText('Cancelled.');
+        await ctx.answerCallbackQuery();
+      }
+    });
 
     this.bot.on('message:text', async (ctx) => {
       const senderId = String(ctx.from?.id);
@@ -97,9 +133,9 @@ export class TelegramChannel extends BaseChannel {
     // 验证 API 连接
     try {
       const me = await this.bot.api.getMe();
-      log.info({ username: me.username, apiRoot: this.config.apiRoot || 'default' }, 'Telegram API connection verified');
+      log.info({ username: me.username, apiRoot: (this.config as any).apiRoot || 'default' }, 'Telegram API connection verified');
     } catch (err) {
-      log.error({ err, apiRoot: this.config.apiRoot }, 'Failed to verify Telegram API connection');
+      log.error({ err, apiRoot: (this.config as any).apiRoot }, 'Failed to verify Telegram API connection');
       throw err;
     }
     
@@ -115,6 +151,167 @@ export class TelegramChannel extends BaseChannel {
     }
 
     await next();
+  }
+
+  // ========== Model Selection ==========
+
+  private async showModelSelector(ctx: Context): Promise<void> {
+    try {
+      const models = this.getAvailableModels();
+      const chatId = String(ctx.chat?.id);
+      const sessionKey = `telegram:${chatId}`;
+      const currentModel = this.sessionModels.get(sessionKey) || this.appConfig.agents?.defaults?.model || 'minimax/MiniMax-M2.5';
+
+      if (models.length === 0) {
+        await ctx.reply('❌ No models available. Please check your configuration.');
+        return;
+      }
+
+      const keyboard = new InlineKeyboard();
+      
+      // Group by provider
+      const byProvider = new Map<string, ModelInfo[]>();
+      for (const model of models) {
+        const list = byProvider.get(model.provider) || [];
+        list.push(model);
+        byProvider.set(model.provider, list);
+      }
+
+      for (const [provider, providerModels] of byProvider) {
+        for (const model of providerModels) {
+          const isCurrent = model.id === currentModel;
+          const label = isCurrent ? `✅ ${model.name}` : model.name;
+          keyboard.text(label, `model:${model.id}`).row();
+        }
+      }
+
+      keyboard.text('❌ Cancel', 'cancel');
+
+      await ctx.reply('🤖 Select a model:', { reply_markup: keyboard });
+    } catch (err) {
+      log.error({ err }, 'Failed to show model selector');
+      await ctx.reply('❌ Failed to load models. Please try again.');
+    }
+  }
+
+  private async handleModelSelection(ctx: Context): Promise<void> {
+    try {
+      const data = ctx.callbackQuery?.data;
+      if (!data) return;
+
+      const modelId = data.replace('model:', '');
+      const chatId = String(ctx.chat?.id);
+      const sessionKey = `telegram:${chatId}`;
+
+      // Save the selected model for this session
+      this.sessionModels.set(sessionKey, modelId);
+
+      // Extract model name for display
+      const modelName = modelId.split('/').pop() || modelId;
+
+      await ctx.editMessageText(`✅ Model switched to *${modelName}*\n\nThis model will be used for your next message.`, {
+        parse_mode: 'Markdown',
+      });
+      await ctx.answerCallbackQuery(`Switched to ${modelName}`);
+
+      log.info({ sessionKey, modelId }, 'Model switched via Telegram');
+    } catch (err) {
+      log.error({ err }, 'Failed to handle model selection');
+      await ctx.answerCallbackQuery('Failed to switch model');
+    }
+  }
+
+  private getAvailableModels(): ModelInfo[] {
+    const models: ModelInfo[] = [];
+    const providers = this.appConfig.providers || {};
+
+    // Helper to add models from provider
+    const addModels = (providerName: string, providerConfig: any) => {
+      if (!providerConfig?.apiKey) return;
+      
+      const modelList = providerConfig.models || this.getDefaultModelsForProvider(providerName);
+      for (const modelId of modelList) {
+        models.push({
+          id: `${providerName}/${modelId}`,
+          name: modelId,
+          provider: providerName,
+        });
+      }
+    };
+
+    // Check all providers
+    for (const [name, config] of Object.entries(providers)) {
+      addModels(name, config);
+    }
+
+    // Fallback: if no models found, add some defaults
+    if (models.length === 0) {
+      models.push(
+        { id: 'minimax/MiniMax-M2.5', name: 'MiniMax-M2.5', provider: 'minimax' },
+        { id: 'kimi-coding/k2p5', name: 'Kimi K2.5', provider: 'kimi' },
+      );
+    }
+
+    return models;
+  }
+
+  private getDefaultModelsForProvider(provider: string): string[] {
+    const defaults: Record<string, string[]> = {
+      openai: ['gpt-4o', 'gpt-4o-mini'],
+      anthropic: ['claude-3-5-sonnet-20241022'],
+      minimax: ['MiniMax-M2.5'],
+      deepseek: ['deepseek-chat', 'deepseek-reasoner'],
+      groq: ['llama-3.1-70b', 'mixtral-8x7b'],
+      openrouter: ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet'],
+    };
+    return defaults[provider] || ['default'];
+  }
+
+  // ========== Cleanup Command ==========
+
+  private async handleCleanup(ctx: Context): Promise<void> {
+    try {
+      const keyboard = new InlineKeyboard()
+        .text('🗑️ Archive sessions older than 30 days', 'cleanup:confirm').row()
+        .text('❌ Cancel', 'cancel');
+
+      await ctx.reply(
+        '🧹 *Session Cleanup*\n\n' +
+        'This will archive sessions that have been inactive for more than 30 days.\n\n' +
+        'Archived sessions can be restored later.',
+        { parse_mode: 'Markdown', reply_markup: keyboard }
+      );
+    } catch (err) {
+      log.error({ err }, 'Failed to show cleanup dialog');
+      await ctx.reply('❌ Failed to initiate cleanup.');
+    }
+  }
+
+  private async handleCleanupConfirm(ctx: Context): Promise<void> {
+    try {
+      await ctx.editMessageText('🧹 Cleaning up old sessions...');
+      
+      // Send system message to trigger cleanup
+      const chatId = String(ctx.chat?.id);
+      await this.bus.publishInbound({
+        channel: 'system',
+        sender_id: 'telegram:cleanup',
+        chat_id: chatId,
+        content: '/cleanup --days 30 --force',
+      });
+
+      await ctx.editMessageText('✅ Cleanup initiated. Old sessions will be archived.');
+      await ctx.answerCallbackQuery('Cleanup started');
+    } catch (err) {
+      log.error({ err }, 'Failed to execute cleanup');
+      await ctx.editMessageText('❌ Cleanup failed. Please try again later.');
+      await ctx.answerCallbackQuery('Cleanup failed');
+    }
+  }
+
+  // Get the model for a session (used by AgentService)
+  getSessionModel(sessionKey: string): string | undefined {
+    return this.sessionModels.get(sessionKey);
   }
 
   async stop(): Promise<void> {
@@ -150,7 +347,7 @@ export class TelegramChannel extends BaseChannel {
         id: me.id, 
         username: me.username, 
         first_name: me.first_name,
-        apiRoot: this.config.apiRoot || 'default'
+        apiRoot: (this.config as any).apiRoot || 'default'
       }, 'getMe test successful');
       return { 
         success: true, 
@@ -162,7 +359,7 @@ export class TelegramChannel extends BaseChannel {
       };
     } catch (err) {
       const errorMsg = err instanceof Error ? err.message : String(err);
-      log.error({ err, apiRoot: this.config.apiRoot }, 'getMe test failed');
+      log.error({ err, apiRoot: (this.config as any).apiRoot }, 'getMe test failed');
       return { success: false, error: errorMsg };
     }
   }

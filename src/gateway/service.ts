@@ -81,6 +81,9 @@ export class GatewayService {
       pluginRegistry: this.pluginLoader?.getRegistry(),
     });
 
+    // Set channel manager reference for model switching
+    this.agentService.setChannelManager(this.channelManager);
+
     // Initialize cron service with custom executor
     const cronExecutor = new MessageJobExecutor(this.channelManager);
     this.cronService = new CronService(

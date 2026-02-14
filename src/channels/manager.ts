@@ -11,13 +11,15 @@ const log = createLogger('ChannelManager');
 export class ChannelManager {
   private channels: Map<string, BaseChannel> = new Map();
   private bus: MessageBus;
+  private config: Config;
 
   constructor(config: Config, bus: MessageBus) {
     this.bus = bus;
+    this.config = config;
 
     // Initialize Telegram
     if (config.channels.telegram?.enabled) {
-      const telegram = new TelegramChannel(config.channels.telegram, bus);
+      const telegram = new TelegramChannel(config.channels.telegram, bus, config);
       this.channels.set('telegram', telegram);
     }
 
@@ -59,6 +61,8 @@ export class ChannelManager {
    * Update channel configuration (hot reload)
    */
   updateConfig(config: Config): void {
+    this.config = config; // Update stored config
+    
     // Update Telegram config if enabled
     if (config.channels.telegram?.enabled) {
       const telegram = this.channels.get('telegram');
@@ -66,7 +70,7 @@ export class ChannelManager {
         (telegram as any).updateConfig(config.channels.telegram);
       } else {
         // Create new instance if not exists
-        const newTelegram = new TelegramChannel(config.channels.telegram, this.bus);
+        const newTelegram = new TelegramChannel(config.channels.telegram, this.bus, config);
         this.channels.set('telegram', newTelegram);
       }
     }
