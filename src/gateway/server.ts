@@ -57,8 +57,18 @@ export class GatewayServer {
 
     // Stop the HTTP server
     if (this.server) {
+      // Force server close after a short delay to allow connections to drain
+      const forceClose = setTimeout(() => {
+        if (this.server) {
+          (this.server as any).closeAllConnections?.();
+        }
+      }, 2000);
+      
       await new Promise<void>((resolve) => {
-        this.server!.close(() => resolve());
+        this.server!.close(() => {
+          clearTimeout(forceClose);
+          resolve();
+        });
       });
       this.server = undefined;
     }

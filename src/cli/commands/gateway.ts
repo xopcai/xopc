@@ -36,10 +36,24 @@ function createGatewayCommand(_ctx: CLIContext): Command {
       });
 
       const shutdown = async (signal: string) => {
-        console.log(`\\n🛑 Received ${signal}, shutting down...`);
-        await server.stop();
-        console.log('✅ Gateway stopped');
-        process.exit(0);
+        console.log(`\n🛑 Received ${signal}, shutting down...`);
+        
+        // Force exit after 5 seconds if graceful shutdown fails
+        const forceExit = setTimeout(() => {
+          console.log('⚠️  Force exiting...');
+          process.exit(1);
+        }, 5000);
+        
+        try {
+          await server.stop();
+          clearTimeout(forceExit);
+          console.log('✅ Gateway stopped');
+          process.exit(0);
+        } catch (err) {
+          clearTimeout(forceExit);
+          console.error('❌ Error during shutdown:', err);
+          process.exit(1);
+        }
       };
 
       process.on('SIGINT', () => shutdown('SIGINT'));
