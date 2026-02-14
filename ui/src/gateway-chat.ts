@@ -294,22 +294,32 @@ export class XopcbotGatewayChat extends LitElement {
   // ========== Session management ==========
 
   private async _loadSessions(): Promise<void> {
-    if (!this.config) return;
+    if (!this.config) {
+      console.warn('[GatewayChat] No config, skipping session load');
+      return;
+    }
+
+    console.log('[GatewayChat] Loading sessions from', this.config.url);
 
     try {
       const url = apiUrl(this.config.url, '/api/sessions');
       const headers = authHeaders(this.config.token);
+      console.log('[GatewayChat] Fetching sessions with token:', !!this.config.token);
       const res = await fetch(url, { headers });
       
+      console.log('[GatewayChat] Sessions response status:', res.status);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       
       const data = await res.json();
+      console.log('[GatewayChat] Sessions data:', data);
       const sessions = data.items || [];
       
       // Filter gateway sessions and sort by updatedAt (newest first)
       const gatewaySessions = sessions
         .filter((s: any) => s.key.startsWith('gateway:'))
         .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+
+      console.log('[GatewayChat] Gateway sessions:', gatewaySessions);
       
       this._sessions = gatewaySessions;
       
@@ -328,14 +338,18 @@ export class XopcbotGatewayChat extends LitElement {
   private async _loadSession(sessionKey: string): Promise<void> {
     if (!this.config) return;
 
+    console.log('[GatewayChat] Loading session:', sessionKey);
+
     try {
       const url = apiUrl(this.config.url, `/api/sessions/${encodeURIComponent(sessionKey)}`);
       const headers = authHeaders(this.config.token);
       const res = await fetch(url, { headers });
       
+      console.log('[GatewayChat] Session response status:', res.status);
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       
       const data = await res.json();
+      console.log('[GatewayChat] Session data keys:', Object.keys(data));
       const session = data.session;
       
       this._currentSessionKey = sessionKey;
