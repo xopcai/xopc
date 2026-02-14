@@ -74,7 +74,6 @@ export class XopcbotGatewayChat extends LitElement {
   @state() private _streamingContent = '';
   @state() private _streamingMessage: Message | null = null;
   @state() private _reconnectCount = 0;
-  @state() private _reconnectDelay = 0;
   @state() private _isAtBottom = true;
   @state() private _currentSessionKey: string | null = null;
   @state() private _sessions: Array<{ key: string; name?: string; updatedAt: string }> = [];
@@ -83,17 +82,12 @@ export class XopcbotGatewayChat extends LitElement {
   private _eventSource?: EventSource;
   /** AbortController for the current agent POST request */
   private _agentAbort?: AbortController;
-  private _reconnectTimer?: number;
   private _shouldReconnect = true;
   private _isSending = false;
 
   // Configurable reconnection settings
   private get _maxReconnectAttempts(): number {
     return this.config?.maxReconnectAttempts ?? 10;
-  }
-
-  private get _baseReconnectDelay(): number {
-    return this.config?.reconnectDelay ?? 1000;
   }
 
   private get _autoReconnect(): boolean {
@@ -121,7 +115,6 @@ export class XopcbotGatewayChat extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this._shouldReconnect = false;
-    this._clearReconnectTimer();
     this.disconnect();
     this.removeEventListener('scroll', this._handleScroll as EventListener);
   }
@@ -159,13 +152,11 @@ export class XopcbotGatewayChat extends LitElement {
 
       this._eventSource = new EventSource(url.toString());
 
-      // EventSource fires onopen when the connection is established (or re-established)
+      // EventSource fires onopen when the connection is established
       this._eventSource.onopen = () => {
         this._connectionState = 'connected';
         this._error = null;
         this._reconnectCount = 0;
-        this._reconnectDelay = 0;
-        this._clearReconnectTimer();
         this.requestUpdate();
         // Load sessions after connection is established
         this._loadSessions();
@@ -199,33 +190,16 @@ export class XopcbotGatewayChat extends LitElement {
         } catch { /* ignore */ }
       });
 
-      // EventSource auto-reconnects on error. We just update UI state.
+      // EventSource auto-reconnects on error. Handle permanent disconnection.
       // readyState: 0=CONNECTING, 1=OPEN, 2=CLOSED
       this._eventSource.onerror = () => {
-        // EventSource is auto-reconnecting (readyState=CONNECTING) or permanently closed (CLOSED)
         if (this._eventSource?.readyState === EventSource.CLOSED) {
-          // Permanently closed — do manual reconnect with backoff
+          // Permanently closed - EventSource has given up auto-reconnect
           this._connectionState = 'disconnected';
-
-          if (this._isStreaming) {
-            this._isStreaming = false;
-            this._isSending = false;
-            this._streamingContent = '';
-            this._streamingMessage = null;
-          }
-
-          if (this._shouldReconnect && this._autoReconnect) {
-            if (this._reconnectCount < this._maxReconnectAttempts) {
-              this._scheduleReconnect();
-            } else {
-              this._error = t('errors.connectionError');
-              this._connectionState = 'error';
-            }
-          }
+          this._handlePermanentDisconnect();
         } else {
-          // readyState=CONNECTING — EventSource is auto-reconnecting, just show status
+          // CONNECTING - EventSource is auto-reconnecting
           this._connectionState = 'reconnecting';
-          this._reconnectCount++;
         }
         this.requestUpdate();
       };
@@ -237,45 +211,28 @@ export class XopcbotGatewayChat extends LitElement {
     }
   }
 
-  private _scheduleReconnect(): void {
-    if (!this._shouldReconnect || !this._autoReconnect) return;
+  private _handlePermanentDisconnect(): void {
+    // Reset streaming state if interrupted
+    if (this._isStreaming) {
+      this._isStreaming = false;
+      this._isSending = false;
+      this._streamingContent = '';
+      this._streamingMessage = null;
+    }
 
-    this._reconnectCount++;
-    this._connectionState = 'reconnecting';
-
-    this._reconnectDelay = Math.min(
-      this._baseReconnectDelay * Math.pow(2, this._reconnectCount - 1),
-      30000,
-    );
-
-    const updateCountdown = () => {
-      if (this._reconnectDelay > 0 && this._connectionState === 'reconnecting') {
-        this._reconnectDelay -= 1000;
-        this.requestUpdate();
-        if (this._reconnectDelay > 0) {
-          setTimeout(updateCountdown, 1000);
-        }
+    // Auto-reconnect with exponential backoff (EventSource handles it)
+    if (this._shouldReconnect && this._autoReconnect) {
+      this._reconnectCount++;
+      if (this._reconnectCount > this._maxReconnectAttempts) {
+        this._error = t('errors.connectionError');
+        this._connectionState = 'error';
       }
-    };
-    updateCountdown();
-
-    this._reconnectTimer = window.setTimeout(() => {
-      if (this._shouldReconnect) this.connect();
-    }, this._reconnectDelay);
-
-    this.requestUpdate();
-  }
-
-  private _clearReconnectTimer(): void {
-    if (this._reconnectTimer) {
-      clearTimeout(this._reconnectTimer);
-      this._reconnectTimer = undefined;
+      // EventSource will auto-reconnect, no manual timer needed
     }
   }
 
   disconnect(): void {
     this._shouldReconnect = false;
-    this._clearReconnectTimer();
     this._eventSource?.close();
     this._eventSource = undefined;
     this._agentAbort?.abort();
@@ -286,7 +243,6 @@ export class XopcbotGatewayChat extends LitElement {
   reconnect(): void {
     this._shouldReconnect = true;
     this._reconnectCount = 0;
-    this._clearReconnectTimer();
     this.disconnect();
     setTimeout(() => this.connect(), 100);
   }
@@ -492,6 +448,9 @@ export class XopcbotGatewayChat extends LitElement {
   private async _consumeSSEStream(body: ReadableStream<Uint8Array>): Promise<void> {
     const reader = body.pipeThrough(new TextDecoderStream()).getReader();
     let buffer = '';
+    // State for multi-line data handling
+    let currentEventType = '';
+    let currentEventData = '';
 
     try {
       while (true) {
@@ -499,41 +458,49 @@ export class XopcbotGatewayChat extends LitElement {
         if (done) break;
 
         buffer += value;
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || ''; // keep incomplete line
 
-        let currentEvent = '';
-        let currentData = '';
+        // Process complete lines
+        while (buffer.includes('\n')) {
+          const newlineIndex = buffer.indexOf('\n');
+          const line = buffer.slice(0, newlineIndex);
+          buffer = buffer.slice(newlineIndex + 1);
 
-        for (const line of lines) {
           if (line.startsWith('event:')) {
-            currentEvent = line.slice(6).trim();
+            currentEventType = line.slice(6).trim();
           } else if (line.startsWith('data:')) {
-            currentData += line.slice(5).trim();
+            // Append data (support multi-line data)
+            currentEventData += (currentEventData ? '\n' : '') + line.slice(5).trim();
           } else if (line === '') {
-            // End of SSE event
-            if (currentData) {
-              this._handleSSEEvent(currentEvent, currentData);
+            // Empty line = event boundary
+            if (currentEventData) {
+              this._handleSSEEvent(currentEventType || 'message', currentEventData);
+              currentEventType = '';
+              currentEventData = '';
             }
-            currentEvent = '';
-            currentData = '';
           }
+          // Ignore other lines (id:, retry:, etc.)
         }
       }
 
-      // Process remaining buffer
-      if (buffer.trim()) {
-        const lines = buffer.split('\n');
-        let currentEvent = '';
-        let currentData = '';
-        for (const line of lines) {
-          if (line.startsWith('event:')) currentEvent = line.slice(6).trim();
-          else if (line.startsWith('data:')) currentData += line.slice(5).trim();
-          else if (line === '' && currentData) {
-            this._handleSSEEvent(currentEvent, currentData);
-            currentEvent = '';
-            currentData = '';
+      // Process remaining buffer (last event may not have trailing newline)
+      if (buffer.trim() || currentEventData) {
+        if (buffer.trim()) {
+          const lines = buffer.split('\n');
+          for (const line of lines) {
+            if (line.startsWith('event:')) {
+              currentEventType = line.slice(6).trim();
+            } else if (line.startsWith('data:')) {
+              currentEventData += (currentEventData ? '\n' : '') + line.slice(5).trim();
+            } else if (line === '' && currentEventData) {
+              this._handleSSEEvent(currentEventType || 'message', currentEventData);
+              currentEventType = '';
+              currentEventData = '';
+            }
           }
+        }
+        // If we still have unprocessed data, emit it
+        if (currentEventData) {
+          this._handleSSEEvent(currentEventType || 'message', currentEventData);
         }
       }
     } finally {
@@ -718,7 +685,7 @@ export class XopcbotGatewayChat extends LitElement {
       return html`
         <div class="status-bar warning">
           <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-          <span>${t('chat.reconnecting', { seconds: Math.ceil(this._reconnectDelay / 1000) })}</span>
+          <span>${t('chat.reconnecting')}</span>
         </div>
       `;
     }

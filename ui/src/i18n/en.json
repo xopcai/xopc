@@ -38,7 +38,7 @@
     "connecting": "Connecting...",
     "disconnected": "Disconnected",
     "connectionError": "Connection error",
-    "reconnecting": "Reconnecting in {{seconds}}s...",
+    "reconnecting": "Reconnecting...",
     "online": "Online",
     "offline": "Offline"
   },

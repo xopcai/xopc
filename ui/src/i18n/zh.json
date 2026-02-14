@@ -38,7 +38,7 @@
     "connecting": "连接中...",
     "disconnected": "已断开",
     "connectionError": "连接错误",
-    "reconnecting": "{{seconds}}秒后重新连接...",
+    "reconnecting": "重新连接中...",
     "online": "在线",
     "offline": "离线"
   },

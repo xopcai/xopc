@@ -51,13 +51,22 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   const { service, token } = config;
   const app = new Hono();
 
-  // Global middleware
-  app.use(logger());
-  app.use(cors({
-    origin: '*',
+  // CORS configuration from config
+  const corsOrigins = service.currentConfig.gateway.corsOrigins || ['*'];
+  const isProduction = process.env.NODE_ENV === 'production';
+  const effectiveOrigins = isProduction && corsOrigins.length > 0 ? corsOrigins : ['*'];
+
+  const CORS_OPTIONS = {
+    origin: effectiveOrigins,
     allowMethods: ['GET', 'POST', 'PATCH', 'DELETE', 'OPTIONS'],
     allowHeaders: ['Content-Type', 'Authorization', 'Accept', 'X-Session-Id', 'Last-Event-ID'],
-  }));
+    credentials: true,
+    maxAge: 86400,
+  };
+
+  // Global middleware
+  app.use(logger());
+  app.use(cors(CORS_OPTIONS));
 
   // Health endpoint (no auth required)
   app.get('/health', (c) => {
@@ -102,7 +111,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   // ========== Core SSE API ==========
 
-  const sseConfig = { service };
+  const sseConfig = { 
+    service,
+    maxSseConnections: service.currentConfig.gateway.maxSseConnections,
+  };
 
   // POST /api/agent — Agent message (SSE stream or JSON fallback)
   authenticated.post('/api/agent', createAgentSSEHandler(sseConfig));

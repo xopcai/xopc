@@ -5,8 +5,32 @@ import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('Hono:SSE');
 
+// Active SSE connections tracking for connection limiting
+const activeConnections = new Map<string, AbortController>();
+
 export interface SSEHandlerConfig {
   service: GatewayService;
+  maxSseConnections?: number;
+}
+
+// Type validation for agent request body
+interface AgentRequestBody {
+  message: string;
+  channel?: string;
+  chatId?: string;
+  attachments?: Array<{
+    type: string;
+    mimeType?: string;
+    data?: string;
+    name?: string;
+    size?: number;
+  }>;
+}
+
+function isValidAgentRequest(body: unknown): body is AgentRequestBody {
+  if (!body || typeof body !== 'object') return false;
+  const b = body as Record<string, unknown>;
+  return typeof b.message === 'string' && b.message.length > 0;
 }
 
 /**
@@ -26,21 +50,17 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
   const { service } = config;
 
   return async (c: Context) => {
-    const body = await c.req.json().catch(() => ({}));
-    const message = body.message as string | undefined;
-    const channel = (body.channel as string) || 'gateway';
-    const chatId = (body.chatId as string) || 'default';
-    const attachments = body.attachments as Array<{
-      type: string;
-      mimeType?: string;
-      data?: string;
-      name?: string;
-      size?: number;
-    }> | undefined;
+    const body = await c.req.json().catch(() => null);
 
-    if (!message) {
-      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing required field: message' } }, 400);
+    // Input validation
+    if (!isValidAgentRequest(body)) {
+      return c.json({
+        ok: false,
+        error: { code: 'BAD_REQUEST', message: 'Missing or invalid required field: message' }
+      }, 400);
     }
+
+    const { message, channel = 'gateway', chatId = 'default', attachments } = body;
 
     const accept = c.req.header('Accept') || '';
     const wantSSE = accept.includes('text/event-stream');
@@ -164,15 +184,29 @@ export function createSendHandler(config: SSEHandlerConfig) {
  *   - any other server-initiated events
  *
  * Supports Last-Event-ID for reconnection.
+ * Enforces maximum connection limit to prevent DoS.
  */
 export function createEventsSSEHandler(config: SSEHandlerConfig) {
   const { service } = config;
+  const maxConnections = config.maxSseConnections ?? 100;
 
   return async (c: Context) => {
+    // Check maximum connections limit
+    if (activeConnections.size >= maxConnections) {
+      log.warn({ current: activeConnections.size, max: maxConnections }, 'SSE connection limit reached');
+      return c.json({
+        ok: false,
+        error: { code: 'TOO_MANY_CONNECTIONS', message: 'Maximum SSE connections exceeded' }
+      }, 503);
+    }
+
     const lastEventId = c.req.header('Last-Event-ID') || undefined;
     const sessionId = c.req.header('X-Session-Id')
       || c.req.query('sessionId')
       || crypto.randomUUID();
+
+    const abortController = new AbortController();
+    activeConnections.set(sessionId, abortController);
 
     return streamSSE(c, async (stream) => {
       let aborted = false;
@@ -226,6 +260,7 @@ export function createEventsSSEHandler(config: SSEHandlerConfig) {
           aborted = true;
           clearInterval(keepAlive);
           cleanup();
+          activeConnections.delete(sessionId);
           log.debug({ sessionId }, 'Event stream disconnected');
           resolve();
         });
