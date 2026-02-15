@@ -4,6 +4,7 @@ import { AgentService } from '../agent/index.js';
 import { ChannelManager } from '../channels/manager.js';
 import { MessageBus } from '../bus/index.js';
 import { loadConfig, saveConfig, DEFAULT_PATHS } from '../config/index.js';
+import { getWorkspacePath } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
 import { CronService, DefaultJobExecutor } from '../cron/index.js';
 import { PluginLoader, normalizePluginConfig } from '../plugins/index.js';
@@ -71,6 +72,7 @@ export class GatewayService {
   private running = false;
   private configReloader: ConfigHotReloader | null = null;
   private startTime = Date.now();
+  private workspacePath: string;
 
   // SSE event system
   private eventCounter = 0;
@@ -86,12 +88,13 @@ export class GatewayService {
     this.channelManager = new ChannelManager(this.config, this.bus);
 
     // Initialize plugin loader
+    this.workspacePath = getWorkspacePath(this.config) || './workspace';
     this.initializePlugins();
 
     // Initialize agent service with plugin registry
     const modelConfig = this.config.agents?.defaults?.model;
     this.agentService = new AgentService(this.bus, {
-      workspace: this.config.agents?.defaults?.workspace || './workspace',
+      workspace: this.workspacePath,
       model: typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary,
       braveApiKey: this.config.tools?.web?.search?.apiKey,
       config: this.config,
@@ -110,7 +113,7 @@ export class GatewayService {
 
     // Initialize session manager
     this.sessionManager = new SessionManager({
-      workspace: this.config.agents?.defaults?.workspace || './workspace',
+      workspace: this.workspacePath,
     });
 
     // Initialize heartbeat service
@@ -131,8 +134,8 @@ export class GatewayService {
       const resolvedConfigs = normalizePluginConfig(pluginsConfig);
       
       this.pluginLoader = new PluginLoader({
-        workspaceDir: this.config.agents?.defaults?.workspace || './workspace',
-        pluginsDir: join(this.config.agents?.defaults?.workspace || './workspace', '.plugins'),
+        workspaceDir: this.workspacePath,
+        pluginsDir: join(this.workspacePath, '.plugins'),
       });
 
       // Load enabled plugins

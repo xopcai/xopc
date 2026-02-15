@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { homedir } from 'os';
 
 // ============================================
 // Provider Configuration (camelCase)
@@ -29,25 +30,44 @@ export const OllamaProviderSchema = z.object({
 // Unified providers config
 export const ProvidersConfigSchema = z.object({
   // OpenAI-compatible providers
-  openai: OpenAIProviderSchema.default({}),
-  qwen: OpenAIProviderSchema.default({}),
-  kimi: OpenAIProviderSchema.default({}),
-  moonshot: OpenAIProviderSchema.default({}),
-  minimax: OpenAIProviderSchema.default({}),
-  'minimax-cn': OpenAIProviderSchema.default({}),
-  deepseek: OpenAIProviderSchema.default({}),
-  groq: OpenAIProviderSchema.default({}),
-  openrouter: OpenAIProviderSchema.default({}),
-  xai: OpenAIProviderSchema.default({}),
-  bedrock: OpenAIProviderSchema.default({}),
-  
+  openai: OpenAIProviderSchema.optional(),
+  qwen: OpenAIProviderSchema.optional(),
+  kimi: OpenAIProviderSchema.optional(),
+  moonshot: OpenAIProviderSchema.optional(),
+  minimax: OpenAIProviderSchema.optional(),
+  'minimax-cn': OpenAIProviderSchema.optional(),
+  deepseek: OpenAIProviderSchema.optional(),
+  groq: OpenAIProviderSchema.optional(),
+  openrouter: OpenAIProviderSchema.optional(),
+  xai: OpenAIProviderSchema.optional(),
+  bedrock: OpenAIProviderSchema.optional(),
+
   // Native providers
-  anthropic: AnthropicProviderSchema.default({}),
-  google: AnthropicProviderSchema.default({}),
-  
+  anthropic: AnthropicProviderSchema.optional(),
+  google: AnthropicProviderSchema.optional(),
+
   // Local providers
-  ollama: OllamaProviderSchema.default({}),
-}).strict();
+  ollama: OllamaProviderSchema.optional(),
+}).strict().default({
+  openai: { apiKey: '' },
+  qwen: { apiKey: '' },
+  kimi: { apiKey: '' },
+  moonshot: { apiKey: '' },
+  minimax: { apiKey: '' },
+  'minimax-cn': { apiKey: '' },
+  deepseek: { apiKey: '' },
+  groq: { apiKey: '' },
+  openrouter: { apiKey: '' },
+  xai: { apiKey: '' },
+  bedrock: { apiKey: '' },
+  anthropic: { apiKey: '' },
+  google: { apiKey: '' },
+  ollama: {
+    enabled: true,
+    baseUrl: 'http://127.0.0.1:11434/v1',
+    autoDiscovery: true,
+  },
+});
 
 // ============================================
 // Agent Configs (camelCase)
@@ -72,17 +92,39 @@ export const AgentDefaultsSchema = z.object({
     triggerThreshold: z.number().min(0.5).max(0.95).default(0.8),
     minMessagesBeforeCompact: z.number().default(10),
     keepRecentMessages: z.number().default(5),
-  }).default({}),
+  }).optional(),
   pruning: z.object({
     enabled: z.boolean().default(true),
     maxToolResultChars: z.number().default(10000),
     headKeepRatio: z.number().default(0.3),
     tailKeepRatio: z.number().default(0.3),
-  }).default({}),
+  }).optional(),
 });
 
 export const AgentsConfigSchema = z.object({
-  defaults: AgentDefaultsSchema.default({}),
+  defaults: AgentDefaultsSchema.optional(),
+}).default({
+  defaults: {
+    workspace: '~/.xopcbot/workspace',
+    model: 'anthropic/claude-sonnet-4-5',
+    maxTokens: 8192,
+    temperature: 0.7,
+    maxToolIterations: 20,
+    compaction: {
+      enabled: true,
+      mode: 'default',
+      reserveTokens: 8000,
+      triggerThreshold: 0.8,
+      minMessagesBeforeCompact: 10,
+      keepRecentMessages: 5,
+    },
+    pruning: {
+      enabled: true,
+      maxToolResultChars: 10000,
+      headKeepRatio: 0.3,
+      tailKeepRatio: 0.3,
+    },
+  },
 });
 
 // ============================================
@@ -104,42 +146,82 @@ export const WhatsAppConfigSchema = z.object({
 });
 
 export const ChannelsConfigSchema = z.object({
-  telegram: TelegramConfigSchema.default({}),
-  whatsapp: WhatsAppConfigSchema.default({}),
+  telegram: TelegramConfigSchema.optional(),
+  whatsapp: WhatsAppConfigSchema.optional(),
+}).default({
+  telegram: {
+    enabled: false,
+    token: '',
+    allowFrom: [],
+    debug: false,
+  },
+  whatsapp: {
+    enabled: false,
+    bridgeUrl: 'ws://localhost:3001',
+    allowFrom: [],
+  },
 });
 
 export const WebSearchConfigSchema = z.object({
-  apiKey: z.string().default(''),
-  maxResults: z.number().default(5),
+  apiKey: z.string(),
+  maxResults: z.number(),
+}).default({
+  apiKey: '',
+  maxResults: 5,
 });
 
 export const WebToolsConfigSchema = z.object({
-  search: WebSearchConfigSchema.default({}),
+  search: WebSearchConfigSchema.optional(),
 });
 
 export const ToolsConfigSchema = z.object({
-  web: WebToolsConfigSchema.default({}),
+  web: WebToolsConfigSchema.optional(),
+}).default({
+  web: {
+    search: {
+      apiKey: '',
+      maxResults: 5,
+    },
+  },
 });
 
 export const HeartbeatConfigSchema = z.object({
-  enabled: z.boolean().default(true),
-  intervalMs: z.number().default(60000),
+  enabled: z.boolean(),
+  intervalMs: z.number(),
+}).default({
+  enabled: true,
+  intervalMs: 60000,
 });
 
 export const GatewayConfigSchema = z.object({
-  host: z.string().default('0.0.0.0'),
-  port: z.number().default(18790),
-  heartbeat: HeartbeatConfigSchema.default({}),
-  maxSseConnections: z.number().default(100),
-  corsOrigins: z.array(z.string()).default(['*']),
+  host: z.string().optional(),
+  port: z.number().optional(),
+  heartbeat: HeartbeatConfigSchema.optional(),
+  maxSseConnections: z.number().optional(),
+  corsOrigins: z.array(z.string()).optional(),
+}).default({
+  host: '0.0.0.0',
+  port: 18790,
+  heartbeat: {
+    enabled: true,
+    intervalMs: 60000,
+  },
+  maxSseConnections: 100,
+  corsOrigins: ['*'],
 });
 
 export const CronConfigSchema = z.object({
-  enabled: z.boolean().default(true),
-  maxConcurrentJobs: z.number().default(5),
-  defaultTimezone: z.string().default('UTC'),
-  historyRetentionDays: z.number().default(7),
-  enableMetrics: z.boolean().default(true),
+  enabled: z.boolean().optional(),
+  maxConcurrentJobs: z.number().optional(),
+  defaultTimezone: z.string().optional(),
+  historyRetentionDays: z.number().optional(),
+  enableMetrics: z.boolean().optional(),
+}).default({
+  enabled: true,
+  maxConcurrentJobs: 5,
+  defaultTimezone: 'UTC',
+  historyRetentionDays: 7,
+  enableMetrics: true,
 });
 
 // ============================================
@@ -162,7 +244,7 @@ export const PluginsConfigSchema = z.record(
   z.union([
     z.boolean(),
     z.array(z.string()),
-    z.record(z.unknown())
+    z.record(z.string(), z.unknown())
   ])
 ).default({});
 
@@ -171,13 +253,96 @@ export const PluginsConfigSchema = z.record(
 // ============================================
 
 export const ConfigSchema = z.object({
-  agents: AgentsConfigSchema.default({}),
-  channels: ChannelsConfigSchema.default({}),
-  providers: ProvidersConfigSchema.default({}),
-  gateway: GatewayConfigSchema.default({}),
-  tools: ToolsConfigSchema.default({}),
-  cron: CronConfigSchema.default({}),
-  plugins: PluginsConfigSchema.default({}),
+  agents: AgentsConfigSchema,
+  channels: ChannelsConfigSchema,
+  providers: ProvidersConfigSchema,
+  gateway: GatewayConfigSchema,
+  tools: ToolsConfigSchema,
+  cron: CronConfigSchema,
+  plugins: PluginsConfigSchema,
+}).default({
+  agents: {
+    defaults: {
+      workspace: '~/.xopcbot/workspace',
+      model: 'anthropic/claude-sonnet-4-5',
+      maxTokens: 8192,
+      temperature: 0.7,
+      maxToolIterations: 20,
+      compaction: {
+        enabled: true,
+        mode: 'default',
+        reserveTokens: 8000,
+        triggerThreshold: 0.8,
+        minMessagesBeforeCompact: 10,
+        keepRecentMessages: 5,
+      },
+      pruning: {
+        enabled: true,
+        maxToolResultChars: 10000,
+        headKeepRatio: 0.3,
+        tailKeepRatio: 0.3,
+      },
+    },
+  },
+  channels: {
+    telegram: {
+      enabled: false,
+      token: '',
+      allowFrom: [],
+      debug: false,
+    },
+    whatsapp: {
+      enabled: false,
+      bridgeUrl: 'ws://localhost:3001',
+      allowFrom: [],
+    },
+  },
+  providers: {
+    openai: { apiKey: '' },
+    qwen: { apiKey: '' },
+    kimi: { apiKey: '' },
+    moonshot: { apiKey: '' },
+    minimax: { apiKey: '' },
+    'minimax-cn': { apiKey: '' },
+    deepseek: { apiKey: '' },
+    groq: { apiKey: '' },
+    openrouter: { apiKey: '' },
+    xai: { apiKey: '' },
+    bedrock: { apiKey: '' },
+    anthropic: { apiKey: '' },
+    google: { apiKey: '' },
+    ollama: {
+      enabled: true,
+      baseUrl: 'http://127.0.0.1:11434/v1',
+      autoDiscovery: true,
+    },
+  },
+  gateway: {
+    host: '0.0.0.0',
+    port: 18790,
+    heartbeat: {
+      enabled: true,
+      intervalMs: 60000,
+    },
+    maxSseConnections: 100,
+    corsOrigins: ['*'],
+  },
+  tools: {
+    web: {
+      search: {
+        apiKey: '',
+        maxResults: 5,
+      },
+    },
+  },
+  cron: {
+    enabled: true,
+    maxConcurrentJobs: 5,
+    defaultTimezone: 'UTC',
+    historyRetentionDays: 7,
+    enableMetrics: true,
+  },
+  plugins: {},
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -339,7 +504,11 @@ export function listConfiguredProviders(config: Config): string[] {
 }
 
 export function getWorkspacePath(config: Config): string {
-  return config.agents.defaults.workspace;
+  const workspace = config.agents.defaults.workspace;
+  if (workspace.startsWith('~')) {
+    return workspace.replace('~', homedir());
+  }
+  return workspace;
 }
 
 // ============================================
