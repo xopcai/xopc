@@ -601,7 +601,6 @@ async function setupModel(configPath: string, existingConfig: any, ctx: CLIConte
 }
 
 function getModelsForProvider(provider: string): { value: string; name: string }[] {
-  const { ModelRegistry } = require('../../providers/registry.js');
   const registry = new ModelRegistry();
   const models = registry.getAll().filter(m => m.provider === provider);
   
