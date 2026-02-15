@@ -538,6 +538,7 @@ export const BUILTIN_MODELS: BuiltinModel[] = [
   { id: 'qwen/qwen3-235b', name: 'Qwen3 235B', provider: 'qwen' },
   { id: 'kimi/kimi-k2.5', name: 'Kimi K2.5', provider: 'kimi' },
   { id: 'kimi/kimi-k2-thinking', name: 'Kimi K2 Thinking', provider: 'kimi' },
+  { id: 'minimax/minimax-m2.5', name: 'MiniMax M2.5', provider: 'minimax' },
   { id: 'minimax/minimax-m2.1', name: 'MiniMax M2.1', provider: 'minimax' },
   { id: 'minimax/minimax-m2', name: 'MiniMax M2', provider: 'minimax' },
   { id: 'deepseek/deepseek-chat', name: 'DeepSeek Chat', provider: 'deepseek' },

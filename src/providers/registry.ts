@@ -4,6 +4,7 @@
  * Model registration and management based on pi-mono architecture.
  * Loads built-in models from @mariozechner/pi-ai and custom models from config.json.
  * Supports auto-discovery of local Ollama models.
+ * Supports AuthStorage for OAuth and API key authentication.
  */
 
 import {
@@ -15,6 +16,7 @@ import {
 } from '@mariozechner/pi-ai';
 import { getApiKey as getConfigApiKey, getApiBase } from '../config/schema.js';
 import type { Config } from '../config/schema.js';
+import type { AuthStorage } from '../auth/storage.js';
 
 const OLLAMA_API_BASE = 'http://127.0.0.1:11434';
 const OLLAMA_TAGS_URL = `${OLLAMA_API_BASE}/api/tags`;
@@ -86,12 +88,44 @@ export class ModelRegistry {
 	private ollamaEnabled: boolean = true;
 	private ollamaDiscovery: boolean = true;
 	private ollamaModels: Model<Api>[] = [];
+	private authStorage: AuthStorage | null = null;
 
-	constructor(config?: Config | null, options?: { ollamaEnabled?: boolean; ollamaDiscovery?: boolean }) {
+	constructor(
+		config?: Config | null,
+		options?: { ollamaEnabled?: boolean; ollamaDiscovery?: boolean; authStorage?: AuthStorage | null }
+	) {
 		this.config = config ?? null;
 		this.ollamaEnabled = options?.ollamaEnabled ?? true;
 		this.ollamaDiscovery = options?.ollamaDiscovery ?? true;
+		this.authStorage = options?.authStorage ?? null;
 		this.loadModels();
+	}
+
+	/**
+	 * Set AuthStorage instance for OAuth/API key resolution.
+	 */
+	setAuthStorage(authStorage: AuthStorage | null): void {
+		this.authStorage = authStorage;
+	}
+
+	/**
+	 * Get API key for a provider (supports OAuth and API keys).
+	 */
+	async getApiKey(provider: string): Promise<string | undefined> {
+		// Try AuthStorage first (supports OAuth)
+		if (this.authStorage) {
+			const key = await this.authStorage.getApiKey(provider);
+			if (key) return key;
+		}
+
+		// Fall back to config
+		if (this.config) {
+			return getConfigApiKey(this.config, provider) ?? undefined;
+		}
+
+		// Fall back to environment variable
+		const envKey = `${provider.toUpperCase().replace(/-/g, '_')}_API_KEY`;
+		return process.env[envKey];
 	}
 
 	private loadModels(): void {
@@ -196,14 +230,48 @@ export class ModelRegistry {
 		return this.models;
 	}
 
-	/** Get only models that have auth configured */
-	getAvailable(): Model<Api>[] {
+	/** Get only models that have auth configured (sync - uses config only) */
+	getAvailableSync(): Model<Api>[] {
 		if (!this.config) return this.models;
 
 		return this.models.filter((m) => {
 			const apiKey = getConfigApiKey(this.config!, m.provider);
 			return !!apiKey || m.provider === 'ollama';
 		});
+	}
+
+	/** Get only models that have auth configured (async - supports OAuth) */
+	async getAvailable(): Promise<Model<Api>[]> {
+		if (!this.config && !this.authStorage) return this.models;
+
+		const available: Model<Api>[] = [];
+		
+		for (const m of this.models) {
+			// Ollama is always available (local)
+			if (m.provider === 'ollama') {
+				available.push(m);
+				continue;
+			}
+
+			// Check auth via AuthStorage (supports OAuth)
+			if (this.authStorage) {
+				const hasAuth = this.authStorage.hasAuth(m.provider);
+				if (hasAuth) {
+					available.push(m);
+					continue;
+				}
+			}
+
+			// Fall back to config
+			if (this.config) {
+				const apiKey = getConfigApiKey(this.config, m.provider);
+				if (apiKey) {
+					available.push(m);
+				}
+			}
+		}
+
+		return available;
 	}
 
 	find(provider: string, modelId: string): Model<Api> | undefined {
@@ -242,8 +310,24 @@ export class ModelRegistry {
 		return discoverOllamaModels();
 	}
 
-	/** Check if model has auth configured */
+	/** Check if model has auth configured (sync - uses config only) */
 	hasAuth(provider: string): boolean {
+		// Check AuthStorage first
+		if (this.authStorage && this.authStorage.hasAuth(provider)) {
+			return true;
+		}
+		// Fall back to config
+		if (!this.config) return false;
+		return !!getConfigApiKey(this.config, provider);
+	}
+
+	/** Check if model has auth configured (async - supports OAuth) */
+	async hasAuthAsync(provider: string): Promise<boolean> {
+		// Check AuthStorage first (supports OAuth)
+		if (this.authStorage) {
+			return this.authStorage.hasAuth(provider);
+		}
+		// Fall back to config
 		if (!this.config) return false;
 		return !!getConfigApiKey(this.config, provider);
 	}

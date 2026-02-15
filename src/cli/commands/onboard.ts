@@ -6,6 +6,8 @@ import { saveConfig, PROVIDER_OPTIONS } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import { loadAllTemplates } from '../templates.js';
 import type { CLIContext } from '../registry.js';
+import { AuthStorage, anthropicOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import { homedir } from 'os';
 
 /**
  * Load raw config without schema parsing to avoid default values being added.
@@ -112,6 +114,42 @@ async function runOnboard(options: { quick?: boolean }, ctx: CLIContext): Promis
   }
 }
 
+async function doOAuthLogin(provider: string): Promise<string> {
+  console.log('\n🔐 Starting OAuth login...');
+  
+  // Create AuthStorage and register OAuth providers
+  const authPath = join(homedir(), '.xopcbot', 'auth.json');
+  const authStorage = new AuthStorage({ filename: authPath });
+  
+  if (provider === 'anthropic') {
+    authStorage.registerOAuthProvider(anthropicOAuthProvider);
+    
+    const callbacks: OAuthLoginCallbacks = {
+      onAuth: (info) => {
+        console.log('\n🌐 Please open this URL in your browser:\n');
+        console.log(info.url);
+        console.log('\n');
+      },
+      onPrompt: async (prompt) => {
+        return input({ message: prompt.message });
+      },
+      onProgress: (message) => {
+        console.log('  →', message);
+      },
+    };
+    
+    try {
+      await authStorage.login('anthropic', callbacks);
+      return 'oauth'; // Return a marker to indicate OAuth was used
+    } catch (error) {
+      console.error('❌ OAuth login failed:', error);
+      throw new Error('OAuth login was cancelled or failed');
+    }
+  }
+  
+  throw new Error(`OAuth not supported for provider: ${provider}`);
+}
+
 async function setupWorkspace(workspacePath: string, interactive: boolean): Promise<void> {
   console.log('\n📁 Step 1: Workspace\n');
 
@@ -154,14 +192,42 @@ async function setupModel(configPath: string, existingConfig: any, ctx: CLIConte
   });
 
   const providerInfo = PROVIDER_OPTIONS.find(p => p.value === provider)!;
+  
+  // Check if provider supports OAuth
+  const oauthProviders = ['anthropic']; // Add more providers as needed
+  const supportsOAuth = oauthProviders.includes(provider);
+  
   let apiKey = process.env[`${providerInfo.envKey}`];
+  let useOAuth = false;
 
   if (!apiKey) {
-    console.log(`\n🔑 Enter API key for ${providerInfo.name}`);
-    apiKey = await input({
-      message: `API Key:`,
-      validate: (v: string) => v.length > 0 || 'Required',
-    });
+    if (supportsOAuth) {
+      // Ask user to choose between API Key and OAuth
+      const authMethod = await select({
+        message: `How would you like to authenticate with ${providerInfo.name}?`,
+        choices: [
+          { value: 'api_key', name: 'API Key (enter manually)' },
+          { value: 'oauth', name: 'OAuth Login (browser-based)' },
+        ],
+      });
+      
+      if (authMethod === 'oauth') {
+        useOAuth = true;
+        apiKey = await doOAuthLogin(provider);
+      } else {
+        console.log(`\n🔑 Enter API key for ${providerInfo.name}`);
+        apiKey = await input({
+          message: `API Key:`,
+          validate: (v: string) => v.length > 0 || 'Required',
+        });
+      }
+    } else {
+      console.log(`\n🔑 Enter API key for ${providerInfo.name}`);
+      apiKey = await input({
+        message: `API Key:`,
+        validate: (v: string) => v.length > 0 || 'Required',
+      });
+    }
   } else {
     console.log(`✅ Found ${providerInfo.envKey} in environment`);
   }
@@ -177,7 +243,15 @@ async function setupModel(configPath: string, existingConfig: any, ctx: CLIConte
 
   const config = existingConfig || {};
   config.providers = config.providers || {};
-  config.providers[provider] = { apiKey };
+  
+  if (useOAuth) {
+    // For OAuth, we don't store the API key in config.json
+    // It's stored in auth.json via AuthStorage
+    config.providers[provider] = {};
+    console.log('\n✅ OAuth login successful! Credentials saved to ~/.xopcbot/auth.json');
+  } else {
+    config.providers[provider] = { apiKey };
+  }
 
   config.agents = config.agents || {};
   config.agents.defaults = config.agents.defaults || {};
