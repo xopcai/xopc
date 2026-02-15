@@ -172,6 +172,7 @@ function createConfigureCommand(ctx: CLIContext): Command {
               allowFrom: allowFrom
                 ? allowFrom.split(',').map((s: string) => s.trim())
                 : [],
+              debug: false,
             },
           };
           saveConfig(updatedConfig, configPath);

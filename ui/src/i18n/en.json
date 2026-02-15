@@ -109,3 +109,8 @@
     "showArtifacts": "Show artifacts"
   },
   "logs": {
+    "title": "Logs",
+    "refresh": "Refresh",
+    "clear": "Clear"
+  }
+}

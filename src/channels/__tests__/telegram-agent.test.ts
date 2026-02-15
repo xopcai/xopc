@@ -45,7 +45,7 @@ describe('Telegram to Agent Integration', () => {
         },
       },
       channels: {
-        telegram: { enabled: false, token: '', allowFrom: [] },
+        telegram: { enabled: false, token: '', allowFrom: [], debug: false },
         whatsapp: { enabled: false, bridgeUrl: '', allowFrom: [] },
       },
       providers: {},
@@ -56,6 +56,7 @@ describe('Telegram to Agent Integration', () => {
       },
       tools: { web: { search: { apiKey: '', maxResults: 5 } } },
       cron: { enabled: false, maxConcurrentJobs: 5, defaultTimezone: 'UTC', historyRetentionDays: 7, enableMetrics: false },
+      plugins: {},
     };
   });
 

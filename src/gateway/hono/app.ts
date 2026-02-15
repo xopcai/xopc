@@ -224,7 +224,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     
     // Update agent defaults
     if (body.agents?.defaults) {
-      if (!config.agents) config.agents = { defaults: {} };
+      if (!config.agents) config.agents = { defaults: { workspace: '~/.xopcbot/workspace', model: 'anthropic/claude-sonnet-4-5', maxTokens: 8192, temperature: 0.7, maxToolIterations: 20 } };
       if (!config.agents.defaults) config.agents.defaults = {} as any;
       
       if (body.agents.defaults.model !== undefined) {
@@ -246,7 +246,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     
     // Update channels
     if (body.channels?.telegram) {
-      if (!config.channels) config.channels = { telegram: {}, whatsapp: {} };
+      if (!config.channels) config.channels = { telegram: { enabled: false, token: '', allowFrom: [], debug: false }, whatsapp: { enabled: false, bridgeUrl: 'ws://localhost:3001', allowFrom: [] } };
       if (!config.channels.telegram) config.channels.telegram = {} as any;
       
       if (body.channels.telegram.enabled !== undefined) {
@@ -266,7 +266,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       }
     }
     if (body.channels?.whatsapp) {
-      if (!config.channels) config.channels = { telegram: {}, whatsapp: {} };
+      if (!config.channels) config.channels = { telegram: { enabled: false, token: '', allowFrom: [], debug: false }, whatsapp: { enabled: false, bridgeUrl: 'ws://localhost:3001', allowFrom: [] } };
       if (!config.channels.whatsapp) config.channels.whatsapp = {} as any;
       
       if (body.channels.whatsapp.enabled !== undefined) {
@@ -282,13 +282,13 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     
     // Update gateway
     if (body.gateway?.heartbeat?.enabled !== undefined) {
-      if (!config.gateway) config.gateway = { heartbeat: {} };
-      if (!config.gateway.heartbeat) config.gateway.heartbeat = {} as any;
+      if (!config.gateway) config.gateway = { host: '0.0.0.0', port: 18790, heartbeat: { enabled: true, intervalMs: 60000 }, maxSseConnections: 100, corsOrigins: ['*'] };
+      if (!config.gateway.heartbeat) config.gateway.heartbeat = { enabled: true, intervalMs: 60000 };
       config.gateway.heartbeat.enabled = body.gateway.heartbeat.enabled;
     }
     if (body.gateway?.heartbeat?.intervalMs !== undefined) {
-      if (!config.gateway) config.gateway = { heartbeat: {} };
-      if (!config.gateway.heartbeat) config.gateway.heartbeat = {} as any;
+      if (!config.gateway) config.gateway = { host: '0.0.0.0', port: 18790, heartbeat: { enabled: true, intervalMs: 60000 }, maxSseConnections: 100, corsOrigins: ['*'] };
+      if (!config.gateway.heartbeat) config.gateway.heartbeat = { enabled: true, intervalMs: 60000 };
       config.gateway.heartbeat.intervalMs = body.gateway.heartbeat.intervalMs;
     }
     

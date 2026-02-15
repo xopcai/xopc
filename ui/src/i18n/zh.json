@@ -109,3 +109,8 @@
     "showArtifacts": "显示产物"
   },
   "logs": {
+    "title": "日志",
+    "refresh": "刷新",
+    "clear": "清空"
+  }
+}
