@@ -30,7 +30,7 @@ export function createFindTool(cwd: string): AgentTool<typeof findSchema> {
 	return {
 		name: 'find',
 		label: '📁 find',
-		description: `Search for files by glob pattern. Returns matching file paths relative to the search directory. Output is truncated to ${DEFAULT_LIMIT} results or ${DEFAULT_MAX_BYTES / 1024}KB.`,
+		description: 'Find files by glob pattern (e.g., *.ts, **/*.json).',
 		parameters: findSchema,
 		execute: async (
 			_toolCallId: string,

@@ -3,7 +3,7 @@ import { customElement, property, state, query } from 'lit/decorators.js';
 import './gateway-chat';
 import './pages/SessionManager';
 import './pages/CronManager';
-import './pages/SubagentsManager';
+// Pages
 import './pages/LogManager';
 import './pages/SettingsPage';
 import {
@@ -95,7 +95,7 @@ export class XopcbotApp extends LitElement {
     }
     
     const tab = hash as Tab;
-    const validTabs: Tab[] = ['sessions', 'subagents', 'cron', 'logs', 'settings'];
+    const validTabs: Tab[] = ['sessions', 'cron', 'logs', 'settings'];
     
     if (validTabs.includes(tab)) {
       if (this._activeTab !== tab) {
@@ -353,7 +353,6 @@ export class XopcbotApp extends LitElement {
 
             ${this._activeTab === 'chat' ? this._renderChat() : nothing}
             ${this._activeTab === 'sessions' ? this._renderSessions() : nothing}
-            ${this._activeTab === 'subagents' ? this._renderSubagents() : nothing}
             ${this._activeTab === 'cron' ? this._renderCron() : nothing}
             ${this._activeTab === 'logs' ? this._renderLogs() : nothing}
             ${this._activeTab === 'settings' ? this._renderSettings() : nothing}
@@ -384,17 +383,6 @@ export class XopcbotApp extends LitElement {
       <session-manager
         .config=${{ url, token }}
       ></session-manager>
-    `;
-  }
-
-  private _renderSubagents(): unknown {
-    const url = this.gatewayConfig?.url || '';
-    const token = this.gatewayConfig?.token;
-    
-    return html`
-      <subagents-manager
-        .config=${{ url, token }}
-      ></subagents-manager>
     `;
   }
 

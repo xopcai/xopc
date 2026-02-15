@@ -1,22 +1,24 @@
-// Read File Tool
+// Read file tool
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { readFile, stat } from 'fs/promises';
 import { normalize } from 'path';
 import { checkFileSafety } from '../prompt/safety.js';
+import { truncateHead, formatSize, DEFAULT_MAX_BYTES } from './truncate.js';
 
-// Max file size (10MB)
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
+const DEFAULT_MAX_LINES = 500;
 
 const ReadFileSchema = Type.Object({
-  path: Type.String({ description: 'The file path to read' }),
+  path: Type.String({ description: 'File path to read' }),
+  limit: Type.Optional(Type.Number({ description: 'Max lines (default: 500)' })),
 });
 
-export const readFileTool: AgentTool<typeof ReadFileSchema, {} > = {
+export const readFileTool: AgentTool<typeof ReadFileSchema, {}> = {
   name: 'read_file',
-  description: 'Read the contents of a file at the given path.',
+  description: 'Read file contents.',
   parameters: ReadFileSchema,
-  label: '📄 Read File',
+  label: '📄 Read',
 
   async execute(
     toolCallId: string,
@@ -24,42 +26,33 @@ export const readFileTool: AgentTool<typeof ReadFileSchema, {} > = {
     _signal?: AbortSignal
   ): Promise<AgentToolResult<{}>> {
     try {
-      // Safety check - block sensitive paths
       const safety = checkFileSafety('read', params.path);
       if (!safety.allowed) {
-        return {
-          content: [{ type: 'text', text: `🚫 ${safety.message}` }],
-          details: { blocked: true, reason: safety.message },
-        };
+        return { content: [{ type: 'text', text: `🚫 ${safety.message}` }], details: {} };
       }
 
-      // Path normalization to prevent traversal
       const normalized = normalize(params.path);
-
-      // Check file size before reading
       const stats = await stat(normalized);
+
       if (stats.size > MAX_FILE_SIZE) {
-        return {
-          content: [{ type: 'text', text: `🚫 File too large: ${stats.size} bytes (max: ${MAX_FILE_SIZE})` }],
-          details: { blocked: true, reason: 'File size exceeded' },
-        };
+        return { content: [{ type: 'text', text: `🚫 File too large: ${formatSize(stats.size)}` }], details: {} };
       }
 
       const content = await readFile(normalized, 'utf-8');
-      return {
-        content: [{ type: 'text', text: content }],
-        details: { size: stats.size },
-      };
+      const truncation = truncateHead(content, { maxLines: params.limit || DEFAULT_MAX_LINES, maxBytes: DEFAULT_MAX_BYTES });
+
+      let outputText = truncation.content;
+      if (truncation.truncated) {
+        if (truncation.firstLineExceedsLimit) {
+          outputText = `(Line exceeds ${formatSize(DEFAULT_MAX_BYTES)})`;
+        } else {
+          outputText += `\n\n[${truncation.outputLines}/${truncation.totalLines} lines]`;
+        }
+      }
+
+      return { content: [{ type: 'text', text: outputText }], details: {} };
     } catch (error) {
-      return {
-        content: [
-          {
-            type: 'text',
-            text: `Error reading file: ${error instanceof Error ? error.message : String(error)}`,
-          },
-        ],
-        details: {},
-      };
+      return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: {} };
     }
   },
 };

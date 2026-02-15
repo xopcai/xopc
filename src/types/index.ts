@@ -186,16 +186,6 @@ export interface CronJob {
   enabled: boolean;
   created_at: string;
 }
-
-export interface SubagentResult {
-  task_id: string;
-  label: string;
-  task: string;
-  result: string;
-  status: 'ok' | 'error';
-}
-
-// Re-export session types
 export {
   SessionStatus,
   type SessionMetadata,
