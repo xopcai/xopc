@@ -20,6 +20,7 @@ import type { Config } from '../config/schema.js';
 import type { AuthStorage } from '../auth/storage.js';
 import { listProfilesForProvider } from '../auth/profiles/profiles.js';
 import { resolveApiKeyForProfile } from '../auth/profiles/oauth.js';
+import { fetchModelsDevModels, clearModelsDevCache } from './models-dev.js';
 
 const OLLAMA_API_BASE = 'http://127.0.0.1:11434';
 const OLLAMA_TAGS_URL = `${OLLAMA_API_BASE}/api/tags`;
@@ -232,15 +233,19 @@ export class ModelRegistry {
 	private authStorage: AuthStorage | null = null;
 	private useAuthProfiles: boolean = true;
 
+	private modelsDevEnabled: boolean = true;
+	private modelsDevLoaded: boolean = false;
+
 	constructor(
 		config?: Config | null,
-		options?: { ollamaEnabled?: boolean; ollamaDiscovery?: boolean; authStorage?: AuthStorage | null; useAuthProfiles?: boolean }
+		options?: { ollamaEnabled?: boolean; ollamaDiscovery?: boolean; authStorage?: AuthStorage | null; useAuthProfiles?: boolean; modelsDevEnabled?: boolean }
 	) {
 		this.config = config ?? null;
 		this.ollamaEnabled = options?.ollamaEnabled ?? true;
 		this.ollamaDiscovery = options?.ollamaDiscovery ?? true;
 		this.authStorage = options?.authStorage ?? null;
 		this.useAuthProfiles = options?.useAuthProfiles ?? true;
+		this.modelsDevEnabled = options?.modelsDevEnabled ?? true;
 		this.loadModels();
 	}
 
@@ -340,6 +345,33 @@ export class ModelRegistry {
 		}
 	}
 
+	/**
+	 * Load models from models.dev API (async)
+	 * This fetches the latest model data from models.dev and merges with existing models
+	 */
+	async loadModelsDevModels(): Promise<void> {
+		if (!this.modelsDevEnabled || this.modelsDevLoaded) return;
+
+		try {
+			const modelsDevModels = await fetchModelsDevModels();
+			
+			for (const [provider, models] of modelsDevModels) {
+				for (const model of models) {
+					const exists = this.models.some(
+						m => m.provider === model.provider && m.id === model.id
+					);
+					if (!exists) {
+						this.models.push(model);
+					}
+				}
+			}
+			
+			this.modelsDevLoaded = true;
+		} catch (error) {
+			console.warn('Failed to load models.dev models:', error);
+		}
+	}
+
 	private applyProviderOverrides(): void {
 		if (!this.config) return;
 
@@ -403,6 +435,7 @@ export class ModelRegistry {
 	async refreshAsync(): Promise<void> {
 		this.models = [];
 		this._error = undefined;
+		this.modelsDevLoaded = false;
 		this.loadBuiltInModels();
 		this.loadBuiltinProviderModels();
 		if (this.config) {
@@ -410,6 +443,10 @@ export class ModelRegistry {
 		}
 		if (this.ollamaEnabled && this.ollamaDiscovery) {
 			await this.discoverLocalModels();
+		}
+		// Load models from models.dev API
+		if (this.modelsDevEnabled) {
+			await this.loadModelsDevModels();
 		}
 	}
 
@@ -507,7 +544,31 @@ export class ModelRegistry {
 	refresh(): void {
 		this.models = [];
 		this._error = undefined;
+		this.modelsDevLoaded = false;
 		this.loadModels();
+	}
+
+	/**
+	 * Refresh models from models.dev API
+	 */
+	async refreshFromModelsDev(): Promise<void> {
+		this.modelsDevLoaded = false;
+		clearModelsDevCache();
+		await this.loadModelsDevModels();
+	}
+
+	/**
+	 * Check if models.dev integration is enabled
+	 */
+	isModelsDevEnabled(): boolean {
+		return this.modelsDevEnabled;
+	}
+
+	/**
+	 * Enable/disable models.dev integration
+	 */
+	setModelsDevEnabled(enabled: boolean): void {
+		this.modelsDevEnabled = enabled;
 	}
 
 	async isOllamaAvailable(): Promise<boolean> {
