@@ -5,7 +5,7 @@
  */
 
 import { Command } from 'commander';
-import { AuthStorage, anthropicOAuthProvider, qwenPortalOAuthProvider, minimaxOAuthProvider, kimiOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import { AuthStorage, anthropicOAuthProvider, qwenPortalOAuthProvider, minimaxOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
 import {
 	listProfilesForProvider,
 	listAllProfiles,
@@ -77,6 +77,54 @@ const oauthProviders: Record<string, { name: string; login: (callbacks: OAuthLog
 			};
 		},
 	},
+	'github-copilot': {
+		name: 'GitHub Copilot',
+		login: async (callbacks) => {
+			const provider = githubCopilotOAuthProvider;
+			const creds = await provider.login(callbacks);
+			return {
+				type: 'oauth' as const,
+				provider: 'github-copilot',
+				...creds,
+			};
+		},
+	},
+	'google-gemini-cli': {
+		name: 'Google Gemini CLI',
+		login: async (callbacks) => {
+			const provider = googleGeminiCliOAuthProvider;
+			const creds = await provider.login(callbacks);
+			return {
+				type: 'oauth' as const,
+				provider: 'google-gemini-cli',
+				...creds,
+			};
+		},
+	},
+	'google-antigravity': {
+		name: 'Google Antigravity',
+		login: async (callbacks) => {
+			const provider = googleAntigravityOAuthProvider;
+			const creds = await provider.login(callbacks);
+			return {
+				type: 'oauth' as const,
+				provider: 'google-antigravity',
+				...creds,
+			};
+		},
+	},
+	'openai-codex': {
+		name: 'OpenAI Codex',
+		login: async (callbacks) => {
+			const provider = openaiCodexOAuthProvider;
+			const creds = await provider.login(callbacks);
+			return {
+				type: 'oauth' as const,
+				provider: 'openai-codex',
+				...creds,
+			};
+		},
+	},
 };
 
 // Create a shared AuthStorage instance (legacy)
@@ -87,6 +135,10 @@ function getAuthStorage(): AuthStorage {
 	storage.registerOAuthProvider(qwenPortalOAuthProvider);
 	storage.registerOAuthProvider(minimaxOAuthProvider);
 	storage.registerOAuthProvider(kimiOAuthProvider);
+	storage.registerOAuthProvider(githubCopilotOAuthProvider);
+	storage.registerOAuthProvider(googleGeminiCliOAuthProvider);
+	storage.registerOAuthProvider(googleAntigravityOAuthProvider);
+	storage.registerOAuthProvider(openaiCodexOAuthProvider);
 	return storage;
 }
 
