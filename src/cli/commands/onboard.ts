@@ -6,7 +6,7 @@ import { saveConfig, PROVIDER_OPTIONS } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import { loadAllTemplates } from '../templates.js';
 import type { CLIContext } from '../registry.js';
-import { AuthStorage, anthropicOAuthProvider, qwenPortalOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import { AuthStorage, anthropicOAuthProvider, qwenPortalOAuthProvider, minimaxOAuthProvider, kimiOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
 import { upsertAuthProfile, listProfilesForProvider } from '../../auth/profiles/index.js';
 import { PROVIDER_INFO, ModelRegistry } from '../../providers/index.js';
 import { colors } from '../utils/colors.js';
@@ -188,6 +188,76 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
         credential: {
           type: 'oauth',
           provider: 'qwen',
+          ...creds,
+        },
+      });
+      return true;
+    } catch (error) {
+      console.error('❌ OAuth login failed:', error);
+      return false;
+    }
+  }
+  
+  if (provider === 'minimax') {
+    const callbacks: OAuthLoginCallbacks = {
+      onAuth: (info) => {
+        console.log('\n🌐 Please open this URL in your browser:\n');
+        console.log(info.url);
+        if (info.instructions) {
+          console.log('\n' + info.instructions);
+        }
+        console.log('\n');
+      },
+      onPrompt: async (prompt) => {
+        return input({ message: prompt.message });
+      },
+      onProgress: (message) => {
+        console.log('  →', message);
+      },
+    };
+    
+    try {
+      const creds = await minimaxOAuthProvider.login(callbacks);
+      upsertAuthProfile({
+        profileId: 'minimax:default',
+        credential: {
+          type: 'oauth',
+          provider: 'minimax',
+          ...creds,
+        },
+      });
+      return true;
+    } catch (error) {
+      console.error('❌ OAuth login failed:', error);
+      return false;
+    }
+  }
+  
+  if (provider === 'kimi') {
+    const callbacks: OAuthLoginCallbacks = {
+      onAuth: (info) => {
+        console.log('\n🌐 Please open this URL in your browser:\n');
+        console.log(info.url);
+        if (info.instructions) {
+          console.log('\n' + info.instructions);
+        }
+        console.log('\n');
+      },
+      onPrompt: async (prompt) => {
+        return input({ message: prompt.message });
+      },
+      onProgress: (message) => {
+        console.log('  →', message);
+      },
+    };
+    
+    try {
+      const creds = await kimiOAuthProvider.login(callbacks);
+      upsertAuthProfile({
+        profileId: 'kimi:default',
+        credential: {
+          type: 'oauth',
+          provider: 'kimi',
           ...creds,
         },
       });

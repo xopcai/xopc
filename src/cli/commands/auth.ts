@@ -5,7 +5,7 @@
  */
 
 import { Command } from 'commander';
-import { AuthStorage, anthropicOAuthProvider, qwenPortalOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import { AuthStorage, anthropicOAuthProvider, qwenPortalOAuthProvider, minimaxOAuthProvider, kimiOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
 import {
 	listProfilesForProvider,
 	listAllProfiles,
@@ -53,6 +53,30 @@ const oauthProviders: Record<string, { name: string; login: (callbacks: OAuthLog
 			};
 		},
 	},
+	minimax: {
+		name: 'MiniMax (幂维智能)',
+		login: async (callbacks) => {
+			const provider = minimaxOAuthProvider;
+			const creds = await provider.login(callbacks);
+			return {
+				type: 'oauth' as const,
+				provider: 'minimax',
+				...creds,
+			};
+		},
+	},
+	kimi: {
+		name: 'Kimi (月之暗面)',
+		login: async (callbacks) => {
+			const provider = kimiOAuthProvider;
+			const creds = await provider.login(callbacks);
+			return {
+				type: 'oauth' as const,
+				provider: 'kimi',
+				...creds,
+			};
+		},
+	},
 };
 
 // Create a shared AuthStorage instance (legacy)
@@ -61,6 +85,8 @@ function getAuthStorage(): AuthStorage {
 	const storage = new AuthStorage({ filename: authPath });
 	storage.registerOAuthProvider(anthropicOAuthProvider);
 	storage.registerOAuthProvider(qwenPortalOAuthProvider);
+	storage.registerOAuthProvider(minimaxOAuthProvider);
+	storage.registerOAuthProvider(kimiOAuthProvider);
 	return storage;
 }
 
