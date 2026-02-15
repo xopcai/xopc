@@ -6,7 +6,10 @@ import { saveConfig, PROVIDER_OPTIONS } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import { loadAllTemplates } from '../templates.js';
 import type { CLIContext } from '../registry.js';
-import { AuthStorage, anthropicOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import { AuthStorage, anthropicOAuthProvider, qwenPortalOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import { upsertAuthProfile, listProfilesForProvider } from '../../auth/profiles/index.js';
+import { PROVIDER_INFO, ModelRegistry } from '../../providers/index.js';
+import { colors } from '../utils/colors.js';
 import { homedir } from 'os';
 
 /**
@@ -105,6 +108,7 @@ async function runOnboard(options: { quick?: boolean }, ctx: CLIContext): Promis
   console.log('  xopcbot agent -m "Hello"    # Chat with AI');
   console.log('  xopcbot agent -i            # Interactive mode');
   console.log('  xopcbot models list         # List models');
+  console.log('  xopcbot auth list           # View authentication');
 
   console.log('\n📁 Files:');
   console.log('  Config:', configPath);
@@ -114,14 +118,12 @@ async function runOnboard(options: { quick?: boolean }, ctx: CLIContext): Promis
   }
 }
 
-async function doOAuthLogin(provider: string): Promise<string> {
+async function doOAuthLogin(provider: string): Promise<boolean> {
   console.log('\n🔐 Starting OAuth login...');
   
-  // Create AuthStorage and register OAuth providers
-  const authPath = join(homedir(), '.xopcbot', 'auth.json');
-  const authStorage = new AuthStorage({ filename: authPath });
-  
   if (provider === 'anthropic') {
+    const authPath = join(homedir(), '.xopcbot', 'auth.json');
+    const authStorage = new AuthStorage({ filename: authPath });
     authStorage.registerOAuthProvider(anthropicOAuthProvider);
     
     const callbacks: OAuthLoginCallbacks = {
@@ -140,14 +142,64 @@ async function doOAuthLogin(provider: string): Promise<string> {
     
     try {
       await authStorage.login('anthropic', callbacks);
-      return 'oauth'; // Return a marker to indicate OAuth was used
+      
+      // Also add to AuthProfiles
+      const creds = authStorage.getOAuthCredentials('anthropic');
+      if (creds) {
+        upsertAuthProfile({
+          profileId: 'anthropic:default',
+          credential: {
+            type: 'oauth',
+            provider: 'anthropic',
+            ...creds,
+          },
+        });
+      }
+      
+      return true;
     } catch (error) {
       console.error('❌ OAuth login failed:', error);
-      throw new Error('OAuth login was cancelled or failed');
+      return false;
     }
   }
   
-  throw new Error(`OAuth not supported for provider: ${provider}`);
+  if (provider === 'qwen') {
+    const callbacks: OAuthLoginCallbacks = {
+      onAuth: (info) => {
+        console.log('\n🌐 Please open this URL in your browser:\n');
+        console.log(info.url);
+        if (info.instructions) {
+          console.log('\n' + info.instructions);
+        }
+        console.log('\n');
+      },
+      onPrompt: async (prompt) => {
+        return input({ message: prompt.message });
+      },
+      onProgress: (message) => {
+        console.log('  →', message);
+      },
+    };
+    
+    try {
+      const creds = await qwenPortalOAuthProvider.login(callbacks);
+      upsertAuthProfile({
+        profileId: 'qwen:default',
+        credential: {
+          type: 'oauth',
+          provider: 'qwen',
+          ...creds,
+        },
+      });
+      return true;
+    } catch (error) {
+      console.error('❌ OAuth login failed:', error);
+      return false;
+    }
+  }
+  
+  console.error(`OAuth not supported for provider: ${provider}`);
+  return false;
 }
 
 async function setupWorkspace(workspacePath: string, interactive: boolean): Promise<void> {
@@ -183,22 +235,71 @@ async function setupModel(configPath: string, existingConfig: any, ctx: CLIConte
     }
   }
 
+  // Build provider options dynamically from ModelRegistry
+  const providerInfos = ModelRegistry.getAllProviderInfo();
+  
+  // Filter to providers that have models and are commonly used
+  const commonProviders = ['openai', 'anthropic', 'google', 'qwen', 'kimi', 'deepseek', 'groq', 'moonshot', 'minimax'];
+  const availableProviders = providerInfos.filter(p => commonProviders.includes(p.id));
+  
+  const choices = availableProviders.map(p => ({
+    value: p.id,
+    name: `${p.name} (${p.envKey || 'no env key'})`,
+  }));
+
   const provider = await select({
     message: 'Select provider:',
-    choices: PROVIDER_OPTIONS.map(p => ({
-      value: p.value,
-      name: `${p.name} (${p.envKey})`,
-    })),
+    choices,
   });
 
-  const providerInfo = PROVIDER_OPTIONS.find(p => p.value === provider)!;
+  const providerInfo = providerInfos.find(p => p.id === provider)!;
+  
+  // Check if provider has existing profiles
+  const existingProfiles = listProfilesForProvider(provider);
+  if (existingProfiles.length > 0) {
+    console.log(`\n${colors.green('✓')} Found existing credentials for ${providerInfo.name}`);
+    const useExisting = await confirm({
+      message: 'Use existing credentials?',
+      default: true,
+    });
+    
+    if (useExisting) {
+      // Get available models
+      const modelChoices = getModelsForProvider(provider);
+      if (modelChoices.length === 0) {
+        console.log(`\n⚠️  No models found for ${providerInfo.name}. Please check your credentials.`);
+      } else {
+        const model = await select({
+          message: 'Select model:',
+          choices: modelChoices,
+        });
+        
+        const config = existingConfig || {};
+        config.agents = config.agents || {};
+        config.agents.defaults = config.agents.defaults || {};
+        config.agents.defaults.model = { primary: model, fallbacks: [] };
+        config.agents.defaults.workspace = ctx.workspacePath;
+        
+        saveConfig(config, configPath);
+        console.log('\n✅ Model configured:', model);
+        return config;
+      }
+    }
+  }
   
   // Check if provider supports OAuth
-  const oauthProviders = ['anthropic']; // Add more providers as needed
-  const supportsOAuth = oauthProviders.includes(provider);
+  const supportsOAuth = providerInfo.supportsOAuth;
   
-  let apiKey = process.env[`${providerInfo.envKey}`];
+  let apiKey: string | undefined;
   let useOAuth = false;
+
+  // Check environment variable first
+  if (providerInfo.envKey) {
+    apiKey = process.env[providerInfo.envKey];
+    if (apiKey) {
+      console.log(`\n${colors.green('✓')} Found ${providerInfo.envKey} in environment`);
+    }
+  }
 
   if (!apiKey) {
     if (supportsOAuth) {
@@ -212,33 +313,59 @@ async function setupModel(configPath: string, existingConfig: any, ctx: CLIConte
       });
       
       if (authMethod === 'oauth') {
-        useOAuth = true;
-        apiKey = await doOAuthLogin(provider);
+        const success = await doOAuthLogin(provider);
+        if (success) {
+          useOAuth = true;
+          console.log('\n✅ OAuth login successful!');
+        } else {
+          console.log('\n⚠️ OAuth login failed. Please enter API key manually.');
+          apiKey = await input({
+            message: `API Key for ${providerInfo.name}:`,
+            validate: (v: string) => v.length > 0 || 'Required',
+          });
+          useOAuth = false;
+        }
       } else {
-        console.log(`\n🔑 Enter API key for ${providerInfo.name}`);
         apiKey = await input({
-          message: `API Key:`,
+          message: `API Key for ${providerInfo.name}:`,
           validate: (v: string) => v.length > 0 || 'Required',
         });
       }
     } else {
-      console.log(`\n🔑 Enter API key for ${providerInfo.name}`);
       apiKey = await input({
-        message: `API Key:`,
+        message: `API Key for ${providerInfo.name}:`,
         validate: (v: string) => v.length > 0 || 'Required',
       });
     }
-  } else {
-    console.log(`✅ Found ${providerInfo.envKey} in environment`);
   }
 
-  console.log(`\n📋 Available models:`);
+  // Get available models
+  const modelChoices = getModelsForProvider(provider);
+  if (modelChoices.length === 0) {
+    console.log(`\n⚠️  No built-in models found for ${providerInfo.name}.`);
+    console.log('   You can still use custom model names.');
+    const model = await input({
+      message: 'Model name:',
+      validate: (v: string) => v.length > 0 || 'Required',
+    });
+    
+    const config = existingConfig || {};
+    config.providers = config.providers || {};
+    config.providers[provider] = { apiKey };
+    config.agents = config.agents || {};
+    config.agents.defaults = config.agents.defaults || {};
+    config.agents.defaults.model = { primary: `${provider}/${model}`, fallbacks: [] };
+    config.agents.defaults.workspace = ctx.workspacePath;
+    
+    saveConfig(config, configPath);
+    console.log('\n✅ Model configured:', `${provider}/${model}`);
+    return config;
+  }
+
+  console.log(`\n📋 Available models for ${providerInfo.name}:`);
   const model = await select({
     message: 'Select model:',
-    choices: providerInfo.models.map(m => ({
-      value: `${provider}/${m}`,
-      name: m,
-    })),
+    choices: modelChoices,
   });
 
   const config = existingConfig || {};
@@ -246,9 +373,9 @@ async function setupModel(configPath: string, existingConfig: any, ctx: CLIConte
   
   if (useOAuth) {
     // For OAuth, we don't store the API key in config.json
-    // It's stored in auth.json via AuthStorage
+    // It's stored in auth-profiles.json via AuthProfiles
     config.providers[provider] = {};
-    console.log('\n✅ OAuth login successful! Credentials saved to ~/.xopcbot/auth.json');
+    console.log('\n✅ Credentials saved to auth profiles');
   } else {
     config.providers[provider] = { apiKey };
   }
@@ -261,6 +388,17 @@ async function setupModel(configPath: string, existingConfig: any, ctx: CLIConte
   saveConfig(config, configPath);
   console.log('\n✅ Model configured:', model);
   return config;
+}
+
+function getModelsForProvider(provider: string): { value: string; name: string }[] {
+  const { ModelRegistry } = require('../../providers/registry.js');
+  const registry = new ModelRegistry();
+  const models = registry.getAll().filter(m => m.provider === provider);
+  
+  return models.map(m => ({
+    value: `${m.provider}/${m.id}`,
+    name: m.name || m.id,
+  }));
 }
 
 async function setupChannels(configPath: string, config: any): Promise<void> {
