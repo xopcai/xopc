@@ -559,6 +559,7 @@ export const PROVIDER_NAMES: Record<string, string> = {
   'kimi': 'Kimi (月之暗面)',
   'moonshot': 'Moonshot AI',
   'minimax': 'MiniMax',
+  'minimax-cn': 'MiniMax CN (国内)',
   'deepseek': 'DeepSeek',
   'groq': 'Groq',
   'openrouter': 'OpenRouter',
@@ -578,7 +579,8 @@ export const PROVIDER_OPTIONS: ProviderOption[] = [
   { name: 'Google (Gemini)', value: 'google', envKey: 'GOOGLE_API_KEY', models: ['gemini-2.5-pro', 'gemini-2.5-flash'] },
   { name: 'Qwen (通义千问)', value: 'qwen', envKey: 'QWEN_API_KEY', models: ['qwen-plus', 'qwen-max', 'qwen3-235b'] },
   { name: 'Kimi (月之暗面)', value: 'kimi', envKey: 'KIMI_API_KEY', models: ['kimi-k2.5', 'kimi-k2-thinking'] },
-  { name: 'MiniMax', value: 'minimax', envKey: 'MINIMAX_API_KEY', models: ['minimax-m2.1', 'minimax-m2'] },
+  { name: 'MiniMax (海外)', value: 'minimax', envKey: 'MINIMAX_API_KEY', models: ['minimax-m2.1', 'minimax-m2'] },
+  { name: 'MiniMax CN (国内)', value: 'minimax-cn', envKey: 'MINIMAX_CN_API_KEY', models: ['minimax-m2.1', 'minimax-m2'] },
   { name: 'DeepSeek', value: 'deepseek', envKey: 'DEEPSEEK_API_KEY', models: ['deepseek-chat', 'deepseek-reasoner'] },
   { name: 'Groq', value: 'groq', envKey: 'GROQ_API_KEY', models: ['llama-3.3-70b'] },
 ];
