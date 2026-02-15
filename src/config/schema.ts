@@ -36,6 +36,8 @@ export const ProvidersConfigSchema = z.object({
   moonshot: OpenAIProviderSchema.optional(),
   minimax: OpenAIProviderSchema.optional(),
   'minimax-cn': OpenAIProviderSchema.optional(),
+  zhipu: OpenAIProviderSchema.optional(),
+  'zhipu-cn': OpenAIProviderSchema.optional(),
   deepseek: OpenAIProviderSchema.optional(),
   groq: OpenAIProviderSchema.optional(),
   openrouter: OpenAIProviderSchema.optional(),
@@ -55,6 +57,8 @@ export const ProvidersConfigSchema = z.object({
   moonshot: { apiKey: '' },
   minimax: { apiKey: '' },
   'minimax-cn': { apiKey: '' },
+  zhipu: { apiKey: '' },
+  'zhipu-cn': { apiKey: '' },
   deepseek: { apiKey: '' },
   groq: { apiKey: '' },
   openrouter: { apiKey: '' },
@@ -304,6 +308,8 @@ export const ConfigSchema = z.object({
     moonshot: { apiKey: '' },
     minimax: { apiKey: '' },
     'minimax-cn': { apiKey: '' },
+    zhipu: { apiKey: '' },
+    'zhipu-cn': { apiKey: '' },
     deepseek: { apiKey: '' },
     groq: { apiKey: '' },
     openrouter: { apiKey: '' },
@@ -361,6 +367,8 @@ const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { baseUrl: string; envKey: str
   'groq': { baseUrl: 'https://api.groq.com/openai/v1', envKey: ['GROQ_API_KEY'] },
   'openrouter': { baseUrl: 'https://openrouter.ai/api/v1', envKey: ['OPENROUTER_API_KEY'] },
   'xai': { baseUrl: 'https://api.x.ai/v1', envKey: ['XAI_API_KEY'] },
+  'zhipu': { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', envKey: ['ZHIPU_API_KEY'] },
+  'zhipu-cn': { baseUrl: 'https://open.bigmodel.cn/api/paas/v4', envKey: ['ZHIPU_CN_API_KEY', 'ZHIPU_API_KEY'] },
   'bedrock': { baseUrl: '', envKey: ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'] },
 };
 
@@ -479,6 +487,9 @@ export function parseModelId(modelId: string): ParsedModelRef {
   if (modelLower.startsWith('deepseek') || modelLower.startsWith('r1')) {
     return { provider: 'deepseek', model: modelId };
   }
+  if (modelLower.startsWith('glm-') || modelLower.startsWith('glm')) {
+    return { provider: 'zhipu', model: modelId };
+  }
   if (modelLower.startsWith('llama') || modelLower.startsWith('mixtral') || modelLower.startsWith('gemma')) {
     return { provider: 'groq', model: modelId };
   }
@@ -541,6 +552,13 @@ export const BUILTIN_MODELS: BuiltinModel[] = [
   { id: 'minimax/minimax-m2.5', name: 'MiniMax M2.5', provider: 'minimax' },
   { id: 'minimax/minimax-m2.1', name: 'MiniMax M2.1', provider: 'minimax' },
   { id: 'minimax/minimax-m2', name: 'MiniMax M2', provider: 'minimax' },
+  { id: 'zhipu/glm-4', name: 'GLM-4', provider: 'zhipu' },
+  { id: 'zhipu/glm-4-flash', name: 'GLM-4 Flash', provider: 'zhipu' },
+  { id: 'zhipu/glm-4-plus', name: 'GLM-4 Plus', provider: 'zhipu' },
+  { id: 'zhipu/glm-4-flashx', name: 'GLM-4 FlashX', provider: 'zhipu' },
+  { id: 'zhipu/glm-4v-flash', name: 'GLM-4V Flash', provider: 'zhipu' },
+  { id: 'zhipu/glm-5', name: 'GLM-5', provider: 'zhipu' },
+  { id: 'zhipu/glm-5-flash', name: 'GLM-5 Flash', provider: 'zhipu' },
   { id: 'deepseek/deepseek-chat', name: 'DeepSeek Chat', provider: 'deepseek' },
   { id: 'deepseek/deepseek-reasoner', name: 'DeepSeek Reasoner', provider: 'deepseek' },
   { id: 'groq/llama-3.3-70b', name: 'Llama 3.3 70B', provider: 'groq' },
@@ -560,6 +578,8 @@ export const PROVIDER_NAMES: Record<string, string> = {
   'moonshot': 'Moonshot AI',
   'minimax': 'MiniMax',
   'minimax-cn': 'MiniMax CN (国内)',
+  'zhipu': 'Zhipu (智谱)',
+  'zhipu-cn': 'Zhipu CN (国内)',
   'deepseek': 'DeepSeek',
   'groq': 'Groq',
   'openrouter': 'OpenRouter',
@@ -581,6 +601,8 @@ export const PROVIDER_OPTIONS: ProviderOption[] = [
   { name: 'Kimi (月之暗面)', value: 'kimi', envKey: 'KIMI_API_KEY', models: ['kimi-k2.5', 'kimi-k2-thinking'] },
   { name: 'MiniMax (海外)', value: 'minimax', envKey: 'MINIMAX_API_KEY', models: ['minimax-m2.1', 'minimax-m2'] },
   { name: 'MiniMax CN (国内)', value: 'minimax-cn', envKey: 'MINIMAX_CN_API_KEY', models: ['minimax-m2.1', 'minimax-m2'] },
+  { name: 'Zhipu (智谱 GLM)', value: 'zhipu', envKey: 'ZHIPU_API_KEY', models: ['glm-4', 'glm-4-flash', 'glm-4-plus', 'glm-5', 'glm-5-flash'] },
+  { name: 'Zhipu CN (国内)', value: 'zhipu-cn', envKey: 'ZHIPU_CN_API_KEY', models: ['glm-4', 'glm-4-flash', 'glm-4-plus', 'glm-5', 'glm-5-flash'] },
   { name: 'DeepSeek', value: 'deepseek', envKey: 'DEEPSEEK_API_KEY', models: ['deepseek-chat', 'deepseek-reasoner'] },
   { name: 'Groq', value: 'groq', envKey: 'GROQ_API_KEY', models: ['llama-3.3-70b'] },
 ];

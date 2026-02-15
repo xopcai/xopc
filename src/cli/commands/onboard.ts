@@ -449,7 +449,7 @@ async function setupModel(configPath: string, existingConfig: any, ctx: CLIConte
   const providerInfos = ModelRegistry.getAllProviderInfo();
   
   // Filter to providers that have models and are commonly used
-  const commonProviders = ['openai', 'anthropic', 'google', 'qwen', 'kimi', 'deepseek', 'groq', 'moonshot', 'minimax', 'minimax-cn'];
+  const commonProviders = ['openai', 'anthropic', 'google', 'qwen', 'kimi', 'deepseek', 'groq', 'moonshot', 'minimax', 'minimax-cn', 'zhipu', 'zhipu-cn'];
   const availableProviders = providerInfos.filter(p => commonProviders.includes(p.id));
   
   const choices = availableProviders.map(p => ({

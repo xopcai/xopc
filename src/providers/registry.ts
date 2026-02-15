@@ -118,6 +118,26 @@ export const BUILTIN_PROVIDER_MODELS: Record<string, Model<Api>[]> = {
 		{ id: 'deepseek-coder', name: 'DeepSeek Coder', api: 'openai-completions', provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 16000, maxTokens: 4096 },
 		{ id: 'deepseek-v3', name: 'DeepSeek V3', api: 'openai-completions', provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 64000, maxTokens: 4096 },
 	] as Model<Api>[],
+	// Zhipu (智谱 GLM)
+	'zhipu': [
+		{ id: 'glm-4', name: 'GLM-4', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
+		{ id: 'glm-4-flash', name: 'GLM-4 Flash', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
+		{ id: 'glm-4-plus', name: 'GLM-4 Plus', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
+		{ id: 'glm-4-flashx', name: 'GLM-4 FlashX', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
+		{ id: 'glm-4v-flash', name: 'GLM-4V Flash', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text', 'image'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
+		{ id: 'glm-5', name: 'GLM-5', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 },
+		{ id: 'glm-5-flash', name: 'GLM-5 Flash', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 },
+	] as Model<Api>[],
+	// Zhipu CN (国内版)
+	'zhipu-cn': [
+		{ id: 'glm-4', name: 'GLM-4', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
+		{ id: 'glm-4-flash', name: 'GLM-4 Flash', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
+		{ id: 'glm-4-plus', name: 'GLM-4 Plus', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
+		{ id: 'glm-4-flashx', name: 'GLM-4 FlashX', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
+		{ id: 'glm-4v-flash', name: 'GLM-4V Flash', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text', 'image'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
+		{ id: 'glm-5', name: 'GLM-5', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 },
+		{ id: 'glm-5-flash', name: 'GLM-5 Flash', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 },
+	] as Model<Api>[],
 	// xAI (Grok)
 	'xai': [
 		{ id: 'grok-2', name: 'Grok 2', api: 'openai-completions', provider: 'xai', baseUrl: 'https://api.x.ai/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 131072, maxTokens: 8192 },
@@ -176,6 +196,8 @@ export const PROVIDER_INFO: Record<string, ProviderInfo> = {
 	'moonshot': { id: 'moonshot', name: 'Moonshot AI', envKey: 'MOONSHOT_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://api.moonshot.ai/v1' },
 	'minimax': { id: 'minimax', name: 'MiniMax', envKey: 'MINIMAX_API_KEY', authType: 'api_key', supportsOAuth: true, baseUrl: 'https://api.minimax.io/v1' },
 	'minimax-cn': { id: 'minimax-cn', name: 'MiniMax CN (国内)', envKey: 'MINIMAX_CN_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://api.minimaxi.com/v1' },
+	'zhipu': { id: 'zhipu', name: 'Zhipu (智谱 GLM)', envKey: 'ZHIPU_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
+	'zhipu-cn': { id: 'zhipu-cn', name: 'Zhipu CN (国内)', envKey: 'ZHIPU_CN_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
 	'deepseek': { id: 'deepseek', name: 'DeepSeek', envKey: 'DEEPSEEK_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://api.deepseek.com/v1' },
 	'groq': { id: 'groq', name: 'Groq', envKey: 'GROQ_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://api.groq.com/openai/v1' },
 	'openrouter': { id: 'openrouter', name: 'OpenRouter', envKey: 'OPENROUTER_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://openrouter.ai/api/v1' },
