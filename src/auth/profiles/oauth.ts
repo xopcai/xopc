@@ -5,7 +5,6 @@
  */
 
 import type { OAuthCredentials } from '@mariozechner/pi-ai';
-import type { AuthProfileCredential } from './types.js';
 import { loadAuthProfileStore, saveAuthProfileStore } from './store.js';
 
 /** Resolve API key for a profile (handles OAuth refresh) */

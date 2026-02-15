@@ -171,7 +171,7 @@ export function buildContextFilesSection(contextFiles?: ContextFile[]): PromptSe
   };
 }
 
-export function buildHeartbeatSection(enabled: boolean, prompt?: string): PromptSection {
+export function buildHeartbeatSection(enabled: boolean, _prompt?: string): PromptSection {
   if (!enabled) {
     return { content: '', priority: 70 };
   }

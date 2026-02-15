@@ -76,14 +76,14 @@ export function generateDiffString(
 ): string {
 	const oldLines = oldText.split('\n');
 	const newLines = newText.split('\n');
-	const contextLines = options.contextLines ?? 0;
+	const _contextLines = options.contextLines ?? 0;
 
 	let diff = `--- ${filePath}\n+++ ${filePath}\n`;
 
 	// Simple diff: show before/after
 	if (oldLines.length === 0) {
 		diff += '@@ -0,0 +1,' + newLines.length + ' @@\n';
-		newLines.forEach((line, i) => diff += '+' + line + '\n');
+		newLines.forEach((line, _i) => diff += '+' + line + '\n');
 	} else if (newLines.length === 0) {
 		diff += '@@ -1,' + oldLines.length + ' +0,0 @@\n';
 		oldLines.forEach((line) => diff += '-' + line + '\n');

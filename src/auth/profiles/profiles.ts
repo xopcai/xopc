@@ -4,7 +4,7 @@
  * CRUD operations for auth profiles.
  */
 
-import type { ApiKeyCredential, OAuthCredential, TokenCredential, AuthProfileCredential, AuthProfileEntry } from './types.js';
+import type { AuthProfileCredential, AuthProfileEntry } from './types.js';
 import { ensureAuthProfileStore, loadAuthProfileStore, saveAuthProfileStore, resolveAuthStorePath } from './store.js';
 
 function hasKey(cred: AuthProfileCredential): boolean {

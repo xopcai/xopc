@@ -9,7 +9,7 @@ import { loadAuthProfileStore, saveAuthProfileStore } from './store.js';
 
 const DEFAULT_COOLDOWN_HOURS = 5;
 const MAX_COOLDOWN_HOURS = 24;
-const FAILURE_WINDOW_HOURS = 24;
+const _FAILURE_WINDOW_HOURS = 24;
 
 /** Mark a profile as used */
 export function markProfileUsed(profileId: string): void {

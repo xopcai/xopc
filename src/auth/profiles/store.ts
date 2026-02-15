@@ -5,11 +5,10 @@
  * Handles loading, saving, and migration of auth credentials.
  */
 
-import fs, { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
+import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync, unlinkSync } from 'node:fs';
 import path from 'node:path';
 import { homedir } from 'os';
 import type { AuthProfileCredential, AuthProfileStore, ProfileUsageStats } from './types.js';
-import type { OAuthCredentials } from '@mariozechner/pi-ai';
 
 const AUTH_STORE_VERSION = 1;
 const AUTH_STORE_FILENAME = 'auth-profiles.json';
@@ -190,7 +189,7 @@ function mergeRecord<T>(
 	return { ...base, ...override };
 }
 
-function mergeAuthProfileStores(
+function _mergeAuthProfileStores(
 	base: AuthProfileStore,
 	override: AuthProfileStore,
 ): AuthProfileStore {

@@ -3,10 +3,7 @@ import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { spawn } from 'child_process';
 import { checkShellSafety } from '../prompt/safety.js';
-import { randomBytes } from 'crypto';
 import { createWriteStream } from 'fs';
-import { join } from 'path';
-import { tmpdir } from 'os';
 
 const MAX_SHELL_TIMEOUT = 300;
 const DEFAULT_MAX_BYTES = 50 * 1024;
@@ -69,7 +66,7 @@ export function createShellTool(cwd: string): AgentTool<typeof ShellSchema, Shel
     async execute(
       toolCallId: string,
       params: Static<typeof ShellSchema>,
-      signal?: AbortSignal
+      _signal?: AbortSignal
     ): Promise<AgentToolResult<ShellDetails>> {
       const safety = checkShellSafety(params.command);
       if (!safety.allowed) {
@@ -80,11 +77,11 @@ export function createShellTool(cwd: string): AgentTool<typeof ShellSchema, Shel
       }
 
       return new Promise((resolve) => {
-        const startTime = Date.now();
+        const _startTime = Date.now();
         let output = '';
         let errorOutput = '';
         let timedOut = false;
-        let tempFile: string | null = null;
+        let _tempFile: string | null = null;
         let tempStream: ReturnType<typeof createWriteStream> | null = null;
         const useTempFile = false; // Disabled - stream directly
 

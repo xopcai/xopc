@@ -181,7 +181,7 @@ export class TelegramChannel extends BaseChannel {
         byProvider.set(model.provider, list);
       }
 
-      for (const [provider, providerModels] of byProvider) {
+      for (const [_provider, providerModels] of byProvider) {
         for (const model of providerModels) {
           const isCurrent = model.id === currentModel;
           const label = isCurrent ? `✅ ${model.name}` : model.name;

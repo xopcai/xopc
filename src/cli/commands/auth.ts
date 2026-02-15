@@ -11,10 +11,9 @@ import {
 	listAllProfiles,
 	upsertAuthProfile,
 	removeAuthProfile,
-	getProvidersWithProfiles,
 	type AuthProfileCredential,
 } from '../../auth/profiles/index.js';
-import { PROVIDER_INFO, ModelRegistry } from '../../providers/index.js';
+import { ModelRegistry } from '../../providers/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors, colorizeStatus } from '../utils/colors.js';
@@ -142,7 +141,7 @@ function getAuthStorage(): AuthStorage {
 	return storage;
 }
 
-function createAuthCommand(ctx: CLIContext): Command {
+function createAuthCommand(_ctx: CLIContext): Command {
 	const cmd = new Command('auth')
 		.description('Manage authentication credentials')
 		.addHelpText(
@@ -195,7 +194,7 @@ function createAuthCommand(ctx: CLIContext): Command {
 		.command('get <provider>')
 		.description('Get API key for a provider (shows masked)')
 		.option('-p, --profile <profileId>', 'Profile ID')
-		.action(async (provider: string, options: { profile?: string }) => {
+		.action(async (provider: string, _options: { profile?: string }) => {
 			const profiles = listProfilesForProvider(provider);
 			
 			if (profiles.length === 0) {
@@ -215,7 +214,7 @@ function createAuthCommand(ctx: CLIContext): Command {
 			}
 
 			for (const profile of profiles) {
-				const masked = '****';
+				const _masked = '****';
 				const status = colorizeStatus(profile.hasKey);
 				console.log(`\nProvider: ${provider}`);
 				console.log(`Profile: ${profile.profileId}`);

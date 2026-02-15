@@ -1,6 +1,5 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach } from 'vitest';
 import { PluginLoader, normalizePluginConfig } from '../loader.js';
-import type { ResolvedPluginConfig } from '../types.js';
 
 describe('PluginLoader', () => {
   describe('normalizePluginConfig()', () => {

@@ -19,7 +19,7 @@ import { getApiKey as getConfigApiKey, getApiBase } from '../config/schema.js';
 import type { Config } from '../config/schema.js';
 import type { AuthStorage } from '../auth/storage.js';
 import { listProfilesForProvider } from '../auth/profiles/profiles.js';
-import { resolveApiKeyForProfile, profileHasAuth } from '../auth/profiles/oauth.js';
+import { resolveApiKeyForProfile } from '../auth/profiles/oauth.js';
 
 const OLLAMA_API_BASE = 'http://127.0.0.1:11434';
 const OLLAMA_TAGS_URL = `${OLLAMA_API_BASE}/api/tags`;
@@ -302,9 +302,9 @@ export class ModelRegistry {
 	}
 
 	private loadBuiltinProviderModels(): void {
-		for (const [provider, models] of Object.entries(BUILTIN_PROVIDER_MODELS)) {
+		for (const [_provider, models] of Object.entries(BUILTIN_PROVIDER_MODELS)) {
 			// Check if we already have models from pi-ai for this provider
-			const existingProviders = new Set(this.models.map(m => m.provider));
+			const _existingProviders = new Set(this.models.map(m => m.provider));
 			
 			// Only add if pi-ai doesn't have models for this provider, or add to existing
 			for (const model of models) {

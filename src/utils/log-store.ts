@@ -2,8 +2,8 @@
  * Log Store - File-based log storage with query capabilities
  */
 
-import { readFileSync, existsSync, mkdirSync, readdirSync, statSync, createReadStream } from 'fs';
-import { join, basename } from 'path';
+import { existsSync, mkdirSync, readdirSync, statSync, createReadStream } from 'fs';
+import { join } from 'path';
 import { createInterface } from 'readline';
 import type { Readable } from 'stream';
 

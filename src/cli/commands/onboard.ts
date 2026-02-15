@@ -2,13 +2,13 @@ import { Command } from 'commander';
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { input, select, confirm } from '@inquirer/prompts';
-import { saveConfig, PROVIDER_OPTIONS } from '../../config/index.js';
+import { saveConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import { loadAllTemplates } from '../templates.js';
 import type { CLIContext } from '../registry.js';
 import { AuthStorage, anthropicOAuthProvider, qwenPortalOAuthProvider, minimaxOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
 import { upsertAuthProfile, listProfilesForProvider } from '../../auth/profiles/index.js';
-import { PROVIDER_INFO, ModelRegistry } from '../../providers/index.js';
+import { ModelRegistry } from '../../providers/index.js';
 import { colors } from '../utils/colors.js';
 import { homedir } from 'os';
 

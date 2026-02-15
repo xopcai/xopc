@@ -30,7 +30,7 @@ export const githubCopilotOAuthProvider: OAuthProviderInterface = {
 		};
 	},
 
-	async refreshToken(credentials: OAuthCredentials): Promise<OAuthCredentials> {
+	async refreshToken(_credentials: OAuthCredentials): Promise<OAuthCredentials> {
 		// GitHub Copilot tokens don't support refresh
 		throw new Error('GitHub Copilot tokens do not support refresh. Please re-authenticate.');
 	},

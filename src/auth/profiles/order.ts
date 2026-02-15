@@ -4,7 +4,6 @@
  * Resolves the order of auth profiles for a provider (round-robin, etc).
  */
 
-import type { AuthProfileStore } from './types.js';
 import { loadAuthProfileStore } from './store.js';
 
 /**

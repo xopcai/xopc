@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
-import { HookRunner, createHookContext, isHookEvent } from '../hooks.js';
+import { HookRunner, isHookEvent } from '../hooks.js';
 import type { PluginRegistry, PluginHookEvent, PluginHookHandler, PluginTool } from '../types.js';
 
 // Mock PluginRegistry
