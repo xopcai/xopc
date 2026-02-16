@@ -128,10 +128,11 @@ export class SettingsPage extends LitElement {
   }
 
   private _tryInitialize(): void {
-    if (this._initialized || !this.config?.url) {
+    if (!this.config?.url) {
       return;
     }
-    this._initialized = true;
+    
+    // Always try to load settings when config changes
     this._loadSettings();
   }
 
