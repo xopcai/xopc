@@ -10,6 +10,7 @@ import type { GatewayService } from '../service.js';
 import type { Config } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../utils/log-store.js';
+import { getLocalModelsDevModels } from '../../providers/models-dev.js';
 
 const log = createLogger('HonoApp');
 
@@ -324,6 +325,30 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
     
     return c.json({ ok: true, payload: { config } });
+  });
+
+  // GET /api/models - Get available models
+  authenticated.get('/api/models', (c) => {
+    const localModels = getLocalModelsDevModels();
+    const models: Array<{ id: string; name: string; provider: string }> = [];
+
+    for (const [provider, providerModels] of localModels) {
+      for (const model of providerModels) {
+        models.push({
+          id: `${provider}/${model.id}`,
+          name: model.name || model.id,
+          provider: provider,
+        });
+      }
+    }
+
+    // Sort by provider then name
+    models.sort((a, b) => {
+      if (a.provider !== b.provider) return a.provider.localeCompare(b.provider);
+      return a.name.localeCompare(b.name);
+    });
+
+    return c.json({ ok: true, payload: { models } });
   });
 
   // ========== Cron REST API (/api/cron) ==========

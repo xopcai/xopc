@@ -14,31 +14,6 @@ export interface SettingsPageConfig {
   token?: string;
 }
 
-// Built-in models catalog
-const BUILTIN_MODELS = [
-  { id: 'openai/gpt-4o', name: 'GPT-4o', provider: 'openai' },
-  { id: 'openai/gpt-4o-mini', name: 'GPT-4o Mini', provider: 'openai' },
-  { id: 'openai/gpt-4.1', name: 'GPT-4.1', provider: 'openai' },
-  { id: 'openai/o1', name: 'o1', provider: 'openai' },
-  { id: 'openai/o3', name: 'o3', provider: 'openai' },
-  { id: 'anthropic/claude-sonnet-4-5', name: 'Claude Sonnet 4.5', provider: 'anthropic' },
-  { id: 'anthropic/claude-haiku-4-5', name: 'Claude Haiku 4.5', provider: 'anthropic' },
-  { id: 'anthropic/claude-opus-4-5', name: 'Claude Opus 4.5', provider: 'anthropic' },
-  { id: 'google/gemini-2.5-pro', name: 'Gemini 2.5 Pro', provider: 'google' },
-  { id: 'google/gemini-2.5-flash', name: 'Gemini 2.5 Flash', provider: 'google' },
-  { id: 'qwen/qwen-plus', name: 'Qwen Plus', provider: 'qwen' },
-  { id: 'qwen/qwen-max', name: 'Qwen Max', provider: 'qwen' },
-  { id: 'qwen/qwen3-235b', name: 'Qwen3 235B', provider: 'qwen' },
-  { id: 'kimi/kimi-k2.5', name: 'Kimi K2.5', provider: 'kimi' },
-  { id: 'kimi/kimi-k2-thinking', name: 'Kimi K2 Thinking', provider: 'kimi' },
-  { id: 'minimax/minimax-m2.1', name: 'MiniMax M2.1', provider: 'minimax' },
-  { id: 'minimax/minimax-m2', name: 'MiniMax M2', provider: 'minimax' },
-  { id: 'deepseek/deepseek-chat', name: 'DeepSeek Chat', provider: 'deepseek' },
-  { id: 'deepseek/deepseek-reasoner', name: 'DeepSeek Reasoner', provider: 'deepseek' },
-  { id: 'groq/llama-3.3-70b', name: 'Llama 3.3 70B', provider: 'groq' },
-  { id: 'openrouter/openai/gpt-4o', name: 'GPT-4o (OpenRouter)', provider: 'openrouter' },
-];
-
 export interface SettingsSection {
   id: string;
   title: string;
@@ -75,6 +50,7 @@ export class SettingsPage extends LitElement {
   @state() private _dirtyFields: Set<string> = new Set();
   @state() private _errors: Map<string, string> = new Map();
   @state() private _saveSuccess = false;
+  @state() private _models: Array<{ id: string; name: string; provider: string }> = [];
 
   @state() private _values: SettingsValue = {
     model: 'anthropic/claude-sonnet-4-5',
@@ -138,7 +114,7 @@ export class SettingsPage extends LitElement {
 
   // Settings sections definition
   private get _sections(): SettingsSection[] {
-    const modelOptions = BUILTIN_MODELS.map(m => ({
+    const modelOptions = this._models.map(m => ({
       value: m.id,
       label: `${m.provider}/${m.name}`,
     }));
@@ -265,28 +241,28 @@ export class SettingsPage extends LitElement {
             {
               key: 'telegramToken',
               label: 'Telegram Token',
-              type: 'password',
+              type: 'password' as const,
               description: 'Bot API token from @BotFather',
               placeholder: '1234567890:ABCdefGHIjklMNOpqrsTUVwxyz',
             },
             {
               key: 'telegramApiRoot',
               label: 'API Root (Optional)',
-              type: 'text',
+              type: 'text' as const,
               description: 'Custom Telegram API root URL',
               placeholder: 'https://api.telegram.org',
             },
             {
               key: 'telegramAllowFrom',
               label: 'Allow From (Optional)',
-              type: 'text',
+              type: 'text' as const,
               description: 'Allowed user IDs, comma separated',
               placeholder: '123456789, 987654321',
             },
             {
               key: 'telegramDebug',
               label: 'Debug Mode',
-              type: 'boolean',
+              type: 'boolean' as const,
               description: 'Enable debug logging for Telegram',
             },
           ] : []),
@@ -301,14 +277,14 @@ export class SettingsPage extends LitElement {
             {
               key: 'whatsappBridgeUrl',
               label: 'Bridge URL',
-              type: 'text',
+              type: 'text' as const,
               description: 'WhatsApp bridge WebSocket URL',
               placeholder: 'ws://localhost:3001',
             },
             {
               key: 'whatsappAllowFrom',
               label: 'Allow From (Optional)',
-              type: 'text',
+              type: 'text' as const,
               description: 'Allowed phone numbers, comma separated',
               placeholder: '+1234567890, +0987654321',
             },
@@ -396,6 +372,29 @@ export class SettingsPage extends LitElement {
       console.error('Failed to load settings:', err);
     } finally {
       this._loading = false;
+    }
+
+    // Also load models list
+    this._loadModels();
+  }
+
+  private async _loadModels(): Promise<void> {
+    if (!this.config?.url) return;
+
+    try {
+      const { url, token } = this.config;
+      const response = await fetch(`${url}/api/models`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.payload?.models) {
+          this._models = data.payload.models;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load models:', err);
     }
   }
 
