@@ -255,7 +255,7 @@ export class ModelRegistry {
 		// Use local data by default (fast, no network required)
 		const localModels = getLocalModelsDevModels();
 
-		for (const [provider, models] of localModels) {
+		for (const [_provider, models] of localModels) {
 			for (const model of models) {
 				const exists = this.models.some(
 					m => m.provider === model.provider && m.id === model.id
