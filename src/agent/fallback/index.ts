@@ -12,4 +12,4 @@ export { FailoverError, isFailoverError, describeFailoverError } from './error.j
 
 export { runWithModelFallback, type FallbackResult } from './runner.js';
 export type { ModelCandidate, FallbackAttempt } from './candidates.js';
-export { resolveFallbackCandidates } from './candidates.js';
+export { resolveFallbackCandidates, isProviderConfigured } from './candidates.js';

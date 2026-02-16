@@ -11,6 +11,7 @@ import type { Config } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../utils/log-store.js';
 import { getLocalModelsDevModels } from '../../providers/models-dev.js';
+import { isProviderConfigured } from '../../agent/fallback/index.js';
 
 const log = createLogger('HonoApp');
 
@@ -327,12 +328,16 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ ok: true, payload: { config } });
   });
 
-  // GET /api/models - Get available models
+  // GET /api/models - Get available models (only configured providers)
   authenticated.get('/api/models', (c) => {
+    const config = service.currentConfig;
     const localModels = getLocalModelsDevModels();
     const models: Array<{ id: string; name: string; provider: string }> = [];
 
     for (const [provider, providerModels] of localModels) {
+      // Only include models from configured providers (have API key or enabled)
+      if (!isProviderConfigured(config, provider)) continue;
+
       for (const model of providerModels) {
         models.push({
           id: `${provider}/${model.id}`,

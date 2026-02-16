@@ -14,6 +14,24 @@ export interface FallbackAttempt {
   code?: string;
 }
 
+/**
+ * Check if a provider is configured (has API key or is enabled for local providers)
+ */
+export function isProviderConfigured(cfg: Config | undefined, provider: string): boolean {
+  if (!cfg?.providers) return false;
+
+  const providerConfig = cfg.providers[provider as keyof typeof cfg.providers];
+  if (!providerConfig) return false;
+
+  // Ollama is special - it uses 'enabled' flag instead of apiKey
+  if (provider === 'ollama') {
+    return (providerConfig as { enabled?: boolean }).enabled ?? true;
+  }
+
+  // Other providers require apiKey
+  return 'apiKey' in providerConfig && Boolean(providerConfig.apiKey);
+}
+
 function parseModelRef(raw: string, defaultProvider?: string): ModelCandidate | null {
   const trimmed = raw.trim();
   if (!trimmed) return null;
@@ -50,6 +68,8 @@ export function resolveFallbackCandidates(params: {
   const addCandidate = (c: ModelCandidate) => {
     const key = `${c.provider}/${c.model}`.toLowerCase();
     if (seen.has(key)) return;
+    // Skip providers that are not configured (no API key)
+    if (!isProviderConfigured(cfg, c.provider)) return;
     seen.add(key);
     candidates.push(c);
   };
