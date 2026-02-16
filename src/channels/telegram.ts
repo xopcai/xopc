@@ -5,6 +5,7 @@ import { OutboundMessage } from '../types/index.js';
 import { MessageBus } from '../bus/index.js';
 import { createLogger } from '../utils/logger.js';
 import { TypingController } from './typing-controller.js';
+import { getApiKey } from '../config/schema.js';
 import type { Config } from '../config/index.js';
 
 const log = createLogger('TelegramChannel');
@@ -76,6 +77,10 @@ export class TelegramChannel extends BaseChannel {
       
       if (data.startsWith('model:')) {
         await this.handleModelSelection(ctx);
+      } else if (data.startsWith('provider:')) {
+        await this.handleProviderSelection(ctx);
+      } else if (data === 'providers') {
+        await this.showProvidersAgain(ctx);
       } else if (data === 'cleanup:confirm') {
         await this.handleCleanupConfirm(ctx);
       } else if (data === 'cancel') {
@@ -161,40 +166,62 @@ export class TelegramChannel extends BaseChannel {
 
   private async showModelSelector(ctx: Context): Promise<void> {
     try {
-      const models = this.getAvailableModels();
-      const chatId = String(ctx.chat?.id);
-      const sessionKey = `telegram:${chatId}`;
-      const currentModel = this.sessionModels.get(sessionKey) || this.appConfig.agents?.defaults?.model || 'minimax/MiniMax-M2.5';
+      const providers = this.getAvailableProviders();
 
-      if (models.length === 0) {
-        await ctx.reply('❌ No models available. Please check your configuration.');
+      if (providers.length === 0) {
+        await ctx.reply('❌ No providers available. Please check your configuration.');
         return;
       }
 
       const keyboard = new InlineKeyboard();
       
-      // Group by provider
-      const byProvider = new Map<string, ModelInfo[]>();
-      for (const model of models) {
-        const list = byProvider.get(model.provider) || [];
-        list.push(model);
-        byProvider.set(model.provider, list);
-      }
-
-      for (const [_provider, providerModels] of byProvider) {
-        for (const model of providerModels) {
-          const isCurrent = model.id === currentModel;
-          const label = isCurrent ? `✅ ${model.name}` : model.name;
-          keyboard.text(label, `model:${model.id}`).row();
-        }
+      for (const provider of providers) {
+        keyboard.text(provider.name, `provider:${provider.id}`).row();
       }
 
       keyboard.text('❌ Cancel', 'cancel');
 
-      await ctx.reply('🤖 Select a model:', { reply_markup: keyboard });
+      await ctx.reply('🤖 Select a provider:', { reply_markup: keyboard });
     } catch (err) {
-      log.error({ err }, 'Failed to show model selector');
-      await ctx.reply('❌ Failed to load models. Please try again.');
+      log.error({ err }, 'Failed to show provider selector');
+      await ctx.reply('❌ Failed to load providers. Please try again.');
+    }
+  }
+
+  private async showProviderModels(ctx: Context, providerId: string): Promise<void> {
+    try {
+      const chatId = String(ctx.chat?.id);
+      const sessionKey = `telegram:${chatId}`;
+      const currentModel = this.sessionModels.get(sessionKey) || this.appConfig.agents?.defaults?.model || 'anthropic/claude-sonnet-4-5';
+
+      const models = this.getModelsForProvider(providerId);
+      
+      if (models.length === 0) {
+        await ctx.editMessageText('❌ No models available for this provider.');
+        await ctx.answerCallbackQuery();
+        return;
+      }
+
+      const keyboard = new InlineKeyboard();
+      
+      for (const model of models) {
+        const isCurrent = model.id === currentModel;
+        const label = isCurrent ? `✅ ${model.name}` : model.name;
+        keyboard.text(label, `model:${model.id}`).row();
+      }
+
+      keyboard.text('⬅️ Back', 'providers').row();
+      keyboard.text('❌ Cancel', 'cancel');
+
+      const providerName = this.getProviderDisplayName(providerId);
+      await ctx.editMessageText(`🤖 Select a model from *${providerName}*:`, { 
+        reply_markup: keyboard,
+        parse_mode: 'Markdown',
+      });
+      await ctx.answerCallbackQuery();
+    } catch (err) {
+      log.error({ err, providerId }, 'Failed to show provider models');
+      await ctx.answerCallbackQuery('Failed to load models');
     }
   }
 
@@ -225,15 +252,50 @@ export class TelegramChannel extends BaseChannel {
     }
   }
 
+  private async handleProviderSelection(ctx: Context): Promise<void> {
+    try {
+      const data = ctx.callbackQuery?.data;
+      if (!data) return;
+
+      const providerId = data.replace('provider:', '');
+      await this.showProviderModels(ctx, providerId);
+    } catch (err) {
+      log.error({ err }, 'Failed to handle provider selection');
+      await ctx.answerCallbackQuery('Failed to select provider');
+    }
+  }
+
+  private async showProvidersAgain(ctx: Context): Promise<void> {
+    try {
+      const providers = this.getAvailableProviders();
+
+      const keyboard = new InlineKeyboard();
+      
+      for (const provider of providers) {
+        keyboard.text(provider.name, `provider:${provider.id}`).row();
+      }
+
+      keyboard.text('❌ Cancel', 'cancel');
+
+      await ctx.editMessageText('🤖 Select a provider:', { reply_markup: keyboard });
+      await ctx.answerCallbackQuery();
+    } catch (err) {
+      log.error({ err }, 'Failed to show providers again');
+      await ctx.answerCallbackQuery('Failed to go back');
+    }
+  }
+
   private getAvailableModels(): ModelInfo[] {
     const models: ModelInfo[] = [];
     const providers = this.appConfig.providers || {};
 
     // Helper to add models from provider
     const addModels = (providerName: string, providerConfig: any) => {
-      if (!providerConfig?.apiKey) return;
+      // Use getApiKey to check both config and environment variables
+      const apiKey = getApiKey(this.appConfig, providerName);
+      if (!apiKey) return;
       
-      const modelList = providerConfig.models || this.getDefaultModelsForProvider(providerName);
+      const modelList = providerConfig?.models || this.getDefaultModelsForProvider(providerName);
       for (const modelId of modelList) {
         models.push({
           id: `${providerName}/${modelId}`,
@@ -261,14 +323,76 @@ export class TelegramChannel extends BaseChannel {
 
   private getDefaultModelsForProvider(provider: string): string[] {
     const defaults: Record<string, string[]> = {
-      openai: ['gpt-4o', 'gpt-4o-mini'],
-      anthropic: ['claude-3-5-sonnet-20241022'],
-      minimax: ['MiniMax-M2.5'],
+      openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-5', 'o1', 'o3'],
+      anthropic: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-5'],
+      google: ['gemini-2.5-pro', 'gemini-2.5-flash'],
+      qwen: ['qwen-plus', 'qwen-max', 'qwen3-235b'],
+      kimi: ['kimi-k2.5', 'kimi-k2-thinking'],
+      minimax: ['minimax-m2.5', 'minimax-m2.1', 'minimax-m2'],
+      'minimax-cn': ['minimax-m2.1', 'minimax-m2'],
+      zhipu: ['glm-4', 'glm-4-flash', 'glm-4-plus', 'glm-5', 'glm-5-flash'],
+      'zhipu-cn': ['glm-4', 'glm-4-flash', 'glm-4-plus', 'glm-5', 'glm-5-flash'],
       deepseek: ['deepseek-chat', 'deepseek-reasoner'],
-      groq: ['llama-3.1-70b', 'mixtral-8x7b'],
+      groq: ['llama-3.3-70b', 'mixtral-8x7b'],
       openrouter: ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet'],
+      xai: ['grok-2'],
     };
     return defaults[provider] || ['default'];
+  }
+
+  private getProviderDisplayName(provider: string): string {
+    const names: Record<string, string> = {
+      openai: 'OpenAI',
+      anthropic: 'Anthropic',
+      google: 'Google',
+      qwen: 'Qwen (通义千问)',
+      kimi: 'Kimi (月之暗面)',
+      minimax: 'MiniMax (海外)',
+      'minimax-cn': 'MiniMax CN (国内)',
+      zhipu: 'Zhipu (智谱)',
+      'zhipu-cn': 'Zhipu CN (国内)',
+      deepseek: 'DeepSeek',
+      groq: 'Groq',
+      openrouter: 'OpenRouter',
+      xai: 'xAI (Grok)',
+      ollama: 'Ollama (本地)',
+    };
+    return names[provider] || provider;
+  }
+
+  private getAvailableProviders(): Array<{ id: string; name: string }> {
+    const providers = this.appConfig.providers || {};
+    const available: Array<{ id: string; name: string }> = [];
+
+    for (const [name, _config] of Object.entries(providers)) {
+      // Use getApiKey to check both config and environment variables
+      const apiKey = getApiKey(this.appConfig, name);
+      if (apiKey) {
+        available.push({
+          id: name,
+          name: this.getProviderDisplayName(name),
+        });
+      }
+    }
+
+    return available;
+  }
+
+  private getModelsForProvider(providerId: string): ModelInfo[] {
+    const models: ModelInfo[] = [];
+    const providerConfig = (this.appConfig.providers as any)?.[providerId];
+    
+    const modelList = providerConfig?.models || this.getDefaultModelsForProvider(providerId);
+    
+    for (const modelId of modelList) {
+      models.push({
+        id: `${providerId}/${modelId}`,
+        name: modelId,
+        provider: providerId,
+      });
+    }
+
+    return models;
   }
 
   // ========== Usage Command ==========
