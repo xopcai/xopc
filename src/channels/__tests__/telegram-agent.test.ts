@@ -57,6 +57,7 @@ describe('Telegram to Agent Integration', () => {
       tools: { web: { search: { apiKey: '', maxResults: 5 } } },
       cron: { enabled: false, maxConcurrentJobs: 5, defaultTimezone: 'UTC', historyRetentionDays: 7, enableMetrics: false },
       plugins: {},
+      modelsDev: { enabled: true },
     };
   });
 

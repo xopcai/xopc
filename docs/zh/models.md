@@ -173,6 +173,53 @@ xopcbot models auth list
 | deepseek | deepseek-chat, deepseek-reasoner |
 | groq | llama-3.3-70b |
 
+## Models.dev 集成
+
+xopcbot 集成了 [models.dev](https://models.dev/)，这是一个综合性的开源 AI 模型规格数据库。此功能**默认启用**，无需在运行时发起网络请求即可提供额外的模型信息。
+
+### 配置
+
+```json
+{
+  "modelsDev": {
+    "enabled": true
+  }
+}
+```
+
+要禁用 models.dev 集成：
+
+```json
+{
+  "modelsDev": {
+    "enabled": false
+  }
+}
+```
+
+### 支持的提供商
+
+本地 models.dev 数据包含以下提供商的模型：
+
+- **openai** - GPT 模型
+- **anthropic** - Claude 模型
+- **google** - Gemini 模型
+- **groq** - Llama, Mixtral 模型
+- **deepseek** - DeepSeek 模型
+- **openrouter** - 多提供商路由
+- **xai** - Grok 模型
+- **zhipu** - GLM 模型
+
+### 工作原理
+
+启用后，xopcbot 会在启动时自动从内置的本地缓存加载模型数据。这提供了：
+
+1. **更快的启动** - 加载模型列表无需网络请求
+2. **离线支持** - 可以在没有网络连接的情况下工作
+3. **最新模型** - 本地数据预先从 models.dev API 获取
+
+本地数据存储在 `src/providers/models-dev-data.ts` 中，可以通过从 models.dev API 获取新数据来重新生成。
+
 ## 模型引用
 
 使用 `提供商/模型ID` 格式引用模型：

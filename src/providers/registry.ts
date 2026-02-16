@@ -20,7 +20,7 @@ import type { Config } from '../config/schema.js';
 import type { AuthStorage } from '../auth/storage.js';
 import { listProfilesForProvider } from '../auth/profiles/profiles.js';
 import { resolveApiKeyForProfile } from '../auth/profiles/oauth.js';
-import { fetchModelsDevModels, clearModelsDevCache } from './models-dev.js';
+import { getLocalModelsDevModels } from './models-dev.js';
 
 const OLLAMA_API_BASE = 'http://127.0.0.1:11434';
 const OLLAMA_TAGS_URL = `${OLLAMA_API_BASE}/api/tags`;
@@ -84,94 +84,6 @@ export interface ProviderOverride {
 	api?: 'openai-completions' | 'anthropic-messages' | 'google-generative-ai';
 	models?: string[];
 }
-
-/** Built-in model definitions for additional providers */
-export const BUILTIN_PROVIDER_MODELS: Record<string, Model<Api>[]> = {
-	// Qwen (DashScope)
-	'qwen': [
-		{ id: 'qwen-plus', name: 'Qwen Plus', api: 'openai-completions', provider: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 131072, maxTokens: 16384 },
-		{ id: 'qwen-max', name: 'Qwen Max', api: 'openai-completions', provider: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 131072, maxTokens: 16384 },
-		{ id: 'qwen-turbo', name: 'Qwen Turbo', api: 'openai-completions', provider: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 131072, maxTokens: 16384 },
-		{ id: 'qwen-long', name: 'Qwen Long', api: 'openai-completions', provider: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 1048576, maxTokens: 8192 },
-		{ id: 'qwq-32b', name: 'QwQ 32B', api: 'openai-completions', provider: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', reasoning: true, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32768, maxTokens: 4096 },
-		{ id: 'qwen3-235b', name: 'Qwen3 235B', api: 'openai-completions', provider: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', reasoning: true, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 131072, maxTokens: 16384 },
-		{ id: 'qwen3-30b', name: 'Qwen3 30B', api: 'openai-completions', provider: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', reasoning: true, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 131072, maxTokens: 16384 },
-		{ id: 'qwen3-8b', name: 'Qwen3 8B', api: 'openai-completions', provider: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', reasoning: true, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 131072, maxTokens: 16384 },
-		{ id: 'qwen3-4b', name: 'Qwen3 4B', api: 'openai-completions', provider: 'qwen', baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', reasoning: true, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 131072, maxTokens: 16384 },
-	] as Model<Api>[],
-	// Kimi (Moonshot AI)
-	'kimi': [
-		{ id: 'kimi-k2.5', name: 'Kimi K2.5', api: 'openai-completions', provider: 'kimi', baseUrl: 'https://api.moonshot.cn/v1', reasoning: true, input: ['text', 'image'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 2000000, maxTokens: 8192 },
-		{ id: 'kimi-k2-thinking', name: 'Kimi K2 Thinking', api: 'openai-completions', provider: 'kimi', baseUrl: 'https://api.moonshot.cn/v1', reasoning: true, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 200000, maxTokens: 32768 },
-		{ id: 'kimi-k1.5', name: 'Kimi K1.5', api: 'openai-completions', provider: 'kimi', baseUrl: 'https://api.moonshot.cn/v1', reasoning: true, input: ['text', 'image'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 },
-		{ id: 'kimi-latest', name: 'Kimi Latest', api: 'openai-completions', provider: 'kimi', baseUrl: 'https://api.moonshot.cn/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
-	] as Model<Api>[],
-	// Moonshot AI (same as kimi, but can have different base URL)
-	'moonshot': [
-		{ id: 'moonshot-v1-8k', name: 'Moonshot V1 8K', api: 'openai-completions', provider: 'moonshot', baseUrl: 'https://api.moonshot.ai/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 8192, maxTokens: 4096 },
-		{ id: 'moonshot-v1-32k', name: 'Moonshot V1 32K', api: 'openai-completions', provider: 'moonshot', baseUrl: 'https://api.moonshot.ai/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32000, maxTokens: 16384 },
-		{ id: 'moonshot-v1-128k', name: 'Moonshot V1 128K', api: 'openai-completions', provider: 'moonshot', baseUrl: 'https://api.moonshot.ai/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 131072, maxTokens: 32768 },
-	] as Model<Api>[],
-	// DeepSeek
-	'deepseek': [
-		{ id: 'deepseek-chat', name: 'DeepSeek Chat', api: 'openai-completions', provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 64000, maxTokens: 4096 },
-		{ id: 'deepseek-reasoner', name: 'DeepSeek Reasoner', api: 'openai-completions', provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', reasoning: true, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 64000, maxTokens: 4096 },
-		{ id: 'deepseek-coder', name: 'DeepSeek Coder', api: 'openai-completions', provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 16000, maxTokens: 4096 },
-		{ id: 'deepseek-v3', name: 'DeepSeek V3', api: 'openai-completions', provider: 'deepseek', baseUrl: 'https://api.deepseek.com/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 64000, maxTokens: 4096 },
-	] as Model<Api>[],
-	// Zhipu (智谱 GLM)
-	'zhipu': [
-		{ id: 'glm-4', name: 'GLM-4', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
-		{ id: 'glm-4-flash', name: 'GLM-4 Flash', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
-		{ id: 'glm-4-plus', name: 'GLM-4 Plus', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
-		{ id: 'glm-4-flashx', name: 'GLM-4 FlashX', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
-		{ id: 'glm-4v-flash', name: 'GLM-4V Flash', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text', 'image'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
-		{ id: 'glm-5', name: 'GLM-5', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 },
-		{ id: 'glm-5-flash', name: 'GLM-5 Flash', api: 'openai-completions', provider: 'zhipu', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 },
-	] as Model<Api>[],
-	// Zhipu CN (国内版)
-	'zhipu-cn': [
-		{ id: 'glm-4', name: 'GLM-4', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
-		{ id: 'glm-4-flash', name: 'GLM-4 Flash', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
-		{ id: 'glm-4-plus', name: 'GLM-4 Plus', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
-		{ id: 'glm-4-flashx', name: 'GLM-4 FlashX', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
-		{ id: 'glm-4v-flash', name: 'GLM-4V Flash', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text', 'image'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 8192 },
-		{ id: 'glm-5', name: 'GLM-5', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 },
-		{ id: 'glm-5-flash', name: 'GLM-5 Flash', api: 'openai-completions', provider: 'zhipu-cn', baseUrl: 'https://open.bigmodel.cn/api/paas/v4', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 },
-	] as Model<Api>[],
-	// xAI (Grok)
-	'xai': [
-		{ id: 'grok-2', name: 'Grok 2', api: 'openai-completions', provider: 'xai', baseUrl: 'https://api.x.ai/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 131072, maxTokens: 8192 },
-		{ id: 'grok-2-vision', name: 'Grok 2 Vision', api: 'openai-completions', provider: 'xai', baseUrl: 'https://api.x.ai/v1', reasoning: false, input: ['text', 'image'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32768, maxTokens: 4096 },
-		{ id: 'grok-beta', name: 'Grok Beta', api: 'openai-completions', provider: 'xai', baseUrl: 'https://api.x.ai/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 131072, maxTokens: 8192 },
-		{ id: 'grok-vision-beta', name: 'Grok Vision Beta', api: 'openai-completions', provider: 'xai', baseUrl: 'https://api.x.ai/v1', reasoning: false, input: ['text', 'image'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32768, maxTokens: 4096 },
-	] as Model<Api>[],
-	// Cerebras
-	'cerebras': [
-		{ id: 'llama-3.3-70b', name: 'Llama 3.3 70B', api: 'openai-completions', provider: 'cerebras', baseUrl: 'https://api.cerebras.ai/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 8192, maxTokens: 4096 },
-		{ id: 'llama-3.1-70b', name: 'Llama 3.1 70B', api: 'openai-completions', provider: 'cerebras', baseUrl: 'https://api.cerebras.ai/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 4096 },
-		{ id: 'llama-3.1-8b', name: 'Llama 3.1 8B', api: 'openai-completions', provider: 'cerebras', baseUrl: 'https://api.cerebras.ai/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 4096 },
-	] as Model<Api>[],
-	// Mistral
-	'mistral': [
-		{ id: 'mistral-large-latest', name: 'Mistral Large', api: 'openai-completions', provider: 'mistral', baseUrl: 'https://api.mistral.ai/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 },
-		{ id: 'mistral-small-latest', name: 'Mistral Small', api: 'openai-completions', provider: 'mistral', baseUrl: 'https://api.mistral.ai/v1', reasoning: false, input: ['text'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 4096 },
-		{ id: 'pixtral-large-latest', name: 'Pixtral Large', api: 'openai-completions', provider: 'mistral', baseUrl: 'https://api.mistral.ai/v1', reasoning: false, input: ['text', 'image'], cost: { input: 0.0, output: 0.0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 16384 },
-	] as Model<Api>[],
-	// Ollama (local)
-	'ollama': [
-		{ id: 'llama3', name: 'Llama 3', api: 'openai-completions', provider: 'ollama', baseUrl: `${OLLAMA_API_BASE}/v1`, reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 8192, maxTokens: 4096 },
-		{ id: 'llama3.1', name: 'Llama 3.1', api: 'openai-completions', provider: 'ollama', baseUrl: `${OLLAMA_API_BASE}/v1`, reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 4096 },
-		{ id: 'llama3.2', name: 'Llama 3.2', api: 'openai-completions', provider: 'ollama', baseUrl: `${OLLAMA_API_BASE}/v1`, reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 128000, maxTokens: 4096 },
-		{ id: 'qwen2.5', name: 'Qwen 2.5', api: 'openai-completions', provider: 'ollama', baseUrl: `${OLLAMA_API_BASE}/v1`, reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32768, maxTokens: 4096 },
-		{ id: 'qwen2.5-coder', name: 'Qwen 2.5 Coder', api: 'openai-completions', provider: 'ollama', baseUrl: `${OLLAMA_API_BASE}/v1`, reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32768, maxTokens: 4096 },
-		{ id: 'mistral', name: 'Mistral', api: 'openai-completions', provider: 'ollama', baseUrl: `${OLLAMA_API_BASE}/v1`, reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 8192, maxTokens: 4096 },
-		{ id: 'phi3', name: 'Phi-3', api: 'openai-completions', provider: 'ollama', baseUrl: `${OLLAMA_API_BASE}/v1`, reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 4096, maxTokens: 4096 },
-		{ id: 'codellama', name: 'CodeLlama', api: 'openai-completions', provider: 'ollama', baseUrl: `${OLLAMA_API_BASE}/v1`, reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 16384, maxTokens: 4096 },
-		{ id: 'deepseek-llm', name: 'DeepSeek LLM', api: 'openai-completions', provider: 'ollama', baseUrl: `${OLLAMA_API_BASE}/v1`, reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 32768, maxTokens: 4096 },
-		{ id: 'deepseek-coder', name: 'DeepSeek Coder', api: 'openai-completions', provider: 'ollama', baseUrl: `${OLLAMA_API_BASE}/v1`, reasoning: false, input: ['text'], cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }, contextWindow: 16384, maxTokens: 4096 },
-	] as Model<Api>[],
-};
 
 /** Provider information for UI display */
 export interface ProviderInfo {
@@ -329,11 +241,21 @@ export class ModelRegistry {
 	}
 
 	private loadBuiltinProviderModels(): void {
-		for (const [_provider, models] of Object.entries(BUILTIN_PROVIDER_MODELS)) {
-			// Check if we already have models from pi-ai for this provider
-			const _existingProviders = new Set(this.models.map(m => m.provider));
-			
-			// Only add if pi-ai doesn't have models for this provider, or add to existing
+		// Now loaded from models-dev-data.ts via loadModelsDevModels()
+		// This method kept for backwards compatibility
+	}
+
+	/**
+	 * Load models from models.dev (local data first, then optionally from API)
+	 * This loads model data from the built-in local cache
+	 */
+	async loadModelsDevModels(): Promise<void> {
+		if (!this.modelsDevEnabled || this.modelsDevLoaded) return;
+
+		// Use local data by default (fast, no network required)
+		const localModels = getLocalModelsDevModels();
+
+		for (const [provider, models] of localModels) {
 			for (const model of models) {
 				const exists = this.models.some(
 					m => m.provider === model.provider && m.id === model.id
@@ -343,33 +265,8 @@ export class ModelRegistry {
 				}
 			}
 		}
-	}
 
-	/**
-	 * Load models from models.dev API (async)
-	 * This fetches the latest model data from models.dev and merges with existing models
-	 */
-	async loadModelsDevModels(): Promise<void> {
-		if (!this.modelsDevEnabled || this.modelsDevLoaded) return;
-
-		try {
-			const modelsDevModels = await fetchModelsDevModels();
-			
-			for (const [provider, models] of modelsDevModels) {
-				for (const model of models) {
-					const exists = this.models.some(
-						m => m.provider === model.provider && m.id === model.id
-					);
-					if (!exists) {
-						this.models.push(model);
-					}
-				}
-			}
-			
-			this.modelsDevLoaded = true;
-		} catch (error) {
-			console.warn('Failed to load models.dev models:', error);
-		}
+		this.modelsDevLoaded = true;
 	}
 
 	private applyProviderOverrides(): void {
@@ -444,7 +341,7 @@ export class ModelRegistry {
 		if (this.ollamaEnabled && this.ollamaDiscovery) {
 			await this.discoverLocalModels();
 		}
-		// Load models from models.dev API
+		// Load models from models.dev (local data)
 		if (this.modelsDevEnabled) {
 			await this.loadModelsDevModels();
 		}
@@ -549,11 +446,10 @@ export class ModelRegistry {
 	}
 
 	/**
-	 * Refresh models from models.dev API
+	 * Refresh models from models.dev (reload local data)
 	 */
 	async refreshFromModelsDev(): Promise<void> {
 		this.modelsDevLoaded = false;
-		clearModelsDevCache();
 		await this.loadModelsDevModels();
 	}
 

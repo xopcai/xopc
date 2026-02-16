@@ -70,6 +70,9 @@ xopcbot 的所有配置都集中在 `~/.config/xopcbot/config.json` 文件中。
         "max_results": 5
       }
     }
+  },
+  "modelsDev": {
+    "enabled": true
   }
 }
 ```
@@ -419,3 +422,21 @@ npm run dev -- cron list
 - 不要将配置文件提交到 Git
 - 使用环境变量存储敏感信息
 - 配置文件的权限应设为 `600`
+
+### modelsDev
+
+models.dev 集成配置。models.dev 是一个综合性的开源 AI 模型规格数据库。
+
+```json
+{
+  "modelsDev": {
+    "enabled": true
+  }
+}
+```
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `enabled` | boolean | `true` | 启用/禁用 models.dev 模型数据 |
+
+启用后，xopcbot 会自动从内置的本地缓存加载模型信息，包括来自 OpenAI、Anthropic、Google、Groq、DeepSeek 等提供商的模型。这提供了更快的模型列表加载速度，无需在运行时发起网络请求。

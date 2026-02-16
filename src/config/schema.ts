@@ -228,6 +228,13 @@ export const CronConfigSchema = z.object({
   enableMetrics: true,
 });
 
+// Models.dev configuration
+export const ModelsDevConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+}).default({
+  enabled: true,
+});
+
 // ============================================
 // Plugin Configs
 // ============================================
@@ -264,6 +271,7 @@ export const ConfigSchema = z.object({
   tools: ToolsConfigSchema,
   cron: CronConfigSchema,
   plugins: PluginsConfigSchema,
+  modelsDev: ModelsDevConfigSchema,
 }).default({
   agents: {
     defaults: {
@@ -349,6 +357,9 @@ export const ConfigSchema = z.object({
     enableMetrics: true,
   },
   plugins: {},
+  modelsDev: {
+    enabled: true,
+  },
 });
 
 export type Config = z.infer<typeof ConfigSchema>;

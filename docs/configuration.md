@@ -70,6 +70,9 @@ All xopcbot configuration is centralized in the `~/.config/xopcbot/config.json` 
         "max_results": 5
       }
     }
+  },
+  "modelsDev": {
+    "enabled": true
   }
 }
 ```
@@ -419,3 +422,21 @@ Set different models to use different providers.
 - Don't commit config files to Git
 - Use environment variables for sensitive data
 - Set config file permissions to `600`
+
+### modelsDev
+
+Configuration for models.dev integration. models.dev provides a comprehensive database of open-source AI model specifications.
+
+```json
+{
+  "modelsDev": {
+    "enabled": true
+  }
+}
+```
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable/disable models.dev model data |
+
+When enabled, xopcbot automatically loads model information from the built-in local cache, which includes models from providers like OpenAI, Anthropic, Google, Groq, DeepSeek, and more. This provides faster model listing without requiring network requests at runtime.
