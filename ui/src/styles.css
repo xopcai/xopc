@@ -1610,7 +1610,8 @@ xopcbot-gateway-chat {
 .session-manager {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   padding: 1.5rem;
   gap: 1rem;
   overflow-y: auto;
@@ -2498,7 +2499,8 @@ xopcbot-gateway-chat {
 .cron-manager {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   padding: 1.5rem;
   gap: 1rem;
   overflow-y: auto;
@@ -2541,7 +2543,8 @@ xopcbot-gateway-chat {
 .subagents-manager {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   padding: 1.5rem;
   gap: 1rem;
   overflow-y: auto;
@@ -2864,7 +2867,8 @@ xopcbot-gateway-chat {
 .log-manager {
   display: flex;
   flex-direction: column;
-  height: 100%;
+  flex: 1;
+  min-height: 0;
   padding: 1.5rem;
   gap: 1rem;
   overflow-y: auto;
