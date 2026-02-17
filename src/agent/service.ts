@@ -134,6 +134,15 @@ export class AgentService {
   private sessionModels: Map<string, string> = new Map(); // sessionKey -> modelId
   private channelManager?: any; // Reference to get session model from channel
   private sessionUsage: Map<string, { prompt: number; completion: number; total: number }> = new Map(); // Track usage per session
+  private sessionLastActivity: Map<string, number> = new Map(); // Track last activity time per session
+  private cleanupInterval?: NodeJS.Timeout;
+
+  /** Max sessions to keep in memory */
+  private readonly MAX_SESSIONS = 1000;
+  /** Session TTL in milliseconds (30 minutes) */
+  private readonly SESSION_TTL_MS = 30 * 60 * 1000;
+  /** Cleanup interval in milliseconds (5 minutes) */
+  private readonly CLEANUP_INTERVAL_MS = 5 * 60 * 1000;
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
     this.agentId = `agent-${Date.now()}`;
@@ -244,6 +253,81 @@ export class AgentService {
     });
 
     this.unsubscribe = this.agent.subscribe((event) => this.handleEvent(event));
+
+    // Start session cleanup interval
+    this.startCleanupInterval();
+  }
+
+  /**
+   * Start periodic cleanup of inactive sessions
+   */
+  private startCleanupInterval(): void {
+    this.cleanupInterval = setInterval(() => {
+      this.cleanupInactiveSessions();
+    }, this.CLEANUP_INTERVAL_MS);
+    
+    // Ensure cleanup on process exit
+    process.on('SIGINT', () => this.dispose());
+    process.on('SIGTERM', () => this.dispose());
+  }
+
+  /**
+   * Cleanup inactive sessions to prevent memory leak
+   */
+  private cleanupInactiveSessions(): void {
+    const now = Date.now();
+    const sessionsToDelete: string[] = [];
+    let deletedCount = 0;
+
+    // Find expired sessions
+    for (const [sessionKey, lastActivity] of this.sessionLastActivity) {
+      if (now - lastActivity > this.SESSION_TTL_MS) {
+        sessionsToDelete.push(sessionKey);
+      }
+    }
+
+    // Delete expired sessions
+    for (const sessionKey of sessionsToDelete) {
+      this.sessionUsage.delete(sessionKey);
+      this.sessionLastActivity.delete(sessionKey);
+      this.sessionModels.delete(sessionKey);
+      deletedCount++;
+    }
+
+    // If still over limit, remove oldest
+    if (this.sessionUsage.size > this.MAX_SESSIONS) {
+      const sorted = Array.from(this.sessionLastActivity.entries())
+        .sort((a, b) => a[1] - b[1]);
+      
+      const toRemove = sorted.slice(0, this.sessionUsage.size - this.MAX_SESSIONS);
+      for (const [sessionKey] of toRemove) {
+        this.sessionUsage.delete(sessionKey);
+        this.sessionLastActivity.delete(sessionKey);
+        this.sessionModels.delete(sessionKey);
+        deletedCount++;
+      }
+    }
+
+    if (deletedCount > 0) {
+      log.info({ deleted: deletedCount, remaining: this.sessionUsage.size }, 'Cleaned up inactive sessions');
+    }
+  }
+
+  /**
+   * Update last activity timestamp for a session
+   */
+  private touchSession(sessionKey: string): void {
+    this.sessionLastActivity.set(sessionKey, Date.now());
+  }
+
+  /**
+   * Dispose resources (call on shutdown)
+   */
+  private dispose(): void {
+    if (this.cleanupInterval) {
+      clearInterval(this.cleanupInterval);
+      this.cleanupInterval = undefined;
+    }
   }
 
   // Set channel manager reference for accessing session-specific settings
@@ -347,6 +431,9 @@ export class AgentService {
     this.running = false;
     this.agent.abort();
     this.unsubscribe?.();
+    
+    // Cleanup interval
+    this.dispose();
 
     this.triggerHook('gateway_stop', { reason: 'stopped' });
 
@@ -679,6 +766,9 @@ export class AgentService {
           currentUsage.total += result.usage.total_tokens || 0;
           this.sessionUsage.set(sessionKey, currentUsage);
         }
+        
+        // Update session activity
+        this.touchSession(sessionKey);
 
         const sendResult = await this.runMessageSendingHook(msg.chat_id, result.content);
 
@@ -814,6 +904,9 @@ export class AgentService {
     if (msg.content === '/usage' && msg.sender_id === 'telegram:usage') {
       const sessionKey = (msg.metadata?.sessionKey as string) || `telegram:${msg.chat_id}`;
       const usage = this.sessionUsage.get(sessionKey);
+      
+      // Update activity even for read-only operations
+      this.touchSession(sessionKey);
       
       if (usage) {
         const modelName = this.currentModelName.split('/').pop() || this.currentModelName;
