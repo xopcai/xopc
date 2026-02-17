@@ -5,6 +5,7 @@
  * Refactored to delegate specific concerns to specialized modules.
  */
 
+import { readFileSync } from 'fs';
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { AgentToolResult } from '@mariozechner/pi-agent-core';
@@ -32,7 +33,6 @@ import { createSkillLoader, type Skill } from './skills/index.js';
 import { getBundledSkillsDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
-import type { BeforeToolCallResult } from '../plugins/hooks.js';
 import type { CommandContext } from '../plugins/types.js';
 import { PromptBuilder } from './prompt/index.js';
 import { createTypingController } from './typing.js';
@@ -337,8 +337,8 @@ export class AgentService {
   }
 
   private async runBeforeToolCallHook(
-    toolName: string,
-    params: Record<string, unknown>
+    _toolName: string,
+    _params: Record<string, unknown>
   ): Promise<{ allowed: boolean; params?: Record<string, unknown>; reason?: string }> {
     if (!this.hookRunner) return { allowed: true };
     // ... (simplified, full implementation similar to original)
@@ -360,7 +360,7 @@ export class AgentService {
       description: tool.description,
       parameters: tool.parameters,
       label: `🔌 ${tool.name}`,
-      async execute(toolCallId: string, params: Record<string, unknown>): Promise<AgentToolResult> {
+      async execute(toolCallId: string, params: Record<string, unknown>): Promise<AgentToolResult<unknown>> {
         try {
           const result = await tool.execute(params);
           return { content: [{ type: 'text', text: result }], details: {} };
@@ -630,7 +630,10 @@ export class AgentService {
         break;
       case 'message_end':
         if (event.message.role === 'assistant') {
-          const text = extractTextContent(event.message.content);
+          const content = event.message.content;
+          const text = Array.isArray(content) 
+            ? extractTextContent(content as Array<{ type: string; text?: string }>)
+            : String(content);
           log.debug({ contentLength: text.length }, 'Assistant response complete');
         }
         break;
@@ -653,7 +656,11 @@ export class AgentService {
     const messages = this.agent.state.messages;
     for (let i = messages.length - 1; i >= 0; i--) {
       if (messages[i].role === 'assistant') {
-        return extractTextContent(messages[i].content);
+        const content = messages[i].content;
+        if (Array.isArray(content)) {
+          return extractTextContent(content as Array<{ type: string; text?: string }>);
+        }
+        return String(content);
       }
     }
     return null;
