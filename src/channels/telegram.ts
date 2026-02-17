@@ -7,6 +7,7 @@ import { createLogger } from '../utils/logger.js';
 import { TypingController } from './typing-controller.js';
 import { getApiKey } from '../config/schema.js';
 import type { Config } from '../config/index.js';
+import { createCallbackRegistry } from './telegram-handlers.js';
 
 const log = createLogger('TelegramChannel');
 
@@ -71,22 +72,30 @@ export class TelegramChannel extends BaseChannel {
       await this.handleCleanup(ctx);
     });
 
+    // Setup callback query handler registry
+    const callbackRegistry = createCallbackRegistry({
+      onModelSelect: async (ctx, modelId) => {
+        await this.handleModelSelection(ctx, modelId);
+      },
+      onProviderSelect: async (ctx, providerId) => {
+        await this.handleProviderSelection(ctx, providerId);
+      },
+      onShowProviders: async (ctx) => {
+        await this.showProvidersAgain(ctx);
+      },
+      onCleanupConfirm: async (ctx) => {
+        await this.handleCleanupConfirm(ctx);
+      },
+      onCancel: async (ctx) => {
+        await ctx.editMessageText('Cancelled.');
+        await ctx.answerCallbackQuery();
+      },
+    });
+
     // Handle callback queries (inline keyboard)
     this.bot.on('callback_query:data', async (ctx) => {
       const data = ctx.callbackQuery.data;
-      
-      if (data.startsWith('model:')) {
-        await this.handleModelSelection(ctx);
-      } else if (data.startsWith('provider:')) {
-        await this.handleProviderSelection(ctx);
-      } else if (data === 'providers') {
-        await this.showProvidersAgain(ctx);
-      } else if (data === 'cleanup:confirm') {
-        await this.handleCleanupConfirm(ctx);
-      } else if (data === 'cancel') {
-        await ctx.editMessageText('Cancelled.');
-        await ctx.answerCallbackQuery();
-      }
+      await callbackRegistry.route(ctx, data);
     });
 
     this.bot.on('message:text', async (ctx) => {
@@ -225,12 +234,8 @@ export class TelegramChannel extends BaseChannel {
     }
   }
 
-  private async handleModelSelection(ctx: Context): Promise<void> {
+  private async handleModelSelection(ctx: Context, modelId: string): Promise<void> {
     try {
-      const data = ctx.callbackQuery?.data;
-      if (!data) return;
-
-      const modelId = data.replace('model:', '');
       const chatId = String(ctx.chat?.id);
       const sessionKey = `telegram:${chatId}`;
 
@@ -252,12 +257,8 @@ export class TelegramChannel extends BaseChannel {
     }
   }
 
-  private async handleProviderSelection(ctx: Context): Promise<void> {
+  private async handleProviderSelection(ctx: Context, providerId: string): Promise<void> {
     try {
-      const data = ctx.callbackQuery?.data;
-      if (!data) return;
-
-      const providerId = data.replace('provider:', '');
       await this.showProviderModels(ctx, providerId);
     } catch (err) {
       log.error({ err }, 'Failed to handle provider selection');
