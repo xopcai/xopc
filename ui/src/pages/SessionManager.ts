@@ -6,6 +6,7 @@ import '../components/SessionList';
 import '../components/SessionDetailDrawer';
 import '../components/ConfirmDialog';
 import { getIcon } from '../utils/icons';
+import { t } from '../utils/i18n';
 import { SessionAPIClient, type SessionMetadata, type SessionDetail, type SessionStats } from '../utils/session-api';
 import type { SessionListEventDetail } from '../components/SessionList';
 import type { SessionDetailEventDetail } from '../components/SessionDetailDrawer';
@@ -386,12 +387,12 @@ export class SessionManager extends LitElement {
   private _renderHeader(): unknown {
     return html`
       <div class="session-manager__header">
-        <h1 class="page-title">${getIcon('folderOpen')} Sessions</h1>
+        <h1 class="page-title">${getIcon('folderOpen')} ${t('sessions.title')}</h1>
         <div class="search-box">
           ${getIcon('search')}
           <input
             type="text"
-            placeholder="Search sessions..."
+            placeholder="${t('sessions.searchPlaceholder')}"
             .value=${this._searchQuery}
             @input=${this._handleSearch}
           />
@@ -430,19 +431,19 @@ export class SessionManager extends LitElement {
       <div class="session-manager__stats">
         <div class="stat-card">
           <div class="stat-value">${this._stats.totalSessions}</div>
-          <div class="stat-label">Total</div>
+          <div class="stat-label">${t('sessions.totalSessions')}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">${this._stats.activeSessions}</div>
-          <div class="stat-label">Active</div>
+          <div class="stat-label">${t('sessions.activeSessions')}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">${this._stats.pinnedSessions}</div>
-          <div class="stat-label">Pinned</div>
+          <div class="stat-label">${t('sessions.pinnedSessions')}</div>
         </div>
         <div class="stat-card">
           <div class="stat-value">${this._stats.archivedSessions}</div>
-          <div class="stat-label">Archived</div>
+          <div class="stat-label">${t('sessions.archivedSessions')}</div>
         </div>
       </div>
     `;

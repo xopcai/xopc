@@ -1,13 +1,16 @@
 import { html, nothing } from 'lit';
 import type { TemplateResult } from 'lit';
 import { getIcon } from './utils/icons';
+import { t } from './utils/i18n';
 
-// Tab groups configuration
-export const TAB_GROUPS = [
-  { label: 'Chat', tabs: ['chat'] },
-  { label: 'Management', tabs: ['sessions', 'cron', 'logs'] },
-  { label: 'Settings', tabs: ['settings'] },
-] as const;
+// Get tab groups with i18n labels
+export function getTabGroups() {
+  return [
+    { label: t('nav.chat'), tabs: ['chat'] as const },
+    { label: t('nav.management'), tabs: ['sessions', 'cron', 'logs'] as const },
+    { label: t('nav.settings'), tabs: ['settings'] as const },
+  ];
+}
 
 export type Tab = 'chat' | 'sessions' | 'cron' | 'logs' | 'settings';
 
@@ -17,6 +20,11 @@ export interface NavItem {
   icon: string;
 }
 
+// Get tab label (supports i18n)
+export function getTabLabel(tab: Tab): string {
+  return t(`nav.${tab}`);
+}
+
 // Tab icon map (no subtitle needed)
 const TAB_ICONS: Record<Tab, string> = {
   chat: 'messageSquare',
@@ -24,14 +32,6 @@ const TAB_ICONS: Record<Tab, string> = {
   cron: 'clock',
   logs: 'fileText',
   settings: 'settings',
-};
-
-const TAB_LABELS: Record<Tab, string> = {
-  chat: 'Chat',
-  sessions: 'Sessions',
-  cron: 'Cron Jobs',
-  logs: 'Logs',
-  settings: 'Settings',
 };
 
 // Chat route with optional session key
@@ -81,7 +81,7 @@ export function renderNavItem(
   onClick: () => void
 ): TemplateResult {
   const icon = TAB_ICONS[tab];
-  const label = TAB_LABELS[tab];
+  const label = getTabLabel(tab);
   
   return html`
     <button 

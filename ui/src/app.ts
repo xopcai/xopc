@@ -7,7 +7,7 @@ import './pages/CronManager';
 import './pages/LogManager';
 import './pages/SettingsPage';
 import {
-  TAB_GROUPS,
+  getTabGroups,
   type Tab,
   renderNavItem,
   parseChatHash,
@@ -317,7 +317,7 @@ export class XopcbotApp extends LitElement {
         <div class="shell-main">
           <!-- Sidebar Navigation -->
           <aside class="nav ${this._navCollapsed ? 'nav--collapsed' : ''} ${this._navMobileOpen ? 'nav--mobile-open' : ''}">
-            ${TAB_GROUPS.map((group) => {
+            ${getTabGroups().map((group) => {
               const hasActiveTab = group.tabs.some((tab) => tab === this._activeTab);
               return html`
                 <div class="nav-group">

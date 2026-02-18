@@ -3,6 +3,7 @@
 import { html, LitElement, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons';
+import { t } from '../utils/i18n';
 import {
   LogAPIClient,
   type LogEntry,
@@ -280,18 +281,18 @@ export class LogManager extends LitElement {
   private _renderHeader(): unknown {
     return html`
       <div class="log-manager__header">
-        <h1 class="page-title">${getIcon('fileText')} Logs</h1>
+        <h1 class="page-title">${getIcon('fileText')} ${t('logs.title')}</h1>
         <div class="log-manager__actions">
           <button
             class="btn ${this._autoRefresh ? 'btn-primary' : 'btn-secondary'}"
             @click=${this._toggleAutoRefresh}
           >
             ${getIcon(this._autoRefresh ? 'pause' : 'play')}
-            ${this._autoRefresh ? 'Pause' : 'Auto Refresh'}
+            ${this._autoRefresh ? t('logs.pause') : t('logs.autoRefresh')}
           </button>
           <button class="btn btn-secondary" @click=${() => this._loadLogs(true)}>
             ${getIcon('refreshCw')}
-            Refresh
+            ${t('logs.refresh')}
           </button>
         </div>
       </div>
@@ -302,7 +303,7 @@ export class LogManager extends LitElement {
     return html`
       <div class="log-manager__filters">
         <div class="filter-group">
-          <label class="filter-label">Level</label>
+          <label class="filter-label">${t('logs.level')}</label>
           <div class="level-filters">
             ${LOG_LEVELS.map((level) => html`
               <button
@@ -317,12 +318,12 @@ export class LogManager extends LitElement {
         </div>
 
         <div class="filter-group">
-          <label class="filter-label">Search</label>
+          <label class="filter-label">${t('logs.search')}</label>
           <div class="search-box">
             ${getIcon('search')}
             <input
               type="text"
-              placeholder="Search logs..."
+              placeholder="${t('logs.searchPlaceholder')}"
               .value=${this._searchQuery}
               @input=${this._handleSearch}
             />
@@ -399,9 +400,9 @@ export class LogManager extends LitElement {
         <div class="log-manager__empty">
           <div class="empty-state">
             <div class="empty-state__icon">${getIcon('fileText')}</div>
-            <div class="empty-state__title">No logs found</div>
+            <div class="empty-state__title">${t('logs.noLogs')}</div>
             <div class="empty-state__description">
-              Try adjusting your filters or check back later.
+              ${t('logs.noLogsDescription')}
             </div>
           </div>
         </div>
@@ -413,10 +414,10 @@ export class LogManager extends LitElement {
         <table class="log-table">
           <thead>
             <tr>
-              <th>Time</th>
-              <th>Level</th>
-              <th>Module</th>
-              <th>Message</th>
+              <th>${t('logs.time')}</th>
+              <th>${t('logs.level')}</th>
+              <th>${t('logs.module')}</th>
+              <th>${t('logs.message')}</th>
             </tr>
           </thead>
           <tbody>
@@ -478,17 +479,17 @@ export class LogManager extends LitElement {
       <div class="drawer-overlay" @click=${this._closeDetail}></div>
       <div class="drawer drawer--right">
         <div class="drawer__header">
-          <h3>Log Details</h3>
+          <h3>${t('logs.details')}</h3>
           <button class="btn-icon" @click=${this._closeDetail}>${getIcon('x')}</button>
         </div>
         <div class="drawer__content">
           <div class="log-detail">
             <div class="log-detail__field">
-              <label>Timestamp</label>
+              <label>${t('logs.time')}</label>
               <code>${log.timestamp}</code>
             </div>
             <div class="log-detail__field">
-              <label>Level</label>
+              <label>${t('logs.level')}</label>
               <span
                 class="level-badge"
                 style="--level-color: ${LOG_LEVEL_COLORS[log.level]}"
@@ -497,11 +498,11 @@ export class LogManager extends LitElement {
               </span>
             </div>
             <div class="log-detail__field">
-              <label>Module</label>
+              <label>${t('logs.module')}</label>
               <code>${log.module}</code>
             </div>
             <div class="log-detail__field">
-              <label>Message</label>
+              <label>${t('logs.message')}</label>
               <pre class="log-detail__message">${log.message}</pre>
             </div>
             ${log.meta ? html`

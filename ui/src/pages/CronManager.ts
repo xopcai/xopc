@@ -3,6 +3,7 @@
 import { html, LitElement, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons';
+import { t } from '../utils/i18n';
 import { CronAPIClient, type CronJob, type CronJobExecution, type CronMetrics } from '../utils/cron-api';
 import '../components/ConfirmDialog';
 
@@ -177,16 +178,16 @@ export class CronManager extends LitElement {
 
   private _showRunConfirm(job: CronJob): void {
     this._confirmOpen = true;
-    this._confirmTitle = 'Run Job';
-    this._confirmMessage = `Run "${job.name || job.id}" now?`;
+    this._confirmTitle = t('cron.runNow');
+    this._confirmMessage = t('cron.confirmRun');
     this._confirmJobId = job.id;
     this._confirmAction = 'run';
   }
 
   private _showDeleteConfirm(job: CronJob): void {
     this._confirmOpen = true;
-    this._confirmTitle = 'Delete Job';
-    this._confirmMessage = `Delete "${job.name || job.id}"? This cannot be undone.`;
+    this._confirmTitle = t('cron.delete');
+    this._confirmMessage = t('cron.confirmDelete');
     this._confirmJobId = job.id;
     this._confirmAction = 'delete';
   }
@@ -229,13 +230,13 @@ export class CronManager extends LitElement {
 
         <!-- Header -->
         <div class="cron-manager__header">
-          <h1 class="page-title">${getIcon('clock')} Cron Jobs</h1>
+          <h1 class="page-title">${getIcon('clock')} ${t('cron.title')}</h1>
           <div class="cron-manager__actions">
             <button class="btn btn-secondary" @click=${this._loadJobs} ?disabled=${this._loading}>
-              ${getIcon('refresh')} Refresh
+              ${getIcon('refresh')} ${t('logs.refresh')}
             </button>
             <button class="btn btn-primary" @click=${this._openForm}>
-              ${getIcon('plus')} Add Job
+              ${getIcon('plus')} ${t('cron.addJob')}
             </button>
           </div>
         </div>
@@ -245,15 +246,15 @@ export class CronManager extends LitElement {
           <div class="cron-manager__stats">
             <div class="stat-card">
               <div class="stat-value">${this._metrics.totalJobs}</div>
-              <div class="stat-label">Total</div>
+              <div class="stat-label">${t('sessions.totalSessions')}</div>
             </div>
             <div class="stat-card">
               <div class="stat-value">${this._metrics.enabledJobs}</div>
-              <div class="stat-label">Enabled</div>
+              <div class="stat-label">${t('cron.enabled')}</div>
             </div>
             <div class="stat-card">
               <div class="stat-value">${this._metrics.runningJobs}</div>
-              <div class="stat-label">Running</div>
+              <div class="stat-label">${t('cron.running')}</div>
             </div>
             <div class="stat-card">
               <div class="stat-value" style="font-size: 0.875rem;">
@@ -261,7 +262,7 @@ export class CronManager extends LitElement {
                   ? this._formatNextRun(this._metrics.nextScheduledJob.runAt)
                   : 'N/A'}
               </div>
-              <div class="stat-label">Next Run</div>
+              <div class="stat-label">${t('cron.nextRun')}</div>
             </div>
           </div>
         ` : nothing}
@@ -288,11 +289,11 @@ export class CronManager extends LitElement {
               <table class="data-table">
                 <thead>
                   <tr>
-                    <th>Name</th>
-                    <th>Schedule</th>
-                    <th>Next Run</th>
-                    <th>Status</th>
-                    <th>Actions</th>
+                    <th>${t('cron.name')}</th>
+                    <th>${t('cron.scheduleLabel')}</th>
+                    <th>${t('cron.nextRun')}</th>
+                    <th>${t('cron.status')}</th>
+                    <th>${t('cron.actions')}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -317,10 +318,10 @@ export class CronManager extends LitElement {
                       </td>
                       <td>
                         <div class="action-buttons">
-                          <button class="btn btn-icon btn-secondary" title="Run Now" @click=${() => this._showRunConfirm(job)}>
+                          <button class="btn btn-icon btn-secondary" title="${t('cron.runNow')}" @click=${() => this._showRunConfirm(job)}>
                             ${getIcon('play')}
                           </button>
-                          <button class="btn btn-icon btn-danger" title="Delete" @click=${() => this._showDeleteConfirm(job)}>
+                          <button class="btn btn-icon btn-danger" title="${t('cron.delete')}" @click=${() => this._showDeleteConfirm(job)}>
                             ${getIcon('trash')}
                           </button>
                         </div>
@@ -339,22 +340,22 @@ export class CronManager extends LitElement {
         <div class="modal-backdrop" @click=${this._closeForm}>
           <div class="modal modal--form" @click=${(e: Event) => e.stopPropagation()}>
             <div class="modal__header">
-              <h2 class="modal__title">Add Cron Job</h2>
+              <h2 class="modal__title">${t('cron.addJob')}</h2>
               <button class="btn-icon" @click=${this._closeForm}>${getIcon('x')}</button>
             </div>
             <div class="modal__content">
               <div class="form-field">
-                <label class="form-field__label">Name (optional)</label>
+                <label class="form-field__label">${t('cron.name')}</label>
                 <input 
                   type="text" 
                   class="form-field__input"
                   .value=${this._formName}
                   @input=${(e: Event) => this._formName = (e.target as HTMLInputElement).value}
-                  placeholder="My scheduled task"
+                  placeholder="${t('cron.namePlaceholder')}"
                 />
               </div>
               <div class="form-field">
-                <label class="form-field__label">Schedule (cron expression) *</label>
+                <label class="form-field__label">${t('cron.schedule')}</label>
                 <input 
                   type="text" 
                   class="form-field__input"
@@ -362,27 +363,27 @@ export class CronManager extends LitElement {
                   @input=${(e: Event) => this._formSchedule = (e.target as HTMLInputElement).value}
                   placeholder="*/5 * * * *"
                 />
-                <p class="form-field__hint">e.g., */5 * * * * (every 5 minutes), 0 9 * * * (daily at 9am)</p>
+                <p class="form-field__hint">${t('cron.scheduleHint')}</p>
               </div>
               <div class="form-field">
-                <label class="form-field__label">Message *</label>
+                <label class="form-field__label">${t('cron.message')}</label>
                 <textarea 
                   class="form-field__textarea"
                   .value=${this._formMessage}
                   @input=${(e: Event) => this._formMessage = (e.target as HTMLTextAreaElement).value}
-                  placeholder="What should the assistant do?"
+                  placeholder="${t('cron.messagePlaceholder')}"
                   rows="4"
                 ></textarea>
               </div>
             </div>
             <div class="modal__actions">
-              <button class="btn btn-secondary" @click=${this._closeForm}>Cancel</button>
+              <button class="btn btn-secondary" @click=${this._closeForm}>${t('common.cancel')}</button>
               <button 
                 class="btn btn-primary" 
                 @click=${this._submitForm}
                 ?disabled=${this._formSubmitting || !this._formSchedule || !this._formMessage}
               >
-                ${this._formSubmitting ? 'Creating...' : 'Create Job'}
+                ${this._formSubmitting ? t('common.loading') : t('cron.create')}
               </button>
             </div>
           </div>
@@ -405,19 +406,19 @@ export class CronManager extends LitElement {
               ` : html`
                 <div class="session-detail">
                   <div class="session-detail__row">
-                    <span class="session-detail__label">Schedule</span>
+                    <span class="session-detail__label">${t('cron.scheduleLabel')}</span>
                     <code>${this._detailJob?.schedule}</code>
                   </div>
                   <div class="session-detail__row">
-                    <span class="session-detail__label">Message</span>
+                    <span class="session-detail__label">${t('cron.messageLabel')}</span>
                     <span>${this._detailJob?.message}</span>
                   </div>
                   <div class="session-detail__row">
-                    <span class="session-detail__label">Status</span>
-                    <span>${this._detailJob?.enabled ? 'Enabled' : 'Disabled'}</span>
+                    <span class="session-detail__label">${t('cron.status')}</span>
+                    <span>${this._detailJob?.enabled ? t('cron.enabled') : t('cron.disabled')}</span>
                   </div>
                   <div class="session-detail__row">
-                    <span class="session-detail__label">Next Run</span>
+                    <span class="session-detail__label">${t('cron.nextRun')}</span>
                     <span>${this._detailJob?.next_run ? this._formatNextRun(this._detailJob.next_run) : 'N/A'}</span>
                   </div>
                 </div>
@@ -432,8 +433,8 @@ export class CronManager extends LitElement {
         .open=${this._confirmOpen}
         .title=${this._confirmTitle}
         .message=${this._confirmMessage}
-        .confirmText=${this._confirmAction === 'delete' ? 'Delete' : 'Run'}
-        .cancelText="Cancel"
+        .confirmText=${this._confirmAction === 'delete' ? t('cron.delete') : t('cron.runNow')}
+        .cancelText=${t('common.cancel')}
         .type=${this._confirmAction === 'delete' ? 'danger' : 'warning'}
         @confirm=${(e: CustomEvent<{ confirmed: boolean }>) => {
           if (e.detail.confirmed) {
