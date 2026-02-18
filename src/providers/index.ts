@@ -91,6 +91,24 @@ export {
 } from './provider-catalog.js';
 
 // ============================================
+// NEW: Auto Discovery (zero-config setup)
+// ============================================
+export {
+	scanProviders,
+	recommendDefaultModel,
+	generateAutoConfig,
+	generateConfigTemplate,
+	quickSetup,
+	isModelAvailable,
+	getBestAvailableModel,
+	printDiagnostic,
+	getConfigSummary,
+	type DiscoveredProvider,
+	type AutoConfig,
+	type QuickSetupResult,
+} from './auto-discovery.js';
+
+// ============================================
 // NEW: Model Catalog (model capabilities system)
 // ============================================
 export {
