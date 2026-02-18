@@ -11,206 +11,219 @@
  */
 
 import * as PiAI from '@mariozechner/pi-ai';
+import type { Model, Api } from '@mariozechner/pi-ai';
 import type { LLMProvider } from '../types/index.js';
 import type { Config } from '../config/schema.js';
 import { getApiKey } from '../config/schema.js';
 import { ModelRegistry } from './registry.js';
+import { createProviderConfig } from './config.js';
+import { buildProviderOptions } from './api-strategies.js';
+import type {
+  ChatMessage,
+  ChatResponse,
+  ToolCall,
+  ContentPart,
+  ToolDefinition,
+} from './types.js';
 
 export { PiAI };
 export type { LLMProvider };
 
+/** Provider configuration instance */
+const providerConfig = createProviderConfig();
+
+/** Pi-AI result type for completion */
+interface PiAIResult {
+  stopReason?: string;
+  errorMessage?: string;
+  content?: Array<{ type: string; text?: string; id?: string; name?: string; arguments?: unknown }>;
+  usage?: {
+    input?: number;
+    output?: number;
+    totalTokens?: number;
+  };
+}
+
 export class LLMProviderImpl implements LLMProvider {
-	private model: PiAI.Model<PiAI.Api>;
-	private modelId: string;
-	private registry: ModelRegistry;
-	private config: Config;
+  private model: Model<Api>;
+  private modelId: string;
+  private registry: ModelRegistry;
+  private config: Config;
 
-	constructor(config: Config, modelId: string) {
-		this.config = config;
-		this.modelId = modelId;
-		this.registry = new ModelRegistry(config);
+  constructor(config: Config, modelId: string) {
+    this.config = config;
+    this.modelId = modelId;
+    this.registry = new ModelRegistry(config);
 
-		const model = this.registry.findByRef(modelId);
+    const model = this.registry.findByRef(modelId);
 
-		if (!model) {
-			throw new Error(`Model not found: ${modelId}. Run 'xopcbot models list' to see available models.`);
-		}
+    if (!model) {
+      throw new Error(`Model not found: ${modelId}. Run 'xopcbot models list' to see available models.`);
+    }
 
-		this.model = model;
-	}
+    this.model = model;
+  }
 
-	private getApiKey(): string | undefined {
-		return getApiKey(this.config, this.model.provider);
-	}
+  private getApiKey(): string | undefined {
+    return getApiKey(this.config, this.model.provider);
+  }
 
-	async chat(
-		messages: any[],
-		tools?: any[],
-		_model?: string,
-		maxTokens?: number,
-		temperature?: number
-	): Promise<any> {
-		const apiKey = this.getApiKey();
-		const context = this.buildContext(messages, tools);
+  async chat(
+    messages: ChatMessage[],
+    tools?: ToolDefinition[],
+    _model?: string,
+    maxTokens?: number,
+    temperature?: number
+  ): Promise<ChatResponse> {
+    const apiKey = this.getApiKey();
+    const context = this.buildContext(messages, tools);
 
-		try {
-			const options: any = {
-				apiKey,
-				maxTokens,
-				temperature: temperature ?? 0.7,
-			};
+    try {
+      // Base options
+      const options: Record<string, unknown> = {
+        apiKey,
+        maxTokens,
+        temperature: temperature ?? providerConfig.defaultTemperature,
+      };
 
-			if (this.model.api === 'anthropic-messages') {
-				options.thinkingEnabled = this.model.reasoning;
-				options.thinkingBudgetTokens = maxTokens ? Math.min(maxTokens, 8192) : 8192;
-			} else if (this.model.api === 'google-generative-ai') {
-				options.thinking = {
-					enabled: this.model.reasoning,
-					budgetTokens: maxTokens ? Math.min(maxTokens, 8192) : 8192,
-				};
-			} else if (this.model.api === 'openai-completions' && this.model.reasoning) {
-				const compat = this.model.compat as any;
-				if (compat?.thinkingFormat === 'qwen') {
-					options.enableThinking = true;
-				} else {
-					options.reasoningEffort = 'medium';
-				}
-			}
+      // Apply provider-specific strategy options
+      const providerOptions = buildProviderOptions(this.model.api, {
+        reasoning: this.model.reasoning,
+        maxTokens,
+        modelMaxTokens: Math.min(this.model.maxTokens, providerConfig.maxThinkingBudgetTokens),
+        thinkingFormat: (this.model.compat as { thinkingFormat?: string })?.thinkingFormat,
+      });
 
-			const result = await (PiAI.complete as any)(this.model, context, options);
+      Object.assign(options, providerOptions);
 
-			if (result.stopReason === 'error' || result.stopReason === 'aborted') {
-				return {
-					content: null,
-					tool_calls: [],
-					finish_reason: result.stopReason,
-					error: result.errorMessage || 'Unknown error',
-				};
-			}
+      const result = await PiAI.complete(this.model, context as unknown as Parameters<typeof PiAI.complete>[1], options as unknown as Parameters<typeof PiAI.complete>[2]) as PiAIResult;
 
-			// Parse response
-			const contentArray = Array.isArray(result.content) ? result.content : [];
-			const textContent = contentArray
-				.filter((c: any) => c.type === 'text')
-				.map((c: any) => c.text)
-				.join('');
+      if (result.stopReason === 'error' || result.stopReason === 'aborted') {
+        return {
+          content: null,
+          tool_calls: [],
+          finish_reason: result.stopReason,
+          error: result.errorMessage || 'Unknown error',
+        };
+      }
 
-			const toolCalls = contentArray
-				.filter((c: any) => c.type === 'toolCall')
-				.map((tc: any) => ({
-					id: tc.id || '',
-					type: 'function' as const,
-					function: {
-						name: tc.name || '',
-						arguments: typeof tc.arguments === 'string'
-							? tc.arguments
-							: JSON.stringify(tc.arguments || {}),
-					},
-				}));
+      // Parse response
+      const contentArray = Array.isArray(result.content) ? result.content : [];
+      const textContent = contentArray
+        .filter((c): c is { type: 'text'; text: string } => c.type === 'text' && typeof c.text === 'string')
+        .map((c) => c.text)
+        .join('');
 
-			return {
-				content: textContent || null,
-				tool_calls: toolCalls,
-				finish_reason: result.stopReason || 'stop',
-				usage: result.usage ? {
-					prompt_tokens: result.usage.input || 0,
-					completion_tokens: result.usage.output || 0,
-					total_tokens: result.usage.totalTokens || 0,
-				} : undefined,
-			};
-		} catch (error) {
-			return {
-				content: null,
-				tool_calls: [],
-				finish_reason: 'error',
-				error: error instanceof Error ? error.message : String(error),
-			};
-		}
-	}
+      const toolCalls: ToolCall[] = contentArray
+        .filter((c) => c.type === 'toolCall')
+        .map((tc) => ({
+          id: tc.id || '',
+          type: 'function' as const,
+          function: {
+            name: tc.name || '',
+            arguments: typeof tc.arguments === 'string'
+              ? tc.arguments
+              : JSON.stringify(tc.arguments || {}),
+          },
+        }));
 
-	private buildContext(messages: any[], tools?: any[]) {
-		return {
-			messages: messages.map((m: any) => this.normalizeMessage(m)),
-			tools: tools?.map((t: any) => this.normalizeTool(t)),
-		};
-	}
+      return {
+        content: textContent || null,
+        tool_calls: toolCalls,
+        finish_reason: result.stopReason || 'stop',
+        usage: result.usage ? {
+          prompt_tokens: result.usage.input || 0,
+          completion_tokens: result.usage.output || 0,
+          total_tokens: result.usage.totalTokens || 0,
+        } : undefined,
+      };
+    } catch (error) {
+      return {
+        content: null,
+        tool_calls: [],
+        finish_reason: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      };
+    }
+  }
 
-	private normalizeMessage(m: any) {
-		// Handle toolResult messages
-		if (m.role === 'toolResult') {
-			return {
-				role: 'toolResult',
-				toolCallId: m.tool_call_id || m.toolCallId || m.tool_call_id$,
-				toolName: m.toolName || m.tool_call_id,
-				content: m.content
-					? (typeof m.content === 'string'
-						? [{ type: 'text', text: m.content }]
-						: m.content)
-					: [{ type: 'text', text: String(m.content) }],
-				isError: m.isError || false,
-				timestamp: m.timestamp || Date.now(),
-			};
-		}
+  private buildContext(messages: ChatMessage[], tools?: ToolDefinition[]) {
+    return {
+      messages: messages.map((m) => this.normalizeMessage(m)),
+      tools: tools?.map((t) => this.normalizeTool(t)),
+    };
+  }
 
-		// Handle regular messages
-		let content: any[] = [];
+  private normalizeMessage(m: ChatMessage): Record<string, unknown> {
+    // Handle toolResult messages
+    if (m.role === 'toolResult') {
+      return {
+        role: 'toolResult',
+        toolCallId: m.toolCallId,
+        toolName: m.toolName,
+        content: m.content,
+        isError: m.isError,
+        timestamp: m.timestamp ?? Date.now(),
+      };
+    }
 
-		if (typeof m.content === 'string') {
-			content = [{ type: 'text', text: m.content }];
-		} else if (Array.isArray(m.content)) {
-			content = m.content.map((c: any) => {
-				if (c.type === 'text') {
-					return { type: 'text', text: c.text };
-				} else if (c.type === 'image_url' || c.image_url) {
-					const imageData = c.image_url?.data || c.data;
-					const mimeType = c.image_url?.mime_type || c.mime_type || 'image/png';
-					return { type: 'image', data: imageData, mimeType };
-				}
-				return { type: 'text', text: JSON.stringify(c) };
-			});
-		} else {
-			content = [{ type: 'text', text: String(m.content) }];
-		}
+    // Handle regular messages
+    let content: ContentPart[] = [];
 
-		return {
-			role: m.role,
-			content,
-			timestamp: m.timestamp || Date.now(),
-		};
-	}
+    if (typeof m.content === 'string') {
+      content = [{ type: 'text', text: m.content }];
+    } else if (Array.isArray(m.content)) {
+      content = m.content.map((c: ContentPart): ContentPart => {
+        if (c.type === 'text') {
+          return { type: 'text', text: c.text };
+        } else if (c.type === 'image') {
+          return { type: 'image', data: c.data, mimeType: c.mimeType };
+        }
+        return { type: 'text', text: JSON.stringify(c) };
+      });
+    } else {
+      content = [{ type: 'text', text: String(m.content) }];
+    }
 
-	private normalizeTool(t: any) {
-		return {
-			name: t.name,
-			description: t.description,
-			parameters: t.parameters,
-		};
-	}
+    return {
+      role: m.role,
+      content,
+      timestamp: m.timestamp ?? Date.now(),
+    };
+  }
 
-	getDefaultModel(): string {
-		return this.modelId;
-	}
+  private normalizeTool(t: ToolDefinition): Record<string, unknown> {
+    return {
+      name: t.name,
+      description: t.description,
+      parameters: t.parameters,
+    };
+  }
 
-	getModelInfo(): { id: string; provider: string; contextWindow: number; maxTokens: number } {
-		return {
-			id: this.model.id,
-			provider: this.model.provider,
-			contextWindow: this.model.contextWindow,
-			maxTokens: this.model.maxTokens,
-		};
-	}
+  getDefaultModel(): string {
+    return this.modelId;
+  }
 
-	calculateCost(usage: { input: number; output: number; cacheRead?: number; cacheWrite?: number }): number {
-		const cost = PiAI.calculateCost(this.model, {
-			input: usage.input,
-			output: usage.output,
-			cacheRead: usage.cacheRead || 0,
-			cacheWrite: usage.cacheWrite || 0,
-			totalTokens: usage.input + usage.output,
-			cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
-		});
-		return cost.total;
-	}
+  getModelInfo(): { id: string; provider: string; contextWindow: number; maxTokens: number } {
+    return {
+      id: this.model.id,
+      provider: this.model.provider,
+      contextWindow: this.model.contextWindow,
+      maxTokens: this.model.maxTokens,
+    };
+  }
+
+  calculateCost(usage: { input: number; output: number; cacheRead?: number; cacheWrite?: number }): number {
+    const cost = PiAI.calculateCost(this.model, {
+      input: usage.input,
+      output: usage.output,
+      cacheRead: usage.cacheRead ?? 0,
+      cacheWrite: usage.cacheWrite ?? 0,
+      totalTokens: usage.input + usage.output,
+      cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, total: 0 },
+    });
+    return cost.total;
+  }
 }
 
 // ============================================
@@ -221,47 +234,47 @@ export class LLMProviderImpl implements LLMProvider {
  * Create a provider instance
  */
 export function createProvider(config: Config, modelId: string): LLMProviderImpl {
-	return new LLMProviderImpl(config, modelId);
+  return new LLMProviderImpl(config, modelId);
 }
 
 /**
  * Get list of available models
  */
 export function getAvailableModels(config: Config) {
-	const registry = new ModelRegistry(config);
-	const models = registry.getAll();
+  const registry = new ModelRegistry(config);
+  const models = registry.getAll();
 
-	// Filter to only models with configured auth
-	const available = models.filter((m) => {
-		const apiKey = getApiKey(config, m.provider);
-		return !!apiKey || m.provider === 'ollama';
-	});
+  // Filter to only models with configured auth
+  const available = models.filter((m) => {
+    const apiKey = getApiKey(config, m.provider);
+    return !!apiKey || m.provider === 'ollama';
+  });
 
-	return available.map((m) => ({
-		id: `${m.provider}/${m.id}`,
-		name: m.name,
-		provider: m.provider,
-		contextWindow: m.contextWindow,
-		maxTokens: m.maxTokens,
-		reasoning: m.reasoning,
-		input: m.input,
-	}));
+  return available.map((m) => ({
+    id: `${m.provider}/${m.id}`,
+    name: m.name,
+    provider: m.provider,
+    contextWindow: m.contextWindow,
+    maxTokens: m.maxTokens,
+    reasoning: m.reasoning,
+    input: m.input,
+  }));
 }
 
 /**
  * List all models (including unavailable ones)
  */
 export function listAllModels(config: Config) {
-	const registry = new ModelRegistry(config);
-	const models = registry.getAll();
+  const registry = new ModelRegistry(config);
+  const models = registry.getAll();
 
-	// Group by provider
-	const byProvider = new Map<string, typeof models>();
-	for (const model of models) {
-		const list = byProvider.get(model.provider) ?? [];
-		list.push(model);
-		byProvider.set(model.provider, list);
-	}
+  // Group by provider
+  const byProvider = new Map<string, typeof models>();
+  for (const model of models) {
+    const list = byProvider.get(model.provider) ?? [];
+    list.push(model);
+    byProvider.set(model.provider, list);
+  }
 
-	return byProvider;
+  return byProvider;
 }

@@ -21,9 +21,13 @@ import type { AuthStorage } from '../auth/storage.js';
 import { listProfilesForProvider } from '../auth/profiles/profiles.js';
 import { resolveApiKeyForProfile } from '../auth/profiles/oauth.js';
 import { getLocalModelsDevModels } from './models-dev.js';
+import { createProviderConfig } from './config.js';
 
-const OLLAMA_API_BASE = 'http://127.0.0.1:11434';
+const providerConfig = createProviderConfig();
+const OLLAMA_API_BASE = providerConfig.ollamaBaseUrl;
 const OLLAMA_TAGS_URL = `${OLLAMA_API_BASE}/api/tags`;
+const OLLAMA_TIMEOUT_MS = providerConfig.ollamaTimeoutMs;
+const OLLAMA_DISCOVERY_TIMEOUT_MS = providerConfig.ollamaDiscoveryTimeoutMs;
 
 interface OllamaModel {
 	name: string;
@@ -44,7 +48,7 @@ interface OllamaTagsResponse {
 
 async function discoverOllamaModels(): Promise<Model<Api>[]> {
 	try {
-		const response = await fetch(OLLAMA_TAGS_URL, { signal: AbortSignal.timeout(5000) });
+		const response = await fetch(OLLAMA_TAGS_URL, { signal: AbortSignal.timeout(OLLAMA_TIMEOUT_MS) });
 		if (!response.ok) return [];
 
 		const data = (await response.json()) as OllamaTagsResponse;
@@ -71,7 +75,7 @@ async function discoverOllamaModels(): Promise<Model<Api>[]> {
 
 async function isOllamaRunning(): Promise<boolean> {
 	try {
-		const response = await fetch(OLLAMA_TAGS_URL, { signal: AbortSignal.timeout(2000) });
+		const response = await fetch(OLLAMA_TAGS_URL, { signal: AbortSignal.timeout(OLLAMA_DISCOVERY_TIMEOUT_MS) });
 		return response.ok;
 	} catch {
 		return false;
