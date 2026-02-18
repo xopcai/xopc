@@ -5,6 +5,7 @@ import {
   X, Save, ChevronRight, Check, AlertCircle,
   Settings, Eye, EyeOff, Loader2
 } from 'lucide';
+import { t } from '../utils/i18n';
 
 export interface SettingsSection {
   id: string;
@@ -128,13 +129,15 @@ export class XopcbotSettings extends LitElement {
 
   private renderMain(): unknown {
     const section = this.sections.find(s => s.id === this._activeSection);
-    if (!section) return html`<div class="settings-main">No section selected</div>`;
+    if (!section) return html`<div class="settings-main">${t('settings.noSection')}</div>`;
+
+    const descKey = `settings.descriptions.${section.id}` as const;
 
     return html`
       <div class="settings-main">
         <div class="section-header">
           <h2>${section.title}</h2>
-          <p class="section-description">Configure your ${section.title.toLowerCase()} settings</p>
+          <p class="section-description">${t(descKey)}</p>
         </div>
         
         <div class="fields-grid">
@@ -178,7 +181,7 @@ export class XopcbotSettings extends LitElement {
         ` : ''}
 
         ${isDirty && !error ? html`
-          <div class="field-dirty">Unsaved changes</div>
+          <div class="field-dirty">${t('settings.unsavedChanges')}</div>
         ` : ''}
       </div>
     `;
@@ -250,7 +253,7 @@ export class XopcbotSettings extends LitElement {
           @change=${(e: Event) => this._handleInput(field, fullKey, (e.target as HTMLInputElement).checked)}
         />
         <span class="toggle-switch"></span>
-        <span class="toggle-text">${field.description || 'Enable this feature'}</span>
+        <span class="toggle-text">${field.description || t('settings.enableFeature')}</span>
       </label>
     `;
   }
@@ -261,7 +264,7 @@ export class XopcbotSettings extends LitElement {
     return html`
       <div class="settings-footer">
         <button class="btn btn-ghost" @click=${() => this.onClose?.()}>
-          Cancel
+          ${t('settings.cancel')}
         </button>
         <button 
           class="btn btn-primary" 
@@ -270,10 +273,10 @@ export class XopcbotSettings extends LitElement {
         >
           ${this.loading ? html`
             <Loader2 class="w-4 h-4 animate-spin" />
-            Saving...
+            ${t('settings.saving')}
           ` : html`
             <Save class="w-4 h-4" />
-            Save Changes
+            ${t('settings.saveChanges')}
           `}
         </button>
       </div>
@@ -287,11 +290,11 @@ export class XopcbotSettings extends LitElement {
   private _handleInput(field: SettingsField, fullKey: string, value: any): void {
     // Validate
     if (field.validation?.required && !value) {
-      this._errors.set(fullKey, `${field.label} is required`);
+      this._errors.set(fullKey, t('settings.required', { field: field.label }));
     } else if (field.validation?.pattern && value) {
       const regex = new RegExp(field.validation.pattern);
       if (!regex.test(value)) {
-        this._errors.set(fullKey, `Invalid format`);
+        this._errors.set(fullKey, t('settings.invalidFormat'));
       } else {
         this._errors.delete(fullKey);
       }

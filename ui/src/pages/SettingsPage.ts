@@ -8,6 +8,7 @@ import {
   Settings, Eye, EyeOff, Loader2, RefreshCw
 } from 'lucide';
 import { getIcon } from '../utils/icons';
+import { t } from '../utils/i18n';
 
 export interface SettingsPageConfig {
   url: string;
@@ -122,191 +123,191 @@ export class SettingsPage extends LitElement {
     return [
       {
         id: 'agent',
-        title: 'Agent',
+        title: t('settings.sections.agent'),
         icon: 'bot',
         fields: [
           {
             key: 'model',
-            label: 'Model',
+            label: t('settings.fields.model'),
             type: 'select',
-            description: 'Default AI model to use',
+            description: t('settings.descriptionsFields.model'),
             options: modelOptions,
           },
           {
             key: 'workspace',
-            label: 'Workspace',
+            label: t('settings.fields.workspace'),
             type: 'text',
-            description: 'Working directory for agent files',
-            placeholder: '~/.xopcbot/workspace',
+            description: t('settings.descriptionsFields.workspace'),
+            placeholder: t('settings.placeholders.workspace'),
           },
           {
             key: 'maxTokens',
-            label: 'Max Tokens',
+            label: t('settings.fields.maxTokens'),
             type: 'number',
-            description: 'Maximum tokens in response',
+            description: t('settings.descriptionsFields.maxTokens'),
             validation: { min: 256, max: 128000 },
           },
           {
             key: 'temperature',
-            label: 'Temperature',
+            label: t('settings.fields.temperature'),
             type: 'number',
-            description: 'Randomness in responses (0-2)',
+            description: t('settings.descriptionsFields.temperature'),
             validation: { min: 0, max: 2 },
           },
           {
             key: 'maxToolIterations',
-            label: 'Max Tool Iterations',
+            label: t('settings.fields.maxToolIterations'),
             type: 'number',
-            description: 'Maximum tool calls per message',
+            description: t('settings.descriptionsFields.maxToolIterations'),
             validation: { min: 1, max: 100 },
           },
         ],
       },
       {
         id: 'providers',
-        title: 'Providers',
+        title: t('settings.sections.providers'),
         icon: 'cloud',
         fields: [
           {
             key: 'openaiApiKey',
-            label: 'OpenAI API Key',
+            label: t('settings.fields.openaiApiKey'),
             type: 'password',
-            description: 'API key for OpenAI models',
-            placeholder: 'sk-...',
+            description: t('settings.descriptionsFields.openaiApiKey'),
+            placeholder: t('settings.placeholders.openaiApiKey'),
           },
           {
             key: 'anthropicApiKey',
-            label: 'Anthropic API Key',
+            label: t('settings.fields.anthropicApiKey'),
             type: 'password',
-            description: 'API key for Claude models',
-            placeholder: 'sk-ant-...',
+            description: t('settings.descriptionsFields.anthropicApiKey'),
+            placeholder: t('settings.placeholders.anthropicApiKey'),
           },
           {
             key: 'googleApiKey',
-            label: 'Google API Key',
+            label: t('settings.fields.googleApiKey'),
             type: 'password',
-            description: 'API key for Gemini models',
-            placeholder: 'AIzaSy...',
+            description: t('settings.descriptionsFields.googleApiKey'),
+            placeholder: t('settings.placeholders.googleApiKey'),
           },
           {
             key: 'qwenApiKey',
-            label: 'Qwen API Key',
+            label: t('settings.fields.qwenApiKey'),
             type: 'password',
-            description: 'API key for Qwen models',
-            placeholder: 'sk-...',
+            description: t('settings.descriptionsFields.qwenApiKey'),
+            placeholder: t('settings.placeholders.qwenApiKey'),
           },
           {
             key: 'kimiApiKey',
-            label: 'Kimi API Key',
+            label: t('settings.fields.kimiApiKey'),
             type: 'password',
-            description: 'API key for Kimi models',
-            placeholder: 'sk-kimi-...',
+            description: t('settings.descriptionsFields.kimiApiKey'),
+            placeholder: t('settings.placeholders.kimiApiKey'),
           },
           {
             key: 'minimaxApiKey',
-            label: 'MiniMax API Key',
+            label: t('settings.fields.minimaxApiKey'),
             type: 'password',
-            description: 'API key for MiniMax models',
-            placeholder: 'sk-cp-...',
+            description: t('settings.descriptionsFields.minimaxApiKey'),
+            placeholder: t('settings.placeholders.minimaxApiKey'),
           },
           {
             key: 'deepseekApiKey',
-            label: 'DeepSeek API Key',
+            label: t('settings.fields.deepseekApiKey'),
             type: 'password',
-            description: 'API key for DeepSeek models',
-            placeholder: 'sk-...',
+            description: t('settings.descriptionsFields.deepseekApiKey'),
+            placeholder: t('settings.placeholders.deepseekApiKey'),
           },
           {
             key: 'openrouterApiKey',
-            label: 'OpenRouter API Key',
+            label: t('settings.fields.openrouterApiKey'),
             type: 'password',
-            description: 'API key for OpenRouter models',
-            placeholder: 'sk-or-...',
+            description: t('settings.descriptionsFields.openrouterApiKey'),
+            placeholder: t('settings.placeholders.openrouterApiKey'),
           },
         ],
       },
       {
         id: 'channels',
-        title: 'Channels',
+        title: t('settings.sections.channels'),
         icon: 'plug',
         fields: [
           // Telegram section
           {
             key: 'telegramEnabled',
-            label: 'Telegram',
+            label: t('settings.fields.telegramEnabled'),
             type: 'boolean',
-            description: 'Enable Telegram bot',
+            description: t('settings.descriptionsFields.telegramEnabled'),
           },
           ...(this._values.telegramEnabled ? [
             {
               key: 'telegramToken',
-              label: 'Telegram Token',
+              label: t('settings.fields.telegramToken'),
               type: 'password' as const,
-              description: 'Bot API token from @BotFather',
-              placeholder: '1234567890:ABCdefGHIjklMNOpqrsTUVwxyz',
+              description: t('settings.descriptionsFields.telegramToken'),
+              placeholder: t('settings.placeholders.telegramToken'),
             },
             {
               key: 'telegramApiRoot',
-              label: 'API Root (Optional)',
+              label: t('settings.fields.telegramApiRoot'),
               type: 'text' as const,
-              description: 'Custom Telegram API root URL',
-              placeholder: 'https://api.telegram.org',
+              description: t('settings.descriptionsFields.telegramApiRoot'),
+              placeholder: t('settings.placeholders.telegramApiRoot'),
             },
             {
               key: 'telegramAllowFrom',
-              label: 'Allow From (Optional)',
+              label: t('settings.fields.telegramAllowFrom'),
               type: 'text' as const,
-              description: 'Allowed user IDs, comma separated',
-              placeholder: '123456789, 987654321',
+              description: t('settings.descriptionsFields.telegramAllowFrom'),
+              placeholder: t('settings.placeholders.telegramAllowFrom'),
             },
             {
               key: 'telegramDebug',
-              label: 'Debug Mode',
+              label: t('settings.fields.telegramDebug'),
               type: 'boolean' as const,
-              description: 'Enable debug logging for Telegram',
+              description: t('settings.descriptionsFields.telegramDebug'),
             },
           ] : []),
           // WhatsApp section
           {
             key: 'whatsappEnabled',
-            label: 'WhatsApp',
+            label: t('settings.fields.whatsappEnabled'),
             type: 'boolean',
-            description: 'Enable WhatsApp bridge',
+            description: t('settings.descriptionsFields.whatsappEnabled'),
           },
           ...(this._values.whatsappEnabled ? [
             {
               key: 'whatsappBridgeUrl',
-              label: 'Bridge URL',
+              label: t('settings.fields.whatsappBridgeUrl'),
               type: 'text' as const,
-              description: 'WhatsApp bridge WebSocket URL',
-              placeholder: 'ws://localhost:3001',
+              description: t('settings.descriptionsFields.whatsappBridgeUrl'),
+              placeholder: t('settings.placeholders.whatsappBridgeUrl'),
             },
             {
               key: 'whatsappAllowFrom',
-              label: 'Allow From (Optional)',
+              label: t('settings.fields.whatsappAllowFrom'),
               type: 'text' as const,
-              description: 'Allowed phone numbers, comma separated',
-              placeholder: '+1234567890, +0987654321',
+              description: t('settings.descriptionsFields.whatsappAllowFrom'),
+              placeholder: t('settings.placeholders.whatsappAllowFrom'),
             },
           ] : []),
         ],
       },
       {
         id: 'gateway',
-        title: 'Gateway',
+        title: t('settings.sections.gateway'),
         icon: 'globe',
         fields: [
           {
             key: 'heartbeatEnabled',
-            label: 'Heartbeat',
+            label: t('settings.fields.heartbeatEnabled'),
             type: 'boolean',
-            description: 'Enable heartbeat monitoring',
+            description: t('settings.descriptionsFields.heartbeatEnabled'),
           },
           {
             key: 'heartbeatIntervalMs',
-            label: 'Heartbeat Interval (ms)',
+            label: t('settings.fields.heartbeatIntervalMs'),
             type: 'number',
-            description: 'Heartbeat check interval in milliseconds',
+            description: t('settings.descriptionsFields.heartbeatIntervalMs'),
             validation: { min: 1000, max: 600000 },
           },
         ],
@@ -559,7 +560,7 @@ export class SettingsPage extends LitElement {
       <div class="settings-page">
         <div class="settings-sidebar">
           <div class="sidebar-header">
-            <h3>Settings</h3>
+            <h3>${t('settings.title')}</h3>
           </div>
           <nav class="sidebar-nav">
             ${this._sections.map(section => html`
@@ -578,7 +579,7 @@ export class SettingsPage extends LitElement {
           ${this._loading ? html`
             <div class="loading-state">
               <div class="spinner"></div>
-              <p>Loading settings...</p>
+              <p>${t('settings.loading')}</p>
             </div>
           ` : this._renderSection()}
         </div>
@@ -586,7 +587,7 @@ export class SettingsPage extends LitElement {
         <!-- Save button floating -->
         ${this._dirtyFields.size > 0 ? html`
           <div class="floating-save">
-            <span class="dirty-count">${this._dirtyFields.size} unsaved</span>
+            <span class="dirty-count">${t('settings.unsaved', { count: this._dirtyFields.size })}</span>
             <button 
               class="btn btn-primary"
               ?disabled=${this._saving || this._errors.size > 0}
@@ -594,10 +595,10 @@ export class SettingsPage extends LitElement {
             >
               ${this._saving ? html`
                 <span class="spinner-sm"></span>
-                Saving...
+                ${t('settings.saving')}
               ` : html`
                 <span>${getIcon('save')}</span>
-                Save Changes
+                ${t('settings.saveChanges')}
               `}
             </button>
           </div>
@@ -608,13 +609,15 @@ export class SettingsPage extends LitElement {
 
   private _renderSection(): unknown {
     const section = this._sections.find(s => s.id === this._activeSection);
-    if (!section) return html`<div>No section selected</div>`;
+    if (!section) return html`<div>${t('settings.noSection')}</div>`;
+
+    const descKey = `settings.descriptions.${section.id}` as const;
 
     return html`
       <div class="section-content">
         <div class="section-header">
           <h2>${section.title}</h2>
-          <p class="section-desc">Configure your ${section.title.toLowerCase()} settings</p>
+          <p class="section-desc">${t(descKey)}</p>
         </div>
 
         <div class="fields-grid">
@@ -690,7 +693,7 @@ export class SettingsPage extends LitElement {
           @change=${(e: Event) => this._handleInput(field.key, (e.target as HTMLInputElement).checked)}
         />
         <span class="toggle-switch"></span>
-        <span class="toggle-text">${field.description || 'Enable this feature'}</span>
+        <span class="toggle-text">${field.description || t('settings.enableFeature')}</span>
       </label>
     `;
   }
