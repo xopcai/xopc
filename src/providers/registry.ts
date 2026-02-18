@@ -5,6 +5,8 @@
  * Loads built-in models from @mariozechner/pi-ai and custom models from config.json.
  * Supports auto-discovery of local Ollama models.
  * Supports AuthStorage and AuthProfiles for OAuth and API key authentication.
+ * 
+ * UPDATED: Now uses provider-catalog for unified provider definitions
  */
 
 import {
@@ -22,6 +24,25 @@ import { listProfilesForProvider } from '../auth/profiles/profiles.js';
 import { resolveApiKeyForProfile } from '../auth/profiles/oauth.js';
 import { getLocalModelsDevModels } from './models-dev.js';
 import { createProviderConfig } from './config.js';
+
+// NEW: Import from provider-catalog
+import {
+	getProvider as getProviderFromCatalog,
+	getProviderApiKey as getProviderApiKeyFromCatalog,
+	isProviderConfigured,
+	getConfiguredProviders,
+	getProviderDisplayInfo,
+	detectProviderByModel,
+	getAllProviders,
+} from './provider-catalog.js';
+
+// NEW: Import from model-catalog
+import {
+	findModelByProvider,
+	getModelsByProvider as getModelsByProviderFromCatalog,
+	modelSupportsFeature,
+	modelSupportsModality,
+} from './model-catalog.js';
 
 const providerConfig = createProviderConfig();
 const OLLAMA_API_BASE = providerConfig.ollamaBaseUrl;
@@ -89,7 +110,7 @@ export interface ProviderOverride {
 	models?: string[];
 }
 
-/** Provider information for UI display */
+/** Provider information for UI display - DEPRECATED: Use getProviderDisplayInfo from provider-catalog */
 export interface ProviderInfo {
 	id: string;
 	name: string;
@@ -100,6 +121,10 @@ export interface ProviderInfo {
 	logo?: string;
 }
 
+/**
+ * DEPRECATED: Use getAllProviders() from provider-catalog instead.
+ * Kept for backward compatibility.
+ */
 export const PROVIDER_INFO: Record<string, ProviderInfo> = {
 	'openai': { id: 'openai', name: 'OpenAI', envKey: 'OPENAI_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://api.openai.com/v1' },
 	'anthropic': { id: 'anthropic', name: 'Anthropic', envKey: 'ANTHROPIC_API_KEY', authType: 'api_key', supportsOAuth: true, baseUrl: 'https://api.anthropic.com' },
@@ -181,6 +206,8 @@ export class ModelRegistry {
 
 	/**
 	 * Get API key for a provider (supports OAuth, AuthProfiles, and API keys).
+	 * 
+	 * UPDATED: Now uses provider-catalog as primary source
 	 */
 	async getApiKey(provider: string): Promise<string | undefined> {
 		// Try AuthProfiles first (new architecture)
@@ -206,14 +233,76 @@ export class ModelRegistry {
 			if (key) return key;
 		}
 
+		// Try provider-catalog (NEW)
+		const catalogKey = getProviderApiKeyFromCatalog(provider);
+		if (catalogKey) return catalogKey;
+
 		// Fall back to config
 		if (this.config) {
 			return getConfigApiKey(this.config, provider) ?? undefined;
 		}
 
-		// Fall back to environment variable
-		const envKey = `${provider.toUpperCase().replace(/-/g, '_')}_API_KEY`;
-		return process.env[envKey];
+		return undefined;
+	}
+
+	/**
+	 * NEW: Get provider definition from catalog
+	 */
+	getProviderFromCatalog(providerId: string) {
+		return getProviderFromCatalog(providerId);
+	}
+
+	/**
+	 * NEW: Check if provider is configured using catalog
+	 */
+	isProviderConfigured(providerId: string): boolean {
+		return isProviderConfigured(providerId);
+	}
+
+	/**
+	 * NEW: Get all configured providers using catalog
+	 */
+	getConfiguredProviders() {
+		return getConfiguredProviders();
+	}
+
+	/**
+	 * NEW: Auto-detect provider by model ID
+	 */
+	detectProvider(modelId: string): string | undefined {
+		return detectProviderByModel(modelId);
+	}
+
+	/**
+	 * NEW: Check if model supports a specific feature
+	 */
+	modelSupportsFeature(modelId: string, feature: string): boolean {
+		// Parse provider/model format
+		const { provider, model } = this.parseModelRef(modelId);
+		return modelSupportsFeature(model, feature as any);
+	}
+
+	/**
+	 * NEW: Check if model supports a specific modality
+	 */
+	modelSupportsModality(modelId: string, modality: string): boolean {
+		const { provider, model } = this.parseModelRef(modelId);
+		return modelSupportsModality(model, modality as any);
+	}
+
+	/**
+	 * NEW: Parse model reference
+	 */
+	parseModelRef(ref: string): { provider: string; model: string } {
+		const slashIndex = ref.indexOf('/');
+		if (slashIndex === -1) {
+			// Try to detect provider
+			const detected = detectProviderByModel(ref);
+			return { provider: detected || 'openai', model: ref };
+		}
+		const provider = ref.substring(0, slashIndex);
+		const model = ref.substring(slashIndex + 1);
+		return { provider, model };
 	}
 
 	private loadModels(): void {
@@ -408,6 +497,12 @@ export class ModelRegistry {
 				}
 			}
 
+			// Check via provider-catalog (NEW)
+			if (isProviderConfigured(m.provider)) {
+				available.push(m);
+				continue;
+			}
+
 			// Fall back to config
 			if (this.config) {
 				const apiKey = getConfigApiKey(this.config, m.provider);
@@ -492,6 +587,10 @@ export class ModelRegistry {
 		if (this.authStorage && this.authStorage.hasAuth(provider)) {
 			return true;
 		}
+		// Check provider-catalog (NEW)
+		if (isProviderConfigured(provider)) {
+			return true;
+		}
 		// Fall back to config
 		if (!this.config) return false;
 		return !!getConfigApiKey(this.config, provider);
@@ -515,18 +614,62 @@ export class ModelRegistry {
 		if (this.authStorage) {
 			return this.authStorage.hasAuth(provider);
 		}
+		// Check provider-catalog (NEW)
+		if (isProviderConfigured(provider)) {
+			return true;
+		}
 		// Fall back to config
 		if (!this.config) return false;
 		return !!getConfigApiKey(this.config, provider);
 	}
 
-	/** Get provider info */
+	/** 
+	 * Get provider info 
+	 * UPDATED: Now uses provider-catalog as primary source
+	 */
 	static getProviderInfo(provider: string): ProviderInfo | undefined {
+		// Try new catalog first
+		const fromCatalog = getProviderDisplayInfo(provider);
+		if (fromCatalog) {
+			// Filter 'none' auth type to legacy compatible type
+			const authType = fromCatalog.authType === 'none' ? 'api_key' : fromCatalog.authType;
+			return {
+				id: fromCatalog.id,
+				name: fromCatalog.name,
+				envKey: fromCatalog.envKeys[0] || '',
+				authType,
+				supportsOAuth: fromCatalog.supportsOAuth,
+				baseUrl: fromCatalog.baseUrl,
+				logo: fromCatalog.logo,
+			};
+		}
+		// Fall back to legacy
 		return PROVIDER_INFO[provider];
 	}
 
-	/** Get all provider infos */
+	/** 
+	 * Get all provider infos 
+	 * UPDATED: Now uses provider-catalog as primary source
+	 */
 	static getAllProviderInfo(): ProviderInfo[] {
+		// Get from new catalog
+		const fromCatalog = getAllProviders().map(p => getProviderDisplayInfo(p.id));
+		if (fromCatalog.length > 0 && fromCatalog[0]) {
+			return fromCatalog.map(info => {
+				// Filter 'none' auth type to legacy compatible type
+				const authType = info.authType === 'none' ? 'api_key' : info.authType;
+				return {
+					id: info.id,
+					name: info.name,
+					envKey: info.envKeys[0] || '',
+					authType,
+					supportsOAuth: info.supportsOAuth,
+					baseUrl: info.baseUrl,
+					logo: info.logo,
+				};
+			});
+		}
+		// Fall back to legacy
 		return Object.values(PROVIDER_INFO);
 	}
 }
