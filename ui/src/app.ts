@@ -9,8 +9,6 @@ import './pages/SettingsPage';
 import {
   TAB_GROUPS,
   type Tab,
-  titleForTab,
-  subtitleForTab,
   renderNavItem,
   parseChatHash,
   getChatHash,
@@ -344,13 +342,6 @@ export class XopcbotApp extends LitElement {
 
           <!-- Main Content -->
           <main class="content ${this._activeTab === 'chat' ? 'content--chat' : ''}">
-            <section class="content-header">
-              <div>
-                <div class="page-title">${titleForTab(this._activeTab)}</div>
-                <div class="page-sub">${subtitleForTab(this._activeTab)}</div>
-              </div>
-            </section>
-
             ${this._activeTab === 'chat' ? this._renderChat() : nothing}
             ${this._activeTab === 'sessions' ? this._renderSessions() : nothing}
             ${this._activeTab === 'cron' ? this._renderCron() : nothing}

@@ -3,18 +3,6 @@
     "title": "XOPCBOT Gateway",
     "brand": "XOPCBOT"
   },
-  "nav": {
-    "chat": "Chat",
-    "sessions": "Sessions",
-    "cron": "Cron Jobs",
-    "logs": "Logs",
-    "settings": "Settings",
-    "chatSubtitle": "Chat with the gateway agent",
-    "sessionsSubtitle": "Manage conversation history",
-    "cronSubtitle": "Manage scheduled tasks",
-    "logsSubtitle": "View system logs",
-    "settingsSubtitle": "Configure gateway settings"
-  },
   "chat": {
     "title": "XopcBot",
     "newSession": "New Chat",

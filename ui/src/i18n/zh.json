@@ -3,18 +3,6 @@
     "title": "XOPCBOT 网关",
     "brand": "XOPCBOT"
   },
-  "nav": {
-    "chat": "对话",
-    "sessions": "会话",
-    "cron": "定时任务",
-    "logs": "日志",
-    "settings": "设置",
-    "chatSubtitle": "与网关代理对话",
-    "sessionsSubtitle": "管理对话历史",
-    "cronSubtitle": "管理定时任务",
-    "logsSubtitle": "查看系统日志",
-    "settingsSubtitle": "配置网关设置"
-  },
   "chat": {
     "title": "XopcBot",
     "newSession": "新建对话",

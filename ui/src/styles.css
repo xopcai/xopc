@@ -584,20 +584,9 @@ html, body {
   background: var(--bg-primary);
 }
 
-.content-header {
-  padding: 0.75rem 1.5rem;
-  border-bottom: 1px solid var(--border-color);
-  flex-shrink: 0;
-}
-
 .page-title {
   font-size: 1rem;
   font-weight: 600;
-}
-
-.page-sub {
-  font-size: 0.75rem;
-  color: var(--text-muted);
 }
 
 /* --------------------------------------------
