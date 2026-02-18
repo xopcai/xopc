@@ -14,6 +14,12 @@ export interface CronJob {
   updated_at: string;
 }
 
+export interface ChannelStatus {
+  name: string;
+  enabled: boolean;
+  connected: boolean;
+}
+
 export interface CronJobExecution {
   id: string;
   jobId: string;
@@ -135,5 +141,10 @@ export class CronAPIClient {
 
   async getMetrics(): Promise<CronMetrics> {
     return await this.request<CronMetrics>('GET', '/api/cron/metrics');
+  }
+
+  async getChannels(): Promise<ChannelStatus[]> {
+    const result = await this.request<{ ok: boolean; payload: { channels: ChannelStatus[] } }>('GET', '/api/channels/status');
+    return result.payload?.channels || [];
   }
 }

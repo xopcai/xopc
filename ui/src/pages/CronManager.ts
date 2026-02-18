@@ -4,7 +4,7 @@ import { html, LitElement, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
-import { CronAPIClient, type CronJob, type CronJobExecution, type CronMetrics } from '../utils/cron-api';
+import { CronAPIClient, type CronJob, type CronJobExecution, type CronMetrics, type ChannelStatus } from '../utils/cron-api';
 import '../components/ConfirmDialog';
 
 export interface CronManagerConfig {
@@ -18,6 +18,7 @@ export class CronManager extends LitElement {
 
   @state() private _jobs: CronJob[] = [];
   @state() private _metrics: CronMetrics | null = null;
+  @state() private _channels: ChannelStatus[] = [];
   @state() private _loading = false;
   @state() private _error: string | null = null;
 
@@ -25,6 +26,8 @@ export class CronManager extends LitElement {
   @state() private _formOpen = false;
   @state() private _formName = '';
   @state() private _formSchedule = '*/5 * * * *';
+  @state() private _formChannel = 'telegram';
+  @state() private _formChatId = '';
   @state() private _formMessage = '';
   @state() private _formSubmitting = false;
 
@@ -69,6 +72,7 @@ export class CronManager extends LitElement {
     this._initialized = true;
     this._loadJobs();
     this._loadMetrics();
+    this._loadChannels();
   }
 
   override disconnectedCallback(): void {
@@ -99,12 +103,22 @@ export class CronManager extends LitElement {
     }
   }
 
+  private async _loadChannels(): Promise<void> {
+    try {
+      this._channels = await this._api.getChannels();
+    } catch (err) {
+      console.error('[CronManager] Channels error:', err);
+    }
+  }
+
   // ========== Form ==========
 
   private _openForm(): void {
     this._formOpen = true;
     this._formName = '';
     this._formSchedule = '*/5 * * * *';
+    this._formChannel = 'telegram';
+    this._formChatId = '';
     this._formMessage = '';
   }
 
@@ -112,6 +126,8 @@ export class CronManager extends LitElement {
     this._formOpen = false;
     this._formName = '';
     this._formSchedule = '*/5 * * * *';
+    this._formChannel = 'telegram';
+    this._formChatId = '';
     this._formMessage = '';
   }
 
@@ -121,11 +137,18 @@ export class CronManager extends LitElement {
       return;
     }
 
+    if (!this._formChatId) {
+      this._error = 'Chat ID is required';
+      return;
+    }
+
     this._formSubmitting = true;
     this._error = null;
 
     try {
-      await this._api.addJob(this._formSchedule, this._formMessage, {
+      // Format: channel:chat_id:message
+      const message = `${this._formChannel}:${this._formChatId}:${this._formMessage}`;
+      await this._api.addJob(this._formSchedule, message, {
         name: this._formName || undefined,
       });
       this._closeForm();
@@ -200,18 +223,29 @@ export class CronManager extends LitElement {
     this._confirmAction = null;
   }
 
+  private _handleConfirm(e: CustomEvent<{ confirmed: boolean }>): void {
+    if (e.detail.confirmed) {
+      this._executeConfirmAction();
+    } else {
+      this._closeConfirm();
+    }
+  }
+
   private async _executeConfirmAction(): Promise<void> {
-    if (!this._confirmJobId || !this._confirmAction) return;
+    if (!this._confirmJobId || !this._confirmAction) {
+      return;
+    }
 
     const jobId = this._confirmJobId;
+    const action = this._confirmAction;  // Save before closing
     this._closeConfirm();
-
+    
     try {
-      if (this._confirmAction === 'run') {
+      if (action === 'run') {
         await this._api.runJob(jobId);
         await this._loadJobs();
         await this._loadMetrics();
-      } else if (this._confirmAction === 'delete') {
+      } else if (action === 'delete') {
         await this._api.removeJob(jobId);
         await this._loadJobs();
         await this._loadMetrics();
@@ -366,6 +400,30 @@ export class CronManager extends LitElement {
                 <p class="form-field__hint">${t('cron.scheduleHint')}</p>
               </div>
               <div class="form-field">
+                <label class="form-field__label">Channel</label>
+                <select 
+                  class="form-field__select"
+                  .value=${this._formChannel}
+                  @change=${(e: Event) => this._formChannel = (e.target as HTMLSelectElement).value}
+                >
+                  ${this._channels.map(ch => html`
+                    <option value=${ch.name} ?disabled=${!ch.enabled}>
+                      ${ch.name} ${!ch.enabled ? '(disabled)' : ''}
+                    </option>
+                  `)}
+                </select>
+              </div>
+              <div class="form-field">
+                <label class="form-field__label">Chat ID *</label>
+                <input 
+                  type="text" 
+                  class="form-field__input"
+                  .value=${this._formChatId}
+                  @input=${(e: Event) => this._formChatId = (e.target as HTMLInputElement).value}
+                  placeholder="e.g., 123456789"
+                />
+              </div>
+              <div class="form-field">
                 <label class="form-field__label">${t('cron.message')}</label>
                 <textarea 
                   class="form-field__textarea"
@@ -381,7 +439,7 @@ export class CronManager extends LitElement {
               <button 
                 class="btn btn-primary" 
                 @click=${this._submitForm}
-                ?disabled=${this._formSubmitting || !this._formSchedule || !this._formMessage}
+                ?disabled=${this._formSubmitting || !this._formSchedule || !this._formChatId || !this._formMessage}
               >
                 ${this._formSubmitting ? t('common.loading') : t('cron.create')}
               </button>
@@ -436,13 +494,7 @@ export class CronManager extends LitElement {
         .confirmText=${this._confirmAction === 'delete' ? t('cron.delete') : t('cron.runNow')}
         .cancelText=${t('common.cancel')}
         .type=${this._confirmAction === 'delete' ? 'danger' : 'warning'}
-        @confirm=${(e: CustomEvent<{ confirmed: boolean }>) => {
-          if (e.detail.confirmed) {
-            this._executeConfirmAction();
-          } else {
-            this._closeConfirm();
-          }
-        }}
+        @confirm=${this._handleConfirm}
       ></confirm-dialog>
     `;
   }
