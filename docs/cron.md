@@ -1,150 +1,256 @@
-# 定时任务
+# Cron Jobs
 
-xopcbot 内置 Cron 服务，支持定时发送消息。
+xopcbot has a built-in Cron service that supports scheduled message sending with two execution modes: **Direct** and **AI Agent**.
 
-## 使用方法
+## Usage
 
-### 查看任务列表
+### List Tasks
 
 ```bash
 npm run dev -- cron list
 ```
 
-输出示例：
+Output example:
 
 ```
-ID   | Schedule      | Message                    | Enabled
------|---------------|----------------------------|--------
-abc1 | 0 9 * * *    | Good morning!             | true
-abc2 | 0 18 * * *   | Good evening!             | true
+ID       | Schedule      | Mode     | Enabled | Next Run
+---------|---------------|----------|---------|-------------------
+abc12345 | 0 9 * * *    | main     | true    | 2026-02-21T09:00
+def67890 | 0 10 * * *   | isolated | true    | 2026-02-21T10:00
 ```
 
-### 添加任务
+### Add Task
 
 ```bash
 npm run dev -- cron add --schedule "0 9 * * *" --message "Good morning!"
 ```
 
-参数：
+**Parameters:**
 
-| 参数 | 描述 |
-|------|------|
-| `--schedule` | Cron 表达式 |
-| `--message` | 定时发送的消息 |
-| `--name` | (可选) 任务名称 |
+| Parameter | Description |
+|-----------|-------------|
+| `--schedule` | Cron expression |
+| `--message` | Message to send |
+| `--name` | (Optional) Task name |
+| `--target` | Execution mode: `main` (direct) or `isolated` (AI agent) |
+| `--model` | (Optional) Model for AI agent mode |
+| `--channel` | (Optional) Target channel: `telegram`, `whatsapp`, `cli` |
+| `--to` | (Optional) Recipient chat ID |
 
-### 删除任务
+### Remove Task
 
 ```bash
 npm run dev -- cron remove <task-id>
 ```
 
-### 启用/禁用任务
+### Enable/Disable Task
 
 ```bash
 npm run dev -- cron enable <task-id>
 npm run dev -- cron disable <task-id>
 ```
 
-## Cron 表达式格式
+### Run Now
+
+```bash
+npm run dev -- cron run <task-id>
+```
+
+## Execution Modes
+
+### 1. Direct Mode (`main`)
+
+Sends messages directly to the specified channel without AI processing.
+
+```bash
+npm run dev -- cron add "0 9 * *" "Good morning!" \
+  --name "Morning" \
+  --target main \
+  --channel telegram \
+  --to 123456789
+```
+
+### 2. AI Agent Mode (`isolated`)
+
+Uses AI agent to process the message, then sends the response to the channel.
+
+```bash
+npm run dev -- cron add "0 10 * * *" "What's the weather today?" \
+  --name "Weather" \
+  --target isolated \
+  --model minimax/minimax-m2.5 \
+  --channel telegram \
+  --to 123456789
+```
+
+## Cron Expression Format
 
 ```
-┌───────────── 分钟 (0 - 59)
-│ ┌─────────── 小时 (0 - 23)
-│ │ ┌───────── 日 (1 - 31)
-│ │ │ ┌─────── 月 (1 - 12)
-│ │ │ │ ┌───── 周几 (0 - 6, 周日=0)
+┌───────────── minute (0 - 59)
+│ ┌─────────── hour (0 - 23)
+│ │ ┌───────── day of month (1 - 31)
+│ │ │ ┌─────── month (1 - 12)
+│ │ │ │ ┌───── day of week (0 - 6, Sunday=0)
 │ │ │ │ │
 * * * * *
 ```
 
-## 常用示例
+## Common Examples
 
-| 表达式 | 描述 |
-|--------|------|
-| `0 9 * * *` | 每天 9:00 |
-| `0 18 * * 1-5` | 工作日 18:00 |
-| `30 8 * * 1` | 每周一 8:30 |
-| `0 0 1 * *` | 每月 1 号 |
-| `*/15 * * * *` | 每 15 分钟 |
+| Expression | Description |
+|-----------|-------------|
+| `0 9 * * *` | Daily at 9:00 AM |
+| `0 18 * * 1-5` | Weekdays at 6:00 PM |
+| `30 8 * * 1` | Every Monday at 8:30 AM |
+| `0 0 1 * *` | First day of every month |
+| `*/15 * * * *` | Every 15 minutes |
+| `*/1 * * * *` | Every minute (for testing) |
 
-## 任务存储
+## Task Storage
 
-任务保存在 `~/.xopcbot/cron-jobs.json`：
+Tasks are saved in `~/.xopcbot/cron-jobs.json`:
 
 ```json
 {
   "jobs": [
     {
-      "id": "abc123",
+      "id": "abc12345",
       "name": "Morning",
       "schedule": "0 9 * * *",
       "message": "Good morning!",
       "enabled": true,
-      "created_at": "2026-02-03T12:00:00.000Z"
+      "sessionTarget": "main",
+      "delivery": {
+        "mode": "direct",
+        "channel": "telegram",
+        "to": "123456789"
+      },
+      "created_at": "2026-02-20T12:00:00.000Z",
+      "updated_at": "2026-02-20T12:00:00.000Z"
+    },
+    {
+      "id": "def67890",
+      "name": "Weather",
+      "schedule": "0 10 * * *",
+      "message": "What's the weather today?",
+      "enabled": true,
+      "sessionTarget": "isolated",
+      "model": "minimax/minimax-m2.5",
+      "delivery": {
+        "mode": "direct",
+        "channel": "telegram",
+        "to": "123456789"
+      },
+      "created_at": "2026-02-20T12:00:00.000Z",
+      "updated_at": "2026-02-20T12:00:00.000Z"
     }
-  ]
+  ],
+  "version": 1
 }
 ```
 
-## 程序化使用
+## Programmatic Usage
 
 ```typescript
-import { CronService } from '../cron/service.js';
+import { CronService } from '../cron/index.js';
 
-const cronService = new CronService();
-
-// 添加任务
-const id = await cronService.addJob({
-  schedule: '0 9 * * *',
-  message: 'Daily reminder!',
-  name: 'Daily'
+const cronService = new CronService({
+  filePath: '~/.xopcbot/cron-jobs.json',
+  agentService: agentServiceInstance,
+  messageBus: messageBusInstance,
 });
 
-// 列出任务
-const jobs = cronService.listJobs();
+// Initialize
+await cronService.initialize();
+
+// Add task - Direct mode
+await cronService.addJob('0 9 * * *', 'Good morning!', {
+  name: 'Morning',
+  sessionTarget: 'main',
+  delivery: {
+    mode: 'direct',
+    channel: 'telegram',
+    to: '123456789',
+  },
+});
+
+// Add task - AI Agent mode
+await cronService.addJob('0 10 * * *', 'Query weather', {
+  name: 'Weather',
+  sessionTarget: 'isolated',
+  model: 'minimax/minimax-m2.5',
+  delivery: {
+    mode: 'direct',
+    channel: 'telegram',
+    to: '123456789',
+  },
+});
+
+// List tasks
+const jobs = await cronService.listJobs();
 console.log(jobs);
 
-// 删除任务
-cronService.removeJob(id);
+// Get task history
+const history = cronService.getHistory(jobId, 10);
 
-// 获取运行中的任务数
-const count = cronService.getRunningCount();
+// Run task immediately
+await cronService.runJobNow(jobId);
+
+// Stop service
+await cronService.stop();
 ```
 
-## 配置
+## Configuration
 
-定时任务在配置文件中启用：
+Cron jobs are enabled in the config:
 
 ```json
 {
-  "gateway": {
-    "host": "0.0.0.0",
-    "port": 18790
+  "cron": {
+    "enabled": true,
+    "maxConcurrentJobs": 5,
+    "defaultTimezone": "UTC",
+    "historyRetentionDays": 7
   }
 }
 ```
 
-确保网关服务运行以接收定时消息。
+Make sure the gateway service is running to receive scheduled messages.
 
-## 最佳实践
+## Error Backoff
 
-1. **测试表达式**：使用 `cron-parser` 验证表达式
-2. **合理频率**：避免过于频繁的任务
-3. **错误处理**：查看日志确认任务执行成功
-4. **时区注意**：Cron 使用服务器时区
+When a job fails consecutively, the system applies exponential backoff:
 
-## 故障排除
+| Consecutive Errors | Delay |
+|-------------------|-------|
+| 1 | 30 seconds |
+| 2 | 1 minute |
+| 3 | 5 minutes |
+| 4 | 15 minutes |
+| 5+ | 60 minutes |
 
-**任务不执行？**
-- 确认网关服务正在运行
-- 检查 Cron 表达式格式正确
-- 查看日志中的错误信息
+## Best Practices
 
-**时区问题？**
-- Cron 使用系统时区
-- 确认服务器时区设置正确
+1. **Test expressions**: Use `cron-parser` to validate expressions
+2. **Reasonable frequency**: Avoid overly frequent tasks
+3. **Error handling**: Check logs to confirm task execution success
+4. **Timezone**: Cron uses server timezone
 
-**消息未发送？**
-- 检查通道配置是否启用
-- 确认 API Key 有效
+## Troubleshooting
+
+**Task not executing?**
+- Ensure gateway service is running
+- Check Cron expression format is correct
+- Check error logs
+
+**Timezone issues?**
+- Cron uses system timezone
+- Ensure server timezone is set correctly
+
+**Message not sent?**
+- Check channel configuration is enabled
+- Verify API Key is valid
+
+**AI mode not working?**
+- Ensure model is configured in providers
+- Check agent service is initialized
