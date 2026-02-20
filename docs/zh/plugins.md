@@ -410,7 +410,7 @@ api.registerTool({
 | `before_agent_start` | Agent 启动前 | 修改系统提示 |
 | `agent_end` | Agent 完成后 | 后处理结果 |
 | `message_received` | 收到消息时 | 消息预处理 |
-| `message_sending` | 发送消息前 | 修改消息内容 |
+| `message_sending` | 发送消息前 | 拦截/修改消息内容 |
 | `message_sent` | 消息发送后 | 发送日志 |
 | `before_tool_call` | 工具调用前 | 参数验证 |
 | `after_tool_call` | 工具调用后 | 结果处理 |
@@ -420,20 +420,51 @@ api.registerTool({
 | `gateway_stop` | 网关关闭 | 清理 |
 
 ```javascript
-// 修改消息发送
+// message_sending hook - 拦截或修改 AI 发送的消息
 api.registerHook('message_sending', async (event, ctx) => {
-  const message = event;
-  if (message.content.startsWith('[private]')) {
-    message.content = message.content.replace('[private]', '').trim();
-    return { content: message.content };
+  const { to, content } = event;
+
+  // 1. 阻止消息发送（例如：内容审核）
+  if (content.includes('敏感信息')) {
+    return {
+      cancel: true,
+      cancelReason: '内容包含敏感信息'
+    };
+  }
+
+  // 2. 修改消息内容（例如：添加签名、替换内容）
+  if (content.includes('{{signature}}')) {
+    return {
+      content: content.replace('{{signature}}', '\n\n— 由 AI 助手发送')
+    };
+  }
+
+  // 3. 针对特定聊天阻止
+  if (to === 'blocked-chat-id') {
+    return {
+      cancel: true,
+      cancelReason: '此聊天已被阻止'
+    };
   }
 });
 
-// 阻止特定工具调用
+// before_tool_call hook - 阻止或修改工具调用
 api.registerHook('before_tool_call', async (event, ctx) => {
-  const toolCall = event;
-  if (toolCall.toolName === 'delete_file') {
-    return { block: true, blockReason: 'File deletion is disabled' };
+  const { toolName, params } = event;
+
+  // 阻止危险操作
+  if (toolName === 'delete_file' || toolName === 'execute_command') {
+    return {
+      block: true,
+      blockReason: '出于安全考虑，此操作已被禁用'
+    };
+  }
+
+  // 修改参数
+  if (toolName === 'write_file' && params.path?.includes('/etc/')) {
+    return {
+      params: { ...params, path: params.path.replace('/etc/', '/safe/') }
+    };
   }
 });
 ```
