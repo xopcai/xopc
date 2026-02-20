@@ -4,7 +4,7 @@ import { html, LitElement, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
-import { CronAPIClient, type CronJob, type CronJobExecution, type CronMetrics, type ChannelStatus } from '../utils/cron-api';
+import { CronAPIClient, type CronJob, type CronJobExecution, type CronMetrics, type ChannelStatus, type ModelInfo } from '../utils/cron-api';
 import '../components/ConfirmDialog';
 
 export interface CronManagerConfig {
@@ -19,6 +19,8 @@ export class CronManager extends LitElement {
   @state() private _jobs: CronJob[] = [];
   @state() private _metrics: CronMetrics | null = null;
   @state() private _channels: ChannelStatus[] = [];
+  @state() private _availableModels: ModelInfo[] = [];
+  @state() private _defaultModel: string = '';
   @state() private _loading = false;
   @state() private _error: string | null = null;
 
@@ -29,6 +31,8 @@ export class CronManager extends LitElement {
   @state() private _formChannel = 'telegram';
   @state() private _formChatId = '';
   @state() private _formMessage = '';
+  @state() private _formSessionTarget: 'main' | 'isolated' = 'main';
+  @state() private _formModel = '';
   @state() private _formSubmitting = false;
 
   // Detail drawer state
@@ -73,6 +77,7 @@ export class CronManager extends LitElement {
     this._loadJobs();
     this._loadMetrics();
     this._loadChannels();
+    this._loadModels();
   }
 
   override disconnectedCallback(): void {
@@ -111,6 +116,24 @@ export class CronManager extends LitElement {
     }
   }
 
+  private async _loadModels(): Promise<void> {
+    try {
+      // Load available models from configured providers
+      this._availableModels = await this._api.getModels();
+      
+      // Load config to get default model
+      const config = await this._api.getConfig();
+      this._defaultModel = config.model || '';
+      
+      // Set form default model
+      this._formModel = this._defaultModel;
+      
+      console.log('[CronManager] Loaded models:', this._availableModels.length, 'default:', this._defaultModel);
+    } catch (err) {
+      console.error('[CronManager] Models error:', err);
+    }
+  }
+
   // ========== Form ==========
 
   private _openForm(): void {
@@ -120,6 +143,9 @@ export class CronManager extends LitElement {
     this._formChannel = 'telegram';
     this._formChatId = '';
     this._formMessage = '';
+    this._formSessionTarget = 'main';
+    // Use loaded default model, or first available model, or empty
+    this._formModel = this._defaultModel || (this._availableModels.length > 0 ? this._availableModels[0].id : '');
   }
 
   private _closeForm(): void {
@@ -129,6 +155,8 @@ export class CronManager extends LitElement {
     this._formChannel = 'telegram';
     this._formChatId = '';
     this._formMessage = '';
+    this._formSessionTarget = 'main';
+    this._formModel = 'google/gemini-2.5-flash-lite-preview-06-17';
   }
 
   private async _submitForm(): Promise<void> {
@@ -146,10 +174,26 @@ export class CronManager extends LitElement {
     this._error = null;
 
     try {
-      // Format: channel:chat_id:message
-      const message = `${this._formChannel}:${this._formChatId}:${this._formMessage}`;
+      // Build message (just the content, not prefixed with channel:chat_id)
+      const message = this._formMessage;
+      
+      // Build delivery config
+      const delivery = {
+        mode: 'direct' as const,
+        channel: this._formChannel,
+        to: this._formChatId,
+      };
+
+      // Build payload based on session target
+      const payload = this._formSessionTarget === 'isolated'
+        ? { kind: 'agentTurn' as const, message, model: this._formModel }
+        : { kind: 'systemEvent' as const, text: message };
+
       await this._api.addJob(this._formSchedule, message, {
         name: this._formName || undefined,
+        sessionTarget: this._formSessionTarget,
+        model: this._formSessionTarget === 'isolated' ? this._formModel : undefined,
+        delivery,
       });
       this._closeForm();
       await this._loadJobs();
@@ -399,6 +443,38 @@ export class CronManager extends LitElement {
                 />
                 <p class="form-field__hint">${t('cron.scheduleHint')}</p>
               </div>
+              <div class="form-field">
+                <label class="form-field__label">Mode</label>
+                <select 
+                  class="form-field__select"
+                  .value=${this._formSessionTarget}
+                  @change=${(e: Event) => this._formSessionTarget = (e.target as HTMLSelectElement).value as 'main' | 'isolated'}
+                >
+                  <option value="main">Direct (send message directly)</option>
+                  <option value="isolated">AI Agent (process with AI then send)</option>
+                </select>
+                <p class="form-field__hint">
+                  ${this._formSessionTarget === 'main' 
+                    ? 'Send message directly to the channel without AI processing'
+                    : 'Use AI agent to process the message, then send the response'}
+                </p>
+              </div>
+              ${this._formSessionTarget === 'isolated' ? html`
+                <div class="form-field">
+                  <label class="form-field__label">Model</label>
+                  <select 
+                    class="form-field__select"
+                    .value=${this._formModel}
+                    @change=${(e: Event) => this._formModel = (e.target as HTMLSelectElement).value}
+                  >
+                    ${this._availableModels.length > 0 ? this._availableModels.map(model => html`
+                      <option value=${model.id}>${model.name} (${model.provider})</option>
+                    `) : html`
+                      <option value="">No configured models</option>
+                    `}
+                  </select>
+                </div>
+              ` : nothing}
               <div class="form-field">
                 <label class="form-field__label">Channel</label>
                 <select 

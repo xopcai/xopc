@@ -2331,7 +2331,16 @@ xopcbot-gateway-chat {
 /* Form Modal - larger for forms */
 .modal--form {
   max-width: 520px;
+  max-height: 90vh;
+  display: flex;
+  flex-direction: column;
   text-align: left;
+}
+
+.modal--form .modal__content {
+  flex: 1;
+  overflow-y: auto;
+  max-height: calc(90vh - 140px);
 }
 
 .modal__header {

@@ -39,22 +39,38 @@ class MessageJobExecutor extends DefaultJobExecutor {
     super();
   }
 
-  protected async performJob(job: JobData, _signal: AbortSignal): Promise<void> {
-    // Send the scheduled message through the appropriate channel
-    // Parse channel and chat_id from job message format: "channel:chat_id:message"
-    const parts = job.message.split(':', 3);
-    if (parts.length >= 3) {
-      const [channel, chatId, ...messageParts] = parts;
-      const content = messageParts.join(':');
-      
-      await this.channelManager.send({
-        channel,
-        chat_id: chatId,
-        content,
-      });
-    } else {
-      // Fallback: send as is
-      log.warn({ jobId: job.id }, 'Job message format invalid, expected "channel:chat_id:message"');
+  protected async performJob(job: JobData, _signal: AbortSignal): Promise<{ status: 'ok' | 'error' | 'skipped'; error?: string; summary?: string }> {
+    try {
+      // Send the scheduled message through the appropriate channel
+      // Parse channel and chat_id from job message format: "channel:chat_id:message"
+      const parts = job.message.split(':', 3);
+      if (parts.length >= 3) {
+        const [channel, chatId, ...messageParts] = parts;
+        const content = messageParts.join(':');
+
+        await this.channelManager.send({
+          channel,
+          chat_id: chatId,
+          content,
+        });
+
+        return {
+          status: 'ok',
+          summary: `Sent to ${channel}:${chatId}`,
+        };
+      } else {
+        // Fallback: send as is
+        log.warn({ jobId: job.id }, 'Job message format invalid, expected "channel:chat_id:message"');
+        return {
+          status: 'error',
+          error: 'Invalid message format',
+        };
+      }
+    } catch (error) {
+      return {
+        status: 'error',
+        error: error instanceof Error ? error.message : String(error),
+      };
     }
   }
 }
@@ -106,10 +122,11 @@ export class GatewayService {
 
     // Initialize cron service with custom executor
     const cronExecutor = new MessageJobExecutor(this.channelManager);
-    this.cronService = new CronService(
-      DEFAULT_PATHS.cronJobs,
-      cronExecutor
-    );
+    this.cronService = new CronService({
+      filePath: DEFAULT_PATHS.cronJobs,
+      agentService: this.agentService,
+      messageBus: this.bus,
+    });
 
     // Initialize session manager
     this.sessionManager = new SessionManager({

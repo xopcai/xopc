@@ -1,5 +1,20 @@
 // Cron API - HTTP client for cron job management
 
+export interface CronDelivery {
+  mode: 'none' | 'announce' | 'direct';
+  channel?: string;
+  to?: string;
+  bestEffort?: boolean;
+}
+
+export interface CronPayload {
+  kind: 'systemEvent' | 'agentTurn';
+  text?: string;
+  message?: string;
+  model?: string;
+  timeoutSeconds?: number;
+}
+
 export interface CronJob {
   id: string;
   name?: string;
@@ -12,6 +27,29 @@ export interface CronJob {
   next_run?: string;
   created_at: string;
   updated_at: string;
+  // New fields
+  sessionTarget?: 'main' | 'isolated';
+  payload?: CronPayload;
+  delivery?: CronDelivery;
+  model?: string;
+}
+
+export interface AddJobOptions {
+  name?: string;
+  timezone?: string;
+  sessionTarget?: 'main' | 'isolated';
+  model?: string;
+  delivery?: CronDelivery;
+}
+
+export interface ModelInfo {
+  id: string;
+  name: string;
+  provider: string;
+}
+
+export interface ConfigInfo {
+  model?: string;
 }
 
 export interface ChannelStatus {
@@ -107,7 +145,7 @@ export class CronAPIClient {
     }
   }
 
-  async addJob(schedule: string, message: string, options?: { name?: string; timezone?: string }): Promise<{ id: string; schedule: string }> {
+  async addJob(schedule: string, message: string, options?: AddJobOptions): Promise<{ id: string; schedule: string }> {
     return await this.request<{ id: string; schedule: string }>('POST', '/api/cron', {
       schedule,
       message,
@@ -146,5 +184,19 @@ export class CronAPIClient {
   async getChannels(): Promise<ChannelStatus[]> {
     const result = await this.request<{ ok: boolean; payload: { channels: ChannelStatus[] } }>('GET', '/api/channels/status');
     return result.payload?.channels || [];
+  }
+
+  async getModels(): Promise<ModelInfo[]> {
+    const result = await this.request<{ ok: boolean; payload: { models: ModelInfo[] } }>('GET', '/api/models');
+    return result.payload?.models || [];
+  }
+
+  async getConfig(): Promise<ConfigInfo> {
+    const result = await this.request<{ config: ConfigInfo }>('GET', '/api/config');
+    // Extract model from nested config structure
+    const config = result.config || {};
+    return {
+      model: (config as any).agents?.defaults?.model || '',
+    };
   }
 }

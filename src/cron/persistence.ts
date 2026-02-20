@@ -9,21 +9,9 @@ import {
 } from 'fs/promises';
 import { dirname } from 'path';
 import { createLogger } from '../utils/logger.js';
+import type { JobData } from './types.js';
 
 const log = createLogger('CronPersistence');
-
-export interface JobData {
-  id: string;
-  name?: string;
-  schedule: string;
-  message: string;
-  enabled: boolean;
-  timezone?: string;
-  maxRetries: number;
-  timeout: number;
-  created_at: string;
-  updated_at: string;
-}
 
 export interface JobsFile {
   jobs: JobData[];

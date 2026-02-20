@@ -12,6 +12,7 @@ import type {
   JobData,
   JobExecution,
   JobExecutor,
+  JobExecutorDeps,
   CronMetrics,
   CronHealth,
   AddJobOptions,
@@ -24,18 +25,42 @@ interface ScheduledTask {
   stop: () => void;
 }
 
+export interface CronServiceConfig {
+  filePath?: string;
+  agentService?: any;
+  messageBus?: any;
+}
+
 export class CronService {
   private persistence: CronPersistence;
-  private executor: JobExecutor;
+  private executor: DefaultJobExecutor;
   private tasks: Map<string, ScheduledTask> = new Map();
   private initialized = false;
+  private agentService: any = null;
+  private messageBus: any = null;
 
-  constructor(
-    filePath: string = DEFAULT_PATHS.cronJobs,
-    executor?: JobExecutor
-  ) {
+  constructor(config?: CronServiceConfig) {
+    const filePath = config?.filePath || DEFAULT_PATHS.cronJobs;
     this.persistence = new CronPersistence(filePath);
-    this.executor = executor || new DefaultJobExecutor();
+    this.executor = new DefaultJobExecutor();
+
+    // Set dependencies if provided
+    if (config?.agentService || config?.messageBus) {
+      this.setDeps({
+        agentService: config.agentService,
+        messageBus: config.messageBus,
+      });
+    }
+  }
+
+  /**
+   * Set dependencies for the executor
+   */
+  setDeps(deps: JobExecutorDeps): void {
+    this.agentService = deps.agentService;
+    this.messageBus = deps.messageBus;
+    this.executor.setDeps(deps);
+    log.info('CronService dependencies set');
   }
 
   /**
@@ -46,7 +71,7 @@ export class CronService {
 
     await this.persistence.initialize();
     await this.loadAllJobs();
-    
+
     this.initialized = true;
     log.info('CronService initialized');
   }
@@ -73,7 +98,24 @@ export class CronService {
 
     const id = uuidv4().slice(0, 8);
     const now = new Date().toISOString();
-    
+
+    // Build payload based on session target
+    let payload;
+    const sessionTarget = options?.sessionTarget || 'main';
+
+    if (sessionTarget === 'isolated') {
+      payload = {
+        kind: 'agentTurn',
+        message,
+        model: options?.model,
+      };
+    } else {
+      payload = {
+        kind: 'systemEvent',
+        text: message,
+      };
+    }
+
     const job: JobData = {
       id,
       name: options?.name,
@@ -85,6 +127,10 @@ export class CronService {
       timeout: options?.timeout ?? 60000,
       created_at: now,
       updated_at: now,
+      sessionTarget,
+      payload,
+      delivery: options?.delivery,
+      model: options?.model,
     };
 
     // Save to persistence
@@ -93,7 +139,7 @@ export class CronService {
     // Schedule the job
     this.scheduleJob(job);
 
-    log.info({ jobId: id, name: options?.name }, 'Job added');
+    log.info({ jobId: id, name: options?.name, sessionTarget }, 'Job added');
     return { id, schedule };
   }
 
@@ -105,7 +151,7 @@ export class CronService {
 
     return jobs.map((job) => {
       let nextRun: string | undefined;
-      
+
       if (job.enabled) {
         try {
           const options = job.timezone ? { tz: job.timezone } : undefined;
@@ -125,6 +171,10 @@ export class CronService {
         timezone: job.timezone,
         maxRetries: job.maxRetries,
         timeout: job.timeout,
+        sessionTarget: job.sessionTarget,
+        payload: job.payload,
+        delivery: job.delivery,
+        model: job.model,
         next_run: nextRun,
       };
     });
@@ -178,11 +228,11 @@ export class CronService {
 
     // Remove from persistence
     const removed = await this.persistence.removeJob(id);
-    
+
     if (removed) {
       log.info({ jobId: id }, 'Job removed');
     }
-    
+
     return removed;
   }
 
@@ -210,10 +260,7 @@ export class CronService {
    * Get execution history for a job
    */
   getJobHistory(jobId: string, limit?: number): JobExecution[] {
-    if (this.executor instanceof DefaultJobExecutor) {
-      return this.executor.getHistory(jobId, limit);
-    }
-    return [];
+    return this.executor.getHistory(jobId, limit);
   }
 
   /**
@@ -224,13 +271,13 @@ export class CronService {
     const enabled = jobs.filter((j) => j.enabled);
 
     let nextScheduledJob: CronMetrics['nextScheduledJob'] | undefined;
-    
+
     for (const job of enabled) {
       try {
         const options = job.timezone ? { tz: job.timezone } : undefined;
         const interval = CronExpressionParser.parse(job.schedule, options);
         const next = interval.next();
-        
+
         if (!nextScheduledJob || next.getTime() < nextScheduledJob.runAt.getTime()) {
           nextScheduledJob = {
             id: job.id,
@@ -281,6 +328,14 @@ export class CronService {
       }
     }
 
+    // Check if agent service is configured for isolated jobs
+    for (const job of jobs) {
+      if (job.enabled && job.sessionTarget === 'isolated' && !this.agentService) {
+        issues.push(`Job ${job.id} requires agent service but none configured`);
+        break;
+      }
+    }
+
     // Determine status
     let status: CronHealth['status'] = 'healthy';
     if (issues.length > 0) {
@@ -310,16 +365,14 @@ export class CronService {
     // Cancel all scheduled tasks
     for (const [id, task] of this.tasks) {
       task.stop();
-      
+
       // Cancel running executions
-      if (this.executor instanceof DefaultJobExecutor) {
-        this.executor.cancelJob(id);
-      }
+      this.executor.cancelJob(id);
     }
     this.tasks.clear();
 
     // Wait for running jobs if requested
-    if (options?.waitForRunning && this.executor instanceof DefaultJobExecutor) {
+    if (options?.waitForRunning) {
       const start = Date.now();
       while (Date.now() - start < timeout) {
         const running = this.executor.getRunningExecutions();
@@ -363,7 +416,7 @@ export class CronService {
     }
 
     const options = job.timezone ? { timezone: job.timezone } : undefined;
-    
+
     const task = nodeCron.schedule(
       job.schedule,
       async () => {
@@ -381,18 +434,22 @@ export class CronService {
    */
   private async executeJob(job: JobData): Promise<void> {
     // Prevent overlapping executions
-    if (this.executor instanceof DefaultJobExecutor && this.executor.isRunning(job.id)) {
+    if (this.executor.isRunning(job.id)) {
       log.warn({ jobId: job.id }, 'Job already running, skipping');
       return;
     }
 
     const controller = new AbortController();
-    
+
     try {
-      await this.executor.execute(job, controller.signal);
+      const deps: JobExecutorDeps = {
+        agentService: this.agentService,
+        messageBus: this.messageBus,
+      };
+      await this.executor.execute(job, controller.signal, deps);
     } catch (error) {
       log.error({ jobId: job.id, err: error as Error }, 'Job execution failed');
-      // Retry logic is handled by the executor
+      // Retry logic can be added here based on error type
     }
   }
 
