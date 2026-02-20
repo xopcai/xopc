@@ -95,7 +95,7 @@ export class CronManager extends LitElement {
     try {
       this._jobs = await this._api.listJobs();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'Failed to load jobs';
+      this._error = err instanceof Error ? (err.message || 'Failed to load jobs') : 'Failed to load jobs';
       console.error('[CronManager] Load error:', err);
     } finally {
       this._loading = false;
@@ -244,7 +244,7 @@ export class CronManager extends LitElement {
       await this._loadJobs();
       await this._loadMetrics();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : `Failed to ${this._formMode} job`;
+      this._error = err instanceof Error ? (err.message || 'Unknown error') : `Failed to ${this._formMode} job`;
     } finally {
       this._formSubmitting = false;
     }
@@ -284,7 +284,7 @@ export class CronManager extends LitElement {
       await this._loadJobs();
       await this._loadMetrics();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'Failed to toggle job';
+      this._error = err instanceof Error ? (err.message || 'Failed to toggle job') : 'Failed to toggle job';
     }
   }
 
@@ -340,7 +340,7 @@ export class CronManager extends LitElement {
         await this._loadMetrics();
       }
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'Action failed';
+      this._error = err instanceof Error ? (err.message || 'Action failed') : 'Action failed';
     }
   }
 
@@ -472,20 +472,20 @@ export class CronManager extends LitElement {
             <div class="modal__content">
               <div class="form-field">
                 <label class="form-field__label">${t('cron.name')}</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   class="form-field__input"
-                  .value=${this._formName}
+                  .value=${this._formName ?? ''}
                   @input=${(e: Event) => this._formName = (e.target as HTMLInputElement).value}
-                  placeholder="${t('cron.namePlaceholder')}"
+                  placeholder="${t('cron.namePlaceholder') ?? 'My scheduled task'}"
                 />
               </div>
               <div class="form-field">
                 <label class="form-field__label">${t('cron.schedule')}</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   class="form-field__input"
-                  .value=${this._formSchedule}
+                  .value=${this._formSchedule ?? ''}
                   @input=${(e: Event) => this._formSchedule = (e.target as HTMLInputElement).value}
                   placeholder="*/5 * * * *"
                 />
@@ -493,9 +493,9 @@ export class CronManager extends LitElement {
               </div>
               <div class="form-field">
                 <label class="form-field__label">Mode</label>
-                <select 
+                <select
                   class="form-field__select"
-                  .value=${this._formSessionTarget}
+                  .value=${this._formSessionTarget ?? 'main'}
                   @change=${(e: Event) => this._formSessionTarget = (e.target as HTMLSelectElement).value as 'main' | 'isolated'}
                 >
                   <option value="main">Direct (send message directly)</option>
@@ -510,9 +510,9 @@ export class CronManager extends LitElement {
               ${this._formSessionTarget === 'isolated' ? html`
                 <div class="form-field">
                   <label class="form-field__label">Model</label>
-                  <select 
+                  <select
                     class="form-field__select"
-                    .value=${this._formModel}
+                    .value=${this._formModel ?? ''}
                     @change=${(e: Event) => this._formModel = (e.target as HTMLSelectElement).value}
                   >
                     ${this._availableModels.length > 0 ? this._availableModels.map(model => html`
@@ -525,9 +525,9 @@ export class CronManager extends LitElement {
               ` : nothing}
               <div class="form-field">
                 <label class="form-field__label">Channel</label>
-                <select 
+                <select
                   class="form-field__select"
-                  .value=${this._formChannel}
+                  .value=${this._formChannel ?? 'telegram'}
                   @change=${(e: Event) => this._formChannel = (e.target as HTMLSelectElement).value}
                 >
                   ${this._channels.map(ch => html`
@@ -539,10 +539,10 @@ export class CronManager extends LitElement {
               </div>
               <div class="form-field">
                 <label class="form-field__label">Chat ID *</label>
-                <input 
-                  type="text" 
+                <input
+                  type="text"
                   class="form-field__input"
-                  .value=${this._formChatId}
+                  .value=${this._formChatId ?? ''}
                   @input=${(e: Event) => this._formChatId = (e.target as HTMLInputElement).value}
                   placeholder="e.g., 123456789"
                 />
@@ -551,9 +551,9 @@ export class CronManager extends LitElement {
                 <label class="form-field__label">${t('cron.message')}</label>
                 <textarea 
                   class="form-field__textarea"
-                  .value=${this._formMessage}
+                  .value=${this._formMessage ?? ''}
                   @input=${(e: Event) => this._formMessage = (e.target as HTMLTextAreaElement).value}
-                  placeholder="${t('cron.messagePlaceholder')}"
+                  placeholder="${t('cron.messagePlaceholder') ?? 'What should the assistant do?'}"
                   rows="4"
                 ></textarea>
               </div>
