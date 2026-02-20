@@ -202,4 +202,11 @@ export class CronAPIClient {
       model: (config as any).agents?.defaults?.model || '',
     };
   }
+
+  /**
+   * Disconnect/cleanup method (no-op for HTTP client, provided for interface compatibility)
+   */
+  disconnect(): void {
+    // HTTP client has no persistent connection to close
+  }
 }
