@@ -382,14 +382,39 @@ export class SessionStore {
       const data = await readFile(path, 'utf-8');
       return JSON.parse(data) as AgentMessage[];
     } catch {
-      // Check archive
-      const archivePath = join(this.archiveDir, `${safeKey}.json`);
+      // Check archive - find the most recent archived file
+      const archivedFile = await this.findMostRecentArchive(safeKey);
+      if (!archivedFile) {
+        return [];
+      }
       try {
-        const data = await readFile(archivePath, 'utf-8');
+        const data = await readFile(archivedFile, 'utf-8');
         return JSON.parse(data) as AgentMessage[];
       } catch {
         return [];
       }
+    }
+  }
+
+  /**
+   * Find the most recent archived session file for a given key.
+   * Archived files have format: {safeKey}.{timestamp}.json
+   */
+  private async findMostRecentArchive(safeKey: string): Promise<string | null> {
+    try {
+      const files = await readdir(this.archiveDir);
+      const matchingFiles = files
+        .filter((f) => f.startsWith(`${safeKey}.`) && f.endsWith('.json') && !f.endsWith('.meta.json'))
+        .sort()
+        .reverse();
+
+      if (matchingFiles.length === 0) {
+        return null;
+      }
+
+      return join(this.archiveDir, matchingFiles[0]);
+    } catch {
+      return null;
     }
   }
 
@@ -717,7 +742,10 @@ export class SessionStore {
   private async moveToArchive(key: string): Promise<void> {
     const safeKey = this.sanitizeKey(key);
     const sourcePath = join(this.sessionsDir, `${safeKey}.json`);
-    const targetPath = join(this.archiveDir, `${safeKey}.json`);
+
+    // Use timestamped filename to avoid overwriting previous archives
+    const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+    const targetPath = join(this.archiveDir, `${safeKey}.${timestamp}.json`);
 
     try {
       const data = await readFile(sourcePath, 'utf-8');
@@ -726,7 +754,7 @@ export class SessionStore {
 
       // Move meta file if exists
       const metaSource = join(this.sessionsDir, `${safeKey}.meta.json`);
-      const metaTarget = join(this.archiveDir, `${safeKey}.meta.json`);
+      const metaTarget = join(this.archiveDir, `${safeKey}.${timestamp}.meta.json`);
       try {
         const metaData = await readFile(metaSource, 'utf-8');
         await writeFile(metaTarget, metaData);
@@ -741,7 +769,11 @@ export class SessionStore {
 
   private async moveFromArchive(key: string): Promise<void> {
     const safeKey = this.sanitizeKey(key);
-    const sourcePath = join(this.archiveDir, `${safeKey}.json`);
+    const sourcePath = await this.findMostRecentArchive(safeKey);
+    if (!sourcePath) {
+      return;
+    }
+
     const targetPath = join(this.sessionsDir, `${safeKey}.json`);
 
     try {
@@ -749,8 +781,8 @@ export class SessionStore {
       await writeFile(targetPath, data);
       await unlink(sourcePath);
 
-      // Move meta file if exists
-      const metaSource = join(this.archiveDir, `${safeKey}.meta.json`);
+      // Move meta file if exists (find the corresponding meta file)
+      const metaSource = sourcePath.replace('.json', '.meta.json');
       const metaTarget = join(this.sessionsDir, `${safeKey}.meta.json`);
       try {
         const metaData = await readFile(metaSource, 'utf-8');

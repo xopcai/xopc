@@ -425,12 +425,19 @@ export class AgentService {
       
       // Handle commands
       if (command === '/reset' || command === '/new') {
+        // Archive current session before starting a new one
+        const messages = await this.sessionStore.load(sessionKey);
+        if (messages.length > 0) {
+          await this.sessionStore.archive(sessionKey);
+          log.info({ sessionKey, messageCount: messages.length }, 'Session archived due to /new command');
+        }
+        // Clear current session state to start fresh
         await this.sessionStore.deleteSession(sessionKey);
         this.sessionTracker.deleteSession(sessionKey);
         await this.bus.publishOutbound({
           channel: msg.channel,
           chat_id: msg.chat_id,
-          content: '✅ New session started.',
+          content: '✅ New session started. Previous session has been archived.',
           type: 'message',
         });
         return;
