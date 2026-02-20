@@ -44,3 +44,6 @@ coverage/
 memory/
 !src/agent/prompt/memory/
 docs/.vitepress/cache/
+
+# Docs-local
+.docs-local

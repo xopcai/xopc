@@ -4,9 +4,7 @@
  * Model registration and management based on pi-mono architecture.
  * Loads built-in models from @mariozechner/pi-ai and custom models from config.json.
  * Supports auto-discovery of local Ollama models.
- * Supports AuthStorage and AuthProfiles for OAuth and API key authentication.
- * 
- * UPDATED: Now uses provider-catalog for unified provider definitions
+ * Supports AuthProfiles for OAuth and API key authentication.
  */
 
 import {
@@ -19,13 +17,12 @@ import {
 } from '@mariozechner/pi-ai';
 import { getApiKey as getConfigApiKey, getApiBase } from '../config/schema.js';
 import type { Config } from '../config/schema.js';
-import type { AuthStorage } from '../auth/storage.js';
 import { listProfilesForProvider } from '../auth/profiles/profiles.js';
 import { resolveApiKeyForProfile } from '../auth/profiles/oauth.js';
 import { getLocalModelsDevModels } from './models-dev.js';
 import { createProviderConfig } from './config.js';
 
-// NEW: Import from provider-catalog
+// Import from provider-catalog
 import {
 	getProvider as getProviderFromCatalog,
 	getProviderApiKey as getProviderApiKeyFromCatalog,
@@ -36,7 +33,7 @@ import {
 	getAllProviders,
 } from './provider-catalog.js';
 
-// NEW: Import from model-catalog
+// Import from model-catalog
 import {
 	findModelByProvider,
 	getModelsByProvider as getModelsByProviderFromCatalog,
@@ -110,7 +107,7 @@ export interface ProviderOverride {
 	models?: string[];
 }
 
-/** Provider information for UI display - DEPRECATED: Use getProviderDisplayInfo from provider-catalog */
+/** Provider information for UI display */
 export interface ProviderInfo {
 	id: string;
 	name: string;
@@ -122,8 +119,8 @@ export interface ProviderInfo {
 }
 
 /**
- * DEPRECATED: Use getAllProviders() from provider-catalog instead.
- * Kept for backward compatibility.
+ * Provider information map for UI display.
+ * Use getProviderDisplayInfo from provider-catalog for new code.
  */
 export const PROVIDER_INFO: Record<string, ProviderInfo> = {
 	'openai': { id: 'openai', name: 'OpenAI', envKey: 'OPENAI_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://api.openai.com/v1' },
@@ -171,7 +168,6 @@ export class ModelRegistry {
 	private ollamaEnabled: boolean = true;
 	private ollamaDiscovery: boolean = true;
 	private ollamaModels: Model<Api>[] = [];
-	private authStorage: AuthStorage | null = null;
 	private useAuthProfiles: boolean = true;
 
 	private modelsDevEnabled: boolean = true;
@@ -179,22 +175,14 @@ export class ModelRegistry {
 
 	constructor(
 		config?: Config | null,
-		options?: { ollamaEnabled?: boolean; ollamaDiscovery?: boolean; authStorage?: AuthStorage | null; useAuthProfiles?: boolean; modelsDevEnabled?: boolean }
+		options?: { ollamaEnabled?: boolean; ollamaDiscovery?: boolean; useAuthProfiles?: boolean; modelsDevEnabled?: boolean }
 	) {
 		this.config = config ?? null;
 		this.ollamaEnabled = options?.ollamaEnabled ?? true;
 		this.ollamaDiscovery = options?.ollamaDiscovery ?? true;
-		this.authStorage = options?.authStorage ?? null;
 		this.useAuthProfiles = options?.useAuthProfiles ?? true;
 		this.modelsDevEnabled = options?.modelsDevEnabled ?? true;
 		this.loadModels();
-	}
-
-	/**
-	 * Set AuthStorage instance for OAuth/API key resolution.
-	 */
-	setAuthStorage(authStorage: AuthStorage | null): void {
-		this.authStorage = authStorage;
 	}
 
 	/**
@@ -205,12 +193,10 @@ export class ModelRegistry {
 	}
 
 	/**
-	 * Get API key for a provider (supports OAuth, AuthProfiles, and API keys).
-	 * 
-	 * UPDATED: Now uses provider-catalog as primary source
+	 * Get API key for a provider (supports OAuth and AuthProfiles).
 	 */
 	async getApiKey(provider: string): Promise<string | undefined> {
-		// Try AuthProfiles first (new architecture)
+		// Try AuthProfiles first
 		if (this.useAuthProfiles) {
 			const profiles = listProfilesForProvider(provider);
 			if (profiles.length > 0) {
@@ -227,13 +213,7 @@ export class ModelRegistry {
 			}
 		}
 
-		// Try AuthStorage (legacy)
-		if (this.authStorage) {
-			const key = await this.authStorage.getApiKey(provider);
-			if (key) return key;
-		}
-
-		// Try provider-catalog (NEW)
+		// Try provider-catalog
 		const catalogKey = getProviderApiKeyFromCatalog(provider);
 		if (catalogKey) return catalogKey;
 
@@ -246,35 +226,35 @@ export class ModelRegistry {
 	}
 
 	/**
-	 * NEW: Get provider definition from catalog
+	 * Get provider definition from catalog
 	 */
 	getProviderFromCatalog(providerId: string) {
 		return getProviderFromCatalog(providerId);
 	}
 
 	/**
-	 * NEW: Check if provider is configured using catalog
+	 * Check if provider is configured using catalog
 	 */
 	isProviderConfigured(providerId: string): boolean {
 		return isProviderConfigured(providerId);
 	}
 
 	/**
-	 * NEW: Get all configured providers using catalog
+	 * Get all configured providers using catalog
 	 */
 	getConfiguredProviders() {
 		return getConfiguredProviders();
 	}
 
 	/**
-	 * NEW: Auto-detect provider by model ID
+	 * Auto-detect provider by model ID
 	 */
 	detectProvider(modelId: string): string | undefined {
 		return detectProviderByModel(modelId);
 	}
 
 	/**
-	 * NEW: Check if model supports a specific feature
+	 * Check if model supports a specific feature
 	 */
 	modelSupportsFeature(modelId: string, feature: string): boolean {
 		// Parse provider/model format
@@ -283,7 +263,7 @@ export class ModelRegistry {
 	}
 
 	/**
-	 * NEW: Check if model supports a specific modality
+	 * Check if model supports a specific modality
 	 */
 	modelSupportsModality(modelId: string, modality: string): boolean {
 		const { provider, model } = this.parseModelRef(modelId);
@@ -291,7 +271,7 @@ export class ModelRegistry {
 	}
 
 	/**
-	 * NEW: Parse model reference
+	 * Parse model reference
 	 */
 	parseModelRef(ref: string): { provider: string; model: string } {
 		const slashIndex = ref.indexOf('/');
@@ -468,7 +448,7 @@ export class ModelRegistry {
 
 	/** Get only models that have auth configured (async - supports OAuth and AuthProfiles) */
 	async getAvailable(): Promise<Model<Api>[]> {
-		if (!this.config && !this.authStorage && !this.useAuthProfiles) return this.models;
+		if (!this.config && !this.useAuthProfiles) return this.models;
 
 		const available: Model<Api>[] = [];
 		
@@ -479,7 +459,7 @@ export class ModelRegistry {
 				continue;
 			}
 
-			// Check auth via AuthProfiles (new architecture)
+			// Check auth via AuthProfiles
 			if (this.useAuthProfiles) {
 				const profiles = listProfilesForProvider(m.provider);
 				if (profiles.some(p => p.hasKey)) {
@@ -488,16 +468,7 @@ export class ModelRegistry {
 				}
 			}
 
-			// Check auth via AuthStorage (legacy)
-			if (this.authStorage) {
-				const hasAuth = this.authStorage.hasAuth(m.provider);
-				if (hasAuth) {
-					available.push(m);
-					continue;
-				}
-			}
-
-			// Check via provider-catalog (NEW)
+			// Check via provider-catalog
 			if (isProviderConfigured(m.provider)) {
 				available.push(m);
 				continue;
@@ -574,7 +545,7 @@ export class ModelRegistry {
 		return discoverOllamaModels();
 	}
 
-	/** Check if model has auth configured (sync - uses config only) */
+	/** Check if model has auth configured (sync) */
 	hasAuth(provider: string): boolean {
 		// Check AuthProfiles first
 		if (this.useAuthProfiles) {
@@ -583,11 +554,7 @@ export class ModelRegistry {
 				return true;
 			}
 		}
-		// Check AuthStorage
-		if (this.authStorage && this.authStorage.hasAuth(provider)) {
-			return true;
-		}
-		// Check provider-catalog (NEW)
+		// Check provider-catalog
 		if (isProviderConfigured(provider)) {
 			return true;
 		}
@@ -610,11 +577,7 @@ export class ModelRegistry {
 				}
 			}
 		}
-		// Check AuthStorage
-		if (this.authStorage) {
-			return this.authStorage.hasAuth(provider);
-		}
-		// Check provider-catalog (NEW)
+		// Check provider-catalog
 		if (isProviderConfigured(provider)) {
 			return true;
 		}
@@ -625,13 +588,10 @@ export class ModelRegistry {
 
 	/** 
 	 * Get provider info 
-	 * UPDATED: Now uses provider-catalog as primary source
 	 */
 	static getProviderInfo(provider: string): ProviderInfo | undefined {
-		// Try new catalog first
 		const fromCatalog = getProviderDisplayInfo(provider);
 		if (fromCatalog) {
-			// Filter 'none' auth type to legacy compatible type
 			const authType = fromCatalog.authType === 'none' ? 'api_key' : fromCatalog.authType;
 			return {
 				id: fromCatalog.id,
@@ -643,20 +603,16 @@ export class ModelRegistry {
 				logo: fromCatalog.logo,
 			};
 		}
-		// Fall back to legacy
 		return PROVIDER_INFO[provider];
 	}
 
 	/** 
 	 * Get all provider infos 
-	 * UPDATED: Now uses provider-catalog as primary source
 	 */
 	static getAllProviderInfo(): ProviderInfo[] {
-		// Get from new catalog
 		const fromCatalog = getAllProviders().map(p => getProviderDisplayInfo(p.id));
 		if (fromCatalog.length > 0 && fromCatalog[0]) {
 			return fromCatalog.map(info => {
-				// Filter 'none' auth type to legacy compatible type
 				const authType = info.authType === 'none' ? 'api_key' : info.authType;
 				return {
 					id: info.id,
@@ -669,7 +625,6 @@ export class ModelRegistry {
 				};
 			});
 		}
-		// Fall back to legacy
 		return Object.values(PROVIDER_INFO);
 	}
 }
