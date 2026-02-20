@@ -769,6 +769,45 @@ export const PROVIDER_CATALOG: Record<string, ProviderDefinition> = {
     },
     modelPrefixes: [],
   },
+
+  // ============================================
+  // Bailian Coding Plan (百炼 Coding Plan)
+  // ============================================
+
+  bailian: {
+    id: 'bailian',
+    name: 'Bailian Coding Plan',
+    category: 'openai-compatible',
+    description: '阿里云百炼 Coding Plan 专属 API',
+    auth: {
+      type: 'api_key',
+      envKeys: ['BAILIAN_API_KEY', 'BAILIAN_CODING_API_KEY'],
+      headerPrefix: 'Bearer ',
+      supportsOAuth: false,
+    },
+    api: {
+      type: 'openai',
+      baseUrl: 'https://coding.dashscope.aliyuncs.com/v1',
+      strategy: 'openai-completions',
+    },
+    capabilities: {
+      multimodal: false,
+      streaming: true,
+      functionCalling: true,
+      vision: false,
+      reasoning: true,
+      jsonMode: true,
+      systemPrompt: true,
+      tools: true,
+    },
+    defaults: {
+      temperature: 0.7,
+      maxTokens: 65536,
+      timeout: 120000,
+      contextWindow: 262144,
+    },
+    modelPrefixes: ['qwen3'],
+  },
 };
 
 // ============================================

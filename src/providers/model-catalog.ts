@@ -917,6 +917,67 @@ export const MODEL_CATALOG: ModelDefinition[] = [
   },
 
   // ============================================
+  // Bailian Coding Plan (百炼)
+  // ============================================
+  
+  {
+    id: 'qwen3-max-2026-01-23',
+    name: 'Qwen3 Max (Coding Plan)',
+    provider: 'bailian',
+    description: '阿里云百炼 Coding Plan qwen3-max-thinking',
+    family: 'Qwen3',
+    inputModalities: ['text'],
+    outputModalities: ['text'],
+    features: {
+      streaming: true,
+      functionCalling: true,
+      jsonMode: true,
+      reasoning: true,
+      systemPrompt: true,
+      tools: true,
+      vision: false,
+      documentUnderstanding: false,
+      codeExecution: false,
+      imageGeneration: false,
+      audioUnderstanding: false,
+      videoUnderstanding: false,
+    },
+    limits: {
+      contextWindow: 262144,
+      maxOutputTokens: 65536,
+    },
+    recommended: true,
+  },
+  
+  {
+    id: 'qwen3.5-plus',
+    name: 'Qwen3.5 Plus (Coding Plan)',
+    provider: 'bailian',
+    description: '阿里云百炼 Coding Plan qwen3.5-plus',
+    family: 'Qwen3.5',
+    inputModalities: ['text'],
+    outputModalities: ['text'],
+    features: {
+      streaming: true,
+      functionCalling: true,
+      jsonMode: true,
+      reasoning: true,
+      systemPrompt: true,
+      tools: true,
+      vision: false,
+      documentUnderstanding: false,
+      codeExecution: false,
+      imageGeneration: false,
+      audioUnderstanding: false,
+      videoUnderstanding: false,
+    },
+    limits: {
+      contextWindow: 131072,
+      maxOutputTokens: 32768,
+    },
+  },
+
+  // ============================================
   // Groq
   // ============================================
   
