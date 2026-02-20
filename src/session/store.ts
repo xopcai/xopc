@@ -654,7 +654,7 @@ export class SessionStore {
 
     return {
       totalSessions: sessions.length,
-      activeSessions: sessions.filter((s) => s.status === SessionStatus.ACTIVE).length,
+      activeSessions: sessions.filter((s) => s.status === SessionStatus.ACTIVE || s.status === SessionStatus.IDLE).length,
       archivedSessions: sessions.filter((s) => s.status === SessionStatus.ARCHIVED).length,
       pinnedSessions: sessions.filter((s) => s.status === SessionStatus.PINNED).length,
       totalMessages: sessions.reduce((sum, s) => sum + s.messageCount, 0),
