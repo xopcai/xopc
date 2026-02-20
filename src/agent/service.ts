@@ -350,8 +350,13 @@ export class AgentService {
     content: string
   ): Promise<{ send: boolean; content?: string; reason?: string }> {
     if (!this.hookRunner) return { send: true, content };
-    // ... (simplified)
-    return { send: true, content };
+    
+    const ctx = createHookContext({
+      sessionKey: this.currentContext?.sessionKey,
+      agentId: this.agentId,
+    });
+    
+    return this.hookRunner.runMessageSending(to, content, ctx);
   }
 
   private convertPluginTools(pluginTools: PluginTool[]): AgentTool<any, any>[] {
@@ -506,14 +511,19 @@ export class AgentService {
           contentWithUsage += `\n\n📊 *${modelName}*  \`+${result.usage.prompt_tokens} → ${result.usage.completion_tokens} = ${result.usage.total_tokens}\``;
         }
 
-        await this.bus.publishOutbound({
-          channel: msg.channel,
-          chat_id: msg.chat_id,
-          content: contentWithUsage,
-          type: 'message',
-        });
-
-        await this.triggerHook('message_sent', { to: msg.chat_id, content: result.content, success: true });
+        // Run message_sending hook for plugin interception
+        const hookResult = await this.runMessageSendingHook(msg.chat_id, contentWithUsage);
+        if (!hookResult.send) {
+          log.info({ chatId: msg.chat_id, reason: hookResult.reason }, 'Message sending blocked by hook');
+        } else {
+          await this.bus.publishOutbound({
+            channel: msg.channel,
+            chat_id: msg.chat_id,
+            content: hookResult.content || contentWithUsage,
+            type: 'message',
+          });
+          await this.triggerHook('message_sent', { to: msg.chat_id, content: hookResult.content || contentWithUsage, success: true });
+        }
       }
 
       await this.sessionStore.save(sessionKey, this.agent.state.messages);
@@ -581,12 +591,18 @@ export class AgentService {
 
     const finalContent = this.getLastAssistantContent();
     if (finalContent) {
-      await this.bus.publishOutbound({
-        channel: originChannel,
-        chat_id: originChatId,
-        content: finalContent,
-        type: 'message',
-      });
+      // Run message_sending hook for plugin interception
+      const hookResult = await this.runMessageSendingHook(originChatId, finalContent);
+      if (!hookResult.send) {
+        log.info({ chatId: originChatId, reason: hookResult.reason }, 'System message sending blocked by hook');
+      } else {
+        await this.bus.publishOutbound({
+          channel: originChannel,
+          chat_id: originChatId,
+          content: hookResult.content || finalContent,
+          type: 'message',
+        });
+      }
     }
 
     await this.sessionStore.save(sessionKey, this.agent.state.messages);

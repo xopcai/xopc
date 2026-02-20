@@ -6,13 +6,12 @@ import { MessageBus } from '../bus/index.js';
 import { loadConfig, saveConfig, DEFAULT_PATHS } from '../config/index.js';
 import { getWorkspacePath } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
-import { CronService, DefaultJobExecutor } from '../cron/index.js';
+import { CronService } from '../cron/index.js';
 import { PluginLoader, normalizePluginConfig } from '../plugins/index.js';
 import { HeartbeatService } from '../heartbeat/index.js';
 import { ConfigHotReloader } from '../config/reload.js';
 import { SessionManager } from '../session/index.js';
 import type { Config } from '../config/schema.js';
-import type { JobData } from '../cron/types.js';
 import type { SessionListQuery, ExportFormat } from '../types/index.js';
 
 const log = createLogger('GatewayService');
@@ -32,47 +31,6 @@ const EVENT_BUFFER_SIZE = 200; // ring buffer per subscriber for Last-Event-ID r
 export interface GatewayServiceConfig {
   configPath?: string;
   enableHotReload?: boolean;
-}
-
-class MessageJobExecutor extends DefaultJobExecutor {
-  constructor(private channelManager: ChannelManager) {
-    super();
-  }
-
-  protected async performJob(job: JobData, _signal: AbortSignal): Promise<{ status: 'ok' | 'error' | 'skipped'; error?: string; summary?: string }> {
-    try {
-      // Send the scheduled message through the appropriate channel
-      // Parse channel and chat_id from job message format: "channel:chat_id:message"
-      const parts = job.message.split(':', 3);
-      if (parts.length >= 3) {
-        const [channel, chatId, ...messageParts] = parts;
-        const content = messageParts.join(':');
-
-        await this.channelManager.send({
-          channel,
-          chat_id: chatId,
-          content,
-        });
-
-        return {
-          status: 'ok',
-          summary: `Sent to ${channel}:${chatId}`,
-        };
-      } else {
-        // Fallback: send as is
-        log.warn({ jobId: job.id }, 'Job message format invalid, expected "channel:chat_id:message"');
-        return {
-          status: 'error',
-          error: 'Invalid message format',
-        };
-      }
-    } catch (error) {
-      return {
-        status: 'error',
-        error: error instanceof Error ? error.message : String(error),
-      };
-    }
-  }
 }
 
 export class GatewayService {
@@ -120,8 +78,7 @@ export class GatewayService {
     // Set channel manager reference for model switching
     this.agentService.setChannelManager(this.channelManager);
 
-    // Initialize cron service with custom executor
-    const cronExecutor = new MessageJobExecutor(this.channelManager);
+    // Initialize cron service
     this.cronService = new CronService({
       filePath: DEFAULT_PATHS.cronJobs,
       agentService: this.agentService,
