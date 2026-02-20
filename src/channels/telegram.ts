@@ -26,6 +26,7 @@ export class TelegramChannel extends BaseChannel {
   private typingController: TypingController;
   private appConfig: Config;
   private sessionModels: Map<string, string> = new Map(); // sessionKey -> modelId
+  private botUsername: string | null = null;
 
   constructor(config: Record<string, unknown>, bus: MessageBus, appConfig: Config) {
     super(config, bus);
@@ -103,7 +104,15 @@ export class TelegramChannel extends BaseChannel {
       const chatId = String(ctx.chat.id);
       const content = ctx.message.text || '';
 
-      await this.handleMessage(senderId, chatId, content);
+      // Check if this is a group message and if bot is mentioned
+      if (!this.shouldProcessGroupMessage(ctx, content)) {
+        return;
+      }
+
+      // Remove bot mention from content for cleaner processing
+      const cleanContent = this.removeBotMention(content);
+
+      await this.handleMessage(senderId, chatId, cleanContent);
     });
 
     this.bot.on('message:photo', async (ctx) => {
@@ -111,10 +120,18 @@ export class TelegramChannel extends BaseChannel {
       const fileIds = photos.map((p) => p.file_id);
       const caption = ctx.message.caption || '[photo]';
 
+      // Check if this is a group message and if bot is mentioned
+      if (!this.shouldProcessGroupMessage(ctx, ctx.message.caption)) {
+        return;
+      }
+
+      // Remove bot mention from caption for cleaner processing
+      const cleanCaption = this.removeBotMention(caption);
+
       await this.handleMessage(
         String(ctx.from?.id),
         String(ctx.chat.id),
-        caption,
+        cleanCaption,
         fileIds
       );
     });
@@ -123,10 +140,18 @@ export class TelegramChannel extends BaseChannel {
       const fileId = ctx.message.document?.file_id;
       const caption = ctx.message.caption || ctx.message.document?.file_name || '[document]';
 
+      // Check if this is a group message and if bot is mentioned
+      if (!this.shouldProcessGroupMessage(ctx, ctx.message.caption)) {
+        return;
+      }
+
+      // Remove bot mention from caption for cleaner processing
+      const cleanCaption = this.removeBotMention(caption);
+
       await this.handleMessage(
         String(ctx.from?.id),
         String(ctx.chat.id),
-        caption,
+        cleanCaption,
         fileId ? [fileId] : undefined
       );
     });
@@ -148,9 +173,10 @@ export class TelegramChannel extends BaseChannel {
     this.runner = run(this.bot);
     this.running = true;
     
-    // 验证 API 连接
+    // 验证 API 连接并获取 bot 信息
     try {
       const me = await this.bot.api.getMe();
+      this.botUsername = me.username ?? null;
       log.info({ username: me.username, apiRoot: (this.config as any).apiRoot || 'default' }, 'Telegram API connection verified');
     } catch (err) {
       log.error({ err, apiRoot: (this.config as any).apiRoot }, 'Failed to verify Telegram API connection');
@@ -169,6 +195,74 @@ export class TelegramChannel extends BaseChannel {
     }
 
     await next();
+  }
+
+  /**
+   * Check if a group message should be processed.
+   * In groups, only process messages that mention the bot.
+   * Private chats are always processed.
+   */
+  private shouldProcessGroupMessage(ctx: Context, text?: string): boolean {
+    const chatType = ctx.chat?.type;
+
+    // Private chats are always processed
+    if (chatType === 'private') {
+      return true;
+    }
+
+    // In groups/supergroups, only process if bot is mentioned
+    if (chatType === 'group' || chatType === 'supergroup') {
+      if (!this.botUsername) {
+        log.warn('Bot username not available, skipping group message');
+        return false;
+      }
+
+      const messageText = text ?? '';
+      return this.hasBotMention(ctx.message, messageText);
+    }
+
+    // Channel messages are not processed
+    return false;
+  }
+
+  /**
+   * Check if the message contains a mention of the bot.
+   * Supports both text mentions and entity-based mentions.
+   */
+  private hasBotMention(message: any, text: string): boolean {
+    if (!this.botUsername) return false;
+
+    const botUsernameLower = this.botUsername.toLowerCase();
+    const textLower = text.toLowerCase();
+
+    // Check simple text mention: @botUsername
+    if (textLower.includes(`@${botUsernameLower}`)) {
+      return true;
+    }
+
+    // Check entity-based mentions (Telegram's mention entities)
+    const entities = message?.entities ?? message?.caption_entities ?? [];
+    for (const ent of entities) {
+      if (ent.type === 'mention') {
+        const mentionText = text.slice(ent.offset, ent.offset + ent.length);
+        if (mentionText.toLowerCase() === `@${botUsernameLower}`) {
+          return true;
+        }
+      }
+    }
+
+    return false;
+  }
+
+  /**
+   * Remove bot mention from text for cleaner processing.
+   */
+  private removeBotMention(text: string): string {
+    if (!this.botUsername) return text;
+
+    const botUsernameLower = this.botUsername.toLowerCase();
+    // Remove @botUsername from text
+    return text.replace(new RegExp(`@${botUsernameLower}\\s*`, 'gi'), '').trim();
   }
 
   // ========== Model Selection ==========
