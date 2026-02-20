@@ -26,6 +26,8 @@ export class CronManager extends LitElement {
 
   // Form state
   @state() private _formOpen = false;
+  @state() private _formMode: 'add' | 'edit' = 'add';
+  @state() private _formJobId: string | null = null;
   @state() private _formName = '';
   @state() private _formSchedule = '*/5 * * * *';
   @state() private _formChannel = 'telegram';
@@ -136,27 +138,59 @@ export class CronManager extends LitElement {
 
   // ========== Form ==========
 
-  private _openForm(): void {
+  private _openForm(job?: CronJob): void {
     this._formOpen = true;
-    this._formName = '';
-    this._formSchedule = '*/5 * * * *';
-    this._formChannel = 'telegram';
-    this._formChatId = '';
-    this._formMessage = '';
-    this._formSessionTarget = 'main';
-    // Use loaded default model, or first available model, or empty
-    this._formModel = this._defaultModel || (this._availableModels.length > 0 ? this._availableModels[0].id : '');
+    this._formMode = job ? 'edit' : 'add';
+    this._formJobId = job?.id || null;
+    
+    if (job) {
+      // Editing existing job - populate form
+      this._formName = job.name || '';
+      this._formSchedule = job.schedule;
+      this._formMessage = job.message;
+      this._formSessionTarget = job.sessionTarget || 'main';
+      this._formModel = job.model || '';
+      
+      // Parse delivery info
+      if (job.delivery) {
+        this._formChannel = job.delivery.channel || 'telegram';
+        this._formChatId = job.delivery.to || '';
+      } else {
+        // Try to parse from message format: "channel:chat_id:message"
+        const parts = job.message.split(':');
+        const knownChannels = ['telegram', 'whatsapp', 'cli', 'gateway'];
+        if (parts.length >= 3 && knownChannels.includes(parts[0])) {
+          this._formChannel = parts[0];
+          this._formChatId = parts[1];
+          this._formMessage = parts.slice(2).join(':');
+        } else {
+          this._formChannel = 'telegram';
+          this._formChatId = '';
+        }
+      }
+    } else {
+      // Adding new job
+      this._formName = '';
+      this._formSchedule = '*/5 * * * *';
+      this._formChannel = 'telegram';
+      this._formChatId = '';
+      this._formMessage = '';
+      this._formSessionTarget = 'main';
+      this._formModel = this._defaultModel || (this._availableModels.length > 0 ? this._availableModels[0].id : '');
+    }
   }
 
   private _closeForm(): void {
     this._formOpen = false;
+    this._formMode = 'add';
+    this._formJobId = null;
     this._formName = '';
     this._formSchedule = '*/5 * * * *';
     this._formChannel = 'telegram';
     this._formChatId = '';
     this._formMessage = '';
     this._formSessionTarget = 'main';
-    this._formModel = 'google/gemini-2.5-flash-lite-preview-06-17';
+    this._formModel = '';
   }
 
   private async _submitForm(): Promise<void> {
@@ -189,17 +223,28 @@ export class CronManager extends LitElement {
         ? { kind: 'agentTurn' as const, message, model: this._formModel }
         : { kind: 'systemEvent' as const, text: message };
 
-      await this._api.addJob(this._formSchedule, message, {
+      const jobData = {
         name: this._formName || undefined,
+        schedule: this._formSchedule,
+        message,
         sessionTarget: this._formSessionTarget,
         model: this._formSessionTarget === 'isolated' ? this._formModel : undefined,
         delivery,
-      });
+      };
+
+      if (this._formMode === 'edit' && this._formJobId) {
+        // Update existing job
+        await this._api.updateJob(this._formJobId, jobData);
+      } else {
+        // Add new job
+        await this._api.addJob(this._formSchedule, message, jobData);
+      }
+      
       this._closeForm();
       await this._loadJobs();
       await this._loadMetrics();
     } catch (err) {
-      this._error = err instanceof Error ? err.message : 'Failed to add job';
+      this._error = err instanceof Error ? err.message : `Failed to ${this._formMode} job`;
     } finally {
       this._formSubmitting = false;
     }
@@ -313,7 +358,7 @@ export class CronManager extends LitElement {
             <button class="btn btn-secondary" @click=${this._loadJobs} ?disabled=${this._loading}>
               ${getIcon('refresh')} ${t('logs.refresh')}
             </button>
-            <button class="btn btn-primary" @click=${this._openForm}>
+            <button class="btn btn-primary" @click=${() => this._openForm()}>
               ${getIcon('plus')} ${t('cron.addJob')}
             </button>
           </div>
@@ -396,6 +441,9 @@ export class CronManager extends LitElement {
                       </td>
                       <td>
                         <div class="action-buttons">
+                          <button class="btn btn-icon btn-secondary" title="Edit" @click=${() => this._openForm(job)}>
+                            ${getIcon('edit')}
+                          </button>
                           <button class="btn btn-icon btn-secondary" title="${t('cron.runNow')}" @click=${() => this._showRunConfirm(job)}>
                             ${getIcon('play')}
                           </button>
@@ -413,12 +461,12 @@ export class CronManager extends LitElement {
         </div>
       </div>
 
-      <!-- Add Job Form Modal -->
+      <!-- Add/Edit Job Form Modal -->
       ${this._formOpen ? html`
         <div class="modal-backdrop" @click=${this._closeForm}>
           <div class="modal modal--form" @click=${(e: Event) => e.stopPropagation()}>
             <div class="modal__header">
-              <h2 class="modal__title">${t('cron.addJob')}</h2>
+              <h2 class="modal__title">${this._formMode === 'edit' ? 'Edit Job' : t('cron.addJob')}</h2>
               <button class="btn-icon" @click=${this._closeForm}>${getIcon('x')}</button>
             </div>
             <div class="modal__content">
@@ -517,7 +565,7 @@ export class CronManager extends LitElement {
                 @click=${this._submitForm}
                 ?disabled=${this._formSubmitting || !this._formSchedule || !this._formChatId || !this._formMessage}
               >
-                ${this._formSubmitting ? t('common.loading') : t('cron.create')}
+                ${this._formSubmitting ? t('common.loading') : (this._formMode === 'edit' ? 'Save' : t('cron.create'))}
               </button>
             </div>
           </div>

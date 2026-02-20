@@ -91,6 +91,9 @@ export interface CronJobUpdate {
   timezone?: string;
   maxRetries?: number;
   timeout?: number;
+  sessionTarget?: 'main' | 'isolated';
+  model?: string;
+  delivery?: CronDelivery;
 }
 
 export class CronAPIClient {
