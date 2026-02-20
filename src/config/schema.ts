@@ -5,12 +5,34 @@ import { homedir } from 'os';
 // Provider Configuration (camelCase)
 // ============================================
 
+// Model cost schema
+export const ModelCostSchema = z.object({
+  input: z.number().default(0),
+  output: z.number().default(0),
+  cacheRead: z.number().default(0),
+  cacheWrite: z.number().default(0),
+});
+
+// Detailed model metadata schema
+export const ModelMetadataSchema = z.object({
+  id: z.string(),
+  name: z.string(),
+  reasoning: z.boolean().default(false),
+  input: z.array(z.enum(['text', 'image'])).default(['text']),
+  cost: ModelCostSchema.default({ input: 0, output: 0, cacheRead: 0, cacheWrite: 0 }),
+  contextWindow: z.number().default(128000),
+  maxTokens: z.number().default(16384),
+});
+
 // OpenAI-compatible provider schema
 export const OpenAIProviderSchema = z.object({
   apiKey: z.string().default(''),
   baseUrl: z.string().optional(),
   api: z.enum(['openai-completions', 'anthropic-messages', 'google-generative-ai', 'github-copilot']).optional(),
-  models: z.array(z.string()).optional(),
+  models: z.union([
+    z.array(z.string()), // Simple string array (backward compatible)
+    z.array(ModelMetadataSchema), // Detailed model objects
+  ]).optional(),
 });
 
 // Anthropic provider schema
@@ -43,6 +65,7 @@ export const ProvidersConfigSchema = z.object({
   openrouter: OpenAIProviderSchema.optional(),
   xai: OpenAIProviderSchema.optional(),
   bedrock: OpenAIProviderSchema.optional(),
+  bailian: OpenAIProviderSchema.optional(),
 
   // Native providers
   anthropic: AnthropicProviderSchema.optional(),
@@ -64,6 +87,7 @@ export const ProvidersConfigSchema = z.object({
   openrouter: { apiKey: '' },
   xai: { apiKey: '' },
   bedrock: { apiKey: '' },
+  bailian: { apiKey: '' },
   anthropic: { apiKey: '' },
   google: { apiKey: '' },
   ollama: {
@@ -323,6 +347,7 @@ export const ConfigSchema = z.object({
     openrouter: { apiKey: '' },
     xai: { apiKey: '' },
     bedrock: { apiKey: '' },
+    bailian: { apiKey: '' },
     anthropic: { apiKey: '' },
     google: { apiKey: '' },
     ollama: {
@@ -368,10 +393,13 @@ export type OpenAIProviderConfig = z.infer<typeof OpenAIProviderSchema>;
 export type AnthropicProviderConfig = z.infer<typeof AnthropicProviderSchema>;
 export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
 export type WhatsAppConfig = z.infer<typeof WhatsAppConfigSchema>;
+export type ModelMetadata = z.infer<typeof ModelMetadataSchema>;
+export type ModelCost = z.infer<typeof ModelCostSchema>;
 
 const OPENAI_COMPATIBLE_PROVIDERS: Record<string, { baseUrl: string; envKey: string[] }> = {
   'openai': { baseUrl: 'https://api.openai.com/v1', envKey: ['OPENAI_API_KEY'] },
   'qwen': { baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1', envKey: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'] },
+  'bailian': { baseUrl: 'https://coding.dashscope.aliyuncs.com/v1', envKey: ['BAILIAN_API_KEY', 'DASHSCOPE_API_KEY'] },
   'kimi': { baseUrl: 'https://api.moonshot.cn/v1', envKey: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'] },
   'moonshot': { baseUrl: 'https://api.moonshot.ai/v1', envKey: ['MOONSHOT_API_KEY'] },
   'deepseek': { baseUrl: 'https://api.deepseek.com/v1', envKey: ['DEEPSEEK_API_KEY'] },
@@ -486,6 +514,9 @@ export function parseModelId(modelId: string): ParsedModelRef {
   if (modelLower.startsWith('qwen') || modelLower.startsWith('qwq')) {
     return { provider: 'qwen', model: modelId };
   }
+  if (modelLower.startsWith('bailian')) {
+    return { provider: 'bailian', model: modelId };
+  }
   if (modelLower.startsWith('kimi')) {
     return { provider: 'kimi', model: modelId };
   }
@@ -585,6 +616,7 @@ export const PROVIDER_NAMES: Record<string, string> = {
   'anthropic': 'Anthropic',
   'google': 'Google',
   'qwen': 'Qwen (通义千问)',
+  'bailian': 'Bailian (阿里百炼)',
   'kimi': 'Kimi (月之暗面)',
   'moonshot': 'Moonshot AI',
   'minimax': 'MiniMax',
@@ -609,6 +641,7 @@ export const PROVIDER_OPTIONS: ProviderOption[] = [
   { name: 'Anthropic (Claude)', value: 'anthropic', envKey: 'ANTHROPIC_API_KEY', models: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-5'] },
   { name: 'Google (Gemini)', value: 'google', envKey: 'GOOGLE_API_KEY', models: ['gemini-2.5-pro', 'gemini-2.5-flash'] },
   { name: 'Qwen (通义千问)', value: 'qwen', envKey: 'QWEN_API_KEY', models: ['qwen-plus', 'qwen-max', 'qwen3-235b'] },
+  { name: 'Bailian (阿里百炼)', value: 'bailian', envKey: 'BAILIAN_API_KEY', models: ['qwen3-max-2026-01-23'] },
   { name: 'Kimi (月之暗面)', value: 'kimi', envKey: 'KIMI_API_KEY', models: ['kimi-k2.5', 'kimi-k2-thinking'] },
   { name: 'MiniMax (海外)', value: 'minimax', envKey: 'MINIMAX_API_KEY', models: ['minimax-m2.1', 'minimax-m2'] },
   { name: 'MiniMax CN (国内)', value: 'minimax-cn', envKey: 'MINIMAX_CN_API_KEY', models: ['minimax-m2.1', 'minimax-m2'] },

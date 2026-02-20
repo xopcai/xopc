@@ -104,7 +104,23 @@ export interface ProviderOverride {
 	baseUrl?: string;
 	apiKey?: string;
 	api?: 'openai-completions' | 'anthropic-messages' | 'google-generative-ai';
-	models?: string[];
+	models?: string[] | ModelMetadata[];
+}
+
+/** Model metadata for detailed model configuration */
+export interface ModelMetadata {
+	id: string;
+	name: string;
+	reasoning?: boolean;
+	input?: ('text' | 'image')[];
+	cost?: {
+		input?: number;
+		output?: number;
+		cacheRead?: number;
+		cacheWrite?: number;
+	};
+	contextWindow?: number;
+	maxTokens?: number;
 }
 
 /** Provider information for UI display */
@@ -131,6 +147,7 @@ export const PROVIDER_INFO: Record<string, ProviderInfo> = {
 	'github-copilot': { id: 'github-copilot', name: 'GitHub Copilot', envKey: 'GITHUB_COPILOT_TOKEN', authType: 'token', supportsOAuth: true },
 	'openai-codex': { id: 'openai-codex', name: 'OpenAI Codex', envKey: 'OPENAI_CODEX_API_KEY', authType: 'api_key', supportsOAuth: true },
 	'qwen': { id: 'qwen', name: 'Qwen (通义千问)', envKey: 'QWEN_API_KEY', authType: 'api_key', supportsOAuth: true, baseUrl: 'https://dashscope.aliyuncs.com/compatible-mode/v1' },
+	'bailian': { id: 'bailian', name: 'Bailian (阿里百炼)', envKey: 'BAILIAN_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://coding.dashscope.aliyuncs.com/v1' },
 	'kimi': { id: 'kimi', name: 'Kimi (月之暗面)', envKey: 'KIMI_API_KEY', authType: 'api_key', supportsOAuth: true, baseUrl: 'https://api.moonshot.cn/v1' },
 	'moonshot': { id: 'moonshot', name: 'Moonshot AI', envKey: 'MOONSHOT_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://api.moonshot.ai/v1' },
 	'minimax': { id: 'minimax', name: 'MiniMax', envKey: 'MINIMAX_API_KEY', authType: 'api_key', supportsOAuth: true, baseUrl: 'https://api.minimax.io/v1' },
@@ -361,20 +378,30 @@ export class ModelRegistry {
 				const api = (providerConfig.api ?? 'openai-completions') as Api;
 				const baseUrl = providerConfig.baseUrl ?? getApiBase(this.config, providerName) ?? '';
 
-				for (const modelId of providerConfig.models) {
+				for (const modelConfig of providerConfig.models) {
+					// Handle both string array and object array formats
+					const isMetadataObject = typeof modelConfig === 'object' && modelConfig !== null && 'id' in modelConfig;
+					const modelId = isMetadataObject ? (modelConfig as ModelMetadata).id : (modelConfig as string);
+					
 					const exists = this.models.some((m) => m.provider === providerName && m.id === modelId);
 					if (!exists) {
+						const metadata = isMetadataObject ? (modelConfig as ModelMetadata) : null;
 						this.models.push({
 							id: modelId,
-							name: modelId,
+							name: metadata?.name ?? modelId,
 							api,
 							provider: providerName,
 							baseUrl,
-							reasoning: false,
-							input: ['text'],
-							cost: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0 },
-							contextWindow: 128000,
-							maxTokens: 16384,
+							reasoning: metadata?.reasoning ?? false,
+							input: metadata?.input ?? ['text'],
+							cost: {
+								input: metadata?.cost?.input ?? 0,
+								output: metadata?.cost?.output ?? 0,
+								cacheRead: metadata?.cost?.cacheRead ?? 0,
+								cacheWrite: metadata?.cost?.cacheWrite ?? 0,
+							},
+							contextWindow: metadata?.contextWindow ?? 128000,
+							maxTokens: metadata?.maxTokens ?? 16384,
 						} as Model<Api>);
 					}
 				}
