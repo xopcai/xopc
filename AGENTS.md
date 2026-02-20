@@ -1,45 +1,94 @@
 # AGENTS.md - xopcbot Development Guide
 
-_This file guides AI assistants working on the xopcbot codebase._
+> This file guides AI assistants working on the xopcbot codebase.
+
+---
+
+## Table of Contents
+
+- [Project Overview](#project-overview)
+- [Quick Start](#quick-start)
+- [Tech Stack](#tech-stack)
+- [Project Structure](#project-structure)
+- [Code Style Guidelines](#code-style-guidelines)
+- [Key Patterns](#key-patterns)
+- [Common Tasks](#common-tasks)
+- [Configuration](#configuration)
+- [Environment Variables](#environment-variables)
+- [Testing](#testing)
+- [Web UI](#web-ui)
+- [Debugging](#debugging)
+- [Troubleshooting](#troubleshooting)
+
+---
 
 ## Project Overview
 
 **xopcbot** is an ultra-lightweight personal AI assistant built with Node.js + TypeScript. It provides a CLI-based interface to LLMs with multi-channel support (Telegram, WhatsApp).
 
-### Key Stats
-- ~6,000 lines of TypeScript
-- 99+ unit tests
-- 20+ LLM providers via `@mariozechner/pi-ai`
+| Metric | Value |
+|--------|-------|
+| Codebase | ~6,000 lines of TypeScript |
+| Test Coverage | 99+ unit tests |
+| LLM Providers | 20+ via `@mariozechner/pi-ai` |
+| Node.js | >= 22 |
 
-## Code Style Guidelines
+---
 
-### Comments
-- **All comments must be in English** when used
-- **Keep comments minimal** - only add when necessary:
-  - Complex logic that isn't self-explanatory
-  - Non-obvious business rules or edge cases
-  - Public API documentation (JSDoc for exported functions)
-- **Avoid obvious comments** - don't state what the code already shows
-- Prefer self-documenting code with clear variable/function names
+## Quick Start
 
-### Naming Conventions
-- `camelCase` for variables, functions, methods
-- `PascalCase` for classes, interfaces, types
-- `UPPER_SNAKE_CASE` for constants
-- Prefix unused params with underscore: `_unusedParam`
+```bash
+# 1. Install dependencies (use pnpm, NOT npm)
+pnpm install
 
-### Import Organization
-1. External dependencies
-2. Internal absolute imports
-3. Relative imports (sibling files last)
+# 2. Run CLI commands directly (no build needed)
+pnpm run dev -- <command>
 
-## Architecture
+# Examples:
+pnpm run dev -- agent -i              # Interactive agent
+pnpm run dev -- agent -m "Hello"      # Single message
+
+# 3. Build for production
+pnpm run build
+
+# 4. Run tests
+pnpm test
+```
+
+---
+
+## Tech Stack
+
+| Component | Technology |
+|-----------|------------|
+| Runtime | Node.js >=22 |
+| Language | TypeScript 5.x |
+| AI Framework | `@mariozechner/pi-agent-core` |
+| CLI Framework | `commander` |
+| Validation | `zod` (config), `@sinclair/typebox` (tools) |
+| Testing | `vitest` |
+| UI Components | `lit` (Web Components) |
+
+### Key Dependencies
+
+| Package | Purpose |
+|---------|---------|
+| `@mariozechner/pi-agent-core` | Agent loop, tools, events |
+| `@mariozechner/pi-ai` | LLM providers, streaming |
+| `@sinclair/typebox` | JSON Schema generation |
+| `commander` | CLI framework |
+| `zod` | Config validation |
+| `lit` | Web component library |
+
+---
+
+## Project Structure
 
 ```
 src/
 ├── agent/              # Core agent logic (pi-agent-core based)
 │   ├── service.ts      #   Main AgentService class
-│   ├── memory/          #   Session persistence
+│   ├── memory/         #   Session persistence
 │   └── tools/          #   Built-in tools (Typebox schemas)
 ├── bus/                # Event bus for message routing
 ├── channels/           # Telegram & WhatsApp integrations
@@ -53,93 +102,72 @@ src/
 ├── types/              # Shared TypeScript types
 └── ui/                 # Web UI components (Lit-based)
     └── src/
-        ├── index.ts            #   Main entry with XopcbotChat
-        ├── gateway-chat.ts    #   Gateway-connected chat component
-        ├── components/        #   UI components
+        ├── index.ts              # Main entry with XopcbotChat
+        ├── gateway-chat.ts       # Gateway-connected chat component
+        ├── components/           # UI components
         │   ├── MessageEditor.ts
         │   ├── MessageList.ts
         │   └── StreamingMessageContainer.ts
-        ├── dialogs/           #   Dialog components
+        ├── dialogs/              # Dialog components
         │   └── ConfigDialog.ts
-        └── utils/             #   Utilities
+        └── utils/                # Utilities
             ├── i18n.ts
             ├── format.ts
             └── attachment-utils.ts
 ```
 
-## Tech Stack
+---
 
-| Component | Technology |
-|-----------|------------|
-| Runtime | Node.js >=22 |
-| Language | TypeScript 5.x |
-| AI Framework | `@mariozechner/pi-agent-core` |
-| CLI | `commander` |
-| Validation | `zod` (config), `@sinclair/typebox` (tools) |
-| Testing | `vitest` |
+## Code Style Guidelines
 
-## Development Workflow
+### Comments
 
-### Package Manager
+- **All comments must be in English**
+- **Keep comments minimal** - only for:
+  - Complex logic that isn't self-explanatory
+  - Non-obvious business rules or edge cases
+  - Public API documentation (JSDoc for exported functions)
+- **Avoid obvious comments** - don't state what the code already shows
+- Prefer self-documenting code with clear variable/function names
 
-**Use pnpm, NOT npm.**
+### Naming Conventions
 
-```bash
-# Install dependencies
-pnpm install
+| Type | Convention | Example |
+|------|------------|---------|
+| Variables, functions, methods | `camelCase` | `getUserById()` |
+| Classes, interfaces, types | `PascalCase` | `AgentService` |
+| Constants | `UPPER_SNAKE_CASE` | `MAX_RETRY_COUNT` |
+| Unused parameters | Prefix with `_` | `_unusedParam` |
+| Private methods | Prefix with `_` | `_internalHelper()` |
 
-# Add new dependency
-pnpm add <package>
+### Import Organization
 
-# Add dev dependency
-pnpm add -D <package>
+Order of imports (separate groups with blank lines):
 
-# Remove dependency
-pnpm remove <package>
+```typescript
+// 1. External dependencies
+import { Type } from '@sinclair/typebox';
+import { Command } from 'commander';
 
-# Update lockfile
-pnpm install --frozen-lockfile
+// 2. Internal absolute imports
+import { AgentService } from './agent/index.js';
+import { MessageBus } from './bus/index.js';
+
+// 3. Relative imports (sibling files last)
+import { register } from '../registry.js';
+import { utils } from './utils.js';
 ```
 
-⚠️ **Never commit `package-lock.json`** - This project uses `pnpm-lock.yaml`.
+### File Naming
 
-### Running Locally
+| File Type | Pattern | Example |
+|-----------|---------|---------|
+| Source files | `camelCase.ts` | `agentService.ts` |
+| Test files | `<name>.test.ts` | `filesystem.test.ts` |
+| Type definitions | `<name>.types.ts` | `config.types.ts` |
+| Index exports | `index.ts` | `index.ts` |
 
-```bash
-# Install dependencies
-pnpm install
-
-# Run CLI command (no build needed)
-pnpm run dev -- <command>
-
-# Example: Interactive agent
-pnpm run dev -- agent -i
-
-# Example: Single message
-pnpm run dev -- agent -m "Hello"
-```
-
-### Building
-
-```bash
-# Type check and compile
-pnpm run build
-
-# Output goes to dist/
-```
-
-### Testing
-
-```bash
-# Run all tests
-pnpm test
-
-# Run specific test file
-pnpm vitest run src/agent/tools/__tests__/filesystem.test.ts
-
-# Watch mode
-pnpm vitest --watch
-```
+---
 
 ## Key Patterns
 
@@ -154,7 +182,9 @@ import { register } from '../registry.js';
 function createCommand(ctx: CLIContext): Command {
   return new Command('mycommand')
     .description('My command')
-    .action(async () => { ... });
+    .action(async () => { 
+      // Implementation
+    });
 }
 
 register({
@@ -209,22 +239,14 @@ const agent = new AgentService(bus, {
 await agent.start();
 ```
 
-## Configuration
-
-Config location: `~/.xopcbot/config.json`
-
-Key sections:
-- `providers` - LLM API keys
-- `agents.defaults` - Default model, tokens, temperature
-- `channels` - Telegram/WhatsApp settings
-- `gateway` - HTTP server settings
+---
 
 ## Common Tasks
 
 ### Adding a New CLI Command
 
 1. Create `src/cli/commands/<name>.ts`
-2. Use the self-registration pattern
+2. Use the [self-registration pattern](#1-command-self-registration)
 3. Import it in `src/cli/index.ts`
 
 ### Adding a New Tool
@@ -239,41 +261,119 @@ Key sections:
 2. Update `src/providers/registry.ts` - add provider details
 3. Update environment variable handling if needed
 
+### Package Management
+
+⚠️ **Always use pnpm, NEVER npm.**
+
+```bash
+# Install dependencies
+pnpm install
+
+# Add new dependency
+pnpm add <package>
+
+# Add dev dependency
+pnpm add -D <package>
+
+# Remove dependency
+pnpm remove <package>
+
+# Update lockfile
+pnpm install --frozen-lockfile
+```
+
+> ⚠️ **Never commit `package-lock.json`** - This project uses `pnpm-lock.yaml`.
+
+---
+
+## Configuration
+
+**Config location:** `~/.xopcbot/config.json`
+
+**Key sections:**
+
+| Section | Description |
+|---------|-------------|
+| `providers` | LLM API keys |
+| `agents.defaults` | Default model, tokens, temperature |
+| `channels` | Telegram/WhatsApp settings |
+| `gateway` | HTTP server settings |
+
+---
+
 ## Environment Variables
 
-| Variable | Purpose |
-|----------|---------|
-| `OPENAI_API_KEY` | OpenAI authentication |
-| `ANTHROPIC_API_KEY` | Anthropic authentication |
-| `XOPCBOT_CONFIG` | Custom config file path |
-| `XOPCBOT_WORKSPACE` | Custom workspace directory |
+| Variable | Purpose | Required |
+|----------|---------|----------|
+| `OPENAI_API_KEY` | OpenAI API authentication | Optional* |
+| `ANTHROPIC_API_KEY` | Anthropic API authentication | Optional* |
+| `BRAVE_API_KEY` | Brave Search API key | Optional |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot integration | Optional |
+| `WHATSAPP_API_KEY` | WhatsApp integration | Optional |
+| `XOPCBOT_CONFIG` | Custom config file path | Optional |
+| `XOPCBOT_WORKSPACE` | Custom workspace directory | Optional |
+| `XOPCBOT_LOG_LEVEL` | Log level (debug/info/warn/error) | Optional |
 
-## Testing Guidelines
+\* At least one LLM provider key is required
+
+---
+
+## Testing
+
+### Running Tests
+
+```bash
+# Run all tests
+pnpm test
+
+# Run specific test file
+pnpm vitest run src/agent/tools/__tests__/filesystem.test.ts
+
+# Watch mode
+pnpm vitest --watch
+
+# With coverage
+pnpm vitest run --coverage
+```
+
+### Test Guidelines
 
 - Tests live alongside source: `src/**/__tests__/*.test.ts`
 - Use `vitest` APIs: `describe`, `it`, `expect`, `vi.mock`
 - Mock filesystem operations with `vi.mock('fs')`
 
-## Dependencies to Know
+### Example Test Structure
 
-| Package | Purpose |
-|---------|---------|
-| `@mariozechner/pi-agent-core` | Agent loop, tools, events |
-| `@mariozechner/pi-ai` | LLM providers, streaming |
-| `@sinclair/typebox` | JSON Schema generation |
-| `commander` | CLI framework |
-| `zod` | Config validation |
-| `lit` | Web component library for UI |
+```typescript
+import { describe, it, expect, vi } from 'vitest';
+import { myFunction } from '../myModule.js';
 
-## Web UI (ui/)
+describe('myModule', () => {
+  it('should do something', async () => {
+    // Arrange
+    const input = 'test';
+    
+    // Act
+    const result = await myFunction(input);
+    
+    // Assert
+    expect(result).toBe('expected');
+  });
+});
+```
+
+---
+
+## Web UI
 
 The `ui/` directory contains web-based UI components for xopcbot, inspired by [pi-mono/web-ui](https://github.com/mariozechner/pi-mono/tree/main/packages/web-ui) and [openclaw/ui](https://github.com/openclaw/openclaw/tree/main/ui).
 
 ### Building the UI
 
 ```bash
-# Install UI dependencies
 cd ui
+
+# Install dependencies
 pnpm install
 
 # Development mode with hot reload
@@ -286,6 +386,7 @@ pnpm run build
 ### UI Components
 
 #### XopcbotChat
+
 Main chat component that wraps an Agent instance:
 
 ```typescript
@@ -298,6 +399,7 @@ chat.agent = agent;
 ```
 
 #### XopcbotGatewayChat
+
 WebSocket-connected chat component for remote gateway access:
 
 ```typescript
@@ -311,6 +413,7 @@ chat.config = {
 ```
 
 #### XopcbotConfig
+
 Configuration dialog component:
 
 ```typescript
@@ -322,19 +425,24 @@ config.sections = [
     id: 'general',
     title: 'General',
     fields: [
-      { key: 'language', label: 'Language', type: 'select', options: [
-        { value: 'en', label: 'English' },
-        { value: 'zh', label: '中文' },
-      ]},
+      { 
+        key: 'language', 
+        label: 'Language', 
+        type: 'select', 
+        options: [
+          { value: 'en', label: 'English' },
+          { value: 'zh', label: '中文' },
+        ]
+      },
     ],
   },
 ];
 config.onSave = (values) => console.log('Save:', values);
 ```
 
-### Integration with Gateway
+### Gateway Integration
 
-The UI connects to the gateway via WebSocket events:
+WebSocket events between UI and Gateway:
 
 | Event | Direction | Purpose |
 |-------|-----------|---------|
@@ -371,23 +479,67 @@ UI components use CSS variables for theming:
 }
 ```
 
-## When Making Changes
+---
 
-- **Agent logic** → Check `src/agent/service.ts`
-- **Tools** → Update `src/agent/tools/`
-- **CLI** → Add to `src/cli/commands/`
-- **Config** → Update `src/config/schema.ts`
-- **Tests** → Add to `__tests__/` alongside source
+## Debugging
 
-## Build & Deploy
+### Log Levels
+
+Set via `XOPCBOT_LOG_LEVEL` environment variable:
+
+| Level | Description |
+|-------|-------------|
+| `debug` | Verbose logging including internal details |
+| `info` | General information (default) |
+| `warn` | Warnings and non-critical issues |
+| `error` | Errors only |
+
+### Debug Commands
 
 ```bash
-# Full verification
-pnpm run build && pnpm test
+# Run with debug logging
+XOPCBOT_LOG_LEVEL=debug pnpm run dev -- agent -i
 
-# The compiled output in dist/ is not committed to git
+# Check config
+pnpm run dev -- config --show
+
+# Validate config
+pnpm run dev -- config --validate
 ```
 
 ---
 
-_Last updated: 2025-02-10_
+## Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| `ERR_MODULE_NOT_FOUND` | Run `pnpm install` to ensure dependencies are installed |
+| `Cannot find module '@xopcbot/...'` | Run `pnpm run build` to compile the project |
+| Tests failing with timeout | Check if LLM API keys are set and valid |
+| Config not loading | Verify `~/.xopcbot/config.json` syntax is valid JSON |
+| UI not connecting | Check gateway is running and WebSocket URL is correct |
+| `package-lock.json` conflicts | Remove it and run `pnpm install` |
+
+### Getting Help
+
+1. Check existing tests for usage examples
+2. Review similar implementations in the codebase
+3. Verify environment variables are set correctly
+
+---
+
+## When Making Changes
+
+| If you're changing... | Check these files |
+|----------------------|-------------------|
+| **Agent logic** | `src/agent/service.ts` |
+| **Tools** | `src/agent/tools/` |
+| **CLI commands** | `src/cli/commands/` |
+| **Configuration** | `src/config/schema.ts` |
+| **Tests** | `src/**/__tests__/` alongside source |
+| **UI components** | `ui/src/components/` |
+| **Providers** | `src/providers/registry.ts` |
+
+---
+
+_Last updated: 2026-02-20_
