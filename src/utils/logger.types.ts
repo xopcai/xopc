@@ -159,14 +159,7 @@ export interface LogQuery {
  * Log statistics
  */
 export interface LogStats {
-  totalFiles: number;
-  totalSize: number;
-  totalLines: number;
-  oldestLog: string | null;
-  newestLog: string | null;
   byLevel: Record<LogLevel, number>;
-  byModule: Record<string, number>;
-  files: LogFileMeta[];
 }
 
 /**

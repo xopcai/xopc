@@ -7,7 +7,6 @@ import { t } from '../utils/i18n';
 import {
   LogAPIClient,
   type LogEntry,
-  type LogStats,
   type LogFile,
   type LogLevel,
   LOG_LEVELS,
@@ -26,9 +25,9 @@ export class LogManager extends LitElement {
   @state() private _logs: LogEntry[] = [];
   @state() private _loading = false;
   @state() private _hasMore = false;
-  @state() private _stats: LogStats | null = null;
   @state() private _files: LogFile[] = [];
   @state() private _modules: string[] = [];
+  @state() private _showFilesPanel = false;
 
   // Filters
   @state() private _selectedLevels: Set<LogLevel> = new Set();
@@ -82,7 +81,6 @@ export class LogManager extends LitElement {
     this._api = new LogAPIClient(httpUrl, this.config.token);
     this._initialized = true;
     this._loadLogs();
-    this._loadStats();
     this._loadFiles();
     this._loadModules();
   }
@@ -125,14 +123,6 @@ export class LogManager extends LitElement {
       console.error('[LogManager] Load error:', err);
     } finally {
       this._loading = false;
-    }
-  }
-
-  private async _loadStats(): Promise<void> {
-    try {
-      this._stats = await this._api.getLogStats();
-    } catch (err) {
-      console.error('[LogManager] Stats error:', err);
     }
   }
 
@@ -228,7 +218,6 @@ export class LogManager extends LitElement {
   private _startAutoRefresh(): void {
     this._refreshInterval = window.setInterval(() => {
       this._loadLogs(true);
-      this._loadStats();
     }, 5000);
   }
 
@@ -268,11 +257,12 @@ export class LogManager extends LitElement {
     return html`
       <div class="log-manager">
         ${this._renderHeader()}
-        ${this._renderFilters()}
-        ${this._renderStats()}
+        <div class="log-manager__main">
+          ${this._renderFilters()}
+          ${this._renderLogTable()}
+          ${this._renderFilesPanel()}
+        </div>
         ${this._error ? html`<div class="error-banner">${this._error}</div>` : ''}
-        ${this._renderLogTable()}
-        ${this._renderFileList()}
       </div>
 
       ${this._selectedLog ? this._renderDetailDrawer() : ''}
@@ -282,18 +272,35 @@ export class LogManager extends LitElement {
   private _renderHeader(): unknown {
     return html`
       <div class="log-manager__header">
-        <h1 class="page-title">${getIcon('fileText')} ${t('logs.title')}</h1>
+        <div class="log-manager__title">
+          <span class="title-icon">${getIcon('fileText')}</span>
+          <div class="title-text">
+            <h1>${t('logs.title')}</h1>
+            <span class="title-subtitle">System logs and diagnostics</span>
+          </div>
+        </div>
         <div class="log-manager__actions">
           <button
-            class="btn ${this._autoRefresh ? 'btn-primary' : 'btn-secondary'}"
+            class="btn-icon"
+            @click=${this._toggleFilesPanel}
+            title="Toggle log files"
+          >
+            ${getIcon('folder')}
+            ${this._files.length > 0 ? html`<span class="badge">${this._files.length}</span>` : ''}
+          </button>
+          <button
+            class="btn-icon ${this._autoRefresh ? 'btn-icon--active' : ''}"
             @click=${this._toggleAutoRefresh}
+            title=${this._autoRefresh ? t('logs.pause') : t('logs.autoRefresh')}
           >
             ${getIcon(this._autoRefresh ? 'pause' : 'play')}
-            ${this._autoRefresh ? t('logs.pause') : t('logs.autoRefresh')}
           </button>
-          <button class="btn btn-secondary" @click=${() => this._loadLogs(true)}>
+          <button
+            class="btn-icon"
+            @click=${() => this._loadLogs(true)}
+            title=${t('logs.refresh')}
+          >
             ${getIcon('refreshCw')}
-            ${t('logs.refresh')}
           </button>
         </div>
       </div>
@@ -369,30 +376,6 @@ export class LogManager extends LitElement {
 
 
 
-  private _renderStats(): unknown {
-    if (!this._stats) return '';
-
-    const totalLines = this._stats.totalLines ?? this._stats.totalFiles ?? 0;
-    const byLevel = this._stats.byLevel ?? {};
-
-    return html`
-      <div class="log-manager__stats">
-        <div class="stat-card">
-          <div class="stat-value">${totalLines.toLocaleString()}</div>
-          <div class="stat-label">Total Logs</div>
-        </div>
-        ${Object.entries(byLevel).map(([level, count]) => html`
-          <div class="stat-card stat-card--${level}">
-            <div class="stat-value" style="color: ${LOG_LEVEL_COLORS[level as LogLevel]}">
-              ${(count ?? 0).toLocaleString()}
-            </div>
-            <div class="stat-label">${level}</div>
-          </div>
-        `)}
-      </div>
-    `;
-  }
-
   private _renderLogTable(): unknown {
     if (this._loading && this._logs.length === 0) {
       return this._renderLoading();
@@ -460,20 +443,41 @@ export class LogManager extends LitElement {
     `;
   }
 
-  private _renderFileList(): unknown {
-    if (this._files.length === 0) return '';
+  private _toggleFilesPanel(): void {
+    this._showFilesPanel = !this._showFilesPanel;
+  }
 
+  private _renderFilesPanel(): unknown {
     return html`
-      <div class="log-files">
-        <h3 class="section-title">${getIcon('folder')} Log Files</h3>
-        <div class="file-list">
-          ${this._files.map((file) => html`
-            <div class="file-item">
-              <span class="file-name">${getIcon('file')}${file.name}</span>
-              <span class="file-size">${this._formatFileSize(file.size)}</span>
-              <span class="file-time">${this._formatTimestamp(file.modified)}</span>
+      ${this._showFilesPanel ? html`
+        <div class="drawer-overlay" @click=${this._toggleFilesPanel}></div>
+      ` : ''}
+      <div class="files-panel ${this._showFilesPanel ? 'files-panel--open' : ''}">
+        <div class="files-panel__header">
+          <span class="files-panel__title">
+            ${getIcon('folder')}
+            Log Files
+          </span>
+          <button class="btn btn-icon" @click=${this._toggleFilesPanel}>
+            ${getIcon('x')}
+          </button>
+        </div>
+        <div class="files-panel__content">
+          ${this._files.length === 0 ? html`
+            <div class="files-panel__empty">No log files found</div>
+          ` : html`
+            <div class="file-list">
+              ${this._files.map((file) => html`
+                <div class="file-item">
+                  <span class="file-name">${getIcon('file')}${file.name}</span>
+                  <span class="file-meta">
+                    <span class="file-size">${this._formatFileSize(file.size)}</span>
+                    <span class="file-time">${this._formatTimestamp(file.modified)}</span>
+                  </span>
+                </div>
+              `)}
             </div>
-          `)}
+          `}
         </div>
       </div>
     `;

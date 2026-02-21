@@ -32,14 +32,7 @@ export interface LogFile {
 }
 
 export interface LogStats {
-  totalFiles: number;
-  totalSize: number;
-  totalLines: number;
-  oldestLog: string | null;
-  newestLog: string | null;
   byLevel: Record<string, number>;
-  byModule: Record<string, number>;
-  files?: unknown[];
 }
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';

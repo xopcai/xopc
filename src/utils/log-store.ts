@@ -423,13 +423,12 @@ export async function getLogModules(): Promise<string[]> {
 }
 
 /**
- * Get comprehensive log statistics
+ * Get log statistics by level (sampled from recent files)
  */
 export async function getLogStats(): Promise<LogStats> {
   const files = getLogFiles();
-  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
 
-  // Count by level and module (sample recent files)
+  // Count by level (sample from recent files)
   const byLevel: Record<LogLevel, number> = {
     trace: 0,
     debug: 0,
@@ -439,45 +438,16 @@ export async function getLogStats(): Promise<LogStats> {
     fatal: 0,
     silent: 0,
   };
-  const byModule: Record<string, number> = {};
-  let totalLines = 0;
-  let sampledLines = 0;
 
-  // Sample from recent files to estimate totals
   for (const file of files.slice(0, 7)) {
-    const fileSampleCount = 3000; // Sample more lines for better accuracy
-    for await (const entry of streamLogFile(file.path, { limit: fileSampleCount })) {
-      sampledLines++;
+    for await (const entry of streamLogFile(file.path, { limit: 1000 })) {
       if (entry.level in byLevel) {
         byLevel[entry.level as LogLevel]++;
-      }
-      if (entry.module) {
-        byModule[entry.module] = (byModule[entry.module] || 0) + 1;
       }
     }
   }
 
-  // Estimate total lines based on file sizes
-  // Average line size is approximately 200-300 bytes for JSON logs
-  const avgBytesPerLine = sampledLines > 0 ? (totalSize / sampledLines) : 250;
-  const estimatedTotalLines = avgBytesPerLine > 0 ? Math.round(totalSize / avgBytesPerLine) : sampledLines;
-
-  // Scale level counts proportionally
-  const scaleFactor = sampledLines > 0 ? estimatedTotalLines / sampledLines : 1;
-  for (const level of Object.keys(byLevel)) {
-    byLevel[level as LogLevel] = Math.round(byLevel[level as LogLevel] * scaleFactor);
-  }
-
-  return {
-    totalFiles: files.length,
-    totalSize,
-    totalLines: estimatedTotalLines,
-    oldestLog: files.length > 0 ? files[files.length - 1].modified : null,
-    newestLog: files.length > 0 ? files[0].modified : null,
-    byLevel,
-    byModule,
-    files,
-  };
+  return { byLevel };
 }
 
 // ============================================
