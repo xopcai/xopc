@@ -91,7 +91,19 @@ src/
 │   ├── memory/         #   Session persistence
 │   └── tools/          #   Built-in tools (Typebox schemas)
 ├── bus/                # Event bus for message routing
-├── channels/           # Telegram & WhatsApp integrations
+├── channels/           # Channel integrations (Telegram, WhatsApp)
+│   ├── telegram/       #   Telegram plugin architecture
+│   │   ├── plugin.ts   #     Main plugin implementation
+│   │   ├── client.ts   #     Bot client wrapper
+│   │   ├── webhook.ts  #     Webhook server support
+│   │   └── command-handler.ts  # Bot command handlers
+│   ├── whatsapp/       #   WhatsApp plugin
+│   ├── types.ts        #   Channel plugin interfaces
+│   ├── manager.ts      #   Channel lifecycle manager
+│   ├── access-control.ts     # Access control policies
+│   ├── draft-stream.ts       # Streaming message preview
+│   ├── format.ts             # Markdown to HTML formatter
+│   └── update-offset-store.ts # Polling offset persistence
 ├── cli/                # CLI commands with self-registration
 ├── config/             # Configuration management
 ├── cron/               # Scheduled tasks
@@ -239,6 +251,56 @@ const agent = new AgentService(bus, {
 await agent.start();
 ```
 
+### 4. Channel Plugin Usage (New)
+
+Channels now use a plugin-based architecture inspired by openclaw:
+
+```typescript
+import { telegramPlugin } from './channels/index.js';
+import { ChannelManager } from './channels/manager.js';
+
+// Initialize plugin
+await telegramPlugin.init({ bus, config, channelConfig });
+await telegramPlugin.start();
+
+// Send message
+await telegramPlugin.send({
+  chatId: '123456',
+  content: 'Hello World',
+  accountId: 'personal',
+});
+
+// Streaming message preview
+const stream = telegramPlugin.startStream({ chatId: '123456' });
+stream.update('Processing...');
+stream.update('Still working...');
+await stream.end();
+```
+
+### 5. Channel Access Control
+
+Channels support hierarchical access control:
+
+```typescript
+// DM policies: 'pairing' | 'allowlist' | 'open' | 'disabled'
+// Group policies: 'open' | 'disabled' | 'allowlist'
+
+// Config example
+{
+  "channels": {
+    "telegram": {
+      "accounts": {
+        "personal": {
+          "dmPolicy": "allowlist",
+          "groupPolicy": "open",
+          "allowFrom": [123456, 789012]
+        }
+      }
+    }
+  }
+}
+```
+
 ---
 
 ## Common Tasks
@@ -260,6 +322,28 @@ await agent.start();
 1. Update `src/config/schema.ts` - add to `ProvidersConfigSchema`
 2. Update `src/providers/registry.ts` - add provider details
 3. Update environment variable handling if needed
+
+### Adding a New Channel Plugin
+
+1. Create plugin directory: `src/channels/<name>/`
+2. Implement `ChannelPlugin` interface from `src/channels/types.ts`
+3. Add to `src/channels/index.ts` exports
+4. Register in `ChannelManager` for lifecycle management
+
+### Working with Channel Streaming
+
+```typescript
+import { DraftStreamManager } from './channels/draft-stream.js';
+
+const manager = new DraftStreamManager(bot);
+const stream = manager.getOrCreate('chat-123', { chatId: 123 });
+
+// Update preview message
+stream.update('Processing your request...');
+
+// Finalize
+await stream.flush();
+```
 
 ### Package Management
 
@@ -298,6 +382,47 @@ pnpm install --frozen-lockfile
 | `agents.defaults` | Default model, tokens, temperature |
 | `channels` | Telegram/WhatsApp settings |
 | `gateway` | HTTP server settings |
+| `cron` | Scheduled task settings |
+| `plugins` | Plugin enable/disable configuration |
+
+### Telegram Multi-Account Configuration
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "accounts": {
+        "personal": {
+          "name": "Personal Bot",
+          "token": "BOT_TOKEN_1",
+          "dmPolicy": "allowlist",
+          "groupPolicy": "open",
+          "allowFrom": [123456789],
+          "streamMode": "partial"
+        },
+        "work": {
+          "name": "Work Bot",
+          "token": "BOT_TOKEN_2",
+          "dmPolicy": "disabled",
+          "groupPolicy": "allowlist",
+          "groups": {
+            "-1001234567890": {
+              "requireMention": true,
+              "systemPrompt": "You are a work assistant"
+            }
+          }
+        }
+      }
+    }
+  }
+}
+```
+
+**Policies:**
+- `dmPolicy`: `pairing` | `allowlist` | `open` | `disabled`
+- `groupPolicy`: `open` | `disabled` | `allowlist`
+- `streamMode`: `off` | `partial` | `block`
 
 ---
 
@@ -312,7 +437,12 @@ pnpm install --frozen-lockfile
 | `WHATSAPP_API_KEY` | WhatsApp integration | Optional |
 | `XOPCBOT_CONFIG` | Custom config file path | Optional |
 | `XOPCBOT_WORKSPACE` | Custom workspace directory | Optional |
-| `XOPCBOT_LOG_LEVEL` | Log level (debug/info/warn/error) | Optional |
+| `XOPCBOT_LOG_LEVEL` | Log level (trace/debug/info/warn/error/fatal) | Optional |
+| `XOPCBOT_LOG_DIR` | Log directory path | Optional |
+| `XOPCBOT_LOG_CONSOLE` | Enable console output (true/false) | Optional |
+| `XOPCBOT_LOG_FILE` | Enable file output (true/false) | Optional |
+| `XOPCBOT_LOG_RETENTION_DAYS` | Days to retain log files | Optional |
+| `XOPCBOT_PRETTY_LOGS` | Pretty print logs for development | Optional |
 
 \* At least one LLM provider key is required
 
@@ -451,6 +581,14 @@ WebSocket events between UI and Gateway:
 | `chat` | Gateway → UI | Chat updates (delta/final/error) |
 | `config.get` | UI → Gateway | Load configuration |
 | `config.set` | UI → Gateway | Save configuration |
+| `logs.query` | UI → Gateway | Query log entries |
+| `logs.files` | UI → Gateway | List log files |
+| `logs.stats` | UI → Gateway | Get log statistics |
+| `cron.jobs` | UI → Gateway | List cron jobs |
+| `cron.create` | UI → Gateway | Create cron job |
+| `cron.delete` | UI → Gateway | Delete cron job |
+| `cron.toggle` | UI → Gateway | Enable/disable cron job |
+| `cron.run` | UI → Gateway | Trigger cron job manually |
 
 ### Styling
 
@@ -489,10 +627,25 @@ Set via `XOPCBOT_LOG_LEVEL` environment variable:
 
 | Level | Description |
 |-------|-------------|
+| `trace` | Development debugging only (function entry/exit) |
 | `debug` | Verbose logging including internal details |
 | `info` | General information (default) |
 | `warn` | Warnings and non-critical issues |
-| `error` | Errors only |
+| `error` | Failures with impact |
+| `fatal` | System cannot continue |
+
+### Contextual Logging
+
+```typescript
+import { createRequestLogger, clearRequestContext } from './utils/logger.js';
+
+// Create request-scoped logger
+const requestLogger = createRequestLogger('req-123', { userId: 'user-456' });
+requestLogger.info('Processing request');  // Includes requestId automatically
+
+// Clean up when done
+clearRequestContext('req-123');
+```
 
 ### Debug Commands
 
@@ -505,6 +658,26 @@ pnpm run dev -- config --show
 
 # Validate config
 pnpm run dev -- config --validate
+
+# View logs via Log Manager UI
+# Access: http://localhost:18790 → Log Manager tab
+```
+
+### Log Querying
+
+```typescript
+import { queryLogs, getLogStats } from './utils/log-store.js';
+
+// Query by level and module
+const errors = await queryLogs({
+  levels: ['error', 'fatal'],
+  module: 'AgentService',
+  limit: 100,
+});
+
+// Get statistics
+const stats = await getLogStats();
+console.log(`Errors: ${stats.byLevel.error}`);
 ```
 
 ---
@@ -519,12 +692,19 @@ pnpm run dev -- config --validate
 | Config not loading | Verify `~/.xopcbot/config.json` syntax is valid JSON |
 | UI not connecting | Check gateway is running and WebSocket URL is correct |
 | `package-lock.json` conflicts | Remove it and run `pnpm install` |
+| Telegram bot not responding | Check `TELEGRAM_BOT_TOKEN` and bot status with BotFather |
+| Telegram @mention not working | Verify bot username is correct in group settings |
+| Logs not appearing in UI | Check `XOPCBOT_LOG_LEVEL` and `XOPCBOT_LOG_FILE` settings |
+| Log files growing too large | Enable rotation with `XOPCBOT_LOG_RETENTION_DAYS` |
+| Cron jobs not triggering | Verify `cron.enabled: true` in config |
+| Streaming preview not showing | Check `streamMode` setting in Telegram account config |
 
 ### Getting Help
 
 1. Check existing tests for usage examples
 2. Review similar implementations in the codebase
 3. Verify environment variables are set correctly
+4. Check logs via Log Manager UI for error details
 
 ---
 
@@ -539,7 +719,10 @@ pnpm run dev -- config --validate
 | **Tests** | `src/**/__tests__/` alongside source |
 | **UI components** | `ui/src/components/` |
 | **Providers** | `src/providers/registry.ts` |
+| **Channel plugins** | `src/channels/` |
+| **Logging system** | `src/utils/logger.ts`, `src/utils/log-store.ts` |
+| **Log UI** | `ui/src/pages/LogManager.ts` |
 
 ---
 
-_Last updated: 2026-02-20_
+_Last updated: 2026-02-21_
