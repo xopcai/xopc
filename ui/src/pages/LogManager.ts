@@ -117,6 +117,7 @@ export class LogManager extends LitElement {
         this._logs = [...this._logs, ...result.logs];
       }
 
+      console.log('[LogManager] Total logs in state:', this._logs.length);
       this._hasMore = result.logs.length === this._limit;
       this._offset = this._offset + result.logs.length;
     } catch (err) {
@@ -366,16 +367,18 @@ export class LogManager extends LitElement {
     `;
   }
 
+
+
   private _renderStats(): unknown {
     if (!this._stats) return '';
 
-    const total = this._stats.total ?? 0;
+    const totalLines = this._stats.totalLines ?? this._stats.totalFiles ?? 0;
     const byLevel = this._stats.byLevel ?? {};
 
     return html`
       <div class="log-manager__stats">
         <div class="stat-card">
-          <div class="stat-value">${total.toLocaleString()}</div>
+          <div class="stat-value">${totalLines.toLocaleString()}</div>
           <div class="stat-label">Total Logs</div>
         </div>
         ${Object.entries(byLevel).map(([level, count]) => html`
@@ -421,20 +424,26 @@ export class LogManager extends LitElement {
             </tr>
           </thead>
           <tbody>
-            ${this._logs.map((log) => html`
-              <tr class="log-row log-row--${log.level}" @click=${() => this._selectLog(log)}>
-                <td class="log-cell log-cell--time">${this._formatTimestamp(log.timestamp)}</td>
-                <td class="log-cell log-cell--level">
-                  <span
-                    class="level-badge level-badge--small"
-                    style="--level-color: ${LOG_LEVEL_COLORS[log.level]}"
-                  >
-                    ${log.level}
-                  </span>
+            ${this._logs.length === 0 ? html`
+              <tr>
+                <td colspan="4" style="padding: 2rem; text-align: center; color: var(--text-muted);">
+                  No logs to display
                 </td>
-                <td class="log-cell log-cell--module">${log.module}</td>
-                <td class="log-cell log-cell--message">${log.message}</td>
               </tr>
+            ` : this._logs.map((log) => html`
+                <tr class="log-row log-row--${log.level || 'info'}" @click=${() => this._selectLog(log)}>
+                  <td class="log-cell log-cell--time">${this._formatTimestamp(log.timestamp)}</td>
+                  <td class="log-cell log-cell--level">
+                    <span
+                      class="level-badge level-badge--small"
+                      style="--level-color: ${LOG_LEVEL_COLORS[log.level as LogLevel] || LOG_LEVEL_COLORS.info}"
+                    >
+                      ${log.level || 'info'}
+                    </span>
+                  </td>
+                  <td class="log-cell log-cell--module">${log.module || log.prefix || log.service || '-'}</td>
+                  <td class="log-cell log-cell--message">${log.message || JSON.stringify(log)}</td>
+                </tr>
             `)}
           </tbody>
         </table>
@@ -478,9 +487,9 @@ export class LogManager extends LitElement {
     return html`
       <div class="drawer-overlay" @click=${this._closeDetail}></div>
       <div class="drawer drawer--right">
-        <div class="drawer__header">
-          <h3>${t('logs.details')}</h3>
-          <button class="btn-icon" @click=${this._closeDetail}>${getIcon('x')}</button>
+        <div class="drawer-header">
+          <h3 class="drawer-header__title">${t('logs.details')}</h3>
+          <button class="btn btn-icon" @click=${this._closeDetail}>${getIcon('x')}</button>
         </div>
         <div class="drawer__content">
           <div class="log-detail">

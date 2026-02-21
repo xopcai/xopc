@@ -10,6 +10,7 @@ import type { GatewayService } from '../service.js';
 import type { Config } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../utils/log-store.js';
+import type { LogLevel } from '../../utils/logger.types.js';
 import { getLocalModelsDevModels } from '../../providers/models-dev.js';
 import { isProviderConfigured } from '../../agent/fallback/index.js';
 
@@ -584,8 +585,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // GET /api/logs - Query logs with filters
   authenticated.get('/api/logs', async (c) => {
     const query = c.req.query();
-    const result = await queryLogs({
-      level: query.level ? query.level.split(',') : undefined,
+    const logs = await queryLogs({
+      levels: query.level ? query.level.split(',') as LogLevel[] : undefined,
       from: query.from,
       to: query.to,
       q: query.q,
@@ -593,7 +594,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       limit: query.limit ? parseInt(query.limit) : 100,
       offset: query.offset ? parseInt(query.offset) : 0,
     });
-    return c.json({ logs: result, count: result.length });
+    return c.json({ logs, count: logs.length });
   });
 
   // GET /api/logs/files - List log files

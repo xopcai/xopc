@@ -1,66 +1,80 @@
 /**
- * Log Store - File-based log storage with query capabilities
+ * Log Store - Enhanced File-based Log Storage
+ * 
+ * Features:
+ * - Query logs across multiple files with filtering
+ * - Support for compressed (.gz) log files
+ * - Pagination and sorting
+ * - Statistics and analytics
+ * - Safe log cleanup with actual deletion
  */
 
-import { existsSync, mkdirSync, readdirSync, statSync, createReadStream } from 'fs';
-import { join } from 'path';
+import { 
+  existsSync, 
+  mkdirSync, 
+  readdirSync, 
+  statSync, 
+  createReadStream,
+  unlinkSync,
+  readFileSync,
+} from 'fs';
+import { readFile } from 'fs/promises';
+import { join, basename } from 'path';
 import { createInterface } from 'readline';
-import type { Readable } from 'stream';
+import { gunzip } from 'zlib';
+import { promisify } from 'util';
+import { Readable } from 'stream';
+import type { LogLevel, LogFileMeta, LogQuery, LogStats, LogEntry } from './logger.types.js';
 
-export interface LogEntry {
-  timestamp: string;
-  level: string;
-  message: string;
-  module?: string;
-  prefix?: string;
-  service?: string;
-  plugin?: string;
-  [key: string]: unknown;
+const gunzipAsync = promisify(gunzip);
+
+// ============================================
+// Types
+// ============================================
+
+interface ParsedLogEntry extends LogEntry {
+  _source?: string;
+  _lineNumber?: number;
 }
 
-export interface LogQuery {
-  level?: string[];
-  from?: string;
-  to?: string;
-  q?: string; // keyword search
-  module?: string;
-  limit?: number;
-  offset?: number;
-}
-
-export interface LogFile {
-  name: string;
-  path: string;
-  size: number;
-  modified: string;
-  type: 'app' | 'error' | 'audit';
-}
+// ============================================
+// Configuration
+// ============================================
 
 const LOG_DIR = process.env.XOPCBOT_LOG_DIR || join(process.env.HOME || '.', '.xopcbot', 'logs');
 
-// Ensure log directory exists
 function ensureLogDir(): void {
   if (!existsSync(LOG_DIR)) {
     mkdirSync(LOG_DIR, { recursive: true });
   }
 }
 
+// ============================================
+// File Management
+// ============================================
+
 /**
- * Get all log files
+ * Get all log files (including compressed)
  */
-export function getLogFiles(): LogFile[] {
+export function getLogFiles(): LogFileMeta[] {
   ensureLogDir();
 
   const files = readdirSync(LOG_DIR)
-    .filter(f => f.endsWith('.log'))
+    .filter(f => f.endsWith('.log') || f.endsWith('.log.gz'))
     .map(f => {
-      const path = join(LOG_DIR, f);
-      const stats = statSync(path);
-      const type: LogFile['type'] = f.includes('error') ? 'error' : f.includes('audit') ? 'audit' : 'app';
+      const filePath = join(LOG_DIR, f);
+      const stats = statSync(filePath);
+      
+      let type: LogFileMeta['type'] = 'app';
+      if (f.includes('error')) type = 'error';
+      else if (f.includes('audit')) type = 'audit';
+      else if (f.includes('access')) type = 'access';
+
       return {
         name: f,
-        path,
+        path: filePath,
         size: stats.size,
+        created: stats.birthtime.toISOString(),
         modified: stats.mtime.toISOString(),
         type,
       };
@@ -73,116 +87,207 @@ export function getLogFiles(): LogFile[] {
 /**
  * Get log file path for a specific date and type
  */
-export function getLogPath(date: Date = new Date(), type: 'app' | 'error' | 'audit' = 'app'): string {
+export function getLogPath(
+  date: Date = new Date(), 
+  type: 'app' | 'error' | 'audit' | 'access' = 'app'
+): string {
   ensureLogDir();
   const dateStr = date.toISOString().split('T')[0];
   return join(LOG_DIR, `${type}-${dateStr}.log`);
 }
 
 /**
- * Parse a single log line
+ * Get available log files for a date range
  */
-function parseLogLine(line: string): LogEntry | null {
+export function getLogFilesForRange(from: Date, to: Date): LogFileMeta[] {
+  const allFiles = getLogFiles();
+  
+  return allFiles.filter(f => {
+    // Extract date from filename (e.g., app-2024-01-01.log)
+    const match = f.name.match(/(\d{4}-\d{2}-\d{2})/);
+    if (!match) return false;
+    
+    const fileDate = new Date(match[1]);
+    return fileDate >= from && fileDate <= to;
+  });
+}
+
+// ============================================
+// Log Parsing
+// ============================================
+
+/**
+ * Parse a single log line (JSON format from pino)
+ */
+function parseLogLine(line: string, source?: string, lineNumber?: number): ParsedLogEntry | null {
+  const trimmed = line.trim();
+  if (!trimmed) return null;
+
   try {
-    // Try JSON format first
-    const parsed = JSON.parse(line);
+    // Try JSON format (pino default)
+    const parsed = JSON.parse(trimmed);
+    
+    // Convert pino numeric level to string (10=trace, 20=debug, 30=info, 40=warn, 50=error, 60=fatal)
+    const levelNum = typeof parsed.level === 'number' ? parsed.level : 30;
+    const levelMap: Record<number, string> = {
+      10: 'trace',
+      20: 'debug',
+      30: 'info',
+      40: 'warn',
+      50: 'error',
+      60: 'fatal',
+    };
+
     return {
       timestamp: parsed.time || parsed.timestamp || '',
-      level: parsed.level?.toString() || 'info',
+      level: levelMap[levelNum] || (parsed.level?.toString() || 'info').toLowerCase(),
       message: parsed.msg || parsed.message || '',
       module: parsed.module,
       prefix: parsed.prefix,
       service: parsed.service,
       plugin: parsed.plugin,
+      requestId: parsed.requestId,
+      sessionId: parsed.sessionId,
+      _source: source,
+      _lineNumber: lineNumber,
       ...parsed,
     };
   } catch {
     // Fallback: try to parse pino's text format
-    // Format: [2024-01-01T12:00:00.000Z] <level>: message {meta}
-    const match = line.match(/^\[([^\]]+)\]\s+(\w+):\s+(.+)$/);
+    const match = trimmed.match(/^\[([^\]]+)\]\s+(\w+):\s+(.+)$/);
     if (match) {
       return {
         timestamp: match[1],
         level: match[2].toLowerCase(),
         message: match[3],
+        _source: source,
+        _lineNumber: lineNumber,
       };
     }
-    // Plain text
-    if (line.trim()) {
-      return {
-        timestamp: new Date().toISOString(),
-        level: 'info',
-        message: line,
-      };
-    }
+    
+    // Plain text fallback
+    return {
+      timestamp: new Date().toISOString(),
+      level: 'info',
+      message: trimmed,
+      _source: source,
+      _lineNumber: lineNumber,
+    };
   }
-  return null;
+}
+
+// ============================================
+// Streaming
+// ============================================
+
+/**
+ * Create a readable stream for a log file (handles .gz files)
+ */
+async function createLogFileStream(filePath: string): Promise<Readable> {
+  if (filePath.endsWith('.gz')) {
+    const compressed = await readFile(filePath);
+    const decompressed = await gunzipAsync(compressed);
+    return Readable.from(decompressed.toString('utf-8').split('\n'));
+  }
+  
+  return createReadStream(filePath, { encoding: 'utf-8' });
 }
 
 /**
- * Stream logs from a file
+ * Stream and filter log entries from a file
  */
 async function* streamLogFile(
   filePath: string,
-  query: LogQuery
-): AsyncGenerator<LogEntry> {
+  query: LogQuery = {}
+): AsyncGenerator<ParsedLogEntry> {
   if (!existsSync(filePath)) return;
 
-  const fileStream: Readable = createReadStream(filePath, { encoding: 'utf-8' });
-  const rl = createInterface({ input: fileStream });
+  const fileName = basename(filePath);
+  let stream: Readable;
+  
+  try {
+    stream = await createLogFileStream(filePath);
+  } catch {
+    return;
+  }
 
-  let offset = query.offset || 0;
-  let limit = query.limit || 100;
-  let skipped = 0;
+  const rl = createInterface({ 
+    input: stream,
+    crlfDelay: Infinity 
+  });
 
-  for await (const line of rl) {
-    if (!line.trim()) continue;
+  let lineNumber = 0;
 
-    const entry = parseLogLine(line);
-    if (!entry) continue;
+  try {
+    for await (const line of rl) {
+      lineNumber++;
+      const entry = parseLogLine(line, fileName, lineNumber);
+      if (!entry) continue;
 
-    // Filter by level
-    if (query.level?.length && !query.level.includes(entry.level)) {
-      continue;
-    }
+      // Apply filters
+      if (!matchesQuery(entry, query)) continue;
 
-    // Filter by time range
-    if (query.from && new Date(entry.timestamp) < new Date(query.from)) {
-      continue;
-    }
-    if (query.to && new Date(entry.timestamp) > new Date(query.to)) {
-      continue;
-    }
-
-    // Filter by keyword
-    if (query.q) {
-      const keyword = query.q.toLowerCase();
-      const searchFields = [entry.message, entry.module, entry.prefix, entry.service, entry.plugin]
-        .filter(Boolean)
-        .map(String)
-        .join(' ');
-      if (!searchFields.toLowerCase().includes(keyword)) {
-        continue;
-      }
-    }
-
-    // Filter by module
-    if (query.module && entry.module !== query.module) {
-      continue;
-    }
-
-    // Handle offset/limit for pagination
-    if (skipped < offset) {
-      skipped++;
-      continue;
-    }
-
-    if (limit > 0) {
       yield entry;
-      limit--;
     }
+  } finally {
+    rl.close();
   }
 }
+
+/**
+ * Check if a log entry matches the query filters
+ */
+function matchesQuery(entry: ParsedLogEntry, query: LogQuery): boolean {
+  // Filter by levels
+  if (query.levels?.length && !query.levels.includes(entry.level as LogLevel)) {
+    return false;
+  }
+
+  // Filter by time range
+  if (query.from) {
+    const fromDate = new Date(query.from);
+    const entryDate = new Date(entry.timestamp);
+    if (entryDate < fromDate) return false;
+  }
+  if (query.to) {
+    const toDate = new Date(query.to);
+    const entryDate = new Date(entry.timestamp);
+    if (entryDate > toDate) return false;
+  }
+
+  // Filter by keyword (search in message and context fields)
+  if (query.q) {
+    const keyword = query.q.toLowerCase();
+    const searchable = [
+      entry.message,
+      entry.module,
+      entry.prefix,
+      entry.service,
+      entry.plugin,
+      entry.requestId,
+      entry.sessionId,
+    ]
+      .filter(Boolean)
+      .map(String)
+      .join(' ')
+      .toLowerCase();
+    
+    if (!searchable.includes(keyword)) return false;
+  }
+
+  // Filter by specific fields
+  if (query.module && entry.module !== query.module) return false;
+  if (query.plugin && entry.plugin !== query.plugin) return false;
+  if (query.service && entry.service !== query.service) return false;
+  if (query.requestId && entry.requestId !== query.requestId) return false;
+  if (query.sessionId && entry.sessionId !== query.sessionId) return false;
+
+  return true;
+}
+
+// ============================================
+// Query API
+// ============================================
 
 /**
  * Query logs across multiple files
@@ -190,106 +295,264 @@ async function* streamLogFile(
 export async function queryLogs(query: LogQuery = {}): Promise<LogEntry[]> {
   ensureLogDir();
 
-  const results: LogEntry[] = [];
+  const results: ParsedLogEntry[] = [];
   const files = getLogFiles();
 
-  // If specific date range, only look at relevant files
+  // Filter files by date range if specified
   let relevantFiles = files;
   if (query.from || query.to) {
     const fromDate = query.from ? new Date(query.from) : new Date(0);
     const toDate = query.to ? new Date(query.to) : new Date();
-    
-    relevantFiles = files.filter(f => {
-      const fileDate = new Date(f.modified);
-      return fileDate >= fromDate && fileDate <= toDate;
-    });
+    relevantFiles = getLogFilesForRange(fromDate, toDate);
   }
 
-  // Query each file and collect results
+  // Query each file
   for (const file of relevantFiles) {
     for await (const entry of streamLogFile(file.path, query)) {
       results.push(entry);
-      
-      // Limit total results
-      if (query.limit && results.length >= query.limit) {
-        return results;
+
+      // Early exit if limit reached
+      const limit = query.limit || 100;
+      if (results.length >= limit) {
+        break;
       }
+    }
+
+    if (query.limit && results.length >= query.limit) {
+      break;
     }
   }
 
-  // Sort by timestamp descending
-  results.sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+  // Sort by timestamp
+  const order = query.order || 'desc';
+  results.sort((a, b) => {
+    const diff = new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime();
+    return order === 'desc' ? diff : -diff;
+  });
 
-  return results;
+  // Apply offset/limit
+  const offset = query.offset || 0;
+  const limit = query.limit || 100;
+  return results.slice(offset, offset + limit).map(({ _source, _lineNumber, ...rest }) => rest);
 }
 
 /**
- * Get available log levels from log files
+ * Get recent logs (convenience method)
  */
-export function getLogLevels(): string[] {
-  return ['debug', 'info', 'warn', 'error', 'fatal'];
+export async function getRecentLogs(options?: {
+  level?: LogLevel;
+  limit?: number;
+  module?: string;
+}): Promise<LogEntry[]> {
+  return queryLogs({
+    levels: options?.level ? [options.level] : undefined,
+    limit: options?.limit || 50,
+    module: options?.module,
+    order: 'desc',
+  });
 }
 
 /**
- * Get available modules from log files
+ * Search logs by keyword
+ */
+export async function searchLogs(
+  keyword: string,
+  options?: {
+    from?: string;
+    to?: string;
+    limit?: number;
+  }
+): Promise<LogEntry[]> {
+  return queryLogs({
+    q: keyword,
+    ...options,
+    limit: options?.limit || 100,
+  });
+}
+
+/**
+ * Get logs for a specific request/session
+ */
+export async function getLogsByContext(
+  contextType: 'requestId' | 'sessionId',
+  contextValue: string,
+  limit: number = 100
+): Promise<LogEntry[]> {
+  return queryLogs({
+    [contextType]: contextValue,
+    limit,
+    order: 'asc',
+  });
+}
+
+// ============================================
+// Statistics
+// ============================================
+
+/**
+ * Get available log levels from actual log data
+ */
+export async function getLogLevels(): Promise<LogLevel[]> {
+  const levels = new Set<LogLevel>();
+  const files = getLogFiles().slice(0, 3); // Check last 3 files
+
+  for (const file of files) {
+    for await (const entry of streamLogFile(file.path, { limit: 500 })) {
+      levels.add(entry.level as LogLevel);
+    }
+  }
+
+  return Array.from(levels).sort();
+}
+
+/**
+ * Get available modules from log data
  */
 export async function getLogModules(): Promise<string[]> {
   const modules = new Set<string>();
-  
-  for (const file of getLogFiles().slice(0, 7)) { // Last 7 files
+  const files = getLogFiles().slice(0, 7);
+
+  for (const file of files) {
     for await (const entry of streamLogFile(file.path, { limit: 1000 })) {
+      if (entry.module) modules.add(entry.module);
+      if (entry.prefix) modules.add(entry.prefix);
+    }
+  }
+
+  return Array.from(modules).filter(Boolean).sort();
+}
+
+/**
+ * Get comprehensive log statistics
+ */
+export async function getLogStats(): Promise<LogStats> {
+  const files = getLogFiles();
+  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+
+  // Count by level and module (sample recent files)
+  const byLevel: Record<LogLevel, number> = {
+    trace: 0,
+    debug: 0,
+    info: 0,
+    warn: 0,
+    error: 0,
+    fatal: 0,
+    silent: 0,
+  };
+  const byModule: Record<string, number> = {};
+  let totalLines = 0;
+  let sampledLines = 0;
+
+  // Sample from recent files to estimate totals
+  for (const file of files.slice(0, 7)) {
+    const fileSampleCount = 3000; // Sample more lines for better accuracy
+    for await (const entry of streamLogFile(file.path, { limit: fileSampleCount })) {
+      sampledLines++;
+      if (entry.level in byLevel) {
+        byLevel[entry.level as LogLevel]++;
+      }
       if (entry.module) {
-        modules.add(entry.module);
+        byModule[entry.module] = (byModule[entry.module] || 0) + 1;
       }
     }
   }
 
-  return Array.from(modules).sort();
-}
+  // Estimate total lines based on file sizes
+  // Average line size is approximately 200-300 bytes for JSON logs
+  const avgBytesPerLine = sampledLines > 0 ? (totalSize / sampledLines) : 250;
+  const estimatedTotalLines = avgBytesPerLine > 0 ? Math.round(totalSize / avgBytesPerLine) : sampledLines;
 
-/**
- * Get log statistics
- */
-export function getLogStats(): {
-  totalFiles: number;
-  totalSize: number;
-  oldestLog: string | null;
-  newestLog: string | null;
-  files: LogFile[];
-} {
-  const files = getLogFiles();
-  const totalSize = files.reduce((sum, f) => sum + f.size, 0);
+  // Scale level counts proportionally
+  const scaleFactor = sampledLines > 0 ? estimatedTotalLines / sampledLines : 1;
+  for (const level of Object.keys(byLevel)) {
+    byLevel[level as LogLevel] = Math.round(byLevel[level as LogLevel] * scaleFactor);
+  }
 
   return {
     totalFiles: files.length,
     totalSize,
+    totalLines: estimatedTotalLines,
     oldestLog: files.length > 0 ? files[files.length - 1].modified : null,
     newestLog: files.length > 0 ? files[0].modified : null,
+    byLevel,
+    byModule,
     files,
   };
 }
 
+// ============================================
+// Cleanup
+// ============================================
+
 /**
- * Clean old logs (keep last N days)
+ * Clean old logs (actually deletes files)
  */
-export function cleanOldLogs(keepDays: number = 7): number {
+export function cleanOldLogs(keepDays: number = 7): {
+  deleted: number;
+  freedBytes: number;
+  errors: string[];
+} {
   const cutoff = new Date();
   cutoff.setDate(cutoff.getDate() - keepDays);
 
   let deleted = 0;
-  for (const file of getLogFiles()) {
-    if (new Date(file.modified) < cutoff) {
+  let freedBytes = 0;
+  const errors: string[] = [];
+
+  const files = getLogFiles();
+  for (const file of files) {
+    const fileDate = new Date(file.modified);
+    if (fileDate < cutoff) {
       try {
-        // Note: unlinkSync would delete the file
-        // For safety, we'll just return the count
+        const size = file.size;
+        unlinkSync(file.path);
         deleted++;
-      } catch {
-        // Ignore errors
+        freedBytes += size;
+      } catch (err) {
+        errors.push(`Failed to delete ${file.name}: ${err}`);
       }
     }
   }
 
-  return deleted;
+  return { deleted, freedBytes, errors };
 }
 
+/**
+ * Clean logs by size (keep total under limit)
+ */
+export function cleanBySize(maxTotalMB: number = 500): {
+  deleted: number;
+  freedBytes: number;
+  errors: string[];
+} {
+  const maxBytes = maxTotalMB * 1024 * 1024;
+  const files = getLogFiles();
+  
+  let totalSize = files.reduce((sum, f) => sum + f.size, 0);
+  let deleted = 0;
+  let freedBytes = 0;
+  const errors: string[] = [];
+
+  // Delete oldest files until under limit
+  for (const file of files.slice().reverse()) {
+    if (totalSize <= maxBytes) break;
+
+    try {
+      unlinkSync(file.path);
+      freedBytes += file.size;
+      totalSize -= file.size;
+      deleted++;
+    } catch (err) {
+      errors.push(`Failed to delete ${file.name}: ${err}`);
+    }
+  }
+
+  return { deleted, freedBytes, errors };
+}
+
+// ============================================
+// Exports
+// ============================================
+
 export { LOG_DIR };
+export type { LogEntry, LogQuery, LogFileMeta, LogStats } from './logger.types.js';

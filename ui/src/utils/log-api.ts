@@ -3,9 +3,16 @@
 export interface LogEntry {
   timestamp: string;
   level: 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
-  module: string;
   message: string;
+  module?: string;
+  prefix?: string;
+  service?: string;
+  plugin?: string;
+  requestId?: string;
+  sessionId?: string;
+  userId?: string;
   meta?: Record<string, unknown>;
+  [key: string]: unknown;
 }
 
 export interface LogQuery {
@@ -25,13 +32,14 @@ export interface LogFile {
 }
 
 export interface LogStats {
-  total: number;
+  totalFiles: number;
+  totalSize: number;
+  totalLines: number;
+  oldestLog: string | null;
+  newestLog: string | null;
   byLevel: Record<string, number>;
   byModule: Record<string, number>;
-  dateRange: {
-    from: string;
-    to: string;
-  };
+  files?: unknown[];
 }
 
 export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
