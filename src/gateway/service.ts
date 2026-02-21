@@ -133,7 +133,8 @@ export class GatewayService {
     this.startTime = Date.now();
     this.running = true;
 
-    // Start channels
+    // Start channels (initialize first, then start)
+    await this.channelManager.initializePlugins();
     await this.channelManager.startAll();
 
     // Initialize session manager

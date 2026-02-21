@@ -14,6 +14,7 @@ export interface OutboundMessage {
   type?: 'message' | 'typing_on' | 'typing_off';
   mediaUrl?: string;
   mediaType?: 'photo' | 'video' | 'audio' | 'document' | 'animation';
+  metadata?: Record<string, unknown>;
 }
 
 export interface Message {

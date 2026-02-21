@@ -249,7 +249,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     
     // Update channels
     if (body.channels?.telegram) {
-      if (!config.channels) config.channels = { telegram: { enabled: false, token: '', allowFrom: [], debug: false }, whatsapp: { enabled: false, bridgeUrl: 'ws://localhost:3001', allowFrom: [] } };
+      if (!config.channels) config.channels = { telegram: { enabled: false, token: '', allowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const }, whatsapp: { enabled: false, bridgeUrl: 'ws://localhost:3001', allowFrom: [] } };
       if (!config.channels.telegram) config.channels.telegram = {} as any;
       
       if (body.channels.telegram.enabled !== undefined) {
@@ -269,7 +269,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       }
     }
     if (body.channels?.whatsapp) {
-      if (!config.channels) config.channels = { telegram: { enabled: false, token: '', allowFrom: [], debug: false }, whatsapp: { enabled: false, bridgeUrl: 'ws://localhost:3001', allowFrom: [] } };
+      if (!config.channels) config.channels = { telegram: { enabled: false, token: '', allowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const }, whatsapp: { enabled: false, bridgeUrl: 'ws://localhost:3001', allowFrom: [] } };
       if (!config.channels.whatsapp) config.channels.whatsapp = {} as any;
       
       if (body.channels.whatsapp.enabled !== undefined) {

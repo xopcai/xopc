@@ -146,6 +146,8 @@ function createConfigureCommand(ctx: CLIContext): Command {
               ? allowFrom.split(',').map((s: string) => s.trim())
               : [],
             debug: false,
+            dmPolicy: 'pairing' as const,
+            groupPolicy: 'open' as const,
           };
           saveConfig(updatedConfig, configPath);
           console.log('\n✅ Telegram configured');
