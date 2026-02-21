@@ -6,6 +6,9 @@
  * Check if value is a plain object
  */
 function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (value === null || value === undefined || typeof value !== 'object') {
+    return false;
+  }
   return Object.getPrototypeOf(value) === Object.prototype;
 }
 
