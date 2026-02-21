@@ -1,5 +1,5 @@
 import { Command } from 'commander';
-import { input, confirm, select, password } from '@inquirer/prompts';
+import { input, confirm, select } from '@inquirer/prompts';
 import { existsSync } from 'fs';
 import { loadConfig, saveConfig, ConfigSchema } from '../../config/index.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
@@ -22,7 +22,7 @@ function createConfigureCommand(ctx: CLIContext): Command {
     .option('--all', 'Configure everything')
     .action(async (opts) => {
       const configPath = ctx.configPath;
-      const existingConfig = existsSync(configPath)
+      let config = existsSync(configPath)
         ? loadConfig(configPath)
         : ConfigSchema.parse({});
 
@@ -66,10 +66,13 @@ function createConfigureCommand(ctx: CLIContext): Command {
           console.log(`    Use: xopcbot auth login ${provider}`);
         }
 
-        const apiKey = await password({
+        const apiKey = await input({
           message: `Enter API key for ${providerInfo.name}:`,
           validate: (value: string) => value.length > 0 || 'API key is required',
         });
+
+        // Load additional models from models-dev-data.ts
+        await registry.loadModelsDevModels();
 
         // Get available models for this provider
         const models = registry.getAll().filter(m => m.provider === provider);
@@ -91,32 +94,29 @@ function createConfigureCommand(ctx: CLIContext): Command {
         });
 
         // Build config based on provider type
-        const updatedConfig = { ...existingConfig };
-        updatedConfig.providers = updatedConfig.providers || {};
+        config.providers = config.providers || {};
 
         if (provider === 'anthropic' || provider === 'google') {
           // Native providers
-          updatedConfig.providers[provider] = { apiKey };
+          config.providers[provider] = { apiKey };
         } else {
           // OpenAI-compatible providers
-          updatedConfig.providers[provider] = {
+          config.providers[provider] = {
             apiKey,
             baseUrl: providerInfo.baseUrl,
           };
         }
 
-        updatedConfig.agents = updatedConfig.agents || {};
-        updatedConfig.agents.defaults = {
-          ...updatedConfig.agents.defaults,
-          workspace: existingConfig.agents?.defaults?.workspace || '~/.xopcbot/workspace',
-          maxTokens: existingConfig.agents?.defaults?.maxTokens || 8192,
-          temperature: existingConfig.agents?.defaults?.temperature || 0.7,
-          maxToolIterations: existingConfig.agents?.defaults?.maxToolIterations || 20,
+        config.agents = config.agents || {};
+        config.agents.defaults = {
+          ...config.agents.defaults,
+          workspace: config.agents?.defaults?.workspace || '~/.xopcbot/workspace',
+          maxTokens: config.agents?.defaults?.maxTokens || 8192,
+          temperature: config.agents?.defaults?.temperature || 0.7,
+          maxToolIterations: config.agents?.defaults?.maxToolIterations || 20,
           model,
         };
 
-        const finalConfig = ConfigSchema.parse(updatedConfig);
-        saveConfig(finalConfig, configPath);
         console.log(`\n✅ ${providerInfo.name} configured`);
         console.log(`   Model: ${model}`);
         console.log(`   ${colors.gray('Tip: Use "xopcbot auth login ' + provider + '" for OAuth')}`);
@@ -127,35 +127,35 @@ function createConfigureCommand(ctx: CLIContext): Command {
 
         const enableTelegram = await confirm({
           message: 'Enable Telegram?',
-          default: existingConfig.channels?.telegram?.enabled || false,
+          default: config.channels?.telegram?.enabled || false,
         });
 
         if (enableTelegram) {
-          const token = await password({ message: 'Telegram Bot Token:' });
+          const token = await input({ message: 'Telegram Bot Token:' });
           const allowFrom = await input({
             message: 'Allowed user IDs (comma-separated, leave empty for all):',
             default: '',
           });
 
-          const updatedConfig = existsSync(configPath) ? loadConfig(configPath) : ConfigSchema.parse({});
-          updatedConfig.channels = updatedConfig.channels || {};
-          updatedConfig.channels.telegram = {
+          config.channels = config.channels || {};
+          // Merge with existing config to preserve apiRoot and other settings
+          config.channels.telegram = {
+            ...config.channels.telegram,
             enabled: true,
             token,
             allowFrom: allowFrom
               ? allowFrom.split(',').map((s: string) => s.trim())
               : [],
-            debug: false,
-            dmPolicy: 'pairing' as const,
-            groupPolicy: 'open' as const,
+            debug: config.channels.telegram?.debug ?? false,
+            dmPolicy: config.channels.telegram?.dmPolicy ?? 'pairing',
+            groupPolicy: config.channels.telegram?.groupPolicy ?? 'open',
           };
-          saveConfig(updatedConfig, configPath);
           console.log('\n✅ Telegram configured');
         }
 
         const enableWhatsApp = await confirm({
           message: 'Enable WhatsApp?',
-          default: existingConfig.channels?.whatsapp?.enabled || false,
+          default: config.channels?.whatsapp?.enabled || false,
         });
 
         if (enableWhatsApp) {
@@ -164,17 +164,21 @@ function createConfigureCommand(ctx: CLIContext): Command {
             default: 'ws://localhost:3001',
           });
 
-          const updatedConfig = existsSync(configPath) ? loadConfig(configPath) : ConfigSchema.parse({});
-          updatedConfig.channels = updatedConfig.channels || {};
-          updatedConfig.channels.whatsapp = {
+          config.channels = config.channels || {};
+          // Merge with existing config to preserve other settings
+          config.channels.whatsapp = {
+            ...config.channels.whatsapp,
             enabled: true,
             bridgeUrl,
-            allowFrom: [],
+            allowFrom: config.channels.whatsapp?.allowFrom ?? [],
           };
-          saveConfig(updatedConfig, configPath);
           console.log('\n✅ WhatsApp configured');
         }
       }
+
+      // Save config once at the end
+      const finalConfig = ConfigSchema.parse(config);
+      await saveConfig(finalConfig, configPath);
 
       console.log('\n' + '─'.repeat(40));
       console.log(`\n📁 Config saved to: ${configPath}`);

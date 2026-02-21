@@ -12,6 +12,13 @@ vi.mock('fs', async (importOriginal) => {
     readFileSync: vi.fn(),
     writeFileSync: vi.fn(),
     mkdirSync: vi.fn(),
+    copyFileSync: vi.fn(),
+    promises: {
+      unlink: vi.fn().mockResolvedValue(undefined),
+      rename: vi.fn().mockResolvedValue(undefined),
+      copyFile: vi.fn().mockResolvedValue(undefined),
+      writeFile: vi.fn().mockResolvedValue(undefined),
+    },
   };
 });
 
@@ -119,7 +126,7 @@ describe('saveConfig', () => {
     delete process.env.CONFIG_PATH;
   });
 
-  it('should save config to file', () => {
+  it('should save config to file', async () => {
     const config = ConfigSchema.parse({
       agents: {
         defaults: {
@@ -130,56 +137,67 @@ describe('saveConfig', () => {
 
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
-    saveConfig(config);
+    await saveConfig(config);
 
-    expect(fs.writeFileSync).toHaveBeenCalledWith(
+    expect(fs.promises.writeFile).toHaveBeenCalledWith(
       '/tmp/test-home/.xopcbot/config.json',
       expect.stringContaining('test-model'),
       'utf-8'
     );
   });
 
-  it('should create parent directories if they do not exist', () => {
+  it('should create parent directories if they do not exist', async () => {
     const config = ConfigSchema.parse({});
 
     vi.mocked(fs.existsSync).mockReturnValue(false);
     vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
-    saveConfig(config);
+    await saveConfig(config);
 
     expect(fs.mkdirSync).toHaveBeenCalledWith('/tmp/test-home/.xopcbot', { recursive: true });
-    expect(fs.writeFileSync).toHaveBeenCalled();
+    expect(fs.promises.writeFile).toHaveBeenCalled();
   });
 
-  it('should handle custom config path', () => {
+  it('should handle custom config path', async () => {
     const customPath = '/custom/path/config.json';
     const config = ConfigSchema.parse({});
 
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
-    saveConfig(config, customPath);
+    await saveConfig(config, customPath);
 
-    expect(fs.writeFileSync).toHaveBeenCalledWith(customPath, expect.any(String), 'utf-8');
+    expect(fs.promises.writeFile).toHaveBeenCalledWith(customPath, expect.any(String), 'utf-8');
   });
 
-  it('should write pretty-printed JSON', () => {
+  it('should write pretty-printed JSON', async () => {
     const config = ConfigSchema.parse({ agents: { defaults: { model: 'test' } } });
 
     vi.mocked(fs.existsSync).mockReturnValue(true);
     vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
-    saveConfig(config);
+    await saveConfig(config);
 
-    const writtenContent = vi.mocked(fs.writeFileSync).mock.calls[0][1] as string;
+    const writtenContent = vi.mocked(fs.promises.writeFile).mock.calls[0][1] as string;
     // Should be indented JSON
     expect(writtenContent).toContain('\n');
     expect(() => JSON.parse(writtenContent)).not.toThrow();
+  });
+
+  it('should backup existing config before writing', async () => {
+    const config = ConfigSchema.parse({ agents: { defaults: { model: 'test' } } });
+
+    vi.mocked(fs.existsSync).mockReturnValue(true);
+    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
+
+    await saveConfig(config);
+
+    // Should copy existing config to .bak
+    expect(fs.promises.copyFile).toHaveBeenCalledWith(
+      '/tmp/test-home/.xopcbot/config.json',
+      '/tmp/test-home/.xopcbot/config.json.bak'
+    );
   });
 });
 
@@ -324,7 +342,7 @@ describe('saveConfig edge cases', () => {
     delete process.env.CONFIG_PATH;
   });
 
-  it('should save config with all sections', () => {
+  it('should save config with all sections', async () => {
     const config = ConfigSchema.parse({
       agents: {
         defaults: {
@@ -341,11 +359,10 @@ describe('saveConfig edge cases', () => {
     });
 
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
-    saveConfig(config);
+    await saveConfig(config);
 
-    const writtenContent = vi.mocked(fs.writeFileSync).mock.calls[0][1] as string;
+    const writtenContent = vi.mocked(fs.promises.writeFile).mock.calls[0][1] as string;
     const parsed = JSON.parse(writtenContent);
 
     expect(parsed.agents.defaults.model).toBe('test-model');
@@ -353,44 +370,41 @@ describe('saveConfig edge cases', () => {
     expect(parsed.gateway.port).toBe(3000);
   });
 
-  it('should use env var CONFIG_PATH when set', () => {
+  it('should use env var CONFIG_PATH when set', async () => {
     process.env.CONFIG_PATH = '/env/config.json';
     const config = ConfigSchema.parse({});
 
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
-    saveConfig(config);
+    await saveConfig(config);
 
-    expect(fs.writeFileSync).toHaveBeenCalledWith('/env/config.json', expect.any(String), 'utf-8');
+    expect(fs.promises.writeFile).toHaveBeenCalledWith('/env/config.json', expect.any(String), 'utf-8');
 
     delete process.env.CONFIG_PATH;
   });
 
-  it('should handle argument path taking precedence over env var', () => {
+  it('should handle argument path taking precedence over env var', async () => {
     process.env.CONFIG_PATH = '/env/config.json';
     const argPath = '/arg/config.json';
     const config = ConfigSchema.parse({});
 
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
-    saveConfig(config, argPath);
+    await saveConfig(config, argPath);
 
-    expect(fs.writeFileSync).toHaveBeenCalledWith(argPath, expect.any(String), 'utf-8');
+    expect(fs.promises.writeFile).toHaveBeenCalledWith(argPath, expect.any(String), 'utf-8');
 
     delete process.env.CONFIG_PATH;
   });
 
-  it('should serialize config with proper structure', () => {
+  it('should serialize config with proper structure', async () => {
     const config = ConfigSchema.parse({});
 
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
-    saveConfig(config);
+    await saveConfig(config);
 
-    const writtenContent = vi.mocked(fs.writeFileSync).mock.calls[0][1] as string;
+    const writtenContent = vi.mocked(fs.promises.writeFile).mock.calls[0][1] as string;
     const parsed = JSON.parse(writtenContent);
 
     expect(parsed).toHaveProperty('agents');
@@ -401,7 +415,7 @@ describe('saveConfig edge cases', () => {
     expect(parsed).toHaveProperty('cron');
   });
 
-  it('should handle special characters in config values', () => {
+  it('should handle special characters in config values', async () => {
     const config = ConfigSchema.parse({
       agents: {
         defaults: {
@@ -414,12 +428,24 @@ describe('saveConfig edge cases', () => {
     });
 
     vi.mocked(fs.existsSync).mockReturnValue(true);
-    vi.mocked(fs.writeFileSync).mockReturnValue(undefined);
 
-    saveConfig(config);
+    await saveConfig(config);
 
-    const writtenContent = vi.mocked(fs.writeFileSync).mock.calls[0][1] as string;
+    const writtenContent = vi.mocked(fs.promises.writeFile).mock.calls[0][1] as string;
     expect(() => JSON.parse(writtenContent)).not.toThrow();
+  });
+
+  it('should not backup when config file does not exist', async () => {
+    const config = ConfigSchema.parse({ agents: { defaults: { model: 'test' } } });
+
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.mkdirSync).mockReturnValue(undefined);
+
+    await saveConfig(config);
+
+    // Should not try to copy when file doesn't exist
+    expect(fs.promises.copyFile).not.toHaveBeenCalled();
+    expect(fs.promises.writeFile).toHaveBeenCalled();
   });
 });
 

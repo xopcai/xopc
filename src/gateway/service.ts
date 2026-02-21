@@ -319,7 +319,7 @@ export class GatewayService {
    */
   async saveConfig(config: Config): Promise<{ saved: boolean; error?: string }> {
     try {
-      saveConfig(config, this.configPath);
+      await saveConfig(config, this.configPath);
       this.config = config;
       return { saved: true };
     } catch (err) {
@@ -340,7 +340,7 @@ export class GatewayService {
       this.config = { ...this.config, ...updates };
       
       // Save to disk
-      saveConfig(this.config, this.configPath);
+      await saveConfig(this.config, this.configPath);
       
       log.info('Configuration updated successfully');
       return { updated: true };
