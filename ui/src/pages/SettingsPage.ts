@@ -322,6 +322,9 @@ export class SettingsPage extends LitElement {
     const { url, token } = this.config;
 
     try {
+      // Load models first to ensure options are available
+      await this._loadModels();
+
       const response = await fetch(`${url}/api/config`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       });
@@ -374,9 +377,6 @@ export class SettingsPage extends LitElement {
     } finally {
       this._loading = false;
     }
-
-    // Also load models list
-    this._loadModels();
   }
 
   private async _loadModels(): Promise<void> {

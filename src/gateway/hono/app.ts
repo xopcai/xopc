@@ -335,6 +335,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     const localModels = getLocalModelsDevModels();
     const models: Array<{ id: string; name: string; provider: string }> = [];
 
+    // Add models from configured providers
     for (const [provider, providerModels] of localModels) {
       // Only include models from configured providers (have API key or enabled)
       if (!isProviderConfigured(config, provider)) continue;
@@ -345,6 +346,31 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           name: model.name || model.id,
           provider: provider,
         });
+      }
+    }
+
+    // Add custom models from config.json provider overrides
+    const providers = config.providers as Record<string, any>;
+    if (providers) {
+      for (const [providerName, providerConfig] of Object.entries(providers)) {
+        // Skip if already added from localModels
+        if (localModels.has(providerName)) continue;
+        
+        // Only include configured providers (have API key)
+        if (!isProviderConfigured(config, providerName)) continue;
+        
+        // Add custom models defined in provider config
+        if (providerConfig?.models && Array.isArray(providerConfig.models)) {
+          for (const modelConfig of providerConfig.models) {
+            const modelId = typeof modelConfig === 'string' ? modelConfig : (modelConfig as any).id;
+            const modelName = typeof modelConfig === 'string' ? modelConfig : (modelConfig as any).name || modelConfig;
+            models.push({
+              id: `${providerName}/${modelId}`,
+              name: modelName,
+              provider: providerName,
+            });
+          }
+        }
       }
     }
 
