@@ -12,7 +12,6 @@ import {
 	getProviderApiKey,
 	getProvider,
 	PROVIDER_CATALOG,
-	type ProviderDefinition,
 } from './provider-catalog.js';
 
 export interface DiscoveredProvider {
@@ -162,7 +161,6 @@ export interface QuickSetupResult {
  */
 export function quickSetup(): QuickSetupResult {
 	const { configured, unconfigured } = scanProviders();
-	const errors: string[] = [];
 
 	if (configured.length === 0) {
 		// 列出需要配置的 provider
@@ -193,7 +191,7 @@ export function quickSetup(): QuickSetupResult {
  * 检查特定模型是否可用
  */
 export function isModelAvailable(modelRef: string): boolean {
-	const [providerId, modelId] = modelRef.includes('/')
+	const [providerId, _modelId] = modelRef.includes('/')
 		? modelRef.split('/')
 		: [undefined, modelRef];
 

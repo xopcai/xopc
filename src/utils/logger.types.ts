@@ -4,7 +4,7 @@
  * Centralized type definitions for the logging system.
  */
 
-import type { Logger, LogFn, ChildLoggerOptions } from 'pino';
+import type { Logger } from 'pino';
 
 /**
  * Basic log entry structure

@@ -35,8 +35,6 @@ import {
 
 // Import from model-catalog
 import {
-	findModelByProvider,
-	getModelsByProvider as getModelsByProviderFromCatalog,
 	modelSupportsFeature,
 	modelSupportsModality,
 } from './model-catalog.js';
@@ -275,7 +273,7 @@ export class ModelRegistry {
 	 */
 	modelSupportsFeature(modelId: string, feature: string): boolean {
 		// Parse provider/model format
-		const { provider, model } = this.parseModelRef(modelId);
+		const { model } = this.parseModelRef(modelId);
 		return modelSupportsFeature(model, feature as any);
 	}
 
@@ -283,7 +281,7 @@ export class ModelRegistry {
 	 * Check if model supports a specific modality
 	 */
 	modelSupportsModality(modelId: string, modality: string): boolean {
-		const { provider, model } = this.parseModelRef(modelId);
+		const { model } = this.parseModelRef(modelId);
 		return modelSupportsModality(model, modality as any);
 	}
 

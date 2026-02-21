@@ -18,7 +18,7 @@
  */
 
 import pino from 'pino';
-import type { Logger as PinoLogger, ChildLoggerOptions, DestinationStream } from 'pino';
+import type { Logger as PinoLogger, DestinationStream } from 'pino';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { existsSync, mkdirSync, createWriteStream, unlinkSync, readdirSync, statSync, readFileSync } from 'fs';

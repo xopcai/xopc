@@ -11,7 +11,6 @@ import { AddJobRequestSchema, UpdateJobRequestSchema } from './validation.js';
 import type {
   JobData,
   JobExecution,
-  JobExecutor,
   JobExecutorDeps,
   CronMetrics,
   CronHealth,

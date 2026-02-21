@@ -1269,9 +1269,9 @@ export function registerCustomModel(model: ModelDefinition): void {
  * 从远程获取模型列表（用于 OpenRouter 等动态 provider）
  */
 export async function fetchRemoteModels(
-  providerId: string,
-  apiKey: string,
-  baseUrl: string
+  _providerId: string,
+  _apiKey: string,
+  _baseUrl: string
 ): Promise<ModelDefinition[]> {
   // TODO: 实现远程获取逻辑
   // 对于 OpenRouter，调用 /v1/models
