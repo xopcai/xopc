@@ -193,21 +193,22 @@ export class GatewayProcessManager {
       mkdirSync(logDir, { recursive: true });
     }
 
-    // Always use compiled JS for background mode to avoid tsx complexity
-    // This ensures clean process detachment
-    // __dirname is dist/gateway, so we need to go up one level to dist
+    // Check if compiled code exists - if not, use development mode with tsx
     const cliPath = join(__dirname, '..', 'cli', 'index.js');
+    const isDevelopment = !existsSync(cliPath);
     
-    // Check if compiled code exists
-    if (!existsSync(cliPath)) {
-      throw new Error(
-        'Compiled code not found. Please run "pnpm run build" before using background mode, ' +
-        'or use foreground mode (without --background) for development.'
-      );
-    }
+    const command = isDevelopment ? 'tsx' : 'node';
+    const entryPoint = isDevelopment 
+      ? join(PROJECT_ROOT, 'src', 'cli', 'index.ts')
+      : cliPath;
     
-    // Use node with compiled JS
-    this.childProcess = spawn('node', [cliPath, ...args], {
+    // For development mode with tsx, we need special handling for background process
+    // Since tsx doesn't support detached processes well, we'll spawn with setsid
+    const spawnArgs = isDevelopment 
+      ? [entryPoint, ...args]
+      : [entryPoint, ...args];
+    
+    this.childProcess = spawn(command, spawnArgs, {
       detached: true,
       stdio: 'ignore',
       env: { ...process.env },
