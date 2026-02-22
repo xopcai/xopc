@@ -504,27 +504,6 @@ export class ModelRegistry {
 		this.loadModels();
 	}
 
-	/**
-	 * @deprecated No longer needed - all models come from pi-ai
-	 */
-	async refreshFromModelsDev(): Promise<void> {
-		// No-op - kept for backwards compatibility
-	}
-
-	/**
-	 * @deprecated No longer needed - all models come from pi-ai
-	 */
-	isModelsDevEnabled(): boolean {
-		return false;
-	}
-
-	/**
-	 * @deprecated No longer needed - all models come from pi-ai
-	 */
-	setModelsDevEnabled(_enabled: boolean): void {
-		// No-op - kept for backwards compatibility
-	}
-
 	async isOllamaAvailable(): Promise<boolean> {
 		return isOllamaRunning();
 	}
