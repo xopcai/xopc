@@ -348,7 +348,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // ========== Auth API (/api/auth) ==========
 
   // GET /api/auth/token - Get current gateway token
-  authenticated.get('/auth/token', (c) => {
+  authenticated.get('/api/auth/token', (c) => {
     const authToken = service.getAuthToken();
     return c.json({ 
       ok: true, 
@@ -360,7 +360,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   // POST /api/auth/token/refresh - Generate new gateway token
-  authenticated.post('/auth/token/refresh', async (c) => {
+  authenticated.post('/api/auth/token/refresh', async (c) => {
     try {
       const newToken = await service.refreshAuthToken();
       return c.json({ 
