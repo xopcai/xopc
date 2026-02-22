@@ -49,3 +49,6 @@ docs/.vitepress/cache/
 .docs-local
 
 .pi
+
+# Worktrees
+.worktrees/
