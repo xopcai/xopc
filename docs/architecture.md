@@ -12,7 +12,7 @@ This document describes xopcbot's overall architecture and module relationships.
 │  ┌─────────────────────────────────────────────────────┐   │
 │  │                    CLI Layer                         │   │
 │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐ ┌─────────┐   │   │
-│  │  │ onboard │ │ agent   │ │ gateway │ │ cron    │   │   │
+│  │  │ setup   │ │ onboard │ │ agent   │ │ gateway │   │   │
 │  │  └─────────┘ └─────────┘ └─────────┘ └─────────┘   │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │

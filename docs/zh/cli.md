@@ -34,38 +34,86 @@ pnpm run dev -- <command>
 
 | 命令 | 描述 |
 |------|------|
-| `onboard` | 初始化配置和工作区 |
+| `setup` | 初始化配置文件和工作区目录 |
+| `onboard` | 交互式设置向导（LLM、渠道、Gateway） |
 | `agent` | 与 Agent 对话 |
 | `gateway` | 启动 REST 网关 |
 | `cron` | 管理定时任务 |
 | `plugin` | 管理插件 |
 | `skills` | 管理技能（安装、启用、配置、测试） |
+| `config` | 查看和编辑配置（非交互式） |
+
+---
+
+## setup
+
+仅初始化配置文件和工作区目录（无交互式提示）。
+
+```bash
+xopcbot setup
+```
+
+**参数**：
+
+| 参数 | 描述 |
+|------|------|
+| `--workspace <path>` | 工作区目录路径（默认：~/.xopcbot/workspace） |
+
+**示例**：
+
+```bash
+# 创建默认配置和工作区
+xopcbot setup
+
+# 自定义工作区路径
+xopcbot setup --workspace ~/my-workspace
+```
+
+**功能**：
+- 创建 `~/.xopcbot/config.json`（如果不存在）
+- 创建工作区目录并生成引导文件（AGENTS.md、BOOTSTRAP.md 等）
 
 ---
 
 ## onboard
 
-初始化 xopcbot 配置。
+xopcbot 的交互式设置向导。这是设置 xopcbot 的推荐方式。
 
 ```bash
 xopcbot onboard
 ```
 
-**功能**：
-- 创建配置目录
-- 设置默认配置
-- 配置 LLM 提供商
-- 配置通道 (Telegram/WhatsApp)
-- 自动启动 Gateway（后台模式）
+**选项**：
 
-**交互提示**：
+| 选项 | 描述 |
+|------|------|
+| `--model` | 仅配置 LLM 提供商和模型 |
+| `--channels` | 仅配置消息渠道 |
+| `--gateway` | 仅配置 Gateway WebUI |
+| `--all` | 配置所有内容（默认） |
 
+**示例**：
+
+```bash
+# 完整交互式设置（默认）
+xopcbot onboard
+
+# 仅配置 LLM 模型
+xopcbot onboard --model
+
+# 仅配置渠道
+xopcbot onboard --channels
+
+# 仅配置 Gateway
+xopcbot onboard --gateway
 ```
-? Select LLM provider: openai
-? Enter API key: sk-...
-? Enable Telegram? Yes
-? Telegram bot token: 123456:...
-```
+
+**功能**（不带选项时）：
+- 自动检测是否需要设置工作区
+- 配置 LLM 提供商和模型
+- 配置消息渠道（Telegram/WhatsApp）
+- 配置 Gateway WebUI 并自动生成 Token
+- 完成后自动启动 Gateway
 
 **完成后**：
 

@@ -34,38 +34,86 @@ pnpm run dev -- <command>
 
 | Command | Description |
 |---------|-------------|
-| `onboard` | Initialize configuration and workspace |
+| `setup` | Initialize config file and workspace directory |
+| `onboard` | Interactive setup wizard (LLM, channels, gateway) |
 | `agent` | Chat with Agent |
 | `gateway` | Start REST gateway |
 | `cron` | Manage scheduled tasks |
 | `plugin` | Manage plugins |
 | `skills` | Manage skills (install, enable, configure, test) |
+| `config` | View and edit configuration (non-interactive) |
+
+---
+
+## setup
+
+Initialize config file and workspace directory only (without interactive prompts).
+
+```bash
+xopcbot setup
+```
+
+**Parameters**:
+
+| Parameter | Description |
+|-----------|-------------|
+| `--workspace <path>` | Workspace directory path (default: ~/.xopcbot/workspace) |
+
+**Examples**:
+
+```bash
+# Create default config and workspace
+xopcbot setup
+
+# Custom workspace path
+xopcbot setup --workspace ~/my-workspace
+```
+
+**What it does**:
+- Creates `~/.xopcbot/config.json` (if not exists)
+- Creates workspace directory with bootstrap files (AGENTS.md, BOOTSTRAP.md, etc.)
 
 ---
 
 ## onboard
 
-Initialize xopcbot configuration.
+Interactive setup wizard for xopcbot. This is the recommended way to set up xopcbot.
 
 ```bash
 xopcbot onboard
 ```
 
-**Features**:
-- Create config directory
-- Set default configuration
-- Configure LLM provider
-- Configure channels (Telegram/WhatsApp)
-- Auto-start Gateway (background mode)
+**Options**:
 
-**Interactive prompts**:
+| Option | Description |
+|--------|-------------|
+| `--model` | Configure LLM provider and model only |
+| `--channels` | Configure messaging channels only |
+| `--gateway` | Configure gateway WebUI only |
+| `--all` | Configure everything (default) |
 
+**Examples**:
+
+```bash
+# Full interactive setup (default)
+xopcbot onboard
+
+# Configure LLM model only
+xopcbot onboard --model
+
+# Configure channels only
+xopcbot onboard --channels
+
+# Configure gateway only
+xopcbot onboard --gateway
 ```
-? Select LLM provider: openai
-? Enter API key: sk-...
-? Enable Telegram? Yes
-? Telegram bot token: 123456:...
-```
+
+**Features** (when running without options):
+- Auto-detects if workspace needs setup
+- Configure LLM provider and model
+- Configure messaging channels (Telegram/WhatsApp)
+- Configure gateway WebUI with auto-generated token
+- Auto-start Gateway after completion
 
 **After completion**:
 

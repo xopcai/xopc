@@ -32,17 +32,27 @@ npm install
 
 ## 3. Configuration
 
-The easiest way to set up your configuration is with the interactive `configure` command.
+The easiest way to set up your configuration is with the interactive `onboard` command.
 
 ```bash
-xopcbot configure
-# or: pnpm run dev -- configure
+xopcbot onboard
+# or: pnpm run dev -- onboard
 ```
 
 This command will:
-1.  Create the necessary directories (`~/.xopcbot/` and `~/.xopcbot/workspace/`).
+1.  Create the workspace directory with bootstrap files (`~/.xopcbot/workspace/`).
 2.  Generate a default `config.json` file at `~/.xopcbot/config.json`.
 3.  Prompt you to select an LLM provider and enter your API key.
+4.  Optionally configure messaging channels (Telegram/WhatsApp).
+5.  Optionally configure and start the Gateway WebUI.
+
+**Alternative: Quick setup**
+
+If you only want to set up the basic files without interactive prompts:
+
+```bash
+xopcbot setup
+```
 
 Your API key will be securely stored in the configuration file.
 
