@@ -4,11 +4,88 @@ REST API 网关，用于外部程序与 xopcbot 交互。
 
 ## 启动网关
 
+### 前台模式（Foreground Mode）
+
 ```bash
 xopcbot gateway --port 18790
 ```
 
 默认端口：`18790`
+
+### 后台模式（Background Mode）
+
+```bash
+# 启动后台服务
+xopcbot gateway --background
+
+# 或简写
+xopcbot gateway -b
+
+# 指定日志文件
+xopcbot gateway --background --log-file ~/.xopcbot/gateway.log
+```
+
+后台模式将网关作为守护进程运行，适合生产环境使用。
+
+## 进程管理命令
+
+### 查看状态
+
+```bash
+xopcbot gateway status
+```
+
+输出示例：
+```
+✅ Gateway is running
+
+   PID: 12345
+   Host: 0.0.0.0
+   Port: 18790
+   Uptime: 5m 32s
+   Health: healthy
+
+🌐 Access:
+   URL: http://localhost:18790
+   Token: abc12345...xyz67890
+   Direct: http://localhost:18790?token=abc12345...
+```
+
+### 停止网关
+
+```bash
+# 优雅停止（默认 5 秒超时）
+xopcbot gateway stop
+
+# 强制停止
+xopcbot gateway stop --force
+
+# 自定义超时时间（毫秒）
+xopcbot gateway stop --timeout 3000
+```
+
+### 重启网关
+
+```bash
+# 使用现有配置重启
+xopcbot gateway restart
+
+# 更改配置重启
+xopcbot gateway restart --port 8080 --host 127.0.0.1
+```
+
+### 查看日志
+
+```bash
+# 查看最近 50 行
+xopcbot gateway logs
+
+# 查看指定行数
+xopcbot gateway logs --lines 100
+
+# 实时跟踪日志（类似 tail -f）
+xopcbot gateway logs --follow
+```
 
 ## API 端点
 
@@ -126,6 +203,10 @@ GET /health
 | GET | `/api/cron` | 列出定时任务 |
 | POST | `/api/cron/trigger` | 触发任务 |
 | GET | `/health` | 健康检查 |
+| GET | `/api/logs` | 查询日志（需认证） |
+| POST | `/api/cron/create` | 创建定时任务 |
+| DELETE | `/api/cron/:id` | 删除定时任务 |
+| POST | `/api/cron/:id/toggle` | 启用/禁用定时任务 |
 
 ## 错误响应
 
@@ -152,6 +233,25 @@ GET /health
 
 ## 使用示例
 
+### 命令行管理
+
+```bash
+# 启动后台网关
+xopcbot gateway --background
+
+# 检查状态
+xopcbot gateway status
+
+# 查看日志
+xopcbot gateway logs --lines 20
+
+# 重启网关
+xopcbot gateway restart
+
+# 停止网关
+xopcbot gateway stop
+```
+
 ### cURL
 
 ```bash
@@ -167,6 +267,12 @@ curl -X POST http://localhost:18790/api/agent \
 
 # 健康检查
 curl http://localhost:18790/health
+
+# 带认证的请求
+curl -X POST http://localhost:18790/api/agent \
+  -H "Content-Type: application/json" \
+  -H "Authorization: Bearer YOUR_TOKEN" \
+  -d '{"message": "Hello"}'
 ```
 
 ### JavaScript/Node.js
@@ -248,7 +354,10 @@ Content-Type: application/json
 {
   "gateway": {
     "host": "0.0.0.0",
-    "port": 18790
+    "port": 18790,
+    "auth": {
+      "token": "your-secret-token"
+    }
   }
 }
 ```
@@ -257,6 +366,47 @@ Content-Type: application/json
 |------|--------|------|
 | `host` | `0.0.0.0` | 绑定地址 |
 | `port` | `18790` | 端口号 |
+| `auth.token` | `null` | API 认证令牌（可选） |
+
+## 后台模式配置
+
+### PID 文件
+
+后台模式运行时，PID 文件保存在：`~/.xopcbot/gateway.pid`
+
+### 日志文件
+
+默认日志位置：`~/.xopcbot/logs/gateway.log`
+
+可通过 `--log-file` 参数自定义：
+
+```bash
+xopcbot gateway --background --log-file /var/log/xopcbot/gateway.log
+```
+
+### 端口冲突检测
+
+启动时会自动检测端口占用，如果端口已被占用，会提示：
+
+```
+❌ Failed to start gateway
+   Port 18790 is already in use.
+   💡 Use a different port: xopcbot gateway --port 8080
+   💡 Or stop the existing process first
+```
+
+### 优雅关闭
+
+后台模式支持优雅关闭：
+1. 收到停止信号后，等待 5 秒让现有请求完成
+2. 如果 5 秒后仍有请求，强制终止进程
+3. 自动清理 PID 文件
+
+可通过 `--timeout` 参数自定义超时时间：
+
+```bash
+xopcbot gateway stop --timeout 10000  # 10 秒超时
+```
 
 ## CORS 配置
 

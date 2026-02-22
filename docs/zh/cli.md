@@ -56,6 +56,7 @@ xopcbot onboard
 - 设置默认配置
 - 配置 LLM 提供商
 - 配置通道 (Telegram/WhatsApp)
+- 自动启动 Gateway（后台模式）
 
 **交互提示**：
 
@@ -65,6 +66,13 @@ xopcbot onboard
 ? Enable Telegram? Yes
 ? Telegram bot token: 123456:...
 ```
+
+**完成后**：
+
+onboard 完成后会自动启动 Gateway 服务（后台模式），并显示：
+- Gateway 访问 URL
+- PID 信息
+- 管理命令提示
 
 ---
 
@@ -116,6 +124,8 @@ xopcbot agent -m "Continue our discussion" -s my-session
 
 启动 REST API 网关。
 
+### 前台模式
+
 ```bash
 xopcbot gateway --port 18790
 ```
@@ -124,35 +134,56 @@ xopcbot gateway --port 18790
 
 | 参数 | 描述 |
 |------|------|
-| `-p, --port` | 端口号 (默认: 18790) |
-| `-h, --host` | 绑定地址 (默认: 0.0.0.0) |
+| `-p, --port` | 端口号 (默认：18790) |
+| `-h, --host` | 绑定地址 (默认：0.0.0.0) |
+| `--token` | 认证令牌 |
+| `--no-hot-reload` | 禁用配置热重载 |
+| `-b, --background` | 后台模式运行 |
+| `--log-file` | 后台模式日志文件路径 |
 
-**后台运行**：
+### 后台模式
 
 ```bash
-nohup xopcbot gateway --port 18790 > bot.log 2>&1 &
+# 启动后台网关
+xopcbot gateway --background
+
+# 或简写
+xopcbot gateway -b
+```
+
+### 子命令
+
+| 子命令 | 描述 |
+|--------|------|
+| `gateway status` | 查看网关运行状态 |
+| `gateway stop` | 停止运行的网关 |
+| `gateway restart` | 重启网关 |
+| `gateway logs` | 查看网关日志 |
+| `gateway token` | 查看/生成认证令牌 |
+
+**示例**：
+
+```bash
+# 查看状态
+xopcbot gateway status
+
+# 停止网关
+xopcbot gateway stop
+
+# 重启网关（可更改配置）
+xopcbot gateway restart --port 8080
+
+# 查看最近 50 行日志
+xopcbot gateway logs
+
+# 实时跟踪日志
+xopcbot gateway logs --follow
+
+# 生成新令牌
+xopcbot gateway token --generate
 ```
 
 ---
-
-## cron
-
-管理定时任务。
-
-### 列出任务
-
-```bash
-xopcbot cron list
-```
-
-**输出**：
-
-```
-ID   | Schedule      | Message               | Enabled
------|---------------|-----------------------|--------
-abc1 | 0 9 * * *    | Good morning!         | true
-abc2 | */15 * * * * | Reminder every 15m   | false
-```
 
 ### 添加任务
 
