@@ -47,11 +47,13 @@ const isTestEnv = !!process.env.VITEST || !!process.env.TEST || !!process.env.NO
 const isMainModule = !isTestEnv && import.meta.url.startsWith('file:');
 
 if (isMainModule) {
-  const hasArgs = process.argv.length > 2;
-  const isFlag = process.argv[2]?.startsWith('-');
-  // Always parse for flags (--version, --help) or no args
-  // Only skip when there's a command argument
-  if (!hasArgs || isFlag) {
-    program.parse(process.argv);
-  }
+  // Filter out standalone '--' separator (passed by pnpm run -- <cmd>)
+  // npm removes it automatically, pnpm passes it through
+  const argv = process.argv.filter((arg, index) => {
+    if (arg !== '--') return true;
+    // Only filter '--' if it's the separator between script and command
+    // (i.e., comes after the script name and before actual args)
+    return index < 2; // Keep '--' if it's a script argument (index 0 or 1)
+  });
+  program.parse(argv);
 }
