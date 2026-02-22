@@ -1,133 +1,62 @@
-/**
- * Model Catalog
- *
- * 模型能力系统 - 声明式模型定义
- * - 支持多模态能力声明
- * - 支持定价信息
- * - 支持能力匹配和筛选
- */
-
-// ============================================
-// 基础类型定义
-// ============================================
-
-/** 支持的模态类型 */
 export type Modality = 'text' | 'image' | 'audio' | 'video' | 'document' | 'pdf';
 
-/** 模型能力特性 */
 export interface ModelFeatures {
-  /** 流式输出 */
   streaming: boolean;
-  /** 函数调用 */
   functionCalling: boolean;
-  /** JSON 模式 */
   jsonMode: boolean;
-  /** 推理能力 */
   reasoning: boolean;
-  /** 系统提示词 */
   systemPrompt: boolean;
-  /** 工具调用 */
   tools: boolean;
-  /** 视觉理解 */
   vision: boolean;
-  /** 长文档理解 */
   documentUnderstanding: boolean;
-  /** 代码执行 */
   codeExecution: boolean;
-  /** 图像生成 */
   imageGeneration: boolean;
-  /** 音频理解 */
   audioUnderstanding: boolean;
-  /** 视频理解 */
   videoUnderstanding: boolean;
 }
 
-/** 模型限制 */
 export interface ModelLimits {
-  /** 上下文窗口大小 */
   contextWindow: number;
-  /** 最大输出 token */
   maxOutputTokens: number;
-  /** 最大输入文件大小（MB） */
   maxFileSize?: number;
-  /** 单请求最大图像数 */
   maxImagesPerRequest?: number;
-  /** 支持的图像类型 */
   supportedImageTypes?: string[];
-  /** 支持的视频类型 */
   supportedVideoTypes?: string[];
-  /** 支持音频类型 */
   supportedAudioTypes?: string[];
-  /** 支持文档类型 */
   supportedDocumentTypes?: string[];
 }
 
-/** 模型定价 */
 export interface ModelPricing {
-  /** 输入每 1K token 价格（美元） */
   inputPer1k: number;
-  /** 输出每 1K token 价格（美元） */
   outputPer1k: number;
-  /** 缓存读取折扣（如 0.5 表示半价） */
   cacheReadDiscount?: number;
-  /** 缓存写入费用 */
   cacheWritePer1k?: number;
 }
 
-/** 模型性能指标（估算） */
 export interface ModelPerformance {
-  /** 质量评分 1-10 */
   qualityScore?: number;
-  /** 速度评分 1-10 */
   speedScore?: number;
-  /** 典型响应延迟（毫秒） */
   typicalLatency?: number;
-  /** 适合的任务类型 */
   recommendedFor?: string[];
 }
 
-// ============================================
-// 模型定义
-// ============================================
-
 export interface ModelDefinition {
-  /** 模型 ID（在 provider 内唯一） */
   id: string;
-  /** 显示名称 */
   name: string;
-  /** 所属 Provider */
   provider: string;
-  /** 描述 */
   description?: string;
-  /** 模型版本 */
   version?: string;
-  /** 模型系列 */
   family?: string;
-  
-  /** 支持输入模态 */
   inputModalities: Modality[];
-  /** 支持输出模态 */
   outputModalities: Modality[];
-  /** 功能特性 */
   features: ModelFeatures;
-  /** 限制 */
   limits: ModelLimits;
-  /** 定价（可选，如不提供则从 provider 估算） */
   pricing?: ModelPricing;
-  /** 性能指标（可选） */
   performance?: ModelPerformance;
-  
-  /** 模型特定参数覆盖 */
   defaultParams?: Record<string, unknown>;
-  /** 是否推荐 */
   recommended?: boolean;
-  /** 是否 Deprecated */
   deprecated?: boolean;
 }
-
-// ============================================
-// 模型注册表
-// ============================================
 
 export const MODEL_CATALOG: ModelDefinition[] = [
   // ============================================
@@ -255,11 +184,11 @@ export const MODEL_CATALOG: ModelDefinition[] = [
     inputModalities: ['text'],
     outputModalities: ['text'],
     features: {
-      streaming: false,  // o1 不支持流式
+      streaming: false,  // o1 does not support streaming
       functionCalling: true,
       jsonMode: true,
       reasoning: true,
-      systemPrompt: false,  // o1 不支持 system prompt
+      systemPrompt: false,  // o1 does not support system prompt
       tools: true,
       vision: false,
       documentUnderstanding: false,
@@ -542,7 +471,7 @@ export const MODEL_CATALOG: ModelDefinition[] = [
   },
 
   // ============================================
-  // Qwen (通义千问)
+  // Qwen
   // ============================================
   
   {
@@ -636,7 +565,7 @@ export const MODEL_CATALOG: ModelDefinition[] = [
   },
 
   // ============================================
-  // Kimi (月之暗面)
+  // Kimi
   // ============================================
   
   {
@@ -765,7 +694,7 @@ export const MODEL_CATALOG: ModelDefinition[] = [
   },
 
   // ============================================
-  // Zhipu (智谱)
+  // Zhipu
   // ============================================
   
   {
@@ -916,9 +845,7 @@ export const MODEL_CATALOG: ModelDefinition[] = [
     pricing: { inputPer1k: 0.00055, outputPer1k: 0.00219 },
   },
 
-  // ============================================
-  // Bailian Coding Plan (百炼)
-  // ============================================
+
   
   {
     id: 'qwen3-max-2026-01-23',
@@ -1049,90 +976,56 @@ export const MODEL_CATALOG: ModelDefinition[] = [
   },
 ];
 
-// ============================================
-// 辅助函数
-// ============================================
-
-/**
- * 获取所有模型
- */
 export function getAllModels(): ModelDefinition[] {
   return MODEL_CATALOG;
 }
 
-/**
- * 根据 ID 查找模型
- */
 export function findModel(id: string): ModelDefinition | undefined {
   return MODEL_CATALOG.find(m => m.id === id);
 }
 
-/**
- * 根据 Provider 获取模型
- */
 export function getModelsByProvider(providerId: string): ModelDefinition[] {
   return MODEL_CATALOG.filter(m => m.provider === providerId);
 }
 
-/**
- * 根据 Provider 和模型 ID 查找
- */
 export function findModelByProvider(providerId: string, modelId: string): ModelDefinition | undefined {
   return MODEL_CATALOG.find(m => m.provider === providerId && m.id === modelId);
 }
 
-/**
- * 获取推荐的模型
- */
 export function getRecommendedModels(): ModelDefinition[] {
   return MODEL_CATALOG.filter(m => m.recommended && !m.deprecated);
 }
 
-/**
- * 获取支持特定能力的模型
- */
 export function getModelsByCapability(
   capability: keyof ModelFeatures
 ): ModelDefinition[] {
   return MODEL_CATALOG.filter(m => m.features[capability] && !m.deprecated);
 }
 
-/**
- * 获取支持特定模态的模型
- */
 export function getModelsByModality(modality: Modality): ModelDefinition[] {
   return MODEL_CATALOG.filter(m => 
     m.inputModalities.includes(modality) && !m.deprecated
   );
 }
 
-/**
- * 获取支持视觉的模型
- */
 export function getVisionModels(): ModelDefinition[] {
   return getModelsByCapability('vision');
 }
 
-/**
- * 获取支持函数调用的模型
- */
 export function getFunctionCallingModels(): ModelDefinition[] {
   return getModelsByCapability('functionCalling');
 }
 
-/**
- * 根据任务类型推荐模型
- */
 export type TaskType = 
-  | 'general'      // 通用对话
-  | 'coding'       // 代码生成
-  | 'vision'       // 图像理解
-  | 'fast'         // 快速响应
-  | 'cheap'        // 低成本
-  | 'long-context' // 长上下文
-  | 'reasoning'    // 复杂推理
-  | 'document'     // 文档处理
-  | 'multimodal';  // 多模态
+  | 'general'
+  | 'coding'
+  | 'vision'
+  | 'fast'
+  | 'cheap'
+  | 'long-context'
+  | 'reasoning'
+  | 'document'
+  | 'multimodal';
 
 export function getModelsForTask(task: TaskType): ModelDefinition[] {
   switch (task) {
@@ -1171,9 +1064,6 @@ export function getModelsForTask(task: TaskType): ModelDefinition[] {
   }
 }
 
-/**
- * 检查模型是否支持特定模态
- */
 export function modelSupportsModality(
   modelId: string, 
   modality: Modality
@@ -1183,9 +1073,6 @@ export function modelSupportsModality(
   return model.inputModalities.includes(modality);
 }
 
-/**
- * 检查模型是否支持特定功能
- */
 export function modelSupportsFeature(
   modelId: string, 
   feature: keyof ModelFeatures
@@ -1195,9 +1082,6 @@ export function modelSupportsFeature(
   return model.features[feature];
 }
 
-/**
- * 估算请求成本
- */
 export function estimateCost(
   modelId: string,
   inputTokens: number,
@@ -1212,9 +1096,6 @@ export function estimateCost(
   return inputCost + outputCost;
 }
 
-/**
- * 模型对比信息（用于 UI 展示）
- */
 export interface ModelComparisonInfo {
   id: string;
   name: string;
@@ -1249,11 +1130,7 @@ export function getModelComparisonInfo(): ModelComparisonInfo[] {
     }));
 }
 
-/**
- * 注册自定义模型（运行时扩展）
- */
 export function registerCustomModel(model: ModelDefinition): void {
-  // 检查是否已存在
   const existingIndex = MODEL_CATALOG.findIndex(m => 
     m.id === model.id && m.provider === model.provider
   );
@@ -1265,31 +1142,18 @@ export function registerCustomModel(model: ModelDefinition): void {
   }
 }
 
-/**
- * 从远程获取模型列表（用于 OpenRouter 等动态 provider）
- */
 export async function fetchRemoteModels(
   _providerId: string,
   _apiKey: string,
   _baseUrl: string
 ): Promise<ModelDefinition[]> {
-  // TODO: 实现远程获取逻辑
-  // 对于 OpenRouter，调用 /v1/models
-  // 对于其他 provider，类似处理
-  
   return [];
 }
 
-/**
- * 获取完整模型引用（provider/model）
- */
 export function getFullModelRef(model: ModelDefinition): string {
   return `${model.provider}/${model.id}`;
 }
 
-/**
- * 解析模型引用
- */
 export function parseModelReference(ref: string): { provider?: string; modelId: string } {
   if (ref.includes('/')) {
     const [provider, ...modelParts] = ref.split('/');
@@ -1298,9 +1162,6 @@ export function parseModelReference(ref: string): { provider?: string; modelId: 
   return { modelId: ref };
 }
 
-/**
- * 查找模型（支持完整引用格式）
- */
 export function findModelByRef(ref: string): ModelDefinition | undefined {
   const { provider, modelId } = parseModelReference(ref);
   
@@ -1308,6 +1169,5 @@ export function findModelByRef(ref: string): ModelDefinition | undefined {
     return findModelByProvider(provider, modelId);
   }
   
-  // 只提供 modelId，尝试在所有 provider 中查找
   return findModel(modelId);
 }

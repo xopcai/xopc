@@ -1,12 +1,3 @@
-/**
- * Provider Catalog
- *
- * 统一的 Provider 定义中心
- * - 合并 schema.ts、registry.ts、PROVIDER_INFO 中的 provider 定义
- * - 支持动态 provider 扩展
- * - 声明式能力配置
- */
-
 export type ProviderCategory = 'native' | 'openai-compatible' | 'anthropic-compatible' | 'local';
 
 export type AuthType = 'api_key' | 'oauth' | 'token' | 'none';
@@ -15,107 +6,66 @@ export type ApiType = 'openai' | 'anthropic' | 'google' | 'ollama' | 'custom';
 
 export type ApiStrategy = 'openai-completions' | 'anthropic-messages' | 'google-generative-ai' | 'github-copilot';
 
-/**
- * Provider 认证配置
- */
 export interface ProviderAuth {
-  /** 认证类型 */
   type: AuthType;
-  /** 环境变量名列表（支持多个备选） */
   envKeys: string[];
-  /** HTTP Header 名称 */
   headerName?: string;
-  /** Header 前缀，如 "Bearer " 或 "ApiKey " */
   headerPrefix?: string;
-  /** 是否支持 OAuth */
   supportsOAuth?: boolean;
 }
 
-/**
- * Provider API 配置
- */
 export interface ProviderApi {
-  /** API 类型 */
   type: ApiType;
-  /** 基础 URL */
   baseUrl: string;
-  /** 策略类型（用于 api-strategies.ts） */
   strategy: ApiStrategy;
-  /** 自定义端点覆盖 */
   endpoints?: {
     chat?: string;
     models?: string;
   };
 }
 
-/**
- * Provider 能力声明
- */
 export interface ProviderCapabilities {
-  /** 支持多模态输入 */
   multimodal: boolean;
-  /** 支持流式输出 */
   streaming: boolean;
-  /** 支持函数调用 */
   functionCalling: boolean;
-  /** 支持视觉理解 */
   vision: boolean;
-  /** 支持推理模式 */
   reasoning: boolean;
-  /** 支持 JSON 模式 */
   jsonMode: boolean;
-  /** 支持系统提示词 */
   systemPrompt: boolean;
-  /** 支持工具调用 */
   tools: boolean;
-  /** 原生支持图像生成 */
   imageGeneration?: boolean;
 }
 
-/**
- * Provider 默认参数
- */
 export interface ProviderDefaults {
-  /** 默认 temperature */
   temperature: number;
-  /** 默认最大 token */
   maxTokens: number;
-  /** 请求超时（毫秒） */
   timeout: number;
-  /** 上下文窗口大小 */
   contextWindow?: number;
 }
 
-/**
- * Provider 完整定义
- */
 export interface ProviderDefinition {
-  /** Provider ID */
   id: string;
-  /** 显示名称 */
   name: string;
-  /** 分类 */
   category: ProviderCategory;
-  /** 描述 */
   description?: string;
   /** Logo URL */
   logo?: string;
-  /** 认证配置 */
+  /** Authentication configuration */
   auth: ProviderAuth;
-  /** API 配置 */
+  /** API configuration */
   api: ProviderApi;
-  /** 能力声明 */
+  /** Capability declaration */
   capabilities: ProviderCapabilities;
-  /** 默认参数 */
+  /** Default parameters */
   defaults: ProviderDefaults;
-  /** 模型 ID 前缀（用于自动识别） */
+  /** Model ID prefixes (for auto-detection) */
   modelPrefixes?: string[];
-  /** 是否需要特殊配置 */
+  /** Whether special configuration is required */
   requiresConfig?: boolean;
 }
 
 // ============================================
-// Provider 注册表
+// Provider Registry
 // ============================================
 
 export const PROVIDER_CATALOG: Record<string, ProviderDefinition> = {
@@ -771,7 +721,7 @@ export const PROVIDER_CATALOG: Record<string, ProviderDefinition> = {
   },
 
   // ============================================
-  // Bailian Coding Plan (百炼 Coding Plan)
+  // Bailian Coding Plan
   // ============================================
 
   bailian: {
@@ -810,37 +760,21 @@ export const PROVIDER_CATALOG: Record<string, ProviderDefinition> = {
   },
 };
 
-// ============================================
-// 辅助函数
-// ============================================
-
-/**
- * 获取 Provider 定义
- */
 export function getProvider(id: string): ProviderDefinition | undefined {
   return PROVIDER_CATALOG[id];
 }
 
-/**
- * 获取所有 Providers
- */
 export function getAllProviders(): ProviderDefinition[] {
   return Object.values(PROVIDER_CATALOG);
 }
 
-/**
- * 根据模型 ID 自动检测 Provider
- */
 export function detectProviderByModel(modelId: string): string | undefined {
   const lowerId = modelId.toLowerCase();
   
   for (const [providerId, provider] of Object.entries(PROVIDER_CATALOG)) {
-    // 检查前缀匹配
     if (provider.modelPrefixes?.some(prefix => lowerId.startsWith(prefix.toLowerCase()))) {
       return providerId;
     }
-    
-    // 检查 provider 名称是否在模型 ID 中
     if (lowerId.includes(providerId.toLowerCase())) {
       return providerId;
     }
@@ -849,9 +783,6 @@ export function detectProviderByModel(modelId: string): string | undefined {
   return undefined;
 }
 
-/**
- * 检查 Provider 是否有配置（环境变量）
- */
 export function isProviderConfigured(id: string): boolean {
   const provider = PROVIDER_CATALOG[id];
   if (!provider) return false;
@@ -862,16 +793,10 @@ export function isProviderConfigured(id: string): boolean {
   });
 }
 
-/**
- * 获取所有已配置的 Providers
- */
 export function getConfiguredProviders(): ProviderDefinition[] {
   return getAllProviders().filter(p => isProviderConfigured(p.id));
 }
 
-/**
- * 获取 Provider 的 API Key
- */
 export function getProviderApiKey(id: string): string | undefined {
   const provider = PROVIDER_CATALOG[id];
   if (!provider) return undefined;
@@ -884,9 +809,6 @@ export function getProviderApiKey(id: string): string | undefined {
   return undefined;
 }
 
-/**
- * 获取 Provider 显示信息（用于 UI）
- */
 export interface ProviderDisplayInfo {
   id: string;
   name: string;
@@ -916,18 +838,12 @@ export function getProviderDisplayInfo(id: string): ProviderDisplayInfo | undefi
   };
 }
 
-/**
- * 获取所有 Provider 显示信息
- */
 export function getAllProviderDisplayInfo(): ProviderDisplayInfo[] {
   return getAllProviders()
     .map(p => getProviderDisplayInfo(p.id))
     .filter((p): p is ProviderDisplayInfo => p !== undefined);
 }
 
-/**
- * 解析模型引用（provider/model 或仅 model）
- */
 export interface ParsedModelRef {
   provider: string;
   model: string;
@@ -935,7 +851,6 @@ export interface ParsedModelRef {
 }
 
 export function parseModelRef(modelRef: string): ParsedModelRef {
-  // 检查是否为完整引用格式 provider/model
   if (modelRef.includes('/')) {
     const [provider, ...modelParts] = modelRef.split('/');
     return {
@@ -945,7 +860,6 @@ export function parseModelRef(modelRef: string): ParsedModelRef {
     };
   }
   
-  // 尝试自动检测 provider
   const detected = detectProviderByModel(modelRef);
   if (detected) {
     return {
@@ -955,7 +869,6 @@ export function parseModelRef(modelRef: string): ParsedModelRef {
     };
   }
   
-  // 默认使用 openai
   return {
     provider: 'openai',
     model: modelRef,
@@ -963,16 +876,10 @@ export function parseModelRef(modelRef: string): ParsedModelRef {
   };
 }
 
-/**
- * 注册自定义 Provider（运行时扩展）
- */
 export function registerCustomProvider(definition: ProviderDefinition): void {
   PROVIDER_CATALOG[definition.id] = definition;
 }
 
-/**
- * 从配置创建自定义 Provider
- */
 export function createCustomProviderFromConfig(
   id: string,
   name: string,
