@@ -787,7 +787,6 @@ async function setupGateway(config: any): Promise<any> {
   }
 
   console.log('\n🌐 Step 4: Gateway WebUI (Optional)\n');
-  console.log('The gateway provides a web-based UI for chatting with your AI assistant.');
 
   const enableGateway = await confirm({
     message: 'Enable Gateway WebUI?',
