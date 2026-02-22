@@ -11,13 +11,23 @@
 
 ## 2. 安装
 
+### 方式一：从 npm 安装（推荐）
+
+```bash
+# 全局安装
+npm install -g @xopcai/xopcbot
+# 或：pnpm add -g @xopcai/xopcbot
+```
+
+### 方式二：从源码构建
+
 从 GitHub 克隆仓库并安装依赖：
 
 ```bash
 git clone https://github.com/xopcai/xopcbot.git
 cd xopcbot
 npm install
-# 或: pnpm install
+# 或：pnpm install
 ```
 
 ## 3. 配置

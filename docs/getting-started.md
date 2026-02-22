@@ -11,7 +11,17 @@ Before you begin, ensure you have the following installed:
 
 ## 2. Installation
 
-Clone the repository from GitHub and install the dependencies.
+### Option 1: Install from npm (Recommended)
+
+```bash
+# Install globally
+npm install -g @xopcai/xopcbot
+# or: pnpm add -g @xopcai/xopcbot
+```
+
+### Option 2: Build from source
+
+Clone the repository from GitHub and install the dependencies:
 
 ```bash
 git clone https://github.com/xopcai/xopcbot.git

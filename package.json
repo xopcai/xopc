@@ -1,5 +1,5 @@
 {
-  "name": "xopcbot",
+  "name": "@xopcai/xopcbot",
   "version": "0.1.0",
   "description": "Ultra-Lightweight Personal AI Assistant - Node.js + TypeScript",
   "type": "module",
@@ -11,6 +11,9 @@
   "files": [
     "dist"
   ],
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
     "build": "tsc && pnpm --filter @xopcbot/web-ui run build",
     "dev": "tsx src/cli/index.ts",

@@ -653,8 +653,12 @@ export default plugin;
 3. 推送到 GitHub 或发布到 npm
 
 ```bash
-# 发布到 npm
-npm publish
+# 发布到 npm（公开发布）
+npm publish --access public
+
+# 如果使用 scoped 包名（推荐）
+# package.json: { "name": "@yourname/xopcbot-plugin-name" }
+npm publish --access public
 ```
 
 ## 最佳实践

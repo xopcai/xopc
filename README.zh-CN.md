@@ -41,6 +41,21 @@
 
 ## 🚀 快速开始
 
+### 方式一：从 npm 安装
+
+```bash
+# 全局安装
+npm install -g @xopcai/xopcbot
+
+# 配置（交互式设置）
+xopcbot configure
+
+# 开始聊天！
+xopcbot agent -i
+```
+
+### 方式二：从源码构建
+
 ```bash
 # 克隆并安装
 git clone https://github.com/xopcai/xopcbot.git
@@ -54,7 +69,7 @@ pnpm run dev -- configure
 pnpm run dev -- agent -i
 ```
 
-> **提示：** 运行 `pnpm run dev -- configure` 交互式设置 LLM 提供商 API 密钥。
+> **提示：** 运行 `xopcbot configure`（或 `pnpm run dev -- configure`）交互式设置 LLM 提供商 API 密钥。
 
 ---
 
