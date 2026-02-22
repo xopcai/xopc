@@ -97,7 +97,7 @@ export class CronManager extends LitElement {
     try {
       this._jobs = await this._api.listJobs();
     } catch (err) {
-      this._error = err instanceof Error ? (err.message || 'Failed to load jobs') : 'Failed to load jobs';
+      this._error = err instanceof Error ? (err.message || t('cron.failedToLoadJobs')) : t('cron.failedToLoadJobs');
       console.error('[CronManager] Load error:', err);
     } finally {
       this._loading = false;
@@ -213,12 +213,12 @@ export class CronManager extends LitElement {
 
   private async _submitForm(): Promise<void> {
     if (!this._formSchedule || !this._formMessage) {
-      this._error = 'Schedule and message are required';
+      this._error = t('cron.scheduleRequired');
       return;
     }
 
     if (!this._formChatId) {
-      this._error = 'Chat ID is required';
+      this._error = t('cron.chatIdRequired');
       return;
     }
 
@@ -262,7 +262,7 @@ export class CronManager extends LitElement {
       await this._loadJobs();
       await this._loadMetrics();
     } catch (err) {
-      this._error = err instanceof Error ? (err.message || 'Unknown error') : `Failed to ${this._formMode} job`;
+      this._error = err instanceof Error ? (err.message || t('cron.failedToJob', { mode: this._formMode })) : t('cron.failedToJob', { mode: this._formMode });
     } finally {
       this._formSubmitting = false;
     }
@@ -302,7 +302,7 @@ export class CronManager extends LitElement {
       await this._loadJobs();
       await this._loadMetrics();
     } catch (err) {
-      this._error = err instanceof Error ? (err.message || 'Failed to toggle job') : 'Failed to toggle job';
+      this._error = err instanceof Error ? (err.message || t('cron.failedToToggleJob')) : t('cron.failedToToggleJob');
     }
   }
 
@@ -358,7 +358,7 @@ export class CronManager extends LitElement {
         await this._loadMetrics();
       }
     } catch (err) {
-      this._error = err instanceof Error ? (err.message || 'Action failed') : 'Action failed';
+      this._error = err instanceof Error ? (err.message || t('cron.actionFailed')) : t('cron.actionFailed');
     }
   }
 
@@ -484,7 +484,7 @@ export class CronManager extends LitElement {
         <div class="modal-backdrop" @click=${this._closeForm}>
           <div class="modal modal--form" @click=${(e: Event) => e.stopPropagation()}>
             <div class="modal__header">
-              <h2 class="modal__title">${this._formMode === 'edit' ? 'Edit Job' : t('cron.addJob')}</h2>
+              <h2 class="modal__title">${this._formMode === 'edit' ? t('cron.editJob') : t('cron.addJob')}</h2>
               <button class="btn-icon" @click=${this._closeForm}>${getIcon('x')}</button>
             </div>
             <div class="modal__content">
@@ -541,24 +541,24 @@ export class CronManager extends LitElement {
                 </p>
               </div>
               <div class="form-field">
-                <label class="form-field__label">Mode</label>
+                <label class="form-field__label">${t('cron.mode')}</label>
                 <select
                   class="form-field__select"
                   .value=${this._formSessionTarget ?? 'main'}
                   @change=${(e: Event) => this._formSessionTarget = (e.target as HTMLSelectElement).value as 'main' | 'isolated'}
                 >
-                  <option value="main">Direct (send message directly)</option>
-                  <option value="isolated">AI Agent (process with AI then send)</option>
+                  <option value="main">${t('cron.modeDirectOption') || 'Direct (send message directly)'}</option>
+                  <option value="isolated">${t('cron.modeAgentOption') || 'AI Agent (process with AI then send)'}</option>
                 </select>
                 <p class="form-field__hint">
                   ${this._formSessionTarget === 'main' 
-                    ? 'Send message directly to the channel without AI processing'
-                    : 'Use AI agent to process the message, then send the response'}
+                    ? t('cron.modeDirect')
+                    : t('cron.modeAgent')}
                 </p>
               </div>
               ${this._formSessionTarget === 'isolated' ? html`
                 <div class="form-field">
-                  <label class="form-field__label">Model</label>
+                  <label class="form-field__label">${t('cron.model')}</label>
                   <select
                     class="form-field__select"
                     .value=${this._formModel ?? ''}
@@ -567,7 +567,7 @@ export class CronManager extends LitElement {
                     ${this._availableModels.length > 0 ? this._availableModels.map(model => html`
                       <option value=${model.id}>${model.name} (${model.provider})</option>
                     `) : html`
-                      <option value="">No configured models</option>
+                      <option value="">${t('cron.noConfiguredModels')}</option>
                     `}
                   </select>
                 </div>
@@ -637,8 +637,8 @@ export class CronManager extends LitElement {
                 </div>
                 <p class="form-field__hint">
                   ${this._sessionChatIds.length > 0 
-                    ? 'Enter manually or select from recent chats'
-                    : 'No recent chats found. Enter chat ID manually (e.g., 123456789 for Telegram)'}
+                    ? t('cron.enterManuallyOrSelect')
+                    : t('cron.noRecentChats')}
                 </p>
               </div>
               <div class="form-field">
@@ -659,7 +659,7 @@ export class CronManager extends LitElement {
                 @click=${this._submitForm}
                 ?disabled=${this._formSubmitting || !this._formSchedule || !this._formChatId || !this._formMessage}
               >
-                ${this._formSubmitting ? t('common.loading') : (this._formMode === 'edit' ? 'Save' : t('cron.create'))}
+                ${this._formSubmitting ? t('common.loading') : (this._formMode === 'edit' ? t('cron.save') : t('cron.create'))}
               </button>
             </div>
           </div>
