@@ -1,41 +1,41 @@
 # Gateway API
 
-REST API 网关，用于外部程序与 xopcbot 交互。
+REST API gateway for external programs to interact with xopcbot.
 
-## 启动网关
+## Start Gateway
 
-### 前台模式（Foreground Mode）
+### Foreground Mode
 
 ```bash
 xopcbot gateway --port 18790
 ```
 
-默认端口：`18790`
+Default port: `18790`
 
-### 后台模式（Background Mode）
+### Background Mode
 
 ```bash
-# 启动后台服务
+# Start background service
 xopcbot gateway --background
 
-# 或简写
+# Or shorthand
 xopcbot gateway -b
 
-# 指定日志文件
+# Specify log file
 xopcbot gateway --background --log-file ~/.xopcbot/gateway.log
 ```
 
-后台模式将网关作为守护进程运行，适合生产环境使用。
+Background mode runs the gateway as a daemon, suitable for production use.
 
-## 进程管理命令
+## Process Management Commands
 
-### 查看状态
+### Check Status
 
 ```bash
 xopcbot gateway status
 ```
 
-输出示例：
+Example output:
 ```
 ✅ Gateway is running
 
@@ -51,45 +51,45 @@ xopcbot gateway status
    Direct: http://localhost:18790?token=abc12345...
 ```
 
-### 停止网关
+### Stop Gateway
 
 ```bash
-# 优雅停止（默认 5 秒超时）
+# Graceful stop (default 5 second timeout)
 xopcbot gateway stop
 
-# 强制停止
+# Force stop
 xopcbot gateway stop --force
 
-# 自定义超时时间（毫秒）
+# Custom timeout (milliseconds)
 xopcbot gateway stop --timeout 3000
 ```
 
-### 重启网关
+### Restart Gateway
 
 ```bash
-# 使用现有配置重启
+# Restart with existing config
 xopcbot gateway restart
 
-# 更改配置重启
+# Restart with different config
 xopcbot gateway restart --port 8080 --host 127.0.0.1
 ```
 
-### 查看日志
+### View Logs
 
 ```bash
-# 查看最近 50 行
+# View last 50 lines
 xopcbot gateway logs
 
-# 查看指定行数
+# View specific number of lines
 xopcbot gateway logs --lines 100
 
-# 实时跟踪日志（类似 tail -f）
+# Follow logs in real-time (like tail -f)
 xopcbot gateway logs --follow
 ```
 
-## API 端点
+## API Endpoints
 
-### 发送消息
+### Send Message
 
 ```http
 POST /api/message
@@ -102,7 +102,7 @@ Content-Type: application/json
 }
 ```
 
-**响应**：
+**Response**:
 
 ```json
 {
@@ -111,7 +111,7 @@ Content-Type: application/json
 }
 ```
 
-### 发送消息 (同步)
+### Send Message (Sync)
 
 ```http
 POST /api/message/sync
@@ -124,7 +124,7 @@ Content-Type: application/json
 }
 ```
 
-**响应**：
+**Response**:
 
 ```json
 {
@@ -133,7 +133,7 @@ Content-Type: application/json
 }
 ```
 
-### Agent 对话
+### Agent Chat
 
 ```http
 POST /api/agent
@@ -145,7 +145,7 @@ Content-Type: application/json
 }
 ```
 
-**响应**：
+**Response**:
 
 ```json
 {
@@ -155,7 +155,7 @@ Content-Type: application/json
 }
 ```
 
-### 触发 Cron 任务
+### Trigger Cron Job
 
 ```http
 POST /api/cron/trigger
@@ -166,7 +166,7 @@ Content-Type: application/json
 }
 ```
 
-**响应**：
+**Response**:
 
 ```json
 {
@@ -175,13 +175,13 @@ Content-Type: application/json
 }
 ```
 
-### 健康检查
+### Health Check
 
 ```http
 GET /health
 ```
 
-**响应**：
+**Response**:
 
 ```json
 {
@@ -190,27 +190,27 @@ GET /health
 }
 ```
 
-## 完整 API 列表
+## Complete API List
 
-| 方法 | 路径 | 描述 |
-|------|------|------|
-| POST | `/api/message` | 发送消息 (异步) |
-| POST | `/api/message/sync` | 发送消息 (同步) |
-| POST | `/api/agent` | Agent 对话 |
-| GET | `/api/sessions` | 列出会话 |
-| GET | `/api/sessions/:key` | 获取会话 |
-| DELETE | `/api/sessions/:key` | 删除会话 |
-| GET | `/api/cron` | 列出定时任务 |
-| POST | `/api/cron/trigger` | 触发任务 |
-| GET | `/health` | 健康检查 |
-| GET | `/api/logs` | 查询日志（需认证） |
-| POST | `/api/cron/create` | 创建定时任务 |
-| DELETE | `/api/cron/:id` | 删除定时任务 |
-| POST | `/api/cron/:id/toggle` | 启用/禁用定时任务 |
+| Method | Path | Description |
+|--------|------|-------------|
+| POST | `/api/message` | Send message (async) |
+| POST | `/api/message/sync` | Send message (sync) |
+| POST | `/api/agent` | Agent chat |
+| GET | `/api/sessions` | List sessions |
+| GET | `/api/sessions/:key` | Get session |
+| DELETE | `/api/sessions/:key` | Delete session |
+| GET | `/api/cron` | List scheduled tasks |
+| POST | `/api/cron/trigger` | Trigger task |
+| GET | `/health` | Health check |
+| GET | `/api/logs` | Query logs (auth required) |
+| POST | `/api/cron/create` | Create scheduled task |
+| DELETE | `/api/cron/:id` | Delete scheduled task |
+| POST | `/api/cron/:id/toggle` | Enable/disable scheduled task |
 
-## 错误响应
+## Error Responses
 
-所有 API 错误格式：
+All API errors follow this format:
 
 ```json
 {
@@ -221,54 +221,54 @@ GET /health
 }
 ```
 
-**错误码**：
+**Error codes**:
 
-| 错误码 | 描述 |
-|--------|------|
-| `INVALID_REQUEST` | 请求参数错误 |
-| `CHANNEL_NOT_FOUND` | 通道不存在 |
-| `SESSION_NOT_FOUND` | 会话不存在 |
-| `AGENT_ERROR` | Agent 处理错误 |
-| `INTERNAL_ERROR` | 内部错误 |
+| Error Code | Description |
+|------------|-------------|
+| `INVALID_REQUEST` | Invalid request parameters |
+| `CHANNEL_NOT_FOUND` | Channel not found |
+| `SESSION_NOT_FOUND` | Session not found |
+| `AGENT_ERROR` | Agent processing error |
+| `INTERNAL_ERROR` | Internal error |
 
-## 使用示例
+## Usage Examples
 
-### 命令行管理
+### CLI Management
 
 ```bash
-# 启动后台网关
+# Start background gateway
 xopcbot gateway --background
 
-# 检查状态
+# Check status
 xopcbot gateway status
 
-# 查看日志
+# View logs
 xopcbot gateway logs --lines 20
 
-# 重启网关
+# Restart gateway
 xopcbot gateway restart
 
-# 停止网关
+# Stop gateway
 xopcbot gateway stop
 ```
 
 ### cURL
 
 ```bash
-# 发送消息
+# Send message
 curl -X POST http://localhost:18790/api/message \
   -H "Content-Type: application/json" \
   -d '{"channel": "telegram", "chat_id": "123", "content": "Hello!"}'
 
-# Agent 对话
+# Agent chat
 curl -X POST http://localhost:18790/api/agent \
   -H "Content-Type: application/json" \
   -d '{"message": "What is 2+2?"}'
 
-# 健康检查
+# Health check
 curl http://localhost:18790/health
 
-# 带认证的请求
+# Request with auth
 curl -X POST http://localhost:18790/api/agent \
   -H "Content-Type: application/json" \
   -H "Authorization: Bearer YOUR_TOKEN" \
@@ -325,9 +325,9 @@ def chat(message):
     return resp.json()
 ```
 
-## Webhook 集成
+## Webhook Integration
 
-支持接收 webhook 回调：
+Supports receiving webhook callbacks:
 
 ```http
 POST /api/webhook/:channel
@@ -339,16 +339,16 @@ Content-Type: application/json
 }
 ```
 
-## 认证
+## Authentication
 
-⚠️ 当前版本 API 无认证。
+⚠️ Current version has no API authentication.
 
-生产环境建议：
-- 使用 Nginx/Traefik 添加 Basic Auth
-- 或通过 `.env` 配置 API Key
-- 限制可访问 IP
+For production, recommended:
+- Add Basic Auth via Nginx/Traefik
+- Or configure API Key via `.env`
+- Limit accessible IPs
 
-## 配置
+## Configuration
 
 ```json
 {
@@ -362,31 +362,31 @@ Content-Type: application/json
 }
 ```
 
-| 参数 | 默认值 | 描述 |
-|------|--------|------|
-| `host` | `0.0.0.0` | 绑定地址 |
-| `port` | `18790` | 端口号 |
-| `auth.token` | `null` | API 认证令牌（可选） |
+| Parameter | Default | Description |
+|-----------|---------|-------------|
+| `host` | `0.0.0.0` | Bind address |
+| `port` | `18790` | Port number |
+| `auth.token` | `null` | API auth token (optional) |
 
-## 后台模式配置
+## Background Mode Configuration
 
-### PID 文件
+### PID File
 
-后台模式运行时，PID 文件保存在：`~/.xopcbot/gateway.pid`
+When running in background, PID file is saved at: `~/.xopcbot/gateway.pid`
 
-### 日志文件
+### Log File
 
-默认日志位置：`~/.xopcbot/logs/gateway.log`
+Default log location: `~/.xopcbot/logs/gateway.log`
 
-可通过 `--log-file` 参数自定义：
+Can be customized via `--log-file` parameter:
 
 ```bash
 xopcbot gateway --background --log-file /var/log/xopcbot/gateway.log
 ```
 
-### 端口冲突检测
+### Port Conflict Detection
 
-启动时会自动检测端口占用，如果端口已被占用，会提示：
+On startup, it automatically detects port occupancy. If port is already in use:
 
 ```
 ❌ Failed to start gateway
@@ -395,19 +395,19 @@ xopcbot gateway --background --log-file /var/log/xopcbot/gateway.log
    💡 Or stop the existing process first
 ```
 
-### 优雅关闭
+### Graceful Shutdown
 
-后台模式支持优雅关闭：
-1. 收到停止信号后，等待 5 秒让现有请求完成
-2. 如果 5 秒后仍有请求，强制终止进程
-3. 自动清理 PID 文件
+Background mode supports graceful shutdown:
+1. After receiving stop signal, wait 5 seconds for existing requests to complete
+2. If requests still pending after 5 seconds, force terminate process
+3. Automatically clean up PID file
 
-可通过 `--timeout` 参数自定义超时时间：
+Timeout can be customized via `--timeout` parameter:
 
 ```bash
-xopcbot gateway stop --timeout 10000  # 10 秒超时
+xopcbot gateway stop --timeout 10000  # 10 second timeout
 ```
 
-## CORS 配置
+## CORS Configuration
 
-如需从浏览器访问，添加 CORS 头（通过代理或中间件）。
+To access from browser, add CORS headers (via proxy or middleware).

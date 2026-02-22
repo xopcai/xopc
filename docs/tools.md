@@ -1,229 +1,155 @@
-# 内置工具参考
+# Built-in Tools Reference
 
-xopcbot 内置了一组工具供 Agent 调用。
+xopcbot has a set of built-in tools for the Agent to call.
 
-## 工具列表
+## Tools List
 
-| 工具 | 名称 | 描述 |
-|------|------|------|
-| 📄 读取 | `read_file` | 读取文件内容 (截断至 50KB/500 行) |
-| ✍️ 写入 | `write_file` | 创建或覆盖文件 |
-| ✏️ 编辑 | `edit_file` | 替换文件中的文本 |
-| 📂 列表 | `list_dir` | 列出目录内容 |
-| 💻 Shell | `shell` | 执行 Shell 命令 (截断至 50KB) |
-| 🔍 搜索 | `grep` | 在文件中搜索文本 |
-| 📄 查找 | `find` | 按条件查找文件 |
-| 🔍 网页搜索 | `web_search` | 使用 Brave Search |
-| 📄 网页抓取 | `web_fetch` | 获取网页内容 |
-| 📨 消息 | `send_message` | 发送消息到通道 |
-| 🔍 记忆搜索 | `memory_search` | 搜索记忆文件 |
-| 📄 记忆读取 | `memory_get` | 读取记忆片段 |
+| Tool | Name | Description |
+|------|------|-------------|
+| 📄 Read | `read_file` | Read file content (truncated to 50KB/500 lines) |
+| ✍️ Write | `write_file` | Create or overwrite file |
+| ✏️ Edit | `edit_file` | Replace text in file |
+| 📂 List | `list_dir` | List directory contents |
+| 💻 Shell | `shell` | Execute Shell command (truncated to 50KB) |
+| 🔍 Search | `grep` | Search text in files |
+| 📄 Find | `find` | Find files by conditions |
+| 🔍 Web Search | `web_search` | Search the web using Brave Search |
+| 📄 Web Fetch | `web_fetch` | Fetch web page content |
+| 📤 Message | `send_message` | Send message to channel |
+| 🔍 Memory Search | `memory_search` | Search memory files |
+| 📄 Memory Get | `memory_get` | Read memory snippets |
 
 ---
 
 ## 📄 read_file
 
-读取文件内容。输出自动截断至前 500 行或 50KB (取先到者)。
+Read file content. Output automatically truncated to first 500 lines or 50KB.
 
-### 参数
+### Parameters
 
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `path` | string | ✅ | 文件路径 |
-| `limit` | number | ❌ | 最大行数 (默认 500) |
-
-### 示例
-
-```
-read_file({ "path": "config.json" })
-```
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `path` | string | ✅ | File path |
+| `limit` | number | ❌ | Maximum lines (default 500) |
 
 ---
 
 ## ✍️ write_file
 
-创建或覆盖文件。
+Create or overwrite a file.
 
-### 参数
+### Parameters
 
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `path` | string | ✅ | 文件路径 |
-| `content` | string | ✅ | 文件内容 |
-
-### 示例
-
-```
-write_file({ "path": "hello.txt", "content": "Hello!" })
-```
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `path` | string | ✅ | File path |
+| `content` | string | ✅ | File content |
 
 ---
 
 ## ✏️ edit_file
 
-替换文件中的指定文本。
+Replace specified text in a file.
 
-### 参数
+### Parameters
 
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `path` | string | ✅ | 文件路径 |
-| `oldText` | string | ✅ | 要替换的文本 |
-| `newText` | string | ✅ | 替换文本 |
-
-### 示例
-
-```
-edit_file({ "path": "test.txt", "oldText": "hello", "newText": "hi" })
-```
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `path` | string | ✅ | File path |
+| `oldText` | string | ✅ | Text to replace |
+| `newText` | string | ✅ | Replacement text |
 
 ---
 
 ## 📂 list_dir
 
-列出目录内容。
-
-### 参数
-
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `path` | string | ✅ | 目录路径 |
+List directory contents.
 
 ---
 
 ## 💻 shell
 
-执行 Shell 命令。输出自动截断至最后 50KB。
+Execute Shell command. Output automatically truncated to last 50KB.
 
-### 参数
+### Limits
 
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `command` | string | ✅ | 要执行的命令 |
-
-### 示例
-
-```
-shell({ "command": "ls -la | wc -l" })
-```
-
-### 限制
-
-- 超时: 5 分钟
-- 输出截断: 50KB (从尾部保留)
+- Timeout: 5 minutes
+- Output truncation: 50KB
 
 ---
 
 ## 🔍 grep
 
-在文件中搜索文本。
+Search text in files.
 
-### 参数
+### Parameters
 
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `pattern` | string | ✅ | 搜索模式 (支持正则) |
-| `glob` | string | ❌ | 文件匹配模式 |
-| `path` | string | ❌ | 搜索目录 |
-| `ignoreCase` | boolean | ❌ | 忽略大小写 |
-| `literal` | boolean | ❌ | 纯文本匹配 |
-| `context` | number | ❌ | 上下文行数 |
-| `limit` | number | ❌ | 最大结果数 (默认 100) |
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `pattern` | string | ✅ | Search pattern (supports regex) |
+| `glob` | string | ❌ | File matching pattern |
+| `path` | string | ❌ | Search directory |
+| `ignoreCase` | boolean | ❌ | Ignore case |
+| `literal` | boolean | ❌ | Plain text matching |
+| `context` | number | ❌ | Number of context lines |
+| `limit` | number | ❌ | Maximum results (default 100) |
 
 ---
 
 ## 📄 find
 
-按条件查找文件。
+Find files by conditions.
 
-### 参数
+### Parameters
 
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `pattern` | string | ✅ | 文件名匹配模式 |
-| `path` | string | ❌ | 搜索目录 |
-| `limit` | number | ❌ | 最大结果数 |
+| Parameter | Type | Required | Description |
+|-----------|------|----------|-------------|
+| `pattern` | string | ✅ | Filename matching pattern |
+| `path` | string | ❌ | Search directory |
+| `limit` | number | ❌ | Maximum results |
 
 ---
 
 ## 🔍 web_search
 
-使用 Brave Search API 搜索网页。
+Search the web using Brave Search API.
 
-### 配置
+### Configuration
 
 ```bash
 export BRAVE_SEARCH_API_KEY="your-api-key"
 ```
 
-### 参数
-
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `query` | string | ✅ | 搜索关键词 |
-| `count` | number | ❌ | 结果数 (默认 5) |
-
 ---
 
 ## 📄 web_fetch
 
-获取网页内容。
-
-### 参数
-
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `url` | string | ✅ | 网页 URL |
-| `maxChars` | number | ❌ | 最大字符数 |
+Fetch web page content.
 
 ---
 
-## 📨 send_message
+## 📤 send_message
 
-发送消息到配置的通道。
-
-### 参数
-
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `message` | string | ✅ | 消息内容 |
-| `channel` | string | ❌ | 通道名称 |
+Send message to configured channel.
 
 ---
 
 ## 🔍 memory_search
 
-搜索记忆文件。在回答关于之前工作、决定等问题前必须调用。
-
-### 参数
-
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `query` | string | ✅ | 搜索查询 |
-| `maxResults` | number | ❌ | 最大结果数 |
+Search memory files. Must be called before answering questions about previous work, decisions, etc.
 
 ---
 
 ## 📄 memory_get
 
-从记忆文件读取片段。
-
-### 参数
-
-| 参数 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `path` | string | ✅ | 文件路径 |
-| `from` | number | ❌ | 起始行号 |
-| `lines` | number | ❌ | 读取行数 |
+Read snippets from memory files.
 
 ---
 
-## 安全限制
+## Security Limits
 
-| 操作 | 限制 |
-|------|------|
-| 文件路径 | 限制在 workspace 目录内 |
-| Shell 命令 | 超时 5 分钟 |
-| 文件大小 | 最大 10MB |
-
-详见 [插件文档](plugins.md)。
+| Operation | Limit |
+|-----------|-------|
+| File path | Restricted to workspace directory |
+| Shell command | 5 minute timeout |
+| File size | Maximum 10MB |

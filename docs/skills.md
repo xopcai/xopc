@@ -1,40 +1,41 @@
-# Skills 系统使用指南
+# Skills System Guide
 
-xopcbot 的技能系统灵感来源于 [openclaw](https://github.com/openclaw/openclaw)，允许你通过 SKILL.md 文件为 AI 助手添加领域特定的能力和知识。
+xopcbot's skills system is inspired by [openclaw](https://github.com/openclaw/openclaw), allowing you to add domain-specific capabilities and knowledge to your AI assistant through SKILL.md files.
 
-## 目录
+## Table of Contents
 
-- [什么是 Skill](#什么是-skill)
-- [SKILL.md 文件格式](#skillmd-文件格式)
-- [技能来源](#技能来源)
-- [CLI 命令](#cli-命令)
-- [配置技能](#配置技能)
-- [安装技能依赖](#安装技能依赖)
-- [安全扫描](#安全扫描)
-- [示例技能](#示例技能)
+- [What is a Skill](#what-is-a-skill)
+- [SKILL.md File Format](#skillmd-file-format)
+- [Skill Sources](#skill-sources)
+- [CLI Commands](#cli-commands)
+- [Configure Skills](#configure-skills)
+- [Install Skill Dependencies](#install-skill-dependencies)
+- [Security Scanning](#security-scanning)
+- [Skill Testing](#skill-testing)
+- [Example Skills](#example-skills)
 
-## 什么是 Skill
+## What is a Skill
 
-Skill 是一个包含以下内容的目录：
+A Skill is a directory containing:
 
-- `SKILL.md` - 技能的元数据和说明文档（必需）
-- 脚本、配置文件、资源文件等（可选）
+- `SKILL.md` - Skill metadata and documentation (required)
+- Scripts, config files, resource files, etc. (optional)
 
-技能可以帮助 AI 助手：
-- 理解特定领域的知识和最佳实践
-- 使用特定的 CLI 工具和 API
-- 遵循特定的工作流程和规范
+Skills help the AI assistant:
+- Understand domain-specific knowledge and best practices
+- Use specific CLI tools and APIs
+- Follow specific workflows and conventions
 
-## SKILL.md 文件格式
+## SKILL.md File Format
 
-SKILL.md 使用 YAML frontmatter 定义元数据，后面跟着 Markdown 格式的详细说明。
+SKILL.md uses YAML frontmatter for metadata, followed by detailed documentation in Markdown format.
 
-### 基本结构
+### Basic Structure
 
 ```markdown
 ---
 name: skill-name
-description: 技能的简短描述
+description: Short description of the skill
 homepage: https://example.com
 emoji: 📦
 os: [darwin, linux]
@@ -51,61 +52,61 @@ metadata:
         label: Install curl (brew)
 ---
 
-# Skill 名称
+# Skill Name
 
-详细说明如何使用这个技能...
+Detailed explanation of how to use this skill...
 ```
 
-### Frontmatter 字段
+### Frontmatter Fields
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `name` | string | 技能名称（唯一标识符） |
-| `description` | string | 技能的简短描述 |
-| `homepage` | string | 项目主页 URL |
-| `emoji` | string | UI 中显示的图标 |
-| `os` | string[] | 支持的操作系统：`darwin`, `linux`, `win32` |
-| `metadata.openclaw` | object | openclaw 兼容的元数据 |
-| `metadata.openclaw.emoji` | string | 图标 |
-| `metadata.openclaw.requires` | object | 依赖要求 |
-| `metadata.openclaw.requires.bins` | string[] | 必需的二进制文件 |
-| `metadata.openclaw.requires.anyBins` | string[] | 任一可用的二进制文件 |
-| `metadata.openclaw.install` | array | 安装选项列表 |
+| Field | Type | Description |
+|-------|------|-------------|
+| `name` | string | Skill name (unique identifier) |
+| `description` | string | Short description of the skill |
+| `homepage` | string | Project homepage URL |
+| `emoji` | string | Icon displayed in UI |
+| `os` | string[] | Supported operating systems: `darwin`, `linux`, `win32` |
+| `metadata.openclaw` | object | Openclaw-compatible metadata |
+| `metadata.openclaw.emoji` | string | Icon |
+| `metadata.openclaw.requires` | object | Dependency requirements |
+| `metadata.openclaw.requires.bins` | string[] | Required binaries |
+| `metadata.openclaw.requires.anyBins` | string[] | Any one of the binaries must be available |
+| `metadata.openclaw.install` | array | List of installation options |
 
-### 安装器类型
+### Installer Types
 
-支持以下安装器类型：
+Supported installer types:
 
-| kind | 说明 | 必需字段 |
-|------|------|----------|
-| `brew` | Homebrew 包 | `formula` |
-| `pnpm` | pnpm 包 | `package` |
-| `npm` | npm 包 | `package` |
-| `yarn` | Yarn 包 | `package` |
-| `bun` | Bun 包 | `package` |
-| `go` | Go 模块 | `module` |
+| kind | Description | Required Fields |
+|------|-------------|-----------------|
+| `brew` | Homebrew package | `formula` |
+| `pnpm` | pnpm package | `package` |
+| `npm` | npm package | `package` |
+| `yarn` | Yarn package | `package` |
+| `bun` | Bun package | `package` |
+| `go` | Go module | `module` |
 | `uv` | Python (uv) | `package` |
-| `download` | 直接下载 | `url` |
+| `download` | Direct download | `url` |
 
-### 安装器示例
+### Installer Examples
 
 ```yaml
 install:
-  # Homebrew 安装
+  # Homebrew installation
   - id: brew-curl
     kind: brew
     formula: curl
     bins: [curl]
     label: Install curl (brew)
   
-  # pnpm 安装
+  # pnpm installation
   - id: pnpm-tool
     kind: pnpm
     package: some-tool
     bins: [some-tool]
     label: Install via pnpm
   
-  # Go 安装
+  # Go installation
   - id: go-tool
     kind: go
     module: github.com/user/tool/cmd/tool@latest
@@ -113,110 +114,139 @@ install:
     label: Install via Go
 ```
 
-## 技能来源
+## Skill Sources
 
-技能可以从以下位置加载：
+Skills can be loaded from these locations:
 
-1. **Bundled** - 内置于 xopcbot 的技能
-   - 位置：`src/agent/skills/bundled/`
+1. **Bundled** - Skills built into xopcbot
+   - Location: `src/agent/skills/bundled/`
    
-2. **Workspace** - 工作区特定的技能
-   - 位置：`<workspace>/skills/`
-   - 优先级最高
+2. **Workspace** - Workspace-specific skills
+   - Location: `<workspace>/skills/`
+   - Highest priority
 
-3. **Global** - 全局技能
-   - 位置：`~/.xopcbot/skills/`
-   - 位置：`~/.agents/skills/`
+3. **Global** - Global skills
+   - Location: `~/.xopcbot/skills/`
+   - Location: `~/.agents/skills/`
 
-4. **Extra** - 额外配置的技能目录
-   - 通过配置文件指定
+4. **Extra** - Extra configured skill directories
+   - Specified via config file
 
-### 优先级
+### Priority
 
 Workspace > Global > Bundled
 
-后加载的技能会覆盖先加载的同名技能。
+Skills loaded later will override earlier ones with the same name.
 
-## CLI 命令
+## CLI Commands
 
-### 列出技能
+### List Skills
 
 ```bash
-# 列出所有可用技能
+# List all available skills
 xopcbot skills list
 
-# 显示详细信息
+# Show detailed information
 xopcbot skills list -v
 
-# JSON 格式输出
+# JSON format output
 xopcbot skills list --json
 ```
 
-### 安装技能依赖
+### Install Skill Dependencies
 
 ```bash
-# 安装默认依赖
+# Install default dependencies
 xopcbot skills install weather
 
-# 指定安装器
+# Specify installer
 xopcbot skills install weather -i brew-curl
 
-# 预演（不实际执行）
+# Dry run (don't actually execute)
 xopcbot skills install weather --dry-run
 ```
 
-### 启用/禁用技能
+### Enable/Disable Skills
 
 ```bash
-# 启用技能
+# Enable skill
 xopcbot skills enable weather
 
-# 禁用技能
+# Disable skill
 xopcbot skills disable weather
 ```
 
-### 查看技能状态
+### View Skill Status
 
 ```bash
-# 查看所有技能状态
+# View all skills status
 xopcbot skills status
 
-# 查看特定技能详情
+# View specific skill details
 xopcbot skills status weather
 
-# JSON 格式
+# JSON format
 xopcbot skills status --json
 ```
 
-### 安全审计
+### Security Audit
 
 ```bash
-# 审计所有技能
+# Audit all skills
 xopcbot skills audit
 
-# 审计特定技能
+# Audit specific skill
 xopcbot skills audit weather
 
-# 显示详细发现
+# Show detailed findings
 xopcbot skills audit weather --deep
 ```
 
-### 配置技能
+### Configure Skill
 
 ```bash
-# 显示当前配置
+# Show current configuration
 xopcbot skills config weather --show
 
-# 设置 API 密钥
+# Set API key
 xopcbot skills config weather --api-key=YOUR_API_KEY
 
-# 设置环境变量
+# Set environment variables
 xopcbot skills config weather --env API_KEY=value --env DEBUG=true
 ```
 
-## 配置技能
+### Test Skill
 
-技能配置文件位于 `~/.xopcbot/skills.json`：
+```bash
+# Test all skills
+xopcbot skills test
+
+# Test specific skill
+xopcbot skills test weather
+
+# Verbose output
+xopcbot skills test --verbose
+
+# JSON format
+xopcbot skills test --format json
+
+# Skip specific tests
+xopcbot skills test --skip-security
+xopcbot skills test --skip-examples
+
+# Validate SKILL.md file
+xopcbot skills test validate ./skills/weather/SKILL.md
+
+# Check dependencies
+xopcbot skills test check-deps
+
+# Security audit
+xopcbot skills test security --deep
+```
+
+## Configure Skills
+
+Skill configuration file is located at `~/.xopcbot/skills.json`:
 
 ```json
 {
@@ -225,7 +255,7 @@ xopcbot skills config weather --env API_KEY=value --env DEBUG=true
       "enabled": true,
       "apiKey": "your-api-key",
       "env": {
-        "WTTR_LANG": "zh",
+        "WTTR_LANG": "en",
         "WTTR_UNITS": "m"
       },
       "config": {
@@ -236,79 +266,79 @@ xopcbot skills config weather --env API_KEY=value --env DEBUG=true
 }
 ```
 
-### 环境变量覆盖
+### Environment Variable Override
 
-可以使用环境变量覆盖技能配置：
+You can override skill configuration using environment variables:
 
 ```bash
-# 启用/禁用
+# Enable/disable
 export XOPCBOT_SKILL_WEATHER_ENABLED=true
 
-# API 密钥
+# API key
 export XOPCBOT_SKILL_WEATHER_API_KEY=your-key
 
-# 环境变量
-export XOPCBOT_SKILL_WEATHER_ENV_WTTR_LANG=zh
+# Environment variables
+export XOPCBOT_SKILL_WEATHER_ENV_WTTR_LANG=en
 ```
 
-## 安装技能依赖
+## Install Skill Dependencies
 
-技能可能依赖外部工具。使用 `skills install` 命令安装：
+Skills may depend on external tools. Use `skills install` command to install:
 
 ```bash
-# 查看技能需要的依赖
+# View skill dependencies
 xopcbot skills status weather
 
-# 安装依赖
+# Install dependencies
 xopcbot skills install weather
 ```
 
-安装器支持：
+Supported installers:
 - ✅ Homebrew (macOS/Linux)
 - ✅ pnpm/npm/yarn/bun (Node.js)
 - ✅ Go modules
 - ✅ uv (Python)
-- ⏳ 直接下载（开发中）
+- ⏳ Direct download (in development)
 
-### 安装流程
+### Installation Flow
 
-1. 解析技能的 `install` 元数据
-2. 检查前置条件（如 brew、go 是否已安装）
-3. 自动安装缺失的前置条件（如果可能）
-4. 执行安装命令
-5. 进行安全扫描
-6. 报告结果和警告
+1. Parse skill's `install` metadata
+2. Check prerequisites (like whether brew, go are installed)
+3. Auto-install missing prerequisites (if possible)
+4. Execute installation commands
+5. Perform security scan
+6. Report results and warnings
 
-## 安全扫描
+## Security Scanning
 
-所有技能在安装和加载时都会进行安全扫描。
+All skills undergo security scanning during installation and loading.
 
-### 扫描内容
+### Scan Contents
 
-**Critical（严重）**:
-- `exec()` 直接命令执行
-- `eval()` 动态代码执行
-- `child_process` 模块使用
-- 文件写入/删除操作
-- 网络服务器创建
+**Critical**:
+- `exec()` direct command execution
+- `eval()` dynamic code execution
+- `child_process` module usage
+- File write/delete operations
+- Network server creation
 
-**Warning（警告）**:
-- 环境变量访问
-- 当前工作目录访问
-- 命令行参数访问
-- 定时器使用
+**Warning**:
+- Environment variable access
+- Current working directory access
+- Command line argument access
+- Timer usage
 
-### 查看扫描结果
+### View Scan Results
 
 ```bash
-# 快速审计
+# Quick audit
 xopcbot skills audit weather
 
-# 详细报告
+# Detailed report
 xopcbot skills audit weather --deep
 ```
 
-### 扫描输出示例
+### Example Scan Output
 
 ```
 Security scan results for "weather":
@@ -321,9 +351,85 @@ Findings:
   ⚠️  Console output at line 12
 ```
 
-## 示例技能
+## Skill Testing
 
-### 天气技能
+xopcbot provides a complete skill testing framework to verify skill quality, safety, and functionality.
+
+### Test Types
+
+| Test | Description |
+|------|-------------|
+| SKILL.md format | Validate YAML frontmatter and required fields |
+| Dependency check | Check if declared binaries are available |
+| Security scan | Scan for dangerous code patterns |
+| Metadata integrity | Check optional fields like emoji, homepage |
+| Example validation | Validate code block syntax |
+
+### Run Tests
+
+```bash
+# Test all skills
+xopcbot skills test
+
+# Test specific skill
+xopcbot skills test weather
+
+# Verbose output
+xopcbot skills test --verbose
+
+# JSON format (for CI/CD)
+xopcbot skills test --format json
+
+# TAP format (for CI/CD)
+xopcbot skills test --format tap
+
+# Strict mode (warnings are also treated as failures)
+xopcbot skills test --strict
+```
+
+### Example Test Output
+
+```
+Skill Test Results
+==================
+
+✅ weather
+   SKILL.md format: Valid
+   Dependencies: All satisfied
+   Security: No issues
+   Metadata: Complete
+   Examples: 5 code blocks
+
+Summary: 1/1 skills passed
+```
+
+### Use in CI/CD
+
+```yaml
+# .github/workflows/skills-test.yml
+name: Skills Test
+
+on:
+  push:
+    paths:
+      - 'skills/**'
+  pull_request:
+    paths:
+      - 'skills/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: pnpm install
+      - run: pnpm run build
+      - run: xopcbot skills test --format tap --strict
+```
+
+## Example Skills
+
+### Weather Skill
 
 ```markdown
 ---
@@ -345,7 +451,7 @@ metadata:
 
 # Weather Skill
 
-使用 wttr.in 获取天气信息。
+Get weather information using wttr.in.
 
 ## Quick Start
 
@@ -353,12 +459,12 @@ metadata:
 curl wttr.in/Beijing
 ```
 
-## 更多用法
+## More Usage
 
-详见 [wttr.in 文档](https://github.com/chubin/wttr.in)
+See [wttr.in documentation](https://github.com/chubin/wttr.in)
 ```
 
-### GitHub 技能
+### GitHub Skill
 
 ```markdown
 ---
@@ -380,79 +486,103 @@ metadata:
 
 # GitHub Skill
 
-使用 GitHub CLI (gh) 与 GitHub 交互。
+Interact with GitHub using GitHub CLI (gh).
 
-## 配置
+## Configuration
 
 ```bash
 gh auth login
 ```
 
-## 常用命令
+## Common Commands
 
 ```bash
-# 查看 PR
+# View PRs
 gh pr list
 
-# 创建 Issue
+# Create Issue
 gh issue create
 
-# 查看 CI 状态
+# View CI status
 gh run list
 ```
 ```
 
-## 最佳实践
+## Best Practices
 
-### 创建技能
+### Creating Skills
 
-1. **明确的名称**: 使用小写，连字符分隔（如 `my-skill`）
-2. **清晰的描述**: 一句话说明技能用途
-3. **完整的文档**: 包含快速开始、示例、参考链接
-4. **声明依赖**: 明确列出所需的二进制文件
-5. **提供安装器**: 为用户提供多种安装选项
-6. **平台支持**: 声明支持的操作系统
+1. **Clear naming**: Use lowercase, hyphen-separated (e.g., `my-skill`)
+2. **Clear description**: One sentence explaining the skill's purpose
+3. **Complete documentation**: Include quick start, examples, reference links
+4. **Declare dependencies**: Clearly list required binaries
+5. **Provide installers**: Offer multiple installation options for users
+6. **Platform support**: Declare supported operating systems
 
-### 技能内容
+### Skill Content
 
-- ✅ 提供 CLI 命令示例
-- ✅ 包含常见用例
-- ✅ 列出环境变量配置
-- ✅ 提供错误处理建议
-- ✅ 包含参考文档链接
+- ✅ Provide CLI command examples
+- ✅ Include common use cases
+- ✅ List environment variable configuration
+- ✅ Provide error handling suggestions
+- ✅ Include reference documentation links
 
-### 安全考虑
+### Security Considerations
 
-- 避免在技能脚本中使用 `eval()`
-- 谨慎使用文件写入操作
-- 明确声明网络访问需求
-- 提供安全的使用示例
+- Avoid using `eval()` in skill scripts
+- Use file write operations carefully
+- Clearly declare network access needs
+- Provide safe usage examples
 
-## 故障排除
+### Testing Skills
 
-### 技能未加载
+- Run `skills test` before committing
+- Ensure all tests pass
+- Fix security scan warnings
+- Verify code examples are executable
 
-1. 检查 SKILL.md 文件格式是否正确
-2. 确认技能目录名称与 `name` 字段匹配
-3. 查看 `xopcbot skills list` 输出
-4. 检查是否有命名冲突
+## Troubleshooting
 
-### 依赖安装失败
+### Skill Not Loaded
 
-1. 使用 `--dry-run` 查看安装命令
-2. 手动执行安装命令排查问题
-3. 检查包管理器是否正常工作
-4. 查看安全扫描警告
+1. Check if SKILL.md file format is correct
+2. Confirm skill directory name matches `name` field
+3. Check `xopcbot skills list` output
+4. Check for naming conflicts
 
-### 技能不工作
+### Dependency Installation Failed
 
-1. 检查依赖的二进制文件是否可用：`xopcbot skills status <name>`
-2. 确认技能已启用：`xopcbot skills enable <name>`
-3. 检查配置文件：`xopcbot skills config <name> --show`
-4. 查看详细日志：`XOPCBOT_LOG_LEVEL=debug xopcbot ...`
+1. Use `--dry-run` to see installation commands
+2. Manually execute installation commands to debug
+3. Check if package managers are working
+4. Check security scan warnings
 
-## 参考资料
+### Skill Not Working
 
-- [openclaw skills](https://github.com/openclaw/openclaw/tree/main/skills) - 灵感来源和示例
-- [SKILL.md 格式](#skillmd-文件格式) - 完整的格式说明
-- [CLI 命令](#cli-命令) - 所有可用命令
+1. Check if required binaries are available: `xopcbot skills status <name>`
+2. Confirm skill is enabled: `xopcbot skills enable <name>`
+3. Check configuration: `xopcbot skills config <name> --show`
+4. Check verbose logs: `XOPCBOT_LOG_LEVEL=debug xopcbot ...`
+
+### Test Failures
+
+```bash
+# View verbose output
+xopcbot skills test --verbose
+
+# Skip specific tests
+xopcbot skills test --skip-security
+
+# Only run failed tests (future support)
+xopcbot skills test --bail
+```
+
+## References
+
+- [Skill Testing Framework](./skills-testing.md) - Detailed test framework documentation
+- [CLI Command Reference](./cli.md) - All available commands
+- [openclaw skills](https://github.com/openclaw/openclaw/tree/main/skills) - Inspiration source and examples
+
+---
+
+_Last updated: 2026-02-22_

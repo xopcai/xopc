@@ -1,12 +1,12 @@
-# 心跳机制
+# Heartbeat Mechanism
 
-心跳服务用于主动监控和唤醒 Agent。
+Heartbeat service is used to proactively monitor and wake up the Agent.
 
-## 概述
+## Overview
 
-心跳机制定期检查系统状态，并在满足条件时主动触发 Agent。
+The heartbeat mechanism regularly checks system status and proactively triggers the Agent when conditions are met.
 
-## 工作原理
+## How It Works
 
 ```
 ┌─────────────────┐
@@ -29,47 +29,47 @@
 └─────────────────┘
 ```
 
-## 配置
+## Configuration
 
 ```typescript
 interface HeartbeatConfig {
-  intervalMs: number;   // 检查间隔（毫秒）
-  enabled: boolean;     // 是否启用
+  intervalMs: number;   // Check interval (milliseconds)
+  enabled: boolean;     // Whether to enable
 }
 ```
 
-### 默认配置
+### Default Configuration
 
 ```json
 {
   "heartbeat": {
-    "intervalMs": 300000,  // 5 分钟
+    "intervalMs": 300000,  // 5 minutes
     "enabled": true
   }
 }
 ```
 
-## 使用场景
+## Use Cases
 
-### 定期检查
+### Regular Checks
 
-- 检查待处理的定时任务
-- 监控内存使用情况
-- 检查配置变更
+- Check pending scheduled tasks
+- Monitor memory usage
+- Check configuration changes
 
-### 条件触发
+### Conditional Trigger
 
-当满足条件时主动唤醒：
+Proactively wake up when conditions are met:
 
 ```typescript
-// 检查是否有待处理的 cron 任务
+// Check if there are pending cron jobs
 const pendingJobs = cronService.getPendingJobs();
 if (pendingJobs.length > 0) {
-  // 触发 Agent 处理
+  // Trigger Agent to process
 }
 ```
 
-## 程序化使用
+## Programmatic Usage
 
 ```typescript
 import { HeartbeatService } from '../heartbeat/service.js';
@@ -78,33 +78,33 @@ import { CronService } from '../cron/service.js';
 const cronService = new CronService();
 const heartbeat = new HeartbeatService(cronService);
 
-// 启动心跳
+// Start heartbeat
 heartbeat.start({
-  intervalMs: 60000,  // 1 分钟
+  intervalMs: 60000,  // 1 minute
   enabled: true
 });
 
-// 停止心跳
+// Stop heartbeat
 heartbeat.stop();
 
-// 检查状态
+// Check status
 const status = heartbeat.isRunning();
 ```
 
-## 监控指标
+## Monitoring Metrics
 
-心跳服务会监控：
+Heartbeat service monitors:
 
-| 指标 | 描述 |
-|------|------|
-| `runningJobs` | 运行中的 cron 任务数 |
-| `pendingJobs` | 待处理的定时任务 |
-| `memoryUsage` | 内存使用情况 |
-| `sessionCount` | 活动会话数 |
+| Metric | Description |
+|--------|-------------|
+| `runningJobs` | Number of running cron jobs |
+| `pendingJobs` | Pending scheduled tasks |
+| `memoryUsage` | Memory usage |
+| `sessionCount` | Active session count |
 
-## 日志输出
+## Log Output
 
-心跳服务会输出状态日志：
+Heartbeat service outputs status logs:
 
 ```
 [Heartbeat] Active - 5 cron jobs running
@@ -112,33 +112,33 @@ const status = heartbeat.isRunning();
 [Heartbeat] Triggering wake for pending task
 ```
 
-## 最佳实践
+## Best Practices
 
-1. **合理间隔**：根据需求设置检查频率
-2. **资源考虑**：避免过于频繁的检查
-3. **日志级别**：生产环境可降低日志级别
-4. **错误处理**：心跳错误不应影响主服务
+1. **Reasonable interval**: Set check frequency based on needs
+2. **Resource consideration**: Avoid too frequent checks
+3. **Log level**: Can reduce log level in production
+4. **Error handling**: Heartbeat errors should not affect main service
 
-## 与 Cron 的关系
+## Relationship with Cron
 
-| 组件 | 职责 |
-|------|------|
-| **Cron** | 按时执行特定任务 |
-| **Heartbeat** | 定期检查并触发唤醒 |
+| Component | Responsibility |
+|-----------|----------------|
+| **Cron** | Execute specific tasks on schedule |
+| **Heartbeat** | Regular checks and wake triggers |
 
-两者协同工作：Heartbeat 监控 Cron 任务的执行状态。
+They work together: Heartbeat monitors Cron job execution status.
 
-## 故障排除
+## Troubleshooting
 
-**心跳不工作？**
-- 确认 `enabled` 设为 `true`
-- 检查 `intervalMs` 配置有效
-- 查看服务日志
+**Heartbeat not working?**
+- Confirm `enabled` is set to `true`
+- Check `intervalMs` configuration is valid
+- Check service logs
 
-**触发过于频繁？**
-- 增加 `intervalMs` 值
-- 检查触发条件逻辑
+**Triggering too frequently?**
+- Increase `intervalMs` value
+- Check trigger condition logic
 
-**内存泄漏？**
-- 定期重启服务
-- 监控内存使用趋势
+**Memory leak?**
+- Regularly restart service
+- Monitor memory usage trends

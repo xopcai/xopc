@@ -347,27 +347,27 @@ const plugin = {
   description: 'Description here',
   version: '1.0.0',
 
-  // 插件注册时调用
+  // Called when plugin is registered
   register(api: PluginApi) {
-    // 注册工具
+    // Register tool
     api.registerTool({...});
     
-    // 注册命令
+    // Register command
     api.registerCommand({...});
     
-    // 注册钩子
+    // Register hook
     api.registerHook('message_received', async (event, ctx) => {...});
     
     // 注册 HTTP 路由
     api.registerHttpRoute('/my-route', async (req, res) => {...});
   },
 
-  // 插件启用时调用
+  // Called when plugin is enabled
   activate(api: PluginApi) {
     console.log('Plugin activated');
   },
 
-  // 插件禁用时调用
+  // Called when plugin is disabled
   deactivate(api: PluginApi) {
     console.log('Plugin deactivated');
   },
@@ -395,7 +395,7 @@ api.registerTool({
   },
   async execute(params) {
     const input = params.input;
-    // 执行操作
+    // Perform operation
     return `Result: ${input}`;
   }
 });
@@ -420,47 +420,47 @@ api.registerTool({
 | `gateway_stop` | 网关关闭 | 清理 |
 
 ```javascript
-// message_sending hook - 拦截或修改 AI 发送的消息
+// message_sending hook - intercept or modify AI sent messages
 api.registerHook('message_sending', async (event, ctx) => {
   const { to, content } = event;
 
-  // 1. 阻止消息发送（例如：内容审核）
+  // 1. Block message sending (e.g., content moderation)
   if (content.includes('敏感信息')) {
     return {
       cancel: true,
-      cancelReason: '内容包含敏感信息'
+      cancelReason: 'Content contains sensitive information'
     };
   }
 
-  // 2. 修改消息内容（例如：添加签名、替换内容）
+  // 2. Modify message content (e.g., add signature, replace content)
   if (content.includes('{{signature}}')) {
     return {
-      content: content.replace('{{signature}}', '\n\n— 由 AI 助手发送')
+      content: content.replace('{{signature}}', '\n\n— Sent by AI Assistant')
     };
   }
 
-  // 3. 针对特定聊天阻止
+  // 3. Block for specific chat
   if (to === 'blocked-chat-id') {
     return {
       cancel: true,
-      cancelReason: '此聊天已被阻止'
+      cancelReason: 'This chat is blocked'
     };
   }
 });
 
-// before_tool_call hook - 阻止或修改工具调用
+// before_tool_call hook - block or modify tool calls
 api.registerHook('before_tool_call', async (event, ctx) => {
   const { toolName, params } = event;
 
-  // 阻止危险操作
+  // Block dangerous operations
   if (toolName === 'delete_file' || toolName === 'execute_command') {
     return {
       block: true,
-      blockReason: '出于安全考虑，此操作已被禁用'
+      blockReason: 'This operation is disabled for safety'
     };
   }
 
-  // 修改参数
+  // Modify parameters
   if (toolName === 'write_file' && params.path?.includes('/etc/')) {
     return {
       params: { ...params, path: params.path.replace('/etc/', '/safe/') }
@@ -510,9 +510,9 @@ api.registerGatewayMethod('my-plugin.status', async (params) => {
 api.registerService({
   id: 'my-service',
   start(context) {
-    // 启动后台任务
+    // Start background task
     this.interval = setInterval(() => {
-      // 定时任务
+      // Scheduled task
     }, 60000);
   },
   stop(context) {
@@ -565,25 +565,25 @@ api.logger.error('Error message');
 ## 路径解析
 
 ```javascript
-// 解析工作区路径
+// Resolve workspace path
 const configPath = api.resolvePath('config.json');
 
-// 解析插件相对路径
+// Resolve plugin relative path
 const dataPath = api.resolvePath('./data.json');
 ```
 
 ## 事件系统
 
 ```javascript
-// 发送事件
+// Emit event
 api.emit('my-event', { key: 'value' });
 
-// 监听事件
+// Listen for event
 api.on('other-event', (data) => {
   console.log('Received:', data);
 });
 
-// 移除监听器
+// Remove listener
 api.off('my-event', handler);
 ```
 

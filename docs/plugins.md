@@ -1,52 +1,52 @@
-# xopcbot 插件系统
+# xopcbot Plugin System
 
-xopcbot 提供了一个轻量级但功能强大的插件系统，灵感来自 [OpenClaw](https://github.com/openclaw/openclaw)。
+xopcbot provides a lightweight but powerful plugin system, inspired by [OpenClaw](https://github.com/openclaw/openclaw).
 
-## 特性
+## Features
 
-- 🏗️ **三级存储架构** - Workspace / Global / Bundled
-- 🔌 **Plugin SDK** - 官方 SDK，统一导入路径
-- ⚡ **TypeScript 原生** - 通过 jiti 即时加载，无需编译
-- 📦 **多源安装** - 支持 npm、本地目录、Git 仓库
+- 🏗️ **Three-tier Storage Architecture** - Workspace / Global / Bundled
+- 🔌 **Plugin SDK** - Official SDK, unified import paths
+- ⚡ **Native TypeScript** - Instant loading via jiti, no compilation needed
+- 📦 **Multi-source Installation** - Support npm, local directory, Git repository
 
-## 快速开始
+## Quick Start
 
-### 安装插件
+### Install Plugin
 
-**方式一：使用 CLI（推荐）**
+**Method One: Using CLI (recommended)**
 
 ```bash
-# 从 npm 安装到 workspace
+# Install from npm to workspace
 xopcbot plugin install xopcbot-plugin-hello
 
-# 安装到 global（跨项目共享）
+# Install to global (shared across projects)
 xopcbot plugin install xopcbot-plugin-hello --global
 
-# 从本地目录安装
+# Install from local directory
 xopcbot plugin install ./my-local-plugin
 
-# 查看已安装插件
+# View installed plugins
 xopcbot plugin list
 
-# 移除插件
+# Remove plugin
 xopcbot plugin remove hello
 ```
 
-**方式二：手动安装**
+**Method Two: Manual Installation**
 
 ```bash
-# Global 目录
+# Global directory
 cd ~/.xopcbot/plugins
 git clone https://github.com/your/plugin.git
 
-# 或 Workspace 目录
+# Or Workspace directory
 cd workspace/.plugins
 git clone https://github.com/your/plugin.git
 ```
 
-### 启用插件
+### Enable Plugin
 
-在 `~/.xopcbot/config.json` 中配置：
+Configure in `~/.xopcbot/config.json`:
 
 ```json
 {
@@ -58,15 +58,15 @@ git clone https://github.com/your/plugin.git
 }
 ```
 
-**配置格式说明：**
+**Configuration format explanation:**
 
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `enabled` | `string[]` | 要启用的插件 ID 列表 |
-| `disabled` | `string[]` | （可选）禁用的插件 ID 列表 |
-| `[plugin-id]` | `object \| boolean` | 插件特定配置 |
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | `string[]` | List of plugin IDs to enable |
+| `disabled` | `string[]` | (Optional) List of plugin IDs to disable |
+| `[plugin-id]` | `object \| boolean` | Plugin-specific configuration |
 
-**示例配置：**
+**Example configuration:**
 
 ```json
 {
@@ -86,53 +86,53 @@ git clone https://github.com/your/plugin.git
 }
 ```
 
-- `enabled` 数组中的插件会被加载
-- 插件 ID 作为 key 可以配置插件特定的选项
-- 如果插件不需要配置，可以设为 `true`
+- Plugins in `enabled` array will be loaded
+- Plugin ID as key can configure plugin-specific options
+- If plugin doesn't need configuration, can set to `true`
 
-### 创建新插件
+### Create New Plugin
 
 ```bash
-# 创建插件脚手架
+# Create plugin scaffold
 xopcbot plugin create my-plugin --name "My Plugin" --kind utility
 
-# 支持的 kind: channel|provider|memory|tool|utility
+# Supported kinds: channel|provider|memory|tool|utility
 ```
 
-这将创建：
-- `package.json` - npm 配置
-- `index.ts` - 插件入口（TypeScript，使用 xopcbot/plugin-sdk）
-- `xopcbot.plugin.json` - 插件清单
-- `README.md` - 文档模板
+This will create:
+- `package.json` - npm config
+- `index.ts` - Plugin entry (TypeScript, using xopcbot/plugin-sdk)
+- `xopcbot.plugin.json` - Plugin manifest
+- `README.md` - Documentation template
 
 ---
 
-## 三级存储架构
+## Three-tier Storage Architecture
 
-xopcbot 支持三级插件存储，按优先级从高到低：
+xopcbot supports three-tier plugin storage, from highest to lowest priority:
 
-| 级别 | 路径 | 用途 | 优先级 |
-|------|------|------|--------|
-| **Workspace** | `workspace/.plugins/` | 项目私有插件 | ⭐⭐⭐ 最高 |
-| **Global** | `~/.xopcbot/plugins/` | 用户级共享插件 | ⭐⭐ 中 |
-| **Bundled** | `xopcbot/plugins/` | 内置插件 | ⭐ 最低 |
+| Level | Path | Use Case | Priority |
+|-------|------|----------|----------|
+| **Workspace** | `workspace/.plugins/` | Project-private plugins | ⭐⭐⭐ Highest |
+| **Global** | `~/.xopcbot/plugins/` | User-level shared plugins | ⭐⭐ Medium |
+| **Bundled** | `xopcbot/plugins/` | Built-in plugins | ⭐ Lowest |
 
-### 优先级规则
+### Priority Rules
 
-- **Workspace** 插件可以覆盖 **Global** 和 **Bundled** 同名插件
-- **Global** 插件可以覆盖 **Bundled** 同名插件
-- 适合场景：
-  - Workspace：项目特定的定制插件
-  - Global：常用的共享插件（如 telegram-channel）
-  - Bundled：随 xopcbot 发布的官方插件
+- **Workspace** plugins can override **Global** and **Bundled** plugins with the same name
+- **Global** plugins can override **Bundled** plugins with the same name
+- Use cases:
+  - Workspace: Project-specific custom plugins
+  Global: Commonly used shared plugins (like telegram-channel)
+  - Bundled: Official plugins shipped with xopcbot
 
-### Global 插件目录
+### Global Plugin Directory
 
 ```bash
-# 默认位置
+# Default location
 ~/.xopcbot/plugins/
 
-# 自定义位置（环境变量）
+# Custom location (environment variable)
 export XOPCBOT_GLOBAL_PLUGINS=/path/to/global/plugins
 ```
 
@@ -140,67 +140,67 @@ export XOPCBOT_GLOBAL_PLUGINS=/path/to/global/plugins
 
 ## Plugin SDK
 
-xopcbot 提供官方 Plugin SDK，统一导出所有插件开发所需的类型和接口。
+xopcbot provides an official Plugin SDK, exporting all types and interfaces needed for plugin development.
 
-### 使用 SDK
+### Using the SDK
 
 ```typescript
-// 推荐方式：使用官方 SDK
+// Recommended: Use official SDK
 import type { PluginApi, PluginDefinition } from 'xopcbot/plugin-sdk';
 
-// 不推荐使用内部路径
+// Not recommended to use internal paths
 // import type { ... } from 'xopcbot/plugins';  ❌
 ```
 
-### 导出的类型
+### Exported Types
 
 ```typescript
-// 核心类型
+// Core types
 import type {
-  PluginDefinition,      // 插件定义
-  PluginApi,             // 插件 API
-  PluginLogger,          // 日志接口
+  PluginDefinition,      // Plugin definition
+  PluginApi,             // Plugin API
+  PluginLogger,          // Logger interface
 } from 'xopcbot/plugin-sdk';
 
-// 工具
+// Tools
 import type {
-  PluginTool,            // 工具定义
-  PluginToolContext,     // 工具上下文
+  PluginTool,            // Tool definition
+  PluginToolContext,     // Tool context
 } from 'xopcbot/plugin-sdk';
 
-// 钩子
+// Hooks
 import type {
-  PluginHookEvent,       // 钩子事件类型
-  PluginHookHandler,     // 钩子处理器
-  HookOptions,           // 钩子选项
+  PluginHookEvent,       // Hook event type
+  PluginHookHandler,     // Hook handler
+  HookOptions,           // Hook options
 } from 'xopcbot/plugin-sdk';
 
-// 通道
+// Channels
 import type {
-  ChannelPlugin,         // 通道插件
-  OutboundMessage,       // 出站消息
+  ChannelPlugin,         // Channel plugin
+  OutboundMessage,       // Outbound message
 } from 'xopcbot/plugin-sdk';
 
-// 命令
+// Commands
 import type {
-  PluginCommand,         // 命令定义
-  CommandContext,        // 命令上下文
-  CommandResult,         // 命令结果
+  PluginCommand,         // Command definition
+  CommandContext,        // Command context
+  CommandResult,         // Command result
 } from 'xopcbot/plugin-sdk';
 
-// 服务
+// Services
 import type {
-  PluginService,         // 服务定义
-  ServiceContext,        // 服务上下文
+  PluginService,         // Service definition
+  ServiceContext,        // Service context
 } from 'xopcbot/plugin-sdk';
 ```
 
-### SDK 路径解析
+### SDK Path Resolution
 
-在底层，xopcbot 使用 jiti 配置路径别名：
+Under the hood, xopcbot uses jiti to configure path aliases:
 
 ```typescript
-// jiti 配置
+// jiti configuration
 {
   alias: {
     'xopcbot/plugin-sdk': './src/plugin-sdk/index.ts'
@@ -208,51 +208,51 @@ import type {
 }
 ```
 
-这意味着插件开发时无需关心 xopcbot 源码位置，SDK 路径会自动解析。
+This means plugin developers don't need to worry about xopcbot source code location - SDK paths are automatically resolved.
 ```
 
-这将创建：
-- `package.json` - npm 配置
-- `index.ts` - 插件入口（TypeScript，支持 jiti 即时加载）
-- `xopcbot.plugin.json` - 插件清单
-- `README.md` - 文档模板
+This will create:
+- `package.json` - npm config
+- `index.ts` - Plugin entry (TypeScript, supports jiti instant loading)
+- `xopcbot.plugin.json` - Plugin manifest
+- `README.md` - Documentation template
 
-## CLI 命令参考
+## CLI Command Reference
 
 ### plugin install
 
-安装插件。
+Install a plugin.
 
 ```bash
-# 从 npm 安装
+# Install from npm
 xopcbot plugin install <package-name>
 
-# 安装特定版本
+# Install specific version
 xopcbot plugin install my-plugin@1.0.0
 
-# 从本地目录安装
+# Install from local directory
 xopcbot plugin install ./local-plugin-dir
 xopcbot plugin install /absolute/path/to/plugin
 
-# 设置超时时间（默认 120 秒）
+# Set timeout (default 120 seconds)
 xopcbot plugin install slow-plugin --timeout 300000
 ```
 
-**安装流程**：
-1. 下载/复制插件文件
-2. 验证 `xopcbot.plugin.json` 清单
-3. 安装依赖（如有 `package.json` 依赖）
-4. 复制到工作区 `.plugins/` 目录
+**Installation flow**:
+1. Download/copy plugin files
+2. Validate `xopcbot.plugin.json` manifest
+3. Install dependencies (if `package.json` has dependencies)
+4. Copy to workspace `.plugins/` directory
 
 ### plugin list
 
-列出所有已安装插件。
+List all installed plugins.
 
 ```bash
 xopcbot plugin list
 ```
 
-**输出示例**：
+**Example output**:
 ```
 📦 Installed Plugins
 
@@ -271,18 +271,18 @@ xopcbot plugin list
 
 ### plugin remove / uninstall
 
-移除已安装插件。
+Remove an installed plugin.
 
 ```bash
 xopcbot plugin remove <plugin-id>
 xopcbot plugin uninstall <plugin-id>
 ```
 
-**注意**：移除插件后，如果已启用，还需要从配置文件中删除。
+**Note**: After removing a plugin, if it was enabled, you also need to delete it from the configuration file.
 
 ### plugin info
 
-查看插件详情。
+View plugin details.
 
 ```bash
 xopcbot plugin info <plugin-id>
@@ -290,31 +290,31 @@ xopcbot plugin info <plugin-id>
 
 ### plugin create
 
-创建新插件脚手架。
+Create new plugin scaffold.
 
 ```bash
 xopcbot plugin create <plugin-id> [options]
 
 Options:
-  --name <name>           插件显示名称
-  --description <desc>    插件描述
-  --kind <kind>          插件类型: channel|provider|memory|tool|utility
+  --name <name>           Plugin display name
+  --description <desc>    Plugin description
+  --kind <kind>          Plugin type: channel|provider|memory|tool|utility
 ```
 
-**示例**：
+**Example**:
 ```bash
-# 创建一个工具类插件
+# Create a tool plugin
 xopcbot plugin create weather-tool --name "Weather Tool" --kind tool
 
-# 创建一个通道类插件
+# Create a channel plugin
 xopcbot plugin create discord-channel --name "Discord Channel" --kind channel
 ```
 
-## 插件结构
+## Plugin Structure
 
-### Manifest 文件
+### Manifest File
 
-每个插件必须包含一个 `xopcbot.plugin.json` 文件：
+Each plugin must include a `xopcbot.plugin.json` file:
 
 ```json
 {
@@ -335,7 +335,7 @@ xopcbot plugin create discord-channel --name "Discord Channel" --kind channel
 }
 ```
 
-### 插件入口文件
+### Plugin Entry File
 
 ```javascript
 // index.js
@@ -347,27 +347,27 @@ const plugin = {
   description: 'Description here',
   version: '1.0.0',
 
-  // 插件注册时调用
+  // Called when plugin is registered
   register(api: PluginApi) {
-    // 注册工具
+    // Register tool
     api.registerTool({...});
     
-    // 注册命令
+    // Register command
     api.registerCommand({...});
     
-    // 注册钩子
+    // Register hook
     api.registerHook('message_received', async (event, ctx) => {...});
     
-    // 注册 HTTP 路由
+    // Register HTTP route
     api.registerHttpRoute('/my-route', async (req, res) => {...});
   },
 
-  // 插件启用时调用
+  // Called when plugin is enabled
   activate(api: PluginApi) {
     console.log('Plugin activated');
   },
 
-  // 插件禁用时调用
+  // Called when plugin is disabled
   deactivate(api: PluginApi) {
     console.log('Plugin deactivated');
   },
@@ -376,11 +376,11 @@ const plugin = {
 export default plugin;
 ```
 
-## 核心概念
+## Core Concepts
 
-### 工具 (Tools)
+### Tools
 
-插件可以注册自定义工具供 Agent 使用：
+Plugins can register custom tools for the Agent to use:
 
 ```javascript
 api.registerTool({
@@ -395,51 +395,51 @@ api.registerTool({
   },
   async execute(params) {
     const input = params.input;
-    // 执行操作
+    // Perform operation
     return `Result: ${input}`;
   }
 });
 ```
 
-### 钩子 (Hooks)
+### Hooks
 
-钩子允许插件在各个生命周期点拦截和修改行为：
+Hooks allow plugins to intercept and modify behavior at various lifecycle points:
 
-| 钩子 | 时机 | 用途 |
-|------|------|------|
-| `before_agent_start` | Agent 启动前 | 修改系统提示 |
-| `agent_end` | Agent 完成后 | 后处理结果 |
-| `message_received` | 收到消息时 | 消息预处理 |
-| `message_sending` | 发送消息前 | 拦截/修改消息内容 |
-| `message_sent` | 消息发送后 | 发送日志 |
-| `before_tool_call` | 工具调用前 | 参数验证 |
-| `after_tool_call` | 工具调用后 | 结果处理 |
-| `session_start` | 会话开始 | 初始化 |
-| `session_end` | 会话结束 | 清理 |
-| `gateway_start` | 网关启动 | 配置 |
-| `gateway_stop` | 网关关闭 | 清理 |
+| Hook | Timing | Use Case |
+|------|--------|-----------|
+| `before_agent_start` | Before Agent starts | Modify system prompt |
+| `agent_end` | After Agent completes | Post-process results |
+| `message_received` | When message received | Message pre-processing |
+| `message_sending` | Before sending message | Intercept/modify message content |
+| `message_sent` | After message sent | Send logging |
+| `before_tool_call` | Before tool call | Parameter validation |
+| `after_tool_call` | After tool call | Result processing |
+| `session_start` | Session start | Initialization |
+| `session_end` | Session end | Cleanup |
+| `gateway_start` | Gateway starts | Configuration |
+| `gateway_stop` | Gateway stops | Cleanup |
 
 ```javascript
-// message_sending hook - 拦截或修改 AI 发送的消息
+// message_sending hook - intercept or modify AI sent messages
 api.registerHook('message_sending', async (event, ctx) => {
   const { to, content } = event;
 
-  // 1. 阻止消息发送（例如：内容审核）
-  if (content.includes('敏感信息')) {
+  // 1. Block message sending (e.g., content moderation)
+  if (content.includes('sensitive info')) {
     return {
       cancel: true,
       cancelReason: 'Content contains sensitive information'
     };
   }
 
-  // 2. 修改消息内容（例如：添加签名、替换内容）
+  // 2. Modify message content (e.g., add signature, replace content)
   if (content.includes('{{signature}}')) {
     return {
       content: content.replace('{{signature}}', '\n\n— Sent by AI Assistant')
     };
   }
 
-  // 3. 针对特定聊天阻止
+  // 3. Block for specific chat
   if (to === 'blocked-chat-id') {
     return {
       cancel: true,
@@ -448,11 +448,11 @@ api.registerHook('message_sending', async (event, ctx) => {
   }
 });
 
-// before_tool_call hook - 阻止或修改工具调用
+// before_tool_call hook - block or modify tool calls
 api.registerHook('before_tool_call', async (event, ctx) => {
   const { toolName, params } = event;
 
-  // 阻止危险操作
+  // Block dangerous operations
   if (toolName === 'delete_file' || toolName === 'execute_command') {
     return {
       block: true,
@@ -460,7 +460,7 @@ api.registerHook('before_tool_call', async (event, ctx) => {
     };
   }
 
-  // 修改参数
+  // Modify parameters
   if (toolName === 'write_file' && params.path?.includes('/etc/')) {
     return {
       params: { ...params, path: params.path.replace('/etc/', '/safe/') }
@@ -469,9 +469,9 @@ api.registerHook('before_tool_call', async (event, ctx) => {
 });
 ```
 
-### 命令 (Commands)
+### Commands
 
-注册自定义命令：
+Register custom commands:
 
 ```javascript
 api.registerCommand({
@@ -488,7 +488,7 @@ api.registerCommand({
 });
 ```
 
-### HTTP 路由
+### HTTP Routes
 
 ```javascript
 api.registerHttpRoute('/my-plugin/status', async (req, res) => {
@@ -496,7 +496,7 @@ api.registerHttpRoute('/my-plugin/status', async (req, res) => {
 });
 ```
 
-### 网关方法
+### Gateway Methods
 
 ```javascript
 api.registerGatewayMethod('my-plugin.status', async (params) => {
@@ -504,15 +504,15 @@ api.registerGatewayMethod('my-plugin.status', async (params) => {
 });
 ```
 
-### 后台服务
+### Background Services
 
 ```javascript
 api.registerService({
   id: 'my-service',
   start(context) {
-    // 启动后台任务
+    // Start background task
     this.interval = setInterval(() => {
-      // 定时任务
+      // Scheduled task
     }, 60000);
   },
   stop(context) {
@@ -523,9 +523,9 @@ api.registerService({
 });
 ```
 
-## 配置管理
+## Configuration Management
 
-### 定义配置模式
+### Define Configuration Schema
 
 ```json
 {
@@ -546,14 +546,14 @@ api.registerService({
 }
 ```
 
-### 访问配置
+### Access Configuration
 
 ```javascript
 const apiKey = api.pluginConfig.apiKey;
 const maxResults = api.pluginConfig.maxResults || 10;
 ```
 
-## 日志记录
+## Logging
 
 ```javascript
 api.logger.debug('Detailed debug information');
@@ -562,32 +562,32 @@ api.logger.warn('Warning message');
 api.logger.error('Error message');
 ```
 
-## 路径解析
+## Path Resolution
 
 ```javascript
-// 解析工作区路径
+// Resolve workspace path
 const configPath = api.resolvePath('config.json');
 
-// 解析插件相对路径
+// Resolve plugin relative path
 const dataPath = api.resolvePath('./data.json');
 ```
 
-## 事件系统
+## Event System
 
 ```javascript
-// 发送事件
+// Emit event
 api.emit('my-event', { key: 'value' });
 
-// 监听事件
+// Listen for event
 api.on('other-event', (data) => {
   console.log('Received:', data);
 });
 
-// 移除监听器
+// Remove listener
 api.off('my-event', handler);
 ```
 
-## 完整示例
+## Complete Example
 
 ```javascript
 import type { PluginApi } from 'xopcbot-plugin-sdk';
@@ -646,31 +646,31 @@ const plugin = {
 export default plugin;
 ```
 
-## 发布插件
+## Publishing Plugins
 
-1. 创建 `xopcbot.plugin.json` manifest
-2. 创建 `index.js` 入口文件
-3. 推送到 GitHub 或发布到 npm
+1. Create `xopcbot.plugin.json` manifest
+2. Create `index.js` entry file
+3. Push to GitHub or publish to npm
 
 ```bash
-# 发布到 npm（公开发布）
+# Publish to npm (public)
 npm publish --access public
 
-# 如果使用 scoped 包名（推荐）
+# If using scoped package name (recommended)
 # package.json: { "name": "@yourname/xopcbot-plugin-name" }
 npm publish --access public
 ```
 
-## 最佳实践
+## Best Practices
 
-1. **错误处理**：所有异步操作都应使用 try/catch
-2. **日志记录**：使用 API 的日志系统而非 console
-3. **资源清理**：在 `deactivate` 中释放资源
-4. **配置验证**：使用 JSON Schema 验证配置
-5. **版本管理**：遵循语义化版本
+1. **Error handling**: All async operations should use try/catch
+2. **Logging**: Use the API's logging system instead of console
+3. **Resource cleanup**: Release resources in `deactivate`
+4. **Configuration validation**: Use JSON Schema to validate configuration
+5. **Version management**: Follow semantic versioning
 
-## 相关链接
+## Related Links
 
-- [插件示例](examples/)
-- [API 参考](./api.md)
-- [钩子参考](./hooks.md)
+- [Plugin Examples](examples/)
+- [API Reference](./api.md)
+- [Hooks Reference](./hooks.md)
