@@ -15,8 +15,8 @@ export interface ParsedFrontmatter<T = Record<string, unknown>> {
 export function parseFrontmatter<T = Record<string, unknown>>(
   content: string
 ): ParsedFrontmatter<T> {
-  // Match --- frontmatter ---
-  const frontmatterMatch = content.match(/^---\n([\s\S]*?)\n---\n([\s\S]*)$/);
+  // Match --- frontmatter --- (supports both Unix \n and Windows \r\n line endings)
+  const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
   
   if (!frontmatterMatch) {
     return {

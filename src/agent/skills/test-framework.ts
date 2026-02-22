@@ -6,7 +6,7 @@
  */
 
 import { existsSync, readFileSync, readdirSync } from 'fs';
-import { join, relative } from 'path';
+import { basename, join, relative } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import { parseFrontmatter } from '../../utils/frontmatter.js';
 import { scanSkillDirectory } from './scanner.js';
@@ -576,7 +576,7 @@ export class SkillTestFramework {
     const passed = summary.failed === 0 && (this.options.strict ? summary.warnings === 0 : true);
 
     return {
-      skillName: join(skillDir).split('/').pop() || skillDir,
+      skillName: basename(skillDir),
       skillPath: skillDir,
       timestamp: Date.now(),
       results,
@@ -587,7 +587,7 @@ export class SkillTestFramework {
 
   private createFailureReport(skillDir: string, message: string): SkillTestReport {
     return {
-      skillName: join(skillDir).split('/').pop() || skillDir,
+      skillName: basename(skillDir),
       skillPath: skillDir,
       timestamp: Date.now(),
       results: [{

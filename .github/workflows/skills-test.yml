@@ -20,7 +20,7 @@ jobs:
     
     strategy:
       matrix:
-        os: [ubuntu-latest, macos-latest]
+        os: [ubuntu-latest, macos-latest, windows-latest]
         node-version: [22.x]
     
     steps:
@@ -33,20 +33,29 @@ jobs:
           node-version: ${{ matrix.node-version }}
       
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 10
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      
+      - name: Install UI dependencies
+        run: cd ui && pnpm install --frozen-lockfile
       
       - name: Build
         run: pnpm run build
       
       - name: Run skill tests
+        shell: bash
         run: |
           echo "Testing skills on ${{ matrix.os }}"
-          ./scripts/test-skills.sh --verbose
+          if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
+            # Windows doesn't support bash script, run CLI directly
+            pnpm run dev -- skills test --format json --skip-examples
+          else
+            ./scripts/test-skills.sh --verbose
+          fi
       
       - name: Run unit tests for test framework
         run: pnpm vitest run src/agent/skills/__tests__/test-framework.test.ts
@@ -60,36 +69,6 @@ jobs:
             test-results/*.json
             *.tap
           retention-days: 7
-
-  test-skills-windows:
-    name: Test Skills (Windows)
-    runs-on: windows-latest
-    
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-      
-      - name: Setup Node.js
-        uses: actions/setup-node@v4
-        with:
-          node-version: 22.x
-      
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v2
-        with:
-          version: 8
-      
-      - name: Install dependencies
-        run: pnpm install --frozen-lockfile
-      
-      - name: Build
-        run: pnpm run build
-      
-      - name: Run skill tests
-        run: |
-          # Windows doesn't support bash script, run CLI directly
-          pnpm run dev -- skills test --format json --skip-examples
-        shell: bash
 
   security-audit:
     name: Security Audit
@@ -105,12 +84,15 @@ jobs:
           node-version: 22.x
       
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 10
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      
+      - name: Install UI dependencies
+        run: cd ui && pnpm install --frozen-lockfile
       
       - name: Build
         run: pnpm run build
@@ -137,12 +119,15 @@ jobs:
           node-version: 22.x
       
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 10
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      
+      - name: Install UI dependencies
+        run: cd ui && pnpm install --frozen-lockfile
       
       - name: Build
         run: pnpm run build
@@ -171,12 +156,15 @@ jobs:
           node-version: 22.x
       
       - name: Setup pnpm
-        uses: pnpm/action-setup@v2
+        uses: pnpm/action-setup@v4
         with:
-          version: 8
+          version: 10
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
+      
+      - name: Install UI dependencies
+        run: cd ui && pnpm install --frozen-lockfile
       
       - name: Build
         run: pnpm run build
@@ -189,7 +177,7 @@ jobs:
   report:
     name: Test Report
     runs-on: ubuntu-latest
-    needs: [test-skills, test-skills-windows, security-audit, validate-skill-format, check-dependencies]
+    needs: [test-skills, security-audit, validate-skill-format, check-dependencies]
     if: always()
     
     steps:
@@ -200,17 +188,14 @@ jobs:
           echo "═══════════════════════════════════════════════════════════"
           echo ""
           echo "Test Jobs Status:"
-          echo "  - Linux/Mac Tests: ${{ needs.test-skills.result }}"
-          echo "  - Windows Tests: ${{ needs.test-skills-windows.result }}"
+          echo "  - Cross-Platform Tests: ${{ needs.test-skills.result }}"
           echo "  - Security Audit: ${{ needs.security-audit.result }}"
           echo "  - Format Validation: ${{ needs.validate-skill-format.result }}"
           echo "  - Dependency Check: ${{ needs.check-dependencies.result }}"
           echo ""
           
           # Overall status
-          if [[ "${{ needs.test-skills.result }}" == "success" && \
-                "${{ needs.test-skills-windows.result }}" == "success" || \
-                "${{ needs.test-skills-windows.result }}" == "skipped" ]]; then
+          if [[ "${{ needs.test-skills.result }}" == "success" ]]; then
             echo "✅ All skill tests passed!"
           else
             echo "❌ Some skill tests failed"
