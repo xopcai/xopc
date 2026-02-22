@@ -15,7 +15,7 @@ import {
   formatTestResultsTap,
 } from '../../agent/skills/index.js';
 import { getBundledSkillsDir } from '../../config/paths.js';
-import { register, type CLIContext } from '../registry.js';
+import type { CLIContext } from '../registry.js';
 
 const log = createLogger('cli:skills-test');
 
@@ -221,26 +221,5 @@ function outputReports(reports: any[], format: string, verbose: boolean) {
       console.log(formatTestResults(reports, verbose));
   }
 }
-
-// Register the command
-register({
-  id: 'skills:test',
-  name: 'test',
-  description: 'Test and validate skills',
-  factory: createSkillsTestCommand,
-  metadata: {
-    category: 'maintenance',
-    examples: [
-      'xopcbot skills test                        # Test all skills',
-      'xopcbot skills test weather                # Test specific skill',
-      'xopcbot skills test --format json          # Output as JSON',
-      'xopcbot skills test --verbose              # Show detailed output',
-      'xopcbot skills test --skip-security        # Skip security tests',
-      'xopcbot skills validate ./skills/weather   # Validate SKILL.md file',
-      'xopcbot skills check-deps                  # Check all dependencies',
-      'xopcbot skills security --deep             # Security audit with details',
-    ],
-  },
-});
 
 export { createSkillsTestCommand };

@@ -5,7 +5,7 @@
  * Validates SKILL.md format, dependencies, security, and examples.
  */
 
-import { existsSync, readFileSync } from 'fs';
+import { existsSync, readFileSync, readdirSync } from 'fs';
 import { join, relative } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import { parseFrontmatter } from '../../utils/frontmatter.js';
@@ -649,8 +649,6 @@ export class SkillTestRunner {
   }
 
   private findSkillDirectories(skillsDir: string): string[] {
-    const { readdirSync } = require('fs');
-    const { join } = require('path');
     const dirs: string[] = [];
 
     try {

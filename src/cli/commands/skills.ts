@@ -1,7 +1,7 @@
 /**
  * Skills CLI Command
  * 
- * Manage skills: list, install, enable/disable, configure
+ * Manage skills: list, install, enable/disable, configure, test
  */
 
 import { Command } from 'commander';
@@ -19,6 +19,7 @@ import {
 } from '../../agent/skills/index.js';
 import { DEFAULT_BASE_DIR, getBundledSkillsDir } from '../../config/paths.js';
 import { register, type CLIContext } from '../registry.js';
+import { createSkillsTestCommand } from './skills-test.js';
 
 function loadWorkspaceSkillEntries(workspaceDir: string): Array<{ skill: Skill; metadata: Skill['metadata']; enabled: boolean }> {
   const loader = createSkillLoader();
@@ -405,6 +406,10 @@ function createSkillsCommand(ctx: CLIContext): Command {
       console.log(`✓ Updated configuration for skill "${skillName}"`);
     });
 
+  // Add test subcommand
+  const testCommand = createSkillsTestCommand(ctx);
+  command.addCommand(testCommand);
+
   return command;
 }
 
@@ -412,7 +417,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
 register({
   id: 'skills',
   name: 'skills',
-  description: 'Manage skills (install, enable, configure)',
+  description: 'Manage skills (install, enable, configure, test)',
   factory: createSkillsCommand,
   metadata: {
     category: 'utility',
@@ -428,6 +433,11 @@ register({
       'xopcbot skills audit weather --deep        # Detailed security audit',
       'xopcbot skills config weather --show       # Show skill configuration',
       'xopcbot skills config weather --api-key=KEY  # Set API key',
+      'xopcbot skills test                        # Test all skills',
+      'xopcbot skills test weather                # Test specific skill',
+      'xopcbot skills test validate ./skills/weather/SKILL.md  # Validate SKILL.md file',
+      'xopcbot skills test check-deps             # Check dependencies',
+      'xopcbot skills test security --deep        # Security audit',
     ],
   },
 });
