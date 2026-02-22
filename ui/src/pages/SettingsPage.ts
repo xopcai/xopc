@@ -11,7 +11,8 @@ import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
 
 export interface SettingsPageConfig {
-  url: string;
+  /** @deprecated No longer needed - always uses current origin */
+  url?: string;
   token?: string;
 }
 
@@ -48,6 +49,9 @@ export class SettingsPage extends LitElement {
   @state() private _activeSection = 'agent';
   @state() private _loading = false;
   @state() private _saving = false;
+  @state() private _refreshingToken = false;
+  @state() private _serverToken: string | null = null;
+  @state() private _showToken = false;
   @state() private _dirtyFields: Set<string> = new Set();
   @state() private _errors: Map<string, string> = new Map();
   @state() private _saveSuccess = false;
@@ -69,6 +73,7 @@ export class SettingsPage extends LitElement {
     whatsappBridgeUrl: 'ws://localhost:3001',
     whatsappAllowFrom: '',
     // Gateway
+    gatewayToken: '',
     heartbeatEnabled: true,
     heartbeatIntervalMs: 60000,
     // Providers
@@ -105,9 +110,10 @@ export class SettingsPage extends LitElement {
   }
 
   private _tryInitialize(): void {
-    if (!this.config?.url) {
+    if (this._initialized) {
       return;
     }
+    this._initialized = true;
     
     // Always try to load settings when config changes
     this._loadSettings();
@@ -298,6 +304,13 @@ export class SettingsPage extends LitElement {
         icon: 'globe',
         fields: [
           {
+            key: 'gatewayToken',
+            label: t('settings.fields.gatewayToken'),
+            type: 'password',
+            description: t('settings.descriptionsFields.gatewayToken'),
+            placeholder: t('settings.placeholders.gatewayToken'),
+          },
+          {
             key: 'heartbeatEnabled',
             label: t('settings.fields.heartbeatEnabled'),
             type: 'boolean',
@@ -316,14 +329,20 @@ export class SettingsPage extends LitElement {
   }
 
   private async _loadSettings(): Promise<void> {
-    if (!this.config?.url) return;
-
     this._loading = true;
-    const { url, token } = this.config;
+    const url = window.location.origin;
+    const token = this.config?.token;
 
     try {
       // Load models first to ensure options are available
       await this._loadModels();
+
+      // Load gateway token from localStorage (not from server config)
+      const savedSettings = this._loadUiSettings();
+      this._values.gatewayToken = savedSettings.token || '';
+
+      // Load server token info
+      await this._loadServerToken();
 
       const response = await fetch(`${url}/api/config`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
@@ -379,11 +398,94 @@ export class SettingsPage extends LitElement {
     }
   }
 
-  private async _loadModels(): Promise<void> {
-    if (!this.config?.url) return;
+  /**
+   * Load UI settings from localStorage.
+   */
+  private _loadUiSettings(): { token: string } {
+    try {
+      const token = localStorage.getItem('xopcbot.token');
+      return { token: token || '' };
+    } catch {
+      return { token: '' };
+    }
+  }
+
+  /**
+   * Save UI settings to localStorage.
+   */
+  private _saveUiSettings(token: string): void {
+    try {
+      localStorage.setItem('xopcbot.token', token);
+    } catch (err) {
+      console.error('Failed to save UI settings:', err);
+    }
+  }
+
+  /**
+   * Load server token info from API.
+   */
+  private async _loadServerToken(): Promise<void> {
+    try {
+      const url = window.location.origin;
+      const token = this.config?.token;
+      const response = await fetch(`${url}/api/auth/token`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.ok && data.payload?.token) {
+          this._serverToken = data.payload.token;
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load server token:', err);
+    }
+  }
+
+  /**
+   * Refresh server token.
+   */
+  private async _refreshServerToken(): Promise<void> {
+    this._refreshingToken = true;
 
     try {
-      const { url, token } = this.config;
+      const url = window.location.origin;
+      const token = this.config?.token;
+      const response = await fetch(`${url}/api/auth/token/refresh`, {
+        method: 'POST',
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        if (data.ok && data.payload?.token) {
+          this._serverToken = data.payload.token;
+          // Also update local token to match
+          this._values.gatewayToken = data.payload.token;
+          this._saveUiSettings(data.payload.token);
+          this.requestUpdate();
+
+          // Show success message
+          alert('Token refreshed successfully! Please copy the new token and update any other clients.');
+        }
+      } else {
+        const error = await response.json();
+        throw new Error(error.error || 'Failed to refresh token');
+      }
+    } catch (err) {
+      console.error('Failed to refresh token:', err);
+      alert(err instanceof Error ? err.message : 'Failed to refresh token');
+    } finally {
+      this._refreshingToken = false;
+      this.requestUpdate();
+    }
+  }
+
+  private async _loadModels(): Promise<void> {
+    try {
+      const url = window.location.origin;
+      const token = this.config?.token;
       const response = await fetch(`${url}/api/models`, {
         headers: token ? { 'Authorization': `Bearer ${token}` } : {},
       });
@@ -400,11 +502,12 @@ export class SettingsPage extends LitElement {
   }
 
   private async _saveSettings(): Promise<void> {
-    if (!this.config?.url || this._errors.size > 0) return;
+    if (this._errors.size > 0) return;
 
     this._saving = true;
     this._saveSuccess = false;
-    const { url, token } = this.config;
+    const url = window.location.origin;
+    const token = this.config?.token;
 
     // Build updates
     const updates: any = {};
@@ -539,6 +642,12 @@ export class SettingsPage extends LitElement {
       }
 
       this._dirtyFields.clear();
+      
+      // Save gateway token to localStorage (not to server config)
+      if (this._dirtyFields.has('gatewayToken')) {
+        this._saveUiSettings(this._values.gatewayToken || '');
+      }
+      
       this._saveSuccess = true;
       setTimeout(() => { this._saveSuccess = false; }, 3000);
     } catch (err) {
@@ -620,9 +729,70 @@ export class SettingsPage extends LitElement {
           <p class="section-desc">${t(descKey)}</p>
         </div>
 
+        ${section.id === 'gateway' ? this._renderGatewaySection() : ''}
+
         <div class="fields-grid">
           ${section.fields.map(field => this._renderField(field))}
         </div>
+      </div>
+    `;
+  }
+
+  private _renderGatewaySection(): unknown {
+    const tokenPreview = this._serverToken 
+      ? `${this._serverToken.slice(0, 8)}...${this._serverToken.slice(-8)}`
+      : 'Not available';
+    
+    return html`
+      <div class="gateway-token-section" style="margin-bottom: 24px; padding: 16px; background: var(--muted); border-radius: 8px;">
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
+          <h4 style="margin: 0; font-size: 14px; font-weight: 600;">Server Authentication Token</h4>
+          <button
+            class="btn btn-sm btn-secondary"
+            ?disabled=${this._refreshingToken}
+            @click=${this._refreshServerToken}
+            style="display: flex; align-items: center; gap: 6px;"
+          >
+            ${this._refreshingToken ? html`
+              <span class="spinner-sm"></span>
+              Refreshing...
+            ` : html`
+              ${getIcon('refreshCw')}
+              Refresh Token
+            `}
+          </button>
+        </div>
+        
+        <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
+          <code style="flex: 1; padding: 8px 12px; background: var(--background); border-radius: 4px; font-family: monospace; font-size: 13px; word-break: break-all;">
+            ${this._showToken ? this._serverToken || 'Not available' : tokenPreview}
+          </code>
+          <button
+            class="btn btn-icon"
+            @click=${() => this._showToken = !this._showToken}
+            title=${this._showToken ? 'Hide token' : 'Show token'}
+          >
+            ${this._showToken ? getIcon('eyeOff') : getIcon('eye')}
+          </button>
+          <button
+            class="btn btn-icon"
+            ?disabled=${!this._serverToken}
+            @click=${() => {
+              if (this._serverToken) {
+                navigator.clipboard.writeText(this._serverToken);
+                alert('Token copied to clipboard!');
+              }
+            }}
+            title="Copy token"
+          >
+            ${getIcon('copy')}
+          </button>
+        </div>
+        
+        <p style="margin: 0; font-size: 12px; color: var(--muted-foreground);">
+          This is the current server token. Click "Refresh Token" to generate a new one. 
+          After refreshing, copy the new token and update your client configuration.
+        </p>
       </div>
     `;
   }

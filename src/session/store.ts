@@ -74,12 +74,21 @@ export class SessionStore {
 
       // If cache is valid and file hasn't changed, use cache
       if (this.indexCache && mtime <= this.indexCacheTime) {
+        // Ensure sessions array exists
+        if (!this.indexCache.sessions) {
+          this.indexCache.sessions = [];
+        }
         return this.indexCache;
       }
 
       // File has changed or cache is empty, reload
       const data = await readFile(this.indexFile, 'utf-8');
-      this.indexCache = JSON.parse(data) as SessionIndex;
+      const parsed = JSON.parse(data) as SessionIndex;
+      // Ensure sessions array exists
+      if (!parsed.sessions) {
+        parsed.sessions = [];
+      }
+      this.indexCache = parsed;
       this.indexCacheTime = mtime;
       return this.indexCache;
     } catch {
@@ -194,7 +203,7 @@ export class SessionStore {
 
   async list(query: SessionListQuery = {}): Promise<PaginatedResult<SessionMetadata>> {
     const index = await this.loadIndex();
-    let sessions = [...index.sessions];
+    let sessions = [...(index.sessions || [])];
 
     // Apply filters
     if (query.status) {

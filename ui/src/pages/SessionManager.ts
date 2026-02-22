@@ -12,7 +12,8 @@ import type { SessionListEventDetail } from '../components/SessionList';
 import type { SessionDetailEventDetail } from '../components/SessionDetailDrawer';
 
 export interface SessionManagerConfig {
-  url: string;
+  /** @deprecated No longer needed - always uses current origin */
+  url?: string;
   token?: string;
 }
 
@@ -62,11 +63,11 @@ export class SessionManager extends LitElement {
   }
 
   private _tryInitialize(): void {
-    if (this._initialized || !this.config?.url) {
+    if (this._initialized) {
       return;
     }
-    const httpUrl = this.config.url.replace(/\/+$/, '');
-    this._api = new SessionAPIClient(httpUrl, this.config.token);
+    const httpUrl = window.location.origin;
+    this._api = new SessionAPIClient(httpUrl, this.config?.token);
     this._initialized = true;
     this._loadSessions();
     this._loadStats();

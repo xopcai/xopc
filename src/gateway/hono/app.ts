@@ -49,7 +49,7 @@ function serveStaticFile(relativePath: string): Response | null {
 
 export interface HonoAppConfig {
   service: GatewayService;
-  token?: string;
+  token?: string; 
 }
 
 export function createHonoApp(config: HonoAppConfig): Hono {
@@ -327,6 +327,39 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
     
     return c.json({ ok: true, payload: { config } });
+  });
+
+  // ========== Auth API (/api/auth) ==========
+
+  // GET /api/auth/token - Get current gateway token
+  authenticated.get('/auth/token', (c) => {
+    const authToken = service.getAuthToken();
+    return c.json({ 
+      ok: true, 
+      payload: { 
+        token: authToken,
+        mode: service.getAuthMode(),
+      } 
+    });
+  });
+
+  // POST /api/auth/token/refresh - Generate new gateway token
+  authenticated.post('/auth/token/refresh', async (c) => {
+    try {
+      const newToken = await service.refreshAuthToken();
+      return c.json({ 
+        ok: true, 
+        payload: { 
+          token: newToken,
+          message: 'Token refreshed successfully. Please update your client configuration.'
+        } 
+      });
+    } catch (err) {
+      return c.json({ 
+        ok: false, 
+        error: err instanceof Error ? err.message : 'Failed to refresh token' 
+      }, 500);
+    }
   });
 
   // GET /api/models - Get available models (only configured providers)

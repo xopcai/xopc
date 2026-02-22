@@ -6,6 +6,9 @@ import './pages/CronManager';
 // Pages
 import './pages/LogManager';
 import './pages/SettingsPage';
+// Components
+import './components/TokenDialog';
+import type { TokenDialog } from './components/TokenDialog';
 import {
   getTabGroups,
   type Tab,
@@ -16,6 +19,7 @@ import {
 } from './navigation';
 import { getIcon } from './utils/icons';
 import { t, setLanguage, getCurrentLanguage, initI18n } from './utils/i18n';
+import { getToken, setToken, getTheme, setTheme, getLanguage, setLanguage as setStoredLanguage } from './utils/storage';
 import type { XopcbotGatewayChat } from './gateway-chat';
 
 export type { Tab } from './navigation';
@@ -29,9 +33,12 @@ export interface AppSettings {
 
 @customElement('xopcbot-app')
 export class XopcbotApp extends LitElement {
-  @property({ attribute: false }) gatewayConfig?: {
+  @state() private _gatewayConfig: {
     url: string;
     token?: string;
+  } = {
+    url: window.location.origin,
+    token: getToken() || undefined,
   };
 
   @state() private _activeTab: Tab = 'chat';
@@ -40,8 +47,43 @@ export class XopcbotApp extends LitElement {
   @state() private _theme: 'light' | 'dark' | 'system' = 'system';
   @state() private _language: 'en' | 'zh' = 'en';
   @state() private _chatRoute: ChatRoute = { type: 'recent' };
+  @state() private _showTokenDialog = false;
 
   @query('xopcbot-gateway-chat') private _chatElement!: XopcbotGatewayChat;
+
+  // Legacy property support
+  get gatewayConfig() { return this._gatewayConfig; }
+  set gatewayConfig(value) { this._gatewayConfig = value || { url: window.location.origin }; }
+
+  constructor() {
+    super();
+  }
+
+  private _initializeToken(): void {
+    // Check URL for token parameter
+    const urlParams = new URLSearchParams(window.location.search);
+    const urlToken = urlParams.get('token');
+
+    // If token in URL, save it to localStorage and remove from URL
+    if (urlToken) {
+      setToken(urlToken);
+      // Remove token from URL without reloading
+      const newUrl = window.location.pathname + window.location.hash;
+      window.history.replaceState({}, '', newUrl);
+    }
+
+    // Read token from localStorage
+    const token = getToken();
+
+    // Update gatewayConfig with storage token
+    this._gatewayConfig = {
+      url: window.location.origin,
+      token: token || undefined,
+    };
+
+    // Check if we need to show token dialog
+    this._showTokenDialog = !token;
+  }
 
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -49,6 +91,10 @@ export class XopcbotApp extends LitElement {
 
   override connectedCallback(): void {
     super.connectedCallback();
+
+    // Initialize token in connectedCallback to ensure localStorage is available
+    this._initializeToken();
+
     this._loadTheme();
     this._loadLanguage();
     this._loadRouteFromHash();
@@ -134,19 +180,13 @@ export class XopcbotApp extends LitElement {
   }
 
   private _loadTheme(): void {
-    const saved = localStorage.getItem('xopcbot-theme') as 'light' | 'dark' | 'system' | null;
-    if (saved) {
-      this._theme = saved;
-    }
+    this._theme = getTheme();
     this._applyTheme();
   }
 
   private _loadLanguage(): void {
-    const saved = localStorage.getItem('xopcbot-language') as 'en' | 'zh' | null;
-    if (saved) {
-      this._language = saved;
-      setLanguage(saved);
-    }
+    this._language = getLanguage();
+    setLanguage(this._language);
   }
 
   private _applyTheme(): void {
@@ -177,14 +217,14 @@ export class XopcbotApp extends LitElement {
 
   private _setTheme(theme: 'light' | 'dark' | 'system'): void {
     this._theme = theme;
-    localStorage.setItem('xopcbot-theme', theme);
+    setTheme(theme);
     this._applyTheme();
   }
 
   private _setLanguage(lang: 'en' | 'zh'): void {
     this._language = lang;
     setLanguage(lang);
-    localStorage.setItem('xopcbot-language', lang);
+    setStoredLanguage(lang);
     this.requestUpdate();
   }
 
@@ -268,7 +308,35 @@ export class XopcbotApp extends LitElement {
     this._navMobileOpen = false;
   }
 
+  private _handleTokenSave(token: string): void {
+    // Save to localStorage
+    setToken(token);
+    
+    // Update gateway config - always use current origin
+    this._gatewayConfig = {
+      url: window.location.origin,
+      token,
+    };
+    
+    // Hide dialog
+    this._showTokenDialog = false;
+    
+    // Force re-render (not needed for @state but kept for clarity)
+    this.requestUpdate();
+  }
+
   override render(): unknown {
+    // Show token dialog if no token
+    if (this._showTokenDialog) {
+      return html`
+        <token-dialog
+          .config=${{
+            serverUrl: window.location.origin,
+            onSave: (token: string) => this._handleTokenSave(token),
+          }}
+        ></token-dialog>
+      `;
+    }
     return html`
       <div class="shell ${this._activeTab === 'chat' ? 'shell--chat' : ''} ${this._navCollapsed ? 'shell--nav-collapsed' : ''}">
         <!-- Topbar -->
@@ -354,9 +422,10 @@ export class XopcbotApp extends LitElement {
   }
 
   private _renderChat(): unknown {
+    const token = getToken();
     return html`
       <xopcbot-gateway-chat
-        .config=${this.gatewayConfig}
+        .config=${{ url: window.location.origin, token: token || undefined }}
         .route=${this._chatRoute}
         .enableAttachments=${true}
         .enableModelSelector=${true}
@@ -367,45 +436,41 @@ export class XopcbotApp extends LitElement {
   }
 
   private _renderSessions(): unknown {
-    const url = this.gatewayConfig?.url || '';
-    const token = this.gatewayConfig?.token;
-    
+    const token = getToken() || this._gatewayConfig?.token;
+
     return html`
       <session-manager
-        .config=${{ url, token }}
+        .config=${{ token }}
       ></session-manager>
     `;
   }
 
   private _renderCron(): unknown {
-    const url = this.gatewayConfig?.url || '';
-    const token = this.gatewayConfig?.token;
-    
+    const token = getToken() || this._gatewayConfig?.token;
+
     return html`
       <cron-manager
-        .config=${{ url, token }}
+        .config=${{ token }}
       ></cron-manager>
     `;
   }
 
   private _renderLogs(): unknown {
-    const url = this.gatewayConfig?.url || '';
-    const token = this.gatewayConfig?.token;
-    
+    const token = getToken() || this._gatewayConfig?.token;
+
     return html`
       <log-manager
-        .config=${{ url, token }}
+        .config=${{ token }}
       ></log-manager>
     `;
   }
 
   private _renderSettings(): unknown {
-    const url = this.gatewayConfig?.url || '';
-    const token = this.gatewayConfig?.token;
-    
+    const token = getToken() || this._gatewayConfig?.token;
+
     return html`
       <settings-page
-        .config=${{ url, token }}
+        .config=${{ token }}
       ></settings-page>
     `;
   }

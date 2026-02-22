@@ -90,7 +90,8 @@
       "whatsappBridgeUrl": "Bridge URL",
       "whatsappAllowFrom": "Allow From (Optional)",
       "heartbeatEnabled": "Heartbeat",
-      "heartbeatIntervalMs": "Heartbeat Interval (ms)"
+      "heartbeatIntervalMs": "Heartbeat Interval (ms)",
+      "gatewayToken": "Gateway Token"
     },
     "descriptionsFields": {
       "model": "Default AI model to use",
@@ -116,7 +117,8 @@
       "whatsappBridgeUrl": "WhatsApp bridge WebSocket URL",
       "whatsappAllowFrom": "Allowed phone numbers, comma separated",
       "heartbeatEnabled": "Enable heartbeat monitoring",
-      "heartbeatIntervalMs": "Heartbeat check interval in milliseconds"
+      "heartbeatIntervalMs": "Heartbeat check interval in milliseconds",
+      "gatewayToken": "Authentication token for gateway API access"
     },
     "placeholders": {
       "workspace": "~/.xopcbot/workspace",
@@ -132,7 +134,8 @@
       "telegramApiRoot": "https://api.telegram.org",
       "telegramAllowFrom": "123456789, 987654321",
       "whatsappBridgeUrl": "ws://localhost:3001",
-      "whatsappAllowFrom": "+1234567890, +0987654321"
+      "whatsappAllowFrom": "+1234567890, +0987654321",
+      "gatewayToken": "Enter your gateway authentication token"
     },
     "connection": {
       "title": "Connection",

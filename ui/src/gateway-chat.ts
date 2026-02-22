@@ -26,8 +26,8 @@ export type ErrorPayload = {
 };
 
 export type GatewayClientConfig = {
-  /** Base HTTP URL, e.g. "http://localhost:3000" */
-  url: string;
+  /** @deprecated No longer needed - always uses current origin */
+  url?: string;
   token?: string;
   autoReconnect?: boolean;
   maxReconnectAttempts?: number;
@@ -45,10 +45,14 @@ type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'reconnecti
 
 // ---------- Helpers ----------
 
-/** Build an HTTP URL from the config (strip trailing slashes, ensure /api prefix). */
-function apiUrl(base: string, path: string): string {
-  const clean = base.replace(/\/+$/, '');
-  return `${clean}${path}`;
+/** Get the base URL - always uses current origin. */
+function getBaseUrl(): string {
+  return window.location.origin;
+}
+
+/** Build an HTTP URL from the path. */
+function apiUrl(path: string): string {
+  return `${getBaseUrl()}${path}`;
 }
 
 function authHeaders(token?: string): Record<string, string> {
@@ -174,7 +178,7 @@ export class XopcbotGatewayChat extends LitElement {
     if (!this.config) return;
 
     try {
-      const url = apiUrl(this.config.url, `/api/sessions/${encodeURIComponent(sessionKey)}?offset=${offset}&limit=50`);
+      const url = apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=${offset}&limit=50`);
       const headers = authHeaders(this.config.token);
       const res = await fetch(url, { headers });
       
@@ -284,7 +288,7 @@ export class XopcbotGatewayChat extends LitElement {
     this.requestUpdate();
 
     try {
-      const eventsUrl = apiUrl(this.config.url, '/api/events');
+      const eventsUrl = apiUrl('/api/events');
       const url = new URL(eventsUrl);
       if (this.config.token) url.searchParams.set('token', this.config.token);
 
@@ -395,7 +399,7 @@ export class XopcbotGatewayChat extends LitElement {
     }
 
     try {
-      const url = apiUrl(this.config.url, '/api/sessions?limit=20');
+      const url = apiUrl('/api/sessions?limit=20');
       const headers = authHeaders(this.config.token);
       const res = await fetch(url, { headers });
 
@@ -463,7 +467,7 @@ export class XopcbotGatewayChat extends LitElement {
     }
 
     try {
-      const url = apiUrl(this.config.url, '/api/sessions');
+      const url = apiUrl('/api/sessions');
       const headers = {
         ...authHeaders(this.config.token),
         'Content-Type': 'application/json',
@@ -530,7 +534,7 @@ export class XopcbotGatewayChat extends LitElement {
 
     try {
       this._agentAbort = new AbortController();
-      const url = apiUrl(this.config.url, '/api/agent');
+      const url = apiUrl('/api/agent');
       const headers = {
         ...authHeaders(this.config.token),
         Accept: 'text/event-stream',
@@ -737,7 +741,7 @@ export class XopcbotGatewayChat extends LitElement {
   public async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     if (!this.config) throw new Error('Not configured');
 
-    const url = apiUrl(this.config.url, path);
+    const url = apiUrl(path);
     const res = await fetch(url, {
       method,
       headers: authHeaders(this.config.token),

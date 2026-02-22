@@ -261,6 +261,21 @@ export const ToolsConfigSchema = z.object({
   },
 });
 
+// ============================================
+// Gateway Authentication Configuration
+// ============================================
+
+export const GatewayAuthSchema = z.object({
+  mode: z.enum(['none', 'token']).default('token'),
+  token: z.string().optional(),
+}).default({
+  mode: 'token',
+});
+
+// ============================================
+// Gateway Configuration
+// ============================================
+
 export const HeartbeatConfigSchema = z.object({
   enabled: z.boolean(),
   intervalMs: z.number(),
@@ -272,12 +287,16 @@ export const HeartbeatConfigSchema = z.object({
 export const GatewayConfigSchema = z.object({
   host: z.string().optional(),
   port: z.number().optional(),
+  auth: GatewayAuthSchema.optional(),
   heartbeat: HeartbeatConfigSchema.optional(),
   maxSseConnections: z.number().optional(),
   corsOrigins: z.array(z.string()).optional(),
 }).default({
   host: '0.0.0.0',
   port: 18790,
+  auth: {
+    mode: 'token',
+  },
   heartbeat: {
     enabled: true,
     intervalMs: 60000,
@@ -439,6 +458,7 @@ export const ConfigSchema = z.object({
 
 export type Config = z.infer<typeof ConfigSchema>;
 export type AgentDefaults = z.infer<typeof AgentDefaultsSchema>;
+export type GatewayAuthConfig = z.infer<typeof GatewayAuthSchema>;
 export type OpenAIProviderConfig = z.infer<typeof OpenAIProviderSchema>;
 export type AnthropicProviderConfig = z.infer<typeof AnthropicProviderSchema>;
 export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;

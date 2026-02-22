@@ -13,6 +13,7 @@ import { ConfigHotReloader } from '../config/reload.js';
 import { SessionManager } from '../session/index.js';
 import type { Config } from '../config/schema.js';
 import type { SessionListQuery, ExportFormat } from '../types/index.js';
+import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 
 const log = createLogger('GatewayService');
 
@@ -48,6 +49,9 @@ export class GatewayService {
   private startTime = Date.now();
   private workspacePath: string;
 
+  // Authentication
+  private auth: ResolvedGatewayAuth;
+
   // SSE event system
   private eventCounter = 0;
   private subscribers = new Map<string, EventListener>();
@@ -57,6 +61,22 @@ export class GatewayService {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || DEFAULT_PATHS.config;
     this.config = loadConfig(this.configPath);
+
+    // Initialize authentication
+    this.auth = resolveGatewayAuth({
+      authConfig: this.config.gateway?.auth,
+    });
+
+    // Validate auth configuration
+    assertGatewayAuthConfigured(this.auth);
+
+    // Log token info (not the token itself)
+    if (this.auth.mode === 'token') {
+      const tokenPreview = this.auth.token ? `${this.auth.token.slice(0, 8)}...` : 'none';
+      log.info({ mode: this.auth.mode, tokenPreview }, 'Gateway authentication configured');
+    } else {
+      log.warn({ mode: this.auth.mode }, 'Gateway authentication disabled (no auth required)');
+    }
 
     // Initialize channel manager
     this.channelManager = new ChannelManager(this.config, this.bus);
@@ -753,5 +773,65 @@ export class GatewayService {
     }
 
     return chatIds;
+  }
+
+  /**
+   * Validate authentication token from request headers.
+   * Returns true if auth is disabled (mode: 'none') or token is valid.
+   */
+  validateAuth(headers?: Record<string, string | string[] | undefined>): boolean {
+    const token = extractToken(headers);
+    return validateToken(this.auth, token);
+  }
+
+  /**
+   * Get current auth mode.
+   */
+  getAuthMode(): 'none' | 'token' {
+    return this.auth.mode;
+  }
+
+  /**
+   * Get current auth token (for CLI server integration).
+   * Returns undefined if mode is 'none'.
+   */
+  getAuthToken(): string | undefined {
+    return this.auth.mode === 'token' ? this.auth.token : undefined;
+  }
+
+  /**
+   * Refresh (regenerate) the gateway auth token.
+   * Returns the new token.
+   */
+  async refreshAuthToken(): Promise<string> {
+    if (this.auth.mode !== 'token') {
+      throw new Error('Cannot refresh token: auth mode is not token');
+    }
+
+    // Generate new token
+    const newToken = crypto.randomBytes(24).toString('hex');
+    
+    // Update in-memory auth
+    this.auth.token = newToken;
+    
+    // Update config
+    this.config = {
+      ...this.config,
+      gateway: {
+        ...this.config.gateway,
+        auth: {
+          ...this.config.gateway?.auth,
+          mode: 'token',
+          token: newToken,
+        },
+      },
+    };
+    
+    // Save to disk
+    await saveConfig(this.config, this.configPath);
+    
+    log.info({ tokenPreview: `${newToken.slice(0, 8)}...` }, 'Gateway token refreshed');
+    
+    return newToken;
   }
 }

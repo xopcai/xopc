@@ -34,9 +34,11 @@ export class GatewayServer {
     await this.service.start();
 
     // Create Hono app
+    // Priority: CLI token > service auto-generated token
+    const effectiveToken = this.config.token || this.serviceInstance.getAuthToken();
     const app = createHonoApp({
       service: this.service,
-      token: this.config.token,
+      token: effectiveToken,
     });
 
     // Create Node.js HTTP server (no WebSocket upgrade needed)

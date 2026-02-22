@@ -8,7 +8,8 @@ import { CronAPIClient, type CronJob, type CronJobExecution, type CronMetrics, t
 import '../components/ConfirmDialog';
 
 export interface CronManagerConfig {
-  url: string;
+  /** @deprecated No longer needed - always uses current origin */
+  url?: string;
   token?: string;
 }
 
@@ -71,11 +72,11 @@ export class CronManager extends LitElement {
   }
 
   private _tryInitialize(): void {
-    if (this._initialized || !this.config?.url) {
+    if (this._initialized) {
       return;
     }
-    const httpUrl = this.config.url.replace(/\/+$/, '');
-    this._api = new CronAPIClient(httpUrl, this.config.token);
+    const httpUrl = window.location.origin;
+    this._api = new CronAPIClient(httpUrl, this.config?.token);
     this._initialized = true;
     this._loadJobs();
     this._loadMetrics();

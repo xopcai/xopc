@@ -90,7 +90,8 @@
       "whatsappBridgeUrl": "桥接地址",
       "whatsappAllowFrom": "允许来源（可选）",
       "heartbeatEnabled": "心跳",
-      "heartbeatIntervalMs": "心跳间隔（毫秒）"
+      "heartbeatIntervalMs": "心跳间隔（毫秒）",
+      "gatewayToken": "网关令牌"
     },
     "descriptionsFields": {
       "model": "默认使用的 AI 模型",
@@ -116,7 +117,8 @@
       "whatsappBridgeUrl": "WhatsApp 桥接 WebSocket 地址",
       "whatsappAllowFrom": "允许的电话号码，逗号分隔",
       "heartbeatEnabled": "启用心跳监控",
-      "heartbeatIntervalMs": "心跳检查间隔（毫秒）"
+      "heartbeatIntervalMs": "心跳检查间隔（毫秒）",
+      "gatewayToken": "网关 API 访问认证令牌"
     },
     "placeholders": {
       "workspace": "~/.xopcbot/workspace",
@@ -132,7 +134,8 @@
       "telegramApiRoot": "https://api.telegram.org",
       "telegramAllowFrom": "123456789, 987654321",
       "whatsappBridgeUrl": "ws://localhost:3001",
-      "whatsappAllowFrom": "+1234567890, +0987654321"
+      "whatsappAllowFrom": "+1234567890, +0987654321",
+      "gatewayToken": "输入网关认证令牌"
     },
     "connection": {
       "title": "连接",
