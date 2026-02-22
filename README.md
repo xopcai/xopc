@@ -1,7 +1,5 @@
 # 🐈 xopcbot: Ultra-Lightweight Personal AI Assistant
 
-[中文](./README.zh-CN.md) | English
-
 <div align="center">
   <p>
     <strong>An ultra-lightweight, plugin-driven personal AI assistant built with Node.js and TypeScript.</strong>
@@ -17,67 +15,76 @@
       <img src="https://img.shields.io/badge/Node-%3E%3D22.0.0-brightgreen" alt="Node">
     </a>
     <a href="#">
-      <img src="https://img.shields.io/badge/TypeScript-5.x-blue" alt="TypeScript">
-    </a>
-    <a href="#">
       <img src="https://img.shields.io/badge/License-MIT-green" alt="License">
     </a>
   </p>
 </div>
 
-**xopcbot** provides the core functionality of a personal AI agent in a minimal footprint (~6,000 lines of TypeScript). It's designed to be simple, extensible, and easy to understand.
+## ✨ What can xopcbot do?
 
-## ✨ Features
+xopcbot is your personal AI assistant that runs locally. It can help you with:
 
-- **🤖 Unified LLM API** - Supports 20+ providers (OpenAI, Anthropic, Google, Groq, DeepSeek, MiniMax, Qwen, Kimi, etc.)
-- **🔌 Extensible Plugins** - Add custom tools, hooks, and commands with hot-reloading
-- **📱 Multi-Channel Support** - Telegram, WhatsApp, Feishu/Lark, or Web UI
-- **🧠 Persistent Memory** - Conversation history with automatic context compaction
-- **📂 Session Management** - Browse, search, archive, and manage conversations via CLI or Web UI
-- **🔧 Rich Built-in Tools** - Filesystem, shell, web search, grep, find, edit, and more
-- **⏰ Scheduled Tasks** - Cron-based automation
-- **🖥️ Powerful CLI** - Manage agent, config, and plugins from command line
-- **🌐 Modern Web UI** - Chat, sessions, cron, subagents, logs, and settings
+| Use Case | Example |
+|----------|---------|
+| **Coding assistant** | Debug code, explain snippets, write functions |
+| **Task automation** | Schedule recurring tasks with cron |
+| **File operations** | Search, read, edit files in your workspace |
+| **Web research** | Search the web and summarize results |
+| **Multi-channel chat** | Talk via Telegram, WhatsApp, Feishu, or Web UI |
+
+```bash
+# Chat interactively in your terminal
+xopcbot agent -i
+
+# Or send a single message
+xopcbot agent -m "Explain what this code does: function foo() { return 42; }"
+
+# Let xopcbot help with a git task
+xopcbot agent -m "Show me the recent commits and create a PR summary"
+```
 
 ---
 
 ## 🚀 Quick Start
 
-### Option 1: Install from npm
+### 1️⃣ Install
 
 ```bash
-# Install globally
+# From npm (recommended)
 npm install -g @xopcai/xopcbot
 
-# Interactive setup wizard
-xopcbot onboard
-
-# Start chatting!
-xopcbot agent -i
+# Or from source
+git clone https://github.com/xopcai/xopcbot.git
+cd xopcbot && pnpm install && pnpm build
 ```
 
-### Option 2: Build from source
+### 2️⃣ Setup (interactive wizard)
 
 ```bash
-# Clone and install
-git clone https://github.com/xopcai/xopcbot.git
-cd xopcbot
-pnpm install
-
-# Interactive setup wizard
-pnpm run dev -- onboard
-
-# Start chatting!
-pnpm run dev -- agent -i
+xopcbot onboard
+# or: pnpm run dev -- onboard
 ```
 
-> **Tip:** Run `xopcbot onboard` (or `pnpm run dev -- onboard`) to set up your LLM provider API key interactively. Use `xopcbot onboard --quick` for quick model setup only.
+The wizard will guide you through:
+- Choosing your preferred AI model (20+ providers supported)
+- Configuring API keys
+- Setting up chat channels (Telegram, WhatsApp, etc.)
+
+> **Tip:** Use `xopcbot onboard --quick` for quick model setup only.
+
+### 3️⃣ Start chatting!
+
+```bash
+# Interactive chat mode
+xopcbot agent -i
+
+# Or use specific channels
+xopcbot agent -m "Hello!" --channel telegram --chat-id 123456
+```
 
 ---
 
 ## 📖 Documentation
-
-Full documentation is available at **[xopcai.github.io/xopcbot](https://xopcai.github.io/xopcbot/)**
 
 | Guide | Description |
 |-------|-------------|
@@ -85,33 +92,31 @@ Full documentation is available at **[xopcai.github.io/xopcbot](https://xopcai.g
 | [Configuration](https://xopcai.github.io/xopcbot/configuration) | Full config reference |
 | [CLI Reference](https://xopcai.github.io/xopcbot/cli) | All available commands |
 | [Channels](https://xopcai.github.io/xopcbot/channels) | Telegram, WhatsApp, Feishu setup |
-| [Plugins](https://xopcai.github.io/xopcbot/plugins) | Build your own plugins |
 | [Tools](https://xopcai.github.io/xopcbot/tools) | Built-in tools reference |
-| [Architecture](https://xopcai.github.io/xopcbot/architecture) | Under the hood |
 
 ---
 
-## 💬 Supported Channels
+## 🔌 Supported Channels
 
-| Channel | Status | Description |
-|---------|--------|-------------|
-| Telegram | ✅ | Bot API with polling/webhook |
-| WhatsApp | ✅ | Baileys WebSocket |
-| Feishu/Lark | ✅ | WebSocket events |
-| Web UI | ✅ | Modern browser interface |
+| Channel | Status | Install |
+|---------|--------|---------|
+| Telegram | ✅ | [Setup Guide](https://xopcai.github.io/xopcbot/channels#telegram) |
+| WhatsApp | ✅ | [Setup Guide](https://xopcai.github.io/xopcbot/channels#whatsapp) |
+| Feishu/Lark | ✅ | [Setup Guide](https://xopcai.github.io/xopcbot/channels#feishu) |
+| Web UI | ✅ | Built-in, run `xopcbot gateway` |
 
 ---
 
 ## 🛠️ Development
 
 ```bash
-# Development
+# Development (with hot reload)
 pnpm run dev
 
-# Build
+# Build for production
 pnpm run build
 
-# Test
+# Run tests
 pnpm test
 
 # Lint
