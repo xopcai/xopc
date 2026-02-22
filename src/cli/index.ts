@@ -4,8 +4,8 @@ import { registry, createDefaultContext, type CLIContext } from './registry.js';
 import pkg from '../../package.json' with { type: 'json' };
 
 // Import order determines display order in help
+import './commands/setup.js';
 import './commands/onboard.js';
-import './commands/configure.js';
 import './commands/agent.js';
 import './commands/gateway.js';
 import './commands/session.js';

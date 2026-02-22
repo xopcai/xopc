@@ -63,23 +63,23 @@ describe('xopcbot integration tests', () => {
     const { registry } = await import('../cli/registry.js');
 
     // Import commands to trigger registration
+    await import('../cli/commands/setup.js');
     await import('../cli/commands/onboard.js');
     await import('../cli/commands/agent.js');
     await import('../cli/commands/gateway.js');
     await import('../cli/commands/cron.js');
     await import('../cli/commands/config.js');
     await import('../cli/commands/models.js');
-    await import('../cli/commands/configure.js');
     await import('../cli/commands/session.js');
 
     // Verify commands are registered
+    expect(registry.findByName('setup')).toBeDefined();
     expect(registry.findByName('onboard')).toBeDefined();
     expect(registry.findByName('agent')).toBeDefined();
     expect(registry.findByName('gateway')).toBeDefined();
     expect(registry.findByName('cron')).toBeDefined();
     expect(registry.findByName('config')).toBeDefined();
     expect(registry.findByName('models')).toBeDefined();
-    expect(registry.findByName('configure')).toBeDefined();
     expect(registry.findByName('session')).toBeDefined();
   });
 });

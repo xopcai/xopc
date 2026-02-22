@@ -34,8 +34,44 @@ function isInteractive(): boolean {
   return process.stdin.isTTY && process.stdout.isTTY;
 }
 
+/**
+ * Check if workspace is properly set up
+ */
+function isWorkspaceSetup(workspacePath: string): boolean {
+  return existsSync(workspacePath) && existsSync(join(workspacePath, 'AGENTS.md'));
+}
+
+/**
+ * Setup workspace directory and bootstrap files
+ */
+function setupWorkspace(workspacePath: string): void {
+  if (!existsSync(workspacePath)) {
+    mkdirSync(workspacePath, { recursive: true });
+    console.log('✅ Created workspace:', workspacePath);
+  } else {
+    console.log('ℹ️  Workspace already exists:', workspacePath);
+  }
+
+  // Load templates from docs/reference/templates/
+  const templates = loadAllTemplates();
+
+  const memoryDir = join(workspacePath, 'memory');
+  if (!existsSync(memoryDir)) {
+    mkdirSync(memoryDir, { recursive: true });
+    console.log('✅ Created memory/ directory');
+  }
+
+  for (const [filename, content] of Object.entries(templates)) {
+    const filePath = join(workspacePath, filename);
+    if (!existsSync(filePath)) {
+      writeFileSync(filePath, content, 'utf-8');
+      console.log('✅ Created', filename);
+    }
+  }
+}
+
 async function setupNonInteractive(_configPath: string, existingConfig: any): Promise<any> {
-  console.log('\n🤖 Step 2: AI Model (Non-Interactive Mode)\n');
+  console.log('\n🤖 AI Model Configuration (Non-Interactive Mode)\n');
   console.log('Current config:', JSON.stringify(existingConfig?.agents?.defaults?.model, null, 2));
   console.log('\n💡 To configure in interactive mode, run: xopcbot onboard');
   console.log('💡 Or set up manually in:', _configPath);
@@ -47,9 +83,14 @@ function createOnboardCommand(ctx: CLIContext): Command {
     .description('Interactive setup wizard for xopcbot')
     .addHelpText('after', formatExamples([
       'xopcbot onboard              # Full interactive setup',
-      'xopcbot onboard --quick       # Quick model setup only',
+      'xopcbot onboard --model      # Configure LLM model only',
+      'xopcbot onboard --channels   # Configure channels only',
+      'xopcbot onboard --gateway   # Configure gateway only',
     ]))
-    .option('--quick', 'Quick setup (model only)')
+    .option('--model', 'Configure LLM provider and model')
+    .option('--channels', 'Configure messaging channels')
+    .option('--gateway', 'Configure gateway WebUI')
+    .option('--all', 'Configure everything (default)')
     .action(async (options) => {
       try {
         await runOnboard(options, ctx);
@@ -66,7 +107,7 @@ function createOnboardCommand(ctx: CLIContext): Command {
   return cmd;
 }
 
-async function runOnboard(options: { quick?: boolean }, ctx: CLIContext): Promise<void> {
+async function runOnboard(options: { model?: boolean; channels?: boolean; gateway?: boolean; all?: boolean }, ctx: CLIContext): Promise<void> {
   console.log('🧙 xopcbot Setup Wizard\n');
   console.log('═'.repeat(50));
 
@@ -76,21 +117,44 @@ async function runOnboard(options: { quick?: boolean }, ctx: CLIContext): Promis
   // Use raw config loading to avoid schema defaults being added
   let config = loadRawConfig(configPath) || {};
 
-  if (!options.quick) {
-    await setupWorkspace(workspacePath, isInteractive());
+  // Determine what to configure based on options
+  const doModel = options.model || options.all || (!options.channels && !options.gateway);
+  const doChannels = options.channels || options.all;
+  const doGateway = options.gateway || options.all;
+  const runFullWizard = !options.model && !options.channels && !options.gateway;
+
+  // Auto-detect if setup is needed (for full wizard only)
+  const needsSetup = !isWorkspaceSetup(workspacePath);
+
+  if (runFullWizard && needsSetup) {
+    console.log('\n📁 Step 1: Workspace Setup\n');
+    setupWorkspace(workspacePath);
   }
 
   if (!isInteractive()) {
-    config = await setupNonInteractive(configPath, config);
-    if (!options.quick) {
-      config = await setupChannels(config, configPath);
-      config = await setupGateway(config);
+    // Non-interactive mode
+    if (doModel) {
+      config = await setupNonInteractive(configPath, config);
+    }
+    if (doChannels) {
+      console.log('\n💬 Channels Configuration (Non-Interactive Mode)\n');
+      console.log('💡 To configure channels, edit the config file manually.');
+    }
+    if (doGateway) {
+      console.log('\n🌐 Gateway Configuration (Non-Interactive Mode)\n');
+      console.log('💡 To configure gateway, edit the config file manually.');
     }
   } else {
-    config = await setupModel(config, ctx);
+    // Interactive mode
+    if (doModel) {
+      config = await setupModel(config, ctx);
+    }
 
-    if (!options.quick) {
-      config = await setupChannels(config, configPath);
+    if (doChannels) {
+      config = await setupChannels(config);
+    }
+
+    if (doGateway) {
       config = await setupGateway(config);
     }
   }
@@ -101,7 +165,7 @@ async function runOnboard(options: { quick?: boolean }, ctx: CLIContext): Promis
   console.log('\n' + '═'.repeat(50));
   console.log('\n🎉 Setup Complete!\n');
 
-  if (!options.quick) {
+  if (runFullWizard) {
     console.log('🚀 Next Steps:');
     console.log('  1. Read BOOTSTRAP.md in your workspace for first-run guidance');
     console.log('  2. Chat with your assistant: xopcbot agent -i');
@@ -117,14 +181,14 @@ async function runOnboard(options: { quick?: boolean }, ctx: CLIContext): Promis
   console.log('\n📁 Files:');
   console.log('  Config:', configPath);
   console.log('  Workspace:', workspacePath);
-  if (!options.quick) {
+  if (runFullWizard) {
     console.log('  Bootstrap:', join(workspacePath, 'BOOTSTRAP.md'));
   }
 
   // Handle gateway startup if configured
   const gatewayConfigured = config?.gateway?.auth?.mode === 'token' && config?.gateway?.auth?.token;
   
-  if (gatewayConfigured) {
+  if (gatewayConfigured && (doGateway || runFullWizard)) {
     const host = config?.gateway?.host || '0.0.0.0';
     const port = config?.gateway?.port || 18790;
     const displayHost = host === '0.0.0.0' ? 'localhost' : host;
@@ -578,21 +642,8 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
   return false;
 }
 
-async function setupWorkspace(workspacePath: string, interactive: boolean): Promise<void> {
-  console.log('\n📁 Step 1: Workspace\n');
-
-  if (!existsSync(workspacePath)) {
-    mkdirSync(workspacePath, { recursive: true });
-    console.log('✅ Created workspace:', workspacePath);
-  } else {
-    console.log('ℹ️  Workspace already exists:', workspacePath);
-  }
-
-  createBootstrapFiles(workspacePath, interactive);
-}
-
 async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
-  console.log('\n🤖 Step 2: AI Model\n');
+  console.log('\n🤖 Step: AI Model\n');
 
   const config = existingConfig || {};
   const currentModelConfig = config?.agents?.defaults?.model;
@@ -771,18 +822,12 @@ async function getModelsForProvider(provider: string): Promise<{ value: string; 
   }));
 }
 
-async function setupChannels(config: any, _configPath: string): Promise<any> {
-  if (!isInteractive()) {
-    console.log('\n💬 Step 3: Channels (Optional)\n');
-    console.log('💡 To configure channels, edit the config file manually.');
-    return config;
-  }
-
-  console.log('\n💬 Step 3: Channels (Optional)\n');
+async function setupChannels(config: any): Promise<any> {
+  console.log('\n💬 Step: Channels (Optional)\n');
 
   const enableTelegram = await confirm({
     message: 'Enable Telegram?',
-    default: false,
+    default: config?.channels?.telegram?.enabled || false,
   });
 
   if (enableTelegram) {
@@ -811,17 +856,32 @@ async function setupChannels(config: any, _configPath: string): Promise<any> {
     console.log('✅ Telegram already configured');
   }
 
+  const enableWhatsApp = await confirm({
+    message: 'Enable WhatsApp?',
+    default: config?.channels?.whatsapp?.enabled || false,
+  });
+
+  if (enableWhatsApp) {
+    const bridgeUrl = await input({
+      message: 'WhatsApp Bridge URL:',
+      default: 'ws://localhost:3001',
+    });
+
+    config.channels = config.channels || {};
+    config.channels.whatsapp = {
+      ...config.channels.whatsapp,
+      enabled: true,
+      bridgeUrl,
+      allowFrom: config.channels.whatsapp?.allowFrom ?? [],
+    };
+    console.log('✅ WhatsApp enabled');
+  }
+
   return config;
 }
 
 async function setupGateway(config: any): Promise<any> {
-  if (!isInteractive()) {
-    console.log('\n🌐 Step 4: Gateway (Optional)\n');
-    console.log('💡 To configure gateway, edit the config file manually.');
-    return config;
-  }
-
-  console.log('\n🌐 Step 4: Gateway WebUI (Optional)\n');
+  console.log('\n🌐 Step: Gateway WebUI (Optional)\n');
 
   const enableGateway = await confirm({
     message: 'Enable Gateway WebUI?',
@@ -874,27 +934,6 @@ async function setupGateway(config: any): Promise<any> {
   return config;
 }
 
-function createBootstrapFiles(workspace: string, interactive: boolean): void {
-  // Load templates from docs/reference/templates/
-  const templates = loadAllTemplates();
-
-  const memoryDir = join(workspace, 'memory');
-  if (!existsSync(memoryDir)) {
-    mkdirSync(memoryDir, { recursive: true });
-    console.log('✅ Created memory/ directory');
-  }
-
-  for (const [filename, content] of Object.entries(templates)) {
-    const filePath = join(workspace, filename);
-    if (!existsSync(filePath)) {
-      writeFileSync(filePath, content, 'utf-8');
-      console.log('✅ Created', filename);
-    } else if (interactive) {
-      console.log('ℹ️ ', filename, 'already exists (skipped)');
-    }
-  }
-}
-
 register({
   id: 'onboard',
   name: 'onboard',
@@ -902,6 +941,8 @@ register({
   factory: createOnboardCommand,
   metadata: { category: 'setup', examples: [
     'xopcbot onboard',
-    'xopcbot onboard --quick',
+    'xopcbot onboard --model',
+    'xopcbot onboard --channels',
+    'xopcbot onboard --gateway',
   ]},
 });
