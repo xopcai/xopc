@@ -19,7 +19,6 @@ import { getApiKey as getConfigApiKey, getApiBase } from '../config/schema.js';
 import type { Config } from '../config/schema.js';
 import { listProfilesForProvider } from '../auth/profiles/profiles.js';
 import { resolveApiKeyForProfile } from '../auth/profiles/oauth.js';
-import { getLocalModelsDevModels } from './models-dev.js';
 import { createProviderConfig } from './config.js';
 
 // Import from provider-catalog
@@ -185,18 +184,14 @@ export class ModelRegistry {
 	private ollamaModels: Model<Api>[] = [];
 	private useAuthProfiles: boolean = true;
 
-	private modelsDevEnabled: boolean = true;
-	private modelsDevLoaded: boolean = false;
-
 	constructor(
 		config?: Config | null,
-		options?: { ollamaEnabled?: boolean; ollamaDiscovery?: boolean; useAuthProfiles?: boolean; modelsDevEnabled?: boolean }
+		options?: { ollamaEnabled?: boolean; ollamaDiscovery?: boolean; useAuthProfiles?: boolean }
 	) {
 		this.config = config ?? null;
 		this.ollamaEnabled = options?.ollamaEnabled ?? true;
 		this.ollamaDiscovery = options?.ollamaDiscovery ?? true;
 		this.useAuthProfiles = options?.useAuthProfiles ?? true;
-		this.modelsDevEnabled = options?.modelsDevEnabled ?? true;
 		this.loadModels();
 	}
 
@@ -329,32 +324,7 @@ export class ModelRegistry {
 	}
 
 	private loadBuiltinProviderModels(): void {
-		// Now loaded from models-dev-data.ts via loadModelsDevModels()
-		// This method kept for backwards compatibility
-	}
-
-	/**
-	 * Load models from models.dev (local data first, then optionally from API)
-	 * This loads model data from the built-in local cache
-	 */
-	async loadModelsDevModels(): Promise<void> {
-		if (!this.modelsDevEnabled || this.modelsDevLoaded) return;
-
-		// Use local data by default (fast, no network required)
-		const localModels = getLocalModelsDevModels();
-
-		for (const [_provider, models] of localModels) {
-			for (const model of models) {
-				const exists = this.models.some(
-					m => m.provider === model.provider && m.id === model.id
-				);
-				if (!exists) {
-					this.models.push(model);
-				}
-			}
-		}
-
-		this.modelsDevLoaded = true;
+		// No longer needed - all models come from pi-ai
 	}
 
 	private applyProviderOverrides(): void {
@@ -430,7 +400,6 @@ export class ModelRegistry {
 	async refreshAsync(): Promise<void> {
 		this.models = [];
 		this._error = undefined;
-		this.modelsDevLoaded = false;
 		this.loadBuiltInModels();
 		this.loadBuiltinProviderModels();
 		if (this.config) {
@@ -438,10 +407,6 @@ export class ModelRegistry {
 		}
 		if (this.ollamaEnabled && this.ollamaDiscovery) {
 			await this.discoverLocalModels();
-		}
-		// Load models from models.dev (local data)
-		if (this.modelsDevEnabled) {
-			await this.loadModelsDevModels();
 		}
 	}
 
@@ -536,30 +501,28 @@ export class ModelRegistry {
 	refresh(): void {
 		this.models = [];
 		this._error = undefined;
-		this.modelsDevLoaded = false;
 		this.loadModels();
 	}
 
 	/**
-	 * Refresh models from models.dev (reload local data)
+	 * @deprecated No longer needed - all models come from pi-ai
 	 */
 	async refreshFromModelsDev(): Promise<void> {
-		this.modelsDevLoaded = false;
-		await this.loadModelsDevModels();
+		// No-op - kept for backwards compatibility
 	}
 
 	/**
-	 * Check if models.dev integration is enabled
+	 * @deprecated No longer needed - all models come from pi-ai
 	 */
 	isModelsDevEnabled(): boolean {
-		return this.modelsDevEnabled;
+		return false;
 	}
 
 	/**
-	 * Enable/disable models.dev integration
+	 * @deprecated No longer needed - all models come from pi-ai
 	 */
-	setModelsDevEnabled(enabled: boolean): void {
-		this.modelsDevEnabled = enabled;
+	setModelsDevEnabled(_enabled: boolean): void {
+		// No-op - kept for backwards compatibility
 	}
 
 	async isOllamaAvailable(): Promise<boolean> {

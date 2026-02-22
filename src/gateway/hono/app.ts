@@ -11,8 +11,8 @@ import type { Config } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../utils/log-store.js';
 import type { LogLevel } from '../../utils/logger.types.js';
-import { getLocalModelsDevModels } from '../../providers/models-dev.js';
 import { isProviderConfigured } from '../../agent/fallback/index.js';
+import { getModels as getPiAiModels, getProviders as getPiAiProviders } from '@mariozechner/pi-ai';
 
 const log = createLogger('HonoApp');
 
@@ -381,14 +381,17 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // GET /api/models - Get available models (only configured providers)
   authenticated.get('/api/models', (c) => {
     const config = service.currentConfig;
-    const localModels = getLocalModelsDevModels();
     const models: Array<{ id: string; name: string; provider: string }> = [];
 
+    // Get all providers from pi-ai
+    const piAiProviders = getPiAiProviders() as string[];
+
     // Add models from configured providers
-    for (const [provider, providerModels] of localModels) {
+    for (const provider of piAiProviders) {
       // Only include models from configured providers (have API key or enabled)
       if (!isProviderConfigured(config, provider)) continue;
 
+      const providerModels = getPiAiModels(provider as any);
       for (const model of providerModels) {
         models.push({
           id: `${provider}/${model.id}`,
@@ -402,12 +405,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     const providers = config.providers as Record<string, any>;
     if (providers) {
       for (const [providerName, providerConfig] of Object.entries(providers)) {
-        // Skip if already added from localModels
-        if (localModels.has(providerName)) continue;
-        
+        // Skip if already in pi-ai
+        if (piAiProviders.includes(providerName)) continue;
+
         // Only include configured providers (have API key)
         if (!isProviderConfigured(config, providerName)) continue;
-        
+
         // Add custom models defined in provider config
         if (providerConfig?.models && Array.isArray(providerConfig.models)) {
           for (const modelConfig of providerConfig.models) {

@@ -763,7 +763,6 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
 
 async function getModelsForProvider(provider: string): Promise<{ value: string; name: string }[]> {
   const registry = new ModelRegistry();
-  await registry.loadModelsDevModels();
   const models = registry.getAll().filter(m => m.provider === provider);
 
   return models.map(m => ({

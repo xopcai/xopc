@@ -71,10 +71,7 @@ function createConfigureCommand(ctx: CLIContext): Command {
           validate: (value: string) => value.length > 0 || 'API key is required',
         });
 
-        // Load additional models from models-dev-data.ts
-        await registry.loadModelsDevModels();
-
-        // Get available models for this provider
+        // Get available models for this provider (all from pi-ai)
         const models = registry.getAll().filter(m => m.provider === provider);
         const modelChoices = models.slice(0, 20).map(m => ({
           value: `${m.provider}/${m.id}`,

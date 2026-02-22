@@ -1,37 +1,35 @@
 /**
- * Models.dev Provider
+ * Models.dev Provider (DEPRECATED)
  *
- * Provides local model data cached from models.dev API.
- * models.dev is a comprehensive open-source database of AI model specifications.
+ * This module is deprecated. All models are now loaded from @mariozechner/pi-ai.
  * 
- * This module provides the cached model data without requiring network requests at runtime.
+ * The models-dev-data.ts file has been removed in favor of the centralized
+ * model definitions in the pi-ai package.
  */
 
 import type { Api, Model } from '@mariozechner/pi-ai';
-import { LOCAL_MODELS_DEV_DATA } from './models-dev-data.js';
 
 /**
+ * @deprecated Use pi-ai directly instead
  * Get all models from local cached data
  */
 export function getLocalModelsDevModels(): Map<string, Model<Api>[]> {
-	const models = new Map<string, Model<Api>[]>();
-
-	for (const [provider, providerModels] of Object.entries(LOCAL_MODELS_DEV_DATA)) {
-		models.set(provider, providerModels as Model<Api>[]);
-	}
-
-	return models;
+	// Return empty map - all models now come from pi-ai
+	return new Map();
 }
 
 /**
+ * @deprecated Use pi-ai directly instead
  * Get models for a specific provider from local data
  */
-export function getLocalModelsDevModelsForProvider(provider: string): Model<Api>[] {
-	return LOCAL_MODELS_DEV_DATA[provider] ?? [];
+export function getLocalModelsDevModelsForProvider(_provider: string): Model<Api>[] {
+	// Return empty array - all models now come from pi-ai
+	return [];
 }
 
 /**
  * Provider info from models.dev data
+ * @deprecated No longer needed
  */
 export interface ModelsDevProviderInfo {
 	id: string;
@@ -41,20 +39,10 @@ export interface ModelsDevProviderInfo {
 }
 
 /**
+ * @deprecated Use pi-ai directly instead
  * Get provider info list from local data
  */
 export function getModelsDevProviders(): ModelsDevProviderInfo[] {
-	const providers: ModelsDevProviderInfo[] = [];
-	const localModels = getLocalModelsDevModels();
-
-	for (const [providerId, models] of localModels) {
-		// Extract provider name from first model
-		const model = models[0];
-		providers.push({
-			id: providerId,
-			name: model?.provider ?? providerId,
-		});
-	}
-
-	return providers;
+	// Return empty array - all providers now come from pi-ai
+	return [];
 }
