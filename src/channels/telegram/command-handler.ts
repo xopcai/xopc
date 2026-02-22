@@ -294,6 +294,32 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     }
   };
 
+  const handleStart = async (ctx: Context): Promise<void> => {
+    try {
+      const providers = getAvailableProviders();
+      const hasProviders = providers.length > 0;
+
+      await ctx.reply(
+        '👋 *Welcome to xopcbot!*\n\n' +
+        'I am your AI assistant. Here are the available commands:\n\n' +
+        '🤖 *Model Selection*\n' +
+        '/models - Select a model to use\n\n' +
+        '📊 *Session Management*\n' +
+        '/usage - View token usage statistics\n' +
+        '/new - Start a new session (archive current)\n' +
+        '/cleanup - Clean up old sessions\n\n' +
+        '🛠️ *Skills*\n' +
+        '/skills - Manage skills (e.g., /skills reload)\n\n' +
+        '💡 *Tip*: Just send a message to start chatting!' +
+        (hasProviders ? '' : '\n\n⚠️ *Note*: No LLM providers configured. Please set up API keys in your config.'),
+        { parse_mode: 'Markdown' }
+      );
+    } catch (err) {
+      log.error({ err }, 'Failed to handle start command');
+      await ctx.reply('❌ Failed to show welcome message.');
+    }
+  };
+
   return {
     handleModels,
     handleProviderSelect,
@@ -305,6 +331,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     handleCancel,
     handleNew,
     handleSkills,
+    handleStart,
     getAvailableProviders,
   };
 }

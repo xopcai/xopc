@@ -484,6 +484,7 @@ export class TelegramChannelPlugin implements ChannelPlugin {
       // Register slash commands with Telegram Bot API
       try {
         await bot.api.setMyCommands([
+          { command: 'start', description: 'Show welcome message and help' },
           { command: 'models', description: 'Show available models' },
           { command: 'usage', description: 'Show token usage stats' },
           { command: 'cleanup', description: 'Clean up old sessions' },
@@ -515,6 +516,10 @@ export class TelegramChannelPlugin implements ChannelPlugin {
       bot.command('skills', async (ctx) => {
         const args = ctx.message?.text?.replace('/skills', '').trim();
         await commandHandler!.handleSkills(ctx, args || undefined);
+      });
+
+      bot.command('start', async (ctx) => {
+        await commandHandler!.handleStart(ctx);
       });
 
       // Register message handler
