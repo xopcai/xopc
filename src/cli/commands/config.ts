@@ -38,6 +38,9 @@ function createConfigCommand(ctx: CLIContext): Command {
         'xopcbot config set agents.defaults.temperature 0.8',
         'xopcbot config unset agents.defaults.max_tokens',
         'xopcbot config show',
+        'xopcbot config token              # Show gateway token info',
+        'xopcbot config token --show       # Show full token',
+        'xopcbot config token --generate   # Generate new token',
       ])
     );
 
@@ -133,6 +136,65 @@ function createConfigCommand(ctx: CLIContext): Command {
     });
 
   cmd
+    .command('token')
+    .description('Generate or view the gateway auth token')
+    .option('--generate', 'Generate a new token')
+    .option('--show', 'Show the current token (unmasked)')
+    .action(async (options) => {
+      if (!existsSync(ctx.configPath)) {
+        log.error('Config file not found. Run: xopcbot onboard');
+        process.exit(1);
+      }
+
+      const config = loadConfig(ctx.configPath);
+
+      if (options.show) {
+        const token = config?.gateway?.auth?.token;
+        if (token) {
+          console.log(token);
+        } else {
+          console.log('No token configured. Gateway auth mode:', config?.gateway?.auth?.mode || 'not set');
+        }
+        return;
+      }
+
+      if (options.generate) {
+        const crypto = await import('crypto');
+        const newToken = crypto.randomBytes(24).toString('hex');
+
+        config.gateway = config.gateway || {};
+        config.gateway.auth = {
+          mode: 'token',
+          token: newToken,
+        };
+
+        writeFileSync(ctx.configPath, JSON.stringify(config, null, 2));
+        log.info('New gateway token generated');
+        console.log(`Token: ${newToken.slice(0, 8)}...${newToken.slice(-8)}`);
+        console.log('\nUse "xopcbot config token --show" to view the full token');
+        return;
+      }
+
+      // Default: show masked token info
+      const token = config?.gateway?.auth?.token;
+      const mode = config?.gateway?.auth?.mode;
+      const host = config?.gateway?.host || '0.0.0.0';
+      const port = config?.gateway?.port || 18790;
+
+      console.log('Gateway Configuration:');
+      console.log(`  Host: ${host}`);
+      console.log(`  Port: ${port}`);
+      console.log(`  Auth Mode: ${mode || 'not set'}`);
+      if (token) {
+        console.log(`  Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
+        console.log('\nUse "xopcbot config token --show" to view the full token');
+        console.log('Use "xopcbot config token --generate" to generate a new token');
+      } else if (mode === 'token') {
+        console.log('  Token: not set (will be auto-generated on first gateway start)');
+      }
+    });
+
+  cmd
     .command('path')
     .description('Show configuration file path')
     .action(() => {
@@ -153,6 +215,9 @@ register({
       'xopcbot config get agents.defaults.model',
       'xopcbot config set agents.defaults.temperature 0.8',
       'xopcbot config show',
+      'xopcbot config token',
+      'xopcbot config token --show',
+      'xopcbot config token --generate',
     ],
   },
 });

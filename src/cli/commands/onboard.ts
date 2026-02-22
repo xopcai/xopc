@@ -82,12 +82,14 @@ async function runOnboard(options: { quick?: boolean }, ctx: CLIContext): Promis
     config = await setupNonInteractive(configPath, config);
     if (!options.quick) {
       config = await setupChannels(config, configPath);
+      config = await setupGateway(config);
     }
   } else {
     config = await setupModel(config, ctx);
 
     if (!options.quick) {
       config = await setupChannels(config, configPath);
+      config = await setupGateway(config);
     }
   }
 
@@ -115,6 +117,28 @@ async function runOnboard(options: { quick?: boolean }, ctx: CLIContext): Promis
   console.log('  Workspace:', workspacePath);
   if (!options.quick) {
     console.log('  Bootstrap:', join(workspacePath, 'BOOTSTRAP.md'));
+  }
+
+  // Display WebUI info if gateway is configured
+  if (config?.gateway?.auth?.mode === 'token' && config?.gateway?.auth?.token) {
+    const host = config?.gateway?.host || '0.0.0.0';
+    const port = config?.gateway?.port || 18790;
+    const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+    const token = config.gateway.auth.token;
+    const webuiUrl = `http://${displayHost}:${port}?token=${token}`;
+
+    console.log('\n🌐 WebUI Access:');
+    console.log(`  URL: http://${displayHost}:${port}`);
+    console.log(`  Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
+    console.log('');
+    console.log('  Direct Access URL (with token):');
+    console.log(`    ${webuiUrl}`);
+    console.log('');
+    console.log('  To start the gateway server:');
+    console.log(`    xopcbot gateway`);
+    console.log('');
+    console.log('  To view token later:');
+    console.log(`    xopcbot config token --show`);
   }
 }
 
@@ -645,6 +669,67 @@ async function setupChannels(config: any, _configPath: string): Promise<any> {
   if (hasTelegram) {
     console.log('✅ Telegram already configured');
   }
+
+  return config;
+}
+
+async function setupGateway(config: any): Promise<any> {
+  if (!isInteractive()) {
+    console.log('\n🌐 Step 4: Gateway (Optional)\n');
+    console.log('💡 To configure gateway, edit the config file manually.');
+    return config;
+  }
+
+  console.log('\n🌐 Step 4: Gateway WebUI (Optional)\n');
+  console.log('The gateway provides a web-based UI for chatting with your AI assistant.');
+
+  const enableGateway = await confirm({
+    message: 'Enable Gateway WebUI?',
+    default: true,
+  });
+
+  if (!enableGateway) {
+    config.gateway = config.gateway || {};
+    config.gateway.auth = { mode: 'none' };
+    console.log('ℹ️  Gateway disabled (auth mode set to none)');
+    return config;
+  }
+
+  // Check if gateway auth is already configured
+  const existingToken = config?.gateway?.auth?.token;
+  const existingMode = config?.gateway?.auth?.mode;
+
+  if (existingToken && existingMode === 'token') {
+    console.log('\nℹ️  Gateway auth token already configured');
+    const keepExisting = await confirm({
+      message: 'Keep existing token?',
+      default: true,
+    });
+
+    if (keepExisting) {
+      console.log('✅ Keeping existing gateway configuration');
+      return config;
+    }
+  }
+
+  // Generate new token
+  const crypto = await import('crypto');
+  const token = crypto.randomBytes(24).toString('hex');
+
+  // Configure gateway with defaults
+  config.gateway = config.gateway || {};
+  config.gateway.host = config.gateway.host || '0.0.0.0';
+  config.gateway.port = config.gateway.port || 18790;
+  config.gateway.auth = {
+    mode: 'token',
+    token,
+  };
+
+  console.log('\n✅ Gateway configured:');
+  console.log(`   Host: ${config.gateway.host}`);
+  console.log(`   Port: ${config.gateway.port}`);
+  console.log(`   Auth: Token-based (auto-generated)`);
+  console.log(`   Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
 
   return config;
 }
