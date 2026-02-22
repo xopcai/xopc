@@ -88,13 +88,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json(service.getHealth());
   });
 
-  // Root path - serve UI
-  app.get('/', (c) => {
-    const response = serveStaticFile('index.html');
-    if (response) return response;
-    return c.text('UI not found', 404);
-  });
-
   // API info (no auth required for basic info)
   app.get('/api', (c) => {
     return c.json({
@@ -115,6 +108,29 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         '...  /api/sessions/*',
       ],
     });
+  });
+
+  // UI static files (no auth required)
+  // Must be before authenticated routes
+  app.get('/assets/*', (c) => {
+    const path = c.req.path.replace('/assets/', '');
+    const response = serveStaticFile(`assets/${path}`);
+    if (response) return response;
+    return c.text('Not found', 404);
+  });
+
+  // Favicon (no auth required)
+  app.get('/favicon.ico', (c) => {
+    const response = serveStaticFile('favicon.ico');
+    if (response) return response;
+    return c.text('Not found', 404);
+  });
+
+  // Root path - serve UI (no auth required for the page itself)
+  app.get('/', (c) => {
+    const response = serveStaticFile('index.html');
+    if (response) return response;
+    return c.text('UI not found', 404);
   });
 
   // Authenticated routes
@@ -754,14 +770,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   // Mount authenticated routes
   app.route('/', authenticated);
-
-  // UI static files (served at root)
-  app.get('/assets/*', (c) => {
-    const path = c.req.path.replace('/assets/', '');
-    const response = serveStaticFile(`assets/${path}`);
-    if (response) return response;
-    return c.text('Not found', 404);
-  });
 
   // 404 handler
   app.notFound((c) => {
