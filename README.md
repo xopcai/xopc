@@ -49,8 +49,8 @@
 # Install globally
 npm install -g @xopcai/xopcbot
 
-# Configure (interactive setup)
-xopcbot configure
+# Interactive setup wizard
+xopcbot onboard
 
 # Start chatting!
 xopcbot agent -i
@@ -64,14 +64,14 @@ git clone https://github.com/xopcai/xopcbot.git
 cd xopcbot
 pnpm install
 
-# Configure (interactive setup)
-pnpm run dev -- configure
+# Interactive setup wizard
+pnpm run dev -- onboard
 
 # Start chatting!
 pnpm run dev -- agent -i
 ```
 
-> **Tip:** Run `xopcbot configure` (or `pnpm run dev -- configure`) to set up your LLM provider API key interactively.
+> **Tip:** Run `xopcbot onboard` (or `pnpm run dev -- onboard`) to set up your LLM provider API key interactively. Use `xopcbot onboard --quick` for quick model setup only.
 
 ---
 

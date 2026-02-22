@@ -47,8 +47,8 @@
 # 全局安装
 npm install -g @xopcai/xopcbot
 
-# 配置（交互式设置）
-xopcbot configure
+# 交互式设置向导
+xopcbot onboard
 
 # 开始聊天！
 xopcbot agent -i
@@ -62,14 +62,14 @@ git clone https://github.com/xopcai/xopcbot.git
 cd xopcbot
 pnpm install
 
-# 配置（交互式设置）
-pnpm run dev -- configure
+# 交互式设置向导
+pnpm run dev -- onboard
 
 # 开始聊天！
 pnpm run dev -- agent -i
 ```
 
-> **提示：** 运行 `xopcbot configure`（或 `pnpm run dev -- configure`）交互式设置 LLM 提供商 API 密钥。
+> **提示：** 运行 `xopcbot onboard`（或 `pnpm run dev -- onboard`）交互式设置 LLM 提供商 API 密钥。使用 `xopcbot onboard --quick` 可快速设置模型。
 
 ---
 
