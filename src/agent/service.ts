@@ -425,54 +425,85 @@ export class AgentService {
 
       const command = msg.content.trim();
       
-      // Handle commands
-      if (command === '/reset' || command === '/new') {
-        // Archive current session before starting a new one
-        const messages = await this.sessionStore.load(sessionKey);
-        if (messages.length > 0) {
-          await this.sessionStore.archive(sessionKey);
-          log.info({ sessionKey, messageCount: messages.length }, 'Session archived due to /new command');
+      // Handle CLI commands
+      if (command === '/new') {
+        try {
+          // Archive current session before starting a new one
+          const messages = await this.sessionStore.load(sessionKey);
+          if (messages.length > 0) {
+            await this.sessionStore.archive(sessionKey);
+            log.info({ sessionKey, messageCount: messages.length }, 'Session archived due to /new command');
+          }
+          // Clear current session state to start fresh
+          await this.sessionStore.deleteSession(sessionKey);
+          this.sessionTracker.deleteSession(sessionKey);
+          await this.bus.publishOutbound({
+            channel: msg.channel,
+            chat_id: msg.chat_id,
+            content: '✅ New session started. Previous session has been archived.',
+            type: 'message',
+          });
+        } catch (err) {
+          log.error({ err, sessionKey }, 'Failed to start new session');
+          await this.bus.publishOutbound({
+            channel: msg.channel,
+            chat_id: msg.chat_id,
+            content: '❌ Failed to start new session. Please try again.',
+            type: 'message',
+          });
         }
-        // Clear current session state to start fresh
-        await this.sessionStore.deleteSession(sessionKey);
-        this.sessionTracker.deleteSession(sessionKey);
-        await this.bus.publishOutbound({
-          channel: msg.channel,
-          chat_id: msg.chat_id,
-          content: '✅ New session started. Previous session has been archived.',
-          type: 'message',
-        });
         return;
       }
 
       if (command === '/skills reload') {
-        this.reloadSkills();
-        await this.bus.publishOutbound({
-          channel: msg.channel,
-          chat_id: msg.chat_id,
-          content: '✅ Skills reloaded successfully',
-          type: 'message',
-        });
+        try {
+          this.reloadSkills();
+          await this.bus.publishOutbound({
+            channel: msg.channel,
+            chat_id: msg.chat_id,
+            content: '✅ Skills reloaded successfully',
+            type: 'message',
+          });
+        } catch (err) {
+          log.error({ err }, 'Failed to reload skills');
+          await this.bus.publishOutbound({
+            channel: msg.channel,
+            chat_id: msg.chat_id,
+            content: '❌ Failed to reload skills.',
+            type: 'message',
+          });
+        }
         return;
       }
 
       // Check plugin commands
       if (msg.content.startsWith('/') && this.config.pluginRegistry) {
-        const commandName = command.slice(1).split(/\s+/)[0];
-        const pluginCommand = this.config.pluginRegistry.getCommand(commandName);
-        if (pluginCommand) {
-          const ctx: CommandContext = {
-            senderId: msg.sender_id,
-            channel: msg.channel,
-            isAuthorized: true,
-            config: this.config.config as any,
-          };
-          const args = command.replace(/^\/\w+\s*/, '');
-          const result = await pluginCommand.handler(args, ctx);
+        try {
+          const commandName = command.slice(1).split(/\s+/)[0];
+          const pluginCommand = this.config.pluginRegistry.getCommand(commandName);
+          if (pluginCommand) {
+            const ctx: CommandContext = {
+              senderId: msg.sender_id,
+              channel: msg.channel,
+              isAuthorized: true,
+              config: this.config.config as any,
+            };
+            const args = command.replace(/^\/\w+\s*/, '');
+            const result = await pluginCommand.handler(args, ctx);
+            await this.bus.publishOutbound({
+              channel: msg.channel,
+              chat_id: msg.chat_id,
+              content: result.content,
+              type: 'message',
+            });
+            return;
+          }
+        } catch (err) {
+          log.error({ err, command }, 'Failed to execute plugin command');
           await this.bus.publishOutbound({
             channel: msg.channel,
             chat_id: msg.chat_id,
-            content: result.content,
+            content: `❌ Command failed: ${err instanceof Error ? err.message : String(err)}`,
             type: 'message',
           });
           return;
@@ -568,6 +599,7 @@ export class AgentService {
   private async handleSystemMessage(msg: InboundMessage): Promise<void> {
     log.info({ senderId: msg.sender_id }, 'Processing system message');
 
+    // Handle Telegram command requests
     if (msg.content === '/usage' && msg.sender_id === 'telegram:usage') {
       const sessionKey = (msg.metadata?.sessionKey as string) || `telegram:${msg.chat_id}`;
       const usage = this.sessionTracker.getUsage(sessionKey);
@@ -591,6 +623,58 @@ export class AgentService {
           channel: 'telegram',
           chat_id: msg.chat_id,
           content: '📊 No usage data available for this session yet.',
+          type: 'message',
+        });
+      }
+      return;
+    }
+
+    if (msg.content === '/new' && msg.sender_id === 'telegram:new') {
+      const sessionKey = (msg.metadata?.sessionKey as string) || `telegram:${msg.chat_id}`;
+      try {
+        // Archive current session
+        const messages = await this.sessionStore.load(sessionKey);
+        if (messages.length > 0) {
+          await this.sessionStore.archive(sessionKey);
+          log.info({ sessionKey, messageCount: messages.length }, 'Session archived due to /new command');
+        }
+        // Clear current session state
+        await this.sessionStore.deleteSession(sessionKey);
+        this.sessionTracker.deleteSession(sessionKey);
+        
+        await this.bus.publishOutbound({
+          channel: 'telegram',
+          chat_id: msg.chat_id,
+          content: '✅ New session started. Previous session has been archived.',
+          type: 'message',
+        });
+      } catch (err) {
+        log.error({ err, sessionKey }, 'Failed to start new session');
+        await this.bus.publishOutbound({
+          channel: 'telegram',
+          chat_id: msg.chat_id,
+          content: '❌ Failed to start new session. Please try again.',
+          type: 'message',
+        });
+      }
+      return;
+    }
+
+    if (msg.content === '/skills reload' && msg.sender_id === 'telegram:skills') {
+      try {
+        this.reloadSkills();
+        await this.bus.publishOutbound({
+          channel: 'telegram',
+          chat_id: msg.chat_id,
+          content: '✅ Skills reloaded successfully',
+          type: 'message',
+        });
+      } catch (err) {
+        log.error({ err }, 'Failed to reload skills');
+        await this.bus.publishOutbound({
+          channel: 'telegram',
+          chat_id: msg.chat_id,
+          content: '❌ Failed to reload skills.',
           type: 'message',
         });
       }

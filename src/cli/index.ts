@@ -41,11 +41,14 @@ program.hook('preAction', (thisCommand) => {
 const ctx = getContextWithOpts(process.argv);
 registry.install(program, ctx);
 
-// Only parse if this is the main module
-// Skip parsing only when there are non-flag arguments (commands)
-const hasArgs = process.argv.length > 2;
-const isFlag = process.argv[2]?.startsWith('-');
-if (import.meta.url.startsWith('file:')) {
+// Only parse if this is the main module being executed directly
+// Skip parsing when imported as module (e.g., in tests)
+const isTestEnv = !!process.env.VITEST || !!process.env.TEST || !!process.env.NODE_ENV?.includes('test');
+const isMainModule = !isTestEnv && import.meta.url.startsWith('file:');
+
+if (isMainModule) {
+  const hasArgs = process.argv.length > 2;
+  const isFlag = process.argv[2]?.startsWith('-');
   // Always parse for flags (--version, --help) or no args
   // Only skip when there's a command argument
   if (!hasArgs || isFlag) {

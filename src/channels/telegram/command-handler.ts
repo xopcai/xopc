@@ -245,6 +245,55 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     await ctx.answerCallbackQuery();
   };
 
+  const handleNew = async (ctx: Context): Promise<void> => {
+    try {
+      const chatId = String(ctx.chat?.id);
+      const sessionKey = `telegram:${chatId}`;
+
+      // Send command to agent service for processing
+      await bus.publishInbound({
+        channel: 'system',
+        sender_id: 'telegram:new',
+        chat_id: chatId,
+        content: '/new',
+        metadata: { sessionKey },
+      });
+
+      await ctx.reply('✅ Starting new session...');
+    } catch (err) {
+      log.error({ err }, 'Failed to start new session');
+      await ctx.reply('❌ Failed to start new session. Please try again.');
+    }
+  };
+
+  const handleSkills = async (ctx: Context, args?: string): Promise<void> => {
+    try {
+      const chatId = String(ctx.chat?.id);
+
+      if (args === 'reload') {
+        // Send reload command to agent service
+        await bus.publishInbound({
+          channel: 'system',
+          sender_id: 'telegram:skills',
+          chat_id: chatId,
+          content: '/skills reload',
+        });
+        await ctx.reply('✅ Skills reloaded successfully');
+      } else {
+        // Show help
+        await ctx.reply(
+          '🛠️ *Skills Management*\n\n' +
+          'Available commands:\n' +
+          '/skills reload - Reload all skills from disk',
+          { parse_mode: 'Markdown' }
+        );
+      }
+    } catch (err) {
+      log.error({ err }, 'Failed to handle skills command');
+      await ctx.reply('❌ Failed to execute skills command.');
+    }
+  };
+
   return {
     handleModels,
     handleProviderSelect,
@@ -254,6 +303,8 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     handleCleanup,
     handleCleanupConfirm,
     handleCancel,
+    handleNew,
+    handleSkills,
     getAvailableProviders,
   };
 }
