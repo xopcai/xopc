@@ -35,6 +35,7 @@ import { draftStreamManager } from '../draft-stream.js';
 import { formatTelegramMessage } from '../format.js';
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/index.js';
+import { createTelegramCommandHandler } from './command-handler.js';
 
 const log = createLogger('TelegramPlugin');
 
@@ -154,6 +155,7 @@ interface MessageProcessorDeps {
   bus: any;
   config: Config;
   accountManager: TelegramAccountManager;
+  _commandHandler?: ReturnType<typeof createTelegramCommandHandler>;
 }
 
 interface QueuedMessage {
@@ -164,7 +166,7 @@ interface QueuedMessage {
 }
 
 function createMessageProcessor(deps: MessageProcessorDeps) {
-  const { bus, config, accountManager } = deps;
+  const { bus, config, accountManager, _commandHandler } = deps;
   
   const messageQueues = new Map<string, QueuedMessage[]>();
   const processingChats = new Set<string>();
@@ -376,16 +378,27 @@ export class TelegramChannelPlugin implements ChannelPlugin {
 
   private accountManager = new TelegramAccountManager();
   private messageProcessor!: ReturnType<typeof createMessageProcessor>;
+  private commandHandlers = new Map<string, ReturnType<typeof createTelegramCommandHandler>>();
   private bus: any = null;
   private config: Config | null = null;
 
   async init(options: ChannelInitOptions): Promise<void> {
     this.bus = options.bus;
     this.config = options.config;
+    
+    // Create command handler for shared state
+    const commandHandler = createTelegramCommandHandler({
+      bus: options.bus,
+      config: options.config,
+      getSessionModel: (sessionKey) => this.getSessionModel(sessionKey),
+      setSessionModel: (sessionKey, modelId) => this.setSessionModel(sessionKey, modelId),
+    });
+    
     this.messageProcessor = createMessageProcessor({
       bus: options.bus,
       config: options.config,
       accountManager: this.accountManager,
+      _commandHandler: commandHandler,
     });
 
     const telegramConfig = options.config.channels?.telegram;
@@ -447,6 +460,40 @@ export class TelegramChannelPlugin implements ChannelPlugin {
       this.accountManager.setBotUsername(accountId, me.username);
       log.info({ accountId, username: me.username }, 'Telegram bot initialized');
 
+      // Get or create command handler for this account
+      let commandHandler = this.commandHandlers.get(accountId);
+      if (!commandHandler) {
+        commandHandler = createTelegramCommandHandler({
+          bus: this.bus!,
+          config: this.config!,
+          getSessionModel: (sessionKey) => this.getSessionModel(sessionKey),
+          setSessionModel: (sessionKey, modelId) => this.setSessionModel(sessionKey, modelId),
+          showProviderModels: async (ctx, providerId) => {
+            await commandHandler!.handleProviderSelect(ctx, providerId);
+          },
+          showProvidersAgain: async (ctx) => {
+            await commandHandler!.handleShowProviders(ctx);
+          },
+          handleCleanupConfirm: async (ctx) => {
+            await commandHandler!.handleCleanupConfirm(ctx);
+          },
+        });
+        this.commandHandlers.set(accountId, commandHandler);
+      }
+
+      // Register slash commands
+      bot.command('models', async (ctx) => {
+        await commandHandler!.handleModels(ctx);
+      });
+      
+      bot.command('usage', async (ctx) => {
+        await commandHandler!.handleUsage(ctx);
+      });
+      
+      bot.command('cleanup', async (ctx) => {
+        await commandHandler!.handleCleanup(ctx);
+      });
+
       // Register message handler
       const enqueueMessage = this.messageProcessor;
       bot.on('message', async (ctx) => {
@@ -454,6 +501,33 @@ export class TelegramChannelPlugin implements ChannelPlugin {
           await enqueueMessage(ctx, accountId);
         } catch (err) {
           log.error({ accountId, err }, 'Failed to process message');
+        }
+      });
+
+      // Register callback query handler for inline keyboards
+      bot.on('callback_query:data', async (ctx) => {
+        try {
+          const data = ctx.callbackQuery.data;
+          
+          if (data.startsWith('provider:')) {
+            const providerId = data.slice('provider:'.length);
+            await commandHandler!.handleProviderSelect(ctx, providerId);
+          } else if (data.startsWith('model:')) {
+            const modelId = data.slice('model:'.length);
+            await commandHandler!.handleModelSelect(ctx, modelId);
+          } else if (data === 'providers') {
+            await commandHandler!.handleShowProviders(ctx);
+          } else if (data === 'cleanup:confirm') {
+            await commandHandler!.handleCleanupConfirm(ctx);
+          } else if (data === 'cancel') {
+            await commandHandler!.handleCancel(ctx);
+          } else {
+            log.warn({ callbackData: data, accountId }, 'Unknown callback query data');
+            await ctx.answerCallbackQuery('Unknown action');
+          }
+        } catch (err) {
+          log.error({ accountId, err }, 'Failed to handle callback query');
+          await ctx.answerCallbackQuery('Failed to process action');
         }
       });
 

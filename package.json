@@ -1,6 +1,6 @@
 {
   "name": "@xopcai/xopcbot",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Ultra-Lightweight Personal AI Assistant - Node.js + TypeScript",
   "type": "module",
   "main": "dist/index.js",
