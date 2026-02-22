@@ -4,7 +4,7 @@ import { html, LitElement, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
-import { CronAPIClient, type CronJob, type CronJobExecution, type CronMetrics, type ChannelStatus, type ModelInfo } from '../utils/cron-api';
+import { CronAPIClient, type CronJob, type CronJobExecution, type CronMetrics, type ChannelStatus, type ModelInfo, type SessionChatId } from '../utils/cron-api';
 import '../components/ConfirmDialog';
 
 export interface CronManagerConfig {
@@ -21,6 +21,7 @@ export class CronManager extends LitElement {
   @state() private _channels: ChannelStatus[] = [];
   @state() private _availableModels: ModelInfo[] = [];
   @state() private _defaultModel: string = '';
+  @state() private _sessionChatIds: SessionChatId[] = [];
   @state() private _loading = false;
   @state() private _error: string | null = null;
 
@@ -29,7 +30,7 @@ export class CronManager extends LitElement {
   @state() private _formMode: 'add' | 'edit' = 'add';
   @state() private _formJobId: string | null = null;
   @state() private _formName = '';
-  @state() private _formSchedule = '*/5 * * * *';
+  @state() private _formSchedule = '*/5 * * * *'; 
   @state() private _formChannel = 'telegram';
   @state() private _formChatId = '';
   @state() private _formMessage = '';
@@ -80,6 +81,7 @@ export class CronManager extends LitElement {
     this._loadMetrics();
     this._loadChannels();
     this._loadModels();
+    this._loadSessionChatIds();
   }
 
   override disconnectedCallback(): void {
@@ -136,12 +138,28 @@ export class CronManager extends LitElement {
     }
   }
 
+  private async _loadSessionChatIds(): Promise<void> {
+    try {
+      const chatIds = await this._api.getSessionChatIds(this._formChannel);
+      this._sessionChatIds = chatIds;
+      console.log('[CronManager] Loaded session chatIds for channel', this._formChannel, ':', chatIds.length, chatIds);
+    } catch (err) {
+      console.error('[CronManager] Session chatIds error:', err);
+      this._sessionChatIds = [];
+    }
+  }
+
   // ========== Form ==========
 
   private _openForm(job?: CronJob): void {
     this._formOpen = true;
     this._formMode = job ? 'edit' : 'add';
     this._formJobId = job?.id || null;
+    
+    // Refresh session chat IDs when opening form
+    if (!job) {
+      this._loadSessionChatIds();
+    }
     
     if (job) {
       // Editing existing job - populate form
@@ -367,19 +385,19 @@ export class CronManager extends LitElement {
         <!-- Stats -->
         ${this._metrics ? html`
           <div class="cron-manager__stats">
-            <div class="stat-card">
+            <div class="stat-card" style="text-align: center;">
               <div class="stat-value">${this._metrics.totalJobs}</div>
               <div class="stat-label">${t('sessions.totalSessions')}</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" style="text-align: center;">
               <div class="stat-value">${this._metrics.enabledJobs}</div>
               <div class="stat-label">${t('cron.enabled')}</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" style="text-align: center;">
               <div class="stat-value">${this._metrics.runningJobs}</div>
               <div class="stat-label">${t('cron.running')}</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" style="text-align: center;">
               <div class="stat-value" style="font-size: 0.875rem;">
                 ${this._metrics.nextScheduledJob 
                   ? this._formatNextRun(this._metrics.nextScheduledJob.runAt)
@@ -422,14 +440,14 @@ export class CronManager extends LitElement {
                 <tbody>
                   ${this._jobs.map(job => html`
                     <tr>
-                      <td>
+                      <td style="vertical-align: middle; text-align: center;">
                         <button class="btn btn-link" @click=${() => this._openDetail(job)}>
                           ${job.name || job.id}
                         </button>
                       </td>
-                      <td><code>${job.schedule}</code></td>
-                      <td>${job.next_run ? this._formatNextRun(job.next_run) : '-'}</td>
-                      <td>
+                      <td style="vertical-align: middle; text-align: center;"><code>${job.schedule}</code></td>
+                      <td style="vertical-align: middle; text-align: center;">${job.next_run ? this._formatNextRun(job.next_run) : '-'}</td>
+                      <td style="vertical-align: middle; text-align: center;">
                         <label class="toggle">
                           <input 
                             type="checkbox" 
@@ -439,7 +457,7 @@ export class CronManager extends LitElement {
                           <span class="toggle__slider"></span>
                         </label>
                       </td>
-                      <td>
+                      <td style="vertical-align: middle; text-align: center;">
                         <div class="action-buttons">
                           <button class="btn btn-icon btn-secondary" title="Edit" @click=${() => this._openForm(job)}>
                             ${getIcon('edit')}
@@ -482,14 +500,45 @@ export class CronManager extends LitElement {
               </div>
               <div class="form-field">
                 <label class="form-field__label">${t('cron.schedule')}</label>
-                <input
-                  type="text"
-                  class="form-field__input"
-                  .value=${this._formSchedule ?? ''}
-                  @input=${(e: Event) => this._formSchedule = (e.target as HTMLInputElement).value}
-                  placeholder="*/5 * * * *"
-                />
-                <p class="form-field__hint">${t('cron.scheduleHint')}</p>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <input
+                    type="text"
+                    class="form-field__input"
+                    style="flex: 2; min-width: 0;"
+                    .value=${this._formSchedule ?? '*/5 * * * *'}
+                    @input=${(e: Event) => this._formSchedule = (e.target as HTMLInputElement).value}
+                    placeholder="*/5 * * * *"
+                  />
+                  <select
+                    class="form-field__select"
+                    style="flex: 1; min-width: 0;"
+                    .value=${this._formSchedule ?? '*/5 * * * *'}
+                    @change=${(e: Event) => {
+                      const value = (e.target as HTMLSelectElement).value;
+                      if (value) {
+                        this._formSchedule = value;
+                      }
+                    }}
+                  >
+                    <option value="">${t('cron.schedulePresets.custom')}</option>
+                    <option value="*/1 * * * *">${t('cron.schedulePresets.everyMinute')}</option>
+                    <option value="*/5 * * * *">${t('cron.schedulePresets.every5Minutes')}</option>
+                    <option value="*/10 * * * *">${t('cron.schedulePresets.every10Minutes')}</option>
+                    <option value="*/15 * * * *">${t('cron.schedulePresets.every15Minutes')}</option>
+                    <option value="*/30 * * * *">${t('cron.schedulePresets.every30Minutes')}</option>
+                    <option value="0 * * * *">${t('cron.schedulePresets.everyHour')}</option>
+                    <option value="0 */2 * * *">${t('cron.schedulePresets.every2Hours')}</option>
+                    <option value="0 */4 * * *">${t('cron.schedulePresets.every4Hours')}</option>
+                    <option value="0 */6 * * *">${t('cron.schedulePresets.every6Hours')}</option>
+                    <option value="0 */12 * * *">${t('cron.schedulePresets.every12Hours')}</option>
+                    <option value="0 0 * * *">${t('cron.schedulePresets.everyDayMidnight')}</option>
+                    <option value="0 9 * * *">${t('cron.schedulePresets.everyDay9AM')}</option>
+                    <option value="0 21 * * *">${t('cron.schedulePresets.everyDay9PM')}</option>
+                  </select>
+                </div>
+                <p class="form-field__hint">
+                  ${t('cron.scheduleHintPreset')}
+                </p>
               </div>
               <div class="form-field">
                 <label class="form-field__label">Mode</label>
@@ -528,7 +577,13 @@ export class CronManager extends LitElement {
                 <select
                   class="form-field__select"
                   .value=${this._formChannel ?? 'telegram'}
-                  @change=${(e: Event) => this._formChannel = (e.target as HTMLSelectElement).value}
+                  @change=${(e: Event) => {
+                    this._formChannel = (e.target as HTMLSelectElement).value;
+                    // Reload chat IDs for selected channel
+                    this._loadSessionChatIds();
+                    // Clear chat ID when channel changes
+                    this._formChatId = '';
+                  }}
                 >
                   ${this._channels.map(ch => html`
                     <option value=${ch.name} ?disabled=${!ch.enabled}>
@@ -538,14 +593,53 @@ export class CronManager extends LitElement {
                 </select>
               </div>
               <div class="form-field">
-                <label class="form-field__label">Chat ID *</label>
-                <input
-                  type="text"
-                  class="form-field__input"
-                  .value=${this._formChatId ?? ''}
-                  @input=${(e: Event) => this._formChatId = (e.target as HTMLInputElement).value}
-                  placeholder="e.g., 123456789"
-                />
+                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
+                  <label class="form-field__label" style="margin: 0;">Chat ID *</label>
+                  <button 
+                    type="button" 
+                    class="btn btn-secondary btn-sm" 
+                    @click=${() => this._loadSessionChatIds()}
+                    title="Refresh chat list"
+                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
+                  >
+                    ${getIcon('refresh')} Refresh
+                  </button>
+                </div>
+                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                  <input
+                    type="text"
+                    class="form-field__input"
+                    style="flex: 2; min-width: 0;"
+                    .value=${this._formChatId ?? ''}
+                    @input=${(e: Event) => this._formChatId = (e.target as HTMLInputElement).value}
+                    placeholder="e.g., 123456789"
+                  />
+                  <select
+                    class="form-field__select"
+                    style="flex: 1; min-width: 0;"
+                    .value=${this._formChatId ?? ''}
+                    @change=${(e: Event) => {
+                      const value = (e.target as HTMLSelectElement).value;
+                      if (value) {
+                        this._formChatId = value;
+                      }
+                    }}
+                  >
+                    <option value="">-- Select --</option>
+                    ${this._sessionChatIds.length > 0 ? this._sessionChatIds.map(item => html`
+                      <option value=${item.chatId}>
+                        ${item.channel}: ${item.chatId} (${this._formatLastActive(item.lastActive)})
+                      </option>
+                    `) : html`
+                      <option value="" disabled>No recent chats</option>
+                    `}
+                  </select>
+                </div>
+                <p class="form-field__hint">
+                  ${this._sessionChatIds.length > 0 
+                    ? 'Enter manually or select from recent chats'
+                    : 'No recent chats found. Enter chat ID manually (e.g., 123456789 for Telegram)'}
+                </p>
               </div>
               <div class="form-field">
                 <label class="form-field__label">${t('cron.message')}</label>
@@ -630,11 +724,39 @@ export class CronManager extends LitElement {
     const now = new Date();
     const diff = d.getTime() - now.getTime();
     
-    if (diff < 0) return 'Overdue';
-    if (diff < 60000) return 'Less than a minute';
-    if (diff < 3600000) return `${Math.floor(diff / 60000)} min`;
-    if (diff < 86400000) return `${Math.floor(diff / 3600000)} hours`;
+    if (diff < 0) return t('cron.timeLabels.overdue');
+    if (diff < 60000) return t('cron.timeLabels.lessThanMinute');
+    if (diff < 3600000) {
+      const mins = Math.floor(diff / 60000);
+      return t('cron.timeLabels.minutes', { count: mins });
+    }
+    if (diff < 86400000) {
+      const hours = Math.floor(diff / 3600000);
+      return t('cron.timeLabels.hours', { count: hours });
+    }
     return d.toLocaleString();
+  }
+
+  private _formatLastActive(date: string): string {
+    const d = new Date(date);
+    const now = new Date();
+    const diff = now.getTime() - d.getTime();
+    
+    if (diff < 0) return t('cron.lastActiveLabels.justNow');
+    if (diff < 60000) return t('cron.lastActiveLabels.justNow');
+    if (diff < 3600000) {
+      const mins = Math.floor(diff / 60000);
+      return t('cron.lastActiveLabels.minutesAgo', { count: mins });
+    }
+    if (diff < 86400000) {
+      const hours = Math.floor(diff / 3600000);
+      return t('cron.lastActiveLabels.hoursAgo', { count: hours });
+    }
+    if (diff < 604800000) {
+      const days = Math.floor(diff / 86400000);
+      return t('cron.lastActiveLabels.daysAgo', { count: days });
+    }
+    return d.toLocaleDateString();
   }
 
   private _formatTime(date: string): string {

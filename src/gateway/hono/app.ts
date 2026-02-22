@@ -517,7 +517,14 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json(result);
   });
 
-  // GET /api/sessions/:key - Get single session (must be after /stats)
+  // GET /api/sessions/chat-ids - Get unique chat IDs from sessions (must be before /:key)
+  authenticated.get('/api/sessions/chat-ids', async (c) => {
+    const channel = c.req.query('channel');
+    const chatIds = await service.getSessionChatIds(channel || undefined);
+    return c.json({ ok: true, payload: { chatIds } });
+  });
+
+  // GET /api/sessions/:key - Get single session (must be after /stats and /chat-ids)
   authenticated.get('/api/sessions/:key', async (c) => {
     const key = c.req.param('key');
     const session = await service.getSession(key);

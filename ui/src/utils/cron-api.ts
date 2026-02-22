@@ -58,6 +58,12 @@ export interface ChannelStatus {
   connected: boolean;
 }
 
+export interface SessionChatId {
+  channel: string;
+  chatId: string;
+  lastActive: string;
+}
+
 export interface CronJobExecution {
   id: string;
   jobId: string;
@@ -201,6 +207,12 @@ export class CronAPIClient {
     return {
       model: (config as any).agents?.defaults?.model || '',
     };
+  }
+
+  async getSessionChatIds(channel?: string): Promise<SessionChatId[]> {
+    const query = channel ? `?channel=${encodeURIComponent(channel)}` : '';
+    const result = await this.request<{ ok: boolean; payload: { chatIds: SessionChatId[] } }>('GET', `/api/sessions/chat-ids${query}`);
+    return result.payload?.chatIds || [];
   }
 
   /**

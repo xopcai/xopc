@@ -258,7 +258,36 @@
     "messageLabel": "消息",
     "confirm": "确认",
     "cancel": "取消",
-    "total": "总计"
+    "total": "总计",
+    "schedulePresets": {
+      "custom": "-- 自定义（在下方输入） --",
+      "everyMinute": "每分钟",
+      "every5Minutes": "每 5 分钟（默认）",
+      "every10Minutes": "每 10 分钟",
+      "every15Minutes": "每 15 分钟",
+      "every30Minutes": "每 30 分钟",
+      "everyHour": "每小时",
+      "every2Hours": "每 2 小时",
+      "every4Hours": "每 4 小时",
+      "every6Hours": "每 6 小时",
+      "every12Hours": "每 12 小时",
+      "everyDayMidnight": "每天午夜",
+      "everyDay9AM": "每天早上 9 点",
+      "everyDay9PM": "每天晚上 9 点"
+    },
+    "scheduleHintPreset": "选择预设或输入自定义 cron 表达式",
+    "timeLabels": {
+      "lessThanMinute": "不到 1 分钟",
+      "minutes": "{{count}} 分钟",
+      "hours": "{{count}} 小时",
+      "overdue": "已过期"
+    },
+    "lastActiveLabels": {
+      "justNow": "刚刚",
+      "minutesAgo": "{{count}} 分钟前",
+      "hoursAgo": "{{count}} 小时前",
+      "daysAgo": "{{count}} 天前"
+    }
   },
   "common": {
     "save": "保存",

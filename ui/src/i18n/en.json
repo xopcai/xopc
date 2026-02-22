@@ -258,7 +258,36 @@
     "messageLabel": "Message",
     "confirm": "Confirm",
     "cancel": "Cancel",
-    "total": "Total"
+    "total": "Total",
+    "schedulePresets": {
+      "custom": "-- Custom (enter below) --",
+      "everyMinute": "Every minute",
+      "every5Minutes": "Every 5 minutes (default)",
+      "every10Minutes": "Every 10 minutes",
+      "every15Minutes": "Every 15 minutes",
+      "every30Minutes": "Every 30 minutes",
+      "everyHour": "Every hour",
+      "every2Hours": "Every 2 hours",
+      "every4Hours": "Every 4 hours",
+      "every6Hours": "Every 6 hours",
+      "every12Hours": "Every 12 hours",
+      "everyDayMidnight": "Every day at midnight",
+      "everyDay9AM": "Every day at 9:00 AM",
+      "everyDay9PM": "Every day at 9:00 PM"
+    },
+    "scheduleHintPreset": "Select a preset or enter custom cron expression",
+    "timeLabels": {
+      "lessThanMinute": "Less than a minute",
+      "minutes": "{{count}} min",
+      "hours": "{{count}} hours",
+      "overdue": "Overdue"
+    },
+    "lastActiveLabels": {
+      "justNow": "just now",
+      "minutesAgo": "{{count}}m ago",
+      "hoursAgo": "{{count}}h ago",
+      "daysAgo": "{{count}}d ago"
+    }
   },
   "common": {
     "save": "Save",

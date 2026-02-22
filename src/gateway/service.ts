@@ -723,4 +723,35 @@ export class GatewayService {
   async getSessionStats() {
     return this.sessionManager.getStats();
   }
+
+  /**
+   * Get unique chat IDs from sessions, grouped by channel
+   * Returns a list of channel/chatId pairs for cron job configuration
+   */
+  async getSessionChatIds(channel?: string): Promise<Array<{ channel: string; chatId: string; lastActive: string }>> {
+    const result = await this.sessionManager.listSessions({
+      limit: 1000,
+      sortBy: 'lastAccessedAt',
+      sortOrder: 'desc',
+      ...(channel ? { channel } : {}),
+    });
+
+    // Group by channel:chatId to get unique pairs
+    const seen = new Set<string>();
+    const chatIds: Array<{ channel: string; chatId: string; lastActive: string }> = [];
+
+    for (const session of result.items) {
+      const key = `${session.sourceChannel}:${session.sourceChatId}`;
+      if (!seen.has(key) && session.sourceChannel && session.sourceChatId) {
+        seen.add(key);
+        chatIds.push({
+          channel: session.sourceChannel,
+          chatId: session.sourceChatId,
+          lastActive: session.lastAccessedAt,
+        });
+      }
+    }
+
+    return chatIds;
+  }
 }
