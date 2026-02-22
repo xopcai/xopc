@@ -71,8 +71,8 @@ xopcbot onboard
 
 onboard 完成后会自动启动 Gateway 服务（后台模式），并显示：
 - Gateway 访问 URL
+- Token 信息
 - PID 信息
-- 管理命令提示
 
 ---
 

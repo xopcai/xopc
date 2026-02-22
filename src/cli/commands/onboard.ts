@@ -139,63 +139,90 @@ async function runOnboard(options: { quick?: boolean }, ctx: CLIContext): Promis
     console.log(`    ${webuiUrl}`);
     console.log('');
 
-    // Ask user if they want to start gateway now (only in interactive mode)
-    if (isInteractive()) {
-      const startGateway = await confirm({
-        message: '🚀 Start Gateway WebUI now?',
-        default: true,
-      });
+    // Auto-start gateway after onboarding
+    await startGatewayNow(config, ctx);
+  }
+}
 
-      if (startGateway) {
-        await startGatewayNow(config, ctx);
-      } else {
-        console.log('');
-        console.log('💡 To start the gateway later:');
-        console.log(`    xopcbot gateway --background`);
-        console.log('');
-        console.log('  To view token later:');
-        console.log(`    xopcbot config token --show`);
-      }
-    } else {
-      // Non-interactive mode: just show instructions
-      console.log('  To start the gateway server:');
-      console.log(`    xopcbot gateway --background`);
-      console.log('');
-      console.log('  To view token later:');
-      console.log(`    xopcbot config token --show`);
+/**
+ * Print gateway access info and management commands
+ */
+function printGatewayInfo(host: string, port: number, pid?: number): void {
+  const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+  
+  if (pid) {
+    console.log(`   PID: ${pid}`);
+  }
+  console.log('');
+  console.log('🌐 WebUI is available at:');
+  console.log(`   http://${displayHost}:${port}`);
+  console.log('');
+  console.log('📝 Management Commands:');
+  console.log('   xopcbot gateway status    # Check status');
+  console.log('   xopcbot gateway stop      # Stop gateway');
+  console.log('   xopcbot gateway restart   # Restart gateway');
+  console.log('   xopcbot gateway logs      # View logs');
+}
+
+/**
+ * Handle start/restart errors
+ */
+async function handleGatewayError(
+  error: unknown, 
+  port: number, 
+  isRestart: boolean
+): Promise<void> {
+  const action = isRestart ? 'restart' : 'start';
+  console.error(`❌ Failed to ${action} gateway`);
+  const errorMsg = error instanceof Error ? error.message : String(error);
+  console.error(`   ${errorMsg}`);
+  
+  if (isRestart) {
+    const { getProcessUsingPort } = await import('../../gateway/port-checker.js');
+    const pid = await getProcessUsingPort(port);
+    if (pid) {
+      console.error(`\n💡 Port ${port} is used by PID ${pid}`);
+      console.error(`💡 To stop: kill ${pid} or kill -9 ${pid}`);
     }
   }
 }
 
 /**
+ * Handle start result errors
+ */
+function handleStartResultError(result: { error?: string }): void {
+  // Check if it's a "compiled code not found" error
+  const isDevMode = result.error?.includes('Compiled code not found');
+  
+  console.error('❌ Failed to start gateway in background mode');
+  
+  if (isDevMode) {
+    console.log('');
+    console.log('⚠️  You are in development mode (using tsx).');
+    console.log('');
+    console.log('💡 Option 1: Build and run in background (recommended)');
+    console.log('    pnpm run build');
+    console.log('    xopcbot gateway --background');
+    console.log('');
+    console.log('💡 Option 2: Run in foreground (blocks terminal)');
+    console.log('    xopcbot gateway');
+    console.log('    # Press Ctrl+C to stop');
+    console.log('');
+  } else if (result.error) {
+    console.error(`   ${result.error}`);
+  }
+}
+
+/**
  * Start gateway process immediately after onboarding
+ * If already running, restart to apply new config
  */
 async function startGatewayNow(config: any, ctx: CLIContext): Promise<void> {
-  console.log('\n🚀 Starting Gateway WebUI...');
-  
   const manager = new GatewayProcessManager();
-  
-  // Check if already running
-  if (manager.isRunning()) {
-    const status = manager.getStatus();
-    console.log('ℹ️  Gateway is already running');
-    if (status.pid) {
-      console.log(`   PID: ${status.pid}`);
-    }
-    if (status.uptime) {
-      const minutes = Math.floor(status.uptime / 60000);
-      const seconds = Math.floor((status.uptime % 60000) / 1000);
-      console.log(`   Uptime: ${minutes}m ${seconds}s`);
-    }
-    console.log('\n💡 Use "xopcbot gateway restart" to restart');
-    return;
-  }
-
   const host = config?.gateway?.host || '0.0.0.0';
   const port = config?.gateway?.port || 18790;
   const token = config.gateway.auth.token;
 
-  // Try to start in background mode
   const processConfig: GatewayProcessConfig = {
     host,
     port,
@@ -205,46 +232,55 @@ async function startGatewayNow(config: any, ctx: CLIContext): Promise<void> {
     enableHotReload: true,
   };
 
+  // Case 1: Gateway is running with PID file - restart it
+  if (manager.isRunning()) {
+    console.log('\n🔄 Restarting Gateway WebUI...');
+    try {
+      await manager.restart(processConfig);
+      console.log('✅ Gateway restarted successfully!');
+      printGatewayInfo(host, port);
+    } catch (error) {
+      await handleGatewayError(error, port, true);
+    }
+    return;
+  }
+
+  // Check port availability
+  const { checkPortAvailable } = await import('../../gateway/port-checker.js');
+  const portAvailable = await checkPortAvailable(port);
+  
+  // Case 2: Port is in use but no PID file - try restart
+  if (!portAvailable) {
+    console.log('\n🔄 Gateway is already running (port in use), restarting...');
+    try {
+      await manager.restart(processConfig);
+      console.log('✅ Gateway restarted successfully!');
+      printGatewayInfo(host, port);
+    } catch (error) {
+      await handleGatewayError(error, port, true);
+    }
+    return;
+  }
+
+  // Case 3: Port is available - start new gateway
+  console.log('\n🚀 Starting Gateway WebUI...');
   const result = await manager.start(processConfig);
 
   if (result.success) {
-    const displayHost = host === '0.0.0.0' ? 'localhost' : host;
-    
     console.log('✅ Gateway started successfully!');
-    console.log(`   PID: ${result.pid}`);
-    console.log('');
-    console.log('🌐 WebUI is now available at:');
-    console.log(`   http://${displayHost}:${port}`);
-    console.log('');
-    console.log('📝 Management Commands:');
-    console.log('   xopcbot gateway status    # Check status');
-    console.log('   xopcbot gateway stop      # Stop gateway');
-    console.log('   xopcbot gateway restart   # Restart gateway');
-    console.log('   xopcbot gateway logs      # View logs');
-  } else {
-    // Check if it's a "compiled code not found" error
-    const isDevMode = result.error?.includes('Compiled code not found');
-    
-    console.error('❌ Failed to start gateway in background mode');
-    
-    if (isDevMode) {
-      console.log('');
-      console.log('⚠️  You are in development mode (using tsx).');
-      console.log('');
-      console.log('💡 Option 1: Build and run in background (recommended)');
-      console.log('    pnpm run build');
-      console.log('    xopcbot gateway --background');
-      console.log('');
-      console.log('💡 Option 2: Run in foreground (blocks terminal)');
-      console.log('    xopcbot gateway');
-      console.log('    # Press Ctrl+C to stop');
-      console.log('');
-    } else if (result.portInUse) {
-      console.error('\n⚠️  Port conflict detected:');
-      console.error(result.error);
-    } else if (result.error) {
-      console.error(`   ${result.error}`);
+    printGatewayInfo(host, port, result.pid);
+  } else if (result.portInUse) {
+    // Port conflict detected during start, try restart instead
+    console.log('\n🔄 Port is in use, attempting restart...');
+    try {
+      await manager.restart(processConfig);
+      console.log('✅ Gateway restarted successfully!');
+      printGatewayInfo(host, port);
+    } catch (error) {
+      await handleGatewayError(error, port, true);
     }
+  } else {
+    handleStartResultError(result);
   }
 }
 
