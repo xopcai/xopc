@@ -487,6 +487,8 @@ export class TelegramChannelPlugin implements ChannelPlugin {
           { command: 'models', description: 'Show available models' },
           { command: 'usage', description: 'Show token usage stats' },
           { command: 'cleanup', description: 'Clean up old sessions' },
+          { command: 'new', description: 'Start a new session (archive current)' },
+          { command: 'skills', description: 'Manage skills (e.g., /skills reload)' },
         ]);
         log.info({ accountId }, 'Registered Telegram bot commands');
       } catch (err) {
