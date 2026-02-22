@@ -35,7 +35,7 @@ interface Message {
 ### 默认会话
 
 ```bash
-npm run dev -- agent -m "Hello"
+xopcbot agent -m "Hello"
 ```
 
 使用默认会话键进行对话。
@@ -43,13 +43,13 @@ npm run dev -- agent -m "Hello"
 ### 指定会话
 
 ```bash
-npm run dev -- agent -m "Hello" --session my-chat
+xopcbot agent -m "Hello" --session my-chat
 ```
 
 ### 交互模式
 
 ```bash
-npm run dev -- agent -i
+xopcbot agent -i
 ```
 
 按 `Ctrl+C` 退出交互模式。

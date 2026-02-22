@@ -5,7 +5,7 @@ REST API 网关，用于外部程序与 xopcbot 交互。
 ## 启动网关
 
 ```bash
-npm run dev -- gateway --port 18790
+xopcbot gateway --port 18790
 ```
 
 默认端口：`18790`

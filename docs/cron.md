@@ -7,7 +7,7 @@ xopcbot has a built-in Cron service that supports scheduled message sending with
 ### List Tasks
 
 ```bash
-npm run dev -- cron list
+xopcbot cron list
 ```
 
 Output example:
@@ -22,7 +22,7 @@ def67890 | 0 10 * * *   | isolated | true    | 2026-02-21T10:00
 ### Add Task
 
 ```bash
-npm run dev -- cron add --schedule "0 9 * * *" --message "Good morning!"
+xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
 ```
 
 **Parameters:**
@@ -40,20 +40,20 @@ npm run dev -- cron add --schedule "0 9 * * *" --message "Good morning!"
 ### Remove Task
 
 ```bash
-npm run dev -- cron remove <task-id>
+xopcbot cron remove <task-id>
 ```
 
 ### Enable/Disable Task
 
 ```bash
-npm run dev -- cron enable <task-id>
-npm run dev -- cron disable <task-id>
+xopcbot cron enable <task-id>
+xopcbot cron disable <task-id>
 ```
 
 ### Run Now
 
 ```bash
-npm run dev -- cron run <task-id>
+xopcbot cron run <task-id>
 ```
 
 ## Execution Modes
@@ -63,7 +63,7 @@ npm run dev -- cron run <task-id>
 Sends messages directly to the specified channel without AI processing.
 
 ```bash
-npm run dev -- cron add "0 9 * *" "Good morning!" \
+xopcbot cron add "0 9 * *" "Good morning!" \
   --name "Morning" \
   --target main \
   --channel telegram \
@@ -75,7 +75,7 @@ npm run dev -- cron add "0 9 * *" "Good morning!" \
 Uses AI agent to process the message, then sends the response to the channel.
 
 ```bash
-npm run dev -- cron add "0 10 * * *" "What's the weather today?" \
+xopcbot cron add "0 10 * * *" "What's the weather today?" \
   --name "Weather" \
   --target isolated \
   --model minimax/minimax-m2.5 \

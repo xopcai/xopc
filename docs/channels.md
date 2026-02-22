@@ -48,7 +48,7 @@ Add to `~/.config/xopcbot/config.json`:
 ### Startup Test
 
 ```bash
-npm run dev -- gateway --port 18790
+xopcbot gateway --port 18790
 ```
 
 Then chat with the bot in Telegram.
@@ -167,7 +167,7 @@ npm start
 }
 
 # 3. Start gateway
-npm run dev -- gateway --port 18790
+xopcbot gateway --port 18790
 ```
 
 ---
@@ -205,7 +205,7 @@ npm run dev -- gateway --port 18790
 
 ```bash
 # Send message to Telegram
-npm run dev -- agent -m "Hello from CLI"
+xopcbot agent -m "Hello from CLI"
 ```
 
 ### Via Gateway API

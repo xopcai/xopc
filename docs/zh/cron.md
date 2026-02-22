@@ -7,7 +7,7 @@ xopcbot 内置 Cron 服务，支持定时发送消息，支持两种执行模式
 ### 查看任务列表
 
 ```bash
-npm run dev -- cron list
+xopcbot cron list
 ```
 
 输出示例：
@@ -22,7 +22,7 @@ def67890 | 0 10 * * *   | isolated | true    | 2026-02-21T10:00
 ### 添加任务
 
 ```bash
-npm run dev -- cron add --schedule "0 9 * * *" --message "Good morning!"
+xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
 ```
 
 参数：
@@ -40,20 +40,20 @@ npm run dev -- cron add --schedule "0 9 * * *" --message "Good morning!"
 ### 删除任务
 
 ```bash
-npm run dev -- cron remove <task-id>
+xopcbot cron remove <task-id>
 ```
 
 ### 启用/禁用任务
 
 ```bash
-npm run dev -- cron enable <task-id>
-npm run dev -- cron disable <task-id>
+xopcbot cron enable <task-id>
+xopcbot cron disable <task-id>
 ```
 
 ### 立即运行
 
 ```bash
-npm run dev -- cron run <task-id>
+xopcbot cron run <task-id>
 ```
 
 ## 执行模式
@@ -63,7 +63,7 @@ npm run dev -- cron run <task-id>
 不经过 AI 处理，直接向指定渠道发送消息。
 
 ```bash
-npm run dev -- cron add "0 9 * * *" "早安！" \
+xopcbot cron add "0 9 * * *" "早安！" \
   --name "早安提醒" \
   --target main \
   --channel telegram \
@@ -75,7 +75,7 @@ npm run dev -- cron add "0 9 * * *" "早安！" \
 使用 AI Agent 处理消息，然后将回复发送到指定渠道。
 
 ```bash
-npm run dev -- cron add "0 10 * * *" "今天天气怎么样？" \
+xopcbot cron add "0 10 * * *" "今天天气怎么样？" \
   --name "天气查询" \
   --target isolated \
   --model minimax/minimax-m2.5 \

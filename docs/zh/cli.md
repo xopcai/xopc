@@ -2,6 +2,34 @@
 
 xopcbot 提供丰富的 CLI 命令用于管理、对话和配置。
 
+## 使用方式
+
+### 从 npm 安装（推荐）
+
+```bash
+# 全局安装
+npm install -g @xopcai/xopcbot
+
+# 直接使用命令
+xopcbot <command>
+```
+
+### 从源码运行（开发）
+
+```bash
+# 克隆并安装
+git clone https://github.com/xopcai/xopcbot.git
+cd xopcbot
+pnpm install
+
+# 使用 pnpm run dev -- 前缀
+pnpm run dev -- <command>
+```
+
+**本文档中的命令示例默认使用 `xopcbot` 命令。** 如果你从源码运行，请将 `xopcbot` 替换为 `pnpm run dev --`。
+
+---
+
 ## 命令列表
 
 | 命令 | 描述 |
@@ -20,7 +48,7 @@ xopcbot 提供丰富的 CLI 命令用于管理、对话和配置。
 初始化 xopcbot 配置。
 
 ```bash
-npm run dev -- onboard
+xopcbot onboard
 ```
 
 **功能**：
@@ -47,7 +75,7 @@ npm run dev -- onboard
 ### 单次对话
 
 ```bash
-npm run dev -- agent -m "Hello, world!"
+xopcbot agent -m "Hello, world!"
 ```
 
 **参数**：
@@ -61,7 +89,7 @@ npm run dev -- agent -m "Hello, world!"
 ### 交互模式
 
 ```bash
-npm run dev -- agent -i
+xopcbot agent -i
 ```
 
 **使用**：
@@ -79,7 +107,7 @@ Bot: File listing...
 ### 指定会话
 
 ```bash
-npm run dev -- agent -m "Continue our discussion" -s my-session
+xopcbot agent -m "Continue our discussion" -s my-session
 ```
 
 ---
@@ -89,7 +117,7 @@ npm run dev -- agent -m "Continue our discussion" -s my-session
 启动 REST API 网关。
 
 ```bash
-npm run dev -- gateway --port 18790
+xopcbot gateway --port 18790
 ```
 
 **参数**：
@@ -102,7 +130,7 @@ npm run dev -- gateway --port 18790
 **后台运行**：
 
 ```bash
-nohup npm run dev -- gateway --port 18790 > bot.log 2>&1 &
+nohup xopcbot gateway --port 18790 > bot.log 2>&1 &
 ```
 
 ---
@@ -114,7 +142,7 @@ nohup npm run dev -- gateway --port 18790 > bot.log 2>&1 &
 ### 列出任务
 
 ```bash
-npm run dev -- cron list
+xopcbot cron list
 ```
 
 **输出**：
@@ -129,7 +157,7 @@ abc2 | */15 * * * * | Reminder every 15m   | false
 ### 添加任务
 
 ```bash
-npm run dev -- cron add --schedule "0 9 * * *" --message "Good morning!"
+xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
 ```
 
 **参数**：
@@ -144,38 +172,38 @@ npm run dev -- cron add --schedule "0 9 * * *" --message "Good morning!"
 
 ```bash
 # 每天 9 点
-npm run dev -- cron add --schedule "0 9 * * *" --message "Daily update"
+xopcbot cron add --schedule "0 9 * * *" --message "Daily update"
 
 # 工作日 18 点
-npm run dev -- cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!"
+xopcbot cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!"
 
 # 每小时提醒
-npm run dev -- cron add --schedule "0 * * * *" --message "Hourly reminder" --name hourly
+xopcbot cron add --schedule "0 * * * *" --message "Hourly reminder" --name hourly
 ```
 
 ### 删除任务
 
 ```bash
-npm run dev -- cron remove <task-id>
+xopcbot cron remove <task-id>
 ```
 
 **示例**：
 
 ```bash
-npm run dev -- cron remove abc1
+xopcbot cron remove abc1
 ```
 
 ### 启用/禁用
 
 ```bash
-npm run dev -- cron enable <task-id>
-npm run dev -- cron disable <task-id>
+xopcbot cron enable <task-id>
+xopcbot cron disable <task-id>
 ```
 
 ### 触发任务
 
 ```bash
-npm run dev -- cron trigger <task-id>
+xopcbot cron trigger <task-id>
 ```
 
 ---
@@ -187,7 +215,7 @@ npm run dev -- cron trigger <task-id>
 ### 列出插件
 
 ```bash
-npm run dev -- plugin list
+xopcbot plugin list
 ```
 
 **输出示例**：
@@ -213,29 +241,29 @@ npm run dev -- plugin list
 
 **从 npm 安装到 workspace**（默认）：
 ```bash
-npm run dev -- plugin install <package-name>
+xopcbot plugin install <package-name>
 
 # 示例
-npm run dev -- plugin install xopcbot-plugin-telegram
-npm run dev -- plugin install @scope/my-plugin
-npm run dev -- plugin install my-plugin@1.0.0
+xopcbot plugin install xopcbot-plugin-telegram
+xopcbot plugin install @scope/my-plugin
+xopcbot plugin install my-plugin@1.0.0
 ```
 
 **安装到 global**（跨项目共享）：
 ```bash
-npm run dev -- plugin install <package-name> --global
+xopcbot plugin install <package-name> --global
 
 # 示例
-npm run dev -- plugin install xopcbot-plugin-telegram --global
+xopcbot plugin install xopcbot-plugin-telegram --global
 ```
 
 **从本地目录安装**：
 ```bash
 # 安装到 workspace
-npm run dev -- plugin install ./my-local-plugin
+xopcbot plugin install ./my-local-plugin
 
 # 安装到 global
-npm run dev -- plugin install ./my-local-plugin --global
+xopcbot plugin install ./my-local-plugin --global
 ```
 
 **参数**：
@@ -259,14 +287,14 @@ npm run dev -- plugin install ./my-local-plugin --global
 ### 移除插件
 
 ```bash
-npm run dev -- plugin remove <plugin-id>
+xopcbot plugin remove <plugin-id>
 # 或
-npm run dev -- plugin uninstall <plugin-id>
+xopcbot plugin uninstall <plugin-id>
 ```
 
 **示例**：
 ```bash
-npm run dev -- plugin remove telegram-channel
+xopcbot plugin remove telegram-channel
 ```
 
 **注意**：
@@ -276,12 +304,12 @@ npm run dev -- plugin remove telegram-channel
 ### 查看插件详情
 
 ```bash
-npm run dev -- plugin info <plugin-id>
+xopcbot plugin info <plugin-id>
 ```
 
 **示例**：
 ```bash
-npm run dev -- plugin info telegram-channel
+xopcbot plugin info telegram-channel
 ```
 
 **输出**：
@@ -300,7 +328,7 @@ npm run dev -- plugin info telegram-channel
 创建新插件脚手架。
 
 ```bash
-npm run dev -- plugin create <plugin-id> [options]
+xopcbot plugin create <plugin-id> [options]
 ```
 
 **参数**：
@@ -315,13 +343,13 @@ npm run dev -- plugin create <plugin-id> [options]
 
 ```bash
 # 创建工具类插件
-npm run dev -- plugin create weather-tool --name "Weather Tool" --kind tool
+xopcbot plugin create weather-tool --name "Weather Tool" --kind tool
 
 # 创建通道类插件
-npm run dev -- plugin create discord-channel --name "Discord Channel" --kind channel
+xopcbot plugin create discord-channel --name "Discord Channel" --kind channel
 
 # 创建内存类插件
-npm run dev -- plugin create redis-memory --name "Redis Memory" --kind memory
+xopcbot plugin create redis-memory --name "Redis Memory" --kind memory
 ```
 
 **生成的文件**：
@@ -361,10 +389,10 @@ npm run dev -- plugin create redis-memory --name "Redis Memory" --kind memory
 ### 帮助信息
 
 ```bash
-npm run dev -- --help
-npm run dev -- agent --help
-npm run dev -- gateway --help
-npm run dev -- plugin --help
+xopcbot --help
+xopcbot agent --help
+xopcbot gateway --help
+xopcbot plugin --help
 ```
 
 ---
@@ -376,77 +404,77 @@ npm run dev -- plugin --help
 ### 列出技能
 
 ```bash
-npm run dev -- skills list
-npm run dev -- skills list -v          # 详细信息
-npm run dev -- skills list --json      # JSON 格式
+xopcbot skills list
+xopcbot skills list -v          # 详细信息
+xopcbot skills list --json      # JSON 格式
 ```
 
 ### 安装技能依赖
 
 ```bash
-npm run dev -- skills install <skill-name>
-npm run dev -- skills install <skill-name> -i <install-id>   # 指定安装器
-npm run dev -- skills install <skill-name> --dry-run         # 预演
+xopcbot skills install <skill-name>
+xopcbot skills install <skill-name> -i <install-id>   # 指定安装器
+xopcbot skills install <skill-name> --dry-run         # 预演
 ```
 
 ### 启用/禁用技能
 
 ```bash
-npm run dev -- skills enable <skill-name>
-npm run dev -- skills disable <skill-name>
+xopcbot skills enable <skill-name>
+xopcbot skills disable <skill-name>
 ```
 
 ### 查看技能状态
 
 ```bash
-npm run dev -- skills status
-npm run dev -- skills status <skill-name>
-npm run dev -- skills status --json
+xopcbot skills status
+xopcbot skills status <skill-name>
+xopcbot skills status --json
 ```
 
 ### 安全审计
 
 ```bash
-npm run dev -- skills audit
-npm run dev -- skills audit <skill-name>
-npm run dev -- skills audit <skill-name> --deep    # 详细输出
+xopcbot skills audit
+xopcbot skills audit <skill-name>
+xopcbot skills audit <skill-name> --deep    # 详细输出
 ```
 
 ### 配置技能
 
 ```bash
-npm run dev -- skills config <skill-name> --show
-npm run dev -- skills config <skill-name> --api-key=KEY
-npm run dev -- skills config <skill-name> --env KEY=value
+xopcbot skills config <skill-name> --show
+xopcbot skills config <skill-name> --api-key=KEY
+xopcbot skills config <skill-name> --env KEY=value
 ```
 
 ### 测试技能
 
 ```bash
 # 测试所有技能
-npm run dev -- skills test
+xopcbot skills test
 
 # 测试特定技能
-npm run dev -- skills test <skill-name>
+xopcbot skills test <skill-name>
 
 # 详细输出
-npm run dev -- skills test --verbose
+xopcbot skills test --verbose
 
 # JSON 格式
-npm run dev -- skills test --format json
+xopcbot skills test --format json
 
 # 跳过特定测试
-npm run dev -- skills test --skip-security
-npm run dev -- skills test --skip-examples
+xopcbot skills test --skip-security
+xopcbot skills test --skip-examples
 
 # 验证 SKILL.md 文件
-npm run dev -- skills test validate ./skills/weather/SKILL.md
+xopcbot skills test validate ./skills/weather/SKILL.md
 
 # 检查依赖
-npm run dev -- skills test check-deps
+xopcbot skills test check-deps
 
 # 安全审计
-npm run dev -- skills test security --deep
+xopcbot skills test security --deep
 ```
 
 **测试输出格式**：
@@ -478,25 +506,25 @@ npm run dev -- skills test security --deep
 
 case "$1" in
   chat)
-    npm run dev -- agent -m "${*:2}"
+    xopcbot agent -m "${*:2}"
     ;;
   shell)
-    npm run dev -- agent -i
+    xopcbot agent -i
     ;;
   start)
-    npm run dev -- gateway --port 18790
+    xopcbot gateway --port 18790
     ;;
   cron)
     shift
-    npm run dev -- cron "$@"
+    xopcbot cron "$@"
     ;;
   plugin)
     shift
-    npm run dev -- plugin "$@"
+    xopcbot plugin "$@"
     ;;
   skills)
     shift
-    npm run dev -- skills "$@"
+    xopcbot skills "$@"
     ;;
   *)
     echo "Usage: bot {chat|shell|start|cron|plugin|skills}"

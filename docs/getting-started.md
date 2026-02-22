@@ -35,7 +35,7 @@ npm install
 The easiest way to set up your configuration is with the interactive `configure` command.
 
 ```bash
-npm run dev -- configure
+xopcbot configure
 # or: pnpm run dev -- configure
 ```
 
@@ -55,7 +55,7 @@ Once configured, you can immediately start interacting with your agent through t
 Use the `-m` flag to send a single message and receive a response.
 
 ```bash
-npm run dev -- agent -m "Explain what an LLM is in one sentence."
+xopcbot agent -m "Explain what an LLM is in one sentence."
 # or: pnpm run dev -- agent -m "Explain what an LLM is in one sentence."
 ```
 
@@ -64,7 +64,7 @@ npm run dev -- agent -m "Explain what an LLM is in one sentence."
 For a continuous conversation, use the `-i` flag to enter interactive mode.
 
 ```bash
-npm run dev -- agent -i
+xopcbot agent -i
 # or: pnpm run dev -- agent -i
 ```
 
@@ -99,7 +99,7 @@ See the [Channels documentation](channels.md) for more details.
 Run the `gateway` command. This starts a long-running process that connects to your configured channels and listens for messages.
 
 ```bash
-npm run dev -- gateway
+xopcbot gateway
 # or: pnpm run dev -- gateway
 ```
 

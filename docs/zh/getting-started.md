@@ -35,7 +35,7 @@ npm install
 最简单的配置方式是使用交互式 `onboard` 命令：
 
 ```bash
-npm run dev -- onboard
+xopcbot onboard
 # 或: pnpm run dev -- onboard
 ```
 
@@ -64,7 +64,7 @@ npm run dev -- onboard
 使用 `-m` 标志发送单条消息并接收回复：
 
 ```bash
-npm run dev -- agent -m "用一句话解释什么是 LLM。"
+xopcbot agent -m "用一句话解释什么是 LLM。"
 # 或: pnpm run dev -- agent -m "用一句话解释什么是 LLM。"
 ```
 
@@ -73,7 +73,7 @@ npm run dev -- agent -m "用一句话解释什么是 LLM。"
 要进行连续对话，使用 `-i` 标志进入交互模式：
 
 ```bash
-npm run dev -- agent -i
+xopcbot agent -i
 # 或: pnpm run dev -- agent -i
 ```
 
@@ -108,7 +108,7 @@ npm run dev -- agent -i
 运行 `gateway` 命令。这将启动一个长期运行的进程，连接配置的通道并监听消息。
 
 ```bash
-npm run dev -- gateway
+xopcbot gateway
 # 或: pnpm run dev -- gateway
 ```
 

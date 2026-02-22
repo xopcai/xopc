@@ -48,7 +48,7 @@ xopcbot 支持多种通信通道：Telegram、WhatsApp。
 ### 启动测试
 
 ```bash
-npm run dev -- gateway --port 18790
+xopcbot gateway --port 18790
 ```
 
 然后在 Telegram 中与机器人对话。
@@ -167,7 +167,7 @@ npm start
 }
 
 # 3. 启动网关
-npm run dev -- gateway --port 18790
+xopcbot gateway --port 18790
 ```
 
 ---
@@ -205,7 +205,7 @@ npm run dev -- gateway --port 18790
 
 ```bash
 # 发送消息到 Telegram
-npm run dev -- agent -m "Hello from CLI"
+xopcbot agent -m "Hello from CLI"
 ```
 
 ### 通过 Gateway API
