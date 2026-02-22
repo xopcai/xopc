@@ -11,6 +11,7 @@ xopcbot 提供丰富的 CLI 命令用于管理、对话和配置。
 | `gateway` | 启动 REST 网关 |
 | `cron` | 管理定时任务 |
 | `plugin` | 管理插件 |
+| `skills` | 管理技能（安装、启用、配置） |
 
 ---
 
@@ -368,6 +369,106 @@ npm run dev -- plugin --help
 
 ---
 
+## skills
+
+管理技能的 CLI 命令。
+
+### 列出技能
+
+```bash
+npm run dev -- skills list
+npm run dev -- skills list -v          # 详细信息
+npm run dev -- skills list --json      # JSON 格式
+```
+
+### 安装技能依赖
+
+```bash
+npm run dev -- skills install <skill-name>
+npm run dev -- skills install <skill-name> -i <install-id>   # 指定安装器
+npm run dev -- skills install <skill-name> --dry-run         # 预演
+```
+
+### 启用/禁用技能
+
+```bash
+npm run dev -- skills enable <skill-name>
+npm run dev -- skills disable <skill-name>
+```
+
+### 查看技能状态
+
+```bash
+npm run dev -- skills status
+npm run dev -- skills status <skill-name>
+npm run dev -- skills status --json
+```
+
+### 安全审计
+
+```bash
+npm run dev -- skills audit
+npm run dev -- skills audit <skill-name>
+npm run dev -- skills audit <skill-name> --deep    # 详细输出
+```
+
+### 配置技能
+
+```bash
+npm run dev -- skills config <skill-name> --show
+npm run dev -- skills config <skill-name> --api-key=KEY
+npm run dev -- skills config <skill-name> --env KEY=value
+```
+
+### 测试技能
+
+```bash
+# 测试所有技能
+npm run dev -- skills test
+
+# 测试特定技能
+npm run dev -- skills test <skill-name>
+
+# 详细输出
+npm run dev -- skills test --verbose
+
+# JSON 格式
+npm run dev -- skills test --format json
+
+# 跳过特定测试
+npm run dev -- skills test --skip-security
+npm run dev -- skills test --skip-examples
+
+# 验证 SKILL.md 文件
+npm run dev -- skills test validate ./skills/weather/SKILL.md
+
+# 检查依赖
+npm run dev -- skills test check-deps
+
+# 安全审计
+npm run dev -- skills test security --deep
+```
+
+**测试输出格式**：
+
+| 格式 | 说明 |
+|------|------|
+| `text` | 人类可读的文本输出（默认） |
+| `json` | JSON 格式，用于机器读取 |
+| `tap` | TAP 格式，用于 CI/CD 集成 |
+
+**测试类型**：
+
+| 测试 | 说明 |
+|------|------|
+| SKILL.md 格式 | 验证 YAML frontmatter 和必需字段 |
+| 依赖检查 | 检查声明的二进制文件是否可用 |
+| 安全扫描 | 扫描危险代码模式 |
+| 元数据完整性 | 检查 emoji、homepage 等可选字段 |
+| 示例验证 | 验证代码块语法 |
+
+---
+
 ## 快捷脚本
 
 创建快捷脚本 `bot`：
@@ -393,8 +494,12 @@ case "$1" in
     shift
     npm run dev -- plugin "$@"
     ;;
+  skills)
+    shift
+    npm run dev -- skills "$@"
+    ;;
   *)
-    echo "Usage: bot {chat|shell|start|cron|plugin}"
+    echo "Usage: bot {chat|shell|start|cron|plugin|skills}"
     ;;
 esac
 ```
@@ -407,6 +512,8 @@ bot start
 bot cron list
 bot plugin list
 bot plugin install xopcbot-plugin-telegram
+bot skills list
+bot skills test weather
 ```
 
 ---

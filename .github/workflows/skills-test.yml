@@ -1,0 +1,218 @@
+name: Skills Test
+
+on:
+  push:
+    paths:
+      - 'skills/**'
+      - 'src/agent/skills/**'
+      - 'src/cli/commands/skills*.ts'
+  pull_request:
+    paths:
+      - 'skills/**'
+      - 'src/agent/skills/**'
+      - 'src/cli/commands/skills*.ts'
+  workflow_dispatch:
+
+jobs:
+  test-skills:
+    name: Test Skills
+    runs-on: ${{ matrix.os }}
+    
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+        node-version: [22.x]
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js ${{ matrix.node-version }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Build
+        run: pnpm run build
+      
+      - name: Run skill tests
+        run: |
+          echo "Testing skills on ${{ matrix.os }}"
+          ./scripts/test-skills.sh --verbose
+      
+      - name: Run unit tests for test framework
+        run: pnpm vitest run src/agent/skills/__tests__/test-framework.test.ts
+      
+      - name: Upload test results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: skill-test-results-${{ matrix.os }}
+          path: |
+            test-results/*.json
+            *.tap
+          retention-days: 7
+
+  test-skills-windows:
+    name: Test Skills (Windows)
+    runs-on: windows-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Build
+        run: pnpm run build
+      
+      - name: Run skill tests
+        run: |
+          # Windows doesn't support bash script, run CLI directly
+          pnpm run dev -- skills test --format json --skip-examples
+        shell: bash
+
+  security-audit:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Build
+        run: pnpm run build
+      
+      - name: Run security audit
+        run: |
+          echo "Running security audit on all skills..."
+          pnpm run dev -- skills test security --deep
+          
+          # Also run npm audit for dependencies
+          npm audit --audit-level=moderate || true
+
+  validate-skill-format:
+    name: Validate SKILL.md Format
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Build
+        run: pnpm run build
+      
+      - name: Validate all SKILL.md files
+        run: |
+          echo "Validating SKILL.md format for all skills..."
+          for skill_dir in skills/*/; do
+            if [ -f "$skill_dir/SKILL.md" ]; then
+              echo "Validating $skill_dir"
+              pnpm run dev -- skills test validate "$skill_dir/SKILL.md"
+            fi
+          done
+
+  check-dependencies:
+    name: Check Dependencies
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+      
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v2
+        with:
+          version: 8
+      
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+      
+      - name: Build
+        run: pnpm run build
+      
+      - name: Check skill dependencies
+        run: |
+          echo "Checking skill dependencies..."
+          pnpm run dev -- skills test check-deps
+
+  report:
+    name: Test Report
+    runs-on: ubuntu-latest
+    needs: [test-skills, test-skills-windows, security-audit, validate-skill-format, check-dependencies]
+    if: always()
+    
+    steps:
+      - name: Generate report
+        run: |
+          echo "═══════════════════════════════════════════════════════════"
+          echo "              Skills Test Report                          "
+          echo "═══════════════════════════════════════════════════════════"
+          echo ""
+          echo "Test Jobs Status:"
+          echo "  - Linux/Mac Tests: ${{ needs.test-skills.result }}"
+          echo "  - Windows Tests: ${{ needs.test-skills-windows.result }}"
+          echo "  - Security Audit: ${{ needs.security-audit.result }}"
+          echo "  - Format Validation: ${{ needs.validate-skill-format.result }}"
+          echo "  - Dependency Check: ${{ needs.check-dependencies.result }}"
+          echo ""
+          
+          # Overall status
+          if [[ "${{ needs.test-skills.result }}" == "success" && \
+                "${{ needs.test-skills-windows.result }}" == "success" || \
+                "${{ needs.test-skills-windows.result }}" == "skipped" ]]; then
+            echo "✅ All skill tests passed!"
+          else
+            echo "❌ Some skill tests failed"
+            exit 1
+          fi

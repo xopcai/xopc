@@ -6,6 +6,7 @@
   - [Architecture](architecture.md)
   - [Session Management](session.md)
   - [Skills System](skills.md)
+  - [Skills Testing](skills-testing.md)
   - [Built-in Tools](tools.md)
 
 - **Features**

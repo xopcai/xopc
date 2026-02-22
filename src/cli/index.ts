@@ -13,6 +13,7 @@ import './commands/config.js';
 import './commands/models.js';
 import './commands/plugin.js';
 import './commands/auth.js';
+import './commands/skills.js';
 
 
 // Global parsed options - updated before each command

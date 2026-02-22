@@ -47,3 +47,5 @@ docs/.vitepress/cache/
 
 # Docs-local
 .docs-local
+
+.pi

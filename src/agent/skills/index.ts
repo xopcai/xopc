@@ -2,30 +2,20 @@ import { existsSync, readdirSync, readFileSync } from 'fs';
 import { basename, dirname, join, relative, sep } from 'path';
 import { parseFrontmatter } from '../../utils/frontmatter.js';
 import { DEFAULT_BASE_DIR } from '../../config/paths.js';
+import { createLogger } from '../../utils/logger.js';
+import type { 
+  Skill, 
+  SkillMetadata, 
+  SkillDiagnostic, 
+  LoadSkillsResult,
+  SkillConfig,
+  SkillInstallSpec,
+  SkillRequires,
+} from './types.js';
+
+const log = createLogger('SkillLoader');
 
 const IGNORE_FILES = ['.gitignore', '.ignore', '.fdignore'];
-
-export interface SkillDiagnostic {
-  type: 'warning' | 'collision' | 'error';
-  skillName?: string;
-  message: string;
-  path?: string;
-}
-
-export interface Skill {
-  name: string;
-  description: string;
-  filePath: string;
-  baseDir: string;
-  source: 'builtin' | 'workspace' | 'global';
-  disableModelInvocation: boolean;
-}
-
-export interface LoadSkillsResult {
-  skills: Skill[];
-  prompt: string;
-  diagnostics: SkillDiagnostic[];
-}
 
 function toPosixPath(p: string): string {
   return p.split(sep).join('/');
@@ -106,10 +96,13 @@ function escapeXml(str: string): string {
 }
 
 function formatSkillXml(skill: Skill): string {
+  const emoji = skill.metadata.emoji || skill.metadata.openclaw?.emoji || '';
+  const emojiStr = emoji ? `${emoji} ` : '';
+  
   return [
     '  <skill>',
     `    <name>${escapeXml(skill.name)}</name>`,
-    `    <description>${escapeXml(skill.description)}</description>`,
+    `    <description>${emojiStr}${escapeXml(skill.description)}</description>`,
     `    <location>${escapeXml(skill.filePath)}</location>`,
     '  </skill>',
   ].join('\n');
@@ -178,16 +171,59 @@ function discoverSkills(dir: string, source: 'builtin' | 'workspace' | 'global')
   return skills;
 }
 
+function parseSkillMetadata(frontmatter: Record<string, unknown>): SkillMetadata {
+  // Support both direct metadata and openclaw-compatible nested metadata
+  const metadata: SkillMetadata = {
+    name: frontmatter.name as string || '',
+    description: frontmatter.description as string || '',
+    emoji: frontmatter.emoji as string || undefined,
+    homepage: frontmatter.homepage as string || undefined,
+    os: frontmatter.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
+    requires: frontmatter.requires as SkillMetadata['requires'] || undefined,
+    install: frontmatter.install as SkillInstallSpec[] || undefined,
+  };
+
+  // Support openclaw-compatible nested metadata
+  const openclawMeta = frontmatter.metadata as Record<string, unknown> | undefined;
+  if (openclawMeta?.openclaw) {
+    const oc = openclawMeta.openclaw as Record<string, unknown>;
+    metadata.openclaw = {
+      emoji: oc.emoji as string || undefined,
+      requires: oc.requires as SkillRequires || undefined,
+      install: oc.install as SkillInstallSpec[] || undefined,
+      os: oc.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
+    };
+    
+    // Merge openclaw metadata if direct metadata is missing
+    if (!metadata.emoji && metadata.openclaw.emoji) {
+      metadata.emoji = metadata.openclaw.emoji;
+    }
+    if (!metadata.requires && metadata.openclaw.requires) {
+      metadata.requires = metadata.openclaw.requires;
+    }
+    if (!metadata.install && metadata.openclaw.install) {
+      metadata.install = metadata.openclaw.install;
+    }
+    if (!metadata.os && metadata.openclaw.os) {
+      metadata.os = metadata.openclaw.os;
+    }
+  }
+
+  return metadata;
+}
+
 function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | 'global'): Skill | null {
   try {
     const rawContent = readFileSync(filePath, 'utf-8');
-    const { frontmatter } = parseFrontmatter(rawContent);
+    const { frontmatter, content } = parseFrontmatter(rawContent);
     const skillDir = dirname(filePath);
     const parentDirName = basename(skillDir);
 
     const name = (frontmatter.name as string | undefined) || parentDirName;
     const description = frontmatter.description as string | undefined;
     if (!description?.trim()) return null;
+
+    const metadata = parseSkillMetadata(frontmatter);
 
     return {
       name,
@@ -196,6 +232,8 @@ function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | '
       baseDir: skillDir,
       source,
       disableModelInvocation: frontmatter['disable-model-invocation'] === true,
+      metadata,
+      content,
     };
   } catch {
     return null;
@@ -206,8 +244,9 @@ export function loadSkills(options: {
   workspaceDir?: string;
   globalDir?: string;
   builtinDir?: string;
+  extraDirs?: string[];
 }): LoadSkillsResult {
-  const { workspaceDir, builtinDir } = options;
+  const { workspaceDir, builtinDir, extraDirs = [] } = options;
 
   const skillMap = new Map<string, Skill>();
   const diagnostics: SkillDiagnostic[] = [];
@@ -266,6 +305,25 @@ export function loadSkills(options: {
     }
   }
 
+  // Scan extra directories
+  for (const extraDir of extraDirs) {
+    if (existsSync(extraDir)) {
+      for (const skill of discoverSkills(extraDir, 'global')) {
+        const existing = skillMap.get(skill.name);
+        if (existing) {
+          diagnostics.push({
+            type: 'collision',
+            skillName: skill.name,
+            message: `Skill "${skill.name}" collision: ${existing.source} overrides ${skill.source}`,
+            path: skill.filePath,
+          });
+        } else {
+          skillMap.set(skill.name, skill);
+        }
+      }
+    }
+  }
+
   return {
     skills: Array.from(skillMap.values()),
     prompt: formatSkillsForPrompt(Array.from(skillMap.values())),
@@ -273,25 +331,138 @@ export function loadSkills(options: {
   };
 }
 
-export function createSkillLoader() {
+export interface SkillLoader {
+  init: (workspace: string, builtin: string | null) => LoadSkillsResult;
+  load: () => LoadSkillsResult;
+  reload: () => LoadSkillsResult;
+  getSkills: () => Skill[];
+  getPrompt: () => string;
+  getDiagnostics: () => SkillDiagnostic[];
+  getLastLoadTime: () => number;
+  getSkillByName: (name: string) => Skill | undefined;
+  getEnabledSkills: (config?: Record<string, SkillConfig>) => Skill[];
+}
+
+export function createSkillLoader(): SkillLoader {
   let cachedSkills: Skill[] = [];
   let cachedPrompt: string = '';
   let cachedDiagnostics: SkillDiagnostic[] = [];
   let lastLoadTime = 0;
   let workspaceDir: string | undefined;
   let builtinDir: string | undefined;
+  let extraDirs: string[] = [];
+
+  function updateCache(result: LoadSkillsResult): LoadSkillsResult {
+    cachedSkills = result.skills;
+    cachedPrompt = result.prompt;
+    cachedDiagnostics = result.diagnostics;
+    lastLoadTime = Date.now();
+    return result;
+  }
 
   return {
     init: (workspace: string, builtin: string | null) => {
       workspaceDir = workspace;
       builtinDir = builtin || undefined;
-      return loadSkills({ workspaceDir, builtinDir });
+      return updateCache(loadSkills({ workspaceDir, builtinDir, extraDirs }));
     },
-    load: () => loadSkills({ workspaceDir, builtinDir }),
-    reload: () => loadSkills({ workspaceDir, builtinDir }),
+    
+    load: () => {
+      return updateCache(loadSkills({ workspaceDir, builtinDir, extraDirs }));
+    },
+    
+    reload: () => {
+      log.info('Reloading skills');
+      return updateCache(loadSkills({ workspaceDir, builtinDir, extraDirs }));
+    },
+    
     getSkills: () => cachedSkills,
     getPrompt: () => cachedPrompt,
     getDiagnostics: () => cachedDiagnostics,
     getLastLoadTime: () => lastLoadTime,
+    
+    getSkillByName: (name: string) => {
+      return cachedSkills.find(s => s.name === name);
+    },
+    
+    getEnabledSkills: (config?: Record<string, SkillConfig>) => {
+      if (!config) {
+        return cachedSkills.filter(s => !s.disableModelInvocation);
+      }
+      
+      return cachedSkills.filter(skill => {
+        const skillConfig = config[skill.name];
+        if (skillConfig?.enabled === false) {
+          return false;
+        }
+        return !skill.disableModelInvocation;
+      });
+    },
   };
 }
+
+// Re-export types for convenience
+export type { 
+  Skill, 
+  SkillMetadata, 
+  SkillConfig,
+  SkillInstallSpec,
+  SkillInstallResult,
+  SkillInstallRequest,
+  LoadSkillsResult,
+  SkillDiagnostic,
+  SkillSnapshot,
+} from './types.js';
+
+// Re-export installer
+export { 
+  installSkill, 
+  findInstallSpec,
+  hasBinary,
+  getDefaultInstallerPreferences,
+  type InstallerPreferences,
+  type InstallContext,
+} from './installer.js';
+
+// Re-export scanner
+export {
+  scanSkillDirectory,
+  formatScanSummary,
+  collectSkillInstallWarnings,
+  type ScanSummary,
+  type SecurityFinding,
+  type Severity,
+} from './scanner.js';
+
+// Re-export config manager
+export {
+  resolveSkillConfig,
+  applySkillEnvOverrides,
+  getSkillEnvironment,
+  createSkillConfigManager,
+  isSkillEnabled,
+  validateSkillConfig,
+  type SkillConfigFile,
+} from './config.js';
+
+// Re-export watcher
+export {
+  createSkillWatcher,
+  createWatcherFromLoader,
+  type SkillWatcher,
+  type SkillWatcherOptions,
+} from './watcher.js';
+
+// Re-export test framework
+export {
+  SkillTestFramework,
+  SkillTestRunner,
+  formatTestResults,
+  formatTestResultsJson,
+  formatTestResultsTap,
+  type TestResult,
+  type TestStatus,
+  type SkillTestReport,
+  type TestOptions,
+  type TestRunnerOptions,
+} from './test-framework.js';
