@@ -16,14 +16,20 @@ hero:
 features:
   - title: 🚀 Lightweight & Fast
     details: Built on Node.js + TypeScript with minimal dependencies
+    link: /getting-started
   - title: 🔌 Plugin System
     details: Extend functionality with a powerful plugin architecture
+    link: /plugins
   - title: 🌐 Multi-Channel
     details: Supports Telegram, WhatsApp, and more
+    link: /channels
   - title: 💻 Local First
     details: Run your AI assistant locally with full control
+    link: /configuration
   - title: 🔧 Tool Integration
     details: Seamlessly integrate with CLI tools and APIs
+    link: /tools
   - title: 🎯 Skill System
     details: Teach your agent new skills via Markdown files
+    link: /skills
 ---
