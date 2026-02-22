@@ -1,5 +1,6 @@
 import { homedir } from 'os';
 import { join, dirname } from 'path';
+import { existsSync } from 'fs';
 import { fileURLToPath } from 'url';
 
 export const XOPCBOT_DIR = '.xopcbot';
@@ -59,13 +60,26 @@ export function getBundledPluginsDir(): string | null {
 
 /**
  * Get bundled skills directory (shipped with xopcbot)
+ * Works in both production (installed from npm) and development (source code)
  */
 export function getBundledSkillsDir(): string | null {
   try {
     const currentFile = fileURLToPath(import.meta.url);
     const srcDir = dirname(currentFile);
-    const bundledDir = join(srcDir, '..', '..', 'skills');
-    return bundledDir;
+    
+    // Production: from package root (dist/config/paths.js -> ../.. -> skills)
+    const prodDir = join(srcDir, '..', '..', 'skills');
+    if (existsSync(prodDir)) {
+      return prodDir;
+    }
+    
+    // Development: from source root (src/config/paths.js -> ../../.. -> skills)
+    const devDir = join(srcDir, '..', '..', '..', 'skills');
+    if (existsSync(devDir)) {
+      return devDir;
+    }
+    
+    return null;
   } catch {
     return null;
   }

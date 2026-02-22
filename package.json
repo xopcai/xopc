@@ -9,7 +9,8 @@
     "xopcbot": "./dist/cli/index.js"
   },
   "files": [
-    "dist"
+    "dist",
+    "skills"
   ],
   "publishConfig": {
     "access": "public"
