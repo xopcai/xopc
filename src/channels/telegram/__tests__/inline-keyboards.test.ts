@@ -44,7 +44,7 @@ describe('TelegramInlineKeyboards', () => {
 
       const keyboard = TelegramInlineKeyboards.providerSelector(providers);
       const allButtons = keyboard.inline_keyboard.flat();
-      const providerButton = allButtons.find(btn => btn.callback_data?.includes('provider:openai'));
+      const providerButton = allButtons.find(btn => ('callback_data' in btn) && btn.callback_data?.includes('provider:openai'));
       expect(providerButton).toBeDefined();
     });
   });
@@ -87,7 +87,7 @@ describe('TelegramInlineKeyboards', () => {
       const keyboard = TelegramInlineKeyboards.cleanupConfirm();
 
       const allButtons = keyboard.inline_keyboard.flat();
-      const confirmButton = allButtons.find(btn => btn.callback_data?.includes('cleanup:confirm'));
+      const confirmButton = allButtons.find(btn => ('callback_data' in btn) && btn.callback_data?.includes('cleanup:confirm'));
       expect(confirmButton).toBeDefined();
     });
 
@@ -95,7 +95,7 @@ describe('TelegramInlineKeyboards', () => {
       const keyboard = TelegramInlineKeyboards.cleanupConfirm();
 
       const allButtons = keyboard.inline_keyboard.flat();
-      const cancelButton = allButtons.find(btn => btn.callback_data?.includes('cancel'));
+      const cancelButton = allButtons.find(btn => ('callback_data' in btn) && btn.callback_data?.includes('cancel'));
       expect(cancelButton).toBeDefined();
     });
   });

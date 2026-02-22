@@ -150,7 +150,7 @@ describe('ConfigHotReloader', () => {
         mockConfigPath,
         mockInitialConfig,
         mockCallbacks,
-        { enabled: false }
+        { enabled: false, debounceMs: 300 }
       );
 
       reloader.start();
@@ -168,7 +168,7 @@ describe('ConfigHotReloader', () => {
         mockConfigPath,
         mockInitialConfig,
         mockCallbacks,
-        { enabled: true }
+        { enabled: true, debounceMs: 300 }
       );
 
       reloader.start();
@@ -184,7 +184,8 @@ describe('ConfigHotReloader', () => {
       const reloader = new ConfigHotReloader(
         mockConfigPath,
         mockInitialConfig,
-        mockCallbacks
+        mockCallbacks,
+        { enabled: true, debounceMs: 300 }
       );
 
       expect(() => reloader.start()).not.toThrow();
@@ -226,7 +227,7 @@ describe('ConfigHotReloader', () => {
       
       // Trigger a change to start debounce timer
       const watcherCallback = vi.mocked(watch).mock.calls[0][1];
-      watcherCallback('change');
+      watcherCallback('change', 'config.json');
       
       await reloader.stop();
 
@@ -412,7 +413,7 @@ describe('ConfigHotReloader', () => {
         mockConfigPath,
         mockInitialConfig,
         mockCallbacks,
-        { debounceMs: 100 }
+        { enabled: true, debounceMs: 100 }
       );
 
       // Manually call scheduleReload multiple times
@@ -547,7 +548,7 @@ describe('ConfigHotReloader', () => {
         mockConfigPath,
         mockInitialConfig,
         mockCallbacks,
-        { enabled: true }
+        { enabled: true, debounceMs: 300 }
       );
       expect(reloaderEnabled.isEnabled()).toBe(true);
 
@@ -555,7 +556,7 @@ describe('ConfigHotReloader', () => {
         mockConfigPath,
         mockInitialConfig,
         mockCallbacks,
-        { enabled: false }
+        { enabled: false, debounceMs: 300 }
       );
       expect(reloaderDisabled.isEnabled()).toBe(false);
     });

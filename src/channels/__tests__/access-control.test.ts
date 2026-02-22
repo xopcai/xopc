@@ -143,6 +143,8 @@ describe('evaluateGroupBaseAccess', () => {
   it('should allow non-group chats', () => {
     const result = evaluateGroupBaseAccess({
       isGroup: false,
+      hasGroupAllowOverride: false,
+      effectiveGroupAllow: { entries: [], hasWildcard: false, hasEntries: false },
     });
     expect(result.allowed).toBe(true);
   });
@@ -151,6 +153,8 @@ describe('evaluateGroupBaseAccess', () => {
     const result = evaluateGroupBaseAccess({
       isGroup: true,
       groupConfig: { groupId: '123', enabled: false },
+      hasGroupAllowOverride: false,
+      effectiveGroupAllow: { entries: [], hasWildcard: false, hasEntries: false },
     });
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe('group-disabled');
@@ -161,6 +165,8 @@ describe('evaluateGroupBaseAccess', () => {
       isGroup: true,
       groupConfig: { groupId: '123', enabled: true },
       topicConfig: { topicId: '456', enabled: false },
+      hasGroupAllowOverride: false,
+      effectiveGroupAllow: { entries: [], hasWildcard: false, hasEntries: false },
     });
     expect(result.allowed).toBe(false);
     expect(result.reason).toBe('topic-disabled');
