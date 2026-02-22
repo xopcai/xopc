@@ -5,6 +5,13 @@ import type { MessageBus, OutboundMessage } from '../../bus/index.js';
 
 const MessageSendSchema = Type.Object({
   content: Type.String({ description: 'The message content to send' }),
+  mediaUrl: Type.Optional(Type.String({ description: 'URL of the media to send (photo, video, audio, document)' })),
+  mediaType: Type.Optional(Type.Enum({
+    photo: 'photo',
+    video: 'video',
+    audio: 'audio',
+    document: 'document',
+  }, { description: 'Type of media to send' })),
 });
 
 interface MessageContext {
@@ -40,12 +47,15 @@ export function createMessageTool(
           channel: ctx.channel,
           chat_id: ctx.chatId,
           content: params.content,
+          mediaUrl: params.mediaUrl,
+          mediaType: params.mediaType as 'photo' | 'video' | 'audio' | 'document' | undefined,
         };
 
         await bus.publishOutbound(msg);
 
+        const mediaInfo = params.mediaUrl ? ` (with ${params.mediaType || 'media'})` : '';
         return {
-          content: [{ type: 'text', text: 'Message sent successfully' }],
+          content: [{ type: 'text', text: `Message sent successfully${mediaInfo}` }],
           details: {},
         };
       } catch (error) {

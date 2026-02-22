@@ -109,7 +109,9 @@ export class ChannelManager {
     const result = await plugin.send(sendOptions);
     
     if (!result.success) {
-      log.error({ channel: msg.channel, error: result.error }, 'Failed to send message');
+      log.error({ channel: msg.channel, chatId: msg.chat_id, mediaUrl: !!msg.mediaUrl, error: result.error }, 'Failed to send message');
+    } else {
+      log.info({ channel: msg.channel, chatId: msg.chat_id, messageId: result.messageId, mediaUrl: !!msg.mediaUrl }, 'Message sent successfully');
     }
   }
 

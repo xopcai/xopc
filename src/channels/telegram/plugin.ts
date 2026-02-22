@@ -39,6 +39,49 @@ import type { Config } from '../../config/index.js';
 const log = createLogger('TelegramPlugin');
 
 // ============================================
+// MIME Type Helper
+// ============================================
+
+function getMimeType(type: string, filePath?: string): string {
+  // Try to get from file extension
+  if (filePath) {
+    const ext = filePath.split('.').pop()?.toLowerCase();
+    const extMap: Record<string, string> = {
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      png: 'image/png',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      bmp: 'image/bmp',
+      svg: 'image/svg+xml',
+      mp4: 'video/mp4',
+      mov: 'video/quicktime',
+      avi: 'video/x-msvideo',
+      webm: 'video/webm',
+      mp3: 'audio/mpeg',
+      wav: 'audio/wav',
+      ogg: 'audio/ogg',
+      pdf: 'application/pdf',
+      doc: 'application/msword',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      txt: 'text/plain',
+      zip: 'application/zip',
+    };
+    if (ext && extMap[ext]) return extMap[ext];
+  }
+
+  // Fallback based on type
+  const typeMap: Record<string, string> = {
+    photo: 'image/jpeg',
+    video: 'video/mp4',
+    audio: 'audio/mpeg',
+    document: 'application/octet-stream',
+    sticker: 'image/webp',
+  };
+  return typeMap[type] || 'application/octet-stream';
+}
+
+// ============================================
 // Account Manager
 // ============================================
 
@@ -256,7 +299,39 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
     if (message.video) media.push({ type: 'video', fileId: message.video.file_id });
     if (message.audio) media.push({ type: 'audio', fileId: message.audio.file_id });
 
-    log.info({ accountId, chatId, senderId, isGroup, threadId, sessionKey, contentLength: cleanContent.length }, 'Processing Telegram message');
+    // Download media files and convert to attachments
+    const attachments: Array<{ type: string; mimeType: string; data: string; name?: string; size?: number }> = [];
+    const bot = accountManager.getBot(accountId);
+    const botToken = account.token;
+
+    if (bot && botToken && media.length > 0) {
+      for (const item of media) {
+        try {
+          const file = await bot.api.getFile(item.fileId);
+          // Construct download URL: https://api.telegram.org/file/bot<token>/<file_path>
+          const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${file.file_path}`;
+          const response = await fetch(downloadUrl);
+          if (!response.ok) {
+            throw new Error(`Failed to download: ${response.status}`);
+          }
+          const buffer = await response.arrayBuffer();
+          const base64 = Buffer.from(buffer).toString('base64');
+          const mimeType = getMimeType(item.type, file.file_path);
+          attachments.push({
+            type: item.type,
+            mimeType,
+            data: base64,
+            name: file.file_path.split('/').pop(),
+            size: buffer.byteLength,
+          });
+          log.debug({ type: item.type, size: buffer.byteLength }, 'Media downloaded');
+        } catch (err) {
+          log.error({ type: item.type, fileId: item.fileId, err }, 'Failed to download media');
+        }
+      }
+    }
+
+    log.info({ accountId, chatId, senderId, isGroup, threadId, sessionKey, contentLength: cleanContent.length, attachmentCount: attachments.length }, 'Processing Telegram message');
 
     await bus.publishInbound({
       channel: 'telegram',
@@ -270,6 +345,7 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
         threadId: threadId ? String(threadId) : undefined,
         media: media.length > 0 ? media : undefined,
       },
+      attachments: attachments.length > 0 ? attachments : undefined,
     });
   };
 
@@ -451,8 +527,11 @@ export class TelegramChannelPlugin implements ChannelPlugin {
   async send(options: ChannelSendOptions): Promise<ChannelSendResult> {
     const { chatId, content, type = 'message', accountId = 'default', threadId, replyToMessageId, mediaUrl, mediaType, silent } = options;
 
+    log.info({ chatId, accountId, hasContent: !!content, hasMediaUrl: !!mediaUrl, mediaType, contentLength: content?.length }, 'TelegramPlugin.send called');
+
     const bot = this.accountManager.getBot(accountId);
     if (!bot) {
+      log.error({ accountId }, 'Bot not found for account');
       return { messageId: '', chatId, success: false, error: 'Bot not initialized' };
     }
 
@@ -471,19 +550,74 @@ export class TelegramChannelPlugin implements ChannelPlugin {
       return { messageId: '', chatId, success: true };
     }
 
-    // Skip empty messages
-    if (!content || content.trim() === '') {
-      log.debug({ chatId }, 'Skipping empty message');
+    // Skip empty messages only if there's no media to send
+    if ((!content || content.trim() === '') && !mediaUrl) {
+      log.debug({ chatId }, 'Skipping empty message (no content and no media)');
       return { messageId: '', chatId, success: true };
     }
 
     try {
       let sentMessageId: number;
 
-      if (mediaUrl) {
+      // Check for data URL first (base64 encoded)
+      if (mediaUrl && mediaUrl.startsWith('data:')) {
+        log.info({ chatId, mediaType, contentLength: content.length, dataUrlLength: mediaUrl.length }, 'Sending media as data URL');
+        // Handle data URL (base64 encoded media)
+        const dataUrlMatch = mediaUrl.match(/^data:([^;]+);base64,(.+)$/);
+        if (!dataUrlMatch) {
+          log.error({ chatId }, 'Invalid data URL format');
+          return { messageId: '', chatId, success: false, error: 'Invalid data URL format' };
+        }
+        const mimeType = dataUrlMatch[1];
+        const base64Data = dataUrlMatch[2];
+        const buffer = Buffer.from(base64Data, 'base64');
+        log.debug({ chatId, mimeType, bufferSize: buffer.length }, 'Decoded base64 media');
+        const file = new InputFile(buffer);
+
+        const sendOptions: any = {
+          parse_mode: 'HTML',
+          caption: content ? formatTelegramMessage(content).html : undefined,
+        };
+        if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
+        if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
+        if (silent) sendOptions.disable_notification = true;
+
+        log.debug({ chatId, mediaType: mimeType, method: 'sendPhoto/sendDocument' }, 'Calling Telegram API');
+
+        // Determine media type from mime type
+        const mediaCategory = mimeType.split('/')[0];
+        let apiResult;
+        switch (mediaCategory) {
+          case 'image':
+            apiResult = await bot.api.sendPhoto(chatId, file, sendOptions);
+            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendPhoto response');
+            sentMessageId = apiResult.message_id;
+            break;
+          case 'video':
+            apiResult = await bot.api.sendVideo(chatId, file, sendOptions);
+            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendVideo response');
+            sentMessageId = apiResult.message_id;
+            break;
+          case 'audio':
+            apiResult = await bot.api.sendAudio(chatId, file, sendOptions);
+            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendAudio response');
+            sentMessageId = apiResult.message_id;
+            break;
+          default:
+            apiResult = await bot.api.sendDocument(chatId, file, sendOptions);
+            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendDocument response');
+            sentMessageId = apiResult.message_id;
+        }
+      } else if (mediaUrl) {
+        log.info({ chatId, mediaType, mediaUrl: mediaUrl.substring(0, 100), hasContent: !!content }, 'Sending media from URL');
+        // Handle regular URL
         const response = await fetch(mediaUrl);
-        if (!response.ok) throw new Error(`Failed to fetch media: ${response.status}`);
+        if (!response.ok) {
+          log.error({ chatId, status: response.status }, 'Failed to fetch media');
+          throw new Error(`Failed to fetch media: ${response.status}`);
+        }
         const buffer = await response.arrayBuffer();
+        log.debug({ chatId, bufferSize: buffer.byteLength }, 'Fetched media from URL');
         const file = new InputFile(Buffer.from(buffer));
 
         const sendOptions: any = {
@@ -494,19 +628,37 @@ export class TelegramChannelPlugin implements ChannelPlugin {
         if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
         if (silent) sendOptions.disable_notification = true;
 
+        log.debug({ chatId, mediaType, method: 'sendPhoto/sendVideo/sendDocument' }, 'Calling Telegram API');
+
+        let apiResult;
         switch (mediaType) {
           case 'photo':
-            sentMessageId = (await bot.api.sendPhoto(chatId, file, sendOptions)).message_id;
+            apiResult = await bot.api.sendPhoto(chatId, file, sendOptions);
+            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendPhoto response');
             break;
           case 'video':
-            sentMessageId = (await bot.api.sendVideo(chatId, file, sendOptions)).message_id;
+            apiResult = await bot.api.sendVideo(chatId, file, sendOptions);
+            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendVideo response');
             break;
           case 'audio':
-            sentMessageId = (await bot.api.sendAudio(chatId, file, sendOptions)).message_id;
+            apiResult = await bot.api.sendAudio(chatId, file, sendOptions);
+            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendAudio response');
             break;
           default:
-            sentMessageId = (await bot.api.sendDocument(chatId, file, sendOptions)).message_id;
+            apiResult = await bot.api.sendDocument(chatId, file, sendOptions);
+            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendDocument response');
         }
+
+        // Validate API response
+        if (!apiResult || !apiResult.ok) {
+          log.error({ chatId, apiResult }, 'Telegram API returned error');
+          return { messageId: '', chatId, success: false, error: `Telegram API error: ${JSON.stringify(apiResult)}` };
+        }
+        if (!apiResult.message_id) {
+          log.error({ chatId, apiResult }, 'Telegram API response missing message_id');
+          return { messageId: '', chatId, success: false, error: 'Telegram API response missing message_id' };
+        }
+        sentMessageId = apiResult.message_id;
       } else {
         const { html } = formatTelegramMessage(content || '');
         const sendOptions: any = { parse_mode: 'HTML' };
@@ -519,7 +671,7 @@ export class TelegramChannelPlugin implements ChannelPlugin {
 
       return { messageId: String(sentMessageId), chatId, success: true };
     } catch (err) {
-      log.error({ accountId, chatId, err }, 'Failed to send message');
+      log.error({ accountId, chatId, err, mediaUrl: !!mediaUrl, mediaType }, 'Failed to send message - caught error');
       return { messageId: '', chatId, success: false, error: err instanceof Error ? err.message : String(err) };
     }
   }

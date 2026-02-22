@@ -3,7 +3,14 @@ export interface InboundMessage {
   sender_id: string;
   chat_id: string;
   content: string;
-  media?: string[];
+  media?: Array<{ type: string; fileId: string }>;
+  attachments?: Array<{
+    type: string;
+    mimeType: string;
+    data: string;
+    name?: string;
+    size?: number;
+  }>;
   metadata?: Record<string, unknown>;
 }
 

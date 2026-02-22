@@ -141,14 +141,20 @@ describe('Message Bus Integration', () => {
       sender_id: '123456789',
       chat_id: '987654321',
       content: 'Check this photo',
-      media: ['file_id_1', 'file_id_2'],
+      media: [
+        { type: 'photo', fileId: 'file_id_1' },
+        { type: 'photo', fileId: 'file_id_2' },
+      ],
       metadata: { caption: 'Vacation photo' },
     };
 
     await bus.publishInbound(messageWithMedia);
 
     expect(receivedMessages).toHaveLength(1);
-    expect(receivedMessages[0].media).toEqual(['file_id_1', 'file_id_2']);
+    expect(receivedMessages[0].media).toEqual([
+      { type: 'photo', fileId: 'file_id_1' },
+      { type: 'photo', fileId: 'file_id_2' },
+    ]);
     expect(receivedMessages[0].metadata).toEqual({ caption: 'Vacation photo' });
   });
 });

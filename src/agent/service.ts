@@ -26,6 +26,7 @@ import {
   createWebSearchTool,
   webFetchTool,
   createMessageTool,
+  createSendMediaTool,
   createMemorySearchTool,
   createMemoryGetTool,
 } from './tools/index.js';
@@ -140,6 +141,7 @@ export class AgentService {
       createWebSearchTool(config.braveApiKey),
       webFetchTool,
       createMessageTool(bus, () => this.currentContext),
+      createSendMediaTool(bus, () => this.currentContext),
       createMemorySearchTool(config.workspace),
       createMemoryGetTool(config.workspace),
     ];
@@ -486,9 +488,32 @@ export class AgentService {
       messages = await this.sessionStore.load(sessionKey);
       this.agent.replaceMessages(messages);
 
+      // Build message content with text and attachments
+      const messageContent: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
+
+      // Add text content
+      if (expandedContent.trim()) {
+        messageContent.push({ type: 'text', text: expandedContent });
+      }
+
+      // Add attachments from inbound message
+      const attachments = msg.attachments;
+      if (attachments && attachments.length > 0) {
+        for (const att of attachments) {
+          if (att.type === 'photo' || att.mimeType?.startsWith('image/')) {
+            const mimeType = att.mimeType || 'image/jpeg';
+            messageContent.push({ type: 'image', data: att.data, mimeType });
+          } else {
+            // For non-image files, add as text description
+            const fileInfo = `[File: ${att.name || att.type} (${att.mimeType || 'unknown type'}, ${att.size || 0} bytes)]`;
+            messageContent.push({ type: 'text', text: fileInfo });
+          }
+        }
+      }
+
       const userMessage: AgentMessage = {
         role: 'user',
-        content: [{ type: 'text', text: expandedContent }],
+        content: messageContent,
         timestamp: Date.now(),
       };
 

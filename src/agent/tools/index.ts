@@ -27,6 +27,8 @@ export { createWebSearchTool, webFetchTool } from './web.js';
 
 export { createMessageTool } from './communication.js';
 
+export { createSendMediaTool } from './send-media.js';
+
 // Utility exports
 export {
   truncateHead,

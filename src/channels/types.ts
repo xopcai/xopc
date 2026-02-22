@@ -161,7 +161,7 @@ export interface ChannelSendOptions {
   threadId?: string;
   replyToMessageId?: string;
   mediaUrl?: string;
-  mediaType?: string;
+  mediaType?: 'photo' | 'video' | 'audio' | 'document' | 'animation';
   silent?: boolean;
 }
 
