@@ -481,7 +481,19 @@ export class TelegramChannelPlugin implements ChannelPlugin {
         this.commandHandlers.set(accountId, commandHandler);
       }
 
-      // Register slash commands
+      // Register slash commands with Telegram Bot API
+      try {
+        await bot.api.setMyCommands([
+          { command: 'models', description: 'Show available models' },
+          { command: 'usage', description: 'Show token usage stats' },
+          { command: 'cleanup', description: 'Clean up old sessions' },
+        ]);
+        log.info({ accountId }, 'Registered Telegram bot commands');
+      } catch (err) {
+        log.error({ accountId, err }, 'Failed to register Telegram bot commands');
+      }
+
+      // Register command handlers
       bot.command('models', async (ctx) => {
         await commandHandler!.handleModels(ctx);
       });
