@@ -67,16 +67,21 @@ export function getBundledSkillsDir(): string | null {
     const currentFile = fileURLToPath(import.meta.url);
     const srcDir = dirname(currentFile);
     
-    // Production: from package root (dist/config/paths.js -> ../.. -> skills)
-    const prodDir = join(srcDir, '..', '..', 'skills');
-    if (existsSync(prodDir)) {
-      return prodDir;
+    // Production (npm): dist/config/paths.js -> ../../ -> package root -> skills
+    // Works for both:
+    // - Direct install: node_modules/@xopcai/xopcbot/dist/config/paths.js
+    // - Local dev: /path/to/xopcbot/dist/config/paths.js
+    const packageRoot = join(srcDir, '..', '..');
+    const skillsDir = join(packageRoot, 'skills');
+    if (existsSync(skillsDir)) {
+      return skillsDir;
     }
     
-    // Development: from source root (src/config/paths.js -> ../../.. -> skills)
-    const devDir = join(srcDir, '..', '..', '..', 'skills');
-    if (existsSync(devDir)) {
-      return devDir;
+    // Development (source): src/config/paths.js -> ../../../ -> package root -> skills
+    const devPackageRoot = join(srcDir, '..', '..', '..');
+    const devSkillsDir = join(devPackageRoot, 'skills');
+    if (existsSync(devSkillsDir)) {
+      return devSkillsDir;
     }
     
     return null;
