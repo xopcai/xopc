@@ -3012,13 +3012,39 @@ xopcbot-gateway-chat {
 /* Filters - Compact Layout */
 .log-manager__filters {
   display: flex;
-  align-items: flex-end;
-  gap: 0.75rem;
+  flex-direction: column;
+  gap: 0.625rem;
   padding: 0.75rem 1rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   flex-shrink: 0;
+}
+
+/* First row: Level filters and Search - always on same line */
+.log-manager__filters-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 0.75rem;
+  flex-wrap: nowrap;
+}
+
+.log-manager__filters-row > .filter-group:first-child {
+  flex: 0 0 auto;
+}
+
+.log-manager__filters-row > .filter-group:nth-child(2) {
+  flex: 1;
+  min-width: 200px;
+  max-width: 400px;
+}
+
+/* Second row: Module, Date range, Clear button */
+.log-manager__filters > .filter-row {
+  display: flex;
+  gap: 0.5rem;
+  flex-wrap: nowrap;
+  align-items: flex-end;
 }
 
 .filter-group {
@@ -3035,15 +3061,13 @@ xopcbot-gateway-chat {
   letter-spacing: 0.05em;
 }
 
-.filter-row {
-  display: flex;
-  gap: 0.5rem;
-  flex-wrap: nowrap;
-  align-items: flex-end;
+.filter-row .filter-group {
+  min-width: 120px;
+  flex: 1;
 }
 
-.filter-row .filter-group {
-  min-width: 140px;
+.filter-row .filter-group:first-child {
+  flex: 1.5;
 }
 
 .filter-row select,
@@ -3056,19 +3080,15 @@ xopcbot-gateway-chat {
   border-radius: var(--radius-sm);
   background: var(--bg-primary);
   color: var(--text-primary);
-  min-width: 140px;
+  width: 100%;
+  height: 2rem;
 }
 
 .filter-row .btn-ghost {
   padding: 0.375rem 0.75rem;
   font-size: 0.8125rem;
-  height: fit-content;
-}
-
-.level-filters {
-  display: flex;
-  gap: 0.375rem;
-  flex-wrap: nowrap;
+  height: 2rem;
+  white-space: nowrap;
 }
 
 .log-manager__filters .filter-group {
@@ -3083,6 +3103,39 @@ xopcbot-gateway-chat {
   color: var(--text-muted);
   text-transform: uppercase;
   letter-spacing: 0.05em;
+}
+
+/* Search box in filters */
+.log-manager__filters .search-box {
+  min-width: auto;
+  width: 100%;
+  height: 2rem;
+  padding: 0 0.625rem;
+}
+
+.log-manager__filters .search-box svg {
+  width: 1rem;
+  height: 1rem;
+}
+
+.log-manager__filters .search-box input {
+  font-size: 0.8125rem;
+  outline: none;
+  box-shadow: none;
+}
+
+.log-manager__filters .search-box:focus-within {
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px var(--accent-primary-light);
+}
+
+/* Level filters - match search box height */
+.log-manager__filters .level-filters {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  flex-wrap: wrap;
+  height: 2rem;
 }
 
 .level-badge {
@@ -3440,12 +3493,15 @@ xopcbot-gateway-chat {
 /* Responsive */
 @media (max-width: 768px) {
   .log-manager {
-    padding: 1rem;
+    padding: 0.75rem;
+    height: auto;
+    min-height: calc(100vh - 50px);
   }
 
   .log-manager__header {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.75rem;
   }
 
   .log-manager__actions {
@@ -3457,9 +3513,60 @@ xopcbot-gateway-chat {
     flex: 1;
   }
 
-  .filter-row {
+  /* Mobile filters - compact vertical layout */
+  .log-manager__filters {
+    gap: 0.625rem;
+    padding: 0.625rem 0.75rem;
+  }
+
+  .log-manager__filters-row {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.625rem;
+  }
+
+  .log-manager__filters-row > .filter-group:first-child,
+  .log-manager__filters-row > .filter-group:nth-child(2) {
+    flex: none;
+    min-width: auto;
+    max-width: none;
+    width: 100%;
+  }
+
+  .log-manager__filters > .filter-row {
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  .filter-row .filter-group {
+    flex: 1;
+    min-width: 100px;
+  }
+
+  .filter-row .filter-group:first-child {
+    flex: 1 1 100%;
+    min-width: auto;
+  }
+
+  .filter-row .filter-group:nth-child(2),
+  .filter-row .filter-group:nth-child(3) {
+    flex: 1;
+    min-width: 120px;
+  }
+
+  .filter-row .btn-ghost {
+    flex: 0 0 auto;
+    align-self: flex-end;
+  }
+
+  .log-manager__filters .level-filters {
+    flex-wrap: wrap;
+    height: auto;
+  }
+
+  .level-badge {
+    font-size: 0.625rem;
+    padding: 0.125rem 0.375rem;
   }
 
   .filter-row select,
@@ -3478,5 +3585,22 @@ xopcbot-gateway-chat {
 
   .log-cell--message {
     max-width: 200px;
+  }
+}
+
+/* Tablet - 768px to 1024px */
+@media (max-width: 1024px) and (min-width: 769px) {
+  .log-manager__filters-row {
+    flex-wrap: wrap;
+  }
+
+  .log-manager__filters-row > .filter-group:nth-child(2) {
+    flex: 1;
+    min-width: 180px;
+    max-width: none;
+  }
+
+  .log-manager__filters > .filter-row {
+    flex-wrap: wrap;
   }
 }

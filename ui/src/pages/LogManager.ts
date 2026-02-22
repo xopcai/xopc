@@ -311,31 +311,33 @@ export class LogManager extends LitElement {
   private _renderFilters(): unknown {
     return html`
       <div class="log-manager__filters">
-        <div class="filter-group">
-          <label class="filter-label">${t('logs.level')}</label>
-          <div class="level-filters">
-            ${LOG_LEVELS.map((level) => html`
-              <button
-                class="level-badge ${this._selectedLevels.has(level) ? 'level-badge--active' : ''}"
-                style="--level-color: ${LOG_LEVEL_COLORS[level]}"
-                @click=${() => this._toggleLevel(level)}
-              >
-                ${level}
-              </button>
-            `)}
+        <div class="log-manager__filters-row">
+          <div class="filter-group">
+            <label class="filter-label">${t('logs.level')}</label>
+            <div class="level-filters">
+              ${LOG_LEVELS.map((level) => html`
+                <button
+                  class="level-badge ${this._selectedLevels.has(level) ? 'level-badge--active' : ''}"
+                  style="--level-color: ${LOG_LEVEL_COLORS[level]}"
+                  @click=${() => this._toggleLevel(level)}
+                >
+                  ${level}
+                </button>
+              `)}
+            </div>
           </div>
-        </div>
 
-        <div class="filter-group">
-          <label class="filter-label">${t('logs.search')}</label>
-          <div class="search-box">
-            ${getIcon('search')}
-            <input
-              type="text"
-              placeholder="${t('logs.searchPlaceholder')}"
-              .value=${this._searchQuery}
-              @input=${this._handleSearch}
-            />
+          <div class="filter-group">
+            <label class="filter-label">${t('logs.search')}</label>
+            <div class="search-box">
+              ${getIcon('search')}
+              <input
+                type="text"
+                placeholder="${t('logs.searchPlaceholder')}"
+                .value=${this._searchQuery}
+                @input=${this._handleSearch}
+              />
+            </div>
           </div>
         </div>
 
