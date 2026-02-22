@@ -27,7 +27,7 @@
     "skills:validate": "tsx src/cli/index.ts skills test validate",
     "skills:security": "tsx src/cli/index.ts skills test security",
     "lint": "eslint 'src/**/*.ts' --ignore-pattern '**/examples/**'",
-    "prepublishOnly": "npm run build && npm test && npm run test:skills:all",
+    "prepublishOnly": "npm test && npm run test:skills:all && npm run build",
     "docs:dev": "vitepress dev docs",
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs"
