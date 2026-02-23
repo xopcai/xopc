@@ -307,11 +307,12 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
     const botToken = account.token;
 
     if (bot && botToken && media.length > 0) {
+      const accountApiRoot = account.apiRoot?.replace(/\/$/, '') || 'https://api.telegram.org';
       for (const item of media) {
         try {
           const file = await bot.api.getFile(item.fileId);
-          // Construct download URL: https://api.telegram.org/file/bot<token>/<file_path>
-          const downloadUrl = `https://api.telegram.org/file/bot${botToken}/${file.file_path}`;
+          // Construct download URL using apiRoot if configured, otherwise default to api.telegram.org
+          const downloadUrl = `${accountApiRoot}/file/bot${botToken}/${file.file_path}`;
           const response = await fetch(downloadUrl);
           if (!response.ok) {
             throw new Error(`Failed to download: ${response.status}`);
