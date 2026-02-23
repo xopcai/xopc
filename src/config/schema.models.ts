@@ -62,7 +62,7 @@ export const ModelDefinitionSchema = z
     api: ModelApiSchema.optional(),
     reasoning: z.boolean().optional(),
     input: z.array(z.union([z.literal("text"), z.literal("image")])).optional(),
-    cost: ModelCostSchema,
+    cost: ModelCostSchema.optional(),
     contextWindow: z.number().positive().optional(),
     maxTokens: z.number().positive().optional(),
     headers: z.record(z.string(), z.string()).optional(),
