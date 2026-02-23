@@ -21,6 +21,11 @@ import { listProfilesForProvider } from '../auth/profiles/profiles.js';
 import { resolveApiKeyForProfile } from '../auth/profiles/oauth.js';
 import { createProviderConfig } from './config.js';
 
+// Import new config integration
+import { getEffectiveConfig } from '../config/integration.js';
+import { getModelConfig, parseModelRef } from '../agents/model-selection.js';
+import { getCompatFlags } from '../agents/model-compat.js';
+
 // Import from provider-catalog
 import {
 	getProvider as getProviderFromCatalog,
@@ -390,6 +395,59 @@ export class ModelRegistry {
 		}
 	}
 
+	/**
+	 * Apply OpenClaw-style models config (new format)
+	 */
+	private applyModelsConfig(): void {
+		if (!this.config) return;
+
+		// Get effective models config (with defaults applied)
+		const effectiveConfig = getEffectiveConfig(this.config);
+		const modelsConfig = effectiveConfig.models;
+
+		if (!modelsConfig?.providers) return;
+
+		for (const [providerId, providerConfig] of Object.entries(modelsConfig.providers)) {
+			// Skip if no models
+			if (!providerConfig.models || providerConfig.models.length === 0) continue;
+
+			for (const modelDef of providerConfig.models) {
+				// Check if model already exists
+				const existingIndex = this.models.findIndex(
+					(m) => m.provider === providerId && m.id === modelDef.id
+				);
+
+				// Get compatibility flags
+				const compat = getCompatFlags(modelDef);
+
+				const modelEntry: Model<Api> = {
+					id: modelDef.id,
+					name: modelDef.name,
+					api: (modelDef.api ?? providerConfig.api ?? 'openai-completions') as Api,
+					provider: providerId,
+					baseUrl: providerConfig.baseUrl,
+					reasoning: modelDef.reasoning ?? false,
+					input: modelDef.input ?? ['text'],
+					cost: {
+						input: modelDef.cost?.input ?? 0,
+						output: modelDef.cost?.output ?? 0,
+						cacheRead: modelDef.cost?.cacheRead ?? 0,
+						cacheWrite: modelDef.cost?.cacheWrite ?? 0,
+					},
+					contextWindow: modelDef.contextWindow ?? 128000,
+					maxTokens: modelDef.maxTokens ?? 16384,
+					headers: providerConfig.headers ?? modelDef.headers,
+				};
+
+				if (existingIndex >= 0) {
+					this.models[existingIndex] = modelEntry;
+				} else {
+					this.models.push(modelEntry);
+				}
+			}
+		}
+	}
+
 	updateConfig(config: Config): void {
 		this.config = config;
 		this.models = [];
@@ -404,6 +462,7 @@ export class ModelRegistry {
 		this.loadBuiltinProviderModels();
 		if (this.config) {
 			this.applyProviderOverrides();
+			this.applyModelsConfig();
 		}
 		if (this.ollamaEnabled && this.ollamaDiscovery) {
 			await this.discoverLocalModels();
