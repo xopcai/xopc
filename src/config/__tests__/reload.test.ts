@@ -96,7 +96,7 @@ describe('ConfigHotReloader', () => {
   };
 
   const mockCallbacks: ReloadCallbacks = {
-    onProvidersReload: vi.fn(),
+    onModelsReload: vi.fn(),
     onAgentDefaultsReload: vi.fn(),
     onChannelsReload: vi.fn(),
     onCronReload: vi.fn(),
@@ -354,7 +354,7 @@ describe('ConfigHotReloader', () => {
       expect(result.success).toBe(true);
       expect(mockCallbacks.onFullRestart).toHaveBeenCalledWith(newConfig);
       // Should not call hot reload callbacks when restart is required
-      expect(mockCallbacks.onProvidersReload).not.toHaveBeenCalled();
+      expect(mockCallbacks.onModelsReload).not.toHaveBeenCalled();
     });
 
     it('should handle reload errors gracefully', async () => {
@@ -426,7 +426,7 @@ describe('ConfigHotReloader', () => {
       // Should only have one pending timer
       await vi.advanceTimersByTimeAsync(100);
 
-      expect(mockCallbacks.onProvidersReload).toHaveBeenCalledTimes(1);
+      expect(mockCallbacks.onModelsReload).toHaveBeenCalledTimes(1);
       
       vi.useRealTimers();
     });
@@ -453,7 +453,7 @@ describe('ConfigHotReloader', () => {
       const result = await reloader.triggerReload();
 
       expect(result.success).toBe(true);
-      expect(mockCallbacks.onProvidersReload).toHaveBeenCalledWith(newConfig);
+      expect(mockCallbacks.onModelsReload).toHaveBeenCalledWith(newConfig);
     });
   });
 

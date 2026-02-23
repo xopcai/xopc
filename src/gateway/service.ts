@@ -239,7 +239,7 @@ export class GatewayService {
       this.configPath,
       this.config,
       {
-        onProvidersReload: (newConfig) => this.handleProvidersReload(newConfig),
+        onModelsReload: (newConfig) => this.handleModelsReload(newConfig),
         onAgentDefaultsReload: (newConfig) => this.handleAgentDefaultsReload(newConfig),
         onChannelsReload: (newConfig) => this.handleChannelsReload(newConfig),
         onCronReload: (newConfig) => this.handleCronReload(newConfig),
@@ -260,13 +260,13 @@ export class GatewayService {
   }
 
   /**
-   * Handle providers config hot reload
+   * Handle models config hot reload
    */
-  private handleProvidersReload(newConfig: Config): void {
-    log.info('Reloading providers config...');
+  private handleModelsReload(newConfig: Config): void {
+    log.info('Reloading models config...');
     this.config = newConfig;
-    this.emit('config.reload', { section: 'providers' });
-    log.info('Providers config reloaded');
+    this.emit('config.reload', { section: 'models' });
+    log.info('Models config reloaded');
   }
 
   /**

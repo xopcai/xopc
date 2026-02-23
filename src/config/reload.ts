@@ -24,7 +24,7 @@ export interface ReloadResult {
  * Callback types for different reload actions
  */
 export interface ReloadCallbacks {
-  onProvidersReload?: (newConfig: Config) => void;
+  onModelsReload?: (newConfig: Config) => void;
   onAgentDefaultsReload?: (newConfig: Config) => void;
   onChannelsReload?: (newConfig: Config) => void;
   onCronReload?: (newConfig: Config) => void;
@@ -176,9 +176,9 @@ export class ConfigHotReloader {
    * Apply a single hot-reloadable path
    */
   private async applyHotPath(path: string, newConfig: Config): Promise<void> {
-    if (path.startsWith('providers.')) {
-      if (this.callbacks.onProvidersReload) {
-        this.callbacks.onProvidersReload(newConfig);
+    if (path.startsWith('models.')) {
+      if (this.callbacks.onModelsReload) {
+        this.callbacks.onModelsReload(newConfig);
       }
       return;
     }
