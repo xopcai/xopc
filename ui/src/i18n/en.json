@@ -56,7 +56,7 @@
     "unsavedChanges": "Unsaved changes",
     "sections": {
       "agent": "Agent",
-      "providers": "Providers",
+      "models": "Models",
       "channels": "Channels",
       "gateway": "Gateway"
     },

@@ -366,15 +366,15 @@ export class SettingsPage extends LitElement {
             maxTokens: config.agents?.defaults?.maxTokens || 8192,
             temperature: config.agents?.defaults?.temperature ?? 0.7,
             maxToolIterations: config.agents?.defaults?.maxToolIterations || 20,
-            // Providers
-            openaiApiKey: config.providers?.openai?.apiKey || '',
-            anthropicApiKey: config.providers?.anthropic?.apiKey || '',
-            googleApiKey: config.providers?.google?.apiKey || '',
-            qwenApiKey: config.providers?.qwen?.apiKey || '',
-            kimiApiKey: config.providers?.kimi?.apiKey || '',
-            minimaxApiKey: config.providers?.minimax?.apiKey || '',
-            deepseekApiKey: config.providers?.deepseek?.apiKey || '',
-            openrouterApiKey: config.providers?.openrouter?.apiKey || '',
+            // Providers (new models config)
+            openaiApiKey: config.models?.providers?.openai?.apiKey || '',
+            anthropicApiKey: config.models?.providers?.anthropic?.apiKey || '',
+            googleApiKey: config.models?.providers?.google?.apiKey || '',
+            qwenApiKey: config.models?.providers?.qwen?.apiKey || '',
+            kimiApiKey: config.models?.providers?.kimi?.apiKey || '',
+            minimaxApiKey: config.models?.providers?.minimax?.apiKey || '',
+            deepseekApiKey: config.models?.providers?.deepseek?.apiKey || '',
+            openrouterApiKey: config.models?.providers?.openrouter?.apiKey || '',
             // Telegram
             telegramEnabled: config.channels?.telegram?.enabled || false,
             telegramToken: config.channels?.telegram?.token || '',
@@ -533,37 +533,37 @@ export class SettingsPage extends LitElement {
       }
     }
 
-    // Update providers
+    // Update models config (new format)
     const providerFields = [
       'openaiApiKey', 'anthropicApiKey', 'googleApiKey', 'qwenApiKey', 
       'kimiApiKey', 'minimaxApiKey', 'deepseekApiKey', 'openrouterApiKey'
     ];
     const dirtyProviders = providerFields.filter(f => this._dirtyFields.has(f));
     if (dirtyProviders.length > 0) {
-      updates.providers = {};
+      updates.models = { mode: 'merge', providers: {} };
       if (this._dirtyFields.has('openaiApiKey')) {
-        updates.providers.openai = { apiKey: this._values.openaiApiKey };
+        updates.models.providers.openai = { apiKey: this._values.openaiApiKey, models: [] };
       }
       if (this._dirtyFields.has('anthropicApiKey')) {
-        updates.providers.anthropic = { apiKey: this._values.anthropicApiKey };
+        updates.models.providers.anthropic = { apiKey: this._values.anthropicApiKey, models: [] };
       }
       if (this._dirtyFields.has('googleApiKey')) {
-        updates.providers.google = { apiKey: this._values.googleApiKey };
+        updates.models.providers.google = { apiKey: this._values.googleApiKey, models: [] };
       }
       if (this._dirtyFields.has('qwenApiKey')) {
-        updates.providers.qwen = { apiKey: this._values.qwenApiKey };
+        updates.models.providers.qwen = { apiKey: this._values.qwenApiKey, models: [] };
       }
       if (this._dirtyFields.has('kimiApiKey')) {
-        updates.providers.kimi = { apiKey: this._values.kimiApiKey };
+        updates.models.providers.kimi = { apiKey: this._values.kimiApiKey, models: [] };
       }
       if (this._dirtyFields.has('minimaxApiKey')) {
-        updates.providers.minimax = { apiKey: this._values.minimaxApiKey };
+        updates.models.providers.minimax = { apiKey: this._values.minimaxApiKey, models: [] };
       }
       if (this._dirtyFields.has('deepseekApiKey')) {
-        updates.providers.deepseek = { apiKey: this._values.deepseekApiKey };
+        updates.models.providers.deepseek = { apiKey: this._values.deepseekApiKey, models: [] };
       }
       if (this._dirtyFields.has('openrouterApiKey')) {
-        updates.providers.openrouter = { apiKey: this._values.openrouterApiKey };
+        updates.models.providers.openrouter = { apiKey: this._values.openrouterApiKey, models: [] };
       }
     }
 
