@@ -785,8 +785,9 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
       validate: (v: string) => v.length > 0 || 'Required',
     });
 
-    config.providers = config.providers || {};
-    config.providers[provider] = { apiKey };
+    config.models = config.models || { mode: 'merge', providers: {} };
+    config.models.providers = config.models.providers || {};
+    config.models.providers[provider] = { apiKey, models: [{ id: model, name: model }] };
     config.agents = config.agents || {};
     config.agents.defaults = config.agents.defaults || {};
     config.agents.defaults.model = { primary: `${provider}/${model}`, fallbacks: [] };
@@ -802,15 +803,16 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
     choices: modelChoices,
   });
 
-  config.providers = config.providers || {};
+  config.models = config.models || { mode: 'merge', providers: {} };
+  config.models.providers = config.models.providers || {};
 
   if (useOAuth) {
     // For OAuth, we don't store the API key in config.json
     // It's stored in auth-profiles.json via AuthProfiles
-    config.providers[provider] = {};
+    config.models.providers[provider] = { models: [{ id: model, name: model }] };
     console.log('\n✅ Credentials saved to auth profiles');
   } else {
-    config.providers[provider] = { apiKey };
+    config.models.providers[provider] = { apiKey, models: [{ id: model, name: model }] };
   }
 
   config.agents = config.agents || {};
