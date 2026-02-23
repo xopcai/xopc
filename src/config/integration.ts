@@ -5,7 +5,7 @@
  * This is the primary and only way to configure models.
  */
 
-import type { ModelsConfig, ModelProviderConfig, ModelDefinitionConfig } from './types.models.js';
+import type { ModelsConfig } from './types.models.js';
 import { applyModelDefaults } from './defaults.js';
 import type { Config } from './schema.js';
 

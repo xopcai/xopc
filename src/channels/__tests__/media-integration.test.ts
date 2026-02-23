@@ -4,7 +4,7 @@
  * End-to-end tests for media processing pipeline.
  */
 
-import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { MessageBus, InboundMessage, OutboundMessage } from '../../bus/index.js';
 
 describe('Media Processing Integration', () => {

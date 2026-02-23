@@ -89,7 +89,7 @@ export interface ApplyModelDefaultsOptions {
 
 export function applyModelDefaults(
   cfg: { models?: { providers?: Record<string, ModelProviderConfig> } },
-  options: ApplyModelDefaultsOptions = {},
+  _options: ApplyModelDefaultsOptions = {},
 ): { models?: { providers?: Record<string, ModelProviderConfig> } } {
   let mutated = false;
   let nextCfg = { ...cfg };
@@ -187,9 +187,6 @@ export function applyModelDefaults(
       };
     }
   }
-
-  // Apply model aliases
-  const existingModels = {}; // TODO: Apply from agent defaults if needed
 
   if (!mutated) {
     return cfg;

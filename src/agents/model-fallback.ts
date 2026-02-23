@@ -5,8 +5,8 @@
  * Based on OpenClaw's model-fallback.ts approach.
  */
 
-import type { ModelDefinitionConfig, ModelProviderConfig, ModelsConfig } from '../config/types.models.js';
-import { parseModelRef, normalizeProviderId, findProviderConfig } from './model-selection.js';
+import type { ModelDefinitionConfig, ModelsConfig } from '../config/types.models.js';
+import { parseModelRef, normalizeProviderId } from './model-selection.js';
 
 export interface FallbackCandidate {
   model: ModelDefinitionConfig;

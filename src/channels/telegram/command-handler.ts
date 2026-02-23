@@ -6,7 +6,7 @@
 
 import type { Context } from 'grammy';
 import { createLogger } from '../../utils/logger.js';
-import { getApiKey } from '../../config/schema.js';
+
 import type { Config } from '../../config/index.js';
 import { TelegramInlineKeyboards, type ModelInfo, type ProviderInfo } from './inline-keyboards.js';
 

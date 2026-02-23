@@ -4,7 +4,7 @@
  * Tests for media message handling in AgentService.
  */
 
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 
 describe('Agent Message Content Building', () => {
   describe('MessageContent Array Construction', () => {

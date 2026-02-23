@@ -5,7 +5,7 @@
  * Based on OpenClaw's model-selection.ts approach.
  */
 
-import { resolveModelAlias, DEFAULT_MODEL_ALIASES } from '../config/defaults.js';
+import { resolveModelAlias } from '../config/defaults.js';
 import type { ModelDefinitionConfig, ModelProviderConfig } from '../config/types.models.js';
 
 // ============================================

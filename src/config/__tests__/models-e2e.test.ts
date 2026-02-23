@@ -8,7 +8,7 @@
  * - Compatibility flags
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect } from 'vitest';
 import { ConfigSchema, type Config } from '../schema.js';
 import { scanProviders, validateModelDefinition, buildModelMap, isValidModelRef } from '../../agents/model-scan.js';
 import { getFallbackCandidates, selectFallback, isRetryableError } from '../../agents/model-fallback.js';
