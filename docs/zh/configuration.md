@@ -1,6 +1,6 @@
 # 配置参考
 
-xopcbot 的所有配置都集中在 `~/.config/xopcbot/config.json` 文件中。
+xopcbot 所有配置集中在 `~/.config/xopcbot/config.json` 文件中。
 
 ## 完整配置示例
 
@@ -18,33 +18,63 @@ xopcbot 的所有配置都集中在 `~/.config/xopcbot/config.json` 文件中。
       "max_tool_iterations": 20
     }
   },
-  "providers": {
-    "openai": {
-      "api_key": "sk-...",
-      "base_url": "https://api.openai.com/v1"
-    },
-    "anthropic": {
-      "api_key": "sk-ant-..."
-    },
-    "minimax": {
-      "api_key": "..."
-    },
-    "openrouter": {
-      "api_key": "sk-or-...",
-      "base_url": "https://openrouter.ai/api/v1"
-    },
-    "groq": {
-      "api_key": "gsk_..."
-    },
-    "google": {
-      "api_key": "AIza..."
-    },
-    "deepseek": {
-      "api_key": "..."
-    },
-    "ollama": {
-      "enabled": true,
-      "base_url": "http://127.0.0.1:11434/v1"
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "openai": {
+        "baseUrl": "https://api.openai.com/v1",
+        "apiKey": "sk-...",
+        "models": [
+          { "id": "gpt-4o", "name": "GPT-4o" },
+          { "id": "gpt-4o-mini", "name": "GPT-4o Mini" }
+        ]
+      },
+      "anthropic": {
+        "apiKey": "sk-ant-...",
+        "models": [
+          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5", "reasoning": true }
+        ]
+      },
+      "minimax": {
+        "apiKey": "...",
+        "models": [
+          { "id": "minimax-m2.1", "name": "MiniMax M2.1" }
+        ]
+      },
+      "openrouter": {
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "apiKey": "sk-or-...",
+        "models": [
+          { "id": "openai/gpt-4o", "name": "GPT-4o (via OpenRouter)" }
+        ]
+      },
+      "groq": {
+        "baseUrl": "https://api.groq.com/openai/v1",
+        "apiKey": "gsk_...",
+        "models": [
+          { "id": "llama-3.1-70b-versatile", "name": "Llama 3.1 70B" }
+        ]
+      },
+      "google": {
+        "apiKey": "AIza...",
+        "models": [
+          { "id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash" }
+        ]
+      },
+      "deepseek": {
+        "baseUrl": "https://api.deepseek.com/v1",
+        "apiKey": "...",
+        "models": [
+          { "id": "deepseek-chat", "name": "DeepSeek Chat" }
+        ]
+      },
+      "ollama": {
+        "baseUrl": "http://127.0.0.1:11434/v1",
+        "enabled": true,
+        "models": [
+          { "id": "llama3", "name": "Llama 3" }
+        ]
+      }
     }
   },
   "channels": {
@@ -77,17 +107,17 @@ xopcbot 的所有配置都集中在 `~/.config/xopcbot/config.json` 文件中。
 }
 ```
 
-## 配置项详解
+## 配置选项
 
 ### agents
 
-Agent 的默认配置。
+智能体默认配置。
 
 | 字段 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `workspace` | string | `~/.xopcbot/workspace` | 工作区目录 |
+|-------|------|---------|------|
+| `workspace` | string | `~/.xopcbot/workspace` | 工作目录 |
 | `model` | string / object | `anthropic/claude-sonnet-4-5` | 默认模型 |
-| `max_tokens` | number | `8192` | 最大输出 token |
+| `max_tokens` | number | `8192` | 最大输出 tokens |
 | `temperature` | number | `0.7` | 温度参数 (0-2) |
 | `max_tool_iterations` | number | `20` | 最大工具调用次数 |
 
@@ -98,345 +128,308 @@ Agent 的默认配置。
 **简单格式（单个模型）：**
 ```json
 {
-  "agents": {
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-5"
-    }
+  "model": "anthropic/claude-sonnet-4-5"
+}
+```
+
+**对象格式（带备用模型）：**
+```json
+{
+  "model": {
+    "primary": "anthropic/claude-sonnet-4-5",
+    "fallbacks": ["openai/gpt-4o"]
   }
 }
 ```
 
-**完整格式（主模型 + 备用模型）：**
+模型 ID 格式为 `provider/model-id`，例如 `anthropic/claude-opus-4-5`。
+
+### models
+
+OpenClaw 风格的模型配置。用于配置 API 提供商和可用模型。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `mode` | string | `merge` | 配置合并模式：`merge` 或 `replace` |
+| `providers` | object | `{}` | 提供商配置 |
+| `bedrockDiscovery` | object | `{}` | AWS Bedrock 模型发现设置 |
+
+### models.providers
+
+在此部分配置每个 LLM 提供商：
+
 ```json
 {
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "anthropic/claude-sonnet-4-5",
-        "fallbacks": [
-          "openai/gpt-4o",
-          "minimax/minimax-m2.1",
-          "google/gemini-2.5-flash"
+  "models": {
+    "providers": {
+      "openai": {
+        "baseUrl": "https://api.openai.com/v1",
+        "apiKey": "sk-...",
+        "models": [
+          { "id": "gpt-4o", "name": "GPT-4o" }
         ]
       }
     }
   }
 }
 ```
+
+提供商配置选项：
 
 | 字段 | 类型 | 说明 |
-|------|------|------|
-| `primary` | string | 主要模型 (provider/model 格式) |
-| `fallbacks` | string[] | 备用模型列表，当主模型失败时自动切换 |
+|-------|------|------|
+| `baseUrl` | string | API 端点 URL |
+| `apiKey` | string | API 密钥（支持 `${ANTHROPIC_API_KEY}` 等环境变量） |
+| `api` | string | API 类型：`openai-completions`、`anthropic-messages`、`google-generative-ai` |
+| `auth` | object | OAuth 配置 |
+| `headers` | object | 自定义 HTTP 头 |
+| `enabled` | boolean | 启用/禁用提供商 |
+| `models` | array | 可用模型列表 |
 
-#### 模型回退机制
+### models.providers.[provider].models
 
-当主模型调用失败时，xopcbot 会自动尝试备用模型列表中的模型：
+每个模型定义：
 
-1. **支持的失败类型**：
-   - `auth` - 认证失败 (401, 403)
-   - `rate_limit` - 速率限制 (429)
-   - `billing` - 账单/配额问题 (402)
-   - `timeout` - 请求超时
-   - `format` - 请求格式错误 (400)
-
-2. **回退流程**：
-   - 主模型调用失败
-   - 检测失败原因
-   - 按顺序尝试备用模型
-   - 任意模型成功则返回结果
-   - 所有模型失败则抛出错误
-
-3. **示例配置**：
 ```json
 {
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "anthropic/claude-sonnet-4-5",
-        "fallbacks": [
-          "openai/gpt-4o",
-          "minimax/minimax-m2.1"
-        ]
-      }
-    }
+  "id": "gpt-4o",
+  "name": "GPT-4o",
+  "reasoning": false,
+  "input": ["text", "image"],
+  "cost": {
+    "input": 0.000005,
+    "output": 0.000015
   },
-  "providers": {
-    "anthropic": { "api_key": "sk-ant-..." },
-    "openai": { "api_key": "sk-..." },
-    "minimax": { "api_key": "..." }
-  }
-}
-```
-
-模型 ID 格式：
-- **简短格式**：`gpt-4o` (使用默认 provider)
-- **完整格式**：`anthropic/claude-sonnet-4-5`
-
-### providers
-
-LLM 提供商配置。
-
-#### openai
-
-```json
-{
-  "providers": {
-    "openai": {
-      "api_key": "sk-...",
-      "api_base": "https://api.openai.com/v1"
-    }
-  }
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `api_key` | string | OpenAI API Key |
-| `api_base` | string | (可选) 自定义 API 地址 |
-
-#### anthropic
-
-```json
-{
-  "providers": {
-    "anthropic": {
-      "api_key": "sk-ant-..."
-    }
-  }
-}
-```
-
-#### openrouter
-
-```json
-{
-  "providers": {
-    "openrouter": {
-      "api_key": "sk-or-...",
-      "api_base": "https://openrouter.ai/api/v1"
-    }
-  }
-}
-```
-
-#### groq
-
-```json
-{
-  "providers": {
-    "groq": {
-      "api_key": "gsk_..."
-    }
-  }
-}
-```
-
-#### gemini
-
-```json
-{
-  "providers": {
-    "gemini": {
-      "api_key": "AIza..."
-    }
-  }
-}
-```
-
-#### zhipu (智谱 AI)
-
-```json
-{
-  "providers": {
-    "zhipu": {
-      "api_key": "...",
-      "api_base": "https://open.bigmodel.cn/api/paas/v4"
-    }
-  }
-}
-```
-
-#### vllm (本地部署)
-
-```json
-{
-  "providers": {
-    "vllm": {
-      "api_key": "dummy",
-      "api_base": "http://localhost:8000/v1"
-    }
-  }
-}
-```
-
-### channels
-
-通信通道配置。
-
-#### telegram
-
-```json
-{
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "token": "123456:...",
-      "allow_from": ["@username", "123456789"]
-    }
-  }
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `enabled` | boolean | 是否启用 |
-| `token` | string | Bot Token |
-| `allow_from` | string[] | 白名单用户 |
-
-获取 Token：[@BotFather](https://t.me/BotFather)
-
-#### whatsapp
-
-```json
-{
-  "channels": {
-    "whatsapp": {
-      "enabled": false,
-      "bridge_url": "ws://localhost:3001",
-      "allow_from": []
-    }
-  }
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `enabled` | boolean | 是否启用 |
-| `bridge_url` | string | WA Bridge WebSocket 地址 |
-| `allow_from` | string[] | 白名单用户 |
-
-### gateway
-
-REST 网关配置。
-
-```json
-{
-  "gateway": {
-    "host": "0.0.0.0",
-    "port": 18790
-  }
-}
-```
-
-| 字段 | 类型 | 说明 |
-|------|------|------|
-| `host` | string | 绑定地址 |
-| `port` | number | 端口号 |
-
-### tools
-
-内置工具配置。
-
-```json
-{
-  "tools": {
-    "web": {
-      "search": {
-        "api_key": "",
-        "max_results": 5
-      }
-    }
-  }
-}
-```
-
-## 环境变量
-
-配置也可以通过环境变量设置，会覆盖配置文件：
-
-| 配置项 | 环境变量 |
-|--------|----------|
-| OpenAI API Key | `OPENAI_API_KEY` |
-| Anthropic API Key | `ANTHROPIC_API_KEY` |
-| OpenRouter API Key | `OPENROUTER_API_KEY` |
-| Groq API Key | `GROQ_API_KEY` |
-| Google API Key | `GOOGLE_API_KEY` |
-| MiniMax API Key | `MINIMAX_API_KEY` |
-| DeepSeek API Key | `DEEPSEEK_API_KEY` |
-| Brave Search API Key | `BRAVE_API_KEY` |
-| Telegram Bot Token | `TELEGRAM_BOT_TOKEN` |
-
-示例：
-
-```bash
-export OPENAI_API_KEY="sk-..."
-export ANTHROPIC_API_KEY="sk-ant-..."
-export MINIMAX_API_KEY="..."
-export DEEPSEEK_API_KEY="..."
-```
-
-## 配置文件位置
-
-| 用途 | 位置 |
-|------|------|
-| 配置文件 | `~/.config/xopcbot/config.json` |
-| 工作区 | `~/.xopcbot/workspace/` |
-| 会话数据 | `~/.xopcbot/workspace/sessions/` |
-
-## 验证配置
-
-运行命令检查配置：
-
-```bash
-# 测试 Provider 连接
-npm run dev -- agent -m "Hello"
-
-# 列出定时任务
-npm run dev -- cron list
-```
-
-## 常见问题
-
-### Q: 修改配置后需要重启吗？
-
-是的，修改 `config.json` 后需要重启服务。
-
-### Q: 如何使用多个提供商？
-
-配置多个 provider，agent 会根据模型名称自动选择：
-
-```json
-{
-  "providers": {
-    "openai": { "api_key": "sk-..." },
-    "anthropic": { "api_key": "sk-ant-..." }
-  }
-}
-```
-
-设置不同模型使用不同提供商。
-
-### Q: API Key 安全性
-
-- 不要将配置文件提交到 Git
-- 使用环境变量存储敏感信息
-- 配置文件的权限应设为 `600`
-
-### modelsDev
-
-models.dev 集成配置。models.dev 是一个综合性的开源 AI 模型规格数据库。
-
-```json
-{
-  "modelsDev": {
-    "enabled": true
-  }
+  "contextWindow": 128000,
+  "maxTokens": 16384
 }
 ```
 
 | 字段 | 类型 | 默认值 | 说明 |
-|------|------|--------|------|
-| `enabled` | boolean | `true` | 启用/禁用 models.dev 模型数据 |
+|-------|------|---------|------|
+| `id` | string | (必填) | 模型标识符 |
+| `name` | string | (必填) | 显示名称 |
+| `reasoning` | boolean | `false` | 支持推理/思考 |
+| `input` | array | `["text"]` | 输入类型：`text`、`image` |
+| `cost` | object | | 价格信息 |
+| `contextWindow` | number | `128000` | 上下文窗口大小 |
+| `maxTokens` | number | `16384` | 最大输出 tokens |
 
-启用后，xopcbot 会自动从内置的本地缓存加载模型信息，包括来自 OpenAI、Anthropic、Google、Groq、DeepSeek 等提供商的模型。这提供了更快的模型列表加载速度，无需在运行时发起网络请求。
+### channels
+
+通信渠道配置。
+
+### channels.telegram
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `false` | 启用 Telegram 机器人 |
+| `token` | string | - | 从 @BotFather 获取的机器人令牌 |
+| `allow_from` | array | `[]` | 允许的用户 ID（空 = 允许所有） |
+| `group_admins` | boolean | `false` | 仅允许群管理员 |
+| `magic` | string | - | 提及前缀 |
+
+### channels.whatsapp
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `false` | 启用 WhatsApp 桥接 |
+| `bridge_url` | string | `ws://localhost:3001` | WhatsApp 桥接 WebSocket URL |
+| `allow_from` | array | `[]` | 允许的手机号 |
+
+### channels.discord
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `false` | 启用 Discord 机器人 |
+| `token` | string | - | 机器人令牌 |
+| `allow_from` | array | `[]` | 允许的群组/频道 ID |
+
+### channels.slack
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `false` | 启用 Slack 机器人 |
+| `token` | string | - | 机器人令牌 |
+| `allow_from` | array | `[]` | 允许的频道 ID |
+
+### channels.signal
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `false` | 启用 Signal 机器人 |
+| `phone_number` | string | - | Signal 手机号 |
+| `device_name` | string | - | 设备名称 |
+| `allow_from` | array | `[]` | 允许的手机号 |
+
+### gateway
+
+HTTP API 网关配置。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `host` | string | `0.0.0.0` | 绑定地址 |
+| `port` | number | `18790` | 端口号 |
+| `auth` | object | - | 认证配置 |
+| `cors` | object | - | CORS 设置 |
+
+### gateway.auth
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `false` | 启用认证 |
+| `username` | string | - | 用户名 |
+| `password` | string | - | 密码 |
+| `api_key` | string | - | API 密钥认证 |
+
+### gateway.cors
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `false` | 启用 CORS |
+| `origins` | array | `[]` | 允许的来源 |
+| `credentials` | boolean | `false` | 允许凭证 |
+
+### tools
+
+工具配置。
+
+### tools.web
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `search` | object | - | 网页搜索配置 |
+| `browse` | object | - | 网页浏览配置 |
+
+### tools.web.search
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `provider` | string | `brave` | 搜索提供商：`brave`、`searxng` |
+| `api_key` | string | - | API 密钥 |
+| `max_results` | number | `5` | 最大结果数 |
+
+### tools.web.browse
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `true` | 启用浏览 |
+| `max_depth` | number | `2` | 最大链接深度 |
+| `timeout` | number | `30000` | 超时毫秒数 |
+
+### cron
+
+定时任务配置。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `true` | 启用 cron |
+| `jobs` | array | `[]` | 定时任务列表 |
+
+### heartbeat
+
+定期健康检查配置。
+
+| 字段 |类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `true` | 启用心跳 |
+| `interval` | number | `300000` | 间隔毫秒数（5分钟）|
+| `checks` | array | - | 检查列表 |
+
+### modelsDev
+
+本地模型开发设置。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `true` | 启用本地模型缓存 |
+
+## 环境变量
+
+xopcbot 支持环境变量来存储敏感数据：
+
+| 变量 | 说明 |
+|------|------|
+| `ANTHROPIC_API_KEY` | Anthropic API 密钥 |
+| `OPENAI_API_KEY` | OpenAI API 密钥 |
+| `GOOGLE_API_KEY` | Google AI API 密钥 |
+| `TELEGRAM_BOT_TOKEN` | Telegram 机器人令牌 |
+| `WHATSAPP_BRIDGE_URL` | WhatsApp 桥接 URL |
+
+环境变量优先于配置文件中的值。
+
+## 问答
+
+### Q: 如何使用多个提供商？
+
+使用 `models` 配置来定义多个提供商。智能体会根据模型 ID 自动选择合适的提供商：
+
+```json
+{
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "openai": {
+        "baseUrl": "https://api.openai.com/v1",
+        "apiKey": "${OPENAI_API_KEY}",
+        "models": [
+          { "id": "gpt-4o", "name": "GPT-4o" }
+        ]
+      },
+      "anthropic": {
+        "apiKey": "${ANTHROPIC_API_KEY}",
+        "models": [
+          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5", "reasoning": true }
+        ]
+      }
+    }
+  }
+}
+```
+
+在 `agents.defaults.model` 中设置不同的模型来使用不同的提供商。
+
+### Q: 如何配置 Ollama？
+
+```json
+{
+  "models": {
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://127.0.0.1:11434/v1",
+        "enabled": true,
+        "autoDiscovery": true,
+        "models": [
+          { "id": "llama3", "name": "Llama 3" }
+        ]
+      }
+    }
+  }
+}
+```
+
+### Q: 如何配置 OAuth？
+
+某些提供商支持 OAuth 认证：
+
+```json
+{
+  "models": {
+    "providers": {
+      "anthropic": {
+        "baseUrl": "https://api.anthropic.com",
+        "auth": {
+          "type": "oauth",
+          "clientId": "...",
+          "clientSecret": "..."
+        },
+        "models": []
+      }
+    }
+  }
+}
+```
+
+### Q: 什么是 modelsDev？
+
+启用后，xopcbot 会自动从内置本地缓存加载模型信息，包括来自 OpenAI、Anthropic、Google、Groq、DeepSeek 等提供商的模型。这可以更快地列出模型，无需在运行时发起网络请求。

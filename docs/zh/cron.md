@@ -252,5 +252,5 @@ await cronService.stop();
 - 确认 API Key 有效
 
 **AI 模式不工作？**
-- 确保模型已在 providers 中配置
+- 确保模型已在 models 配置中
 - 检查 agent service 已正确初始化

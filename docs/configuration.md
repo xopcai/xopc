@@ -18,33 +18,63 @@ All xopcbot configuration is centralized in the `~/.config/xopcbot/config.json` 
       "max_tool_iterations": 20
     }
   },
-  "providers": {
-    "openai": {
-      "api_key": "sk-...",
-      "base_url": "https://api.openai.com/v1"
-    },
-    "anthropic": {
-      "api_key": "sk-ant-..."
-    },
-    "minimax": {
-      "api_key": "..."
-    },
-    "openrouter": {
-      "api_key": "sk-or-...",
-      "base_url": "https://openrouter.ai/api/v1"
-    },
-    "groq": {
-      "api_key": "gsk_..."
-    },
-    "google": {
-      "api_key": "AIza..."
-    },
-    "deepseek": {
-      "api_key": "..."
-    },
-    "ollama": {
-      "enabled": true,
-      "base_url": "http://127.0.0.1:11434/v1"
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "openai": {
+        "baseUrl": "https://api.openai.com/v1",
+        "apiKey": "sk-...",
+        "models": [
+          { "id": "gpt-4o", "name": "GPT-4o" },
+          { "id": "gpt-4o-mini", "name": "GPT-4o Mini" }
+        ]
+      },
+      "anthropic": {
+        "apiKey": "sk-ant-...",
+        "models": [
+          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5", "reasoning": true }
+        ]
+      },
+      "minimax": {
+        "apiKey": "...",
+        "models": [
+          { "id": "minimax-m2.1", "name": "MiniMax M2.1" }
+        ]
+      },
+      "openrouter": {
+        "baseUrl": "https://openrouter.ai/api/v1",
+        "apiKey": "sk-or-...",
+        "models": [
+          { "id": "openai/gpt-4o", "name": "GPT-4o (via OpenRouter)" }
+        ]
+      },
+      "groq": {
+        "baseUrl": "https://api.groq.com/openai/v1",
+        "apiKey": "gsk_...",
+        "models": [
+          { "id": "llama-3.1-70b-versatile", "name": "Llama 3.1 70B" }
+        ]
+      },
+      "google": {
+        "apiKey": "AIza...",
+        "models": [
+          { "id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash" }
+        ]
+      },
+      "deepseek": {
+        "baseUrl": "https://api.deepseek.com/v1",
+        "apiKey": "...",
+        "models": [
+          { "id": "deepseek-chat", "name": "DeepSeek Chat" }
+        ]
+      },
+      "ollama": {
+        "baseUrl": "http://127.0.0.1:11434/v1",
+        "enabled": true,
+        "models": [
+          { "id": "llama3", "name": "Llama 3" }
+        ]
+      }
     }
   },
   "channels": {
@@ -98,345 +128,308 @@ Model configuration supports two formats:
 **Simple format (single model):**
 ```json
 {
-  "agents": {
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-5"
-    }
+  "model": "anthropic/claude-sonnet-4-5"
+}
+```
+
+**Object format (with fallbacks):**
+```json
+{
+  "model": {
+    "primary": "anthropic/claude-sonnet-4-5",
+    "fallbacks": ["openai/gpt-4o"]
   }
 }
 ```
 
-**Full format (primary + fallbacks):**
+The model ID format is `provider/model-id`, e.g., `anthropic/claude-opus-4-5`.
+
+### models
+
+OpenClaw-style model configuration. Use this to configure API providers and available models.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `mode` | string | `merge` | Config merge mode: `merge` or `replace` |
+| `providers` | object | `{}` | Provider configurations |
+| `bedrockDiscovery` | object | `{}` | AWS Bedrock model discovery settings |
+
+### models.providers
+
+Configure each LLM provider under this section:
+
 ```json
 {
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "anthropic/claude-sonnet-4-5",
-        "fallbacks": [
-          "openai/gpt-4o",
-          "minimax/minimax-m2.1",
-          "google/gemini-2.5-flash"
+  "models": {
+    "providers": {
+      "openai": {
+        "baseUrl": "https://api.openai.com/v1",
+        "apiKey": "sk-...",
+        "models": [
+          { "id": "gpt-4o", "name": "GPT-4o" }
         ]
       }
     }
   }
 }
 ```
+
+Provider configuration options:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `primary` | string | Primary model (provider/model format) |
-| `fallbacks` | string[] | Fallback models, used when primary fails |
+| `baseUrl` | string | API endpoint URL |
+| `apiKey` | string | API key (supports env vars like `${ANTHROPIC_API_KEY}`) |
+| `api` | string | API type: `openai-completions`, `anthropic-messages`, `google-generative-ai` |
+| `auth` | object | OAuth configuration |
+| `headers` | object | Custom HTTP headers |
+| `enabled` | boolean | Enable/disable provider |
+| `models` | array | List of available models |
 
-#### Model Fallback Mechanism
+### models.providers.[provider].models
 
-When the primary model fails, xopcbot automatically tries fallback models:
+Each model definition:
 
-1. **Supported failure types**:
-   - `auth` - Authentication failure (401, 403)
-   - `rate_limit` - Rate limit exceeded (429)
-   - `billing` - Billing/quota issues (402)
-   - `timeout` - Request timeout
-   - `format` - Request format error (400)
-
-2. **Fallback flow**:
-   - Primary model call fails
-   - Detect failure reason
-   - Try fallbacks in order
-   - Return result if any succeeds
-   - Throw error if all fail
-
-3. **Example configuration**:
 ```json
 {
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "anthropic/claude-sonnet-4-5",
-        "fallbacks": [
-          "openai/gpt-4o",
-          "minimax/minimax-m2.1"
-        ]
-      }
-    }
+  "id": "gpt-4o",
+  "name": "GPT-4o",
+  "reasoning": false,
+  "input": ["text", "image"],
+  "cost": {
+    "input": 0.000005,
+    "output": 0.000015
   },
-  "providers": {
-    "anthropic": { "api_key": "sk-ant-..." },
-    "openai": { "api_key": "sk-..." },
-    "minimax": { "api_key": "..." }
-  }
-}
-```
-
-Model ID formats:
-- **Short format**: `gpt-4o` (uses default provider)
-- **Full format**: `anthropic/claude-sonnet-4-5`
-
-### providers
-
-LLM provider configurations.
-
-#### openai
-
-```json
-{
-  "providers": {
-    "openai": {
-      "api_key": "sk-...",
-      "api_base": "https://api.openai.com/v1"
-    }
-  }
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `api_key` | string | OpenAI API Key |
-| `api_base` | string | (Optional) Custom API endpoint |
-
-#### anthropic
-
-```json
-{
-  "providers": {
-    "anthropic": {
-      "api_key": "sk-ant-..."
-    }
-  }
-}
-```
-
-#### openrouter
-
-```json
-{
-  "providers": {
-    "openrouter": {
-      "api_key": "sk-or-...",
-      "api_base": "https://openrouter.ai/api/v1"
-    }
-  }
-}
-```
-
-#### groq
-
-```json
-{
-  "providers": {
-    "groq": {
-      "api_key": "gsk_..."
-    }
-  }
-}
-```
-
-#### gemini
-
-```json
-{
-  "providers": {
-    "gemini": {
-      "api_key": "AIza..."
-    }
-  }
-}
-```
-
-#### zhipu (智谱 AI)
-
-```json
-{
-  "providers": {
-    "zhipu": {
-      "api_key": "...",
-      "api_base": "https://open.bigmodel.cn/api/paas/v4"
-    }
-  }
-}
-```
-
-#### vllm (Local deployment)
-
-```json
-{
-  "providers": {
-    "vllm": {
-      "api_key": "dummy",
-      "api_base": "http://localhost:8000/v1"
-    }
-  }
-}
-```
-
-### channels
-
-Communication channel configurations.
-
-#### telegram
-
-```json
-{
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "token": "123456:...",
-      "allow_from": ["@username", "123456789"]
-    }
-  }
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `enabled` | boolean | Enable channel |
-| `token` | string | Bot Token |
-| `allow_from` | string[] | Whitelist users |
-
-Get Token: [@BotFather](https://t.me/BotFather)
-
-#### whatsapp
-
-```json
-{
-  "channels": {
-    "whatsapp": {
-      "enabled": false,
-      "bridge_url": "ws://localhost:3001",
-      "allow_from": []
-    }
-  }
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `enabled` | boolean | Enable channel |
-| `bridge_url` | string | WA Bridge WebSocket URL |
-| `allow_from` | string[] | Whitelist users |
-
-### gateway
-
-REST gateway configuration.
-
-```json
-{
-  "gateway": {
-    "host": "0.0.0.0",
-    "port": 18790
-  }
-}
-```
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `host` | string | Bind address |
-| `port` | number | Port number |
-
-### tools
-
-Built-in tool configurations.
-
-```json
-{
-  "tools": {
-    "web": {
-      "search": {
-        "api_key": "",
-        "max_results": 5
-      }
-    }
-  }
-}
-```
-
-## Environment Variables
-
-Configuration can also be set via environment variables, which override config file:
-
-| Config | Environment Variable |
-|--------|---------------------|
-| OpenAI API Key | `OPENAI_API_KEY` |
-| Anthropic API Key | `ANTHROPIC_API_KEY` |
-| OpenRouter API Key | `OPENROUTER_API_KEY` |
-| Groq API Key | `GROQ_API_KEY` |
-| Google API Key | `GOOGLE_API_KEY` |
-| MiniMax API Key | `MINIMAX_API_KEY` |
-| DeepSeek API Key | `DEEPSEEK_API_KEY` |
-| Brave Search API Key | `BRAVE_API_KEY` |
-| Telegram Bot Token | `TELEGRAM_BOT_TOKEN` |
-
-Example:
-
-```bash
-export OPENAI_API_KEY="sk-..."
-export ANTHROPIC_API_KEY="sk-ant-..."
-export MINIMAX_API_KEY="..."
-export DEEPSEEK_API_KEY="..."
-```
-
-## Config File Locations
-
-| Purpose | Location |
-|---------|----------|
-| Config file | `~/.config/xopcbot/config.json` |
-| Workspace | `~/.xopcbot/workspace/` |
-| Session data | `~/.xopcbot/workspace/sessions/` |
-
-## Verify Configuration
-
-Run commands to test configuration:
-
-```bash
-# Test provider connection
-npm run dev -- agent -m "Hello"
-
-# List cron jobs
-npm run dev -- cron list
-```
-
-## FAQ
-
-### Q: Need to restart after config changes?
-
-Yes, restart the service after modifying `config.json`.
-
-### Q: How to use multiple providers?
-
-Configure multiple providers, agent automatically selects based on model name:
-
-```json
-{
-  "providers": {
-    "openai": { "api_key": "sk-..." },
-    "anthropic": { "api_key": "sk-ant-..." }
-  }
-}
-```
-
-Set different models to use different providers.
-
-### Q: API Key Security
-
-- Don't commit config files to Git
-- Use environment variables for sensitive data
-- Set config file permissions to `600`
-
-### modelsDev
-
-Configuration for models.dev integration. models.dev provides a comprehensive database of open-source AI model specifications.
-
-```json
-{
-  "modelsDev": {
-    "enabled": true
-  }
+  "contextWindow": 128000,
+  "maxTokens": 16384
 }
 ```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable/disable models.dev model data |
+| `id` | string | (required) | Model identifier |
+| `name` | string | (required) | Display name |
+| `reasoning` | boolean | `false` | Supports reasoning/thinking |
+| `input` | array | `["text"]` | Input types: `text`, `image` |
+| `cost` | object | | Pricing info |
+| `contextWindow` | number | `128000` | Context window size |
+| `maxTokens` | number | `16384` | Max output tokens |
+
+### channels
+
+Communication channels configuration.
+
+### channels.telegram
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable Telegram bot |
+| `token` | string | - | Bot token from @BotFather |
+| `allow_from` | array | `[]` | Allowed user IDs (empty = all) |
+| `group_admins` | boolean | `false` | Only allow group admins |
+| `magic` | string | - | Magic prefix for mentions |
+
+### channels.whatsapp
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable WhatsApp bridge |
+| `bridge_url` | string | `ws://localhost:3001` | WhatsApp bridge WebSocket URL |
+| `allow_from` | array | `[]` | Allowed phone numbers |
+
+### channels.discord
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable Discord bot |
+| `token` | string | - | Bot token |
+| `allow_from` | array | `[]` | Allowed guild/channel IDs |
+
+### channels.slack
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable Slack bot |
+| `token` | string | - | Bot token |
+| `allow_from` | array | `[]` | Allowed channel IDs |
+
+### channels.signal
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable Signal bot |
+| `phone_number` | string | - | Signal phone number |
+| `device_name` | string | - | Device name |
+| `allow_from` | array | `[]` | Allowed phone numbers |
+
+### gateway
+
+HTTP API gateway configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `host` | string | `0.0.0.0` | Bind address |
+| `port` | number | `18790` | Port number |
+| `auth` | object | - | Authentication config |
+| `cors` | object | - | CORS settings |
+
+### gateway.auth
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable auth |
+| `username` | string | - | Auth username |
+| `password` | string | - | Auth password |
+| `api_key` | string | - | API key auth |
+
+### gateway.cors
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable CORS |
+| `origins` | array | `[]` | Allowed origins |
+| `credentials` | boolean | `false` | Allow credentials |
+
+### tools
+
+Tool configurations.
+
+### tools.web
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `search` | object | - | Web search config |
+| `browse` | object | - | Web browsing config |
+
+### tools.web.search
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `provider` | string | `brave` | Search provider: `brave`, `searxng` |
+| `api_key` | string | - | API key |
+| `max_results` | number | `5` | Max results |
+
+### tools.web.browse
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable browsing |
+| `max_depth` | number | `2` | Max link depth |
+| `timeout` | number | `30000` | Timeout ms |
+
+### cron
+
+Scheduled tasks configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable cron |
+| `jobs` | array | `[]` | List of cron jobs |
+
+### heartbeat
+
+Periodic health check configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable heartbeat |
+| `interval` | number | `300000` | Interval in ms (5 min) |
+| `checks` | array | - | List of checks |
+
+### modelsDev
+
+Local model development settings.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable local model cache |
+
+## Environment Variables
+
+xopcbot supports environment variables for sensitive data:
+
+| Variable | Description |
+|----------|-------------|
+| `ANTHROPIC_API_KEY` | Anthropic API key |
+| `OPENAI_API_KEY` | OpenAI API key |
+| `GOOGLE_API_KEY` | Google AI API key |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token |
+| `WHATSAPP_BRIDGE_URL` | WhatsApp bridge URL |
+
+Environment variables take priority over config file values.
+
+## Q&A
+
+### Q: How to use multiple providers?
+
+Use the `models` configuration to define multiple providers. The agent automatically selects the appropriate provider based on the model ID:
+
+```json
+{
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "openai": {
+        "baseUrl": "https://api.openai.com/v1",
+        "apiKey": "${OPENAI_API_KEY}",
+        "models": [
+          { "id": "gpt-4o", "name": "GPT-4o" }
+        ]
+      },
+      "anthropic": {
+        "apiKey": "${ANTHROPIC_API_KEY}",
+        "models": [
+          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5", "reasoning": true }
+        ]
+      }
+    }
+  }
+}
+```
+
+Set different models in `agents.defaults.model` to use different providers.
+
+### Q: How to use Ollama?
+
+```json
+{
+  "models": {
+    "providers": {
+      "ollama": {
+        "baseUrl": "http://127.0.0.1:11434/v1",
+        "enabled": true,
+        "autoDiscovery": true,
+        "models": [
+          { "id": "llama3", "name": "Llama 3" }
+        ]
+      }
+    }
+  }
+}
+```
+
+### Q: How to configure OAuth?
+
+Some providers support OAuth authentication:
+
+```json
+{
+  "models": {
+    "providers": {
+      "anthropic": {
+        "baseUrl": "https://api.anthropic.com",
+        "auth": {
+          "type": "oauth",
+          "clientId": "...",
+          "clientSecret": "..."
+        },
+        "models": []
+      }
+    }
+  }
+}
+```
+
+### Q: What is modelsDev?
 
 When enabled, xopcbot automatically loads model information from the built-in local cache, which includes models from providers like OpenAI, Anthropic, Google, Groq, DeepSeek, and more. This provides faster model listing without requiring network requests at runtime.
