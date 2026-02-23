@@ -18,18 +18,20 @@ export interface FallbackAttempt {
  * Check if a provider is configured (has API key or is enabled for local providers)
  */
 export function isProviderConfigured(cfg: Config | undefined, provider: string): boolean {
-  if (!cfg?.providers) return false;
+  if (!cfg?.models?.providers) return false;
 
-  const providerConfig = cfg.providers[provider as keyof typeof cfg.providers];
+  const providerConfig = cfg.models.providers[provider];
   if (!providerConfig) return false;
 
-  // Ollama is special - it uses 'enabled' flag instead of apiKey
+  // Check if has API key
+  if (providerConfig.apiKey) return true;
+
+  // Ollama - check baseUrl
   if (provider === 'ollama') {
-    return (providerConfig as { enabled?: boolean }).enabled ?? true;
+    return !!providerConfig.baseUrl;
   }
 
-  // Other providers require apiKey
-  return 'apiKey' in providerConfig && Boolean(providerConfig.apiKey);
+  return false;
 }
 
 function parseModelRef(raw: string, defaultProvider?: string): ModelCandidate | null {

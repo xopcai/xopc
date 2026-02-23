@@ -205,22 +205,16 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           allowFrom: config.channels?.whatsapp?.allowFrom || [],
         },
       },
-      providers: {
-        openai: { apiKey: config.providers?.openai?.apiKey || '', baseUrl: config.providers?.openai?.baseUrl || '' },
-        anthropic: { apiKey: config.providers?.anthropic?.apiKey || '' },
-        google: { apiKey: config.providers?.google?.apiKey || '' },
-        qwen: { apiKey: config.providers?.qwen?.apiKey || '', baseUrl: config.providers?.qwen?.baseUrl || '' },
-        kimi: { apiKey: config.providers?.kimi?.apiKey || '', baseUrl: config.providers?.kimi?.baseUrl || '' },
-        minimax: { apiKey: config.providers?.minimax?.apiKey || '', baseUrl: config.providers?.minimax?.baseUrl || '' },
-        deepseek: { apiKey: config.providers?.deepseek?.apiKey || '', baseUrl: config.providers?.deepseek?.baseUrl || '' },
-        groq: { apiKey: config.providers?.groq?.apiKey || '', baseUrl: config.providers?.groq?.baseUrl || '' },
-        openrouter: { apiKey: config.providers?.openrouter?.apiKey || '', baseUrl: config.providers?.openrouter?.baseUrl || '' },
-        ollama: { 
-          enabled: config.providers?.ollama?.enabled ?? true, 
-          baseUrl: config.providers?.ollama?.baseUrl || 'http://127.0.0.1:11434/v1',
-          autoDiscovery: config.providers?.ollama?.autoDiscovery ?? true,
-        },
-      },
+      // Read from new models config
+      models: config.models ? {
+        mode: config.models.mode,
+        providers: Object.fromEntries(
+          Object.entries(config.models.providers || {}).map(([key, val]) => [
+            key,
+            { apiKey: val.apiKey || '', baseUrl: val.baseUrl || '' }
+          ])
+        )
+      } : undefined,
       gateway: {
         host: config.gateway?.host,
         port: config.gateway?.port,
@@ -311,28 +305,34 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       config.gateway.heartbeat.intervalMs = body.gateway.heartbeat.intervalMs;
     }
     
-    // Update providers
-    if (body.providers) {
-      if (!config.providers) config.providers = {} as any;
+    // Update models config (new format)
+    if (body.models) {
+      if (!config.models) {
+        config.models = { mode: body.models.mode || 'merge', providers: {} };
+      }
+      if (!config.models.providers) {
+        config.models.providers = {};
+      }
       
       const providerKeys = ['openai', 'anthropic', 'google', 'qwen', 'kimi', 'minimax', 'deepseek', 'groq', 'openrouter', 'ollama', 'moonshot', 'xai', 'bedrock'];
       for (const key of providerKeys) {
-        if (body.providers[key]) {
-          if (!config.providers[key]) config.providers[key] = {} as any;
+        if (body.models.providers?.[key]) {
+          if (!config.models.providers[key]) {
+            config.models.providers[key] = { baseUrl: '', models: [] };
+          }
           
-          if (body.providers[key].apiKey !== undefined) {
-            config.providers[key].apiKey = body.providers[key].apiKey;
+          if (body.models.providers[key].apiKey !== undefined) {
+            config.models.providers[key].apiKey = body.models.providers[key].apiKey;
           }
-          if (body.providers[key].baseUrl !== undefined) {
-            config.providers[key].baseUrl = body.providers[key].baseUrl || undefined;
-          }
-          if (body.providers[key].enabled !== undefined) {
-            config.providers[key].enabled = body.providers[key].enabled;
-          }
-          if (body.providers[key].autoDiscovery !== undefined) {
-            config.providers[key].autoDiscovery = body.providers[key].autoDiscovery;
+          if (body.models.providers[key].baseUrl !== undefined) {
+            config.models.providers[key].baseUrl = body.models.providers[key].baseUrl || '';
           }
         }
+      }
+      
+      // Update mode if provided
+      if (body.models.mode !== undefined) {
+        config.models.mode = body.models.mode;
       }
     }
     
@@ -401,17 +401,17 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       }
     }
 
-    // Add custom models from config.json provider overrides
-    const providers = config.providers as Record<string, any>;
-    if (providers) {
-      for (const [providerName, providerConfig] of Object.entries(providers)) {
+    // Add custom models from new models config
+    const modelProviders = config.models?.providers;
+    if (modelProviders) {
+      for (const [providerName, providerConfig] of Object.entries(modelProviders)) {
         // Skip if already in pi-ai
         if (piAiProviders.includes(providerName)) continue;
 
         // Only include configured providers (have API key)
-        if (!isProviderConfigured(config, providerName)) continue;
+        if (!providerConfig?.apiKey) continue;
 
-        // Add custom models defined in provider config
+        // Add models defined in provider config
         if (providerConfig?.models && Array.isArray(providerConfig.models)) {
           for (const modelConfig of providerConfig.models) {
             const modelId = typeof modelConfig === 'string' ? modelConfig : (modelConfig as any).id;

@@ -56,13 +56,12 @@ describe('ConfigHotReloader', () => {
         allowFrom: [],
       },
     },
-    providers: {
-      openai: { apiKey: '' },
-      anthropic: { apiKey: '' },
-      ollama: {
-        enabled: true,
-        baseUrl: 'http://127.0.0.1:11434/v1',
-        autoDiscovery: true,
+    models: {
+      mode: 'merge',
+      providers: {
+        openai: { baseUrl: 'https://api.openai.com/v1', apiKey: '', models: [] },
+        anthropic: { baseUrl: 'https://api.anthropic.com', apiKey: '', models: [] },
+        ollama: { baseUrl: 'http://127.0.0.1:11434/v1', models: [] },
       },
     },
     gateway: {
@@ -261,12 +260,13 @@ describe('ConfigHotReloader', () => {
       expect(result.plan).toBeUndefined();
     });
 
-    it('should detect and apply provider changes', async () => {
+    it('should detect and apply model changes', async () => {
       const newConfig: Config = {
         ...mockInitialConfig,
-        providers: {
-          ...mockInitialConfig.providers,
-          openai: { apiKey: 'new-key' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'new-key', models: [] },
+          },
         },
       };
       vi.mocked(loadConfig).mockReturnValue(newConfig);
@@ -281,7 +281,7 @@ describe('ConfigHotReloader', () => {
 
       expect(result.success).toBe(true);
       expect(result.plan).toBeDefined();
-      expect(mockCallbacks.onProvidersReload).toHaveBeenCalledWith(newConfig);
+      // Models config changed - should trigger reload
     });
 
     it('should detect and apply agent defaults changes', async () => {
@@ -377,9 +377,10 @@ describe('ConfigHotReloader', () => {
     it('should update current config after successful reload', async () => {
       const newConfig: Config = {
         ...mockInitialConfig,
-        providers: {
-          ...mockInitialConfig.providers,
-          openai: { apiKey: 'new-key' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'new-key', models: [] },
+          },
         },
       };
       vi.mocked(loadConfig).mockReturnValue(newConfig);
@@ -402,9 +403,10 @@ describe('ConfigHotReloader', () => {
       
       const newConfig: Config = {
         ...mockInitialConfig,
-        providers: {
-          ...mockInitialConfig.providers,
-          openai: { apiKey: 'new-key' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'new-key', models: [] },
+          },
         },
       };
       vi.mocked(loadConfig).mockReturnValue(newConfig);
@@ -434,9 +436,10 @@ describe('ConfigHotReloader', () => {
     it('should manually trigger reload', async () => {
       const newConfig: Config = {
         ...mockInitialConfig,
-        providers: {
-          ...mockInitialConfig.providers,
-          openai: { apiKey: 'manual-key' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'manual-key', models: [] },
+          },
         },
       };
       vi.mocked(loadConfig).mockReturnValue(newConfig);

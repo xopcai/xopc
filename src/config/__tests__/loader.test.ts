@@ -242,7 +242,7 @@ describe('loadConfig edge cases', () => {
 
     const config = loadConfig();
 
-    expect(config.providers?.openai?.apiKey).toBe('test-key');
+    expect(config.models?.providers?.openai?.apiKey).toBe('test-key');
     expect(config.agents?.defaults?.model).toBe('anthropic/claude-sonnet-4-5');
   });
 
@@ -291,10 +291,10 @@ describe('loadConfig edge cases', () => {
 
     const config = loadConfig();
 
-    expect(config.providers?.openai?.apiKey).toBe('test');
+    expect(config.models?.providers?.openai?.apiKey).toBe('test');
     // Unspecified providers are undefined (not merged with defaults)
-    expect(config.providers?.anthropic).toBeUndefined();
-    expect(config.providers?.ollama).toBeUndefined();
+    expect(config.models?.providers?.anthropic).toBeUndefined();
+    expect(config.models?.providers?.ollama).toBeUndefined();
   });
 
   it('should handle whitespace-only JSON', () => {
@@ -366,7 +366,7 @@ describe('saveConfig edge cases', () => {
     const parsed = JSON.parse(writtenContent);
 
     expect(parsed.agents.defaults.model).toBe('test-model');
-    expect(parsed.providers.openai.apiKey).toBe('test-key');
+    expect(parsed.models?.providers?.openai?.apiKey).toBe('test-key');
     expect(parsed.gateway.port).toBe(3000);
   });
 

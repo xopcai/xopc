@@ -61,14 +61,11 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
   // ========== Helper Functions ==========
 
   const getAvailableProviders = (): ProviderInfo[] => {
-    const providers = config.providers || {};
+    const modelProviders = config.models?.providers || {};
     const available: ProviderInfo[] = [];
 
-    for (const [name] of Object.entries(providers)) {
-      const apiKey = getApiKey(config, name) as any;
-      // Handle both string and object API key formats
-      const apiKeyStr = typeof apiKey === 'string' ? apiKey : apiKey?.primary || '';
-      if (apiKeyStr) {
+    for (const [name, providerConfig] of Object.entries(modelProviders)) {
+      if (providerConfig?.apiKey) {
         available.push({ id: name, name: PROVIDER_NAMES[name] || name });
       }
     }
@@ -82,8 +79,8 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
   };
 
   const getModelsForProvider = (providerId: string): ModelInfo[] => {
-    const providerConfig = (config.providers as any)?.[providerId];
-    const modelList = providerConfig?.models || DEFAULT_MODELS[providerId] || ['default'];
+    const providerConfig = config.models?.providers?.[providerId];
+    const modelList = (providerConfig?.models || DEFAULT_MODELS[providerId] || ['default']) as string[];
     
     return modelList.map((modelId: string) => ({
       id: `${providerId}/${modelId}`,

@@ -357,22 +357,15 @@ export const PluginsConfigSchema = z.record(
 // Root Config
 // ============================================
 
-/**
- * @deprecated Use `models` config instead. Providers config will be removed in future versions.
- */
-const DeprecatedProvidersConfigSchema = ProvidersConfigSchema;
-
 export const ConfigSchema = z.object({
   agents: AgentsConfigSchema,
   channels: ChannelsConfigSchema,
-  /** @deprecated Use `models` instead */
-  providers: DeprecatedProvidersConfigSchema,
   gateway: GatewayConfigSchema,
   tools: ToolsConfigSchema,
   cron: CronConfigSchema,
   plugins: PluginsConfigSchema,
   modelsDev: ModelsDevConfigSchema,
-  // OpenClaw-style models configuration (primary)
+  // OpenClaw-style models configuration
   models: ModelsConfigSchema,
 }).default({
   agents: {
@@ -411,30 +404,6 @@ export const ConfigSchema = z.object({
       enabled: false,
       bridgeUrl: 'ws://localhost:3001',
       allowFrom: [],
-    },
-  },
-  /** @deprecated Use `models` instead */
-  providers: {
-    openai: { apiKey: '' },
-    qwen: { apiKey: '' },
-    kimi: { apiKey: '' },
-    moonshot: { apiKey: '' },
-    minimax: { apiKey: '' },
-    'minimax-cn': { apiKey: '' },
-    zhipu: { apiKey: '' },
-    'zhipu-cn': { apiKey: '' },
-    deepseek: { apiKey: '' },
-    groq: { apiKey: '' },
-    openrouter: { apiKey: '' },
-    xai: { apiKey: '' },
-    bedrock: { apiKey: '' },
-    bailian: { apiKey: '' },
-    anthropic: { apiKey: '' },
-    google: { apiKey: '' },
-    ollama: {
-      enabled: true,
-      baseUrl: 'http://127.0.0.1:11434/v1',
-      autoDiscovery: true,
     },
   },
   gateway: {
@@ -513,9 +482,11 @@ const NATIVE_PROVIDERS: Record<string, { envKey: string[] }> = {
 // ============================================
 
 export function getApiKey(config: Config, provider: string): string | null {
-  const configKey = (config.providers as any)?.[provider]?.apiKey;
-  if (configKey) return configKey;
+  // First try new models config
+  const modelsProvider = config.models?.providers?.[provider];
+  if (modelsProvider?.apiKey) return modelsProvider.apiKey;
   
+  // Fallback to environment variables
   if (ANTHROPIC_COMPATIBLE_PROVIDERS[provider]) {
     for (const envKey of ANTHROPIC_COMPATIBLE_PROVIDERS[provider].envKey) {
       if (process.env[envKey]) return process.env[envKey]!;
@@ -538,9 +509,11 @@ export function getApiKey(config: Config, provider: string): string | null {
 }
 
 export function getApiBase(config: Config, provider: string): string | null {
-  const configBase = (config.providers as any)?.[provider]?.baseUrl;
-  if (configBase) return configBase;
+  // First try new models config
+  const modelsProvider = config.models?.providers?.[provider];
+  if (modelsProvider?.baseUrl) return modelsProvider.baseUrl;
   
+  // Fallback to default base URLs
   if (ANTHROPIC_COMPATIBLE_PROVIDERS[provider]) {
     return ANTHROPIC_COMPATIBLE_PROVIDERS[provider].baseUrl;
   }

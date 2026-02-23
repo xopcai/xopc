@@ -48,17 +48,20 @@ describe('ConfigSchema', () => {
     expect(config.agents.defaults.maxTokens).toBe(8192);
   });
 
-  it('should validate provider configuration', () => {
+  it('should validate model configuration', () => {
     const config = ConfigSchema.parse({
-      providers: {
-        openai: {
-          apiKey: 'sk-test123',
-          baseUrl: 'https://api.openai.com',
+      models: {
+        providers: {
+          openai: {
+            baseUrl: 'https://api.openai.com/v1',
+            apiKey: 'sk-test123',
+            models: [{ id: 'gpt-4', name: 'GPT-4' }],
+          },
         },
       },
     });
 
-    expect(config.providers.openai.apiKey).toBe('sk-test123');
+    expect(config.models?.providers?.openai?.apiKey).toBe('sk-test123');
   });
 
   it('should validate channel configuration', () => {
