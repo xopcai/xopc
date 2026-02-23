@@ -1,14 +1,27 @@
-// Extended types for xopcbot agent
-import type { AgentMessage as BaseAgentMessage } from '@mariozechner/pi-agent-core';
+/**
+ * Agent Types
+ * 
+ * Core type definitions for agent configuration
+ */
 
-// Re-export to avoid unused import warning
-export type { BaseAgentMessage };
+import type { AgentDefaults } from './types.agent-defaults.js';
+
+// ============================================
+// Agent Configuration
+// ============================================
 
 export interface AgentConfig {
-  workspace: string;
-  model?: string;
-  systemPrompt?: string;
+  defaults?: AgentDefaults;
+  list?: Record<string, AgentDefaults>;
 }
 
-// Re-export base types
-export type { AgentMessage } from '@mariozechner/pi-agent-core';
+// ============================================
+// Agent Runtime State
+// ============================================
+
+export interface AgentRuntimeState {
+  sessionKey: string;
+  currentModel?: string;
+  messageCount: number;
+  lastActivity: number;
+}

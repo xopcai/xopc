@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import { homedir } from 'os';
 
+// Import OpenClaw-style model configuration
+import { ModelsConfigSchema } from './schema.models.js';
+
 // ============================================
 // Provider Configuration (camelCase)
 // ============================================
@@ -363,6 +366,8 @@ export const ConfigSchema = z.object({
   cron: CronConfigSchema,
   plugins: PluginsConfigSchema,
   modelsDev: ModelsDevConfigSchema,
+  // OpenClaw-style models configuration
+  models: ModelsConfigSchema,
 }).default({
   agents: {
     defaults: {
@@ -453,6 +458,11 @@ export const ConfigSchema = z.object({
   plugins: {},
   modelsDev: {
     enabled: true,
+  },
+  // OpenClaw-style models configuration
+  models: {
+    mode: 'merge',
+    providers: {},
   },
 });
 
