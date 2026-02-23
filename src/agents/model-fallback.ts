@@ -165,15 +165,18 @@ function createCandidate(
     reason = reason || 'large context window';
   }
   
-  // Skip if priority is too low
-  if (priority >= 100) {
-    return null;
+  // Prefer models with larger context than the failed model
+  if (model.contextWindow && model.contextWindow > 50000) {
+    priority -= 3;
+    reason = reason || 'adequate context window';
   }
   
+  // Always return a candidate, even with low priority
+  // This ensures we have fallback options even if none match preferences
   return {
     model,
     provider: providerId,
-    reason,
+    reason: reason || 'available fallback',
     priority,
   };
 }

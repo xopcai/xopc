@@ -79,7 +79,12 @@ describe('resolveFallbackCandidates', () => {
     const candidates = resolveFallbackCandidates({
       cfg: {
         agents: { defaults: { model: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: ['openai/gpt-4o'] } } },
-        providers: { anthropic: { apiKey: 'test-key' }, openai: { apiKey: 'test-key' } },
+        models: {
+          providers: {
+            anthropic: { baseUrl: 'https://api.anthropic.com', apiKey: 'test-key', models: [] },
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'test-key', models: [] },
+          },
+        },
       } as any,
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',
@@ -92,7 +97,12 @@ describe('resolveFallbackCandidates', () => {
     const candidates = resolveFallbackCandidates({
       cfg: {
         agents: { defaults: { model: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: ['openai/gpt-4o'] } } },
-        providers: { anthropic: { apiKey: 'test-key' }, minimax: { apiKey: 'test-key' } },
+        models: {
+          providers: {
+            anthropic: { baseUrl: 'https://api.anthropic.com', apiKey: 'test-key', models: [] },
+            minimax: { baseUrl: 'https://api.minimax.io/v1', apiKey: 'test-key', models: [] },
+          },
+        },
       } as any,
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',
@@ -106,7 +116,11 @@ describe('resolveFallbackCandidates', () => {
     const candidates = resolveFallbackCandidates({
       cfg: {
         agents: { defaults: { model: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: ['anthropic/claude-sonnet-4-5'] } } },
-        providers: { anthropic: { apiKey: 'test-key' } },
+        models: {
+          providers: {
+            anthropic: { baseUrl: 'https://api.anthropic.com', apiKey: 'test-key', models: [] },
+          },
+        },
       } as any,
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',
@@ -119,7 +133,11 @@ describe('resolveFallbackCandidates', () => {
     const candidates = resolveFallbackCandidates({
       cfg: {
         agents: { defaults: { model: { primary: 'anthropic/claude-sonnet-4-5', fallbacks: ['openai/gpt-4o', 'unconfigured/model'] } } },
-        providers: { anthropic: { apiKey: 'test-key' } }, // openai not configured
+        models: {
+          providers: {
+            anthropic: { baseUrl: 'https://api.anthropic.com', apiKey: 'test-key', models: [] },
+          },
+        },
       } as any,
       provider: 'anthropic',
       model: 'claude-sonnet-4-5',

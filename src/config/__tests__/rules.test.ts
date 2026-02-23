@@ -12,7 +12,7 @@ describe('BASE_RELOAD_RULES', () => {
   it('should contain expected rules', () => {
     expect(BASE_RELOAD_RULES.length).toBeGreaterThan(0);
     
-    const providersRule = BASE_RELOAD_RULES.find(r => r.prefix === 'providers');
+    const providersRule = BASE_RELOAD_RULES.find(r => r.prefix === 'models.providers');
     expect(providersRule).toBeDefined();
     expect(providersRule?.kind).toBe('hot');
   });
@@ -26,16 +26,16 @@ describe('BASE_RELOAD_RULES', () => {
 
 describe('matchReloadRule', () => {
   it('should match exact prefix', () => {
-    const rule = matchReloadRule('providers');
+    const rule = matchReloadRule('models.providers');
     expect(rule).toBeDefined();
-    expect(rule?.prefix).toBe('providers');
+    expect(rule?.prefix).toBe('models.providers');
     expect(rule?.kind).toBe('hot');
   });
 
   it('should match nested path under prefix', () => {
-    const rule = matchReloadRule('providers.openai.apiKey');
+    const rule = matchReloadRule('models.providers.openai.apiKey');
     expect(rule).toBeDefined();
-    expect(rule?.prefix).toBe('providers');
+    expect(rule?.prefix).toBe('models.providers');
     expect(rule?.kind).toBe('hot');
   });
 
@@ -105,12 +105,12 @@ describe('buildReloadPlan', () => {
 
   it('should categorize hot paths correctly', () => {
     const plan = buildReloadPlan([
-      'providers.openai.apiKey',
+      'models.providers.openai.apiKey',
       'agents.defaults.model',
       'channels.telegram.enabled',
     ]);
 
-    expect(plan.hotPaths).toContain('providers.openai.apiKey');
+    expect(plan.hotPaths).toContain('models.providers.openai.apiKey');
     expect(plan.hotPaths).toContain('agents.defaults.model');
     expect(plan.hotPaths).toContain('channels.telegram.enabled');
     expect(plan.requiresHotReload).toBe(true);
@@ -141,13 +141,13 @@ describe('buildReloadPlan', () => {
 
   it('should handle mixed paths', () => {
     const plan = buildReloadPlan([
-      'providers.openai.apiKey',
+      'models.providers.openai.apiKey',
       'gateway.port',
       'agents.defaults.temperature',
       'agents.defaults.workspace',
     ]);
 
-    expect(plan.hotPaths).toContain('providers.openai.apiKey');
+    expect(plan.hotPaths).toContain('models.providers.openai.apiKey');
     expect(plan.hotPaths).toContain('agents.defaults.temperature');
     expect(plan.restartPaths).toContain('gateway.port');
     expect(plan.noopPaths).toContain('agents.defaults.workspace');
@@ -164,7 +164,7 @@ describe('buildReloadPlan', () => {
 
   it('should include all changed paths in changedPaths array', () => {
     const paths = [
-      'providers.openai.apiKey',
+      'models.providers.openai.apiKey',
       'gateway.port',
       'unknown.path',
     ];
@@ -177,12 +177,12 @@ describe('buildReloadPlan', () => {
 
   it('should handle deeply nested paths', () => {
     const plan = buildReloadPlan([
-      'providers.openai.models.0.id',
+      'models.providers.openai.models.0.id',
       'agents.defaults.compaction.enabled',
       'agents.defaults.pruning.maxToolResultChars',
     ]);
 
-    expect(plan.hotPaths).toContain('providers.openai.models.0.id');
+    expect(plan.hotPaths).toContain('models.providers.openai.models.0.id');
     expect(plan.hotPaths).toContain('agents.defaults.compaction.enabled');
     expect(plan.hotPaths).toContain('agents.defaults.pruning.maxToolResultChars');
   });
@@ -201,7 +201,7 @@ describe('getHotReloadablePaths', () => {
     expect(Array.isArray(paths)).toBe(true);
     expect(paths.length).toBeGreaterThan(0);
     
-    expect(paths).toContain('providers');
+    expect(paths).toContain('models.providers');
     expect(paths).toContain('agents.defaults.model');
     expect(paths).toContain('channels.telegram');
   });
@@ -227,7 +227,7 @@ describe('getRestartRequiredPaths', () => {
 
   it('should not include hot paths', () => {
     const paths = getRestartRequiredPaths();
-    expect(paths).not.toContain('providers');
+    expect(paths).not.toContain('models.providers');
     expect(paths).not.toContain('agents.defaults.model');
   });
 });

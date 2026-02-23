@@ -28,8 +28,9 @@ export interface ReloadPlan {
  * Base reload rules for config paths
  */
 export const BASE_RELOAD_RULES: ReloadRule[] = [
-  // Providers - hot reload
-  { prefix: 'providers', kind: 'hot', description: 'Provider API keys, base URLs' },
+  // Models config - hot reload
+  { prefix: 'models.providers', kind: 'hot', description: 'Model provider API keys, base URLs' },
+  { prefix: 'models.mode', kind: 'hot', description: 'Model merge mode' },
   
   // Agent defaults - hot reload
   { prefix: 'agents.defaults.model', kind: 'hot', description: 'Model configuration' },

@@ -126,6 +126,10 @@ export const ModelsConfigSchema = z
     bedrockDiscovery: BedrockDiscoverySchema,
   })
   .strict()
-  .optional();
+  .default({
+    mode: 'merge',
+    providers: {},
+    bedrockDiscovery: {},
+  });
 
 export type ModelsConfig = z.infer<typeof ModelsConfigSchema>;

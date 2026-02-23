@@ -88,6 +88,58 @@ export function validateModelDefinition(
     errors.push('missing name');
   }
 
+  // Validate API type if provided
+  if (model.api) {
+    const validApis = [
+      'openai-completions',
+      'openai-responses',
+      'anthropic-messages',
+      'google-generative-ai',
+      'github-copilot',
+      'bedrock-converse-stream',
+      'ollama',
+    ];
+    if (!validApis.includes(model.api)) {
+      errors.push(`invalid api type: ${model.api}`);
+    }
+  }
+
+  // Validate context window if provided
+  if (model.contextWindow !== undefined) {
+    if (!Number.isFinite(model.contextWindow) || model.contextWindow <= 0) {
+      errors.push('contextWindow must be a positive number');
+    }
+  }
+
+  // Validate maxTokens if provided
+  if (model.maxTokens !== undefined) {
+    if (!Number.isFinite(model.maxTokens) || model.maxTokens <= 0) {
+      errors.push('maxTokens must be a positive number');
+    }
+  }
+
+  // Validate cost fields if provided
+  if (model.cost) {
+    const costFields = ['input', 'output', 'cacheRead', 'cacheWrite'] as const;
+    for (const field of costFields) {
+      if (model.cost[field] !== undefined) {
+        if (typeof model.cost[field] !== 'number' || model.cost[field]! < 0) {
+          errors.push(`cost.${field} must be a non-negative number`);
+        }
+      }
+    }
+  }
+
+  // Validate input types if provided
+  if (model.input) {
+    const validInputs = ['text', 'image'];
+    for (const inputType of model.input) {
+      if (!validInputs.includes(inputType)) {
+        errors.push(`invalid input type: ${inputType}`);
+      }
+    }
+  }
+
   if (errors.length > 0) {
     return { model: null, errors };
   }

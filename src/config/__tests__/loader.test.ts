@@ -232,8 +232,10 @@ describe('loadConfig edge cases', () => {
 
   it('should handle config with missing sections', () => {
     const mockConfig = {
-      providers: {
-        openai: { apiKey: 'test-key' },
+      models: {
+        providers: {
+          openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'test-key', models: [] },
+        },
       },
     };
 
@@ -280,9 +282,11 @@ describe('loadConfig edge cases', () => {
 
   it('should handle partial provider config', () => {
     const mockConfig = {
-      providers: {
-        openai: { apiKey: 'test' },
-        // anthropic and ollama are not provided, will be undefined
+      models: {
+        providers: {
+          openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'test', models: [] },
+          // anthropic and ollama are not provided, will be undefined
+        },
       },
     };
 
@@ -350,8 +354,10 @@ describe('saveConfig edge cases', () => {
           maxTokens: 4096,
         },
       },
-      providers: {
-        openai: { apiKey: 'test-key' },
+      models: {
+        providers: {
+          openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'test-key', models: [] },
+        },
       },
       gateway: {
         port: 3000,
@@ -366,7 +372,7 @@ describe('saveConfig edge cases', () => {
     const parsed = JSON.parse(writtenContent);
 
     expect(parsed.agents.defaults.model).toBe('test-model');
-    expect(parsed.models?.providers?.openai?.apiKey).toBe('test-key');
+    expect(parsed.models.providers.openai.apiKey).toBe('test-key');
     expect(parsed.gateway.port).toBe(3000);
   });
 
@@ -408,7 +414,7 @@ describe('saveConfig edge cases', () => {
     const parsed = JSON.parse(writtenContent);
 
     expect(parsed).toHaveProperty('agents');
-    expect(parsed).toHaveProperty('providers');
+    expect(parsed).toHaveProperty('models');
     expect(parsed).toHaveProperty('channels');
     expect(parsed).toHaveProperty('gateway');
     expect(parsed).toHaveProperty('tools');

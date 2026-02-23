@@ -358,8 +358,10 @@ describe('Helper Functions', () => {
 
     it('should return API key from config', () => {
       const config = ConfigSchema.parse({
-        providers: {
-          openai: { apiKey: 'sk-config-key' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-config-key', models: [] },
+          },
         },
       });
 
@@ -369,8 +371,10 @@ describe('Helper Functions', () => {
     it('should return API key from env when not in config', () => {
       process.env.OPENAI_API_KEY = 'sk-env-key';
       const config = ConfigSchema.parse({
-        providers: {
-          openai: { apiKey: '' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: '', models: [] },
+          },
         },
       });
 
@@ -380,8 +384,10 @@ describe('Helper Functions', () => {
     it('should prioritize config over env', () => {
       process.env.OPENAI_API_KEY = 'sk-env-key';
       const config = ConfigSchema.parse({
-        providers: {
-          openai: { apiKey: 'sk-config-key' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-config-key', models: [] },
+          },
         },
       });
 
@@ -390,8 +396,10 @@ describe('Helper Functions', () => {
 
     it('should return null when no key found', () => {
       const config = ConfigSchema.parse({
-        providers: {
-          openai: { apiKey: '' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: '', models: [] },
+          },
         },
       });
 
@@ -402,8 +410,10 @@ describe('Helper Functions', () => {
   describe('getApiBase', () => {
     it('should return base URL from config', () => {
       const config = ConfigSchema.parse({
-        providers: {
-          openai: { apiKey: '', baseUrl: 'https://custom.openai.com/v1' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://custom.openai.com/v1', apiKey: '', models: [] },
+          },
         },
       });
 
@@ -412,8 +422,10 @@ describe('Helper Functions', () => {
 
     it('should return default base URL for provider', () => {
       const config = ConfigSchema.parse({
-        providers: {
-          openai: { apiKey: '' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: '', models: [] },
+          },
         },
       });
 
@@ -479,8 +491,10 @@ describe('Helper Functions', () => {
   describe('isProviderConfigured', () => {
     it('should return true when provider has API key', () => {
       const config = ConfigSchema.parse({
-        providers: {
-          openai: { apiKey: 'sk-test' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', models: [] },
+          },
         },
       });
 
@@ -489,8 +503,10 @@ describe('Helper Functions', () => {
 
     it('should return false when provider has no API key', () => {
       const config = ConfigSchema.parse({
-        providers: {
-          openai: { apiKey: '' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: '', models: [] },
+          },
         },
       });
 
@@ -501,10 +517,12 @@ describe('Helper Functions', () => {
   describe('listConfiguredProviders', () => {
     it('should return list of configured providers', () => {
       const config = ConfigSchema.parse({
-        providers: {
-          openai: { apiKey: 'sk-test' },
-          anthropic: { apiKey: 'ant-test' },
-          deepseek: { apiKey: '' },
+        models: {
+          providers: {
+            openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'sk-test', models: [] },
+            anthropic: { baseUrl: 'https://api.anthropic.com', apiKey: 'ant-test', models: [] },
+            deepseek: { baseUrl: 'https://api.deepseek.com/v1', apiKey: '', models: [] },
+          },
         },
       });
 

@@ -401,11 +401,15 @@ describe('ConfigHotReloader', () => {
     it('should debounce multiple rapid calls', async () => {
       vi.useFakeTimers();
       
+      // Create new config with only one change (openai apiKey)
       const newConfig: Config = {
         ...mockInitialConfig,
         models: {
+          mode: 'merge' as const,
           providers: {
             openai: { baseUrl: 'https://api.openai.com/v1', apiKey: 'new-key', models: [] },
+            anthropic: { baseUrl: 'https://api.anthropic.com', apiKey: '', models: [] },
+            ollama: { baseUrl: 'http://127.0.0.1:11434/v1', models: [] },
           },
         },
       };
@@ -426,6 +430,7 @@ describe('ConfigHotReloader', () => {
       // Should only have one pending timer
       await vi.advanceTimersByTimeAsync(100);
 
+      // Should only call onModelsReload once due to debouncing
       expect(mockCallbacks.onModelsReload).toHaveBeenCalledTimes(1);
       
       vi.useRealTimers();
