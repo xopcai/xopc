@@ -328,58 +328,18 @@ export class ModelRegistry {
 		}
 	}
 
+	/**
+	 * @deprecated Provider override logic removed. Use `models` config instead.
+	 */
 	private loadBuiltinProviderModels(): void {
-		// No longer needed - all models come from pi-ai
+		// No longer needed - all models come from new models config
 	}
 
+	/**
+	 * @deprecated Provider override logic removed. Use `models` config instead.
+	 */
 	private applyProviderOverrides(): void {
-		if (!this.config) return;
-
-		const providers = this.config.providers as Record<string, ProviderOverride>;
-
-		for (const [providerName, providerConfig] of Object.entries(providers)) {
-			if (providerConfig.baseUrl) {
-				this.models = this.models.map((m) => {
-					if (m.provider === providerName) {
-						return { ...m, baseUrl: providerConfig.baseUrl! };
-					}
-					return m;
-				});
-			}
-
-			if (providerConfig.models && providerConfig.models.length > 0) {
-				const api = (providerConfig.api ?? 'openai-completions') as Api;
-				const baseUrl = providerConfig.baseUrl ?? getApiBase(this.config, providerName) ?? '';
-
-				for (const modelConfig of providerConfig.models) {
-					// Handle both string array and object array formats
-					const isMetadataObject = typeof modelConfig === 'object' && modelConfig !== null && 'id' in modelConfig;
-					const modelId = isMetadataObject ? (modelConfig as ModelMetadata).id : (modelConfig as string);
-					
-					const exists = this.models.some((m) => m.provider === providerName && m.id === modelId);
-					if (!exists) {
-						const metadata = isMetadataObject ? (modelConfig as ModelMetadata) : null;
-						this.models.push({
-							id: modelId,
-							name: metadata?.name ?? modelId,
-							api,
-							provider: providerName,
-							baseUrl,
-							reasoning: metadata?.reasoning ?? false,
-							input: metadata?.input ?? ['text'],
-							cost: {
-								input: metadata?.cost?.input ?? 0,
-								output: metadata?.cost?.output ?? 0,
-								cacheRead: metadata?.cost?.cacheRead ?? 0,
-								cacheWrite: metadata?.cost?.cacheWrite ?? 0,
-							},
-							contextWindow: metadata?.contextWindow ?? 128000,
-							maxTokens: metadata?.maxTokens ?? 16384,
-						} as Model<Api>);
-					}
-				}
-			}
-		}
+		// Removed - use models config instead
 	}
 
 	private async discoverLocalModels(): Promise<void> {
@@ -459,9 +419,8 @@ export class ModelRegistry {
 		this.models = [];
 		this._error = undefined;
 		this.loadBuiltInModels();
-		this.loadBuiltinProviderModels();
+		// Load from new models config only
 		if (this.config) {
-			this.applyProviderOverrides();
 			this.applyModelsConfig();
 		}
 		if (this.ollamaEnabled && this.ollamaDiscovery) {

@@ -357,16 +357,22 @@ export const PluginsConfigSchema = z.record(
 // Root Config
 // ============================================
 
+/**
+ * @deprecated Use `models` config instead. Providers config will be removed in future versions.
+ */
+const DeprecatedProvidersConfigSchema = ProvidersConfigSchema;
+
 export const ConfigSchema = z.object({
   agents: AgentsConfigSchema,
   channels: ChannelsConfigSchema,
-  providers: ProvidersConfigSchema,
+  /** @deprecated Use `models` instead */
+  providers: DeprecatedProvidersConfigSchema,
   gateway: GatewayConfigSchema,
   tools: ToolsConfigSchema,
   cron: CronConfigSchema,
   plugins: PluginsConfigSchema,
   modelsDev: ModelsDevConfigSchema,
-  // OpenClaw-style models configuration
+  // OpenClaw-style models configuration (primary)
   models: ModelsConfigSchema,
 }).default({
   agents: {
@@ -407,6 +413,7 @@ export const ConfigSchema = z.object({
       allowFrom: [],
     },
   },
+  /** @deprecated Use `models` instead */
   providers: {
     openai: { apiKey: '' },
     qwen: { apiKey: '' },
