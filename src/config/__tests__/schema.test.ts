@@ -3,7 +3,6 @@ import {
   ConfigSchema,
   AgentDefaultsSchema,
   TelegramConfigSchema,
-  ProvidersConfigSchema,
   GatewayConfigSchema,
   CronConfigSchema,
   ToolsConfigSchema,
@@ -210,104 +209,6 @@ describe('TelegramConfigSchema', () => {
   });
 });
 
-describe('ProvidersConfigSchema', () => {
-  it('should apply defaults when providers is undefined', () => {
-    // When the entire providers section is undefined, defaults are applied
-    // This happens when parsing the full ConfigSchema with empty input
-    const providers = ProvidersConfigSchema.parse(undefined);
-
-    // ProvidersConfigSchema has .default() that provides all provider defaults
-    expect(providers.openai).toBeDefined();
-    expect(providers.openai?.apiKey).toBe('');
-    expect(providers.anthropic).toBeDefined();
-    expect(providers.anthropic?.apiKey).toBe('');
-    expect(providers.ollama).toBeDefined();
-    expect(providers.ollama?.enabled).toBe(true);
-    expect(providers.ollama?.baseUrl).toBe('http://127.0.0.1:11434/v1');
-  });
-
-  it('should have undefined fields when parsing empty object', () => {
-    // When parsing empty object {}, fields are undefined (not defaults)
-    const providers = ProvidersConfigSchema.parse({});
-    expect(providers.openai).toBeUndefined();
-  });
-
-  it('should accept OpenAI provider config', () => {
-    const providers = ProvidersConfigSchema.parse({
-      openai: {
-        apiKey: 'sk-test',
-        baseUrl: 'https://api.openai.com/v1',
-      },
-    });
-
-    expect(providers.openai?.apiKey).toBe('sk-test');
-    expect(providers.openai?.baseUrl).toBe('https://api.openai.com/v1');
-  });
-
-  it('should accept Anthropic provider config', () => {
-    const providers = ProvidersConfigSchema.parse({
-      anthropic: {
-        apiKey: 'ant-test',
-        models: ['claude-sonnet-4-5'],
-      },
-    });
-
-    expect(providers.anthropic?.apiKey).toBe('ant-test');
-    expect(providers.anthropic?.models).toEqual(['claude-sonnet-4-5']);
-  });
-
-  it('should accept Ollama provider config', () => {
-    const providers = ProvidersConfigSchema.parse({
-      ollama: {
-        enabled: true,
-        baseUrl: 'http://localhost:11434/v1',
-        autoDiscovery: false,
-        models: ['llama3', 'mistral'],
-      },
-    });
-
-    expect(providers.ollama?.enabled).toBe(true);
-    expect(providers.ollama?.autoDiscovery).toBe(false);
-  });
-
-  it('should reject invalid Ollama properties', () => {
-    expect(() => {
-      ProvidersConfigSchema.parse({
-        ollama: {
-          enabled: true,
-          invalidProp: 'should fail',
-        },
-      });
-    }).toThrow();
-  });
-
-  it('should accept model metadata with cost info', () => {
-    const providers = ProvidersConfigSchema.parse({
-      openai: {
-        apiKey: 'sk-test',
-        models: [
-          {
-            id: 'gpt-4o',
-            name: 'GPT-4o',
-            reasoning: false,
-            input: ['text', 'image'],
-            cost: {
-              input: 0.000005,
-              output: 0.000015,
-              cacheRead: 0.000001,
-              cacheWrite: 0.000002,
-            },
-            contextWindow: 128000,
-            maxTokens: 16384,
-          },
-        ],
-      },
-    });
-
-    expect(providers.openai?.models?.[0]).toBeDefined();
-    expect((providers.openai?.models?.[0] as any).cost.input).toBe(0.000005);
-  });
-});
 
 describe('GatewayConfigSchema', () => {
   it('should parse empty object', () => {

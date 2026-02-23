@@ -27,78 +27,6 @@ export const ModelMetadataSchema = z.object({
   maxTokens: z.number().default(16384),
 });
 
-// OpenAI-compatible provider schema
-export const OpenAIProviderSchema = z.object({
-  apiKey: z.string().default(''),
-  baseUrl: z.string().optional(),
-  api: z.enum(['openai-completions', 'anthropic-messages', 'google-generative-ai', 'github-copilot']).optional(),
-  models: z.union([
-    z.array(z.string()), // Simple string array (backward compatible)
-    z.array(ModelMetadataSchema), // Detailed model objects
-  ]).optional(),
-});
-
-// Anthropic provider schema
-export const AnthropicProviderSchema = z.object({
-  apiKey: z.string().default(''),
-  models: z.array(z.string()).optional(),
-});
-
-// Ollama provider schema
-export const OllamaProviderSchema = z.object({
-  enabled: z.boolean().default(true),
-  baseUrl: z.string().default('http://127.0.0.1:11434/v1'),
-  models: z.array(z.string()).optional(),
-  autoDiscovery: z.boolean().default(true),
-}).strict();
-
-// Unified providers config
-export const ProvidersConfigSchema = z.object({
-  // OpenAI-compatible providers
-  openai: OpenAIProviderSchema.optional(),
-  qwen: OpenAIProviderSchema.optional(),
-  kimi: OpenAIProviderSchema.optional(),
-  moonshot: OpenAIProviderSchema.optional(),
-  minimax: OpenAIProviderSchema.optional(),
-  'minimax-cn': OpenAIProviderSchema.optional(),
-  zhipu: OpenAIProviderSchema.optional(),
-  'zhipu-cn': OpenAIProviderSchema.optional(),
-  deepseek: OpenAIProviderSchema.optional(),
-  groq: OpenAIProviderSchema.optional(),
-  openrouter: OpenAIProviderSchema.optional(),
-  xai: OpenAIProviderSchema.optional(),
-  bedrock: OpenAIProviderSchema.optional(),
-  bailian: OpenAIProviderSchema.optional(),
-
-  // Native providers
-  anthropic: AnthropicProviderSchema.optional(),
-  google: AnthropicProviderSchema.optional(),
-
-  // Local providers
-  ollama: OllamaProviderSchema.optional(),
-}).strict().default({
-  openai: { apiKey: '' },
-  qwen: { apiKey: '' },
-  kimi: { apiKey: '' },
-  moonshot: { apiKey: '' },
-  minimax: { apiKey: '' },
-  'minimax-cn': { apiKey: '' },
-  zhipu: { apiKey: '' },
-  'zhipu-cn': { apiKey: '' },
-  deepseek: { apiKey: '' },
-  groq: { apiKey: '' },
-  openrouter: { apiKey: '' },
-  xai: { apiKey: '' },
-  bedrock: { apiKey: '' },
-  bailian: { apiKey: '' },
-  anthropic: { apiKey: '' },
-  google: { apiKey: '' },
-  ollama: {
-    enabled: true,
-    baseUrl: 'http://127.0.0.1:11434/v1',
-    autoDiscovery: true,
-  },
-});
 
 // ============================================
 // Agent Configs (camelCase)
@@ -445,8 +373,6 @@ export const ConfigSchema = z.object({
 export type Config = z.infer<typeof ConfigSchema>;
 export type AgentDefaults = z.infer<typeof AgentDefaultsSchema>;
 export type GatewayAuthConfig = z.infer<typeof GatewayAuthSchema>;
-export type OpenAIProviderConfig = z.infer<typeof OpenAIProviderSchema>;
-export type AnthropicProviderConfig = z.infer<typeof AnthropicProviderSchema>;
 export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
 export type WhatsAppConfig = z.infer<typeof WhatsAppConfigSchema>;
 export type ModelMetadata = z.infer<typeof ModelMetadataSchema>;
