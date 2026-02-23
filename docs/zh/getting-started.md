@@ -43,23 +43,12 @@ xopcbot onboard
 1. 创建必要的目录（`~/.xopcbot/` 和 `~/.xopcbot/workspace/`）。
 2. 在 `~/.xopcbot/config.json` 生成默认配置文件。
 3. 提示选择 LLM 提供商并输入 API 密钥。
+4. 引导配置消息渠道（Telegram/WhatsApp）。
+5. 配置并启动 Gateway WebUI。
 
 您的 API 密钥将安全存储在配置文件中。
 
-### 配置向导流程
-
-```
-? 选择 LLM 提供商: openai
-? 输入 API 密钥: sk-...
-? 启用 Telegram? Yes
-? Telegram Bot Token: 123456:...
-```
-
 ## 4. 首次对话（CLI）
-
-配置完成后，您可以立即通过命令行与代理交互。
-
-#### 单次消息模式
 
 使用 `-m` 标志发送单条消息并接收回复：
 

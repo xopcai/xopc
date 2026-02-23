@@ -119,8 +119,8 @@ async function runOnboard(options: { model?: boolean; channels?: boolean; gatewa
 
   // Determine what to configure based on options
   const doModel = options.model || options.all || (!options.channels && !options.gateway);
-  const doChannels = options.channels || options.all;
-  const doGateway = options.gateway || options.all;
+  const doChannels = options.channels || options.all || (!options.model && !options.gateway);
+  const doGateway = options.gateway || options.all || (!options.model && !options.channels);
   const runFullWizard = !options.model && !options.channels && !options.gateway;
 
   // Auto-detect if setup is needed (for full wizard only)
@@ -278,10 +278,20 @@ function handleStartResultError(result: { error?: string }): void {
 }
 
 /**
+ * Check if running in development mode (using tsx)
+ */
+function isDevMode(): boolean {
+  return process.argv.some(arg => arg.includes('tsx')) || 
+         process.execArgv.some(arg => arg.includes('tsx'));
+}
+
+/**
  * Start gateway process immediately after onboarding
  * If already running, restart to apply new config
+ * In development mode, starts in foreground mode (no background).
  */
 async function startGatewayNow(config: any, ctx: CLIContext): Promise<void> {
+  const devMode = isDevMode();
   const manager = new GatewayProcessManager();
   const host = config?.gateway?.host || '0.0.0.0';
   const port = config?.gateway?.port || 18790;
@@ -292,8 +302,8 @@ async function startGatewayNow(config: any, ctx: CLIContext): Promise<void> {
     port,
     token,
     configPath: ctx.configPath,
-    background: true,
-    enableHotReload: true,
+    background: !devMode,
+    enableHotReload: devMode,
   };
 
   // Case 1: Gateway is running with PID file - restart it

@@ -113,14 +113,16 @@ xopcbot onboard --gateway
 - 配置 LLM 提供商和模型
 - 配置消息渠道（Telegram/WhatsApp）
 - 配置 Gateway WebUI 并自动生成 Token
-- 完成后自动启动 Gateway
+- 完成后自动启动 Gateway（开发模式为前台，生产模式为后台）
 
 **完成后**：
 
-onboard 完成后会自动启动 Gateway 服务（后台模式），并显示：
+onboard 完成后会自动启动 Gateway 服务，并显示：
 - Gateway 访问 URL
 - Token 信息
-- PID 信息
+- PID 信息（仅后台模式）
+
+**注意**：开发模式下（`pnpm run dev`），Gateway 以前台模式启动并阻塞终端。生产模式下（`pnpm run build` 后），Gateway 以后台模式启动。
 
 ---
 

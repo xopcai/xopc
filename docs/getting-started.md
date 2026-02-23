@@ -43,8 +43,8 @@ This command will:
 1.  Create the workspace directory with bootstrap files (`~/.xopcbot/workspace/`).
 2.  Generate a default `config.json` file at `~/.xopcbot/config.json`.
 3.  Prompt you to select an LLM provider and enter your API key.
-4.  Optionally configure messaging channels (Telegram/WhatsApp).
-5.  Optionally configure and start the Gateway WebUI.
+4.  Guide you through configuring messaging channels (Telegram/WhatsApp).
+5.  Configure and start the Gateway WebUI.
 
 **Alternative: Quick setup**
 

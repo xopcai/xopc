@@ -113,14 +113,16 @@ xopcbot onboard --gateway
 - Configure LLM provider and model
 - Configure messaging channels (Telegram/WhatsApp)
 - Configure gateway WebUI with auto-generated token
-- Auto-start Gateway after completion
+- Auto-start Gateway after completion (foreground mode in development, background mode in production)
 
 **After completion**:
 
-After onboard completes, Gateway service will auto-start (background mode) and display:
+After onboard completes, Gateway service will auto-start and display:
 - Gateway access URL
 - Token information
-- PID information
+- PID information (background mode only)
+
+**Note**: In development mode (`pnpm run dev`), Gateway starts in foreground mode and blocks the terminal. In production mode (after `pnpm run build`), Gateway starts in background mode.
 
 ---
 
