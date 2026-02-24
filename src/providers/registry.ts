@@ -307,7 +307,7 @@ export class ModelRegistry {
 		this.loadBuiltinProviderModels();
 
 		if (this.config) {
-			this.applyProviderOverrides();
+			this.applyModelsConfig();
 		}
 
 		// Auto-discover Ollama models (async)
@@ -333,13 +333,6 @@ export class ModelRegistry {
 	 */
 	private loadBuiltinProviderModels(): void {
 		// No longer needed - all models come from new models config
-	}
-
-	/**
-	 * @deprecated Provider override logic removed. Use `models` config instead.
-	 */
-	private applyProviderOverrides(): void {
-		// Removed - use models config instead
 	}
 
 	private async discoverLocalModels(): Promise<void> {
