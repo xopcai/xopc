@@ -5,7 +5,7 @@
  */
 
 import { Command } from 'commander';
-import { AuthStorage, anthropicOAuthProvider, qwenPortalOAuthProvider, minimaxOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import { AuthStorage, anthropicOAuthProvider, minimaxOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
 import {
 	listProfilesForProvider,
 	listAllProfiles,
@@ -37,18 +37,6 @@ const oauthProviders: Record<string, { name: string; login: (callbacks: OAuthLog
 				type: 'oauth' as const,
 				provider: 'anthropic',
 				...creds!,
-			};
-		},
-	},
-	qwen: {
-		name: 'Qwen (通义千问)',
-		login: async (callbacks) => {
-			const provider = qwenPortalOAuthProvider;
-			const creds = await provider.login(callbacks);
-			return {
-				type: 'oauth' as const,
-				provider: 'qwen',
-				...creds,
 			};
 		},
 	},
@@ -131,7 +119,6 @@ function getAuthStorage(): AuthStorage {
 	const authPath = join(homedir(), '.xopcbot', 'auth.json');
 	const storage = new AuthStorage({ filename: authPath });
 	storage.registerOAuthProvider(anthropicOAuthProvider);
-	storage.registerOAuthProvider(qwenPortalOAuthProvider);
 	storage.registerOAuthProvider(minimaxOAuthProvider);
 	storage.registerOAuthProvider(kimiOAuthProvider);
 	storage.registerOAuthProvider(githubCopilotOAuthProvider);

@@ -6,7 +6,7 @@ import { saveConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import { loadAllTemplates } from '../templates.js';
 import type { CLIContext } from '../registry.js';
-import { AuthStorage, anthropicOAuthProvider, qwenPortalOAuthProvider, minimaxOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import { AuthStorage, anthropicOAuthProvider, minimaxOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
 import { upsertAuthProfile, listProfilesForProvider } from '../../auth/profiles/index.js';
 import { ModelRegistry } from '../../providers/index.js';
 import { colors } from '../utils/colors.js';
@@ -187,7 +187,7 @@ async function runOnboard(options: { model?: boolean; channels?: boolean; gatewa
 
   // Handle gateway startup if configured
   const gatewayConfigured = config?.gateway?.auth?.mode === 'token' && config?.gateway?.auth?.token;
-  
+
   if (gatewayConfigured && (doGateway || runFullWizard)) {
     const host = config?.gateway?.host || '0.0.0.0';
     const port = config?.gateway?.port || 18790;
@@ -213,7 +213,7 @@ async function runOnboard(options: { model?: boolean; channels?: boolean; gatewa
  */
 function printGatewayInfo(host: string, port: number, pid?: number): void {
   const displayHost = host === '0.0.0.0' ? 'localhost' : host;
-  
+
   if (pid) {
     console.log(`   PID: ${pid}`);
   }
@@ -232,15 +232,15 @@ function printGatewayInfo(host: string, port: number, pid?: number): void {
  * Handle start/restart errors
  */
 async function handleGatewayError(
-  error: unknown, 
-  port: number, 
+  error: unknown,
+  port: number,
   isRestart: boolean
 ): Promise<void> {
   const action = isRestart ? 'restart' : 'start';
   console.error(`❌ Failed to ${action} gateway`);
   const errorMsg = error instanceof Error ? error.message : String(error);
   console.error(`   ${errorMsg}`);
-  
+
   if (isRestart) {
     const { getProcessUsingPort } = await import('../../gateway/port-checker.js');
     const pid = await getProcessUsingPort(port);
@@ -257,9 +257,9 @@ async function handleGatewayError(
 function handleStartResultError(result: { error?: string }): void {
   // Check if it's a "compiled code not found" error
   const isDevMode = result.error?.includes('Compiled code not found');
-  
+
   console.error('❌ Failed to start gateway in background mode');
-  
+
   if (isDevMode) {
     console.log('');
     console.log('⚠️  You are in development mode (using tsx).');
@@ -281,7 +281,7 @@ function handleStartResultError(result: { error?: string }): void {
  * Check if running in development mode (using tsx)
  */
 function isDevMode(): boolean {
-  return process.argv.some(arg => arg.includes('tsx')) || 
+  return process.argv.some(arg => arg.includes('tsx')) ||
          process.execArgv.some(arg => arg.includes('tsx'));
 }
 
@@ -322,7 +322,7 @@ async function startGatewayNow(config: any, ctx: CLIContext): Promise<void> {
   // Check port availability
   const { checkPortAvailable } = await import('../../gateway/port-checker.js');
   const portAvailable = await checkPortAvailable(port);
-  
+
   // Case 2: Port is in use but no PID file - try restart
   if (!portAvailable) {
     console.log('\n🔄 Gateway is already running (port in use), restarting...');
@@ -360,12 +360,12 @@ async function startGatewayNow(config: any, ctx: CLIContext): Promise<void> {
 
 async function doOAuthLogin(provider: string): Promise<boolean> {
   console.log('\n🔐 Starting OAuth login...');
-  
+
   if (provider === 'anthropic') {
     const authPath = join(homedir(), '.xopcbot', 'auth.json');
     const authStorage = new AuthStorage({ filename: authPath });
     authStorage.registerOAuthProvider(anthropicOAuthProvider);
-    
+
     const callbacks: OAuthLoginCallbacks = {
       onAuth: (info) => {
         console.log('\n🌐 Please open this URL in your browser:\n');
@@ -379,10 +379,10 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
         console.log('  →', message);
       },
     };
-    
+
     try {
       await authStorage.login('anthropic', callbacks);
-      
+
       // Also add to AuthProfiles
       const creds = authStorage.getOAuthCredentials('anthropic');
       if (creds) {
@@ -395,49 +395,14 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
           },
         });
       }
-      
+
       return true;
     } catch (error) {
       console.error('❌ OAuth login failed:', error);
       return false;
     }
   }
-  
-  if (provider === 'qwen') {
-    const callbacks: OAuthLoginCallbacks = {
-      onAuth: (info) => {
-        console.log('\n🌐 Please open this URL in your browser:\n');
-        console.log(info.url);
-        if (info.instructions) {
-          console.log('\n' + info.instructions);
-        }
-        console.log('\n');
-      },
-      onPrompt: async (prompt) => {
-        return input({ message: prompt.message });
-      },
-      onProgress: (message) => {
-        console.log('  →', message);
-      },
-    };
-    
-    try {
-      const creds = await qwenPortalOAuthProvider.login(callbacks);
-      upsertAuthProfile({
-        profileId: 'qwen:default',
-        credential: {
-          type: 'oauth',
-          provider: 'qwen',
-          ...creds,
-        },
-      });
-      return true;
-    } catch (error) {
-      console.error('❌ OAuth login failed:', error);
-      return false;
-    }
-  }
-  
+
   if (provider === 'minimax') {
     const callbacks: OAuthLoginCallbacks = {
       onAuth: (info) => {
@@ -455,7 +420,7 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
         console.log('  →', message);
       },
     };
-    
+
     try {
       const creds = await minimaxOAuthProvider.login(callbacks);
       upsertAuthProfile({
@@ -472,7 +437,7 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
       return false;
     }
   }
-  
+
   if (provider === 'kimi') {
     const callbacks: OAuthLoginCallbacks = {
       onAuth: (info) => {
@@ -490,7 +455,7 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
         console.log('  →', message);
       },
     };
-    
+
     try {
       const creds = await kimiOAuthProvider.login(callbacks);
       upsertAuthProfile({
@@ -507,7 +472,7 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
       return false;
     }
   }
-  
+
   if (provider === 'github-copilot') {
     const callbacks: OAuthLoginCallbacks = {
       onAuth: (info) => {
@@ -525,7 +490,7 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
         console.log('  →', message);
       },
     };
-    
+
     try {
       const creds = await githubCopilotOAuthProvider.login(callbacks);
       upsertAuthProfile({
@@ -542,7 +507,7 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
       return false;
     }
   }
-  
+
   if (provider === 'google-gemini-cli') {
     const callbacks: OAuthLoginCallbacks = {
       onAuth: (info) => {
@@ -560,7 +525,7 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
         console.log('  →', message);
       },
     };
-    
+
     try {
       const creds = await googleGeminiCliOAuthProvider.login(callbacks);
       upsertAuthProfile({
@@ -577,7 +542,7 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
       return false;
     }
   }
-  
+
   if (provider === 'google-antigravity') {
     const callbacks: OAuthLoginCallbacks = {
       onAuth: (info) => {
@@ -595,7 +560,7 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
         console.log('  →', message);
       },
     };
-    
+
     try {
       const creds = await googleAntigravityOAuthProvider.login(callbacks);
       upsertAuthProfile({
@@ -612,7 +577,7 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
       return false;
     }
   }
-  
+
   if (provider === 'openai-codex') {
     const callbacks: OAuthLoginCallbacks = {
       onAuth: (info) => {
@@ -630,7 +595,7 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
         console.log('  →', message);
       },
     };
-    
+
     try {
       const creds = await openaiCodexOAuthProvider.login(callbacks);
       upsertAuthProfile({
@@ -647,7 +612,7 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
       return false;
     }
   }
-  
+
   console.error(`OAuth not supported for provider: ${provider}`);
   return false;
 }
@@ -675,11 +640,11 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
 
   // Build provider options dynamically from ModelRegistry
   const providerInfos = ModelRegistry.getAllProviderInfo();
-  
+
   // Filter to providers that have models and are commonly used
   const commonProviders = ['openai', 'anthropic', 'google', 'qwen', 'kimi', 'deepseek', 'groq', 'moonshot', 'minimax', 'minimax-cn', 'zhipu', 'zhipu-cn'];
   const availableProviders = providerInfos.filter(p => commonProviders.includes(p.id));
-  
+
   const choices = availableProviders.map(p => ({
     value: p.id,
     name: `${p.name} (${p.envKey || 'no env key'})`,
@@ -691,7 +656,7 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
   });
 
   const providerInfo = providerInfos.find(p => p.id === provider)!;
-  
+
   // Check if provider has existing profiles
   const existingProfiles = listProfilesForProvider(provider);
   if (existingProfiles.length > 0) {
@@ -700,7 +665,7 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
       message: 'Use existing credentials?',
       default: true,
     });
-    
+
     if (useExisting) {
       // Get available models
       const modelChoices = await getModelsForProvider(provider);
@@ -722,10 +687,10 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
       }
     }
   }
-  
+
   // Check if provider supports OAuth
   const supportsOAuth = providerInfo.supportsOAuth;
-  
+
   let apiKey: string | undefined;
   let useOAuth = false;
 
@@ -747,7 +712,7 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
           { value: 'oauth', name: 'OAuth Login (browser-based)' },
         ],
       });
-      
+
       if (authMethod === 'oauth') {
         const success = await doOAuthLogin(provider);
         if (success) {

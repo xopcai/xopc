@@ -192,7 +192,7 @@ export const PROVIDER_CATALOG: Record<string, ProviderDefinition> = {
       type: 'api_key',
       envKeys: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'],
       headerPrefix: 'Bearer ',
-      supportsOAuth: true,
+      supportsOAuth: false,
     },
     api: {
       type: 'openai',
