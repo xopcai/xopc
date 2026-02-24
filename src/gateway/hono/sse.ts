@@ -30,7 +30,10 @@ interface AgentRequestBody {
 function isValidAgentRequest(body: unknown): body is AgentRequestBody {
   if (!body || typeof body !== 'object') return false;
   const b = body as Record<string, unknown>;
-  return typeof b.message === 'string' && b.message.length > 0;
+  // Allow empty message if attachments are provided
+  const hasMessage = typeof b.message === 'string';
+  const hasAttachments = Array.isArray(b.attachments) && b.attachments.length > 0;
+  return hasMessage || hasAttachments;
 }
 
 /**
@@ -56,7 +59,7 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
     if (!isValidAgentRequest(body)) {
       return c.json({
         ok: false,
-        error: { code: 'BAD_REQUEST', message: 'Missing or invalid required field: message' }
+        error: { code: 'BAD_REQUEST', message: 'Missing required field: message or attachments' }
       }, 400);
     }
 
