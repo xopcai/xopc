@@ -96,7 +96,7 @@ function escapeXml(str: string): string {
 }
 
 function formatSkillXml(skill: Skill): string {
-  const emoji = skill.metadata.emoji || skill.metadata.openclaw?.emoji || '';
+  const emoji = skill.metadata.emoji || '';
   const emojiStr = emoji ? `${emoji} ` : '';
   
   return [
@@ -172,41 +172,28 @@ function discoverSkills(dir: string, source: 'builtin' | 'workspace' | 'global')
 }
 
 function parseSkillMetadata(frontmatter: Record<string, unknown>): SkillMetadata {
-  // Support both direct metadata and openclaw-compatible nested metadata
+  // Only support metadata.xopcbot nested structure
+  const meta = frontmatter.metadata as Record<string, unknown> | undefined;
+  const xopcbotMeta = meta?.xopcbot as Record<string, unknown> | undefined;
+  
   const metadata: SkillMetadata = {
     name: frontmatter.name as string || '',
     description: frontmatter.description as string || '',
-    emoji: frontmatter.emoji as string || undefined,
+    emoji: xopcbotMeta?.emoji as string || frontmatter.emoji as string || undefined,
     homepage: frontmatter.homepage as string || undefined,
-    os: frontmatter.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
-    requires: frontmatter.requires as SkillMetadata['requires'] || undefined,
-    install: frontmatter.install as SkillInstallSpec[] || undefined,
+    os: xopcbotMeta?.os as Array<'darwin' | 'linux' | 'win32'> || frontmatter.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
+    requires: xopcbotMeta?.requires as SkillRequires || frontmatter.requires as SkillRequires || undefined,
+    install: xopcbotMeta?.install as SkillInstallSpec[] || frontmatter.install as SkillInstallSpec[] || undefined,
   };
 
-  // Support openclaw-compatible nested metadata
-  const openclawMeta = frontmatter.metadata as Record<string, unknown> | undefined;
-  if (openclawMeta?.openclaw) {
-    const oc = openclawMeta.openclaw as Record<string, unknown>;
-    metadata.openclaw = {
-      emoji: oc.emoji as string || undefined,
-      requires: oc.requires as SkillRequires || undefined,
-      install: oc.install as SkillInstallSpec[] || undefined,
-      os: oc.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
+  // Store xopcbot metadata for reference
+  if (xopcbotMeta) {
+    metadata.xopcbot = {
+      emoji: xopcbotMeta.emoji as string || undefined,
+      requires: xopcbotMeta.requires as SkillRequires || undefined,
+      install: xopcbotMeta.install as SkillInstallSpec[] || undefined,
+      os: xopcbotMeta.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
     };
-    
-    // Merge openclaw metadata if direct metadata is missing
-    if (!metadata.emoji && metadata.openclaw.emoji) {
-      metadata.emoji = metadata.openclaw.emoji;
-    }
-    if (!metadata.requires && metadata.openclaw.requires) {
-      metadata.requires = metadata.openclaw.requires;
-    }
-    if (!metadata.install && metadata.openclaw.install) {
-      metadata.install = metadata.openclaw.install;
-    }
-    if (!metadata.os && metadata.openclaw.os) {
-      metadata.os = metadata.openclaw.os;
-    }
   }
 
   return metadata;

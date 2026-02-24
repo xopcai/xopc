@@ -3,7 +3,7 @@ name: find-skills
 description: Helps users discover, install, and manage agent skills in xopcbot workspace
 license: MIT
 metadata:
-  openclaw:
+  xopcbot:
     requires:
       bins: [git]
     install:
@@ -149,7 +149,6 @@ Use your browsing capabilities to search:
 - Popular repos:
   - `vercel-labs/agent-skills`
   - `ComposioHQ/awesome-claude-skills`
-  - `openclaw/openclaw/skills`
 
 ### Step 3: Install the Skill
 

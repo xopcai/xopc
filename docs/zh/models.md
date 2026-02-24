@@ -1,6 +1,6 @@
 # 模型配置
 
-xopcbot 通过统一的配置系统支持多个 LLM 提供商，使用 OpenClaw 风格的 `models` 配置。
+xopcbot 通过统一的配置系统支持多个 LLM 提供商，使用 `models` 配置。
 
 ## 配置文件
 

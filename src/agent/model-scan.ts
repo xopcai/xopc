@@ -2,7 +2,6 @@
  * Model Scan
  * 
  * Scans and discovers models from provider configurations.
- * Based on OpenClaw's model-scan.ts approach.
  */
 
 import type { ModelProviderConfig, ModelDefinitionConfig, ModelsConfig } from '../config/types.models.js';

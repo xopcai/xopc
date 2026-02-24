@@ -146,7 +146,7 @@ The model ID format is `provider/model-id`, e.g., `anthropic/claude-opus-4-5`.
 
 ### models
 
-OpenClaw-style model configuration. Use this to configure API providers and available models.
+ model configuration. Use this to configure API providers and available models.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|

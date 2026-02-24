@@ -1,6 +1,6 @@
 # Models Configuration
 
-xopcbot supports multiple LLM providers through a unified configuration system using the OpenClaw-style `models` config.
+xopcbot supports multiple LLM providers through a unified configuration system using the  `models` config.
 
 ## Configuration File
 

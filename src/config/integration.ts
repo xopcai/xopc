@@ -1,7 +1,7 @@
 /**
  * Model Config Integration
  * 
- * OpenClaw-style model configuration system.
+ * xopcbot model configuration system.
  * This is the primary and only way to configure models.
  */
 

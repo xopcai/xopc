@@ -1,6 +1,6 @@
 # Skills System Guide
 
-xopcbot's skills system is inspired by [openclaw](https://github.com/openclaw/openclaw), allowing you to add domain-specific capabilities and knowledge to your AI assistant through SKILL.md files.
+xopcbot's skills system is , allowing you to add domain-specific capabilities and knowledge to your AI assistant through SKILL.md files.
 
 ## Table of Contents
 
@@ -37,11 +37,10 @@ SKILL.md uses YAML frontmatter for metadata, followed by detailed documentation 
 name: skill-name
 description: Short description of the skill
 homepage: https://example.com
-emoji: 📦
-os: [darwin, linux]
 metadata:
-  openclaw:
+  xopcbot:
     emoji: 📦
+    os: [darwin, linux]
     requires:
       bins: [curl, jq]
     install:
@@ -64,14 +63,12 @@ Detailed explanation of how to use this skill...
 | `name` | string | Skill name (unique identifier) |
 | `description` | string | Short description of the skill |
 | `homepage` | string | Project homepage URL |
-| `emoji` | string | Icon displayed in UI |
-| `os` | string[] | Supported operating systems: `darwin`, `linux`, `win32` |
-| `metadata.openclaw` | object | Openclaw-compatible metadata |
-| `metadata.openclaw.emoji` | string | Icon |
-| `metadata.openclaw.requires` | object | Dependency requirements |
-| `metadata.openclaw.requires.bins` | string[] | Required binaries |
-| `metadata.openclaw.requires.anyBins` | string[] | Any one of the binaries must be available |
-| `metadata.openclaw.install` | array | List of installation options |
+| `metadata.xopcbot.emoji` | string | Icon displayed in UI |
+| `metadata.xopcbot.os` | string[] | Supported operating systems: `darwin`, `linux`, `win32` |
+| `metadata.xopcbot.requires` | object | Dependency requirements |
+| `metadata.xopcbot.requires.bins` | string[] | Required binaries |
+| `metadata.xopcbot.requires.anyBins` | string[] | Any one of the binaries must be available |
+| `metadata.xopcbot.install` | array | List of installation options |
 
 ### Installer Types
 
@@ -436,9 +433,9 @@ jobs:
 name: weather
 description: Get weather information using wttr.in
 homepage: https://github.com/chubin/wttr.in
-emoji: 🌤️
 metadata:
-  openclaw:
+  xopcbot:
+    emoji: 🌤️
     requires:
       anyBins: [curl, wget]
     install:
@@ -471,17 +468,17 @@ See [wttr.in documentation](https://github.com/chubin/wttr.in)
 name: github
 description: Interact with GitHub via CLI
 homepage: https://cli.github.com
-emoji: 🐙
 metadata:
-  openclaw:
+  xopcbot:
+    emoji: 🐙
     requires:
       bins: [gh]
     install:
       - id: brew-gh
         kind: brew
-        formula: gh
-        bins: [gh]
-        label: Install GitHub CLI (brew)
+    formula: gh
+    bins: [gh]
+    label: Install GitHub CLI (brew)
 ---
 
 # GitHub Skill
@@ -581,7 +578,6 @@ xopcbot skills test --bail
 
 - [Skill Testing Framework](./skills-testing.md) - Detailed test framework documentation
 - [CLI Command Reference](./cli.md) - All available commands
-- [openclaw skills](https://github.com/openclaw/openclaw/tree/main/skills) - Inspiration source and examples
 
 ---
 

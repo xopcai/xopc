@@ -2,7 +2,6 @@
  * Model Compatibility
  * 
  * Handles model-specific compatibility checks and configurations.
- * Based on OpenClaw's model-compat.ts approach.
  */
 
 import type { ModelCompatConfig, ModelDefinitionConfig } from '../config/types.models.js';

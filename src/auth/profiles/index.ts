@@ -5,8 +5,6 @@
  * - API keys (static)
  * - Tokens (static bearer-style)
  * - OAuth (refreshable credentials)
- * 
- * Based on openclaw's auth-profiles architecture.
  */
 
 export * from './types.js';

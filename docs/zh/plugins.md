@@ -1,6 +1,6 @@
 # xopcbot 插件系统
 
-xopcbot 提供了一个轻量级但功能强大的插件系统，灵感来自 [OpenClaw](https://github.com/openclaw/openclaw)。
+xopcbot 提供了一个轻量级但功能强大的插件系统。
 
 ## 特性
 

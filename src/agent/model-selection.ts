@@ -2,7 +2,6 @@
  * Model Selection
  * 
  * Handles model reference parsing, provider normalization, and alias resolution.
- * Based on OpenClaw's model-selection.ts approach.
  */
 
 import { resolveModelAlias } from '../config/defaults.js';

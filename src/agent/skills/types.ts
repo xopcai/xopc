@@ -55,8 +55,8 @@ export interface SkillMetadata {
   requires?: SkillRequires;
   /** Installation specs */
   install?: SkillInstallSpec[];
-  /** OpenClaw compatibility metadata */
-  openclaw?: {
+  /** xopcbot-specific metadata (for future extensions) */
+  xopcbot?: {
     emoji?: string;
     requires?: SkillRequires;
     install?: SkillInstallSpec[];

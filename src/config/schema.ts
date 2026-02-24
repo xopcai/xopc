@@ -1,7 +1,7 @@
 import { z } from 'zod';
 import { homedir } from 'os';
 
-// Import OpenClaw-style model configuration
+// Import models configuration
 import { ModelsConfigSchema } from './schema.models.js';
 
 // ============================================
@@ -293,7 +293,7 @@ export const ConfigSchema = z.object({
   cron: CronConfigSchema,
   plugins: PluginsConfigSchema,
   modelsDev: ModelsDevConfigSchema,
-  // OpenClaw-style models configuration
+  // models configuration
   models: ModelsConfigSchema,
 }).default({
   agents: {
@@ -363,7 +363,7 @@ export const ConfigSchema = z.object({
   modelsDev: {
     enabled: true,
   },
-  // OpenClaw-style models configuration
+  // models configuration
   models: {
     mode: 'merge',
     providers: {},

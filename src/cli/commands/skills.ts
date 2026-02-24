@@ -66,7 +66,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
       console.log(`\nFound ${result.skills.length} skill(s):\n`);
 
       for (const skill of result.skills) {
-        const emoji = skill.metadata.emoji || skill.metadata.openclaw?.emoji || '📦';
+        const emoji = skill.metadata.xopcbot?.emoji || '📦';
         const source = `[${skill.source}]`;
         console.log(`${emoji} ${skill.name} ${source}`);
         console.log(`   ${skill.description}`);
@@ -74,7 +74,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
         if (options.verbose) {
           console.log(`   Path: ${skill.filePath}`);
           
-          const requires = skill.metadata.requires || skill.metadata.openclaw?.requires;
+          const requires = skill.metadata.xopcbot?.requires;
           if (requires?.bins) {
             const binsStatus = requires.bins.map(bin => {
               const available = hasBinary(bin);
@@ -83,7 +83,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
             console.log(`   Requires: ${binsStatus}`);
           }
           
-          const install = skill.metadata.install || skill.metadata.openclaw?.install;
+          const install = skill.metadata.xopcbot?.install;
           if (install && install.length > 0) {
             console.log(`   Install options: ${install.map(i => i.label || i.kind).join(', ')}`);
           }
@@ -126,7 +126,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
         process.exit(1);
       }
 
-      const installSpecs = entry.metadata.install || entry.metadata.openclaw?.install || [];
+      const installSpecs = entry.metadata.xopcbot?.install || entry.metadata.install || [];
       if (installSpecs.length === 0) {
         console.log(`Skill "${skillName}" has no install specs`);
         process.exit(0);
@@ -256,7 +256,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
           return;
         }
 
-        const emoji = skill.metadata.emoji || skill.metadata.openclaw?.emoji || '📦';
+        const emoji = skill.metadata.xopcbot?.emoji || skill.metadata.emoji || '📦';
         console.log(`\n${emoji} ${skill.name}`);
         console.log(`   Description: ${skill.description}`);
         console.log(`   Enabled: ${enabled ? '✓' : '✗'}`);
@@ -267,7 +267,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
           console.log(`   API Key: ${skillConfig.apiKey.slice(0, 8)}...`);
         }
 
-        const requires = skill.metadata.requires || skill.metadata.openclaw?.requires;
+        const requires = skill.metadata.xopcbot?.requires;
         if (requires) {
           if (requires.bins) {
             console.log(`   Required binaries: ${requires.bins.join(', ')}`);

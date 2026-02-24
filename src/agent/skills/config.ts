@@ -232,7 +232,7 @@ export function isSkillEnabled(
   }
 
   // Check if skill has requirements that are not met
-  const requires = skill.metadata.requires || skill.metadata.openclaw?.requires;
+  const requires = skill.metadata.xopcbot?.requires || skill.metadata.requires;
   if (requires?.bins) {
     const { hasBinary } = require('./installer.js');
     for (const bin of requires.bins) {

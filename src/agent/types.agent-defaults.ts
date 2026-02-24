@@ -1,7 +1,5 @@
 /**
  * Agent Defaults Types
- * 
- * Based on OpenClaw's types.agent-defaults.ts
  */
 
 // ============================================

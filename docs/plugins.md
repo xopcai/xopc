@@ -1,6 +1,6 @@
 # xopcbot Plugin System
 
-xopcbot provides a lightweight but powerful plugin system, inspired by [OpenClaw](https://github.com/openclaw/openclaw).
+xopcbot provides a lightweight but powerful plugin system.
 
 ## Features
 

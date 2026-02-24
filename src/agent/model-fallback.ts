@@ -2,7 +2,6 @@
  * Model Fallback
  * 
  * Handles automatic model fallback when a provider fails.
- * Based on OpenClaw's model-fallback.ts approach.
  */
 
 import type { ModelDefinitionConfig, ModelsConfig } from '../config/types.models.js';

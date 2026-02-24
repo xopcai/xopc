@@ -11,5 +11,5 @@
 export { AuthStorage, type AuthEntry, type AuthStorageOptions } from './storage.js';
 export * from './oauth/index.js';
 
-// Auth Profiles (new architecture based on openclaw)
+// Auth Profiles
 export * from './profiles/index.js';
