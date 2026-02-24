@@ -28,7 +28,7 @@ export const kimiOAuthProvider: OAuthProviderInterface = {
 			},
 			body: new URLSearchParams({
 				client_id: KIMI_OAUTH_CLIENT_ID,
-				scope: 'api',
+				scope: 'kimi-code',
 			}),
 		});
 
