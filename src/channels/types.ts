@@ -1,7 +1,7 @@
 /**
  * Channel Plugin Architecture Types
  * 
- * Inspired by openclaw's plugin-based channel design
+ *
  */
 
 import type { MessageBus } from '../bus/index.js';

@@ -1,7 +1,5 @@
 /**
  * xopcbot Plugin System - Core Types
- * 
- * A lightweight plugin system inspired by OpenClaw.
  */
 
 import type { Config } from '../types/index.js';

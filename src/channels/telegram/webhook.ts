@@ -2,7 +2,7 @@
  * Telegram Webhook Server
  * 
  * Production-ready webhook listener for Telegram Bot API
- * Inspired by openclaw's webhook.ts
+ *
  */
 
 import { createServer, type Server, type IncomingMessage, type ServerResponse } from 'node:http';

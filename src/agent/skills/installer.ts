@@ -2,7 +2,7 @@
  * Skill Installer
  * 
  * Handles installation of skill dependencies via various package managers.
- * Inspired by openclaw's skills-install.ts
+ *
  */
 
 import { exec } from 'child_process';

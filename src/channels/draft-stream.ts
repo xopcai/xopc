@@ -2,7 +2,7 @@
  * Telegram Draft Stream for Streaming Message Previews
  * 
  * Implements real-time message streaming with edit-based updates
- * Inspired by openclaw's draft-stream.ts
+ *
  */
 
 import type { Bot } from 'grammy';

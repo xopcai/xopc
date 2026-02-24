@@ -2,7 +2,7 @@
  * Skill Security Scanner
  * 
  * Scans skill directories for potentially dangerous code patterns.
- * Inspired by openclaw's skill-scanner.ts
+ *
  */
 
 import { readdir, readFile } from 'fs/promises';

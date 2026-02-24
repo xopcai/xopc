@@ -2,7 +2,7 @@
  * Skill Watcher
  * 
  * Watches skill directories for changes and triggers reloads.
- * Inspired by openclaw's skills refresh system
+ *
  */
 
 import { watch } from 'fs';

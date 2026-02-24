@@ -1,8 +1,6 @@
 /**
  * xopcbot Plugin System
  * 
- * A lightweight plugin system inspired by OpenClaw.
- * 
  * @module plugins
  */
 

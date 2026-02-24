@@ -1,4 +1,4 @@
-// Prompt Builder - Modernized for efficiency (inspired by pi)
+// Prompt Builder - Modernized for efficiency ()
 // Simplified and optimized for modern LLM capabilities
 import type { Static } from '@sinclair/typebox';
 import { Type } from '@sinclair/typebox';
@@ -63,7 +63,7 @@ export function buildToolSection(availableTools: string[]): PromptSection {
   };
 }
 
-// Key guidelines - direct and concise (inspired by pi)
+// Key guidelines - direct and concise ()
 export function buildGuidelinesSection(): PromptSection {
   return {
     header: '## Guidelines',

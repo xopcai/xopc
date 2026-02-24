@@ -1,7 +1,7 @@
 /**
  * Skill System Types
  * 
- * Inspired by openclaw's skill architecture
+ *
  */
 
 // ============================================================================

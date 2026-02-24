@@ -2,7 +2,7 @@
  * Channel Access Control Utilities
  * 
  * Implements hierarchical access control for groups and topics
- * Inspired by openclaw's group-access.ts and bot-access.ts
+ *
  */
 
 import type {

@@ -2,7 +2,7 @@
  * Update Offset Store for Telegram Polling
  * 
  * Persists last processed update ID to avoid duplicate message processing
- * Inspired by openclaw's update-offset-store.ts
+ *
  */
 
 import { promises as fs } from 'node:fs';

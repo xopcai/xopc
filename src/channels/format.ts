@@ -4,7 +4,7 @@
  * Converts Markdown to Telegram HTML format with proper escaping
  * and file reference protection
  * 
- * Inspired by openclaw's format.ts
+ *
  */
 
 // File extensions that share TLDs and commonly appear in code/documentation

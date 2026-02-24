@@ -2,7 +2,7 @@
  * Skill Configuration Manager
  * 
  * Handles skill-specific configuration and environment variables.
- * Inspired by openclaw's skills config system
+ *
  */
 
 import { existsSync, readFileSync, writeFileSync } from 'fs';
