@@ -16,7 +16,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && npm --filter @xopcbot/web-ui run build",
+    "build": "tsc && cd ui && npm run build",
     "dev": "tsx src/cli/index.ts",
     "start": "node dist/cli/index.js",
     "test": "vitest run src",
