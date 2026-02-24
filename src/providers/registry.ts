@@ -15,7 +15,7 @@ import {
 	type KnownProvider,
 	type OAuthCredentials,
 } from '@mariozechner/pi-ai';
-import { getApiKey as getConfigApiKey, getApiBase } from '../config/schema.js';
+import { getApiKey as getConfigApiKey } from '../config/schema.js';
 import type { Config } from '../config/schema.js';
 import { listProfilesForProvider } from '../auth/profiles/profiles.js';
 import { resolveApiKeyForProfile } from '../auth/profiles/oauth.js';
@@ -23,8 +23,6 @@ import { createProviderConfig } from './config.js';
 
 // Import new config integration
 import { getEffectiveConfig } from '../config/integration.js';
-import { getModelConfig, parseModelRef } from '../agent/model-selection.js';
-import { getCompatFlags } from '../agent/model-compat.js';
 
 // Import from provider-catalog
 import {
@@ -369,9 +367,6 @@ export class ModelRegistry {
 				const existingIndex = this.models.findIndex(
 					(m) => m.provider === providerId && m.id === modelDef.id
 				);
-
-				// Get compatibility flags
-				const compat = getCompatFlags(modelDef);
 
 				const modelEntry: Model<Api> = {
 					id: modelDef.id,

@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import type { InboundMessage } from '../../types/index.js';
 
 describe('Media Download and Conversion', () => {
   // Mock fetch for testing
@@ -224,7 +225,7 @@ describe('Media Download and Conversion', () => {
     });
 
     it('should handle message without attachments', () => {
-      const message = {
+      const message: InboundMessage = {
         channel: 'telegram',
         sender_id: '123456789',
         chat_id: '987654321',

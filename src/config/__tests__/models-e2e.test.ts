@@ -10,10 +10,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { ConfigSchema, type Config } from '../schema.js';
-import { scanProviders, validateModelDefinition, buildModelMap, isValidModelRef } from '../../agents/model-scan.js';
-import { getFallbackCandidates, selectFallback, isRetryableError } from '../../agents/model-fallback.js';
-import { getCompatFlags, modelSupportsReasoning, modelSupportsVision } from '../../agents/model-compat.js';
-import { parseModelRef, resolveModelRef, getModelConfig, findProviderConfig } from '../../agents/model-selection.js';
+import { scanProviders, validateModelDefinition, buildModelMap, isValidModelRef } from '../../agent/model-scan.js';
+import { getFallbackCandidates, selectFallback, isRetryableError } from '../../agent/model-fallback.js';
+import { getCompatFlags, modelSupportsReasoning, modelSupportsVision } from '../../agent/model-compat.js';
+import { parseModelRef, resolveModelRef, getModelConfig, findProviderConfig } from '../../agent/model-selection.js';
 import { resolveModelAlias } from '../defaults.js';
 
 describe('Models Config E2E', () => {
@@ -189,8 +189,8 @@ describe('Models Config E2E', () => {
     });
 
     it('should detect vision models', () => {
-      const visionModel = { id: 'gpt-4o', name: 'GPT-4o', input: ['text', 'image'] as const };
-      const textOnlyModel = { id: 'gpt-4o-mini', name: 'GPT-4o Mini', input: ['text'] as const };
+      const visionModel = { id: 'gpt-4o', name: 'GPT-4o', input: ['text', 'image'] as ('text' | 'image')[] };
+      const textOnlyModel = { id: 'gpt-4o-mini', name: 'GPT-4o Mini', input: ['text'] as ('text' | 'image')[] };
 
       expect(modelSupportsVision(visionModel)).toBe(true);
       expect(modelSupportsVision(textOnlyModel)).toBe(false);
