@@ -95,8 +95,8 @@ tags: [test, example, demo]
 
     const result = parseFrontmatter(content);
     
-    // Simple YAML parser treats arrays as strings (JSON.parse handles them)
-    expect(result.frontmatter.tags).toBe('[test, example, demo]');
+    // YAML parser correctly handles arrays
+    expect(result.frontmatter.tags).toEqual(['test', 'example', 'demo']);
   });
 
   it('should parse boolean values', () => {
@@ -169,7 +169,8 @@ describe('serializeFrontmatter', () => {
 
     const result = serializeFrontmatter(frontmatter);
     
-    expect(result).toContain('metadata: {"version":1}');
+    // Serializes objects as YAML (not JSON)
+    expect(result).toContain('version: 1');
   });
 
   it('should escape quotes in strings', () => {

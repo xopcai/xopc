@@ -11,7 +11,7 @@ import type { OAuthCredentials, OAuthProviderInterface, OAuthLoginCallbacks } fr
 const KIMI_OAUTH_BASE_URL = 'https://auth.kimi.com';
 const KIMI_OAUTH_DEVICE_URL = `${KIMI_OAUTH_BASE_URL}/api/oauth/device_authorization`;
 const KIMI_OAUTH_TOKEN_URL = `${KIMI_OAUTH_BASE_URL}/api/oauth/token`;
-const KIMI_OAUTH_CLIENT_ID = 'your_client_id'; // Users need to register their own app
+const KIMI_OAUTH_CLIENT_ID = '17e5f671-d194-4dfb-9706-5516cb48c098';
 
 export const kimiOAuthProvider: OAuthProviderInterface = {
 	id: 'kimi',
