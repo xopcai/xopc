@@ -1,4 +1,5 @@
 import type { Config } from '../../config/schema.js';
+import { isProviderConfigured as checkEnvProvider } from '../../providers/provider-catalog.js';
 
 export interface ModelCandidate {
   provider: string;
@@ -15,20 +16,18 @@ export interface FallbackAttempt {
 }
 
 /**
- * Check if a provider is configured (has API key or is enabled for local providers)
+ * Check if a provider is configured (has API key in config or environment variable)
  */
 export function isProviderConfigured(cfg: Config | undefined, provider: string): boolean {
-  if (!cfg?.models?.providers) return false;
+  // First check config
+  if (cfg?.models?.providers?.[provider]?.apiKey) return true;
 
-  const providerConfig = cfg.models.providers[provider];
-  if (!providerConfig) return false;
+  // Then check environment variable (via provider-catalog)
+  if (checkEnvProvider(provider)) return true;
 
-  // Check if has API key
-  if (providerConfig.apiKey) return true;
-
-  // Ollama - check baseUrl
+  // Ollama special case - check baseUrl
   if (provider === 'ollama') {
-    return !!providerConfig.baseUrl;
+    return !!cfg?.models?.providers?.[provider]?.baseUrl;
   }
 
   return false;
