@@ -31,20 +31,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-      
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
+          cache: 'npm'
       
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm install
       
       - name: Install UI dependencies
-        run: cd ui && pnpm install --frozen-lockfile
+        run: cd ui && npm install
       
       - name: Build
-        run: pnpm run build
+        run: npm run build
       
       - name: Run skill tests
         shell: bash
@@ -52,13 +48,13 @@ jobs:
           echo "Testing skills on ${{ matrix.os }}"
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             # Windows doesn't support bash script, run CLI directly
-            pnpm run dev -- skills test --format json --skip-examples
+            npm run dev -- skills test --format json --skip-examples
           else
             ./scripts/test-skills.sh --verbose
           fi
       
       - name: Run unit tests for test framework
-        run: pnpm vitest run src/agent/skills/__tests__/test-framework.test.ts
+        run: npm vitest run src/agent/skills/__tests__/test-framework.test.ts
       
       - name: Upload test results
         if: always()
@@ -82,25 +78,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-      
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
+          cache: 'npm'
       
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm install
       
       - name: Install UI dependencies
-        run: cd ui && pnpm install --frozen-lockfile
+        run: cd ui && npm install
       
       - name: Build
-        run: pnpm run build
+        run: npm run build
       
       - name: Run security audit
         run: |
           echo "Running security audit on all skills..."
-          pnpm run dev -- skills test security --deep
+          npm run dev -- skills test security --deep
           
           # Also run npm audit for dependencies
           npm audit --audit-level=moderate || true
@@ -117,20 +109,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-      
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
+          cache: 'npm'
       
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm install
       
       - name: Install UI dependencies
-        run: cd ui && pnpm install --frozen-lockfile
+        run: cd ui && npm install
       
       - name: Build
-        run: pnpm run build
+        run: npm run build
       
       - name: Validate all SKILL.md files
         run: |
@@ -138,7 +126,7 @@ jobs:
           for skill_dir in skills/*/; do
             if [ -f "$skill_dir/SKILL.md" ]; then
               echo "Validating $skill_dir"
-              pnpm run dev -- skills test validate "$skill_dir/SKILL.md"
+              npm run dev -- skills test validate "$skill_dir/SKILL.md"
             fi
           done
 
@@ -154,25 +142,21 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-      
-      - name: Setup pnpm
-        uses: pnpm/action-setup@v4
-        with:
-          version: 10
+          cache: 'npm'
       
       - name: Install dependencies
-        run: pnpm install --frozen-lockfile
+        run: npm install
       
       - name: Install UI dependencies
-        run: cd ui && pnpm install --frozen-lockfile
+        run: cd ui && npm install
       
       - name: Build
-        run: pnpm run build
+        run: npm run build
       
       - name: Check skill dependencies
         run: |
           echo "Checking skill dependencies..."
-          pnpm run dev -- skills test check-deps
+          npm run dev -- skills test check-deps
 
   report:
     name: Test Report
