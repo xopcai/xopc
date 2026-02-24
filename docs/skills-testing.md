@@ -18,30 +18,30 @@ xopcbot provides a complete skill testing framework to verify skill quality, saf
 
 ```bash
 # Using CLI command
-pnpm run dev -- skills test
+npm run dev -- skills test
 
 # Verbose output
-pnpm run dev -- skills test --verbose
+npm run dev -- skills test --verbose
 
 # JSON format
-pnpm run dev -- skills test --format json
+npm run dev -- skills test --format json
 ```
 
 ### Test Single Skill
 
 ```bash
 # Test specific skill
-pnpm run dev -- skills test weather
+npm run dev -- skills test weather
 
 # Verbose output
-pnpm run dev -- skills test weather --verbose
+npm run dev -- skills test weather --verbose
 ```
 
 ### Run Unit Tests
 
 ```bash
 # Run test framework unit tests
-pnpm test src/agent/skills/__tests__/test-framework.test.ts
+npm test src/agent/skills/__tests__/test-framework.test.ts
 ```
 
 ## Test Types
@@ -339,8 +339,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
-      - run: pnpm install
-      - run: pnpm run build
+      - run: npm install
+      - run: npm run build
       - run: xopcbot skills test --verbose
 ```
 
@@ -363,10 +363,10 @@ jobs:
           node-version: 22
       
       - name: Install dependencies
-        run: pnpm install
+        run: npm install
       
       - name: Build
-        run: pnpm run build
+        run: npm run build
       
       - name: Run skill tests
         run: |
@@ -390,7 +390,7 @@ set -e
 echo "Running local skill regression tests..."
 
 # Run unit tests
-pnpm test src/agent/skills/__tests__/test-framework.test.ts
+npm test src/agent/skills/__tests__/test-framework.test.ts
 
 # Run integration tests
 xopcbot skills test --verbose

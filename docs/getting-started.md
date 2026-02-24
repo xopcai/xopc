@@ -16,7 +16,7 @@ Before you begin, ensure you have the following installed:
 ```bash
 # Install globally
 npm install -g @xopcai/xopcbot
-# or: pnpm add -g @xopcai/xopcbot
+# or: npm add -g @xopcai/xopcbot
 ```
 
 ### Option 2: Build from source
@@ -27,7 +27,7 @@ Clone the repository from GitHub and install the dependencies:
 git clone https://github.com/xopcai/xopcbot.git
 cd xopcbot
 npm install
-# or: pnpm install
+# or: npm install
 ```
 
 ## 3. Configuration
@@ -36,7 +36,7 @@ The easiest way to set up your configuration is with the interactive `onboard` c
 
 ```bash
 xopcbot onboard
-# or: pnpm run dev -- onboard
+# or: npm run dev -- onboard
 ```
 
 This command will:
@@ -66,7 +66,7 @@ Use the `-m` flag to send a single message and receive a response.
 
 ```bash
 xopcbot agent -m "Explain what an LLM is in one sentence."
-# or: pnpm run dev -- agent -m "Explain what an LLM is in one sentence."
+# or: npm run dev -- agent -m "Explain what an LLM is in one sentence."
 ```
 
 #### Interactive Mode
@@ -75,7 +75,7 @@ For a continuous conversation, use the `-i` flag to enter interactive mode.
 
 ```bash
 xopcbot agent -i
-# or: pnpm run dev -- agent -i
+# or: npm run dev -- agent -i
 ```
 
 You'll be presented with a `You:` prompt. Type your messages and press Enter. To exit, press `Ctrl+C`.
@@ -110,7 +110,7 @@ Run the `gateway` command. This starts a long-running process that connects to y
 
 ```bash
 xopcbot gateway
-# or: pnpm run dev -- gateway
+# or: npm run dev -- gateway
 ```
 
 You can now open your Telegram client and start a conversation with your bot. Any messages you send will be processed by the agent.

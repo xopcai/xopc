@@ -96,7 +96,7 @@ install:
     bins: [curl]
     label: Install curl (brew)
   
-  # pnpm installation
+  # npm installation
   - id: pnpm-tool
     kind: pnpm
     package: some-tool
@@ -292,7 +292,7 @@ xopcbot skills install weather
 
 Supported installers:
 - ✅ Homebrew (macOS/Linux)
-- ✅ pnpm/npm/yarn/bun (Node.js)
+- ✅ npm/yarn/bun (Node.js)
 - ✅ Go modules
 - ✅ uv (Python)
 - ⏳ Direct download (in development)
@@ -419,8 +419,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: pnpm install
-      - run: pnpm run build
+      - run: npm install
+      - run: npm run build
       - run: xopcbot skills test --format tap --strict
 ```
 

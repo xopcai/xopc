@@ -55,14 +55,14 @@ npm install -g @xopcai/xopcbot
 
 # 或从源码构建
 git clone https://github.com/xopcai/xopcbot.git
-cd xopcbot && pnpm install && pnpm build
+cd xopcbot && npm install && npm build
 ```
 
 ### 2️⃣ 配置（交互式向导）
 
 ```bash
 xopcbot onboard
-# 或: pnpm run dev -- onboard
+# 或: npm run dev -- onboard
 ```
 
 向导会引导你完成：
@@ -111,16 +111,16 @@ xopcbot agent -m "你好！" --channel telegram --chat-id 123456
 
 ```bash
 # 开发模式（热重载）
-pnpm run dev
+npm run dev
 
 # 构建生产版本
-pnpm run build
+npm run build
 
 # 运行测试
-pnpm test
+npm test
 
 # 代码检查
-pnpm run lint
+npm run lint
 ```
 
 ---

@@ -16,13 +16,13 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && pnpm --filter @xopcbot/web-ui run build",
+    "build": "tsc && npm --filter @xopcbot/web-ui run build",
     "dev": "tsx src/cli/index.ts",
     "start": "node dist/cli/index.js",
     "test": "vitest run src",
     "test:skills": "vitest run src/agent/skills/__tests__",
     "test:skills:regression": "./scripts/test-skills.sh",
-    "test:skills:all": "pnpm test:skills && pnpm test:skills:regression",
+    "test:skills:all": "npm run test:skills && npm run test:skills:regression",
     "skills:test": "tsx src/cli/index.ts skills test",
     "skills:validate": "tsx src/cli/index.ts skills test validate",
     "skills:security": "tsx src/cli/index.ts skills test security",

@@ -16,7 +16,7 @@
 ```bash
 # 全局安装
 npm install -g @xopcai/xopcbot
-# 或：pnpm add -g @xopcai/xopcbot
+# 或：npm add -g @xopcai/xopcbot
 ```
 
 ### 方式二：从源码构建
@@ -27,7 +27,7 @@ npm install -g @xopcai/xopcbot
 git clone https://github.com/xopcai/xopcbot.git
 cd xopcbot
 npm install
-# 或：pnpm install
+# 或：npm install
 ```
 
 ## 3. 配置
@@ -36,7 +36,7 @@ npm install
 
 ```bash
 xopcbot onboard
-# 或: pnpm run dev -- onboard
+# 或: npm run dev -- onboard
 ```
 
 该命令将：
@@ -54,7 +54,7 @@ xopcbot onboard
 
 ```bash
 xopcbot agent -m "用一句话解释什么是 LLM。"
-# 或: pnpm run dev -- agent -m "用一句话解释什么是 LLM。"
+# 或: npm run dev -- agent -m "用一句话解释什么是 LLM。"
 ```
 
 #### 交互模式
@@ -63,7 +63,7 @@ xopcbot agent -m "用一句话解释什么是 LLM。"
 
 ```bash
 xopcbot agent -i
-# 或: pnpm run dev -- agent -i
+# 或: npm run dev -- agent -i
 ```
 
 您将看到 `You:` 提示符，输入消息后按回车即可。按 `Ctrl+C` 退出。
@@ -98,7 +98,7 @@ xopcbot agent -i
 
 ```bash
 xopcbot gateway
-# 或: pnpm run dev -- gateway
+# 或: npm run dev -- gateway
 ```
 
 现在您可以打开 Telegram 客户端与机器人对话。发送的任何消息都将由代理处理。

@@ -55,14 +55,14 @@ npm install -g @xopcai/xopcbot
 
 # Or from source
 git clone https://github.com/xopcai/xopcbot.git
-cd xopcbot && pnpm install && pnpm build
+cd xopcbot && npm install && npm build
 ```
 
 ### 2️⃣ Setup (interactive wizard)
 
 ```bash
 xopcbot onboard
-# or: pnpm run dev -- onboard
+# or: npm run dev -- onboard
 ```
 
 The wizard will guide you through:
@@ -111,16 +111,16 @@ xopcbot agent -m "Hello!" --channel telegram --chat-id 123456
 
 ```bash
 # Development (with hot reload)
-pnpm run dev
+npm run dev
 
 # Build for production
-pnpm run build
+npm run build
 
 # Run tests
-pnpm test
+npm test
 
 # Lint
-pnpm run lint
+npm run lint
 ```
 
 ---
