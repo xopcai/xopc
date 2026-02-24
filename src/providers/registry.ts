@@ -301,9 +301,6 @@ export class ModelRegistry {
 	private loadModels(): void {
 		this.loadBuiltInModels();
 
-		// Load additional builtin models
-		this.loadBuiltinProviderModels();
-
 		if (this.config) {
 			this.applyModelsConfig();
 		}
@@ -324,13 +321,6 @@ export class ModelRegistry {
 		} catch (error) {
 			console.warn('Failed to load built-in models:', error);
 		}
-	}
-
-	/**
-	 * @deprecated Provider override logic removed. Use `models` config instead.
-	 */
-	private loadBuiltinProviderModels(): void {
-		// No longer needed - all models come from new models config
 	}
 
 	private async discoverLocalModels(): Promise<void> {
