@@ -9,7 +9,7 @@ export { ModelManager } from './model-manager.js';
 export { loadBootstrapFiles, extractTextContent, stripFrontMatter, truncateBootstrapContent } from './helpers.js';
 export type { BootstrapFile, TruncateResult } from './helpers.js';
 
-// Model configuration (OpenClaw-style)
+// Model configuration (xopcbot)
 export * from './model-selection.js';
 export * from './model-scan.js';
 export * from './model-compat.js';

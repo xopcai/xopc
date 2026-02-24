@@ -337,7 +337,7 @@ export class ModelRegistry {
 	}
 
 	/**
-	 * Apply OpenClaw-style models config (new format)
+	 * Apply xopcbot models config (new format)
 	 */
 	private applyModelsConfig(): void {
 		if (!this.config) return;
