@@ -7,6 +7,9 @@ export { MessageBubble } from './MessageList/MessageBubble';
 export { AttachmentRenderer } from './MessageList/AttachmentRenderer';
 export { UsageBadge } from './MessageList/UsageBadge';
 
+// Markdown renderer
+export { MarkdownRenderer } from './MarkdownRenderer';
+
 // Session management components
 export { SessionCard } from './SessionCard';
 export { SessionList } from './SessionList';
