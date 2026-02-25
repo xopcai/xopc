@@ -1,7 +1,7 @@
 /**
  * Workspace Management - Core bootstrap file handling
  * 
- * Follows OpenClaw's workspace architecture:
+ * Workspace architecture for xopcbot:
  * - Default filenames constants
  * - File caching with mtime invalidation
  * - Template loading and seeding
@@ -15,7 +15,7 @@ import { createLogger } from '../utils/logger.js';
 const log = createLogger('Workspace');
 
 // =============================================================================
-// Default Filenames (matching OpenClaw)
+// Default Filenames
 // =============================================================================
 
 export const DEFAULT_AGENTS_FILENAME = 'AGENTS.md';
@@ -27,7 +27,7 @@ export const DEFAULT_HEARTBEAT_FILENAME = 'HEARTBEAT.md';
 export const DEFAULT_BOOTSTRAP_FILENAME = 'BOOTSTRAP.md';
 export const DEFAULT_MEMORY_FILENAME = 'MEMORY.md';
 export const DEFAULT_MEMORY_ALT_FILENAME = 'memory.md';
-export const DEFAULT_WORKSPACE_STATE_DIR = '.openclaw';
+export const DEFAULT_WORKSPACE_STATE_DIR = '.xopcbot';
 export const DEFAULT_WORKSPACE_STATE_FILE = 'workspace-state.json';
 
 // =============================================================================
@@ -99,7 +99,7 @@ const workspaceFileCache = new Map<string, CacheEntry>();
  * Read file with caching based on mtime. Returns cached content if file
  * hasn't changed, otherwise reads from disk and updates cache.
  * 
- * Follows OpenClaw's approach for performance optimization.
+ * Performance optimization approach.
  */
 export async function readFileWithCache(filePath: string): Promise<string> {
   try {
@@ -187,7 +187,7 @@ export async function loadTemplate(name: string): Promise<string> {
   }
 
   const pending = (async () => {
-    // Try multiple possible template locations (matching OpenClaw)
+    // Try multiple possible template locations
     const possiblePaths = [
       path.join(process.cwd(), 'docs', 'reference', 'templates', name),
       path.join(process.cwd(), 'templates', name),
@@ -326,8 +326,6 @@ export async function ensureWorkspaceDir(dir: string): Promise<string> {
 
 /**
  * Ensure workspace has bootstrap files, seeding from templates if needed
- * 
- * Follows OpenClaw's ensureAgentWorkspace pattern
  */
 export async function ensureBootstrapFiles(
   dir: string,
@@ -516,8 +514,6 @@ async function resolveMemoryBootstrapEntries(
 
 /**
  * Load all workspace bootstrap files
- * 
- * Follows OpenClaw's loadWorkspaceBootstrapFiles pattern
  */
 export async function loadWorkspaceBootstrapFiles(dir: string): Promise<WorkspaceBootstrapFile[]> {
   const resolvedDir = path.resolve(dir);
