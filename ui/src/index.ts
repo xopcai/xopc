@@ -1,6 +1,10 @@
 import { html, LitElement } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { Agent, type AgentEvent } from '@mariozechner/pi-agent-core';
+
+// Import styles
+import './styles.css';
+
 import './components/MessageEditor';
 import './components/MessageList';
 import './components/StreamingMessageContainer';
