@@ -6,7 +6,7 @@ import { saveConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import { getFallbackTemplate, TEMPLATE_FILES } from '../templates.js';
 import type { CLIContext } from '../registry.js';
-import { AuthStorage, anthropicOAuthProvider, minimaxOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import { AuthStorage, anthropicOAuthProvider, minimaxOAuthProvider, minimaxCnOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
 import { upsertAuthProfile, listProfilesForProvider } from '../../auth/profiles/index.js';
 import { ModelRegistry } from '../../providers/index.js';
 import { colors } from '../utils/colors.js';
@@ -433,6 +433,41 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
       return true;
     } catch (error) {
       console.error('❌ OAuth login failed:', error);
+      return false;
+    }
+  }
+
+  if (provider === 'minimax-cn') {
+    const callbacks: OAuthLoginCallbacks = {
+      onAuth: (info) => {
+        console.log('\n🌐 请在浏览器中打开以下 URL:\n');
+        console.log(info.url);
+        if (info.instructions) {
+          console.log('\n' + info.instructions);
+        }
+        console.log('\n');
+      },
+      onPrompt: async (prompt) => {
+        return input({ message: prompt.message });
+      },
+      onProgress: (message) => {
+        console.log('  →', message);
+      },
+    };
+
+    try {
+      const creds = await minimaxCnOAuthProvider.login(callbacks);
+      upsertAuthProfile({
+        profileId: 'minimax-cn:default',
+        credential: {
+          type: 'oauth',
+          provider: 'minimax-cn',
+          ...creds,
+        },
+      });
+      return true;
+    } catch (error) {
+      console.error('❌ OAuth 登录失败:', error);
       return false;
     }
   }

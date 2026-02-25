@@ -151,7 +151,7 @@ export const PROVIDER_INFO: Record<string, ProviderInfo> = {
 	'kimi': { id: 'kimi', name: 'Kimi', envKey: 'KIMI_API_KEY', authType: 'api_key', supportsOAuth: true, baseUrl: 'https://api.moonshot.cn/v1' },
 	'moonshot': { id: 'moonshot', name: 'Moonshot AI', envKey: 'MOONSHOT_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://api.moonshot.ai/v1' },
 	'minimax': { id: 'minimax', name: 'MiniMax', envKey: 'MINIMAX_API_KEY', authType: 'api_key', supportsOAuth: true, baseUrl: 'https://api.minimax.io/v1' },
-	'minimax-cn': { id: 'minimax-cn', name: 'MiniMax CN', envKey: 'MINIMAX_CN_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://api.minimaxi.com/v1' },
+	'minimax-cn': { id: 'minimax-cn', name: 'MiniMax CN', envKey: 'MINIMAX_CN_API_KEY', authType: 'api_key', supportsOAuth: true, baseUrl: 'https://api.minimaxi.com/v1' },
 	'zhipu': { id: 'zhipu', name: 'Zhipu (GLM)', envKey: 'ZHIPU_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
 	'zhipu-cn': { id: 'zhipu-cn', name: 'Zhipu CN', envKey: 'ZHIPU_CN_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://open.bigmodel.cn/api/paas/v4' },
 	'deepseek': { id: 'deepseek', name: 'DeepSeek', envKey: 'DEEPSEEK_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://api.deepseek.com/v1' },
