@@ -215,6 +215,120 @@ Each model definition:
 | `contextWindow` | number | `128000` | Context window size |
 | `maxTokens` | number | `16384` | Max output tokens |
 
+### Supported Providers
+
+xopcbot supports the following LLM providers:
+
+| Provider | Auth Type | Capabilities | Model Prefixes |
+|----------|-----------|--------------|----------------|
+| `openai` | API Key | text, vision, tools | gpt-, o1- |
+| `anthropic` | API Key, OAuth | text, vision, reasoning, tools | claude- |
+| `google` | API Key | text, vision, tools | gemini- |
+| `qwen` | API Key | text, vision, tools | qwen-, qwq- |
+| `kimi` | OAuth (Device Code) | text, reasoning, tools | kimi- |
+| `moonshot` | API Key | text, tools | moonshot- |
+| `minimax` | API Key | text | abab- |
+| `deepseek` | API Key | text, reasoning, tools | deepseek- |
+| `groq` | API Key | text, tools | llama-, mixtral- |
+| `openrouter` | API Key | text, vision, tools | openrouter/ |
+| `xai` | API Key | text, tools | xai/, grok- |
+| `cerebras` | API Key | text | cerebras/ |
+| `mistral` | API Key | text, tools | mistral- |
+| `zhipu` | API Key | text | glm- |
+| `ollama` | None (local) | text, vision | llama3, qwen2, etc. |
+| `bailian` | API Key | text | bailian- |
+
+#### Provider Examples
+
+**Kimi (OAuth):**
+```json
+{
+  "kimi": {
+    "auth": {
+      "type": "oauth",
+      "clientId": "your-client-id",
+      "clientSecret": "your-client-secret"
+    },
+    "models": [
+      { "id": "kimi-k2.5", "name": "Kimi K2.5", "reasoning": true }
+    ]
+  }
+}
+```
+
+**Moonshot (API Key):**
+```json
+{
+  "moonshot": {
+    "apiKey": "${MOONSHOT_API_KEY}",
+    "models": [
+      { "id": "moonshot-v1-8k", "name": "Moonshot V1 8K" }
+    ]
+  }
+}
+```
+
+**MiniMax:**
+```json
+{
+  "minimax": {
+    "apiKey": "${MINIMAX_API_KEY}",
+    "baseUrl": "https://api.minimax.chat/v1",
+    "models": [
+      { "id": "abab6.5s-chat", "name": "MiniMax ABAB 6.5S" }
+    ]
+  }
+}
+```
+
+**Zhipu (智谱):**
+```json
+{
+  "zhipu": {
+    "apiKey": "${ZHIPU_API_KEY}",
+    "models": [
+      { "id": "glm-4-flash", "name": "GLM-4 Flash" }
+    ]
+  }
+}
+```
+
+**xAI (Grok):**
+```json
+{
+  "xai": {
+    "apiKey": "${XAI_API_KEY}",
+    "models": [
+      { "id": "grok-2-1212", "name": "Grok 2" }
+    ]
+  }
+}
+```
+
+**Cerebras:**
+```json
+{
+  "cerebras": {
+    "apiKey": "${CEREBRAS_API_KEY}",
+    "models": [
+      { "id": "llama-3.3-70b", "name": "Llama 3.3 70B" }
+    ]
+  }
+}
+```
+
+**Bailian (百川):**
+```json
+{
+  "bailian": {
+    "apiKey": "${BAILIAN_API_KEY}",
+    "models": [
+      { "id": "baichuan4", "name": "Baichuan 4" }
+    ]
+  }
+}
+```
+
 ### channels
 
 Communication channels configuration.
@@ -410,8 +524,30 @@ Set different models in `agents.defaults.model` to use different providers.
 
 ### Q: How to configure OAuth?
 
-Some providers support OAuth authentication:
+xopcbot supports OAuth authentication for certain providers:
 
+**Kimi (Device Code Flow - Recommended):**
+```json
+{
+  "models": {
+    "providers": {
+      "kimi": {
+        "auth": {
+          "type": "oauth",
+          "clientId": "17e5f671-d194-4dfb-9706-5516cb48c098"
+        },
+        "models": [
+          { "id": "kimi-k2.5", "name": "Kimi K2.5", "reasoning": true }
+        ]
+      }
+    }
+  }
+}
+```
+
+Kimi uses Device Code Flow - the CLI will prompt you to visit `auth.kimi.com` and enter a code to complete authentication.
+
+**Other OAuth Providers:**
 ```json
 {
   "models": {
@@ -429,6 +565,8 @@ Some providers support OAuth authentication:
   }
 }
 ```
+
+> **Note:** Qwen OAuth was removed in favor of browser-based login (run `qwen` CLI).
 
 ### Q: What is modelsDev?
 

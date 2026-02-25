@@ -215,6 +215,95 @@ xopcbot 所有配置集中在 `~/.config/xopcbot/config.json` 文件中。
 | `contextWindow` | number | `128000` | 上下文窗口大小 |
 | `maxTokens` | number | `16384` | 最大输出 tokens |
 
+### 支持的提供商
+
+xopcbot 支持以下 LLM 提供商：
+
+| 提供商 | 认证方式 | 能力 | 模型前缀 |
+|----------|-----------|--------------|----------------|
+| `openai` | API Key | 文本、视觉、工具 | gpt-, o1- |
+| `anthropic` | API Key, OAuth | 文本、视觉、推理、工具 | claude- |
+| `google` | API Key | 文本、视觉、工具 | gemini- |
+| `qwen` | API Key | 文本、视觉、工具 | qwen-, qwq- |
+| `kimi` | OAuth (设备码) | 文本、推理、工具 | kimi- |
+| `moonshot` | API Key | 文本、工具 | moonshot- |
+| `minimax` | API Key | 文本 | abab- |
+| `deepseek` | API Key | 文本、推理、工具 | deepseek- |
+| `groq` | API Key | 文本、工具 | llama-, mixtral- |
+| `openrouter` | API Key | 文本、视觉、工具 | openrouter/ |
+| `xai` | API Key | 文本、工具 | xai/, grok- |
+| `cerebras` | API Key | 文本 | cerebras/ |
+| `mistral` | API Key | 文本、工具 | mistral- |
+| `zhipu` | API Key | 文本 | glm- |
+| `ollama` | 无 (本地) | 文本、视觉 | llama3, qwen2 等 |
+| `bailian` | API Key | 文本 | bailian- |
+
+#### 提供商配置示例
+
+**Kimi (OAuth):**
+```json
+{
+  "kimi": {
+    "auth": {
+      "type": "oauth",
+      "clientId": "your-client-id"
+    },
+    "models": [
+      { "id": "kimi-k2.5", "name": "Kimi K2.5", "reasoning": true }
+    ]
+  }
+}
+```
+
+**Moonshot:**
+```json
+{
+  "moonshot": {
+    "apiKey": "${MOONSHOT_API_KEY}",
+    "models": [
+      { "id": "moonshot-v1-8k", "name": "Moonshot V1 8K" }
+    ]
+  }
+}
+```
+
+**MiniMax:**
+```json
+{
+  "minimax": {
+    "apiKey": "${MINIMAX_API_KEY}",
+    "baseUrl": "https://api.minimax.chat/v1",
+    "models": [
+      { "id": "abab6.5s-chat", "name": "MiniMax ABAB 6.5S" }
+    ]
+  }
+}
+```
+
+**智谱 (Zhipu):**
+```json
+{
+  "zhipu": {
+    "apiKey": "${ZHIPU_API_KEY}",
+    "models": [
+      { "id": "glm-4-flash", "name": "GLM-4 Flash" }
+    ]
+  }
+}
+```
+
+**xAI (Grok):**
+```json
+{
+  "xai": {
+    "apiKey": "${XAI_API_KEY}",
+    "models": [
+      { "id": "grok-2-1212", "name": "Grok 2" }
+    ]
+  }
+}
+```
+
 ### channels
 
 通信渠道配置。
@@ -410,8 +499,30 @@ xopcbot 支持环境变量来存储敏感数据：
 
 ### Q: 如何配置 OAuth？
 
-某些提供商支持 OAuth 认证：
+xopcbot 支持以下提供商的 OAuth 认证：
 
+**Kimi (设备码流程 - 推荐):**
+```json
+{
+  "models": {
+    "providers": {
+      "kimi": {
+        "auth": {
+          "type": "oauth",
+          "clientId": "17e5f671-d194-4dfb-9706-5516cb48c098"
+        },
+        "models": [
+          { "id": "kimi-k2.5", "name": "Kimi K2.5", "reasoning": true }
+        ]
+      }
+    }
+  }
+}
+```
+
+Kimi 使用设备码流程 - CLI 会提示您访问 `auth.kimi.com` 并输入代码完成认证。
+
+**其他 OAuth 提供商:**
 ```json
 {
   "models": {
@@ -429,6 +540,8 @@ xopcbot 支持环境变量来存储敏感数据：
   }
 }
 ```
+
+> **注意:** Qwen OAuth 已移除，改为浏览器登录（运行 `qwen` CLI）。
 
 ### Q: 什么是 modelsDev？
 
