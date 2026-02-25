@@ -4,7 +4,7 @@
  * Handles model-specific compatibility checks and configurations.
  */
 
-import type { ModelCompatConfig, ModelDefinitionConfig } from '../config/types.models.js';
+import type { ModelCompatConfig, ModelDefinitionConfig } from '../../config/types.models.js';
 
 // ============================================
 // Compatibility Flags

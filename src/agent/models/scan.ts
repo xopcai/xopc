@@ -4,8 +4,8 @@
  * Scans and discovers models from provider configurations.
  */
 
-import type { ModelProviderConfig, ModelDefinitionConfig, ModelsConfig } from '../config/types.models.js';
-import { parseModelRef, normalizeProviderId } from './model-selection.js';
+import type { ModelProviderConfig, ModelDefinitionConfig, ModelsConfig } from '../../config/types.models.js';
+import { parseModelRef, normalizeProviderId } from './selection.js';
 
 export interface ScanResult {
   provider: string;

@@ -4,8 +4,8 @@
  * Handles model reference parsing, provider normalization, and alias resolution.
  */
 
-import { resolveModelAlias } from '../config/defaults.js';
-import type { ModelDefinitionConfig, ModelProviderConfig } from '../config/types.models.js';
+import { resolveModelAlias } from '../../config/defaults.js';
+import type { ModelDefinitionConfig, ModelProviderConfig } from '../../config/types.models.js';
 
 // ============================================
 // Types

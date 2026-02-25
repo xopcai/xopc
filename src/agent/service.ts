@@ -39,7 +39,7 @@ import { buildSystemPrompt } from './system-prompt.js';
 import { createTypingController } from './typing.js';
 import { loadBootstrapFiles, extractTextContent, type BootstrapFile } from './helpers.js';
 import { SessionTracker } from './session-tracker.js';
-import { ModelManager } from './model-manager.js';
+import { ModelManager } from './models/index.js';
 
 const log = createLogger('AgentService');
 

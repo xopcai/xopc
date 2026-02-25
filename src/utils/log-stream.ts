@@ -217,7 +217,7 @@ export function createLogStreamHandler() {
  * app.get('/api/logs/stream', createLogSSEHandler());
  * ```
  */
-export function createLogSSEHandler() {
+export function createLogSSEHandler(): (c: { req: { raw: Request; url: string } }) => Promise<Response> {
   return async (c: { req: { raw: Request; url: string } }) => {
     const url = new URL(c.req.url);
     const levelsParam = url.searchParams.get('levels');

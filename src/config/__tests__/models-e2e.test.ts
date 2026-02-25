@@ -10,10 +10,10 @@
 
 import { describe, it, expect } from 'vitest';
 import { ConfigSchema, type Config } from '../schema.js';
-import { scanProviders, validateModelDefinition, buildModelMap, isValidModelRef } from '../../agent/model-scan.js';
-import { getFallbackCandidates, selectFallback, isRetryableError } from '../../agent/model-fallback.js';
-import { getCompatFlags, modelSupportsReasoning, modelSupportsVision } from '../../agent/model-compat.js';
-import { parseModelRef, resolveModelRef, getModelConfig, findProviderConfig } from '../../agent/model-selection.js';
+import { scanProviders, validateModelDefinition, buildModelMap, isValidModelRef } from '../../agent/models/scan.js';
+import { getFallbackCandidates, selectFallback, isRetryableError } from '../../agent/models/fallback.js';
+import { getCompatFlags, modelSupportsReasoning, modelSupportsVision } from '../../agent/models/compat.js';
+import { parseModelRef, resolveModelRef, getModelConfig, findProviderConfig } from '../../agent/models/selection.js';
 import { resolveModelAlias } from '../defaults.js';
 
 describe('Models Config E2E', () => {

@@ -4,8 +4,8 @@
  * Handles automatic model fallback when a provider fails.
  */
 
-import type { ModelDefinitionConfig, ModelsConfig } from '../config/types.models.js';
-import { parseModelRef, normalizeProviderId } from './model-selection.js';
+import type { ModelDefinitionConfig, ModelsConfig } from '../../config/types.models.js';
+import { parseModelRef, normalizeProviderId } from './selection.js';
 
 export interface FallbackCandidate {
   model: ModelDefinitionConfig;

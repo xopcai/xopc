@@ -7,10 +7,10 @@
 
 import { Agent, type AgentMessage } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
-import type { Config } from '../config/schema.js';
-import { createLogger } from '../utils/logger.js';
-import { ModelRegistry } from '../providers/registry.js';
-import { isFailoverError, describeFailoverError, resolveFallbackCandidates } from './fallback/index.js';
+import type { Config } from '../../config/schema.js';
+import { createLogger } from '../../utils/logger.js';
+import { ModelRegistry } from '../../providers/registry.js';
+import { isFailoverError, describeFailoverError, resolveFallbackCandidates } from '../fallback/index.js';
 
 const log = createLogger('ModelManager');
 
