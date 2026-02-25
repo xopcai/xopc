@@ -710,6 +710,14 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ dir: LOG_DIR });
   });
 
+  // ========== Real-time Log Streaming (SSE) ==========
+
+  // GET /api/logs/stream - Stream logs in real-time via SSE
+  authenticated.get('/api/logs/stream', async (c) => {
+    const { createLogSSEHandler } = await import('../../utils/log-stream.js');
+    return createLogSSEHandler()(c);
+  });
+
   // ========== Plugin HTTP Routes ==========
   const pluginRegistry = service.getPluginRegistry?.();
   if (pluginRegistry) {

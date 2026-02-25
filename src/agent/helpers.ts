@@ -79,6 +79,7 @@ export function truncateBootstrapContent(content: string, maxChars: number): Tru
 
 export interface BootstrapFile {
   name: string;
+  path?: string;
   content: string;
   missing?: boolean;
 }

@@ -35,7 +35,7 @@ import { getBundledSkillsDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
 import type { CommandContext } from '../plugins/types.js';
-import { PromptBuilder } from './prompt/index.js';
+import { buildSystemPrompt } from './system-prompt.js';
 import { createTypingController } from './typing.js';
 import { loadBootstrapFiles, extractTextContent, type BootstrapFile } from './helpers.js';
 import { SessionTracker } from './session-tracker.js';
@@ -799,9 +799,31 @@ export class AgentService {
   }
 
   private getSystemPrompt(): string {
-    const prompt = PromptBuilder.createFullPrompt(
-      { workspaceDir: this.config.workspace },
-      { heartbeatEnabled: false, contextFiles: this.bootstrapFiles }
+    // Get heartbeat config from gateway config
+    const gatewayConfig = this.config.config?.gateway;
+    const heartbeatEnabled = gatewayConfig?.heartbeat?.enabled ?? false;
+    
+    // Extract timezone from USER.md for quiet hours display
+    const userFile = this.bootstrapFiles.find(f => f.name === 'USER.md');
+    let userTimezone: string | undefined;
+    if (userFile && !userFile.missing && userFile.content) {
+      // Try to extract timezone from USER.md content
+      const tzMatch = userFile.content.match(/Timezone:\s*(.+)/i);
+      if (tzMatch) {
+        userTimezone = tzMatch[1].trim();
+      }
+    }
+
+    // Use the new OpenClaw-style system prompt builder
+    // Cast BootstrapFile[] to WorkspaceBootstrapFile[] for compatibility
+    const prompt = buildSystemPrompt(
+      this.config.workspace,
+      {
+        bootstrapFiles: this.bootstrapFiles as any,
+        heartbeatEnabled,
+        availableTools: this.skills.map(s => s.name),
+        userTimezone,
+      }
     );
     return this.skillPrompt ? prompt + '\n\n' + this.skillPrompt : prompt;
   }

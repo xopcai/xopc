@@ -93,7 +93,7 @@ export function clearTemplateCache(): void {
 }
 
 /** Minimal fallback templates in case files are missing */
-function getFallbackTemplate(name: TemplateFile): string {
+export function getFallbackTemplate(name: TemplateFile): string {
   const fallbacks: Record<TemplateFile, string> = {
     'BOOTSTRAP.md': `# BOOTSTRAP.md - Hello, World
 

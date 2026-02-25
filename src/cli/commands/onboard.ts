@@ -4,7 +4,7 @@ import { join } from 'path';
 import { input, select, confirm } from '@inquirer/prompts';
 import { saveConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
-import { loadAllTemplates } from '../templates.js';
+import { getFallbackTemplate, TEMPLATE_FILES } from '../templates.js';
 import type { CLIContext } from '../registry.js';
 import { AuthStorage, anthropicOAuthProvider, minimaxOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
 import { upsertAuthProfile, listProfilesForProvider } from '../../auth/profiles/index.js';
@@ -52,18 +52,17 @@ function setupWorkspace(workspacePath: string): void {
     console.log('ℹ️  Workspace already exists:', workspacePath);
   }
 
-  // Load templates from docs/reference/templates/
-  const templates = loadAllTemplates();
-
+  // Use built-in templates (no frontmatter)
   const memoryDir = join(workspacePath, 'memory');
   if (!existsSync(memoryDir)) {
     mkdirSync(memoryDir, { recursive: true });
     console.log('✅ Created memory/ directory');
   }
 
-  for (const [filename, content] of Object.entries(templates)) {
+  for (const filename of TEMPLATE_FILES) {
     const filePath = join(workspacePath, filename);
     if (!existsSync(filePath)) {
+      const content = getFallbackTemplate(filename);
       writeFileSync(filePath, content, 'utf-8');
       console.log('✅ Created', filename);
     }

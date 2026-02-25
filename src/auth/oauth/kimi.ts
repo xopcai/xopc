@@ -136,7 +136,7 @@ export const kimiOAuthProvider: OAuthProviderInterface = {
 	},
 };
 
-function base64UrlEncode(buffer: Uint8Array): string {
+function _base64UrlEncode(buffer: Uint8Array): string {
 	let str = '';
 	buffer.forEach(b => str += String.fromCharCode(b));
 	return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');

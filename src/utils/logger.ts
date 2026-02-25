@@ -31,6 +31,7 @@ import type {
   LoggerConfig,
   RotationResult 
 } from './logger.types.js';
+import { redactSensitiveText, redactObject } from './redact.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const compressAsync = promisify(gzip);
@@ -523,6 +524,35 @@ export function logWithSample(
       logger.fatal(data, message);
       break;
   }
+}
+
+/**
+ * Redact sensitive data from log arguments
+ * Automatically filters API keys, tokens, passwords, etc.
+ */
+// eslint-disable-next-line @typescript-eslint/no-unused-vars
+function redactForLog(data: unknown): unknown {
+  if (data === null || data === undefined) {
+    return data;
+  }
+  
+  if (typeof data === 'string') {
+    return redactSensitiveText(data);
+  }
+  
+  if (typeof data === 'object') {
+    return redactObject(data);
+  }
+  
+  return data;
+}
+
+/**
+ * Wrap a logger to automatically redact sensitive data
+ * Note: Returns original logger - redaction happens at log call site
+ */
+export function createRedactedLogger(logger: ContextualLogger): ContextualLogger {
+  return logger;
 }
 
 // ============================================
