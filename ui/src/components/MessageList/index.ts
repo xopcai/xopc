@@ -1,5 +1,6 @@
 import { html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
+import { virtualize, virtualizerRef } from '@lit-labs/virtualizer/virtualize.js';
 import { t } from '../../utils/i18n';
 import type { Message } from './types';
 import './MessageBubble';
@@ -8,7 +9,8 @@ import './MessageBubble';
 export class MessageList extends LitElement {
   @property({ attribute: false }) messages: Message[] = [];
   @property({ type: Boolean }) isStreaming = false;
-  @property({ type: Boolean }) useVirtualScroll = false;
+  @property({ type: Boolean }) useVirtualScroll = true;
+  @property({ type: Number }) virtualScrollThreshold = 50;
 
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -19,6 +21,17 @@ export class MessageList extends LitElement {
       return this._renderEmptyState();
     }
 
+    const shouldVirtualize = this.useVirtualScroll && 
+      this.messages.length > this.virtualScrollThreshold;
+
+    if (shouldVirtualize) {
+      return this._renderVirtualList();
+    }
+
+    return this._renderSimpleList();
+  }
+
+  private _renderSimpleList(): unknown {
     return html`
       <div class="flex flex-col gap-4 pb-4">
         ${this.messages.map((message, index) => html`
@@ -27,6 +40,25 @@ export class MessageList extends LitElement {
             .isStreaming=${this.isStreaming && index === this.messages.length - 1}
           ></message-bubble>
         `)}
+      </div>
+    `;
+  }
+
+  private _renderVirtualList(): unknown {
+    return html`
+      <div class="flex flex-col pb-4">
+        ${virtualize({
+          items: this.messages,
+          renderItem: (message, index) => html`
+            <div class="py-2">
+              <message-bubble 
+                .message=${message}
+                .isStreaming=${this.isStreaming && index === this.messages.length - 1}
+              ></message-bubble>
+            </div>
+          `,
+          scroller: true,
+        })}
       </div>
     `;
   }
