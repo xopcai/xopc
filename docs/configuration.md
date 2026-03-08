@@ -31,11 +31,6 @@ All xopcbot configuration is centralized in the `~/.xopcbot/config.json` file.
       "enabled": true,
       "token": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
       "allow_from": []
-    },
-    "whatsapp": {
-      "enabled": false,
-      "bridge_url": "ws://localhost:3001",
-      "allow_from": []
     }
   },
   "gateway": {
@@ -268,14 +263,6 @@ Communication channels configuration.
 | `group_admins` | boolean | `false` | Only allow group admins |
 | `magic` | string | - | Magic prefix for mentions |
 
-### channels.whatsapp
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable WhatsApp bridge |
-| `bridge_url` | string | `ws://localhost:3001` | WhatsApp bridge WebSocket URL |
-| `allow_from` | array | `[]` | Allowed phone numbers |
-
 ### channels.discord
 
 | Field | Type | Default | Description |
@@ -493,7 +480,6 @@ xopcbot supports environment variables for sensitive data:
 | `GOOGLE_API_KEY` | Google AI API key |
 | `DASHSCOPE_API_KEY` | Alibaba DashScope API key (for STT/TTS) |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
-| `WHATSAPP_BRIDGE_URL` | WhatsApp bridge URL |
 
 Environment variables take priority over config file values.
 

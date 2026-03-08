@@ -38,7 +38,7 @@ function createSessionCommand(_ctx: CLIContext): Command {
   sessionCmd
     .command('list')
     .description('List all sessions')
-    .option('-c, --channel <channel>', 'Filter by channel (telegram, whatsapp, gateway, cli)')
+    .option('-c, --channel <channel>', 'Filter by channel (telegram, gateway, cli)')
     .option('-s, --status <status>', 'Filter by status (active, idle, archived, pinned)')
     .option('-t, --tag <tag>', 'Filter by tag (can be used multiple times)', collect, [])
     .option('-q, --query <query>', 'Search query')

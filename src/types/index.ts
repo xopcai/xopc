@@ -140,18 +140,11 @@ export interface AgentDefaults {
 
 export interface ChannelsConfig {
   telegram?: TelegramConfig;
-  whatsapp?: WhatsAppConfig;
 }
 
 export interface TelegramConfig {
   enabled?: boolean;
   token?: string;
-  allowFrom?: string[];
-}
-
-export interface WhatsAppConfig {
-  enabled?: boolean;
-  bridgeUrl?: string;
   allowFrom?: string[];
 }
 

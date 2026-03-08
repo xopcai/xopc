@@ -1,6 +1,6 @@
 # Channel Configuration
 
-xopcbot supports multiple communication channels: Telegram, WhatsApp.
+xopcbot supports multiple communication channels. Currently only Telegram is implemented.
 
 ## Telegram Channel
 
@@ -114,71 +114,13 @@ if (result.success) {
 
 ---
 
-## WhatsApp Channel
-
-### Configuration
-
-```json
-{
-  "channels": {
-    "whatsapp": {
-      "enabled": true,
-      "bridge_url": "ws://localhost:3001",
-      "allowFrom": []
-    }
-  }
-}
-```
-
-### Configuration Fields
-
-| Field | Type | Description |
-|-------|------|-------------|
-| `enabled` | boolean | Enable channel |
-| `bridge_url` | string | WA Bridge WebSocket URL |
-| `allowFrom` | string[] | Whitelist users |
-
-### Current Status
-
-⚠️ **WhatsApp channel is currently a placeholder**, requires external WA Bridge.
-
-Options:
-- [whatsapp-web.js](https://github.com/pedroslopez/whatsapp-web.js)
-- [Chat-API](https://github.com/chat-api)
-- [WA Bridge](https://github.com/pереводчик/wa-bridge)
-
-### Full Setup Example
-
-```bash
-# 1. Install wa-bridge (example)
-git clone https://github.com/example/wa-bridge.git
-cd wa-bridge
-npm install
-npm start
-
-# 2. Configure xopcbot
-{
-  "channels": {
-    "whatsapp": {
-      "enabled": true,
-      "bridge_url": "ws://localhost:3001"
-    }
-  }
-}
-
-# 3. Start gateway
-xopcbot gateway --port 18790
-```
-
----
-
 ## Message Format
 
 ### Inbound Message
 
 ```typescript
 {
-  channel: 'telegram' | 'whatsapp',
+  channel: 'telegram',
   sender_id: '123456789',
   chat_id: '987654321',
   content: 'Hello, bot!',
@@ -191,7 +133,7 @@ xopcbot gateway --port 18790
 
 ```typescript
 {
-  channel: 'telegram' | 'whatsapp',
+  channel: 'telegram',
   chat_id: '987654321',
   content: 'Hello, user!'
 }
@@ -230,31 +172,6 @@ api.registerHook('message_sending', async (event, ctx) => {
 ```
 
 ---
-
-## Multi-Channel Usage
-
-Can enable Telegram and WhatsApp simultaneously:
-
-```json
-{
-  "channels": {
-    "telegram": {
-      "enabled": true,
-      "token": "...",
-      "allowFrom": ["@username"],
-      "apiRoot": "https://api.telegram.org",
-      "debug": false
-    },
-    "whatsapp": {
-      "enabled": true,
-      "bridge_url": "ws://localhost:3001",
-      "allowFrom": []
-    }
-  }
-}
-```
-
-Bot listens to messages from both channels.
 
 ## Best Practices
 

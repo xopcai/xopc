@@ -36,7 +36,7 @@ const validTimezones = [
 ];
 
 // Valid delivery channels
-const validChannels = ['telegram', 'whatsapp', 'cli'] as const;
+const validChannels = ['telegram', 'cli'] as const;
 const CronDeliveryMode = z.enum(['none', 'announce', 'direct']);
 
 // CronPayload validation

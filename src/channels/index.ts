@@ -5,12 +5,10 @@
  * 
  * Structure:
  * - telegram/: Telegram channel implementation
- * - whatsapp/: WhatsApp channel implementation
  */
 
 export * from './types.js';
 export { telegramPlugin } from './telegram/plugin.js';
-export { whatsappPlugin } from './whatsapp/plugin.js';
 export { TelegramClient } from './telegram/client.js';
 export { createTelegramCommandHandler } from './telegram/command-handler.js';
 export { TelegramInlineKeyboards } from './telegram/inline-keyboards.js';

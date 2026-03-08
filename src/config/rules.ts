@@ -50,7 +50,6 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   
   // Channels - hot reload
   { prefix: 'channels.telegram', kind: 'hot', description: 'Telegram settings' },
-  { prefix: 'channels.whatsapp', kind: 'hot', description: 'WhatsApp settings' },
   
   // Cron - hot reload
   { prefix: 'cron', kind: 'hot', description: 'Scheduled tasks' },

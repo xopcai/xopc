@@ -8,7 +8,7 @@ export type CronDeliveryMode = 'none' | 'announce' | 'direct';
 
 export interface CronDelivery {
   mode: CronDeliveryMode;
-  channel?: string;  // 'telegram' | 'whatsapp' | 'cli'
+  channel?: string;  // 'telegram' | 'cli'
   to?: string;       // recipient chat id
   bestEffort?: boolean;
 }

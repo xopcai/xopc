@@ -21,7 +21,7 @@ features:
     details: Extend functionality with a powerful plugin architecture
     link: /plugins
   - title: 🌐 Multi-Channel
-    details: Supports Telegram, WhatsApp, Discord, Slack, Signal and more
+    details: Supports Telegram, Discord, Slack, Signal and more
     link: /channels
   - title: 💻 Local First
     details: Run your AI assistant locally with full control

@@ -868,28 +868,6 @@ async function setupChannels(config: Config): Promise<Config> {
     console.log('✅ Telegram already configured');
   }
 
-  const enableWhatsApp = await confirm({
-    message: 'Enable WhatsApp?',
-    default: config?.channels?.whatsapp?.enabled || false,
-  });
-
-  if (enableWhatsApp) {
-    const bridgeUrl = await input({
-      message: 'WhatsApp Bridge URL:',
-      default: 'ws://localhost:3001',
-    });
-
-    config.channels = config.channels || {};
-    const existingWhatsApp = config.channels.whatsapp || {};
-    config.channels.whatsapp = {
-      ...existingWhatsApp,
-      enabled: true,
-      bridgeUrl,
-      allowFrom: ((existingWhatsApp as { allowFrom?: string[] }).allowFrom ?? []) as string[],
-    };
-    console.log('✅ WhatsApp enabled');
-  }
-
   return config;
 }
 

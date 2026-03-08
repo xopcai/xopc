@@ -160,7 +160,7 @@ export function isValidSessionKey(sessionKey: string): boolean {
   if (parts.length < 2) return false;
   
   const source = parts[0];
-  const validSources = ['telegram', 'whatsapp', 'feishu', 'discord', 'slack', 'webui', 'cli', 'api', 'system'];
+  const validSources = ['telegram', 'feishu', 'discord', 'slack', 'webui', 'cli', 'api', 'system'];
   
   return validSources.includes(source);
 }

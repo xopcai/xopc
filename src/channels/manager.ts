@@ -5,7 +5,6 @@
  */
 
 import { telegramPlugin } from './telegram/plugin.js';
-import { whatsappPlugin } from './whatsapp/plugin.js';
 import type { ChannelPlugin } from './types.js';
 import { MessageBus } from '../bus/index.js';
 import { Config } from '../config/index.js';
@@ -14,7 +13,7 @@ import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('ChannelManager');
 
-const PLUGINS: ChannelPlugin[] = [telegramPlugin, whatsappPlugin];
+const PLUGINS: ChannelPlugin[] = [telegramPlugin];
 
 export class ChannelManager {
   private bus: MessageBus;

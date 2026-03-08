@@ -33,11 +33,6 @@ xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
       "enabled": true,
       "token": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
       "allow_from": []
-    },
-    "whatsapp": {
-      "enabled": false,
-      "bridge_url": "ws://localhost:3001",
-      "allow_from": []
     }
   },
   "gateway": {
@@ -143,14 +138,6 @@ xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
 | `allow_from` | array | `[]` | 允许的用户 ID（空 = 允许所有） |
 | `group_admins` | boolean | `false` | 仅允许群管理员 |
 | `magic` | string | - | 提及前缀 |
-
-### channels.whatsapp
-
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `enabled` | boolean | `false` | 启用 WhatsApp 桥接 |
-| `bridge_url` | string | `ws://localhost:3001` | WhatsApp 桥接 WebSocket URL |
-| `allow_from` | array | `[]` | 允许的手机号 |
 
 ### channels.discord
 
@@ -369,7 +356,6 @@ xopcbot 支持环境变量来存储敏感数据：
 | `GOOGLE_API_KEY` | Google AI API 密钥 |
 | `DASHSCOPE_API_KEY` | 阿里云 DashScope API 密钥（用于 STT/TTS） |
 | `TELEGRAM_BOT_TOKEN` | Telegram 机器人令牌 |
-| `WHATSAPP_BRIDGE_URL` | WhatsApp 桥接 URL |
 | `XOPCBOT_MODELS_JSON` | 自定义 models.json 文件路径 |
 
 环境变量优先于配置文件中的值。

@@ -34,7 +34,7 @@ xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
 | `--name` | (Optional) Task name |
 | `--target` | Execution mode: `main` (direct) or `isolated` (AI agent) |
 | `--model` | (Optional) Model for AI agent mode |
-| `--channel` | (Optional) Target channel: `telegram`, `whatsapp`, `cli` |
+| `--channel` | (Optional) Target channel: `telegram`, `cli` |
 | `--to` | (Optional) Recipient chat ID |
 
 ### Remove Task

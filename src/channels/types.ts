@@ -11,7 +11,7 @@ import type { Config } from '../config/index.js';
 // Channel Metadata & Capabilities
 // ============================================
 
-export type ChannelType = 'telegram' | 'whatsapp' | 'system';
+export type ChannelType = 'telegram' | 'system';
 
 export type ChatType = 'direct' | 'group' | 'channel' | 'thread';
 

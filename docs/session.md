@@ -166,7 +166,7 @@ interface SessionMetadata {
   messageCount: number;
   estimatedTokens: number;
   compactedCount: number;   // Number of times compressed
-  sourceChannel: string;    // telegram, whatsapp, gateway, cli
+  sourceChannel: string;    // telegram, gateway, cli
   sourceChatId: string;
 }
 

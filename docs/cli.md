@@ -111,7 +111,7 @@ xopcbot onboard --gateway
 **Features** (when running without options):
 - Auto-detects if workspace needs setup
 - Configure LLM provider and model
-- Configure messaging channels (Telegram/WhatsApp)
+- Configure messaging channels (Telegram)
 - Configure gateway WebUI with auto-generated token
 - Display gateway start command after completion
 
@@ -191,6 +191,7 @@ The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 | `--token` | Auth token |
 | `--no-hot-reload` | Disable config hot reload |
 | `--force` | Force kill existing process on port |
+| `--background` | Start gateway in background mode (detached) |
 
 ### Force Start
 
@@ -211,6 +212,10 @@ This will send SIGTERM, wait 700ms, then SIGKILL if needed.
 | `gateway restart` | Restart gateway |
 | `gateway logs` | View gateway logs |
 | `gateway token` | View/generate auth token |
+| `gateway install` | Install as system service |
+| `gateway uninstall` | Remove system service |
+| `gateway service-start` | Start via system service |
+| `gateway service-status` | Check service status |
 
 **Examples**:
 
@@ -238,6 +243,18 @@ xopcbot gateway logs --follow
 
 # Generate new token
 xopcbot gateway token --generate
+
+# Install as system service
+xopcbot gateway install
+
+# Uninstall system service
+xopcbot gateway uninstall
+
+# Start via system service
+xopcbot gateway service-start
+
+# Check service status
+xopcbot gateway service-status
 ```
 
 ### Process Management

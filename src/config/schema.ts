@@ -118,15 +118,8 @@ export const TelegramConfigSchema = z.object({
   groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('open'),
 });
 
-export const WhatsAppConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  bridgeUrl: z.string().default('ws://localhost:3001'),
-  allowFrom: z.array(z.string()).default([]),
-});
-
 export const ChannelsConfigSchema = z.object({
   telegram: TelegramConfigSchema.optional(),
-  whatsapp: WhatsAppConfigSchema.optional(),
 }).default({
   telegram: {
     enabled: false,
@@ -135,11 +128,6 @@ export const ChannelsConfigSchema = z.object({
     debug: false,
     dmPolicy: 'pairing' as const,
     groupPolicy: 'open' as const,
-  },
-  whatsapp: {
-    enabled: false,
-    bridgeUrl: 'ws://localhost:3001',
-    allowFrom: [],
   },
 });
 
@@ -327,11 +315,6 @@ export const ConfigSchema = z.object({
       dmPolicy: 'pairing' as const,
       groupPolicy: 'open' as const,
     },
-    whatsapp: {
-      enabled: false,
-      bridgeUrl: 'ws://localhost:3001',
-      allowFrom: [],
-    },
   },
   gateway: {
     host: '0.0.0.0',
@@ -399,7 +382,6 @@ export type Config = z.infer<typeof ConfigSchema>;
 export type AgentDefaults = z.infer<typeof AgentDefaultsSchema>;
 export type GatewayAuthConfig = z.infer<typeof GatewayAuthSchema>;
 export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
-export type WhatsAppConfig = z.infer<typeof WhatsAppConfigSchema>;
 export type STTConfig = z.infer<typeof STTConfigSchema>;
 export type TTSConfig = z.infer<typeof TTSConfigSchema>;
 

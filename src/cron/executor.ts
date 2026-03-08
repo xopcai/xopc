@@ -182,7 +182,7 @@ export class DefaultJobExecutor implements JobExecutor {
       const hasAtLeastThreeParts = parts.length >= 3;
       
       // Check if first part looks like a known channel
-      const knownChannels = ['telegram', 'whatsapp', 'cli', 'gateway'];
+      const knownChannels = ['telegram', 'cli', 'gateway'];
       const firstPartIsChannel = knownChannels.includes(parts[0]);
       
       if (hasAtLeastThreeParts && firstPartIsChannel) {
