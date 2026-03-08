@@ -113,6 +113,14 @@ xopcbot gateway
 # or: npm run dev -- gateway
 ```
 
+The gateway runs in **foreground mode** by default. Press `Ctrl+C` to stop it.
+
+If the port is already in use, you can force start:
+
+```bash
+xopcbot gateway --force
+```
+
 You can now open your Telegram client and start a conversation with your bot. Any messages you send will be processed by the agent.
 
 ## What's Next?

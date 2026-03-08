@@ -5,7 +5,7 @@
  * This ensures consistency between Telegram, Feishu, Web UI, and CLI.
  */
 
-import type { MessageSource, _PlatformMetadata } from './types.js';
+import type { MessageSource } from './types.js';
 
 export interface SessionKeyContext {
   source: MessageSource;

@@ -4,7 +4,7 @@ REST API 网关，用于外部程序与 xopcbot 交互。
 
 ## 启动网关
 
-### 前台模式（Foreground Mode）
+### 前台模式（推荐）
 
 ```bash
 xopcbot gateway --port 18790
@@ -12,20 +12,21 @@ xopcbot gateway --port 18790
 
 默认端口：`18790`
 
-### 后台模式（Background Mode）
+网关默认在前台运行，按 `Ctrl+C` 停止。
+
+### 强制启动（终止现有进程）
+
+如果端口已被占用，使用 `--force` 自动终止现有进程：
 
 ```bash
-# 启动后台服务
-xopcbot gateway --background
-
-# 或简写
-xopcbot gateway -b
-
-# 指定日志文件
-xopcbot gateway --background --log-file ~/.xopcbot/gateway.log
+xopcbot gateway --force
 ```
 
-后台模式将网关作为守护进程运行，适合生产环境使用。
+这将：
+1. 向监听端口的进程发送 SIGTERM
+2. 等待 700ms 优雅关闭
+3. 如仍在运行则发送 SIGKILL
+4. 启动新的网关实例
 
 ## 进程管理命令
 
@@ -39,40 +40,41 @@ xopcbot gateway status
 ```
 ✅ Gateway is running
 
-   PID: 12345
-   Host: 0.0.0.0
    Port: 18790
-   Uptime: 5m 32s
-   Health: healthy
 
 🌐 Access:
    URL: http://localhost:18790
    Token: abc12345...xyz67890
-   Direct: http://localhost:18790?token=abc12345...
+
+📝 Management:
+   xopcbot gateway stop      # 停止网关
+   xopcbot gateway restart   # 重启网关
 ```
 
 ### 停止网关
 
 ```bash
-# 优雅停止（默认 5 秒超时）
+# 优雅停止（SIGTERM，5秒超时）
 xopcbot gateway stop
 
-# 强制停止
+# 强制停止（立即 SIGKILL）
 xopcbot gateway stop --force
 
-# 自定义超时时间（毫秒）
+# 自定义超时（毫秒）
 xopcbot gateway stop --timeout 3000
 ```
 
 ### 重启网关
 
 ```bash
-# 使用现有配置重启
+# 发送 SIGUSR1 信号触发优雅重启
 xopcbot gateway restart
 
-# 更改配置重启
-xopcbot gateway restart --port 8080 --host 127.0.0.1
+# 强制重启（终止并重新启动）
+xopcbot gateway restart --force
 ```
+
+**注意**：SIGUSR1 重启需要设置环境变量 `XOPCBOT_ALLOW_SIGUSR1_RESTART=1`。
 
 ### 查看日志
 
@@ -85,6 +87,52 @@ xopcbot gateway logs --lines 100
 
 # 实时跟踪日志（类似 tail -f）
 xopcbot gateway logs --follow
+```
+
+## 进程架构
+
+新的网关进程管理基于 [openclaw](https://github.com/openclaw/openclaw) 设计：
+
+### Gateway Lock
+
+使用文件锁替代 PID 文件：
+
+- **位置**：`~/.xopcbot/locks/gateway.{hash}.lock`
+- **哈希**：配置路径的 SHA256（支持多配置）
+- **内容**：`{ pid, createdAt, configPath, startTime }`
+
+### 运行循环
+
+```
+┌─────────────────────────────────────────┐
+│              运行循环                    │
+├─────────────────────────────────────────┤
+│  1. 获取 Gateway Lock                   │
+│  2. 启动 Gateway Server                 │
+│  3. 等待信号                            │
+│     - SIGTERM/SIGINT -> 停止            │
+│     - SIGUSR1 -> 重启                   │
+│  4. 优雅关闭（5秒超时）                  │
+│  5. 释放锁                              │
+│  6. 退出或重新生成进程                   │
+└─────────────────────────────────────────┘
+```
+
+### 进程重生
+
+重启时：
+1. 检测环境（受监督 vs 普通）
+2. 如受监督：退出让监督器重启
+3. 如普通：生成分离的子进程，然后退出
+
+### 端口管理
+
+```bash
+# 检查端口是否可用
+lsof -i :18790
+
+# 强制释放端口（SIGTERM -> SIGKILL）
+xopcbot gateway --force
 ```
 
 ## API 端点
@@ -236,8 +284,8 @@ GET /health
 ### 命令行管理
 
 ```bash
-# 启动后台网关
-xopcbot gateway --background
+# 启动网关（前台）
+xopcbot gateway
 
 # 检查状态
 xopcbot gateway status
@@ -368,39 +416,32 @@ Content-Type: application/json
 | `port` | `18790` | 端口号 |
 | `auth.token` | `null` | API 认证令牌（可选） |
 
-## 后台模式配置
+## 锁文件
 
-### PID 文件
+网关锁文件位置：`~/.xopcbot/locks/gateway.{hash}.lock`
 
-后台模式运行时，PID 文件保存在：`~/.xopcbot/gateway.pid`
-
-### 日志文件
-
-默认日志位置：`~/.xopcbot/logs/gateway.log`
-
-可通过 `--log-file` 参数自定义：
-
-```bash
-xopcbot gateway --background --log-file /var/log/xopcbot/gateway.log
-```
+哈希基于配置文件路径，允许不同配置运行多个网关。
 
 ### 端口冲突检测
 
-启动时会自动检测端口占用，如果端口已被占用，会提示：
+启动时会自动检测端口占用，如果端口已被占用：
 
 ```
-❌ Failed to start gateway
-   Port 18790 is already in use.
-   💡 Use a different port: xopcbot gateway --port 8080
-   💡 Or stop the existing process first
+❌ Port 18790 is already in use. Use --force to kill existing process.
+```
+
+使用 `--force` 自动终止现有进程：
+
+```bash
+xopcbot gateway --force
 ```
 
 ### 优雅关闭
 
-后台模式支持优雅关闭：
+网关支持优雅关闭：
 1. 收到停止信号后，等待 5 秒让现有请求完成
-2. 如果 5 秒后仍有请求，强制终止进程
-3. 自动清理 PID 文件
+2. 如果 5 秒后仍有请求，强制终止
+3. 自动释放锁文件
 
 可通过 `--timeout` 参数自定义超时时间：
 
@@ -408,6 +449,32 @@ xopcbot gateway --background --log-file /var/log/xopcbot/gateway.log
 xopcbot gateway stop --timeout 10000  # 10 秒超时
 ```
 
+## 环境变量
+
+| 变量 | 描述 |
+|------|------|
+| `XOPCBOT_NO_RESPAWN` | 禁用进程重生，使用进程内重启 |
+| `XOPCBOT_ALLOW_SIGUSR1_RESTART` | 允许 SIGUSR1 触发重启 |
+| `XOPCBOT_SERVICE_MARKER` | 标记在监督器下运行（systemd/launchd） |
+
 ## CORS 配置
 
 如需从浏览器访问，添加 CORS 头（通过代理或中间件）。
+
+## 从旧版本迁移
+
+如果你之前使用后台模式：
+
+1. 停止旧网关：
+   ```bash
+   ps aux | grep xopcbot
+   kill -9 <PID>
+   rm ~/.xopcbot/gateway.pid
+   ```
+
+2. 启动新网关：
+   ```bash
+   xopcbot gateway
+   ```
+
+3. 使用 `Ctrl+C` 停止，或从另一个终端运行 `xopcbot gateway stop`。

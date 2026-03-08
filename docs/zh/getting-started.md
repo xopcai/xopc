@@ -101,6 +101,14 @@ xopcbot gateway
 # 或: npm run dev -- gateway
 ```
 
+网关默认在**前台模式**下运行。按 `Ctrl+C` 停止它。
+
+如果端口已被占用，您可以强制启动：
+
+```bash
+xopcbot gateway --force
+```
+
 现在您可以打开 Telegram 客户端与机器人对话。发送的任何消息都将由代理处理。
 
 #### c. 使用 Web UI

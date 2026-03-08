@@ -11,10 +11,11 @@
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { SessionStore } from '../store.js';
-import { WindowConfig, CompactionConfig } from '../agent/memory/index.js';
+import { WindowConfig } from '../../agent/memory/window.js';
+import { CompactionConfig } from '../../agent/memory/compaction.js';
 import { AgentMessage } from '@mariozechner/pi-agent-core';
 import { join } from 'path';
-import { mkdtemp, rm, _writeFile, _readFile, _readdir, stat } from 'fs/promises';
+import { mkdtemp, rm, stat } from 'fs/promises';
 import { tmpdir } from 'os';
 
 // Test helper to create a temporary directory
@@ -24,11 +25,30 @@ async function createTempDir(): Promise<string> {
 
 // Test helper to create a sample message
 function createSampleMessage(role: 'user' | 'assistant', text: string): AgentMessage {
+  if (role === 'user') {
+    return {
+      role: 'user',
+      content: [{ type: 'text', text }],
+      timestamp: Date.now(),
+    } as AgentMessage;
+  }
   return {
-    role,
+    role: 'assistant',
     content: [{ type: 'text', text }],
+    api: {} as any,
+    provider: {} as any,
+    model: 'test-model',
+    usage: { 
+      input: 0, 
+      output: 0, 
+      cacheRead: 0, 
+      cacheWrite: 0, 
+      totalTokens: 0,
+      cost: { input: 0, output: 0, total: 0 }
+    },
+    stopReason: 'stop' as const,
     timestamp: Date.now(),
-  };
+  } as AgentMessage;
 }
 
 describe('SessionStore', () => {
@@ -37,8 +57,8 @@ describe('SessionStore', () => {
 
   beforeEach(async () => {
     testDir = await createTempDir();
-    const windowConfig: WindowConfig = { maxMessages: 100 };
-    const compactionConfig: CompactionConfig = { enabled: false };
+    const windowConfig: WindowConfig = { maxMessages: 100, keepRecentMessages: 20, preserveSystemMessages: true };
+    const compactionConfig: CompactionConfig = { enabled: false, mode: 'abstractive', reserveTokens: 8000, triggerThreshold: 0.8, minMessagesBeforeCompact: 10, keepRecentMessages: 10, summaryMaxTokens: 500 };
     store = new SessionStore(testDir, windowConfig, compactionConfig);
     await store.initialize();
   });
@@ -158,8 +178,8 @@ describe('SessionStore', () => {
       const loaded = await store.loadMessages(key);
 
       expect(loaded).toHaveLength(2);
-      expect(loaded[0].content[0].text).toBe('Hello 🌍 你好 🔥');
-      expect(loaded[1].content[0].text).toBe('Special chars: <>&"\'');
+      expect((loaded[0].content[0] as any).text).toBe('Hello 🌍 你好 🔥');
+      expect((loaded[1].content[0] as any).text).toBe('Special chars: <>&"\'');
     });
 
     it('should handle large messages', async () => {
@@ -171,7 +191,7 @@ describe('SessionStore', () => {
       const loaded = await store.loadMessages(key);
 
       expect(loaded).toHaveLength(1);
-      expect(loaded[0].content[0].text).toBe(largeText);
+      expect((loaded[0].content[0] as any).text).toBe(largeText);
     });
   });
 
@@ -405,8 +425,8 @@ describe('SessionStore', () => {
   describe('estimateTokenUsage', () => {
     it('should estimate tokens for messages', async () => {
       const messages: AgentMessage[] = [
-        { role: 'user', content: [{ type: 'text', text: 'Hello world' }], timestamp: Date.now() },
-        { role: 'assistant', content: [{ type: 'text', text: 'Hi there!' }], timestamp: Date.now() },
+        { role: 'user', content: [{ type: 'text', text: 'Hello world' }], timestamp: Date.now() } as AgentMessage,
+        { role: 'assistant', content: [{ type: 'text', text: 'Hi there!' }], timestamp: Date.now(), api: {} as any, provider: {} as any, model: 'test', usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, total: 0 } }, stopReason: 'stop' as const } as AgentMessage,
       ];
 
       const estimate = await store.estimateTokenUsage('test', messages);

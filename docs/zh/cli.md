@@ -113,16 +113,16 @@ xopcbot onboard --gateway
 - 配置 LLM 提供商和模型
 - 配置消息渠道（Telegram/WhatsApp）
 - 配置 Gateway WebUI 并自动生成 Token
-- 完成后自动启动 Gateway（开发模式为前台，生产模式为后台）
+- 完成后显示启动网关的命令
 
 **完成后**：
 
-onboard 完成后会自动启动 Gateway 服务，并显示：
+onboard 完成后会显示：
 - Gateway 访问 URL
 - Token 信息
-- PID 信息（仅后台模式）
+- 启动网关的命令
 
-**注意**：开发模式下（`pnpm run dev`），Gateway 以前台模式启动并阻塞终端。生产模式下（`pnpm run build` 后），Gateway 以后台模式启动。
+**注意**：Gateway 默认在前台运行。按 `Ctrl+C` 停止，或使用 `xopcbot gateway stop` 从另一个终端停止。
 
 ---
 
@@ -174,11 +174,13 @@ xopcbot agent -m "Continue our discussion" -s my-session
 
 启动 REST API 网关。
 
-### 前台模式
+### 前台模式（默认）
 
 ```bash
 xopcbot gateway --port 18790
 ```
+
+网关默认在前台运行，按 `Ctrl+C` 停止。
 
 **参数**：
 
@@ -188,18 +190,17 @@ xopcbot gateway --port 18790
 | `-h, --host` | 绑定地址 (默认：0.0.0.0) |
 | `--token` | 认证令牌 |
 | `--no-hot-reload` | 禁用配置热重载 |
-| `-b, --background` | 后台模式运行 |
-| `--log-file` | 后台模式日志文件路径 |
+| `--force` | 强制终止端口上的现有进程 |
 
-### 后台模式
+### 强制启动
+
+如果端口已被占用，使用 `--force` 自动终止现有进程：
 
 ```bash
-# 启动后台网关
-xopcbot gateway --background
-
-# 或简写
-xopcbot gateway -b
+xopcbot gateway --force
 ```
+
+这将发送 SIGTERM，等待 700ms，然后如需要发送 SIGKILL。
 
 ### 子命令
 
@@ -217,11 +218,17 @@ xopcbot gateway -b
 # 查看状态
 xopcbot gateway status
 
-# 停止网关
+# 停止网关（SIGTERM，5秒超时）
 xopcbot gateway stop
 
-# 重启网关（可更改配置）
-xopcbot gateway restart --port 8080
+# 强制停止（立即 SIGKILL）
+xopcbot gateway stop --force
+
+# 重启网关（SIGUSR1 信号）
+xopcbot gateway restart
+
+# 强制重启（终止并重新启动）
+xopcbot gateway restart --force
 
 # 查看最近 50 行日志
 xopcbot gateway logs
@@ -232,6 +239,22 @@ xopcbot gateway logs --follow
 # 生成新令牌
 xopcbot gateway token --generate
 ```
+
+### 进程管理
+
+网关使用基于 [openclaw](https://github.com/openclaw/openclaw) 的新进程管理系统：
+
+- **锁文件**：`~/.xopcbot/locks/gateway.{hash}.lock`（替代 PID 文件）
+- **信号**：SIGTERM/SIGINT=停止，SIGUSR1=重启
+- **端口管理**：自动冲突检测和解决
+
+**环境变量**：
+
+| 变量 | 描述 |
+|------|------|
+| `XOPCBOT_NO_RESPAWN` | 禁用进程重生 |
+| `XOPCBOT_ALLOW_SIGUSR1_RESTART` | 允许 SIGUSR1 重启 |
+| `XOPCBOT_SERVICE_MARKER` | 标记受监督环境 |
 
 ---
 

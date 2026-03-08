@@ -4,7 +4,7 @@ REST API gateway for external programs to interact with xopcbot.
 
 ## Start Gateway
 
-### Foreground Mode
+### Foreground Mode (Recommended)
 
 ```bash
 xopcbot gateway --port 18790
@@ -12,20 +12,21 @@ xopcbot gateway --port 18790
 
 Default port: `18790`
 
-### Background Mode
+The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
+
+### Force Start (Kill Existing Process)
+
+If the port is already in use, use `--force` to automatically kill the existing process:
 
 ```bash
-# Start background service
-xopcbot gateway --background
-
-# Or shorthand
-xopcbot gateway -b
-
-# Specify log file
-xopcbot gateway --background --log-file ~/.xopcbot/gateway.log
+xopcbot gateway --force
 ```
 
-Background mode runs the gateway as a daemon, suitable for production use.
+This will:
+1. Send SIGTERM to processes listening on the port
+2. Wait 700ms for graceful shutdown
+3. Send SIGKILL if still running
+4. Start the new gateway instance
 
 ## Process Management Commands
 
@@ -39,25 +40,24 @@ Example output:
 ```
 ✅ Gateway is running
 
-   PID: 12345
-   Host: 0.0.0.0
    Port: 18790
-   Uptime: 5m 32s
-   Health: healthy
 
 🌐 Access:
    URL: http://localhost:18790
    Token: abc12345...xyz67890
-   Direct: http://localhost:18790?token=abc12345...
+
+📝 Management:
+   xopcbot gateway stop      # Stop gateway
+   xopcbot gateway restart   # Restart gateway
 ```
 
 ### Stop Gateway
 
 ```bash
-# Graceful stop (default 5 second timeout)
+# Graceful stop (SIGTERM with 5 second timeout)
 xopcbot gateway stop
 
-# Force stop
+# Force stop (SIGKILL immediately)
 xopcbot gateway stop --force
 
 # Custom timeout (milliseconds)
@@ -67,12 +67,14 @@ xopcbot gateway stop --timeout 3000
 ### Restart Gateway
 
 ```bash
-# Restart with existing config
+# Send SIGUSR1 signal to trigger graceful restart
 xopcbot gateway restart
 
-# Restart with different config
-xopcbot gateway restart --port 8080 --host 127.0.0.1
+# Force restart (kill and start new)
+xopcbot gateway restart --force
 ```
+
+**Note**: SIGUSR1 restart requires `XOPCBOT_ALLOW_SIGUSR1_RESTART=1` environment variable.
 
 ### View Logs
 
@@ -85,6 +87,52 @@ xopcbot gateway logs --lines 100
 
 # Follow logs in real-time (like tail -f)
 xopcbot gateway logs --follow
+```
+
+## Process Architecture
+
+The new gateway process management is based on [openclaw](https://github.com/openclaw/openclaw) design:
+
+### Gateway Lock
+
+Uses file-based locking instead of PID files:
+
+- **Location**: `~/.xopcbot/locks/gateway.{hash}.lock`
+- **Hash**: SHA256 of config path (supports multiple configs)
+- **Content**: `{ pid, createdAt, configPath, startTime }`
+
+### Run Loop
+
+```
+┌─────────────────────────────────────────┐
+│              Run Loop                   │
+├─────────────────────────────────────────┤
+│  1. Acquire Gateway Lock                │
+│  2. Start Gateway Server                │
+│  3. Wait for signal                     │
+│     - SIGTERM/SIGINT -> Stop            │
+│     - SIGUSR1 -> Restart                │
+│  4. Graceful shutdown (5s timeout)      │
+│  5. Release lock                        │
+│  6. Exit or respawn                     │
+└─────────────────────────────────────────┘
+```
+
+### Process Respawn
+
+On restart:
+1. Detect environment (supervised vs normal)
+2. If supervised: exit and let supervisor restart
+3. If normal: spawn detached child, then exit
+
+### Port Management
+
+```bash
+# Check if port is available
+lsof -i :18790
+
+# Force free port (SIGTERM -> SIGKILL)
+xopcbot gateway --force
 ```
 
 ## API Endpoints
@@ -236,8 +284,8 @@ All API errors follow this format:
 ### CLI Management
 
 ```bash
-# Start background gateway
-xopcbot gateway --background
+# Start gateway (foreground)
+xopcbot gateway
 
 # Check status
 xopcbot gateway status
@@ -368,39 +416,32 @@ For production, recommended:
 | `port` | `18790` | Port number |
 | `auth.token` | `null` | API auth token (optional) |
 
-## Background Mode Configuration
+## Lock File
 
-### PID File
+Gateway lock file location: `~/.xopcbot/locks/gateway.{hash}.lock`
 
-When running in background, PID file is saved at: `~/.xopcbot/gateway.pid`
-
-### Log File
-
-Default log location: `~/.xopcbot/logs/gateway.log`
-
-Can be customized via `--log-file` parameter:
-
-```bash
-xopcbot gateway --background --log-file /var/log/xopcbot/gateway.log
-```
+The hash is based on config file path, allowing multiple gateways with different configs.
 
 ### Port Conflict Detection
 
 On startup, it automatically detects port occupancy. If port is already in use:
 
 ```
-❌ Failed to start gateway
-   Port 18790 is already in use.
-   💡 Use a different port: xopcbot gateway --port 8080
-   💡 Or stop the existing process first
+❌ Port 18790 is already in use. Use --force to kill existing process.
+```
+
+Use `--force` to automatically kill the existing process:
+
+```bash
+xopcbot gateway --force
 ```
 
 ### Graceful Shutdown
 
-Background mode supports graceful shutdown:
+Gateway supports graceful shutdown:
 1. After receiving stop signal, wait 5 seconds for existing requests to complete
-2. If requests still pending after 5 seconds, force terminate process
-3. Automatically clean up PID file
+2. If requests still pending after 5 seconds, force terminate
+3. Automatically release lock file
 
 Timeout can be customized via `--timeout` parameter:
 
@@ -408,6 +449,32 @@ Timeout can be customized via `--timeout` parameter:
 xopcbot gateway stop --timeout 10000  # 10 second timeout
 ```
 
+## Environment Variables
+
+| Variable | Description |
+|----------|-------------|
+| `XOPCBOT_NO_RESPAWN` | Disable process respawn, use in-process restart |
+| `XOPCBOT_ALLOW_SIGUSR1_RESTART` | Allow SIGUSR1 to trigger restart |
+| `XOPCBOT_SERVICE_MARKER` | Mark running under supervisor (systemd/launchd) |
+
 ## CORS Configuration
 
 To access from browser, add CORS headers (via proxy or middleware).
+
+## Migration from Old Version
+
+If you were using the old background mode:
+
+1. Stop old gateway:
+   ```bash
+   ps aux | grep xopcbot
+   kill -9 <PID>
+   rm ~/.xopcbot/gateway.pid
+   ```
+
+2. Start new gateway:
+   ```bash
+   xopcbot gateway
+   ```
+
+3. Use `Ctrl+C` to stop, or `xopcbot gateway stop` from another terminal.

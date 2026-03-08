@@ -40,7 +40,7 @@ import { createTypingController } from './typing.js';
 import { loadBootstrapFiles, extractTextContent, type BootstrapFile } from './helpers.js';
 import { SessionTracker } from './session-tracker.js';
 import { ModelManager } from './models/index.js';
-import { _processMessage, initializeCommands, type _CommandProcessorDeps } from '../commands/index.js';
+import { initializeCommands } from '../commands/index.js';
 import { getModelsByProvider, getProviderDisplayName, isProviderConfigured, getAllProviders } from '../providers/index.js';
 
 const log = createLogger('AgentService');

@@ -113,16 +113,16 @@ xopcbot onboard --gateway
 - Configure LLM provider and model
 - Configure messaging channels (Telegram/WhatsApp)
 - Configure gateway WebUI with auto-generated token
-- Auto-start Gateway after completion (foreground mode in development, background mode in production)
+- Display gateway start command after completion
 
 **After completion**:
 
-After onboard completes, Gateway service will auto-start and display:
+After onboard completes, it will display:
 - Gateway access URL
 - Token information
-- PID information (background mode only)
+- Command to start gateway
 
-**Note**: In development mode (`pnpm run dev`), Gateway starts in foreground mode and blocks the terminal. In production mode (after `pnpm run build`), Gateway starts in background mode.
+**Note**: Gateway runs in foreground mode by default. Press `Ctrl+C` to stop, or use `xopcbot gateway stop` from another terminal.
 
 ---
 
@@ -174,11 +174,13 @@ xopcbot agent -m "Continue our discussion" -s my-session
 
 Start REST API gateway.
 
-### Foreground mode
+### Foreground mode (Default)
 
 ```bash
 xopcbot gateway --port 18790
 ```
+
+The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 
 **Parameters**:
 
@@ -188,18 +190,17 @@ xopcbot gateway --port 18790
 | `-h, --host` | Bind address (default: 0.0.0.0) |
 | `--token` | Auth token |
 | `--no-hot-reload` | Disable config hot reload |
-| `-b, --background` | Run in background mode |
-| `--log-file` | Log file path for background mode |
+| `--force` | Force kill existing process on port |
 
-### Background mode
+### Force Start
+
+If the port is already in use, use `--force` to automatically kill the existing process:
 
 ```bash
-# Start background gateway
-xopcbot gateway --background
-
-# Or shorthand
-xopcbot gateway -b
+xopcbot gateway --force
 ```
+
+This will send SIGTERM, wait 700ms, then SIGKILL if needed.
 
 ### Subcommands
 
@@ -217,11 +218,17 @@ xopcbot gateway -b
 # Check status
 xopcbot gateway status
 
-# Stop gateway
+# Stop gateway (SIGTERM with 5s timeout)
 xopcbot gateway stop
 
-# Restart gateway (can change config)
-xopcbot gateway restart --port 8080
+# Force stop (SIGKILL immediately)
+xopcbot gateway stop --force
+
+# Restart gateway (SIGUSR1 signal)
+xopcbot gateway restart
+
+# Force restart (kill and start new)
+xopcbot gateway restart --force
 
 # View last 50 lines
 xopcbot gateway logs
@@ -232,6 +239,22 @@ xopcbot gateway logs --follow
 # Generate new token
 xopcbot gateway token --generate
 ```
+
+### Process Management
+
+The gateway uses a new process management system based on [openclaw](https://github.com/openclaw/openclaw):
+
+- **Lock file**: `~/.xopcbot/locks/gateway.{hash}.lock` (instead of PID file)
+- **Signals**: SIGTERM/SIGINT=stop, SIGUSR1=restart
+- **Port management**: Automatic conflict detection and resolution
+
+**Environment variables**:
+
+| Variable | Description |
+|----------|-------------|
+| `XOPCBOT_NO_RESPAWN` | Disable process respawn |
+| `XOPCBOT_ALLOW_SIGUSR1_RESTART` | Allow SIGUSR1 restart |
+| `XOPCBOT_SERVICE_MARKER` | Mark supervised environment |
 
 ---
 

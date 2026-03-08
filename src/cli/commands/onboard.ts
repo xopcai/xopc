@@ -6,10 +6,22 @@ import { saveConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import { getFallbackTemplate, TEMPLATE_FILES } from '../templates.js';
 import type { CLIContext } from '../registry.js';
-import { AuthStorage, anthropicOAuthProvider, minimaxOAuthProvider, minimaxCnOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import type { Config } from '../../config/schema.js';
+import {
+  AuthStorage,
+  anthropicOAuthProvider,
+  minimaxOAuthProvider,
+  minimaxCnOAuthProvider,
+  kimiOAuthProvider,
+  githubCopilotOAuthProvider,
+  googleGeminiCliOAuthProvider,
+  googleAntigravityOAuthProvider,
+  openaiCodexOAuthProvider,
+  type OAuthLoginCallbacks,
+} from '../../auth/index.js';
 import { upsertAuthProfile, listProfilesForProvider } from '../../auth/profiles/index.js';
-import { 
-  getModelsByProvider, 
+import {
+  getModelsByProvider,
   getSortedProviders,
   getProviderDisplayName,
   providerSupportsOAuth,
@@ -17,20 +29,20 @@ import {
 } from '../../providers/index.js';
 import { colors } from '../utils/colors.js';
 import { homedir } from 'os';
-import { GatewayProcessManager } from '../../gateway/process-manager.js';
-import type { GatewayProcessConfig } from '../../gateway/process-manager.types.js';
+import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
+import { listPortListeners } from '../../gateway/ports.js';
 
 /**
  * Load raw config without schema parsing to avoid default values being added.
  * This preserves the user's original config structure during onboard.
  */
-function loadRawConfig(configPath: string): any {
+function loadRawConfig(configPath: string): Config | null {
   if (!existsSync(configPath)) {
     return null;
   }
   try {
     const content = readFileSync(configPath, 'utf-8');
-    return JSON.parse(content);
+    return JSON.parse(content) as Config;
   } catch {
     return null;
   }
@@ -75,7 +87,7 @@ function setupWorkspace(workspacePath: string): void {
   }
 }
 
-async function setupNonInteractive(_configPath: string, existingConfig: any): Promise<any> {
+async function setupNonInteractive(_configPath: string, existingConfig: Config | null): Promise<Config | null> {
   console.log('\n🤖 AI Model Configuration (Non-Interactive Mode)\n');
   console.log('Current config:', JSON.stringify(existingConfig?.agents?.defaults?.model, null, 2));
   console.log('\n💡 To configure in interactive mode, run: xopcbot onboard');
@@ -86,12 +98,15 @@ async function setupNonInteractive(_configPath: string, existingConfig: any): Pr
 function createOnboardCommand(ctx: CLIContext): Command {
   const cmd = new Command('onboard')
     .description('Interactive setup wizard for xopcbot')
-    .addHelpText('after', formatExamples([
-      'xopcbot onboard              # Full interactive setup',
-      'xopcbot onboard --model      # Configure LLM model only',
-      'xopcbot onboard --channels   # Configure channels only',
-      'xopcbot onboard --gateway   # Configure gateway only',
-    ]))
+    .addHelpText(
+      'after',
+      formatExamples([
+        'xopcbot onboard              # Full interactive setup',
+        'xopcbot onboard --model      # Configure LLM model only',
+        'xopcbot onboard --channels   # Configure channels only',
+        'xopcbot onboard --gateway    # Configure gateway only',
+      ])
+    )
     .option('--model', 'Configure LLM provider and model')
     .option('--channels', 'Configure messaging channels')
     .option('--gateway', 'Configure gateway WebUI')
@@ -99,9 +114,10 @@ function createOnboardCommand(ctx: CLIContext): Command {
     .action(async (options) => {
       try {
         await runOnboard(options, ctx);
-      } catch (error: any) {
+      } catch (error: unknown) {
         // Handle user cancellation gracefully (Ctrl+C)
-        if (error?.name === 'ExitPromptError' || error?.code === 'EXIT_PROMPT') {
+        const err = error as { name?: string; code?: string };
+        if (err?.name === 'ExitPromptError' || err?.code === 'EXIT_PROMPT') {
           console.log('\n\n👋 Setup cancelled.');
           process.exit(0);
         }
@@ -112,15 +128,18 @@ function createOnboardCommand(ctx: CLIContext): Command {
   return cmd;
 }
 
-async function runOnboard(options: { model?: boolean; channels?: boolean; gateway?: boolean; all?: boolean }, ctx: CLIContext): Promise<void> {
-  console.log('🧙 xopcbot Setup Wizard\n');
+async function runOnboard(
+  options: { model?: boolean; channels?: boolean; gateway?: boolean; all?: boolean },
+  ctx: CLIContext
+): Promise<void> {
+  console.log(colors.cyan('\n🚀 Welcome to xopcbot setup!\n'));
   console.log('═'.repeat(50));
 
   const workspacePath = ctx.workspacePath;
   const configPath = ctx.configPath;
 
   // Use raw config loading to avoid schema defaults being added
-  let config = loadRawConfig(configPath) || {};
+  let config = loadRawConfig(configPath) || ({} as Config);
 
   // Determine what to configure based on options
   const doModel = options.model || options.all || (!options.channels && !options.gateway);
@@ -165,7 +184,7 @@ async function runOnboard(options: { model?: boolean; channels?: boolean; gatewa
   }
 
   // Save config once at the end
-  await saveConfig(config, configPath);
+  await saveConfig(config as Config, configPath);
 
   console.log('\n' + '═'.repeat(50));
   console.log('\n🎉 Setup Complete!\n');
@@ -198,11 +217,12 @@ async function runOnboard(options: { model?: boolean; channels?: boolean; gatewa
     const port = config?.gateway?.port || 18790;
     const displayHost = host === '0.0.0.0' ? 'localhost' : host;
     const token = config.gateway.auth.token;
+
     const webuiUrl = `http://${displayHost}:${port}?token=${token}`;
 
     console.log('\n🌐 WebUI Access:');
     console.log(`  URL: http://${displayHost}:${port}`);
-    console.log(`  Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
+    console.log(`  Token: ${token?.slice(0, 8)}...${token?.slice(-8)}`);
     console.log('');
     console.log('  Direct Access URL (with token):');
     console.log(`    ${webuiUrl}`);
@@ -211,17 +231,17 @@ async function runOnboard(options: { model?: boolean; channels?: boolean; gatewa
     // Auto-start gateway after onboarding
     await startGatewayNow(config, ctx);
   }
+
+  // Explicitly exit to prevent hanging
+  process.exit(0);
 }
 
 /**
  * Print gateway access info and management commands
  */
-function printGatewayInfo(host: string, port: number, pid?: number): void {
+function printGatewayInfo(host: string, port: number, _pid?: number): void {
   const displayHost = host === '0.0.0.0' ? 'localhost' : host;
 
-  if (pid) {
-    console.log(`   PID: ${pid}`);
-  }
   console.log('');
   console.log('🌐 WebUI is available at:');
   console.log(`   http://${displayHost}:${port}`);
@@ -234,133 +254,105 @@ function printGatewayInfo(host: string, port: number, pid?: number): void {
 }
 
 /**
- * Handle start/restart errors
+ * Handle gateway startup after onboarding.
+ * In interactive mode, asks user if they want to start gateway in background.
+ * In non-interactive mode, provides guidance on how to start manually.
  */
-async function handleGatewayError(
-  error: unknown,
-  port: number,
-  isRestart: boolean
-): Promise<void> {
-  const action = isRestart ? 'restart' : 'start';
-  console.error(`❌ Failed to ${action} gateway`);
-  const errorMsg = error instanceof Error ? error.message : String(error);
-  console.error(`   ${errorMsg}`);
-
-  if (isRestart) {
-    const { getProcessUsingPort } = await import('../../gateway/port-checker.js');
-    const pid = await getProcessUsingPort(port);
-    if (pid) {
-      console.error(`\n💡 Port ${port} is used by PID ${pid}`);
-      console.error(`💡 To stop: kill ${pid} or kill -9 ${pid}`);
-    }
-  }
-}
-
-/**
- * Handle start result errors
- */
-function handleStartResultError(result: { error?: string }): void {
-  // Check if it's a "compiled code not found" error
-  const isDevMode = result.error?.includes('Compiled code not found');
-
-  console.error('❌ Failed to start gateway in background mode');
-
-  if (isDevMode) {
-    console.log('');
-    console.log('⚠️  You are in development mode (using tsx).');
-    console.log('');
-    console.log('💡 Option 1: Build and run in background (recommended)');
-    console.log('    pnpm run build');
-    console.log('    xopcbot gateway --background');
-    console.log('');
-    console.log('💡 Option 2: Run in foreground (blocks terminal)');
-    console.log('    xopcbot gateway');
-    console.log('    # Press Ctrl+C to stop');
-    console.log('');
-  } else if (result.error) {
-    console.error(`   ${result.error}`);
-  }
-}
-
-/**
- * Check if running in development mode (using tsx)
- */
-function isDevMode(): boolean {
-  return process.argv.some(arg => arg.includes('tsx')) ||
-         process.execArgv.some(arg => arg.includes('tsx'));
-}
-
-/**
- * Start gateway process immediately after onboarding
- * If already running, restart to apply new config
- * In development mode, starts in foreground mode (no background).
- */
-async function startGatewayNow(config: any, ctx: CLIContext): Promise<void> {
-  const devMode = isDevMode();
-  const manager = new GatewayProcessManager();
+async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
   const host = config?.gateway?.host || '0.0.0.0';
   const port = config?.gateway?.port || 18790;
-  const token = config.gateway.auth.token;
+  const displayHost = host === '0.0.0.0' ? 'localhost' : host;
 
-  const processConfig: GatewayProcessConfig = {
-    host,
-    port,
-    token,
-    configPath: ctx.configPath,
-    background: !devMode,
-    enableHotReload: devMode,
-  };
-
-  // Case 1: Gateway is running with PID file - restart it
-  if (manager.isRunning()) {
-    console.log('\n🔄 Restarting Gateway WebUI...');
-    try {
-      await manager.restart(processConfig);
-      console.log('✅ Gateway restarted successfully!');
-      printGatewayInfo(host, port);
-    } catch (error) {
-      await handleGatewayError(error, port, true);
+  // Check if gateway is already running by trying to acquire lock
+  let isRunning = false;
+  try {
+    const lock = await acquireGatewayLock(ctx.configPath, { timeoutMs: 100, port });
+    await lock.release();
+  } catch (err) {
+    if (err instanceof GatewayLockError) {
+      isRunning = true;
     }
-    return;
   }
 
-  // Check port availability
-  const { checkPortAvailable } = await import('../../gateway/port-checker.js');
-  const portAvailable = await checkPortAvailable(port);
-
-  // Case 2: Port is in use but no PID file - try restart
-  if (!portAvailable) {
-    console.log('\n🔄 Gateway is already running (port in use), restarting...');
-    try {
-      await manager.restart(processConfig);
-      console.log('✅ Gateway restarted successfully!');
-      printGatewayInfo(host, port);
-    } catch (error) {
-      await handleGatewayError(error, port, true);
-    }
-    return;
-  }
-
-  // Case 3: Port is available - start new gateway
-  console.log('\n🚀 Starting Gateway WebUI...');
-  const result = await manager.start(processConfig);
-
-  if (result.success) {
-    console.log('✅ Gateway started successfully!');
-    printGatewayInfo(host, port, result.pid);
-  } else if (result.portInUse) {
-    // Port conflict detected during start, try restart instead
-    console.log('\n🔄 Port is in use, attempting restart...');
-    try {
-      await manager.restart(processConfig);
-      console.log('✅ Gateway restarted successfully!');
-      printGatewayInfo(host, port);
-    } catch (error) {
-      await handleGatewayError(error, port, true);
-    }
+  if (isRunning) {
+    // Gateway is running - provide restart guidance
+    console.log('\n🌐 Gateway is already running!');
+    console.log(`   URL: http://${displayHost}:${port}`);
+    console.log('');
+    console.log('📝 To apply the new configuration, restart gateway:');
+    console.log('   xopcbot gateway restart');
   } else {
-    handleStartResultError(result);
+    // Gateway is not running
+    if (isInteractive()) {
+      // Interactive mode: ask user if they want to start gateway
+      const shouldStart = await confirm({
+        message: 'Start Gateway WebUI now (background mode)?',
+        default: true,
+      });
+
+      if (shouldStart) {
+        console.log('\n🚀 Starting Gateway WebUI in background...');
+        console.log('');
+
+        // Use spawn to start gateway in background
+        const { spawn } = await import('child_process');
+        const args = [
+          ...process.execArgv,
+          ...process.argv.slice(1).filter(arg => !arg.includes('onboard') && arg !== '--quick'),
+          'gateway',
+          '--background',
+          '--host', host,
+          '--port', String(port),
+        ];
+
+        const child = spawn(process.execPath, args, {
+          detached: true,
+          stdio: 'ignore',
+          env: process.env,
+        });
+
+        child.unref();
+
+        // Wait a moment to check if process started successfully
+        await new Promise(resolve => setTimeout(resolve, 500));
+
+        if (child.pid && !child.killed) {
+          console.log('✅ Gateway started in background');
+          console.log(`   PID: ${child.pid}`);
+          console.log(`   URL: http://${displayHost}:${port}`);
+          const token = config?.gateway?.auth?.token;
+          if (token) {
+            console.log(`   Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
+          }
+        } else {
+          console.log('⚠️  Failed to start gateway automatically.');
+          console.log('   You can start it manually with:');
+          console.log(`   xopcbot gateway --background`);
+        }
+      } else {
+        // User chose not to start
+        console.log('\n⏭️  Skipping gateway startup.');
+        console.log('   You can start it later with:');
+        console.log(`   xopcbot gateway --background`);
+      }
+    } else {
+      // Non-interactive mode: provide guidance
+      console.log('\n🚀 Gateway is configured but not running.');
+      console.log('');
+      console.log('📝 To start the gateway in background:');
+      console.log(`   xopcbot gateway --background`);
+      console.log('');
+      console.log('📝 To start in foreground (development mode):');
+      console.log(`   pnpm run dev -- gateway --host ${host} --port ${port}`);
+    }
   }
+
+  console.log('');
+  console.log('📚 Other useful commands:');
+  console.log('   xopcbot gateway status    # Check gateway status');
+  console.log('   xopcbot gateway stop      # Stop gateway');
+  console.log('   xopcbot gateway restart   # Restart gateway');
+  console.log('   xopcbot gateway logs      # View logs');
 }
 
 async function doOAuthLogin(provider: string): Promise<boolean> {
@@ -657,14 +649,16 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
   return false;
 }
 
-async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
+async function setupModel(
+  existingConfig: Config | null,
+  ctx: CLIContext
+): Promise<Config> {
   console.log('\n🤖 Step: AI Model\n');
 
-  const config = existingConfig || {};
+  const config = existingConfig || ({} as Config);
   const currentModelConfig = config?.agents?.defaults?.model;
-  const currentModel = typeof currentModelConfig === 'string'
-    ? currentModelConfig
-    : currentModelConfig?.primary;
+  const currentModel =
+    typeof currentModelConfig === 'string' ? currentModelConfig : currentModelConfig?.primary;
 
   if (currentModel) {
     console.log('Current model:', currentModel);
@@ -681,7 +675,7 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
   // Get sorted providers with metadata
   const sortedProviders = getSortedProviders();
 
-  const choices = sortedProviders.map(p => ({
+  const choices = sortedProviders.map((p) => ({
     value: p,
     name: getProviderDisplayName(p),
   }));
@@ -714,7 +708,13 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
         });
 
         config.agents = config.agents || {};
-        config.agents.defaults = config.agents.defaults || {};
+        config.agents.defaults = config.agents.defaults || {
+          workspace: ctx.workspacePath,
+          model: { primary: model, fallbacks: [] },
+          maxTokens: 8192,
+          temperature: 0.7,
+          maxToolIterations: 20,
+        };
         config.agents.defaults.model = { primary: model, fallbacks: [] };
         config.agents.defaults.workspace = ctx.workspacePath;
 
@@ -728,7 +728,7 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
   let useOAuth = false;
 
   // Check environment variable
-  const envKey = provider.toUpperCase() + '_API_KEY';
+  const envKey = provider.toUpperCase().replace(/-/g, '_') + '_API_KEY';
   apiKey = process.env[envKey];
   if (apiKey) {
     console.log(`\n${colors.green('✓')} Found ${envKey} in environment`);
@@ -739,7 +739,7 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
     const supportsOAuth = providerSupportsOAuth(provider);
     const supportsApiKey = providerSupportsApiKey(provider);
     const isOAuthOnly = supportsOAuth && !supportsApiKey;
-    
+
     if (isOAuthOnly) {
       // OAuth only - no choice
       const success = await doOAuthLogin(provider);
@@ -802,7 +802,13 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
     config.providers = config.providers || {};
     config.providers[provider] = apiKey;
     config.agents = config.agents || {};
-    config.agents.defaults = config.agents.defaults || {};
+    config.agents.defaults = config.agents.defaults || {
+      workspace: ctx.workspacePath,
+      model: { primary: `${provider}/${model}`, fallbacks: [] },
+      maxTokens: 8192,
+      temperature: 0.7,
+      maxToolIterations: 20,
+    };
     config.agents.defaults.model = { primary: `${provider}/${model}`, fallbacks: [] };
     config.agents.defaults.workspace = ctx.workspacePath;
 
@@ -818,12 +824,18 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
 
   // Store in new simplified format
   config.providers = config.providers || {};
-  if (!useOAuth) {
+  if (!useOAuth && apiKey) {
     config.providers[provider] = apiKey;
   }
 
   config.agents = config.agents || {};
-  config.agents.defaults = config.agents.defaults || {};
+  config.agents.defaults = config.agents.defaults || {
+    workspace: ctx.workspacePath,
+    model: { primary: model, fallbacks: [] },
+    maxTokens: 8192,
+    temperature: 0.7,
+    maxToolIterations: 20,
+  };
   config.agents.defaults.model = { primary: model, fallbacks: [] };
   config.agents.defaults.workspace = ctx.workspacePath;
 
@@ -833,13 +845,13 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
 
 async function getModelsForProvider(provider: string): Promise<{ value: string; name: string }[]> {
   const models = getModelsByProvider(provider);
-  return models.map(m => ({
+  return models.map((m) => ({
     value: `${m.provider}/${m.id}`,
     name: m.name || m.id,
   }));
 }
 
-async function setupChannels(config: any): Promise<any> {
+async function setupChannels(config: Config): Promise<Config> {
   console.log('\n💬 Step: Channels (Optional)\n');
 
   const enableTelegram = await confirm({
@@ -855,14 +867,15 @@ async function setupChannels(config: any): Promise<any> {
 
     config.channels = config.channels || {};
     // Merge with existing config to preserve apiRoot and other settings
+    const existingTelegram = config.channels.telegram || {};
     config.channels.telegram = {
-      ...config.channels.telegram,
+      ...existingTelegram,
       enabled: true,
       token,
-      allowFrom: config.channels.telegram?.allowFrom ?? [],
-      debug: config.channels.telegram?.debug ?? false,
-      dmPolicy: config.channels.telegram?.dmPolicy ?? 'pairing',
-      groupPolicy: config.channels.telegram?.groupPolicy ?? 'open',
+      allowFrom: ((existingTelegram as { allowFrom?: (string | number)[] }).allowFrom ?? []) as (string | number)[],
+      debug: (existingTelegram as { debug?: boolean }).debug ?? false,
+      dmPolicy: ((existingTelegram as { dmPolicy?: 'pairing' | 'allowlist' | 'open' | 'disabled' }).dmPolicy ?? 'pairing') as 'pairing' | 'allowlist' | 'open' | 'disabled',
+      groupPolicy: ((existingTelegram as { groupPolicy?: 'allowlist' | 'open' | 'disabled' }).groupPolicy ?? 'open') as 'allowlist' | 'open' | 'disabled',
     };
 
     console.log('✅ Telegram enabled');
@@ -885,11 +898,12 @@ async function setupChannels(config: any): Promise<any> {
     });
 
     config.channels = config.channels || {};
+    const existingWhatsApp = config.channels.whatsapp || {};
     config.channels.whatsapp = {
-      ...config.channels.whatsapp,
+      ...existingWhatsApp,
       enabled: true,
       bridgeUrl,
-      allowFrom: config.channels.whatsapp?.allowFrom ?? [],
+      allowFrom: ((existingWhatsApp as { allowFrom?: string[] }).allowFrom ?? []) as string[],
     };
     console.log('✅ WhatsApp enabled');
   }
@@ -897,7 +911,7 @@ async function setupChannels(config: any): Promise<any> {
   return config;
 }
 
-async function setupGateway(config: any): Promise<any> {
+async function setupGateway(config: Config): Promise<Config> {
   console.log('\n🌐 Step: Gateway WebUI (Optional)\n');
 
   const enableGateway = await confirm({
@@ -956,10 +970,13 @@ register({
   name: 'onboard',
   description: 'Interactive setup wizard for xopcbot',
   factory: createOnboardCommand,
-  metadata: { category: 'setup', examples: [
-    'xopcbot onboard',
-    'xopcbot onboard --model',
-    'xopcbot onboard --channels',
-    'xopcbot onboard --gateway',
-  ]},
+  metadata: {
+    category: 'setup',
+    examples: [
+      'xopcbot onboard',
+      'xopcbot onboard --model',
+      'xopcbot onboard --channels',
+      'xopcbot onboard --gateway',
+    ],
+  },
 });

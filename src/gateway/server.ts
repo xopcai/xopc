@@ -54,6 +54,12 @@ export class GatewayServer {
     });
   }
 
+  async close(opts?: { reason?: string; restartExpectedMs?: number | null }): Promise<void> {
+    const reason = opts?.reason ?? 'gateway stopping';
+    log.info({ reason }, 'Closing gateway server...');
+    await this.stop();
+  }
+
   async stop(): Promise<void> {
     log.info('Stopping gateway server...');
 
