@@ -64,6 +64,35 @@ function clearModelsCache(): void {
   _cachedModelsResponse = null;
 }
 
+// Fetch ALL pi-ai supported models (regardless of configuration)
+async function fetchAllProvidersFromApi(): Promise<Array<{
+  id: string;
+  name: string;
+  provider: string;
+  contextWindow?: number;
+  maxTokens?: number;
+  reasoning?: boolean;
+  vision?: boolean;
+  cost?: { input: number; output: number };
+}>> {
+  if (_cachedAllProvidersResponse) {
+    return _cachedAllProvidersResponse;
+  }
+  
+  const url = window.location.origin;
+  const response = await fetch(`${url}/api/providers`);
+  
+  if (!response.ok) {
+    console.warn('Failed to load providers from API');
+    return [];
+  }
+  
+  const data = await response.json();
+  const models = data?.payload?.models || [];
+  _cachedAllProvidersResponse = models;
+  return models;
+}
+
 import type { ModelConfig } from '../pages/SettingsPage.js';
 import type { ProviderTemplate } from './provider-templates.js';
 import { PROVIDER_TEMPLATES, getProviderTemplate } from './provider-templates.js';
@@ -319,7 +348,8 @@ function formatProviderName(providerId: string): string {
  */
 export async function getAllProviderTemplates(): Promise<ProviderTemplate[]> {
   try {
-    const models = await fetchModelsFromApi();
+    // Use /api/providers to get ALL pi-ai supported models
+    const models = await fetchAllProvidersFromApi();
     
     if (models.length > 0) {
       // Get all unique providers from the response
