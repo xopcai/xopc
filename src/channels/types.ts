@@ -184,6 +184,10 @@ export interface ChannelSendResult {
 
 export interface ChannelStreamHandle {
   update: (text: string) => void;
+  /** Update stream with progress stage indicator */
+  updateProgress?: (text: string, stage: string, detail?: string) => void;
+  /** Set progress stage without updating text */
+  setProgress?: (stage: string, detail?: string) => void;
   end: () => Promise<void>;
   abort: () => Promise<void>;
   messageId: () => number | undefined;

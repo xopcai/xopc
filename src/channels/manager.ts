@@ -115,6 +115,24 @@ export class ChannelManager {
     }
   }
 
+  /**
+   * Start a streaming message for real-time updates
+   * Returns a handle for updating the stream
+   */
+  startStream(channel: string, chatId: string, accountId?: string): any {
+    const extension = EXTENSIONS.find(e => e.id === channel);
+    
+    if (!extension) {
+      log.error({ channel }, 'Unknown channel for streaming');
+      return null;
+    }
+
+    return extension.startStream({
+      chatId: String(chatId),
+      accountId,
+    });
+  }
+
   getChannel(name: string): any {
     const extension = EXTENSIONS.find(e => e.id === name);
     return extension || null;

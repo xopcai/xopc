@@ -39,3 +39,18 @@ export type { SystemPromptOptions, MemoryCitationsMode } from './system-prompt.j
 
 // Model module
 export * from './models/index.js';
+
+// Progress feedback module
+export { 
+  ProgressFeedbackManager, 
+  progressFeedbackManager,
+  formatProgressMessage,
+  formatHeartbeatMessage,
+} from './progress.js';
+export type { 
+  ProgressFeedbackConfig, 
+  ProgressStage, 
+  ProgressUpdate, 
+  ProgressCallbacks,
+  ProgressMessage,
+} from './progress.js';

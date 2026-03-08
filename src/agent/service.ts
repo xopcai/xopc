@@ -41,6 +41,13 @@ import { SessionTracker } from './session-tracker.js';
 import { ModelManager } from './models/index.js';
 import { initializeCommands } from '../commands/index.js';
 import { getModelsByProvider, getProviderDisplayName, isProviderConfigured, getAllProviders } from '../providers/index.js';
+import { 
+  ProgressFeedbackManager, 
+  formatProgressMessage,
+  formatHeartbeatMessage,
+  type ProgressStage,
+  type ProgressMessage,
+} from './progress.js';
 
 const log = createLogger('AgentService');
 
@@ -86,6 +93,20 @@ export class AgentService {
   // Delegated modules
   private sessionTracker: SessionTracker;
   private modelManager: ModelManager;
+  private progressManager: ProgressFeedbackManager;
+
+  // Stream handle for current context (for progress updates)
+  private currentStreamHandle: {
+    update: (text: string) => void;
+    updateProgress?: (text: string, stage: ProgressStage, detail?: string) => void;
+    setProgress?: (stage: ProgressStage, detail?: string) => void;
+    end: () => Promise<void>;
+    abort: () => Promise<void>;
+    messageId: () => number | undefined;
+  } | null = null;
+
+  // Channel manager reference for stream handling
+  private channelManagerRef: any = null;
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
     this.agentId = `agent-${Date.now()}`;
@@ -197,6 +218,23 @@ export class AgentService {
 
     this.unsubscribe = this.agent.subscribe((event) => this.handleEvent(event));
 
+    // Initialize progress feedback manager
+    this.progressManager = new ProgressFeedbackManager({
+      level: 'normal',
+      showThinking: true,
+      streamToolProgress: true,
+      heartbeatEnabled: true,
+      heartbeatIntervalMs: 20000,
+      longTaskThresholdMs: 30000,
+    });
+
+    // Setup progress callbacks
+    this.progressManager.setCallbacks({
+      onHeartbeat: (elapsedMs, stage) => {
+        this.sendHeartbeatFeedback(elapsedMs, stage);
+      },
+    });
+
     // Setup shutdown handlers
     process.on('SIGINT', () => this.dispose());
     process.on('SIGTERM', () => this.dispose());
@@ -208,6 +246,7 @@ export class AgentService {
 
   setChannelManager(channelManager: any): void {
     this.modelManager.setChannelManager(channelManager);
+    this.channelManagerRef = channelManager;
   }
 
   async switchModelForSession(sessionKey: string, modelId: string): Promise<boolean> {
@@ -471,6 +510,19 @@ export class AgentService {
     try {
       typing.start();
 
+      // Try to start a stream for progress updates (if channel supports it)
+      const accountId = msg.metadata?.accountId as string | undefined;
+      try {
+        if (this.channelManagerRef && msg.channel !== 'system') {
+          const stream = this.channelManagerRef.startStream(msg.channel, msg.chat_id, accountId);
+          if (stream) {
+            this.setStreamHandle(stream);
+          }
+        }
+      } catch (err) {
+        log.debug({ err }, 'Failed to start stream for progress, continuing without it');
+      }
+
       const content = msg.content.trim();
 
       // Check if it's a command using the new command system
@@ -719,6 +771,15 @@ export class AgentService {
       await this.triggerHook('agent_end', { messages: this.agent.state.messages, success: false, durationMs: 0, error: errorMessage });
     } finally {
       typing.stop();
+      // End stream and cleanup progress feedback
+      if (this.currentStreamHandle) {
+        try {
+          await this.currentStreamHandle.end();
+        } catch (err) {
+          log.debug({ err }, 'Error ending stream');
+        }
+        this.clearStreamHandle();
+      }
     }
   }
 
@@ -864,13 +925,164 @@ export class AgentService {
     return defaults?.maxTokens ? defaults.maxTokens * 4 : 128000;
   }
 
+  // ============================================================================
+  // Progress Feedback Methods
+  // ============================================================================
+
+  /**
+   * Set the stream handle for the current context
+   * This allows sending progress updates to the user
+   */
+  setStreamHandle(handle: typeof this.currentStreamHandle): void {
+    this.currentStreamHandle = handle;
+    if (handle) {
+      // Set up callbacks to send progress to the user via stream
+      // Note: These callbacks should NOT call progressManager methods to avoid infinite loops
+      this.progressManager.setCallbacks({
+        onProgress: (msg) => this.sendProgressMessage(msg),
+        onStreamStart: (toolName, toolArgs) => {
+          // Directly handle stream start without calling progressManager again
+          const stage = this.getToolStage(toolName);
+          if (this.currentStreamHandle?.setProgress) {
+            let detail: string | undefined;
+            if (toolArgs.path) {
+              detail = String(toolArgs.path);
+            } else if (toolArgs.command) {
+              const cmd = String(toolArgs.command);
+              detail = cmd.length > 30 ? cmd.slice(0, 30) + '...' : cmd;
+            }
+            this.currentStreamHandle.setProgress(stage, detail);
+          }
+        },
+        onStreamUpdate: (_toolName, _partialResult) => {
+          // Handle stream update - could be used for live tool output
+          log.debug({ partialLength: String(_partialResult).length }, 'Tool stream update');
+        },
+        onStreamEnd: (_toolName, _result, _isError) => {
+          // Clear progress indicator when tool ends
+          if (this.currentStreamHandle?.setProgress) {
+            this.currentStreamHandle.setProgress('idle');
+          }
+        },
+        onThinking: (thinking) => this.sendThinkingFeedback(thinking),
+        onHeartbeat: (elapsedMs, stage) => {
+          this.sendHeartbeatFeedback(elapsedMs, stage);
+        },
+      });
+    }
+  }
+
+  /**
+   * Clear the stream handle when processing is done
+   */
+  clearStreamHandle(): void {
+    this.currentStreamHandle = null;
+    this.progressManager.endTask();
+  }
+
+  /**
+   * Send progress message via stream or direct message
+   */
+  private async sendProgressMessage(msg: ProgressMessage): Promise<void> {
+    if (!this.currentContext) return;
+
+    const formatted = formatProgressMessage(msg);
+    
+    // Try to use stream if available, otherwise send direct message
+    if (this.currentStreamHandle?.updateProgress && msg.stage !== 'idle') {
+      this.currentStreamHandle.updateProgress('', msg.stage as ProgressStage, msg.message);
+    } else if (msg.type === 'error') {
+      await this.bus.publishOutbound({
+        channel: this.currentContext.channel,
+        chat_id: this.currentContext.chatId,
+        content: formatted,
+        type: 'message',
+      });
+    }
+  }
+
+  /**
+   * Send tool execution start feedback
+   * Note: Called from handleEvent, which triggers the progress manager
+   * This method just updates the stream, not the progress manager (to avoid loops)
+   */
+  private async sendToolStartFeedback(toolName: string, toolArgs: Record<string, unknown>): Promise<void> {
+    // Use stream progress if available - don't call progressManager again to avoid infinite loop
+    const stage = this.getToolStage(toolName);
+    if (this.currentStreamHandle?.setProgress) {
+      let detail: string | undefined;
+      if (toolArgs.path) {
+        detail = String(toolArgs.path);
+      } else if (toolArgs.command) {
+        const cmd = String(toolArgs.command);
+        detail = cmd.length > 30 ? cmd.slice(0, 30) + '...' : cmd;
+      }
+      this.currentStreamHandle.setProgress(stage, detail);
+    }
+  }
+
+  /**
+   * Send tool execution update feedback
+   */
+  private async sendToolUpdateFeedback(_toolName: string, _partialResult: string): Promise<void> {
+    // Currently just logging - could be used for live tool output display
+  }
+
+  /**
+   * Send tool execution end feedback
+   */
+  private async sendToolEndFeedback(_toolName: string, _result: string, _isError: boolean): Promise<void> {
+    // Clear progress indicator - now handled by onStreamEnd callback
+  }
+
+  /**
+   * Send thinking/reasoning feedback
+   */
+  private async sendThinkingFeedback(thinking: string): Promise<void> {
+    // Could be used to show thinking indicator
+    // For now, just log it
+    log.debug({ thinking: thinking.slice(0, 100) }, 'Thinking update');
+  }
+
+  /**
+   * Send heartbeat for long-running tasks
+   */
+  private async sendHeartbeatFeedback(elapsedMs: number, stage: ProgressStage): Promise<void> {
+    if (!this.currentContext) return;
+
+    const formatted = formatHeartbeatMessage(elapsedMs, stage);
+    log.info({ elapsedMs, stage }, 'Progress heartbeat');
+    
+    // Send heartbeat as a direct message
+    await this.bus.publishOutbound({
+      channel: this.currentContext.channel,
+      chat_id: this.currentContext.chatId,
+      content: formatted,
+      type: 'message',
+    });
+  }
+
+  /**
+   * Map tool name to progress stage
+   */
+  private getToolStage(toolName: string): ProgressStage {
+    const name = toolName.toLowerCase();
+    if (name.includes('read') || name.includes('file')) return 'reading';
+    if (name.includes('search') || name.includes('grep') || name.includes('web')) return 'searching';
+    if (name.includes('write') || name.includes('edit')) return 'writing';
+    if (name.includes('bash') || name.includes('shell') || name.includes('exec')) return 'executing';
+    return 'executing';
+  }
+
   private handleEvent(event: AgentEvent): void {
     switch (event.type) {
       case 'agent_start':
         log.debug('Agent turn started');
+        this.progressManager.startTask();
         break;
       case 'turn_start':
         log.debug('Turn started');
+        this.progressManager.onTurnStart();
         break;
       case 'message_start':
         if (event.message.role === 'assistant') log.debug('Assistant response starting');
@@ -885,16 +1097,25 @@ export class AgentService {
         }
         break;
       case 'tool_execution_start':
-        log.debug({ tool: event.toolName }, 'Tool execution started');
+        log.debug({ tool: event.toolName, args: event.args }, 'Tool execution started');
+        // Trigger progress manager to send feedback
+        this.progressManager.onToolStart(event.toolName, event.args || {});
+        break;
+      case 'tool_execution_update':
+        // Send tool update feedback (streaming)
+        this.progressManager.onToolUpdate(event.toolName, event.partialResult);
         break;
       case 'tool_execution_end':
         log.debug({ tool: event.toolName, isError: event.isError }, 'Tool execution complete');
+        // Trigger progress manager for tool end
+        this.progressManager.onToolEnd(event.toolName, event.result, event.isError);
         break;
       case 'turn_end':
         log.debug('Turn complete');
         break;
       case 'agent_end':
         log.debug('Agent turn ended');
+        this.progressManager.onAgentEnd();
         break;
     }
   }

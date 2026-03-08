@@ -14,6 +14,7 @@
   - [LLM Models](models.md)
   - [Voice (STT/TTS)](voice.md)
   - [Channels (Telegram)](channels.md)
+  - [Progress Feedback](progress.md)
   - [Extensions](extensions.md)
   - [Scheduled Tasks (Cron)](cron.md)
   - [Heartbeat](heartbeat.md)

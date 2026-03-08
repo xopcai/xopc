@@ -38,6 +38,7 @@ import type { Config } from '../../config/index.js';
 import { createTelegramCommandHandler } from './command-handler.js';
 import { generateSessionKey } from '../../commands/session-key.js';
 import { transcribe, isSTTAvailable } from '../../stt/index.js';
+import type { ProgressStage } from '../../agent/progress.js';
 import { speak, isTTSAvailable } from '../../tts/index.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
@@ -929,6 +930,7 @@ export class TelegramChannelExtension implements ChannelExtension {
       threadId: threadId ? parseInt(threadId, 10) : undefined,
       replyToMessageId: replyToMessageId ? parseInt(replyToMessageId, 10) : undefined,
       parseMode: parseMode === 'HTML' ? 'HTML' : 'Markdown',
+      enableProgress: true, // Enable progress indicator
     });
 
     return {
@@ -936,7 +938,18 @@ export class TelegramChannelExtension implements ChannelExtension {
         const { html } = formatTelegramMessage(text);
         draftStream.update(html);
       },
+      /** Update stream with progress stage indicator */
+      updateProgress: (text: string, stage: ProgressStage, detail?: string) => {
+        const { html } = formatTelegramMessage(text);
+        draftStream.updateWithProgress(html, stage, detail);
+      },
+      /** Set progress stage without updating text */
+      setProgress: (stage: ProgressStage, detail?: string) => {
+        draftStream.setProgress(stage, detail);
+      },
       end: async () => {
+        // Clear progress indicator before ending
+        draftStream.setProgress('idle');
         await draftStream.flush();
         await draftStreamManager.stop(streamKey);
       },

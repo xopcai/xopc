@@ -2,16 +2,29 @@
  * Telegram Draft Stream for Streaming Message Previews
  * 
  * Implements real-time message streaming with edit-based updates
+ * Supports progress stages and tool execution feedback
  *
  */
 
 import type { Bot } from 'grammy';
 import { createLogger } from '../utils/logger.js';
+import type { ProgressStage } from '../agent/progress.js';
 
 const log = createLogger('DraftStream');
 
 const TELEGRAM_STREAM_MAX_CHARS = 4096;
 const DEFAULT_THROTTLE_MS = 1000;
+
+// Progress stage emoji and labels
+const STAGE_CONFIG: Record<ProgressStage, { emoji: string; label: string; color: string }> = {
+  'thinking': { emoji: '🤔', label: 'Thinking', color: '🔵' },
+  'searching': { emoji: '🔍', label: 'Searching', color: '🟢' },
+  'reading': { emoji: '📖', label: 'Reading', color: '🟡' },
+  'writing': { emoji: '✍️', label: 'Writing', color: '🟠' },
+  'executing': { emoji: '⚙️', label: 'Executing', color: '🟣' },
+  'analyzing': { emoji: '📊', label: 'Analyzing', color: '🔴' },
+  'idle': { emoji: '💬', label: 'Ready', color: '⚪' },
+};
 
 export interface TelegramDraftStreamOptions {
   api: Bot['api'];
@@ -21,15 +34,21 @@ export interface TelegramDraftStreamOptions {
   replyToMessageId?: number;
   throttleMs?: number;
   parseMode?: 'Markdown' | 'HTML' | undefined;
+  /** Enable progress stage indicator */
+  enableProgress?: boolean;
 }
 
 export interface TelegramDraftStream {
   update: (text: string) => void;
+  /** Update with progress stage indicator */
+  updateWithProgress: (text: string, stage?: ProgressStage, detail?: string) => void;
   flush: () => Promise<void>;
   messageId: () => number | undefined;
   clear: () => Promise<void>;
   stop: () => void;
   forceNewMessage: () => void;
+  /** Set the current progress stage */
+  setProgress: (stage: ProgressStage, detail?: string) => void;
 }
 
 /**
@@ -189,17 +208,59 @@ export function createTelegramDraftStream(
   };
 
   log.debug(
-    { chatId, maxChars, throttleMs },
+    { chatId, maxChars, throttleMs, enableProgress: options.enableProgress },
     'Draft stream created'
   );
 
+  // Progress state
+  let currentProgressStage: ProgressStage | null = null;
+  let currentProgressDetail: string = '';
+
+  const setProgress = (stage: ProgressStage, detail?: string) => {
+    if (!options.enableProgress) return;
+    currentProgressStage = stage;
+    currentProgressDetail = detail || '';
+  };
+
+  const formatProgressIndicator = (stage: ProgressStage, detail?: string): string => {
+    const config = STAGE_CONFIG[stage] || STAGE_CONFIG.idle;
+    let indicator = `${config.emoji} ${config.label}`;
+    if (detail) {
+      indicator += `\n${detail}`;
+    }
+    return indicator;
+  };
+
+  const updateWithProgress = (text: string, stage?: ProgressStage, detail?: string) => {
+    if (stopped) {
+      return;
+    }
+
+    // Update progress state if provided
+    if (stage) {
+      setProgress(stage, detail);
+    }
+
+    // Build combined text
+    let combinedText = text;
+    if (options.enableProgress && currentProgressStage && currentProgressStage !== 'idle') {
+      const indicator = formatProgressIndicator(currentProgressStage, currentProgressDetail);
+      combinedText = `${indicator}\n\n${text}`;
+    }
+
+    pendingText = combinedText;
+    scheduleUpdate();
+  };
+
   return {
     update,
+    updateWithProgress,
     flush,
     messageId: () => streamMessageId,
     clear,
     stop,
     forceNewMessage,
+    setProgress,
   };
 }
 

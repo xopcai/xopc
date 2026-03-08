@@ -44,6 +44,7 @@ export default defineConfig({
             text: 'Features',
             items: [
               { text: 'Channels', link: '/channels' },
+              { text: 'Progress Feedback', link: '/progress' },
               { text: 'Gateway', link: '/gateway' },
               { text: 'Session', link: '/session' },
               { text: 'Skills', link: '/skills' },
@@ -100,6 +101,7 @@ export default defineConfig({
             text: '功能特性',
             items: [
               { text: '消息通道', link: '/zh/channels' },
+              { text: '进度反馈', link: '/zh/progress' },
               { text: '网关服务', link: '/zh/gateway' },
               { text: '会话管理', link: '/zh/session' },
               { text: '技能系统', link: '/zh/skills' },
