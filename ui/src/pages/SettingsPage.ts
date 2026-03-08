@@ -734,25 +734,39 @@ export class SettingsPage extends LitElement {
   }
 
   private async _loadModels(): Promise<void> {
-    try {
-      const url = window.location.origin;
-      const token = this.config?.token;
-      const response = await fetch(`${url}/api/models`, {
-        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        if (data.payload?.models) {
-          this._models = data.payload.models;
-        }
-      }
-    } catch (err) {
-      console.error('Failed to load models:', err);
-    }
-
-    // Also load dynamic providers for the template selection
+    // Load all models and providers in one call
     await this._loadDynamicProviders();
+    
+    // Extract models from dynamic providers for the model selector
+    const modelsFromProviders: Array<{
+      id: string;
+      name: string;
+      provider: string;
+      contextWindow?: number;
+      maxTokens?: number;
+      reasoning?: boolean;
+      vision?: boolean;
+      cost?: { input: number; output: number };
+    }> = [];
+    
+    for (const provider of this._dynamicProviders) {
+      for (const model of provider.models) {
+        modelsFromProviders.push({
+          id: `${provider.id}/${model.id}`,
+          name: model.name,
+          provider: provider.id,
+          contextWindow: model.contextWindow,
+          maxTokens: model.maxTokens,
+          reasoning: model.capabilities?.reasoning,
+          vision: model.capabilities?.image,
+          cost: model.cost,
+        });
+      }
+    }
+    
+    if (modelsFromProviders.length > 0) {
+      this._models = modelsFromProviders;
+    }
   }
 
   private async _loadDynamicProviders(): Promise<void> {

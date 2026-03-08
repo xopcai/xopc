@@ -5,6 +5,53 @@
  * Falls back to static templates when API is unavailable.
  */
 
+// Cache for API response to avoid duplicate requests
+let _cachedModelsResponse: Array<{
+  id: string;
+  name: string;
+  provider: string;
+  contextWindow?: number;
+  maxTokens?: number;
+  reasoning?: boolean;
+  vision?: boolean;
+  cost?: { input: number; output: number };
+}> | null = null;
+
+async function fetchModelsFromApi(): Promise<Array<{
+  id: string;
+  name: string;
+  provider: string;
+  contextWindow?: number;
+  maxTokens?: number;
+  reasoning?: boolean;
+  vision?: boolean;
+  cost?: { input: number; output: number };
+}>> {
+  // Return cached response if available
+  if (_cachedModelsResponse) {
+    return _cachedModelsResponse;
+  }
+  
+  const url = window.location.origin;
+  const response = await fetch(`${url}/api/models`);
+  
+  if (!response.ok) {
+    console.warn('Failed to load models from API');
+    return [];
+  }
+  
+  const data = await response.json();
+  const models = data?.payload?.models || [];
+  
+  // Cache the response
+  _cachedModelsResponse = models;
+  return models;
+}
+
+function clearModelsCache(): void {
+  _cachedModelsResponse = null;
+}
+
 import type { ModelConfig } from '../pages/SettingsPage.js';
 import type { ProviderTemplate } from './provider-templates.js';
 import { PROVIDER_TEMPLATES, getProviderTemplate } from './provider-templates.js';
@@ -131,20 +178,14 @@ const KNOWN_PROVIDER_CONFIGS: Record<string, {
 };
 
 /**
- * Load dynamic providers from backend API
+ * Load dynamic providers from backend API (uses cache)
  */
 export async function loadDynamicProviders(): Promise<DynamicProviderInfo[]> {
-  const url = window.location.origin;
-  
   try {
-    const response = await fetch(`${url}/api/models`);
-    if (!response.ok) {
-      console.warn('Failed to load models from API, falling back to templates');
+    const models = await fetchModelsFromApi();
+    if (models.length === 0) {
       return getTemplateProviders();
     }
-    
-    const data = await response.json();
-    const models = data?.payload?.models || [];
     
     // Group models by provider
     const providerMap = new Map<string, DynamicProviderInfo>();
@@ -266,12 +307,9 @@ function formatProviderName(providerId: string): string {
  */
 export async function getAllProviderTemplates(): Promise<ProviderTemplate[]> {
   try {
-    const url = window.location.origin;
-    const response = await fetch(`${url}/api/models`);
-    if (response.ok) {
-      const data = await response.json();
-      const models = data?.payload?.models || [];
-      
+    const models = await fetchModelsFromApi();
+    
+    if (models.length > 0) {
       // Get all unique providers from the response
       const providerSet = new Set<string>();
       for (const model of models) {
@@ -290,7 +328,7 @@ export async function getAllProviderTemplates(): Promise<ProviderTemplate[]> {
             oauthProviderId: knownConfig.oauthProviderId,
             baseUrl: knownConfig.baseUrl,
             api: knownConfig.api,
-            models: [], // Models will be loaded per-provider if needed
+            models: [],
           });
         }
       }
