@@ -8,7 +8,6 @@ import { Hono } from 'hono';
 import type { GatewayService } from '../service.js';
 import type { Config } from '../../config/schema.js';
 import { 
-  AuthStorage, 
   type OAuthProviderInterface, 
   type OAuthLoginCallbacks,
   type OAuthCredentials 
