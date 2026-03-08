@@ -8,7 +8,6 @@ import { getFallbackTemplate, TEMPLATE_FILES } from '../templates.js';
 import type { CLIContext } from '../registry.js';
 import type { Config } from '../../config/schema.js';
 import {
-  AuthStorage,
   anthropicOAuthProvider,
   minimaxOAuthProvider,
   minimaxCnOAuthProvider,
@@ -28,7 +27,6 @@ import {
   providerSupportsApiKey,
 } from '../../providers/index.js';
 import { colors } from '../utils/colors.js';
-import { homedir } from 'os';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
 
 // Import workspace utilities
@@ -381,89 +379,6 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
     console.error('❌ OAuth login failed:', error);
     return false;
   }
-}
-
-async function _doOAuthLoginOld(provider: string): Promise<boolean> {
-  console.log('\n🔐 Starting OAuth login...');
-
-  if (provider === 'anthropic') {
-    const authPath = join(homedir(), '.xopcbot', 'auth.json');
-    const authStorage = new AuthStorage({ filename: authPath });
-    authStorage.registerOAuthProvider(anthropicOAuthProvider);
-
-    const callbacks: OAuthLoginCallbacks = {
-      onAuth: (info) => {
-        console.log('\n🌐 Please open this URL in your browser:\n');
-        console.log(info.url);
-        console.log('\n');
-      },
-      onPrompt: async (prompt) => {
-        return input({ message: prompt.message });
-      },
-      onProgress: (message) => {
-        console.log('  →', message);
-      },
-    };
-
-    try {
-      await authStorage.login('anthropic', callbacks);
-
-      const creds = authStorage.getOAuthCredentials('anthropic');
-      if (creds) {
-        upsertAuthProfile({
-          profileId: 'anthropic:default',
-          credential: {
-            type: 'oauth',
-            provider: 'anthropic',
-            ...creds,
-          },
-        });
-      }
-
-      return true;
-    } catch (error) {
-      console.error('❌ OAuth login failed:', error);
-      return false;
-    }
-  }
-
-  if (provider === 'minimax') {
-    const callbacks: OAuthLoginCallbacks = {
-      onAuth: (info) => {
-        console.log('\n🌐 Please open this URL in your browser:\n');
-        console.log(info.url);
-        if (info.instructions) {
-          console.log('\n' + info.instructions);
-        }
-        console.log('\n');
-      },
-      onPrompt: async (prompt) => {
-        return input({ message: prompt.message });
-      },
-      onProgress: (message) => {
-        console.log('  →', message);
-      },
-    };
-
-    try {
-      const creds = await minimaxOAuthProvider.login(callbacks);
-      upsertAuthProfile({
-        profileId: 'minimax:default',
-        credential: {
-          type: 'oauth',
-          provider: 'minimax',
-          ...creds,
-        },
-      });
-      return true;
-    } catch (error) {
-      console.error('❌ OAuth login failed:', error);
-      return false;
-    }
-  }
-
-  console.error(`OAuth not supported for provider: ${provider}`);
-  return false;
 }
 
 async function setupModel(config: Config, ctx: CLIContext): Promise<Config> {
