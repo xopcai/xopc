@@ -127,7 +127,6 @@ npm run lint
 
 ## 🙏 致谢
 
-- 灵感来自 [OpenClaw](https://github.com/openclaw/openclaw)
 - LLM 提供商基于 [@mariozechner/pi-ai](https://github.com/badlogic/pi-mono)
 
 ---

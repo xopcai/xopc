@@ -242,8 +242,6 @@ xopcbot gateway token --generate
 
 ### Process Management
 
-The gateway uses a new process management system based on [openclaw](https://github.com/openclaw/openclaw):
-
 - **Lock file**: `~/.xopcbot/locks/gateway.{hash}.lock` (instead of PID file)
 - **Signals**: SIGTERM/SIGINT=stop, SIGUSR1=restart
 - **Port management**: Automatic conflict detection and resolution

@@ -1,7 +1,7 @@
 /**
  * System Prompt Builder - Enhanced version with workspace context integration
  * 
- * Follows OpenClaw's system-prompt.ts architecture:
+ * Integrates workspace bootstrap files:
  * - SOUL.md for persona and tone
  * - USER.md for user context
  * - IDENTITY.md for agent identity
@@ -72,7 +72,7 @@ export interface SystemPromptOptions {
 /**
  * Build SOUL.md section - persona and tone
  * 
- * OpenClaw: "If SOUL.md is present, embody its persona and tone"
+ * If SOUL.md is present, embody its persona and tone
  */
 function buildSoulSection(bootstrapFiles: WorkspaceBootstrapFile[]): string {
   const soulFile = bootstrapFiles.find(f => f.name === DEFAULT_SOUL_FILENAME);
@@ -222,7 +222,7 @@ _Read HEARTBEAT.md for current tasks. If nothing needs attention, reply: HEARTBE
 /**
  * Build Memory section - recall instructions
  * 
- * OpenClaw: "Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search"
+ * Before answering anything about prior work, decisions, dates, people, preferences, or todos: run memory_search
  */
 function buildMemorySection(
   bootstrapFiles: WorkspaceBootstrapFile[],
@@ -375,8 +375,7 @@ function truncateForPrompt(content: string, maxChars: number): string {
 /**
  * Build system prompt with workspace context integration
  * 
- * This follows OpenClaw's approach of injecting workspace files
- * at appropriate positions in the system prompt.
+ * Injects workspace files at appropriate positions in the system prompt.
  */
 export function buildSystemPrompt(
   workspaceDir: string,

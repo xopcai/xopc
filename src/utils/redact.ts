@@ -6,8 +6,6 @@
  * - Tokens (GitHub, Slack, etc.)
  * - Passwords and secrets
  * - Private keys (PEM blocks)
- * 
- * Based on OpenClaw's redact.ts implementation.
  */
 
 // =============================================================================

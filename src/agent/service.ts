@@ -801,7 +801,6 @@ export class AgentService {
       }
     }
 
-    // Use the new OpenClaw-style system prompt builder
     // Cast BootstrapFile[] to WorkspaceBootstrapFile[] for compatibility
     const prompt = buildSystemPrompt(
       this.config.workspace,

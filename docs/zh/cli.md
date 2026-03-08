@@ -242,8 +242,6 @@ xopcbot gateway token --generate
 
 ### 进程管理
 
-网关使用基于 [openclaw](https://github.com/openclaw/openclaw) 的新进程管理系统：
-
 - **锁文件**：`~/.xopcbot/locks/gateway.{hash}.lock`（替代 PID 文件）
 - **信号**：SIGTERM/SIGINT=停止，SIGUSR1=重启
 - **端口管理**：自动冲突检测和解决

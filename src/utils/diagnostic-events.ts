@@ -7,8 +7,6 @@
  * - Session events (state changes, stuck detection)
  * - Model usage events (tokens, cost, duration)
  * - Heartbeat events (system health)
- * 
- * Based on OpenClaw's diagnostic-events.ts implementation.
  */
 
 import { createRequire } from 'node:module';

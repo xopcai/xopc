@@ -302,7 +302,7 @@ await agent.start();
 
 ### 4. Channel Plugin Usage (New)
 
-Channels now use a plugin-based architecture inspired by openclaw:
+Channels now use a plugin-based architecture:
 
 ```typescript
 import { telegramPlugin } from './channels/index.js';
@@ -559,7 +559,7 @@ describe('myModule', () => {
 
 ## Web UI
 
-The `ui/` directory contains web-based UI components for xopcbot, inspired by [pi-mono/web-ui](https://github.com/mariozechner/pi-mono/tree/main/packages/web-ui) and [openclaw/ui](https://github.com/openclaw/openclaw/tree/main/ui).
+The `ui/` directory contains web-based UI components for xopcbot, inspired by [pi-mono/web-ui](https://github.com/mariozechner/pi-mono/tree/main/packages/web-ui).
 
 ### Building the UI
 

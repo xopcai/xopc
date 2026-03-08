@@ -91,8 +91,6 @@ xopcbot gateway logs --follow
 
 ## Process Architecture
 
-The new gateway process management is based on [openclaw](https://github.com/openclaw/openclaw) design:
-
 ### Gateway Lock
 
 Uses file-based locking instead of PID files:

@@ -193,5 +193,3 @@ Ensure `im:message:send_as_bot` permission is approved.
 MIT
 
 ## Credits
-
-Inspired by [clawdbot-feishu](https://github.com/m1heng/clawdbot-feishu) for OpenClaw.

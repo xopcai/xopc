@@ -1,7 +1,6 @@
 export { GatewayServer, type GatewayServerConfig } from './server.js';
 export { GatewayService, type GatewayServiceConfig, type ServiceEvent } from './service.js';
 
-// Process management (openclaw-style)
 export { acquireGatewayLock, GatewayLockError, type GatewayLockHandle } from './lock.js';
 export { runGatewayLoop, type RunGatewayLoopOptions } from './run-loop.js';
 export { restartGatewayProcessWithFreshPid, type GatewayRespawnResult } from './respawn.js';

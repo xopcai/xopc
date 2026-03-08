@@ -1,6 +1,5 @@
 /**
  * Process Respawn - Process respawn logic
- * Based on openclaw's process-respawn.ts design
  */
 
 import { spawn } from "node:child_process";

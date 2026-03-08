@@ -127,7 +127,6 @@ npm run lint
 
 ## 🙏 Credits
 
-- Inspired by [OpenClaw](https://github.com/openclaw/openclaw)
 - LLM providers via [@mariozechner/pi-ai](https://github.com/badlogic/pi-mono)
 
 ---

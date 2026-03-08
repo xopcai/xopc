@@ -1,6 +1,5 @@
 /**
  * Gateway Run Loop - Core run loop for gateway process management
- * Based on openclaw's run-loop.ts design
  */
 
 import type { GatewayServer } from "./server.js";

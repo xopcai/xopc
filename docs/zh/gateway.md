@@ -91,8 +91,6 @@ xopcbot gateway logs --follow
 
 ## 进程架构
 
-新的网关进程管理基于 [openclaw](https://github.com/openclaw/openclaw) 设计：
-
 ### Gateway Lock
 
 使用文件锁替代 PID 文件：

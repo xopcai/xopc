@@ -34,7 +34,7 @@ function resolveGuiDomain(): string {
 function resolveLaunchAgentPlistPath(env: GatewayServiceEnv): string {
   const home = os.homedir();
   const libraryPath = path.join(home, 'Library', 'LaunchAgents');
-  const label = env.OPENCLAW_PROFILE ? `ai.openclaw.gateway.${env.OPENCLAW_PROFILE}` : 'ai.openclaw.gateway';
+  const label = env.XOPCBOT_PROFILE ? `ai.xopcbot.gateway.${env.XOPCBOT_PROFILE}` : 'ai.xopcbot.gateway';
   return path.join(libraryPath, `${label}.plist`);
 }
 
@@ -185,16 +185,16 @@ export function isLaunchdAvailable(): boolean {
  * LaunchAgent service implementation
  */
 export const launchdService: GatewayService = {
-  label: 'ai.openclaw.gateway',
-  loadedText: 'ai.openclaw.gateway',
-  notLoadedText: 'ai.openclaw.gateway',
+  label: 'ai.xopcbot.gateway',
+  loadedText: 'ai.xopcbot.gateway',
+  notLoadedText: 'ai.xopcbot.gateway',
 
   async install(args: GatewayServiceInstallArgs): Promise<void> {
     const plistPath = resolveLaunchAgentPlistPath(args.env);
     const logDir = resolveLogDir();
-    const label = args.env.OPENCLAW_PROFILE
-      ? `ai.openclaw.gateway.${args.env.OPENCLAW_PROFILE}`
-      : 'ai.openclaw.gateway';
+    const label = args.env.XOPCBOT_PROFILE
+      ? `ai.xopcbot.gateway.${args.env.XOPCBOT_PROFILE}`
+      : 'ai.xopcbot.gateway';
 
     // Ensure directories exist
     await mkdir(path.dirname(plistPath), { recursive: true });

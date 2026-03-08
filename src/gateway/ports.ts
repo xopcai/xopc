@@ -1,6 +1,5 @@
 /**
  * Ports Management - Port management utilities
- * Based on openclaw's ports.ts design
  */
 
 import { execFileSync } from "node:child_process";

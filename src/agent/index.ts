@@ -11,7 +11,6 @@ export { ModelManager } from './models/index.js';
 export { loadBootstrapFiles, extractTextContent, stripFrontMatter, truncateBootstrapContent } from './helpers.js';
 export type { BootstrapFile, TruncateResult } from './helpers.js';
 
-// New workspace module (OpenClaw-style)
 export {
   loadWorkspaceBootstrapFiles,
   ensureBootstrapFiles,
@@ -35,7 +34,6 @@ export {
 } from './workspace.js';
 export type { WorkspaceBootstrapFile, WorkspaceBootstrapFileName, WorkspaceOnboardingState } from './workspace.js';
 
-// System prompt builder (OpenClaw-style)
 export { buildSystemPrompt, buildMinimalSystemPrompt, getBootstrapFile, hasBootstrapFile } from './system-prompt.js';
 export type { SystemPromptOptions, MemoryCitationsMode } from './system-prompt.js';
 

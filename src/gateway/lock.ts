@@ -1,6 +1,5 @@
 /**
  * Gateway Lock - Prevents multiple gateway instances from running simultaneously
- * Based on openclaw's gateway-lock.ts design
  */
 
 import { createHash } from "node:crypto";
