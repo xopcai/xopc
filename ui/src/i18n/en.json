@@ -59,6 +59,7 @@
       "providers": "Providers",
       "models": "Models",
       "channels": "Channels",
+      "voice": "Voice (STT/TTS)",
       "gateway": "Gateway"
     },
     "descriptions": {
@@ -208,6 +209,58 @@
       "showModelSelectorDesc": "Display model selection dropdown",
       "showThinkingSelector": "Show Thinking Selector",
       "showThinkingSelectorDesc": "Display thinking level selection"
+    },
+    "voice": {
+      "title": "Voice (STT/TTS)",
+      "description": "Configure speech-to-text and text-to-speech for voice messages",
+      "stt": {
+        "title": "Speech-to-Text (STT)",
+        "description": "Convert voice messages to text",
+        "enable": "Enable STT",
+        "enableDesc": "Convert Telegram voice messages to text",
+        "provider": "Provider",
+        "alibaba": "Alibaba Paraformer (中文推荐)",
+        "openai": "OpenAI Whisper",
+        "apiKey": "API Key",
+        "apiKeyDesc": "Leave empty to use environment variable",
+        "model": "Model",
+        "fallback": "Enable Fallback",
+        "fallbackDesc": "Switch to backup provider on failure"
+      },
+      "tts": {
+        "title": "Text-to-Speech (TTS)",
+        "description": "Convert agent responses to voice",
+        "enable": "Enable TTS",
+        "enableDesc": "Send voice replies when user sends voice messages",
+        "trigger": "Trigger Mode",
+        "triggerAuto": "Auto (reply with voice to voice messages)",
+        "triggerNever": "Never (text only)",
+        "provider": "Provider",
+        "voice": "Voice",
+        "voiceDesc": "Voice ID"
+      },
+      "models": {
+        "paraformerV1": "paraformer-v1 (16kHz+)",
+        "paraformer8k": "paraformer-8k-v1 (Phone)",
+        "paraformerMtl": "paraformer-mtl-v1 (Multilingual)",
+        "whisper1": "whisper-1",
+        "tts1": "tts-1 (fast)",
+        "tts1Hd": "tts-1-hd (high quality)",
+        "cosyvoiceV1": "cosyvoice-v1"
+      },
+      "voices": {
+        "alloy": "Alloy",
+        "echo": "Echo",
+        "fable": "Fable",
+        "onyx": "Onyx",
+        "nova": "Nova",
+        "shimmer": "Shimmer"
+      },
+      "notes": {
+        "title": "Note",
+        "duration": "Voice messages longer than 60 seconds will not be transcribed.",
+        "envVars": "Environment variables supported: {{vars}}"
+      }
     }
   },
   "errors": {

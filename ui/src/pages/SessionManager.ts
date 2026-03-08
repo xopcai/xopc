@@ -294,10 +294,13 @@ export class SessionManager extends LitElement {
 
   private _handleListAction(e: CustomEvent<SessionListEventDetail>): void {
     const { action, key } = e.detail;
-    
+
     switch (action) {
       case 'select':
         this._openDetail(key);
+        break;
+      case 'continue':
+        this._continueSession(key);
         break;
       case 'delete':
         this._showConfirm(key);
@@ -318,6 +321,15 @@ export class SessionManager extends LitElement {
         this._exportSession(key);
         break;
     }
+  }
+
+  private _continueSession(key: string): void {
+    // Dispatch global event to navigate to chat with this session
+    window.dispatchEvent(new CustomEvent('navigate-to-chat', {
+      detail: { sessionKey: key },
+      bubbles: true,
+      composed: true,
+    }));
   }
 
   private _handleSearch(e: InputEvent): void {

@@ -115,6 +115,13 @@ export class XopcbotApp extends LitElement {
     window.addEventListener('hashchange', () => {
       this._loadRouteFromHash();
     });
+
+    // Listen for navigate-to-chat event from session manager
+    window.addEventListener('navigate-to-chat', ((e: CustomEvent<{ sessionKey: string }>) => {
+      const { sessionKey } = e.detail;
+      this._switchTab('chat');
+      this._updateChatRoute({ type: 'session', sessionKey });
+    }) as EventListener);
   }
 
   /**

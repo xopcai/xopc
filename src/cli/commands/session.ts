@@ -484,9 +484,9 @@ register({
     category: 'maintenance',
     examples: [
       'xopcbot session list',
-      'xopcbot session info telegram:123456',
-      'xopcbot session delete telegram:123456',
-      'xopcbot session export telegram:123456 --format markdown',
+      'xopcbot session info telegram:dm:123456',
+      'xopcbot session delete telegram:g:-100123456',
+      'xopcbot session export telegram:dm:123456 --format markdown',
     ],
   },
 });

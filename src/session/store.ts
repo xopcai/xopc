@@ -383,7 +383,7 @@ export class SessionStore {
 
   // ========== Message Operations ==========
 
-  async loadMessages(key: string): Promise<AgentMessage[]> {
+  async loadMessages(key: string, options?: { fromArchive?: boolean }): Promise<AgentMessage[]> {
     const safeKey = this.sanitizeKey(key);
     const path = join(this.sessionsDir, `${safeKey}.json`);
 
@@ -391,17 +391,21 @@ export class SessionStore {
       const data = await readFile(path, 'utf-8');
       return JSON.parse(data) as AgentMessage[];
     } catch {
-      // Check archive - find the most recent archived file
-      const archivedFile = await this.findMostRecentArchive(safeKey);
-      if (!archivedFile) {
-        return [];
+      // Only check archive if explicitly requested (e.g., for restore command)
+      // This prevents accidentally loading archived sessions after /new command
+      if (options?.fromArchive) {
+        const archivedFile = await this.findMostRecentArchive(safeKey);
+        if (!archivedFile) {
+          return [];
+        }
+        try {
+          const data = await readFile(archivedFile, 'utf-8');
+          return JSON.parse(data) as AgentMessage[];
+        } catch {
+          return [];
+        }
       }
-      try {
-        const data = await readFile(archivedFile, 'utf-8');
-        return JSON.parse(data) as AgentMessage[];
-      } catch {
-        return [];
-      }
+      return [];
     }
   }
 
@@ -569,8 +573,8 @@ export class SessionStore {
   }
 
   /** Alias for loadMessages */
-  async load(key: string): Promise<AgentMessage[]> {
-    return this.loadMessages(key);
+  async load(key: string, options?: { fromArchive?: boolean }): Promise<AgentMessage[]> {
+    return this.loadMessages(key, options);
   }
 
   /** Alias for saveMessages */
@@ -703,9 +707,10 @@ export class SessionStore {
   }
 
   private fileNameToKey(fileName: string): string {
-    // Reverse of sanitizeKey - try to restore original format
-    // telegram_123456 -> telegram:123456
-    return fileName.replace(/^([^_]+)_(.+)$/, '$1:$2');
+    // Reverse of sanitizeKey - restore all colons from underscores
+    // telegram_dm_123456 -> telegram:dm:123456
+    // telegram_g_-100123456_t_789 -> telegram:g:-100123456:t:789
+    return fileName.replace(/_/g, ':');
   }
 
   private parseSessionKey(key: string): { channel: string; chatId: string } {

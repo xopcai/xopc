@@ -7,7 +7,7 @@ import { getIcon } from '../utils/icons';
 import type { SessionMetadata } from '../utils/session-api';
 
 export interface SessionCardEventDetail {
-  action: 'click' | 'rename' | 'delete' | 'archive' | 'unarchive' | 'pin' | 'unpin' | 'export';
+  action: 'click' | 'continue' | 'rename' | 'delete' | 'archive' | 'unarchive' | 'pin' | 'unpin' | 'export';
   key: string;
 }
 
@@ -113,6 +113,12 @@ export class SessionCard extends LitElement {
         ` : ''}
 
         <div class="session-card__actions" @click=${(e: Event) => e.stopPropagation()}>
+          <button
+            class="btn-icon btn-icon--primary"
+            title="Continue Chat"
+            @click=${() => this._emit('continue')}
+          >${getIcon('messageSquare')}</button>
+
           ${isArchived ? html`
             <button 
               class="btn-icon btn-icon--success" 

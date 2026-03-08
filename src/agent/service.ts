@@ -40,6 +40,8 @@ import { createTypingController } from './typing.js';
 import { loadBootstrapFiles, extractTextContent, type BootstrapFile } from './helpers.js';
 import { SessionTracker } from './session-tracker.js';
 import { ModelManager } from './models/index.js';
+import { _processMessage, initializeCommands, type _CommandProcessorDeps } from '../commands/index.js';
+import { getModelsByProvider, getProviderDisplayName, isProviderConfigured, getAllProviders } from '../providers/index.js';
 
 const log = createLogger('AgentService');
 
@@ -99,6 +101,10 @@ export class AgentService {
       defaultModel: config.model,
       config: config.config,
     });
+
+    // Initialize command system
+    initializeCommands();
+    log.info('Command system initialized');
 
     // Setup session store
     const defaults = config.agentDefaults || config.config?.agents?.defaults;
@@ -377,7 +383,8 @@ export class AgentService {
   }
 
   private async handleInboundMessage(msg: InboundMessage): Promise<void> {
-    const sessionKey = `${msg.channel}:${msg.chat_id}`;
+    // Use sessionKey from metadata if available (for channels with custom session key format like Telegram)
+    const sessionKey = (msg.metadata?.sessionKey as string) || `${msg.channel}:${msg.chat_id}`;
     this.currentContext = { channel: msg.channel, chatId: msg.chat_id, sessionKey };
 
     try {
@@ -399,8 +406,9 @@ export class AgentService {
   }
 
   private async handleUserMessage(msg: InboundMessage): Promise<void> {
-    const sessionKey = `${msg.channel}:${msg.chat_id}`;
-    log.info({ channel: msg.channel, senderId: msg.sender_id }, 'Processing message');
+    // Use sessionKey from metadata if available (for channels with custom session key format like Telegram)
+    const sessionKey = (msg.metadata?.sessionKey as string) || `${msg.channel}:${msg.chat_id}`;
+    log.info({ channel: msg.channel, senderId: msg.sender_id, sessionKey }, 'Processing message');
 
     // Apply model for session
     await this.modelManager.applyModelForSession(this.agent, sessionKey);
@@ -418,39 +426,31 @@ export class AgentService {
     try {
       typing.start();
 
-      const command = msg.content.trim();
+      const content = msg.content.trim();
       
-      // Handle CLI commands
-      if (command === '/new') {
-        try {
-          // Archive current session before starting a new one
-          const messages = await this.sessionStore.load(sessionKey);
-          if (messages.length > 0) {
-            await this.sessionStore.archive(sessionKey);
-            log.info({ sessionKey, messageCount: messages.length }, 'Session archived due to /new command');
+      // Check if it's a command using the new command system
+      if (content.startsWith('/')) {
+        const parsed = this.parseCommand(content);
+        if (parsed && parsed.command !== 'skills') { // Keep /skills reload as-is for now
+          // Use new command system
+          const isGroup = (msg.metadata?.isGroup as boolean) || false;
+          const isHandled = await this.executeCommand(parsed.command, parsed.args, {
+            sessionKey,
+            channel: msg.channel,
+            chatId: msg.chat_id,
+            senderId: msg.sender_id,
+            isGroup,
+          });
+          
+          if (isHandled) {
+            return; // Command was handled
           }
-          // Clear current session state to start fresh
-          await this.sessionStore.deleteSession(sessionKey);
-          this.sessionTracker.deleteSession(sessionKey);
-          await this.bus.publishOutbound({
-            channel: msg.channel,
-            chat_id: msg.chat_id,
-            content: '✅ New session started. Previous session has been archived.',
-            type: 'message',
-          });
-        } catch (err) {
-          log.error({ err, sessionKey }, 'Failed to start new session');
-          await this.bus.publishOutbound({
-            channel: msg.channel,
-            chat_id: msg.chat_id,
-            content: '❌ Failed to start new session. Please try again.',
-            type: 'message',
-          });
+          // If not handled, continue to AI processing (unknown command)
         }
-        return;
       }
 
-      if (command === '/skills reload') {
+      // Handle /skills reload (legacy, will be migrated)
+      if (content === '/skills reload') {
         try {
           this.reloadSkills();
           await this.bus.publishOutbound({
@@ -471,10 +471,10 @@ export class AgentService {
         return;
       }
 
-      // Check plugin commands
-      if (msg.content.startsWith('/') && this.config.pluginRegistry) {
+      // Check plugin commands (legacy, will be migrated)
+      if (content.startsWith('/') && this.config.pluginRegistry) {
         try {
-          const commandName = command.slice(1).split(/\s+/)[0];
+          const commandName = content.slice(1).split(/\s+/)[0];
           const pluginCommand = this.config.pluginRegistry.getCommand(commandName);
           if (pluginCommand) {
             const ctx: CommandContext = {
@@ -483,7 +483,7 @@ export class AgentService {
               isAuthorized: true,
               config: this.config.config as any,
             };
-            const args = command.replace(/^\/\w+\s*/, '');
+            const args = content.replace(/^\/\w+\s*/, '');
             const result = await pluginCommand.handler(args, ctx);
             await this.bus.publishOutbound({
               channel: msg.channel,
@@ -494,7 +494,7 @@ export class AgentService {
             return;
           }
         } catch (err) {
-          log.error({ err, command }, 'Failed to execute plugin command');
+          log.error({ err, command: content }, 'Failed to execute plugin command');
           await this.bus.publishOutbound({
             channel: msg.channel,
             chat_id: msg.chat_id,
@@ -605,9 +605,39 @@ export class AgentService {
   }
 
   private async handleSystemMessage(msg: InboundMessage): Promise<void> {
-    log.info({ senderId: msg.sender_id }, 'Processing system message');
+    log.info({ senderId: msg.sender_id, content: msg.content }, 'Processing system message');
 
-    // Handle Telegram command requests
+    // Check if this is a channel command request (e.g., from Telegram /new, /usage handlers)
+    // These commands are sent via system channel but should be handled by the unified command system
+    if (msg.metadata?.sessionKey && msg.content.startsWith('/')) {
+      const sessionKey = msg.metadata.sessionKey as string;
+      const parsed = this.parseCommand(msg.content);
+      
+      if (parsed) {
+        // Use parseSessionKey to extract channel info from sessionKey
+        const { parseSessionKey } = await import('../commands/session-key.js');
+        const sessionInfo = parseSessionKey(sessionKey);
+        const channel = sessionInfo.source;
+        
+        // Use unified command system to handle the command
+        const isHandled = await this.executeCommand(parsed.command, parsed.args, {
+          sessionKey,
+          channel,
+          chatId: sessionInfo.chatId,
+          senderId: msg.sender_id,
+          isGroup: (msg.metadata?.isGroup as boolean) || false,
+        });
+
+        if (isHandled) {
+          return; // Command was handled by the command system
+        }
+      }
+    }
+
+    // Legacy system messages that need AI processing
+    // (messages that don't start with / or weren't handled by command system)
+    
+    // Handle Telegram /usage explicitly (for backward compatibility)
     if (msg.content === '/usage' && msg.sender_id === 'telegram:usage') {
       const sessionKey = (msg.metadata?.sessionKey as string) || `telegram:${msg.chat_id}`;
       const usage = this.sessionTracker.getUsage(sessionKey);
@@ -637,58 +667,6 @@ export class AgentService {
       return;
     }
 
-    if (msg.content === '/new' && msg.sender_id === 'telegram:new') {
-      const sessionKey = (msg.metadata?.sessionKey as string) || `telegram:${msg.chat_id}`;
-      try {
-        // Archive current session
-        const messages = await this.sessionStore.load(sessionKey);
-        if (messages.length > 0) {
-          await this.sessionStore.archive(sessionKey);
-          log.info({ sessionKey, messageCount: messages.length }, 'Session archived due to /new command');
-        }
-        // Clear current session state
-        await this.sessionStore.deleteSession(sessionKey);
-        this.sessionTracker.deleteSession(sessionKey);
-        
-        await this.bus.publishOutbound({
-          channel: 'telegram',
-          chat_id: msg.chat_id,
-          content: '✅ New session started. Previous session has been archived.',
-          type: 'message',
-        });
-      } catch (err) {
-        log.error({ err, sessionKey }, 'Failed to start new session');
-        await this.bus.publishOutbound({
-          channel: 'telegram',
-          chat_id: msg.chat_id,
-          content: '❌ Failed to start new session. Please try again.',
-          type: 'message',
-        });
-      }
-      return;
-    }
-
-    if (msg.content === '/skills reload' && msg.sender_id === 'telegram:skills') {
-      try {
-        this.reloadSkills();
-        await this.bus.publishOutbound({
-          channel: 'telegram',
-          chat_id: msg.chat_id,
-          content: '✅ Skills reloaded successfully',
-          type: 'message',
-        });
-      } catch (err) {
-        log.error({ err }, 'Failed to reload skills');
-        await this.bus.publishOutbound({
-          channel: 'telegram',
-          chat_id: msg.chat_id,
-          content: '❌ Failed to reload skills.',
-          type: 'message',
-        });
-      }
-      return;
-    }
-
     // Parse origin channel
     let originChannel = 'cli';
     let originChatId = msg.chat_id;
@@ -698,7 +676,8 @@ export class AgentService {
       originChatId = rest.join(':');
     }
 
-    const sessionKey = `${originChannel}:${originChatId}`;
+    // Use sessionKey from metadata if available (for channels with custom session key format like Telegram)
+    const sessionKey = (msg.metadata?.sessionKey as string) || `${originChannel}:${originChatId}`;
     let messages = await this.sessionStore.load(sessionKey);
     await this.checkAndCompact(sessionKey, messages);
     messages = await this.sessionStore.load(sessionKey);
@@ -867,5 +846,145 @@ export class AgentService {
     } catch {
       return text;
     }
+  }
+
+  /**
+   * Parse a command from message text
+   */
+  private parseCommand(text: string): { command: string; args: string } | null {
+    const trimmed = text.trim();
+    
+    if (!trimmed.startsWith('/')) {
+      return null;
+    }
+
+    const withoutPrefix = trimmed.slice(1);
+    const spaceIndex = withoutPrefix.indexOf(' ');
+    
+    if (spaceIndex === -1) {
+      return { command: withoutPrefix, args: '' };
+    }
+
+    return {
+      command: withoutPrefix.slice(0, spaceIndex),
+      args: withoutPrefix.slice(spaceIndex + 1).trim(),
+    };
+  }
+
+  /**
+   * Execute a command using the new command system
+   */
+  private async executeCommand(
+    commandName: string,
+    args: string,
+    context: {
+      sessionKey: string;
+      channel: string;
+      chatId: string;
+      senderId: string;
+      isGroup: boolean;
+    }
+  ): Promise<boolean> {
+    const { commandRegistry, createCommandContext } = await import('../commands/index.js');
+    
+    // Check if command exists
+    if (!commandRegistry.has(commandName)) {
+      return false;
+    }
+
+    log.info({ command: commandName, sessionKey: context.sessionKey }, 'Executing command via new system');
+
+    // Create command context
+    const cmdCtx = createCommandContext({
+      sessionKey: context.sessionKey,
+      source: context.channel as any,
+      channelId: context.channel,
+      chatId: context.chatId,
+      senderId: context.senderId,
+      isGroup: context.isGroup,
+      config: this.config.config!,
+      bus: this.bus,
+      sessionStore: this.sessionStore,
+      
+      replyHandler: async (text: string, _options?) => {
+        await this.bus.publishOutbound({
+          channel: context.channel,
+          chat_id: context.chatId,
+          content: text,
+          type: 'message',
+        });
+      },
+      
+      typingHandler: async (typing: boolean) => {
+        await this.bus.publishOutbound({
+          channel: context.channel,
+          chat_id: context.chatId,
+          type: typing ? 'typing_on' : 'typing_off',
+        });
+      },
+      
+      supportedFeatures: ['markdown', 'typing'],
+      
+      getCurrentModel: () => this.modelManager.getCurrentModel(),
+      
+      switchModel: async (modelId: string) => {
+        return this.modelManager.switchModelForSession(context.sessionKey, modelId);
+      },
+      
+      listModels: async () => {
+        const providers = getAllProviders();
+        const models: Array<{ id: string; name: string; provider: string }> = [];
+        
+        for (const providerId of providers) {
+          if (isProviderConfigured(this.config.config!, providerId)) {
+            const providerModels = getModelsByProvider(providerId);
+            for (const m of providerModels) {
+              models.push({
+                id: `${m.provider}/${m.id}`,
+                name: m.name || m.id,
+                provider: getProviderDisplayName(providerId),
+              });
+            }
+          }
+        }
+        
+        return models;
+      },
+      
+      getUsage: async () => {
+        const messages = await this.sessionStore.load(context.sessionKey);
+        let promptTokens = 0;
+        let completionTokens = 0;
+        
+        for (const msg of messages) {
+          if ('usage' in msg && msg.usage) {
+            promptTokens += (msg.usage as any).input || 0;
+            completionTokens += (msg.usage as any).output || 0;
+          }
+        }
+        
+        return {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+          messageCount: messages.length,
+        };
+      },
+    });
+
+    // Execute command
+    const result = await commandRegistry.execute(commandName, cmdCtx, args);
+    
+    // Send response if there's content
+    if (result.content) {
+      await this.bus.publishOutbound({
+        channel: context.channel,
+        chat_id: context.chatId,
+        content: result.content,
+        type: 'message',
+      });
+    }
+
+    return true;
   }
 }

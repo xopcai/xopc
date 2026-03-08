@@ -9,7 +9,7 @@ import type { SessionMetadata } from '../utils/session-api';
 import type { SessionCardEventDetail } from './SessionCard';
 
 export interface SessionListEventDetail {
-  action: 'select' | 'rename' | 'delete' | 'archive' | 'unarchive' | 'pin' | 'unpin' | 'export';
+  action: 'select' | 'continue' | 'rename' | 'delete' | 'archive' | 'unarchive' | 'pin' | 'unpin' | 'export';
   key: string;
 }
 
@@ -39,7 +39,7 @@ export class SessionList extends LitElement {
     if (action === 'click') {
       this._emit('select', key);
     } else {
-      this._emit(action as SessionListEventDetail['action'], key);
+      this._emit(action, key);
     }
   }
 

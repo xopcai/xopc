@@ -1,15 +1,16 @@
 /**
  * Telegram Command Handler
  * 
- * 处理 /models, /usage, /cleanup 等命令
+ * Handles Telegram-specific UI interactions (inline keyboards, callbacks).
+ * Core commands (/new, /usage, /models, etc.) are handled by the unified command system.
  */
 
 import type { Context } from 'grammy';
 import { createLogger } from '../../utils/logger.js';
-
 import type { Config } from '../../config/index.js';
-import { TelegramInlineKeyboards, type ModelInfo, type ProviderInfo } from './inline-keyboards.js';
+import { TelegramInlineKeyboards, type ProviderInfo } from './inline-keyboards.js';
 import { getProviderDisplayName, getModelsByProvider, DEFAULT_MODEL, getAllProviders, isProviderConfigured } from '../../providers/index.js';
+import { generateSessionKey } from '../../commands/session-key.js';
 
 const log = createLogger('TelegramCommandHandler');
 
@@ -18,6 +19,7 @@ export interface TelegramCommandHandlerDeps {
   config: Config;
   getSessionModel: (sessionKey: string) => string | undefined;
   setSessionModel: (sessionKey: string, modelId: string) => void;
+  // Optional callbacks for inline keyboard handling
   showProviderModels?: (ctx: Context, providerId: string) => Promise<void>;
   showProvidersAgain?: (ctx: Context) => Promise<void>;
   handleCleanupConfirm?: (ctx: Context) => Promise<void>;
@@ -29,7 +31,6 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
   // ========== Helper Functions ==========
 
   const getAvailableProviders = (): ProviderInfo[] => {
-    // Get all providers and filter by configured status (includes env vars, config, and registry)
     const allProviders = getAllProviders();
     const available: ProviderInfo[] = [];
 
@@ -39,7 +40,6 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
       }
     }
 
-    // Fallback defaults
     if (available.length === 0) {
       available.push({ id: 'minimax', name: 'MiniMax' }, { id: 'kimi', name: 'Kimi' });
     }
@@ -47,12 +47,10 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     return available;
   };
 
-  const getModelsForProvider = (providerId: string): ModelInfo[] => {
-    // 从 pi-ai 获取模型列表
+  const getModelsForProvider = (providerId: string) => {
     const models = getModelsByProvider(providerId);
     
     if (models.length === 0) {
-      // Fallback: return default placeholder
       return [{ id: `${providerId}/default`, name: 'default', provider: providerId }];
     }
     
@@ -63,8 +61,62 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     }));
   };
 
+  // ========== Helper Functions ==========
+
+  // Helper to get sessionKey from Telegram context
+  const getSessionKeyFromCtx = (ctx: Context): string => {
+    const chatId = String(ctx.chat?.id);
+    const senderId = String(ctx.from?.id);
+    const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
+    const threadId = (ctx.message as any)?.message_thread_id;
+
+    return generateSessionKey({
+      source: 'telegram',
+      chatId,
+      senderId,
+      isGroup,
+      threadId: threadId ? String(threadId) : undefined,
+    });
+  };
+
   // ========== Command Handlers ==========
 
+  /**
+   * /start - Show welcome message
+   * Note: Other commands (/new, /usage, /models, etc.) are handled by the unified command system
+   */
+  const handleStart = async (ctx: Context): Promise<void> => {
+    try {
+      const providers = getAvailableProviders();
+      const hasProviders = providers.length > 0;
+
+      await ctx.reply(
+        '👋 *Welcome to xopcbot!*\n\n' +
+        'I am your AI assistant. Here are the available commands:\n\n' +
+        '🤖 *Model Selection*\n' +
+        '/models - Select a model to use\n' +
+        '/switch \u003cmodel-id\u003e - Switch to a specific model\n\n' +
+        '📊 *Session Management*\n' +
+        '/new - Start a new session (archive current)\n' +
+        '/list - List all your sessions\n' +
+        '/usage - View token usage statistics\n' +
+        '/cleanup - Clean up old sessions\n\n' +
+        '🛠️ *Skills*\n' +
+        '/skills reload - Reload all skills from disk\n\n' +
+        '💡 *Tip*: Just send a message to start chatting!' +
+        (hasProviders ? '' : '\n\n⚠️ *Note*: No LLM providers configured. Please set up API keys in your config.'),
+        { parse_mode: 'Markdown' }
+      );
+    } catch (err) {
+      log.error({ err }, 'Failed to handle start command');
+      await ctx.reply('❌ Failed to show welcome message.');
+    }
+  };
+
+  /**
+   * /models - Show model selector with inline keyboard
+   * Note: This provides a UI enhancement over the basic /models command
+   */
   const handleModels = async (ctx: Context): Promise<void> => {
     try {
       const providers = getAvailableProviders();
@@ -83,12 +135,29 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     }
   };
 
+  /**
+   * /cleanup - Show cleanup confirmation dialog
+   */
+  const handleCleanup = async (ctx: Context): Promise<void> => {
+    try {
+      await ctx.reply(
+        '🧹 *Session Cleanup*\n\n' +
+        'This will archive sessions that have been inactive for more than 30 days.\n\n' +
+        'Archived sessions can be restored later.',
+        { parse_mode: 'Markdown', reply_markup: TelegramInlineKeyboards.cleanupConfirm() }
+      );
+    } catch (err) {
+      log.error({ err }, 'Failed to show cleanup dialog');
+      await ctx.reply('❌ Failed to initiate cleanup.');
+    }
+  };
+
+  // ========== Callback Handlers (Inline Keyboard) ==========
+
   const handleProviderSelect = async (ctx: Context, providerId: string): Promise<void> => {
     try {
-      const chatId = String(ctx.chat?.id);
-      const sessionKey = `telegram:${chatId}`;
+      const sessionKey = getSessionKeyFromCtx(ctx);
       const modelConfig = config.agents?.defaults?.model;
-      // Handle both string and object model configs
       const defaultModel = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary || DEFAULT_MODEL;
       const currentModel = getSessionModel(sessionKey) || defaultModel;
 
@@ -101,8 +170,8 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
       }
 
       const keyboard = TelegramInlineKeyboards.modelSelector(models, currentModel);
-
       const providerName = getProviderDisplayName(providerId);
+      
       await ctx.editMessageText(`🤖 Select a model from *${providerName}*:`, { 
         reply_markup: keyboard,
         parse_mode: 'Markdown',
@@ -116,9 +185,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
 
   const handleModelSelect = async (ctx: Context, modelId: string): Promise<void> => {
     try {
-      const chatId = String(ctx.chat?.id);
-      const sessionKey = `telegram:${chatId}`;
-
+      const sessionKey = getSessionKeyFromCtx(ctx);
       setSessionModel(sessionKey, modelId);
 
       const modelName = modelId.split('/').pop() || modelId;
@@ -149,48 +216,12 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     }
   };
 
-  const handleUsage = async (ctx: Context): Promise<void> => {
-    try {
-      const chatId = String(ctx.chat?.id);
-      const sessionKey = `telegram:${chatId}`;
-
-      await bus.publishInbound({
-        channel: 'system',
-        sender_id: 'telegram:usage',
-        chat_id: chatId,
-        content: '/usage',
-        metadata: { sessionKey },
-      });
-
-      await ctx.reply(
-        '📊 *Token Usage Stats*\n\nFetching usage statistics for this session...',
-        { parse_mode: 'Markdown' }
-      );
-    } catch (err) {
-      log.error({ err }, 'Failed to show usage stats');
-      await ctx.reply('❌ Failed to fetch usage statistics.');
-    }
-  };
-
-  const handleCleanup = async (ctx: Context): Promise<void> => {
-    try {
-      await ctx.reply(
-        '🧹 *Session Cleanup*\n\n' +
-        'This will archive sessions that have been inactive for more than 30 days.\n\n' +
-        'Archived sessions can be restored later.',
-        { parse_mode: 'Markdown', reply_markup: TelegramInlineKeyboards.cleanupConfirm() }
-      );
-    } catch (err) {
-      log.error({ err }, 'Failed to show cleanup dialog');
-      await ctx.reply('❌ Failed to initiate cleanup.');
-    }
-  };
-
   const handleCleanupConfirm = async (ctx: Context): Promise<void> => {
     try {
       await ctx.editMessageText('🧹 Cleaning up old sessions...');
       
       const chatId = String(ctx.chat?.id);
+
       await bus.publishInbound({
         channel: 'system',
         sender_id: 'telegram:cleanup',
@@ -212,93 +243,18 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     await ctx.answerCallbackQuery();
   };
 
-  const handleNew = async (ctx: Context): Promise<void> => {
-    try {
-      const chatId = String(ctx.chat?.id);
-      const sessionKey = `telegram:${chatId}`;
-
-      // Send command to agent service for processing
-      await bus.publishInbound({
-        channel: 'system',
-        sender_id: 'telegram:new',
-        chat_id: chatId,
-        content: '/new',
-        metadata: { sessionKey },
-      });
-
-      await ctx.reply('✅ Starting new session...');
-    } catch (err) {
-      log.error({ err }, 'Failed to start new session');
-      await ctx.reply('❌ Failed to start new session. Please try again.');
-    }
-  };
-
-  const handleSkills = async (ctx: Context, args?: string): Promise<void> => {
-    try {
-      const chatId = String(ctx.chat?.id);
-
-      if (args === 'reload') {
-        // Send reload command to agent service
-        await bus.publishInbound({
-          channel: 'system',
-          sender_id: 'telegram:skills',
-          chat_id: chatId,
-          content: '/skills reload',
-        });
-        await ctx.reply('✅ Skills reloaded successfully');
-      } else {
-        // Show help
-        await ctx.reply(
-          '🛠️ *Skills Management*\n\n' +
-          'Available commands:\n' +
-          '/skills reload - Reload all skills from disk',
-          { parse_mode: 'Markdown' }
-        );
-      }
-    } catch (err) {
-      log.error({ err }, 'Failed to handle skills command');
-      await ctx.reply('❌ Failed to execute skills command.');
-    }
-  };
-
-  const handleStart = async (ctx: Context): Promise<void> => {
-    try {
-      const providers = getAvailableProviders();
-      const hasProviders = providers.length > 0;
-
-      await ctx.reply(
-        '👋 *Welcome to xopcbot!*\n\n' +
-        'I am your AI assistant. Here are the available commands:\n\n' +
-        '🤖 *Model Selection*\n' +
-        '/models - Select a model to use\n\n' +
-        '📊 *Session Management*\n' +
-        '/usage - View token usage statistics\n' +
-        '/new - Start a new session (archive current)\n' +
-        '/cleanup - Clean up old sessions\n\n' +
-        '🛠️ *Skills*\n' +
-        '/skills - Manage skills (e.g., /skills reload)\n\n' +
-        '💡 *Tip*: Just send a message to start chatting!' +
-        (hasProviders ? '' : '\n\n⚠️ *Note*: No LLM providers configured. Please set up API keys in your config.'),
-        { parse_mode: 'Markdown' }
-      );
-    } catch (err) {
-      log.error({ err }, 'Failed to handle start command');
-      await ctx.reply('❌ Failed to show welcome message.');
-    }
-  };
-
   return {
+    // Command handlers
+    handleStart,
     handleModels,
+    handleCleanup,
+    // Callback handlers
     handleProviderSelect,
     handleModelSelect,
     handleShowProviders,
-    handleUsage,
-    handleCleanup,
     handleCleanupConfirm,
     handleCancel,
-    handleNew,
-    handleSkills,
-    handleStart,
+    // Helpers
     getAvailableProviders,
   };
 }

@@ -36,6 +36,7 @@ import { formatTelegramMessage } from '../format.js';
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/index.js';
 import { createTelegramCommandHandler } from './command-handler.js';
+import { generateSessionKey } from '../../commands/session-key.js';
 import { transcribe, isSTTAvailable } from '../../stt/index.js';
 import { speak, isTTSAvailable } from '../../tts/index.js';
 import { exec } from 'child_process';
@@ -340,9 +341,14 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
 
     const cleanContent = isGroup ? removeBotMention(content, botUsername) : content;
 
-    const sessionKey = isGroup
-      ? `telegram:group:${chatId}${threadId ? `:topic:${threadId}` : ''}`
-      : `telegram:dm:${senderId}`;
+    // Use unified session key generator for consistency with command system
+    const sessionKey = generateSessionKey({
+      source: 'telegram',
+      chatId,
+      senderId,
+      isGroup,
+      threadId: threadId ? String(threadId) : undefined,
+    });
 
     const media: Array<{ type: string; fileId: string }> = [];
     if (message.photo?.length) {
@@ -424,7 +430,21 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
       ? transcribedText + (cleanContent ? '\n\n' + cleanContent : '')
       : cleanContent;
 
-    log.info({ accountId, chatId, senderId, isGroup, threadId, sessionKey, contentLength: finalContent.length, attachmentCount: attachments.length, hasVoice: !!transcribedText }, 'Processing Telegram message');
+    // Check if it's a command
+    const isCommand = cleanContent.startsWith('/');
+    
+    log.info({ 
+      accountId, 
+      chatId, 
+      senderId, 
+      isGroup, 
+      threadId, 
+      sessionKey, 
+      contentLength: finalContent.length, 
+      attachmentCount: attachments.length, 
+      hasVoice: !!transcribedText,
+      isCommand 
+    }, 'Processing Telegram message');
 
     await bus.publishInbound({
       channel: 'telegram',
@@ -435,6 +455,7 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
         sessionKey,
         messageId: String(message.message_id),
         isGroup,
+        isCommand,
         threadId: threadId ? String(threadId) : undefined,
         media: media.length > 0 ? media : undefined,
         transcribedVoice: !!transcribedText || undefined,
@@ -593,21 +614,8 @@ export class TelegramChannelPlugin implements ChannelPlugin {
         await commandHandler!.handleModels(ctx);
       });
       
-      bot.command('usage', async (ctx) => {
-        await commandHandler!.handleUsage(ctx);
-      });
-      
       bot.command('cleanup', async (ctx) => {
         await commandHandler!.handleCleanup(ctx);
-      });
-
-      bot.command('new', async (ctx) => {
-        await commandHandler!.handleNew(ctx);
-      });
-
-      bot.command('skills', async (ctx) => {
-        const args = ctx.message?.text?.replace('/skills', '').trim();
-        await commandHandler!.handleSkills(ctx, args || undefined);
       });
 
       bot.command('start', async (ctx) => {
