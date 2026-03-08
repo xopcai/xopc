@@ -894,26 +894,32 @@ export class SettingsPage extends LitElement {
           const match = field.match(/providers\.([^.]+)(?:\.(.*))?/);
           if (match) {
             const providerId = match[1];
-            const provider = this._providers.find(p => p.id === providerId);
-            if (provider) {
-              updates.models.providers[providerId] = {
-                baseUrl: provider.baseUrl,
-                api: provider.api,
-                apiKey: provider.apiKey,
-                models: provider.models.map(m => ({
-                  id: m.id,
-                  name: m.name,
-                  reasoning: m.capabilities.reasoning,
-                  input: [
-                    ...(m.capabilities.text ? ['text'] : []),
-                    ...(m.capabilities.image ? ['image'] : []),
-                  ],
-                  contextWindow: m.contextWindow,
-                  maxTokens: m.maxTokens,
-                  cost: m.cost || { input: 0, output: 0 },
-                })),
-              };
+            let provider = this._providers.find(p => p.id === providerId);
+            
+            // If provider not found in _providers, try to get from config or create minimal entry
+            if (!provider) {
+              console.warn(`Provider ${providerId} not found in _providers, skipping model save`);
+              continue;
             }
+            
+            // Ensure we have the latest models data
+            updates.models.providers[providerId] = {
+              baseUrl: provider.baseUrl || '',
+              api: provider.api || 'openai-completions',
+              apiKey: provider.apiKey || '',
+              models: (provider.models || []).map(m => ({
+                id: m.id,
+                name: m.name,
+                reasoning: m.capabilities?.reasoning ?? false,
+                input: [
+                  ...(m.capabilities?.text ? ['text'] : []),
+                  ...(m.capabilities?.image ? ['image'] : []),
+                ],
+                contextWindow: m.contextWindow || 128000,
+                maxTokens: m.maxTokens || 4096,
+                cost: m.cost || { input: 0, output: 0 },
+              })),
+            };
           }
         }
       }
@@ -1002,6 +1008,19 @@ export class SettingsPage extends LitElement {
       clearProviderCaches();
       await this._loadDynamicProviders();
       await this._loadModels();
+      
+      // Also reload _providers from config to ensure sync
+      const configUrl = window.location.origin;
+      const configToken = this.config?.token;
+      const configResponse = await fetch(`${configUrl}/api/config`, {
+        headers: { 'Authorization': `Bearer ${configToken}` }
+      });
+      if (configResponse.ok) {
+        const data = await configResponse.json();
+        if (data?.payload?.config?.models?.providers) {
+          this._loadProvidersFromConfig(data.payload.config.models.providers);
+        }
+      }
       
       this._dirtyFields.clear();
       this._saveSuccess = true;
