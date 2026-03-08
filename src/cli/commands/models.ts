@@ -61,7 +61,7 @@ function createModelsCommand(_ctx: CLIContext): Command {
       console.log('\n📚 Models\n');
       
       // Group by provider
-      const byProvider = new Map<string, typeof models>();
+      const byProvider = new Map<string, ReturnType<typeof getAllModels>[number][]>();
       for (const model of models) {
         const list = byProvider.get(model.provider) ?? [];
         list.push(model);

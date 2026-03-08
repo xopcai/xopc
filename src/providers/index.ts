@@ -50,7 +50,7 @@ export function resolveModel(ref: string): Model<Api> {
 	throw new Error(`Model not found: ${ref}. Use format: provider/model-id`);
 }
 
-export function getModelsByProvider(provider: string): Model<Api>[] {
+export function getModelsByProvider(provider: string): readonly Model<Api>[] {
 	// Get from registry (includes custom models)
 	const registry = getModelRegistry();
 	return registry.getAll().filter(m => m.provider === provider);
@@ -124,14 +124,14 @@ export function getConfiguredProviders(config: Config | null | undefined): strin
 	return getAllProviders().filter(p => isProviderConfigured(config, p));
 }
 
-export function getAllModels(): Model<Api>[] {
+export function getAllModels(): readonly Model<Api>[] {
 	const registry = getModelRegistry();
 	return registry.getAll();
 }
 
-export function getAvailableModels(config: Config | null | undefined): Model<Api>[] {
-	const configured = new Set(getConfiguredProviders(config));
-	return getAllModels().filter(m => configured.has(m.provider));
+export function getAvailableModels(config: Config | null | undefined): readonly Model<Api>[] {
+	const registry = getModelRegistry();
+	return registry.getAvailable();
 }
 
 export type { Model, Api } from '@mariozechner/pi-ai';

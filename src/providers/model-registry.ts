@@ -140,16 +140,25 @@ export class ModelRegistry {
 	private customProviderApiKeys: Map<string, string> = new Map();
 	private loadError: string | undefined = undefined;
 
+	// Performance caches
+	private _availableModelsCache: Model<Api>[] | undefined;
+	private _providersCache: string[] | undefined;
+	private _authStatusCache: Map<string, boolean> = new Map();
+
 	constructor(private modelsJsonPath: string = getModelsJsonPath()) {
 		this.loadModels();
 	}
 
 	/**
 	 * Reload models from disk (built-in + custom from models.json)
+	 * Clears all caches
 	 */
 	refresh(): void {
 		this.customProviderApiKeys.clear();
 		this.loadError = undefined;
+		this._availableModelsCache = undefined;
+		this._providersCache = undefined;
+		this._authStatusCache.clear();
 		this.loadModels();
 		log.info('Model registry refreshed');
 	}
@@ -163,16 +172,22 @@ export class ModelRegistry {
 
 	/**
 	 * Get all models (built-in + custom)
+	 * Results are cached until refresh() is called
 	 */
-	getAll(): Model<Api>[] {
+	getAll(): readonly Model<Api>[] {
 		return this.models;
 	}
 
 	/**
 	 * Get only models that have auth configured
+	 * Results are cached on first call until refresh()
 	 */
-	getAvailable(): Model<Api>[] {
-		return this.models.filter((m) => this.hasAuth(m.provider));
+	getAvailable(): readonly Model<Api>[] {
+		// Lazy initialization with caching
+		if (!this._availableModelsCache) {
+			this._availableModelsCache = this.models.filter((m) => this.hasAuth(m.provider));
+		}
+		return this._availableModelsCache;
 	}
 
 	/**
@@ -216,20 +231,37 @@ export class ModelRegistry {
 
 	/**
 	 * Check if a provider has auth configured
+	 * Results are cached until refresh() is called
 	 */
 	private hasAuth(provider: string): boolean {
-		// Check custom provider API keys
+		// Check cache first
+		if (this._authStatusCache.has(provider)) {
+			return this._authStatusCache.get(provider)!;
+		}
+
+		// Compute and cache
+		let result: boolean;
 		if (this.customProviderApiKeys.has(provider)) {
 			const key = this.getApiKey(provider);
-			return !!key;
+			result = !!key;
+		} else {
+			result = false;
 		}
-		return false;
+
+		this._authStatusCache.set(provider, result);
+		return result;
 	}
 
 	/**
 	 * Load all models
+	 * Clears caches to ensure fresh data
 	 */
 	private loadModels(): void {
+		// Clear caches before loading
+		this._availableModelsCache = undefined;
+		this._providersCache = undefined;
+		this._authStatusCache.clear();
+
 		// Load custom models and overrides from models.json
 		const {
 			models: customModels,

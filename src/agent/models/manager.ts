@@ -268,7 +268,7 @@ export class ModelManager {
   /**
    * Get all available models
    */
-  getAllModels(): Model<Api>[] {
+  getAllModels(): readonly Model<Api>[] {
     return getAvailableModels(this.config);
   }
 
