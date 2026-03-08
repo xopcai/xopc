@@ -1,0 +1,22 @@
+{
+  "id": "weather-service",
+  "name": "Weather Service",
+  "description": "Provides weather data to other plugins via typed event bus",
+  "version": "1.0.0",
+  "kind": "utility",
+  "main": "index.ts",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "defaultCity": {
+        "type": "string",
+        "default": "Beijing",
+        "description": "Default city for weather queries"
+      },
+      "apiKey": {
+        "type": "string",
+        "description": "Weather API key (optional)"
+      }
+    }
+  }
+}

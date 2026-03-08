@@ -1,6 +1,6 @@
 /**
  * Agent Service - Main coordinator
- * 
+ *
  * Orchestrates message processing, model management, and session handling.
  * Refactored to delegate specific concerns to specialized modules.
  */
@@ -62,7 +62,7 @@ interface AgentContext {
 
 /**
  * AgentService - Main agent orchestrator
- * 
+ *
  * Delegates to:
  * - SessionTracker: session state and cleanup
  * - ModelManager: model selection and fallback
@@ -83,7 +83,7 @@ export class AgentService {
   private skillLoader = createSkillLoader();
   private workspaceDir: string;
   private bootstrapFiles: BootstrapFile[] = [];
-  
+
   // Delegated modules
   private sessionTracker: SessionTracker;
   private modelManager: ModelManager;
@@ -197,7 +197,7 @@ export class AgentService {
     });
 
     this.unsubscribe = this.agent.subscribe((event) => this.handleEvent(event));
-    
+
     // Setup shutdown handlers
     process.on('SIGINT', () => this.dispose());
     process.on('SIGTERM', () => this.dispose());
@@ -246,7 +246,7 @@ export class AgentService {
     this.agent.abort();
     this.unsubscribe?.();
     this.dispose();
-    
+
     this.triggerHook('gateway_stop', { reason: 'stopped' });
     log.info('Agent service stopped');
     return Promise.resolve();
@@ -271,7 +271,7 @@ export class AgentService {
   }
 
   async processDirect(
-    content: string, 
+    content: string,
     sessionKey = 'cli:direct',
     attachments?: Array<{
       type: string;
@@ -285,7 +285,7 @@ export class AgentService {
     this.agent.replaceMessages(messages);
 
     const messageContent: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
-    
+
     if (content.trim()) {
       messageContent.push({ type: 'text', text: content });
     }
@@ -353,13 +353,58 @@ export class AgentService {
     content: string
   ): Promise<{ send: boolean; content?: string; reason?: string }> {
     if (!this.hookRunner) return { send: true, content };
-    
+
     const ctx = createHookContext({
       sessionKey: this.currentContext?.sessionKey,
       agentId: this.agentId,
     });
-    
+
     return this.hookRunner.runMessageSending(to, content, ctx);
+  }
+
+  // 🆕 Phase 1: Input Hook - Intercept and transform user input
+  private async runInputHook(
+    text: string,
+    images: Array<{ type: string; data: string; mimeType?: string }>,
+    source: string
+  ): Promise<{
+    text: string;
+    images: Array<{ type: string; data: string; mimeType?: string }>;
+    action: 'continue' | 'handled';
+    skipAgent: boolean;
+    response?: string;
+  }> {
+    if (!this.hookRunner) {
+      return {
+        text,
+        images,
+        action: 'continue',
+        skipAgent: false,
+      };
+    }
+
+    const ctx = createHookContext({
+      sessionKey: this.currentContext?.sessionKey,
+      agentId: this.agentId,
+    });
+
+    return this.hookRunner.runInputHook(text, images, source, ctx);
+  }
+
+  // 🆕 Phase 1: Context Hook - Modify messages before sending to LLM
+  private async runContextHook(
+    messages: AgentMessage[]
+  ): Promise<{ messages: AgentMessage[]; modified: boolean }> {
+    if (!this.hookRunner) {
+      return { messages, modified: false };
+    }
+
+    const ctx = createHookContext({
+      sessionKey: this.currentContext?.sessionKey,
+      agentId: this.agentId,
+    });
+
+    return this.hookRunner.runContextHook(messages, ctx);
   }
 
   private convertPluginTools(pluginTools: PluginTool[]): AgentTool<any, any>[] {
@@ -427,7 +472,7 @@ export class AgentService {
       typing.start();
 
       const content = msg.content.trim();
-      
+
       // Check if it's a command using the new command system
       if (content.startsWith('/')) {
         const parsed = this.parseCommand(content);
@@ -441,7 +486,7 @@ export class AgentService {
             senderId: msg.sender_id,
             isGroup,
           });
-          
+
           if (isHandled) {
             return; // Command was handled
           }
@@ -509,28 +554,70 @@ export class AgentService {
       const expandedContent = this.expandSkillCommand(msg.content);
       await this.triggerHook('before_agent_start', { prompt: expandedContent });
 
+      // 🆕 Phase 1: Input Hook - Intercept/transform user input
+      const inputImages: Array<{ type: string; data: string; mimeType?: string }> = [];
+      if (msg.attachments) {
+        for (const att of msg.attachments) {
+          if (att.type === 'photo' || att.mimeType?.startsWith('image/')) {
+            inputImages.push({
+              type: 'image',
+              data: att.data,
+              mimeType: att.mimeType || 'image/jpeg',
+            });
+          }
+        }
+      }
+
+      const inputResult = await this.runInputHook(expandedContent, inputImages, msg.channel);
+
+      // If handled by input hook, skip AI processing
+      if (inputResult.skipAgent) {
+        if (inputResult.response) {
+          await this.bus.publishOutbound({
+            channel: msg.channel,
+            chat_id: msg.chat_id,
+            content: inputResult.response,
+            type: 'message',
+          });
+        }
+        return;
+      }
+
+      // Use transformed content
+      const processedContent = inputResult.text;
+
       let messages = await this.sessionStore.load(sessionKey);
       await this.checkAndCompact(sessionKey, messages);
       messages = await this.sessionStore.load(sessionKey);
       this.agent.replaceMessages(messages);
 
+      // 🆕 Phase 1: Context Hook - Modify messages before sending to LLM
+      const contextResult = await this.runContextHook(this.agent.state.messages);
+      if (contextResult.modified) {
+        this.agent.replaceMessages(contextResult.messages);
+      }
+
       // Build message content with text and attachments
       const messageContent: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
 
-      // Add text content
-      if (expandedContent.trim()) {
-        messageContent.push({ type: 'text', text: expandedContent });
+      // Add text content (use transformed content from input hook)
+      if (processedContent.trim()) {
+        messageContent.push({ type: 'text', text: processedContent });
       }
 
       // Add attachments from inbound message
-      const attachments = msg.attachments;
-      if (attachments && attachments.length > 0) {
-        for (const att of attachments) {
-          if (att.type === 'photo' || att.mimeType?.startsWith('image/')) {
-            const mimeType = att.mimeType || 'image/jpeg';
-            messageContent.push({ type: 'image', data: att.data, mimeType });
-          } else {
-            // For non-image files, add as text description
+      // Use transformed images from input hook if available, otherwise use original
+      const finalImages = inputResult.images || inputImages;
+      if (finalImages.length > 0) {
+        for (const img of finalImages) {
+          messageContent.push({ type: 'image', data: img.data, mimeType: img.mimeType || 'image/jpeg' });
+        }
+      }
+
+      // Add non-image attachments as text description
+      if (msg.attachments) {
+        for (const att of msg.attachments) {
+          if (att.type !== 'photo' && !att.mimeType?.startsWith('image/')) {
             const fileInfo = `[File: ${att.name || att.type} (${att.mimeType || 'unknown type'}, ${att.size || 0} bytes)]`;
             messageContent.push({ type: 'text', text: fileInfo });
           }
@@ -543,6 +630,13 @@ export class AgentService {
         timestamp: Date.now(),
       };
 
+      // 🆕 Phase 1: Turn Start Hook
+      const turnIndex = this.agent.state.messages.filter(m => m.role === 'user').length + 1;
+      await this.triggerHook('turn_start', {
+        turnIndex,
+        timestamp: Date.now(),
+      });
+
       // Run with fallback
       const currentProvider = this.modelManager.getCurrentProvider();
       const currentModel = this.modelManager.getCurrentModel();
@@ -550,7 +644,7 @@ export class AgentService {
         { sessionKey, provider: currentProvider, model: currentModel },
         'Calling LLM'
       );
-      
+
       const result = await this.modelManager.runWithFallback(
         this.agent,
         sessionKey,
@@ -558,6 +652,17 @@ export class AgentService {
         currentProvider,
         currentModel
       );
+
+      // 🆕 Phase 1: Turn End Hook
+      await this.triggerHook('turn_end', {
+        turnIndex,
+        message: {
+          role: 'assistant',
+          content: result.content || '',
+        },
+        toolResults: result.toolResults || [],
+        timestamp: Date.now(),
+      });
 
       // Track usage
       if (result.usage) {
@@ -585,7 +690,7 @@ export class AgentService {
           const userSentVoice = msg.metadata?.transcribedVoice === true;
           const ttsEnabled = this.config.config?.tts?.enabled && this.config.config?.tts?.trigger === 'auto';
           const useTTS = userSentVoice && ttsEnabled && msg.channel === 'telegram';
-          
+
           await this.bus.publishOutbound({
             channel: msg.channel,
             chat_id: msg.chat_id,
@@ -612,13 +717,13 @@ export class AgentService {
     if (msg.metadata?.sessionKey && msg.content.startsWith('/')) {
       const sessionKey = msg.metadata.sessionKey as string;
       const parsed = this.parseCommand(msg.content);
-      
+
       if (parsed) {
         // Use parseSessionKey to extract channel info from sessionKey
         const { parseSessionKey } = await import('../commands/session-key.js');
         const sessionInfo = parseSessionKey(sessionKey);
         const channel = sessionInfo.source;
-        
+
         // Use unified command system to handle the command
         const isHandled = await this.executeCommand(parsed.command, parsed.args, {
           sessionKey,
@@ -636,19 +741,19 @@ export class AgentService {
 
     // Legacy system messages that need AI processing
     // (messages that don't start with / or weren't handled by command system)
-    
+
     // Handle Telegram /usage explicitly (for backward compatibility)
     if (msg.content === '/usage' && msg.sender_id === 'telegram:usage') {
       const sessionKey = (msg.metadata?.sessionKey as string) || `telegram:${msg.chat_id}`;
       const usage = this.sessionTracker.getUsage(sessionKey);
       this.sessionTracker.touchSession(sessionKey);
-      
+
       if (usage) {
         const modelName = this.modelManager.getCurrentModel().split('/').pop() || 'unknown';
         await this.bus.publishOutbound({
           channel: 'telegram',
           chat_id: msg.chat_id,
-          content: 
+          content:
             '📊 *Session Token Usage*\n\n' +
             `🤖 Model: ${modelName}\n` +
             `📥 Prompt: ${usage.prompt.toLocaleString()} tokens\n` +
@@ -717,7 +822,7 @@ export class AgentService {
     if (!prep.needsCompaction) return;
 
     log.info({ sessionKey, reason: prep.stats?.reason, usagePercent: prep.stats?.usagePercent }, 'Session needs compaction');
-    
+
     try {
       const result = await this.sessionStore.compact(sessionKey, messages, contextWindow);
       await this.triggerHook('after_compaction', {
@@ -750,7 +855,7 @@ export class AgentService {
       case 'message_end':
         if (event.message.role === 'assistant') {
           const content = event.message.content;
-          const text = Array.isArray(content) 
+          const text = Array.isArray(content)
             ? extractTextContent(content as Array<{ type: string; text?: string }>)
             : String(content);
           log.debug({ contentLength: text.length }, 'Assistant response complete');
@@ -789,7 +894,7 @@ export class AgentService {
     // Get heartbeat config from gateway config
     const gatewayConfig = this.config.config?.gateway;
     const heartbeatEnabled = gatewayConfig?.heartbeat?.enabled ?? false;
-    
+
     // Extract timezone from USER.md for quiet hours display
     const userFile = this.bootstrapFiles.find(f => f.name === 'USER.md');
     let userTimezone: string | undefined;
@@ -852,14 +957,14 @@ export class AgentService {
    */
   private parseCommand(text: string): { command: string; args: string } | null {
     const trimmed = text.trim();
-    
+
     if (!trimmed.startsWith('/')) {
       return null;
     }
 
     const withoutPrefix = trimmed.slice(1);
     const spaceIndex = withoutPrefix.indexOf(' ');
-    
+
     if (spaceIndex === -1) {
       return { command: withoutPrefix, args: '' };
     }
@@ -885,7 +990,7 @@ export class AgentService {
     }
   ): Promise<boolean> {
     const { commandRegistry, createCommandContext } = await import('../commands/index.js');
-    
+
     // Check if command exists
     if (!commandRegistry.has(commandName)) {
       return false;
@@ -904,7 +1009,7 @@ export class AgentService {
       config: this.config.config!,
       bus: this.bus,
       sessionStore: this.sessionStore,
-      
+
       replyHandler: async (text: string, _options?) => {
         await this.bus.publishOutbound({
           channel: context.channel,
@@ -913,7 +1018,7 @@ export class AgentService {
           type: 'message',
         });
       },
-      
+
       typingHandler: async (typing: boolean) => {
         await this.bus.publishOutbound({
           channel: context.channel,
@@ -921,19 +1026,19 @@ export class AgentService {
           type: typing ? 'typing_on' : 'typing_off',
         });
       },
-      
+
       supportedFeatures: ['markdown', 'typing'],
-      
+
       getCurrentModel: () => this.modelManager.getCurrentModel(),
-      
+
       switchModel: async (modelId: string) => {
         return this.modelManager.switchModelForSession(context.sessionKey, modelId);
       },
-      
+
       listModels: async () => {
         const providers = getAllProviders();
         const models: Array<{ id: string; name: string; provider: string }> = [];
-        
+
         for (const providerId of providers) {
           if (isProviderConfigured(this.config.config!, providerId)) {
             const providerModels = getModelsByProvider(providerId);
@@ -946,22 +1051,22 @@ export class AgentService {
             }
           }
         }
-        
+
         return models;
       },
-      
+
       getUsage: async () => {
         const messages = await this.sessionStore.load(context.sessionKey);
         let promptTokens = 0;
         let completionTokens = 0;
-        
+
         for (const msg of messages) {
           if ('usage' in msg && msg.usage) {
             promptTokens += (msg.usage as any).input || 0;
             completionTokens += (msg.usage as any).output || 0;
           }
         }
-        
+
         return {
           promptTokens,
           completionTokens,
@@ -973,7 +1078,7 @@ export class AgentService {
 
     // Execute command
     const result = await commandRegistry.execute(commandName, cmdCtx, args);
-    
+
     // Send response if there's content
     if (result.content) {
       await this.bus.publishOutbound({

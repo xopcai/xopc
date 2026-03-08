@@ -4,8 +4,9 @@
 
 import type {
   PluginHookEvent,
-  PluginRegistry,
+  AgentMessage,
 } from './types.js';
+import { PluginRegistryImpl as PluginRegistry } from './loader.js';
 
 // ============================================================================
 // Hook Event Types
@@ -375,6 +376,154 @@ export class HookRunner {
 
     return { send: true, content: modifiedContent };
   }
+
+  // ============================================================================
+  // Phase 1: Enhanced Hook Methods
+  // ============================================================================
+
+  /**
+   * Execute context hooks to modify messages before sending to LLM.
+   * Handlers chain: each handler sees the result of previous handler.
+   */
+  async runContextHook(
+    messages: AgentMessage[],
+    context?: HookContext,
+  ): Promise<{ messages: AgentMessage[]; modified: boolean }> {
+    const handlers = this.registry.getHooks('context');
+    
+    if (handlers.length === 0) {
+      return { messages, modified: false };
+    }
+
+    let currentMessages = [...messages];
+    let modified = false;
+
+    const event = {
+      messages: currentMessages,
+      timestamp: new Date(),
+      ...context,
+    };
+
+    for (const handler of handlers) {
+      try {
+        const result = await handler(event, context || {});
+        
+        if (result && typeof result === 'object' && 'messages' in result) {
+          const typedResult = result as { messages: Array<{ role: string; content: string }> };
+          currentMessages = typedResult.messages;
+          event.messages = currentMessages;
+          modified = true;
+        }
+      } catch (error) {
+        if (!this.options.catchErrors) {
+          throw error;
+        }
+        this.options.logger?.warn?.(
+          `context hook error: ${error instanceof Error ? error.message : String(error)}`
+        );
+        // Continue with current messages on error
+      }
+    }
+
+    return { messages: currentMessages, modified };
+  }
+
+  /**
+   * Execute input hooks to intercept/transform user input.
+   * Supports: continue (pass through), transform (modify), handled (skip agent).
+   */
+  async runInputHook(
+    text: string,
+    images: Array<{ type: string; data: string; mimeType?: string }> | undefined,
+    source: string,
+    context?: HookContext,
+  ): Promise<{
+    text: string;
+    images: Array<{ type: string; data: string; mimeType?: string }> | undefined;
+    action: 'continue' | 'handled';
+    skipAgent: boolean;
+    response?: string;
+  }> {
+    const handlers = this.registry.getHooks('input');
+
+    // If no handlers, return original input
+    if (handlers.length === 0) {
+      return {
+        text,
+        images,
+        action: 'continue',
+        skipAgent: false,
+      };
+    }
+
+    let currentText = text;
+    let currentImages = images;
+
+    const event = {
+      text: currentText,
+      images: currentImages,
+      source,
+      timestamp: new Date(),
+      ...context,
+    };
+
+    for (const handler of handlers) {
+      try {
+        const result = await handler(event, context || {});
+
+        if (result && typeof result === 'object') {
+          const typedResult = result as {
+            action: 'continue' | 'handled' | 'transform';
+            text?: string;
+            images?: Array<{ type: string; data: string; mimeType?: string }>;
+            response?: string;
+          };
+
+          // Handle transformation
+          if (typedResult.action === 'transform') {
+            if (typedResult.text !== undefined) {
+              currentText = typedResult.text;
+              event.text = currentText;
+            }
+            if (typedResult.images !== undefined) {
+              currentImages = typedResult.images;
+              event.images = currentImages;
+            }
+            // Continue to next handler after transform
+            continue;
+          }
+
+          // Handle short-circuit (skip remaining handlers and agent)
+          if (typedResult.action === 'handled') {
+            return {
+              text: currentText,
+              images: currentImages,
+              action: 'handled',
+              skipAgent: true,
+              response: typedResult.response,
+            };
+          }
+
+          // action === 'continue': proceed to next handler
+        }
+      } catch (error) {
+        if (!this.options.catchErrors) {
+          throw error;
+        }
+        this.options.logger?.warn?.(
+          `input hook error: ${error instanceof Error ? error.message : String(error)}`
+        );
+        // Continue to next handler on error
+      }
+    }
+
+    return {
+      text: currentText,
+      images: currentImages,
+      action: 'continue',
+      skipAgent: false,
+    };
+  }
 }
 
 // ============================================================================
@@ -390,6 +539,7 @@ export function createHookContext(overrides?: Partial<HookContext>): HookContext
 
 export function isHookEvent(value: string): value is PluginHookEvent {
   const hookEvents: PluginHookEvent[] = [
+    // Existing hooks
     'before_agent_start',
     'agent_end',
     'before_compaction',
@@ -403,6 +553,15 @@ export function isHookEvent(value: string): value is PluginHookEvent {
     'session_end',
     'gateway_start',
     'gateway_stop',
+    // Phase 1: Enhanced hooks
+    'context',
+    'input',
+    'turn_start',
+    'turn_end',
+    // Phase 2: Tool execution lifecycle
+    'tool_execution_start',
+    'tool_execution_update',
+    'tool_execution_end',
   ];
   return hookEvents.includes(value as PluginHookEvent);
 }

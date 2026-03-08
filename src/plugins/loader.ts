@@ -20,21 +20,21 @@ import {
   resolvePluginSdkPath,
 } from '../config/paths.js';
 import type {
+  PluginApi,
+  PluginTool,
+  PluginModule,
   ChannelPlugin,
   GatewayMethodHandler,
   HttpRequestHandler,
-  PluginApi,
   PluginCommand,
+  PluginService,
   PluginHookEvent,
   PluginHookHandler,
   PluginManifest,
-  PluginModule,
   PluginRecord,
-  PluginRegistry,
-  PluginService,
-  PluginTool,
   ResolvedPluginConfig,
 } from './types.js';
+import { PluginRegistryImpl as PluginRegistry } from './loader.js';
 import { PluginApiImpl, createPluginLogger, createPathResolver } from './api.js';
 import { createLogger, createServiceLogger } from '../utils/logger.js';
 
@@ -48,7 +48,7 @@ export type PluginSourceOrigin = 'workspace' | 'global' | 'bundled' | 'config';
 interface DiscoveredPlugin {
   id: string;
   path: string;
-  origin: PluginSourceOrigin;
+  source: PluginSourceOrigin;
   manifest: PluginManifest;
 }
 
@@ -67,7 +67,7 @@ export class PluginRegistryImpl implements PluginRegistry {
   tools = new Map<string, PluginTool>();
 
   addPlugin(record: PluginRecord): void {
-    this.plugins.set(record.definition.id, record);
+    this.plugins.set(record.id, record);
   }
 
   getPlugin(id: string): PluginRecord | undefined {
@@ -82,31 +82,16 @@ export class PluginRegistryImpl implements PluginRegistry {
     event: PluginHookEvent,
     handler: PluginHookHandler,
     pluginId: string,
-    priority = 0,
+    _priority = 0,
   ): void {
     if (!this.hooks.has(event)) {
       this.hooks.set(event, []);
     }
-    // Store with priority wrapper
-    const priorityHandler: PluginHookHandler = async (eventData: unknown, context: unknown) => {
-      return handler(eventData, context);
-    };
-    (priorityHandler as unknown as Record<symbol, unknown>)[Symbol.for('pluginId')] = pluginId;
-    (priorityHandler as unknown as Record<symbol, unknown>)[Symbol.for('priority')] = priority;
-    this.hooks.get(event)!.push(priorityHandler);
+    this.hooks.get(event)!.push(handler);
   }
 
   getHooks(event: PluginHookEvent): PluginHookHandler[] {
-    const handlers = this.hooks.get(event);
-    if (!handlers) return [];
-    // Sort by priority (descending)
-    return handlers.slice().sort((a, b) => {
-      const pa =
-        ((a as unknown as Record<symbol, unknown>)[Symbol.for('priority')] as number) || 0;
-      const pb =
-        ((b as unknown as Record<symbol, unknown>)[Symbol.for('priority')] as number) || 0;
-      return pb - pa;
-    });
+    return this.hooks.get(event) || [];
   }
 
   addChannel(channel: ChannelPlugin): void {
@@ -170,6 +155,14 @@ export class PluginRegistryImpl implements PluginRegistry {
       log.warn({ tool: tool.name }, `Tool already registered, overwriting`);
     }
     this.tools.set(tool.name, tool);
+  }
+
+  removeTool(name: string): void {
+    this.tools.delete(name);
+  }
+
+  getTools(): Map<string, PluginTool> {
+    return this.tools;
   }
 
   getTool(name: string): PluginTool | undefined {
@@ -252,7 +245,7 @@ export class PluginLoader {
 
   private discoverInDirectory(
     dir: string,
-    origin: PluginSourceOrigin,
+    source: PluginSourceOrigin,
     discovered: Map<string, DiscoveredPlugin>,
   ): void {
     if (!existsSync(dir)) {
@@ -287,15 +280,15 @@ export class PluginLoader {
       const existing = discovered.get(pluginId);
       if (existing) {
         const priority = { workspace: 3, global: 2, bundled: 1, config: 0 };
-        if (priority[origin] <= priority[existing.origin]) {
+        if (priority[origin] <= priority[existing.source]) {
           log.debug(
-            { pluginId, from: origin, existing: existing.origin },
+            { pluginId, from: origin, existing: existing.source },
             'Skipping lower priority plugin',
           );
           continue;
         }
         log.info(
-          { pluginId, from: origin, overriding: existing.origin },
+          { pluginId, from: origin, overriding: existing.source },
           'Plugin override by higher priority source',
         );
       }
@@ -323,7 +316,7 @@ export class PluginLoader {
 
       const config: ResolvedPluginConfig = {
         id: plugin.id,
-        origin: plugin.origin,
+        source: plugin.source,
         path: plugin.path,
         enabled: true,
         config: {},
@@ -438,7 +431,7 @@ export class PluginLoader {
       });
 
       this.pluginInstances.set(config.id, api);
-      log.info({ name: manifest.name, id: manifest.id, origin: config.origin }, `Loaded plugin`);
+      log.info({ name: manifest.name, id: manifest.id, source: config.source }, `Loaded plugin`);
 
       return api;
     } catch (error) {
@@ -668,7 +661,7 @@ export function normalizePluginConfig(
     const config = (rawConfig[id] as Record<string, unknown>) || {};
     plugins.push({
       id,
-      origin: 'config',
+      source: 'config',
       path: id,
       enabled: true,
       config,
@@ -681,7 +674,7 @@ export function normalizePluginConfig(
       const config = (rawConfig[id] as Record<string, unknown>) || {};
       plugins.push({
         id,
-        origin: 'config',
+        source: 'config',
         path: id,
         enabled: false,
         config,

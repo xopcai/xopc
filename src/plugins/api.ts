@@ -3,25 +3,35 @@
  */
 
 import type {
+  PluginApi,
+  PluginLogger,
+  PluginTool,
+  PluginRegistry as CorePluginRegistry,
   ChannelPlugin,
   GatewayMethodHandler,
   HttpRequestHandler,
-  PluginApi,
   PluginCommand,
-  PluginLogger,
   PluginService,
-  PluginTool,
-  PluginRegistry,
+  ProviderConfig,
+  FlagConfig,
+  FlagValue,
+  ShortcutConfig,
 } from './types.js';
 import type { Config } from '../types/index.js';
 import { resolve, isAbsolute } from 'path';
 import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';
+import { TypedEventBus } from './typed-event-bus.js';
+import { PluginRegistry } from './plugin-registry.js';
 
 export class PluginApiImpl implements PluginApi {
   private _tools: Map<string, PluginTool> = new Map();
   private _hooks: Map<string, Set<Function>> = new Map();
   private _eventBus = new EventEmitter();
+  private _typedEventBus: TypedEventBus;
+  
+  // Phase 4: Unified Registry
+  private _registry: PluginRegistry;
 
   constructor(
     public readonly id: string,
@@ -32,8 +42,16 @@ export class PluginApiImpl implements PluginApi {
     public readonly pluginConfig: Record<string, unknown>,
     private readonly _logger: PluginLogger,
     private readonly _resolvePath: (input: string) => string,
-    private readonly _registry?: PluginRegistry,
-  ) {}
+    private readonly _coreRegistry?: CorePluginRegistry,
+  ) {
+    // Initialize typed event bus
+    this._typedEventBus = new TypedEventBus({
+      logger: _logger,
+    });
+    
+    // Initialize unified registry
+    this._registry = new PluginRegistry({ logger: _logger });
+  }
 
   get logger(): PluginLogger {
     return this._logger;
@@ -44,12 +62,6 @@ export class PluginApiImpl implements PluginApi {
       this._logger.warn(`Tool ${tool.name} already registered, overwriting`);
     }
     this._tools.set(tool.name, tool);
-    
-    // Sync to registry if available
-    if (this._registry) {
-      this._registry.addTool(tool);
-    }
-    
     this._logger.info(`Registered tool: ${tool.name}`);
   }
 
@@ -111,6 +123,29 @@ export class PluginApiImpl implements PluginApi {
     this._eventBus.off(event, handler);
   }
 
+  // Phase 3: Typed Event Bus
+  get events(): TypedEventBus {
+    return this._typedEventBus;
+  }
+
+  // Phase 4: Unified Registry Methods
+  registerProvider(name: string, config: Partial<ProviderConfig>): void {
+    this._registry.registerProvider(name, config);
+    this._logger.info(`Plugin registered provider: ${name}`);
+  }
+
+  registerFlag(name: string, config: FlagConfig): void {
+    this._registry.registerFlag(name, config, this.id);
+  }
+
+  getFlag(name: string): FlagValue {
+    return this._registry.getFlag(name);
+  }
+
+  registerShortcut(key: string, config: ShortcutConfig): void {
+    this._registry.registerShortcut(key, config, { pluginId: this.id });
+  }
+
   // Internal methods for plugin manager
   _getTools(): Map<string, PluginTool> {
     return this._tools;
@@ -122,6 +157,11 @@ export class PluginApiImpl implements PluginApi {
 
   _getEventBus(): EventEmitter {
     return this._eventBus;
+  }
+
+  _cleanup(): void {
+    this._typedEventBus.cleanupAll();
+    this._eventBus.removeAllListeners();
   }
 }
 

@@ -1,0 +1,23 @@
+{
+  "id": "context-injector",
+  "name": "Context Injector",
+  "description": "Example plugin demonstrating context hook - injects system messages before LLM calls",
+  "version": "1.0.0",
+  "kind": "utility",
+  "main": "index.ts",
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "injectedContext": {
+        "type": "string",
+        "default": "Remember to be concise.",
+        "description": "Context to inject into every conversation"
+      },
+      "enableTimestamp": {
+        "type": "boolean",
+        "default": true,
+        "description": "Inject current timestamp"
+      }
+    }
+  }
+}

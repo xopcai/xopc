@@ -14,14 +14,14 @@ describe('PluginLoader', () => {
       expect(result).toHaveLength(2);
       expect(result[0]).toEqual({
         id: 'plugin-a',
-        origin: 'config',
+        source: 'config',
         path: 'plugin-a',
         enabled: true,
         config: { setting: 'value' },
       });
       expect(result[1]).toEqual({
         id: 'plugin-b',
-        origin: 'config',
+        source: 'config',
         path: 'plugin-b',
         enabled: true,
         config: {},

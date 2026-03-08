@@ -37,28 +37,59 @@ export type {
   PluginHookEvent,
   PluginHookHandler,
   HookOptions,
+  // Phase 1: Enhanced hook types
+  AgentMessage,
+  ContextHookEvent,
+  ContextHookResult,
+  InputHookEvent,
+  InputHookResult,
+  TurnStartHookEvent,
+  TurnEndHookEvent,
 } from '../plugins/types.js';
 
-// Hook context types (from hooks.ts)
+// Phase 2: Enhanced Tool System
 export type {
-  HookContext,
-  BeforeAgentStartContext,
-  BeforeAgentStartResult,
-  AgentEndContext,
-  BeforeCompactionContext,
-  AfterCompactionContext,
-  MessageReceivedContext,
-  MessageSendingContext,
-  MessageSendingResult,
-  MessageSentContext,
-  BeforeToolCallContext,
-  BeforeToolCallResult,
-  AfterToolCallContext,
-  SessionStartContext,
-  SessionEndContext,
-  GatewayStartContext,
-  GatewayStopContext,
-} from '../plugins/hooks.js';
+  ToolContentItem,
+  ToolUpdate,
+  ToolResult,
+  EnhancedToolContext,
+  ToolUpdateCallback,
+  EnhancedTool,
+  ToolExecutionStartEvent,
+  ToolExecutionUpdateEvent,
+  ToolExecutionEndEvent,
+} from '../plugins/types.js';
+
+// Phase 3: Typed Event Bus
+export type {
+  EventMap,
+  RequestMap,
+  EventHandler,
+  EventHandlerMeta,
+  RequestHandler,
+  RequestHandlerMeta,
+  WildcardEventHandler,
+  WildcardHandlerMeta,
+  TypedEventBusOptions,
+  RequestOptions,
+} from '../plugins/types.js';
+
+// Phase 4: Advanced Features
+export type {
+  ProviderConfig,
+  ModelConfig,
+  OAuthConfig,
+  OAuthCallbacks,
+  OAuthCredentials,
+  FlagConfig,
+  FlagValue,
+  ShortcutConfig,
+  ShortcutHandler,
+} from '../plugins/types.js';
+
+// Export classes
+export { TypedEventBus } from '../plugins/typed-event-bus.js';
+export { PluginRegistryImpl } from '../plugins/loader.js';
 
 // Export hook runner and utilities
 export { HookRunner, createHookContext, isHookEvent } from '../plugins/hooks.js';
