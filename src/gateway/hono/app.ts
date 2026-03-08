@@ -425,8 +425,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         // Skip if already in pi-ai
         if (piAiProviders.includes(providerName)) continue;
 
-        // Only include configured providers (have API key)
-        if (!providerConfig?.apiKey) continue;
+        // Only include providers that have models defined or apiKey
+        if (!providerConfig?.apiKey && !providerConfig?.models?.length) continue;
 
         // Add models defined in provider config
         if (providerConfig?.models && Array.isArray(providerConfig.models)) {
