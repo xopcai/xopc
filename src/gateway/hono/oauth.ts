@@ -13,7 +13,7 @@ import {
 } from '../../auth/index.js';
 import { 
   kimiOAuthProvider, 
-  qwenOAuthProvider, 
+  qwenPortalOAuthProvider, 
   minimaxOAuthProvider,
   minimaxCnOAuthProvider,
   anthropicOAuthProvider,
@@ -26,7 +26,7 @@ import {
 // Static OAuth providers map
 const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = {
   'kimi': kimiOAuthProvider,
-  'qwen': qwenOAuthProvider,
+  'qwen': qwenPortalOAuthProvider,
   'minimax': minimaxOAuthProvider,
   'minimax-cn': minimaxCnOAuthProvider,
   'anthropic': anthropicOAuthProvider,
