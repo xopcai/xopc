@@ -6,6 +6,15 @@ export * from './diff.js';
 export * from './rules.js';
 export * from './defaults.js';
 export * from './integration.js';
+export * from './models-json.js';
+export * from './resolve-config-value.js';
+
+// Re-export from model-registry for convenience
+export {
+  loadModelsJson,
+  saveModelsJson,
+  validateModelsJsonConfig as validateModelsJsonConfig,
+} from '../providers/model-registry.js';
 
 // Re-export types from types.models (avoid conflict with schema.js)
 export type {

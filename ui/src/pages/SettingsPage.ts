@@ -10,6 +10,9 @@ import '../components/ProviderList.js';
 import '../components/ModelSelector.js';
 import { fetchConfiguredModels, fetchProviderMeta, type Model } from '../config/registry-client.js';
 import type { ProviderInfo, ProviderListChangeEvent, ProviderListOAuthEvent } from '../components/ProviderList.js';
+import '../components/ModelJsonEditor.js';
+import type { ModelsJsonConfig } from '../config/models-json-client.js';
+import { fetchModelsJson } from '../config/models-json-client.js';
 
 export interface SettingsPageConfig {
   token?: string;
@@ -84,7 +87,7 @@ interface SettingsData {
 export class SettingsPage extends LitElement {
   @property({ attribute: false }) config?: SettingsPageConfig;
 
-  @state() private _activeSection: 'agent' | 'providers' | 'channels' | 'gateway' = 'agent';
+  @state() private _activeSection: 'agent' | 'providers' | 'models' | 'channels' | 'gateway' = 'agent';
   @state() private _loading = false;
   @state() private _saving = false;
   @state() private _saveSuccess = false;
@@ -141,6 +144,11 @@ export class SettingsPage extends LitElement {
   @state() private _providers: ProviderInfo[] = [];
   @state() private _loadingProviders = false;
   @state() private _models: Model[] = [];
+  
+  // Models.json state
+  @state() private _modelsJsonConfig: ModelsJsonConfig = { providers: {} };
+  @state() private _modelsJsonError?: string;
+  @state() private _loadingModelsJson = false;
 
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -150,6 +158,23 @@ export class SettingsPage extends LitElement {
     super.connectedCallback();
     this._loadSettings();
     this._loadProviders();
+    this._loadModelsJson();
+  }
+
+  private async _loadModelsJson() {
+    this._loadingModelsJson = true;
+    const token = this.config?.token;
+
+    try {
+      const { config, loadError } = await fetchModelsJson(token);
+      this._modelsJsonConfig = config;
+      this._modelsJsonError = loadError;
+    } catch (err) {
+      console.error('Failed to load models.json:', err);
+      this._modelsJsonError = err instanceof Error ? err.message : 'Failed to load models.json';
+    } finally {
+      this._loadingModelsJson = false;
+    }
   }
 
   private async _loadSettings() {
@@ -395,6 +420,7 @@ export class SettingsPage extends LitElement {
     const sections = [
       { id: 'agent', title: t('settings.sections.agent'), icon: 'bot' },
       { id: 'providers', title: t('settings.sections.providers'), icon: 'cloud' },
+      { id: 'models', title: t('settings.sections.models') || 'Models', icon: 'cpu' },
       { id: 'channels', title: t('settings.sections.channels'), icon: 'plug' },
       { id: 'gateway', title: t('settings.sections.gateway'), icon: 'globe' },
     ] as const;
@@ -501,6 +527,51 @@ export class SettingsPage extends LitElement {
             />
           </div>
         </div>
+      </div>
+    `;
+  }
+
+  private _renderModelsSection() {
+    return html`
+      <div class="section-content">
+        <div class="section-header">
+          <h2>${t('settings.sections.models') || 'Custom Models'}</h2>
+          <p class="section-desc">
+            Configure custom model providers (Ollama, vLLM, OpenRouter, etc.) via models.json.
+            <a href="https://github.com/xopc/xopcbot/blob/main/docs/models.md" target="_blank">Learn more</a>
+          </p>
+        </div>
+
+        ${this._modelsJsonError ? html`
+          <div class="alert alert-error" style="margin-bottom: 1rem; padding: 0.75rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 0.375rem; color: #dc2626;">
+            ${getIcon('alertCircle')}
+            <span>${this._modelsJsonError}</span>
+          </div>
+        ` : ''}
+
+        ${this._loadingModelsJson ? html`
+          <div class="loading-state">
+            <span class="spinner"></span>
+            <p>Loading models.json...</p>
+          </div>
+        ` : html`
+          <model-json-editor
+            .config=${this._modelsJsonConfig}
+            .token=${this.config?.token}
+            @change=${(e: CustomEvent<{ config: typeof this._modelsJsonConfig }>) => {
+              this._modelsJsonConfig = e.detail.config;
+              this._dirty = true;
+            }}
+            @save=${() => {
+              this._saveSuccess = true;
+              setTimeout(() => this._saveSuccess = false, 3000);
+              this._loadModelsJson();
+            }}
+            @reload=${() => {
+              this._loadModelsJson();
+            }}
+          ></model-json-editor>
+        `}
       </div>
     `;
   }
@@ -1116,6 +1187,8 @@ export class SettingsPage extends LitElement {
         return this._renderAgentSection();
       case 'providers':
         return this._renderProvidersSection();
+      case 'models':
+        return this._renderModelsSection();
       case 'channels':
         return this._renderChannelsSection();
       case 'gateway':

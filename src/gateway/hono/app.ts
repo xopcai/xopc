@@ -17,10 +17,18 @@ import {
   getAllProviders, 
   isProviderConfigured,
   PROVIDER_META,
+  getModelRegistry,
   type Model,
   type Api,
 } from '../../providers/index.js';
 import { createOAuthHandler, loadOAuthCredentialsToCache } from './oauth.js';
+import { 
+  loadModelsJson, 
+  saveModelsJson, 
+  validateModelsJsonConfig,
+  getModelsJsonPath,
+} from '../../config/index.js';
+import { testApiKeyResolution } from '../../config/resolve-config-value.js';
 
 const log = createLogger('HonoApp');
 
@@ -447,6 +455,104 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         error: err instanceof Error ? err.message : 'Failed to reload registry',
       }, 500);
     }
+  });
+
+  // ========== Models.json API ==========
+
+  // GET /api/models-json - Get current models.json configuration
+  authenticated.get('/api/models-json', async (c) => {
+    const path = getModelsJsonPath();
+    const { config, error } = loadModelsJson(path);
+    const registry = getModelRegistry();
+    
+    return c.json({
+      ok: true,
+      payload: {
+        config,
+        path,
+        exists: !!error || Object.keys(config.providers).length > 0,
+        loadError: error || registry.getError(),
+      },
+    });
+  });
+
+  // POST /api/models-json/validate - Validate configuration
+  authenticated.post('/api/models-json/validate', async (c) => {
+    const body = await c.req.json();
+    const { config } = body;
+    
+    const result = validateModelsJsonConfig(config);
+    
+    return c.json({
+      ok: true,
+      payload: result,
+    });
+  });
+
+  // PATCH /api/models-json - Save configuration
+  authenticated.patch('/api/models-json', async (c) => {
+    const body = await c.req.json();
+    const { config } = body;
+    
+    const path = getModelsJsonPath();
+    const result = saveModelsJson(path, config);
+    
+    if (!result.success) {
+      return c.json({ ok: false, error: result.error }, 400);
+    }
+    
+    // Refresh registry
+    const registry = getModelRegistry();
+    registry.refresh();
+    
+    // Emit event
+    service.emit('models-json.updated', { 
+      providerCount: Object.keys(config.providers).length,
+      modelCount: registry.getAll().length,
+    });
+    
+    return c.json({ 
+      ok: true, 
+      payload: { 
+        saved: true,
+        modelCount: registry.getAll().length,
+      },
+    });
+  });
+
+  // POST /api/models-json/reload - Hot reload
+  authenticated.post('/api/models-json/reload', async (c) => {
+    const registry = getModelRegistry();
+    registry.refresh();
+    
+    const error = registry.getError();
+    const models = registry.getAll();
+    
+    service.emit('models-json.reloaded', { 
+      modelCount: models.length,
+      error: error || undefined,
+    });
+    
+    return c.json({
+      ok: true,
+      payload: {
+        modelCount: models.length,
+        error,
+      },
+    });
+  });
+
+  // POST /api/models-json/test-api-key - Test API key resolution
+  authenticated.post('/api/models-json/test-api-key', async (c) => {
+    const body = await c.req.json();
+    const { value } = body;
+    
+    const result = testApiKeyResolution(value);
+    
+    return c.json({
+      ok: true,
+      payload: result,
+    });
   });
 
   // GET /api/models - Get available models (only configured providers)

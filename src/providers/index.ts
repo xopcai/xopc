@@ -1,6 +1,5 @@
 /**
- * Minimal model provider module - uses pi-ai built-in models.
- * Follows Occam's razor: no unnecessary entities.
+ * Model provider module - integrates built-in models with custom models from models.json
  */
 
 import {
@@ -11,14 +10,26 @@ import {
 	type Api,
 } from '@mariozechner/pi-ai';
 import type { Config } from '../config/schema.js';
+import { getModelRegistry } from './model-registry.js';
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('Providers');
 
 /**
  * Resolve model reference. Supports:
  * - "provider/modelId" format
- * - "modelId" auto-detection via pi-ai
+ * - "modelId" auto-detection via pi-ai or custom models
  * @throws if model not found
  */
 export function resolveModel(ref: string): Model<Api> {
+	// First try ModelRegistry (includes custom models)
+	const registry = getModelRegistry();
+	const customModel = registry.resolve(ref);
+	if (customModel) {
+		return customModel;
+	}
+
+	// Fall back to built-in models
 	if (ref.includes('/')) {
 		const [provider, modelId] = ref.split('/');
 		const model = getPiAiModel(provider as any, modelId as any);
@@ -40,18 +51,36 @@ export function resolveModel(ref: string): Model<Api> {
 }
 
 export function getModelsByProvider(provider: string): Model<Api>[] {
-	try {
-		return getPiAiModels(provider as any) as Model<Api>[];
-	} catch {
-		return [];
-	}
+	// Get from registry (includes custom models)
+	const registry = getModelRegistry();
+	return registry.getAll().filter(m => m.provider === provider);
 }
 
 export function getAllProviders(): string[] {
-	return getPiAiProviders() as string[];
+	const registry = getModelRegistry();
+	const providers = new Set<string>();
+	
+	// Add built-in providers
+	for (const p of getPiAiProviders()) {
+		providers.add(p);
+	}
+	
+	// Add custom providers from registry
+	for (const m of registry.getAll()) {
+		providers.add(m.provider);
+	}
+	
+	return Array.from(providers);
 }
 
 export function getApiKey(config: Config | null | undefined, provider: string): string | undefined {
+	// Check registry first (for custom providers from models.json)
+	const registry = getModelRegistry();
+	const registryKey = registry.getApiKey(provider);
+	if (registryKey) {
+		return registryKey;
+	}
+
 	// Check config.providers (new flat format)
 	if (config?.providers?.[provider]) {
 		return config.providers[provider];
@@ -96,7 +125,8 @@ export function getConfiguredProviders(config: Config | null | undefined): strin
 }
 
 export function getAllModels(): Model<Api>[] {
-	return getAllProviders().flatMap(p => getModelsByProvider(p));
+	const registry = getModelRegistry();
+	return registry.getAll();
 }
 
 export function getAvailableModels(config: Config | null | undefined): Model<Api>[] {
@@ -213,13 +243,21 @@ export const PROVIDER_PREFIX_PATTERNS: Record<string, string[]> = {
 export function detectProvider(modelId: string): string | undefined {
   const lowerId = modelId.toLowerCase();
   
+  // Check custom models first
+  const registry = getModelRegistry();
+  for (const model of registry.getAll()) {
+    if (model.id === modelId) {
+      return model.provider;
+    }
+  }
+  
   for (const [provider, prefixes] of Object.entries(PROVIDER_PREFIX_PATTERNS)) {
     if (prefixes.some(p => lowerId.startsWith(p))) {
       return provider;
     }
   }
   
-  for (const provider of getAllProviders()) {
+  for (const provider of getPiAiProviders()) {
     try {
       const models = getPiAiModels(provider as any);
       if (models.some(m => m.id === modelId)) {
@@ -236,3 +274,6 @@ export function detectProvider(modelId: string): string | undefined {
 export function getProviderEnvVars(provider: string): string[] {
   return PROVIDER_ENV_MAP[provider] || [`${provider.toUpperCase().replace(/-/g, '_')}_API_KEY`];
 }
+
+// Re-export ModelRegistry for advanced use cases
+export { ModelRegistry, getModelRegistry, resetModelRegistry } from './model-registry.js';

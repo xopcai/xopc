@@ -519,6 +519,14 @@ export class GatewayService {
   }
 
   /**
+   * Get model registry for external access (HTTP routes)
+   */
+  getModelRegistry() {
+    const { getModelRegistry } = require('../providers/index.js');
+    return getModelRegistry();
+  }
+
+  /**
    * Invoke a gateway method registered by plugins
    */
   async invokeGatewayMethod(method: string, params: Record<string, unknown>): Promise<unknown> {
