@@ -9,6 +9,7 @@
 import { registerSessionCommands } from './builtins/session.js';
 import { registerModelCommands } from './builtins/model.js';
 import { registerSystemCommands } from './builtins/system.js';
+import { registerTTSCommands } from './builtins/tts.js';
 
 // Types
 export type {
@@ -60,6 +61,7 @@ export { CommandContextImpl, createCommandContext } from './context.js';
 export { registerSessionCommands } from './builtins/session.js';
 export { registerModelCommands } from './builtins/model.js';
 export { registerSystemCommands } from './builtins/system.js';
+export { registerTTSCommands } from './builtins/tts.js';
 
 // Processor
 export { processMessage } from './processor.js';
@@ -72,4 +74,5 @@ export function initializeCommands(): void {
   registerSessionCommands();
   registerModelCommands();
   registerSystemCommands();
+  registerTTSCommands();
 }

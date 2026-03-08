@@ -5,8 +5,12 @@
  * - Text messages (with chunking)
  * - Data URL media (base64 encoded)
  * - Remote URL media
- * - TTS voice messages
+ * - Voice messages (TTS audio)
  * - Typing indicators
+ *
+ * Following OpenClaw architecture:
+ * - TTS audio is passed as mediaUrl with audioAsVoice flag
+ * - No TTS generation happens here - it's done at the dispatch layer
  */
 
 import type { Bot } from 'grammy';
@@ -21,19 +25,11 @@ import { sentMessageCache } from './sent-cache.js';
 import { createRetryRunner, isRecoverableNetworkError } from '../../infra/retry.js';
 import { createLogger } from '../../utils/logger.js';
 import { isTelegramHtmlParseError } from './errors.js';
-import { speak, isTTSAvailable } from '../../tts/index.js';
-import { compressAudio } from '../../utils/audio.js';
 
 const log = createLogger('TelegramOutboundSender');
 
 /** Maximum message chunk size */
 const MESSAGE_CHUNK_SIZE = 3800;
-
-/** Maximum retry attempts for TTS generation */
-const TTS_MAX_RETRIES = 3;
-
-/** Delay between TTS retry attempts in milliseconds */
-const TTS_RETRY_DELAY_MS = 500;
 
 export interface OutboundSenderDeps {
   accountManager: TelegramAccountManager;
@@ -42,6 +38,10 @@ export interface OutboundSenderDeps {
 
 /**
  * Create outbound message sender
+ *
+ * Note: TTS is handled at the dispatch layer (ChannelManager),
+ * not here. If a message has TTS audio, it will be passed as
+ * mediaUrl with audioAsVoice=true.
  */
 export function createOutboundSender(deps: OutboundSenderDeps) {
   const { accountManager } = deps;
@@ -57,9 +57,17 @@ export function createOutboundSender(deps: OutboundSenderDeps) {
       mediaUrl,
       mediaType,
       silent,
+      audioAsVoice,
     } = options;
 
-    log.info({ chatId, accountId, hasContent: !!content, hasMediaUrl: !!mediaUrl }, 'Sending outbound message');
+    log.debug({
+      chatId,
+      accountId,
+      hasContent: !!content,
+      hasMediaUrl: !!mediaUrl,
+      audioAsVoice,
+      mediaType,
+    }, 'Sending outbound message');
 
     const bot = accountManager.getBot(accountId);
     if (!bot) {
@@ -90,8 +98,16 @@ export function createOutboundSender(deps: OutboundSenderDeps) {
     try {
       let sentMessageId: number;
 
+      // Handle voice messages (TTS audio with audioAsVoice flag)
+      if (mediaUrl && audioAsVoice) {
+        sentMessageId = await sendVoiceMessage(bot, chatId, mediaUrl, content, {
+          threadId,
+          replyToMessageId,
+          silent,
+        });
+      }
       // Handle data URL media
-      if (mediaUrl && mediaUrl.startsWith('data:')) {
+      else if (mediaUrl && mediaUrl.startsWith('data:')) {
         sentMessageId = await sendDataUrlMedia(bot, chatId, mediaUrl, content, {
           threadId,
           replyToMessageId,
@@ -101,14 +117,6 @@ export function createOutboundSender(deps: OutboundSenderDeps) {
       // Handle remote URL media
       else if (mediaUrl) {
         sentMessageId = await sendRemoteUrlMedia(bot, chatId, mediaUrl, mediaType, content, {
-          threadId,
-          replyToMessageId,
-          silent,
-        });
-      }
-      // Handle TTS voice
-      else if (options.tts && deps.config?.tts && isTTSAvailable(deps.config.tts)) {
-        sentMessageId = await sendTtsVoice(bot, chatId, content, {
           threadId,
           replyToMessageId,
           silent,
@@ -133,6 +141,39 @@ export function createOutboundSender(deps: OutboundSenderDeps) {
       log.error({ chatId, err }, 'Failed to send message');
       return { messageId: '', chatId, success: false, error: err instanceof Error ? err.message : String(err) };
     }
+  }
+
+  async function sendVoiceMessage(
+    bot: Bot,
+    chatId: string,
+    mediaUrl: string,
+    content?: string,
+    options?: { threadId?: string; replyToMessageId?: string; silent?: boolean }
+  ): Promise<number> {
+    const parsed = parseDataUrl(mediaUrl);
+    if (!parsed) {
+      throw new Error('Invalid voice message data URL format');
+    }
+
+    const { buffer } = parsed;
+    const file = new InputFile(buffer, 'voice.ogg');
+
+    // Use caption for the text content (if any)
+    const caption = content?.trim();
+    const htmlCaption = caption ? renderTelegramHtmlText(caption) : undefined;
+
+    const sendOptions = buildSendOptions({
+      threadId: options?.threadId,
+      replyToMessageId: options?.replyToMessageId,
+      silent: options?.silent,
+      caption: htmlCaption,
+    });
+
+    const result = await bot.api.sendVoice(chatId, file, sendOptions);
+
+    log.info({ chatId, messageId: result.message_id }, 'Voice message sent');
+
+    return result.message_id;
   }
 
   async function sendDataUrlMedia(
@@ -298,86 +339,6 @@ export function createOutboundSender(deps: OutboundSenderDeps) {
     }
 
     return firstMessageId;
-  }
-
-  async function sendTtsVoice(
-    bot: Bot,
-    chatId: string,
-    content: string | undefined,
-    options?: { threadId?: string; replyToMessageId?: string; silent?: boolean }
-  ): Promise<number> {
-    log.info({ chatId, contentLength: content?.length }, 'Generating TTS voice message');
-
-    let sentMessageId: number | undefined;
-    let ttsErrorOccurred = false;
-
-    for (let attempt = 1; attempt <= TTS_MAX_RETRIES + 1; attempt++) {
-      try {
-        const ttsResult = await speak(content || '', deps.config!.tts!);
-
-        // Compress audio if it's wav format
-        const { buffer: compressedAudio, format: compressedFormat } = await compressAudio(
-          Buffer.from(ttsResult.audio),
-          ttsResult.format
-        );
-
-        const file = new InputFile(compressedAudio, `voice.${compressedFormat}`);
-
-        const sendOptions = buildSendOptions({
-          threadId: options?.threadId,
-          replyToMessageId: options?.replyToMessageId,
-          silent: options?.silent,
-        });
-
-        // Use sendVoice for opus, sendAudio for other formats
-        if (compressedFormat === 'opus') {
-          const result = await bot.api.sendVoice(chatId, file, sendOptions);
-          sentMessageId = result.message_id;
-        } else {
-          const result = await bot.api.sendAudio(chatId, file, sendOptions);
-          sentMessageId = result.message_id;
-        }
-
-        log.info({
-          chatId,
-          messageId: sentMessageId,
-          provider: ttsResult.provider,
-          format: compressedFormat,
-          attempt,
-        }, 'TTS voice message sent');
-        break; // Success, exit retry loop
-      } catch (ttsError) {
-        const errorMsg = ttsError instanceof Error ? ttsError.message : String(ttsError);
-
-        if (attempt <= TTS_MAX_RETRIES) {
-          log.warn({
-            error: errorMsg,
-            attempt,
-            maxRetries: TTS_MAX_RETRIES,
-            textLength: content?.length,
-          }, `TTS generation failed (attempt ${attempt}/${TTS_MAX_RETRIES + 1}), retrying...`);
-          ttsErrorOccurred = true;
-          // Exponential backoff
-          await new Promise((resolve) => setTimeout(resolve, attempt * TTS_RETRY_DELAY_MS));
-        } else {
-          log.error({
-            error: errorMsg,
-            attempt,
-            textLength: content?.length,
-            provider: deps.config!.tts!.provider,
-          }, 'TTS generation failed after all retries, falling back to text');
-          ttsErrorOccurred = true;
-        }
-      }
-    }
-
-    // Fallback to text message if all TTS attempts failed
-    if (ttsErrorOccurred && !sentMessageId) {
-      log.info({ chatId }, 'Falling back to text message after TTS failure');
-      sentMessageId = await sendTextMessage(bot, chatId, content || '', options);
-    }
-
-    return sentMessageId;
   }
 
   return { send };

@@ -101,6 +101,10 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
         '/list - List all your sessions\n' +
         '/usage - View token usage statistics\n' +
         '/cleanup - Clean up old sessions\n\n' +
+        '🔊 *Voice (TTS)*\n' +
+        '/tts - Show TTS settings\n' +
+        '/tts on|off - Enable/disable TTS\n' +
+        '/tts always|inbound|tagged|never - Set trigger mode\n\n' +
         '🛠️ *Skills*\n' +
         '/skills reload - Reload all skills from disk\n\n' +
         '💡 *Tip*: Just send a message to start chatting!' +

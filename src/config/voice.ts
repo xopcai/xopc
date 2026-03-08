@@ -1,9 +1,11 @@
 /**
  * Voice (STT/TTS) Model Configuration
- * 
+ *
  * This module provides available STT/TTS models for the UI.
  * Models can be extended via config file or environment variables.
  */
+
+import { OPENAI_TTS_MODELS, OPENAI_TTS_VOICES } from '../tts/index.js';
 
 export interface VoiceModel {
   id: string;
@@ -19,10 +21,12 @@ export interface VoiceModelsConfig {
   tts: {
     alibaba: VoiceModel[];
     openai: VoiceModel[];
+    edge: VoiceModel[];
   };
   ttsVoices: {
     alibaba: VoiceModel[];
     openai: VoiceModel[];
+    edge: VoiceModel[];
   };
 }
 
@@ -38,7 +42,15 @@ const DEFAULT_STT_OPENAI: VoiceModel[] = [
   { id: 'whisper-1', name: 'Whisper-1' },
 ];
 
-// Default TTS models
+// Default TTS models - dynamically from TTS module
+const DEFAULT_TTS_OPENAI: VoiceModel[] = OPENAI_TTS_MODELS.map(id => ({
+  id,
+  name: id === 'tts-1' ? 'TTS-1 (Fast)' :
+        id === 'tts-1-hd' ? 'TTS-1 HD (High Quality)' :
+        id === 'gpt-4o-mini-tts' ? 'GPT-4o Mini TTS (Latest)' :
+        id,
+}));
+
 const DEFAULT_TTS_ALIBABA: VoiceModel[] = [
   { id: 'qwen-tts', name: 'Qwen TTS (Recommended)' },
   { id: 'qwen-tts-realtime', name: 'Qwen TTS Realtime' },
@@ -46,27 +58,38 @@ const DEFAULT_TTS_ALIBABA: VoiceModel[] = [
   { id: 'qwen3-tts-instruct-flash', name: 'Qwen3 TTS Instruct Flash' },
 ];
 
-const DEFAULT_TTS_OPENAI: VoiceModel[] = [
-  { id: 'tts-1', name: 'TTS-1 (Fast)' },
-  { id: 'tts-1-hd', name: 'TTS-1 HD (High Quality)' },
+const DEFAULT_TTS_EDGE: VoiceModel[] = [
+  { id: 'edge-default', name: 'Edge TTS (Free)' },
 ];
 
 // Default TTS voices
 const DEFAULT_TTS_VOICES_ALIBABA: VoiceModel[] = [
   { id: 'Cherry', name: 'Cherry' },
-  { id: 'longxiaochun', name: 'Long Xiao Chun' },
-  { id: 'longcheng', name: 'Long Cheng' },
-  { id: 'xiaogang', name: 'Xiao Gang' },
-  { id: 'xiaoxian', name: 'Xiao Xian' },
+  { id: 'longxiaochun', name: 'Long Xiao Chun (龙小春)' },
+  { id: 'longcheng', name: 'Long Cheng (龙呈)' },
+  { id: 'xiaogang', name: 'Xiao Gang (小刚)' },
+  { id: 'xiaoxian', name: 'Xiao Xian (小娴)' },
 ];
 
-const DEFAULT_TTS_VOICES_OPENAI: VoiceModel[] = [
-  { id: 'alloy', name: 'Alloy' },
-  { id: 'echo', name: 'Echo' },
-  { id: 'fable', name: 'Fable' },
-  { id: 'onyx', name: 'Onyx' },
-  { id: 'nova', name: 'Nova' },
-  { id: 'shimmer', name: 'Shimmer' },
+const DEFAULT_TTS_VOICES_OPENAI: VoiceModel[] = OPENAI_TTS_VOICES.map(id => ({
+  id,
+  name: id.charAt(0).toUpperCase() + id.slice(1),
+}));
+
+// Edge TTS popular voices
+const DEFAULT_TTS_VOICES_EDGE: VoiceModel[] = [
+  { id: 'en-US-MichelleNeural', name: 'Michelle (US English, Female)' },
+  { id: 'en-US-JennyNeural', name: 'Jenny (US English, Female)' },
+  { id: 'en-US-GuyNeural', name: 'Guy (US English, Male)' },
+  { id: 'en-GB-SoniaNeural', name: 'Sonia (UK English, Female)' },
+  { id: 'en-GB-RyanNeural', name: 'Ryan (UK English, Male)' },
+  { id: 'zh-CN-XiaoxiaoNeural', name: '晓晓 (中文, 女声)' },
+  { id: 'zh-CN-YunyangNeural', name: '云扬 (中文, 男声)' },
+  { id: 'zh-CN-XiaoyiNeural', name: '晓伊 (中文, 女声)' },
+  { id: 'ja-JP-NanamiNeural', name: '七海 (日本語, 女性)' },
+  { id: 'de-DE-KatjaNeural', name: 'Katja (Deutsch, Weiblich)' },
+  { id: 'fr-FR-DeniseNeural', name: 'Denise (Français, Féminin)' },
+  { id: 'es-ES-ElviraNeural', name: 'Elvira (Español, Femenino)' },
 ];
 
 export function getVoiceModelsConfig(): VoiceModelsConfig {
@@ -78,10 +101,35 @@ export function getVoiceModelsConfig(): VoiceModelsConfig {
     tts: {
       alibaba: DEFAULT_TTS_ALIBABA,
       openai: DEFAULT_TTS_OPENAI,
+      edge: DEFAULT_TTS_EDGE,
     },
     ttsVoices: {
       alibaba: DEFAULT_TTS_VOICES_ALIBABA,
       openai: DEFAULT_TTS_VOICES_OPENAI,
+      edge: DEFAULT_TTS_VOICES_EDGE,
     },
   };
+}
+
+/**
+ * Get available TTS providers for UI
+ */
+export function getTTSProviders(): Array<{ id: string; name: string; description?: string }> {
+  return [
+    { id: 'openai', name: 'OpenAI', description: 'High quality, multiple voices' },
+    { id: 'alibaba', name: 'Alibaba', description: 'Qwen TTS, good for Chinese' },
+    { id: 'edge', name: 'Microsoft Edge', description: 'Free, 100+ voices, multi-language' },
+  ];
+}
+
+/**
+ * Get TTS trigger modes for UI
+ */
+export function getTTSTriggerModes(): Array<{ id: string; name: string; description: string }> {
+  return [
+    { id: 'off', name: 'Disabled', description: 'TTS is completely disabled' },
+    { id: 'always', name: 'Always', description: 'Apply TTS to all messages' },
+    { id: 'inbound', name: 'Inbound Audio', description: 'Only when user sends voice message' },
+    { id: 'tagged', name: 'Tagged', description: 'Only when [[tts]] directive is used' },
+  ];
 }

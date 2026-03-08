@@ -1,10 +1,3 @@
-/**
- * Agent Service - Main coordinator (Refactored)
- *
- * Orchestrates message processing, model management, and session handling.
- * Delegates specific concerns to specialized modules.
- */
-
 import { Agent, type AgentEvent, type AgentMessage } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import { MessageBusShutdownError, type MessageBus, type InboundMessage } from '../bus/index.js';
@@ -33,7 +26,6 @@ import { SelfVerifyMiddleware } from './middleware/self-verify.js';
 import { LifecycleManager } from './lifecycle/index.js';
 import { CompactionLifecycleHandler } from './lifecycle/handlers/compaction.js';
 
-// New modular components
 import { MessageRouter, CommandHandler, StreamManager } from './messaging/index.js';
 import { SessionContextManager, SessionLifecycleManager, type SessionContext } from './session/index.js';
 import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
@@ -72,23 +64,7 @@ export interface StreamHandle {
   messageId: () => number | undefined;
 }
 
-/**
- * AgentService - Main agent orchestrator (Refactored)
- *
- * This class now acts as a facade, delegating specific concerns to:
- * - MessageRouter: message routing and classification
- * - CommandHandler: command parsing and execution
- * - StreamManager: stream handle management
- * - SessionContextManager: session context tracking
- * - SessionLifecycleManager: session lifecycle events
- * - AgentOrchestrator: agent execution coordination
- * - AgentEventHandler: agent event processing
- * - FeedbackCoordinator: progress feedback coordination
- * - SkillManager: skill loading and management
- * - SystemPromptBuilder: system prompt construction
- */
 export class AgentService {
-  // Core Agent and infrastructure
   private agent: Agent;
   private sessionStore: SessionStore;
   private hookRunner?: ExtensionHookRunner;
@@ -101,7 +77,6 @@ export class AgentService {
   private bus: MessageBus;
   private config: AgentServiceConfig;
 
-  // Legacy delegated modules (kept for compatibility)
   private sessionTracker: SessionTracker;
   private modelManager: ModelManager;
   private progressManager: ProgressFeedbackManager;
@@ -116,7 +91,6 @@ export class AgentService {
   private errorPatternMatcher: ErrorPatternMatcher;
   private selfVerifyMiddleware: SelfVerifyMiddleware;
 
-  // New modular components
   private messageRouter: MessageRouter;
   private commandHandler: CommandHandler;
   private streamManager: StreamManager;
@@ -134,24 +108,19 @@ export class AgentService {
     this.agentId = `agent-${Date.now()}`;
     this.workspaceDir = config.workspace;
 
-    // Load bootstrap files
     this.bootstrapFiles = loadBootstrapFiles(config.workspace);
 
-    // Initialize legacy delegated modules
     this.sessionTracker = new SessionTracker();
     this.modelManager = new ModelManager({
       defaultModel: config.model,
       config: config.config,
     });
 
-    // Initialize command system
     initializeCommands();
     log.info('Command system initialized');
 
-    // Setup session store
     this.sessionStore = this.createSessionStore();
 
-    // Setup hook runner and handler
     this.hookRunner = this.createHookRunner();
     this.hookHandler = new HookHandler({
       hookRunner: this.hookRunner,
@@ -159,7 +128,6 @@ export class AgentService {
       get sessionKey() { return this.currentContext?.sessionKey; },
     });
 
-    // Initialize tools via factory
     this.toolsFactory = new AgentToolsFactory({
       workspace: config.workspace,
       braveApiKey: config.braveApiKey,
@@ -169,7 +137,6 @@ export class AgentService {
     });
     const tools = this.toolsFactory.createAllTools();
 
-    // Initialize new modular components
     this.skillManager = new SkillManager(config.workspace, getBundledSkillsDir());
     this.systemPromptBuilder = new SystemPromptBuilder({
       workspace: config.workspace,
@@ -177,19 +144,15 @@ export class AgentService {
       skillManager: this.skillManager,
     });
 
-    // Initialize agent
     this.agent = this.createAgent(tools);
     this.unsubscribe = this.agent.subscribe((event) => this.handleEvent(event));
 
-    // Initialize progress and reliability modules
     this.progressManager = this.createProgressManager();
     this.initializeReliabilityModules();
 
-    // Initialize lifecycle manager
     this.lifecycleManager = new LifecycleManager();
     this.initializeLifecycleHandlers();
 
-    // Initialize new modular architecture
     this.streamManager = new StreamManager();
     this.sessionContextManager = new SessionContextManager();
     this.feedbackCoordinator = new FeedbackCoordinator({
@@ -234,16 +197,11 @@ export class AgentService {
       this.lifecycleManager
     );
 
-    // Setup shutdown handlers
     process.on('SIGINT', () => this.dispose());
     process.on('SIGTERM', () => this.dispose());
 
-    log.info('AgentService initialized with modular architecture');
+    log.info('AgentService initialized');
   }
-
-  // ============================================================================
-  // Initialization Helpers
-  // ============================================================================
 
   private createSessionStore(): SessionStore {
     const sessionStoreDefaults = this.config.agentDefaults || this.config.config?.agents?.defaults;
@@ -383,10 +341,6 @@ export class AgentService {
     );
   }
 
-  // ============================================================================
-  // Public API (Maintains backward compatibility)
-  // ============================================================================
-
   setChannelManager(channelManager: ChannelManager): void {
     this.modelManager.setChannelManager(channelManager);
     this.channelManagerRef = channelManager;
@@ -421,7 +375,6 @@ export class AgentService {
         const msg = await this.bus.consumeInbound();
         await this.handleInboundMessage(msg);
       } catch (error) {
-        // MessageBusShutdownError is expected during graceful shutdown
         if (error instanceof MessageBusShutdownError) {
           break;
         }
@@ -476,12 +429,10 @@ export class AgentService {
       size?: number;
     }>
   ): Promise<string> {
-    // Parse sessionKey to extract channel and chatId
     const parts = sessionKey.split(':');
     const channel = parts[0] || 'cli';
     const chatId = parts.slice(1).join(':') || 'direct';
 
-    // Create and set context for this direct processing
     const context: SessionContext = {
       sessionKey,
       channel,
@@ -528,45 +479,37 @@ export class AgentService {
 
       return response;
     } finally {
-      // Clear context after processing
       this.sessionContextManager.clearContext();
       this.feedbackCoordinator.clearContext();
     }
   }
 
-  // ============================================================================
-  // Private Methods
-  // ============================================================================
-
   private async handleInboundMessage(msg: InboundMessage): Promise<void> {
-    // Route the message
     const routing = await this.messageRouter.routeMessage(msg);
     const { context, isCommand, command, commandArgs } = routing;
 
-    // Create SessionContext from AgentContext (ensuring required fields)
     const sessionContext: SessionContext = {
       sessionKey: context.sessionKey,
       channel: context.channel,
       chatId: context.chatId,
       senderId: context.senderId || '',
       isGroup: context.isGroup || false,
+      metadata: {
+        transcribedVoice: msg.metadata?.transcribedVoice === true,
+      },
     };
 
-    // Set context for this message
     this.sessionContextManager.setContext(sessionContext);
     this.feedbackCoordinator.setContext(sessionContext);
 
-    // Start session lifecycle
     await this.sessionLifecycleManager.startSession(sessionContext);
 
     try {
-      // Handle system messages
       if (msg.channel === 'system') {
         await this.handleSystemMessage(msg, sessionContext);
         return;
       }
 
-      // Handle commands
       if (isCommand && command) {
         const handled = await this.commandHandler.executeCommand(command, commandArgs || '', {
           sessionKey: sessionContext.sessionKey,
@@ -581,7 +524,6 @@ export class AgentService {
         }
       }
 
-      // Send typing indicator
       if (msg.channel !== 'cli') {
         this.bus.publishOutbound({
           channel: msg.channel,
@@ -597,30 +539,25 @@ export class AgentService {
         });
       }
 
-      // Setup streaming if channel manager is available
       if (this.channelManagerRef && msg.channel !== 'cli') {
         const streamHandle = this.channelManagerRef.startStream(
           msg.channel,
           msg.chat_id,
           msg.metadata?.accountId as string | undefined
         );
-        
+
         if (streamHandle) {
           this.setStreamHandle(streamHandle as StreamHandle);
         }
       }
 
-      // Process through agent orchestrator
       await this.agentOrchestrator.process(msg, sessionContext);
 
     } finally {
-      // End session lifecycle
       await this.sessionLifecycleManager.endSession(sessionContext);
-      
-      // End and cleanup stream
       await this.streamManager.end();
+      await this.sendTTSForStreamingResponse(msg, sessionContext);
       this.feedbackCoordinator.endTask();
-      
       this.sessionContextManager.clearContext();
       this.feedbackCoordinator.clearContext();
     }
@@ -670,16 +607,14 @@ export class AgentService {
   }
 
   private handleEvent(event: AgentEvent): void {
-    // Handle streaming updates
     if (event.type === 'message_update') {
-      // Cast to any to access message property safely (though TS should narrow it)
       const msgEvent = event as any;
       if (msgEvent.message?.role === 'assistant') {
         const content = msgEvent.message.content;
         const text = Array.isArray(content)
           ? extractTextContent(content as Array<{ type: string; text?: string }>)
           : String(content);
-        
+
         this.streamManager.update(text);
       }
     }
@@ -722,6 +657,69 @@ export class AgentService {
       }
     }
     return '';
+  }
+
+  private async sendTTSForStreamingResponse(
+    msg: InboundMessage,
+    sessionContext: SessionContext
+  ): Promise<void> {
+    const ttsConfig = this.config.config?.tts || {
+      enabled: false,
+      provider: 'openai' as const,
+      trigger: 'always' as const,
+    };
+
+    if (!ttsConfig.enabled) return;
+
+    const trigger = ttsConfig.trigger || 'off';
+    let shouldSendTTS = false;
+
+    switch (trigger) {
+      case 'off':
+        return;
+      case 'always':
+        shouldSendTTS = true;
+        break;
+      case 'inbound':
+        shouldSendTTS = sessionContext.metadata?.transcribedVoice === true;
+        break;
+      case 'tagged':
+        return;
+    }
+
+    if (!shouldSendTTS) return;
+
+    const finalContent = this.getLastAssistantContent();
+    if (!finalContent?.trim()) return;
+
+    try {
+      const { maybeApplyTtsToPayload } = await import('../tts/payload.js');
+
+      const ttsMsg = await maybeApplyTtsToPayload(
+        {
+          channel: msg.channel,
+          chat_id: msg.chat_id,
+          content: finalContent,
+          type: 'message',
+          metadata: {
+            accountId: msg.metadata?.accountId,
+            threadId: msg.metadata?.threadId,
+          },
+        },
+        {
+          config: ttsConfig,
+          channel: msg.channel,
+          inboundAudio: sessionContext.metadata?.transcribedVoice === true,
+        }
+      );
+
+      if (ttsMsg.mediaUrl) {
+        await this.bus.publishOutbound(ttsMsg);
+        log.info('TTS voice message sent');
+      }
+    } catch (error) {
+      log.warn({ error }, 'TTS failed');
+    }
   }
 
   private dispose(): void {

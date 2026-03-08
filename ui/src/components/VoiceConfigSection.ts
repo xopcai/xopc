@@ -21,10 +21,12 @@ export interface VoiceModels {
   tts: {
     alibaba: VoiceModel[];
     openai: VoiceModel[];
+    edge: VoiceModel[];
   };
   ttsVoices: {
     alibaba: VoiceModel[];
     openai: VoiceModel[];
+    edge: VoiceModel[];
   };
 }
 
@@ -38,10 +40,11 @@ export interface VoiceSectionConfig {
   };
   tts?: {
     enabled: boolean;
-    provider: 'openai' | 'alibaba';
-    trigger: 'auto' | 'never';
+    provider: 'openai' | 'alibaba' | 'edge';
+    trigger: 'off' | 'always' | 'inbound' | 'tagged';
     alibaba?: { apiKey?: string; model?: string; voice?: string };
     openai?: { apiKey?: string; model?: string; voice?: string };
+    edge?: { voice?: string; lang?: string };
   };
 }
 
@@ -346,12 +349,27 @@ export class VoiceConfigSection extends LitElement {
     this.onChange?.(path, value);
   }
 
+  private _getTriggerDescription(trigger: string): string {
+    switch (trigger) {
+      case 'off':
+        return 'TTS is completely disabled';
+      case 'always':
+        return 'Apply TTS to all messages';
+      case 'inbound':
+        return 'Only reply with voice when user sends voice';
+      case 'tagged':
+        return 'Only when [[tts]] directive is used';
+      default:
+        return '';
+    }
+  }
+
   render() {
     const sttEnabled = this.config.stt?.enabled ?? false;
     const ttsEnabled = this.config.tts?.enabled ?? false;
     const sttProvider = this.config.stt?.provider || 'alibaba';
     const ttsProvider = this.config.tts?.provider || 'openai';
-    const ttsTrigger = this.config.tts?.trigger || 'auto';
+    const ttsTrigger = this.config.tts?.trigger || 'always';
 
     return html`
       <div class="section-content">
@@ -511,9 +529,12 @@ export class VoiceConfigSection extends LitElement {
                   .value=${ttsTrigger}
                   @change=${(e: Event) => this._updateConfig('tts.trigger', (e.target as HTMLSelectElement).value)}
                 >
-                  <option value="auto">${t('settings.voice.tts.triggerAuto')}</option>
-                  <option value="never">${t('settings.voice.tts.triggerNever')}</option>
+                  <option value="off">${t('settings.voice.tts.triggerOff')}</option>
+                  <option value="always">${t('settings.voice.tts.triggerAlways')}</option>
+                  <option value="inbound">${t('settings.voice.tts.triggerInbound')}</option>
+                  <option value="tagged">${t('settings.voice.tts.triggerTagged')}</option>
                 </select>
+                <p class="field-desc">${this._getTriggerDescription(ttsTrigger)}</p>
               </div>
 
               <!-- TTS Provider -->
@@ -526,6 +547,7 @@ export class VoiceConfigSection extends LitElement {
                 >
                   <option value="openai">OpenAI TTS</option>
                   <option value="alibaba">${t('settings.voice.stt.alibaba')}</option>
+                  <option value="edge">Microsoft Edge (Free)</option>
                 </select>
               </div>
 
@@ -622,6 +644,27 @@ export class VoiceConfigSection extends LitElement {
                           <option value="longxiaochun">Long Xiao Chun</option>
                         `}
                   </select>
+                </div>
+              ` : ''}
+
+              ${ttsProvider === 'edge' ? html`
+                <div class="field-group">
+                  <label class="field-label">${t('settings.voice.tts.voice')}</label>
+                  <select
+                    class="select-input"
+                    .value=${this.config.tts?.edge?.voice || ''}
+                    @change=${(e: Event) => this._updateConfig('tts.edge.voice', (e.target as HTMLSelectElement).value)}
+                  >
+                    ${this._voiceModels?.ttsVoices?.edge?.length
+                      ? this._voiceModels.ttsVoices.edge.map(voice => html`
+                          <option value=${voice.id} ?selected=${voice.id === this.config.tts?.edge?.voice}>${voice.name}</option>
+                        `)
+                      : html`
+                          <option value="en-US-MichelleNeural">Michelle (US English)</option>
+                          <option value="zh-CN-XiaoxiaoNeural">Xiaoxiao (Chinese)</option>
+                        `}
+                  </select>
+                  <p class="field-desc">Microsoft Edge TTS - Free, no API key required</p>
                 </div>
               ` : ''}
             </div>

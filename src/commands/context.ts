@@ -22,6 +22,7 @@ import type { MessageBus } from '../bus/index.js';
 import type { SessionStore } from '../session/index.js';
 import { createLogger } from '../utils/logger.js';
 import { getRoutingInfo } from './session-key.js';
+import { saveConfig } from '../config/loader.js';
 
 const log = createLogger('CommandContext');
 
@@ -211,6 +212,39 @@ export class CommandContextImpl implements CommandContext {
 
   supports(feature: PlatformFeature): boolean {
     return this.deps.supportedFeatures.includes(feature);
+  }
+
+  // === Configuration ===
+
+  getConfig(): Config {
+    return this.config;
+  }
+
+  async updateConfig(path: string, value: unknown): Promise<boolean> {
+    try {
+      // Update config object using path
+      const keys = path.split('.');
+      let target: Record<string, unknown> = this.config as Record<string, unknown>;
+      
+      for (let i = 0; i < keys.length - 1; i++) {
+        const key = keys[i];
+        if (!(key in target) || typeof target[key] !== 'object' || target[key] === null) {
+          target[key] = {};
+        }
+        target = target[key] as Record<string, unknown>;
+      }
+      
+      target[keys[keys.length - 1]] = value;
+      
+      // Save to disk
+      await saveConfig(this.config);
+      
+      log.info({ path, value }, 'Config updated via command');
+      return true;
+    } catch (error) {
+      log.error({ err: error, path, value }, 'Failed to update config');
+      return false;
+    }
   }
 
   // === Private Helpers ===

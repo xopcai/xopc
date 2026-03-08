@@ -19,6 +19,7 @@ export class TelegramAccountManager {
   private runners = new Map<string, ReturnType<typeof run>>();
   private statuses = new Map<string, ChannelStatus>();
   private botUsernames = new Map<string, string>();
+  private startingAccounts = new Set<string>();
 
   registerAccount(account: TelegramAccountConfig): void {
     this.accounts.set(account.accountId, account);
@@ -51,16 +52,43 @@ export class TelegramAccountManager {
 
   async stopRunner(accountId: string): Promise<void> {
     const runner = this.runners.get(accountId);
+    const bot = this.bots.get(accountId);
+    
     if (runner) {
       await runner.stop();
       this.runners.delete(accountId);
-      // Update status to stopped
-      this.updateStatus({
-        accountId,
-        running: false,
-        mode: 'stopped',
-      });
     }
+    
+    if (bot) {
+      bot.stop();
+      this.bots.delete(accountId);
+    }
+    
+    this.startingAccounts.delete(accountId);
+    
+    // Update status to stopped
+    this.updateStatus({
+      accountId,
+      running: false,
+      mode: 'stopped',
+    });
+  }
+
+  isStarting(accountId: string): boolean {
+    return this.startingAccounts.has(accountId);
+  }
+
+  markStarting(accountId: string): void {
+    this.startingAccounts.add(accountId);
+  }
+
+  markStartComplete(accountId: string): void {
+    this.startingAccounts.delete(accountId);
+  }
+
+  isRunning(accountId: string): boolean {
+    const status = this.statuses.get(accountId);
+    return status?.running ?? false;
   }
 
   updateStatus(status: ChannelStatus): void {

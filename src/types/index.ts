@@ -22,8 +22,22 @@ export interface OutboundMessage {
   mediaUrl?: string;
   mediaType?: 'photo' | 'video' | 'audio' | 'document' | 'animation';
   metadata?: Record<string, unknown>;
-  /** Request TTS voice message for this text content (Telegram only) */
-  tts?: boolean;
+  /**
+   * Send audio as voice message (bubble) instead of audio file.
+   * This is set by the TTS system when generating voice messages.
+   */
+  audioAsVoice?: boolean;
+  // Reply support
+  replyToMessageId?: string;
+  quoteText?: string;
+  // Message options
+  silent?: boolean;
+  spoiler?: boolean;
+  // Telegram inline keyboard buttons
+  buttons?: Array<Array<{
+    text: string;
+    callback_data: string;
+  }>>;
 }
 
 export interface Message {

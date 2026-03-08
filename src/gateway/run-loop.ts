@@ -86,13 +86,16 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
 
   const requestShutdown = (action: GatewayRunSignalAction, signal: string) => {
     if (shuttingDown) {
-      console.log(`[GatewayRunLoop] Received ${signal} during shutdown; ignoring`);
+      // Already shutting down, ignore subsequent signals silently
       return;
     }
 
     shuttingDown = true;
     const isRestart = action === "restart";
     console.log(`[GatewayRunLoop] Received ${signal}; ${isRestart ? "restarting" : "shutting down"}`);
+
+    // Remove signal listeners to prevent repeated logging
+    cleanupSignals();
 
     // Force exit timer
     const forceExitMs = isRestart ? DRAIN_TIMEOUT_MS + SHUTDOWN_TIMEOUT_MS : SHUTDOWN_TIMEOUT_MS;

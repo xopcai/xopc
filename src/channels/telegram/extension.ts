@@ -186,7 +186,16 @@ export class TelegramChannelExtension implements ChannelExtension {
       ? [this.accountManager.getAccount(options.accountId)].filter(Boolean) as TelegramAccountConfig[]
       : this.accountManager.getAllAccounts();
 
-    for (const account of accounts) {
+    for (let i = 0; i < accounts.length; i++) {
+      const account = accounts[i];
+      
+      // Add delay between starting multiple accounts to avoid rate limits
+      if (i > 0) {
+        const delay = 2000; // 2 seconds between accounts
+        log.debug({ accountId: account.accountId, delayMs: delay }, 'Waiting before starting next account');
+        await new Promise(resolve => setTimeout(resolve, delay));
+      }
+      
       await this.startAccount(account);
     }
   }
@@ -198,6 +207,20 @@ export class TelegramChannelExtension implements ChannelExtension {
       log.warn({ accountId }, 'Skipping account - no token configured');
       return;
     }
+
+    // Check if already running
+    if (this.accountManager.isRunning(accountId)) {
+      log.warn({ accountId }, 'Account is already running, skipping start');
+      return;
+    }
+
+    // Check if currently starting (prevent concurrent starts)
+    if (this.accountManager.isStarting(accountId)) {
+      log.warn({ accountId }, 'Account is already starting, skipping duplicate start');
+      return;
+    }
+
+    this.accountManager.markStarting(accountId);
 
     try {
       const botConfig = apiRoot ? { client: { apiRoot } } : undefined;
@@ -238,6 +261,7 @@ export class TelegramChannelExtension implements ChannelExtension {
           { command: 'cleanup', description: 'Clean up old sessions' },
           { command: 'new', description: 'Start a new session (archive current)' },
           { command: 'skills', description: 'Manage skills (e.g., /skills reload)' },
+          { command: 'tts', description: 'Manage TTS settings (e.g., /tts always)' },
         ]);
         log.info({ accountId }, 'Registered Telegram bot commands');
       } catch (err) {
@@ -315,7 +339,19 @@ export class TelegramChannelExtension implements ChannelExtension {
       // Error handler
       bot.catch((err) => {
         const ctx = err.ctx;
-        log.error({ accountId, updateId: ctx.update.update_id, error: err.error }, 'Telegram bot error');
+        const error = err.error;
+        
+        // Handle 409 Conflict error (multiple instances)
+        if (error && typeof error === 'object' && 'error_code' in error && error.error_code === 409) {
+          log.error({ accountId }, 'Telegram bot conflict detected - another instance is running with the same token');
+          // Stop this instance to avoid further conflicts
+          this.accountManager.stopRunner(accountId).catch((stopErr) => {
+            log.error({ accountId, err: stopErr }, 'Failed to stop runner after conflict');
+          });
+          return;
+        }
+        
+        log.error({ accountId, updateId: ctx.update.update_id, error }, 'Telegram bot error');
       });
 
       // Persist update offset
@@ -330,15 +366,37 @@ export class TelegramChannelExtension implements ChannelExtension {
         await next();
       });
 
-      // Start polling
+      // Start polling with enhanced error handling
       const runner = run(bot, {
         runner: {
-          fetch: { timeout: 30, allowed_updates: undefined },
+          fetch: { 
+            timeout: 30, 
+            allowed_updates: undefined,
+          },
           silent: true,
           maxRetryTime: 5 * 60 * 1000,
           retryInterval: 'exponential',
         },
       });
+
+      // Handle runner errors to catch 409 conflicts early
+      const task = runner.task();
+      if (task) {
+        task.then(() => {
+          log.info({ accountId }, 'Telegram runner task completed');
+        }).catch((err) => {
+          const errorMessage = err instanceof Error ? err.message : String(err);
+          if (errorMessage.includes('409') || errorMessage.includes('Conflict')) {
+            log.error({ accountId }, 'Telegram runner stopped due to conflict (409)');
+            this.accountManager.updateStatus({
+              accountId,
+              running: false,
+              lastError: 'Conflict: another instance is running',
+              mode: 'stopped',
+            });
+          }
+        });
+      }
 
       this.accountManager.registerRunner(accountId, runner);
 
@@ -349,13 +407,26 @@ export class TelegramChannelExtension implements ChannelExtension {
         mode: 'polling',
       });
 
+      this.accountManager.markStartComplete(accountId);
+
       log.info({ accountId, mode: 'polling' }, 'Telegram account started');
     } catch (err) {
-      log.error({ accountId, err }, 'Failed to start Telegram account');
+      this.accountManager.markStartComplete(accountId);
+      
+      // Handle specific error codes
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      
+      if (errorMessage.includes('409') || errorMessage.includes('Conflict')) {
+        log.error({ accountId }, 'Telegram bot conflict (409) - another instance is already running with this token');
+        log.info({ accountId }, 'Try stopping other instances or wait a few seconds before restarting');
+      } else {
+        log.error({ accountId, err }, 'Failed to start Telegram account');
+      }
+      
       this.accountManager.updateStatus({
         accountId,
         running: false,
-        lastError: err instanceof Error ? err.message : String(err),
+        lastError: errorMessage,
         mode: 'stopped',
       });
       throw err;

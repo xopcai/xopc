@@ -171,6 +171,12 @@ export interface CommandContext {
   // === Platform Features ===
   /** Check if platform supports a feature */
   supports(feature: PlatformFeature): boolean;
+
+  // === Configuration ===
+  /** Get current configuration */
+  getConfig?(): Config;
+  /** Update configuration value */
+  updateConfig?(path: string, value: unknown): Promise<boolean>;
 }
 
 export type PlatformFeature = 

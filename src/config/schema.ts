@@ -258,12 +258,45 @@ export const TTSProviderConfigSchema = z.object({
   voice: z.string().optional(),
 });
 
+export const TTSFallbackConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  order: z.array(z.enum(['openai', 'alibaba', 'edge'])).default(['openai', 'alibaba', 'edge']),
+});
+
+export const TTSModelOverridesConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  allowText: z.boolean().default(true),
+  allowProvider: z.boolean().default(false),
+  allowVoice: z.boolean().default(true),
+  allowModelId: z.boolean().default(true),
+  allowVoiceSettings: z.boolean().default(false),
+  allowNormalization: z.boolean().default(false),
+  allowSeed: z.boolean().default(false),
+});
+
+export const TTSEdgeConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  voice: z.string().optional(),
+  lang: z.string().optional(),
+  outputFormat: z.string().optional(),
+  pitch: z.string().optional(),
+  rate: z.string().optional(),
+  volume: z.string().optional(),
+  proxy: z.string().optional(),
+  timeoutMs: z.number().int().min(1000).max(120000).optional(),
+});
+
 export const TTSConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  provider: z.enum(['openai', 'alibaba']).default('openai'),
-  trigger: z.enum(['auto', 'never']).default('auto'),
+  provider: z.enum(['openai', 'alibaba', 'edge']).default('openai'),
+  trigger: z.enum(['off', 'always', 'inbound', 'tagged']).default('always'),
+  fallback: TTSFallbackConfigSchema.optional(),
+  maxTextLength: z.number().int().min(1).default(4096),
+  timeoutMs: z.number().int().min(1000).max(120000).default(30000),
+  modelOverrides: TTSModelOverridesConfigSchema.optional(),
   alibaba: TTSProviderConfigSchema.optional(),
   openai: TTSProviderConfigSchema.optional(),
+  edge: TTSEdgeConfigSchema.optional(),
 });
 
 // ============================================
@@ -381,8 +414,24 @@ export const ConfigSchema = z.object({
   },
   tts: {
     enabled: false,
-    provider: 'alibaba',
-    trigger: 'auto',
+    provider: 'openai',
+    trigger: 'always',
+    fallback: {
+      enabled: true,
+      order: ['openai', 'alibaba', 'edge'],
+    },
+    maxTextLength: 4096,
+    timeoutMs: 30000,
+    modelOverrides: {
+      enabled: true,
+      allowText: true,
+      allowProvider: false,
+      allowVoice: true,
+      allowModelId: true,
+      allowVoiceSettings: false,
+      allowNormalization: false,
+      allowSeed: false,
+    },
     alibaba: {
       model: 'qwen-tts',
       voice: 'Cherry',
@@ -390,6 +439,12 @@ export const ConfigSchema = z.object({
     openai: {
       model: 'tts-1',
       voice: 'alloy',
+    },
+    edge: {
+      enabled: true,
+      voice: 'en-US-MichelleNeural',
+      lang: 'en-US',
+      outputFormat: 'audio-24khz-48kbitrate-mono-mp3',
     },
   },
 });

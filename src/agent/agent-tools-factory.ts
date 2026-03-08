@@ -1,7 +1,12 @@
 /**
  * Agent Tools Factory - Creates and configures agent tools
- * 
+ *
  * Centralizes tool creation logic to keep service.ts focused on orchestration.
+ *
+ * TTS Architecture Note:
+ * TTS is NOT handled by tools anymore. Following OpenClaw architecture,
+ * TTS is applied at the ChannelManager dispatch layer via maybeApplyTtsToPayload().
+ * This prevents duplicate voice messages.
  */
 
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
@@ -34,6 +39,7 @@ export interface ToolFactoryDeps {
   getCurrentContext: () => { channel: string; chatId: string; sessionKey: string } | null;
   bus: MessageBus;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
+  // TTS config removed - handled at dispatch layer
 }
 
 export class AgentToolsFactory {
@@ -41,7 +47,7 @@ export class AgentToolsFactory {
 
   createCoreTools(): AgentTool<any, any>[] {
     const { workspace, braveApiKey, bus } = this.deps;
-    
+
     return [
       readFileTool,
       writeFileTool,
@@ -52,6 +58,8 @@ export class AgentToolsFactory {
       createShellTool(workspace),
       createWebSearchTool(braveApiKey),
       webFetchTool,
+      // Note: TTS is NOT handled by send_message tool anymore
+      // TTS is applied at the ChannelManager dispatch layer
       createMessageTool(bus, () => this.deps.getCurrentContext()),
       createSendMediaTool(bus, () => this.deps.getCurrentContext()),
       createMemorySearchTool(workspace),

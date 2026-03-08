@@ -167,8 +167,11 @@ export interface ChannelSendOptions {
   mediaUrl?: string;
   mediaType?: 'photo' | 'video' | 'audio' | 'document' | 'animation';
   silent?: boolean;
-  /** Request TTS voice message for this text content */
-  tts?: boolean;
+  /**
+   * Send audio as voice message (bubble) instead of audio file.
+   * This is set when TTS audio is attached to the message.
+   */
+  audioAsVoice?: boolean;
 }
 
 export interface ChannelSendStreamOptions {

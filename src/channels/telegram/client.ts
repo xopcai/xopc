@@ -66,7 +66,30 @@ export class TelegramClient {
     if (!this.bot) {
       throw new Error('Bot not initialized');
     }
-    this.runner = run(this.bot);
+    this.runner = run(this.bot, {
+      runner: {
+        fetch: { timeout: 30 },
+        silent: true,
+        maxRetryTime: 5 * 60 * 1000,
+        retryInterval: 'exponential',
+      },
+    });
+    
+    // Handle runner errors
+    const task = this.runner.task();
+    if (task) {
+      task.then(() => {
+        log.info('Telegram client runner stopped');
+      }).catch((err) => {
+        const errorMessage = err instanceof Error ? err.message : String(err);
+        if (errorMessage.includes('409') || errorMessage.includes('Conflict')) {
+          log.error('Telegram bot conflict (409) - another instance is running with the same token');
+        } else {
+          log.error({ err }, 'Telegram runner error');
+        }
+      });
+    }
+    
     log.info('Telegram client started');
   }
 

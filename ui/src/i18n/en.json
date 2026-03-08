@@ -234,8 +234,10 @@
         "enable": "Enable TTS",
         "enableDesc": "Send voice replies when user sends voice messages",
         "trigger": "Trigger Mode",
-        "triggerAuto": "Auto (reply with voice to voice messages)",
-        "triggerNever": "Never (text only)",
+        "triggerOff": "Off (TTS disabled)",
+        "triggerAlways": "Always (all messages)",
+        "triggerInbound": "Inbound (reply to voice messages)",
+        "triggerTagged": "Tagged (only with [[tts]] directive)",
         "provider": "Provider",
         "voice": "Voice",
         "voiceDesc": "Voice ID"

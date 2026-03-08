@@ -234,8 +234,10 @@
         "enable": "启用 TTS",
         "enableDesc": "用户发送语音消息时以语音回复",
         "trigger": "触发模式",
-        "triggerAuto": "自动（对语音消息用语音回复）",
-        "triggerNever": "从不（仅文字）",
+        "triggerOff": "关闭（禁用 TTS）",
+        "triggerAlways": "始终（所有消息）",
+        "triggerInbound": "入站（回复语音消息）",
+        "triggerTagged": "标记（仅使用 [[tts]] 指令时）",
         "provider": "提供商",
         "voice": "音色",
         "voiceDesc": "音色 ID"
