@@ -691,6 +691,32 @@ export class AgentService {
 
       await this.sessionStore.save(sessionKey, this.agent.state.messages);
       await this.triggerHook('agent_end', { messages: this.agent.state.messages, success: true, durationMs: 0 });
+    } catch (error) {
+      // Handle errors during message processing - notify user
+      log.error({ err: error, sessionKey, channel: msg.channel, chatId: msg.chat_id }, 'Error processing message');
+
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      let userMessage = '❌ An error occurred while processing your message.';
+
+      // Provide more specific error messages
+      if (errorMessage.includes('timeout') || errorMessage.includes('ETIMEDOUT')) {
+        userMessage = '❌ Request timed out. Please try again.';
+      } else if (errorMessage.includes('rate limit') || errorMessage.includes('429')) {
+        userMessage = '❌ Rate limit exceeded. Please wait a moment and try again.';
+      } else if (errorMessage.includes('context') || errorMessage.includes('token')) {
+        userMessage = '❌ Context too long. Starting a new session might help.';
+      } else if (errorMessage.includes('API key') || errorMessage.includes('unauthorized')) {
+        userMessage = '❌ API authentication failed. Please check configuration.';
+      }
+
+      await this.bus.publishOutbound({
+        channel: msg.channel,
+        chat_id: msg.chat_id,
+        content: userMessage,
+        type: 'message',
+      });
+
+      await this.triggerHook('agent_end', { messages: this.agent.state.messages, success: false, durationMs: 0, error: errorMessage });
     } finally {
       typing.stop();
     }
@@ -781,26 +807,36 @@ export class AgentService {
       timestamp: Date.now(),
     };
 
-    await this.agent.prompt(systemMessage);
-    await this.agent.waitForIdle();
+    try {
+      await this.agent.prompt(systemMessage);
+      await this.agent.waitForIdle();
 
-    const finalContent = this.getLastAssistantContent();
-    if (finalContent) {
-      // Run message_sending hook for extension interception
-      const hookResult = await this.runMessageSendingHook(originChatId, finalContent);
-      if (!hookResult.send) {
-        log.info({ chatId: originChatId, reason: hookResult.reason }, 'System message sending blocked by hook');
-      } else {
-        await this.bus.publishOutbound({
-          channel: originChannel,
-          chat_id: originChatId,
-          content: hookResult.content || finalContent,
-          type: 'message',
-        });
+      const finalContent = this.getLastAssistantContent();
+      if (finalContent) {
+        // Run message_sending hook for extension interception
+        const hookResult = await this.runMessageSendingHook(originChatId, finalContent);
+        if (!hookResult.send) {
+          log.info({ chatId: originChatId, reason: hookResult.reason }, 'System message sending blocked by hook');
+        } else {
+          await this.bus.publishOutbound({
+            channel: originChannel,
+            chat_id: originChatId,
+            content: hookResult.content || finalContent,
+            type: 'message',
+          });
+        }
       }
-    }
 
-    await this.sessionStore.save(sessionKey, this.agent.state.messages);
+      await this.sessionStore.save(sessionKey, this.agent.state.messages);
+    } catch (error) {
+      log.error({ err: error, sessionKey }, 'Error processing system message');
+      await this.bus.publishOutbound({
+        channel: originChannel,
+        chat_id: originChatId,
+        content: '❌ An error occurred while processing the system message.',
+        type: 'message',
+      });
+    }
   }
 
   private async checkAndCompact(sessionKey: string, messages: AgentMessage[]): Promise<void> {
