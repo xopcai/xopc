@@ -119,6 +119,7 @@ export interface ProviderInfo {
 }
 
 /**
+ * @deprecated Use getProvider() from models-loader.js instead
  * Provider information map for UI display.
  * Now uses unified models-loader for runtime data.
  */

@@ -9,9 +9,17 @@ import {
 } from 'lucide';
 import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
-import type { ProviderTemplate } from '../config/provider-templates.js';
-import { PROVIDER_TEMPLATES, getProviderTemplate } from '../config/provider-templates.js';
-import { loadDynamicProviders, toProviderTemplate, getAllProviderTemplates, clearProviderCaches, type DynamicProviderInfo } from '../config/dynamic-providers.js';
+// Unified Model Registry client
+import { 
+  fetchRegistry, 
+  fetchProviders, 
+  fetchConfiguredModels, 
+  toProviderTemplates, 
+  clearRegistryCache, 
+  type ProviderTemplate,
+  type RegistryProvider,
+  type RegistryModel 
+} from '../config/registry-client.js';
 
 // Model and Provider interfaces
 export interface ModelConfig {
@@ -114,7 +122,7 @@ export class SettingsPage extends LitElement {
   @state() private _selectedTemplate: ProviderTemplate | null = null;
   @state() private _templateApiKey: string = '';
   @state() private _showTemplateSelection = true;
-  @state() private _dynamicProviders: DynamicProviderInfo[] = [];
+  @state() private _dynamicProviders: RegistryProvider[] = [];
   @state() private _staticTemplates: ProviderTemplate[] = [];
   @state() private _loadingDynamicProviders = false;
 
@@ -758,8 +766,8 @@ export class SettingsPage extends LitElement {
           provider: provider.id,
           contextWindow: model.contextWindow,
           maxTokens: model.maxTokens,
-          reasoning: model.capabilities?.reasoning,
-          vision: model.capabilities?.image,
+          reasoning: model.reasoning,
+          vision: model.input.includes('image'),
           cost: model.cost,
         });
       }
@@ -774,13 +782,14 @@ export class SettingsPage extends LitElement {
     this._loadingDynamicProviders = true;
     const token = this.config?.token;
     try {
-      // Load configured providers (for model selection)
-      this._dynamicProviders = await loadDynamicProviders(token);
+      // Load all providers from registry
+      const providers = await fetchProviders(token);
+      this._dynamicProviders = providers;
       
-      // Load all supported provider templates (for adding new providers)
-      this._staticTemplates = await getAllProviderTemplates(token);
+      // Convert to template format for adding new providers
+      this._staticTemplates = toProviderTemplates(providers);
     } catch (err) {
-      console.error('Failed to load dynamic providers:', err);
+      console.error('Failed to load providers from registry:', err);
       this._dynamicProviders = [];
       this._staticTemplates = [];
     } finally {
@@ -1005,7 +1014,7 @@ export class SettingsPage extends LitElement {
       }
 
       // Clear provider caches and reload providers/models so user sees changes immediately
-      clearProviderCaches();
+      clearRegistryCache();
       await this._loadDynamicProviders();
       await this._loadModels();
       
@@ -1475,13 +1484,7 @@ export class SettingsPage extends LitElement {
   }
 
   private _renderTemplateSelectionModal(): unknown {
-    // Use dynamic providers from backend, and pre-loaded static templates
-    const dynamicApiKeyProviders = this._dynamicProviders
-      .filter(p => p.authType === 'api_key')
-      .map(toProviderTemplate);
-    const dynamicOauthProviders = this._dynamicProviders
-      .filter(p => p.authType === 'oauth')
-      .map(toProviderTemplate);
+    // Use static templates from registry (already converted by _loadDynamicProviders)
     const staticApiKeyTemplates = this._staticTemplates.filter(t => t.authType === 'api_key');
     const staticOauthTemplates = this._staticTemplates.filter(t => t.authType === 'oauth');
 

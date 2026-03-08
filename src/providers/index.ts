@@ -21,7 +21,6 @@ export type { LLMProvider } from './pi-ai.js';
 export {
 	ModelRegistry,
 	resolveConfigValue,
-	PROVIDER_INFO,
 	registerOAuthRefresh,
 	type ProviderOverride,
 	type ProviderInfo,

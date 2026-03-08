@@ -2,10 +2,12 @@
  * Registry Client for Frontend
  * 
  * Fetches provider/model info from backend API.
+ * Replaces the old provider-templates.js and dynamic-providers.js
  */
 
-import type { ProviderConfig, ModelConfig } from './provider-templates.js';
+import type { ModelConfig } from '../pages/SettingsPage.js';
 
+// Define interfaces directly (previously imported from provider-templates.js)
 export interface RegistryAuth {
   type: string;
   supportsOAuth: boolean;
@@ -46,6 +48,17 @@ export interface RegistryProvider {
 export interface RegistryResponse {
   version: string;
   providers: RegistryProvider[];
+}
+
+// Provider template format for SettingsPage
+export interface ProviderTemplate {
+  id: string;
+  name: string;
+  baseUrl: string;
+  api: string;
+  authType: 'api_key' | 'oauth';
+  oauthProviderId?: string;
+  models: ModelConfig[];
 }
 
 let _cache: RegistryResponse | null = null;
@@ -111,7 +124,7 @@ export async function fetchConfiguredModels(token?: string): Promise<RegistryMod
 /**
  * Convert registry provider to ProviderTemplate format (for SettingsPage compatibility)
  */
-export function toProviderTemplates(providers: RegistryProvider[]): ProviderConfig[] {
+export function toProviderTemplates(providers: RegistryProvider[]): ProviderTemplate[] {
   return providers.map(p => ({
     id: p.id,
     name: p.name,
