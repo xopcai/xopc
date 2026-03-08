@@ -5,10 +5,12 @@ import { customElement, property, state, query } from 'lit/decorators.js';
 import { 
   User, Bot, Plug, Globe, Search, Clock, Puzzle, 
   X, Save, ChevronRight, Check, AlertCircle,
-  Settings, Eye, EyeOff, Loader2, RefreshCw
+  Settings, Eye, EyeOff, Loader2, RefreshCw, Key, Lock
 } from 'lucide';
 import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
+import type { ProviderTemplate } from '../config/provider-templates.js';
+import { PROVIDER_TEMPLATES, getProviderTemplate } from '../config/provider-templates.js';
 
 // Model and Provider interfaces
 export interface ModelConfig {
@@ -96,6 +98,9 @@ export class SettingsPage extends LitElement {
     apiKey: '',
     models: [],
   };
+  @state() private _selectedTemplate: ProviderTemplate | null = null;
+  @state() private _templateApiKey: string = '';
+  @state() private _showTemplateSelection = true;
 
   @state() private _values: SettingsValue = {
     model: 'anthropic/claude-sonnet-4-5',
@@ -1335,95 +1340,374 @@ export class SettingsPage extends LitElement {
   }
 
   private _renderAddProviderModal(): unknown {
+    if (this._showTemplateSelection) {
+      return this._renderTemplateSelectionModal();
+    }
+
+    if (this._selectedTemplate?.authType === 'oauth') {
+      return this._renderOAuthProviderModal();
+    }
+
+    return this._renderApiKeyProviderModal();
+  }
+
+  private _renderTemplateSelectionModal(): unknown {
+    const apiKeyTemplates = PROVIDER_TEMPLATES.filter(t => t.authType === 'api_key');
+    const oauthTemplates = PROVIDER_TEMPLATES.filter(t => t.authType === 'oauth');
+
     return html`
       <div class="modal-overlay" @click=${() => this._showAddProviderModal = false}>
-        <div class="modal-content" @click=${(e: Event) => e.stopPropagation()}>
+        <div class="modal-content modal-lg" @click=${(e: Event) => e.stopPropagation()}>
           <div class="modal-header">
-            <h3>Add Provider</h3>
+            <h3>${t('settings.addProvider') || 'Add Provider'}</h3>
             <button class="btn btn-icon" @click=${() => this._showAddProviderModal = false}>
               ${getIcon('x')}
             </button>
           </div>
           
           <div class="modal-body">
-            <div class="field-group">
-              <label class="field-label">Provider ID</label>
-              <input
-                type="text"
-                class="text-input"
-                .value=${this._newProvider.id}
-                placeholder="e.g., openai"
-                @change=${(e: Event) => {
-                  this._newProvider = { ...this._newProvider, id: (e.target as HTMLInputElement).value };
-                }}
-              />
-            </div>
+            <p class="modal-description">${t('settings.selectProviderTemplate') || 'Select a provider to quickly configure with pre-filled settings'}</p>
             
-            <div class="field-group">
-              <label class="field-label">Base URL</label>
-              <input
-                type="text"
-                class="text-input"
-                .value=${this._newProvider.baseUrl}
-                placeholder="https://api.openai.com/v1"
-                @change=${(e: Event) => {
-                  this._newProvider = { ...this._newProvider, baseUrl: (e.target as HTMLInputElement).value };
-                }}
-              />
-            </div>
+            ${apiKeyTemplates.length > 0 ? html`
+              <div class="template-section">
+                <h4 class="template-section-title">
+                  <span class="template-icon">${getIcon('key')}</span>
+                  ${t('settings.apiKeyProviders') || 'API Key Providers'}
+                </h4>
+                <div class="template-grid">
+                  ${apiKeyTemplates.map(template => html`
+                    <button
+                      class="template-card"
+                      @click=${() => this._selectTemplate(template)}
+                    >
+                      <div class="template-card-header">
+                        <span class="template-card-name">${template.name}</span>
+                        <span class="template-card-badge api-key">API Key</span>
+                      </div>
+                      <div class="template-card-models">
+                        ${template.models.slice(0, 3).map(m => html`
+                          <span class="template-model-tag">${m.name}</span>
+                        `)}
+                        ${template.models.length > 3 ? html`
+                          <span class="template-model-tag more">+${template.models.length - 3}</span>
+                        ` : ''}
+                      </div>
+                    </button>
+                  `)}
+                </div>
+              </div>
+            ` : ''}
             
-            <div class="field-group">
-              <label class="field-label">API Type</label>
-              <select
-                class="select-input"
-                .value=${this._newProvider.api}
-                @change=${(e: Event) => {
-                  this._newProvider = { ...this._newProvider, api: (e.target as HTMLSelectElement).value };
-                }}
-              >
-                <option value="openai-completions">OpenAI Completions</option>
-                <option value="openai-responses">OpenAI Responses</option>
-                <option value="anthropic-messages">Anthropic Messages</option>
-                <option value="google-generative-ai">Google Generative AI</option>
-                <option value="ollama">Ollama</option>
-              </select>
-            </div>
+            ${oauthTemplates.length > 0 ? html`
+              <div class="template-section">
+                <h4 class="template-section-title">
+                  <span class="template-icon">${getIcon('lock')}</span>
+                  ${t('settings.oauthProviders') || 'OAuth Providers'}
+                </h4>
+                <div class="template-grid">
+                  ${oauthTemplates.map(template => html`
+                    <button
+                      class="template-card"
+                      @click=${() => this._selectTemplate(template)}
+                    >
+                      <div class="template-card-header">
+                        <span class="template-card-name">${template.name}</span>
+                        <span class="template-card-badge oauth">OAuth</span>
+                      </div>
+                      <div class="template-card-models">
+                        ${template.models.slice(0, 3).map(m => html`
+                          <span class="template-model-tag">${m.name}</span>
+                        `)}
+                        ${template.models.length > 3 ? html`
+                          <span class="template-model-tag more">+${template.models.length - 3}</span>
+                        ` : ''}
+                      </div>
+                    </button>
+                  `)}
+                </div>
+              </div>
+            ` : ''}
+          </div>
+          
+          <div class="modal-footer">
+            <button class="btn btn-ghost" @click=${() => this._showAddProviderModal = false}>
+              ${t('settings.cancel') || 'Cancel'}
+            </button>
+            <button 
+              class="btn btn-secondary"
+              @click=${() => {
+                this._showTemplateSelection = false;
+                this._selectedTemplate = null;
+              }}
+            >
+              ${t('settings.customProvider') || 'Custom Provider'}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private _renderApiKeyProviderModal(): unknown {
+    const template = this._selectedTemplate;
+    const isCustom = !template || template.id === 'custom';
+
+    return html`
+      <div class="modal-overlay" @click=${() => this._closeAddProviderModal()}>
+        <div class="modal-content" @click=${(e: Event) => e.stopPropagation()}>
+          <div class="modal-header">
+            <h3>${isCustom ? 'Add Custom Provider' : `Add ${template?.name}`}</h3>
+            <button class="btn btn-icon" @click=${() => this._closeAddProviderModal()}>
+              ${getIcon('x')}
+            </button>
+          </div>
+          
+          <div class="modal-body">
+            ${template ? html`
+              <div class="template-info">
+                <p class="template-info-text">
+                  <span class="template-info-label">Base URL:</span>
+                  <code>${template.baseUrl}</code>
+                </p>
+                <p class="template-info-text">
+                  <span class="template-info-label">API Type:</span>
+                  <span>${template.api}</span>
+                </p>
+              </div>
+            ` : ''}
+
+            ${isCustom ? html`
+              <div class="field-group">
+                <label class="field-label">Provider ID</label>
+                <input
+                  type="text"
+                  class="text-input"
+                  .value=${this._newProvider.id}
+                  placeholder="e.g., my-provider"
+                  @change=${(e: Event) => {
+                    this._newProvider = { ...this._newProvider, id: (e.target as HTMLInputElement).value };
+                  }}
+                />
+              </div>
+
+              <div class="field-group">
+                <label class="field-label">Base URL</label>
+                <input
+                  type="text"
+                  class="text-input"
+                  .value=${this._newProvider.baseUrl}
+                  placeholder="https://api.example.com/v1"
+                  @change=${(e: Event) => {
+                    this._newProvider = { ...this._newProvider, baseUrl: (e.target as HTMLInputElement).value };
+                  }}
+                />
+              </div>
+
+              <div class="field-group">
+                <label class="field-label">API Type</label>
+                <select
+                  class="select-input"
+                  .value=${this._newProvider.api}
+                  @change=${(e: Event) => {
+                    this._newProvider = { ...this._newProvider, api: (e.target as HTMLSelectElement).value };
+                  }}
+                >
+                  <option value="openai-completions">OpenAI Completions</option>
+                  <option value="openai-responses">OpenAI Responses</option>
+                  <option value="anthropic-messages">Anthropic Messages</option>
+                  <option value="google-generative-ai">Google Generative AI</option>
+                  <option value="ollama">Ollama</option>
+                </select>
+              </div>
+            ` : ''}
             
             <div class="field-group">
               <label class="field-label">API Key</label>
               <input
                 type="password"
                 class="text-input"
-                .value=${this._newProvider.apiKey}
-                placeholder="sk-..."
-                @change=${(e: Event) => {
-                  this._newProvider = { ...this._newProvider, apiKey: (e.target as HTMLInputElement).value };
-                }}
+                .value=${this._templateApiKey}
+                placeholder=${template ? `${template.id}-...` : 'sk-...'}
+                @change=${(e: Event) => this._templateApiKey = (e.target as HTMLInputElement).value}
               />
+              <p class="field-help">${t('settings.apiKeyHelp') || 'Your API key will be stored securely in the configuration'}</p>
             </div>
+
+            ${template && template.models.length > 0 ? html`
+              <div class="field-group">
+                <label class="field-label">Models to Include</label>
+                <div class="checkbox-group-vertical">
+                  ${template.models.map((model, index) => html`
+                    <label class="checkbox-label">
+                      <input
+                        type="checkbox"
+                        .checked=${true}
+                        @change=${(e: Event) => this._toggleTemplateModel(index, (e.target as HTMLInputElement).checked)}
+                      />
+                      <span>${model.name}</span>
+                    </label>
+                  `)}
+                </div>
+              </div>
+            ` : ''}
           </div>
           
           <div class="modal-footer">
-            <button class="btn btn-ghost" @click=${() => this._showAddProviderModal = false}>
-              Cancel
+            <button class="btn btn-ghost" @click=${() => this._backToTemplateSelection()}>
+              ${t('settings.back') || 'Back'}
             </button>
             <button 
               class="btn btn-primary"
-              ?disabled=${!this._newProvider.id || !this._newProvider.baseUrl}
-              @click=${() => {
-                if (this._newProvider.id && this._newProvider.baseUrl) {
-                  this._addProvider({ ...this._newProvider });
-                  this._newProvider = { id: '', baseUrl: '', api: 'openai-completions', apiKey: '', models: [] };
-                  this._showAddProviderModal = false;
-                }
-              }}
+              ?disabled=${isCustom ? !this._newProvider.id || !this._newProvider.baseUrl : !this._templateApiKey}
+              @click=${() => this._addProviderFromTemplate()}
             >
-              Add Provider
+              ${t('settings.addProvider') || 'Add Provider'}
             </button>
           </div>
         </div>
       </div>
     `;
+  }
+
+  private _renderOAuthProviderModal(): unknown {
+    const template = this._selectedTemplate!;
+
+    return html`
+      <div class="modal-overlay" @click=${() => this._closeAddProviderModal()}>
+        <div class="modal-content" @click=${(e: Event) => e.stopPropagation()}>
+          <div class="modal-header">
+            <h3>Add ${template.name}</h3>
+            <button class="btn btn-icon" @click=${() => this._closeAddProviderModal()}>
+              ${getIcon('x')}
+            </button>
+          </div>
+          
+          <div class="modal-body">
+            <div class="oauth-setup">
+              <div class="oauth-info">
+                <p class="template-info-text">
+                  <span class="template-info-label">Base URL:</span>
+                  <code>${template.baseUrl}</code>
+                </p>
+                <p class="template-info-text">
+                  <span class="template-info-label">Authentication:</span>
+                  <span>OAuth 2.0</span>
+                </p>
+              </div>
+
+              <div class="oauth-login-section">
+                <p class="oauth-description">
+                  ${t('settings.oauthDescription') || `Click the button below to authorize with ${template.name}. You will be redirected to the provider's website to complete authentication.`}
+                </p>
+                
+                <button class="btn btn-primary btn-oauth" @click=${() => this._startOAuthLogin(template)}>
+                  <span class="oauth-icon">${getIcon('lock')}</span>
+                  ${t('settings.loginWithProvider') || `Login with ${template.name}`}
+                </button>
+              </div>
+
+              ${template.models.length > 0 ? html`
+                <div class="field-group">
+                  <label class="field-label">Models to Include</label>
+                  <div class="checkbox-group-vertical">
+                    ${template.models.map((model, index) => html`
+                      <label class="checkbox-label">
+                        <input
+                          type="checkbox"
+                          .checked=${true}
+                          @change=${(e: Event) => this._toggleTemplateModel(index, (e.target as HTMLInputElement).checked)}
+                        />
+                        <span>${model.name}</span>
+                      </label>
+                    `)}
+                  </div>
+                </div>
+              ` : ''}
+            </div>
+          </div>
+          
+          <div class="modal-footer">
+            <button class="btn btn-ghost" @click=${() => this._backToTemplateSelection()}>
+              ${t('settings.back') || 'Back'}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private _selectTemplate(template: ProviderTemplate): void {
+    this._selectedTemplate = template;
+    this._showTemplateSelection = false;
+    
+    // Pre-fill custom provider fields if using custom template
+    if (template.id === 'custom' || template.id === 'ollama') {
+      this._newProvider = {
+        id: '',
+        baseUrl: template.baseUrl,
+        api: template.api,
+        apiKey: '',
+        models: [],
+      };
+    }
+  }
+
+  private _backToTemplateSelection(): void {
+    this._showTemplateSelection = true;
+    this._selectedTemplate = null;
+    this._templateApiKey = '';
+    this._newProvider = { id: '', baseUrl: '', api: 'openai-completions', apiKey: '', models: [] };
+  }
+
+  private _closeAddProviderModal(): void {
+    this._showAddProviderModal = false;
+    this._showTemplateSelection = true;
+    this._selectedTemplate = null;
+    this._templateApiKey = '';
+    this._newProvider = { id: '', baseUrl: '', api: 'openai-completions', apiKey: '', models: [] };
+  }
+
+  private _toggleTemplateModel(index: number, checked: boolean): void {
+    if (!this._selectedTemplate) return;
+    
+    // Create a copy of the template with toggled model
+    const updatedModels = [...this._selectedTemplate.models];
+    // We don't actually remove the model, just mark it for exclusion
+    // This will be handled when creating the provider
+  }
+
+  private _addProviderFromTemplate(): void {
+    if (!this._selectedTemplate) return;
+
+    const template = this._selectedTemplate;
+    const providerId = template.id === 'custom' ? this._newProvider.id : template.id;
+    const baseUrl = template.id === 'custom' ? this._newProvider.baseUrl : template.baseUrl;
+    const api = template.id === 'custom' ? this._newProvider.api : template.api;
+
+    if (!providerId || !baseUrl) return;
+
+    const newProvider: ProviderConfig = {
+      id: providerId,
+      baseUrl,
+      api,
+      apiKey: this._templateApiKey,
+      models: template.models.length > 0 ? template.models : [],
+    };
+
+    this._addProvider(newProvider);
+    this._closeAddProviderModal();
+  }
+
+  private async _startOAuthLogin(template: ProviderTemplate): Promise<void> {
+    // TODO: Implement OAuth flow
+    // This would typically:
+    // 1. Call backend to start OAuth flow
+    // 2. Open a popup or redirect to OAuth provider
+    // 3. Wait for callback
+    // 4. Get API key/token from backend
+    // 5. Create provider with the token
+    
+    alert(`OAuth login for ${template.name} will be implemented in Phase 2`);
   }
 
   private _renderField(field: SettingsField): unknown {

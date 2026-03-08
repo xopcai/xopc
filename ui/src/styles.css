@@ -3866,3 +3866,214 @@ xopcbot-gateway-chat {
 .btn-full {
   width: 100%;
 }
+
+.btn-secondary {
+  background: var(--bg-secondary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-color);
+}
+
+.btn-secondary:hover {
+  background: var(--bg-tertiary);
+}
+
+/* Modal variants */
+.modal-lg {
+  max-width: 720px;
+}
+
+.modal-description {
+  color: var(--text-secondary);
+  margin-bottom: 1.5rem;
+  font-size: 0.9375rem;
+}
+
+/* Template selection styles */
+.template-section {
+  margin-bottom: 1.5rem;
+}
+
+.template-section-title {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.875rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.025em;
+}
+
+.template-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--accent-primary);
+}
+
+.template-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+  gap: 0.75rem;
+}
+
+.template-card {
+  display: flex;
+  flex-direction: column;
+  padding: 1rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  text-align: left;
+}
+
+.template-card:hover {
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-sm);
+  transform: translateY(-1px);
+}
+
+.template-card-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 0.5rem;
+}
+
+.template-card-name {
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.template-card-badge {
+  font-size: 0.625rem;
+  font-weight: 600;
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-sm);
+  text-transform: uppercase;
+}
+
+.template-card-badge.api-key {
+  background: var(--accent-success-light);
+  color: var(--accent-success);
+}
+
+.template-card-badge.oauth {
+  background: var(--accent-primary-light);
+  color: var(--accent-primary);
+}
+
+.template-card-models {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.375rem;
+}
+
+.template-model-tag {
+  font-size: 0.6875rem;
+  padding: 0.125rem 0.375rem;
+  background: var(--bg-tertiary);
+  color: var(--text-secondary);
+  border-radius: var(--radius-sm);
+}
+
+.template-model-tag.more {
+  background: var(--border-color);
+  color: var(--text-muted);
+}
+
+/* Template info in modal */
+.template-info {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+  margin-bottom: 1rem;
+}
+
+.template-info-text {
+  display: flex;
+  gap: 0.5rem;
+  margin: 0 0 0.5rem 0;
+  font-size: 0.875rem;
+}
+
+.template-info-text:last-child {
+  margin-bottom: 0;
+}
+
+.template-info-label {
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.template-info code {
+  background: var(--bg-tertiary);
+  padding: 0.125rem 0.375rem;
+  border-radius: var(--radius-sm);
+  font-family: var(--font-mono);
+  font-size: 0.8125rem;
+}
+
+/* OAuth styles */
+.oauth-setup {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.oauth-info {
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 1rem;
+}
+
+.oauth-login-section {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.5rem;
+  background: var(--bg-secondary);
+  border: 1px dashed var(--border-color);
+  border-radius: var(--radius-md);
+}
+
+.oauth-description {
+  text-align: center;
+  color: var(--text-secondary);
+  font-size: 0.875rem;
+  margin: 0;
+}
+
+.btn-oauth {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1.5rem;
+}
+
+.oauth-icon {
+  display: flex;
+  align-items: center;
+}
+
+/* Checkbox group vertical */
+.checkbox-group-vertical {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+/* Field help text */
+.field-help {
+  font-size: 0.75rem;
+  color: var(--text-muted);
+  margin: 0.375rem 0 0 0;
+}
