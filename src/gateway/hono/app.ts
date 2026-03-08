@@ -216,11 +216,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           apiRoot: config.channels?.telegram?.apiRoot || '',
           debug: config.channels?.telegram?.debug || false,
         },
-        whatsapp: {
-          enabled: config.channels?.whatsapp?.enabled,
-          bridgeUrl: config.channels?.whatsapp?.bridgeUrl || 'ws://localhost:3001',
-          allowFrom: config.channels?.whatsapp?.allowFrom || [],
-        },
       },
       // Provider API keys - don't return actual values for security
       // Return empty string if not configured (user needs to input)
@@ -281,7 +276,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     
     // Update channels
     if (body.channels?.telegram) {
-      if (!config.channels) config.channels = { telegram: { enabled: false, token: '', allowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const }, whatsapp: { enabled: false, bridgeUrl: 'ws://localhost:3001', allowFrom: [] } };
+      if (!config.channels) config.channels = { telegram: { enabled: false, token: '', allowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const } };
       if (!config.channels.telegram) config.channels.telegram = {} as any;
       
       if (body.channels.telegram.enabled !== undefined) {
@@ -298,20 +293,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       }
       if (body.channels.telegram.debug !== undefined) {
         config.channels.telegram.debug = body.channels.telegram.debug;
-      }
-    }
-    if (body.channels?.whatsapp) {
-      if (!config.channels) config.channels = { telegram: { enabled: false, token: '', allowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const }, whatsapp: { enabled: false, bridgeUrl: 'ws://localhost:3001', allowFrom: [] } };
-      if (!config.channels.whatsapp) config.channels.whatsapp = {} as any;
-      
-      if (body.channels.whatsapp.enabled !== undefined) {
-        config.channels.whatsapp.enabled = body.channels.whatsapp.enabled;
-      }
-      if (body.channels.whatsapp.bridgeUrl !== undefined) {
-        config.channels.whatsapp.bridgeUrl = body.channels.whatsapp.bridgeUrl;
-      }
-      if (body.channels.whatsapp.allowFrom !== undefined) {
-        config.channels.whatsapp.allowFrom = body.channels.whatsapp.allowFrom;
       }
     }
     
