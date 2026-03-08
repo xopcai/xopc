@@ -315,19 +315,25 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         config.models.providers = {};
       }
       
-      const providerKeys = ['openai', 'anthropic', 'google', 'qwen', 'kimi', 'minimax', 'deepseek', 'groq', 'openrouter', 'ollama', 'moonshot', 'xai', 'bedrock'];
-      for (const key of providerKeys) {
-        if (body.models.providers?.[key]) {
-          if (!config.models.providers[key]) {
-            config.models.providers[key] = { baseUrl: '', models: [] };
-          }
-          
-          if (body.models.providers[key].apiKey !== undefined) {
-            config.models.providers[key].apiKey = body.models.providers[key].apiKey;
-          }
-          if (body.models.providers[key].baseUrl !== undefined) {
-            config.models.providers[key].baseUrl = body.models.providers[key].baseUrl || '';
-          }
+      // Handle all provider keys, including custom ones
+      const providerUpdates = body.models.providers || {};
+      for (const [key, providerConfig] of Object.entries(providerUpdates)) {
+        if (!config.models.providers[key]) {
+          config.models.providers[key] = { baseUrl: '', models: [] };
+        }
+        
+        const pc = providerConfig as any;
+        if (pc.apiKey !== undefined) {
+          config.models.providers[key].apiKey = pc.apiKey;
+        }
+        if (pc.baseUrl !== undefined) {
+          config.models.providers[key].baseUrl = pc.baseUrl || '';
+        }
+        if (pc.api !== undefined) {
+          config.models.providers[key].api = pc.api;
+        }
+        if (pc.models !== undefined) {
+          config.models.providers[key].models = pc.models;
         }
       }
       

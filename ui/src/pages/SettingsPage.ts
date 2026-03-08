@@ -632,7 +632,8 @@ export class SettingsPage extends LitElement {
    */
   private _addProvider(provider: ProviderConfig): void {
     this._providers = [...this._providers, provider];
-    this._dirtyFields.add(`providers.${provider.id}`);
+    // Mark provider as dirty so its full config (including models) gets saved
+    this._dirtyFields.add(`providers.${provider.id}.models`);
     this._expandedProviders.add(provider.id);
     this.requestUpdate();
   }
@@ -889,7 +890,8 @@ export class SettingsPage extends LitElement {
       } else {
         // Only update specific providers
         for (const field of dirtyProviderModels) {
-          const match = field.match(/providers\.([^\.]+)\.(.*)/);
+          // Match patterns like "providers.openai" or "providers.openai.models"
+          const match = field.match(/providers\.([^.]+)(?:\.(.*))?/);
           if (match) {
             const providerId = match[1];
             const provider = this._providers.find(p => p.id === providerId);
