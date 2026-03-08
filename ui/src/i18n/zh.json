@@ -56,6 +56,7 @@
     "unsavedChanges": "未保存的更改",
     "sections": {
       "agent": "代理",
+      "providers": "提供商",
       "models": "模型",
       "channels": "渠道",
       "gateway": "网关"
