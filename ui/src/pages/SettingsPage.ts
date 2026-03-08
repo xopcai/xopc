@@ -57,13 +57,16 @@ export interface SettingsField {
   type: 'text' | 'password' | 'number' | 'boolean' | 'select' | 'textarea';
   description?: string;
   placeholder?: string;
-  options?: Array<{ value: string; label: string }>;
+  options?: Array<{ value: string; label: string; group?: string }>;
   validation?: {
     required?: boolean;
     min?: number;
     max?: number;
     pattern?: string;
   };
+  // For select fields with search
+  searchQuery?: string;
+  onSearchChange?: (query: string) => void;
 }
 
 export interface SettingsValue {
@@ -113,6 +116,7 @@ export class SettingsPage extends LitElement {
   @state() private _showTemplateSelection = true;
   @state() private _dynamicProviders: DynamicProviderInfo[] = [];
   @state() private _loadingDynamicProviders = false;
+  @state() private _modelSearchQuery = '';
 
   @state() private _values: SettingsValue = {
     model: 'anthropic/claude-sonnet-4-5',
@@ -222,10 +226,49 @@ export class SettingsPage extends LitElement {
 
   // Settings sections definition
   private get _sections(): SettingsSection[] {
-    const modelOptions = this._models.map(m => ({
-      value: m.id,
-      label: this._formatModelLabel(m),
-    }));
+    // Filter models based on search query
+    const searchLower = this._modelSearchQuery.toLowerCase();
+    const filteredModels = searchLower
+      ? this._models.filter(m => 
+          m.name.toLowerCase().includes(searchLower) ||
+          m.provider.toLowerCase().includes(searchLower) ||
+          m.id.toLowerCase().includes(searchLower)
+        )
+      : this._models;
+
+    // Group models by provider
+    const groupedModels = new Map<string, typeof this._models>();
+    for (const model of filteredModels) {
+      const provider = model.provider;
+      if (!groupedModels.has(provider)) {
+        groupedModels.set(provider, []);
+      }
+      groupedModels.get(provider)!.push(model);
+    }
+
+    // Build grouped options for model selector
+    const modelOptions: Array<{ value: string; label: string; group?: string }> = [];
+    for (const [provider, models] of groupedModels) {
+      // Add provider group header (represented by disabled option)
+      modelOptions.push({ value: '', label: `── ${provider.toUpperCase()} ──`, group: provider });
+      for (const m of models) {
+        modelOptions.push({
+          value: m.id,
+          label: `  ${m.name}`,
+          group: provider,
+        });
+      }
+    }
+
+    // Filter vision models for imageModel
+    const visionModels = filteredModels.filter(m => m.vision || m.id.includes('vision') || m.id.includes('vl') || m.id.includes('image'));
+    const imageModelOptions = [
+      { value: '', label: 'None (use primary model)' },
+      ...visionModels.map(m => ({
+        value: m.id,
+        label: this._formatModelLabel(m),
+      })),
+    ];
 
     return [
       {
@@ -239,19 +282,15 @@ export class SettingsPage extends LitElement {
             type: 'select',
             description: t('settings.descriptionsFields.model'),
             options: modelOptions,
+            searchQuery: this._modelSearchQuery,
+            onSearchChange: (query: string) => { this._modelSearchQuery = query; },
           },
           {
             key: 'imageModel',
             label: t('settings.fields.imageModel'),
             type: 'select',
             description: t('settings.descriptionsFields.imageModel'),
-            options: [
-              { value: '', label: 'None (use primary model)' },
-              ...this._models.filter(m => m.vision || m.id.includes('vision') || m.id.includes('vl') || m.id.includes('image')).map(m => ({
-                value: m.id,
-                label: this._formatModelLabel(m),
-              })),
-            ],
+            options: imageModelOptions,
           },
           {
             key: 'workspace',
@@ -1914,6 +1953,43 @@ export class SettingsPage extends LitElement {
   }
 
   private _renderSelectField(field: SettingsField, value: any): unknown {
+    // Check if this select field has search enabled
+    const hasSearch = field.searchQuery !== undefined && field.onSearchChange;
+    
+    // Check if options have groups (contain disabled options with group markers)
+    const hasGroups = field.options?.some(opt => opt.group === undefined && opt.label.startsWith('──'));
+
+    if (hasSearch) {
+      return html`
+        <div class="select-with-search">
+          <input
+            type="text"
+            class="text-input search-input"
+            .value=${field.searchQuery || ''}
+            placeholder="Search models..."
+            @input=${(e: Event) => field.onSearchChange?.((e.target as HTMLInputElement).value)}
+          />
+          <select
+            class="select-input"
+            .value=${String(value ?? '')}
+            @change=${(e: Event) => this._handleInput(field.key, (e.target as HTMLSelectElement).value)}
+            size=${Math.min(field.options?.length || 10, 15)}
+          >
+            ${field.options?.map(opt => html`
+              <option 
+                value=${opt.value} 
+                ?selected=${value === opt.value}
+                ?disabled=${!opt.value && opt.label.startsWith('──')}
+                class=${opt.group ? 'group-header' : ''}
+              >
+                ${opt.label}
+              </option>
+            `)}
+          </select>
+        </div>
+      `;
+    }
+
     return html`
       <select
         class="select-input"

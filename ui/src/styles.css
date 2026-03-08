@@ -1302,6 +1302,35 @@ xopcbot-gateway-chat {
   box-shadow: 0 0 0 3px var(--color-primary-alpha);
 }
 
+/* Select with search */
+.settings-page .select-with-search {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.settings-page .select-with-search .search-input {
+  padding: 0.5rem 0.75rem;
+  font-size: 0.875rem;
+}
+
+.settings-page .select-with-search .select-input {
+  max-height: 300px;
+  overflow-y: auto;
+}
+
+.settings-page .select-with-search .select-input option.group-header {
+  font-weight: 600;
+  color: var(--color-primary);
+  background: var(--bg-secondary);
+}
+
+.settings-page .select-with-search .select-input option:disabled {
+  font-weight: 600;
+  color: var(--text-muted);
+  background: var(--bg-secondary);
+}
+
 .settings-page .toggle-label {
   display: flex;
   align-items: center;
