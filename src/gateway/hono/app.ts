@@ -216,6 +216,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           allowFrom: config.channels?.telegram?.allowFrom || [],
           apiRoot: config.channels?.telegram?.apiRoot || '',
           debug: config.channels?.telegram?.debug || false,
+          streamMode: config.channels?.telegram?.streamMode || 'partial',
         },
       },
       // Provider API keys - don't return actual values for security
@@ -300,6 +301,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       }
       if (body.channels.telegram.debug !== undefined) {
         config.channels.telegram.debug = body.channels.telegram.debug;
+      }
+      if (body.channels.telegram.streamMode !== undefined) {
+        config.channels.telegram.streamMode = body.channels.telegram.streamMode;
       }
     }
     
