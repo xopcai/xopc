@@ -25,6 +25,8 @@ import {
 } from '../config/models-json-client.js';
 import './ModelEditDialog.js';
 import type { ModelEditDialog, ModelEditDialogResult } from './ModelEditDialog.js';
+import './ProviderEditDialog.js';
+import type { ProviderEditDialog, ProviderEditDialogResult } from './ProviderEditDialog.js';
 
 // API types for dropdown
 const API_TYPES = [
@@ -59,6 +61,7 @@ export class ModelJsonEditor extends LitElement {
   @state() private _showPasswords: Set<string> = new Set();
   @state() private _testResults: Map<string, { type: string; resolved?: string; error?: string }> = new Map();
   @query('model-edit-dialog') private _editDialog!: ModelEditDialog;
+  @query('provider-edit-dialog') private _providerEditDialog!: ProviderEditDialog;
 
   static styles = css`
     :host { display: block; }
@@ -387,23 +390,24 @@ export class ModelJsonEditor extends LitElement {
   }
 
   private _addProvider() {
-    const id = prompt('Enter provider ID (e.g., ollama, custom-proxy):');
-    if (!id) return;
-    
-    const newConfig = { ...this.config };
-    newConfig.providers = { ...newConfig.providers };
-    newConfig.providers[id] = {
-      baseUrl: '',
-      apiKey: '',
-      api: 'openai-completions',
-      models: [],
+    const handleClose = (e: CustomEvent<ProviderEditDialogResult>) => {
+      this._providerEditDialog.removeEventListener('close', handleClose as EventListener);
+      
+      if (e.detail.confirmed && e.detail.providerId && e.detail.config) {
+        const newConfig = { ...this.config };
+        newConfig.providers = { ...newConfig.providers };
+        newConfig.providers[e.detail.providerId] = e.detail.config;
+        
+        const expanded = new Set(this._editorState.expandedProviders);
+        expanded.add(e.detail.providerId);
+        
+        this._editorState = { ...this._editorState, expandedProviders: expanded };
+        this._emitChange(newConfig);
+      }
     };
     
-    const expanded = new Set(this._editorState.expandedProviders);
-    expanded.add(id);
-    
-    this._editorState = { ...this._editorState, expandedProviders: expanded };
-    this._emitChange(newConfig);
+    this._providerEditDialog.addEventListener('close', handleClose as EventListener);
+    this._providerEditDialog.open(undefined, undefined, true);
   }
 
   private _removeProvider(providerId: string) {
@@ -544,6 +548,8 @@ export class ModelJsonEditor extends LitElement {
       <model-edit-dialog
         .providerId=${editingModel?.provider}
       ></model-edit-dialog>
+      
+      <provider-edit-dialog></provider-edit-dialog>
     `;
   }
 
