@@ -8,47 +8,25 @@
 import { readFileSync } from 'fs';
 import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
-import type { AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { MessageBus, InboundMessage } from '../bus/index.js';
 import type { Config, AgentDefaults } from '../config/schema.js';
-import type { ExtensionTool } from '../extensions/types/index.js';
 import type { ChannelManager } from '../channels/manager.js';
-import { resolveModel, DEFAULT_MODEL, getApiKey as getProviderApiKey } from '../providers/index.js';
+
+import { resolveModel, DEFAULT_MODEL, getApiKey as getProviderApiKey, getAllProviders, isProviderConfigured, getModelsByProvider, getProviderDisplayName } from '../providers/index.js';
 import { SessionStore, type CompactionConfig, type WindowConfig } from '../session/index.js';
-import { SessionCompactor } from './memory/compaction.js';
-import {
-  readFileTool,
-  writeFileTool,
-  editFileTool,
-  listDirTool,
-  createShellTool,
-  grepTool,
-  findTool,
-  createWebSearchTool,
-  webFetchTool,
-  createMessageTool,
-  createSendMediaTool,
-  createMemorySearchTool,
-  createMemoryGetTool,
-} from './tools/index.js';
 import { createSkillLoader, type Skill } from './skills/index.js';
 import { getBundledSkillsDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
-import { ExtensionRegistryImpl as ExtensionRegistry, ExtensionHookRunner, createHookContext } from '../extensions/index.js';
+import { ExtensionRegistryImpl as ExtensionRegistry, ExtensionHookRunner } from '../extensions/index.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { createTypingController } from './typing.js';
 import { loadBootstrapFiles, extractTextContent, type BootstrapFile } from './helpers.js';
 import { SessionTracker } from './session-tracker.js';
 import { ModelManager } from './models/index.js';
 import { initializeCommands } from '../commands/index.js';
-import { getModelsByProvider, getProviderDisplayName, isProviderConfigured, getAllProviders } from '../providers/index.js';
-import { 
-  ProgressFeedbackManager, 
-  formatProgressMessage,
-  formatHeartbeatMessage,
-  type ProgressStage,
-  type ProgressMessage,
-} from './progress.js';
+import { ProgressFeedbackManager, formatProgressMessage, formatHeartbeatMessage, type ProgressStage, type ProgressMessage } from './progress.js';
+import { HookHandler } from './hook-handler.js';
+import { AgentToolsFactory } from './agent-tools-factory.js';
 
 const log = createLogger('AgentService');
 
@@ -74,12 +52,12 @@ interface AgentContext {
  * - SessionTracker: session state and cleanup
  * - ModelManager: model selection and fallback
  * - SessionStore: message persistence
- * - ExtensionRegistry: hooks and tools
+ * - HookHandler: extension hooks
+ * - AgentToolsFactory: tool creation
  */
 export class AgentService {
   private agent: Agent;
   private sessionStore: SessionStore;
-  private compactor: SessionCompactor;
   private hookRunner?: ExtensionHookRunner;
   private unsubscribe?: () => void;
   private running = false;
@@ -95,6 +73,8 @@ export class AgentService {
   private sessionTracker: SessionTracker;
   private modelManager: ModelManager;
   private progressManager: ProgressFeedbackManager;
+  private hookHandler: HookHandler;
+  private toolsFactory: AgentToolsFactory;
 
   // Stream handle for current context (for progress updates)
   private currentStreamHandle: {
@@ -144,7 +124,7 @@ export class AgentService {
     };
     this.sessionStore = new SessionStore(config.workspace, windowConfig, compactionConfig);
 
-    // Setup hook runner
+    // Setup hook runner and handler
     if (config.extensionRegistry) {
       this.hookRunner = new ExtensionHookRunner(config.extensionRegistry, {
         catchErrors: true,
@@ -155,29 +135,21 @@ export class AgentService {
         },
       });
     }
+    this.hookHandler = new HookHandler({
+      hookRunner: this.hookRunner,
+      agentId: this.agentId,
+      get sessionKey() { return this.currentContext?.sessionKey; },
+    });
 
-    // Initialize tools
-    const tools: AgentTool<any, any>[] = [
-      readFileTool,
-      writeFileTool,
-      editFileTool,
-      listDirTool,
-      grepTool,
-      findTool,
-      createShellTool(config.workspace),
-      createWebSearchTool(config.braveApiKey),
-      webFetchTool,
-      createMessageTool(bus, () => this.currentContext),
-      createSendMediaTool(bus, () => this.currentContext),
-      createMemorySearchTool(config.workspace),
-      createMemoryGetTool(config.workspace),
-    ];
-
-    if (config.extensionRegistry) {
-      const extensionTools = this.convertExtensionTools(config.extensionRegistry.getAllTools());
-      tools.push(...extensionTools);
-      log.info({ count: extensionTools.length }, 'Loaded extension tools');
-    }
+    // Initialize tools via factory
+    this.toolsFactory = new AgentToolsFactory({
+      workspace: config.workspace,
+      braveApiKey: config.braveApiKey,
+      extensionRegistry: config.extensionRegistry,
+      getCurrentContext: () => this.currentContext,
+      bus,
+    });
+    const tools = this.toolsFactory.createAllTools();
 
     // Load skills
     const skillResult = this.skillLoader.init(config.workspace, getBundledSkillsDir());
@@ -260,9 +232,9 @@ export class AgentService {
 
   async start(): Promise<void> {
     this.running = true;
-    await this.triggerHook('gateway_start', { port: 0, host: 'cli' });
+    await this.hookHandler.trigger('gateway_start', { port: 0, host: 'cli' });
     log.info('Agent service started');
-    await this.triggerHook('session_start', { sessionId: this.agentId });
+    await this.hookHandler.trigger('session_start', { sessionId: this.agentId });
 
     while (this.running) {
       try {
@@ -274,7 +246,7 @@ export class AgentService {
       }
     }
 
-    await this.triggerHook('session_end', {
+    await this.hookHandler.trigger('session_end', {
       sessionId: this.agentId,
       messageCount: this.agent.state.messages.length,
     });
@@ -286,7 +258,7 @@ export class AgentService {
     this.unsubscribe?.();
     this.dispose();
 
-    this.triggerHook('gateway_stop', { reason: 'stopped' });
+    this.hookHandler.trigger('gateway_stop', { reason: 'stopped' });
     log.info('Agent service stopped');
     return Promise.resolve();
   }
@@ -363,117 +335,15 @@ export class AgentService {
     this.sessionTracker.dispose();
   }
 
-  private async triggerHook(event: string, eventData: Record<string, unknown>): Promise<void> {
-    if (!this.hookRunner) return;
-    const ctx = createHookContext({
-      extensionId: undefined,
-      sessionKey: this.currentContext?.sessionKey,
-      agentId: this.agentId,
-      timestamp: new Date(),
-    });
-    try {
-      await this.hookRunner.runHooks(event as any, eventData, ctx);
-    } catch (error) {
-      log.warn({ event, err: error }, 'Hook execution failed');
-    }
-  }
-
-  private async runBeforeToolCallHook(
-    _toolName: string,
-    _params: Record<string, unknown>
-  ): Promise<{ allowed: boolean; params?: Record<string, unknown>; reason?: string }> {
-    if (!this.hookRunner) return { allowed: true };
-    // ... (simplified, full implementation similar to original)
-    return { allowed: true };
-  }
-
-  private async runMessageSendingHook(
-    to: string,
-    content: string
-  ): Promise<{ send: boolean; content?: string; reason?: string }> {
-    if (!this.hookRunner) return { send: true, content };
-
-    const ctx = createHookContext({
-      sessionKey: this.currentContext?.sessionKey,
-      agentId: this.agentId,
-    });
-
-    return this.hookRunner.runMessageSending(to, content, ctx);
-  }
-
-  // 🆕 Phase 1: Input Hook - Intercept and transform user input
-  private async runInputHook(
-    text: string,
-    images: Array<{ type: string; data: string; mimeType?: string }>,
-    source: string
-  ): Promise<{
-    text: string;
-    images: Array<{ type: string; data: string; mimeType?: string }>;
-    action: 'continue' | 'handled';
-    skipAgent: boolean;
-    response?: string;
-  }> {
-    if (!this.hookRunner) {
-      return {
-        text,
-        images,
-        action: 'continue',
-        skipAgent: false,
-      };
-    }
-
-    const ctx = createHookContext({
-      sessionKey: this.currentContext?.sessionKey,
-      agentId: this.agentId,
-    });
-
-    return this.hookRunner.runInputHook(text, images, source, ctx);
-  }
-
-  // 🆕 Phase 1: Context Hook - Modify messages before sending to LLM
-  private async runContextHook(
-    messages: AgentMessage[]
-  ): Promise<{ messages: AgentMessage[]; modified: boolean }> {
-    if (!this.hookRunner) {
-      return { messages, modified: false };
-    }
-
-    const ctx = createHookContext({
-      sessionKey: this.currentContext?.sessionKey,
-      agentId: this.agentId,
-    });
-
-    const result = await this.hookRunner.runContextHook(messages as any, ctx);
-    return { messages: result.messages as AgentMessage[], modified: result.modified };
-  }
-
-  private convertExtensionTools(extensionTools: ExtensionTool[]): AgentTool<any, any>[] {
-    return extensionTools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters,
-      label: `🔌 ${tool.name}`,
-      async execute(toolCallId: string, params: Record<string, unknown>): Promise<AgentToolResult<unknown>> {
-        try {
-          const result = await tool.execute(params);
-          return { content: [{ type: 'text', text: result }], details: {} };
-        } catch (error) {
-          return {
-            content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
-            details: {},
-          };
-        }
-      },
-    }));
-  }
+  // Hook methods delegated to HookHandler
+  // See: src/agent/hook-handler.ts
 
   private async handleInboundMessage(msg: InboundMessage): Promise<void> {
-    // Use sessionKey from metadata if available (for channels with custom session key format like Telegram)
     const sessionKey = (msg.metadata?.sessionKey as string) || `${msg.channel}:${msg.chat_id}`;
     this.currentContext = { channel: msg.channel, chatId: msg.chat_id, sessionKey };
 
     try {
-      await this.triggerHook('message_received', {
+      await this.hookHandler.trigger('message_received', {
         channelId: msg.channel,
         from: msg.sender_id,
         content: msg.content,
@@ -593,7 +463,7 @@ export class AgentService {
 
       // Process message
       const expandedContent = this.expandSkillCommand(msg.content);
-      await this.triggerHook('before_agent_start', { prompt: expandedContent });
+      await this.hookHandler.trigger('before_agent_start', { prompt: expandedContent });
 
       // 🆕 Phase 1: Input Hook - Intercept/transform user input
       const inputImages: Array<{ type: string; data: string; mimeType?: string }> = [];
@@ -609,7 +479,7 @@ export class AgentService {
         }
       }
 
-      const inputResult = await this.runInputHook(expandedContent, inputImages, msg.channel);
+      const inputResult = await this.hookHandler.runInputHook(expandedContent, inputImages, msg.channel);
 
       // If handled by input hook, skip AI processing
       if (inputResult.skipAgent) {
@@ -633,7 +503,7 @@ export class AgentService {
       this.agent.replaceMessages(messages);
 
       // 🆕 Phase 1: Context Hook - Modify messages before sending to LLM
-      const contextResult = await this.runContextHook(this.agent.state.messages);
+      const contextResult = await this.hookHandler.runContextHook(this.agent.state.messages);
       if (contextResult.modified) {
         this.agent.replaceMessages(contextResult.messages);
       }
@@ -673,7 +543,7 @@ export class AgentService {
 
       // 🆕 Phase 1: Turn Start Hook
       const turnIndex = this.agent.state.messages.filter(m => m.role === 'user').length + 1;
-      await this.triggerHook('turn_start', {
+      await this.hookHandler.trigger('turn_start', {
         turnIndex,
         timestamp: Date.now(),
       });
@@ -695,7 +565,7 @@ export class AgentService {
       );
 
       // 🆕 Phase 1: Turn End Hook
-      await this.triggerHook('turn_end', {
+      await this.hookHandler.trigger('turn_end', {
         turnIndex,
         message: {
           role: 'assistant',
@@ -722,7 +592,7 @@ export class AgentService {
         }
 
         // Run message_sending hook for extension interception
-        const hookResult = await this.runMessageSendingHook(msg.chat_id, contentWithUsage);
+        const hookResult = await this.hookHandler.runMessageSending(msg.chat_id, contentWithUsage);
         if (!hookResult.send) {
           log.info({ chatId: msg.chat_id, reason: hookResult.reason }, 'Message sending blocked by hook');
         } else {
@@ -738,12 +608,12 @@ export class AgentService {
             type: 'message',
             tts: useTTS || undefined,
           });
-          await this.triggerHook('message_sent', { to: msg.chat_id, content: hookResult.content || contentWithUsage, success: true });
+          await this.hookHandler.trigger('message_sent', { to: msg.chat_id, content: hookResult.content || contentWithUsage, success: true });
         }
       }
 
       await this.sessionStore.save(sessionKey, this.agent.state.messages);
-      await this.triggerHook('agent_end', { messages: this.agent.state.messages, success: true, durationMs: 0 });
+      await this.hookHandler.trigger('agent_end', { messages: this.agent.state.messages, success: true, durationMs: 0 });
     } catch (error) {
       // Handle errors during message processing - notify user
       log.error({ err: error, sessionKey, channel: msg.channel, chatId: msg.chat_id }, 'Error processing message');
@@ -769,7 +639,7 @@ export class AgentService {
         type: 'message',
       });
 
-      await this.triggerHook('agent_end', { messages: this.agent.state.messages, success: false, durationMs: 0, error: errorMessage });
+      await this.hookHandler.trigger('agent_end', { messages: this.agent.state.messages, success: false, durationMs: 0, error: errorMessage });
     } finally {
       typing.stop();
       // End stream and cleanup progress feedback
@@ -876,7 +746,7 @@ export class AgentService {
       const finalContent = this.getLastAssistantContent();
       if (finalContent) {
         // Run message_sending hook for extension interception
-        const hookResult = await this.runMessageSendingHook(originChatId, finalContent);
+        const hookResult = await this.hookHandler.runMessageSending(originChatId, finalContent);
         if (!hookResult.send) {
           log.info({ chatId: originChatId, reason: hookResult.reason }, 'System message sending blocked by hook');
         } else {
@@ -910,7 +780,7 @@ export class AgentService {
 
     try {
       const result = await this.sessionStore.compact(sessionKey, messages, contextWindow);
-      await this.triggerHook('after_compaction', {
+      await this.hookHandler.trigger('after_compaction', {
         messageCount: messages.length,
         tokenCount: result.tokensBefore,
         compactedCount: messages.length - result.firstKeptIndex,
