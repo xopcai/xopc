@@ -1,7 +1,5 @@
 import { Command } from 'commander';
 import { AgentService } from '../../agent/index.js';
-import { SessionManager } from '../../session/index.js';
-import { getSessionManager } from '../utils/session.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
 import { MessageBus, MessageBusShutdownError } from '../../bus/index.js';
 import { createLogger } from '../../utils/logger.js';
@@ -9,6 +7,8 @@ import { register, formatExamples, type CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
 import { ExtensionLoader, normalizeExtensionConfig } from '../../extensions/index.js';
 import { join } from 'path';
+import { listSessions } from './agent/sessions.js';
+import { startInteractiveChat } from './agent/interactive.js';
 
 const log = createLogger('AgentCommand');
 
@@ -17,29 +17,6 @@ interface AgentCommandOptions {
   interactive?: boolean;
   session?: string;
   list?: boolean;
-}
-
-async function listSessions(workspace: string): Promise<void> {
-  const manager = await getSessionManager(workspace);
-  
-  const result = await manager.listSessions({ limit: 20, sortBy: 'updatedAt', sortOrder: 'desc' });
-  
-  console.log('\n📋 Available Sessions:\n');
-  if (result.items.length === 0) {
-    console.log('No sessions found.');
-    return;
-  }
-  
-  console.log('Key'.padEnd(35) + 'Name'.padEnd(20) + 'Messages'.padEnd(10) + 'Updated');
-  console.log('─'.repeat(85));
-  
-  for (const session of result.items) {
-    const name = (session.name || '-').slice(0, 18).padEnd(20);
-    const messages = String(session.messageCount).padEnd(10);
-    const updated = new Date(session.updatedAt).toLocaleDateString();
-    console.log(`${session.key.slice(0, 33).padEnd(35)}${name}${messages}${updated}`);
-  }
-  console.log();
 }
 
 function createAgentCommand(_ctx: CLIContext): Command {
@@ -82,6 +59,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
       // Validate session key if provided
       let sessionKey = options.session || 'cli:direct';
       if (options.session) {
+        const { getSessionManager } = await import('../utils/session.js');
         const manager = await getSessionManager(workspace);
         const session = await manager.getSessionMetadata(options.session);
         if (!session) {
@@ -127,16 +105,13 @@ function createAgentCommand(_ctx: CLIContext): Command {
       });
 
       // Start outbound message processor for CLI mode
-      // Just logs outbound messages to console (no channels in CLI mode)
       let running = true;
       const _outboundProcessor = (async () => {
         while (running) {
           try {
             const msg = await bus.consumeOutbound();
-            // In CLI mode, just log outbound messages
             console.log(`\n📤 [${msg.channel}] ${msg.chat_id}: ${msg.content.slice(0, 100)}...`);
           } catch (error) {
-            // Ignore shutdown errors during exit
             if (error instanceof MessageBusShutdownError) {
               break;
             }
@@ -148,7 +123,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
 
       const shutdown = async () => {
         running = false;
-        bus.shutdown(); // Shutdown bus to cancel pending consumers
+        bus.shutdown();
         await agent.stop();
       };
 
@@ -160,76 +135,11 @@ function createAgentCommand(_ctx: CLIContext): Command {
         console.log('\n🤖:', response);
         await shutdown();
       } else if (options.interactive) {
-        // Interactive mode
-        if (options.session) {
-          console.log('🧠 Interactive chat mode - Continuing session\n');
-        } else {
-          console.log('🧠 Interactive chat mode (Ctrl+C to exit)\n');
-        }
-
-        const readline = await import('readline');
-        const rl = readline.createInterface({
-          input: process.stdin,
-          output: process.stdout,
-          terminal: true,
+        await startInteractiveChat(agent, {
+          workspace,
+          sessionKey,
+          continuingSession: !!options.session,
         });
-
-        rl.on('line', async (input) => {
-          const trimmed = input.trim();
-          
-          // Handle special commands
-          if (trimmed === ':sessions' || trimmed === ':list') {
-            rl.pause();
-            await listSessions(workspace);
-            rl.resume();
-            rl.prompt();
-            return;
-          }
-          
-          if (trimmed.startsWith(':session ')) {
-            const newSessionKey = trimmed.slice(9).trim();
-            const manager = await getSessionManager(workspace);
-            const session = await manager.getSessionMetadata(newSessionKey);
-            if (session) {
-              sessionKey = newSessionKey;
-              console.log(`🔄 Switched to session: ${sessionKey}\n`);
-            } else {
-              console.log(`❌ Session not found: ${newSessionKey}\n`);
-            }
-            rl.prompt();
-            return;
-          }
-
-          if (trimmed === ':help') {
-            console.log(`
-📖 Available commands:
-  :sessions, :list    - List available sessions
-  :session <key>     - Switch to another session
-  :quit, :exit       - Exit interactive mode
-  :help              - Show this help
-`);
-            rl.prompt();
-            return;
-          }
-
-          if (trimmed === ':quit' || trimmed === ':exit') {
-            rl.close();
-            return;
-          }
-
-          const response = await agent.processDirect(input, sessionKey);
-          console.log('\n🤖:', response);
-          rl.prompt();
-        });
-
-        rl.on('close', async () => {
-          console.log('\n👋 Goodbye!');
-          await shutdown();
-          process.exit(0);
-        });
-
-        rl.setPrompt('You: ');
-        rl.prompt();
       } else {
         await shutdown();
         cmd.help();
