@@ -1,11 +1,21 @@
 import tseslint from 'typescript-eslint';
 
 export default [
+  // Global ignores
   {
-    files: ["src/**/*.ts"],
     ignores: [
+      "dist/**/*",
+      "docs/**/*",
+      "node_modules/**/*",
+      "ui/**/*",
+      "*.js",
+      "*.mjs",
       "src/plugins/examples/**/*",
     ],
+  },
+  // TypeScript source files
+  {
+    files: ["src/**/*.ts"],
     plugins: {
       "@typescript-eslint": tseslint.plugin,
     },

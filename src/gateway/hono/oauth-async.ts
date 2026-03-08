@@ -259,14 +259,12 @@ async function runOAuthFlow(
   const abortController = new AbortController();
   session.abortController = abortController;
 
-  let authResult: { url?: string; instructions?: string } | null = null;
   let manualCodePromise: Promise<string> | null = null;
   let manualCodeResolve: ((code: string) => void) | undefined;
   let manualCodeReject: ((error: Error) => void) | undefined;
 
   const callbacks: OAuthLoginCallbacks = {
     onAuth: (auth: { url: string; instructions?: string }) => {
-      authResult = auth;
       session.authUrl = auth.url;
       session.instructions = auth.instructions;
       

@@ -10,11 +10,7 @@ import {
 	type Api,
 } from '@mariozechner/pi-ai';
 import type { Config } from '../config/schema.js';
-import { resolveConfigValue } from '../config/resolve-config-value.js';
 import { getModelRegistry } from './model-registry.js';
-import { createLogger } from '../utils/logger.js';
-
-const log = createLogger('Providers');
 
 // ============================================
 // Provider Environment Variable Mappings

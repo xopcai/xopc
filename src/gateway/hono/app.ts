@@ -29,8 +29,6 @@ import {
   loadModelsJson,
   saveModelsJson,
   validateModelsConfig,
-  type ModelsJsonConfig,
-  type ProviderConfig,
 } from '../../config/models-json.js';
 
 const log = createLogger('HonoApp');

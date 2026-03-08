@@ -12,22 +12,17 @@
 
 import {
 	type Api,
-	getModel as getPiAiModel,
 	getModels as getPiAiModels,
 	getProviders as getPiAiProviders,
 	type Model,
 	type KnownProvider,
 } from '@mariozechner/pi-ai';
-import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
-import { dirname } from 'path';
+import { existsSync, readFileSync } from 'fs';
 import { resolveConfigValue, resolveHeaders } from '../config/resolve-config-value.js';
 import { getModelsJsonPath } from '../config/paths.js';
 import type {
 	ModelsJsonConfig,
-	ProviderConfig,
-	CustomModel,
 	ModelOverride,
-	ValidationResult,
 } from '../config/models-json.js';
 import { validateModelsConfig, getDefaultModelValues } from '../config/models-json.js';
 import { createLogger } from '../utils/logger.js';
