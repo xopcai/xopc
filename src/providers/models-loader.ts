@@ -13,6 +13,9 @@ import type { ModelsManifest, ResolvedModel, ResolvedProvider, ProviderEntry, Mo
 import type { Config } from '../config/schema.js';
 import { getModels as getPiAiModels, getProviders as getPiAiProviders } from '@mariozechner/pi-ai';
 
+// Re-export types
+export type { ModelsManifest, ResolvedModel, ResolvedProvider, ProviderEntry, ModelEntry };
+
 let currentManifest: ModelsManifest = manifestData as ModelsManifest;
 
 /** Get the built-in manifest */
@@ -49,7 +52,7 @@ function toResolvedProvider(
     input: m.input ?? ['text'],
     contextWindow: m.contextWindow ?? 128000,
     maxTokens: m.maxTokens ?? 4096,
-    cost: m.cost ?? { input: 0, output: 0 },
+    cost: { input: m.cost?.input ?? 0, output: m.cost?.output ?? 0 },
     compat: m.compat,
     headers: m.headers,
     recommended: m.recommended ?? false,
@@ -143,7 +146,7 @@ export function buildRegistry(config?: Config): ResolvedProvider[] {
               input: model.input ?? ['text'],
               contextWindow: model.contextWindow ?? 128000,
               maxTokens: model.maxTokens ?? 4096,
-              cost: model.cost ?? { input: 0, output: 0 },
+              cost: { input: model.cost?.input ?? 0, output: model.cost?.output ?? 0 },
               recommended: false,
               deprecated: false,
               source: 'pi-ai',
@@ -173,7 +176,7 @@ export function buildRegistry(config?: Config): ResolvedProvider[] {
             input: m.input ?? ['text'],
             contextWindow: m.contextWindow ?? 128000,
             maxTokens: m.maxTokens ?? 4096,
-            cost: m.cost ?? { input: 0, output: 0 },
+            cost: { input: m.cost?.input ?? 0, output: m.cost?.output ?? 0 },
             recommended: false,
             deprecated: false,
             source: 'pi-ai',
@@ -202,6 +205,7 @@ export function buildRegistry(config?: Config): ResolvedProvider[] {
         
         for (const model of userConfig.models) {
           const existingIndex = existing.models.findIndex(m => m.id === model.id);
+          const modelCost = model.cost || { input: 0, output: 0 };
           const modelEntry: ResolvedModel = {
             ref: `${providerId}/${model.id}`,
             id: model.id,
@@ -214,7 +218,12 @@ export function buildRegistry(config?: Config): ResolvedProvider[] {
             input: (model.input as any) ?? ['text'],
             contextWindow: model.contextWindow ?? 128000,
             maxTokens: model.maxTokens ?? 4096,
-            cost: model.cost ?? { input: 0, output: 0 },
+            cost: {
+              input: modelCost.input ?? 0,
+              output: modelCost.output ?? 0,
+              cacheRead: modelCost.cacheRead,
+              cacheWrite: modelCost.cacheWrite,
+            },
             recommended: false,
             deprecated: false,
             source: 'user',
@@ -252,7 +261,7 @@ export function buildRegistry(config?: Config): ResolvedProvider[] {
           input: (m.input as any) ?? ['text'],
           contextWindow: m.contextWindow ?? 128000,
           maxTokens: m.maxTokens ?? 4096,
-          cost: m.cost ?? { input: 0, output: 0 },
+          cost: { input: m.cost?.input ?? 0, output: m.cost?.output ?? 0 },
           recommended: false,
           deprecated: false,
           source: 'user' as const,

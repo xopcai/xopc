@@ -222,14 +222,14 @@ export class ModelRegistry {
 	 * Get provider definition from unified loader
 	 */
 	getProviderFromCatalog(providerId: string) {
-		return getProvider(this.config, providerId);
+		return getProvider(this.config ?? undefined, providerId);
 	}
 
 	/**
 	 * Check if provider is configured using unified loader
 	 */
 	isProviderConfigured(providerId: string): boolean {
-		return isProviderConfigured(this.config, providerId);
+		return isProviderConfigured(this.config ?? undefined, providerId);
 	}
 
 	/**
@@ -475,7 +475,7 @@ export class ModelRegistry {
 			}
 
 			// Check via unified loader
-			if (isProviderConfigured(this.config, m.provider)) {
+			if (isProviderConfigured(this.config ?? undefined, m.provider)) {
 				available.push(m);
 				continue;
 			}
@@ -538,7 +538,7 @@ export class ModelRegistry {
 			}
 		}
 		// Check via unified loader
-		if (isProviderConfigured(this.config, provider)) {
+		if (isProviderConfigured(this.config ?? undefined, provider)) {
 			return true;
 		}
 		// Fall back to config
@@ -561,7 +561,7 @@ export class ModelRegistry {
 			}
 		}
 		// Check via unified loader
-		if (isProviderConfigured(this.config, provider)) {
+		if (isProviderConfigured(this.config ?? undefined, provider)) {
 			return true;
 		}
 		// Fall back to config
@@ -573,13 +573,15 @@ export class ModelRegistry {
 	 * Get provider info 
 	 */
 	static getProviderInfo(provider: string): ProviderInfo | undefined {
-		const resolved = getProvider(provider);
+		const resolved = getProvider(provider, this.config ?? undefined);
 		if (resolved) {
+			const authType = resolved.auth.type === 'none' ? 'api_key' : 
+				resolved.auth.type === 'aws-sdk' ? 'api_key' : resolved.auth.type;
 			return {
 				id: resolved.id,
 				name: resolved.name,
 				envKey: resolved.auth.envKeys[0] || '',
-				authType: resolved.auth.type === 'none' ? 'api_key' : resolved.auth.type,
+				authType: authType as 'api_key' | 'oauth' | 'token',
 				supportsOAuth: resolved.auth.supportsOAuth ?? false,
 				baseUrl: resolved.baseUrl,
 				logo: undefined,
@@ -593,15 +595,19 @@ export class ModelRegistry {
 	 */
 	static getAllProviderInfo(): ProviderInfo[] {
 		const registry = buildRegistry();
-		return registry.map(p => ({
-			id: p.id,
-			name: p.name,
-			envKey: p.auth.envKeys[0] || '',
-			authType: p.auth.type === 'none' ? 'api_key' : p.auth.type,
-			supportsOAuth: p.auth.supportsOAuth ?? false,
-			baseUrl: p.baseUrl,
-			logo: undefined,
-		}));
+		return registry.map(p => {
+			const authType = p.auth.type === 'none' ? 'api_key' : 
+				p.auth.type === 'aws-sdk' ? 'api_key' : p.auth.type;
+			return {
+				id: p.id,
+				name: p.name,
+				envKey: p.auth.envKeys[0] || '',
+				authType: authType as 'api_key' | 'oauth' | 'token',
+				supportsOAuth: p.auth.supportsOAuth ?? false,
+				baseUrl: p.baseUrl,
+				logo: undefined,
+			};
+		});
 	}
 }
 

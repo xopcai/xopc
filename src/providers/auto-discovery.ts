@@ -64,8 +64,8 @@ export function recommendDefaultModel(configuredProviders: string[]): string {
 	if (configuredProviders.length > 0) {
 		const first = configuredProviders[0];
 		const provider = getProvider(first);
-		if (provider) {
-			return `${first}/${provider.defaults.maxTokens > 4000 ? 'default' : 'default'}`;
+		if (provider && provider.models.length > 0) {
+			return `${first}/${provider.models[0].id}`;
 		}
 	}
 
