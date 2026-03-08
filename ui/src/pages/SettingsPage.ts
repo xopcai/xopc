@@ -785,7 +785,7 @@ export class SettingsPage extends LitElement {
     // Load all models and providers in one call
     await this._loadDynamicProviders();
     
-    // Extract models from dynamic providers for the model selector
+    // Extract models from CONFIGURED providers only for the default model selector
     const modelsFromProviders: Array<{
       id: string;
       name: string;
@@ -797,7 +797,10 @@ export class SettingsPage extends LitElement {
       cost?: { input: number; output: number };
     }> = [];
     
-    for (const provider of this._dynamicProviders) {
+    // Only show models from configured providers
+    const configuredProviders = this._dynamicProviders.filter(p => p.configured);
+    
+    for (const provider of configuredProviders) {
       for (const model of provider.models) {
         modelsFromProviders.push({
           id: `${provider.id}/${model.id}`,
