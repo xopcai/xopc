@@ -473,7 +473,6 @@ export function getProviderConfig(config: Config, provider: string): RichProvide
   }
   return undefined;
 }
-}
 
 /**
  * 解析模型引用

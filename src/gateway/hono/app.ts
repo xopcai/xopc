@@ -23,7 +23,7 @@ import {
 } from '../../providers/index.js';
 import { createOAuthHandler, loadOAuthCredentialsToCache } from './oauth.js';
 import { testApiKeyResolution } from '../../config/resolve-config-value.js';
-import type { Config, ProviderConfig, RichProviderConfig } from '../../config/schema.js';
+import type { ProviderConfig, RichProviderConfig } from '../../config/schema.js';
 
 const log = createLogger('HonoApp');
 
