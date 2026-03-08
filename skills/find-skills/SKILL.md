@@ -2,14 +2,6 @@
 name: find-skills
 description: Helps users discover, install, and manage agent skills in xopcbot workspace
 license: MIT
-metadata:
-  xopcbot:
-    requires:
-      bins: [git]
-    install:
-      - id: git-clone
-        kind: download
-        label: Clone skills repository
 ---
 
 # Find Skills
