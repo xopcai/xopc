@@ -690,354 +690,301 @@ export class SettingsPage extends LitElement {
           ? html`
               <div class="channel-fields" style="margin-top: 1.5rem; padding-left: 1rem; border-left: 2px solid var(--border-color);">
                 <!-- Simple Mode -->
-                ${!this._settings.telegram.advancedMode
+                <!-- Bot Token (Required) -->
+                <div class="field-group">
+                  <div class="field-header">
+                    <label class="field-label">Bot Token <span class="required-mark">*</span></label>
+                  </div>
+                  <div class="input-with-actions">
+                    <input
+                      class="text-input"
+                      type="${this._showTelegramToken ? 'text' : 'password'}"
+                      .value=${this._settings.telegram.token}
+                      @change=${(e: Event) =>
+                        this._updateSettings(
+                          'telegram.token',
+                          (e.target as HTMLInputElement).value
+                        )
+                      }
+                      placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                    />
+                    <div class="input-actions">
+                      ${this._settings.telegram.token ? html`
+                        <button
+                          class="btn-icon"
+                          @click=${this._copyTelegramToken}
+                          title="${this._copiedTelegramToken ? 'Copied!' : 'Copy Token'}"
+                        >
+                          ${getIcon(this._copiedTelegramToken ? 'check' : 'copy')}
+                        </button>
+                      ` : ''}
+                      <button
+                        class="btn-icon"
+                        @click=${this._toggleTelegramTokenVisibility}
+                        title="${this._showTelegramToken ? 'Hide' : 'Show'} Token"
+                      >
+                        ${getIcon(this._showTelegramToken ? 'eyeOff' : 'eye')}
+                      </button>
+                    </div>
+                  </div>
+                  <p class="field-desc">Get your token from @BotFather</p>
+                </div>
+
+                <!-- Allow From -->
+                <div class="field-group">
+                  <div class="field-header">
+                    <label class="field-label">Allow From (User IDs)</label>
+                  </div>
+                  <textarea
+                    class="textarea-input"
+                    .value=${this._settings.telegram.allowFrom.join(', ')}
+                    @change=${(e: Event) =>
+                      this._updateSettings(
+                        'telegram.allowFrom',
+                        (e.target as HTMLTextAreaElement).value
+                          .split(/[,\n]/)
+                          .map((s) => s.trim())
+                          .filter(Boolean)
+                      )
+                    }
+                    placeholder="123456789, 987654321"
+                    rows="2"
+                  ></textarea>
+                  <p class="field-desc">Comma-separated user IDs allowed to use the bot</p>
+                </div>
+
+                <!-- Expand/Collapse Advanced Settings -->
+                <div class="field-group" style="margin-top: 1rem;">
+                  <button
+                    class="btn btn-ghost"
+                    @click=${() => this._updateSettings('telegram.advancedMode', !this._settings.telegram.advancedMode)}
+                    style="display: flex; align-items: center; gap: 0.5rem;"
+                  >
+                    ${getIcon(this._settings.telegram.advancedMode ? 'chevronUp' : 'chevronDown')}
+                    <span>${this._settings.telegram.advancedMode ? 'Hide' : 'Show'} Advanced Settings</span>
+                  </button>
+                </div>
+
+                <!-- Advanced Settings (Expandable) -->
+                ${this._settings.telegram.advancedMode
                   ? html`
-                      <!-- Bot Token (Required) -->
-                      <div class="field-group">
-                        <div class="field-header">
-                          <label class="field-label">Bot Token <span class="required-mark">*</span></label>
-                        </div>
-                        <div class="input-with-actions">
+                      <div style="margin-top: 1.5rem; padding-top: 1.5rem; border-top: 1px solid var(--border-color);">
+                        <!-- API Root (Optional) -->
+                        <div class="field-group">
+                          <div class="field-header">
+                            <label class="field-label">API Root</label>
+                          </div>
                           <input
                             class="text-input"
-                            type="${this._showTelegramToken ? 'text' : 'password'}"
-                            .value=${this._settings.telegram.token}
+                            type="text"
+                            .value=${this._settings.telegram.apiRoot}
                             @change=${(e: Event) =>
                               this._updateSettings(
-                                'telegram.token',
+                                'telegram.apiRoot',
                                 (e.target as HTMLInputElement).value
                               )
                             }
-                            placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
+                            placeholder="https://api.telegram.org"
                           />
-                          <div class="input-actions">
-                            ${this._settings.telegram.token ? html`
-                              <button
-                                class="btn-icon"
-                                @click=${this._copyTelegramToken}
-                                title="${this._copiedTelegramToken ? 'Copied!' : 'Copy Token'}"
-                              >
-                                ${getIcon(this._copiedTelegramToken ? 'check' : 'copy')}
-                              </button>
-                            ` : ''}
-                            <button
-                              class="btn-icon"
-                              @click=${this._toggleTelegramTokenVisibility}
-                              title="${this._showTelegramToken ? 'Hide' : 'Show'} Token"
-                            >
-                              ${getIcon(this._showTelegramToken ? 'eyeOff' : 'eye')}
-                            </button>
-                          </div>
+                          <p class="field-desc">Custom API endpoint (leave empty for default)</p>
                         </div>
-                        <p class="field-desc">Get your token from @BotFather</p>
-                      </div>
 
-                      <!-- Allow From -->
-                      <div class="field-group">
-                        <div class="field-header">
-                          <label class="field-label">Allow From (User IDs)</label>
-                        </div>
-                        <textarea
-                          class="textarea-input"
-                          .value=${this._settings.telegram.allowFrom.join(', ')}
-                          @change=${(e: Event) =>
-                            this._updateSettings(
-                              'telegram.allowFrom',
-                              (e.target as HTMLTextAreaElement).value
-                                .split(/[,\n]/)
-                                .map((s) => s.trim())
-                                .filter(Boolean)
-                            )
-                          }
-                          placeholder="123456789, 987654321"
-                          rows="2"
-                        ></textarea>
-                        <p class="field-desc">Comma-separated user IDs allowed to use the bot</p>
-                      </div>
-
-                      <!-- Switch to Advanced -->
-                      <div class="field-group" style="margin-top: 1rem;">
-                        <button
-                          class="btn btn-ghost"
-                          @click=${() => this._updateSettings('telegram.advancedMode', true)}
-                        >
-                          ${getIcon('settings')} Switch to Advanced Mode
-                        </button>
-                      </div>
-                    `
-                  : ''}
-
-                <!-- Advanced Mode -->
-                ${this._settings.telegram.advancedMode
-                  ? html`
-                      <!-- Switch to Simple -->
-                      <div class="field-group" style="margin-bottom: 1rem;">
-                        <button
-                          class="btn btn-ghost"
-                          @click=${() => this._updateSettings('telegram.advancedMode', false)}
-                        >
-                          ${getIcon('arrowLeft')} Back to Simple Mode
-                        </button>
-                      </div>
-
-                      <!-- Bot Token (Required) -->
-                      <div class="field-group">
-                        <div class="field-header">
-                          <label class="field-label">Bot Token <span class="required-mark">*</span></label>
-                        </div>
-                        <input
-                          class="text-input"
-                          type="password"
-                          .value=${this._settings.telegram.token}
-                          @change=${(e: Event) =>
-                            this._updateSettings(
-                              'telegram.token',
-                              (e.target as HTMLInputElement).value
-                            )
-                          }
-                          placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-                        />
-                        <p class="field-desc">Get your token from @BotFather</p>
-                      </div>
-
-                      <!-- API Root (Optional) -->
-                      <div class="field-group">
-                        <div class="field-header">
-                          <label class="field-label">API Root</label>
-                        </div>
-                        <input
-                          class="text-input"
-                          type="text"
-                          .value=${this._settings.telegram.apiRoot}
-                          @change=${(e: Event) =>
-                            this._updateSettings(
-                              'telegram.apiRoot',
-                              (e.target as HTMLInputElement).value
-                            )
-                          }
-                          placeholder="https://api.telegram.org"
-                        />
-                        <p class="field-desc">Custom API endpoint (leave empty for default)</p>
-                      </div>
-
-                      <!-- Proxy (Optional) -->
-                      <div class="field-group">
-                        <div class="field-header">
-                          <label class="field-label">Proxy</label>
-                        </div>
-                        <input
-                          class="text-input"
-                          type="text"
-                          .value=${this._settings.telegram.proxy}
-                          @change=${(e: Event) =>
-                            this._updateSettings(
-                              'telegram.proxy',
-                              (e.target as HTMLInputElement).value
-                            )
-                          }
-                          placeholder="http://proxy.example.com:8080"
-                        />
-                        <p class="field-desc">HTTP/HTTPS proxy URL (optional)</p>
-                      </div>
-
-                      <!-- DM Policy -->
-                      <div class="field-group">
-                        <div class="field-header">
-                          <label class="field-label">DM Policy</label>
-                        </div>
-                        <select
-                          class="select-input"
-                          .value=${this._settings.telegram.dmPolicy}
-                          @change=${(e: Event) =>
-                            this._updateSettings(
-                              'telegram.dmPolicy',
-                              (e.target as HTMLSelectElement).value as DmPolicy
-                            )
-                          }
-                        >
-                          ${dmPolicyOptions.map(
-                            (opt) =>
-                              html`<option value=${opt.value}>${opt.label}</option>`
-                          )}
-                        </select>
-                        <p class="field-desc">How to handle direct messages</p>
-                      </div>
-
-                      <!-- Group Policy -->
-                      <div class="field-group">
-                        <div class="field-header">
-                          <label class="field-label">Group Policy</label>
-                        </div>
-                        <select
-                          class="select-input"
-                          .value=${this._settings.telegram.groupPolicy}
-                          @change=${(e: Event) =>
-                            this._updateSettings(
-                              'telegram.groupPolicy',
-                              (e.target as HTMLSelectElement).value as GroupPolicy
-                            )
-                          }
-                        >
-                          ${groupPolicyOptions.map(
-                            (opt) =>
-                              html`<option value=${opt.value}>${opt.label}</option>`
-                          )}
-                        </select>
-                        <p class="field-desc">How to handle group messages</p>
-                      </div>
-
-                      <!-- Reply To Mode -->
-                      <div class="field-group">
-                        <div class="field-header">
-                          <label class="field-label">Reply To Mode</label>
-                        </div>
-                        <select
-                          class="select-input"
-                          .value=${this._settings.telegram.replyToMode}
-                          @change=${(e: Event) =>
-                            this._updateSettings(
-                              'telegram.replyToMode',
-                              (e.target as HTMLSelectElement).value as ReplyToMode
-                            )
-                          }
-                        >
-                          ${replyToModeOptions.map(
-                            (opt) =>
-                              html`<option value=${opt.value}>${opt.label}</option>`
-                          )}
-                        </select>
-                      </div>
-
-                      <!-- Stream Mode -->
-                      <div class="field-group">
-                        <div class="field-header">
-                          <label class="field-label">Stream Mode</label>
-                        </div>
-                        <select
-                          class="select-input"
-                          .value=${this._settings.telegram.streamMode}
-                          @change=${(e: Event) =>
-                            this._updateSettings(
-                              'telegram.streamMode',
-                              (e.target as HTMLSelectElement).value as StreamMode
-                            )
-                          }
-                        >
-                          ${streamModeOptions.map(
-                            (opt) =>
-                              html`<option value=${opt.value}>${opt.label}</option>`
-                          )}
-                        </select>
-                      </div>
-
-                      <!-- Allow From -->
-                      <div class="field-group">
-                        <div class="field-header">
-                          <label class="field-label">Allow From (User IDs)</label>
-                        </div>
-                        <textarea
-                          class="textarea-input"
-                          .value=${this._settings.telegram.allowFrom.join(', ')}
-                          @change=${(e: Event) =>
-                            this._updateSettings(
-                              'telegram.allowFrom',
-                              (e.target as HTMLTextAreaElement).value
-                                .split(/[,\n]/)
-                                .map((s) => s.trim())
-                                .filter(Boolean)
-                            )
-                          }
-                          placeholder="123456789, 987654321"
-                          rows="2"
-                        ></textarea>
-                        <p class="field-desc">Comma-separated user IDs allowed to use the bot (for allowlist mode)</p>
-                      </div>
-
-                      <!-- Group Allow From -->
-                      <div class="field-group">
-                        <div class="field-header">
-                          <label class="field-label">Allow From Groups (Group IDs)</label>
-                        </div>
-                        <textarea
-                          class="textarea-input"
-                          .value=${this._settings.telegram.groupAllowFrom.join(', ')}
-                          @change=${(e: Event) =>
-                            this._updateSettings(
-                              'telegram.groupAllowFrom',
-                              (e.target as HTMLTextAreaElement).value
-                                .split(/[,\n]/)
-                                .map((s) => s.trim())
-                                .filter(Boolean)
-                            )
-                          }
-                          placeholder="-1001234567890, -1009876543210"
-                          rows="2"
-                        ></textarea>
-                        <p class="field-desc">Comma-separated group IDs allowed to use the bot</p>
-                      </div>
-
-                      <!-- History Limit -->
-                      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                        <!-- Proxy (Optional) -->
                         <div class="field-group">
                           <div class="field-header">
-                            <label class="field-label">History Limit</label>
+                            <label class="field-label">Proxy</label>
                           </div>
                           <input
                             class="text-input"
-                            type="number"
-                            .value=${this._settings.telegram.historyLimit}
+                            type="text"
+                            .value=${this._settings.telegram.proxy}
                             @change=${(e: Event) =>
                               this._updateSettings(
-                                'telegram.historyLimit',
-                                parseInt((e.target as HTMLInputElement).value) || 50
+                                'telegram.proxy',
+                                (e.target as HTMLInputElement).value
                               )
                             }
-                            min="10"
-                            max="200"
+                            placeholder="http://proxy.example.com:8080"
                           />
-                          <p class="field-desc">Messages per session</p>
+                          <p class="field-desc">HTTP/HTTPS proxy URL (optional)</p>
                         </div>
 
+                        <!-- DM Policy -->
                         <div class="field-group">
                           <div class="field-header">
-                            <label class="field-label">Text Chunk Limit</label>
+                            <label class="field-label">DM Policy</label>
                           </div>
-                          <input
-                            class="text-input"
-                            type="number"
-                            .value=${this._settings.telegram.textChunkLimit}
+                          <select
+                            class="select-input"
+                            .value=${this._settings.telegram.dmPolicy}
                             @change=${(e: Event) =>
                               this._updateSettings(
-                                'telegram.textChunkLimit',
-                                parseInt((e.target as HTMLInputElement).value) || 4000
+                                'telegram.dmPolicy',
+                                (e.target as HTMLSelectElement).value as DmPolicy
                               )
                             }
-                            min="1000"
-                            max="10000"
-                            step="100"
-                          />
-                          <p class="field-desc">Max characters per message</p>
+                          >
+                            ${dmPolicyOptions.map(
+                              (opt) =>
+                                html`<option value=${opt.value}>${opt.label}</option>`
+                            )}
+                          </select>
+                          <p class="field-desc">How to handle direct messages</p>
                         </div>
-                      </div>
 
-                      <!-- Debug Mode -->
-                      <div class="field-group">
-                        <label class="toggle-label">
-                          <input
-                            class="toggle-input"
-                            type="checkbox"
-                            .checked=${this._settings.telegram.debug}
+                        <!-- Group Policy -->
+                        <div class="field-group">
+                          <div class="field-header">
+                            <label class="field-label">Group Policy</label>
+                          </div>
+                          <select
+                            class="select-input"
+                            .value=${this._settings.telegram.groupPolicy}
                             @change=${(e: Event) =>
                               this._updateSettings(
-                                'telegram.debug',
-                                (e.target as HTMLInputElement).checked
+                                'telegram.groupPolicy',
+                                (e.target as HTMLSelectElement).value as GroupPolicy
                               )
                             }
-                          />
-                          <span class="toggle-switch"></span>
-                          <span class="toggle-text">Debug Mode</span>
-                        </label>
-                        <p class="field-desc">Enable verbose logging for troubleshooting</p>
+                          >
+                            ${groupPolicyOptions.map(
+                              (opt) =>
+                                html`<option value=${opt.value}>${opt.label}</option>`
+                            )}
+                          </select>
+                          <p class="field-desc">How to handle group messages</p>
+                        </div>
+
+                        <!-- Reply To Mode -->
+                        <div class="field-group">
+                          <div class="field-header">
+                            <label class="field-label">Reply To Mode</label>
+                          </div>
+                          <select
+                            class="select-input"
+                            .value=${this._settings.telegram.replyToMode}
+                            @change=${(e: Event) =>
+                              this._updateSettings(
+                                'telegram.replyToMode',
+                                (e.target as HTMLSelectElement).value as ReplyToMode
+                              )
+                            }
+                          >
+                            ${replyToModeOptions.map(
+                              (opt) =>
+                                html`<option value=${opt.value}>${opt.label}</option>`
+                            )}
+                          </select>
+                        </div>
+
+                        <!-- Stream Mode -->
+                        <div class="field-group">
+                          <div class="field-header">
+                            <label class="field-label">Stream Mode</label>
+                          </div>
+                          <select
+                            class="select-input"
+                            .value=${this._settings.telegram.streamMode}
+                            @change=${(e: Event) =>
+                              this._updateSettings(
+                                'telegram.streamMode',
+                                (e.target as HTMLSelectElement).value as StreamMode
+                              )
+                            }
+                          >
+                            ${streamModeOptions.map(
+                              (opt) =>
+                                html`<option value=${opt.value}>${opt.label}</option>`
+                            )}
+                          </select>
+                        </div>
+
+                        <!-- Group Allow From -->
+                        <div class="field-group">
+                          <div class="field-header">
+                            <label class="field-label">Allow From Groups (Group IDs)</label>
+                          </div>
+                          <textarea
+                            class="textarea-input"
+                            .value=${this._settings.telegram.groupAllowFrom.join(', ')}
+                            @change=${(e: Event) =>
+                              this._updateSettings(
+                                'telegram.groupAllowFrom',
+                                (e.target as HTMLTextAreaElement).value
+                                  .split(/[,\n]/)
+                                  .map((s) => s.trim())
+                                  .filter(Boolean)
+                              )
+                            }
+                            placeholder="-1001234567890, -1009876543210"
+                            rows="2"
+                          ></textarea>
+                          <p class="field-desc">Comma-separated group IDs allowed to use the bot</p>
+                        </div>
+
+                        <!-- History Limit & Text Chunk Limit -->
+                        <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 1rem;">
+                          <div class="field-group">
+                            <div class="field-header">
+                              <label class="field-label">History Limit</label>
+                            </div>
+                            <input
+                              class="text-input"
+                              type="number"
+                              .value=${this._settings.telegram.historyLimit}
+                              @change=${(e: Event) =>
+                                this._updateSettings(
+                                  'telegram.historyLimit',
+                                  parseInt((e.target as HTMLInputElement).value) || 50
+                                )
+                              }
+                              min="10"
+                              max="200"
+                            />
+                            <p class="field-desc">Messages per session</p>
+                          </div>
+
+                          <div class="field-group">
+                            <div class="field-header">
+                              <label class="field-label">Text Chunk Limit</label>
+                            </div>
+                            <input
+                              class="text-input"
+                              type="number"
+                              .value=${this._settings.telegram.textChunkLimit}
+                              @change=${(e: Event) =>
+                                this._updateSettings(
+                                  'telegram.textChunkLimit',
+                                  parseInt((e.target as HTMLInputElement).value) || 4000
+                                )
+                              }
+                              min="1000"
+                              max="10000"
+                              step="100"
+                            />
+                            <p class="field-desc">Max characters per message</p>
+                          </div>
+                        </div>
+
+                        <!-- Debug Mode -->
+                        <div class="field-group">
+                          <label class="toggle-label">
+                            <input
+                              class="toggle-input"
+                              type="checkbox"
+                              .checked=${this._settings.telegram.debug}
+                              @change=${(e: Event) =>
+                                this._updateSettings(
+                                  'telegram.debug',
+                                  (e.target as HTMLInputElement).checked
+                                )
+                              }
+                            />
+                            <span class="toggle-switch"></span>
+                            <span class="toggle-text">Debug Mode</span>
+                          </label>
+                          <p class="field-desc">Enable verbose logging for troubleshooting</p>
+                        </div>
                       </div>
                     `
                   : ''}
