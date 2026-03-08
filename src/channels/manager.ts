@@ -1,7 +1,7 @@
 /**
  * Channel Manager
  * 
- * Manages all channel plugins.
+ * Manages all channel implementations.
  */
 
 import { telegramPlugin } from './telegram/plugin.js';

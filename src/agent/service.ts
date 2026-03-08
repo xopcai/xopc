@@ -154,7 +154,7 @@ export class AgentService {
     if (config.extensionRegistry) {
       const pluginTools = this.convertExtensionTools(config.extensionRegistry.getAllTools());
       tools.push(...pluginTools);
-      log.info({ count: pluginTools.length }, 'Loaded plugin tools');
+      log.info({ count: pluginTools.length }, 'Loaded extension tools');
     }
 
     // Load skills
@@ -516,7 +516,7 @@ export class AgentService {
         return;
       }
 
-      // Check plugin commands (legacy, will be migrated)
+      // Check extension commands (legacy, will be migrated)
       if (content.startsWith('/') && this.config.extensionRegistry) {
         try {
           const commandName = content.slice(1).split(/\s+/)[0];
@@ -527,7 +527,7 @@ export class AgentService {
             return;
           }
         } catch (err) {
-          log.error({ err, command: content }, 'Failed to execute plugin command');
+          log.error({ err, command: content }, 'Failed to execute extension command');
           await this.bus.publishOutbound({
             channel: msg.channel,
             chat_id: msg.chat_id,
