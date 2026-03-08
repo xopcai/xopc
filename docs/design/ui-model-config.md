@@ -195,19 +195,23 @@ interface ProviderConfig {
 
 ## 实现优先级
 
-### Phase 1: 基础模型管理
+### Phase 1: 基础模型管理 ✅ 已完成
 1. 重构 Providers section 为可展开卡片
 2. 添加自定义模型表单
 3. 支持添加/删除模型
+4. Agent section 添加 imageModel 选择器
 
-### Phase 2: 图片模型支持
-1. 在 Agent section 添加 imageModel 选择器
-2. 筛选有图片能力的模型
+### Phase 2: Provider 管理 ✅ 已完成
+1. 添加 Provider 创建功能
+2. 添加 Provider 删除功能（带确认对话框）
+3. 支持选择 API 类型（OpenAI、Anthropic、Google、Ollama 等）
 
-### Phase 3: 高级功能
+### Phase 3: 高级功能 🔄 待实施
 1. 模型搜索/筛选
 2. 批量导入/导出
 3. 模型能力自动检测（通过 API）
+4. Provider/Model 拖拽排序
+5. 模型使用统计展示
 
 ## 技术实现建议
 
