@@ -119,8 +119,8 @@ export class XopcbotApp extends LitElement {
     // Listen for navigate-to-chat event from session manager
     window.addEventListener('navigate-to-chat', ((e: CustomEvent<{ sessionKey: string }>) => {
       const { sessionKey } = e.detail;
-      this._switchTab('chat');
       this._updateChatRoute({ type: 'session', sessionKey });
+      this._switchTab('chat');
     }) as EventListener);
   }
 
