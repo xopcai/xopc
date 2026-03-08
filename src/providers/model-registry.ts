@@ -32,6 +32,53 @@ import type {
 import { validateModelsConfig, getDefaultModelValues } from '../config/models-json.js';
 import { createLogger } from '../utils/logger.js';
 
+/**
+ * Get API key from environment variables for a provider.
+ * Supports both standard format (PROVIDER_API_KEY) and provider-specific mappings.
+ */
+function getApiKeyFromEnv(provider: string): string | undefined {
+	// Standard format: PROVIDER_API_KEY
+	const envVar = provider.toUpperCase().replace(/-/g, '_') + '_API_KEY';
+	const envKey = process.env[envVar];
+	if (envKey) return envKey;
+
+	// Provider-specific env var mappings
+	const envMap: Record<string, string[]> = {
+		openai: ['OPENAI_API_KEY'],
+		anthropic: ['ANTHROPIC_API_KEY'],
+		google: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
+		groq: ['GROQ_API_KEY'],
+		deepseek: ['DEEPSEEK_API_KEY'],
+		qwen: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'],
+		kimi: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'],
+		minimax: ['MINIMAX_API_KEY'],
+		'minimax-cn': ['MINIMAX_API_KEY'],
+		zhipu: ['ZHIPU_API_KEY'],
+		openrouter: ['OPENROUTER_API_KEY'],
+		xai: ['XAI_API_KEY'],
+		cerebras: ['CEREBRAS_API_KEY'],
+		mistral: ['MISTRAL_API_KEY'],
+		huggingface: ['HF_TOKEN', 'HUGGINGFACE_TOKEN'],
+		opencode: ['OPENCODE_API_KEY'],
+		'kimi-coding': ['KIMI_API_KEY', 'MOONSHOT_API_KEY'],
+		'google-gemini-cli': ['GEMINI_CLI_TOKEN', 'GOOGLE_TOKEN'],
+		'google-antigravity': ['ANTIGRAVITY_API_KEY'],
+		'azure-openai-responses': ['AZURE_OPENAI_API_KEY'],
+		'amazon-bedrock': ['AWS_ACCESS_KEY_ID', 'AWS_SECRET_ACCESS_KEY'],
+		'google-vertex': ['GOOGLE_VERTEX_TOKEN'],
+		'github-copilot': ['GITHUB_TOKEN', 'GITHUB_COPILOT_TOKEN'],
+		vercel: ['VERCEL_TOKEN'],
+		'vercel-ai-gateway': ['VERCEL_AI_GATEWAY_API_KEY'],
+	};
+
+	const keys = envMap[provider] || [];
+	for (const key of keys) {
+		if (process.env[key]) return process.env[key];
+	}
+
+	return undefined;
+}
+
 const log = createLogger('ModelRegistry');
 
 /** Provider override config (baseUrl, headers, apiKey) without custom models */
@@ -240,11 +287,15 @@ export class ModelRegistry {
 
 		// Compute and cache
 		let result: boolean;
+		
+		// Check custom provider configs from models.json first
 		if (this.customProviderApiKeys.has(provider)) {
 			const key = this.getApiKey(provider);
 			result = !!key;
 		} else {
-			result = false;
+			// Also check environment variables
+			const envKey = getApiKeyFromEnv(provider);
+			result = !!envKey;
 		}
 
 		this._authStatusCache.set(provider, result);
