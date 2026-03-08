@@ -333,3 +333,130 @@ describe('draftStreamManager singleton', () => {
     expect(draftStreamManager).toBeInstanceOf(DraftStreamManager);
   });
 });
+
+describe('createTelegramDraftStream with progress', () => {
+  const mockApi = {
+    sendMessage: vi.fn().mockResolvedValue({ message_id: 123 }),
+    editMessageText: vi.fn().mockResolvedValue({ message_id: 123 }),
+    deleteMessage: vi.fn().mockResolvedValue(true),
+  };
+
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('should support setProgress method when enabled', () => {
+    const stream = createTelegramDraftStream({
+      api: mockApi as any,
+      chatId: '123456',
+      enableProgress: true,
+    });
+
+    expect(typeof stream.setProgress).toBe('function');
+  });
+
+  it('should not have setProgress when disabled', () => {
+    const stream = createTelegramDraftStream({
+      api: mockApi as any,
+      chatId: '123456',
+      enableProgress: false,
+    });
+
+    // setProgress exists but does nothing when disabled
+    expect(typeof stream.setProgress).toBe('function');
+  });
+
+  it('should support updateWithProgress method', () => {
+    const stream = createTelegramDraftStream({
+      api: mockApi as any,
+      chatId: '123456',
+      enableProgress: true,
+    });
+
+    expect(typeof stream.updateWithProgress).toBe('function');
+  });
+
+  it('should include progress indicator in message when setProgress is called', async () => {
+    const stream = createTelegramDraftStream({
+      api: mockApi as any,
+      chatId: '123456',
+      enableProgress: true,
+    });
+
+    // Set progress stage
+    stream.setProgress('reading', '/path/to/file.txt');
+
+    // Update with content
+    stream.updateWithProgress('File content here');
+
+    await new Promise(resolve => setTimeout(resolve, 1100));
+
+    // Should include progress indicator
+    expect(mockApi.sendMessage).toHaveBeenCalled();
+    const callArgs = mockApi.sendMessage.mock.calls[0];
+    const message = callArgs[1];
+    expect(message).toContain('📖');
+    expect(message).toContain('Reading');
+    expect(message).toContain('File content here');
+  });
+
+  it('should include tool detail in progress indicator', async () => {
+    const stream = createTelegramDraftStream({
+      api: mockApi as any,
+      chatId: '123456',
+      enableProgress: true,
+    });
+
+    stream.setProgress('executing', 'npm install');
+    stream.updateWithProgress('Running command...');
+
+    await new Promise(resolve => setTimeout(resolve, 1100));
+
+    expect(mockApi.sendMessage).toHaveBeenCalled();
+    const callArgs = mockApi.sendMessage.mock.calls[0];
+    const message = callArgs[1];
+    expect(message).toContain('npm install');
+  });
+
+  it('should not include progress indicator when stage is idle', async () => {
+    const stream = createTelegramDraftStream({
+      api: mockApi as any,
+      chatId: '123456',
+      enableProgress: true,
+    });
+
+    stream.setProgress('idle');
+    stream.updateWithProgress('Hello world');
+
+    await new Promise(resolve => setTimeout(resolve, 1100));
+
+    expect(mockApi.sendMessage).toHaveBeenCalled();
+    const callArgs = mockApi.sendMessage.mock.calls[0];
+    const message = callArgs[1];
+    // Should not have progress indicator when idle
+    expect(message).toBe('Hello world');
+  });
+
+  it('should handle all progress stages correctly', async () => {
+    const stages = ['thinking', 'searching', 'reading', 'writing', 'executing', 'analyzing'] as const;
+    const expectedEmojis = ['🤔', '🔍', '📖', '✍️', '⚙️', '📊'];
+
+    for (let i = 0; i < stages.length; i++) {
+      const stream = createTelegramDraftStream({
+        api: mockApi as any,
+        chatId: `123456${i}`, // Use unique chatId
+        enableProgress: true,
+      });
+
+      stream.setProgress(stages[i], 'test detail');
+      stream.updateWithProgress('Content');
+
+      await new Promise(resolve => setTimeout(resolve, 1100));
+
+      expect(mockApi.sendMessage).toHaveBeenCalled();
+      const callArgs = mockApi.sendMessage.mock.calls[i];
+      expect(callArgs[1]).toContain(expectedEmojis[i]);
+      expect(callArgs[1]).toContain('test detail');
+    }
+  }, 15000);
+});

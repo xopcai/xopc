@@ -57,20 +57,64 @@ const DEFAULT_CONFIG: ProgressFeedbackConfig = {
 
 // Tool category mapping for better feedback
 const TOOL_STAGE_MAP: Record<string, ProgressStage> = {
+  // Reading tools
   'read': 'reading',
   'read_file': 'reading',
+  'read_multiple': 'reading',
   'glob': 'reading',
+  'find': 'reading',
+  'list_dir': 'reading',
+  'ls': 'reading',
+  'memory_get': 'reading',
+  
+  // Searching tools
   'grep': 'searching',
   'web_search': 'searching',
+  'search': 'searching',
+  'memory_search': 'searching',
+  'find_files': 'searching',
+  
+  // Web fetching
   'web_fetch': 'reading',
-  'bash': 'executing',
-  'shell': 'executing',
+  'fetch': 'reading',
+  'curl': 'reading',
+  'wget': 'reading',
+  
+  // Writing tools
   'write': 'writing',
   'write_file': 'writing',
+  'write_multiple': 'writing',
   'edit': 'writing',
+  'patch': 'writing',
+  'create': 'writing',
+  'mkdir': 'writing',
+  'delete': 'writing',
+  'remove': 'writing',
+  
+  // Executing tools
+  'bash': 'executing',
+  'shell': 'executing',
+  'exec': 'executing',
+  'run': 'executing',
+  'command': 'executing',
+  'node': 'executing',
+  'python': 'executing',
+  'npm': 'executing',
+  'pnpm': 'executing',
+  'git': 'executing',
+  'docker': 'executing',
+  'kubectl': 'executing',
+  
+  // Message/communication
   'message': 'idle',
-  'memory_search': 'searching',
-  'memory_get': 'reading',
+  'send': 'idle',
+  'reply': 'idle',
+  
+  // Analysis tools
+  'analyze': 'analyzing',
+  'compare': 'analyzing',
+  'diff': 'analyzing',
+  'summarize': 'analyzing',
 };
 
 // Emoji mapping for stages
