@@ -1,11 +1,11 @@
 /**
  * Telegram Channel Extension
  * 
- * 插件模式多账户实现，支持:
- * - 多账户
- * - 层级访问控制
- * - Update offset 持久化
- * - Streaming message
+ * Multi-account implementation with plugin architecture, supporting:
+ * - Multiple accounts
+ * - Hierarchical access control
+ * - Update offset persistence
+ * - Streaming messages
  */
 
 import { Bot, type Context, InputFile } from 'grammy';
@@ -32,7 +32,7 @@ import {
 } from '../access-control.js';
 import { readUpdateOffset, writeUpdateOffset } from '../update-offset-store.js';
 import { draftStreamManager } from '../draft-stream.js';
-import { formatTelegramMessage } from '../format.js';
+import { formatTelegramMessage, splitTelegramMessage } from '../format.js';
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/index.js';
 import { createTelegramCommandHandler } from './command-handler.js';
@@ -384,7 +384,7 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
             const voiceDuration = message.voice?.duration || 0;
             if (voiceDuration > 60) {
               log.warn({ duration: voiceDuration }, 'Voice message too long (>60s), skipping STT');
-              transcribedText = '[语音超过1分钟，不支持转文字]';
+              transcribedText = '[Voice message too long (>60s), STT not supported]';
             } else {
               try {
                 log.info({ 
@@ -405,7 +405,7 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
                   provider: config.stt.provider,
                   bufferSize: buffer.byteLength 
                 }, 'STT transcription failed');
-                transcribedText = `[语音转文字失败：${errorMsg}]`;
+                transcribedText = `[STT failed: ${errorMsg}]`;
               }
             }
           }
@@ -779,7 +779,7 @@ export class TelegramChannelExtension implements ChannelExtension {
 
         const sendOptions: any = {
           parse_mode: 'HTML',
-          caption: content ? formatTelegramMessage(content).html : undefined,
+          caption: content ? splitTelegramMessage(formatTelegramMessage(content).html, 1024)[0] : undefined, // Caption limit: 1024
         };
         if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
         if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
@@ -825,7 +825,7 @@ export class TelegramChannelExtension implements ChannelExtension {
 
         const sendOptions: any = {
           parse_mode: 'HTML',
-          caption: content ? formatTelegramMessage(content).html : undefined,
+          caption: content ? splitTelegramMessage(formatTelegramMessage(content).html, 1024)[0] : undefined, // Caption limit: 1024
         };
         if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
         if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
@@ -866,48 +866,112 @@ export class TelegramChannelExtension implements ChannelExtension {
         // TTS: Generate voice message
         log.info({ chatId, contentLength: content?.length }, 'Generating TTS voice message');
 
-        try {
-          const ttsResult = await speak(content || '', this.config.tts);
+        let ttsErrorOccurred = false;
+        let lastTtsError: unknown = null;
+        const maxRetries = 2;
+        
+        for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
+          try {
+            const ttsResult = await speak(content || '', this.config.tts);
 
-          // Compress audio if it's wav format (to reduce file size for Telegram)
-          const { buffer: compressedAudio, format: compressedFormat } = await compressAudio(
-            Buffer.from(ttsResult.audio),
-            ttsResult.format
-          );
+            // Compress audio if it's wav format (to reduce file size for Telegram)
+            const { buffer: compressedAudio, format: compressedFormat } = await compressAudio(
+              Buffer.from(ttsResult.audio),
+              ttsResult.format
+            );
 
-          const file = new InputFile(compressedAudio, `voice.${compressedFormat}`);
+            const file = new InputFile(compressedAudio, `voice.${compressedFormat}`);
 
-          const sendOptions: any = {};
-          if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
-          if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
-          if (silent) sendOptions.disable_notification = true;
+            const sendOptions: any = {};
+            if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
+            if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
+            if (silent) sendOptions.disable_notification = true;
 
-          // Use sendVoice for opus, sendAudio for other formats
-          if (compressedFormat === 'opus') {
-            sentMessageId = (await bot.api.sendVoice(chatId, file, sendOptions)).message_id;
-          } else {
-            sentMessageId = (await bot.api.sendAudio(chatId, file, sendOptions)).message_id;
+            // Use sendVoice for opus, sendAudio for other formats
+            if (compressedFormat === 'opus') {
+              sentMessageId = (await bot.api.sendVoice(chatId, file, sendOptions)).message_id;
+            } else {
+              sentMessageId = (await bot.api.sendAudio(chatId, file, sendOptions)).message_id;
+            }
+            log.info({ chatId, messageId: sentMessageId, provider: ttsResult.provider, format: compressedFormat, attempt }, 'TTS voice message sent');
+            break; // Success, exit retry loop
+            
+          } catch (ttsError) {
+            lastTtsError = ttsError;
+            const errorMsg = ttsError instanceof Error ? ttsError.message : String(ttsError);
+            
+            if (attempt <= maxRetries) {
+              log.warn({ 
+                error: errorMsg, 
+                attempt, 
+                maxRetries,
+                textLength: content?.length 
+              }, `TTS generation failed (attempt ${attempt}/${maxRetries + 1}), retrying...`);
+              ttsErrorOccurred = true;
+              // Wait before retry (exponential backoff: 1s, 2s)
+              await new Promise(resolve => setTimeout(resolve, attempt * 1000));
+            } else {
+              log.error({ 
+                error: errorMsg, 
+                attempt,
+                textLength: content?.length,
+                provider: this.config.tts.provider
+              }, 'TTS generation failed after all retries, falling back to text');
+              ttsErrorOccurred = true;
+            }
           }
-          log.info({ chatId, messageId: sentMessageId, provider: ttsResult.provider, format: compressedFormat }, 'TTS voice message sent');
-        } catch (ttsError) {
-          log.error({ error: ttsError }, 'TTS generation failed, falling back to text');
-          // Fallback to text message
+        }
+        
+        // Fallback to text message if all TTS attempts failed
+        if (ttsErrorOccurred && !sentMessageId) {
           const { html } = formatTelegramMessage(content || '');
+          const chunks = splitTelegramMessage(html, 3800);
+          
           const sendOptions: any = { parse_mode: 'HTML' };
           if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
           if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
           if (silent) sendOptions.disable_notification = true;
 
-          sentMessageId = (await bot.api.sendMessage(chatId, html, sendOptions)).message_id;
+          sentMessageId = (await bot.api.sendMessage(chatId, chunks[0], sendOptions)).message_id;
+          
+          // Send remaining chunks
+          for (let i = 1; i < chunks.length; i++) {
+            const replyOptions: any = { 
+              parse_mode: 'HTML',
+              reply_to_message_id: sentMessageId 
+            };
+            if (threadId) replyOptions.message_thread_id = parseInt(threadId, 10);
+            if (silent) replyOptions.disable_notification = true;
+            
+            await bot.api.sendMessage(chatId, chunks[i], replyOptions);
+          }
+          
+          log.info({ chatId, chunks: chunks.length }, 'Fallback text message sent');
         }
       } else {
+        // Split long messages into chunks (Telegram limit: 4096 chars)
         const { html } = formatTelegramMessage(content || '');
+        const chunks = splitTelegramMessage(html, 3800); // Leave margin for safety
+        
         const sendOptions: any = { parse_mode: 'HTML' };
         if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
         if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
         if (silent) sendOptions.disable_notification = true;
 
-        sentMessageId = (await bot.api.sendMessage(chatId, html, sendOptions)).message_id;
+        // Send first chunk
+        sentMessageId = (await bot.api.sendMessage(chatId, chunks[0], sendOptions)).message_id;
+        
+        // Send remaining chunks as replies
+        for (let i = 1; i < chunks.length; i++) {
+          const replyOptions: any = { 
+            parse_mode: 'HTML',
+            reply_to_message_id: sentMessageId 
+          };
+          if (threadId) replyOptions.message_thread_id = parseInt(threadId, 10);
+          if (silent) replyOptions.disable_notification = true;
+          
+          await bot.api.sendMessage(chatId, chunks[i], replyOptions);
+        }
       }
 
       return { messageId: String(sentMessageId), chatId, success: true };
