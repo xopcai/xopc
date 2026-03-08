@@ -69,6 +69,7 @@
     },
     "fields": {
       "model": "Model",
+      "imageModel": "Image Model",
       "workspace": "Workspace",
       "maxTokens": "Max Tokens",
       "temperature": "Temperature",
@@ -96,6 +97,7 @@
     },
     "descriptionsFields": {
       "model": "Default AI model to use",
+      "imageModel": "Model for image understanding (optional)",
       "workspace": "Working directory for agent files",
       "maxTokens": "Maximum tokens in response",
       "temperature": "Randomness in responses (0-2)",

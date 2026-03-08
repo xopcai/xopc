@@ -69,6 +69,7 @@
     },
     "fields": {
       "model": "模型",
+      "imageModel": "图片模型",
       "workspace": "工作区",
       "maxTokens": "最大 Token 数",
       "temperature": "温度",
@@ -96,6 +97,7 @@
     },
     "descriptionsFields": {
       "model": "默认使用的 AI 模型",
+      "imageModel": "用于图像理解的模型（可选）",
       "workspace": "代理文件的工作目录",
       "maxTokens": "响应中的最大 token 数",
       "temperature": "响应随机性（0-2）",

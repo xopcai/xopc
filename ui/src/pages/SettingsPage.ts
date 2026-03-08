@@ -10,6 +10,31 @@ import {
 import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
 
+// Model and Provider interfaces
+export interface ModelConfig {
+  id: string;
+  name: string;
+  capabilities: {
+    text: boolean;
+    image: boolean;
+    reasoning: boolean;
+  };
+  contextWindow: number;
+  maxTokens: number;
+  cost?: {
+    input: number;
+    output: number;
+  };
+}
+
+export interface ProviderConfig {
+  id: string;
+  baseUrl: string;
+  api: string;
+  apiKey: string;
+  models: ModelConfig[];
+}
+
 export interface SettingsPageConfig {
   /** @deprecated No longer needed - always uses current origin */
   url?: string;
@@ -57,8 +82,17 @@ export class SettingsPage extends LitElement {
   @state() private _saveSuccess = false;
   @state() private _models: Array<{ id: string; name: string; provider: string }> = [];
 
+  // Provider and Model management
+  @state() private _providers: ProviderConfig[] = [];
+  @state() private _expandedProviders: Set<string> = new Set();
+  @state() private _editingModel: { providerId: string; model: ModelConfig } | null = null;
+  @state() private _showAddModelModal = false;
+  @state() private _showAddProviderModal = false;
+  @state() private _editingProvider: ProviderConfig | null = null;
+
   @state() private _values: SettingsValue = {
     model: 'anthropic/claude-sonnet-4-5',
+    imageModel: '',
     maxTokens: 8192,
     temperature: 0.7,
     maxToolIterations: 20,
@@ -76,7 +110,7 @@ export class SettingsPage extends LitElement {
     gatewayToken: '',
     heartbeatEnabled: true,
     heartbeatIntervalMs: 60000,
-    // Providers
+    // Providers API Keys (legacy)
     openaiApiKey: '',
     anthropicApiKey: '',
     googleApiKey: '',
@@ -138,6 +172,19 @@ export class SettingsPage extends LitElement {
             type: 'select',
             description: t('settings.descriptionsFields.model'),
             options: modelOptions,
+          },
+          {
+            key: 'imageModel',
+            label: t('settings.fields.imageModel'),
+            type: 'select',
+            description: t('settings.descriptionsFields.imageModel'),
+            options: [
+              { value: '', label: 'None (use primary model)' },
+              ...this._models.filter(m => m.id.includes('vision') || m.id.includes('vl') || m.id.includes('image')).map(m => ({
+                value: m.id,
+                label: `${m.provider}/${m.name}`,
+              })),
+            ],
           },
           {
             key: 'workspace',
@@ -389,12 +436,98 @@ export class SettingsPage extends LitElement {
             heartbeatEnabled: config.gateway?.heartbeat?.enabled ?? true,
             heartbeatIntervalMs: config.gateway?.heartbeat?.intervalMs || 60000,
           };
+
+          // Load providers with models
+          this._loadProvidersFromConfig(config.models?.providers || {});
         }
       }
     } catch (err) {
       console.error('Failed to load settings:', err);
     } finally {
       this._loading = false;
+    }
+  }
+
+  /**
+   * Load providers from config.
+   */
+  private _loadProvidersFromConfig(providersConfig: Record<string, any>): void {
+    const providers: ProviderConfig[] = [];
+    
+    for (const [providerId, providerData] of Object.entries(providersConfig)) {
+      const models: ModelConfig[] = (providerData.models || []).map((m: any) => ({
+        id: m.id || '',
+        name: m.name || m.id || '',
+        capabilities: {
+          text: m.input?.includes('text') || true,
+          image: m.input?.includes('image') || false,
+          reasoning: m.reasoning || false,
+        },
+        contextWindow: m.contextWindow || 128000,
+        maxTokens: m.maxTokens || 4096,
+        cost: m.cost || { input: 0, output: 0 },
+      }));
+
+      providers.push({
+        id: providerId,
+        baseUrl: providerData.baseUrl || '',
+        api: providerData.api || 'openai-completions',
+        apiKey: providerData.apiKey || '',
+        models,
+      });
+    }
+
+    this._providers = providers;
+  }
+
+  /**
+   * Toggle provider expanded state.
+   */
+  private _toggleProvider(providerId: string): void {
+    if (this._expandedProviders.has(providerId)) {
+      this._expandedProviders.delete(providerId);
+    } else {
+      this._expandedProviders.add(providerId);
+    }
+    this.requestUpdate();
+  }
+
+  /**
+   * Add a new model to a provider.
+   */
+  private _addModel(providerId: string, model: ModelConfig): void {
+    const provider = this._providers.find(p => p.id === providerId);
+    if (provider) {
+      provider.models.push(model);
+      this._dirtyFields.add(`providers.${providerId}.models`);
+      this.requestUpdate();
+    }
+  }
+
+  /**
+   * Update an existing model.
+   */
+  private _updateModel(providerId: string, modelId: string, updates: Partial<ModelConfig>): void {
+    const provider = this._providers.find(p => p.id === providerId);
+    if (provider) {
+      const modelIndex = provider.models.findIndex(m => m.id === modelId);
+      if (modelIndex >= 0) {
+        provider.models[modelIndex] = { ...provider.models[modelIndex], ...updates };
+        this._dirtyFields.add(`providers.${providerId}.models`);
+        this.requestUpdate();
+      }
+    }
+  }
+
+  /**
+   * Delete a model from a provider.
+   */
+  private _deleteModel(providerId: string, modelId: string): void {
+    const provider = this._providers.find(p => p.id === providerId);
+    if (provider) {
+      provider.models = provider.models.filter(m => m.id !== modelId);
+      this._dirtyFields.add(`providers.${providerId}.models`);
+      this.requestUpdate();
     }
   }
 
@@ -512,12 +645,15 @@ export class SettingsPage extends LitElement {
     // Build updates
     const updates: any = {};
 
-    if (this._dirtyFields.has('model') || this._dirtyFields.has('maxTokens') ||
+    if (this._dirtyFields.has('model') || this._dirtyFields.has('imageModel') || this._dirtyFields.has('maxTokens') ||
         this._dirtyFields.has('temperature') || this._dirtyFields.has('maxToolIterations') ||
         this._dirtyFields.has('workspace')) {
       updates.agents = { defaults: {} };
       if (this._dirtyFields.has('model')) {
         updates.agents.defaults.model = this._values.model;
+      }
+      if (this._dirtyFields.has('imageModel')) {
+        updates.agents.defaults.imageModel = this._values.imageModel ? { primary: this._values.imageModel } : undefined;
       }
       if (this._dirtyFields.has('workspace')) {
         updates.agents.defaults.workspace = this._values.workspace;
@@ -564,6 +700,41 @@ export class SettingsPage extends LitElement {
       }
       if (this._dirtyFields.has('openrouterApiKey')) {
         updates.models.providers.openrouter = { apiKey: this._values.openrouterApiKey, models: [] };
+      }
+    }
+
+    // Update providers with models (new structure)
+    const dirtyProviderModels = Array.from(this._dirtyFields).filter(f => f.startsWith('providers.'));
+    if (dirtyProviderModels.length > 0) {
+      if (!updates.models) {
+        updates.models = { mode: 'merge', providers: {} };
+      }
+      
+      for (const field of dirtyProviderModels) {
+        const match = field.match(/providers\.([^\.]+)\.(.*)/);
+        if (match) {
+          const providerId = match[1];
+          const provider = this._providers.find(p => p.id === providerId);
+          if (provider) {
+            updates.models.providers[providerId] = {
+              baseUrl: provider.baseUrl,
+              api: provider.api,
+              apiKey: provider.apiKey,
+              models: provider.models.map(m => ({
+                id: m.id,
+                name: m.name,
+                reasoning: m.capabilities.reasoning,
+                input: [
+                  ...(m.capabilities.text ? ['text'] : []),
+                  ...(m.capabilities.image ? ['image'] : []),
+                ],
+                contextWindow: m.contextWindow,
+                maxTokens: m.maxTokens,
+                cost: m.cost || { input: 0, output: 0 },
+              })),
+            };
+          }
+        }
       }
     }
 
@@ -730,9 +901,10 @@ export class SettingsPage extends LitElement {
         </div>
 
         ${section.id === 'gateway' ? this._renderGatewaySection() : ''}
+        ${section.id === 'providers' ? this._renderProvidersSection() : ''}
 
         <div class="fields-grid">
-          ${section.fields.map(field => this._renderField(field))}
+          ${section.id !== 'providers' ? section.fields.map(field => this._renderField(field)) : ''}
         </div>
       </div>
     `;
@@ -793,6 +965,262 @@ export class SettingsPage extends LitElement {
           This is the current server token. Click "Refresh Token" to generate a new one. 
           After refreshing, copy the new token and update your client configuration.
         </p>
+      </div>
+    `;
+  }
+
+  private _renderProvidersSection(): unknown {
+    return html`
+      <div class="providers-section">
+        ${this._providers.map(provider => html`
+          <div class="provider-card">
+            <div 
+              class="provider-header"
+              @click=${() => this._toggleProvider(provider.id)}
+            >
+              <div class="provider-title">
+                <span class="provider-icon">${getIcon('cloud')}</span>
+                <span class="provider-name">${provider.id}</span>
+                <span class="provider-model-count">${provider.models.length} models</span>
+              </div>
+              <div class="provider-actions">
+                <button
+                  class="btn btn-sm btn-ghost"
+                  @click=${(e: Event) => {
+                    e.stopPropagation();
+                    this._editingProvider = { ...provider };
+                  }}
+                >
+                  ${getIcon('settings')}
+                </button>
+                <span class="expand-icon ${this._expandedProviders.has(provider.id) ? 'expanded' : ''}">
+                  ${getIcon('chevronRight')}
+                </span>
+              </div>
+            </div>
+            
+            ${this._expandedProviders.has(provider.id) ? html`
+              <div class="provider-body">
+                <!-- API Configuration -->
+                <div class="provider-config">
+                  <div class="field-group">
+                    <label class="field-label">Base URL</label>
+                    <input
+                      type="text"
+                      class="text-input"
+                      .value=${provider.baseUrl}
+                      @change=${(e: Event) => {
+                        const target = e.target as HTMLInputElement;
+                        provider.baseUrl = target.value;
+                        this._dirtyFields.add(`providers.${provider.id}.baseUrl`);
+                      }}
+                    />
+                  </div>
+                  <div class="field-group">
+                    <label class="field-label">API Key</label>
+                    <div class="input-wrapper">
+                      <input
+                        type="password"
+                        class="text-input"
+                        .value=${provider.apiKey}
+                        placeholder="sk-..."
+                        @change=${(e: Event) => {
+                          const target = e.target as HTMLInputElement;
+                          provider.apiKey = target.value;
+                          this._dirtyFields.add(`providers.${provider.id}.apiKey`);
+                        }}
+                      />
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Models List -->
+                <div class="models-section">
+                  <div class="models-header">
+                    <h4>Models</h4>
+                    <button
+                      class="btn btn-sm btn-primary"
+                      @click=${() => {
+                        this._editingModel = {
+                          providerId: provider.id,
+                          model: {
+                            id: '',
+                            name: '',
+                            capabilities: { text: true, image: false, reasoning: false },
+                            contextWindow: 128000,
+                            maxTokens: 4096,
+                          },
+                        };
+                      }}
+                    >
+                      ${getIcon('plus')} Add Model
+                    </button>
+                  </div>
+                  
+                  <div class="models-list">
+                    ${provider.models.map(model => html`
+                      <div class="model-item">
+                        <div class="model-info">
+                          <span class="model-name">${model.name}</span>
+                          <span class="model-id">${model.id}</span>
+                          <div class="model-capabilities">
+                            ${model.capabilities.text ? html`<span class="capability-tag">Text</span>` : ''}
+                            ${model.capabilities.image ? html`<span class="capability-tag image">Image</span>` : ''}
+                            ${model.capabilities.reasoning ? html`<span class="capability-tag reasoning">Reasoning</span>` : ''}
+                          </div>
+                        </div>
+                        <div class="model-actions">
+                          <button
+                            class="btn btn-icon btn-sm"
+                            @click=${() => {
+                              this._editingModel = { providerId: provider.id, model: { ...model } };
+                            }}
+                          >
+                            ${getIcon('edit')}
+                          </button>
+                          <button
+                            class="btn btn-icon btn-sm btn-danger"
+                            @click=${() => this._deleteModel(provider.id, model.id)}
+                          >
+                            ${getIcon('trash')}
+                          </button>
+                        </div>
+                      </div>
+                    `)}
+                  </div>
+                </div>
+              </div>
+            ` : ''}
+          </div>
+        `)}
+        
+        <!-- Add Provider Button -->
+        <button
+          class="btn btn-outline btn-full"
+          @click=${() => this._showAddProviderModal = true}
+        >
+          ${getIcon('plus')} Add Provider
+        </button>
+
+        <!-- Model Edit Modal -->
+        ${this._editingModel ? this._renderModelModal() : ''}
+      </div>
+    `;
+  }
+
+  private _renderModelModal(): unknown {
+    const { providerId, model } = this._editingModel!;
+    const isNew = !model.id;
+
+    return html`
+      <div class="modal-overlay" @click=${() => this._editingModel = null}>
+        <div class="modal-content" @click=${(e: Event) => e.stopPropagation()}>
+          <div class="modal-header">
+            <h3>${isNew ? 'Add Model' : 'Edit Model'}</h3>
+            <button class="btn btn-icon" @click=${() => this._editingModel = null}>
+              ${getIcon('x')}
+            </button>
+          </div>
+          
+          <div class="modal-body">
+            <div class="field-group">
+              <label class="field-label">Model ID</label>
+              <input
+                type="text"
+                class="text-input"
+                .value=${model.id}
+                ?disabled=${!isNew}
+                placeholder="e.g., gpt-4o"
+                @input=${(e: Event) => {
+                  model.id = (e.target as HTMLInputElement).value;
+                  if (!model.name) model.name = model.id;
+                }}
+              />
+            </div>
+            
+            <div class="field-group">
+              <label class="field-label">Display Name</label>
+              <input
+                type="text"
+                class="text-input"
+                .value=${model.name}
+                placeholder="e.g., GPT-4o"
+                @input=${(e: Event) => model.name = (e.target as HTMLInputElement).value}
+              />
+            </div>
+            
+            <div class="field-group">
+              <label class="field-label">Capabilities</label>
+              <div class="checkbox-group">
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    .checked=${model.capabilities.text}
+                    @change=${(e: Event) => model.capabilities.text = (e.target as HTMLInputElement).checked}
+                  />
+                  <span>Text</span>
+                </label>
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    .checked=${model.capabilities.image}
+                    @change=${(e: Event) => model.capabilities.image = (e.target as HTMLInputElement).checked}
+                  />
+                  <span>Image</span>
+                </label>
+                <label class="checkbox-label">
+                  <input
+                    type="checkbox"
+                    .checked=${model.capabilities.reasoning}
+                    @change=${(e: Event) => model.capabilities.reasoning = (e.target as HTMLInputElement).checked}
+                  />
+                  <span>Reasoning</span>
+                </label>
+              </div>
+            </div>
+            
+            <div class="field-row">
+              <div class="field-group">
+                <label class="field-label">Context Window</label>
+                <input
+                  type="number"
+                  class="text-input"
+                  .value=${model.contextWindow}
+                  @input=${(e: Event) => model.contextWindow = Number((e.target as HTMLInputElement).value)}
+                />
+              </div>
+              <div class="field-group">
+                <label class="field-label">Max Tokens</label>
+                <input
+                  type="number"
+                  class="text-input"
+                  .value=${model.maxTokens}
+                  @input=${(e: Event) => model.maxTokens = Number((e.target as HTMLInputElement).value)}
+                />
+              </div>
+            </div>
+          </div>
+          
+          <div class="modal-footer">
+            <button class="btn btn-ghost" @click=${() => this._editingModel = null}>
+              Cancel
+            </button>
+            <button 
+              class="btn btn-primary"
+              ?disabled=${!model.id || !model.name}
+              @click=${() => {
+                if (isNew) {
+                  this._addModel(providerId, model);
+                } else {
+                  this._updateModel(providerId, model.id, model);
+                }
+                this._editingModel = null;
+              }}
+            >
+              ${isNew ? 'Add Model' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
       </div>
     `;
   }
