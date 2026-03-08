@@ -4,6 +4,11 @@
  * Hook events, handlers, and context types.
  */
 
+import type { AgentMessage } from '@mariozechner/pi-agent-core';
+
+// Re-export AgentMessage for use in hook system
+export type { AgentMessage };
+
 // ============================================================================
 // Hook Event Types
 // ============================================================================
@@ -33,7 +38,7 @@ export type PluginHookEvent =
   | 'tool_execution_update'
   | 'tool_execution_end';
 
-export type PluginHookHandler = (event: unknown) => void | Promise<void>;
+export type PluginHookHandler = (event: unknown, context?: unknown) => unknown | Promise<unknown>;
 
 export interface HookOptions {
   priority?: number;

@@ -8,28 +8,39 @@
  * import type { PluginApi, PluginDefinition } from 'xopcbot/plugin-sdk';
  */
 
+/**
+ * xopcbot Plugin SDK
+ * 
+ * Official SDK for developing xopcbot plugins.
+ * Import types and utilities from this module:
+ * 
+ * @example
+ * import type { PluginApi, PluginDefinition } from 'xopcbot/plugin-sdk';
+ */
+
 // Core plugin types
 export type {
   PluginDefinition,
   PluginModule,
   PluginKind,
+  PluginApi,
+  PluginLogger,
   PluginManifest,
   PluginRecord,
   PluginRegistry,
   ResolvedPluginConfig,
-  PluginOrigin,
-} from '../plugins/types.js';
-
-// Plugin API
-export type {
-  PluginApi,
-  PluginLogger,
 } from '../plugins/types.js';
 
 // Tools
 export type {
   PluginTool,
   PluginToolContext,
+  EnhancedTool,
+  ToolUpdate,
+  ToolResult,
+  ToolExecutionStartEvent,
+  ToolExecutionUpdateEvent,
+  ToolExecutionEndEvent,
 } from '../plugins/types.js';
 
 // Hooks
@@ -37,27 +48,13 @@ export type {
   PluginHookEvent,
   PluginHookHandler,
   HookOptions,
-  // Phase 1: Enhanced hook types
   AgentMessage,
-  ContextHookEvent,
-  ContextHookResult,
-  InputHookEvent,
-  InputHookResult,
-  TurnStartHookEvent,
-  TurnEndHookEvent,
-} from '../plugins/types.js';
-
-// Phase 2: Enhanced Tool System
-export type {
-  ToolContentItem,
-  ToolUpdate,
-  ToolResult,
-  EnhancedToolContext,
-  ToolUpdateCallback,
-  EnhancedTool,
-  ToolExecutionStartEvent,
-  ToolExecutionUpdateEvent,
-  ToolExecutionEndEvent,
+  ContextEvent,
+  ContextResult,
+  InputEvent,
+  InputResult,
+  TurnEvent,
+  TurnResult,
 } from '../plugins/types.js';
 
 // Phase 3: Typed Event Bus
@@ -87,17 +84,11 @@ export type {
   ShortcutHandler,
 } from '../plugins/types.js';
 
-// Export classes
-export { TypedEventBus } from '../plugins/typed-event-bus.js';
-export { PluginRegistryImpl } from '../plugins/loader.js';
-
-// Export hook runner and utilities
-export { HookRunner, createHookContext, isHookEvent } from '../plugins/hooks.js';
-
 // Channels
 export type {
   ChannelPlugin,
-  OutboundMessage,
+  SendMessageOptions,
+  ChannelMessage,
 } from '../plugins/types.js';
 
 // HTTP
@@ -110,21 +101,25 @@ export type {
 // Commands
 export type {
   PluginCommand,
-  CommandContext,
-  CommandResult,
 } from '../plugins/types.js';
 
 // Services
 export type {
   PluginService,
-  ServiceContext,
 } from '../plugins/types.js';
 
 // Gateway
 export type {
   GatewayMethodHandler,
-  GatewayContext,
+  GatewayStopContext,
 } from '../plugins/types.js';
+
+// Export classes
+export { TypedEventBus } from '../plugins/typed-event-bus.js';
+export { PluginRegistryImpl } from '../plugins/loader.js';
+
+// Export hook runner and utilities
+export { HookRunner, createHookContext, isHookEvent } from '../plugins/hooks.js';
 
 // Config
 export type { Config } from '../types/index.js';

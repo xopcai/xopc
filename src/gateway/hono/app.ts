@@ -921,15 +921,18 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           headers: c.req.header(),
           body: await c.req.json().catch(() => ({})),
         };
-        const res = {
-          status: (code: number) => {
-            c.status(code as any);
-            return res;
-          },
-          json: (data: unknown) => c.json(data),
-          send: (data: string) => c.text(data),
-        };
-        await handler(req as any, res as any);
+        const response = await handler(req as any);
+        if (response) {
+          if (response.status) c.status(response.status as any);
+          if (response.headers) {
+            for (const [key, value] of Object.entries(response.headers)) {
+              c.header(key, value);
+            }
+          }
+          if (response.body !== undefined) {
+            return c.json(response.body);
+          }
+        }
         return c.text('');
       });
 
@@ -940,15 +943,18 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           url: c.req.url,
           headers: c.req.header(),
         };
-        const res = {
-          status: (code: number) => {
-            c.status(code as any);
-            return res;
-          },
-          json: (data: unknown) => c.json(data),
-          send: (data: string) => c.text(data),
-        };
-        await handler(req as any, res as any);
+        const response = await handler(req as any);
+        if (response) {
+          if (response.status) c.status(response.status as any);
+          if (response.headers) {
+            for (const [key, value] of Object.entries(response.headers)) {
+              c.header(key, value);
+            }
+          }
+          if (response.body !== undefined) {
+            return c.json(response.body);
+          }
+        }
         return c.text('');
       });
     }

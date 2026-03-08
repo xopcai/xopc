@@ -547,13 +547,14 @@ export class GatewayService {
       throw new Error(`Gateway method not found: ${method}`);
     }
 
-    const ctx = {
-      senderId: params._senderId as string | undefined,
-      channel: params._channel as string | undefined,
-      isAuthorized: true, // TODO: implement proper authorization
+    // Merge context into params for backward compatibility
+    const enhancedParams = {
+      ...params,
+      _senderId: params._senderId as string | undefined,
+      _channel: params._channel as string | undefined,
     };
 
-    return await handler(params, ctx);
+    return await handler(enhancedParams);
   }
 
   get currentConfig(): Config {

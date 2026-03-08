@@ -4,6 +4,8 @@
  * Type-safe event bus for inter-extension communication.
  */
 
+import type { PluginLogger } from './core.js';
+
 // ============================================================================
 // Event Bus Core Types
 // ============================================================================
@@ -46,13 +48,6 @@ export interface TypedEventBusOptions {
 
 export interface RequestOptions {
   timeout?: number;
-}
-
-export interface PluginLogger {
-  debug(msg: string): void;
-  info(msg: string): void;
-  warn(msg: string): void;
-  error(msg: string): void;
 }
 
 // ============================================================================

@@ -33,8 +33,7 @@ import {
 import { createSkillLoader, type Skill } from './skills/index.js';
 import { getBundledSkillsDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
-import { PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
-import type { CommandContext } from '../plugins/types.js';
+import { PluginRegistryImpl as PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { createTypingController } from './typing.js';
 import { loadBootstrapFiles, extractTextContent, type BootstrapFile } from './helpers.js';
@@ -404,7 +403,8 @@ export class AgentService {
       agentId: this.agentId,
     });
 
-    return this.hookRunner.runContextHook(messages, ctx);
+    const result = await this.hookRunner.runContextHook(messages as any, ctx);
+    return { messages: result.messages as AgentMessage[], modified: result.modified };
   }
 
   private convertPluginTools(pluginTools: PluginTool[]): AgentTool<any, any>[] {
@@ -522,20 +522,8 @@ export class AgentService {
           const commandName = content.slice(1).split(/\s+/)[0];
           const pluginCommand = this.config.pluginRegistry.getCommand(commandName);
           if (pluginCommand) {
-            const ctx: CommandContext = {
-              senderId: msg.sender_id,
-              channel: msg.channel,
-              isAuthorized: true,
-              config: this.config.config as any,
-            };
             const args = content.replace(/^\/\w+\s*/, '');
-            const result = await pluginCommand.handler(args, ctx);
-            await this.bus.publishOutbound({
-              channel: msg.channel,
-              chat_id: msg.chat_id,
-              content: result.content,
-              type: 'message',
-            });
+            await pluginCommand.handler([args]);
             return;
           }
         } catch (err) {
@@ -660,7 +648,6 @@ export class AgentService {
           role: 'assistant',
           content: result.content || '',
         },
-        toolResults: result.toolResults || [],
         timestamp: Date.now(),
       });
 

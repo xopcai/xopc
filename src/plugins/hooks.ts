@@ -409,8 +409,8 @@ export class HookRunner {
         const result = await handler(event, context || {});
         
         if (result && typeof result === 'object' && 'messages' in result) {
-          const typedResult = result as { messages: Array<{ role: string; content: string }> };
-          currentMessages = typedResult.messages;
+          const typedResult = result as { messages: AgentMessage[] };
+          currentMessages = typedResult.messages as AgentMessage[];
           event.messages = currentMessages;
           modified = true;
         }
@@ -425,7 +425,7 @@ export class HookRunner {
       }
     }
 
-    return { messages: currentMessages, modified };
+    return { messages: currentMessages as AgentMessage[], modified };
   }
 
   /**

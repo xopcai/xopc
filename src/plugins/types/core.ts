@@ -9,7 +9,7 @@ import type { TypedEventBus } from './events.js';
 import type { PluginTool } from './tools.js';
 import type { PluginHookEvent, PluginHookHandler, HookOptions } from './hooks.js';
 import type { ChannelPlugin } from './channels.js';
-import type { ProviderConfig, FlagConfig, FlagValue, ShortcutConfig, PluginLogger } from './phase4.js';
+import type { ProviderConfig, FlagConfig, FlagValue, ShortcutConfig } from './phase4.js';
 
 // ============================================================================
 // Plugin Definition
@@ -159,4 +159,8 @@ export interface PluginService {
 
 export interface PluginRegistry {
   addTool(tool: PluginTool): void;
+  getTools(): Map<string, PluginTool>;
+  getTool(name: string): PluginTool | undefined;
+  getAllTools(): PluginTool[];
+  getCommand(name: string): PluginCommand | undefined;
 }

@@ -280,15 +280,15 @@ export class PluginLoader {
       const existing = discovered.get(pluginId);
       if (existing) {
         const priority = { workspace: 3, global: 2, bundled: 1, config: 0 };
-        if (priority[origin] <= priority[existing.source]) {
+        if (priority[source] <= priority[existing.source]) {
           log.debug(
-            { pluginId, from: origin, existing: existing.source },
+            { pluginId, from: source, existing: existing.source },
             'Skipping lower priority plugin',
           );
           continue;
         }
         log.info(
-          { pluginId, from: origin, overriding: existing.source },
+          { pluginId, from: source, overriding: existing.source },
           'Plugin override by higher priority source',
         );
       }
@@ -296,7 +296,7 @@ export class PluginLoader {
       discovered.set(pluginId, {
         id: pluginId,
         path: pluginPath,
-        origin,
+        source,
         manifest,
       });
     }
@@ -316,6 +316,7 @@ export class PluginLoader {
 
       const config: ResolvedPluginConfig = {
         id: plugin.id,
+        name: plugin.manifest.name || plugin.id,
         source: plugin.source,
         path: plugin.path,
         enabled: true,
@@ -423,11 +424,14 @@ export class PluginLoader {
 
       // Register to registry
       this.registry.addPlugin({
-        definition: manifest,
+        id: config.id,
+        name: manifest.name,
+        version: manifest.version,
+        path: pluginPath,
         module,
-        source: pluginPath,
+        config: config.config,
         enabled: true,
-        loaded: true,
+        source: config.source,
       });
 
       this.pluginInstances.set(config.id, api);
@@ -565,12 +569,7 @@ export class PluginLoader {
     for (const service of services) {
       const serviceLog = createServiceLogger(service.id);
       try {
-        await service.start({
-          config: {} as unknown as Record<string, unknown>,
-          workspaceDir: this.options.workspaceDir || '',
-          stateDir: join(this.options.workspaceDir || '', '.state'),
-          logger: createPluginLogger(`[${service.id}]`),
-        });
+        await service.start?.();
         serviceLog.info(`Started service`);
       } catch (error) {
         serviceLog.error({ err: error }, `Failed to start service`);
@@ -585,17 +584,7 @@ export class PluginLoader {
       if (service.stop) {
         const serviceLog = createServiceLogger(service.id);
         try {
-          await service.stop({
-            config: {} as unknown as Record<string, unknown>,
-            workspaceDir: this.options.workspaceDir || '',
-            stateDir: join(this.options.workspaceDir || '', '.state'),
-            logger: {
-              debug: () => {},
-              info: () => {},
-              warn: () => {},
-              error: () => {},
-            },
-          });
+          await service.stop();
           serviceLog.info(`Stopped service`);
         } catch (error) {
           serviceLog.error({ err: error }, `Failed to stop service`);
@@ -661,6 +650,7 @@ export function normalizePluginConfig(
     const config = (rawConfig[id] as Record<string, unknown>) || {};
     plugins.push({
       id,
+      name: id,
       source: 'config',
       path: id,
       enabled: true,
@@ -674,6 +664,7 @@ export function normalizePluginConfig(
       const config = (rawConfig[id] as Record<string, unknown>) || {};
       plugins.push({
         id,
+        name: id,
         source: 'config',
         path: id,
         enabled: false,

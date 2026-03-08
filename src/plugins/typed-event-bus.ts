@@ -22,8 +22,8 @@ import type {
   WildcardHandlerMeta,
   TypedEventBusOptions,
   RequestOptions,
-  PluginLogger,
 } from './types/events.js';
+import type { PluginLogger } from './types/core.js';
 
 interface InternalRequest {
   id: string;
