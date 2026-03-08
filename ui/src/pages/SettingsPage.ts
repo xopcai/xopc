@@ -230,7 +230,7 @@ export class SettingsPage extends LitElement {
               dmPolicy: config.channels?.telegram?.dmPolicy || 'pairing',
               groupPolicy: config.channels?.telegram?.groupPolicy || 'open',
               replyToMode: config.channels?.telegram?.replyToMode || 'off',
-              streamMode: config.channels?.telegram?.streamMode || 'partial',
+              streamMode: config.channels?.telegram?.streamMode ?? 'partial',
               historyLimit: config.channels?.telegram?.historyLimit || 50,
               textChunkLimit: config.channels?.telegram?.textChunkLimit || 4000,
               proxy: config.channels?.telegram?.proxy || '',
@@ -844,7 +844,7 @@ export class SettingsPage extends LitElement {
                           </div>
                           <select
                             class="select-input"
-                            .value=${this._settings.telegram.dmPolicy}
+                            .value=${String(this._settings.telegram.dmPolicy)}
                             @change=${(e: Event) =>
                               this._updateSettings(
                                 'telegram.dmPolicy',
@@ -854,7 +854,7 @@ export class SettingsPage extends LitElement {
                           >
                             ${dmPolicyOptions.map(
                               (opt) =>
-                                html`<option value=${opt.value}>${opt.label}</option>`
+                                html`<option value=${String(opt.value)}>${opt.label}</option>`
                             )}
                           </select>
                           <p class="field-desc">How to handle direct messages</p>
@@ -867,7 +867,7 @@ export class SettingsPage extends LitElement {
                           </div>
                           <select
                             class="select-input"
-                            .value=${this._settings.telegram.groupPolicy}
+                            .value=${String(this._settings.telegram.groupPolicy)}
                             @change=${(e: Event) =>
                               this._updateSettings(
                                 'telegram.groupPolicy',
@@ -877,7 +877,7 @@ export class SettingsPage extends LitElement {
                           >
                             ${groupPolicyOptions.map(
                               (opt) =>
-                                html`<option value=${opt.value}>${opt.label}</option>`
+                                html`<option value=${String(opt.value)}>${opt.label}</option>`
                             )}
                           </select>
                           <p class="field-desc">How to handle group messages</p>
@@ -890,7 +890,7 @@ export class SettingsPage extends LitElement {
                           </div>
                           <select
                             class="select-input"
-                            .value=${this._settings.telegram.replyToMode}
+                            .value=${String(this._settings.telegram.replyToMode)}
                             @change=${(e: Event) =>
                               this._updateSettings(
                                 'telegram.replyToMode',
@@ -900,7 +900,7 @@ export class SettingsPage extends LitElement {
                           >
                             ${replyToModeOptions.map(
                               (opt) =>
-                                html`<option value=${opt.value}>${opt.label}</option>`
+                                html`<option value=${String(opt.value)}>${opt.label}</option>`
                             )}
                           </select>
                         </div>
@@ -912,7 +912,7 @@ export class SettingsPage extends LitElement {
                           </div>
                           <select
                             class="select-input"
-                            .value=${this._settings.telegram.streamMode}
+                            .value=${String(this._settings.telegram.streamMode)}
                             @change=${(e: Event) =>
                               this._updateSettings(
                                 'telegram.streamMode',
@@ -922,7 +922,7 @@ export class SettingsPage extends LitElement {
                           >
                             ${streamModeOptions.map(
                               (opt) =>
-                                html`<option value=${opt.value}>${opt.label}</option>`
+                                html`<option value=${String(opt.value)}>${opt.label}</option>`
                             )}
                           </select>
                         </div>
