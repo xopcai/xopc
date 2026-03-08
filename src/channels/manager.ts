@@ -5,7 +5,7 @@
  */
 
 import { telegramExtension } from './telegram/extension.js';
-import type { ChannelExtension } from './types.js';
+import type { ChannelExtension, ChannelStreamHandle } from './types.js';
 import { MessageBus } from '../bus/index.js';
 import { Config } from '../config/index.js';
 import { OutboundMessage } from '../types/index.js';
@@ -119,7 +119,7 @@ export class ChannelManager {
    * Start a streaming message for real-time updates
    * Returns a handle for updating the stream
    */
-  startStream(channel: string, chatId: string, accountId?: string): any {
+  startStream(channel: string, chatId: string, accountId?: string): ChannelStreamHandle | null {
     const extension = EXTENSIONS.find(e => e.id === channel);
     
     if (!extension) {

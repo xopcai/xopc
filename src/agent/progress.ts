@@ -167,10 +167,20 @@ export class ProgressFeedbackManager {
   }
 
   private mapToolToStage(toolName: string): ProgressStage {
-    const normalizedName = toolName.toLowerCase().replace(/_/g, '');
-    for (const [key, stage] of Object.entries(TOOL_STAGE_MAP)) {
-      if (normalizedName.includes(key)) {
-        return stage;
+    const normalizedName = toolName.toLowerCase();
+    const normalizedNoUnderscore = normalizedName.replace(/_/g, '');
+    
+    // Try both versions: with and without underscores
+    const toCheck = [normalizedName, normalizedNoUnderscore];
+    
+    // Sort keys by length (longest first) to match more specific keys first
+    const sortedKeys = Object.keys(TOOL_STAGE_MAP).sort((a, b) => b.length - a.length);
+    
+    for (const name of toCheck) {
+      for (const key of sortedKeys) {
+        if (name.includes(key)) {
+          return TOOL_STAGE_MAP[key];
+        }
       }
     }
     return 'executing';

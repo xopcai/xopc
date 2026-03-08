@@ -6,6 +6,10 @@
 
 import type { MessageBus } from '../bus/index.js';
 import type { Config } from '../config/index.js';
+import type { ProgressStage } from '../agent/progress.js';
+
+// Re-export ProgressStage for convenience
+export type { ProgressStage } from '../agent/progress.js';
 
 // ============================================
 // Channel Metadata & Capabilities
@@ -185,9 +189,9 @@ export interface ChannelSendResult {
 export interface ChannelStreamHandle {
   update: (text: string) => void;
   /** Update stream with progress stage indicator */
-  updateProgress?: (text: string, stage: string, detail?: string) => void;
+  updateProgress?: (text: string, stage: ProgressStage, detail?: string) => void;
   /** Set progress stage without updating text */
-  setProgress?: (stage: string, detail?: string) => void;
+  setProgress?: (stage: ProgressStage, detail?: string) => void;
   end: () => Promise<void>;
   abort: () => Promise<void>;
   messageId: () => number | undefined;

@@ -12,6 +12,7 @@ import type { AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { MessageBus, InboundMessage } from '../bus/index.js';
 import type { Config, AgentDefaults } from '../config/schema.js';
 import type { ExtensionTool } from '../extensions/types/index.js';
+import type { ChannelManager } from '../channels/manager.js';
 import { resolveModel, DEFAULT_MODEL, getApiKey as getProviderApiKey } from '../providers/index.js';
 import { SessionStore, type CompactionConfig, type WindowConfig } from '../session/index.js';
 import { SessionCompactor } from './memory/compaction.js';
@@ -106,7 +107,7 @@ export class AgentService {
   } | null = null;
 
   // Channel manager reference for stream handling
-  private channelManagerRef: any = null;
+  private channelManagerRef: ChannelManager | null = null;
 
   constructor(private bus: MessageBus, private config: AgentServiceConfig) {
     this.agentId = `agent-${Date.now()}`;
@@ -244,7 +245,7 @@ export class AgentService {
   // Public API
   // ============================================================================
 
-  setChannelManager(channelManager: any): void {
+  setChannelManager(channelManager: ChannelManager): void {
     this.modelManager.setChannelManager(channelManager);
     this.channelManagerRef = channelManager;
   }

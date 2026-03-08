@@ -38,7 +38,7 @@ import type { Config } from '../../config/index.js';
 import { createTelegramCommandHandler } from './command-handler.js';
 import { generateSessionKey } from '../../commands/session-key.js';
 import { transcribe, isSTTAvailable } from '../../stt/index.js';
-import type { ProgressStage } from '../../agent/progress.js';
+import type { ProgressStage } from '../types.js';
 import { speak, isTTSAvailable } from '../../tts/index.js';
 import { exec } from 'child_process';
 import { promisify } from 'util';
