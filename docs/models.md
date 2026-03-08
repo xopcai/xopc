@@ -1,11 +1,11 @@
 # Custom Models Configuration
 
-xopcbot supports custom model providers via `~/.xopcbot/models.json`, similar to [pi-coding-agent](https://github.com/mariozechner/pi-mono/tree/main/packages/coding-agent).
+xopcbot supports custom model providers via `config.providers` in `~/.xopcbot/config.json`.
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
-- [Configuration File](#configuration-file)
+- [Configuration](#configuration)
 - [Supported APIs](#supported-apis)
 - [Provider Configuration](#provider-configuration)
 - [Model Configuration](#model-configuration)
@@ -18,7 +18,7 @@ xopcbot supports custom model providers via `~/.xopcbot/models.json`, similar to
 
 ## Quick Start
 
-Create `~/.xopcbot/models.json`:
+Add to `~/.xopcbot/config.json`:
 
 ```json
 {
@@ -38,12 +38,39 @@ Create `~/.xopcbot/models.json`:
 
 The `apiKey` is required but Ollama ignores it, so any value works.
 
-## Configuration File
+## Configuration
 
-### Location
+### File Location
 
-- **Default**: `~/.xopcbot/models.json`
-- **Custom**: Set `XOPCBOT_MODELS_JSON` environment variable
+`~/.xopcbot/config.json`
+
+### Two Formats
+
+**Simple format** - for built-in providers with API key only:
+```json
+{
+  "providers": {
+    "openai": "sk-xxx",
+    "anthropic": "sk-ant-xxx"
+  }
+}
+```
+
+**Rich format** - for custom providers with models:
+```json
+{
+  "providers": {
+    "ollama": {
+      "baseUrl": "http://localhost:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "models": [
+        { "id": "llama3.1:8b" }
+      ]
+    }
+  }
+}
+```
 
 ### Minimal Example
 
@@ -67,6 +94,7 @@ The `apiKey` is required but Ollama ignores it, so any value works.
 ```json
 {
   "providers": {
+    "openai": "sk-xxx",
     "ollama": {
       "baseUrl": "http://localhost:11434/v1",
       "api": "openai-completions",
@@ -251,16 +279,6 @@ Selecting a preset automatically fills in the base URL and API type.
 - **Add Authorization header** - Automatically adds `Authorization: Bearer {apiKey}`
 - **Custom Headers** - JSON format custom headers
 
-#### Empty State
-
-When no providers are configured, the UI shows a helpful empty state with:
-- Large visual icon
-- Descriptive title and explanation
-- **"Add Your First Provider"** button
-- Quick suggestion tags for popular providers (Ollama, OpenRouter, LM Studio)
-
-Clicking a suggestion tag opens the provider dialog with pre-filled configuration.
-
 ### Model Management
 
 #### Adding/Editing Models
@@ -306,7 +324,7 @@ The toolbar shows real-time statistics:
 ### Actions
 
 - **Validate** - Check configuration for errors without saving
-- **Save** - Save changes to `models.json`
+- **Save** - Save changes to config.json
 - **Reload** - Hot reload configuration without restart
 - **Show/Hide JSON** - View raw JSON configuration
 
@@ -404,18 +422,19 @@ Changes are automatically reloaded when you save in the UI. No restart required.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/models-json` | Get current configuration |
-| POST | `/api/models-json/validate` | Validate configuration |
-| PATCH | `/api/models-json` | Save configuration |
-| POST | `/api/models-json/reload` | Hot reload |
-| POST | `/api/models-json/test-api-key` | Test API key resolution |
+| GET | `/api/providers` | Get custom providers configuration |
+| POST | `/api/providers/validate` | Validate provider configuration |
+| PATCH | `/api/providers/:name` | Save/update provider |
+| DELETE | `/api/providers/:name` | Remove provider |
+| POST | `/api/providers/reload` | Hot reload |
+| POST | `/api/providers/test-api-key` | Test API key resolution |
 
 ## Troubleshooting
 
 ### Models not showing up
 
 1. Check the browser console for errors
-2. Verify `models.json` syntax is valid JSON
+2. Verify `config.json` syntax is valid JSON
 3. Check the Settings → Models page for validation errors
 4. Ensure API keys are correctly resolved (use the Test button)
 
@@ -429,5 +448,16 @@ Changes are automatically reloaded when you save in the UI. No restart required.
 ### Changes not taking effect
 
 1. Click "Reload" in the UI to force a refresh
-2. Check the `models.json` file was saved correctly
+2. Check the `config.json` file was saved correctly
 3. Restart the gateway if needed
+
+### Migration from models.json
+
+If you previously used `~/.xopcbot/models.json`, move the content to `config.json` under the `providers` key:
+
+```bash
+# Old: ~/.xopcbot/models.json
+# New: ~/.xopcbot/config.json
+```
+
+Simply copy the `providers` object from `models.json` into `config.json`.
