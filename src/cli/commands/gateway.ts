@@ -265,7 +265,14 @@ async function startForegroundMode(
 
   // Handle uncaught errors
   process.on('uncaughtException', (err) => {
-    log.error({ err }, 'Uncaught exception');
+    try {
+      log.error({ err }, 'Uncaught exception');
+    } catch (logErr) {
+      // Ignore logging errors during shutdown (EPIPE)
+      if ((logErr as any).code !== 'EPIPE') {
+        console.error('Logger failed:', logErr);
+      }
+    }
     shutdown('uncaughtException');
   });
 
