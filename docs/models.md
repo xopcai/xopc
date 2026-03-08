@@ -12,6 +12,9 @@ xopcbot supports custom model providers via `~/.xopcbot/models.json`, similar to
 - [Overriding Built-in Providers](#overriding-built-in-providers)
 - [API Key Resolution](#api-key-resolution)
 - [Frontend UI](#frontend-ui)
+- [Examples](#examples)
+- [API Endpoints](#api-endpoints)
+- [Troubleshooting](#troubleshooting)
 
 ## Quick Start
 
@@ -220,12 +223,92 @@ Access the Models configuration in the web UI:
 
 1. Open the web UI (http://localhost:18790 by default)
 2. Go to **Settings** → **Models**
-3. Use the visual editor to:
-   - Add custom providers
-   - Configure API endpoints
-   - Add models
-   - Test API key resolution
-   - Validate configuration
+3. Use the visual editor to configure providers and models
+
+### Provider Management
+
+#### Adding a Provider
+
+Click **"Add Provider"** to open the provider configuration dialog:
+
+**Quick Setup with Presets:**
+- **Ollama** - Local LLMs via Ollama (`http://localhost:11434/v1`)
+- **LM Studio** - LM Studio local server (`http://localhost:1234/v1`)
+- **OpenRouter** - Multi-provider API (`https://openrouter.ai/api/v1`)
+- **Vercel AI Gateway** - Vercel AI Gateway (`https://ai-gateway.vercel.sh/v1`)
+- **vLLM** - vLLM inference server (`http://localhost:8000/v1`)
+- **Custom** - Manual configuration
+
+Selecting a preset automatically fills in the base URL and API type.
+
+**Configuration Fields:**
+- **Provider ID** - Unique identifier (lowercase, alphanumeric, hyphens, underscores)
+- **API Type** - The API protocol (OpenAI Completions, Anthropic Messages, etc.)
+- **Base URL** - The API endpoint URL (should end with `/v1` for OpenAI-compatible APIs)
+- **API Key** - Supports literal values, environment variables (uppercase), or shell commands (`!command`)
+
+**Advanced Options:**
+- **Add Authorization header** - Automatically adds `Authorization: Bearer {apiKey}`
+- **Custom Headers** - JSON format custom headers
+
+#### Empty State
+
+When no providers are configured, the UI shows a helpful empty state with:
+- Large visual icon
+- Descriptive title and explanation
+- **"Add Your First Provider"** button
+- Quick suggestion tags for popular providers (Ollama, OpenRouter, LM Studio)
+
+Clicking a suggestion tag opens the provider dialog with pre-filled configuration.
+
+### Model Management
+
+#### Adding/Editing Models
+
+Click **"Add Model"** or the edit icon on an existing model to open the model editor dialog:
+
+**Basic Tab:**
+- **Model ID** - Unique identifier (e.g., `llama3.1:8b`, `gpt-4o`)
+- **Display Name** - Human-readable name
+- **Input Types** - Text only or Text + Vision
+- **Supports Reasoning** - Enable for models with extended thinking capability
+- **Context Window** - Maximum context size in tokens (default: 128000)
+- **Max Output Tokens** - Maximum response tokens (default: 16384)
+
+**Advanced Tab:**
+- **Cost Configuration** - Per-million-token pricing:
+  - Input / Output / Cache Read / Cache Write
+- **Custom Headers** - Model-specific headers in JSON format
+
+**Compatibility Tab:**
+- **OpenAI Completions Settings:**
+  - Supports Store
+  - Supports Developer Role
+  - Supports Usage in Streaming
+  - Max Tokens Field (auto-detect / max_completion_tokens / max_tokens)
+- **Routing Configuration** (for OpenRouter/Vercel):
+  - Provider Order - Priority list (e.g., `anthropic, openai`)
+  - Allowed Providers - Whitelist (e.g., `amazon-bedrock`)
+
+### API Key Testing
+
+Each provider shows an API key type badge (literal/env/shell). Click **"Test"** to:
+- Verify the key resolves correctly
+- See the resolved value type
+- Check for errors (e.g., missing environment variable)
+
+### Statistics Display
+
+The toolbar shows real-time statistics:
+- **Providers count** - Number of custom providers (highlighted in blue when > 0)
+- **Models count** - Total models across all providers
+
+### Actions
+
+- **Validate** - Check configuration for errors without saving
+- **Save** - Save changes to `models.json`
+- **Reload** - Hot reload configuration without restart
+- **Show/Hide JSON** - View raw JSON configuration
 
 ### Hot Reload
 
