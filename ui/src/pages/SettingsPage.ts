@@ -1866,6 +1866,30 @@ export class SettingsPage extends LitElement {
   }
 
   private _addProviderFromTemplate(): void {
+    if (!this._selectedTemplate && this._newProvider.id) {
+      // Custom provider - use values from _newProvider
+      const providerId = this._newProvider.id;
+      const baseUrl = this._newProvider.baseUrl;
+      const api = this._newProvider.api;
+
+      if (!providerId || !baseUrl) {
+        console.warn('Custom provider missing required fields');
+        return;
+      }
+
+      const newProvider: ProviderConfig = {
+        id: providerId,
+        baseUrl,
+        api,
+        apiKey: this._templateApiKey,
+        models: [],
+      };
+
+      this._addProvider(newProvider);
+      this._closeAddProviderModal();
+      return;
+    }
+
     if (!this._selectedTemplate) return;
 
     const template = this._selectedTemplate;
