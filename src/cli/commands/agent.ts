@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import { AgentService } from '../../agent/index.js';
 import { SessionManager } from '../../session/index.js';
+import { getSessionManager } from '../utils/session.js';
 import { loadConfig, getWorkspacePath } from '../../config/index.js';
 import { MessageBus, MessageBusShutdownError } from '../../bus/index.js';
 import { createLogger } from '../../utils/logger.js';
@@ -19,8 +20,7 @@ interface AgentCommandOptions {
 }
 
 async function listSessions(workspace: string): Promise<void> {
-  const manager = new SessionManager({ workspace });
-  await manager.initialize();
+  const manager = await getSessionManager(workspace);
   
   const result = await manager.listSessions({ limit: 20, sortBy: 'updatedAt', sortOrder: 'desc' });
   
@@ -82,8 +82,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
       // Validate session key if provided
       let sessionKey = options.session || 'cli:direct';
       if (options.session) {
-        const manager = new SessionManager({ workspace });
-        await manager.initialize();
+        const manager = await getSessionManager(workspace);
         const session = await manager.getSessionMetadata(options.session);
         if (!session) {
           console.error(`❌ Session not found: ${options.session}`);
@@ -189,8 +188,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
           
           if (trimmed.startsWith(':session ')) {
             const newSessionKey = trimmed.slice(9).trim();
-            const manager = new SessionManager({ workspace });
-            await manager.initialize();
+            const manager = await getSessionManager(workspace);
             const session = await manager.getSessionMetadata(newSessionKey);
             if (session) {
               sessionKey = newSessionKey;

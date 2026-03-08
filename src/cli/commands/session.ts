@@ -2,6 +2,7 @@
 
 import { Command } from 'commander';
 import { SessionManager } from '../../session/index.js';
+import { getSessionManager } from '../utils/session.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
@@ -29,9 +30,7 @@ function createSessionCommand(_ctx: CLIContext): Command {
 
   async function getManager(): Promise<SessionManager> {
     const ctx = getContextWithOpts();
-    const manager = new SessionManager({ workspace: ctx.workspacePath });
-    await manager.initialize();
-    return manager;
+    return getSessionManager(ctx.workspacePath);
   }
 
   // List sessions
