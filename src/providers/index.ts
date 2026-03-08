@@ -136,6 +136,42 @@ export function getAvailableModels(config: Config | null | undefined): readonly 
 	return registry.getAvailable();
 }
 
+/**
+ * Get the first available model with a valid API key.
+ * Useful when the configured model doesn't have valid credentials.
+ * 
+ * Priority:
+ * 1. Use defaultModel from config if available and has API key
+ * 2. Use first available model with valid API key
+ * 3. Return undefined if no models are available
+ */
+export function getFirstAvailableModel(config: Config | null | undefined): Model<Api> | undefined {
+	const availableModels = getAvailableModels(config);
+	
+	if (availableModels.length === 0) {
+		return undefined;
+	}
+	
+	// Try to find configured default model first
+	const defaultModel = config?.agents?.defaults?.model;
+	if (defaultModel) {
+		const modelRef = typeof defaultModel === 'string' ? defaultModel : defaultModel.primary;
+		if (modelRef) {
+			// Check if the configured model has valid API key
+			const configured = availableModels.find(m => 
+				`${m.provider}/${m.id}` === modelRef ||
+				m.id === modelRef
+			);
+			if (configured) {
+				return configured;
+			}
+		}
+	}
+	
+	// Return first available model
+	return availableModels[0];
+}
+
 export type { Model, Api } from '@mariozechner/pi-ai';
 
 export type ProviderCategory = 'common' | 'specialty' | 'oauth' | 'enterprise';
