@@ -5,7 +5,7 @@
  */
 
 import { html, LitElement, css } from 'lit';
-import { customElement, property, state } from 'lit/decorators.js';
+import { customElement, property, state, query } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons.js';
 import { t } from '../utils/i18n.js';
 import type { 
@@ -23,6 +23,8 @@ import {
   maskApiKey,
   createCustomModel,
 } from '../config/models-json-client.js';
+import './ModelEditDialog.js';
+import type { ModelEditDialog, ModelEditDialogResult } from './ModelEditDialog.js';
 
 // API types for dropdown
 const API_TYPES = [
@@ -56,6 +58,7 @@ export class ModelJsonEditor extends LitElement {
   };
   @state() private _showPasswords: Set<string> = new Set();
   @state() private _testResults: Map<string, { type: string; resolved?: string; error?: string }> = new Map();
+  @query('model-edit-dialog') private _editDialog!: ModelEditDialog;
 
   static styles = css`
     :host { display: block; }
@@ -413,15 +416,21 @@ export class ModelJsonEditor extends LitElement {
   }
 
   private _addModel(providerId: string) {
-    const id = prompt('Enter model ID (e.g., llama3.1:8b):');
-    if (!id) return;
+    this._editorState = { ...this._editorState, editingModel: { provider: providerId, modelId: '' } };
     
-    const provider = this.config.providers[providerId];
-    const newModel = createCustomModel(id);
+    const handleClose = (e: CustomEvent<ModelEditDialogResult>) => {
+      this._editDialog.removeEventListener('close', handleClose as EventListener);
+      
+      if (e.detail.confirmed && e.detail.model) {
+        const provider = this.config.providers[providerId];
+        this._updateProvider(providerId, {
+          models: [...(provider.models || []), e.detail.model],
+        });
+      }
+    };
     
-    this._updateProvider(providerId, {
-      models: [...(provider.models || []), newModel],
-    });
+    this._editDialog.addEventListener('close', handleClose as EventListener);
+    this._editDialog.open(undefined, true);
   }
 
   private _removeModel(providerId: string, modelId: string) {
@@ -514,6 +523,11 @@ export class ModelJsonEditor extends LitElement {
   // ============================================
 
   render() {
+    const editingModel = this._editorState.editingModel;
+    const currentModel = editingModel 
+      ? this.config.providers[editingModel.provider]?.models?.find(m => m.id === editingModel.modelId)
+      : undefined;
+    
     return html`
       ${this.error ? html`
         <div class="error-alert">
@@ -526,6 +540,10 @@ export class ModelJsonEditor extends LitElement {
       ${this._renderProviders()}
       ${this._renderValidationErrors()}
       ${this._editorState.showRawJson ? this._renderRawJson() : ''}
+      
+      <model-edit-dialog
+        .providerId=${editingModel?.provider}
+      ></model-edit-dialog>
     `;
   }
 
@@ -727,21 +745,22 @@ export class ModelJsonEditor extends LitElement {
   }
 
   private _editModel(providerId: string, model: CustomModel) {
-    // Simple prompt-based editing for now
-    const name = prompt('Model name:', model.name || model.id);
-    if (name === null) return;
+    this._editorState = { ...this._editorState, editingModel: { provider: providerId, modelId: model.id } };
     
-    const contextWindow = prompt('Context window:', String(model.contextWindow || 128000));
-    if (contextWindow === null) return;
+    const handleClose = (e: CustomEvent<ModelEditDialogResult>) => {
+      this._editDialog.removeEventListener('close', handleClose as EventListener);
+      
+      if (e.detail.confirmed && e.detail.model) {
+        const provider = this.config.providers[providerId];
+        const updatedModels = (provider.models || []).map(m =>
+          m.id === model.id ? e.detail.model! : m
+        );
+        this._updateProvider(providerId, { models: updatedModels });
+      }
+    };
     
-    const maxTokens = prompt('Max tokens:', String(model.maxTokens || 16384));
-    if (maxTokens === null) return;
-    
-    this._updateModel(providerId, model.id, {
-      name: name || model.id,
-      contextWindow: parseInt(contextWindow) || 128000,
-      maxTokens: parseInt(maxTokens) || 16384,
-    });
+    this._editDialog.addEventListener('close', handleClose as EventListener);
+    this._editDialog.open(model, false);
   }
 
   private _renderValidationErrors() {
