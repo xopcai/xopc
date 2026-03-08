@@ -127,21 +127,21 @@ export class ExtensionApiImpl implements ExtensionApi {
     return this._typedEventBus;
   }
 
-  // Phase 4: Unified Registry Methods
-  registerProvider(name: string, config: Partial<ProviderConfig>): void {
+  // Phase 4: Unified Registry Methods (TODO: implement)
+  registerProvider(_name: string, _config: Partial<ProviderConfig>): void {
     // this._registry.registerProvider(name, config);
-    this._logger.info(`Extension registered provider: ${name}`);
+    this._logger.info(`Extension registered provider: ${_name}`);
   }
 
-  registerFlag(name: string, config: FlagConfig): void {
+  registerFlag(_name: string, _config: FlagConfig): void {
     // this._registry.registerFlag(name, config, this.id);
   }
 
-  getFlag(name: string): FlagValue {
-    return // this._registry.getFlag(name);
+  getFlag(_name: string): FlagValue {
+    return undefined; // this._registry.getFlag(name);
   }
 
-  registerShortcut(key: string, config: ShortcutConfig): void {
+  registerShortcut(_key: string, _config: ShortcutConfig): void {
     // this._registry.registerShortcut(key, config, { extensionId: this.id });
   }
 
