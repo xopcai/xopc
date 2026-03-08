@@ -619,6 +619,7 @@ export class SettingsPage extends LitElement {
         <provider-list
           .providers=${providers}
           .loading=${this._loadingProviders}
+          .token=${this.config?.token}
           @change=${this._onProviderChange}
           @oauth=${this._onProviderOAuth}
         ></provider-list>
