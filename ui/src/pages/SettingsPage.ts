@@ -117,7 +117,6 @@ export class SettingsPage extends LitElement {
   @state() private _dynamicProviders: DynamicProviderInfo[] = [];
   @state() private _staticTemplates: ProviderTemplate[] = [];
   @state() private _loadingDynamicProviders = false;
-  @state() private _modelSearchQuery = '';
 
   @state() private _values: SettingsValue = {
     model: 'anthropic/claude-sonnet-4-5',
@@ -227,42 +226,14 @@ export class SettingsPage extends LitElement {
 
   // Settings sections definition
   private get _sections(): SettingsSection[] {
-    // Filter models based on search query
-    const searchLower = this._modelSearchQuery.toLowerCase();
-    const filteredModels = searchLower
-      ? this._models.filter(m => 
-          m.name.toLowerCase().includes(searchLower) ||
-          m.provider.toLowerCase().includes(searchLower) ||
-          m.id.toLowerCase().includes(searchLower)
-        )
-      : this._models;
-
-    // Group models by provider
-    const groupedModels = new Map<string, typeof this._models>();
-    for (const model of filteredModels) {
-      const provider = model.provider;
-      if (!groupedModels.has(provider)) {
-        groupedModels.set(provider, []);
-      }
-      groupedModels.get(provider)!.push(model);
-    }
-
-    // Build grouped options for model selector
-    const modelOptions: Array<{ value: string; label: string; group?: string }> = [];
-    for (const [provider, models] of groupedModels) {
-      // Add provider group header (represented by disabled option)
-      modelOptions.push({ value: '', label: `── ${provider.toUpperCase()} ──`, group: provider });
-      for (const m of models) {
-        modelOptions.push({
-          value: m.id,
-          label: `  ${m.name}`,
-          group: provider,
-        });
-      }
-    }
+    // Simple flat list of models with formatted labels
+    const modelOptions = this._models.map(m => ({
+      value: m.id,
+      label: this._formatModelLabel(m),
+    }));
 
     // Filter vision models for imageModel
-    const visionModels = filteredModels.filter(m => m.vision || m.id.includes('vision') || m.id.includes('vl') || m.id.includes('image'));
+    const visionModels = this._models.filter(m => m.vision || m.id.includes('vision') || m.id.includes('vl') || m.id.includes('image'));
     const imageModelOptions = [
       { value: '', label: 'None (use primary model)' },
       ...visionModels.map(m => ({
@@ -283,8 +254,6 @@ export class SettingsPage extends LitElement {
             type: 'select',
             description: t('settings.descriptionsFields.model'),
             options: modelOptions,
-            searchQuery: this._modelSearchQuery,
-            onSearchChange: (query: string) => { this._modelSearchQuery = query; },
           },
           {
             key: 'imageModel',
