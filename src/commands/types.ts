@@ -75,7 +75,7 @@ export interface MessageAttachment {
 // Command System
 // ============================================================================
 
-export type CommandCategory = 'session' | 'model' | 'system' | 'tool' | 'plugin';
+export type CommandCategory = 'session' | 'model' | 'system' | 'tool' | 'extension';
 export type CommandScope = 'global' | 'private' | 'group';
 
 export interface CommandDefinition {

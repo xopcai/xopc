@@ -42,7 +42,7 @@ export class GatewayService {
   private agentService: AgentService;
   private channelManager: ChannelManager;
   private cronService: CronService;
-  private pluginLoader: ExtensionLoader | null = null;
+  private extensionLoader: ExtensionLoader | null = null;
   private heartbeatService: HeartbeatService;
   private sessionManager: SessionManager;
   private running = false;
@@ -100,7 +100,7 @@ export class GatewayService {
       model: typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary,
       braveApiKey: this.config.tools?.web?.search?.apiKey,
       config: this.config,
-      extensionRegistry: this.pluginLoader?.getRegistry(),
+      extensionRegistry: this.extensionLoader?.getRegistry(),
     });
 
     // Set channel manager reference for model switching
@@ -135,7 +135,7 @@ export class GatewayService {
 
       const resolvedConfigs = normalizeExtensionConfig(extensionsConfig);
       
-      this.pluginLoader = new ExtensionLoader({
+      this.extensionLoader = new ExtensionLoader({
         workspaceDir: this.workspacePath,
         extensionsDir: join(this.workspacePath, '.extensions'),
       });
@@ -143,7 +143,7 @@ export class GatewayService {
       // Load enabled extensions
       const enabledExtensions = resolvedConfigs.filter(c => c.enabled);
       if (enabledExtensions.length > 0) {
-        this.pluginLoader.loadExtensions(enabledExtensions).then(() => {
+        this.extensionLoader.loadExtensions(enabledExtensions).then(() => {
           log.info({ count: enabledExtensions.length }, 'Extensions loaded');
         }).catch(err => {
           log.warn({ err }, 'Failed to load some extensions');
@@ -522,7 +522,7 @@ export class GatewayService {
    * Get plugin registry for external access (HTTP routes, gateway methods)
    */
   getExtensionRegistry() {
-    return this.pluginLoader?.getRegistry();
+    return this.extensionLoader?.getRegistry();
   }
 
   /**
@@ -534,12 +534,12 @@ export class GatewayService {
   }
 
   /**
-   * Invoke a gateway method registered by plugins
+   * Invoke a gateway method registered by extensions
    */
   async invokeGatewayMethod(method: string, params: Record<string, unknown>): Promise<unknown> {
     const registry = this.getExtensionRegistry();
     if (!registry) {
-      throw new Error('Plugin registry not available');
+      throw new Error('Extension registry not available');
     }
 
     const handler = registry.getGatewayMethod(method);

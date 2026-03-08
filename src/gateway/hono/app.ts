@@ -907,11 +907,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return createLogSSEHandler()(c);
   });
 
-  // ========== Plugin HTTP Routes ==========
-  const pluginRegistry = service.getExtensionRegistry?.();
-  if (pluginRegistry) {
+  // ========== Extension HTTP Routes ==========
+  const extensionRegistry = service.getExtensionRegistry?.();
+  if (extensionRegistry) {
     // Register plugin HTTP routes
-    const httpRoutes = pluginRegistry.httpRoutes;
+    const httpRoutes = extensionRegistry.httpRoutes;
     for (const [path, handler] of httpRoutes) {
       // POST handler
       authenticated.post(path, async (c) => {
@@ -960,7 +960,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
   }
 
-  // ========== Plugin Gateway Methods ==========
+  // ========== Extension Gateway Methods ==========
 
   // POST /api/gateway/:method - Invoke a gateway method
   authenticated.post('/api/gateway/:method', async (c) => {

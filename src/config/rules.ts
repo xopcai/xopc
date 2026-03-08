@@ -61,7 +61,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'webSearch', kind: 'hot', description: 'Web search settings' },
   { prefix: 'webTools', kind: 'hot', description: 'Web tools settings' },
   
-  // Plugins - restart required
+  // Extensions - restart required
   { prefix: 'extensions', kind: 'restart', description: 'Extension configuration' },
   
   // Tools - hot reload (for tool-specific settings)

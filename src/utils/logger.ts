@@ -253,7 +253,7 @@ export function createModuleLogger(moduleName: string, modulePath?: string): Con
 }
 
 /**
- * Create a logger for plugins with consistent interface
+ * Create a logger for extensions with consistent interface
  */
 export function createPluginLogger(extensionName: string): ContextualLogger {
   const child = baseLogger.child({ extension: extensionName });
