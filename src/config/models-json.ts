@@ -157,6 +157,18 @@ export interface ValidationResult {
 }
 
 // ============================================
+// Strict Provider ID Validation
+// ============================================
+
+const PROVIDER_ID_REGEX = /^[a-z0-9]([a-z0-9-_]*[a-z0-9])?$/;
+const RESERVED_PROVIDER_IDS = new Set([
+	'openai', 'anthropic', 'google', 'groq', 'deepseek', 'minimax', 'mistral',
+	'xai', 'cerebras', 'openrouter', 'huggingface', 'opencode', 'zai',
+	'amazon-bedrock', 'azure-openai-responses', 'google-vertex', 'vercel-ai-gateway',
+	'github-copilot', 'openai-codex', 'google-gemini-cli', 'google-antigravity'
+]);
+
+// ============================================
 // Validation Function
 // ============================================
 
@@ -180,6 +192,24 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 
 	// Additional validation rules
 	for (const [providerName, providerConfig] of Object.entries(data.providers)) {
+		// Validate provider ID format
+		if (!PROVIDER_ID_REGEX.test(providerName)) {
+			errors.push({
+				path: `providers.${providerName}`,
+				message: 'Provider ID must start/end with alphanumeric, contain only lowercase letters, numbers, hyphens, and underscores',
+				severity: 'error',
+			});
+		}
+
+		// Warn about reserved provider IDs (can override but not recommended)
+		if (RESERVED_PROVIDER_IDS.has(providerName) && !providerConfig.baseUrl) {
+			errors.push({
+				path: `providers.${providerName}`,
+				message: `Overriding built-in provider "${providerName}" requires baseUrl to be specified`,
+				severity: 'warning',
+			});
+		}
+
 		const hasModels = providerConfig.models && providerConfig.models.length > 0;
 		const hasModelOverrides = providerConfig.modelOverrides && Object.keys(providerConfig.modelOverrides).length > 0;
 		const hasBaseUrl = !!providerConfig.baseUrl;
@@ -220,6 +250,43 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 						path: `providers.${providerName}.models[${i}].api`,
 						message: 'api is required when not specified at provider level',
 						severity: 'error',
+					});
+				}
+
+				// Validate model ID doesn't contain slashes
+				if (model.id.includes('/')) {
+					errors.push({
+						path: `providers.${providerName}.models[${i}].id`,
+						message: 'Model ID cannot contain "/" character',
+						severity: 'error',
+					});
+				}
+
+				// Validate cost values are non-negative
+				if (model.cost) {
+					const costFields = ['input', 'output', 'cacheRead', 'cacheWrite'] as const;
+					for (const field of costFields) {
+						const value = model.cost[field];
+						if (value !== undefined && value < 0) {
+							errors.push({
+								path: `providers.${providerName}.models[${i}].cost.${field}`,
+								message: 'Cost value cannot be negative',
+								severity: 'error',
+							});
+						}
+					}
+				}
+			}
+		}
+
+		// Validate modelOverrides keys don't contain slashes
+		if (providerConfig.modelOverrides) {
+			for (const modelId of Object.keys(providerConfig.modelOverrides)) {
+				if (!modelId.includes('/')) {
+					errors.push({
+						path: `providers.${providerName}.modelOverrides.${modelId}`,
+						message: 'Model override key should be in format "provider/model-id"',
+						severity: 'warning',
 					});
 				}
 			}

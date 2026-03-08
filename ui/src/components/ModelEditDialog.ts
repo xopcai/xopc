@@ -763,14 +763,109 @@ export class ModelEditDialog extends LitElement {
     `;
   }
 
-  private _updateCompat(key: string, value: unknown) {
+// Valid compat keys for type safety
+type CompatKey = 
+  | 'supportsStore'
+  | 'supportsDeveloperRole'
+  | 'supportsReasoningEffort'
+  | 'supportsUsageInStreaming'
+  | 'maxTokensField'
+  | 'requiresToolResultName'
+  | 'requiresAssistantAfterToolResult'
+  | 'requiresThinkingAsText'
+  | 'requiresMistralToolIds'
+  | 'thinkingFormat'
+  | 'openRouterRouting'
+  | 'vercelGatewayRouting'
+  | 'supportsStrictMode';
+
+const VALID_COMPAT_KEYS: Set<string> = new Set([
+  'supportsStore',
+  'supportsDeveloperRole',
+  'supportsReasoningEffort',
+  'supportsUsageInStreaming',
+  'maxTokensField',
+  'requiresToolResultName',
+  'requiresAssistantAfterToolResult',
+  'requiresThinkingAsText',
+  'requiresMistralToolIds',
+  'thinkingFormat',
+  'openRouterRouting',
+  'vercelGatewayRouting',
+  'supportsStrictMode',
+]);
+
+  private _updateCompat(key: CompatKey, value: unknown) {
+    // Validate key is allowed
+    if (!VALID_COMPAT_KEYS.has(key)) {
+      console.warn(`[ModelEditDialog] Ignoring invalid compat key: ${key}`);
+      return;
+    }
+
+    // Validate value type based on key
+    const validatedValue = this._validateCompatValue(key, value);
+    
     const compat = { ...(this._formData.compat || {}) };
-    if (value === undefined) {
+    if (validatedValue === undefined) {
       delete compat[key];
     } else {
-      compat[key] = value;
+      compat[key] = validatedValue;
     }
     this._updateField('compat', Object.keys(compat).length > 0 ? compat : undefined);
+  }
+
+  private _validateCompatValue(key: CompatKey, value: unknown): unknown {
+    // Boolean fields
+    const booleanFields: CompatKey[] = [
+      'supportsStore',
+      'supportsDeveloperRole',
+      'supportsReasoningEffort',
+      'supportsUsageInStreaming',
+      'requiresToolResultName',
+      'requiresAssistantAfterToolResult',
+      'requiresThinkingAsText',
+      'requiresMistralToolIds',
+      'supportsStrictMode',
+    ];
+
+    if (booleanFields.includes(key)) {
+      return typeof value === 'boolean' ? value : undefined;
+    }
+
+    // String fields
+    if (key === 'maxTokensField') {
+      if (value === undefined || value === '') return undefined;
+      return value === 'max_completion_tokens' || value === 'max_tokens' ? value : undefined;
+    }
+
+    if (key === 'thinkingFormat') {
+      if (typeof value !== 'string') return undefined;
+      return ['openai', 'zai', 'qwen'].includes(value) ? value : undefined;
+    }
+
+    // Object fields (routing)
+    if (key === 'openRouterRouting' || key === 'vercelGatewayRouting') {
+      if (value === undefined || value === null) return undefined;
+      if (typeof value !== 'object') return undefined;
+      
+      // Validate routing object structure
+      const routing = value as Record<string, unknown>;
+      const validKeys = ['only', 'order'];
+      const filtered: Record<string, unknown> = {};
+      
+      for (const k of validKeys) {
+        if (k in routing) {
+          const arr = routing[k];
+          if (Array.isArray(arr) && arr.every(item => typeof item === 'string')) {
+            filtered[k] = arr;
+          }
+        }
+      }
+      
+      return Object.keys(filtered).length > 0 ? filtered : undefined;
+    }
+
+    return value;
   }
 }
 
