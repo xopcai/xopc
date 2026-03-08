@@ -135,6 +135,20 @@ export class ModelSelector extends LitElement {
     this._loadModels();
   }
 
+  protected willUpdate(): void {
+    // After models are loaded, ensure the select value is properly set
+    // This handles the case where value is set before models are loaded
+    if (this.value && this._models.length > 0) {
+      const hasMatchingModel = this._models.some(m => m.id === this.value);
+      if (!hasMatchingModel) {
+        console.warn('[ModelSelector] Current value not found in models:', {
+          value: this.value,
+          availableModels: this._models.map(m => m.id),
+        });
+      }
+    }
+  }
+
   private async _loadModels() {
     if (this._loading) return;
 
@@ -172,6 +186,14 @@ export class ModelSelector extends LitElement {
       });
 
       this._models = models;
+
+      // Debug logging for model selection
+      console.log('[ModelSelector] Models loaded:', {
+        count: models.length,
+        currentValue: this.value,
+        hasMatchingModel: models.some(m => m.id === this.value),
+        matchingModel: models.find(m => m.id === this.value),
+      });
     } catch (err) {
       console.error('[ModelSelector] Failed to load models:', err);
       this._error = err instanceof Error ? err.message : 'Failed to load models';
@@ -219,7 +241,7 @@ export class ModelSelector extends LitElement {
           <div class="select-wrapper">
             <select
               class="model-select"
-              .value=${this.value}
+              .value=${this.value || ''}
               @change=${this._onChange}
               ?disabled=${this.disabled}
             >
@@ -227,7 +249,10 @@ export class ModelSelector extends LitElement {
                 ${this.placeholder}
               </option>
               ${this._models.map(model => html`
-                <option value="${model.id}">
+                <option 
+                  value="${model.id}"
+                  ?selected=${model.id === this.value}
+                >
                   ${model.provider}/${model.name}
                 </option>
               `)}
