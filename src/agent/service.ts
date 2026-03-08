@@ -32,6 +32,7 @@ import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
 import { FeedbackCoordinator } from './feedback/index.js';
 import { SkillManager } from './skills/index.js';
 import { SystemPromptBuilder } from './prompt/service-prompt-builder.js';
+import { maybeApplyTtsToPayload } from '../tts/payload.js';
 
 const log = createLogger('AgentService');
 
@@ -693,8 +694,6 @@ export class AgentService {
     if (!finalContent?.trim()) return;
 
     try {
-      const { maybeApplyTtsToPayload } = await import('../tts/payload.js');
-
       const ttsMsg = await maybeApplyTtsToPayload(
         {
           channel: msg.channel,

@@ -8,6 +8,8 @@ import type { MessageBus } from '../../bus/index.js';
 import type { Config } from '../../config/schema.js';
 import type { SessionStore } from '../../session/index.js';
 import { createLogger } from '../../utils/logger.js';
+import { commandRegistry, createCommandContext } from '../../commands/index.js';
+import { getAllProviders, isProviderConfigured, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
 
 const log = createLogger('CommandHandler');
 
@@ -50,8 +52,6 @@ export class CommandHandler {
     args: string,
     context: CommandContext
   ): Promise<boolean> {
-    const { commandRegistry, createCommandContext } = await import('../../commands/index.js');
-
     // Check if command exists
     if (!commandRegistry.has(commandName)) {
       return false;
@@ -97,7 +97,6 @@ export class CommandHandler {
       },
 
       listModels: async () => {
-        const { getAllProviders, isProviderConfigured, getModelsByProvider, getProviderDisplayName } = await import('../../providers/index.js');
         const providers = getAllProviders();
         const models: Array<{ id: string; name: string; provider: string }> = [];
 

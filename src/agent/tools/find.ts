@@ -4,7 +4,7 @@ import { existsSync } from 'fs';
 import { globSync } from 'glob';
 import path from 'path';
 import { DEFAULT_MAX_BYTES, formatSize, type TruncationResult, truncateHead } from './truncate.js';
-import { resolveToCwd } from './path-utils.js';
+import { resolveToCwd } from '../../utils/path-utils.js';
 
 const findSchema = Type.Object({
 	pattern: Type.String({

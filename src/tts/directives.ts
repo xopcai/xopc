@@ -1,23 +1,12 @@
 import type { TTSProvider, TtsDirectiveParseResult, TtsDirectiveOverrides, TTSModelOverrideConfig } from './types.js';
-import { OPENAI_TTS_VOICES, OPENAI_TTS_MODELS } from './providers/index.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('TTS:Directives');
 
 const VALID_PROVIDERS: TTSProvider[] = ['openai', 'alibaba', 'edge'];
-const VALID_OPENAI_VOICES_SET = new Set(OPENAI_TTS_VOICES);
-const VALID_OPENAI_MODELS_SET = new Set(OPENAI_TTS_MODELS);
 
 function isValidProvider(value: string): value is TTSProvider {
   return VALID_PROVIDERS.includes(value as TTSProvider);
-}
-
-function isValidOpenAIVoice(value: string): boolean {
-  return VALID_OPENAI_VOICES_SET.has(value as typeof OPENAI_TTS_VOICES[number]);
-}
-
-function isValidOpenAIModel(value: string): boolean {
-  return VALID_OPENAI_MODELS_SET.has(value as typeof OPENAI_TTS_MODELS[number]);
 }
 
 function parseNumber(value: string): number | undefined {
