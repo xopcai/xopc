@@ -1,48 +1,73 @@
 # 模型配置
 
-xopcbot 通过统一的配置系统支持多个 LLM 提供商，使用 `models` 配置。
+xopcbot 使用 `@mariozechner/pi-ai` 作为统一的模型层，通过一致的 API 访问 20+ LLM 提供商。
 
-## 配置文件
+## 架构
 
-所有模型配置存储在 `~/.xopcbot/config.json` 中：
+```
+┌──────────────────────────────┐
+│      @mariozechner/pi-ai     │ ← 内置提供商/模型定义
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│     xopcbot providers/       │ ← 提供商查找和 API Key 解析
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│    配置 (API Keys)           │ ← 环境变量进行认证
+└──────────────────────────────┘
+```
+
+### 主要特性
+
+- **20+ 内置提供商** - OpenAI、Anthropic、Google、Groq、DeepSeek 等
+- **自动模型检测** - 根据模型 ID 自动检测提供商
+- **统一 API** - 所有提供商接口一致
+- **OAuth 支持** - 支持 GitHub Copilot、OpenAI Codex 等
+
+## 支持的提供商
+
+| 提供商 | 类别 | 环境变量 | 说明 |
+|--------|------|----------|------|
+| `openai` | 常用 | `OPENAI_API_KEY` | GPT-4, o1, o3, o4, Codex |
+| `anthropic` | 常用 | `ANTHROPIC_API_KEY` | Claude 模型，支持 OAuth |
+| `google` | 常用 | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini 模型 |
+| `groq` | 常用 | `GROQ_API_KEY` | 快速推理，Llama/Mixtral |
+| `deepseek` | 常用 | `DEEPSEEK_API_KEY` | DeepSeek R1, Chat |
+| `minimax` | 常用 | `MINIMAX_API_KEY` | MiniMax M2 系列 |
+| `minimax-cn` | 常用 | `MINIMAX_API_KEY` | MiniMax 国内端点 |
+| `kimi-coding` | 常用 | `KIMI_API_KEY` / `MOONSHOT_API_KEY` | Kimi 编程模型 |
+| `xai` | 专用 | `XAI_API_KEY` | Grok 模型 |
+| `mistral` | 专用 | `MISTRAL_API_KEY` | Mistral 模型 |
+| `cerebras` | 专用 | `CEREBRAS_API_KEY` | 超快速推理 |
+| `openrouter` | 专用 | `OPENROUTER_API_KEY` | 多提供商聚合 |
+| `huggingface` | 专用 | `HF_TOKEN` / `HUGGINGFACE_TOKEN` | Hugging Face 端点 |
+| `opencode` | 专用 | `OPENCODE_API_KEY` | OpenCode 模型 |
+| `zai` | 专用 | `ZAI_API_KEY` | Z.ai 模型 |
+| `amazon-bedrock` | 企业级 | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | AWS Nova 模型 |
+| `azure-openai-responses` | 企业级 | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_BASE_URL` | Azure OpenAI |
+| `google-vertex` | 企业级 | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | Google Vertex AI |
+| `vercel-ai-gateway` | 企业级 | - | Vercel AI Gateway |
+| `github-copilot` | OAuth | OAuth 流程 | GitHub Copilot |
+| `openai-codex` | OAuth | OAuth 流程 | OpenAI Codex |
+| `google-gemini-cli` | OAuth | OAuth 流程 | Google Gemini CLI |
+| `google-antigravity` | OAuth | OAuth 流程 | Google Antigravity |
+
+## 配置
+
+### 设置 API Keys
+
+通过 `~/.xopcbot/config.json` 中的环境变量配置 API Keys：
 
 ```json
 {
-  "models": {
-    "mode": "merge",
-    "providers": {
-      "openai": {
-        "baseUrl": "https://api.openai.com/v1",
-        "apiKey": "${OPENAI_API_KEY}",
-        "models": [
-          { "id": "gpt-4o", "name": "GPT-4o" },
-          { "id": "gpt-4o-mini", "name": "GPT-4o Mini" }
-        ]
-      },
-      "anthropic": {
-        "apiKey": "${ANTHROPIC_API_KEY}",
-        "models": [
-          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5", "reasoning": true },
-          { "id": "claude-opus-4-5", "name": "Claude Opus 4.5", "reasoning": true }
-        ]
-      },
-      "qwen": {
-        "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "apiKey": "${QWEN_API_KEY}",
-        "models": [
-          { "id": "qwen-plus", "name": "Qwen Plus" },
-          { "id": "qwen-max", "name": "Qwen Max" }
-        ]
-      },
-      "ollama": {
-        "enabled": true,
-        "baseUrl": "http://127.0.0.1:11434/v1",
-        "models": [
-          { "id": "qwen2.5:7b", "name": "Qwen 2.5 7B" }
-        ],
-        "autoDiscovery": true
-      }
-    }
+  "providers": {
+    "openai": "${OPENAI_API_KEY}",
+    "anthropic": "${ANTHROPIC_API_KEY}",
+    "deepseek": "${DEEPSEEK_API_KEY}",
+    "groq": "${GROQ_API_KEY}"
   },
   "agents": {
     "defaults": {
@@ -52,99 +77,15 @@ xopcbot 通过统一的配置系统支持多个 LLM 提供商，使用 `models` 
 }
 ```
 
-## 提供商配置
+或直接在环境中设置：
 
-### 配置选项
-
-| 字段 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `baseUrl` | string | 是 | API 基础 URL |
-| `apiKey` | string | 否 | API 密钥，支持 `${ENV_VAR}` 语法 |
-| `api` | string | 否 | API 类型：`openai-completions`、`anthropic-messages`、`google-generative-ai` |
-| `auth` | object | 否 | OAuth 配置 |
-| `headers` | object | 否 | 自定义 HTTP 头 |
-| `enabled` | boolean | 否 | 启用/禁用提供商（默认：true）|
-| `models` | array | 否 | 模型列表 |
-
-### 模型定义
-
-| 字段 | 类型 | 必填 | 描述 |
-|------|------|------|------|
-| `id` | string | 是 | 模型标识符 |
-| `name` | string | 是 | 显示名称 |
-| `reasoning` | boolean | 否 | 支持推理/思考 |
-| `input` | array | 否 | 输入类型：`["text"]` 或 `["text", "image"]` |
-| `cost` | object | 否 | 价格信息 |
-| `contextWindow` | number | 否 | 上下文窗口大小 |
-| `maxTokens` | number | 否 | 最大输出 tokens |
-
-### 内置提供商
-
-| 提供商 | apiKey 环境变量 | baseUrl | 备注 |
-|--------|---------------|---------|------|
-| `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | GPT-4, o1, o3 |
-| `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` | Claude 模型 |
-| `google` | `GOOGLE_API_KEY` | `https://generativelanguage.googleapis.com/v1` | Gemini 模型 |
-| `qwen` | `QWEN_API_KEY` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 通义千问 |
-| `kimi` | `KIMI_API_KEY` | `https://api.moonshot.cn/v1` | 月之暗面 |
-| `moonshot` | `MOONSHOT_API_KEY` | `https://api.moonshot.ai/v1` | Moonshot AI |
-| `minimax` | `MINIMAX_API_KEY` | `https://api.minimax.io/anthropic` | MiniMax |
-| `minimax-cn` | `MINIMAX_CN_API_KEY` | `https://api.minimaxi.com/anthropic` | MiniMax 国内 |
-| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1` | DeepSeek |
-| `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` | Llama, Mixtral |
-| `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` | 多提供商聚合 |
-| `xai` | `XAI_API_KEY` | `https://api.x.ai/v1` | Grok |
-| `bedrock` | AWS 凭证 | - | Amazon Bedrock |
-
-### Ollama 配置
-
-Ollama 默认支持自动发现：
-
-```json
-{
-  "models": {
-    "providers": {
-      "ollama": {
-        "enabled": true,
-        "baseUrl": "http://127.0.0.1:11434/v1",
-        "autoDiscovery": true,
-        "models": []
-      }
-    }
-  }
-}
-```
-
-设置 `autoDiscovery: true` 可自动从 Ollama API 获取可用模型。
-
-### 使用环境变量
-
-在 apiKey 中使用 `${ENV_VAR_NAME}` 语法：
-
-```json
-{
-  "models": {
-    "providers": {
-      "anthropic": {
-        "apiKey": "${ANTHROPIC_API_KEY}",
-        "models": []
-      }
-    }
-  }
-}
+```bash
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+export DEEPSEEK_API_KEY="sk-..."
 ```
 
 环境变量优先于配置文件中的值。
-
-## 模型选择
-
-### 格式
-
-模型 ID 使用 `provider/model-id` 格式：
-
-- `anthropic/claude-sonnet-4-5`
-- `openai/gpt-4o`
-- `qwen/qwen-plus`
 
 ### 设置默认模型
 
@@ -166,34 +107,104 @@ Ollama 默认支持自动发现：
     "defaults": {
       "model": {
         "primary": "anthropic/claude-sonnet-4-5",
-        "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
+        "fallbacks": ["openai/gpt-4o", "deepseek/deepseek-chat"]
       }
     }
   }
 }
 ```
 
-## OAuth 认证
+## 模型选择
 
-某些提供商支持 OAuth：
+### 格式
+
+模型 ID 使用 `提供商/模型ID` 格式：
+
+```bash
+anthropic/claude-sonnet-4-5
+openai/gpt-4o
+google/gemini-2.5-flash
+deepseek/deepseek-chat
+```
+
+### 自动检测
+
+如果只指定模型 ID 而不带提供商前缀，xopcbot 会尝试自动检测：
 
 ```json
 {
-  "models": {
-    "providers": {
-      "anthropic": {
-        "baseUrl": "https://api.anthropic.com",
-        "auth": {
-          "type": "oauth",
-          "clientId": "your-client-id",
-          "clientSecret": "your-client-secret"
-        },
-        "models": []
-      }
+  "agents": {
+    "defaults": {
+      "model": "claude-sonnet-4-5"  // 自动检测为 anthropic
     }
   }
 }
 ```
+
+### 推荐模型
+
+| 模型 | 提供商 | 适用场景 |
+|------|--------|----------|
+| `anthropic/claude-sonnet-4-5` | Anthropic | 平衡性能 |
+| `anthropic/claude-3-5-sonnet-20241022` | Anthropic | 稳定可靠 |
+| `openai/gpt-4o` | OpenAI | 通用场景 |
+| `google/gemini-2.5-flash` | Google | 快速、成本效益高 |
+| `groq/llama-3.3-70b-versatile` | Groq | 超快速推理 |
+| `deepseek/deepseek-chat` | DeepSeek | 成本效益高 |
+| `minimax/MiniMax-M2.1` | MiniMax | 编程任务 |
+
+## API 端点
+
+### GET /api/providers
+
+返回 pi-ai 支持的所有提供商：
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:18790/api/providers
+```
+
+### GET /api/providers/:provider/models
+
+返回特定提供商的模型：
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:18790/api/providers/openai/models
+```
+
+### GET /api/auth/providers
+
+返回所有提供商的认证状态：
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:18790/api/auth/providers
+```
+
+返回结果：
+
+```json
+{
+  "providers": {
+    "openai": { "status": "configured" },
+    "anthropic": { "status": "configured" },
+    "deepseek": { "status": "not_configured" }
+  }
+}
+```
+
+## 提供商检测
+
+xopcbot 可以根据模型 ID 前缀自动检测提供商：
+
+| 提供商 | 前缀 |
+|--------|------|
+| `openai` | `gpt-`, `o1`, `o3`, `o4`, `chatgpt-` |
+| `anthropic` | `claude-` |
+| `google` | `gemini-`, `gemma-` |
+| `xai` | `grok-` |
+| `groq` | `llama-`, `mixtral-`, `gemma-` |
+| `deepseek` | `deepseek-`, `r1` |
+| `mistral` | `mistral-` |
+| `cerebras` | `llama-` |
 
 ## 查看已配置提供商
 
@@ -204,3 +215,34 @@ xopcbot auth providers
 ```
 
 这将显示所有提供商的认证状态（API 密钥、OAuth 或未配置）。
+
+## OAuth 提供商
+
+部分提供商支持 OAuth 认证：
+
+- `github-copilot` - GitHub Copilot
+- `openai-codex` - OpenAI Codex
+- `google-gemini-cli` - Google Gemini CLI
+- `google-antigravity` - Google Antigravity
+
+OAuth 凭证通过 Web UI 管理。
+
+## 故障排除
+
+### 提供商未找到
+
+如果遇到 "Model not found" 错误：
+
+1. 检查模型 ID 格式：`提供商/模型ID`
+2. 验证提供商是否支持
+3. 检查 API Key 是否配置
+
+### API Key 不生效
+
+1. 验证环境变量设置正确
+2. 检查 API Key 是否有效且有足够额度
+3. 使用 `xopcbot auth providers` 检查状态
+
+### 模型不可用
+
+某些模型可能在特定地区不可用或需要特定的 API Key。详情请参阅 [pi-ai 文档](https://github.com/mariozechner/pi-ai)。

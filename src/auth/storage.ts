@@ -7,7 +7,13 @@
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync, chmodSync } from 'fs';
 import { dirname, join } from 'path';
-import { resolveConfigValue } from '../providers/registry.js';
+/**
+ * Resolve config value (handles ${ENV_VAR} syntax)
+ */
+function resolveConfigValue(value: string): string {
+  const match = /^\$\{([A-Z0-9_]+)\}$/.exec(value);
+  return match ? process.env[match[1]] ?? value : value;
+}
 import type { OAuthCredentials, OAuthProviderInterface, OAuthLoginCallbacks } from './oauth/types.js';
 
 export interface AuthEntry {

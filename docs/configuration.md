@@ -1,6 +1,6 @@
 # Configuration Reference
 
-All xopcbot configuration is centralized in the `~/.config/xopcbot/config.json` file.
+All xopcbot configuration is centralized in the `~/.xopcbot/config.json` file.
 
 ## Full Configuration Example
 
@@ -18,64 +18,13 @@ All xopcbot configuration is centralized in the `~/.config/xopcbot/config.json` 
       "max_tool_iterations": 20
     }
   },
-  "models": {
-    "mode": "merge",
-    "providers": {
-      "openai": {
-        "baseUrl": "https://api.openai.com/v1",
-        "apiKey": "sk-...",
-        "models": [
-          { "id": "gpt-4o", "name": "GPT-4o" },
-          { "id": "gpt-4o-mini", "name": "GPT-4o Mini" }
-        ]
-      },
-      "anthropic": {
-        "apiKey": "sk-ant-...",
-        "models": [
-          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5", "reasoning": true }
-        ]
-      },
-      "minimax": {
-        "apiKey": "...",
-        "models": [
-          { "id": "minimax-m2.1", "name": "MiniMax M2.1" }
-        ]
-      },
-      "openrouter": {
-        "baseUrl": "https://openrouter.ai/api/v1",
-        "apiKey": "sk-or-...",
-        "models": [
-          { "id": "openai/gpt-4o", "name": "GPT-4o (via OpenRouter)" }
-        ]
-      },
-      "groq": {
-        "baseUrl": "https://api.groq.com/openai/v1",
-        "apiKey": "gsk_...",
-        "models": [
-          { "id": "llama-3.1-70b-versatile", "name": "Llama 3.1 70B" }
-        ]
-      },
-      "google": {
-        "apiKey": "AIza...",
-        "models": [
-          { "id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash" }
-        ]
-      },
-      "deepseek": {
-        "baseUrl": "https://api.deepseek.com/v1",
-        "apiKey": "...",
-        "models": [
-          { "id": "deepseek-chat", "name": "DeepSeek Chat" }
-        ]
-      },
-      "ollama": {
-        "baseUrl": "http://127.0.0.1:11434/v1",
-        "enabled": true,
-        "models": [
-          { "id": "llama3", "name": "Llama 3" }
-        ]
-      }
-    }
+  "providers": {
+    "openai": "${OPENAI_API_KEY}",
+    "anthropic": "${ANTHROPIC_API_KEY}",
+    "deepseek": "${DEEPSEEK_API_KEY}",
+    "groq": "${GROQ_API_KEY}",
+    "google": "${GOOGLE_API_KEY}",
+    "minimax": "${MINIMAX_API_KEY}"
   },
   "channels": {
     "telegram": {
@@ -150,64 +99,40 @@ The model ID format is `provider/model-id`, e.g., `anthropic/claude-opus-4-5`.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `mode` | string | `merge` | Config merge mode: `merge` or `replace` |
-| `providers` | object | `{}` | Provider configurations |
-| `bedrockDiscovery` | object | `{}` | AWS Bedrock model discovery settings |
+| `providers` | object | `{}` | Provider API keys (see below) |
 
-### models.providers
+### providers
 
-Configure each LLM provider under this section:
+Configure LLM provider API keys. Keys can be actual values or environment variable references:
 
 ```json
 {
-  "models": {
-    "providers": {
-      "openai": {
-        "baseUrl": "https://api.openai.com/v1",
-        "apiKey": "sk-...",
-        "models": [
-          { "id": "gpt-4o", "name": "GPT-4o" }
-        ]
-      }
-    }
+  "providers": {
+    "openai": "${OPENAI_API_KEY}",
+    "anthropic": "${ANTHROPIC_API_KEY}",
+    "deepseek": "sk-...",
+    "groq": "${GROQ_API_KEY}"
   }
 }
 ```
 
-Provider configuration options:
+Supported providers and their environment variables:
 
-| Field | Type | Description |
-|-------|------|-------------|
-| `baseUrl` | string | API endpoint URL |
-| `apiKey` | string | API key (supports env vars like `${ANTHROPIC_API_KEY}`) |
-| `api` | string | API type: `openai-completions`, `anthropic-messages`, `google-generative-ai` |
-| `auth` | object | OAuth configuration |
-| `headers` | object | Custom HTTP headers |
-| `enabled` | boolean | Enable/disable provider |
-| `models` | array | List of available models |
+| Provider | Environment Variable |
+|----------|---------------------|
+| `openai` | `OPENAI_API_KEY` |
+| `anthropic` | `ANTHROPIC_API_KEY` |
+| `google` | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |
+| `groq` | `GROQ_API_KEY` |
+| `deepseek` | `DEEPSEEK_API_KEY` |
+| `minimax` | `MINIMAX_API_KEY` |
+| `xai` | `XAI_API_KEY` |
+| `mistral` | `MISTRAL_API_KEY` |
+| `cerebras` | `CEREBRAS_API_KEY` |
+| `openrouter` | `OPENROUTER_API_KEY` |
+| `huggingface` | `HF_TOKEN` or `HUGGINGFACE_TOKEN` |
 
-### models.providers.[provider].models
-
-Each model definition:
-
-```json
-{
-  "id": "gpt-4o",
-  "name": "GPT-4o",
-  "reasoning": false,
-  "input": ["text", "image"],
-  "cost": {
-    "input": 0.000005,
-    "output": 0.000015
-  },
-  "contextWindow": 128000,
-  "maxTokens": 16384
-}
-```
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `id` | string | (required) | Model identifier |
+You can also use environment variables directly without adding them to config.
 | `name` | string | (required) | Display name |
 | `reasoning` | boolean | `false` | Supports reasoning/thinking |
 | `input` | array | `["text"]` | Input types: `text`, `image` |

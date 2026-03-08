@@ -16,5 +16,15 @@ export { SessionList } from './SessionList';
 export { SessionDetailDrawer } from './SessionDetailDrawer';
 export { ConfirmDialog } from './ConfirmDialog';
 
+// Provider & Model components (Phase 1 refactor)
+export { ProviderConfig } from './ProviderConfig';
+export { ProviderList } from './ProviderList';
+export { ModelSelector } from './ModelSelector';
+
+// Re-export types
+export type { ProviderConfigChangeEvent, ProviderOAuthEvent } from './ProviderConfig';
+export type { Model, ModelSelectEvent } from './ModelSelector';
+export type { ProviderInfo, ProviderListChangeEvent, ProviderListOAuthEvent } from './ProviderList';
+
 // Legacy compatibility
 export { MessageList as default } from './MessageList/index';

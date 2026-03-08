@@ -9,6 +9,7 @@ import { createLogger } from '../../utils/logger.js';
 
 import type { Config } from '../../config/index.js';
 import { TelegramInlineKeyboards, type ModelInfo, type ProviderInfo } from './inline-keyboards.js';
+import { getProviderDisplayName, getModelsByProvider, DEFAULT_MODEL } from '../../providers/index.js';
 
 const log = createLogger('TelegramCommandHandler');
 
@@ -22,51 +23,18 @@ export interface TelegramCommandHandlerDeps {
   handleCleanupConfirm?: (ctx: Context) => Promise<void>;
 }
 
-const DEFAULT_MODELS: Record<string, string[]> = {
-  openai: ['gpt-4o', 'gpt-4o-mini', 'gpt-4.1', 'gpt-5', 'o1', 'o3'],
-  anthropic: ['claude-sonnet-4-5', 'claude-haiku-4-5', 'claude-opus-4-5'],
-  google: ['gemini-2.5-pro', 'gemini-2.5-flash'],
-  qwen: ['qwen-plus', 'qwen-max', 'qwen3-235b'],
-  kimi: ['kimi-k2.5', 'kimi-k2-thinking'],
-  minimax: ['minimax-m2.5', 'minimax-m2.1', 'minimax-m2'],
-  'minimax-cn': ['minimax-m2.1', 'minimax-m2'],
-  zhipu: ['glm-4', 'glm-4-flash', 'glm-4-plus', 'glm-5', 'glm-5-flash'],
-  'zhipu-cn': ['glm-4', 'glm-4-flash', 'glm-4-plus', 'glm-5', 'glm-5-flash'],
-  deepseek: ['deepseek-chat', 'deepseek-reasoner'],
-  groq: ['llama-3.3-70b', 'mixtral-8x7b'],
-  openrouter: ['openai/gpt-4o', 'anthropic/claude-3.5-sonnet'],
-  xai: ['grok-2'],
-};
-
-const PROVIDER_NAMES: Record<string, string> = {
-  openai: 'OpenAI',
-  anthropic: 'Anthropic',
-  google: 'Google',
-  qwen: 'Qwen',
-  kimi: 'Kimi',
-  minimax: 'MiniMax',
-  'minimax-cn': 'MiniMax CN',
-  zhipu: 'Zhipu',
-  'zhipu-cn': 'Zhipu CN',
-  deepseek: 'DeepSeek',
-  groq: 'Groq',
-  openrouter: 'OpenRouter',
-  xai: 'xAI',
-  ollama: 'Ollama',
-};
-
 export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
   const { config, getSessionModel, setSessionModel, bus } = deps;
 
   // ========== Helper Functions ==========
 
   const getAvailableProviders = (): ProviderInfo[] => {
-    const modelProviders = config.models?.providers || {};
+    const providers = config.providers || {};
     const available: ProviderInfo[] = [];
 
-    for (const [name, providerConfig] of Object.entries(modelProviders)) {
-      if (providerConfig?.apiKey) {
-        available.push({ id: name, name: PROVIDER_NAMES[name] || name });
+    for (const [name, apiKey] of Object.entries(providers)) {
+      if (apiKey) {
+        available.push({ id: name, name: getProviderDisplayName(name) });
       }
     }
 
@@ -79,18 +47,19 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
   };
 
   const getModelsForProvider = (providerId: string): ModelInfo[] => {
-    const providerConfig = config.models?.providers?.[providerId];
-    const modelList = (providerConfig?.models || DEFAULT_MODELS[providerId] || ['default']) as string[];
+    // 从 pi-ai 获取模型列表
+    const models = getModelsByProvider(providerId);
     
-    return modelList.map((modelId: string) => ({
-      id: `${providerId}/${modelId}`,
-      name: modelId,
-      provider: providerId,
+    if (models.length === 0) {
+      // Fallback: return default placeholder
+      return [{ id: `${providerId}/default`, name: 'default', provider: providerId }];
+    }
+    
+    return models.map(m => ({
+      id: `${m.provider}/${m.id}`,
+      name: m.name || m.id,
+      provider: m.provider,
     }));
-  };
-
-  const getProviderDisplayName = (provider: string): string => {
-    return PROVIDER_NAMES[provider] || provider;
   };
 
   // ========== Command Handlers ==========
@@ -119,7 +88,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
       const sessionKey = `telegram:${chatId}`;
       const modelConfig = config.agents?.defaults?.model;
       // Handle both string and object model configs
-      const defaultModel = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary || 'anthropic/claude-sonnet-4-5';
+      const defaultModel = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary || DEFAULT_MODEL;
       const currentModel = getSessionModel(sessionKey) || defaultModel;
 
       const models = getModelsForProvider(providerId);

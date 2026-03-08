@@ -9,7 +9,7 @@ import { Agent, type AgentMessage } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { Config } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
-import { ModelRegistry } from '../../providers/registry.js';
+import { resolveModel, getAvailableModels, DEFAULT_MODEL } from '../../providers/index.js';
 import { isFailoverError, describeFailoverError, resolveFallbackCandidates } from '../fallback/index.js';
 
 const log = createLogger('ModelManager');
@@ -46,7 +46,6 @@ function getLastAssistantContent(agent: Agent): string | null {
 }
 
 export class ModelManager {
-  private modelRegistry: ModelRegistry;
   private defaultModel: string;
   private config?: Config;
   private currentModelName: string;
@@ -56,11 +55,9 @@ export class ModelManager {
 
   constructor(config: ModelManagerConfig = {}) {
     this.config = config.config;
-    this.defaultModel = config.defaultModel || 'minimax/MiniMax-M2.5';
+    this.defaultModel = config.defaultModel || DEFAULT_MODEL;
     this.currentModelName = this.defaultModel;
-    this.currentProvider = 'google';
-    
-    this.modelRegistry = new ModelRegistry(config.config ?? null, { ollamaEnabled: false });
+    this.currentProvider = 'anthropic';
   }
 
   /**
@@ -68,13 +65,6 @@ export class ModelManager {
    */
   setChannelManager(channelManager: any): void {
     this.channelManager = channelManager;
-  }
-
-  /**
-   * Get the model registry
-   */
-  getRegistry(): ModelRegistry {
-    return this.modelRegistry;
   }
 
   /**
@@ -96,9 +86,9 @@ export class ModelManager {
    */
   async switchModelForSession(sessionKey: string, modelId: string): Promise<boolean> {
     try {
-      const found = this.modelRegistry.findByRef(modelId);
+      const found = resolveModel(modelId);
       if (!found) {
-        log.warn({ modelId }, 'Model not found in registry');
+        log.warn({ modelId }, 'Model not found');
         return false;
       }
 
@@ -149,7 +139,7 @@ export class ModelManager {
     }
 
     try {
-      const found = this.modelRegistry.findByRef(targetModelId);
+      const found = resolveModel(targetModelId);
       if (!found) {
         log.warn({ modelId: targetModelId }, 'Model not found, keeping current');
         return;
@@ -185,12 +175,14 @@ export class ModelManager {
 
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i];
-      const candidateModel = this.modelRegistry.find(candidate.provider, candidate.model);
-
-      if (!candidateModel) {
+      
+      let candidateModel: Model<Api>;
+      try {
+        candidateModel = resolveModel(`${candidate.provider}/${candidate.model}`);
+      } catch {
         log.warn(
           { provider: candidate.provider, model: candidate.model },
-          'Fallback model not found in registry'
+          'Fallback model not found'
         );
         continue;
       }
@@ -255,27 +247,42 @@ export class ModelManager {
    * Find model by reference (provider/modelId)
    */
   findByRef(ref: string): Model<Api> | undefined {
-    return this.modelRegistry.findByRef(ref);
+    try {
+      return resolveModel(ref);
+    } catch {
+      return undefined;
+    }
   }
 
   /**
    * Find model by provider and ID
    */
   find(provider: string, modelId: string): Model<Api> | undefined {
-    return this.modelRegistry.find(provider, modelId);
+    try {
+      return resolveModel(`${provider}/${modelId}`);
+    } catch {
+      return undefined;
+    }
   }
 
   /**
    * Get all available models
    */
   getAllModels(): Model<Api>[] {
-    return this.modelRegistry.getAll();
+    return getAvailableModels(this.config);
   }
 
   /**
    * Get models grouped by provider
    */
   getModelsByProvider(): Map<string, Model<Api>[]> {
-    return this.modelRegistry.getByProvider();
+    const all = this.getAllModels();
+    const grouped = new Map<string, Model<Api>[]>();
+    for (const model of all) {
+      const list = grouped.get(model.provider) ?? [];
+      list.push(model);
+      grouped.set(model.provider, list);
+    }
+    return grouped;
   }
 }

@@ -1,35 +1,16 @@
 /**
- * Model Config Integration
+ * Config Integration
  * 
- * xopcbot model configuration system.
- * This is the primary and only way to configure models.
+ * Placeholder for backward compatibility.
+ * Provider configuration is now directly in config.providers.
  */
 
-import type { ModelsConfig } from './types.models.js';
-import { applyModelDefaults } from './defaults.js';
 import type { Config } from './schema.js';
 
 /**
- * Get models config from main config
+ * Get effective config - returns the config as-is
+ * @deprecated Config is now flat, no need for normalization
  */
-export function getModelsConfig(config: Config): ModelsConfig | undefined {
-  return config.models;
-}
-
-/**
- * Apply defaults to models config
- */
-export function normalizeModelsConfig(config: { models?: ModelsConfig }): { models?: ModelsConfig } {
-  return applyModelDefaults(config);
-}
-
-/**
- * Get effective config - returns the models config as-is (no migration)
- */
-export function getEffectiveConfig(config: Config): { models?: ModelsConfig } {
-  const modelsConfig = config.models;
-  if (!modelsConfig) {
-    return { models: undefined };
-  }
-  return normalizeModelsConfig({ models: modelsConfig });
+export function getEffectiveConfig(config: Config): Config {
+  return config;
 }

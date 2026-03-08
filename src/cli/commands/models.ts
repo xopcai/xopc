@@ -1,21 +1,14 @@
 import { Command } from 'commander';
-import { loadConfig, listBuiltinModels, PROVIDER_NAMES, listConfiguredProviders } from '../../config/index.js';
+import { loadConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import type { CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
-
-function groupModelsByProvider(models: Array<{ id: string; name: string; provider: string }>) {
-  const groups: Record<string, Array<{ id: string; name: string }>> = {};
-
-  for (const model of models) {
-    if (!groups[model.provider]) {
-      groups[model.provider] = [];
-    }
-    groups[model.provider].push({ id: model.id.split('/')[1] || model.id, name: model.name });
-  }
-
-  return groups;
-}
+import { 
+  getAllModels, 
+  getAvailableModels, 
+  getConfiguredProviders,
+  isProviderConfigured 
+} from '../../providers/index.js';
 
 function createModelsCommand(_ctx: CLIContext): Command {
   const cmd = new Command('models')
@@ -23,23 +16,29 @@ function createModelsCommand(_ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
-        'xopcbot models list              # List all models',
-        'xopcbot models list --builtin    # Show built-in models',
+        'xopcbot models list              # List all available models',
+        'xopcbot models list --all        # Show all built-in models',
         'xopcbot models list --json       # Output as JSON',
       ])
     )
     .option('--json', 'Output as JSON', false)
-    .option('--builtin', 'Show built-in models only', false)
+    .option('--all, -a', 'Show all built-in models', false)
     .action(async (options) => {
       const ctx = getContextWithOpts();
       const config = loadConfig(ctx.configPath);
-      const builtinModels = listBuiltinModels();
-      const configuredProviders = listConfiguredProviders(config);
+      const configuredProviders = getConfiguredProviders(config);
 
       if (options.json) {
+        const models = options.all 
+          ? getAllModels() 
+          : getAvailableModels(config);
         console.log(JSON.stringify({
-          builtin: builtinModels,
-          configured: configuredProviders,
+          providers: configuredProviders,
+          models: models.map(m => ({
+            id: `${m.provider}/${m.id}`,
+            name: m.name,
+            provider: m.provider,
+          })),
         }, null, 2));
         return;
       }
@@ -50,22 +49,34 @@ function createModelsCommand(_ctx: CLIContext): Command {
       if (configuredProviders.length > 0) {
         console.log('\n📦 Configured Providers\n');
         for (const provider of configuredProviders) {
-          console.log(`  ✓ ${PROVIDER_NAMES[provider] || provider}`);
+          console.log(`  ✓ ${provider}`);
         }
         console.log('');
       }
 
-      if (!options.builtin || configuredProviders.length === 0) {
-        console.log('\n📚 Built-in Models\n');
-        const groups = groupModelsByProvider(builtinModels);
-        for (const [provider, models] of Object.entries(groups)) {
-          console.log(`  [${PROVIDER_NAMES[provider] || provider}]`);
-          for (const model of models) {
-            console.log(`    • ${model.name}`);
-          }
-        }
-        console.log('');
+      const models = options.all 
+        ? getAllModels() 
+        : getAvailableModels(config);
+
+      console.log('\n📚 Models\n');
+      
+      // Group by provider
+      const byProvider = new Map<string, typeof models>();
+      for (const model of models) {
+        const list = byProvider.get(model.provider) ?? [];
+        list.push(model);
+        byProvider.set(model.provider, list);
       }
+
+      for (const [provider, providerModels] of byProvider) {
+        console.log(`  [${provider}]`);
+        for (const model of providerModels) {
+          const available = isProviderConfigured(config, provider);
+          const status = available ? '✓' : '○';
+          console.log(`    ${status} ${model.name}`);
+        }
+      }
+      console.log('');
 
       console.log('═'.repeat(60));
       console.log(`\n📌 Current default model: ${config.agents?.defaults?.model || 'Not set'}`);
@@ -88,7 +99,7 @@ register({
     category: 'utility',
     examples: [
       'xopcbot models list',
-      'xopcbot models list --builtin',
+      'xopcbot models list --all',
     ],
   },
 });

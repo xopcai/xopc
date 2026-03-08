@@ -27,9 +27,9 @@ import {
 // Static OAuth providers map
 const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = {
   'kimi': kimiOAuthProvider,
-  'kimi-coding': kimiOAuthProvider,  // Alias for frontend compatibility
+  'kimi-coding': kimiOAuthProvider,
   'qwen': qwenPortalOAuthProvider,
-  'qwen-portal': qwenPortalOAuthProvider,  // Alias
+  'qwen-portal': qwenPortalOAuthProvider,
   'minimax': minimaxOAuthProvider,
   'minimax-cn': minimaxCnOAuthProvider,
   'anthropic': anthropicOAuthProvider,
@@ -39,7 +39,7 @@ const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = {
   'openai-codex': openaiCodexOAuthProvider,
 };
 
-// Simple in-memory cache for OAuth credentials (for fast access)
+// Simple in-memory cache for OAuth credentials
 const oauthCredentialsCache: Map<string, OAuthCredentials> = new Map();
 
 function getOAuthCredentialsFromCache(provider: string): OAuthCredentials | undefined {
@@ -56,18 +56,8 @@ function deleteOAuthCredentialsFromCache(provider: string): void {
 
 // Load OAuth credentials from config into cache
 export function loadOAuthCredentialsToCache(service: GatewayService): void {
-  const config = service.currentConfig;
-  const providers = config.models?.providers || {};
-  
-  for (const [providerId, providerConfig] of Object.entries(providers)) {
-    if (providerConfig.oauth) {
-      oauthCredentialsCache.set(providerId, {
-        access: providerConfig.oauth.access,
-        refresh: providerConfig.oauth.refresh || '',
-        expires: providerConfig.oauth.expires,
-      });
-    }
-  }
+  // OAuth credentials are now managed via AuthProfiles, not config
+  // This function is kept for compatibility
 }
 
 export function createOAuthHandler(service: GatewayService) {
@@ -90,21 +80,18 @@ export function createOAuthHandler(service: GatewayService) {
     }
 
     try {
-      // For Device Code Flow, we need callbacks with onPrompt
       let authResult: any = null;
       
       const callbacks: OAuthLoginCallbacks = {
         onAuth: (auth: { url: string; instructions?: string }) => {
           authResult = { url: auth.url, instructions: auth.instructions };
         },
-        // For Device Code Flow: return the device code user needs to enter
         onPrompt: async (prompt: { message: string; deviceCode?: string; verificationUri?: string }) => {
           authResult = { 
             message: prompt.message, 
             deviceCode: prompt.deviceCode,
             verificationUri: prompt.verificationUri,
           };
-          // Return empty string - we'll handle this differently via the response
           return prompt.deviceCode || '';
         },
         onProgress: (message: string) => {
@@ -112,40 +99,21 @@ export function createOAuthHandler(service: GatewayService) {
         },
       };
 
-      // Start OAuth login
       const credentials = await oauthProvider.login(callbacks);
-
-      // Store the credentials in cache
       setOAuthCredentialsToCache(provider, credentials);
 
-      // Save OAuth credentials to config file for persistence
-      const config = service.currentConfig as Config;
-      if (!config.models) {
-        config.models = { mode: 'merge', providers: {} };
-      }
-      if (!config.models.providers) {
-        config.models.providers = {};
-      }
-      if (!config.models.providers[provider]) {
-        config.models.providers[provider] = { 
-          baseUrl: '', 
-          models: [],
-          auth: 'oauth',
-        };
-      }
-      config.models.providers[provider].oauth = {
-        access: credentials.access,
-        refresh: credentials.refresh,
-        expires: credentials.expires,
-      };
-      
-      // Also set the API key from OAuth credentials
-      config.models.providers[provider].apiKey = oauthProvider.getApiKey(credentials);
+      // Get API key from OAuth credentials
+      const apiKey = oauthProvider.getApiKey(credentials);
 
-      // Save to file
+      // Save API key to config
+      const config = service.currentConfig;
+      if (!config.providers) {
+        (config as any).providers = {};
+      }
+      (config as any).providers[provider] = apiKey;
+      
       await service.saveConfig(config);
 
-      // Return auth info to frontend for display
       return c.json({ 
         ok: true, 
         payload: { 
@@ -173,11 +141,13 @@ export function createOAuthHandler(service: GatewayService) {
   oauth.get('/:provider', (c) => {
     const provider = c.req.param('provider');
     const credentials = getOAuthCredentialsFromCache(provider);
+    const config = service.currentConfig;
+    const configured = !!(config.providers?.[provider]);
 
     return c.json({ 
       ok: true, 
       payload: { 
-        configured: !!credentials,
+        configured: configured || !!credentials,
         expires: credentials?.expires 
       } 
     });
@@ -190,14 +160,12 @@ export function createOAuthHandler(service: GatewayService) {
   oauth.delete('/:provider', async (c) => {
     const provider = c.req.param('provider');
     
-    // Remove from cache
     deleteOAuthCredentialsFromCache(provider);
 
     // Remove from config
-    const config = service.currentConfig as Config;
-    if (config.models?.providers?.[provider]) {
-      delete config.models.providers[provider].oauth;
-      delete config.models.providers[provider].apiKey;
+    const config = service.currentConfig;
+    if ((config as any).providers?.[provider]) {
+      delete (config as any).providers[provider];
       await service.saveConfig(config);
     }
 

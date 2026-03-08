@@ -13,6 +13,7 @@ import type { MessageBus, InboundMessage } from '../bus/index.js';
 import type { Config, AgentDefaults } from '../config/schema.js';
 import type { PluginTool } from '../plugins/types.js';
 import { getApiKey as getConfigApiKey } from '../config/schema.js';
+import { resolveModel, DEFAULT_MODEL } from '../providers/index.js';
 import { SessionStore, type CompactionConfig, type WindowConfig } from '../session/index.js';
 import { SessionCompactor } from './memory/compaction.js';
 import {
@@ -166,18 +167,16 @@ export class AgentService {
     log.info({ count: skillResult.skills.length }, 'Skills loaded');
 
     // Initialize agent
-    const registry = this.modelManager.getRegistry();
     let model: Model<Api>;
     if (config.model) {
-      const found = registry.findByRef(config.model);
-      if (found) {
-        model = found;
-      } else {
+      try {
+        model = resolveModel(config.model);
+      } catch {
         log.warn({ model: config.model }, 'Model not found, using default');
-        model = registry.find('google', 'gemini-2.5-flash-lite-preview-06-17')!;
+        model = resolveModel(DEFAULT_MODEL);
       }
     } else {
-      model = registry.find('google', 'gemini-2.5-flash-lite-preview-06-17')!;
+      model = resolveModel(DEFAULT_MODEL);
     }
 
     this.agent = new Agent({

@@ -107,7 +107,7 @@ oauth: {
 ```
 
 ### 存储位置
-OAuth 凭证存储在 `config.yaml` 的 `models.providers.{providerId}.oauth` 字段。
+OAuth 凭证存储在配置的 `oauth` 字段中（格式因提供商而异）。
 
 ### 生命周期
 1. 用户点击 OAuth Provider → 触发 `/api/auth/oauth/start`

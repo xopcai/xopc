@@ -8,7 +8,16 @@ import { getFallbackTemplate, TEMPLATE_FILES } from '../templates.js';
 import type { CLIContext } from '../registry.js';
 import { AuthStorage, anthropicOAuthProvider, minimaxOAuthProvider, minimaxCnOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
 import { upsertAuthProfile, listProfilesForProvider } from '../../auth/profiles/index.js';
-import { ModelRegistry } from '../../providers/index.js';
+import { 
+  getAllProviders, 
+  getModelsByProvider, 
+  resolveModel, 
+  PROVIDER_META, 
+  getSortedProviders,
+  getProviderDisplayName,
+  providerSupportsOAuth,
+  providerSupportsApiKey,
+} from '../../providers/index.js';
 import { colors } from '../utils/colors.js';
 import { homedir } from 'os';
 import { GatewayProcessManager } from '../../gateway/process-manager.js';
@@ -672,16 +681,12 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
     }
   }
 
-  // Build provider options dynamically from ModelRegistry
-  const providerInfos = ModelRegistry.getAllProviderInfo();
+  // Get sorted providers with metadata
+  const sortedProviders = getSortedProviders();
 
-  // Filter to providers that have models and are commonly used
-  const commonProviders = ['openai', 'anthropic', 'google', 'qwen', 'kimi', 'deepseek', 'groq', 'moonshot', 'minimax', 'minimax-cn', 'zhipu', 'zhipu-cn'];
-  const availableProviders = providerInfos.filter(p => commonProviders.includes(p.id));
-
-  const choices = availableProviders.map(p => ({
-    value: p.id,
-    name: `${p.name} (${p.envKey || 'no env key'})`,
+  const choices = sortedProviders.map(p => ({
+    value: p,
+    name: getProviderDisplayName(p),
   }));
 
   const provider = await select({
@@ -689,12 +694,12 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
     choices,
   });
 
-  const providerInfo = providerInfos.find(p => p.id === provider)!;
+  const providerName = getProviderDisplayName(provider);
 
   // Check if provider has existing profiles
   const existingProfiles = listProfilesForProvider(provider);
   if (existingProfiles.length > 0) {
-    console.log(`\n${colors.green('✓')} Found existing credentials for ${providerInfo.name}`);
+    console.log(`\n${colors.green('✓')} Found existing credentials for ${providerName}`);
     const useExisting = await confirm({
       message: 'Use existing credentials?',
       default: true,
@@ -704,7 +709,7 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
       // Get available models
       const modelChoices = await getModelsForProvider(provider);
       if (modelChoices.length === 0) {
-        console.log(`\n⚠️  No models found for ${providerInfo.name}. Please check your credentials.`);
+        console.log(`\n⚠️  No models found for ${providerName}. Please check your credentials.`);
       } else {
         const model = await select({
           message: 'Select model:',
@@ -722,25 +727,36 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
     }
   }
 
-  // Check if provider supports OAuth
-  const supportsOAuth = providerInfo.supportsOAuth;
-
   let apiKey: string | undefined;
   let useOAuth = false;
 
-  // Check environment variable first
-  if (providerInfo.envKey) {
-    apiKey = process.env[providerInfo.envKey];
-    if (apiKey) {
-      console.log(`\n${colors.green('✓')} Found ${providerInfo.envKey} in environment`);
-    }
+  // Check environment variable
+  const envKey = provider.toUpperCase() + '_API_KEY';
+  apiKey = process.env[envKey];
+  if (apiKey) {
+    console.log(`\n${colors.green('✓')} Found ${envKey} in environment`);
   }
 
   if (!apiKey) {
-    if (supportsOAuth) {
-      // Ask user to choose between API Key and OAuth
+    // Check auth support from metadata
+    const supportsOAuth = providerSupportsOAuth(provider);
+    const supportsApiKey = providerSupportsApiKey(provider);
+    const isOAuthOnly = supportsOAuth && !supportsApiKey;
+    
+    if (isOAuthOnly) {
+      // OAuth only - no choice
+      const success = await doOAuthLogin(provider);
+      if (success) {
+        useOAuth = true;
+        console.log('\n✅ OAuth login successful!');
+      } else {
+        console.error('\n❌ OAuth login failed. This provider requires OAuth.');
+        return config;
+      }
+    } else if (supportsOAuth && supportsApiKey) {
+      // Dual auth - let user choose
       const authMethod = await select({
-        message: `How would you like to authenticate with ${providerInfo.name}?`,
+        message: `How would you like to authenticate with ${providerName}?`,
         choices: [
           { value: 'api_key', name: 'API Key (enter manually)' },
           { value: 'oauth', name: 'OAuth Login (browser-based)' },
@@ -755,20 +771,21 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
         } else {
           console.log('\n⚠️ OAuth login failed. Please enter API key manually.');
           apiKey = await input({
-            message: `API Key for ${providerInfo.name}:`,
+            message: `API Key for ${providerName}:`,
             validate: (v: string) => v.length > 0 || 'Required',
           });
           useOAuth = false;
         }
       } else {
         apiKey = await input({
-          message: `API Key for ${providerInfo.name}:`,
+          message: `API Key for ${providerName}:`,
           validate: (v: string) => v.length > 0 || 'Required',
         });
       }
     } else {
+      // API key only
       apiKey = await input({
-        message: `API Key for ${providerInfo.name}:`,
+        message: `API Key for ${providerName}:`,
         validate: (v: string) => v.length > 0 || 'Required',
       });
     }
@@ -777,16 +794,16 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
   // Get available models
   const modelChoices = await getModelsForProvider(provider);
   if (modelChoices.length === 0) {
-    console.log(`\n⚠️  No built-in models found for ${providerInfo.name}.`);
+    console.log(`\n⚠️  No built-in models found for ${providerName}.`);
     console.log('   You can still use custom model names.');
     const model = await input({
       message: 'Model name:',
       validate: (v: string) => v.length > 0 || 'Required',
     });
 
-    config.models = config.models || { mode: 'merge', providers: {} };
-    config.models.providers = config.models.providers || {};
-    config.models.providers[provider] = { apiKey, models: [{ id: model, name: model }] };
+    // Store API key in new simplified format
+    config.providers = config.providers || {};
+    config.providers[provider] = apiKey;
     config.agents = config.agents || {};
     config.agents.defaults = config.agents.defaults || {};
     config.agents.defaults.model = { primary: `${provider}/${model}`, fallbacks: [] };
@@ -796,22 +813,16 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
     return config;
   }
 
-  console.log(`\n📋 Available models for ${providerInfo.name}:`);
+  console.log(`\n📋 Available models for ${providerName}:`);
   const model = await select({
     message: 'Select model:',
     choices: modelChoices,
   });
 
-  config.models = config.models || { mode: 'merge', providers: {} };
-  config.models.providers = config.models.providers || {};
-
-  if (useOAuth) {
-    // For OAuth, we don't store the API key in config.json
-    // It's stored in auth-profiles.json via AuthProfiles
-    config.models.providers[provider] = { models: [{ id: model, name: model }] };
-    console.log('\n✅ Credentials saved to auth profiles');
-  } else {
-    config.models.providers[provider] = { apiKey, models: [{ id: model, name: model }] };
+  // Store in new simplified format
+  config.providers = config.providers || {};
+  if (!useOAuth) {
+    config.providers[provider] = apiKey;
   }
 
   config.agents = config.agents || {};
@@ -824,9 +835,7 @@ async function setupModel(existingConfig: any, ctx: CLIContext): Promise<any> {
 }
 
 async function getModelsForProvider(provider: string): Promise<{ value: string; name: string }[]> {
-  const registry = new ModelRegistry();
-  const models = registry.getAll().filter(m => m.provider === provider);
-
+  const models = getModelsByProvider(provider);
   return models.map(m => ({
     value: `${m.provider}/${m.id}`,
     name: m.name || m.id,

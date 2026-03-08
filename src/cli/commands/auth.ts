@@ -13,7 +13,7 @@ import {
 	removeAuthProfile,
 	type AuthProfileCredential,
 } from '../../auth/profiles/index.js';
-import { ModelRegistry } from '../../providers/index.js';
+import { getAllProviders } from '../../providers/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors, colorizeStatus } from '../utils/colors.js';
@@ -386,18 +386,15 @@ function createAuthCommand(_ctx: CLIContext): Command {
 		.action(() => {
 			console.log('\nSupported providers:\n');
 			
-			// Built-in providers from ModelRegistry
-			const providerInfos = ModelRegistry.getAllProviderInfo();
+			// Built-in providers from pi-ai
+			const providers = getAllProviders();
 			
-			for (const info of providerInfos) {
-				const oauthStatus = info.supportsOAuth ? colors.green('OAuth') : colors.gray('-');
-				const apiKeyStatus = colors.cyan('API Key');
-				const tokenStatus = info.authType === 'token' ? colors.yellow('Token') : colors.gray('-');
-				
-				console.log(`  ${info.id.padEnd(25)} ${apiKeyStatus.padEnd(12)} ${oauthStatus.padEnd(10)} ${tokenStatus}`);
+			for (const id of providers) {
+				console.log(`  ${id}`);
 			}
 			
-			console.log('\n');
+			console.log('\nSet API key: xopcbot auth set <provider> <key>');
+			console.log('Environment variables: PROVIDER_API_KEY\n');
 		});
 
 	return cmd;

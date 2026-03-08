@@ -6,6 +6,8 @@ import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
 import { CronAPIClient, type CronJob, type CronJobExecution, type CronMetrics, type ChannelStatus, type ModelInfo, type SessionChatId } from '../utils/cron-api';
 import '../components/ConfirmDialog';
+import '../components/ModelSelector';
+import type { ModelSelectEvent } from '../components/ModelSelector';
 
 export interface CronManagerConfig {
   /** @deprecated No longer needed - always uses current origin */
@@ -559,18 +561,13 @@ export class CronManager extends LitElement {
               </div>
               ${this._formSessionTarget === 'isolated' ? html`
                 <div class="form-field">
-                  <label class="form-field__label">${t('cron.model')}</label>
-                  <select
-                    class="form-field__select"
-                    .value=${this._formModel ?? ''}
-                    @change=${(e: Event) => this._formModel = (e.target as HTMLSelectElement).value}
-                  >
-                    ${this._availableModels.length > 0 ? this._availableModels.map(model => html`
-                      <option value=${model.id}>${model.name} (${model.provider})</option>
-                    `) : html`
-                      <option value="">${t('cron.noConfiguredModels')}</option>
-                    `}
-                  </select>
+                  <model-selector
+                    .value=${this._formModel}
+                    .filter=${'configured'}
+                    .token=${this.config?.token}
+                    .label=${t('cron.model')}
+                    @change=${(e: CustomEvent<ModelSelectEvent>) => this._formModel = e.detail.modelId}
+                  ></model-selector>
                 </div>
               ` : nothing}
               <div class="form-field">

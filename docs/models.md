@@ -1,57 +1,73 @@
 # Models Configuration
 
-xopcbot supports multiple LLM providers through a unified configuration system. The model registry combines built-in definitions from `models.json` with user configuration.
+xopcbot uses `@mariozechner/pi-ai` as the unified model layer, providing access to 20+ LLM providers with a single consistent API.
 
 ## Architecture
 
-The model configuration system uses a **Unified Model Registry** with multiple data sources:
+```
+┌──────────────────────────────┐
+│      @mariozechner/pi-ai     │ ← Built-in provider/model definitions
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│     xopcbot providers/       │ ← Provider lookup & API key resolution
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│    Config (API Keys)        │ ← Environment variables for auth
+└──────────────────────────────┘
+```
 
-1. **Built-in manifest** (`models.json`) - Core provider and model definitions
-2. **pi-ai npm package** - Additional provider models
-3. **User config** (`config.json`) - Custom provider configurations
-4. **Ollama discovery** - Auto-discovered local models
+### Key Features
 
-## Configuration File
+- **20+ Built-in Providers** - OpenAI, Anthropic, Google, Groq, DeepSeek, etc.
+- **Automatic Model Detection** - Detect provider from model ID automatically
+- **Unified API** - Consistent interface across all providers
+- **OAuth Support** - For providers like GitHub Copilot, OpenAI Codex
 
-All model configurations are stored in `~/.xopcbot/config.json`:
+## Supported Providers
+
+| Provider | Category | Environment Variables | Notes |
+|----------|----------|----------------------|-------|
+| `openai` | Common | `OPENAI_API_KEY` | GPT-4, o1, o3, o4, Codex |
+| `anthropic` | Common | `ANTHROPIC_API_KEY` | Claude models, supports OAuth |
+| `google` | Common | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini models |
+| `groq` | Common | `GROQ_API_KEY` | Fast inference, Llama/Mixtral |
+| `deepseek` | Common | `DEEPSEEK_API_KEY` | DeepSeek R1, Chat |
+| `minimax` | Common | `MINIMAX_API_KEY` | MiniMax M2 series |
+| `minimax-cn` | Common | `MINIMAX_API_KEY` | MiniMax CN endpoint |
+| `kimi-coding` | Common | `KIMI_API_KEY` / `MOONSHOT_API_KEY` | Kimi for Coding |
+| `xai` | Specialty | `XAI_API_KEY` | Grok models |
+| `mistral` | Specialty | `MISTRAL_API_KEY` | Mistral models |
+| `cerebras` | Specialty | `CEREBRAS_API_KEY` | Ultra-fast inference |
+| `openrouter` | Specialty | `OPENROUTER_API_KEY` | Multi-provider aggregation |
+| `huggingface` | Specialty | `HF_TOKEN` / `HUGGINGFACE_TOKEN` | Hugging Face endpoints |
+| `opencode` | Specialty | `OPENCODE_API_KEY` | OpenCode models |
+| `zai` | Specialty | `ZAI_API_KEY` | Z.ai models |
+| `amazon-bedrock` | Enterprise | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | AWS Nova models |
+| `azure-openai-responses` | Enterprise | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_BASE_URL` | Azure OpenAI |
+| `google-vertex` | Enterprise | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | Google Vertex AI |
+| `vercel-ai-gateway` | Enterprise | - | Vercel AI Gateway |
+| `github-copilot` | OAuth | OAuth flow | GitHub Copilot |
+| `openai-codex` | OAuth | OAuth flow | OpenAI Codex |
+| `google-gemini-cli` | OAuth | OAuth flow | Google Gemini CLI |
+| `google-antigravity` | OAuth | OAuth flow | Google Antigravity |
+
+## Configuration
+
+### Setting API Keys
+
+Configure API keys via environment variables in `~/.xopcbot/config.json`:
 
 ```json
 {
-  "models": {
-    "mode": "merge",
-    "providers": {
-      "openai": {
-        "baseUrl": "https://api.openai.com/v1",
-        "apiKey": "${OPENAI_API_KEY}",
-        "models": [
-          { "id": "gpt-4o", "name": "GPT-4o" },
-          { "id": "gpt-4o-mini", "name": "GPT-4o Mini" }
-        ]
-      },
-      "anthropic": {
-        "apiKey": "${ANTHROPIC_API_KEY}",
-        "models": [
-          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5", "reasoning": true },
-          { "id": "claude-opus-4-5", "name": "Claude Opus 4.5", "reasoning": true }
-        ]
-      },
-      "qwen": {
-        "baseUrl": "https://dashscope.aliyuncs.com/compatible-mode/v1",
-        "apiKey": "${QWEN_API_KEY}",
-        "models": [
-          { "id": "qwen-plus", "name": "Qwen Plus" },
-          { "id": "qwen-max", "name": "Qwen Max" }
-        ]
-      },
-      "ollama": {
-        "enabled": true,
-        "baseUrl": "http://127.0.0.1:11434/v1",
-        "models": [
-          { "id": "qwen2.5:7b", "name": "Qwen 2.5 7B" }
-        ],
-        "autoDiscovery": true
-      }
-    }
+  "providers": {
+    "openai": "${OPENAI_API_KEY}",
+    "anthropic": "${ANTHROPIC_API_KEY}",
+    "deepseek": "${DEEPSEEK_API_KEY}",
+    "groq": "${GROQ_API_KEY}"
   },
   "agents": {
     "defaults": {
@@ -61,156 +77,15 @@ All model configurations are stored in `~/.xopcbot/config.json`:
 }
 ```
 
-## Merge Mode
-
-The `models.mode` setting controls how user config merges with built-in definitions:
-
-| Mode | Description |
-|------|-------------|
-| `merge` | Combine user models with built-in models (default) |
-| `replace` | Replace all built-in models with user-defined ones |
-
-## API Endpoints
-
-### GET /api/registry
-
-Returns the unified model registry (built-in + user config):
+Or use environment variables directly:
 
 ```bash
-curl -H "Authorization: Bearer $TOKEN" http://localhost:3142/api/registry
-```
-
-### POST /api/registry/reload
-
-Hot-reloads the model registry:
-
-```bash
-curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:3142/api/registry/reload
-```
-
-### GET /api/models
-
-Returns only **configured providers' models** (for agent default model selector).
-
-### GET /api/providers
-
-Returns **ALL pi-ai supported models** (for Add Provider modal).
-
-## Provider Configuration
-
-### Configuration Options
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `baseUrl` | string | Yes | API base URL |
-| `apiKey` | string | No | API key, supports `${ENV_VAR}` syntax |
-| `oauth` | object | No | OAuth credentials |
-| `api` | string | No | API type: `openai-completions`, `anthropic-messages`, `google-generative-ai` |
-| `headers` | object | No | Custom HTTP headers |
-| `enabled` | boolean | No | Enable/disable provider (default: true) |
-| `models` | array | No | Model list |
-
-### Model Definition
-
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `id` | string | Yes | Model identifier |
-| `name` | string | Yes | Display name |
-| `reasoning` | boolean | No | Supports reasoning/thinking |
-| `input` | array | No | Input types: `["text"]` or `["text", "image"]` |
-| `cost` | object | No | Pricing info: `{ input: number, output: number }` |
-| `contextWindow` | number | No | Context window size |
-| `maxTokens` | number | No | Max output tokens |
-
-### OAuth Credentials
-
-OAuth credentials are persisted to config:
-
-```json
-{
-  "models": {
-    "providers": {
-      "anthropic": {
-        "oauth": {
-          "accessToken": "eyJ...",
-          "refreshToken": "...",
-          "expiresAt": "2026-02-27T12:00:00Z"
-        }
-      }
-    }
-  }
-}
-```
-
-### Using Environment Variables
-
-Use `${ENV_VAR_NAME}` syntax in apiKey:
-
-```json
-{
-  "models": {
-    "providers": {
-      "anthropic": {
-        "apiKey": "${ANTHROPIC_API_KEY}",
-        "models": []
-      }
-    }
-  }
-}
+export OPENAI_API_KEY="sk-..."
+export ANTHROPIC_API_KEY="sk-ant-..."
+export DEEPSEEK_API_KEY="sk-..."
 ```
 
 Environment variables take priority over config file values.
-
-## Built-in Providers
-
-The following providers are pre-defined in `models.json`:
-
-| Provider | Env Key | baseUrl | Notes |
-|----------|---------|---------|-------|
-| `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | GPT-4, o1, o3, o4 |
-| `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` | Claude models |
-| `google` | `GOOGLE_API_KEY` | `https://generativelanguage.googleapis.com/v1` | Gemini models |
-| `qwen` | `QWEN_API_KEY` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 通义千问 |
-| `kimi` | `KIMI_API_KEY` | `https://api.moonshot.cn/v1` | 月之暗面 |
-| `moonshot` | `MOONSHOT_API_KEY` | `https://api.moonshot.ai/v1` | Moonshot AI |
-| `minimax` | `MINIMAX_API_KEY` | `https://api.minimax.io/anthropic` | MiniMax |
-| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1` | DeepSeek |
-| `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` | Llama, Mixtral |
-| `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` | Multi-provider |
-| `xai` | `XAI_API_KEY` | `https://api.x.ai/v1` | Grok |
-| `bedrock` | AWS Credentials | - | Amazon Bedrock |
-| `ollama` | - | `http://127.0.0.1:11434/v1` | Local models |
-
-## Ollama Configuration
-
-Ollama is supported with auto-discovery:
-
-```json
-{
-  "models": {
-    "providers": {
-      "ollama": {
-        "enabled": true,
-        "baseUrl": "http://127.0.0.1:11434/v1",
-        "autoDiscovery": true,
-        "models": []
-      }
-    }
-  }
-}
-```
-
-Set `autoDiscovery: true` to automatically fetch available models from Ollama API.
-
-## Model Selection
-
-### Format
-
-Model IDs use `provider/model-id` format:
-
-- `anthropic/claude-sonnet-4-5`
-- `openai/gpt-4o`
-- `qwen/qwen-plus`
 
 ### Setting Default Model
 
@@ -232,12 +107,104 @@ Model IDs use `provider/model-id` format:
     "defaults": {
       "model": {
         "primary": "anthropic/claude-sonnet-4-5",
-        "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
+        "fallbacks": ["openai/gpt-4o", "deepseek/deepseek-chat"]
       }
     }
   }
 }
 ```
+
+## Model Selection
+
+### Format
+
+Model IDs use `provider/model-id` format:
+
+```bash
+anthropic/claude-sonnet-4-5
+openai/gpt-4o
+google/gemini-2.5-flash
+deepseek/deepseek-chat
+```
+
+### Automatic Detection
+
+If you only specify the model ID without provider prefix, xopcbot will try to auto-detect:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "claude-sonnet-4-5"  // Auto-detected as anthropic
+    }
+  }
+}
+```
+
+### Recommended Models
+
+| Model | Provider | Use Case |
+|-------|----------|----------|
+| `anthropic/claude-sonnet-4-5` | Anthropic | Balanced performance |
+| `anthropic/claude-3-5-sonnet-20241022` | Anthropic | Stable, reliable |
+| `openai/gpt-4o` | OpenAI | General purpose |
+| `google/gemini-2.5-flash` | Google | Fast, cost-effective |
+| `groq/llama-3.3-70b-versatile` | Groq | Ultra-fast inference |
+| `deepseek/deepseek-chat` | DeepSeek | Cost-effective |
+| `minimax/MiniMax-M2.1` | MiniMax | Coding tasks |
+
+## API Endpoints
+
+### GET /api/providers
+
+Returns all available providers from pi-ai:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:18790/api/providers
+```
+
+### GET /api/providers/:provider/models
+
+Returns models for a specific provider:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:18790/api/providers/openai/models
+```
+
+### GET /api/auth/providers
+
+Returns authentication status for all providers:
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:18790/api/auth/providers
+```
+
+Returns:
+
+```json
+{
+  "providers": {
+    "openai": { "status": "configured" },
+    "anthropic": { "status": "configured" },
+    "deepseek": { "status": "not_configured" }
+  }
+}
+```
+
+## Provider Detection
+
+xopcbot can automatically detect the provider based on model ID prefixes:
+
+| Provider | Prefixes |
+|----------|----------|
+| `openai` | `gpt-`, `o1`, `o3`, `o4`, `chatgpt-` |
+| `anthropic` | `claude-` |
+| `google` | `gemini-`, `gemma-` |
+| `xai` | `grok-` |
+| `groq` | `llama-`, `mixtral-`, `gemma-` |
+| `deepseek` | `deepseek-`, `r1` |
+| `mistral` | `mistral-` |
+| `cerebras` | `llama-` |
 
 ## Listing Configured Providers
 
@@ -249,28 +216,33 @@ xopcbot auth providers
 
 This shows all providers with their authentication status (API Key, OAuth, or Not configured).
 
+## OAuth Providers
+
+Some providers support OAuth authentication:
+
+- `github-copilot` - GitHub Copilot
+- `openai-codex` - OpenAI Codex
+- `google-gemini-cli` - Google Gemini CLI
+- `google-antigravity` - Google Antigravity
+
+OAuth credentials are managed through the web UI.
+
 ## Troubleshooting
 
-### Cache Issues
+### Provider Not Found
 
-After modifying provider configurations, clear the cache:
+If you get "Model not found" error:
 
-```bash
-# The system auto-clears cache on config save
-```
+1. Check the model ID format: `provider/model-id`
+2. Verify the provider is supported
+3. Check API key is configured
 
-### Hot Reload
+### API Key Not Working
 
-Use the reload endpoint to refresh the registry without restart:
+1. Verify environment variable is set correctly
+2. Check API key is valid and has sufficient credits
+3. Use `xopcbot auth providers` to check status
 
-```bash
-curl -X POST http://localhost:3142/api/registry/reload
-```
+### Model Not Available
 
-### Debug
-
-Check the registry via API:
-
-```bash
-curl http://localhost:3142/api/registry | jq '.providers | keys'
-```
+Some models may not be available in all regions or require specific API keys. Check the [pi-ai documentation](https://github.com/mariozechner/pi-ai) for details.

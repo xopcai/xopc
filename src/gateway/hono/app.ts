@@ -11,7 +11,15 @@ import type { Config } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../utils/log-store.js';
 import type { LogLevel } from '../../utils/logger.types.js';
-import { getManifestVersion, buildRegistry, getConfiguredModels, getAllModels } from '../../providers/models-loader.js';
+import { 
+  getAllModels, 
+  getAvailableModels, 
+  getAllProviders, 
+  isProviderConfigured,
+  PROVIDER_META,
+  type Model,
+  type Api,
+} from '../../providers/index.js';
 import { createOAuthHandler, loadOAuthCredentialsToCache } from './oauth.js';
 
 const log = createLogger('HonoApp');
@@ -205,19 +213,22 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           allowFrom: config.channels?.whatsapp?.allowFrom || [],
         },
       },
-      // Read from new models config
-      models: config.models ? {
-        mode: config.models.mode,
-        providers: Object.fromEntries(
-          Object.entries(config.models.providers || {}).map(([key, val]) => [
-            key,
-            { apiKey: val.apiKey || '', baseUrl: val.baseUrl || '' }
-          ])
-        )
-      } : undefined,
+      // Provider API keys - don't return actual values for security
+      // Return empty string if not configured (user needs to input)
+      // If configured, return empty string too (don't overwrite with ***)
+      providers: Object.fromEntries(
+        Object.entries(config.providers || {}).map(([key, val]) => [
+          key,
+          val || ''  // Return actual value if set, empty string if not
+        ])
+      ),
       gateway: {
         host: config.gateway?.host,
         port: config.gateway?.port,
+        auth: {
+          mode: config.gateway?.auth?.mode || 'token',
+          token: config.gateway?.auth?.token || '',
+        },
         heartbeat: {
           enabled: config.gateway?.heartbeat?.enabled,
           intervalMs: config.gateway?.heartbeat?.intervalMs,
@@ -305,40 +316,16 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       config.gateway.heartbeat.intervalMs = body.gateway.heartbeat.intervalMs;
     }
     
-    // Update models config (new format)
-    if (body.models) {
-      if (!config.models) {
-        config.models = { mode: body.models.mode || 'merge', providers: {} };
-      }
-      if (!config.models.providers) {
-        config.models.providers = {};
+    // Update providers config (new simplified format)
+    if (body.providers) {
+      if (!config.providers) {
+        config.providers = {};
       }
       
-      // Handle all provider keys, including custom ones
-      const providerUpdates = body.models.providers || {};
-      for (const [key, providerConfig] of Object.entries(providerUpdates)) {
-        if (!config.models.providers[key]) {
-          config.models.providers[key] = { baseUrl: '', models: [] };
+      for (const [key, apiKey] of Object.entries(body.providers)) {
+        if (apiKey !== undefined) {
+          config.providers[key] = apiKey as string;
         }
-        
-        const pc = providerConfig as any;
-        if (pc.apiKey !== undefined) {
-          config.models.providers[key].apiKey = pc.apiKey;
-        }
-        if (pc.baseUrl !== undefined) {
-          config.models.providers[key].baseUrl = pc.baseUrl || '';
-        }
-        if (pc.api !== undefined) {
-          config.models.providers[key].api = pc.api;
-        }
-        if (pc.models !== undefined) {
-          config.models.providers[key].models = pc.models;
-        }
-      }
-      
-      // Update mode if provided
-      if (body.models.mode !== undefined) {
-        config.models.mode = body.models.mode;
       }
     }
     
@@ -390,56 +377,60 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // Load OAuth credentials from config into cache on startup
   loadOAuthCredentialsToCache(service);
 
-  // ========== Unified Registry API (/api/registry) ==========
+  // ========== Registry API ==========
   
   // GET /api/registry - Full registry for frontend
   authenticated.get('/api/registry', (c) => {
     const config = service.currentConfig;
-    const providers = buildRegistry(config);
+    const allModels = getAllModels();
+    const configured = new Set(getAvailableModels(config).map(m => `${m.provider}/${m.id}`));
+    
+    // Group models by provider
+    const providerMap = new Map<string, Model<Api>[]>();
+    for (const model of allModels) {
+      const list = providerMap.get(model.provider) ?? [];
+      list.push(model);
+      providerMap.set(model.provider, list);
+    }
     
     return c.json({
       ok: true,
       payload: {
-        version: getManifestVersion(),
-        providers: providers.map(p => ({
-          id: p.id,
-          name: p.name,
-          baseUrl: p.baseUrl,
-          api: p.api,
-          auth: {
-            type: p.auth.type,
-            supportsOAuth: p.auth.supportsOAuth ?? false,
-            oauthProviderId: p.auth.oauthProviderId,
-          },
-          capabilities: p.capabilities,
-          configured: p.configured,
-          models: p.models.map(m => ({
-            ref: m.ref,
+        version: 'pi-ai',
+        providers: Array.from(providerMap.entries()).map(([id, models]) => ({
+          id,
+          name: id.charAt(0).toUpperCase() + id.slice(1),
+          configured: models.some(m => configured.has(`${m.provider}/${m.id}`)),
+          models: models.map(m => ({
+            ref: `${m.provider}/${m.id}`,
             id: m.id,
             name: m.name,
-            reasoning: m.reasoning,
-            input: m.input,
-            contextWindow: m.contextWindow,
-            maxTokens: m.maxTokens,
-            cost: m.cost,
-            recommended: m.recommended,
-            source: m.source,
+            provider: m.provider,
+            reasoning: m.reasoning ?? false,
+            input: m.input ?? ['text'],
+            contextWindow: m.contextWindow ?? 128000,
+            maxTokens: m.maxTokens ?? 4096,
+            cost: {
+              input: m.cost?.input ?? 0,
+              output: m.cost?.output ?? 0,
+            },
+            available: configured.has(`${m.provider}/${m.id}`),
           })),
         })),
       },
     });
   });
 
-  // POST /api/registry/reload - Hot reload registry
+  // POST /api/registry/reload - Hot reload (no-op with pi-ai, but keep for compatibility)
   authenticated.post('/api/registry/reload', async (c) => {
     try {
-      // Reload config (this will rebuild the registry)
+      // Reload config
       await service.reloadConfig();
       
       // Reload OAuth credentials from new config
       loadOAuthCredentialsToCache(service);
       
-      const models = getAllModels(service.currentConfig);
+      const models = getAllModels();
       
       // Emit SSE event to all connected clients
       service.emit('registry.updated', { modelCount: models.length });
@@ -461,17 +452,18 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // GET /api/models - Get available models (only configured providers)
   authenticated.get('/api/models', (c) => {
     const config = service.currentConfig;
-    const configuredModels = getConfiguredModels(config);
-    
-    const models = configuredModels.map(m => ({
-      id: m.ref,
+    const models = getAvailableModels(config).map(m => ({
+      id: `${m.provider}/${m.id}`,
       name: m.name,
       provider: m.provider,
-      contextWindow: m.contextWindow,
-      maxTokens: m.maxTokens,
-      reasoning: m.reasoning,
-      vision: m.input.includes('image'),
-      cost: m.cost,
+      contextWindow: m.contextWindow ?? 128000,
+      maxTokens: m.maxTokens ?? 4096,
+      reasoning: m.reasoning ?? false,
+      vision: m.input?.includes('image') ?? false,
+      cost: {
+        input: m.cost?.input ?? 0,
+        output: m.cost?.output ?? 0,
+      },
     }));
 
     // Sort by provider then name
@@ -483,20 +475,25 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ ok: true, payload: { models } });
   });
 
-  // GET /api/providers - Get ALL available providers and models (regardless of configuration)
+  // GET /api/providers - Get ALL available providers and models
   authenticated.get('/api/providers', (c) => {
     const config = service.currentConfig;
-    const allModels = getAllModels(config);
+    const allModels = getAllModels();
+    const configured = new Set(getAvailableModels(config).map(m => `${m.provider}/${m.id}`));
     
     const models = allModels.map(m => ({
-      id: m.ref,
+      id: `${m.provider}/${m.id}`,
       name: m.name,
       provider: m.provider,
-      contextWindow: m.contextWindow,
-      maxTokens: m.maxTokens,
-      reasoning: m.reasoning,
-      vision: m.input.includes('image'),
-      cost: m.cost,
+      contextWindow: m.contextWindow ?? 128000,
+      maxTokens: m.maxTokens ?? 4096,
+      reasoning: m.reasoning ?? false,
+      vision: m.input?.includes('image') ?? false,
+      cost: {
+        input: m.cost?.input ?? 0,
+        output: m.cost?.output ?? 0,
+      },
+      available: configured.has(`${m.provider}/${m.id}`),
     }));
 
     // Sort by provider then name
@@ -506,6 +503,23 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     });
 
     return c.json({ ok: true, payload: { models } });
+  });
+
+  // GET /api/providers/meta - Get provider metadata (categories, display names)
+  authenticated.get('/api/providers/meta', (c) => {
+    const config = service.currentConfig;
+    const providers = getAllProviders();
+    
+    const meta = providers.map(provider => ({
+      id: provider,
+      name: PROVIDER_META[provider]?.name || provider,
+      category: PROVIDER_META[provider]?.category || 'specialty',
+      supportsOAuth: PROVIDER_META[provider]?.supportsOAuth ?? false,
+      supportsApiKey: PROVIDER_META[provider]?.supportsApiKey ?? true,
+      configured: isProviderConfigured(config, provider),
+    }));
+
+    return c.json({ ok: true, payload: { providers: meta } });
   });
 
   // ========== Cron REST API (/api/cron) ==========

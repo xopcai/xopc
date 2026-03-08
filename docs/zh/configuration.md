@@ -1,6 +1,6 @@
 # 配置参考
 
-xopcbot 所有配置集中在 `~/.config/xopcbot/config.json` 文件中。
+xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
 
 ## 完整配置示例
 
@@ -18,64 +18,13 @@ xopcbot 所有配置集中在 `~/.config/xopcbot/config.json` 文件中。
       "max_tool_iterations": 20
     }
   },
-  "models": {
-    "mode": "merge",
-    "providers": {
-      "openai": {
-        "baseUrl": "https://api.openai.com/v1",
-        "apiKey": "sk-...",
-        "models": [
-          { "id": "gpt-4o", "name": "GPT-4o" },
-          { "id": "gpt-4o-mini", "name": "GPT-4o Mini" }
-        ]
-      },
-      "anthropic": {
-        "apiKey": "sk-ant-...",
-        "models": [
-          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5", "reasoning": true }
-        ]
-      },
-      "minimax": {
-        "apiKey": "...",
-        "models": [
-          { "id": "minimax-m2.1", "name": "MiniMax M2.1" }
-        ]
-      },
-      "openrouter": {
-        "baseUrl": "https://openrouter.ai/api/v1",
-        "apiKey": "sk-or-...",
-        "models": [
-          { "id": "openai/gpt-4o", "name": "GPT-4o (via OpenRouter)" }
-        ]
-      },
-      "groq": {
-        "baseUrl": "https://api.groq.com/openai/v1",
-        "apiKey": "gsk_...",
-        "models": [
-          { "id": "llama-3.1-70b-versatile", "name": "Llama 3.1 70B" }
-        ]
-      },
-      "google": {
-        "apiKey": "AIza...",
-        "models": [
-          { "id": "gemini-2.0-flash", "name": "Gemini 2.0 Flash" }
-        ]
-      },
-      "deepseek": {
-        "baseUrl": "https://api.deepseek.com/v1",
-        "apiKey": "...",
-        "models": [
-          { "id": "deepseek-chat", "name": "DeepSeek Chat" }
-        ]
-      },
-      "ollama": {
-        "baseUrl": "http://127.0.0.1:11434/v1",
-        "enabled": true,
-        "models": [
-          { "id": "llama3", "name": "Llama 3" }
-        ]
-      }
-    }
+  "providers": {
+    "openai": "${OPENAI_API_KEY}",
+    "anthropic": "${ANTHROPIC_API_KEY}",
+    "deepseek": "${DEEPSEEK_API_KEY}",
+    "groq": "${GROQ_API_KEY}",
+    "google": "${GOOGLE_API_KEY}",
+    "minimax": "${MINIMAX_API_KEY}"
   },
   "channels": {
     "telegram": {
@@ -150,64 +99,40 @@ xopcbot 所有配置集中在 `~/.config/xopcbot/config.json` 文件中。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
-| `mode` | string | `merge` | 配置合并模式：`merge` 或 `replace` |
-| `providers` | object | `{}` | 提供商配置 |
-| `bedrockDiscovery` | object | `{}` | AWS Bedrock 模型发现设置 |
+| `providers` | object | `{}` | 提供商 API Keys（见下文） |
 
-### models.providers
+### providers
 
-在此部分配置每个 LLM 提供商：
+配置 LLM 提供商的 API Keys。Key 可以是实际值或环境变量引用：
 
 ```json
 {
-  "models": {
-    "providers": {
-      "openai": {
-        "baseUrl": "https://api.openai.com/v1",
-        "apiKey": "sk-...",
-        "models": [
-          { "id": "gpt-4o", "name": "GPT-4o" }
-        ]
-      }
-    }
+  "providers": {
+    "openai": "${OPENAI_API_KEY}",
+    "anthropic": "${ANTHROPIC_API_KEY}",
+    "deepseek": "sk-...",
+    "groq": "${GROQ_API_KEY}"
   }
 }
 ```
 
-提供商配置选项：
+支持的提供商及其环境变量：
 
-| 字段 | 类型 | 说明 |
-|-------|------|------|
-| `baseUrl` | string | API 端点 URL |
-| `apiKey` | string | API 密钥（支持 `${ANTHROPIC_API_KEY}` 等环境变量） |
-| `api` | string | API 类型：`openai-completions`、`anthropic-messages`、`google-generative-ai` |
-| `auth` | object | OAuth 配置 |
-| `headers` | object | 自定义 HTTP 头 |
-| `enabled` | boolean | 启用/禁用提供商 |
-| `models` | array | 可用模型列表 |
+| 提供商 | 环境变量 |
+|--------|----------|
+| `openai` | `OPENAI_API_KEY` |
+| `anthropic` | `ANTHROPIC_API_KEY` |
+| `google` | `GOOGLE_API_KEY` 或 `GEMINI_API_KEY` |
+| `groq` | `GROQ_API_KEY` |
+| `deepseek` | `DEEPSEEK_API_KEY` |
+| `minimax` | `MINIMAX_API_KEY` |
+| `xai` | `XAI_API_KEY` |
+| `mistral` | `MISTRAL_API_KEY` |
+| `cerebras` | `CEREBRAS_API_KEY` |
+| `openrouter` | `OPENROUTER_API_KEY` |
+| `huggingface` | `HF_TOKEN` 或 `HUGGINGFACE_TOKEN` |
 
-### models.providers.[provider].models
-
-每个模型定义：
-
-```json
-{
-  "id": "gpt-4o",
-  "name": "GPT-4o",
-  "reasoning": false,
-  "input": ["text", "image"],
-  "cost": {
-    "input": 0.000005,
-    "output": 0.000015
-  },
-  "contextWindow": 128000,
-  "maxTokens": 16384
-}
-```
-
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `id` | string | (必填) | 模型标识符 |
+你也可以直接在环境中设置环境变量，而无需添加到配置文件中。
 | `name` | string | (必填) | 显示名称 |
 | `reasoning` | boolean | `false` | 支持推理/思考 |
 | `input` | array | `["text"]` | 输入类型：`text`、`image` |

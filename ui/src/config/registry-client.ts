@@ -1,148 +1,157 @@
 /**
- * Registry Client for Frontend
- * 
- * Fetches provider/model info from backend API.
- * Replaces the old provider-templates.js and dynamic-providers.js
+ * Registry client - simplified API client for models/providers.
  */
 
-import type { ModelConfig } from '../pages/SettingsPage.js';
-
-// Define interfaces directly (previously imported from provider-templates.js)
-export interface RegistryAuth {
-  type: string;
-  supportsOAuth: boolean;
-  oauthProviderId?: string;
-}
-
-export interface RegistryCapabilities {
-  streaming: boolean;
-  functionCalling: boolean;
-  vision: boolean;
-  reasoning: boolean;
-}
-
-export interface RegistryModel {
-  ref: string;
+export interface Model {
   id: string;
   name: string;
-  reasoning: boolean;
-  input: string[];
+  provider: string;
   contextWindow: number;
   maxTokens: number;
-  cost: { input: number; output: number };
-  recommended: boolean;
-  source: string;
+  reasoning: boolean;
+  vision: boolean;
+  cost: {
+    input: number;
+    output: number;
+  };
+  available: boolean;
 }
 
-export interface RegistryProvider {
+export interface Provider {
   id: string;
   name: string;
-  baseUrl: string;
-  api: string;
-  auth: RegistryAuth;
-  capabilities: RegistryCapabilities;
   configured: boolean;
-  models: RegistryModel[];
+  models: Model[];
 }
 
-export interface RegistryResponse {
-  version: string;
-  providers: RegistryProvider[];
-}
+export type ProviderCategory = 'common' | 'specialty' | 'enterprise' | 'oauth';
 
-// Provider template format for SettingsPage
-export interface ProviderTemplate {
+export interface ProviderMeta {
   id: string;
   name: string;
-  baseUrl: string;
-  api: string;
-  authType: 'api_key' | 'oauth';
-  oauthProviderId?: string;
-  models: ModelConfig[];
+  category: ProviderCategory;
+  supportsOAuth: boolean;
+  supportsApiKey: boolean;
+  configured: boolean;
 }
 
-let _cache: RegistryResponse | null = null;
+export interface RegistryData {
+  version: string;
+  providers: Provider[];
+}
 
-/**
- * Fetch full registry from backend
- */
-export async function fetchRegistry(token?: string): Promise<RegistryResponse> {
-  if (_cache) return _cache;
-
+export async function fetchRegistry(token?: string): Promise<RegistryData> {
   const response = await fetch(`${window.location.origin}/api/registry`, {
     headers: token ? { Authorization: `Bearer ${token}` } : {},
   });
 
   if (!response.ok) {
-    throw new Error('Failed to load registry');
+    throw new Error(`Failed to fetch registry: ${response.status}`);
   }
 
   const data = await response.json();
-  _cache = data.payload;
-  return _cache;
+  return data.payload;
 }
 
-/**
- * Clear registry cache (call after saving settings)
- */
-export function clearRegistryCache(): void {
-  _cache = null;
+export async function fetchAllModels(token?: string): Promise<Model[]> {
+  const response = await fetch(`${window.location.origin}/api/providers`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch models: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.payload.models;
 }
 
-/**
- * Get all providers
- */
-export async function fetchProviders(token?: string): Promise<RegistryProvider[]> {
+export async function fetchConfiguredModels(token?: string): Promise<Model[]> {
+  const response = await fetch(`${window.location.origin}/api/models`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch configured models: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.payload.models;
+}
+
+export async function fetchProviders(token?: string): Promise<Provider[]> {
   const registry = await fetchRegistry(token);
-  return registry.providers;
+  return registry.providers.sort((a, b) => {
+    if (a.configured !== b.configured) {
+      return a.configured ? -1 : 1;
+    }
+    return a.id.localeCompare(b.id);
+  });
 }
 
-/**
- * Get configured providers only
- */
-export async function fetchConfiguredProviders(token?: string): Promise<RegistryProvider[]> {
-  const providers = await fetchProviders(token);
-  return providers.filter(p => p.configured);
+export async function fetchProviderMeta(token?: string): Promise<ProviderMeta[]> {
+  const response = await fetch(`${window.location.origin}/api/providers/meta`, {
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to fetch provider meta: ${response.status}`);
+  }
+
+  const data = await response.json();
+  return data.payload.providers;
 }
 
-/**
- * Get all models as flat list
- */
-export async function fetchAllModels(token?: string): Promise<RegistryModel[]> {
-  const providers = await fetchProviders(token);
-  return providers.flatMap(p => p.models);
+export async function reloadRegistry(token?: string): Promise<void> {
+  const response = await fetch(`${window.location.origin}/api/registry/reload`, {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {},
+  });
+
+  if (!response.ok) {
+    throw new Error(`Failed to reload registry: ${response.status}`);
+  }
 }
 
-/**
- * Get configured models only
- */
-export async function fetchConfiguredModels(token?: string): Promise<RegistryModel[]> {
-  const providers = await fetchConfiguredProviders(token);
-  return providers.flatMap(p => p.models);
+let _modelsCache: Model[] | null = null;
+let _cacheExpiry: number = 0;
+const CACHE_DURATION = 60000;
+
+export async function fetchCachedModels(token?: string, forceRefresh = false): Promise<Model[]> {
+  const now = Date.now();
+
+  if (!forceRefresh && _modelsCache && now < _cacheExpiry) {
+    return _modelsCache;
+  }
+
+  _modelsCache = await fetchConfiguredModels(token);
+  _cacheExpiry = now + CACHE_DURATION;
+  return _modelsCache;
 }
 
-/**
- * Convert registry provider to ProviderTemplate format (for SettingsPage compatibility)
- */
-export function toProviderTemplates(providers: RegistryProvider[]): ProviderTemplate[] {
-  return providers.map(p => ({
-    id: p.id,
-    name: p.name,
-    baseUrl: p.baseUrl,
-    api: p.api,
-    authType: p.auth.supportsOAuth ? 'oauth' : 'api_key',
-    oauthProviderId: p.auth.oauthProviderId,
-    models: p.models.map(m => ({
-      id: m.id,
-      name: m.name,
-      capabilities: {
-        text: m.input.includes('text'),
-        image: m.input.includes('image'),
-        reasoning: m.reasoning,
-      },
-      contextWindow: m.contextWindow,
-      maxTokens: m.maxTokens,
-      cost: m.cost,
-    })),
+export function clearRegistryCache(): void {
+  _modelsCache = null;
+  _cacheExpiry = 0;
+}
+
+/** @deprecated Use fetchAllModels instead */
+export async function fetchProvidersLegacy(token?: string) {
+  return fetchAllModels(token);
+}
+
+/** @deprecated Use fetchConfiguredModels instead */
+export async function fetchConfiguredProviders(token?: string) {
+  const models = await fetchConfiguredModels(token);
+  const providers = new Map<string, Model[]>();
+  models.forEach(m => {
+    const list = providers.get(m.provider) || [];
+    list.push(m);
+    providers.set(m.provider, list);
+  });
+  return Array.from(providers.entries()).map(([id, models]) => ({
+    id,
+    name: id,
+    configured: true,
+    models,
   }));
 }

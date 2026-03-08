@@ -130,50 +130,50 @@ src/
 
 ## Model Registry Architecture
 
-xopcbot uses a **Unified Model Registry** to manage all provider and model configurations.
+xopcbot uses `@mariozechner/pi-ai` as the unified model layer, providing 20+ LLM providers through a single consistent API.
 
 ### Architecture Overview
 
 ```
-┌──────────────────┐
-│   models.json    │ ← Single source of truth (12 core providers)
-└────────┬─────────┘
-         │
-         ▼
-┌────────────────────┐
-│  models-loader.ts  │ ← 4-layer merge:
-│   1. Built-in      │     - Built-in (models.json)
-│   2. pi-ai npm     │     - pi-ai npm package
-│   3. User config   │     - User config (config.json)
-│   4. Ollama disc.  │     - Ollama discovery
-└────────┬───────────┘
-         │
-         ▼
-┌────────────────────┐
-│  GET /api/registry │ ← Frontend fetches all data via API
-└────────────────────┘
+┌──────────────────────────────┐
+│      @mariozechner/pi-ai     │ ← Built-in provider/model definitions
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│     src/providers/index.ts   │ ← Provider lookup, API key resolution
+└──────────────┬───────────────┘
+               │
+               ▼
+┌──────────────────────────────┐
+│    Config (API Keys)        │ ← Environment variables for auth
+└──────────────────────────────┘
 ```
 
-### Key Files
+### Key Functions
 
-| File | Purpose |
-|------|---------|
-| `src/providers/models.json` | Built-in provider/model definitions |
-| `src/providers/models.types.ts` | TypeScript types for registry |
-| `src/providers/models-loader.ts` | Load, validate, merge layers |
-| `src/providers/registry.ts` | ModelRegistry class (uses models-loader) |
-| `ui/src/config/registry-client.ts` | Frontend API client |
+| Function | Purpose |
+|----------|---------|
+| `resolveModel(ref)` | Resolve model reference with optional provider prefix |
+| `getAllProviders()` | Get all available providers from pi-ai |
+| `getModelsByProvider(provider)` | Get models for a specific provider |
+| `getApiKey(config, provider)` | Resolve API key from config or env vars |
+| `isProviderConfigured(config, provider)` | Check if provider has valid credentials |
+| `getProviderEnvVars(provider)` | Get required env vars for provider |
+| `detectProvider(modelId)` | Auto-detect provider from model ID |
+
+### Provider Metadata
+
+The `PROVIDER_META` object provides display names and categories:
+
+- **common**: OpenAI, Anthropic, Google, Groq, DeepSeek, MiniMax, Kimi
+- **specialty**: xAI, Mistral, Cerebras, OpenRouter, HuggingFace, OpenCode, Z.ai
+- **enterprise**: Amazon Bedrock, Azure OpenAI, Google Vertex, Vercel AI Gateway
+- **oauth**: GitHub Copilot, OpenAI Codex, Google Gemini CLI, Google Antigravity
 
 ### Hot Reload
 
-Changes to `models.json` or `config.json` can be reloaded without restart:
-
-```bash
-# Backend
-curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:18790/api/registry/reload
-
-# Frontend automatically refreshes via cache invalidation
-```
+Provider configurations are loaded from environment variables at startup. No hot reload needed for API key changes - just restart or update config.
 
 See [docs/models.md](./docs/models.md) for full documentation.
 
@@ -368,70 +368,23 @@ Channels support hierarchical access control:
 
 ### Adding a New Provider
 
-**Method 1: Edit the built-in manifest (for core providers)**
+Providers are managed by `@mariozechner/pi-ai` package. To add support for a new provider:
 
-1. Edit `src/providers/models.json`
-2. Add provider definition with models
-3. Restart gateway or call `POST /api/registry/reload`
+1. **Check if pi-ai already supports it** - Run `node -e "const {getProviders} = require('@mariozechner/pi-ai'); console.log(getProviders())"` to see all available
+2. **Request addition in pi-ai** - If not supported, open an issue/PR in the [pi-ai repository](https://github.com/mariozechner/pi-ai)
 
-Example:
-```jsonc
-{
-  "providers": {
-    "new-provider": {
-      "name": "New Provider",
-      "baseUrl": "https://api.new-provider.com/v1",
-      "api": "openai-completions",
-      "auth": {
-        "type": "api_key",
-        "envKeys": ["NEW_PROVIDER_API_KEY"]
-      },
-      "capabilities": {
-        "streaming": true,
-        "functionCalling": true,
-        "vision": false,
-        "reasoning": false
-      },
-      "models": [
-        {
-          "id": "model-v1",
-          "name": "Model v1",
-          "contextWindow": 128000,
-          "maxTokens": 8192,
-          "cost": { "input": 1.0, "output": 3.0 }
-        }
-      ]
-    }
-  }
-}
-```
+For custom model endpoints, you can use the generic `openrouter` or `vercel-ai-gateway` providers which support custom base URLs.
 
-**Method 2: Add via user config (for custom providers)**
-
-1. Edit `~/.xopcbot/config.json`
-2. Add to `models.providers` section
-3. Restart gateway or call `POST /api/registry/reload`
-
-Example:
+Example for custom endpoint via Vercel AI Gateway:
 ```json
 {
-  "models": {
-    "mode": "merge",
-    "providers": {
-      "my-custom-provider": {
-        "baseUrl": "https://my-api.example.com/v1",
-        "apiKey": "sk-...",
-        "api": "openai-completions",
-        "models": [
-          { "id": "my-model", "name": "My Model" }
-        ]
-      }
-    }
+  "providers": {
+    "vercel-ai-gateway": "${VERCEL_AI_GATEWAY_API_KEY}"
   }
 }
 ```
 
-The frontend will automatically fetch the new provider via `/api/registry`.
+The frontend fetches available providers via `/api/providers`.
 
 ### Adding a New Channel Plugin
 
@@ -828,8 +781,8 @@ console.log(`Errors: ${stats.byLevel.error}`);
 | **Configuration** | `src/config/schema.ts` |
 | **Tests** | `src/**/__tests__/` alongside source |
 | **UI components** | `ui/src/components/` |
-| **Model registry** | `src/providers/models.json`, `src/providers/models-loader.ts` |
-| **Providers** | `src/providers/registry.ts`, `src/providers/models.json` |
+| **Model registry** | `src/providers/index.ts` (uses `@mariozechner/pi-ai`) |
+| **Providers** | `src/providers/index.ts` |
 | **Channel plugins** | `src/channels/` |
 | **Logging system** | `src/utils/logger.ts`, `src/utils/log-store.ts` |
 | **Log UI** | `ui/src/pages/LogManager.ts` |
