@@ -8,6 +8,55 @@ import { execSync } from 'child_process';
 // Cache for shell command results (persists for process lifetime)
 const commandResultCache = new Map<string, string | undefined>();
 
+// Allowed safe commands for API key resolution (whitelist approach)
+const ALLOWED_COMMANDS = [
+	'op', // 1Password CLI
+	'security', // macOS Keychain
+	'pass', // pass password manager
+	'gpg', // GPG
+	'cat', // Read file (careful with this)
+	'head',
+	'tail',
+	'echo',
+];
+
+// Dangerous characters/patterns that should never be allowed
+const DANGEROUS_PATTERNS = [
+	/[;&|]/, // Command chaining
+	/>/, // Output redirection
+	/</, // Input redirection
+	/\$\(/, // Command substitution
+	/`/, // Backtick substitution
+	/\$\{.*\}/, // Variable expansion with braces
+	/\*\*?/, // Glob expansion
+	/\.\./, // Path traversal
+];
+
+/**
+ * Validate if a command is safe to execute
+ */
+function isSafeCommand(command: string): { safe: boolean; error?: string } {
+	// Check for dangerous patterns
+	for (const pattern of DANGEROUS_PATTERNS) {
+		if (pattern.test(command)) {
+			return { safe: false, error: 'Command contains potentially dangerous characters' };
+		}
+	}
+
+	// Extract the base command (first word before any arguments)
+	const baseCommand = command.trim().split(/\s+/)[0];
+
+	// Check if base command is in allowed list
+	if (!ALLOWED_COMMANDS.includes(baseCommand)) {
+		return {
+			safe: false,
+			error: `Command "${baseCommand}" is not in the allowed list. Allowed: ${ALLOWED_COMMANDS.join(', ')}`,
+		};
+	}
+
+	return { safe: true };
+}
+
 /**
  * Resolve a config value (API key, header value, etc.) to an actual value.
  * - If starts with "!", executes the rest as a shell command and uses stdout (cached)
@@ -35,6 +84,14 @@ function executeCommand(commandConfig: string): string | undefined {
 	}
 
 	const command = commandConfig.slice(1);
+
+	// Security check
+	const safety = isSafeCommand(command);
+	if (!safety.safe) {
+		console.error(`[Security] Blocked unsafe command: ${safety.error}`);
+		return undefined;
+	}
+
 	let result: string | undefined;
 	try {
 		const output = execSync(command, {
@@ -75,6 +132,7 @@ export function clearConfigValueCache(): void {
 
 /**
  * Test API key resolution without caching (for UI testing)
+ * SECURITY: This function validates commands against a whitelist
  */
 export function testApiKeyResolution(value: string): {
 	type: 'literal' | 'env' | 'command';
@@ -82,8 +140,18 @@ export function testApiKeyResolution(value: string): {
 	error?: string;
 } {
 	if (value.startsWith('!')) {
+		const command = value.slice(1);
+
+		// Security validation
+		const safety = isSafeCommand(command);
+		if (!safety.safe) {
+			return {
+				type: 'command',
+				error: `Security: ${safety.error}`,
+			};
+		}
+
 		try {
-			const command = value.slice(1);
 			const output = execSync(command, {
 				encoding: 'utf-8',
 				timeout: 10000,
@@ -119,4 +187,11 @@ export function testApiKeyResolution(value: string): {
 		type: 'literal',
 		resolved: value,
 	};
+}
+
+/**
+ * Get the list of allowed commands (for documentation/UI)
+ */
+export function getAllowedCommands(): string[] {
+	return [...ALLOWED_COMMANDS];
 }
