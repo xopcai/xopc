@@ -910,7 +910,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // ========== Extension HTTP Routes ==========
   const extensionRegistry = service.getExtensionRegistry?.();
   if (extensionRegistry) {
-    // Register plugin HTTP routes
+    // Register extension HTTP routes
     const httpRoutes = extensionRegistry.httpRoutes;
     for (const [path, handler] of httpRoutes) {
       // POST handler

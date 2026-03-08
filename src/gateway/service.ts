@@ -82,7 +82,7 @@ export class GatewayService {
     // Initialize channel manager
     this.channelManager = new ChannelManager(this.config, this.bus);
 
-    // Initialize plugin loader
+    // Initialize extension loader
     this.workspacePath = getWorkspacePath(this.config) || './workspace';
     this.initializeExtensions();
 
@@ -93,7 +93,7 @@ export class GatewayService {
       error: registry.getError(),
     }, 'ModelRegistry initialized');
 
-    // Initialize agent service with plugin registry
+    // Initialize agent service with extension registry
     const modelConfig = this.config.agents?.defaults?.model;
     this.agentService = new AgentService(this.bus, {
       workspace: this.workspacePath,
@@ -519,7 +519,7 @@ export class GatewayService {
   }
 
   /**
-   * Get plugin registry for external access (HTTP routes, gateway methods)
+   * Get extension registry for external access (HTTP routes, gateway methods)
    */
   getExtensionRegistry() {
     return this.extensionLoader?.getRegistry();

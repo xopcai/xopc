@@ -144,7 +144,7 @@ function parseLogLine(line: string, source?: string, lineNumber?: number): Parse
       module: parsed.module,
       prefix: parsed.prefix,
       service: parsed.service,
-      plugin: parsed.extension,
+      extension: parsed.extension,
       requestId: parsed.requestId,
       sessionId: parsed.sessionId,
       _source: source,
