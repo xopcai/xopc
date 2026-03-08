@@ -37,7 +37,11 @@ export class TypingController {
       // Send initial typing action
       await sendTyping(threadId);
     } catch (error) {
-      console.error(`Failed to start typing for ${key}:`, error);
+      // Log error but don't fail - typing is optional
+      if (this.debug) {
+        console.error(`Failed to start typing for ${key}:`, error);
+      }
+      return; // Don't start interval if initial send failed
     }
 
     // Start periodic typing updates
