@@ -1318,7 +1318,11 @@ export class SettingsPage extends LitElement {
         <!-- Add Provider Button -->
         <button
           class="btn btn-outline btn-full"
-          @click=${() => this._showAddProviderModal = true}
+          @click=${() => {
+            this._showAddProviderModal = true;
+            this._showTemplateSelection = true;
+            this.requestUpdate();
+          }}
         >
           ${getIcon('plus')} ${t('settings.addProvider')}
         </button>
@@ -1523,7 +1527,7 @@ export class SettingsPage extends LitElement {
           <div class="modal-body">
             <p class="modal-description">${t('settings.selectProviderTemplate') || 'Select a provider to quickly configure with pre-filled settings'}</p>
             
-            ${dynamicApiKeyProviders.length > 0 ? html`
+            ${staticApiKeyTemplates.length > 0 ? html`
               <div class="template-section">
                 <h4 class="template-section-title">
                   <span class="template-icon">${getIcon('cloud')}</span>
@@ -1531,7 +1535,7 @@ export class SettingsPage extends LitElement {
                   <span style="font-weight: normal; font-size: 12px; color: var(--muted-foreground);">(from backend)</span>
                 </h4>
                 <div class="template-grid">
-                  ${dynamicApiKeyProviders.map(template => html`
+                  ${staticApiKeyTemplates.map(template => html`
                     <button
                       class="template-card"
                       @click=${() => this._selectTemplate(template)}
@@ -1554,7 +1558,7 @@ export class SettingsPage extends LitElement {
               </div>
             ` : ''}
 
-            ${dynamicOauthProviders.length > 0 ? html`
+            ${staticOauthTemplates.length > 0 ? html`
               <div class="template-section">
                 <h4 class="template-section-title">
                   <span class="template-icon">${getIcon('cloud')}</span>
@@ -1562,7 +1566,7 @@ export class SettingsPage extends LitElement {
                   <span style="font-weight: normal; font-size: 12px; color: var(--muted-foreground);">(from backend)</span>
                 </h4>
                 <div class="template-grid">
-                  ${dynamicOauthProviders.map(template => html`
+                  ${staticOauthTemplates.map(template => html`
                     <button
                       class="template-card"
                       @click=${() => this._selectTemplate(template)}
