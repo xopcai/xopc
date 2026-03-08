@@ -2,10 +2,118 @@ import { z } from 'zod';
 import { homedir } from 'os';
 
 // ============================================
-// Provider API Keys (simplified)
+// Provider Configuration (merged from models.json)
 // ============================================
 
-export const ProvidersConfigSchema = z.record(z.string(), z.string()).default({});
+// OpenAI Compatibility Settings
+export const OpenRouterRoutingSchema = z.object({
+  only: z.array(z.string()).optional(),
+  order: z.array(z.string()).optional(),
+});
+
+export const VercelGatewayRoutingSchema = z.object({
+  only: z.array(z.string()).optional(),
+  order: z.array(z.string()).optional(),
+});
+
+export const OpenAICompletionsCompatSchema = z.object({
+  supportsStore: z.boolean().optional(),
+  supportsDeveloperRole: z.boolean().optional(),
+  supportsReasoningEffort: z.boolean().optional(),
+  supportsUsageInStreaming: z.boolean().optional(),
+  maxTokensField: z.enum(['max_completion_tokens', 'max_tokens']).optional(),
+  requiresToolResultName: z.boolean().optional(),
+  requiresAssistantAfterToolResult: z.boolean().optional(),
+  requiresThinkingAsText: z.boolean().optional(),
+  requiresMistralToolIds: z.boolean().optional(),
+  thinkingFormat: z.enum(['openai', 'zai', 'qwen']).optional(),
+  openRouterRouting: OpenRouterRoutingSchema.optional(),
+  vercelGatewayRouting: VercelGatewayRoutingSchema.optional(),
+  supportsStrictMode: z.boolean().optional(),
+});
+
+export const OpenAIResponsesCompatSchema = z.object({});
+
+export const OpenAICompatSchema = z.union([
+  OpenAICompletionsCompatSchema,
+  OpenAIResponsesCompatSchema,
+]);
+
+// Model Definition
+export const CustomModelSchema = z.object({
+  id: z.string().min(1),
+  name: z.string().min(1).optional(),
+  api: z.enum([
+    'openai-completions',
+    'openai-responses',
+    'anthropic-messages',
+    'google-generative-ai',
+    'azure-openai-responses',
+    'bedrock-converse-stream',
+    'openai-codex-responses',
+    'google-gemini-cli',
+    'google-vertex',
+  ]).optional(),
+  reasoning: z.boolean().optional(),
+  input: z.array(z.enum(['text', 'image'])).optional(),
+  contextWindow: z.number().positive().optional(),
+  maxTokens: z.number().positive().optional(),
+  cost: z.object({
+    input: z.number(),
+    output: z.number(),
+    cacheRead: z.number(),
+    cacheWrite: z.number(),
+  }).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+  compat: OpenAICompatSchema.optional(),
+});
+
+// Model Override (for built-in models)
+export const ModelOverrideSchema = z.object({
+  name: z.string().min(1).optional(),
+  reasoning: z.boolean().optional(),
+  input: z.array(z.enum(['text', 'image'])).optional(),
+  contextWindow: z.number().positive().optional(),
+  maxTokens: z.number().positive().optional(),
+  cost: z.object({
+    input: z.number().optional(),
+    output: z.number().optional(),
+    cacheRead: z.number().optional(),
+    cacheWrite: z.number().optional(),
+  }).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+  compat: OpenAICompatSchema.optional(),
+});
+
+// Rich Provider Configuration (object format)
+export const RichProviderConfigSchema = z.object({
+  baseUrl: z.string().url().optional(),
+  apiKey: z.string().optional(),
+  api: z.enum([
+    'openai-completions',
+    'openai-responses',
+    'anthropic-messages',
+    'google-generative-ai',
+    'azure-openai-responses',
+    'bedrock-converse-stream',
+    'openai-codex-responses',
+    'google-gemini-cli',
+    'google-vertex',
+  ]).optional(),
+  headers: z.record(z.string(), z.string()).optional(),
+  authHeader: z.boolean().optional(),
+  models: z.array(CustomModelSchema).optional(),
+  modelOverrides: z.record(z.string(), ModelOverrideSchema).optional(),
+});
+
+// Provider config: simple string (API key) or rich object
+export const ProviderConfigSchema = z.union([
+  z.string(), // API key only
+  RichProviderConfigSchema,
+]);
+
+// Providers config: record of provider name -> config
+export const ProvidersConfigSchema = z.record(z.string(), ProviderConfigSchema).default({});
 
 // ============================================
 // Agent Configs
@@ -330,15 +438,41 @@ export type GatewayAuthConfig = z.infer<typeof GatewayAuthSchema>;
 export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
 export type WhatsAppConfig = z.infer<typeof WhatsAppConfigSchema>;
 
+// Provider config types
+export type ProviderConfig = z.infer<typeof ProviderConfigSchema>;
+export type RichProviderConfig = z.infer<typeof RichProviderConfigSchema>;
+export type CustomModel = z.infer<typeof CustomModelSchema>;
+export type ModelOverride = z.infer<typeof ModelOverrideSchema>;
+export type OpenAICompat = z.infer<typeof OpenAICompatSchema>;
+
 // ============================================
 // Helper Functions
 // ============================================
 
 /**
- * 从配置中获取 API key
+ * 从配置中获取 API key (支持 string 和 object 两种格式)
  */
 export function getApiKey(config: Config, provider: string): string | undefined {
-  return config.providers?.[provider];
+  const providerConfig = config.providers?.[provider];
+  if (typeof providerConfig === 'string') {
+    return providerConfig;
+  }
+  if (typeof providerConfig === 'object' && providerConfig !== null) {
+    return providerConfig.apiKey;
+  }
+  return undefined;
+}
+
+/**
+ * 获取 provider 的完整配置对象
+ */
+export function getProviderConfig(config: Config, provider: string): RichProviderConfig | undefined {
+  const providerConfig = config.providers?.[provider];
+  if (typeof providerConfig === 'object' && providerConfig !== null) {
+    return providerConfig;
+  }
+  return undefined;
+}
 }
 
 /**

@@ -10,6 +10,7 @@ import {
 	type Api,
 } from '@mariozechner/pi-ai';
 import type { Config } from '../config/schema.js';
+import { resolveConfigValue } from '../config/resolve-config-value.js';
 import { getModelRegistry } from './model-registry.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -74,17 +75,51 @@ export function getAllProviders(): string[] {
 }
 
 export function getApiKey(config: Config | null | undefined, provider: string): string | undefined {
-	// Check registry first (for custom providers from models.json)
+	// Check config.providers first (handles both string and object formats)
+	const providerConfig = config?.providers?.[provider];
+	if (typeof providerConfig === 'string') {
+		return providerConfig;
+	}
+	if (typeof providerConfig === 'object' && providerConfig !== null && providerConfig.apiKey) {
+		return resolveConfigValue(providerConfig.apiKey);
+	}
+
+	// Check registry for custom providers
 	const registry = getModelRegistry();
 	const registryKey = registry.getApiKey(provider);
 	if (registryKey) {
 		return registryKey;
 	}
 
-	// Check config.providers (new flat format)
-	if (config?.providers?.[provider]) {
-		return config.providers[provider];
+	// Check environment variables
+	const envVar = provider.toUpperCase().replace(/-/g, '_') + '_API_KEY';
+	const envKey = process.env[envVar];
+	if (envKey) return envKey;
+
+	// Provider-specific env var mappings
+	const envMap: Record<string, string[]> = {
+		openai: ['OPENAI_API_KEY'],
+		anthropic: ['ANTHROPIC_API_KEY'],
+		google: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
+		groq: ['GROQ_API_KEY'],
+		deepseek: ['DEEPSEEK_API_KEY'],
+		qwen: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'],
+		kimi: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'],
+		minimax: ['MINIMAX_API_KEY'],
+		zhipu: ['ZHIPU_API_KEY'],
+		openrouter: ['OPENROUTER_API_KEY'],
+		xai: ['XAI_API_KEY'],
+		cerebras: ['CEREBRAS_API_KEY'],
+		mistral: ['MISTRAL_API_KEY'],
+	};
+
+	const keys = envMap[provider] || [];
+	for (const key of keys) {
+		if (process.env[key]) return process.env[key];
 	}
+
+	return undefined;
+}
 
 	// Check environment variables
 	const envVar = provider.toUpperCase().replace(/-/g, '_') + '_API_KEY';
