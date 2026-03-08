@@ -170,6 +170,45 @@ export class SettingsPage extends LitElement {
   override connectedCallback(): void {
     super.connectedCallback();
     this._tryInitialize();
+    this._setupRegistryUpdateListener();
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this._cleanupRegistryUpdateListener();
+  }
+
+  private _eventSource: EventSource | null = null;
+
+  private _setupRegistryUpdateListener(): void {
+    if (!this.config?.token) return;
+    
+    try {
+      // Connect to SSE endpoint
+      const url = `${window.location.origin}/api/events`;
+      this._eventSource = new EventSource(url);
+      
+      this._eventSource.addEventListener('registry.updated', () => {
+        console.log('[SettingsPage] Registry updated, reloading...');
+        clearRegistryCache();
+        this._loadDynamicProviders();
+        this._loadModels();
+        this._loadSettings();
+      });
+      
+      this._eventSource.onerror = (error) => {
+        console.error('[SettingsPage] SSE connection error:', error);
+      };
+    } catch (err) {
+      console.error('[SettingsPage] Failed to setup SSE listener:', err);
+    }
+  }
+
+  private _cleanupRegistryUpdateListener(): void {
+    if (this._eventSource) {
+      this._eventSource.close();
+      this._eventSource = null;
+    }
   }
 
   override willUpdate(changedProperties: Map<string, unknown>): void {

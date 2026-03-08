@@ -441,6 +441,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       
       const models = getAllModels(service.currentConfig);
       
+      // Emit SSE event to all connected clients
+      service.emit('registry.updated', { modelCount: models.length });
+      
       return c.json({
         ok: true,
         payload: {
