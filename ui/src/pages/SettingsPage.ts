@@ -12,7 +12,7 @@ import { fetchConfiguredModels, fetchProviderMeta, type Model } from '../config/
 import type { ProviderInfo, ProviderListChangeEvent, ProviderListOAuthEvent } from '../components/ProviderList.js';
 import '../components/ModelJsonEditor.js';
 import type { ModelsJsonConfig } from '../config/models-json-client.js';
-import { fetchModelsJson } from '../config/models-json-client.js';
+import { fetchModelsJson, saveModelsJson } from '../config/models-json-client.js';
 
 export interface SettingsPageConfig {
   token?: string;
@@ -391,6 +391,7 @@ export class SettingsPage extends LitElement {
     };
 
     try {
+      // Save config.json
       const response = await fetch(`${window.location.origin}/api/config`, {
         method: 'PATCH',
         headers: {
@@ -400,14 +401,24 @@ export class SettingsPage extends LitElement {
         body: JSON.stringify(updates),
       });
 
-      if (response.ok) {
-        this._dirty = false;
-        this._saveSuccess = true;
-        setTimeout(() => (this._saveSuccess = false), 3000);
-      } else {
+      if (!response.ok) {
         const error = await response.json();
         throw new Error(error.error || 'Failed to save settings');
       }
+
+      // Also save models.json if it was modified
+      if (this._modelsJsonConfig) {
+        try {
+          await saveModelsJson(this._modelsJsonConfig, token);
+        } catch (modelsErr) {
+          console.warn('Failed to save models.json:', modelsErr);
+          // Don't fail the whole save if models.json fails
+        }
+      }
+
+      this._dirty = false;
+      this._saveSuccess = true;
+      setTimeout(() => (this._saveSuccess = false), 3000);
     } catch (err) {
       console.error('Failed to save settings:', err);
       alert(err instanceof Error ? err.message : 'Failed to save settings');
