@@ -1875,12 +1875,30 @@ export class SettingsPage extends LitElement {
 
     if (!providerId || !baseUrl) return;
 
+    // Get models from dynamic providers (loaded from backend /api/providers)
+    // This gives us ALL supported models for the provider, not just template models
+    let models: ModelConfig[] = [];
+    
+    if (template.id === 'custom') {
+      // Custom provider: no predefined models
+      models = [];
+    } else {
+      // Find the provider in dynamic providers to get all its models
+      const dynamicProvider = this._dynamicProviders.find(p => p.id === template.id);
+      if (dynamicProvider && dynamicProvider.models.length > 0) {
+        models = dynamicProvider.models;
+      } else if (template.models.length > 0) {
+        // Fallback to template models if dynamic provider not found
+        models = template.models;
+      }
+    }
+
     const newProvider: ProviderConfig = {
       id: providerId,
       baseUrl,
       api,
       apiKey: this._templateApiKey,
-      models: template.models.length > 0 ? template.models : [],
+      models,
     };
 
     this._addProvider(newProvider);
