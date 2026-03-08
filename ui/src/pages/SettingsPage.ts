@@ -993,16 +993,17 @@ export class SettingsPage extends LitElement {
         throw new Error(error.error || 'Failed to save settings');
       }
 
-      this._dirtyFields.clear();
-      
-      // Clear provider caches so next load gets fresh data
-      clearProviderCaches();
-      
       // Save gateway token to localStorage (not to server config)
       if (this._dirtyFields.has('gatewayToken')) {
         this._saveUiSettings(this._values.gatewayToken || '');
       }
+
+      // Clear provider caches and reload providers/models so user sees changes immediately
+      clearProviderCaches();
+      await this._loadDynamicProviders();
+      await this._loadModels();
       
+      this._dirtyFields.clear();
       this._saveSuccess = true;
       setTimeout(() => { this._saveSuccess = false; }, 3000);
     } catch (err) {
