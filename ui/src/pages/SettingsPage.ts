@@ -1179,6 +1179,23 @@ export class SettingsPage extends LitElement {
     const { providerId, model } = this._editingModel!;
     const isNew = !model.id;
 
+    const updateModel = (updates: Partial<ModelConfig>) => {
+      this._editingModel = {
+        providerId,
+        model: { ...model, ...updates }
+      };
+    };
+
+    const updateCapabilities = (updates: Partial<ModelConfig['capabilities']>) => {
+      this._editingModel = {
+        providerId,
+        model: {
+          ...model,
+          capabilities: { ...model.capabilities, ...updates }
+        }
+      };
+    };
+
     return html`
       <div class="modal-overlay" @click=${() => this._editingModel = null}>
         <div class="modal-content" @click=${(e: Event) => e.stopPropagation()}>
@@ -1199,8 +1216,11 @@ export class SettingsPage extends LitElement {
                 ?disabled=${!isNew}
                 placeholder="e.g., gpt-4o"
                 @input=${(e: Event) => {
-                  model.id = (e.target as HTMLInputElement).value;
-                  if (!model.name) model.name = model.id;
+                  const id = (e.target as HTMLInputElement).value;
+                  updateModel({ 
+                    id, 
+                    name: model.name || id 
+                  });
                 }}
               />
             </div>
@@ -1212,7 +1232,7 @@ export class SettingsPage extends LitElement {
                 class="text-input"
                 .value=${model.name}
                 placeholder="e.g., GPT-4o"
-                @input=${(e: Event) => model.name = (e.target as HTMLInputElement).value}
+                @input=${(e: Event) => updateModel({ name: (e.target as HTMLInputElement).value })}
               />
             </div>
             
@@ -1223,7 +1243,7 @@ export class SettingsPage extends LitElement {
                   <input
                     type="checkbox"
                     .checked=${model.capabilities.text}
-                    @change=${(e: Event) => model.capabilities.text = (e.target as HTMLInputElement).checked}
+                    @change=${(e: Event) => updateCapabilities({ text: (e.target as HTMLInputElement).checked })}
                   />
                   <span>Text</span>
                 </label>
@@ -1231,7 +1251,7 @@ export class SettingsPage extends LitElement {
                   <input
                     type="checkbox"
                     .checked=${model.capabilities.image}
-                    @change=${(e: Event) => model.capabilities.image = (e.target as HTMLInputElement).checked}
+                    @change=${(e: Event) => updateCapabilities({ image: (e.target as HTMLInputElement).checked })}
                   />
                   <span>Image</span>
                 </label>
@@ -1239,7 +1259,7 @@ export class SettingsPage extends LitElement {
                   <input
                     type="checkbox"
                     .checked=${model.capabilities.reasoning}
-                    @change=${(e: Event) => model.capabilities.reasoning = (e.target as HTMLInputElement).checked}
+                    @change=${(e: Event) => updateCapabilities({ reasoning: (e.target as HTMLInputElement).checked })}
                   />
                   <span>Reasoning</span>
                 </label>
@@ -1253,7 +1273,7 @@ export class SettingsPage extends LitElement {
                   type="number"
                   class="text-input"
                   .value=${model.contextWindow}
-                  @input=${(e: Event) => model.contextWindow = Number((e.target as HTMLInputElement).value)}
+                  @input=${(e: Event) => updateModel({ contextWindow: Number((e.target as HTMLInputElement).value) })}
                 />
               </div>
               <div class="field-group">
@@ -1262,7 +1282,7 @@ export class SettingsPage extends LitElement {
                   type="number"
                   class="text-input"
                   .value=${model.maxTokens}
-                  @input=${(e: Event) => model.maxTokens = Number((e.target as HTMLInputElement).value)}
+                  @input=${(e: Event) => updateModel({ maxTokens: Number((e.target as HTMLInputElement).value) })}
                 />
               </div>
             </div>
