@@ -26,7 +26,9 @@ import {
 // Static OAuth providers map
 const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = {
   'kimi': kimiOAuthProvider,
+  'kimi-coding': kimiOAuthProvider,  // Alias for frontend compatibility
   'qwen': qwenPortalOAuthProvider,
+  'qwen-portal': qwenPortalOAuthProvider,  // Alias
   'minimax': minimaxOAuthProvider,
   'minimax-cn': minimaxCnOAuthProvider,
   'anthropic': anthropicOAuthProvider,
