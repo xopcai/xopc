@@ -577,7 +577,7 @@ export class SettingsPage extends LitElement {
    * Delete a provider.
    */
   private _deleteProvider(providerId: string): void {
-    if (confirm(`Are you sure you want to delete provider "${providerId}"?`)) {
+    if (confirm(t('settings.confirmDeleteProvider', { provider: providerId }))) {
       this._providers = this._providers.filter(p => p.id !== providerId);
       this._dirtyFields.add('providers');
       this._expandedProviders.delete(providerId);
@@ -654,7 +654,7 @@ export class SettingsPage extends LitElement {
           this.requestUpdate();
 
           // Show success message
-          alert('Token refreshed successfully! Please copy the new token and update any other clients.');
+          alert(t('settings.tokenRefreshed'));
         }
       } else {
         const error = await response.json();
@@ -662,7 +662,7 @@ export class SettingsPage extends LitElement {
       }
     } catch (err) {
       console.error('Failed to refresh token:', err);
-      alert(err instanceof Error ? err.message : 'Failed to refresh token');
+      alert(err instanceof Error ? err.message : t('settings.failedToRefreshToken'));
     } finally {
       this._refreshingToken = false;
       this.requestUpdate();
@@ -844,7 +844,7 @@ export class SettingsPage extends LitElement {
         }
         if (this._dirtyFields.has('telegramAllowFrom')) {
           updates.channels.telegram.allowFrom = this._values.telegramAllowFrom
-            ? this._values.telegramAllowFrom.split(',').map(s => s.trim()).filter(s => s)
+            ? this._values.telegramAllowFrom.split(',').map((s: string) => s.trim()).filter((s: string) => s)
             : [];
         }
       }
@@ -861,7 +861,7 @@ export class SettingsPage extends LitElement {
         }
         if (this._dirtyFields.has('whatsappAllowFrom')) {
           updates.channels.whatsapp.allowFrom = this._values.whatsappAllowFrom
-            ? this._values.whatsappAllowFrom.split(',').map(s => s.trim()).filter(s => s)
+            ? this._values.whatsappAllowFrom.split(',').map((s: string) => s.trim()).filter((s: string) => s)
             : [];
         }
       }
@@ -903,7 +903,7 @@ export class SettingsPage extends LitElement {
       setTimeout(() => { this._saveSuccess = false; }, 3000);
     } catch (err) {
       console.error('Failed to save settings:', err);
-      alert(err instanceof Error ? err.message : 'Failed to save settings');
+      alert(err instanceof Error ? err.message : t('settings.failedToSaveSettings'));
     } finally {
       this._saving = false;
     }
@@ -998,7 +998,7 @@ export class SettingsPage extends LitElement {
     return html`
       <div class="gateway-token-section" style="margin-bottom: 24px; padding: 16px; background: var(--muted); border-radius: 8px;">
         <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px;">
-          <h4 style="margin: 0; font-size: 14px; font-weight: 600;">Server Authentication Token</h4>
+          <h4 style="margin: 0; font-size: 14px; font-weight: 600;">${t('settings.serverAuthToken')}</h4>
           <button
             class="btn btn-sm btn-secondary"
             ?disabled=${this._refreshingToken}
@@ -1007,22 +1007,22 @@ export class SettingsPage extends LitElement {
           >
             ${this._refreshingToken ? html`
               <span class="spinner-sm"></span>
-              Refreshing...
+              ${t('settings.refreshing')}
             ` : html`
               ${getIcon('refreshCw')}
-              Refresh Token
+              ${t('settings.refreshToken')}
             `}
           </button>
         </div>
         
         <div style="display: flex; align-items: center; gap: 12px; margin-bottom: 8px;">
           <code style="flex: 1; padding: 8px 12px; background: var(--background); border-radius: 4px; font-family: monospace; font-size: 13px; word-break: break-all;">
-            ${this._showToken ? this._serverToken || 'Not available' : tokenPreview}
+            ${this._showToken ? this._serverToken || t('settings.notAvailable') : tokenPreview}
           </code>
           <button
             class="btn btn-icon"
             @click=${() => this._showToken = !this._showToken}
-            title=${this._showToken ? 'Hide token' : 'Show token'}
+            title=${this._showToken ? t('settings.hideToken') : t('settings.showToken')}
           >
             ${this._showToken ? getIcon('eyeOff') : getIcon('eye')}
           </button>
@@ -1032,18 +1032,17 @@ export class SettingsPage extends LitElement {
             @click=${() => {
               if (this._serverToken) {
                 navigator.clipboard.writeText(this._serverToken);
-                alert('Token copied to clipboard!');
+                alert(t('settings.tokenCopied'));
               }
             }}
-            title="Copy token"
+            title=${t('settings.copyToken')}
           >
             ${getIcon('copy')}
           </button>
         </div>
         
         <p style="margin: 0; font-size: 12px; color: var(--muted-foreground);">
-          This is the current server token. Click "Refresh Token" to generate a new one. 
-          After refreshing, copy the new token and update your client configuration.
+          ${t('settings.tokenDescription')}
         </p>
       </div>
     `;
@@ -1093,7 +1092,7 @@ export class SettingsPage extends LitElement {
                 <!-- API Configuration -->
                 <div class="provider-config">
                   <div class="field-group">
-                    <label class="field-label">Base URL</label>
+                    <label class="field-label">${t('settings.baseUrl')}</label>
                     <input
                       type="text"
                       class="text-input"
@@ -1106,7 +1105,7 @@ export class SettingsPage extends LitElement {
                     />
                   </div>
                   <div class="field-group">
-                    <label class="field-label">API Key</label>
+                    <label class="field-label">${t('settings.apiKey')}</label>
                     <div class="input-wrapper">
                       <input
                         type="password"
@@ -1126,7 +1125,7 @@ export class SettingsPage extends LitElement {
                 <!-- Models List -->
                 <div class="models-section">
                   <div class="models-header">
-                    <h4>Models</h4>
+                    <h4>${t('settings.models')}</h4>
                     <button
                       class="btn btn-sm btn-primary"
                       @click=${() => {
@@ -1142,7 +1141,7 @@ export class SettingsPage extends LitElement {
                         };
                       }}
                     >
-                      ${getIcon('plus')} Add Model
+                      ${getIcon('plus')} ${t('settings.addModel')}
                     </button>
                   </div>
                   
@@ -1188,7 +1187,7 @@ export class SettingsPage extends LitElement {
           class="btn btn-outline btn-full"
           @click=${() => this._showAddProviderModal = true}
         >
-          ${getIcon('plus')} Add Provider
+          ${getIcon('plus')} ${t('settings.addProvider')}
         </button>
 
         <!-- Model Edit Modal -->
@@ -1225,7 +1224,7 @@ export class SettingsPage extends LitElement {
       <div class="modal-overlay" @click=${() => this._editingModel = null}>
         <div class="modal-content" @click=${(e: Event) => e.stopPropagation()}>
           <div class="modal-header">
-            <h3>${isNew ? 'Add Model' : 'Edit Model'}</h3>
+            <h3>${isNew ? t('settings.addModel') : t('settings.editModel')}</h3>
             <button class="btn btn-icon" @click=${() => this._editingModel = null}>
               ${getIcon('x')}
             </button>
@@ -1233,7 +1232,7 @@ export class SettingsPage extends LitElement {
           
           <div class="modal-body">
             <div class="field-group">
-              <label class="field-label">Model ID</label>
+              <label class="field-label">${t('settings.modelId')}</label>
               <input
                 type="text"
                 class="text-input"
@@ -1253,7 +1252,7 @@ export class SettingsPage extends LitElement {
             </div>
             
             <div class="field-group">
-              <label class="field-label">Display Name</label>
+              <label class="field-label">${t('settings.displayName')}</label>
               <input
                 type="text"
                 class="text-input"
@@ -1264,7 +1263,7 @@ export class SettingsPage extends LitElement {
             </div>
             
             <div class="field-group">
-              <label class="field-label">Capabilities</label>
+              <label class="field-label">${t('settings.capabilities')}</label>
               <div class="checkbox-group">
                 <label class="checkbox-label">
                   <input
@@ -1272,7 +1271,7 @@ export class SettingsPage extends LitElement {
                     .checked=${model.capabilities.text}
                     @change=${(e: Event) => updateCapabilities({ text: (e.target as HTMLInputElement).checked })}
                   />
-                  <span>Text</span>
+                  <span>${t('settings.capabilityText')}</span>
                 </label>
                 <label class="checkbox-label">
                   <input
@@ -1280,7 +1279,7 @@ export class SettingsPage extends LitElement {
                     .checked=${model.capabilities.image}
                     @change=${(e: Event) => updateCapabilities({ image: (e.target as HTMLInputElement).checked })}
                   />
-                  <span>Image</span>
+                  <span>${t('settings.capabilityImage')}</span>
                 </label>
                 <label class="checkbox-label">
                   <input
@@ -1288,14 +1287,14 @@ export class SettingsPage extends LitElement {
                     .checked=${model.capabilities.reasoning}
                     @change=${(e: Event) => updateCapabilities({ reasoning: (e.target as HTMLInputElement).checked })}
                   />
-                  <span>Reasoning</span>
+                  <span>${t('settings.capabilityReasoning')}</span>
                 </label>
               </div>
             </div>
             
             <div class="field-row">
               <div class="field-group">
-                <label class="field-label">Context Window</label>
+                <label class="field-label">${t('settings.contextWindow')}</label>
                 <input
                   type="number"
                   class="text-input"
@@ -1304,7 +1303,7 @@ export class SettingsPage extends LitElement {
                 />
               </div>
               <div class="field-group">
-                <label class="field-label">Max Tokens</label>
+                <label class="field-label">${t('settings.maxTokens')}</label>
                 <input
                   type="number"
                   class="text-input"
@@ -1317,7 +1316,7 @@ export class SettingsPage extends LitElement {
           
           <div class="modal-footer">
             <button class="btn btn-ghost" @click=${() => this._editingModel = null}>
-              Cancel
+              ${t('settings.cancel')}
             </button>
             <button 
               class="btn btn-primary"
@@ -1331,7 +1330,7 @@ export class SettingsPage extends LitElement {
                 this._editingModel = null;
               }}
             >
-              ${isNew ? 'Add Model' : 'Save Changes'}
+              ${isNew ? t('settings.addModel') : t('settings.saveChanges')}
             </button>
           </div>
         </div>
@@ -1382,7 +1381,7 @@ export class SettingsPage extends LitElement {
                     >
                       <div class="template-card-header">
                         <span class="template-card-name">${template.name}</span>
-                        <span class="template-card-badge api-key">API Key</span>
+                        <span class="template-card-badge api-key">${t('settings.apiKeyBadge')}</span>
                       </div>
                       <div class="template-card-models">
                         ${template.models.slice(0, 3).map(m => html`
@@ -1412,7 +1411,7 @@ export class SettingsPage extends LitElement {
                     >
                       <div class="template-card-header">
                         <span class="template-card-name">${template.name}</span>
-                        <span class="template-card-badge oauth">OAuth</span>
+                        <span class="template-card-badge oauth">${t('settings.oauthBadge')}</span>
                       </div>
                       <div class="template-card-models">
                         ${template.models.slice(0, 3).map(m => html`
@@ -1456,7 +1455,7 @@ export class SettingsPage extends LitElement {
       <div class="modal-overlay" @click=${() => this._closeAddProviderModal()}>
         <div class="modal-content" @click=${(e: Event) => e.stopPropagation()}>
           <div class="modal-header">
-            <h3>${isCustom ? 'Add Custom Provider' : `Add ${template?.name}`}</h3>
+            <h3>${isCustom ? t('settings.customProvider') : `${t('settings.addProvider')} ${template?.name}`}</h3>
             <button class="btn btn-icon" @click=${() => this._closeAddProviderModal()}>
               ${getIcon('x')}
             </button>
@@ -1466,11 +1465,11 @@ export class SettingsPage extends LitElement {
             ${template ? html`
               <div class="template-info">
                 <p class="template-info-text">
-                  <span class="template-info-label">Base URL:</span>
+                  <span class="template-info-label">${t('settings.baseUrl')}:</span>
                   <code>${template.baseUrl}</code>
                 </p>
                 <p class="template-info-text">
-                  <span class="template-info-label">API Type:</span>
+                  <span class="template-info-label">${t('settings.apiType')}:</span>
                   <span>${template.api}</span>
                 </p>
               </div>
@@ -1478,7 +1477,7 @@ export class SettingsPage extends LitElement {
 
             ${isCustom ? html`
               <div class="field-group">
-                <label class="field-label">Provider ID</label>
+                <label class="field-label">${t('settings.providerId')}</label>
                 <input
                   type="text"
                   class="text-input"
@@ -1491,7 +1490,7 @@ export class SettingsPage extends LitElement {
               </div>
 
               <div class="field-group">
-                <label class="field-label">Base URL</label>
+                <label class="field-label">${t('settings.baseUrl')}</label>
                 <input
                   type="text"
                   class="text-input"
@@ -1504,7 +1503,7 @@ export class SettingsPage extends LitElement {
               </div>
 
               <div class="field-group">
-                <label class="field-label">API Type</label>
+                <label class="field-label">${t('settings.apiType')}</label>
                 <select
                   class="select-input"
                   .value=${this._newProvider.api}
@@ -1522,7 +1521,7 @@ export class SettingsPage extends LitElement {
             ` : ''}
             
             <div class="field-group">
-              <label class="field-label">API Key</label>
+              <label class="field-label">${t('settings.apiKey')}</label>
               <input
                 type="password"
                 class="text-input"
@@ -1535,7 +1534,7 @@ export class SettingsPage extends LitElement {
 
             ${template && template.models.length > 0 ? html`
               <div class="field-group">
-                <label class="field-label">Models to Include</label>
+                <label class="field-label">${t('settings.modelsToInclude')}</label>
                 <div class="checkbox-group-vertical">
                   ${template.models.map((model, index) => html`
                     <label class="checkbox-label">
@@ -1576,7 +1575,7 @@ export class SettingsPage extends LitElement {
       <div class="modal-overlay" @click=${() => this._closeAddProviderModal()}>
         <div class="modal-content" @click=${(e: Event) => e.stopPropagation()}>
           <div class="modal-header">
-            <h3>Add ${template.name}</h3>
+            <h3>${t('settings.addProvider')} ${template.name}</h3>
             <button class="btn btn-icon" @click=${() => this._closeAddProviderModal()}>
               ${getIcon('x')}
             </button>
@@ -1586,29 +1585,29 @@ export class SettingsPage extends LitElement {
             <div class="oauth-setup">
               <div class="oauth-info">
                 <p class="template-info-text">
-                  <span class="template-info-label">Base URL:</span>
+                  <span class="template-info-label">${t('settings.baseUrl')}:</span>
                   <code>${template.baseUrl}</code>
                 </p>
                 <p class="template-info-text">
-                  <span class="template-info-label">Authentication:</span>
-                  <span>OAuth 2.0</span>
+                  <span class="template-info-label">${t('settings.authentication')}:</span>
+                  <span>${t('settings.oauth')}</span>
                 </p>
               </div>
 
               <div class="oauth-login-section">
                 <p class="oauth-description">
-                  ${t('settings.oauthDescription') || `Click the button below to authorize with ${template.name}. You will be redirected to the provider's website to complete authentication.`}
+                  ${t('settings.oauthDescription', { provider: template.name })}
                 </p>
                 
                 <button class="btn btn-primary btn-oauth" @click=${() => this._startOAuthLogin(template)}>
                   <span class="oauth-icon">${getIcon('lock')}</span>
-                  ${t('settings.loginWithProvider') || `Login with ${template.name}`}
+                  ${t('settings.loginWithProvider', { provider: template.name })}
                 </button>
               </div>
 
               ${template.models.length > 0 ? html`
                 <div class="field-group">
-                  <label class="field-label">Models to Include</label>
+                  <label class="field-label">${t('settings.modelsToInclude')}</label>
                   <div class="checkbox-group-vertical">
                     ${template.models.map((model, index) => html`
                       <label class="checkbox-label">
