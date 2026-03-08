@@ -10,7 +10,8 @@
   },
   "files": [
     "dist",
-    "skills"
+    "skills",
+    "extensions"
   ],
   "publishConfig": {
     "access": "public"

@@ -39,7 +39,7 @@ pnpm run dev -- <command>
 | `agent` | Chat with Agent |
 | `gateway` | Start REST gateway |
 | `cron` | Manage scheduled tasks |
-| `plugin` | Manage plugins |
+| `extension` | Manage extensions |
 | `skills` | Manage skills (install, enable, configure, test) |
 | `config` | View and edit configuration (non-interactive) |
 
@@ -331,27 +331,27 @@ xopcbot cron trigger <task-id>
 
 ---
 
-## plugin
+## extension
 
-Manage plugins. Supports three-tier storage: workspace (./.plugins/) → global (~/.xopcbot/plugins/) → bundled.
+Manage extensions. Supports three-tier storage: workspace (./.extensions/) → global (~/.xopcbot/extensions/) → bundled.
 
-### List plugins
+### List extensions
 
 ```bash
-xopcbot plugin list
+xopcbot extension list
 ```
 
 **Example output**:
 ```
-📦 Installed Plugins
+📦 Installed Extensions
 
 ══════════════════════════════════════════════════════════════════════
 
-  📁 Workspace (./.plugins/)
+  📁 Workspace (./.extensions/)
     • My Custom Plugin @ 0.1.0
-      ID: my-custom-plugin
+      ID: my-custom-extension
 
-  🌐 Global (~/.xopcbot/plugins/)
+  🌐 Global (~/.xopcbot/extensions/)
     • Telegram Channel @ 1.2.0
       ID: telegram-channel
 
@@ -360,79 +360,79 @@ xopcbot plugin list
       ID: discord-channel
 ```
 
-### Install plugin
+### Install extension
 
 **Install from npm to workspace** (default):
 ```bash
-xopcbot plugin install <package-name>
+xopcbot extension install <package-name>
 
 # Examples
-xopcbot plugin install xopcbot-plugin-telegram
-xopcbot plugin install @scope/my-plugin
-xopcbot plugin install my-plugin@1.0.0
+xopcbot extension install xopcbot-extension-telegram
+xopcbot extension install @scope/my-extension
+xopcbot extension install my-extension@1.0.0
 ```
 
 **Install to global** (shared across projects):
 ```bash
-xopcbot plugin install <package-name> --global
+xopcbot extension install <package-name> --global
 
 # Example
-xopcbot plugin install xopcbot-plugin-telegram --global
+xopcbot extension install xopcbot-extension-telegram --global
 ```
 
 **Install from local directory**:
 ```bash
 # Install to workspace
-xopcbot plugin install ./my-local-plugin
+xopcbot extension install ./my-local-extension
 
 # Install to global
-xopcbot plugin install ./my-local-plugin --global
+xopcbot extension install ./my-local-extension --global
 ```
 
 **Parameters**:
 
 | Parameter | Description |
 |-----------|-------------|
-| `--global` | Install to global directory (~/.xopcbot/plugins/) |
+| `--global` | Install to global directory (~/.xopcbot/extensions/) |
 | `--timeout <ms>` | Installation timeout (default 120000ms) |
 
 **Installation flow**:
-1. Download/copy plugin files
-2. Validate `xopcbot.plugin.json` manifest
+1. Download/copy extension files
+2. Validate `xopcbot.extension.json` manifest
 3. Install dependencies (if `package.json` has dependencies)
-4. Copy to target directory (workspace/.plugins/ or ~/.xopcbot/plugins/)
+4. Copy to target directory (workspace/.extensions/ or ~/.xopcbot/extensions/)
 
 **Three-tier storage explanation**:
-- Workspace (./.plugins/): Project private, highest priority
-- Global (~/.xopcbot/plugins/): User-level shared
-- Bundled: Built-in plugins, lowest priority
+- Workspace (./.extensions/): Project private, highest priority
+- Global (~/.xopcbot/extensions/): User-level shared
+- Bundled: Built-in extensions, lowest priority
 
-### Remove plugin
+### Remove extension
 
 ```bash
-xopcbot plugin remove <plugin-id>
+xopcbot extension remove <extension-id>
 # Or
-xopcbot plugin uninstall <plugin-id>
+xopcbot extension uninstall <extension-id>
 ```
 
 **Example**:
 ```bash
-xopcbot plugin remove telegram-channel
+xopcbot extension remove telegram-channel
 ```
 
 **Note**:
 - First tries to remove from workspace, then global if not found
 - After removal, if enabled, also need to delete from config file
 
-### View plugin details
+### View extension details
 
 ```bash
-xopcbot plugin info <plugin-id>
+xopcbot extension info <extension-id>
 ```
 
 **Example**:
 ```bash
-xopcbot plugin info telegram-channel
+xopcbot extension info telegram-channel
 ```
 
 **Output**:
@@ -443,15 +443,15 @@ xopcbot plugin info telegram-channel
   Version: 1.2.0
   Kind: channel
   Description: Telegram channel integration
-  Path: /home/user/.xopcbot/workspace/.plugins/telegram-channel
+  Path: /home/user/.xopcbot/workspace/.extensions/telegram-channel
 ```
 
-### Create plugin
+### Create extension
 
-Create new plugin scaffold.
+Create new extension scaffold.
 
 ```bash
-xopcbot plugin create <plugin-id> [options]
+xopcbot extension create <extension-id> [options]
 ```
 
 **Parameters**:
@@ -465,27 +465,27 @@ xopcbot plugin create <plugin-id> [options]
 **Examples**:
 
 ```bash
-# Create a tool plugin
-xopcbot plugin create weather-tool --name "Weather Tool" --kind tool
+# Create a tool extension
+xopcbot extension create weather-tool --name "Weather Tool" --kind tool
 
-# Create a channel plugin
-xopcbot plugin create discord-channel --name "Discord Channel" --kind channel
+# Create a channel extension
+xopcbot extension create discord-channel --name "Discord Channel" --kind channel
 
-# Create a memory plugin
-xopcbot plugin create redis-memory --name "Redis Memory" --kind memory
+# Create a memory extension
+xopcbot extension create redis-memory --name "Redis Memory" --kind memory
 ```
 
 **Generated files**:
 ```
-.plugins/
-└── my-plugin/
+.extensions/
+└── my-extension/
     ├── package.json          # npm config
     ├── index.ts              # Plugin entry (TypeScript)
-    ├── xopcbot.plugin.json   # Plugin manifest
+    ├── xopcbot.extension.json   # Plugin manifest
     └── README.md             # Documentation template
 ```
 
-**Note**: Created plugins use TypeScript, loaded via [jiti](https://github.com/unjs/jiti) without precompilation.
+**Note**: Created extensions use TypeScript, loaded via [jiti](https://github.com/unjs/jiti) without precompilation.
 
 ---
 
@@ -515,7 +515,7 @@ xopcbot plugin create redis-memory --name "Redis Memory" --kind memory
 xopcbot --help
 xopcbot agent --help
 xopcbot gateway --help
-xopcbot plugin --help
+xopcbot extension --help
 ```
 
 ---
@@ -641,16 +641,16 @@ case "$1" in
     shift
     xopcbot cron "$@"
     ;;
-  plugin)
+  extension)
     shift
-    xopcbot plugin "$@"
+    xopcbot extension "$@"
     ;;
   skills)
     shift
     xopcbot skills "$@"
     ;;
   *)
-    echo "Usage: bot {chat|shell|start|cron|plugin|skills}"
+    echo "Usage: bot {chat|shell|start|cron|extension|skills}"
     ;;
 esac
 ```
@@ -661,8 +661,8 @@ Usage:
 bot chat Hello!
 bot start
 bot cron list
-bot plugin list
-bot plugin install xopcbot-plugin-telegram
+bot extension list
+bot extension install xopcbot-extension-telegram
 bot skills list
 bot skills test weather
 ```

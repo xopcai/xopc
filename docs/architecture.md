@@ -111,10 +111,10 @@ src/agent/memory/
                   # Supports extractive/abstractive/structured modes
 ```
 
-### Plugin System (`src/plugins/`)
+### Extension System (`src/extensions/`)
 
 ```
-src/plugins/
+src/extensions/
 ├── types.ts       # Plugin type definitions
 ├── api.ts         # Plugin API
 ├── loader.ts      # Plugin loader

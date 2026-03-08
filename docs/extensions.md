@@ -1,56 +1,56 @@
-# xopcbot Plugin System
+# xopcbot Extension System
 
-xopcbot provides a lightweight but powerful plugin system.
+xopcbot provides a lightweight but powerful extension system.
 
 ## Features
 
 - 🏗️ **Three-tier Storage Architecture** - Workspace / Global / Bundled
-- 🔌 **Plugin SDK** - Official SDK, unified import paths
+- 🔌 **Extension SDK** - Official SDK, unified import paths
 - ⚡ **Native TypeScript** - Instant loading via jiti, no compilation needed
 - 📦 **Multi-source Installation** - Support npm, local directory, Git repository
 
 ## Quick Start
 
-### Install Plugin
+### Install Extension
 
 **Method One: Using CLI (recommended)**
 
 ```bash
 # Install from npm to workspace
-xopcbot plugin install xopcbot-plugin-hello
+xopcbot extension install xopcbot-extension-hello
 
 # Install to global (shared across projects)
-xopcbot plugin install xopcbot-plugin-hello --global
+xopcbot extension install xopcbot-extension-hello --global
 
 # Install from local directory
-xopcbot plugin install ./my-local-plugin
+xopcbot extension install ./my-local-extension
 
-# View installed plugins
-xopcbot plugin list
+# View installed extensions
+xopcbot extension list
 
-# Remove plugin
-xopcbot plugin remove hello
+# Remove extension
+xopcbot extension remove hello
 ```
 
 **Method Two: Manual Installation**
 
 ```bash
 # Global directory
-cd ~/.xopcbot/plugins
-git clone https://github.com/your/plugin.git
+cd ~/.xopcbot/extensions
+git clone https://github.com/your/extension.git
 
 # Or Workspace directory
-cd workspace/.plugins
-git clone https://github.com/your/plugin.git
+cd workspace/.extensions
+git clone https://github.com/your/extension.git
 ```
 
-### Enable Plugin
+### Enable Extension
 
 Configure in `~/.xopcbot/config.json`:
 
 ```json
 {
-  "plugins": {
+  "extensions": {
     "enabled": ["hello", "echo"],
     "hello": { "greeting": "Hi there!" },
     "echo": true
@@ -62,17 +62,17 @@ Configure in `~/.xopcbot/config.json`:
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `enabled` | `string[]` | List of plugin IDs to enable |
-| `disabled` | `string[]` | (Optional) List of plugin IDs to disable |
-| `[plugin-id]` | `object \| boolean` | Plugin-specific configuration |
+| `enabled` | `string[]` | List of extension IDs to enable |
+| `disabled` | `string[]` | (Optional) List of extension IDs to disable |
+| `[extension-id]` | `object \| boolean` | Extension-specific configuration |
 
 **Example configuration:**
 
 ```json
 {
-  "plugins": {
+  "extensions": {
     "enabled": ["telegram-channel", "weather-tool", "echo"],
-    "disabled": ["deprecated-plugin"],
+    "disabled": ["deprecated-extension"],
     "telegram-channel": {
       "token": "bot-token-here",
       "webhookUrl": "https://example.com/webhook"
@@ -86,70 +86,70 @@ Configure in `~/.xopcbot/config.json`:
 }
 ```
 
-- Plugins in `enabled` array will be loaded
-- Plugin ID as key can configure plugin-specific options
-- If plugin doesn't need configuration, can set to `true`
+- Extensions in `enabled` array will be loaded
+- Extension ID as key can configure extension-specific options
+- If extension doesn't need configuration, can set to `true`
 
-### Create New Plugin
+### Create New Extension
 
 ```bash
-# Create plugin scaffold
-xopcbot plugin create my-plugin --name "My Plugin" --kind utility
+# Create extension scaffold
+xopcbot extension create my-extension --name "My Extension" --kind utility
 
 # Supported kinds: channel|provider|memory|tool|utility
 ```
 
 This will create:
 - `package.json` - npm config
-- `index.ts` - Plugin entry (TypeScript, using xopcbot/plugin-sdk)
-- `xopcbot.plugin.json` - Plugin manifest
+- `index.ts` - Extension entry (TypeScript, using xopcbot/extension-sdk)
+- `xopcbot.extension.json` - Extension manifest
 - `README.md` - Documentation template
 
 ---
 
 ## Three-tier Storage Architecture
 
-xopcbot supports three-tier plugin storage, from highest to lowest priority:
+xopcbot supports three-tier extension storage, from highest to lowest priority:
 
 | Level | Path | Use Case | Priority |
 |-------|------|----------|----------|
-| **Workspace** | `workspace/.plugins/` | Project-private plugins | ⭐⭐⭐ Highest |
-| **Global** | `~/.xopcbot/plugins/` | User-level shared plugins | ⭐⭐ Medium |
-| **Bundled** | `xopcbot/plugins/` | Built-in plugins | ⭐ Lowest |
+| **Workspace** | `workspace/.extensions/` | Project-private extensions | ⭐⭐⭐ Highest |
+| **Global** | `~/.xopcbot/extensions/` | User-level shared extensions | ⭐⭐ Medium |
+| **Bundled** | `xopcbot/extensions/` | Built-in extensions | ⭐ Lowest |
 
 ### Priority Rules
 
-- **Workspace** plugins can override **Global** and **Bundled** plugins with the same name
-- **Global** plugins can override **Bundled** plugins with the same name
+- **Workspace** extensions can override **Global** and **Bundled** extensions with the same name
+- **Global** extensions can override **Bundled** extensions with the same name
 - Use cases:
-  - Workspace: Project-specific custom plugins
-  Global: Commonly used shared plugins (like telegram-channel)
-  - Bundled: Official plugins shipped with xopcbot
+  - Workspace: Project-specific custom extensions
+  Global: Commonly used shared extensions (like telegram-channel)
+  - Bundled: Official extensions shipped with xopcbot
 
-### Global Plugin Directory
+### Global Extension Directory
 
 ```bash
 # Default location
-~/.xopcbot/plugins/
+~/.xopcbot/extensions/
 
 # Custom location (environment variable)
-export XOPCBOT_GLOBAL_PLUGINS=/path/to/global/plugins
+export XOPCBOT_GLOBAL_PLUGINS=/path/to/global/extensions
 ```
 
 ---
 
-## Plugin SDK
+## Extension SDK
 
-xopcbot provides an official Plugin SDK, exporting all types and interfaces needed for plugin development.
+xopcbot provides an official Extension SDK, exporting all types and interfaces needed for extension development.
 
 ### Using the SDK
 
 ```typescript
 // Recommended: Use official SDK
-import type { PluginApi, PluginDefinition } from 'xopcbot/plugin-sdk';
+import type { ExtensionApi, ExtensionDefinition } from 'xopcbot/extension-sdk';
 
 // Not recommended to use internal paths
-// import type { ... } from 'xopcbot/plugins';  ❌
+// import type { ... } from 'xopcbot/extensions';  ❌
 ```
 
 ### Exported Types
@@ -157,42 +157,42 @@ import type { PluginApi, PluginDefinition } from 'xopcbot/plugin-sdk';
 ```typescript
 // Core types
 import type {
-  PluginDefinition,      // Plugin definition
-  PluginApi,             // Plugin API
-  PluginLogger,          // Logger interface
-} from 'xopcbot/plugin-sdk';
+  ExtensionDefinition,      // Extension definition
+  ExtensionApi,             // Extension API
+  ExtensionLogger,          // Logger interface
+} from 'xopcbot/extension-sdk';
 
 // Tools
 import type {
-  PluginTool,            // Tool definition
-  PluginToolContext,     // Tool context
-} from 'xopcbot/plugin-sdk';
+  ExtensionTool,            // Tool definition
+  ExtensionToolContext,     // Tool context
+} from 'xopcbot/extension-sdk';
 
 // Hooks
 import type {
-  PluginHookEvent,       // Hook event type
-  PluginHookHandler,     // Hook handler
+  ExtensionHookEvent,       // Hook event type
+  ExtensionHookHandler,     // Hook handler
   HookOptions,           // Hook options
-} from 'xopcbot/plugin-sdk';
+} from 'xopcbot/extension-sdk';
 
 // Channels
 import type {
-  ChannelPlugin,         // Channel plugin
+  ChannelExtension,         // Channel extension
   OutboundMessage,       // Outbound message
-} from 'xopcbot/plugin-sdk';
+} from 'xopcbot/extension-sdk';
 
 // Commands
 import type {
-  PluginCommand,         // Command definition
+  ExtensionCommand,         // Command definition
   CommandContext,        // Command context
   CommandResult,         // Command result
-} from 'xopcbot/plugin-sdk';
+} from 'xopcbot/extension-sdk';
 
 // Services
 import type {
-  PluginService,         // Service definition
+  ExtensionService,         // Service definition
   ServiceContext,        // Service context
-} from 'xopcbot/plugin-sdk';
+} from 'xopcbot/extension-sdk';
 ```
 
 ### SDK Path Resolution
@@ -203,124 +203,124 @@ Under the hood, xopcbot uses jiti to configure path aliases:
 // jiti configuration
 {
   alias: {
-    'xopcbot/plugin-sdk': './src/plugin-sdk/index.ts'
+    'xopcbot/extension-sdk': './src/extension-sdk/index.ts'
   }
 }
 ```
 
-This means plugin developers don't need to worry about xopcbot source code location - SDK paths are automatically resolved.
+This means extension developers don't need to worry about xopcbot source code location - SDK paths are automatically resolved.
 ```
 
 This will create:
 - `package.json` - npm config
-- `index.ts` - Plugin entry (TypeScript, supports jiti instant loading)
-- `xopcbot.plugin.json` - Plugin manifest
+- `index.ts` - Extension entry (TypeScript, supports jiti instant loading)
+- `xopcbot.extension.json` - Extension manifest
 - `README.md` - Documentation template
 
 ## CLI Command Reference
 
-### plugin install
+### extension install
 
-Install a plugin.
+Install a extension.
 
 ```bash
 # Install from npm
-xopcbot plugin install <package-name>
+xopcbot extension install <package-name>
 
 # Install specific version
-xopcbot plugin install my-plugin@1.0.0
+xopcbot extension install my-extension@1.0.0
 
 # Install from local directory
-xopcbot plugin install ./local-plugin-dir
-xopcbot plugin install /absolute/path/to/plugin
+xopcbot extension install ./local-extension-dir
+xopcbot extension install /absolute/path/to/extension
 
 # Set timeout (default 120 seconds)
-xopcbot plugin install slow-plugin --timeout 300000
+xopcbot extension install slow-extension --timeout 300000
 ```
 
 **Installation flow**:
-1. Download/copy plugin files
-2. Validate `xopcbot.plugin.json` manifest
+1. Download/copy extension files
+2. Validate `xopcbot.extension.json` manifest
 3. Install dependencies (if `package.json` has dependencies)
-4. Copy to workspace `.plugins/` directory
+4. Copy to workspace `.extensions/` directory
 
-### plugin list
+### extension list
 
-List all installed plugins.
+List all installed extensions.
 
 ```bash
-xopcbot plugin list
+xopcbot extension list
 ```
 
 **Example output**:
 ```
-📦 Installed Plugins
+📦 Installed Extensions
 
 ════════════════════════════════════════════════════════════
 
   📁 Telegram Channel
      ID: telegram-channel
      Version: 1.2.0
-     Path: /home/user/.xopcbot/workspace/.plugins/telegram-channel
+     Path: /home/user/.xopcbot/workspace/.extensions/telegram-channel
 
-  📁 My Custom Plugin
-     ID: my-custom-plugin
+  📁 My Custom Extension
+     ID: my-custom-extension
      Version: 0.1.0
-     Path: /home/user/.xopcbot/workspace/.plugins/my-custom-plugin
+     Path: /home/user/.xopcbot/workspace/.extensions/my-custom-extension
 ```
 
-### plugin remove / uninstall
+### extension remove / uninstall
 
-Remove an installed plugin.
+Remove an installed extension.
 
 ```bash
-xopcbot plugin remove <plugin-id>
-xopcbot plugin uninstall <plugin-id>
+xopcbot extension remove <extension-id>
+xopcbot extension uninstall <extension-id>
 ```
 
-**Note**: After removing a plugin, if it was enabled, you also need to delete it from the configuration file.
+**Note**: After removing a extension, if it was enabled, you also need to delete it from the configuration file.
 
-### plugin info
+### extension info
 
-View plugin details.
+View extension details.
 
 ```bash
-xopcbot plugin info <plugin-id>
+xopcbot extension info <extension-id>
 ```
 
-### plugin create
+### extension create
 
-Create new plugin scaffold.
+Create new extension scaffold.
 
 ```bash
-xopcbot plugin create <plugin-id> [options]
+xopcbot extension create <extension-id> [options]
 
 Options:
-  --name <name>           Plugin display name
-  --description <desc>    Plugin description
-  --kind <kind>          Plugin type: channel|provider|memory|tool|utility
+  --name <name>           Extension display name
+  --description <desc>    Extension description
+  --kind <kind>          Extension type: channel|provider|memory|tool|utility
 ```
 
 **Example**:
 ```bash
-# Create a tool plugin
-xopcbot plugin create weather-tool --name "Weather Tool" --kind tool
+# Create a tool extension
+xopcbot extension create weather-tool --name "Weather Tool" --kind tool
 
-# Create a channel plugin
-xopcbot plugin create discord-channel --name "Discord Channel" --kind channel
+# Create a channel extension
+xopcbot extension create discord-channel --name "Discord Channel" --kind channel
 ```
 
-## Plugin Structure
+## Extension Structure
 
 ### Manifest File
 
-Each plugin must include a `xopcbot.plugin.json` file:
+Each extension must include a `xopcbot.extension.json` file:
 
 ```json
 {
-  "id": "my-plugin",
-  "name": "My Plugin",
-  "description": "A description of my plugin",
+  "id": "my-extension",
+  "name": "My Extension",
+  "description": "A description of my extension",
   "version": "1.0.0",
   "main": "index.js",
   "configSchema": {
@@ -335,20 +335,20 @@ Each plugin must include a `xopcbot.plugin.json` file:
 }
 ```
 
-### Plugin Entry File
+### Extension Entry File
 
 ```javascript
 // index.js
-import type { PluginApi } from 'xopcbot-plugin-sdk';
+import type { ExtensionApi } from 'xopcbot-extension-sdk';
 
-const plugin = {
-  id: 'my-plugin',
-  name: 'My Plugin',
+const extension = {
+  id: 'my-extension',
+  name: 'My Extension',
   description: 'Description here',
   version: '1.0.0',
 
-  // Called when plugin is registered
-  register(api: PluginApi) {
+  // Called when extension is registered
+  register(api: ExtensionApi) {
     // Register tool
     api.registerTool({...});
     
@@ -362,25 +362,25 @@ const plugin = {
     api.registerHttpRoute('/my-route', async (req, res) => {...});
   },
 
-  // Called when plugin is enabled
-  activate(api: PluginApi) {
-    console.log('Plugin activated');
+  // Called when extension is enabled
+  activate(api: ExtensionApi) {
+    console.log('Extension activated');
   },
 
-  // Called when plugin is disabled
-  deactivate(api: PluginApi) {
-    console.log('Plugin deactivated');
+  // Called when extension is disabled
+  deactivate(api: ExtensionApi) {
+    console.log('Extension deactivated');
   },
 };
 
-export default plugin;
+export default extension;
 ```
 
 ## Core Concepts
 
 ### Tools
 
-Plugins can register custom tools for the Agent to use:
+Extensions can register custom tools for the Agent to use:
 
 ```javascript
 api.registerTool({
@@ -403,7 +403,7 @@ api.registerTool({
 
 ### Hooks
 
-Hooks allow plugins to intercept and modify behavior at various lifecycle points:
+Hooks allow extensions to intercept and modify behavior at various lifecycle points:
 
 | Hook | Timing | Use Case |
 |------|--------|-----------|
@@ -476,12 +476,12 @@ Register custom commands:
 ```javascript
 api.registerCommand({
   name: 'status',
-  description: 'Check plugin status',
+  description: 'Check extension status',
   acceptArgs: false,
   requireAuth: true,
   handler: async (args, ctx) => {
     return {
-      content: 'Plugin is running!',
+      content: 'Extension is running!',
       success: true
     };
   }
@@ -491,15 +491,15 @@ api.registerCommand({
 ### HTTP Routes
 
 ```javascript
-api.registerHttpRoute('/my-plugin/status', async (req, res) => {
-  res.json({ status: 'running', plugin: 'my-plugin' });
+api.registerHttpRoute('/my-extension/status', async (req, res) => {
+  res.json({ status: 'running', extension: 'my-extension' });
 });
 ```
 
 ### Gateway Methods
 
 ```javascript
-api.registerGatewayMethod('my-plugin.status', async (params) => {
+api.registerGatewayMethod('my-extension.status', async (params) => {
   return { status: 'running' };
 });
 ```
@@ -549,8 +549,8 @@ api.registerService({
 ### Access Configuration
 
 ```javascript
-const apiKey = api.pluginConfig.apiKey;
-const maxResults = api.pluginConfig.maxResults || 10;
+const apiKey = api.extensionConfig.apiKey;
+const maxResults = api.extensionConfig.maxResults || 10;
 ```
 
 ## Logging
@@ -568,7 +568,7 @@ api.logger.error('Error message');
 // Resolve workspace path
 const configPath = api.resolvePath('config.json');
 
-// Resolve plugin relative path
+// Resolve extension relative path
 const dataPath = api.resolvePath('./data.json');
 ```
 
@@ -590,12 +590,12 @@ api.off('my-event', handler);
 ## Complete Example
 
 ```javascript
-import type { PluginApi } from 'xopcbot-plugin-sdk';
+import type { ExtensionApi } from 'xopcbot-extension-sdk';
 
-const plugin = {
+const extension = {
   id: 'example',
-  name: 'Example Plugin',
-  description: 'A complete example plugin',
+  name: 'Example Extension',
+  description: 'A complete example extension',
   version: '1.0.0',
   configSchema: {
     type: 'object',
@@ -635,20 +635,20 @@ const plugin = {
   },
 
   activate(api) {
-    console.log('Plugin activated');
+    console.log('Extension activated');
   },
 
   deactivate(api) {
-    console.log('Plugin deactivated');
+    console.log('Extension deactivated');
   }
 };
 
-export default plugin;
+export default extension;
 ```
 
-## Publishing Plugins
+## Publishing Extensions
 
-1. Create `xopcbot.plugin.json` manifest
+1. Create `xopcbot.extension.json` manifest
 2. Create `index.js` entry file
 3. Push to GitHub or publish to npm
 
@@ -657,7 +657,7 @@ export default plugin;
 npm publish --access public
 
 # If using scoped package name (recommended)
-# package.json: { "name": "@yourname/xopcbot-plugin-name" }
+# package.json: { "name": "@yourname/xopcbot-extension-name" }
 npm publish --access public
 ```
 
@@ -671,6 +671,6 @@ npm publish --access public
 
 ## Related Links
 
-- [Plugin Examples](examples/)
+- [Extension Examples](examples/)
 - [API Reference](./api.md)
 - [Hooks Reference](./hooks.md)

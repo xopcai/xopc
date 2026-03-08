@@ -19,7 +19,7 @@ features:
     link: /getting-started
   - title: 🔌 Plugin System
     details: Extend functionality with a powerful plugin architecture
-    link: /plugins
+    link: /extensions
   - title: 🌐 Multi-Channel
     details: Supports Telegram, Discord, Slack, Signal and more
     link: /channels

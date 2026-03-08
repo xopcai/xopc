@@ -129,4 +129,4 @@ You now have a fully functional xopcbot! Here are a few suggestions for what to 
 
 - **[CLI Reference](cli.md)**: Discover all the available commands to manage your bot.
 - **[Configuration](configuration.md)**: Learn about all the settings you can tweak in `config.json`.
-- **[Plugins](plugins.md)**: Explore how to extend your agent's capabilities with plugins.
+- **[Plugins](extensions.md)**: Explore how to extend your agent's capabilities with plugins.

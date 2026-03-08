@@ -1,12 +1,12 @@
-# xopcbot Extension Examples
+# Official xopcbot Extensions
 
-This directory contains example extensions demonstrating the xopcbot extension system.
+Official extensions for xopcbot. These are fully-supported extensions maintained as part of the xopcbot project. demonstrating the xopcbot extension system.
 
-## Available Examples
+## Available Extensions
 
 ### Phase 3: Inter-Extension Communication (New!)
 
-#### 6. Cross-Extension Communication (`cross-extension-comm/`)
+#### 6. Cross-Extension Communication (`cross-plugin-comm/`)
 
 Demonstrates **TypedEventBus** for inter-extension communication:
 
@@ -17,7 +17,7 @@ Demonstrates **TypedEventBus** for inter-extension communication:
 
 **Installation:**
 ```bash
-xopcbot extension install ./examples/extensions/cross-extension-comm
+xopcbot extension install ./extensions/cross-plugin-comm
 ```
 
 **Features:**
@@ -41,7 +41,7 @@ Demonstrates the **Enhanced Tool System** with streaming and state persistence:
 
 **Installation:**
 ```bash
-xopcbot extension install ./examples/extensions/progress-tracker
+xopcbot extension install ./extensions/progress-tracker
 ```
 
 **Features:**
@@ -65,7 +65,7 @@ Demonstrates the **context hook** - modify messages before sending to LLM:
 
 **Installation:**
 ```bash
-xopcbot extension install ./examples/extensions/context-injector
+xopcbot extension install ./extensions/context-injector
 ```
 
 **Configuration:**
@@ -100,7 +100,7 @@ Demonstrates the **input hook** - intercept and process user input:
 
 **Installation:**
 ```bash
-xopcbot extension install ./examples/extensions/input-guard
+xopcbot extension install ./extensions/input-guard
 ```
 
 **Configuration:**
@@ -140,7 +140,7 @@ A comprehensive example showing all basic extension features:
 
 **Installation:**
 ```bash
-xopcbot extension install ./examples/extensions/hello
+xopcbot extension install ./extensions/hello
 ```
 
 **Usage:**
@@ -172,7 +172,7 @@ Demonstrates message processing and modification:
 
 **Installation:**
 ```bash
-xopcbot extension install ./examples/extensions/echo
+xopcbot extension install ./extensions/echo
 ```
 
 **Usage:**

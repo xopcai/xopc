@@ -14,7 +14,7 @@
   - [LLM Models](models.md)
   - [Voice (STT/TTS)](voice.md)
   - [Channels (Telegram)](channels.md)
-  - [Plugins](plugins.md)
+  - [Extensions](extensions.md)
   - [Scheduled Tasks (Cron)](cron.md)
   - [Heartbeat](heartbeat.md)
   - [Gateway Server](gateway.md)
