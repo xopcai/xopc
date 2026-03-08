@@ -93,25 +93,25 @@ function createAgentCommand(_ctx: CLIContext): Command {
         console.log(`📂 Continuing session: ${options.session} (${session.messageCount} messages)\n`);
       }
 
-      // Initialize plugin loader
-      let pluginLoader: ExtensionLoader | null = null;
+      // Initialize extension loader
+      let extensionLoader: ExtensionLoader | null = null;
       try {
-        const pluginsConfig = (config as any).plugins;
-        if (pluginsConfig) {
-          const resolvedConfigs = normalizeExtensionConfig(pluginsConfig);
-          const enabledPlugins = resolvedConfigs.filter(c => c.enabled);
+        const extensionsConfig = (config as any).extensions;
+        if (extensionsConfig) {
+          const resolvedConfigs = normalizeExtensionConfig(extensionsConfig);
+          const enabledExtensions = resolvedConfigs.filter(c => c.enabled);
           
-          if (enabledPlugins.length > 0) {
-            pluginLoader = new ExtensionLoader({
+          if (enabledExtensions.length > 0) {
+            extensionLoader = new ExtensionLoader({
               workspaceDir: workspace,
-              extensionsDir: join(workspace, '.plugins'),
+              extensionsDir: join(workspace, '.extensions'),
             });
-            await pluginLoader.loadExtensions(enabledPlugins);
-            log.info({ count: enabledPlugins.length }, 'Plugins loaded');
+            await extensionLoader.loadExtensions(enabledExtensions);
+            log.info({ count: enabledExtensions.length }, 'Extensions loaded');
           }
         }
       } catch (error) {
-        log.warn({ err: error }, 'Failed to load plugins');
+        log.warn({ err: error }, 'Failed to load extensions');
       }
 
       const agent = new AgentService(bus, {
@@ -119,7 +119,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
         model: modelId,
         braveApiKey,
         config,
-        extensionRegistry: pluginLoader?.getRegistry(),
+        extensionRegistry: extensionLoader?.getRegistry(),
       });
 
       // Start agent service in background

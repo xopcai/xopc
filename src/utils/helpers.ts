@@ -24,13 +24,13 @@ export function getWorkspacePath(customPath?: string): string {
   return DEFAULT_PATHS.workspace;
 }
 
-export function createPathResolver(pluginDir: string, workspaceDir: string) {
+export function createPathResolver(extensionDir: string, workspaceDir: string) {
   return (input: string): string => {
     if (input.startsWith('~')) {
       return input.replace('~', process.env.HOME || '');
     }
     if (input.startsWith('.')) {
-      return resolve(pluginDir, input);
+      return resolve(extensionDir, input);
     }
     if (!isAbsolute(input)) {
       return resolve(workspaceDir, input);

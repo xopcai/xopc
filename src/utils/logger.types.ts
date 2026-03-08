@@ -16,7 +16,7 @@ export interface LogEntry {
   module?: string;
   prefix?: string;
   service?: string;
-  plugin?: string;
+  extension?: string;
   requestId?: string;
   sessionId?: string;
   userId?: string;
@@ -63,8 +63,8 @@ export interface LogContext {
   userId?: string;
   /** Module/component name */
   module?: string;
-  /** Plugin name */
-  plugin?: string;
+  /** Extension name */
+  extension?: string;
   /** Service name */
   service?: string;
   /** Additional context */
@@ -139,8 +139,8 @@ export interface LogQuery {
   q?: string;
   /** Filter by module */
   module?: string;
-  /** Filter by plugin */
-  plugin?: string;
+  /** Filter by extension */
+  extension?: string;
   /** Filter by service */
   service?: string;
   /** Filter by request ID */

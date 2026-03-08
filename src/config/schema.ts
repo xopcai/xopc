@@ -255,10 +255,10 @@ export const TTSConfigSchema = z.object({
 });
 
 // ============================================
-// Plugin Configs
+// Extension Configs
 // ============================================
 
-export const PluginsConfigSchema = z.record(
+export const ExtensionsConfigSchema = z.record(
   z.string(),
   z.union([
     z.boolean(),
@@ -277,7 +277,7 @@ export const ConfigSchema = z.object({
   gateway: GatewayConfigSchema,
   tools: ToolsConfigSchema,
   cron: CronConfigSchema,
-  plugins: PluginsConfigSchema,
+  extensions: ExtensionsConfigSchema,
   modelsDev: ModelsDevConfigSchema,
   providers: ProvidersConfigSchema,
   stt: STTConfigSchema.optional(),
@@ -344,7 +344,7 @@ export const ConfigSchema = z.object({
     historyRetentionDays: 7,
     enableMetrics: true,
   },
-  plugins: {},
+  extensions: {},
   modelsDev: {
     enabled: true,
   },

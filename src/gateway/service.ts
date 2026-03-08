@@ -84,7 +84,7 @@ export class GatewayService {
 
     // Initialize plugin loader
     this.workspacePath = getWorkspacePath(this.config) || './workspace';
-    this.initializePlugins();
+    this.initializeExtensions();
 
     // Initialize ModelRegistry (loads from models.json)
     const registry = getModelRegistry();
@@ -123,34 +123,34 @@ export class GatewayService {
   }
 
   /**
-   * Initialize plugins from config
+   * Initialize extensions from config
    */
-  private initializePlugins(): void {
+  private initializeExtensions(): void {
     try {
-      const pluginsConfig = (this.config as any).plugins;
-      if (!pluginsConfig) {
-        log.debug('No plugins configured');
+      const extensionsConfig = (this.config as any).extensions;
+      if (!extensionsConfig) {
+        log.debug('No extensions configured');
         return;
       }
 
-      const resolvedConfigs = normalizeExtensionConfig(pluginsConfig);
+      const resolvedConfigs = normalizeExtensionConfig(extensionsConfig);
       
       this.pluginLoader = new ExtensionLoader({
         workspaceDir: this.workspacePath,
-        extensionsDir: join(this.workspacePath, '.plugins'),
+        extensionsDir: join(this.workspacePath, '.extensions'),
       });
 
-      // Load enabled plugins
-      const enabledPlugins = resolvedConfigs.filter(c => c.enabled);
-      if (enabledPlugins.length > 0) {
-        this.pluginLoader.loadExtensions(enabledPlugins).then(() => {
-          log.info({ count: enabledPlugins.length }, 'Plugins loaded');
+      // Load enabled extensions
+      const enabledExtensions = resolvedConfigs.filter(c => c.enabled);
+      if (enabledExtensions.length > 0) {
+        this.pluginLoader.loadExtensions(enabledExtensions).then(() => {
+          log.info({ count: enabledExtensions.length }, 'Extensions loaded');
         }).catch(err => {
-          log.warn({ err }, 'Failed to load some plugins');
+          log.warn({ err }, 'Failed to load some extensions');
         });
       }
     } catch (error) {
-      log.warn({ err: error }, 'Failed to initialize plugins');
+      log.warn({ err: error }, 'Failed to initialize extensions');
     }
   }
 

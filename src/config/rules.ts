@@ -62,7 +62,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'webTools', kind: 'hot', description: 'Web tools settings' },
   
   // Plugins - restart required
-  { prefix: 'plugins', kind: 'restart', description: 'Plugin configuration' },
+  { prefix: 'extensions', kind: 'restart', description: 'Extension configuration' },
   
   // Tools - hot reload (for tool-specific settings)
   { prefix: 'tools', kind: 'hot', description: 'Tools configuration' },

@@ -144,7 +144,7 @@ function parseLogLine(line: string, source?: string, lineNumber?: number): Parse
       module: parsed.module,
       prefix: parsed.prefix,
       service: parsed.service,
-      plugin: parsed.plugin,
+      plugin: parsed.extension,
       requestId: parsed.requestId,
       sessionId: parsed.sessionId,
       _source: source,
@@ -262,7 +262,7 @@ function matchesQuery(entry: ParsedLogEntry, query: LogQuery): boolean {
       entry.module,
       entry.prefix,
       entry.service,
-      entry.plugin,
+      entry.extension,
       entry.requestId,
       entry.sessionId,
     ]
@@ -276,7 +276,7 @@ function matchesQuery(entry: ParsedLogEntry, query: LogQuery): boolean {
 
   // Filter by specific fields
   if (query.module && entry.module !== query.module) return false;
-  if (query.plugin && entry.plugin !== query.plugin) return false;
+  if (query.extension && entry.extension !== query.extension) return false;
   if (query.service && entry.service !== query.service) return false;
   if (query.requestId && entry.requestId !== query.requestId) return false;
   if (query.sessionId && entry.sessionId !== query.sessionId) return false;
