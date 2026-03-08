@@ -457,6 +457,50 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ ok: true, payload: { models } });
   });
 
+  // GET /api/providers - Get ALL available providers and models from pi-ai (regardless of configuration)
+  authenticated.get('/api/providers', (c) => {
+    const models: Array<{
+      id: string;
+      name: string;
+      provider: string;
+      contextWindow?: number;
+      maxTokens?: number;
+      reasoning?: boolean;
+      vision?: boolean;
+      cost?: { input: number; output: number };
+    }> = [];
+
+    // Get all providers from pi-ai (no configuration check)
+    const piAiProviders = getPiAiProviders() as string[];
+
+    for (const provider of piAiProviders) {
+      const providerModels = getPiAiModels(provider as any);
+      for (const model of providerModels) {
+        models.push({
+          id: `${provider}/${model.id}`,
+          name: model.name || model.id,
+          provider: provider,
+          contextWindow: model.contextWindow,
+          maxTokens: model.maxTokens,
+          reasoning: model.reasoning,
+          vision: model.input?.includes('image'),
+          cost: {
+            input: model.cost?.input || 0,
+            output: model.cost?.output || 0,
+          },
+        });
+      }
+    }
+
+    // Sort by provider then name
+    models.sort((a, b) => {
+      if (a.provider !== b.provider) return a.provider.localeCompare(b.provider);
+      return a.name.localeCompare(b.name);
+    });
+
+    return c.json({ ok: true, payload: { models } });
+  });
+
   // ========== Cron REST API (/api/cron) ==========
 
   // GET /api/cron - List all jobs

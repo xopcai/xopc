@@ -17,6 +17,18 @@ let _cachedModelsResponse: Array<{
   cost?: { input: number; output: number };
 }> | null = null;
 
+// Cache for /api/providers (all pi-ai supported models)
+let _cachedAllProvidersResponse: Array<{
+  id: string;
+  name: string;
+  provider: string;
+  contextWindow?: number;
+  maxTokens?: number;
+  reasoning?: boolean;
+  vision?: boolean;
+  cost?: { input: number; output: number };
+}> | null = null;
+
 async function fetchModelsFromApi(): Promise<Array<{
   id: string;
   name: string;
