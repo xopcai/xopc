@@ -13,7 +13,7 @@ import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_D
 import type { LogLevel } from '../../utils/logger.types.js';
 import { isProviderConfigured } from '../../agent/fallback/index.js';
 import { getModels as getPiAiModels, getProviders as getPiAiProviders } from '@mariozechner/pi-ai';
-import { createOAuthHandler } from './oauth.js';
+import { createOAuthHandler, loadOAuthCredentialsToCache } from './oauth.js';
 
 const log = createLogger('HonoApp');
 
@@ -386,7 +386,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   // ========== OAuth API (/api/auth/oauth) ==========
-  authenticated.route('/api/auth/oauth', createOAuthHandler());
+  authenticated.route('/api/auth/oauth', createOAuthHandler(service));
+
+  // Load OAuth credentials from config into cache on startup
+  loadOAuthCredentialsToCache(service);
 
   // GET /api/models - Get available models (only configured providers)
   authenticated.get('/api/models', (c) => {

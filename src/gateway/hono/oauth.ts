@@ -5,6 +5,8 @@
  */
 
 import { Hono } from 'hono';
+import type { GatewayService } from '../service.js';
+import type { Config } from '../../config/schema.js';
 import { 
   AuthStorage, 
   type OAuthProviderInterface, 
@@ -38,22 +40,38 @@ const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = {
   'openai-codex': openaiCodexOAuthProvider,
 };
 
-// Simple in-memory storage for OAuth credentials
-const oauthCredentials: Map<string, OAuthCredentials> = new Map();
+// Simple in-memory cache for OAuth credentials (for fast access)
+const oauthCredentialsCache: Map<string, OAuthCredentials> = new Map();
 
-function getOAuthCredentials(provider: string): OAuthCredentials | undefined {
-  return oauthCredentials.get(provider);
+function getOAuthCredentialsFromCache(provider: string): OAuthCredentials | undefined {
+  return oauthCredentialsCache.get(provider);
 }
 
-function setOAuthCredentials(provider: string, creds: OAuthCredentials): void {
-  oauthCredentials.set(provider, creds);
+function setOAuthCredentialsToCache(provider: string, creds: OAuthCredentials): void {
+  oauthCredentialsCache.set(provider, creds);
 }
 
-function deleteOAuthCredentials(provider: string): void {
-  oauthCredentials.delete(provider);
+function deleteOAuthCredentialsFromCache(provider: string): void {
+  oauthCredentialsCache.delete(provider);
 }
 
-export function createOAuthHandler() {
+// Load OAuth credentials from config into cache
+export function loadOAuthCredentialsToCache(service: GatewayService): void {
+  const config = service.currentConfig;
+  const providers = config.models?.providers || {};
+  
+  for (const [providerId, providerConfig] of Object.entries(providers)) {
+    if (providerConfig.oauth) {
+      oauthCredentialsCache.set(providerId, {
+        access: providerConfig.oauth.access,
+        refresh: providerConfig.oauth.refresh || '',
+        expires: providerConfig.oauth.expires,
+      });
+    }
+  }
+}
+
+export function createOAuthHandler(service: GatewayService) {
   const oauth = new Hono();
 
   /**
@@ -98,9 +116,37 @@ export function createOAuthHandler() {
       // Start OAuth login
       const credentials = await oauthProvider.login(callbacks);
 
-      // Store the credentials
-      setOAuthCredentials(provider, credentials);
+      // Store the credentials in cache
+      setOAuthCredentialsToCache(provider, credentials);
 
+      // Save OAuth credentials to config file for persistence
+      const config = service.currentConfig as Config;
+      if (!config.models) {
+        config.models = { mode: 'merge', providers: {} };
+      }
+      if (!config.models.providers) {
+        config.models.providers = {};
+      }
+      if (!config.models.providers[provider]) {
+        config.models.providers[provider] = { 
+          baseUrl: '', 
+          models: [],
+          auth: 'oauth',
+        };
+      }
+      config.models.providers[provider].oauth = {
+        access: credentials.access,
+        refresh: credentials.refresh,
+        expires: credentials.expires,
+      };
+      
+      // Also set the API key from OAuth credentials
+      config.models.providers[provider].apiKey = oauthProvider.getApiKey(credentials);
+
+      // Save to file
+      await service.saveConfig(config);
+
+      // Return auth info to frontend for display
       return c.json({ 
         ok: true, 
         payload: { 
@@ -108,6 +154,9 @@ export function createOAuthHandler() {
           provider,
           message: 'OAuth login successful',
           expires: credentials.expires,
+          authUrl: authResult?.url,
+          deviceCode: authResult?.deviceCode,
+          instructions: authResult?.instructions,
         } 
       });
     } catch (err) {
@@ -124,7 +173,7 @@ export function createOAuthHandler() {
    */
   oauth.get('/:provider', (c) => {
     const provider = c.req.param('provider');
-    const credentials = getOAuthCredentials(provider);
+    const credentials = getOAuthCredentialsFromCache(provider);
 
     return c.json({ 
       ok: true, 
@@ -139,9 +188,19 @@ export function createOAuthHandler() {
    * DELETE /api/auth/oauth/:provider
    * Revoke OAuth credentials
    */
-  oauth.delete('/:provider', (c) => {
+  oauth.delete('/:provider', async (c) => {
     const provider = c.req.param('provider');
-    deleteOAuthCredentials(provider);
+    
+    // Remove from cache
+    deleteOAuthCredentialsFromCache(provider);
+
+    // Remove from config
+    const config = service.currentConfig as Config;
+    if (config.models?.providers?.[provider]) {
+      delete config.models.providers[provider].oauth;
+      delete config.models.providers[provider].apiKey;
+      await service.saveConfig(config);
+    }
 
     return c.json({ ok: true });
   });

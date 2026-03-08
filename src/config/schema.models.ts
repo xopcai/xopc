@@ -94,6 +94,12 @@ export const ModelProviderSchema = z
     headers: z.record(z.string(), z.string()).optional(),
     authHeader: z.boolean().optional(),
     models: z.array(ModelDefinitionSchema),
+    // OAuth credentials storage
+    oauth: z.object({
+      access: z.string(),
+      refresh: z.string().optional(),
+      expires: z.number(),
+    }).optional(),
   })
   .strict();
 
