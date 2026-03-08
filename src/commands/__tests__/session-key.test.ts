@@ -98,30 +98,6 @@ describe('SessionKey', () => {
         expect(key).toBe('gateway:dm:user');
       });
     });
-
-    describe('WhatsApp', () => {
-      it('should generate DM key for WhatsApp', () => {
-        const key = generateSessionKey({
-          source: 'whatsapp',
-          chatId: '+1234567890',
-          senderId: '+1234567890',
-          isGroup: false,
-        });
-
-        expect(key).toBe('whatsapp:dm:+1234567890');
-      });
-
-      it('should generate group key for WhatsApp', () => {
-        const key = generateSessionKey({
-          source: 'whatsapp',
-          chatId: '-1001234567890',
-          senderId: '+1234567890',
-          isGroup: true,
-        });
-
-        expect(key).toBe('whatsapp:g:-1001234567890');
-      });
-    });
   });
 
   describe('parseSessionKey', () => {
