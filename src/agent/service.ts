@@ -6,7 +6,7 @@
  */
 
 import { readFileSync } from 'fs';
-import { Agent, type AgentEvent, type AgentMessage, type AgentTool } from '@mariozechner/pi-agent-core';
+import { Agent, type AgentEvent, type AgentMessage } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { MessageBus, InboundMessage } from '../bus/index.js';
 import type { Config, AgentDefaults } from '../config/schema.js';

@@ -867,7 +867,6 @@ export class TelegramChannelExtension implements ChannelExtension {
         log.info({ chatId, contentLength: content?.length }, 'Generating TTS voice message');
 
         let ttsErrorOccurred = false;
-        let lastTtsError: unknown = null;
         const maxRetries = 2;
         
         for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
@@ -897,7 +896,6 @@ export class TelegramChannelExtension implements ChannelExtension {
             break; // Success, exit retry loop
             
           } catch (ttsError) {
-            lastTtsError = ttsError;
             const errorMsg = ttsError instanceof Error ? ttsError.message : String(ttsError);
             
             if (attempt <= maxRetries) {
