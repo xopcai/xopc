@@ -30,6 +30,7 @@ export class TelegramAdapter implements ChannelAdapter {
     'edit',
     'typing',
     'voice',
+    'reactions',
   ];
 
   private config?: Config;
@@ -89,6 +90,52 @@ export class TelegramAdapter implements ChannelAdapter {
         type: 'photo',
         mimeType: 'image/jpeg',
       });
+    }
+
+    // Handle documents/files
+    if (message.document) {
+      attachments = attachments || [];
+      const doc = message.document;
+      const attachment: MessageAttachment = {
+        type: 'document',
+        mimeType: doc.mime_type,
+        name: doc.file_name,
+        size: doc.file_size,
+      };
+
+      // For text files, download and include content
+      if (doc.mime_type?.startsWith('text/') || doc.file_name?.endsWith('.md')) {
+        try {
+          // Get bot token from config
+          const botToken = this.config?.channels?.telegram?.token;
+          if (!botToken) {
+            throw new Error('Bot token not configured');
+          }
+          
+          // Get file info from Telegram API
+          const file = await ctx.api.getFile(doc.file_id);
+          // Construct download URL (use apiRoot if configured, otherwise default)
+          const apiRoot = this.config?.channels?.telegram?.apiRoot?.replace(/\/$/, '') || 'https://api.telegram.org';
+          const downloadUrl = `${apiRoot}/file/bot${botToken}/${file.file_path}`;
+          
+          const response = await fetch(downloadUrl);
+          if (!response.ok) {
+            throw new Error(`Download failed: ${response.status}`);
+          }
+          const buffer = await response.arrayBuffer();
+          const textContent = Buffer.from(buffer).toString('utf-8');
+          attachment.data = Buffer.from(textContent).toString('base64');
+          
+          // If no other content, use file content as message content
+          if (!content) {
+            content = textContent;
+          }
+        } catch (error) {
+          log.warn({ fileName: doc.file_name, error }, 'Failed to download document');
+        }
+      }
+
+      attachments.push(attachment);
     }
 
     // Check if it's a command
