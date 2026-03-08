@@ -503,9 +503,15 @@ export class SettingsPage extends LitElement {
    * Add a new model to a provider.
    */
   private _addModel(providerId: string, model: ModelConfig): void {
-    const provider = this._providers.find(p => p.id === providerId);
-    if (provider) {
-      provider.models.push(model);
+    const providerIndex = this._providers.findIndex(p => p.id === providerId);
+    if (providerIndex >= 0) {
+      const provider = this._providers[providerIndex];
+      const updatedProviders = [...this._providers];
+      updatedProviders[providerIndex] = { 
+        ...provider, 
+        models: [...provider.models, model] 
+      };
+      this._providers = updatedProviders;
       this._dirtyFields.add(`providers.${providerId}.models`);
       this.requestUpdate();
     }
@@ -515,11 +521,19 @@ export class SettingsPage extends LitElement {
    * Update an existing model.
    */
   private _updateModel(providerId: string, modelId: string, updates: Partial<ModelConfig>): void {
-    const provider = this._providers.find(p => p.id === providerId);
-    if (provider) {
+    const providerIndex = this._providers.findIndex(p => p.id === providerId);
+    if (providerIndex >= 0) {
+      const provider = this._providers[providerIndex];
       const modelIndex = provider.models.findIndex(m => m.id === modelId);
       if (modelIndex >= 0) {
-        provider.models[modelIndex] = { ...provider.models[modelIndex], ...updates };
+        // Create new arrays to trigger Lit reactivity
+        const updatedModels = [...provider.models];
+        updatedModels[modelIndex] = { ...updatedModels[modelIndex], ...updates };
+        
+        const updatedProviders = [...this._providers];
+        updatedProviders[providerIndex] = { ...provider, models: updatedModels };
+        
+        this._providers = updatedProviders;
         this._dirtyFields.add(`providers.${providerId}.models`);
         this.requestUpdate();
       }
@@ -530,9 +544,15 @@ export class SettingsPage extends LitElement {
    * Delete a model from a provider.
    */
   private _deleteModel(providerId: string, modelId: string): void {
-    const provider = this._providers.find(p => p.id === providerId);
-    if (provider) {
-      provider.models = provider.models.filter(m => m.id !== modelId);
+    const providerIndex = this._providers.findIndex(p => p.id === providerId);
+    if (providerIndex >= 0) {
+      const provider = this._providers[providerIndex];
+      const updatedProviders = [...this._providers];
+      updatedProviders[providerIndex] = {
+        ...provider,
+        models: provider.models.filter(m => m.id !== modelId)
+      };
+      this._providers = updatedProviders;
       this._dirtyFields.add(`providers.${providerId}.models`);
       this.requestUpdate();
     }
