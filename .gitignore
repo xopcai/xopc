@@ -51,4 +51,4 @@ docs/.vitepress/cache/
 .pi
 
 # Worktrees
-.worktrees/
+.worktrees/pnpm-lock.yaml
