@@ -89,6 +89,86 @@ xopcbot gateway logs --lines 100
 xopcbot gateway logs --follow
 ```
 
+## 系统服务管理
+
+xopcbot 支持将网关作为系统服务运行，实现开机自动启动。
+
+### 支持的平台
+
+| 平台 | 服务类型 |
+|------|----------|
+| Linux | systemd 用户服务 |
+| macOS | LaunchAgent |
+| Windows | 任务计划程序 |
+
+### 安装为系统服务
+
+```bash
+xopcbot gateway install
+```
+
+**选项**：
+
+| 选项 | 描述 |
+|------|------|
+| `--port <number>` | 网关端口 (默认: 18790) |
+| `--host <address>` | 绑定地址 (默认: 0.0.0.0) |
+| `--token <token>` | 认证令牌 |
+| `--runtime <runtime>` | 运行时: node 或 binary (默认: node) |
+
+**示例**：
+
+```bash
+xopcbot gateway install --port 8080 --token my-secret-token
+```
+
+安装后，网关将在登录时自动启动。
+
+### 服务命令
+
+```bash
+# 通过系统服务启动
+xopcbot gateway service-start
+
+# 查看服务状态
+xopcbot gateway service-status
+
+# 卸载系统服务
+xopcbot gateway uninstall
+```
+
+### 服务状态输出
+
+```bash
+xopcbot gateway service-status
+```
+
+示例输出：
+```
+📋 Service Status
+────────────────
+Installed: Yes
+Status: running
+PID: 12345
+
+📝 Configuration
+────────────────
+Program: node
+Args: /path/to/xopcbot gateway --port 18790
+Working Dir: /home/user
+
+🌐 Access
+─────────
+URL: http://localhost:18790
+
+📝 Commands
+───────────
+  xopcbot gateway service-start   # 启动服务
+  xopcbot gateway stop            # 停止（进程）
+  xopcbot gateway restart         # 重启（进程）
+  xopcbot gateway uninstall      # 移除服务
+```
+
 ## 进程架构
 
 ### Gateway Lock

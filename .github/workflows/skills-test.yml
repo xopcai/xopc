@@ -27,20 +27,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
+      - name: Configure Git to use HTTPS instead of SSH
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      
       - name: Setup Node.js ${{ matrix.node-version }}
         uses: actions/setup-node@v4
         with:
           node-version: ${{ matrix.node-version }}
-          cache: 'npm'
+          cache: 'pnpm'
+      
+      - name: Configure Git for HTTPS
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git config --global url."https://".insteadOf "git://"
       
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
       
       - name: Install UI dependencies
-        run: cd ui && npm install
+        run: cd ui && pnpm install --frozen-lockfile
       
       - name: Build
-        run: npm run build
+        run: pnpm run build
       
       - name: Run skill tests
         shell: bash
@@ -48,13 +62,13 @@ jobs:
           echo "Testing skills on ${{ matrix.os }}"
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
             # Windows doesn't support bash script, run CLI directly
-            npm run dev -- skills test --format json --skip-examples
+            pnpm run dev -- skills test --format json --skip-examples
           else
             ./scripts/test-skills.sh --verbose
           fi
       
       - name: Run unit tests for test framework
-        run: npm vitest run src/agent/skills/__tests__/test-framework.test.ts
+        run: pnpm vitest run src/agent/skills/__tests__/test-framework.test.ts
       
       - name: Upload test results
         if: always()
@@ -74,28 +88,42 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
+      - name: Configure Git to use HTTPS instead of SSH
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-          cache: 'npm'
+          cache: 'pnpm'
+      
+      - name: Configure Git for HTTPS
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git config --global url."https://".insteadOf "git://"
       
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
       
       - name: Install UI dependencies
-        run: cd ui && npm install
+        run: cd ui && pnpm install --frozen-lockfile
       
       - name: Build
-        run: npm run build
+        run: pnpm run build
       
       - name: Run security audit
         run: |
           echo "Running security audit on all skills..."
-          npm run dev -- skills test security --deep
+          pnpm run dev -- skills test security --deep
           
-          # Also run npm audit for dependencies
-          npm audit --audit-level=moderate || true
+          # Also run pnpm audit for dependencies
+          pnpm audit --audit-level=moderate || true
 
   validate-skill-format:
     name: Validate SKILL.md Format
@@ -105,20 +133,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
+      - name: Configure Git to use HTTPS instead of SSH
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-          cache: 'npm'
+          cache: 'pnpm'
+      
+      - name: Configure Git for HTTPS
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git config --global url."https://".insteadOf "git://"
       
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
       
       - name: Install UI dependencies
-        run: cd ui && npm install
+        run: cd ui && pnpm install --frozen-lockfile
       
       - name: Build
-        run: npm run build
+        run: pnpm run build
       
       - name: Validate all SKILL.md files
         run: |
@@ -126,7 +168,7 @@ jobs:
           for skill_dir in skills/*/; do
             if [ -f "$skill_dir/SKILL.md" ]; then
               echo "Validating $skill_dir"
-              npm run dev -- skills test validate "$skill_dir/SKILL.md"
+              pnpm run dev -- skills test validate "$skill_dir/SKILL.md"
             fi
           done
 
@@ -138,25 +180,39 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
       
+      - name: Configure Git to use HTTPS instead of SSH
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+      
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 22.x
-          cache: 'npm'
+          cache: 'pnpm'
+      
+      - name: Configure Git for HTTPS
+        run: |
+          git config --global url."https://github.com/".insteadOf "git@github.com:"
+          git config --global url."https://".insteadOf "git://"
       
       - name: Install dependencies
-        run: npm install
+        run: pnpm install --frozen-lockfile
       
       - name: Install UI dependencies
-        run: cd ui && npm install
+        run: cd ui && pnpm install --frozen-lockfile
       
       - name: Build
-        run: npm run build
+        run: pnpm run build
       
       - name: Check skill dependencies
         run: |
           echo "Checking skill dependencies..."
-          npm run dev -- skills test check-deps
+          pnpm run dev -- skills test check-deps
 
   report:
     name: Test Report

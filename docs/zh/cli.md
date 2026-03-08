@@ -191,6 +191,7 @@ xopcbot gateway --port 18790
 | `--token` | 认证令牌 |
 | `--no-hot-reload` | 禁用配置热重载 |
 | `--force` | 强制终止端口上的现有进程 |
+| `--background` | 后台模式启动（分离进程） |
 
 ### 强制启动
 
@@ -211,6 +212,10 @@ xopcbot gateway --force
 | `gateway restart` | 重启网关 |
 | `gateway logs` | 查看网关日志 |
 | `gateway token` | 查看/生成认证令牌 |
+| `gateway install` | 安装为系统服务 |
+| `gateway uninstall` | 卸载系统服务 |
+| `gateway service-start` | 通过系统服务启动 |
+| `gateway service-status` | 查看服务状态 |
 
 **示例**：
 
@@ -238,6 +243,18 @@ xopcbot gateway logs --follow
 
 # 生成新令牌
 xopcbot gateway token --generate
+
+# 安装为系统服务
+xopcbot gateway install
+
+# 卸载系统服务
+xopcbot gateway uninstall
+
+# 通过系统服务启动
+xopcbot gateway service-start
+
+# 查看服务状态
+xopcbot gateway service-status
 ```
 
 ### 进程管理

@@ -89,6 +89,86 @@ xopcbot gateway logs --lines 100
 xopcbot gateway logs --follow
 ```
 
+## System Service Management
+
+xopcbot supports running the gateway as a system service for automatic startup.
+
+### Supported Platforms
+
+| Platform | Service Type |
+|----------|--------------|
+| Linux | systemd user service |
+| macOS | LaunchAgent |
+| Windows | Task Scheduler |
+
+### Install as System Service
+
+```bash
+xopcbot gateway install
+```
+
+**Options**:
+
+| Option | Description |
+|--------|-------------|
+| `--port <number>` | Gateway port (default: 18790) |
+| `--host <address>` | Host to bind to (default: 0.0.0.0) |
+| `--token <token>` | Authentication token |
+| `--runtime <runtime>` | Runtime: node or binary (default: node) |
+
+**Example**:
+
+```bash
+xopcbot gateway install --port 8080 --token my-secret-token
+```
+
+After installation, the gateway will start automatically when you log in.
+
+### Service Commands
+
+```bash
+# Start via system service
+xopcbot gateway service-start
+
+# Check service status
+xopcbot gateway service-status
+
+# Uninstall system service
+xopcbot gateway uninstall
+```
+
+### Service Status Output
+
+```bash
+xopcbot gateway service-status
+```
+
+Example output:
+```
+📋 Service Status
+────────────────
+Installed: Yes
+Status: running
+PID: 12345
+
+📝 Configuration
+────────────────
+Program: node
+Args: /path/to/xopcbot gateway --port 18790
+Working Dir: /home/user
+
+🌐 Access
+─────────
+URL: http://localhost:18790
+
+📝 Commands
+───────────
+  xopcbot gateway service-start   # Start service
+  xopcbot gateway stop            # Stop (process)
+  xopcbot gateway restart         # Restart (process)
+  xopcbot gateway uninstall      # Remove service
+```
+
 ## Process Architecture
 
 ### Gateway Lock

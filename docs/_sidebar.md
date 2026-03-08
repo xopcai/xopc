@@ -18,4 +18,3 @@
   - [Scheduled Tasks (Cron)](cron.md)
   - [Heartbeat](heartbeat.md)
   - [Gateway Server](gateway.md)
-  - [Gateway Process Management](gateway-process-management.md)
