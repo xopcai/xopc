@@ -89,6 +89,13 @@ export class SettingsPage extends LitElement {
   @state() private _showAddModelModal = false;
   @state() private _showAddProviderModal = false;
   @state() private _editingProvider: ProviderConfig | null = null;
+  @state() private _newProvider: ProviderConfig = {
+    id: '',
+    baseUrl: '',
+    api: 'openai-completions',
+    apiKey: '',
+    models: [],
+  };
 
   @state() private _values: SettingsValue = {
     model: 'anthropic/claude-sonnet-4-5',
@@ -727,34 +734,60 @@ export class SettingsPage extends LitElement {
 
     // Update providers with models (new structure)
     const dirtyProviderModels = Array.from(this._dirtyFields).filter(f => f.startsWith('providers.'));
-    if (dirtyProviderModels.length > 0) {
+    const isProvidersDirty = this._dirtyFields.has('providers');
+    
+    if (dirtyProviderModels.length > 0 || isProvidersDirty) {
       if (!updates.models) {
         updates.models = { mode: 'merge', providers: {} };
       }
       
-      for (const field of dirtyProviderModels) {
-        const match = field.match(/providers\.([^\.]+)\.(.*)/);
-        if (match) {
-          const providerId = match[1];
-          const provider = this._providers.find(p => p.id === providerId);
-          if (provider) {
-            updates.models.providers[providerId] = {
-              baseUrl: provider.baseUrl,
-              api: provider.api,
-              apiKey: provider.apiKey,
-              models: provider.models.map(m => ({
-                id: m.id,
-                name: m.name,
-                reasoning: m.capabilities.reasoning,
-                input: [
-                  ...(m.capabilities.text ? ['text'] : []),
-                  ...(m.capabilities.image ? ['image'] : []),
-                ],
-                contextWindow: m.contextWindow,
-                maxTokens: m.maxTokens,
-                cost: m.cost || { input: 0, output: 0 },
-              })),
-            };
+      // If providers were modified (e.g., deleted), sync all providers
+      if (isProvidersDirty) {
+        for (const provider of this._providers) {
+          updates.models.providers[provider.id] = {
+            baseUrl: provider.baseUrl,
+            api: provider.api,
+            apiKey: provider.apiKey,
+            models: provider.models.map(m => ({
+              id: m.id,
+              name: m.name,
+              reasoning: m.capabilities.reasoning,
+              input: [
+                ...(m.capabilities.text ? ['text'] : []),
+                ...(m.capabilities.image ? ['image'] : []),
+              ],
+              contextWindow: m.contextWindow,
+              maxTokens: m.maxTokens,
+              cost: m.cost || { input: 0, output: 0 },
+            })),
+          };
+        }
+      } else {
+        // Only update specific providers
+        for (const field of dirtyProviderModels) {
+          const match = field.match(/providers\.([^\.]+)\.(.*)/);
+          if (match) {
+            const providerId = match[1];
+            const provider = this._providers.find(p => p.id === providerId);
+            if (provider) {
+              updates.models.providers[providerId] = {
+                baseUrl: provider.baseUrl,
+                api: provider.api,
+                apiKey: provider.apiKey,
+                models: provider.models.map(m => ({
+                  id: m.id,
+                  name: m.name,
+                  reasoning: m.capabilities.reasoning,
+                  input: [
+                    ...(m.capabilities.text ? ['text'] : []),
+                    ...(m.capabilities.image ? ['image'] : []),
+                  ],
+                  contextWindow: m.contextWindow,
+                  maxTokens: m.maxTokens,
+                  cost: m.cost || { input: 0, output: 0 },
+                })),
+              };
+            }
           }
         }
       }
@@ -1260,14 +1293,6 @@ export class SettingsPage extends LitElement {
   }
 
   private _renderAddProviderModal(): unknown {
-    const newProvider: ProviderConfig = {
-      id: '',
-      baseUrl: '',
-      api: 'openai-completions',
-      apiKey: '',
-      models: [],
-    };
-
     return html`
       <div class="modal-overlay" @click=${() => this._showAddProviderModal = false}>
         <div class="modal-content" @click=${(e: Event) => e.stopPropagation()}>
@@ -1284,9 +1309,11 @@ export class SettingsPage extends LitElement {
               <input
                 type="text"
                 class="text-input"
-                .value=${newProvider.id}
+                .value=${this._newProvider.id}
                 placeholder="e.g., openai"
-                @input=${(e: Event) => newProvider.id = (e.target as HTMLInputElement).value}
+                @input=${(e: Event) => {
+                  this._newProvider = { ...this._newProvider, id: (e.target as HTMLInputElement).value };
+                }}
               />
             </div>
             
@@ -1295,9 +1322,11 @@ export class SettingsPage extends LitElement {
               <input
                 type="text"
                 class="text-input"
-                .value=${newProvider.baseUrl}
+                .value=${this._newProvider.baseUrl}
                 placeholder="https://api.openai.com/v1"
-                @input=${(e: Event) => newProvider.baseUrl = (e.target as HTMLInputElement).value}
+                @input=${(e: Event) => {
+                  this._newProvider = { ...this._newProvider, baseUrl: (e.target as HTMLInputElement).value };
+                }}
               />
             </div>
             
@@ -1305,8 +1334,10 @@ export class SettingsPage extends LitElement {
               <label class="field-label">API Type</label>
               <select
                 class="select-input"
-                .value=${newProvider.api}
-                @change=${(e: Event) => newProvider.api = (e.target as HTMLSelectElement).value}
+                .value=${this._newProvider.api}
+                @change=${(e: Event) => {
+                  this._newProvider = { ...this._newProvider, api: (e.target as HTMLSelectElement).value };
+                }}
               >
                 <option value="openai-completions">OpenAI Completions</option>
                 <option value="openai-responses">OpenAI Responses</option>
@@ -1321,9 +1352,11 @@ export class SettingsPage extends LitElement {
               <input
                 type="password"
                 class="text-input"
-                .value=${newProvider.apiKey}
+                .value=${this._newProvider.apiKey}
                 placeholder="sk-..."
-                @input=${(e: Event) => newProvider.apiKey = (e.target as HTMLInputElement).value}
+                @input=${(e: Event) => {
+                  this._newProvider = { ...this._newProvider, apiKey: (e.target as HTMLInputElement).value };
+                }}
               />
             </div>
           </div>
@@ -1334,10 +1367,11 @@ export class SettingsPage extends LitElement {
             </button>
             <button 
               class="btn btn-primary"
-              ?disabled=${!newProvider.id || !newProvider.baseUrl}
+              ?disabled=${!this._newProvider.id || !this._newProvider.baseUrl}
               @click=${() => {
-                if (newProvider.id && newProvider.baseUrl) {
-                  this._addProvider(newProvider);
+                if (this._newProvider.id && this._newProvider.baseUrl) {
+                  this._addProvider({ ...this._newProvider });
+                  this._newProvider = { id: '', baseUrl: '', api: 'openai-completions', apiKey: '', models: [] };
                   this._showAddProviderModal = false;
                 }
               }}
