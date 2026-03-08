@@ -9,7 +9,7 @@ import { createLogger } from '../../utils/logger.js';
 
 import type { Config } from '../../config/index.js';
 import { TelegramInlineKeyboards, type ModelInfo, type ProviderInfo } from './inline-keyboards.js';
-import { getProviderDisplayName, getModelsByProvider, DEFAULT_MODEL } from '../../providers/index.js';
+import { getProviderDisplayName, getModelsByProvider, DEFAULT_MODEL, getAllProviders, isProviderConfigured } from '../../providers/index.js';
 
 const log = createLogger('TelegramCommandHandler');
 
@@ -29,12 +29,13 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
   // ========== Helper Functions ==========
 
   const getAvailableProviders = (): ProviderInfo[] => {
-    const providers = config.providers || {};
+    // Get all providers and filter by configured status (includes env vars, config, and registry)
+    const allProviders = getAllProviders();
     const available: ProviderInfo[] = [];
 
-    for (const [name, apiKey] of Object.entries(providers)) {
-      if (apiKey) {
-        available.push({ id: name, name: getProviderDisplayName(name) });
+    for (const providerId of allProviders) {
+      if (isProviderConfigured(config, providerId)) {
+        available.push({ id: providerId, name: getProviderDisplayName(providerId) });
       }
     }
 
