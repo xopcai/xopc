@@ -22,6 +22,7 @@ import {
   type Api,
 } from '../../providers/index.js';
 import { createOAuthHandler, loadOAuthCredentialsToCache } from './oauth.js';
+import { createOAuthAsyncHandler } from './oauth-async.js';
 import { testApiKeyResolution } from '../../config/resolve-config-value.js';
 import { 
   getModelsJsonPath,
@@ -383,6 +384,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   // ========== OAuth API (/api/auth/oauth) ==========
   authenticated.route('/api/auth/oauth', createOAuthHandler(service));
+
+  // ========== Async OAuth API (/api/auth/oauth-async) ==========
+  authenticated.route('/api/auth/oauth-async', createOAuthAsyncHandler(service));
 
   // Load OAuth credentials from config into cache on startup
   loadOAuthCredentialsToCache(service);

@@ -5,7 +5,14 @@
 import { html, LitElement, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons.js';
-import { startOAuthLogin, revokeOAuth } from '../utils/oauth-api.js';
+import { 
+  startAsyncOAuthLogin, 
+  fetchOAuthSessionStatus, 
+  submitOAuthCode, 
+  cancelOAuth,
+  cleanupOAuthSession,
+  revokeOAuth 
+} from '../utils/oauth-api.js';
 
 export interface ProviderConfigChangeEvent {
   provider: string;
@@ -33,8 +40,11 @@ export class ProviderConfig extends LitElement {
   @state() private _copied: boolean = false;
   @state() private _loading: boolean = false;
   @state() private _localValue: string = '';
-  @state() private _oauthStatus?: 'idle' | 'waiting' | 'success' | 'error';
+  @state() private _oauthStatus?: 'idle' | 'waiting' | 'waiting_code' | 'success' | 'error';
   @state() private _oauthMessage?: string;
+  @state() private _sessionId?: string;
+  @state() private _authUrl?: string;
+  @state() private _pollingInterval?: number;
   
   static styles = css`
     :host { display: block; }
@@ -190,6 +200,7 @@ export class ProviderConfig extends LitElement {
       display: flex;
       align-items: center;
       gap: 0.375rem;
+      white-space: pre-line;
     }
 
     .help-text.error-text {
@@ -211,7 +222,67 @@ export class ProviderConfig extends LitElement {
     @keyframes spin {
       to { transform: rotate(360deg); }
     }
+
+    .oauth-actions {
+      display: flex;
+      gap: 0.5rem;
+      margin-top: 0.75rem;
+    }
+
+    .btn {
+      padding: 0.5rem 1rem;
+      border-radius: var(--radius-md, 0.5rem);
+      font-size: 0.8125rem;
+      font-weight: 500;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      transition: all var(--transition-fast, 150ms);
+    }
+
+    .btn-primary {
+      background: var(--accent-primary, #4f46e5);
+      color: white;
+      border: none;
+    }
+
+    .btn-primary:hover {
+      background: var(--accent-primary-dark, #4338ca);
+    }
+
+    .btn-secondary {
+      background: transparent;
+      border: 1px solid var(--border-color, #e7e5e4);
+      color: var(--text-secondary, #57534e);
+    }
+
+    .btn-secondary:hover {
+      background: var(--bg-secondary, #f5f5f4);
+    }
+
+    .code-input {
+      margin-top: 0.75rem;
+      display: flex;
+      gap: 0.5rem;
+    }
+
+    .code-input input {
+      flex: 1;
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--border-color, #e7e5e4);
+      border-radius: var(--radius-md, 0.5rem);
+      font-size: 0.8125rem;
+    }
   `;
+  
+  disconnectedCallback() {
+    super.disconnectedCallback();
+    this._stopPolling();
+    if (this._sessionId) {
+      cleanupOAuthSession(this._sessionId, this.token).catch(() => {});
+    }
+  }
   
   private _onApiKeyChange(e: Event) {
     const target = e.target as HTMLInputElement;
@@ -226,62 +297,109 @@ export class ProviderConfig extends LitElement {
     this._loading = true;
     this._oauthStatus = 'waiting';
     this._oauthMessage = 'Starting OAuth login...';
+    this._sessionId = undefined;
     
     try {
-      const result = await startOAuthLogin(this.provider, this.token);
+      // Start async OAuth flow
+      const result = await startAsyncOAuthLogin(this.provider, this.token);
+      this._sessionId = result.sessionId;
       
-      if (result.success) {
-        this._oauthStatus = 'success';
-        
-        // Handle callback server providers (Google Antigravity, Gemini CLI, OpenAI Codex)
-        if (result.usesCallbackServer) {
-          if (result.authUrl) {
-            // Open authorization URL
-            window.open(result.authUrl, '_blank');
-            this._oauthMessage = `1. Click "Open Authorization Page" below to authenticate in your browser.\n2. After authorization, the page will automatically detect completion.`;
-          } else if (result.manualCodeRequested) {
-            // Manual code input needed
-            this._oauthMessage = `Please complete authorization at: ${result.verificationUri}\n\nEnter the code when prompted.`;
-          }
-        } else {
-          // Standard OAuth flow
-          this._oauthMessage = result.message;
-          
-          // If there's an auth URL, open it in a new window
-          if (result.authUrl) {
-            window.open(result.authUrl, '_blank');
-            this._oauthMessage = `Opening authorization page... ${result.instructions || ''}`;
-          }
-          
-          // Show device code if available
-          if (result.deviceCode && result.verificationUri) {
-            this._oauthMessage = `Go to ${result.verificationUri} and enter code: ${result.deviceCode}`;
-          }
-        }
-        
-        // Notify parent of success
-        this.dispatchEvent(new CustomEvent<ProviderOAuthEvent>('oauth', {
-          detail: { provider: this.provider, success: true, message: result.message },
-          bubbles: true,
-          composed: true,
-        }));
-        
-        // Reload page after short delay to reflect new config
-        setTimeout(() => {
-          window.location.reload();
-        }, 2000);
-      }
+      // Start polling for status
+      this._startPolling();
     } catch (err) {
       this._oauthStatus = 'error';
       this._oauthMessage = err instanceof Error ? err.message : 'OAuth login failed';
+      this._loading = false;
       
       this.dispatchEvent(new CustomEvent<ProviderOAuthEvent>('oauth', {
         detail: { provider: this.provider, success: false, error: this._oauthMessage },
         bubbles: true,
         composed: true,
       }));
-    } finally {
+    }
+  }
+
+  private _startPolling() {
+    this._pollingInterval = window.setInterval(async () => {
+      if (!this._sessionId) return;
+
+      try {
+        const status = await fetchOAuthSessionStatus(this._sessionId, this.token);
+        
+        this._oauthMessage = status.message;
+        this._authUrl = status.authUrl;
+        
+        if (status.status === 'waiting_auth' || status.status === 'waiting_code') {
+          this._oauthStatus = status.status === 'waiting_code' ? 'waiting_code' : 'waiting';
+          
+          // Open auth URL if available
+          if (status.authUrl && !this._authUrl) {
+            window.open(status.authUrl, '_blank');
+          }
+        } else if (status.status === 'completed') {
+          this._stopPolling();
+          this._oauthStatus = 'success';
+          this._loading = false;
+          
+          this.dispatchEvent(new CustomEvent<ProviderOAuthEvent>('oauth', {
+            detail: { provider: this.provider, success: true, message: status.message },
+            bubbles: true,
+            composed: true,
+          }));
+          
+          // Reload page after short delay
+          setTimeout(() => {
+            window.location.reload();
+          }, 1500);
+        } else if (status.status === 'failed' || status.status === 'cancelled') {
+          this._stopPolling();
+          this._oauthStatus = 'error';
+          this._loading = false;
+          this._oauthMessage = status.error || status.message || 'OAuth flow failed';
+          
+          this.dispatchEvent(new CustomEvent<ProviderOAuthEvent>('oauth', {
+            detail: { provider: this.provider, success: false, error: this._oauthMessage },
+            bubbles: true,
+            composed: true,
+          }));
+        }
+      } catch (err) {
+        console.error('Failed to poll OAuth status:', err);
+      }
+    }, 1000); // Poll every second
+  }
+
+  private _stopPolling() {
+    if (this._pollingInterval) {
+      clearInterval(this._pollingInterval);
+      this._pollingInterval = undefined;
+    }
+  }
+
+  private async _onSubmitCode(code: string) {
+    if (!this._sessionId || !code) return;
+
+    try {
+      await submitOAuthCode(this._sessionId, code, this.token);
+      this._oauthMessage = 'Processing authorization code...';
+    } catch (err) {
+      this._oauthStatus = 'error';
+      this._oauthMessage = err instanceof Error ? err.message : 'Failed to submit code';
+    }
+  }
+
+  private async _onCancelOAuth() {
+    if (!this._sessionId) return;
+
+    try {
+      await cancelOAuth(this._sessionId, this.token);
+      this._stopPolling();
+      this._oauthStatus = 'idle';
       this._loading = false;
+      this._oauthMessage = 'OAuth cancelled';
+      this._sessionId = undefined;
+    } catch (err) {
+      console.error('Failed to cancel OAuth:', err);
     }
   }
   
@@ -387,24 +505,59 @@ export class ProviderConfig extends LitElement {
           ` : ''}
         </div>
 
-        ${this._oauthStatus === 'waiting' && this._oauthMessage?.includes('authorization page') ? html`
-          <div style="margin-top: 0.75rem;">
+        ${this._oauthMessage ? html`
+          <div class="help-text ${this._oauthStatus === 'error' ? 'error-text' : ''}">
+            ${this._oauthStatus === 'success' ? getIcon('check') : (this._oauthStatus === 'error' ? getIcon('alertCircle') : getIcon('info'))}
+            ${this._oauthMessage}
+          </div>
+        ` : ''}
+
+        ${this._oauthStatus === 'waiting' || this._oauthStatus === 'waiting_code' ? html`
+          <div class="oauth-actions">
+            ${this._authUrl ? html`
+              <a 
+                class="btn btn-primary" 
+                href="${this._authUrl}" 
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                ${getIcon('externalLink')} Open Authorization Page
+              </a>
+            ` : ''}
             <button 
-              class="btn btn-primary"
-              @click=${() => {
-                // Auth URL already opened in _onOAuthClick
-                this._oauthMessage = 'Waiting for authorization completion...';
-              }}
+              class="btn btn-secondary" 
+              @click=${this._onCancelOAuth}
             >
-              ${getIcon('externalLink')} Open Authorization Page
+              ${getIcon('x')} Cancel
             </button>
           </div>
         ` : ''}
-        
-        ${this._oauthMessage ? html`
-          <div class="help-text ${this._oauthStatus === 'error' ? 'error-text' : ''}" style="margin-top: 0.5rem;">
-            ${this._oauthStatus === 'success' ? getIcon('check') : (this._oauthStatus === 'error' ? getIcon('alertCircle') : getIcon('info'))}
-            ${this._oauthMessage}
+
+        ${this._oauthStatus === 'waiting_code' ? html`
+          <div class="code-input">
+            <input 
+              type="text" 
+              placeholder="Paste redirect URL or authorization code..."
+              @keydown=${(e: KeyboardEvent) => {
+                if (e.key === 'Enter') {
+                  const input = e.target as HTMLInputElement;
+                  this._onSubmitCode(input.value);
+                  input.value = '';
+                }
+              }}
+            />
+            <button 
+              class="btn btn-primary"
+              @click=${() => {
+                const input = this.shadowRoot?.querySelector('.code-input input') as HTMLInputElement;
+                if (input?.value) {
+                  this._onSubmitCode(input.value);
+                  input.value = '';
+                }
+              }}
+            >
+              Submit
+            </button>
           </div>
         ` : ''}
         
