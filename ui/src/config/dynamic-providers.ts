@@ -118,8 +118,17 @@ async function fetchAllProvidersFromApi(token?: string): Promise<Array<{
 }
 
 import type { ModelConfig } from '../pages/SettingsPage.js';
-import type { ProviderTemplate } from './provider-templates.js';
-import { PROVIDER_TEMPLATES, getProviderTemplate } from './provider-templates.js';
+
+// Provider template interface (inline, previously from provider-templates.ts)
+export interface ProviderTemplate {
+  id: string;
+  name: string;
+  authType: 'api_key' | 'oauth';
+  oauthProviderId?: string;
+  baseUrl: string;
+  api: string;
+  models: ModelConfig[];
+}
 
 export interface DynamicProviderInfo {
   id: string;
@@ -305,28 +314,11 @@ export async function loadDynamicProviders(token?: string): Promise<DynamicProvi
 }
 
 /**
- * Get providers from static templates (fallback)
+ * Get providers from static templates (fallback when API unavailable)
+ * Now returns empty array - API is the primary source
  */
 function getTemplateProviders(): DynamicProviderInfo[] {
-  return PROVIDER_TEMPLATES.map(template => ({
-    id: template.id,
-    name: template.name,
-    baseUrl: template.baseUrl,
-    api: template.api,
-    authType: template.authType,
-    oauthProviderId: template.oauthProviderId,
-    models: template.models.map(m => ({
-      id: m.id,
-      name: m.name,
-      capabilities: {
-        text: m.capabilities.text,
-        image: m.capabilities.image,
-        reasoning: m.capabilities.reasoning,
-      },
-      contextWindow: m.contextWindow,
-      maxTokens: m.maxTokens,
-    })),
-  }));
+  return [];
 }
 
 /**
@@ -343,7 +335,11 @@ export function toProviderTemplate(provider: DynamicProviderInfo): ProviderTempl
     models: provider.models.map(m => ({
       id: m.id,
       name: m.name,
-      capabilities: m.capabilities,
+      capabilities: {
+        text: m.capabilities?.text ?? true,
+        image: m.capabilities?.image ?? false,
+        reasoning: m.capabilities?.reasoning ?? false,
+      },
       contextWindow: m.contextWindow,
       maxTokens: m.maxTokens,
     })),
@@ -354,12 +350,6 @@ export function toProviderTemplate(provider: DynamicProviderInfo): ProviderTempl
  * Format provider ID to readable name
  */
 function formatProviderName(providerId: string): string {
-  // Check if we have a template with a nicer name
-  const template = getProviderTemplate(providerId);
-  if (template) {
-    return template.name;
-  }
-  
   // Format the ID
   return providerId
     .split('-')
@@ -409,6 +399,6 @@ export async function getAllProviderTemplates(token?: string): Promise<ProviderT
     console.warn('Failed to load provider templates from API:', err);
   }
   
-  // Fallback to static templates
-  return PROVIDER_TEMPLATES;
+  // Fallback to empty array - API is the primary source
+  return [];
 }

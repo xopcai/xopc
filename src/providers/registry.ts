@@ -22,25 +22,8 @@ import { createProviderConfig } from './config.js';
 // Import new config integration
 import { getEffectiveConfig } from '../config/integration.js';
 
-// Import from provider-catalog
-import {
-	getProvider as getProviderFromCatalog,
-	getProviderApiKey as getProviderApiKeyFromCatalog,
-	isProviderConfigured,
-	getConfiguredProviders,
-	getProviderDisplayInfo,
-	detectProviderByModel,
-	getAllProviders,
-} from './provider-catalog.js';
-
 // Import new unified model loader
-import { buildRegistry, getAllModels } from './models-loader.js';
-
-// Import from model-catalog
-import {
-	modelSupportsFeature,
-	modelSupportsModality,
-} from './model-catalog.js';
+import { buildRegistry, getAllModels, getProvider, isProviderConfigured, getConfiguredProviderIds } from './models-loader.js';
 
 const providerConfig = createProviderConfig();
 const OLLAMA_API_BASE = providerConfig.ollamaBaseUrl;
@@ -137,7 +120,7 @@ export interface ProviderInfo {
 
 /**
  * Provider information map for UI display.
- * Use getProviderDisplayInfo from provider-catalog for new code.
+ * Now uses unified models-loader for runtime data.
  */
 export const PROVIDER_INFO: Record<string, ProviderInfo> = {
 	'openai': { id: 'openai', name: 'OpenAI', envKey: 'OPENAI_API_KEY', authType: 'api_key', supportsOAuth: false, baseUrl: 'https://api.openai.com/v1' },
@@ -227,10 +210,6 @@ export class ModelRegistry {
 			}
 		}
 
-		// Try provider-catalog
-		const catalogKey = getProviderApiKeyFromCatalog(provider);
-		if (catalogKey) return catalogKey;
-
 		// Fall back to config
 		if (this.config) {
 			return getConfigApiKey(this.config, provider) ?? undefined;
@@ -240,31 +219,38 @@ export class ModelRegistry {
 	}
 
 	/**
-	 * Get provider definition from catalog
+	 * Get provider definition from unified loader
 	 */
 	getProviderFromCatalog(providerId: string) {
-		return getProviderFromCatalog(providerId);
+		return getProvider(this.config, providerId);
 	}
 
 	/**
-	 * Check if provider is configured using catalog
+	 * Check if provider is configured using unified loader
 	 */
 	isProviderConfigured(providerId: string): boolean {
-		return isProviderConfigured(providerId);
+		return isProviderConfigured(this.config, providerId);
 	}
 
 	/**
-	 * Get all configured providers using catalog
+	 * Get all configured providers using unified loader
 	 */
 	getConfiguredProviders() {
-		return getConfiguredProviders();
+		return getConfiguredProviderIds(this.config).map(id => this.getProviderFromCatalog(id)).filter(Boolean);
 	}
 
 	/**
 	 * Auto-detect provider by model ID
 	 */
 	detectProvider(modelId: string): string | undefined {
-		return detectProviderByModel(modelId);
+		// Try to find provider by matching model prefix
+		const registry = buildRegistry(this.config);
+		for (const provider of registry) {
+			if (provider.models.some(m => m.id === modelId)) {
+				return provider.id;
+			}
+		}
+		return undefined;
 	}
 
 	/**
@@ -272,16 +258,25 @@ export class ModelRegistry {
 	 */
 	modelSupportsFeature(modelId: string, feature: string): boolean {
 		// Parse provider/model format
-		const { model } = this.parseModelRef(modelId);
-		return modelSupportsFeature(model, feature as any);
+		const { provider, model } = this.parseModelRef(modelId);
+		const modelEntry = getProvider(provider, this.config)?.models.find(m => m.id === model);
+		if (!modelEntry) return false;
+		
+		switch (feature) {
+			case 'vision': return modelEntry.input.includes('image');
+			case 'reasoning': return modelEntry.reasoning;
+			case 'streaming': return getProvider(provider, this.config)?.capabilities.streaming ?? false;
+			default: return false;
+		}
 	}
 
 	/**
 	 * Check if model supports a specific modality
 	 */
 	modelSupportsModality(modelId: string, modality: string): boolean {
-		const { model } = this.parseModelRef(modelId);
-		return modelSupportsModality(model, modality as any);
+		const { provider, model } = this.parseModelRef(modelId);
+		const modelEntry = getProvider(provider, this.config)?.models.find(m => m.id === model);
+		return modelEntry?.input.includes(modality as 'text' | 'image') ?? false;
 	}
 
 	/**
@@ -290,9 +285,14 @@ export class ModelRegistry {
 	parseModelRef(ref: string): { provider: string; model: string } {
 		const slashIndex = ref.indexOf('/');
 		if (slashIndex === -1) {
-			// Try to detect provider
-			const detected = detectProviderByModel(ref);
-			return { provider: detected || 'openai', model: ref };
+			// Try to detect provider by matching model ID
+			const registry = buildRegistry(this.config);
+			for (const p of registry) {
+				if (p.models.some(m => m.id === ref)) {
+					return { provider: p.id, model: ref };
+				}
+			}
+			return { provider: 'openai', model: ref };
 		}
 		const provider = ref.substring(0, slashIndex);
 		const model = ref.substring(slashIndex + 1);
@@ -474,8 +474,8 @@ export class ModelRegistry {
 				}
 			}
 
-			// Check via provider-catalog
-			if (isProviderConfigured(m.provider)) {
+			// Check via unified loader
+			if (isProviderConfigured(this.config, m.provider)) {
 				available.push(m);
 				continue;
 			}
@@ -537,8 +537,8 @@ export class ModelRegistry {
 				return true;
 			}
 		}
-		// Check provider-catalog
-		if (isProviderConfigured(provider)) {
+		// Check via unified loader
+		if (isProviderConfigured(this.config, provider)) {
 			return true;
 		}
 		// Fall back to config
@@ -560,8 +560,8 @@ export class ModelRegistry {
 				}
 			}
 		}
-		// Check provider-catalog
-		if (isProviderConfigured(provider)) {
+		// Check via unified loader
+		if (isProviderConfigured(this.config, provider)) {
 			return true;
 		}
 		// Fall back to config
@@ -573,42 +573,35 @@ export class ModelRegistry {
 	 * Get provider info 
 	 */
 	static getProviderInfo(provider: string): ProviderInfo | undefined {
-		const fromCatalog = getProviderDisplayInfo(provider);
-		if (fromCatalog) {
-			const authType = fromCatalog.authType === 'none' ? 'api_key' : fromCatalog.authType;
+		const resolved = getProvider(provider);
+		if (resolved) {
 			return {
-				id: fromCatalog.id,
-				name: fromCatalog.name,
-				envKey: fromCatalog.envKeys[0] || '',
-				authType,
-				supportsOAuth: fromCatalog.supportsOAuth,
-				baseUrl: fromCatalog.baseUrl,
-				logo: fromCatalog.logo,
+				id: resolved.id,
+				name: resolved.name,
+				envKey: resolved.auth.envKeys[0] || '',
+				authType: resolved.auth.type === 'none' ? 'api_key' : resolved.auth.type,
+				supportsOAuth: resolved.auth.supportsOAuth ?? false,
+				baseUrl: resolved.baseUrl,
+				logo: undefined,
 			};
 		}
-		return PROVIDER_INFO[provider];
+		return undefined;
 	}
 
 	/** 
 	 * Get all provider infos 
 	 */
 	static getAllProviderInfo(): ProviderInfo[] {
-		const fromCatalog = getAllProviders().map(p => getProviderDisplayInfo(p.id));
-		if (fromCatalog.length > 0 && fromCatalog[0]) {
-			return fromCatalog.map(info => {
-				const authType = info.authType === 'none' ? 'api_key' : info.authType;
-				return {
-					id: info.id,
-					name: info.name,
-					envKey: info.envKeys[0] || '',
-					authType,
-					supportsOAuth: info.supportsOAuth,
-					baseUrl: info.baseUrl,
-					logo: info.logo,
-				};
-			});
-		}
-		return Object.values(PROVIDER_INFO);
+		const registry = buildRegistry();
+		return registry.map(p => ({
+			id: p.id,
+			name: p.name,
+			envKey: p.auth.envKeys[0] || '',
+			authType: p.auth.type === 'none' ? 'api_key' : p.auth.type,
+			supportsOAuth: p.auth.supportsOAuth ?? false,
+			baseUrl: p.baseUrl,
+			logo: undefined,
+		}));
 	}
 }
 

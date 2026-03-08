@@ -3,13 +3,11 @@
  * 
  * LLM provider implementations.
  * 
- * New Architecture (ModelRegistry):
+ * Architecture:
+ * - models.json: Built-in model definitions ()
+ * - modelssingle source of truth-loader.ts: Unified model registry loader
  * - registry.ts: Model registration and management
- * - pi-ai.ts: Unified provider adapter with strict types
- * - api-strategies.ts: Provider-specific API option builders
- * - config.ts: Centralized provider configuration
- * - models-loader.ts: Unified model registry loader (single source of truth)
- * - models.json: Built-in model definitions
+ * - auto-discovery.ts: Provider auto-discovery
  * 
  * Auth Profiles:
  * - auth/profiles/: Advanced credential management with OAuth support
@@ -29,7 +27,7 @@ export {
 	type ProviderInfo,
 } from './registry.js';
 
-// New unified loader exports (single source of truth)
+// Unified model loader exports (single source of truth)
 export {
 	getManifest,
 	getManifestVersion,
@@ -41,8 +39,6 @@ export {
 	isProviderConfigured,
 	getAllProviderIds,
 	getConfiguredProviderIds,
-	modelSupportsFeature,
-	modelSupportsModality,
 	type ModelsManifest,
 	type ResolvedModel,
 	type ResolvedProvider,
@@ -50,68 +46,7 @@ export {
 	type ModelEntry,
 } from './models-loader.js';
 
-// New strict types
-export type {
-	ChatMessage,
-	ChatOptions,
-	ChatResponse,
-	ToolCall,
-	ContentPart,
-	TextContent,
-	ImageContent,
-	ApiType,
-	ApiStrategyOptions,
-	FinishReason,
-	TokenUsage,
-} from './types.js';
-
-// API strategies
-export { getApiStrategy, buildProviderOptions } from './api-strategies.js';
-
-// Configuration
-export {
-	createProviderConfig,
-	loadProviderConfigFromEnv,
-	DEFAULT_PROVIDER_CONFIG,
-	type ProviderBehaviorConfig,
-} from './config.js';
-
-// ============================================
-// Provider Catalog
-// ============================================
-export {
-	// Core
-	PROVIDER_CATALOG,
-	getAllProviders,
-	
-	// Detection & Configuration
-	detectProviderByModel,
-	getConfiguredProviders,
-	getProviderApiKey,
-	
-	// Display
-	getProviderDisplayInfo,
-	getAllProviderDisplayInfo,
-	
-	// Model reference parsing
-	parseModelRef,
-	registerCustomProvider,
-	createCustomProviderFromConfig,
-	
-	// Types
-	type ProviderDefinition,
-	type ProviderAuth,
-	type ProviderApi,
-	type ProviderCapabilities,
-	type ProviderDefaults,
-	type ProviderCategory,
-	type AuthType,
-	type ParsedModelRef,
-} from './provider-catalog.js';
-
-// ============================================
-// Auto Discovery
-// ============================================
+// Auto Discovery exports
 export {
 	scanProviders,
 	recommendDefaultModel,
@@ -126,44 +61,3 @@ export {
 	type AutoConfig,
 	type QuickSetupResult,
 } from './auto-discovery.js';
-
-// ============================================
-// Model Catalog
-// ============================================
-export {
-	// Core
-	MODEL_CATALOG,
-	findModel,
-	findModelByProvider,
-	findModelByRef,
-	getModelsByProvider,
-	
-	// Recommendations
-	getRecommendedModels,
-	getModelsForTask,
-	
-	// Capabilities
-	getModelsByCapability,
-	getModelsByModality,
-	getVisionModels,
-	getFunctionCallingModels,
-	
-	// Pricing & Performance
-	estimateCost,
-	getModelComparisonInfo,
-	
-	// Utilities
-	getFullModelRef,
-	parseModelReference,
-	registerCustomModel,
-	
-	// Types
-	type ModelDefinition,
-	type ModelFeatures,
-	type ModelLimits,
-	type ModelPricing,
-	type ModelPerformance,
-	type Modality,
-	type TaskType,
-	type ModelComparisonInfo,
-} from './model-catalog.js';
