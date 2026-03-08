@@ -1,5 +1,6 @@
 /**
  * Provider config component with API key input and OAuth login support.
+ * Clean and simple design with clear visual hierarchy.
  */
 
 import { html, LitElement, css } from 'lit';
@@ -39,69 +40,184 @@ export class ProviderConfig extends LitElement {
   @state() private _showKey: boolean = false;
   @state() private _copied: boolean = false;
   @state() private _loading: boolean = false;
-  @state() private _localValue: string = '';
   @state() private _oauthStatus?: 'idle' | 'waiting' | 'waiting_code' | 'success' | 'error';
   @state() private _oauthMessage?: string;
   @state() private _sessionId?: string;
   @state() private _authUrl?: string;
   @state() private _pollingInterval?: number;
+  @state() private _expanded: boolean = false;
   
   static styles = css`
     :host { display: block; }
 
-    .provider-item {
-      background: var(--bg-secondary, #f5f5f4);
-      border: 1px solid var(--border-color, #e7e5e4);
-      border-radius: var(--radius-md, 0.5rem);
-      padding: 1rem;
-      margin-bottom: 0.75rem;
+    .provider-row {
+      display: flex;
+      align-items: center;
+      gap: 1rem;
+      padding: 0.875rem 1rem;
+      background: var(--background, #ffffff);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 0.5rem;
       transition: all var(--transition-fast, 150ms) ease;
     }
 
-    .provider-item:hover { border-color: var(--accent-primary, #4f46e5); }
-    .provider-item.configured { border-left: 3px solid var(--accent-success, #059669); }
+    .provider-row:hover {
+      border-color: var(--primary, #3b82f6);
+      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
+    }
 
-    .provider-header {
+    .provider-row.configured {
+      border-left: 3px solid var(--accent-success, #059669);
+    }
+
+    .provider-row.expanded {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    /* Provider Info Section */
+    .provider-main {
       display: flex;
       align-items: center;
-      justify-content: space-between;
-      margin-bottom: 0.75rem;
+      gap: 0.75rem;
+      flex: 1;
+      min-width: 0;
+    }
+
+    .provider-icon {
+      width: 36px;
+      height: 36px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--muted, #f1f5f9);
+      border-radius: 0.5rem;
+      flex-shrink: 0;
+    }
+
+    .provider-icon svg {
+      width: 18px;
+      height: 18px;
+      color: var(--muted-foreground, #64748b);
+    }
+
+    .provider-icon.configured svg {
+      color: var(--accent-success, #059669);
+    }
+
+    .provider-details {
+      flex: 1;
+      min-width: 0;
     }
 
     .provider-name {
       font-weight: 600;
       font-size: 0.875rem;
-      color: var(--text-primary, #1c1917);
+      color: var(--foreground, #0f172a);
+      margin-bottom: 0.125rem;
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
     }
 
-    .provider-category {
-      font-size: 0.6875rem;
-      padding: 0.125rem 0.5rem;
-      border-radius: var(--radius-sm, 0.375rem);
-      background: var(--text-muted, #a8a29e);
-      color: white;
+    .provider-category-tag {
+      font-size: 0.625rem;
+      padding: 0.125rem 0.375rem;
+      border-radius: 0.25rem;
+      background: var(--muted, #f1f5f9);
+      color: var(--muted-foreground, #64748b);
       text-transform: uppercase;
-      letter-spacing: 0.5px;
+      letter-spacing: 0.3px;
+      font-weight: 500;
     }
 
-    .provider-category.oauth { background: #f59e0b; }
-    .provider-category.enterprise { background: #8b5cf6; }
-    .provider-category.specialty { background: #06b6d4; }
+    .provider-category-tag.oauth { 
+      background: rgba(245, 158, 11, 0.1); 
+      color: #d97706; 
+    }
+    
+    .provider-category-tag.enterprise { 
+      background: rgba(139, 92, 246, 0.1); 
+      color: #8b5cf6; 
+    }
+    
+    .provider-category-tag.specialty { 
+      background: rgba(6, 182, 212, 0.1); 
+      color: #0891b2; 
+    }
 
-    .badge {
+    .provider-meta {
       font-size: 0.75rem;
-      padding: 0.125rem 0.5rem;
-      border-radius: var(--radius-sm, 0.375rem);
-      background: var(--bg-tertiary, #e7e5e4);
-      color: var(--text-secondary, #57534e);
+      color: var(--muted-foreground, #64748b);
     }
 
-    .badge.success {
+    /* Status Indicator */
+    .status-indicator {
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.25rem 0.625rem;
+      border-radius: 9999px;
+      font-size: 0.6875rem;
+      font-weight: 500;
+      flex-shrink: 0;
+    }
+
+    .status-indicator.configured {
       background: var(--accent-success-light, #d1fae5);
       color: var(--accent-success, #059669);
     }
 
-    .provider-input {
+    .status-indicator.not-configured {
+      background: var(--muted, #f1f5f9);
+      color: var(--muted-foreground, #94a3b8);
+    }
+
+    .status-indicator svg {
+      width: 12px;
+      height: 12px;
+    }
+
+    /* Expand Button */
+    .expand-btn {
+      padding: 0.375rem;
+      border: none;
+      background: transparent;
+      cursor: pointer;
+      border-radius: 0.375rem;
+      color: var(--muted-foreground, #64748b);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      transition: all var(--transition-fast, 150ms);
+      flex-shrink: 0;
+    }
+
+    .expand-btn:hover {
+      background: var(--muted, #f1f5f9);
+      color: var(--foreground, #0f172a);
+    }
+
+    .expand-btn svg {
+      width: 16px;
+      height: 16px;
+      transition: transform 150ms;
+    }
+
+    .expand-btn.expanded svg {
+      transform: rotate(180deg);
+    }
+
+    /* Expanded Content */
+    .provider-expanded {
+      width: 100%;
+      margin-top: 1rem;
+      padding-top: 1rem;
+      border-top: 1px solid var(--border, #e2e8f0);
+    }
+
+    /* Input Section */
+    .input-section {
       display: flex;
       gap: 0.5rem;
       align-items: stretch;
@@ -116,23 +232,26 @@ export class ProviderConfig extends LitElement {
 
     .api-key-input {
       width: 100%;
-      height: 100%;
       padding: 0.5rem 0.75rem;
-      padding-right: 4.5rem;
-      border: 1px solid var(--border-color, #e7e5e4);
-      border-radius: var(--radius-md, 0.5rem);
+      padding-right: 4rem;
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 0.5rem;
       font-size: 0.8125rem;
       font-family: var(--font-mono, monospace);
-      background: var(--bg-primary, #fafaf9);
-      color: var(--text-primary, #1c1917);
+      background: var(--background, #ffffff);
+      color: var(--foreground, #0f172a);
       transition: all var(--transition-fast, 150ms);
       box-sizing: border-box;
     }
 
     .api-key-input:focus {
       outline: none;
-      border-color: var(--accent-primary, #4f46e5);
-      box-shadow: 0 0 0 2px var(--accent-primary-light, #e0e7ff);
+      border-color: var(--primary, #3b82f6);
+      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+    }
+
+    .api-key-input::placeholder {
+      color: var(--muted-foreground, #94a3b8);
     }
 
     .input-actions {
@@ -148,8 +267,8 @@ export class ProviderConfig extends LitElement {
       border: none;
       background: transparent;
       cursor: pointer;
-      border-radius: var(--radius-sm, 0.375rem);
-      color: var(--text-muted, #a8a29e);
+      border-radius: 0.375rem;
+      color: var(--muted-foreground, #64748b);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -158,22 +277,22 @@ export class ProviderConfig extends LitElement {
     }
 
     .btn-icon:hover {
-      background: var(--bg-secondary, #f5f5f4);
-      color: var(--text-primary, #1c1917);
+      background: var(--muted, #f1f5f9);
+      color: var(--foreground, #0f172a);
     }
 
     .btn-icon svg {
-      width: 16px;
-      height: 16px;
+      width: 14px;
+      height: 14px;
     }
 
     .btn-oauth {
-      padding: 0.5rem 1rem;
-      border: 1px solid var(--accent-primary, #4f46e5);
+      padding: 0.5rem 0.875rem;
+      border: 1px solid var(--primary, #3b82f6);
       background: transparent;
-      color: var(--accent-primary, #4f46e5);
-      border-radius: var(--radius-md, 0.5rem);
-      font-size: 0.8125rem;
+      color: var(--primary, #3b82f6);
+      border-radius: 0.5rem;
+      font-size: 0.75rem;
       font-weight: 500;
       cursor: pointer;
       display: flex;
@@ -181,10 +300,11 @@ export class ProviderConfig extends LitElement {
       gap: 0.375rem;
       white-space: nowrap;
       transition: all var(--transition-fast, 150ms);
+      flex-shrink: 0;
     }
 
     .btn-oauth:hover {
-      background: var(--accent-primary, #4f46e5);
+      background: var(--primary, #3b82f6);
       color: white;
     }
 
@@ -193,28 +313,55 @@ export class ProviderConfig extends LitElement {
       cursor: not-allowed;
     }
 
+    .btn-oauth.revoke {
+      border-color: var(--accent-error, #dc2626);
+      color: var(--accent-error, #dc2626);
+    }
+
+    .btn-oauth.revoke:hover {
+      background: var(--accent-error, #dc2626);
+      color: white;
+    }
+
+    /* Help Text */
     .help-text {
-      margin-top: 0.5rem;
+      margin-top: 0.625rem;
       font-size: 0.75rem;
-      color: var(--text-secondary, #57534e);
+      color: var(--muted-foreground, #64748b);
       display: flex;
-      align-items: center;
+      align-items: flex-start;
       gap: 0.375rem;
-      white-space: pre-line;
+      line-height: 1.4;
+    }
+
+    .help-text svg {
+      width: 14px;
+      height: 14px;
+      flex-shrink: 0;
+      margin-top: 0.125rem;
     }
 
     .help-text.error-text {
       color: var(--accent-error, #dc2626);
-      background: var(--accent-error-light, #fee2e2);
-      padding: 0.5rem;
-      border-radius: var(--radius-md, 0.5rem);
+      background: rgba(254, 226, 226, 0.5);
+      padding: 0.5rem 0.625rem;
+      border-radius: 0.375rem;
     }
 
+    .help-text.env-text {
+      color: var(--muted-foreground, #64748b);
+      background: var(--muted, #f8fafc);
+      padding: 0.5rem 0.625rem;
+      border-radius: 0.375rem;
+      border: 1px dashed var(--border, #e2e8f0);
+    }
+
+    /* Spinner */
     .spinner {
       width: 14px;
       height: 14px;
-      border: 2px solid var(--border-color, #e7e5e4);
-      border-top-color: var(--accent-primary, #4f46e5);
+      border: 2px solid var(--border, #e2e8f0);
+      border-top-color: var(--primary, #3b82f6);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -223,15 +370,17 @@ export class ProviderConfig extends LitElement {
       to { transform: rotate(360deg); }
     }
 
+    /* OAuth Actions */
     .oauth-actions {
       display: flex;
       gap: 0.5rem;
       margin-top: 0.75rem;
+      flex-wrap: wrap;
     }
 
     .btn {
       padding: 0.5rem 1rem;
-      border-radius: var(--radius-md, 0.5rem);
+      border-radius: 0.5rem;
       font-size: 0.8125rem;
       font-weight: 500;
       cursor: pointer;
@@ -239,28 +388,30 @@ export class ProviderConfig extends LitElement {
       align-items: center;
       gap: 0.375rem;
       transition: all var(--transition-fast, 150ms);
+      text-decoration: none;
     }
 
     .btn-primary {
-      background: var(--accent-primary, #4f46e5);
+      background: var(--primary, #3b82f6);
       color: white;
       border: none;
     }
 
     .btn-primary:hover {
-      background: var(--accent-primary-dark, #4338ca);
+      background: var(--primary-dark, #2563eb);
     }
 
     .btn-secondary {
       background: transparent;
-      border: 1px solid var(--border-color, #e7e5e4);
-      color: var(--text-secondary, #57534e);
+      border: 1px solid var(--border, #e2e8f0);
+      color: var(--foreground, #0f172a);
     }
 
     .btn-secondary:hover {
-      background: var(--bg-secondary, #f5f5f4);
+      background: var(--muted, #f1f5f9);
     }
 
+    /* Code Input */
     .code-input {
       margin-top: 0.75rem;
       display: flex;
@@ -270,18 +421,53 @@ export class ProviderConfig extends LitElement {
     .code-input input {
       flex: 1;
       padding: 0.5rem 0.75rem;
-      border: 1px solid var(--border-color, #e7e5e4);
-      border-radius: var(--radius-md, 0.5rem);
+      border: 1px solid var(--border, #e2e8f0);
+      border-radius: 0.5rem;
       font-size: 0.8125rem;
+      background: var(--background, #ffffff);
+      color: var(--foreground, #0f172a);
+    }
+
+    .code-input input:focus {
+      outline: none;
+      border-color: var(--primary, #3b82f6);
+    }
+
+    .code-input input::placeholder {
+      color: var(--muted-foreground, #94a3b8);
+    }
+
+    /* Responsive */
+    @media (max-width: 640px) {
+      .provider-row {
+        flex-wrap: wrap;
+      }
+
+      .provider-main {
+        flex: 1 1 calc(100% - 60px);
+      }
+
+      .input-section {
+        flex-direction: column;
+      }
+
+      .btn-oauth {
+        width: 100%;
+        justify-content: center;
+      }
     }
   `;
-  
+
   disconnectedCallback() {
     super.disconnectedCallback();
     this._stopPolling();
     if (this._sessionId) {
       cleanupOAuthSession(this._sessionId, this.token).catch(() => {});
     }
+  }
+
+  private _toggleExpand() {
+    this._expanded = !this._expanded;
   }
   
   private _onApiKeyChange(e: Event) {
@@ -300,11 +486,8 @@ export class ProviderConfig extends LitElement {
     this._sessionId = undefined;
     
     try {
-      // Start async OAuth flow
       const result = await startAsyncOAuthLogin(this.provider, this.token);
       this._sessionId = result.sessionId;
-      
-      // Start polling for status
       this._startPolling();
     } catch (err) {
       this._oauthStatus = 'error';
@@ -332,7 +515,6 @@ export class ProviderConfig extends LitElement {
         if (status.status === 'waiting_auth' || status.status === 'waiting_code') {
           this._oauthStatus = status.status === 'waiting_code' ? 'waiting_code' : 'waiting';
           
-          // Open auth URL if available
           if (status.authUrl && !this._authUrl) {
             window.open(status.authUrl, '_blank');
           }
@@ -347,7 +529,6 @@ export class ProviderConfig extends LitElement {
             composed: true,
           }));
           
-          // Reload page after short delay
           setTimeout(() => {
             window.location.reload();
           }, 1500);
@@ -366,7 +547,7 @@ export class ProviderConfig extends LitElement {
       } catch (err) {
         console.error('Failed to poll OAuth status:', err);
       }
-    }, 1000); // Poll every second
+    }, 1000);
   }
 
   private _stopPolling() {
@@ -434,143 +615,167 @@ export class ProviderConfig extends LitElement {
     const isOAuthConfigured = this.configured && !isMasked;
     
     return html`
-      <div class="provider-item ${this.configured ? 'configured' : ''}">
-        <div class="provider-header">
-          <div style="display: flex; align-items: center; gap: 8px;">
-            <span class="provider-name">${this.displayName || this.provider}</span>
-            <span class="provider-category ${categoryClass}">${this.category}</span>
+      <div class="provider-row ${this.configured ? 'configured' : ''} ${this._expanded ? 'expanded' : ''}">
+        <div class="provider-main">
+          <div class="provider-icon ${this.configured ? 'configured' : ''}">
+            ${this.configured ? getIcon('checkCircle') : getIcon('key')}
           </div>
-          ${this.configured 
-            ? html`<span class="badge success">${getIcon('check')} Configured</span>` 
-            : html`<span class="badge">Not configured</span>`
-          }
-        </div>
-        
-        <div class="provider-input">
-          <div class="input-wrapper">
-            <input
-              class="api-key-input"
-              type="${this._showKey ? 'text' : 'password'}"
-              .value=${inputValue}
-              placeholder="${isMasked ? 'Configured via environment variable' : (this.configured ? 'Configured (leave empty to keep)' : 'sk-...')}"
-              @change=${this._onApiKeyChange}
-              ?disabled=${this._loading}
-            />
-            <div class="input-actions">
-              ${this.apiKey && !isMasked ? html`
-                <button 
-                  class="btn-icon" 
-                  @click=${this._copyToClipboard}
-                  title="${this._copied ? 'Copied!' : 'Copy API Key'}"
-                >
-                  ${getIcon(this._copied ? 'check' : 'copy')}
-                </button>
-              ` : ''}
-              <button 
-                class="btn-icon" 
-                @click=${() => this._showKey = !this._showKey}
-                title="${this._showKey ? 'Hide' : 'Show'} API Key"
-                ?disabled=${isMasked}
-              >
-                ${getIcon(this._showKey ? 'eyeOff' : 'eye')}
-              </button>
+          
+          <div class="provider-details">
+            <div class="provider-name">
+              ${this.displayName || this.provider}
+              <span class="provider-category-tag ${categoryClass}">${this.category}</span>
+            </div>
+            <div class="provider-meta">
+              ${isMasked 
+                ? 'Configured via environment variable' 
+                : (this.configured ? 'API key configured' : 'Not configured')
+              }
             </div>
           </div>
           
-          ${this.supportsOAuth ? html`
-            ${isOAuthConfigured
-              ? html`
-                  <button 
-                    class="btn-oauth" 
-                    @click=${this._onRevokeOAuth}
-                    ?disabled=${this._loading}
-                    style="border-color: var(--accent-error, #dc2626); color: var(--accent-error, #dc2626);"
-                  >
-                    ${getIcon('logOut')} Revoke
-                  </button>
-                `
-              : html`
-                  <button 
-                    class="btn-oauth" 
-                    @click=${this._onOAuthClick}
-                    ?disabled=${this._loading}
-                  >
-                    ${this._loading 
-                      ? html`<span class="spinner"></span> Processing...` 
-                      : html`${getIcon('externalLink')} OAuth Login`
-                    }
-                  </button>
-                `
+          <div class="status-indicator ${this.configured ? 'configured' : 'not-configured'}">
+            ${this.configured 
+              ? html`${getIcon('check')} Configured` 
+              : html`${getIcon('circle')} Not set`
             }
-          ` : ''}
+          </div>
+          
+          <button 
+            class="expand-btn ${this._expanded ? 'expanded' : ''}"
+            @click=${this._toggleExpand}
+            title="${this._expanded ? 'Collapse' : 'Configure'}"
+          >
+            ${getIcon('chevronDown')}
+          </button>
         </div>
-
-        ${this._oauthMessage ? html`
-          <div class="help-text ${this._oauthStatus === 'error' ? 'error-text' : ''}">
-            ${this._oauthStatus === 'success' ? getIcon('check') : (this._oauthStatus === 'error' ? getIcon('alertCircle') : getIcon('info'))}
-            ${this._oauthMessage}
-          </div>
-        ` : ''}
-
-        ${this._oauthStatus === 'waiting' || this._oauthStatus === 'waiting_code' ? html`
-          <div class="oauth-actions">
-            ${this._authUrl ? html`
-              <a 
-                class="btn btn-primary" 
-                href="${this._authUrl}" 
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                ${getIcon('externalLink')} Open Authorization Page
-              </a>
-            ` : ''}
-            <button 
-              class="btn btn-secondary" 
-              @click=${this._onCancelOAuth}
-            >
-              ${getIcon('x')} Cancel
-            </button>
-          </div>
-        ` : ''}
-
-        ${this._oauthStatus === 'waiting_code' ? html`
-          <div class="code-input">
-            <input 
-              type="text" 
-              placeholder="Paste redirect URL or authorization code..."
-              @keydown=${(e: KeyboardEvent) => {
-                if (e.key === 'Enter') {
-                  const input = e.target as HTMLInputElement;
-                  this._onSubmitCode(input.value);
-                  input.value = '';
-                }
-              }}
-            />
-            <button 
-              class="btn btn-primary"
-              @click=${() => {
-                const input = this.shadowRoot?.querySelector('.code-input input') as HTMLInputElement;
-                if (input?.value) {
-                  this._onSubmitCode(input.value);
-                  input.value = '';
-                }
-              }}
-            >
-              Submit
-            </button>
-          </div>
-        ` : ''}
         
-        ${isMasked ? html`
-          <div class="help-text">
-            ${getIcon('info')} API key is configured via environment variable and cannot be displayed.
-            Enter a new key above to override, or leave empty to keep the current configuration.
-          </div>
-        ` : ''}
-        ${this.supportsOAuth && !isMasked && !isOAuthConfigured ? html`
-          <div class="help-text">
-            This provider supports OAuth login. Click "OAuth Login" to authenticate via browser, 
-            or enter an API key manually above.
+        ${this._expanded ? html`
+          <div class="provider-expanded">
+            <div class="input-section">
+              <div class="input-wrapper">
+                <input
+                  class="api-key-input"
+                  type="${this._showKey ? 'text' : 'password'}"
+                  .value=${inputValue}
+                  placeholder="${isMasked ? 'Configured via environment variable' : (this.configured ? 'Configured (leave empty to keep)' : 'sk-...')}"
+                  @change=${this._onApiKeyChange}
+                  ?disabled=${this._loading}
+                />
+                <div class="input-actions">
+                  ${this.apiKey && !isMasked ? html`
+                    <button 
+                      class="btn-icon" 
+                      @click=${this._copyToClipboard}
+                      title="${this._copied ? 'Copied!' : 'Copy API Key'}"
+                    >
+                      ${getIcon(this._copied ? 'check' : 'copy')}
+                    </button>
+                  ` : ''}
+                  <button 
+                    class="btn-icon" 
+                    @click=${() => this._showKey = !this._showKey}
+                    title="${this._showKey ? 'Hide' : 'Show'} API Key"
+                    ?disabled=${isMasked}
+                  >
+                    ${getIcon(this._showKey ? 'eyeOff' : 'eye')}
+                  </button>
+                </div>
+              </div>
+              
+              ${this.supportsOAuth ? html`
+                ${isOAuthConfigured
+                  ? html`
+                      <button 
+                        class="btn-oauth revoke" 
+                        @click=${this._onRevokeOAuth}
+                        ?disabled=${this._loading}
+                      >
+                        ${getIcon('logOut')} Revoke
+                      </button>
+                    `
+                  : html`
+                      <button 
+                        class="btn-oauth" 
+                        @click=${this._onOAuthClick}
+                        ?disabled=${this._loading}
+                      >
+                        ${this._loading 
+                          ? html`<span class="spinner"></span>` 
+                          : html`${getIcon('logIn')} OAuth`
+                        }
+                      </button>
+                    `
+                }
+              ` : ''}
+            </div>
+
+            ${this._oauthMessage ? html`
+              <div class="help-text ${this._oauthStatus === 'error' ? 'error-text' : ''}">
+                ${this._oauthStatus === 'success' ? getIcon('checkCircle') : (this._oauthStatus === 'error' ? getIcon('alertCircle') : getIcon('info'))}
+                <span>${this._oauthMessage}</span>
+              </div>
+            ` : ''}
+
+            ${this._oauthStatus === 'waiting' || this._oauthStatus === 'waiting_code' ? html`
+              <div class="oauth-actions">
+                ${this._authUrl ? html`
+                  <a 
+                    class="btn btn-primary" 
+                    href="${this._authUrl}" 
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
+                    ${getIcon('externalLink')} Open Auth Page
+                  </a>
+                ` : ''}
+                <button 
+                  class="btn btn-secondary" 
+                  @click=${this._onCancelOAuth}
+                >
+                  ${getIcon('x')} Cancel
+                </button>
+              </div>
+            ` : ''}
+
+            ${this._oauthStatus === 'waiting_code' ? html`
+              <div class="code-input">
+                <input 
+                  type="text" 
+                  placeholder="Paste redirect URL or code..."
+                  @keydown=${(e: KeyboardEvent) => {
+                    if (e.key === 'Enter') {
+                      const input = e.target as HTMLInputElement;
+                      this._onSubmitCode(input.value);
+                      input.value = '';
+                    }
+                  }}
+                />
+                <button 
+                  class="btn btn-primary"
+                  @click=${() => {
+                    const input = this.shadowRoot?.querySelector('.code-input input') as HTMLInputElement;
+                    if (input?.value) {
+                      this._onSubmitCode(input.value);
+                      input.value = '';
+                    }
+                  }}
+                >
+                  Submit
+                </button>
+              </div>
+            ` : ''}
+            
+            ${isMasked ? html`
+              <div class="help-text env-text">
+                ${getIcon('info')} API key is set via environment variable. Enter a new key above to override.
+              </div>
+            ` : ''}
+            ${this.supportsOAuth && !isMasked && !isOAuthConfigured ? html`
+              <div class="help-text">
+                ${getIcon('info')} Use OAuth for secure authentication, or enter API key manually.
+              </div>
+            ` : ''}
           </div>
         ` : ''}
       </div>
