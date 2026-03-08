@@ -73,18 +73,25 @@ export function createOAuthHandler() {
     }
 
     try {
-      // For Device Code Flow, we need callbacks
+      // For Device Code Flow, we need callbacks with onPrompt
       let authResult: any = null;
       
       const callbacks: OAuthLoginCallbacks = {
         onAuth: (auth: { url: string; instructions?: string }) => {
           authResult = { url: auth.url, instructions: auth.instructions };
         },
-        onSuccess: (creds: any) => {
-          authResult = { success: true, credentials: creds };
+        // For Device Code Flow: return the device code user needs to enter
+        onPrompt: async (prompt: { message: string; deviceCode?: string; verificationUri?: string }) => {
+          authResult = { 
+            message: prompt.message, 
+            deviceCode: prompt.deviceCode,
+            verificationUri: prompt.verificationUri,
+          };
+          // Return empty string - we'll handle this differently via the response
+          return prompt.deviceCode || '';
         },
-        onError: (error: Error) => {
-          authResult = { error: error.message };
+        onProgress: (message: string) => {
+          console.log('OAuth progress:', message);
         },
       };
 
