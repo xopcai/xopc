@@ -5,6 +5,7 @@
 import { html, LitElement, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons.js';
+import { startOAuthLogin, revokeOAuth } from '../utils/oauth-api.js';
 
 export interface ProviderConfigChangeEvent {
   provider: string;
@@ -13,6 +14,9 @@ export interface ProviderConfigChangeEvent {
 
 export interface ProviderOAuthEvent {
   provider: string;
+  success: boolean;
+  message?: string;
+  error?: string;
 }
 
 @customElement('provider-config')
@@ -23,11 +27,14 @@ export class ProviderConfig extends LitElement {
   @property({ type: Boolean }) supportsOAuth: boolean = false;
   @property({ type: String }) displayName: string = '';
   @property({ type: String }) category: string = 'common';
+  @property({ type: String }) token?: string;
   
   @state() private _showKey: boolean = false;
   @state() private _copied: boolean = false;
   @state() private _loading: boolean = false;
   @state() private _localValue: string = '';
+  @state() private _oauthStatus?: 'idle' | 'waiting' | 'success' | 'error';
+  @state() private _oauthMessage?: string;
   
   static styles = css`
     :host { display: block; }
@@ -180,6 +187,16 @@ export class ProviderConfig extends LitElement {
       margin-top: 0.5rem;
       font-size: 0.75rem;
       color: var(--text-secondary, #57534e);
+      display: flex;
+      align-items: center;
+      gap: 0.375rem;
+    }
+
+    .help-text.error-text {
+      color: var(--accent-error, #dc2626);
+      background: var(--accent-error-light, #fee2e2);
+      padding: 0.5rem;
+      border-radius: var(--radius-md, 0.5rem);
     }
 
     .spinner {
@@ -205,12 +222,77 @@ export class ProviderConfig extends LitElement {
     }));
   }
   
-  private _onOAuthClick() {
-    this.dispatchEvent(new CustomEvent<ProviderOAuthEvent>('oauth', {
-      detail: { provider: this.provider },
-      bubbles: true,
-      composed: true,
-    }));
+  private async _onOAuthClick() {
+    this._loading = true;
+    this._oauthStatus = 'waiting';
+    this._oauthMessage = 'Starting OAuth login...';
+    
+    try {
+      const result = await startOAuthLogin(this.provider, this.token);
+      
+      if (result.success) {
+        this._oauthStatus = 'success';
+        
+        // Handle callback server providers (Google Antigravity, Gemini CLI, OpenAI Codex)
+        if (result.usesCallbackServer) {
+          if (result.authUrl) {
+            // Open authorization URL
+            window.open(result.authUrl, '_blank');
+            this._oauthMessage = `1. Click "Open Authorization Page" below to authenticate in your browser.\n2. After authorization, the page will automatically detect completion.`;
+          } else if (result.manualCodeRequested) {
+            // Manual code input needed
+            this._oauthMessage = `Please complete authorization at: ${result.verificationUri}\n\nEnter the code when prompted.`;
+          }
+        } else {
+          // Standard OAuth flow
+          this._oauthMessage = result.message;
+          
+          // If there's an auth URL, open it in a new window
+          if (result.authUrl) {
+            window.open(result.authUrl, '_blank');
+            this._oauthMessage = `Opening authorization page... ${result.instructions || ''}`;
+          }
+          
+          // Show device code if available
+          if (result.deviceCode && result.verificationUri) {
+            this._oauthMessage = `Go to ${result.verificationUri} and enter code: ${result.deviceCode}`;
+          }
+        }
+        
+        // Notify parent of success
+        this.dispatchEvent(new CustomEvent<ProviderOAuthEvent>('oauth', {
+          detail: { provider: this.provider, success: true, message: result.message },
+          bubbles: true,
+          composed: true,
+        }));
+        
+        // Reload page after short delay to reflect new config
+        setTimeout(() => {
+          window.location.reload();
+        }, 2000);
+      }
+    } catch (err) {
+      this._oauthStatus = 'error';
+      this._oauthMessage = err instanceof Error ? err.message : 'OAuth login failed';
+      
+      this.dispatchEvent(new CustomEvent<ProviderOAuthEvent>('oauth', {
+        detail: { provider: this.provider, success: false, error: this._oauthMessage },
+        bubbles: true,
+        composed: true,
+      }));
+    } finally {
+      this._loading = false;
+    }
+  }
+  
+  private _onRevokeOAuth() {
+    if (confirm(`Revoke OAuth credentials for ${this.displayName}?`)) {
+      revokeOAuth(this.provider, this.token).then(() => {
+        window.location.reload();
+      }).catch(err => {
+        alert(`Failed to revoke: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      });
+    }
   }
   
   private async _copyToClipboard() {
@@ -231,6 +313,7 @@ export class ProviderConfig extends LitElement {
     const categoryClass = this.category.toLowerCase();
     const isMasked = this.apiKey === '••••••••••••';
     const inputValue = isMasked && !this._showKey ? '' : this.apiKey;
+    const isOAuthConfigured = this.configured && !isMasked;
     
     return html`
       <div class="provider-item ${this.configured ? 'configured' : ''}">
@@ -277,18 +360,53 @@ export class ProviderConfig extends LitElement {
           </div>
           
           ${this.supportsOAuth ? html`
-            <button 
-              class="btn-oauth" 
-              @click=${this._onOAuthClick}
-              ?disabled=${this._loading}
-            >
-              ${this._loading 
-                ? html`<span class="spinner"></span> Processing...` 
-                : html`${getIcon('externalLink')} OAuth Login`
-              }
-            </button>
+            ${isOAuthConfigured
+              ? html`
+                  <button 
+                    class="btn-oauth" 
+                    @click=${this._onRevokeOAuth}
+                    ?disabled=${this._loading}
+                    style="border-color: var(--accent-error, #dc2626); color: var(--accent-error, #dc2626);"
+                  >
+                    ${getIcon('logOut')} Revoke
+                  </button>
+                `
+              : html`
+                  <button 
+                    class="btn-oauth" 
+                    @click=${this._onOAuthClick}
+                    ?disabled=${this._loading}
+                  >
+                    ${this._loading 
+                      ? html`<span class="spinner"></span> Processing...` 
+                      : html`${getIcon('externalLink')} OAuth Login`
+                    }
+                  </button>
+                `
+            }
           ` : ''}
         </div>
+
+        ${this._oauthStatus === 'waiting' && this._oauthMessage?.includes('authorization page') ? html`
+          <div style="margin-top: 0.75rem;">
+            <button 
+              class="btn btn-primary"
+              @click=${() => {
+                // Auth URL already opened in _onOAuthClick
+                this._oauthMessage = 'Waiting for authorization completion...';
+              }}
+            >
+              ${getIcon('externalLink')} Open Authorization Page
+            </button>
+          </div>
+        ` : ''}
+        
+        ${this._oauthMessage ? html`
+          <div class="help-text ${this._oauthStatus === 'error' ? 'error-text' : ''}" style="margin-top: 0.5rem;">
+            ${this._oauthStatus === 'success' ? getIcon('check') : (this._oauthStatus === 'error' ? getIcon('alertCircle') : getIcon('info'))}
+            ${this._oauthMessage}
+          </div>
+        ` : ''}
         
         ${isMasked ? html`
           <div class="help-text">
@@ -296,7 +414,7 @@ export class ProviderConfig extends LitElement {
             Enter a new key above to override, or leave empty to keep the current configuration.
           </div>
         ` : ''}
-        ${this.supportsOAuth && !isMasked ? html`
+        ${this.supportsOAuth && !isMasked && !isOAuthConfigured ? html`
           <div class="help-text">
             This provider supports OAuth login. Click "OAuth Login" to authenticate via browser, 
             or enter an API key manually above.

@@ -237,6 +237,7 @@ export class ProviderList extends LitElement {
                     .configured=${provider.configured}
                     .supportsOAuth=${provider.supportsOAuth}
                     .category=${provider.category}
+                    .token=${this.token}
                     @change=${this._onProviderChange}
                     @oauth=${this._onProviderOAuth}
                   ></provider-config>

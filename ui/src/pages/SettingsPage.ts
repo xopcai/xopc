@@ -301,9 +301,15 @@ export class SettingsPage extends LitElement {
   }
 
   private _onProviderOAuth(e: CustomEvent<ProviderListOAuthEvent>) {
-    const { provider } = e.detail;
-    console.log('OAuth login requested for:', provider);
-    alert(`OAuth login for ${provider} - Not yet implemented`);
+    const { provider, success, message, error } = e.detail;
+    
+    if (success) {
+      console.log('OAuth login successful for:', provider, message);
+      // Page will reload automatically
+    } else if (error) {
+      console.error('OAuth login failed for:', provider, error);
+      alert(`OAuth login failed: ${error}`);
+    }
   }
 
   private _toggleTelegramTokenVisibility() {

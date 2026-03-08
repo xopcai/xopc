@@ -80,6 +80,7 @@ export function createOAuthHandler(service: GatewayService) {
 
     try {
       let authResult: any = null;
+      let manualCodeRequested = false;
       
       const callbacks: OAuthLoginCallbacks = {
         onAuth: (auth: { url: string; instructions?: string }) => {
@@ -95,6 +96,12 @@ export function createOAuthHandler(service: GatewayService) {
         },
         onProgress: (message: string) => {
           console.log('OAuth progress:', message);
+        },
+        onManualCodeInput: async () => {
+          // For callback server providers, signal that manual code input is needed
+          manualCodeRequested = true;
+          // Return empty - frontend will handle manual input
+          return '';
         },
       };
 
@@ -122,7 +129,10 @@ export function createOAuthHandler(service: GatewayService) {
           expires: credentials.expires,
           authUrl: authResult?.url,
           deviceCode: authResult?.deviceCode,
+          verificationUri: authResult?.verificationUri,
           instructions: authResult?.instructions,
+          usesCallbackServer: oauthProvider.usesCallbackServer ?? false,
+          manualCodeRequested,
         } 
       });
     } catch (err) {
