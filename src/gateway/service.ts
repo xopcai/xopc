@@ -162,7 +162,7 @@ export class GatewayService {
     this.running = true;
 
     // Start channels (initialize first, then start)
-    await this.channelManager.initializePlugins();
+    await this.channelManager.initializeChannels();
     await this.channelManager.startAll();
 
     // Initialize session manager

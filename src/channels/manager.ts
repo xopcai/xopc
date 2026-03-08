@@ -25,7 +25,7 @@ export class ChannelManager {
     this.config = config;
   }
 
-  async initializePlugins(): Promise<void> {
+  async initializeChannels(): Promise<void> {
     if (this.initialized) return;
 
     for (const plugin of PLUGINS) {
@@ -37,9 +37,9 @@ export class ChannelManager {
             config: this.config,
             channelConfig,
           });
-          log.info({ channel: plugin.id }, 'Channel plugin initialized');
+          log.info({ channel: plugin.id }, 'Channel initialized');
         } catch (err) {
-          log.error({ channel: plugin.id, err }, 'Failed to initialize channel plugin');
+          log.error({ channel: plugin.id, err }, 'Failed to initialize channel');
         }
       }
     }
@@ -55,7 +55,7 @@ export class ChannelManager {
       if (channelConfig?.enabled) {
         promises.push(
           plugin.start().catch(err => {
-            log.error({ channel: plugin.id, err }, 'Failed to start channel plugin');
+            log.error({ channel: plugin.id, err }, 'Failed to start channel');
           })
         );
       }
@@ -72,7 +72,7 @@ export class ChannelManager {
       if (channelConfig?.enabled) {
         promises.push(
           plugin.stop().catch(err => {
-            log.error({ channel: plugin.id, err }, 'Failed to stop channel plugin');
+            log.error({ channel: plugin.id, err }, 'Failed to stop channel');
           })
         );
       }
