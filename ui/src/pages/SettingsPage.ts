@@ -184,8 +184,8 @@ export class SettingsPage extends LitElement {
     if (!this.config?.token) return;
     
     try {
-      // Connect to SSE endpoint
-      const url = `${window.location.origin}/api/events`;
+      // Connect to SSE endpoint with token in query parameter
+      const url = `${window.location.origin}/api/events?token=${this.config.token}`;
       this._eventSource = new EventSource(url);
       
       this._eventSource.addEventListener('registry.updated', () => {
