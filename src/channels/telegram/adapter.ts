@@ -73,7 +73,7 @@ export class TelegramAdapter implements ChannelAdapter {
     // Handle voice message transcription
     let attachments: MessageAttachment[] | undefined;
     if (message.voice || message.audio) {
-      // Voice transcription would be handled by the plugin
+      // Voice transcription would be handled by the extension
       // Here we just mark it as a voice attachment
       attachments = [{
         type: 'voice',

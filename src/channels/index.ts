@@ -8,7 +8,7 @@
  */
 
 export * from './types.js';
-export { telegramPlugin } from './telegram/plugin.js';
+export { telegramExtension } from './telegram/extension.js';
 export { TelegramClient } from './telegram/client.js';
 export { createTelegramCommandHandler } from './telegram/command-handler.js';
 export { TelegramInlineKeyboards } from './telegram/inline-keyboards.js';

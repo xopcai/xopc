@@ -1,18 +1,18 @@
 /**
- * Context Injector Plugin - Phase 1 Context Hook Example
+ * Context Injector Extension - Phase 1 Context Hook Example
  *
  * Demonstrates: Context hook to inject system messages before LLM
  *
- * Usage: xopcbot plugin install ./examples/plugins/context-injector
+ * Usage: xopcbot extension install ./examples/extensions/context-injector
  */
 
-import type { PluginApi } from 'xopcbot/plugin-sdk';
+import type { ExtensionApi } from 'xopcbot/extension-sdk';
 
-export default function(api: PluginApi) {
-  const config = api.pluginConfig;
+export default function(api: ExtensionApi) {
+  const config = api.extensionConfig;
   const injectedContext = (config.injectedContext as string) || 'Remember to be concise.';
 
-  api.logger.info('Context Injector plugin registered!');
+  api.logger.info('Context Injector extension registered!');
 
   // Context Hook: Inject system messages before sending to LLM
   api.registerHook('context', async (event) => {
@@ -31,12 +31,12 @@ export default function(api: PluginApi) {
     if (lastSystemIndex >= 0) {
       messages.splice(lastSystemIndex + 1, 0, {
         role: 'system',
-        content: `[Plugin Context] ${injectedContext}`,
+        content: `[Extension Context] ${injectedContext}`,
       });
     } else {
       messages.unshift({
         role: 'system',
-        content: `[Plugin Context] ${injectedContext}`,
+        content: `[Extension Context] ${injectedContext}`,
       });
     }
 

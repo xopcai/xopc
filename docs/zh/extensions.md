@@ -1,35 +1,35 @@
-# xopcbot 插件系统
+# xopcbot 扩展系统
 
-xopcbot 提供了一个轻量级但功能强大的插件系统。
+xopcbot 提供了一个轻量级但功能强大的扩展系统。
 
 ## 特性
 
 - 🏗️ **三级存储架构** - Workspace / Global / Bundled
-- 🔌 **Plugin SDK** - 官方 SDK，统一导入路径
+- 🔌 **Extension SDK** - 官方 SDK，统一导入路径
 - ⚡ **TypeScript 原生** - 通过 jiti 即时加载，无需编译
 - 📦 **多源安装** - 支持 npm、本地目录、Git 仓库
 
 ## 快速开始
 
-### 安装插件
+### 安装扩展
 
 **方式一：使用 CLI（推荐）**
 
 ```bash
 # 从 npm 安装到 workspace
-xopcbot plugin install xopcbot-plugin-hello
+xopcbot extension install xopcbot-extension-hello
 
 # 安装到 global（跨项目共享）
-xopcbot plugin install xopcbot-plugin-hello --global
+xopcbot extension install xopcbot-extension-hello --global
 
 # 从本地目录安装
-xopcbot plugin install ./my-local-plugin
+xopcbot extension install ./my-local-extension
 
-# 查看已安装插件
-xopcbot plugin list
+# 查看已安装扩展
+xopcbot extension list
 
-# 移除插件
-xopcbot plugin remove hello
+# 移除扩展
+xopcbot extension remove hello
 ```
 
 **方式二：手动安装**
@@ -37,14 +37,14 @@ xopcbot plugin remove hello
 ```bash
 # Global 目录
 cd ~/.xopcbot/extensions
-git clone https://github.com/your/plugin.git
+git clone https://github.com/your/extension.git
 
 # 或 Workspace 目录
 cd workspace/.extensions
-git clone https://github.com/your/plugin.git
+git clone https://github.com/your/extension.git
 ```
 
-### 启用插件
+### 启用扩展
 
 在 `~/.xopcbot/config.json` 中配置：
 
@@ -62,9 +62,9 @@ git clone https://github.com/your/plugin.git
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `enabled` | `string[]` | 要启用的插件 ID 列表 |
-| `disabled` | `string[]` | （可选）禁用的插件 ID 列表 |
-| `[plugin-id]` | `object \| boolean` | 插件特定配置 |
+| `enabled` | `string[]` | 要启用的扩展 ID 列表 |
+| `disabled` | `string[]` | （可选）禁用的扩展 ID 列表 |
+| `[extension-id]` | `object \| boolean` | 扩展特定配置 |
 
 **示例配置：**
 
@@ -72,7 +72,7 @@ git clone https://github.com/your/plugin.git
 {
   "extensions": {
     "enabled": ["telegram-channel", "weather-tool", "echo"],
-    "disabled": ["deprecated-plugin"],
+    "disabled": ["deprecated-extension"],
     "telegram-channel": {
       "token": "bot-token-here",
       "webhookUrl": "https://example.com/webhook"
@@ -86,67 +86,67 @@ git clone https://github.com/your/plugin.git
 }
 ```
 
-- `enabled` 数组中的插件会被加载
-- 插件 ID 作为 key 可以配置插件特定的选项
-- 如果插件不需要配置，可以设为 `true`
+- `enabled` 数组中的扩展会被加载
+- 扩展 ID 作为 key 可以配置扩展特定的选项
+- 如果扩展不需要配置，可以设为 `true`
 
-### 创建新插件
+### 创建新扩展
 
 ```bash
-# 创建插件脚手架
-xopcbot plugin create my-plugin --name "My Plugin" --kind utility
+# 创建扩展脚手架
+xopcbot extension create my-extension --name "My Extension" --kind utility
 
 # 支持的 kind: channel|provider|memory|tool|utility
 ```
 
 这将创建：
 - `package.json` - npm 配置
-- `index.ts` - 插件入口（TypeScript，使用 xopcbot/plugin-sdk）
-- `xopcbot.plugin.json` - 插件清单
+- `index.ts` - 扩展入口（TypeScript，使用 xopcbot/extension-sdk）
+- `xopcbot.extension.json` - 扩展清单
 - `README.md` - 文档模板
 
 ---
 
 ## 三级存储架构
 
-xopcbot 支持三级插件存储，按优先级从高到低：
+xopcbot 支持三级扩展存储，按优先级从高到低：
 
 | 级别 | 路径 | 用途 | 优先级 |
 |------|------|------|--------|
-| **Workspace** | `workspace/.extensions/` | 项目私有插件 | ⭐⭐⭐ 最高 |
-| **Global** | `~/.xopcbot/extensions/` | 用户级共享插件 | ⭐⭐ 中 |
-| **Bundled** | `xopcbot/extensions/` | 内置插件 | ⭐ 最低 |
+| **Workspace** | `workspace/.extensions/` | 项目私有扩展 | ⭐⭐⭐ 最高 |
+| **Global** | `~/.xopcbot/extensions/` | 用户级共享扩展 | ⭐⭐ 中 |
+| **Bundled** | `xopcbot/extensions/` | 内置扩展 | ⭐ 最低 |
 
 ### 优先级规则
 
-- **Workspace** 插件可以覆盖 **Global** 和 **Bundled** 同名插件
-- **Global** 插件可以覆盖 **Bundled** 同名插件
+- **Workspace** 扩展可以覆盖 **Global** 和 **Bundled** 同名扩展
+- **Global** 扩展可以覆盖 **Bundled** 同名扩展
 - 适合场景：
-  - Workspace：项目特定的定制插件
-  - Global：常用的共享插件（如 telegram-channel）
-  - Bundled：随 xopcbot 发布的官方插件
+  - Workspace：项目特定的定制扩展
+  - Global：常用的共享扩展（如 telegram-channel）
+  - Bundled：随 xopcbot 发布的官方扩展
 
-### Global 插件目录
+### Global 扩展目录
 
 ```bash
 # 默认位置
 ~/.xopcbot/extensions/
 
 # 自定义位置（环境变量）
-export XOPCBOT_GLOBAL_PLUGINS=/path/to/global/extensions
+export XOPCBOT_GLOBAL_EXTENSIONS=/path/to/global/extensions
 ```
 
 ---
 
-## Plugin SDK
+## Extension SDK
 
-xopcbot 提供官方 Plugin SDK，统一导出所有插件开发所需的类型和接口。
+xopcbot 提供官方 Extension SDK，统一导出所有扩展开发所需的类型和接口。
 
 ### 使用 SDK
 
 ```typescript
 // 推荐方式：使用官方 SDK
-import type { PluginApi, PluginDefinition } from 'xopcbot/plugin-sdk';
+import type { ExtensionApi, ExtensionDefinition } from 'xopcbot/extension-sdk';
 
 // 不推荐使用内部路径
 // import type { ... } from 'xopcbot/extensions';  ❌
@@ -157,42 +157,42 @@ import type { PluginApi, PluginDefinition } from 'xopcbot/plugin-sdk';
 ```typescript
 // 核心类型
 import type {
-  PluginDefinition,      // 插件定义
-  PluginApi,             // 插件 API
-  PluginLogger,          // 日志接口
-} from 'xopcbot/plugin-sdk';
+  ExtensionDefinition,      // 扩展定义
+  ExtensionApi,             // 扩展 API
+  ExtensionLogger,          // 日志接口
+} from 'xopcbot/extension-sdk';
 
 // 工具
 import type {
-  PluginTool,            // 工具定义
-  PluginToolContext,     // 工具上下文
-} from 'xopcbot/plugin-sdk';
+  ExtensionTool,            // 工具定义
+  ExtensionToolContext,     // 工具上下文
+} from 'xopcbot/extension-sdk';
 
 // 钩子
 import type {
-  PluginHookEvent,       // 钩子事件类型
-  PluginHookHandler,     // 钩子处理器
+  ExtensionHookEvent,       // 钩子事件类型
+  ExtensionHookHandler,     // 钩子处理器
   HookOptions,           // 钩子选项
-} from 'xopcbot/plugin-sdk';
+} from 'xopcbot/extension-sdk';
 
 // 通道
 import type {
-  ChannelPlugin,         // 通道插件
+  ChannelExtension,         // 通道扩展
   OutboundMessage,       // 出站消息
-} from 'xopcbot/plugin-sdk';
+} from 'xopcbot/extension-sdk';
 
 // 命令
 import type {
-  PluginCommand,         // 命令定义
+  ExtensionCommand,         // 命令定义
   CommandContext,        // 命令上下文
   CommandResult,         // 命令结果
-} from 'xopcbot/plugin-sdk';
+} from 'xopcbot/extension-sdk';
 
 // 服务
 import type {
-  PluginService,         // 服务定义
+  ExtensionService,         // 服务定义
   ServiceContext,        // 服务上下文
-} from 'xopcbot/plugin-sdk';
+} from 'xopcbot/extension-sdk';
 ```
 
 ### SDK 路径解析
@@ -203,58 +203,58 @@ import type {
 // jiti 配置
 {
   alias: {
-    'xopcbot/plugin-sdk': './src/plugin-sdk/index.ts'
+    'xopcbot/extension-sdk': './src/extension-sdk/index.ts'
   }
 }
 ```
 
-这意味着插件开发时无需关心 xopcbot 源码位置，SDK 路径会自动解析。
+这意味着扩展开发时无需关心 xopcbot 源码位置，SDK 路径会自动解析。
 ```
 
 这将创建：
 - `package.json` - npm 配置
-- `index.ts` - 插件入口（TypeScript，支持 jiti 即时加载）
-- `xopcbot.plugin.json` - 插件清单
+- `index.ts` - 扩展入口（TypeScript，支持 jiti 即时加载）
+- `xopcbot.extension.json` - 扩展清单
 - `README.md` - 文档模板
 
 ## CLI 命令参考
 
-### plugin install
+### extension install
 
-安装插件。
+安装扩展。
 
 ```bash
 # 从 npm 安装
-xopcbot plugin install <package-name>
+xopcbot extension install <package-name>
 
 # 安装特定版本
-xopcbot plugin install my-plugin@1.0.0
+xopcbot extension install my-extension@1.0.0
 
 # 从本地目录安装
-xopcbot plugin install ./local-plugin-dir
-xopcbot plugin install /absolute/path/to/plugin
+xopcbot extension install ./local-extension-dir
+xopcbot extension install /absolute/path/to/extension
 
 # 设置超时时间（默认 120 秒）
-xopcbot plugin install slow-plugin --timeout 300000
+xopcbot extension install slow-extension --timeout 300000
 ```
 
 **安装流程**：
-1. 下载/复制插件文件
-2. 验证 `xopcbot.plugin.json` 清单
+1. 下载/复制扩展文件
+2. 验证 `xopcbot.extension.json` 清单
 3. 安装依赖（如有 `package.json` 依赖）
 4. 复制到工作区 `.extensions/` 目录
 
-### plugin list
+### extension list
 
-列出所有已安装插件。
+列出所有已安装扩展。
 
 ```bash
-xopcbot plugin list
+xopcbot extension list
 ```
 
 **输出示例**：
 ```
-📦 Installed Plugins
+📦 Installed Extensions
 
 ════════════════════════════════════════════════════════════
 
@@ -263,64 +263,64 @@ xopcbot plugin list
      Version: 1.2.0
      Path: /home/user/.xopcbot/workspace/.extensions/telegram-channel
 
-  📁 My Custom Plugin
-     ID: my-custom-plugin
+  📁 My Custom Extension
+     ID: my-custom-extension
      Version: 0.1.0
-     Path: /home/user/.xopcbot/workspace/.extensions/my-custom-plugin
+     Path: /home/user/.xopcbot/workspace/.extensions/my-custom-extension
 ```
 
-### plugin remove / uninstall
+### extension remove / uninstall
 
-移除已安装插件。
+移除已安装扩展。
 
 ```bash
-xopcbot plugin remove <plugin-id>
-xopcbot plugin uninstall <plugin-id>
+xopcbot extension remove <extension-id>
+xopcbot extension uninstall <extension-id>
 ```
 
-**注意**：移除插件后，如果已启用，还需要从配置文件中删除。
+**注意**：移除扩展后，如果已启用，还需要从配置文件中删除。
 
-### plugin info
+### extension info
 
-查看插件详情。
+查看扩展详情。
 
 ```bash
-xopcbot plugin info <plugin-id>
+xopcbot extension info <extension-id>
 ```
 
-### plugin create
+### extension create
 
-创建新插件脚手架。
+创建新扩展脚手架。
 
 ```bash
-xopcbot plugin create <plugin-id> [options]
+xopcbot extension create <extension-id> [options]
 
 Options:
-  --name <name>           插件显示名称
-  --description <desc>    插件描述
-  --kind <kind>          插件类型: channel|provider|memory|tool|utility
+  --name <name>           扩展显示名称
+  --description <desc>    扩展描述
+  --kind <kind>          扩展类型: channel|provider|memory|tool|utility
 ```
 
 **示例**：
 ```bash
-# 创建一个工具类插件
-xopcbot plugin create weather-tool --name "Weather Tool" --kind tool
+# 创建一个工具类扩展
+xopcbot extension create weather-tool --name "Weather Tool" --kind tool
 
-# 创建一个通道类插件
-xopcbot plugin create discord-channel --name "Discord Channel" --kind channel
+# 创建一个通道类扩展
+xopcbot extension create discord-channel --name "Discord Channel" --kind channel
 ```
 
-## 插件结构
+## 扩展结构
 
 ### Manifest 文件
 
-每个插件必须包含一个 `xopcbot.plugin.json` 文件：
+每个扩展必须包含一个 `xopcbot.extension.json` 文件：
 
 ```json
 {
-  "id": "my-plugin",
-  "name": "My Plugin",
-  "description": "A description of my plugin",
+  "id": "my-extension",
+  "name": "My Extension",
+  "description": "A description of my extension",
   "version": "1.0.0",
   "main": "index.js",
   "configSchema": {
@@ -335,20 +335,20 @@ xopcbot plugin create discord-channel --name "Discord Channel" --kind channel
 }
 ```
 
-### 插件入口文件
+### 扩展入口文件
 
 ```javascript
 // index.js
-import type { PluginApi } from 'xopcbot-plugin-sdk';
+import type { ExtensionApi } from 'xopcbot-extension-sdk';
 
-const plugin = {
-  id: 'my-plugin',
-  name: 'My Plugin',
+const extension = {
+  id: 'my-extension',
+  name: 'My Extension',
   description: 'Description here',
   version: '1.0.0',
 
-  // Called when plugin is registered
-  register(api: PluginApi) {
+  // Called when extension is registered
+  register(api: ExtensionApi) {
     // Register tool
     api.registerTool({...});
     
@@ -362,25 +362,25 @@ const plugin = {
     api.registerHttpRoute('/my-route', async (req, res) => {...});
   },
 
-  // Called when plugin is enabled
-  activate(api: PluginApi) {
-    console.log('Plugin activated');
+  // Called when extension is enabled
+  activate(api: ExtensionApi) {
+    console.log('Extension activated');
   },
 
-  // Called when plugin is disabled
-  deactivate(api: PluginApi) {
-    console.log('Plugin deactivated');
+  // Called when extension is disabled
+  deactivate(api: ExtensionApi) {
+    console.log('Extension deactivated');
   },
 };
 
-export default plugin;
+export default extension;
 ```
 
 ## 核心概念
 
 ### 工具 (Tools)
 
-插件可以注册自定义工具供 Agent 使用：
+扩展可以注册自定义工具供 Agent 使用：
 
 ```javascript
 api.registerTool({
@@ -403,7 +403,7 @@ api.registerTool({
 
 ### 钩子 (Hooks)
 
-钩子允许插件在各个生命周期点拦截和修改行为：
+钩子允许扩展在各个生命周期点拦截和修改行为：
 
 | 钩子 | 时机 | 用途 |
 |------|------|------|
@@ -476,12 +476,12 @@ api.registerHook('before_tool_call', async (event, ctx) => {
 ```javascript
 api.registerCommand({
   name: 'status',
-  description: 'Check plugin status',
+  description: 'Check extension status',
   acceptArgs: false,
   requireAuth: true,
   handler: async (args, ctx) => {
     return {
-      content: 'Plugin is running!',
+      content: 'Extension is running!',
       success: true
     };
   }
@@ -491,15 +491,15 @@ api.registerCommand({
 ### HTTP 路由
 
 ```javascript
-api.registerHttpRoute('/my-plugin/status', async (req, res) => {
-  res.json({ status: 'running', plugin: 'my-plugin' });
+api.registerHttpRoute('/my-extension/status', async (req, res) => {
+  res.json({ status: 'running', extension: 'my-extension' });
 });
 ```
 
 ### 网关方法
 
 ```javascript
-api.registerGatewayMethod('my-plugin.status', async (params) => {
+api.registerGatewayMethod('my-extension.status', async (params) => {
   return { status: 'running' };
 });
 ```
@@ -549,8 +549,8 @@ api.registerService({
 ### 访问配置
 
 ```javascript
-const apiKey = api.pluginConfig.apiKey;
-const maxResults = api.pluginConfig.maxResults || 10;
+const apiKey = api.extensionConfig.apiKey;
+const maxResults = api.extensionConfig.maxResults || 10;
 ```
 
 ## 日志记录
@@ -568,7 +568,7 @@ api.logger.error('Error message');
 // Resolve workspace path
 const configPath = api.resolvePath('config.json');
 
-// Resolve plugin relative path
+// Resolve extension relative path
 const dataPath = api.resolvePath('./data.json');
 ```
 
@@ -590,12 +590,12 @@ api.off('my-event', handler);
 ## 完整示例
 
 ```javascript
-import type { PluginApi } from 'xopcbot-plugin-sdk';
+import type { ExtensionApi } from 'xopcbot-extension-sdk';
 
-const plugin = {
+const extension = {
   id: 'example',
-  name: 'Example Plugin',
-  description: 'A complete example plugin',
+  name: 'Example Extension',
+  description: 'A complete example extension',
   version: '1.0.0',
   configSchema: {
     type: 'object',
@@ -635,20 +635,20 @@ const plugin = {
   },
 
   activate(api) {
-    console.log('Plugin activated');
+    console.log('Extension activated');
   },
 
   deactivate(api) {
-    console.log('Plugin deactivated');
+    console.log('Extension deactivated');
   }
 };
 
-export default plugin;
+export default extension;
 ```
 
-## 发布插件
+## 发布扩展
 
-1. 创建 `xopcbot.plugin.json` manifest
+1. 创建 `xopcbot.extension.json` manifest
 2. 创建 `index.js` 入口文件
 3. 推送到 GitHub 或发布到 npm
 
@@ -657,7 +657,7 @@ export default plugin;
 npm publish --access public
 
 # 如果使用 scoped 包名（推荐）
-# package.json: { "name": "@yourname/xopcbot-plugin-name" }
+# package.json: { "name": "@yourname/xopcbot-extension-name" }
 npm publish --access public
 ```
 
@@ -671,6 +671,6 @@ npm publish --access public
 
 ## 相关链接
 
-- [插件示例](examples/)
+- [扩展示例](examples/)
 - [API 参考](./api.md)
 - [钩子参考](./hooks.md)

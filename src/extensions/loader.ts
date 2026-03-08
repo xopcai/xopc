@@ -23,7 +23,7 @@ import type {
   ExtensionApi,
   ExtensionTool,
   ExtensionModule,
-  ChannelPlugin,
+  ChannelExtension,
   GatewayMethodHandler,
   HttpRequestHandler,
   ExtensionCommand,
@@ -59,7 +59,7 @@ interface DiscoveredExtension {
 export class ExtensionRegistryImpl implements ExtensionRegistry {
   extensions = new Map<string, ExtensionRecord>();
   hooks = new Map<ExtensionHookEvent, ExtensionHookHandler[]>();
-  channels = new Map<string, ChannelPlugin>();
+  channels = new Map<string, ChannelExtension>();
   httpRoutes = new Map<string, HttpRequestHandler>();
   commands = new Map<string, ExtensionCommand>();
   services = new Map<string, ExtensionService>();
@@ -94,14 +94,14 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
     return this.hooks.get(event) || [];
   }
 
-  addChannel(channel: ChannelPlugin): void {
+  addChannel(channel: ChannelExtension): void {
     if (this.channels.has(channel.name)) {
       log.warn({ channel: channel.name }, `Channel already registered, overwriting`);
     }
     this.channels.set(channel.name, channel);
   }
 
-  getChannel(name: string): ChannelPlugin | undefined {
+  getChannel(name: string): ChannelExtension | undefined {
     return this.channels.get(name);
   }
 

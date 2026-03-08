@@ -162,7 +162,7 @@ curl -X POST http://localhost:18790/api/message \
   }'
 ```
 
-### Via Plugin
+### Via Extension
 
 ```typescript
 api.registerHook('message_sending', async (event, ctx) => {

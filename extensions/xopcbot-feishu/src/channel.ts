@@ -3,7 +3,7 @@
  */
 
 import * as Lark from '@larksuiteoapi/node-sdk';
-import type { PluginApi, ChannelPlugin, OutboundMessage } from 'xopcbot/plugin-sdk';
+import type { ExtensionApi, ChannelExtension, OutboundMessage } from 'xopcbot/extension-sdk';
 import { createFeishuWSClient, createEventDispatcher } from './client.js';
 import { sendMessage } from './send.js';
 import { resolveFeishuMediaList } from './media.js';
@@ -13,15 +13,15 @@ import { tryRecordMessage, type FeishuConfig, type FeishuMessageEvent } from './
 
 export interface FeishuChannelOptions {
   config: FeishuConfig;
-  api: PluginApi;
+  api: ExtensionApi;
   defaultAgentId: string;
 }
 
-export class FeishuChannel implements ChannelPlugin {
+export class FeishuChannel implements ChannelExtension {
   name = 'feishu';
   private wsClient?: Lark.WSClient;
   private config: FeishuConfig;
-  private api: PluginApi;
+  private api: ExtensionApi;
   private defaultAgentId: string;
   private running = false;
   private botOpenId?: string;

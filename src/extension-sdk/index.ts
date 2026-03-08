@@ -76,7 +76,7 @@ export type {
 
 // Channels
 export type {
-  ChannelPlugin,
+  ChannelExtension,
   SendMessageOptions,
   ChannelMessage,
 } from '../extensions/types/index.js';

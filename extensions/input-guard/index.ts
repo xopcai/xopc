@@ -1,18 +1,18 @@
 /**
- * Input Guard Plugin - Phase 1 Input Hook Example
+ * Input Guard Extension - Phase 1 Input Hook Example
  *
  * Demonstrates: Input hook for content moderation and quick commands
  *
- * Usage: xopcbot plugin install ./examples/plugins/input-guard
+ * Usage: xopcbot extension install ./examples/extensions/input-guard
  */
 
-import type { PluginApi } from 'xopcbot/plugin-sdk';
+import type { ExtensionApi } from 'xopcbot/extension-sdk';
 
-export default function(api: PluginApi) {
-  const config = api.pluginConfig;
+export default function(api: ExtensionApi) {
+  const config = api.extensionConfig;
   const blockedWords = (config.blockedWords as string[]) || ['spam', 'scam'];
 
-  api.logger.info('Input Guard plugin registered!');
+  api.logger.info('Input Guard extension registered!');
 
   // Input Hook: Intercept and process user input
   api.registerHook('input', async (event) => {

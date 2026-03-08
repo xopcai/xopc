@@ -13,8 +13,8 @@ describe('ChannelManager module', () => {
     expect(typeof ChannelManager).toBe('function');
   });
 
-  it('should export PLUGINS constant', async () => {
-    // PLUGINS is a const but not exported, check manager module loads
+  it('should export EXTENSIONS constant', async () => {
+    // EXTENSIONS is a const but not exported, check manager module loads
     const module = await import('../manager.js');
     // If we can import the module without errors, basic structure is correct
     expect(module.ChannelManager).toBeDefined();

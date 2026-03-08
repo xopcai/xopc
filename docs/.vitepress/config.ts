@@ -36,7 +36,7 @@ export default defineConfig({
               { text: 'Configuration', link: '/configuration' },
               { text: 'CLI', link: '/cli' },
               { text: 'Tools', link: '/tools' },
-              { text: 'Plugins', link: '/plugins' },
+              { text: 'Extensions', link: '/extensions' },
               { text: 'Models', link: '/models' }
             ]
           },
@@ -92,7 +92,7 @@ export default defineConfig({
               { text: '配置参考', link: '/zh/configuration' },
               { text: 'CLI 命令', link: '/zh/cli' },
               { text: '内置工具', link: '/zh/tools' },
-              { text: '插件系统', link: '/zh/plugins' },
+              { text: '扩展系统', link: '/zh/extensions' },
               { text: '模型支持', link: '/zh/models' }
             ]
           },

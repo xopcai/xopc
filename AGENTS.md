@@ -92,12 +92,12 @@ src/
 │   └── tools/          #   Built-in tools (Typebox schemas)
 ├── bus/                # Event bus for message routing
 ├── channels/           # Channel integrations (Telegram, Feishu)
-│   ├── telegram/       #   Telegram plugin architecture
-│   │   ├── plugin.ts   #     Main plugin implementation
+│   ├── telegram/       #   Telegram extension architecture
+│   │   ├── extension.ts   #     Main extension implementation
 │   │   ├── client.ts   #     Bot client wrapper
 │   │   ├── webhook.ts  #     Webhook server support
 │   │   └── command-handler.ts  # Bot command handlers
-│   ├── types.ts        #   Channel plugin interfaces
+│   ├── types.ts        #   Channel extension interfaces
 │   ├── manager.ts      #   Channel lifecycle manager
 │   ├── access-control.ts     # Access control policies
 │   ├── draft-stream.ts       # Streaming message preview
@@ -299,27 +299,27 @@ const agent = new AgentService(bus, {
 await agent.start();
 ```
 
-### 4. Channel Plugin Usage (New)
+### 4. Channel Extension Usage (New)
 
-Channels now use a plugin-based architecture:
+Channels now use an extension-based architecture:
 
 ```typescript
-import { telegramPlugin } from './channels/index.js';
+import { telegramExtension } from './channels/index.js';
 import { ChannelManager } from './channels/manager.js';
 
-// Initialize plugin
-await telegramPlugin.init({ bus, config, channelConfig });
-await telegramPlugin.start();
+// Initialize extension
+await telegramExtension.init({ bus, config, channelConfig });
+await telegramExtension.start();
 
 // Send message
-await telegramPlugin.send({
+await telegramExtension.send({
   chatId: '123456',
   content: 'Hello World',
   accountId: 'personal',
 });
 
 // Streaming message preview
-const stream = telegramPlugin.startStream({ chatId: '123456' });
+const stream = telegramExtension.startStream({ chatId: '123456' });
 stream.update('Processing...');
 stream.update('Still working...');
 await stream.end();
@@ -385,10 +385,10 @@ Example for custom endpoint via Vercel AI Gateway:
 
 The frontend fetches available providers via `/api/providers`.
 
-### Adding a New Channel Plugin
+### Adding a New Channel Extension
 
-1. Create plugin directory: `src/channels/<name>/`
-2. Implement `ChannelPlugin` interface from `src/channels/types.ts`
+1. Create extension directory: `src/channels/<name>/`
+2. Implement `ChannelExtension` interface from `src/channels/types.ts`
 3. Add to `src/channels/index.ts` exports
 4. Register in `ChannelManager` for lifecycle management
 
@@ -781,7 +781,7 @@ console.log(`Errors: ${stats.byLevel.error}`);
 | **UI components** | `ui/src/components/` |
 | **Model registry** | `src/providers/index.ts` (uses `@mariozechner/pi-ai`) |
 | **Providers** | `src/providers/index.ts` |
-| **Channel plugins** | `src/channels/` |
+| **Channel extensions** | `src/channels/` |
 | **Logging system** | `src/utils/logger.ts`, `src/utils/log-store.ts` |
 | **Log UI** | `ui/src/pages/LogManager.ts` |
 

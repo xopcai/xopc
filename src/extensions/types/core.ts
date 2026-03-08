@@ -8,7 +8,7 @@ import type { Config } from '../../types/index.js';
 import type { TypedEventBus } from './events.js';
 import type { ExtensionTool } from './tools.js';
 import type { ExtensionHookEvent, ExtensionHookHandler, HookOptions } from './hooks.js';
-import type { ChannelPlugin } from './channels.js';
+import type { ChannelExtension } from './channels.js';
 import type { ProviderConfig, FlagConfig, FlagValue, ShortcutConfig } from './phase4.js';
 
 // ============================================================================
@@ -67,7 +67,7 @@ export interface ExtensionApi {
   registerHook(event: ExtensionHookEvent, handler: ExtensionHookHandler, opts?: HookOptions): void;
   
   // Channel Registration
-  registerChannel(channel: ChannelPlugin): void;
+  registerChannel(channel: ChannelExtension): void;
   
   // HTTP Route Registration
   registerHttpRoute(path: string, handler: HttpRequestHandler): void;

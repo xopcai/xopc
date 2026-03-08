@@ -348,7 +348,7 @@ xopcbot extension list
 ══════════════════════════════════════════════════════════════════════
 
   📁 Workspace (./.extensions/)
-    • My Custom Plugin @ 0.1.0
+    • My Custom Extension @ 0.1.0
       ID: my-custom-extension
 
   🌐 Global (~/.xopcbot/extensions/)
@@ -437,7 +437,7 @@ xopcbot extension info telegram-channel
 
 **Output**:
 ```
-📦 Plugin: Telegram Channel
+📦 Extension: Telegram Channel
 
   ID: telegram-channel
   Version: 1.2.0
@@ -458,9 +458,9 @@ xopcbot extension create <extension-id> [options]
 
 | Parameter | Description |
 |-----------|-------------|
-| `--name <name>` | Plugin display name |
-| `--description <desc>` | Plugin description |
-| `--kind <kind>` | Plugin type: `channel`, `provider`, `memory`, `tool`, `utility` |
+| `--name <name>` | Extension display name |
+| `--description <desc>` | Extension description |
+| `--kind <kind>` | Extension type: `channel`, `provider`, `memory`, `tool`, `utility` |
 
 **Examples**:
 
@@ -480,8 +480,8 @@ xopcbot extension create redis-memory --name "Redis Memory" --kind memory
 .extensions/
 └── my-extension/
     ├── package.json          # npm config
-    ├── index.ts              # Plugin entry (TypeScript)
-    ├── xopcbot.extension.json   # Plugin manifest
+    ├── index.ts              # Extension entry (TypeScript)
+    ├── xopcbot.extension.json   # Extension manifest
     └── README.md             # Documentation template
 ```
 

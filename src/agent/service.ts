@@ -152,9 +152,9 @@ export class AgentService {
     ];
 
     if (config.extensionRegistry) {
-      const pluginTools = this.convertExtensionTools(config.extensionRegistry.getAllTools());
-      tools.push(...pluginTools);
-      log.info({ count: pluginTools.length }, 'Loaded extension tools');
+      const extensionTools = this.convertExtensionTools(config.extensionRegistry.getAllTools());
+      tools.push(...extensionTools);
+      log.info({ count: extensionTools.length }, 'Loaded extension tools');
     }
 
     // Load skills
@@ -407,8 +407,8 @@ export class AgentService {
     return { messages: result.messages as AgentMessage[], modified: result.modified };
   }
 
-  private convertExtensionTools(pluginTools: ExtensionTool[]): AgentTool<any, any>[] {
-    return pluginTools.map((tool) => ({
+  private convertExtensionTools(extensionTools: ExtensionTool[]): AgentTool<any, any>[] {
+    return extensionTools.map((tool) => ({
       name: tool.name,
       description: tool.description,
       parameters: tool.parameters,
@@ -520,10 +520,10 @@ export class AgentService {
       if (content.startsWith('/') && this.config.extensionRegistry) {
         try {
           const commandName = content.slice(1).split(/\s+/)[0];
-          const pluginCommand = this.config.extensionRegistry.getCommand(commandName);
-          if (pluginCommand) {
+          const extensionCommand = this.config.extensionRegistry.getCommand(commandName);
+          if (extensionCommand) {
             const args = content.replace(/^\/\w+\s*/, '');
-            await pluginCommand.handler([args]);
+            await extensionCommand.handler([args]);
             return;
           }
         } catch (err) {
@@ -668,7 +668,7 @@ export class AgentService {
           contentWithUsage += `\n\n📊 *${modelName}*  \`+${result.usage.prompt_tokens} → ${result.usage.completion_tokens} = ${result.usage.total_tokens}\``;
         }
 
-        // Run message_sending hook for plugin interception
+        // Run message_sending hook for extension interception
         const hookResult = await this.runMessageSendingHook(msg.chat_id, contentWithUsage);
         if (!hookResult.send) {
           log.info({ chatId: msg.chat_id, reason: hookResult.reason }, 'Message sending blocked by hook');
@@ -786,7 +786,7 @@ export class AgentService {
 
     const finalContent = this.getLastAssistantContent();
     if (finalContent) {
-      // Run message_sending hook for plugin interception
+      // Run message_sending hook for extension interception
       const hookResult = await this.runMessageSendingHook(originChatId, finalContent);
       if (!hookResult.send) {
         log.info({ chatId: originChatId, reason: hookResult.reason }, 'System message sending blocked by hook');

@@ -1,7 +1,7 @@
 /**
- * Xopcbot Feishu Plugin
+ * Xopcbot Feishu Extension
  *
- * Feishu/Lark (飞书) channel plugin for xopcbot.
+ * Feishu/Lark (飞书) channel extension for xopcbot.
  *
  * Features:
  * - WebSocket-based event receiving
@@ -11,11 +11,11 @@
  * - Media download and processing
  *
  * Installation:
- *   xopcbot plugin install ./examples/plugins/xopcbot-feishu
+ *   xopcbot extension install ./examples/extensions/xopcbot-feishu
  *
  * Configuration (config.json):
  *   {
- *     "plugins": {
+ *     "extensions": {
  *       "enabled": ["xopcbot-feishu"],
  *       "xopcbot-feishu": {
  *         "enabled": true,
@@ -36,7 +36,7 @@
  *   - im:resource (媒体资源)
  */
 
-import type { PluginApi, PluginDefinition } from 'xopcbot/plugin-sdk';
+import type { ExtensionApi, ExtensionDefinition } from 'xopcbot/extension-sdk';
 import { FeishuChannel } from './src/channel.js';
 import type { FeishuConfig } from './src/types.js';
 
@@ -44,10 +44,10 @@ import type { FeishuConfig } from './src/types.js';
 let feishuChannel: FeishuChannel | null = null;
 
 /**
- * Get Feishu configuration from plugin config
+ * Get Feishu configuration from extension config
  */
-function getFeishuConfig(api: PluginApi): FeishuConfig {
-  const config = api.pluginConfig as Record<string, unknown>;
+function getFeishuConfig(api: ExtensionApi): FeishuConfig {
+  const config = api.extensionConfig as Record<string, unknown>;
 
   return {
     enabled: config.enabled === true,
@@ -86,15 +86,15 @@ function validateConfig(config: FeishuConfig): { valid: boolean; error?: string 
   return { valid: true };
 }
 
-const plugin: PluginDefinition = {
+const extension: ExtensionDefinition = {
   id: 'xopcbot-feishu',
   name: 'Xopcbot Feishu',
-  description: 'Feishu/Lark channel plugin for xopcbot with WebSocket support',
+  description: 'Feishu/Lark channel extension for xopcbot with WebSocket support',
   version: '1.0.0',
   kind: 'channel',
 
-  register(api: PluginApi) {
-    api.logger.info('Feishu plugin registering...');
+  register(api: ExtensionApi) {
+    api.logger.info('Feishu extension registering...');
 
     const feishuConfig = getFeishuConfig(api);
     const validation = validateConfig(feishuConfig);
@@ -105,7 +105,7 @@ const plugin: PluginDefinition = {
     }
 
     if (!feishuConfig.enabled) {
-      api.logger.info('Feishu plugin is disabled');
+      api.logger.info('Feishu extension is disabled');
       return;
     }
 
@@ -222,11 +222,11 @@ const plugin: PluginDefinition = {
       return event;
     });
 
-    api.logger.info('Feishu plugin registered successfully');
+    api.logger.info('Feishu extension registered successfully');
   },
 
-  async activate(api: PluginApi) {
-    api.logger.info('Feishu plugin activating...');
+  async activate(api: ExtensionApi) {
+    api.logger.info('Feishu extension activating...');
 
     if (feishuChannel) {
       try {
@@ -238,19 +238,19 @@ const plugin: PluginDefinition = {
     }
   },
 
-  async deactivate(api: PluginApi) {
-    api.logger.info('Feishu plugin deactivating...');
+  async deactivate(api: ExtensionApi) {
+    api.logger.info('Feishu extension deactivating...');
 
     if (feishuChannel) {
       await feishuChannel.stop();
       feishuChannel = null;
     }
 
-    api.logger.info('Feishu plugin deactivated');
+    api.logger.info('Feishu extension deactivated');
   },
 };
 
-export default plugin;
+export default extension;
 
 // Re-exports for advanced usage
 export { FeishuChannel } from './src/channel.js';

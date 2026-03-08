@@ -13,15 +13,15 @@ import type {
   AgentMessage,
 } from '../../extensions/types.js';
 
-// Mock plugin that uses Phase 1 hooks
-const _createTestPlugin = (actions: {
+// Mock extension that uses Phase 1 hooks
+const _createTestExtension = (actions: {
   onInput?: (text: string) => InputHookResult | undefined;
   onContext?: (messages: AgentMessage[]) => AgentMessage[] | undefined;
   onTurnStart?: () => void;
   onTurnEnd?: () => void;
 }): ExtensionDefinition => ({
   id: 'test-phase1',
-  name: 'Test Phase 1 Plugin',
+  name: 'Test Phase 1 Extension',
   version: '1.0.0',
   
   register(api) {
@@ -100,7 +100,7 @@ describe('AgentService Phase 1 Integration', () => {
         }
         return { action: 'continue' };
       },
-      'test-plugin',
+      'test-extension',
       0
     );
 
@@ -124,7 +124,7 @@ describe('AgentService Phase 1 Integration', () => {
         }
         return { action: 'continue' };
       },
-      'test-plugin',
+      'test-extension',
       0
     );
 
@@ -146,7 +146,7 @@ describe('AgentService Phase 1 Integration', () => {
         } as AgentMessage);
         return { messages };
       },
-      'test-plugin',
+      'test-extension',
       0
     );
 
@@ -170,7 +170,7 @@ describe('AgentService Phase 1 Integration', () => {
       async (event) => {
         events.push(`start:${event.turnIndex}`);
       },
-      'test-plugin',
+      'test-extension',
       0
     );
 
@@ -179,7 +179,7 @@ describe('AgentService Phase 1 Integration', () => {
       async (event) => {
         events.push(`end:${event.turnIndex}`);
       },
-      'test-plugin',
+      'test-extension',
       0
     );
 
@@ -196,39 +196,39 @@ describe('AgentService Phase 1 Integration', () => {
     expect(events).toEqual(['start:1', 'end:1']);
   });
 
-  it('should handle multiple plugins with priority', async () => {
+  it('should handle multiple extensions with priority', async () => {
     const order: string[] = [];
 
-    // Plugin A with priority 10 (runs first)
+    // Extension A with priority 10 (runs first)
     registry.addHook(
       'input',
       async () => {
         order.push('A');
         return { action: 'continue' };
       },
-      'plugin-a',
+      'extension-a',
       10
     );
 
-    // Plugin B with priority 5 (runs second)
+    // Extension B with priority 5 (runs second)
     registry.addHook(
       'input',
       async () => {
         order.push('B');
         return { action: 'continue' };
       },
-      'plugin-b',
+      'extension-b',
       5
     );
 
-    // Plugin C with priority 1 (runs last)
+    // Extension C with priority 1 (runs last)
     registry.addHook(
       'input',
       async () => {
         order.push('C');
         return { action: 'continue' };
       },
-      'plugin-c',
+      'extension-c',
       1
     );
 

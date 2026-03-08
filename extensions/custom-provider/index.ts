@@ -1,15 +1,15 @@
 /**
- * Custom Provider Plugin - Phase 4 Example
+ * Custom Provider Extension - Phase 4 Example
  *
  * Demonstrates: Provider registration, CLI flags, and shortcuts
  *
- * Usage: xopcbot plugin install ./examples/plugins/custom-provider
+ * Usage: xopcbot extension install ./examples/extensions/custom-provider
  */
 
-import type { PluginApi } from 'xopcbot/plugin-sdk';
+import type { ExtensionApi } from 'xopcbot/extension-sdk';
 
-export default function(api: PluginApi) {
-  api.logger.info('Custom Provider plugin registered!');
+export default function(api: ExtensionApi) {
+  api.logger.info('Custom Provider extension registered!');
 
   // Register CLI Flag
   api.registerFlag('custom-model', {

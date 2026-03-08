@@ -1,5 +1,5 @@
 /**
- * Channel Plugin Architecture Types
+ * Channel Extension Architecture Types
  * 
  *
  */
@@ -140,7 +140,7 @@ export interface ChannelMediaRef {
 }
 
 // ============================================
-// Channel Plugin Interface
+// Channel Extension Interface
 // ============================================
 
 export interface ChannelInitOptions {
@@ -198,7 +198,7 @@ export interface ChannelStatus {
   mode: 'polling' | 'webhook' | 'stopped';
 }
 
-export interface ChannelPlugin {
+export interface ChannelExtension {
   /** Channel identifier */
   id: ChannelType;
   

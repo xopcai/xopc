@@ -1,5 +1,5 @@
 /**
- * Telegram Channel Plugin
+ * Telegram Channel Extension
  * 
  * 插件模式多账户实现，支持:
  * - 多账户
@@ -11,7 +11,7 @@
 import { Bot, type Context, InputFile } from 'grammy';
 import { run } from '@grammyjs/runner';
 import type {
-  ChannelPlugin,
+  ChannelExtension,
   ChannelInitOptions,
   ChannelStartOptions,
   ChannelSendOptions,
@@ -45,7 +45,7 @@ import { writeFile, unlink } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 
-const log = createLogger('TelegramPlugin');
+const log = createLogger('TelegramExtension');
 const execAsync = promisify(exec);
 
 /**
@@ -468,10 +468,10 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
 }
 
 // ============================================
-// Telegram Plugin Implementation
+// Telegram Extension Implementation
 // ============================================
 
-export class TelegramChannelPlugin implements ChannelPlugin {
+export class TelegramChannelExtension implements ChannelExtension {
   id = 'telegram' as const;
   
   meta: ChannelMetadata = {
@@ -729,7 +729,7 @@ export class TelegramChannelPlugin implements ChannelPlugin {
   async send(options: ChannelSendOptions): Promise<ChannelSendResult> {
     const { chatId, content, type = 'message', accountId = 'default', threadId, replyToMessageId, mediaUrl, mediaType, silent } = options;
 
-    log.info({ chatId, accountId, hasContent: !!content, hasMediaUrl: !!mediaUrl, mediaType, contentLength: content?.length }, 'TelegramPlugin.send called');
+    log.info({ chatId, accountId, hasContent: !!content, hasMediaUrl: !!mediaUrl, mediaType, contentLength: content?.length }, 'TelegramExtension.send called');
 
     const bot = this.accountManager.getBot(accountId);
     if (!bot) {
@@ -916,7 +916,7 @@ export class TelegramChannelPlugin implements ChannelPlugin {
     }
   }
 
-  startStream(options: ChannelSendStreamOptions): ReturnType<ChannelPlugin['startStream']> {
+  startStream(options: ChannelSendStreamOptions): ReturnType<ChannelExtension['startStream']> {
     const { chatId, accountId = 'default', threadId, replyToMessageId, parseMode = 'HTML' } = options;
 
     const bot = this.accountManager.getBot(accountId);
@@ -986,4 +986,4 @@ export class TelegramChannelPlugin implements ChannelPlugin {
   }
 }
 
-export const telegramPlugin = new TelegramChannelPlugin();
+export const telegramExtension = new TelegramChannelExtension();

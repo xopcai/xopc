@@ -4,8 +4,8 @@
  * Manages all channel implementations.
  */
 
-import { telegramPlugin } from './telegram/plugin.js';
-import type { ChannelPlugin } from './types.js';
+import { telegramExtension } from './telegram/extension.js';
+import type { ChannelExtension } from './types.js';
 import { MessageBus } from '../bus/index.js';
 import { Config } from '../config/index.js';
 import { OutboundMessage } from '../types/index.js';
@@ -13,7 +13,7 @@ import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('ChannelManager');
 
-const PLUGINS: ChannelPlugin[] = [telegramPlugin];
+const EXTENSIONS: ChannelExtension[] = [telegramExtension];
 
 export class ChannelManager {
   private bus: MessageBus;
@@ -28,18 +28,18 @@ export class ChannelManager {
   async initializeChannels(): Promise<void> {
     if (this.initialized) return;
 
-    for (const plugin of PLUGINS) {
-      const channelConfig = this.config.channels?.[plugin.id];
+    for (const extension of EXTENSIONS) {
+      const channelConfig = this.config.channels?.[extension.id];
       if (channelConfig?.enabled) {
         try {
-          await plugin.init({
+          await extension.init({
             bus: this.bus,
             config: this.config,
             channelConfig,
           });
-          log.info({ channel: plugin.id }, 'Channel initialized');
+          log.info({ channel: extension.id }, 'Channel initialized');
         } catch (err) {
-          log.error({ channel: plugin.id, err }, 'Failed to initialize channel');
+          log.error({ channel: extension.id, err }, 'Failed to initialize channel');
         }
       }
     }
@@ -50,12 +50,12 @@ export class ChannelManager {
   async startAll(): Promise<void> {
     const promises: Promise<void>[] = [];
 
-    for (const plugin of PLUGINS) {
-      const channelConfig = this.config.channels?.[plugin.id];
+    for (const extension of EXTENSIONS) {
+      const channelConfig = this.config.channels?.[extension.id];
       if (channelConfig?.enabled) {
         promises.push(
-          plugin.start().catch(err => {
-            log.error({ channel: plugin.id, err }, 'Failed to start channel');
+          extension.start().catch(err => {
+            log.error({ channel: extension.id, err }, 'Failed to start channel');
           })
         );
       }
@@ -67,12 +67,12 @@ export class ChannelManager {
   async stopAll(): Promise<void> {
     const promises: Promise<void>[] = [];
 
-    for (const plugin of PLUGINS) {
-      const channelConfig = this.config.channels?.[plugin.id];
+    for (const extension of EXTENSIONS) {
+      const channelConfig = this.config.channels?.[extension.id];
       if (channelConfig?.enabled) {
         promises.push(
-          plugin.stop().catch(err => {
-            log.error({ channel: plugin.id, err }, 'Failed to stop channel');
+          extension.stop().catch(err => {
+            log.error({ channel: extension.id, err }, 'Failed to stop channel');
           })
         );
       }
@@ -87,9 +87,9 @@ export class ChannelManager {
   }
 
   async send(msg: OutboundMessage): Promise<void> {
-    const plugin = PLUGINS.find(p => p.id === msg.channel);
+    const extension = EXTENSIONS.find(e => e.id === msg.channel);
     
-    if (!plugin) {
+    if (!extension) {
       log.error({ channel: msg.channel }, 'Unknown channel');
       return;
     }
@@ -106,7 +106,7 @@ export class ChannelManager {
       tts: msg.tts,
     };
 
-    const result = await plugin.send(sendOptions);
+    const result = await extension.send(sendOptions);
     
     if (!result.success) {
       log.error({ channel: msg.channel, chatId: msg.chat_id, mediaUrl: !!msg.mediaUrl, error: result.error }, 'Failed to send message');
@@ -116,15 +116,15 @@ export class ChannelManager {
   }
 
   getChannel(name: string): any {
-    const plugin = PLUGINS.find(p => p.id === name);
-    return plugin || null;
+    const extension = EXTENSIONS.find(e => e.id === name);
+    return extension || null;
   }
 
   getStatus(channelName: string, accountId?: string) {
-    const plugin = PLUGINS.find(p => p.id === channelName);
+    const extension = EXTENSIONS.find(e => e.id === channelName);
     
-    if (plugin) {
-      return plugin.getStatus(accountId);
+    if (extension) {
+      return extension.getStatus(accountId);
     }
 
     return {
@@ -134,22 +134,22 @@ export class ChannelManager {
   }
 
   getRunningChannels(): string[] {
-    return PLUGINS
-      .filter(p => this.config.channels?.[p.id]?.enabled)
-      .map(p => p.id);
+    return EXTENSIONS
+      .filter(e => this.config.channels?.[e.id]?.enabled)
+      .map(e => e.id);
   }
 
   getAllChannels(): string[] {
-    return PLUGINS.map(p => p.id);
+    return EXTENSIONS.map(e => e.id);
   }
 
   async testConnections(): Promise<Record<string, { success: boolean; error?: string }>> {
     const results: Record<string, { success: boolean; error?: string }> = {};
 
-    for (const plugin of PLUGINS) {
-      const channelConfig = this.config.channels?.[plugin.id];
+    for (const extension of EXTENSIONS) {
+      const channelConfig = this.config.channels?.[extension.id];
       if (channelConfig?.enabled) {
-        results[plugin.id] = await plugin.testConnection();
+        results[extension.id] = await extension.testConnection();
       }
     }
 

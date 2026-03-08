@@ -1,5 +1,5 @@
 /**
- * Feishu Plugin Types
+ * Feishu Extension Types
  */
 
 export type FeishuDomain = 'feishu' | 'lark';

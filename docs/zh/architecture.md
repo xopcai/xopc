@@ -52,8 +52,8 @@ AgentService 是核心编排器，负责：
 1. **消息处理** - 接收用户消息，调用 LLM，处理工具调用
 2. **Prompt 构建** - 从 SOUL.md/USER.md/AGENTS.md/TOOLS.md 构建系统 Prompt
 3. **内存管理** - 会话消息存储和上下文压缩
-4. **工具执行** - 内置工具 + 插件工具的统一执行
-5. **插件集成** - 插件工具和 Hook 的加载
+4. **工具执行** - 内置工具 + 扩展工具的统一执行
+5. **扩展集成** - 扩展工具和 Hook 的加载
 
 ### Prompt Builder (`src/agent/prompt/`)
 
@@ -111,13 +111,13 @@ src/agent/memory/
                   # 支持 extractive/abstractive/structured 模式
 ```
 
-### 插件系统 (`src/plugins/`)
+### 扩展系统 (`src/extensions/`)
 
 ```
-src/plugins/
-├── types.ts       # 插件类型定义
-├── api.ts         # Plugin API
-├── loader.ts      # 插件加载器
+src/extensions/
+├── types.ts       # 扩展类型定义
+├── api.ts         # Extension API
+├── loader.ts      # 扩展加载器
 ├── hooks.ts       # Hook 系统
 └── index.ts      # 导出
 ```
@@ -158,7 +158,7 @@ User (Telegram/Gateway)
 │          ▼          │
 │  ┌───────────────┐  │
 │  │ Execute Tools │  │ ← Tools (filesystem, shell, web, memory...)
-│  │ + Plugins     │  │
+│  │ + Extensions  │  │
 │  └───────┬───────┘  │
 └──────────┬──────────┘
            │
@@ -212,9 +212,9 @@ api.registerHook('before_tool_call', async (event, ctx) => {
 });
 ```
 
-### 添加插件
+### 添加扩展
 
-1. 创建 `xopcbot.plugin.json` manifest
+1. 创建 `xopcbot.extension.json` manifest
 2. 实现 `register(api)` 函数
 3. 发布或本地加载
 

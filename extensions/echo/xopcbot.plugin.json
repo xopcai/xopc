@@ -1,6 +1,6 @@
 {
   "id": "echo",
-  "name": "Echo Plugin",
+  "name": "Echo Extension",
   "description": "Echoes messages back with modifications",
   "version": "1.0.0",
   "kind": "utility",

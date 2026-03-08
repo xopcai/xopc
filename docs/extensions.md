@@ -133,7 +133,7 @@ xopcbot supports three-tier extension storage, from highest to lowest priority:
 ~/.xopcbot/extensions/
 
 # Custom location (environment variable)
-export XOPCBOT_GLOBAL_PLUGINS=/path/to/global/extensions
+export XOPCBOT_GLOBAL_EXTENSIONS=/path/to/global/extensions
 ```
 
 ---

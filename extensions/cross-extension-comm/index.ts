@@ -1,12 +1,12 @@
 /**
- * Cross-Plugin Communication - Phase 3 TypedEventBus Example
+ * Cross-Extension Communication - Phase 3 TypedEventBus Example
  *
- * Demonstrates: Event bus for inter-plugin communication (RPC pattern)
+ * Demonstrates: Event bus for inter-extension communication (RPC pattern)
  *
- * Usage: xopcbot plugin install ./examples/plugins/cross-plugin-comm
+ * Usage: xopcbot extension install ./examples/extensions/cross-extension-comm
  */
 
-import type { PluginApi } from 'xopcbot/plugin-sdk';
+import type { ExtensionApi } from 'xopcbot/extension-sdk';
 
 // Mock weather data
 const weatherData: Record<string, { temp: number; humidity: number }> = {
@@ -15,8 +15,8 @@ const weatherData: Record<string, { temp: number; humidity: number }> = {
   'New York': { temp: 15, humidity: 50 },
 };
 
-export default function(api: PluginApi) {
-  api.logger.info('Weather Service plugin registered!');
+export default function(api: ExtensionApi) {
+  api.logger.info('Weather Service extension registered!');
 
   // Request-Response Pattern (RPC)
   api.events.onRequest('weather:get', async (params: { city: string }) => {
@@ -41,9 +41,9 @@ export default function(api: PluginApi) {
     });
   }, 60000); // Every minute
 
-  // Cleanup on plugin unload
+  // Cleanup on extension unload
   api.registerHook('session_end', () => {
     clearInterval(updateInterval);
-    api.events.cleanup('cross-plugin-comm');
+    api.events.cleanup('cross-extension-comm');
   });
 }

@@ -17,8 +17,8 @@ features:
   - title: 🚀 Lightweight & Fast
     details: Built on Node.js + TypeScript with minimal dependencies
     link: /getting-started
-  - title: 🔌 Plugin System
-    details: Extend functionality with a powerful plugin architecture
+  - title: 🔌 Extension System
+    details: Extend functionality with a powerful extension architecture
     link: /extensions
   - title: 🌐 Multi-Channel
     details: Supports Telegram, Discord, Slack, Signal and more

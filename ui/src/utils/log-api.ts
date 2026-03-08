@@ -7,7 +7,7 @@ export interface LogEntry {
   module?: string;
   prefix?: string;
   service?: string;
-  plugin?: string;
+  extension?: string;
   requestId?: string;
   sessionId?: string;
   userId?: string;

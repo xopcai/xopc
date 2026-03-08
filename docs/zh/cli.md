@@ -39,7 +39,7 @@ pnpm run dev -- <command>
 | `agent` | 与 Agent 对话 |
 | `gateway` | 启动 REST 网关 |
 | `cron` | 管理定时任务 |
-| `plugin` | 管理插件 |
+| `extension` | 管理扩展 |
 | `skills` | 管理技能（安装、启用、配置、测试） |
 | `config` | 查看和编辑配置（非交互式） |
 
@@ -327,27 +327,27 @@ xopcbot cron trigger <task-id>
 
 ---
 
-## plugin
+## extension
 
-管理插件。支持三级存储：workspace (./.plugins/) → global (~/.xopcbot/plugins/) → bundled。
+管理扩展。支持三级存储：workspace (./.extensions/) → global (~/.xopcbot/extensions/) → bundled。
 
-### 列出插件
+### 列出扩展
 
 ```bash
-xopcbot plugin list
+xopcbot extension list
 ```
 
 **输出示例**：
 ```
-📦 Installed Plugins
+📦 Installed Extensions
 
 ══════════════════════════════════════════════════════════════════════
 
-  📁 Workspace (./.plugins/)
-    • My Custom Plugin @ 0.1.0
-      ID: my-custom-plugin
+  📁 Workspace (./.extensions/)
+    • My Custom Extension @ 0.1.0
+      ID: my-custom-extension
 
-  🌐 Global (~/.xopcbot/plugins/)
+  🌐 Global (~/.xopcbot/extensions/)
     • Telegram Channel @ 1.2.0
       ID: telegram-channel
 
@@ -356,132 +356,132 @@ xopcbot plugin list
       ID: discord-channel
 ```
 
-### 安装插件
+### 安装扩展
 
 **从 npm 安装到 workspace**（默认）：
 ```bash
-xopcbot plugin install <package-name>
+xopcbot extension install <package-name>
 
 # 示例
-xopcbot plugin install xopcbot-plugin-telegram
-xopcbot plugin install @scope/my-plugin
-xopcbot plugin install my-plugin@1.0.0
+xopcbot extension install xopcbot-extension-telegram
+xopcbot extension install @scope/my-extension
+xopcbot extension install my-extension@1.0.0
 ```
 
 **安装到 global**（跨项目共享）：
 ```bash
-xopcbot plugin install <package-name> --global
+xopcbot extension install <package-name> --global
 
 # 示例
-xopcbot plugin install xopcbot-plugin-telegram --global
+xopcbot extension install xopcbot-extension-telegram --global
 ```
 
 **从本地目录安装**：
 ```bash
 # 安装到 workspace
-xopcbot plugin install ./my-local-plugin
+xopcbot extension install ./my-local-extension
 
 # 安装到 global
-xopcbot plugin install ./my-local-plugin --global
+xopcbot extension install ./my-local-extension --global
 ```
 
 **参数**：
 
 | 参数 | 描述 |
 |------|------|
-| `--global` | 安装到全局目录 (~/.xopcbot/plugins/) |
+| `--global` | 安装到全局目录 (~/.xopcbot/extensions/) |
 | `--timeout <ms>` | 安装超时时间（默认 120000ms） |
 
 **安装流程**：
-1. 下载/复制插件文件
-2. 验证 `xopcbot.plugin.json` 清单
+1. 下载/复制扩展文件
+2. 验证 `xopcbot.extension.json` 清单
 3. 安装依赖（如有 `package.json` 依赖）
-4. 复制到目标目录 (workspace/.plugins/ 或 ~/.xopcbot/plugins/)
+4. 复制到目标目录 (workspace/.extensions/ 或 ~/.xopcbot/extensions/)
 
 **三级存储说明**：
-- Workspace (./.plugins/)：项目私有，优先级最高
-- Global (~/.xopcbot/plugins/)：用户级共享
-- Bundled：内置插件，优先级最低
+- Workspace (./.extensions/)：项目私有，优先级最高
+- Global (~/.xopcbot/extensions/)：用户级共享
+- Bundled：内置扩展，优先级最低
 
-### 移除插件
+### 移除扩展
 
 ```bash
-xopcbot plugin remove <plugin-id>
+xopcbot extension remove <extension-id>
 # 或
-xopcbot plugin uninstall <plugin-id>
+xopcbot extension uninstall <extension-id>
 ```
 
 **示例**：
 ```bash
-xopcbot plugin remove telegram-channel
+xopcbot extension remove telegram-channel
 ```
 
 **注意**：
 - 优先从 workspace 移除，如不存在则从 global 移除
 - 移除后如果已启用，还需要从配置文件中删除
 
-### 查看插件详情
+### 查看扩展详情
 
 ```bash
-xopcbot plugin info <plugin-id>
+xopcbot extension info <extension-id>
 ```
 
 **示例**：
 ```bash
-xopcbot plugin info telegram-channel
+xopcbot extension info telegram-channel
 ```
 
 **输出**：
 ```
-📦 Plugin: Telegram Channel
+📦 Extension: Telegram Channel
 
   ID: telegram-channel
   Version: 1.2.0
   Kind: channel
   Description: Telegram channel integration
-  Path: /home/user/.xopcbot/workspace/.plugins/telegram-channel
+  Path: /home/user/.xopcbot/workspace/.extensions/telegram-channel
 ```
 
-### 创建插件
+### 创建扩展
 
 创建新插件脚手架。
 
 ```bash
-xopcbot plugin create <plugin-id> [options]
+xopcbot extension create <extension-id> [options]
 ```
 
 **参数**：
 
 | 参数 | 描述 |
 |------|------|
-| `--name <name>` | 插件显示名称 |
-| `--description <desc>` | 插件描述 |
-| `--kind <kind>` | 插件类型: `channel`, `provider`, `memory`, `tool`, `utility` |
+| `--name <name>` | 扩展显示名称 |
+| `--description <desc>` | 扩展描述 |
+| `--kind <kind>` | 扩展类型: `channel`, `provider`, `memory`, `tool`, `utility` |
 
 **示例**：
 
 ```bash
 # 创建工具类插件
-xopcbot plugin create weather-tool --name "Weather Tool" --kind tool
+xopcbot extension create weather-tool --name "Weather Tool" --kind tool
 
 # 创建通道类插件
-xopcbot plugin create discord-channel --name "Discord Channel" --kind channel
+xopcbot extension create discord-channel --name "Discord Channel" --kind channel
 
 # 创建内存类插件
-xopcbot plugin create redis-memory --name "Redis Memory" --kind memory
+xopcbot extension create redis-memory --name "Redis Memory" --kind memory
 ```
 
 **生成的文件**：
 ```
-.plugins/
-└── my-plugin/
+.extensions/
+└── my-extension/
     ├── package.json          # npm 配置
-    ├── index.ts              # 插件入口（TypeScript）
-    ├── xopcbot.plugin.json   # 插件清单
+    ├── index.ts              # 扩展入口（TypeScript）
+    ├── xopcbot.extension.json   # 扩展清单
     └── README.md             # 文档模板
 ```
 
-**注意**：创建的插件使用 TypeScript，通过 [jiti](https://github.com/unjs/jiti) 即时加载，无需预编译。
+**注意**：创建的扩展使用 TypeScript，通过 [jiti](https://github.com/unjs/jiti) 即时加载，无需预编译。
 
 ---
 
@@ -511,7 +511,7 @@ xopcbot plugin create redis-memory --name "Redis Memory" --kind memory
 xopcbot --help
 xopcbot agent --help
 xopcbot gateway --help
-xopcbot plugin --help
+xopcbot extension --help
 ```
 
 ---
@@ -637,16 +637,16 @@ case "$1" in
     shift
     xopcbot cron "$@"
     ;;
-  plugin)
+  extension)
     shift
-    xopcbot plugin "$@"
+    xopcbot extension "$@"
     ;;
   skills)
     shift
     xopcbot skills "$@"
     ;;
   *)
-    echo "Usage: bot {chat|shell|start|cron|plugin|skills}"
+    echo "Usage: bot {chat|shell|start|cron|extension|skills}"
     ;;
 esac
 ```
@@ -657,8 +657,8 @@ esac
 bot chat Hello!
 bot start
 bot cron list
-bot plugin list
-bot plugin install xopcbot-plugin-telegram
+bot extension list
+bot extension install xopcbot-extension-telegram
 bot skills list
 bot skills test weather
 ```

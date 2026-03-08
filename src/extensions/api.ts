@@ -6,7 +6,7 @@ import type {
   ExtensionApi,
   ExtensionLogger,
   ExtensionTool,
-  ChannelPlugin,
+  ChannelExtension,
   GatewayMethodHandler,
   HttpRequestHandler,
   ExtensionCommand,
@@ -81,7 +81,7 @@ export class ExtensionApiImpl implements ExtensionApi {
     this._logger.info(`Registered hook: ${event}`);
   }
 
-  registerChannel(channel: ChannelPlugin): void {
+  registerChannel(channel: ChannelExtension): void {
     this._eventBus.emit('channel:register', channel);
     this._logger.info(`Registered channel: ${channel.name}`);
   }

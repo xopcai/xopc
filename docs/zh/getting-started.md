@@ -146,5 +146,5 @@ http://localhost:18790
 
 - **[CLI 参考](/zh/cli)**：发现管理机器人的所有可用命令。
 - **[配置参考](/zh/configuration)**：了解 `config.json` 中可调整的所有设置。
-- **[插件系统](/zh/plugins)**：探索如何通过插件扩展代理功能。
+- **[扩展系统](/zh/extensions)**：探索如何通过扩展扩展代理功能。
 - **[内置工具](/zh/tools)**：了解代理可用的文件系统、Shell 和 Web 工具。

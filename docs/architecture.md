@@ -52,8 +52,8 @@ AgentService is the core orchestrator responsible for:
 1. **Message Processing** - Receive user messages, call LLM, handle tool calls
 2. **Prompt Building** - Build system prompt from SOUL.md/USER.md/AGENTS.md/TOOLS.md
 3. **Memory Management** - Session message storage and context compression
-4. **Tool Execution** - Unified execution of built-in tools + plugin tools
-5. **Plugin Integration** - Load plugin tools and hooks
+4. **Tool Execution** - Unified execution of built-in tools + extension tools
+5. **Extension Integration** - Load extension tools and hooks
 
 ### Prompt Builder (`src/agent/prompt/`)
 
@@ -115,9 +115,9 @@ src/agent/memory/
 
 ```
 src/extensions/
-├── types.ts       # Plugin type definitions
-├── api.ts         # Plugin API
-├── loader.ts      # Plugin loader
+├── types.ts       # Extension type definitions
+├── api.ts         # Extension API
+├── loader.ts      # Extension loader
 ├── hooks.ts       # Hook system
 └── index.ts      # Exports
 ```
@@ -158,7 +158,7 @@ User (Telegram/Gateway)
 │          ▼          │
 │  ┌───────────────┐  │
 │  │ Execute Tools │  │ ← Tools (filesystem, shell, web, memory...)
-│  │ + Plugins     │  │
+│  │ + Extensions  │  │
 │  └───────┬───────┘  │
 └──────────┬──────────┘
            │
@@ -212,9 +212,9 @@ api.registerHook('before_tool_call', async (event, ctx) => {
 });
 ```
 
-### Adding Plugins
+### Adding Extensions
 
-1. Create `xopcbot.plugin.json` manifest
+1. Create `xopcbot.extension.json` manifest
 2. Implement `register(api)` function
 3. Publish or load locally
 

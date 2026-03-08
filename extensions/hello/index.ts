@@ -1,36 +1,36 @@
 /**
- * Hello World Plugin Example
+ * Hello World Extension Example
  * 
- * Demonstrates basic plugin functionality:
+ * Demonstrates basic extension functionality:
  * - Tool registration
  * - Hook registration
  * - Command registration
  * - Configuration usage
  * 
  * Installation:
- *   xopcbot plugin install ./examples/plugins/hello
+ *   xopcbot extension install ./examples/extensions/hello
  * 
  * Or copy to your workspace:
- *   cp -r examples/plugins/hello workspace/.plugins/
+ *   cp -r examples/extensions/hello workspace/.extensions/
  */
 
-import type { PluginApi } from 'xopcbot/plugin-sdk';
+import type { ExtensionApi } from 'xopcbot/extension-sdk';
 
-// Plugin definition
-const plugin = {
+// Extension definition
+const extension = {
   id: 'hello',
   name: 'Hello World',
-  description: 'A simple example plugin',
+  description: 'A simple example extension',
   version: '1.0.0',
 
-  // Register is called when the plugin is loaded
-  register(api: PluginApi) {
-    // Log that the plugin is registered
-    api.logger.info('Hello World plugin registered!');
+  // Register is called when the extension is loaded
+  register(api: ExtensionApi) {
+    // Log that the extension is registered
+    api.logger.info('Hello World extension registered!');
     
-    // Log plugin configuration
-    const greeting = (api.pluginConfig.greeting as string) || 'Hello';
-    const verbose = api.pluginConfig.verbose as boolean;
+    // Log extension configuration
+    const greeting = (api.extensionConfig.greeting as string) || 'Hello';
+    const verbose = api.extensionConfig.verbose as boolean;
     
     api.logger.info(`Greeting: ${greeting}`);
     if (verbose) {
@@ -59,7 +59,7 @@ const plugin = {
       async execute(params) {
         const name = params.name as string;
         const times = Math.min(Math.max((params.times as number) || 1, 1), 10);
-        const greeting = (api.pluginConfig.greeting as string) || 'Hello';
+        const greeting = (api.extensionConfig.greeting as string) || 'Hello';
         
         const greetings = [];
         for (let i = 0; i < times; i++) {
@@ -79,7 +79,7 @@ const plugin = {
       requireAuth: false,
       handler: async (args, _context) => {
         const name = args || 'World';
-        const greeting = (api.pluginConfig.greeting as string) || 'Hello';
+        const greeting = (api.extensionConfig.greeting as string) || 'Hello';
         return {
           content: `${greeting}, ${name}!`,
           success: true,
@@ -100,29 +100,29 @@ const plugin = {
 
     // Register a simple HTTP route
     api.registerHttpRoute('/hello', async (_req, res) => {
-      const greeting = (api.pluginConfig.greeting as string) || 'Hello';
-      res.json({ message: greeting, plugin: 'hello' });
+      const greeting = (api.extensionConfig.greeting as string) || 'Hello';
+      res.json({ message: greeting, extension: 'hello' });
     });
 
     // Register a gateway method
     api.registerGatewayMethod('hello', async (params) => {
       const name = (params.name as string) || 'World';
-      const greeting = (api.pluginConfig.greeting as string) || 'Hello';
+      const greeting = (api.extensionConfig.greeting as string) || 'Hello';
       return { message: `${greeting}, ${name}!` };
     });
 
-    api.logger.info('Hello World plugin fully initialized');
+    api.logger.info('Hello World extension fully initialized');
   },
 
-  // Activate is called when the plugin is enabled
-  activate(api: PluginApi) {
-    api.logger.info('Hello World plugin activated!');
+  // Activate is called when the extension is enabled
+  activate(api: ExtensionApi) {
+    api.logger.info('Hello World extension activated!');
   },
 
-  // Deactivate is called when the plugin is disabled
-  deactivate(api: PluginApi) {
-    api.logger.info('Hello World plugin deactivated');
+  // Deactivate is called when the extension is disabled
+  deactivate(api: ExtensionApi) {
+    api.logger.info('Hello World extension deactivated');
   },
 };
 
-export default plugin;
+export default extension;

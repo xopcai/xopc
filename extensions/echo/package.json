@@ -6,7 +6,7 @@
   "xopcbot": {
     "extension": true,
     "id": "echo",
-    "name": "Echo Plugin",
+    "name": "Echo Extension",
     "kind": "utility"
   },
   "keywords": [

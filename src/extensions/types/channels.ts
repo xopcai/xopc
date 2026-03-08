@@ -8,7 +8,7 @@
 // Channel Extension
 // ============================================================================
 
-export interface ChannelPlugin {
+export interface ChannelExtension {
   name: string;
   connect: () => Promise<void>;
   disconnect: () => Promise<void>;

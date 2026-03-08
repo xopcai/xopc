@@ -1,15 +1,15 @@
 /**
- * Progress Tracker Plugin - Phase 2 Enhanced Tool Example
+ * Progress Tracker Extension - Phase 2 Enhanced Tool Example
  *
  * Demonstrates: EnhancedTool with streaming updates (onUpdate callback)
  *
- * Usage: xopcbot plugin install ./examples/plugins/progress-tracker
+ * Usage: xopcbot extension install ./examples/extensions/progress-tracker
  */
 
-import type { PluginApi, EnhancedTool } from 'xopcbot/plugin-sdk';
+import type { ExtensionApi, EnhancedTool } from 'xopcbot/extension-sdk';
 
-export default function(api: PluginApi) {
-  api.logger.info('Progress Tracker plugin registered!');
+export default function(api: ExtensionApi) {
+  api.logger.info('Progress Tracker extension registered!');
 
   // Enhanced Tool with streaming updates
   const longTaskTool: EnhancedTool<{ steps?: number }> = {

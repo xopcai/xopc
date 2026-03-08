@@ -10,7 +10,7 @@ export default [
       "ui/**/*",
       "*.js",
       "*.mjs",
-      "src/plugins/examples/**/*",
+      "src/extensions/examples/**/*",
     ],
   },
   // TypeScript source files

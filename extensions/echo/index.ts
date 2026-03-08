@@ -1,23 +1,23 @@
 /**
- * Echo Plugin Example
+ * Echo Extension Example
  * 
  * Demonstrates message modification hooks and message processing.
  * 
  * Installation:
- *   xopcbot plugin install ./examples/plugins/echo
+ *   xopcbot extension install ./examples/extensions/echo
  */
 
-import type { PluginApi } from 'xopcbot/plugin-sdk';
+import type { ExtensionApi } from 'xopcbot/extension-sdk';
 
-const plugin = {
+const extension = {
   id: 'echo',
-  name: 'Echo Plugin',
+  name: "Echo Extension",
   description: 'Echoes messages back with modifications',
   version: '1.0.0',
   kind: 'utility' as const,
 
-  register(api: PluginApi) {
-    api.logger.info('Echo plugin registered');
+  register(api: ExtensionApi) {
+    api.logger.info('Echo extension registered');
 
     // Register the echo tool
     api.registerTool({
@@ -47,9 +47,9 @@ const plugin = {
       },
       async execute(params) {
         let message = params.message as string;
-        const prefix = (params.prefix || api.pluginConfig.prefix) as string;
-        const uppercase = (params.uppercase ?? api.pluginConfig.uppercase) as boolean;
-        const reverse = (params.reverse ?? api.pluginConfig.reverse) as boolean;
+        const prefix = (params.prefix || api.extensionConfig.prefix) as string;
+        const uppercase = (params.uppercase ?? api.extensionConfig.uppercase) as boolean;
+        const reverse = (params.reverse ?? api.extensionConfig.reverse) as boolean;
 
         if (uppercase) {
           message = message.toUpperCase();
@@ -75,7 +75,7 @@ const plugin = {
         metadata?: Record<string, unknown>;
       };
       
-      const prefix = (api.pluginConfig.prefix as string) || '';
+      const prefix = (api.extensionConfig.prefix as string) || '';
       if (prefix && messageEvent.content) {
         messageEvent.content = `${prefix} ${messageEvent.content}`;
       }
@@ -94,16 +94,16 @@ const plugin = {
       api.logger.info(`Message from ${receivedEvent.from}: ${receivedEvent.content.substring(0, 100)}`);
     });
 
-    api.logger.info('Echo plugin fully initialized');
+    api.logger.info('Echo extension fully initialized');
   },
 
-  activate(api: PluginApi) {
-    api.logger.info('Echo plugin activated');
+  activate(api: ExtensionApi) {
+    api.logger.info('Echo extension activated');
   },
 
-  deactivate(api: PluginApi) {
-    api.logger.info('Echo plugin deactivated');
+  deactivate(api: ExtensionApi) {
+    api.logger.info('Echo extension deactivated');
   },
 };
 
-export default plugin;
+export default extension;

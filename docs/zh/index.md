@@ -17,9 +17,9 @@ features:
   - title: 🚀 轻量快速
     details: 基于 Node.js + TypeScript 构建，依赖最少
     link: /zh/getting-started
-  - title: 🔌 插件系统
-    details: 通过强大的插件架构扩展功能
-    link: /zh/plugins
+  - title: 🔌 扩展系统
+    details: 通过强大的扩展架构扩展功能
+    link: /zh/extensions
   - title: 🌐 多通道支持
     details: 支持 Telegram、Discord、Slack、Signal 等
     link: /zh/channels

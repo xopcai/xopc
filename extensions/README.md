@@ -6,7 +6,7 @@ Official extensions for xopcbot. These are fully-supported extensions maintained
 
 ### Phase 3: Inter-Extension Communication (New!)
 
-#### 6. Cross-Extension Communication (`cross-plugin-comm/`)
+#### 6. Cross-Extension Communication (`cross-extension-comm/`)
 
 Demonstrates **TypedEventBus** for inter-extension communication:
 
@@ -17,7 +17,7 @@ Demonstrates **TypedEventBus** for inter-extension communication:
 
 **Installation:**
 ```bash
-xopcbot extension install ./extensions/cross-plugin-comm
+xopcbot extension install ./extensions/cross-extension-comm
 ```
 
 **Features:**
