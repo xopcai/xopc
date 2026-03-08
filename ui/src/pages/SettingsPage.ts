@@ -1673,7 +1673,7 @@ export class SettingsPage extends LitElement {
                   class="text-input"
                   .value=${this._newProvider.id}
                   placeholder="e.g., my-provider"
-                  @change=${(e: Event) => {
+                  @input=${(e: Event) => {
                     this._newProvider = { ...this._newProvider, id: (e.target as HTMLInputElement).value };
                   }}
                 />
@@ -1686,7 +1686,7 @@ export class SettingsPage extends LitElement {
                   class="text-input"
                   .value=${this._newProvider.baseUrl}
                   placeholder="https://api.example.com/v1"
-                  @change=${(e: Event) => {
+                  @input=${(e: Event) => {
                     this._newProvider = { ...this._newProvider, baseUrl: (e.target as HTMLInputElement).value };
                   }}
                 />
@@ -1717,7 +1717,7 @@ export class SettingsPage extends LitElement {
                 class="text-input"
                 .value=${this._templateApiKey}
                 placeholder=${template ? `${template.id}-...` : 'sk-...'}
-                @change=${(e: Event) => this._templateApiKey = (e.target as HTMLInputElement).value}
+                @input=${(e: Event) => this._templateApiKey = (e.target as HTMLInputElement).value}
               />
               <p class="field-help">${t('settings.apiKeyHelp') || 'Your API key will be stored securely in the configuration'}</p>
             </div>
