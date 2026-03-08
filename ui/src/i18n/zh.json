@@ -22,6 +22,15 @@
     "assistant": "助手",
     "tool": "工具",
     "thinking": "思考中...",
+    "progress": {
+      "thinking": "🤔 思考中",
+      "searching": "🔍 搜索中",
+      "reading": "📖 读取中",
+      "writing": "✍️ 写入中",
+      "executing": "⚙️ 执行中",
+      "analyzing": "📊 分析中",
+      "idle": "💬 就绪"
+    },
     "typeMessage": "输入消息...",
     "attachFile": "附加文件",
     "sendMessage": "发送消息",

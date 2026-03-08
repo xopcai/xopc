@@ -41,6 +41,14 @@ interface Message {
   timestamp: number;
 }
 
+interface ProgressState {
+  stage: string;
+  message: string;
+  detail?: string;
+  toolName?: string;
+  timestamp: number;
+}
+
 type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error';
 
 // ---------- Helpers ----------
@@ -79,6 +87,7 @@ export class XopcbotGatewayChat extends LitElement {
   @state() private _isStreaming = false;
   @state() private _streamingContent = '';
   @state() private _streamingMessage: Message | null = null;
+  @state() private _currentProgress: ProgressState | null = null;
   @state() private _reconnectCount = 0;
   @state() private _isAtBottom = true;
   @state() private _currentSessionKey: string | null = null;
@@ -668,11 +677,24 @@ export class XopcbotGatewayChat extends LitElement {
           }
           break;
 
+        case 'progress':
+          // Handle progress feedback from agent
+          this._currentProgress = {
+            stage: parsed.stage || 'thinking',
+            message: parsed.message || '',
+            detail: parsed.detail,
+            toolName: parsed.toolName,
+            timestamp: Date.now(),
+          };
+          this.requestUpdate();
+          break;
+
         case 'error':
           this._error = parsed.content || parsed.error?.message || t('errors.sendFailed');
           this._isStreaming = false;
           this._isSending = false;
           this._streamingMessage = null;
+          this._currentProgress = null;
           this.requestUpdate();
           break;
 
@@ -726,6 +748,7 @@ export class XopcbotGatewayChat extends LitElement {
     }
     this._isStreaming = false;
     this._streamingContent = '';
+    this._currentProgress = null;
     this._isSending = false;
     
     // Auto-scroll to bottom if user is at bottom
@@ -955,7 +978,7 @@ export class XopcbotGatewayChat extends LitElement {
           <div class="flex items-center gap-2 text-xs text-muted">
             <span class="font-medium">${t('chat.assistant')}</span>
             <span>·</span>
-            <span class="text-primary animate-pulse">${t('chat.thinking')}</span>
+            ${this._renderProgressIndicator()}
           </div>
           <div class="message-bubble assistant">
             <div class="markdown-content">
@@ -971,6 +994,32 @@ export class XopcbotGatewayChat extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  private _renderProgressIndicator(): unknown {
+    if (this._currentProgress) {
+      const emoji = this._getProgressEmoji(this._currentProgress.stage);
+      const title = this._currentProgress.detail ? ` title="${this._currentProgress.detail}"` : '';
+      return html`
+        <span class="text-accent animate-pulse"${title}>
+          ${emoji} ${this._currentProgress.message}
+        </span>
+      `;
+    }
+    return html`<span class="text-primary animate-pulse">${t('chat.thinking')}</span>`;
+  }
+
+  private _getProgressEmoji(stage: string): string {
+    const emojiMap: Record<string, string> = {
+      'thinking': '🤔',
+      'searching': '🔍',
+      'reading': '📖',
+      'writing': '✍️',
+      'executing': '⚙️',
+      'analyzing': '📊',
+      'idle': '💬',
+    };
+    return emojiMap[stage] || '💬';
   }
 
   private _renderMessageContent(content: Array<{ type: string; text?: string }>): unknown {

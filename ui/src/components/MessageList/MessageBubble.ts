@@ -9,6 +9,7 @@ import './UsageBadge';
 export class MessageBubble extends LitElement {
   @property({ attribute: false }) message!: Message;
   @property({ type: Boolean }) isStreaming = false;
+  @property({ attribute: false }) progress: { stage: string; message: string; detail?: string } | null = null;
 
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -33,7 +34,7 @@ export class MessageBubble extends LitElement {
             <span class="font-medium">${roleLabel}</span>
             <span>·</span>
             <span>${this._formatTime(this.message.timestamp)}</span>
-            ${this.isStreaming ? html`<span class="text-primary animate-pulse">${t('chat.thinking')}</span>` : ''}
+            ${this._renderStatusIndicator()}
           </div>
 
           <div class="message-bubble ${isUser ? 'bg-primary-light' : 'bg-secondary'}">
@@ -118,5 +119,37 @@ export class MessageBubble extends LitElement {
       hour: '2-digit', 
       minute: '2-digit' 
     });
+  }
+
+  private _renderStatusIndicator(): unknown {
+    // Show progress info if available
+    if (this.progress) {
+      const emoji = this._getStageEmoji(this.progress.stage);
+      return html`
+        <span class="text-accent animate-pulse" title="${this.progress.detail || ''}">
+          ${emoji} ${this.progress.message}
+        </span>
+      `;
+    }
+    
+    // Fallback to old thinking indicator
+    if (this.isStreaming) {
+      return html`<span class="text-primary animate-pulse">${t('chat.thinking')}</span>`;
+    }
+    
+    return null;
+  }
+
+  private _getStageEmoji(stage: string): string {
+    const emojiMap: Record<string, string> = {
+      'thinking': '🤔',
+      'searching': '🔍',
+      'reading': '📖',
+      'writing': '✍️',
+      'executing': '⚙️',
+      'analyzing': '📊',
+      'idle': '💬',
+    };
+    return emojiMap[stage] || '💬';
   }
 }

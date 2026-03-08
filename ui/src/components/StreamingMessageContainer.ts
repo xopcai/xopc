@@ -14,6 +14,7 @@ export class StreamingMessageContainer extends LitElement {
   @property({ attribute: false }) tools: Map<string, any> = new Map();
   @property({ attribute: false }) pendingToolCalls: Set<string> = new Set();
   @property({ type: Boolean }) isStreaming = false;
+  @property({ attribute: false }) progress: { stage: string; message: string; detail?: string } | null = null;
 
   @state() private _currentMessage: any = null;
   @state() private _isComplete = false;
@@ -40,7 +41,7 @@ export class StreamingMessageContainer extends LitElement {
           <div class="flex items-center gap-2 text-xs text-muted">
             <span class="font-medium">Assistant</span>
             <span>·</span>
-            <span class="text-accent animate-pulse">thinking...</span>
+            ${this._renderProgressIndicator()}
           </div>
           
           <div class="rounded-xl p-3 bg-secondary">
@@ -49,6 +50,32 @@ export class StreamingMessageContainer extends LitElement {
         </div>
       </div>
     `;
+  }
+
+  private _renderProgressIndicator(): unknown {
+    if (this.progress) {
+      const emoji = this._getProgressEmoji(this.progress.stage);
+      const title = this.progress.detail ? ` title="${this.progress.detail}"` : '';
+      return html`
+        <span class="text-accent animate-pulse"${title}>
+          ${emoji} ${this.progress.message}
+        </span>
+      `;
+    }
+    return html`<span class="text-accent animate-pulse">thinking...</span>`;
+  }
+
+  private _getProgressEmoji(stage: string): string {
+    const emojiMap: Record<string, string> = {
+      'thinking': '🤔',
+      'searching': '🔍',
+      'reading': '📖',
+      'writing': '✍️',
+      'executing': '⚙️',
+      'analyzing': '📊',
+      'idle': '💬',
+    };
+    return emojiMap[stage] || '💬';
   }
 
   private renderStreamingContent(): unknown {

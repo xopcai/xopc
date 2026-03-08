@@ -22,6 +22,15 @@
     "assistant": "Assistant",
     "tool": "Tool",
     "thinking": "thinking...",
+    "progress": {
+      "thinking": "🤔 Thinking",
+      "searching": "🔍 Searching",
+      "reading": "📖 Reading",
+      "writing": "✍️ Writing",
+      "executing": "⚙️ Executing",
+      "analyzing": "📊 Analyzing",
+      "idle": "💬 Ready"
+    },
     "typeMessage": "Type a message...",
     "attachFile": "Attach file",
     "sendMessage": "Send message",
