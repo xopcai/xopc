@@ -1215,11 +1215,13 @@ export class SettingsPage extends LitElement {
                 .value=${model.id}
                 ?disabled=${!isNew}
                 placeholder="e.g., gpt-4o"
-                @input=${(e: Event) => {
+                @change=${(e: Event) => {
                   const id = (e.target as HTMLInputElement).value;
+                  // Only auto-fill name if it's empty and this is a new model
+                  const shouldAutoFillName = isNew && !model.name;
                   updateModel({ 
                     id, 
-                    name: model.name || id 
+                    ...(shouldAutoFillName ? { name: id } : {})
                   });
                 }}
               />
@@ -1232,7 +1234,7 @@ export class SettingsPage extends LitElement {
                 class="text-input"
                 .value=${model.name}
                 placeholder="e.g., GPT-4o"
-                @input=${(e: Event) => updateModel({ name: (e.target as HTMLInputElement).value })}
+                @change=${(e: Event) => updateModel({ name: (e.target as HTMLInputElement).value })}
               />
             </div>
             
@@ -1273,7 +1275,7 @@ export class SettingsPage extends LitElement {
                   type="number"
                   class="text-input"
                   .value=${model.contextWindow}
-                  @input=${(e: Event) => updateModel({ contextWindow: Number((e.target as HTMLInputElement).value) })}
+                  @change=${(e: Event) => updateModel({ contextWindow: Number((e.target as HTMLInputElement).value) })}
                 />
               </div>
               <div class="field-group">
@@ -1282,7 +1284,7 @@ export class SettingsPage extends LitElement {
                   type="number"
                   class="text-input"
                   .value=${model.maxTokens}
-                  @input=${(e: Event) => updateModel({ maxTokens: Number((e.target as HTMLInputElement).value) })}
+                  @change=${(e: Event) => updateModel({ maxTokens: Number((e.target as HTMLInputElement).value) })}
                 />
               </div>
             </div>
@@ -1331,7 +1333,7 @@ export class SettingsPage extends LitElement {
                 class="text-input"
                 .value=${this._newProvider.id}
                 placeholder="e.g., openai"
-                @input=${(e: Event) => {
+                @change=${(e: Event) => {
                   this._newProvider = { ...this._newProvider, id: (e.target as HTMLInputElement).value };
                 }}
               />
@@ -1344,7 +1346,7 @@ export class SettingsPage extends LitElement {
                 class="text-input"
                 .value=${this._newProvider.baseUrl}
                 placeholder="https://api.openai.com/v1"
-                @input=${(e: Event) => {
+                @change=${(e: Event) => {
                   this._newProvider = { ...this._newProvider, baseUrl: (e.target as HTMLInputElement).value };
                 }}
               />
@@ -1374,7 +1376,7 @@ export class SettingsPage extends LitElement {
                 class="text-input"
                 .value=${this._newProvider.apiKey}
                 placeholder="sk-..."
-                @input=${(e: Event) => {
+                @change=${(e: Event) => {
                   this._newProvider = { ...this._newProvider, apiKey: (e.target as HTMLInputElement).value };
                 }}
               />
