@@ -17,10 +17,11 @@ export interface FallbackAttempt {
 
 /**
  * Check if a provider is configured (has API key in config or environment variable)
+ * or is explicitly defined in config (even without apiKey)
  */
 export function isProviderConfigured(cfg: Config | undefined, provider: string): boolean {
-  // First check config
-  if (cfg?.models?.providers?.[provider]?.apiKey) return true;
+  // Check if provider is explicitly defined in config (even without apiKey)
+  if (cfg?.models?.providers?.[provider]) return true;
 
   // Then check environment variable (via provider-catalog)
   if (checkEnvProvider(provider)) return true;
