@@ -5,8 +5,17 @@
 
 import { execSync } from 'child_process';
 
-// Cache for shell command results (persists for process lifetime)
-const commandResultCache = new Map<string, string | undefined>();
+// Cache configuration
+const MAX_CACHE_SIZE = 100;
+const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
+
+interface CacheEntry {
+	value: string | undefined;
+	timestamp: number;
+}
+
+// Cache for shell command results with LRU eviction
+const commandResultCache = new Map<string, CacheEntry>();
 
 // Allowed safe commands for API key resolution (whitelist approach)
 const ALLOWED_COMMANDS = [
@@ -31,6 +40,31 @@ const DANGEROUS_PATTERNS = [
 	/\*\*?/, // Glob expansion
 	/\.\./, // Path traversal
 ];
+
+/**
+ * Clean expired cache entries and enforce size limit (LRU eviction)
+ */
+function maintainCache(): void {
+	const now = Date.now();
+
+	// Remove expired entries
+	for (const [key, entry] of commandResultCache.entries()) {
+		if (now - entry.timestamp > CACHE_TTL_MS) {
+			commandResultCache.delete(key);
+		}
+	}
+
+	// LRU eviction if still over limit
+	if (commandResultCache.size > MAX_CACHE_SIZE) {
+		const sortedEntries = [...commandResultCache.entries()].sort(
+			(a, b) => a[1].timestamp - b[1].timestamp
+		);
+		const entriesToDelete = sortedEntries.slice(0, sortedEntries.length - MAX_CACHE_SIZE);
+		for (const [key] of entriesToDelete) {
+			commandResultCache.delete(key);
+		}
+	}
+}
 
 /**
  * Validate if a command is safe to execute
@@ -79,8 +113,17 @@ export function resolveConfigValue(config: string): string | undefined {
 }
 
 function executeCommand(commandConfig: string): string | undefined {
-	if (commandResultCache.has(commandConfig)) {
-		return commandResultCache.get(commandConfig);
+	// Maintain cache before operations
+	maintainCache();
+
+	// Check cache
+	const cached = commandResultCache.get(commandConfig);
+	if (cached) {
+		const now = Date.now();
+		if (now - cached.timestamp <= CACHE_TTL_MS) {
+			return cached.value;
+		}
+		// Expired, will be replaced
 	}
 
 	const command = commandConfig.slice(1);
@@ -100,11 +143,17 @@ function executeCommand(commandConfig: string): string | undefined {
 			stdio: ['ignore', 'pipe', 'ignore'],
 		});
 		result = output.trim() || undefined;
-	} catch {
+	} catch (err) {
+		// Log error for debugging but don't expose details
+		console.error(`[Config] Command execution failed: ${err instanceof Error ? err.message : 'Unknown error'}`);
 		result = undefined;
 	}
 
-	commandResultCache.set(commandConfig, result);
+	// Store with timestamp
+	commandResultCache.set(commandConfig, {
+		value: result,
+		timestamp: Date.now(),
+	});
 	return result;
 }
 
@@ -128,6 +177,15 @@ export function resolveHeaders(
 /** Clear the config value command cache. Exported for testing. */
 export function clearConfigValueCache(): void {
 	commandResultCache.clear();
+}
+
+/** Get cache statistics for monitoring */
+export function getCacheStats(): { size: number; maxSize: number; ttlMs: number } {
+	return {
+		size: commandResultCache.size,
+		maxSize: MAX_CACHE_SIZE,
+		ttlMs: CACHE_TTL_MS,
+	};
 }
 
 /**

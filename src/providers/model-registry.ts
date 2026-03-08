@@ -294,7 +294,9 @@ export class ModelRegistry {
 					return model;
 				});
 			} catch (err) {
-				log.warn({ provider, err }, 'Failed to load built-in models for provider');
+				const errorMsg = err instanceof Error ? err.message : String(err);
+				log.error({ provider, error: errorMsg }, 'Failed to load built-in models for provider');
+				// Return empty array but log the error - don't silently fail
 				return [];
 			}
 		});
