@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import { homedir } from 'os';
-import { PROVIDER_ENV_MAP, isProviderConfigured as checkProviderConfigured } from '../providers/index.js';
 
 // ============================================
 // Provider API Keys (simple format only)
@@ -385,38 +384,8 @@ export function parseModelId(modelId: string): ParsedModelRef {
   return { provider: 'openai', model: modelId };
 }
 
-/**
- * 检查 provider 是否已配置
- */
-export function isProviderConfigured(config: Config, provider: string): boolean {
-  // 1. 检查 config
-  if (config.providers?.[provider]) return true;
-
-  // 2. 检查环境变量 (使用统一的 PROVIDER_ENV_MAP)
-  const keys = PROVIDER_ENV_MAP[provider] || [];
-  return keys.some(key => process.env[key]);
-}
-
-/**
- * 获取所有已配置的 provider
- */
-export function listConfiguredProviders(config: Config): string[] {
-  const providers = new Set<string>();
-
-  // 从 config 添加
-  if (config.providers) {
-    for (const [provider, key] of Object.entries(config.providers)) {
-      if (key) providers.add(provider);
-    }
-  }
-
-  // 从环境变量添加 (使用统一的 PROVIDER_ENV_MAP)
-  for (const p of Object.keys(PROVIDER_ENV_MAP)) {
-    if (isProviderConfigured(config, p)) providers.add(p);
-  }
-
-  return Array.from(providers);
-}
+// Re-export from providers/index.ts for backward compatibility
+export { isProviderConfigured, getConfiguredProviders as listConfiguredProviders } from '../providers/index.js';
 
 /**
  * 获取工作空间路径

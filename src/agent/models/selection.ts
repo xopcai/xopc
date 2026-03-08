@@ -178,36 +178,6 @@ export function getModelConfig(
 // ============================================
 
 /**
- * Detect provider from model ID based on known patterns
- */
-export function detectProviderByModel(modelId: string): string | null {
-  const lower = modelId.toLowerCase();
-  
-  // Anthropic
-  if (lower.includes('claude') || lower.startsWith('anthropic/')) {
-    return 'anthropic';
-  }
-  
-  // OpenAI
-  if (lower.startsWith('gpt-') || lower.startsWith('openai/')) {
-    return 'openai';
-  }
-  
-  // Google
-  if (lower.includes('gemini') || lower.startsWith('google/')) {
-    return 'google';
-  }
-  
-  // Ollama (local models typically don't have provider prefix)
-  // This is a heuristic - check if it looks like a common Ollama model
-  if (lower.includes(':') && !lower.includes('/')) {
-    return 'ollama';
-  }
-  
-  return null;
-}
-
-/**
  * Get all available model IDs from all providers
  */
 export function getAllModelIds(

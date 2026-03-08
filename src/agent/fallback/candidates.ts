@@ -1,6 +1,7 @@
 import type { Config } from '../../config/schema.js';
 import { isProviderConfigured } from '../../config/schema.js';
 import { DEFAULT_MODEL } from '../../providers/index.js';
+import { parseModelRef as parseModelRefUtil, normalizeProviderId } from '../models/selection.js';
 
 export interface ModelCandidate {
   provider: string;
@@ -23,18 +24,17 @@ export { isProviderConfigured };
 const DEFAULT_PROVIDER = DEFAULT_MODEL.split('/')[0];
 const DEFAULT_MODEL_ID = DEFAULT_MODEL.split('/')[1];
 
+/**
+ * Parse model reference string into provider/model parts.
+ * Uses the unified implementation from selection.ts.
+ */
 function parseModelRef(raw: string, defaultProvider?: string): ModelCandidate | null {
-  const trimmed = raw.trim();
-  if (!trimmed) return null;
-
-  const slashIndex = trimmed.indexOf('/');
-  if (slashIndex === -1) {
-    return defaultProvider ? { provider: defaultProvider, model: trimmed } : null;
-  }
-
-  const provider = trimmed.slice(0, slashIndex).trim();
-  const model = trimmed.slice(slashIndex + 1).trim();
-  return provider && model ? { provider, model } : null;
+  const result = parseModelRefUtil(raw, defaultProvider);
+  if (!result) return null;
+  return {
+    provider: normalizeProviderId(result.provider),
+    model: result.model,
+  };
 }
 
 export function resolveFallbackCandidates(params: {

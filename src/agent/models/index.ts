@@ -13,7 +13,6 @@ export {
   findProviderConfig,
   findModelConfig,
   getModelConfig,
-  detectProviderByModel,
   getAllModelIds,
   type ModelRef,
   type ThinkLevel,
