@@ -11,6 +11,7 @@ import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
 import type { ProviderTemplate } from '../config/provider-templates.js';
 import { PROVIDER_TEMPLATES, getProviderTemplate } from '../config/provider-templates.js';
+import { loadDynamicProviders, toProviderTemplate, getAllProviderTemplates, type DynamicProviderInfo } from '../config/dynamic-providers.js';
 
 // Model and Provider interfaces
 export interface ModelConfig {
@@ -101,6 +102,8 @@ export class SettingsPage extends LitElement {
   @state() private _selectedTemplate: ProviderTemplate | null = null;
   @state() private _templateApiKey: string = '';
   @state() private _showTemplateSelection = true;
+  @state() private _dynamicProviders: DynamicProviderInfo[] = [];
+  @state() private _loadingDynamicProviders = false;
 
   @state() private _values: SettingsValue = {
     model: 'anthropic/claude-sonnet-4-5',
@@ -685,6 +688,21 @@ export class SettingsPage extends LitElement {
       }
     } catch (err) {
       console.error('Failed to load models:', err);
+    }
+
+    // Also load dynamic providers for the template selection
+    await this._loadDynamicProviders();
+  }
+
+  private async _loadDynamicProviders(): Promise<void> {
+    this._loadingDynamicProviders = true;
+    try {
+      this._dynamicProviders = await loadDynamicProviders();
+    } catch (err) {
+      console.error('Failed to load dynamic providers:', err);
+      this._dynamicProviders = [];
+    } finally {
+      this._loadingDynamicProviders = false;
     }
   }
 
@@ -1351,8 +1369,38 @@ export class SettingsPage extends LitElement {
   }
 
   private _renderTemplateSelectionModal(): unknown {
-    const apiKeyTemplates = PROVIDER_TEMPLATES.filter(t => t.authType === 'api_key');
-    const oauthTemplates = PROVIDER_TEMPLATES.filter(t => t.authType === 'oauth');
+    // Use dynamic providers from backend, fallback to static templates
+    const staticTemplates = getAllProviderTemplates();
+    const dynamicApiKeyProviders = this._dynamicProviders
+      .filter(p => p.authType === 'api_key')
+      .map(toProviderTemplate);
+    const dynamicOauthProviders = this._dynamicProviders
+      .filter(p => p.authType === 'oauth')
+      .map(toProviderTemplate);
+    const staticApiKeyTemplates = staticTemplates.filter(t => t.authType === 'api_key');
+    const staticOauthTemplates = staticTemplates.filter(t => t.authType === 'oauth');
+
+    // Show loading state if dynamic providers are being loaded
+    if (this._loadingDynamicProviders) {
+      return html`
+        <div class="modal-overlay" @click=${() => this._showAddProviderModal = false}>
+          <div class="modal-content modal-lg" @click=${(e: Event) => e.stopPropagation()}>
+            <div class="modal-header">
+              <h3>${t('settings.addProvider') || 'Add Provider'}</h3>
+              <button class="btn btn-icon" @click=${() => this._showAddProviderModal = false}>
+                ${getIcon('x')}
+              </button>
+            </div>
+            <div class="modal-body" style="display: flex; align-items: center; justify-content: center; min-height: 200px;">
+              <div style="text-align: center;">
+                <div class="spinner"></div>
+                <p style="margin-top: 12px; color: var(--muted-foreground);">Loading providers...</p>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
 
     return html`
       <div class="modal-overlay" @click=${() => this._showAddProviderModal = false}>
@@ -1367,14 +1415,76 @@ export class SettingsPage extends LitElement {
           <div class="modal-body">
             <p class="modal-description">${t('settings.selectProviderTemplate') || 'Select a provider to quickly configure with pre-filled settings'}</p>
             
-            ${apiKeyTemplates.length > 0 ? html`
+            ${dynamicApiKeyProviders.length > 0 ? html`
+              <div class="template-section">
+                <h4 class="template-section-title">
+                  <span class="template-icon">${getIcon('cloud')}</span>
+                  ${t('settings.availableProviders') || 'Available Providers'}
+                  <span style="font-weight: normal; font-size: 12px; color: var(--muted-foreground);">(from backend)</span>
+                </h4>
+                <div class="template-grid">
+                  ${dynamicApiKeyProviders.map(template => html`
+                    <button
+                      class="template-card"
+                      @click=${() => this._selectTemplate(template)}
+                    >
+                      <div class="template-card-header">
+                        <span class="template-card-name">${template.name}</span>
+                        <span class="template-card-badge api-key">API Key</span>
+                      </div>
+                      <div class="template-card-models">
+                        ${template.models.slice(0, 3).map(m => html`
+                          <span class="template-model-tag">${m.name}</span>
+                        `)}
+                        ${template.models.length > 3 ? html`
+                          <span class="template-model-tag more">+${template.models.length - 3}</span>
+                        ` : ''}
+                      </div>
+                    </button>
+                  `)}
+                </div>
+              </div>
+            ` : ''}
+
+            ${dynamicOauthProviders.length > 0 ? html`
+              <div class="template-section">
+                <h4 class="template-section-title">
+                  <span class="template-icon">${getIcon('cloud')}</span>
+                  ${t('settings.oauthProviders') || 'OAuth Providers'}
+                  <span style="font-weight: normal; font-size: 12px; color: var(--muted-foreground);">(from backend)</span>
+                </h4>
+                <div class="template-grid">
+                  ${dynamicOauthProviders.map(template => html`
+                    <button
+                      class="template-card"
+                      @click=${() => this._selectTemplate(template)}
+                    >
+                      <div class="template-card-header">
+                        <span class="template-card-name">${template.name}</span>
+                        <span class="template-card-badge oauth">OAuth</span>
+                      </div>
+                      <div class="template-card-models">
+                        ${template.models.slice(0, 3).map(m => html`
+                          <span class="template-model-tag">${m.name}</span>
+                        `)}
+                        ${template.models.length > 3 ? html`
+                          <span class="template-model-tag more">+${template.models.length - 3}</span>
+                        ` : ''}
+                      </div>
+                    </button>
+                  `)}
+                </div>
+              </div>
+            ` : ''}
+            
+            ${staticApiKeyTemplates.length > 0 ? html`
               <div class="template-section">
                 <h4 class="template-section-title">
                   <span class="template-icon">${getIcon('key')}</span>
                   ${t('settings.apiKeyProviders') || 'API Key Providers'}
                 </h4>
                 <div class="template-grid">
-                  ${apiKeyTemplates.map(template => html`
+                  ${staticApiKeyTemplates.map(template => html`
                     <button
                       class="template-card"
                       @click=${() => this._selectTemplate(template)}
@@ -1397,14 +1507,14 @@ export class SettingsPage extends LitElement {
               </div>
             ` : ''}
             
-            ${oauthTemplates.length > 0 ? html`
+            ${staticOauthTemplates.length > 0 ? html`
               <div class="template-section">
                 <h4 class="template-section-title">
                   <span class="template-icon">${getIcon('lock')}</span>
                   ${t('settings.oauthProviders') || 'OAuth Providers'}
                 </h4>
                 <div class="template-grid">
-                  ${oauthTemplates.map(template => html`
+                  ${staticOauthTemplates.map(template => html`
                     <button
                       class="template-card"
                       @click=${() => this._selectTemplate(template)}
