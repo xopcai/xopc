@@ -324,7 +324,148 @@ export class ModelJsonEditor extends LitElement {
       grid-template-columns: 1fr 1fr;
       gap: 0.75rem;
     }
-    
+
+    /* Stats Badge Styles */
+    .stats-badge {
+      display: flex;
+      align-items: center;
+      gap: 0.5rem;
+      padding: 0.375rem 0.75rem;
+      background: var(--bg-secondary, #f1f5f9);
+      border-radius: var(--radius-md, 0.375rem);
+      font-size: 0.875rem;
+    }
+
+    .stat-item {
+      display: flex;
+      align-items: center;
+      gap: 0.25rem;
+    }
+
+    .stat-item.empty {
+      opacity: 0.5;
+    }
+
+    .stat-number {
+      font-weight: 600;
+      color: var(--accent-primary, #3b82f6);
+    }
+
+    .stat-item.empty .stat-number {
+      color: var(--text-muted, #94a3b8);
+    }
+
+    .stat-label {
+      color: var(--text-muted, #64748b);
+    }
+
+    .stat-separator {
+      color: var(--border-color, #e2e8f0);
+    }
+
+    /* Enhanced Empty State Styles */
+    .empty-state {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      padding: 3rem 2rem;
+      text-align: center;
+      background: linear-gradient(135deg, var(--bg-secondary, #f8fafc) 0%, var(--bg-primary, white) 100%);
+      border: 2px dashed var(--border-color, #e2e8f0);
+      border-radius: var(--radius-lg, 0.75rem);
+      margin: 1rem 0;
+    }
+
+    .empty-icon {
+      width: 64px;
+      height: 64px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      background: var(--bg-primary, white);
+      border-radius: 50%;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.08);
+      margin-bottom: 1.5rem;
+      color: var(--accent-primary, #3b82f6);
+    }
+
+    .empty-icon svg {
+      width: 32px;
+      height: 32px;
+    }
+
+    .empty-title {
+      font-size: 1.25rem;
+      font-weight: 600;
+      color: var(--text-primary, #0f172a);
+      margin: 0 0 0.5rem;
+    }
+
+    .empty-description {
+      font-size: 0.9375rem;
+      color: var(--text-muted, #64748b);
+      max-width: 400px;
+      margin: 0 0 1.5rem;
+      line-height: 1.6;
+    }
+
+    .empty-actions {
+      margin-bottom: 1.5rem;
+    }
+
+    .empty-suggestions {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.5rem;
+      justify-content: center;
+    }
+
+    .suggestion-tag {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.375rem;
+      padding: 0.5rem 0.875rem;
+      background: var(--bg-primary, white);
+      border: 1px solid var(--border-color, #e2e8f0);
+      border-radius: var(--radius-full, 9999px);
+      font-size: 0.8125rem;
+      color: var(--text-secondary, #475569);
+      cursor: pointer;
+      transition: all 0.15s;
+    }
+
+    .suggestion-tag:hover {
+      border-color: var(--accent-primary, #3b82f6);
+      background: rgba(59, 130, 246, 0.05);
+      color: var(--accent-primary, #3b82f6);
+      transform: translateY(-1px);
+    }
+
+    .suggestion-tag svg {
+      width: 14px;
+      height: 14px;
+    }
+
+    @media (max-width: 640px) {
+      .empty-state {
+        padding: 2rem 1rem;
+      }
+
+      .empty-title {
+        font-size: 1.125rem;
+      }
+
+      .empty-description {
+        font-size: 0.875rem;
+      }
+
+      .stats-badge {
+        font-size: 0.8125rem;
+        padding: 0.25rem 0.5rem;
+      }
+    }
+
     .dialog-overlay {
       position: fixed;
       inset: 0;
@@ -408,6 +549,41 @@ export class ModelJsonEditor extends LitElement {
     
     this._providerEditDialog.addEventListener('close', handleClose as EventListener);
     this._providerEditDialog.open(undefined, undefined, true);
+  }
+
+  private _quickAddProvider(preset: string) {
+    // Quick add with preset - directly open the dialog with preset applied
+    const handleClose = (e: CustomEvent<ProviderEditDialogResult>) => {
+      this._providerEditDialog.removeEventListener('close', handleClose as EventListener);
+      
+      if (e.detail.confirmed && e.detail.providerId && e.detail.config) {
+        const newConfig = { ...this.config };
+        newConfig.providers = { ...newConfig.providers };
+        newConfig.providers[e.detail.providerId] = e.detail.config;
+        
+        const expanded = new Set(this._editorState.expandedProviders);
+        expanded.add(e.detail.providerId);
+        
+        this._editorState = { ...this._editorState, expandedProviders: expanded };
+        this._emitChange(newConfig);
+      }
+    };
+    
+    this._providerEditDialog.addEventListener('close', handleClose as EventListener);
+    
+    // Open with preset configuration
+    const presets: Record<string, Partial<ProviderConfig>> = {
+      ollama: { baseUrl: 'http://localhost:11434/v1', api: 'openai-completions', apiKey: 'ollama' },
+      openrouter: { baseUrl: 'https://openrouter.ai/api/v1', api: 'openai-completions', apiKey: '' },
+      lmstudio: { baseUrl: 'http://localhost:1234/v1', api: 'openai-completions', apiKey: 'lmstudio' },
+    };
+    
+    const presetConfig = presets[preset];
+    if (presetConfig) {
+      this._providerEditDialog.open({ ...presetConfig, models: [] }, preset, true);
+    } else {
+      this._providerEditDialog.open(undefined, undefined, true);
+    }
   }
 
   private _removeProvider(providerId: string) {
@@ -576,7 +752,17 @@ export class ModelJsonEditor extends LitElement {
         <button class="btn btn-ghost" @click=${() => this._editorState = { ...this._editorState, showRawJson: !this._editorState.showRawJson }}>
           ${this._editorState.showRawJson ? 'Hide JSON' : 'Show JSON'}
         </button>
-        <span class="api-key-type">${providerCount} providers, ${modelCount} models</span>
+        <div class="stats-badge">
+          <span class="stat-item ${providerCount === 0 ? 'empty' : ''}">
+            <span class="stat-number">${providerCount}</span>
+            <span class="stat-label">provider${providerCount !== 1 ? 's' : ''}</span>
+          </span>
+          <span class="stat-separator">|</span>
+          <span class="stat-item ${modelCount === 0 ? 'empty' : ''}">
+            <span class="stat-number">${modelCount}</span>
+            <span class="stat-label">model${modelCount !== 1 ? 's' : ''}</span>
+          </span>
+        </div>
       </div>
     `;
   }
@@ -587,8 +773,29 @@ export class ModelJsonEditor extends LitElement {
     if (providers.length === 0) {
       return html`
         <div class="empty-state">
-          <p>No custom providers configured.</p>
-          <p>Click "Add Provider" to add Ollama, vLLM, OpenRouter, or other custom providers.</p>
+          <div class="empty-icon">
+            ${getIcon('cpu')}
+          </div>
+          <h3 class="empty-title">No Custom Providers</h3>
+          <p class="empty-description">
+            Add custom model providers like Ollama, vLLM, OpenRouter, or other OpenAI-compatible APIs.
+          </p>
+          <div class="empty-actions">
+            <button class="btn btn-primary" @click=${this._addProvider}>
+              ${getIcon('plus')} Add Your First Provider
+            </button>
+          </div>
+          <div class="empty-suggestions">
+            <div class="suggestion-tag" @click=${() => this._quickAddProvider('ollama')}>
+              ${getIcon('zap')} Ollama
+            </div>
+            <div class="suggestion-tag" @click=${() => this._quickAddProvider('openrouter')}>
+              ${getIcon('globe')} OpenRouter
+            </div>
+            <div class="suggestion-tag" @click=${() => this._quickAddProvider('lmstudio')}>
+              ${getIcon('monitor')} LM Studio
+            </div>
+          </div>
         </div>
       `;
     }
