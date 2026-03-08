@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { markdownToIR } from "./ir.js";
+import { markdownToIR } from "../ir.js";
 
 /**
  * HR (Thematic Break) Spacing Analysis

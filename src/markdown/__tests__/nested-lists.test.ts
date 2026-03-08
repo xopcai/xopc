@@ -38,7 +38,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { markdownToIR } from "./ir.js";
+import { markdownToIR } from "../ir.js";
 
 describe("Nested Lists - 2 Level Nesting", () => {
   it("renders bullet items nested inside bullet items with proper indentation", () => {

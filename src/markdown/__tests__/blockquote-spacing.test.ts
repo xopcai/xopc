@@ -27,7 +27,7 @@
  */
 
 import { describe, it, expect } from "vitest";
-import { markdownToIR } from "./ir.js";
+import { markdownToIR } from "../ir.js";
 
 describe("blockquote spacing", () => {
   describe("blockquote followed by paragraph", () => {

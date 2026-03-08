@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { parseFrontmatterBlock } from "./frontmatter.js";
+import { parseFrontmatterBlock } from "../frontmatter.js";
 
 describe("parseFrontmatterBlock", () => {
   it("parses YAML block scalars", () => {

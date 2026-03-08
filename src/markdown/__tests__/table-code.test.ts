@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { markdownToIR } from "./ir.js";
+import { markdownToIR } from "../ir.js";
 
 describe("markdownToIR tableMode code - style overlap", () => {
   it("should not have overlapping styles when cell has bold text", () => {
