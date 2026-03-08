@@ -34,7 +34,7 @@ xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
 | `--name` | (可选) 任务名称 |
 | `--target` | 执行模式：`main`（直接发送）或 `isolated`（AI Agent） |
 | `--model` | (可选) AI Agent 模式使用的模型 |
-| `--channel` | (可选) 目标渠道：`telegram`、`whatsapp`、`cli` |
+| `--channel` | (可选) 目标渠道：`telegram`、`cli` |
 | `--to` | (可选) 接收者 Chat ID |
 
 ### 删除任务

@@ -21,7 +21,7 @@ features:
     details: 通过强大的插件架构扩展功能
     link: /zh/plugins
   - title: 🌐 多通道支持
-    details: 支持 Telegram、WhatsApp、Discord、Slack、Signal 等
+    details: 支持 Telegram、Discord、Slack、Signal 等
     link: /zh/channels
   - title: 💻 本地优先
     details: 在本地运行 AI 助手，完全掌控

@@ -89,9 +89,6 @@
       "telegramApiRoot": "API Root (Optional)",
       "telegramAllowFrom": "Allow From (Optional)",
       "telegramDebug": "Debug Mode",
-      "whatsappEnabled": "WhatsApp",
-      "whatsappBridgeUrl": "Bridge URL",
-      "whatsappAllowFrom": "Allow From (Optional)",
       "heartbeatEnabled": "Heartbeat",
       "heartbeatIntervalMs": "Heartbeat Interval (ms)",
       "gatewayToken": "Gateway Token"
@@ -117,9 +114,6 @@
       "telegramApiRoot": "Custom Telegram API root URL",
       "telegramAllowFrom": "Allowed user IDs, comma separated",
       "telegramDebug": "Enable debug logging for Telegram",
-      "whatsappEnabled": "Enable WhatsApp bridge",
-      "whatsappBridgeUrl": "WhatsApp bridge WebSocket URL",
-      "whatsappAllowFrom": "Allowed phone numbers, comma separated",
       "heartbeatEnabled": "Enable heartbeat monitoring",
       "heartbeatIntervalMs": "Heartbeat check interval in milliseconds",
       "gatewayToken": "Authentication token for gateway API access"
@@ -137,8 +131,6 @@
       "telegramToken": "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz",
       "telegramApiRoot": "https://api.telegram.org",
       "telegramAllowFrom": "123456789, 987654321",
-      "whatsappBridgeUrl": "ws://localhost:3001",
-      "whatsappAllowFrom": "+1234567890, +0987654321",
       "gatewayToken": "Enter your gateway authentication token"
     },
     "addProvider": "Add Provider",

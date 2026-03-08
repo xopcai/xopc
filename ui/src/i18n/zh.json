@@ -89,9 +89,6 @@
       "telegramApiRoot": "API 根地址（可选）",
       "telegramAllowFrom": "允许来源（可选）",
       "telegramDebug": "调试模式",
-      "whatsappEnabled": "WhatsApp",
-      "whatsappBridgeUrl": "桥接地址",
-      "whatsappAllowFrom": "允许来源（可选）",
       "heartbeatEnabled": "心跳",
       "heartbeatIntervalMs": "心跳间隔（毫秒）",
       "gatewayToken": "网关令牌"
@@ -117,9 +114,6 @@
       "telegramApiRoot": "自定义 Telegram API 根地址",
       "telegramAllowFrom": "允许的用户 ID，逗号分隔",
       "telegramDebug": "启用 Telegram 调试日志",
-      "whatsappEnabled": "启用 WhatsApp 桥接",
-      "whatsappBridgeUrl": "WhatsApp 桥接 WebSocket 地址",
-      "whatsappAllowFrom": "允许的电话号码，逗号分隔",
       "heartbeatEnabled": "启用心跳监控",
       "heartbeatIntervalMs": "心跳检查间隔（毫秒）",
       "gatewayToken": "网关 API 访问认证令牌"
@@ -137,8 +131,6 @@
       "telegramToken": "1234567890:ABCdefGHIjklMNOpqrsTUVwxyz",
       "telegramApiRoot": "https://api.telegram.org",
       "telegramAllowFrom": "123456789, 987654321",
-      "whatsappBridgeUrl": "ws://localhost:3001",
-      "whatsappAllowFrom": "+1234567890, +0987654321",
       "gatewayToken": "输入网关认证令牌"
     },
     "addProvider": "添加提供商",

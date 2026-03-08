@@ -111,7 +111,7 @@ xopcbot onboard --gateway
 **功能**（不带选项时）：
 - 自动检测是否需要设置工作区
 - 配置 LLM 提供商和模型
-- 配置消息渠道（Telegram/WhatsApp）
+- 配置消息渠道（Telegram）
 - 配置 Gateway WebUI 并自动生成 Token
 - 完成后显示启动网关的命令
 

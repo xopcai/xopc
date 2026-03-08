@@ -30,7 +30,7 @@ xopcbot 是运行在本地 的个人 AI 助手，可以帮助你：
 | **任务自动化** | 使用 cron 设置定时任务 |
 | **文件操作** | 在工作区中搜索、读取、编辑文件 |
 | **网络搜索** | 搜索网页并总结结果 |
-| **多渠道聊天** | 通过 Telegram、WhatsApp、飞书或网页 UI 交流 |
+| **多渠道聊天** | 通过 Telegram、飞书或网页 UI 交流 |
 
 ```bash
 # 在终端中交互式聊天
@@ -68,7 +68,7 @@ xopcbot onboard
 向导会引导你完成：
 - 选择喜欢的 AI 模型（支持 20+ 提供商）
 - 配置 API 密钥
-- 设置聊天渠道（Telegram、WhatsApp 等）
+- 设置聊天渠道（Telegram 等）
 
 > **提示：** 使用 `xopcbot onboard --quick` 可快速设置模型。
 
@@ -91,7 +91,7 @@ xopcbot agent -m "你好！" --channel telegram --chat-id 123456
 | [快速开始](https://xopcai.github.io/xopcbot/getting-started) | 安装和基本用法 |
 | [配置](https://xopcai.github.io/xopcbot/configuration) | 完整配置参考 |
 | [CLI 参考](https://xopcai.github.io/xopcbot/cli) | 所有可用命令 |
-| [渠道](https://xopcai.github.io/xopcbot/channels) | Telegram、WhatsApp、飞书设置 |
+| [渠道](https://xopcai.github.io/xopcbot/channels) | Telegram、飞书设置 |
 | [工具](https://xopcai.github.io/xopcbot/tools) | 内置工具参考 |
 
 ---
@@ -101,7 +101,6 @@ xopcbot agent -m "你好！" --channel telegram --chat-id 123456
 | 渠道 | 状态 | 安装 |
 |------|------|------|
 | Telegram | ✅ | [设置指南](https://xopcai.github.io/xopcbot/channels#telegram) |
-| WhatsApp | ✅ | [设置指南](https://xopcai.github.io/xopcbot/channels#whatsapp) |
 | 飞书/Lark | ✅ | [设置指南](https://xopcai.github.io/xopcbot/channels#feishu) |
 | 网页 UI | ✅ | 内置，运行 `xopcbot gateway` 即可 |
 

@@ -43,7 +43,7 @@ xopcbot onboard
 1. 创建必要的目录（`~/.xopcbot/` 和 `~/.xopcbot/workspace/`）。
 2. 在 `~/.xopcbot/config.json` 生成默认配置文件。
 3. 提示选择 LLM 提供商并输入 API 密钥。
-4. 引导配置消息渠道（Telegram/WhatsApp）。
+4. 引导配置消息渠道（Telegram）。
 5. 配置并启动 Gateway WebUI。
 
 您的 API 密钥将安全存储在配置文件中。

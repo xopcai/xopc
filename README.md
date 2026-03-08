@@ -30,7 +30,7 @@ xopcbot is your personal AI assistant that runs locally. It can help you with:
 | **Task automation** | Schedule recurring tasks with cron |
 | **File operations** | Search, read, edit files in your workspace |
 | **Web research** | Search the web and summarize results |
-| **Multi-channel chat** | Talk via Telegram, WhatsApp, Feishu, or Web UI |
+| **Multi-channel chat** | Talk via Telegram, Feishu, or Web UI |
 
 ```bash
 # Chat interactively in your terminal
@@ -68,7 +68,7 @@ xopcbot onboard
 The wizard will guide you through:
 - Choosing your preferred AI model (20+ providers supported)
 - Configuring API keys
-- Setting up chat channels (Telegram, WhatsApp, etc.)
+- Setting up chat channels (Telegram, etc.)
 
 > **Tip:** Use `xopcbot onboard --quick` for quick model setup only.
 
@@ -91,7 +91,7 @@ xopcbot agent -m "Hello!" --channel telegram --chat-id 123456
 | [Getting Started](https://xopcai.github.io/xopcbot/getting-started) | Setup and basic usage |
 | [Configuration](https://xopcai.github.io/xopcbot/configuration) | Full config reference |
 | [CLI Reference](https://xopcai.github.io/xopcbot/cli) | All available commands |
-| [Channels](https://xopcai.github.io/xopcbot/channels) | Telegram, WhatsApp, Feishu setup |
+| [Channels](https://xopcai.github.io/xopcbot/channels) | Telegram, Feishu setup |
 | [Tools](https://xopcai.github.io/xopcbot/tools) | Built-in tools reference |
 
 ---
@@ -101,7 +101,6 @@ xopcbot agent -m "Hello!" --channel telegram --chat-id 123456
 | Channel | Status | Install |
 |---------|--------|---------|
 | Telegram | ✅ | [Setup Guide](https://xopcai.github.io/xopcbot/channels#telegram) |
-| WhatsApp | ✅ | [Setup Guide](https://xopcai.github.io/xopcbot/channels#whatsapp) |
 | Feishu/Lark | ✅ | [Setup Guide](https://xopcai.github.io/xopcbot/channels#feishu) |
 | Web UI | ✅ | Built-in, run `xopcbot gateway` |
 

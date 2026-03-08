@@ -24,7 +24,7 @@
 
 ## Project Overview
 
-**xopcbot** is an ultra-lightweight personal AI assistant built with Node.js + TypeScript. It provides a CLI-based interface to LLMs with multi-channel support (Telegram, WhatsApp).
+**xopcbot** is an ultra-lightweight personal AI assistant built with Node.js + TypeScript. It provides a CLI-based interface to LLMs with multi-channel support (Telegram, Feishu, Web UI).
 
 | Metric | Value |
 |--------|-------|
@@ -91,13 +91,12 @@ src/
 │   ├── memory/         #   Session persistence
 │   └── tools/          #   Built-in tools (Typebox schemas)
 ├── bus/                # Event bus for message routing
-├── channels/           # Channel integrations (Telegram, WhatsApp)
+├── channels/           # Channel integrations (Telegram, Feishu)
 │   ├── telegram/       #   Telegram plugin architecture
 │   │   ├── plugin.ts   #     Main plugin implementation
 │   │   ├── client.ts   #     Bot client wrapper
 │   │   ├── webhook.ts  #     Webhook server support
 │   │   └── command-handler.ts  # Bot command handlers
-│   ├── whatsapp/       #   WhatsApp plugin
 │   ├── types.ts        #   Channel plugin interfaces
 │   ├── manager.ts      #   Channel lifecycle manager
 │   ├── access-control.ts     # Access control policies
@@ -443,7 +442,7 @@ pnpm install --frozen-lockfile
 |---------|-------------|
 | `providers` | LLM API keys |
 | `agents.defaults` | Default model, tokens, temperature |
-| `channels` | Telegram/WhatsApp settings |
+| `channels` | Telegram settings |
 | `gateway` | HTTP server settings |
 | `cron` | Scheduled task settings |
 | `plugins` | Plugin enable/disable configuration |
@@ -497,7 +496,6 @@ pnpm install --frozen-lockfile
 | `ANTHROPIC_API_KEY` | Anthropic API authentication | Optional* |
 | `BRAVE_API_KEY` | Brave Search API key | Optional |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot integration | Optional |
-| `WHATSAPP_API_KEY` | WhatsApp integration | Optional |
 | `XOPCBOT_CONFIG` | Custom config file path | Optional |
 | `XOPCBOT_WORKSPACE` | Custom workspace directory | Optional |
 | `XOPCBOT_LOG_LEVEL` | Log level (trace/debug/info/warn/error/fatal) | Optional |
