@@ -1899,20 +1899,19 @@ export class SettingsPage extends LitElement {
 
     if (!providerId || !baseUrl) return;
 
-    // Get models from dynamic providers (loaded from backend /api/providers)
-    // This gives us ALL supported models for the provider, not just template models
+    // Get models from static templates (loaded from /api/providers - all pi-ai models)
     let models: ModelConfig[] = [];
     
     if (template.id === 'custom') {
       // Custom provider: no predefined models
       models = [];
     } else {
-      // Find the provider in dynamic providers to get all its models
-      const dynamicProvider = this._dynamicProviders.find(p => p.id === template.id);
-      if (dynamicProvider && dynamicProvider.models.length > 0) {
-        models = dynamicProvider.models;
+      // Find the provider in static templates to get all its models
+      const staticTemplate = this._staticTemplates.find(t => t.id === template.id);
+      if (staticTemplate && staticTemplate.models.length > 0) {
+        models = staticTemplate.models;
       } else if (template.models.length > 0) {
-        // Fallback to template models if dynamic provider not found
+        // Fallback to template models if static template not found
         models = template.models;
       }
     }
