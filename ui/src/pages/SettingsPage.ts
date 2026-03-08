@@ -771,12 +771,13 @@ export class SettingsPage extends LitElement {
 
   private async _loadDynamicProviders(): Promise<void> {
     this._loadingDynamicProviders = true;
+    const token = this.config?.token;
     try {
       // Load configured providers (for model selection)
-      this._dynamicProviders = await loadDynamicProviders();
+      this._dynamicProviders = await loadDynamicProviders(token);
       
       // Load all supported provider templates (for adding new providers)
-      this._staticTemplates = await getAllProviderTemplates();
+      this._staticTemplates = await getAllProviderTemplates(token);
     } catch (err) {
       console.error('Failed to load dynamic providers:', err);
       this._dynamicProviders = [];

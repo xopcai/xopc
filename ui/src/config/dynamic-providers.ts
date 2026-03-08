@@ -8,9 +8,9 @@
 import { getToken } from '../utils/storage.js';
 
 // Helper to get auth headers
-function getAuthHeaders(): Record<string, string> {
-  const token = getToken();
-  return token ? { 'Authorization': `Bearer ${token}` } : {};
+function getAuthHeaders(token?: string): Record<string, string> {
+  const authToken = token || getToken();
+  return authToken ? { 'Authorization': `Bearer ${authToken}` } : {};
 }
 
 // Cache for API response to avoid duplicate requests
@@ -37,7 +37,7 @@ let _cachedAllProvidersResponse: Array<{
   cost?: { input: number; output: number };
 }> | null = null;
 
-async function fetchModelsFromApi(): Promise<Array<{
+async function fetchModelsFromApi(token?: string): Promise<Array<{
   id: string;
   name: string;
   provider: string;
@@ -54,7 +54,7 @@ async function fetchModelsFromApi(): Promise<Array<{
   
   const url = window.location.origin;
   const response = await fetch(`${url}/api/models`, {
-    headers: getAuthHeaders(),
+    headers: getAuthHeaders(token),
   });
   
   if (!response.ok) {
@@ -75,7 +75,7 @@ function clearModelsCache(): void {
 }
 
 // Fetch ALL pi-ai supported models (regardless of configuration)
-async function fetchAllProvidersFromApi(): Promise<Array<{
+async function fetchAllProvidersFromApi(token?: string): Promise<Array<{
   id: string;
   name: string;
   provider: string;
@@ -91,7 +91,7 @@ async function fetchAllProvidersFromApi(): Promise<Array<{
   
   const url = window.location.origin;
   const response = await fetch(`${url}/api/providers`, {
-    headers: getAuthHeaders(),
+    headers: getAuthHeaders(token),
   });
   
   if (!response.ok) {
@@ -232,10 +232,11 @@ const KNOWN_PROVIDER_CONFIGS: Record<string, {
 
 /**
  * Load dynamic providers from backend API (uses cache)
+ * @param token Optional auth token
  */
-export async function loadDynamicProviders(): Promise<DynamicProviderInfo[]> {
+export async function loadDynamicProviders(token?: string): Promise<DynamicProviderInfo[]> {
   try {
-    const models = await fetchModelsFromApi();
+    const models = await fetchModelsFromApi(token);
     if (models.length === 0) {
       return getTemplateProviders();
     }
@@ -357,11 +358,12 @@ function formatProviderName(providerId: string): string {
 /**
  * Get all available provider templates (static + dynamic)
  * This is used when user wants to add a new provider
+ * @param token Optional auth token
  */
-export async function getAllProviderTemplates(): Promise<ProviderTemplate[]> {
+export async function getAllProviderTemplates(token?: string): Promise<ProviderTemplate[]> {
   try {
     // Use /api/providers to get ALL pi-ai supported models
-    const models = await fetchAllProvidersFromApi();
+    const models = await fetchAllProvidersFromApi(token);
     
     if (models.length > 0) {
       // Get all unique providers from the response
