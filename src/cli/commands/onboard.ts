@@ -30,7 +30,6 @@ import {
 import { colors } from '../utils/colors.js';
 import { homedir } from 'os';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
-import { listPortListeners } from '../../gateway/ports.js';
 
 /**
  * Load raw config without schema parsing to avoid default values being added.
@@ -234,23 +233,6 @@ async function runOnboard(
 
   // Explicitly exit to prevent hanging
   process.exit(0);
-}
-
-/**
- * Print gateway access info and management commands
- */
-function printGatewayInfo(host: string, port: number, _pid?: number): void {
-  const displayHost = host === '0.0.0.0' ? 'localhost' : host;
-
-  console.log('');
-  console.log('🌐 WebUI is available at:');
-  console.log(`   http://${displayHost}:${port}`);
-  console.log('');
-  console.log('📝 Management Commands:');
-  console.log('   xopcbot gateway status    # Check status');
-  console.log('   xopcbot gateway stop      # Stop gateway');
-  console.log('   xopcbot gateway restart   # Restart gateway');
-  console.log('   xopcbot gateway logs      # View logs');
 }
 
 /**

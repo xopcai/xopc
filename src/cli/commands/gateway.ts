@@ -9,6 +9,12 @@ import { getContextWithOpts } from '../index.js';
 import { runGatewayLoop } from '../../gateway/run-loop.js';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
 import { forceFreePortAndWait, checkPortAvailable, listPortListeners } from '../../gateway/ports.js';
+import {
+  resolveGatewayService,
+  isDaemonAvailableAsync,
+  getPlatformName,
+  buildGatewayInstallArgs,
+} from '../../daemon/index.js';
 
 const log = createLogger('GatewayCommand');
 
@@ -42,6 +48,10 @@ function createGatewayCommand(_ctx: CLIContext): Command {
     .addCommand(createStopCommand())
     .addCommand(createRestartCommand())
     .addCommand(createLogsCommand())
+    .addCommand(createInstallCommand())
+    .addCommand(createUninstallCommand())
+    .addCommand(createServiceStartCommand())
+    .addCommand(createServiceStatusCommand())
     .action(async (options) => {
       const ctx = getContextWithOpts();
       const config = loadConfig(ctx.configPath);
@@ -566,6 +576,250 @@ register({
       'xopcbot gateway logs',
       'xopcbot gateway token',
       'xopcbot gateway token --generate',
+      'xopcbot gateway install',
+      'xopcbot gateway uninstall',
     ],
   },
 });
+
+/**
+ * Create install subcommand - Install gateway as system service
+ */
+function createInstallCommand(): Command {
+  return new Command('install')
+    .description('Install gateway as a system service (daemon)')
+    .option('--port <number>', 'Gateway port', '18790')
+    .option('--host <address>', 'Host to bind to', '0.0.0.0')
+    .option('--token <token>', 'Authentication token')
+    .option('--runtime <runtime>', 'Runtime: node or binary', 'node')
+    .action(async (options) => {
+      // Check platform support
+      if (!await isDaemonAvailableAsync()) {
+        console.error(`❌ Daemon service not supported on ${getPlatformName()}`);
+        console.log('');
+        console.log('Supported platforms:');
+        console.log('  - Linux (systemd)');
+        console.log('  - macOS (launchd)');
+        console.log('  - Windows (Task Scheduler)');
+        process.exit(1);
+      }
+
+      const ctx = getContextWithOpts();
+      const config = loadConfig(ctx.configPath);
+      const port = parseInt(options.port, 10);
+      const host = options.host;
+      const token = options.token || config?.gateway?.auth?.token;
+
+      console.log('🔧 Installing xopcbot gateway as system service...');
+      console.log(`   Platform: ${getPlatformName()}`);
+      console.log(`   Port: ${port}`);
+      console.log(`   Host: ${host}`);
+      console.log('');
+
+      try {
+        const service = await resolveGatewayService();
+
+        // Check if already installed
+        const loaded = await service.isLoaded({ env: process.env });
+        if (loaded) {
+          const runtime = await service.getRuntime({ env: process.env });
+          console.log(`⚠️  Service already installed (status: ${runtime.status})`);
+          console.log('');
+          console.log('To reinstall, first uninstall:');
+          console.log('  xopcbot gateway uninstall');
+          process.exit(1);
+        }
+
+        // Build install args
+        const installArgs = buildGatewayInstallArgs({
+          port,
+          host,
+          token: token || undefined,
+          runtime: options.runtime,
+        });
+
+        // Install service
+        await service.install({
+          ...installArgs,
+          stdout: process.stdout,
+          stderr: process.stderr,
+        });
+
+        console.log('');
+        console.log('✅ Gateway service installed successfully!');
+        console.log('');
+        console.log('📝 Next steps:');
+        console.log('   xopcbot gateway start    # Start the service');
+        console.log('   xopcbot gateway status   # Check service status');
+        console.log('');
+        console.log('💡 The gateway will now start automatically when you log in.');
+
+        process.exit(0);
+      } catch (err) {
+        console.error('❌ Failed to install service:', err);
+        process.exit(1);
+      }
+    });
+}
+
+/**
+ * Create uninstall subcommand - Uninstall gateway system service
+ */
+function createUninstallCommand(): Command {
+  return new Command('uninstall')
+    .description('Uninstall gateway system service')
+    .action(async () => {
+      if (!await isDaemonAvailableAsync()) {
+        console.error(`❌ Daemon service not supported on ${getPlatformName()}`);
+        process.exit(1);
+      }
+
+      console.log('🔧 Uninstalling xopcbot gateway service...');
+
+      try {
+        const service = await resolveGatewayService();
+
+        const loaded = await service.isLoaded({ env: process.env });
+        if (!loaded) {
+          console.log('ℹ️  Service is not installed');
+          process.exit(0);
+        }
+
+        await service.uninstall({
+          env: process.env,
+          stdout: process.stdout,
+          stderr: process.stderr,
+        });
+
+        console.log('');
+        console.log('✅ Gateway service uninstalled successfully!');
+
+        process.exit(0);
+      } catch (err) {
+        console.error('❌ Failed to uninstall service:', err);
+        process.exit(1);
+      }
+    });
+}
+
+/**
+ * Create service start subcommand - Start via daemon
+ */
+function createServiceStartCommand(): Command {
+  return new Command('service-start')
+    .description('Start gateway via system service')
+    .action(async () => {
+      if (!await isDaemonAvailableAsync()) {
+        console.error(`❌ Daemon service not supported on ${getPlatformName()}`);
+        process.exit(1);
+      }
+
+      try {
+        const service = await resolveGatewayService();
+
+        const loaded = await service.isLoaded({ env: process.env });
+        if (!loaded) {
+          console.log('ℹ️  Service is not installed. Use: xopcbot gateway install');
+          process.exit(1);
+        }
+
+        console.log('🚀 Starting gateway service...');
+        await service.start({
+          env: process.env,
+          stdout: process.stdout,
+          stderr: process.stderr,
+        });
+
+        // Get runtime info
+        const runtime = await service.getRuntime({ env: process.env });
+        console.log('');
+        console.log('✅ Gateway service started');
+        if (runtime.pid) {
+          console.log(`   PID: ${runtime.pid}`);
+        }
+
+        const config = loadConfig(DEFAULT_PATHS.config);
+        const port = config?.gateway?.port || 18790;
+        console.log(`   URL: http://localhost:${port}`);
+
+        process.exit(0);
+      } catch (err) {
+        console.error('❌ Failed to start service:', err);
+        process.exit(1);
+      }
+    });
+}
+
+/**
+ * Create service status subcommand - Check daemon service status
+ */
+function createServiceStatusCommand(): Command {
+  return new Command('service-status')
+    .description('Check gateway system service status')
+    .action(async () => {
+      if (!await isDaemonAvailableAsync()) {
+        console.error(`❌ Daemon service not supported on ${getPlatformName()}`);
+        process.exit(1);
+      }
+
+      try {
+        const service = await resolveGatewayService();
+
+        const loaded = await service.isLoaded({ env: process.env });
+        if (!loaded) {
+          console.log('❌ Service is not installed');
+          console.log('');
+          console.log('To install: xopcbot gateway install');
+          process.exit(0);
+        }
+
+        const runtime = await service.getRuntime({ env: process.env });
+
+        console.log('📋 Service Status');
+        console.log('────────────────');
+        console.log(`Installed: Yes`);
+        console.log(`Status: ${runtime.status}`);
+        if (runtime.pid) {
+          console.log(`PID: ${runtime.pid}`);
+        }
+        if (runtime.lastExitStatus !== undefined) {
+          console.log(`Last Exit Code: ${runtime.lastExitStatus}`);
+        }
+
+        // Read command config
+        const cmdConfig = await service.readCommand(process.env);
+        if (cmdConfig) {
+          console.log('');
+          console.log('📝 Configuration');
+          console.log('────────────────');
+          console.log(`Program: ${cmdConfig.program}`);
+          if (cmdConfig.arguments.length > 0) {
+            console.log(`Args: ${cmdConfig.arguments.join(' ')}`);
+          }
+          if (cmdConfig.workingDirectory) {
+            console.log(`Working Dir: ${cmdConfig.workingDirectory}`);
+          }
+        }
+
+        const config = loadConfig(DEFAULT_PATHS.config);
+        const port = config?.gateway?.port || 18790;
+        console.log('');
+        console.log('🌐 Access');
+        console.log('─────────');
+        console.log(`URL: http://localhost:${port}`);
+
+        console.log('');
+        console.log('📝 Commands');
+        console.log('───────────');
+        console.log('  xopcbot gateway service-start   # Start service');
+        console.log('  xopcbot gateway stop            # Stop (process)');
+        console.log('  xopcbot gateway restart         # Restart (process)');
+        console.log('  xopcbot gateway uninstall      # Remove service');
+
+        process.exit(0);
+      } catch (err) {
+        console.error('❌ Failed to get service status:', err);
+        process.exit(1);
+      }
+    });
+}
