@@ -532,6 +532,28 @@ export class SettingsPage extends LitElement {
   }
 
   /**
+   * Add a new provider.
+   */
+  private _addProvider(provider: ProviderConfig): void {
+    this._providers = [...this._providers, provider];
+    this._dirtyFields.add(`providers.${provider.id}`);
+    this._expandedProviders.add(provider.id);
+    this.requestUpdate();
+  }
+
+  /**
+   * Delete a provider.
+   */
+  private _deleteProvider(providerId: string): void {
+    if (confirm(`Are you sure you want to delete provider "${providerId}"?`)) {
+      this._providers = this._providers.filter(p => p.id !== providerId);
+      this._dirtyFields.add('providers');
+      this._expandedProviders.delete(providerId);
+      this.requestUpdate();
+    }
+  }
+
+  /**
    * Load UI settings from localStorage.
    */
   private _loadUiSettings(): { token: string } {
@@ -993,6 +1015,15 @@ export class SettingsPage extends LitElement {
                 >
                   ${getIcon('settings')}
                 </button>
+                <button
+                  class="btn btn-sm btn-ghost btn-danger"
+                  @click=${(e: Event) => {
+                    e.stopPropagation();
+                    this._deleteProvider(provider.id);
+                  }}
+                >
+                  ${getIcon('trash')}
+                </button>
                 <span class="expand-icon ${this._expandedProviders.has(provider.id) ? 'expanded' : ''}">
                   ${getIcon('chevronRight')}
                 </span>
@@ -1104,6 +1135,9 @@ export class SettingsPage extends LitElement {
 
         <!-- Model Edit Modal -->
         ${this._editingModel ? this._renderModelModal() : ''}
+        
+        <!-- Add Provider Modal -->
+        ${this._showAddProviderModal ? this._renderAddProviderModal() : ''}
       </div>
     `;
   }
@@ -1218,6 +1252,97 @@ export class SettingsPage extends LitElement {
               }}
             >
               ${isNew ? 'Add Model' : 'Save Changes'}
+            </button>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  private _renderAddProviderModal(): unknown {
+    const newProvider: ProviderConfig = {
+      id: '',
+      baseUrl: '',
+      api: 'openai-completions',
+      apiKey: '',
+      models: [],
+    };
+
+    return html`
+      <div class="modal-overlay" @click=${() => this._showAddProviderModal = false}>
+        <div class="modal-content" @click=${(e: Event) => e.stopPropagation()}>
+          <div class="modal-header">
+            <h3>Add Provider</h3>
+            <button class="btn btn-icon" @click=${() => this._showAddProviderModal = false}>
+              ${getIcon('x')}
+            </button>
+          </div>
+          
+          <div class="modal-body">
+            <div class="field-group">
+              <label class="field-label">Provider ID</label>
+              <input
+                type="text"
+                class="text-input"
+                .value=${newProvider.id}
+                placeholder="e.g., openai"
+                @input=${(e: Event) => newProvider.id = (e.target as HTMLInputElement).value}
+              />
+            </div>
+            
+            <div class="field-group">
+              <label class="field-label">Base URL</label>
+              <input
+                type="text"
+                class="text-input"
+                .value=${newProvider.baseUrl}
+                placeholder="https://api.openai.com/v1"
+                @input=${(e: Event) => newProvider.baseUrl = (e.target as HTMLInputElement).value}
+              />
+            </div>
+            
+            <div class="field-group">
+              <label class="field-label">API Type</label>
+              <select
+                class="select-input"
+                .value=${newProvider.api}
+                @change=${(e: Event) => newProvider.api = (e.target as HTMLSelectElement).value}
+              >
+                <option value="openai-completions">OpenAI Completions</option>
+                <option value="openai-responses">OpenAI Responses</option>
+                <option value="anthropic-messages">Anthropic Messages</option>
+                <option value="google-generative-ai">Google Generative AI</option>
+                <option value="ollama">Ollama</option>
+              </select>
+            </div>
+            
+            <div class="field-group">
+              <label class="field-label">API Key</label>
+              <input
+                type="password"
+                class="text-input"
+                .value=${newProvider.apiKey}
+                placeholder="sk-..."
+                @input=${(e: Event) => newProvider.apiKey = (e.target as HTMLInputElement).value}
+              />
+            </div>
+          </div>
+          
+          <div class="modal-footer">
+            <button class="btn btn-ghost" @click=${() => this._showAddProviderModal = false}>
+              Cancel
+            </button>
+            <button 
+              class="btn btn-primary"
+              ?disabled=${!newProvider.id || !newProvider.baseUrl}
+              @click=${() => {
+                if (newProvider.id && newProvider.baseUrl) {
+                  this._addProvider(newProvider);
+                  this._showAddProviderModal = false;
+                }
+              }}
+            >
+              Add Provider
             </button>
           </div>
         </div>

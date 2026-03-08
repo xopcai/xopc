@@ -3843,3 +3843,26 @@ xopcbot-gateway-chat {
 .checkbox-label input[type="checkbox"] {
   cursor: pointer;
 }
+
+/* Button variants */
+.btn-danger {
+  color: var(--accent-error);
+}
+
+.btn-danger:hover {
+  background: var(--accent-error-light);
+}
+
+.btn-outline {
+  border: 1px dashed var(--border-color);
+  background: transparent;
+}
+
+.btn-outline:hover {
+  border-color: var(--accent-primary);
+  color: var(--accent-primary);
+}
+
+.btn-full {
+  width: 100%;
+}
