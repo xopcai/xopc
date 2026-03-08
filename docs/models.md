@@ -1,248 +1,350 @@
-# Models Configuration
+# Custom Models Configuration
 
-xopcbot uses `@mariozechner/pi-ai` as the unified model layer, providing access to 20+ LLM providers with a single consistent API.
+xopcbot supports custom model providers via `~/.xopcbot/models.json`, similar to [pi-coding-agent](https://github.com/mariozechner/pi-mono/tree/main/packages/coding-agent).
 
-## Architecture
+## Table of Contents
 
-```
-┌──────────────────────────────┐
-│      @mariozechner/pi-ai     │ ← Built-in provider/model definitions
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│     xopcbot providers/       │ ← Provider lookup & API key resolution
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│    Config (API Keys)        │ ← Environment variables for auth
-└──────────────────────────────┘
-```
+- [Quick Start](#quick-start)
+- [Configuration File](#configuration-file)
+- [Supported APIs](#supported-apis)
+- [Provider Configuration](#provider-configuration)
+- [Model Configuration](#model-configuration)
+- [Overriding Built-in Providers](#overriding-built-in-providers)
+- [API Key Resolution](#api-key-resolution)
+- [Frontend UI](#frontend-ui)
 
-### Key Features
+## Quick Start
 
-- **20+ Built-in Providers** - OpenAI, Anthropic, Google, Groq, DeepSeek, etc.
-- **Automatic Model Detection** - Detect provider from model ID automatically
-- **Unified API** - Consistent interface across all providers
-- **OAuth Support** - For providers like GitHub Copilot, OpenAI Codex
-
-## Supported Providers
-
-| Provider | Category | Environment Variables | Notes |
-|----------|----------|----------------------|-------|
-| `openai` | Common | `OPENAI_API_KEY` | GPT-4, o1, o3, o4, Codex |
-| `anthropic` | Common | `ANTHROPIC_API_KEY` | Claude models, supports OAuth |
-| `google` | Common | `GEMINI_API_KEY` / `GOOGLE_API_KEY` | Gemini models |
-| `groq` | Common | `GROQ_API_KEY` | Fast inference, Llama/Mixtral |
-| `deepseek` | Common | `DEEPSEEK_API_KEY` | DeepSeek R1, Chat |
-| `minimax` | Common | `MINIMAX_API_KEY` | MiniMax M2 series |
-| `minimax-cn` | Common | `MINIMAX_API_KEY` | MiniMax CN endpoint |
-| `kimi-coding` | Common | `KIMI_API_KEY` / `MOONSHOT_API_KEY` | Kimi for Coding |
-| `xai` | Specialty | `XAI_API_KEY` | Grok models |
-| `mistral` | Specialty | `MISTRAL_API_KEY` | Mistral models |
-| `cerebras` | Specialty | `CEREBRAS_API_KEY` | Ultra-fast inference |
-| `openrouter` | Specialty | `OPENROUTER_API_KEY` | Multi-provider aggregation |
-| `huggingface` | Specialty | `HF_TOKEN` / `HUGGINGFACE_TOKEN` | Hugging Face endpoints |
-| `opencode` | Specialty | `OPENCODE_API_KEY` | OpenCode models |
-| `zai` | Specialty | `ZAI_API_KEY` | Z.ai models |
-| `amazon-bedrock` | Enterprise | `AWS_ACCESS_KEY_ID`, `AWS_SECRET_ACCESS_KEY`, `AWS_REGION` | AWS Nova models |
-| `azure-openai-responses` | Enterprise | `AZURE_OPENAI_API_KEY`, `AZURE_OPENAI_BASE_URL` | Azure OpenAI |
-| `google-vertex` | Enterprise | `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION` | Google Vertex AI |
-| `vercel-ai-gateway` | Enterprise | - | Vercel AI Gateway |
-| `github-copilot` | OAuth | OAuth flow | GitHub Copilot |
-| `openai-codex` | OAuth | OAuth flow | OpenAI Codex |
-| `google-gemini-cli` | OAuth | OAuth flow | Google Gemini CLI |
-| `google-antigravity` | OAuth | OAuth flow | Google Antigravity |
-
-## Configuration
-
-### Setting API Keys
-
-Configure API keys via environment variables in `~/.xopcbot/config.json`:
+Create `~/.xopcbot/models.json`:
 
 ```json
 {
   "providers": {
-    "openai": "${OPENAI_API_KEY}",
-    "anthropic": "${ANTHROPIC_API_KEY}",
-    "deepseek": "${DEEPSEEK_API_KEY}",
-    "groq": "${GROQ_API_KEY}"
-  },
-  "agents": {
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-5"
+    "ollama": {
+      "baseUrl": "http://localhost:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "models": [
+        { "id": "llama3.1:8b" },
+        { "id": "qwen2.5-coder:7b" }
+      ]
     }
   }
 }
 ```
 
-Or use environment variables directly:
+The `apiKey` is required but Ollama ignores it, so any value works.
 
-```bash
-export OPENAI_API_KEY="sk-..."
-export ANTHROPIC_API_KEY="sk-ant-..."
-export DEEPSEEK_API_KEY="sk-..."
-```
+## Configuration File
 
-Environment variables take priority over config file values.
+### Location
 
-### Setting Default Model
+- **Default**: `~/.xopcbot/models.json`
+- **Custom**: Set `XOPCBOT_MODELS_JSON` environment variable
+
+### Minimal Example
 
 ```json
 {
-  "agents": {
-    "defaults": {
-      "model": "anthropic/claude-sonnet-4-5"
+  "providers": {
+    "ollama": {
+      "baseUrl": "http://localhost:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "models": [
+        { "id": "llama3.1:8b" }
+      ]
     }
   }
 }
 ```
 
-### Fallback Models
+### Full Example
 
 ```json
 {
-  "agents": {
-    "defaults": {
-      "model": {
-        "primary": "anthropic/claude-sonnet-4-5",
-        "fallbacks": ["openai/gpt-4o", "deepseek/deepseek-chat"]
+  "providers": {
+    "ollama": {
+      "baseUrl": "http://localhost:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "models": [
+        {
+          "id": "llama3.1:8b",
+          "name": "Llama 3.1 8B (Local)",
+          "reasoning": false,
+          "input": ["text"],
+          "contextWindow": 128000,
+          "maxTokens": 32000,
+          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+        }
+      ]
+    },
+    "openrouter": {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "apiKey": "OPENROUTER_API_KEY",
+      "api": "openai-completions",
+      "models": [
+        {
+          "id": "anthropic/claude-3.5-sonnet",
+          "name": "Claude 3.5 Sonnet (OR)",
+          "compat": {
+            "openRouterRouting": {
+              "only": ["anthropic"]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
+```
+
+## Supported APIs
+
+| API | Description |
+|-----|-------------|
+| `openai-completions` | OpenAI Chat Completions (most compatible) |
+| `openai-responses` | OpenAI Responses API |
+| `anthropic-messages` | Anthropic Messages API |
+| `google-generative-ai` | Google Generative AI |
+| `azure-openai-responses` | Azure OpenAI |
+| `bedrock-converse-stream` | AWS Bedrock |
+| `openai-codex-responses` | OpenAI Codex |
+| `google-gemini-cli` | Google Gemini CLI |
+| `google-vertex` | Google Vertex AI |
+
+## Provider Configuration
+
+| Field | Description |
+|-------|-------------|
+| `baseUrl` | API endpoint URL |
+| `api` | API type (see above) |
+| `apiKey` | API key (see resolution below) |
+| `headers` | Custom headers |
+| `authHeader` | Set `true` to add `Authorization: Bearer <apiKey>` |
+| `models` | Array of model configurations |
+| `modelOverrides` | Per-model overrides for built-in models |
+
+## Model Configuration
+
+| Field | Required | Default | Description |
+|-------|----------|---------|-------------|
+| `id` | Yes | - | Model identifier (passed to the API) |
+| `name` | No | `id` | Display name |
+| `api` | No | provider's `api` | Override provider's API |
+| `reasoning` | No | `false` | Supports extended thinking |
+| `input` | No | `["text"]` | Input types: `["text"]` or `["text", "image"]` |
+| `contextWindow` | No | `128000` | Context window size |
+| `maxTokens` | No | `16384` | Maximum output tokens |
+| `cost` | No | all zeros | `{input, output, cacheRead, cacheWrite}` per million tokens |
+| `headers` | No | - | Custom headers for this model |
+| `compat` | No | - | OpenAI compatibility settings |
+
+## Overriding Built-in Providers
+
+### Base URL Override
+
+Route a built-in provider through a proxy:
+
+```json
+{
+  "providers": {
+    "anthropic": {
+      "baseUrl": "https://my-proxy.example.com/v1"
+    }
+  }
+}
+```
+
+### Model Overrides
+
+Customize specific built-in models:
+
+```json
+{
+  "providers": {
+    "openrouter": {
+      "modelOverrides": {
+        "anthropic/claude-sonnet-4": {
+          "name": "Claude Sonnet 4 (Bedrock Route)",
+          "compat": {
+            "openRouterRouting": {
+              "only": ["amazon-bedrock"]
+            }
+          }
+        }
       }
     }
   }
 }
 ```
 
-## Model Selection
+## API Key Resolution
 
-### Format
+The `apiKey` field supports three formats:
 
-Model IDs use `provider/model-id` format:
+### 1. Shell Command
 
-```bash
-anthropic/claude-sonnet-4-5
-openai/gpt-4o
-google/gemini-2.5-flash
-deepseek/deepseek-chat
-```
-
-### Automatic Detection
-
-If you only specify the model ID without provider prefix, xopcbot will try to auto-detect:
+Prefix with `!` to execute a shell command:
 
 ```json
 {
-  "agents": {
-    "defaults": {
-      "model": "claude-sonnet-4-5"  // Auto-detected as anthropic
+  "apiKey": "!op read 'op://vault/item/credential'"
+}
+```
+
+### 2. Environment Variable
+
+Use the name of an environment variable (all uppercase):
+
+```json
+{
+  "apiKey": "ANTHROPIC_API_KEY"
+}
+```
+
+### 3. Literal Value
+
+Use the value directly:
+
+```json
+{
+  "apiKey": "sk-..."
+}
+```
+
+## Frontend UI
+
+Access the Models configuration in the web UI:
+
+1. Open the web UI (http://localhost:18790 by default)
+2. Go to **Settings** → **Models**
+3. Use the visual editor to:
+   - Add custom providers
+   - Configure API endpoints
+   - Add models
+   - Test API key resolution
+   - Validate configuration
+
+### Hot Reload
+
+Changes are automatically reloaded when you save in the UI. No restart required.
+
+## Examples
+
+### Ollama (Local)
+
+```json
+{
+  "providers": {
+    "ollama": {
+      "baseUrl": "http://localhost:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "models": [
+        { "id": "llama3.1:8b" },
+        { "id": "qwen2.5-coder:7b" }
+      ]
     }
   }
 }
 ```
 
-### Recommended Models
-
-| Model | Provider | Use Case |
-|-------|----------|----------|
-| `anthropic/claude-sonnet-4-5` | Anthropic | Balanced performance |
-| `anthropic/claude-3-5-sonnet-20241022` | Anthropic | Stable, reliable |
-| `openai/gpt-4o` | OpenAI | General purpose |
-| `google/gemini-2.5-flash` | Google | Fast, cost-effective |
-| `groq/llama-3.3-70b-versatile` | Groq | Ultra-fast inference |
-| `deepseek/deepseek-chat` | DeepSeek | Cost-effective |
-| `minimax/MiniMax-M2.1` | MiniMax | Coding tasks |
-
-## API Endpoints
-
-### GET /api/providers
-
-Returns all available providers from pi-ai:
-
-```bash
-curl -H "Authorization: Bearer $TOKEN" http://localhost:18790/api/providers
-```
-
-### GET /api/providers/:provider/models
-
-Returns models for a specific provider:
-
-```bash
-curl -H "Authorization: Bearer $TOKEN" http://localhost:18790/api/providers/openai/models
-```
-
-### GET /api/auth/providers
-
-Returns authentication status for all providers:
-
-```bash
-curl -H "Authorization: Bearer $TOKEN" http://localhost:18790/api/auth/providers
-```
-
-Returns:
+### OpenRouter
 
 ```json
 {
   "providers": {
-    "openai": { "status": "configured" },
-    "anthropic": { "status": "configured" },
-    "deepseek": { "status": "not_configured" }
+    "openrouter": {
+      "baseUrl": "https://openrouter.ai/api/v1",
+      "apiKey": "OPENROUTER_API_KEY",
+      "api": "openai-completions",
+      "models": [
+        {
+          "id": "anthropic/claude-3.5-sonnet",
+          "compat": {
+            "openRouterRouting": {
+              "order": ["anthropic", "openai"]
+            }
+          }
+        }
+      ]
+    }
   }
 }
 ```
 
-## Provider Detection
+### Vercel AI Gateway
 
-xopcbot can automatically detect the provider based on model ID prefixes:
-
-| Provider | Prefixes |
-|----------|----------|
-| `openai` | `gpt-`, `o1`, `o3`, `o4`, `chatgpt-` |
-| `anthropic` | `claude-` |
-| `google` | `gemini-`, `gemma-` |
-| `xai` | `grok-` |
-| `groq` | `llama-`, `mixtral-`, `gemma-` |
-| `deepseek` | `deepseek-`, `r1` |
-| `mistral` | `mistral-` |
-| `cerebras` | `llama-` |
-
-## Listing Configured Providers
-
-Use the CLI to list configured providers:
-
-```bash
-xopcbot auth providers
+```json
+{
+  "providers": {
+    "vercel-ai-gateway": {
+      "baseUrl": "https://ai-gateway.vercel.sh/v1",
+      "apiKey": "AI_GATEWAY_API_KEY",
+      "api": "openai-completions",
+      "models": [
+        {
+          "id": "moonshotai/kimi-k2.5",
+          "name": "Kimi K2.5 (Fireworks via Vercel)",
+          "compat": {
+            "vercelGatewayRouting": {
+              "only": ["fireworks", "novita"]
+            }
+          }
+        }
+      ]
+    }
+  }
+}
 ```
 
-This shows all providers with their authentication status (API Key, OAuth, or Not configured).
+### LM Studio
 
-## OAuth Providers
+```json
+{
+  "providers": {
+    "lmstudio": {
+      "baseUrl": "http://localhost:1234/v1",
+      "api": "openai-completions",
+      "apiKey": "lmstudio",
+      "models": [
+        { "id": "local-model" }
+      ]
+    }
+  }
+}
+```
 
-Some providers support OAuth authentication:
+## API Endpoints
 
-- `github-copilot` - GitHub Copilot
-- `openai-codex` - OpenAI Codex
-- `google-gemini-cli` - Google Gemini CLI
-- `google-antigravity` - Google Antigravity
-
-OAuth credentials are managed through the web UI.
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/models-json` | Get current configuration |
+| POST | `/api/models-json/validate` | Validate configuration |
+| PATCH | `/api/models-json` | Save configuration |
+| POST | `/api/models-json/reload` | Hot reload |
+| POST | `/api/models-json/test-api-key` | Test API key resolution |
 
 ## Troubleshooting
 
-### Provider Not Found
+### Models not showing up
 
-If you get "Model not found" error:
+1. Check the browser console for errors
+2. Verify `models.json` syntax is valid JSON
+3. Check the Settings → Models page for validation errors
+4. Ensure API keys are correctly resolved (use the Test button)
 
-1. Check the model ID format: `provider/model-id`
-2. Verify the provider is supported
-3. Check API key is configured
+### API key not working
 
-### API Key Not Working
+1. Use the "Test" button in the UI to verify resolution
+2. Check environment variables are set
+3. For shell commands, ensure they work when run manually
+4. Check logs for command execution errors
 
-1. Verify environment variable is set correctly
-2. Check API key is valid and has sufficient credits
-3. Use `xopcbot auth providers` to check status
+### Changes not taking effect
 
-### Model Not Available
-
-Some models may not be available in all regions or require specific API keys. Check the [pi-ai documentation](https://github.com/mariozechner/pi-ai) for details.
+1. Click "Reload" in the UI to force a refresh
+2. Check the `models.json` file was saved correctly
+3. Restart the gateway if needed
