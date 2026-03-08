@@ -264,7 +264,45 @@ function formatProviderName(providerId: string): string {
  * Get all available provider templates (static + dynamic)
  * This is used when user wants to add a new provider
  */
-export function getAllProviderTemplates(): ProviderTemplate[] {
-  // Return static templates as they're curated for quick setup
+export async function getAllProviderTemplates(): Promise<ProviderTemplate[]> {
+  try {
+    const url = window.location.origin;
+    const response = await fetch(`${url}/api/models`);
+    if (response.ok) {
+      const data = await response.json();
+      const models = data?.payload?.models || [];
+      
+      // Get all unique providers from the response
+      const providerSet = new Set<string>();
+      for (const model of models) {
+        providerSet.add(model.provider);
+      }
+      
+      // Convert to ProviderTemplate format
+      const templates: ProviderTemplate[] = [];
+      for (const providerId of Array.from(providerSet).sort()) {
+        const knownConfig = KNOWN_PROVIDER_CONFIGS[providerId];
+        if (knownConfig) {
+          templates.push({
+            id: providerId,
+            name: formatProviderName(providerId),
+            authType: knownConfig.authType,
+            oauthProviderId: knownConfig.oauthProviderId,
+            baseUrl: knownConfig.baseUrl,
+            api: knownConfig.api,
+            models: [], // Models will be loaded per-provider if needed
+          });
+        }
+      }
+      
+      if (templates.length > 0) {
+        return templates;
+      }
+    }
+  } catch (err) {
+    console.warn('Failed to load provider templates from API:', err);
+  }
+  
+  // Fallback to static templates
   return PROVIDER_TEMPLATES;
 }

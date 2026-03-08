@@ -115,6 +115,7 @@ export class SettingsPage extends LitElement {
   @state() private _templateApiKey: string = '';
   @state() private _showTemplateSelection = true;
   @state() private _dynamicProviders: DynamicProviderInfo[] = [];
+  @state() private _staticTemplates: ProviderTemplate[] = [];
   @state() private _loadingDynamicProviders = false;
   @state() private _modelSearchQuery = '';
 
@@ -788,10 +789,15 @@ export class SettingsPage extends LitElement {
   private async _loadDynamicProviders(): Promise<void> {
     this._loadingDynamicProviders = true;
     try {
+      // Load configured providers (for model selection)
       this._dynamicProviders = await loadDynamicProviders();
+      
+      // Load all supported provider templates (for adding new providers)
+      this._staticTemplates = await getAllProviderTemplates();
     } catch (err) {
       console.error('Failed to load dynamic providers:', err);
       this._dynamicProviders = [];
+      this._staticTemplates = [];
     } finally {
       this._loadingDynamicProviders = false;
     }
@@ -1460,16 +1466,15 @@ export class SettingsPage extends LitElement {
   }
 
   private _renderTemplateSelectionModal(): unknown {
-    // Use dynamic providers from backend, fallback to static templates
-    const staticTemplates = getAllProviderTemplates();
+    // Use dynamic providers from backend, and pre-loaded static templates
     const dynamicApiKeyProviders = this._dynamicProviders
       .filter(p => p.authType === 'api_key')
       .map(toProviderTemplate);
     const dynamicOauthProviders = this._dynamicProviders
       .filter(p => p.authType === 'oauth')
       .map(toProviderTemplate);
-    const staticApiKeyTemplates = staticTemplates.filter(t => t.authType === 'api_key');
-    const staticOauthTemplates = staticTemplates.filter(t => t.authType === 'oauth');
+    const staticApiKeyTemplates = this._staticTemplates.filter(t => t.authType === 'api_key');
+    const staticOauthTemplates = this._staticTemplates.filter(t => t.authType === 'oauth');
 
     // Show loading state if dynamic providers are being loaded
     if (this._loadingDynamicProviders) {
