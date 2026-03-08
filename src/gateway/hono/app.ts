@@ -381,7 +381,16 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // GET /api/models - Get available models (only configured providers)
   authenticated.get('/api/models', (c) => {
     const config = service.currentConfig;
-    const models: Array<{ id: string; name: string; provider: string }> = [];
+    const models: Array<{
+      id: string;
+      name: string;
+      provider: string;
+      contextWindow?: number;
+      maxTokens?: number;
+      reasoning?: boolean;
+      vision?: boolean;
+      cost?: { input: number; output: number };
+    }> = [];
 
     // Get all providers from pi-ai
     const piAiProviders = getPiAiProviders() as string[];
@@ -397,6 +406,14 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           id: `${provider}/${model.id}`,
           name: model.name || model.id,
           provider: provider,
+          contextWindow: model.contextWindow,
+          maxTokens: model.maxTokens,
+          reasoning: model.reasoning,
+          vision: model.input?.includes('image'),
+          cost: {
+            input: model.cost?.input || 0,
+            output: model.cost?.output || 0,
+          },
         });
       }
     }
@@ -420,6 +437,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
               id: `${providerName}/${modelId}`,
               name: modelName,
               provider: providerName,
+              contextWindow: (modelConfig as any).contextWindow,
+              maxTokens: (modelConfig as any).maxTokens,
+              reasoning: (modelConfig as any).reasoning,
+              vision: (modelConfig as any).input?.includes('image'),
+              cost: (modelConfig as any).cost,
             });
           }
         }

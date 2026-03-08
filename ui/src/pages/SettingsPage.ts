@@ -83,7 +83,16 @@ export class SettingsPage extends LitElement {
   @state() private _dirtyFields: Set<string> = new Set();
   @state() private _errors: Map<string, string> = new Map();
   @state() private _saveSuccess = false;
-  @state() private _models: Array<{ id: string; name: string; provider: string }> = [];
+  @state() private _models: Array<{
+    id: string;
+    name: string;
+    provider: string;
+    contextWindow?: number;
+    maxTokens?: number;
+    reasoning?: boolean;
+    vision?: boolean;
+    cost?: { input: number; output: number };
+  }> = [];
 
   // Provider and Model management
   @state() private _providers: ProviderConfig[] = [];
@@ -168,11 +177,54 @@ export class SettingsPage extends LitElement {
     this._loadSettings();
   }
 
+  // Helper: Format context window (e.g., 128K, 1M)
+  private _formatContextWindow(tokens?: number): string {
+    if (!tokens) return '';
+    if (tokens >= 1000000) return `${(tokens / 1000000).toFixed(0)}M`;
+    if (tokens >= 1000) return `${(tokens / 1000).toFixed(0)}K`;
+    return tokens.toString();
+  }
+
+  // Helper: Format cost (e.g., $2.50/M)
+  private _formatCost(cost?: { input: number; output: number }): string {
+    if (!cost || (cost.input === 0 && cost.output === 0)) return '';
+    return `$${cost.input.toFixed(2)}/M`;
+  }
+
+  // Helper: Format model display name with badges
+  private _formatModelLabel(m: {
+    name: string;
+    provider: string;
+    contextWindow?: number;
+    reasoning?: boolean;
+    vision?: boolean;
+    cost?: { input: number; output: number };
+  }): string {
+    const badges: string[] = [];
+    
+    // Context window badge
+    const ctx = this._formatContextWindow(m.contextWindow);
+    if (ctx) badges.push(ctx);
+    
+    // Reasoning badge
+    if (m.reasoning) badges.push('🧠');
+    
+    // Vision badge  
+    if (m.vision) badges.push('📷');
+    
+    // Cost badge (only if non-zero)
+    const costStr = this._formatCost(m.cost);
+    if (costStr) badges.push(costStr);
+    
+    const badgeStr = badges.length > 0 ? ` [${badges.join(' ')}]` : '';
+    return `${m.provider}/${m.name}${badgeStr}`;
+  }
+
   // Settings sections definition
   private get _sections(): SettingsSection[] {
     const modelOptions = this._models.map(m => ({
       value: m.id,
-      label: `${m.provider}/${m.name}`,
+      label: this._formatModelLabel(m),
     }));
 
     return [
@@ -195,9 +247,9 @@ export class SettingsPage extends LitElement {
             description: t('settings.descriptionsFields.imageModel'),
             options: [
               { value: '', label: 'None (use primary model)' },
-              ...this._models.filter(m => m.id.includes('vision') || m.id.includes('vl') || m.id.includes('image')).map(m => ({
+              ...this._models.filter(m => m.vision || m.id.includes('vision') || m.id.includes('vl') || m.id.includes('image')).map(m => ({
                 value: m.id,
-                label: `${m.provider}/${m.name}`,
+                label: this._formatModelLabel(m),
               })),
             ],
           },
