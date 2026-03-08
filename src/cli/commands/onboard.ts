@@ -31,6 +31,9 @@ import { colors } from '../utils/colors.js';
 import { homedir } from 'os';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
 
+// Import workspace utilities
+import { isWorkspaceSetup, setupWorkspace, isConfigSetup, setupConfig, quickSetup } from '../utils/workspace.js';
+
 /**
  * Load raw config without schema parsing to avoid default values being added.
  * This preserves the user's original config structure during onboard.
@@ -49,41 +52,6 @@ function loadRawConfig(configPath: string): Config | null {
 
 function isInteractive(): boolean {
   return process.stdin.isTTY && process.stdout.isTTY;
-}
-
-/**
- * Check if workspace is properly set up
- */
-function isWorkspaceSetup(workspacePath: string): boolean {
-  return existsSync(workspacePath) && existsSync(join(workspacePath, 'AGENTS.md'));
-}
-
-/**
- * Setup workspace directory and bootstrap files
- */
-function setupWorkspace(workspacePath: string): void {
-  if (!existsSync(workspacePath)) {
-    mkdirSync(workspacePath, { recursive: true });
-    console.log('✅ Created workspace:', workspacePath);
-  } else {
-    console.log('ℹ️  Workspace already exists:', workspacePath);
-  }
-
-  // Use built-in templates (no frontmatter)
-  const memoryDir = join(workspacePath, 'memory');
-  if (!existsSync(memoryDir)) {
-    mkdirSync(memoryDir, { recursive: true });
-    console.log('✅ Created memory/ directory');
-  }
-
-  for (const filename of TEMPLATE_FILES) {
-    const filePath = join(workspacePath, filename);
-    if (!existsSync(filePath)) {
-      const content = getFallbackTemplate(filename);
-      writeFileSync(filePath, content, 'utf-8');
-      console.log('✅ Created', filename);
-    }
-  }
 }
 
 async function setupNonInteractive(_configPath: string, existingConfig: Config | null): Promise<Config | null> {
@@ -114,7 +82,6 @@ function createOnboardCommand(ctx: CLIContext): Command {
       try {
         await runOnboard(options, ctx);
       } catch (error: unknown) {
-        // Handle user cancellation gracefully (Ctrl+C)
         const err = error as { name?: string; code?: string };
         if (err?.name === 'ExitPromptError' || err?.code === 'EXIT_PROMPT') {
           console.log('\n\n👋 Setup cancelled.');
@@ -151,7 +118,7 @@ async function runOnboard(
 
   if (runFullWizard && needsSetup) {
     console.log('\n📁 Step 1: Workspace Setup\n');
-    setupWorkspace(workspacePath);
+    quickSetup(workspacePath);
   }
 
   if (!isInteractive()) {
@@ -209,13 +176,13 @@ async function runOnboard(
   }
 
   // Handle gateway startup if configured
-  const gatewayConfigured = config?.gateway?.auth?.mode === 'token' && config?.gateway?.auth?.token;
+  const gatewayConfigured = (config as any)?.gateway?.auth?.mode === 'token' && (config as any)?.gateway?.auth?.token;
 
   if (gatewayConfigured && (doGateway || runFullWizard)) {
-    const host = config?.gateway?.host || '0.0.0.0';
-    const port = config?.gateway?.port || 18790;
+    const host = (config as any)?.gateway?.host || '0.0.0.0';
+    const port = (config as any)?.gateway?.port || 18790;
     const displayHost = host === '0.0.0.0' ? 'localhost' : host;
-    const token = config.gateway.auth.token;
+    const token = (config as any).gateway.auth.token;
 
     const webuiUrl = `http://${displayHost}:${port}?token=${token}`;
 
@@ -227,25 +194,17 @@ async function runOnboard(
     console.log(`    ${webuiUrl}`);
     console.log('');
 
-    // Auto-start gateway after onboarding
-    await startGatewayNow(config, ctx);
+    await startGatewayNow(config as Config, ctx);
   }
 
-  // Explicitly exit to prevent hanging
   process.exit(0);
 }
 
-/**
- * Handle gateway startup after onboarding.
- * In interactive mode, asks user if they want to start gateway in background.
- * In non-interactive mode, provides guidance on how to start manually.
- */
 async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
-  const host = config?.gateway?.host || '0.0.0.0';
-  const port = config?.gateway?.port || 18790;
+  const host = (config as any)?.gateway?.host || '0.0.0.0';
+  const port = (config as any)?.gateway?.port || 18790;
   const displayHost = host === '0.0.0.0' ? 'localhost' : host;
 
-  // Check if gateway is already running by trying to acquire lock
   let isRunning = false;
   try {
     const lock = await acquireGatewayLock(ctx.configPath, { timeoutMs: 100, port });
@@ -257,16 +216,13 @@ async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
   }
 
   if (isRunning) {
-    // Gateway is running - provide restart guidance
     console.log('\n🌐 Gateway is already running!');
     console.log(`   URL: http://${displayHost}:${port}`);
     console.log('');
     console.log('📝 To apply the new configuration, restart gateway:');
     console.log('   xopcbot gateway restart');
   } else {
-    // Gateway is not running
     if (isInteractive()) {
-      // Interactive mode: ask user if they want to start gateway
       const shouldStart = await confirm({
         message: 'Start Gateway WebUI now (background mode)?',
         default: true,
@@ -276,7 +232,6 @@ async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
         console.log('\n🚀 Starting Gateway WebUI in background...');
         console.log('');
 
-        // Use spawn to start gateway in background
         const { spawn } = await import('child_process');
         const args = [
           ...process.execArgv,
@@ -295,14 +250,13 @@ async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
 
         child.unref();
 
-        // Wait a moment to check if process started successfully
         await new Promise(resolve => setTimeout(resolve, 500));
 
         if (child.pid && !child.killed) {
           console.log('✅ Gateway started in background');
           console.log(`   PID: ${child.pid}`);
           console.log(`   URL: http://${displayHost}:${port}`);
-          const token = config?.gateway?.auth?.token;
+          const token = (config as any)?.gateway?.auth?.token;
           if (token) {
             console.log(`   Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
           }
@@ -312,13 +266,11 @@ async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
           console.log(`   xopcbot gateway --background`);
         }
       } else {
-        // User chose not to start
         console.log('\n⏭️  Skipping gateway startup.');
         console.log('   You can start it later with:');
         console.log(`   xopcbot gateway --background`);
       }
     } else {
-      // Non-interactive mode: provide guidance
       console.log('\n🚀 Gateway is configured but not running.');
       console.log('');
       console.log('📝 To start the gateway in background:');
@@ -337,7 +289,6 @@ async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
   console.log('   xopcbot gateway logs      # View logs');
 }
 
-// OAuth provider configuration map
 const OAUTH_PROVIDER_MAP = {
   anthropic: {
     provider: anthropicOAuthProvider,
@@ -432,7 +383,6 @@ async function doOAuthLogin(provider: string): Promise<boolean> {
   }
 }
 
-// TODO: Remove old OAuth login code below this line
 async function _doOAuthLoginOld(provider: string): Promise<boolean> {
   console.log('\n🔐 Starting OAuth login...');
 
@@ -458,7 +408,6 @@ async function _doOAuthLoginOld(provider: string): Promise<boolean> {
     try {
       await authStorage.login('anthropic', callbacks);
 
-      // Also add to AuthProfiles
       const creds = authStorage.getOAuthCredentials('anthropic');
       if (creds) {
         upsertAuthProfile({
@@ -513,472 +462,211 @@ async function _doOAuthLoginOld(provider: string): Promise<boolean> {
     }
   }
 
-  if (provider === 'minimax-cn') {
-    const callbacks: OAuthLoginCallbacks = {
-      onAuth: (info) => {
-        console.log('\n🌐 请在浏览器中打开以下 URL:\n');
-        console.log(info.url);
-        if (info.instructions) {
-          console.log('\n' + info.instructions);
-        }
-        console.log('\n');
-      },
-      onPrompt: async (prompt) => {
-        return input({ message: prompt.message });
-      },
-      onProgress: (message) => {
-        console.log('  →', message);
-      },
-    };
-
-    try {
-      const creds = await minimaxCnOAuthProvider.login(callbacks);
-      upsertAuthProfile({
-        profileId: 'minimax-cn:default',
-        credential: {
-          type: 'oauth',
-          provider: 'minimax-cn',
-          ...creds,
-        },
-      });
-      return true;
-    } catch (error) {
-      console.error('❌ OAuth 登录失败:', error);
-      return false;
-    }
-  }
-
-  if (provider === 'kimi') {
-    const callbacks: OAuthLoginCallbacks = {
-      onAuth: (info) => {
-        console.log('\n🌐 Please open this URL in your browser:\n');
-        console.log(info.url);
-        if (info.instructions) {
-          console.log('\n' + info.instructions);
-        }
-        console.log('\n');
-      },
-      onPrompt: async (prompt) => {
-        return input({ message: prompt.message });
-      },
-      onProgress: (message) => {
-        console.log('  →', message);
-      },
-    };
-
-    try {
-      const creds = await kimiOAuthProvider.login(callbacks);
-      upsertAuthProfile({
-        profileId: 'kimi:default',
-        credential: {
-          type: 'oauth',
-          provider: 'kimi',
-          ...creds,
-        },
-      });
-      return true;
-    } catch (error) {
-      console.error('❌ OAuth login failed:', error);
-      return false;
-    }
-  }
-
-  if (provider === 'github-copilot') {
-    const callbacks: OAuthLoginCallbacks = {
-      onAuth: (info) => {
-        console.log('\n🌐 Please open this URL in your browser:\n');
-        console.log(info.url);
-        if (info.instructions) {
-          console.log('\n' + info.instructions);
-        }
-        console.log('\n');
-      },
-      onPrompt: async (prompt) => {
-        return input({ message: prompt.message });
-      },
-      onProgress: (message) => {
-        console.log('  →', message);
-      },
-    };
-
-    try {
-      const creds = await githubCopilotOAuthProvider.login(callbacks);
-      upsertAuthProfile({
-        profileId: 'github-copilot:default',
-        credential: {
-          type: 'oauth',
-          provider: 'github-copilot',
-          ...creds,
-        },
-      });
-      return true;
-    } catch (error) {
-      console.error('❌ OAuth login failed:', error);
-      return false;
-    }
-  }
-
-  if (provider === 'google-gemini-cli') {
-    const callbacks: OAuthLoginCallbacks = {
-      onAuth: (info) => {
-        console.log('\n🌐 Please open this URL in your browser:\n');
-        console.log(info.url);
-        if (info.instructions) {
-          console.log('\n' + info.instructions);
-        }
-        console.log('\n');
-      },
-      onPrompt: async (prompt) => {
-        return input({ message: prompt.message });
-      },
-      onProgress: (message) => {
-        console.log('  →', message);
-      },
-    };
-
-    try {
-      const creds = await googleGeminiCliOAuthProvider.login(callbacks);
-      upsertAuthProfile({
-        profileId: 'google-gemini-cli:default',
-        credential: {
-          type: 'oauth',
-          provider: 'google-gemini-cli',
-          ...creds,
-        },
-      });
-      return true;
-    } catch (error) {
-      console.error('❌ OAuth login failed:', error);
-      return false;
-    }
-  }
-
-  if (provider === 'google-antigravity') {
-    const callbacks: OAuthLoginCallbacks = {
-      onAuth: (info) => {
-        console.log('\n🌐 Please open this URL in your browser:\n');
-        console.log(info.url);
-        if (info.instructions) {
-          console.log('\n' + info.instructions);
-        }
-        console.log('\n');
-      },
-      onPrompt: async (prompt) => {
-        return input({ message: prompt.message });
-      },
-      onProgress: (message) => {
-        console.log('  →', message);
-      },
-    };
-
-    try {
-      const creds = await googleAntigravityOAuthProvider.login(callbacks);
-      upsertAuthProfile({
-        profileId: 'google-antigravity:default',
-        credential: {
-          type: 'oauth',
-          provider: 'google-antigravity',
-          ...creds,
-        },
-      });
-      return true;
-    } catch (error) {
-      console.error('❌ OAuth login failed:', error);
-      return false;
-    }
-  }
-
-  if (provider === 'openai-codex') {
-    const callbacks: OAuthLoginCallbacks = {
-      onAuth: (info) => {
-        console.log('\n🌐 Please open this URL in your browser:\n');
-        console.log(info.url);
-        if (info.instructions) {
-          console.log('\n' + info.instructions);
-        }
-        console.log('\n');
-      },
-      onPrompt: async (prompt) => {
-        return input({ message: prompt.message });
-      },
-      onProgress: (message) => {
-        console.log('  →', message);
-      },
-    };
-
-    try {
-      const creds = await openaiCodexOAuthProvider.login(callbacks);
-      upsertAuthProfile({
-        profileId: 'openai-codex:default',
-        credential: {
-          type: 'oauth',
-          provider: 'openai-codex',
-          ...creds,
-        },
-      });
-      return true;
-    } catch (error) {
-      console.error('❌ OAuth login failed:', error);
-      return false;
-    }
-  }
-
   console.error(`OAuth not supported for provider: ${provider}`);
   return false;
 }
 
-async function setupModel(
-  existingConfig: Config | null,
-  ctx: CLIContext
-): Promise<Config> {
-  console.log('\n🤖 Step: AI Model\n');
+async function setupModel(config: Config, ctx: CLIContext): Promise<Config> {
+  console.log(colors.cyan('\n🤖 Step 2: AI Model Configuration\n'));
 
-  const config = existingConfig || ({} as Config);
-  const currentModelConfig = config?.agents?.defaults?.model;
-  const currentModel =
-    typeof currentModelConfig === 'string' ? currentModelConfig : currentModelConfig?.primary;
+  const providers = getSortedProviders();
+  
+  if (providers.length === 0) {
+    console.log('⚠️  No providers available.');
+    return config;
+  }
 
-  if (currentModel) {
-    console.log('Current model:', currentModel);
-    const keepCurrent = await confirm({
-      message: 'Keep using this model?',
-      default: true,
+  const providerChoices = providers.map(p => ({
+    name: getProviderDisplayName(p),
+    value: p,
+  }));
+
+  const selectedProvider = await select({
+    message: 'Select AI provider:',
+    choices: providerChoices,
+  });
+
+  console.log(`\n📦 Selected: ${getProviderDisplayName(selectedProvider)}`);
+
+  const currentProviderConfig = (config as any).providers?.[selectedProvider];
+  const hasExistingConfig = !!currentProviderConfig;
+
+  const authMethods: string[] = [];
+  if (providerSupportsOAuth(selectedProvider)) authMethods.push('oauth');
+  if (providerSupportsApiKey(selectedProvider)) authMethods.push('api_key');
+
+  if (authMethods.length === 0) {
+    console.log('⚠️  No authentication methods available for this provider.');
+    return config;
+  }
+
+  if (hasExistingConfig) {
+    const reconfigure = await confirm({
+      message: 'Provider already configured. Reconfigure?',
+      default: false,
     });
-    if (keepCurrent) {
-      console.log('✅ Keeping:', currentModel);
+    if (!reconfigure) {
+      (config as any).agents = (config as any).agents || {};
+      (config as any).agents.defaults = (config as any).agents.defaults || {};
+      (config as any).agents.defaults.model = selectedProvider;
+      await saveConfig(config, ctx.configPath);
       return config;
     }
   }
 
-  // Get sorted providers with metadata
-  const sortedProviders = getSortedProviders();
-
-  const choices = sortedProviders.map((p) => ({
-    value: p,
-    name: getProviderDisplayName(p),
-  }));
-
-  const provider = await select({
-    message: 'Select provider:',
-    choices,
-  });
-
-  const providerName = getProviderDisplayName(provider);
-
-  // Check if provider has existing profiles
-  const existingProfiles = listProfilesForProvider(provider);
-  if (existingProfiles.length > 0) {
-    console.log(`\n${colors.green('✓')} Found existing credentials for ${providerName}`);
-    const useExisting = await confirm({
-      message: 'Use existing credentials?',
-      default: true,
+  let authMethod: string;
+  if (authMethods.length === 1) {
+    authMethod = authMethods[0];
+  } else {
+    authMethod = await select({
+      message: 'Select authentication method:',
+      choices: authMethods.map(m => ({
+        name: m === 'oauth' ? 'OAuth (Browser Login)' : 'API Key',
+        value: m,
+      })),
     });
-
-    if (useExisting) {
-      // Get available models
-      const modelChoices = await getModelsForProvider(provider);
-      if (modelChoices.length === 0) {
-        console.log(`\n⚠️  No models found for ${providerName}. Please check your credentials.`);
-      } else {
-        const model = await select({
-          message: 'Select model:',
-          choices: modelChoices,
-        });
-
-        config.agents = config.agents || {};
-        config.agents.defaults = config.agents.defaults || {
-          workspace: ctx.workspacePath,
-          model: { primary: model, fallbacks: [] },
-          maxTokens: 8192,
-          temperature: 0.7,
-          maxToolIterations: 20,
-          maxRequestsPerTurn: 50,
-          maxToolFailuresPerTurn: 3,
-        };
-        config.agents.defaults.model = { primary: model, fallbacks: [] };
-        config.agents.defaults.workspace = ctx.workspacePath;
-
-        console.log('\n✅ Model configured:', model);
-        return config;
-      }
-    }
   }
 
-  let apiKey: string | undefined;
-  let useOAuth = false;
-
-  // Check environment variable
-  const envKey = provider.toUpperCase().replace(/-/g, '_') + '_API_KEY';
-  apiKey = process.env[envKey];
-  if (apiKey) {
-    console.log(`\n${colors.green('✓')} Found ${envKey} in environment`);
-  }
-
-  if (!apiKey) {
-    // Check auth support from metadata
-    const supportsOAuth = providerSupportsOAuth(provider);
-    const supportsApiKey = providerSupportsApiKey(provider);
-    const isOAuthOnly = supportsOAuth && !supportsApiKey;
-
-    if (isOAuthOnly) {
-      // OAuth only - no choice
-      const success = await doOAuthLogin(provider);
-      if (success) {
-        useOAuth = true;
-        console.log('\n✅ OAuth login successful!');
-      } else {
-        console.error('\n❌ OAuth login failed. This provider requires OAuth.');
-        return config;
-      }
-    } else if (supportsOAuth && supportsApiKey) {
-      // Dual auth - let user choose
-      const authMethod = await select({
-        message: `How would you like to authenticate with ${providerName}?`,
-        choices: [
-          { value: 'api_key', name: 'API Key (enter manually)' },
-          { value: 'oauth', name: 'OAuth Login (browser-based)' },
-        ],
-      });
-
-      if (authMethod === 'oauth') {
-        const success = await doOAuthLogin(provider);
-        if (success) {
-          useOAuth = true;
-          console.log('\n✅ OAuth login successful!');
-        } else {
-          console.log('\n⚠️ OAuth login failed. Please enter API key manually.');
-          apiKey = await input({
-            message: `API Key for ${providerName}:`,
-            validate: (v: string) => v.length > 0 || 'Required',
-          });
-          useOAuth = false;
-        }
-      } else {
-        apiKey = await input({
-          message: `API Key for ${providerName}:`,
-          validate: (v: string) => v.length > 0 || 'Required',
-        });
-      }
+  if (authMethod === 'oauth') {
+    const success = await doOAuthLogin(selectedProvider);
+    if (success) {
+      console.log('✅ OAuth login successful!');
     } else {
-      // API key only
-      apiKey = await input({
-        message: `API Key for ${providerName}:`,
-        validate: (v: string) => v.length > 0 || 'Required',
-      });
+      console.log('❌ OAuth login failed. Please try again or use API key.');
     }
   }
 
-  // Get available models
-  const modelChoices = await getModelsForProvider(provider);
-  if (modelChoices.length === 0) {
-    console.log(`\n⚠️  No built-in models found for ${providerName}.`);
-    console.log('   You can still use custom model names.');
-    const model = await input({
-      message: 'Model name:',
-      validate: (v: string) => v.length > 0 || 'Required',
+  if (authMethod === 'api_key') {
+    const apiKey = await input({
+      message: `Enter API key (${selectedProvider}):`,
+      validate: (input) => input.length > 0 || 'API key is required',
     });
 
-    // Store API key in new simplified format
-    config.providers = config.providers || {};
-    config.providers[provider] = apiKey;
-    config.agents = config.agents || {};
-    config.agents.defaults = config.agents.defaults || {
-      workspace: ctx.workspacePath,
-      model: { primary: `${provider}/${model}`, fallbacks: [] },
-      maxTokens: 8192,
-      temperature: 0.7,
-      maxToolIterations: 20,
-      maxRequestsPerTurn: 50,
-      maxToolFailuresPerTurn: 3,
+    (config as any).providers = (config as any).providers || {};
+    (config as any).providers[selectedProvider] = {
+      api_key: apiKey,
     };
-    config.agents.defaults.model = { primary: `${provider}/${model}`, fallbacks: [] };
-    config.agents.defaults.workspace = ctx.workspacePath;
 
-    console.log('\n✅ Model configured:', `${provider}/${model}`);
-    return config;
+    console.log('✅ API key saved.');
   }
 
-  console.log(`\n📋 Available models for ${providerName}:`);
-  const model = await select({
-    message: 'Select model:',
-    choices: modelChoices,
-  });
+  const models = await getModelsForProvider(selectedProvider);
+  
+  if (models.length === 0) {
+    console.log('⚠️  No models available for this provider.');
+  } else {
+    const selectedModel = await select({
+      message: 'Select model:',
+      choices: models,
+    });
 
-  // Store in new simplified format
-  config.providers = config.providers || {};
-  if (!useOAuth && apiKey) {
-    config.providers[provider] = apiKey;
+    (config as any).agents = (config as any).agents || {};
+    (config as any).agents.defaults = (config as any).agents.defaults || {};
+    (config as any).agents.defaults.model = `${selectedProvider}/${selectedModel}`;
   }
 
-  config.agents = config.agents || {};
-  config.agents.defaults = config.agents.defaults || {
-    workspace: ctx.workspacePath,
-    model: { primary: model, fallbacks: [] },
-    maxTokens: 8192,
-    temperature: 0.7,
-    maxToolIterations: 20,
-    maxRequestsPerTurn: 50,
-    maxToolFailuresPerTurn: 3,
-  };
-  config.agents.defaults.model = { primary: model, fallbacks: [] };
-  config.agents.defaults.workspace = ctx.workspacePath;
+  await saveConfig(config as Config, ctx.configPath);
+  console.log('✅ Model configuration saved.\n');
 
-  console.log('\n✅ Model configured:', model);
   return config;
 }
 
 async function getModelsForProvider(provider: string): Promise<{ value: string; name: string }[]> {
   const models = getModelsByProvider(provider);
-  return models.map((m) => ({
-    value: `${m.provider}/${m.id}`,
+  
+  if (!models || models.length === 0) {
+    return [{ value: 'default', name: 'Default Model' }];
+  }
+
+  return models.map(m => ({
+    value: m.id,
     name: m.name || m.id,
   }));
 }
 
 async function setupChannels(config: Config): Promise<Config> {
-  console.log('\n💬 Step: Channels (Optional)\n');
+  console.log(colors.cyan('\n💬 Step 3: Messaging Channels\n'));
 
   const enableTelegram = await confirm({
-    message: 'Enable Telegram?',
-    default: config?.channels?.telegram?.enabled || false,
+    message: 'Enable Telegram channel?',
+    default: true,
   });
 
   if (enableTelegram) {
-    const token = await input({
-      message: 'Telegram Bot Token:',
-      validate: (v: string) => v.length > 0 || 'Required',
-    });
+    (config as any).channels = (config as any).channels || {};
+    (config as any).channels.telegram = (config as any).channels.telegram || {};
 
-    config.channels = config.channels || {};
-    // Merge with existing config to preserve apiRoot and other settings
-    const existingTelegram = config.channels.telegram || {};
-    config.channels.telegram = {
-      ...existingTelegram,
-      enabled: true,
-      token,
-      allowFrom: ((existingTelegram as { allowFrom?: (string | number)[] }).allowFrom ?? []) as (string | number)[],
-      groupAllowFrom: ((existingTelegram as { groupAllowFrom?: (string | number)[] }).groupAllowFrom ?? []) as (string | number)[],
-      debug: (existingTelegram as { debug?: boolean }).debug ?? false,
-      dmPolicy: ((existingTelegram as { dmPolicy?: 'pairing' | 'allowlist' | 'open' | 'disabled' }).dmPolicy ?? 'pairing') as 'pairing' | 'allowlist' | 'open' | 'disabled',
-      groupPolicy: ((existingTelegram as { groupPolicy?: 'allowlist' | 'open' | 'disabled' }).groupPolicy ?? 'open') as 'allowlist' | 'open' | 'disabled',
-      replyToMode: ((existingTelegram as { replyToMode?: 'off' | 'first' | 'all' }).replyToMode ?? 'off') as 'off' | 'first' | 'all',
-      historyLimit: ((existingTelegram as { historyLimit?: number }).historyLimit ?? 50),
-      textChunkLimit: ((existingTelegram as { textChunkLimit?: number }).textChunkLimit ?? 4000),
-    };
+    const hasToken = !!(config as any).channels.telegram.bot_token;
+    
+    if (!hasToken) {
+      console.log('\n📝 Telegram Configuration:');
+      console.log('   Get your bot token from @BotFather on Telegram.\n');
 
-    console.log('✅ Telegram enabled');
+      const botToken = await input({
+        message: 'Enter Telegram Bot Token:',
+        validate: (input) => input.length > 0 || 'Bot token is required',
+      });
+
+      (config as any).channels.telegram.bot_token = botToken;
+      console.log('✅ Telegram configured.');
+    } else {
+      console.log('ℹ️  Telegram already configured.');
+    }
   }
 
-  const hasTelegram = config?.channels?.telegram?.enabled;
-  if (hasTelegram) {
-    console.log('✅ Telegram already configured');
+  const enableSlack = await confirm({
+    message: 'Enable Slack channel?',
+    default: false,
+  });
+
+  if (enableSlack) {
+    (config as any).channels = (config as any).channels || {};
+    (config as any).channels.slack = (config as any).channels.slack || {};
+
+    console.log('\n📝 Slack Configuration:');
+    console.log('   Create a Slack app at https://api.slack.com/apps\n');
+
+    const botToken = await input({
+      message: 'Enter Slack Bot Token (xoxb-...):',
+      validate: (input) => input.length > 0 || 'Bot token is required',
+    });
+
+    const signingSecret = await input({
+      message: 'Enter Slack Signing Secret:',
+      validate: (input) => input.length > 0 || 'Signing secret is required',
+    });
+
+    (config as any).channels.slack.bot_token = botToken;
+    (config as any).channels.slack.signing_secret = signingSecret;
+    console.log('✅ Slack configured.');
+  }
+
+  const enableDiscord = await confirm({
+    message: 'Enable Discord channel?',
+    default: false,
+  });
+
+  if (enableDiscord) {
+    (config as any).channels = (config as any).channels || {};
+    (config as any).channels.discord = (config as any).channels.discord || {};
+
+    console.log('\n📝 Discord Configuration:');
+    console.log('   Create a bot at https://discord.com/developers/applications\n');
+
+    const botToken = await input({
+      message: 'Enter Discord Bot Token:',
+      validate: (input) => input.length > 0 || 'Bot token is required',
+    });
+
+    (config as any).channels.discord.bot_token = botToken;
+    console.log('✅ Discord configured.');
   }
 
   return config;
 }
 
 async function setupGateway(config: Config): Promise<Config> {
-  console.log('\n🌐 Step: Gateway WebUI (Optional)\n');
+  console.log(colors.cyan('\n🌐 Step 4: Gateway WebUI\n'));
 
   const enableGateway = await confirm({
     message: 'Enable Gateway WebUI?',
@@ -986,47 +674,68 @@ async function setupGateway(config: Config): Promise<Config> {
   });
 
   if (!enableGateway) {
-    config.gateway = config.gateway || {};
-    config.gateway.auth = { mode: 'none' };
-    console.log('ℹ️  Gateway disabled (auth mode set to none)');
+    console.log('ℹ️  Gateway skipped.');
     return config;
   }
 
-  // Check if gateway auth is already configured
-  const existingToken = config?.gateway?.auth?.token;
-  const existingMode = config?.gateway?.auth?.mode;
+  const host = await select({
+    message: 'Bind address:',
+    choices: [
+      { name: 'Localhost only (127.0.0.1)', value: '127.0.0.1' },
+      { name: 'All interfaces (0.0.0.0)', value: '0.0.0.0' },
+    ],
+    default: '0.0.0.0',
+  });
 
-  if (existingToken && existingMode === 'token') {
-    console.log('\nℹ️  Gateway auth token already configured');
-    const keepExisting = await confirm({
-      message: 'Keep existing token?',
-      default: true,
-    });
+  const portInput = await input({
+    message: 'Port:',
+    default: '18790',
+    validate: (input) => {
+      const port = parseInt(input, 10);
+      return !isNaN(port) && port > 0 && port < 65536 || 'Invalid port number';
+    },
+  });
 
-    if (keepExisting) {
-      console.log('✅ Keeping existing gateway configuration');
-      return config;
+  const port = parseInt(portInput, 10);
+
+  const authMode = await select({
+    message: 'Authentication:',
+    choices: [
+      { name: 'Token (recommended)', value: 'token' },
+      { name: 'None (local only)', value: 'none' },
+    ],
+    default: 'token',
+  });
+
+  let token: string | undefined;
+  if (authMode === 'token') {
+    const existingToken = (config as any)?.gateway?.auth?.token;
+    if (existingToken) {
+      const reuse = await confirm({
+        message: 'Use existing token?',
+        default: true,
+      });
+      if (reuse) {
+        token = existingToken;
+      }
+    }
+
+    if (!token) {
+      const crypto = await import('crypto');
+      token = crypto.randomBytes(24).toString('hex');
+      console.log(`\n🔑 Generated token: ${token.slice(0, 8)}...${token.slice(-8)}`);
     }
   }
 
-  // Generate new token
-  const crypto = await import('crypto');
-  const token = crypto.randomBytes(24).toString('hex');
-
-  // Configure gateway with defaults
-  config.gateway = config.gateway || {};
-  config.gateway.host = config.gateway.host || '0.0.0.0';
-  config.gateway.port = config.gateway.port || 18790;
-  config.gateway.auth = {
-    mode: 'token',
-    token,
+  (config as any).gateway = (config as any).gateway || {};
+  (config as any).gateway.host = host;
+  (config as any).gateway.port = port;
+  (config as any).gateway.auth = {
+    mode: authMode,
+    ...(token ? { token } : {}),
   };
 
-  console.log('\n✅ Gateway configured:');
-  console.log(`   Host: ${config.gateway.host}`);
-  console.log(`   Port: ${config.gateway.port}`);
-  console.log(`   Auth: Token-based (auto-generated)`);
-  console.log(`   Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
+  console.log('✅ Gateway configuration saved.\n');
 
   return config;
 }
@@ -1034,7 +743,7 @@ async function setupGateway(config: Config): Promise<Config> {
 register({
   id: 'onboard',
   name: 'onboard',
-  description: 'Interactive setup wizard for xopcbot',
+  description: 'Interactive setup wizard',
   factory: createOnboardCommand,
   metadata: {
     category: 'setup',
@@ -1042,7 +751,6 @@ register({
       'xopcbot onboard',
       'xopcbot onboard --model',
       'xopcbot onboard --channels',
-      'xopcbot onboard --gateway',
     ],
   },
 });

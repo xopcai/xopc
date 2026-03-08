@@ -29,27 +29,26 @@ const templateCache = new Map<TemplateFile, string>();
 
 /**
  * Get the path to template files.
- * Looks for templates in docs/reference/templates/ relative to project root.
+ * Uses environment or looks in project root.
  */
 function getTemplatePath(): string {
-  // Try multiple paths to find templates
-  const possiblePaths = [
-    // Development: from src/cli/ to project root
-    join(__dirname, '../../../docs/reference/templates'),
-    // Development alternative: one level up (in case running from different location)
-    join(__dirname, '../../docs/reference/templates'),
-    // Production: from dist/cli/ to project root
-    join(__dirname, '../docs/reference/templates'),
-  ];
-
-  for (const path of possiblePaths) {
-    if (existsSync(path)) {
-      return path;
-    }
+  // Use environment to determine path
+  const envPath = process.env.XOPCBOT_TEMPLATE_PATH;
+  if (envPath && existsSync(envPath)) {
+    return envPath;
   }
 
-  // Default to first option (will fail gracefully with fallback)
-  return possiblePaths[0];
+  // Default: look in project root docs/reference/templates
+  // Works for both development (src/cli/) and production (dist/cli/)
+  const projectRoot = join(__dirname, '../../..');
+  const defaultPath = join(projectRoot, 'docs/reference/templates');
+  
+  if (existsSync(defaultPath)) {
+    return defaultPath;
+  }
+
+  // Fallback: return default (will fail gracefully)
+  return defaultPath;
 }
 
 /**
@@ -64,14 +63,18 @@ export function loadTemplate(name: TemplateFile): string {
   const templatePath = join(getTemplatePath(), name);
   
   try {
-    const content = readFileSync(templatePath, 'utf-8');
-    templateCache.set(name, content);
-    return content;
+    if (existsSync(templatePath)) {
+      const content = readFileSync(templatePath, 'utf-8');
+      templateCache.set(name, content);
+      return content;
+    }
   } catch {
-    // Fallback: return a minimal default if template is missing
-    console.warn(`Warning: Template ${name} not found at ${templatePath}`);
-    return getFallbackTemplate(name);
+    // Fall through to fallback
   }
+
+  // Fallback: return minimal default if template is missing
+  console.warn(`Warning: Template ${name} not found, using fallback`);
+  return getFallbackTemplate(name);
 }
 
 /**
