@@ -12,6 +12,7 @@
 - **Features**
   - [CLI Reference](cli.md)
   - [LLM Models](models.md)
+  - [Voice (STT/TTS)](voice.md)
   - [Channels (Telegram)](channels.md)
   - [Plugins](plugins.md)
   - [Scheduled Tasks (Cron)](cron.md)

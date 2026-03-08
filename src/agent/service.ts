@@ -581,11 +581,17 @@ export class AgentService {
         if (!hookResult.send) {
           log.info({ chatId: msg.chat_id, reason: hookResult.reason }, 'Message sending blocked by hook');
         } else {
+          // Check if TTS should be used (user sent voice message and TTS is enabled)
+          const userSentVoice = msg.metadata?.transcribedVoice === true;
+          const ttsEnabled = this.config.config?.tts?.enabled && this.config.config?.tts?.trigger === 'auto';
+          const useTTS = userSentVoice && ttsEnabled && msg.channel === 'telegram';
+          
           await this.bus.publishOutbound({
             channel: msg.channel,
             chat_id: msg.chat_id,
             content: hookResult.content || contentWithUsage,
             type: 'message',
+            tts: useTTS || undefined,
           });
           await this.triggerHook('message_sent', { to: msg.chat_id, content: hookResult.content || contentWithUsage, success: true });
         }

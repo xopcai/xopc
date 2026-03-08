@@ -104,6 +104,7 @@ export class ChannelManager {
       replyToMessageId: msg.metadata?.replyToMessageId ? String(msg.metadata.replyToMessageId) : undefined,
       mediaUrl: msg.mediaUrl,
       mediaType: msg.mediaType,
+      tts: msg.tts,
     };
 
     const result = await plugin.send(sendOptions);

@@ -259,6 +259,105 @@ HTTP API 网关配置。
 |-------|------|---------|------|
 | `enabled` | boolean | `true` | 启用本地模型缓存 |
 
+### stt
+
+语音转文字（STT）配置。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `false` | 启用 STT |
+| `provider` | string | `alibaba` | 提供商：`alibaba`、`openai` |
+| `alibaba` | object | - | 阿里云 DashScope 配置 |
+| `openai` | object | - | OpenAI Whisper 配置 |
+| `fallback` | object | - | 回退配置 |
+
+#### stt.alibaba
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `apiKey` | string | - | DashScope API 密钥 |
+| `model` | string | `paraformer-v1` | 模型：`paraformer-v1`、`paraformer-8k-v1`、`paraformer-mtl-v1` |
+
+#### stt.openai
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `apiKey` | string | - | OpenAI API 密钥 |
+| `model` | string | `whisper-1` | 模型：`whisper-1` |
+
+#### stt.fallback
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `true` | 启用回退 |
+| `order` | array | `["alibaba", "openai"]` | 回退顺序 |
+
+示例：
+```json
+{
+  "stt": {
+    "enabled": true,
+    "provider": "alibaba",
+    "alibaba": {
+      "apiKey": "${DASHSCOPE_API_KEY}",
+      "model": "paraformer-v1"
+    },
+    "fallback": {
+      "enabled": true,
+      "order": ["alibaba", "openai"]
+    }
+  }
+}
+```
+
+### tts
+
+文字转语音（TTS）配置。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `false` | 启用 TTS |
+| `provider` | string | `openai` | 提供商：`openai`、`alibaba` |
+| `trigger` | string | `auto` | 触发模式：`auto`、`never` |
+| `openai` | object | - | OpenAI TTS 配置 |
+| `alibaba` | object | - | 阿里云 CosyVoice 配置 |
+
+#### tts.openai
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `apiKey` | string | - | OpenAI API 密钥 |
+| `model` | string | `tts-1` | 模型：`tts-1`、`tts-1-hd` |
+| `voice` | string | `alloy` | 音色：`alloy`、`echo`、`fable`、`onyx`、`nova`、`shimmer` |
+
+#### tts.alibaba
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `apiKey` | string | - | DashScope API 密钥 |
+| `model` | string | `cosyvoice-v1` | 模型：`cosyvoice-v1` |
+| `voice` | string | - | 音色 ID |
+
+示例：
+```json
+{
+  "tts": {
+    "enabled": true,
+    "provider": "openai",
+    "trigger": "auto",
+    "openai": {
+      "apiKey": "${OPENAI_API_KEY}",
+      "model": "tts-1",
+      "voice": "alloy"
+    }
+  }
+}
+```
+
+**触发模式：**
+- `auto`：用户发语音时，Agent 用语音回复
+- `never`：禁用 TTS，只发送文字
+
 ## 环境变量
 
 xopcbot 支持环境变量来存储敏感数据：
@@ -268,6 +367,7 @@ xopcbot 支持环境变量来存储敏感数据：
 | `ANTHROPIC_API_KEY` | Anthropic API 密钥 |
 | `OPENAI_API_KEY` | OpenAI API 密钥 |
 | `GOOGLE_API_KEY` | Google AI API 密钥 |
+| `DASHSCOPE_API_KEY` | 阿里云 DashScope API 密钥（用于 STT/TTS） |
 | `TELEGRAM_BOT_TOKEN` | Telegram 机器人令牌 |
 | `WHATSAPP_BRIDGE_URL` | WhatsApp 桥接 URL |
 | `XOPCBOT_MODELS_JSON` | 自定义 models.json 文件路径 |

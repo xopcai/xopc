@@ -22,6 +22,8 @@ export interface OutboundMessage {
   mediaUrl?: string;
   mediaType?: 'photo' | 'video' | 'audio' | 'document' | 'animation';
   metadata?: Record<string, unknown>;
+  /** Request TTS voice message for this text content (Telegram only) */
+  tts?: boolean;
 }
 
 export interface Message {

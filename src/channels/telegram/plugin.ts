@@ -36,8 +36,59 @@ import { formatTelegramMessage } from '../format.js';
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/index.js';
 import { createTelegramCommandHandler } from './command-handler.js';
+import { transcribe, isSTTAvailable } from '../../stt/index.js';
+import { speak, isTTSAvailable } from '../../tts/index.js';
+import { exec } from 'child_process';
+import { promisify } from 'util';
+import { writeFile, unlink } from 'fs/promises';
+import { tmpdir } from 'os';
+import { join } from 'path';
 
 const log = createLogger('TelegramPlugin');
+const execAsync = promisify(exec);
+
+/**
+ * Compress audio buffer using ffmpeg (wav -> opus)
+ * Returns original buffer if compression fails
+ */
+async function compressAudio(audioBuffer: Buffer, inputFormat: string): Promise<{ buffer: Buffer; format: string }> {
+  if (inputFormat !== 'wav') {
+    return { buffer: audioBuffer, format: inputFormat };
+  }
+
+  const tempDir = tmpdir();
+  const inputPath = join(tempDir, `input_${Date.now()}.wav`);
+  const outputPath = join(tempDir, `output_${Date.now()}.opus`);
+
+  try {
+    // Write input file
+    await writeFile(inputPath, audioBuffer);
+
+    // Compress using ffmpeg
+    await execAsync(`ffmpeg -i "${inputPath}" -c:a libopus -b:a 24k -vbr on "${outputPath}" -y`);
+
+    // Read output file
+    const { readFile } = await import('fs/promises');
+    const compressedBuffer = await readFile(outputPath);
+
+    log.info({
+      originalSize: audioBuffer.length,
+      compressedSize: compressedBuffer.length,
+      ratio: (compressedBuffer.length / audioBuffer.length * 100).toFixed(1) + '%'
+    }, 'Audio compressed successfully');
+
+    return { buffer: compressedBuffer, format: 'opus' };
+  } catch (error) {
+    log.warn({ error, inputFormat }, 'Audio compression failed, using original');
+    return { buffer: audioBuffer, format: inputFormat };
+  } finally {
+    // Cleanup temp files
+    try {
+      await unlink(inputPath).catch(() => {});
+      await unlink(outputPath).catch(() => {});
+    } catch {}
+  }
+}
 
 // ============================================
 // MIME Type Helper
@@ -300,9 +351,11 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
     if (message.document) media.push({ type: 'document', fileId: message.document.file_id });
     if (message.video) media.push({ type: 'video', fileId: message.video.file_id });
     if (message.audio) media.push({ type: 'audio', fileId: message.audio.file_id });
+    if (message.voice) media.push({ type: 'voice', fileId: message.voice.file_id });
 
     // Download media files and convert to attachments
     const attachments: Array<{ type: string; mimeType: string; data: string; name?: string; size?: number }> = [];
+    let transcribedText = '';
     const bot = accountManager.getBot(accountId);
     const botToken = account.token;
 
@@ -318,6 +371,38 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
             throw new Error(`Failed to download: ${response.status}`);
           }
           const buffer = await response.arrayBuffer();
+          
+          // Handle voice messages with STT
+          if (item.type === 'voice' && config?.stt && isSTTAvailable(config.stt)) {
+            const voiceDuration = message.voice?.duration || 0;
+            if (voiceDuration > 60) {
+              log.warn({ duration: voiceDuration }, 'Voice message too long (>60s), skipping STT');
+              transcribedText = '[语音超过1分钟，不支持转文字]';
+            } else {
+              try {
+                log.info({ 
+                  provider: config.stt.provider,
+                  bufferSize: buffer.byteLength,
+                  duration: voiceDuration 
+                }, 'Starting STT transcription');
+                
+                const sttResult = await transcribe(Buffer.from(buffer), config.stt, {
+                  language: config.stt.provider === 'alibaba' ? 'zh' : undefined,
+                });
+                transcribedText = sttResult.text;
+                log.info({ provider: sttResult.provider, textLength: transcribedText.length }, 'Voice transcribed');
+              } catch (sttError) {
+                const errorMsg = sttError instanceof Error ? sttError.message : String(sttError);
+                log.error({ 
+                  error: errorMsg,
+                  provider: config.stt.provider,
+                  bufferSize: buffer.byteLength 
+                }, 'STT transcription failed');
+                transcribedText = `[语音转文字失败：${errorMsg}]`;
+              }
+            }
+          }
+          
           const base64 = Buffer.from(buffer).toString('base64');
           const mimeType = getMimeType(item.type, file.file_path);
           attachments.push({
@@ -334,19 +419,25 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
       }
     }
 
-    log.info({ accountId, chatId, senderId, isGroup, threadId, sessionKey, contentLength: cleanContent.length, attachmentCount: attachments.length }, 'Processing Telegram message');
+    // Combine transcribed text with original content
+    const finalContent = transcribedText 
+      ? transcribedText + (cleanContent ? '\n\n' + cleanContent : '')
+      : cleanContent;
+
+    log.info({ accountId, chatId, senderId, isGroup, threadId, sessionKey, contentLength: finalContent.length, attachmentCount: attachments.length, hasVoice: !!transcribedText }, 'Processing Telegram message');
 
     await bus.publishInbound({
       channel: 'telegram',
       sender_id: senderId,
       chat_id: chatId,
-      content: cleanContent,
+      content: finalContent,
       metadata: {
         sessionKey,
         messageId: String(message.message_id),
         isGroup,
         threadId: threadId ? String(threadId) : undefined,
         media: media.length > 0 ? media : undefined,
+        transcribedVoice: !!transcribedText || undefined,
       },
       attachments: attachments.length > 0 ? attachments : undefined,
     });
@@ -762,6 +853,44 @@ export class TelegramChannelPlugin implements ChannelPlugin {
           return { messageId: '', chatId, success: false, error: 'Telegram API response missing message_id' };
         }
         sentMessageId = apiResult.message_id;
+      } else if (options.tts && this.config?.tts && isTTSAvailable(this.config.tts)) {
+        // TTS: Generate voice message
+        log.info({ chatId, contentLength: content?.length }, 'Generating TTS voice message');
+
+        try {
+          const ttsResult = await speak(content || '', this.config.tts);
+
+          // Compress audio if it's wav format (to reduce file size for Telegram)
+          const { buffer: compressedAudio, format: compressedFormat } = await compressAudio(
+            Buffer.from(ttsResult.audio),
+            ttsResult.format
+          );
+
+          const file = new InputFile(compressedAudio, `voice.${compressedFormat}`);
+
+          const sendOptions: any = {};
+          if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
+          if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
+          if (silent) sendOptions.disable_notification = true;
+
+          // Use sendVoice for opus, sendAudio for other formats
+          if (compressedFormat === 'opus') {
+            sentMessageId = (await bot.api.sendVoice(chatId, file, sendOptions)).message_id;
+          } else {
+            sentMessageId = (await bot.api.sendAudio(chatId, file, sendOptions)).message_id;
+          }
+          log.info({ chatId, messageId: sentMessageId, provider: ttsResult.provider, format: compressedFormat }, 'TTS voice message sent');
+        } catch (ttsError) {
+          log.error({ error: ttsError }, 'TTS generation failed, falling back to text');
+          // Fallback to text message
+          const { html } = formatTelegramMessage(content || '');
+          const sendOptions: any = { parse_mode: 'HTML' };
+          if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
+          if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
+          if (silent) sendOptions.disable_notification = true;
+
+          sentMessageId = (await bot.api.sendMessage(chatId, html, sendOptions)).message_id;
+        }
       } else {
         const { html } = formatTelegramMessage(content || '');
         const sendOptions: any = { parse_mode: 'HTML' };

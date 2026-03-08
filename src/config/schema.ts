@@ -227,6 +227,46 @@ export const ModelsDevConfigSchema = z.object({
 });
 
 // ============================================
+// STT (Speech-to-Text) Config
+// ============================================
+
+export const STTProviderConfigSchema = z.object({
+  apiKey: z.string().optional(),
+  model: z.string().optional(),
+});
+
+export const STTFallbackConfigSchema = z.object({
+  enabled: z.boolean().default(true),
+  order: z.array(z.enum(['alibaba', 'openai'])).default(['alibaba', 'openai']),
+});
+
+export const STTConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  provider: z.enum(['alibaba', 'openai']).default('alibaba'),
+  alibaba: STTProviderConfigSchema.optional(),
+  openai: STTProviderConfigSchema.optional(),
+  fallback: STTFallbackConfigSchema.optional(),
+});
+
+// ============================================
+// TTS (Text-to-Speech) Config
+// ============================================
+
+export const TTSProviderConfigSchema = z.object({
+  apiKey: z.string().optional(),
+  model: z.string().optional(),
+  voice: z.string().optional(),
+});
+
+export const TTSConfigSchema = z.object({
+  enabled: z.boolean().default(false),
+  provider: z.enum(['openai', 'alibaba']).default('openai'),
+  trigger: z.enum(['auto', 'never']).default('auto'),
+  alibaba: TTSProviderConfigSchema.optional(),
+  openai: TTSProviderConfigSchema.optional(),
+});
+
+// ============================================
 // Plugin Configs
 // ============================================
 
@@ -252,6 +292,8 @@ export const ConfigSchema = z.object({
   plugins: PluginsConfigSchema,
   modelsDev: ModelsDevConfigSchema,
   providers: ProvidersConfigSchema,
+  stt: STTConfigSchema.optional(),
+  tts: TTSConfigSchema.optional(),
 }).default({
   agents: {
     defaults: {
@@ -324,6 +366,33 @@ export const ConfigSchema = z.object({
     enabled: true,
   },
   providers: {},
+  stt: {
+    enabled: false,
+    provider: 'alibaba',
+    alibaba: {
+      model: 'paraformer-v2',
+    },
+    openai: {
+      model: 'whisper-1',
+    },
+    fallback: {
+      enabled: true,
+      order: ['alibaba', 'openai'],
+    },
+  },
+  tts: {
+    enabled: false,
+    provider: 'alibaba',
+    trigger: 'auto',
+    alibaba: {
+      model: 'qwen3-tts-flash',
+      voice: 'Cherry',
+    },
+    openai: {
+      model: 'tts-1',
+      voice: 'alloy',
+    },
+  },
 });
 
 export type Config = z.infer<typeof ConfigSchema>;
@@ -331,6 +400,8 @@ export type AgentDefaults = z.infer<typeof AgentDefaultsSchema>;
 export type GatewayAuthConfig = z.infer<typeof GatewayAuthSchema>;
 export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
 export type WhatsAppConfig = z.infer<typeof WhatsAppConfigSchema>;
+export type STTConfig = z.infer<typeof STTConfigSchema>;
+export type TTSConfig = z.infer<typeof TTSConfigSchema>;
 
 // ============================================
 // Helper Functions

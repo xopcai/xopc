@@ -244,6 +244,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         },
       },
       cron: { enabled: config.cron?.enabled },
+      stt: config.stt,
+      tts: config.tts,
     };
     return c.json({ ok: true, payload: { config: safeConfig } });
   });
@@ -336,6 +338,16 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           config.providers[key] = apiKey as string;
         }
       }
+    }
+
+    // Update STT config
+    if (body.stt !== undefined) {
+      config.stt = body.stt;
+    }
+
+    // Update TTS config
+    if (body.tts !== undefined) {
+      config.tts = body.tts;
     }
     
     // Save config

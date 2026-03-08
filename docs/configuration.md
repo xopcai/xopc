@@ -383,6 +383,105 @@ Local model development settings.
 |-------|------|---------|-------------|
 | `enabled` | boolean | `true` | Enable local model cache |
 
+### stt
+
+Speech-to-Text configuration for voice messages.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable STT |
+| `provider` | string | `alibaba` | Provider: `alibaba`, `openai` |
+| `alibaba` | object | - | Alibaba DashScope config |
+| `openai` | object | - | OpenAI Whisper config |
+| `fallback` | object | - | Fallback configuration |
+
+#### stt.alibaba
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `apiKey` | string | - | DashScope API key |
+| `model` | string | `paraformer-v1` | Model: `paraformer-v1`, `paraformer-8k-v1`, `paraformer-mtl-v1` |
+
+#### stt.openai
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `apiKey` | string | - | OpenAI API key |
+| `model` | string | `whisper-1` | Model: `whisper-1` |
+
+#### stt.fallback
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable fallback |
+| `order` | array | `["alibaba", "openai"]` | Provider fallback order |
+
+Example:
+```json
+{
+  "stt": {
+    "enabled": true,
+    "provider": "alibaba",
+    "alibaba": {
+      "apiKey": "${DASHSCOPE_API_KEY}",
+      "model": "paraformer-v1"
+    },
+    "fallback": {
+      "enabled": true,
+      "order": ["alibaba", "openai"]
+    }
+  }
+}
+```
+
+### tts
+
+Text-to-Speech configuration for voice replies.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `false` | Enable TTS |
+| `provider` | string | `openai` | Provider: `openai`, `alibaba` |
+| `trigger` | string | `auto` | Trigger mode: `auto`, `never` |
+| `openai` | object | - | OpenAI TTS config |
+| `alibaba` | object | - | Alibaba CosyVoice config |
+
+#### tts.openai
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `apiKey` | string | - | OpenAI API key |
+| `model` | string | `tts-1` | Model: `tts-1`, `tts-1-hd` |
+| `voice` | string | `alloy` | Voice: `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer` |
+
+#### tts.alibaba
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `apiKey` | string | - | DashScope API key |
+| `model` | string | `cosyvoice-v1` | Model: `cosyvoice-v1` |
+| `voice` | string | - | Voice ID |
+
+Example:
+```json
+{
+  "tts": {
+    "enabled": true,
+    "provider": "openai",
+    "trigger": "auto",
+    "openai": {
+      "apiKey": "${OPENAI_API_KEY}",
+      "model": "tts-1",
+      "voice": "alloy"
+    }
+  }
+}
+```
+
+**Trigger modes:**
+- `auto`: Send voice reply when user sends voice message
+- `never`: Disable TTS, only send text
+
 ## Environment Variables
 
 xopcbot supports environment variables for sensitive data:
@@ -392,6 +491,7 @@ xopcbot supports environment variables for sensitive data:
 | `ANTHROPIC_API_KEY` | Anthropic API key |
 | `OPENAI_API_KEY` | OpenAI API key |
 | `GOOGLE_API_KEY` | Google AI API key |
+| `DASHSCOPE_API_KEY` | Alibaba DashScope API key (for STT/TTS) |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `WHATSAPP_BRIDGE_URL` | WhatsApp bridge URL |
 

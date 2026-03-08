@@ -163,6 +163,8 @@ export interface ChannelSendOptions {
   mediaUrl?: string;
   mediaType?: 'photo' | 'video' | 'audio' | 'document' | 'animation';
   silent?: boolean;
+  /** Request TTS voice message for this text content */
+  tts?: boolean;
 }
 
 export interface ChannelSendStreamOptions {

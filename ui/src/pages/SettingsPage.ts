@@ -8,6 +8,7 @@ import { getIcon } from '../utils/icons.js';
 import { t } from '../utils/i18n.js';
 import '../components/ProviderList.js';
 import '../components/ModelSelector.js';
+import '../components/VoiceConfigSection.js';
 import { fetchConfiguredModels, fetchProviderMeta, type Model } from '../config/registry-client.js';
 import type { ProviderInfo, ProviderListChangeEvent, ProviderListOAuthEvent } from '../components/ProviderList.js';
 import '../components/ModelJsonEditor.js';
@@ -81,13 +82,27 @@ interface SettingsData {
       token?: string;
     };
   };
+  stt?: {
+    enabled: boolean;
+    provider: 'alibaba' | 'openai';
+    alibaba?: { apiKey?: string; model?: string };
+    openai?: { apiKey?: string; model?: string };
+    fallback?: { enabled: boolean; order: ('alibaba' | 'openai')[] };
+  };
+  tts?: {
+    enabled: boolean;
+    provider: 'openai' | 'alibaba';
+    trigger: 'auto' | 'never';
+    alibaba?: { apiKey?: string; model?: string; voice?: string };
+    openai?: { apiKey?: string; model?: string; voice?: string };
+  };
 }
 
 @customElement('settings-page')
 export class SettingsPage extends LitElement {
   @property({ attribute: false }) config?: SettingsPageConfig;
 
-  @state() private _activeSection: 'agent' | 'providers' | 'models' | 'channels' | 'gateway' = 'agent';
+  @state() private _activeSection: 'agent' | 'providers' | 'models' | 'channels' | 'voice' | 'gateway' = 'agent';
   @state() private _loading = false;
   @state() private _saving = false;
   @state() private _saveSuccess = false;
@@ -234,6 +249,20 @@ export class SettingsPage extends LitElement {
                 mode: config.gateway?.auth?.mode || 'token',
                 token: config.gateway?.auth?.token || '',
               },
+            },
+            stt: config.stt || {
+              enabled: false,
+              provider: 'alibaba',
+              alibaba: { model: 'paraformer-v1' },
+              openai: { model: 'whisper-1' },
+              fallback: { enabled: true, order: ['alibaba', 'openai'] },
+            },
+            tts: config.tts || {
+              enabled: false,
+              provider: 'openai',
+              trigger: 'auto',
+              alibaba: { model: 'cosyvoice-v1', voice: 'longxiaochun' },
+              openai: { model: 'tts-1', voice: 'alloy' },
             },
           };
         }
@@ -394,6 +423,8 @@ export class SettingsPage extends LitElement {
           mode: this._settings.gateway.auth?.mode || 'token',
         },
       },
+      stt: this._settings.stt,
+      tts: this._settings.tts,
     };
 
     try {
@@ -439,6 +470,7 @@ export class SettingsPage extends LitElement {
       { id: 'providers', title: t('settings.sections.providers'), icon: 'cloud' },
       { id: 'models', title: t('settings.sections.models') || 'Models', icon: 'cpu' },
       { id: 'channels', title: t('settings.sections.channels'), icon: 'plug' },
+      { id: 'voice', title: t('settings.sections.voice') || 'Voice (STT/TTS)', icon: 'mic' },
       { id: 'gateway', title: t('settings.sections.gateway'), icon: 'globe' },
     ] as const;
 
@@ -1063,15 +1095,21 @@ export class SettingsPage extends LitElement {
     `;
   }
 
+  private _renderVoiceSection() {
+    return html`
+      <voice-config-section
+        .config=${{ stt: this._settings.stt, tts: this._settings.tts }}
+        .onChange=${(path: string, value: unknown) => this._updateSettings(path, value)}
+      ></voice-config-section>
+    `;
+  }
+
   private _renderGatewaySection() {
     return html`
-      <div class="section-content">
-        <div class="section-header">
-          <h2>${t('settings.sections.gateway')}</h2>
-        </div>
-
-        <div class="fields-grid">
-          <!-- Auth Token -->
+      <div class="settings-section">
+        <h3 class="section-title">Gateway Configuration</h3>
+        <div class="section-content">
+          <!-- Gateway Token -->
           <div class="field-group">
             <div class="field-header">
               <label class="field-label">Access Token</label>
@@ -1159,6 +1197,8 @@ export class SettingsPage extends LitElement {
         return this._renderModelsSection();
       case 'channels':
         return this._renderChannelsSection();
+      case 'voice':
+        return this._renderVoiceSection();
       case 'gateway':
         return this._renderGatewaySection();
       default:
