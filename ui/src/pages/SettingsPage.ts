@@ -11,7 +11,7 @@ import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
 import type { ProviderTemplate } from '../config/provider-templates.js';
 import { PROVIDER_TEMPLATES, getProviderTemplate } from '../config/provider-templates.js';
-import { loadDynamicProviders, toProviderTemplate, getAllProviderTemplates, type DynamicProviderInfo } from '../config/dynamic-providers.js';
+import { loadDynamicProviders, toProviderTemplate, getAllProviderTemplates, clearProviderCaches, type DynamicProviderInfo } from '../config/dynamic-providers.js';
 
 // Model and Provider interfaces
 export interface ModelConfig {
@@ -994,6 +994,9 @@ export class SettingsPage extends LitElement {
       }
 
       this._dirtyFields.clear();
+      
+      // Clear provider caches so next load gets fresh data
+      clearProviderCaches();
       
       // Save gateway token to localStorage (not to server config)
       if (this._dirtyFields.has('gatewayToken')) {

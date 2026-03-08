@@ -74,6 +74,18 @@ function clearModelsCache(): void {
   _cachedModelsResponse = null;
 }
 
+function clearAllProvidersCache(): void {
+  _cachedAllProvidersResponse = null;
+}
+
+/**
+ * Clear all caches - call this after saving settings
+ */
+export function clearProviderCaches(): void {
+  clearModelsCache();
+  clearAllProvidersCache();
+}
+
 // Fetch ALL pi-ai supported models (regardless of configuration)
 async function fetchAllProvidersFromApi(token?: string): Promise<Array<{
   id: string;
