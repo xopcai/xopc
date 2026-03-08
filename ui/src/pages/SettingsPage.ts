@@ -1888,15 +1888,38 @@ export class SettingsPage extends LitElement {
   }
 
   private async _startOAuthLogin(template: ProviderTemplate): Promise<void> {
-    // TODO: Implement OAuth flow
-    // This would typically:
-    // 1. Call backend to start OAuth flow
-    // 2. Open a popup or redirect to OAuth provider
-    // 3. Wait for callback
-    // 4. Get API key/token from backend
-    // 5. Create provider with the token
-    
-    alert(`OAuth login for ${template.name} will be implemented in Phase 2`);
+    const url = window.location.origin;
+    const token = this.config?.token;
+
+    try {
+      // Call backend to start OAuth flow
+      const response = await fetch(`${url}/api/auth/oauth/start`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { 'Authorization': `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ provider: template.id }),
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        alert(data.error || 'OAuth login failed');
+        return;
+      }
+
+      if (data.payload?.success) {
+        alert(`${template.name} OAuth login successful!`);
+        // Reload providers to see the newly configured provider
+        await this._loadDynamicProviders();
+        // Close modal
+        this._showAddProviderModal = false;
+      }
+    } catch (err) {
+      console.error('OAuth login error:', err);
+      alert('OAuth login failed. Please try again.');
+    }
   }
 
   private _renderField(field: SettingsField): unknown {
