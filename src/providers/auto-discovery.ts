@@ -1,9 +1,4 @@
-import {
-	getConfiguredProviders,
-	getProviderApiKey,
-	getProvider,
-	PROVIDER_CATALOG,
-} from './provider-catalog.js';
+import { buildRegistry, getConfiguredProviderIds, getProvider, getAllProviderIds } from './models-loader.js';
 
 export interface DiscoveredProvider {
 	id: string;
@@ -25,17 +20,17 @@ export function scanProviders(): {
 } {
 	const configured: DiscoveredProvider[] = [];
 	const unconfigured: DiscoveredProvider[] = [];
+	const registry = buildRegistry();
 
-	for (const [id, provider] of Object.entries(PROVIDER_CATALOG)) {
-		const apiKey = getProviderApiKey(id);
-		const isConfigured = !!apiKey;
+	for (const provider of registry) {
+		const isConfigured = provider.configured;
 
 		const info: DiscoveredProvider = {
-			id,
+			id: provider.id,
 			name: provider.name,
 			configured: isConfigured,
-			apiKey: isConfigured ? '***' + apiKey.slice(-4) : undefined,
-			baseUrl: provider.api.baseUrl,
+			apiKey: undefined,
+			baseUrl: provider.baseUrl,
 		};
 
 		if (isConfigured) {
@@ -78,15 +73,11 @@ export function recommendDefaultModel(configuredProviders: string[]): string {
 }
 
 export function generateAutoConfig(): AutoConfig {
-	const configured = getConfiguredProviders();
-	const providerIds = configured.map(p => p.id);
+	const providerIds = getConfiguredProviderIds();
 
 	const providerConfigs: Record<string, { apiKey?: string; baseUrl?: string }> = {};
-	for (const provider of configured) {
-		const apiKey = getProviderApiKey(provider.id);
-		if (apiKey) {
-			providerConfigs[provider.id] = { apiKey: '${ENV}' };
-		}
+	for (const providerId of providerIds) {
+		providerConfigs[providerId] = { apiKey: '${ENV}' };
 	}
 
 	return {
@@ -154,15 +145,15 @@ export function isModelAvailable(modelRef: string): boolean {
 		: [undefined, modelRef];
 
 	if (!providerId) {
-		for (const id of Object.keys(PROVIDER_CATALOG)) {
-			if (getProviderApiKey(id)) {
+		for (const id of getAllProviderIds()) {
+			if (getProvider(id)?.configured) {
 				return true;
 			}
 		}
 		return false;
 	}
 
-	return !!getProviderApiKey(providerId);
+	return !!getProvider(providerId)?.configured;
 }
 
 export function getBestAvailableModel(): string | undefined {
@@ -182,10 +173,9 @@ export function getBestAvailableModel(): string | undefined {
 		}
 	}
 
-	const configured = getConfiguredProviders();
+	const configured = getConfiguredProviderIds();
 	if (configured.length > 0) {
-		const first = configured[0];
-		return `${first.id}/default`;
+		return `${configured[0]}/default`;
 	}
 
 	return undefined;
@@ -237,7 +227,7 @@ export function getConfigSummary(): {
 	defaultModel?: string;
 	message: string;
 } {
-	const configured = getConfiguredProviders();
+	const configured = getConfiguredProviderIds();
 	
 	if (configured.length === 0) {
 		return {

@@ -1,5 +1,5 @@
 import type { Config } from '../../config/schema.js';
-import { isProviderConfigured as checkEnvProvider } from '../../providers/provider-catalog.js';
+import { isProviderConfigured } from '../../providers/models-loader.js';
 
 export interface ModelCandidate {
   provider: string;
@@ -15,16 +15,16 @@ export interface FallbackAttempt {
   code?: string;
 }
 
+// Re-export for backward compatibility
+export { isProviderConfigured };
+
 /**
  * Check if a provider is configured (has API key in config or environment variable)
  * or is explicitly defined in config (even without apiKey)
  */
-export function isProviderConfigured(cfg: Config | undefined, provider: string): boolean {
-  // Check config for apiKey
-  if (cfg?.models?.providers?.[provider]?.apiKey) return true;
-
-  // Then check environment variable (via provider-catalog)
-  if (checkEnvProvider(provider)) return true;
+export function isProviderConfiguredWrapper(cfg: Config | undefined, provider: string): boolean {
+  // Use the new loader function
+  if (isProviderConfigured(cfg, provider)) return true;
 
   // Ollama special case - check baseUrl
   if (provider === 'ollama') {

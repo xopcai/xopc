@@ -13,6 +13,7 @@ import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_D
 import type { LogLevel } from '../../utils/logger.types.js';
 import { isProviderConfigured } from '../../agent/fallback/index.js';
 import { getModels as getPiAiModels, getProviders as getPiAiProviders } from '@mariozechner/pi-ai';
+import { getManifestVersion, buildRegistry, getConfiguredModels, getAllModels } from '../../providers/models-loader.js';
 import { createOAuthHandler, loadOAuthCredentialsToCache } from './oauth.js';
 
 const log = createLogger('HonoApp');
@@ -391,75 +392,86 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // Load OAuth credentials from config into cache on startup
   loadOAuthCredentialsToCache(service);
 
+  // ========== Unified Registry API (/api/registry) ==========
+  
+  // GET /api/registry - Full registry for frontend
+  authenticated.get('/api/registry', (c) => {
+    const config = service.currentConfig;
+    const providers = buildRegistry(config);
+    
+    return c.json({
+      ok: true,
+      payload: {
+        version: getManifestVersion(),
+        providers: providers.map(p => ({
+          id: p.id,
+          name: p.name,
+          baseUrl: p.baseUrl,
+          api: p.api,
+          auth: {
+            type: p.auth.type,
+            supportsOAuth: p.auth.supportsOAuth ?? false,
+            oauthProviderId: p.auth.oauthProviderId,
+          },
+          capabilities: p.capabilities,
+          configured: p.configured,
+          models: p.models.map(m => ({
+            ref: m.ref,
+            id: m.id,
+            name: m.name,
+            reasoning: m.reasoning,
+            input: m.input,
+            contextWindow: m.contextWindow,
+            maxTokens: m.maxTokens,
+            cost: m.cost,
+            recommended: m.recommended,
+            source: m.source,
+          })),
+        })),
+      },
+    });
+  });
+
+  // POST /api/registry/reload - Hot reload registry
+  authenticated.post('/api/registry/reload', async (c) => {
+    try {
+      // Reload config (this will rebuild the registry)
+      await service.reloadConfig();
+      
+      // Reload OAuth credentials from new config
+      loadOAuthCredentialsToCache(service);
+      
+      const models = getAllModels(service.currentConfig);
+      
+      return c.json({
+        ok: true,
+        payload: {
+          message: 'Registry reloaded',
+          modelCount: models.length,
+        },
+      });
+    } catch (err) {
+      return c.json({
+        error: err instanceof Error ? err.message : 'Failed to reload registry',
+      }, 500);
+    }
+  });
+
   // GET /api/models - Get available models (only configured providers)
   authenticated.get('/api/models', (c) => {
     const config = service.currentConfig;
-    const models: Array<{
-      id: string;
-      name: string;
-      provider: string;
-      contextWindow?: number;
-      maxTokens?: number;
-      reasoning?: boolean;
-      vision?: boolean;
-      cost?: { input: number; output: number };
-    }> = [];
-
-    // Get all providers from pi-ai
-    const piAiProviders = getPiAiProviders() as string[];
-
-    // Add models from configured providers
-    for (const provider of piAiProviders) {
-      // Only include models from configured providers (have API key or enabled)
-      if (!isProviderConfigured(config, provider)) continue;
-
-      const providerModels = getPiAiModels(provider as any);
-      for (const model of providerModels) {
-        models.push({
-          id: `${provider}/${model.id}`,
-          name: model.name || model.id,
-          provider: provider,
-          contextWindow: model.contextWindow,
-          maxTokens: model.maxTokens,
-          reasoning: model.reasoning,
-          vision: model.input?.includes('image'),
-          cost: {
-            input: model.cost?.input || 0,
-            output: model.cost?.output || 0,
-          },
-        });
-      }
-    }
-
-    // Add custom models from new models config
-    const modelProviders = config.models?.providers;
-    if (modelProviders) {
-      for (const [providerName, providerConfig] of Object.entries(modelProviders)) {
-        // Skip if already in pi-ai
-        if (piAiProviders.includes(providerName)) continue;
-
-        // Only include providers that have models defined or apiKey
-        if (!providerConfig?.apiKey && !providerConfig?.models?.length) continue;
-
-        // Add models defined in provider config
-        if (providerConfig?.models && Array.isArray(providerConfig.models)) {
-          for (const modelConfig of providerConfig.models) {
-            const modelId = typeof modelConfig === 'string' ? modelConfig : (modelConfig as any).id;
-            const modelName = typeof modelConfig === 'string' ? modelConfig : (modelConfig as any).name || modelConfig;
-            models.push({
-              id: `${providerName}/${modelId}`,
-              name: modelName,
-              provider: providerName,
-              contextWindow: (modelConfig as any).contextWindow,
-              maxTokens: (modelConfig as any).maxTokens,
-              reasoning: (modelConfig as any).reasoning,
-              vision: (modelConfig as any).input?.includes('image'),
-              cost: (modelConfig as any).cost,
-            });
-          }
-        }
-      }
-    }
+    const configuredModels = getConfiguredModels(config);
+    
+    const models = configuredModels.map(m => ({
+      id: m.ref,
+      name: m.name,
+      provider: m.provider,
+      contextWindow: m.contextWindow,
+      maxTokens: m.maxTokens,
+      reasoning: m.reasoning,
+      vision: m.input.includes('image'),
+      cost: m.cost,
+    }));
 
     // Sort by provider then name
     models.sort((a, b) => {
@@ -470,40 +482,21 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ ok: true, payload: { models } });
   });
 
-  // GET /api/providers - Get ALL available providers and models from pi-ai (regardless of configuration)
+  // GET /api/providers - Get ALL available providers and models (regardless of configuration)
   authenticated.get('/api/providers', (c) => {
-    const models: Array<{
-      id: string;
-      name: string;
-      provider: string;
-      contextWindow?: number;
-      maxTokens?: number;
-      reasoning?: boolean;
-      vision?: boolean;
-      cost?: { input: number; output: number };
-    }> = [];
-
-    // Get all providers from pi-ai (no configuration check)
-    const piAiProviders = getPiAiProviders() as string[];
-
-    for (const provider of piAiProviders) {
-      const providerModels = getPiAiModels(provider as any);
-      for (const model of providerModels) {
-        models.push({
-          id: `${provider}/${model.id}`,
-          name: model.name || model.id,
-          provider: provider,
-          contextWindow: model.contextWindow,
-          maxTokens: model.maxTokens,
-          reasoning: model.reasoning,
-          vision: model.input?.includes('image'),
-          cost: {
-            input: model.cost?.input || 0,
-            output: model.cost?.output || 0,
-          },
-        });
-      }
-    }
+    const config = service.currentConfig;
+    const allModels = getAllModels(config);
+    
+    const models = allModels.map(m => ({
+      id: m.ref,
+      name: m.name,
+      provider: m.provider,
+      contextWindow: m.contextWindow,
+      maxTokens: m.maxTokens,
+      reasoning: m.reasoning,
+      vision: m.input.includes('image'),
+      cost: m.cost,
+    }));
 
     // Sort by provider then name
     models.sort((a, b) => {

@@ -8,8 +8,8 @@
  * - pi-ai.ts: Unified provider adapter with strict types
  * - api-strategies.ts: Provider-specific API option builders
  * - config.ts: Centralized provider configuration
- * - provider-catalog.ts: Unified provider definitions
- * - model-catalog.ts: Model capabilities system
+ * - models-loader.ts: Unified model registry loader (single source of truth)
+ * - models.json: Built-in model definitions
  * 
  * Auth Profiles:
  * - auth/profiles/: Advanced credential management with OAuth support
@@ -28,6 +28,27 @@ export {
 	type ProviderOverride,
 	type ProviderInfo,
 } from './registry.js';
+
+// New unified loader exports (single source of truth)
+export {
+	getManifest,
+	getManifestVersion,
+	buildRegistry,
+	getAllModels,
+	getConfiguredModels,
+	getProvider,
+	getModel,
+	isProviderConfigured,
+	getAllProviderIds,
+	getConfiguredProviderIds,
+	modelSupportsFeature,
+	modelSupportsModality,
+	type ModelsManifest,
+	type ResolvedModel,
+	type ResolvedProvider,
+	type ProviderEntry,
+	type ModelEntry,
+} from './models-loader.js';
 
 // New strict types
 export type {
@@ -61,12 +82,10 @@ export {
 export {
 	// Core
 	PROVIDER_CATALOG,
-	getProvider,
 	getAllProviders,
 	
 	// Detection & Configuration
 	detectProviderByModel,
-	isProviderConfigured,
 	getConfiguredProviders,
 	getProviderApiKey,
 	
@@ -114,7 +133,6 @@ export {
 export {
 	// Core
 	MODEL_CATALOG,
-	getAllModels,
 	findModel,
 	findModelByProvider,
 	findModelByRef,
@@ -129,8 +147,6 @@ export {
 	getModelsByModality,
 	getVisionModels,
 	getFunctionCallingModels,
-	modelSupportsModality,
-	modelSupportsFeature,
 	
 	// Pricing & Performance
 	estimateCost,

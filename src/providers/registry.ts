@@ -8,8 +8,6 @@
  */
 
 import {
-	getModels,
-	getProviders,
 	type Api,
 	type Model,
 	type KnownProvider,
@@ -34,6 +32,9 @@ import {
 	detectProviderByModel,
 	getAllProviders,
 } from './provider-catalog.js';
+
+// Import new unified model loader
+import { buildRegistry, getAllModels } from './models-loader.js';
 
 // Import from model-catalog
 import {
@@ -312,11 +313,30 @@ export class ModelRegistry {
 	}
 
 	private loadBuiltInModels(): void {
+		// Use new unified loader for built-in models
 		try {
-			const providers = getProviders() as string[];
-			for (const provider of providers) {
-				const builtInModels = getModels(provider as KnownProvider) as Model<Api>[];
-				this.models.push(...builtInModels);
+			const resolvedModels = getAllModels(this.config);
+			
+			// Convert ResolvedModel to pi-ai Model<Api> format for backward compatibility
+			for (const model of resolvedModels) {
+				this.models.push({
+					id: model.id,
+					name: model.name,
+					api: model.api as Api,
+					provider: model.provider as KnownProvider,
+					baseUrl: model.baseUrl,
+					reasoning: model.reasoning,
+					input: model.input as ("text" | "image")[],
+					cost: {
+						input: model.cost.input,
+						output: model.cost.output,
+						cacheRead: 0,
+						cacheWrite: 0,
+					},
+					contextWindow: model.contextWindow,
+					maxTokens: model.maxTokens,
+					headers: model.headers,
+				});
 			}
 		} catch (error) {
 			console.warn('Failed to load built-in models:', error);
