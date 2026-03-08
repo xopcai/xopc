@@ -12,8 +12,7 @@ import type { AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { MessageBus, InboundMessage } from '../bus/index.js';
 import type { Config, AgentDefaults } from '../config/schema.js';
 import type { PluginTool } from '../plugins/types.js';
-import { getApiKey as getConfigApiKey } from '../config/schema.js';
-import { resolveModel, DEFAULT_MODEL } from '../providers/index.js';
+import { resolveModel, DEFAULT_MODEL, getApiKey as getProviderApiKey } from '../providers/index.js';
 import { SessionStore, type CompactionConfig, type WindowConfig } from '../session/index.js';
 import { SessionCompactor } from './memory/compaction.js';
 import {
@@ -187,10 +186,7 @@ export class AgentService {
         messages: [],
       },
       getApiKey: (provider: string) => {
-        if (config.config) {
-          return getConfigApiKey(config.config, provider) ?? undefined;
-        }
-        return undefined;
+        return getProviderApiKey(config.config, provider);
       },
     });
 
