@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { homedir } from 'os';
+import { PROVIDER_ENV_MAP, isProviderConfigured as checkProviderConfigured } from '../providers/index.js';
 
 // ============================================
 // Provider API Keys (simple format only)
@@ -391,24 +392,8 @@ export function isProviderConfigured(config: Config, provider: string): boolean 
   // 1. 检查 config
   if (config.providers?.[provider]) return true;
 
-  // 2. 检查环境变量
-  const envMap: Record<string, string[]> = {
-    openai: ['OPENAI_API_KEY'],
-    anthropic: ['ANTHROPIC_API_KEY'],
-    google: ['GEMINI_API_KEY', 'GOOGLE_API_KEY'],
-    groq: ['GROQ_API_KEY'],
-    deepseek: ['DEEPSEEK_API_KEY'],
-    qwen: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'],
-    kimi: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'],
-    minimax: ['MINIMAX_API_KEY'],
-    zhipu: ['ZHIPU_API_KEY'],
-    openrouter: ['OPENROUTER_API_KEY'],
-    xai: ['XAI_API_KEY'],
-    cerebras: ['CEREBRAS_API_KEY'],
-    mistral: ['MISTRAL_API_KEY'],
-  };
-
-  const keys = envMap[provider] || [];
+  // 2. 检查环境变量 (使用统一的 PROVIDER_ENV_MAP)
+  const keys = PROVIDER_ENV_MAP[provider] || [];
   return keys.some(key => process.env[key]);
 }
 
@@ -425,10 +410,8 @@ export function listConfiguredProviders(config: Config): string[] {
     }
   }
 
-  // 从环境变量添加
-  const allProviders = ['openai', 'anthropic', 'google', 'groq', 'deepseek', 
-    'qwen', 'kimi', 'minimax', 'zhipu', 'openrouter', 'xai', 'cerebras', 'mistral'];
-  for (const p of allProviders) {
+  // 从环境变量添加 (使用统一的 PROVIDER_ENV_MAP)
+  for (const p of Object.keys(PROVIDER_ENV_MAP)) {
     if (isProviderConfigured(config, p)) providers.add(p);
   }
 
