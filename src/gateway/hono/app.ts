@@ -11,8 +11,6 @@ import type { Config } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../utils/log-store.js';
 import type { LogLevel } from '../../utils/logger.types.js';
-import { isProviderConfigured } from '../../agent/fallback/index.js';
-import { getModels as getPiAiModels, getProviders as getPiAiProviders } from '@mariozechner/pi-ai';
 import { getManifestVersion, buildRegistry, getConfiguredModels, getAllModels } from '../../providers/models-loader.js';
 import { createOAuthHandler, loadOAuthCredentialsToCache } from './oauth.js';
 

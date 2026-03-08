@@ -118,7 +118,7 @@ export function buildRegistry(config?: Config): ResolvedProvider[] {
   
   // Layer 1: Built-in manifest
   for (const entry of Object.entries(currentManifest.providers)) {
-    const [id, provider] = entry;
+    const [id, _provider] = entry;
     // Check if user configured this provider
     const userConfig = userProviders[id];
     const configured = !!(userConfig?.apiKey || userConfig?.oauth);
