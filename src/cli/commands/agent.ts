@@ -172,6 +172,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
         const rl = readline.createInterface({
           input: process.stdin,
           output: process.stdout,
+          terminal: true,
         });
 
         rl.on('line', async (input) => {

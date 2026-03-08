@@ -43,9 +43,11 @@ program.hook('preAction', (thisCommand) => {
 
 // Hook to ensure process exits after command completion
 program.hook('postAction', async (thisCommand) => {
-  const commandName = thisCommand.name();
+  // Get the actual subcommand being executed (not the root program name)
+  const args = thisCommand.args;
+  const subCommandName = args.length > 0 ? args[0] : thisCommand.name();
   // Skip long-running commands (gateway foreground, agent interactive)
-  if (LONG_RUNNING_COMMANDS.has(commandName)) {
+  if (LONG_RUNNING_COMMANDS.has(subCommandName)) {
     return;
   }
   // For all other commands, flush logs and exit
