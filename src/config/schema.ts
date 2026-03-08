@@ -128,6 +128,7 @@ export const TelegramConfigSchema = z.object({
   accounts: z.record(z.string(), TelegramAccountConfigSchema).optional(),
   dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing'),
   groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('open'),
+  streamMode: z.enum(['off', 'partial', 'block']).optional(),
 });
 
 export const ChannelsConfigSchema = z.object({

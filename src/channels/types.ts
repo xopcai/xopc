@@ -99,6 +99,7 @@ export interface TelegramChannelConfig {
   allowFrom?: Array<string | number>;
   dmPolicy?: DmPolicy;
   groupPolicy?: GroupPolicy;
+  streamMode?: 'off' | 'partial' | 'block';
 }
 
 // ============================================

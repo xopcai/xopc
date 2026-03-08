@@ -166,6 +166,7 @@ export class TelegramChannelExtension implements ChannelExtension {
         dmPolicy: telegramConfig.dmPolicy ?? 'pairing',
         groupPolicy: telegramConfig.groupPolicy ?? 'open',
         apiRoot: telegramConfig.apiRoot,
+        streamMode: telegramConfig.streamMode,
       };
       this.accountManager.registerAccount(legacyAccount);
       log.info('Registered legacy Telegram account (default)');
@@ -553,6 +554,22 @@ export class TelegramChannelExtension implements ChannelExtension {
 
     const bot = this.accountManager.getBot(accountId);
     if (!bot) throw new Error('Bot not initialized');
+
+    // Get account config to check streamMode
+    const account = this.accountManager.getAccount(accountId);
+    const streamMode = account?.streamMode ?? 'partial';
+
+    // If streamMode is 'off', return a no-op stream handle
+    if (streamMode === 'off') {
+      return {
+        update: () => { /* no-op */ },
+        updateProgress: () => { /* no-op */ },
+        setProgress: () => { /* no-op */ },
+        end: async () => { /* no-op */ },
+        abort: async () => { /* no-op */ },
+        messageId: () => undefined,
+      };
+    }
 
     const streamKey = `${accountId}:${chatId}:${threadId || 'dm'}`;
     const draftStream = draftStreamManager.getOrCreate(streamKey, {
