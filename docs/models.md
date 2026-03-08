@@ -1,6 +1,15 @@
 # Models Configuration
 
-xopcbot supports multiple LLM providers through a unified configuration system using the  `models` config.
+xopcbot supports multiple LLM providers through a unified configuration system. The model registry combines built-in definitions from `models.json` with user configuration.
+
+## Architecture
+
+The model configuration system uses a **Unified Model Registry** with multiple data sources:
+
+1. **Built-in manifest** (`models.json`) - Core provider and model definitions
+2. **pi-ai npm package** - Additional provider models
+3. **User config** (`config.json`) - Custom provider configurations
+4. **Ollama discovery** - Auto-discovered local models
 
 ## Configuration File
 
@@ -52,6 +61,41 @@ All model configurations are stored in `~/.xopcbot/config.json`:
 }
 ```
 
+## Merge Mode
+
+The `models.mode` setting controls how user config merges with built-in definitions:
+
+| Mode | Description |
+|------|-------------|
+| `merge` | Combine user models with built-in models (default) |
+| `replace` | Replace all built-in models with user-defined ones |
+
+## API Endpoints
+
+### GET /api/registry
+
+Returns the unified model registry (built-in + user config):
+
+```bash
+curl -H "Authorization: Bearer $TOKEN" http://localhost:3142/api/registry
+```
+
+### POST /api/registry/reload
+
+Hot-reloads the model registry:
+
+```bash
+curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:3142/api/registry/reload
+```
+
+### GET /api/models
+
+Returns only **configured providers' models** (for agent default model selector).
+
+### GET /api/providers
+
+Returns **ALL pi-ai supported models** (for Add Provider modal).
+
 ## Provider Configuration
 
 ### Configuration Options
@@ -60,8 +104,8 @@ All model configurations are stored in `~/.xopcbot/config.json`:
 |-------|------|----------|-------------|
 | `baseUrl` | string | Yes | API base URL |
 | `apiKey` | string | No | API key, supports `${ENV_VAR}` syntax |
+| `oauth` | object | No | OAuth credentials |
 | `api` | string | No | API type: `openai-completions`, `anthropic-messages`, `google-generative-ai` |
-| `auth` | object | No | OAuth configuration |
 | `headers` | object | No | Custom HTTP headers |
 | `enabled` | boolean | No | Enable/disable provider (default: true) |
 | `models` | array | No | Model list |
@@ -74,48 +118,29 @@ All model configurations are stored in `~/.xopcbot/config.json`:
 | `name` | string | Yes | Display name |
 | `reasoning` | boolean | No | Supports reasoning/thinking |
 | `input` | array | No | Input types: `["text"]` or `["text", "image"]` |
-| `cost` | object | No | Pricing info |
+| `cost` | object | No | Pricing info: `{ input: number, output: number }` |
 | `contextWindow` | number | No | Context window size |
 | `maxTokens` | number | No | Max output tokens |
 
-### Built-in Providers
+### OAuth Credentials
 
-| Provider | apiKey Env | baseUrl | Notes |
-|----------|-----------|---------|-------|
-| `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | GPT-4, o1, o3 |
-| `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` | Claude models |
-| `google` | `GOOGLE_API_KEY` | `https://generativelanguage.googleapis.com/v1` | Gemini models |
-| `qwen` | `QWEN_API_KEY` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 通义千问 |
-| `kimi` | `KIMI_API_KEY` | `https://api.moonshot.cn/v1` | 月之暗面 |
-| `moonshot` | `MOONSHOT_API_KEY` | `https://api.moonshot.ai/v1` | Moonshot AI |
-| `minimax` | `MINIMAX_API_KEY` | `https://api.minimax.io/anthropic` | MiniMax |
-| `minimax-cn` | `MINIMAX_CN_API_KEY` | `https://api.minimaxi.com/anthropic` | MiniMax CN |
-| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1` | DeepSeek |
-| `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` | Llama, Mixtral |
-| `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` | Multi-provider |
-| `xai` | `XAI_API_KEY` | `https://api.x.ai/v1` | Grok |
-| `bedrock` | AWS Credentials | - | Amazon Bedrock |
-
-### Ollama Configuration
-
-Ollama is supported with auto-discovery by default:
+OAuth credentials are persisted to config:
 
 ```json
 {
   "models": {
     "providers": {
-      "ollama": {
-        "enabled": true,
-        "baseUrl": "http://127.0.0.1:11434/v1",
-        "autoDiscovery": true,
-        "models": []
+      "anthropic": {
+        "oauth": {
+          "accessToken": "eyJ...",
+          "refreshToken": "...",
+          "expiresAt": "2026-02-27T12:00:00Z"
+        }
       }
     }
   }
 }
 ```
-
-Set `autoDiscovery: true` to automatically fetch available models from Ollama API.
 
 ### Using Environment Variables
 
@@ -135,6 +160,47 @@ Use `${ENV_VAR_NAME}` syntax in apiKey:
 ```
 
 Environment variables take priority over config file values.
+
+## Built-in Providers
+
+The following providers are pre-defined in `models.json`:
+
+| Provider | Env Key | baseUrl | Notes |
+|----------|---------|---------|-------|
+| `openai` | `OPENAI_API_KEY` | `https://api.openai.com/v1` | GPT-4, o1, o3, o4 |
+| `anthropic` | `ANTHROPIC_API_KEY` | `https://api.anthropic.com` | Claude models |
+| `google` | `GOOGLE_API_KEY` | `https://generativelanguage.googleapis.com/v1` | Gemini models |
+| `qwen` | `QWEN_API_KEY` | `https://dashscope.aliyuncs.com/compatible-mode/v1` | 通义千问 |
+| `kimi` | `KIMI_API_KEY` | `https://api.moonshot.cn/v1` | 月之暗面 |
+| `moonshot` | `MOONSHOT_API_KEY` | `https://api.moonshot.ai/v1` | Moonshot AI |
+| `minimax` | `MINIMAX_API_KEY` | `https://api.minimax.io/anthropic` | MiniMax |
+| `deepseek` | `DEEPSEEK_API_KEY` | `https://api.deepseek.com/v1` | DeepSeek |
+| `groq` | `GROQ_API_KEY` | `https://api.groq.com/openai/v1` | Llama, Mixtral |
+| `openrouter` | `OPENROUTER_API_KEY` | `https://openrouter.ai/api/v1` | Multi-provider |
+| `xai` | `XAI_API_KEY` | `https://api.x.ai/v1` | Grok |
+| `bedrock` | AWS Credentials | - | Amazon Bedrock |
+| `ollama` | - | `http://127.0.0.1:11434/v1` | Local models |
+
+## Ollama Configuration
+
+Ollama is supported with auto-discovery:
+
+```json
+{
+  "models": {
+    "providers": {
+      "ollama": {
+        "enabled": true,
+        "baseUrl": "http://127.0.0.1:11434/v1",
+        "autoDiscovery": true,
+        "models": []
+      }
+    }
+  }
+}
+```
+
+Set `autoDiscovery: true` to automatically fetch available models from Ollama API.
 
 ## Model Selection
 
@@ -173,28 +239,6 @@ Model IDs use `provider/model-id` format:
 }
 ```
 
-## OAuth Authentication
-
-Some providers support OAuth:
-
-```json
-{
-  "models": {
-    "providers": {
-      "anthropic": {
-        "baseUrl": "https://api.anthropic.com",
-        "auth": {
-          "type": "oauth",
-          "clientId": "your-client-id",
-          "clientSecret": "your-client-secret"
-        },
-        "models": []
-      }
-    }
-  }
-}
-```
-
 ## Listing Configured Providers
 
 Use the CLI to list configured providers:
@@ -204,3 +248,29 @@ xopcbot auth providers
 ```
 
 This shows all providers with their authentication status (API Key, OAuth, or Not configured).
+
+## Troubleshooting
+
+### Cache Issues
+
+After modifying provider configurations, clear the cache:
+
+```bash
+# The system auto-clears cache on config save
+```
+
+### Hot Reload
+
+Use the reload endpoint to refresh the registry without restart:
+
+```bash
+curl -X POST http://localhost:3142/api/registry/reload
+```
+
+### Debug
+
+Check the registry via API:
+
+```bash
+curl http://localhost:3142/api/registry | jq '.providers | keys'
+```
