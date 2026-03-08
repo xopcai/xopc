@@ -35,6 +35,17 @@ export function setToken(token: string): void {
 }
 
 /**
+ * Clear the gateway token (e.g., when expired).
+ */
+export function clearToken(): void {
+  try {
+    localStorage.removeItem(TOKEN_KEY);
+  } catch (err) {
+    console.error('Failed to clear token:', err);
+  }
+}
+
+/**
  * Get the theme.
  */
 export function getTheme(): Theme {

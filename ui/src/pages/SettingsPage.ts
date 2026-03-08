@@ -109,6 +109,7 @@ export class SettingsPage extends LitElement {
   // Gateway token UI state
   @state() private _showGatewayToken: boolean = false;
   @state() private _copiedGatewayToken: boolean = false;
+  @state() private _tokenExpired: boolean = false;
 
   @state() private _settings: SettingsData = {
     model: '',
@@ -164,6 +165,17 @@ export class SettingsPage extends LitElement {
     this._loadSettings();
     this._loadProviders();
     this._loadModelsJson();
+    
+    // Listen for token expiration events from parent
+    window.addEventListener('token-expired', (() => {
+      this._tokenExpired = true;
+    }) as EventListener);
+    
+    // Listen for token update events
+    window.addEventListener('token-updated', (() => {
+      this._tokenExpired = false;
+      this._loadSettings();
+    }) as EventListener);
   }
 
   private async _loadModelsJson() {
@@ -358,6 +370,11 @@ export class SettingsPage extends LitElement {
     } catch (err) {
       console.error('Failed to copy:', err);
     }
+  }
+
+  private _openTokenDialog(): void {
+    // Dispatch event to show token dialog in app.ts
+    window.dispatchEvent(new CustomEvent('show-token-dialog'));
   }
 
   private async _saveSettings() {
@@ -1019,6 +1036,23 @@ export class SettingsPage extends LitElement {
     return html`
       <div class="settings-section">
         <h3 class="section-title">Gateway Configuration</h3>
+        
+        <!-- Token Expiration Alert -->
+        ${this._tokenExpired ? html`
+          <div class="alert alert-error" style="margin-bottom: 1rem; padding: 0.75rem; background: #fef2f2; border: 1px solid #fecaca; border-radius: 0.375rem; color: #dc2626; display: flex; align-items: center; gap: 0.5rem;">
+            ${getIcon('alertCircle')}
+            <span>Token is invalid or expired. Please update it.</span>
+            <button
+              class="btn btn-sm btn-error"
+              @click=${this._openTokenDialog}
+              style="margin-left: auto;"
+            >
+              ${getIcon('refresh')}
+              Update Token
+            </button>
+          </div>
+        ` : ''}
+        
         <div class="section-content">
           <!-- Gateway Token -->
           <div class="field-group">
@@ -1055,6 +1089,18 @@ export class SettingsPage extends LitElement {
               </div>
             </div>
             <p class="field-desc">Token used to authenticate API requests. Leave empty to auto-generate.</p>
+          </div>
+          
+          <!-- Change Token Button -->
+          <div class="field-group">
+            <button
+              class="btn btn-secondary"
+              @click=${this._openTokenDialog}
+              style="display: inline-flex; align-items: center; gap: 0.5rem;"
+            >
+              ${getIcon('refresh')}
+              Change Token
+            </button>
           </div>
 
           <!-- Heartbeat Enable -->

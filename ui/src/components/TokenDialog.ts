@@ -26,7 +26,14 @@ export class TokenDialog extends LitElement {
       this._error = 'Please enter a token';
       return;
     }
-    this.config?.onSave(this._token.trim());
+    
+    const token = this._token.trim();
+    
+    // Dispatch event for parent components to handle
+    window.dispatchEvent(new CustomEvent('token-saved', { detail: { token } }));
+    
+    // Call the onSave callback
+    this.config?.onSave(token);
   }
 
   private _handleKeydown(e: KeyboardEvent): void {

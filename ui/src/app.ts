@@ -19,7 +19,7 @@ import {
 } from './navigation';
 import { getIcon } from './utils/icons';
 import { t, setLanguage, getCurrentLanguage, initI18n } from './utils/i18n';
-import { getToken, setToken, getTheme, setTheme, getLanguage, setLanguage as setStoredLanguage } from './utils/storage';
+import { getToken, setToken, clearToken, getTheme, setTheme, getLanguage, setLanguage as setStoredLanguage } from './utils/storage';
 import type { XopcbotGatewayChat } from './gateway-chat';
 
 export type { Tab } from './navigation';
@@ -48,6 +48,7 @@ export class XopcbotApp extends LitElement {
   @state() private _language: 'en' | 'zh' = 'en';
   @state() private _chatRoute: ChatRoute = { type: 'recent' };
   @state() private _showTokenDialog = false;
+  @state() private _tokenExpired = false;
 
   @query('xopcbot-gateway-chat') private _chatElement!: XopcbotGatewayChat;
 
@@ -85,6 +86,58 @@ export class XopcbotApp extends LitElement {
     this._showTokenDialog = !token;
   }
 
+  /**
+   * Setup fetch interceptor to detect 401 responses (token expired)
+   */
+  private _setupAuthInterceptor(): void {
+    const originalFetch = window.fetch;
+    const self = this;
+    let isShowingDialog = false;
+
+    window.fetch = new Proxy(originalFetch, {
+      apply: async (target, thisArg, args) => {
+        const response = await target.apply(thisArg, args);
+        
+        // Check for 401 Unauthorized (token expired/invalid)
+        if (response.status === 401 && !isShowingDialog) {
+          self._handleTokenExpired();
+          isShowingDialog = true;
+        }
+        
+        return response;
+      },
+    });
+  }
+
+  /**
+   * Handle token expiration - clear token and show dialog
+   */
+  private _handleTokenExpired(): void {
+    // Clear the expired token
+    clearToken();
+    
+    // Update gateway config
+    this._gatewayConfig = {
+      url: window.location.origin,
+      token: undefined,
+    };
+    
+    // Notify settings page
+    window.dispatchEvent(new CustomEvent('token-expired'));
+    
+    // Show token dialog
+    this._showTokenDialog = true;
+    this._tokenExpired = true;
+    
+    // Reset flag after dialog is closed
+    const checkDialogClosed = setInterval(() => {
+      if (!this._showTokenDialog) {
+        this._tokenExpired = false;
+        clearInterval(checkDialogClosed);
+      }
+    }, 500);
+  }
+
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
   }
@@ -98,6 +151,9 @@ export class XopcbotApp extends LitElement {
     this._loadTheme();
     this._loadLanguage();
     this._loadRouteFromHash();
+
+    // Setup 401 interceptor to detect token expiration
+    this._setupAuthInterceptor();
 
     // Listen for system theme changes
     window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => {
@@ -121,6 +177,17 @@ export class XopcbotApp extends LitElement {
       const { sessionKey } = e.detail;
       this._updateChatRoute({ type: 'session', sessionKey });
       this._switchTab('chat');
+    }) as EventListener);
+
+    // Listen for show-token-dialog event from settings page
+    window.addEventListener('show-token-dialog', (() => {
+      this._showTokenDialog = true;
+    }) as EventListener);
+    
+    // Listen for token-saved event to notify other components
+    window.addEventListener('token-saved', (() => {
+      // Dispatch token-updated for settings page to reload
+      window.dispatchEvent(new CustomEvent('token-updated'));
     }) as EventListener);
   }
 
@@ -327,6 +394,7 @@ export class XopcbotApp extends LitElement {
     
     // Hide dialog
     this._showTokenDialog = false;
+    this._tokenExpired = false;
     
     // Force re-render (not needed for @state but kept for clarity)
     this.requestUpdate();
