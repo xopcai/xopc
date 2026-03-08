@@ -21,8 +21,8 @@ import type {
   ChannelMetadata,
   TelegramAccountConfig,
 } from '../types.js';
-import { readUpdateOffset, writeUpdateOffset } from '../update-offset-store.js';
-import { draftStreamManager } from '../draft-stream.js';
+import { readUpdateOffset, writeUpdateOffset } from './update-offset-store.js';
+import { draftStreamManager } from './draft-stream.js';
 import { MediaGroupBuffer } from './media-group.js';
 import { InboundDebounce, buildTelegramDebounceKey } from './debounce.js';
 import type { Message } from '@grammyjs/types';
@@ -31,7 +31,7 @@ import { createTelegramCommandHandler } from './command-handler.js';
 import { TelegramAccountManager } from './account-manager.js';
 import { createInboundProcessor } from './inbound-processor.js';
 import { createOutboundSender } from './outbound-sender.js';
-import { renderTelegramHtmlText } from '../format.js';
+import { renderTelegramHtmlText } from './format.js';
 import type { ProgressStage } from '../types.js';
 import { createLogger } from '../../utils/logger.js';
 // Import services for dependency injection into inbound-processor
@@ -41,7 +41,7 @@ import {
   resolveRequireMention,
   hasBotMention,
   removeBotMention,
-} from '../access-control.js';
+} from './access-control.js';
 import { generateSessionKey } from '../../commands/session-key.js';
 import { transcribe, isSTTAvailable } from '../../stt/index.js';
 import { getMimeType } from '../../utils/media.js';

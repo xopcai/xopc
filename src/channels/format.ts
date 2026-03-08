@@ -1,11 +1,11 @@
 /**
  * Telegram Message Formatting Utilities
  *
- * Re-exports from telegram-format.ts for backward compatibility.
+ * Re-exports from telegram/format.ts for backward compatibility.
  * All implementations now use the robust @src/markdown/ package.
  */
 
-// Re-export everything from the new telegram-format module
+// Re-export everything from the telegram format module
 export {
   // Core formatting functions
   escapeHtml,
@@ -24,7 +24,7 @@ export {
   renderIRToTelegramHtml,
   // Types
   type FormattedChunk,
-} from "./telegram-format.js";
+} from "./telegram/format.js";
 
 // Re-export from markdown package for advanced use cases
 export {

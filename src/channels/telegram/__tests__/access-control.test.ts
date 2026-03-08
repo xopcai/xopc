@@ -17,7 +17,7 @@ import {
   removeBotMention,
 } from '../access-control.js';
 
-import type { NormalizedAllowFrom } from '../types.js';
+import type { NormalizedAllowFrom } from '../../types.js';
 
 describe('normalizeAllowFrom', () => {
   it('should return empty normalized when input is undefined', () => {

@@ -7,8 +7,8 @@
  */
 
 import type { Bot } from 'grammy';
-import { createLogger } from '../utils/logger.js';
-import type { ProgressStage } from './types.js';
+import { createLogger } from '../../utils/logger.js';
+import type { ProgressStage } from '../types.js';
 import { formatTelegramMessage } from './format.js';
 
 const log = createLogger('DraftStream');

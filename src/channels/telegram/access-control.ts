@@ -12,7 +12,7 @@ import type {
   TelegramGroupConfig,
   TelegramTopicConfig,
   GroupPolicy,
-} from './types.js';
+} from '../types.js';
 
 // ============================================
 // AllowFrom Normalization

@@ -20,7 +20,7 @@ import type { ChannelSendOptions, ChannelSendResult } from '../types.js';
 import type { TelegramAccountManager } from './account-manager.js';
 import { buildSendOptions, parseDataUrl, resolveMediaMethod } from './send-options.js';
 import { splitTelegramCaption } from './caption.js';
-import { renderTelegramHtmlText, markdownToTelegramChunks } from '../format.js';
+import { renderTelegramHtmlText, markdownToTelegramChunks } from './format.js';
 import { sentMessageCache } from './sent-cache.js';
 import { createRetryRunner, isRecoverableNetworkError } from '../../infra/retry.js';
 import { createLogger } from '../../utils/logger.js';
