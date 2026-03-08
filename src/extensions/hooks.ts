@@ -1,12 +1,12 @@
 /**
- * Plugin Hook System
+ * Extension Hook System
  */
 
 import type {
-  PluginHookEvent,
+  ExtensionHookEvent,
   AgentMessage,
-} from './types.js';
-import { PluginRegistryImpl as PluginRegistry } from './loader.js';
+} from './types/index.js';
+import { ExtensionRegistryImpl as ExtensionRegistry } from './loader.js';
 
 // ============================================================================
 // Hook Event Types
@@ -14,7 +14,7 @@ import { PluginRegistryImpl as PluginRegistry } from './loader.js';
 
 export interface HookContext {
   timestamp?: Date;
-  pluginId?: string;
+  extensionId?: string;
   sessionKey?: string;
   agentId?: string;
 }
@@ -202,26 +202,26 @@ export interface HookLogger {
   error: (message: string) => void;
 }
 
-export class HookRunner {
-  private registry: PluginRegistry;
+export class ExtensionHookRunner {
+  private registry: ExtensionRegistry;
   private options: HookRunnerOptions;
 
-  constructor(registry: PluginRegistry, options?: HookRunnerOptions) {
+  constructor(registry: ExtensionRegistry, options?: HookRunnerOptions) {
     this.registry = registry;
     this.options = options || {};
   }
 
   /**
-   * Get the plugin registry
+   * Get the extension registry
    */
-  getRegistry(): PluginRegistry {
+  getRegistry(): ExtensionRegistry {
     return this.registry;
   }
 
   /**
    * Execute hooks for a specific event
    */
-  async runHooks<K extends PluginHookEvent>(
+  async runHooks<K extends ExtensionHookEvent>(
     event: K,
     eventData: unknown,
     context: HookContext,
@@ -255,7 +255,7 @@ export class HookRunner {
   /**
    * Execute hooks and return modified event data
    */
-  async runHooksWithResult<K extends PluginHookEvent>(
+  async runHooksWithResult<K extends ExtensionHookEvent>(
     event: K,
     eventData: BeforeAgentStartContext,
     context: HookContext,
@@ -537,8 +537,8 @@ export function createHookContext(overrides?: Partial<HookContext>): HookContext
   };
 }
 
-export function isHookEvent(value: string): value is PluginHookEvent {
-  const hookEvents: PluginHookEvent[] = [
+export function isHookEvent(value: string): value is ExtensionHookEvent {
+  const hookEvents: ExtensionHookEvent[] = [
     // Existing hooks
     'before_agent_start',
     'agent_end',
@@ -563,5 +563,5 @@ export function isHookEvent(value: string): value is PluginHookEvent {
     'tool_execution_update',
     'tool_execution_end',
   ];
-  return hookEvents.includes(value as PluginHookEvent);
+  return hookEvents.includes(value as ExtensionHookEvent);
 }

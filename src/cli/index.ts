@@ -12,7 +12,7 @@ import './commands/session.js';
 import './commands/cron.js';
 import './commands/config.js';
 import './commands/models.js';
-import './commands/plugin.js';
+import './commands/extension.js';
 import './commands/auth.js';
 import './commands/skills.js';
 

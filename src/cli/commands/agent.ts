@@ -6,7 +6,7 @@ import { MessageBus } from '../../bus/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
-import { PluginLoader, normalizePluginConfig } from '../../plugins/index.js';
+import { ExtensionLoader, normalizeExtensionConfig } from '../../extensions/index.js';
 import { join } from 'path';
 
 const log = createLogger('AgentCommand');
@@ -94,19 +94,19 @@ function createAgentCommand(_ctx: CLIContext): Command {
       }
 
       // Initialize plugin loader
-      let pluginLoader: PluginLoader | null = null;
+      let pluginLoader: ExtensionLoader | null = null;
       try {
         const pluginsConfig = (config as any).plugins;
         if (pluginsConfig) {
-          const resolvedConfigs = normalizePluginConfig(pluginsConfig);
+          const resolvedConfigs = normalizeExtensionConfig(pluginsConfig);
           const enabledPlugins = resolvedConfigs.filter(c => c.enabled);
           
           if (enabledPlugins.length > 0) {
-            pluginLoader = new PluginLoader({
+            pluginLoader = new ExtensionLoader({
               workspaceDir: workspace,
-              pluginsDir: join(workspace, '.plugins'),
+              extensionsDir: join(workspace, '.plugins'),
             });
-            await pluginLoader.loadPlugins(enabledPlugins);
+            await pluginLoader.loadExtensions(enabledPlugins);
             log.info({ count: enabledPlugins.length }, 'Plugins loaded');
           }
         }
@@ -119,7 +119,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
         model: modelId,
         braveApiKey,
         config,
-        pluginRegistry: pluginLoader?.getRegistry(),
+        extensionRegistry: pluginLoader?.getRegistry(),
       });
 
       // Start agent service in background

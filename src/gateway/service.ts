@@ -7,7 +7,7 @@ import { loadConfig, saveConfig, DEFAULT_PATHS } from '../config/index.js';
 import { getWorkspacePath } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
 import { CronService } from '../cron/index.js';
-import { PluginLoader, normalizePluginConfig } from '../plugins/index.js';
+import { ExtensionLoader, normalizeExtensionConfig } from '../extensions/index.js';
 import { HeartbeatService } from '../heartbeat/index.js';
 import { ConfigHotReloader } from '../config/reload.js';
 import { SessionManager } from '../session/index.js';
@@ -42,7 +42,7 @@ export class GatewayService {
   private agentService: AgentService;
   private channelManager: ChannelManager;
   private cronService: CronService;
-  private pluginLoader: PluginLoader | null = null;
+  private pluginLoader: ExtensionLoader | null = null;
   private heartbeatService: HeartbeatService;
   private sessionManager: SessionManager;
   private running = false;
@@ -100,7 +100,7 @@ export class GatewayService {
       model: typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary,
       braveApiKey: this.config.tools?.web?.search?.apiKey,
       config: this.config,
-      pluginRegistry: this.pluginLoader?.getRegistry(),
+      extensionRegistry: this.pluginLoader?.getRegistry(),
     });
 
     // Set channel manager reference for model switching
@@ -133,17 +133,17 @@ export class GatewayService {
         return;
       }
 
-      const resolvedConfigs = normalizePluginConfig(pluginsConfig);
+      const resolvedConfigs = normalizeExtensionConfig(pluginsConfig);
       
-      this.pluginLoader = new PluginLoader({
+      this.pluginLoader = new ExtensionLoader({
         workspaceDir: this.workspacePath,
-        pluginsDir: join(this.workspacePath, '.plugins'),
+        extensionsDir: join(this.workspacePath, '.plugins'),
       });
 
       // Load enabled plugins
       const enabledPlugins = resolvedConfigs.filter(c => c.enabled);
       if (enabledPlugins.length > 0) {
-        this.pluginLoader.loadPlugins(enabledPlugins).then(() => {
+        this.pluginLoader.loadExtensions(enabledPlugins).then(() => {
           log.info({ count: enabledPlugins.length }, 'Plugins loaded');
         }).catch(err => {
           log.warn({ err }, 'Failed to load some plugins');
@@ -521,7 +521,7 @@ export class GatewayService {
   /**
    * Get plugin registry for external access (HTTP routes, gateway methods)
    */
-  getPluginRegistry() {
+  getExtensionRegistry() {
     return this.pluginLoader?.getRegistry();
   }
 
@@ -537,7 +537,7 @@ export class GatewayService {
    * Invoke a gateway method registered by plugins
    */
   async invokeGatewayMethod(method: string, params: Record<string, unknown>): Promise<unknown> {
-    const registry = this.getPluginRegistry();
+    const registry = this.getExtensionRegistry();
     if (!registry) {
       throw new Error('Plugin registry not available');
     }

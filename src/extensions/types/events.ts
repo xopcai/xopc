@@ -1,10 +1,10 @@
 /**
- * Plugin System - Event Bus Types
+ * Extension System - Event Bus Types
  * 
  * Type-safe event bus for inter-extension communication.
  */
 
-import type { PluginLogger } from './core.js';
+import type { ExtensionLogger } from './core.js';
 
 // ============================================================================
 // Event Bus Core Types
@@ -20,7 +20,7 @@ export type EventHandler<T = unknown> = (data: T) => void | Promise<void>;
 
 export interface EventHandlerMeta {
   handler: EventHandler<unknown>;
-  pluginId?: string;
+  extensionId?: string;
   once?: boolean;
 }
 
@@ -29,21 +29,21 @@ export type RequestHandler<TParams = unknown, TResponse = unknown> =
 
 export interface RequestHandlerMeta {
   handler: RequestHandler<unknown, unknown>;
-  pluginId?: string;
+  extensionId?: string;
 }
 
 export type WildcardEventHandler = (data: unknown, eventType: string) => void | Promise<void>;
 
 export interface WildcardHandlerMeta {
   handler: WildcardEventHandler;
-  pluginId?: string;
+  extensionId?: string;
   pattern: string;
 }
 
 export interface TypedEventBusOptions {
   requestTimeout?: number;
   catchErrors?: boolean;
-  logger?: PluginLogger;
+  logger?: ExtensionLogger;
 }
 
 export interface RequestOptions {
@@ -58,7 +58,7 @@ export interface TypedEventBus {
   on<K extends string>(
     event: K,
     handler: (data: unknown) => void,
-    options?: { pluginId?: string; once?: boolean }
+    options?: { extensionId?: string; once?: boolean }
   ): () => void;
   
   off<K extends string>(event: K, handler: (data: unknown) => void): void;
@@ -68,13 +68,13 @@ export interface TypedEventBus {
   onWildcard(
     pattern: string,
     handler: (data: unknown, eventType: string) => void,
-    options?: { pluginId?: string }
+    options?: { extensionId?: string }
   ): () => void;
   
   onRequest<K extends string>(
     method: K,
     handler: (params: unknown) => unknown | Promise<unknown>,
-    options?: { pluginId?: string }
+    options?: { extensionId?: string }
   ): void;
   
   request<K extends string>(
@@ -83,6 +83,6 @@ export interface TypedEventBus {
     options?: { timeout?: number }
   ): Promise<unknown>;
   
-  cleanup(pluginId: string): void;
+  cleanup(extensionId: string): void;
   cleanupAll(): void;
 }

@@ -1,11 +1,11 @@
 /**
- * Plugin System - Channel Types
+ * Extension System - Channel Types
  * 
- * Channel plugin definitions and message types.
+ * Channel extension definitions and message types.
  */
 
 // ============================================================================
-// Channel Plugin
+// Channel Extension
 // ============================================================================
 
 export interface ChannelPlugin {

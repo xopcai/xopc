@@ -11,8 +11,8 @@ export const DEFAULT_PATHS = {
   modelsJson: join(DEFAULT_BASE_DIR, 'models.json'),
   workspace: join(DEFAULT_BASE_DIR, 'workspace'),
   sessions: join(DEFAULT_BASE_DIR, 'sessions'),
-  plugins: join(DEFAULT_BASE_DIR, 'workspace', '.plugins'),
-  globalPlugins: join(DEFAULT_BASE_DIR, 'plugins'),
+  extensions: join(DEFAULT_BASE_DIR, 'workspace', '.extensions'),
+  globalExtensions: join(DEFAULT_BASE_DIR, 'extensions'),
   memory: join(DEFAULT_BASE_DIR, 'memory'),
   cronJobs: join(DEFAULT_BASE_DIR, 'cron-jobs.json'),
 } as const;
@@ -34,29 +34,29 @@ export function getBaseDir(): string {
 }
 
 /**
- * Get global plugins directory (~/.xopcbot/plugins/)
- * For plugins shared across all workspaces
+ * Get global extensions directory (~/.xopcbot/extensions/)
+ * For extensions shared across all workspaces
  */
-export function getGlobalPluginsDir(): string {
-  return DEFAULT_PATHS.globalPlugins;
+export function getGlobalExtensionsDir(): string {
+  return DEFAULT_PATHS.globalExtensions;
 }
 
 /**
- * Get workspace plugins directory (workspace/.plugins/)
+ * Get workspace extensions directory (workspace/.extensions/)
  */
-export function getWorkspacePluginsDir(workspaceDir?: string): string {
+export function getWorkspaceExtensionsDir(workspaceDir?: string): string {
   const ws = workspaceDir || getDefaultWorkspacePath();
-  return join(ws, '.plugins');
+  return join(ws, '.extensions');
 }
 
 /**
- * Get bundled plugins directory (shipped with xopcbot)
+ * Get bundled extensions directory (shipped with xopcbot)
  */
-export function getBundledPluginsDir(): string | null {
+export function getBundledExtensionsDir(): string | null {
   try {
     const currentFile = fileURLToPath(import.meta.url);
     const srcDir = dirname(currentFile);
-    const bundledDir = join(srcDir, '..', '..', 'plugins');
+    const bundledDir = join(srcDir, '..', '..', 'extensions');
     return bundledDir;
   } catch {
     return null;
@@ -96,13 +96,13 @@ export function getBundledSkillsDir(): string | null {
 }
 
 /**
- * Get plugin SDK path for jiti alias
+ * Get extension SDK path for jiti alias
  */
-export function resolvePluginSdkPath(): string | null {
+export function resolveExtensionSdkPath(): string | null {
   try {
     const currentFile = fileURLToPath(import.meta.url);
     const srcDir = dirname(currentFile);
-    return join(srcDir, '..', 'plugin-sdk', 'index.ts');
+    return join(srcDir, '..', 'extension-sdk', 'index.ts');
   } catch {
     return null;
   }

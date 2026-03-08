@@ -908,7 +908,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   // ========== Plugin HTTP Routes ==========
-  const pluginRegistry = service.getPluginRegistry?.();
+  const pluginRegistry = service.getExtensionRegistry?.();
   if (pluginRegistry) {
     // Register plugin HTTP routes
     const httpRoutes = pluginRegistry.httpRoutes;

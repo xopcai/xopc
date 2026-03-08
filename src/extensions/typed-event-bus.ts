@@ -7,7 +7,7 @@
  * - Type-safe event emission and listening
  * - Request-response pattern (RPC)
  * - Wildcard pattern matching for events
- * - Automatic cleanup on plugin unload
+ * - Automatic cleanup on extension unload
  * - Error handling with optional error catching
  */
 
@@ -23,7 +23,7 @@ import type {
   TypedEventBusOptions,
   RequestOptions,
 } from './types/events.js';
-import type { PluginLogger } from './types/core.js';
+import type { ExtensionLogger } from './types/core.js';
 
 interface InternalRequest {
   id: string;
@@ -100,17 +100,17 @@ export class TypedEventBus<
    *
    * @param event - Event name
    * @param handler - Event handler function
-   * @param options - Handler options (pluginId, once)
+   * @param options - Handler options (extensionId, once)
    * @returns Unsubscribe function
    */
   on<K extends keyof TEvents>(
     event: K,
     handler: EventHandler<TEvents[K]>,
-    options: { pluginId?: string; once?: boolean } = {}
+    options: { extensionId?: string; once?: boolean } = {}
   ): () => void {
     const meta: EventHandlerMeta = {
       handler: handler as EventHandler<unknown>,
-      pluginId: options.pluginId,
+      extensionId: options.extensionId,
       once: options.once,
     };
 
@@ -198,18 +198,18 @@ export class TypedEventBus<
    *
    * @param pattern - Wildcard pattern (e.g., 'user:*', '*:update')
    * @param handler - Handler function
-   * @param options - Handler options (pluginId)
+   * @param options - Handler options (extensionId)
    * @returns Unsubscribe function
    */
   onWildcard(
     pattern: string,
     handler: WildcardEventHandler,
-    options: { pluginId?: string } = {}
+    options: { extensionId?: string } = {}
   ): () => void {
     const meta: WildcardHandlerMeta = {
       handler,
       pattern,
-      pluginId: options.pluginId,
+      extensionId: options.extensionId,
     };
 
     this.wildcardHandlers.push(meta);
@@ -252,11 +252,11 @@ export class TypedEventBus<
   onRequest<K extends keyof TRequests>(
     method: K,
     handler: (params: TRequests[K]) => unknown | Promise<unknown>,
-    options: { pluginId?: string } = {}
+    options: { extensionId?: string } = {}
   ): void {
     const meta: RequestHandlerMeta = {
       handler: handler as RequestHandler<unknown, unknown>,
-      pluginId: options.pluginId,
+      extensionId: options.extensionId,
     };
 
     const handlers = this.requestHandlers.get(method) || [];
@@ -295,17 +295,17 @@ export class TypedEventBus<
   }
 
   // ============================================================================
-  // Plugin Cleanup
+  // Extension Cleanup
   // ============================================================================
 
   /**
-   * Remove all listeners and handlers for a specific plugin
+   * Remove all listeners and handlers for a specific extension
    *
-   * @param pluginId - Plugin ID to cleanup
+   * @param extensionId - Extension ID to cleanup
    */
-  cleanup(pluginId: string): void {
+  cleanup(extensionId: string): void {
     for (const [event, handlers] of this.eventHandlers.entries()) {
-      const filtered = handlers.filter((h) => h.pluginId !== pluginId);
+      const filtered = handlers.filter((h) => h.extensionId !== extensionId);
       if (filtered.length === 0) {
         this.eventHandlers.delete(event);
       } else {
@@ -313,10 +313,10 @@ export class TypedEventBus<
       }
     }
 
-    this.wildcardHandlers = this.wildcardHandlers.filter((h) => h.pluginId !== pluginId);
+    this.wildcardHandlers = this.wildcardHandlers.filter((h) => h.extensionId !== extensionId);
 
     for (const [method, handlers] of this.requestHandlers.entries()) {
-      const filtered = handlers.filter((h) => h.pluginId !== pluginId);
+      const filtered = handlers.filter((h) => h.extensionId !== extensionId);
       if (filtered.length === 0) {
         this.requestHandlers.delete(method);
       } else {
@@ -384,7 +384,7 @@ export class TypedEventBus<
     }
   }
 
-  private createDefaultLogger(): PluginLogger {
+  private createDefaultLogger(): ExtensionLogger {
     return {
       debug: () => {},
       info: () => {},

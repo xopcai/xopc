@@ -5,13 +5,13 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { PluginRegistryImpl, HookRunner } from '../../plugins/index.js';
+import { ExtensionRegistryImpl, ExtensionHookRunner } from '../../extensions/index.js';
 import type { 
-  PluginDefinition, 
+  ExtensionDefinition, 
   InputHookResult,
   ContextHookResult,
   AgentMessage,
-} from '../../plugins/types.js';
+} from '../../extensions/types.js';
 
 // Mock plugin that uses Phase 1 hooks
 const _createTestPlugin = (actions: {
@@ -19,7 +19,7 @@ const _createTestPlugin = (actions: {
   onContext?: (messages: AgentMessage[]) => AgentMessage[] | undefined;
   onTurnStart?: () => void;
   onTurnEnd?: () => void;
-}): PluginDefinition => ({
+}): ExtensionDefinition => ({
   id: 'test-phase1',
   name: 'Test Phase 1 Plugin',
   version: '1.0.0',
@@ -59,13 +59,13 @@ const _createTestPlugin = (actions: {
 });
 
 describe('AgentService Phase 1 Integration', () => {
-  let registry: PluginRegistryImpl;
-  let hookRunner: HookRunner;
+  let registry: ExtensionRegistryImpl;
+  let hookRunner: ExtensionHookRunner;
   let _mockBus: MessageBus;
 
   beforeEach(() => {
-    registry = new PluginRegistryImpl();
-    hookRunner = new HookRunner(registry, {
+    registry = new ExtensionRegistryImpl();
+    hookRunner = new ExtensionHookRunner(registry, {
       catchErrors: true,
       logger: {
         info: vi.fn(),

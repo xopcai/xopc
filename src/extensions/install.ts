@@ -1,5 +1,5 @@
 /**
- * Plugin Installation Module
+ * Extension Installation Module
  * Supports installing from npm packages and local directories
  * Supports three-tier storage: workspace, global, bundled
  */
@@ -16,9 +16,9 @@ import {
 import { join, isAbsolute, resolve } from 'path';
 import { tmpdir } from 'os';
 import {
-  getGlobalPluginsDir,
-  getWorkspacePluginsDir,
-  getBundledPluginsDir,
+  getGlobalExtensionsDir,
+  getWorkspaceExtensionsDir,
+  getBundledExtensionsDir,
 } from '../config/paths.js';
 
 export interface InstallOptions {
@@ -30,13 +30,13 @@ export interface InstallOptions {
 
 export interface InstallResult {
   ok: boolean;
-  pluginId?: string;
+  extensionId?: string;
   targetDir?: string;
   origin?: 'workspace' | 'global';
   error?: string;
 }
 
-export interface ListedPlugin {
+export interface ListedExtension {
   id: string;
   name?: string;
   version?: string;
@@ -45,7 +45,7 @@ export interface ListedPlugin {
   origin: 'workspace' | 'global' | 'bundled';
 }
 
-interface PluginManifest {
+interface ExtensionManifest {
   id: string;
   name?: string;
   version?: string;
@@ -53,26 +53,26 @@ interface PluginManifest {
 }
 
 /**
- * Resolve target plugins directory based on options
+ * Resolve target extensions directory based on options
  */
-export function resolvePluginsDir(
+export function resolveExtensionsDir(
   workspaceDir: string,
   global = false,
 ): string {
   if (global) {
-    const globalDir = getGlobalPluginsDir();
+    const globalDir = getGlobalExtensionsDir();
     mkdirSync(globalDir, { recursive: true });
     return globalDir;
   }
-  return getWorkspacePluginsDir(workspaceDir);
+  return getWorkspaceExtensionsDir(workspaceDir);
 }
 
 /**
- * Install plugin from npm package
+ * Install extension from npm package
  */
 export async function installFromNpm(
   packageSpec: string,
-  pluginsDir: string,
+  extensionsDir: string,
   timeoutMs = 120000,
 ): Promise<InstallResult> {
   const tmpDir = join(tmpdir(), `xopcbot-install-${Date.now()}`);
@@ -108,7 +108,7 @@ export async function installFromNpm(
     const extractDir = join(tmpDir, 'package');
 
     // Validate and install
-    return await installFromDirectory(extractDir, pluginsDir);
+    return await installFromDirectory(extractDir, extensionsDir);
   } catch (error) {
     return {
       ok: false,
@@ -125,11 +125,11 @@ export async function installFromNpm(
 }
 
 /**
- * Install plugin from local directory
+ * Install extension from local directory
  */
 export async function installFromLocal(
   localPath: string,
-  pluginsDir: string,
+  extensionsDir: string,
 ): Promise<InstallResult> {
   // Resolve to absolute path
   const sourceDir = isAbsolute(localPath) ? localPath : resolve(process.cwd(), localPath);
@@ -140,30 +140,30 @@ export async function installFromLocal(
 
   console.log(`📂 Installing from local directory: ${sourceDir}...`);
 
-  return await installFromDirectory(sourceDir, pluginsDir);
+  return await installFromDirectory(sourceDir, extensionsDir);
 }
 
 /**
- * Install plugin from extracted directory
+ * Install extension from extracted directory
  */
 async function installFromDirectory(
   sourceDir: string,
-  pluginsDir: string,
+  extensionsDir: string,
 ): Promise<InstallResult> {
   // Validate manifest
-  const manifestPath = join(sourceDir, 'xopcbot.plugin.json');
+  const manifestPath = join(sourceDir, 'xopcbot.extension.json');
   const packagePath = join(sourceDir, 'package.json');
 
-  let manifest: PluginManifest | null = null;
+  let manifest: ExtensionManifest | null = null;
   let packageJson: { name?: string; version?: string; dependencies?: Record<string, string> } | null =
     null;
 
-  // Try to load xopcbot.plugin.json first
+  // Try to load xopcbot.extension.json first
   if (existsSync(manifestPath)) {
     try {
-      manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as PluginManifest;
+      manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as ExtensionManifest;
     } catch {
-      return { ok: false, error: 'Invalid xopcbot.plugin.json manifest file' };
+      return { ok: false, error: 'Invalid xopcbot.extension.json manifest file' };
     }
   }
 
@@ -176,24 +176,24 @@ async function installFromDirectory(
     }
   }
 
-  // Determine plugin ID
-  const pluginId = manifest?.id || packageJson?.name;
-  if (!pluginId) {
+  // Determine extension ID
+  const extensionId = manifest?.id || packageJson?.name;
+  if (!extensionId) {
     return {
       ok: false,
-      error: 'Plugin must have an id in xopcbot.plugin.json or name in package.json',
+      error: 'Extension must have an id in xopcbot.extension.json or name in package.json',
     };
   }
 
-  // Validate plugin ID (no path separators)
-  if (pluginId.includes('/') || pluginId.includes('\\')) {
-    return { ok: false, error: 'Plugin ID cannot contain path separators' };
+  // Validate extension ID (no path separators)
+  if (extensionId.includes('/') || extensionId.includes('\\')) {
+    return { ok: false, error: 'Extension ID cannot contain path separators' };
   }
 
   // Check if already exists
-  const targetDir = join(pluginsDir, pluginId);
+  const targetDir = join(extensionsDir, extensionId);
   if (existsSync(targetDir)) {
-    return { ok: false, error: `Plugin already exists at ${targetDir}. Use update instead.` };
+    return { ok: false, error: `Extension already exists at ${targetDir}. Use update instead.` };
   }
 
   // Validate main entry exists
@@ -203,7 +203,7 @@ async function installFromDirectory(
     return { ok: false, error: `Main entry not found: ${mainFile}` };
   }
 
-  console.log(`📋 Plugin: ${manifest?.name || pluginId} (${pluginId})`);
+  console.log(`📋 Extension: ${manifest?.name || extensionId} (${extensionId})`);
   if (manifest?.version || packageJson?.version) {
     console.log(`🔖 Version: ${manifest?.version || packageJson?.version}`);
   }
@@ -234,32 +234,32 @@ async function installFromDirectory(
     }
   }
 
-  const origin = pluginsDir.includes('.xopcbot/plugins') ? 'global' : 'workspace';
+  const origin = extensionsDir.includes('.xopcbot/extensions') ? 'global' : 'workspace';
 
-  console.log(`✅ Plugin ${pluginId} installed successfully!`);
-  console.log(`\nTo enable the plugin, add to your config:`);
-  console.log(`  plugins:`);
-  console.log(`    enabled: [${pluginId}]`);
-  console.log(`    ${pluginId}:`);
-  console.log(`      # your plugin options here\n`);
+  console.log(`✅ Extension ${extensionId} installed successfully!`);
+  console.log(`\nTo enable the extension, add to your config:`);
+  console.log(`  extensions:`);
+  console.log(`    enabled: [${extensionId}]`);
+  console.log(`    ${extensionId}:`);
+  console.log(`      # your extension options here\n`);
 
-  return { ok: true, pluginId, targetDir, origin };
+  return { ok: true, extensionId, targetDir, origin };
 }
 
 /**
- * Remove installed plugin from all tiers
+ * Remove installed extension from all tiers
  */
-export function removePlugin(
-  pluginId: string,
+export function removeExtension(
+  extensionId: string,
   workspaceDir: string,
 ): { ok: boolean; removedFrom?: string; error?: string } {
   // Try workspace first
-  const workspaceDir_ = getWorkspacePluginsDir(workspaceDir);
-  const workspacePlugin = join(workspaceDir_, pluginId);
+  const workspaceDir_ = getWorkspaceExtensionsDir(workspaceDir);
+  const workspaceExtension = join(workspaceDir_, extensionId);
 
-  if (existsSync(workspacePlugin)) {
+  if (existsSync(workspaceExtension)) {
     try {
-      rmSync(workspacePlugin, { recursive: true, force: true });
+      rmSync(workspaceExtension, { recursive: true, force: true });
       return { ok: true, removedFrom: 'workspace' };
     } catch (error) {
       return {
@@ -270,12 +270,12 @@ export function removePlugin(
   }
 
   // Try global
-  const globalDir = getGlobalPluginsDir();
-  const globalPlugin = join(globalDir, pluginId);
+  const globalDir = getGlobalExtensionsDir();
+  const globalExtension = join(globalDir, extensionId);
 
-  if (existsSync(globalPlugin)) {
+  if (existsSync(globalExtension)) {
     try {
-      rmSync(globalPlugin, { recursive: true, force: true });
+      rmSync(globalExtension, { recursive: true, force: true });
       return { ok: true, removedFrom: 'global' };
     } catch (error) {
       return {
@@ -285,32 +285,32 @@ export function removePlugin(
     }
   }
 
-  return { ok: false, error: `Plugin not found: ${pluginId}` };
+  return { ok: false, error: `Extension not found: ${extensionId}` };
 }
 
 /**
- * List installed plugins from all tiers
+ * List installed extensions from all tiers
  */
-export function listAllPlugins(workspaceDir: string): ListedPlugin[] {
-  const plugins: ListedPlugin[] = [];
+export function listAllExtensions(workspaceDir: string): ListedExtension[] {
+  const extensions: ListedExtension[] = [];
   const seen = new Set<string>();
 
   // Priority 1: Workspace (highest)
-  const workspacePluginsDir = getWorkspacePluginsDir(workspaceDir);
-  if (existsSync(workspacePluginsDir)) {
-    for (const entry of readdirSync(workspacePluginsDir, { withFileTypes: true })) {
+  const workspaceExtensionsDir = getWorkspaceExtensionsDir(workspaceDir);
+  if (existsSync(workspaceExtensionsDir)) {
+    for (const entry of readdirSync(workspaceExtensionsDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
 
-      const pluginDir = join(workspacePluginsDir, entry.name);
-      const manifest = readManifest(pluginDir);
+      const extensionDir = join(workspaceExtensionsDir, entry.name);
+      const manifest = readManifest(extensionDir);
 
       if (manifest) {
         seen.add(entry.name);
-        plugins.push({
+        extensions.push({
           id: entry.name,
           name: manifest.name,
           version: manifest.version,
-          path: pluginDir,
+          path: extensionDir,
           origin: 'workspace',
         });
       }
@@ -318,22 +318,22 @@ export function listAllPlugins(workspaceDir: string): ListedPlugin[] {
   }
 
   // Priority 2: Global
-  const globalDir = getGlobalPluginsDir();
+  const globalDir = getGlobalExtensionsDir();
   if (existsSync(globalDir)) {
     for (const entry of readdirSync(globalDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       if (seen.has(entry.name)) continue; // Skip if already in workspace
 
-      const pluginDir = join(globalDir, entry.name);
-      const manifest = readManifest(pluginDir);
+      const extensionDir = join(globalDir, entry.name);
+      const manifest = readManifest(extensionDir);
 
       if (manifest) {
         seen.add(entry.name);
-        plugins.push({
+        extensions.push({
           id: entry.name,
           name: manifest.name,
           version: manifest.version,
-          path: pluginDir,
+          path: extensionDir,
           origin: 'global',
         });
       }
@@ -341,42 +341,42 @@ export function listAllPlugins(workspaceDir: string): ListedPlugin[] {
   }
 
   // Priority 3: Bundled (lowest)
-  const bundledDir = getBundledPluginsDir();
+  const bundledDir = getBundledExtensionsDir();
   if (bundledDir && existsSync(bundledDir)) {
     for (const entry of readdirSync(bundledDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
       if (seen.has(entry.name)) continue;
 
-      const pluginDir = join(bundledDir, entry.name);
-      const manifest = readManifest(pluginDir);
+      const extensionDir = join(bundledDir, entry.name);
+      const manifest = readManifest(extensionDir);
 
       if (manifest) {
-        plugins.push({
+        extensions.push({
           id: entry.name,
           name: manifest.name,
           version: manifest.version,
-          path: pluginDir,
+          path: extensionDir,
           origin: 'bundled',
         });
       }
     }
   }
 
-  return plugins;
+  return extensions;
 }
 
-function readManifest(pluginDir: string): PluginManifest | null {
-  const manifestPath = join(pluginDir, 'xopcbot.plugin.json');
+function readManifest(extensionDir: string): ExtensionManifest | null {
+  const manifestPath = join(extensionDir, 'xopcbot.extension.json');
 
   if (!existsSync(manifestPath)) {
     // Try package.json
-    const packagePath = join(pluginDir, 'package.json');
+    const packagePath = join(extensionDir, 'package.json');
     if (existsSync(packagePath)) {
       try {
         const pkg = JSON.parse(readFileSync(packagePath, 'utf-8'));
         return {
           id: pkg.name,
-          name: pkg.xopcbot?.plugin?.name || pkg.name,
+          name: pkg.xopcbot?.extension?.name || pkg.name,
           version: pkg.version,
         };
       } catch {
@@ -387,37 +387,37 @@ function readManifest(pluginDir: string): PluginManifest | null {
   }
 
   try {
-    return JSON.parse(readFileSync(manifestPath, 'utf-8')) as PluginManifest;
+    return JSON.parse(readFileSync(manifestPath, 'utf-8')) as ExtensionManifest;
   } catch {
     return null;
   }
 }
 
 /**
- * Legacy: List plugins from single directory (for backward compatibility)
+ * Legacy: List extensions from single directory (for backward compatibility)
  */
-export function listPlugins(
-  pluginsDir: string,
+export function listExtensions(
+  extensionsDir: string,
 ): Array<{ id: string; name?: string; version?: string; path: string }> {
-  if (!existsSync(pluginsDir)) {
+  if (!existsSync(extensionsDir)) {
     return [];
   }
 
-  const plugins: Array<{ id: string; name?: string; version?: string; path: string }> = [];
+  const extensions: Array<{ id: string; name?: string; version?: string; path: string }> = [];
 
-  for (const entry of readdirSync(pluginsDir, { withFileTypes: true })) {
+  for (const entry of readdirSync(extensionsDir, { withFileTypes: true })) {
     if (!entry.isDirectory()) continue;
 
-    const pluginDir = join(pluginsDir, entry.name);
-    const manifest = readManifest(pluginDir);
+    const extensionDir = join(extensionsDir, entry.name);
+    const manifest = readManifest(extensionDir);
 
-    plugins.push({
+    extensions.push({
       id: entry.name,
       name: manifest?.name,
       version: manifest?.version,
-      path: pluginDir,
+      path: extensionDir,
     });
   }
 
-  return plugins;
+  return extensions;
 }

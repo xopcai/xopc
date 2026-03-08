@@ -1,70 +1,70 @@
 /**
- * Plugin System - Core Types
+ * Extension System - Core Types
  * 
- * Core plugin definitions and Plugin API interface.
+ * Core extension definitions and Extension API interface.
  */
 
 import type { Config } from '../../types/index.js';
 import type { TypedEventBus } from './events.js';
-import type { PluginTool } from './tools.js';
-import type { PluginHookEvent, PluginHookHandler, HookOptions } from './hooks.js';
+import type { ExtensionTool } from './tools.js';
+import type { ExtensionHookEvent, ExtensionHookHandler, HookOptions } from './hooks.js';
 import type { ChannelPlugin } from './channels.js';
 import type { ProviderConfig, FlagConfig, FlagValue, ShortcutConfig } from './phase4.js';
 
 // ============================================================================
-// Plugin Definition
+// Extension Definition
 // ============================================================================
 
-export interface PluginDefinition {
-  /** Unique plugin identifier */
+export interface ExtensionDefinition {
+  /** Unique extension identifier */
   id: string;
   /** Human-readable name */
   name: string;
-  /** Plugin description */
+  /** Extension description */
   description?: string;
-  /** Plugin version */
+  /** Extension version */
   version?: string;
-  /** Plugin kind */
-  kind?: PluginKind;
+  /** Extension kind */
+  kind?: ExtensionKind;
   /** Configuration schema (JSON Schema) */
   configSchema?: Record<string, unknown>;
-  /** Register hook - called when plugin is registered */
-  register?: (api: PluginApi) => void | Promise<void>;
-  /** Activate hook - called when plugin is enabled */
-  activate?: (api: PluginApi) => void | Promise<void>;
-  /** Deactivate hook - called when plugin is disabled */
-  deactivate?: (api: PluginApi) => void | Promise<void>;
+  /** Register hook - called when extension is registered */
+  register?: (api: ExtensionApi) => void | Promise<void>;
+  /** Activate hook - called when extension is enabled */
+  activate?: (api: ExtensionApi) => void | Promise<void>;
+  /** Deactivate hook - called when extension is disabled */
+  deactivate?: (api: ExtensionApi) => void | Promise<void>;
 }
 
-export type PluginKind = 'channel' | 'provider' | 'memory' | 'tool' | 'utility';
+export type ExtensionKind = 'channel' | 'provider' | 'memory' | 'tool' | 'utility';
 
-export type PluginModule = PluginDefinition | ((api: PluginApi) => void | Promise<void>);
+export type ExtensionModule = ExtensionDefinition | ((api: ExtensionApi) => void | Promise<void>);
 
 // ============================================================================
-// Plugin API
+// Extension API
 // ============================================================================
 
-export interface PluginApi {
-  /** Plugin ID */
+export interface ExtensionApi {
+  /** Extension ID */
   readonly id: string;
-  /** Plugin name */
+  /** Extension name */
   readonly name: string;
-  /** Plugin version */
+  /** Extension version */
   readonly version?: string;
-  /** Plugin source path */
+  /** Extension source path */
   readonly source: string;
   /** Runtime configuration */
   readonly config: Config;
-  /** Plugin-specific configuration */
-  readonly pluginConfig: Record<string, unknown>;
+  /** Extension-specific configuration */
+  readonly extensionConfig: Record<string, unknown>;
   /** Logger instance */
-  readonly logger: PluginLogger;
+  readonly logger: ExtensionLogger;
   
   // Tool Registration
-  registerTool(tool: PluginTool): void;
+  registerTool(tool: ExtensionTool): void;
   
   // Hook Registration
-  registerHook(event: PluginHookEvent, handler: PluginHookHandler, opts?: HookOptions): void;
+  registerHook(event: ExtensionHookEvent, handler: ExtensionHookHandler, opts?: HookOptions): void;
   
   // Channel Registration
   registerChannel(channel: ChannelPlugin): void;
@@ -73,10 +73,10 @@ export interface PluginApi {
   registerHttpRoute(path: string, handler: HttpRequestHandler): void;
   
   // Command Registration
-  registerCommand(command: PluginCommand): void;
+  registerCommand(command: ExtensionCommand): void;
   
   // Service Registration
-  registerService(service: PluginService): void;
+  registerService(service: ExtensionService): void;
   
   // Gateway Method Registration
   registerGatewayMethod(method: string, handler: GatewayMethodHandler): void;
@@ -94,7 +94,7 @@ export interface PluginApi {
   
   // Phase 4: Advanced Features
   registerProvider(name: string, config: Partial<ProviderConfig>): void;
-  registerFlag(name: string, config: FlagConfig, pluginId?: string): void;
+  registerFlag(name: string, config: FlagConfig, extensionId?: string): void;
   getFlag(name: string): FlagValue;
   registerShortcut(key: string, config: ShortcutConfig): void;
 }
@@ -103,7 +103,7 @@ export interface PluginApi {
 // Logger
 // ============================================================================
 
-export interface PluginLogger {
+export interface ExtensionLogger {
   debug(msg: string): void;
   info(msg: string): void;
   warn(msg: string): void;
@@ -135,7 +135,7 @@ export type GatewayMethodHandler = (params: unknown) => unknown | Promise<unknow
 // Commands
 // ============================================================================
 
-export interface PluginCommand {
+export interface ExtensionCommand {
   name: string;
   description: string;
   handler: (args: string[]) => void | Promise<void>;
@@ -146,7 +146,7 @@ export interface PluginCommand {
 // Services
 // ============================================================================
 
-export interface PluginService {
+export interface ExtensionService {
   id: string;
   name: string;
   start?: () => void | Promise<void>;
@@ -154,13 +154,13 @@ export interface PluginService {
 }
 
 // ============================================================================
-// Plugin Registry (Core)
+// Extension Registry (Core)
 // ============================================================================
 
-export interface PluginRegistry {
-  addTool(tool: PluginTool): void;
-  getTools(): Map<string, PluginTool>;
-  getTool(name: string): PluginTool | undefined;
-  getAllTools(): PluginTool[];
-  getCommand(name: string): PluginCommand | undefined;
+export interface ExtensionRegistry {
+  addTool(tool: ExtensionTool): void;
+  getTools(): Map<string, ExtensionTool>;
+  getTool(name: string): ExtensionTool | undefined;
+  getAllTools(): ExtensionTool[];
+  getCommand(name: string): ExtensionCommand | undefined;
 }

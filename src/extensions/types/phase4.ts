@@ -1,5 +1,5 @@
 /**
- * Plugin System - Phase 4 Types
+ * Extension System - Phase 4 Types
  * 
  * Advanced features: Provider, Flag, Shortcut registration.
  */

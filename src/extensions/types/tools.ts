@@ -1,5 +1,5 @@
 /**
- * Plugin System - Tool Types
+ * Extension System - Tool Types
  * 
  * Tool definitions and execution types.
  */
@@ -8,14 +8,14 @@
 // Legacy Tool (backward compatible)
 // ============================================================================
 
-export interface PluginTool {
+export interface ExtensionTool {
   name: string;
   description: string;
   parameters: Record<string, unknown>;
   execute: (params: Record<string, unknown>) => Promise<string>;
 }
 
-export interface PluginToolContext {
+export interface ExtensionToolContext {
   agentId?: string;
   sessionKey?: string;
   workspaceDir?: string;
@@ -35,7 +35,7 @@ export interface EnhancedTool<TParams = unknown, TDetails = unknown> {
     params: TParams,
     signal: AbortSignal | undefined,
     onUpdate: ((update: ToolUpdate<TDetails>) => void) | undefined,
-    ctx: PluginContext
+    ctx: ExtensionContext
   ) => Promise<ToolResult<TDetails>>;
 }
 
@@ -56,7 +56,7 @@ export interface ToolUpdate<TDetails = unknown> {
   details?: TDetails;
 }
 
-export interface PluginContext {
+export interface ExtensionContext {
   agentId?: string;
   sessionKey?: string;
   workspaceDir?: string;

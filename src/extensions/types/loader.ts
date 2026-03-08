@@ -1,27 +1,27 @@
 /**
- * Plugin System - Loader Types
+ * Extension System - Loader Types
  * 
- * Plugin loading, manifest, and registry types.
+ * Extension loading, manifest, and registry types.
  */
 
-import type { PluginModule } from './core.js';
+import type { ExtensionModule } from './core.js';
 
 // ============================================================================
-// Plugin Discovery & Loading
+// Extension Discovery & Loading
 // ============================================================================
 
-export interface PluginRecord {
+export interface ExtensionRecord {
   id: string;
   name: string;
   version?: string;
   path: string;
-  module?: PluginModule;
+  module?: ExtensionModule;
   config?: Record<string, unknown>;
   enabled: boolean;
   source: 'workspace' | 'global' | 'bundled' | 'config';
 }
 
-export interface PluginManifest {
+export interface ExtensionManifest {
   id: string;
   name: string;
   version?: string;
@@ -32,7 +32,7 @@ export interface PluginManifest {
   dependencies?: Record<string, string>;
 }
 
-export interface ResolvedPluginConfig {
+export interface ResolvedExtensionConfig {
   id: string;
   name: string;
   path: string;
@@ -41,6 +41,6 @@ export interface ResolvedPluginConfig {
   source: 'workspace' | 'global' | 'bundled' | 'config';
 }
 
-export interface PluginLoaderConfig {
-  plugins: ResolvedPluginConfig[];
+export interface ExtensionLoaderConfig {
+  extensions: ResolvedExtensionConfig[];
 }

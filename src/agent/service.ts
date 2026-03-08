@@ -11,7 +11,7 @@ import type { Model, Api } from '@mariozechner/pi-ai';
 import type { AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { MessageBus, InboundMessage } from '../bus/index.js';
 import type { Config, AgentDefaults } from '../config/schema.js';
-import type { PluginTool } from '../plugins/types.js';
+import type { ExtensionTool } from '../extensions/types/index.js';
 import { resolveModel, DEFAULT_MODEL, getApiKey as getProviderApiKey } from '../providers/index.js';
 import { SessionStore, type CompactionConfig, type WindowConfig } from '../session/index.js';
 import { SessionCompactor } from './memory/compaction.js';
@@ -33,7 +33,7 @@ import {
 import { createSkillLoader, type Skill } from './skills/index.js';
 import { getBundledSkillsDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
-import { PluginRegistryImpl as PluginRegistry, HookRunner, createHookContext } from '../plugins/index.js';
+import { ExtensionRegistryImpl as ExtensionRegistry, ExtensionHookRunner, createHookContext } from '../extensions/index.js';
 import { buildSystemPrompt } from './system-prompt.js';
 import { createTypingController } from './typing.js';
 import { loadBootstrapFiles, extractTextContent, type BootstrapFile } from './helpers.js';
@@ -50,7 +50,7 @@ export interface AgentServiceConfig {
   braveApiKey?: string;
   config?: Config;
   agentDefaults?: AgentDefaults;
-  pluginRegistry?: PluginRegistry;
+  extensionRegistry?: ExtensionRegistry;
 }
 
 interface AgentContext {
@@ -66,13 +66,13 @@ interface AgentContext {
  * - SessionTracker: session state and cleanup
  * - ModelManager: model selection and fallback
  * - SessionStore: message persistence
- * - PluginRegistry: hooks and tools
+ * - ExtensionRegistry: hooks and tools
  */
 export class AgentService {
   private agent: Agent;
   private sessionStore: SessionStore;
   private compactor: SessionCompactor;
-  private hookRunner?: HookRunner;
+  private hookRunner?: ExtensionHookRunner;
   private unsubscribe?: () => void;
   private running = false;
   private currentContext: AgentContext | null = null;
@@ -123,8 +123,8 @@ export class AgentService {
     this.sessionStore = new SessionStore(config.workspace, windowConfig, compactionConfig);
 
     // Setup hook runner
-    if (config.pluginRegistry) {
-      this.hookRunner = new HookRunner(config.pluginRegistry, {
+    if (config.extensionRegistry) {
+      this.hookRunner = new ExtensionHookRunner(config.extensionRegistry, {
         catchErrors: true,
         logger: {
           info: (msg) => log.info({ hook: true }, msg),
@@ -151,8 +151,8 @@ export class AgentService {
       createMemoryGetTool(config.workspace),
     ];
 
-    if (config.pluginRegistry) {
-      const pluginTools = this.convertPluginTools(config.pluginRegistry.getAllTools());
+    if (config.extensionRegistry) {
+      const pluginTools = this.convertExtensionTools(config.extensionRegistry.getAllTools());
       tools.push(...pluginTools);
       log.info({ count: pluginTools.length }, 'Loaded plugin tools');
     }
@@ -326,7 +326,7 @@ export class AgentService {
   private async triggerHook(event: string, eventData: Record<string, unknown>): Promise<void> {
     if (!this.hookRunner) return;
     const ctx = createHookContext({
-      pluginId: undefined,
+      extensionId: undefined,
       sessionKey: this.currentContext?.sessionKey,
       agentId: this.agentId,
       timestamp: new Date(),
@@ -407,7 +407,7 @@ export class AgentService {
     return { messages: result.messages as AgentMessage[], modified: result.modified };
   }
 
-  private convertPluginTools(pluginTools: PluginTool[]): AgentTool<any, any>[] {
+  private convertExtensionTools(pluginTools: ExtensionTool[]): AgentTool<any, any>[] {
     return pluginTools.map((tool) => ({
       name: tool.name,
       description: tool.description,
@@ -517,10 +517,10 @@ export class AgentService {
       }
 
       // Check plugin commands (legacy, will be migrated)
-      if (content.startsWith('/') && this.config.pluginRegistry) {
+      if (content.startsWith('/') && this.config.extensionRegistry) {
         try {
           const commandName = content.slice(1).split(/\s+/)[0];
-          const pluginCommand = this.config.pluginRegistry.getCommand(commandName);
+          const pluginCommand = this.config.extensionRegistry.getCommand(commandName);
           if (pluginCommand) {
             const args = content.replace(/^\/\w+\s*/, '');
             await pluginCommand.handler([args]);

@@ -1,10 +1,10 @@
 /**
- * Plugin Loader and Registry
+ * Extension Loader and Registry
  * 
- * Supports three-tier plugin storage:
- * 1. Workspace level (workspace/.plugins/) - highest priority
- * 2. Global level (~/.xopcbot/plugins/) - shared across workspaces
- * 3. Bundled level (xopcbot/plugins/) - shipped with xopcbot
+ * Supports three-tier extension storage:
+ * 1. Workspace level (workspace/.extensions/) - highest priority
+ * 2. Global level (~/.xopcbot/extensions/) - shared across workspaces
+ * 3. Bundled level (xopcbot/extensions/) - shipped with xopcbot
  */
 
 import { existsSync, readFileSync, readdirSync } from 'fs';
@@ -14,74 +14,74 @@ import { createRequire } from 'node:module';
 import { createJiti } from 'jiti';
 import {
   DEFAULT_PATHS,
-  getGlobalPluginsDir,
-  getWorkspacePluginsDir,
-  getBundledPluginsDir,
-  resolvePluginSdkPath,
+  getGlobalExtensionsDir,
+  getWorkspaceExtensionsDir,
+  getBundledExtensionsDir,
+  resolveExtensionSdkPath,
 } from '../config/paths.js';
 import type {
-  PluginApi,
-  PluginTool,
-  PluginModule,
+  ExtensionApi,
+  ExtensionTool,
+  ExtensionModule,
   ChannelPlugin,
   GatewayMethodHandler,
   HttpRequestHandler,
-  PluginCommand,
-  PluginService,
-  PluginHookEvent,
-  PluginHookHandler,
-  PluginManifest,
-  PluginRecord,
-  ResolvedPluginConfig,
-} from './types.js';
-import { PluginRegistryImpl as PluginRegistry } from './loader.js';
-import { PluginApiImpl, createPluginLogger, createPathResolver } from './api.js';
+  ExtensionCommand,
+  ExtensionService,
+  ExtensionHookEvent,
+  ExtensionHookHandler,
+  ExtensionManifest,
+  ExtensionRecord,
+  ResolvedExtensionConfig,
+} from './types/index.js';
+import { ExtensionRegistryImpl as ExtensionRegistry } from './loader.js';
+import { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './api.js';
 import { createLogger, createServiceLogger } from '../utils/logger.js';
 
-const PLUGIN_MANIFEST_FILE = 'xopcbot.plugin.json';
+const EXTENSION_MANIFEST_FILE = 'xopcbot.extension.json';
 
-const log = createLogger('PluginLoader');
+const log = createLogger('ExtensionLoader');
 
-// Plugin source origin for debugging
-export type PluginSourceOrigin = 'workspace' | 'global' | 'bundled' | 'config';
+// Extension source origin for debugging
+export type ExtensionSourceOrigin = 'workspace' | 'global' | 'bundled' | 'config';
 
-interface DiscoveredPlugin {
+interface DiscoveredExtension {
   id: string;
   path: string;
-  source: PluginSourceOrigin;
-  manifest: PluginManifest;
+  source: ExtensionSourceOrigin;
+  manifest: ExtensionManifest;
 }
 
 // ============================================================================
-// Plugin Registry
+// Extension Registry
 // ============================================================================
 
-export class PluginRegistryImpl implements PluginRegistry {
-  plugins = new Map<string, PluginRecord>();
-  hooks = new Map<PluginHookEvent, PluginHookHandler[]>();
+export class ExtensionRegistryImpl implements ExtensionRegistry {
+  extensions = new Map<string, ExtensionRecord>();
+  hooks = new Map<ExtensionHookEvent, ExtensionHookHandler[]>();
   channels = new Map<string, ChannelPlugin>();
   httpRoutes = new Map<string, HttpRequestHandler>();
-  commands = new Map<string, PluginCommand>();
-  services = new Map<string, PluginService>();
+  commands = new Map<string, ExtensionCommand>();
+  services = new Map<string, ExtensionService>();
   gatewayMethods = new Map<string, GatewayMethodHandler>();
-  tools = new Map<string, PluginTool>();
+  tools = new Map<string, ExtensionTool>();
 
-  addPlugin(record: PluginRecord): void {
-    this.plugins.set(record.id, record);
+  addExtension(record: ExtensionRecord): void {
+    this.extensions.set(record.id, record);
   }
 
-  getPlugin(id: string): PluginRecord | undefined {
-    return this.plugins.get(id);
+  getExtension(id: string): ExtensionRecord | undefined {
+    return this.extensions.get(id);
   }
 
-  getEnabledPlugins(): PluginRecord[] {
-    return Array.from(this.plugins.values()).filter((p) => p.enabled);
+  getEnabledExtensions(): ExtensionRecord[] {
+    return Array.from(this.extensions.values()).filter((p) => p.enabled);
   }
 
   addHook(
-    event: PluginHookEvent,
-    handler: PluginHookHandler,
-    pluginId: string,
+    event: ExtensionHookEvent,
+    handler: ExtensionHookHandler,
+    extensionId: string,
     _priority = 0,
   ): void {
     if (!this.hooks.has(event)) {
@@ -90,7 +90,7 @@ export class PluginRegistryImpl implements PluginRegistry {
     this.hooks.get(event)!.push(handler);
   }
 
-  getHooks(event: PluginHookEvent): PluginHookHandler[] {
+  getHooks(event: ExtensionHookEvent): ExtensionHookHandler[] {
     return this.hooks.get(event) || [];
   }
 
@@ -116,25 +116,25 @@ export class PluginRegistryImpl implements PluginRegistry {
     return this.httpRoutes.get(path);
   }
 
-  addCommand(command: PluginCommand): void {
+  addCommand(command: ExtensionCommand): void {
     if (this.commands.has(command.name)) {
       log.warn({ command: command.name }, `Command already registered, overwriting`);
     }
     this.commands.set(command.name, command);
   }
 
-  getCommand(name: string): PluginCommand | undefined {
+  getCommand(name: string): ExtensionCommand | undefined {
     return this.commands.get(name);
   }
 
-  addService(service: PluginService): void {
+  addService(service: ExtensionService): void {
     if (this.services.has(service.id)) {
       log.warn({ service: service.id }, `Service already registered, overwriting`);
     }
     this.services.set(service.id, service);
   }
 
-  getService(id: string): PluginService | undefined {
+  getService(id: string): ExtensionService | undefined {
     return this.services.get(id);
   }
 
@@ -150,7 +150,7 @@ export class PluginRegistryImpl implements PluginRegistry {
   }
 
   // Tools
-  addTool(tool: PluginTool): void {
+  addTool(tool: ExtensionTool): void {
     if (this.tools.has(tool.name)) {
       log.warn({ tool: tool.name }, `Tool already registered, overwriting`);
     }
@@ -161,47 +161,47 @@ export class PluginRegistryImpl implements PluginRegistry {
     this.tools.delete(name);
   }
 
-  getTools(): Map<string, PluginTool> {
+  getTools(): Map<string, ExtensionTool> {
     return this.tools;
   }
 
-  getTool(name: string): PluginTool | undefined {
+  getTool(name: string): ExtensionTool | undefined {
     return this.tools.get(name);
   }
 
-  getAllTools(): PluginTool[] {
+  getAllTools(): ExtensionTool[] {
     return Array.from(this.tools.values());
   }
 }
 
 // ============================================================================
-// Plugin Loader
+// Extension Loader
 // ============================================================================
 
-export interface PluginLoaderOptions {
+export interface ExtensionLoaderOptions {
   workspaceDir?: string;
-  pluginsDir?: string;
-  bundledPlugins?: string[];
+  extensionsDir?: string;
+  bundledExtensions?: string[];
 }
 
-export class PluginLoader {
-  private registry: PluginRegistryImpl;
-  private options: PluginLoaderOptions;
-  private pluginInstances: Map<string, PluginApi> = new Map();
+export class ExtensionLoader {
+  private registry: ExtensionRegistryImpl;
+  private options: ExtensionLoaderOptions;
+  private extensionInstances: Map<string, ExtensionApi> = new Map();
   private jiti: ReturnType<typeof createJiti>;
 
-  constructor(options?: PluginLoaderOptions) {
-    this.registry = new PluginRegistryImpl();
+  constructor(options?: ExtensionLoaderOptions) {
+    this.registry = new ExtensionRegistryImpl();
     this.options = options || {
       workspaceDir: DEFAULT_PATHS.workspace,
-      pluginsDir: DEFAULT_PATHS.plugins,
+      extensionsDir: DEFAULT_PATHS.extensions,
     };
 
-    // Build jiti alias for plugin-sdk
+    // Build jiti alias for extension-sdk
     const alias: Record<string, string> = {};
-    const sdkPath = resolvePluginSdkPath();
+    const sdkPath = resolveExtensionSdkPath();
     if (sdkPath) {
-      alias['xopcbot/plugin-sdk'] = sdkPath;
+      alias['xopcbot/extension-sdk'] = sdkPath;
     }
 
     // Initialize jiti with TypeScript support and SDK alias
@@ -212,41 +212,41 @@ export class PluginLoader {
     });
   }
 
-  getRegistry(): PluginRegistryImpl {
+  getRegistry(): ExtensionRegistryImpl {
     return this.registry;
   }
 
   /**
-   * Discover plugins from all three tiers:
-   * 1. Workspace (.plugins/) - highest priority
-   * 2. Global (~/.xopcbot/plugins/) - shared
-   * 3. Bundled (xopcbot/plugins/) - lowest priority
+   * Discover extensions from all three tiers:
+   * 1. Workspace (.extensions/) - highest priority
+   * 2. Global (~/.xopcbot/extensions/) - shared
+   * 3. Bundled (xopcbot/extensions/) - lowest priority
    */
-  discoverPlugins(): DiscoveredPlugin[] {
-    const discovered = new Map<string, DiscoveredPlugin>();
+  discoverExtensions(): DiscoveredExtension[] {
+    const discovered = new Map<string, DiscoveredExtension>();
 
-    // Priority 3: Bundled plugins (lowest)
-    const bundledDir = getBundledPluginsDir();
+    // Priority 3: Bundled extensions (lowest)
+    const bundledDir = getBundledExtensionsDir();
     if (bundledDir) {
       this.discoverInDirectory(bundledDir, 'bundled', discovered);
     }
 
-    // Priority 2: Global plugins
-    const globalDir = getGlobalPluginsDir();
+    // Priority 2: Global extensions
+    const globalDir = getGlobalExtensionsDir();
     this.discoverInDirectory(globalDir, 'global', discovered);
 
-    // Priority 1: Workspace plugins (highest, can override)
+    // Priority 1: Workspace extensions (highest, can override)
     const workspaceDir = this.options.workspaceDir || DEFAULT_PATHS.workspace;
-    const workspacePluginsDir = getWorkspacePluginsDir(workspaceDir);
-    this.discoverInDirectory(workspacePluginsDir, 'workspace', discovered);
+    const workspaceExtensionsDir = getWorkspaceExtensionsDir(workspaceDir);
+    this.discoverInDirectory(workspaceExtensionsDir, 'workspace', discovered);
 
     return Array.from(discovered.values());
   }
 
   private discoverInDirectory(
     dir: string,
-    source: PluginSourceOrigin,
-    discovered: Map<string, DiscoveredPlugin>,
+    source: ExtensionSourceOrigin,
+    discovered: Map<string, DiscoveredExtension>,
   ): void {
     if (!existsSync(dir)) {
       return;
@@ -260,42 +260,42 @@ export class PluginLoader {
     }
 
     for (const entry of entries) {
-      const pluginPath = join(dir, entry);
+      const extensionPath = join(dir, entry);
 
       // Check if it's a directory
       try {
-        const stat = existsSync(pluginPath);
+        const stat = existsSync(extensionPath);
         if (!stat) continue;
       } catch {
         continue;
       }
 
       // Try to load manifest
-      const manifest = this.loadManifest(pluginPath);
+      const manifest = this.loadManifest(extensionPath);
       if (!manifest) continue;
 
-      const pluginId = manifest.id || entry;
+      const extensionId = manifest.id || entry;
 
       // Higher priority origins can override lower ones
-      const existing = discovered.get(pluginId);
+      const existing = discovered.get(extensionId);
       if (existing) {
         const priority = { workspace: 3, global: 2, bundled: 1, config: 0 };
         if (priority[source] <= priority[existing.source]) {
           log.debug(
-            { pluginId, from: source, existing: existing.source },
-            'Skipping lower priority plugin',
+            { extensionId, from: source, existing: existing.source },
+            'Skipping lower priority extension',
           );
           continue;
         }
         log.info(
-          { pluginId, from: source, overriding: existing.source },
-          'Plugin override by higher priority source',
+          { extensionId, from: source, overriding: existing.source },
+          'Extension override by higher priority source',
         );
       }
 
-      discovered.set(pluginId, {
-        id: pluginId,
-        path: pluginPath,
+      discovered.set(extensionId, {
+        id: extensionId,
+        path: extensionPath,
         source,
         manifest,
       });
@@ -303,73 +303,73 @@ export class PluginLoader {
   }
 
   /**
-   * Load all discovered plugins
+   * Load all discovered extensions
    */
-  async loadAllPlugins(enabledIds?: string[]): Promise<void> {
-    const plugins = this.discoverPlugins();
+  async loadAllExtensions(enabledIds?: string[]): Promise<void> {
+    const extensions = this.discoverExtensions();
 
-    for (const plugin of plugins) {
+    for (const extension of extensions) {
       // If enabledIds specified, only load those
-      if (enabledIds && !enabledIds.includes(plugin.id)) {
+      if (enabledIds && !enabledIds.includes(extension.id)) {
         continue;
       }
 
-      const config: ResolvedPluginConfig = {
-        id: plugin.id,
-        name: plugin.manifest.name || plugin.id,
-        source: plugin.source,
-        path: plugin.path,
+      const config: ResolvedExtensionConfig = {
+        id: extension.id,
+        name: extension.manifest.name || extension.id,
+        source: extension.source,
+        path: extension.path,
         enabled: true,
         config: {},
       };
 
-      await this.loadPlugin(config);
+      await this.loadExtension(config);
     }
   }
 
-  async loadPlugins(configs: ResolvedPluginConfig[]): Promise<void> {
-    for (const pluginConfig of configs) {
-      if (pluginConfig.enabled) {
-        await this.loadPlugin(pluginConfig);
+  async loadExtensions(configs: ResolvedExtensionConfig[]): Promise<void> {
+    for (const extensionConfig of configs) {
+      if (extensionConfig.enabled) {
+        await this.loadExtension(extensionConfig);
       }
     }
   }
 
-  async loadPlugin(config: ResolvedPluginConfig): Promise<PluginApi | null> {
+  async loadExtension(config: ResolvedExtensionConfig): Promise<ExtensionApi | null> {
     try {
       // Check if already loaded
-      if (this.pluginInstances.has(config.id)) {
-        return this.pluginInstances.get(config.id)!;
+      if (this.extensionInstances.has(config.id)) {
+        return this.extensionInstances.get(config.id)!;
       }
 
-      // Resolve plugin path using resolvePluginPath
-      let pluginPath: string | null;
+      // Resolve extension path using resolveExtensionPath
+      let extensionPath: string | null;
       if (isAbsolute(config.path)) {
-        pluginPath = config.path;
+        extensionPath = config.path;
       } else {
-        // Try to resolve plugin ID to actual path
-        pluginPath = resolvePluginPath(config.path, this.options) ||
-                     resolvePluginPath(config.id, this.options);
+        // Try to resolve extension ID to actual path
+        extensionPath = resolveExtensionPath(config.path, this.options) ||
+                     resolveExtensionPath(config.id, this.options);
       }
       
-      if (!pluginPath) {
-        log.error({ pluginId: config.id, path: config.path }, `Could not resolve plugin path`);
+      if (!extensionPath) {
+        log.error({ extensionId: config.id, path: config.path }, `Could not resolve extension path`);
         return null;
       }
 
-      log.debug({ pluginId: config.id, pluginPath }, 'Resolved plugin path');
+      log.debug({ extensionId: config.id, extensionPath }, 'Resolved extension path');
 
-      const manifest = this.loadManifest(pluginPath);
+      const manifest = this.loadManifest(extensionPath);
       if (!manifest) {
-        log.error({ pluginId: config.id, pluginPath }, `Failed to load manifest for plugin`);
+        log.error({ extensionId: config.id, extensionPath }, `Failed to load manifest for extension`);
         return null;
       }
 
-      // Validate plugin config against schema (basic validation)
+      // Validate extension config against schema (basic validation)
       if (manifest.configSchema) {
         try {
           const schema = manifest.configSchema as Record<string, unknown>;
-          const pluginConfig = config.config as Record<string, unknown>;
+          const extensionConfig = config.config as Record<string, unknown>;
           
           // Basic validation: check required fields and types
           if (schema.type === 'object' && schema.properties) {
@@ -377,81 +377,81 @@ export class PluginLoader {
             const required = (schema.required as string[]) || [];
             
             for (const field of required) {
-              if (pluginConfig[field] === undefined) {
+              if (extensionConfig[field] === undefined) {
                 log.error({ 
-                  pluginId: config.id, 
+                  extensionId: config.id, 
                   field 
-                }, 'Plugin config validation failed: missing required field');
+                }, 'Extension config validation failed: missing required field');
                 return null;
               }
             }
             
-            for (const [key, value] of Object.entries(pluginConfig)) {
+            for (const [key, value] of Object.entries(extensionConfig)) {
               const propSchema = props[key];
               if (propSchema) {
                 if (propSchema.type && !this.validateType(value, propSchema.type as string)) {
                   log.error({ 
-                    pluginId: config.id, 
+                    extensionId: config.id, 
                     field: key,
                     expected: propSchema.type,
                     actual: typeof value
-                  }, 'Plugin config validation failed: type mismatch');
+                  }, 'Extension config validation failed: type mismatch');
                   return null;
                 }
               }
             }
           }
           
-          log.debug({ pluginId: config.id }, 'Plugin config validated');
+          log.debug({ extensionId: config.id }, 'Extension config validated');
         } catch (err) {
-          log.warn({ err, pluginId: config.id }, 'Config schema validation skipped');
+          log.warn({ err, extensionId: config.id }, 'Config schema validation skipped');
         }
       }
 
-      // Create plugin API
-      const pluginDir = dirname(pluginPath);
-      const api = this.createPluginApi(manifest, config, pluginDir);
+      // Create extension API
+      const extensionDir = dirname(extensionPath);
+      const api = this.createExtensionApi(manifest, config, extensionDir);
 
-      // Load plugin module
-      const module = await this.loadModule(pluginPath, manifest);
+      // Load extension module
+      const module = await this.loadModule(extensionPath, manifest);
       if (!module) {
-        log.error({ pluginId: config.id }, `Failed to load module for plugin`);
+        log.error({ extensionId: config.id }, `Failed to load module for extension`);
         return null;
       }
 
-      // Initialize plugin
-      await this.initializePlugin(module, api, manifest);
+      // Initialize extension
+      await this.initializeExtension(module, api, manifest);
 
       // Register to registry
-      this.registry.addPlugin({
+      this.registry.addExtension({
         id: config.id,
         name: manifest.name,
         version: manifest.version,
-        path: pluginPath,
+        path: extensionPath,
         module,
         config: config.config,
         enabled: true,
         source: config.source,
       });
 
-      this.pluginInstances.set(config.id, api);
-      log.info({ name: manifest.name, id: manifest.id, source: config.source }, `Loaded plugin`);
+      this.extensionInstances.set(config.id, api);
+      log.info({ name: manifest.name, id: manifest.id, source: config.source }, `Loaded extension`);
 
       return api;
     } catch (error) {
-      log.error({ err: error, pluginId: config.id }, `Error loading plugin`);
+      log.error({ err: error, extensionId: config.id }, `Error loading extension`);
       return null;
     }
   }
 
-  loadManifest(pluginPath: string): PluginManifest | null {
-    const manifestPath = join(pluginPath, PLUGIN_MANIFEST_FILE);
+  loadManifest(extensionPath: string): ExtensionManifest | null {
+    const manifestPath = join(extensionPath, EXTENSION_MANIFEST_FILE);
 
-    // First try to load xopcbot.plugin.json
+    // First try to load xopcbot.extension.json
     if (existsSync(manifestPath)) {
       try {
         const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-        return manifest as PluginManifest;
+        return manifest as ExtensionManifest;
       } catch (error) {
         log.error({ err: error, manifestPath }, `Failed to parse manifest`);
         return null;
@@ -459,13 +459,13 @@ export class PluginLoader {
     }
 
     // Fallback to package.json
-    const packagePath = join(pluginPath, 'package.json');
+    const packagePath = join(extensionPath, 'package.json');
     if (existsSync(packagePath)) {
       try {
         const packageJson = JSON.parse(readFileSync(packagePath, 'utf-8'));
         
-        // Check for xopcbot.plugin marker
-        if (packageJson.xopcbot?.plugin) {
+        // Check for xopcbot.extension marker
+        if (packageJson.xopcbot?.extension) {
           const xopcbotConfig = packageJson.xopcbot;
           return {
             id: xopcbotConfig.id || packageJson.name,
@@ -478,9 +478,9 @@ export class PluginLoader {
           };
         }
         
-        // Also support xopcbot-plugin-* naming convention
-        if (packageJson.name?.startsWith('xopcbot-plugin-')) {
-          const id = packageJson.name.replace('xopcbot-plugin-', '');
+        // Also support xopcbot-extension-* naming convention
+        if (packageJson.name?.startsWith('xopcbot-extension-')) {
+          const id = packageJson.name.replace('xopcbot-extension-', '');
           return {
             id,
             name: packageJson.name,
@@ -499,20 +499,20 @@ export class PluginLoader {
   }
 
   private async loadModule(
-    pluginPath: string,
-    manifest: PluginManifest,
-  ): Promise<PluginModule | null> {
+    extensionPath: string,
+    manifest: ExtensionManifest,
+  ): Promise<ExtensionModule | null> {
     // Determine entry point - .ts files prioritized for development
     const entryPoints = [
       manifest.main,
       'index.ts',
       'index.js',
-      'plugin.ts',
-      'plugin.js',
+      'extension.ts',
+      'extension.js',
     ].filter(Boolean) as string[];
 
     for (const entry of entryPoints) {
-      const fullPath = isAbsolute(entry) ? entry : join(pluginPath, entry);
+      const fullPath = isAbsolute(entry) ? entry : join(extensionPath, entry);
 
       if (existsSync(fullPath)) {
         try {
@@ -528,19 +528,19 @@ export class PluginLoader {
     return null;
   }
 
-  private createPluginApi(
-    manifest: PluginManifest,
-    config: ResolvedPluginConfig,
-    pluginDir: string,
-  ): PluginApi {
-    const logger = createPluginLogger(`[${manifest.id}]`);
-    const resolvePath = createPathResolver(pluginDir, this.options.workspaceDir || '');
+  private createExtensionApi(
+    manifest: ExtensionManifest,
+    config: ResolvedExtensionConfig,
+    extensionDir: string,
+  ): ExtensionApi {
+    const logger = createExtensionLogger(`[${manifest.id}]`);
+    const resolvePath = createPathResolver(extensionDir, this.options.workspaceDir || '');
 
-    return new PluginApiImpl(
+    return new ExtensionApiImpl(
       manifest.id,
       manifest.name,
       manifest.version,
-      pluginDir,
+      extensionDir,
       config.config as unknown as Record<string, unknown>,
       config.config,
       logger,
@@ -549,16 +549,16 @@ export class PluginLoader {
     );
   }
 
-  private async initializePlugin(
-    module: PluginModule,
-    api: PluginApi,
-    _manifest: PluginManifest,
+  private async initializeExtension(
+    module: ExtensionModule,
+    api: ExtensionApi,
+    _manifest: ExtensionManifest,
   ): Promise<void> {
     if (typeof module === 'function') {
       // Module is a function that receives the API
       await module(api);
     } else if (typeof module === 'object' && module.register) {
-      // Module is a PluginDefinition with register method
+      // Module is a ExtensionDefinition with register method
       await module.register(api);
     }
   }
@@ -610,18 +610,18 @@ export class PluginLoader {
 // Utility Functions
 // ============================================================================
 
-export function resolvePluginPath(id: string, options: PluginLoaderOptions): string | null {
+export function resolveExtensionPath(id: string, options: ExtensionLoaderOptions): string | null {
   // Priority 1: Workspace
   const workspaceDir = options.workspaceDir || DEFAULT_PATHS.workspace;
-  const workspacePath = join(getWorkspacePluginsDir(workspaceDir), id);
+  const workspacePath = join(getWorkspaceExtensionsDir(workspaceDir), id);
   if (existsSync(workspacePath)) return workspacePath;
 
   // Priority 2: Global
-  const globalPath = join(getGlobalPluginsDir(), id);
+  const globalPath = join(getGlobalExtensionsDir(), id);
   if (existsSync(globalPath)) return globalPath;
 
   // Priority 3: Bundled
-  const bundledDir = getBundledPluginsDir();
+  const bundledDir = getBundledExtensionsDir();
   if (bundledDir) {
     const bundledPath = join(bundledDir, id);
     if (existsSync(bundledPath)) return bundledPath;
@@ -637,18 +637,18 @@ export function resolvePluginPath(id: string, options: PluginLoaderOptions): str
   }
 }
 
-export function normalizePluginConfig(
+export function normalizeExtensionConfig(
   rawConfig: Record<string, unknown>,
-): ResolvedPluginConfig[] {
-  const plugins: ResolvedPluginConfig[] = [];
+): ResolvedExtensionConfig[] {
+  const extensions: ResolvedExtensionConfig[] = [];
 
   const enabled = (rawConfig.enabled as string[]) || [];
   const disabled = (rawConfig.disabled as string[]) || [];
 
-  // Parse enabled plugins
+  // Parse enabled extensions
   for (const id of enabled) {
     const config = (rawConfig[id] as Record<string, unknown>) || {};
-    plugins.push({
+    extensions.push({
       id,
       name: id,
       source: 'config',
@@ -658,11 +658,11 @@ export function normalizePluginConfig(
     });
   }
 
-  // Parse disabled plugins
+  // Parse disabled extensions
   for (const id of disabled) {
-    if (!plugins.find((p) => p.id === id)) {
+    if (!extensions.find((p) => p.id === id)) {
       const config = (rawConfig[id] as Record<string, unknown>) || {};
-      plugins.push({
+      extensions.push({
         id,
         name: id,
         source: 'config',
@@ -673,5 +673,5 @@ export function normalizePluginConfig(
     }
   }
 
-  return plugins;
+  return extensions;
 }

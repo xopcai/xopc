@@ -1,5 +1,5 @@
 /**
- * Plugin System - Hook Types
+ * Extension System - Hook Types
  * 
  * Hook events, handlers, and context types.
  */
@@ -13,7 +13,7 @@ export type { AgentMessage };
 // Hook Event Types
 // ============================================================================
 
-export type PluginHookEvent = 
+export type ExtensionHookEvent = 
   // Existing hooks
   | 'before_agent_start'
   | 'agent_end'
@@ -38,7 +38,7 @@ export type PluginHookEvent =
   | 'tool_execution_update'
   | 'tool_execution_end';
 
-export type PluginHookHandler = (event: unknown, context?: unknown) => unknown | Promise<unknown>;
+export type ExtensionHookHandler = (event: unknown, context?: unknown) => unknown | Promise<unknown>;
 
 export interface HookOptions {
   priority?: number;
@@ -92,7 +92,7 @@ export interface TurnResult {
 
 export interface HookContext {
   timestamp?: Date;
-  pluginId?: string;
+  extensionId?: string;
   sessionKey?: string;
   agentId?: string;
 }
