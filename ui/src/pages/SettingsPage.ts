@@ -593,8 +593,11 @@ export class SettingsPage extends LitElement {
       name: p.name,
       category: p.category,
       supportsOAuth: p.supportsOAuth,
-      configured: !!this._settings.providers[p.id],
-      apiKey: this._settings.providers[p.id] || '',
+      // Use configured from providerMeta (which checks env vars + config + registry)
+      configured: p.configured,
+      // Show API key only if set in config file (don't show env var values)
+      // If configured via env var, show placeholder to indicate it's set
+      apiKey: this._settings.providers[p.id] || (p.configured ? '••••••••••••' : ''),
     }));
 
     return html`

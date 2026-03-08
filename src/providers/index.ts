@@ -160,7 +160,28 @@ export function getAllModels(): readonly Model<Api>[] {
 
 export function getAvailableModels(config: Config | null | undefined): readonly Model<Api>[] {
 	const registry = getModelRegistry();
-	return registry.getAvailable();
+	const allModels = registry.getAll();
+	
+	// Filter models by checking if provider has auth configured
+	// Check in order: config.providers -> registry.getApiKey() -> environment variables
+	return allModels.filter(model => {
+		// Check config.providers first
+		if (config?.providers?.[model.provider]) {
+			return true;
+		}
+		
+		// Check registry (models.json custom providers)
+		if (registry.getApiKey(model.provider)) {
+			return true;
+		}
+		
+		// Check environment variables
+		if (getApiKeyFromEnv(model.provider)) {
+			return true;
+		}
+		
+		return false;
+	});
 }
 
 /**

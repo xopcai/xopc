@@ -27,6 +27,7 @@ export class ProviderConfig extends LitElement {
   @state() private _showKey: boolean = false;
   @state() private _copied: boolean = false;
   @state() private _loading: boolean = false;
+  @state() private _localValue: string = '';
   
   static styles = css`
     :host { display: block; }
@@ -228,6 +229,8 @@ export class ProviderConfig extends LitElement {
   
   render() {
     const categoryClass = this.category.toLowerCase();
+    const isMasked = this.apiKey === '••••••••••••';
+    const inputValue = isMasked && !this._showKey ? '' : this.apiKey;
     
     return html`
       <div class="provider-item ${this.configured ? 'configured' : ''}">
@@ -247,13 +250,13 @@ export class ProviderConfig extends LitElement {
             <input
               class="api-key-input"
               type="${this._showKey ? 'text' : 'password'}"
-              .value=${this.apiKey}
-              placeholder="${this.configured ? 'Configured (leave empty to keep)' : 'sk-...'}"
+              .value=${inputValue}
+              placeholder="${isMasked ? 'Configured via environment variable' : (this.configured ? 'Configured (leave empty to keep)' : 'sk-...')}"
               @change=${this._onApiKeyChange}
               ?disabled=${this._loading}
             />
             <div class="input-actions">
-              ${this.apiKey ? html`
+              ${this.apiKey && !isMasked ? html`
                 <button 
                   class="btn-icon" 
                   @click=${this._copyToClipboard}
@@ -266,6 +269,7 @@ export class ProviderConfig extends LitElement {
                 class="btn-icon" 
                 @click=${() => this._showKey = !this._showKey}
                 title="${this._showKey ? 'Hide' : 'Show'} API Key"
+                ?disabled=${isMasked}
               >
                 ${getIcon(this._showKey ? 'eyeOff' : 'eye')}
               </button>
@@ -286,7 +290,13 @@ export class ProviderConfig extends LitElement {
           ` : ''}
         </div>
         
-        ${this.supportsOAuth ? html`
+        ${isMasked ? html`
+          <div class="help-text">
+            ${getIcon('info')} API key is configured via environment variable and cannot be displayed.
+            Enter a new key above to override, or leave empty to keep the current configuration.
+          </div>
+        ` : ''}
+        ${this.supportsOAuth && !isMasked ? html`
           <div class="help-text">
             This provider supports OAuth login. Click "OAuth Login" to authenticate via browser, 
             or enter an API key manually above.
