@@ -544,12 +544,19 @@ export class AgentService {
       };
 
       // Run with fallback
+      const currentProvider = this.modelManager.getCurrentProvider();
+      const currentModel = this.modelManager.getCurrentModel();
+      log.info(
+        { sessionKey, provider: currentProvider, model: currentModel },
+        'Calling LLM'
+      );
+      
       const result = await this.modelManager.runWithFallback(
         this.agent,
         sessionKey,
         userMessage,
-        this.modelManager.getCurrentProvider(),
-        this.modelManager.getCurrentModel()
+        currentProvider,
+        currentModel
       );
 
       // Track usage

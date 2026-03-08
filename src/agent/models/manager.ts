@@ -205,6 +205,12 @@ export class ModelManager {
         // Get usage from agent state if available
         const usage = (agent.state as any).lastUsage || undefined;
 
+        // Log the successfully used model
+        log.info(
+          { provider: candidate.provider, model: candidate.model, success: true },
+          'Model call completed'
+        );
+
         return {
           content: getLastAssistantContent(agent),
           usage,
