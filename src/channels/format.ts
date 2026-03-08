@@ -14,7 +14,6 @@ export {
   markdownToPlainText,
   wrapFileReferencesInHtml,
   formatTelegramMessage,
-  splitTelegramMessage,
   splitTelegramMessageSmart,
   isValidTelegramHtml,
   fixMalformedHtml,

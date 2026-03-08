@@ -91,8 +91,8 @@ export class TelegramChannelExtension implements ChannelExtension {
     // Initialize media group buffer
     this.mediaGroupBuffer = new MediaGroupBuffer({
       timeoutMs: 500,
-      onFlush: async (messages, ctx) => {
-        await this.processMediaGroup(messages, ctx);
+      onFlush: async (messages, ctx, accountId) => {
+        await this.processMediaGroup(messages, ctx, accountId);
       },
     });
 
@@ -287,7 +287,7 @@ export class TelegramChannelExtension implements ChannelExtension {
           // Check for media group (photo album)
           const mediaGroupId = (ctx.message as { media_group_id?: string }).media_group_id;
           if (mediaGroupId) {
-            const buffered = await this.mediaGroupBuffer.process(ctx);
+            const buffered = await this.mediaGroupBuffer.process(ctx, accountId);
             if (buffered) return; // Message was buffered, will be processed as group
           }
 
@@ -457,12 +457,7 @@ export class TelegramChannelExtension implements ChannelExtension {
   /**
    * Process a media group (album) as a single message
    */
-  private async processMediaGroup(messages: Message[], firstCtx: Context): Promise<void> {
-    const accountId = this.getAccountIdFromContext(firstCtx);
-    if (!accountId) {
-      log.warn('Could not determine account ID for media group');
-      return;
-    }
+  private async processMediaGroup(messages: Message[], firstCtx: Context, accountId: string): Promise<void> {
 
     // Get combined caption from last message with caption
     const lastMessageWithCaption = [...messages].reverse().find(m => m.caption || m.text);
@@ -547,24 +542,6 @@ export class TelegramChannelExtension implements ChannelExtension {
     };
 
     await this.inboundProcessor(syntheticCtx as Context, accountId);
-  }
-
-  /**
-   * Get account ID from context (helper method)
-   */
-  private getAccountIdFromContext(ctx: Context): string | undefined {
-    // Find account by matching bot info
-    const botId = ctx.me?.id;
-    if (!botId) return undefined;
-
-    for (const account of this.accountManager.getAllAccounts()) {
-      const bot = this.accountManager.getBot(account.accountId);
-      if (bot && ctx.me?.username === ctx.me?.username) {
-        return account.accountId;
-      }
-    }
-
-    return 'default'; // Fallback to default
   }
 
   async send(options: ChannelSendOptions): Promise<ChannelSendResult> {

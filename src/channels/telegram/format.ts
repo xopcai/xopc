@@ -278,15 +278,6 @@ export function formatTelegramMessage(
 }
 
 /**
- * Split long message into chunks respecting code blocks and paragraphs
- * @deprecated Use markdownToTelegramChunks() instead for IR-based chunking
- */
-export function splitTelegramMessage(text: string, maxChars: number = 4000): string[] {
-  const chunks = markdownToTelegramChunks(text, maxChars);
-  return chunks.map((c) => c.html);
-}
-
-/**
  * Smart split message into chunks with both HTML and plain text
  * Uses Markdown IR for robust chunking that preserves structure
  */

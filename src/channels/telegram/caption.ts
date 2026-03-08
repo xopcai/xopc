@@ -6,7 +6,6 @@
  */
 
 const TELEGRAM_CAPTION_LIMIT = 1024;
-const TELEGRAM_MESSAGE_LIMIT = 4096;
 
 export interface CaptionSplit {
   /** The caption (max 1024 chars) */
@@ -92,63 +91,4 @@ function findGoodSplitPoint(text: string, limit: number): number {
   return limit;
 }
 
-/**
- * Smart text chunking that preserves markdown structure
- * Uses the markdown-ir system for better splitting
- */
-function _smartChunkText(
-  text: string,
-  limit: number = TELEGRAM_MESSAGE_LIMIT
-): string[] {
-  if (!text || text.length <= limit) {
-    return [text];
-  }
 
-  const chunks: string[] = [];
-  let remaining = text;
-
-  while (remaining.length > limit) {
-    const splitIndex = findGoodSplitPoint(remaining, limit);
-
-    if (splitIndex <= 0 || splitIndex >= remaining.length) {
-      // Force split at limit
-      chunks.push(remaining.slice(0, limit));
-      remaining = remaining.slice(limit).trimStart();
-    } else {
-      chunks.push(remaining.slice(0, splitIndex).trim());
-      remaining = remaining.slice(splitIndex).trimStart();
-    }
-  }
-
-  if (remaining) {
-    chunks.push(remaining);
-  }
-
-  return chunks;
-}
-
-/**
- * Calculate approximate byte size (for media upload limits)
- */
-function _calculateByteSize(text: string): number {
-  // UTF-8 encoding: most chars are 1-3 bytes
-  return new TextEncoder().encode(text).length;
-}
-
-/**
- * Truncate text with ellipsis if it exceeds limit
- */
-function _truncateWithEllipsis(text: string, limit: number): string {
-  if (text.length <= limit) return text;
-
-  const ellipsis = '...';
-  const truncated = text.slice(0, limit - ellipsis.length);
-
-  // Try to end at word boundary
-  const lastSpace = truncated.lastIndexOf(' ');
-  if (lastSpace > truncated.length * 0.8) {
-    return truncated.slice(0, lastSpace) + ellipsis;
-  }
-
-  return truncated + ellipsis;
-}

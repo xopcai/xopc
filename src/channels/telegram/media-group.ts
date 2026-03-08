@@ -18,6 +18,7 @@ export interface MediaGroupEntry {
   messages: Array<{
     msg: Message;
     ctx: Context;
+    accountId: string;
     receivedAt: number;
   }>;
   timer: ReturnType<typeof setTimeout>;
@@ -27,13 +28,13 @@ export interface MediaGroupBufferOptions {
   /** Buffer timeout in milliseconds */
   timeoutMs?: number;
   /** Callback when a media group is ready to be processed */
-  onFlush: (messages: Message[], ctx: Context) => Promise<void>;
+  onFlush: (messages: Message[], ctx: Context, accountId: string) => Promise<void>;
 }
 
 export class MediaGroupBuffer {
   private buffer = new Map<string, MediaGroupEntry>();
   private timeoutMs: number;
-  private onFlush: (messages: Message[], ctx: Context) => Promise<void>;
+  private onFlush: (messages: Message[], ctx: Context, accountId: string) => Promise<void>;
   private processing = Promise.resolve();
 
   constructor(options: MediaGroupBufferOptions) {
@@ -46,7 +47,7 @@ export class MediaGroupBuffer {
    * Returns true if message was buffered (part of media group)
    * Returns false if message should be processed immediately
    */
-  async process(ctx: Context): Promise<boolean> {
+  async process(ctx: Context, accountId: string): Promise<boolean> {
     const msg = ctx.message;
     if (!msg) return false;
 
@@ -65,6 +66,7 @@ export class MediaGroupBuffer {
       existingEntry.messages.push({
         msg,
         ctx,
+        accountId,
         receivedAt: Date.now(),
       });
       log.debug({ mediaGroupId, messageCount: existingEntry.messages.length }, 'Added to existing media group');
@@ -73,11 +75,11 @@ export class MediaGroupBuffer {
 
     // Create new group entry
     const timer = setTimeout(() => {
-      this.flushGroup(key);
+      void this.flushGroup(key);
     }, this.timeoutMs);
 
     this.buffer.set(key, {
-      messages: [{ msg, ctx, receivedAt: Date.now() }],
+      messages: [{ msg, ctx, accountId, receivedAt: Date.now() }],
       timer,
     });
 
@@ -102,13 +104,14 @@ export class MediaGroupBuffer {
       try {
         const messages = entry.messages.map(m => m.msg);
         const firstCtx = entry.messages[0].ctx;
+        const accountId = entry.messages[0].accountId;
         
         log.info({ 
           mediaGroupId: (messages[0] as { media_group_id?: string }).media_group_id,
           messageCount: messages.length 
         }, 'Flushing media group');
 
-        await this.onFlush(messages, firstCtx);
+        await this.onFlush(messages, firstCtx, accountId);
       } catch (err) {
         log.error({ err, key }, 'Failed to flush media group');
       }
