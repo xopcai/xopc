@@ -214,9 +214,17 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           enabled: config.channels?.telegram?.enabled,
           token: config.channels?.telegram?.token || '',
           allowFrom: config.channels?.telegram?.allowFrom || [],
+          groupAllowFrom: config.channels?.telegram?.groupAllowFrom || [],
           apiRoot: config.channels?.telegram?.apiRoot || '',
           debug: config.channels?.telegram?.debug || false,
+          dmPolicy: config.channels?.telegram?.dmPolicy || 'pairing',
+          groupPolicy: config.channels?.telegram?.groupPolicy || 'open',
+          replyToMode: config.channels?.telegram?.replyToMode || 'off',
           streamMode: config.channels?.telegram?.streamMode || 'partial',
+          historyLimit: config.channels?.telegram?.historyLimit || 50,
+          textChunkLimit: config.channels?.telegram?.textChunkLimit || 4000,
+          proxy: config.channels?.telegram?.proxy || '',
+          accounts: config.channels?.telegram?.accounts || {},
         },
       },
       // Provider API keys - don't return actual values for security
@@ -284,7 +292,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     
     // Update channels
     if (body.channels?.telegram) {
-      if (!config.channels) config.channels = { telegram: { enabled: false, token: '', allowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const } };
+      if (!config.channels) config.channels = { telegram: { enabled: false, token: '', allowFrom: [], groupAllowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const, replyToMode: 'off' as const, historyLimit: 50, textChunkLimit: 4000 } };
       if (!config.channels.telegram) config.channels.telegram = {} as any;
       
       if (body.channels.telegram.enabled !== undefined) {
@@ -304,6 +312,30 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       }
       if (body.channels.telegram.streamMode !== undefined) {
         config.channels.telegram.streamMode = body.channels.telegram.streamMode;
+      }
+      if (body.channels.telegram.groupAllowFrom !== undefined) {
+        config.channels.telegram.groupAllowFrom = body.channels.telegram.groupAllowFrom;
+      }
+      if (body.channels.telegram.dmPolicy !== undefined) {
+        config.channels.telegram.dmPolicy = body.channels.telegram.dmPolicy;
+      }
+      if (body.channels.telegram.groupPolicy !== undefined) {
+        config.channels.telegram.groupPolicy = body.channels.telegram.groupPolicy;
+      }
+      if (body.channels.telegram.replyToMode !== undefined) {
+        config.channels.telegram.replyToMode = body.channels.telegram.replyToMode;
+      }
+      if (body.channels.telegram.historyLimit !== undefined) {
+        config.channels.telegram.historyLimit = body.channels.telegram.historyLimit;
+      }
+      if (body.channels.telegram.textChunkLimit !== undefined) {
+        config.channels.telegram.textChunkLimit = body.channels.telegram.textChunkLimit;
+      }
+      if (body.channels.telegram.proxy !== undefined) {
+        config.channels.telegram.proxy = body.channels.telegram.proxy;
+      }
+      if (body.channels.telegram.accounts !== undefined) {
+        config.channels.telegram.accounts = body.channels.telegram.accounts;
       }
     }
     

@@ -957,9 +957,13 @@ async function setupChannels(config: Config): Promise<Config> {
       enabled: true,
       token,
       allowFrom: ((existingTelegram as { allowFrom?: (string | number)[] }).allowFrom ?? []) as (string | number)[],
+      groupAllowFrom: ((existingTelegram as { groupAllowFrom?: (string | number)[] }).groupAllowFrom ?? []) as (string | number)[],
       debug: (existingTelegram as { debug?: boolean }).debug ?? false,
       dmPolicy: ((existingTelegram as { dmPolicy?: 'pairing' | 'allowlist' | 'open' | 'disabled' }).dmPolicy ?? 'pairing') as 'pairing' | 'allowlist' | 'open' | 'disabled',
       groupPolicy: ((existingTelegram as { groupPolicy?: 'allowlist' | 'open' | 'disabled' }).groupPolicy ?? 'open') as 'allowlist' | 'open' | 'disabled',
+      replyToMode: ((existingTelegram as { replyToMode?: 'off' | 'first' | 'all' }).replyToMode ?? 'off') as 'off' | 'first' | 'all',
+      historyLimit: ((existingTelegram as { historyLimit?: number }).historyLimit ?? 50),
+      textChunkLimit: ((existingTelegram as { textChunkLimit?: number }).textChunkLimit ?? 4000),
     };
 
     console.log('✅ Telegram enabled');

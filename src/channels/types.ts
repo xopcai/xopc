@@ -97,9 +97,16 @@ export interface TelegramChannelConfig {
   // Legacy single-account config (for backward compatibility)
   token?: string;
   allowFrom?: Array<string | number>;
+  groupAllowFrom?: Array<string | number>;
   dmPolicy?: DmPolicy;
   groupPolicy?: GroupPolicy;
+  replyToMode?: ReplyToMode;
   streamMode?: 'off' | 'partial' | 'block';
+  historyLimit?: number;
+  textChunkLimit?: number;
+  proxy?: string;
+  apiRoot?: string;
+  debug?: boolean;
 }
 
 // ============================================

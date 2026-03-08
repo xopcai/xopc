@@ -123,12 +123,17 @@ export const TelegramConfigSchema = z.object({
   enabled: z.boolean().default(false),
   token: z.string().default(''),
   allowFrom: z.array(z.union([z.string(), z.number()])).default([]),
+  groupAllowFrom: z.array(z.union([z.string(), z.number()])).default([]),
   apiRoot: z.string().optional(),
   debug: z.boolean().default(false),
   accounts: z.record(z.string(), TelegramAccountConfigSchema).optional(),
   dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing'),
   groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('open'),
+  replyToMode: z.enum(['off', 'first', 'all']).default('off'),
   streamMode: z.enum(['off', 'partial', 'block']).optional(),
+  historyLimit: z.number().default(50),
+  textChunkLimit: z.number().default(4000),
+  proxy: z.string().optional(),
 });
 
 export const ChannelsConfigSchema = z.object({
@@ -138,9 +143,13 @@ export const ChannelsConfigSchema = z.object({
     enabled: false,
     token: '',
     allowFrom: [],
+    groupAllowFrom: [],
     debug: false,
     dmPolicy: 'pairing' as const,
     groupPolicy: 'open' as const,
+    replyToMode: 'off' as const,
+    historyLimit: 50,
+    textChunkLimit: 4000,
   },
 });
 
@@ -361,9 +370,13 @@ export const ConfigSchema = z.object({
       enabled: false,
       token: '',
       allowFrom: [],
+      groupAllowFrom: [],
       debug: false,
       dmPolicy: 'pairing' as const,
       groupPolicy: 'open' as const,
+      replyToMode: 'off' as const,
+      historyLimit: 50,
+      textChunkLimit: 4000,
     },
   },
   gateway: {
