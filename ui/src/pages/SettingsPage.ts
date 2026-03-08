@@ -67,11 +67,6 @@ interface SettingsData {
   workspace: string;
   providers: Record<string, string>;
   telegram: TelegramConfig;
-  whatsapp: {
-    enabled: boolean;
-    bridgeUrl: string;
-    allowFrom: string[];
-  };
   gateway: {
     heartbeat: {
       enabled: boolean;
@@ -138,11 +133,6 @@ export class SettingsPage extends LitElement {
       proxy: '',
       accounts: {},
       advancedMode: false,
-    },
-    whatsapp: {
-      enabled: false,
-      bridgeUrl: 'ws://localhost:3001',
-      allowFrom: [],
     },
     gateway: {
       heartbeat: {
@@ -234,11 +224,6 @@ export class SettingsPage extends LitElement {
               proxy: config.channels?.telegram?.proxy || '',
               accounts: config.channels?.telegram?.accounts || {},
               advancedMode: false,
-            },
-            whatsapp: {
-              enabled: config.channels?.whatsapp?.enabled || false,
-              bridgeUrl: config.channels?.whatsapp?.bridgeUrl || 'ws://localhost:3001',
-              allowFrom: config.channels?.whatsapp?.allowFrom || [],
             },
             gateway: {
               heartbeat: {
@@ -407,11 +392,6 @@ export class SettingsPage extends LitElement {
           textChunkLimit: this._settings.telegram.textChunkLimit,
           proxy: this._settings.telegram.proxy || undefined,
           accounts: Object.keys(this._settings.telegram.accounts).length > 0 ? this._settings.telegram.accounts : undefined,
-        },
-        whatsapp: {
-          enabled: this._settings.whatsapp.enabled,
-          bridgeUrl: this._settings.whatsapp.bridgeUrl,
-          allowFrom: this._settings.whatsapp.allowFrom,
         },
       },
       gateway: {
@@ -668,7 +648,6 @@ export class SettingsPage extends LitElement {
 
         <div class="fields-grid">
           ${this._renderTelegramSection()}
-          ${this._renderWhatsAppSection()}
         </div>
       </div>
     `;
@@ -1020,74 +999,6 @@ export class SettingsPage extends LitElement {
                       </div>
                     `
                   : ''}
-              </div>
-            `
-          : ''}
-      </div>
-    `;
-  }
-
-  private _renderWhatsAppSection() {
-    return html`
-      <div class="channel-section" style="margin-top: 2rem;">
-        <label class="toggle-label">
-          <input
-            class="toggle-input"
-            type="checkbox"
-            .checked=${this._settings.whatsapp.enabled}
-            @change=${(e: Event) =>
-              this._updateSettings(
-                'whatsapp.enabled',
-                (e.target as HTMLInputElement).checked
-              )
-            }
-          />
-          <span class="toggle-switch"></span>
-          <span class="toggle-text">Enable WhatsApp</span>
-        </label>
-
-        ${this._settings.whatsapp.enabled
-          ? html`
-              <div class="channel-fields" style="margin-top: 1.5rem; padding-left: 1rem; border-left: 2px solid var(--border-color);">
-                <div class="field-group">
-                  <div class="field-header">
-                    <label class="field-label">Bridge URL</label>
-                  </div>
-                  <input
-                    class="text-input"
-                    type="text"
-                    .value=${this._settings.whatsapp.bridgeUrl}
-                    @change=${(e: Event) =>
-                      this._updateSettings(
-                        'whatsapp.bridgeUrl',
-                        (e.target as HTMLInputElement).value
-                      )
-                    }
-                    placeholder="ws://localhost:3001"
-                  />
-                </div>
-
-                <div class="field-group">
-                  <div class="field-header">
-                    <label class="field-label">Allow From</label>
-                  </div>
-                  <textarea
-                    class="textarea-input"
-                    .value=${this._settings.whatsapp.allowFrom.join(', ')}
-                    @change=${(e: Event) =>
-                      this._updateSettings(
-                        'whatsapp.allowFrom',
-                        (e.target as HTMLTextAreaElement).value
-                          .split(/[,\n]/)
-                          .map((s) => s.trim())
-                          .filter(Boolean)
-                      )
-                    }
-                    placeholder="1234567890, 9876543210"
-                    rows="2"
-                  ></textarea>
-                  <p class="field-desc">Comma-separated phone numbers allowed to use the bot</p>
-                </div>
               </div>
             `
           : ''}

@@ -179,7 +179,7 @@ export class CronManager extends LitElement {
       } else {
         // Try to parse from message format: "channel:chat_id:message"
         const parts = job.message.split(':');
-        const knownChannels = ['telegram', 'whatsapp', 'cli', 'gateway'];
+        const knownChannels = ['telegram', 'cli', 'gateway'];
         if (parts.length >= 3 && knownChannels.includes(parts[0])) {
           this._formChannel = parts[0];
           this._formChatId = parts[1];

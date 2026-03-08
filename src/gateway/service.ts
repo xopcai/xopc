@@ -419,7 +419,7 @@ export class GatewayService {
         }
       }
 
-      // Send message through bus for other channels (telegram, whatsapp, etc.)
+      // Send message through bus for other channels (telegram, etc.)
       await this.bus.publishInbound({
         channel,
         sender_id: 'gateway',
@@ -479,7 +479,6 @@ export class GatewayService {
     // Check which channels are configured
     const configChannels = [
       { name: 'telegram', enabled: !!this.config.channels?.telegram?.enabled },
-      { name: 'whatsapp', enabled: !!this.config.channels?.whatsapp?.enabled },
     ];
 
     return configChannels.map((ch) => ({

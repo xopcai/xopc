@@ -12,7 +12,7 @@ import type { AgentMessage } from '@mariozechner/pi-agent-core';
 // Unified Message Format (Platform Agnostic)
 // ============================================================================
 
-export type MessageSource = 'telegram' | 'whatsapp' | 'webui' | 'cli' | 'api' | 'system' | 'gateway';
+export type MessageSource = 'telegram' | 'webui' | 'cli' | 'api' | 'system' | 'gateway';
 
 export interface UnifiedMessage {
   /** Message source platform */

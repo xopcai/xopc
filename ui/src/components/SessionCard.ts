@@ -47,7 +47,7 @@ export class SessionCard extends LitElement {
   private _getChannelIcon(channel: string): string {
     const icons: Record<string, string> = {
       telegram: 'send',
-      whatsapp: 'phone',
+
       gateway: 'globe',
       cli: 'terminal',
     };
