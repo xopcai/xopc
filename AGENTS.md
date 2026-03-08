@@ -128,6 +128,55 @@ src/
             └── attachment-utils.ts
 ```
 
+## Model Registry Architecture
+
+xopcbot uses a **Unified Model Registry** to manage all provider and model configurations.
+
+### Architecture Overview
+
+```
+┌──────────────────┐
+│   models.json    │ ← Single source of truth (12 core providers)
+└────────┬─────────┘
+         │
+         ▼
+┌────────────────────┐
+│  models-loader.ts  │ ← 4-layer merge:
+│   1. Built-in      │     - Built-in (models.json)
+│   2. pi-ai npm     │     - pi-ai npm package
+│   3. User config   │     - User config (config.json)
+│   4. Ollama disc.  │     - Ollama discovery
+└────────┬───────────┘
+         │
+         ▼
+┌────────────────────┐
+│  GET /api/registry │ ← Frontend fetches all data via API
+└────────────────────┘
+```
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `src/providers/models.json` | Built-in provider/model definitions |
+| `src/providers/models.types.ts` | TypeScript types for registry |
+| `src/providers/models-loader.ts` | Load, validate, merge layers |
+| `src/providers/registry.ts` | ModelRegistry class (uses models-loader) |
+| `ui/src/config/registry-client.ts` | Frontend API client |
+
+### Hot Reload
+
+Changes to `models.json` or `config.json` can be reloaded without restart:
+
+```bash
+# Backend
+curl -X POST -H "Authorization: Bearer $TOKEN" http://localhost:18790/api/registry/reload
+
+# Frontend automatically refreshes via cache invalidation
+```
+
+See [docs/models.md](./docs/models.md) for full documentation.
+
 ---
 
 ## Code Style Guidelines
@@ -319,9 +368,70 @@ Channels support hierarchical access control:
 
 ### Adding a New Provider
 
-1. Update `src/config/schema.ts` - add to `ProvidersConfigSchema`
-2. Update `src/providers/registry.ts` - add provider details
-3. Update environment variable handling if needed
+**Method 1: Edit the built-in manifest (for core providers)**
+
+1. Edit `src/providers/models.json`
+2. Add provider definition with models
+3. Restart gateway or call `POST /api/registry/reload`
+
+Example:
+```jsonc
+{
+  "providers": {
+    "new-provider": {
+      "name": "New Provider",
+      "baseUrl": "https://api.new-provider.com/v1",
+      "api": "openai-completions",
+      "auth": {
+        "type": "api_key",
+        "envKeys": ["NEW_PROVIDER_API_KEY"]
+      },
+      "capabilities": {
+        "streaming": true,
+        "functionCalling": true,
+        "vision": false,
+        "reasoning": false
+      },
+      "models": [
+        {
+          "id": "model-v1",
+          "name": "Model v1",
+          "contextWindow": 128000,
+          "maxTokens": 8192,
+          "cost": { "input": 1.0, "output": 3.0 }
+        }
+      ]
+    }
+  }
+}
+```
+
+**Method 2: Add via user config (for custom providers)**
+
+1. Edit `~/.xopcbot/config.json`
+2. Add to `models.providers` section
+3. Restart gateway or call `POST /api/registry/reload`
+
+Example:
+```json
+{
+  "models": {
+    "mode": "merge",
+    "providers": {
+      "my-custom-provider": {
+        "baseUrl": "https://my-api.example.com/v1",
+        "apiKey": "sk-...",
+        "api": "openai-completions",
+        "models": [
+          { "id": "my-model", "name": "My Model" }
+        ]
+      }
+    }
+  }
+}
+```
+
+The frontend will automatically fetch the new provider via `/api/registry`.
 
 ### Adding a New Channel Plugin
 
@@ -718,11 +828,12 @@ console.log(`Errors: ${stats.byLevel.error}`);
 | **Configuration** | `src/config/schema.ts` |
 | **Tests** | `src/**/__tests__/` alongside source |
 | **UI components** | `ui/src/components/` |
-| **Providers** | `src/providers/registry.ts` |
+| **Model registry** | `src/providers/models.json`, `src/providers/models-loader.ts` |
+| **Providers** | `src/providers/registry.ts`, `src/providers/models.json` |
 | **Channel plugins** | `src/channels/` |
 | **Logging system** | `src/utils/logger.ts`, `src/utils/log-store.ts` |
 | **Log UI** | `ui/src/pages/LogManager.ts` |
 
 ---
 
-_Last updated: 2026-02-21_
+_Last updated: 2026-02-26_
