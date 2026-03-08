@@ -6,7 +6,6 @@
 
 import { Hono } from 'hono';
 import type { GatewayService } from '../service.js';
-import type { Config } from '../../config/schema.js';
 import { 
   type OAuthProviderInterface, 
   type OAuthLoginCallbacks,
@@ -55,7 +54,7 @@ function deleteOAuthCredentialsFromCache(provider: string): void {
 }
 
 // Load OAuth credentials from config into cache
-export function loadOAuthCredentialsToCache(service: GatewayService): void {
+export function loadOAuthCredentialsToCache(_service: GatewayService): void {
   // OAuth credentials are now managed via AuthProfiles, not config
   // This function is kept for compatibility
 }

@@ -9,10 +9,7 @@ import type { CLIContext } from '../registry.js';
 import { AuthStorage, anthropicOAuthProvider, minimaxOAuthProvider, minimaxCnOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
 import { upsertAuthProfile, listProfilesForProvider } from '../../auth/profiles/index.js';
 import { 
-  getAllProviders, 
   getModelsByProvider, 
-  resolveModel, 
-  PROVIDER_META, 
   getSortedProviders,
   getProviderDisplayName,
   providerSupportsOAuth,
