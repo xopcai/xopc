@@ -1,6 +1,6 @@
 # Custom Models Configuration
 
-xopcbot supports custom model providers via `config.providers` in `~/.xopcbot/config.json`.
+xopcbot supports custom model providers via `~/.xopcbot/models.json`.
 
 ## Table of Contents
 
@@ -18,7 +18,7 @@ xopcbot supports custom model providers via `config.providers` in `~/.xopcbot/co
 
 ## Quick Start
 
-Add to `~/.xopcbot/config.json`:
+Create `~/.xopcbot/models.json`:
 
 ```json
 {
@@ -42,35 +42,7 @@ The `apiKey` is required but Ollama ignores it, so any value works.
 
 ### File Location
 
-`~/.xopcbot/config.json`
-
-### Two Formats
-
-**Simple format** - for built-in providers with API key only:
-```json
-{
-  "providers": {
-    "openai": "sk-xxx",
-    "anthropic": "sk-ant-xxx"
-  }
-}
-```
-
-**Rich format** - for custom providers with models:
-```json
-{
-  "providers": {
-    "ollama": {
-      "baseUrl": "http://localhost:11434/v1",
-      "api": "openai-completions",
-      "apiKey": "ollama",
-      "models": [
-        { "id": "llama3.1:8b" }
-      ]
-    }
-  }
-}
-```
+`~/.xopcbot/models.json` (or set `XOPCBOT_MODELS_JSON` environment variable)
 
 ### Minimal Example
 
@@ -94,7 +66,6 @@ The `apiKey` is required but Ollama ignores it, so any value works.
 ```json
 {
   "providers": {
-    "openai": "sk-xxx",
     "ollama": {
       "baseUrl": "http://localhost:11434/v1",
       "api": "openai-completions",
@@ -324,7 +295,7 @@ The toolbar shows real-time statistics:
 ### Actions
 
 - **Validate** - Check configuration for errors without saving
-- **Save** - Save changes to config.json
+- **Save** - Save changes to models.json
 - **Reload** - Hot reload configuration without restart
 - **Show/Hide JSON** - View raw JSON configuration
 
@@ -422,19 +393,18 @@ Changes are automatically reloaded when you save in the UI. No restart required.
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
-| GET | `/api/providers` | Get custom providers configuration |
-| POST | `/api/providers/validate` | Validate provider configuration |
-| PATCH | `/api/providers/:name` | Save/update provider |
-| DELETE | `/api/providers/:name` | Remove provider |
-| POST | `/api/providers/reload` | Hot reload |
-| POST | `/api/providers/test-api-key` | Test API key resolution |
+| GET | `/api/models-json` | Get models.json configuration |
+| POST | `/api/models-json/validate` | Validate models.json configuration |
+| PATCH | `/api/models-json` | Save models.json |
+| POST | `/api/models-json/reload` | Hot reload |
+| POST | `/api/models-json/test-api-key` | Test API key resolution |
 
 ## Troubleshooting
 
 ### Models not showing up
 
 1. Check the browser console for errors
-2. Verify `config.json` syntax is valid JSON
+2. Verify `models.json` syntax is valid JSON
 3. Check the Settings → Models page for validation errors
 4. Ensure API keys are correctly resolved (use the Test button)
 
@@ -448,16 +418,16 @@ Changes are automatically reloaded when you save in the UI. No restart required.
 ### Changes not taking effect
 
 1. Click "Reload" in the UI to force a refresh
-2. Check the `config.json` file was saved correctly
+2. Check the `models.json` file was saved correctly
 3. Restart the gateway if needed
 
-### Migration from models.json
+### Separation from config.json
 
-If you previously used `~/.xopcbot/models.json`, move the content to `config.json` under the `providers` key:
+**Note:** `models.json` is separate from `config.json`:
+- `config.json` contains API keys for built-in providers (simple string format)
+- `models.json` contains custom provider configurations with models
 
-```bash
-# Old: ~/.xopcbot/models.json
-# New: ~/.xopcbot/config.json
-```
-
-Simply copy the `providers` object from `models.json` into `config.json`.
+This separation allows:
+- Different file permissions for sensitive API keys
+- Easier management of custom model configurations
+- Hot reload of models without affecting other settings

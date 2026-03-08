@@ -2,6 +2,8 @@
 
 xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
 
+**注意：** 自定义模型配置已移至独立的 `~/.xopcbot/models.json` 文件。请参阅 [models.md](./models.md) 了解详情。
+
 ## 完整配置示例
 
 ```json
@@ -93,17 +95,9 @@ xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
 
 模型 ID 格式为 `provider/model-id`，例如 `anthropic/claude-opus-4-5`。
 
-### models
-
-模型配置。用于配置 API 提供商和可用模型。
-
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `providers` | object | `{}` | 提供商 API Keys（见下文） |
-
 ### providers
 
-配置 LLM 提供商的 API Keys。Key 可以是实际值或环境变量引用：
+配置 LLM 提供商的 API Keys（简单格式）。Key 可以是实际值或环境变量引用：
 
 ```json
 {
@@ -115,6 +109,8 @@ xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
   }
 }
 ```
+
+**注意：** 如果需要配置自定义模型（Ollama、vLLM、LM Studio 等），请使用 `models.json` 文件。详见 [models.md](./models.md)。
 
 支持的提供商及其环境变量：
 
@@ -133,101 +129,6 @@ xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
 | `huggingface` | `HF_TOKEN` 或 `HUGGINGFACE_TOKEN` |
 
 你也可以直接在环境中设置环境变量，而无需添加到配置文件中。
-| `name` | string | (必填) | 显示名称 |
-| `reasoning` | boolean | `false` | 支持推理/思考 |
-| `input` | array | `["text"]` | 输入类型：`text`、`image` |
-| `cost` | object | | 价格信息 |
-| `contextWindow` | number | `128000` | 上下文窗口大小 |
-| `maxTokens` | number | `16384` | 最大输出 tokens |
-
-### 支持的提供商
-
-xopcbot 支持以下 LLM 提供商：
-
-| 提供商 | 认证方式 | 能力 | 模型前缀 |
-|----------|-----------|--------------|----------------|
-| `openai` | API Key | 文本、视觉、工具 | gpt-, o1- |
-| `anthropic` | API Key, OAuth | 文本、视觉、推理、工具 | claude- |
-| `google` | API Key | 文本、视觉、工具 | gemini- |
-| `qwen` | API Key | 文本、视觉、工具 | qwen-, qwq- |
-| `kimi` | OAuth (设备码) | 文本、推理、工具 | kimi- |
-| `moonshot` | API Key | 文本、工具 | moonshot- |
-| `minimax` | API Key | 文本 | abab- |
-| `deepseek` | API Key | 文本、推理、工具 | deepseek- |
-| `groq` | API Key | 文本、工具 | llama-, mixtral- |
-| `openrouter` | API Key | 文本、视觉、工具 | openrouter/ |
-| `xai` | API Key | 文本、工具 | xai/, grok- |
-| `cerebras` | API Key | 文本 | cerebras/ |
-| `mistral` | API Key | 文本、工具 | mistral- |
-| `zhipu` | API Key | 文本 | glm- |
-| `ollama` | 无 (本地) | 文本、视觉 | llama3, qwen2 等 |
-| `bailian` | API Key | 文本 | bailian- |
-
-#### 提供商配置示例
-
-**Kimi (OAuth):**
-```json
-{
-  "kimi": {
-    "auth": {
-      "type": "oauth",
-      "clientId": "your-client-id"
-    },
-    "models": [
-      { "id": "kimi-k2.5", "name": "Kimi K2.5", "reasoning": true }
-    ]
-  }
-}
-```
-
-**Moonshot:**
-```json
-{
-  "moonshot": {
-    "apiKey": "${MOONSHOT_API_KEY}",
-    "models": [
-      { "id": "moonshot-v1-8k", "name": "Moonshot V1 8K" }
-    ]
-  }
-}
-```
-
-**MiniMax:**
-```json
-{
-  "minimax": {
-    "apiKey": "${MINIMAX_API_KEY}",
-    "baseUrl": "https://api.minimax.chat/v1",
-    "models": [
-      { "id": "abab6.5s-chat", "name": "MiniMax ABAB 6.5S" }
-    ]
-  }
-}
-```
-
-**智谱 (Zhipu):**
-```json
-{
-  "zhipu": {
-    "apiKey": "${ZHIPU_API_KEY}",
-    "models": [
-      { "id": "glm-4-flash", "name": "GLM-4 Flash" }
-    ]
-  }
-}
-```
-
-**xAI (Grok):**
-```json
-{
-  "xai": {
-    "apiKey": "${XAI_API_KEY}",
-    "models": [
-      { "id": "grok-2-1212", "name": "Grok 2" }
-    ]
-  }
-}
-```
 
 ### channels
 
@@ -369,105 +270,18 @@ xopcbot 支持环境变量来存储敏感数据：
 | `GOOGLE_API_KEY` | Google AI API 密钥 |
 | `TELEGRAM_BOT_TOKEN` | Telegram 机器人令牌 |
 | `WHATSAPP_BRIDGE_URL` | WhatsApp 桥接 URL |
+| `XOPCBOT_MODELS_JSON` | 自定义 models.json 文件路径 |
 
 环境变量优先于配置文件中的值。
 
-## 问答
+## 自定义模型配置
 
-### Q: 如何使用多个提供商？
+自定义模型配置（Ollama、vLLM、LM Studio、OpenRouter 等）已移至独立的 `models.json` 文件。
 
-使用 `models` 配置来定义多个提供商。智能体会根据模型 ID 自动选择合适的提供商：
+详见 [models.md](./models.md)。
 
-```json
-{
-  "models": {
-    "mode": "merge",
-    "providers": {
-      "openai": {
-        "baseUrl": "https://api.openai.com/v1",
-        "apiKey": "${OPENAI_API_KEY}",
-        "models": [
-          { "id": "gpt-4o", "name": "GPT-4o" }
-        ]
-      },
-      "anthropic": {
-        "apiKey": "${ANTHROPIC_API_KEY}",
-        "models": [
-          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5", "reasoning": true }
-        ]
-      }
-    }
-  }
-}
-```
+### 为什么分离？
 
-在 `agents.defaults.model` 中设置不同的模型来使用不同的提供商。
-
-### Q: 如何配置 Ollama？
-
-```json
-{
-  "models": {
-    "providers": {
-      "ollama": {
-        "baseUrl": "http://127.0.0.1:11434/v1",
-        "enabled": true,
-        "autoDiscovery": true,
-        "models": [
-          { "id": "llama3", "name": "Llama 3" }
-        ]
-      }
-    }
-  }
-}
-```
-
-### Q: 如何配置 OAuth？
-
-xopcbot 支持以下提供商的 OAuth 认证：
-
-**Kimi (设备码流程 - 推荐):**
-```json
-{
-  "models": {
-    "providers": {
-      "kimi": {
-        "auth": {
-          "type": "oauth",
-          "clientId": "17e5f671-d194-4dfb-9706-5516cb48c098"
-        },
-        "models": [
-          { "id": "kimi-k2.5", "name": "Kimi K2.5", "reasoning": true }
-        ]
-      }
-    }
-  }
-}
-```
-
-Kimi 使用设备码流程 - CLI 会提示您访问 `auth.kimi.com` 并输入代码完成认证。
-
-**其他 OAuth 提供商:**
-```json
-{
-  "models": {
-    "providers": {
-      "anthropic": {
-        "baseUrl": "https://api.anthropic.com",
-        "auth": {
-          "type": "oauth",
-          "clientId": "...",
-          "clientSecret": "..."
-        },
-        "models": []
-      }
-    }
-  }
-}
-```
-
-> **注意:** Qwen OAuth 已移除，改为浏览器登录（运行 `qwen` CLI）。
-
-### Q: 什么是 modelsDev？
-
-启用后，xopcbot 会自动从内置本地缓存加载模型信息，包括来自 OpenAI、Anthropic、Google、Groq、DeepSeek 等提供商的模型。这可以更快地列出模型，无需在运行时发起网络请求。
+- **不同的文件权限** - 可以对敏感 API keys 设置更严格的权限
+- **更方便管理** - 自定义模型配置与主配置分离
+- **热重载** - 修改模型配置时可以热重载而不影响其他设置

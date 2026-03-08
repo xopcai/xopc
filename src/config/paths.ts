@@ -8,6 +8,7 @@ export const DEFAULT_BASE_DIR = join(homedir(), XOPCBOT_DIR);
 
 export const DEFAULT_PATHS = {
   config: join(DEFAULT_BASE_DIR, 'config.json'),
+  modelsJson: join(DEFAULT_BASE_DIR, 'models.json'),
   workspace: join(DEFAULT_BASE_DIR, 'workspace'),
   sessions: join(DEFAULT_BASE_DIR, 'sessions'),
   plugins: join(DEFAULT_BASE_DIR, 'workspace', '.plugins'),
@@ -18,6 +19,10 @@ export const DEFAULT_PATHS = {
 
 export function getDefaultConfigPath(): string {
   return process.env.XOPCBOT_CONFIG || DEFAULT_PATHS.config;
+}
+
+export function getModelsJsonPath(): string {
+  return process.env.XOPCBOT_MODELS_JSON || DEFAULT_PATHS.modelsJson;
 }
 
 export function getDefaultWorkspacePath(): string {

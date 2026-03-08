@@ -75,13 +75,10 @@ export function getAllProviders(): string[] {
 }
 
 export function getApiKey(config: Config | null | undefined, provider: string): string | undefined {
-	// Check config.providers first (handles both string and object formats)
-	const providerConfig = config?.providers?.[provider];
-	if (typeof providerConfig === 'string') {
-		return providerConfig;
-	}
-	if (typeof providerConfig === 'object' && providerConfig !== null && providerConfig.apiKey) {
-		return resolveConfigValue(providerConfig.apiKey);
+	// Check config.providers first (simple string format only)
+	const configKey = config?.providers?.[provider];
+	if (configKey) {
+		return configKey;
 	}
 
 	// Check registry for custom providers

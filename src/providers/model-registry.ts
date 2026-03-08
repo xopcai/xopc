@@ -1,12 +1,13 @@
 /**
- * Model Registry - manages built-in and custom models from config.providers
+ * Model Registry - manages built-in and custom models from models.json
  * 
  * Features:
  * - Loads built-in models from @mariozechner/pi-ai
- * - Loads custom models from config.providers (rich format)
+ * - Loads custom models from ~/.xopcbot/models.json
  * - Supports provider baseUrl/headers overrides
  * - Supports per-model overrides (modelOverrides)
  * - API key resolution with shell commands, env vars, and literals
+ * - Hot reload support
  */
 
 import {
@@ -17,8 +18,18 @@ import {
 	type Model,
 	type KnownProvider,
 } from '@mariozechner/pi-ai';
+import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
+import { dirname } from 'path';
 import { resolveConfigValue, resolveHeaders } from '../config/resolve-config-value.js';
-import type { Config, RichProviderConfig, CustomModel, ModelOverride } from '../config/schema.js';
+import { getModelsJsonPath } from '../config/paths.js';
+import type {
+	ModelsJsonConfig,
+	ProviderConfig,
+	CustomModel,
+	ModelOverride,
+	ValidationResult,
+} from '../config/models-json.js';
+import { validateModelsConfig, getDefaultModelValues } from '../config/models-json.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('ModelRegistry');
@@ -30,7 +41,7 @@ interface ProviderOverride {
 	apiKey?: string;
 }
 
-/** Result of loading custom models from config */
+/** Result of loading custom models from models.json */
 interface CustomModelsResult {
 	models: Model<Api>[];
 	/** Providers with baseUrl/headers/apiKey overrides for built-in models */
@@ -121,36 +132,24 @@ function applyModelOverride(model: Model<Api>, override: ModelOverride): Model<A
 }
 
 /**
- * Model Registry - manages all models (built-in + custom from config)
+ * Model Registry - manages all models (built-in + custom)
  */
 export class ModelRegistry {
 	private models: Model<Api>[] = [];
 	private customProviderApiKeys: Map<string, string> = new Map();
 	private loadError: string | undefined = undefined;
-	private config: Config | undefined;
 
 	// Performance caches
 	private _availableModelsCache: Model<Api>[] | undefined;
 	private _providersCache: string[] | undefined;
 	private _authStatusCache: Map<string, boolean> = new Map();
 
-	constructor(config?: Config) {
-		this.config = config;
-		if (config) {
-			this.loadModels(config);
-		}
+	constructor(private modelsJsonPath: string = getModelsJsonPath()) {
+		this.loadModels();
 	}
 
 	/**
-	 * Update config and reload models
-	 */
-	setConfig(config: Config): void {
-		this.config = config;
-		this.refresh();
-	}
-
-	/**
-	 * Reload models from config
+	 * Reload models from disk (built-in + custom from models.json)
 	 * Clears all caches
 	 */
 	refresh(): void {
@@ -159,14 +158,12 @@ export class ModelRegistry {
 		this._availableModelsCache = undefined;
 		this._providersCache = undefined;
 		this._authStatusCache.clear();
-		if (this.config) {
-			this.loadModels(this.config);
-		}
+		this.loadModels();
 		log.info('Model registry refreshed');
 	}
 
 	/**
-	 * Get any error from loading config (undefined if no error)
+	 * Get any error from loading models.json (undefined if no error)
 	 */
 	getError(): string | undefined {
 		return this.loadError;
@@ -220,7 +217,7 @@ export class ModelRegistry {
 	}
 
 	/**
-	 * Get API key for a provider (for custom providers from config)
+	 * Get API key for a provider (for custom providers from models.json)
 	 */
 	getApiKey(provider: string): string | undefined {
 		// First check custom provider configs
@@ -255,26 +252,27 @@ export class ModelRegistry {
 	}
 
 	/**
-	 * Load all models from config
+	 * Load all models
+	 * Clears caches to ensure fresh data
 	 */
-	private loadModels(config: Config): void {
+	private loadModels(): void {
 		// Clear caches before loading
 		this._availableModelsCache = undefined;
 		this._providersCache = undefined;
 		this._authStatusCache.clear();
 
-		// Load custom models and overrides from config.providers
+		// Load custom models and overrides from models.json
 		const {
 			models: customModels,
 			overrides,
 			modelOverrides,
 			apiKeyConfigs,
 			error,
-		} = this.loadCustomModels(config);
+		} = this.loadCustomModels();
 
 		if (error) {
 			this.loadError = error;
-			log.warn({ error }, 'Failed to load custom models from config, using built-in models only');
+			log.warn({ error }, 'Failed to load models.json, using built-in models only');
 		}
 
 		// Store API key configs for fallback resolution
@@ -353,24 +351,33 @@ export class ModelRegistry {
 	}
 
 	/**
-	 * Load custom models from config.providers
+	 * Load custom models from models.json
 	 */
-	private loadCustomModels(config: Config): CustomModelsResult {
-		if (!config.providers || Object.keys(config.providers).length === 0) {
+	private loadCustomModels(): CustomModelsResult {
+		if (!existsSync(this.modelsJsonPath)) {
 			return emptyCustomModelsResult();
 		}
 
 		try {
+			const content = readFileSync(this.modelsJsonPath, 'utf-8');
+			const config: ModelsJsonConfig = JSON.parse(content);
+
+			// Validate schema
+			const validation = validateModelsConfig(config);
+			if (!validation.valid) {
+				const errors = validation.errors
+					.map((e) => `  - ${e.path}: ${e.message}`)
+					.join('\n');
+				return emptyCustomModelsResult(
+					`Invalid models.json schema:\n${errors}\n\nFile: ${this.modelsJsonPath}`
+				);
+			}
+
 			const overrides = new Map<string, ProviderOverride>();
 			const modelOverrides = new Map<string, Map<string, ModelOverride>>();
 			const apiKeyConfigs = new Map<string, string>();
 
 			for (const [providerName, providerConfig] of Object.entries(config.providers)) {
-				// Skip string configs (simple API key format)
-				if (typeof providerConfig === 'string') {
-					continue;
-				}
-
 				// Apply provider-level baseUrl/headers/apiKey override
 				if (providerConfig.baseUrl || providerConfig.headers || providerConfig.apiKey) {
 					overrides.set(providerName, {
@@ -399,8 +406,13 @@ export class ModelRegistry {
 				error: undefined,
 			};
 		} catch (error) {
+			if (error instanceof SyntaxError) {
+				return emptyCustomModelsResult(
+					`Failed to parse models.json: ${error.message}\n\nFile: ${this.modelsJsonPath}`
+				);
+			}
 			return emptyCustomModelsResult(
-				`Failed to load custom models: ${error instanceof Error ? error.message : error}`
+				`Failed to load models.json: ${error instanceof Error ? error.message : error}\n\nFile: ${this.modelsJsonPath}`
 			);
 		}
 	}
@@ -408,16 +420,11 @@ export class ModelRegistry {
 	/**
 	 * Parse custom models from config
 	 */
-	private parseModels(config: Config): Model<Api>[] {
+	private parseModels(config: ModelsJsonConfig): Model<Api>[] {
 		const models: Model<Api>[] = [];
 		const defaults = getDefaultModelValues();
 
-		for (const [providerName, providerConfig] of Object.entries(config.providers || {})) {
-			// Skip string configs (simple API key format)
-			if (typeof providerConfig === 'string') {
-				continue;
-			}
-
+		for (const [providerName, providerConfig] of Object.entries(config.providers)) {
 			const modelDefs = providerConfig.models ?? [];
 			if (modelDefs.length === 0) continue;
 
@@ -426,6 +433,7 @@ export class ModelRegistry {
 				if (!api) continue;
 
 				// Merge headers: provider headers are base, model headers override
+				// Resolve env vars and shell commands in header values
 				const providerHeaders = resolveHeaders(providerConfig.headers);
 				const modelHeaders = resolveHeaders(modelDef.headers);
 				let headers =
@@ -461,36 +469,18 @@ export class ModelRegistry {
 }
 
 // ============================================
-// Global Registry Instance (lazy init)
+// Global Registry Instance
 // ============================================
 
 let globalRegistry: ModelRegistry | undefined;
 
-export function getModelRegistry(config?: Config): ModelRegistry {
+export function getModelRegistry(): ModelRegistry {
 	if (!globalRegistry) {
-		globalRegistry = new ModelRegistry(config);
+		globalRegistry = new ModelRegistry();
 	}
 	return globalRegistry;
 }
 
 export function resetModelRegistry(): void {
 	globalRegistry = undefined;
-}
-
-// ============================================
-// Default Values
-// ============================================
-
-function getDefaultModelValues(): Required<Pick<CustomModel, 'input' | 'contextWindow' | 'maxTokens' | 'cost'>> {
-	return {
-		input: ['text'],
-		contextWindow: 128000,
-		maxTokens: 16384,
-		cost: {
-			input: 0,
-			output: 0,
-			cacheRead: 0,
-			cacheWrite: 0,
-		},
-	};
 }

@@ -23,7 +23,14 @@ import {
 } from '../../providers/index.js';
 import { createOAuthHandler, loadOAuthCredentialsToCache } from './oauth.js';
 import { testApiKeyResolution } from '../../config/resolve-config-value.js';
-import type { ProviderConfig, RichProviderConfig } from '../../config/schema.js';
+import { 
+  getModelsJsonPath,
+  loadModelsJson,
+  saveModelsJson,
+  validateModelsConfig,
+  type ModelsJsonConfig,
+  type ProviderConfig,
+} from '../../config/models-json.js';
 
 const log = createLogger('HonoApp');
 
@@ -452,78 +459,56 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
   });
 
-  // ========== Providers API (merged from models.json) ==========
+  // ========== Models.json API ==========
 
-  // GET /api/providers - Get current providers configuration from config
-  authenticated.get('/api/providers', async (c) => {
-    const currentConfig = service.currentConfig;
+  // GET /api/models-json - Get models.json configuration
+  authenticated.get('/api/models-json', async (c) => {
+    const path = getModelsJsonPath();
+    const { config, error } = loadModelsJson(path);
     const registry = getModelRegistry();
-    
-    // Extract rich provider configs (object format) from config.providers
-    const richProviders: Record<string, RichProviderConfig> = {};
-    for (const [name, config] of Object.entries(currentConfig.providers || {})) {
-      if (typeof config === 'object' && config !== null) {
-        richProviders[name] = config;
-      }
-    }
     
     return c.json({
       ok: true,
       payload: {
-        providers: richProviders,
-        loadError: registry.getError(),
+        config,
+        path,
+        exists: error === undefined,
+        loadError: error || registry.getError(),
       },
     });
   });
 
-  // POST /api/providers/validate - Validate provider configuration
-  authenticated.post('/api/providers/validate', async (c) => {
+  // POST /api/models-json/validate - Validate models.json configuration
+  authenticated.post('/api/models-json/validate', async (c) => {
     const body = await c.req.json();
-    const { provider, config } = body;
+    const { config } = body;
     
-    // Simple validation - check if config has required fields for custom models
-    const errors: string[] = [];
-    if (config.models && config.models.length > 0) {
-      if (!config.baseUrl) {
-        errors.push('baseUrl is required when defining custom models');
-      }
-      if (!config.apiKey) {
-        errors.push('apiKey is required when defining custom models');
-      }
-      for (const model of config.models) {
-        if (!model.api && !config.api) {
-          errors.push(`api is required for model "${model.id}" when not specified at provider level`);
-        }
-      }
-    }
+    const result = validateModelsConfig(config);
     
     return c.json({
       ok: true,
-      payload: { valid: errors.length === 0, errors },
+      payload: result,
     });
   });
 
-  // PATCH /api/providers/:name - Save provider configuration
-  authenticated.patch('/api/providers/:name', async (c) => {
-    const name = c.req.param('name');
+  // PATCH /api/models-json - Save models.json configuration
+  authenticated.patch('/api/models-json', async (c) => {
     const body = await c.req.json();
-    const { config: providerConfig } = body;
+    const { config } = body;
     
-    // Update config.providers
-    const currentConfig = service.currentConfig;
-    const updatedProviders = { ...currentConfig.providers, [name]: providerConfig };
+    const path = getModelsJsonPath();
+    const result = saveModelsJson(path, config);
     
-    // TODO: Persist config to file (requires config loader update)
-    // For now, just update in-memory config
-    (currentConfig as any).providers = updatedProviders;
+    if (!result.success) {
+      return c.json({ ok: false, error: result.error }, 400);
+    }
     
     // Refresh registry
     const registry = getModelRegistry();
-    registry.setConfig(currentConfig);
+    registry.refresh();
     
     // Emit event
-    service.emit('providers.updated', { 
-      provider: name,
+    service.emit('models-json.updated', { 
       modelCount: registry.getAll().length,
     });
     
@@ -531,41 +516,20 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       ok: true, 
       payload: { 
         saved: true,
-        provider: name,
         modelCount: registry.getAll().length,
       },
     });
   });
 
-  // DELETE /api/providers/:name - Remove provider configuration
-  authenticated.delete('/api/providers/:name', async (c) => {
-    const name = c.req.param('name');
-    
-    const currentConfig = service.currentConfig;
-    const updatedProviders = { ...currentConfig.providers };
-    delete updatedProviders[name];
-    
-    // TODO: Persist config to file
-    (currentConfig as any).providers = updatedProviders;
-    
-    // Refresh registry
-    const registry = getModelRegistry();
-    registry.setConfig(currentConfig);
-    
-    service.emit('providers.deleted', { provider: name });
-    
-    return c.json({ ok: true, payload: { deleted: true, provider: name } });
-  });
-
-  // POST /api/providers/reload - Hot reload registry
-  authenticated.post('/api/providers/reload', async (c) => {
+  // POST /api/models-json/reload - Hot reload models.json
+  authenticated.post('/api/models-json/reload', async (c) => {
     const registry = getModelRegistry();
     registry.refresh();
     
     const error = registry.getError();
     const models = registry.getAll();
     
-    service.emit('providers.reloaded', { 
+    service.emit('models-json.reloaded', { 
       modelCount: models.length,
       error: error || undefined,
     });
@@ -579,8 +543,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     });
   });
 
-  // POST /api/providers/test-api-key - Test API key resolution
-  authenticated.post('/api/providers/test-api-key', async (c) => {
+  // POST /api/models-json/test-api-key - Test API key resolution
+  authenticated.post('/api/models-json/test-api-key', async (c) => {
     const body = await c.req.json();
     const { value } = body;
     

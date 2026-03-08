@@ -14,7 +14,7 @@ import { SessionManager } from '../session/index.js';
 import type { Config } from '../config/schema.js';
 import type { SessionListQuery, ExportFormat } from '../types/index.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
-import { getModelRegistry, getAllProviders as getAllModelProviders } from '../providers/index.js';
+import { getModelRegistry } from '../providers/index.js';
 
 const log = createLogger('GatewayService');
 
@@ -86,12 +86,11 @@ export class GatewayService {
     this.workspacePath = getWorkspacePath(this.config) || './workspace';
     this.initializePlugins();
 
-    // Initialize ModelRegistry with config
-    const registry = getModelRegistry(this.config);
-    const builtinProviders = new Set(getAllModelProviders().filter(p => !this.config.providers?.[p]));
+    // Initialize ModelRegistry (loads from models.json)
+    const registry = getModelRegistry();
     log.info({ 
-      modelCount: registry.getAll().length, 
-      customModelCount: registry.getAll().filter(m => !builtinProviders.has(m.provider)).length 
+      modelCount: registry.getAll().length,
+      error: registry.getError(),
     }, 'ModelRegistry initialized');
 
     // Initialize agent service with plugin registry
