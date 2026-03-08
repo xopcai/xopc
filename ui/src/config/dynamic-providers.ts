@@ -5,6 +5,14 @@
  * Falls back to static templates when API is unavailable.
  */
 
+import { getToken } from '../utils/storage.js';
+
+// Helper to get auth headers
+function getAuthHeaders(): Record<string, string> {
+  const token = getToken();
+  return token ? { 'Authorization': `Bearer ${token}` } : {};
+}
+
 // Cache for API response to avoid duplicate requests
 let _cachedModelsResponse: Array<{
   id: string;
@@ -45,7 +53,9 @@ async function fetchModelsFromApi(): Promise<Array<{
   }
   
   const url = window.location.origin;
-  const response = await fetch(`${url}/api/models`);
+  const response = await fetch(`${url}/api/models`, {
+    headers: getAuthHeaders(),
+  });
   
   if (!response.ok) {
     console.warn('Failed to load models from API');
@@ -80,7 +90,9 @@ async function fetchAllProvidersFromApi(): Promise<Array<{
   }
   
   const url = window.location.origin;
-  const response = await fetch(`${url}/api/providers`);
+  const response = await fetch(`${url}/api/providers`, {
+    headers: getAuthHeaders(),
+  });
   
   if (!response.ok) {
     console.warn('Failed to load providers from API');
