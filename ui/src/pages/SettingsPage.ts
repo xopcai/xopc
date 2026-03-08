@@ -883,28 +883,60 @@ export class SettingsPage extends LitElement {
     if (dirtyProviders.length > 0) {
       updates.models = { mode: 'merge', providers: {} };
       if (this._dirtyFields.has('openaiApiKey')) {
-        updates.models.providers.openai = { apiKey: this._values.openaiApiKey, models: [] };
+        const existing = this._providers.find(p => p.id === 'openai');
+        updates.models.providers.openai = { 
+          apiKey: this._values.openaiApiKey, 
+          models: existing?.models || [] 
+        };
       }
       if (this._dirtyFields.has('anthropicApiKey')) {
-        updates.models.providers.anthropic = { apiKey: this._values.anthropicApiKey, models: [] };
+        const existing = this._providers.find(p => p.id === 'anthropic');
+        updates.models.providers.anthropic = { 
+          apiKey: this._values.anthropicApiKey, 
+          models: existing?.models || [] 
+        };
       }
       if (this._dirtyFields.has('googleApiKey')) {
-        updates.models.providers.google = { apiKey: this._values.googleApiKey, models: [] };
+        const existing = this._providers.find(p => p.id === 'google');
+        updates.models.providers.google = { 
+          apiKey: this._values.googleApiKey, 
+          models: existing?.models || [] 
+        };
       }
       if (this._dirtyFields.has('qwenApiKey')) {
-        updates.models.providers.qwen = { apiKey: this._values.qwenApiKey, models: [] };
+        const existing = this._providers.find(p => p.id === 'qwen');
+        updates.models.providers.qwen = { 
+          apiKey: this._values.qwenApiKey, 
+          models: existing?.models || [] 
+        };
       }
       if (this._dirtyFields.has('kimiApiKey')) {
-        updates.models.providers.kimi = { apiKey: this._values.kimiApiKey, models: [] };
+        const existing = this._providers.find(p => p.id === 'kimi');
+        updates.models.providers.kimi = { 
+          apiKey: this._values.kimiApiKey, 
+          models: existing?.models || [] 
+        };
       }
       if (this._dirtyFields.has('minimaxApiKey')) {
-        updates.models.providers.minimax = { apiKey: this._values.minimaxApiKey, models: [] };
+        const existing = this._providers.find(p => p.id === 'minimax');
+        updates.models.providers.minimax = { 
+          apiKey: this._values.minimaxApiKey, 
+          models: existing?.models || [] 
+        };
       }
       if (this._dirtyFields.has('deepseekApiKey')) {
-        updates.models.providers.deepseek = { apiKey: this._values.deepseekApiKey, models: [] };
+        const existing = this._providers.find(p => p.id === 'deepseek');
+        updates.models.providers.deepseek = { 
+          apiKey: this._values.deepseekApiKey, 
+          models: existing?.models || [] 
+        };
       }
       if (this._dirtyFields.has('openrouterApiKey')) {
-        updates.models.providers.openrouter = { apiKey: this._values.openrouterApiKey, models: [] };
+        const existing = this._providers.find(p => p.id === 'openrouter');
+        updates.models.providers.openrouter = { 
+          apiKey: this._values.openrouterApiKey, 
+          models: existing?.models || [] 
+        };
       }
     }
 
