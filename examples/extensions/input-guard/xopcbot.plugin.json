@@ -1,7 +1,7 @@
 {
   "id": "input-guard",
   "name": "Input Guard",
-  "description": "Example plugin demonstrating input hook - content moderation and command interception",
+  "description": "Example extension demonstrating input hook - content moderation and command interception",
   "version": "1.0.0",
   "kind": "utility",
   "main": "index.ts",

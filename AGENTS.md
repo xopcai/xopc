@@ -445,7 +445,7 @@ pnpm install --frozen-lockfile
 | `channels` | Telegram settings |
 | `gateway` | HTTP server settings |
 | `cron` | Scheduled task settings |
-| `plugins` | Plugin enable/disable configuration |
+| `extensions` | Extension enable/disable configuration |
 
 ### Telegram Multi-Account Configuration
 

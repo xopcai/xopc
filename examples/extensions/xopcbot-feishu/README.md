@@ -1,6 +1,6 @@
-# Xopcbot Feishu Plugin
+# Xopcbot Feishu Extension
 
-Feishu/Lark (飞书) channel plugin for xopcbot with WebSocket-based messaging.
+Feishu/Lark (飞书) channel extension for xopcbot with WebSocket-based messaging.
 
 ## Features
 
@@ -16,10 +16,10 @@ Feishu/Lark (飞书) channel plugin for xopcbot with WebSocket-based messaging.
 
 ```bash
 # From local path
-xopcbot plugin install ./examples/plugins/xopcbot-feishu
+xopcbot extension install ./examples/extensions/xopcbot-feishu
 
 # Or copy to workspace
-xopcbot plugin install /path/to/xopcbot-feishu
+xopcbot extension install /path/to/xopcbot-feishu
 ```
 
 ## Configuration
@@ -28,7 +28,7 @@ Add to your `config.json`:
 
 ```json
 {
-  "plugins": {
+  "extensions": {
     "enabled": ["xopcbot-feishu"],
     "xopcbot-feishu": {
       "enabled": true,
@@ -156,7 +156,7 @@ Response → Feishu API
 
 ```
 xopcbot-feishu/
-├── index.ts          # Plugin entry point
+├── index.ts          # Extension entry point
 ├── src/
 │   ├── types.ts      # TypeScript types
 │   ├── client.ts     # Feishu SDK wrapper
@@ -165,7 +165,7 @@ xopcbot-feishu/
 │   ├── policy.ts     # Access control
 │   ├── send.ts       # Message sending
 │   └── media.ts      # Media handling
-├── xopcbot.plugin.json  # Plugin manifest
+├── xopcbot.extension.json  # Extension manifest
 └── package.json      # Dependencies
 ```
 

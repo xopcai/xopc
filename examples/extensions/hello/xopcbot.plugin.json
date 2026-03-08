@@ -1,7 +1,7 @@
 {
   "id": "hello",
   "name": "Hello World",
-  "description": "A simple example plugin that demonstrates the plugin system",
+  "description": "A simple example extension that demonstrates the extension system",
   "version": "1.0.0",
   "kind": "utility",
   "main": "index.ts",

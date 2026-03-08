@@ -1,7 +1,7 @@
 {
   "id": "weather-service",
   "name": "Weather Service",
-  "description": "Provides weather data to other plugins via typed event bus",
+  "description": "Provides weather data to other extensions via typed event bus",
   "version": "1.0.0",
   "kind": "utility",
   "main": "index.ts",

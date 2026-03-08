@@ -1,4 +1,4 @@
-# Progress Tracker Plugin
+# Progress Tracker Extension
 
 **演示功能:** Phase 2 Enhanced Tool - 流式更新
 
@@ -9,7 +9,7 @@
 
 **使用方法:**
 ```bash
-xopcbot plugin install ./examples/plugins/progress-tracker
+xopcbot extension install ./examples/extensions/progress-tracker
 ```
 
 **代码量:** ~80 行（精简前 217 行）

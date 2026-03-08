@@ -1,7 +1,7 @@
 {
   "id": "xopcbot-feishu",
   "name": "Xopcbot Feishu",
-  "description": "Feishu/Lark (飞书) channel plugin for xopcbot - WebSocket based messaging",
+  "description": "Feishu/Lark (飞书) channel extension for xopcbot - WebSocket based messaging",
   "version": "1.0.0",
   "kind": "channel",
   "main": "index.ts",

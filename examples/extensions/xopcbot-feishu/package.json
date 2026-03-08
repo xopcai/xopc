@@ -1,7 +1,7 @@
 {
   "name": "xopcbot-feishu",
   "version": "1.0.0",
-  "description": "Feishu/Lark channel plugin for xopcbot",
+  "description": "Feishu/Lark channel extension for xopcbot",
   "type": "module",
   "main": "index.ts",
   "scripts": {

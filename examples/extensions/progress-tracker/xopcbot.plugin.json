@@ -1,7 +1,7 @@
 {
   "id": "progress-tracker",
   "name": "Progress Tracker",
-  "description": "Example plugin demonstrating Phase 2 enhanced tools with streaming updates and state persistence",
+  "description": "Example extension demonstrating Phase 2 enhanced tools with streaming updates and state persistence",
   "version": "1.0.0",
   "kind": "tool",
   "main": "index.ts",

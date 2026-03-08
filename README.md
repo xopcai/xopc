@@ -2,7 +2,7 @@
 
 <div align="center">
   <p>
-    <strong>An ultra-lightweight, plugin-driven personal AI assistant built with Node.js and TypeScript.</strong>
+    <strong>An ultra-lightweight, extension-driven personal AI assistant built with Node.js and TypeScript.</strong>
   </p>
   <p>
     <a href="https://github.com/xopcai/xopcbot">

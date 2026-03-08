@@ -1,7 +1,7 @@
 {
   "id": "context-injector",
   "name": "Context Injector",
-  "description": "Example plugin demonstrating context hook - injects system messages before LLM calls",
+  "description": "Example extension demonstrating context hook - injects system messages before LLM calls",
   "version": "1.0.0",
   "kind": "utility",
   "main": "index.ts",

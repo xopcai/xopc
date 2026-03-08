@@ -1,29 +1,29 @@
-# xopcbot Plugin Examples
+# xopcbot Extension Examples
 
-This directory contains example plugins demonstrating the xopcbot plugin system.
+This directory contains example extensions demonstrating the xopcbot extension system.
 
 ## Available Examples
 
 ### Phase 3: Inter-Extension Communication (New!)
 
-#### 6. Cross-Plugin Communication (`cross-plugin-comm/`)
+#### 6. Cross-Extension Communication (`cross-extension-comm/`)
 
 Demonstrates **TypedEventBus** for inter-extension communication:
 
 - **Type-safe Events**: `api.events.on()` and `api.events.emit()`
 - **Request-Response Pattern**: `api.events.request()` and `api.events.onRequest()`
 - **Wildcard Subscriptions**: `api.events.onWildcard('user:*')`
-- **Automatic Cleanup**: Listeners removed when plugin unloads
+- **Automatic Cleanup**: Listeners removed when extension unloads
 
 **Installation:**
 ```bash
-xopcbot plugin install ./examples/plugins/cross-plugin-comm
+xopcbot extension install ./examples/extensions/cross-extension-comm
 ```
 
 **Features:**
 - Provides weather service via `weather:get` request
 - Broadcasts weather updates via `weather:updated` events
-- Other plugins can request data or subscribe to updates
+- Other extensions can request data or subscribe to updates
 - Demonstrates full Phase 3 capabilities
 
 ---
@@ -41,7 +41,7 @@ Demonstrates the **Enhanced Tool System** with streaming and state persistence:
 
 **Installation:**
 ```bash
-xopcbot plugin install ./examples/plugins/progress-tracker
+xopcbot extension install ./examples/extensions/progress-tracker
 ```
 
 **Features:**
@@ -65,13 +65,13 @@ Demonstrates the **context hook** - modify messages before sending to LLM:
 
 **Installation:**
 ```bash
-xopcbot plugin install ./examples/plugins/context-injector
+xopcbot extension install ./examples/extensions/context-injector
 ```
 
 **Configuration:**
 ```json
 {
-  "plugins": {
+  "extensions": {
     "enabled": ["context-injector"],
     "context-injector": {
       "injectedContext": "Always respond in Chinese.",
@@ -84,7 +84,7 @@ xopcbot plugin install ./examples/plugins/context-injector
 **Features:**
 - Every LLM request automatically includes your custom context
 - Use `!summarize <text>` to auto-expand to full prompt
-- Use `!status` for instant plugin status (no LLM call)
+- Use `!status` for instant extension status (no LLM call)
 - Track turn statistics automatically
 
 ---
@@ -100,13 +100,13 @@ Demonstrates the **input hook** - intercept and process user input:
 
 **Installation:**
 ```bash
-xopcbot plugin install ./examples/plugins/input-guard
+xopcbot extension install ./examples/extensions/input-guard
 ```
 
 **Configuration:**
 ```json
 {
-  "plugins": {
+  "extensions": {
     "enabled": ["input-guard"],
     "input-guard": {
       "blockedWords": ["spam", "scam", "inappropriate"],
@@ -129,7 +129,7 @@ xopcbot plugin install ./examples/plugins/input-guard
 
 #### 1. Hello World (`hello/`)
 
-A comprehensive example showing all basic plugin features:
+A comprehensive example showing all basic extension features:
 
 - **Tool Registration**: Custom `hello` tool with parameters
 - **Command Registration**: `/hello` command
@@ -140,7 +140,7 @@ A comprehensive example showing all basic plugin features:
 
 **Installation:**
 ```bash
-xopcbot plugin install ./examples/plugins/hello
+xopcbot extension install ./examples/extensions/hello
 ```
 
 **Usage:**
@@ -150,7 +150,7 @@ xopcbot plugin install ./examples/plugins/hello
 
 # Or configure in config.json
 {
-  "plugins": {
+  "extensions": {
     "enabled": ["hello"],
     "hello": {
       "greeting": "Hi",
@@ -172,7 +172,7 @@ Demonstrates message processing and modification:
 
 **Installation:**
 ```bash
-xopcbot plugin install ./examples/plugins/echo
+xopcbot extension install ./examples/extensions/echo
 ```
 
 **Usage:**
@@ -182,7 +182,7 @@ xopcbot plugin install ./examples/plugins/echo
 
 # Configure defaults
 {
-  "plugins": {
+  "extensions": {
     "enabled": ["echo"],
     "echo": {
       "prefix": "[Bot]",
@@ -208,30 +208,30 @@ See the [Context Injector](#3-context-injector) and [Input Guard](#4-input-guard
 
 ---
 
-## Creating Your Own Plugin
+## Creating Your Own Extension
 
-Use the CLI to scaffold a new plugin:
+Use the CLI to scaffold a new extension:
 
 ```bash
-xopcbot plugin create my-plugin --name "My Plugin" --kind utility
+xopcbot extension create my-extension --name "My Extension" --kind utility
 ```
 
 Or copy an example and modify:
 
 ```bash
-cp -r examples/plugins/context-injector workspace/.plugins/my-plugin
-cd workspace/.plugins/my-plugin
-# Edit index.ts and xopcbot.plugin.json
+cp -r examples/extensions/context-injector workspace/.extensions/my-extension
+cd workspace/.extensions/my-extension
+# Edit index.ts and xopcbot.extension.json
 ```
 
 ---
 
-## Plugin Development Tips
+## Extension Development Tips
 
 1. **Use TypeScript**: Examples use `.ts` files which are loaded via jiti
-2. **Import from SDK**: Always use `import type { ... } from 'xopcbot/plugin-sdk'`
+2. **Import from SDK**: Always use `import type { ... } from 'xopcbot/extension-sdk'`
 3. **Test Locally**: Install from local path before publishing
-4. **Add Config Schema**: Define your plugin's configuration options
+4. **Add Config Schema**: Define your extension's configuration options
 5. **Handle Errors**: Wrap async operations in try/catch
 6. **Use Logger**: Use `api.logger` instead of console
 
@@ -239,4 +239,4 @@ cd workspace/.plugins/my-plugin
 
 ## More Information
 
-See [Plugin Development Guide](../../docs/plugins.md) for complete documentation.
+See [Extension Development Guide](../../docs/extensions.md) for complete documentation.

@@ -1,17 +1,17 @@
 {
-  "name": "xopcbot-plugin-echo",
+  "name": "xopcbot-extension-echo",
   "version": "1.0.0",
   "description": "Echoes messages back with modifications",
   "main": "index.ts",
   "xopcbot": {
-    "plugin": true,
+    "extension": true,
     "id": "echo",
     "name": "Echo Plugin",
     "kind": "utility"
   },
   "keywords": [
     "xopcbot",
-    "xopcbot-plugin"
+    "xopcbot-extension"
   ],
   "license": "MIT"
 }
