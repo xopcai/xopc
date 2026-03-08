@@ -46,7 +46,22 @@ export class XopcbotApp extends LitElement {
   @state() private _navMobileOpen = false; // Mobile overlay state
   @state() private _theme: 'light' | 'dark' | 'system' = 'system';
   @state() private _language: 'en' | 'zh' = 'en';
-  @state() private _chatRoute: ChatRoute = { type: 'recent' };
+  @state() private _chatRoute: ChatRoute;
+
+  constructor() {
+    super();
+    // Parse URL hash immediately to set correct initial route
+    this._chatRoute = this._parseInitialRoute();
+  }
+
+  private _parseInitialRoute(): ChatRoute {
+    const hash = location.hash.slice(1);
+    if (hash.startsWith('chat')) {
+      const chatRoute = parseChatHash(hash);
+      if (chatRoute) return chatRoute;
+    }
+    return { type: 'recent' };
+  }
   @state() private _showTokenDialog = false;
   @state() private _tokenExpired = false;
 
@@ -55,10 +70,6 @@ export class XopcbotApp extends LitElement {
   // Legacy property support
   get gatewayConfig() { return this._gatewayConfig; }
   set gatewayConfig(value) { this._gatewayConfig = value || { url: window.location.origin }; }
-
-  constructor() {
-    super();
-  }
 
   private _initializeToken(): void {
     // Check URL for token parameter

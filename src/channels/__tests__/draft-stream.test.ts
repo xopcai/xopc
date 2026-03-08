@@ -17,7 +17,12 @@ describe('createTelegramDraftStream', () => {
   };
 
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('should create draft stream', () => {
@@ -41,8 +46,8 @@ describe('createTelegramDraftStream', () => {
 
     stream.update('Hello world');
 
-    // Wait for throttle
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    // Advance timers past throttle
+    await vi.advanceTimersByTimeAsync(1100);
 
     expect(mockApi.sendMessage).toHaveBeenCalledWith(
       '123456',
@@ -58,10 +63,10 @@ describe('createTelegramDraftStream', () => {
     });
 
     stream.update('Hello');
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     stream.update('Hello world');
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     expect(mockApi.sendMessage).toHaveBeenCalledTimes(1);
     expect(mockApi.editMessageText).toHaveBeenCalledTimes(1);
@@ -80,10 +85,10 @@ describe('createTelegramDraftStream', () => {
     });
 
     stream.update('Hello world');
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     stream.update('Hello world'); // Same content
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     expect(mockApi.sendMessage).toHaveBeenCalledTimes(1);
     expect(mockApi.editMessageText).not.toHaveBeenCalled();
@@ -98,7 +103,7 @@ describe('createTelegramDraftStream', () => {
 
     const longText = 'a'.repeat(150);
     stream.update(longText);
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     // Stream should be stopped, no more messages sent
     // Note: The first message may or may not be sent depending on timing
@@ -113,7 +118,7 @@ describe('createTelegramDraftStream', () => {
     });
 
     stream.update('Hello');
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     expect(stream.messageId()).toBe(123);
   });
@@ -130,11 +135,11 @@ describe('createTelegramDraftStream', () => {
     });
 
     stream.update('Hello');
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     // Stream should be stopped
     stream.update('More text');
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     expect(errorApi.editMessageText).not.toHaveBeenCalled();
   });
@@ -158,7 +163,7 @@ describe('createTelegramDraftStream', () => {
     });
 
     stream.update('Hello');
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     await stream.clear();
 
@@ -175,7 +180,7 @@ describe('createTelegramDraftStream', () => {
     stream.stop();
 
     stream.update('More text');
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     expect(mockApi.sendMessage).not.toHaveBeenCalled();
   });
@@ -187,12 +192,12 @@ describe('createTelegramDraftStream', () => {
     });
 
     stream.update('First message');
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     stream.forceNewMessage();
 
     stream.update('Second message');
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     expect(mockApi.sendMessage).toHaveBeenCalledTimes(2);
   });
@@ -205,7 +210,7 @@ describe('createTelegramDraftStream', () => {
     });
 
     stream.update('Thread message');
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     expect(mockApi.sendMessage).toHaveBeenCalledWith(
       '123456',
@@ -224,7 +229,7 @@ describe('createTelegramDraftStream', () => {
     });
 
     stream.update('<b>Bold</b>');
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     expect(mockApi.sendMessage).toHaveBeenCalledWith(
       '123456',
@@ -239,12 +244,13 @@ describe('createTelegramDraftStream', () => {
 describe('DraftStreamManager', () => {
   let manager: DraftStreamManager;
 
-  beforeEach(async () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
     manager = new DraftStreamManager();
   });
 
-  afterEach(async () => {
-    await manager.stopAll();
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('should create stream for new key', () => {
@@ -321,7 +327,7 @@ describe('DraftStreamManager', () => {
     stream.stop();
 
     // Wait for auto-cleanup
-    await new Promise(resolve => setTimeout(resolve, 100));
+    await vi.advanceTimersByTimeAsync(100);
 
     expect(manager.get('chat1')).toBeUndefined();
   });
@@ -342,7 +348,12 @@ describe('createTelegramDraftStream with progress', () => {
   };
 
   beforeEach(() => {
+    vi.useFakeTimers();
     vi.clearAllMocks();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it('should support setProgress method when enabled', () => {
@@ -389,7 +400,7 @@ describe('createTelegramDraftStream with progress', () => {
     // Update with content
     stream.updateWithProgress('File content here');
 
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     // Should include progress indicator
     expect(mockApi.sendMessage).toHaveBeenCalled();
@@ -410,7 +421,7 @@ describe('createTelegramDraftStream with progress', () => {
     stream.setProgress('executing', 'npm install');
     stream.updateWithProgress('Running command...');
 
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     expect(mockApi.sendMessage).toHaveBeenCalled();
     const callArgs = mockApi.sendMessage.mock.calls[0];
@@ -428,7 +439,7 @@ describe('createTelegramDraftStream with progress', () => {
     stream.setProgress('idle');
     stream.updateWithProgress('Hello world');
 
-    await new Promise(resolve => setTimeout(resolve, 1100));
+    await vi.advanceTimersByTimeAsync(1100);
 
     expect(mockApi.sendMessage).toHaveBeenCalled();
     const callArgs = mockApi.sendMessage.mock.calls[0];
@@ -442,6 +453,8 @@ describe('createTelegramDraftStream with progress', () => {
     const expectedEmojis = ['🤔', '🔍', '📖', '✍️', '⚙️', '📊'];
 
     for (let i = 0; i < stages.length; i++) {
+      mockApi.sendMessage.mockClear();
+
       const stream = createTelegramDraftStream({
         api: mockApi as any,
         chatId: `123456${i}`, // Use unique chatId
@@ -451,12 +464,12 @@ describe('createTelegramDraftStream with progress', () => {
       stream.setProgress(stages[i], 'test detail');
       stream.updateWithProgress('Content');
 
-      await new Promise(resolve => setTimeout(resolve, 1100));
+      await vi.advanceTimersByTimeAsync(1100);
 
       expect(mockApi.sendMessage).toHaveBeenCalled();
-      const callArgs = mockApi.sendMessage.mock.calls[i];
+      const callArgs = mockApi.sendMessage.mock.calls[0];
       expect(callArgs[1]).toContain(expectedEmojis[i]);
       expect(callArgs[1]).toContain('test detail');
     }
-  }, 15000);
+  });
 });

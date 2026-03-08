@@ -1,5 +1,6 @@
 // Sliding Window Memory - Keep only recent messages
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { Message } from '@mariozechner/pi-ai';
 
 export interface WindowConfig {
   maxMessages: number;
@@ -30,11 +31,11 @@ export class SlidingWindow {
 
     // Separate system-like messages (role not in standard set)
     const systemMessages = messages.filter(m => {
-      const role = (m as any).role;
+      const role = (m as Message).role;
       return role !== 'user' && role !== 'assistant' && role !== 'toolResult';
     });
     const otherMessages = messages.filter(m => {
-      const role = (m as any).role;
+      const role = (m as Message).role;
       return role === 'user' || role === 'assistant' || role === 'toolResult';
     });
 
@@ -73,12 +74,12 @@ export class SlidingWindow {
     return {
       total: messages.length,
       system: messages.filter(m => {
-        const role = (m as any).role;
+        const role = (m as Message).role;
         return role !== 'user' && role !== 'assistant' && role !== 'toolResult';
       }).length,
-      user: messages.filter(m => (m as any).role === 'user').length,
-      assistant: messages.filter(m => (m as any).role === 'assistant').length,
-      tool: messages.filter(m => (m as any).role === 'toolResult').length,
+      user: messages.filter(m => (m as Message).role === 'user').length,
+      assistant: messages.filter(m => (m as Message).role === 'assistant').length,
+      tool: messages.filter(m => (m as Message).role === 'toolResult').length,
       needsTrim: this.needsTrim(messages),
     };
   }

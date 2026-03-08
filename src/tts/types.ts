@@ -53,8 +53,8 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
   provider: 'openai',
   trigger: 'auto',
   alibaba: {
-    model: 'cosyvoice-v1',
-    voice: 'longxiaochun',
+    model: 'qwen-tts',
+    voice: 'Cherry',
   },
   openai: {
     model: 'tts-1',

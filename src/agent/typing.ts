@@ -16,12 +16,12 @@ export function createTypingController(params: {
     if (stopped) return;
     if (typingTimer) return;
 
-    onStart();
+    onStart().catch(() => {}); // typing is best-effort; errors must not propagate
     typingTimer = setInterval(() => {
       if (stopped) {
         stop();
       } else {
-        onStart();
+        onStart().catch(() => {});
       }
     }, intervalSeconds * 1000);
   };
@@ -32,7 +32,7 @@ export function createTypingController(params: {
       typingTimer = null;
     }
     if (!stopped) {
-      onStop();
+      onStop().catch(() => {}); // best-effort
     }
     stopped = true;
   };

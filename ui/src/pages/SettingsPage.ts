@@ -250,7 +250,7 @@ export class SettingsPage extends LitElement {
             stt: config.stt || {
               enabled: false,
               provider: 'alibaba',
-              alibaba: { model: 'paraformer-v1' },
+              alibaba: { model: 'paraformer-v2' },
               openai: { model: 'whisper-1' },
               fallback: { enabled: true, order: ['alibaba', 'openai'] },
             },
@@ -258,7 +258,7 @@ export class SettingsPage extends LitElement {
               enabled: false,
               provider: 'openai',
               trigger: 'auto',
-              alibaba: { model: 'cosyvoice-v1', voice: 'longxiaochun' },
+              alibaba: { model: 'qwen-tts', voice: 'Cherry' },
               openai: { model: 'tts-1', voice: 'alloy' },
             },
           };
@@ -1027,6 +1027,7 @@ export class SettingsPage extends LitElement {
     return html`
       <voice-config-section
         .config=${{ stt: this._settings.stt, tts: this._settings.tts }}
+        .token=${this.config?.token}
         .onChange=${(path: string, value: unknown) => this._updateSettings(path, value)}
       ></voice-config-section>
     `;

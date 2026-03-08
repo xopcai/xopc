@@ -2,6 +2,7 @@
 import { Command } from 'commander';
 import { registry, createDefaultContext, type CLIContext } from './registry.js';
 import pkg from '../../package.json' with { type: 'json' };
+import { flushAndClose } from '../utils/logger.js'; // Import flushAndClose for graceful shutdown
 
 // Import order determines display order in help
 import './commands/setup.js';
@@ -24,6 +25,9 @@ export function getContextWithOpts(argv: string[] = process.argv): CLIContext {
   return createDefaultContext(argv, parsedOpts);
 }
 
+// Long-running commands that should not auto-exit
+const LONG_RUNNING_COMMANDS = new Set(['gateway', 'agent']);
+
 const program = new Command()
   .name('xopcbot')
   .description('Ultra-Lightweight Personal AI Assistant')
@@ -35,6 +39,18 @@ const program = new Command()
 // Hook to capture parsed options before each command runs
 program.hook('preAction', (thisCommand) => {
   parsedOpts = thisCommand.opts();
+});
+
+// Hook to ensure process exits after command completion
+program.hook('postAction', async (thisCommand) => {
+  const commandName = thisCommand.name();
+  // Skip long-running commands (gateway foreground, agent interactive)
+  if (LONG_RUNNING_COMMANDS.has(commandName)) {
+    return;
+  }
+  // For all other commands, flush logs and exit
+  await flushAndClose();
+  process.exit(0);
 });
 
 // Create initial context (will use env vars and defaults)

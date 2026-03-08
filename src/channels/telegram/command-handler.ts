@@ -9,7 +9,7 @@ import type { Context } from 'grammy';
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/index.js';
 import { TelegramInlineKeyboards, type ProviderInfo } from './inline-keyboards.js';
-import { getProviderDisplayName, getModelsByProvider, DEFAULT_MODEL, getAllProviders, isProviderConfigured } from '../../providers/index.js';
+import { getProviderDisplayName, getModelsByProvider, getDefaultModel, getAllProviders, isProviderConfigured } from '../../providers/index.js';
 import { generateSessionKey } from '../../commands/session-key.js';
 
 const log = createLogger('TelegramCommandHandler');
@@ -68,7 +68,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     const chatId = String(ctx.chat?.id);
     const senderId = String(ctx.from?.id);
     const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
-    const threadId = (ctx.message as any)?.message_thread_id;
+    const threadId = (ctx.message as { message_thread_id?: number })?.message_thread_id;
 
     return generateSessionKey({
       source: 'telegram',
@@ -158,7 +158,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     try {
       const sessionKey = getSessionKeyFromCtx(ctx);
       const modelConfig = config.agents?.defaults?.model;
-      const defaultModel = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary || DEFAULT_MODEL;
+      const defaultModel = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary || getDefaultModel(config);
       const currentModel = getSessionModel(sessionKey) || defaultModel;
 
       const models = getModelsForProvider(providerId);

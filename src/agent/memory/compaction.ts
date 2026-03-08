@@ -1,6 +1,6 @@
-// Session Compaction - Compress old messages using LLM summary
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import { complete, type Model, type Api } from '@mariozechner/pi-ai';
+import { complete, type Model, type Api, type UserMessage } from '@mariozechner/pi-ai';
+import { generateStructuredSummary, formatSummaryAsText, type ConversationSummary } from './summary-generator.js';
 
 export interface CompactionResult {
   summary: string;
@@ -8,6 +8,13 @@ export interface CompactionResult {
   tokensBefore: number;
   tokensAfter: number;
   compacted: boolean;
+  structuredSummary?: ConversationSummary;
+  compactedUsage?: {
+    input: number;
+    output: number;
+    total: number;
+    cost?: number;
+  };
 }
 
 export interface CompactionConfig {
@@ -18,6 +25,10 @@ export interface CompactionConfig {
   minMessagesBeforeCompact: number;
   keepRecentMessages: number;
   summaryMaxTokens: number;
+  evictionWindow: number;
+  retentionWindow: number;
+  preserveReasoning: boolean;
+  accumulateUsage: boolean;
 }
 
 const DEFAULT_CONFIG: CompactionConfig = {
@@ -28,9 +39,12 @@ const DEFAULT_CONFIG: CompactionConfig = {
   minMessagesBeforeCompact: 10,
   keepRecentMessages: 10,
   summaryMaxTokens: 500,
+  evictionWindow: 0.2,
+  retentionWindow: 6,
+  preserveReasoning: true,
+  accumulateUsage: true,
 };
 
-// Rough token estimation (4 chars per token average)
 function estimateTokens(text: string): number {
   return Math.ceil(text.length / 4);
 }
@@ -50,17 +64,138 @@ function estimateMessageTokens(msg: AgentMessage): number {
   return estimateTokens(text) + 10;
 }
 
+// Internal: Reasoning extraction utilities
+interface ReasoningDetails {
+  thinking?: string;
+  signature?: string;
+}
+
+function extractLastReasoning(messages: AgentMessage[]): ReasoningDetails | null {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg.role === 'assistant') {
+      const rd = (msg as unknown as { reasoning_details?: ReasoningDetails }).reasoning_details;
+      if (rd && (rd.thinking || rd.signature)) {
+        return rd;
+      }
+    }
+  }
+  return null;
+}
+
+// Internal: Inject reasoning into first assistant message
+function injectReasoningIntoFirstAssistant(
+  messages: AgentMessage[],
+  reasoning: ReasoningDetails
+): void {
+  for (const msg of messages) {
+    if (msg.role === 'assistant') {
+      const existing = (msg as unknown as { reasoning_details?: ReasoningDetails }).reasoning_details;
+      if (!existing || (!existing.thinking && !existing.signature)) {
+        (msg as unknown as { reasoning_details?: ReasoningDetails }).reasoning_details = reasoning;
+      }
+      break;
+    }
+  }
+}
+
+// Internal: Message usage tracking
+interface MessageUsage {
+  input: number;
+  output: number;
+  total: number;
+  cost?: number;
+}
+
+export function accumulateUsage(messages: AgentMessage[]): MessageUsage | undefined {
+  let totalInput = 0;
+  let totalOutput = 0;
+  let totalCost = 0;
+  let hasUsage = false;
+
+  for (const msg of messages) {
+    const usage = (msg as unknown as { usage?: MessageUsage }).usage;
+    if (usage) {
+      hasUsage = true;
+      totalInput += usage.input || 0;
+      totalOutput += usage.output || 0;
+      totalCost += usage.cost || 0;
+    }
+  }
+
+  if (!hasUsage) return undefined;
+
+  return {
+    input: totalInput,
+    output: totalOutput,
+    total: totalInput + totalOutput,
+    cost: totalCost > 0 ? totalCost : undefined,
+  };
+}
+
+// Internal: Droppable message filtering
+type DroppableMessage = AgentMessage & {
+  droppable?: boolean;
+};
+
+function filterDroppableMessages(messages: AgentMessage[]): AgentMessage[] {
+  return messages.filter(msg => !(msg as DroppableMessage).droppable);
+}
+
+function findNthTurnFromEnd(messages: AgentMessage[], n: number): number {
+  if (n <= 0) return messages.length;
+  
+  let turnsFound = 0;
+  let lastRole: string | null = null;
+  
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    
+    if (msg.role === 'user' && lastRole !== 'user') {
+      turnsFound++;
+      if (turnsFound === n) {
+        return i;
+      }
+    }
+    lastRole = msg.role;
+  }
+  
+  return 0;
+}
+
+// Internal: Calculate compaction range
+function calculateCompactionRange(
+  messages: AgentMessage[],
+  config: CompactionConfig
+): { start: number; end: number } | null {
+  const totalMessages = messages.length;
+  
+  if (totalMessages < config.minMessagesBeforeCompact) {
+    return null;
+  }
+  
+  const evictionEnd = Math.floor(totalMessages * config.evictionWindow);
+  const retentionStart = findNthTurnFromEnd(messages, config.retentionWindow);
+  const retentionEnd = retentionStart > 0 ? retentionStart - 1 : 0;
+  const compactionEnd = Math.min(evictionEnd, retentionEnd);
+  
+  if (compactionEnd <= 1) {
+    return null;
+  }
+  
+  return { start: 0, end: compactionEnd };
+}
+
 export class SessionCompactor {
+  private config: CompactionConfig;
+  
   constructor(
-    private config: Partial<CompactionConfig> = {},
+    config?: Partial<CompactionConfig>,
     private model?: Model<Api>
   ) {
     this.config = { ...DEFAULT_CONFIG, ...config };
   }
 
-  /**
-   * Check if compaction is needed
-   */
   needsCompaction(
     messages: AgentMessage[],
     contextWindow: number
@@ -87,67 +222,82 @@ export class SessionCompactor {
     return { needed: false, reason: 'within_threshold' };
   }
 
-  /**
-   * Compact messages by summarizing old ones
-   */
   async compact(
     messages: AgentMessage[],
     _instructions?: string
   ): Promise<CompactionResult> {
-    if (messages.length < this.config.minMessagesBeforeCompact) {
+    const effectiveMessages = filterDroppableMessages(messages);
+    
+    if (effectiveMessages.length < this.config.minMessagesBeforeCompact) {
       return {
         summary: '',
         firstKeptIndex: 0,
-        tokensBefore: this.estimateTotalTokens(messages),
-        tokensAfter: this.estimateTotalTokens(messages),
+        tokensBefore: this.estimateTotalTokens(effectiveMessages),
+        tokensAfter: this.estimateTotalTokens(effectiveMessages),
         compacted: false,
       };
     }
 
-    const keepRecent = this.config.keepRecentMessages;
-    const messagesToSummarize = messages.slice(0, -keepRecent);
-    const keptMessages = messages.slice(-keepRecent);
+    const range = calculateCompactionRange(effectiveMessages, this.config);
+    const keepRecent = range ? effectiveMessages.length - range.end : this.config.keepRecentMessages;
+    const messagesToSummarize = range 
+      ? effectiveMessages.slice(0, range.end)
+      : effectiveMessages.slice(0, -keepRecent);
+    const keptMessages = range 
+      ? effectiveMessages.slice(range.end)
+      : effectiveMessages.slice(-keepRecent);
+
+    let preservedReasoning: ReasoningDetails | null = null;
+    if (this.config.preserveReasoning) {
+      preservedReasoning = extractLastReasoning(messagesToSummarize);
+      if (preservedReasoning) {
+        injectReasoningIntoFirstAssistant(keptMessages, preservedReasoning);
+      }
+    }
 
     const summary = await this.generateSummary(messagesToSummarize);
+    const structuredSummary = this.config.mode === 'structured' 
+      ? generateStructuredSummary(messagesToSummarize)
+      : undefined;
 
-    const tokensBefore = this.estimateTotalTokens(messages);
+    const tokensBefore = this.estimateTotalTokens(effectiveMessages);
     const summaryTokens = estimateTokens(summary) + 20;
     const keptTokens = this.estimateTotalTokens(keptMessages);
     const tokensAfter = summaryTokens + keptTokens;
 
+    let compactedUsage: MessageUsage | undefined;
+    if (this.config.accumulateUsage) {
+      compactedUsage = accumulateUsage(messagesToSummarize);
+    }
+
     return {
       summary,
-      firstKeptIndex: messages.length - keepRecent,
+      firstKeptIndex: keptMessages.length > 0 ? effectiveMessages.length - keptMessages.length : 0,
       tokensBefore,
       tokensAfter,
       compacted: true,
+      structuredSummary,
+      compactedUsage,
     };
   }
 
-  /**
-   * Generate summary based on configured mode
-   */
   private async generateSummary(messages: AgentMessage[]): Promise<string> {
-    // Use LLM if available and mode is abstractive/structured
     if (this.model && (this.config.mode === 'abstractive' || this.config.mode === 'structured')) {
       try {
-        if (this.config.mode === 'abstractive') {
-          return await this.llmAbstractiveSummary(messages);
+        if (this.config.mode === 'structured') {
+          const structured = generateStructuredSummary(messages);
+          return formatSummaryAsText(structured, true);
         } else {
-          return await this.llmStructuredSummary(messages);
+          return await this.llmAbstractiveSummary(messages);
         }
       } catch (err) {
         console.warn('[Compactor] LLM summarization failed, falling back to extractive', err);
       }
     }
 
-    // Fallback to extractive summary
     return this.extractiveSummary(messages);
   }
 
-  /**
-   * LLM-based abstractive summary (natural language summary)
-   */
   private async llmAbstractiveSummary(messages: AgentMessage[]): Promise<string> {
     if (!this.model) {
       throw new Error('Model not available');
@@ -164,82 +314,46 @@ ${conversation}
 
 Summary:`;
 
-    const result = await complete(this.model, { 
-      messages: [{ role: 'user', content: prompt }] as any 
-    }, {
-      maxTokens: this.config.summaryMaxTokens,
-      temperature: 0.3,
-    });
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 30000);
 
-    const text = Array.isArray(result.content)
-      ? result.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('')
-      : '';
-
-    return text.trim();
-  }
-
-  /**
-   * LLM-based structured extraction (structured memory)
-   */
-  private async llmStructuredSummary(messages: AgentMessage[]): Promise<string> {
-    if (!this.model) {
-      throw new Error('Model not available');
-    }
-
-    const conversation = this.formatMessages(messages);
-    const prompt = `Extract key information from this conversation in a structured format:
-
-${conversation}
-
-Output JSON format:
-{
-  "task": "What the user was trying to do",
-  "decisions": ["Key decisions made"],
-  "preferences": ["User preferences mentioned"],
-  "context": ["Technical context or setup"],
-  "pending": ["Any open tasks or follow-ups"]
-}
-
-JSON:`;
-
-    const result = await complete(this.model, { 
-      messages: [{ role: 'user', content: prompt }] as any 
-    }, {
-      maxTokens: this.config.summaryMaxTokens,
-      temperature: 0.2,
-    });
-
-    const text = Array.isArray(result.content)
-      ? result.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('')
-      : '';
-    
-    // Try to parse as JSON, fallback to plain text
     try {
-      const parsed = JSON.parse(text);
-      return JSON.stringify(parsed, null, 2);
-    } catch {
+      const summaryMessage: UserMessage = { role: 'user', content: prompt, timestamp: Date.now() };
+      const result = await complete(this.model, { 
+        messages: [summaryMessage]
+      }, {
+        maxTokens: this.config.summaryMaxTokens,
+        temperature: 0.3,
+        signal: controller.signal as any,
+      });
+
+      const text = Array.isArray(result.content)
+        ? result.content.filter((c: any) => c.type === 'text').map((c: any) => c.text).join('')
+        : '';
+
       return text.trim();
+    } catch (err) {
+      if (err instanceof Error && err.name === 'AbortError') {
+        throw new Error('LLM summarization timed out after 30 seconds');
+      }
+      throw err;
+    } finally {
+      clearTimeout(timeoutId);
     }
   }
 
-  /**
-   * Format messages for LLM consumption
-   */
   private formatMessages(messages: AgentMessage[]): string {
     return messages
       .map(m => {
         const role = m.role;
         const content = typeof m.content === 'string' 
           ? m.content 
-          : (m.content as any[]).filter(c => c.type === 'text').map(c => c.text || '').join('\n');
+          : (m.content as Array<{ type: string; text?: string }>).filter(c => c.type === 'text').map(c => c.text || '').join('\n');
         return `[${role}]: ${content}`;
       })
       .join('\n\n');
   }
 
-  /**
-   * Simple extractive summary (fallback when LLM unavailable)
-   */
   private extractiveSummary(messages: AgentMessage[]): string {
     const userMessages = messages
       .filter(m => m.role === 'user')
@@ -260,16 +374,10 @@ JSON:`;
     return `Previous conversation covered: ${userMessages.slice(0, 300)}...`;
   }
 
-  /**
-   * Estimate tokens for messages array
-   */
   estimateTotalTokens(messages: AgentMessage[]): number {
     return messages.reduce((sum, msg) => sum + estimateMessageTokens(msg), 0);
   }
 
-  /**
-   * Apply compaction result to messages
-   */
   applyCompaction(
     messages: AgentMessage[],
     result: CompactionResult
@@ -278,11 +386,15 @@ JSON:`;
       return messages;
     }
 
-    const summaryMessage: AgentMessage = {
+    const summaryMessage: AgentMessage & { usage?: MessageUsage } = {
       role: 'user',
       content: [{ type: 'text', text: `[Previous conversation summary]: ${result.summary}` }],
       timestamp: Date.now(),
     };
+
+    if (result.compactedUsage) {
+      summaryMessage.usage = result.compactedUsage;
+    }
 
     const keptMessages = messages.slice(result.firstKeptIndex);
     return [summaryMessage, ...keptMessages];

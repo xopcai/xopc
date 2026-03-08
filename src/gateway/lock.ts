@@ -8,9 +8,6 @@ import fs from "node:fs/promises";
 import net from "node:net";
 import path from "node:path";
 import { homedir } from "os";
-import { createLogger } from "../utils/logger.js";
-
-const log = createLogger("GatewayLock");
 
 const DEFAULT_TIMEOUT_MS = 5000;
 const DEFAULT_POLL_INTERVAL_MS = 100;
@@ -180,7 +177,7 @@ export async function acquireGatewayLock(
 
       await handle.writeFile(JSON.stringify(payload), "utf8");
 
-      log.info({ pid: process.pid, lockPath }, "Gateway lock acquired");
+      console.log(`[GatewayLock] Lock acquired: pid=${process.pid}, lockPath=${lockPath}`);
 
       return {
         lockPath,
@@ -188,7 +185,7 @@ export async function acquireGatewayLock(
         release: async () => {
           await handle.close().catch(() => undefined);
           await fs.rm(lockPath, { force: true });
-          log.info({ lockPath }, "Gateway lock released");
+          console.log(`[GatewayLock] Lock released: lockPath=${lockPath}`);
         },
       };
     } catch (err) {
@@ -206,7 +203,7 @@ export async function acquireGatewayLock(
 
       // Owner dead, clean up lock file
       if (ownerStatus === "dead" && ownerPid) {
-        log.warn({ pid: ownerPid }, "Cleaning up stale gateway lock");
+        console.warn(`[GatewayLock] Cleaning up stale gateway lock: pid=${ownerPid}`);
         await fs.rm(lockPath, { force: true });
         continue;
       }
@@ -227,7 +224,7 @@ export async function acquireGatewayLock(
           }
         }
         if (stale) {
-          log.warn({ lockPath }, "Removing stale lock file");
+          console.warn(`[GatewayLock] Removing stale lock file: lockPath=${lockPath}`);
           await fs.rm(lockPath, { force: true });
           continue;
         }

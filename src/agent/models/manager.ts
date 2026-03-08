@@ -9,7 +9,7 @@ import { Agent, type AgentMessage } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { Config } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
-import { resolveModel, getAvailableModels, DEFAULT_MODEL } from '../../providers/index.js';
+import { resolveModel, getAvailableModels, getDefaultModel } from '../../providers/index.js';
 import { isFailoverError, describeFailoverError, resolveFallbackCandidates } from '../fallback/index.js';
 
 const log = createLogger('ModelManager');
@@ -55,9 +55,9 @@ export class ModelManager {
 
   constructor(config: ModelManagerConfig = {}) {
     this.config = config.config;
-    this.defaultModel = config.defaultModel || DEFAULT_MODEL;
+    this.defaultModel = config.defaultModel || getDefaultModel(config.config);
     this.currentModelName = this.defaultModel;
-    this.currentProvider = 'anthropic';
+    this.currentProvider = this.defaultModel.split('/')[0] || 'anthropic';
   }
 
   /**
@@ -198,9 +198,22 @@ export class ModelManager {
         this.currentProvider = candidate.provider;
         this.currentModelName = candidate.model;
 
-        // Execute the prompt
-        await agent.prompt(userMessage);
-        await agent.waitForIdle();
+        // Execute the prompt with timeout to prevent infinite hangs
+        const AGENT_TURN_TIMEOUT_MS = 120_000; // 2 minutes
+
+        const turnPromise = (async () => {
+          await agent.prompt(userMessage);
+          await agent.waitForIdle();
+        })();
+
+        const timeoutPromise = new Promise<never>((_, reject) =>
+          setTimeout(
+            () => reject(new Error(`Agent turn timed out after ${AGENT_TURN_TIMEOUT_MS / 1000}s`)),
+            AGENT_TURN_TIMEOUT_MS
+          )
+        );
+
+        await Promise.race([turnPromise, timeoutPromise]);
 
         // Get usage from agent state if available
         const usage = (agent.state as any).lastUsage || undefined;
@@ -218,20 +231,33 @@ export class ModelManager {
       } catch (err) {
         lastError = err;
 
+        // Enhanced error logging
+        const errorDetails = {
+          attempt: i + 1,
+          provider: candidate.provider,
+          model: candidate.model,
+          errorMessage: err instanceof Error ? err.message : String(err),
+          errorName: err instanceof Error ? err.name : 'Unknown',
+          errorStack: err instanceof Error ? err.stack : undefined,
+          isTimeout: err instanceof Error && err.message.includes('timed out'),
+          isAbort: err instanceof DOMException && err.name === 'AbortError',
+        };
+
         // Don't fallback on user abort
         if (err instanceof DOMException && err.name === 'AbortError') {
+          log.info(errorDetails, 'User aborted model call');
           throw err;
         }
 
         if (isFailoverError(err)) {
           const described = describeFailoverError(err);
           log.warn(
-            { provider: candidate.provider, model: candidate.model, ...described },
+            { ...errorDetails, ...described },
             'Model call failed, trying fallback'
           );
         } else {
           log.warn(
-            { provider: candidate.provider, model: candidate.model, error: err },
+            errorDetails,
             'Model call failed with non-failover error'
           );
         }
@@ -243,6 +269,12 @@ export class ModelManager {
 
     // All models failed
     if (lastError) {
+      log.error({
+        lastError: lastError instanceof Error ? lastError.message : String(lastError),
+        lastErrorStack: lastError instanceof Error ? lastError.stack : undefined,
+        attemptedCandidates: candidates.length,
+        sessionKey,
+      }, 'All model candidates failed');
       throw lastError;
     }
 

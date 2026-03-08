@@ -44,6 +44,9 @@ export interface ProgressFeedbackConfig {
   heartbeatIntervalMs: number;
   // Threshold for long-running task in ms
   longTaskThresholdMs: number;
+  // Enhanced feedback options
+  showErrorAccumulation: boolean;    // Show tool error accumulation (default: true)
+  showRequestLimitWarning: boolean;  // Show request limit warnings (default: true)
 }
 
 const DEFAULT_CONFIG: ProgressFeedbackConfig = {
@@ -53,6 +56,8 @@ const DEFAULT_CONFIG: ProgressFeedbackConfig = {
   heartbeatEnabled: true,
   heartbeatIntervalMs: 20000, // 20 seconds
   longTaskThresholdMs: 30000, // 30 seconds
+  showErrorAccumulation: true,
+  showRequestLimitWarning: true,
 };
 
 // Tool category mapping for better feedback
@@ -140,7 +145,7 @@ const STAGE_LABEL: Record<ProgressStage, string> = {
 };
 
 export interface ProgressMessage {
-  type: 'start' | 'update' | 'complete' | 'error' | 'thinking';
+  type: 'start' | 'update' | 'complete' | 'error' | 'warning' | 'thinking';
   stage: ProgressStage;
   message: string;
   detail?: string;
@@ -407,6 +412,96 @@ export class ProgressFeedbackManager {
   // Get stage label
   getStageLabel(stage: ProgressStage): string {
     return STAGE_LABEL[stage] || '未知';
+  }
+
+  /**
+   * Notify about accumulated tool errors
+   * Enhanced feedback for tool failures
+   */
+  onToolErrorAccumulated(
+    toolName: string,
+    failureCount: number,
+    maxFailures: number,
+    remainingAttempts?: number
+  ): void {
+    if (!this.config.showErrorAccumulation) return;
+    if (this.config.level === 'minimal') return;
+
+    const remaining = remainingAttempts ?? (maxFailures - failureCount);
+    const percentage = (failureCount / maxFailures) * 100;
+    
+    let message: string;
+    let type: 'warning' | 'error' = percentage >= 100 ? 'error' : 'warning';
+
+    if (percentage >= 100) {
+      message = `❌ ${this.formatToolName(toolName)} has reached maximum failures (${maxFailures}/${maxFailures})`;
+    } else if (percentage >= 50) {
+      message = `⚠️ ${this.formatToolName(toolName)} failed ${failureCount}/${maxFailures} times`;
+    } else {
+      message = `⚠️ ${this.formatToolName(toolName)} failed ${failureCount} time${failureCount > 1 ? 's' : ''}`;
+    }
+
+    const progressMsg: ProgressMessage = {
+      type,
+      stage: 'executing',
+      message,
+      detail: remaining > 0 
+        ? `Remaining attempts: ${remaining}` 
+        : 'Stopping tool execution',
+      toolName,
+    };
+
+    this.callbacks.onProgress?.(progressMsg);
+    
+    log.warn(
+      { toolName, failureCount, maxFailures, remaining },
+      'Tool error accumulated'
+    );
+  }
+
+  /**
+   * Notify about request limit status
+   * Enhanced feedback for approaching/ reaching request limits
+   */
+  onRequestLimitStatus(
+    count: number,
+    limit: number,
+    remaining: number,
+    isWarning: boolean,
+    shouldStop: boolean
+  ): void {
+    if (!this.config.showRequestLimitWarning) return;
+    if (this.config.level === 'minimal') return;
+    if (!isWarning && !shouldStop) return;
+
+    const percentage = (count / limit) * 100;
+    
+    let message: string;
+    let type: 'warning' | 'error' = shouldStop ? 'error' : 'warning';
+
+    if (shouldStop) {
+      message = `❌ Request limit reached (${count}/${limit})`;
+    } else if (percentage >= 90) {
+      message = `⚠️ Request limit warning (${count}/${limit})`;
+    } else {
+      message = `⚠️ Approaching request limit (${count}/${limit})`;
+    }
+
+    const progressMsg: ProgressMessage = {
+      type,
+      stage: 'thinking',
+      message,
+      detail: remaining > 0 
+        ? `Remaining requests: ${remaining}` 
+        : 'Stopping execution',
+    };
+
+    this.callbacks.onProgress?.(progressMsg);
+    
+    log.warn(
+      { count, limit, remaining, shouldStop },
+      'Request limit status'
+    );
   }
 }
 

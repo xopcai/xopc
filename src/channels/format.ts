@@ -4,8 +4,20 @@
  * Converts Markdown to Telegram HTML format with proper escaping
  * and file reference protection
  * 
- *
+ * Now uses Markdown IR (Intermediate Representation) for robust parsing
+ * Inspired by OpenClaw's approach
  */
+
+import {
+  parseMarkdownToIR,
+  renderToPlainText,
+  markdownToTelegramChunks,
+  renderTelegramHtmlText,
+  type FormattedChunk,
+} from './markdown-ir.js';
+
+// Re-export from markdown-ir for convenience
+export { markdownToTelegramChunks, renderTelegramHtmlText, type FormattedChunk };
 
 // File extensions that share TLDs and commonly appear in code/documentation
 const FILE_EXTENSIONS_WITH_TLD = new Set([
@@ -40,7 +52,7 @@ export function escapeHtmlAttr(text: string): string {
 /**
  * Detect if a link is an auto-linked file reference
  */
-function isAutoLinkedFileRef(href: string, label: string): boolean {
+function _isAutoLinkedFileRef(href: string, label: string): boolean {
   const stripped = href.replace(/^https?:\/\//i, '');
   if (stripped !== label) {
     return false;
@@ -55,45 +67,23 @@ function isAutoLinkedFileRef(href: string, label: string): boolean {
 
 /**
  * Simple Markdown to HTML converter for Telegram
+ * @deprecated Use renderTelegramHtmlText() or markdownToTelegramChunks() instead
  */
 export function markdownToTelegramHtml(markdown: string): string {
-  let html = escapeHtml(markdown);
-
-  // Code blocks (must be before inline code)
-  html = html.replace(/```(\w*)\n([\s\S]*?)```/g, (_match, lang, code) => {
-    return `<pre><code class="language-${lang}">${code.trim()}</code></pre>`;
-  });
-
-  // Inline code
-  html = html.replace(/`([^`]+)`/g, '<code>$1</code>');
-
-  // Bold
-  html = html.replace(/\*\*([^*]+)\*\*/g, '<b>$1</b>');
-
-  // Italic
-  html = html.replace(/\*([^*]+)\*/g, '<i>$1</i>');
-  html = html.replace(/_([^_]+)_/g, '<i>$1</i>');
-
-  // Strikethrough
-  html = html.replace(/~~([^~]+)~~/g, '<s>$1</s>');
-
-  // Links
-  html = html.replace(/\[([^\]]+)\]\(([^)]+)\)/g, (match, text, href) => {
-    if (isAutoLinkedFileRef(href, text)) {
-      return `<code>${escapeHtml(text)}</code>`;
-    }
-    const safeHref = escapeHtmlAttr(href);
-    return `<a href="${safeHref}">${text}</a>`;
-  });
-
-  // Blockquotes
-  html = html.replace(/^&gt; (.*$)/gm, '<blockquote>$1</blockquote>');
-
-  // Spoilers (Telegram-specific)
-  html = html.replace(/~~\|([^|]+)\|~~/g, '<tg-spoiler>$1</tg-spoiler>');
-
-  return html;
+  // Delegate to new IR-based implementation
+  return renderTelegramHtmlText(markdown);
 }
+
+/**
+ * Convert Markdown to plain text (strip markdown syntax)
+ * Used for fallback when HTML parsing fails
+ */
+export function markdownToPlainText(markdown: string): string {
+  const ir = parseMarkdownToIR(markdown, { linkify: true, enableSpoilers: true });
+  return renderToPlainText(ir);
+}
+
+// ... rest of the file with wrapFileReferencesInHtml, fixMalformedHtml, etc.
 
 /**
  * Wrap standalone file references in &lt;code&gt; tags
@@ -176,58 +166,211 @@ function wrapSegmentFileRefs(
 }
 
 /**
+ * Fix malformed HTML tags by ensuring proper nesting
+ * This handles cases where LLM generates invalid HTML like:
+ * - <code>git<i>diff</code> (i tag not closed)
+ * - <code>git</i>log</code> (i tag closed but not opened in context)
+ */
+function _fixMalformedHtml(html: string): string {
+  const result: string[] = [];
+  const openTags: string[] = [];
+  let i = 0;
+
+  // Tags that are self-closing or should not be tracked
+  const voidElements = new Set([
+    'br', 'hr', 'img', 'input', 'link', 'meta', 'area', 'base', 'col', 'embed',
+    'param', 'source', 'track', 'wbr'
+  ]);
+
+  // Tags that can be nested (inline elements)
+  const inlineTags = new Set([
+    'a', 'b', 'i', 'code', 's', 'strike', 'del', 'u', 'em', 'strong', 'span', 'tg-spoiler'
+  ]);
+
+  while (i < html.length) {
+    // Check if we're at a tag
+    if (html[i] === '<' && i + 1 < html.length && html[i + 1] !== '!') {
+      // Find the end of the tag
+      let tagEnd = html.indexOf('>', i);
+      if (tagEnd === -1) {
+        // No closing > found, treat as literal text
+        result.push(html.slice(i));
+        break;
+      }
+
+      const fullTag = html.slice(i, tagEnd + 1);
+
+      // Skip HTML comments and DOCTYPE
+      if (fullTag.startsWith('<!') || fullTag.startsWith('<!--')) {
+        // Skip until end of comment
+        const commentEnd = html.indexOf('-->', i);
+        if (commentEnd !== -1) {
+          i = commentEnd + 3;
+        } else {
+          result.push(html.slice(i));
+          break;
+        }
+        continue;
+      }
+
+      // Check if it's a closing tag
+      if (fullTag.startsWith('</')) {
+        const tagName = fullTag.slice(2, -1).trim().toLowerCase().split(/\s/)[0];
+
+        if (voidElements.has(tagName)) {
+          // Invalid closing tag for void element, escape it
+          result.push(escapeHtml(fullTag));
+        } else {
+          // Find and close the matching tag
+          const lastIndex = openTags.lastIndexOf(tagName);
+          if (lastIndex !== -1) {
+            // Found matching tag, close all tags opened after it
+            while (openTags.length > lastIndex + 1) {
+              const tagToClose = openTags.pop()!;
+              result.push(`</${tagToClose}>`);
+            }
+            // Close the matching tag
+            openTags.pop();
+            result.push(fullTag);
+          } else {
+            // No matching open tag, escape the closing tag
+            result.push(escapeHtml(fullTag));
+          }
+        }
+      } else if (fullTag.endsWith('/>') || voidElements.has(fullTag.slice(1, -1).trim().toLowerCase().split(/\s/)[0])) {
+        // Self-closing tag or void element
+        result.push(fullTag);
+      } else {
+        // Opening tag
+        const tagName = fullTag.slice(1, -1).trim().toLowerCase().split(/\s/)[0];
+
+        if (tagName && (inlineTags.has(tagName) || tagName === 'pre' || tagName === 'blockquote')) {
+          // Track inline/nestableable tags
+          openTags.push(tagName);
+        }
+        result.push(fullTag);
+      }
+
+      i = tagEnd + 1;
+    } else {
+      // Regular text
+      result.push(html[i]);
+      i++;
+    }
+  }
+
+  // Close any remaining open tags
+  while (openTags.length > 0) {
+    result.push(`</${openTags.pop()}>`);
+  }
+
+  return result.join('');
+}
+
+/**
+ * Validate HTML string for Telegram parse_mode
+ * Returns true if the HTML appears to be valid
+ */
+export function isValidTelegramHtml(html: string): boolean {
+  const voidElements = new Set([
+    'br', 'hr', 'img', 'input', 'link', 'meta', 'area', 'base', 'col', 'embed',
+    'param', 'source', 'track', 'wbr'
+  ]);
+
+  const openTags: string[] = [];
+  let i = 0;
+
+  while (i < html.length) {
+    if (html[i] === '<' && i + 1 < html.length && html[i + 1] !== '!') {
+      let tagEnd = html.indexOf('>', i);
+      if (tagEnd === -1) return false;
+
+      const fullTag = html.slice(i, tagEnd + 1);
+
+      // Skip comments
+      if (fullTag.startsWith('<!') || fullTag.startsWith('<!--')) {
+        const commentEnd = html.indexOf('-->', i);
+        if (commentEnd !== -1) {
+          i = commentEnd + 3;
+        } else {
+          return false;
+        }
+        continue;
+      }
+
+      const isClosing = fullTag.startsWith('</');
+      const tagName = fullTag.slice(isClosing ? 2 : 1, -1).trim().toLowerCase().split(/\s/)[0];
+
+      if (!tagName) {
+        i = tagEnd + 1;
+        continue;
+      }
+
+      if (voidElements.has(tagName)) {
+        // Void elements are self-closing, no need to track
+      } else if (isClosing) {
+        const lastIndex = openTags.lastIndexOf(tagName);
+        if (lastIndex === -1) {
+          // Closing tag without matching opening
+          return false;
+        }
+        // Close all tags between lastIndex and end
+        openTags.splice(lastIndex + 1);
+        openTags.pop();
+      } else {
+        openTags.push(tagName);
+      }
+
+      i = tagEnd + 1;
+    } else {
+      i++;
+    }
+  }
+
+  return openTags.length === 0;
+}
+
+/**
  * Format message for Telegram with proper HTML and file reference protection
+ * Now uses Markdown IR for robust parsing
  */
 export function formatTelegramMessage(
   markdown: string,
-  options: { wrapFileRefs?: boolean } = {}
+  options: { wrapFileRefs?: boolean; textMode?: 'markdown' | 'html' } = {}
 ): { html: string; text: string } {
-  const html = markdownToTelegramHtml(markdown);
-  const wrappedHtml = options.wrapFileRefs !== false
+  const html = renderTelegramHtmlText(markdown, { textMode: options.textMode });
+  
+  // Wrap file references if enabled
+  const finalHtml = options.wrapFileRefs !== false
     ? wrapFileReferencesInHtml(html)
     : html;
 
   return {
-    html: wrappedHtml,
+    html: finalHtml,
     text: markdown,
   };
 }
 
 /**
  * Split long message into chunks respecting code blocks and paragraphs
+ * @deprecated Use markdownToTelegramChunks() instead for IR-based chunking
  */
 export function splitTelegramMessage(
   text: string,
   maxChars: number = 4000
 ): string[] {
-  if (text.length <= maxChars) {
-    return [text];
-  }
+  // Delegate to new IR-based chunking
+  const chunks = markdownToTelegramChunks(text, maxChars);
+  return chunks.map(c => c.html);
+}
 
-  const chunks: string[] = [];
-  let remaining = text;
-
-  while (remaining.length > maxChars) {
-    // Try to split at paragraph boundary
-    let splitIndex = remaining.lastIndexOf('\n\n', maxChars);
-
-    // If no paragraph boundary, try newline
-    if (splitIndex === -1 || splitIndex < maxChars * 0.5) {
-      splitIndex = remaining.lastIndexOf('\n', maxChars);
-    }
-
-    // If still no good split point, hard split
-    if (splitIndex === -1 || splitIndex < maxChars * 0.5) {
-      splitIndex = maxChars;
-    }
-
-    chunks.push(remaining.slice(0, splitIndex));
-    remaining = remaining.slice(splitIndex).trimStart();
-  }
-
-  if (remaining) {
-    chunks.push(remaining);
-  }
-
-  return chunks;
+/**
+ * Smart split message into chunks with both HTML and plain text
+ * Uses Markdown IR for robust chunking that preserves structure
+ */
+export function splitTelegramMessageSmart(
+  markdown: string,
+  maxChars: number = 4000
+): FormattedChunk[] {
+  return markdownToTelegramChunks(markdown, maxChars);
 }

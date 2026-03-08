@@ -128,21 +128,3 @@ export function buildReloadPlan(changedPaths: string[]): ReloadPlan {
 
   return plan;
 }
-
-/**
- * Get all hot-reloadable config paths
- */
-export function getHotReloadablePaths(): string[] {
-  return BASE_RELOAD_RULES
-    .filter(r => r.kind === 'hot')
-    .map(r => r.prefix);
-}
-
-/**
- * Get config paths that require restart
- */
-export function getRestartRequiredPaths(): string[] {
-  return BASE_RELOAD_RULES
-    .filter(r => r.kind === 'restart')
-    .map(r => r.prefix);
-}

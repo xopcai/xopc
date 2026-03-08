@@ -1,9 +1,6 @@
 import { serve, type ServerType } from '@hono/node-server';
-import { createLogger } from '../utils/logger.js';
 import { GatewayService } from './service.js';
 import { createHonoApp } from './hono/app.js';
-
-const log = createLogger('GatewayServer');
 
 export interface GatewayServerConfig {
   host: string;
@@ -28,14 +25,14 @@ export class GatewayServer {
   }
 
   async start(): Promise<void> {
-    log.info({ host: this.config.host, port: this.config.port }, 'Starting gateway server...');
+    console.log(`[GatewayServer] Starting gateway server on ${this.config.host}:${this.config.port}...`);
 
     // Start the underlying service first
     await this.service.start();
 
     // Create Hono app
     // Priority: CLI token > service auto-generated token
-    const effectiveToken = this.config.token || this.serviceInstance.getAuthToken();
+    const effectiveToken = this.config.token || this.service.getAuthToken();
     const app = createHonoApp({
       service: this.service,
       token: effectiveToken,
@@ -47,21 +44,18 @@ export class GatewayServer {
       port: this.config.port,
       hostname: this.config.host,
     }, () => {
-      log.info(
-        { host: this.config.host, port: this.config.port },
-        `Gateway server running at http://${this.config.host}:${this.config.port}`,
-      );
+      console.log(`[GatewayServer] Gateway server running at http://${this.config.host}:${this.config.port}`);
     });
   }
 
   async close(opts?: { reason?: string; restartExpectedMs?: number | null }): Promise<void> {
     const reason = opts?.reason ?? 'gateway stopping';
-    log.info({ reason }, 'Closing gateway server...');
+    console.log(`[GatewayServer] Closing gateway server: ${reason}`);
     await this.stop();
   }
 
   async stop(): Promise<void> {
-    log.info('Stopping gateway server...');
+    console.log('[GatewayServer] Stopping gateway server...');
 
     // Stop the HTTP server
     if (this.server) {
@@ -84,7 +78,7 @@ export class GatewayServer {
     // Stop the underlying service
     await this.service.stop();
 
-    log.info('Gateway server stopped');
+    console.log('[GatewayServer] Gateway server stopped');
   }
 
   get isRunning(): boolean {

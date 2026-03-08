@@ -19,6 +19,7 @@ import { SessionStatus } from './types.js';
 import type { Message } from '../types/index.js';
 import { SessionCompactor, type CompactionConfig, type CompactionResult } from '../agent/memory/compaction.js';
 import { SlidingWindow, type WindowConfig } from '../agent/memory/window.js';
+import { cleanTrailingErrors, hasProblematicMessages } from '../agent/memory/message-sanitizer.js';
 
 const log = createLogger('SessionStore');
 
@@ -389,7 +390,22 @@ export class SessionStore {
 
     try {
       const data = await readFile(path, 'utf-8');
-      return JSON.parse(data) as AgentMessage[];
+      const messages = JSON.parse(data) as AgentMessage[];
+
+      // Defensive: Clean any trailing error messages from previous sessions
+      // This prevents the vicious cycle where error messages cause subsequent API failures
+      if (hasProblematicMessages(messages)) {
+        const cleaned = cleanTrailingErrors(messages);
+        if (cleaned.length !== messages.length) {
+          log.info(
+            { key, original: messages.length, cleaned: cleaned.length },
+            'Cleaned problematic messages on load'
+          );
+        }
+        return cleaned;
+      }
+
+      return messages;
     } catch {
       // Only check archive if explicitly requested (e.g., for restore command)
       // This prevents accidentally loading archived sessions after /new command
@@ -400,7 +416,13 @@ export class SessionStore {
         }
         try {
           const data = await readFile(archivedFile, 'utf-8');
-          return JSON.parse(data) as AgentMessage[];
+          const messages = JSON.parse(data) as AgentMessage[];
+
+          // Also clean archived messages
+          if (hasProblematicMessages(messages)) {
+            return cleanTrailingErrors(messages);
+          }
+          return messages;
         } catch {
           return [];
         }
@@ -514,6 +536,9 @@ export class SessionStore {
     result: CompactionResult
   ): Promise<AgentMessage[]> {
     const compacted = this.compactor.applyCompaction(messages, result);
+    
+    // Persist the compacted messages to disk so subsequent loads see the reduced context
+    await this.saveMessages(key, compacted);
     
     const metadata = await this.getMetadata(key);
     if (metadata) {

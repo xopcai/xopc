@@ -337,7 +337,103 @@ async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
   console.log('   xopcbot gateway logs      # View logs');
 }
 
+// OAuth provider configuration map
+const OAUTH_PROVIDER_MAP = {
+  anthropic: {
+    provider: anthropicOAuthProvider,
+    profileId: 'anthropic:default',
+    displayName: 'Anthropic (Claude)',
+    urlPrompt: '🌐 Please open this URL in your browser:\n',
+  },
+  minimax: {
+    provider: minimaxOAuthProvider,
+    profileId: 'minimax:default',
+    displayName: 'MiniMax',
+    urlPrompt: '🌐 Please open this URL in your browser:\n',
+  },
+  'minimax-cn': {
+    provider: minimaxCnOAuthProvider,
+    profileId: 'minimax-cn:default',
+    displayName: 'MiniMax CN',
+    urlPrompt: '🌐 请在浏览器中打开以下 URL:\n',
+  },
+  kimi: {
+    provider: kimiOAuthProvider,
+    profileId: 'kimi:default',
+    displayName: 'Kimi',
+    urlPrompt: '🌐 Please open this URL in your browser:\n',
+  },
+  'github-copilot': {
+    provider: githubCopilotOAuthProvider,
+    profileId: 'github-copilot:default',
+    displayName: 'GitHub Copilot',
+    urlPrompt: '🌐 Please open this URL in your browser:\n',
+  },
+  'google-gemini-cli': {
+    provider: googleGeminiCliOAuthProvider,
+    profileId: 'google-gemini-cli:default',
+    displayName: 'Google Gemini CLI',
+    urlPrompt: '🌐 Please open this URL in your browser:\n',
+  },
+  'google-antigravity': {
+    provider: googleAntigravityOAuthProvider,
+    profileId: 'google-antigravity:default',
+    displayName: 'Google Antigravity',
+    urlPrompt: '🌐 Please open this URL in your browser:\n',
+  },
+  'openai-codex': {
+    provider: openaiCodexOAuthProvider,
+    profileId: 'openai-codex:default',
+    displayName: 'OpenAI Codex',
+    urlPrompt: '🌐 Please open this URL in your browser:\n',
+  },
+} as const;
+
 async function doOAuthLogin(provider: string): Promise<boolean> {
+  const config = OAUTH_PROVIDER_MAP[provider as keyof typeof OAUTH_PROVIDER_MAP];
+  if (!config) {
+    console.error(`OAuth not supported for provider: ${provider}`);
+    return false;
+  }
+
+  console.log(`\n🔐 Starting ${config.displayName} OAuth login...`);
+
+  const callbacks: OAuthLoginCallbacks = {
+    onAuth: (info) => {
+      console.log(`\n${config.urlPrompt}`);
+      console.log(info.url);
+      if (info.instructions) {
+        console.log('\n' + info.instructions);
+      }
+      console.log('\n');
+    },
+    onPrompt: async (prompt) => {
+      return input({ message: prompt.message });
+    },
+    onProgress: (message) => {
+      console.log(' →', message);
+    },
+  };
+
+  try {
+    const creds = await config.provider.login(callbacks);
+    upsertAuthProfile({
+      profileId: config.profileId,
+      credential: {
+        type: 'oauth',
+        provider,
+        ...creds,
+      },
+    });
+    return true;
+  } catch (error) {
+    console.error('❌ OAuth login failed:', error);
+    return false;
+  }
+}
+
+// TODO: Remove old OAuth login code below this line
+async function _doOAuthLoginOld(provider: string): Promise<boolean> {
   console.log('\n🔐 Starting OAuth login...');
 
   if (provider === 'anthropic') {
@@ -696,6 +792,8 @@ async function setupModel(
           maxTokens: 8192,
           temperature: 0.7,
           maxToolIterations: 20,
+          maxRequestsPerTurn: 50,
+          maxToolFailuresPerTurn: 3,
         };
         config.agents.defaults.model = { primary: model, fallbacks: [] };
         config.agents.defaults.workspace = ctx.workspacePath;
@@ -790,6 +888,8 @@ async function setupModel(
       maxTokens: 8192,
       temperature: 0.7,
       maxToolIterations: 20,
+      maxRequestsPerTurn: 50,
+      maxToolFailuresPerTurn: 3,
     };
     config.agents.defaults.model = { primary: `${provider}/${model}`, fallbacks: [] };
     config.agents.defaults.workspace = ctx.workspacePath;
@@ -817,6 +917,8 @@ async function setupModel(
     maxTokens: 8192,
     temperature: 0.7,
     maxToolIterations: 20,
+    maxRequestsPerTurn: 50,
+    maxToolFailuresPerTurn: 3,
   };
   config.agents.defaults.model = { primary: model, fallbacks: [] };
   config.agents.defaults.workspace = ctx.workspacePath;

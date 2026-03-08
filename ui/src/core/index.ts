@@ -1,10 +1,31 @@
-/**
- * Core Module - Business logic and state management
- */
+// Core exports - Centralized exports for core modules
 
-// Stores
-export { createMessageStore, type MessageStore, type Message, type MessageActions } from './stores/message-store.js';
+export { createRouter, useRouter, routeAware } from './router.js';
+export type { 
+  Route, 
+  RouteLocation, 
+  RouterOptions, 
+  RouteAware 
+} from './router.js';
 
-// Services
-export { GatewayConnection, createConnection, type ConnectionState, type ConnectionConfig } from './services/connection.js';
-export { createApiService, type ApiService, type SendMessageRequest, type ApiError } from './services/api.js';
+export { 
+  createAppStore, 
+  getStore, 
+  resetStore,
+  selectSession,
+  selectConnection,
+  selectMessages,
+  selectRoute,
+} from './store.js';
+export type { 
+  Session,
+  SessionState,
+  SessionActions,
+  Message,
+  MessageState,
+  MessageActions,
+  ConnectionState,
+  ChatRoute,
+  AppState,
+  AppActions,
+} from './store.js';

@@ -53,7 +53,7 @@ export const DEFAULT_STT_CONFIG: STTConfig = {
   enabled: false,
   provider: 'alibaba',
   alibaba: {
-    model: 'paraformer-v1',
+    model: 'paraformer-v2',
   },
   openai: {
     model: 'whisper-1',

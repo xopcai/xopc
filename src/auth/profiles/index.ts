@@ -12,4 +12,3 @@ export * from './store.js';
 export * from './profiles.js';
 export { resolveApiKeyForProfile, profileHasAuth } from './oauth.js';
 export * from './order.js';
-export * from './usage.js';

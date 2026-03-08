@@ -1,36 +1,34 @@
 // Memory Search - Semantic memory recall system
-import { readFileSync, existsSync, mkdirSync, writeFileSync, appendFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join, relative } from 'path';
 
 // =============================================================================
-// Types
+// Types (Internal)
 // =============================================================================
 
-export interface MemoryMatch {
+interface MemoryMatch {
   file: string;
   lines: string;
   score: number;
   lineNumbers: number[];
 }
 
-export interface MemorySearchOptions {
+interface MemorySearchOptions {
   maxResults?: number;
   minScore?: number;
-  glob?: string[];
-  exclude?: string[];
 }
 
-export interface MemoryFile {
+interface MemoryFile {
   path: string;
   content: string;
   modified: Date;
 }
 
 // =============================================================================
-// Memory Path Utilities
+// Memory Path Utilities (Internal)
 // =============================================================================
 
-export function getDailyMemoryPath(baseDir: string, date?: Date): string {
+function getDailyMemoryPath(baseDir: string, date?: Date): string {
   const d = date || new Date();
   const year = d.getFullYear();
   const month = String(d.getMonth() + 1).padStart(2, '0');
@@ -38,11 +36,11 @@ export function getDailyMemoryPath(baseDir: string, date?: Date): string {
   return join(baseDir, `memory`, `${year}-${month}-${day}.md`);
 }
 
-export function getLongTermMemoryPath(baseDir: string): string {
+function getLongTermMemoryPath(baseDir: string): string {
   return join(baseDir, 'MEMORY.md');
 }
 
-export function getAllMemoryPaths(baseDir: string): string[] {
+function getAllMemoryPaths(baseDir: string): string[] {
   const paths: string[] = [];
   
   // Long-term memory
@@ -69,10 +67,10 @@ export function getAllMemoryPaths(baseDir: string): string[] {
 }
 
 // =============================================================================
-// Content Parsing
+// Content Parsing (Internal)
 // =============================================================================
 
-export function parseMemoryFile(path: string): MemoryFile {
+function parseMemoryFile(path: string): MemoryFile {
   const content = readFileSync(path, 'utf-8');
   const stats = existsSync(path) ? { mtime: new Date() } : { mtime: new Date() };
   
@@ -83,38 +81,11 @@ export function parseMemoryFile(path: string): MemoryFile {
   };
 }
 
-export function extractSections(content: string): Map<string, string> {
-  const sections = new Map<string, string>();
-  const lines = content.split('\n');
-  
-  let currentSection = '';
-  let currentContent: string[] = [];
-  
-  for (const line of lines) {
-    const sectionMatch = line.match(/^##\s+(.+)$/);
-    if (sectionMatch) {
-      if (currentSection) {
-        sections.set(currentSection, currentContent.join('\n'));
-      }
-      currentSection = sectionMatch[1].trim();
-      currentContent = [];
-    } else if (currentSection) {
-      currentContent.push(line);
-    }
-  }
-  
-  if (currentSection) {
-    sections.set(currentSection, currentContent.join('\n'));
-  }
-  
-  return sections;
-}
-
 // =============================================================================
-// Simple Fuzzy Search
+// Simple Fuzzy Search (Internal)
 // =============================================================================
 
-export function fuzzyMatch(query: string, text: string): number {
+function fuzzyMatch(query: string, text: string): number {
   const queryLower = query.toLowerCase();
   const textLower = text.toLowerCase();
   
@@ -137,7 +108,7 @@ export function fuzzyMatch(query: string, text: string): number {
   return matchedWords / queryWords.length;
 }
 
-export function searchInContent(query: string, content: string, options: MemorySearchOptions = {}): MemoryMatch | null {
+function searchInContent(query: string, content: string, options: MemorySearchOptions = {}): MemoryMatch | null {
   const { maxResults = 5, minScore = 0.3 } = options;
   
   const lines = content.split('\n');
@@ -171,7 +142,7 @@ export function searchInContent(query: string, content: string, options: MemoryS
 }
 
 // =============================================================================
-// Main Search Function
+// Main Search Function (Exported)
 // =============================================================================
 
 export async function memorySearch(
@@ -209,7 +180,7 @@ export async function memorySearch(
 }
 
 // =============================================================================
-// Memory Get (Read Snippet)
+// Memory Get (Read Snippet) (Exported)
 // =============================================================================
 
 export function memoryGet(
@@ -237,109 +208,4 @@ export function memoryGet(
     content: snippet,
     lineNumbers: { start, end },
   };
-}
-
-// =============================================================================
-// Memory Write
-// =============================================================================
-
-export async function writeToMemory(
-  baseDir: string,
-  content: string,
-  date?: Date
-): Promise<void> {
-  const memoryDir = join(baseDir, 'memory');
-  
-  if (!existsSync(memoryDir)) {
-    mkdirSync(memoryDir, { recursive: true });
-  }
-  
-  const path = getDailyMemoryPath(baseDir, date);
-  appendFileSync(path, content + '\n', 'utf-8');
-}
-
-export async function updateLongTermMemory(
-  baseDir: string,
-  content: string,
-  section?: string
-): Promise<void> {
-  const path = getLongTermMemoryPath(baseDir);
-  
-  if (!existsSync(path)) {
-    writeFileSync(path, content, 'utf-8');
-    return;
-  }
-  
-  if (!section) {
-    // Append to file
-    appendFileSync(path, '\n' + content, 'utf-8');
-    return;
-  }
-  
-  // Update specific section
-  const currentContent = readFileSync(path, 'utf-8');
-  const sections = extractSections(currentContent);
-  sections.set(section, content);
-  
-  const newContent = Array.from(sections.entries())
-    .map(([name, content]) => `## ${name}\n${content}`)
-    .join('\n\n');
-  
-  writeFileSync(path, newContent, 'utf-8');
-}
-
-// =============================================================================
-// Citation Generator
-// =============================================================================
-
-export function generateCitation(file: string, line?: number): string {
-  const fileName = file.split('/').pop() || file;
-  return line ? `Source: ${fileName}#${line}` : `Source: ${fileName}`;
-}
-
-// =============================================================================
-// Quick Access Functions
-// =============================================================================
-
-export async function recallRecentContext(baseDir: string, days: number = 7): Promise<string> {
-  const paths: string[] = [];
-  const today = new Date();
-  
-  for (let i = 0; i < days; i++) {
-    const date = new Date(today);
-    date.setDate(date.getDate() - i);
-    const path = getDailyMemoryPath(baseDir, date);
-    if (existsSync(path)) {
-      paths.push(path);
-    }
-  }
-  
-  const contents = await Promise.all(
-    paths.map(async (path) => {
-      const content = readFileSync(path, 'utf-8');
-      return `=== ${path.split('/').pop()} ===\n${content}`;
-    })
-  );
-  
-  return contents.join('\n\n');
-}
-
-export async function getPreference(baseDir: string, key: string): Promise<string | null> {
-  const path = getLongTermMemoryPath(baseDir);
-  
-  if (!existsSync(path)) {
-    return null;
-  }
-  
-  const content = readFileSync(path, 'utf-8');
-  const sections = extractSections(content);
-  
-  // Look for the preference in various sections
-  for (const [sectionName, sectionContent] of sections) {
-    if (sectionName.toLowerCase().includes(key.toLowerCase())) {
-      return sectionContent;
-    }
-  }
-  
-  return null;
 }

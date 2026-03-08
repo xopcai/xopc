@@ -10,21 +10,29 @@
     "build:app": "vite build --mode app",
     "preview": "vite preview",
     "lint": "eslint src --ext .ts",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "test": "vitest",
+    "test:coverage": "vitest --coverage",
+    "test:ui": "vitest --ui"
   },
   "dependencies": {
     "@lit-labs/virtualizer": "^2.1.1",
     "lit": "^3.3.2",
-    "lucide": "^0.456.0"
+    "lucide": "^0.456.0",
+    "zustand": "^4.5.0"
   },
   "devDependencies": {
     "@tailwindcss/forms": "^0.5.11",
+    "@vitest/coverage-v8": "^1.0.0",
+    "@vitest/ui": "^1.0.0",
     "autoprefixer": "^10.4.24",
+    "happy-dom": "^13.10.1",
     "postcss": "^8.5.6",
     "tailwindcss": "^3.4.0",
     "terser": "^5.46.0",
     "typescript": "^5.9.3",
-    "vite": "^7.3.1"
+    "vite": "^7.3.1",
+    "vitest": "^1.0.0"
   },
   "peerDependencies": {
     "@mariozechner/pi-agent-core": "^0.52.0",

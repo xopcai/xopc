@@ -3,112 +3,9 @@
  * Lightweight markdown rendering without external dependencies
  */
 
-import { html, LitElement, unsafeCSS } from 'lit';
+import { html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
-
-const styles = `
-:host { display: block; }
-
-.markdown-body {
-  font-size: 0.9375rem;
-  line-height: 1.6;
-  color: var(--text-primary);
-}
-
-.markdown-body h1,
-.markdown-body h2,
-.markdown-body h3,
-.markdown-body h4,
-.markdown-body h5,
-.markdown-body h6 {
-  margin-top: 1.5em;
-  margin-bottom: 0.75em;
-  font-weight: 600;
-  line-height: 1.3;
-}
-
-.markdown-body h1 { font-size: 1.5em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
-.markdown-body h2 { font-size: 1.3em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.3em; }
-.markdown-body h3 { font-size: 1.1em; }
-.markdown-body p { margin-bottom: 1em; }
-
-.markdown-body ul,
-.markdown-body ol {
-  margin-bottom: 1em;
-  padding-left: 2em;
-}
-
-.markdown-body li { margin-bottom: 0.25em; }
-
-.markdown-body code {
-  font-family: var(--font-mono);
-  font-size: 0.875em;
-  background: var(--bg-secondary);
-  padding: 0.15em 0.4em;
-  border-radius: var(--radius-sm);
-  color: var(--accent-primary);
-}
-
-.markdown-body pre {
-  background: var(--bg-secondary);
-  border-radius: var(--radius-md);
-  padding: 1em;
-  overflow-x: auto;
-  margin-bottom: 1em;
-}
-
-.markdown-body pre code {
-  background: transparent;
-  padding: 0;
-  color: var(--text-primary);
-  font-size: 0.8125rem;
-}
-
-.markdown-body blockquote {
-  margin: 0 0 1em;
-  padding: 0.75em 1em;
-  border-left: 4px solid var(--accent-primary);
-  color: var(--text-secondary);
-  background: var(--bg-secondary);
-  border-radius: 0 var(--radius-md) var(--radius-md) 0;
-}
-
-.markdown-body a {
-  color: var(--accent-primary);
-  text-decoration: none;
-}
-
-.markdown-body a:hover { text-decoration: underline; }
-
-.markdown-body hr {
-  height: 1px;
-  background: var(--border-color);
-  border: none;
-  margin: 1.5em 0;
-}
-
-.markdown-body table {
-  width: 100%;
-  border-collapse: collapse;
-  margin-bottom: 1em;
-}
-
-.markdown-body th,
-.markdown-body td {
-  padding: 0.5em 0.75em;
-  border: 1px solid var(--border-color);
-  text-align: left;
-}
-
-.markdown-body th {
-  background: var(--bg-secondary);
-  font-weight: 600;
-}
-
-.markdown-body strong { font-weight: 600; }
-.markdown-body em { font-style: italic; }
-`;
 
 /**
  * Simple markdown parser
@@ -210,7 +107,10 @@ function parseMarkdown(text: string): string {
 export class MarkdownRenderer extends LitElement {
   @property({ type: String }) content = '';
 
-  static styles = unsafeCSS(styles);
+  // Disable shadow DOM to allow parent styles to control text color
+  createRenderRoot(): HTMLElement | DocumentFragment {
+    return this;
+  }
 
   render() {
     if (!this.content) {
@@ -220,7 +120,7 @@ export class MarkdownRenderer extends LitElement {
     const htmlContent = parseMarkdown(this.content);
 
     return html`
-      \u003cdiv class="markdown-body" ${unsafeHTML(htmlContent)}\u003e\u003c/div\u003e
+      \u003cdiv class="markdown-body"\u003e${unsafeHTML(htmlContent)}\u003c/div\u003e
     `;
   }
 }

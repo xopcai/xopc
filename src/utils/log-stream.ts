@@ -65,7 +65,7 @@ const _LOG_LEVELS: Record<LogLevel, number> = {
  * @param subscriber - Callback function to receive log entries
  * @returns Unsubscribe function
  */
-export function subscribeToLogs(subscriber: LogSubscriber): () => void {
+function subscribeToLogs(subscriber: LogSubscriber): () => void {
   subscribers.add(subscriber);
   return () => subscribers.delete(subscriber);
 }
@@ -73,14 +73,14 @@ export function subscribeToLogs(subscriber: LogSubscriber): () => void {
 /**
  * Get number of active subscribers
  */
-export function getSubscriberCount(): number {
+function getSubscriberCount(): number {
   return subscribers.size;
 }
 
 /**
  * Check if any subscribers are active
  */
-export function hasSubscribers(): boolean {
+function hasSubscribers(): boolean {
   return subscribers.size > 0;
 }
 
@@ -89,7 +89,7 @@ export function hasSubscribers(): boolean {
  * 
  * @internal - Called by the logger integration
  */
-export function emitLogEntry(entry: LogEntry): void {
+function emitLogEntry(entry: LogEntry): void {
   if (subscribers.size === 0) return;
   
   for (const subscriber of subscribers) {
@@ -106,7 +106,7 @@ export function emitLogEntry(entry: LogEntry): void {
  * 
  * @internal
  */
-export function createLogEntry(
+function createLogEntry(
   level: LogLevel,
   message: string,
   context?: Record<string, unknown>
@@ -133,7 +133,7 @@ export function createLogEntry(
  * app.get('/api/logs/stream', createLogStreamHandler());
  * ```
  */
-export function createLogStreamHandler() {
+function createLogStreamHandler() {
   return (req: Request): Response => {
     const url = new URL(req.url);
     const levelsParam = url.searchParams.get('levels');

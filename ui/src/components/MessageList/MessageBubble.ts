@@ -4,6 +4,7 @@ import { t } from '../../utils/i18n';
 import type { Message, MessageContent } from './types';
 import './AttachmentRenderer';
 import './UsageBadge';
+import '../MarkdownRenderer';
 
 @customElement('message-bubble')
 export class MessageBubble extends LitElement {
@@ -69,7 +70,7 @@ export class MessageBubble extends LitElement {
     switch (block.type) {
       case 'text':
         if (block.text) {
-          return html`<p class="whitespace-pre-wrap">${block.text}</p>`;
+          return html`<markdown-renderer .content=${block.text}></markdown-renderer>`;
         }
         break;
         

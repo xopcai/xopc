@@ -3,6 +3,7 @@ import { customElement, property, state, query } from 'lit/decorators.js';
 import './components/MessageEditor';
 import './components/MessageList';
 import './components/StreamingMessageContainer';
+import './components/MarkdownRenderer';
 import { t, initI18n } from './utils/i18n';
 import type { Attachment } from './utils/attachment-utils';
 import type { MessageEditor } from './components/MessageEditor';
@@ -102,6 +103,8 @@ export class XopcbotGatewayChat extends LitElement {
   private _shouldReconnect = true;
   private _isSending = false;
   private _lastLoadedSessionKey: string | null = null;
+  /** Flag to prevent initial load race condition */
+  private _isLoadingSession = false;
 
   // Configurable reconnection settings
   private get _maxReconnectAttempts(): number {
@@ -122,14 +125,16 @@ export class XopcbotGatewayChat extends LitElement {
     await initI18n('en');
   }
 
+  private _routeHandled = false;
+
   override firstUpdated(): void {
     // Add scroll listener directly to chat messages element after render
     if (this._chatMessages) {
       this._chatMessages.addEventListener('scroll', this._handleScroll as EventListener);
     }
-
-    // Load session based on current route
+    // Handle initial route on first render
     this._handleRouteChange();
+    this._routeHandled = true;
   }
 
   override updated(changedProperties: Map<string, unknown>): void {
@@ -140,8 +145,8 @@ export class XopcbotGatewayChat extends LitElement {
       this.connect();
     }
     
-    // Reload session when route changes
-    if (changedProperties.has('route') && this.route) {
+    // Reload session when route changes (skip if already handled in firstUpdated)
+    if (changedProperties.has('route') && this.route && this._routeHandled) {
       this._handleRouteChange();
     }
   }
@@ -153,15 +158,31 @@ export class XopcbotGatewayChat extends LitElement {
     const route = this.route;
     if (!route) return;
 
+    // Prevent processing route if URL explicitly specifies a session
+    // This acts as a route guard to prevent auto-loading wrong session
+    const currentHash = location.hash.slice(1);
+    if (route.type === 'recent' && currentHash.startsWith('chat/')) {
+      // URL has explicit session but route says 'recent' - parse from URL
+      const pathMatch = currentHash.match(/^chat\/(.+)$/);
+      if (pathMatch && pathMatch[1] && pathMatch[1] !== 'new') {
+        console.warn('[GatewayChat] Route mismatch: URL has session but route is recent, loading from URL');
+        const sessionKey = decodeURIComponent(pathMatch[1]);
+        this._lastLoadedSessionKey = null;
+        await this._loadSession(sessionKey, 0);
+        this._lastLoadedSessionKey = sessionKey;
+        return;
+      }
+    }
+
     // Get target session key from route
     let targetSessionKey: string | null = null;
 
     switch (route.type) {
       case 'recent':
-        // Reset last loaded key to force reload of most recent session
-        this._lastLoadedSessionKey = null;
-        // Load recent sessions - this will load the most recent one
-        await this._loadSessions();
+        // Only auto-load if URL doesn't specify a session
+        if (!currentHash.startsWith('chat/') || currentHash === 'chat' || currentHash === 'chat/') {
+          await this._loadSessions(true);
+        }
         return;
       case 'session':
         targetSessionKey = route.sessionKey;
@@ -171,12 +192,11 @@ export class XopcbotGatewayChat extends LitElement {
         return;
     }
 
-    // If we have a target session, load it directly
+    // If we have a target session, load it directly (force reload even if same session)
     if (targetSessionKey) {
-      if (targetSessionKey !== this._lastLoadedSessionKey) {
-        await this._loadSession(targetSessionKey, 0); // Load with offset 0
-        this._lastLoadedSessionKey = targetSessionKey;
-      }
+      this._lastLoadedSessionKey = null; // Clear cache to force reload
+      await this._loadSession(targetSessionKey, 0);
+      this._lastLoadedSessionKey = targetSessionKey;
     }
   }
 
@@ -185,6 +205,15 @@ export class XopcbotGatewayChat extends LitElement {
    */
   private async _loadSession(sessionKey: string, offset = 0): Promise<void> {
     if (!this.config) return;
+
+    // For initial load (offset=0), allow interrupting previous loads
+    if (offset === 0) {
+      this._isLoadingSession = false;
+    }
+    
+    // Only apply race condition protection for pagination loads
+    if (this._isLoadingSession) return;
+    this._isLoadingSession = true;
 
     try {
       const url = apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=${offset}&limit=50`);
@@ -211,9 +240,12 @@ export class XopcbotGatewayChat extends LitElement {
           timestamp: msg.timestamp ? new Date(msg.timestamp).getTime() : Date.now(),
         }));
       
-      // Handle pagination - prepend if loading older messages
+      // For pagination (offset > 0), preserve existing messages
       if (offset > 0) {
-        this._messages = [...newMessages, ...this._messages];
+        // Avoid duplicate messages by filtering out existing ones based on timestamp
+        const existingTimestamps = new Set(this._messages.map(m => m.timestamp));
+        const uniqueNewMessages = newMessages.filter((m: Message) => !existingTimestamps.has(m.timestamp));
+        this._messages = [...uniqueNewMessages, ...this._messages];
       } else {
         this._messages = newMessages;
       }
@@ -228,6 +260,8 @@ export class XopcbotGatewayChat extends LitElement {
       this.requestUpdate();
     } catch (err) {
       console.error('[GatewayChat] Failed to load session:', err);
+    } finally {
+      this._isLoadingSession = false;
     }
   }
 
@@ -309,10 +343,8 @@ export class XopcbotGatewayChat extends LitElement {
         this._error = null;
         this._reconnectCount = 0;
         this.requestUpdate();
-        // Load sessions after connection is established (only if not already loaded)
-        if (!this._lastLoadedSessionKey) {
-          this._loadSessions();
-        }
+        // Only refresh session list, don't auto-load
+        this._loadSessions(false);
       };
 
       // Also listen for our custom 'connected' event from the server
@@ -402,7 +434,7 @@ export class XopcbotGatewayChat extends LitElement {
 
   // ========== Session management ==========
 
-  private async _loadSessions(): Promise<void> {
+  private async _loadSessions(autoLoad = false): Promise<void> {
     if (!this.config) {
       return;
     }
@@ -424,6 +456,11 @@ export class XopcbotGatewayChat extends LitElement {
 
       this._sessions = gatewaySessions;
 
+      // Only auto-load if explicitly requested
+      if (!autoLoad) {
+        return;
+      }
+
       // Filter out empty sessions and get sessions with messages
       const sessionsWithMessages = gatewaySessions.filter((s: any) => s.messageCount > 0);
 
@@ -433,8 +470,16 @@ export class XopcbotGatewayChat extends LitElement {
         await this._loadSession(recentKey, 0);
         this._lastLoadedSessionKey = recentKey;
 
-        // Update URL to reflect current session
-        this._updateUrlWithSession(recentKey);
+        // Only update URL if it doesn't already specify a different session
+        const currentHash = location.hash.slice(1);
+        const isExplicitSession = currentHash.startsWith('chat/') && 
+                                  currentHash !== 'chat' && 
+                                  currentHash !== 'chat/';
+        if (!isExplicitSession) {
+          this._updateUrlWithSession(recentKey);
+        } else {
+          console.log('[GatewayChat] Skipping URL update - user has explicit session in URL');
+        }
       } else if (gatewaySessions.length > 0) {
         // No sessions with messages, use the most recent empty session
         const emptySession = gatewaySessions[0];
@@ -984,7 +1029,8 @@ export class XopcbotGatewayChat extends LitElement {
             <div class="markdown-content">
               ${content.map((block) => {
                 if (block.type === 'text' && block.text) {
-                  return html`<p class="whitespace-pre-wrap">${block.text}<span class="streaming-cursor"></span></p>`;
+                  // Streaming messages use markdown-renderer for consistency
+                  return html`<markdown-renderer .content=${block.text}></markdown-renderer><span class="streaming-cursor"></span>`;
                 }
                 return '';
               })}
@@ -1028,7 +1074,7 @@ export class XopcbotGatewayChat extends LitElement {
       <div class="markdown-content">
         ${content.map((block) => {
           if (block.type === 'text' && block.text) {
-            return html`<p class="whitespace-pre-wrap">${block.text}</p>`;
+            return html`<markdown-renderer .content=${block.text}></markdown-renderer>`;
           }
           return '';
         })}

@@ -23,11 +23,11 @@ import {
 } from './workspace.js';
 
 // =============================================================================
-// Configuration
+// Configuration (Internal)
 // =============================================================================
 
 /** Maximum characters to inject from workspace files into system prompt */
-export const PROMPT_MAX_CHARS = {
+const PROMPT_MAX_CHARS = {
   SOUL: 8_000,
   USER: 4_000,
   IDENTITY: 2_000,
@@ -286,6 +286,53 @@ Constraints: never read more than one skill up front; only read after selecting.
 }
 
 /**
+ * Build Problem Solving Workflow section
+ *
+ * Implements the "Build & Self-Verify" pattern from harness engineering.
+ * Guides agents through an iterative problem-solving process with verification.
+ *
+ * Inspired by: https://blog.langchain.com/improving-deep-agents-with-harness-engineering/
+ */
+function buildProblemSolvingSection(): string {
+  return `## Problem Solving Workflow
+
+Follow this iterative process for all tasks:
+
+### 1. Plan
+- Read and understand the task requirements
+- Explore the codebase to understand context
+- Create a plan: what needs to change and why
+- Identify how you will verify the solution
+
+### 2. Build
+- Implement your solution incrementally
+- Write tests if they don't exist (happy path + edge cases)
+- Make small, focused changes
+- Document your changes as you go
+
+### 3. Verify
+- Run tests and checks
+- Read the full output, don't just skim
+- Compare results against requirements (not against your code)
+- Test edge cases explicitly
+
+### 4. Fix (if needed)
+- Analyze any errors or failures
+- Revisit the original requirements
+- Fix issues and re-verify
+- Iterate until requirements are met
+
+### Before Declaring Complete
+You MUST verify:
+- [ ] All requirements from the original task are met
+- [ ] Tests pass (if available)
+- [ ] Edge cases are handled
+- [ ] No regressions introduced
+
+**Never skip verification. Models that verify their work perform significantly better.**`;
+}
+
+/**
  * Build Messaging section - channel-specific instructions
  */
 function buildMessagingSection(
@@ -419,18 +466,23 @@ export function buildSystemPrompt(
   // 5. Skills
   sections.push(buildSkillsSection(availableTools));
 
-  // 6. Heartbeat
+  // 6. Problem Solving Workflow (non-minimal only) - Harness Engineering
+  if (!isMinimal) {
+    sections.push(buildProblemSolvingSection());
+  }
+
+  // 7. Heartbeat
   sections.push(buildHeartbeatSection(bootstrapFiles, heartbeatEnabled, heartbeatPrompt, userTimezone));
 
-  // 7. Working directory
+  // 8. Working directory
   sections.push(buildWorkingDirSection(workspaceDir));
 
-  // 8. Tools (non-minimal only)
+  // 9. Tools (non-minimal only)
   if (!isMinimal) {
     sections.push(buildToolsSection(bootstrapFiles));
   }
 
-  // 9. Agents guidelines
+  // 10. Agents guidelines
   sections.push(buildAgentsSection(bootstrapFiles));
 
   // 10. Messaging
@@ -444,9 +496,9 @@ export function buildSystemPrompt(
 }
 
 /**
- * Build minimal system prompt for subagents/cron jobs
+ * Build minimal system prompt for subagents/cron jobs (Internal)
  */
-export function buildMinimalSystemPrompt(
+function _buildMinimalSystemPrompt(
   workspaceDir: string,
   bootstrapFiles: WorkspaceBootstrapFile[]
 ): string {
@@ -458,9 +510,9 @@ export function buildMinimalSystemPrompt(
 }
 
 /**
- * Get bootstrap file by name
+ * Get bootstrap file by name (Internal)
  */
-export function getBootstrapFile(
+function _getBootstrapFile(
   bootstrapFiles: WorkspaceBootstrapFile[],
   name: string
 ): WorkspaceBootstrapFile | undefined {
@@ -468,9 +520,9 @@ export function getBootstrapFile(
 }
 
 /**
- * Check if specific bootstrap file exists and is loaded
+ * Check if specific bootstrap file exists and is loaded (Internal)
  */
-export function hasBootstrapFile(
+function _hasBootstrapFile(
   bootstrapFiles: WorkspaceBootstrapFile[],
   name: string
 ): boolean {

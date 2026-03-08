@@ -5,7 +5,6 @@ import { ChannelManager } from '../channels/manager.js';
 import { MessageBus } from '../bus/index.js';
 import { loadConfig, saveConfig, DEFAULT_PATHS } from '../config/index.js';
 import { getWorkspacePath } from '../config/schema.js';
-import { createLogger } from '../utils/logger.js';
 import { CronService } from '../cron/index.js';
 import { ExtensionLoader, normalizeExtensionConfig } from '../extensions/index.js';
 import { HeartbeatService } from '../heartbeat/index.js';
@@ -15,8 +14,6 @@ import type { Config } from '../config/schema.js';
 import type { SessionListQuery, ExportFormat } from '../types/index.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { getModelRegistry } from '../providers/index.js';
-
-const log = createLogger('GatewayService');
 
 // ========== SSE Event System ==========
 
@@ -73,10 +70,10 @@ export class GatewayService {
 
     // Log token info (not the token itself)
     if (this.auth.mode === 'token') {
-      const tokenPreview = this.auth.token ? `${this.auth.token.slice(0, 8)}...` : 'none';
-      log.info({ mode: this.auth.mode, tokenPreview }, 'Gateway authentication configured');
+      const tokenPreview = this.auth.token ? `${this.auth.token.slice(0, 4)}***` : 'none';
+      console.log(`[GatewayService] Authentication configured: mode=${this.auth.mode}, token=${tokenPreview}`);
     } else {
-      log.warn({ mode: this.auth.mode }, 'Gateway authentication disabled (no auth required)');
+      console.log(`[GatewayService] Authentication disabled: mode=${this.auth.mode}`);
     }
 
     // Initialize channel manager
@@ -88,10 +85,7 @@ export class GatewayService {
 
     // Initialize ModelRegistry (loads from models.json)
     const registry = getModelRegistry();
-    log.info({ 
-      modelCount: registry.getAll().length,
-      error: registry.getError(),
-    }, 'ModelRegistry initialized');
+    console.log(`[GatewayService] ModelRegistry initialized: ${registry.getAll().length} models, error=${registry.getError() || 'none'}`);
 
     // Initialize agent service with extension registry
     const modelConfig = this.config.agents?.defaults?.model;
@@ -129,7 +123,7 @@ export class GatewayService {
     try {
       const extensionsConfig = (this.config as any).extensions;
       if (!extensionsConfig) {
-        log.debug('No extensions configured');
+        console.log('[GatewayService] No extensions configured');
         return;
       }
 
@@ -144,20 +138,20 @@ export class GatewayService {
       const enabledExtensions = resolvedConfigs.filter(c => c.enabled);
       if (enabledExtensions.length > 0) {
         this.extensionLoader.loadExtensions(enabledExtensions).then(() => {
-          log.info({ count: enabledExtensions.length }, 'Extensions loaded');
+          console.log(`[GatewayService] Extensions loaded: ${enabledExtensions.length}`);
         }).catch(err => {
-          log.warn({ err }, 'Failed to load some extensions');
+          console.warn('[GatewayService] Failed to load some extensions:', err);
         });
       }
     } catch (error) {
-      log.warn({ err: error }, 'Failed to initialize extensions');
+      console.warn('[GatewayService] Failed to initialize extensions:', error);
     }
   }
 
   async start(): Promise<void> {
     if (this.running) return;
 
-    log.info('Starting gateway service...');
+    console.log('[GatewayService] Starting gateway service...');
     this.startTime = Date.now();
     this.running = true;
 
@@ -167,7 +161,7 @@ export class GatewayService {
 
     // Initialize session manager
     await this.sessionManager.initialize();
-    log.info('Session manager initialized');
+    console.log('[GatewayService] Session manager initialized');
 
     // Start cron service
     if (this.config.cron?.enabled !== false) {
@@ -183,12 +177,12 @@ export class GatewayService {
 
     // Start agent service (runs in background)
     this.agentService.start().catch((err) => {
-      log.error({ err }, 'Agent service error');
+      console.error('[GatewayService] Agent service error:', err);
     });
 
     // Start outbound message processor
     this.startOutboundProcessor().catch((err) => {
-      log.error({ err }, 'Outbound processor error');
+      console.error('[GatewayService] Outbound processor error:', err);
     });
 
     // Setup config hot reload
@@ -196,13 +190,13 @@ export class GatewayService {
       this.setupConfigReloader();
     }
 
-    log.info('Gateway service started');
+    console.log('[GatewayService] Gateway service started');
   }
 
   async stop(): Promise<void> {
     if (!this.running) return;
 
-    log.info('Stopping gateway service...');
+    console.log('[GatewayService] Stopping gateway service...');
 
     // Stop config reloader
     if (this.configReloader) {
@@ -220,20 +214,20 @@ export class GatewayService {
     await this.cronService.stop();
 
     this.running = false;
-    log.info('Gateway service stopped');
+    console.log('[GatewayService] Gateway service stopped');
   }
 
   /**
    * Start processing outbound messages and send through channels
    */
   private async startOutboundProcessor(): Promise<void> {
-    log.info('Starting outbound message processor');
+    console.log('[GatewayService] Starting outbound message processor');
     while (this.running) {
       try {
         const msg = await this.bus.consumeOutbound();
         await this.channelManager.send(msg);
       } catch (error) {
-        log.error({ err: error }, 'Error processing outbound message');
+        console.error('[GatewayService] Error processing outbound message:', error);
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
@@ -254,7 +248,7 @@ export class GatewayService {
         onHeartbeatReload: (newConfig) => this.handleHeartbeatReload(newConfig),
         onToolsReload: (newConfig) => this.handleToolsReload(newConfig),
         onFullRestart: (newConfig) => {
-          log.warn('Config changed requires full restart - please restart the gateway');
+          console.warn('[GatewayService] Config changed requires full restart - please restart the gateway');
           this.config = newConfig;
           this.emit('config.reload', { section: 'full', requiresRestart: true });
         },
@@ -271,64 +265,64 @@ export class GatewayService {
    * Handle models config hot reload
    */
   private handleModelsReload(newConfig: Config): void {
-    log.info('Reloading models config...');
+    console.log('[GatewayService] Reloading models config...');
     this.config = newConfig;
     this.emit('config.reload', { section: 'models' });
-    log.info('Models config reloaded');
+    console.log('[GatewayService] Models config reloaded');
   }
 
   /**
    * Handle agent defaults config hot reload
    */
   private handleAgentDefaultsReload(newConfig: Config): void {
-    log.info('Reloading agent defaults...');
+    console.log('[GatewayService] Reloading agent defaults...');
     this.config = newConfig;
     this.emit('config.reload', { section: 'agents' });
-    log.info('Agent defaults reloaded');
+    console.log('[GatewayService] Agent defaults reloaded');
   }
 
   /**
    * Handle channels config hot reload
    */
   private handleChannelsReload(newConfig: Config): void {
-    log.info('Reloading channels config...');
+    console.log('[GatewayService] Reloading channels config...');
     this.config = newConfig;
     this.channelManager.updateConfig(newConfig);
     this.emit('config.reload', { section: 'channels' });
     this.emit('channels.status', { channels: this.getChannelsStatus() });
-    log.info('Channels config reloaded');
+    console.log('[GatewayService] Channels config reloaded');
   }
 
   /**
    * Handle cron config hot reload
    */
   private handleCronReload(newConfig: Config): void {
-    log.info('Reloading cron config...');
+    console.log('[GatewayService] Reloading cron config...');
     this.config = newConfig;
     this.cronService.updateConfig(newConfig);
     this.emit('config.reload', { section: 'cron' });
-    log.info('Cron config reloaded');
+    console.log('[GatewayService] Cron config reloaded');
   }
 
   /**
    * Handle heartbeat config hot reload
    */
   private handleHeartbeatReload(newConfig: Config): void {
-    log.info('Reloading heartbeat config...');
+    console.log('[GatewayService] Reloading heartbeat config...');
     this.config = newConfig;
     this.heartbeatService.updateConfig(newConfig);
     this.emit('config.reload', { section: 'heartbeat' });
-    log.info('Heartbeat config reloaded');
+    console.log('[GatewayService] Heartbeat config reloaded');
   }
 
   /**
    * Handle tools config hot reload
    */
   private handleToolsReload(newConfig: Config): void {
-    log.info('Reloading tools config...');
+    console.log('[GatewayService] Reloading tools config...');
     this.config = newConfig;
     this.emit('config.reload', { section: 'tools' });
-    log.info('Tools config reloaded');
+    console.log('[GatewayService] Tools config reloaded');
   }
 
   /**
@@ -352,7 +346,7 @@ export class GatewayService {
       return { saved: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      log.error({ err }, 'Failed to save config');
+      console.error('[GatewayService] Failed to save config:', error);
       return { saved: false, error };
     }
   }
@@ -362,7 +356,7 @@ export class GatewayService {
    */
   async updateConfig(updates: Partial<Config>): Promise<{ updated: boolean; error?: string }> {
     try {
-      log.info('Updating configuration...');
+      console.log('[GatewayService] Updating configuration...');
       
       // Merge updates
       this.config = { ...this.config, ...updates };
@@ -370,11 +364,11 @@ export class GatewayService {
       // Save to disk
       await saveConfig(this.config, this.configPath);
       
-      log.info('Configuration updated successfully');
+      console.log('[GatewayService] Configuration updated successfully');
       return { updated: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      log.error({ err }, 'Failed to update config');
+      console.error('[GatewayService] Failed to update config:', error);
       return { updated: false, error };
     }
   }
@@ -413,7 +407,7 @@ export class GatewayService {
           
           return { status: 'ok', summary: 'Message processed successfully' };
         } catch (error) {
-          log.error({ err: error }, 'Agent processing failed');
+          console.error('[GatewayService] Agent processing failed:', error);
           yield { type: 'error', content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` };
           return { status: 'error', summary: error instanceof Error ? error.message : 'Unknown error' };
         }
@@ -438,7 +432,7 @@ export class GatewayService {
 
       return { status: 'ok', summary: 'Message processed' };
     } catch (error) {
-      log.error({ err: error }, 'Agent run failed');
+      console.error('[GatewayService] Agent run failed:', error);
       throw error;
     }
   }
@@ -461,7 +455,7 @@ export class GatewayService {
       this.emit('message.sent', { channel, chatId, messageId });
       return { sent: true, messageId };
     } catch (error) {
-      log.error({ err: error, channel, chatId }, 'Failed to send message');
+      console.error(`[GatewayService] Failed to send message: channel=${channel}, chatId=${chatId}, error=${error}`);
       throw error;
     }
   }
@@ -497,9 +491,16 @@ export class GatewayService {
     uptime: number;
     channels: { running: number; total: number };
     configPath: string;
+    logs?: {
+      dir: string;
+      errors24h: number;
+      stats: Record<string, number>;
+    };
   } {
     const runningChannels = this.channelManager.getRunningChannels();
     const allChannels = this.channelManager.getAllChannels();
+    const { getLogDir, getLogStats } = require('../utils/logger.js');
+    const logStats = getLogStats();
 
     return {
       status: 'ok',
@@ -511,6 +512,11 @@ export class GatewayService {
         total: allChannels.length,
       },
       configPath: this.configPath,
+      logs: {
+        dir: getLogDir(),
+        errors24h: logStats.errorsLast24h,
+        stats: logStats.byLevel,
+      },
     };
   }
 
@@ -587,7 +593,7 @@ export class GatewayService {
     if (!this.eventBuffers.has(sessionId)) {
       this.eventBuffers.set(sessionId, []);
     }
-    log.debug({ sessionId }, 'Event subscriber added');
+    console.log(`[GatewayService] Event subscriber added: sessionId=${sessionId}`);
 
     return () => {
       this.subscribers.delete(sessionId);
@@ -597,7 +603,7 @@ export class GatewayService {
           this.eventBuffers.delete(sessionId);
         }
       }, 5 * 60_000); // 5 min grace
-      log.debug({ sessionId }, 'Event subscriber removed');
+      console.log(`[GatewayService] Event subscriber removed: sessionId=${sessionId}`);
     };
   }
 
@@ -619,7 +625,7 @@ export class GatewayService {
       try {
         listener(event);
       } catch (err) {
-        log.warn({ sessionId, err }, 'Failed to deliver event to subscriber');
+        console.warn(`[GatewayService] Failed to deliver event to subscriber: sessionId=${sessionId}, err=${err}`);
       }
     }
   }
@@ -846,7 +852,7 @@ export class GatewayService {
     // Save to disk
     await saveConfig(this.config, this.configPath);
     
-    log.info({ tokenPreview: `${newToken.slice(0, 8)}...` }, 'Gateway token refreshed');
+    console.log(`[GatewayService] Gateway token refreshed: ${newToken.slice(0, 8)}...`);
     
     return newToken;
   }

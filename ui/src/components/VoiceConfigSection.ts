@@ -3,9 +3,30 @@
  */
 
 import { html, LitElement, css } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons.js';
 import { t } from '../utils/i18n.js';
+
+export interface VoiceModel {
+  id: string;
+  name: string;
+  description?: string;
+}
+
+export interface VoiceModels {
+  stt: {
+    alibaba: VoiceModel[];
+    openai: VoiceModel[];
+  };
+  tts: {
+    alibaba: VoiceModel[];
+    openai: VoiceModel[];
+  };
+  ttsVoices: {
+    alibaba: VoiceModel[];
+    openai: VoiceModel[];
+  };
+}
 
 export interface VoiceSectionConfig {
   stt?: {
@@ -28,6 +49,34 @@ export interface VoiceSectionConfig {
 export class VoiceConfigSection extends LitElement {
   @property({ attribute: false }) config: VoiceSectionConfig = {};
   @property({ attribute: false }) onChange?: (path: string, value: unknown) => void;
+  @property({ attribute: false }) token?: string;
+
+  @state() private _voiceModels: VoiceModels | null = null;
+
+  async connectedCallback() {
+    super.connectedCallback();
+    await this._fetchVoiceModels();
+  }
+
+  private async _fetchVoiceModels() {
+    try {
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      if (this.token) {
+        headers['Authorization'] = `Bearer ${this.token}`;
+      }
+      
+      const response = await fetch(`${window.location.origin}/api/voice/models`, { headers });
+      const data = await response.json();
+      if (data.ok && data.payload?.models) {
+        this._voiceModels = data.payload.models;
+        this.requestUpdate();
+      }
+    } catch (error) {
+      console.error('Failed to fetch voice models:', error);
+    }
+  }
 
   static styles = css`
     :host {
@@ -365,12 +414,17 @@ export class VoiceConfigSection extends LitElement {
                   <label class="field-label">${t('settings.voice.stt.model')}</label>
                   <select
                     class="select-input"
-                    .value=${this.config.stt?.alibaba?.model || 'paraformer-v1'}
+                    .value=${this.config.stt?.alibaba?.model || ''}
                     @change=${(e: Event) => this._updateConfig('stt.alibaba.model', (e.target as HTMLSelectElement).value)}
                   >
-                    <option value="paraformer-v1">${t('settings.voice.models.paraformerV1')}</option>
-                    <option value="paraformer-8k-v1">${t('settings.voice.models.paraformer8k')}</option>
-                    <option value="paraformer-mtl-v1">${t('settings.voice.models.paraformerMtl')}</option>
+                    ${this._voiceModels?.stt?.alibaba?.length 
+                      ? this._voiceModels.stt.alibaba.map(model => html`
+                          <option value=${model.id} ?selected=${model.id === this.config.stt?.alibaba?.model}>${model.name}</option>
+                        `)
+                      : html`
+                          <option value="paraformer-v2">Paraformer v2</option>
+                          <option value="paraformer-v1">Paraformer v1</option>
+                        `}
                   </select>
                 </div>
               ` : ''}
@@ -391,10 +445,16 @@ export class VoiceConfigSection extends LitElement {
                   <label class="field-label">${t('settings.voice.stt.model')}</label>
                   <select
                     class="select-input"
-                    .value=${this.config.stt?.openai?.model || 'whisper-1'}
+                    .value=${this.config.stt?.openai?.model || ''}
                     @change=${(e: Event) => this._updateConfig('stt.openai.model', (e.target as HTMLSelectElement).value)}
                   >
-                    <option value="whisper-1">${t('settings.voice.models.whisper1')}</option>
+                    ${this._voiceModels?.stt?.openai?.length
+                      ? this._voiceModels.stt.openai.map(model => html`
+                          <option value=${model.id} ?selected=${model.id === this.config.stt?.openai?.model}>${model.name}</option>
+                        `)
+                      : html`
+                          <option value="whisper-1">Whisper-1</option>
+                        `}
                   </select>
                 </div>
               ` : ''}
@@ -485,26 +545,34 @@ export class VoiceConfigSection extends LitElement {
                   <label class="field-label">${t('settings.voice.stt.model')}</label>
                   <select
                     class="select-input"
-                    .value=${this.config.tts?.openai?.model || 'tts-1'}
+                    .value=${this.config.tts?.openai?.model || ''}
                     @change=${(e: Event) => this._updateConfig('tts.openai.model', (e.target as HTMLSelectElement).value)}
                   >
-                    <option value="tts-1">${t('settings.voice.models.tts1')}</option>
-                    <option value="tts-1-hd">${t('settings.voice.models.tts1Hd')}</option>
+                    ${this._voiceModels?.tts?.openai?.length
+                      ? this._voiceModels.tts.openai.map(model => html`
+                          <option value=${model.id} ?selected=${model.id === this.config.tts?.openai?.model}>${model.name}</option>
+                        `)
+                      : html`
+                          <option value="tts-1">TTS-1</option>
+                          <option value="tts-1-hd">TTS-1 HD</option>
+                        `}
                   </select>
                 </div>
                 <div class="field-group">
                   <label class="field-label">${t('settings.voice.tts.voice')}</label>
                   <select
                     class="select-input"
-                    .value=${this.config.tts?.openai?.voice || 'alloy'}
+                    .value=${this.config.tts?.openai?.voice || ''}
                     @change=${(e: Event) => this._updateConfig('tts.openai.voice', (e.target as HTMLSelectElement).value)}
                   >
-                    <option value="alloy">${t('settings.voice.voices.alloy')}</option>
-                    <option value="echo">${t('settings.voice.voices.echo')}</option>
-                    <option value="fable">${t('settings.voice.voices.fable')}</option>
-                    <option value="onyx">${t('settings.voice.voices.onyx')}</option>
-                    <option value="nova">${t('settings.voice.voices.nova')}</option>
-                    <option value="shimmer">${t('settings.voice.voices.shimmer')}</option>
+                    ${this._voiceModels?.ttsVoices?.openai?.length
+                      ? this._voiceModels.ttsVoices.openai.map(voice => html`
+                          <option value=${voice.id} ?selected=${voice.id === this.config.tts?.openai?.voice}>${voice.name}</option>
+                        `)
+                      : html`
+                          <option value="alloy">Alloy</option>
+                          <option value="echo">Echo</option>
+                        `}
                   </select>
                 </div>
               ` : ''}
@@ -525,21 +593,35 @@ export class VoiceConfigSection extends LitElement {
                   <label class="field-label">${t('settings.voice.stt.model')}</label>
                   <select
                     class="select-input"
-                    .value=${this.config.tts?.alibaba?.model || 'cosyvoice-v1'}
+                    .value=${this.config.tts?.alibaba?.model || ''}
                     @change=${(e: Event) => this._updateConfig('tts.alibaba.model', (e.target as HTMLSelectElement).value)}
                   >
-                    <option value="cosyvoice-v1">${t('settings.voice.models.cosyvoiceV1')}</option>
+                    ${this._voiceModels?.tts?.alibaba?.length
+                      ? this._voiceModels.tts.alibaba.map(model => html`
+                          <option value=${model.id} ?selected=${model.id === this.config.tts?.alibaba?.model}>${model.name}</option>
+                        `)
+                      : html`
+                          <option value="qwen-tts">Qwen TTS</option>
+                          <option value="qwen3-tts-flash">Qwen3 TTS Flash</option>
+                        `}
                   </select>
                 </div>
                 <div class="field-group">
                   <label class="field-label">${t('settings.voice.tts.voice')}</label>
-                  <input
-                    class="text-input"
-                    .value=${this.config.tts?.alibaba?.voice || 'longxiaochun'}
-                    @change=${(e: Event) => this._updateConfig('tts.alibaba.voice', (e.target as HTMLInputElement).value)}
-                    placeholder="longxiaochun"
-                  />
-                  <p class="field-desc">${t('settings.voice.tts.voiceDesc')} (e.g., longxiaochun, longcheng)</p>
+                  <select
+                    class="select-input"
+                    .value=${this.config.tts?.alibaba?.voice || ''}
+                    @change=${(e: Event) => this._updateConfig('tts.alibaba.voice', (e.target as HTMLSelectElement).value)}
+                  >
+                    ${this._voiceModels?.ttsVoices?.alibaba?.length
+                      ? this._voiceModels.ttsVoices.alibaba.map(voice => html`
+                          <option value=${voice.id} ?selected=${voice.id === this.config.tts?.alibaba?.voice}>${voice.name}</option>
+                        `)
+                      : html`
+                          <option value="Cherry">Cherry</option>
+                          <option value="longxiaochun">Long Xiao Chun</option>
+                        `}
+                  </select>
                 </div>
               ` : ''}
             </div>

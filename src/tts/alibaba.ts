@@ -40,8 +40,8 @@ export class AlibabaProvider implements TTSProvider {
 
   constructor(config: AlibabaTTSConfig) {
     this.apiKey = config.apiKey;
-    this.model = config.model || 'qwen3-tts-flash';
-    this.voice = config.voice || 'Cherry';
+    this.model = config.model || 'qwen-tts';
+    this.voice = config.voice || 'longxiaochun';
   }
 
   isConfigured(): boolean {
@@ -68,6 +68,8 @@ export class AlibabaProvider implements TTSProvider {
           model: this.model,
           input: {
             text: limitedText,
+          },
+          parameters: {
             voice: options?.voice || this.voice,
           },
         }),

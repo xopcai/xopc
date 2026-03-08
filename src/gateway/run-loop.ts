@@ -5,9 +5,6 @@
 import type { GatewayServer } from "./server.js";
 import { acquireGatewayLock } from "./lock.js";
 import { restartGatewayProcessWithFreshPid } from "./respawn.js";
-import { createLogger } from "../utils/logger.js";
-
-const log = createLogger("GatewayRunLoop");
 
 type GatewayRunSignalAction = "stop" | "restart";
 
@@ -53,22 +50,22 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
       const modeLabel = respawn.mode === "spawned"
         ? `spawned pid ${respawn.pid ?? "unknown"}`
         : "supervisor restart";
-      log.info(`Restart mode: full process restart (${modeLabel})`);
+      console.log(`[GatewayRunLoop] Restart mode: full process restart (${modeLabel})`);
       exitProcess(0);
       return;
     }
 
     if (respawn.mode === "failed") {
-      log.warn(`Full process restart failed: ${respawn.detail ?? "unknown error"}`);
+      console.warn(`[GatewayRunLoop] Full process restart failed: ${respawn.detail ?? "unknown error"}`);
     } else {
-      log.info("Restart mode: in-process restart (XOPCBOT_NO_RESPAWN)");
+      console.log("[GatewayRunLoop] Restart mode: in-process restart (XOPCBOT_NO_RESPAWN)");
     }
 
     // In-process restart: reacquire lock
     try {
       lock = await acquireGatewayLock(opts.configPath, { port: opts.port });
     } catch (err) {
-      log.error(`Failed to reacquire lock: ${String(err)}`);
+      console.error(`[GatewayRunLoop] Failed to reacquire lock: ${String(err)}`);
       exitProcess(1);
       return;
     }
@@ -89,18 +86,18 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
 
   const requestShutdown = (action: GatewayRunSignalAction, signal: string) => {
     if (shuttingDown) {
-      log.info(`Received ${signal} during shutdown; ignoring`);
+      console.log(`[GatewayRunLoop] Received ${signal} during shutdown; ignoring`);
       return;
     }
 
     shuttingDown = true;
     const isRestart = action === "restart";
-    log.info(`Received ${signal}; ${isRestart ? "restarting" : "shutting down"}`);
+    console.log(`[GatewayRunLoop] Received ${signal}; ${isRestart ? "restarting" : "shutting down"}`);
 
     // Force exit timer
     const forceExitMs = isRestart ? DRAIN_TIMEOUT_MS + SHUTDOWN_TIMEOUT_MS : SHUTDOWN_TIMEOUT_MS;
     const forceExitTimer = setTimeout(() => {
-      log.error("Shutdown timed out; force exiting");
+      console.error("[GatewayRunLoop] Shutdown timed out; force exiting");
       exitProcess(0);
     }, forceExitMs);
 
@@ -109,7 +106,7 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
       try {
         // TODO: Add task draining when task queue is implemented
         if (isRestart) {
-          log.info("Draining active tasks before restart...");
+          console.log("[GatewayRunLoop] Draining active tasks before restart...");
         }
 
         await server?.close?.({
@@ -117,7 +114,7 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
           restartExpectedMs: isRestart ? 1500 : null,
         });
       } catch (err) {
-        log.error(`Shutdown error: ${String(err)}`);
+        console.error(`[GatewayRunLoop] Shutdown error: ${String(err)}`);
       } finally {
         clearTimeout(forceExitTimer);
         server = null;
@@ -132,20 +129,20 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
   };
 
   const onSigterm = () => {
-    log.info("SIGTERM received");
+    console.log("[GatewayRunLoop] SIGTERM received");
     requestShutdown("stop", "SIGTERM");
   };
 
   const onSigint = () => {
-    log.info("SIGINT received");
+    console.log("[GatewayRunLoop] SIGINT received");
     requestShutdown("stop", "SIGINT");
   };
 
   const onSigusr1 = () => {
-    log.info("SIGUSR1 received");
+    console.log("[GatewayRunLoop] SIGUSR1 received");
     // Check if external restart is allowed
     if (process.env.XOPCBOT_ALLOW_SIGUSR1_RESTART !== "1") {
-      log.warn("SIGUSR1 restart ignored (set XOPCBOT_ALLOW_SIGUSR1_RESTART=1 to enable)");
+      console.warn("[GatewayRunLoop] SIGUSR1 restart ignored (set XOPCBOT_ALLOW_SIGUSR1_RESTART=1 to enable)");
       return;
     }
     requestShutdown("restart", "SIGUSR1");
@@ -158,11 +155,11 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
   // Main loop
   try {
     while (true) {
-      log.info("Starting gateway server...");
+      console.log("[GatewayRunLoop] Starting gateway server...");
       try {
         server = await opts.start();
       } catch (err) {
-        log.error({ err }, "Failed to start gateway server");
+        console.error("[GatewayRunLoop] Failed to start gateway server:", err);
         // Release lock before exiting
         await releaseLock();
         exitProcess(1);
@@ -174,7 +171,7 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
         restartResolver = resolve;
       });
 
-      log.info("Restart signal received, restarting gateway...");
+      console.log("[GatewayRunLoop] Restart signal received, restarting gateway...");
     }
   } finally {
     await releaseLock();

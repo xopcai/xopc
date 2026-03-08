@@ -180,42 +180,6 @@ export function getAvailableModels(config: Config | null | undefined): readonly 
 	});
 }
 
-/**
- * Get the first available model with a valid API key.
- * Useful when the configured model doesn't have valid credentials.
- * 
- * Priority:
- * 1. Use defaultModel from config if available and has API key
- * 2. Use first available model with valid API key
- * 3. Return undefined if no models are available
- */
-export function getFirstAvailableModel(config: Config | null | undefined): Model<Api> | undefined {
-	const availableModels = getAvailableModels(config);
-	
-	if (availableModels.length === 0) {
-		return undefined;
-	}
-	
-	// Try to find configured default model first
-	const defaultModel = config?.agents?.defaults?.model;
-	if (defaultModel) {
-		const modelRef = typeof defaultModel === 'string' ? defaultModel : defaultModel.primary;
-		if (modelRef) {
-			// Check if the configured model has valid API key
-			const configured = availableModels.find(m => 
-				`${m.provider}/${m.id}` === modelRef ||
-				m.id === modelRef
-			);
-			if (configured) {
-				return configured;
-			}
-		}
-	}
-	
-	// Return first available model
-	return availableModels[0];
-}
-
 export type { Model, Api } from '@mariozechner/pi-ai';
 
 export type ProviderCategory = 'common' | 'specialty' | 'oauth' | 'enterprise';
@@ -279,61 +243,55 @@ export function providerSupportsApiKey(provider: string): boolean {
   return PROVIDER_META[provider]?.supportsApiKey ?? true;
 }
 
-export const DEFAULT_MODEL = 'anthropic/claude-sonnet-4-5';
+// ============================================
+// Dynamic Default Model Resolution
+// ============================================
 
-export const RECOMMENDED_MODELS = [
-  'anthropic/claude-sonnet-4-5',
-  'openai/gpt-4o',
-  'google/gemini-2.5-flash',
-  'groq/llama-3.3-70b',
-  'deepseek/deepseek-chat',
-] as const;
-
-export const PROVIDER_PREFIX_PATTERNS: Record<string, string[]> = {
-  openai: ['gpt-', 'o1', 'o3', 'o4', 'chatgpt-'],
-  anthropic: ['claude-'],
-  google: ['gemini-', 'gemma-'],
-  xai: ['grok-'],
-  groq: ['llama-', 'mixtral-', 'gemma-'],
-  deepseek: ['deepseek-', 'r1'],
-  mistral: ['mistral-'],
-  cerebras: ['llama-'],
-  openrouter: [],
-};
-
-export function detectProvider(modelId: string): string | undefined {
-  const lowerId = modelId.toLowerCase();
+/**
+ * Get a default model reference.
+ * Priority:
+ * 1. First available model with configured API key
+ * 2. First model from pi-ai catalog
+ * 3. Fallback to anthropic/claude-sonnet-4-5 as last resort
+ */
+export function getDefaultModel(config?: Config | null | undefined): string {
+  const availableModels = getAvailableModels(config);
   
-  // Check custom models first
-  const registry = getModelRegistry();
-  for (const model of registry.getAll()) {
-    if (model.id === modelId) {
-      return model.provider;
+  // Try to find configured default model first
+  const defaultModel = config?.agents?.defaults?.model;
+  if (defaultModel) {
+    const modelRef = typeof defaultModel === 'string' ? defaultModel : defaultModel.primary;
+    if (modelRef) {
+      // Check if the configured model has valid API key
+      const configured = availableModels.find(m => 
+        `${m.provider}/${m.id}` === modelRef ||
+        m.id === modelRef
+      );
+      if (configured) {
+        return `${configured.provider}/${configured.id}`;
+      }
     }
   }
   
-  for (const [provider, prefixes] of Object.entries(PROVIDER_PREFIX_PATTERNS)) {
-    if (prefixes.some(p => lowerId.startsWith(p))) {
-      return provider;
-    }
+  // Return first available model
+  if (availableModels.length > 0) {
+    return `${availableModels[0].provider}/${availableModels[0].id}`;
   }
   
+  // Try to get first model from pi-ai catalog
   for (const provider of getPiAiProviders()) {
     try {
-      const models = getPiAiModels(provider as any);
-      if (models.some(m => m.id === modelId)) {
-        return provider;
+      const models = getPiAiModels(provider);
+      if (models.length > 0) {
+        return `${provider}/${models[0].id}`;
       }
     } catch {
       continue;
     }
   }
   
-  return undefined;
-}
-
-export function getProviderEnvVars(provider: string): string[] {
-  return PROVIDER_ENV_MAP[provider] || [`${provider.toUpperCase().replace(/-/g, '_')}_API_KEY`];
+  // Last resort fallback
+  return 'anthropic/claude-sonnet-4-5';
 }
 
 // Re-export ModelRegistry for advanced use cases

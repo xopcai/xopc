@@ -388,6 +388,9 @@ export function createSkillLoader(): SkillLoader {
   };
 }
 
+// Export SkillManager
+export { SkillManager, type SkillDiagnostic, type SkillLoadResult } from './skill-manager.js';
+
 // Re-export types for convenience
 export type { 
   Skill, 
@@ -397,7 +400,7 @@ export type {
   SkillInstallResult,
   SkillInstallRequest,
   LoadSkillsResult,
-  SkillDiagnostic,
+  // Note: SkillDiagnostic is re-exported from skill-manager.ts above
   SkillSnapshot,
 } from './types.js';
 

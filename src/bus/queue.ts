@@ -6,13 +6,26 @@ interface MessageBusEvents {
   outbound: (msg: OutboundMessage) => void;
 }
 
+/**
+ * Error thrown when MessageBus is shut down
+ */
+class MessageBusShutdownError extends Error {
+  constructor() {
+    super('MessageBus has been shut down');
+    this.name = 'MessageBusShutdownError';
+  }
+}
+
 class MessageBus extends EventEmitter {
   private inboundQueue: InboundMessage[] = [];
   private outboundQueue: OutboundMessage[] = [];
-  private inboundConsumers: ((msg: InboundMessage) => void)[] = [];
-  private outboundConsumers: ((msg: OutboundMessage) => void)[] = [];
+  private inboundConsumers: ((msg: InboundMessage | Error) => void)[] = [];
+  private outboundConsumers: ((msg: OutboundMessage | Error) => void)[] = [];
+  private isShutdown = false;
 
   async publishInbound(msg: InboundMessage): Promise<void> {
+    if (this.isShutdown) return; // Ignore if shut down
+
     // Emit event for listeners
     this.emit('inbound', msg);
 
@@ -26,6 +39,8 @@ class MessageBus extends EventEmitter {
   }
 
   async publishOutbound(msg: OutboundMessage): Promise<void> {
+    if (this.isShutdown) return; // Ignore if shut down
+
     // Emit event for listeners
     this.emit('outbound', msg);
 
@@ -39,21 +54,85 @@ class MessageBus extends EventEmitter {
   }
 
   async consumeInbound(): Promise<InboundMessage> {
-    return new Promise((resolve) => {
+    if (this.isShutdown) {
+      throw new MessageBusShutdownError();
+    }
+
+    return new Promise((resolve, reject) => {
       if (this.inboundQueue.length > 0) {
         return resolve(this.inboundQueue.shift()!);
       }
-      this.inboundConsumers.push(resolve);
+
+      // Store both resolve and reject for shutdown handling
+      const consumer = (msg: InboundMessage | Error) => {
+        if (msg instanceof Error) {
+          reject(msg);
+        } else {
+          resolve(msg);
+        }
+      };
+
+      this.inboundConsumers.push(consumer);
     });
   }
 
   async consumeOutbound(): Promise<OutboundMessage> {
-    return new Promise((resolve) => {
+    if (this.isShutdown) {
+      throw new MessageBusShutdownError();
+    }
+
+    return new Promise((resolve, reject) => {
       if (this.outboundQueue.length > 0) {
         return resolve(this.outboundQueue.shift()!);
       }
-      this.outboundConsumers.push(resolve);
+
+      // Store both resolve and reject for shutdown handling
+      const consumer = (msg: OutboundMessage | Error) => {
+        if (msg instanceof Error) {
+          reject(msg);
+        } else {
+          resolve(msg);
+        }
+      };
+
+      this.outboundConsumers.push(consumer);
     });
+  }
+
+  /**
+   * Shutdown the message bus and cancel all pending consumers
+   */
+  shutdown(): void {
+    if (this.isShutdown) return;
+
+    this.isShutdown = true;
+
+    // Reject all pending consumers
+    const error = new MessageBusShutdownError();
+
+    for (const consumer of this.inboundConsumers) {
+      consumer(error);
+    }
+    for (const consumer of this.outboundConsumers) {
+      consumer(error);
+    }
+
+    this.clear();
+  }
+
+  /**
+   * Check if the bus has been shut down
+   */
+  getShutdownState(): boolean {
+    return this.isShutdown;
+  }
+
+  /**
+   * Reset the bus state (for testing only)
+   */
+  reset(): void {
+    this.isShutdown = false;
+    this.clear();
   }
 
   // For testing: drain all queues
@@ -66,5 +145,5 @@ class MessageBus extends EventEmitter {
 }
 
 export const bus = new MessageBus();
-export { MessageBus };
+export { MessageBus, MessageBusShutdownError };
 export type { MessageBusEvents };

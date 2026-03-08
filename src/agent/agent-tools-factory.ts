@@ -23,6 +23,7 @@ import {
   createMemoryGetTool,
 } from './tools/index.js';
 import { createLogger } from '../utils/logger.js';
+import { wrapToolsWithProtection, type ToolExecutorConfig } from './tool-executor.js';
 
 const log = createLogger('AgentToolsFactory');
 
@@ -32,6 +33,7 @@ export interface ToolFactoryDeps {
   extensionRegistry?: any;
   getCurrentContext: () => { channel: string; chatId: string; sessionKey: string } | null;
   bus: MessageBus;
+  toolExecutorConfig?: Partial<ToolExecutorConfig>;
 }
 
 export class AgentToolsFactory {
@@ -81,13 +83,17 @@ export class AgentToolsFactory {
     const coreTools = this.createCoreTools();
     
     if (!this.deps.extensionRegistry) {
-      return coreTools;
+      // Wrap core tools with timeout and retry protection
+      return wrapToolsWithProtection(coreTools, this.deps.toolExecutorConfig);
     }
 
     const extensionTools = this.deps.extensionRegistry.getAllTools();
     const convertedTools = this.convertExtensionTools(extensionTools);
     
     log.info({ count: convertedTools.length }, 'Loaded extension tools');
-    return [...coreTools, ...convertedTools];
+    
+    // Combine all tools and wrap with protection
+    const allTools = [...coreTools, ...convertedTools];
+    return wrapToolsWithProtection(allTools, this.deps.toolExecutorConfig);
   }
 }

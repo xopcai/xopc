@@ -98,7 +98,7 @@ export function getLogPath(
 /**
  * Get available log files for a date range
  */
-export function getLogFilesForRange(from: Date, to: Date): LogFileMeta[] {
+function getLogFilesForRange(from: Date, to: Date): LogFileMeta[] {
   const allFiles = getLogFiles();
   
   return allFiles.filter(f => {
@@ -391,7 +391,7 @@ export async function getLogsByContext(
 /**
  * Get available log levels from actual log data
  */
-export async function getLogLevels(): Promise<LogLevel[]> {
+export async function getLogLevelsFromData(): Promise<LogLevel[]> {
   const levels = new Set<LogLevel>();
   const files = getLogFiles().slice(0, 3); // Check last 3 files
 
@@ -489,7 +489,7 @@ export function cleanOldLogs(keepDays: number = 7): {
 /**
  * Clean logs by size (keep total under limit)
  */
-export function cleanBySize(maxTotalMB: number = 500): {
+function _cleanBySize(maxTotalMB: number = 500): {
   deleted: number;
   freedBytes: number;
   errors: string[];
@@ -517,6 +517,19 @@ export function cleanBySize(maxTotalMB: number = 500): {
   }
 
   return { deleted, freedBytes, errors };
+}
+
+// ============================================
+// Log Levels
+// ============================================
+
+const LOG_LEVELS: LogLevel[] = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
+
+/**
+ * Get available log levels
+ */
+export function getLogLevels(): LogLevel[] {
+  return [...LOG_LEVELS];
 }
 
 // ============================================

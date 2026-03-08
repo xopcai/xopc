@@ -247,7 +247,11 @@
         "whisper1": "whisper-1",
         "tts1": "tts-1（快速）",
         "tts1Hd": "tts-1-hd（高质量）",
-        "cosyvoiceV1": "cosyvoice-v1"
+        "cosyvoiceV1": "cosyvoice-v1",
+        "qwenTts": "qwen-tts",
+        "qwenTtsRealtime": "qwen-tts-realtime",
+        "qwen3TtsFlash": "qwen3-tts-flash",
+        "qwen3TtsInstructFlash": "qwen3-tts-instruct-flash"
       },
       "voices": {
         "alloy": "Alloy",
@@ -255,7 +259,12 @@
         "fable": "Fable",
         "onyx": "Onyx",
         "nova": "Nova",
-        "shimmer": "Shimmer"
+        "shimmer": "Shimmer",
+        "cherry": "樱桃",
+        "longxiaochun": "龙小春",
+        "longcheng": "龙城",
+        "xiaogang": "小刚",
+        "xiaoxian": "小仙"
       },
       "notes": {
         "title": "注意",

@@ -1,6 +1,6 @@
 import type { Config } from '../../config/schema.js';
 import { isProviderConfigured } from '../../config/schema.js';
-import { DEFAULT_MODEL } from '../../providers/index.js';
+import { getDefaultModel } from '../../providers/index.js';
 import { parseModelRef as parseModelRefUtil, normalizeProviderId } from '../models/selection.js';
 
 export interface ModelCandidate {
@@ -20,9 +20,15 @@ export interface FallbackAttempt {
 // Re-export for backward compatibility
 export { isProviderConfigured };
 
-// Parse default model
-const DEFAULT_PROVIDER = DEFAULT_MODEL.split('/')[0];
-const DEFAULT_MODEL_ID = DEFAULT_MODEL.split('/')[1];
+// Get default model dynamically
+function getDefaultModelParts(config?: Config): { provider: string; model: string } {
+  const defaultModel = getDefaultModel(config);
+  const parts = defaultModel.split('/');
+  return {
+    provider: parts[0] || 'anthropic',
+    model: parts[1] || 'claude-sonnet-4-5',
+  };
+}
 
 /**
  * Parse model reference string into provider/model parts.
@@ -49,9 +55,10 @@ export function resolveFallbackCandidates(params: {
   const primaryRef = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
   const fallbacks = fallbacksOverride ?? (typeof modelConfig === 'object' ? modelConfig.fallbacks : undefined);
 
-  const primaryResolved = parseModelRef(primaryRef ?? DEFAULT_MODEL);
-  const provider = inputProvider.trim() || primaryResolved?.provider || DEFAULT_PROVIDER;
-  const model = inputModel.trim() || primaryResolved?.model || DEFAULT_MODEL_ID;
+  const defaultParts = getDefaultModelParts(cfg);
+  const primaryResolved = parseModelRef(primaryRef || getDefaultModel(cfg));
+  const provider = inputProvider.trim() || primaryResolved?.provider || defaultParts.provider;
+  const model = inputModel.trim() || primaryResolved?.model || defaultParts.model;
 
   const candidates: ModelCandidate[] = [];
   const seen = new Set<string>();

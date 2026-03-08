@@ -40,7 +40,8 @@ coverage/
 
 # Memory (local notes, not for git)
 # Note: Only root-level memory/, not src/agent/prompt/memory/
-memory/
+/memory/
+!src/agent/memory/
 !src/agent/prompt/memory/
 docs/.vitepress/cache/
 

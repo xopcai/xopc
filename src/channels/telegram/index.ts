@@ -3,6 +3,11 @@
  */
 
 export { telegramExtension } from './extension.js';
+export { TelegramAccountManager } from './account-manager.js';
+export { createInboundProcessor, type InboundProcessorDeps } from './inbound-processor.js';
+export { createOutboundSender, type OutboundSenderDeps } from './outbound-sender.js';
+export { buildSendOptions, parseDataUrl, resolveMediaMethod, type TelegramSendParams, type TelegramMediaMethod } from './send-options.js';
+// @deprecated - use TelegramAccountManager instead
 export { TelegramClient } from './client.js';
 export { createTelegramCommandHandler, type TelegramCommandHandlerDeps } from './command-handler.js';
 export { TelegramInlineKeyboards } from './inline-keyboards.js';

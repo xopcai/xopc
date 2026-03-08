@@ -21,10 +21,15 @@ export const AgentDefaultsSchema = z.object({
       primary: z.string().optional(),
       fallbacks: z.array(z.string()).optional(),
     }).strict(),
-  ]).default('anthropic/claude-sonnet-4-5'),
+  ]).default(''), // Empty default - will be resolved dynamically at runtime
   maxTokens: z.number().default(8192),
   temperature: z.number().default(0.7),
   maxToolIterations: z.number().default(20),
+  // Task timeout (in milliseconds, default: 5 minutes)
+  maxTaskDurationMs: z.number().min(60000).max(3600000).optional(),
+  // Reliability settings
+  maxRequestsPerTurn: z.number().min(10).max(200).default(50),
+  maxToolFailuresPerTurn: z.number().min(1).max(20).default(3),
   compaction: z.object({
     enabled: z.boolean().default(true),
     mode: z.enum(['default', 'safeguard']).default('default'),
@@ -32,6 +37,9 @@ export const AgentDefaultsSchema = z.object({
     triggerThreshold: z.number().min(0.5).max(0.95).default(0.8),
     minMessagesBeforeCompact: z.number().default(10),
     keepRecentMessages: z.number().default(5),
+    // Dual-strategy compaction
+    evictionWindow: z.number().min(0.1).max(0.5).default(0.2),
+    retentionWindow: z.number().min(3).max(20).default(6),
   }).optional(),
   pruning: z.object({
     enabled: z.boolean().default(true),
@@ -46,10 +54,12 @@ export const AgentsConfigSchema = z.object({
 }).default({
   defaults: {
     workspace: '~/.xopcbot/workspace',
-    model: 'anthropic/claude-sonnet-4-5',
+    model: '', // Empty default - will be resolved dynamically at runtime
     maxTokens: 8192,
     temperature: 0.7,
     maxToolIterations: 20,
+    maxRequestsPerTurn: 50,
+    maxToolFailuresPerTurn: 3,
     compaction: {
       enabled: true,
       mode: 'default',
@@ -57,6 +67,8 @@ export const AgentsConfigSchema = z.object({
       triggerThreshold: 0.8,
       minMessagesBeforeCompact: 10,
       keepRecentMessages: 5,
+      evictionWindow: 0.2,
+      retentionWindow: 6,
     },
     pruning: {
       enabled: true,
@@ -65,7 +77,7 @@ export const AgentsConfigSchema = z.object({
       tailKeepRatio: 0.3,
     },
   },
-});
+} as any);
 
 // ============================================
 // Channel Configs
@@ -286,10 +298,12 @@ export const ConfigSchema = z.object({
   agents: {
     defaults: {
       workspace: '~/.xopcbot/workspace',
-      model: 'anthropic/claude-sonnet-4-5',
+      model: '', // Empty default - will be resolved dynamically at runtime
       maxTokens: 8192,
       temperature: 0.7,
       maxToolIterations: 20,
+      maxRequestsPerTurn: 50,
+      maxToolFailuresPerTurn: 3,
       compaction: {
         enabled: true,
         mode: 'default',
@@ -297,6 +311,8 @@ export const ConfigSchema = z.object({
         triggerThreshold: 0.8,
         minMessagesBeforeCompact: 10,
         keepRecentMessages: 5,
+        evictionWindow: 0.2,
+        retentionWindow: 6,
       },
       pruning: {
         enabled: true,
@@ -368,7 +384,7 @@ export const ConfigSchema = z.object({
     provider: 'alibaba',
     trigger: 'auto',
     alibaba: {
-      model: 'qwen3-tts-flash',
+      model: 'qwen-tts',
       voice: 'Cherry',
     },
     openai: {

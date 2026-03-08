@@ -8,7 +8,7 @@
  * - Streaming messages
  */
 
-import { Bot, type Context, InputFile } from 'grammy';
+import { Bot, type Context } from 'grammy';
 import { run } from '@grammyjs/runner';
 import type {
   ChannelExtension,
@@ -21,452 +21,32 @@ import type {
   ChannelMetadata,
   TelegramAccountConfig,
 } from '../types.js';
+import { readUpdateOffset, writeUpdateOffset } from '../update-offset-store.js';
+import { draftStreamManager } from '../draft-stream.js';
+import { MediaGroupBuffer } from './media-group.js';
+import { InboundDebounce, buildTelegramDebounceKey } from './debounce.js';
+import type { Message } from '@grammyjs/types';
+import type { Config } from '../../config/index.js';
+import { createTelegramCommandHandler } from './command-handler.js';
+import { TelegramAccountManager } from './account-manager.js';
+import { createInboundProcessor } from './inbound-processor.js';
+import { createOutboundSender } from './outbound-sender.js';
+import { renderTelegramHtmlText } from '../format.js';
+import type { ProgressStage } from '../types.js';
+import { createLogger } from '../../utils/logger.js';
+// Import services for dependency injection into inbound-processor
 import {
   normalizeAllowFromWithStore,
   evaluateGroupBaseAccess,
-  evaluateGroupPolicyAccess,
-  resolveGroupPolicy,
   resolveRequireMention,
   hasBotMention,
   removeBotMention,
 } from '../access-control.js';
-import { readUpdateOffset, writeUpdateOffset } from '../update-offset-store.js';
-import { draftStreamManager } from '../draft-stream.js';
-import { formatTelegramMessage, splitTelegramMessage } from '../format.js';
-import { createLogger } from '../../utils/logger.js';
-import type { Config } from '../../config/index.js';
-import { createTelegramCommandHandler } from './command-handler.js';
 import { generateSessionKey } from '../../commands/session-key.js';
 import { transcribe, isSTTAvailable } from '../../stt/index.js';
-import type { ProgressStage } from '../types.js';
-import { speak, isTTSAvailable } from '../../tts/index.js';
-import { exec } from 'child_process';
-import { promisify } from 'util';
-import { writeFile, unlink } from 'fs/promises';
-import { tmpdir } from 'os';
-import { join } from 'path';
+import { getMimeType } from '../../utils/media.js';
 
 const log = createLogger('TelegramExtension');
-const execAsync = promisify(exec);
-
-/**
- * Compress audio buffer using ffmpeg (wav -> opus)
- * Returns original buffer if compression fails
- */
-async function compressAudio(audioBuffer: Buffer, inputFormat: string): Promise<{ buffer: Buffer; format: string }> {
-  if (inputFormat !== 'wav') {
-    return { buffer: audioBuffer, format: inputFormat };
-  }
-
-  const tempDir = tmpdir();
-  const inputPath = join(tempDir, `input_${Date.now()}.wav`);
-  const outputPath = join(tempDir, `output_${Date.now()}.opus`);
-
-  try {
-    // Write input file
-    await writeFile(inputPath, audioBuffer);
-
-    // Compress using ffmpeg
-    await execAsync(`ffmpeg -i "${inputPath}" -c:a libopus -b:a 24k -vbr on "${outputPath}" -y`);
-
-    // Read output file
-    const { readFile } = await import('fs/promises');
-    const compressedBuffer = await readFile(outputPath);
-
-    log.info({
-      originalSize: audioBuffer.length,
-      compressedSize: compressedBuffer.length,
-      ratio: (compressedBuffer.length / audioBuffer.length * 100).toFixed(1) + '%'
-    }, 'Audio compressed successfully');
-
-    return { buffer: compressedBuffer, format: 'opus' };
-  } catch (error) {
-    log.warn({ error, inputFormat }, 'Audio compression failed, using original');
-    return { buffer: audioBuffer, format: inputFormat };
-  } finally {
-    // Cleanup temp files
-    try {
-      await unlink(inputPath).catch(() => {});
-      await unlink(outputPath).catch(() => {});
-    } catch {}
-  }
-}
-
-// ============================================
-// MIME Type Helper
-// ============================================
-
-function getMimeType(type: string, filePath?: string): string {
-  // Try to get from file extension
-  if (filePath) {
-    const ext = filePath.split('.').pop()?.toLowerCase();
-    const extMap: Record<string, string> = {
-      jpg: 'image/jpeg',
-      jpeg: 'image/jpeg',
-      png: 'image/png',
-      gif: 'image/gif',
-      webp: 'image/webp',
-      bmp: 'image/bmp',
-      svg: 'image/svg+xml',
-      mp4: 'video/mp4',
-      mov: 'video/quicktime',
-      avi: 'video/x-msvideo',
-      webm: 'video/webm',
-      mp3: 'audio/mpeg',
-      wav: 'audio/wav',
-      ogg: 'audio/ogg',
-      pdf: 'application/pdf',
-      doc: 'application/msword',
-      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
-      txt: 'text/plain',
-      zip: 'application/zip',
-    };
-    if (ext && extMap[ext]) return extMap[ext];
-  }
-
-  // Fallback based on type
-  const typeMap: Record<string, string> = {
-    photo: 'image/jpeg',
-    video: 'video/mp4',
-    audio: 'audio/mpeg',
-    document: 'application/octet-stream',
-    sticker: 'image/webp',
-  };
-  return typeMap[type] || 'application/octet-stream';
-}
-
-// ============================================
-// Account Manager
-// ============================================
-
-class TelegramAccountManager {
-  private accounts = new Map<string, TelegramAccountConfig>();
-  private bots = new Map<string, Bot>();
-  private runners = new Map<string, ReturnType<typeof run>>();
-  private statuses = new Map<string, ChannelStatus>();
-  private botUsernames = new Map<string, string>();
-
-  registerAccount(account: TelegramAccountConfig): void {
-    this.accounts.set(account.accountId, account);
-    this.statuses.set(account.accountId, {
-      accountId: account.accountId,
-      running: false,
-      mode: 'stopped',
-    });
-  }
-
-  getAccount(accountId: string): TelegramAccountConfig | undefined {
-    return this.accounts.get(accountId);
-  }
-
-  getAllAccounts(): TelegramAccountConfig[] {
-    return Array.from(this.accounts.values());
-  }
-
-  registerBot(accountId: string, bot: Bot): void {
-    this.bots.set(accountId, bot);
-  }
-
-  getBot(accountId: string): Bot | undefined {
-    return this.bots.get(accountId);
-  }
-
-  registerRunner(accountId: string, runner: ReturnType<typeof run>): void {
-    this.runners.set(accountId, runner);
-  }
-
-  async stopRunner(accountId: string): Promise<void> {
-    const runner = this.runners.get(accountId);
-    if (runner) {
-      await runner.stop();
-      this.runners.delete(accountId);
-    }
-  }
-
-  updateStatus(status: ChannelStatus): void {
-    this.statuses.set(status.accountId, status);
-  }
-
-  getStatus(accountId: string): ChannelStatus | undefined {
-    return this.statuses.get(accountId);
-  }
-
-  setBotUsername(accountId: string, username: string): void {
-    this.botUsernames.set(accountId, username);
-  }
-
-  getBotUsername(accountId: string): string | undefined {
-    return this.botUsernames.get(accountId);
-  }
-}
-
-// ============================================
-// Message Processor
-// ============================================
-
-interface MessageProcessorDeps {
-  bus: any;
-  config: Config;
-  accountManager: TelegramAccountManager;
-  _commandHandler?: ReturnType<typeof createTelegramCommandHandler>;
-}
-
-interface QueuedMessage {
-  ctx: Context;
-  accountId: string;
-  resolve: () => void;
-  reject: (err: Error) => void;
-}
-
-function createMessageProcessor(deps: MessageProcessorDeps) {
-  const { bus, config, accountManager, _commandHandler } = deps;
-  
-  const messageQueues = new Map<string, QueuedMessage[]>();
-  const processingChats = new Set<string>();
-
-  const getChatKey = (accountId: string, chatId: string): string => `${accountId}:${chatId}`;
-
-  const processNextMessage = async (chatKey: string) => {
-    if (processingChats.has(chatKey)) return;
-
-    const queue = messageQueues.get(chatKey);
-    if (!queue || queue.length === 0) return;
-
-    processingChats.add(chatKey);
-    const { ctx, accountId, resolve, reject } = queue.shift()!;
-
-    try {
-      await processMessageInternal(ctx, accountId);
-      resolve();
-    } catch (err) {
-      reject(err instanceof Error ? err : new Error(String(err)));
-    } finally {
-      processingChats.delete(chatKey);
-      if (queue.length > 0) {
-        processNextMessage(chatKey);
-      } else {
-        messageQueues.delete(chatKey);
-      }
-    }
-  };
-
-  const enqueueMessage = (ctx: Context, accountId: string): Promise<void> => {
-    const chatId = String(ctx.chat?.id);
-    const chatKey = getChatKey(accountId, chatId);
-    
-    return new Promise((resolve, reject) => {
-      const queue = messageQueues.get(chatKey) || [];
-      queue.push({ ctx, accountId, resolve, reject });
-      messageQueues.set(chatKey, queue);
-      processNextMessage(chatKey);
-    });
-  };
-
-  const processMessageInternal = async (ctx: Context, accountId: string) => {
-    const account = accountManager.getAccount(accountId);
-    if (!account) {
-      log.warn({ accountId }, 'Account not found for message processing');
-      return;
-    }
-
-    const botUsername = accountManager.getBotUsername(accountId);
-    if (!botUsername) {
-      log.warn({ accountId }, 'Bot username not available');
-      return;
-    }
-
-    const message = ctx.message;
-    if (!message) return;
-
-    const chatId = String(ctx.chat?.id);
-    const senderId = String(ctx.from?.id);
-    const senderUsername = ctx.from?.username;
-    const content = message.text ?? message.caption ?? '';
-    const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
-    const threadId = (message as any)?.message_thread_id;
-
-    const groupConfig = account.groups?.[chatId];
-    const topicConfig = threadId ? groupConfig?.topics?.[String(threadId)] : undefined;
-
-    const effectiveAllowFrom = normalizeAllowFromWithStore({
-      allowFrom: isGroup ? account.groupAllowFrom : account.allowFrom,
-    });
-
-    const baseAccess = evaluateGroupBaseAccess({
-      isGroup,
-      groupConfig,
-      topicConfig,
-      hasGroupAllowOverride: !!(groupConfig?.allowFrom || topicConfig?.allowFrom),
-      effectiveGroupAllow: effectiveAllowFrom,
-      senderId,
-      senderUsername,
-    });
-
-    if (!baseAccess.allowed) {
-      log.debug({ accountId, chatId, senderId, reason: baseAccess.reason }, 'Message blocked by base access');
-      return;
-    }
-
-    const groupPolicy = resolveGroupPolicy({
-      topicConfig,
-      groupConfig,
-      accountGroupPolicy: account.groupPolicy,
-      defaultGroupPolicy: config.channels?.telegram?.groupPolicy,
-    });
-
-    const policyAccess = evaluateGroupPolicyAccess({
-      isGroup,
-      groupPolicy,
-      effectiveGroupAllow: effectiveAllowFrom,
-      senderId,
-      senderUsername,
-    });
-
-    if (!policyAccess.allowed) {
-      log.debug({ accountId, chatId, senderId, reason: policyAccess.reason }, 'Message blocked by policy');
-      return;
-    }
-
-    if (isGroup) {
-      const requireMention = resolveRequireMention({
-        topicConfig,
-        groupConfig,
-        defaultRequireMention: true,
-      });
-
-      if (requireMention && !hasBotMention({ botUsername, text: content, entities: message.entities })) {
-        log.debug({ accountId, chatId }, 'Group message without mention ignored');
-        return;
-      }
-    }
-
-    const cleanContent = isGroup ? removeBotMention(content, botUsername) : content;
-
-    // Use unified session key generator for consistency with command system
-    const sessionKey = generateSessionKey({
-      source: 'telegram',
-      chatId,
-      senderId,
-      isGroup,
-      threadId: threadId ? String(threadId) : undefined,
-    });
-
-    const media: Array<{ type: string; fileId: string }> = [];
-    if (message.photo?.length) {
-      media.push({ type: 'photo', fileId: message.photo[message.photo.length - 1].file_id });
-    }
-    if (message.document) media.push({ type: 'document', fileId: message.document.file_id });
-    if (message.video) media.push({ type: 'video', fileId: message.video.file_id });
-    if (message.audio) media.push({ type: 'audio', fileId: message.audio.file_id });
-    if (message.voice) media.push({ type: 'voice', fileId: message.voice.file_id });
-
-    // Download media files and convert to attachments
-    const attachments: Array<{ type: string; mimeType: string; data: string; name?: string; size?: number }> = [];
-    let transcribedText = '';
-    const bot = accountManager.getBot(accountId);
-    const botToken = account.token;
-
-    if (bot && botToken && media.length > 0) {
-      const accountApiRoot = account.apiRoot?.replace(/\/$/, '') || 'https://api.telegram.org';
-      for (const item of media) {
-        try {
-          const file = await bot.api.getFile(item.fileId);
-          // Construct download URL using apiRoot if configured, otherwise default to api.telegram.org
-          const downloadUrl = `${accountApiRoot}/file/bot${botToken}/${file.file_path}`;
-          const response = await fetch(downloadUrl);
-          if (!response.ok) {
-            throw new Error(`Failed to download: ${response.status}`);
-          }
-          const buffer = await response.arrayBuffer();
-          
-          // Handle voice messages with STT
-          if (item.type === 'voice' && config?.stt && isSTTAvailable(config.stt)) {
-            const voiceDuration = message.voice?.duration || 0;
-            if (voiceDuration > 60) {
-              log.warn({ duration: voiceDuration }, 'Voice message too long (>60s), skipping STT');
-              transcribedText = '[Voice message too long (>60s), STT not supported]';
-            } else {
-              try {
-                log.info({ 
-                  provider: config.stt.provider,
-                  bufferSize: buffer.byteLength,
-                  duration: voiceDuration 
-                }, 'Starting STT transcription');
-                
-                const sttResult = await transcribe(Buffer.from(buffer), config.stt, {
-                  language: config.stt.provider === 'alibaba' ? 'zh' : undefined,
-                });
-                transcribedText = sttResult.text;
-                log.info({ provider: sttResult.provider, textLength: transcribedText.length }, 'Voice transcribed');
-              } catch (sttError) {
-                const errorMsg = sttError instanceof Error ? sttError.message : String(sttError);
-                log.error({ 
-                  error: errorMsg,
-                  provider: config.stt.provider,
-                  bufferSize: buffer.byteLength 
-                }, 'STT transcription failed');
-                transcribedText = `[STT failed: ${errorMsg}]`;
-              }
-            }
-          }
-          
-          const base64 = Buffer.from(buffer).toString('base64');
-          const mimeType = getMimeType(item.type, file.file_path);
-          attachments.push({
-            type: item.type,
-            mimeType,
-            data: base64,
-            name: file.file_path.split('/').pop(),
-            size: buffer.byteLength,
-          });
-          log.debug({ type: item.type, size: buffer.byteLength }, 'Media downloaded');
-        } catch (err) {
-          log.error({ type: item.type, fileId: item.fileId, err }, 'Failed to download media');
-        }
-      }
-    }
-
-    // Combine transcribed text with original content
-    const finalContent = transcribedText 
-      ? transcribedText + (cleanContent ? '\n\n' + cleanContent : '')
-      : cleanContent;
-
-    // Check if it's a command
-    const isCommand = cleanContent.startsWith('/');
-    
-    log.info({ 
-      accountId, 
-      chatId, 
-      senderId, 
-      isGroup, 
-      threadId, 
-      sessionKey, 
-      contentLength: finalContent.length, 
-      attachmentCount: attachments.length, 
-      hasVoice: !!transcribedText,
-      isCommand 
-    }, 'Processing Telegram message');
-
-    await bus.publishInbound({
-      channel: 'telegram',
-      sender_id: senderId,
-      chat_id: chatId,
-      content: finalContent,
-      metadata: {
-        sessionKey,
-        messageId: String(message.message_id),
-        isGroup,
-        isCommand,
-        threadId: threadId ? String(threadId) : undefined,
-        media: media.length > 0 ? media : undefined,
-        transcribedVoice: !!transcribedText || undefined,
-      },
-      attachments: attachments.length > 0 ? attachments : undefined,
-    });
-  };
-
-  return enqueueMessage;
-}
 
 // ============================================
 // Telegram Extension Implementation
@@ -474,7 +54,7 @@ function createMessageProcessor(deps: MessageProcessorDeps) {
 
 export class TelegramChannelExtension implements ChannelExtension {
   id = 'telegram' as const;
-  
+
   meta: ChannelMetadata = {
     id: 'telegram',
     name: 'Telegram',
@@ -491,28 +71,82 @@ export class TelegramChannelExtension implements ChannelExtension {
   };
 
   private accountManager = new TelegramAccountManager();
-  private messageProcessor!: ReturnType<typeof createMessageProcessor>;
+  private inboundProcessor!: ReturnType<typeof createInboundProcessor>;
+  private outboundSender!: ReturnType<typeof createOutboundSender>;
   private commandHandlers = new Map<string, ReturnType<typeof createTelegramCommandHandler>>();
   private bus: any = null;
   private config: Config | null = null;
+
+  // New: Media group buffer for combining album photos
+  private mediaGroupBuffer: MediaGroupBuffer;
+
+  // New: Inbound debounce for combining rapid messages
+  private inboundDebounce: InboundDebounce<{
+    ctx: Context;
+    accountId: string;
+    message: Message;
+  }>;
+
+  constructor() {
+    // Initialize media group buffer
+    this.mediaGroupBuffer = new MediaGroupBuffer({
+      timeoutMs: 500,
+      onFlush: async (messages, ctx) => {
+        await this.processMediaGroup(messages, ctx);
+      },
+    });
+
+    // Initialize inbound debounce
+    this.inboundDebounce = new InboundDebounce({
+      debounceMs: 300,
+      buildKey: (item) => buildTelegramDebounceKey(item.ctx),
+      shouldDebounce: (item) => {
+        // Don't debounce commands or media
+        const text = item.message.text ?? item.message.caption ?? '';
+        if (text.startsWith('/')) return false;
+        if (item.message.photo || item.message.document || item.message.video) return false;
+        return text.length < 100; // Only debounce short messages
+      },
+      onFlush: async (items) => {
+        await this.processDebouncedMessages(items);
+      },
+      onError: (err, items) => {
+        log.error({ err, itemCount: items.length }, 'Debounced message processing failed');
+      },
+    });
+  }
 
   async init(options: ChannelInitOptions): Promise<void> {
     this.bus = options.bus;
     this.config = options.config;
     
-    // Create command handler for shared state
-    const commandHandler = createTelegramCommandHandler({
-      bus: options.bus,
-      config: options.config,
-      getSessionModel: (sessionKey) => this.getSessionModel(sessionKey),
-      setSessionModel: (sessionKey, modelId) => this.setSessionModel(sessionKey, modelId),
-    });
-    
-    this.messageProcessor = createMessageProcessor({
+    this.inboundProcessor = createInboundProcessor({
       bus: options.bus,
       config: options.config,
       accountManager: this.accountManager,
-      _commandHandler: commandHandler,
+      // Inject external services for testability
+      accessControl: {
+        normalizeAllowFromWithStore,
+        evaluateGroupBaseAccess,
+        resolveRequireMention,
+        hasBotMention,
+        removeBotMention,
+      },
+      sessionKeyService: {
+        generateSessionKey,
+      },
+      sttService: {
+        transcribe,
+        isSTTAvailable,
+      },
+      mediaUtils: {
+        getMimeType,
+      },
+    });
+
+    this.outboundSender = createOutboundSender({
+      accountManager: this.accountManager,
+      config: options.config,
     });
 
     const telegramConfig = options.config.channels?.telegram;
@@ -623,11 +257,29 @@ export class TelegramChannelExtension implements ChannelExtension {
         await commandHandler!.handleStart(ctx);
       });
 
-      // Register message handler
-      const enqueueMessage = this.messageProcessor;
+      // Register message handler with media group and debounce support
       bot.on('message', async (ctx) => {
         try {
-          await enqueueMessage(ctx, accountId);
+          // Check for media group (photo album)
+          const mediaGroupId = (ctx.message as { media_group_id?: string }).media_group_id;
+          if (mediaGroupId) {
+            const buffered = await this.mediaGroupBuffer.process(ctx);
+            if (buffered) return; // Message was buffered, will be processed as group
+          }
+
+          // Process through inbound debounce for text messages
+          const debounceKey = buildTelegramDebounceKey(ctx);
+          if (debounceKey) {
+            await this.inboundDebounce.process({
+              ctx,
+              accountId,
+              message: ctx.message,
+            });
+            return;
+          }
+
+          // Process immediately (no debounce key)
+          await this.inboundProcessor(ctx, accountId);
         } catch (err) {
           log.error({ accountId, err }, 'Failed to process message');
         }
@@ -711,6 +363,10 @@ export class TelegramChannelExtension implements ChannelExtension {
   }
 
   async stop(accountId?: string): Promise<void> {
+    // Flush all pending buffers before stopping
+    await this.mediaGroupBuffer.flushAll();
+    await this.inboundDebounce.flushAll();
+
     const accounts = accountId
       ? [this.accountManager.getAccount(accountId)].filter(Boolean) as TelegramAccountConfig[]
       : this.accountManager.getAllAccounts();
@@ -727,256 +383,121 @@ export class TelegramChannelExtension implements ChannelExtension {
     }
   }
 
+  /**
+   * Process a media group (album) as a single message
+   */
+  private async processMediaGroup(messages: Message[], firstCtx: Context): Promise<void> {
+    const accountId = this.getAccountIdFromContext(firstCtx);
+    if (!accountId) {
+      log.warn('Could not determine account ID for media group');
+      return;
+    }
+
+    // Get combined caption from last message with caption
+    const lastMessageWithCaption = [...messages].reverse().find(m => m.caption || m.text);
+    const combinedCaption = lastMessageWithCaption?.caption || lastMessageWithCaption?.text || '';
+
+    // Collect the highest-resolution photo from each message in the album
+    const allPhotos = messages
+      .filter(m => m.photo?.length)
+      .map(m => m.photo![m.photo!.length - 1]);
+
+    // Also collect other media types
+    const allMedia: Array<{ type: string; fileId: string }> = [];
+    for (const msg of messages) {
+      if (msg.document) allMedia.push({ type: 'document', fileId: msg.document.file_id });
+      if (msg.video) allMedia.push({ type: 'video', fileId: msg.video.file_id });
+    }
+
+    log.info({
+      accountId,
+      chatId: firstCtx.chat?.id,
+      messageCount: messages.length,
+      photoCount: allPhotos.length,
+      mediaCount: allMedia.length,
+    }, 'Processing media group');
+
+    // Preserve photo field so extractMediaItems can find it
+    const syntheticCtx = {
+      ...firstCtx,
+      message: {
+        ...firstCtx.message,
+        caption: combinedCaption,
+        photo: allPhotos.length > 0 ? allPhotos : firstCtx.message?.photo,
+      },
+    };
+
+    await this.inboundProcessor(syntheticCtx as Context, accountId);
+  }
+
+  /**
+   * Process debounced (combined) messages
+   */
+  private async processDebouncedMessages(items: Array<{ ctx: Context; accountId: string; message: Message }>): Promise<void> {
+    if (items.length === 0) return;
+
+    const first = items[0];
+    const accountId = first.accountId;
+
+    if (items.length === 1) {
+      // Single message - process normally
+      await this.inboundProcessor(first.ctx, accountId);
+      return;
+    }
+
+    // Combine messages
+    const combinedText = items
+      .map(item => item.message.text ?? item.message.caption ?? '')
+      .filter(Boolean)
+      .join('\n');
+
+    // Collect photos from all merged messages
+    const allPhotos = items
+      .filter(item => item.message.photo?.length)
+      .map(item => item.message.photo![item.message.photo!.length - 1]);
+
+    log.info({
+      accountId,
+      chatId: first.ctx.chat?.id,
+      messageCount: items.length,
+      combinedLength: combinedText.length,
+      photoCount: allPhotos.length,
+    }, 'Processing debounced messages');
+
+    // Preserve photo field in the merged synthetic context
+    const syntheticCtx = {
+      ...first.ctx,
+      message: {
+        ...first.message,
+        text: combinedText || undefined,
+        caption: undefined,
+        photo: allPhotos.length > 0 ? allPhotos : first.message.photo,
+      },
+    };
+
+    await this.inboundProcessor(syntheticCtx as Context, accountId);
+  }
+
+  /**
+   * Get account ID from context (helper method)
+   */
+  private getAccountIdFromContext(ctx: Context): string | undefined {
+    // Find account by matching bot info
+    const botId = ctx.me?.id;
+    if (!botId) return undefined;
+
+    for (const account of this.accountManager.getAllAccounts()) {
+      const bot = this.accountManager.getBot(account.accountId);
+      if (bot && ctx.me?.username === ctx.me?.username) {
+        return account.accountId;
+      }
+    }
+
+    return 'default'; // Fallback to default
+  }
+
   async send(options: ChannelSendOptions): Promise<ChannelSendResult> {
-    const { chatId, content, type = 'message', accountId = 'default', threadId, replyToMessageId, mediaUrl, mediaType, silent } = options;
-
-    log.info({ chatId, accountId, hasContent: !!content, hasMediaUrl: !!mediaUrl, mediaType, contentLength: content?.length }, 'TelegramExtension.send called');
-
-    const bot = this.accountManager.getBot(accountId);
-    if (!bot) {
-      log.error({ accountId }, 'Bot not found for account');
-      return { messageId: '', chatId, success: false, error: 'Bot not initialized' };
-    }
-
-    // Handle typing indicators
-    if (type === 'typing_on') {
-      try {
-        await bot.api.sendChatAction(chatId, 'typing');
-      } catch (err) {
-        log.warn({ err }, 'Failed to send typing action');
-      }
-      return { messageId: '', chatId, success: true };
-    }
-
-    if (type === 'typing_off') {
-      // Telegram handles this automatically
-      return { messageId: '', chatId, success: true };
-    }
-
-    // Skip empty messages only if there's no media to send
-    if ((!content || content.trim() === '') && !mediaUrl) {
-      log.debug({ chatId }, 'Skipping empty message (no content and no media)');
-      return { messageId: '', chatId, success: true };
-    }
-
-    try {
-      let sentMessageId: number;
-
-      // Check for data URL first (base64 encoded)
-      if (mediaUrl && mediaUrl.startsWith('data:')) {
-        log.info({ chatId, mediaType, contentLength: content.length, dataUrlLength: mediaUrl.length }, 'Sending media as data URL');
-        // Handle data URL (base64 encoded media)
-        const dataUrlMatch = mediaUrl.match(/^data:([^;]+);base64,(.+)$/);
-        if (!dataUrlMatch) {
-          log.error({ chatId }, 'Invalid data URL format');
-          return { messageId: '', chatId, success: false, error: 'Invalid data URL format' };
-        }
-        const mimeType = dataUrlMatch[1];
-        const base64Data = dataUrlMatch[2];
-        const buffer = Buffer.from(base64Data, 'base64');
-        log.debug({ chatId, mimeType, bufferSize: buffer.length }, 'Decoded base64 media');
-        const file = new InputFile(buffer);
-
-        const sendOptions: any = {
-          parse_mode: 'HTML',
-          caption: content ? splitTelegramMessage(formatTelegramMessage(content).html, 1024)[0] : undefined, // Caption limit: 1024
-        };
-        if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
-        if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
-        if (silent) sendOptions.disable_notification = true;
-
-        log.debug({ chatId, mediaType: mimeType, method: 'sendPhoto/sendDocument' }, 'Calling Telegram API');
-
-        // Determine media type from mime type
-        const mediaCategory = mimeType.split('/')[0];
-        let apiResult;
-        switch (mediaCategory) {
-          case 'image':
-            apiResult = await bot.api.sendPhoto(chatId, file, sendOptions);
-            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendPhoto response');
-            sentMessageId = apiResult.message_id;
-            break;
-          case 'video':
-            apiResult = await bot.api.sendVideo(chatId, file, sendOptions);
-            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendVideo response');
-            sentMessageId = apiResult.message_id;
-            break;
-          case 'audio':
-            apiResult = await bot.api.sendAudio(chatId, file, sendOptions);
-            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendAudio response');
-            sentMessageId = apiResult.message_id;
-            break;
-          default:
-            apiResult = await bot.api.sendDocument(chatId, file, sendOptions);
-            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendDocument response');
-            sentMessageId = apiResult.message_id;
-        }
-      } else if (mediaUrl) {
-        log.info({ chatId, mediaType, mediaUrl: mediaUrl.substring(0, 100), hasContent: !!content }, 'Sending media from URL');
-        // Handle regular URL
-        const response = await fetch(mediaUrl);
-        if (!response.ok) {
-          log.error({ chatId, status: response.status }, 'Failed to fetch media');
-          throw new Error(`Failed to fetch media: ${response.status}`);
-        }
-        const buffer = await response.arrayBuffer();
-        log.debug({ chatId, bufferSize: buffer.byteLength }, 'Fetched media from URL');
-        const file = new InputFile(Buffer.from(buffer));
-
-        const sendOptions: any = {
-          parse_mode: 'HTML',
-          caption: content ? splitTelegramMessage(formatTelegramMessage(content).html, 1024)[0] : undefined, // Caption limit: 1024
-        };
-        if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
-        if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
-        if (silent) sendOptions.disable_notification = true;
-
-        log.debug({ chatId, mediaType, method: 'sendPhoto/sendVideo/sendDocument' }, 'Calling Telegram API');
-
-        let apiResult;
-        switch (mediaType) {
-          case 'photo':
-            apiResult = await bot.api.sendPhoto(chatId, file, sendOptions);
-            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendPhoto response');
-            break;
-          case 'video':
-            apiResult = await bot.api.sendVideo(chatId, file, sendOptions);
-            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendVideo response');
-            break;
-          case 'audio':
-            apiResult = await bot.api.sendAudio(chatId, file, sendOptions);
-            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendAudio response');
-            break;
-          default:
-            apiResult = await bot.api.sendDocument(chatId, file, sendOptions);
-            log.info({ chatId, messageId: apiResult?.message_id, ok: apiResult?.ok }, 'Telegram sendDocument response');
-        }
-
-        // Validate API response
-        if (!apiResult || !apiResult.ok) {
-          log.error({ chatId, apiResult }, 'Telegram API returned error');
-          return { messageId: '', chatId, success: false, error: `Telegram API error: ${JSON.stringify(apiResult)}` };
-        }
-        if (!apiResult.message_id) {
-          log.error({ chatId, apiResult }, 'Telegram API response missing message_id');
-          return { messageId: '', chatId, success: false, error: 'Telegram API response missing message_id' };
-        }
-        sentMessageId = apiResult.message_id;
-      } else if (options.tts && this.config?.tts && isTTSAvailable(this.config.tts)) {
-        // TTS: Generate voice message
-        log.info({ chatId, contentLength: content?.length }, 'Generating TTS voice message');
-
-        let ttsErrorOccurred = false;
-        const maxRetries = 2;
-        
-        for (let attempt = 1; attempt <= maxRetries + 1; attempt++) {
-          try {
-            const ttsResult = await speak(content || '', this.config.tts);
-
-            // Compress audio if it's wav format (to reduce file size for Telegram)
-            const { buffer: compressedAudio, format: compressedFormat } = await compressAudio(
-              Buffer.from(ttsResult.audio),
-              ttsResult.format
-            );
-
-            const file = new InputFile(compressedAudio, `voice.${compressedFormat}`);
-
-            const sendOptions: any = {};
-            if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
-            if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
-            if (silent) sendOptions.disable_notification = true;
-
-            // Use sendVoice for opus, sendAudio for other formats
-            if (compressedFormat === 'opus') {
-              sentMessageId = (await bot.api.sendVoice(chatId, file, sendOptions)).message_id;
-            } else {
-              sentMessageId = (await bot.api.sendAudio(chatId, file, sendOptions)).message_id;
-            }
-            log.info({ chatId, messageId: sentMessageId, provider: ttsResult.provider, format: compressedFormat, attempt }, 'TTS voice message sent');
-            break; // Success, exit retry loop
-            
-          } catch (ttsError) {
-            const errorMsg = ttsError instanceof Error ? ttsError.message : String(ttsError);
-            
-            if (attempt <= maxRetries) {
-              log.warn({ 
-                error: errorMsg, 
-                attempt, 
-                maxRetries,
-                textLength: content?.length 
-              }, `TTS generation failed (attempt ${attempt}/${maxRetries + 1}), retrying...`);
-              ttsErrorOccurred = true;
-              // Wait before retry (exponential backoff: 1s, 2s)
-              await new Promise(resolve => setTimeout(resolve, attempt * 1000));
-            } else {
-              log.error({ 
-                error: errorMsg, 
-                attempt,
-                textLength: content?.length,
-                provider: this.config.tts.provider
-              }, 'TTS generation failed after all retries, falling back to text');
-              ttsErrorOccurred = true;
-            }
-          }
-        }
-        
-        // Fallback to text message if all TTS attempts failed
-        if (ttsErrorOccurred && !sentMessageId) {
-          const { html } = formatTelegramMessage(content || '');
-          const chunks = splitTelegramMessage(html, 3800);
-          
-          const sendOptions: any = { parse_mode: 'HTML' };
-          if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
-          if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
-          if (silent) sendOptions.disable_notification = true;
-
-          sentMessageId = (await bot.api.sendMessage(chatId, chunks[0], sendOptions)).message_id;
-          
-          // Send remaining chunks
-          for (let i = 1; i < chunks.length; i++) {
-            const replyOptions: any = { 
-              parse_mode: 'HTML',
-              reply_to_message_id: sentMessageId 
-            };
-            if (threadId) replyOptions.message_thread_id = parseInt(threadId, 10);
-            if (silent) replyOptions.disable_notification = true;
-            
-            await bot.api.sendMessage(chatId, chunks[i], replyOptions);
-          }
-          
-          log.info({ chatId, chunks: chunks.length }, 'Fallback text message sent');
-        }
-      } else {
-        // Split long messages into chunks (Telegram limit: 4096 chars)
-        const { html } = formatTelegramMessage(content || '');
-        const chunks = splitTelegramMessage(html, 3800); // Leave margin for safety
-        
-        const sendOptions: any = { parse_mode: 'HTML' };
-        if (threadId) sendOptions.message_thread_id = parseInt(threadId, 10);
-        if (replyToMessageId) sendOptions.reply_to_message_id = parseInt(replyToMessageId, 10);
-        if (silent) sendOptions.disable_notification = true;
-
-        // Send first chunk
-        sentMessageId = (await bot.api.sendMessage(chatId, chunks[0], sendOptions)).message_id;
-        
-        // Send remaining chunks as replies
-        for (let i = 1; i < chunks.length; i++) {
-          const replyOptions: any = { 
-            parse_mode: 'HTML',
-            reply_to_message_id: sentMessageId 
-          };
-          if (threadId) replyOptions.message_thread_id = parseInt(threadId, 10);
-          if (silent) replyOptions.disable_notification = true;
-          
-          await bot.api.sendMessage(chatId, chunks[i], replyOptions);
-        }
-      }
-
-      return { messageId: String(sentMessageId), chatId, success: true };
-    } catch (err) {
-      log.error({ accountId, chatId, err, mediaUrl: !!mediaUrl, mediaType }, 'Failed to send message - caught error');
-      return { messageId: '', chatId, success: false, error: err instanceof Error ? err.message : String(err) };
-    }
+    return this.outboundSender.send(options);
   }
 
   startStream(options: ChannelSendStreamOptions): ReturnType<ChannelExtension['startStream']> {
@@ -997,12 +518,15 @@ export class TelegramChannelExtension implements ChannelExtension {
 
     return {
       update: (text: string) => {
-        const { html } = formatTelegramMessage(text);
+        // Convert Markdown to Telegram HTML before passing to draft stream.
+        // The draft stream is configured with parseMode='HTML', so it expects
+        // pre-converted HTML, not raw Markdown.
+        const html = renderTelegramHtmlText(text);
         draftStream.update(html);
       },
       /** Update stream with progress stage indicator */
       updateProgress: (text: string, stage: ProgressStage, detail?: string) => {
-        const { html } = formatTelegramMessage(text);
+        const html = renderTelegramHtmlText(text);
         draftStream.updateWithProgress(html, stage, detail);
       },
       /** Set progress stage without updating text */
