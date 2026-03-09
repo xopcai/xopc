@@ -2,7 +2,7 @@
  * Interactive chat mode for agent command
  */
 
-import type { Interface } from 'readline';
+import type { Interface as _Interface } from 'readline';
 import type { AgentService } from '../../../agent/index.js';
 import { getSessionManager } from '../../utils/session.js';
 import { listSessions } from './sessions.js';

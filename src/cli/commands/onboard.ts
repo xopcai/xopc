@@ -1,10 +1,10 @@
 import { Command } from 'commander';
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { input, select, confirm } from '@inquirer/prompts';
 import { saveConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
-import { getFallbackTemplate, TEMPLATE_FILES } from '../templates.js';
+import { getFallbackTemplate as _getFallbackTemplate, TEMPLATE_FILES as _TEMPLATE_FILES } from '../templates.js';
 import type { CLIContext } from '../registry.js';
 import type { Config } from '../../config/schema.js';
 import {
@@ -18,7 +18,7 @@ import {
   openaiCodexOAuthProvider,
   type OAuthLoginCallbacks,
 } from '../../auth/index.js';
-import { upsertAuthProfile, listProfilesForProvider } from '../../auth/profiles/index.js';
+import { upsertAuthProfile, listProfilesForProvider as _listProfilesForProvider } from '../../auth/profiles/index.js';
 import {
   getModelsByProvider,
   getSortedProviders,
@@ -30,7 +30,7 @@ import { colors } from '../utils/colors.js';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
 
 // Import workspace utilities
-import { isWorkspaceSetup, setupWorkspace, isConfigSetup, setupConfig, quickSetup } from '../utils/workspace.js';
+import { isWorkspaceSetup, setupWorkspace as _setupWorkspace, isConfigSetup as _isConfigSetup, setupConfig as _setupConfig, quickSetup } from '../utils/workspace.js';
 
 /**
  * Load raw config without schema parsing to avoid default values being added.
