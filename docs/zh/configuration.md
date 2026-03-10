@@ -2,7 +2,32 @@
 
 xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
 
-**注意：** 自定义模型配置已移至独立的 `~/.xopcbot/models.json` 文件。请参阅 [models.md](./models.md) 了解详情。
+## 快速开始
+
+运行交互式设置向导：
+
+```bash
+xopcbot onboard
+```
+
+或手动创建：
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-sonnet-4-5",
+      "max_tokens": 8192,
+      "temperature": 0.7
+    }
+  },
+  "providers": {
+    "anthropic": "${ANTHROPIC_API_KEY}"
+  }
+}
+```
+
+---
 
 ## 完整配置示例
 
@@ -31,8 +56,16 @@ xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
   "channels": {
     "telegram": {
       "enabled": true,
-      "token": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
-      "allow_from": []
+      "accounts": {
+        "personal": {
+          "name": "Personal Bot",
+          "token": "BOT_TOKEN",
+          "dmPolicy": "allowlist",
+          "groupPolicy": "open",
+          "allowFrom": [123456789],
+          "streamMode": "partial"
+        }
+      }
     }
   },
   "gateway": {
@@ -42,18 +75,39 @@ xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
   "tools": {
     "web": {
       "search": {
-        "api_key": "",
+        "api_key": "${BRAVE_API_KEY}",
         "max_results": 5
       }
     }
   },
-  "modelsDev": {
-    "enabled": true
+  "stt": {
+    "enabled": true,
+    "provider": "alibaba",
+    "alibaba": {
+      "apiKey": "${DASHSCOPE_API_KEY}",
+      "model": "paraformer-v1"
+    }
+  },
+  "tts": {
+    "enabled": true,
+    "provider": "openai",
+    "trigger": "auto",
+    "openai": {
+      "apiKey": "${OPENAI_API_KEY}",
+      "model": "tts-1",
+      "voice": "alloy"
+    }
+  },
+  "heartbeat": {
+    "enabled": true,
+    "intervalMs": 300000
   }
 }
 ```
 
-## 配置选项
+---
+
+## 配置章节
 
 ### agents
 
@@ -62,16 +116,16 @@ xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `workspace` | string | `~/.xopcbot/workspace` | 工作目录 |
-| `model` | string / object | `anthropic/claude-sonnet-4-5` | 默认模型 |
+| `model` | string/object | `anthropic/claude-sonnet-4-5` | 默认模型 |
 | `max_tokens` | number | `8192` | 最大输出 tokens |
 | `temperature` | number | `0.7` | 温度参数 (0-2) |
 | `max_tool_iterations` | number | `20` | 最大工具调用次数 |
 
-### agents.defaults.model
+#### agents.defaults.model
 
 模型配置支持两种格式：
 
-**简单格式（单个模型）：**
+**简单格式：**
 ```json
 {
   "model": "anthropic/claude-sonnet-4-5"
@@ -83,16 +137,18 @@ xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
 {
   "model": {
     "primary": "anthropic/claude-sonnet-4-5",
-    "fallbacks": ["openai/gpt-4o"]
+    "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
   }
 }
 ```
 
-模型 ID 格式为 `provider/model-id`，例如 `anthropic/claude-opus-4-5`。
+模型 ID 格式：`provider/model-id`（如 `anthropic/claude-opus-4-5`）。
+
+---
 
 ### providers
 
-配置 LLM 提供商的 API Keys（简单格式）。Key 可以是实际值或环境变量引用：
+配置 LLM 提供商 API 密钥。使用环境变量引用：
 
 ```json
 {
@@ -105,9 +161,7 @@ xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
 }
 ```
 
-**注意：** 如果需要配置自定义模型（Ollama、vLLM、LM Studio 等），请使用 `models.json` 文件。详见 [models.md](./models.md)。
-
-支持的提供商及其环境变量：
+**支持的提供商：**
 
 | 提供商 | 环境变量 |
 |--------|----------|
@@ -123,46 +177,73 @@ xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
 | `openrouter` | `OPENROUTER_API_KEY` |
 | `huggingface` | `HF_TOKEN` 或 `HUGGINGFACE_TOKEN` |
 
-你也可以直接在环境中设置环境变量，而无需添加到配置文件中。
+> **注意:** 环境变量优先于配置文件中的值。
+
+查看 [模型文档](/zh/models) 了解自定义提供商配置。
+
+---
 
 ### channels
 
-通信渠道配置。
+通信通道配置。
 
-### channels.telegram
+#### channels.telegram
 
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `enabled` | boolean | `false` | 启用 Telegram 机器人 |
-| `token` | string | - | 从 @BotFather 获取的机器人令牌 |
-| `allow_from` | array | `[]` | 允许的用户 ID（空 = 允许所有） |
-| `group_admins` | boolean | `false` | 仅允许群管理员 |
-| `magic` | string | - | 提及前缀 |
+多账户 Telegram 配置：
 
-### channels.discord
-
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `enabled` | boolean | `false` | 启用 Discord 机器人 |
-| `token` | string | - | 机器人令牌 |
-| `allow_from` | array | `[]` | 允许的群组/频道 ID |
-
-### channels.slack
-
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `enabled` | boolean | `false` | 启用 Slack 机器人 |
-| `token` | string | - | 机器人令牌 |
-| `allow_from` | array | `[]` | 允许的频道 ID |
-
-### channels.signal
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "accounts": {
+        "personal": {
+          "name": "Personal Bot",
+          "token": "BOT_TOKEN",
+          "dmPolicy": "allowlist",
+          "groupPolicy": "open",
+          "allowFrom": [123456789],
+          "streamMode": "partial"
+        }
+      }
+    }
+  }
+}
+```
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
-| `enabled` | boolean | `false` | 启用 Signal 机器人 |
-| `phone_number` | string | - | Signal 手机号 |
-| `device_name` | string | - | 设备名称 |
-| `allow_from` | array | `[]` | 允许的手机号 |
+| `enabled` | boolean | `false` | 启用 Telegram |
+| `accounts` | object | - | 多账户配置 |
+| `accounts.<id>.name` | string | - | 显示名称 |
+| `accounts.<id>.token` | string | - | Bot token |
+| `accounts.<id>.dmPolicy` | string | `open` | DM 策略 |
+| `accounts.<id>.groupPolicy` | string | `open` | 群组策略 |
+| `accounts.<id>.allowFrom` | array | `[]` | 允许的用户 ID |
+| `accounts.<id>.streamMode` | string | `partial` | 流式模式 |
+
+**DM 策略**: `pairing` | `allowlist` | `open` | `disabled`
+
+**群组策略**: `open` | `allowlist` | `disabled`
+
+**流式模式**: `off` | `partial` | `block`
+
+#### channels.feishu
+
+```json
+{
+  "channels": {
+    "feishu": {
+      "enabled": true,
+      "appId": "APP_ID",
+      "appSecret": "APP_SECRET",
+      "verificationToken": "VERIFICATION_TOKEN"
+    }
+  }
+}
+```
+
+---
 
 ### gateway
 
@@ -175,16 +256,16 @@ HTTP API 网关配置。
 | `auth` | object | - | 认证配置 |
 | `cors` | object | - | CORS 设置 |
 
-### gateway.auth
+#### gateway.auth
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `enabled` | boolean | `false` | 启用认证 |
-| `username` | string | - | 用户名 |
-| `password` | string | - | 密码 |
+| `username` | string | - | 认证用户名 |
+| `password` | string | - | 认证密码 |
 | `api_key` | string | - | API 密钥认证 |
 
-### gateway.cors
+#### gateway.cors
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
@@ -192,59 +273,28 @@ HTTP API 网关配置。
 | `origins` | array | `[]` | 允许的来源 |
 | `credentials` | boolean | `false` | 允许凭证 |
 
+---
+
 ### tools
 
 工具配置。
 
-### tools.web
+#### tools.web
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `search` | object | - | 网页搜索配置 |
 | `browse` | object | - | 网页浏览配置 |
 
-### tools.web.search
+##### tools.web.search
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
-| `provider` | string | `brave` | 搜索提供商：`brave`、`searxng` |
+| `provider` | string | `brave` | 搜索提供商 |
 | `api_key` | string | - | API 密钥 |
 | `max_results` | number | `5` | 最大结果数 |
 
-### tools.web.browse
-
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `enabled` | boolean | `true` | 启用浏览 |
-| `max_depth` | number | `2` | 最大链接深度 |
-| `timeout` | number | `30000` | 超时毫秒数 |
-
-### cron
-
-定时任务配置。
-
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `enabled` | boolean | `true` | 启用 cron |
-| `jobs` | array | `[]` | 定时任务列表 |
-
-### heartbeat
-
-定期健康检查配置。
-
-| 字段 |类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `enabled` | boolean | `true` | 启用心跳 |
-| `interval` | number | `300000` | 间隔毫秒数（5分钟）|
-| `checks` | array | - | 检查列表 |
-
-### modelsDev
-
-本地模型开发设置。
-
-| 字段 | 类型 | 默认值 | 说明 |
-|-------|------|---------|------|
-| `enabled` | boolean | `true` | 启用本地模型缓存 |
+---
 
 ### stt
 
@@ -253,7 +303,7 @@ HTTP API 网关配置。
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `enabled` | boolean | `false` | 启用 STT |
-| `provider` | string | `alibaba` | 提供商：`alibaba`、`openai` |
+| `provider` | string | `alibaba` | 提供商：`alibaba`, `openai` |
 | `alibaba` | object | - | 阿里云 DashScope 配置 |
 | `openai` | object | - | OpenAI Whisper 配置 |
 | `fallback` | object | - | 回退配置 |
@@ -263,7 +313,7 @@ HTTP API 网关配置。
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `apiKey` | string | - | DashScope API 密钥 |
-| `model` | string | `paraformer-v1` | 模型：`paraformer-v1`、`paraformer-8k-v1`、`paraformer-mtl-v1` |
+| `model` | string | `paraformer-v1` | 模型：`paraformer-v1`, `paraformer-8k-v1` |
 
 #### stt.openai
 
@@ -279,7 +329,7 @@ HTTP API 网关配置。
 | `enabled` | boolean | `true` | 启用回退 |
 | `order` | array | `["alibaba", "openai"]` | 回退顺序 |
 
-示例：
+**示例：**
 ```json
 {
   "stt": {
@@ -297,6 +347,8 @@ HTTP API 网关配置。
 }
 ```
 
+---
+
 ### tts
 
 文字转语音（TTS）配置。
@@ -304,8 +356,8 @@ HTTP API 网关配置。
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `enabled` | boolean | `false` | 启用 TTS |
-| `provider` | string | `openai` | 提供商：`openai`、`alibaba` |
-| `trigger` | string | `auto` | 触发模式：`auto`、`never` |
+| `provider` | string | `openai` | 提供商：`openai`, `alibaba` |
+| `trigger` | string | `auto` | 触发：`auto`, `never` |
 | `openai` | object | - | OpenAI TTS 配置 |
 | `alibaba` | object | - | 阿里云 CosyVoice 配置 |
 
@@ -314,8 +366,8 @@ HTTP API 网关配置。
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `apiKey` | string | - | OpenAI API 密钥 |
-| `model` | string | `tts-1` | 模型：`tts-1`、`tts-1-hd` |
-| `voice` | string | `alloy` | 音色：`alloy`、`echo`、`fable`、`onyx`、`nova`、`shimmer` |
+| `model` | string | `tts-1` | 模型：`tts-1`, `tts-1-hd` |
+| `voice` | string | `alloy` | 音色：`alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer` |
 
 #### tts.alibaba
 
@@ -325,49 +377,185 @@ HTTP API 网关配置。
 | `model` | string | `cosyvoice-v1` | 模型：`cosyvoice-v1` |
 | `voice` | string | - | 音色 ID |
 
-示例：
+**触发模式：**
+- `auto`: 用户发语音时，Agent 用语音回复
+- `never`: 禁用 TTS，只发送文字
+
+---
+
+### heartbeat
+
+定期健康检查配置。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `true` | 启用心跳 |
+| `intervalMs` | number | `300000` | 间隔毫秒数（5 分钟） |
+
+---
+
+### cron
+
+定时任务配置。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `true` | 启用 cron |
+| `jobs` | array | `[]` | 定时任务列表 |
+
+查看 [Cron 文档](/zh/cron) 了解任务配置。
+
+---
+
+### extensions
+
+扩展启用/禁用配置。
+
 ```json
 {
-  "tts": {
-    "enabled": true,
-    "provider": "openai",
-    "trigger": "auto",
-    "openai": {
-      "apiKey": "${OPENAI_API_KEY}",
-      "model": "tts-1",
-      "voice": "alloy"
+  "extensions": {
+    "enabled": ["telegram-channel", "weather-tool"],
+    "disabled": ["deprecated-extension"],
+    "telegram-channel": {
+      "token": "bot-token-here"
+    },
+    "weather-tool": true
+  }
+}
+```
+
+| 字段 | 类型 | 说明 |
+|-------|------|------|
+| `enabled` | string[] | 要启用的扩展 ID 列表 |
+| `disabled` | string[] | （可选）禁用的扩展 ID 列表 |
+| `[extension-id]` | object/boolean | 扩展特定配置 |
+
+查看 [扩展文档](/zh/extensions) 了解详情。
+
+---
+
+## 环境变量
+
+xopcbot 支持环境变量存储敏感数据：
+
+| 变量 | 说明 |
+|------|------|
+| `OPENAI_API_KEY` | OpenAI API 密钥 |
+| `ANTHROPIC_API_KEY` | Anthropic API 密钥 |
+| `GOOGLE_API_KEY` | Google AI API 密钥 |
+| `GROQ_API_KEY` | Groq API 密钥 |
+| `DEEPSEEK_API_KEY` | DeepSeek API 密钥 |
+| `MINIMAX_API_KEY` | MiniMax API 密钥 |
+| `BRAVE_API_KEY` | Brave Search API 密钥 |
+| `DASHSCOPE_API_KEY` | 阿里云 DashScope API 密钥（STT/TTS） |
+| `TELEGRAM_BOT_TOKEN` | Telegram bot token |
+| `XOPCBOT_CONFIG` | 自定义配置文件路径 |
+| `XOPCBOT_WORKSPACE` | 自定义工作区目录 |
+| `XOPCBOT_LOG_LEVEL` | 日志级别（trace/debug/info/warn/error/fatal） |
+| `XOPCBOT_LOG_DIR` | 日志目录路径 |
+| `XOPCBOT_LOG_CONSOLE` | 启用控制台输出（true/false） |
+| `XOPCBOT_LOG_FILE` | 启用文件输出（true/false） |
+| `XOPCBOT_LOG_RETENTION_DAYS` | 日志文件保留天数 |
+| `XOPCBOT_PRETTY_LOGS` | 开发环境美化日志输出 |
+
+环境变量优先于配置文件中的值。
+
+---
+
+## 配置管理
+
+### 验证配置
+
+```bash
+xopcbot config --validate
+```
+
+### 查看配置
+
+```bash
+xopcbot config --show
+```
+
+### 编辑配置
+
+```bash
+xopcbot config --edit
+```
+
+---
+
+## 常见问题
+
+### Q: 如何使用多个提供商？
+
+使用 `providers` 配置定义多个 API 密钥。Agent 根据模型 ID 自动选择合适的提供商：
+
+```json
+{
+  "providers": {
+    "openai": "${OPENAI_API_KEY}",
+    "anthropic": "${ANTHROPIC_API_KEY}"
+  },
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-sonnet-4-5"
     }
   }
 }
 ```
 
-**触发模式：**
-- `auto`：用户发语音时，Agent 用语音回复
-- `never`：禁用 TTS，只发送文字
+### Q: 如何使用 Ollama（本地模型）？
 
-## 环境变量
+在 `~/.xopcbot/models.json` 中配置自定义提供商：
 
-xopcbot 支持环境变量来存储敏感数据：
+```json
+{
+  "providers": {
+    "ollama": {
+      "baseUrl": "http://localhost:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "models": [
+        { "id": "llama3.1:8b" }
+      ]
+    }
+  }
+}
+```
 
-| 变量 | 说明 |
-|------|------|
-| `ANTHROPIC_API_KEY` | Anthropic API 密钥 |
-| `OPENAI_API_KEY` | OpenAI API 密钥 |
-| `GOOGLE_API_KEY` | Google AI API 密钥 |
-| `DASHSCOPE_API_KEY` | 阿里云 DashScope API 密钥（用于 STT/TTS） |
-| `TELEGRAM_BOT_TOKEN` | Telegram 机器人令牌 |
-| `XOPCBOT_MODELS_JSON` | 自定义 models.json 文件路径 |
+查看 [模型文档](/zh/models) 了解详情。
 
-环境变量优先于配置文件中的值。
+### Q: 如何配置 OAuth？
 
-## 自定义模型配置
+xopcbot 支持某些提供商的 OAuth 认证：
 
-自定义模型配置（Ollama、vLLM、LM Studio、OpenRouter 等）已移至独立的 `models.json` 文件。
+**Kimi（设备码流程）：**
+```json
+{
+  "providers": {
+    "kimi": {
+      "auth": {
+        "type": "oauth",
+        "clientId": "your-client-id"
+      }
+    }
+  }
+}
+```
 
-详见 [models.md](./models.md)。
+Kimi 使用设备码流程 - CLI 会提示访问 `auth.kimi.com` 并输入代码。
 
-### 为什么分离？
+### Q: 如何使用环境变量？
 
-- **不同的文件权限** - 可以对敏感 API keys 设置更严格的权限
-- **更方便管理** - 自定义模型配置与主配置分离
-- **热重载** - 修改模型配置时可以热重载而不影响其他设置
+在配置中使用 `${VAR_NAME}` 语法：
+
+```json
+{
+  "providers": {
+    "openai": "${OPENAI_API_KEY}",
+    "anthropic": "${ANTHROPIC_API_KEY}"
+  }
+}
+```
+
+或直接设置环境变量而不添加到配置中。

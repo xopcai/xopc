@@ -1,150 +1,164 @@
 # 快速开始
 
-本指南提供首次设置 **xopcbot** 的完整教程，包括安装、配置和在不同模式下运行代理。
+本指南提供首次设置 **xopcbot** 的完整教程。
 
 ## 1. 环境要求
 
-开始前，请确保已安装以下软件：
+开始前，请确保已安装：
 
-- **Node.js**：需要版本 **22.0.0** 或更高。可通过 `node -v` 检查版本。
-- **npm** 或 **pnpm**：任意包管理器均可。
+- **Node.js**: 版本 **22.0.0** 或更高 (`node -v`)
+- **pnpm**: 推荐的包管理器 (`pnpm --version`)
+
+> **注意:** 本项目使用 `pnpm`。请**不要**使用 `npm` 进行包管理。
 
 ## 2. 安装
 
 ### 方式一：从 npm 安装（推荐）
 
 ```bash
-# 全局安装
 npm install -g @xopcai/xopcbot
-# 或：npm add -g @xopcai/xopcbot
 ```
 
 ### 方式二：从源码构建
 
-从 GitHub 克隆仓库并安装依赖：
-
 ```bash
 git clone https://github.com/xopcai/xopcbot.git
 cd xopcbot
-npm install
-# 或：npm install
+pnpm install
+pnpm run build
 ```
 
 ## 3. 配置
 
-最简单的配置方式是使用交互式 `onboard` 命令：
+### 交互式设置（推荐）
+
+使用 `onboard` 向导进行引导式设置：
 
 ```bash
 xopcbot onboard
-# 或: npm run dev -- onboard
+# 或：pnpm run dev -- onboard
 ```
 
-该命令将：
-1. 创建必要的目录（`~/.xopcbot/` 和 `~/.xopcbot/workspace/`）。
-2. 在 `~/.xopcbot/config.json` 生成默认配置文件。
-3. 提示选择 LLM 提供商并输入 API 密钥。
-4. 引导配置消息渠道（Telegram）。
-5. 配置并启动 Gateway WebUI。
+向导将引导您完成：
+1. 创建工作区目录 (`~/.xopcbot/workspace/`)
+2. 生成默认 `config.json`
+3. 选择 LLM 提供商并输入 API 密钥
+4. 配置消息通道（Telegram）
+5. 设置 Gateway WebUI
 
-您的 API 密钥将安全存储在配置文件中。
+### 快速设置
 
-## 4. 首次对话（CLI）
+仅需基本文件而不需要交互式提示：
 
-使用 `-m` 标志发送单条消息并接收回复：
+```bash
+xopcbot setup
+```
+
+### 手动配置
+
+直接编辑 `~/.xopcbot/config.json`：
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-sonnet-4-5",
+      "max_tokens": 8192,
+      "temperature": 0.7
+    }
+  },
+  "providers": {
+    "anthropic": "${ANTHROPIC_API_KEY}"
+  }
+}
+```
+
+> **提示:** 使用环境变量存储 API 密钥（如 `ANTHROPIC_API_KEY`）。
+
+## 4. 首次对话
+
+### 单条消息模式
+
+发送单条消息并获取回复：
 
 ```bash
 xopcbot agent -m "用一句话解释什么是 LLM。"
-# 或: npm run dev -- agent -m "用一句话解释什么是 LLM。"
+# 或：pnpm run dev -- agent -m "用一句话解释什么是 LLM。"
 ```
 
-#### 交互模式
+### 交互模式
 
-要进行连续对话，使用 `-i` 标志进入交互模式：
+开始连续对话：
 
 ```bash
 xopcbot agent -i
-# 或: npm run dev -- agent -i
+# 或：pnpm run dev -- agent -i
 ```
 
-您将看到 `You:` 提示符，输入消息后按回车即可。按 `Ctrl+C` 退出。
+您将看到 `You:` 提示符。输入消息后按 Enter，按 `Ctrl+C` 退出。
 
-## 5. 使用通道运行（网关模式）
+## 5. 使用通道运行
 
-要将代理连接到 Telegram 等消息平台，需要以**网关模式**运行。
+### Telegram 设置
 
-#### a. 配置通道
+1. **获取 Bot Token**: 打开 Telegram，搜索 [@BotFather](https://t.me/BotFather)，发送 `/newbot`
 
-首先编辑 `~/.xopcbot/config.json` 文件，添加通道所需信息。对于 Telegram，需要 Bot Token：
+2. **配置** `~/.xopcbot/config.json`：
 
-```jsonc
-// ~/.xopcbot/config.json
+```json
 {
-  // ... 其他配置 ...
   "channels": {
     "telegram": {
       "enabled": true,
-      "token": "123456:ABC-DEF1234567890", // <-- 在此处添加 Bot Token
-      "allowFrom": ["your_telegram_user_id"] // 可选：限制访问用户
+      "token": "YOUR_BOT_TOKEN",
+      "dmPolicy": "allowlist",
+      "allowFrom": [123456789]
     }
   }
 }
 ```
 
-更多详情请参阅[通道文档](/zh/channels)。
-
-#### b. 启动网关
-
-运行 `gateway` 命令。这将启动一个长期运行的进程，连接配置的通道并监听消息。
+3. **启动 Gateway**：
 
 ```bash
 xopcbot gateway
-# 或: npm run dev -- gateway
+# 或：pnpm run dev -- gateway
 ```
 
-网关默认在**前台模式**下运行。按 `Ctrl+C` 停止它。
+4. **聊天**: 打开 Telegram 并与您的机器人对话
 
-如果端口已被占用，您可以强制启动：
+### Web UI
 
-```bash
-xopcbot gateway --force
-```
+启动 gateway 后访问 `http://localhost:18790`。
 
-现在您可以打开 Telegram 客户端与机器人对话。发送的任何消息都将由代理处理。
+## 6. 下一步
 
-#### c. 使用 Web UI
+探索这些指南以解锁更多功能：
 
-网关启动后，打开浏览器访问：
+| 指南 | 描述 |
+|------|------|
+| [CLI 参考](/zh/cli) | 所有可用命令 |
+| [配置参考](/zh/configuration) | 完整配置参考 |
+| [扩展](/zh/extensions) | 扩展功能 |
+| [技能](/zh/skills) | 添加领域特定知识 |
+| [工具](/zh/tools) | 内置工具参考 |
+| [通道](/zh/channels) | 多通道设置 |
+| [模型](/zh/models) | LLM 提供商配置 |
 
-```
-http://localhost:18790
-```
+## 故障排除
 
-您将看到 xopcbot 的 Web 界面，可以：
-- 通过网页与代理对话
-- 查看和修改配置
-- 管理会话
+### 常见问题
 
-## 6. 工作区模板
+| 问题 | 解决方案 |
+|------|----------|
+| `ERR_MODULE_NOT_FOUND` | 运行 `pnpm install` |
+| `Cannot find module '@xopcai/...'` | 运行 `pnpm run build` |
+| 配置未加载 | 验证 `~/.xopcbot/config.json` 是有效 JSON |
+| 机器人无响应 | 检查 `TELEGRAM_BOT_TOKEN` 和机器人状态 |
+| API 密钥错误 | 确认环境变量已设置 |
 
-`onboard` 命令会在工作区创建以下模板文件：
+### 获取帮助
 
-```
-~/.xopcbot/workspace/
-├── SOUL.md          # 代理的核心身份和个性
-├── USER.md          # 关于您的信息
-├── TOOLS.md         # 工具使用说明
-├── AGENTS.md        # 代理协作指南
-├── MEMORY.md        # 记忆存储
-└── memory/          # 记忆片段目录
-```
-
-这些文件会自动加载到代理的系统提示中，帮助代理更好地理解上下文。
-
-## 下一步？
-
-您现在拥有一个功能完整的 xopcbot！以下是一些探索建议：
-
-- **[CLI 参考](/zh/cli)**：发现管理机器人的所有可用命令。
-- **[配置参考](/zh/configuration)**：了解 `config.json` 中可调整的所有设置。
-- **[扩展系统](/zh/extensions)**：探索如何通过扩展扩展代理功能。
-- **[内置工具](/zh/tools)**：了解代理可用的文件系统、Shell 和 Web 工具。
+- 查看 [文档](/) 获取详细指南
+- 查看 [AGENTS.md](https://github.com/xopcai/xopcbot/blob/main/AGENTS.md) 获取开发指南
+- 查看日志：`xopcbot gateway logs --follow`

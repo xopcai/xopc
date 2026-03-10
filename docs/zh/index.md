@@ -21,24 +21,27 @@ features:
     details: 通过强大的扩展架构扩展功能
     link: /zh/extensions
   - title: 🌐 多通道支持
-    details: 支持 Telegram、Discord、Slack、Signal 等
+    details: 支持 Telegram、Feishu 和 Web UI，支持多账户
     link: /zh/channels
   - title: 💻 本地优先
     details: 在本地运行 AI 助手，完全掌控
     link: /zh/configuration
-  - title: 🔧 工具集成
-    details: 与 CLI 工具和 API 无缝集成
+  - title: 🔧 内置工具
+    details: 文件操作、网页搜索、Shell 执行等
     link: /zh/tools
   - title: 🎯 技能系统
-    details: 通过 Markdown 文件教授代理新技能
+    details: 通过 SKILL.md 文件教授代理新技能
     link: /zh/skills
   - title: 🔐 OAuth 支持
     details: 支持 Kimi、Anthropic 等安全认证
     link: /zh/configuration
-  - title: 📊 高级日志
-    details: 敏感数据过滤、诊断事件、实时 SSE 流
-    link: /zh/logging-guide
+  - title: 📊 进度反馈
+    details: 长任务实时进度更新
+    link: /zh/progress
+  - title: 🎤 语音消息
+    details: 支持通过 Telegram 收发语音消息（STT/TTS）
+    link: /zh/voice
   - title: 🤖 多提供商
-    details: OpenAI、Anthropic、Google、Kimi、DeepSeek、Ollama 等
-    link: /zh/configuration
+    details: 20+ LLM 提供商：OpenAI、Anthropic、Google、Groq、DeepSeek、Ollama 等
+    link: /zh/models
 ---
