@@ -1,19 +1,21 @@
 # xopcbot Extension System
 
-xopcbot provides a lightweight but powerful extension system.
+xopcbot provides a lightweight but powerful extension system for customizing and extending functionality.
 
 ## Features
 
-- 🏗️ **Three-tier Storage Architecture** - Workspace / Global / Bundled
-- 🔌 **Extension SDK** - Official SDK, unified import paths
-- ⚡ **Native TypeScript** - Instant loading via jiti, no compilation needed
-- 📦 **Multi-source Installation** - Support npm, local directory, Git repository
+- 🏗️ **Three-tier Storage** - Workspace / Global / Bundled
+- 🔌 **Extension SDK** - Official SDK with unified imports
+- ⚡ **Native TypeScript** - Instant loading via jiti, no compilation
+- 📦 **Multi-source Installation** - npm, local directory, Git repository
+
+---
 
 ## Quick Start
 
 ### Install Extension
 
-**Method One: Using CLI (recommended)**
+**Using CLI (recommended):**
 
 ```bash
 # Install from npm to workspace
@@ -32,18 +34,6 @@ xopcbot extension list
 xopcbot extension remove hello
 ```
 
-**Method Two: Manual Installation**
-
-```bash
-# Global directory
-cd ~/.xopcbot/extensions
-git clone https://github.com/your/extension.git
-
-# Or Workspace directory
-cd workspace/.extensions
-git clone https://github.com/your/extension.git
-```
-
 ### Enable Extension
 
 Configure in `~/.xopcbot/config.json`:
@@ -58,7 +48,7 @@ Configure in `~/.xopcbot/config.json`:
 }
 ```
 
-**Configuration format explanation:**
+**Configuration format:**
 
 | Field | Type | Description |
 |-------|------|-------------|
@@ -66,42 +56,17 @@ Configure in `~/.xopcbot/config.json`:
 | `disabled` | `string[]` | (Optional) List of extension IDs to disable |
 | `[extension-id]` | `object \| boolean` | Extension-specific configuration |
 
-**Example configuration:**
-
-```json
-{
-  "extensions": {
-    "enabled": ["telegram-channel", "weather-tool", "echo"],
-    "disabled": ["deprecated-extension"],
-    "telegram-channel": {
-      "token": "bot-token-here",
-      "webhookUrl": "https://example.com/webhook"
-    },
-    "weather-tool": {
-      "apiKey": "weather-api-key",
-      "defaultCity": "Beijing"
-    },
-    "echo": true
-  }
-}
-```
-
-- Extensions in `enabled` array will be loaded
-- Extension ID as key can configure extension-specific options
-- If extension doesn't need configuration, can set to `true`
-
 ### Create New Extension
 
 ```bash
-# Create extension scaffold
 xopcbot extension create my-extension --name "My Extension" --kind utility
-
-# Supported kinds: channel|provider|memory|tool|utility
 ```
 
-This will create:
+**Supported kinds:** `channel` | `provider` | `memory` | `tool` | `utility`
+
+This creates:
 - `package.json` - npm config
-- `index.ts` - Extension entry (TypeScript, using xopcbot/extension-sdk)
+- `index.ts` - Extension entry (TypeScript)
 - `xopcbot.extension.json` - Extension manifest
 - `README.md` - Documentation template
 
@@ -109,7 +74,7 @@ This will create:
 
 ## Three-tier Storage Architecture
 
-xopcbot supports three-tier extension storage, from highest to lowest priority:
+xopcbot supports three-tier extension storage:
 
 | Level | Path | Use Case | Priority |
 |-------|------|----------|----------|
@@ -119,37 +84,23 @@ xopcbot supports three-tier extension storage, from highest to lowest priority:
 
 ### Priority Rules
 
-- **Workspace** extensions can override **Global** and **Bundled** extensions with the same name
-- **Global** extensions can override **Bundled** extensions with the same name
-- Use cases:
-  - Workspace: Project-specific custom extensions
-  Global: Commonly used shared extensions (like telegram-channel)
-  - Bundled: Official extensions shipped with xopcbot
+- **Workspace** extensions override **Global** and **Bundled** extensions with same name
+- **Global** extensions override **Bundled** extensions with same name
 
-### Global Extension Directory
-
-```bash
-# Default location
-~/.xopcbot/extensions/
-
-# Custom location (environment variable)
-export XOPCBOT_GLOBAL_EXTENSIONS=/path/to/global/extensions
-```
+**Use cases:**
+- Workspace: Project-specific custom extensions
+- Global: Commonly used shared extensions (like telegram-channel)
+- Bundled: Official extensions shipped with xopcbot
 
 ---
 
 ## Extension SDK
 
-xopcbot provides an official Extension SDK, exporting all types and interfaces needed for extension development.
-
-### Using the SDK
+xopcbot provides an official Extension SDK:
 
 ```typescript
 // Recommended: Use official SDK
 import type { ExtensionApi, ExtensionDefinition } from 'xopcbot/extension-sdk';
-
-// Not recommended to use internal paths
-// import type { ... } from 'xopcbot/extensions';  ❌
 ```
 
 ### Exported Types
@@ -172,149 +123,36 @@ import type {
 import type {
   ExtensionHookEvent,       // Hook event type
   ExtensionHookHandler,     // Hook handler
-  HookOptions,           // Hook options
+  HookOptions,              // Hook options
 } from 'xopcbot/extension-sdk';
 
 // Channels
 import type {
   ChannelExtension,         // Channel extension
-  OutboundMessage,       // Outbound message
+  OutboundMessage,          // Outbound message
 } from 'xopcbot/extension-sdk';
 
 // Commands
 import type {
   ExtensionCommand,         // Command definition
-  CommandContext,        // Command context
-  CommandResult,         // Command result
+  CommandContext,           // Command context
+  CommandResult,            // Command result
 } from 'xopcbot/extension-sdk';
 
 // Services
 import type {
   ExtensionService,         // Service definition
-  ServiceContext,        // Service context
+  ServiceContext,           // Service context
 } from 'xopcbot/extension-sdk';
 ```
 
-### SDK Path Resolution
-
-Under the hood, xopcbot uses jiti to configure path aliases:
-
-```typescript
-// jiti configuration
-{
-  alias: {
-    'xopcbot/extension-sdk': './src/extension-sdk/index.ts'
-  }
-}
-```
-
-This means extension developers don't need to worry about xopcbot source code location - SDK paths are automatically resolved.
-```
-
-This will create:
-- `package.json` - npm config
-- `index.ts` - Extension entry (TypeScript, supports jiti instant loading)
-- `xopcbot.extension.json` - Extension manifest
-- `README.md` - Documentation template
-
-## CLI Command Reference
-
-### extension install
-
-Install a extension.
-
-```bash
-# Install from npm
-xopcbot extension install <package-name>
-
-# Install specific version
-xopcbot extension install my-extension@1.0.0
-
-# Install from local directory
-xopcbot extension install ./local-extension-dir
-xopcbot extension install /absolute/path/to/extension
-
-# Set timeout (default 120 seconds)
-xopcbot extension install slow-extension --timeout 300000
-```
-
-**Installation flow**:
-1. Download/copy extension files
-2. Validate `xopcbot.extension.json` manifest
-3. Install dependencies (if `package.json` has dependencies)
-4. Copy to workspace `.extensions/` directory
-
-### extension list
-
-List all installed extensions.
-
-```bash
-xopcbot extension list
-```
-
-**Example output**:
-```
-📦 Installed Extensions
-
-════════════════════════════════════════════════════════════
-
-  📁 Telegram Channel
-     ID: telegram-channel
-     Version: 1.2.0
-     Path: /home/user/.xopcbot/workspace/.extensions/telegram-channel
-
-  📁 My Custom Extension
-     ID: my-custom-extension
-     Version: 0.1.0
-     Path: /home/user/.xopcbot/workspace/.extensions/my-custom-extension
-```
-
-### extension remove / uninstall
-
-Remove an installed extension.
-
-```bash
-xopcbot extension remove <extension-id>
-xopcbot extension uninstall <extension-id>
-```
-
-**Note**: After removing a extension, if it was enabled, you also need to delete it from the configuration file.
-
-### extension info
-
-View extension details.
-
-```bash
-xopcbot extension info <extension-id>
-```
-
-### extension create
-
-Create new extension scaffold.
-
-```bash
-xopcbot extension create <extension-id> [options]
-
-Options:
-  --name <name>           Extension display name
-  --description <desc>    Extension description
-  --kind <kind>          Extension type: channel|provider|memory|tool|utility
-```
-
-**Example**:
-```bash
-# Create a tool extension
-xopcbot extension create weather-tool --name "Weather Tool" --kind tool
-
-# Create a channel extension
-xopcbot extension create discord-channel --name "Discord Channel" --kind channel
-```
+---
 
 ## Extension Structure
 
 ### Manifest File
 
-Each extension must include a `xopcbot.extension.json` file:
+Each extension must include `xopcbot.extension.json`:
 
 ```json
 {
@@ -323,6 +161,7 @@ Each extension must include a `xopcbot.extension.json` file:
   "description": "A description of my extension",
   "version": "1.0.0",
   "main": "index.js",
+  "kind": "utility",
   "configSchema": {
     "type": "object",
     "properties": {
@@ -337,15 +176,15 @@ Each extension must include a `xopcbot.extension.json` file:
 
 ### Extension Entry File
 
-```javascript
-// index.js
-import type { ExtensionApi } from 'xopcbot-extension-sdk';
+```typescript
+import type { ExtensionApi } from 'xopcbot/extension-sdk';
 
 const extension = {
   id: 'my-extension',
   name: 'My Extension',
   description: 'Description here',
   version: '1.0.0',
+  kind: 'utility',
 
   // Called when extension is registered
   register(api: ExtensionApi) {
@@ -376,24 +215,29 @@ const extension = {
 export default extension;
 ```
 
+---
+
 ## Core Concepts
 
 ### Tools
 
-Extensions can register custom tools for the Agent to use:
+Extensions can register custom tools:
 
-```javascript
+```typescript
 api.registerTool({
   name: 'my_tool',
   description: 'Do something useful',
   parameters: {
     type: 'object',
     properties: {
-      input: { type: 'string', description: 'Input value' }
+      input: { 
+        type: 'string', 
+        description: 'Input value' 
+      }
     },
     required: ['input']
   },
-  async execute(params) {
+  async execute(params, ctx) {
     const input = params.input;
     // Perform operation
     return `Result: ${input}`;
@@ -403,28 +247,27 @@ api.registerTool({
 
 ### Hooks
 
-Hooks allow extensions to intercept and modify behavior at various lifecycle points:
+Hooks intercept and modify behavior at lifecycle points:
 
 | Hook | Timing | Use Case |
-|------|--------|-----------|
+|------|--------|----------|
 | `before_agent_start` | Before Agent starts | Modify system prompt |
 | `agent_end` | After Agent completes | Post-process results |
 | `message_received` | When message received | Message pre-processing |
-| `message_sending` | Before sending message | Intercept/modify message content |
+| `message_sending` | Before sending message | Intercept/modify content |
 | `message_sent` | After message sent | Send logging |
 | `before_tool_call` | Before tool call | Parameter validation |
 | `after_tool_call` | After tool call | Result processing |
 | `session_start` | Session start | Initialization |
 | `session_end` | Session end | Cleanup |
-| `gateway_start` | Gateway starts | Configuration |
-| `gateway_stop` | Gateway stops | Cleanup |
 
-```javascript
-// message_sending hook - intercept or modify AI sent messages
+**Example - Block sensitive content:**
+
+```typescript
 api.registerHook('message_sending', async (event, ctx) => {
-  const { to, content } = event;
+  const { content } = event;
 
-  // 1. Block message sending (e.g., content moderation)
+  // Block sensitive information
   if (content.includes('sensitive info')) {
     return {
       cancel: true,
@@ -432,25 +275,23 @@ api.registerHook('message_sending', async (event, ctx) => {
     };
   }
 
-  // 2. Modify message content (e.g., add signature, replace content)
+  // Add signature
   if (content.includes('{{signature}}')) {
     return {
-      content: content.replace('{{signature}}', '\n\n— Sent by AI Assistant')
-    };
-  }
-
-  // 3. Block for specific chat
-  if (to === 'blocked-chat-id') {
-    return {
-      cancel: true,
-      cancelReason: 'This chat is blocked'
+      content: content.replace(
+        '{{signature}}', 
+        '\n\n— Sent by AI Assistant'
+      )
     };
   }
 });
+```
 
-// before_tool_call hook - block or modify tool calls
+**Example - Block dangerous tools:**
+
+```typescript
 api.registerHook('before_tool_call', async (event, ctx) => {
-  const { toolName, params } = event;
+  const { toolName } = event;
 
   // Block dangerous operations
   if (toolName === 'delete_file' || toolName === 'execute_command') {
@@ -459,21 +300,14 @@ api.registerHook('before_tool_call', async (event, ctx) => {
       blockReason: 'This operation is disabled for safety'
     };
   }
-
-  // Modify parameters
-  if (toolName === 'write_file' && params.path?.includes('/etc/')) {
-    return {
-      params: { ...params, path: params.path.replace('/etc/', '/safe/') }
-    };
-  }
 });
 ```
 
 ### Commands
 
-Register custom commands:
+Register custom CLI commands:
 
-```javascript
+```typescript
 api.registerCommand({
   name: 'status',
   description: 'Check extension status',
@@ -490,7 +324,7 @@ api.registerCommand({
 
 ### HTTP Routes
 
-```javascript
+```typescript
 api.registerHttpRoute('/my-extension/status', async (req, res) => {
   res.json({ status: 'running', extension: 'my-extension' });
 });
@@ -498,7 +332,7 @@ api.registerHttpRoute('/my-extension/status', async (req, res) => {
 
 ### Gateway Methods
 
-```javascript
+```typescript
 api.registerGatewayMethod('my-extension.status', async (params) => {
   return { status: 'running' };
 });
@@ -506,7 +340,7 @@ api.registerGatewayMethod('my-extension.status', async (params) => {
 
 ### Background Services
 
-```javascript
+```typescript
 api.registerService({
   id: 'my-service',
   start(context) {
@@ -522,6 +356,8 @@ api.registerService({
   }
 });
 ```
+
+---
 
 ## Configuration Management
 
@@ -548,23 +384,27 @@ api.registerService({
 
 ### Access Configuration
 
-```javascript
+```typescript
 const apiKey = api.extensionConfig.apiKey;
 const maxResults = api.extensionConfig.maxResults || 10;
 ```
 
+---
+
 ## Logging
 
-```javascript
+```typescript
 api.logger.debug('Detailed debug information');
 api.logger.info('General information');
 api.logger.warn('Warning message');
 api.logger.error('Error message');
 ```
 
+---
+
 ## Path Resolution
 
-```javascript
+```typescript
 // Resolve workspace path
 const configPath = api.resolvePath('config.json');
 
@@ -572,9 +412,11 @@ const configPath = api.resolvePath('config.json');
 const dataPath = api.resolvePath('./data.json');
 ```
 
+---
+
 ## Event System
 
-```javascript
+```typescript
 // Emit event
 api.emit('my-event', { key: 'value' });
 
@@ -587,16 +429,19 @@ api.on('other-event', (data) => {
 api.off('my-event', handler);
 ```
 
+---
+
 ## Complete Example
 
-```javascript
-import type { ExtensionApi } from 'xopcbot-extension-sdk';
+```typescript
+import type { ExtensionApi } from 'xopcbot/extension-sdk';
 
 const extension = {
   id: 'example',
   name: 'Example Extension',
   description: 'A complete example extension',
   version: '1.0.0',
+  kind: 'utility',
   configSchema: {
     type: 'object',
     properties: {
@@ -646,10 +491,12 @@ const extension = {
 export default extension;
 ```
 
+---
+
 ## Publishing Extensions
 
 1. Create `xopcbot.extension.json` manifest
-2. Create `index.js` entry file
+2. Create `index.ts` entry file
 3. Push to GitHub or publish to npm
 
 ```bash
@@ -661,6 +508,8 @@ npm publish --access public
 npm publish --access public
 ```
 
+---
+
 ## Best Practices
 
 1. **Error handling**: All async operations should use try/catch
@@ -668,9 +517,77 @@ npm publish --access public
 3. **Resource cleanup**: Release resources in `deactivate`
 4. **Configuration validation**: Use JSON Schema to validate configuration
 5. **Version management**: Follow semantic versioning
+6. **TypeScript**: Use TypeScript for better type safety
+7. **Minimal dependencies**: Keep extensions lightweight
 
-## Related Links
+---
 
-- [Extension Examples](examples/)
-- [API Reference](./api.md)
-- [Hooks Reference](./hooks.md)
+## CLI Command Reference
+
+### extension install
+
+```bash
+# Install from npm
+xopcbot extension install <package-name>
+
+# Install specific version
+xopcbot extension install my-extension@1.0.0
+
+# Install from local directory
+xopcbot extension install ./local-extension-dir
+
+# Set timeout (default 120 seconds)
+xopcbot extension install slow-extension --timeout 300000
+```
+
+### extension list
+
+```bash
+xopcbot extension list
+```
+
+### extension remove / uninstall
+
+```bash
+xopcbot extension remove <extension-id>
+xopcbot extension uninstall <extension-id>
+```
+
+### extension info
+
+```bash
+xopcbot extension info <extension-id>
+```
+
+### extension create
+
+```bash
+xopcbot extension create <extension-id> [options]
+
+Options:
+  --name <name>           Extension display name
+  --description <desc>    Extension description
+  --kind <kind>          Extension type: channel|provider|memory|tool|utility
+```
+
+---
+
+## Troubleshooting
+
+### Extension Not Loading
+
+1. Check if extension is in `enabled` array
+2. Verify `xopcbot.extension.json` manifest is valid
+3. Check logs for loading errors
+
+### Installation Failed
+
+1. Check network connection
+2. Verify package name is correct
+3. Check timeout setting for slow installations
+
+### Hook Not Triggering
+
+1. Verify hook name is correct
+2. Check if hook is registered in `register()` method
+3. Check logs for hook registration errors

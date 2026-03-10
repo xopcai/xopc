@@ -2,19 +2,7 @@
 
 xopcbot supports custom model providers via `~/.xopcbot/models.json`.
 
-## Table of Contents
-
-- [Quick Start](#quick-start)
-- [Configuration](#configuration)
-- [Supported APIs](#supported-apis)
-- [Provider Configuration](#provider-configuration)
-- [Model Configuration](#model-configuration)
-- [Overriding Built-in Providers](#overriding-built-in-providers)
-- [API Key Resolution](#api-key-resolution)
-- [Frontend UI](#frontend-ui)
-- [Examples](#examples)
-- [API Endpoints](#api-endpoints)
-- [Troubleshooting](#troubleshooting)
+---
 
 ## Quick Start
 
@@ -36,7 +24,9 @@ Create `~/.xopcbot/models.json`:
 }
 ```
 
-The `apiKey` is required but Ollama ignores it, so any value works.
+> **Note:** The `apiKey` is required but Ollama ignores it, so any value works.
+
+---
 
 ## Configuration
 
@@ -78,7 +68,12 @@ The `apiKey` is required but Ollama ignores it, so any value works.
           "input": ["text"],
           "contextWindow": 128000,
           "maxTokens": 32000,
-          "cost": { "input": 0, "output": 0, "cacheRead": 0, "cacheWrite": 0 }
+          "cost": { 
+            "input": 0, 
+            "output": 0, 
+            "cacheRead": 0, 
+            "cacheWrite": 0 
+          }
         }
       ]
     },
@@ -102,6 +97,8 @@ The `apiKey` is required but Ollama ignores it, so any value works.
 }
 ```
 
+---
+
 ## Supported APIs
 
 | API | Description |
@@ -116,6 +113,8 @@ The `apiKey` is required but Ollama ignores it, so any value works.
 | `google-gemini-cli` | Google Gemini CLI |
 | `google-vertex` | Google Vertex AI |
 
+---
+
 ## Provider Configuration
 
 | Field | Description |
@@ -124,15 +123,17 @@ The `apiKey` is required but Ollama ignores it, so any value works.
 | `api` | API type (see above) |
 | `apiKey` | API key (see resolution below) |
 | `headers` | Custom headers |
-| `authHeader` | Set `true` to add `Authorization: Bearer <apiKey>` |
+| `authHeader` | Add `Authorization: Bearer <apiKey>` header |
 | `models` | Array of model configurations |
 | `modelOverrides` | Per-model overrides for built-in models |
+
+---
 
 ## Model Configuration
 
 | Field | Required | Default | Description |
 |-------|----------|---------|-------------|
-| `id` | Yes | - | Model identifier (passed to the API) |
+| `id` | Yes | - | Model identifier (passed to API) |
 | `name` | No | `id` | Display name |
 | `api` | No | provider's `api` | Override provider's API |
 | `reasoning` | No | `false` | Supports extended thinking |
@@ -142,6 +143,8 @@ The `apiKey` is required but Ollama ignores it, so any value works.
 | `cost` | No | all zeros | `{input, output, cacheRead, cacheWrite}` per million tokens |
 | `headers` | No | - | Custom headers for this model |
 | `compat` | No | - | OpenAI compatibility settings |
+
+---
 
 ## Overriding Built-in Providers
 
@@ -182,6 +185,8 @@ Customize specific built-in models:
 }
 ```
 
+---
+
 ## API Key Resolution
 
 The `apiKey` field supports three formats:
@@ -216,11 +221,13 @@ Use the value directly:
 }
 ```
 
-## Frontend UI
+---
+
+## Web UI Configuration
 
 Access the Models configuration in the web UI:
 
-1. Open the web UI (http://localhost:18790 by default)
+1. Open the web UI (http://localhost:18790)
 2. Go to **Settings** → **Models**
 3. Use the visual editor to configure providers and models
 
@@ -231,77 +238,70 @@ Access the Models configuration in the web UI:
 Click **"Add Provider"** to open the provider configuration dialog:
 
 **Quick Setup with Presets:**
-- **Ollama** - Local LLMs via Ollama (`http://localhost:11434/v1`)
-- **LM Studio** - LM Studio local server (`http://localhost:1234/v1`)
+- **Ollama** - Local LLMs (`http://localhost:11434/v1`)
+- **LM Studio** - LM Studio server (`http://localhost:1234/v1`)
 - **OpenRouter** - Multi-provider API (`https://openrouter.ai/api/v1`)
-- **Vercel AI Gateway** - Vercel AI Gateway (`https://ai-gateway.vercel.sh/v1`)
-- **vLLM** - vLLM inference server (`http://localhost:8000/v1`)
+- **Vercel AI Gateway** - Vercel Gateway (`https://ai-gateway.vercel.sh/v1`)
+- **vLLM** - vLLM server (`http://localhost:8000/v1`)
 - **Custom** - Manual configuration
 
-Selecting a preset automatically fills in the base URL and API type.
-
 **Configuration Fields:**
-- **Provider ID** - Unique identifier (lowercase, alphanumeric, hyphens, underscores)
-- **API Type** - The API protocol (OpenAI Completions, Anthropic Messages, etc.)
-- **Base URL** - The API endpoint URL (should end with `/v1` for OpenAI-compatible APIs)
-- **API Key** - Supports literal values, environment variables (uppercase), or shell commands (`!command`)
+- **Provider ID** - Unique identifier (lowercase, alphanumeric, hyphens)
+- **API Type** - The API protocol
+- **Base URL** - The API endpoint URL
+- **API Key** - Supports literal, env vars, or shell commands
 
 **Advanced Options:**
-- **Add Authorization header** - Automatically adds `Authorization: Bearer {apiKey}`
+- **Add Authorization header** - Adds `Authorization: Bearer {apiKey}`
 - **Custom Headers** - JSON format custom headers
 
 ### Model Management
 
 #### Adding/Editing Models
 
-Click **"Add Model"** or the edit icon on an existing model to open the model editor dialog:
+Click **"Add Model"** or edit icon on existing model:
 
 **Basic Tab:**
-- **Model ID** - Unique identifier (e.g., `llama3.1:8b`, `gpt-4o`)
+- **Model ID** - Unique identifier
 - **Display Name** - Human-readable name
 - **Input Types** - Text only or Text + Vision
-- **Supports Reasoning** - Enable for models with extended thinking capability
-- **Context Window** - Maximum context size in tokens (default: 128000)
+- **Supports Reasoning** - Enable for extended thinking
+- **Context Window** - Maximum context size (default: 128000)
 - **Max Output Tokens** - Maximum response tokens (default: 16384)
 
 **Advanced Tab:**
-- **Cost Configuration** - Per-million-token pricing:
-  - Input / Output / Cache Read / Cache Write
-- **Custom Headers** - Model-specific headers in JSON format
+- **Cost Configuration** - Per-million-token pricing
+- **Custom Headers** - Model-specific headers
 
 **Compatibility Tab:**
-- **OpenAI Completions Settings:**
-  - Supports Store
-  - Supports Developer Role
-  - Supports Usage in Streaming
-  - Max Tokens Field (auto-detect / max_completion_tokens / max_tokens)
-- **Routing Configuration** (for OpenRouter/Vercel):
-  - Provider Order - Priority list (e.g., `anthropic, openai`)
-  - Allowed Providers - Whitelist (e.g., `amazon-bedrock`)
+- **OpenAI Completions Settings**
+- **Routing Configuration** (for OpenRouter/Vercel)
 
 ### API Key Testing
 
-Each provider shows an API key type badge (literal/env/shell). Click **"Test"** to:
+Each provider shows an API key type badge. Click **"Test"** to:
 - Verify the key resolves correctly
 - See the resolved value type
-- Check for errors (e.g., missing environment variable)
+- Check for errors
 
 ### Statistics Display
 
 The toolbar shows real-time statistics:
-- **Providers count** - Number of custom providers (highlighted in blue when > 0)
+- **Providers count** - Number of custom providers
 - **Models count** - Total models across all providers
 
 ### Actions
 
-- **Validate** - Check configuration for errors without saving
+- **Validate** - Check configuration for errors
 - **Save** - Save changes to models.json
-- **Reload** - Hot reload configuration without restart
+- **Reload** - Hot reload without restart
 - **Show/Hide JSON** - View raw JSON configuration
 
 ### Hot Reload
 
 Changes are automatically reloaded when you save in the UI. No restart required.
+
+---
 
 ## Examples
 
@@ -389,43 +389,47 @@ Changes are automatically reloaded when you save in the UI. No restart required.
 }
 ```
 
+---
+
 ## API Endpoints
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/models-json` | Get models.json configuration |
-| POST | `/api/models-json/validate` | Validate models.json configuration |
-| PATCH | `/api/models-json` | Save models.json |
+| POST | `/api/models-json/validate` | Validate configuration |
+| PATCH | `/api/models-json` | Save configuration |
 | POST | `/api/models-json/reload` | Hot reload |
 | POST | `/api/models-json/test-api-key` | Test API key resolution |
 
+---
+
 ## Troubleshooting
 
-### Models not showing up
+### Models Not Showing Up
 
-1. Check the browser console for errors
+1. Check browser console for errors
 2. Verify `models.json` syntax is valid JSON
-3. Check the Settings → Models page for validation errors
-4. Ensure API keys are correctly resolved (use the Test button)
+3. Check Settings → Models page for validation errors
+4. Ensure API keys are correctly resolved (use Test button)
 
-### API key not working
+### API Key Not Working
 
-1. Use the "Test" button in the UI to verify resolution
+1. Use "Test" button in UI to verify resolution
 2. Check environment variables are set
-3. For shell commands, ensure they work when run manually
+3. For shell commands, ensure they work manually
 4. Check logs for command execution errors
 
-### Changes not taking effect
+### Changes Not Taking Effect
 
-1. Click "Reload" in the UI to force a refresh
-2. Check the `models.json` file was saved correctly
-3. Restart the gateway if needed
+1. Click "Reload" in UI to force refresh
+2. Check `models.json` file was saved correctly
+3. Restart gateway if needed
 
 ### Separation from config.json
 
 **Note:** `models.json` is separate from `config.json`:
-- `config.json` contains API keys for built-in providers (simple string format)
-- `models.json` contains custom provider configurations with models
+- `config.json` contains API keys for built-in providers
+- `models.json` contains custom provider configurations
 
 This separation allows:
 - Different file permissions for sensitive API keys

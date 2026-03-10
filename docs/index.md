@@ -21,24 +21,27 @@ features:
     details: Extend functionality with a powerful extension architecture
     link: /extensions
   - title: 🌐 Multi-Channel
-    details: Supports Telegram, Discord, Slack, Signal and more
+    details: Supports Telegram, Feishu, and Web UI with multi-account support
     link: /channels
   - title: 💻 Local First
     details: Run your AI assistant locally with full control
     link: /configuration
-  - title: 🔧 Tool Integration
-    details: Seamlessly integrate with CLI tools and APIs
+  - title: 🔧 Built-in Tools
+    details: File operations, web search, shell execution, and more
     link: /tools
   - title: 🎯 Skill System
-    details: Teach your agent new skills via Markdown files
+    details: Teach your agent new skills via SKILL.md files
     link: /skills
   - title: 🔐 OAuth Support
     details: Secure authentication with Kimi, Anthropic and more
     link: /configuration
-  - title: 📊 Advanced Logging
-    details: Sensitive data redaction, diagnostic events, real-time SSE streaming
-    link: /logging-guide
+  - title: 📊 Progress Feedback
+    details: Real-time progress updates for long-running tasks
+    link: /progress
+  - title: 🎤 Voice Messages
+    details: STT/TTS support for voice communication via Telegram
+    link: /voice
   - title: 🤖 Multi-Provider
-    details: OpenAI, Anthropic, Google, Kimi, MiniMax, DeepSeek, Ollama and more
-    link: /configuration
+    details: 20+ LLM providers: OpenAI, Anthropic, Google, Groq, DeepSeek, Ollama and more
+    link: /models
 ---

@@ -1,20 +1,24 @@
-# 语音功能 (STT/TTS)
+# Voice Messages (STT/TTS)
 
-xopcbot 支持语音消息处理，包括：
-- **STT** (Speech-to-Text): 语音转文字
-- **TTS** (Text-to-Speech): 文字转语音
+xopcbot supports voice message processing via Telegram:
+- **STT** (Speech-to-Text): Convert voice to text
+- **TTS** (Text-to-Speech): Convert text to voice
 
-## 功能概述
+---
 
-当用户通过 Telegram 发送语音消息时：
-1. STT 将语音转换为文字
-2. Agent 处理文字内容
-3. TTS 将回复转换为语音（可选）
-4. 同时发送文字和语音回复
+## Overview
 
-## 快速开始
+When a user sends a voice message via Telegram:
+1. STT converts voice to text
+2. Agent processes the text content
+3. TTS converts reply to voice (optional)
+4. Sends both text and voice reply
 
-在 `~/.xopcbot/config.json` 中添加配置：
+---
+
+## Quick Start
+
+Add to `~/.xopcbot/config.json`:
 
 ```json
 {
@@ -36,9 +40,11 @@ xopcbot 支持语音消息处理，包括：
 }
 ```
 
-## STT 配置
+---
 
-### 阿里云 Paraformer (推荐中文)
+## STT Configuration
+
+### Alibaba Paraformer (Recommended for Chinese)
 
 ```json
 {
@@ -53,10 +59,10 @@ xopcbot 支持语音消息处理，包括：
 }
 ```
 
-**支持的模型：**
-- `paraformer-v1`: 中英文，16kHz 以上音频
-- `paraformer-8k-v1`: 电话录音，8kHz
-- `paraformer-mtl-v1`: 多语言支持
+**Supported Models:**
+- `paraformer-v1`: Chinese/English, 16kHz+ audio
+- `paraformer-8k-v1`: Phone recordings, 8kHz
+- `paraformer-mtl-v1`: Multi-language support
 
 ### OpenAI Whisper
 
@@ -73,10 +79,10 @@ xopcbot 支持语音消息处理，包括：
 }
 ```
 
-**模型：**
-- `whisper-1`: 支持 99+ 语言
+**Model:**
+- `whisper-1`: Supports 99+ languages
 
-### Fallback 配置
+### Fallback Configuration
 
 ```json
 {
@@ -91,14 +97,18 @@ xopcbot 支持语音消息处理，包括：
 }
 ```
 
-## TTS 配置
+If primary provider fails, automatically tries fallback providers in order.
 
-### 触发模式
+---
 
-| 模式 | 说明 |
-|------|------|
-| `auto` | 用户发语音 → Agent 语音回复 |
-| `never` | 禁用 TTS，只发文字 |
+## TTS Configuration
+
+### Trigger Modes
+
+| Mode | Description |
+|------|-------------|
+| `auto` | User sends voice → Agent replies with voice |
+| `never` | Disable TTS, text only |
 
 ### OpenAI TTS
 
@@ -117,9 +127,13 @@ xopcbot 支持语音消息处理，包括：
 }
 ```
 
-**Voice 选项：** `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`
+**Voices:** `alloy`, `echo`, `fable`, `onyx`, `nova`, `shimmer`
 
-### 阿里云 CosyVoice (推荐中文)
+**Models:**
+- `tts-1`: Standard quality, faster
+- `tts-1-hd`: High definition quality
+
+### Alibaba CosyVoice (Recommended for Chinese)
 
 ```json
 {
@@ -136,9 +150,11 @@ xopcbot 支持语音消息处理，包括：
 }
 ```
 
-**Voice 选项：** 见阿里云语音合成文档
+See Alibaba documentation for available voices.
 
-## 完整配置示例
+---
+
+## Complete Configuration Example
 
 ```json
 {
@@ -176,37 +192,111 @@ xopcbot 支持语音消息处理，包括：
 }
 ```
 
-## 限制
+---
 
-- 语音消息长度限制：60 秒（超过则跳过 STT）
-- TTS 文本长度限制：4000 字符
-- 仅支持 Telegram 频道
+## Limits
 
-## 环境变量
+| Limit | Value |
+|-------|-------|
+| Voice message duration | 60 seconds (STT skipped if longer) |
+| TTS text length | 4000 characters |
+| Supported channels | Telegram only |
 
-可以使用环境变量代替配置文件中的 API key：
+---
 
-| 环境变量 | 用途 |
-|----------|------|
-| `DASHSCOPE_API_KEY` | 阿里云 DashScope API Key |
-| `OPENAI_API_KEY` | OpenAI API Key |
+## Environment Variables
 
-## 故障排除
+Use environment variables instead of hardcoding API keys:
 
-### 语音转文字失败
+| Variable | Purpose |
+|----------|---------|
+| `DASHSCOPE_API_KEY` | Alibaba DashScope API Key (STT/TTS) |
+| `OPENAI_API_KEY` | OpenAI API Key (STT/TTS) |
 
-1. 检查 API key 是否正确
-2. 查看日志：`tail -f ~/.xopcbot/logs/xopcbot.log`
-3. 确认语音时长在 60 秒以内
+Example:
+```json
+{
+  "stt": {
+    "alibaba": {
+      "apiKey": "${DASHSCOPE_API_KEY}"
+    }
+  },
+  "tts": {
+    "openai": {
+      "apiKey": "${OPENAI_API_KEY}"
+    }
+  }
+}
+```
 
-### 没有收到语音回复
+---
 
-1. 确认 `tts.enabled` 为 `true`
-2. 确认 `tts.trigger` 为 `auto`
-3. 检查用户是否发送了语音消息（而非文字）
-4. 查看日志中的 TTS 错误信息
+## Workflow
 
-## API 参考
+```
+User sends voice message (Telegram)
+        │
+        ▼
+┌─────────────────────┐
+│ Download voice      │
+│ message audio       │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ STT Processing      │
+│ (Alibaba/OpenAI)    │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ Agent processes     │
+│ transcribed text    │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ TTS Processing      │
+│ (if trigger=auto)   │
+└──────────┬──────────┘
+           │
+           ▼
+┌─────────────────────┐
+│ Send text + voice   │
+│ reply to Telegram   │
+└─────────────────────┘
+```
+
+---
+
+## Troubleshooting
+
+### STT Fails
+
+1. **Check API key**: Verify API key is correct and has credits
+2. **Check audio length**: Must be < 60 seconds
+3. **View logs**: `tail -f ~/.xopcbot/logs/xopcbot.log`
+4. **Test fallback**: Ensure fallback is configured
+
+### No Voice Reply
+
+1. **Check TTS enabled**: Verify `tts.enabled` is `true`
+2. **Check trigger mode**: Must be `auto` for voice replies
+3. **Verify user sent voice**: TTS only triggers on voice messages
+4. **Check text length**: Must be < 4000 characters
+5. **View logs**: Check for TTS error messages
+
+### Poor Recognition Quality
+
+1. **Try different provider**: Switch between Alibaba and OpenAI
+2. **Check audio quality**: Ensure clear audio recording
+3. **Language match**: Use provider optimized for your language
+   - Chinese: Alibaba Paraformer
+   - Multi-language: OpenAI Whisper
+
+---
+
+## API Reference
 
 ### STT Config Schema
 
@@ -248,3 +338,13 @@ interface TTSConfig {
   };
 }
 ```
+
+---
+
+## Best Practices
+
+1. **Use fallback**: Configure fallback providers for reliability
+2. **Monitor usage**: STT/TTS APIs consume credits
+3. **Set length limits**: Inform users about 60-second limit
+4. **Test voices**: Choose appropriate voice for your use case
+5. **Environment variables**: Store API keys securely

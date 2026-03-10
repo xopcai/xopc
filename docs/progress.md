@@ -2,15 +2,19 @@
 
 > Real-time progress feedback for long-running agent tasks
 
+---
+
 ## Overview
 
-The Progress Feedback system provides real-time updates to users during long-running agent tasks. It helps users understand what the agent is doing, reducing the perception of "stuck" or "no response" during complex operations.
+The Progress Feedback system provides real-time updates during long-running agent tasks, helping users understand what the agent is doing and reducing the perception of "stuck" or "no response".
+
+---
 
 ## Features
 
 ### 1. Tool Execution Feedback
 
-When the agent executes tools (read, write, bash, search, etc.), users receive real-time status updates:
+Real-time status updates when the agent executes tools:
 
 | Stage | Emoji | Description |
 |-------|-------|-------------|
@@ -21,9 +25,9 @@ When the agent executes tools (read, write, bash, search, etc.), users receive r
 | executing | ⚙️ | Running shell commands |
 | analyzing | 📊 | Analyzing data |
 
-### 2. Progress Stages
+### 2. Automatic Stage Mapping
 
-The system automatically maps tool names to appropriate progress stages:
+The system automatically maps tool names to progress stages:
 
 ```
 Tool Name          → Stage
@@ -39,14 +43,16 @@ edit               → writing
 
 ### 3. Long-running Task Heartbeat
 
-For tasks that take longer than 30 seconds, the system sends periodic heartbeat messages:
+For tasks longer than 30 seconds, periodic heartbeat messages are sent:
 
 ```
 🔍 搜索中...
 ⏱️ 已进行 45 秒
 ```
 
-Heartbeat is sent every 20 seconds after the 30-second threshold.
+**Heartbeat Settings:**
+- Threshold: 30 seconds
+- Interval: 20 seconds
 
 ### 4. Stream Integration
 
@@ -55,14 +61,16 @@ For Telegram channels, progress indicators are displayed inline with streaming m
 ```
 🔍 搜索中
 
-正在搜索: "how to build a react app"
+正在搜索："how to build a react app"
 ```
+
+---
 
 ## Configuration
 
 ### Feedback Levels
 
-You can configure the feedback verbosity in the progress manager:
+Configure feedback verbosity:
 
 ```typescript
 const config = {
@@ -104,11 +112,15 @@ Configure stream behavior in `config.json`:
 }
 ```
 
+**Stream Modes:**
+
 | Mode | Description |
 |------|-------------|
-| `off` | No streaming, send complete message at once |
-| `partial` | Stream AI response, show progress indicator for tools |
+| `off` | No streaming, send complete message |
+| `partial` | Stream AI response, show progress for tools |
 | `block` | Full streaming with all intermediate updates |
+
+---
 
 ## How It Works
 
@@ -143,16 +155,18 @@ Task Complete
 
 | Component | File | Description |
 |-----------|------|-------------|
-| `ProgressFeedbackManager` | `src/agent/progress.ts` | Core progress tracking and callbacks |
-| `DraftStream` | `src/channels/draft-stream.ts` | Telegram message streaming with progress |
-| `AgentService` | `src/agent/service.ts` | Integrates progress with agent events |
+| `ProgressFeedbackManager` | `src/agent/progress.ts` | Core progress tracking |
+| `DraftStream` | `src/channels/draft-stream.ts` | Telegram streaming |
+| `AgentService` | `src/agent/service.ts` | Event integration |
+
+---
 
 ## API Reference
 
 ### ProgressFeedbackManager
 
 ```typescript
-import { ProgressFeedbackManager, progressFeedbackManager } from './agent/progress';
+import { ProgressFeedbackManager } from './agent/progress';
 
 const manager = new ProgressFeedbackManager({
   level: 'normal',
@@ -164,9 +178,15 @@ const manager = new ProgressFeedbackManager({
 // Set callbacks for progress events
 manager.setCallbacks({
   onProgress: (msg) => console.log(msg),
-  onStreamStart: (toolName, args) => console.log(`Starting: ${toolName}`),
-  onStreamEnd: (toolName, result, isError) => console.log(`Ended: ${toolName}`),
-  onHeartbeat: (elapsed, stage) => console.log(`Still working... ${elapsed}ms`),
+  onStreamStart: (toolName, args) => {
+    console.log(`Starting: ${toolName}`);
+  },
+  onStreamEnd: (toolName, result, isError) => {
+    console.log(`Ended: ${toolName}`);
+  },
+  onHeartbeat: (elapsed, stage) => {
+    console.log(`Still working... ${elapsed}ms`);
+  },
 });
 
 // Trigger progress updates
@@ -187,14 +207,23 @@ interface ProgressMessage {
   toolName?: string;
 }
 
-type ProgressStage = 'thinking' | 'searching' | 'reading' | 'writing' | 'executing' | 'analyzing' | 'idle';
+type ProgressStage = 
+  | 'thinking' 
+  | 'searching' 
+  | 'reading' 
+  | 'writing' 
+  | 'executing' 
+  | 'analyzing' 
+  | 'idle';
 ```
+
+---
 
 ## Troubleshooting
 
 ### No Progress Updates
 
-1. **Check stream mode**: Ensure `streamMode` is set to `partial` or `block` in config
+1. **Check stream mode**: Ensure `streamMode` is `partial` or `block`
 2. **Check logs**: Look for `ProgressFeedback` or `DraftStream` logs
 3. **Check channel support**: Progress updates only work with Telegram (currently)
 
@@ -210,7 +239,33 @@ const manager = new ProgressFeedbackManager({
 });
 ```
 
+### Progress Not Clearing
+
+If progress indicator stays after task completion:
+
+1. Check for errors in tool execution
+2. Verify `tool_execution_end` event is fired
+3. Check logs for DraftStream flush errors
+
+---
+
+## Best Practices
+
+1. **Use appropriate level**: 
+   - `minimal` for production
+   - `normal` for development
+   - `verbose` for debugging
+
+2. **Configure per channel**: Different channels may need different stream modes
+
+3. **Monitor performance**: Excessive updates can impact performance
+
+4. **Test with long tasks**: Verify heartbeat works for tasks > 30 seconds
+
+---
+
 ## Related
 
-- [Channels](channels.md) - Telegram channel configuration
-- [Architecture](architecture.md) - System architecture overview
+- [Channels](/channels) - Telegram channel configuration
+- [Architecture](/architecture) - System architecture overview
+- [Tools](/tools) - Built-in tools reference

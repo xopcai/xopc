@@ -2,6 +2,8 @@
 
 REST API gateway for external programs to interact with xopcbot.
 
+---
+
 ## Start Gateway
 
 ### Foreground Mode (Recommended)
@@ -14,9 +16,9 @@ Default port: `18790`
 
 The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 
-### Force Start (Kill Existing Process)
+### Force Start
 
-If the port is already in use, use `--force` to automatically kill the existing process:
+If the port is already in use:
 
 ```bash
 xopcbot gateway --force
@@ -28,6 +30,8 @@ This will:
 3. Send SIGKILL if still running
 4. Start the new gateway instance
 
+---
+
 ## Process Management Commands
 
 ### Check Status
@@ -36,7 +40,7 @@ This will:
 xopcbot gateway status
 ```
 
-Example output:
+**Example output:**
 ```
 ✅ Gateway is running
 
@@ -74,7 +78,7 @@ xopcbot gateway restart
 xopcbot gateway restart --force
 ```
 
-**Note**: SIGUSR1 restart requires `XOPCBOT_ALLOW_SIGUSR1_RESTART=1` environment variable.
+> **Note:** SIGUSR1 restart requires `XOPCBOT_ALLOW_SIGUSR1_RESTART=1` environment variable.
 
 ### View Logs
 
@@ -88,6 +92,8 @@ xopcbot gateway logs --lines 100
 # Follow logs in real-time (like tail -f)
 xopcbot gateway logs --follow
 ```
+
+---
 
 ## System Service Management
 
@@ -107,17 +113,16 @@ xopcbot supports running the gateway as a system service for automatic startup.
 xopcbot gateway install
 ```
 
-**Options**:
+**Options:**
 
 | Option | Description |
 |--------|-------------|
 | `--port <number>` | Gateway port (default: 18790) |
 | `--host <address>` | Host to bind to (default: 0.0.0.0) |
 | `--token <token>` | Authentication token |
-| `--runtime <runtime>` | Runtime: node or binary (default: node) |
+| `--runtime <runtime>` | Runtime: node or binary |
 
-**Example**:
-
+**Example:**
 ```bash
 xopcbot gateway install --port 8080 --token my-secret-token
 ```
@@ -137,37 +142,7 @@ xopcbot gateway service-status
 xopcbot gateway uninstall
 ```
 
-### Service Status Output
-
-```bash
-xopcbot gateway service-status
-```
-
-Example output:
-```
-📋 Service Status
-────────────────
-Installed: Yes
-Status: running
-PID: 12345
-
-📝 Configuration
-────────────────
-Program: node
-Args: /path/to/xopcbot gateway --port 18790
-Working Dir: /home/user
-
-🌐 Access
-─────────
-URL: http://localhost:18790
-
-📝 Commands
-───────────
-  xopcbot gateway service-start   # Start service
-  xopcbot gateway stop            # Stop (process)
-  xopcbot gateway restart         # Restart (process)
-  xopcbot gateway uninstall      # Remove service
-```
+---
 
 ## Process Architecture
 
@@ -213,6 +188,8 @@ lsof -i :18790
 xopcbot gateway --force
 ```
 
+---
+
 ## API Endpoints
 
 ### Send Message
@@ -224,12 +201,12 @@ Content-Type: application/json
 {
   "channel": "telegram",
   "chat_id": "123456789",
-  "content": "Hello from API!"
+  "content": "Hello from API!",
+  "accountId": "personal"
 }
 ```
 
-**Response**:
-
+**Response:**
 ```json
 {
   "status": "ok",
@@ -250,8 +227,7 @@ Content-Type: application/json
 }
 ```
 
-**Response**:
-
+**Response:**
 ```json
 {
   "status": "ok",
@@ -271,8 +247,7 @@ Content-Type: application/json
 }
 ```
 
-**Response**:
-
+**Response:**
 ```json
 {
   "status": "ok",
@@ -292,8 +267,7 @@ Content-Type: application/json
 }
 ```
 
-**Response**:
-
+**Response:**
 ```json
 {
   "status": "ok",
@@ -307,14 +281,15 @@ Content-Type: application/json
 GET /health
 ```
 
-**Response**:
-
+**Response:**
 ```json
 {
   "status": "healthy",
   "uptime": 3600
 }
 ```
+
+---
 
 ## Complete API List
 
@@ -332,7 +307,13 @@ GET /health
 | GET | `/api/logs` | Query logs (auth required) |
 | POST | `/api/cron/create` | Create scheduled task |
 | DELETE | `/api/cron/:id` | Delete scheduled task |
-| POST | `/api/cron/:id/toggle` | Enable/disable scheduled task |
+| POST | `/api/cron/:id/toggle` | Enable/disable task |
+| GET | `/api/providers` | List LLM providers |
+| GET | `/api/models` | List available models |
+| GET | `/api/models-json` | Get models.json config |
+| PATCH | `/api/models-json` | Save models.json |
+
+---
 
 ## Error Responses
 
@@ -347,7 +328,7 @@ All API errors follow this format:
 }
 ```
 
-**Error codes**:
+**Error codes:**
 
 | Error Code | Description |
 |------------|-------------|
@@ -357,26 +338,9 @@ All API errors follow this format:
 | `AGENT_ERROR` | Agent processing error |
 | `INTERNAL_ERROR` | Internal error |
 
+---
+
 ## Usage Examples
-
-### CLI Management
-
-```bash
-# Start gateway (foreground)
-xopcbot gateway
-
-# Check status
-xopcbot gateway status
-
-# View logs
-xopcbot gateway logs --lines 20
-
-# Restart gateway
-xopcbot gateway restart
-
-# Stop gateway
-xopcbot gateway stop
-```
 
 ### cURL
 
@@ -451,28 +415,31 @@ def chat(message):
     return resp.json()
 ```
 
-## Webhook Integration
-
-Supports receiving webhook callbacks:
-
-```http
-POST /api/webhook/:channel
-Content-Type: application/json
-
-{
-  "event": "message",
-  "data": { ... }
-}
-```
+---
 
 ## Authentication
 
-⚠️ Current version has no API authentication.
+⚠️ **Current version has no API authentication enabled by default.**
 
 For production, recommended:
 - Add Basic Auth via Nginx/Traefik
-- Or configure API Key via `.env`
+- Or configure API Key via config
 - Limit accessible IPs
+
+### Configure Auth
+
+```json
+{
+  "gateway": {
+    "auth": {
+      "enabled": true,
+      "api_key": "your-secret-token"
+    }
+  }
+}
+```
+
+---
 
 ## Configuration
 
@@ -482,7 +449,12 @@ For production, recommended:
     "host": "0.0.0.0",
     "port": 18790,
     "auth": {
-      "token": "your-secret-token"
+      "enabled": true,
+      "api_key": "your-secret-token"
+    },
+    "cors": {
+      "enabled": true,
+      "origins": ["http://localhost:3000"]
     }
   }
 }
@@ -492,67 +464,100 @@ For production, recommended:
 |-----------|---------|-------------|
 | `host` | `0.0.0.0` | Bind address |
 | `port` | `18790` | Port number |
-| `auth.token` | `null` | API auth token (optional) |
+| `auth.enabled` | `false` | Enable authentication |
+| `auth.api_key` | `null` | API auth token |
+| `cors.enabled` | `false` | Enable CORS |
+| `cors.origins` | `[]` | Allowed origins |
 
-## Lock File
+---
 
-Gateway lock file location: `~/.xopcbot/locks/gateway.{hash}.lock`
-
-The hash is based on config file path, allowing multiple gateways with different configs.
-
-### Port Conflict Detection
-
-On startup, it automatically detects port occupancy. If port is already in use:
-
-```
-❌ Port 18790 is already in use. Use --force to kill existing process.
-```
-
-Use `--force` to automatically kill the existing process:
-
-```bash
-xopcbot gateway --force
-```
-
-### Graceful Shutdown
+## Graceful Shutdown
 
 Gateway supports graceful shutdown:
-1. After receiving stop signal, wait 5 seconds for existing requests to complete
+1. After receiving stop signal, wait 5 seconds for existing requests
 2. If requests still pending after 5 seconds, force terminate
 3. Automatically release lock file
 
-Timeout can be customized via `--timeout` parameter:
+Timeout can be customized:
 
 ```bash
 xopcbot gateway stop --timeout 10000  # 10 second timeout
 ```
 
+---
+
 ## Environment Variables
 
 | Variable | Description |
 |----------|-------------|
-| `XOPCBOT_NO_RESPAWN` | Disable process respawn, use in-process restart |
+| `XOPCBOT_NO_RESPAWN` | Disable process respawn |
 | `XOPCBOT_ALLOW_SIGUSR1_RESTART` | Allow SIGUSR1 to trigger restart |
-| `XOPCBOT_SERVICE_MARKER` | Mark running under supervisor (systemd/launchd) |
+| `XOPCBOT_SERVICE_MARKER` | Mark running under supervisor |
+
+---
 
 ## CORS Configuration
 
-To access from browser, add CORS headers (via proxy or middleware).
+To access from browser, add CORS headers:
 
-## Migration from Old Version
+```json
+{
+  "gateway": {
+    "cors": {
+      "enabled": true,
+      "origins": ["http://localhost:3000"],
+      "credentials": true
+    }
+  }
+}
+```
 
-If you were using the old background mode:
+---
 
-1. Stop old gateway:
-   ```bash
-   ps aux | grep xopcbot
-   kill -9 <PID>
-   rm ~/.xopcbot/gateway.pid
-   ```
+## Web UI
 
-2. Start new gateway:
-   ```bash
-   xopcbot gateway
-   ```
+The gateway serves the Web UI at `/ui/`:
 
-3. Use `Ctrl+C` to stop, or `xopcbot gateway stop` from another terminal.
+```bash
+# Start gateway
+xopcbot gateway
+
+# Open in browser
+open http://localhost:18790/ui/
+```
+
+**Features:**
+- Real-time chat with WebSocket
+- Session management
+- Configuration dialog
+- Log viewer
+- Cron job management
+- Models configuration
+
+---
+
+## Troubleshooting
+
+### Port Already in Use
+
+```bash
+# Check what's using the port
+lsof -i :18790
+
+# Force start (kills existing process)
+xopcbot gateway --force
+```
+
+### Gateway Won't Start
+
+1. Check logs: `xopcbot gateway logs`
+2. Verify config is valid JSON
+3. Check if lock file exists: `~/.xopcbot/locks/`
+4. Remove stale lock file if needed
+
+### API Not Responding
+
+1. Check gateway status: `xopcbot gateway status`
+2. Verify port is correct
+3. Check firewall settings
+4. Review gateway logs for errors

@@ -1,132 +1,166 @@
 # Getting Started
 
-This guide provides a complete walkthrough for setting up **xopcbot** for the first time. We'll cover installation, configuration, and running the agent in different modes.
+This guide provides a complete walkthrough for setting up **xopcbot** for the first time.
 
 ## 1. Prerequisites
 
-Before you begin, ensure you have the following installed:
+Before you begin, ensure you have:
 
-- **Node.js**: You need version **22.0.0** or newer. You can check your version with `node -v`.
-- **npm** or **pnpm**: Your preferred package manager.
+- **Node.js**: Version **22.0.0** or newer (`node -v`)
+- **pnpm**: Recommended package manager (`pnpm --version`)
+
+> **Note:** This project uses `pnpm`. Do NOT use `npm` for package management.
 
 ## 2. Installation
 
 ### Option 1: Install from npm (Recommended)
 
 ```bash
-# Install globally
 npm install -g @xopcai/xopcbot
-# or: npm add -g @xopcai/xopcbot
 ```
 
 ### Option 2: Build from source
 
-Clone the repository from GitHub and install the dependencies:
-
 ```bash
 git clone https://github.com/xopcai/xopcbot.git
 cd xopcbot
-npm install
-# or: npm install
+pnpm install
+pnpm run build
 ```
 
 ## 3. Configuration
 
-The easiest way to set up your configuration is with the interactive `onboard` command.
+### Interactive Setup (Recommended)
+
+Use the `onboard` wizard for guided setup:
 
 ```bash
 xopcbot onboard
-# or: npm run dev -- onboard
+# or: pnpm run dev -- onboard
 ```
 
-This command will:
-1.  Create the workspace directory with bootstrap files (`~/.xopcbot/workspace/`).
-2.  Generate a default `config.json` file at `~/.xopcbot/config.json`.
-3.  Prompt you to select an LLM provider and enter your API key.
-4.  Guide you through configuring messaging channels (Telegram).
-5.  Configure and start the Gateway WebUI.
+The wizard will guide you through:
+1. Creating workspace directory (`~/.xopcbot/workspace/`)
+2. Generating default `config.json`
+3. Selecting an LLM provider and entering API key
+4. Configuring messaging channels (Telegram)
+5. Setting up Gateway WebUI
 
-**Alternative: Quick setup**
+### Quick Setup
 
-If you only want to set up the basic files without interactive prompts:
+For minimal setup without interactive prompts:
 
 ```bash
 xopcbot setup
 ```
 
-Your API key will be securely stored in the configuration file.
+This creates basic config and workspace files only.
 
-## 4. First Interaction (CLI)
+### Manual Configuration
 
-Once configured, you can immediately start interacting with your agent through the command line.
+Edit `~/.xopcbot/config.json` directly:
 
-#### Single Message Mode
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-sonnet-4-5",
+      "max_tokens": 8192,
+      "temperature": 0.7
+    }
+  },
+  "providers": {
+    "anthropic": "${ANTHROPIC_API_KEY}"
+  }
+}
+```
 
-Use the `-m` flag to send a single message and receive a response.
+> **Tip:** Use environment variables for API keys (e.g., `ANTHROPIC_API_KEY`).
+
+## 4. First Interaction
+
+### Single Message Mode
+
+Send a single message and get a response:
 
 ```bash
 xopcbot agent -m "Explain what an LLM is in one sentence."
-# or: npm run dev -- agent -m "Explain what an LLM is in one sentence."
+# or: pnpm run dev -- agent -m "Explain what an LLM is"
 ```
 
-#### Interactive Mode
+### Interactive Mode
 
-For a continuous conversation, use the `-i` flag to enter interactive mode.
+Start a continuous conversation:
 
 ```bash
 xopcbot agent -i
-# or: npm run dev -- agent -i
+# or: pnpm run dev -- agent -i
 ```
 
-You'll be presented with a `You:` prompt. Type your messages and press Enter. To exit, press `Ctrl+C`.
+You'll see a `You:` prompt. Type messages and press Enter. Exit with `Ctrl+C`.
 
-## 5. Running with Channels (Gateway Mode)
+## 5. Running with Channels
 
-To connect your agent to messaging platforms like Telegram, you need to run it in **Gateway Mode**.
+### Telegram Setup
 
-#### a. Configure Your Channel
+1. **Get Bot Token**: Open Telegram, search [@BotFather](https://t.me/BotFather), send `/newbot`
 
-First, edit your `~/.xopcbot/config.json` file and add the required information for your channel. For Telegram, you need your bot token.
+2. **Configure** in `~/.xopcbot/config.json`:
 
-```jsonc
-// ~/.xopcbot/config.json
+```json
 {
-  // ... other config ...
   "channels": {
     "telegram": {
       "enabled": true,
-      "token": "123456:ABC-DEF1234567890", // <-- Add your bot token here
-      "allowFrom": ["your_telegram_user_id"] // Optional: Restrict access
+      "token": "YOUR_BOT_TOKEN",
+      "dmPolicy": "allowlist",
+      "allowFrom": [123456789]
     }
   }
 }
 ```
 
-See the [Channels documentation](channels.md) for more details.
-
-#### b. Start the Gateway
-
-Run the `gateway` command. This starts a long-running process that connects to your configured channels and listens for messages.
+3. **Start Gateway**:
 
 ```bash
 xopcbot gateway
-# or: npm run dev -- gateway
+# or: pnpm run dev -- gateway
 ```
 
-The gateway runs in **foreground mode** by default. Press `Ctrl+C` to stop it.
+4. **Chat**: Open Telegram and message your bot
 
-If the port is already in use, you can force start:
+### Web UI
 
-```bash
-xopcbot gateway --force
-```
+Access the Web UI at `http://localhost:18790` after starting the gateway.
 
-You can now open your Telegram client and start a conversation with your bot. Any messages you send will be processed by the agent.
+## 6. What's Next?
 
-## What's Next?
+Explore these guides to unlock more features:
 
-You now have a fully functional xopcbot! Here are a few suggestions for what to explore next:
+| Guide | Description |
+|-------|-------------|
+| [CLI Reference](/cli) | All available commands |
+| [Configuration](/configuration) | Full config reference |
+| [Extensions](/extensions) | Extend functionality |
+| [Skills](/skills) | Add domain-specific knowledge |
+| [Tools](/tools) | Built-in tools reference |
+| [Channels](/channels) | Multi-channel setup |
+| [Models](/models) | LLM provider configuration |
 
-- **[CLI Reference](cli.md)**: Discover all the available commands to manage your bot.
-- **[Configuration](configuration.md)**: Learn about all the settings you can tweak in `config.json`.
-- **[Extensions](extensions.md)**: Explore how to extend your agent's capabilities with extensions.
+## Troubleshooting
+
+### Common Issues
+
+| Issue | Solution |
+|-------|----------|
+| `ERR_MODULE_NOT_FOUND` | Run `pnpm install` |
+| `Cannot find module '@xopcai/...'` | Run `pnpm run build` |
+| Config not loading | Verify `~/.xopcbot/config.json` is valid JSON |
+| Bot not responding | Check `TELEGRAM_BOT_TOKEN` and bot status |
+| API key errors | Verify environment variables are set |
+
+### Getting Help
+
+- Check [Documentation](/) for detailed guides
+- Review [AGENTS.md](https://github.com/xopcai/xopcbot/blob/main/AGENTS.md) for development guide
+- View logs: `xopcbot gateway logs --follow`

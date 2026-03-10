@@ -7,59 +7,55 @@ xopcbot provides a rich set of CLI commands for management, conversation, and co
 ### Install from npm (recommended)
 
 ```bash
-# Install globally
 npm install -g @xopcai/xopcbot
-
-# Use directly
 xopcbot <command>
 ```
 
 ### Run from source (development)
 
 ```bash
-# Clone and install
 git clone https://github.com/xopcai/xopcbot.git
 cd xopcbot
 pnpm install
 
-# Use pnpm run dev -- prefix
 pnpm run dev -- <command>
 ```
 
-**The examples in this document use `xopcbot` command by default.** If you're running from source, replace `xopcbot` with `pnpm run dev --`.
+> **Note:** Examples in this document use `xopcbot`. If running from source, replace with `pnpm run dev --`.
 
 ---
 
-## Command List
+## Command Overview
 
 | Command | Description |
 |---------|-------------|
-| `setup` | Initialize config file and workspace directory |
-| `onboard` | Interactive setup wizard (LLM, channels, gateway) |
+| `setup` | Initialize config and workspace |
+| `onboard` | Interactive setup wizard |
 | `agent` | Chat with Agent |
 | `gateway` | Start REST gateway |
 | `cron` | Manage scheduled tasks |
 | `extension` | Manage extensions |
-| `skills` | Manage skills (install, enable, configure, test) |
-| `config` | View and edit configuration (non-interactive) |
+| `skills` | Manage skills |
+| `config` | View/edit configuration |
+| `session` | Manage sessions |
 
 ---
 
 ## setup
 
-Initialize config file and workspace directory only (without interactive prompts).
+Initialize config file and workspace directory only.
 
 ```bash
 xopcbot setup
 ```
 
-**Parameters**:
+**Parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
-| `--workspace <path>` | Workspace directory path (default: ~/.xopcbot/workspace) |
+| `--workspace <path>` | Workspace directory path |
 
-**Examples**:
+**Examples:**
 
 ```bash
 # Create default config and workspace
@@ -69,21 +65,21 @@ xopcbot setup
 xopcbot setup --workspace ~/my-workspace
 ```
 
-**What it does**:
+**What it does:**
 - Creates `~/.xopcbot/config.json` (if not exists)
-- Creates workspace directory with bootstrap files (AGENTS.md, BOOTSTRAP.md, etc.)
+- Creates workspace directory with bootstrap files
 
 ---
 
 ## onboard
 
-Interactive setup wizard for xopcbot. This is the recommended way to set up xopcbot.
+Interactive setup wizard for xopcbot.
 
 ```bash
 xopcbot onboard
 ```
 
-**Options**:
+**Options:**
 
 | Option | Description |
 |--------|-------------|
@@ -92,7 +88,7 @@ xopcbot onboard
 | `--gateway` | Configure gateway WebUI only |
 | `--all` | Configure everything (default) |
 
-**Examples**:
+**Examples:**
 
 ```bash
 # Full interactive setup (default)
@@ -103,26 +99,13 @@ xopcbot onboard --model
 
 # Configure channels only
 xopcbot onboard --channels
-
-# Configure gateway only
-xopcbot onboard --gateway
 ```
 
-**Features** (when running without options):
+**Features:**
 - Auto-detects if workspace needs setup
 - Configure LLM provider and model
 - Configure messaging channels (Telegram)
 - Configure gateway WebUI with auto-generated token
-- Display gateway start command after completion
-
-**After completion**:
-
-After onboard completes, it will display:
-- Gateway access URL
-- Token information
-- Command to start gateway
-
-**Note**: Gateway runs in foreground mode by default. Press `Ctrl+C` to stop, or use `xopcbot gateway stop` from another terminal.
 
 ---
 
@@ -130,13 +113,13 @@ After onboard completes, it will display:
 
 Chat with Agent.
 
-### Single conversation
+### Single Message
 
 ```bash
 xopcbot agent -m "Hello, world!"
 ```
 
-**Parameters**:
+**Parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
@@ -144,14 +127,13 @@ xopcbot agent -m "Hello, world!"
 | `-s, --session` | Session key (default: default) |
 | `-i, --interactive` | Interactive mode |
 
-### Interactive mode
+### Interactive Mode
 
 ```bash
 xopcbot agent -i
 ```
 
-**Usage**:
-
+**Usage:**
 ```
 > Hello!
 Bot: Hello! How can I help?
@@ -162,7 +144,7 @@ Bot: File listing...
 > quit
 ```
 
-### Specify session
+### Specify Session
 
 ```bash
 xopcbot agent -m "Continue our discussion" -s my-session
@@ -174,7 +156,7 @@ xopcbot agent -m "Continue our discussion" -s my-session
 
 Start REST API gateway.
 
-### Foreground mode (Default)
+### Foreground Mode (Default)
 
 ```bash
 xopcbot gateway --port 18790
@@ -182,7 +164,7 @@ xopcbot gateway --port 18790
 
 The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 
-**Parameters**:
+**Parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
@@ -191,17 +173,21 @@ The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 | `--token` | Auth token |
 | `--no-hot-reload` | Disable config hot reload |
 | `--force` | Force kill existing process on port |
-| `--background` | Start gateway in background mode (detached) |
+| `--background` | Start in background mode |
 
 ### Force Start
 
-If the port is already in use, use `--force` to automatically kill the existing process:
+If port is already in use:
 
 ```bash
 xopcbot gateway --force
 ```
 
-This will send SIGTERM, wait 700ms, then SIGKILL if needed.
+This will:
+1. Send SIGTERM to processes on the port
+2. Wait 700ms for graceful shutdown
+3. Send SIGKILL if still running
+4. Start new gateway instance
 
 ### Subcommands
 
@@ -217,23 +203,20 @@ This will send SIGTERM, wait 700ms, then SIGKILL if needed.
 | `gateway service-start` | Start via system service |
 | `gateway service-status` | Check service status |
 
-**Examples**:
+**Examples:**
 
 ```bash
 # Check status
 xopcbot gateway status
 
-# Stop gateway (SIGTERM with 5s timeout)
+# Stop gateway (graceful)
 xopcbot gateway stop
 
-# Force stop (SIGKILL immediately)
+# Force stop
 xopcbot gateway stop --force
 
-# Restart gateway (SIGUSR1 signal)
+# Restart gateway
 xopcbot gateway restart
-
-# Force restart (kill and start new)
-xopcbot gateway restart --force
 
 # View last 50 lines
 xopcbot gateway logs
@@ -249,27 +232,7 @@ xopcbot gateway install
 
 # Uninstall system service
 xopcbot gateway uninstall
-
-# Start via system service
-xopcbot gateway service-start
-
-# Check service status
-xopcbot gateway service-status
 ```
-
-### Process Management
-
-- **Lock file**: `~/.xopcbot/locks/gateway.{hash}.lock` (instead of PID file)
-- **Signals**: SIGTERM/SIGINT=stop, SIGUSR1=restart
-- **Port management**: Automatic conflict detection and resolution
-
-**Environment variables**:
-
-| Variable | Description |
-|----------|-------------|
-| `XOPCBOT_NO_RESPAWN` | Disable process respawn |
-| `XOPCBOT_ALLOW_SIGUSR1_RESTART` | Allow SIGUSR1 restart |
-| `XOPCBOT_SERVICE_MARKER` | Mark supervised environment |
 
 ---
 
@@ -277,21 +240,21 @@ xopcbot gateway service-status
 
 Manage scheduled tasks.
 
-### Add task
+### Add Task
 
 ```bash
 xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
 ```
 
-**Parameters**:
+**Parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
 | `--schedule` | Cron expression |
-| `--message` | Message to send on schedule |
+| `--message` | Message to send |
 | `--name` | Task name (optional) |
 
-**Examples**:
+**Examples:**
 
 ```bash
 # Daily at 9am
@@ -304,26 +267,20 @@ xopcbot cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!"
 xopcbot cron add --schedule "0 * * * *" --message "Hourly reminder" --name hourly
 ```
 
-### Remove task
+### Remove Task
 
 ```bash
 xopcbot cron remove <task-id>
 ```
 
-**Example**:
-
-```bash
-xopcbot cron remove abc1
-```
-
-### Enable/disable
+### Enable/Disable
 
 ```bash
 xopcbot cron enable <task-id>
 xopcbot cron disable <task-id>
 ```
 
-### Trigger task
+### Trigger Task
 
 ```bash
 xopcbot cron trigger <task-id>
@@ -333,81 +290,38 @@ xopcbot cron trigger <task-id>
 
 ## extension
 
-Manage extensions. Supports three-tier storage: workspace (./.extensions/) → global (~/.xopcbot/extensions/) → bundled.
+Manage extensions. Supports three-tier storage: workspace → global → bundled.
 
-### List extensions
+### List Extensions
 
 ```bash
 xopcbot extension list
 ```
 
-**Example output**:
-```
-📦 Installed Extensions
+### Install Extension
 
-══════════════════════════════════════════════════════════════════════
-
-  📁 Workspace (./.extensions/)
-    • My Custom Extension @ 0.1.0
-      ID: my-custom-extension
-
-  🌐 Global (~/.xopcbot/extensions/)
-    • Telegram Channel @ 1.2.0
-      ID: telegram-channel
-
-  📦 Bundled (built-in)
-    • Discord Channel @ 2.0.0
-      ID: discord-channel
-```
-
-### Install extension
-
-**Install from npm to workspace** (default):
 ```bash
-xopcbot extension install <package-name>
-
-# Examples
+# Install from npm to workspace (default)
 xopcbot extension install xopcbot-extension-telegram
-xopcbot extension install @scope/my-extension
-xopcbot extension install my-extension@1.0.0
-```
 
-**Install to global** (shared across projects):
-```bash
-xopcbot extension install <package-name> --global
-
-# Example
+# Install to global (shared across projects)
 xopcbot extension install xopcbot-extension-telegram --global
-```
 
-**Install from local directory**:
-```bash
-# Install to workspace
+# Install from local directory
 xopcbot extension install ./my-local-extension
 
-# Install to global
-xopcbot extension install ./my-local-extension --global
+# Set timeout (default 120 seconds)
+xopcbot extension install slow-extension --timeout 300000
 ```
 
-**Parameters**:
+**Parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
-| `--global` | Install to global directory (~/.xopcbot/extensions/) |
-| `--timeout <ms>` | Installation timeout (default 120000ms) |
+| `--global` | Install to global directory |
+| `--timeout <ms>` | Installation timeout |
 
-**Installation flow**:
-1. Download/copy extension files
-2. Validate `xopcbot.extension.json` manifest
-3. Install dependencies (if `package.json` has dependencies)
-4. Copy to target directory (workspace/.extensions/ or ~/.xopcbot/extensions/)
-
-**Three-tier storage explanation**:
-- Workspace (./.extensions/): Project private, highest priority
-- Global (~/.xopcbot/extensions/): User-level shared
-- Bundled: Built-in extensions, lowest priority
-
-### Remove extension
+### Remove Extension
 
 ```bash
 xopcbot extension remove <extension-id>
@@ -415,46 +329,19 @@ xopcbot extension remove <extension-id>
 xopcbot extension uninstall <extension-id>
 ```
 
-**Example**:
-```bash
-xopcbot extension remove telegram-channel
-```
-
-**Note**:
-- First tries to remove from workspace, then global if not found
-- After removal, if enabled, also need to delete from config file
-
-### View extension details
+### View Extension Details
 
 ```bash
 xopcbot extension info <extension-id>
 ```
 
-**Example**:
-```bash
-xopcbot extension info telegram-channel
-```
-
-**Output**:
-```
-📦 Extension: Telegram Channel
-
-  ID: telegram-channel
-  Version: 1.2.0
-  Kind: channel
-  Description: Telegram channel integration
-  Path: /home/user/.xopcbot/workspace/.extensions/telegram-channel
-```
-
-### Create extension
-
-Create new extension scaffold.
+### Create Extension
 
 ```bash
 xopcbot extension create <extension-id> [options]
 ```
 
-**Parameters**:
+**Parameters:**
 
 | Parameter | Description |
 |-----------|-------------|
@@ -462,7 +349,7 @@ xopcbot extension create <extension-id> [options]
 | `--description <desc>` | Extension description |
 | `--kind <kind>` | Extension type: `channel`, `provider`, `memory`, `tool`, `utility` |
 
-**Examples**:
+**Examples:**
 
 ```bash
 # Create a tool extension
@@ -470,61 +357,15 @@ xopcbot extension create weather-tool --name "Weather Tool" --kind tool
 
 # Create a channel extension
 xopcbot extension create discord-channel --name "Discord Channel" --kind channel
-
-# Create a memory extension
-xopcbot extension create redis-memory --name "Redis Memory" --kind memory
-```
-
-**Generated files**:
-```
-.extensions/
-└── my-extension/
-    ├── package.json          # npm config
-    ├── index.ts              # Extension entry (TypeScript)
-    ├── xopcbot.extension.json   # Extension manifest
-    └── README.md             # Documentation template
-```
-
-**Note**: Created extensions use TypeScript, loaded via [jiti](https://github.com/unjs/jiti) without precompilation.
-
----
-
-## Global Options
-
-### Workspace path
-
-```bash
---workspace /path/to/workspace
-```
-
-### Config file
-
-```bash
---config /path/to/config.json
-```
-
-### Verbose output
-
-```bash
---verbose
-```
-
-### Help
-
-```bash
-xopcbot --help
-xopcbot agent --help
-xopcbot gateway --help
-xopcbot extension --help
 ```
 
 ---
 
 ## skills
 
-CLI commands for managing skills.
+Manage skills (install, enable, configure, test).
 
-### List skills
+### List Skills
 
 ```bash
 xopcbot skills list
@@ -532,7 +373,7 @@ xopcbot skills list -v          # Verbose output
 xopcbot skills list --json      # JSON format
 ```
 
-### Install skill dependencies
+### Install Skill Dependencies
 
 ```bash
 xopcbot skills install <skill-name>
@@ -540,14 +381,14 @@ xopcbot skills install <skill-name> -i <install-id>   # Specify installer
 xopcbot skills install <skill-name> --dry-run         # Dry run
 ```
 
-### Enable/disable skills
+### Enable/Disable Skills
 
 ```bash
 xopcbot skills enable <skill-name>
 xopcbot skills disable <skill-name>
 ```
 
-### View skill status
+### View Skill Status
 
 ```bash
 xopcbot skills status
@@ -555,7 +396,7 @@ xopcbot skills status <skill-name>
 xopcbot skills status --json
 ```
 
-### Security audit
+### Security Audit
 
 ```bash
 xopcbot skills audit
@@ -563,7 +404,7 @@ xopcbot skills audit <skill-name>
 xopcbot skills audit <skill-name> --deep    # Verbose output
 ```
 
-### Configure skill
+### Configure Skill
 
 ```bash
 xopcbot skills config <skill-name> --show
@@ -571,7 +412,7 @@ xopcbot skills config <skill-name> --api-key=KEY
 xopcbot skills config <skill-name> --env KEY=value
 ```
 
-### Test skill
+### Test Skill
 
 ```bash
 # Test all skills
@@ -589,34 +430,143 @@ xopcbot skills test --format json
 # Skip specific tests
 xopcbot skills test --skip-security
 xopcbot skills test --skip-examples
-
-# Validate SKILL.md file
-xopcbot skills test validate ./skills/weather/SKILL.md
-
-# Check dependencies
-xopcbot skills test check-deps
-
-# Security audit
-xopcbot skills test security --deep
 ```
 
-**Test output formats**:
+---
 
-| Format | Description |
-|--------|-------------|
-| `text` | Human-readable text output (default) |
-| `json` | JSON format for machine parsing |
-| `tap` | TAP format for CI/CD integration |
+## session
 
-**Test types**:
+Manage conversation sessions.
 
-| Test | Description |
-|------|-------------|
-| SKILL.md format | Validate YAML frontmatter and required fields |
-| Dependency check | Check if declared binaries are available |
-| Security scan | Scan for dangerous code patterns |
-| Metadata integrity | Check optional fields like emoji, homepage |
-| Example validation | Validate code block syntax |
+### List Sessions
+
+```bash
+# List all sessions
+xopcbot session list
+
+# Filter by status
+xopcbot session list --status active
+xopcbot session list --status archived
+xopcbot session list --status pinned
+
+# Search by name or content
+xopcbot session list --query "project"
+
+# Sort and limit
+xopcbot session list --sort updatedAt --order desc --limit 50
+```
+
+### View Session Details
+
+```bash
+# Show session info and recent messages
+xopcbot session info telegram:123456
+
+# Search within a session
+xopcbot session grep telegram:123456 "API design"
+```
+
+### Manage Sessions
+
+```bash
+# Rename a session
+xopcbot session rename telegram:123456 "Project Discussion"
+
+# Add tags
+xopcbot session tag telegram:123456 work important
+
+# Remove tags
+xopcbot session untag telegram:123456 important
+
+# Archive a session
+xopcbot session archive telegram:123456
+
+# Unarchive a session
+xopcbot session unarchive telegram:123456
+
+# Pin a session
+xopcbot session pin telegram:123456
+
+# Unpin a session
+xopcbot session unpin telegram:123456
+
+# Delete a session
+xopcbot session delete telegram:123456
+
+# Export session to JSON
+xopcbot session export telegram:123456 --format json --output backup.json
+```
+
+### Statistics
+
+```bash
+xopcbot session stats
+```
+
+---
+
+## config
+
+View and edit configuration (non-interactive).
+
+### Show Configuration
+
+```bash
+xopcbot config --show
+```
+
+### Validate Configuration
+
+```bash
+xopcbot config --validate
+```
+
+### Edit Configuration
+
+```bash
+xopcbot config --edit
+```
+
+---
+
+## Global Options
+
+### Workspace Path
+
+```bash
+--workspace /path/to/workspace
+```
+
+### Config File
+
+```bash
+--config /path/to/config.json
+```
+
+### Verbose Output
+
+```bash
+--verbose
+```
+
+### Help
+
+```bash
+xopcbot --help
+xopcbot agent --help
+xopcbot gateway --help
+```
+
+---
+
+## Exit Codes
+
+| Exit Code | Description |
+|-----------|-------------|
+| `0` | Success |
+| `1` | General error |
+| `2` | Invalid arguments |
+| `3` | Configuration error |
 
 ---
 
@@ -649,31 +599,22 @@ case "$1" in
     shift
     xopcbot skills "$@"
     ;;
+  session)
+    shift
+    xopcbot session "$@"
+    ;;
   *)
-    echo "Usage: bot {chat|shell|start|cron|extension|skills}"
+    echo "Usage: bot {chat|shell|start|cron|extension|skills|session}"
     ;;
 esac
 ```
 
-Usage:
-
+**Usage:**
 ```bash
 bot chat Hello!
 bot start
 bot cron list
 bot extension list
-bot extension install xopcbot-extension-telegram
 bot skills list
-bot skills test weather
+bot session list
 ```
-
----
-
-## Exit Codes
-
-| Exit Code | Description |
-|-----------|-------------|
-| `0` | Success |
-| `1` | General error |
-| `2` | Invalid arguments |
-| `3` | Configuration error |

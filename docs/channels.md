@@ -1,26 +1,73 @@
 # Channel Configuration
 
-xopcbot supports multiple communication channels. Currently only Telegram is implemented.
+xopcbot supports multiple communication channels with an extension-based architecture.
+
+## Overview
+
+| Channel | Status | Features |
+|---------|--------|----------|
+| Telegram | ✅ | Multi-account, streaming, voice, documents |
+| Feishu/Lark | ✅ | Bot messages, mentions |
+| Web UI | ✅ | Gateway-connected chat interface |
 
 ## Telegram Channel
 
-### Configuration
-
-Add to `~/.config/xopcbot/config.json`:
+### Multi-Account Configuration
 
 ```json
 {
   "channels": {
     "telegram": {
       "enabled": true,
-      "token": "YOUR_BOT_TOKEN",
-      "allowFrom": ["@username1", "@username2"],
-      "apiRoot": "https://api.telegram.org",
-      "debug": false
+      "accounts": {
+        "personal": {
+          "name": "Personal Bot",
+          "token": "BOT_TOKEN_1",
+          "dmPolicy": "allowlist",
+          "groupPolicy": "open",
+          "allowFrom": [123456789],
+          "streamMode": "partial"
+        },
+        "work": {
+          "name": "Work Bot",
+          "token": "BOT_TOKEN_2",
+          "dmPolicy": "disabled",
+          "groupPolicy": "allowlist",
+          "groups": {
+            "-1001234567890": {
+              "requireMention": true,
+              "systemPrompt": "You are a work assistant"
+            }
+          }
+        }
+      }
     }
   }
 }
 ```
+
+### Access Control Policies
+
+**DM Policies** (`dmPolicy`):
+- `pairing` - Require pairing with user
+- `allowlist` - Only allow specified users
+- `open` - Allow all users
+- `disabled` - Disable DMs
+
+**Group Policies** (`groupPolicy`):
+- `open` - Allow all groups
+- `allowlist` - Only allow specified groups
+- `disabled` - Disable groups
+
+### Streaming Configuration
+
+**Stream Modes** (`streamMode`):
+
+| Mode | Description |
+|------|-------------|
+| `off` | Send complete message at once |
+| `partial` | Stream AI response, show progress for tools |
+| `block` | Full streaming with all updates |
 
 ### Get Bot Token
 
@@ -34,83 +81,122 @@ Add to `~/.config/xopcbot/config.json`:
 | Field | Type | Description |
 |-------|------|-------------|
 | `enabled` | boolean | Enable channel |
-| `token` | string | Bot Token |
-| `allowFrom` | string[] | Whitelist users (username or ID) |
-| `apiRoot` | string | Custom Telegram API endpoint, default `https://api.telegram.org` |
+| `accounts` | object | Multi-account configuration |
+| `accounts.<id>.token` | string | Bot Token |
+| `accounts.<id>.dmPolicy` | string | DM access policy |
+| `accounts.<id>.groupPolicy` | string | Group access policy |
+| `accounts.<id>.allowFrom` | array | Allowed user IDs |
+| `accounts.<id>.streamMode` | string | Streaming mode |
+| `apiRoot` | string | Custom Telegram API endpoint |
 | `debug` | boolean | Enable debug logs |
 
-### Usage Limits
+### Voice Messages (STT/TTS)
 
-- **Groups and private chats only**: Channels not supported
-- **Polling mode**: Uses long polling, ~1-2 second delay
-- **Media handling**: Images and other media shown as `[media]`
-
-### Startup Test
-
-```bash
-xopcbot gateway --port 18790
-```
-
-Then chat with the bot in Telegram.
-
-### FAQ
-
-**Q: Not receiving messages?**
-- Check if Token is correct
-- Confirm `enabled` is set to `true`
-- Check network connection
-
-**Q: How to add admins?**
-Modify `allowFrom` array:
+Configure voice message support:
 
 ```json
 {
-  "channels": {
-    "telegram": {
-      "token": "...",
-      "allowFrom": ["@admin1", "123456789"]
+  "stt": {
+    "enabled": true,
+    "provider": "alibaba",
+    "alibaba": {
+      "apiKey": "${DASHSCOPE_API_KEY}",
+      "model": "paraformer-v1"
+    }
+  },
+  "tts": {
+    "enabled": true,
+    "provider": "openai",
+    "trigger": "auto",
+    "openai": {
+      "apiKey": "${OPENAI_API_KEY}",
+      "model": "tts-1",
+      "voice": "alloy"
     }
   }
 }
 ```
 
+See [Voice Documentation](/voice) for details.
+
 ### Reverse Proxy Configuration
 
-In some network environments, you may need a reverse proxy to access Telegram API.
-
-**1. Configure reverse proxy**
+For restricted network environments:
 
 ```json
 {
   "channels": {
     "telegram": {
       "enabled": true,
-      "token": "YOUR_BOT_TOKEN",
-      "apiRoot": "https://your-proxy-domain.com",
-      "debug": true
+      "accounts": {
+        "default": {
+          "token": "YOUR_BOT_TOKEN",
+          "apiRoot": "https://your-proxy-domain.com"
+        }
+      }
     }
   }
 }
 ```
 
-**2. Verify connection**
+Connection is automatically verified on startup.
 
-Connection is automatically verified on startup with `getMe`:
+### Usage Limits
 
-```
-[INFO] Telegram API connection verified: {"username":"your_bot","apiRoot":"https://your-proxy-domain.com"}
-```
+- **Groups and private chats only**: Channels (broadcast) not supported
+- **Polling mode**: Uses long polling, ~1-2 second delay
+- **Voice messages**: 60 second limit for STT
+- **TTS text**: 4000 character limit
 
-**Manual test** (code):
+---
 
-```typescript
-const result = await channel.testConnection();
-if (result.success) {
-  console.log('Bot info:', result.botInfo);
-} else {
-  console.error('Connection failed:', result.error);
+## Feishu/Lark Channel
+
+### Configuration
+
+```json
+{
+  "channels": {
+    "feishu": {
+      "enabled": true,
+      "appId": "APP_ID",
+      "appSecret": "APP_SECRET",
+      "verificationToken": "VERIFICATION_TOKEN"
+    }
+  }
 }
 ```
+
+### Features
+
+- ✅ Bot messages
+- ✅ @mention handling
+- ✅ Rich text formatting
+- ✅ File attachments
+
+---
+
+## Web UI Channel
+
+The Web UI provides a browser-based chat interface.
+
+### Start Gateway
+
+```bash
+xopcbot gateway --port 18790
+```
+
+### Access
+
+Open `http://localhost:18790` in your browser.
+
+### Features
+
+- ✅ Real-time chat with WebSocket
+- ✅ Session management
+- ✅ Configuration dialog
+- ✅ Log viewer
+- ✅ Cron job management
 
 ---
 
@@ -124,7 +210,7 @@ if (result.success) {
   sender_id: '123456789',
   chat_id: '987654321',
   content: 'Hello, bot!',
-  media?: ['file_id_1', 'file_id_2'],
+  media?: string[],
   metadata?: Record<string, unknown>
 }
 ```
@@ -135,7 +221,8 @@ if (result.success) {
 {
   channel: 'telegram',
   chat_id: '987654321',
-  content: 'Hello, user!'
+  content: 'Hello, user!',
+  accountId?: string
 }
 ```
 
@@ -158,11 +245,12 @@ curl -X POST http://localhost:18790/api/message \
   -d '{
     "channel": "telegram",
     "chat_id": "123456789",
-    "content": "Hello via API!"
+    "content": "Hello via API!",
+    "accountId": "personal"
   }'
 ```
 
-### Via Extension
+### Via Extension Hook
 
 ```typescript
 api.registerHook('message_sending', async (event, ctx) => {
@@ -175,7 +263,39 @@ api.registerHook('message_sending', async (event, ctx) => {
 
 ## Best Practices
 
-1. **Set whitelist**: Production environments should set `allow_from` to restrict users
-2. **Enable logging**: View channel status via `npm run dev`
-3. **Error handling**: Channel connection failures auto-retry
-4. **Resource cleanup**: Close connections properly on service stop
+1. **Set whitelist**: Production should set `allowFrom` to restrict users
+2. **Use multi-account**: Separate personal and work bots
+3. **Configure stream mode**: Use `partial` for balanced UX
+4. **Enable logging**: Monitor channel status via logs
+5. **Error handling**: Channel failures auto-retry
+6. **Resource cleanup**: Close connections on service stop
+
+---
+
+## Troubleshooting
+
+### Not Receiving Messages
+
+1. Check if token is correct
+2. Confirm `enabled` is `true`
+3. Check network connection
+4. Verify bot status with BotFather
+
+### @mention Not Working
+
+1. Check bot username in group settings
+2. Verify `requireMention` configuration
+3. Ensure bot has group permissions
+
+### Streaming Not Showing
+
+1. Check `streamMode` is `partial` or `block`
+2. Verify channel supports streaming (Telegram only)
+3. Check logs for DraftStream errors
+
+### Voice Messages Not Working
+
+1. Confirm STT/TTS configuration
+2. Check API keys are valid
+3. Verify audio length < 60 seconds
+4. Check logs for STT/TTS errors

@@ -6,7 +6,7 @@ This document describes xopcbot's overall architecture and module relationships.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      xopcbot                               │
+│                      xopcbot                                │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐   │
@@ -17,19 +17,19 @@ This document describes xopcbot's overall architecture and module relationships.
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │                     Core                              │   │
+│  │                     Core                             │   │
 │  │  ┌─────────────────────────────────────────────┐   │   │
 │  │  │              AgentService                    │   │   │
-│  │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐      │   │   │
-│  │  │  │ Prompt  │ │ Memory  │ │ Skills  │      │   │   │
-│  │  │  │ Builder │ │ Search  │ │         │      │   │   │
-│  │  │  └─────────┘ └─────────┘ └─────────┘      │   │   │
+│  │  │  ┌─────────┐ ┌─────────┐ ┌─────────┐       │   │   │
+│  │  │  │ Prompt  │ │ Memory  │ │ Skills  │       │   │   │
+│  │  │  │ Builder │ │ Search  │ │         │       │   │   │
+│  │  │  └─────────┘ └─────────┘ └─────────┘       │   │   │
 │  │  └─────────────────────────────────────────────┘   │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │
 │  ┌─────────────────────────────────────────────────────┐   │
-│  │                    Providers                          │   │
-│  │            @mariozechner/pi-ai (20+ providers)       │   │
+│  │                   Providers                          │   │
+│  │            @mariozechner/pi-ai (20+ providers)      │   │
 │  └─────────────────────────────────────────────────────┘   │
 │                            │                                │
 └────────────────────────────┼────────────────────────────────┘
@@ -38,9 +38,55 @@ This document describes xopcbot's overall architecture and module relationships.
         │                    │                    │
         ▼                    ▼                    ▼
   ┌──────────┐        ┌──────────┐        ┌──────────┐
-  │Telegram │        │  Cron    │        │ Gateway  │
-  │ Channel │        │ Scheduler │        │   API    │
+  │ Telegram │        │   Cron   │        │ Gateway  │
+  │ Channel  │        │ Scheduler│        │   API    │
   └──────────┘        └──────────┘        └──────────┘
+```
+
+## Project Structure
+
+```
+src/
+├── agent/              # Core agent logic (pi-agent-core based)
+│   ├── service.ts      #   Main AgentService class
+│   ├── memory/         #   Session persistence & compaction
+│   ├── prompt/         #   Prompt builder system
+│   ├── tools/          #   Built-in tools (Typebox schemas)
+│   └── progress.ts     #   Progress feedback system
+├── bus/                # Event bus for message routing
+├── channels/           # Channel integrations
+│   ├── telegram/       #   Telegram extension (multi-account)
+│   │   ├── extension.ts   #     Main implementation
+│   │   ├── client.ts      #     Bot client wrapper
+│   │   ├── webhook.ts     #     Webhook server support
+│   │   └── command-handler.ts  # Bot command handlers
+│   ├── types.ts        #   Channel extension interfaces
+│   ├── manager.ts      #   Channel lifecycle manager
+│   ├── access-control.ts     # Access control policies
+│   ├── draft-stream.ts       # Streaming message preview
+│   └── format.ts             # Markdown to HTML formatter
+├── cli/                # CLI commands with self-registration
+│   ├── commands/       #   Individual command modules
+│   ├── registry.ts     #   Command registration system
+│   └── index.ts        #   CLI entry point
+├── config/             # Configuration management (Zod schemas)
+├── cron/               # Scheduled tasks
+├── gateway/            # HTTP/WebSocket gateway server
+├── heartbeat/          # Proactive monitoring
+├── providers/          # LLM provider registry (pi-ai wrapper)
+├── session/            # Conversation session management
+├── types/              # Shared TypeScript types
+├── ui/                 # Web UI components (Lit-based)
+│   └── src/
+│       ├── index.ts              # Main entry
+│       ├── gateway-chat.ts       # Gateway-connected chat
+│       ├── components/           # UI components
+│       ├── dialogs/              # Dialog components
+│       └── utils/                # Utilities (i18n, format)
+└── utils/              # Shared utilities
+    ├── logger.ts       #   Contextual logging
+    ├── log-store.ts    #   Log storage & querying
+    └── markdown/       #   Markdown processing
 ```
 
 ## Core Modules
@@ -53,7 +99,7 @@ AgentService is the core orchestrator responsible for:
 2. **Prompt Building** - Build system prompt from SOUL.md/USER.md/AGENTS.md/TOOLS.md
 3. **Memory Management** - Session message storage and context compression
 4. **Tool Execution** - Unified execution of built-in tools + extension tools
-5. **Extension Integration** - Load extension tools and hooks
+5. **Progress Feedback** - Real-time updates for long-running tasks
 
 ### Prompt Builder (`src/agent/prompt/`)
 
@@ -62,11 +108,9 @@ Modular prompt building system:
 ```
 src/agent/prompt/
 ├── index.ts         # PromptBuilder - main builder
-│                    # buildIdentitySection, buildMemorySection, etc.
 ├── modes.ts         # Prompt modes (full/minimal/none)
 ├── memory/
 │   └── index.ts     # memory_search, memory_get tools
-│                    # Semantic search of MEMORY.md and memory/*.md
 └── skills.ts        # Skills loading system
 ```
 
@@ -87,20 +131,45 @@ src/agent/prompt/
 
 ### Built-in Tools (`src/agent/tools/`)
 
-| Tool | File | Description |
+| Tool | Name | Description |
 |------|------|-------------|
-| `read_file` | read.ts | Read file content |
-| `write_file` | write.ts | Create/overwrite file |
-| `edit_file` | edit.ts | Precise file editing |
-| `list_dir` | list-dir.ts | List directory contents |
-| `shell` | shell.ts | Execute shell commands |
-| `grep` | grep.ts | Text search |
-| `find` | find.ts | File search |
-| `web_search` | web.ts | Web search |
-| `web_fetch` | web.ts | Web scraping |
-| `send_message` | communication.ts | Send messages |
-| `memory_search` | memory-tool.ts | Search memory files |
-| `memory_get` | memory-tool.ts | Read memory snippets |
+| 📄 Read | `read_file` | Read file content (truncated to 50KB/500 lines) |
+| ✍️ Write | `write_file` | Create or overwrite file |
+| ✏️ Edit | `edit_file` | Replace text in file |
+| 📂 List | `list_dir` | List directory contents |
+| 💻 Shell | `shell` | Execute shell commands (5min timeout) |
+| 🔍 Search | `grep` | Text search in files |
+| 📄 Find | `find` | Find files by pattern |
+| 🔍 Web Search | `web_search` | Web search via Brave Search |
+| 📄 Web Fetch | `web_fetch` | Fetch web page content |
+| 📤 Message | `send_message` | Send messages to channels |
+| 🔍 Memory Search | `memory_search` | Search memory files |
+| 📄 Memory Get | `memory_get` | Read memory snippets |
+
+### Progress Feedback (`src/agent/progress.ts`)
+
+Real-time progress tracking for long-running tasks:
+
+```typescript
+// Tool execution feedback
+manager.onToolStart('read_file', { path: '/file.txt' });
+// → Shows: 📖 读取中...
+
+// Heartbeat for tasks > 30s
+manager.onHeartbeat(elapsed, stage);
+// → Shows: ⏱️ 已进行 45 秒
+```
+
+**Progress Stages**:
+
+| Stage | Emoji | Trigger |
+|-------|-------|---------|
+| thinking | 🤔 | LLM reasoning |
+| searching | 🔍 | web_search, grep |
+| reading | 📖 | read_file |
+| writing | ✍️ | write_file, edit_file |
+| executing | ⚙️ | shell commands |
+| analyzing | 📊 | Data analysis |
 
 ### Session Memory (`src/agent/memory/`)
 
@@ -108,8 +177,43 @@ src/agent/prompt/
 src/agent/memory/
 ├── store.ts       # MemoryStore - session message storage
 └── compaction.ts  # SessionCompactor - context compression
-                  # Supports extractive/abstractive/structured modes
 ```
+
+**Compaction Modes**:
+- `extractive` - Summarize using key sentences
+- `abstractive` - LLM-based summarization
+- `structured` - Preserve structured data
+
+### Channel Extensions (`src/channels/`)
+
+Extension-based channel architecture:
+
+```typescript
+import { telegramExtension } from './channels/index.js';
+
+// Initialize
+await telegramExtension.init({ bus, config, channelConfig });
+await telegramExtension.start();
+
+// Send message
+await telegramExtension.send({
+  chatId: '123456',
+  content: 'Hello World',
+  accountId: 'personal',
+});
+
+// Streaming preview
+const stream = telegramExtension.startStream({ chatId: '123456' });
+stream.update('Processing...');
+await stream.end();
+```
+
+**Features**:
+- Multi-account support
+- Access control (allowlist, group policies)
+- Streaming message preview
+- Voice messages (STT/TTS)
+- Document/file support
 
 ### Extension System (`src/extensions/`)
 
@@ -119,7 +223,7 @@ src/extensions/
 ├── api.ts         # Extension API
 ├── loader.ts      # Extension loader
 ├── hooks.ts       # Hook system
-└── index.ts      # Exports
+└── index.ts       # Exports
 ```
 
 **Hook Lifecycle**:
@@ -129,12 +233,17 @@ before_agent_start → agent_end → message_received →
 before_tool_call → after_tool_call → message_sending → session_end
 ```
 
+**Three-tier Storage**:
+1. **Workspace** (`workspace/.extensions/`) - Project-private
+2. **Global** (`~/.xopcbot/extensions/`) - User-level shared
+3. **Bundled** (`xopcbot/extensions/`) - Built-in
+
 ## Data Flow
 
 ### Conversation Flow
 
 ```
-User (Telegram/Gateway)
+User (Telegram/Gateway/CLI)
         │
         ▼
 ┌─────────────────────┐
@@ -157,8 +266,8 @@ User (Telegram/Gateway)
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │
-│  │ Execute Tools │  │ ← Tools (filesystem, shell, web, memory...)
-│  │ + Extensions  │  │
+│  │ Execute Tools │  │ ← Tools + Extensions
+│  │ + Progress    │  │ ← Progress feedback
 │  └───────┬───────┘  │
 └──────────┬──────────┘
            │
@@ -171,7 +280,7 @@ User (Telegram/Gateway)
 User Reply / Channel Response
 ```
 
-## CLI Command Registration Pattern
+## CLI Command Registration
 
 xopcbot uses self-registration pattern:
 
@@ -187,20 +296,34 @@ function createMyCommand(ctx: CLIContext): Command {
 
 register({
   id: 'mycommand',
-  name: 'mycommand',
-  description: 'My command',
   factory: createMyCommand,
   metadata: { category: 'utility' },
 });
 ```
 
+## Tech Stack
+
+| Layer | Technology |
+|-------|------------|
+| Runtime | Node.js 22+ |
+| Language | TypeScript 5.x |
+| LLM SDK | @mariozechner/pi-ai |
+| Agent Framework | @mariozechner/pi-agent-core |
+| CLI | Commander.js |
+| Validation | Zod (config) + TypeBox (tools) |
+| Logging | Pino |
+| Cron | node-cron |
+| HTTP Server | Hono |
+| Web UI | Lit (Web Components) |
+| Testing | Vitest |
+
 ## Extension Points
 
 ### Adding New Tools
 
-1. Create new file in `src/agent/tools/`
-2. Implement `AgentTool` interface
-3. Export and register in `src/agent/tools/index.ts`
+1. Create `src/agent/tools/<name>.ts`
+2. Implement `AgentTool` interface with Typebox schema
+3. Export from `src/agent/tools/index.ts`
 4. Add to tools array in `AgentService`
 
 ### Adding Hooks
@@ -212,22 +335,9 @@ api.registerHook('before_tool_call', async (event, ctx) => {
 });
 ```
 
-### Adding Extensions
+### Adding Channel Extensions
 
-1. Create `xopcbot.extension.json` manifest
-2. Implement `register(api)` function
-3. Publish or load locally
-
-## Tech Stack
-
-| Layer | Technology |
-|-------|------------|
-| Runtime | Node.js 22+ |
-| Language | TypeScript 5.x |
-| LLM SDK | @mariozechner/pi-ai |
-| CLI | Commander.js |
-| Telegram | node-telegram-bot-api |
-| Validation | Zod + TypeBox |
-| Logging | Pino |
-| Cron | node-cron |
-| HTTP Server | Hono |
+1. Create `src/channels/<name>/` directory
+2. Implement `ChannelExtension` interface
+3. Add to `src/channels/index.ts` exports
+4. Register in `ChannelManager`

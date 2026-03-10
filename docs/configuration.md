@@ -1,6 +1,33 @@
 # Configuration Reference
 
-All xopcbot configuration is centralized in the `~/.xopcbot/config.json` file.
+All xopcbot configuration is centralized in `~/.xopcbot/config.json`.
+
+## Quick Start
+
+Run the interactive setup wizard:
+
+```bash
+xopcbot onboard
+```
+
+Or create manually:
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-sonnet-4-5",
+      "max_tokens": 8192,
+      "temperature": 0.7
+    }
+  },
+  "providers": {
+    "anthropic": "${ANTHROPIC_API_KEY}"
+  }
+}
+```
+
+---
 
 ## Full Configuration Example
 
@@ -29,8 +56,16 @@ All xopcbot configuration is centralized in the `~/.xopcbot/config.json` file.
   "channels": {
     "telegram": {
       "enabled": true,
-      "token": "123456:ABC-DEF1234ghIkl-zyx57W2v1u123ew11",
-      "allow_from": []
+      "accounts": {
+        "personal": {
+          "name": "Personal Bot",
+          "token": "BOT_TOKEN",
+          "dmPolicy": "allowlist",
+          "groupPolicy": "open",
+          "allowFrom": [123456789],
+          "streamMode": "partial"
+        }
+      }
     }
   },
   "gateway": {
@@ -40,18 +75,39 @@ All xopcbot configuration is centralized in the `~/.xopcbot/config.json` file.
   "tools": {
     "web": {
       "search": {
-        "api_key": "",
+        "api_key": "${BRAVE_API_KEY}",
         "max_results": 5
       }
     }
   },
-  "modelsDev": {
-    "enabled": true
+  "stt": {
+    "enabled": true,
+    "provider": "alibaba",
+    "alibaba": {
+      "apiKey": "${DASHSCOPE_API_KEY}",
+      "model": "paraformer-v1"
+    }
+  },
+  "tts": {
+    "enabled": true,
+    "provider": "openai",
+    "trigger": "auto",
+    "openai": {
+      "apiKey": "${OPENAI_API_KEY}",
+      "model": "tts-1",
+      "voice": "alloy"
+    }
+  },
+  "heartbeat": {
+    "enabled": true,
+    "intervalMs": 300000
   }
 }
 ```
 
-## Configuration Options
+---
+
+## Configuration Sections
 
 ### agents
 
@@ -60,16 +116,16 @@ Default configuration for agents.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `workspace` | string | `~/.xopcbot/workspace` | Workspace directory |
-| `model` | string / object | `anthropic/claude-sonnet-4-5` | Default model |
+| `model` | string/object | `anthropic/claude-sonnet-4-5` | Default model |
 | `max_tokens` | number | `8192` | Maximum output tokens |
-| `temperature` | number | `0.7` | Temperature parameter (0-2) |
-| `max_tool_iterations` | number | `20` | Maximum tool call iterations |
+| `temperature` | number | `0.7` | Temperature (0-2) |
+| `max_tool_iterations` | number | `20` | Max tool call iterations |
 
-### agents.defaults.model
+#### agents.defaults.model
 
 Model configuration supports two formats:
 
-**Simple format (single model):**
+**Simple format:**
 ```json
 {
   "model": "anthropic/claude-sonnet-4-5"
@@ -81,24 +137,18 @@ Model configuration supports two formats:
 {
   "model": {
     "primary": "anthropic/claude-sonnet-4-5",
-    "fallbacks": ["openai/gpt-4o"]
+    "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
   }
 }
 ```
 
-The model ID format is `provider/model-id`, e.g., `anthropic/claude-opus-4-5`.
+Model ID format: `provider/model-id` (e.g., `anthropic/claude-opus-4-5`).
 
-### models
-
- model configuration. Use this to configure API providers and available models.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `providers` | object | `{}` | Provider API keys (see below) |
+---
 
 ### providers
 
-Configure LLM provider API keys. Keys can be actual values or environment variable references:
+Configure LLM provider API keys. Use environment variable references:
 
 ```json
 {
@@ -111,7 +161,7 @@ Configure LLM provider API keys. Keys can be actual values or environment variab
 }
 ```
 
-Supported providers and their environment variables:
+**Supported Providers:**
 
 | Provider | Environment Variable |
 |----------|---------------------|
@@ -127,166 +177,73 @@ Supported providers and their environment variables:
 | `openrouter` | `OPENROUTER_API_KEY` |
 | `huggingface` | `HF_TOKEN` or `HUGGINGFACE_TOKEN` |
 
-You can also use environment variables directly without adding them to config.
-| `name` | string | (required) | Display name |
-| `reasoning` | boolean | `false` | Supports reasoning/thinking |
-| `input` | array | `["text"]` | Input types: `text`, `image` |
-| `cost` | object | | Pricing info |
-| `contextWindow` | number | `128000` | Context window size |
-| `maxTokens` | number | `16384` | Max output tokens |
+> **Note:** Environment variables take priority over config file values.
 
-### Supported Providers
+See [Models Documentation](/models) for custom provider configuration.
 
-xopcbot supports the following LLM providers:
-
-| Provider | Auth Type | Capabilities | Model Prefixes |
-|----------|-----------|--------------|----------------|
-| `openai` | API Key | text, vision, tools | gpt-, o1- |
-| `anthropic` | API Key, OAuth | text, vision, reasoning, tools | claude- |
-| `google` | API Key | text, vision, tools | gemini- |
-| `qwen` | API Key | text, vision, tools | qwen-, qwq- |
-| `kimi` | OAuth (Device Code) | text, reasoning, tools | kimi- |
-| `moonshot` | API Key | text, tools | moonshot- |
-| `minimax` | API Key | text | abab- |
-| `deepseek` | API Key | text, reasoning, tools | deepseek- |
-| `groq` | API Key | text, tools | llama-, mixtral- |
-| `openrouter` | API Key | text, vision, tools | openrouter/ |
-| `xai` | API Key | text, tools | xai/, grok- |
-| `cerebras` | API Key | text | cerebras/ |
-| `mistral` | API Key | text, tools | mistral- |
-| `zhipu` | API Key | text | glm- |
-| `ollama` | None (local) | text, vision | llama3, qwen2, etc. |
-| `bailian` | API Key | text | bailian- |
-
-#### Provider Examples
-
-**Kimi (OAuth):**
-```json
-{
-  "kimi": {
-    "auth": {
-      "type": "oauth",
-      "clientId": "your-client-id",
-      "clientSecret": "your-client-secret"
-    },
-    "models": [
-      { "id": "kimi-k2.5", "name": "Kimi K2.5", "reasoning": true }
-    ]
-  }
-}
-```
-
-**Moonshot (API Key):**
-```json
-{
-  "moonshot": {
-    "apiKey": "${MOONSHOT_API_KEY}",
-    "models": [
-      { "id": "moonshot-v1-8k", "name": "Moonshot V1 8K" }
-    ]
-  }
-}
-```
-
-**MiniMax:**
-```json
-{
-  "minimax": {
-    "apiKey": "${MINIMAX_API_KEY}",
-    "baseUrl": "https://api.minimax.chat/v1",
-    "models": [
-      { "id": "abab6.5s-chat", "name": "MiniMax ABAB 6.5S" }
-    ]
-  }
-}
-```
-
-**Zhipu (智谱):**
-```json
-{
-  "zhipu": {
-    "apiKey": "${ZHIPU_API_KEY}",
-    "models": [
-      { "id": "glm-4-flash", "name": "GLM-4 Flash" }
-    ]
-  }
-}
-```
-
-**xAI (Grok):**
-```json
-{
-  "xai": {
-    "apiKey": "${XAI_API_KEY}",
-    "models": [
-      { "id": "grok-2-1212", "name": "Grok 2" }
-    ]
-  }
-}
-```
-
-**Cerebras:**
-```json
-{
-  "cerebras": {
-    "apiKey": "${CEREBRAS_API_KEY}",
-    "models": [
-      { "id": "llama-3.3-70b", "name": "Llama 3.3 70B" }
-    ]
-  }
-}
-```
-
-**Bailian (百川):**
-```json
-{
-  "bailian": {
-    "apiKey": "${BAILIAN_API_KEY}",
-    "models": [
-      { "id": "baichuan4", "name": "Baichuan 4" }
-    ]
-  }
-}
-```
+---
 
 ### channels
 
 Communication channels configuration.
 
-### channels.telegram
+#### channels.telegram
+
+Multi-account Telegram configuration:
+
+```json
+{
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "accounts": {
+        "personal": {
+          "name": "Personal Bot",
+          "token": "BOT_TOKEN",
+          "dmPolicy": "allowlist",
+          "groupPolicy": "open",
+          "allowFrom": [123456789],
+          "streamMode": "partial"
+        }
+      }
+    }
+  }
+}
+```
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable Telegram bot |
-| `token` | string | - | Bot token from @BotFather |
-| `allow_from` | array | `[]` | Allowed user IDs (empty = all) |
-| `group_admins` | boolean | `false` | Only allow group admins |
-| `magic` | string | - | Magic prefix for mentions |
+| `enabled` | boolean | `false` | Enable Telegram |
+| `accounts` | object | - | Multi-account config |
+| `accounts.<id>.name` | string | - | Display name |
+| `accounts.<id>.token` | string | - | Bot token |
+| `accounts.<id>.dmPolicy` | string | `open` | DM policy |
+| `accounts.<id>.groupPolicy` | string | `open` | Group policy |
+| `accounts.<id>.allowFrom` | array | `[]` | Allowed user IDs |
+| `accounts.<id>.streamMode` | string | `partial` | Stream mode |
 
-### channels.discord
+**DM Policies**: `pairing` | `allowlist` | `open` | `disabled`
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable Discord bot |
-| `token` | string | - | Bot token |
-| `allow_from` | array | `[]` | Allowed guild/channel IDs |
+**Group Policies**: `open` | `allowlist` | `disabled`
 
-### channels.slack
+**Stream Modes**: `off` | `partial` | `block`
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable Slack bot |
-| `token` | string | - | Bot token |
-| `allow_from` | array | `[]` | Allowed channel IDs |
+#### channels.feishu
 
-### channels.signal
+```json
+{
+  "channels": {
+    "feishu": {
+      "enabled": true,
+      "appId": "APP_ID",
+      "appSecret": "APP_SECRET",
+      "verificationToken": "VERIFICATION_TOKEN"
+    }
+  }
+}
+```
 
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable Signal bot |
-| `phone_number` | string | - | Signal phone number |
-| `device_name` | string | - | Device name |
-| `allow_from` | array | `[]` | Allowed phone numbers |
+---
 
 ### gateway
 
@@ -299,7 +256,7 @@ HTTP API gateway configuration.
 | `auth` | object | - | Authentication config |
 | `cors` | object | - | CORS settings |
 
-### gateway.auth
+#### gateway.auth
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -308,7 +265,7 @@ HTTP API gateway configuration.
 | `password` | string | - | Auth password |
 | `api_key` | string | - | API key auth |
 
-### gateway.cors
+#### gateway.cors
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -316,59 +273,28 @@ HTTP API gateway configuration.
 | `origins` | array | `[]` | Allowed origins |
 | `credentials` | boolean | `false` | Allow credentials |
 
+---
+
 ### tools
 
 Tool configurations.
 
-### tools.web
+#### tools.web
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `search` | object | - | Web search config |
 | `browse` | object | - | Web browsing config |
 
-### tools.web.search
+##### tools.web.search
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `provider` | string | `brave` | Search provider: `brave`, `searxng` |
+| `provider` | string | `brave` | Search provider |
 | `api_key` | string | - | API key |
 | `max_results` | number | `5` | Max results |
 
-### tools.web.browse
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable browsing |
-| `max_depth` | number | `2` | Max link depth |
-| `timeout` | number | `30000` | Timeout ms |
-
-### cron
-
-Scheduled tasks configuration.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable cron |
-| `jobs` | array | `[]` | List of cron jobs |
-
-### heartbeat
-
-Periodic health check configuration.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable heartbeat |
-| `interval` | number | `300000` | Interval in ms (5 min) |
-| `checks` | array | - | List of checks |
-
-### modelsDev
-
-Local model development settings.
-
-| Field | Type | Default | Description |
-|-------|------|---------|-------------|
-| `enabled` | boolean | `true` | Enable local model cache |
+---
 
 ### stt
 
@@ -387,7 +313,7 @@ Speech-to-Text configuration for voice messages.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `apiKey` | string | - | DashScope API key |
-| `model` | string | `paraformer-v1` | Model: `paraformer-v1`, `paraformer-8k-v1`, `paraformer-mtl-v1` |
+| `model` | string | `paraformer-v1` | Model: `paraformer-v1`, `paraformer-8k-v1` |
 
 #### stt.openai
 
@@ -401,9 +327,9 @@ Speech-to-Text configuration for voice messages.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `enabled` | boolean | `true` | Enable fallback |
-| `order` | array | `["alibaba", "openai"]` | Provider fallback order |
+| `order` | array | `["alibaba", "openai"]` | Fallback order |
 
-Example:
+**Example:**
 ```json
 {
   "stt": {
@@ -421,6 +347,8 @@ Example:
 }
 ```
 
+---
+
 ### tts
 
 Text-to-Speech configuration for voice replies.
@@ -429,7 +357,7 @@ Text-to-Speech configuration for voice replies.
 |-------|------|---------|-------------|
 | `enabled` | boolean | `false` | Enable TTS |
 | `provider` | string | `openai` | Provider: `openai`, `alibaba` |
-| `trigger` | string | `auto` | Trigger mode: `auto`, `never` |
+| `trigger` | string | `auto` | Trigger: `auto`, `never` |
 | `openai` | object | - | OpenAI TTS config |
 | `alibaba` | object | - | Alibaba CosyVoice config |
 
@@ -449,25 +377,62 @@ Text-to-Speech configuration for voice replies.
 | `model` | string | `cosyvoice-v1` | Model: `cosyvoice-v1` |
 | `voice` | string | - | Voice ID |
 
-Example:
+**Trigger modes:**
+- `auto`: Send voice reply when user sends voice message
+- `never`: Disable TTS, only send text
+
+---
+
+### heartbeat
+
+Periodic health check configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable heartbeat |
+| `intervalMs` | number | `300000` | Interval in ms (5 min) |
+
+---
+
+### cron
+
+Scheduled tasks configuration.
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Enable cron |
+| `jobs` | array | `[]` | List of cron jobs |
+
+See [Cron Documentation](/cron) for job configuration.
+
+---
+
+### extensions
+
+Extension enable/disable configuration.
+
 ```json
 {
-  "tts": {
-    "enabled": true,
-    "provider": "openai",
-    "trigger": "auto",
-    "openai": {
-      "apiKey": "${OPENAI_API_KEY}",
-      "model": "tts-1",
-      "voice": "alloy"
-    }
+  "extensions": {
+    "enabled": ["telegram-channel", "weather-tool"],
+    "disabled": ["deprecated-extension"],
+    "telegram-channel": {
+      "token": "bot-token-here"
+    },
+    "weather-tool": true
   }
 }
 ```
 
-**Trigger modes:**
-- `auto`: Send voice reply when user sends voice message
-- `never`: Disable TTS, only send text
+| Field | Type | Description |
+|-------|------|-------------|
+| `enabled` | string[] | List of extension IDs to enable |
+| `disabled` | string[] | (Optional) List of extension IDs to disable |
+| `[extension-id]` | object/boolean | Extension-specific configuration |
+
+See [Extensions Documentation](/extensions) for details.
+
+---
 
 ## Environment Variables
 
@@ -475,110 +440,122 @@ xopcbot supports environment variables for sensitive data:
 
 | Variable | Description |
 |----------|-------------|
-| `ANTHROPIC_API_KEY` | Anthropic API key |
 | `OPENAI_API_KEY` | OpenAI API key |
+| `ANTHROPIC_API_KEY` | Anthropic API key |
 | `GOOGLE_API_KEY` | Google AI API key |
-| `DASHSCOPE_API_KEY` | Alibaba DashScope API key (for STT/TTS) |
+| `GROQ_API_KEY` | Groq API key |
+| `DEEPSEEK_API_KEY` | DeepSeek API key |
+| `MINIMAX_API_KEY` | MiniMax API key |
+| `BRAVE_API_KEY` | Brave Search API key |
+| `DASHSCOPE_API_KEY` | Alibaba DashScope API key (STT/TTS) |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
+| `XOPCBOT_CONFIG` | Custom config file path |
+| `XOPCBOT_WORKSPACE` | Custom workspace directory |
+| `XOPCBOT_LOG_LEVEL` | Log level (trace/debug/info/warn/error/fatal) |
+| `XOPCBOT_LOG_DIR` | Log directory path |
+| `XOPCBOT_LOG_CONSOLE` | Enable console output (true/false) |
+| `XOPCBOT_LOG_FILE` | Enable file output (true/false) |
+| `XOPCBOT_LOG_RETENTION_DAYS` | Days to retain log files |
+| `XOPCBOT_PRETTY_LOGS` | Pretty print logs for development |
 
 Environment variables take priority over config file values.
+
+---
+
+## Configuration Management
+
+### Validate Configuration
+
+```bash
+xopcbot config --validate
+```
+
+### View Configuration
+
+```bash
+xopcbot config --show
+```
+
+### Edit Configuration
+
+```bash
+xopcbot config --edit
+```
+
+---
 
 ## Q&A
 
 ### Q: How to use multiple providers?
 
-Use the `models` configuration to define multiple providers. The agent automatically selects the appropriate provider based on the model ID:
+Use the `providers` configuration to define multiple API keys. The agent automatically selects the appropriate provider based on the model ID:
 
 ```json
 {
-  "models": {
-    "mode": "merge",
-    "providers": {
-      "openai": {
-        "baseUrl": "https://api.openai.com/v1",
-        "apiKey": "${OPENAI_API_KEY}",
-        "models": [
-          { "id": "gpt-4o", "name": "GPT-4o" }
-        ]
-      },
-      "anthropic": {
-        "apiKey": "${ANTHROPIC_API_KEY}",
-        "models": [
-          { "id": "claude-sonnet-4-5", "name": "Claude Sonnet 4.5", "reasoning": true }
-        ]
-      }
+  "providers": {
+    "openai": "${OPENAI_API_KEY}",
+    "anthropic": "${ANTHROPIC_API_KEY}"
+  },
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-sonnet-4-5"
     }
   }
 }
 ```
 
-Set different models in `agents.defaults.model` to use different providers.
+### Q: How to use Ollama (local models)?
 
-### Q: How to use Ollama?
+Configure custom provider in `~/.xopcbot/models.json`:
 
 ```json
 {
-  "models": {
-    "providers": {
-      "ollama": {
-        "baseUrl": "http://127.0.0.1:11434/v1",
-        "enabled": true,
-        "autoDiscovery": true,
-        "models": [
-          { "id": "llama3", "name": "Llama 3" }
-        ]
-      }
+  "providers": {
+    "ollama": {
+      "baseUrl": "http://localhost:11434/v1",
+      "api": "openai-completions",
+      "apiKey": "ollama",
+      "models": [
+        { "id": "llama3.1:8b" }
+      ]
     }
   }
 }
 ```
+
+See [Models Documentation](/models) for details.
 
 ### Q: How to configure OAuth?
 
 xopcbot supports OAuth authentication for certain providers:
 
-**Kimi (Device Code Flow - Recommended):**
+**Kimi (Device Code Flow):**
 ```json
 {
-  "models": {
-    "providers": {
-      "kimi": {
-        "auth": {
-          "type": "oauth",
-          "clientId": "17e5f671-d194-4dfb-9706-5516cb48c098"
-        },
-        "models": [
-          { "id": "kimi-k2.5", "name": "Kimi K2.5", "reasoning": true }
-        ]
+  "providers": {
+    "kimi": {
+      "auth": {
+        "type": "oauth",
+        "clientId": "your-client-id"
       }
     }
   }
 }
 ```
 
-Kimi uses Device Code Flow - the CLI will prompt you to visit `auth.kimi.com` and enter a code to complete authentication.
+Kimi uses Device Code Flow - the CLI will prompt you to visit `auth.kimi.com` and enter a code.
 
-**Other OAuth Providers:**
+### Q: How to use environment variables?
+
+Use `${VAR_NAME}` syntax in config:
+
 ```json
 {
-  "models": {
-    "providers": {
-      "anthropic": {
-        "baseUrl": "https://api.anthropic.com",
-        "auth": {
-          "type": "oauth",
-          "clientId": "...",
-          "clientSecret": "..."
-        },
-        "models": []
-      }
-    }
+  "providers": {
+    "openai": "${OPENAI_API_KEY}",
+    "anthropic": "${ANTHROPIC_API_KEY}"
   }
 }
 ```
 
-> **Note:** Qwen OAuth was removed in favor of browser-based login (run `qwen` CLI).
-
-### Q: What is modelsDev?
-
-When enabled, xopcbot automatically loads model information from the built-in local cache, which includes models from providers like OpenAI, Anthropic, Google, Groq, DeepSeek, and more. This provides faster model listing without requiring network requests at runtime.
+Or set environment variables directly without adding to config.

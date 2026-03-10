@@ -1,6 +1,8 @@
 # Session Management
 
-xopcbot provides comprehensive session management for conversation history, available via both CLI and Web UI.
+xopcbot provides comprehensive session management for conversation history via CLI and Web UI.
+
+---
 
 ## Overview
 
@@ -15,6 +17,8 @@ xopcbot provides comprehensive session management for conversation history, avai
 | Delete | ✅ | ✅ |
 | Search in session | ❌ | ✅ |
 
+---
+
 ## Session Storage
 
 | Property | Value |
@@ -24,6 +28,8 @@ xopcbot provides comprehensive session management for conversation history, avai
 | File format | JSON |
 | Archive directory | `workspace/.sessions/archive/` |
 
+---
+
 ## Session States
 
 | Status | Description |
@@ -31,6 +37,8 @@ xopcbot provides comprehensive session management for conversation history, avai
 | `active` | Currently active session (default) |
 | `pinned` | Pinned to top for quick access |
 | `archived` | Archived and moved to archive folder |
+
+---
 
 ## CLI Usage
 
@@ -90,7 +98,9 @@ xopcbot session unpin telegram:123456
 xopcbot session delete telegram:123456
 
 # Export session to JSON
-xopcbot session export telegram:123456 --format json --output backup.json
+xopcbot session export telegram:123456 \
+  --format json \
+  --output backup.json
 ```
 
 ### Bulk Operations
@@ -106,11 +116,10 @@ xopcbot session cleanup --days 30
 ### Statistics
 
 ```bash
-# View session statistics
 xopcbot session stats
 ```
 
-Sample output:
+**Sample output:**
 ```
 📊 Session Statistics
 
@@ -126,6 +135,8 @@ Sample output:
     gateway: 5
     cli: 2
 ```
+
+---
 
 ## Web UI
 
@@ -152,11 +163,13 @@ xopcbot gateway start
 open http://localhost:18790/ui/
 ```
 
+---
+
 ## Session Structure
 
 ```typescript
 interface SessionMetadata {
-  key: string;              // Unique identifier (e.g., "telegram:123456")
+  key: string;              // Unique identifier
   name?: string;            // Optional custom name
   status: 'active' | 'idle' | 'archived' | 'pinned';
   tags: string[];           // User-defined tags
@@ -165,7 +178,7 @@ interface SessionMetadata {
   lastAccessedAt: string;
   messageCount: number;
   estimatedTokens: number;
-  compactedCount: number;   // Number of times compressed
+  compactedCount: number;   // Number of compressions
   sourceChannel: string;    // telegram, gateway, cli
   sourceChatId: string;
 }
@@ -184,9 +197,11 @@ interface Message {
 }
 ```
 
+---
+
 ## Session Index
 
-The `index.json` file maintains a cache of all session metadata for fast querying:
+The `index.json` file maintains a cache of all session metadata:
 
 ```json
 {
@@ -204,11 +219,13 @@ The `index.json` file maintains a cache of all session metadata for fast queryin
 }
 ```
 
+---
+
 ## Automatic Maintenance
 
 ### Compaction
 
-When a session exceeds the context window limit, old messages are automatically summarized:
+When a session exceeds the context window limit:
 
 1. Early messages are summarized using LLM
 2. Recent messages are preserved (default: last 10)
@@ -231,29 +248,37 @@ Configure in `config.json`:
 }
 ```
 
+**Compaction Modes:**
+- `extractive` - Summarize using key sentences
+- `abstractive` - LLM-based summarization
+- `structured` - Preserve structured data
+
 ### Sliding Window
 
-To prevent memory issues, sessions also have a sliding window:
-
+To prevent memory issues:
 - Maximum messages: 100
 - Keeps recent messages when limit exceeded
 - Preserves system context
 
+---
+
 ## Best Practices
 
-1. **Use Tags**: Tag sessions by project or topic for easy filtering
+1. **Use Tags**: Tag sessions by project or topic
 2. **Pin Important Sessions**: Keep frequently accessed sessions pinned
 3. **Archive Old Sessions**: Archive sessions you don't need regularly
-4. **Regular Cleanup**: Use `session cleanup` to archive old inactive sessions
+4. **Regular Cleanup**: Use `session cleanup` for old inactive sessions
 5. **Export Before Delete**: Export important sessions before deletion
+
+---
 
 ## Troubleshooting
 
 ### Sessions Not Loading in Web UI
 
-- Check gateway is running: `xopcbot gateway status`
-- Verify WebSocket connection in browser console
-- Check for errors in gateway logs
+1. Check gateway is running: `xopcbot gateway status`
+2. Verify WebSocket connection in browser console
+3. Check for errors in gateway logs
 
 ### Session Index Corrupted
 
@@ -276,6 +301,8 @@ If sessions exist in `.sessions/` but don't appear:
 xopcbot session list --limit 1000
 ```
 
+---
+
 ## API Reference
 
 ### WebSocket API Methods
@@ -292,7 +319,6 @@ xopcbot session list --limit 1000
 | `session.unarchive` | Unarchive session |
 | `session.pin` | Pin session |
 | `session.unpin` | Unpin session |
-
 | `session.search` | Search sessions |
 | `session.searchIn` | Search within session |
 | `session.export` | Export session |
