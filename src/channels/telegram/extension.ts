@@ -559,14 +559,32 @@ export class TelegramChannelExtension implements ChannelExtension {
     const account = this.accountManager.getAccount(accountId);
     const streamMode = account?.streamMode ?? 'partial';
 
-    // If streamMode is 'off', return a no-op stream handle
+    // If streamMode is 'off', buffer the content and send it all at once when ended
     if (streamMode === 'off') {
+      let bufferedText = '';
+      let isAborted = false;
       return {
-        update: () => { /* no-op */ },
-        updateProgress: () => { /* no-op */ },
-        setProgress: () => { /* no-op */ },
-        end: async () => { /* no-op */ },
-        abort: async () => { /* no-op */ },
+        update: (text: string) => {
+          bufferedText = text;
+        },
+        updateProgress: () => { /* no-op for progress when streamMode is off */ },
+        setProgress: () => { /* no-op for progress when streamMode is off */ },
+        end: async () => {
+          if (isAborted || !bufferedText.trim()) return;
+          // Send the buffered content as a single message
+          await this.send({
+            chatId,
+            content: bufferedText,
+            type: 'message',
+            accountId,
+            threadId,
+            replyToMessageId,
+          });
+        },
+        abort: async () => {
+          isAborted = true;
+          bufferedText = '';
+        },
         messageId: () => undefined,
       };
     }
