@@ -19,7 +19,7 @@ import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors, colorizeStatus } from '../utils/colors.js';
 import { homedir } from 'os';
 import { join } from 'path';
-import { getOAuthProvider, getSupportedOAuthProviders } from '../../utils/oauth-providers.js';
+import { getOAuthProvider, getSupportedOAuthProviders } from '../utils/oauth-providers.js';
 
 const log = createLogger('AuthCommand');
 
