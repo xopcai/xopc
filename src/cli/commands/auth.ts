@@ -5,7 +5,7 @@
  */
 
 import { Command } from 'commander';
-import { AuthStorage, anthropicOAuthProvider, minimaxOAuthProvider, kimiOAuthProvider, githubCopilotOAuthProvider, googleGeminiCliOAuthProvider, googleAntigravityOAuthProvider, openaiCodexOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import { AuthStorage, anthropicOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
 import {
 	listProfilesForProvider,
 	listAllProfiles,
@@ -19,112 +19,15 @@ import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors, colorizeStatus } from '../utils/colors.js';
 import { homedir } from 'os';
 import { join } from 'path';
+import { getOAuthProvider, getSupportedOAuthProviders } from '../../utils/oauth-providers.js';
 
 const log = createLogger('AuthCommand');
-
-// OAuth providers map
-const oauthProviders: Record<string, { name: string; login: (callbacks: OAuthLoginCallbacks) => Promise<AuthProfileCredential> }> = {
-	anthropic: {
-		name: 'Anthropic (Claude)',
-		login: async (callbacks) => {
-			const authPath = join(homedir(), '.xopcbot', 'auth.json');
-			const storage = new AuthStorage({ filename: authPath });
-			storage.registerOAuthProvider(anthropicOAuthProvider);
-			await storage.login('anthropic', callbacks);
-			// Convert to AuthProfileCredential
-			const creds = storage.getOAuthCredentials('anthropic');
-			return {
-				type: 'oauth' as const,
-				provider: 'anthropic',
-				...creds!,
-			};
-		},
-	},
-	minimax: {
-		name: 'MiniMax (幂维智能)',
-		login: async (callbacks) => {
-			const provider = minimaxOAuthProvider;
-			const creds = await provider.login(callbacks);
-			return {
-				type: 'oauth' as const,
-				provider: 'minimax',
-				...creds,
-			};
-		},
-	},
-	kimi: {
-		name: 'Kimi (月之暗面)',
-		login: async (callbacks) => {
-			const provider = kimiOAuthProvider;
-			const creds = await provider.login(callbacks);
-			return {
-				type: 'oauth' as const,
-				provider: 'kimi',
-				...creds,
-			};
-		},
-	},
-	'github-copilot': {
-		name: 'GitHub Copilot',
-		login: async (callbacks) => {
-			const provider = githubCopilotOAuthProvider;
-			const creds = await provider.login(callbacks);
-			return {
-				type: 'oauth' as const,
-				provider: 'github-copilot',
-				...creds,
-			};
-		},
-	},
-	'google-gemini-cli': {
-		name: 'Google Gemini CLI',
-		login: async (callbacks) => {
-			const provider = googleGeminiCliOAuthProvider;
-			const creds = await provider.login(callbacks);
-			return {
-				type: 'oauth' as const,
-				provider: 'google-gemini-cli',
-				...creds,
-			};
-		},
-	},
-	'google-antigravity': {
-		name: 'Google Antigravity',
-		login: async (callbacks) => {
-			const provider = googleAntigravityOAuthProvider;
-			const creds = await provider.login(callbacks);
-			return {
-				type: 'oauth' as const,
-				provider: 'google-antigravity',
-				...creds,
-			};
-		},
-	},
-	'openai-codex': {
-		name: 'OpenAI Codex',
-		login: async (callbacks) => {
-			const provider = openaiCodexOAuthProvider;
-			const creds = await provider.login(callbacks);
-			return {
-				type: 'oauth' as const,
-				provider: 'openai-codex',
-				...creds,
-			};
-		},
-	},
-};
 
 // Create a shared AuthStorage instance (legacy)
 function getAuthStorage(): AuthStorage {
 	const authPath = join(homedir(), '.xopcbot', 'auth.json');
 	const storage = new AuthStorage({ filename: authPath });
 	storage.registerOAuthProvider(anthropicOAuthProvider);
-	storage.registerOAuthProvider(minimaxOAuthProvider);
-	storage.registerOAuthProvider(kimiOAuthProvider);
-	storage.registerOAuthProvider(githubCopilotOAuthProvider);
-	storage.registerOAuthProvider(googleGeminiCliOAuthProvider);
-	storage.registerOAuthProvider(googleAntigravityOAuthProvider);
-	storage.registerOAuthProvider(openaiCodexOAuthProvider);
 	return storage;
 }
 
@@ -245,20 +148,20 @@ function createAuthCommand(_ctx: CLIContext): Command {
 		.description('Login to a provider using OAuth')
 		.option('-p, --profile <profileId>', 'Profile ID (default: provider:default)')
 		.action(async (provider: string, options: { profile?: string }) => {
-			const oauthProvider = oauthProviders[provider];
+			const oauthConfig = getOAuthProvider(provider);
 			
-			if (!oauthProvider) {
+			if (!oauthConfig) {
 				log.error(`OAuth not supported for provider: ${provider}`);
-				log.info(`Supported OAuth providers: ${Object.keys(oauthProviders).join(', ')}`);
+				log.info(`Supported OAuth providers: ${getSupportedOAuthProviders().join(', ')}`);
 				log.info('Alternatively, set an API key: xopcbot auth set <provider> <key>');
 				process.exit(1);
 			}
 
-			log.info(`Starting ${oauthProvider.name} OAuth login...`);
+			log.info(`Starting ${oauthConfig.displayName} OAuth login...`);
 			
 			const callbacks: OAuthLoginCallbacks = {
 				onAuth: (info) => {
-					console.log('\n🌐 Please open this URL in your browser:\n');
+					console.log('\n' + oauthConfig.urlPrompt);
 					console.log(info.url);
 					if (info.instructions) {
 						console.log('\n' + info.instructions);
@@ -275,9 +178,16 @@ function createAuthCommand(_ctx: CLIContext): Command {
 			};
 
 			try {
-				const credential = await oauthProvider.login(callbacks);
-				const profileId = options.profile || `${provider}:default`;
-				upsertAuthProfile({ profileId, credential });
+				const creds = await oauthConfig.provider.login(callbacks);
+				const profileId = options.profile || oauthConfig.profileId;
+				upsertAuthProfile({
+					profileId,
+					credential: {
+						type: 'oauth',
+						provider,
+						...creds,
+					},
+				});
 				log.info(`✅ OAuth login successful! Profile: ${profileId}`);
 			} catch (error) {
 				log.error(`OAuth login failed: ${error}`);
