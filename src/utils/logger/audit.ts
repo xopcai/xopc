@@ -111,13 +111,63 @@ function redactSensitiveData(data: Record<string, unknown>): Record<string, unkn
     const isSensitive = auditConfig.sensitiveFields.some(
       field => key.toLowerCase().includes(field.toLowerCase())
     );
-    redacted[key] = isSensitive ? '***REDACTED***' : value;
+    
+    if (isSensitive) {
+      redacted[key] = '***REDACTED***';
+    } else if (value && typeof value === 'object' && !Array.isArray(value)) {
+      // Recursively redact nested objects
+      redacted[key] = redactSensitiveData(value as Record<string, unknown>);
+    } else if (Array.isArray(value)) {
+      // Handle arrays
+      redacted[key] = value.map(item => 
+        (item && typeof item === 'object') 
+          ? redactSensitiveData(item as Record<string, unknown>)
+          : item
+      );
+    } else {
+      redacted[key] = value;
+    }
   }
   return redacted;
 }
 
-// TODO: Use redactSensitiveData for action.details redaction
-void redactSensitiveData;
+/**
+ * Redact sensitive fields from an audit event before writing
+ */
+function redactEvent(event: AuditEvent): AuditEvent {
+  const redactedEvent = { ...event };
+  
+  // Redact actor fields
+  if (redactedEvent.actor) {
+    redactedEvent.actor = {
+      ...redactSensitiveData(redactedEvent.actor as Record<string, unknown>),
+    } as AuditEvent['actor'];
+  }
+  
+  // Redact action details
+  if (redactedEvent.action?.details) {
+    redactedEvent.action = {
+      ...redactedEvent.action,
+      details: redactSensitiveData(redactedEvent.action.details as Record<string, unknown>),
+    };
+  }
+  
+  // Redact resource fields
+  if (redactedEvent.resource) {
+    redactedEvent.resource = {
+      ...redactSensitiveData(redactedEvent.resource as Record<string, unknown>),
+    } as AuditEvent['resource'];
+  }
+  
+  // Redact metadata
+  if (redactedEvent.metadata) {
+    redactedEvent.metadata = {
+      ...redactSensitiveData(redactedEvent.metadata as Record<string, unknown>),
+    } as AuditEvent['metadata'];
+  }
+  
+  return redactedEvent;
+}
 
 // ============================================
 // Storage
@@ -137,7 +187,9 @@ function getAuditLogPath(date: Date = new Date()): string {
 async function writeAuditEvent(event: AuditEvent): Promise<void> {
   if (!auditConfig.enabled) return;
 
-  const logLine = JSON.stringify(event) + '\n';
+  // Automatically redact sensitive data before writing
+  const redactedEvent = redactEvent(event);
+  const logLine = JSON.stringify(redactedEvent) + '\n';
   const logPath = getAuditLogPath();
 
   try {
@@ -229,9 +281,10 @@ export async function logConfigChange(
     action: {
       type: 'update',
       result: params.result,
+      // Values will be automatically redacted by redactEvent()
       details: {
-        oldValue: params.oldValue ? '[REDACTED]' : undefined,
-        newValue: params.newValue ? '[REDACTED]' : undefined,
+        oldValue: params.oldValue,
+        newValue: params.newValue,
       },
     },
   });

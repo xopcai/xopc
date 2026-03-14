@@ -16,6 +16,7 @@ import './commands/models.js';
 import './commands/extension.js';
 import './commands/auth.js';
 import './commands/skills.js';
+import './commands/logs.js';
 import './commands/acp.js';
 
 

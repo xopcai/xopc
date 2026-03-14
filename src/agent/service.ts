@@ -23,6 +23,7 @@ import { ToolUsageAnalyzer } from './tool-usage-analyzer.js';
 import { ToolChainTracker } from './tool-chain-tracker.js';
 import { ErrorPatternMatcher } from './error-pattern-matcher.js';
 import { SelfVerifyMiddleware } from './middleware/self-verify.js';
+import { ContextMiddleware, contextMiddleware } from './middleware/context.js';
 import { LifecycleManager } from './lifecycle/index.js';
 import { CompactionLifecycleHandler } from './lifecycle/handlers/compaction.js';
 
@@ -91,6 +92,7 @@ export class AgentService {
   private toolChainTracker: ToolChainTracker;
   private errorPatternMatcher: ErrorPatternMatcher;
   private selfVerifyMiddleware: SelfVerifyMiddleware;
+  private contextMiddleware: ContextMiddleware;
 
   private messageRouter: MessageRouter;
   private commandHandler: CommandHandler;
@@ -326,6 +328,9 @@ export class AgentService {
       defaultMaxRetries: 1,
       logMatches: true,
     });
+
+    // Initialize context middleware for automatic request tracking
+    this.contextMiddleware = new ContextMiddleware();
   }
 
   private initializeLifecycleHandlers(): void {
@@ -442,6 +447,14 @@ export class AgentService {
       isGroup: false,
     };
 
+    // Start request context for logging
+    const requestId = this.contextMiddleware.onRequest({
+      sessionKey,
+      userId: context.senderId,
+      channel,
+      chatId,
+    });
+
     this.sessionContextManager.setContext(context);
     this.feedbackCoordinator.setContext(context);
 
@@ -482,6 +495,7 @@ export class AgentService {
     } finally {
       this.sessionContextManager.clearContext();
       this.feedbackCoordinator.clearContext();
+      this.contextMiddleware.onResponse();
     }
   }
 
