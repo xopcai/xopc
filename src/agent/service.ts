@@ -23,7 +23,7 @@ import { ToolUsageAnalyzer } from './tool-usage-analyzer.js';
 import { ToolChainTracker } from './tool-chain-tracker.js';
 import { ErrorPatternMatcher } from './error-pattern-matcher.js';
 import { SelfVerifyMiddleware } from './middleware/self-verify.js';
-import { ContextMiddleware, contextMiddleware } from './middleware/context.js';
+import { ContextMiddleware } from './middleware/context.js';
 import { LifecycleManager } from './lifecycle/index.js';
 import { CompactionLifecycleHandler } from './lifecycle/handlers/compaction.js';
 
@@ -448,7 +448,7 @@ export class AgentService {
     };
 
     // Start request context for logging
-    const requestId = this.contextMiddleware.onRequest({
+    this.contextMiddleware.onRequest({
       sessionKey,
       userId: context.senderId,
       channel,
