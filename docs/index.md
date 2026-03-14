@@ -42,6 +42,6 @@ features:
     details: STT/TTS support for voice communication via Telegram
     link: /voice
   - title: 🤖 Multi-Provider
-    details: 20+ LLM providers: OpenAI, Anthropic, Google, Groq, DeepSeek, Ollama and more
+    details: "20+ LLM providers: OpenAI, Anthropic, Google, Groq, DeepSeek, Ollama and more"
     link: /models
 ---
