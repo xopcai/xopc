@@ -12,15 +12,12 @@ import {
   getLogStats as fetchLogStats,
   cleanOldLogs,
   type LogQuery,
-  type LogFileMeta,
   type LogEntry,
 } from '../../utils/log-store.js';
-import { getLoggerConfig, getLogDir } from '../../utils/logger/config.js';
+import { getLoggerConfig } from '../../utils/logger/config.js';
 import { rotateLogs } from '../../utils/logger/rotation.js';
-import { getAuditConfig } from '../../utils/logger/audit.js';
-import path from 'path';
 
-function createLogsCommand(ctx: CLIContext): Command {
+function createLogsCommand(_ctx: CLIContext): Command {
   const command = new Command('logs');
   command.description('Manage and query logs');
 
