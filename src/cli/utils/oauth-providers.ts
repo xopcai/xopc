@@ -14,12 +14,12 @@ import {
   googleGeminiCliOAuthProvider,
   googleAntigravityOAuthProvider,
   openaiCodexOAuthProvider,
-  type OAuthProvider,
-} from '../../auth/index.js';
+} from '../../auth/oauth/index.js';
+import type { OAuthProviderInterface } from '../../auth/oauth/types.js';
 
 export interface OAuthProviderConfig {
   displayName: string;
-  provider: OAuthProvider;
+  provider: OAuthProviderInterface;
   profileId: string;
   urlPrompt: string;
 }
