@@ -9,6 +9,20 @@ import type { Attachment } from './utils/attachment-utils';
 import type { MessageEditor } from './components/MessageEditor';
 import type { ChatRoute } from './navigation';
 
+// Re-export types from separated module (also keeps inline types for backward compatibility)
+export {
+  type ChatPayload,
+  type ErrorPayload,
+  type GatewayClientConfig,
+  type Message,
+  type ProgressState,
+  type ConnectionState,
+  type SessionInfo,
+} from './gateway-types';
+
+// Import helpers from separated module
+import { apiUrl, authHeaders } from './gateway-helpers';
+
 // ---------- Types ----------
 
 export type ChatPayload = {
