@@ -1,7 +1,7 @@
 /**
- * Channel Plugin Types - 频道插件核心类型定义
+ * Channel Plugin Types - Core type definitions for channel plugins
  * 
- * 参考 OpenClaw 架构设计，定义标准化的频道插件接口
+ * Based on OpenClaw architecture design
  */
 
 import type { Config } from '../config/index.js';
@@ -85,72 +85,72 @@ export interface ChannelPluginStartOptions {
 }
 
 export interface ChannelPlugin<ResolvedAccount = any> {
-  /** 频道标识符 */
+  /** Channel identifier */
   id: ChannelId;
   
-  /** 频道元数据 */
+  /** Channel metadata */
   meta: ChannelMetadata;
   
-  /** 初始化插件 (仅调用一次) */
+  /** Initialize plugin (called once) */
   init(options: ChannelPluginInitOptions): Promise<void>;
   
-  /** 启动频道监听 */
+  /** Start channel listener */
   start(options?: ChannelPluginStartOptions): Promise<void>;
   
-  /** 停止频道 */
+  /** Stop channel */
   stop(accountId?: string): Promise<void>;
   
-  // ---------- 配置适配器 ----------
+  // Configuration adapter
   
-  /** 配置适配器 - 账户管理 */
-  config: ChannelConfigAdapter<ResolvedAccount>;
+  /** Configuration adapter - account management */
+  configAdapter?: ChannelConfigAdapter<ResolvedAccount>;
   
-  /** 配置 Schema */
+  /** Configuration schema */
   configSchema?: ChannelConfigSchema;
   
-  /** 设置适配器 */
+  /** Setup adapter */
   setup?: ChannelSetupAdapter;
   
-  // ---------- 消息适配器 ----------
+  // Outbound adapter
   
-  /** 出站消息适配器 */
+  /** Outbound message adapter */
   outbound?: ChannelOutboundAdapter;
   
-  /** 流式响应适配器 */
+  /** Streaming response adapter */
   streaming?: ChannelStreamingAdapter;
   
-  // ---------- 安全适配器 ----------
+  // Security adapter
   
-  /** 安全适配器 - 访问控制 */
+  /** Security adapter - access control */
   security?: ChannelSecurityAdapter<ResolvedAccount>;
   
-  /** 群组策略适配器 */
+  /** Group policy adapter */
   groups?: ChannelGroupAdapter;
   
-  /** 提及适配器 */
+  /** Mention adapter */
   mentions?: ChannelMentionAdapter;
   
-  // ---------- 状态适配器 ----------
+  // Status adapter
   
-  /** 状态适配器 - 健康检查 */
+  /** Status adapter - health checks */
   status?: ChannelStatusAdapter<ResolvedAccount>;
   
-  // ---------- 命令适配器 ----------
+  // Command adapter
   
-  /** 命令适配器 */
+  /** Command adapter */
   commands?: ChannelCommandAdapter;
   
-  /** 消息动作适配器 */
+  /** Message action adapter */
   actions?: ChannelMessageActionAdapter;
   
-  // ---------- Gateway ----------
+  // Gateway
   
-  /** Gateway 适配器 */
+  /** Gateway adapter */
   gateway?: ChannelGatewayAdapter<ResolvedAccount>;
   
-  // ---------- 工具 ----------
+  // Tools
   
-  /** 频道特定的 Agent 工具 */
+  /** Channel-specific Agent tools */
   agentTools?: ChannelAgentTool[];
 }
 
@@ -159,28 +159,28 @@ export interface ChannelPlugin<ResolvedAccount = any> {
 // ============================================
 
 export interface ChannelConfigAdapter<ResolvedAccount> {
-  /** 列出所有账户 ID */
+  /** List all account IDs */
   listAccountIds(cfg: Config): string[];
   
-  /** 解析账户配置 */
+  /** Resolve account configuration */
   resolveAccount(cfg: Config, accountId?: string | null): ResolvedAccount;
   
-  /** 检查账户是否已配置 */
+  /** Check if account is configured */
   isConfigured?(account: ResolvedAccount, cfg: Config): boolean | Promise<boolean>;
   
-  /** 获取未配置原因 */
+  /** Get unconfigured reason */
   unconfiguredReason?(account: ResolvedAccount, cfg: Config): string;
   
-  /** 检查账户是否启用 */
+  /** Check if account is enabled */
   isEnabled?(account: ResolvedAccount, cfg: Config): boolean;
   
-  /** 获取禁用原因 */
+  /** Get disabled reason */
   disabledReason?(account: ResolvedAccount, cfg: Config): string;
   
-  /** 描述账户状态 */
+  /** Describe account status */
   describeAccount?(account: ResolvedAccount, cfg: Config): ChannelAccountSnapshot;
   
-  /** 解析 AllowFrom 列表 */
+  /** Resolve AllowFrom list */
   resolveAllowFrom?(params: {
     cfg: Config;
     accountId?: string | null;
@@ -249,23 +249,39 @@ export interface OutboundDeliveryResult {
   error?: string;
 }
 
+/** Agent response */
+export interface AgentResponse {
+  /** Reply content */
+  content: string;
+  /** Media attachments */
+  media?: Array<{ type: string; url: string; caption?: string }>;
+  /** Quick buttons */
+  buttons?: Array<{ text: string; callback_data?: string; url?: string }>;
+  /** Send as voice */
+  asVoice?: boolean;
+  /** Skill invocation */
+  skill?: string;
+  /** Wait for user approval */
+  waitForApproval?: boolean;
+}
+
 export interface ChannelOutboundAdapter {
-  /** 投递模式 */
+  /** Delivery mode */
   deliveryMode: 'direct' | 'gateway' | 'hybrid';
   
-  /** 文本分块器 */
+  /** Text chunker */
   chunker?: ((text: string, limit: number) => string[]) | null;
   
-  /** 分块模式 */
+  /** Chunker mode */
   chunkerMode?: 'text' | 'markdown';
   
-  /** 文本分块限制 */
+  /** Text chunk limit */
   textChunkLimit?: number;
   
-  /** 投票选项限制 */
+  /** Poll options limit */
   pollMaxOptions?: number;
   
-  /** 解析目标 */
+  /** Resolve target */
   resolveTarget?(params: {
     to?: string;
     allowFrom?: string[];
@@ -273,16 +289,16 @@ export interface ChannelOutboundAdapter {
     mode?: ChannelOutboundTargetMode;
   }): { ok: true; to: string } | { ok: false; error: Error };
   
-  /** 发送完整载荷 */
+  /** Send full payload */
   sendPayload?(ctx: ChannelOutboundPayloadContext): Promise<OutboundDeliveryResult>;
   
-  /** 发送文本 */
+  /** Send text */
   sendText?(ctx: ChannelOutboundContext): Promise<OutboundDeliveryResult>;
   
-  /** 发送媒体 */
+  /** Send media */
   sendMedia?(ctx: ChannelOutboundContext): Promise<OutboundDeliveryResult>;
   
-  /** 发送投票 */
+  /** Send poll */
   sendPoll?(ctx: ChannelPollContext): Promise<ChannelPollResult>;
 }
 
@@ -312,7 +328,7 @@ export interface ChannelStreamHandle {
 }
 
 export interface ChannelStreamingAdapter {
-  /** 开始流式消息 */
+  /** Start streaming message */
   startStream(options: {
     chatId: string;
     accountId?: string;
@@ -341,7 +357,7 @@ export interface ChannelSecurityContext {
 }
 
 export interface ChannelSecurityAdapter<ResolvedAccount> {
-  /** 解析 DM 策略 */
+  /** Resolve DM policy */
   resolveDmPolicy?(params: {
     account: ResolvedAccount;
     cfg: Config;
@@ -349,7 +365,7 @@ export interface ChannelSecurityAdapter<ResolvedAccount> {
     chatId: string;
   }): DmPolicy;
   
-  /** 解析群组策略 */
+  /** Resolve group policy */
   resolveGroupPolicy?(params: {
     account: ResolvedAccount;
     cfg: Config;
@@ -357,14 +373,14 @@ export interface ChannelSecurityAdapter<ResolvedAccount> {
     senderId: string;
   }): GroupPolicy;
   
-  /** 解析 AllowFrom */
+  /** Resolve AllowFrom */
   resolveAllowFrom?(params: {
     account: ResolvedAccount;
     cfg: Config;
     accountId?: string;
   }): Array<string | number> | undefined;
   
-  /** 检查访问权限 */
+  /** Check access permission */
   checkAccess?(ctx: ChannelSecurityContext, account: ResolvedAccount, cfg: Config): {
     allowed: boolean;
     reason?: string;
@@ -383,13 +399,13 @@ export interface ChannelGroupContext {
 }
 
 export interface ChannelGroupAdapter {
-  /** 是否需要提及 */
+  /** Check if mention is required */
   resolveRequireMention?(params: ChannelGroupContext): boolean | undefined;
   
-  /** 解析群组介绍提示 */
+  /** Resolve group intro hint */
   resolveGroupIntroHint?(params: ChannelGroupContext): string | undefined;
   
-  /** 解析工具策略 */
+  /** Resolve tool policy */
   resolveToolPolicy?(params: ChannelGroupContext): unknown; // GroupToolPolicyConfig
 }
 
@@ -398,14 +414,14 @@ export interface ChannelGroupAdapter {
 // ============================================
 
 export interface ChannelMentionAdapter {
-  /** 检查是否提及 Bot */
+  /** Check if bot is mentioned */
   hasMention?(params: {
     text: string;
     botUsername: string;
     entities?: unknown[];
   }): boolean;
   
-  /** 移除 Bot 提及 */
+  /** Remove bot mention */
   removeMention?(params: {
     text: string;
     botUsername: string;
@@ -417,10 +433,10 @@ export interface ChannelMentionAdapter {
 // ============================================
 
 export interface ChannelStatusAdapter<ResolvedAccount> {
-  /** 默认运行时快照 */
+  /** Default runtime snapshot */
   defaultRuntime?: ChannelAccountSnapshot;
   
-  /** 构建频道摘要 */
+  /** Build channel summary */
   buildChannelSummary?(params: {
     account: ResolvedAccount;
     cfg: Config;
@@ -428,14 +444,14 @@ export interface ChannelStatusAdapter<ResolvedAccount> {
     snapshot: ChannelAccountSnapshot;
   }): Record<string, unknown> | Promise<Record<string, unknown>>;
   
-  /** 探测账户 */
+  /** Probe account */
   probeAccount?(params: {
     account: ResolvedAccount;
     timeoutMs: number;
     cfg: Config;
   }): Promise<unknown>;
   
-  /** 审计账户 */
+  /** Audit account */
   auditAccount?(params: {
     account: ResolvedAccount;
     timeoutMs: number;
@@ -443,7 +459,7 @@ export interface ChannelStatusAdapter<ResolvedAccount> {
     probe?: unknown;
   }): Promise<unknown>;
   
-  /** 构建账户快照 */
+  /** Build account snapshot */
   buildAccountSnapshot?(params: {
     account: ResolvedAccount;
     cfg: Config;
@@ -452,7 +468,7 @@ export interface ChannelStatusAdapter<ResolvedAccount> {
     audit?: unknown;
   }): ChannelAccountSnapshot | Promise<ChannelAccountSnapshot>;
   
-  /** 解析账户状态 */
+  /** Resolve account status */
   resolveAccountState?(params: {
     account: ResolvedAccount;
     cfg: Config;
@@ -460,7 +476,7 @@ export interface ChannelStatusAdapter<ResolvedAccount> {
     enabled: boolean;
   }): 'online' | 'offline' | 'error' | 'disabled';
   
-  /** 收集状态问题 */
+  /** Collect status issues */
   collectStatusIssues?(accounts: ChannelAccountSnapshot[]): ChannelStatusIssue[];
 }
 
@@ -482,10 +498,10 @@ export interface ChannelCommandSpec {
 }
 
 export interface ChannelCommandAdapter {
-  /** 列出可用命令 */
+  /** List available commands */
   listCommands?(): ChannelCommandSpec[];
   
-  /** 处理命令 */
+  /** Handle command */
   handleCommand?(params: {
     command: string;
     args: string[];
@@ -507,7 +523,7 @@ export interface ChannelMessageActionContext {
 }
 
 export interface ChannelMessageActionAdapter {
-  /** 处理动作 */
+  /** Handle action */
   handleAction?(ctx: ChannelMessageActionContext): Promise<void>;
 }
 
@@ -528,10 +544,10 @@ export interface ChannelGatewayContext<ResolvedAccount = unknown> {
 }
 
 export interface ChannelGatewayAdapter<ResolvedAccount> {
-  /** Gateway 方法列表 */
+  /** Gateway method list */
   methods?: string[];
   
-  /** 处理 Gateway 请求 */
+  /** Handle Gateway request */
   handle?(params: {
     method: string;
     params: Record<string, unknown>;

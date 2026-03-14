@@ -111,19 +111,6 @@ export class ModelManager {
       return sessionModel;
     }
 
-    // Check Telegram channel for session model
-    if (this.channelManager && sessionKey.startsWith('telegram:')) {
-      const telegram = this.channelManager.getChannel('telegram');
-      if (telegram?.getSessionModel) {
-        const tgModel = telegram.getSessionModel(sessionKey);
-        if (tgModel) {
-          // Cache it for future use
-          this.sessionModels.set(sessionKey, tgModel);
-          return tgModel;
-        }
-      }
-    }
-
     // Fall back to default
     return this.defaultModel;
   }

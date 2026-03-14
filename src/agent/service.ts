@@ -34,6 +34,7 @@ import { FeedbackCoordinator } from './feedback/index.js';
 import { SkillManager } from './skills/index.js';
 import { SystemPromptBuilder } from './prompt/service-prompt-builder.js';
 import { maybeApplyTtsToPayload } from '../tts/payload.js';
+import { createTypingController, type TypingController } from './typing.js';
 
 const log = createLogger('AgentService');
 
@@ -539,19 +540,28 @@ export class AgentService {
         }
       }
 
+      // Start continuous typing indicator (renews every 5 seconds)
+      let typingController: TypingController | null = null;
       if (msg.channel !== 'cli') {
-        this.bus.publishOutbound({
-          channel: msg.channel,
-          chat_id: msg.chat_id,
-          content: '',
-          type: 'typing_on',
-          metadata: {
-            accountId: msg.metadata?.accountId,
-            threadId: msg.metadata?.threadId,
+        typingController = createTypingController({
+          intervalSeconds: 5,
+          onStart: async () => {
+            await this.bus.publishOutbound({
+              channel: msg.channel,
+              chat_id: msg.chat_id,
+              content: '',
+              type: 'typing_on',
+              metadata: {
+                accountId: msg.metadata?.accountId,
+                threadId: msg.metadata?.threadId,
+              },
+            });
           },
-        }).catch(err => {
-          log.warn({ err }, 'Failed to send typing indicator');
+          onStop: async () => {
+            // Telegram doesn't have typing_off, but keep for consistency
+          },
         });
+        typingController.start();
       }
 
       if (this.channelManagerRef && msg.channel !== 'cli') {
@@ -566,7 +576,30 @@ export class AgentService {
         }
       }
 
-      await this.agentOrchestrator.process(msg, sessionContext);
+      try {
+        await this.agentOrchestrator.process(msg, sessionContext);
+      } finally {
+        // Stop typing indicator after processing completes
+        typingController?.stop();
+      }
+
+      // Send the agent's response
+      const finalContent = this.getLastAssistantContent();
+      if (finalContent?.trim()) {
+        const hookResult = await this.hookHandler.runMessageSending(sessionContext.chatId, finalContent);
+        if (hookResult.send) {
+          await this.bus.publishOutbound({
+            channel: sessionContext.channel,
+            chat_id: sessionContext.chatId,
+            content: hookResult.content || finalContent,
+            type: 'message',
+            metadata: {
+              accountId: msg.metadata?.accountId,
+              threadId: msg.metadata?.threadId,
+            },
+          });
+        }
+      }
 
     } finally {
       await this.sessionLifecycleManager.endSession(sessionContext);
