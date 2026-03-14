@@ -7,7 +7,6 @@
 import { Command } from 'commander';
 import { readFileSync } from 'fs';
 import { join } from 'path';
-import { input, confirm } from '@inquirer/prompts';
 import { saveConfig } from '../../../config/index.js';
 import { register, formatExamples, type CLIContext } from '../../registry.js';
 import { colors } from '../../utils/colors.js';
