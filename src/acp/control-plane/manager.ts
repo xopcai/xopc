@@ -69,24 +69,11 @@ interface SessionStore {
   load(sessionKey: string): Promise<SessionEntry | null>;
   save(sessionKey: string, entry: SessionEntry): Promise<void>;
   list(): Promise<SessionEntry[]>;
+  initialize(): Promise<void>;
+  delete(sessionKey: string): Promise<void>;
 }
 
-/** Simple File-based Session Store */
-class SimpleSessionStore implements SessionStore {
-  private readonly sessions = new Map<string, SessionEntry>();
-  
-  async load(sessionKey: string): Promise<SessionEntry | null> {
-    return this.sessions.get(sessionKey) ?? null;
-  }
-  
-  async save(sessionKey: string, entry: SessionEntry): Promise<void> {
-    this.sessions.set(sessionKey, entry);
-  }
-  
-  async list(): Promise<SessionEntry[]> {
-    return Array.from(this.sessions.values());
-  }
-}
+import { AcpSessionStore, resolveAcpWorkspace } from "./session-store.js";
 
 export class AcpSessionManager {
   private readonly actorQueue = new SessionActorQueue();
@@ -104,17 +91,23 @@ export class AcpSessionManager {
   private readonly sessionStore: SessionStore;
 
   constructor(private readonly sessionStorePath?: string) {
-    this.sessionStore = new SimpleSessionStore();
+    const workspace = sessionStorePath || resolveAcpWorkspace({} as Config);
+    this.sessionStore = new AcpSessionStore(workspace);
+  }
+
+  /** Initialize the session manager */
+  async initialize(): Promise<void> {
+    await this.sessionStore.initialize();
   }
 
   /** 解析 Session */
-  resolveSession(params: { cfg: Config; sessionKey: string }): AcpSessionResolution {
+  async resolveSession(params: { cfg: Config; sessionKey: string }): Promise<AcpSessionResolution> {
     const sessionKey = normalizeSessionKey(params.sessionKey);
     if (!sessionKey) {
       return { kind: "none", sessionKey };
     }
     
-    // 从缓存获取
+    // 首先从缓存获取 (运行时状态优先)
     const cached = this.runtimeCache.get(normalizeActorKey(sessionKey));
     if (cached) {
       const meta: SessionAcpMeta = {
@@ -129,6 +122,13 @@ export class AcpSessionManager {
       return { kind: "ready", sessionKey, meta };
     }
     
+    // 从持久化存储获取
+    const entry = await this.sessionStore.load(sessionKey);
+    if (entry && entry.acp) {
+      return { kind: "ready", sessionKey, meta: entry.acp };
+    }
+    
+    // 如果是 ACP session key 但没有元数据，说明是 stale
     if (isAcpSessionKey(sessionKey)) {
       return {
         kind: "stale",
@@ -260,7 +260,7 @@ export class AcpSessionManager {
     await this.evictIdleRuntimeHandles({ cfg: input.cfg });
     
     await this.withSessionActor(sessionKey, async () => {
-      const resolution = this.resolveSession({ cfg: input.cfg, sessionKey });
+      const resolution = await this.resolveSession({ cfg: input.cfg, sessionKey });
       if (resolution.kind !== "ready") {
         throw resolveAcpSessionResolutionError(resolution);
       }
@@ -397,7 +397,7 @@ export class AcpSessionManager {
       async () => {
         this.throwIfAborted(params.signal);
         
-        const resolution = this.resolveSession({ cfg: params.cfg, sessionKey });
+        const resolution = await this.resolveSession({ cfg: params.cfg, sessionKey });
         const resolvedMeta = requireReadySessionMeta(resolution);
         
         const { runtime, handle, meta } = await this.ensureRuntimeHandle({
@@ -455,7 +455,7 @@ export class AcpSessionManager {
     await this.evictIdleRuntimeHandles({ cfg: params.cfg });
     
     return await this.withSessionActor(sessionKey, async () => {
-      const resolution = this.resolveSession({ cfg: params.cfg, sessionKey });
+      const resolution = await this.resolveSession({ cfg: params.cfg, sessionKey });
       const resolvedMeta = requireReadySessionMeta(resolution);
       
       const { runtime, handle, meta } = await this.ensureRuntimeHandle({
@@ -505,7 +505,7 @@ export class AcpSessionManager {
     await this.evictIdleRuntimeHandles({ cfg: params.cfg });
     
     return await this.withSessionActor(sessionKey, async () => {
-      const resolution = this.resolveSession({ cfg: params.cfg, sessionKey });
+      const resolution = await this.resolveSession({ cfg: params.cfg, sessionKey });
       const resolvedMeta = requireReadySessionMeta(resolution);
       
       const { runtime, handle, meta } = await this.ensureRuntimeHandle({
@@ -589,7 +589,7 @@ export class AcpSessionManager {
     }
     
     await this.withSessionActor(sessionKey, async () => {
-      const resolution = this.resolveSession({ cfg: params.cfg, sessionKey });
+      const resolution = await this.resolveSession({ cfg: params.cfg, sessionKey });
       const resolvedMeta = requireReadySessionMeta(resolution);
       
       const { runtime, handle } = await this.ensureRuntimeHandle({
@@ -640,7 +640,7 @@ export class AcpSessionManager {
     await this.evictIdleRuntimeHandles({ cfg: input.cfg });
     
     return await this.withSessionActor(sessionKey, async () => {
-      const resolution = this.resolveSession({ cfg: input.cfg, sessionKey });
+      const resolution = await this.resolveSession({ cfg: input.cfg, sessionKey });
       const resolutionError = resolveAcpSessionResolutionError(resolution);
       
       if (resolutionError) {
@@ -1004,12 +1004,25 @@ export class AcpSessionManager {
 
 // Singleton
 let ACP_SESSION_MANAGER_SINGLETON: AcpSessionManager | null = null;
+let ACP_SESSION_MANAGER_INIT_PROMISE: Promise<void> | null = null;
 
 export function getAcpSessionManager(): AcpSessionManager {
   if (!ACP_SESSION_MANAGER_SINGLETON) {
     ACP_SESSION_MANAGER_SINGLETON = new AcpSessionManager();
+    // Start initialization in background
+    ACP_SESSION_MANAGER_INIT_PROMISE = ACP_SESSION_MANAGER_SINGLETON.initialize();
   }
   return ACP_SESSION_MANAGER_SINGLETON;
+}
+
+/** Initialize and get the ACP session manager */
+export async function getAcpSessionManagerAsync(): Promise<AcpSessionManager> {
+  const manager = getAcpSessionManager();
+  if (ACP_SESSION_MANAGER_INIT_PROMISE) {
+    await ACP_SESSION_MANAGER_INIT_PROMISE;
+    ACP_SESSION_MANAGER_INIT_PROMISE = null;
+  }
+  return manager;
 }
 
 export const __testing = {

@@ -14,6 +14,11 @@ import type {
   AcpRuntimeEvent,
   AcpRuntimeTurnAttachment,
   AcpRuntimePromptMode,
+  SessionAcpMeta,
+  SessionIdentity,
+  AcpSessionResolution,
+  AcpSessionRuntimeOptions,
+  AcpSessionStatus,
 } from "../runtime/types.js";
 import type { AcpRuntimeError } from "../runtime/errors.js";
 
@@ -24,7 +29,7 @@ export type {
   AcpSessionResolution,
   AcpSessionRuntimeOptions,
   AcpSessionStatus,
-} from "../runtime/types.js";
+};
 
 /** Session Entry (简化版，避免循环依赖) */
 export type SessionEntry = {
@@ -73,9 +78,6 @@ export type AcpCloseSessionResult = {
   runtimeNotice?: string;
   metaCleared: boolean;
 };
-
-/** ACP Session Runtime Options */
-export type { AcpSessionRuntimeOptions } from "../runtime/types.js";
 
 /** Active Turn State */
 export type ActiveTurnState = {

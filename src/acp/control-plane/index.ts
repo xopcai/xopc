@@ -2,7 +2,7 @@
  * ACP Control Plane Index
  */
 
-export { AcpSessionManager, getAcpSessionManager } from "./manager.js";
+export { AcpSessionManager, getAcpSessionManager, getAcpSessionManagerAsync } from "./manager.js";
 export type {
   AcpInitializeSessionInput,
   AcpRunTurnInput,
@@ -13,3 +13,4 @@ export type {
 export { RuntimeCache } from "./runtime-cache.js";
 export type { CachedRuntimeState } from "./runtime-cache.js";
 export { SessionActorQueue } from "./session-actor-queue.js";
+export { AcpSessionStore, resolveAcpWorkspace } from "./session-store.js";
