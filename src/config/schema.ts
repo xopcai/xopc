@@ -310,6 +310,57 @@ export const TTSConfigSchema = z.object({
 });
 
 // ============================================
+// ACP (Agent Control Protocol) Config
+// ============================================
+
+export const AcpDispatchConfigSchema = z.object({
+  /** Master switch for ACP turn dispatch */
+  enabled: z.boolean().optional(),
+});
+
+export const AcpStreamConfigSchema = z.object({
+  /** Coalescer idle flush window in milliseconds */
+  coalesceIdleMs: z.number().optional(),
+  /** Maximum text size per streamed chunk */
+  maxChunkChars: z.number().optional(),
+  /** Suppresses repeated status/tool projection lines */
+  repeatSuppression: z.boolean().optional(),
+  /** Live streams or waits for terminal event */
+  deliveryMode: z.enum(['live', 'final_only']).optional(),
+  /** Separator before visible text when hidden tool events occurred */
+  hiddenBoundarySeparator: z.enum(['none', 'space', 'newline', 'paragraph']).optional(),
+  /** Maximum assistant output characters per turn */
+  maxOutputChars: z.number().optional(),
+  /** Maximum visible characters for session/update lines */
+  maxSessionUpdateChars: z.number().optional(),
+  /** Per-sessionUpdate visibility overrides */
+  tagVisibility: z.record(z.string(), z.boolean()).optional(),
+});
+
+export const AcpRuntimeConfigSchema = z.object({
+  /** Idle runtime TTL in minutes */
+  ttlMinutes: z.number().optional(),
+  /** Install/setup command shown by doctor */
+  installCommand: z.string().optional(),
+});
+
+export const AcpConfigSchema = z.object({
+  /** Global ACP runtime gate */
+  enabled: z.boolean().optional(),
+  dispatch: AcpDispatchConfigSchema.optional(),
+  /** Backend id registered by ACP runtime plugin */
+  backend: z.string().optional(),
+  /** Default agent for ACP sessions */
+  defaultAgent: z.string().optional(),
+  /** Allowed agents list */
+  allowedAgents: z.array(z.string()).optional(),
+  /** Maximum concurrent ACP sessions */
+  maxConcurrentSessions: z.number().optional(),
+  stream: AcpStreamConfigSchema.optional(),
+  runtime: AcpRuntimeConfigSchema.optional(),
+});
+
+// ============================================
 // Extension Configs
 // ============================================
 
@@ -337,6 +388,7 @@ export const ConfigSchema = z.object({
   providers: ProvidersConfigSchema,
   stt: STTConfigSchema.optional(),
   tts: TTSConfigSchema.optional(),
+  acp: AcpConfigSchema.optional(),
 }).default({
   agents: {
     defaults: {
@@ -469,6 +521,7 @@ export type GatewayAuthConfig = z.infer<typeof GatewayAuthSchema>;
 export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
 export type STTConfig = z.infer<typeof STTConfigSchema>;
 export type TTSConfig = z.infer<typeof TTSConfigSchema>;
+export type AcpConfig = z.infer<typeof AcpConfigSchema>;
 
 // ============================================
 // Helper Functions

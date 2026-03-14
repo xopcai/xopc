@@ -16,6 +16,7 @@ import './commands/models.js';
 import './commands/extension.js';
 import './commands/auth.js';
 import './commands/skills.js';
+import './commands/acp.js';
 
 
 // Global parsed options - updated before each command
