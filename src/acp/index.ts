@@ -27,7 +27,7 @@ export {
 export { AcpRuntimeError } from "./runtime/errors.js";
 
 // Control Plane
-export { AcpSessionManager, getAcpSessionManager } from "./control-plane/manager.js";
+export { AcpSessionManager, getAcpSessionManager, getAcpSessionManagerAsync } from "./control-plane/manager.js";
 export type {
   AcpInitializeSessionInput,
   AcpRunTurnInput,
@@ -35,13 +35,3 @@ export type {
   AcpCloseSessionResult,
   AcpManagerObservabilitySnapshot,
 } from "./control-plane/manager.types.js";
-
-// Re-export types for convenience
-export type {
-  AcpRuntime,
-  AcpRuntimeHandle,
-  AcpRuntimeEvent,
-  AcpRuntimeCapabilities,
-  AcpSessionStatus,
-  SessionAcpMeta,
-} from "./runtime/types.js";
