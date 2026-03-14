@@ -14,16 +14,13 @@ describe('ChannelManager module', () => {
   });
 
   it('should export EXTENSIONS constant', async () => {
-    // EXTENSIONS is a const but not exported, check manager module loads
     const module = await import('../manager.js');
-    // If we can import the module without errors, basic structure is correct
     expect(module.ChannelManager).toBeDefined();
   });
 
   it('should create ChannelManager instance with valid config', async () => {
     const { ChannelManager } = await import('../manager.js');
     
-    // Create minimal mock - we only test constructor works
     const mockConfig = {
       channels: {}
     } as any;

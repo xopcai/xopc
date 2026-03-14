@@ -111,6 +111,9 @@ export class AgentEventHandler {
     this.taskStartTime = Date.now();
     this.progressManager.startTask();
 
+    // Start a new tool chain for this turn
+    this.toolChainTracker.startChain(context.sessionKey);
+
     const result = this.requestLimiter.recordRequest();
 
     this.lifecycleManager.emit('llm_request', context.sessionKey, {

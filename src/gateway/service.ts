@@ -2,6 +2,7 @@ import crypto from 'crypto';
 import { join } from 'path';
 import { AgentService } from '../agent/index.js';
 import { ChannelManager } from '../channels/manager.js';
+import { telegramPlugin } from '../channels/telegram-plugin.js';
 import { MessageBus } from '../bus/index.js';
 import { loadConfig, saveConfig, DEFAULT_PATHS } from '../config/index.js';
 import { getWorkspacePath } from '../config/schema.js';
@@ -14,6 +15,7 @@ import type { Config } from '../config/schema.js';
 import type { SessionListQuery, ExportFormat } from '../types/index.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { getModelRegistry } from '../providers/index.js';
+import { getLogDir, getLogStats } from '../utils/logger.js';
 
 // ========== SSE Event System ==========
 
@@ -78,6 +80,7 @@ export class GatewayService {
 
     // Initialize channel manager
     this.channelManager = new ChannelManager(this.config, this.bus);
+    this.channelManager.registerPlugin(telegramPlugin);
 
     // Initialize extension loader
     this.workspacePath = getWorkspacePath(this.config) || './workspace';
@@ -499,7 +502,6 @@ export class GatewayService {
   } {
     const runningChannels = this.channelManager.getRunningChannels();
     const allChannels = this.channelManager.getAllChannels();
-    const { getLogDir, getLogStats } = require('../utils/logger.js');
     const logStats = getLogStats();
 
     return {

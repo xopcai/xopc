@@ -1,192 +1,289 @@
 /**
- * Channel Manager
- *
- * Manages all channel implementations.
- * TTS is applied at the dispatch layer via maybeApplyTtsToPayload.
+ * Channel Manager - Channel plugin management based on ChannelPlugin interface
  */
 
-import { telegramExtension } from './telegram/extension.js';
-import type { ChannelExtension, ChannelStreamHandle } from './types.js';
-import { MessageBus } from '../bus/index.js';
-import { Config } from '../config/index.js';
-import { OutboundMessage } from '../types/index.js';
-import { maybeApplyTtsToPayload } from '../tts/payload.js';
+import type { Config } from '../config/index.js';
+import type { MessageBus } from '../bus/index.js';
+import type { OutboundMessage } from '../types/index.js';
+import type { 
+  ChannelPlugin, 
+  ChannelPluginInitOptions,
+  ChannelPluginStartOptions,
+  ChannelOutboundContext,
+  OutboundDeliveryResult,
+  ChannelStreamHandle,
+} from './plugin-types.js';
+
 import { createLogger } from '../utils/logger.js';
+import { maybeApplyTtsToPayload } from '../tts/payload.js';
 
 const log = createLogger('ChannelManager');
 
-const EXTENSIONS: ChannelExtension[] = [telegramExtension];
+// ============================================
+// Manager Implementation
+// ============================================
 
 export class ChannelManager {
+  private plugins = new Map<string, ChannelPlugin>();
   private bus: MessageBus;
   private config: Config;
   private initialized = false;
-
+  private running = false;
+  
   constructor(config: Config, bus: MessageBus) {
     this.bus = bus;
     this.config = config;
   }
-
-  async initializeChannels(): Promise<void> {
-    if (this.initialized) return;
-
-    for (const extension of EXTENSIONS) {
-      const channelConfig = this.config.channels?.[extension.id];
-      if (channelConfig?.enabled) {
-        try {
-          await extension.init({
-            bus: this.bus,
-            config: this.config,
-            channelConfig,
-          });
-          log.info({ channel: extension.id }, 'Channel initialized');
-        } catch (err) {
-          log.error({ channel: extension.id, err }, 'Failed to initialize channel');
-        }
-      }
+  
+  registerPlugin(plugin: ChannelPlugin): void {
+    if (this.plugins.has(plugin.id)) {
+      log.warn({ channel: plugin.id }, 'Channel plugin already registered, overwriting');
     }
-
+    this.plugins.set(plugin.id, plugin);
+    log.info({ channel: plugin.id }, 'Registered channel plugin');
+  }
+  
+  getPlugin(id: string): ChannelPlugin | undefined {
+    return this.plugins.get(id);
+  }
+  
+  getAllPlugins(): ChannelPlugin[] {
+    return Array.from(this.plugins.values());
+  }
+  
+  async initialize(): Promise<void> {
+    if (this.initialized) {
+      log.warn('Channels already initialized');
+      return;
+    }
+    
+    const initPromises: Promise<void>[] = [];
+    
+    for (const [id, plugin] of this.plugins) {
+      const channelConfig = this.config.channels?.[id];
+      if (!channelConfig?.enabled) {
+        log.debug({ channel: id }, 'Channel disabled in config, skipping');
+        continue;
+      }
+      
+      const initPromise = this.initializePlugin(plugin, channelConfig as Record<string, unknown>);
+      initPromises.push(initPromise);
+    }
+    
+    await Promise.allSettled(initPromises);
     this.initialized = true;
+    log.info('All channel plugins initialized');
   }
-
-  async startAll(): Promise<void> {
-    const promises: Promise<void>[] = [];
-
-    for (const extension of EXTENSIONS) {
-      const channelConfig = this.config.channels?.[extension.id];
-      if (channelConfig?.enabled) {
-        promises.push(
-          extension.start().catch(err => {
-            log.error({ channel: extension.id, err }, 'Failed to start channel');
-          })
-        );
-      }
+  
+  private async initializePlugin(
+    plugin: ChannelPlugin, 
+    channelConfig: Record<string, unknown>
+  ): Promise<void> {
+    try {
+      const options: ChannelPluginInitOptions = {
+        bus: this.bus,
+        config: this.config,
+        channelConfig,
+      };
+      await plugin.init(options);
+      log.info({ channel: plugin.id }, 'Channel plugin initialized');
+    } catch (err) {
+      log.error({ channel: plugin.id, err }, 'Failed to initialize channel plugin');
     }
-
-    await Promise.all(promises);
   }
-
-  async stopAll(): Promise<void> {
-    const promises: Promise<void>[] = [];
-
-    for (const extension of EXTENSIONS) {
-      const channelConfig = this.config.channels?.[extension.id];
-      if (channelConfig?.enabled) {
-        promises.push(
-          extension.stop().catch(err => {
-            log.error({ channel: extension.id, err }, 'Failed to stop channel');
-          })
-        );
-      }
+  
+  async start(): Promise<void> {
+    if (!this.initialized) {
+      throw new Error('Channels not initialized');
     }
-
-    await Promise.all(promises);
+    
+    if (this.running) {
+      log.warn('Channels already running');
+      return;
+    }
+    
+    const startPromises: Promise<void>[] = [];
+    
+    for (const [id, plugin] of this.plugins) {
+      const channelConfig = this.config.channels?.[id];
+      if (!channelConfig?.enabled) continue;
+      
+      const startPromise = this.startPlugin(plugin).catch(err => {
+        log.error({ channel: id, err }, 'Failed to start channel plugin');
+      });
+      startPromises.push(startPromise);
+    }
+    
+    await Promise.allSettled(startPromises);
+    this.running = true;
+    log.info('All channel plugins started');
   }
-
+  
+  private async startPlugin(plugin: ChannelPlugin): Promise<void> {
+    const options: ChannelPluginStartOptions = {};
+    await plugin.start(options);
+    log.info({ channel: plugin.id }, 'Channel plugin started');
+  }
+  
+  async stop(): Promise<void> {
+    if (!this.running) return;
+    
+    const stopPromises: Promise<void>[] = [];
+    
+    for (const [id, plugin] of this.plugins) {
+      const stopPromise = this.stopPlugin(plugin).catch(err => {
+        log.error({ channel: id, err }, 'Failed to stop channel plugin');
+      });
+      stopPromises.push(stopPromise);
+    }
+    
+    await Promise.allSettled(stopPromises);
+    this.running = false;
+    log.info('All channel plugins stopped');
+  }
+  
+  private async stopPlugin(plugin: ChannelPlugin): Promise<void> {
+    await plugin.stop();
+    log.info({ channel: plugin.id }, 'Channel plugin stopped');
+  }
+  
+  async send(msg: OutboundMessage): Promise<void> {
+    log.debug({ type: msg.type, channel: msg.channel, chatId: msg.chat_id }, 'Received outbound message');
+    
+    const processedMsg = await this.applyTtsIfNeeded(msg);
+    
+    const plugin = this.plugins.get(processedMsg.channel);
+    if (!plugin) {
+      log.error({ channel: processedMsg.channel }, 'Unknown channel');
+      return;
+    }
+    
+    // Handle typing indicators and other special message types
+    if (processedMsg.type === 'typing_on' || processedMsg.type === 'typing_off') {
+      log.debug({ type: processedMsg.type, channel: processedMsg.channel, chatId: processedMsg.chat_id }, 'Processing typing indicator');
+      if (plugin.outbound.sendPayload) {
+        await plugin.outbound.sendPayload({
+          cfg: this.config,
+          to: processedMsg.chat_id,
+          text: processedMsg.content ?? '',
+          mediaUrl: processedMsg.mediaUrl,
+          threadId: processedMsg.metadata?.threadId as string | number | null,
+          replyToId: processedMsg.replyToMessageId,
+          accountId: processedMsg.metadata?.accountId as string ?? undefined,
+          silent: processedMsg.silent,
+          payload: processedMsg,
+        });
+        log.debug({ type: processedMsg.type, channel: processedMsg.channel, chatId: processedMsg.chat_id }, 'Sent typing indicator via payload');
+      } else {
+        log.warn({ channel: processedMsg.channel }, 'Plugin does not support sendPayload, cannot send typing indicator');
+      }
+      return;
+    }
+    
+    if (!plugin.outbound?.sendText && !plugin.outbound?.sendPayload) {
+      log.error({ channel: processedMsg.channel }, 'Channel does not support outbound');
+      return;
+    }
+    
+    const outboundCtx: ChannelOutboundContext = {
+      cfg: this.config,
+      to: processedMsg.chat_id,
+      text: processedMsg.content ?? '',
+      mediaUrl: processedMsg.mediaUrl,
+      threadId: processedMsg.metadata?.threadId as string | number | null,
+      replyToId: processedMsg.replyToMessageId,
+      accountId: processedMsg.metadata?.accountId as string ?? undefined,
+      silent: processedMsg.silent,
+    };
+    
+    let result: OutboundDeliveryResult;
+    
+    if (plugin.outbound.sendPayload) {
+      result = await plugin.outbound.sendPayload({ ...outboundCtx, payload: processedMsg });
+    } else if (plugin.outbound.sendText) {
+      result = await plugin.outbound.sendText(outboundCtx);
+    } else {
+      result = { messageId: '', chatId: processedMsg.chat_id, success: false, error: 'No send method' };
+    }
+    
+    if (result.success) {
+      log.info({ channel: processedMsg.channel, chatId: processedMsg.chat_id, messageId: result.messageId }, 'Message sent');
+    } else {
+      log.error({ channel: processedMsg.channel, chatId: processedMsg.chat_id, error: result.error }, 'Failed to send message');
+    }
+  }
+  
+  startStream(channel: string, chatId: string, accountId?: string): ChannelStreamHandle | null {
+    const plugin = this.plugins.get(channel);
+    if (!plugin) {
+      log.error({ channel }, 'Unknown channel');
+      return null;
+    }
+    
+    return (plugin as any).startStream?.({ chatId, accountId }) ?? null;
+  }
+  
+  async getChannelStatus(channel: string): Promise<Record<string, unknown>> {
+    const plugin = this.plugins.get(channel);
+    if (!plugin) return { error: 'Unknown channel' };
+    
+    if (!plugin.status?.buildChannelSummary) return { status: 'unknown' };
+    
+    try {
+      const accountId = (plugin as any).configAdapter?.listAccountIds(this.config)[0] ?? 'default';
+      const account = (plugin as any).configAdapter?.resolveAccount(this.config, accountId);
+      
+      const summary = await plugin.status.buildChannelSummary({
+        account,
+        cfg: this.config,
+        defaultAccountId: accountId,
+        snapshot: plugin.status.defaultRuntime ?? { accountId, channelId: channel, enabled: true, configured: true },
+      });
+      return summary;
+    } catch (err) {
+      return { error: String(err) };
+    }
+  }
+  
   updateConfig(config: Config): void {
     this.config = config;
     log.info('Channel config updated');
   }
-
-  async send(msg: OutboundMessage): Promise<void> {
-    const processedMsg = await this.applyTtsIfNeeded(msg);
-
-    const extension = EXTENSIONS.find(e => e.id === processedMsg.channel);
-    if (!extension) {
-      log.error({ channel: processedMsg.channel }, 'Unknown channel');
-      return;
-    }
-
-    const sendOptions = {
-      chatId: processedMsg.chat_id,
-      content: processedMsg.content || '',
-      type: processedMsg.type,
-      accountId: processedMsg.metadata?.accountId ? String(processedMsg.metadata.accountId) : undefined,
-      threadId: processedMsg.metadata?.threadId ? String(processedMsg.metadata.threadId) : undefined,
-      replyToMessageId: processedMsg.replyToMessageId,
-      mediaUrl: processedMsg.mediaUrl,
-      mediaType: processedMsg.mediaType,
-      audioAsVoice: processedMsg.audioAsVoice,
-      silent: processedMsg.silent,
-    };
-
-    const result = await extension.send(sendOptions);
-
-    if (!result.success) {
-      log.error({ channel: processedMsg.channel, chatId: processedMsg.chat_id, mediaUrl: !!processedMsg.mediaUrl, error: result.error }, 'Failed to send message');
-    } else {
-      log.info({ channel: processedMsg.channel, chatId: processedMsg.chat_id, messageId: result.messageId, mediaUrl: !!processedMsg.mediaUrl, audioAsVoice: processedMsg.audioAsVoice }, 'Message sent successfully');
-    }
-  }
-
+  
   private async applyTtsIfNeeded(msg: OutboundMessage): Promise<OutboundMessage> {
     if (msg.type && msg.type !== 'message') return msg;
     if (!msg.content?.trim()) return msg;
     if (msg.mediaUrl) return msg;
-
-    const ttsConfig = this.config.tts || {
-      enabled: false,
-      provider: 'openai' as const,
-      trigger: 'always' as const,
-    };
-
+    
+    const ttsConfig = this.config.tts ?? { enabled: false, provider: 'openai' as const, trigger: 'always' as const };
     if (!ttsConfig.enabled) return msg;
-
+    
     const inboundAudio = msg.metadata?.transcribedVoice === true;
-
-    return maybeApplyTtsToPayload(msg, {
-      config: ttsConfig,
-      channel: msg.channel,
-      inboundAudio,
-    });
+    return maybeApplyTtsToPayload(msg, { config: ttsConfig, channel: msg.channel, inboundAudio });
   }
-
-  startStream(channel: string, chatId: string, accountId?: string): ChannelStreamHandle | null {
-    const extension = EXTENSIONS.find(e => e.id === channel);
-    if (!extension) {
-      log.error({ channel }, 'Unknown channel for streaming');
-      return null;
-    }
-
-    return extension.startStream({
-      chatId: String(chatId),
-      accountId,
-    });
+  
+  // Aliases for backward compatibility
+  async initializeChannels(): Promise<void> {
+    return this.initialize();
   }
-
-  getChannel(name: string): any {
-    const extension = EXTENSIONS.find(e => e.id === name);
-    return extension || null;
+  
+  async startAll(): Promise<void> {
+    return this.start();
   }
-
-  getStatus(channelName: string, accountId?: string) {
-    const extension = EXTENSIONS.find(e => e.id === channelName);
-    if (extension) {
-      return extension.getStatus(accountId);
-    }
-    return { running: false, mode: 'unknown' };
+  
+  async stopAll(): Promise<void> {
+    return this.stop();
   }
-
+  
   getRunningChannels(): string[] {
-    return EXTENSIONS
-      .filter(e => this.config.channels?.[e.id]?.enabled)
-      .map(e => e.id);
+    return Array.from(this.plugins.keys());
   }
-
-  getAllChannels(): string[] {
-    return EXTENSIONS.map(e => e.id);
+  
+  getAllChannels(): ChannelPlugin[] {
+    return this.getAllPlugins();
   }
+}
 
-  async testConnections(): Promise<Record<string, { success: boolean; error?: string }>> {
-    const results: Record<string, { success: boolean; error?: string }> = {};
-
-    for (const extension of EXTENSIONS) {
-      const channelConfig = this.config.channels?.[extension.id];
-      if (channelConfig?.enabled) {
-        results[extension.id] = await extension.testConnection();
-      }
-    }
-
-    return results;
-  }
+export function createChannelManager(config: Config, bus: MessageBus): ChannelManager {
+  return new ChannelManager(config, bus);
 }
