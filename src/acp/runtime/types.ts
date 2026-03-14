@@ -183,11 +183,18 @@ export type SessionAcpMeta = {
   lastError?: string;
 };
 
+/** Session Identity 来源 */
+export type SessionIdentitySource = "ensure" | "status" | "event";
+
 /** Session 身份标识 */
 export type SessionIdentity = {
   state: "resolved" | "pending";
-  source: string;
-  backendSessionId?: string;
+  source: SessionIdentitySource;
+  /** Backend 本地记录标识符 (acpx record id) */
+  acpxRecordId?: string;
+  /** Backend 级别的 ACP Session 标识符 */
+  acpxSessionId?: string;
+  /** 上游 harness session 标识符 */
   agentSessionId?: string;
   lastUpdatedAt: number;
 };

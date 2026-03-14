@@ -5,6 +5,7 @@
  */
 
 import type { Config } from "../../config/schema.js";
+import { createLogger } from "../../utils/logger.js";
 import { AcpRuntimeError, toAcpRuntimeError, withAcpRuntimeErrorBoundary } from "../runtime/errors.js";
 import {
   createIdentityFromEnsure,
@@ -50,6 +51,7 @@ import {
   validateRuntimeOptionPatch,
 } from "./runtime-options.js";
 import { SessionActorQueue } from "./session-actor-queue.js";
+import { reconcileRuntimeSessionIdentifiers } from "./identity-reconcile.js";
 import {
   createUnsupportedControlError,
   hasLegacyAcpIdentityProjection,
@@ -89,6 +91,7 @@ export class AcpSessionManager {
   private evictedRuntimeCount = 0;
   private lastEvictedAt: number | undefined;
   private readonly sessionStore: SessionStore;
+  private readonly logger = createLogger("AcpSessionManager");
 
   constructor(private readonly sessionStorePath?: string) {
     const workspace = sessionStorePath || resolveAcpWorkspace({} as Config);
@@ -165,6 +168,103 @@ export class AcpSessionManager {
         [...this.errorCountsByCode.entries()].toSorted(([a], [b]) => a.localeCompare(b)),
       ),
     };
+  }
+
+  /**  Reconciliation: 恢复待处理的 Session Identity
+   * 
+   * 在服务启动时调用，遍历所有 ACP sessions，
+   * 尝试解析 pending identity 的 sessions。
+   */
+  async reconcilePendingSessionIdentities(params: {
+    cfg: Config;
+  }): Promise<AcpStartupIdentityReconcileResult> {
+    const result: AcpStartupIdentityReconcileResult = {
+      checked: 0,
+      resolved: 0,
+      failed: 0,
+    };
+
+    let sessions: SessionEntry[];
+    try {
+      sessions = await this.sessionStore.list();
+    } catch (error) {
+      this.logger.warn({ error }, "Failed to list ACP sessions for identity reconciliation");
+      return result;
+    }
+
+    for (const session of sessions) {
+      if (!session.acp || !session.sessionKey) {
+        continue;
+      }
+
+      const currentIdentity = resolveSessionIdentityFromMeta(session.acp);
+      if (!isSessionIdentityPending(currentIdentity)) {
+        continue;
+      }
+
+      result.checked += 1;
+
+      try {
+        const becameResolved = await this.withSessionActor(session.sessionKey, async () => {
+          const resolution = await this.resolveSession({
+            cfg: params.cfg,
+            sessionKey: session.sessionKey!,
+          });
+
+          if (resolution.kind !== "ready") {
+            return false;
+          }
+
+          const { runtime, handle, meta } = await this.ensureRuntimeHandle({
+            cfg: params.cfg,
+            sessionKey: session.sessionKey!,
+            meta: resolution.meta,
+          });
+
+          // Reconcile with runtime status
+          const reconciled = await reconcileRuntimeSessionIdentifiers({
+            cfg: params.cfg,
+            sessionKey: session.sessionKey!,
+            runtime,
+            handle,
+            meta,
+            failOnStatusError: false,
+            setCachedHandle: (key, handle) => this.setCachedRuntimeState(key, {
+              runtime,
+              handle,
+              backend: handle.backend || meta.backend,
+              agent: meta.agent,
+              mode: meta.mode,
+              cwd: meta.cwd,
+            }),
+            writeSessionMeta: async ({ cfg, sessionKey, mutate }) => {
+              const entry = await this.sessionStore.load(sessionKey);
+              const current = entry?.acp;
+              const result = mutate(current, entry);
+              if (result) {
+                await this.sessionStore.save(sessionKey, { sessionKey, acp: result });
+                return { sessionKey, acp: result };
+              }
+              return null;
+            },
+          });
+
+          return !isSessionIdentityPending(resolveSessionIdentityFromMeta(reconciled.meta));
+        });
+
+        if (becameResolved) {
+          result.resolved += 1;
+        }
+      } catch (error) {
+        result.failed += 1;
+        this.logger.warn(
+          { sessionKey: session.sessionKey, error },
+          "Failed to reconcile ACP session identity",
+        );
+      }
+    }
+
+    return result;
   }
 
   /** 初始化 Session */
