@@ -24,12 +24,17 @@ export abstract class BaseTTSProvider implements TTSProviderInterface {
 
   abstract isConfigured(): boolean;
 
+  /** Get the maximum text length for this provider (can be overridden by subclasses) */
+  getMaxTextLength(): number {
+    return this.config.maxTextLength || 4096;
+  }
+
   protected abstract doSpeak(text: string, options?: TTSOptions): Promise<TTSResult>;
 
   async speak(text: string, options?: TTSOptions): Promise<TTSResult> {
     const startTime = Date.now();
 
-    const maxLength = this.config.maxTextLength || 4096;
+    const maxLength = this.getMaxTextLength();
     if (text.length > maxLength) {
       log.warn({ textLength: text.length, maxLength }, 'Text too long, truncating');
       text = text.slice(0, maxLength - 3) + '...';

@@ -105,7 +105,7 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
     enabled: true,
     order: ['openai', 'alibaba', 'edge'],
   },
-  maxTextLength: 4096,
+  maxTextLength: 512, // Conservative default to accommodate all providers (Alibaba limit is 512)
   timeoutMs: 30000,
   modelOverrides: {
     enabled: true,
