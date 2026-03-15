@@ -8,7 +8,7 @@
  */
 
 import { createLogger } from '../utils/logger.js';
-import type { ChannelPluginInitOptions, ChannelOutboundContext, AgentResponse } from './plugin-types.js';
+import type { AgentResponse } from './plugin-types.js';
 
 // Re-export for convenience
 export type { AgentResponse } from './plugin-types.js';

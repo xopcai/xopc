@@ -4,7 +4,7 @@
 
 import { describe, it, expect, beforeEach } from "vitest";
 import { RuntimeCache, type CachedRuntimeState } from "../runtime-cache.js";
-import type { AcpRuntime, AcpRuntimeHandle, AcpRuntimeSessionMode } from "../../runtime/types.js";
+import type { AcpRuntime, AcpRuntimeSessionMode } from "../../runtime/types.js";
 
 describe("acp-runtime-cache", () => {
   let cache: RuntimeCache;
@@ -119,11 +119,10 @@ describe("acp-runtime-cache", () => {
       const firstTime = firstGet?.lastTouchedAt ?? 0;
       
       // Wait a tiny bit
-      const beforeSecond = Date.now();
       
       // Peek again should NOT update touch time (but set already updated it to now)
       // Note: Since set always updates lastTouchedAt to now, peek returns current time
-      const secondPeek = cache.peek("actor-key");
+      cache.peek("actor-key");
       
       // get() updates touch time, peek() does not
       cache.get("actor-key");

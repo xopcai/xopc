@@ -217,9 +217,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
       resolveAllowFrom: ({ account }) => account.allowFrom,
       checkAccess: (ctx, account) => {
         const isGroup = ctx.isGroup;
-        const policy = isGroup 
-          ? resolveGroupPolicy(account.groupPolicy, 'open')
-          : resolveDmPolicy(account.dmPolicy, 'open');
         const allowFrom = isGroup 
           ? (account.groupAllowFrom ?? account.allowFrom ?? [])
           : (account.allowFrom ?? []);

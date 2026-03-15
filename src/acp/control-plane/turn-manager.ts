@@ -4,15 +4,10 @@
  * Manages ACP turn execution, cancellation, and latency tracking.
  */
 
-import type { Config } from "../../config/schema.js";
-import { createLogger } from "../../utils/logger.js";
 import { AcpRuntimeError, toAcpRuntimeError, withAcpRuntimeErrorBoundary } from "../runtime/errors.js";
-import { resolveSessionIdentityFromMeta } from "../runtime/session-identity.js";
 import type { AcpRuntimeEvent, AcpRuntimeHandle, SessionAcpMeta } from "../runtime/types.js";
 import type { AcpRunTurnInput, ActiveTurnState, TurnLatencyStats } from "./manager.types.js";
 import { normalizeActorKey, normalizeSessionKey } from "./manager.utils.js";
-
-const logger = createLogger("AcpTurnManager");
 
 export class TurnManager {
   private readonly activeTurnBySession = new Map<string, ActiveTurnState>();

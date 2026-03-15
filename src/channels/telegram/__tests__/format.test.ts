@@ -12,7 +12,6 @@ import {
   markdownToTelegramChunks,
   renderIRToTelegramHtml,
 } from '../format.js';
-import { markdownToIR } from '../../../markdown/index.js';
 
 describe('escapeHtml', () => {
   it('should escape & character', () => {

@@ -6,7 +6,6 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   createFixedWindowRateLimiter,
   SessionRateLimiter,
-  type FixedWindowRateLimiter,
 } from "../rate-limit.js";
 
 describe("createFixedWindowRateLimiter", () => {

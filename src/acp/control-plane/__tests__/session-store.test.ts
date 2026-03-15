@@ -2,11 +2,11 @@
  * ACP Session Store Tests
  */
 
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import { AcpSessionStore } from "../session-store.js";
-import type { SessionEntry, SessionAcpMeta } from "../manager.types.js";
+import type { SessionAcpMeta } from "../manager.types.js";
 import type { AcpRuntimeSessionMode } from "../runtime/types.js";
-import { rm, mkdir } from "fs/promises";
+import { mkdir } from "fs/promises";
 import { join } from "path";
 import { tmpdir } from "os";
 

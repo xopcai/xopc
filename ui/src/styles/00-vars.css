@@ -52,6 +52,10 @@ html.light {
   --accent-primary: #4f46e5;
   --accent-primary-hover: #4338ca;
   --accent-primary-light: #e0e7ff;
+  --accent-primary-soft: #c7d2fe;
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #4f46e5 0%, #7c3aed 50%, #db2777 100%);
   
   /* Semantic */
   --accent-success: #059669;
@@ -103,7 +107,10 @@ html.dark {
   --accent-primary: #6366f1;
   --accent-primary-hover: #818cf8;
   --accent-primary-light: #312e81;
-  
+
+  /* Gradients */
+  --gradient-primary: linear-gradient(135deg, #6366f1 0%, #8b5cf6 50%, #ec4899 100%);
+
   --border-color: #333333;
   --border-strong: #444444;
   

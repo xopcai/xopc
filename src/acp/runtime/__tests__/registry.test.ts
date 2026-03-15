@@ -2,7 +2,7 @@
  * ACP Runtime Registry Tests
  */
 
-import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { describe, it, expect, beforeEach } from "vitest";
 import {
   registerAcpRuntimeBackend,
   unregisterAcpRuntimeBackend,

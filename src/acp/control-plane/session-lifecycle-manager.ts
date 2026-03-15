@@ -4,13 +4,10 @@
  * Manages ACP session initialization, closing, and state persistence.
  */
 
-import type { Config } from "../../config/schema.js";
-import { createLogger } from "../../utils/logger.js";
 import { AcpRuntimeError, withAcpRuntimeErrorBoundary } from "../runtime/errors.js";
 import {
   createIdentityFromEnsure,
   mergeSessionIdentity,
-  resolveSessionIdentityFromMeta,
 } from "../runtime/session-identity.js";
 import type { AcpRuntime, SessionAcpMeta } from "../runtime/types.js";
 import { requireAcpRuntimeBackend } from "../runtime/registry.js";
@@ -25,12 +22,9 @@ import type {
 import {
   isAcpSessionKey,
   normalizeSessionKey,
-  resolveAcpAgentFromSessionKey,
   resolveMissingMetaError,
 } from "./manager.utils.js";
 import { normalizeRuntimeOptions, validateRuntimeOptionPatch } from "./runtime-options.js";
-
-const logger = createLogger("AcpSessionLifecycleManager");
 
 export interface SessionLifecycleManagerDeps {
   loadEntry: (sessionKey: string) => Promise<SessionEntry | null>;
