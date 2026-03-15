@@ -5,7 +5,7 @@
  */
 
 import { AcpRuntimeError, toAcpRuntimeError, withAcpRuntimeErrorBoundary } from "../runtime/errors.js";
-import type { AcpRuntimeEvent, AcpRuntimeHandle, SessionAcpMeta } from "../runtime/types.js";
+import type { AcpRuntime, AcpRuntimeHandle, SessionAcpMeta } from "../runtime/types.js";
 import type { AcpRunTurnInput, ActiveTurnState, TurnLatencyStats } from "./manager.types.js";
 import { normalizeActorKey, normalizeSessionKey } from "./manager.utils.js";
 
@@ -32,7 +32,7 @@ export class TurnManager {
   async executeTurn(params: {
     input: AcpRunTurnInput;
     runtime: {
-      runtime: { runTurn: (input: Omit<AcpRunTurnInput, "cfg" | "sessionKey" | "onEvent">) => AsyncIterable<AcpRuntimeEvent>; cancel: (input: { handle: AcpRuntimeHandle; reason?: string }) => Promise<void> };
+      runtime: AcpRuntime;
       handle: AcpRuntimeHandle;
       meta: SessionAcpMeta;
     };
@@ -137,12 +137,12 @@ export class TurnManager {
   async cancelTurn(params: {
     sessionKey: string;
     runtime: {
-      runtime: { cancel: (input: { handle: AcpRuntimeHandle; reason?: string }) => Promise<void> };
+      runtime: AcpRuntime;
       handle: AcpRuntimeHandle;
     };
     reason?: string;
   }): Promise<boolean> {
-    const { sessionKey, runtime: { runtime, handle }, reason } = params;
+    const { sessionKey, runtime: { runtime }, reason } = params;
     const actorKey = normalizeActorKey(sessionKey);
     const activeTurn = this.activeTurnBySession.get(actorKey);
 

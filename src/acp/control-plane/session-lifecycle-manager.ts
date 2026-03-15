@@ -9,7 +9,7 @@ import {
   createIdentityFromEnsure,
   mergeSessionIdentity,
 } from "../runtime/session-identity.js";
-import type { AcpRuntime, SessionAcpMeta } from "../runtime/types.js";
+import type { AcpRuntime, AcpRuntimeHandle, SessionAcpMeta } from "../runtime/types.js";
 import { requireAcpRuntimeBackend } from "../runtime/registry.js";
 import type {
   AcpCloseSessionInput,
@@ -74,7 +74,7 @@ export class SessionLifecycleManager {
   /** Initialize a new session */
   async initializeSession(params: {
     input: AcpInitializeSessionInput;
-    onRuntimeCreated: (sessionKey: string, runtime: { runtime: AcpRuntime; handle: { backend: string }; meta: SessionAcpMeta }) => Promise<void>;
+    onRuntimeCreated: (sessionKey: string, runtime: { runtime: AcpRuntime; handle: AcpRuntimeHandle; meta: SessionAcpMeta }) => Promise<void>;
   }): Promise<{ runtime: AcpRuntime; meta: SessionAcpMeta }> {
     const { input, onRuntimeCreated } = params;
     const sessionKey = normalizeSessionKey(input.sessionKey);
@@ -144,7 +144,7 @@ export class SessionLifecycleManager {
   async closeSession(params: {
     input: AcpCloseSessionInput;
     resolveSession: (sessionKey: string) => Promise<AcpSessionResolution>;
-    getRuntime: (sessionKey: string, meta: SessionAcpMeta) => Promise<{ runtime: AcpRuntime; handle: { backend: string } }>;
+    getRuntime: (sessionKey: string, meta: SessionAcpMeta) => Promise<{ runtime: AcpRuntime; handle: AcpRuntimeHandle }>;
     clearCached: (sessionKey: string) => void;
   }): Promise<AcpCloseSessionResult> {
     const { input, resolveSession, getRuntime, clearCached } = params;

@@ -13,7 +13,7 @@ import {
   isSessionIdentityPending,
   resolveSessionIdentityFromMeta,
 } from "../runtime/session-identity.js";
-import type { AcpRuntime, AcpRuntimeHandle } from "../runtime/types.js";
+import type { AcpRuntime, AcpRuntimeHandle, AcpRuntimeControl } from "../runtime/types.js";
 import {
   type AcpCloseSessionInput,
   type AcpCloseSessionResult,
@@ -514,7 +514,7 @@ export class AcpSessionManager {
   private async resolveRuntimeCapabilities(params: {
     runtime: AcpRuntime;
     handle: AcpRuntimeHandle;
-  }): Promise<{ controls: string[]; configOptionKeys?: string[] }> {
+  }): Promise<{ controls: AcpRuntimeControl[]; configOptionKeys?: string[] }> {
     if (params.runtime.getCapabilities) {
       return await Promise.resolve(params.runtime.getCapabilities({ handle: params.handle }));
     }
