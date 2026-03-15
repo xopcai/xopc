@@ -6,10 +6,23 @@ import { Command } from "commander";
 import { register, formatExamples, type CLIContext } from "../registry.js";
 import { getAcpSessionManager } from "../../acp/control-plane/manager.js";
 import { listAcpRuntimeBackends } from "../../acp/runtime/registry.js";
+import { formatAcpErrorText } from "../../acp/runtime/error-text.js";
+import { AcpRuntimeError } from "../../acp/runtime/errors.js";
 import { loadConfig } from "../../config/loader.js";
 import { createLogger } from "../../utils/logger.js";
 
 const log = createLogger("cli:acp");
+
+/** Format error for CLI output */
+function formatCliError(error: unknown): string {
+  if (error instanceof AcpRuntimeError) {
+    return formatAcpErrorText(error);
+  }
+  if (error instanceof Error) {
+    return error.message;
+  }
+  return String(error);
+}
 
 function createAcpCommand(_ctx: CLIContext): Command {
   const acpCmd = new Command("acp")
@@ -87,7 +100,7 @@ function createAcpCommand(_ctx: CLIContext): Command {
           }
         }
       } catch (error) {
-        log.error({ err: error }, "Failed to get ACP status");
+        console.error(`❌ ${formatCliError(error)}`);
         process.exit(1);
       }
     });
@@ -146,7 +159,7 @@ function createAcpCommand(_ctx: CLIContext): Command {
         console.log(`   Session: ${options.session}`);
         console.log(`   Options: ${JSON.stringify(result)}`);
       } catch (error) {
-        log.error({ err: error }, "Failed to set runtime mode");
+        console.error(`❌ ${formatCliError(error)}`);
         process.exit(1);
       }
     });
@@ -172,7 +185,7 @@ function createAcpCommand(_ctx: CLIContext): Command {
         console.log(`   Session: ${options.session}`);
         console.log(`   Options: ${JSON.stringify(result)}`);
       } catch (error) {
-        log.error({ err: error }, "Failed to set config option");
+        console.error(`❌ ${formatCliError(error)}`);
         process.exit(1);
       }
     });
@@ -197,7 +210,7 @@ function createAcpCommand(_ctx: CLIContext): Command {
           console.log(`Queue Depth: ${snapshot.turns.queueDepth}`);
         }
       } catch (error) {
-        log.error({ err: error }, "Failed to list sessions");
+        console.error(`❌ ${formatCliError(error)}`);
         process.exit(1);
       }
     });
@@ -229,7 +242,7 @@ function createAcpCommand(_ctx: CLIContext): Command {
           console.log(`   Note: ${result.runtimeNotice}`);
         }
       } catch (error) {
-        log.error({ err: error }, "Failed to close session");
+        console.error(`❌ ${formatCliError(error)}`);
         process.exit(1);
       }
     });
@@ -253,7 +266,7 @@ function createAcpCommand(_ctx: CLIContext): Command {
 
         console.log(`✅ Session cancelled: ${options.session}`);
       } catch (error) {
-        log.error({ err: error }, "Failed to cancel session");
+        console.error(`❌ ${formatCliError(error)}`);
         process.exit(1);
       }
     });
