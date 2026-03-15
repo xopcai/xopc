@@ -312,7 +312,7 @@ export function routeAware<T extends { new (...args: any[]): any }>(target: T): 
             (this as any).onRouteChange(to, from);
           }
         });
-      } catch (e) {
+      } catch {
         // Router not initialized yet
         console.warn('[routeAware] Router not initialized');
       }

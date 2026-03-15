@@ -320,7 +320,7 @@ export const createAppStore = () =>
               messages: [...state.message.messages, newMessage],
               streaming: { isActive: false, content: '', message: null },
             },
-          ));
+          }));
         }
       },
 

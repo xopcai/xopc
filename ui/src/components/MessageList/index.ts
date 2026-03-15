@@ -1,6 +1,6 @@
 import { html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { virtualize, virtualizerRef } from '@lit-labs/virtualizer/virtualize.js';
+import { virtualize } from '@lit-labs/virtualizer/virtualize.js';
 import { t } from '../../utils/i18n';
 import type { Message } from './types';
 import './MessageBubble';

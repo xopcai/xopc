@@ -1,7 +1,6 @@
 import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons';
-import { t } from '../utils/i18n';
 
 export interface TokenDialogConfig {
   serverUrl: string;
@@ -117,7 +116,7 @@ export class TokenDialog extends LitElement {
     `;
   }
 
-  private _handleOverlayClick(e: Event): void {
+  private _handleOverlayClick(_e: Event): void {
     // Close on overlay click if cancel is allowed
     if (this.config?.onCancel) {
       this.config.onCancel();

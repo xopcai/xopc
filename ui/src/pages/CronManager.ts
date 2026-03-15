@@ -240,7 +240,7 @@ export class CronManager extends LitElement {
       };
 
       // Build payload based on session target
-      const payload = this._formSessionTarget === 'isolated'
+      const _payload = this._formSessionTarget === 'isolated'
         ? { kind: 'agentTurn' as const, message, model: this._formModel }
         : { kind: 'systemEvent' as const, text: message };
 

@@ -7,7 +7,7 @@ const store = getStore();
 
 export interface ConnectionConfig {
   url: string;
-  token?: string;
+  token?: string | undefined;
   autoReconnect?: boolean;
   maxReconnectAttempts?: number;
   reconnectDelay?: number;

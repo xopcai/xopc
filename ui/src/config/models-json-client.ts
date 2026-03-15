@@ -9,9 +9,10 @@ import type {
   ProviderConfig, 
   CustomModel,
   ValidationResult,
-} from '../../../src/config/models-json';
+  ApiType,
+} from './models-json-types.js';
 
-export type { ModelsJsonConfig, ProviderConfig, CustomModel };
+export type { ModelsJsonConfig, ProviderConfig, CustomModel, ValidationResult, ApiType };
 
 export interface ModelsJsonStatus {
   config: ModelsJsonConfig;
@@ -165,7 +166,7 @@ export async function testApiKey(
 export function createCustomProvider(
   baseUrl: string,
   apiKey: string,
-  api: string = 'openai-completions'
+  api: ApiType = 'openai-completions'
 ): ProviderConfig {
   return {
     baseUrl,

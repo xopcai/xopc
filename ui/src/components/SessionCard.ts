@@ -2,7 +2,7 @@
 
 import { html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
-import { t } from '../utils/i18n';
+
 import { getIcon } from '../utils/icons';
 import type { SessionMetadata } from '../utils/session-api';
 

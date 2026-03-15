@@ -1024,11 +1024,12 @@ export class SettingsPage extends LitElement {
   }
 
   private _renderVoiceSection() {
+    const self = this;
     return html`
       <voice-config-section
         .config=${{ stt: this._settings.stt, tts: this._settings.tts }}
         .token=${this.config?.token}
-        .onChange=${(path: string, value: unknown) => this._updateSettings(path, value)}
+        .onChange=${(path: string, value: unknown) => self._updateSettings(path, value)}
       ></voice-config-section>
     `;
   }

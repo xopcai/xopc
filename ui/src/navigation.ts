@@ -1,4 +1,4 @@
-import { html, nothing } from 'lit';
+import { html } from 'lit';
 import type { TemplateResult } from 'lit';
 import { getIcon } from './utils/icons';
 import { t } from './utils/i18n';

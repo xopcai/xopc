@@ -24,6 +24,9 @@ export interface ProviderListChangeEvent {
 
 export interface ProviderListOAuthEvent {
   provider: string;
+  success?: boolean;
+  message?: string;
+  error?: string;
 }
 
 @customElement('provider-list')

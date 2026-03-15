@@ -3,7 +3,7 @@
  * Handles SSE connection, reconnection, and message streaming
  */
 
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('GatewayConnection');
 
@@ -11,7 +11,7 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'rec
 
 export interface ConnectionConfig {
   url: string;
-  token?: string;
+  token?: string | undefined;
   autoReconnect?: boolean;
   maxReconnectAttempts?: number;
   reconnectDelay?: number;

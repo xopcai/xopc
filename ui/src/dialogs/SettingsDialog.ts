@@ -1,8 +1,9 @@
+/* eslint-disable @typescript-eslint/no-unused-vars */
 import { html, LitElement, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { 
   User, Bot, Plug, Globe, Search, Clock, Puzzle, 
-  X, Save, ChevronRight, Check, AlertCircle,
+  X, Save, ChevronRight, AlertCircle,
   Settings, Eye, EyeOff, Loader2
 } from 'lucide';
 import { t } from '../utils/i18n';

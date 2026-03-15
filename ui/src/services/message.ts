@@ -128,7 +128,7 @@ export class MessageService {
   }
 
   private async _handleSSEStream(body: ReadableStream<Uint8Array>): Promise<void> {
-    const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+    const reader = body.pipeThrough(new TextDecoderStream() as unknown as ReadableWritablePair<string, Uint8Array>).getReader();
     let buffer = '';
     let currentEventType = '';
     let currentEventData = '';

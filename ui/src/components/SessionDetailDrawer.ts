@@ -90,7 +90,7 @@ export class SessionDetailDrawer extends LitElement {
     const query = this._searchQuery;
     const parts = text.split(new RegExp(`(${query})`, 'gi'));
 
-    return parts.map((part, i) => {
+    return parts.map((part, _i) => {
       if (part.toLowerCase() === query.toLowerCase()) {
         return html`<mark class="search-highlight">${part}</mark>`;
       }

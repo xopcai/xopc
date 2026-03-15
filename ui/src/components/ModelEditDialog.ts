@@ -11,7 +11,7 @@ import type { CustomModel } from '../config/models-json-client.js';
 import { createCustomModel } from '../config/models-json-client.js';
 
 // API types for dropdown
-const API_TYPES = [
+const _API_TYPES = [
   { value: 'openai-completions', label: 'OpenAI Completions' },
   { value: 'openai-responses', label: 'OpenAI Responses' },
   { value: 'anthropic-messages', label: 'Anthropic Messages' },

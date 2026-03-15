@@ -1,6 +1,6 @@
 import { html, LitElement } from 'lit';
-import { customElement, property, state, query } from 'lit/decorators.js';
-import { Agent, type AgentEvent } from '@mariozechner/pi-agent-core';
+import { customElement, property, query } from 'lit/decorators.js';
+import type { Agent, AgentEvent } from '@mariozechner/pi-agent-core';
 
 // Import styles
 import './styles.css';
@@ -10,7 +10,7 @@ import './components/MessageList';
 import './components/StreamingMessageContainer';
 import './gateway-chat';
 import './app';
-import { i18n, setLanguage, translations } from './utils/i18n';
+import { i18n } from './utils/i18n';
 import type { Attachment } from './utils/attachment-utils';
 import type { MessageEditor } from './components/MessageEditor';
 import type { StreamingMessageContainer } from './components/StreamingMessageContainer';
@@ -41,15 +41,18 @@ export { XopcbotSettings, type SettingsSection, type SettingsField, type Setting
 
 // Gateway Chat - with type-safe events
 export { 
-  XopcbotGatewayChat, 
-  type GatewayClientConfig,
-  type GatewayEvent,
-  type ChatPayload,
-  type ConfigPayload,
-  type ErrorPayload,
-  type GatewayResponse,
-  type GatewayRequest
+  XopcbotGatewayChat
 } from './gateway-chat';
+
+export type { 
+  GatewayClientConfig,
+  ChatPayload,
+  ErrorPayload,
+  Message,
+  ProgressState,
+  ConnectionState,
+  SessionInfo
+} from './gateway-types';
 
 // App
 export { XopcbotApp, type Tab, type AppSettings } from './app';
@@ -66,6 +69,7 @@ export class XopcbotChat extends LitElement {
 
   private _autoScroll = true;
   private _lastScrollTop = 0;
+  private _lastClientHeight = 0;
   private _scrollContainer?: HTMLElement;
   private _resizeObserver?: ResizeObserver;
   private _unsubscribeSession?: () => void;

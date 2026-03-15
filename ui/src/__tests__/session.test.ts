@@ -111,7 +111,7 @@ describe('SessionService', () => {
     const service = new SessionService('test-token');
     
     // Add sessions to store
-    const store = service as any; // Access store through service
+    const _store = service as any; // Access store through service
     // Note: This would need to be properly mocked in real test
     
     // const emptySession = service.findEmptySession();
