@@ -11,7 +11,7 @@ export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'rec
 
 export interface ConnectionConfig {
   url: string;
-  token?: string | undefined;
+  token: string;
   autoReconnect?: boolean;
   maxReconnectAttempts?: number;
   reconnectDelay?: number;
@@ -65,7 +65,7 @@ export class GatewayConnection {
           const data = JSON.parse(event.data);
           this._events.onMessage(data);
         } catch (err) {
-          log.warn({ err }, 'Failed to parse message');
+          log.warn('Failed to parse message', err);
         }
       };
 
@@ -75,7 +75,7 @@ export class GatewayConnection {
         this._scheduleReconnect();
       };
     } catch (err) {
-      log.error({ err }, 'Failed to connect');
+      log.error('Failed to connect', err);
       this._events.onStateChange('error');
       this._events.onError('Failed to connect');
     }
@@ -92,7 +92,7 @@ export class GatewayConnection {
     this._reconnectAttempts++;
     this._events.onStateChange('reconnecting');
 
-    log.info({ attempt: this._reconnectAttempts }, 'Reconnecting...');
+    log.info(`Reconnecting... (attempt ${this._reconnectAttempts})`);
 
     this._reconnectTimer = window.setTimeout(() => {
       this.connect();

@@ -104,7 +104,7 @@ export class XopcbotApp extends LitElement {
     let isShowingDialog = false;
 
     window.fetch = new Proxy(originalFetch, {
-      apply: async (target, thisArg, args) => {
+      apply: async (target, thisArg, args: [input: URL | RequestInfo, init?: RequestInit]) => {
         const response = await target.apply(thisArg, args);
         
         // Check for 401 Unauthorized (token expired/invalid)

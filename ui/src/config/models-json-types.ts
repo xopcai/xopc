@@ -42,6 +42,8 @@ export interface ProviderConfig {
   api?: ApiType;
   models?: CustomModel[];
   authHeader?: boolean;
+  headers?: Record<string, string>;
+  modelOverrides?: Record<string, unknown>;
 }
 
 export interface ModelsJsonConfig {
@@ -59,14 +61,4 @@ export interface ValidationResult {
   errors: ValidationError[];
 }
 
-// API types
-export type ApiType = 
-  | 'openai-completions'
-  | 'openai-responses'
-  | 'anthropic-messages'
-  | 'google-generative-ai'
-  | 'azure-openai-responses'
-  | 'bedrock-converse-stream'
-  | 'openai-codex-responses'
-  | 'google-gemini-cli'
-  | 'google-vertex';
+
