@@ -344,6 +344,15 @@ export const AcpRuntimeConfigSchema = z.object({
   installCommand: z.string().optional(),
 });
 
+export const AcpRateLimitConfigSchema = z.object({
+  /** Maximum requests per window per session */
+  maxRequests: z.number().default(100),
+  /** Time window in milliseconds */
+  windowMs: z.number().default(60000),
+  /** Whether to enable rate limiting */
+  enabled: z.boolean().default(true),
+});
+
 export const AcpConfigSchema = z.object({
   /** Global ACP runtime gate */
   enabled: z.boolean().optional(),
@@ -356,6 +365,8 @@ export const AcpConfigSchema = z.object({
   allowedAgents: z.array(z.string()).optional(),
   /** Maximum concurrent ACP sessions */
   maxConcurrentSessions: z.number().optional(),
+  /** Rate limiting configuration */
+  rateLimit: AcpRateLimitConfigSchema.optional(),
   stream: AcpStreamConfigSchema.optional(),
   runtime: AcpRuntimeConfigSchema.optional(),
 });
