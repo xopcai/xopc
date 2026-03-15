@@ -5,6 +5,7 @@
 import { Bot, type Context } from 'grammy';
 import { run } from '@grammyjs/runner';
 import type { Message } from '@grammyjs/types';
+import { InputFile } from 'grammy';
 
 import type {
   ChannelPlugin,
@@ -489,8 +490,145 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
       return { messageId: '', chatId: ctx.to, success: true };
     }
     
-    // For other message types, fall back to sendText
+    // Handle voice messages (TTS audio with audioAsVoice flag)
+    if (ctx.mediaUrl && ctx.audioAsVoice) {
+      return this.doSendVoice(ctx);
+    }
+    
+    // Handle other media types
+    if (ctx.mediaUrl) {
+      return this.doSendMedia(ctx);
+    }
+    
+    // For text-only messages, fall back to sendText
     return this.doSendText(ctx);
+  }
+  
+  private async doSendVoice(ctx: ChannelOutboundContext): Promise<OutboundDeliveryResult> {
+    const botState = this.bots.get(ctx.accountId ?? 'default');
+    if (!botState?.bot) {
+      return { messageId: '', chatId: ctx.to, success: false, error: 'Bot not initialized' };
+    }
+    
+    if (!ctx.mediaUrl) {
+      return { messageId: '', chatId: ctx.to, success: false, error: 'No mediaUrl for voice message' };
+    }
+    
+    try {
+      // Parse data URL
+      const parsed = this.parseDataUrl(ctx.mediaUrl);
+      if (!parsed) {
+        return { messageId: '', chatId: ctx.to, success: false, error: 'Invalid voice message data URL format' };
+      }
+      
+      const { buffer } = parsed;
+      const file = new InputFile(buffer, 'voice.ogg');
+      
+      // Use caption for the text content (if any)
+      const caption = ctx.text?.trim();
+      
+      const sendOptions: any = {
+        reply_to_message_id: ctx.replyToId ? parseInt(ctx.replyToId.toString(), 10) : undefined,
+        message_thread_id: ctx.threadId ? parseInt(ctx.threadId.toString(), 10) : undefined,
+        disable_notification: ctx.silent,
+      };
+      
+      if (caption) {
+        // Convert markdown to Telegram HTML, then strip unknown HTML tags
+        const htmlCaption = stripUnknownHtmlTags(renderTelegramHtmlText(caption));
+        sendOptions.caption = htmlCaption;
+        sendOptions.parse_mode = 'HTML';
+      }
+      
+      const result = await botState.bot.api.sendVoice(ctx.to, file, sendOptions);
+      
+      log.info({ chatId: ctx.to, messageId: result.message_id }, 'Voice message sent');
+      
+      return { messageId: result.message_id.toString(), chatId: ctx.to, success: true };
+    } catch (err) {
+      log.error({ chatId: ctx.to, err }, 'Failed to send voice message');
+      return { messageId: '', chatId: ctx.to, success: false, error: String(err) };
+    }
+  }
+  
+  private async doSendMedia(ctx: ChannelOutboundContext): Promise<OutboundDeliveryResult> {
+    const botState = this.bots.get(ctx.accountId ?? 'default');
+    if (!botState?.bot) {
+      return { messageId: '', chatId: ctx.to, success: false, error: 'Bot not initialized' };
+    }
+    
+    if (!ctx.mediaUrl) {
+      return { messageId: '', chatId: ctx.to, success: false, error: 'No mediaUrl' };
+    }
+    
+    try {
+      // Parse data URL
+      const parsed = this.parseDataUrl(ctx.mediaUrl);
+      if (!parsed) {
+        return { messageId: '', chatId: ctx.to, success: false, error: 'Invalid data URL format' };
+      }
+      
+      const { mimeType, buffer } = parsed;
+      const file = new InputFile(buffer);
+      
+      // Use caption for the text content (if any)
+      const caption = ctx.text?.trim();
+      
+      const sendOptions: any = {
+        reply_to_message_id: ctx.replyToId ? parseInt(ctx.replyToId.toString(), 10) : undefined,
+        message_thread_id: ctx.threadId ? parseInt(ctx.threadId.toString(), 10) : undefined,
+        disable_notification: ctx.silent,
+      };
+      
+      if (caption) {
+        const htmlCaption = stripUnknownHtmlTags(renderTelegramHtmlText(caption));
+        sendOptions.caption = htmlCaption;
+        sendOptions.parse_mode = 'HTML';
+      }
+      
+      // Determine media type from MIME type
+      const method = this.resolveMediaMethod(mimeType);
+      let result: { message_id: number };
+      
+      switch (method) {
+        case 'sendPhoto':
+          result = await botState.bot.api.sendPhoto(ctx.to, file, sendOptions);
+          break;
+        case 'sendVideo':
+          result = await botState.bot.api.sendVideo(ctx.to, file, sendOptions);
+          break;
+        case 'sendAudio':
+          result = await botState.bot.api.sendAudio(ctx.to, file, sendOptions);
+          break;
+        default:
+          result = await botState.bot.api.sendDocument(ctx.to, file, sendOptions);
+      }
+      
+      return { messageId: result.message_id.toString(), chatId: ctx.to, success: true };
+    } catch (err) {
+      log.error({ chatId: ctx.to, err }, 'Failed to send media message');
+      return { messageId: '', chatId: ctx.to, success: false, error: String(err) };
+    }
+  }
+  
+  private parseDataUrl(dataUrl: string): { mimeType: string; buffer: Buffer } | null {
+    if (!dataUrl.startsWith('data:')) return null;
+    
+    const match = dataUrl.match(/^data:([^;]+);base64,(.+)$/);
+    if (!match) return null;
+    
+    const mimeType = match[1];
+    const base64Data = match[2];
+    const buffer = Buffer.from(base64Data, 'base64');
+    
+    return { mimeType, buffer };
+  }
+  
+  private resolveMediaMethod(mimeType: string): 'sendPhoto' | 'sendVideo' | 'sendAudio' | 'sendDocument' {
+    if (mimeType.startsWith('image/')) return 'sendPhoto';
+    if (mimeType.startsWith('video/')) return 'sendVideo';
+    if (mimeType.startsWith('audio/')) return 'sendAudio';
+    return 'sendDocument';
   }
   
   // Streaming (接口实现)

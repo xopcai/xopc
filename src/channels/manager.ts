@@ -194,6 +194,7 @@ export class ChannelManager {
       replyToId: processedMsg.replyToMessageId,
       accountId: processedMsg.metadata?.accountId as string ?? undefined,
       silent: processedMsg.silent,
+      audioAsVoice: processedMsg.audioAsVoice,
     };
     
     let result: OutboundDeliveryResult;
