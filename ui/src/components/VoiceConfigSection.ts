@@ -93,14 +93,14 @@ export class VoiceConfigSection extends LitElement {
     .section-header {
       margin-bottom: 1.5rem;
       padding-bottom: 1rem;
-      border-bottom: 1px solid var(--border, #e2e8f0);
+      border-bottom: 1px solid var(--border-color, #e7e5e4);
     }
 
     .section-header h2 {
       margin: 0 0 0.5rem 0;
       font-size: 1.25rem;
       font-weight: 600;
-      color: var(--foreground, #0f172a);
+      color: var(--text-primary, #1c1917);
       display: flex;
       align-items: center;
       gap: 0.5rem;
@@ -108,16 +108,16 @@ export class VoiceConfigSection extends LitElement {
 
     .section-desc {
       margin: 0;
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-secondary, #57534e);
       font-size: 0.875rem;
     }
 
     .subsection {
       margin-bottom: 2rem;
-      background: var(--muted, #f8fafc);
+      background: var(--bg-secondary, #f5f5f4);
       border-radius: 0.75rem;
       padding: 1.25rem;
-      border: 1px solid var(--border, #e2e8f0);
+      border: 1px solid var(--border-color, #e7e5e4);
     }
 
     .subsection:last-child {
@@ -130,14 +130,14 @@ export class VoiceConfigSection extends LitElement {
       gap: 0.75rem;
       margin-bottom: 1.25rem;
       padding-bottom: 0.75rem;
-      border-bottom: 1px solid var(--border, #e2e8f0);
+      border-bottom: 1px solid var(--border-color, #e7e5e4);
     }
 
     .subsection-header h3 {
       margin: 0;
       font-size: 1rem;
       font-weight: 600;
-      color: var(--foreground, #0f172a);
+      color: var(--text-primary, #1c1917);
       display: flex;
       align-items: center;
       gap: 0.5rem;
@@ -146,12 +146,12 @@ export class VoiceConfigSection extends LitElement {
     .subsection-header h3 svg {
       width: 1.25rem;
       height: 1.25rem;
-      color: var(--primary, #3b82f6);
+      color: var(--accent-primary, #4f46e5);
     }
 
     .subsection-desc {
       margin: 0;
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-secondary, #57534e);
       font-size: 0.8125rem;
     }
 
@@ -160,21 +160,21 @@ export class VoiceConfigSection extends LitElement {
       align-items: center;
       justify-content: space-between;
       padding: 0.75rem 1rem;
-      background: var(--background, #ffffff);
+      background: var(--bg-primary, #fafaf9);
       border-radius: 0.5rem;
-      border: 1px solid var(--border, #e2e8f0);
+      border: 1px solid var(--border-color, #e7e5e4);
       margin-bottom: 1rem;
     }
 
     .enable-row .field-label {
       font-weight: 500;
-      color: var(--foreground, #0f172a);
+      color: var(--text-primary, #1c1917);
     }
 
     .enable-row .field-desc {
       margin: 0.25rem 0 0 0;
       font-size: 0.75rem;
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-secondary, #57534e);
     }
 
     .config-grid {
@@ -196,23 +196,23 @@ export class VoiceConfigSection extends LitElement {
     .field-label {
       font-size: 0.8125rem;
       font-weight: 500;
-      color: var(--foreground, #0f172a);
+      color: var(--text-primary, #1c1917);
     }
 
     .field-desc {
       margin: 0;
       font-size: 0.75rem;
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-secondary, #57534e);
     }
 
     .text-input,
     .select-input {
       padding: 0.625rem 0.875rem;
-      border: 1px solid var(--border, #e2e8f0);
+      border: 1px solid var(--border-color, #e7e5e4);
       border-radius: 0.5rem;
       font-size: 0.875rem;
-      background: var(--background, #ffffff);
-      color: var(--foreground, #0f172a);
+      background: var(--bg-primary, #fafaf9);
+      color: var(--text-primary, #1c1917);
       width: 100%;
       box-sizing: border-box;
       transition: border-color 0.15s, box-shadow 0.15s;
@@ -221,14 +221,14 @@ export class VoiceConfigSection extends LitElement {
     .text-input:focus,
     .select-input:focus {
       outline: none;
-      border-color: var(--primary, #3b82f6);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      border-color: var(--accent-primary, #4f46e5);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
     }
 
     .select-input {
       cursor: pointer;
       appearance: none;
-      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2364748b' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+      background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2357534e' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
       background-repeat: no-repeat;
       background-position: right 0.75rem center;
       padding-right: 2.5rem;
@@ -252,7 +252,7 @@ export class VoiceConfigSection extends LitElement {
       position: relative;
       width: 2.75rem;
       height: 1.5rem;
-      background: var(--muted-foreground, #94a3b8);
+      background: var(--text-muted, #a8a29e);
       border-radius: 9999px;
       transition: background 0.2s;
     }
@@ -271,7 +271,7 @@ export class VoiceConfigSection extends LitElement {
     }
 
     .switch input:checked + .switch-slider {
-      background: var(--primary, #3b82f6);
+      background: var(--accent-primary, #4f46e5);
     }
 
     .switch input:checked + .switch-slider::after {
@@ -281,15 +281,15 @@ export class VoiceConfigSection extends LitElement {
     .info-box {
       margin-top: 1.5rem;
       padding: 1rem 1.25rem;
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
-      border: 1px solid rgba(59, 130, 246, 0.2);
+      background: var(--accent-primary-light, #e0e7ff);
+      border: 1px solid rgba(79, 70, 229, 0.2);
       border-radius: 0.75rem;
     }
 
     .info-box p {
       margin: 0 0 0.5rem 0;
       font-size: 0.8125rem;
-      color: var(--foreground, #0f172a);
+      color: var(--text-primary, #1c1917);
       line-height: 1.5;
     }
 
@@ -298,17 +298,17 @@ export class VoiceConfigSection extends LitElement {
     }
 
     .info-box strong {
-      color: var(--primary, #3b82f6);
+      color: var(--accent-primary, #4f46e5);
     }
 
     .info-box code {
       display: inline-block;
       padding: 0.125rem 0.375rem;
-      background: rgba(59, 130, 246, 0.1);
+      background: rgba(79, 70, 229, 0.1);
       border-radius: 0.25rem;
-      font-family: ui-monospace, monospace;
+      font-family: var(--font-mono, 'JetBrains Mono', monospace);
       font-size: 0.75rem;
-      color: var(--primary, #3b82f6);
+      color: var(--accent-primary, #4f46e5);
     }
 
     .provider-badge {
@@ -316,7 +316,7 @@ export class VoiceConfigSection extends LitElement {
       align-items: center;
       gap: 0.375rem;
       padding: 0.25rem 0.625rem;
-      background: var(--primary, #3b82f6);
+      background: var(--accent-primary, #4f46e5);
       color: white;
       font-size: 0.75rem;
       font-weight: 500;
@@ -328,9 +328,9 @@ export class VoiceConfigSection extends LitElement {
       align-items: center;
       justify-content: space-between;
       padding: 0.75rem 1rem;
-      background: var(--background, #ffffff);
+      background: var(--bg-primary, #fafaf9);
       border-radius: 0.5rem;
-      border: 1px solid var(--border, #e2e8f0);
+      border: 1px solid var(--border-color, #e7e5e4);
       margin-top: 0.5rem;
     }
 
