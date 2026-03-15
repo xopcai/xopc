@@ -6,6 +6,8 @@ import { Bot, type Context } from 'grammy';
 import { run } from '@grammyjs/runner';
 import type { Message } from '@grammyjs/types';
 import { InputFile } from 'grammy';
+import { transcribe, isSTTAvailable } from '../stt/index.js';
+import { getMimeType } from '../utils/media.js';
 
 import type {
   ChannelPlugin,
@@ -410,26 +412,150 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
       return;
     }
     
+    const botUsername = this.bots.get(accountId)?.username ?? '';
     const text = ctx.message.text ?? ctx.message.caption ?? '';
     const cleanedText = account.requireMention && isGroup
-      ? removeBotMention({ text, botUsername: this.bots.get(accountId)?.username ?? '' })
+      ? removeBotMention({ text, botUsername })
       : text;
+    
+    // Extract and process media (including STT for voice messages)
+    const media = this.extractMediaItems(ctx.message);
+    let attachments: Array<{ type: string; mimeType: string; data: string; name?: string; size?: number }> = [];
+    let transcribedText = '';
+    
+    if (media.length > 0) {
+      const mediaResult = await this.processAllMedia(
+        media,
+        ctx,
+        accountId,
+        account
+      );
+      attachments = mediaResult.attachments;
+      transcribedText = mediaResult.transcribedText;
+    }
+    
+    // Combine transcribed text with content
+    const finalContent = transcribedText
+      ? transcribedText + (cleanedText ? '\n\n' + cleanedText : '')
+      : cleanedText;
     
     const inboundMsg = {
       channel: 'telegram' as const,
       chat_id: chatId,
       sender_id: senderId,
-      content: cleanedText,
+      content: finalContent,
       metadata: {
         accountId,
         senderUsername,
         messageId: ctx.message.message_id?.toString(),
         threadId: ctx.message.message_thread_id?.toString(),
         isGroup,
+        transcribedVoice: !!transcribedText || undefined,
       },
+      attachments: attachments.length > 0 ? attachments : undefined,
     };
     
+    log.info({
+      accountId,
+      chatId,
+      senderId,
+      contentLength: finalContent.length,
+      attachmentCount: attachments.length,
+      hasTranscribedVoice: !!transcribedText,
+    }, 'Processing Telegram message');
+    
     this.bus.publishInbound(inboundMsg);
+  }
+  
+  private extractMediaItems(message: Message): Array<{ type: string; fileId: string }> {
+    const media: Array<{ type: string; fileId: string }> = [];
+    
+    if (message.photo?.length) {
+      media.push({ type: 'photo', fileId: message.photo[message.photo.length - 1].file_id });
+    }
+    if (message.document) {
+      media.push({ type: 'document', fileId: message.document.file_id });
+    }
+    if (message.video) {
+      media.push({ type: 'video', fileId: message.video.file_id });
+    }
+    if (message.audio) {
+      media.push({ type: 'audio', fileId: message.audio.file_id });
+    }
+    if (message.voice) {
+      media.push({ type: 'voice', fileId: message.voice.file_id });
+    }
+    
+    return media;
+  }
+  
+  private async processAllMedia(
+    media: Array<{ type: string; fileId: string }>,
+    ctx: Context,
+    accountId: string,
+    account: TelegramAccount
+  ): Promise<{ attachments: Array<{ type: string; mimeType: string; data: string; name?: string; size?: number }>; transcribedText: string }> {
+    const attachments: Array<{ type: string; mimeType: string; data: string; name?: string; size?: number }> = [];
+    let transcribedText = '';
+    
+    const botState = this.bots.get(accountId);
+    if (!botState?.bot) {
+      log.warn({ accountId }, 'Bot not available for media processing');
+      return { attachments, transcribedText };
+    }
+    
+    const botToken = account.token;
+    const accountApiRoot = account.apiRoot?.replace(/\/$/, '') || 'https://api.telegram.org';
+    
+    for (const item of media) {
+      try {
+        const file = await botState.bot.api.getFile(item.fileId);
+        const downloadUrl = `${accountApiRoot}/file/bot${botToken}/${file.file_path}`;
+        const response = await fetch(downloadUrl);
+        
+        if (!response.ok) {
+          throw new Error(`Failed to download: ${response.status}`);
+        }
+        
+        const buffer = await response.arrayBuffer();
+        
+        // Handle voice messages with STT
+        if (item.type === 'voice' && isSTTAvailable(this.cfg?.stt)) {
+          const voiceDuration = ctx.message.voice?.duration || 0;
+          const STT_MAX_VOICE_DURATION_SECONDS = 60;
+          
+          if (voiceDuration <= STT_MAX_VOICE_DURATION_SECONDS) {
+            try {
+              const sttResult = await transcribe(Buffer.from(buffer), this.cfg?.stt, {
+                language: (this.cfg?.stt as { provider?: string })?.provider === 'alibaba' ? 'zh' : undefined,
+              });
+              transcribedText = sttResult.text;
+              log.info({ accountId, textLength: sttResult.text.length }, 'Voice message transcribed');
+            } catch (sttError) {
+              log.error({ sttError }, 'STT transcription failed');
+              transcribedText = '[STT failed]';
+            }
+          } else {
+            transcribedText = `[Voice message too long (>${STT_MAX_VOICE_DURATION_SECONDS}s)]`;
+          }
+        }
+        
+        const base64 = Buffer.from(buffer).toString('base64');
+        const mimeType = getMimeType(item.type, file.file_path);
+        
+        attachments.push({
+          type: item.type,
+          mimeType,
+          data: base64,
+          name: file.file_path?.split('/').pop(),
+          size: buffer.byteLength,
+        });
+      } catch (err) {
+        log.error({ type: item.type, fileId: item.fileId, err }, 'Failed to download media');
+      }
+    }
+    
+    return { attachments, transcribedText };
   }
   
   private async doSendText(ctx: ChannelOutboundContext): Promise<OutboundDeliveryResult> {
