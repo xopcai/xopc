@@ -69,14 +69,71 @@ function buildTelegramLinkRenderer(
 }
 
 /**
+ * Strip or escape unknown HTML tags that Telegram doesn't support
+ * Telegram only supports: b, strong, i, em, u, ins, s, strike, del, tg-spoiler,
+ * a, pre, code, blockquote, br
+ */
+const TELEGRAM_ALLOWED_TAGS = new Set([
+  'b', 'strong', 'i', 'em', 'u', 'ins', 's', 'strike', 'del',
+  'tg-spoiler', 'a', 'pre', 'code', 'blockquote', 'br'
+]);
+
+export function stripUnknownHtmlTags(html: string): string {
+  // First pass: normalize escaped HTML entities to actual tags for processing
+  let processed = html.replace(/&lt;(\/?)([a-zA-Z][a-zA-Z0-9-]*)([^&]*?)&gt;/gi, (match, slash, tagName, attrs) => {
+    const normalizedTag = tagName.toLowerCase();
+    
+    // Keep allowed tags (normalize them, preserve attributes)
+    if (TELEGRAM_ALLOWED_TAGS.has(normalizedTag)) {
+      // Decode attributes
+      const decodedAttrs = attrs
+        .replace(/&quot;/g, '"')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .trim();
+      
+      if (decodedAttrs) {
+        return `<${slash}${normalizedTag} ${decodedAttrs}>`;
+      }
+      return `<${slash}${normalizedTag}>`;
+    }
+    
+    // Strip unknown tags
+    return '';
+  });
+  
+  // Second pass: handle any remaining unescaped tags (shouldn't happen, but just in case)
+  processed = processed.replace(/<(\/?)([a-zA-Z][a-zA-Z0-9-]*)([^>]*?)>/gi, (match, slash, tagName, attrs) => {
+    const normalizedTag = tagName.toLowerCase();
+    
+    if (TELEGRAM_ALLOWED_TAGS.has(normalizedTag)) {
+      if (attrs.trim()) {
+        return `<${slash}${normalizedTag} ${attrs.trim()}>`;
+      }
+      return `<${slash}${normalizedTag}>`;
+    }
+    
+    return '';
+  });
+  
+  return processed;
+}
+
+/**
  * Render Markdown IR to Telegram HTML
  */
 export function renderIRToTelegramHtml(ir: MarkdownIR): string {
-  return renderMarkdownWithMarkers(ir, {
+  let html = renderMarkdownWithMarkers(ir, {
     styleMarkers: TELEGRAM_STYLE_MARKERS,
     escapeText: escapeHtml,
     buildLink: buildTelegramLinkRenderer(ir.text),
   });
+  
+  // Strip any unknown HTML tags that might have slipped through
+  html = stripUnknownHtmlTags(html);
+  
+  return html;
 }
 
 /**
