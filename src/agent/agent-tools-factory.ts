@@ -4,7 +4,7 @@
  * Centralizes tool creation logic to keep service.ts focused on orchestration.
  *
  * TTS Architecture Note:
- * TTS is NOT handled by tools anymore. Following OpenClaw architecture,
+ * TTS is NOT handled by tools anymore.
  * TTS is applied at the ChannelManager dispatch layer via maybeApplyTtsToPayload().
  * This prevents duplicate voice messages.
  */

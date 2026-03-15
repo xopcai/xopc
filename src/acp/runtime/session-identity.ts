@@ -2,7 +2,6 @@
  * ACP Session Identity
  * 
  * Session identity management for ACP runtime.
- * Based on OpenClaw's ACP implementation.
  */
 
 import type {

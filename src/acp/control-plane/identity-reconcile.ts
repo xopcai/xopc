@@ -2,7 +2,6 @@
  * ACP Identity Reconciliation
  * 
  * Handles reconciliation of pending session identities at startup.
- * Based on OpenClaw's ACP implementation.
  */
 
 import { createLogger } from '../../utils/logger.js';

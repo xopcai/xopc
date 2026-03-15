@@ -7,6 +7,7 @@
 /** ACP Runtime 错误代码 */
 export type AcpRuntimeErrorCode =
   | "ACP_SESSION_INIT_FAILED"
+  | "ACP_SESSION_RESET_FAILED"
   | "ACP_TURN_FAILED"
   | "ACP_BACKEND_MISSING"
   | "ACP_BACKEND_UNAVAILABLE"
@@ -28,6 +29,7 @@ export class AcpRuntimeError extends Error {
 export function normalizeAcpErrorCode(code: string | undefined): AcpRuntimeErrorCode {
   const validCodes: AcpRuntimeErrorCode[] = [
     "ACP_SESSION_INIT_FAILED",
+    "ACP_SESSION_RESET_FAILED",
     "ACP_TURN_FAILED",
     "ACP_BACKEND_MISSING",
     "ACP_BACKEND_UNAVAILABLE",

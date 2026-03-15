@@ -4,20 +4,20 @@ export default [
   // Global ignores
   {
     ignores: [
-      "dist/**/*",
-      "docs/**/*",
-      "node_modules/**/*",
-      "ui/**/*",
+      "dist/**",
+      "docs/**",
+      "node_modules/**",
+      "ui/**",
       "**/*.js",
       "**/*.js.map",
       "**/*.d.ts",
       "**/*.d.ts.map",
       "*.js",
       "*.mjs",
-      "src/extensions/examples/**/*",
+      "src/extensions/examples/**",
     ],
   },
-  // TypeScript source files
+  // TypeScript source files in src/
   {
     files: ["src/**/*.ts"],
     plugins: {
@@ -29,14 +29,7 @@ export default [
       parser: tseslint.parser,
     },
     rules: {
-      ...tseslint.configs.recommended.rules,
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
-        {
-          "argsIgnorePattern": "^_",
-          "varsIgnorePattern": "^_",
-        }
-      ],
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_", varsIgnorePattern: "^_" }],
       "@typescript-eslint/no-explicit-any": "off",
       "no-console": "off",
     },

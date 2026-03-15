@@ -8,9 +8,8 @@
  * - Voice messages (TTS audio)
  * - Typing indicators
  *
- * Following OpenClaw architecture:
- * - TTS audio is passed as mediaUrl with audioAsVoice flag
- * - No TTS generation happens here - it's done at the dispatch layer
+ * TTS audio is passed as mediaUrl with audioAsVoice flag.
+ * No TTS generation happens here - it's done at the dispatch layer.
  */
 
 import type { Bot } from 'grammy';

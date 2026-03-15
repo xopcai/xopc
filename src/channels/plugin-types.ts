@@ -1,7 +1,5 @@
 /**
  * Channel Plugin Types - Core type definitions for channel plugins
- * 
- * Based on OpenClaw architecture design
  */
 
 import type { Config } from '../config/index.js';

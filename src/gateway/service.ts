@@ -16,6 +16,8 @@ import type { SessionListQuery, ExportFormat } from '../types/index.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { getModelRegistry } from '../providers/index.js';
 import { getLogDir, getLogStats } from '../utils/logger.js';
+import { registerAcpRuntimeBackend } from '../acp/runtime/registry.js';
+import { createLocalAcpRuntimeBackend } from '../acp/runtime/backends/local.js';
 
 // ========== SSE Event System ==========
 
@@ -151,6 +153,27 @@ export class GatewayService {
     }
   }
 
+  /**
+   * Initialize ACP runtime backend
+   */
+  private async initializeAcpRuntime(): Promise<void> {
+    try {
+      // Check if ACP is enabled in config
+      if (!this.config.acp?.enabled) {
+        console.log('[GatewayService] ACP runtime disabled in config');
+        return;
+      }
+
+      // Create and register local ACP runtime backend
+      const backend = createLocalAcpRuntimeBackend(this.agentService, this.bus);
+      registerAcpRuntimeBackend(backend);
+      
+      console.log(`[GatewayService] ACP runtime backend registered: ${backend.id}`);
+    } catch (error) {
+      console.warn('[GatewayService] Failed to initialize ACP runtime:', error);
+    }
+  }
+
   async start(): Promise<void> {
     if (this.running) return;
 
@@ -165,6 +188,9 @@ export class GatewayService {
     // Initialize session manager
     await this.sessionManager.initialize();
     console.log('[GatewayService] Session manager initialized');
+
+    // Initialize ACP runtime backend
+    await this.initializeAcpRuntime();
 
     // Start cron service
     if (this.config.cron?.enabled !== false) {
@@ -400,7 +426,7 @@ export class GatewayService {
       if (channel === 'gateway') {
         const sessionKey = `gateway:${chatId}`;
         
-        yield { type: 'token', content: 'Thinking...\n' };
+        yield { type: 'token', content: '\n' };
         
         try {
           // Process message through the LLM (with attachments if provided)

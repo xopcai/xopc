@@ -3,8 +3,6 @@
  * 
  * Provides configurable retry mechanisms with exponential backoff,
  * jitter, and custom retry conditions.
- * 
- * Based on OpenClaw's retry pattern for network resilience.
  */
 
 export interface RetryConfig {
