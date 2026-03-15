@@ -55,15 +55,15 @@ export class ProviderConfig extends LitElement {
       align-items: center;
       gap: 1rem;
       padding: 0.875rem 1rem;
-      background: var(--background, #ffffff);
-      border: 1px solid var(--border, #e2e8f0);
+      background: var(--bg-primary, #fafaf9);
+      border: 1px solid var(--border-color, #e7e5e4);
       border-radius: 0.5rem;
       transition: all var(--transition-fast, 150ms) ease;
     }
 
     .provider-row:hover {
-      border-color: var(--primary, #3b82f6);
-      box-shadow: 0 2px 8px rgba(59, 130, 246, 0.08);
+      border-color: var(--accent-primary, #4f46e5);
+      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08);
     }
 
     .provider-row.configured {
@@ -90,7 +90,7 @@ export class ProviderConfig extends LitElement {
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--muted, #f1f5f9);
+      background: var(--bg-secondary, #f5f5f4);
       border-radius: 0.5rem;
       flex-shrink: 0;
     }
@@ -98,7 +98,7 @@ export class ProviderConfig extends LitElement {
     .provider-icon svg {
       width: 18px;
       height: 18px;
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-muted, #a8a29e);
     }
 
     .provider-icon.configured svg {
@@ -113,7 +113,7 @@ export class ProviderConfig extends LitElement {
     .provider-name {
       font-weight: 600;
       font-size: 0.875rem;
-      color: var(--foreground, #0f172a);
+      color: var(--text-primary, #1c1917);
       margin-bottom: 0.125rem;
       display: flex;
       align-items: center;
@@ -124,31 +124,31 @@ export class ProviderConfig extends LitElement {
       font-size: 0.625rem;
       padding: 0.125rem 0.375rem;
       border-radius: 0.25rem;
-      background: var(--muted, #f1f5f9);
-      color: var(--muted-foreground, #64748b);
+      background: var(--bg-secondary, #f5f5f4);
+      color: var(--text-muted, #a8a29e);
       text-transform: uppercase;
       letter-spacing: 0.3px;
       font-weight: 500;
     }
 
     .provider-category-tag.oauth { 
-      background: rgba(245, 158, 11, 0.1); 
+      background: rgba(245, 158, 11, 0.15); 
       color: #d97706; 
     }
     
     .provider-category-tag.enterprise { 
-      background: rgba(139, 92, 246, 0.1); 
+      background: rgba(139, 92, 246, 0.15); 
       color: #8b5cf6; 
     }
     
     .provider-category-tag.specialty { 
-      background: rgba(6, 182, 212, 0.1); 
+      background: rgba(6, 182, 212, 0.15); 
       color: #0891b2; 
     }
 
     .provider-meta {
       font-size: 0.75rem;
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-muted, #a8a29e);
     }
 
     /* Status Indicator */
@@ -169,8 +169,8 @@ export class ProviderConfig extends LitElement {
     }
 
     .status-indicator.not-configured {
-      background: var(--muted, #f1f5f9);
-      color: var(--muted-foreground, #94a3b8);
+      background: var(--bg-secondary, #f5f5f4);
+      color: var(--text-muted, #a8a29e);
     }
 
     .status-indicator svg {
@@ -185,7 +185,7 @@ export class ProviderConfig extends LitElement {
       background: transparent;
       cursor: pointer;
       border-radius: 0.375rem;
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-muted, #a8a29e);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -194,8 +194,8 @@ export class ProviderConfig extends LitElement {
     }
 
     .expand-btn:hover {
-      background: var(--muted, #f1f5f9);
-      color: var(--foreground, #0f172a);
+      background: var(--bg-secondary, #f5f5f4);
+      color: var(--text-primary, #1c1917);
     }
 
     .expand-btn svg {
@@ -213,7 +213,7 @@ export class ProviderConfig extends LitElement {
       width: 100%;
       margin-top: 1rem;
       padding-top: 1rem;
-      border-top: 1px solid var(--border, #e2e8f0);
+      border-top: 1px solid var(--border-color, #e7e5e4);
     }
 
     /* Input Section */
@@ -234,24 +234,24 @@ export class ProviderConfig extends LitElement {
       width: 100%;
       padding: 0.5rem 0.75rem;
       padding-right: 4rem;
-      border: 1px solid var(--border, #e2e8f0);
+      border: 1px solid var(--border-color, #e7e5e4);
       border-radius: 0.5rem;
       font-size: 0.8125rem;
       font-family: var(--font-mono, monospace);
-      background: var(--background, #ffffff);
-      color: var(--foreground, #0f172a);
+      background: var(--bg-primary, #fafaf9);
+      color: var(--text-primary, #1c1917);
       transition: all var(--transition-fast, 150ms);
       box-sizing: border-box;
     }
 
     .api-key-input:focus {
       outline: none;
-      border-color: var(--primary, #3b82f6);
-      box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+      border-color: var(--accent-primary, #4f46e5);
+      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
     }
 
     .api-key-input::placeholder {
-      color: var(--muted-foreground, #94a3b8);
+      color: var(--text-muted, #a8a29e);
     }
 
     .input-actions {
@@ -268,7 +268,7 @@ export class ProviderConfig extends LitElement {
       background: transparent;
       cursor: pointer;
       border-radius: 0.375rem;
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-muted, #a8a29e);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -277,8 +277,8 @@ export class ProviderConfig extends LitElement {
     }
 
     .btn-icon:hover {
-      background: var(--muted, #f1f5f9);
-      color: var(--foreground, #0f172a);
+      background: var(--bg-secondary, #f5f5f4);
+      color: var(--text-primary, #1c1917);
     }
 
     .btn-icon svg {
@@ -288,9 +288,9 @@ export class ProviderConfig extends LitElement {
 
     .btn-oauth {
       padding: 0.5rem 0.875rem;
-      border: 1px solid var(--primary, #3b82f6);
+      border: 1px solid var(--accent-primary, #4f46e5);
       background: transparent;
-      color: var(--primary, #3b82f6);
+      color: var(--accent-primary, #4f46e5);
       border-radius: 0.5rem;
       font-size: 0.75rem;
       font-weight: 500;
@@ -304,7 +304,7 @@ export class ProviderConfig extends LitElement {
     }
 
     .btn-oauth:hover {
-      background: var(--primary, #3b82f6);
+      background: var(--accent-primary, #4f46e5);
       color: white;
     }
 
@@ -327,7 +327,7 @@ export class ProviderConfig extends LitElement {
     .help-text {
       margin-top: 0.625rem;
       font-size: 0.75rem;
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-muted, #a8a29e);
       display: flex;
       align-items: flex-start;
       gap: 0.375rem;
@@ -343,25 +343,25 @@ export class ProviderConfig extends LitElement {
 
     .help-text.error-text {
       color: var(--accent-error, #dc2626);
-      background: rgba(254, 226, 226, 0.5);
+      background: var(--accent-error-light, #fee2e2);
       padding: 0.5rem 0.625rem;
       border-radius: 0.375rem;
     }
 
     .help-text.env-text {
-      color: var(--muted-foreground, #64748b);
-      background: var(--muted, #f8fafc);
+      color: var(--text-muted, #a8a29e);
+      background: var(--bg-secondary, #f5f5f4);
       padding: 0.5rem 0.625rem;
       border-radius: 0.375rem;
-      border: 1px dashed var(--border, #e2e8f0);
+      border: 1px dashed var(--border-color, #e7e5e4);
     }
 
     /* Spinner */
     .spinner {
       width: 14px;
       height: 14px;
-      border: 2px solid var(--border, #e2e8f0);
-      border-top-color: var(--primary, #3b82f6);
+      border: 2px solid var(--border-color, #e7e5e4);
+      border-top-color: var(--accent-primary, #4f46e5);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -392,23 +392,23 @@ export class ProviderConfig extends LitElement {
     }
 
     .btn-primary {
-      background: var(--primary, #3b82f6);
+      background: var(--accent-primary, #4f46e5);
       color: white;
       border: none;
     }
 
     .btn-primary:hover {
-      background: var(--primary-dark, #2563eb);
+      background: var(--accent-primary-hover, #4338ca);
     }
 
     .btn-secondary {
       background: transparent;
-      border: 1px solid var(--border, #e2e8f0);
-      color: var(--foreground, #0f172a);
+      border: 1px solid var(--border-color, #e7e5e4);
+      color: var(--text-primary, #1c1917);
     }
 
     .btn-secondary:hover {
-      background: var(--muted, #f1f5f9);
+      background: var(--bg-secondary, #f5f5f4);
     }
 
     /* Code Input */
@@ -421,20 +421,20 @@ export class ProviderConfig extends LitElement {
     .code-input input {
       flex: 1;
       padding: 0.5rem 0.75rem;
-      border: 1px solid var(--border, #e2e8f0);
+      border: 1px solid var(--border-color, #e7e5e4);
       border-radius: 0.5rem;
       font-size: 0.8125rem;
-      background: var(--background, #ffffff);
-      color: var(--foreground, #0f172a);
+      background: var(--bg-primary, #fafaf9);
+      color: var(--text-primary, #1c1917);
     }
 
     .code-input input:focus {
       outline: none;
-      border-color: var(--primary, #3b82f6);
+      border-color: var(--accent-primary, #4f46e5);
     }
 
     .code-input input::placeholder {
-      color: var(--muted-foreground, #94a3b8);
+      color: var(--text-muted, #a8a29e);
     }
 
     /* Responsive */

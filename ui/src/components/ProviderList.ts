@@ -39,13 +39,13 @@ export class ProviderList extends LitElement {
 
     .section-desc {
       margin: 0 0 1.5rem 0;
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-secondary, #57534e);
       font-size: 0.875rem;
       line-height: 1.5;
     }
 
     .section-desc a {
-      color: var(--primary, #3b82f6);
+      color: var(--accent-primary, #4f46e5);
       text-decoration: none;
     }
 
@@ -56,10 +56,10 @@ export class ProviderList extends LitElement {
     /* Subsection style - matching voice/stt/tts */
     .subsection {
       margin-bottom: 1.5rem;
-      background: var(--muted, #f8fafc);
+      background: var(--bg-secondary, #f5f5f4);
       border-radius: 0.75rem;
       padding: 1.25rem;
-      border: 1px solid var(--border, #e2e8f0);
+      border: 1px solid var(--border-color, #e7e5e4);
     }
 
     .subsection:last-child {
@@ -71,14 +71,14 @@ export class ProviderList extends LitElement {
       align-items: center;
       justify-content: space-between;
       padding-bottom: 0.75rem;
-      border-bottom: 1px solid var(--border, #e2e8f0);
+      border-bottom: 1px solid var(--border-color, #e7e5e4);
       margin-bottom: 1rem;
       cursor: pointer;
       user-select: none;
     }
 
     .subsection-header:hover .subsection-title {
-      color: var(--primary, #3b82f6);
+      color: var(--accent-primary, #4f46e5);
     }
 
     .subsection-title {
@@ -87,14 +87,14 @@ export class ProviderList extends LitElement {
       gap: 0.5rem;
       font-weight: 600;
       font-size: 1rem;
-      color: var(--foreground, #0f172a);
+      color: var(--text-primary, #1c1917);
       transition: color var(--transition-fast, 150ms) ease;
     }
 
     .subsection-title svg {
       width: 1.25rem;
       height: 1.25rem;
-      color: var(--primary, #3b82f6);
+      color: var(--accent-primary, #4f46e5);
     }
 
     .subsection-meta {
@@ -107,7 +107,7 @@ export class ProviderList extends LitElement {
       font-size: 0.6875rem;
       padding: 0.125rem 0.5rem;
       border-radius: 9999px;
-      background: var(--muted-foreground, #94a3b8);
+      background: var(--text-muted, #a8a29e);
       color: white;
       font-weight: 500;
     }
@@ -132,7 +132,7 @@ export class ProviderList extends LitElement {
     }
 
     .expand-icon {
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-secondary, #57534e);
     }
 
     .expand-icon svg {
@@ -158,7 +158,7 @@ export class ProviderList extends LitElement {
     .empty-state {
       padding: 1.5rem;
       text-align: center;
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-secondary, #57534e);
     }
 
     .loading-state {
@@ -167,14 +167,14 @@ export class ProviderList extends LitElement {
       justify-content: center;
       gap: 0.5rem;
       padding: 1.5rem;
-      color: var(--muted-foreground, #64748b);
+      color: var(--text-secondary, #57534e);
     }
 
     .spinner {
       width: 16px;
       height: 16px;
-      border: 2px solid var(--border, #e2e8f0);
-      border-top-color: var(--primary, #3b82f6);
+      border: 2px solid var(--border-color, #e7e5e4);
+      border-top-color: var(--accent-primary, #4f46e5);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -187,20 +187,20 @@ export class ProviderList extends LitElement {
     .info-box {
       margin-top: 1.5rem;
       padding: 1rem 1.25rem;
-      background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(99, 102, 241, 0.05) 100%);
-      border: 1px solid rgba(59, 130, 246, 0.2);
+      background: var(--accent-primary-light, #e0e7ff);
+      border: 1px solid rgba(79, 70, 229, 0.2);
       border-radius: 0.75rem;
     }
 
     .info-box p {
       margin: 0;
       font-size: 0.8125rem;
-      color: var(--foreground, #0f172a);
+      color: var(--text-primary, #1c1917);
       line-height: 1.5;
     }
 
     .info-box strong {
-      color: var(--primary, #3b82f6);
+      color: var(--accent-primary, #4f46e5);
     }
 
     @media (max-width: 640px) {
