@@ -1,5 +1,5 @@
 import { html, LitElement, nothing } from 'lit';
-import { customElement, property, state, query } from 'lit/decorators.js';
+import { customElement, state, query } from 'lit/decorators.js';
 import './gateway-chat';
 import './pages/SessionManager';
 import './pages/CronManager';
@@ -8,7 +8,6 @@ import './pages/LogManager';
 import './pages/SettingsPage';
 // Components
 import './components/TokenDialog';
-import type { TokenDialog } from './components/TokenDialog';
 import {
   getTabGroups,
   type Tab,
@@ -18,8 +17,7 @@ import {
   type ChatRoute
 } from './navigation';
 import { getIcon } from './utils/icons';
-import { t, setLanguage, getCurrentLanguage, initI18n } from './utils/i18n';
-import { getToken, setToken, clearToken, getTheme, setTheme, getLanguage, setLanguage as setStoredLanguage } from './utils/storage';
+import { getToken, setToken, clearToken, getTheme, setTheme, getLanguage, setLanguage, setLanguage as setStoredLanguage } from './utils/storage';
 import type { XopcbotGatewayChat } from './gateway-chat';
 
 export type { Tab } from './navigation';
@@ -472,7 +470,7 @@ export class XopcbotApp extends LitElement {
           <!-- Sidebar Navigation -->
           <aside class="nav ${this._navCollapsed ? 'nav--collapsed' : ''} ${this._navMobileOpen ? 'nav--mobile-open' : ''}">
             ${getTabGroups().map((group) => {
-              const hasActiveTab = group.tabs.some((tab) => tab === this._activeTab);
+              const _hasActiveTab = group.tabs.some((tab) => tab === this._activeTab);
               return html`
                 <div class="nav-group">
                   <div class="nav-label nav-label--static">

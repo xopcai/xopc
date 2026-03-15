@@ -7,13 +7,14 @@
 import { html, LitElement, css } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons.js';
-import { t } from '../utils/i18n.js';
+
 import type { 
   ModelsJsonConfig, 
   ProviderConfig, 
   CustomModel,
   ValidationResult,
 } from '../config/models-json-client.js';
+import type { ApiType } from '../config/models-json-types.js';
 import {
   validateModelsJson,
   saveModelsJson,
@@ -21,7 +22,6 @@ import {
   testApiKey,
   getApiKeyType,
   maskApiKey,
-  createCustomModel,
 } from '../config/models-json-client.js';
 import './ModelEditDialog.js';
 import type { ModelEditDialog, ModelEditDialogResult } from './ModelEditDialog.js';
@@ -670,8 +670,8 @@ export class ModelJsonEditor extends LitElement {
         bubbles: true, 
         composed: true 
       }));
-    } catch (err) {
-      console.error('Reload failed:', err);
+    } catch (_err: unknown) {
+      console.error('Reload failed:', _err);
     } finally {
       this._loading = false;
     }
@@ -704,7 +704,7 @@ export class ModelJsonEditor extends LitElement {
 
   render() {
     const editingModel = this._editorState.editingModel;
-    const currentModel = editingModel 
+    const _currentModel = editingModel 
       ? this.config.providers[editingModel.provider]?.models?.find(m => m.id === editingModel.modelId)
       : undefined;
     
@@ -859,7 +859,7 @@ export class ModelJsonEditor extends LitElement {
           <select
             class="select-input"
             .value=${config.api || 'openai-completions'}
-            @change=${(e: Event) => this._updateProvider(id, { api: (e.target as HTMLSelectElement).value })}
+            @change=${(e: Event) => this._updateProvider(id, { api: (e.target as HTMLSelectElement).value as ApiType })}
           >
             ${API_TYPES.map(api => html`<option value=${api.value}>${api.label}</option>
             `)}

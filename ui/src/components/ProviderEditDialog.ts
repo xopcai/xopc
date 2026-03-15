@@ -656,7 +656,7 @@ export class ProviderEditDialog extends LitElement {
       </div>
       
       <div class="preset-grid">
-        ${Object.entries(PROVIDER_PRESETS).map(([key, preset]) => html`
+        ${Object.entries(PROVIDER_PRESETS).map(([key, _preset]) => html`
           <button 
             class="preset-btn ${this._selectedPreset === key ? 'active' : ''}"
             @click=${() => this._applyPreset(key)}

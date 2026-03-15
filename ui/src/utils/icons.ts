@@ -1,30 +1,6 @@
 import { html, type TemplateResult } from 'lit';
 
-// Dynamic icon loader using lucide
-export async function loadIcon(name: string): Promise<TemplateResult> {
-  try {
-    // Dynamic import from lucide
-    const lucide = await import('lucide');
-    const iconFn = (lucide as Record<string, (props: { size?: number }) => string>)[name];
-    
-    if (iconFn) {
-      const svgString = iconFn({ size: 18 });
-      return html`${svgString}`;
-    }
-  } catch {
-    // Fallback to inline icons
-  }
-  
-  // Fallback inline icons
-  return fallbackIcons[name] || fallbackIcons.helpCircle;
-}
-
-// Synchronous icon getter (returns fallback if not cached)
-export function getIcon(name: string): TemplateResult {
-  return fallbackIcons[name] || fallbackIcons.helpCircle;
-}
-
-// Inline SVG fallback icons
+// Inline SVG fallback icons - 定义在最前面避免 use-before-define
 const fallbackIcons: Record<string, TemplateResult> = {
   messageSquare: html`
     <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -517,4 +493,29 @@ export function getDocumentIcon(mimeType: string): TemplateResult {
     `;
   }
   return fallbackIcons.file;
+}
+
+// Dynamic icon loader using lucide
+export async function loadIcon(name: string): Promise<TemplateResult> {
+  try {
+    // Dynamic import from lucide
+    const lucide = await import('lucide');
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const iconFn = (lucide as unknown as Record<string, (props: { size?: number }) => string>)[name];
+    
+    if (iconFn) {
+      const svgString = iconFn({ size: 18 });
+      return html`${svgString}`;
+    }
+  } catch {
+    // Fallback to inline icons
+  }
+  
+  // Fallback inline icons
+  return fallbackIcons[name] || fallbackIcons.helpCircle;
+}
+
+// Synchronous icon getter (returns fallback if not cached)
+export function getIcon(name: string): TemplateResult {
+  return fallbackIcons[name] || fallbackIcons.helpCircle;
 }

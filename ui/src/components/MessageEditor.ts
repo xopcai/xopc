@@ -1,8 +1,8 @@
-import { html, LitElement, type TemplateResult } from 'lit';
+import { html, LitElement } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
-import { Paperclip, Send, Square, X } from 'lucide';
+import { Paperclip, Send, Square, X, FileText } from 'lucide';
 
 // Convert lucide icon array format to SVG string
 function iconToSvg(iconData: unknown, className = ''): string {
@@ -31,7 +31,7 @@ function iconToSvg(iconData: unknown, className = ''): string {
 
   return `<svg ${finalAttrs}>${childrenStr}</svg>`;
 }
-import { i18n, t } from '../utils/i18n';
+import { i18n } from '../utils/i18n';
 
 export interface Attachment {
   id: string;
@@ -108,6 +108,10 @@ export class MessageEditor extends LitElement {
     if (files && files.length > 0) {
       await this._processFiles(Array.from(files));
     }
+  };
+
+  private _handleOutsideClick = (_e: MouseEvent): void => {
+    // Handle click outside if needed
   };
 
   override render(): unknown {

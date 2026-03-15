@@ -23,66 +23,16 @@ export {
 // Import helpers from separated module
 import { apiUrl, authHeaders } from './gateway-helpers';
 
-// ---------- Types ----------
-
-export type ChatPayload = {
-  type?: 'status' | 'token' | 'error';
-  content?: string;
-  status?: 'ok' | 'complete' | 'error';
-  runId?: string;
-  sessionKey?: string;
-  message?: unknown;
-  errorMessage?: string;
-};
-
-export type ErrorPayload = {
-  code: string;
-  message: string;
-};
-
-export type GatewayClientConfig = {
-  /** @deprecated No longer needed - always uses current origin */
-  url?: string;
-  token?: string;
-  autoReconnect?: boolean;
-  maxReconnectAttempts?: number;
-  reconnectDelay?: number;
-};
-
-interface Message {
-  role: 'user' | 'assistant';
-  content: Array<{ type: string; text?: string }>;
-  attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>;
-  timestamp: number;
-}
-
-interface ProgressState {
-  stage: string;
-  message: string;
-  detail?: string;
-  toolName?: string;
-  timestamp: number;
-}
-
-type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error';
+// Import types for local use
+import type { 
+  GatewayClientConfig,
+  Message,
+  ProgressState,
+  ConnectionState
+} from './gateway-types';
 
 // ---------- Helpers ----------
-
-/** Get the base URL - always uses current origin. */
-function getBaseUrl(): string {
-  return window.location.origin;
-}
-
-/** Build an HTTP URL from the path. */
-function apiUrl(path: string): string {
-  return `${getBaseUrl()}${path}`;
-}
-
-function authHeaders(token?: string): Record<string, string> {
-  const h: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) h['Authorization'] = `Bearer ${token}`;
-  return h;
-}
+// getBaseUrl, apiUrl, and authHeaders are imported from './gateway-helpers'
 
 // ---------- Component ----------
 
@@ -658,7 +608,7 @@ export class XopcbotGatewayChat extends LitElement {
 
   /** Consume a fetch ReadableStream as SSE events. */
   private async _consumeSSEStream(body: ReadableStream<Uint8Array>): Promise<void> {
-    const reader = body.pipeThrough(new TextDecoderStream()).getReader();
+    const reader = body.pipeThrough(new TextDecoderStream() as unknown as ReadableWritablePair<string, Uint8Array>).getReader();
     let buffer = '';
     // State for multi-line data handling
     let currentEventType = '';

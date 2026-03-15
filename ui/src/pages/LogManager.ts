@@ -1,6 +1,6 @@
 // Log Manager Page Component
 
-import { html, LitElement, nothing } from 'lit';
+import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';

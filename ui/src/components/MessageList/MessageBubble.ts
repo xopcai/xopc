@@ -19,7 +19,6 @@ export class MessageBubble extends LitElement {
   override render(): unknown {
     const isUser = this.message.role === 'user' || this.message.role === 'user-with-attachments';
     const isAssistant = this.message.role === 'assistant';
-    const isTool = this.message.role === 'tool' || this.message.role === 'tool_result';
 
     const roleLabel = isUser ? t('chat.you') : isAssistant ? t('chat.assistant') : t('chat.tool');
     const avatarLetter = roleLabel.charAt(0);

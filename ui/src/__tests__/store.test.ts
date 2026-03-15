@@ -10,10 +10,9 @@ describe('AppStore', () => {
     const store = createAppStore();
     const state = store.getState();
 
-    expect(state.current).toBeNull();
-    expect(state.list).toEqual([]);
-    expect(state.state).toBe('disconnected');
-    expect(state.current.type).toBe('recent');
+    expect(state.route.current).toEqual({ type: 'recent' });
+    expect(state.session.list).toEqual([]);
+    expect(state.connection.status).toBe('disconnected');
   });
 
   it('should update session list', () => {
@@ -23,19 +22,19 @@ describe('AppStore', () => {
       { key: 'gateway:2', name: 'Session 2', updatedAt: '2024-01-02', messageCount: 3 },
     ];
 
-    store.getState().setList(sessions);
+    store.getState().setSessionList(sessions);
 
-    expect(store.getState().list).toHaveLength(2);
-    expect(store.getState().list[0].key).toBe('gateway:1');
+    expect(store.getState().session.list).toHaveLength(2);
+    expect(store.getState().session.list[0].key).toBe('gateway:1');
   });
 
   it('should set current session', () => {
     const store = createAppStore();
     const session = { key: 'gateway:1', name: 'Test', updatedAt: '2024-01-01', messageCount: 0 };
 
-    store.getState().setCurrent(session);
+    store.getState().setCurrentSession(session);
 
-    expect(store.getState().current?.key).toBe('gateway:1');
+    expect(store.getState().session.current?.key).toBe('gateway:1');
   });
 
   it('should add message', () => {
@@ -49,29 +48,29 @@ describe('AppStore', () => {
 
     store.getState().addMessage(message);
 
-    expect(store.getState().list).toHaveLength(1);
-    expect(store.getState().list[0].content[0].text).toBe('Hello');
+    expect(store.getState().message.messages).toHaveLength(1);
+    expect(store.getState().message.messages[0].content[0].text).toBe('Hello');
   });
 
   it('should update streaming content', () => {
     const store = createAppStore();
 
-    store.getState().setStreaming(true);
+    store.getState().setStreamingActive(true);
     store.getState().setStreamingContent('Hello');
     store.getState().appendStreamingContent(' World');
 
-    expect(store.getState().streaming.isActive).toBe(true);
-    expect(store.getState().streaming.content).toBe('Hello World');
+    expect(store.getState().message.streaming.isActive).toBe(true);
+    expect(store.getState().message.streaming.content).toBe('Hello World');
   });
 
   it('should update connection state', () => {
     const store = createAppStore();
 
-    store.getState().setState('connecting');
-    expect(store.getState().state).toBe('connecting');
+    store.getState().setConnectionStatus('connecting');
+    expect(store.getState().connection.status).toBe('connecting');
 
-    store.getState().setState('connected');
-    expect(store.getState().state).toBe('connected');
+    store.getState().setConnectionStatus('connected');
+    expect(store.getState().connection.status).toBe('connected');
   });
 
   it('should track reconnection count', () => {
@@ -80,19 +79,19 @@ describe('AppStore', () => {
     store.getState().incrementReconnect();
     store.getState().incrementReconnect();
 
-    expect(store.getState().reconnectCount).toBe(2);
+    expect(store.getState().connection.reconnectCount).toBe(2);
 
     store.getState().resetReconnect();
-    expect(store.getState().reconnectCount).toBe(0);
+    expect(store.getState().connection.reconnectCount).toBe(0);
   });
 
   it('should navigate routes', () => {
     const store = createAppStore();
 
-    store.getState().navigate({ type: 'session', sessionKey: 'gateway:abc' });
+    store.getState().navigateRoute({ type: 'session', sessionKey: 'gateway:abc' });
 
-    expect(store.getState().current.type).toBe('session');
-    expect(store.getState().current.sessionKey).toBe('gateway:abc');
-    expect(store.getState().previous?.type).toBe('recent');
+    expect(store.getState().route.current.type).toBe('session');
+    expect(store.getState().route.current.sessionKey).toBe('gateway:abc');
+    expect(store.getState().route.previous?.type).toBe('recent');
   });
 });
