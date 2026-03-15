@@ -29,7 +29,7 @@ import { createLogger } from '../utils/logger.js';
 import { createInboundDebouncer } from '../infra/debounce.js';
 import { createRetryRunner } from '../infra/retry.js';
 import { removeBotMention, evaluateAccess, resolveDmPolicy, resolveGroupPolicy } from './security.js';
-import { stripUnknownHtmlTags } from './telegram/format.js';
+import { renderTelegramHtmlText, stripUnknownHtmlTags } from './telegram/format.js';
 
 const log = createLogger('TelegramPlugin');
 
@@ -443,8 +443,9 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
       return { messageId: '', chatId: ctx.to, success: true };
     }
     
-    // Strip unknown HTML tags to prevent Telegram parse errors
-    const sanitizedText = stripUnknownHtmlTags(ctx.text);
+    // Convert markdown to Telegram HTML, then strip unknown HTML tags
+    const htmlText = renderTelegramHtmlText(ctx.text);
+    const sanitizedText = stripUnknownHtmlTags(htmlText);
     
     const retry = createRetryRunner({ label: 'telegram-send' });
     
