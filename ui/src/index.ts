@@ -31,7 +31,7 @@ export {
 } from './components/index';
 export type { 
   Attachment as MessageAttachment, 
-  Message, 
+  Message as UIMessage, 
   MessageContent 
 } from './components/MessageList/types';
 export { StreamingMessageContainer } from './components/StreamingMessageContainer';
@@ -172,12 +172,15 @@ export class XopcbotChat extends LitElement {
     this._autoScroll = true;
 
     if (attachments && attachments.length > 0) {
-      await this.agent.prompt({
-        role: 'user-with-attachments',
-        content: input,
-        attachments,
-        timestamp: Date.now(),
-      });
+      // Convert attachments to the format expected by the agent
+      const imageContents = attachments
+        .filter(att => att.mimeType.startsWith('image/'))
+        .map(att => ({
+          type: 'image' as const,
+          mimeType: att.mimeType,
+          data: att.content,
+        }));
+      await this.agent.prompt(input, imageContents);
     } else {
       await this.agent.prompt(input);
     }

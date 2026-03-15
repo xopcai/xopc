@@ -500,7 +500,7 @@ export async function loadIcon(name: string): Promise<TemplateResult> {
   try {
     // Dynamic import from lucide
     const lucide = await import('lucide');
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+     
     const iconFn = (lucide as unknown as Record<string, (props: { size?: number }) => string>)[name];
     
     if (iconFn) {

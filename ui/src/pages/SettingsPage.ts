@@ -194,6 +194,21 @@ export class SettingsPage extends LitElement {
     }
   }
 
+  private _handleModelsJsonChange(e: CustomEvent<{ config: ModelsJsonConfig }>): void {
+    this._modelsJsonConfig = e.detail.config;
+    this._dirty = true;
+  }
+
+  private _handleModelsJsonSave(): void {
+    this._saveSuccess = true;
+    setTimeout(() => this._saveSuccess = false, 3000);
+    this._loadModelsJson();
+  }
+
+  private _handleModelsJsonReload(): void {
+    this._loadModelsJson();
+  }
+
   private async _loadSettings() {
     this._loading = true;
     const token = this.config?.token;
@@ -604,18 +619,9 @@ export class SettingsPage extends LitElement {
           <model-json-editor
             .config=${this._modelsJsonConfig}
             .token=${this.config?.token}
-            @change=${(e: CustomEvent<{ config: typeof this._modelsJsonConfig }>) => {
-              this._modelsJsonConfig = e.detail.config;
-              this._dirty = true;
-            }}
-            @save=${() => {
-              this._saveSuccess = true;
-              setTimeout(() => this._saveSuccess = false, 3000);
-              this._loadModelsJson();
-            }}
-            @reload=${() => {
-              this._loadModelsJson();
-            }}
+            @change=${this._handleModelsJsonChange}
+            @save=${this._handleModelsJsonSave}
+            @reload=${this._handleModelsJsonReload}
           ></model-json-editor>
         `}
       </div>
