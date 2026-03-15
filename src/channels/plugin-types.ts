@@ -236,6 +236,7 @@ export interface ChannelOutboundContext {
   threadId?: string | number | null;
   accountId?: string | null;
   silent?: boolean;
+  audioAsVoice?: boolean;
 }
 
 export interface ChannelOutboundPayloadContext extends ChannelOutboundContext {
