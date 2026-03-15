@@ -9,7 +9,7 @@
 import type { Bot } from 'grammy';
 import { createLogger } from '../../utils/logger.js';
 import type { ProgressStage } from '../types.js';
-import { formatTelegramMessage } from './format.js';
+import { formatTelegramMessage, stripUnknownHtmlTags } from './format.js';
 
 const log = createLogger('DraftStream');
 
@@ -105,10 +105,10 @@ export function createTelegramDraftStream(
 
     lastSentText = trimmed;
 
-    // When using HTML parse mode, assume text is already HTML
+    // When using HTML parse mode, assume text is already HTML but strip unknown tags
     // Only process markdown when parseMode is not HTML or is undefined
     const messageText = options.parseMode === 'HTML' 
-      ? trimmed 
+      ? stripUnknownHtmlTags(trimmed)
       : formatTelegramMessage(trimmed).html;
 
     try {

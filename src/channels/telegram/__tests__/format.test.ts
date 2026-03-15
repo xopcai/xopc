@@ -10,7 +10,9 @@ import {
   wrapFileReferencesInHtml,
   formatTelegramMessage,
   markdownToTelegramChunks,
+  renderIRToTelegramHtml,
 } from '../format.js';
+import { markdownToIR } from '../../../markdown/index.js';
 
 describe('escapeHtml', () => {
   it('should escape & character', () => {
@@ -87,8 +89,9 @@ describe('markdownToTelegramHtml', () => {
     expect(result).toContain('a href');
   });
 
-  it('should escape HTML in content', () => {
-    expect(markdownToTelegramHtml('<script>alert(1)</script>')).toContain('&lt;script&gt;');
+  it('should strip unknown HTML tags (security)', () => {
+    // Unknown tags like <script> should be stripped for security
+    expect(markdownToTelegramHtml('<script>alert(1)</script>')).toBe('alert(1)');
   });
 });
 
@@ -184,5 +187,78 @@ describe('markdownToTelegramChunks', () => {
     const result = markdownToTelegramChunks(text, 15);
     // Should split into at least 2 chunks
     expect(result.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe('stripUnknownHtmlTags', () => {
+  it('should strip unknown HTML tags from rendered HTML', () => {
+    // Simulate IR that has raw HTML text (as might come from LLM)
+    const ir = {
+      text: 'Hello <resolvedaccount>world</resolvedaccount>',
+      styles: [],
+      links: [],
+    } as const;
+    const result = renderIRToTelegramHtml(ir);
+    expect(result).toBe('Hello world');
+  });
+
+  it('should keep allowed HTML tags', () => {
+    const ir = {
+      text: 'Hello <b>world</b>',
+      styles: [],
+      links: [],
+    } as const;
+    const result = renderIRToTelegramHtml(ir);
+    expect(result).toBe('Hello <b>world</b>');
+  });
+
+  it('should strip unknown tags but keep content', () => {
+    const ir = {
+      text: 'Test <unknown>content</unknown> here',
+      styles: [],
+      links: [],
+    } as const;
+    const result = renderIRToTelegramHtml(ir);
+    expect(result).toBe('Test content here');
+  });
+
+  it('should strip self-closing unknown tags', () => {
+    const ir = {
+      text: 'Before <custombr/>After',
+      styles: [],
+      links: [],
+    } as const;
+    const result = renderIRToTelegramHtml(ir);
+    expect(result).toBe('Before After');
+  });
+
+  it('should strip unknown tags with attributes', () => {
+    const ir = {
+      text: 'Test <customtag attr="value">content</customtag> here',
+      styles: [],
+      links: [],
+    } as const;
+    const result = renderIRToTelegramHtml(ir);
+    expect(result).toBe('Test content here');
+  });
+
+  it('should keep Telegram-supported tags', () => {
+    const ir = {
+      text: 'Test <b>bold</b> <i>italic</i> <code>code</code>',
+      styles: [],
+      links: [],
+    } as const;
+    const result = renderIRToTelegramHtml(ir);
+    expect(result).toBe('Test <b>bold</b> <i>italic</i> <code>code</code>');
+  });
+
+  it('should handle mixed allowed and unknown tags', () => {
+    const ir = {
+      text: 'Test <b>bold</b> <unknown>unknown content</unknown> <i>italic</i>',
+      styles: [],
+      links: [],
+    } as const;
+    const result = renderIRToTelegramHtml(ir);
+    expect(result).toBe('Test <b>bold</b> unknown content <i>italic</i>');
   });
 });

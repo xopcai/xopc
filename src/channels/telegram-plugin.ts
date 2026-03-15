@@ -29,6 +29,7 @@ import { createLogger } from '../utils/logger.js';
 import { createInboundDebouncer } from '../infra/debounce.js';
 import { createRetryRunner } from '../infra/retry.js';
 import { removeBotMention, evaluateAccess, resolveDmPolicy, resolveGroupPolicy } from './security.js';
+import { stripUnknownHtmlTags } from './telegram/format.js';
 
 const log = createLogger('TelegramPlugin');
 
@@ -442,11 +443,14 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
       return { messageId: '', chatId: ctx.to, success: true };
     }
     
+    // Strip unknown HTML tags to prevent Telegram parse errors
+    const sanitizedText = stripUnknownHtmlTags(ctx.text);
+    
     const retry = createRetryRunner({ label: 'telegram-send' });
     
     try {
       const message = await retry(async () => 
-        botState.bot.api.sendMessage(ctx.to, ctx.text, {
+        botState.bot.api.sendMessage(ctx.to, sanitizedText, {
           parse_mode: 'HTML',
           reply_to_message_id: ctx.replyToId ? parseInt(ctx.replyToId.toString()) : undefined,
           message_thread_id: ctx.threadId ? parseInt(ctx.threadId.toString()) : undefined,
