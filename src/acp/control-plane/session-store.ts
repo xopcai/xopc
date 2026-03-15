@@ -5,14 +5,14 @@
  * Stores ACP session metadata in the workspace's .sessions directory.
  */
 
-import { readFile, writeFile, mkdir, readdir } from 'fs/promises';
-import { join, dirname } from 'path';
+import { readFile, writeFile, mkdir } from 'fs/promises';
+import { join } from 'path';
 import { existsSync } from 'fs';
 import { homedir } from 'os';
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/schema.js';
 import { getDefaultWorkspacePath } from '../../config/paths.js';
-import type { SessionEntry, SessionAcpMeta } from './manager.types.js';
+import type { SessionEntry } from './manager.types.js';
 
 const log = createLogger('AcpSessionStore');
 

@@ -8,7 +8,6 @@
 import type { Config } from "../../config/schema.js";
 import { createLogger } from "../../utils/logger.js";
 import { AcpRuntimeError, withAcpRuntimeErrorBoundary } from "../runtime/errors.js";
-import { formatAcpErrorText, toAcpErrorText } from "../runtime/error-text.js";
 import { SessionRateLimiter } from "../../infra/rate-limit.js";
 import {
   isSessionIdentityPending,
@@ -25,19 +24,15 @@ import {
   type AcpSessionRuntimeOptions,
   type AcpSessionStatus,
   type AcpStartupIdentityReconcileResult,
-  type CachedRuntimeState,
   type SessionAcpMeta,
   type SessionEntry,
 } from "./manager.types.js";
 import { reconcileRuntimeSessionIdentifiers } from "./identity-reconcile.js";
 import {
   createUnsupportedControlError,
-  normalizeAcpErrorCode,
   normalizeActorKey,
-  normalizeSessionKey,
   requireReadySessionMeta,
   resolveAcpSessionResolutionError,
-  resolveRuntimeIdleTtlMs,
 } from "./manager.utils.js";
 import {
   inferRuntimeOptionPatchFromConfigOption,
@@ -192,7 +187,7 @@ export class AcpSessionManager {
             handle,
             meta,
             failOnStatusError: false,
-            setCachedHandle: (key, h) => {
+            setCachedHandle: (key, _h) => {
               this.cacheManager.clear(key);
             },
             writeSessionMeta: async ({ sessionKey, mutate }) => {
@@ -231,7 +226,7 @@ export class AcpSessionManager {
     return await this.withSessionActor(input.sessionKey, async () => {
       const { runtime, meta } = await this.lifecycleManager.initializeSession({
         input,
-        onRuntimeCreated: async (sessionKey, rt) => {
+        onRuntimeCreated: async (sessionKey, _rt) => {
           this.cacheManager.clear(sessionKey);
         },
       });
@@ -427,8 +422,6 @@ export class AcpSessionManager {
   async cancelSession(params: { cfg: Config; sessionKey: string; reason?: string }): Promise<void> {
     await this.evictIdleRuntimeHandles({ cfg: params.cfg });
 
-    const actorKey = normalizeActorKey(params.sessionKey);
-
     // Try cancel active turn first
     const activeTurn = this.turnManager.getActiveTurn(params.sessionKey);
     if (activeTurn) {
@@ -553,7 +546,7 @@ export class AcpSessionManager {
     });
   }
 
-  private enforceConcurrentSessionLimit(sessionKey: string): void {
+  private enforceConcurrentSessionLimit(_sessionKey: string): void {
     // This will be called by sub-managers; actual check is in initializeSession/ensureHandle
     // Kept for interface compatibility
   }
@@ -563,8 +556,7 @@ export class AcpSessionManager {
     op: () => Promise<T>,
     signal?: AbortSignal,
   ): Promise<T> {
-    const actorKey = normalizeActorKey(sessionKey);
-    return await this.actorQueue.run(actorKey, async () => {
+    return await this.actorQueue.run(normalizeActorKey(sessionKey), async () => {
       this.throwIfAborted(signal);
       return await op();
     });

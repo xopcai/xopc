@@ -9,10 +9,6 @@ import { listAcpRuntimeBackends } from "../../acp/runtime/registry.js";
 import { formatAcpErrorText } from "../../acp/runtime/error-text.js";
 import { AcpRuntimeError } from "../../acp/runtime/errors.js";
 import { loadConfig } from "../../config/loader.js";
-import { createLogger } from "../../utils/logger.js";
-
-const log = createLogger("cli:acp");
-
 /** Format error for CLI output */
 function formatCliError(error: unknown): string {
   if (error instanceof AcpRuntimeError) {

@@ -5,7 +5,6 @@
  */
 
 import type { Config } from "../../config/schema.js";
-import { createLogger } from "../../utils/logger.js";
 import { AcpRuntimeError, withAcpRuntimeErrorBoundary } from "../runtime/errors.js";
 import {
   createIdentityFromEnsure,
@@ -31,8 +30,6 @@ import {
   resolveRuntimeOptionsFromMeta,
   runtimeOptionsEqual,
 } from "./runtime-options.js";
-
-const logger = createLogger("AcpRuntimeCacheManager");
 
 export interface RuntimeCacheManagerDeps {
   persistMeta: (sessionKey: string, meta: SessionAcpMeta) => Promise<void>;

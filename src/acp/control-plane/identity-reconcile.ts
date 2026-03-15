@@ -7,7 +7,7 @@
 
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/schema.js';
-import { AcpRuntimeError, withAcpRuntimeErrorBoundary } from '../runtime/errors.js';
+import { withAcpRuntimeErrorBoundary } from '../runtime/errors.js';
 import {
   createIdentityFromStatus,
   identityEquals,
@@ -18,7 +18,6 @@ import {
 import type { AcpRuntime, AcpRuntimeHandle, AcpRuntimeStatus, SessionAcpMeta } from '../runtime/types.js';
 import type { SessionEntry } from './manager.types.js';
 import { hasLegacyAcpIdentityProjection } from './manager.utils.js';
-import type { CachedRuntimeState } from './runtime-cache.js';
 
 const log = createLogger('AcpIdentityReconcile');
 

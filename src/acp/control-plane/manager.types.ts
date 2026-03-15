@@ -8,8 +8,6 @@ import type { Config } from "../../config/schema.js";
 import type {
   AcpRuntime,
   AcpRuntimeHandle,
-  AcpRuntimeCapabilities,
-  AcpRuntimeStatus,
   AcpRuntimeSessionMode,
   AcpRuntimeEvent,
   AcpRuntimeTurnAttachment,
@@ -20,7 +18,6 @@ import type {
   AcpSessionRuntimeOptions,
   AcpSessionStatus,
 } from "../runtime/types.js";
-import type { AcpRuntimeError } from "../runtime/errors.js";
 
 // Re-export types from runtime for convenience
 export type {

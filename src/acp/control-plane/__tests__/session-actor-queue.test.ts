@@ -140,7 +140,7 @@ describe("acp-session-actor-queue", () => {
         await queue.run("actor-1", async () => {
           throw new Error("Test error");
         });
-      } catch (e) {
+      } catch {
         // Expected
       }
 
@@ -154,7 +154,7 @@ describe("acp-session-actor-queue", () => {
         await queue.run("actor-1", async () => {
           throw new Error("Test error");
         });
-      } catch (e) {
+      } catch {
         // Expected
       }
 

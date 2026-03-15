@@ -5,9 +5,8 @@
  */
 
 import type { Config } from "../../config/schema.js";
-import { AcpRuntimeError, normalizeAcpErrorCode } from "../runtime/errors.js";
+import { AcpRuntimeError } from "../runtime/errors.js";
 import type { SessionAcpMeta, AcpSessionResolution } from "../runtime/types.js";
-import type { SessionEntry } from "./manager.types.js";
 
 // Re-export normalizeAcpErrorCode for use in manager
 export { normalizeAcpErrorCode } from "../runtime/errors.js";
@@ -84,7 +83,7 @@ export function resolveMissingMetaError(sessionKey: string): Error {
 }
 
 /** 检查是否有 Legacy ACP Identity Projection */
-export function hasLegacyAcpIdentityProjection(meta: SessionAcpMeta): boolean {
+export function hasLegacyAcpIdentityProjection(_meta: SessionAcpMeta): boolean {
   // 检查是否需要迁移旧的 identity 格式
   return false;
 }
