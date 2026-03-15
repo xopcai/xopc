@@ -35,6 +35,7 @@ export class AlibabaProvider extends BaseTTSProvider {
   private model: string;
   private voice: string;
   private baseUrl = 'https://dashscope.aliyuncs.com/api/v1/services/aigc/multimodal-generation/generation';
+  private readonly maxTextLength = 512; // Alibaba TTS API limit
 
   constructor(config: AlibabaProviderConfig) {
     super(config);
@@ -45,6 +46,11 @@ export class AlibabaProvider extends BaseTTSProvider {
 
   isConfigured(): boolean {
     return !!this.apiKey;
+  }
+
+  /** Get the maximum text length for this provider */
+  getMaxTextLength(): number {
+    return this.maxTextLength;
   }
 
   protected async doSpeak(text: string, options?: TTSOptions): Promise<TTSResult> {
