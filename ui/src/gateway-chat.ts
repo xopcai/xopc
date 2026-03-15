@@ -60,6 +60,9 @@ export class XopcbotGatewayChat extends LitElement {
   @state() private _hasMoreMessages = true; // For pagination
   @state() private _isLoadingMore = false;
 
+  private _lastScrollTop = 0;
+  private _lastClientHeight = 0;
+
   /** SSE event source for server-pushed events */
   private _eventSource?: EventSource;
   /** AbortController for the current agent POST request */
@@ -260,12 +263,21 @@ export class XopcbotGatewayChat extends LitElement {
   private _handleScroll = (): void => {
     if (!this._chatMessages) return;
     const { scrollTop, scrollHeight, clientHeight } = this._chatMessages;
-    const atBottom = scrollHeight - scrollTop - clientHeight < 50;
+    const distanceFromBottom = scrollHeight - scrollTop - clientHeight;
 
-    // Update bottom state
-    if (atBottom !== this._isAtBottom) {
-      this._isAtBottom = atBottom;
+    if (clientHeight < this._lastClientHeight) {
+      this._lastClientHeight = clientHeight;
+      return;
     }
+
+    if (scrollTop !== 0 && scrollTop < this._lastScrollTop && distanceFromBottom > 50) {
+      this._isAtBottom = false;
+    } else if (distanceFromBottom < 10) {
+      this._isAtBottom = true;
+    }
+
+    this._lastScrollTop = scrollTop;
+    this._lastClientHeight = clientHeight;
 
     // Load more when scrolling to top
     if (scrollTop < 100 && !this._isAtBottom && this._hasMoreMessages && !this._isLoadingMore) {
@@ -547,7 +559,13 @@ export class XopcbotGatewayChat extends LitElement {
         timestamp: Date.now(),
       },
     ];
+    // Always scroll to bottom when user sends a message (regardless of previous scroll position)
+    this._isAtBottom = true;
     this._scrollToBottom();
+    // Double-check scroll after a short delay to ensure content is rendered
+    setTimeout(() => {
+      this._scrollToBottom(false);
+    }, 50);
     this.requestUpdate();
 
     try {
@@ -678,6 +696,7 @@ export class XopcbotGatewayChat extends LitElement {
         case 'status':
           this._isStreaming = true;
           this.requestUpdate();
+          if (this._isAtBottom) this._scrollToBottom();
           break;
 
         case 'token':
@@ -696,6 +715,15 @@ export class XopcbotGatewayChat extends LitElement {
             timestamp: Date.now(),
           };
           this.requestUpdate();
+          if (this._isAtBottom) {
+            this._scrollToBottom();
+            // Double-check scroll after a short delay
+            setTimeout(() => {
+              if (this._isAtBottom) {
+                this._scrollToBottom(false);
+              }
+            }, 50);
+          }
           break;
 
         case 'error':
@@ -747,6 +775,12 @@ export class XopcbotGatewayChat extends LitElement {
     // Auto-scroll to bottom while streaming if user is at bottom
     if (this._isAtBottom) {
       this._scrollToBottom();
+      // Double-check scroll after a short delay to ensure markdown-renderer has finished rendering
+      setTimeout(() => {
+        if (this._isAtBottom) {
+          this._scrollToBottom(false);
+        }
+      }, 50);
     }
   }
 
@@ -759,10 +793,16 @@ export class XopcbotGatewayChat extends LitElement {
     this._streamingContent = '';
     this._currentProgress = null;
     this._isSending = false;
-    
+
     // Auto-scroll to bottom if user is at bottom
     if (this._isAtBottom) {
       this._scrollToBottom();
+      // Double-check scroll after a short delay to ensure markdown-renderer has finished rendering
+      setTimeout(() => {
+        if (this._isAtBottom) {
+          this._scrollToBottom(false);
+        }
+      }, 100);
     }
     this.requestUpdate();
   }
