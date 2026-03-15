@@ -467,6 +467,56 @@ export class AcpSessionManager {
     });
   }
 
+  /** Reset Session */
+  async resetSession(params: { cfg: Config; sessionKey: string }): Promise<void> {
+    await this.evictIdleRuntimeHandles({ cfg: params.cfg });
+
+    await this.withSessionActor(params.sessionKey, async () => {
+      const resolution = await this.resolveSession({ cfg: params.cfg, sessionKey: params.sessionKey });
+      const resolvedMeta = requireReadySessionMeta(resolution);
+
+      const { runtime, handle } = await this.cacheManager.ensureHandle({
+        cfg: params.cfg,
+        sessionKey: params.sessionKey,
+        meta: resolvedMeta,
+      });
+
+      // Check if runtime supports resetSession
+      const capabilities = await this.resolveRuntimeCapabilities({ runtime, handle });
+
+      if (!capabilities.controls.includes("session/reset") || !runtime.resetSession) {
+        // Fallback: just clear session state without calling runtime
+        await this.lifecycleManager.setSessionState({
+          sessionKey: params.sessionKey,
+          state: "idle",
+          clearLastError: true,
+        });
+        return;
+      }
+
+      try {
+        await runtime.resetSession!({ handle });
+        await this.lifecycleManager.setSessionState({
+          sessionKey: params.sessionKey,
+          state: "idle",
+          clearLastError: true,
+        });
+      } catch (error) {
+        const acpError =
+          error instanceof AcpRuntimeError
+            ? error
+            : new AcpRuntimeError("ACP_SESSION_RESET_FAILED", error instanceof Error ? error.message : "Reset failed");
+
+        await this.lifecycleManager.setSessionState({
+          sessionKey: params.sessionKey,
+          state: "error",
+          lastError: acpError.message,
+        });
+        throw acpError;
+      }
+    });
+  }
+
   /** Close Session */
   async closeSession(input: AcpCloseSessionInput): Promise<AcpCloseSessionResult> {
     await this.evictIdleRuntimeHandles({ cfg: input.cfg });

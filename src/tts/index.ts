@@ -215,7 +215,7 @@ export {
   type TTSDecision,
 } from './service.js';
 
-// Re-export payload processing (OpenClaw-style)
+// Re-export payload processing
 export {
   maybeApplyTtsToPayload,
   isTtsEnabled,

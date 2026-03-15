@@ -2,7 +2,6 @@
  * Markdown processing package
  *
  * Provides robust markdown parsing and rendering using Intermediate Representation (IR).
- * Inspired by OpenClaw's approach for reliable markdown handling across different outputs.
  */
 
 // IR parsing and chunking

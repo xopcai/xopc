@@ -39,8 +39,7 @@ interface MessageContext {
  * Create the send_message tool.
  *
  * NOTE: TTS (Text-to-Speech) is NOT handled by this tool.
- * Following the OpenClaw architecture, TTS is applied at the dispatch layer
- * via maybeApplyTtsToPayload(), not at the tool layer.
+ * TTS is applied at the dispatch layer via maybeApplyTtsToPayload(), not at the tool layer.
  *
  * This prevents duplicate messages (text + voice) being sent.
  */

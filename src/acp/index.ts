@@ -35,3 +35,7 @@ export type {
   AcpCloseSessionResult,
   AcpManagerObservabilitySnapshot,
 } from "./control-plane/manager.types.js";
+
+// Server
+export { AcpServer } from "./server.js";
+export type { AcpServerOptions, AcpProvenanceMode } from "./types.js";

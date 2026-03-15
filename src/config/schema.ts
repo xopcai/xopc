@@ -355,7 +355,7 @@ export const AcpRateLimitConfigSchema = z.object({
 
 export const AcpConfigSchema = z.object({
   /** Global ACP runtime gate */
-  enabled: z.boolean().optional(),
+  enabled: z.boolean().default(false),
   dispatch: AcpDispatchConfigSchema.optional(),
   /** Backend id registered by ACP runtime plugin */
   backend: z.string().optional(),

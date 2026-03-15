@@ -2,7 +2,6 @@
  * ACP Runtime Types
  * 
  * Core type definitions for Agent Control Protocol runtime abstraction.
- * Based on OpenClaw's ACP implementation.
  */
 
 /** ACP Prompt 模式 */
@@ -29,7 +28,8 @@ export type AcpSessionUpdateTag =
 export type AcpRuntimeControl = 
   | "session/set_mode" 
   | "session/set_config_option" 
-  | "session/status";
+  | "session/status"
+  | "session/reset";
 
 /** ACP Runtime Handle - Session 句柄 */
 export type AcpRuntimeHandle = {
@@ -80,6 +80,8 @@ export type AcpRuntimeCapabilities = {
    * 空值表示 backend 接受键，但没有严格列表
    */
   configOptionKeys?: string[];
+  /** 可选的 backend 支持的工具列表 */
+  toolNames?: string[];
 };
 
 /** ACP Runtime 状态 */
@@ -123,8 +125,11 @@ export type AcpRuntimeEvent =
       text: string;
       tag?: AcpSessionUpdateTag;
       toolCallId?: string;
-      status?: string;
+      status?: "start" | "progress" | "end" | "error";
       title?: string;
+      input?: Record<string, unknown>;
+      output?: string;
+      error?: string;
     }
   | {
       type: "done";
@@ -158,6 +163,9 @@ export interface AcpRuntime {
 
   /** 设置配置选项 */
   setConfigOption?(input: { handle: AcpRuntimeHandle; key: string; value: string }): Promise<void>;
+
+  /** 重置 Session */
+  resetSession?(input: { handle: AcpRuntimeHandle }): Promise<void>;
 
   /** 健康检查 */
   doctor?(): Promise<AcpRuntimeDoctorReport>;

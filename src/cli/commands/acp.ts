@@ -267,6 +267,27 @@ function createAcpCommand(_ctx: CLIContext): Command {
       }
     });
 
+  // acp serve
+  acpCmd
+    .command("serve")
+    .description("Start ACP server for IDE integration")
+    .option("-s, --session <key>", "Default session key")
+    .option("-l, --session-label <label>", "Default session label")
+    .option("--require-existing", "Fail if session does not exist")
+    .option("--reset-session", "Reset session before use")
+    .option("-v, --verbose", "Verbose logging")
+    .action(async (_options) => {
+      try {
+        // Dynamic import to start the ACP server
+        // The main function starts the server - it's an infinite loop
+        // We just need to import it to run it
+        await import("../../acp/server.js");
+      } catch (error) {
+        console.error(`❌ ${formatCliError(error)}`);
+        process.exit(1);
+      }
+    });
+
   return acpCmd;
 }
 
