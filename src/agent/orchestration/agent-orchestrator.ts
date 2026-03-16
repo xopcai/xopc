@@ -99,12 +99,22 @@ export class AgentOrchestrator {
   private async executeAgent(
     agent: Agent,
     userMessage: AgentMessage,
-    _context: SessionContext
+    context: SessionContext
   ): Promise<void> {
-    // Prompt agent with user message
+    // Prompt agent with user message - this adds the message to agent's internal state
     await agent.prompt(userMessage);
 
-    // Wait for agent to become idle
+    // Immediately save user message to local file before waiting for AI response
+    // This ensures user messages are persisted even if the process crashes
+    // or is interrupted while waiting for AI
+    try {
+      await this.sessionStore.save(context.sessionKey, agent.state.messages);
+      log.debug({ sessionKey: context.sessionKey }, 'User message saved immediately after prompt');
+    } catch (err) {
+      log.warn({ err, sessionKey: context.sessionKey }, 'Failed to save user message immediately');
+    }
+
+    // Wait for agent to become idle (AI response generation)
     await agent.waitForIdle();
   }
 

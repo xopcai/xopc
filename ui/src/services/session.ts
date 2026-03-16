@@ -115,6 +115,16 @@ export class SessionService {
     store.getState().setSessionError(null);
 
     try {
+      // Refresh sessions list first to check for existing empty sessions
+      await this.loadSessions();
+      
+      // Check if there's already an empty session we can reuse
+      const emptySession = this.findEmptySession();
+      if (emptySession) {
+        store.getState().setCurrentSession(emptySession);
+        return emptySession;
+      }
+
       const url = apiUrl('/api/sessions');
       const headers = {
         ...authHeaders(this._token),

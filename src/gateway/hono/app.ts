@@ -771,13 +771,46 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   // ========== Session REST API (/api/sessions) ==========
 
-  // POST /api/sessions - Create new session
+  // POST /api/sessions - Create new session (reuses empty sessions)
   authenticated.post('/api/sessions', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const channel = body.channel || 'gateway';
-    const chatId = body.chat_id || `chat_${Date.now()}`;
     
-    // Build proper session key with new routing format
+    // If a specific chat_id is provided, use it (for advanced use cases)
+    // Otherwise, try to find and reuse an existing empty session
+    if (body.chat_id) {
+      const sessionKey = buildSessionKey({
+        agentId: 'main',
+        source: channel,
+        accountId: 'default',
+        peerKind: 'direct',
+        peerId: body.chat_id,
+      });
+
+      await service.sessionManagerInstance.saveMessages(sessionKey, []);
+      const session = await service.getSession(sessionKey);
+      return c.json({ session }, 201);
+    }
+    
+    // Look for existing empty sessions to reuse
+    const existingSessions = await service.listSessions({
+      channel,
+      limit: 50,
+      sortBy: 'updatedAt',
+      sortOrder: 'desc',
+    });
+    
+    // Find the first empty session (messageCount === 0)
+    const emptySession = existingSessions.items.find(s => s.messageCount === 0);
+    
+    if (emptySession) {
+      // Return existing empty session instead of creating a new one
+      const session = await service.getSession(emptySession.key);
+      return c.json({ session, reused: true }, 200);
+    }
+    
+    // No empty session found, create a new one
+    const chatId = `chat_${Date.now()}`;
     const sessionKey = buildSessionKey({
       agentId: 'main',
       source: channel,
