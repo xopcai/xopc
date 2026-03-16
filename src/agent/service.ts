@@ -1,21 +1,17 @@
-import { Agent, type AgentEvent, type AgentMessage } from '@mariozechner/pi-agent-core';
-import type { Model, Api } from '@mariozechner/pi-ai';
+import type { AgentEvent, AgentMessage } from '@mariozechner/pi-agent-core';
 import { MessageBusShutdownError, type MessageBus, type InboundMessage } from '../bus/index.js';
 import type { Config, AgentDefaults } from '../config/schema.js';
 import type { ChannelManager } from '../channels/manager.js';
 
-import { resolveModel, getDefaultModel, getApiKey as getProviderApiKey } from '../providers/index.js';
 import { SessionStore, type CompactionConfig, type WindowConfig } from '../session/index.js';
-import { getBundledSkillsDir } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { ExtensionRegistryImpl as ExtensionRegistry, ExtensionHookRunner } from '../extensions/index.js';
-import { loadBootstrapFiles, extractTextContent, type BootstrapFile } from './helpers.js';
+import { loadBootstrapFiles, extractTextContent } from './helpers.js';
 import { SessionTracker } from './session-tracker.js';
 import { ModelManager } from './models/index.js';
 import { initializeCommands } from '../commands/index.js';
 import { ProgressFeedbackManager, type ProgressStage } from './progress.js';
 import { HookHandler } from './hook-handler.js';
-import { AgentToolsFactory } from './agent-tools-factory.js';
 import { ToolErrorTracker } from './tool-error-tracker.js';
 import { RequestLimiter } from './request-limiter.js';
 import { SystemReminder } from './system-reminder.js';
@@ -31,8 +27,7 @@ import { MessageRouter, CommandHandler, StreamManager } from './messaging/index.
 import { SessionContextManager, SessionLifecycleManager, type SessionContext } from './session/index.js';
 import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
 import { FeedbackCoordinator } from './feedback/index.js';
-import { SkillManager } from './skills/index.js';
-import { SystemPromptBuilder } from './prompt/service-prompt-builder.js';
+import { AgentManager } from './agent-manager.js';
 import { maybeApplyTtsToPayload } from '../tts/payload.js';
 import { createTypingController, type TypingController } from './typing.js';
 
@@ -68,14 +63,12 @@ export interface StreamHandle {
 }
 
 export class AgentService {
-  private agent: Agent;
   private sessionStore: SessionStore;
   private hookRunner?: ExtensionHookRunner;
-  private unsubscribe?: () => void;
   private running = false;
   private agentId: string;
   private workspaceDir: string;
-  private bootstrapFiles: BootstrapFile[] = [];
+  private bootstrapFiles: ReturnType<typeof loadBootstrapFiles> = [];
   private channelManagerRef: ChannelManager | null = null;
   private bus: MessageBus;
   private config: AgentServiceConfig;
@@ -84,7 +77,6 @@ export class AgentService {
   private modelManager: ModelManager;
   private progressManager: ProgressFeedbackManager;
   private hookHandler: HookHandler;
-  private toolsFactory: AgentToolsFactory;
   private lifecycleManager: LifecycleManager;
   private errorTracker: ToolErrorTracker;
   private requestLimiter: RequestLimiter;
@@ -103,8 +95,10 @@ export class AgentService {
   private agentOrchestrator: AgentOrchestrator;
   private agentEventHandler: AgentEventHandler;
   private feedbackCoordinator: FeedbackCoordinator;
-  private skillManager: SkillManager;
-  private systemPromptBuilder: SystemPromptBuilder;
+  private agentManager: AgentManager;
+
+  // Track event unsubscribers per session
+  private sessionUnsubscribers: Map<string, () => void> = new Map();
 
   constructor(bus: MessageBus, config: AgentServiceConfig) {
     this.bus = bus;
@@ -132,25 +126,6 @@ export class AgentService {
       get sessionKey() { return this.currentContext?.sessionKey; },
     });
 
-    this.toolsFactory = new AgentToolsFactory({
-      workspace: config.workspace,
-      braveApiKey: config.braveApiKey,
-      extensionRegistry: config.extensionRegistry,
-      getCurrentContext: () => this.sessionContextManager.getContext(),
-      bus,
-    });
-    const tools = this.toolsFactory.createAllTools();
-
-    this.skillManager = new SkillManager(config.workspace, getBundledSkillsDir());
-    this.systemPromptBuilder = new SystemPromptBuilder({
-      workspace: config.workspace,
-      config: config.config!,
-      skillManager: this.skillManager,
-    });
-
-    this.agent = this.createAgent(tools);
-    this.unsubscribe = this.agent.subscribe((event) => this.handleEvent(event));
-
     this.progressManager = this.createProgressManager();
     this.initializeReliabilityModules();
 
@@ -162,6 +137,17 @@ export class AgentService {
     this.feedbackCoordinator = new FeedbackCoordinator({
       progressManager: this.progressManager,
       bus,
+    });
+
+    // Initialize AgentManager
+    this.agentManager = new AgentManager({
+      workspace: config.workspace,
+      model: config.model,
+      config: config.config,
+      braveApiKey: config.braveApiKey,
+      extensionRegistry: config.extensionRegistry,
+      bus,
+      getCurrentContext: () => this.sessionContextManager.getContext(),
     });
 
     this.agentEventHandler = new AgentEventHandler({
@@ -178,7 +164,7 @@ export class AgentService {
     });
 
     this.agentOrchestrator = new AgentOrchestrator({
-      agent: this.agent,
+      agentManager: this.agentManager,
       sessionStore: this.sessionStore,
       modelManager: this.modelManager,
       eventHandler: this.agentEventHandler,
@@ -236,34 +222,6 @@ export class AgentService {
         info: (msg: string) => log.info({ hook: true }, msg),
         warn: (msg: string) => log.warn({ hook: true }, msg),
         error: (msg: string) => log.error({ hook: true }, msg),
-      },
-    });
-  }
-
-  private createAgent(tools: any[]): Agent {
-    let model: Model<Api>;
-    if (this.config.model) {
-      try {
-        model = resolveModel(this.config.model);
-      } catch {
-        const defaultModel = getDefaultModel(this.config.config);
-        log.warn({ model: this.config.model, defaultModel }, 'Model not found, using default');
-        model = resolveModel(defaultModel);
-      }
-    } else {
-      const defaultModel = getDefaultModel(this.config.config);
-      model = resolveModel(defaultModel);
-    }
-
-    return new Agent({
-      initialState: {
-        systemPrompt: this.systemPromptBuilder.build(this.bootstrapFiles),
-        model,
-        tools,
-        messages: [],
-      },
-      getApiKey: (provider: string) => {
-        return getProviderApiKey(this.config.config, provider);
       },
     });
   }
@@ -354,7 +312,8 @@ export class AgentService {
   }
 
   async switchModelForSession(sessionKey: string, modelId: string): Promise<boolean> {
-    const result = await this.modelManager.switchModelForSession(sessionKey, modelId);
+    // Use AgentManager to set model for the session's agent
+    const result = this.agentManager.setModelForSession(sessionKey, modelId);
     if (result) {
       this.sessionTracker.touchSession(sessionKey);
     }
@@ -392,14 +351,13 @@ export class AgentService {
 
     await this.hookHandler.trigger('session_end', {
       sessionId: this.agentId,
-      messageCount: this.agent.state.messages.length,
+      messageCount: 0, // No longer tracking single agent messages
     });
   }
 
   stop(): Promise<void> {
     this.running = false;
-    this.agent.abort();
-    this.unsubscribe?.();
+    this.agentManager.dispose();
     this.dispose();
 
     this.hookHandler.trigger('gateway_stop', { reason: 'stopped' });
@@ -459,9 +417,15 @@ export class AgentService {
     this.sessionContextManager.setContext(context);
     this.feedbackCoordinator.setContext(context);
 
+    // Setup event handling for this session
+    this.setupSessionEventHandling(sessionKey);
+
     try {
+      // Get or create agent for this session
+      const agent = this.agentManager.getOrCreateAgent(sessionKey);
+
       const messages = await this.sessionStore.load(sessionKey);
-      this.agent.replaceMessages(messages);
+      agent.replaceMessages(messages);
 
       const messageContent: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
 
@@ -482,21 +446,25 @@ export class AgentService {
         }
       }
 
-      await this.agent.prompt({
+      await agent.prompt({
         role: 'user',
         content: messageContent,
         timestamp: Date.now(),
       });
-      await this.agent.waitForIdle();
+      await agent.waitForIdle();
 
-      const response = this.getLastAssistantContent() || '';
-      await this.sessionStore.save(sessionKey, this.agent.state.messages);
+      const response = this.agentManager.getLastAssistantContent(sessionKey) || '';
+      const finalMessages = this.agentManager.getMessages(sessionKey);
+      if (finalMessages) {
+        await this.sessionStore.save(sessionKey, finalMessages);
+      }
 
       return response;
     } finally {
       this.sessionContextManager.clearContext();
       this.feedbackCoordinator.clearContext();
       this.contextMiddleware.onResponse();
+      // Don't unsubscribe here - keep the session agent alive for future messages
     }
   }
 
@@ -517,6 +485,9 @@ export class AgentService {
 
     this.sessionContextManager.setContext(sessionContext);
     this.feedbackCoordinator.setContext(sessionContext);
+
+    // Setup event handling for this session
+    this.setupSessionEventHandling(sessionContext.sessionKey);
 
     await this.sessionLifecycleManager.startSession(sessionContext);
 
@@ -596,10 +567,13 @@ export class AgentService {
   private async handleSystemMessage(msg: InboundMessage, context: SessionContext): Promise<void> {
     log.debug({ sessionKey: context.sessionKey }, 'Processing system message');
 
+    // Get or create agent for this session
+    const agent = this.agentManager.getOrCreateAgent(context.sessionKey);
+
     const messages = await this.sessionStore.load(context.sessionKey);
     await this.checkAndCompact(context.sessionKey, messages);
     const refreshedMessages = await this.sessionStore.load(context.sessionKey);
-    this.agent.replaceMessages(refreshedMessages);
+    agent.replaceMessages(refreshedMessages);
 
     const systemMessage: AgentMessage = {
       role: 'user',
@@ -608,10 +582,10 @@ export class AgentService {
     };
 
     try {
-      await this.agent.prompt(systemMessage);
-      await this.agent.waitForIdle();
+      await agent.prompt(systemMessage);
+      await agent.waitForIdle();
 
-      const finalContent = this.getLastAssistantContent();
+      const finalContent = this.agentManager.getLastAssistantContent(context.sessionKey);
       if (finalContent) {
         const hookResult = await this.hookHandler.runMessageSending(context.chatId, finalContent);
         if (hookResult.send) {
@@ -624,7 +598,10 @@ export class AgentService {
         }
       }
 
-      await this.sessionStore.save(context.sessionKey, this.agent.state.messages);
+      const finalMessages = this.agentManager.getMessages(context.sessionKey);
+      if (finalMessages) {
+        await this.sessionStore.save(context.sessionKey, finalMessages);
+      }
     } catch (error) {
       log.error({ err: error, sessionKey: context.sessionKey }, 'Error processing system message');
       await this.bus.publishOutbound({
@@ -636,7 +613,37 @@ export class AgentService {
     }
   }
 
-  private handleEvent(event: AgentEvent): void {
+  /**
+   * Setup event handling for a specific session
+   */
+  private setupSessionEventHandling(sessionKey: string): void {
+    // If already subscribed, skip
+    if (this.sessionUnsubscribers.has(sessionKey)) {
+      return;
+    }
+
+    const unsubscribe = this.agentManager.subscribeToSession(sessionKey, (event) => {
+      this.handleSessionEvent(sessionKey, event);
+    });
+
+    if (unsubscribe) {
+      this.sessionUnsubscribers.set(sessionKey, unsubscribe);
+    }
+  }
+
+  /**
+   * Handle events from a specific session's agent
+   */
+  private handleSessionEvent(sessionKey: string, event: AgentEvent): void {
+    // Only process events for the current context session
+    const currentContext = this.sessionContextManager.getContext();
+    if (currentContext?.sessionKey !== sessionKey) {
+      // Event from a different session - still process but don't update stream
+      this.agentEventHandler.handle(event, currentContext);
+      return;
+    }
+
+    // Handle streaming updates for the current session
     if (event.type === 'message_update') {
       const msgEvent = event as any;
       if (msgEvent.message?.role === 'assistant') {
@@ -649,8 +656,7 @@ export class AgentService {
       }
     }
 
-    const context = this.sessionContextManager.getContext();
-    this.agentEventHandler.handle(event, context);
+    this.agentEventHandler.handle(event, currentContext);
   }
 
   private async checkAndCompact(sessionKey: string, messages: AgentMessage[]): Promise<void> {
@@ -674,26 +680,11 @@ export class AgentService {
     return defaults?.maxTokens ? defaults.maxTokens * 4 : 128000;
   }
 
-  private getLastAssistantContent(): string {
-    const messages = this.agent.state.messages;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.role === 'assistant') {
-        const content = msg.content;
-        if (Array.isArray(content)) {
-          return extractTextContent(content as Array<{ type: string; text?: string }>);
-        }
-        return String(content);
-      }
-    }
-    return '';
-  }
-
   private async sendFinalResponse(
     msg: InboundMessage,
     sessionContext: SessionContext
   ): Promise<void> {
-    const finalContent = this.getLastAssistantContent();
+    const finalContent = this.agentManager.getLastAssistantContent(sessionContext.sessionKey);
     if (!finalContent?.trim()) return;
 
     const hookResult = await this.hookHandler.runMessageSending(sessionContext.chatId, finalContent);
@@ -771,5 +762,14 @@ export class AgentService {
 
   private dispose(): void {
     this.sessionTracker.dispose();
+
+    // Unsubscribe from all session agents
+    for (const unsubscribe of this.sessionUnsubscribers.values()) {
+      unsubscribe();
+    }
+    this.sessionUnsubscribers.clear();
+
+    // Dispose all agent instances
+    this.agentManager.dispose();
   }
 }

@@ -1,11 +1,18 @@
 /**
  * Session Key Generator
  * 
- * Provides a unified strategy for generating session keys across all platforms.
- * This ensures consistency between Telegram, Feishu, Web UI, and CLI.
+ * Uses the new routing system session key format:
+ * {agentId}:{source}:{accountId}:{peerKind}:{peerId}[:thread:{threadId}][:scope:{scopeId}]
+ * 
+ * Examples:
+ * - main:telegram:default:dm:123456
+ * - main:telegram:default:group:-100123456
+ * - main:gateway:default:direct:chat_abc123
+ * - main:cli:default:direct:cli
  */
 
 import type { MessageSource } from './types.js';
+import { buildSessionKey, parseSessionKey as parseRoutingSessionKey } from '../routing/session-key.js';
 
 export interface SessionKeyContext {
   source: MessageSource;
@@ -14,139 +21,148 @@ export interface SessionKeyContext {
   senderId: string;        // Sender's platform ID
   isGroup: boolean;
   threadId?: string;       // For forum/thread support
+  /** Agent ID (defaults to 'main') */
+  agentId?: string;
+  /** Account ID (defaults to 'default') */
+  accountId?: string;
 }
 
 /**
- * Generate a unified session key
+ * Generate a unified session key using the new routing format
  * 
- * Format:
- * - Private: {source}:{dm|p}:{senderId}  
- *   e.g., telegram:dm:123456, feishu:p:ou_abc123
- * - Group: {source}:g:{chatId}[:t:{threadId}]
- *   e.g., telegram:g:-100123456, telegram:g:-100123456:t:789
- * - CLI: cli:direct or cli:{sessionName}
- * - Web UI: webui:{sessionId}
+ * Format: {agentId}:{source}:{accountId}:{peerKind}:{peerId}[:thread:{threadId}]
+ * 
+ * Examples:
+ * - telegram DM: main:telegram:default:dm:123456
+ * - telegram Group: main:telegram:default:group:-100123456
+ * - gateway: main:gateway:default:direct:chat_abc123
+ * - cli: main:cli:default:direct:cli
  */
 export function generateSessionKey(ctx: SessionKeyContext): string {
-  const { source, chatId, senderId, isGroup, threadId } = ctx;
+  const { source, chatId, senderId, isGroup, threadId, agentId, accountId } = ctx;
   
+  const effectiveAgentId = agentId ?? 'main';
+  const effectiveAccountId = accountId ?? 'default';
+
   // CLI special handling
   if (source === 'cli') {
-    return chatId === 'direct' ? 'cli:direct' : `cli:${chatId}`;
+    return buildSessionKey({
+      agentId: effectiveAgentId,
+      source: 'cli',
+      accountId: effectiveAccountId,
+      peerKind: 'direct',
+      peerId: chatId === 'direct' ? 'cli' : chatId,
+    });
   }
   
-  // Web UI special handling
-  if (source === 'webui') {
-    return `webui:${chatId}`;
+  // Web UI / Gateway special handling
+  if (source === 'webui' || source === 'gateway') {
+    return buildSessionKey({
+      agentId: effectiveAgentId,
+      source: source === 'webui' ? 'gateway' : source,
+      accountId: effectiveAccountId,
+      peerKind: 'direct',
+      peerId: chatId,
+    });
   }
   
   // API special handling
   if (source === 'api') {
-    return `api:${chatId}`;
+    return buildSessionKey({
+      agentId: effectiveAgentId,
+      source: 'api',
+      accountId: effectiveAccountId,
+      peerKind: 'direct',
+      peerId: chatId,
+    });
   }
   
   // System messages
   if (source === 'system') {
-    return `system:${chatId}`;
+    return buildSessionKey({
+      agentId: effectiveAgentId,
+      source: 'system',
+      accountId: effectiveAccountId,
+      peerKind: 'direct',
+      peerId: chatId,
+    });
   }
   
   // Private/DM chat
   if (!isGroup) {
     // Use senderId for private chats (consistent regardless of who initiates)
-    return `${source}:dm:${senderId}`;
+    return buildSessionKey({
+      agentId: effectiveAgentId,
+      source,
+      accountId: effectiveAccountId,
+      peerKind: 'dm',
+      peerId: senderId,
+      threadId,
+    });
   }
   
   // Group chat
-  if (threadId) {
-    // Forum/topic thread
-    return `${source}:g:${chatId}:t:${threadId}`;
-  }
-  
-  // Regular group
-  return `${source}:g:${chatId}`;
+  return buildSessionKey({
+    agentId: effectiveAgentId,
+    source,
+    accountId: effectiveAccountId,
+    peerKind: 'group',
+    peerId: chatId,
+    threadId,
+  });
 }
 
 /**
  * Parse a session key into its components
+ * 
+ * Returns legacy-compatible format for backward compatibility in UI/components
  */
 export function parseSessionKey(sessionKey: string): {
   source: MessageSource;
   type: 'dm' | 'group' | 'thread' | 'direct' | 'other';
   chatId: string;
   threadId?: string;
+  agentId?: string;
+  accountId?: string;
 } {
-  const parts = sessionKey.split(':');
-  const source = parts[0] as MessageSource;
+  const parsed = parseRoutingSessionKey(sessionKey);
   
-  // CLI: cli:direct or cli:name
-  if (source === 'cli') {
+  if (!parsed) {
+    // Fallback for unparseable keys
+    const parts = sessionKey.split(':');
     return {
-      source,
-      type: parts[1] === 'direct' ? 'direct' : 'other',
-      chatId: parts[1] || 'direct',
-    };
-  }
-  
-  // Web UI: webui:{id}
-  if (source === 'webui') {
-    return {
-      source,
+      source: (parts[0] as MessageSource) || 'system',
       type: 'other',
-      chatId: parts[1] || 'default',
+      chatId: parts[parts.length - 1] || 'unknown',
     };
   }
   
-  // API: api:{id}
-  if (source === 'api') {
-    return {
-      source,
-      type: 'other',
-      chatId: parts[1] || 'default',
-    };
+  // Map peerKind to legacy type
+  let type: 'dm' | 'group' | 'thread' | 'direct' | 'other';
+  switch (parsed.peerKind) {
+    case 'dm':
+      type = 'dm';
+      break;
+    case 'group':
+      type = parsed.threadId ? 'thread' : 'group';
+      break;
+    case 'channel':
+      type = parsed.threadId ? 'thread' : 'group';
+      break;
+    case 'direct':
+      type = 'direct';
+      break;
+    default:
+      type = 'other';
   }
   
-  // System: system:{id}
-  if (source === 'system') {
-    return {
-      source,
-      type: 'other',
-      chatId: parts[1] || 'default',
-    };
-  }
-  
-  // Private/DM: {source}:dm:{senderId}
-  if (parts[1] === 'dm' || parts[1] === 'p') {
-    return {
-      source,
-      type: 'dm',
-      chatId: parts[2] || '',
-    };
-  }
-  
-  // Group with thread: {source}:g:{chatId}:t:{threadId}
-  if (parts[1] === 'g' && parts[3] === 't') {
-    return {
-      source,
-      type: 'thread',
-      chatId: parts[2] || '',
-      threadId: parts[4],
-    };
-  }
-  
-  // Regular group: {source}:g:{chatId}
-  if (parts[1] === 'g') {
-    return {
-      source,
-      type: 'group',
-      chatId: parts[2] || '',
-    };
-  }
-  
-  // Legacy format fallback: {source}:{chatId}
   return {
-    source,
-    type: 'other',
-    chatId: parts[1] || '',
+    source: parsed.source as MessageSource,
+    type,
+    chatId: parsed.peerId,
+    threadId: parsed.threadId,
+    agentId: parsed.agentId,
+    accountId: parsed.accountId,
   };
 }
 
@@ -156,13 +172,8 @@ export function parseSessionKey(sessionKey: string): {
 export function isValidSessionKey(sessionKey: string): boolean {
   if (!sessionKey || typeof sessionKey !== 'string') return false;
   
-  const parts = sessionKey.split(':');
-  if (parts.length < 2) return false;
-  
-  const source = parts[0];
-  const validSources = ['telegram', 'feishu', 'discord', 'slack', 'webui', 'cli', 'api', 'system'];
-  
-  return validSources.includes(source);
+  const parsed = parseRoutingSessionKey(sessionKey);
+  return parsed !== null;
 }
 
 /**
@@ -179,7 +190,7 @@ export function getSessionDisplayName(sessionKey: string): string {
     case 'thread':
       return `Thread (${parsed.source})`;
     case 'direct':
-      return 'CLI Direct';
+      return parsed.source === 'cli' ? 'CLI Direct' : `Direct (${parsed.source})`;
     default:
       return `${parsed.source}:${parsed.chatId}`;
   }
@@ -196,9 +207,7 @@ export function getRoutingInfo(sessionKey: string): {
   const parsed = parseSessionKey(sessionKey);
   
   return {
-    channel: parsed.source === 'cli' || parsed.source === 'webui' || parsed.source === 'api' 
-      ? parsed.source 
-      : parsed.source,
+    channel: parsed.source,
     chatId: parsed.chatId,
     threadId: parsed.threadId,
   };

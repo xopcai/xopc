@@ -24,6 +24,49 @@ export enum SessionStatus {
   PINNED = 'pinned',
 }
 
+/** Session routing metadata */
+export interface SessionRoutingMeta {
+  agentId: string;
+  source: string;
+  accountId: string;
+  peerKind: string;
+  peerId: string;
+  threadId?: string;
+  scopeId?: string;
+  mainSessionKey?: string;
+  lastRoutePolicy?: 'main' | 'session';
+}
+
+/** Session ACP metadata */
+export interface SessionAcpMeta {
+  backend?: string;
+  runtimeSessionName?: string;
+  mode?: 'persistent' | 'oneshot';
+  state?: 'idle' | 'running' | 'error';
+  lastActivityAt?: number;
+}
+
+/** Session-level statistics (per session) */
+export interface SessionStats {
+  messageCount: number;
+  tokenCount: number;
+  turnCount?: number;
+  lastTurnAt?: number;
+}
+
+/** Global session statistics (aggregate) */
+export interface GlobalSessionStats {
+  totalSessions: number;
+  activeSessions: number;
+  archivedSessions: number;
+  pinnedSessions: number;
+  totalMessages: number;
+  totalTokens: number;
+  oldestSession?: string;
+  newestSession?: string;
+  byChannel: Record<string, number>;
+}
+
 /** Session metadata (stored in index) */
 export interface SessionMetadata {
   key: string;
@@ -39,6 +82,12 @@ export interface SessionMetadata {
   sourceChannel: string;
   sourceChatId: string;
   customData?: Record<string, unknown>;
+  /** Routing metadata */
+  routing?: SessionRoutingMeta;
+  /** ACP metadata */
+  acp?: SessionAcpMeta;
+  /** Session statistics */
+  stats?: SessionStats;
 }
 
 /** Session detail (metadata + messages) */
@@ -72,19 +121,6 @@ export interface PaginatedResult<T> {
   limit: number;
   offset: number;
   hasMore: boolean;
-}
-
-/** Session statistics */
-export interface SessionStats {
-  totalSessions: number;
-  activeSessions: number;
-  archivedSessions: number;
-  pinnedSessions: number;
-  totalMessages: number;
-  totalTokens: number;
-  oldestSession?: string;
-  newestSession?: string;
-  byChannel: Record<string, number>;
 }
 
 /** Export format */

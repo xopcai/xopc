@@ -5,20 +5,21 @@
  * to response generation.
  */
 
-import { Agent, type AgentMessage } from '@mariozechner/pi-agent-core';
+import type { Agent, AgentMessage } from '@mariozechner/pi-agent-core';
 import type { InboundMessage } from '../../bus/index.js';
 import type { SessionStore } from '../../session/index.js';
 import type { ModelManager } from '../models/index.js';
 import type { SessionContext } from '../session/session-context.js';
 import type { AgentEventHandler } from './agent-event-handler.js';
 import type { FeedbackCoordinator } from '../feedback/feedback-coordinator.js';
+import type { AgentManager } from '../agent-manager.js';
 import { sanitizeMessages, cleanTrailingErrors } from '../memory/message-sanitizer.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('AgentOrchestrator');
 
 export interface AgentOrchestratorConfig {
-  agent: Agent;
+  agentManager: AgentManager;
   sessionStore: SessionStore;
   modelManager: ModelManager;
   eventHandler: AgentEventHandler;
@@ -26,14 +27,14 @@ export interface AgentOrchestratorConfig {
 }
 
 export class AgentOrchestrator {
-  private agent: Agent;
+  private agentManager: AgentManager;
   private sessionStore: SessionStore;
   private modelManager: ModelManager;
   private eventHandler: AgentEventHandler;
   private feedbackCoordinator: FeedbackCoordinator;
 
   constructor(config: AgentOrchestratorConfig) {
-    this.agent = config.agent;
+    this.agentManager = config.agentManager;
     this.sessionStore = config.sessionStore;
     this.modelManager = config.modelManager;
     this.eventHandler = config.eventHandler;
@@ -45,43 +46,46 @@ export class AgentOrchestrator {
    */
   async process(msg: InboundMessage, context: SessionContext): Promise<void> {
     const { sessionKey } = context;
-    
+
     log.debug({ sessionKey }, 'Processing message through agent orchestrator');
-    
+
+    // Get or create agent for this session
+    const agent = this.agentManager.getOrCreateAgent(sessionKey);
+
     try {
       // 1. Load session history
       const messages = await this.sessionStore.load(sessionKey);
-      
+
       // Clean any trailing errors from previous sessions (defensive)
       const cleanedHistory = cleanTrailingErrors(messages);
-      this.agent.replaceMessages(cleanedHistory);
-      
+      agent.replaceMessages(cleanedHistory);
+
       // 2. Apply model configuration for session
-      await this.modelManager.applyModelForSession(this.agent, sessionKey);
-      
+      await this.modelManager.applyModelForSession(agent, sessionKey);
+
       // 3. Build user message
       const userMessage = this.buildUserMessage(msg);
-      
+
       // 4. Start task feedback
       this.feedbackCoordinator.startTask();
-      
+
       // 5. Execute agent
-      await this.executeAgent(userMessage, context);
-      
+      await this.executeAgent(agent, userMessage, context);
+
       // 6. Sanitize messages before saving (remove error messages, empty content)
-      const rawMessages = this.agent.state.messages;
+      const rawMessages = agent.state.messages;
       const { messages: sanitizedMessages, removed } = sanitizeMessages(rawMessages);
-      
+
       if (removed > 0) {
         log.info({ sessionKey, removed }, 'Removed problematic messages before saving');
       }
-      
+
       // 7. Save session messages
       await this.sessionStore.save(sessionKey, sanitizedMessages);
-      
+
       // 8. End task feedback
       this.feedbackCoordinator.endTask();
-      
+
     } catch (error) {
       log.error({ err: error, sessionKey }, 'Error in agent orchestration');
       this.feedbackCoordinator.endTask();
@@ -93,14 +97,15 @@ export class AgentOrchestrator {
    * Execute the agent with a user message
    */
   private async executeAgent(
+    agent: Agent,
     userMessage: AgentMessage,
     _context: SessionContext
   ): Promise<void> {
     // Prompt agent with user message
-    await this.agent.prompt(userMessage);
-    
+    await agent.prompt(userMessage);
+
     // Wait for agent to become idle
-    await this.agent.waitForIdle();
+    await agent.waitForIdle();
   }
 
   /**
@@ -174,16 +179,23 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Check if agent is currently processing
+   * Check if agent is currently processing for a session
    */
-  isProcessing(): boolean {
-    return this.agent.state.messages.length > 0;
+  isProcessing(sessionKey: string): boolean {
+    const agent = this.agentManager.getAgent(sessionKey);
+    if (!agent) {
+      return false;
+    }
+    return agent.state.messages.length > 0;
   }
 
   /**
-   * Abort current agent execution
+   * Abort current agent execution for a session
    */
-  abort(): void {
-    this.agent.abort();
+  abort(sessionKey: string): void {
+    const agent = this.agentManager.getAgent(sessionKey);
+    if (agent) {
+      agent.abort();
+    }
   }
 }

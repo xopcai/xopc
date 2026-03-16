@@ -18,6 +18,7 @@ import { getModelRegistry } from '../providers/index.js';
 import { getLogDir, getLogStats } from '../utils/logger.js';
 import { registerAcpRuntimeBackend } from '../acp/runtime/registry.js';
 import { createLocalAcpRuntimeBackend } from '../acp/runtime/backends/local.js';
+import { buildSessionKey } from '../routing/session-key.js';
 
 // ========== SSE Event System ==========
 
@@ -424,7 +425,14 @@ export class GatewayService {
     try {
       // For 'gateway' channel (web UI), process through agent service
       if (channel === 'gateway') {
-        const sessionKey = `gateway:${chatId}`;
+        // Build proper session key with new routing format
+        const sessionKey = buildSessionKey({
+          agentId: 'main',
+          source: 'gateway',
+          accountId: 'default',
+          peerKind: 'direct',
+          peerId: chatId,
+        });
         
         yield { type: 'token', content: '\n' };
         
