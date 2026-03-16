@@ -427,7 +427,7 @@ export class XopcbotGatewayChat extends LitElement {
 
       // Filter gateway sessions and sort by updatedAt (newest first)
       const gatewaySessions = sessions
-        .filter((s: any) => s.key.startsWith('gateway:'))
+        .filter((s: any) => s.key.includes(':gateway:'))
         .sort((a: any, b: any) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 
       this._sessions = gatewaySessions;

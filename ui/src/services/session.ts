@@ -53,7 +53,7 @@ export class SessionService {
       const data: SessionListResponse = await res.json();
       
       const gatewaySessions = data.items
-        .filter((s) => s.key.startsWith('gateway:'))
+        .filter((s) => s.key.includes(':gateway:'))
         .sort((a, b) => 
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         );
