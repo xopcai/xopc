@@ -27,6 +27,7 @@ import type {
   ChannelSecurityContext,
 } from './plugin-types.js';
 import type { OutboundMessage } from '../types/index.js';
+import { generateSessionKey } from '../commands/session-key.js';
 
 import { createLogger } from '../utils/logger.js';
 import { createInboundDebouncer } from '../infra/debounce.js';
@@ -435,7 +436,17 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
     const finalContent = transcribedText
       ? transcribedText + (cleanedText ? '\n\n' + cleanedText : '')
       : cleanedText;
-    
+
+    // Generate proper session key with new routing format
+    const sessionKey = generateSessionKey({
+      source: 'telegram',
+      chatId,
+      senderId,
+      isGroup,
+      threadId: ctx.message.message_thread_id?.toString(),
+      accountId,
+    });
+
     const inboundMsg = {
       channel: 'telegram' as const,
       chat_id: chatId,
@@ -448,6 +459,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
         threadId: ctx.message.message_thread_id?.toString(),
         isGroup,
         transcribedVoice: !!transcribedText || undefined,
+        sessionKey,
       },
       attachments: attachments.length > 0 ? attachments : undefined,
     };

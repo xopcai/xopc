@@ -3,8 +3,6 @@
  *
  * Each session gets its own Agent instance for true isolation
  * and concurrent processing across sessions.
- * 
- * Simplified implementation following KISS and DRY principles.
  */
 
 import { Agent, type AgentMessage, type AgentEvent } from '@mariozechner/pi-agent-core';
@@ -33,22 +31,13 @@ export interface AgentManagerConfig {
   getCurrentContext: () => SessionContext | null;
 }
 
-/**
- * Agent instance wrapper
- */
-interface AgentInstance {
+export interface AgentInstance {
   agent: Agent;
   sessionKey: string;
   createdAt: number;
   lastUsedAt: number;
 }
 
-/**
- * Simplified Agent Manager
- * 
- * Only manages Agent instance lifecycle per session.
- * All Agent configuration is done at creation time.
- */
 export class AgentManager {
   private agents = new Map<string, AgentInstance>();
   private config: AgentManagerConfig;
@@ -60,14 +49,14 @@ export class AgentManager {
   constructor(config: AgentManagerConfig) {
     this.config = config;
     this.bootstrapFiles = loadBootstrapFiles(config.workspace);
-    
+
     const skillManager = new SkillManager(config.workspace, getBundledSkillsDir());
     this.systemPromptBuilder = new SystemPromptBuilder({
       workspace: config.workspace,
       config: config.config!,
       skillManager,
     });
-    
+
     this.toolsFactory = new AgentToolsFactory({
       workspace: config.workspace,
       braveApiKey: config.braveApiKey,
@@ -75,7 +64,7 @@ export class AgentManager {
       getCurrentContext: config.getCurrentContext,
       bus: config.bus,
     });
-    
+
     this.defaultModel = config.model || getDefaultModel(config.config);
   }
 
@@ -86,6 +75,7 @@ export class AgentManager {
     const existing = this.agents.get(sessionKey);
     if (existing) {
       existing.lastUsedAt = Date.now();
+      log.debug({ sessionKey }, 'Reusing existing agent instance');
       return existing.agent;
     }
 
@@ -97,72 +87,50 @@ export class AgentManager {
       lastUsedAt: Date.now(),
     });
 
-    log.debug({ sessionKey, count: this.agents.size }, 'Agent instance created');
+    log.info({ sessionKey, totalAgents: this.agents.size }, 'Created new agent instance');
     return agent;
   }
 
   /**
-   * Get existing agent for a session
+   * Get existing agent for a session (if any)
    */
   getAgent(sessionKey: string): Agent | undefined {
     return this.agents.get(sessionKey)?.agent;
   }
 
   /**
-   * Set model for a specific session
+   * Check if an agent exists for a session
    */
-  setModelForSession(sessionKey: string, modelId: string): boolean {
-    const instance = this.agents.get(sessionKey);
-    if (!instance) {
-      return false;
-    }
+  hasAgent(sessionKey: string): boolean {
+    return this.agents.has(sessionKey);
+  }
 
-    try {
-      const model = resolveModel(modelId);
-      instance.agent.setModel(model);
+  /**
+   * Remove an agent instance
+   */
+  removeAgent(sessionKey: string): boolean {
+    const instance = this.agents.get(sessionKey);
+    if (instance) {
+      instance.agent.abort();
+      this.agents.delete(sessionKey);
+      log.info({ sessionKey, totalAgents: this.agents.size }, 'Removed agent instance');
       return true;
-    } catch (err) {
-      log.error({ err, sessionKey, modelId }, 'Failed to set model');
-      return false;
     }
+    return false;
   }
 
   /**
-   * Get last assistant content from a session's agent
+   * Get all active session keys
    */
-  getLastAssistantContent(sessionKey: string): string | null {
-    const instance = this.agents.get(sessionKey);
-    if (!instance) {
-      return null;
-    }
-
-    const messages = instance.agent.state.messages;
-    for (let i = messages.length - 1; i >= 0; i--) {
-      const msg = messages[i];
-      if (msg.role === 'assistant') {
-        const content = msg.content;
-        if (Array.isArray(content)) {
-          return extractTextContent(content as Array<{ type: string; text?: string }>);
-        }
-        return String(content);
-      }
-    }
-    return null;
+  getActiveSessions(): string[] {
+    return Array.from(this.agents.keys());
   }
 
   /**
-   * Get messages from a session's agent
+   * Get agent count
    */
-  getMessages(sessionKey: string): AgentMessage[] | null {
-    return this.agents.get(sessionKey)?.agent.state.messages ?? null;
-  }
-
-  /**
-   * Subscribe to agent events for a session
-   */
-  subscribeToSession(sessionKey: string, callback: (event: AgentEvent) => void): (() => void) | null {
-    const instance = this.agents.get(sessionKey);
-    return instance?.agent.subscribe(callback) ?? null;
+  getAgentCount(): number {
+    return this.agents.size;
   }
 
   /**
@@ -195,16 +163,99 @@ export class AgentManager {
   }
 
   /**
-   * Resolve model
+   * Resolve model for agent
    */
   private resolveModel(): Model<Api> {
     if (this.config.model) {
       try {
         return resolveModel(this.config.model);
       } catch {
-        return resolveModel(getDefaultModel(this.config.config));
+        const defaultModel = getDefaultModel(this.config.config);
+        log.warn({ model: this.config.model, defaultModel }, 'Model not found, using default');
+        return resolveModel(defaultModel);
       }
     }
     return resolveModel(getDefaultModel(this.config.config));
+  }
+
+  /**
+   * Set model for a specific session
+   */
+  setModelForSession(sessionKey: string, modelId: string): boolean {
+    const instance = this.agents.get(sessionKey);
+    if (!instance) {
+      log.warn({ sessionKey }, 'Cannot set model: agent instance not found');
+      return false;
+    }
+
+    try {
+      const model = resolveModel(modelId);
+      instance.agent.setModel(model);
+      log.info({ sessionKey, modelId }, 'Model set for session');
+      return true;
+    } catch (err) {
+      log.error({ err, sessionKey, modelId }, 'Failed to set model for session');
+      return false;
+    }
+  }
+
+  /**
+   * Get last assistant content from a session's agent
+   */
+  getLastAssistantContent(sessionKey: string): string | null {
+    const instance = this.agents.get(sessionKey);
+    if (!instance) {
+      return null;
+    }
+
+    const messages = instance.agent.state.messages;
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const msg = messages[i];
+      if (msg.role === 'assistant') {
+        const content = msg.content;
+        if (Array.isArray(content)) {
+          return extractTextContent(content as Array<{ type: string; text?: string }>);
+        }
+        return String(content);
+      }
+    }
+    return null;
+  }
+
+  /**
+   * Replace messages for a session's agent
+   */
+  replaceMessages(sessionKey: string, messages: AgentMessage[]): boolean {
+    const instance = this.agents.get(sessionKey);
+    if (!instance) {
+      return false;
+    }
+
+    instance.agent.replaceMessages(messages);
+    return true;
+  }
+
+  /**
+   * Get messages for a session's agent
+   */
+  getMessages(sessionKey: string): AgentMessage[] | null {
+    const instance = this.agents.get(sessionKey);
+    if (!instance) {
+      return null;
+    }
+
+    return instance.agent.state.messages;
+  }
+
+  /**
+   * Subscribe to agent events for a session
+   */
+  subscribeToSession(sessionKey: string, callback: (event: AgentEvent) => void): (() => void) | null {
+    const instance = this.agents.get(sessionKey);
+    if (!instance) {
+      return null;
+    }
+
+    return instance.agent.subscribe(callback);
   }
 }
