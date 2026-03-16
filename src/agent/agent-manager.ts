@@ -3,6 +3,8 @@
  *
  * Each session gets its own Agent instance for true isolation
  * and concurrent processing across sessions.
+ * 
+ * Simplified implementation following KISS and DRY principles.
  */
 
 import { Agent, type AgentMessage, type AgentEvent } from '@mariozechner/pi-agent-core';
@@ -31,31 +33,41 @@ export interface AgentManagerConfig {
   getCurrentContext: () => SessionContext | null;
 }
 
-export interface AgentInstance {
+/**
+ * Agent instance wrapper
+ */
+interface AgentInstance {
   agent: Agent;
   sessionKey: string;
   createdAt: number;
   lastUsedAt: number;
 }
 
+/**
+ * Simplified Agent Manager
+ * 
+ * Only manages Agent instance lifecycle per session.
+ * All Agent configuration is done at creation time.
+ */
 export class AgentManager {
-  private agents: Map<string, AgentInstance> = new Map();
+  private agents = new Map<string, AgentInstance>();
   private config: AgentManagerConfig;
-  private skillManager: SkillManager;
-  private systemPromptBuilder: SystemPromptBuilder;
   private toolsFactory: AgentToolsFactory;
+  private systemPromptBuilder: SystemPromptBuilder;
   private defaultModel: string;
   private bootstrapFiles: ReturnType<typeof loadBootstrapFiles>;
 
   constructor(config: AgentManagerConfig) {
     this.config = config;
     this.bootstrapFiles = loadBootstrapFiles(config.workspace);
-    this.skillManager = new SkillManager(config.workspace, getBundledSkillsDir());
+    
+    const skillManager = new SkillManager(config.workspace, getBundledSkillsDir());
     this.systemPromptBuilder = new SystemPromptBuilder({
       workspace: config.workspace,
       config: config.config!,
-      skillManager: this.skillManager,
+      skillManager,
     });
+    
     this.toolsFactory = new AgentToolsFactory({
       workspace: config.workspace,
       braveApiKey: config.braveApiKey,
@@ -63,6 +75,7 @@ export class AgentManager {
       getCurrentContext: config.getCurrentContext,
       bus: config.bus,
     });
+    
     this.defaultModel = config.model || getDefaultModel(config.config);
   }
 
@@ -73,140 +86,26 @@ export class AgentManager {
     const existing = this.agents.get(sessionKey);
     if (existing) {
       existing.lastUsedAt = Date.now();
-      log.debug({ sessionKey }, 'Reusing existing agent instance');
       return existing.agent;
     }
 
-    // Create new agent instance
     const agent = this.createAgent();
-    const instance: AgentInstance = {
+    this.agents.set(sessionKey, {
       agent,
       sessionKey,
       createdAt: Date.now(),
       lastUsedAt: Date.now(),
-    };
+    });
 
-    this.agents.set(sessionKey, instance);
-    log.info({ sessionKey, totalAgents: this.agents.size }, 'Created new agent instance');
-
+    log.debug({ sessionKey, count: this.agents.size }, 'Agent instance created');
     return agent;
   }
 
   /**
-   * Get existing agent for a session (if any)
+   * Get existing agent for a session
    */
   getAgent(sessionKey: string): Agent | undefined {
     return this.agents.get(sessionKey)?.agent;
-  }
-
-  /**
-   * Check if an agent exists for a session
-   */
-  hasAgent(sessionKey: string): boolean {
-    return this.agents.has(sessionKey);
-  }
-
-  /**
-   * Remove an agent instance
-   */
-  removeAgent(sessionKey: string): boolean {
-    const instance = this.agents.get(sessionKey);
-    if (instance) {
-      // Abort any ongoing operations
-      instance.agent.abort();
-      this.agents.delete(sessionKey);
-      log.info({ sessionKey, totalAgents: this.agents.size }, 'Removed agent instance');
-      return true;
-    }
-    return false;
-  }
-
-  /**
-   * Get all active session keys
-   */
-  getActiveSessions(): string[] {
-    return Array.from(this.agents.keys());
-  }
-
-  /**
-   * Get agent count
-   */
-  getAgentCount(): number {
-    return this.agents.size;
-  }
-
-  /**
-   * Clean up idle agents (optional, for memory management)
-   */
-  cleanupIdleAgents(maxIdleMs: number): number {
-    const now = Date.now();
-    let removed = 0;
-
-    for (const [sessionKey, instance] of this.agents.entries()) {
-      const idleTime = now - instance.lastUsedAt;
-      if (idleTime > maxIdleMs) {
-        // Only remove if agent is not busy
-        if (!instance.agent.state.isStreaming) {
-          instance.agent.abort();
-          this.agents.delete(sessionKey);
-          removed++;
-          log.info({ sessionKey, idleTime }, 'Cleaned up idle agent');
-        }
-      }
-    }
-
-    if (removed > 0) {
-      log.info({ removed, remaining: this.agents.size }, 'Agent cleanup complete');
-    }
-
-    return removed;
-  }
-
-  /**
-   * Dispose all agents
-   */
-  dispose(): void {
-    for (const instance of this.agents.values()) {
-      instance.agent.abort();
-    }
-    this.agents.clear();
-    log.info('All agent instances disposed');
-  }
-
-  /**
-   * Create a new Agent instance
-   */
-  private createAgent(): Agent {
-    const tools = this.toolsFactory.createAllTools();
-    const model = this.resolveModel();
-
-    return new Agent({
-      initialState: {
-        systemPrompt: this.systemPromptBuilder.build(this.bootstrapFiles),
-        model,
-        tools,
-        messages: [],
-      },
-      getApiKey: (provider: string) => {
-        return getProviderApiKey(this.config.config, provider);
-      },
-    });
-  }
-
-  /**
-   * Resolve model for agent
-   */
-  private resolveModel(): Model<Api> {
-    if (this.config.model) {
-      try {
-        return resolveModel(this.config.model);
-      } catch {
-        const defaultModel = getDefaultModel(this.config.config);
-        log.warn({ model: this.config.model, defaultModel }, 'Model not found, using default');
-        return resolveModel(defaultModel);
-      }
-    }
-    return resolveModel(getDefaultModel(this.config.config));
   }
 
   /**
@@ -215,17 +114,15 @@ export class AgentManager {
   setModelForSession(sessionKey: string, modelId: string): boolean {
     const instance = this.agents.get(sessionKey);
     if (!instance) {
-      log.warn({ sessionKey }, 'Cannot set model: agent instance not found');
       return false;
     }
 
     try {
       const model = resolveModel(modelId);
       instance.agent.setModel(model);
-      log.info({ sessionKey, modelId }, 'Model set for session');
       return true;
     } catch (err) {
-      log.error({ err, sessionKey, modelId }, 'Failed to set model for session');
+      log.error({ err, sessionKey, modelId }, 'Failed to set model');
       return false;
     }
   }
@@ -254,28 +151,10 @@ export class AgentManager {
   }
 
   /**
-   * Replace messages for a session's agent
-   */
-  replaceMessages(sessionKey: string, messages: AgentMessage[]): boolean {
-    const instance = this.agents.get(sessionKey);
-    if (!instance) {
-      return false;
-    }
-
-    instance.agent.replaceMessages(messages);
-    return true;
-  }
-
-  /**
-   * Get messages for a session's agent
+   * Get messages from a session's agent
    */
   getMessages(sessionKey: string): AgentMessage[] | null {
-    const instance = this.agents.get(sessionKey);
-    if (!instance) {
-      return null;
-    }
-
-    return instance.agent.state.messages;
+    return this.agents.get(sessionKey)?.agent.state.messages ?? null;
   }
 
   /**
@@ -283,10 +162,49 @@ export class AgentManager {
    */
   subscribeToSession(sessionKey: string, callback: (event: AgentEvent) => void): (() => void) | null {
     const instance = this.agents.get(sessionKey);
-    if (!instance) {
-      return null;
-    }
+    return instance?.agent.subscribe(callback) ?? null;
+  }
 
-    return instance.agent.subscribe(callback);
+  /**
+   * Dispose all agents
+   */
+  dispose(): void {
+    for (const instance of this.agents.values()) {
+      instance.agent.abort();
+    }
+    this.agents.clear();
+    log.info('All agent instances disposed');
+  }
+
+  /**
+   * Create a new Agent instance
+   */
+  private createAgent(): Agent {
+    const tools = this.toolsFactory.createAllTools();
+    const model = this.resolveModel();
+
+    return new Agent({
+      initialState: {
+        systemPrompt: this.systemPromptBuilder.build(this.bootstrapFiles),
+        model,
+        tools,
+        messages: [],
+      },
+      getApiKey: (provider: string) => getProviderApiKey(this.config.config, provider),
+    });
+  }
+
+  /**
+   * Resolve model
+   */
+  private resolveModel(): Model<Api> {
+    if (this.config.model) {
+      try {
+        return resolveModel(this.config.model);
+      } catch {
+        return resolveModel(getDefaultModel(this.config.config));
+      }
+    }
+    return resolveModel(getDefaultModel(this.config.config));
   }
 }
