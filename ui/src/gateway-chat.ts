@@ -576,10 +576,10 @@ export class XopcbotGatewayChat extends LitElement {
         Accept: 'text/event-stream',
       };
 
-      // Extract chatId from current session key (format: "gateway:chat_xxx")
-      const chatId = this._currentSessionKey
-        ? this._currentSessionKey.replace('gateway:', '')
-        : 'default';
+      // Extract chatId from current session key
+      // Session key format: {agentId}:{source}:{accountId}:{peerKind}:{peerId}
+      // We send the full session key to backend, which will parse it correctly
+      const chatId = this._currentSessionKey || 'default';
 
       const res = await fetch(url, {
         method: 'POST',
