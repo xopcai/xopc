@@ -11,7 +11,7 @@ import type {
   SessionIndex,
   SessionListQuery,
   PaginatedResult,
-  SessionStats,
+  GlobalSessionStats,
   ExportFormat,
   SessionExport,
 } from './types.js';
@@ -66,6 +66,54 @@ export class SessionStore {
   }
 
   // ========== Index Management ==========
+
+  /**
+   * Get sessions by agent ID
+   */
+  async getByAgent(agentId: string): Promise<SessionMetadata[]> {
+    const index = await this.loadIndex();
+    return (index.sessions || []).filter(
+      (s) => s.routing?.agentId?.toLowerCase() === agentId.toLowerCase()
+    );
+  }
+
+  /**
+   * Get sessions by account ID
+   */
+  async getByAccount(accountId: string): Promise<SessionMetadata[]> {
+    const index = await this.loadIndex();
+    return (index.sessions || []).filter(
+      (s) => s.routing?.accountId?.toLowerCase() === accountId.toLowerCase()
+    );
+  }
+
+  /**
+   * Get sessions by peer
+   */
+  async getByPeer(peerKind: string, peerId: string): Promise<SessionMetadata[]> {
+    const index = await this.loadIndex();
+    return (index.sessions || []).filter(
+      (s) =>
+        s.routing?.peerKind?.toLowerCase() === peerKind.toLowerCase() &&
+        s.routing?.peerId?.toLowerCase() === peerId.toLowerCase()
+    );
+  }
+
+  /**
+   * Get main session for a DM conversation
+   */
+  async getMainSession(channel: string, accountId: string): Promise<SessionMetadata | null> {
+    const index = await this.loadIndex();
+    return (
+      (index.sessions || []).find(
+        (s) =>
+          s.routing?.source?.toLowerCase() === channel.toLowerCase() &&
+          s.routing?.accountId?.toLowerCase() === accountId.toLowerCase() &&
+          s.routing?.peerKind?.toLowerCase() === 'dm' &&
+          s.routing?.peerId === 'main'
+      ) ?? null
+    );
+  }
 
   private async loadIndex(): Promise<SessionIndex> {
     try {
@@ -184,6 +232,7 @@ export class SessionStore {
     const stats = await stat(filePath);
 
     const { channel, chatId } = this.parseSessionKey(key);
+    const routing = this.extractRoutingFromKey(key, channel);
 
     return {
       key,
@@ -197,6 +246,47 @@ export class SessionStore {
       compactedCount: 0,
       sourceChannel: channel,
       sourceChatId: chatId,
+      routing,
+      stats: {
+        messageCount: messages.length,
+        tokenCount: this.estimateTokens(messages),
+      },
+    };
+  }
+
+  /**
+   * Extract routing metadata from session key
+   */
+  private extractRoutingFromKey(key: string, channel: string): SessionMetadata['routing'] {
+    const parts = key.split(':');
+    if (parts.length < 5) {
+      return undefined;
+    }
+
+    const [agentId, source, accountId, peerKind, peerId, ...rest] = parts;
+    
+    let threadId: string | undefined;
+    let scopeId: string | undefined;
+    
+    // Parse optional thread and scope
+    for (let i = 0; i < rest.length; i++) {
+      if (rest[i] === 'thread' && rest[i + 1]) {
+        threadId = rest[i + 1];
+        i++;
+      } else if (rest[i] === 'scope' && rest[i + 1]) {
+        scopeId = rest[i + 1];
+        i++;
+      }
+    }
+
+    return {
+      agentId: agentId?.toLowerCase() || 'main',
+      source: source?.toLowerCase() || channel,
+      accountId: accountId?.toLowerCase() || 'default',
+      peerKind: peerKind?.toLowerCase() || 'dm',
+      peerId: peerId?.toLowerCase() || 'unknown',
+      threadId,
+      scopeId,
     };
   }
 
@@ -466,6 +556,7 @@ export class SessionStore {
     const now = new Date().toISOString();
 
     const { channel, chatId } = this.parseSessionKey(key);
+    const routing = this.extractRoutingFromKey(key, channel);
 
     if (existingIdx !== -1) {
       index.sessions[existingIdx] = {
@@ -474,6 +565,13 @@ export class SessionStore {
         estimatedTokens: this.estimateTokens(messages),
         updatedAt: now,
         lastAccessedAt: now,
+        routing: routing || index.sessions[existingIdx].routing,
+        stats: {
+          ...index.sessions[existingIdx].stats,
+          messageCount: messages.length,
+          tokenCount: this.estimateTokens(messages),
+          lastTurnAt: Date.now(),
+        },
       };
     } else {
       index.sessions.push({
@@ -488,6 +586,12 @@ export class SessionStore {
         compactedCount: 0,
         sourceChannel: channel,
         sourceChatId: chatId,
+        routing,
+        stats: {
+          messageCount: messages.length,
+          tokenCount: this.estimateTokens(messages),
+          lastTurnAt: Date.now(),
+        },
       });
     }
 
@@ -672,7 +776,7 @@ export class SessionStore {
 
   // ========== Statistics ==========
 
-  async getStats(): Promise<SessionStats> {
+  async getStats(): Promise<GlobalSessionStats> {
     const index = await this.loadIndex();
     const sessions = index.sessions;
 
@@ -740,8 +844,13 @@ export class SessionStore {
 
   private parseSessionKey(key: string): { channel: string; chatId: string } {
     const parts = key.split(':');
-    if (parts.length >= 2) {
-      return { channel: parts[0], chatId: parts.slice(1).join(':') };
+    // Session key format: {agentId}:{source}:{accountId}:{peerKind}:{peerId}
+    if (parts.length >= 5) {
+      return { channel: parts[1], chatId: parts.slice(2).join(':') };
+    }
+    // ACP session key format: {agentId}:acp:{uuid}
+    if (parts.length === 3 && parts[1] === 'acp') {
+      return { channel: 'acp', chatId: parts[2] };
     }
     return { channel: 'unknown', chatId: key };
   }

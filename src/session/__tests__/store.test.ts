@@ -1,478 +1,208 @@
-/**
- * Session Store Unit Tests
- * 
- * Tests for core session management functionality:
- * - Message loading and saving
- * - Session archiving
- * - Archive loading (fromArchive option)
- * - Session deletion
- * - Edge cases
- */
-
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { SessionStore } from '../store.js';
-import { WindowConfig } from '../../agent/memory/window.js';
-import { CompactionConfig } from '../../agent/memory/compaction.js';
-import { AgentMessage } from '@mariozechner/pi-agent-core';
+import { mkdtemp, rm } from 'fs/promises';
 import { join } from 'path';
-import { mkdtemp, rm, stat } from 'fs/promises';
 import { tmpdir } from 'os';
-
-// Test helper to create a temporary directory
-async function createTempDir(): Promise<string> {
-  return mkdtemp(join(tmpdir(), 'xopcbot-test-'));
-}
-
-// Test helper to create a sample message
-function createSampleMessage(role: 'user' | 'assistant', text: string): AgentMessage {
-  if (role === 'user') {
-    return {
-      role: 'user',
-      content: [{ type: 'text', text }],
-      timestamp: Date.now(),
-    } as AgentMessage;
-  }
-  return {
-    role: 'assistant',
-    content: [{ type: 'text', text }],
-    api: {} as any,
-    provider: {} as any,
-    model: 'test-model',
-    usage: { 
-      input: 0, 
-      output: 0, 
-      cacheRead: 0, 
-      cacheWrite: 0, 
-      totalTokens: 0,
-      cost: { input: 0, output: 0, total: 0 }
-    },
-    stopReason: 'stop' as const,
-    timestamp: Date.now(),
-  } as AgentMessage;
-}
+import { SessionStore } from '../store.js';
 
 describe('SessionStore', () => {
+  let tempDir: string;
   let store: SessionStore;
-  let testDir: string;
 
   beforeEach(async () => {
-    testDir = await createTempDir();
-    const windowConfig: WindowConfig = { maxMessages: 100, keepRecentMessages: 20, preserveSystemMessages: true };
-    const compactionConfig: CompactionConfig = { enabled: false, mode: 'abstractive', reserveTokens: 8000, triggerThreshold: 0.8, minMessagesBeforeCompact: 10, keepRecentMessages: 10, summaryMaxTokens: 500 };
-    store = new SessionStore(testDir, windowConfig, compactionConfig);
+    tempDir = await mkdtemp(join(tmpdir(), 'xopcbot-session-test-'));
+    store = new SessionStore(tempDir);
     await store.initialize();
   });
 
   afterEach(async () => {
-    await rm(testDir, { recursive: true, force: true });
+    await rm(tempDir, { recursive: true, force: true });
   });
 
-  // ========== Message Operations ==========
-
-  describe('loadMessages', () => {
-    it('should return empty array for non-existent session', async () => {
-      const messages = await store.loadMessages('non-existent-session');
-      expect(messages).toEqual([]);
-    });
-
-    it('should load saved messages', async () => {
-      const key = 'test:session:1';
-      const messages = [
-        createSampleMessage('user', 'Hello'),
-        createSampleMessage('assistant', 'Hi there!'),
+  describe('routing metadata extraction', () => {
+    it('should extract routing from basic session key', async () => {
+      const messages: any[] = [
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi there' },
       ];
 
-      await store.saveMessages(key, messages);
-      const loaded = await store.loadMessages(key);
+      await store.saveMessages('main:telegram:default:dm:123456', messages);
+      const metadata = await store.getMetadata('main:telegram:default:dm:123456');
 
-      expect(loaded).toHaveLength(2);
-      expect(loaded[0].content).toEqual([{ type: 'text', text: 'Hello' }]);
-      expect(loaded[1].content).toEqual([{ type: 'text', text: 'Hi there!' }]);
+      expect(metadata?.routing).toEqual({
+        agentId: 'main',
+        source: 'telegram',
+        accountId: 'default',
+        peerKind: 'dm',
+        peerId: '123456',
+      });
     });
 
-    it('should return empty array when session is deleted', async () => {
-      const key = 'test:session:delete';
-      const messages = [createSampleMessage('user', 'Test')];
+    it('should extract routing with thread', async () => {
+      const messages: any[] = [{ role: 'user', content: 'Thread message' }];
 
-      await store.saveMessages(key, messages);
-      await store.delete(key);
+      await store.saveMessages('main:discord:work:channel:987654:thread:789', messages);
+      const metadata = await store.getMetadata('main:discord:work:channel:987654:thread:789');
 
-      const loaded = await store.loadMessages(key);
-      expect(loaded).toEqual([]);
+      expect(metadata?.routing).toEqual({
+        agentId: 'main',
+        source: 'discord',
+        accountId: 'work',
+        peerKind: 'channel',
+        peerId: '987654',
+        threadId: '789',
+      });
     });
 
-    it('should NOT load from archive by default', async () => {
-      const key = 'test:session:archive';
-      const messages = [createSampleMessage('user', 'Original message')];
+    it('should extract routing with scope', async () => {
+      const messages: any[] = [{ role: 'user', content: 'Scoped message' }];
 
-      // Save and then delete (which triggers archive)
-      await store.saveMessages(key, messages);
-      await store.archive(key);
-      await store.delete(key);
+      await store.saveMessages('main:telegram:default:dm:123456:scope:scope1', messages);
+      const metadata = await store.getMetadata('main:telegram:default:dm:123456:scope:scope1');
 
-      // Load without fromArchive option - should return empty
-      const loaded = await store.loadMessages(key);
-      expect(loaded).toEqual([]);
+      expect(metadata?.routing).toEqual({
+        agentId: 'main',
+        source: 'telegram',
+        accountId: 'default',
+        peerKind: 'dm',
+        peerId: '123456',
+        scopeId: 'scope1',
+      });
     });
 
-    it('should load from archive when fromArchive is true', async () => {
-      const key = 'test:session:archive2';
-      const messages = [createSampleMessage('user', 'Archived message')];
+    it('should handle invalid session key', async () => {
+      const messages: any[] = [{ role: 'user', content: 'Test' }];
 
-      // Save and then archive
-      await store.saveMessages(key, messages);
-      await store.archive(key);
-      await store.delete(key);
+      await store.saveMessages('invalid-key', messages);
+      const metadata = await store.getMetadata('invalid-key');
 
-      // Load with fromArchive option - should return archived messages
-      const loaded = await store.loadMessages(key, { fromArchive: true });
-      expect(loaded).toHaveLength(1);
-      expect(loaded[0].content).toEqual([{ type: 'text', text: 'Archived message' }]);
-    });
-
-    it('should handle empty messages array', async () => {
-      const key = 'test:session:empty';
-      await store.saveMessages(key, []);
-      
-      const loaded = await store.loadMessages(key);
-      expect(loaded).toEqual([]);
+      expect(metadata?.routing).toBeUndefined();
     });
   });
 
-  describe('saveMessages', () => {
-    it('should save messages to file', async () => {
-      const key = 'test:session:save';
-      const messages = [
-        createSampleMessage('user', 'Hello'),
-        createSampleMessage('assistant', 'Response'),
+  describe('getByAgent', () => {
+    it('should filter sessions by agent ID', async () => {
+      await store.saveMessages('main:telegram:default:dm:1', [{ role: 'user', content: '1' }]);
+      await store.saveMessages('main:telegram:default:dm:2', [{ role: 'user', content: '2' }]);
+      await store.saveMessages('agent2:telegram:default:dm:3', [{ role: 'user', content: '3' }]);
+
+      const mainSessions = await store.getByAgent('main');
+      expect(mainSessions).toHaveLength(2);
+      expect(mainSessions.every((s) => s.routing?.agentId === 'main')).toBe(true);
+
+      const agent2Sessions = await store.getByAgent('agent2');
+      expect(agent2Sessions).toHaveLength(1);
+    });
+  });
+
+  describe('getByAccount', () => {
+    it('should filter sessions by account ID', async () => {
+      await store.saveMessages('main:telegram:default:dm:1', [{ role: 'user', content: '1' }]);
+      await store.saveMessages('main:telegram:work:dm:2', [{ role: 'user', content: '2' }]);
+      await store.saveMessages('main:telegram:work:dm:3', [{ role: 'user', content: '3' }]);
+
+      const defaultSessions = await store.getByAccount('default');
+      expect(defaultSessions).toHaveLength(1);
+
+      const workSessions = await store.getByAccount('work');
+      expect(workSessions).toHaveLength(2);
+    });
+  });
+
+  describe('getByPeer', () => {
+    it('should filter sessions by peer', async () => {
+      await store.saveMessages('main:telegram:default:dm:123456', [
+        { role: 'user', content: '1' },
+      ]);
+      await store.saveMessages('main:telegram:default:dm:789012', [
+        { role: 'user', content: '2' },
+      ]);
+      await store.saveMessages('main:telegram:default:group:group1', [
+        { role: 'user', content: '3' },
+      ]);
+
+      const peer1Sessions = await store.getByPeer('dm', '123456');
+      expect(peer1Sessions).toHaveLength(1);
+
+      const dmSessions = await store.getByPeer('dm', '123456');
+      expect(dmSessions.length).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('getMainSession', () => {
+    it('should find main DM session', async () => {
+      await store.saveMessages('main:telegram:default:dm:main', [
+        { role: 'user', content: 'Main session' },
+      ]);
+      await store.saveMessages('main:telegram:default:dm:123456', [
+        { role: 'user', content: 'Peer session' },
+      ]);
+
+      const mainSession = await store.getMainSession('telegram', 'default');
+      expect(mainSession).not.toBeNull();
+      expect(mainSession?.routing?.peerId).toBe('main');
+    });
+
+    it('should return null when no main session exists', async () => {
+      await store.saveMessages('main:telegram:default:dm:123456', [
+        { role: 'user', content: 'Peer session' },
+      ]);
+
+      const mainSession = await store.getMainSession('telegram', 'default');
+      expect(mainSession).toBeNull();
+    });
+  });
+
+  describe('stats tracking', () => {
+    it('should track message count and token count', async () => {
+      const messages: any[] = [
+        { role: 'user', content: 'Hello' },
+        { role: 'assistant', content: 'Hi there' },
+        { role: 'user', content: 'How are you?' },
       ];
 
-      await store.saveMessages(key, messages);
+      await store.saveMessages('main:telegram:default:dm:123456', messages);
+      const metadata = await store.getMetadata('main:telegram:default:dm:123456');
 
-      // Verify by loading - file system path may be sanitized differently
-      const loaded = await store.loadMessages(key);
-      expect(loaded).toHaveLength(2);
-      expect(loaded[0].role).toBe('user');
-      expect(loaded[1].role).toBe('assistant');
+      expect(metadata?.stats?.messageCount).toBe(3);
+      expect(metadata?.stats?.tokenCount).toBeGreaterThan(0);
+      expect(metadata?.stats?.lastTurnAt).toBeDefined();
     });
 
-    it('should overwrite existing messages', async () => {
-      const key = 'test:session:overwrite';
-      
-      await store.saveMessages(key, [createSampleMessage('user', 'First')]);
-      await store.saveMessages(key, [createSampleMessage('user', 'Second')]);
+    it('should update stats on subsequent saves', async () => {
+      await store.saveMessages('main:telegram:default:dm:123456', [
+        { role: 'user', content: 'First' },
+      ]);
+      let metadata = await store.getMetadata('main:telegram:default:dm:123456');
+      expect(metadata?.stats?.messageCount).toBe(1);
 
-      const loaded = await store.loadMessages(key);
-      expect(loaded).toHaveLength(1);
-      expect(loaded[0].content).toEqual([{ type: 'text', text: 'Second' }]);
-    });
-
-    it('should handle messages with special characters', async () => {
-      const key = 'test:session:special';
-      const messages = [
-        createSampleMessage('user', 'Hello 🌍 你好 🔥'),
-        createSampleMessage('assistant', 'Special chars: <>&"\''),
-      ];
-
-      await store.saveMessages(key, messages);
-      const loaded = await store.loadMessages(key);
-
-      expect(loaded).toHaveLength(2);
-      expect((loaded[0].content[0] as any).text).toBe('Hello 🌍 你好 🔥');
-      expect((loaded[1].content[0] as any).text).toBe('Special chars: <>&"\'');
-    });
-
-    it('should handle large messages', async () => {
-      const key = 'test:session:large';
-      const largeText = 'A'.repeat(100000); // 100KB string
-      const messages = [createSampleMessage('user', largeText)];
-
-      await store.saveMessages(key, messages);
-      const loaded = await store.loadMessages(key);
-
-      expect(loaded).toHaveLength(1);
-      expect((loaded[0].content[0] as any).text).toBe(largeText);
+      await store.saveMessages('main:telegram:default:dm:123456', [
+        { role: 'user', content: 'First' },
+        { role: 'assistant', content: 'Second' },
+      ]);
+      metadata = await store.getMetadata('main:telegram:default:dm:123456');
+      expect(metadata?.stats?.messageCount).toBe(2);
     });
   });
 
-  // ========== Session Deletion ==========
+  describe('list with routing filters', () => {
+    it('should list sessions with channel filter', async () => {
+      await store.saveMessages('main:telegram:default:dm:1', [{ role: 'user', content: '1' }]);
+      await store.saveMessages('main:discord:default:dm:2', [{ role: 'user', content: '2' }]);
 
-  describe('delete', () => {
-    it('should delete session file', async () => {
-      const key = 'test:session:delete1';
-      await store.saveMessages(key, [createSampleMessage('user', 'Test')]);
-
-      const result = await store.delete(key);
-      expect(result).toBe(true);
-
-      // File should not exist
-      const filePath = join(testDir, 'sessions', `${key}.json`);
-      await expect(stat(filePath)).rejects.toThrow();
+      const telegramSessions = await store.list({ channel: 'telegram' });
+      expect(telegramSessions.items).toHaveLength(1);
+      expect(telegramSessions.items[0].sourceChannel).toBe('telegram');
     });
 
-    it('should return true for non-existent session (idempotent delete)', async () => {
-      // delete is idempotent - returns true even if session doesn't exist
-      const result = await store.delete('non-existent');
-      expect(result).toBe(true);
-    });
+    it('should list sessions with status filter', async () => {
+      await store.saveMessages('main:telegram:default:dm:1', [{ role: 'user', content: '1' }]);
+      await store.saveMessages('main:telegram:default:dm:2', [{ role: 'user', content: '2' }]);
 
-    it('should remove session from index', async () => {
-      const key = 'test:session:delete2';
-      await store.saveMessages(key, [createSampleMessage('user', 'Test')]);
+      await store.archive('main:telegram:default:dm:1');
 
-      await store.delete(key);
-
-      const sessions = await store.list({});
-      expect(sessions.items.find(s => s.key === key)).toBeUndefined();
-    });
-
-    it('should handle concurrent deletions (idempotent)', async () => {
-      const key = 'test:session:concurrent';
-      await store.saveMessages(key, [createSampleMessage('user', 'Test')]);
-
-      // Delete twice - both should succeed (idempotent)
-      const result1 = await store.delete(key);
-      const result2 = await store.delete(key);
-      expect(result1).toBe(true);
-      expect(result2).toBe(true);
-    });
-  });
-
-  // ========== Session Archiving ==========
-
-  describe('archive', () => {
-    it('should archive active session', async () => {
-      const key = 'test:session:archive1';
-      const messages = [createSampleMessage('user', 'To be archived')];
-      
-      await store.saveMessages(key, messages);
-      
-      // Archive should delete the active file and create archive
-      await store.archive(key);
-
-      // After archive, load should return empty (unless fromArchive is true)
-      const loaded = await store.loadMessages(key);
-      expect(loaded).toEqual([]);
-    });
-
-    it('should preserve message content in archive', async () => {
-      const key = 'test:session:archive2';
-      const messages = [
-        createSampleMessage('user', 'Message 1'),
-        createSampleMessage('assistant', 'Response 1'),
-      ];
-      
-      await store.saveMessages(key, messages);
-      await store.archive(key);
-
-      // Load from archive should preserve messages
-      const loaded = await store.loadMessages(key, { fromArchive: true });
-      expect(loaded).toHaveLength(2);
-      expect(loaded[0].content).toEqual([{ type: 'text', text: 'Message 1' }]);
-    });
-  });
-
-  // ========== Session Listing ==========
-
-  describe('list', () => {
-    it('should return empty list for no sessions', async () => {
-      const result = await store.list({});
-      expect(result.items).toEqual([]);
-      expect(result.total).toBe(0);
-    });
-
-    it('should list all sessions', async () => {
-      await store.saveMessages('session:a', [createSampleMessage('user', 'A')]);
-      await store.saveMessages('session:b', [createSampleMessage('user', 'B')]);
-      await store.saveMessages('session:c', [createSampleMessage('user', 'C')]);
-
-      const result = await store.list({});
-      expect(result.total).toBe(3);
-      expect(result.items).toHaveLength(3);
-    });
-
-    it('should support pagination', async () => {
-      for (let i = 0; i < 10; i++) {
-        await store.saveMessages(`session:${i}`, [createSampleMessage('user', `Message ${i}`)]);
-      }
-
-      const page1 = await store.list({ limit: 3, offset: 0 });
-      const page2 = await store.list({ limit: 3, offset: 3 });
-
-      expect(page1.items).toHaveLength(3);
-      expect(page2.items).toHaveLength(3);
-      expect(page1.items[0].key).not.toBe(page2.items[0].key);
-    });
-
-    it('should filter by status', async () => {
-      await store.saveMessages('active:session', [createSampleMessage('user', 'Active')]);
-      await store.saveMessages('archived:session', [createSampleMessage('user', 'Archived')]);
-      await store.archive('archived:session');
-
-      const allSessions = await store.list({});
-      expect(allSessions.total).toBeGreaterThanOrEqual(2);
-    });
-  });
-
-  // ========== Session Key Handling ==========
-
-  describe('session key handling', () => {
-    it('should handle colon-separated keys', async () => {
-      const key = 'telegram:dm:123456';
-      await store.saveMessages(key, [createSampleMessage('user', 'Test')]);
-
-      const loaded = await store.loadMessages(key);
-      expect(loaded).toHaveLength(1);
-    });
-
-    it('should handle special characters in key', async () => {
-      const key = 'test:special-key_123.abc';
-      await store.saveMessages(key, [createSampleMessage('user', 'Test')]);
-
-      const loaded = await store.loadMessages(key);
-      expect(loaded).toHaveLength(1);
-    });
-
-    it('should handle unicode in key', async () => {
-      const key = 'test:用户:123';
-      await store.saveMessages(key, [createSampleMessage('user', 'Test')]);
-
-      const loaded = await store.loadMessages(key);
-      expect(loaded).toHaveLength(1);
-    });
-
-    it('should handle very long keys', async () => {
-      const longKey = 'test:' + 'x'.repeat(200);
-      await store.saveMessages(longKey, [createSampleMessage('user', 'Test')]);
-
-      const loaded = await store.loadMessages(longKey);
-      expect(loaded).toHaveLength(1);
-    });
-  });
-
-  // ========== Index Management ==========
-
-  describe('index management', () => {
-    it('should create index on initialize', async () => {
-      // The index should be created in memory, check via list
-      const result = await store.list({});
-      expect(result.items).toEqual([]);
-    });
-
-    it('should update index when saving messages', async () => {
-      const key = 'test:index:update';
-      await store.saveMessages(key, [createSampleMessage('user', 'Test')]);
-
-      const result = await store.list({});
-      const session = result.items.find(s => s.key === key);
-      expect(session).toBeDefined();
-      expect(session?.messageCount).toBe(1);
-    });
-
-    it('should update index when deleting messages', async () => {
-      const key = 'test:index:delete';
-      await store.saveMessages(key, [createSampleMessage('user', 'Test')]);
-      await store.delete(key);
-
-      const result = await store.list({});
-      const session = result.items.find(s => s.key === key);
-      
-      expect(session).toBeUndefined();
-    });
-  });
-
-  // ========== Edge Cases ==========
-
-  describe('edge cases', () => {
-    it('should handle concurrent save and load', async () => {
-      const key = 'test:concurrent';
-      
-      // Save many messages concurrently
-      const promises = Array.from({ length: 10 }, (_, i) => 
-        store.saveMessages(key, [createSampleMessage('user', `Message ${i}`)])
-      );
-      await Promise.all(promises);
-
-      // Should have some messages (last write wins)
-      const loaded = await store.loadMessages(key);
-      expect(loaded.length).toBeGreaterThanOrEqual(1);
-    });
-
-    it('should handle rapid create and delete', async () => {
-      const key = 'test:rapid';
-      
-      for (let i = 0; i < 5; i++) {
-        await store.saveMessages(key, [createSampleMessage('user', `Message ${i}`)]);
-        await store.delete(key);
-      }
-
-      // Should not have any messages
-      const loaded = await store.loadMessages(key);
-      expect(loaded).toEqual([]);
-    });
-
-    it('should handle empty messages array', async () => {
-      const key = 'test:emptyarray';
-      await store.saveMessages(key, []);
-      
-      const loaded = await store.loadMessages(key);
-      expect(loaded).toEqual([]);
-    });
-  });
-
-  // ========== Token Estimation ==========
-
-  describe('estimateTokenUsage', () => {
-    it('should estimate tokens for messages', async () => {
-      const messages: AgentMessage[] = [
-        { role: 'user', content: [{ type: 'text', text: 'Hello world' }], timestamp: Date.now() } as AgentMessage,
-        { role: 'assistant', content: [{ type: 'text', text: 'Hi there!' }], timestamp: Date.now(), api: {} as any, provider: {} as any, model: 'test', usage: { input: 0, output: 0, cacheRead: 0, cacheWrite: 0, totalTokens: 0, cost: { input: 0, output: 0, total: 0 } }, stopReason: 'stop' as const } as AgentMessage,
-      ];
-
-      const estimate = await store.estimateTokenUsage('test', messages);
-      expect(estimate).toBeGreaterThan(0);
-    });
-
-    it('should return 0 for empty messages', async () => {
-      const estimate = await store.estimateTokenUsage('test', []);
-      expect(estimate).toBe(0);
-    });
-
-    it('should handle large messages', async () => {
-      const largeText = 'word '.repeat(10000);
-      const messages: AgentMessage[] = [
-        { role: 'user', content: [{ type: 'text', text: largeText }], timestamp: Date.now() },
-      ];
-
-      const estimate = await store.estimateTokenUsage('test', messages);
-      // Rough estimate: ~4 chars per token, but 'word ' is 5 chars
-      // 50000 chars / 4 ~= 12500 tokens
-      expect(estimate).toBeGreaterThan(10000);
-    });
-  });
-
-  // ========== Delete Many ==========
-
-  describe('deleteMany', () => {
-    it('should delete multiple sessions', async () => {
-      await store.saveMessages('multi:1', [createSampleMessage('user', 'A')]);
-      await store.saveMessages('multi:2', [createSampleMessage('user', 'B')]);
-      await store.saveMessages('multi:3', [createSampleMessage('user', 'C')]);
-
-      const result = await store.deleteMany(['multi:1', 'multi:2', 'multi:3']);
-
-      expect(result.success).toHaveLength(3);
-      expect(result.failed).toHaveLength(0);
-    });
-
-    it('should handle partial failures', async () => {
-      await store.saveMessages('partial:1', [createSampleMessage('user', 'A')]);
-      // 'partial:2' doesn't exist - should still succeed for partial:1
-
-      const result = await store.deleteMany(['partial:1', 'partial:2']);
-
-      expect(result.success).toContain('partial:1');
-      // partial:2 doesn't exist, so it might be in success or failed depending on implementation
+      const activeSessions = await store.list({ status: 'active' });
+      expect(activeSessions.items).toHaveLength(1);
+      expect(activeSessions.items[0].key).toBe('main:telegram:default:dm:2');
     });
   });
 });

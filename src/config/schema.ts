@@ -49,8 +49,15 @@ export const AgentDefaultsSchema = z.object({
   }).optional(),
 });
 
+export const AgentConfigSchema = z.object({
+  id: z.string(),
+  name: z.string().optional(),
+  enabled: z.boolean().default(true),
+});
+
 export const AgentsConfigSchema = z.object({
   defaults: AgentDefaultsSchema.optional(),
+  list: z.array(AgentConfigSchema).optional(),
 }).default({
   defaults: {
     workspace: '~/.xopcbot/workspace',
@@ -134,6 +141,50 @@ export const TelegramConfigSchema = z.object({
   historyLimit: z.number().default(50),
   textChunkLimit: z.number().default(4000),
   proxy: z.string().optional(),
+});
+
+// ============================================
+// Session Routing Configuration
+// ============================================
+
+export const BindingMatchSchema = z.object({
+  channel: z.string(),
+  accountId: z.string().optional(),
+  peerKind: z.string().optional(),
+  peerId: z.string().optional(),
+  guildId: z.string().optional(),
+  teamId: z.string().optional(),
+  memberRoleIds: z.array(z.string()).optional(),
+});
+
+export const BindingRuleSchema = z.object({
+  id: z.string().optional(),
+  agentId: z.string(),
+  priority: z.number().default(100),
+  match: BindingMatchSchema,
+  enabled: z.boolean().default(true),
+});
+
+export const BindingsConfigSchema = z.array(BindingRuleSchema).default([]);
+
+export const SessionDmScopeSchema = z.enum([
+  'main',
+  'per-peer',
+  'per-channel-peer',
+  'per-account-channel-peer',
+]);
+
+export const SessionStorageConfigSchema = z.object({
+  pruneAfterMs: z.number().optional(),
+  maxEntries: z.number().optional(),
+});
+
+export const SessionConfigSchema = z.object({
+  dmScope: SessionDmScopeSchema.default('main'),
+  identityLinks: z.record(z.string(), z.array(z.string())).optional(),
+  storage: SessionStorageConfigSchema.optional(),
+}).default({
+  dmScope: 'main',
 });
 
 export const ChannelsConfigSchema = z.object({
@@ -390,6 +441,8 @@ export const ExtensionsConfigSchema = z.record(
 
 export const ConfigSchema = z.object({
   agents: AgentsConfigSchema,
+  bindings: BindingsConfigSchema,
+  session: SessionConfigSchema,
   channels: ChannelsConfigSchema,
   gateway: GatewayConfigSchema,
   tools: ToolsConfigSchema,
@@ -427,6 +480,10 @@ export const ConfigSchema = z.object({
         tailKeepRatio: 0.3,
       },
     },
+  },
+  bindings: [],
+  session: {
+    dmScope: 'main' as const,
   },
   channels: {
     telegram: {

@@ -25,6 +25,7 @@ import {
 import { createOAuthHandler, loadOAuthCredentialsToCache } from './oauth.js';
 import { createOAuthAsyncHandler } from './oauth-async.js';
 import { testApiKeyResolution } from '../../config/resolve-config-value.js';
+import { buildSessionKey } from '../../routing/session-key.js';
 import { 
   getModelsJsonPath,
   loadModelsJson,
@@ -775,7 +776,15 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     const body = await c.req.json().catch(() => ({}));
     const channel = body.channel || 'gateway';
     const chatId = body.chat_id || `chat_${Date.now()}`;
-    const sessionKey = `${channel}:${chatId}`;
+    
+    // Build proper session key with new routing format
+    const sessionKey = buildSessionKey({
+      agentId: 'main',
+      source: channel,
+      accountId: 'default',
+      peerKind: 'direct',
+      peerId: chatId,
+    });
 
     await service.sessionManagerInstance.saveMessages(sessionKey, []);
 

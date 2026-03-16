@@ -4,6 +4,7 @@
 
 - **Core Concepts**
   - [Architecture](architecture.md)
+  - [Routing System](routing-system.md)
   - [Session Management](session.md)
   - [Skills System](skills.md)
   - [Skills Testing](skills-testing.md)

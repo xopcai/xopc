@@ -6,6 +6,8 @@ export type { AgentConfig } from './types.js';
 export { SessionTracker } from './session-tracker.js';
 export type { SessionUsage } from './session-tracker.js';
 export { ModelManager } from './models/index.js';
+export { AgentManager } from './agent-manager.js';
+export type { AgentManagerConfig, AgentInstance } from './agent-manager.js';
 
 // Legacy helpers (backward compatibility)
 export { loadBootstrapFiles, extractTextContent } from './helpers.js';

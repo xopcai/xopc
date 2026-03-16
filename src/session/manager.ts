@@ -8,7 +8,7 @@ import type {
   SessionDetail,
   SessionListQuery,
   PaginatedResult,
-  SessionStats,
+  GlobalSessionStats,
   ExportFormat,
   SessionStatus,
 } from './types.js';
@@ -176,7 +176,7 @@ export class SessionManager extends EventEmitter {
 
   // ========== Statistics ==========
 
-  async getStats(): Promise<SessionStats> {
+  async getStats(): Promise<GlobalSessionStats> {
     return this.store.getStats();
   }
 

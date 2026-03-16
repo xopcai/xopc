@@ -1,10 +1,8 @@
 /**
  * Session Key Unit Tests
  * 
- * Tests for session key generation and parsing:
- * - Consistent key format across different channels
- * - DM vs Group vs Thread handling
- * - Edge cases
+ * Tests for session key generation and parsing using the new routing system format:
+ * {agentId}:{source}:{accountId}:{peerKind}:{peerId}[:thread:{threadId}]
  */
 
 import { describe, it, expect } from 'vitest';
@@ -21,7 +19,8 @@ describe('SessionKey', () => {
           isGroup: false,
         });
 
-        expect(key).toBe('telegram:dm:916534770');
+        // New format: {agentId}:{source}:{accountId}:{peerKind}:{peerId}
+        expect(key).toBe('main:telegram:default:dm:916534770');
       });
 
       it('should generate group key', () => {
@@ -32,7 +31,7 @@ describe('SessionKey', () => {
           isGroup: true,
         });
 
-        expect(key).toBe('telegram:g:-1001234567890');
+        expect(key).toBe('main:telegram:default:group:-1001234567890');
       });
 
       it('should generate thread key', () => {
@@ -44,7 +43,7 @@ describe('SessionKey', () => {
           threadId: '789',
         });
 
-        expect(key).toBe('telegram:g:-1001234567890:t:789');
+        expect(key).toBe('main:telegram:default:group:-1001234567890:thread:789');
       });
     });
 
@@ -57,7 +56,7 @@ describe('SessionKey', () => {
           isGroup: false,
         });
 
-        expect(key).toBe('cli:direct');
+        expect(key).toBe('main:cli:default:direct:cli');
       });
 
       it('should generate named key for CLI', () => {
@@ -68,7 +67,7 @@ describe('SessionKey', () => {
           isGroup: false,
         });
 
-        expect(key).toBe('cli:my-session');
+        expect(key).toBe('main:cli:default:direct:my-session');
       });
     });
 
@@ -81,13 +80,13 @@ describe('SessionKey', () => {
           isGroup: false,
         });
 
-        expect(key).toBe('webui:chat_123');
+        // WebUI maps to gateway source
+        expect(key).toBe('main:gateway:default:direct:chat_123');
       });
     });
 
     describe('Gateway', () => {
-      it('should generate key for Gateway (uses DM format for non-group)', () => {
-        // Gateway uses DM format when isGroup is false
+      it('should generate key for Gateway', () => {
         const key = generateSessionKey({
           source: 'gateway',
           chatId: 'chat_123456',
@@ -95,22 +94,50 @@ describe('SessionKey', () => {
           isGroup: false,
         });
 
-        expect(key).toBe('gateway:dm:user');
+        expect(key).toBe('main:gateway:default:direct:chat_123456');
+      });
+    });
+
+    describe('custom agent and account', () => {
+      it('should use custom agentId', () => {
+        const key = generateSessionKey({
+          source: 'telegram',
+          chatId: '123456',
+          senderId: '916534770',
+          isGroup: false,
+          agentId: 'coder',
+        });
+
+        expect(key).toBe('coder:telegram:default:dm:916534770');
+      });
+
+      it('should use custom accountId', () => {
+        const key = generateSessionKey({
+          source: 'telegram',
+          chatId: '123456',
+          senderId: '916534770',
+          isGroup: false,
+          accountId: 'work',
+        });
+
+        expect(key).toBe('main:telegram:work:dm:916534770');
       });
     });
   });
 
   describe('parseSessionKey', () => {
     it('should parse Telegram DM key', () => {
-      const parsed = parseSessionKey('telegram:dm:916534770');
+      const parsed = parseSessionKey('main:telegram:default:dm:916534770');
 
       expect(parsed.source).toBe('telegram');
       expect(parsed.type).toBe('dm');
       expect(parsed.chatId).toBe('916534770');
+      expect(parsed.agentId).toBe('main');
+      expect(parsed.accountId).toBe('default');
     });
 
     it('should parse Telegram group key', () => {
-      const parsed = parseSessionKey('telegram:g:-1001234567890');
+      const parsed = parseSessionKey('main:telegram:default:group:-1001234567890');
 
       expect(parsed.source).toBe('telegram');
       expect(parsed.type).toBe('group');
@@ -118,7 +145,7 @@ describe('SessionKey', () => {
     });
 
     it('should parse Telegram thread key', () => {
-      const parsed = parseSessionKey('telegram:g:-1001234567890:t:789');
+      const parsed = parseSessionKey('main:telegram:default:group:-1001234567890:thread:789');
 
       expect(parsed.source).toBe('telegram');
       expect(parsed.type).toBe('thread');
@@ -127,50 +154,49 @@ describe('SessionKey', () => {
     });
 
     it('should parse CLI direct key', () => {
-      const parsed = parseSessionKey('cli:direct');
+      const parsed = parseSessionKey('main:cli:default:direct:cli');
 
       expect(parsed.source).toBe('cli');
       expect(parsed.type).toBe('direct');
-      expect(parsed.chatId).toBe('direct');
+      expect(parsed.chatId).toBe('cli');
     });
 
     it('should parse CLI named key', () => {
-      const parsed = parseSessionKey('cli:my-session');
+      const parsed = parseSessionKey('main:cli:default:direct:my-session');
 
       expect(parsed.source).toBe('cli');
-      expect(parsed.type).toBe('other');
+      expect(parsed.type).toBe('direct');
       expect(parsed.chatId).toBe('my-session');
     });
 
     it('should parse WebUI key', () => {
-      const parsed = parseSessionKey('webui:chat_123');
+      const parsed = parseSessionKey('main:gateway:default:direct:chat_123');
 
-      expect(parsed.source).toBe('webui');
-      expect(parsed.type).toBe('other');
+      expect(parsed.source).toBe('gateway');
+      expect(parsed.type).toBe('direct');
       expect(parsed.chatId).toBe('chat_123');
     });
 
     it('should parse Gateway key', () => {
-      const parsed = parseSessionKey('gateway:chat_123456');
+      const parsed = parseSessionKey('main:gateway:default:direct:chat_123456');
 
       expect(parsed.source).toBe('gateway');
-      expect(parsed.type).toBe('other');
+      expect(parsed.type).toBe('direct');
       expect(parsed.chatId).toBe('chat_123456');
     });
 
-    it('should handle legacy format fallback', () => {
-      // Old format: telegram:123456
-      const parsed = parseSessionKey('telegram:123456');
+    it('should handle invalid key gracefully', () => {
+      const parsed = parseSessionKey('invalid-key');
 
-      expect(parsed.source).toBe('telegram');
+      expect(parsed.source).toBe('invalid-key');
       expect(parsed.type).toBe('other');
-      expect(parsed.chatId).toBe('123456');
+      expect(parsed.chatId).toBe('invalid-key');
     });
   });
 
   describe('getRoutingInfo', () => {
     it('should extract routing info from Telegram DM', () => {
-      const routing = getRoutingInfo('telegram:dm:916534770');
+      const routing = getRoutingInfo('main:telegram:default:dm:916534770');
 
       expect(routing.channel).toBe('telegram');
       expect(routing.chatId).toBe('916534770');
@@ -178,7 +204,7 @@ describe('SessionKey', () => {
     });
 
     it('should extract routing info from Telegram thread', () => {
-      const routing = getRoutingInfo('telegram:g:-1001234567890:t:789');
+      const routing = getRoutingInfo('main:telegram:default:group:-1001234567890:thread:789');
 
       expect(routing.channel).toBe('telegram');
       expect(routing.chatId).toBe('-1001234567890');
@@ -186,14 +212,14 @@ describe('SessionKey', () => {
     });
 
     it('should extract routing info from CLI', () => {
-      const routing = getRoutingInfo('cli:direct');
+      const routing = getRoutingInfo('main:cli:default:direct:cli');
 
       expect(routing.channel).toBe('cli');
-      expect(routing.chatId).toBe('direct');
+      expect(routing.chatId).toBe('cli');
     });
 
     it('should extract routing info from Gateway', () => {
-      const routing = getRoutingInfo('gateway:chat_123456');
+      const routing = getRoutingInfo('main:gateway:default:direct:chat_123456');
 
       expect(routing.channel).toBe('gateway');
       expect(routing.chatId).toBe('chat_123456');
@@ -235,8 +261,8 @@ describe('SessionKey', () => {
       });
 
       expect(dmKey).not.toBe(groupKey);
-      expect(dmKey).toBe('telegram:dm:916534770');
-      expect(groupKey).toBe('telegram:g:-1001234567890');
+      expect(dmKey).toBe('main:telegram:default:dm:916534770');
+      expect(groupKey).toBe('main:telegram:default:group:-1001234567890');
     });
 
     it('should round-trip generate and parse', () => {

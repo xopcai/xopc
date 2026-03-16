@@ -1,27 +1,194 @@
 # 会话管理
 
-xopcbot 会自动管理对话会话，保持上下文连贯性。
+xopcbot 提供全面的会话管理功能，支持通过 CLI 和 Web UI 管理对话历史。
+
+---
+
+## 功能概览
+
+| 功能 | CLI | Web UI |
+|------|-----|--------|
+| 列出会话 | ✅ | ✅ |
+| 搜索会话 | ✅ | ✅ |
+| 查看详情 | ✅ | ✅ |
+| 归档/取消归档 | ✅ | ✅ |
+| 置顶/取消置顶 | ✅ | ✅ |
+| 导出 (JSON) | ✅ | ✅ |
+| 删除 | ✅ | ✅ |
+| 会话内搜索 | ❌ | ✅ |
+
+---
 
 ## 会话存储
 
-| 类型 | 位置 |
-|------|------|
-| 存储目录 | `~/.xopcbot/sessions/` |
+| 属性 | 值 |
+|------|-----|
+| 存储目录 | `workspace/.sessions/` |
+| 索引文件 | `workspace/.sessions/index.json` |
 | 文件格式 | JSON |
+| 归档目录 | `workspace/.sessions/archive/` |
+
+---
+
+## 会话状态
+
+| 状态 | 描述 |
+|------|------|
+| `active` | 当前活动会话（默认） |
+| `pinned` | 置顶会话，快速访问 |
+| `archived` | 已归档，移动到归档文件夹 |
+
+---
+
+## CLI 使用
+
+### 列出会话
+
+```bash
+# 列出所有会话
+xopcbot session list
+
+# 按状态筛选
+xopcbot session list --status active
+xopcbot session list --status archived
+xopcbot session list --status pinned
+
+# 按名称或内容搜索
+xopcbot session list --query "project"
+
+# 排序和限制
+xopcbot session list --sort updatedAt --order desc --limit 50
+```
+
+### 查看会话详情
+
+```bash
+# 显示会话信息和最近消息
+xopcbot session info telegram:123456
+
+# 在会话内搜索
+xopcbot session grep telegram:123456 "API design"
+```
+
+### 管理会话
+
+```bash
+# 重命名会话
+xopcbot session rename telegram:123456 "Project Discussion"
+
+# 添加标签
+xopcbot session tag telegram:123456 work important
+
+# 移除标签
+xopcbot session untag telegram:123456 important
+
+# 归档会话
+xopcbot session archive telegram:123456
+
+# 取消归档
+xopcbot session unarchive telegram:123456
+
+# 置顶会话
+xopcbot session pin telegram:123456
+
+# 取消置顶
+xopcbot session unpin telegram:123456
+
+# 删除会话
+xopcbot session delete telegram:123456
+
+# 导出会话为 JSON
+xopcbot session export telegram:123456 \
+  --format json \
+  --output backup.json
+```
+
+### 批量操作
+
+```bash
+# 按筛选条件删除多个会话
+xopcbot session delete-many --status archived --force
+
+# 归档旧会话（30+ 天未活动）
+xopcbot session cleanup --days 30
+```
+
+### 统计信息
+
+```bash
+xopcbot session stats
+```
+
+**示例输出：**
+```
+📊 会话统计
+
+  总会话数:     42
+  活动:         28
+  已归档:       12
+  置顶:         2
+  总消息数:     1,847
+  总 Token:     452.3k
+
+  按通道:
+    telegram: 35
+    gateway: 5
+    cli: 2
+```
+
+---
+
+## Web UI
+
+Web UI 在 `/ui/` 提供可视化的会话管理界面。
+
+### 功能
+
+1. **会话列表**: 网格/列表视图，支持筛选
+2. **搜索**: 跨会话实时搜索
+3. **筛选器**: 按状态筛选（全部/活动/置顶/归档）
+4. **统计**: 可视化统计卡片
+5. **详情抽屉**: 点击任意会话查看：
+   - 完整消息历史
+   - 会话内搜索（高亮显示）
+   - 归档/置顶/导出/删除操作
+
+### 访问 UI
+
+```bash
+# 启动 gateway
+xopcbot gateway start
+
+# 在浏览器中打开
+open http://localhost:18790/ui/
+```
+
+---
 
 ## 会话结构
 
 ```typescript
-interface Session {
-  key: string;           // 会话唯一标识
-  messages: Message[];    // 消息历史
-  created_at: string;    // 创建时间
-  updated_at: string;    // 更新时间
-  metadata?: Record<string, unknown>;  // 元数据
+interface SessionMetadata {
+  key: string;              // 唯一标识符
+  name?: string;            // 可选自定义名称
+  status: 'active' | 'idle' | 'archived' | 'pinned';
+  tags: string[];           // 用户定义的标签
+  createdAt: string;        // ISO 时间戳
+  updatedAt: string;
+  lastAccessedAt: string;
+  messageCount: number;
+  estimatedTokens: number;
+  compactedCount: number;   // 压缩次数
+  sourceChannel: string;    // telegram, gateway, cli
+  sourceChatId: string;
+}
+
+interface SessionDetail extends SessionMetadata {
+  messages: Message[];
 }
 
 interface Message {
-  role: 'system' | 'user' | 'assistant' | 'tool';
+  role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
   content: string;
   timestamp?: string;
   tool_call_id?: string;
@@ -30,143 +197,129 @@ interface Message {
 }
 ```
 
-## 使用会话
+---
 
-### 默认会话
+## 会话索引
 
-```bash
-xopcbot agent -m "Hello"
+`index.json` 文件维护所有会话元数据的缓存：
+
+```json
+{
+  "version": "1.0",
+  "lastUpdated": "2026-02-14T10:00:00Z",
+  "sessions": [
+    {
+      "key": "telegram:123456",
+      "status": "active",
+      "tags": ["work"],
+      "messageCount": 42,
+      ...
+    }
+  ]
+}
 ```
 
-使用默认会话键进行对话。
+---
 
-### 指定会话
+## 自动维护
 
-```bash
-xopcbot agent -m "Hello" --session my-chat
-```
+### 压缩
 
-### 交互模式
+当会话超出上下文窗口限制时：
 
-```bash
-xopcbot agent -i
-```
+1. 使用 LLM 摘要早期消息
+2. 保留最近消息（默认：最后 10 条）
+3. 始终保留系统消息
 
-按 `Ctrl+C` 退出交互模式。
-
-## 会话生命周期
-
-```
-1. 创建会话 (如不存在)
-       ↓
-2. 加载历史消息
-       ↓
-3. 添加用户消息
-       ↓
-4. Agent 处理
-       ↓
-5. 保存助手回复
-       ↓
-6. 持久化到磁盘
-```
-
-## 消息角色
-
-| 角色 | 用途 |
-|------|------|
-| `system` | 系统提示词 |
-| `user` | 用户消息 |
-| `assistant` | AI 回复 |
-| `tool` | 工具调用结果 |
-
-## 上下文窗口
-
-Agent 默认使用完整会话历史。可以通过配置限制：
+在 `config.json` 中配置：
 
 ```json
 {
   "agents": {
     "defaults": {
-      "max_tokens": 8192
+      "compaction": {
+        "enabled": true,
+        "mode": "abstractive",
+        "triggerThreshold": 0.8,
+        "keepRecentMessages": 10
+      }
     }
   }
 }
 ```
 
-当消息过长时会自动压缩（compaction）。
+**压缩模式：**
+- `extractive` - 使用关键句摘要
+- `abstractive` - 基于 LLM 的摘要
+- `structured` - 保留结构化数据
 
-## 会话压缩
+### 滑动窗口
 
-当消息数量或 token 超过阈值时，会自动压缩：
+防止内存问题：
+- 最大消息数：100
+- 超出限制时保留最近消息
+- 保留系统上下文
 
-1. **摘要早期消息**：保留关键信息
-2. **移除冗余**：合并相似消息
-3. **保留上下文**：确保对话连贯性
-
-## 清空会话
-
-### 通过 CLI
-
-```bash
-# 删除指定会话
-rm ~/.xopcbot/sessions/<session-key>.json
-
-# 清空所有会话
-rm ~/.xopcbot/sessions/*.json
-```
-
-### 通过代码
-
-```typescript
-import { SessionManager } from '../session/manager.js';
-
-const manager = new SessionManager();
-manager.clearSession('my-chat');
-```
+---
 
 ## 最佳实践
 
-1. **定期清理**：删除不需要的历史会话
-2. **会话隔离**：不同项目使用不同会话键
-3. **敏感信息**：避免在会话中存储敏感数据
-4. **备份重要会话**：手动备份到安全位置
+1. **使用标签**: 按项目或主题标记会话
+2. **置顶重要会话**: 将常用会话置顶
+3. **归档旧会话**: 归档不常用的会话
+4. **定期清理**: 使用 `session cleanup` 清理旧会话
+5. **删除前导出**: 删除重要会话前先导出
 
-## 文件格式
-
-会话文件示例 (`~/.xopcbot/sessions/default.json`)：
-
-```json
-{
-  "key": "default",
-  "messages": [
-    {
-      "role": "system",
-      "content": "You are a helpful assistant."
-    },
-    {
-      "role": "user",
-      "content": "Hello!"
-    },
-    {
-      "role": "assistant",
-      "content": "Hello! How can I help you today?"
-    }
-  ],
-  "created_at": "2026-02-03T12:00:00.000Z",
-  "updated_at": "2026-02-03T12:00:01.000Z",
-  "metadata": {}
-}
-```
+---
 
 ## 故障排除
 
-**会话丢失？**
-- 检查 `~/.xopcbot/sessions/` 目录存在
-- 确认文件权限正确
-- 查看日志中的错误信息
+### Web UI 无法加载会话
 
-**上下文不连贯？**
-- 确认会话未被意外清空
-- 检查消息压缩是否过度
-- 可能需要增加 `max_tokens` 配置
+1. 检查 gateway 是否运行：`xopcbot gateway status`
+2. 在浏览器控制台验证 WebSocket 连接
+3. 检查 gateway 日志中的错误
 
+### 会话索引损坏
+
+索引将在下次访问时自动重建。强制重建：
+
+```bash
+# 删除索引文件
+rm workspace/.sessions/index.json
+
+# 下次列出会话时会重建
+xopcbot session list
+```
+
+### 会话丢失
+
+如果 `.sessions/` 中存在但无法显示：
+
+```bash
+# 通过迁移强制重建索引
+xopcbot session list --limit 1000
+```
+
+---
+
+## API 参考
+
+### WebSocket API 方法
+
+| 方法 | 描述 |
+|------|------|
+| `session.list` | 分页列出会话 |
+| `session.get` | 获取会话详情 |
+| `session.delete` | 删除会话 |
+| `session.rename` | 重命名会话 |
+| `session.tag` | 添加标签 |
+| `session.untag` | 移除标签 |
+| `session.archive` | 归档会话 |
+| `session.unarchive` | 取消归档 |
+| `session.pin` | 置顶会话 |
+| `session.unpin` | 取消置顶 |
+| `session.search` | 搜索会话 |
+| `session.searchIn` | 会话内搜索 |
+| `session.export` | 导出会话 |
+| `session.stats` | 获取统计信息 |
