@@ -485,6 +485,10 @@ export class XopcbotGatewayChat extends LitElement {
   async _createNewSession(): Promise<void> {
     if (!this.config) return;
 
+    // Refresh sessions list first to ensure we have the latest data
+    // This prevents creating duplicate empty sessions
+    await this._loadSessions(false);
+
     // Check if there's already an empty session
     const emptySession = this._sessions.find((s: any) => s.messageCount === 0);
     if (emptySession) {
