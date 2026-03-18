@@ -3,6 +3,8 @@ import { customElement, property, state, query } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { Paperclip, Send, Square, X, FileText } from 'lucide';
+import { loadAttachment, formatFileSize, type Attachment } from '../utils/attachment-utils';
+import { i18n } from '../utils/i18n';
 
 // Convert lucide icon array format to SVG string
 function iconToSvg(iconData: unknown, className = ''): string {
@@ -30,16 +32,6 @@ function iconToSvg(iconData: unknown, className = ''): string {
   const finalAttrs = className ? `${attrStr} class="${className}"` : attrStr;
 
   return `<svg ${finalAttrs}>${childrenStr}</svg>`;
-}
-import { i18n } from '../utils/i18n';
-
-export interface Attachment {
-  id: string;
-  name: string;
-  type: string;
-  mimeType: string;
-  size: number;
-  content: string; // base64
 }
 
 @customElement('message-editor')
@@ -329,26 +321,9 @@ export class MessageEditor extends LitElement {
   }
 
   private async _loadAttachment(file: File): Promise<Attachment> {
-    const base64 = await this._readFileAsBase64(file);
-    const isImage = file.type.startsWith('image/');
-
-    return {
-      id: crypto.randomUUID(),
-      name: file.name,
-      type: isImage ? 'image' : 'document',
-      mimeType: file.type,
-      size: file.size,
-      content: base64,
-    };
-  }
-
-  private _readFileAsBase64(file: File): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const reader = new FileReader();
-      reader.onload = () => resolve(reader.result as string);
-      reader.onerror = () => reject(reader.error);
-      reader.readAsDataURL(file);
-    });
+    // Use the enhanced loadAttachment from attachment-utils
+    const attachment = await loadAttachment(file, file.name);
+    return attachment;
   }
 
   private _removeAttachment(index: number): void {
@@ -356,13 +331,6 @@ export class MessageEditor extends LitElement {
   }
 
   private _formatFileSize(bytes: number): string {
-    const units = ['B', 'KB', 'MB', 'GB'];
-    let unitIndex = 0;
-    let size = bytes;
-    while (size >= 1024 && unitIndex < units.length - 1) {
-      size /= 1024;
-      unitIndex++;
-    }
-    return `${size.toFixed(1)} ${units[unitIndex]}`;
+    return formatFileSize(bytes);
   }
 }
