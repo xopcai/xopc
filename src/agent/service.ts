@@ -28,7 +28,7 @@ import { SessionContextManager, SessionLifecycleManager, type SessionContext } f
 import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
 import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager } from './agent-manager.js';
-import { maybeApplyTtsToPayload } from '../tts/payload.js';
+
 import { createTypingController, type TypingController } from './typing.js';
 
 const log = createLogger('AgentService');
@@ -690,64 +690,7 @@ export class AgentService {
     const hookResult = await this.hookHandler.runMessageSending(sessionContext.chatId, finalContent);
     if (!hookResult.send) return;
 
-    const ttsConfig = this.config.config?.tts || {
-      enabled: false,
-      provider: 'openai' as const,
-      trigger: 'always' as const,
-    };
-
-    // Check if TTS should be used
-    const trigger = ttsConfig.trigger || 'off';
-    let shouldSendTTS = false;
-
-    if (ttsConfig.enabled) {
-      switch (trigger) {
-        case 'always':
-          shouldSendTTS = true;
-          break;
-        case 'inbound':
-          shouldSendTTS = sessionContext.metadata?.transcribedVoice === true;
-          break;
-        case 'tagged':
-          shouldSendTTS = /\[\[tts\]\]/i.test(hookResult.content || finalContent);
-          break;
-        default:
-          shouldSendTTS = false;
-      }
-    }
-
-    if (shouldSendTTS) {
-      // Try to send TTS message
-      try {
-        const ttsMsg = await maybeApplyTtsToPayload(
-          {
-            channel: msg.channel,
-            chat_id: msg.chat_id,
-            content: hookResult.content || finalContent,
-            type: 'message',
-            metadata: {
-              accountId: msg.metadata?.accountId,
-              threadId: msg.metadata?.threadId,
-            },
-          },
-          {
-            config: ttsConfig,
-            channel: msg.channel,
-            inboundAudio: sessionContext.metadata?.transcribedVoice === true,
-          }
-        );
-
-        if (ttsMsg.mediaUrl) {
-          await this.bus.publishOutbound(ttsMsg);
-          log.info('TTS voice message sent');
-          return; // TTS sent successfully, don't send text
-        }
-      } catch (error) {
-        log.warn({ error }, 'TTS failed, falling back to text');
-      }
-    }
-
-    // Send text message (fallback or TTS not enabled)
+    // TTS is handled by ChannelManager, just send text message here
     await this.bus.publishOutbound({
       channel: sessionContext.channel,
       chat_id: sessionContext.chatId,
@@ -756,6 +699,7 @@ export class AgentService {
       metadata: {
         accountId: msg.metadata?.accountId,
         threadId: msg.metadata?.threadId,
+        transcribedVoice: sessionContext.metadata?.transcribedVoice,
       },
     });
   }
