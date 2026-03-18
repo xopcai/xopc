@@ -1,6 +1,6 @@
 import { html, LitElement, nothing } from 'lit';
 import { customElement, state, query } from 'lit/decorators.js';
-import './gateway-chat';
+import './chat/ChatPanel.js';
 import './pages/SessionManager';
 import './pages/CronManager';
 // Pages
@@ -18,7 +18,7 @@ import {
 } from './navigation';
 import { getIcon } from './utils/icons';
 import { getToken, setToken, clearToken, getTheme, setTheme, getLanguage, setLanguage, setLanguage as setStoredLanguage } from './utils/storage';
-import type { XopcbotGatewayChat } from './gateway-chat';
+import type { ChatPanel } from './chat/ChatPanel.js';
 
 export type { Tab } from './navigation';
 
@@ -63,7 +63,7 @@ export class XopcbotApp extends LitElement {
   @state() private _showTokenDialog = false;
   @state() private _tokenExpired = false;
 
-  @query('xopcbot-gateway-chat') private _chatElement!: XopcbotGatewayChat;
+  @query('chat-panel') private _chatElement!: ChatPanel;
 
   // Legacy property support
   get gatewayConfig() { return this._gatewayConfig; }
@@ -508,14 +508,13 @@ export class XopcbotApp extends LitElement {
   private _renderChat(): unknown {
     const token = getToken();
     return html`
-      <xopcbot-gateway-chat
+      <chat-panel
         .config=${{ url: window.location.origin, token: token || undefined }}
         .route=${this._chatRoute}
         .enableAttachments=${true}
         .enableModelSelector=${true}
-        .enableThinkingSelector=${true}
         @route-change=${(e: CustomEvent<ChatRoute>) => this._updateChatRoute(e.detail)}
-      ></xopcbot-gateway-chat>
+      ></chat-panel>
     `;
   }
 
@@ -565,7 +564,7 @@ export class XopcbotApp extends LitElement {
   }
 
   // Get chat element for external access
-  public get chatElement(): XopcbotGatewayChat | undefined {
+  public get chatElement(): ChatPanel | undefined {
     return this._chatElement;
   }
 }

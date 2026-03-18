@@ -1,4 +1,4 @@
-import type { AgentEvent, AgentMessage } from '@mariozechner/pi-agent-core';
+import type { AgentEvent, AgentMessage, ThinkingLevel } from '@mariozechner/pi-agent-core';
 import { MessageBusShutdownError, type MessageBus, type InboundMessage } from '../bus/index.js';
 import type { Config, AgentDefaults } from '../config/schema.js';
 import type { ChannelManager } from '../channels/manager.js';
@@ -43,6 +43,10 @@ export interface AgentServiceConfig {
   maxRequestsPerTurn?: number;
   maxToolFailuresPerTurn?: number;
   maxTaskDurationMs?: number;
+  // Thinking configuration
+  thinkingLevel?: ThinkingLevel;
+  reasoningLevel?: 'off' | 'on' | 'stream';
+  verboseLevel?: 'off' | 'on' | 'full';
 }
 
 export interface AgentContext {
@@ -148,6 +152,9 @@ export class AgentService {
       extensionRegistry: config.extensionRegistry,
       bus,
       getCurrentContext: () => this.sessionContextManager.getContext(),
+      thinkingLevel: config.thinkingLevel,
+      reasoningLevel: config.reasoningLevel,
+      verboseLevel: config.verboseLevel,
     });
 
     this.agentEventHandler = new AgentEventHandler({
@@ -383,6 +390,214 @@ export class AgentService {
     };
   }
 
+  async *processDirectStreaming(
+    content: string,
+    sessionKey = 'cli:direct',
+    attachments?: Array<{
+      type: string;
+      mimeType?: string;
+      data?: string;
+      name?: string;
+      size?: number;
+    }>,
+    thinking?: string,
+  ): AsyncGenerator<{ type: string; [key: string]: unknown }, void, unknown> {
+    const parts = sessionKey.split(':');
+    const channel = parts[0] || 'cli';
+    const chatId = parts.slice(1).join(':') || 'direct';
+
+    const context: SessionContext = {
+      sessionKey,
+      channel,
+      chatId,
+      senderId: '',
+      isGroup: false,
+    };
+
+    this.contextMiddleware.onRequest({
+      sessionKey,
+      userId: context.senderId,
+      channel,
+      chatId,
+    });
+
+    this.sessionContextManager.setContext(context);
+    this.feedbackCoordinator.setContext(context);
+    this.setupSessionEventHandling(sessionKey);
+
+    const eventQueue: Array<{ type: string; [key: string]: unknown }> = [];
+    let resolveWaiting: (() => void) | null = null;
+    let agentDone = false;
+
+    // Track last sent content for delta calculation (增量推送优化)
+    let lastSentContent = '';
+
+    const pushEvent = (event: { type: string; [key: string]: unknown }) => {
+      eventQueue.push(event);
+      if (resolveWaiting) {
+        resolveWaiting();
+        resolveWaiting = null;
+      }
+    };
+
+    const agent = this.agentManager.getOrCreateAgent(sessionKey);
+    const unsubscribeStreaming = agent.subscribe((event: AgentEvent) => {
+      this.agentEventHandler.handle(event, context);
+
+      switch (event.type) {
+        case 'tool_execution_start': {
+          const toolEvent = event as Extract<AgentEvent, { type: 'tool_execution_start' }>;
+          pushEvent({
+            type: 'tool_start',
+            toolName: toolEvent.toolName,
+            args: toolEvent.args,
+          });
+          break;
+        }
+        case 'tool_execution_end': {
+          const toolEvent = event as Extract<AgentEvent, { type: 'tool_execution_end' }>;
+          pushEvent({
+            type: 'tool_end',
+            toolName: toolEvent.toolName,
+            isError: toolEvent.isError,
+            result: typeof toolEvent.result === 'string'
+              ? toolEvent.result.slice(0, 500)
+              : undefined,
+          });
+          break;
+        }
+        case 'message_update': {
+          const msgEvent = event as any;
+          if (msgEvent.message?.role === 'assistant') {
+            const msgContent = msgEvent.message.content;
+            const fullText = Array.isArray(msgContent)
+              ? extractTextContent(msgContent as Array<{ type: string; text?: string }>)
+              : String(msgContent);
+
+            // 计算增量：只推送新增加的内容
+            if (fullText.length > lastSentContent.length) {
+              const delta = fullText.slice(lastSentContent.length);
+              if (delta) {
+                pushEvent({ type: 'token', content: delta });
+                lastSentContent = fullText;
+              }
+            } else if (fullText.length < lastSentContent.length) {
+              // 内容被重置（比如新消息），推送完整内容
+              pushEvent({ type: 'token', content: fullText });
+              lastSentContent = fullText;
+            }
+          }
+          break;
+        }
+        case 'message_start': {
+          const msgEvent = event as Extract<AgentEvent, { type: 'message_start' }>;
+          if (msgEvent.message?.role === 'assistant') {
+            // 重置增量追踪
+            lastSentContent = '';
+            pushEvent({ type: 'thinking', status: 'started' });
+          }
+          break;
+        }
+        case 'message_end': {
+          pushEvent({ type: 'message_end' });
+          break;
+        }
+        case 'agent_start': {
+          pushEvent({ type: 'progress', stage: 'thinking', message: '🤔 Thinking...' });
+          break;
+        }
+        case 'agent_end': {
+          pushEvent({ type: 'progress', stage: 'idle', message: 'Done' });
+          break;
+        }
+        default:
+          break;
+      }
+    });
+
+    try {
+      const messages = await this.sessionStore.load(sessionKey);
+      agent.replaceMessages(messages);
+
+      if (thinking) {
+        this.agentManager.setThinkingLevel(sessionKey, thinking as ThinkingLevel);
+      }
+
+      const messageContent: Array<
+        { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
+      > = [];
+
+      if (content.trim()) {
+        messageContent.push({ type: 'text', text: content });
+      }
+
+      if (attachments && attachments.length > 0) {
+        for (const att of attachments) {
+          if (att.type === 'image' || att.mimeType?.startsWith('image/')) {
+            messageContent.push({
+              type: 'image',
+              data: att.data || '',
+              mimeType: att.mimeType || 'image/png',
+            });
+          } else {
+            const fileInfo = `[File: ${att.name || 'unknown'} (${att.mimeType || 'unknown type'}, ${att.size || 0} bytes)]`;
+            messageContent.push({ type: 'text', text: fileInfo });
+          }
+        }
+      }
+
+      const agentPromise = (async () => {
+        await agent.prompt({
+          role: 'user',
+          content: messageContent,
+          timestamp: Date.now(),
+        });
+        await agent.waitForIdle();
+      })();
+
+      agentPromise
+        .then(() => {
+          agentDone = true;
+          pushEvent({ type: '__done__' });
+        })
+        .catch((err) => {
+          agentDone = true;
+          pushEvent({ type: 'error', content: err instanceof Error ? err.message : String(err) });
+          pushEvent({ type: '__done__' });
+        });
+
+      while (true) {
+        if (eventQueue.length > 0) {
+          const event = eventQueue.shift()!;
+          if (event.type === '__done__') break;
+          yield event;
+        } else if (agentDone) {
+          break;
+        } else {
+          await new Promise<void>((resolve) => {
+            resolveWaiting = resolve;
+          });
+        }
+      }
+
+      while (eventQueue.length > 0) {
+        const event = eventQueue.shift()!;
+        if (event.type === '__done__') continue;
+        yield event;
+      }
+
+      const finalMessages = this.agentManager.getMessages(sessionKey);
+      if (finalMessages) {
+        await this.sessionStore.save(sessionKey, finalMessages);
+      }
+    } finally {
+      unsubscribeStreaming();
+      this.sessionContextManager.clearContext();
+      this.feedbackCoordinator.clearContext();
+      this.contextMiddleware.onResponse();
+    }
+  }
+
   async processDirect(
     content: string,
     sessionKey = 'cli:direct',
@@ -392,7 +607,8 @@ export class AgentService {
       data?: string;
       name?: string;
       size?: number;
-    }>
+    }>,
+    thinking?: string,
   ): Promise<string> {
     const parts = sessionKey.split(':');
     const channel = parts[0] || 'cli';
@@ -426,6 +642,11 @@ export class AgentService {
 
       const messages = await this.sessionStore.load(sessionKey);
       agent.replaceMessages(messages);
+
+      // Set thinking level if provided
+      if (thinking) {
+        this.agentManager.setThinkingLevel(sessionKey, thinking as ThinkingLevel);
+      }
 
       const messageContent: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
 

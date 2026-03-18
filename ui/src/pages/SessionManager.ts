@@ -427,7 +427,7 @@ export class SessionManager extends LitElement {
         ${filters.map(f => html`
           <button
             class="filter-btn ${this._statusFilter === f.key ? 'filter-btn--active' : ''}"
-            @click=${() => this._handleStatusFilter(f.key as typeof this._statusFilter)}
+            @click=${() => this._handleStatusFilter(f.key)}
           >
             ${getIcon(f.icon)}
             ${f.label}

@@ -669,7 +669,7 @@ export class ModelEditDialog extends LitElement {
   }
 
   private _renderCompatTab() {
-    const compat = (this._formData.compat || {}) as Record<string, unknown>;
+    const compat = (this._formData.compat || {});
     
     return html`
       <div class="form-grid">

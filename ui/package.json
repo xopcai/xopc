@@ -5,16 +5,22 @@
   "version": "0.1.0",
   "scripts": {
     "dev": "vite",
+    "dev:host": "vite --host",
     "build": "npm run build:lib && npm run build:app",
     "build:lib": "vite build --mode lib",
     "build:app": "vite build --mode app",
     "preview": "vite preview",
     "lint": "eslint",
     "lint:fix": "eslint --fix",
+    "lint:check": "eslint --max-warnings 0",
     "type-check": "tsc --noEmit",
+    "type-check:watch": "tsc --watch",
     "test": "vitest",
+    "test:run": "vitest --run",
+    "test:watch": "vitest --watch",
     "test:coverage": "vitest --coverage",
-    "test:ui": "vitest --ui"
+    "test:ui": "vitest --ui",
+    "clean": "rm -rf dist lib node_modules/.vite"
   },
   "dependencies": {
     "@lit-labs/virtualizer": "^2.1.1",

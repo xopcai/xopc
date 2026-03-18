@@ -197,24 +197,53 @@ export class MessageService {
 
         case 'token':
           if (parsed.content) {
-            store.getState().appendStreamingContent(parsed.content);
+            // Append mode (backend now sends delta/incremental text)
+            const current = store.getState().message.streaming.content || '';
+            store.getState().setStreamingContent(current + parsed.content);
           }
           break;
 
-        case 'error':
+        case 'thinking':
+          // When status is 'started', reset streaming content for new message
+          if (parsed.status === 'started') {
+            store.getState().setStreamingContent('');
+          }
+          // Thinking events - handled by UI components
+          break;
+
+        case 'thinking_end':
+          // Thinking end - handled by UI components
+          break;
+
+        case 'tool_start':
+          // Tool execution start - handled by UI components
+          break;
+
+        case 'tool_end':
+          // Tool execution end - handled by UI components
+          break;
+
+        case 'message_end':
+          // Message end - handled by result event
+          break;
+
+        case 'progress':
+          // Progress updates - handled by UI components
+          break;
+
+        case 'error': {
           const errorMsg = parsed.content || parsed.error?.message || 'Message failed';
           store.getState().setMessageError(errorMsg);
           store.getState().setStreamingActive(false);
           break;
+        }
 
         case 'result':
           store.getState().finalizeStreaming();
           break;
 
         default:
-          if (parsed.content) {
-            store.getState().appendStreamingContent(parsed.content);
-          }
+          // Unknown event - ignore to prevent incorrect content append
           break;
       }
     } catch {

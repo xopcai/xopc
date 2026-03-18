@@ -10,7 +10,7 @@ import './components/MessageList';
 import './components/StreamingMessageContainer';
 import './components/AttachmentTile';
 import './dialogs/AttachmentOverlay';
-import './gateway-chat';
+import './chat/ChatPanel.js';
 import './app';
 import { i18n } from './utils/i18n';
 import type { Attachment } from './utils/attachment-utils';
@@ -42,20 +42,17 @@ export { StreamingMessageContainer } from './components/StreamingMessageContaine
 // Dialogs
 export { XopcbotSettings, type SettingsSection, type SettingsField, type SettingsValue } from './dialogs/SettingsDialog';
 
-// Gateway Chat - with type-safe events
-export { 
-  XopcbotGatewayChat
-} from './gateway-chat';
-
-export type { 
+// Chat Panel
+export { ChatPanel } from './chat/index.js';
+export type {
   GatewayClientConfig,
   ChatPayload,
   ErrorPayload,
   Message,
   ProgressState,
   ConnectionState,
-  SessionInfo
-} from './gateway-types';
+  SessionInfo,
+} from './chat/index.js';
 
 // App
 export { XopcbotApp, type Tab, type AppSettings } from './app';

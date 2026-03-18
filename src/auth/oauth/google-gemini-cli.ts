@@ -4,16 +4,15 @@
  * OAuth authentication for Google Gemini CLI (Cloud Code Assist).
  */
 
-import type { OAuthCredentials, OAuthProviderInterface, OAuthLoginCallbacks } from './types.js';
+import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from './types.js';
 
-// Use dynamic import to avoid type issues
 export const googleGeminiCliOAuthProvider: OAuthProviderInterface = {
 	id: 'google-gemini-cli',
-	name: 'Google Gemini CLI',
+	name: 'Google Cloud Code Assist (Gemini CLI)',
 	usesCallbackServer: true,
 
 	async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
-		const { loginGeminiCli } = await import('@mariozechner/pi-ai');
+		const { loginGeminiCli } = await import('@mariozechner/pi-ai/oauth');
 		const creds = await loginGeminiCli(
 			(info: { url: string; instructions?: string }) => callbacks.onAuth(info),
 			(msg: string) => callbacks.onProgress?.(msg),
@@ -28,11 +27,13 @@ export const googleGeminiCliOAuthProvider: OAuthProviderInterface = {
 	},
 
 	async refreshToken(credentials: OAuthCredentials): Promise<OAuthCredentials> {
-		const { refreshOAuthToken } = await import('@mariozechner/pi-ai');
-		return refreshOAuthToken('google-gemini-cli', credentials);
+		const { refreshGoogleCloudToken } = await import('@mariozechner/pi-ai/oauth');
+		const creds = credentials as OAuthCredentials & { projectId?: string };
+		return refreshGoogleCloudToken(creds.refresh, creds.projectId || '');
 	},
 
 	getApiKey(credentials: OAuthCredentials): string {
-		return credentials.access;
+		const creds = credentials as OAuthCredentials & { projectId?: string };
+		return JSON.stringify({ token: creds.access, projectId: creds.projectId });
 	},
 };

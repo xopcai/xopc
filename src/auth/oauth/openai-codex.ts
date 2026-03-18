@@ -4,7 +4,7 @@
  * OAuth authentication for OpenAI Codex (ChatGPT Plus/Pro Subscription).
  */
 
-import type { OAuthCredentials, OAuthProviderInterface, OAuthLoginCallbacks } from './types.js';
+import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from './types.js';
 
 export const openaiCodexOAuthProvider: OAuthProviderInterface = {
 	id: 'openai-codex',
@@ -12,7 +12,7 @@ export const openaiCodexOAuthProvider: OAuthProviderInterface = {
 	usesCallbackServer: true,
 
 	async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
-		const { loginOpenAICodex } = await import('@mariozechner/pi-ai');
+		const { loginOpenAICodex } = await import('@mariozechner/pi-ai/oauth');
 		const creds = await loginOpenAICodex({
 			onAuth: (info: { url: string; instructions?: string }) => callbacks.onAuth(info),
 			onPrompt: async (prompt) => callbacks.onPrompt(prompt),
@@ -29,8 +29,8 @@ export const openaiCodexOAuthProvider: OAuthProviderInterface = {
 	},
 
 	async refreshToken(credentials: OAuthCredentials): Promise<OAuthCredentials> {
-		const { refreshOAuthToken } = await import('@mariozechner/pi-ai');
-		return refreshOAuthToken('openai-codex', credentials);
+		const { refreshOpenAICodexToken } = await import('@mariozechner/pi-ai/oauth');
+		return refreshOpenAICodexToken(credentials.refresh);
 	},
 
 	getApiKey(credentials: OAuthCredentials): string {

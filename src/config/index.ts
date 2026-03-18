@@ -9,6 +9,24 @@ export * from './integration.js';
 export * from './models-json.js';
 export * from './resolve-config-value.js';
 
+// Re-export thinking types
+export type {
+  ThinkLevel,
+  ReasoningLevel,
+  VerboseLevel,
+  ElevatedMode,
+  SessionAgentConfig,
+} from '../types/thinking.js';
+export {
+  normalizeThinkLevel,
+  normalizeReasoningLevel,
+  normalizeVerboseLevel,
+  normalizeElevatedMode,
+  listThinkingLevels,
+  formatThinkingLevels,
+  thinkLevelToNumber,
+} from '../types/thinking.js';
+
 // Re-export types from types.models (avoid conflict with schema.js)
 export type {
   ModelApi,

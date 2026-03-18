@@ -5,6 +5,7 @@ import type { Message, MessageContent } from './types';
 import './AttachmentRenderer';
 import './UsageBadge';
 import '../MarkdownRenderer';
+import '../ThinkingBlock';
 
 @customElement('message-bubble')
 export class MessageBubble extends LitElement {
@@ -38,6 +39,7 @@ export class MessageBubble extends LitElement {
           </div>
 
           <div class="message-bubble ${isUser ? 'bg-primary-light' : 'bg-secondary'}">
+            ${this._renderThinking()}
             ${this._renderContent(this.message.content)}
             ${this.message.attachments?.length ? html`
               <attachment-renderer .attachments=${this.message.attachments}></attachment-renderer>
@@ -49,6 +51,20 @@ export class MessageBubble extends LitElement {
           ` : ''}
         </div>
       </div>
+    `;
+  }
+
+  private _renderThinking(): unknown {
+    const thinking = this.message.thinking;
+    if (!thinking && !this.message.thinkingStreaming) {
+      return null;
+    }
+
+    return html`
+      <thinking-block
+        .content=${thinking || ''}
+        .isStreaming=${this.message.thinkingStreaming || false}
+      ></thinking-block>
     `;
   }
 
