@@ -6,6 +6,9 @@ import { Paperclip, Send, Square, X, FileText } from 'lucide';
 import { loadAttachment, formatFileSize, type Attachment } from '../utils/attachment-utils';
 import { i18n } from '../utils/i18n';
 
+// Thinking level type
+export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'adaptive';
+
 // Convert lucide icon array format to SVG string
 function iconToSvg(iconData: unknown, className = ''): string {
   if (!iconData || !Array.isArray(iconData)) return '';
@@ -43,11 +46,13 @@ export class MessageEditor extends LitElement {
   @property({ type: Boolean }) isStreaming = false;
   @property({ type: Boolean }) showAttachmentButton = true;
   @property({ type: Boolean }) showModelSelector = true;
-  @property({ attribute: false }) currentModel?: { id: string; provider: string };
-
-  @property({ attribute: false }) onSend?: (input: string, attachments: Attachment[]) => void;
+  @property({ type: Boolean }) showThinkingSelector = true;
+  @property({ type: String }) thinkingLevel: ThinkingLevel = 'medium';
+  
+  @property({ attribute: false }) onSend?: (input: string, attachments: Attachment[], thinkingLevel?: ThinkingLevel) => void;
   @property({ attribute: false }) onAbort?: () => void;
   @property({ attribute: false }) onModelSelect?: () => void;
+  @property({ attribute: false }) onThinkingChange?: (level: ThinkingLevel) => void;
 
   @state() private _isComposing = false;
   @state() private _isDragging = false;
@@ -114,6 +119,8 @@ export class MessageEditor extends LitElement {
         <div class="input-row ${this._isDragging ? 'dragging' : ''}">
           ${this.showAttachmentButton ? this._renderAttachmentButton() : ''}
           
+          ${this._renderThinkingSelector()}
+
           <textarea
             ${ref(this.textareaRef)}
             class="text-input"
@@ -176,6 +183,46 @@ export class MessageEditor extends LitElement {
     `;
   }
 
+  private _renderThinkingSelector(): unknown {
+    // Show thinking selector if enabled
+    if (!this.showThinkingSelector) {
+      return null;
+    }
+
+    const levelLabels: Record<ThinkingLevel, string> = {
+      off: '💭',
+      minimal: '🧠',
+      low: '💡',
+      medium: '🧠',
+      high: '🧠',
+      xhigh: '🧠',
+      adaptive: '✨',
+    };
+
+    return html`
+      <div class="thinking-pill" title=${i18n('Thinking level') + ': ' + this.thinkingLevel}>
+        <span class="thinking-icon">${levelLabels[this.thinkingLevel] || '🧠'}</span>
+        <select 
+          class="thinking-select-hidden"
+          .value=${this.thinkingLevel}
+          @change=${(e: Event) => {
+            const level = (e.target as HTMLSelectElement).value as ThinkingLevel;
+            this.thinkingLevel = level;
+            this.onThinkingChange?.(level);
+          }}
+        >
+          <option value="off">${i18n('Off')}</option>
+          <option value="minimal">${i18n('Minimal')}</option>
+          <option value="low">${i18n('Low')}</option>
+          <option value="medium">${i18n('Medium')}</option>
+          <option value="high">${i18n('High')}</option>
+          <option value="xhigh">${i18n('X-High')}</option>
+          <option value="adaptive">${i18n('Adaptive')}</option>
+        </select>
+      </div>
+    `;
+  }
+
   private _renderSendButton(): unknown {
     const canSend = this.value.trim() || this.attachments.length > 0;
 
@@ -210,11 +257,14 @@ export class MessageEditor extends LitElement {
 
   private _triggerFileSelect(type: 'image' | 'document' | 'all'): void {
     // Try ref first
-    let input: HTMLInputElement | null | undefined = this.fileInputRef.value;
+    let input: HTMLInputElement | null = this.fileInputRef.value ?? null;
 
     // Fallback: query selector since we're using light DOM
     if (!input) {
-      input = this.querySelector('input[type="file"]') as HTMLInputElement | null;
+      const fallback = this.querySelector('input[type="file"]');
+      if (fallback instanceof HTMLInputElement) {
+        input = fallback;
+      }
     }
 
     if (!input) {
@@ -281,7 +331,8 @@ export class MessageEditor extends LitElement {
     
     this._isSending = true;
     const attachments = [...this.attachments];
-    this.onSend?.(this.value, attachments);
+    const thinkingLevel = this.thinkingLevel;
+    this.onSend?.(this.value, attachments, thinkingLevel);
     this.value = '';
     this.attachments = [];
     

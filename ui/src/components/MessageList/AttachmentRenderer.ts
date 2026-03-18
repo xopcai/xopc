@@ -3,8 +3,6 @@ import { customElement, property } from 'lit/decorators.js';
 import '../AttachmentTile';
 import { AttachmentOverlay } from '../../dialogs/AttachmentOverlay';
 import type { Attachment } from '../../utils/attachment-utils';
-import { formatFileSize } from '../../utils/attachment-utils';
-import { t } from '../../utils/i18n';
 
 @customElement('attachment-renderer')
 export class AttachmentRenderer extends LitElement {

@@ -13,12 +13,14 @@ describe('SessionService', () => {
   });
 
   it('should load sessions', async () => {
+    // Session keys use format "channel:uniqueId" e.g. "gateway:1"
     const mockResponse = {
       items: [
         { key: 'gateway:1', name: 'Session 1', updatedAt: '2024-01-01', messageCount: 5 },
-        { key: 'other:1', name: 'Other', updatedAt: '2024-01-02', messageCount: 3 },
+        { key: 'telegram:123', name: 'Telegram', updatedAt: '2024-01-02', messageCount: 3 },
+        { key: 'feishu:456', name: 'Feishu', updatedAt: '2024-01-03', messageCount: 1 },
       ],
-      total: 2,
+      total: 3,
     };
 
     vi.mocked(fetch).mockResolvedValueOnce({
@@ -68,7 +70,16 @@ describe('SessionService', () => {
   });
 
   it('should create new session', async () => {
-    const mockResponse = {
+    // Mock first call: loadSessions() to check for empty sessions
+    const mockListResponse = {
+      items: [
+        { key: 'gateway:existing', name: 'Existing', updatedAt: '2024-01-01', messageCount: 3 },
+      ],
+      total: 1,
+    };
+
+    // Mock second call: create new session
+    const mockCreateResponse = {
       session: {
         key: 'gateway:new',
         name: 'New Session',
@@ -76,11 +87,17 @@ describe('SessionService', () => {
       },
     };
 
-    vi.mocked(fetch).mockResolvedValueOnce({
-      ok: true,
-      status: 200,
-      json: async () => mockResponse,
-    } as Response);
+    vi.mocked(fetch)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => mockListResponse,
+      } as Response)
+      .mockResolvedValueOnce({
+        ok: true,
+        status: 200,
+        json: async () => mockCreateResponse,
+      } as Response);
 
     const service = new SessionService('test-token');
     const session = await service.createSession('gateway');

@@ -4,7 +4,7 @@
  * OAuth authentication for Google Antigravity (Gemini 3, Claude, GPT-OSS).
  */
 
-import type { OAuthCredentials, OAuthProviderInterface, OAuthLoginCallbacks } from './types.js';
+import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from './types.js';
 
 export const googleAntigravityOAuthProvider: OAuthProviderInterface = {
 	id: 'google-antigravity',
@@ -12,7 +12,7 @@ export const googleAntigravityOAuthProvider: OAuthProviderInterface = {
 	usesCallbackServer: true,
 
 	async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
-		const { loginAntigravity } = await import('@mariozechner/pi-ai');
+		const { loginAntigravity } = await import('@mariozechner/pi-ai/oauth');
 		const creds = await loginAntigravity(
 			(info: { url: string; instructions?: string }) => callbacks.onAuth(info),
 			(msg: string) => callbacks.onProgress?.(msg),
@@ -27,11 +27,13 @@ export const googleAntigravityOAuthProvider: OAuthProviderInterface = {
 	},
 
 	async refreshToken(credentials: OAuthCredentials): Promise<OAuthCredentials> {
-		const { refreshOAuthToken } = await import('@mariozechner/pi-ai');
-		return refreshOAuthToken('google-antigravity', credentials);
+		const { refreshAntigravityToken } = await import('@mariozechner/pi-ai/oauth');
+		const creds = credentials as OAuthCredentials & { projectId?: string };
+		return refreshAntigravityToken(creds.refresh, creds.projectId || '');
 	},
 
 	getApiKey(credentials: OAuthCredentials): string {
-		return credentials.access;
+		const creds = credentials as OAuthCredentials & { projectId?: string };
+		return JSON.stringify({ token: creds.access, projectId: creds.projectId });
 	},
 };

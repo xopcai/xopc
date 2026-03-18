@@ -5,15 +5,16 @@
  * Uses device code flow for authentication.
  */
 
-import type { OAuthCredentials, OAuthProviderInterface, OAuthLoginCallbacks } from './types.js';
+import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from './types.js';
 
+// Re-export from pi-ai/oauth
 export const githubCopilotOAuthProvider: OAuthProviderInterface = {
 	id: 'github-copilot',
 	name: 'GitHub Copilot',
 	usesCallbackServer: false,
 
 	async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
-		const { loginGitHubCopilot } = await import('@mariozechner/pi-ai');
+		const { loginGitHubCopilot } = await import('@mariozechner/pi-ai/oauth');
 		const creds = await loginGitHubCopilot({
 			onAuth: (url: string, instructions?: string) => {
 				callbacks.onAuth({ url, instructions });

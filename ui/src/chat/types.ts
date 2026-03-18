@@ -1,5 +1,3 @@
-// ========== Types for Gateway Chat ==========
-
 export type ChatPayload = {
   type?: 'status' | 'token' | 'error';
   content?: string;
@@ -29,6 +27,9 @@ export interface Message {
   content: Array<{ type: string; text?: string }>;
   attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>;
   timestamp: number;
+  thinking?: string;
+  thinkingStreaming?: boolean;
+  usage?: { inputTokens?: number; outputTokens?: number };
 }
 
 export interface ProgressState {
@@ -46,4 +47,11 @@ export interface SessionInfo {
   name?: string;
   updatedAt: string;
   messageCount?: number;
+}
+
+export interface ToolCall {
+  toolName: string;
+  args?: unknown;
+  status: 'running' | 'done' | 'error';
+  result?: string;
 }

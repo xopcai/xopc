@@ -72,6 +72,24 @@ html.dark .glass {
   word-wrap: break-word;
 }
 
+/* Thinking Block */
+.thinking-block {
+  border-left: 2px solid var(--border);
+  padding-left: 0.5rem;
+  margin: 0.5rem 0;
+}
+
+.thinking-block .thinking-header {
+  user-select: none;
+}
+
+.thinking-block .thinking-content {
+  background: var(--bg-secondary);
+  border-radius: var(--radius);
+  padding: 0.5rem;
+  margin-top: 0.25rem;
+}
+
 /* User message - gradient accent */
 .message-bubble.user {
   background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-hover) 100%);
@@ -102,6 +120,7 @@ html.dark .glass {
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
   box-shadow: var(--shadow-sm);
+  max-width: 85%;
 }
 
 /* Message item layout */
@@ -545,6 +564,45 @@ html.dark .glass {
   align-items: flex-end;
   gap: 0.5rem;
   padding: 0.5rem 1rem;
+}
+
+.thinking-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 9999px;
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.thinking-pill:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-hover);
+}
+
+.thinking-icon {
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.thinking-select-hidden {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.75rem;
+  cursor: pointer;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  width: auto;
+}
+
+.thinking-select-hidden:focus {
+  outline: none;
 }
 
 .text-input {

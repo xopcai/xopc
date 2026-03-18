@@ -5,7 +5,7 @@
  * and concurrent processing across sessions.
  */
 
-import { Agent, type AgentMessage, type AgentEvent } from '@mariozechner/pi-agent-core';
+import { Agent, type AgentMessage, type AgentEvent, type ThinkingLevel } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
@@ -29,6 +29,10 @@ export interface AgentManagerConfig {
   extensionRegistry?: ExtensionRegistry;
   bus: MessageBus;
   getCurrentContext: () => SessionContext | null;
+  // Thinking configuration
+  thinkingLevel?: ThinkingLevel;
+  reasoningLevel?: 'off' | 'on' | 'stream';
+  verboseLevel?: 'off' | 'on' | 'full';
 }
 
 export interface AgentInstance {
@@ -134,6 +138,17 @@ export class AgentManager {
   }
 
   /**
+   * Set thinking level for a session's agent
+   */
+  setThinkingLevel(sessionKey: string, level: ThinkingLevel): void {
+    const instance = this.agents.get(sessionKey);
+    if (instance) {
+      instance.agent.setThinkingLevel(level);
+      log.debug({ sessionKey, thinkingLevel: level }, 'Set thinking level for agent');
+    }
+  }
+
+  /**
    * Dispose all agents
    */
   dispose(): void {
@@ -155,6 +170,7 @@ export class AgentManager {
       initialState: {
         systemPrompt: this.systemPromptBuilder.build(this.bootstrapFiles),
         model,
+        thinkingLevel: this.config.thinkingLevel || 'medium',
         tools,
         messages: [],
       },

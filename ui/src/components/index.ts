@@ -10,6 +10,13 @@ export { UsageBadge } from './MessageList/UsageBadge';
 // Markdown renderer
 export { MarkdownRenderer } from './MarkdownRenderer';
 
+// Thinking block component
+export { ThinkingBlock } from './ThinkingBlock';
+
+// Message editor component
+export { MessageEditor } from './MessageEditor';
+export type { ThinkingLevel } from './MessageEditor';
+
 // Session management components
 export { SessionCard } from './SessionCard';
 export { SessionList } from './SessionList';

@@ -19,10 +19,11 @@ import { getSessionDisplayName } from './session-key.js';
 import type { Config } from '../config/schema.js';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import type { MessageBus } from '../bus/index.js';
-import type { SessionStore } from '../session/index.js';
+import type { SessionStore, SessionConfigStore } from '../session/index.js';
 import { createLogger } from '../utils/logger.js';
 import { getRoutingInfo } from './session-key.js';
 import { saveConfig } from '../config/loader.js';
+import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../types/thinking.js';
 
 const log = createLogger('CommandContext');
 
@@ -36,6 +37,7 @@ export interface CommandContextDeps {
   config: Config;
   bus: MessageBus;
   sessionStore: SessionStore;
+  sessionConfigStore?: SessionConfigStore;
   // Callbacks for platform-specific operations
   replyHandler: (text: string, options?: ReplyOptions) => Promise<void>;
   componentHandler?: (component: UIComponent) => Promise<void>;
@@ -248,6 +250,90 @@ export class CommandContextImpl implements CommandContext {
   }
 
   // === Private Helpers ===
+
+  // === Thinking Configuration ===
+
+  /**
+   * Get the session config store (if available)
+   */
+  getSessionConfigStore(): SessionConfigStore | undefined {
+    return this.deps.sessionConfigStore;
+  }
+
+  /**
+   * Get current thinking level (session override or default)
+   */
+  async getThinkingLevel(): Promise<ThinkLevel | undefined> {
+    const configStore = this.deps.sessionConfigStore;
+    if (configStore) {
+      const sessionConfig = await configStore.get(this.sessionKey);
+      if (sessionConfig?.thinkingLevel) {
+        return sessionConfig.thinkingLevel;
+      }
+    }
+    // Fallback to agent default
+    return this.config.agents?.defaults?.thinkingDefault;
+  }
+
+  /**
+   * Set thinking level for this session
+   */
+  async setThinkingLevel(level: ThinkLevel): Promise<void> {
+    const configStore = this.deps.sessionConfigStore;
+    if (configStore) {
+      await configStore.update(this.sessionKey, { thinkingLevel: level });
+    }
+  }
+
+  /**
+   * Get current reasoning level (session override or default)
+   */
+  async getReasoningLevel(): Promise<ReasoningLevel | undefined> {
+    const configStore = this.deps.sessionConfigStore;
+    if (configStore) {
+      const sessionConfig = await configStore.get(this.sessionKey);
+      if (sessionConfig?.reasoningLevel) {
+        return sessionConfig.reasoningLevel;
+      }
+    }
+    // Fallback to agent default
+    return this.config.agents?.defaults?.reasoningDefault;
+  }
+
+  /**
+   * Set reasoning level for this session
+   */
+  async setReasoningLevel(level: ReasoningLevel): Promise<void> {
+    const configStore = this.deps.sessionConfigStore;
+    if (configStore) {
+      await configStore.update(this.sessionKey, { reasoningLevel: level });
+    }
+  }
+
+  /**
+   * Get current verbose level (session override or default)
+   */
+  async getVerboseLevel(): Promise<VerboseLevel | undefined> {
+    const configStore = this.deps.sessionConfigStore;
+    if (configStore) {
+      const sessionConfig = await configStore.get(this.sessionKey);
+      if (sessionConfig?.verboseLevel) {
+        return sessionConfig.verboseLevel;
+      }
+    }
+    // Fallback to agent default
+    return this.config.agents?.defaults?.verboseDefault;
+  }
+
+  /**
+   * Set verbose level for this session
+   */
+  async setVerboseLevel(level: VerboseLevel): Promise<void> {
+    const configStore = this.deps.sessionConfigStore;
+    if (configStore) {
+      await configStore.update(this.sessionKey, { verboseLevel: level });
+    }
+  }
 
   private renderComponentAsText(component: UIComponent): string {
     switch (component.type) {

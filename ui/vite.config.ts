@@ -26,6 +26,7 @@ export default defineConfig(({ mode }) => {
         },
         sourcemap: true,
         minify: 'terser',
+        chunkSizeWarningLimit: 500,
       },
       css: {
         postcss: true,
@@ -39,12 +40,22 @@ export default defineConfig(({ mode }) => {
     build: {
       outDir: '../dist/gateway/static/root',
       emptyOutDir: true,
+      sourcemap: true,
       rollupOptions: {
         input: {
           main: 'index.html',
         },
+        output: {
+          manualChunks: {
+            // Vendor chunks for better caching
+            'vendor-lit': ['lit', '@lit-labs/virtualizer'],
+            'vendor-pdf': ['pdfjs-dist'],
+            'vendor-xlsx': ['xlsx'],
+            'vendor-utils': ['jszip', 'docx-preview'],
+          },
+        },
       },
-      sourcemap: true,
+      chunkSizeWarningLimit: 600,
     },
     server: {
       port: 3000,

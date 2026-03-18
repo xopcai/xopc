@@ -30,6 +30,10 @@ export const AgentDefaultsSchema = z.object({
   // Reliability settings
   maxRequestsPerTurn: z.number().min(10).max(200).default(50),
   maxToolFailuresPerTurn: z.number().min(1).max(20).default(3),
+  // Thinking ability settings
+  thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive']).optional(),
+  reasoningDefault: z.enum(['off', 'on', 'stream']).optional(),
+  verboseDefault: z.enum(['off', 'on', 'full']).optional(),
   compaction: z.object({
     enabled: z.boolean().default(true),
     mode: z.enum(['default', 'safeguard']).default('default'),
@@ -478,6 +482,9 @@ export const ConfigSchema = z.object({
       maxToolIterations: 20,
       maxRequestsPerTurn: 50,
       maxToolFailuresPerTurn: 3,
+      thinkingDefault: 'medium',
+      reasoningDefault: 'off',
+      verboseDefault: 'off',
       compaction: {
         enabled: true,
         mode: 'default',

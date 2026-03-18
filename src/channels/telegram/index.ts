@@ -9,3 +9,4 @@ export { buildSendOptions, parseDataUrl, resolveMediaMethod, type TelegramSendPa
 export { createTelegramCommandHandler, type TelegramCommandHandlerDeps } from './command-handler.js';
 export { TelegramInlineKeyboards } from './inline-keyboards.js';
 export { startTelegramWebhook, validateWebhookSecret } from './webhook.js';
+export { createStatusReactionHandler, type StatusReactionHandler, type ThinkingStatus, type StatusReactionConfig, THINKING_REACTIONS } from './status-reactions.js';

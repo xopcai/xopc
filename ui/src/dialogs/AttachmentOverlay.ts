@@ -1,4 +1,4 @@
-import { LitElement, html, type TemplateResult } from 'lit';
+import { LitElement, html } from 'lit';
 import { customElement, state } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { Download, X } from 'lucide';

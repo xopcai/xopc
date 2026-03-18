@@ -18,6 +18,8 @@ export interface MessageContent {
   content?: unknown;
   is_error?: boolean;
   error?: boolean;
+  /** Thinking/reasoning content from the model */
+  thinking?: string;
 }
 
 export interface Message {
@@ -35,4 +37,8 @@ export interface Message {
     id: string;
     function: { name: string; arguments: string };
   }>;
+  /** Thinking content for the message (separate from content array) */
+  thinking?: string;
+  /** Whether thinking is still streaming */
+  thinkingStreaming?: boolean;
 }

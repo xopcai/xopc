@@ -10,6 +10,7 @@ import { registerSessionCommands } from './builtins/session.js';
 import { registerModelCommands } from './builtins/model.js';
 import { registerSystemCommands } from './builtins/system.js';
 import { registerTTSCommands } from './builtins/tts.js';
+import { registerThinkingCommands } from './builtins/thinking.js';
 
 // Types
 export type {
@@ -62,10 +63,7 @@ export { registerSessionCommands } from './builtins/session.js';
 export { registerModelCommands } from './builtins/model.js';
 export { registerSystemCommands } from './builtins/system.js';
 export { registerTTSCommands } from './builtins/tts.js';
-
-// Processor
-export { processMessage } from './processor.js';
-export type { CommandProcessorDeps } from './processor.js';
+export { registerThinkingCommands } from './builtins/thinking.js';
 
 /**
  * Initialize the command system with all built-in commands
@@ -75,4 +73,5 @@ export function initializeCommands(): void {
   registerModelCommands();
   registerSystemCommands();
   registerTTSCommands();
+  registerThinkingCommands();
 }

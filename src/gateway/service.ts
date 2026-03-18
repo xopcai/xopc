@@ -421,34 +421,36 @@ export class GatewayService {
       data?: string;
       name?: string;
       size?: number;
-    }>
+    }>,
+    thinking?: string,
   ): AsyncGenerator<{ type: string; content?: string; status?: string; runId?: string }, { status: string; summary: string }, unknown> {
     const runId = crypto.randomUUID();
 
     yield { type: 'status', status: 'accepted', runId };
 
     try {
-      // For 'gateway' channel (web UI), process through agent service
-      if (channel === 'gateway') {
+      // For 'webchat' channel (web UI), process through agent service
+      if (channel === 'webchat') {
         // Determine session key: if chatId is already a valid session key, use it directly
         // Otherwise, build a new session key from the chatId
         const parsedKey = parseSessionKey(chatId);
         const sessionKey = parsedKey ? chatId : buildSessionKey({
           agentId: 'main',
-          source: 'gateway',
+          source: 'webchat',
           accountId: 'default',
           peerKind: 'direct',
           peerId: chatId,
         });
         
-        yield { type: 'token', content: '\n' };
-        
         try {
-          // Process message through the LLM (with attachments if provided)
-          const response = await this.agentService.processDirect(message, sessionKey, attachments);
-          
-          yield { type: 'token', content: response };
-          
+          const eventStream = this.agentService.processDirectStreaming(
+            message, sessionKey, attachments, thinking
+          );
+
+          for await (const event of eventStream) {
+            yield event as { type: string; content?: string; status?: string; runId?: string };
+          }
+
           return { status: 'ok', summary: 'Message processed successfully' };
         } catch (error) {
           log.error({ error }, 'Agent processing failed');

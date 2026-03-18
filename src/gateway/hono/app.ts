@@ -206,6 +206,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           temperature: config.agents?.defaults?.temperature,
           maxToolIterations: config.agents?.defaults?.maxToolIterations,
           workspace: config.agents?.defaults?.workspace,
+          thinkingDefault: config.agents?.defaults?.thinkingDefault,
+          reasoningDefault: config.agents?.defaults?.reasoningDefault,
+          verboseDefault: config.agents?.defaults?.verboseDefault,
           compaction: config.agents?.defaults?.compaction,
           pruning: config.agents?.defaults?.pruning,
         },
@@ -271,7 +274,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     
     // Update agent defaults
     if (body.agents?.defaults) {
-      if (!config.agents) config.agents = { defaults: { workspace: '~/.xopcbot/workspace', model: 'anthropic/claude-sonnet-4-5', maxTokens: 8192, temperature: 0.7, maxToolIterations: 20, maxRequestsPerTurn: 50, maxToolFailuresPerTurn: 3 } };
+      if (!config.agents) config.agents = { defaults: { workspace: '~/.xopcbot/workspace', model: 'anthropic/claude-sonnet-4-5', maxTokens: 8192, temperature: 0.7, maxToolIterations: 20, maxRequestsPerTurn: 50, maxToolFailuresPerTurn: 3, thinkingDefault: 'medium', reasoningDefault: 'off', verboseDefault: 'off' } };
       if (!config.agents.defaults) config.agents.defaults = {} as any;
       
       if (body.agents.defaults.model !== undefined) {
@@ -288,6 +291,15 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       }
       if (body.agents.defaults.workspace !== undefined) {
         config.agents.defaults.workspace = body.agents.defaults.workspace;
+      }
+      if (body.agents.defaults.thinkingDefault !== undefined) {
+        config.agents.defaults.thinkingDefault = body.agents.defaults.thinkingDefault;
+      }
+      if (body.agents.defaults.reasoningDefault !== undefined) {
+        config.agents.defaults.reasoningDefault = body.agents.defaults.reasoningDefault;
+      }
+      if (body.agents.defaults.verboseDefault !== undefined) {
+        config.agents.defaults.verboseDefault = body.agents.defaults.verboseDefault;
       }
     }
     
@@ -774,7 +786,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // POST /api/sessions - Create new session (reuses empty sessions)
   authenticated.post('/api/sessions', async (c) => {
     const body = await c.req.json().catch(() => ({}));
-    const channel = body.channel || 'gateway';
+    const channel = body.channel || 'webchat';
     
     // If a specific chat_id is provided, use it (for advanced use cases)
     // Otherwise, try to find and reuse an existing empty session

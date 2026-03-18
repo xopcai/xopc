@@ -3,7 +3,6 @@ import { customElement, property } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { FileSpreadsheet, FileText, X } from 'lucide';
 import type { Attachment } from '../utils/attachment-utils';
-import { getFileIcon } from '../utils/attachment-utils';
 import { i18n } from '../utils/i18n';
 
 // Convert lucide icon array format to SVG string

@@ -18,6 +18,7 @@ interface AgentRequestBody {
   message: string;
   channel?: string;
   chatId?: string;
+  thinking?: string;
   attachments?: Array<{
     type: string;
     mimeType?: string;
@@ -63,11 +64,11 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
       }, 400);
     }
 
-    const { message, channel = 'gateway', chatId = 'default', attachments } = body;
+    const { message, channel = 'webchat', chatId = 'default', attachments, thinking } = body;
 
     const accept = c.req.header('Accept') || '';
     const wantSSE = accept.includes('text/event-stream');
-    const generator = service.runAgent(message, channel, chatId, attachments);
+    const generator = service.runAgent(message, channel, chatId, attachments, thinking);
 
     // --- Non-streaming fallback: collect everything, return JSON ---
     if (!wantSSE) {
