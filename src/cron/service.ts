@@ -59,7 +59,7 @@ export class CronService {
     this.agentService = deps.agentService;
     this.messageBus = deps.messageBus;
     this.executor.setDeps(deps);
-    log.info('CronService dependencies set');
+    log.debug('CronService dependencies set');
   }
 
   /**
@@ -72,7 +72,7 @@ export class CronService {
     await this.loadAllJobs();
 
     this.initialized = true;
-    log.info('CronService initialized');
+    log.debug('CronService initialized');
   }
 
   /**
@@ -398,7 +398,7 @@ export class CronService {
       }
     }
 
-    log.info({ count: this.tasks.size }, 'Jobs loaded');
+    log.debug({ count: this.tasks.size }, 'Jobs loaded');
   }
 
   /**

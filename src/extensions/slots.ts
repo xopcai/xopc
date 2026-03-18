@@ -141,7 +141,7 @@ const registeredSlotTypes = new Set<SlotKey>();
 export function registerSlotType(key: SlotKey): void {
   if (!registeredSlotTypes.has(key)) {
     registeredSlotTypes.add(key);
-    log.info(`Registered slot type: ${key}`);
+    log.debug(`Registered slot type: ${key}`);
   }
 }
 

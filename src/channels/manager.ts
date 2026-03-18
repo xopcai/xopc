@@ -40,7 +40,7 @@ export class ChannelManager {
       log.warn({ channel: plugin.id }, 'Channel plugin already registered, overwriting');
     }
     this.plugins.set(plugin.id, plugin);
-    log.info({ channel: plugin.id }, 'Registered channel plugin');
+    log.debug({ channel: plugin.id }, 'Registered channel plugin');
   }
   
   getPlugin(id: string): ChannelPlugin | undefined {
@@ -116,7 +116,7 @@ export class ChannelManager {
     
     await Promise.allSettled(startPromises);
     this.running = true;
-    log.info('All channel plugins started');
+    log.debug('All channel plugins started');
   }
   
   private async startPlugin(plugin: ChannelPlugin): Promise<void> {

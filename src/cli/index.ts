@@ -48,8 +48,19 @@ program.hook('postAction', async (thisCommand) => {
   // Get the actual subcommand being executed (not the root program name)
   const args = thisCommand.args;
   const subCommandName = args.length > 0 ? args[0] : thisCommand.name();
-  // Skip long-running commands (gateway foreground, agent interactive)
+
+  // Skip long-running commands (gateway foreground, agent interactive mode)
   if (LONG_RUNNING_COMMANDS.has(subCommandName)) {
+    // For agent command, only skip exit if interactive mode (-i) is used
+    if (subCommandName === 'agent') {
+      const hasInteractiveFlag = process.argv.includes('-i') || process.argv.includes('--interactive');
+      if (!hasInteractiveFlag) {
+        // Agent in non-interactive mode should exit normally
+        await flushAndClose();
+        process.exit(0);
+      }
+    }
+    // Gateway or agent -i: don't exit
     return;
   }
   // For all other commands, flush logs and exit

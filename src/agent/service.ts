@@ -115,7 +115,7 @@ export class AgentService {
     });
 
     initializeCommands();
-    log.info('Command system initialized');
+    log.debug('Command system initialized');
 
     this.sessionStore = this.createSessionStore();
 
@@ -300,7 +300,7 @@ export class AgentService {
       accumulateUsage: true,
     }));
 
-    log.info(
+    log.debug(
       { handlers: this.lifecycleManager.getRegisteredHandlers() },
       'Lifecycle handlers initialized'
     );
@@ -333,7 +333,7 @@ export class AgentService {
   async start(): Promise<void> {
     this.running = true;
     await this.hookHandler.trigger('gateway_start', { port: 0, host: 'cli' });
-    log.info('Agent service started');
+    log.debug('Agent service started');
     await this.hookHandler.trigger('session_start', { sessionId: this.agentId });
 
     while (this.running) {
@@ -361,7 +361,7 @@ export class AgentService {
     this.dispose();
 
     this.hookHandler.trigger('gateway_stop', { reason: 'stopped' });
-    log.info('Agent service stopped');
+    log.debug('Agent service stopped');
     return Promise.resolve();
   }
 
