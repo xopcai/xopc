@@ -18,8 +18,12 @@
   },
   "dependencies": {
     "@lit-labs/virtualizer": "^2.1.1",
+    "docx-preview": "^0.3.7",
+    "jszip": "^3.10.1",
     "lit": "^3.3.2",
     "lucide": "^0.456.0",
+    "pdfjs-dist": "^5.4.394",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zustand": "^4.5.0"
   },
   "devDependencies": {

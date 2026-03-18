@@ -8,6 +8,8 @@ import './styles.css';
 import './components/MessageEditor';
 import './components/MessageList';
 import './components/StreamingMessageContainer';
+import './components/AttachmentTile';
+import './dialogs/AttachmentOverlay';
 import './gateway-chat';
 import './app';
 import { i18n } from './utils/i18n';
@@ -20,6 +22,7 @@ export { t, i18n, setLanguage, getCurrentLanguage, initI18n, type Language } fro
 export type { Attachment } from './utils/attachment-utils';
 export { formatUsage, formatTokenCount, formatCost } from './utils/format';
 export { getIcon, loadIcon, getDocumentIcon } from './utils/icons';
+export { loadAttachment, formatFileSize, getFileIcon } from './utils/attachment-utils';
 
 // Components
 export { MessageEditor } from './components/MessageEditor';
