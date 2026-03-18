@@ -9,8 +9,7 @@
  * This prevents duplicate voice messages.
  */
 
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
-import type { ExtensionTool } from '../extensions/types/index.js';
+import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type { MessageBus } from '../bus/index.js';
 import {
   readFileTool,
@@ -67,41 +66,20 @@ export class AgentToolsFactory {
     ];
   }
 
-  convertExtensionTools(extensionTools: ExtensionTool[]): AgentTool<any, any>[] {
-    return extensionTools.map((tool) => ({
-      name: tool.name,
-      description: tool.description,
-      parameters: tool.parameters,
-      label: `🔌 ${tool.name}`,
-      async execute(toolCallId: string, params: Record<string, unknown>): Promise<AgentToolResult<unknown>> {
-        try {
-          const result = await tool.execute(params);
-          return { content: [{ type: 'text', text: result }], details: {} };
-        } catch (error) {
-          return {
-            content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }],
-            details: {},
-          };
-        }
-      },
-    }));
-  }
-
   createAllTools(): AgentTool<any, any>[] {
     const coreTools = this.createCoreTools();
-    
+
     if (!this.deps.extensionRegistry) {
       // Wrap core tools with timeout and retry protection
       return wrapToolsWithProtection(coreTools, this.deps.toolExecutorConfig);
     }
 
     const extensionTools = this.deps.extensionRegistry.getAllTools();
-    const convertedTools = this.convertExtensionTools(extensionTools);
-    
-    log.info({ count: convertedTools.length }, 'Loaded extension tools');
-    
+
+    log.info({ count: extensionTools.length }, 'Loaded extension tools');
+
     // Combine all tools and wrap with protection
-    const allTools = [...coreTools, ...convertedTools];
+    const allTools = [...coreTools, ...extensionTools];
     return wrapToolsWithProtection(allTools, this.deps.toolExecutorConfig);
   }
 }

@@ -1,69 +1,20 @@
 /**
  * Extension System - Tool Types
- * 
- * Tool definitions and execution types.
+ *
+ * Tool definitions re-exported from @mariozechner/pi-agent-core.
  */
 
-// ============================================================================
-// Legacy Tool (backward compatible)
-// ============================================================================
+import type {
+  AgentTool,
+  AgentToolResult,
+  AgentToolUpdateCallback,
+} from '@mariozechner/pi-agent-core';
 
-export interface ExtensionTool {
-  name: string;
-  description: string;
-  parameters: Record<string, unknown>;
-  execute: (params: Record<string, unknown>) => Promise<string>;
-}
-
-export interface ExtensionToolContext {
-  agentId?: string;
-  sessionKey?: string;
-  workspaceDir?: string;
-  sandboxed?: boolean;
-}
+// Re-export core tool types
+export type { AgentTool, AgentToolResult, AgentToolUpdateCallback };
 
 // ============================================================================
-// Enhanced Tool (Phase 2)
-// ============================================================================
-
-export interface EnhancedTool<TParams = unknown, TDetails = unknown> {
-  name: string;
-  description: string;
-  parameters: TSchema;
-  execute: (
-    toolCallId: string,
-    params: TParams,
-    signal: AbortSignal | undefined,
-    onUpdate: ((update: ToolUpdate<TDetails>) => void) | undefined,
-    ctx: ExtensionContext
-  ) => Promise<ToolResult<TDetails>>;
-}
-
-export interface TSchema {
-  type: 'object';
-  properties?: Record<string, unknown>;
-  required?: string[];
-}
-
-export interface ToolResult<TDetails = unknown> {
-  content: Array<{ type: 'text' | 'image'; text?: string; data?: string }>;
-  details?: TDetails;
-  isError?: boolean;
-}
-
-export interface ToolUpdate<TDetails = unknown> {
-  content: Array<{ type: 'text' | 'image'; text?: string; data?: string }>;
-  details?: TDetails;
-}
-
-export interface ExtensionContext {
-  agentId?: string;
-  sessionKey?: string;
-  workspaceDir?: string;
-}
-
-// ============================================================================
-// Tool Execution Lifecycle (Phase 2)
+// Tool Execution Lifecycle Events
 // ============================================================================
 
 export interface ToolExecutionStartEvent {
@@ -74,18 +25,18 @@ export interface ToolExecutionStartEvent {
   sessionKey?: string;
 }
 
-export interface ToolExecutionUpdateEvent {
+export interface ToolExecutionUpdateEvent<TDetails = unknown> {
   toolName: string;
   toolCallId: string;
-  update: ToolUpdate;
+  update: AgentToolResult<TDetails>;
   agentId?: string;
   sessionKey?: string;
 }
 
-export interface ToolExecutionEndEvent {
+export interface ToolExecutionEndEvent<TDetails = unknown> {
   toolName: string;
   toolCallId: string;
-  result?: ToolResult;
+  result?: AgentToolResult<TDetails>;
   error?: Error;
   durationMs?: number;
   agentId?: string;

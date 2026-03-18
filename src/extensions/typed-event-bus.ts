@@ -1,5 +1,5 @@
 /**
- * Typed Event Bus - Phase 3
+ * Typed Event Bus 
  *
  * Type-safe event bus for inter-extension communication.
  *

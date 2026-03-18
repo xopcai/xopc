@@ -19,9 +19,10 @@ import {
   getBundledExtensionsDir,
   resolveExtensionSdkPath,
 } from '../config/paths.js';
+import type { Config } from '../types/index.js';
+import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type {
   ExtensionApi,
-  ExtensionTool,
   ExtensionModule,
   ChannelExtension,
   GatewayMethodHandler,
@@ -37,6 +38,35 @@ import type {
 import { ExtensionRegistryImpl as ExtensionRegistry } from './loader.js';
 import { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './api.js';
 import { createLogger, createServiceLogger } from '../utils/logger.js';
+
+//  Security imports
+import {
+  checkExtensionPathSafety,
+  isExtensionAllowed,
+  provenanceTracker,
+  logSecurityIssue,
+  DEFAULT_SECURITY_CONFIG,
+  type SecurityConfig,
+  // Note: ExtensionSourceOrigin is defined locally in this file
+} from './security.js';
+
+//  Provider imports
+import { getProviderRegistry, type ProviderPluginRegistry } from '../providers/plugin-registry.js';
+
+//  Slot imports
+import {
+  getSlotRegistry,
+  type SlotRegistry,
+  type SlotKey,
+} from './slots.js';
+
+//  Diagnostics imports
+import {
+  getExtensionCache,
+  getExtensionDiagnostics,
+  type ExtensionLoaderCache,
+  type ExtensionDiagnostics,
+} from './diagnostics.js';
 
 const EXTENSION_MANIFEST_FILE = 'xopcbot.extension.json';
 
@@ -64,7 +94,7 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
   commands = new Map<string, ExtensionCommand>();
   services = new Map<string, ExtensionService>();
   gatewayMethods = new Map<string, GatewayMethodHandler>();
-  tools = new Map<string, ExtensionTool>();
+  tools = new Map<string, AgentTool>();
 
   addExtension(record: ExtensionRecord): void {
     this.extensions.set(record.id, record);
@@ -150,7 +180,7 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
   }
 
   // Tools
-  addTool(tool: ExtensionTool): void {
+  addTool(tool: AgentTool): void {
     if (this.tools.has(tool.name)) {
       log.warn({ tool: tool.name }, `Tool already registered, overwriting`);
     }
@@ -161,15 +191,15 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
     this.tools.delete(name);
   }
 
-  getTools(): Map<string, ExtensionTool> {
+  getTools(): Map<string, AgentTool> {
     return this.tools;
   }
 
-  getTool(name: string): ExtensionTool | undefined {
+  getTool(name: string): AgentTool | undefined {
     return this.tools.get(name);
   }
 
-  getAllTools(): ExtensionTool[] {
+  getAllTools(): AgentTool[] {
     return Array.from(this.tools.values());
   }
 }
@@ -189,6 +219,20 @@ export class ExtensionLoader {
   private options: ExtensionLoaderOptions;
   private extensionInstances: Map<string, ExtensionApi> = new Map();
   private jiti: ReturnType<typeof createJiti>;
+  
+  //  Security
+  private securityConfig: SecurityConfig;
+  
+  //  Provider Registry
+  private providerRegistry: ProviderPluginRegistry;
+  
+  //  Slot Registry & Config
+  private slotRegistry: SlotRegistry;
+  private slotsConfig: Partial<Record<SlotKey, string>> = {};
+  
+  //  Cache and Diagnostics
+  private cache: ExtensionLoaderCache;
+  private diagnostics: ExtensionDiagnostics;
 
   constructor(options?: ExtensionLoaderOptions) {
     this.registry = new ExtensionRegistryImpl();
@@ -196,6 +240,19 @@ export class ExtensionLoader {
       workspaceDir: DEFAULT_PATHS.workspace,
       extensionsDir: DEFAULT_PATHS.extensions,
     };
+
+    // Initialize security config
+    this.securityConfig = DEFAULT_SECURITY_CONFIG;
+    
+    // Initialize provider registry
+    this.providerRegistry = getProviderRegistry();
+    
+    // Initialize slot registry
+    this.slotRegistry = getSlotRegistry();
+    
+    // Initialize cache and diagnostics 
+    this.cache = getExtensionCache();
+    this.diagnostics = getExtensionDiagnostics();
 
     // Build jiti alias for extension-sdk
     const alias: Record<string, string> = {};
@@ -210,6 +267,67 @@ export class ExtensionLoader {
       extensions: ['.ts', '.tsx', '.mts', '.cts', '.js', '.mjs', '.cjs', '.json'],
       alias,
     });
+  }
+
+  /**
+   * Set security configuration 
+   */
+  setSecurityConfig(config: Partial<SecurityConfig>): void {
+    this.securityConfig = { ...this.securityConfig, ...config };
+  }
+
+  /**
+   * Get security configuration 
+   */
+  getSecurityConfig(): SecurityConfig {
+    return this.securityConfig;
+  }
+
+  /**
+   * Get provider registry 
+   */
+  getProviderRegistry(): ProviderPluginRegistry {
+    return this.providerRegistry;
+  }
+
+  /**
+   * Get slot registry 
+   */
+  getSlotRegistry(): SlotRegistry {
+    return this.slotRegistry;
+  }
+
+  /**
+   * Get diagnostics 
+   */
+  getDiagnostics(): ExtensionDiagnostics {
+    return this.diagnostics;
+  }
+
+  /**
+   * Set configuration from main Config object 
+   */
+  setConfig(config: Config): void {
+    // Wire slot config
+    const slots = (config.extensions as any)?.slots || {};
+    this.slotsConfig = {
+      memory: slots.memory,
+      tts: slots.tts,
+      imageGeneration: slots.imageGeneration,
+      webSearch: slots.webSearch,
+    };
+
+    // Wire security config
+    const security = (config.extensions as any)?.security;
+    if (security) {
+      this.securityConfig = {
+        checkPermissions: security.checkPermissions ?? true,
+        allowUntrusted: security.allowUntrusted ?? false,
+        allow: security.allow ?? [],
+        trackProvenance: security.trackProvenance ?? true,
+        allowPromptInjection: security.allowPromptInjection ?? false,
+      };
+    }
   }
 
   getRegistry(): ExtensionRegistryImpl {
@@ -337,6 +455,14 @@ export class ExtensionLoader {
 
   async loadExtension(config: ResolvedExtensionConfig): Promise<ExtensionApi | null> {
     try {
+      //  Check cache first
+      const cacheKey = this.cache.buildKey(this.options, [config.id]);
+      const cached = this.cache.get<ExtensionApi>(cacheKey);
+      if (cached) {
+        log.debug({ extensionId: config.id }, 'Extension loaded from cache');
+        return cached;
+      }
+
       // Check if already loaded
       if (this.extensionInstances.has(config.id)) {
         return this.extensionInstances.get(config.id)!;
@@ -354,14 +480,36 @@ export class ExtensionLoader {
       
       if (!extensionPath) {
         log.error({ extensionId: config.id, path: config.path }, `Could not resolve extension path`);
+        this.diagnostics.error(config.id, `Could not resolve extension path: ${config.path}`);
         return null;
       }
 
       log.debug({ extensionId: config.id, extensionPath }, 'Resolved extension path');
 
+      //  Security check
+      const source = config.source || 'bundled';
+      const safetyResult = checkExtensionPathSafety(extensionPath, extensionPath, source);
+      
+      if (!safetyResult.safe) {
+        logSecurityIssue(config.id, safetyResult);
+        
+        if (this.securityConfig.checkPermissions && source !== 'bundled') {
+          // Check allowlist
+          if (!isExtensionAllowed(config.id, this.securityConfig)) {
+            this.diagnostics.error(config.id, `Extension not allowed: ${safetyResult.detail}`);
+            log.error({ extensionId: config.id, reason: safetyResult.reason }, 'Extension blocked by security policy');
+            return null;
+          }
+        }
+      }
+
+      // Track provenance 
+      provenanceTracker.track(config.id, source);
+
       const manifest = this.loadManifest(extensionPath);
       if (!manifest) {
         log.error({ extensionId: config.id, extensionPath }, `Failed to load manifest for extension`);
+        this.diagnostics.error(config.id, `Failed to load manifest`);
         return null;
       }
 
@@ -416,7 +564,14 @@ export class ExtensionLoader {
       const module = await this.loadModule(extensionPath, manifest);
       if (!module) {
         log.error({ extensionId: config.id }, `Failed to load module for extension`);
+        this.diagnostics.error(config.id, `Failed to load module`);
         return null;
+      }
+
+      //  Check and claim slots
+      const slotClaimed = this.claimExtensionSlots(config.id, manifest);
+      if (!slotClaimed) {
+        log.warn({ extensionId: config.id }, 'Failed to claim required slots');
       }
 
       // Initialize extension
@@ -434,14 +589,71 @@ export class ExtensionLoader {
         source: config.source,
       });
 
+      // Register extension tools to registry (so AgentManager can access them)
+      // Note: api is actually ExtensionApiImpl at runtime
+      const apiImpl = api as unknown as { _getTools: () => Map<string, AgentTool> };
+      const extensionTools = apiImpl._getTools();
+      for (const tool of extensionTools.values()) {
+        this.registry.addTool(tool);
+      }
+
       this.extensionInstances.set(config.id, api);
+      
+      //  Cache the loaded extension
+      this.cache.set(cacheKey, api);
+
+      this.diagnostics.info(config.id, `Loaded extension: ${manifest.name}`);
       log.info({ name: manifest.name, id: manifest.id, source: config.source }, `Loaded extension`);
 
       return api;
     } catch (error) {
       log.error({ err: error, extensionId: config.id }, `Error loading extension`);
+      this.diagnostics.error(config.id, `Error loading extension: ${error}`);
       return null;
     }
+  }
+
+  /**
+   *  Claim extension slots based on manifest kind
+   * Respects configured preferred plugin from config.extensions.slots
+   */
+  private claimExtensionSlots(extensionId: string, manifest: ExtensionManifest): boolean {
+    const kind = manifest.kind as string;
+    
+    // Map extension kind to slot
+    const slotMap: Record<string, SlotKey> = {
+      'memory': 'memory',
+      'tts': 'tts',
+      'image-generation': 'imageGeneration',
+      'imageGeneration': 'imageGeneration',
+      'web-search': 'webSearch',
+      'webSearch': 'webSearch',
+    };
+    
+    const slotKey = slotMap[kind];
+    if (!slotKey) {
+      return true; // No slot required
+    }
+    
+    // Check if slot is reserved for a different plugin in config
+    const preferredPlugin = this.slotsConfig[slotKey];
+    if (preferredPlugin && preferredPlugin !== extensionId) {
+      log.info(
+        { extensionId, slotKey, preferredPlugin },
+        `Skipping slot claim: slot "${slotKey}" is reserved for "${preferredPlugin}"`
+      );
+      this.diagnostics.info(
+        extensionId,
+        `Slot "${slotKey}" is reserved for "${preferredPlugin}", skipping claim`
+      );
+      return false;
+    }
+    
+    const claimed = this.slotRegistry.claim(slotKey, extensionId, null);
+    if (!claimed) {
+      this.diagnostics.warn(extensionId, `Slot "${slotKey}" already claimed by another extension`);
+    }
+    return claimed;
   }
 
   loadManifest(extensionPath: string): ExtensionManifest | null {

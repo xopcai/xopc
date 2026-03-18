@@ -1,21 +1,28 @@
 /**
  * Extension API Implementation
+ * 
+ *  Complete extension API with strong typing, security, and provider support.
  */
 
+import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type {
   ExtensionApi,
   ExtensionLogger,
-  ExtensionTool,
   ChannelExtension,
   GatewayMethodHandler,
   HttpRequestHandler,
   ExtensionCommand,
   ExtensionService,
-  ProviderConfig,
   FlagConfig,
   FlagValue,
   ShortcutConfig,
+  HookHandlerMap,
+  ExtensionHookEvent,
+  HookExecutionMode,
 } from './types/index.js';
+import {
+  HOOK_EXECUTION_MODES,
+} from './types/hooks.js';
 import type { Config } from '../types/index.js';
 import { resolve, isAbsolute } from 'path';
 import { EventEmitter } from 'events';
@@ -24,12 +31,14 @@ import { TypedEventBus } from './typed-event-bus.js';
 import { ExtensionRegistryImpl } from './loader.js';
 
 export class ExtensionApiImpl implements ExtensionApi {
-  private _tools: Map<string, ExtensionTool> = new Map();
+  private _tools: Map<string, AgentTool> = new Map();
   private _hooks: Map<string, Set<Function>> = new Map();
+  //  Strongly typed hooks (for on() method)
+  private _typedHooks: Map<ExtensionHookEvent, Set<Function>> = new Map();
   private _eventBus = new EventEmitter();
   private _typedEventBus: TypedEventBus;
   
-  // Phase 4: Unified Registry
+  //  Unified Registry
   private _registry: ExtensionRegistryImpl;
 
   constructor(
@@ -56,7 +65,7 @@ export class ExtensionApiImpl implements ExtensionApi {
     return this._logger;
   }
 
-  registerTool(tool: ExtensionTool): void {
+  registerTool(tool: AgentTool): void {
     if (this._tools.has(tool.name)) {
       this._logger.warn(`Tool ${tool.name} already registered, overwriting`);
     }
@@ -79,6 +88,47 @@ export class ExtensionApiImpl implements ExtensionApi {
     }
 
     this._logger.info(`Registered hook: ${event}`);
+  }
+
+  /**
+   *  Strongly typed hook registration
+   * Provides compile-time type checking and IDE autocomplete
+   * 
+   * @example
+   * api.on('before_agent_start', async (event, ctx) => {
+   *   console.log('Agent starting with prompt:', event.prompt);
+   *   return { systemPrompt: event.systemPrompt };
+   * });
+   */
+  onHook<K extends ExtensionHookEvent>(
+    hookName: K,
+    handler: HookHandlerMap[K],
+    _opts?: { priority?: number },
+  ): void {
+    // Get execution mode for this hook
+    const mode = (HOOK_EXECUTION_MODES as Record<string, HookExecutionMode>)[hookName];
+    
+    if (!this._typedHooks.has(hookName)) {
+      this._typedHooks.set(hookName, new Set());
+    }
+    
+    this._typedHooks.get(hookName)!.add(handler);
+    
+    // Also register in legacy hooks map for backward compatibility
+    if (!this._hooks.has(hookName)) {
+      this._hooks.set(hookName, new Set());
+    }
+    this._hooks.get(hookName)!.add(handler);
+    
+    this._logger.debug(`Registered typed hook: ${hookName} (mode: ${mode})`);
+  }
+
+  /**
+   *  Get typed hooks for a specific event
+   */
+  _getTypedHooks<K extends ExtensionHookEvent>(hookName: K): HookHandlerMap[K][] {
+    const hooks = this._typedHooks.get(hookName);
+    return hooks ? Array.from(hooks) as HookHandlerMap[K][] : [];
   }
 
   registerChannel(channel: ChannelExtension): void {
@@ -122,15 +172,31 @@ export class ExtensionApiImpl implements ExtensionApi {
     this._eventBus.off(event, handler);
   }
 
-  // Phase 3: Typed Event Bus
+  //  Typed Event Bus
   get events(): TypedEventBus {
     return this._typedEventBus;
   }
 
-  // Phase 4: Unified Registry Methods (TODO: implement)
-  registerProvider(_name: string, _config: Partial<ProviderConfig>): void {
-    // this._registry.registerProvider(name, config);
-    this._logger.info(`Extension registered provider: ${_name}`);
+  //  Unified Registry Methods
+  
+  /**
+   * Register a full ProviderPlugin
+   */
+  registerProvider(plugin: import('./types/providers.js').ProviderPlugin): void {
+    import('../providers/plugin-registry.js').then(({ getProviderRegistry }) => {
+      const registry = getProviderRegistry();
+      registry.register(plugin);
+      this._logger.info(`Extension registered provider: ${plugin.id}`);
+    }).catch((err: unknown) => {
+      this._logger.error(`Failed to register provider: ${err instanceof Error ? err.message : String(err)}`);
+    });
+  }
+
+  /**
+   * Register a full ProviderPlugin (alias for registerProvider)
+   */
+  registerProviderPlugin(plugin: import('./types/providers.js').ProviderPlugin): void {
+    this.registerProvider(plugin);
   }
 
   registerFlag(_name: string, _config: FlagConfig): void {
@@ -146,7 +212,7 @@ export class ExtensionApiImpl implements ExtensionApi {
   }
 
   // Internal methods for extension manager
-  _getTools(): Map<string, ExtensionTool> {
+  _getTools(): Map<string, AgentTool> {
     return this._tools;
   }
 
@@ -161,6 +227,8 @@ export class ExtensionApiImpl implements ExtensionApi {
   _cleanup(): void {
     this._typedEventBus.cleanupAll();
     this._eventBus.removeAllListeners();
+    this._hooks.clear();
+    this._typedHooks.clear();
   }
 }
 

@@ -96,6 +96,30 @@ export interface Config {
       };
     };
   };
+  //  Extension config
+  // Supports both global config (security, slots) and per-extension config
+  // e.g., config.extensions.security = {...}
+  // e.g., config.extensions.enabled = ["hello", "echo"]
+  // e.g., config.extensions.hello = { greeting: "Hi there!" }
+  extensions?: {
+    enabled?: string[];
+    allow?: string[];
+    security?: {
+      checkPermissions?: boolean;
+      allowUntrusted?: boolean;
+      trackProvenance?: boolean;
+      allowPromptInjection?: boolean;
+    };
+    slots?: {
+      memory?: string;
+      tts?: string;
+      imageGeneration?: string;
+      webSearch?: string;
+    };
+    // Allow arbitrary extension-specific configuration
+    // Each extension can access its config via api.extensionConfig
+    [key: string]: unknown;
+  };
 }
 
 export {
