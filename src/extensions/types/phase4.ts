@@ -1,5 +1,5 @@
 /**
- * Extension System - Phase 4 Types
+ * Extension System  Types
  * 
  * Advanced features: Provider, Flag, Shortcut registration.
  */

@@ -591,3 +591,108 @@ Options:
 1. Verify hook name is correct
 2. Check if hook is registered in `register()` method
 3. Check logs for hook registration errors
+
+---
+
+## Extension Configuration
+
+### Global Configuration
+
+The `extensions` section in `config.json` supports the following global options:
+
+```json
+{
+  "extensions": {
+    "enabled": {
+      "hello": true,
+      "echo": false
+    },
+    "allow": ["hello", "echo", "xopcbot-feishu"],
+    "security": {
+      "checkPermissions": true,
+      "allowUntrusted": false,
+      "trackProvenance": true,
+      "allowPromptInjection": false
+    },
+    "slots": {
+      "memory": "memory-lancedb",
+      "tts": "elevenlabs"
+    }
+  }
+}
+```
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `enabled` | `Record<string, boolean>` | Enable/disable specific extensions |
+| `allow` | `string[]` | Allowlist of permitted extensions |
+| `security.checkPermissions` | `boolean` | Enable path safety checks |
+| `security.allowUntrusted` | `boolean` | Allow loading extensions not in allowlist |
+| `security.trackProvenance` | `boolean` | Track extension install source |
+| `security.allowPromptInjection` | `boolean` | Allow extensions to inject system prompts |
+| `slots.memory` | `string` | Preferred memory backend extension |
+| `slots.tts` | `string` | Preferred TTS provider extension |
+| `slots.imageGeneration` | `string` | Preferred image generation extension |
+| `slots.webSearch` | `string` | Preferred web search extension |
+
+### Extension-Specific Configuration
+
+Each extension can have its own custom configuration. Any fields not in the global config are treated as extension-specific:
+
+```json
+{
+  "extensions": {
+    "feishu": {
+      "appId": "cli_xxx",
+      "appSecret": "yyy",
+      "verificationToken": "zzz"
+    },
+    "memory-lancedb": {
+      "vectorDim": 1536,
+      "persistencePath": "~/data/memory"
+    }
+  }
+}
+```
+
+The extension can access its config via `api.extensionConfig`:
+
+```typescript
+// In your extension's register() or activate()
+export function register(api: ExtensionApi) {
+  const feishuConfig = api.extensionConfig as {
+    appId: string;
+    appSecret: string;
+    verificationToken?: string;
+  };
+  
+  console.log('Feishu App ID:', feishuConfig.appId);
+}
+```
+
+### Slot Configuration
+
+Slots ensure exclusive capabilities have only one active implementation. Configure which extension should claim each slot:
+
+```json
+{
+  "extensions": {
+    "slots": {
+      "memory": "my-memory-extension",
+      "tts": "my-tts-extension"
+    }
+  }
+}
+```
+
+When a slot has a preferred plugin, other extensions requesting that slot will be rejected.
+
+### Security
+
+By default, xopcbot performs security checks on extensions:
+- Path safety (no symlink escape)
+- Ownership validation
+- Hardlink detection
+- Provenance tracking
+
+Set `allowPromptInjection: true` to allow extensions to modify system prompts via hook results.

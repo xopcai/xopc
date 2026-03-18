@@ -50,7 +50,7 @@ export {
   type RotationResult,
   type ContextualLogger,
   
-  // Phase 3: Exporters
+  //  Exporters
   type LogExporter,
   type ExporterConfig,
   type LokiConfig,
@@ -62,7 +62,7 @@ export {
   flushExporters,
   getExporters,
   
-  // Phase 3: Audit Log
+  //  Audit Log
   type AuditEvent,
   type AuditEventType,
   type AuditLogConfig,

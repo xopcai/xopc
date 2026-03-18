@@ -4,194 +4,24 @@
 
 import type {
   ExtensionHookEvent,
+  HookAgentContext as HookContext,
   AgentMessage,
-} from './types/index.js';
+  BeforeAgentStartContext,
+  BeforeToolCallContext,
+  BeforeToolCallResult,
+  MessageSendingContext,
+  MessageSendingResult,
+} from './types/hooks.js';
+
 import { ExtensionRegistryImpl as ExtensionRegistry } from './loader.js';
+import { HOOK_EXECUTION_MODES } from './types/hooks.js';
 
 // ============================================================================
-// Hook Event Types
-// ============================================================================
-
-export interface HookContext {
-  timestamp?: Date;
-  extensionId?: string;
-  sessionKey?: string;
-  agentId?: string;
-}
-
-export interface BeforeAgentStartContext extends HookContext {
-  prompt: string;
-  messages?: unknown[];
-}
-
-export interface BeforeAgentStartResult {
-  systemPrompt?: string;
-  prependContext?: string;
-}
-
-export interface AgentEndContext extends HookContext {
-  messages: unknown[];
-  success: boolean;
-  error?: string;
-  durationMs?: number;
-}
-
-export interface BeforeCompactionContext extends HookContext {
-  messageCount: number;
-  tokenCount?: number;
-}
-
-export interface AfterCompactionContext extends HookContext {
-  messageCount: number;
-  tokenCount?: number;
-  compactedCount: number;
-}
-
-export interface MessageReceivedContext extends HookContext {
-  channelId: string;
-  from: string;
-  content: string;
-  timestamp?: Date;
-  metadata?: Record<string, unknown>;
-}
-
-export interface MessageSendingContext extends HookContext {
-  to: string;
-  content: string;
-  metadata?: Record<string, unknown>;
-}
-
-export interface MessageSendingResult {
-  content?: string;
-  cancel?: boolean;
-  cancelReason?: string;
-}
-
-export interface MessageSentContext extends HookContext {
-  to: string;
-  content: string;
-  success: boolean;
-  error?: string;
-}
-
-export interface BeforeToolCallContext extends HookContext {
-  toolName: string;
-  params: Record<string, unknown>;
-}
-
-export interface BeforeToolCallResult {
-  params?: Record<string, unknown>;
-  block?: boolean;
-  blockReason?: string;
-}
-
-export interface AfterToolCallContext extends HookContext {
-  toolName: string;
-  params: Record<string, unknown>;
-  result?: unknown;
-  error?: string;
-  durationMs?: number;
-}
-
-export interface SessionStartContext extends HookContext {
-  sessionId: string;
-  resumedFrom?: string;
-}
-
-export interface SessionEndContext extends HookContext {
-  sessionId: string;
-  messageCount: number;
-  durationMs?: number;
-}
-
-export interface GatewayStartContext extends HookContext {
-  port: number;
-  host: string;
-}
-
-export interface GatewayStopContext extends HookContext {
-  reason?: string;
-}
-
-// ============================================================================
-// Hook Handler Map
-// ============================================================================
-
-export type HookHandlerMap = {
-  before_agent_start: (
-    event: BeforeAgentStartContext,
-    ctx: HookContext,
-  ) => Promise<BeforeAgentStartResult | void> | BeforeAgentStartResult | void;
-  
-  agent_end: (
-    event: AgentEndContext,
-    ctx: HookContext,
-  ) => Promise<void> | void;
-  
-  before_compaction: (
-    event: BeforeCompactionContext,
-    ctx: HookContext,
-  ) => Promise<void> | void;
-  
-  after_compaction: (
-    event: AfterCompactionContext,
-    ctx: HookContext,
-  ) => Promise<void> | void;
-  
-  message_received: (
-    event: MessageReceivedContext,
-    ctx: HookContext,
-  ) => Promise<void> | void;
-  
-  message_sending: (
-    event: MessageSendingContext,
-    ctx: HookContext,
-  ) => Promise<MessageSendingResult | void> | MessageSendingResult | void;
-  
-  message_sent: (
-    event: MessageSentContext,
-    ctx: HookContext,
-  ) => Promise<void> | void;
-  
-  before_tool_call: (
-    event: BeforeToolCallContext,
-    ctx: HookContext,
-  ) => Promise<BeforeToolCallResult | void> | BeforeToolCallResult | void;
-  
-  after_tool_call: (
-    event: AfterToolCallContext,
-    ctx: HookContext,
-  ) => Promise<void> | void;
-  
-  session_start: (
-    event: SessionStartContext,
-    ctx: HookContext,
-  ) => Promise<void> | void;
-  
-  session_end: (
-    event: SessionEndContext,
-    ctx: HookContext,
-  ) => Promise<void> | void;
-  
-  gateway_start: (
-    event: GatewayStartContext,
-    ctx: HookContext,
-  ) => Promise<void> | void;
-  
-  gateway_stop: (
-    event: GatewayStopContext,
-    ctx: HookContext,
-  ) => Promise<void> | void;
-};
-
-// ============================================================================
-// Hook Runner
+// Hook Runner Options
 // ============================================================================
 
 export interface HookRunnerOptions {
-  /** If true, errors in hooks will be caught and logged instead of thrown */
   catchErrors?: boolean;
-  /** Default logger */
   logger?: HookLogger;
 }
 
@@ -202,6 +32,10 @@ export interface HookLogger {
   error: (message: string) => void;
 }
 
+// ============================================================================
+// Extension Hook Runner
+// ============================================================================
+
 export class ExtensionHookRunner {
   private registry: ExtensionRegistry;
   private options: HookRunnerOptions;
@@ -211,16 +45,10 @@ export class ExtensionHookRunner {
     this.options = options || {};
   }
 
-  /**
-   * Get the extension registry
-   */
   getRegistry(): ExtensionRegistry {
     return this.registry;
   }
 
-  /**
-   * Execute hooks for a specific event
-   */
   async runHooks<K extends ExtensionHookEvent>(
     event: K,
     eventData: unknown,
@@ -252,9 +80,6 @@ export class ExtensionHookRunner {
     return { success: true, results };
   }
 
-  /**
-   * Execute hooks and return modified event data
-   */
   async runHooksWithResult<K extends ExtensionHookEvent>(
     event: K,
     eventData: BeforeAgentStartContext,
@@ -267,7 +92,6 @@ export class ExtensionHookRunner {
       try {
         const result = await handler(modifiedData, context);
         if (result && typeof result === 'object') {
-          // Merge modifications
           modifiedData = { ...modifiedData, ...result };
         }
       } catch (error) {
@@ -281,9 +105,6 @@ export class ExtensionHookRunner {
     return modifiedData;
   }
 
-  /**
-   * Execute before_tool_call hooks and potentially block the call
-   */
   async runBeforeToolCall(
     toolName: string,
     params: Record<string, unknown>,
@@ -329,9 +150,6 @@ export class ExtensionHookRunner {
     return { allowed: true, params: modifiedParams };
   }
 
-  /**
-   * Execute message_sending hooks and potentially cancel or modify
-   */
   async runMessageSending(
     to: string,
     content: string,
@@ -377,14 +195,7 @@ export class ExtensionHookRunner {
     return { send: true, content: modifiedContent };
   }
 
-  // ============================================================================
-  // Phase 1: Enhanced Hook Methods
-  // ============================================================================
-
-  /**
-   * Execute context hooks to modify messages before sending to LLM.
-   * Handlers chain: each handler sees the result of previous handler.
-   */
+  //  Enhanced Hook Methods
   async runContextHook(
     messages: AgentMessage[],
     context?: HookContext,
@@ -421,17 +232,12 @@ export class ExtensionHookRunner {
         this.options.logger?.warn?.(
           `context hook error: ${error instanceof Error ? error.message : String(error)}`
         );
-        // Continue with current messages on error
       }
     }
 
     return { messages: currentMessages as AgentMessage[], modified };
   }
 
-  /**
-   * Execute input hooks to intercept/transform user input.
-   * Supports: continue (pass through), transform (modify), handled (skip agent).
-   */
   async runInputHook(
     text: string,
     images: Array<{ type: string; data: string; mimeType?: string }> | undefined,
@@ -446,7 +252,6 @@ export class ExtensionHookRunner {
   }> {
     const handlers = this.registry.getHooks('input');
 
-    // If no handlers, return original input
     if (handlers.length === 0) {
       return {
         text,
@@ -479,7 +284,6 @@ export class ExtensionHookRunner {
             response?: string;
           };
 
-          // Handle transformation
           if (typedResult.action === 'transform') {
             if (typedResult.text !== undefined) {
               currentText = typedResult.text;
@@ -489,11 +293,9 @@ export class ExtensionHookRunner {
               currentImages = typedResult.images;
               event.images = currentImages;
             }
-            // Continue to next handler after transform
             continue;
           }
 
-          // Handle short-circuit (skip remaining handlers and agent)
           if (typedResult.action === 'handled') {
             return {
               text: currentText,
@@ -503,8 +305,6 @@ export class ExtensionHookRunner {
               response: typedResult.response,
             };
           }
-
-          // action === 'continue': proceed to next handler
         }
       } catch (error) {
         if (!this.options.catchErrors) {
@@ -513,7 +313,6 @@ export class ExtensionHookRunner {
         this.options.logger?.warn?.(
           `input hook error: ${error instanceof Error ? error.message : String(error)}`
         );
-        // Continue to next handler on error
       }
     }
 
@@ -523,6 +322,121 @@ export class ExtensionHookRunner {
       action: 'continue',
       skipAgent: false,
     };
+  }
+
+  //  Three-Mode Hook Execution
+  async runVoidHook<K extends ExtensionHookEvent>(
+    hookName: K,
+    eventData: unknown,
+    context: HookContext,
+  ): Promise<void> {
+    const handlers = this.registry.getHooks(hookName);
+    if (handlers.length === 0) return;
+
+    await Promise.allSettled(
+      handlers.map(async (handler) => {
+        try {
+          await handler(eventData, context);
+        } catch (error) {
+          if (!this.options.catchErrors) {
+            throw error;
+          }
+          this.options.logger?.warn?.(
+            `Void hook error in ${hookName}: ${error instanceof Error ? error.message : String(error)}`
+          );
+        }
+      })
+    );
+  }
+
+  async runModifyingHook<K extends ExtensionHookEvent, R = unknown>(
+    hookName: K,
+    eventData: unknown,
+    context: HookContext,
+    merge?: (current: R, next: R) => R,
+  ): Promise<R | undefined> {
+    const handlers = this.registry.getHooks(hookName);
+    if (handlers.length === 0) return undefined;
+
+    let result: R | undefined;
+
+    for (const handler of handlers) {
+      try {
+        const handlerResult = await handler(eventData, context);
+        if (handlerResult && typeof handlerResult === 'object') {
+          if (merge && result) {
+            result = merge(result, handlerResult as R);
+          } else if (!result) {
+            result = handlerResult as R;
+          }
+        }
+      } catch (error) {
+        if (!this.options.catchErrors) {
+          throw error;
+        }
+        this.options.logger?.warn?.(
+          `Modifying hook error in ${hookName}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    return result;
+  }
+
+  async runClaimingHook<K extends ExtensionHookEvent>(
+    hookName: K,
+    eventData: unknown,
+    context: HookContext,
+  ): Promise<{ handled: boolean; result?: unknown }> {
+    const handlers = this.registry.getHooks(hookName);
+
+    for (const handler of handlers) {
+      try {
+        const result = await handler(eventData, context);
+        
+        if (result && typeof result === 'object' && 'handled' in result) {
+          const typedResult = result as { handled: boolean };
+          if (typedResult.handled) {
+            return { handled: true, result };
+          }
+        }
+      } catch (error) {
+        if (!this.options.catchErrors) {
+          throw error;
+        }
+        this.options.logger?.warn?.(
+          `Claiming hook error in ${hookName}: ${error instanceof Error ? error.message : String(error)}`
+        );
+      }
+    }
+
+    return { handled: false };
+  }
+
+  async runHooksByMode<K extends ExtensionHookEvent>(
+    hookName: K,
+    eventData: unknown,
+    context: HookContext,
+  ): Promise<{ success: boolean; result?: unknown }> {
+    const mode = HOOK_EXECUTION_MODES[hookName];
+
+    switch (mode) {
+      case 'void':
+        await this.runVoidHook(hookName, eventData, context);
+        return { success: true };
+
+      case 'modifying':
+        const modifyingResult = await this.runModifyingHook(hookName, eventData, context);
+        return { success: true, result: modifyingResult };
+
+      case 'claiming':
+        const claimingResult = await this.runClaimingHook(hookName, eventData, context);
+        return { success: true, result: claimingResult };
+
+      default:
+        const legacyResult = await this.runHooks(hookName, eventData, context);
+        return { success: legacyResult.success };
+    }
   }
 }
 
@@ -539,7 +453,6 @@ export function createHookContext(overrides?: Partial<HookContext>): HookContext
 
 export function isHookEvent(value: string): value is ExtensionHookEvent {
   const hookEvents: ExtensionHookEvent[] = [
-    // Existing hooks
     'before_agent_start',
     'agent_end',
     'before_compaction',
@@ -553,15 +466,27 @@ export function isHookEvent(value: string): value is ExtensionHookEvent {
     'session_end',
     'gateway_start',
     'gateway_stop',
-    // Phase 1: Enhanced hooks
     'context',
     'input',
     'turn_start',
     'turn_end',
-    // Phase 2: Tool execution lifecycle
     'tool_execution_start',
     'tool_execution_update',
     'tool_execution_end',
+    'before_model_resolve',
+    'before_prompt_build',
+    'llm_input',
+    'llm_output',
+    'inbound_claim',
+    'before_reset',
+    'before_message_write',
+    'subagent_start',
+    'subagent_end',
+    'subagent_error',
+    'subagent_result',
   ];
   return hookEvents.includes(value as ExtensionHookEvent);
 }
+
+// Re-export HookContext for backward compatibility
+export type { HookContext };

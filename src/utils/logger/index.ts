@@ -245,7 +245,7 @@ export {
   cleanOldLogs,
 };
 
-// Phase 3: Exporters
+//  Exporters
 export {
   type LogExporter,
   type ExporterConfig,
@@ -259,7 +259,7 @@ export {
   getExporters,
 } from './exporters.js';
 
-// Phase 3: Audit Log
+//  Audit Log
 export {
   type AuditEvent,
   type AuditEventType,

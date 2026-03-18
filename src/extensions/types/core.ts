@@ -6,10 +6,11 @@
 
 import type { Config } from '../../types/index.js';
 import type { TypedEventBus } from './events.js';
-import type { ExtensionTool } from './tools.js';
-import type { ExtensionHookEvent, ExtensionHookHandler, HookOptions } from './hooks.js';
+import type { AgentTool } from '@mariozechner/pi-agent-core';
+import type { ExtensionHookEvent, ExtensionHookHandler, HookOptions, HookHandlerMap } from './hooks.js';
 import type { ChannelExtension } from './channels.js';
-import type { ProviderConfig, FlagConfig, FlagValue, ShortcutConfig } from './phase4.js';
+import type { FlagConfig, FlagValue, ShortcutConfig } from './phase4.js';
+import type { ProviderPlugin } from './providers.js';
 
 // ============================================================================
 // Extension Definition
@@ -61,10 +62,13 @@ export interface ExtensionApi {
   readonly logger: ExtensionLogger;
   
   // Tool Registration
-  registerTool(tool: ExtensionTool): void;
+  registerTool(tool: AgentTool): void;
   
   // Hook Registration
   registerHook(event: ExtensionHookEvent, handler: ExtensionHookHandler, opts?: HookOptions): void;
+  
+  //  Strongly Typed Hook Registration
+  onHook<K extends ExtensionHookEvent>(hookName: K, handler: HookHandlerMap[K], opts?: { priority?: number }): void;
   
   // Channel Registration
   registerChannel(channel: ChannelExtension): void;
@@ -89,11 +93,14 @@ export interface ExtensionApi {
   on(event: string, handler: (data: unknown) => void): void;
   off(event: string, handler: (data: unknown) => void): void;
   
-  // Phase 3: Typed Event Bus
+  //  Typed Event Bus
   events: TypedEventBus;
   
-  // Phase 4: Advanced Features
-  registerProvider(name: string, config: Partial<ProviderConfig>): void;
+  //  Provider Registration
+  registerProvider(plugin: ProviderPlugin): void;
+  registerProviderPlugin(plugin: ProviderPlugin): void;
+  
+  //  Advanced Features
   registerFlag(name: string, config: FlagConfig, extensionId?: string): void;
   getFlag(name: string): FlagValue;
   registerShortcut(key: string, config: ShortcutConfig): void;
@@ -158,9 +165,9 @@ export interface ExtensionService {
 // ============================================================================
 
 export interface ExtensionRegistry {
-  addTool(tool: ExtensionTool): void;
-  getTools(): Map<string, ExtensionTool>;
-  getTool(name: string): ExtensionTool | undefined;
-  getAllTools(): ExtensionTool[];
+  addTool(tool: AgentTool): void;
+  getTools(): Map<string, AgentTool>;
+  getTool(name: string): AgentTool | undefined;
+  getAllTools(): AgentTool[];
   getCommand(name: string): ExtensionCommand | undefined;
 }

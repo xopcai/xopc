@@ -674,3 +674,108 @@ npm publish --access public
 - [扩展示例](examples/)
 - [API 参考](./api.md)
 - [钩子参考](./hooks.md)
+
+---
+
+## 扩展配置
+
+### 全局配置
+
+`config.json` 中的 `extensions` 部分支持以下全局选项：
+
+```json
+{
+  "extensions": {
+    "enabled": {
+      "hello": true,
+      "echo": false
+    },
+    "allow": ["hello", "echo", "xopcbot-feishu"],
+    "security": {
+      "checkPermissions": true,
+      "allowUntrusted": false,
+      "trackProvenance": true,
+      "allowPromptInjection": false
+    },
+    "slots": {
+      "memory": "memory-lancedb",
+      "tts": "elevenlabs"
+    }
+  }
+}
+```
+
+| 选项 | 类型 | 说明 |
+|------|------|------|
+| `enabled` | `Record<string, boolean>` | 启用/禁用特定扩展 |
+| `allow` | `string[]` | 允许的扩展白名单 |
+| `security.checkPermissions` | `boolean` | 启用路径安全检查 |
+| `security.allowUntrusted` | `boolean` | 允许加载不在白名单中的扩展 |
+| `security.trackProvenance` | `boolean` | 追踪扩展安装来源 |
+| `security.allowPromptInjection` | `boolean` | 允许扩展注入 system prompt |
+| `slots.memory` | `string` | 首选 memory 后端扩展 |
+| `slots.tts` | `string` | 首选 TTS 提供商扩展 |
+| `slots.imageGeneration` | `string` | 首选图像生成扩展 |
+| `slots.webSearch` | `string` | 首选网页搜索扩展 |
+
+### 扩展自定义配置
+
+每个扩展都可以有自己的自定义配置。任何不在全局配置中的字段都会被视为扩展特定配置：
+
+```json
+{
+  "extensions": {
+    "feishu": {
+      "appId": "cli_xxx",
+      "appSecret": "yyy",
+      "verificationToken": "zzz"
+    },
+    "memory-lancedb": {
+      "vectorDim": 1536,
+      "persistencePath": "~/data/memory"
+    }
+  }
+}
+```
+
+扩展可以通过 `api.extensionConfig` 访问其配置：
+
+```typescript
+// 在扩展的 register() 或 activate() 中
+export function register(api: ExtensionApi) {
+  const feishuConfig = api.extensionConfig as {
+    appId: string;
+    appSecret: string;
+    verificationToken?: string;
+  };
+  
+  console.log('飞书 App ID:', feishuConfig.appId);
+}
+```
+
+### Slot 配置
+
+Slot 确保独占能力只有一个活动实现。配置哪个扩展应该声明每个 slot：
+
+```json
+{
+  "extensions": {
+    "slots": {
+      "memory": "my-memory-extension",
+      "tts": "my-tts-extension"
+    }
+  }
+}
+```
+
+当 slot 有首选插件时，其他请求该 slot 的扩展将被拒绝。
+
+### 安全
+
+默认情况下，xopcbot 对扩展执行安全检查：
+- 路径安全（无 symlink 逃逸）
+- 所有权验证
+- Hardlink 检测
+- 来源追踪
+
+设置 `allowPromptInjection: true` 以允许扩展通过钩子结果修改 system prompt。

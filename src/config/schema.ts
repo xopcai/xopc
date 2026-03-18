@@ -423,17 +423,32 @@ export const AcpConfigSchema = z.object({
 });
 
 // ============================================
-// Extension Configs
+// ============================================
+// Extension Configs 
 // ============================================
 
-export const ExtensionsConfigSchema = z.record(
-  z.string(),
-  z.union([
-    z.boolean(),
-    z.array(z.string()),
-    z.record(z.string(), z.unknown())
-  ])
-).default({});
+// Security config for extensions 
+export const ExtensionSecurityConfigSchema = z.object({
+  checkPermissions: z.boolean().default(true),
+  allowUntrusted: z.boolean().default(false),
+  allow: z.array(z.string()).default([]),
+  trackProvenance: z.boolean().default(true),
+  allowPromptInjection: z.boolean().default(false),
+});
+
+// Slot config for extensions 
+export const ExtensionSlotsConfigSchema = z.object({
+  memory: z.string().optional(),
+  tts: z.string().optional(),
+  imageGeneration: z.string().optional(),
+  webSearch: z.string().optional(),
+});
+
+// Complete extensions config
+// Extension config allows both known fields AND arbitrary extension-specific config
+// Known fields: enabled (array), allow (array), security (object), slots (object)
+// Arbitrary: any other key is extension-specific config (e.g., extensions.hello.greeting)
+export const ExtensionsConfigSchema: z.ZodType<Record<string, unknown>> = z.record(z.string(), z.unknown());
 
 // ============================================
 // Root Config
@@ -527,7 +542,17 @@ export const ConfigSchema = z.object({
     historyRetentionDays: 7,
     enableMetrics: true,
   },
-  extensions: {},
+  extensions: {
+    allow: [],
+    security: {
+      checkPermissions: true,
+      allowUntrusted: false,
+      allow: [],
+      trackProvenance: true,
+      allowPromptInjection: false,
+    },
+    slots: {},
+  },
   modelsDev: {
     enabled: true,
   },
