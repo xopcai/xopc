@@ -147,7 +147,7 @@ export function loadBootstrapFiles(bootstrapDir: string): BootstrapFile[] {
     }
   }
 
-  log.info(
+  log.debug(
     { loaded: loadedCount, missing: missingCount, dir: bootstrapDir }, 
     'Workspace bootstrap files loaded'
   );

@@ -87,7 +87,7 @@ export class AgentManager {
       lastUsedAt: Date.now(),
     });
 
-    log.info({ sessionKey, totalAgents: this.agents.size }, 'Created new agent instance');
+    log.debug({ sessionKey, totalAgents: this.agents.size }, 'Created new agent instance');
     return agent;
   }
 
@@ -141,7 +141,7 @@ export class AgentManager {
       instance.agent.abort();
     }
     this.agents.clear();
-    log.info('All agent instances disposed');
+    log.debug('All agent instances disposed');
   }
 
   /**

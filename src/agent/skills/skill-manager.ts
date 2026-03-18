@@ -56,7 +56,7 @@ export class SkillManager {
       }
     }
 
-    log.info({ count: result.skills.length }, 'Skills loaded');
+    log.debug({ count: result.skills.length }, 'Skills loaded');
   }
 
   /**

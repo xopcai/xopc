@@ -284,7 +284,7 @@ export class ModelRegistry {
 		// Merge custom models
 		this.models = this.mergeCustomModels(builtInModels, customModels);
 
-		log.info(
+		log.debug(
 			{ builtIn: builtInModels.length, custom: customModels.length, total: this.models.length },
 			'Models loaded'
 		);

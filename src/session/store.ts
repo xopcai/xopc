@@ -62,7 +62,7 @@ export class SessionStore {
       await this.loadIndex();
     }
 
-    log.info('Session store initialized');
+    log.debug('Session store initialized');
   }
 
   // ========== Index Management ==========

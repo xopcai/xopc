@@ -23,7 +23,7 @@ export class HeartbeatService {
       return;
     }
 
-    log.info({ intervalMs: config.intervalMs }, 'Starting heartbeat service');
+    log.debug({ intervalMs: config.intervalMs }, 'Starting heartbeat service');
 
     this.intervalId = setInterval(async () => {
       await this.checkAndWake();
@@ -36,7 +36,7 @@ export class HeartbeatService {
       const metrics = await this.cronService.getMetrics();
       
       // Log status
-      log.info({ 
+      log.debug({ 
         runningJobs: metrics.runningJobs,
         enabledJobs: metrics.enabledJobs 
       }, 'Heartbeat active');
