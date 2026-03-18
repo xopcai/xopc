@@ -106,14 +106,13 @@ export function checkExtensionPathSafety(
       }
     }
 
-    // 5. Hardlink check (only for global and config origins)
-    // Workspace extensions are user-controlled and trusted
-    // Global/config extensions may be shared across workspaces and need stricter checks
-    if (origin === 'global' || origin === 'config') {
-      // Check if it's a hardlink by comparing inode
+    // 5. Hardlink check (only for non-bundled extensions and regular files)
+    // Skip for directories - APFS creates spurious hardlink counts due to
+    // Time Machine snapshots and APFS clones, causing false positives
+    if (origin !== 'bundled') {
       const sourceStat = fs.statSync(sourcePath);
-      if (sourceStat.nlink > 1) {
-        // Could be a hardlink to bundled or other sensitive directories
+      // Only check regular files, not directories
+      if (sourceStat.isFile() && sourceStat.nlink > 1) {
         return {
           safe: false,
           reason: 'hardlink',
