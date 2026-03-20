@@ -197,7 +197,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   // GET /api/config
-  authenticated.get('/api/config', (c) => {
+  authenticated.get('/api/config', async (c) => {
     const config = service.currentConfig;
     const safeConfig = {
       agents: {
@@ -662,18 +662,17 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   // GET /api/providers/meta - Get provider metadata (categories, display names)
-  authenticated.get('/api/providers/meta', (c) => {
-    const config = service.currentConfig;
+  authenticated.get('/api/providers/meta', async (c) => {
     const providers = getAllProviders();
     
-    const meta = providers.map(provider => ({
+    const meta = await Promise.all(providers.map(async provider => ({
       id: provider,
       name: PROVIDER_META[provider]?.name || provider,
       category: PROVIDER_META[provider]?.category || 'specialty',
       supportsOAuth: PROVIDER_META[provider]?.supportsOAuth ?? false,
       supportsApiKey: PROVIDER_META[provider]?.supportsApiKey ?? true,
       configured: await isProviderConfigured(provider),
-    }));
+    })));
 
     return c.json({ ok: true, payload: { providers: meta } });
   });
