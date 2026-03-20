@@ -1,38 +1,23 @@
 /**
  * GitHub Copilot OAuth Provider
- * 
+ *
  * OAuth authentication for GitHub Copilot.
  * Uses device code flow for authentication.
  */
 
 import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from './types.js';
 
-// Re-export from pi-ai/oauth
+// Stub implementation - OAuth functionality not available
 export const githubCopilotOAuthProvider: OAuthProviderInterface = {
 	id: 'github-copilot',
 	name: 'GitHub Copilot',
 	usesCallbackServer: false,
 
-	async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
-		const { loginGitHubCopilot } = await import('@mariozechner/pi-ai/oauth');
-		const creds = await loginGitHubCopilot({
-			onAuth: (url: string, instructions?: string) => {
-				callbacks.onAuth({ url, instructions });
-			},
-			onPrompt: async (prompt) => callbacks.onPrompt(prompt),
-			onProgress: (msg) => callbacks.onProgress?.(msg),
-			signal: callbacks.signal,
-		});
-		
-		return {
-			access: creds.access,
-			refresh: creds.refresh,
-			expires: creds.expires,
-		};
+	async login(_callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+		throw new Error('GitHub Copilot OAuth not implemented');
 	},
 
 	async refreshToken(_credentials: OAuthCredentials): Promise<OAuthCredentials> {
-		// GitHub Copilot tokens don't support refresh
 		throw new Error('GitHub Copilot tokens do not support refresh. Please re-authenticate.');
 	},
 

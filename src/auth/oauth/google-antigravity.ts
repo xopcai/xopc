@@ -1,35 +1,23 @@
 /**
  * Google Antigravity OAuth Provider
- * 
+ *
  * OAuth authentication for Google Antigravity (Gemini 3, Claude, GPT-OSS).
  */
 
 import type { OAuthCredentials, OAuthLoginCallbacks, OAuthProviderInterface } from './types.js';
 
+// Stub implementation - OAuth functionality not available
 export const googleAntigravityOAuthProvider: OAuthProviderInterface = {
 	id: 'google-antigravity',
 	name: 'Google Antigravity',
 	usesCallbackServer: true,
 
-	async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
-		const { loginAntigravity } = await import('@mariozechner/pi-ai/oauth');
-		const creds = await loginAntigravity(
-			(info: { url: string; instructions?: string }) => callbacks.onAuth(info),
-			(msg: string) => callbacks.onProgress?.(msg),
-			callbacks.onManualCodeInput
-		);
-		
-		return {
-			access: creds.access,
-			refresh: creds.refresh,
-			expires: creds.expires,
-		};
+	async login(_callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
+		throw new Error('Google Antigravity OAuth not implemented');
 	},
 
-	async refreshToken(credentials: OAuthCredentials): Promise<OAuthCredentials> {
-		const { refreshAntigravityToken } = await import('@mariozechner/pi-ai/oauth');
-		const creds = credentials as OAuthCredentials & { projectId?: string };
-		return refreshAntigravityToken(creds.refresh, creds.projectId || '');
+	async refreshToken(_credentials: OAuthCredentials): Promise<OAuthCredentials> {
+		throw new Error('Google Antigravity OAuth refresh not implemented');
 	},
 
 	getApiKey(credentials: OAuthCredentials): string {
