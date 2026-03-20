@@ -2,14 +2,6 @@ import { z } from 'zod';
 import { homedir } from 'os';
 
 // ============================================
-// Provider API Keys (simple format only)
-// ============================================
-// Rich provider configs (baseUrl, models, etc.) are in models.json
-// See src/config/models-json.ts and docs/models.md
-
-export const ProvidersConfigSchema = z.record(z.string(), z.string()).default({});
-
-// ============================================
 // Agent Configs
 // ============================================
 
@@ -468,7 +460,6 @@ export const ConfigSchema = z.object({
   cron: CronConfigSchema,
   extensions: ExtensionsConfigSchema,
   modelsDev: ModelsDevConfigSchema,
-  providers: ProvidersConfigSchema,
   stt: STTConfigSchema.optional(),
   tts: TTSConfigSchema.optional(),
   acp: AcpConfigSchema.optional(),
@@ -563,7 +554,6 @@ export const ConfigSchema = z.object({
   modelsDev: {
     enabled: true,
   },
-  providers: {},
   stt: {
     enabled: false,
     provider: 'alibaba',
@@ -628,11 +618,18 @@ export type AcpConfig = z.infer<typeof AcpConfigSchema>;
 // ============================================
 
 /**
- * 从配置中获取 API key (simple string format only)
- * For rich provider configs, use models.json
+ * @deprecated API keys are now managed by the credential system.
+ * Use CredentialResolver from '../auth/credentials.js' instead.
+ * This function will be removed in v2.0.
+ * 
+ * Example:
+ * ```typescript
+ * const resolver = new CredentialResolver({ agentId: 'main' });
+ * const apiKey = await resolver.resolveApiKey('openai');
+ * ```
  */
-export function getApiKey(config: Config, provider: string): string | undefined {
-  return config.providers?.[provider];
+export function getApiKey(_config: Config, _provider: string): undefined {
+  return undefined;
 }
 
 /**
