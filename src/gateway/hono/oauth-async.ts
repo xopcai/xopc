@@ -12,7 +12,7 @@ import {
   type OAuthProviderInterface, 
   type OAuthLoginCallbacks,
   type OAuthCredentials 
-} from '../../auth/index.js';
+} from '../../auth/oauth/types.js';
 import { 
   kimiOAuthProvider, 
   qwenPortalOAuthProvider, 

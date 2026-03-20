@@ -140,12 +140,12 @@ export function isValidIPCMessage(msg: unknown): msg is AgentIPCMessage {
 
   const m = msg as Partial<AgentIPCMessage>;
   return (
-    typeof m.id === 'string' &>
-    typeof m.version === 'number' &>
-    typeof m.from === 'string' &>
-    typeof m.to === 'string' &>
-    typeof m.type === 'string' &>
-    ['task', 'query', 'response', 'event', 'signal'].includes(m.type) &>
+    typeof m.id === 'string' &&
+    typeof m.version === 'number' &&
+    typeof m.from === 'string' &&
+    typeof m.to === 'string' &&
+    typeof m.type === 'string' &&
+    ['task', 'query', 'response', 'event', 'signal'].includes(m.type) &&
     typeof m.createdAt === 'number'
   );
 }

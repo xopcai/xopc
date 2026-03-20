@@ -270,8 +270,8 @@ export function providerSupportsApiKey(provider: string): boolean {
  * 2. First model from pi-ai catalog
  * 3. Fallback to anthropic/claude-sonnet-4-5 as last resort
  */
-export function getDefaultModel(config?: Config | null | undefined): string {
-  const availableModels = getAvailableModels(config);
+export async function getDefaultModel(config?: Config | null | undefined): Promise<string> {
+  const availableModels = await getAvailableModels();
   
   // Try to find configured default model first
   const defaultModel = config?.agents?.defaults?.model;

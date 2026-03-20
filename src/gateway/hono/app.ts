@@ -439,10 +439,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // ========== Registry API ==========
   
   // GET /api/registry - Full registry for frontend
-  authenticated.get('/api/registry', (c) => {
+  authenticated.get('/api/registry', async (c) => {
     const config = service.currentConfig;
     const allModels = getAllModels();
-    const configured = new Set(getAvailableModels(config).map(m => `${m.provider}/${m.id}`));
+    const availableModels = await getAvailableModels();
+    const configured = new Set(availableModels.map(m => `${m.provider}/${m.id}`));
     
     // Group models by provider
     const providerMap = new Map<string, Model<Api>[]>();
@@ -606,9 +607,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   // GET /api/models - Get available models (only configured providers)
-  authenticated.get('/api/models', (c) => {
-    const config = service.currentConfig;
-    const models = getAvailableModels(config).map(m => ({
+  authenticated.get('/api/models', async (c) => {
+    const models = (await getAvailableModels()).map(m => ({
       id: `${m.provider}/${m.id}`,
       name: m.name,
       provider: m.provider,
@@ -632,10 +632,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   // GET /api/providers - Get ALL available providers and models
-  authenticated.get('/api/providers', (c) => {
-    const config = service.currentConfig;
+  authenticated.get('/api/providers', async (c) => {
     const allModels = getAllModels();
-    const configured = new Set(getAvailableModels(config).map(m => `${m.provider}/${m.id}`));
+    const availableModels = await getAvailableModels();
+    const configured = new Set(availableModels.map(m => `${m.provider}/${m.id}`));
     
     const models = allModels.map(m => ({
       id: `${m.provider}/${m.id}`,
@@ -672,7 +672,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       category: PROVIDER_META[provider]?.category || 'specialty',
       supportsOAuth: PROVIDER_META[provider]?.supportsOAuth ?? false,
       supportsApiKey: PROVIDER_META[provider]?.supportsApiKey ?? true,
-      configured: isProviderConfigured(config, provider),
+      configured: await isProviderConfigured(provider),
     }));
 
     return c.json({ ok: true, payload: { providers: meta } });
