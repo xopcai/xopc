@@ -11,7 +11,7 @@ import { existsSync } from 'fs';
 import { homedir } from 'os';
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/schema.js';
-import { getDefaultWorkspacePath } from '../../config/paths.js';
+import { resolveWorkspaceDir } from '../../config/paths.js';
 import type { SessionEntry } from './manager.types.js';
 
 const log = createLogger('AcpSessionStore');
