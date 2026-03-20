@@ -6,6 +6,8 @@
 
 import { describe, it, expect } from 'vitest';
 
+import type { ChannelPlugin } from '../plugin-types.js';
+
 describe('ChannelManager module', () => {
   it('should export ChannelManager class', async () => {
     const { ChannelManager } = await import('../manager.js');
@@ -32,5 +34,48 @@ describe('ChannelManager module', () => {
     
     const manager = new ChannelManager(mockConfig, mockBus);
     expect(manager).toBeDefined();
+  });
+
+  it('does not call stop on plugins that were never initialized', async () => {
+    const { ChannelManager } = await import('../manager.js');
+
+    let stopCalls = 0;
+    const plugin = {
+      id: 'mockchan',
+      meta: {
+        id: 'mockchan',
+        name: 'Mock',
+        description: '',
+        capabilities: {
+          chatTypes: [],
+          reactions: false,
+          threads: false,
+          media: false,
+          polls: false,
+          nativeCommands: false,
+          blockStreaming: false,
+        },
+      },
+      init: async () => {},
+      start: async () => {},
+      stop: async () => {
+        stopCalls++;
+      },
+    } as unknown as ChannelPlugin;
+
+    const mockBus = {
+      on: () => {},
+      publishInbound: async () => {},
+      publishOutbound: async () => {},
+    } as any;
+
+    const manager = new ChannelManager({ channels: {} } as any, mockBus);
+    manager.registerPlugin(plugin);
+
+    await manager.initialize();
+    await manager.start();
+    await manager.stop();
+
+    expect(stopCalls).toBe(0);
   });
 });

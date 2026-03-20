@@ -25,6 +25,8 @@ const log = createLogger('ChannelManager');
 
 export class ChannelManager {
   private plugins = new Map<string, ChannelPlugin>();
+  /** Plugins that completed `init()` successfully (skipped channels are not listed). */
+  private initializedPluginIds = new Set<string>();
   private bus: MessageBus;
   private config: Config;
   private initialized = false;
@@ -86,6 +88,7 @@ export class ChannelManager {
         channelConfig,
       };
       await plugin.init(options);
+      this.initializedPluginIds.add(plugin.id);
       log.info({ channel: plugin.id }, 'Channel plugin initialized');
     } catch (err) {
       log.error({ channel: plugin.id, err }, 'Failed to initialize channel plugin');
@@ -130,7 +133,9 @@ export class ChannelManager {
     
     const stopPromises: Promise<void>[] = [];
     
-    for (const [id, plugin] of this.plugins) {
+    for (const id of this.initializedPluginIds) {
+      const plugin = this.plugins.get(id);
+      if (!plugin) continue;
       const stopPromise = this.stopPlugin(plugin).catch(err => {
         log.error({ channel: id, err }, 'Failed to stop channel plugin');
       });
