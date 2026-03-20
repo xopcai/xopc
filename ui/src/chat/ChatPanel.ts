@@ -364,7 +364,7 @@ export class ChatPanel extends LitElement {
         <div class="chat-messages-inner">${this._renderMessages()}</div>
       </div>
       ${!this._atBottom ? html`
-        <button class="scroll-to-bottom-btn" style="position:fixed;bottom:100px;right:24px;width:48px;height:48px;border-radius:50%;background:#3b82f6;color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:100;" @click=${() => this._scrollToBottom()} title="Scroll to bottom">
+        <button class="scroll-to-bottom-btn" style="position:fixed;right:1.5rem;bottom:120px;width:48px;height:48px;border-radius:50%;background:#3b82f6;color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:100;" @click=${() => this._scrollToBottom()} title="Scroll to bottom">
           <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
         </button>` : ''}
       <div class="chat-input-container">
