@@ -196,7 +196,7 @@ export class ExtensionLockfileManager {
     const data = await this.load();
 
     // Validate all extensions exist
-    for (const [extensionId, entry] of Object.entries(data.extensions)) {
+    for (const [extensionId] of Object.entries(data.extensions)) {
       const extDir = join(resolveExtensionsDir(), extensionId);
 
       if (!existsSync(extDir)) {

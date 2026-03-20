@@ -255,7 +255,7 @@ export function createOAuthAsyncHandler(service: GatewayService) {
 async function runOAuthFlow(
   session: OAuthSession,
   oauthProvider: OAuthProviderInterface,
-  service: GatewayService
+  _service: GatewayService
 ): Promise<void> {
   const abortController = new AbortController();
   session.abortController = abortController;

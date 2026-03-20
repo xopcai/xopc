@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { createLogger } from '../../utils/logger.js';
 import {
-  getProfileManager,
   listProfiles,
   createProfile,
   deleteProfile,

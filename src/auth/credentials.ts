@@ -216,7 +216,7 @@ export class CredentialResolver {
       }
 
       return token;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -286,7 +286,7 @@ export class CredentialResolver {
     const normalizedProvider = provider.toLowerCase();
 
     // Look for exact match first
-    for (const [id, profile] of Object.entries(file.profiles)) {
+    for (const [, profile] of Object.entries(file.profiles)) {
       if (profile.provider === normalizedProvider) {
         return profile;
       }
@@ -305,7 +305,7 @@ export class CredentialResolver {
         version: data.version || 1,
         profiles: data.profiles || {},
       };
-    } catch (error) {
+    } catch {
       return { version: 2, profiles: {} };
     }
   }
@@ -322,7 +322,7 @@ export class CredentialResolver {
         version: data.version || 1,
         profiles: data.profiles || {},
       };
-    } catch (error) {
+    } catch {
       return { version: 2, profiles: {} };
     }
   }
