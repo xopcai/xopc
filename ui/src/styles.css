@@ -2,33 +2,33 @@
    XOPCBOT DESIGN SYSTEM - Entry Point
    ============================================ */
 
-/* Base styles and CSS variables - must come first */
-@import './styles/00-vars.css';
-
-/* Tailwind directives */
+/* Tailwind directives - must come first */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
 
+/* Base styles and CSS variables */
+@import './styles/00-vars.css';
+
 /* ============================================
    LAYOUT - Shell, Topbar, Navigation
    ============================================ */
-@import './styles/03-layout/index.css';
+@import './layout/index.css';
 
 /* ============================================
    COMPONENTS - Reusable UI Components
    ============================================ */
-@import './styles/02-components/index.css';
+@import './components/index.css';
 
 /* ============================================
    UTILITIES - Utility Classes
    ============================================ */
-@import './styles/05-utilities.css';
+@import './utilities.css';
 
 /* ============================================
    FEATURES - Feature-Specific Styles
    ============================================ */
-@import './styles/03-features/index.css';
+@import './features/index.css';
 
 /* ============================================
    LEGACY - Remaining styles to be organized
