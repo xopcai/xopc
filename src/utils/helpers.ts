@@ -1,12 +1,12 @@
 import { resolve, isAbsolute } from 'path';
 import { homedir } from 'os';
-import { DEFAULT_PATHS } from '../config/paths.js';
+import { resolveWorkspaceDir } from '../config/paths.js';
 
 export function getWorkspacePath(customPath?: string): string {
   if (customPath) {
     return customPath.replace(/^~/, homedir());
   }
-  return DEFAULT_PATHS.workspace;
+  return resolveWorkspaceDir();
 }
 
 export function createPathResolver(extensionDir: string, workspaceDir: string) {

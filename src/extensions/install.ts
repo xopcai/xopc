@@ -16,9 +16,9 @@ import {
 import { join, isAbsolute, resolve } from 'path';
 import { tmpdir } from 'os';
 import {
-  getGlobalExtensionsDir,
-  getWorkspaceExtensionsDir,
-  getBundledExtensionsDir,
+  resolveExtensionsDir as resolveGlobalExtensionsDir,
+  resolveWorkspaceExtensionsDir,
+  resolveBundledExtensionsDir,
 } from '../config/paths.js';
 
 export interface InstallOptions {
@@ -60,11 +60,11 @@ export function resolveExtensionsDir(
   global = false,
 ): string {
   if (global) {
-    const globalDir = getGlobalExtensionsDir();
+    const globalDir = resolveGlobalExtensionsDir();
     mkdirSync(globalDir, { recursive: true });
     return globalDir;
   }
-  return getWorkspaceExtensionsDir(workspaceDir);
+  return resolveWorkspaceExtensionsDir(workspaceDir);
 }
 
 /**
@@ -254,7 +254,7 @@ export function removeExtension(
   workspaceDir: string,
 ): { ok: boolean; removedFrom?: string; error?: string } {
   // Try workspace first
-  const workspaceDir_ = getWorkspaceExtensionsDir(workspaceDir);
+  const workspaceDir_ = resolveWorkspaceExtensionsDir(workspaceDir);
   const workspaceExtension = join(workspaceDir_, extensionId);
 
   if (existsSync(workspaceExtension)) {
@@ -270,7 +270,7 @@ export function removeExtension(
   }
 
   // Try global
-  const globalDir = getGlobalExtensionsDir();
+  const globalDir = resolveGlobalExtensionsDir();
   const globalExtension = join(globalDir, extensionId);
 
   if (existsSync(globalExtension)) {
@@ -296,7 +296,7 @@ export function listAllExtensions(workspaceDir: string): ListedExtension[] {
   const seen = new Set<string>();
 
   // Priority 1: Workspace (highest)
-  const workspaceExtensionsDir = getWorkspaceExtensionsDir(workspaceDir);
+  const workspaceExtensionsDir = resolveWorkspaceExtensionsDir(workspaceDir);
   if (existsSync(workspaceExtensionsDir)) {
     for (const entry of readdirSync(workspaceExtensionsDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
@@ -318,7 +318,7 @@ export function listAllExtensions(workspaceDir: string): ListedExtension[] {
   }
 
   // Priority 2: Global
-  const globalDir = getGlobalExtensionsDir();
+  const globalDir = resolveGlobalExtensionsDir();
   if (existsSync(globalDir)) {
     for (const entry of readdirSync(globalDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;
@@ -341,7 +341,7 @@ export function listAllExtensions(workspaceDir: string): ListedExtension[] {
   }
 
   // Priority 3: Bundled (lowest)
-  const bundledDir = getBundledExtensionsDir();
+  const bundledDir = resolveBundledExtensionsDir();
   if (bundledDir && existsSync(bundledDir)) {
     for (const entry of readdirSync(bundledDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;

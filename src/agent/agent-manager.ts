@@ -9,8 +9,8 @@ import { Agent, type AgentMessage, type AgentEvent, type ThinkingLevel } from '@
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
-import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
-import { getBundledSkillsDir } from '../config/paths.js';
+import { resolveModel, getDefaultModelSync, getApiKeyFromEnv } from '../providers/index.js';
+import { resolveBundledSkillsDir } from '../config/paths.js';
 import { loadBootstrapFiles, extractTextContent } from './helpers.js';
 import { SkillManager } from './skills/index.js';
 import { SystemPromptBuilder } from './prompt/service-prompt-builder.js';
@@ -54,7 +54,7 @@ export class AgentManager {
     this.config = config;
     this.bootstrapFiles = loadBootstrapFiles(config.workspace);
 
-    const skillManager = new SkillManager(config.workspace, getBundledSkillsDir());
+    const skillManager = new SkillManager(config.workspace, resolveBundledSkillsDir());
     this.systemPromptBuilder = new SystemPromptBuilder({
       workspace: config.workspace,
       config: config.config!,
@@ -174,7 +174,7 @@ export class AgentManager {
         tools,
         messages: [],
       },
-      getApiKey: (provider: string) => getApiKeySync(this.config.config, provider),
+      getApiKey: (provider: string) => getApiKeyFromEnv(provider),
     });
   }
 

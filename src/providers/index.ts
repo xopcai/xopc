@@ -143,27 +143,21 @@ export async function getApiKey(provider: string): Promise<string | undefined> {
 }
 
 /**
- * @deprecated Use async getApiKey() instead
+ * Synchronous version for use in non-async contexts
+ * Only checks environment variables and registry, not credential system
  */
-export function getApiKeySync(config: Config | null | undefined, provider: string): string | undefined {
-	// Legacy fallback - check registry and env only
+export function isProviderConfiguredSync(provider: string): boolean {
+	// Check registry for custom providers
 	const registry = getModelRegistry();
-	const registryKey = registry.getApiKey(provider);
-	if (registryKey) {
-		return registryKey;
+	if (registry.getApiKey(provider)) {
+		return true;
 	}
-	return getApiKeyFromEnv(provider);
+	// Check environment variables
+	return !!getApiKeyFromEnv(provider);
 }
 
 export async function isProviderConfigured(provider: string): Promise<boolean> {
 	return await hasCredentials(provider);
-}
-
-/**
- * @deprecated Use async isProviderConfigured() instead
- */
-export function isProviderConfiguredSync(config: Config | null | undefined, provider: string): boolean {
-	return !!getApiKeySync(config, provider);
 }
 
 export async function getConfiguredProviders(): Promise<string[]> {

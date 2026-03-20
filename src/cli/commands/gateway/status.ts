@@ -1,5 +1,6 @@
 import { Command } from 'commander';
-import { loadConfig, DEFAULT_PATHS } from '../../../config/index.js';
+import { loadConfig } from '../../../config/index.js';
+import { resolveConfigPath } from '../../../config/paths.js';
 import { createLogger } from '../../../utils/logger.js';
 import { getContextWithOpts } from '../../index.js';
 import { acquireGatewayLock, GatewayLockError } from '../../../gateway/lock.js';
@@ -14,7 +15,7 @@ export function createStatusCommand(): Command {
     .description('Check gateway status')
     .action(async () => {
       const ctx = getContextWithOpts();
-      const configPath = ctx.configPath || DEFAULT_PATHS.config;
+      const configPath = ctx.configPath || resolveConfigPath();
       const config = loadConfig(configPath);
       const port = config?.gateway?.port || 18790;
 

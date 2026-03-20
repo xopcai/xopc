@@ -5,7 +5,7 @@
  */
 
 import { createSkillLoader, type Skill } from './index.js';
-import { getBundledSkillsDir } from '../../config/paths.js';
+import { resolveBundledSkillsDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('SkillManager');
@@ -31,7 +31,7 @@ export class SkillManager {
 
   constructor(workspace: string, bundledSkillsDir?: string) {
     this.workspace = workspace;
-    this.bundledSkillsDir = bundledSkillsDir || getBundledSkillsDir();
+    this.bundledSkillsDir = bundledSkillsDir || resolveBundledSkillsDir();
     this.initialize();
   }
 

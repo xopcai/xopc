@@ -23,8 +23,8 @@ import { AcpRuntimeError, normalizeAcpErrorCode } from "../errors.js";
 import type { MessageBus } from "../../../bus/index.js";
 import type { Config } from "../../../config/schema.js";
 import { SessionStore } from "../../../session/index.js";
-import { resolveModel, getDefaultModelSync, getApiKeySync } from "../../../providers/index.js";
-import { getBundledSkillsDir } from "../../../config/paths.js";
+import { resolveModel, getDefaultModelSync, getApiKeyFromEnv } from "../../../providers/index.js";
+import { resolveBundledSkillsDir } from "../../../config/paths.js";
 import { AgentToolsFactory } from "../../../agent/agent-tools-factory.js";
 import { SystemPromptBuilder } from "../../../agent/prompt/service-prompt-builder.js";
 import { SkillManager } from "../../../agent/skills/index.js";
@@ -140,7 +140,7 @@ export class LocalAcpRuntime implements AcpRuntime {
     }
 
     const bootstrapFiles = loadBootstrapFiles(this.workspace);
-    const skillManager = new SkillManager(this.workspace, getBundledSkillsDir());
+    const skillManager = new SkillManager(this.workspace, resolveBundledSkillsDir());
     
     // Create a minimal config if none provided
     const agentConfig = this.config || {
@@ -164,7 +164,7 @@ export class LocalAcpRuntime implements AcpRuntime {
         messages: [],
       },
       getApiKey: (provider: string) => {
-        return getApiKeySync(this.config, provider);
+        return getApiKeyFromEnv(provider);
       },
     });
   }

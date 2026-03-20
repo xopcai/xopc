@@ -2,7 +2,8 @@
 import nodeCron from 'node-cron';
 import { CronExpressionParser } from 'cron-parser';
 import { v4 as uuidv4 } from 'uuid';
-import { DEFAULT_PATHS, Config } from '../config/index.js';
+import { Config } from '../config/index.js';
+import { resolveCronJobsPath } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { CronPersistence } from './persistence.js';
 import { DefaultJobExecutor } from './executor.js';
@@ -39,7 +40,7 @@ export class CronService {
   private messageBus: any = null;
 
   constructor(config?: CronServiceConfig) {
-    const filePath = config?.filePath || DEFAULT_PATHS.cronJobs;
+    const filePath = config?.filePath || resolveCronJobsPath();
     this.persistence = new CronPersistence(filePath);
     this.executor = new DefaultJobExecutor();
 

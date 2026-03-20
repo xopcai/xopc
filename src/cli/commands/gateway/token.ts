@@ -1,6 +1,7 @@
 import { Command } from 'commander';
 import crypto from 'crypto';
-import { loadConfig, saveConfig, DEFAULT_PATHS } from '../../../config/index.js';
+import { loadConfig, saveConfig } from '../../../config/index.js';
+import { resolveConfigPath } from '../../../config/paths.js';
 import { createLogger } from '../../../utils/logger.js';
 import { getContextWithOpts } from '../../index.js';
 
@@ -16,7 +17,7 @@ export function createTokenCommand(): Command {
     .option('--mode <mode>', 'Auth mode: token or none', 'token')
     .action(async (options) => {
       const ctx = getContextWithOpts();
-      const configPath = ctx.configPath || DEFAULT_PATHS.config;
+      const configPath = ctx.configPath || resolveConfigPath();
 
       try {
         const config = loadConfig(configPath);

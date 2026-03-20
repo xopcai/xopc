@@ -14,7 +14,7 @@ import {
   formatTestResultsJson,
   formatTestResultsTap,
 } from '../../agent/skills/index.js';
-import { getBundledSkillsDir } from '../../config/paths.js';
+import { resolveBundledSkillsDir } from '../../config/paths.js';
 import type { CLIContext } from '../registry.js';
 
 const log = createLogger('cli:skills-test');
@@ -34,7 +34,7 @@ function createSkillsTestCommand(_ctx: CLIContext): Command {
     .action(async (skillName, options) => {
       const skillsDir = options.skillsDir 
         ? join(process.cwd(), options.skillsDir)
-        : getBundledSkillsDir() || join(process.cwd(), 'skills');
+        : resolveBundledSkillsDir() || join(process.cwd(), 'skills');
 
       log.info({ skillsDir, skillName }, 'Running skill tests');
 
@@ -107,7 +107,7 @@ function createSkillsTestCommand(_ctx: CLIContext): Command {
     .command('check-deps [skill-name]')
     .description('Check skill dependencies')
     .action(async (skillName) => {
-      const skillsDir = getBundledSkillsDir() || join(process.cwd(), 'skills');
+      const skillsDir = resolveBundledSkillsDir() || join(process.cwd(), 'skills');
       const framework = new SkillTestFramework();
 
       if (skillName) {
@@ -151,7 +151,7 @@ function createSkillsTestCommand(_ctx: CLIContext): Command {
     .description('Security audit for skills')
     .option('--deep', 'Show detailed findings')
     .action(async (skillName, options) => {
-      const skillsDir = getBundledSkillsDir() || join(process.cwd(), 'skills');
+      const skillsDir = resolveBundledSkillsDir() || join(process.cwd(), 'skills');
       const framework = new SkillTestFramework();
 
       if (skillName) {

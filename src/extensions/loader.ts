@@ -13,10 +13,10 @@ import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createJiti } from 'jiti';
 import {
-  DEFAULT_PATHS,
-  getGlobalExtensionsDir,
-  getWorkspaceExtensionsDir,
-  getBundledExtensionsDir,
+  resolveWorkspaceDir,
+  resolveExtensionsDir,
+  resolveWorkspaceExtensionsDir,
+  resolveBundledExtensionsDir,
   resolveExtensionSdkPath,
 } from '../config/paths.js';
 import type { Config } from '../types/index.js';
@@ -237,8 +237,8 @@ export class ExtensionLoader {
   constructor(options?: ExtensionLoaderOptions) {
     this.registry = new ExtensionRegistryImpl();
     this.options = options || {
-      workspaceDir: DEFAULT_PATHS.workspace,
-      extensionsDir: DEFAULT_PATHS.extensions,
+      workspaceDir: resolveWorkspaceDir(),
+      extensionsDir: resolveWorkspaceExtensionsDir(),
     };
 
     // Initialize security config
@@ -344,18 +344,18 @@ export class ExtensionLoader {
     const discovered = new Map<string, DiscoveredExtension>();
 
     // Priority 3: Bundled extensions (lowest)
-    const bundledDir = getBundledExtensionsDir();
+    const bundledDir = resolveBundledExtensionsDir();
     if (bundledDir) {
       this.discoverInDirectory(bundledDir, 'bundled', discovered);
     }
 
     // Priority 2: Global extensions
-    const globalDir = getGlobalExtensionsDir();
+    const globalDir = resolveExtensionsDir();
     this.discoverInDirectory(globalDir, 'global', discovered);
 
     // Priority 1: Workspace extensions (highest, can override)
-    const workspaceDir = this.options.workspaceDir || DEFAULT_PATHS.workspace;
-    const workspaceExtensionsDir = getWorkspaceExtensionsDir(workspaceDir);
+    const workspaceDir = this.options.workspaceDir || resolveWorkspaceDir();
+    const workspaceExtensionsDir = resolveWorkspaceExtensionsDir(workspaceDir);
     this.discoverInDirectory(workspaceExtensionsDir, 'workspace', discovered);
 
     return Array.from(discovered.values());
@@ -824,16 +824,16 @@ export class ExtensionLoader {
 
 export function resolveExtensionPath(id: string, options: ExtensionLoaderOptions): string | null {
   // Priority 1: Workspace
-  const workspaceDir = options.workspaceDir || DEFAULT_PATHS.workspace;
-  const workspacePath = join(getWorkspaceExtensionsDir(workspaceDir), id);
+  const workspaceDir = options.workspaceDir || resolveWorkspaceDir();
+  const workspacePath = join(resolveWorkspaceExtensionsDir(workspaceDir), id);
   if (existsSync(workspacePath)) return workspacePath;
 
   // Priority 2: Global
-  const globalPath = join(getGlobalExtensionsDir(), id);
+  const globalPath = join(resolveExtensionsDir(), id);
   if (existsSync(globalPath)) return globalPath;
 
   // Priority 3: Bundled
-  const bundledDir = getBundledExtensionsDir();
+  const bundledDir = resolveBundledExtensionsDir();
   if (bundledDir) {
     const bundledPath = join(bundledDir, id);
     if (existsSync(bundledPath)) return bundledPath;
