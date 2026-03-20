@@ -289,22 +289,174 @@
 /* Input Area */
 .input-area {
   display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-  padding: 1rem;
+  flex-direction: column;
+  gap: 0;
+  padding: 0.75rem 1rem 1rem;
   background: var(--bg-primary);
   border-top: 1px solid var(--border-color);
 }
 
+/* Input Row - Textarea Area */
 .input-row {
   display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
-  flex: 1;
-  padding: 0.5rem;
+  align-items: stretch;
+  padding: 0.5rem 1rem;
   background: var(--bg-secondary);
   border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
+  border-bottom: none;
+}
+
+/* Toolbar Row - Bottom Actions */
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 0.625rem;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-color);
+  border-top: none;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+/* Toolbar Buttons */
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.toolbar-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.toolbar-btn.voice-btn {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar-btn.voice-btn:hover {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+/* Attachment Button */
+.attach-btn {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.attach-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+/* Thinking Selector */
+.thinking-pill {
+  display: flex;
+  align-items: center;
+  gap: 0.25rem;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
+  padding: 0.25rem 0.5rem;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+  height: 2rem;
+}
+
+.thinking-pill:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
+}
+
+.thinking-icon {
+  font-size: 0.875rem;
+  line-height: 1;
+}
+
+.thinking-select-hidden {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: var(--text-secondary);
+  font-size: 0.8125rem;
+  cursor: pointer;
+  outline: none;
+  padding: 0;
+  margin: 0;
+  width: auto;
+  font-weight: 500;
+}
+
+.thinking-select-hidden:focus {
+  outline: none;
+}
+
+/* Send Button */
+.send-btn, .stop-btn {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.send-btn.active {
+  background: var(--accent-primary);
+  color: white;
+  border-color: var(--accent-primary);
+}
+
+.send-btn.active:hover {
+  background: var(--accent-primary-hover);
+  border-color: var(--accent-primary-hover);
+}
+
+.stop-btn {
+  background: var(--accent-error);
+  color: white;
+  border-color: var(--accent-error);
+}
+
+.stop-btn:hover {
+  background: var(--accent-error-hover);
+  border-color: var(--accent-error-hover);
 }
 
 .input-actions {

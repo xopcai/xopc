@@ -9,7 +9,7 @@ import { Agent, type AgentMessage } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { Config } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
-import { resolveModel, getAvailableModels, getDefaultModel } from '../../providers/index.js';
+import { resolveModel, getAllModels as getAllModelsFromProviders, getDefaultModelSync } from '../../providers/index.js';
 import { isFailoverError, describeFailoverError, resolveFallbackCandidates } from '../fallback/index.js';
 
 const log = createLogger('ModelManager');
@@ -55,7 +55,7 @@ export class ModelManager {
 
   constructor(config: ModelManagerConfig = {}) {
     this.config = config.config;
-    this.defaultModel = config.defaultModel || getDefaultModel(config.config);
+    this.defaultModel = config.defaultModel || getDefaultModelSync(config.config);
     this.currentModelName = this.defaultModel;
     this.currentProvider = this.defaultModel.split('/')[0] || 'anthropic';
   }
@@ -294,7 +294,7 @@ export class ModelManager {
    * Get all available models
    */
   getAllModels(): readonly Model<Api>[] {
-    return getAvailableModels(this.config);
+    return getAllModelsFromProviders();
   }
 
   /**

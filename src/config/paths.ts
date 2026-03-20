@@ -2,6 +2,7 @@ import { homedir } from 'os';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
+import { existsSync } from 'fs';
 
 // ============================================
 // Environment Variable Names
@@ -467,8 +468,32 @@ export function resolveBundledSkillsDir(): string | null {
   }
 }
 
+/**
+ * Path to extension-sdk entry (for jiti / extension loader aliases).
+ */
+export function resolveExtensionSdkPath(): string {
+  try {
+    const currentFile = fileURLToPath(import.meta.url);
+    const srcDir = dirname(currentFile);
+    const adjacent = join(srcDir, '..', 'extension-sdk', 'index.ts');
+    if (existsSync(adjacent)) {
+      return adjacent;
+    }
+    const fromPackageRoot = join(srcDir, '..', '..', 'src', 'extension-sdk', 'index.ts');
+    if (existsSync(fromPackageRoot)) {
+      return fromPackageRoot;
+    }
+    const cwd = join(process.cwd(), 'src', 'extension-sdk', 'index.ts');
+    if (existsSync(cwd)) {
+      return cwd;
+    }
+    return adjacent;
+  } catch {
+    return join(process.cwd(), 'src', 'extension-sdk', 'index.ts');
+  }
+}
+
 // Re-export existsSync for bundled paths
-import { existsSync } from 'fs';
 export { existsSync };
 
 // ============================================

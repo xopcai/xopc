@@ -3,11 +3,11 @@ import { loadConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
 import type { CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
-import { 
-  getAllModels, 
-  getAvailableModels, 
+import {
+  getAllModels,
+  getAvailableModels,
   getConfiguredProviders,
-  isProviderConfigured 
+  isProviderConfigured,
 } from '../../providers/index.js';
 
 function createModelsCommand(_ctx: CLIContext): Command {
@@ -26,12 +26,12 @@ function createModelsCommand(_ctx: CLIContext): Command {
     .action(async (options) => {
       const ctx = getContextWithOpts();
       const config = loadConfig(ctx.configPath);
-      const configuredProviders = getConfiguredProviders(config);
+      const configuredProviders = await getConfiguredProviders();
 
       if (options.json) {
-        const models = options.all 
-          ? getAllModels() 
-          : getAvailableModels(config);
+        const models = options.all
+          ? getAllModels()
+          : await getAvailableModels();
         console.log(JSON.stringify({
           providers: configuredProviders,
           models: models.map(m => ({
@@ -54,9 +54,9 @@ function createModelsCommand(_ctx: CLIContext): Command {
         console.log('');
       }
 
-      const models = options.all 
-        ? getAllModels() 
-        : getAvailableModels(config);
+      const models = options.all
+        ? getAllModels()
+        : await getAvailableModels();
 
       console.log('\n📚 Models\n');
       
@@ -71,7 +71,7 @@ function createModelsCommand(_ctx: CLIContext): Command {
       for (const [provider, providerModels] of byProvider) {
         console.log(`  [${provider}]`);
         for (const model of providerModels) {
-          const available = isProviderConfigured(config, provider);
+          const available = await isProviderConfigured(provider);
           const status = available ? '✓' : '○';
           console.log(`    ${status} ${model.name}`);
         }

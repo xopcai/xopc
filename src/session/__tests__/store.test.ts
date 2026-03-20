@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm } from 'fs/promises';
+import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
+import { existsSync } from 'fs';
 import { SessionStore } from '../store.js';
 
 describe('SessionStore', () => {
@@ -10,7 +11,7 @@ describe('SessionStore', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'xopcbot-session-test-'));
-    store = new SessionStore(tempDir);
+    store = new SessionStore({ sessionsDir: join(tempDir, '.sessions') });
     await store.initialize();
   });
 
@@ -203,6 +204,35 @@ describe('SessionStore', () => {
       const activeSessions = await store.list({ status: 'active' });
       expect(activeSessions.items).toHaveLength(1);
       expect(activeSessions.items[0].key).toBe('main:telegram:default:dm:2');
+    });
+  });
+
+  describe('legacy workspace migration', () => {
+    it('copies legacy workspace/.sessions into explicit sessionsDir when new store is empty', async () => {
+      const root = await mkdtemp(join(tmpdir(), 'xopcbot-session-migrate-'));
+      try {
+        const legacyWs = join(root, 'ws');
+        const legacySessions = join(legacyWs, '.sessions');
+        await mkdir(legacySessions, { recursive: true });
+        await writeFile(
+          join(legacySessions, 'index.json'),
+          JSON.stringify({ version: '1.0', lastUpdated: new Date().toISOString(), sessions: [] })
+        );
+        await writeFile(
+          join(legacySessions, 'main_telegram_default_dm_99.json'),
+          JSON.stringify([{ role: 'user', content: 'migrated' }])
+        );
+
+        const targetSessions = join(root, 'new-sessions');
+        const migrated = new SessionStore({ workspace: legacyWs, sessionsDir: targetSessions });
+        await migrated.initialize();
+
+        expect(existsSync(join(targetSessions, 'main_telegram_default_dm_99.json'))).toBe(true);
+        const detail = await migrated.get('main:telegram:default:dm:99');
+        expect(detail?.messages.length).toBeGreaterThan(0);
+      } finally {
+        await rm(root, { recursive: true, force: true });
+      }
     });
   });
 });

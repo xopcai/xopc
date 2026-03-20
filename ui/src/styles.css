@@ -2,33 +2,17 @@
    XOPCBOT DESIGN SYSTEM - Entry Point
    ============================================ */
 
-/* Tailwind directives - must come first */
+/* @import statements must precede all other statements */
+@import './styles/00-vars.css';
+@import './styles/layout/index.css';
+@import './styles/components/index.css';
+@import './styles/05-utilities.css';
+@import './styles/features/index.css';
+
+/* Tailwind directives */
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
-
-/* Base styles and CSS variables */
-@import './styles/00-vars.css';
-
-/* ============================================
-   LAYOUT - Shell, Topbar, Navigation
-   ============================================ */
-@import './layout/index.css';
-
-/* ============================================
-   COMPONENTS - Reusable UI Components
-   ============================================ */
-@import './components/index.css';
-
-/* ============================================
-   UTILITIES - Utility Classes
-   ============================================ */
-@import './utilities.css';
-
-/* ============================================
-   FEATURES - Feature-Specific Styles
-   ============================================ */
-@import './features/index.css';
 
 /* ============================================
    LEGACY - Remaining styles to be organized
@@ -289,8 +273,10 @@
     min-height: 3rem;
   }
 
-  .attach-btn {
-    order: 1;
+  .toolbar-row {
+    padding: 0.375rem 0;
+    gap: 0.25rem;
+    margin: 0;
   }
 
   .input-actions {
@@ -301,9 +287,14 @@
     padding-bottom: 0;
   }
 
-  .attach-btn, .send-btn, .stop-btn {
-    width: 2rem;
-    height: 2rem;
+  .toolbar-btn, .attach-btn, .send-btn, .stop-btn {
+    width: 1.75rem;
+    height: 1.75rem;
+  }
+
+  .thinking-pill {
+    padding: 0.15rem 0.35rem;
+    height: 1.75rem;
   }
 
   .page-header {

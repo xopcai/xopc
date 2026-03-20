@@ -1,6 +1,6 @@
 import type { Config } from '../../config/schema.js';
 import { isProviderConfigured } from '../../config/schema.js';
-import { getDefaultModel } from '../../providers/index.js';
+import { getDefaultModelSync } from '../../providers/index.js';
 import { parseModelRef as parseModelRefUtil, normalizeProviderId } from '../models/selection.js';
 
 export interface ModelCandidate {
@@ -17,12 +17,12 @@ export interface FallbackAttempt {
   code?: string;
 }
 
-// Re-export for backward compatibility
+// Re-export for backward compatibility (sync)
 export { isProviderConfigured };
 
 // Get default model dynamically
 function getDefaultModelParts(config?: Config): { provider: string; model: string } {
-  const defaultModel = getDefaultModel(config);
+  const defaultModel = getDefaultModelSync(config);
   const parts = defaultModel.split('/');
   return {
     provider: parts[0] || 'anthropic',
@@ -56,7 +56,7 @@ export function resolveFallbackCandidates(params: {
   const fallbacks = fallbacksOverride ?? (typeof modelConfig === 'object' ? modelConfig.fallbacks : undefined);
 
   const defaultParts = getDefaultModelParts(cfg);
-  const primaryResolved = parseModelRef(primaryRef || getDefaultModel(cfg));
+  const primaryResolved = parseModelRef(primaryRef || getDefaultModelSync(cfg));
   const provider = inputProvider.trim() || primaryResolved?.provider || defaultParts.provider;
   const model = inputModel.trim() || primaryResolved?.model || defaultParts.model;
 

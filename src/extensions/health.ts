@@ -1,8 +1,8 @@
 import { existsSync } from 'fs';
 import { readFile, readdir, access } from 'fs/promises';
 import { join } from 'path';
-import { createLogger } from '../../utils/logger.js';
-import { resolveExtensionsDir } from '../../config/paths.js';
+import { createLogger } from '../utils/logger.js';
+import { resolveExtensionsDir } from '../config/paths.js';
 import { getExtensionLockfileManager } from './lockfile.js';
 
 const log = createLogger('ExtensionHealth');

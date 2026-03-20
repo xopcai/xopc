@@ -9,7 +9,7 @@ import { Agent, type AgentMessage, type AgentEvent, type ThinkingLevel } from '@
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
-import { resolveModel, getDefaultModel, getApiKey as getProviderApiKey } from '../providers/index.js';
+import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
 import { getBundledSkillsDir } from '../config/paths.js';
 import { loadBootstrapFiles, extractTextContent } from './helpers.js';
 import { SkillManager } from './skills/index.js';
@@ -69,7 +69,7 @@ export class AgentManager {
       bus: config.bus,
     });
 
-    this.defaultModel = config.model || getDefaultModel(config.config);
+    this.defaultModel = config.model || getDefaultModelSync(config.config);
   }
 
   /**
@@ -174,7 +174,7 @@ export class AgentManager {
         tools,
         messages: [],
       },
-      getApiKey: (provider: string) => getProviderApiKey(this.config.config, provider),
+      getApiKey: (provider: string) => getApiKeySync(this.config.config, provider),
     });
   }
 
@@ -186,12 +186,12 @@ export class AgentManager {
       try {
         return resolveModel(this.config.model);
       } catch {
-        const defaultModel = getDefaultModel(this.config.config);
+        const defaultModel = getDefaultModelSync(this.config.config);
         log.warn({ model: this.config.model, defaultModel }, 'Model not found, using default');
         return resolveModel(defaultModel);
       }
     }
-    return resolveModel(getDefaultModel(this.config.config));
+    return resolveModel(getDefaultModelSync(this.config.config));
   }
 
   /**
