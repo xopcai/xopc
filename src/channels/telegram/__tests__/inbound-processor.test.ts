@@ -69,7 +69,7 @@ describe('inbound-processor', () => {
       accountId: 'default',
       name: 'Default',
       enabled: true,
-      token: 'test-token',
+      botToken: 'test-token',
     });
     accountManager.setBotUsername('default', 'test_bot');
 

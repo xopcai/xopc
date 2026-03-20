@@ -59,7 +59,7 @@ xopcbot onboard
       "accounts": {
         "personal": {
           "name": "Personal Bot",
-          "token": "BOT_TOKEN",
+          "botToken": "BOT_TOKEN",
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
@@ -199,7 +199,7 @@ xopcbot onboard
       "accounts": {
         "personal": {
           "name": "Personal Bot",
-          "token": "BOT_TOKEN",
+          "botToken": "BOT_TOKEN",
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
@@ -216,7 +216,7 @@ xopcbot onboard
 | `enabled` | boolean | `false` | 启用 Telegram |
 | `accounts` | object | - | 多账户配置 |
 | `accounts.<id>.name` | string | - | 显示名称 |
-| `accounts.<id>.token` | string | - | Bot token |
+| `accounts.<id>.botToken` | string | - | Bot token |
 | `accounts.<id>.dmPolicy` | string | `open` | DM 策略 |
 | `accounts.<id>.groupPolicy` | string | `open` | 群组策略 |
 | `accounts.<id>.allowFrom` | array | `[]` | 允许的用户 ID |

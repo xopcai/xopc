@@ -59,7 +59,7 @@ Or create manually:
       "accounts": {
         "personal": {
           "name": "Personal Bot",
-          "token": "BOT_TOKEN",
+          "botToken": "BOT_TOKEN",
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
@@ -199,7 +199,7 @@ Multi-account Telegram configuration:
       "accounts": {
         "personal": {
           "name": "Personal Bot",
-          "token": "BOT_TOKEN",
+          "botToken": "BOT_TOKEN",
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
@@ -216,7 +216,7 @@ Multi-account Telegram configuration:
 | `enabled` | boolean | `false` | Enable Telegram |
 | `accounts` | object | - | Multi-account config |
 | `accounts.<id>.name` | string | - | Display name |
-| `accounts.<id>.token` | string | - | Bot token |
+| `accounts.<id>.botToken` | string | - | Bot token |
 | `accounts.<id>.dmPolicy` | string | `open` | DM policy |
 | `accounts.<id>.groupPolicy` | string | `open` | Group policy |
 | `accounts.<id>.allowFrom` | array | `[]` | Allowed user IDs |

@@ -15,8 +15,7 @@ export interface TelegramOnboardOptions {
 type TelegramPartial = NonNullable<Config['channels']>['telegram'];
 
 /**
- * Interactive Telegram setup: writes schema fields `token` and `enabled`, preserves apiRoot etc.
- * Optional `botToken` is merged into `token` and omitted on save.
+ * Interactive Telegram setup: writes schema fields `botToken` and `enabled`, preserves apiRoot etc.
  */
 export async function setupTelegramOnboard(
   config: Config,
@@ -34,30 +33,25 @@ export async function setupTelegramOnboard(
   config.channels = config.channels || {};
   const existingTelegram = (config.channels.telegram ?? {}) as Record<string, unknown>;
 
-  const fromBotToken =
+  const existingBotToken =
     typeof existingTelegram.botToken === 'string' ? existingTelegram.botToken.trim() : '';
-  const existingToken =
-    typeof existingTelegram.token === 'string' ? existingTelegram.token.trim() : '';
-  const resolvedExisting = existingToken || fromBotToken;
 
-  let token = resolvedExisting;
-  if (!token) {
+  let botToken = existingBotToken;
+  if (!botToken) {
     console.log('\n📝 Telegram Configuration:');
     console.log('   Get your bot token from @BotFather on Telegram.\n');
-    token = await input({
+    botToken = await input({
       message: 'Telegram Bot Token:',
       validate: (v: string) => v.length > 0 || 'Required',
     });
   } else {
-    console.log('ℹ️  Telegram token already present; keeping existing.');
+    console.log('ℹ️  Telegram bot token already present; keeping existing.');
   }
 
-  const { botToken: _dropBotTokenAlias, ...restExisting } = existingTelegram;
-
   config.channels.telegram = {
-    ...(restExisting as TelegramPartial),
+    ...(existingTelegram as TelegramPartial),
     enabled: true,
-    token,
+    botToken,
     allowFrom: ((existingTelegram as { allowFrom?: (string | number)[] }).allowFrom ?? []) as (
       | string
       | number

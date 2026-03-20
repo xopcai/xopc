@@ -258,7 +258,7 @@ See [Voice Documentation](https://xopcai.github.io/xopcbot/voice).
   "channels": {
     "telegram": {
       "enabled": true,
-      "token": "BOT_TOKEN_HERE",
+      "botToken": "BOT_TOKEN_HERE",
       "dmPolicy": "allowlist",
       "allowFrom": [123456789]
     }

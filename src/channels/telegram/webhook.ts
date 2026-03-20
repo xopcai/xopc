@@ -18,7 +18,7 @@ const TELEGRAM_WEBHOOK_CALLBACK_TIMEOUT_MS = 10_000;
 
 export interface TelegramWebhookOptions {
   bot: Bot;
-  token: string;
+  botToken: string;
   path?: string;
   port?: number;
   host?: string;

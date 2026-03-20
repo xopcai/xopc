@@ -112,7 +112,7 @@ You'll see a `You:` prompt. Type messages and press Enter. Exit with `Ctrl+C`.
   "channels": {
     "telegram": {
       "enabled": true,
-      "token": "YOUR_BOT_TOKEN",
+      "botToken": "YOUR_BOT_TOKEN",
       "dmPolicy": "allowlist",
       "allowFrom": [123456789]
     }

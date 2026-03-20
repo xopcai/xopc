@@ -405,7 +405,7 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
     // Collect and process media
     const media = extractMediaItems(message);
     const bot = accountManager.getBot(accountId);
-    const botToken = account.token;
+    const botToken = account.botToken;
 
     let attachments: ProcessedAttachment[] = [];
     let transcribedText = '';

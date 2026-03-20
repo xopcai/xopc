@@ -103,52 +103,40 @@ export const TelegramGroupConfigSchema = z.object({
   topics: z.record(z.string(), TelegramTopicConfigSchema).optional(),
 });
 
-export const TelegramAccountConfigSchema = z
-  .object({
-    accountId: z.string(),
-    name: z.string().optional(),
-    enabled: z.boolean().default(true),
-    token: z.string().default(''),
-    /** Optional alias; merged into `token` on parse */
-    botToken: z.string().optional(),
-    tokenFile: z.string().optional(),
-    allowFrom: z.array(z.union([z.string(), z.number()])).default([]),
-    groupAllowFrom: z.array(z.union([z.string(), z.number()])).optional(),
-    dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing'),
-    groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('open'),
-    replyToMode: z.enum(['off', 'first', 'all']).default('off'),
-    groups: z.record(z.string(), TelegramGroupConfigSchema).optional(),
-    historyLimit: z.number().default(50),
-    textChunkLimit: z.number().default(4000),
-    streamMode: z.enum(['off', 'partial', 'block']).default('partial'),
-    proxy: z.string().optional(),
-    apiRoot: z.string().optional(),
-  })
-  .transform(({ botToken, ...rest }) => ({
-    ...rest,
-    token: rest.token || botToken || '',
-  }));
+export const TelegramAccountConfigSchema = z.object({
+  accountId: z.string(),
+  name: z.string().optional(),
+  enabled: z.boolean().default(true),
+  botToken: z.string().default(''),
+  tokenFile: z.string().optional(),
+  allowFrom: z.array(z.union([z.string(), z.number()])).default([]),
+  groupAllowFrom: z.array(z.union([z.string(), z.number()])).optional(),
+  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing'),
+  groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('open'),
+  replyToMode: z.enum(['off', 'first', 'all']).default('off'),
+  groups: z.record(z.string(), TelegramGroupConfigSchema).optional(),
+  historyLimit: z.number().default(50),
+  textChunkLimit: z.number().default(4000),
+  streamMode: z.enum(['off', 'partial', 'block']).default('partial'),
+  proxy: z.string().optional(),
+  apiRoot: z.string().optional(),
+});
 
-/** Normalize optional `botToken` into `token`; implicit enable when a token exists. */
+/** Implicit enable when `botToken` is set. */
 function preprocessTelegramConfigInput(raw: unknown): unknown {
   if (raw === null || raw === undefined) return raw;
   if (typeof raw !== 'object' || Array.isArray(raw)) return raw;
   const o = { ...(raw as Record<string, unknown>) };
-  const token = typeof o.token === 'string' ? o.token : '';
-  const botTokenAlt = typeof o.botToken === 'string' ? o.botToken : '';
-  if (!token.trim() && botTokenAlt.trim()) {
-    o.token = botTokenAlt.trim();
-  }
-  if (o.enabled === undefined && typeof o.token === 'string' && o.token.trim().length > 0) {
+  const botToken = typeof o.botToken === 'string' ? o.botToken : '';
+  if (o.enabled === undefined && botToken.trim().length > 0) {
     o.enabled = true;
   }
-  delete o.botToken;
   return o;
 }
 
 const TelegramConfigSchemaInner = z.object({
   enabled: z.boolean().default(false),
-  token: z.string().default(''),
+  botToken: z.string().default(''),
   allowFrom: z.array(z.union([z.string(), z.number()])).default([]),
   groupAllowFrom: z.array(z.union([z.string(), z.number()])).default([]),
   apiRoot: z.string().optional(),
@@ -217,7 +205,7 @@ export const ChannelsConfigSchema = z.object({
 }).default({
   telegram: {
     enabled: false,
-    token: '',
+    botToken: '',
     allowFrom: [],
     groupAllowFrom: [],
     debug: false,
@@ -530,7 +518,7 @@ export const ConfigSchema = z.object({
   channels: {
     telegram: {
       enabled: false,
-      token: '',
+      botToken: '',
       allowFrom: [],
       groupAllowFrom: [],
       debug: false,
