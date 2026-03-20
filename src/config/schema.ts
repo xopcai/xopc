@@ -458,7 +458,7 @@ export const ConfigSchema = z.object({
   gateway: GatewayConfigSchema,
   tools: ToolsConfigSchema,
   cron: CronConfigSchema,
-  extensions: ExtensionsConfigSchema,
+  extensions: ExtensionsConfigSchema.default({}),
   modelsDev: ModelsDevConfigSchema,
   stt: STTConfigSchema.optional(),
   tts: TTSConfigSchema.optional(),
