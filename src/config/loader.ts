@@ -62,11 +62,11 @@ export function loadConfig(configPath?: string): Config {
       return ConfigSchema.parse(json);
     } catch (error) {
       log.error({ err: error, path }, `Failed to load config`);
-      return ConfigSchema.parse({});
+      return ConfigSchema.parse(undefined);
     }
   }
 
-  return ConfigSchema.parse({});
+  return ConfigSchema.parse(undefined);
 }
 
 /**

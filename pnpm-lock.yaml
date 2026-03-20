@@ -24,11 +24,11 @@ importers:
         specifier: ^8.2.1
         version: 8.3.0(@types/node@25.3.2)
       '@mariozechner/pi-agent-core':
-        specifier: ^0.60.0
-        version: 0.60.0(ws@8.19.0)(zod@4.3.6)
+        specifier: ^0.61.0
+        version: 0.61.0(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-ai':
-        specifier: ^0.60.0
-        version: 0.60.0(ws@8.19.0)(zod@4.3.6)
+        specifier: ^0.61.0
+        version: 0.61.0(ws@8.19.0)(zod@4.3.6)
       '@sinclair/typebox':
         specifier: ^0.34.48
         version: 0.34.48
@@ -904,12 +904,12 @@ packages:
   '@jridgewell/sourcemap-codec@1.5.5':
     resolution: {integrity: sha512-cYQ9310grqxueWbl+WuIUIaiUaDcj7WOq5fVhEljNVgRfOUhY9fy2zTvfoqWsnebh8Sl70VScFbICvJnLKB0Og==}
 
-  '@mariozechner/pi-agent-core@0.60.0':
-    resolution: {integrity: sha512-1zQcfFp8r0iwZCxCBQ9/ccFJoagns68cndLPTJJXl1ZqkYirzSld1zBOPxLAgeAKWIz3OX8dB2WQwTJFhmEojQ==}
+  '@mariozechner/pi-agent-core@0.61.0':
+    resolution: {integrity: sha512-MBCZfcYDmc5ssZGitv66nSsjma0W+4VwnfzPDRXdOcIhtxiJYux2t8mZe23CbUb4WNkeY3eMU2N6pe4YWeGexg==}
     engines: {node: '>=20.0.0'}
 
-  '@mariozechner/pi-ai@0.60.0':
-    resolution: {integrity: sha512-OiMuXQturnEDPmA+ho7eLe4G8plO2z21yjNMs9niQREauoblWOz7Glv58I66KPzczLED4aZTlQLTRdU6t1rz8A==}
+  '@mariozechner/pi-ai@0.61.0':
+    resolution: {integrity: sha512-iiTiZ91aEND1AfP314exsissbPJnMMZv0NWLkazFf8TwYlUo9qD+6TlXEUYnX1ZRMCnZ7RjSEVerRrQ63FGZXw==}
     engines: {node: '>=20.0.0'}
     hasBin: true
 
@@ -3705,9 +3705,9 @@ snapshots:
 
   '@jridgewell/sourcemap-codec@1.5.5': {}
 
-  '@mariozechner/pi-agent-core@0.60.0(ws@8.19.0)(zod@4.3.6)':
+  '@mariozechner/pi-agent-core@0.61.0(ws@8.19.0)(zod@4.3.6)':
     dependencies:
-      '@mariozechner/pi-ai': 0.60.0(ws@8.19.0)(zod@4.3.6)
+      '@mariozechner/pi-ai': 0.61.0(ws@8.19.0)(zod@4.3.6)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - aws-crt
@@ -3717,7 +3717,7 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-ai@0.60.0(ws@8.19.0)(zod@4.3.6)':
+  '@mariozechner/pi-ai@0.61.0(ws@8.19.0)(zod@4.3.6)':
     dependencies:
       '@anthropic-ai/sdk': 0.73.0(zod@4.3.6)
       '@aws-sdk/client-bedrock-runtime': 3.999.0
