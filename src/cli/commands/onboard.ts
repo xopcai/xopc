@@ -17,7 +17,7 @@ import {
   googleAntigravityOAuthProvider,
   openaiCodexOAuthProvider,
   type OAuthLoginCallbacks,
-} from '../../auth/index.js';
+} from '../../auth/oauth/index.js';
 import { upsertAuthProfile, listProfilesForProvider as _listProfilesForProvider } from '../../auth/profiles/index.js';
 import {
   getModelsByProvider,
