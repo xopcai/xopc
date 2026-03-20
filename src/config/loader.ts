@@ -1,7 +1,7 @@
 import { readFileSync, existsSync, mkdirSync, promises as fsPromises } from 'fs';
 import { dirname } from 'path';
 import { Config, ConfigSchema } from './schema.js';
-import { DEFAULT_PATHS } from './paths.js';
+import { resolveConfigPath } from './paths.js';
 import { config } from 'dotenv';
 import { createLogger } from '../utils/logger.js';
 
@@ -12,7 +12,7 @@ const CONFIG_BACKUP_COUNT = 20;
 
 /**
  * Rotate config backups before writing new config.
- * Creates a backup chain: config.json.bak, config.json.bak.1, config.json.bak.2, etc.
+ * Creates a backup chain: xopcbot.json.bak, xopcbot.json.bak.1, xopcbot.json.bak.2, etc.
  */
 async function rotateConfigBackups(configPath: string): Promise<void> {
   if (CONFIG_BACKUP_COUNT <= 1) {
@@ -46,10 +46,14 @@ async function rotateConfigBackups(configPath: string): Promise<void> {
   }
 }
 
+/**
+ * Load configuration from file
+ * @param configPath Optional custom config path, defaults to XOPCBOT_CONFIG_PATH or ~/.xopcbot/xopcbot.json
+ */
 export function loadConfig(configPath?: string): Config {
   config();
 
-  const path = configPath || process.env.CONFIG_PATH || DEFAULT_PATHS.config;
+  const path = configPath || process.env.XOPCBOT_CONFIG_PATH || resolveConfigPath();
 
   if (existsSync(path)) {
     try {
@@ -65,8 +69,13 @@ export function loadConfig(configPath?: string): Config {
   return ConfigSchema.parse({});
 }
 
+/**
+ * Save configuration to file
+ * @param config Configuration object to save
+ * @param configPath Optional custom config path
+ */
 export async function saveConfig(config: Config, configPath?: string): Promise<void> {
-  const path = configPath || process.env.CONFIG_PATH || DEFAULT_PATHS.config;
+  const path = configPath || process.env.XOPCBOT_CONFIG_PATH || resolveConfigPath();
 
   const dir = dirname(path);
   if (!existsSync(dir)) {
@@ -89,4 +98,5 @@ export async function saveConfig(config: Config, configPath?: string): Promise<v
   await fsPromises.writeFile(path, content, 'utf-8');
 }
 
-export { DEFAULT_PATHS };
+// Re-export for backward compatibility
+export { resolveConfigPath } from './paths.js';
