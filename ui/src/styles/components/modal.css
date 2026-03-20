@@ -1,0 +1,53 @@
+/* ============================================
+   Modal & Common Components Styles
+   ============================================ */
+
+/* Shimmer animation for skeleton loading */
+@keyframes shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Error banner */
+.error-banner {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  background: color-mix(in srgb, var(--color-error, #ef4444) 10%, transparent);
+  border: 1px solid color-mix(in srgb, var(--color-error, #ef4444) 30%, transparent);
+  border-radius: var(--radius-md);
+  color: var(--color-error, #ef4444);
+  font-size: 0.875rem;
+  margin-bottom: 1rem;
+}
+
+/* Empty state */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 3rem 1.5rem;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.empty-state__icon {
+  font-size: 2.5rem;
+  margin-bottom: 1rem;
+  opacity: 0.5;
+}
+
+.empty-state__title {
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-secondary);
+  margin-bottom: 0.375rem;
+}
+
+.empty-state__desc {
+  font-size: 0.875rem;
+  color: var(--text-muted);
+  max-width: 28rem;
+}

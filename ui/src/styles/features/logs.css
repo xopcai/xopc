@@ -1,0 +1,21 @@
+/* ============================================
+   Log Manager Styles
+   ============================================ */
+
+/* Log Manager Main Layout */
+.log-manager__main {
+  display: flex;
+  flex-direction: column;   /* 关键：改为竖排 */
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+/* Log Table Container */
+.log-table-container {
+  flex: 1;
+  min-height: 0;            /* 关键：允许在 flex column 中收缩 */
+  overflow-y: auto;
+  overflow-x: hidden;
+}

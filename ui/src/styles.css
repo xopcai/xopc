@@ -4,6 +4,14 @@
 /* Chat UI styles */
 @import './styles/chat.css';
 
+/* Component styles */
+@import './styles/components/modal.css';
+
+/* Feature page styles */
+@import './styles/features/logs.css';
+@import './styles/features/cron.css';
+@import './styles/features/settings.css';
+
 /* Tailwind directives - must come after @import */
 @tailwind base;
 @tailwind components;
