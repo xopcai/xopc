@@ -1,6 +1,6 @@
 import { homedir } from 'os';
 import { join } from 'path';
-import { mkdir, readdir, stat, rmdir } from 'fs/promises';
+import { mkdir, readdir, stat, rm } from 'fs/promises';
 import { existsSync } from 'fs';
 import { createLogger } from '../utils/logger.js';
 import { resolveHomeDir, resolveStateDir, ENV_VARS } from './paths.js';
@@ -181,7 +181,7 @@ export class ProfileManager {
     }
 
     // Delete the directory
-    await rmdir(stateDir, { recursive: true });
+    await rm(stateDir, { recursive: true, force: true });
 
     log.info({ name }, 'Deleted profile');
   }

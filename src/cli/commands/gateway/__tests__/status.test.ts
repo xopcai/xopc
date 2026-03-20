@@ -22,7 +22,7 @@ vi.mock('../../../../config/index.js', () => ({
 
 vi.mock('../../index.js', () => ({
   getContextWithOpts: vi.fn(() => ({
-    configPath: '/root/.xopcbot/config.json',
+    configPath: '/root/.xopcbot/xopcbot.json',
     workspacePath: '/root/.xopcbot/workspace',
     isVerbose: false,
   })),
@@ -79,7 +79,7 @@ describe('Gateway Status Command', () => {
       const cmd = createStatusCommand();
       await cmd.parseAsync(['node', 'test']);
 
-      expect(acquireGatewayLock).toHaveBeenCalledWith('/root/.xopcbot/config.json', {
+      expect(acquireGatewayLock).toHaveBeenCalledWith('/root/.xopcbot/xopcbot.json', {
         timeoutMs: 100,
         port: 18790,
       });

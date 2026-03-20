@@ -22,7 +22,7 @@ vi.mock('../../../../config/index.js', () => ({
 
 vi.mock('../../index.js', () => ({
   getContextWithOpts: vi.fn(() => ({
-    configPath: '/root/.xopcbot/config.json',
+    configPath: '/root/.xopcbot/xopcbot.json',
     workspacePath: '/root/.xopcbot/workspace',
     isVerbose: false,
   })),
@@ -81,7 +81,7 @@ describe('Gateway Token Command', () => {
       const cmd = createTokenCommand();
       await cmd.parseAsync(['node', 'test']);
 
-      expect(loadConfig).toHaveBeenCalledWith('/root/.xopcbot/config.json');
+      expect(loadConfig).toHaveBeenCalledWith('/root/.xopcbot/xopcbot.json');
       expect(consoleLogSpy).toHaveBeenCalledWith(expect.stringContaining('Current gateway token'));
       expect(processExitSpy).toHaveBeenCalledWith(0);
     });

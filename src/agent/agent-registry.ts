@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile, rmdir } from 'fs/promises';
+import { mkdir, readdir, readFile, writeFile, rm } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { createLogger } from '../utils/logger.js';
@@ -239,7 +239,7 @@ export class AgentRegistry {
       );
     }
 
-    await rmdir(agentDir, { recursive: true });
+    await rm(agentDir, { recursive: true, force: true });
 
     log.info({ agentId: id }, 'Deleted agent');
   }
@@ -323,7 +323,7 @@ export class AgentRegistry {
           // Process exists, don't clean up
         } catch {
           // Process doesn't exist, clean up
-          await rmdir(runDir, { recursive: true });
+          await rm(runDir, { recursive: true, force: true });
           cleaned++;
           log.info({ agentId: agent.id, pid }, 'Cleaned up orphaned run directory');
         }

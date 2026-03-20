@@ -1,8 +1,9 @@
 // Session store - manages session persistence, indexing, compaction, and sliding window
 
-import { readFile, writeFile, mkdir, unlink, readdir, stat } from 'fs/promises';
+import { readFile, writeFile, mkdir, unlink, readdir, stat, cp } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
+import { resolveSessionsDir, resolveAgentId, FILENAMES } from '../config/paths.js';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { createLogger } from '../utils/logger.js';
 import type {
@@ -26,8 +27,24 @@ const log = createLogger('SessionStore');
 const INDEX_VERSION = '1.0';
 const DEFAULT_LIMIT = 50;
 
+/**
+ * Session files live under `resolveSessionsDir(agentId)` (ADR-003).
+ * Optional `workspace` enables one-time migration from legacy `<workspace>/.sessions`.
+ */
+export interface SessionStoreOptions {
+  /** Agent OS agent id (default: XOPCBOT_AGENT_ID or `main`) */
+  agentId?: string;
+  /**
+   * Config workspace path (`agents.defaults.workspace`).
+   * If legacy `<workspace>/.sessions` exists and the new store is empty, it is copied here.
+   */
+  workspace?: string;
+  /** Override storage root (tests); skips `resolveSessionsDir` */
+  sessionsDir?: string;
+}
+
 export class SessionStore {
-  private baseDir: string;
+  private readonly legacyWorkspace?: string;
   private sessionsDir: string;
   private archiveDir: string;
   private indexFile: string;
@@ -38,14 +55,15 @@ export class SessionStore {
   private compactor: SessionCompactor;
 
   constructor(
-    workspace: string,
+    options: SessionStoreOptions,
     windowConfig?: Partial<WindowConfig>,
     compactionConfig?: Partial<CompactionConfig>
   ) {
-    this.baseDir = workspace;
-    this.sessionsDir = join(workspace, '.sessions');
-    this.archiveDir = join(workspace, '.sessions', 'archive');
-    this.indexFile = join(workspace, '.sessions', 'index.json');
+    const agentId = options.agentId ?? resolveAgentId();
+    this.legacyWorkspace = options.workspace;
+    this.sessionsDir = options.sessionsDir ?? resolveSessionsDir(agentId);
+    this.archiveDir = join(this.sessionsDir, 'archive');
+    this.indexFile = join(this.sessionsDir, FILENAMES.SESSIONS_INDEX);
     this.window = new SlidingWindow(windowConfig);
     this.compactor = new SessionCompactor(compactionConfig);
   }
@@ -56,6 +74,8 @@ export class SessionStore {
     await mkdir(this.sessionsDir, { recursive: true });
     await mkdir(this.archiveDir, { recursive: true });
 
+    await this.maybeMigrateLegacyWorkspace();
+
     if (!existsSync(this.indexFile)) {
       await this.rebuildIndex();
     } else {
@@ -63,6 +83,58 @@ export class SessionStore {
     }
 
     log.debug('Session store initialized');
+  }
+
+  /**
+   * Copy legacy `<workspace>/.sessions` into `agents/<agentId>/sessions/` when the new location is empty.
+   */
+  private async maybeMigrateLegacyWorkspace(): Promise<void> {
+    if (!this.legacyWorkspace) return;
+
+    const legacyDir = join(this.legacyWorkspace, '.sessions');
+    if (!existsSync(legacyDir)) return;
+    if (legacyDir === this.sessionsDir) return;
+
+    const hasNewSessions = await this.hasNonEmptyIndex(this.indexFile);
+    if (hasNewSessions) return;
+
+    let legacyHasData = false;
+    try {
+      const names = await readdir(legacyDir);
+      legacyHasData = names.some(
+        (n) =>
+          (n.endsWith('.json') && n !== FILENAMES.SESSIONS_INDEX) ||
+          n === 'archive'
+      );
+    } catch {
+      return;
+    }
+    if (!legacyHasData) return;
+
+    try {
+      const entries = await readdir(legacyDir, { withFileTypes: true });
+      for (const ent of entries) {
+        const src = join(legacyDir, ent.name);
+        const dest = join(this.sessionsDir, ent.name);
+        await cp(src, dest, { recursive: true, force: true });
+      }
+      log.info({ from: legacyDir, to: this.sessionsDir }, 'Migrated sessions from legacy workspace/.sessions');
+      this.indexCache = null;
+      this.indexCacheTime = 0;
+    } catch (err) {
+      log.warn({ err, legacyDir, target: this.sessionsDir }, 'Failed to migrate legacy sessions');
+    }
+  }
+
+  private async hasNonEmptyIndex(indexPath: string): Promise<boolean> {
+    if (!existsSync(indexPath)) return false;
+    try {
+      const raw = await readFile(indexPath, 'utf-8');
+      const data = JSON.parse(raw) as SessionIndex;
+      return Array.isArray(data.sessions) && data.sessions.length > 0;
+    } catch {
+      return false;
+    }
   }
 
   // ========== Index Management ==========

@@ -19,7 +19,10 @@ import type { WindowConfig } from '../agent/memory/window.js';
 const log = createLogger('SessionManager');
 
 export interface SessionManagerConfig {
-  workspace: string;
+  /** Config workspace path; enables migration from `<workspace>/.sessions` */
+  workspace?: string;
+  agentId?: string;
+  sessionsDir?: string;
   windowConfig?: Partial<WindowConfig>;
   compactionConfig?: Partial<CompactionConfig>;
 }
@@ -29,7 +32,15 @@ export class SessionManager extends EventEmitter {
 
   constructor(config: SessionManagerConfig) {
     super();
-    this.store = new SessionStore(config.workspace, config.windowConfig, config.compactionConfig);
+    this.store = new SessionStore(
+      {
+        workspace: config.workspace,
+        agentId: config.agentId,
+        sessionsDir: config.sessionsDir,
+      },
+      config.windowConfig,
+      config.compactionConfig
+    );
   }
 
   async initialize(): Promise<void> {

@@ -217,7 +217,7 @@ export class AgentService {
       evictionWindow: sessionStoreDefaults?.compaction?.evictionWindow || 0.2,
       retentionWindow: sessionStoreDefaults?.compaction?.retentionWindow || 6,
     };
-    return new SessionStore(this.config.workspace, windowConfig, compactionConfig);
+    return new SessionStore({ workspace: this.config.workspace }, windowConfig, compactionConfig);
   }
 
   private createHookRunner(): ExtensionHookRunner | undefined {

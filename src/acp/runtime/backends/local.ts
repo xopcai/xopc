@@ -23,7 +23,7 @@ import { AcpRuntimeError, normalizeAcpErrorCode } from "../errors.js";
 import type { MessageBus } from "../../../bus/index.js";
 import type { Config } from "../../../config/schema.js";
 import { SessionStore } from "../../../session/index.js";
-import { resolveModel, getDefaultModel, getApiKey as getProviderApiKey } from "../../../providers/index.js";
+import { resolveModel, getDefaultModelSync, getApiKeySync } from "../../../providers/index.js";
 import { getBundledSkillsDir } from "../../../config/paths.js";
 import { AgentToolsFactory } from "../../../agent/agent-tools-factory.js";
 import { SystemPromptBuilder } from "../../../agent/prompt/service-prompt-builder.js";
@@ -80,7 +80,7 @@ export class LocalAcpRuntime implements AcpRuntime {
     this.config = runtimeConfig?.config;
 
     // Initialize session store
-    this.sessionStore = new SessionStore(this.workspace, {
+    this.sessionStore = new SessionStore({ workspace: this.workspace }, {
       maxMessages: 100,
       keepRecentMessages: 20,
       preserveSystemMessages: true,
@@ -130,12 +130,12 @@ export class LocalAcpRuntime implements AcpRuntime {
         const modelId = typeof modelConfig === "string" ? modelConfig : modelConfig.primary;
         model = resolveModel(modelId);
       } catch {
-        const defaultModel = getDefaultModel(this.config);
+        const defaultModel = getDefaultModelSync(this.config);
         log.warn({ modelConfig, defaultModel }, "Model not found, using default");
         model = resolveModel(defaultModel);
       }
     } else {
-      const defaultModel = getDefaultModel(this.config);
+      const defaultModel = getDefaultModelSync(this.config);
       model = resolveModel(defaultModel);
     }
 
@@ -164,7 +164,7 @@ export class LocalAcpRuntime implements AcpRuntime {
         messages: [],
       },
       getApiKey: (provider: string) => {
-        return getProviderApiKey(this.config, provider);
+        return getApiKeySync(this.config, provider);
       },
     });
   }

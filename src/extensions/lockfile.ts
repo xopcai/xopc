@@ -2,8 +2,8 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { dirname, join } from 'path';
 import { createHash } from 'crypto';
-import { createLogger } from '../../utils/logger.js';
-import { resolveExtensionsLockPath, resolveExtensionsDir } from '../../config/paths.js';
+import { createLogger } from '../utils/logger.js';
+import { resolveExtensionsLockPath, resolveExtensionsDir } from '../config/paths.js';
 
 const log = createLogger('ExtensionLockfile');
 

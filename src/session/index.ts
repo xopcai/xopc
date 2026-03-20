@@ -2,6 +2,7 @@
 
 export { SessionManager } from './manager.js';
 export { SessionStore } from './store.js';
+export type { SessionStoreOptions } from './store.js';
 export { SessionConfigStore, resolveThinkingLevel, resolveReasoningLevel, resolveVerboseLevel } from './config-store.js';
 export type { SessionAgentConfig } from './config-store.js';
 

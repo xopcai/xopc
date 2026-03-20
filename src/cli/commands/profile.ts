@@ -6,8 +6,8 @@ import {
   createProfile,
   deleteProfile,
   getCurrentProfile,
+  resolveProfileStateDir,
 } from '../../config/profile.js';
-import { resolveProfileStateDir } from '../../config/paths.js';
 import { colors } from '../utils/colors.js';
 import Table from 'cli-table3';
 

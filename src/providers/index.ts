@@ -310,5 +310,34 @@ export async function getDefaultModel(config?: Config | null | undefined): Promi
   return 'anthropic/claude-sonnet-4-5';
 }
 
+/**
+ * Synchronous default model resolution for constructors and sync code paths.
+ * Uses catalog/registry only (no async credential checks).
+ */
+export function getDefaultModelSync(config?: Config | null | undefined): string {
+  const defaultModel = config?.agents?.defaults?.model;
+  if (defaultModel) {
+    const modelRef = typeof defaultModel === 'string' ? defaultModel : defaultModel.primary;
+    if (modelRef) {
+      return modelRef;
+    }
+  }
+  const all = getAllModels();
+  if (all.length > 0) {
+    return `${all[0].provider}/${all[0].id}`;
+  }
+  for (const provider of getPiAiProviders()) {
+    try {
+      const models = getPiAiModels(provider);
+      if (models.length > 0) {
+        return `${provider}/${models[0].id}`;
+      }
+    } catch {
+      continue;
+    }
+  }
+  return 'anthropic/claude-sonnet-4-5';
+}
+
 // Re-export ModelRegistry for advanced use cases
 export { ModelRegistry, getModelRegistry, resetModelRegistry } from './model-registry.js';

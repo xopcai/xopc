@@ -6,10 +6,11 @@
 
 import type { MessageBus } from '../../bus/index.js';
 import type { Config } from '../../config/schema.js';
+import { isProviderConfigured } from '../../config/schema.js';
 import type { SessionStore } from '../../session/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { commandRegistry, createCommandContext } from '../../commands/index.js';
-import { getAllProviders, isProviderConfigured, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
+import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
 
 const log = createLogger('CommandHandler');
 
