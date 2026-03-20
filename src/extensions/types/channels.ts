@@ -38,7 +38,7 @@ export interface ChannelMessage {
 
 export interface TelegramConfig {
   enabled: boolean;
-  token: string;
+  botToken: string;
   allowFrom: Array<string | number>;
   debug: boolean;
   dmPolicy: DmPolicy;
@@ -55,7 +55,7 @@ export interface TelegramConfig {
 
 export interface TelegramAccountConfig {
   enabled: boolean;
-  token: string;
+  botToken: string;
   allowFrom?: Array<string | number>;
   groupAllowFrom?: Array<string | number>;
   debug?: boolean;

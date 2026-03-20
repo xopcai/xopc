@@ -22,7 +22,7 @@ xopcbot supports multiple communication channels with an extension-based archite
       "accounts": {
         "personal": {
           "name": "Personal Bot",
-          "token": "BOT_TOKEN_1",
+          "botToken": "BOT_TOKEN_1",
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
@@ -30,7 +30,7 @@ xopcbot supports multiple communication channels with an extension-based archite
         },
         "work": {
           "name": "Work Bot",
-          "token": "BOT_TOKEN_2",
+          "botToken": "BOT_TOKEN_2",
           "dmPolicy": "disabled",
           "groupPolicy": "allowlist",
           "groups": {
@@ -82,7 +82,7 @@ xopcbot supports multiple communication channels with an extension-based archite
 |-------|------|-------------|
 | `enabled` | boolean | Enable channel |
 | `accounts` | object | Multi-account configuration |
-| `accounts.<id>.token` | string | Bot Token |
+| `accounts.<id>.botToken` | string | Bot Token |
 | `accounts.<id>.dmPolicy` | string | DM access policy |
 | `accounts.<id>.groupPolicy` | string | Group access policy |
 | `accounts.<id>.allowFrom` | array | Allowed user IDs |
@@ -130,7 +130,7 @@ For restricted network environments:
       "enabled": true,
       "accounts": {
         "default": {
-          "token": "YOUR_BOT_TOKEN",
+          "botToken": "YOUR_BOT_TOKEN",
           "apiRoot": "https://your-proxy-domain.com"
         }
       }

@@ -76,7 +76,7 @@ export interface TelegramAccountConfig {
   accountId: string;
   name?: string;
   enabled?: boolean;
-  token?: string;
+  botToken?: string;
   tokenFile?: string;
   dmPolicy?: DmPolicy;
   groupPolicy?: GroupPolicy;
@@ -94,8 +94,7 @@ export interface TelegramAccountConfig {
 export interface TelegramChannelConfig {
   enabled?: boolean;
   accounts?: Record<string, TelegramAccountConfig>;
-  // Legacy single-account config (for backward compatibility)
-  token?: string;
+  botToken?: string;
   allowFrom?: Array<string | number>;
   groupAllowFrom?: Array<string | number>;
   dmPolicy?: DmPolicy;

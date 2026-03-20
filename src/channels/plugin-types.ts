@@ -210,7 +210,6 @@ export interface ChannelSetupAdapter {
 }
 
 export interface ChannelSetupInput {
-  token?: string;
   botToken?: string;
   botTokenFile?: string;
   [key: string]: unknown;

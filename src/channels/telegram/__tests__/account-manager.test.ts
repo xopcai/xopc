@@ -17,7 +17,7 @@ describe('TelegramAccountManager', () => {
         accountId: 'test-account',
         name: 'Test Account',
         enabled: true,
-        token: 'test-token',
+        botToken: 'test-token',
       };
 
       manager.registerAccount(account);
@@ -35,13 +35,13 @@ describe('TelegramAccountManager', () => {
         accountId: 'test',
         name: 'Test 1',
         enabled: true,
-        token: 'token1',
+        botToken: 'token1',
       };
       const account2: TelegramAccountConfig = {
         accountId: 'test',
         name: 'Test 2',
         enabled: true,
-        token: 'token2',
+        botToken: 'token2',
       };
 
       manager.registerAccount(account1);
@@ -61,7 +61,7 @@ describe('TelegramAccountManager', () => {
         accountId: 'test',
         name: 'Test',
         enabled: true,
-        token: 'token',
+        botToken: 'token',
       };
       manager.registerAccount(account);
 
@@ -79,13 +79,13 @@ describe('TelegramAccountManager', () => {
         accountId: 'account1',
         name: 'Account 1',
         enabled: true,
-        token: 'token1',
+        botToken: 'token1',
       };
       const account2: TelegramAccountConfig = {
         accountId: 'account2',
         name: 'Account 2',
         enabled: true,
-        token: 'token2',
+        botToken: 'token2',
       };
 
       manager.registerAccount(account1);
@@ -209,7 +209,7 @@ describe('TelegramAccountManager', () => {
         accountId: 'lifecycle-test',
         name: 'Lifecycle Test',
         enabled: true,
-        token: 'test-token',
+        botToken: 'test-token',
       };
 
       // Register account

@@ -8,7 +8,7 @@ export interface TelegramAccount {
   accountId: string;
   name: string;
   enabled: boolean;
-  token: string;
+  botToken: string;
   allowFrom: (string | number)[];
   groupAllowFrom?: (string | number)[];
   dmPolicy: DmPolicy;
@@ -23,7 +23,7 @@ export interface TelegramAccount {
 
 export interface TelegramConfig {
   enabled: boolean;
-  token: string;
+  botToken: string;
   apiRoot: string;
   debug: boolean;
   allowFrom: (string | number)[];

@@ -22,7 +22,7 @@ xopcbot 支持多种通信通道，采用基于扩展的架构。
       "accounts": {
         "personal": {
           "name": "Personal Bot",
-          "token": "BOT_TOKEN_1",
+          "botToken": "BOT_TOKEN_1",
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
@@ -30,7 +30,7 @@ xopcbot 支持多种通信通道，采用基于扩展的架构。
         },
         "work": {
           "name": "Work Bot",
-          "token": "BOT_TOKEN_2",
+          "botToken": "BOT_TOKEN_2",
           "dmPolicy": "disabled",
           "groupPolicy": "allowlist",
           "groups": {
@@ -82,7 +82,7 @@ xopcbot 支持多种通信通道，采用基于扩展的架构。
 |------|------|------|
 | `enabled` | boolean | 启用通道 |
 | `accounts` | object | 多账户配置 |
-| `accounts.<id>.token` | string | Bot Token |
+| `accounts.<id>.botToken` | string | Bot Token |
 | `accounts.<id>.dmPolicy` | string | DM 访问策略 |
 | `accounts.<id>.groupPolicy` | string | 群组访问策略 |
 | `accounts.<id>.allowFrom` | array | 允许的用户 ID |
@@ -130,7 +130,7 @@ xopcbot 支持多种通信通道，采用基于扩展的架构。
       "enabled": true,
       "accounts": {
         "default": {
-          "token": "YOUR_BOT_TOKEN",
+          "botToken": "YOUR_BOT_TOKEN",
           "apiRoot": "https://your-proxy-domain.com"
         }
       }

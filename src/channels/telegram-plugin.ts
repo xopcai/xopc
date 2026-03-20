@@ -46,7 +46,7 @@ interface TelegramAccount {
   accountId: string;
   name?: string;
   enabled: boolean;
-  token: string;
+  botToken: string;
   apiRoot?: string;
   dmPolicy?: 'pairing' | 'allowlist' | 'open' | 'disabled';
   groupPolicy?: 'open' | 'disabled' | 'allowlist';
@@ -179,12 +179,12 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
     const telegramCfg = this.cfg.channels?.telegram as Record<string, unknown> | undefined;
     if (!telegramCfg) return;
     
-    if (telegramCfg.token && !telegramCfg.accounts) {
+    if (telegramCfg.botToken && !telegramCfg.accounts) {
       this.accountManager.registerAccount({
         accountId: 'default',
         name: 'Default Account',
         enabled: true,
-        token: telegramCfg.token as string,
+        botToken: telegramCfg.botToken as string,
         apiRoot: telegramCfg.apiRoot as string | undefined,
         dmPolicy: telegramCfg.dmPolicy as any,
         groupPolicy: telegramCfg.groupPolicy as any,
@@ -208,12 +208,12 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
       listAccountIds: () => this.accountManager.getAllAccounts().map(a => a.accountId),
       resolveAccount: (_cfg, accountId = 'default') => {
         const account = this.accountManager.getAccount(accountId);
-        if (!account) return { accountId, enabled: false, token: '' };
+        if (!account) return { accountId, enabled: false, botToken: '' };
         return {
           accountId: account.accountId,
           name: account.name,
           enabled: account.enabled !== false,
-          token: account.token || '',
+          botToken: account.botToken || '',
           apiRoot: account.apiRoot,
           dmPolicy: account.dmPolicy as any,
           groupPolicy: account.groupPolicy as any,
@@ -226,17 +226,17 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
       isEnabled: (account) => account.enabled !== false,
       disabledReason: (account) => {
         if (account.enabled === false) return 'Account disabled';
-        if (!account.token) return 'No token configured';
+        if (!account.botToken) return 'No token configured';
         return '';
       },
-      isConfigured: async (account) => !!account.token,
+      isConfigured: async (account) => !!account.botToken,
       describeAccount: (account) => {
         const status = this.accountManager.getStatus(account.accountId);
         return {
           accountId: account.accountId,
           channelId: 'telegram',
           enabled: account.enabled !== false,
-          configured: !!account.token,
+          configured: !!account.botToken,
           status: status?.running ? 'running' : 'stopped',
         } as ChannelAccountSnapshot;
       },
@@ -284,7 +284,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
         return {
           accountId: account.accountId,
           enabled: account.enabled !== false,
-          configured: !!account.token,
+          configured: !!account.botToken,
           running: status?.running ?? false,
           username: this.accountManager.getBotUsername(account.accountId),
         };
@@ -308,7 +308,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
           accountId: account.accountId,
           channelId: 'telegram',
           enabled: account.enabled !== false,
-          configured: !!account.token,
+          configured: !!account.botToken,
           status: status?.running ? 'running' : 'stopped',
         } as ChannelAccountSnapshot;
       },
@@ -328,7 +328,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
     
     for (const accountId of accountIds) {
       const account = this.configAdapter.resolveAccount(this.cfg, accountId);
-      if (!account.enabled || !account.token) continue;
+      if (!account.enabled || !account.botToken) continue;
       await this.startAccount(account);
     }
   }
@@ -348,13 +348,13 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
   
   private async startAccount(account: TelegramAccount): Promise<void> {
     if (this.accountManager.isRunning(account.accountId)) return;
-    if (!account.token) return;
+    if (!account.botToken) return;
     
     this.accountManager.markStarting(account.accountId);
     
     try {
       const botConfig = account.apiRoot ? { client: { apiRoot: account.apiRoot } } : undefined;
-      const bot = new Bot(account.token, botConfig);
+      const bot = new Bot(account.botToken, botConfig);
       const me = await bot.api.getMe();
       
       const runner = run(bot, {

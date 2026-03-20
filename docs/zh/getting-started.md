@@ -110,7 +110,7 @@ xopcbot agent -i
   "channels": {
     "telegram": {
       "enabled": true,
-      "token": "YOUR_BOT_TOKEN",
+      "botToken": "YOUR_BOT_TOKEN",
       "dmPolicy": "allowlist",
       "allowFrom": [123456789]
     }

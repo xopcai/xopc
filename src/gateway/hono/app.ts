@@ -217,7 +217,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       channels: {
         telegram: {
           enabled: config.channels?.telegram?.enabled,
-          token: config.channels?.telegram?.token || '',
+          botToken: config.channels?.telegram?.botToken || '',
           allowFrom: config.channels?.telegram?.allowFrom || [],
           groupAllowFrom: config.channels?.telegram?.groupAllowFrom || [],
           apiRoot: config.channels?.telegram?.apiRoot || '',
@@ -306,14 +306,14 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     
     // Update channels
     if (body.channels?.telegram) {
-      if (!config.channels) config.channels = { telegram: { enabled: false, token: '', allowFrom: [], groupAllowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const, replyToMode: 'off' as const, historyLimit: 50, textChunkLimit: 4000 } };
+      if (!config.channels) config.channels = { telegram: { enabled: false, botToken: '', allowFrom: [], groupAllowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const, replyToMode: 'off' as const, historyLimit: 50, textChunkLimit: 4000 } };
       if (!config.channels.telegram) config.channels.telegram = {} as any;
       
       if (body.channels.telegram.enabled !== undefined) {
         config.channels.telegram.enabled = body.channels.telegram.enabled;
       }
-      if (body.channels.telegram.token !== undefined) {
-        config.channels.telegram.token = body.channels.telegram.token;
+      if (body.channels.telegram.botToken !== undefined) {
+        config.channels.telegram.botToken = body.channels.telegram.botToken;
       }
       if (body.channels.telegram.allowFrom !== undefined) {
         config.channels.telegram.allowFrom = body.channels.telegram.allowFrom;

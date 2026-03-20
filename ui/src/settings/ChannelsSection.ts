@@ -19,9 +19,9 @@ export class ChannelsSection extends LitElement {
   private _toggleToken() { this._showToken = !this._showToken; this.requestUpdate(); }
 
   private async _copyToken() {
-    const token = this.settings.telegram.token;
-    if (!token) return;
-    await navigator.clipboard.writeText(token).catch(() => {});
+    const botToken = this.settings.telegram.botToken;
+    if (!botToken) return;
+    await navigator.clipboard.writeText(botToken).catch(() => {});
     this._copied = true;
     this.requestUpdate();
     setTimeout(() => { this._copied = false; this.requestUpdate(); }, 2000);
@@ -54,11 +54,11 @@ export class ChannelsSection extends LitElement {
             <div class="field-group">
               <div class="field-header"><label class="field-label">Bot Token <span class="required-mark">*</span></label></div>
               <div class="input-with-actions">
-                <input class="text-input" type="${this._showToken ? 'text' : 'password'}" .value=${tg.token}
+                <input class="text-input" type="${this._showToken ? 'text' : 'password'}" .value=${tg.botToken}
                   placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
-                  @change=${(e: Event) => this._field('telegram.token', (e.target as HTMLInputElement).value)} />
+                  @change=${(e: Event) => this._field('telegram.botToken', (e.target as HTMLInputElement).value)} />
                 <div class="input-actions">
-                  ${tg.token ? html`<button class="btn-icon" @click=${this._copyToken} title="${this._copied ? 'Copied!' : 'Copy'}">${getIcon(this._copied ? 'check' : 'copy')}</button>` : ''}
+                  ${tg.botToken ? html`<button class="btn-icon" @click=${this._copyToken} title="${this._copied ? 'Copied!' : 'Copy'}">${getIcon(this._copied ? 'check' : 'copy')}</button>` : ''}
                   <button class="btn-icon" @click=${this._toggleToken} title="${this._showToken ? 'Hide' : 'Show'}">${getIcon(this._showToken ? 'eyeOff' : 'eye')}</button>
                 </div>
               </div>

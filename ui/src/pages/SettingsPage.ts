@@ -77,7 +77,7 @@ export class SettingsPage extends LitElement {
         providers: c.providers || {},
         telegram: {
           enabled: c.channels?.telegram?.enabled || false,
-          token: c.channels?.telegram?.token || '',
+          botToken: c.channels?.telegram?.botToken || '',
           apiRoot: c.channels?.telegram?.apiRoot || '',
           debug: c.channels?.telegram?.debug || false,
           allowFrom: c.channels?.telegram?.allowFrom || [],
@@ -165,7 +165,7 @@ export class SettingsPage extends LitElement {
       providers: s.providers,
       channels: {
         telegram: {
-          enabled: tg.enabled, token: tg.token, apiRoot: tg.apiRoot || undefined, debug: tg.debug,
+          enabled: tg.enabled, botToken: tg.botToken, apiRoot: tg.apiRoot || undefined, debug: tg.debug,
           allowFrom: tg.allowFrom, groupAllowFrom: tg.groupAllowFrom.length ? tg.groupAllowFrom : undefined,
           dmPolicy: tg.dmPolicy, groupPolicy: tg.groupPolicy, replyToMode: tg.replyToMode,
           streamMode: tg.streamMode, historyLimit: tg.historyLimit, textChunkLimit: tg.textChunkLimit,

@@ -457,7 +457,7 @@ pnpm install --frozen-lockfile
       "accounts": {
         "personal": {
           "name": "Personal Bot",
-          "token": "BOT_TOKEN_1",
+          "botToken": "BOT_TOKEN_1",
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
@@ -465,7 +465,7 @@ pnpm install --frozen-lockfile
         },
         "work": {
           "name": "Work Bot",
-          "token": "BOT_TOKEN_2",
+          "botToken": "BOT_TOKEN_2",
           "dmPolicy": "disabled",
           "groupPolicy": "allowlist",
           "groups": {
