@@ -11,6 +11,7 @@ import {
 } from '@mariozechner/pi-ai';
 import type { Config } from '../config/schema.js';
 import { getModelRegistry } from './model-registry.js';
+import { resolveApiKey, hasCredentials } from '../auth/credentials.js';
 
 // ============================================
 // Provider Environment Variable Mappings
@@ -123,11 +124,11 @@ export function getAllProviders(): string[] {
 	return Array.from(providers);
 }
 
-export function getApiKey(config: Config | null | undefined, provider: string): string | undefined {
-	// Check config.providers first (simple string format only)
-	const configKey = config?.providers?.[provider];
-	if (configKey) {
-		return configKey;
+export async function getApiKey(provider: string): Promise<string | undefined> {
+	// Use new credential resolver first (checks: agent private > global > oauth > env)
+	const credentialKey = await resolveApiKey(provider);
+	if (credentialKey) {
+		return credentialKey;
 	}
 
 	// Check registry for custom providers (from models.json)
@@ -137,16 +138,43 @@ export function getApiKey(config: Config | null | undefined, provider: string): 
 		return registryKey;
 	}
 
-	// Check environment variables
+	// Fallback to environment variables
 	return getApiKeyFromEnv(provider);
 }
 
-export function isProviderConfigured(config: Config | null | undefined, provider: string): boolean {
-	return !!getApiKey(config, provider);
+/**
+ * @deprecated Use async getApiKey() instead
+ */
+export function getApiKeySync(config: Config | null | undefined, provider: string): string | undefined {
+	// Legacy fallback - check registry and env only
+	const registry = getModelRegistry();
+	const registryKey = registry.getApiKey(provider);
+	if (registryKey) {
+		return registryKey;
+	}
+	return getApiKeyFromEnv(provider);
 }
 
-export function getConfiguredProviders(config: Config | null | undefined): string[] {
-	return getAllProviders().filter(p => isProviderConfigured(config, p));
+export async function isProviderConfigured(provider: string): Promise<boolean> {
+	return await hasCredentials(provider);
+}
+
+/**
+ * @deprecated Use async isProviderConfigured() instead
+ */
+export function isProviderConfiguredSync(config: Config | null | undefined, provider: string): boolean {
+	return !!getApiKeySync(config, provider);
+}
+
+export async function getConfiguredProviders(): Promise<string[]> {
+	const allProviders = getAllProviders();
+	const configured: string[] = [];
+	for (const p of allProviders) {
+		if (await isProviderConfigured(p)) {
+			configured.push(p);
+		}
+	}
+	return configured;
 }
 
 export function getAllModels(): readonly Model<Api>[] {
@@ -154,30 +182,18 @@ export function getAllModels(): readonly Model<Api>[] {
 	return registry.getAll();
 }
 
-export function getAvailableModels(config: Config | null | undefined): readonly Model<Api>[] {
+export async function getAvailableModels(): Promise<readonly Model<Api>[]> {
 	const registry = getModelRegistry();
 	const allModels = registry.getAll();
 	
 	// Filter models by checking if provider has auth configured
-	// Check in order: config.providers -> registry.getApiKey() -> environment variables
-	return allModels.filter(model => {
-		// Check config.providers first
-		if (config?.providers?.[model.provider]) {
-			return true;
+	const available: Model<Api>[] = [];
+	for (const model of allModels) {
+		if (await isProviderConfigured(model.provider)) {
+			available.push(model);
 		}
-		
-		// Check registry (models.json custom providers)
-		if (registry.getApiKey(model.provider)) {
-			return true;
-		}
-		
-		// Check environment variables
-		if (getApiKeyFromEnv(model.provider)) {
-			return true;
-		}
-		
-		return false;
-	});
+	}
+	return available;
 }
 
 export type { Model, Api } from '@mariozechner/pi-ai';
