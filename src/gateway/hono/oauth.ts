@@ -22,6 +22,8 @@ import {
   googleAntigravityOAuthProvider,
   openaiCodexOAuthProvider,
 } from '../../auth/oauth/index.js';
+import { CredentialResolver } from '../../auth/credentials.js';
+import { isProviderConfigured } from '../../providers/index.js';
 
 // Static OAuth providers map
 const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = {
@@ -111,14 +113,9 @@ export function createOAuthHandler(service: GatewayService) {
       // Get API key from OAuth credentials
       const apiKey = oauthProvider.getApiKey(credentials);
 
-      // Save API key to config
-      const config = service.currentConfig;
-      if (!config.providers) {
-        (config as any).providers = {};
-      }
-      (config as any).providers[provider] = apiKey;
-      
-      await service.saveConfig(config);
+      // Save API key to credential system
+      const resolver = new CredentialResolver();
+      await resolver.saveApiKey(provider, apiKey, { profileName: 'default' });
 
       return c.json({ 
         ok: true, 
@@ -147,11 +144,10 @@ export function createOAuthHandler(service: GatewayService) {
    * GET /api/auth/oauth/:provider
    * Check OAuth status for a provider
    */
-  oauth.get('/:provider', (c) => {
+  oauth.get('/:provider', async (c) => {
     const provider = c.req.param('provider');
     const credentials = getOAuthCredentialsFromCache(provider);
-    const config = service.currentConfig;
-    const configured = !!(config.providers?.[provider]);
+    const configured = await isProviderConfigured(provider);
 
     return c.json({ 
       ok: true, 

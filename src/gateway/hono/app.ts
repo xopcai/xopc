@@ -32,6 +32,7 @@ import {
   saveModelsJson,
   validateModelsConfig,
 } from '../../config/models-json.js';
+import { CredentialResolver } from '../../auth/credentials.js';
 
 const log = createLogger('HonoApp');
 
@@ -231,14 +232,14 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           accounts: config.channels?.telegram?.accounts || {},
         },
       },
-      // Provider API keys - don't return actual values for security
-      // Return empty string if not configured (user needs to input)
-      // If configured, return empty string too (don't overwrite with ***)
+      // Provider API keys - check credential system for configured status
       providers: Object.fromEntries(
-        Object.entries(config.providers || {}).map(([key, val]) => [
-          key,
-          val || ''  // Return actual value if set, empty string if not
-        ])
+        await Promise.all(
+          getAllProviders().map(async (provider) => [
+            provider,
+            (await isProviderConfigured(provider)) ? '***' : ''
+          ])
+        )
       ),
       gateway: {
         host: config.gateway?.host,
@@ -364,15 +365,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       config.gateway.heartbeat.intervalMs = body.gateway.heartbeat.intervalMs;
     }
     
-    // Update providers config (new simplified format)
+    // Update providers config - save to credential system instead of config
     if (body.providers) {
-      if (!config.providers) {
-        config.providers = {};
-      }
-      
+      const resolver = new CredentialResolver();
       for (const [key, apiKey] of Object.entries(body.providers)) {
-        if (apiKey !== undefined) {
-          config.providers[key] = apiKey as string;
+        if (apiKey !== undefined && typeof apiKey === 'string' && apiKey.trim() && apiKey !== '***') {
+          await resolver.saveApiKey(key, apiKey, { profileName: 'default' });
         }
       }
     }
