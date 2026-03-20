@@ -1,5 +1,4 @@
-import { readFile, writeFile, mkdir, access } from 'fs/promises';
-import { existsSync } from 'fs';
+import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { createLogger } from '../utils/logger.js';
 import {

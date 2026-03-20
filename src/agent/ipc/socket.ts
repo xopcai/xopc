@@ -3,19 +3,10 @@ import { mkdir } from 'fs/promises';
 import { dirname } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import { resolveSocketPath } from '../../config/paths.js';
-import type { AgentIPCMessage, AnyIPCMessage } from './types.js';
+import type { AgentIPCMessage } from './types.js';
 import { isValidIPCMessage } from './types.js';
 
 const log = createLogger('AgentSocket');
-
-// ============================================
-// Socket Message Protocol
-// ============================================
-
-interface SocketMessage {
-  id: string;
-  payload: AgentIPCMessage;
-}
 
 // ============================================
 // Agent Socket Server
@@ -199,7 +190,7 @@ export class AgentSocketClient {
    */
   disconnect(): void {
     // Reject all pending responses
-    for (const [id, handler] of this.pendingResponses) {
+    for (const [_id, handler] of this.pendingResponses) {
       clearTimeout(handler.timeout);
       handler.reject(new Error('Socket disconnected'));
     }

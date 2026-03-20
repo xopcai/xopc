@@ -1,4 +1,4 @@
-import { mkdir, readdir, stat, readFile, writeFile, rmdir } from 'fs/promises';
+import { mkdir, readdir, readFile, writeFile, rmdir } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { createLogger } from '../utils/logger.js';
@@ -11,7 +11,6 @@ import {
   resolveInboxDir,
   resolveRunDir,
   resolvePidPath,
-  resolveStatusPath,
 } from '../config/paths.js';
 
 const log = createLogger('AgentRegistry');
@@ -346,7 +345,7 @@ export class AgentRegistry {
     try {
       const content = await readFile(path, 'utf-8');
       return JSON.parse(content) as AgentMetadata;
-    } catch (error) {
+    } catch {
       return null;
     }
   }
@@ -354,7 +353,6 @@ export class AgentRegistry {
   private async checkStatus(agentId: string): Promise<{ status: AgentStatus; pid?: number }> {
     const runDir = resolveRunDir(agentId);
     const pidPath = resolvePidPath(agentId);
-    const statusPath = resolveStatusPath(agentId);
 
     if (!existsSync(runDir) || !existsSync(pidPath)) {
       return { status: 'idle' };
@@ -371,7 +369,7 @@ export class AgentRegistry {
       } catch {
         return { status: 'stopped' };
       }
-    } catch (error) {
+    } catch {
       return { status: 'error' };
     }
   }

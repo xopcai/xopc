@@ -7,7 +7,7 @@
  * a subagent in its own process.
  */
 
-import { mkdir, writeFile, readFile, unlink } from 'fs/promises';
+import { mkdir, writeFile, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { createLogger } from '../utils/logger.js';
 import {
@@ -15,7 +15,6 @@ import {
   resolveRunDir,
   resolvePidPath,
   resolveStatusPath,
-  resolveSocketPath,
   resolveAgentDir,
 } from '../config/paths.js';
 import { AgentSocketServer } from './ipc/socket.js';
@@ -204,7 +203,7 @@ class AgentInstance {
     }
   }
 
-  private async executeTask(task: string, context?: string): Promise<string> {
+  private async executeTask(task: string, _context?: string): Promise<string> {
     // TODO: This should integrate with the actual agent service
     // For now, just return a placeholder
     return `Task completed: ${task.slice(0, 100)}...`;

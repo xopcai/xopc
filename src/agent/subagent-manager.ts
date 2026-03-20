@@ -5,9 +5,8 @@ import { join } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import { resolveAgentDir, resolveRunDir, resolvePidPath, resolveStatusPath } from '../../config/paths.js';
 import { getAgentRegistry, createAgent } from '../agent-registry.js';
-import { getSubagentRegistry, type SubagentRun } from '../subagent-registry.js';
-import { AgentBus, type SpawnOptions, type SubagentResult } from '../ipc/bus.js';
-import type { AgentIPCMessage } from '../ipc/types.js';
+import { getSubagentRegistry } from '../subagent-registry.js';
+import { AgentBus, type SubagentResult } from '../ipc/bus.js';
 
 const log = createLogger('SubagentManager');
 
