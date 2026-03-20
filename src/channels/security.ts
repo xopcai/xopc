@@ -125,8 +125,10 @@ function evaluateDmAccess(params: {
   const { context, policy, allowFrom } = params;
   if (policy === 'disabled') return { allowed: false, reason: 'DM is disabled', policy };
   if (policy === 'open') return { allowed: true, policy };
-  
-  if (policy === 'allowlist' || policy === 'pairing') {
+
+  if (policy === 'pairing') return { allowed: true, policy };
+
+  if (policy === 'allowlist') {
     const match = resolveAllowlistMatchSimple({
       allowFrom,
       senderId: context.senderId,
