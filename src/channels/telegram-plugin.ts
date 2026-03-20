@@ -334,6 +334,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
   }
   
   async stop(accountId?: string): Promise<void> {
+    if (!this.configAdapter) return;
     const ids = accountId ? [accountId] : this.configAdapter.listAccountIds(this.cfg);
     for (const id of ids) {
       await this.accountManager.stopRunner(id);
