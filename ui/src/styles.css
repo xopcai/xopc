@@ -514,11 +514,11 @@ html.dark .glass {
 }
 
 .scroll-to-bottom-btn {
-  position: absolute;
-  bottom: 1rem;
+  position: fixed;
   right: 1.5rem;
-  width: 2.5rem;
-  height: 2.5rem;
+  bottom: 120px;
+  width: 48px;
+  height: 48px;
   border-radius: 50%;
   background: var(--color-primary, #3b82f6);
   color: white;
@@ -527,9 +527,14 @@ html.dark .glass {
   display: flex;
   align-items: center;
   justify-content: center;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
   transition: transform 0.2s, background 0.2s;
-  z-index: 10;
+  z-index: 100;
+}
+
+.scroll-to-bottom-btn:hover {
+  transform: scale(1.05);
+  background: var(--color-primary-hover, #2563eb);
 }
 
 .scroll-to-bottom-btn:hover {
@@ -538,57 +543,162 @@ html.dark .glass {
 }
 
 .chat-input-container {
-  padding: 0 1.5rem 1.5rem;
+  padding: 0;
   flex-shrink: 0;
+  background: var(--bg-primary);
+  border-top: 1px solid var(--border-color);
+  box-shadow: 0 -4px 20px rgba(0, 0, 0, 0.05);
 }
 
 .chat-input-inner {
   max-width: 80rem;
   margin: 0 auto;
   width: 100%;
+  padding: 0.75rem 1rem 0.75rem;
 }
 
 /* --------------------------------------------
-   EDITOR
+   EDITOR - Vertical Layout (Option A)
    -------------------------------------------- */
 .editor-container {
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-sm);
+  background: transparent;
+  border: none;
+  border-radius: 0;
+  box-shadow: none;
   display: flex;
   flex-direction: column;
   transition: all var(--transition-normal);
 }
 
 .editor-container:focus-within {
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px var(--accent-primary-light), var(--shadow-md);
-  background: var(--bg-primary);
+  background: transparent;
 }
 
+/* Input Row - Textarea Area */
 .input-row {
   display: flex;
-  align-items: flex-end;
-  gap: 0.5rem;
+  align-items: stretch;
   padding: 0.5rem 1rem;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-lg);
+  margin: 0 0.5rem;
 }
 
+.text-input {
+  flex: 1;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none;
+  font-size: 0.9375rem;
+  line-height: 1.5;
+  padding: 0;
+  min-height: 1.5rem;
+  max-height: 8rem; /* 5-8 lines: 1.5rem base * 5-8 lines ≈ 8rem */
+  color: var(--text-primary);
+  font-family: inherit;
+  overflow-y: auto;
+  scrollbar-width: none; /* Firefox */
+  -ms-overflow-style: none; /* IE/Edge */
+}
+
+.text-input::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/Opera */
+}
+
+.text-input::placeholder {
+  color: var(--text-muted);
+}
+
+/* Toolbar Row - Bottom Actions */
+.toolbar-row {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.5rem 1rem 0.625rem;
+  background: transparent;
+  border-radius: 0;
+  margin: 0 0.5rem;
+}
+
+.toolbar-spacer {
+  flex: 1;
+}
+
+/* Toolbar Buttons */
+.toolbar-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 2rem;
+  height: 2rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.toolbar-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+.toolbar-btn.voice-btn {
+  /* Voice button placeholder style - grayed out for future feature */
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.toolbar-btn.voice-btn:hover {
+  background: var(--bg-primary);
+  border-color: var(--border-color);
+  color: var(--text-secondary);
+}
+
+/* Attachment Button */
+.attach-btn {
+  width: 2rem;
+  height: 2rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border-color);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--transition-fast);
+  flex-shrink: 0;
+}
+
+.attach-btn:hover {
+  background: var(--bg-tertiary);
+  border-color: var(--border-strong);
+  color: var(--text-primary);
+}
+
+/* Thinking Selector */
 .thinking-pill {
   display: flex;
   align-items: center;
   gap: 0.25rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border);
-  border-radius: 9999px;
+  background: var(--bg-primary);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-md);
   padding: 0.25rem 0.5rem;
   cursor: pointer;
   transition: all var(--transition-fast);
+  flex-shrink: 0;
+  height: 2rem;
 }
 
 .thinking-pill:hover {
   background: var(--bg-tertiary);
-  border-color: var(--border-hover);
+  border-color: var(--border-strong);
 }
 
 .thinking-icon {
@@ -601,87 +711,33 @@ html.dark .glass {
   background: transparent;
   border: none;
   color: var(--text-secondary);
-  font-size: 0.75rem;
+  font-size: 0.8125rem;
   cursor: pointer;
   outline: none;
   padding: 0;
   margin: 0;
   width: auto;
+  font-weight: 500;
 }
 
 .thinking-select-hidden:focus {
   outline: none;
 }
 
-.text-input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  outline: none;
-  resize: none;
-  font-size: 0.9375rem;
-  line-height: 1.5;
-  padding: 0.5rem 0;
-  min-height: 2.5rem;
-  max-height: 15rem;
-  color: var(--text-primary);
-}
-
-.input-with-actions {
-  position: relative;
-  display: flex;
-  align-items: center;
-}
-
-.input-with-actions .text-input {
-  padding-right: 4.5rem;
-  width: 100%;
-  box-sizing: border-box;
-}
-
-.input-with-actions .input-actions {
-  position: absolute;
-  right: 0.25rem;
-  top: 50%;
-  transform: translateY(-50%);
-}
-
-.input-with-actions .btn-icon {
-  width: 1.75rem;
-  height: 1.75rem;
-  padding: 0.25rem;
-}
-
-.input-with-actions .btn-icon svg {
-  width: 16px;
-  height: 16px;
-}
-
-.input-actions {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding-bottom: 0.25rem;
-}
-
-/* Buttons */
-.attach-btn, .send-btn, .stop-btn {
-  width: 2.25rem;
-  height: 2.25rem;
+/* Send Button */
+.send-btn, .stop-btn {
+  width: 2rem;
+  height: 2rem;
   display: flex;
   align-items: center;
   justify-content: center;
   border-radius: var(--radius-md);
   border: 1px solid var(--border-color);
-  background: var(--bg-secondary);
+  background: var(--bg-primary);
   color: var(--text-secondary);
   cursor: pointer;
   transition: all var(--transition-fast);
   flex-shrink: 0;
-}
-
-.attach-btn:hover {
-  background: var(--bg-tertiary);
 }
 
 .send-btn.active {
@@ -690,10 +746,20 @@ html.dark .glass {
   border-color: var(--accent-primary);
 }
 
+.send-btn.active:hover {
+  background: var(--accent-primary-hover);
+  border-color: var(--accent-primary-hover);
+}
+
 .stop-btn {
   background: var(--accent-error);
   color: white;
   border-color: var(--accent-error);
+}
+
+.stop-btn:hover {
+  background: var(--accent-error-hover);
+  border-color: var(--accent-error-hover);
 }
 
 /* Buttons */
@@ -735,38 +801,40 @@ html.dark .glass {
     display: none;
   }
 
-  /* Editor Mobile Optimization */
-  .chat-input-container {
-    padding: 0 1rem 1rem;
+  /* Editor Mobile Optimization - Vertical Layout */
+  .chat-input-inner {
+    padding: 0 0.5rem 0.5rem;
   }
 
   .input-row {
-    flex-wrap: wrap;
-    padding: 0.75rem;
+    padding: 0.5rem 0.75rem;
+    margin: 0;
+    border-radius: var(--radius-md);
   }
 
   .text-input {
-    flex: 0 0 100%;
-    order: -1;
-    margin-bottom: 0.5rem;
-    min-height: 3rem;
+    min-height: 2rem;
+    max-height: 6rem; /* Reduced max height on mobile */
   }
 
-  .attach-btn {
-    order: 1;
+  .toolbar-row {
+    padding: 0.375rem 0;
+    gap: 0.25rem;
+    margin: 0;
   }
 
-  .input-actions {
-    flex: 1;
-    order: 2;
-    justify-content: flex-end;
-    gap: 0.5rem;
-    padding-bottom: 0;
+  .toolbar-btn, .attach-btn, .send-btn, .stop-btn {
+    width: 1.75rem;
+    height: 1.75rem;
   }
 
-  .attach-btn, .send-btn, .stop-btn {
-    width: 2rem;
-    height: 2rem;
+  .thinking-pill {
+    padding: 0.15rem 0.35rem;
+    height: 1.75rem;
+  }
+
+  .thinking-select-hidden {
+    font-size: 0.75rem;
   }
 }
 
@@ -1458,18 +1526,20 @@ xopcbot-gateway-chat {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
-  padding: 0.5rem 1rem;
-  border-bottom: 1px solid var(--border-color);
+  padding: 0 0.5rem 0.5rem;
+  margin: 0 0.5rem;
+  border-bottom: none;
 }
 
 .attachment-chip {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.25rem 0.5rem;
-  background: var(--bg-secondary);
+  padding: 0.2rem 0.4rem;
+  background: var(--bg-tertiary);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
+  font-size: 0.75rem;
   font-size: 0.75rem;
 }
 

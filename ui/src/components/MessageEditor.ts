@@ -2,7 +2,7 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
-import { Paperclip, Send, Square, X, FileText } from 'lucide';
+import { Paperclip, Send, Square, X, FileText, Mic } from 'lucide';
 import { loadAttachment, formatFileSize, type Attachment } from '../utils/attachment-utils';
 import { i18n } from '../utils/i18n';
 
@@ -117,10 +117,6 @@ export class MessageEditor extends LitElement {
         ${this.attachments.length > 0 ? this._renderAttachments() : ''}
         
         <div class="input-row ${this._isDragging ? 'dragging' : ''}">
-          ${this.showAttachmentButton ? this._renderAttachmentButton() : ''}
-          
-          ${this._renderThinkingSelector()}
-
           <textarea
             ${ref(this.textareaRef)}
             class="text-input"
@@ -133,10 +129,14 @@ export class MessageEditor extends LitElement {
             @paste=${this._handlePaste}
             rows="1"
           ></textarea>
+        </div>
 
-          <div class="input-actions">
-            ${this._renderSendButton()}
-          </div>
+        <div class="toolbar-row">
+          ${this.showAttachmentButton ? this._renderAttachmentButton() : ''}
+          ${this._renderVoiceButton()}
+          ${this._renderThinkingSelector()}
+          <div class="toolbar-spacer"></div>
+          ${this._renderSendButton()}
         </div>
 
         ${this._isDragging ? this._renderDropOverlay() : ''}
@@ -180,6 +180,14 @@ export class MessageEditor extends LitElement {
           class="hidden"
           @change=${this._handleFileInputChange}
         />
+    `;
+  }
+
+  private _renderVoiceButton(): unknown {
+    return html`
+      <button type="button" class="toolbar-btn voice-btn" title=${i18n('Voice input') + ' (coming soon)'}>
+        ${unsafeHTML(iconToSvg(Mic, 'w-4 h-4'))}
+      </button>
     `;
   }
 
@@ -321,8 +329,12 @@ export class MessageEditor extends LitElement {
     const textarea = this.textareaRef.value;
     if (!textarea) return;
     
+    const lineHeight = 24; // ~1.5rem line-height
+    const maxLines = 8;
+    const maxHeight = lineHeight * maxLines;
+    
     textarea.style.height = 'auto';
-    textarea.style.height = Math.min(textarea.scrollHeight, 200) + 'px';
+    textarea.style.height = Math.min(textarea.scrollHeight, maxHeight) + 'px';
   }
 
   private _send(): void {
