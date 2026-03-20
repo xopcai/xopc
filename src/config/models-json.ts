@@ -9,10 +9,10 @@
 import { z } from 'zod';
 import { existsSync, readFileSync, writeFileSync, mkdirSync } from 'fs';
 import { dirname } from 'path';
-import { getModelsJsonPath } from './paths.js';
+import { resolveModelsJsonPath } from './paths.js';
 
 // Re-export for convenience
-export { getModelsJsonPath } from './paths.js';
+export { resolveModelsJsonPath as getModelsJsonPath } from './paths.js';
 
 // ============================================
 // OpenAI Compatibility Settings
@@ -332,7 +332,7 @@ export function getDefaultModelValues(): Required<Pick<CustomModel, 'input' | 'c
 /**
  * Load models.json from disk
  */
-export function loadModelsJson(path: string = getModelsJsonPath()): { config: ModelsJsonConfig; error?: string } {
+export function loadModelsJson(path: string = resolveModelsJsonPath()): { config: ModelsJsonConfig; error?: string } {
 	if (!existsSync(path)) {
 		return { config: { providers: {} } };
 	}
@@ -388,6 +388,6 @@ export function saveModelsJson(path: string, config: ModelsJsonConfig): { succes
 /**
  * Check if models.json exists
  */
-export function modelsJsonExists(path: string = getModelsJsonPath()): boolean {
+export function modelsJsonExists(path: string = resolveModelsJsonPath()): boolean {
 	return existsSync(path);
 }

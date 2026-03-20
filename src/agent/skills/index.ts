@@ -1,7 +1,7 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { basename, dirname, join, relative, sep } from 'path';
 import { parseFrontmatter } from '../../utils/frontmatter.js';
-import { DEFAULT_BASE_DIR } from '../../config/paths.js';
+import { resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import type { 
   Skill, 
@@ -256,7 +256,7 @@ export function loadSkills(options: {
 
   const globalDirs = [
     options.globalDir,
-    join(DEFAULT_BASE_DIR, 'skills'),
+    join(resolveStateDir(), 'skills'),
     join(process.env.HOME || '', '.agents', 'skills'),
   ].filter((d): d is string => !!d && existsSync(d));
 

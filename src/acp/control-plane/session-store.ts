@@ -28,7 +28,7 @@ export class AcpSessionStore {
   private indexDirty = false;
 
   constructor(workspace?: string) {
-    this.baseDir = workspace || getDefaultWorkspacePath();
+    this.baseDir = workspace || resolveWorkspaceDir();
     this.sessionsDir = join(this.baseDir, ACP_SESSIONS_DIR);
     this.indexFile = join(this.sessionsDir, ACP_SESSIONS_INDEX_FILE);
   }
@@ -203,5 +203,5 @@ export function resolveAcpWorkspace(cfg: Config): string {
     }
     return workspace;
   }
-  return getDefaultWorkspacePath();
+  return resolveWorkspaceDir();
 }

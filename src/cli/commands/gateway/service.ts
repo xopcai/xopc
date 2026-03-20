@@ -1,5 +1,6 @@
 import { Command } from 'commander';
-import { loadConfig, DEFAULT_PATHS } from '../../../config/index.js';
+import { loadConfig } from '../../../config/index.js';
+import { resolveConfigPath } from '../../../config/paths.js';
 import { createLogger } from '../../../utils/logger.js';
 import { getContextWithOpts } from '../../index.js';
 import {
@@ -19,7 +20,7 @@ export function createInstallCommand(): Command {
     .description('Install gateway as system service')
     .action(async () => {
       const ctx = getContextWithOpts();
-      const configPath = ctx.configPath || DEFAULT_PATHS.config;
+      const configPath = ctx.configPath || resolveConfigPath();
       const config = loadConfig(configPath);
       const port = config?.gateway?.port || 18790;
       const host = config?.gateway?.host || '0.0.0.0';
@@ -108,7 +109,7 @@ export function createUninstallCommand(): Command {
     .description('Uninstall gateway system service')
     .action(async () => {
       const ctx = getContextWithOpts();
-      const _configPath = ctx.configPath || DEFAULT_PATHS.config;
+      const _configPath = ctx.configPath || resolveConfigPath();
 
       console.log('🔧 Uninstalling gateway system service...');
 
@@ -138,7 +139,7 @@ export function createServiceStartCommand(): Command {
     .description('Start gateway system service')
     .action(async () => {
       const ctx = getContextWithOpts();
-      const configPath = ctx.configPath || DEFAULT_PATHS.config;
+      const configPath = ctx.configPath || resolveConfigPath();
       const config = loadConfig(configPath);
       const port = config?.gateway?.port || 18790;
 

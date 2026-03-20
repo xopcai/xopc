@@ -1,7 +1,8 @@
 import { Command } from 'commander';
 import { spawn } from 'child_process';
 import { GatewayServer } from '../../gateway/index.js';
-import { loadConfig, DEFAULT_PATHS } from '../../config/index.js';
+import { loadConfig } from '../../config/index.js';
+import { resolveConfigPath } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
@@ -145,7 +146,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
       console.log('');
 
       await runGatewayLoop({
-        configPath: ctx.configPath || DEFAULT_PATHS.config,
+        configPath: ctx.configPath || resolveConfigPath(),
         port,
         start: async () => {
           const server = new GatewayServer({

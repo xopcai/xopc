@@ -6,7 +6,7 @@
 
 import type { MessageBus } from '../../bus/index.js';
 import type { Config } from '../../config/schema.js';
-import { isProviderConfigured } from '../../config/schema.js';
+import { isProviderConfiguredSync } from '../../providers/index.js';
 import type { SessionStore } from '../../session/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { commandRegistry, createCommandContext } from '../../commands/index.js';
@@ -102,7 +102,7 @@ export class CommandHandler {
         const models: Array<{ id: string; name: string; provider: string }> = [];
 
         for (const providerId of providers) {
-          if (isProviderConfigured(this.config, providerId)) {
+          if (isProviderConfiguredSync(providerId)) {
             const providerModels = getModelsByProvider(providerId);
             for (const m of providerModels) {
               models.push({

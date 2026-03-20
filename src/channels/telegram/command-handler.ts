@@ -8,7 +8,7 @@
 import type { Context } from 'grammy';
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/index.js';
-import { isProviderConfigured } from '../../config/schema.js';
+import { isProviderConfiguredSync } from '../../providers/index.js';
 import { TelegramInlineKeyboards, type ProviderInfo } from './inline-keyboards.js';
 import { getProviderDisplayName, getModelsByProvider, getDefaultModelSync, getAllProviders } from '../../providers/index.js';
 import { generateSessionKey } from '../../commands/session-key.js';
@@ -36,7 +36,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     const available: ProviderInfo[] = [];
 
     for (const providerId of allProviders) {
-      if (isProviderConfigured(config, providerId)) {
+      if (isProviderConfiguredSync(providerId)) {
         available.push({ id: providerId, name: getProviderDisplayName(providerId) });
       }
     }

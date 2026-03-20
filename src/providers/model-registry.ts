@@ -19,7 +19,7 @@ import {
 } from '@mariozechner/pi-ai';
 import { existsSync, readFileSync } from 'fs';
 import { resolveConfigValue, resolveHeaders } from '../config/resolve-config-value.js';
-import { getModelsJsonPath } from '../config/paths.js';
+import { getModelsJsonPath } from '../config/models-json.js';
 import type {
 	ModelsJsonConfig,
 	ModelOverride,

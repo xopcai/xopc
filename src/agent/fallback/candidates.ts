@@ -1,5 +1,5 @@
 import type { Config } from '../../config/schema.js';
-import { isProviderConfigured } from '../../config/schema.js';
+import { isProviderConfiguredSync } from '../../providers/index.js';
 import { getDefaultModelSync } from '../../providers/index.js';
 import { parseModelRef as parseModelRefUtil, normalizeProviderId } from '../models/selection.js';
 
@@ -18,7 +18,7 @@ export interface FallbackAttempt {
 }
 
 // Re-export for backward compatibility (sync)
-export { isProviderConfigured };
+export { isProviderConfiguredSync as isProviderConfigured };
 
 // Get default model dynamically
 function getDefaultModelParts(config?: Config): { provider: string; model: string } {
@@ -67,7 +67,7 @@ export function resolveFallbackCandidates(params: {
     const key = `${c.provider}/${c.model}`.toLowerCase();
     if (seen.has(key)) return;
     // Skip providers that are not configured (no API key)
-    if (!isProviderConfigured(cfg, c.provider)) return;
+    if (!isProviderConfiguredSync(c.provider)) return;
     seen.add(key);
     candidates.push(c);
   };

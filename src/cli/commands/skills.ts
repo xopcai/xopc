@@ -17,13 +17,13 @@ import {
   formatScanSummary,
   type Skill,
 } from '../../agent/skills/index.js';
-import { DEFAULT_BASE_DIR, getBundledSkillsDir } from '../../config/paths.js';
+import { resolveStateDir, resolveBundledSkillsDir } from '../../config/paths.js';
 import { register, type CLIContext } from '../registry.js';
 import { createSkillsTestCommand } from './skills-test.js';
 
 function loadWorkspaceSkillEntries(workspaceDir: string): Array<{ skill: Skill; metadata: Skill['metadata']; enabled: boolean }> {
   const loader = createSkillLoader();
-  loader.init(workspaceDir, getBundledSkillsDir());
+  loader.init(workspaceDir, resolveBundledSkillsDir());
   const result = loader.load();
   return result.skills.map(skill => ({
     skill,
@@ -45,7 +45,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
     .action(async (options) => {
       const loader = createSkillLoader();
       const workspaceDir = ctx.workspacePath;
-      loader.init(workspaceDir, getBundledSkillsDir());
+      loader.init(workspaceDir, resolveBundledSkillsDir());
       const result = loader.load();
 
       if (options.json) {
@@ -207,7 +207,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
     .command('enable <skill-name>')
     .description('Enable a skill')
     .action(async (skillName) => {
-      const configManager = createSkillConfigManager(DEFAULT_BASE_DIR);
+      const configManager = createSkillConfigManager(resolveStateDir());
       configManager.setSkillEnabled(skillName, true);
       console.log(`✓ Skill "${skillName}" enabled`);
     });
@@ -216,7 +216,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
     .command('disable <skill-name>')
     .description('Disable a skill')
     .action(async (skillName) => {
-      const configManager = createSkillConfigManager(DEFAULT_BASE_DIR);
+      const configManager = createSkillConfigManager(resolveStateDir());
       configManager.setSkillEnabled(skillName, false);
       console.log(`✓ Skill "${skillName}" disabled`);
     });
@@ -229,9 +229,9 @@ function createSkillsCommand(ctx: CLIContext): Command {
     .action(async (skillName, options) => {
       const loader = createSkillLoader();
       const workspaceDir = ctx.workspacePath;
-      loader.init(workspaceDir, getBundledSkillsDir());
+      loader.init(workspaceDir, resolveBundledSkillsDir());
       const result = loader.load();
-      const configManager = createSkillConfigManager(DEFAULT_BASE_DIR);
+      const configManager = createSkillConfigManager(resolveStateDir());
       const config = configManager.load();
 
       if (skillName) {
@@ -321,7 +321,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
     .action(async (skillName, options) => {
       const loader = createSkillLoader();
       const workspaceDir = ctx.workspacePath;
-      loader.init(workspaceDir, getBundledSkillsDir());
+      loader.init(workspaceDir, resolveBundledSkillsDir());
       const result = loader.load();
 
       async function auditSkill(skill: typeof result.skills[0]) {
@@ -366,7 +366,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
     .option('--env <KEY=VALUE>', 'Set environment variable', (val, prev: string[] = []) => [...prev, val], [])
     .option('--show', 'Show current configuration')
     .action(async (skillName, options) => {
-      const configManager = createSkillConfigManager(DEFAULT_BASE_DIR);
+      const configManager = createSkillConfigManager(resolveStateDir());
       
       if (options.show) {
         const config = configManager.getSkillConfig(skillName);

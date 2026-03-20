@@ -1,5 +1,6 @@
 import { Command } from 'commander';
-import { loadConfig, DEFAULT_PATHS } from '../../../config/index.js';
+import { loadConfig } from '../../../config/index.js';
+import { resolveConfigPath } from '../../../config/paths.js';
 import { createLogger } from '../../../utils/logger.js';
 import { getContextWithOpts } from '../../index.js';
 import { acquireGatewayLock } from '../../../gateway/lock.js';
@@ -22,7 +23,7 @@ export function createStopCommand(): Command {
 
       // Check if gateway is running by trying to acquire lock
       try {
-        const lock = await acquireGatewayLock(ctx.configPath || DEFAULT_PATHS.config, {
+        const lock = await acquireGatewayLock(ctx.configPath || resolveConfigPath(), {
           timeoutMs: 100,
           port,
         });

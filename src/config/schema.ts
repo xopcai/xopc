@@ -647,21 +647,6 @@ export type AcpConfig = z.infer<typeof AcpConfigSchema>;
 // ============================================
 
 /**
- * @deprecated API keys are now managed by the credential system.
- * Use CredentialResolver from '../auth/credentials.js' instead.
- * This function will be removed in v2.0.
- * 
- * Example:
- * ```typescript
- * const resolver = new CredentialResolver({ agentId: 'main' });
- * const apiKey = await resolver.resolveApiKey('openai');
- * ```
- */
-export function getApiKey(_config: Config, _provider: string): undefined {
-  return undefined;
-}
-
-/**
  * 解析模型引用
  */
 export interface ParsedModelRef {
@@ -669,40 +654,8 @@ export interface ParsedModelRef {
   model: string;
 }
 
-/**
- * @deprecated Use detectProvider from providers/index.js instead
- */
-export function parseModelId(modelId: string): ParsedModelRef {
-  // 优先检查 provider/model 格式
-  if (modelId.includes('/')) {
-    const [provider, model] = modelId.split('/');
-    return { provider: provider.toLowerCase(), model };
-  }
-
-  // 使用统一的 provider 检测（避免循环导入，暂时保留简单逻辑）
-  const lower = modelId.toLowerCase();
-  if (lower.startsWith('gpt-') || lower.startsWith('o1') || lower.startsWith('o3') || lower.startsWith('o4')) {
-    return { provider: 'openai', model: modelId };
-  }
-  if (lower.startsWith('claude-')) {
-    return { provider: 'anthropic', model: modelId };
-  }
-  if (lower.startsWith('gemini-')) {
-    return { provider: 'google', model: modelId };
-  }
-  if (lower.startsWith('deepseek')) {
-    return { provider: 'deepseek', model: modelId };
-  }
-  if (lower.startsWith('grok')) {
-    return { provider: 'xai', model: modelId };
-  }
-
-  // 默认回退到 openai
-  return { provider: 'openai', model: modelId };
-}
-
 // Re-export from providers/index.ts for backward compatibility
-export { isProviderConfiguredSync as isProviderConfigured } from '../providers/index.js';
+export { isProviderConfigured } from '../providers/index.js';
 
 /**
  * 获取工作空间路径

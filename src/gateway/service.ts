@@ -4,7 +4,7 @@ import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
 import { telegramPlugin } from '../channels/telegram-plugin.js';
 import { MessageBus } from '../bus/index.js';
-import { loadConfig, saveConfig, DEFAULT_PATHS } from '../config/index.js';
+import { loadConfig, saveConfig } from '../config/index.js';
 import { getWorkspacePath } from '../config/schema.js';
 import { CronService } from '../cron/index.js';
 import { ExtensionLoader, normalizeExtensionConfig } from '../extensions/index.js';
@@ -16,6 +16,7 @@ import type { SessionListQuery, ExportFormat } from '../types/index.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { getModelRegistry } from '../providers/index.js';
 import { getLogDir, getLogStats, createLogger } from '../utils/logger.js';
+import { resolveConfigPath, resolveCronJobsPath } from '../config/paths.js';
 
 const log = createLogger('GatewayService');
 import { registerAcpRuntimeBackend } from '../acp/runtime/registry.js';
@@ -64,7 +65,7 @@ export class GatewayService {
 
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
-    this.configPath = serviceConfig.configPath || DEFAULT_PATHS.config;
+    this.configPath = serviceConfig.configPath || resolveConfigPath();
     this.config = loadConfig(this.configPath);
 
     // Initialize authentication
@@ -113,7 +114,7 @@ export class GatewayService {
 
     // Initialize cron service
     this.cronService = new CronService({
-      filePath: DEFAULT_PATHS.cronJobs,
+      filePath: resolveCronJobsPath(),
       agentService: this.agentService,
       messageBus: this.bus,
     });
