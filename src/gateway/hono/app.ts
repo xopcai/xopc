@@ -440,7 +440,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   
   // GET /api/registry - Full registry for frontend
   authenticated.get('/api/registry', async (c) => {
-    const config = service.currentConfig;
     const allModels = getAllModels();
     const availableModels = await getAvailableModels();
     const configured = new Set(availableModels.map(m => `${m.provider}/${m.id}`));

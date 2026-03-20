@@ -1,7 +1,6 @@
 import { Command } from 'commander';
 import { createLogger } from '../../utils/logger.js';
-import { getAgentRegistry, createAgent, deleteAgent, getAgent, listAgents } from '../../agent/agent-registry.js';
-import { resolveStateDir } from '../../config/paths.js';
+import { createAgent, deleteAgent, getAgent, listAgents } from '../../agent/agent-registry.js';
 import { colors } from '../utils/colors.js';
 import Table from 'cli-table3';
 
@@ -17,7 +16,6 @@ export function createAgentListCommand(): Command {
     .option('--json', 'Output as JSON')
     .action(async (options) => {
       try {
-        const registry = getAgentRegistry();
         const agents = await listAgents();
 
         if (options.json) {
@@ -74,7 +72,6 @@ export function createAgentPsCommand(): Command {
     .option('--json', 'Output as JSON')
     .action(async (options) => {
       try {
-        const registry = getAgentRegistry();
         const allAgents = await listAgents();
         const runningAgents = allAgents.filter((a) => a.status === 'running');
 
@@ -130,8 +127,6 @@ export function createAgentCreateCommand(): Command {
     .option('--copy-from <agentId>', 'Copy workspace from existing agent')
     .action(async (id, options) => {
       try {
-        const registry = getAgentRegistry();
-
         const agent = await createAgent(id, {
           name: options.name,
           description: options.description,
@@ -165,8 +160,6 @@ export function createAgentDeleteCommand(): Command {
     .option('-f, --force', 'Force delete even if running')
     .action(async (id, options) => {
       try {
-        const registry = getAgentRegistry();
-
         const agent = await getAgent(id);
         if (!agent) {
           console.error(colors.red('Error:'), `Agent "${id}" not found`);
@@ -195,7 +188,6 @@ export function createAgentInfoCommand(): Command {
     .option('--json', 'Output as JSON')
     .action(async (id, options) => {
       try {
-        const registry = getAgentRegistry();
         const agent = await getAgent(id);
 
         if (!agent) {
@@ -242,7 +234,6 @@ export function createAgentSwitchCommand(): Command {
     .argument('<id>', 'Agent ID')
     .action(async (id) => {
       try {
-        const registry = getAgentRegistry();
         const agent = await getAgent(id);
 
         if (!agent) {

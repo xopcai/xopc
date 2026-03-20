@@ -1,15 +1,10 @@
 import { Command } from 'commander';
 import { createLogger } from '../../utils/logger.js';
-import {
-  getExtensionLockfileManager,
-  loadExtensionLockfile,
-  saveExtensionLockfile,
-} from '../../extensions/lockfile.js';
+import { getExtensionLockfileManager } from '../../extensions/lockfile.js';
 import {
   getExtensionHealthChecker,
   checkAllExtensionsHealth,
 } from '../../extensions/health.js';
-import { resolveExtensionsDir } from '../../config/paths.js';
 import { colors } from '../utils/colors.js';
 
 const log = createLogger('ExtensionCommands');

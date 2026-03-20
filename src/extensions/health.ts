@@ -1,11 +1,8 @@
 import { existsSync } from 'fs';
-import { readFile, readdir, access } from 'fs/promises';
+import { readFile, readdir } from 'fs/promises';
 import { join } from 'path';
-import { createLogger } from '../utils/logger.js';
 import { resolveExtensionsDir } from '../config/paths.js';
 import { getExtensionLockfileManager } from './lockfile.js';
-
-const log = createLogger('ExtensionHealth');
 
 // ============================================
 // Types
@@ -111,7 +108,7 @@ export class ExtensionHealthChecker {
         issues.push('package.json missing main or exports field');
         status = 'warning';
       }
-    } catch (error) {
+    } catch {
       issues.push('Failed to parse package.json');
       status = 'error';
     }
@@ -136,7 +133,7 @@ export class ExtensionHealthChecker {
           status = 'warning';
         }
       }
-    } catch (error) {
+    } catch {
       issues.push('Failed to parse xopcbot.extension.json');
       status = status === 'error' ? 'error' : 'warning';
     }
@@ -243,7 +240,7 @@ export class ExtensionHealthChecker {
           });
 
           fixed.push('Installed node_modules');
-        } catch (error) {
+        } catch {
           failed.push('Failed to install node_modules');
         }
       }

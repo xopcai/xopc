@@ -419,7 +419,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
     });
   }
   
-  private async handleCallbackQuery(ctx: Context, accountId: string): Promise<void> {
+  private async handleCallbackQuery(ctx: Context, _accountId: string): Promise<void> {
     const data = ctx.callbackQuery?.data;
     if (!data) return;
     
