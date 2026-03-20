@@ -25,6 +25,7 @@ import {
   openaiCodexOAuthProvider,
 } from '../../auth/oauth/index.js';
 import { createLogger } from '../../utils/logger.js';
+import { CredentialResolver } from '../../auth/credentials.js';
 
 const log = createLogger('OAuthAsync');
 
@@ -323,14 +324,9 @@ async function runOAuthFlow(
     // Get API key from OAuth credentials
     const apiKey = oauthProvider.getApiKey(credentials);
 
-    // Save API key to config
-    const config = service.currentConfig;
-    if (!config.providers) {
-      (config as any).providers = {};
-    }
-    (config as any).providers[session.provider] = apiKey;
-    
-    await service.saveConfig(config);
+    // Save API key to credential system
+    const resolver = new CredentialResolver();
+    await resolver.saveApiKey(session.provider, apiKey, { profileName: 'default' });
 
     session.status = 'completed';
     session.credentials = credentials;

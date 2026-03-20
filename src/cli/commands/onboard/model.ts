@@ -17,6 +17,7 @@ import { listProfilesForProvider } from '../../../auth/profiles/index.js';
 import { upsertAuthProfile } from '../../../auth/profiles/index.js';
 import { getOAuthProvider } from '../../utils/oauth-providers.js';
 import type { OAuthLoginCallbacks } from '../../../auth/index.js';
+import { CredentialResolver } from '../../../auth/credentials.js';
 
 /**
  * Get available models for a provider
@@ -229,9 +230,12 @@ export async function setupModel(
       validate: (v: string) => v.length > 0 || 'Required',
     });
 
-    // Store API key in new simplified format
-    config.providers = config.providers || {};
-    config.providers[provider] = apiKey;
+    // Store API key in new credential system
+    if (apiKey) {
+      const resolver = new CredentialResolver();
+      await resolver.saveApiKey(provider, apiKey, { profileName: 'default' });
+    }
+
     config.agents = config.agents || {};
     config.agents.defaults = config.agents.defaults || {
       workspace: ctx.workspacePath,
@@ -255,10 +259,10 @@ export async function setupModel(
     choices: modelChoices,
   });
 
-  // Store in new simplified format
-  config.providers = config.providers || {};
+  // Store in new credential system
   if (!useOAuth && apiKey) {
-    config.providers[provider] = apiKey;
+    const resolver = new CredentialResolver();
+    await resolver.saveApiKey(provider, apiKey, { profileName: 'default' });
   }
 
   config.agents = config.agents || {};
