@@ -17,7 +17,8 @@ import {
   type ChatRoute
 } from './navigation';
 import { getIcon } from './utils/icons';
-import { getToken, setToken, clearToken, getTheme, setTheme, getLanguage, setLanguage, setLanguage as setStoredLanguage } from './utils/storage';
+import { getToken, setToken, clearToken, getTheme, setTheme, getLanguage, setLanguage as setStoredLanguage } from './utils/storage';
+import { setLanguage as setI18nLanguage } from './utils/i18n';
 import type { ChatPanel } from './chat/ChatPanel.js';
 
 export type { Tab } from './navigation';
@@ -269,7 +270,7 @@ export class XopcbotApp extends LitElement {
 
   private _loadLanguage(): void {
     this._language = getLanguage();
-    setLanguage(this._language);
+    setI18nLanguage(this._language);
   }
 
   private _applyTheme(): void {
@@ -306,7 +307,7 @@ export class XopcbotApp extends LitElement {
 
   private _setLanguage(lang: 'en' | 'zh'): void {
     this._language = lang;
-    setLanguage(lang);
+    setI18nLanguage(lang);
     setStoredLanguage(lang);
     this.requestUpdate();
   }
