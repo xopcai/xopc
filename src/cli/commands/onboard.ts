@@ -28,6 +28,7 @@ import {
 } from '../../providers/index.js';
 import { colors } from '../utils/colors.js';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
+import { setupTelegramOnboard } from './onboard/channels.js';
 
 // Import workspace utilities
 import { isWorkspaceSetup, setupWorkspace as _setupWorkspace, isConfigSetup as _isConfigSetup, setupConfig as _setupConfig, quickSetup } from '../utils/workspace.js';
@@ -502,32 +503,10 @@ async function getModelsForProvider(provider: string): Promise<{ value: string; 
 async function setupChannels(config: Config): Promise<Config> {
   console.log(colors.cyan('\n💬 Step 3: Messaging Channels\n'));
 
-  const enableTelegram = await confirm({
-    message: 'Enable Telegram channel?',
-    default: true,
+  await setupTelegramOnboard(config, {
+    confirmMessage: 'Enable Telegram channel?',
+    confirmDefault: true,
   });
-
-  if (enableTelegram) {
-    (config as any).channels = (config as any).channels || {};
-    (config as any).channels.telegram = (config as any).channels.telegram || {};
-
-    const hasToken = !!(config as any).channels.telegram.bot_token;
-    
-    if (!hasToken) {
-      console.log('\n📝 Telegram Configuration:');
-      console.log('   Get your bot token from @BotFather on Telegram.\n');
-
-      const botToken = await input({
-        message: 'Enter Telegram Bot Token:',
-        validate: (input) => input.length > 0 || 'Bot token is required',
-      });
-
-      (config as any).channels.telegram.bot_token = botToken;
-      console.log('✅ Telegram configured.');
-    } else {
-      console.log('ℹ️  Telegram already configured.');
-    }
-  }
 
   const enableSlack = await confirm({
     message: 'Enable Slack channel?',
@@ -551,8 +530,8 @@ async function setupChannels(config: Config): Promise<Config> {
       validate: (input) => input.length > 0 || 'Signing secret is required',
     });
 
-    (config as any).channels.slack.bot_token = botToken;
-    (config as any).channels.slack.signing_secret = signingSecret;
+    (config as any).channels.slack.botToken = botToken;
+    (config as any).channels.slack.signingSecret = signingSecret;
     console.log('✅ Slack configured.');
   }
 
@@ -573,7 +552,7 @@ async function setupChannels(config: Config): Promise<Config> {
       validate: (input) => input.length > 0 || 'Bot token is required',
     });
 
-    (config as any).channels.discord.bot_token = botToken;
+    (config as any).channels.discord.botToken = botToken;
     console.log('✅ Discord configured.');
   }
 
