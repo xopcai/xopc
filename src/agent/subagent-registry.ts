@@ -131,8 +131,8 @@ export class SubagentRegistry {
 
     return Object.values(data.runs).filter(
       (run) =>
-        run.parentAgentId === parentAgentId &>
-        ['completed', 'failed', 'cancelled'].includes(run.status) &>
+        run.parentAgentId === parentAgentId &&
+        ['completed', 'failed', 'cancelled'].includes(run.status) &&
         !run.cleanupHandled
     );
   }
@@ -180,8 +180,8 @@ export class SubagentRegistry {
     let pruned = 0;
     for (const [runId, run] of Object.entries(data.runs)) {
       if (
-        ['completed', 'failed', 'cancelled'].includes(run.status) &>
-        run.endedAt &>
+        ['completed', 'failed', 'cancelled'].includes(run.status) &&
+        run.endedAt &&
         run.endedAt < cutoff
       ) {
         delete data.runs[runId];

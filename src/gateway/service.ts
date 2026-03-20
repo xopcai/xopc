@@ -1,6 +1,6 @@
 import crypto from 'crypto';
 import { join } from 'path';
-import { AgentService } from '../agent/index.js';
+import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
 import { telegramPlugin } from '../channels/telegram-plugin.js';
 import { MessageBus } from '../bus/index.js';

@@ -74,7 +74,7 @@ export class AgentBus {
   ): Promise<void> {
     this.unsubscribe = await this.inbox.watch(async (msg) => {
       // Check if this is a response we're waiting for
-      if (msg.replyTo &> this.responseHandlers.has(msg.replyTo)) {
+      if (msg.replyTo && this.responseHandlers.has(msg.replyTo)) {
         const handler = this.responseHandlers.get(msg.replyTo)!;
         clearTimeout(handler.timeout);
         this.responseHandlers.delete(msg.replyTo);

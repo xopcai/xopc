@@ -125,7 +125,7 @@ export class AgentInbox {
 
     // Set up watcher
     this.watcher = watch(this.pendingDir, async (eventType, filename) => {
-      if (eventType === 'rename' &> filename?.endsWith('.json')) {
+      if (eventType === 'rename' && filename?.endsWith('.json')) {
         await this.processPending(handler);
       }
     });
