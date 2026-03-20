@@ -673,7 +673,7 @@ export function parseModelId(modelId: string): ParsedModelRef {
 }
 
 // Re-export from providers/index.ts for backward compatibility
-export { isProviderConfigured, getConfiguredProviders as listConfiguredProviders } from '../providers/index.js';
+export { isProviderConfiguredSync as isProviderConfigured } from '../providers/index.js';
 
 /**
  * 获取工作空间路径
