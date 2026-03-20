@@ -1,12 +1,9 @@
 import { createLogger } from '../../utils/logger.js';
-import { resolveAgentId, resolveAgentDir } from '../../config/paths.js';
+import { resolveAgentId } from '../../config/paths.js';
 import { AgentInbox } from './inbox.js';
 import type {
   AgentIPCMessage,
-  AgentTaskMessage,
   AgentResponseMessage,
-  AgentSignalMessage,
-  TaskPayload,
   AgentSignal,
   IPCPriority,
 } from './types.js';
@@ -97,7 +94,7 @@ export class AgentBus {
     this.unsubscribe = undefined;
 
     // Reject all pending response handlers
-    for (const [id, handler] of this.responseHandlers) {
+    for (const [_id, handler] of this.responseHandlers) {
       clearTimeout(handler.timeout);
       handler.reject(new Error('AgentBus stopped listening'));
     }

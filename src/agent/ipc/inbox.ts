@@ -3,11 +3,7 @@ import { existsSync } from 'fs';
 import { join, dirname } from 'path';
 import { watch, type FSWatcher } from 'fs';
 import { createLogger } from '../../utils/logger.js';
-import {
-  resolveInboxPendingDir,
-  resolveInboxProcessedDir,
-  resolveInboxDir,
-} from '../../config/paths.js';
+import { resolveInboxDir } from '../../config/paths.js';
 import type { AgentIPCMessage } from './types.js';
 
 const log = createLogger('AgentInbox');
