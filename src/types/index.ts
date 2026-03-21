@@ -83,7 +83,6 @@ export interface Config {
       allowFrom?: string[];
     };
   };
-  providers?: Record<string, { apiKey?: string; apiBase?: string }>;
   gateway?: {
     host?: string;
     port?: number;

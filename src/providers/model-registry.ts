@@ -26,7 +26,7 @@ import type {
 } from '../config/models-json.js';
 import { validateModelsConfig, getDefaultModelValues } from '../config/models-json.js';
 import { createLogger } from '../utils/logger.js';
-import { getApiKeyFromEnv } from './index.js';
+import { getApiKeyFromEnv } from './env-keys.js';
 
 const log = createLogger('ModelRegistry');
 

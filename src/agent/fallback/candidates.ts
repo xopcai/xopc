@@ -17,9 +17,6 @@ export interface FallbackAttempt {
   code?: string;
 }
 
-// Re-export for backward compatibility (sync)
-export { isProviderConfiguredSync as isProviderConfigured };
-
 // Get default model dynamically
 function getDefaultModelParts(config?: Config): { provider: string; model: string } {
   const defaultModel = getDefaultModelSync(config);

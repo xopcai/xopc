@@ -97,7 +97,16 @@ export class SettingsPage extends LitElement {
           auth: { mode: c.gateway?.auth?.mode || 'token', token: c.gateway?.auth?.token || '' },
         },
         stt: c.stt || { enabled: false, provider: 'alibaba', alibaba: { model: 'paraformer-v2' }, openai: { model: 'whisper-1' }, fallback: { enabled: true, order: ['alibaba', 'openai'] } },
-        tts: c.tts || { enabled: false, provider: 'openai', trigger: 'auto', alibaba: { model: 'qwen-tts', voice: 'Cherry' }, openai: { model: 'tts-1', voice: 'alloy' } },
+        tts: {
+          enabled: false,
+          provider: 'openai',
+          trigger: 'always',
+          maxTextLength: 4096,
+          timeoutMs: 30000,
+          alibaba: { model: 'qwen-tts', voice: 'Cherry' },
+          openai: { model: 'tts-1', voice: 'alloy' },
+          ...(c.tts ?? {}),
+        },
       };
     } catch (err) {
       console.error('Failed to load settings:', err);

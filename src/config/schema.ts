@@ -642,7 +642,6 @@ export interface ParsedModelRef {
   model: string;
 }
 
-// Re-export from providers/index.ts for backward compatibility
 export { isProviderConfigured } from '../providers/index.js';
 
 /**

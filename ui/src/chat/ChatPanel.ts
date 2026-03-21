@@ -608,3 +608,4 @@ export class ChatPanel extends LitElement {
     `;
   }
 }
+

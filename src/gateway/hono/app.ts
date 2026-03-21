@@ -480,7 +480,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     });
   });
 
-  // POST /api/registry/reload - Hot reload (no-op with pi-ai, but keep for compatibility)
+  // POST /api/registry/reload — reload gateway config and refresh model list for clients
   authenticated.post('/api/registry/reload', async (c) => {
     try {
       // Reload config

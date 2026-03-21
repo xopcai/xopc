@@ -240,11 +240,11 @@ export function validateModelsConfig(config: unknown): ValidationResult {
 			}
 		}
 
-		// If no models and no baseUrl and no modelOverrides, it's invalid
-		if (!hasModels && !hasBaseUrl && !hasModelOverrides) {
+		// If no models and no baseUrl and no modelOverrides, apiKey alone is valid (auth for built-in providers)
+		if (!hasModels && !hasBaseUrl && !hasModelOverrides && !providerConfig.apiKey) {
 			errors.push({
 				path: `providers.${providerName}`,
-				message: 'Must specify baseUrl, modelOverrides, or models',
+				message: 'Must specify baseUrl, modelOverrides, models, or apiKey',
 				severity: 'error',
 			});
 		}
