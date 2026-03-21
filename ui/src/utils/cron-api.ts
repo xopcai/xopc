@@ -60,8 +60,13 @@ export interface ChannelStatus {
 
 export interface SessionChatId {
   channel: string;
+  /** Routing suffix stored in jobs (e.g. default:dm:123); unique per account + peer */
   chatId: string;
   lastActive: string;
+  /** From session routing; Telegram platform id for display */
+  accountId?: string;
+  peerKind?: string;
+  peerId?: string;
 }
 
 export interface CronJobExecution {

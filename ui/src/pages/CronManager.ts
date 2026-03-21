@@ -135,7 +135,6 @@ export class CronManager extends LitElement {
       // Set form default model
       this._formModel = this._defaultModel;
       
-      console.log('[CronManager] Loaded models:', this._availableModels.length, 'default:', this._defaultModel);
     } catch (err) {
       console.error('[CronManager] Models error:', err);
     }
@@ -145,7 +144,6 @@ export class CronManager extends LitElement {
     try {
       const chatIds = await this._api.getSessionChatIds(this._formChannel);
       this._sessionChatIds = chatIds;
-      console.log('[CronManager] Loaded session chatIds for channel', this._formChannel, ':', chatIds.length, chatIds);
     } catch (err) {
       console.error('[CronManager] Session chatIds error:', err);
       this._sessionChatIds = [];
@@ -160,10 +158,8 @@ export class CronManager extends LitElement {
     this._formJobId = job?.id || null;
     
     // Refresh session chat IDs when opening form
-    if (!job) {
-      this._loadSessionChatIds();
-    }
-    
+    this._loadSessionChatIds();
+
     if (job) {
       // Editing existing job - populate form
       this._formName = job.name || '';
@@ -390,7 +386,7 @@ export class CronManager extends LitElement {
           <div class="cron-manager__stats">
             <div class="stat-card" style="text-align: center;">
               <div class="stat-value">${this._metrics.totalJobs}</div>
-              <div class="stat-label">${t('sessions.totalSessions')}</div>
+              <div class="stat-label">${t('cron.totalJobs')}</div>
             </div>
             <div class="stat-card" style="text-align: center;">
               <div class="stat-value">${this._metrics.enabledJobs}</div>
@@ -421,8 +417,8 @@ export class CronManager extends LitElement {
             <div class="session-list session-list--empty">
               <div class="empty-state">
                 <div class="empty-state__icon">${getIcon('clock')}</div>
-                <div class="empty-state__title">No cron jobs yet</div>
-                <button class="btn btn-primary" @click=${this._openForm}>Create your first job</button>
+                <div class="empty-state__title">${t('cron.emptyStateTitle')}</div>
+                <button class="btn btn-primary" @click=${this._openForm}>${t('cron.emptyStateCta')}</button>
               </div>
             </div>
           ` : html`
@@ -571,7 +567,7 @@ export class CronManager extends LitElement {
                 </div>
               ` : nothing}
               <div class="form-field">
-                <label class="form-field__label">Channel</label>
+                <label class="form-field__label">${t('cron.channel')}</label>
                 <select
                   class="form-field__select"
                   .value=${this._formChannel ?? 'telegram'}
@@ -592,15 +588,15 @@ export class CronManager extends LitElement {
               </div>
               <div class="form-field">
                 <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                  <label class="form-field__label" style="margin: 0;">Chat ID *</label>
+                  <label class="form-field__label" style="margin: 0;">${t('cron.recipient')}</label>
                   <button 
                     type="button" 
                     class="btn btn-secondary btn-sm" 
                     @click=${() => this._loadSessionChatIds()}
-                    title="Refresh chat list"
+                    title=${t('cron.refreshRecipientHint')}
                     style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
                   >
-                    ${getIcon('refresh')} Refresh
+                    ${getIcon('refresh')} ${t('cron.refreshList')}
                   </button>
                 </div>
                 <div style="display: flex; gap: 0.5rem; align-items: center;">
@@ -610,7 +606,7 @@ export class CronManager extends LitElement {
                     style="flex: 2; min-width: 0;"
                     .value=${this._formChatId ?? ''}
                     @input=${(e: Event) => this._formChatId = (e.target as HTMLInputElement).value}
-                    placeholder="e.g., 123456789"
+                    placeholder=${t('cron.recipientPlaceholder')}
                   />
                   <select
                     class="form-field__select"
@@ -623,13 +619,13 @@ export class CronManager extends LitElement {
                       }
                     }}
                   >
-                    <option value="">-- Select --</option>
+                    <option value="">${t('cron.selectRecipient')}</option>
                     ${this._sessionChatIds.length > 0 ? this._sessionChatIds.map(item => html`
                       <option value=${item.chatId}>
-                        ${item.channel}: ${item.chatId} (${this._formatLastActive(item.lastActive)})
+                        ${this._formatRecipientOptionLabel(item)}
                       </option>
                     `) : html`
-                      <option value="" disabled>No recent chats</option>
+                      <option value="" disabled>${t('cron.noRecentChatsOption')}</option>
                     `}
                   </select>
                 </div>
@@ -688,6 +684,19 @@ export class CronManager extends LitElement {
                     <span>${this._detailJob?.message}</span>
                   </div>
                   <div class="session-detail__row">
+                    <span class="session-detail__label">${t('cron.mode')}</span>
+                    <span>${this._detailJob?.sessionTarget === 'isolated'
+                      ? t('cron.modeAgentOption')
+                      : t('cron.modeDirectOption')}</span>
+                  </div>
+                  ${this._detailJob?.delivery?.to
+                    ? html`
+                  <div class="session-detail__row">
+                    <span class="session-detail__label">${t('cron.deliveryTarget')}</span>
+                    <span><code>${this._detailJob.delivery?.channel ?? ''}</code> → ${this._formatDeliveryToSummary(this._detailJob)}</span>
+                  </div>`
+                    : nothing}
+                  <div class="session-detail__row">
                     <span class="session-detail__label">${t('cron.status')}</span>
                     <span>${this._detailJob?.enabled ? t('cron.enabled') : t('cron.disabled')}</span>
                   </div>
@@ -733,6 +742,25 @@ export class CronManager extends LitElement {
       return t('cron.timeLabels.hours', { count: hours });
     }
     return d.toLocaleString();
+  }
+
+  private _formatRecipientOptionLabel(item: SessionChatId): string {
+    const when = this._formatLastActive(item.lastActive);
+    if (item.channel === 'telegram' && item.peerId) {
+      const acc = item.accountId ?? 'default';
+      const kind = item.peerKind ?? '';
+      return `${acc} · ${kind} · ${item.peerId} · ${when}`;
+    }
+    return `${item.channel}: ${item.chatId} · ${when}`;
+  }
+
+  private _formatDeliveryToSummary(job: CronJob): string {
+    const to = job.delivery?.to ?? '';
+    const parts = to.split(':');
+    if (parts.length === 3 && (parts[1] === 'dm' || parts[1] === 'group')) {
+      return `${parts[0]} · ${parts[1]} · ${parts[2]}`;
+    }
+    return to;
   }
 
   private _formatLastActive(date: string): string {
