@@ -2,19 +2,24 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import '../components/MessageEditor.js';
 import '../components/MessageList/index.js';
-import '../components/MarkdownRenderer.js';
 import { t, initI18n } from '../utils/i18n.js';
 import { getLanguage } from '../utils/storage.js';
 import type { Attachment } from '../utils/attachment-utils.js';
 import type { MessageEditor, ThinkingLevel } from '../components/MessageEditor.js';
 import type { ChatRoute } from '../navigation.js';
-import type { GatewayClientConfig, Message, ProgressState, ConnectionState, ToolCall, SessionInfo } from './types.js';
+import type { GatewayClientConfig, ProgressState, ConnectionState, SessionInfo } from './types.js';
 import { ChatConnection } from './connection.js';
 import { SessionManager } from './session.js';
 import { MessageSender } from './messaging.js';
-import { formatTime, formatFileSize } from './helpers.js';
+import type { Message } from '../messages/types.js';
+import {
+  appendTextDelta,
+  appendToolStart,
+  completeTool,
+  ensureAssistantMessage,
+} from '../messages/streaming.js';
 
-export type { GatewayClientConfig, Message, ProgressState, ConnectionState, SessionInfo };
+export type { GatewayClientConfig, Message, ProgressState, ConnectionState, SessionInfo } from './types.js';
 
 @customElement('chat-panel')
 export class ChatPanel extends LitElement {
@@ -39,7 +44,6 @@ export class ChatPanel extends LitElement {
   @state() private _hasMore = true;
   @state() private _loadingMore = false;
   @state() private _thinkingLevel: ThinkingLevel = 'medium';
-  @state() private _toolCalls: ToolCall[] = [];
 
   private _conn?: ChatConnection;
   private _sessionMgr?: SessionManager;
@@ -51,12 +55,13 @@ export class ChatPanel extends LitElement {
   private _lastLoadedKey: string | null = null;
   private _loadingSession = false;
 
-  createRenderRoot() { return this; }
+  createRenderRoot() {
+    return this;
+  }
 
   override connectedCallback() {
     super.connectedCallback();
     this.classList.add('chat-container');
-    // Align with app / localStorage; do not force English (would override user locale).
     initI18n(getLanguage());
   }
 
@@ -83,27 +88,41 @@ export class ChatPanel extends LitElement {
     this._messagesEl?.removeEventListener('scroll', this._onScroll as EventListener);
   }
 
-  // ── Services ──────────────────────────────────────────────
-
   private _initServices() {
     if (!this.config) return;
     this._sessionMgr = new SessionManager(this.config);
     this._sender = new MessageSender(this.config);
     this._conn = new ChatConnection(this.config, {
-      onConnected: () => { this._connState = 'connected'; this._error = null; this._reconnectCount = 0; this._loadSessions(false); this.requestUpdate(); },
-      onReconnecting: () => { this._connState = 'reconnecting'; this.requestUpdate(); },
-      onDisconnected: () => { this._connState = 'disconnected'; this.requestUpdate(); },
-      onError: (msg) => { this._error = msg; this._connState = 'error'; this.requestUpdate(); },
+      onConnected: () => {
+        this._connState = 'connected';
+        this._error = null;
+        this._reconnectCount = 0;
+        this._loadSessions(false);
+        this.requestUpdate();
+      },
+      onReconnecting: () => {
+        this._connState = 'reconnecting';
+        this.requestUpdate();
+      },
+      onDisconnected: () => {
+        this._connState = 'disconnected';
+        this.requestUpdate();
+      },
+      onError: (msg) => {
+        this._error = msg;
+        this._connState = 'error';
+        this.requestUpdate();
+      },
       onEvent: (evt, data) => {
         try {
           const detail = JSON.parse(data);
           this.dispatchEvent(new CustomEvent(evt.replace('.', '-'), { detail }));
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       },
     });
   }
-
-  // ── Connection ────────────────────────────────────────────
 
   connect() {
     if (!this._conn) this._initServices();
@@ -112,11 +131,16 @@ export class ChatPanel extends LitElement {
     this._conn?.connect();
   }
 
-  disconnect() { this._conn?.disconnect(); this._connState = 'disconnected'; }
+  disconnect() {
+    this._conn?.disconnect();
+    this._connState = 'disconnected';
+  }
 
-  reconnect() { this._conn?.reconnect(); this._connState = 'connecting'; this.requestUpdate(); }
-
-  // ── Route ─────────────────────────────────────────────────
+  reconnect() {
+    this._conn?.reconnect();
+    this._connState = 'connecting';
+    this.requestUpdate();
+  }
 
   private async _handleRouteChange() {
     const route = this.route;
@@ -125,11 +149,17 @@ export class ChatPanel extends LitElement {
     const keyFromUrl = this._sessionMgr?.parseSessionFromHash() ?? null;
 
     if (route.type === 'recent') {
-      if (keyFromUrl) { await this._loadSessionById(keyFromUrl); return; }
+      if (keyFromUrl) {
+        await this._loadSessionById(keyFromUrl);
+        return;
+      }
       await this._loadSessions(true);
       return;
     }
-    if (route.type === 'new') { await this._createSession(); return; }
+    if (route.type === 'new') {
+      await this._createSession();
+      return;
+    }
     if (route.type === 'session') {
       if (route.sessionKey === this._lastLoadedKey) {
         return;
@@ -138,15 +168,13 @@ export class ChatPanel extends LitElement {
     }
   }
 
-  // ── Sessions ──────────────────────────────────────────────
-
   private async _loadSessions(autoLoad: boolean) {
     if (!this._sessionMgr) return;
     try {
       this._sessions = await this._sessionMgr.loadSessions();
       if (!autoLoad) return;
 
-      const withMsgs = this._sessions.filter((s: any) => s.messageCount > 0);
+      const withMsgs = this._sessions.filter((s: SessionInfo) => (s.messageCount ?? 0) > 0);
       const target = withMsgs[0] ?? this._sessions[0];
       if (target) {
         await this._loadSessionById(target.key);
@@ -185,13 +213,14 @@ export class ChatPanel extends LitElement {
       this._hasMore = hasMore;
 
       if (offset > 0) {
-        const existing = new Set(this._messages.map(m => m.timestamp));
-        this._messages = [...messages.filter(m => !existing.has(m.timestamp)), ...this._messages];
+        const existing = new Set(this._messages.map((m) => m.timestamp));
+        this._messages = [...messages.filter((m) => !existing.has(m.timestamp)), ...this._messages];
       } else {
         this._messages = messages;
         this._lastLoadedKey = key;
         this._notifySessionRoute(key);
       }
+      this._atBottom = true;
       this.requestUpdate();
       if (offset === 0) this._scrollToBottom(false);
     } catch (_err: unknown) {
@@ -203,7 +232,8 @@ export class ChatPanel extends LitElement {
 
   private async _fallbackToRecent() {
     await this._loadSessions(false);
-    const target = this._sessions.find((s: any) => s.messageCount > 0) ?? this._sessions[0];
+    const target =
+      this._sessions.find((s: SessionInfo) => (s.messageCount ?? 0) > 0) ?? this._sessions[0];
     if (target) {
       this._sessionKey = target.key;
       this._messages = [];
@@ -217,7 +247,7 @@ export class ChatPanel extends LitElement {
   async _createSession() {
     if (!this._sessionMgr) return;
     await this._loadSessions(false);
-    const empty = this._sessions.find((s: any) => s.messageCount === 0);
+    const empty = this._sessions.find((s: SessionInfo) => (s.messageCount ?? 0) === 0);
     if (empty) {
       this._sessionKey = empty.key;
       this._messages = [];
@@ -241,15 +271,33 @@ export class ChatPanel extends LitElement {
     }
   }
 
-  // ── Messaging ─────────────────────────────────────────────
+  private get _displayMessages(): Message[] {
+    const list = [...this._messages];
+    if (this._streamingMsg) {
+      list.push(this._streamingMsg);
+    }
+    return list;
+  }
 
-  async sendMessage(content: string, attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>, thinkingLevel?: string) {
+  async sendMessage(
+    content: string,
+    attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
+    thinkingLevel?: string,
+  ) {
     if (this._isSending || this._streaming) return;
     if (!content.trim() && !attachments?.length) return;
     if (!this._sender) return;
 
     this._isSending = true;
-    this._messages = [...this._messages, { role: 'user', content: content ? [{ type: 'text', text: content }] : [], attachments, timestamp: Date.now() }];
+    this._messages = [
+      ...this._messages,
+      {
+        role: 'user',
+        content: content ? [{ type: 'text', text: content }] : [],
+        attachments,
+        timestamp: Date.now(),
+      },
+    ];
     this._atBottom = true;
     this.requestUpdate();
     this._scrollToBottom();
@@ -258,18 +306,46 @@ export class ChatPanel extends LitElement {
 
     try {
       await this._sender.send(content, this._sessionKey || 'default', attachments, thinkingLevel, {
-        onStreamStart: () => { this._streaming = true; this.requestUpdate(); if (this._atBottom) this._scrollToBottom(); },
+        onStreamStart: () => {
+          this._streaming = true;
+          this._streamingMsg = ensureAssistantMessage(this._streamingMsg, Date.now());
+          this.requestUpdate();
+          if (this._atBottom) this._scrollToBottom();
+        },
         onToken: (delta) => this._appendToken(delta),
-        onThinking: (content, isDelta) => this._updateThinking(content, isDelta),
-        onThinkingEnd: () => { if (this._streamingMsg) { this._streamingMsg.thinkingStreaming = false; } },
-        onToolStart: (toolName, args) => { this._ensureStreamingMsg(); this._toolCalls = [...this._toolCalls, { toolName, args, status: 'running' }]; this.requestUpdate(); },
-        onToolEnd: (toolName, isError, result) => {
-          this._toolCalls = this._toolCalls.map(t => t.toolName === toolName ? { ...t, status: isError ? 'error' : 'done', result } : t);
+        onThinking: (c, isDelta) => this._updateThinking(c, isDelta),
+        onThinkingEnd: () => {
+          if (this._streamingMsg) {
+            this._streamingMsg.thinkingStreaming = false;
+          }
+        },
+        onToolStart: (toolName, args) => {
+          const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
+          this._streamingMsg = msg;
+          appendToolStart(msg.content, toolName, args);
+          this._streaming = true;
           this.requestUpdate();
         },
-        onProgress: (p) => { this._progress = p; this.requestUpdate(); if (this._atBottom) this._scrollToBottom(); },
+        onToolEnd: (toolName, isError, result) => {
+          const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
+          this._streamingMsg = msg;
+          completeTool(msg.content, toolName, isError, result);
+          this.requestUpdate();
+        },
+        onProgress: (p) => {
+          this._progress = p;
+          this.requestUpdate();
+          if (this._atBottom) this._scrollToBottom();
+        },
         onResult: () => this._finalizeMessage(),
-        onError: (msg) => { this._error = msg; this._streaming = false; this._isSending = false; this._streamingMsg = null; this._progress = null; this.requestUpdate(); },
+        onError: (msg) => {
+          this._error = msg;
+          this._streaming = false;
+          this._isSending = false;
+          this._streamingMsg = null;
+          this._progress = null;
+          this.requestUpdate();
+        },
       });
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
@@ -288,38 +364,26 @@ export class ChatPanel extends LitElement {
     this._streaming = false;
     this._isSending = false;
     this._streamingMsg = null;
-    this._toolCalls = [];
+    this._progress = null;
     this.requestUpdate();
   }
 
   private _appendToken(delta: string) {
-    if (this._streamingMsg) {
-      const block = this._streamingMsg.content.find(b => b.type === 'text');
-      if (block) block.text = (block.text || '') + delta;
-      else this._streamingMsg.content.push({ type: 'text', text: delta });
-    } else {
-      this._streamingMsg = { role: 'assistant', content: [{ type: 'text', text: delta }], timestamp: Date.now() };
-    }
+    const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
+    this._streamingMsg = msg;
+    appendTextDelta(msg.content, delta);
     this._streaming = true;
     this.requestUpdate();
     if (this._atBottom) this._scrollToBottom();
   }
 
   private _updateThinking(content: string, isDelta: boolean) {
-    if (!this._streamingMsg) {
-      this._streamingMsg = { role: 'assistant', content: [], timestamp: Date.now(), thinking: '', thinkingStreaming: true };
-    }
-    this._streamingMsg.thinking = isDelta ? (this._streamingMsg.thinking || '') + content : content;
-    this._streamingMsg.thinkingStreaming = true;
+    const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
+    this._streamingMsg = msg;
+    msg.thinking = isDelta ? (msg.thinking || '') + content : content;
+    msg.thinkingStreaming = true;
     this.requestUpdate();
     if (this._atBottom) this._scrollToBottom();
-  }
-
-  private _ensureStreamingMsg() {
-    if (!this._streamingMsg) {
-      this._streamingMsg = { role: 'assistant', content: [], timestamp: Date.now() };
-      this._streaming = true;
-    }
   }
 
   private _finalizeMessage() {
@@ -331,18 +395,18 @@ export class ChatPanel extends LitElement {
     this._streaming = false;
     this._progress = null;
     this._isSending = false;
-    this._toolCalls = [];
     this.requestUpdate();
     if (this._atBottom) this._scrollToBottom();
   }
-
-  // ── Scroll ────────────────────────────────────────────────
 
   private _onScroll = () => {
     if (!this._messagesEl) return;
     const { scrollTop, scrollHeight, clientHeight } = this._messagesEl;
     const fromBottom = scrollHeight - scrollTop - clientHeight;
-    if (clientHeight < this._lastClientHeight) { this._lastClientHeight = clientHeight; return; }
+    if (clientHeight < this._lastClientHeight) {
+      this._lastClientHeight = clientHeight;
+      return;
+    }
     if (scrollTop !== 0 && scrollTop < this._lastScrollTop && fromBottom > 50) this._atBottom = false;
     else if (fromBottom < 10) this._atBottom = true;
     this._lastScrollTop = scrollTop;
@@ -350,34 +414,78 @@ export class ChatPanel extends LitElement {
     if (scrollTop < 100 && !this._atBottom && this._hasMore && !this._loadingMore) this._loadMore();
   };
 
+  /**
+   * Scroll the message pane to the bottom after nested list/bubbles finish layout.
+   * ChatPanel.updateComplete alone can run before child Lit elements have measured height.
+   */
   private _scrollToBottom(smooth = true) {
-    this.updateComplete.then(() => {
-      this._messagesEl?.scrollTo({ top: this._messagesEl.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
-    });
+    void this._scrollToBottomAfterLayout(smooth);
+  }
+
+  private async _scrollToBottomAfterLayout(smooth: boolean) {
+    try {
+      await this.updateComplete;
+      const list = this.querySelector('message-list');
+      if (list && 'updateComplete' in list) {
+        await (list as LitElement).updateComplete;
+      }
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+      await new Promise<void>((r) => requestAnimationFrame(() => r()));
+
+      const el = this._messagesEl;
+      if (!el) return;
+      el.scrollTo({ top: el.scrollHeight, behavior: smooth ? 'smooth' : 'auto' });
+
+      const before = el.scrollHeight;
+      requestAnimationFrame(() => {
+        if (!this._messagesEl) return;
+        if (this._messagesEl.scrollHeight > before) {
+          this._messagesEl.scrollTo({
+            top: this._messagesEl.scrollHeight,
+            behavior: smooth ? 'smooth' : 'auto',
+          });
+        }
+      });
+    } catch {
+      /* ignore */
+    }
   }
 
   private async _loadMore() {
     if (!this._sessionKey || this._loadingMore || !this._hasMore) return;
     this._loadingMore = true;
-    try { await this._loadSessionById(this._sessionKey, this._messages.length); }
-    finally { this._loadingMore = false; }
+    try {
+      await this._loadSessionById(this._sessionKey, this._messages.length);
+    } finally {
+      this._loadingMore = false;
+    }
   }
 
-  // ── Public API ────────────────────────────────────────────
-
-  get connectionState() { return this._connState; }
-  get messages() { return this._messages; }
-  clearMessages() { this._messages = []; this.requestUpdate(); }
+  get connectionState() {
+    return this._connState;
+  }
+  get messages() {
+    return this._messages;
+  }
+  clearMessages() {
+    this._messages = [];
+    this.requestUpdate();
+  }
 
   public async request<T>(method: string, path: string, body?: unknown): Promise<T> {
     if (!this.config) throw new Error('Not configured');
     const { apiUrl, authHeaders } = await import('./helpers.js');
-    const res = await fetch(apiUrl(path), { method, headers: authHeaders(this.config.token), body: body ? JSON.stringify(body) : undefined });
-    if (!res.ok) { const e = await res.json().catch(() => ({})); throw new Error(e.error?.message || `HTTP ${res.status}`); }
+    const res = await fetch(apiUrl(path), {
+      method,
+      headers: authHeaders(this.config.token),
+      body: body ? JSON.stringify(body) : undefined,
+    });
+    if (!res.ok) {
+      const e = await res.json().catch(() => ({}));
+      throw new Error(e.error?.message || `HTTP ${res.status}`);
+    }
     return res.json();
   }
-
-  // ── Render ────────────────────────────────────────────────
 
   override render() {
     return html`
@@ -386,10 +494,18 @@ export class ChatPanel extends LitElement {
       <div class="chat-messages">
         <div class="chat-messages-inner">${this._renderMessages()}</div>
       </div>
-      ${!this._atBottom ? html`
-        <button class="scroll-to-bottom-btn" style="position:fixed;right:1.5rem;bottom:120px;width:48px;height:48px;border-radius:50%;background:#3b82f6;color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:100;" @click=${() => this._scrollToBottom()} title="Scroll to bottom">
-          <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
-        </button>` : ''}
+      ${!this._atBottom
+        ? html`
+            <button
+              class="scroll-to-bottom-btn"
+              style="position:fixed;right:1.5rem;bottom:120px;width:48px;height:48px;border-radius:50%;background:#3b82f6;color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:100;"
+              @click=${() => this._scrollToBottom()}
+              title="Scroll to bottom"
+            >
+              <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m6 9 6 6 6-6"/></svg>
+            </button>
+          `
+        : ''}
       <div class="chat-input-container">
         <div class="chat-input-inner">${this._renderInput()}</div>
       </div>
@@ -401,10 +517,15 @@ export class ChatPanel extends LitElement {
       <div class="chat-header">
         <div class="chat-header-title">
           <span class="font-semibold">${t('chat.title') || 'XopcBot'}</span>
-          ${this._sessionKey ? html`<span class="text-xs text-muted ml-2">${this._sessions.find(s => s.key === this._sessionKey)?.name || this._sessionKey}</span>` : ''}
+          ${this._sessionKey
+            ? html`<span class="text-xs text-muted ml-2">${this._sessions.find((s) => s.key === this._sessionKey)?.name || this._sessionKey}</span>`
+            : ''}
         </div>
         <button class="new-session-btn" @click=${() => this._createSession()}>
-          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <line x1="12" y1="5" x2="12" y2="19" />
+            <line x1="5" y1="12" x2="19" y2="12" />
+          </svg>
           <span>${t('chat.newSession') || 'New Chat'}</span>
         </button>
       </div>
@@ -412,138 +533,52 @@ export class ChatPanel extends LitElement {
   }
 
   private _renderStatus() {
-    if (this._connState === 'error' && this._error) return html`
-      <div class="status-bar error">
-        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-        <span>${this._error}</span>
-        <button class="underline ml-auto" @click=${() => this.reconnect()}>${t('chat.retry')}</button>
-      </div>`;
-    if (this._connState === 'reconnecting' || this._connState === 'connecting') return html`
-      <div class="status-bar warning">
-        <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
-        <span>${this._connState === 'reconnecting' ? t('chat.reconnecting') : t('chat.connecting')}</span>
-      </div>`;
+    if (this._connState === 'error' && this._error) {
+      return html`
+        <div class="status-bar error">
+          <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="8" x2="12" y2="12" />
+            <line x1="12" y1="16" x2="12.01" y2="16" />
+          </svg>
+          <span>${this._error}</span>
+          <button class="underline ml-auto" @click=${() => this.reconnect()}>${t('chat.retry')}</button>
+        </div>
+      `;
+    }
+    if (this._connState === 'reconnecting' || this._connState === 'connecting') {
+      return html`
+        <div class="status-bar warning">
+          <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          <span>${this._connState === 'reconnecting' ? t('chat.reconnecting') : t('chat.connecting')}</span>
+        </div>
+      `;
+    }
     return null;
   }
 
   private _renderMessages() {
-    if (!this._messages.length && !this._streaming) return html`
-      <div class="empty-state" style="padding-top:30vh;">
-        <div class="icon">🤖</div>
-        <div class="title">${t('chat.welcomeTitle')}</div>
-        <div class="description">${t('chat.welcomeDescription')}</div>
-      </div>`;
-    return html`
-      <div class="flex flex-col gap-4">
-        ${this._messages.map(m => this._renderMessage(m))}
-        ${this._streaming && this._streamingMsg ? this._renderStreamingMessage() : ''}
-      </div>`;
-  }
+    const list = this._displayMessages;
+    const streamingLast = this._streaming && !!this._streamingMsg;
 
-  private _renderMessage(msg: Message) {
-    const isUser = msg.role === 'user';
-    if (!msg.content?.some(b => b.text) && !msg.attachments?.length) return null;
-    return html`
-      <div class="message-item ${isUser ? 'flex-row-reverse' : ''}">
-        <div class="avatar ${isUser ? 'user' : 'assistant'}">${isUser ? t('chat.you').charAt(0) : 'X'}</div>
-        <div class="flex flex-col gap-1 max-w-[calc(100%-3rem)]">
-          <div class="flex items-center gap-2 text-xs text-muted ${isUser ? 'flex-row-reverse' : ''}">
-            <span class="font-medium">${isUser ? t('chat.you') : t('chat.assistant')}</span>
-            <span>·</span>
-            <span>${formatTime(msg.timestamp)}</span>
-          </div>
-          <div class="message-bubble ${isUser ? 'user' : 'assistant'}">
-            ${this._renderContent(msg.content)}
-            ${msg.attachments?.length ? this._renderAttachments(msg.attachments) : ''}
-          </div>
+    if (!list.length && !this._streaming) {
+      return html`
+        <div class="empty-state" style="padding-top:30vh;">
+          <div class="icon">🤖</div>
+          <div class="title">${t('chat.welcomeTitle')}</div>
+          <div class="description">${t('chat.welcomeDescription')}</div>
         </div>
-      </div>`;
-  }
-
-  private _renderStreamingMessage() {
-    const content = this._streamingMsg?.content || [];
-    const hasText = content.some(b => b.type === 'text' && b.text);
-    return html`
-      <div class="message-item">
-        <div class="avatar assistant">X</div>
-        <div class="flex flex-col gap-1 max-w-[calc(100%-3rem)]">
-          <div class="flex items-center gap-2 text-xs text-muted">
-            <span class="font-medium">${t('chat.assistant')}</span><span>·</span>
-            ${this._renderProgress()}
-          </div>
-          <div class="message-bubble assistant">
-            ${this._renderThinkingBlock()}
-            ${this._renderToolCalls()}
-            <div class="markdown-content">
-              ${content.map(b => b.type === 'text' && b.text ? html`<markdown-renderer .content=${b.text}></markdown-renderer><span class="streaming-cursor"></span>` : '')}
-              ${!hasText && !this._toolCalls.length && !this._streamingMsg?.thinkingStreaming ? html`<span class="streaming-cursor"></span>` : ''}
-            </div>
-          </div>
-        </div>
-      </div>`;
-  }
-
-  private _renderThinkingBlock() {
-    if (!this._streamingMsg?.thinking && !this._streamingMsg?.thinkingStreaming) return null;
-    return html`
-      <div class="thinking-block mb-2">
-        <div class="flex items-center gap-2 text-xs text-muted mb-1"><span class="animate-pulse">💭</span><span>Thinking...</span></div>
-        ${this._streamingMsg?.thinking ? html`<div class="text-sm text-muted italic">${this._streamingMsg.thinking}</div>` : ''}
-      </div>`;
-  }
-
-  private _renderToolCalls() {
-    if (!this._toolCalls.length) return null;
-    return html`
-      <div class="tool-calls flex flex-col gap-2 mb-2">
-        ${this._toolCalls.map(t => html`
-          <div class="tool-call-card bg-surface rounded-lg p-3 border border-border">
-            <div class="flex items-center gap-2 mb-2">
-              <span class="text-lg">${t.status === 'running' ? '⚙️' : t.status === 'done' ? '✅' : '❌'}</span>
-              <span class="font-medium text-sm">${t.toolName}</span>
-              <span class="text-xs text-muted ml-auto">${t.status === 'running' ? 'Running...' : t.status === 'done' ? 'Done' : 'Error'}</span>
-            </div>
-            ${t.args ? html`<details class="text-xs"><summary class="cursor-pointer text-muted hover:text-primary">Arguments</summary><pre class="mt-1 p-2 bg-background rounded overflow-auto max-h-[120px]"><code>${JSON.stringify(t.args, null, 2)}</code></pre></details>` : ''}
-            ${t.result ? html`<div class="mt-2 text-xs"><div class="text-muted">Result:</div><pre class="mt-1 p-2 bg-background rounded overflow-auto max-h-[80px] opacity-80"><code>${t.result}</code></pre></div>` : ''}
-          </div>`)}
-      </div>`;
-  }
-
-  private _renderProgress() {
-    if (this._progress) {
-      const emojis: Record<string, string> = { thinking: '🤔', searching: '🔍', reading: '📖', writing: '✍️', executing: '⚙️', analyzing: '📊', idle: '💬' };
-      return html`<span class="text-accent animate-pulse">${emojis[this._progress.stage] || '💬'} ${this._progress.message}</span>`;
+      `;
     }
-    return html`<span class="text-primary animate-pulse">${t('chat.thinking')}</span>`;
-  }
 
-  private _renderContent(content: Array<{ type: string; text?: string }>) {
-    if (!content?.length) return null;
-    return html`<div class="markdown-content">${content.map(b => b.type === 'text' && b.text ? html`<markdown-renderer .content=${b.text}></markdown-renderer>` : '')}</div>`;
-  }
-
-  private _renderAttachments(attachments: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>) {
-    const images = attachments.filter(a => a.type === 'image' || a.mimeType?.startsWith('image/'));
-    const docs = attachments.filter(a => a.type !== 'image' && !a.mimeType?.startsWith('image/'));
     return html`
-      <div class="flex flex-col gap-2 mt-2">
-        ${images.length ? this._renderImages(images) : ''}
-        ${docs.length ? html`<div class="flex flex-col gap-2">${docs.map(d => this._renderDoc(d))}</div>` : ''}
-      </div>`;
-  }
-
-  private _renderImages(images: Array<{ data?: string; name?: string }>) {
-    const cls = ['', 'single', 'double', 'triple', 'quad'][Math.min(images.length, 4)];
-    return html`<div class="image-gallery ${cls}">${images.map(img => html`<img src="${img.data}" alt="${img.name || 'Image'}" />`)}</div>`;
-  }
-
-  private _renderDoc(doc: { mimeType?: string; name?: string; size?: number }) {
-    const color = doc.mimeType?.includes('pdf') ? '#ef4444' : doc.mimeType?.includes('word') ? '#2563eb' : doc.mimeType?.includes('sheet') ? '#16a34a' : 'currentColor';
-    return html`
-      <div class="document-preview">
-        <div class="icon"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14,2 14,8 20,8"/></svg></div>
-        <div class="info"><div class="name">${doc.name || 'Document'}</div><div class="meta">${doc.size ? formatFileSize(doc.size) : doc.mimeType || 'File'}</div></div>
-      </div>`;
+      <message-list
+        .messages=${list}
+        .isStreaming=${streamingLast}
+        .progress=${streamingLast ? this._progress : null}
+        .useVirtualScroll=${false}
+      ></message-list>
+    `;
   }
 
   private _renderInput() {
@@ -556,11 +591,20 @@ export class ChatPanel extends LitElement {
         .thinkingLevel=${this._thinkingLevel}
         .onSend=${(input: string, attachments: Attachment[], level?: string) => {
           if (level) this._thinkingLevel = level as ThinkingLevel;
-          const data = attachments?.map(a => ({ type: a.type || 'file', mimeType: a.mimeType, data: a.content, name: a.name, size: a.size }));
+          const data = attachments?.map((a) => ({
+            type: a.type || 'file',
+            mimeType: a.mimeType,
+            data: a.content,
+            name: a.name,
+            size: a.size,
+          }));
           this.sendMessage(input, data, level);
         }}
-        .onThinkingChange=${(level: string) => { this._thinkingLevel = level as ThinkingLevel; }}
+        .onThinkingChange=${(level: string) => {
+          this._thinkingLevel = level as ThinkingLevel;
+        }}
         .onAbort=${() => this.abort()}
-      ></message-editor>`;
+      ></message-editor>
+    `;
   }
 }

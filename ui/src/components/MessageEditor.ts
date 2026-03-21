@@ -4,38 +4,11 @@ import { createRef, ref } from 'lit/directives/ref.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { Paperclip, Send, Square, X, FileText, Mic } from 'lucide';
 import { loadAttachment, formatFileSize, type Attachment } from '../utils/attachment-utils';
+import { iconToSvg } from '../utils/lucide-icon.js';
 import { i18n } from '../utils/i18n';
 
 // Thinking level type
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'adaptive';
-
-// Convert lucide icon array format to SVG string
-function iconToSvg(iconData: unknown, className = ''): string {
-  if (!iconData || !Array.isArray(iconData)) return '';
-
-  const [_tag, attrs, children] = iconData as [string, Record<string, string>, unknown[]];
-
-  const attrStr = Object.entries(attrs || {})
-    .map(([k, v]) => `${k}="${v}"`)
-    .join(' ');
-
-  const childrenStr = Array.isArray(children)
-    ? children.map(child => {
-        if (Array.isArray(child)) {
-          const [cTag, cAttrs] = child;
-          const cAttrStr = Object.entries(cAttrs || {})
-            .map(([k, v]) => `${k}="${v}"`)
-            .join(' ');
-          return `<${cTag} ${cAttrStr} />`;
-        }
-        return '';
-      }).join('')
-    : '';
-
-  const finalAttrs = className ? `${attrStr} class="${className}"` : attrStr;
-
-  return `<svg ${finalAttrs}>${childrenStr}</svg>`;
-}
 
 @customElement('message-editor')
 export class MessageEditor extends LitElement {

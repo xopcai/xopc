@@ -8,7 +8,6 @@ import './styles/app/index.css';
 
 import './components/MessageEditor';
 import './components/MessageList';
-import './components/StreamingMessageContainer';
 import './components/AttachmentTile';
 import './dialogs/AttachmentOverlay';
 import './chat/ChatPanel.js';
@@ -16,7 +15,7 @@ import './app';
 import { i18n } from './utils/i18n';
 import type { Attachment } from './utils/attachment-utils';
 import type { MessageEditor } from './components/MessageEditor';
-import type { StreamingMessageContainer } from './components/StreamingMessageContainer';
+import { normalizeAgentMessages } from './messages/agent-messages.js';
 
 // Utils
 export { t, i18n, setLanguage, getCurrentLanguage, initI18n, type Language } from './utils/i18n';
@@ -27,18 +26,38 @@ export { loadAttachment, formatFileSize, getFileIcon } from './utils/attachment-
 
 // Components
 export { MessageEditor } from './components/MessageEditor';
-export { 
-  MessageList, 
-  MessageBubble, 
-  AttachmentRenderer, 
-  UsageBadge 
+export {
+  MessageList,
+  MessageBubble,
+  AttachmentRenderer,
+  UsageBadge,
 } from './components/index';
-export type { 
-  Attachment as MessageAttachment, 
-  Message as UIMessage, 
-  MessageContent 
+export type {
+  Attachment as MessageAttachment,
+  Message as UIMessage,
+  MessageContent,
 } from './components/MessageList/types';
-export { StreamingMessageContainer } from './components/StreamingMessageContainer';
+export type {
+  ToolRenderer,
+  ToolRenderResult,
+  ToolResultMessage,
+  ToolContentPart,
+} from './tools/index.js';
+export {
+  renderTool,
+  renderToolToHtml,
+  registerToolRenderer,
+  setShowJsonMode,
+  getToolRenderer,
+  toolRenderers,
+  renderHeader,
+  renderCollapsibleHeader,
+  DefaultRenderer,
+  BashRenderer,
+  stringToToolResultMessage,
+  extractTextFromToolResult,
+} from './tools/index.js';
+export { ArtifactElement, ImageArtifact, MarkdownArtifact } from './tools/artifacts/index.js';
 
 // Dialogs
 export { XopcbotSettings, type SettingsSection, type SettingsField, type SettingsValue } from './dialogs/SettingsDialog';
@@ -66,7 +85,6 @@ export class XopcbotChat extends LitElement {
   @property({ type: Boolean }) enableThinkingSelector = true;
 
   @query('message-editor') private _messageEditor!: MessageEditor;
-  @query('streaming-message-container') private _streamingContainer!: StreamingMessageContainer;
 
   private _autoScroll = true;
   private _lastScrollTop = 0;
@@ -112,17 +130,9 @@ export class XopcbotChat extends LitElement {
           this.requestUpdate();
           break;
         case 'agent_end':
-          if (this._streamingContainer) {
-            this._streamingContainer.isStreaming = false;
-            this._streamingContainer.setMessage(null, true);
-          }
           this.requestUpdate();
           break;
         case 'message_update':
-          if (this._streamingContainer) {
-            this._streamingContainer.isStreaming = this.agent?.state.isStreaming || false;
-            this._streamingContainer.setMessage(ev.message, !this._streamingContainer.isStreaming);
-          }
           this.requestUpdate();
           break;
       }
@@ -173,10 +183,9 @@ export class XopcbotChat extends LitElement {
     this._autoScroll = true;
 
     if (attachments && attachments.length > 0) {
-      // Convert attachments to the format expected by the agent
       const imageContents = attachments
-        .filter(att => att.mimeType.startsWith('image/'))
-        .map(att => ({
+        .filter((att) => att.mimeType.startsWith('image/'))
+        .map((att) => ({
           type: 'image' as const,
           mimeType: att.mimeType,
           data: att.content,
@@ -193,23 +202,13 @@ export class XopcbotChat extends LitElement {
     }
 
     const state = this.agent.state;
+    const messages = normalizeAgentMessages(this.agent.state.messages as unknown[]);
     return html`
-      <div class="flex flex-col gap-3">
-        <message-list
-          .messages=${this.agent.state.messages}
-          .tools=${state.tools}
-          .pendingToolCalls=${this.agent ? this.agent.state.pendingToolCalls : new Set<string>()}
-          .isStreaming=${state.isStreaming}
-        ></message-list>
-
-        <streaming-message-container
-          class="${state.isStreaming ? '' : 'hidden'}"
-          .tools=${state.tools}
-          .isStreaming=${state.isStreaming}
-          .pendingToolCalls=${state.pendingToolCalls}
-          .isStreaming=${state.isStreaming}
-        ></streaming-message-container>
-      </div>
+      <message-list
+        .messages=${messages}
+        .isStreaming=${state.isStreaming}
+        .useVirtualScroll=${false}
+      ></message-list>
     `;
   }
 

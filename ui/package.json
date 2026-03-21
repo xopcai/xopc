@@ -6,7 +6,7 @@
   "scripts": {
     "dev": "vite",
     "dev:host": "vite --host",
-    "build": "npm run build:lib && npm run build:app",
+    "build": "pnpm run build:lib && pnpm run build:app",
     "build:lib": "vite build --mode lib",
     "build:app": "vite build --mode app",
     "preview": "vite preview",
