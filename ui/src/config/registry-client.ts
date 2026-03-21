@@ -133,25 +133,3 @@ export function clearRegistryCache(): void {
   _modelsCache = null;
   _cacheExpiry = 0;
 }
-
-/** @deprecated Use fetchAllModels instead */
-export async function fetchProvidersLegacy(token?: string) {
-  return fetchAllModels(token);
-}
-
-/** @deprecated Use fetchConfiguredModels instead */
-export async function fetchConfiguredProviders(token?: string) {
-  const models = await fetchConfiguredModels(token);
-  const providers = new Map<string, Model[]>();
-  models.forEach(m => {
-    const list = providers.get(m.provider) || [];
-    list.push(m);
-    providers.set(m.provider, list);
-  });
-  return Array.from(providers.entries()).map(([id, models]) => ({
-    id,
-    name: id,
-    configured: true,
-    models,
-  }));
-}

@@ -55,11 +55,8 @@ function deleteOAuthCredentialsFromCache(provider: string): void {
   oauthCredentialsCache.delete(provider);
 }
 
-// Load OAuth credentials from config into cache
-export function loadOAuthCredentialsToCache(_service: GatewayService): void {
-  // OAuth credentials are now managed via AuthProfiles, not config
-  // This function is kept for compatibility
-}
+/** No-op: OAuth tokens live on disk under auth paths; cache is populated during login. */
+export function loadOAuthCredentialsToCache(_service: GatewayService): void {}
 
 export function createOAuthHandler(service: GatewayService) {
   const oauth = new Hono();
@@ -166,13 +163,6 @@ export function createOAuthHandler(service: GatewayService) {
     const provider = c.req.param('provider');
     
     deleteOAuthCredentialsFromCache(provider);
-
-    // Remove from config
-    const config = service.currentConfig;
-    if ((config as any).providers?.[provider]) {
-      delete (config as any).providers[provider];
-      await service.saveConfig(config);
-    }
 
     return c.json({ ok: true });
   });

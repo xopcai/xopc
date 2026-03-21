@@ -16,7 +16,6 @@ export interface ModelRef {
  */
 export function normalizeProviderId(provider: string): string {
   const normalized = provider.trim().toLowerCase();
-  // Alias mappings
   if (normalized === 'z.ai' || normalized === 'z-ai') {
     return 'zai';
   }
@@ -29,7 +28,6 @@ export function normalizeProviderId(provider: string): string {
   if (normalized === 'kimi-code') {
     return 'kimi-coding';
   }
-  // Backward compatibility for older provider naming
   if (normalized === 'bytedance' || normalized === 'doubao') {
     return 'volcengine';
   }

@@ -1,6 +1,6 @@
 import { readFileSync, existsSync, mkdirSync, promises as fsPromises } from 'fs';
 import { dirname } from 'path';
-import { Config, ConfigSchema } from './schema.js';
+import { type Config, ConfigSchema } from './schema.js';
 import { resolveConfigPath } from './paths.js';
 import { config } from 'dotenv';
 import { createLogger } from '../utils/logger.js';
@@ -82,7 +82,8 @@ export async function saveConfig(config: Config, configPath?: string): Promise<v
     mkdirSync(dir, { recursive: true });
   }
 
-  const content = JSON.stringify(config, null, 2);
+  const validated = ConfigSchema.parse(config);
+  const content = JSON.stringify(validated, null, 2);
 
   // Backup existing config before writing
   if (existsSync(path)) {

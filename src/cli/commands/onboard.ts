@@ -7,25 +7,7 @@ import { register, formatExamples } from '../registry.js';
 import { getFallbackTemplate as _getFallbackTemplate, TEMPLATE_FILES as _TEMPLATE_FILES } from '../templates.js';
 import type { CLIContext } from '../registry.js';
 import type { Config } from '../../config/schema.js';
-import {
-  anthropicOAuthProvider,
-  minimaxOAuthProvider,
-  minimaxCnOAuthProvider,
-  kimiOAuthProvider,
-  githubCopilotOAuthProvider,
-  googleGeminiCliOAuthProvider,
-  googleAntigravityOAuthProvider,
-  openaiCodexOAuthProvider,
-  type OAuthLoginCallbacks,
-} from '../../auth/oauth/index.js';
-import { upsertAuthProfile, listProfilesForProvider as _listProfilesForProvider } from '../../auth/profiles/index.js';
-import {
-  getModelsByProvider,
-  getSortedProviders,
-  getProviderDisplayName,
-  providerSupportsOAuth,
-  providerSupportsApiKey,
-} from '../../providers/index.js';
+import { setupModel as runModelSetup } from './onboard/model.js';
 import { colors } from '../utils/colors.js';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
 import { setupTelegramOnboard } from './onboard/channels/index.js';
@@ -136,7 +118,7 @@ async function runOnboard(
   } else {
     // Interactive mode
     if (doModel) {
-      config = await setupModel(config, ctx);
+      config = await runModelSetup(config, ctx);
     }
 
     if (doChannels) {
@@ -288,222 +270,10 @@ async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
   console.log('   xopcbot gateway logs      # View logs');
 }
 
-const OAUTH_PROVIDER_MAP = {
-  anthropic: {
-    provider: anthropicOAuthProvider,
-    profileId: 'anthropic:default',
-    displayName: 'Anthropic (Claude)',
-    urlPrompt: '🌐 Please open this URL in your browser:\n',
-  },
-  minimax: {
-    provider: minimaxOAuthProvider,
-    profileId: 'minimax:default',
-    displayName: 'MiniMax',
-    urlPrompt: '🌐 Please open this URL in your browser:\n',
-  },
-  'minimax-cn': {
-    provider: minimaxCnOAuthProvider,
-    profileId: 'minimax-cn:default',
-    displayName: 'MiniMax CN',
-    urlPrompt: '🌐 请在浏览器中打开以下 URL:\n',
-  },
-  kimi: {
-    provider: kimiOAuthProvider,
-    profileId: 'kimi:default',
-    displayName: 'Kimi',
-    urlPrompt: '🌐 Please open this URL in your browser:\n',
-  },
-  'github-copilot': {
-    provider: githubCopilotOAuthProvider,
-    profileId: 'github-copilot:default',
-    displayName: 'GitHub Copilot',
-    urlPrompt: '🌐 Please open this URL in your browser:\n',
-  },
-  'google-gemini-cli': {
-    provider: googleGeminiCliOAuthProvider,
-    profileId: 'google-gemini-cli:default',
-    displayName: 'Google Gemini CLI',
-    urlPrompt: '🌐 Please open this URL in your browser:\n',
-  },
-  'google-antigravity': {
-    provider: googleAntigravityOAuthProvider,
-    profileId: 'google-antigravity:default',
-    displayName: 'Google Antigravity',
-    urlPrompt: '🌐 Please open this URL in your browser:\n',
-  },
-  'openai-codex': {
-    provider: openaiCodexOAuthProvider,
-    profileId: 'openai-codex:default',
-    displayName: 'OpenAI Codex',
-    urlPrompt: '🌐 Please open this URL in your browser:\n',
-  },
-} as const;
-
-async function doOAuthLogin(provider: string): Promise<boolean> {
-  const config = OAUTH_PROVIDER_MAP[provider as keyof typeof OAUTH_PROVIDER_MAP];
-  if (!config) {
-    console.error(`OAuth not supported for provider: ${provider}`);
-    return false;
-  }
-
-  console.log(`\n🔐 Starting ${config.displayName} OAuth login...`);
-
-  const callbacks: OAuthLoginCallbacks = {
-    onAuth: (info) => {
-      console.log(`\n${config.urlPrompt}`);
-      console.log(info.url);
-      if (info.instructions) {
-        console.log('\n' + info.instructions);
-      }
-      console.log('\n');
-    },
-    onPrompt: async (prompt) => {
-      return input({ message: prompt.message });
-    },
-    onProgress: (message) => {
-      console.log(' →', message);
-    },
-  };
-
-  try {
-    const creds = await config.provider.login(callbacks);
-    upsertAuthProfile({
-      profileId: config.profileId,
-      credential: {
-        type: 'oauth',
-        provider,
-        ...creds,
-      },
-    });
-    return true;
-  } catch (error) {
-    console.error('❌ OAuth login failed:', error);
-    return false;
-  }
-}
-
-async function setupModel(config: Config, ctx: CLIContext): Promise<Config> {
-  console.log(colors.cyan('\n🤖 Step 2: AI Model Configuration\n'));
-
-  const providers = getSortedProviders();
-  
-  if (providers.length === 0) {
-    console.log('⚠️  No providers available.');
-    return config;
-  }
-
-  const providerChoices = providers.map(p => ({
-    name: getProviderDisplayName(p),
-    value: p,
-  }));
-
-  const selectedProvider = await select({
-    message: 'Select AI provider:',
-    choices: providerChoices,
-  });
-
-  console.log(`\n📦 Selected: ${getProviderDisplayName(selectedProvider)}`);
-
-  const currentProviderConfig = (config as any).providers?.[selectedProvider];
-  const hasExistingConfig = !!currentProviderConfig;
-
-  const authMethods: string[] = [];
-  if (providerSupportsOAuth(selectedProvider)) authMethods.push('oauth');
-  if (providerSupportsApiKey(selectedProvider)) authMethods.push('api_key');
-
-  if (authMethods.length === 0) {
-    console.log('⚠️  No authentication methods available for this provider.');
-    return config;
-  }
-
-  if (hasExistingConfig) {
-    const reconfigure = await confirm({
-      message: 'Provider already configured. Reconfigure?',
-      default: false,
-    });
-    if (!reconfigure) {
-      (config as any).agents = (config as any).agents || {};
-      (config as any).agents.defaults = (config as any).agents.defaults || {};
-      (config as any).agents.defaults.model = selectedProvider;
-      await saveConfig(config, ctx.configPath);
-      return config;
-    }
-  }
-
-  let authMethod: string;
-  if (authMethods.length === 1) {
-    authMethod = authMethods[0];
-  } else {
-    authMethod = await select({
-      message: 'Select authentication method:',
-      choices: authMethods.map(m => ({
-        name: m === 'oauth' ? 'OAuth (Browser Login)' : 'API Key',
-        value: m,
-      })),
-    });
-  }
-
-  if (authMethod === 'oauth') {
-    const success = await doOAuthLogin(selectedProvider);
-    if (success) {
-      console.log('✅ OAuth login successful!');
-    } else {
-      console.log('❌ OAuth login failed. Please try again or use API key.');
-    }
-  }
-
-  if (authMethod === 'api_key') {
-    const apiKey = await input({
-      message: `Enter API key (${selectedProvider}):`,
-      validate: (input) => input.length > 0 || 'API key is required',
-    });
-
-    (config as any).providers = (config as any).providers || {};
-    (config as any).providers[selectedProvider] = {
-      api_key: apiKey,
-    };
-
-    console.log('✅ API key saved.');
-  }
-
-  const models = await getModelsForProvider(selectedProvider);
-  
-  if (models.length === 0) {
-    console.log('⚠️  No models available for this provider.');
-  } else {
-    const selectedModel = await select({
-      message: 'Select model:',
-      choices: models,
-    });
-
-    (config as any).agents = (config as any).agents || {};
-    (config as any).agents.defaults = (config as any).agents.defaults || {};
-    (config as any).agents.defaults.model = `${selectedProvider}/${selectedModel}`;
-  }
-
-  await saveConfig(config as Config, ctx.configPath);
-  console.log('✅ Model configuration saved.\n');
-
-  return config;
-}
-
-async function getModelsForProvider(provider: string): Promise<{ value: string; name: string }[]> {
-  const models = getModelsByProvider(provider);
-  
-  if (!models || models.length === 0) {
-    return [{ value: 'default', name: 'Default Model' }];
-  }
-
-  return models.map(m => ({
-    value: m.id,
-    name: m.name || m.id,
-  }));
-}
-
 async function setupChannels(config: Config): Promise<Config> {
   console.log(colors.cyan('\n💬 Step 3: Messaging Channels\n'));
 
-  await setupTelegramOnboard(config, {
+  config = await setupTelegramOnboard(config, {
     confirmMessage: 'Enable Telegram channel?',
     confirmDefault: true,
   });

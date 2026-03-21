@@ -63,10 +63,13 @@ export interface SettingsData {
   };
   tts?: {
     enabled: boolean;
-    provider: 'openai' | 'alibaba';
-    trigger: 'auto' | 'never';
+    provider: 'openai' | 'alibaba' | 'edge';
+    trigger: 'off' | 'always' | 'inbound' | 'tagged';
+    maxTextLength?: number;
+    timeoutMs?: number;
     alibaba?: { apiKey?: string; model?: string; voice?: string };
     openai?: { apiKey?: string; model?: string; voice?: string };
+    edge?: { voice?: string; lang?: string };
   };
 }
 

@@ -1,6 +1,7 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join, dirname } from 'path';
 import { createLogger } from '../utils/logger.js';
+import { getApiKeyFromEnv } from '../providers/env-keys.js';
 import {
   resolveCredentialsDir,
   resolveAuthProfilesPath,
@@ -41,22 +42,6 @@ export interface AuthProfilesFile {
   version: number;
   profiles: Record<string, ApiKeyProfile>;
 }
-
-// ============================================
-// Default Environment Variable Mappings
-// ============================================
-
-const DEFAULT_ENV_VARS: Record<string, string> = {
-  openai: 'OPENAI_API_KEY',
-  anthropic: 'ANTHROPIC_API_KEY',
-  google: 'GOOGLE_API_KEY',
-  deepseek: 'DEEPSEEK_API_KEY',
-  xai: 'XAI_API_KEY',
-  alibaba: 'ALIBABA_API_KEY',
-  moonshot: 'MOONSHOT_API_KEY',
-  minimax: 'MINIMAX_API_KEY',
-  '01-ai': 'ZERONE_API_KEY',
-};
 
 // ============================================
 // Credential Resolver
@@ -108,8 +93,8 @@ export class CredentialResolver {
       return oauthToken.access;
     }
 
-    // 4. Fallback to environment variable
-    const envKey = this.loadFromEnv(normalizedProvider);
+    // 4. Environment variables (see `src/providers/env-keys.ts`)
+    const envKey = getApiKeyFromEnv(normalizedProvider);
     if (envKey) {
       log.debug({ provider, source: 'env' }, 'Resolved API key from environment');
       return envKey;
@@ -265,18 +250,8 @@ export class CredentialResolver {
     return profile.key;
   }
 
-  private loadFromEnv(providerOrEnvVar: string): string | null {
-    // Try direct env var
-    const directValue = process.env[providerOrEnvVar];
-    if (directValue) return directValue;
-
-    // Try default mapping
-    const envVar = DEFAULT_ENV_VARS[providerOrEnvVar.toLowerCase()];
-    if (envVar) {
-      return process.env[envVar] || null;
-    }
-
-    return null;
+  private loadFromEnv(envVarName: string): string | null {
+    return process.env[envVarName] || null;
   }
 
   private findProfileForProvider(

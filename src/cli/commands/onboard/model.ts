@@ -18,6 +18,7 @@ import { upsertAuthProfile } from '../../../auth/profiles/index.js';
 import { getOAuthProvider } from '../../utils/oauth-providers.js';
 import type { OAuthLoginCallbacks } from '../../../auth/index.js';
 import { CredentialResolver } from '../../../auth/credentials.js';
+import { getApiKeyFromEnv } from '../../../providers/env-keys.js';
 
 /**
  * Get available models for a provider
@@ -159,11 +160,9 @@ export async function setupModel(
   let apiKey: string | undefined;
   let useOAuth = false;
 
-  // Check environment variable
-  const envKey = provider.toUpperCase().replace(/-/g, '_') + '_API_KEY';
-  apiKey = process.env[envKey];
+  apiKey = getApiKeyFromEnv(provider);
   if (apiKey) {
-    console.log(`\n${colors.green('✓')} Found ${envKey} in environment`);
+    console.log(`\n${colors.green('✓')} Found API key for ${providerName} in environment`);
   }
 
   if (!apiKey) {
