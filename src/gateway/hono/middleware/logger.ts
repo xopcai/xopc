@@ -11,7 +11,7 @@ export function logger() {
     
     const duration = Date.now() - start;
     
-    log.info({
+    log.debug({
       method: c.req.method,
       path: c.req.path,
       status: c.res.status,

@@ -131,7 +131,9 @@ export class ChatPanel extends LitElement {
     }
     if (route.type === 'new') { await this._createSession(); return; }
     if (route.type === 'session') {
-      this._lastLoadedKey = null;
+      if (route.sessionKey === this._lastLoadedKey) {
+        return;
+      }
       await this._loadSessionById(route.sessionKey);
     }
   }
@@ -158,8 +160,21 @@ export class ChatPanel extends LitElement {
     }
   }
 
+  private _notifySessionRoute(sessionKey: string) {
+    this.dispatchEvent(
+      new CustomEvent<ChatRoute>('route-change', {
+        detail: { type: 'session', sessionKey },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   private async _loadSessionById(key: string, offset = 0) {
     if (!this._sessionMgr) return;
+    if (offset === 0 && key === this._sessionKey && (this._isSending || this._streaming)) {
+      return;
+    }
     if (offset === 0) this._loadingSession = false;
     if (this._loadingSession) return;
     this._loadingSession = true;
@@ -174,10 +189,12 @@ export class ChatPanel extends LitElement {
         this._messages = [...messages.filter(m => !existing.has(m.timestamp)), ...this._messages];
       } else {
         this._messages = messages;
-        this._scrollToBottom(false);
+        this._lastLoadedKey = key;
+        this._notifySessionRoute(key);
       }
       this.requestUpdate();
-    } catch (err: any) {
+      if (offset === 0) this._scrollToBottom(false);
+    } catch (_err: unknown) {
       if (offset === 0) await this._fallbackToRecent();
     } finally {
       this._loadingSession = false;
@@ -206,6 +223,7 @@ export class ChatPanel extends LitElement {
       this._messages = [];
       this._lastLoadedKey = empty.key;
       this._sessionMgr.updateUrl(empty.key);
+      this._notifySessionRoute(empty.key);
       return;
     }
     try {
@@ -215,8 +233,9 @@ export class ChatPanel extends LitElement {
       this._sessions = [session, ...this._sessions];
       this._lastLoadedKey = session.key;
       this._sessionMgr.updateUrl(session.key);
-      this._scrollToBottom();
+      this._notifySessionRoute(session.key);
       this.requestUpdate();
+      this._scrollToBottom();
     } catch (err) {
       console.error('[ChatPanel] createSession failed:', err);
     }
@@ -232,8 +251,10 @@ export class ChatPanel extends LitElement {
     this._isSending = true;
     this._messages = [...this._messages, { role: 'user', content: content ? [{ type: 'text', text: content }] : [], attachments, timestamp: Date.now() }];
     this._atBottom = true;
-    this._scrollToBottom();
     this.requestUpdate();
+    this._scrollToBottom();
+    await this.updateComplete;
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
     try {
       await this._sender.send(content, this._sessionKey || 'default', attachments, thinkingLevel, {
@@ -311,8 +332,8 @@ export class ChatPanel extends LitElement {
     this._progress = null;
     this._isSending = false;
     this._toolCalls = [];
-    if (this._atBottom) this._scrollToBottom();
     this.requestUpdate();
+    if (this._atBottom) this._scrollToBottom();
   }
 
   // ── Scroll ────────────────────────────────────────────────
