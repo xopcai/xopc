@@ -42,7 +42,8 @@ export interface OutboundMessage {
 
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
-  content: string;
+  /** Plain text (legacy) or structured content blocks from the agent (tool calls, multimodal). */
+  content: string | unknown[];
   timestamp?: string;
   tool_call_id?: string;
   tool_calls?: Array<{

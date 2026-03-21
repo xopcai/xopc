@@ -29,6 +29,8 @@ import { AgentToolsFactory } from "../../../agent/agent-tools-factory.js";
 import { SystemPromptBuilder } from "../../../agent/prompt/service-prompt-builder.js";
 import { SkillManager } from "../../../agent/skills/index.js";
 import { loadBootstrapFiles, extractTextContent } from "../../../agent/helpers.js";
+import { cleanTrailingErrors, sanitizeMessages } from "../../../agent/memory/message-sanitizer.js";
+import { tryApplySessionTranscriptHygiene } from "../../../agent/transcript/transcript-hygiene.js";
 import { createLogger } from "../../../utils/logger.js";
 
 const log = createLogger("LocalAcpRuntime");
@@ -67,6 +69,8 @@ interface LocalSessionState {
 export class LocalAcpRuntime implements AcpRuntime {
   private readonly sessions = new Map<string, LocalSessionState>();
   private agent: Agent;
+  /** Resolved default model for transcript hygiene (OpenClaw-style). */
+  private agentModel: Model<Api>;
   private sessionStore: SessionStore;
   private tools: AgentTool<any, any>[] = [];
   private workspace: string;
@@ -99,7 +103,9 @@ export class LocalAcpRuntime implements AcpRuntime {
     this.initializeTools();
 
     // Initialize agent
-    this.agent = this.createAgent();
+    const { agent, model } = this.createAgent();
+    this.agent = agent;
+    this.agentModel = model;
 
     // Subscribe to agent events
     this.agent.subscribe((event) => this.handleAgentEvent(event));
@@ -121,7 +127,7 @@ export class LocalAcpRuntime implements AcpRuntime {
   /**
    * Create agent instance
    */
-  private createAgent(): Agent {
+  private createAgent(): { agent: Agent; model: Model<Api> } {
     let model: Model<Api>;
 
     const modelConfig = this.config?.agents?.defaults?.model;
@@ -156,7 +162,7 @@ export class LocalAcpRuntime implements AcpRuntime {
       skillManager,
     });
 
-    return new Agent({
+    const agent = new Agent({
       initialState: {
         systemPrompt: systemPromptBuilder.build(bootstrapFiles),
         model,
@@ -165,6 +171,7 @@ export class LocalAcpRuntime implements AcpRuntime {
       },
       getApiKey: (provider: string) => getApiKeySync(provider),
     });
+    return { agent, model };
   }
 
   /**
@@ -269,8 +276,10 @@ export class LocalAcpRuntime implements AcpRuntime {
     });
 
     try {
-      // Load session messages into agent
-      this.agent.replaceMessages(session.messages);
+      // Load session messages into agent (transcript hygiene aligned with main AgentService)
+      let loaded = cleanTrailingErrors(session.messages);
+      loaded = tryApplySessionTranscriptHygiene(loaded, this.agentModel);
+      this.agent.replaceMessages(loaded);
 
       // Yield initial status
       yield {
@@ -496,8 +505,10 @@ export class LocalAcpRuntime implements AcpRuntime {
         }
 
         // Save session messages
-        session.messages = [...this.agent.state.messages];
-        await this.sessionStore.save(input.handle.sessionKey, session.messages);
+        const { messages: sanitized } = sanitizeMessages(this.agent.state.messages);
+        const persisted = tryApplySessionTranscriptHygiene(sanitized, this.agentModel);
+        session.messages = [...persisted];
+        await this.sessionStore.save(input.handle.sessionKey, persisted);
 
       } finally {
         unsubscribe();

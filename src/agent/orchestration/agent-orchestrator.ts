@@ -14,6 +14,7 @@ import type { AgentEventHandler } from './agent-event-handler.js';
 import type { FeedbackCoordinator } from '../feedback/feedback-coordinator.js';
 import type { AgentManager } from '../agent-manager.js';
 import { sanitizeMessages, cleanTrailingErrors } from '../memory/message-sanitizer.js';
+import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygiene.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('AgentOrchestrator');
@@ -54,11 +55,19 @@ export class AgentOrchestrator {
 
     try {
       // 1. Load session history
-      const messages = await this.sessionStore.load(sessionKey);
+      let messages = await this.sessionStore.load(sessionKey);
 
       // Clean any trailing errors from previous sessions (defensive)
-      const cleanedHistory = cleanTrailingErrors(messages);
-      agent.replaceMessages(cleanedHistory);
+      messages = cleanTrailingErrors(messages);
+
+      try {
+        const model = this.modelManager.getResolvedModelForSession(sessionKey);
+        messages = tryApplySessionTranscriptHygiene(messages, model);
+      } catch (err) {
+        log.warn({ err, sessionKey }, 'Transcript hygiene skipped (model resolve failed)');
+      }
+
+      agent.replaceMessages(messages);
 
       // 2. Apply model configuration for session
       await this.modelManager.applyModelForSession(agent, sessionKey);
@@ -80,8 +89,8 @@ export class AgentOrchestrator {
         log.info({ sessionKey, removed }, 'Removed problematic messages before saving');
       }
 
-      // 7. Save session messages
-      await this.sessionStore.save(sessionKey, sanitizedMessages);
+      // 7. Save session messages (transcript hygiene aligned with OpenClaw)
+      await this.saveSessionSnapshot(sessionKey, sanitizedMessages);
 
       // 8. End task feedback
       this.feedbackCoordinator.endTask();
@@ -91,6 +100,20 @@ export class AgentOrchestrator {
       this.feedbackCoordinator.endTask();
       throw error;
     }
+  }
+
+  /**
+   * Transcript hygiene (OpenClaw-style) + persist. Expects messages already passed through {@link sanitizeMessages}.
+   */
+  private async saveSessionSnapshot(sessionKey: string, messages: AgentMessage[]): Promise<void> {
+    let toPersist = messages;
+    try {
+      const model = this.modelManager.getResolvedModelForSession(sessionKey);
+      toPersist = tryApplySessionTranscriptHygiene(messages, model);
+    } catch (err) {
+      log.warn({ err, sessionKey }, 'Transcript hygiene on save skipped');
+    }
+    await this.sessionStore.save(sessionKey, toPersist);
   }
 
   /**
@@ -108,7 +131,8 @@ export class AgentOrchestrator {
     // This ensures user messages are persisted even if the process crashes
     // or is interrupted while waiting for AI
     try {
-      await this.sessionStore.save(context.sessionKey, agent.state.messages);
+      const { messages: sanitizedTurn } = sanitizeMessages(agent.state.messages);
+      await this.saveSessionSnapshot(context.sessionKey, sanitizedTurn);
       log.debug({ sessionKey: context.sessionKey }, 'User message saved immediately after prompt');
     } catch (err) {
       log.warn({ err, sessionKey: context.sessionKey }, 'Failed to save user message immediately');

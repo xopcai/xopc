@@ -20,6 +20,15 @@ const log = createLogger('MessageSanitizer');
  * Check if a message has valid, non-empty content
  */
 function hasValidContent(message: AgentMessage): boolean {
+  const msg = message as AgentMessage & {
+    tool_calls?: unknown[];
+    toolCalls?: unknown[];
+  };
+  if (message.role === 'assistant') {
+    if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) return true;
+    if (Array.isArray(msg.toolCalls) && msg.toolCalls.length > 0) return true;
+  }
+
   const content = message.content;
 
   // String content must be non-empty

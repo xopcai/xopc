@@ -82,6 +82,22 @@ describe('MessageSanitizer', () => {
       expect(result.removed).toBe(2);
     });
 
+    it('should remove assistant messages with empty content array', () => {
+      const messages: AgentMessage[] = [
+        { role: 'user', content: 'Hello', timestamp: 1 },
+        {
+          role: 'assistant',
+          content: [],
+          timestamp: 2,
+        },
+      ];
+
+      const result = sanitizeMessages(messages);
+
+      expect(result.messages).toHaveLength(1);
+      expect(result.removed).toBe(1);
+    });
+
     it('should keep messages with tool calls even without text', () => {
       const messages: AgentMessage[] = [
         { role: 'user', content: 'Hello', timestamp: 1 },
@@ -90,6 +106,29 @@ describe('MessageSanitizer', () => {
           content: [{ type: 'toolCall', name: 'search', id: '123', args: {} }],
           timestamp: 2,
         },
+      ];
+
+      const result = sanitizeMessages(messages);
+
+      expect(result.messages).toHaveLength(2);
+      expect(result.removed).toBe(0);
+    });
+
+    it('should keep assistant messages with OpenAI-style tool_calls only', () => {
+      const messages: AgentMessage[] = [
+        { role: 'user', content: 'Hello', timestamp: 1 },
+        {
+          role: 'assistant',
+          content: '',
+          tool_calls: [
+            {
+              id: 'call_1',
+              type: 'function',
+              function: { name: 'bash', arguments: '{}' },
+            },
+          ],
+          timestamp: 2,
+        } as AgentMessage,
       ];
 
       const result = sanitizeMessages(messages);

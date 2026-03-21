@@ -1,5 +1,10 @@
 import { describe, it, expect } from 'vitest';
-import { appendTextDelta, appendToolStart, completeTool } from '../messages/streaming.js';
+import {
+  appendTextDelta,
+  appendToolStart,
+  cloneMessageForRender,
+  completeTool,
+} from '../messages/streaming.js';
 import type { MessageContent } from '../messages/types.js';
 
 describe('messages/streaming', () => {
@@ -21,5 +26,18 @@ describe('messages/streaming', () => {
     if (c[0].type !== 'tool_use') throw new Error('expected tool_use');
     expect(c[0].status).toBe('done');
     expect(c[0].result).toBe('ok');
+  });
+
+  it('cloneMessageForRender yields new content references for Lit updates', () => {
+    const msg = {
+      role: 'assistant' as const,
+      content: [{ type: 'text' as const, text: 'hi' }],
+      timestamp: 1,
+    };
+    const clone = cloneMessageForRender(msg);
+    expect(clone).not.toBe(msg);
+    expect(clone.content).not.toBe(msg.content);
+    expect(clone.content[0]).not.toBe(msg.content[0]);
+    expect(clone.content[0].text).toBe('hi');
   });
 });

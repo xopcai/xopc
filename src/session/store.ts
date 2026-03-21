@@ -836,7 +836,11 @@ export class SessionStore {
         const role = msg.role === 'assistant' ? 'Assistant' : msg.role === 'user' ? 'User' : msg.role;
         lines.push(`## ${role}`);
         lines.push('');
-        lines.push(msg.content);
+        const body =
+          typeof msg.content === 'string'
+            ? msg.content
+            : JSON.stringify(msg.content, null, 2);
+        lines.push(body);
         lines.push('');
         lines.push('---');
         lines.push('');
@@ -940,23 +944,40 @@ export class SessionStore {
   private extractTextContent(content: unknown): string {
     if (typeof content === 'string') return content;
     if (Array.isArray(content)) {
-      return content
-        .filter((c) => typeof c === 'object' && c !== null && 'type' in c && c.type === 'text')
-        .map((c) => (c as { text?: string }).text || '')
-        .join('');
+      const parts: string[] = [];
+      for (const item of content) {
+        if (typeof item !== 'object' || item === null || !('type' in item)) continue;
+        const c = item as { type?: string; text?: string; name?: string };
+        if (c.type === 'text' && typeof c.text === 'string') {
+          parts.push(c.text);
+        } else if (c.type === 'toolCall' || c.type === 'tool_use') {
+          parts.push(c.name ? `[${c.name}]` : '');
+        }
+      }
+      return parts.join('');
     }
     return '';
   }
 
   private convertMessages(messages: AgentMessage[]): Message[] {
-    return messages.map((m: any) => ({
-      role: m.role as 'system' | 'user' | 'assistant' | 'tool' | 'toolResult',
-      content: typeof m.content === 'string' ? m.content : this.extractTextContent(m.content),
-      timestamp: m.timestamp ? new Date(m.timestamp).toISOString() : undefined,
-      tool_call_id: m.tool_call_id || m.toolCallId,
-      tool_calls: m.tool_calls,
-      name: m.name,
-    }));
+    return messages.map((m: any) => {
+      const c = m.content;
+      const content: string | unknown[] =
+        typeof c === 'string'
+          ? c
+          : Array.isArray(c)
+            ? c
+            : this.extractTextContent(c);
+
+      return {
+        role: m.role as 'system' | 'user' | 'assistant' | 'tool' | 'toolResult',
+        content,
+        timestamp: m.timestamp ? new Date(m.timestamp).toISOString() : undefined,
+        tool_call_id: m.tool_call_id || m.toolCallId,
+        tool_calls: m.tool_calls,
+        name: m.name,
+      };
+    });
   }
 
   private async moveToArchive(key: string): Promise<void> {

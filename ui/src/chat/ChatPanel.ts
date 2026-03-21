@@ -15,6 +15,7 @@ import type { Message } from '../messages/types.js';
 import {
   appendTextDelta,
   appendToolStart,
+  cloneMessageForRender,
   completeTool,
   ensureAssistantMessage,
 } from '../messages/streaming.js';
@@ -308,7 +309,8 @@ export class ChatPanel extends LitElement {
       await this._sender.send(content, this._sessionKey || 'default', attachments, thinkingLevel, {
         onStreamStart: () => {
           this._streaming = true;
-          this._streamingMsg = ensureAssistantMessage(this._streamingMsg, Date.now());
+          const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
+          this._streamingMsg = cloneMessageForRender(msg);
           this.requestUpdate();
           if (this._atBottom) this._scrollToBottom();
         },
@@ -317,19 +319,21 @@ export class ChatPanel extends LitElement {
         onThinkingEnd: () => {
           if (this._streamingMsg) {
             this._streamingMsg.thinkingStreaming = false;
+            this._streamingMsg = cloneMessageForRender(this._streamingMsg);
+            this.requestUpdate();
           }
         },
         onToolStart: (toolName, args) => {
           const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
-          this._streamingMsg = msg;
           appendToolStart(msg.content, toolName, args);
+          this._streamingMsg = cloneMessageForRender(msg);
           this._streaming = true;
           this.requestUpdate();
         },
         onToolEnd: (toolName, isError, result) => {
           const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
-          this._streamingMsg = msg;
           completeTool(msg.content, toolName, isError, result);
+          this._streamingMsg = cloneMessageForRender(msg);
           this.requestUpdate();
         },
         onProgress: (p) => {
@@ -370,8 +374,8 @@ export class ChatPanel extends LitElement {
 
   private _appendToken(delta: string) {
     const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
-    this._streamingMsg = msg;
     appendTextDelta(msg.content, delta);
+    this._streamingMsg = cloneMessageForRender(msg);
     this._streaming = true;
     this.requestUpdate();
     if (this._atBottom) this._scrollToBottom();
@@ -379,9 +383,9 @@ export class ChatPanel extends LitElement {
 
   private _updateThinking(content: string, isDelta: boolean) {
     const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
-    this._streamingMsg = msg;
     msg.thinking = isDelta ? (msg.thinking || '') + content : content;
     msg.thinkingStreaming = true;
+    this._streamingMsg = cloneMessageForRender(msg);
     this.requestUpdate();
     if (this._atBottom) this._scrollToBottom();
   }
@@ -389,7 +393,7 @@ export class ChatPanel extends LitElement {
   private _finalizeMessage() {
     if (this._streamingMsg) {
       this._streamingMsg.thinkingStreaming = false;
-      this._messages = [...this._messages, this._streamingMsg];
+      this._messages = [...this._messages, cloneMessageForRender(this._streamingMsg)];
       this._streamingMsg = null;
     }
     this._streaming = false;

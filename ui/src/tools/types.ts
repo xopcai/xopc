@@ -23,5 +23,6 @@ export interface ToolRenderer<TParams = unknown, TDetails = unknown> {
     params: TParams | undefined,
     result: ToolResultMessage<TDetails> | undefined,
     isStreaming?: boolean,
+    toolName?: string,
   ): ToolRenderResult;
 }
