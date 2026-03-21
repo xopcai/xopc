@@ -1,0 +1,72 @@
+/**
+ * Tool call cards (gateway chat) — collapsible panels, states, theme tokens.
+ */
+
+.tool-call-card {
+  @apply rounded-lg border border-border overflow-hidden;
+  background: var(--bg-secondary);
+}
+
+.tool-call-card--running {
+  @apply border-dashed border-border;
+  background: color-mix(in srgb, var(--bg-secondary) 92%, var(--accent-primary) 8%);
+}
+
+.tool-call-header {
+  @apply flex items-center gap-2 px-3 py-2 w-full text-left cursor-pointer text-sm;
+  color: var(--text-secondary);
+  transition: background-color 0.15s ease, color 0.15s ease;
+}
+
+.tool-call-header:hover {
+  color: var(--text-primary);
+  background: color-mix(in srgb, var(--bg-tertiary) 55%, transparent);
+}
+
+.tool-call-header .tool-call-chevron {
+  opacity: 0.7;
+  transition: opacity 0.15s ease;
+}
+
+.tool-call-header:hover .tool-call-chevron {
+  opacity: 1;
+}
+
+.tool-call-header--static {
+  @apply cursor-default;
+}
+
+.tool-call-header--static:hover {
+  background: transparent;
+}
+
+.tool-call-name-badge {
+  @apply inline-flex items-center gap-1 rounded-md px-1.5 py-0.5 text-xs font-medium border border-border;
+  background: var(--bg-tertiary);
+  color: var(--text-primary);
+}
+
+.tool-call-body {
+  @apply px-3 pb-3;
+  overflow: hidden;
+  transition:
+    max-height 0.28s ease-out,
+    opacity 0.2s ease-out,
+    padding-top 0.2s ease-out;
+}
+
+.tool-call-body--collapsed {
+  max-height: 0;
+  opacity: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+
+.tool-call-body--expanded {
+  max-height: 2000px;
+  opacity: 1;
+}
+
+.tool-call-body-inner {
+  @apply space-y-3 pt-1;
+}

@@ -80,13 +80,16 @@ export class MessageSender {
 
         while (buf.includes('\n')) {
           const idx = buf.indexOf('\n');
-          const line = buf.slice(0, idx);
+          let line = buf.slice(0, idx);
           buf = buf.slice(idx + 1);
+          line = line.replace(/\r$/, '');
 
           if (line.startsWith('event:')) {
+            evtData = '';
             evtType = line.slice(6).trim();
           } else if (line.startsWith('data:')) {
-            evtData += (evtData ? '\n' : '') + line.slice(5).trim();
+            const payload = line.startsWith('data: ') ? line.slice(6) : line.slice(5);
+            evtData += (evtData ? '\n' : '') + payload;
           } else if (line === '' && evtData) {
             this._dispatchSSE(evtType || 'message', evtData, callbacks);
             evtType = '';
@@ -112,14 +115,29 @@ export class MessageSender {
       case 'status':
         cb?.onStreamStart();
         break;
-      case 'token':
-        if (parsed.content) cb?.onToken(parsed.content);
+      case 'token': {
+        const chunk =
+          typeof parsed.content === 'string'
+            ? parsed.content
+            : typeof parsed.delta === 'string'
+              ? parsed.delta
+              : typeof parsed.text === 'string'
+                ? parsed.text
+                : '';
+        if (chunk) cb?.onToken(chunk);
         break;
+      }
       case 'thinking':
-        if (parsed.status === 'started') cb?.onThinking('', false);
-        cb?.onThinking(parsed.content || '', parsed.delta || false);
+        if (parsed.status === 'started') {
+          cb?.onThinking('', false);
+          break;
+        }
+        cb?.onThinking(parsed.content || '', Boolean(parsed.delta));
         break;
       case 'thinking_end':
+        cb?.onThinkingEnd();
+        break;
+      case 'message_end':
         cb?.onThinkingEnd();
         break;
       case 'tool_start':
@@ -143,9 +161,18 @@ export class MessageSender {
       case 'error':
         cb?.onError(parsed.content || parsed.error?.message || 'Send failed');
         break;
-      default:
-        if (parsed.content) cb?.onToken(parsed.content);
+      default: {
+        const chunk =
+          typeof parsed.content === 'string'
+            ? parsed.content
+            : typeof parsed.delta === 'string'
+              ? parsed.delta
+              : typeof parsed.text === 'string'
+                ? parsed.text
+                : '';
+        if (chunk) cb?.onToken(chunk);
         break;
+      }
     }
   }
 }

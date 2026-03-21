@@ -4,6 +4,7 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons';
 import type { SessionDetail } from '../utils/session-api';
+import { messageWireSearchText } from '../messages/agent-messages.js';
 
 export interface SessionDetailEventDetail {
   action: 'close' | 'archive' | 'unarchive' | 'pin' | 'unpin' | 'delete' | 'export';
@@ -58,7 +59,7 @@ export class SessionDetailDrawer extends LitElement {
     const results: number[] = [];
 
     this.session.messages.forEach((msg, index) => {
-      if (msg.content.toLowerCase().includes(query)) {
+      if (messageWireSearchText(msg.content).toLowerCase().includes(query)) {
         results.push(index);
       }
     });
@@ -215,7 +216,7 @@ export class SessionDetailDrawer extends LitElement {
                 <span class="message__role">${msg.role}</span>
                 ${msg.timestamp ? html`<span class="message__time">${this._formatDate(msg.timestamp)}</span>` : ''}
               </div>
-              <div class="message__content">${this._highlightText(msg.content)}</div>
+              <div class="message__content">${this._highlightText(messageWireSearchText(msg.content))}</div>
             </div>
           `;
         })}

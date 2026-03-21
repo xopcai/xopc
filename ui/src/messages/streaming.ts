@@ -7,6 +7,19 @@ export function ensureAssistantMessage(msg: Message | null | undefined, timestam
   return { role: 'assistant', content: [], timestamp };
 }
 
+/**
+ * Clone message so Lit child components (e.g. message-bubble) see a new `message` reference
+ * after in-place streaming mutations. Without this, @property message skips re-render when
+ * only nested content changes.
+ */
+export function cloneMessageForRender(msg: Message): Message {
+  return {
+    ...msg,
+    content: msg.content.map((b) => ({ ...b })),
+    attachments: msg.attachments ? msg.attachments.map((a) => ({ ...a })) : undefined,
+  };
+}
+
 export function appendTextDelta(content: MessageContent[], delta: string): void {
   const last = content[content.length - 1];
   if (last?.type === 'text') {

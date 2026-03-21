@@ -27,6 +27,9 @@ export class ThinkingBlock extends LitElement {
       return null;
     }
 
+    // While streaming, always show body text (collapsed-only header hid reasoning from users).
+    const showBody = this.isExpanded || this.isStreaming;
+
     const shimmerClasses = this.isStreaming
       ? 'animate-shimmer bg-gradient-to-r from-muted-foreground via-foreground to-muted-foreground bg-[length:200%_100%] bg-clip-text text-transparent'
       : '';
@@ -37,18 +40,20 @@ export class ThinkingBlock extends LitElement {
           class="thinking-header cursor-pointer select-none flex items-center gap-2 py-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
           @click=${this.toggleExpanded}
         >
-          <span class="transition-transform inline-block ${this.isExpanded ? 'rotate-90' : ''}">
+          <span class="transition-transform inline-block ${showBody ? 'rotate-90' : ''}">
             <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
               <polyline points="9 18 15 12 9 6"></polyline>
             </svg>
           </span>
           <span class="${shimmerClasses}">${this.isStreaming ? 'Thinking...' : 'Reasoning'}</span>
         </div>
-        ${this.isExpanded ? html`
-          <div class="thinking-content pl-6 py-2 text-sm text-muted-foreground whitespace-pre-wrap font-mono">
-            ${this.content}
-          </div>
-        ` : ''}
+        ${showBody
+          ? html`
+              <div class="thinking-content pl-6 py-2 text-sm text-muted-foreground whitespace-pre-wrap font-mono">
+                ${this.content || (this.isStreaming ? '…' : '')}
+              </div>
+            `
+          : ''}
       </div>
     `;
   }

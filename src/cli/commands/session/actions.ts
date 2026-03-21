@@ -8,6 +8,24 @@ import { getManager } from './utils.js';
 
 const log = createLogger('SessionCommand');
 
+function formatMessageContentForCli(content: string | unknown[]): string {
+  if (typeof content === 'string') {
+    return content;
+  }
+  if (Array.isArray(content)) {
+    return content
+      .map((block) => {
+        if (!block || typeof block !== 'object') return '';
+        const b = block as Record<string, unknown>;
+        if (b.type === 'text' && typeof b.text === 'string') return b.text;
+        if (b.type === 'toolCall' || b.type === 'tool_use') return `[${String(b.name ?? 'tool')}]`;
+        return '';
+      })
+      .join(' ');
+  }
+  return '';
+}
+
 // List sessions
 export async function listSessions(options: {
   channel?: string;
@@ -87,8 +105,9 @@ export async function getSessionInfo(key: string): Promise<void> {
     const recent = session.messages.slice(-5);
     for (const msg of recent) {
       const role = msg.role.padEnd(10);
-      const preview = msg.content.slice(0, 60).replace(/\n/g, ' ');
-      console.log(`    ${role}: ${preview}${msg.content.length > 60 ? '...' : ''}`);
+      const text = formatMessageContentForCli(msg.content);
+      const preview = text.slice(0, 60).replace(/\n/g, ' ');
+      console.log(`    ${role}: ${preview}${text.length > 60 ? '...' : ''}`);
     }
   }
 
@@ -236,11 +255,12 @@ export async function grepSession(key: string, keyword: string): Promise<void> {
 
   for (const msg of messages) {
     const role = msg.role.padEnd(10);
-    const highlighted = msg.content.replace(
+    const text = formatMessageContentForCli(msg.content);
+    const highlighted = text.replace(
       new RegExp(keyword, 'gi'),
       (match) => `\x1b[33m${match}\x1b[0m`
     );
-    console.log(`  ${role}: ${highlighted.slice(0, 200)}${msg.content.length > 200 ? '...' : ''}\n`);
+    console.log(`  ${role}: ${highlighted.slice(0, 200)}${text.length > 200 ? '...' : ''}\n`);
   }
 }
 

@@ -105,6 +105,7 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
     }
 
     // --- SSE streaming ---
+    c.header('X-Accel-Buffering', 'no');
     return streamSSE(c, async (stream) => {
       let eventId = 0;
 

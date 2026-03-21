@@ -18,7 +18,7 @@ export interface SessionMetadata {
 export interface SessionDetail extends SessionMetadata {
   messages: Array<{
     role: string;
-    content: string;
+    content: string | unknown[];
     timestamp?: string;
   }>;
 }

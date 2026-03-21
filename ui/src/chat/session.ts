@@ -1,21 +1,10 @@
 import type { Message, GatewayClientConfig, SessionInfo } from './types.js';
-import type { MessageContent } from '../messages/types.js';
+import { sessionWireToUiMessages } from '../messages/agent-messages.js';
 import { apiUrl, authHeaders } from './helpers.js';
 
 /** Web UI chat sessions use source segment `webchat` (API) or legacy `gateway`. */
 export function isWebUiSessionKey(key: string): boolean {
   return key.startsWith('gateway:') || key.includes(':gateway:') || key.includes(':webchat:');
-}
-
-function normalizeContent(raw: unknown): MessageContent[] {
-  if (raw == null) return [];
-  if (typeof raw === 'string') {
-    return [{ type: 'text', text: raw }];
-  }
-  if (!Array.isArray(raw)) {
-    return [{ type: 'text', text: String(raw) }];
-  }
-  return raw as MessageContent[];
 }
 
 export class SessionManager {
@@ -43,16 +32,7 @@ export class SessionManager {
     if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.status}`);
     const data = await res.json();
     const raw = data.session?.messages || [];
-    const messages: Message[] = raw
-      .filter((m: { role?: string }) => m.role === 'user' || m.role === 'assistant')
-      .map((m: Record<string, unknown>) => ({
-        role: m.role as Message['role'],
-        content: normalizeContent(m.content),
-        attachments: m.attachments as Message['attachments'],
-        timestamp: m.timestamp ? new Date(m.timestamp as string).getTime() : Date.now(),
-        thinking: m.thinking as string | undefined,
-        usage: m.usage as Message['usage'],
-      }));
+    const messages = sessionWireToUiMessages(raw);
     return { messages, hasMore: raw.length >= 50 };
   }
 

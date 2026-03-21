@@ -23,6 +23,11 @@ const BOOTSTRAP_FILES: WorkspaceBootstrapFileName[] = [
 /** Maximum characters to inject from workspace files into system prompt */
 export const BOOTSTRAP_MAX_CHARS = 20_000;
 
+/** Bootstrap truncation: fraction of `maxChars` kept from the start of the file */
+const HEAD_TRUNCATION_RATIO = 0.7;
+/** Bootstrap truncation: fraction of `maxChars` kept from the end of the file */
+const TAIL_TRUNCATION_RATIO = 0.2;
+
 export interface TruncateResult {
   content: string;
   truncated: boolean;
@@ -39,7 +44,12 @@ function stripFrontMatter(content: string): string {
 
 /**
  * Truncate workspace file content to prevent token overflow.
- * Keeps head (70%) and tail (20%) with a truncation marker in between.
+ * Keeps head (HEAD_TRUNCATION_RATIO, 70%) and tail (TAIL_TRUNCATION_RATIO, 20%) with a
+ * truncation marker in between; the remainder is reserved for the marker.
+ *
+ * @param content - Raw file content
+ * @param maxChars - Maximum characters allowed
+ * @returns Truncated content with metadata
  */
 export function truncateBootstrapContent(content: string, maxChars: number): TruncateResult {
   const trimmed = content.trimEnd();
@@ -51,8 +61,8 @@ export function truncateBootstrapContent(content: string, maxChars: number): Tru
     };
   }
 
-  const headChars = Math.floor(maxChars * 0.7);
-  const tailChars = Math.floor(maxChars * 0.2);
+  const headChars = Math.floor(maxChars * HEAD_TRUNCATION_RATIO);
+  const tailChars = Math.floor(maxChars * TAIL_TRUNCATION_RATIO);
   const head = trimmed.slice(0, headChars);
   const tail = trimmed.slice(-tailChars);
 
@@ -165,4 +175,31 @@ export function extractTextContent(
     .filter((c) => c.type === 'text')
     .map((c) => c.text || '')
     .join('');
+}
+
+const THINKING_BLOCK_TYPES = new Set(['thinking', 'thinking_delta', 'redacted_thinking']);
+
+/**
+ * Concatenate thinking / reasoning content blocks from assistant message.content.
+ * pi-ai may use `thinking` or `text` on `type: "thinking"` blocks.
+ */
+export function extractThinkingContent(
+  content: Array<{ type: string; thinking?: string; text?: string }> | undefined
+): string {
+  if (!Array.isArray(content)) return '';
+  return content
+    .filter((c) => THINKING_BLOCK_TYPES.has(c.type))
+    .map((c) => (typeof c.thinking === 'string' ? c.thinking : c.text) || '')
+    .join('');
+}
+
+/**
+ * Extended thinking on the assistant message (e.g. Anthropic reasoning / pi-ai reasoning_details).
+ */
+export function extractThinkingFromAssistantMessage(
+  message: { role?: string; reasoning_details?: { thinking?: string } } | undefined
+): string {
+  if (!message || message.role !== 'assistant') return '';
+  const t = message.reasoning_details?.thinking;
+  return typeof t === 'string' ? t : '';
 }

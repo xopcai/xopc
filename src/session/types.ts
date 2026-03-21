@@ -2,7 +2,7 @@
 
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
-  content: string;
+  content: string | unknown[];
   timestamp?: string;
   tool_call_id?: string;
   tool_calls?: Array<{

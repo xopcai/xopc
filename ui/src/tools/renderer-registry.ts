@@ -57,7 +57,7 @@ export function renderCollapsibleHeader(
   text: string | TemplateResult,
   contentRef: Ref<HTMLElement>,
   chevronRef: Ref<HTMLElement>,
-  defaultExpanded = false,
+  defaultExpanded = true,
 ): TemplateResult {
   const statusIcon = (icon: unknown, color: string) =>
     html`<span class="inline-block ${color}">${lucideIcon(icon, 'w-4 h-4')}</span>`;
@@ -67,10 +67,10 @@ export function renderCollapsibleHeader(
     const content = contentRef.value;
     const chevron = chevronRef.value;
     if (content && chevron) {
-      const isCollapsed = content.classList.contains('max-h-0');
+      const isCollapsed = content.classList.contains('tool-call-body--collapsed');
       if (isCollapsed) {
-        content.classList.remove('max-h-0');
-        content.classList.add('max-h-[2000px]', 'mt-3');
+        content.classList.remove('tool-call-body--collapsed');
+        content.classList.add('tool-call-body--expanded');
         const upIcon = chevron.querySelector('.chevron-up');
         const downIcon = chevron.querySelector('.chevrons-up-down');
         if (upIcon && downIcon) {
@@ -78,8 +78,8 @@ export function renderCollapsibleHeader(
           downIcon.classList.add('hidden');
         }
       } else {
-        content.classList.remove('max-h-[2000px]', 'mt-3');
-        content.classList.add('max-h-0');
+        content.classList.remove('tool-call-body--expanded');
+        content.classList.add('tool-call-body--collapsed');
         const upIcon = chevron.querySelector('.chevron-up');
         const downIcon = chevron.querySelector('.chevrons-up-down');
         if (upIcon && downIcon) {
@@ -101,14 +101,14 @@ export function renderCollapsibleHeader(
     <button
       type="button"
       @click=${toggleContent}
-      class="flex items-center justify-between gap-2 text-sm text-muted-foreground w-full text-left hover:text-foreground transition-colors cursor-pointer"
+      class="tool-call-header"
     >
-      <div class="flex items-center gap-2">
-        ${state === 'inprogress' ? statusIcon(Loader, 'text-foreground animate-spin') : ''}
-        ${statusIcon(toolIcon, toolIconColor)}
-        ${text}
+      <div class="flex items-center gap-2 min-w-0">
+        ${state === 'inprogress' ? statusIcon(Loader, 'text-foreground animate-spin shrink-0') : ''}
+        ${statusIcon(toolIcon, `${toolIconColor} shrink-0`)}
+        <span class="min-w-0">${text}</span>
       </div>
-      <span class="inline-block text-muted-foreground" ${ref(chevronRef)}>
+      <span class="tool-call-chevron inline-block text-muted-foreground shrink-0" ${ref(chevronRef)}>
         <span class="chevron-up ${defaultExpanded ? '' : 'hidden'}">${lucideIcon(ChevronUp, 'w-4 h-4')}</span>
         <span class="chevrons-up-down ${defaultExpanded ? 'hidden' : ''}"
           >${lucideIcon(ChevronsUpDown, 'w-4 h-4')}</span

@@ -102,6 +102,13 @@ export class ModelManager {
   }
 
   /**
+   * Resolved pi-ai model for session (for transcript policy, tools, etc.)
+   */
+  getResolvedModelForSession(sessionKey: string): Model<Api> {
+    return resolveModel(this.getModelForSession(sessionKey));
+  }
+
+  /**
    * Get model for session, checking session override first
    */
   getModelForSession(sessionKey: string): string {

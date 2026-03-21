@@ -6,7 +6,12 @@ import type { ChannelManager } from '../channels/manager.js';
 import { SessionStore, type CompactionConfig, type WindowConfig } from '../session/index.js';
 import { createLogger } from '../utils/logger.js';
 import { ExtensionRegistryImpl as ExtensionRegistry, ExtensionHookRunner } from '../extensions/index.js';
-import { loadBootstrapFiles, extractTextContent } from './helpers.js';
+import {
+  loadBootstrapFiles,
+  extractTextContent,
+  extractThinkingContent,
+  extractThinkingFromAssistantMessage,
+} from './helpers.js';
 import { SessionTracker } from './session-tracker.js';
 import { ModelManager } from './models/index.js';
 import { initializeCommands } from '../commands/index.js';
@@ -30,6 +35,8 @@ import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager } from './agent-manager.js';
 
 import { createTypingController, type TypingController } from './typing.js';
+import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
+import { tryApplySessionTranscriptHygiene } from './transcript/transcript-hygiene.js';
 
 const log = createLogger('AgentService');
 
@@ -375,6 +382,114 @@ export class AgentService {
     return Promise.resolve();
   }
 
+  /**
+   * Persist agent messages with the same sanitizer + transcript hygiene as AgentOrchestrator.
+   */
+  private async persistAgentSessionMessages(sessionKey: string): Promise<void> {
+    const raw = this.agentManager.getMessages(sessionKey);
+    if (!raw) {
+      return;
+    }
+    const { messages } = sanitizeMessages(raw);
+    let toSave = messages;
+    try {
+      const model = this.modelManager.getResolvedModelForSession(sessionKey);
+      toSave = tryApplySessionTranscriptHygiene(messages, model);
+    } catch (err) {
+      log.warn({ err, sessionKey }, 'Transcript hygiene on save skipped');
+    }
+    await this.sessionStore.save(sessionKey, toSave);
+  }
+
+  private prepareLoadedSessionMessages(sessionKey: string, messages: AgentMessage[]): AgentMessage[] {
+    let out = cleanTrailingErrors(messages);
+    try {
+      const model = this.modelManager.getResolvedModelForSession(sessionKey);
+      out = tryApplySessionTranscriptHygiene(out, model);
+    } catch (err) {
+      log.warn({ err, sessionKey }, 'Transcript hygiene on load skipped');
+    }
+    return out;
+  }
+
+  private parseSessionKey(sessionKey: string): { channel: string; chatId: string } {
+    const parts = sessionKey.split(':');
+    return {
+      channel: parts[0] || 'cli',
+      chatId: parts.slice(1).join(':') || 'direct',
+    };
+  }
+
+  private initSessionContext(
+    sessionKey: string,
+    channel: string,
+    chatId: string,
+    senderId = '',
+  ): SessionContext {
+    const context: SessionContext = {
+      sessionKey,
+      channel,
+      chatId,
+      senderId,
+      isGroup: false,
+    };
+
+    this.contextMiddleware.onRequest({
+      sessionKey,
+      userId: context.senderId,
+      channel,
+      chatId,
+    });
+
+    this.sessionContextManager.setContext(context);
+    this.feedbackCoordinator.setContext(context);
+    this.setupSessionEventHandling(sessionKey);
+
+    return context;
+  }
+
+  private buildMessageContent(
+    content: string,
+    attachments?: Array<{
+      type: string;
+      mimeType?: string;
+      data?: string;
+      name?: string;
+      size?: number;
+    }>,
+  ): Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> {
+    const messageContent: Array<
+      { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
+    > = [];
+
+    if (content.trim()) {
+      messageContent.push({ type: 'text', text: content });
+    }
+
+    if (attachments && attachments.length > 0) {
+      for (const att of attachments) {
+        if (att.type === 'image' || att.mimeType?.startsWith('image/')) {
+          messageContent.push({
+            type: 'image',
+            data: att.data || '',
+            mimeType: att.mimeType || 'image/png',
+          });
+        } else {
+          const fileInfo = `[File: ${att.name || 'unknown'} (${att.mimeType || 'unknown type'}, ${att.size || 0} bytes)]`;
+          messageContent.push({ type: 'text', text: fileInfo });
+        }
+      }
+    }
+
+    return messageContent;
+  }
+
+  private endDirectRequestContext(): void {
+    this.sessionContextManager.clearContext();
+    this.feedbackCoordinator.clearContext();
+    this.contextMiddleware.onResponse();
+  }
+
   async compactSession(sessionKey: string, instructions?: string): Promise<void> {
     const messages = await this.sessionStore.load(sessionKey);
     const contextWindow = this.getContextWindow();
@@ -405,28 +520,8 @@ export class AgentService {
     }>,
     thinking?: string,
   ): AsyncGenerator<{ type: string; [key: string]: unknown }, void, unknown> {
-    const parts = sessionKey.split(':');
-    const channel = parts[0] || 'cli';
-    const chatId = parts.slice(1).join(':') || 'direct';
-
-    const context: SessionContext = {
-      sessionKey,
-      channel,
-      chatId,
-      senderId: '',
-      isGroup: false,
-    };
-
-    this.contextMiddleware.onRequest({
-      sessionKey,
-      userId: context.senderId,
-      channel,
-      chatId,
-    });
-
-    this.sessionContextManager.setContext(context);
-    this.feedbackCoordinator.setContext(context);
-    this.setupSessionEventHandling(sessionKey);
+    const { channel, chatId } = this.parseSessionKey(sessionKey);
+    const context = this.initSessionContext(sessionKey, channel, chatId);
 
     const eventQueue: Array<{ type: string; [key: string]: unknown }> = [];
     let resolveWaiting: (() => void) | null = null;
@@ -434,6 +529,7 @@ export class AgentService {
 
     // Track last sent content for delta calculation (增量推送优化)
     let lastSentContent = '';
+    let lastSentThinking = '';
 
     const pushEvent = (event: { type: string; [key: string]: unknown }) => {
       eventQueue.push(event);
@@ -470,14 +566,23 @@ export class AgentService {
           break;
         }
         case 'message_update': {
-          const msgEvent = event as any;
+          const msgEvent = event as Extract<AgentEvent, { type: 'message_update' }>;
           if (msgEvent.message?.role === 'assistant') {
             const msgContent = msgEvent.message.content;
-            const fullText = Array.isArray(msgContent)
-              ? extractTextContent(msgContent as Array<{ type: string; text?: string }>)
+            const blocks = Array.isArray(msgContent)
+              ? (msgContent as Array<{ type: string; text?: string }>)
+              : undefined;
+            const fullText = blocks
+              ? extractTextContent(blocks)
               : String(msgContent);
+            const thinkingFromBlocks = blocks ? extractThinkingContent(blocks) : '';
+            const thinkingFromReasoning = extractThinkingFromAssistantMessage(msgEvent.message);
+            const thinkingText =
+              thinkingFromReasoning.length >= thinkingFromBlocks.length
+                ? thinkingFromReasoning
+                : thinkingFromBlocks;
 
-            // 计算增量：只推送新增加的内容
+            // Main answer text (type: text)
             if (fullText.length > lastSentContent.length) {
               const delta = fullText.slice(lastSentContent.length);
               if (delta) {
@@ -485,9 +590,20 @@ export class AgentService {
                 lastSentContent = fullText;
               }
             } else if (fullText.length < lastSentContent.length) {
-              // 内容被重置（比如新消息），推送完整内容
               pushEvent({ type: 'token', content: fullText });
               lastSentContent = fullText;
+            }
+
+            // Reasoning / thinking blocks (some models stream here instead of main text)
+            if (thinkingText.length > lastSentThinking.length) {
+              const thDelta = thinkingText.slice(lastSentThinking.length);
+              if (thDelta) {
+                pushEvent({ type: 'thinking', content: thDelta, delta: true });
+                lastSentThinking = thinkingText;
+              }
+            } else if (thinkingText.length < lastSentThinking.length) {
+              pushEvent({ type: 'thinking', content: thinkingText, delta: false });
+              lastSentThinking = thinkingText;
             }
           }
           break;
@@ -497,6 +613,7 @@ export class AgentService {
           if (msgEvent.message?.role === 'assistant') {
             // 重置增量追踪
             lastSentContent = '';
+            lastSentThinking = '';
             pushEvent({ type: 'thinking', status: 'started' });
           }
           break;
@@ -519,35 +636,14 @@ export class AgentService {
     });
 
     try {
-      const messages = await this.sessionStore.load(sessionKey);
-      agent.replaceMessages(messages);
+      const loaded = await this.sessionStore.load(sessionKey);
+      agent.replaceMessages(this.prepareLoadedSessionMessages(sessionKey, loaded));
 
       if (thinking) {
         this.agentManager.setThinkingLevel(sessionKey, thinking as ThinkingLevel);
       }
 
-      const messageContent: Array<
-        { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
-      > = [];
-
-      if (content.trim()) {
-        messageContent.push({ type: 'text', text: content });
-      }
-
-      if (attachments && attachments.length > 0) {
-        for (const att of attachments) {
-          if (att.type === 'image' || att.mimeType?.startsWith('image/')) {
-            messageContent.push({
-              type: 'image',
-              data: att.data || '',
-              mimeType: att.mimeType || 'image/png',
-            });
-          } else {
-            const fileInfo = `[File: ${att.name || 'unknown'} (${att.mimeType || 'unknown type'}, ${att.size || 0} bytes)]`;
-            messageContent.push({ type: 'text', text: fileInfo });
-          }
-        }
-      }
+      const messageContent = this.buildMessageContent(content, attachments);
 
       const agentPromise = (async () => {
         await agent.prompt({
@@ -589,15 +685,10 @@ export class AgentService {
         yield event;
       }
 
-      const finalMessages = this.agentManager.getMessages(sessionKey);
-      if (finalMessages) {
-        await this.sessionStore.save(sessionKey, finalMessages);
-      }
+      await this.persistAgentSessionMessages(sessionKey);
     } finally {
       unsubscribeStreaming();
-      this.sessionContextManager.clearContext();
-      this.feedbackCoordinator.clearContext();
-      this.contextMiddleware.onResponse();
+      this.endDirectRequestContext();
     }
   }
 
@@ -613,62 +704,22 @@ export class AgentService {
     }>,
     thinking?: string,
   ): Promise<string> {
-    const parts = sessionKey.split(':');
-    const channel = parts[0] || 'cli';
-    const chatId = parts.slice(1).join(':') || 'direct';
-
-    const context: SessionContext = {
-      sessionKey,
-      channel,
-      chatId,
-      senderId: '',
-      isGroup: false,
-    };
-
-    // Start request context for logging
-    this.contextMiddleware.onRequest({
-      sessionKey,
-      userId: context.senderId,
-      channel,
-      chatId,
-    });
-
-    this.sessionContextManager.setContext(context);
-    this.feedbackCoordinator.setContext(context);
-
-    // Setup event handling for this session
-    this.setupSessionEventHandling(sessionKey);
+    const { channel, chatId } = this.parseSessionKey(sessionKey);
+    this.initSessionContext(sessionKey, channel, chatId);
 
     try {
       // Get or create agent for this session
       const agent = this.agentManager.getOrCreateAgent(sessionKey);
 
-      const messages = await this.sessionStore.load(sessionKey);
-      agent.replaceMessages(messages);
+      const loaded = await this.sessionStore.load(sessionKey);
+      agent.replaceMessages(this.prepareLoadedSessionMessages(sessionKey, loaded));
 
       // Set thinking level if provided
       if (thinking) {
         this.agentManager.setThinkingLevel(sessionKey, thinking as ThinkingLevel);
       }
 
-      const messageContent: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
-
-      if (content.trim()) {
-        messageContent.push({ type: 'text', text: content });
-      }
-
-      if (attachments && attachments.length > 0) {
-        for (const att of attachments) {
-          if (att.type === 'image' || att.mimeType?.startsWith('image/')) {
-            const mimeType = att.mimeType || 'image/png';
-            const data = att.data || '';
-            messageContent.push({ type: 'image', data, mimeType });
-          } else {
-            const fileInfo = `[File: ${att.name || 'unknown'} (${att.mimeType || 'unknown type'}, ${att.size || 0} bytes)]`;
-            messageContent.push({ type: 'text', text: fileInfo });
-          }
-        }
-      }
+      const messageContent = this.buildMessageContent(content, attachments);
 
       await agent.prompt({
         role: 'user',
@@ -678,16 +729,11 @@ export class AgentService {
       await agent.waitForIdle();
 
       const response = this.agentManager.getLastAssistantContent(sessionKey) || '';
-      const finalMessages = this.agentManager.getMessages(sessionKey);
-      if (finalMessages) {
-        await this.sessionStore.save(sessionKey, finalMessages);
-      }
+      await this.persistAgentSessionMessages(sessionKey);
 
       return response;
     } finally {
-      this.sessionContextManager.clearContext();
-      this.feedbackCoordinator.clearContext();
-      this.contextMiddleware.onResponse();
+      this.endDirectRequestContext();
       // Don't unsubscribe here - keep the session agent alive for future messages
     }
   }
@@ -797,7 +843,7 @@ export class AgentService {
     const messages = await this.sessionStore.load(context.sessionKey);
     await this.checkAndCompact(context.sessionKey, messages);
     const refreshedMessages = await this.sessionStore.load(context.sessionKey);
-    agent.replaceMessages(refreshedMessages);
+    agent.replaceMessages(this.prepareLoadedSessionMessages(context.sessionKey, refreshedMessages));
 
     const systemMessage: AgentMessage = {
       role: 'user',
@@ -822,10 +868,7 @@ export class AgentService {
         }
       }
 
-      const finalMessages = this.agentManager.getMessages(context.sessionKey);
-      if (finalMessages) {
-        await this.sessionStore.save(context.sessionKey, finalMessages);
-      }
+      await this.persistAgentSessionMessages(context.sessionKey);
     } catch (error) {
       log.error({ err: error, sessionKey: context.sessionKey }, 'Error processing system message');
       await this.bus.publishOutbound({
@@ -869,7 +912,7 @@ export class AgentService {
 
     // Handle streaming updates for the current session
     if (event.type === 'message_update') {
-      const msgEvent = event as any;
+      const msgEvent = event as Extract<AgentEvent, { type: 'message_update' }>;
       if (msgEvent.message?.role === 'assistant') {
         const content = msgEvent.message.content;
         const text = Array.isArray(content)

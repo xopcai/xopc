@@ -35,13 +35,13 @@ export function renderTool(
   isStreaming?: boolean,
 ): ToolRenderResult {
   if (showJsonMode) {
-    return defaultRenderer.render(params, result, isStreaming);
+    return defaultRenderer.render(params, result, isStreaming, toolName);
   }
   const renderer = getToolRenderer(toolName);
   if (renderer) {
-    return renderer.render(params, result, isStreaming);
+    return renderer.render(params, result, isStreaming, toolName);
   }
-  return defaultRenderer.render(params, result, isStreaming);
+  return defaultRenderer.render(params, result, isStreaming, toolName);
 }
 
 export function renderToolToHtml(
@@ -54,5 +54,5 @@ export function renderToolToHtml(
   if (isCustom) {
     return content;
   }
-  return html`<div class="tool-call-card rounded-lg p-3 border border-border bg-surface">${content}</div>`;
+  return html`<div class="tool-call-card p-3">${content}</div>`;
 }
