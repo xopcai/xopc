@@ -88,6 +88,11 @@ export interface CronUsageSummary {
   total_tokens?: number;
 }
 
+/** One row for GET /api/cron/runs/history (optional display name from job definition). */
+export interface CronRunHistoryRow extends JobExecution {
+  jobName?: string;
+}
+
 export type CronRunStatus = 'ok' | 'error' | 'skipped';
 
 export interface CronRunOutcome {

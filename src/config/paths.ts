@@ -308,6 +308,13 @@ export function resolveCronLogsDir(): string {
 }
 
 /**
+ * Directory for persisted cron run history (one JSONL file per job id).
+ */
+export function resolveCronRunsDir(): string {
+  return join(resolveCronDir(), 'runs');
+}
+
+/**
  * Resolve a specific cron log file path
  */
 export function resolveCronLogPath(date: string): string {

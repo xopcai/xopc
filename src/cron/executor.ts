@@ -9,6 +9,7 @@ import type {
 import { createLogger } from '../utils/logger.js';
 import { normalizeTelegramDeliveryChatId } from './telegram-delivery-chat-id.js';
 import { getCronPayloadText } from './job-content.js';
+import type { CronRunLogStore } from './run-log-store.js';
 
 const log = createLogger('CronExecutor');
 
@@ -31,6 +32,11 @@ export class DefaultJobExecutor implements JobExecutor {
   private runningJobs = new Map<string, AbortController>();
   private agentService: any = null;
   private messageBus: any = null;
+  private runLogStore: CronRunLogStore | null = null;
+
+  setRunLogStore(store: CronRunLogStore | null): void {
+    this.runLogStore = store;
+  }
 
   setDeps(deps: JobExecutorDeps): void {
     this.agentService = deps.agentService;
@@ -114,7 +120,10 @@ export class DefaultJobExecutor implements JobExecutor {
       this.runningJobs.delete(job.id);
     }
 
-    // Return result for caller to handle retry/backoff
+    if (this.runLogStore) {
+      await this.runLogStore.appendCompleted(execution);
+    }
+
     return;
   }
 

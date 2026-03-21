@@ -86,6 +86,14 @@ export interface CronJobExecution {
   error?: string;
   output?: string;
   retryCount: number;
+  summary?: string;
+  sessionKey?: string;
+  model?: string;
+}
+
+/** Row from GET /api/cron/runs/history */
+export interface CronRunHistoryRow extends CronJobExecution {
+  jobName?: string;
 }
 
 export interface CronMetrics {
@@ -195,6 +203,11 @@ export class CronAPIClient {
   async getHistory(id: string, limit = 10): Promise<CronJobExecution[]> {
     const result = await this.request<{ history: CronJobExecution[] }>('GET', `/api/cron/${id}/history?limit=${limit}`);
     return result.history || [];
+  }
+
+  async getAllRunsHistory(limit = 40): Promise<CronRunHistoryRow[]> {
+    const result = await this.request<{ runs: CronRunHistoryRow[] }>('GET', `/api/cron/runs/history?limit=${limit}`);
+    return result.runs || [];
   }
 
   async getMetrics(): Promise<CronMetrics> {
