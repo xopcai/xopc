@@ -12,7 +12,7 @@ import { customElement, property, state } from 'lit/decorators.js';
 export class ThinkingBlock extends LitElement {
   @property() content = '';
   @property({ type: Boolean }) isStreaming = false;
-  @state() private isExpanded = false;
+  @state() private isExpanded = true;
 
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -27,7 +27,6 @@ export class ThinkingBlock extends LitElement {
       return null;
     }
 
-    // While streaming, always show body text (collapsed-only header hid reasoning from users).
     const showBody = this.isExpanded || this.isStreaming;
 
     const shimmerClasses = this.isStreaming
