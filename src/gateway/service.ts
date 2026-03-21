@@ -814,9 +814,20 @@ export class GatewayService {
 
   /**
    * Get unique chat IDs from sessions, grouped by channel
-   * Returns a list of channel/chatId pairs for cron job configuration
+   * Returns a list of channel/chatId pairs for cron job configuration.
+   * `chatId` is the session-store routing suffix (unique per bot account + peer).
+   * When `routing` exists, `peerId` is the platform id (e.g. Telegram numeric chat id).
    */
-  async getSessionChatIds(channel?: string): Promise<Array<{ channel: string; chatId: string; lastActive: string }>> {
+  async getSessionChatIds(channel?: string): Promise<
+    Array<{
+      channel: string;
+      chatId: string;
+      lastActive: string;
+      accountId?: string;
+      peerKind?: string;
+      peerId?: string;
+    }>
+  > {
     const result = await this.sessionManager.listSessions({
       limit: 1000,
       sortBy: 'lastAccessedAt',
@@ -826,16 +837,31 @@ export class GatewayService {
 
     // Group by channel:chatId to get unique pairs
     const seen = new Set<string>();
-    const chatIds: Array<{ channel: string; chatId: string; lastActive: string }> = [];
+    const chatIds: Array<{
+      channel: string;
+      chatId: string;
+      lastActive: string;
+      accountId?: string;
+      peerKind?: string;
+      peerId?: string;
+    }> = [];
 
     for (const session of result.items) {
       const key = `${session.sourceChannel}:${session.sourceChatId}`;
       if (!seen.has(key) && session.sourceChannel && session.sourceChatId) {
         seen.add(key);
+        const r = session.routing;
         chatIds.push({
           channel: session.sourceChannel,
           chatId: session.sourceChatId,
           lastActive: session.lastAccessedAt,
+          ...(r
+            ? {
+                accountId: r.accountId,
+                peerKind: r.peerKind,
+                peerId: r.peerId,
+              }
+            : {}),
         });
       }
     }
