@@ -4,6 +4,7 @@ import '../components/MessageEditor.js';
 import '../components/MessageList/index.js';
 import '../components/MarkdownRenderer.js';
 import { t, initI18n } from '../utils/i18n.js';
+import { getLanguage } from '../utils/storage.js';
 import type { Attachment } from '../utils/attachment-utils.js';
 import type { MessageEditor, ThinkingLevel } from '../components/MessageEditor.js';
 import type { ChatRoute } from '../navigation.js';
@@ -52,10 +53,11 @@ export class ChatPanel extends LitElement {
 
   createRenderRoot() { return this; }
 
-  override async connectedCallback() {
+  override connectedCallback() {
     super.connectedCallback();
     this.classList.add('chat-container');
-    await initI18n('en');
+    // Align with app / localStorage; do not force English (would override user locale).
+    initI18n(getLanguage());
   }
 
   override firstUpdated() {
