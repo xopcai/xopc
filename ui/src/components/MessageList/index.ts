@@ -2,13 +2,15 @@ import { html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { virtualize } from '@lit-labs/virtualizer/virtualize.js';
 import { t } from '../../utils/i18n';
-import type { Message } from './types';
+import type { Message, ProgressState } from './types';
 import './MessageBubble';
 
 @customElement('message-list')
 export class MessageList extends LitElement {
   @property({ attribute: false }) messages: Message[] = [];
   @property({ type: Boolean }) isStreaming = false;
+  /** Shown on the last bubble while the assistant message is streaming. */
+  @property({ attribute: false }) progress: ProgressState | null = null;
   @property({ type: Boolean }) useVirtualScroll = true;
   @property({ type: Number }) virtualScrollThreshold = 50;
 
@@ -38,6 +40,7 @@ export class MessageList extends LitElement {
           <message-bubble 
             .message=${message}
             .isStreaming=${this.isStreaming && index === this.messages.length - 1}
+            .progress=${this.isStreaming && index === this.messages.length - 1 ? this.progress : null}
           ></message-bubble>
         `)}
       </div>
@@ -54,6 +57,7 @@ export class MessageList extends LitElement {
               <message-bubble 
                 .message=${message}
                 .isStreaming=${this.isStreaming && index === this.messages.length - 1}
+                .progress=${this.isStreaming && index === this.messages.length - 1 ? this.progress : null}
               ></message-bubble>
             </div>
           `,

@@ -8,7 +8,7 @@ export abstract class ArtifactElement extends LitElement {
   public filename = '';
 
   protected override createRenderRoot(): HTMLElement | DocumentFragment {
-    return this; // light DOM for shared styles
+    return this;
   }
 
   public abstract get content(): string;

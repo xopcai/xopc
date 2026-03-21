@@ -33,5 +33,23 @@ export type { ProviderConfigChangeEvent, ProviderOAuthEvent } from './ProviderCo
 export type { Model, ModelSelectEvent } from './ModelSelector';
 export type { ProviderInfo, ProviderListChangeEvent, ProviderListOAuthEvent } from './ProviderList';
 
-// Legacy compatibility
-export { MessageList as default } from './MessageList/index';
+export {
+  renderTool,
+  renderToolToHtml,
+  registerToolRenderer,
+  setShowJsonMode,
+  getToolRenderer,
+  toolRenderers,
+  renderHeader,
+  renderCollapsibleHeader,
+  DefaultRenderer,
+  BashRenderer,
+  stringToToolResultMessage,
+  extractTextFromToolResult,
+} from '../tools/index.js';
+export type {
+  ToolRenderer,
+  ToolRenderResult,
+  ToolResultMessage,
+  ToolContentPart,
+} from '../tools/index.js';

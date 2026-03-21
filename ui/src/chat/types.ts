@@ -22,24 +22,6 @@ export type GatewayClientConfig = {
   reconnectDelay?: number;
 };
 
-export interface Message {
-  role: 'user' | 'assistant';
-  content: Array<{ type: string; text?: string }>;
-  attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>;
-  timestamp: number;
-  thinking?: string;
-  thinkingStreaming?: boolean;
-  usage?: { inputTokens?: number; outputTokens?: number };
-}
-
-export interface ProgressState {
-  stage: string;
-  message: string;
-  detail?: string;
-  toolName?: string;
-  timestamp: number;
-}
-
 export type ConnectionState = 'connecting' | 'connected' | 'disconnected' | 'reconnecting' | 'error';
 
 export interface SessionInfo {
@@ -49,9 +31,4 @@ export interface SessionInfo {
   messageCount?: number;
 }
 
-export interface ToolCall {
-  toolName: string;
-  args?: unknown;
-  status: 'running' | 'done' | 'error';
-  result?: string;
-}
+export type { Message, ProgressState } from '../messages/types.js';

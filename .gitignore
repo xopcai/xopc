@@ -30,6 +30,7 @@ Thumbs.db
 
 # pnpm
 pnpm-store/
+.pnpm-store/
 
 # Test coverage
 coverage/

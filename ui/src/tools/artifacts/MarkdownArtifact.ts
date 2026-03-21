@@ -2,7 +2,7 @@ import { html, type TemplateResult } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { ArtifactElement } from './ArtifactElement.js';
 import { i18n } from '../../utils/i18n.js';
-import '../MarkdownRenderer';
+import '../../components/MarkdownRenderer.js';
 
 @customElement('markdown-artifact')
 export class MarkdownArtifact extends ArtifactElement {
@@ -47,14 +47,14 @@ export class MarkdownArtifact extends ArtifactElement {
         <button
           class="p-2 hover:bg-muted rounded-md transition-colors"
           @click=${this._copy}
-          title="${i18n('Copy')}"  
+          title="${i18n('Copy')}"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>
         </button>
         <button
           class="p-2 hover:bg-muted rounded-md transition-colors"
           @click=${this._download}
-          title="${i18n('Download')}"  
+          title="${i18n('Download')}"
         >
           <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" x2="12" y1="15" y2="3"/></svg>
         </button>

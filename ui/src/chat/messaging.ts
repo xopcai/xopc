@@ -1,4 +1,4 @@
-import type { Message, ProgressState, ToolCall, GatewayClientConfig } from './types.js';
+import type { ProgressState, GatewayClientConfig } from './types.js';
 import { apiUrl, authHeaders } from './helpers.js';
 
 export type MessagingCallbacks = {
@@ -18,7 +18,9 @@ export class MessageSender {
 
   constructor(private _config: GatewayClientConfig) {}
 
-  get isSending() { return !!this._abort; }
+  get isSending() {
+    return !!this._abort;
+  }
 
   async send(
     content: string,
@@ -100,24 +102,50 @@ export class MessageSender {
 
   private _dispatchSSE(event: string, data: string, cb?: MessagingCallbacks): void {
     let parsed: any;
-    try { parsed = JSON.parse(data); } catch { return; }
+    try {
+      parsed = JSON.parse(data);
+    } catch {
+      return;
+    }
 
     switch (event) {
-      case 'status': cb?.onStreamStart(); break;
-      case 'token': if (parsed.content) cb?.onToken(parsed.content); break;
+      case 'status':
+        cb?.onStreamStart();
+        break;
+      case 'token':
+        if (parsed.content) cb?.onToken(parsed.content);
+        break;
       case 'thinking':
         if (parsed.status === 'started') cb?.onThinking('', false);
         cb?.onThinking(parsed.content || '', parsed.delta || false);
         break;
-      case 'thinking_end': cb?.onThinkingEnd(); break;
-      case 'tool_start': cb?.onToolStart(parsed.toolName || 'unknown', parsed.args); break;
-      case 'tool_end': cb?.onToolEnd(parsed.toolName, !!parsed.isError, parsed.result); break;
-      case 'progress':
-        cb?.onProgress({ stage: parsed.stage || 'thinking', message: parsed.message || '', detail: parsed.detail, toolName: parsed.toolName, timestamp: Date.now() });
+      case 'thinking_end':
+        cb?.onThinkingEnd();
         break;
-      case 'result': cb?.onResult(); break;
-      case 'error': cb?.onError(parsed.content || parsed.error?.message || 'Send failed'); break;
-      default: if (parsed.content) cb?.onToken(parsed.content); break;
+      case 'tool_start':
+        cb?.onToolStart(parsed.toolName || 'unknown', parsed.args);
+        break;
+      case 'tool_end':
+        cb?.onToolEnd(parsed.toolName, !!parsed.isError, parsed.result);
+        break;
+      case 'progress':
+        cb?.onProgress({
+          stage: parsed.stage || 'thinking',
+          message: parsed.message || '',
+          detail: parsed.detail,
+          toolName: parsed.toolName,
+          timestamp: Date.now(),
+        });
+        break;
+      case 'result':
+        cb?.onResult();
+        break;
+      case 'error':
+        cb?.onError(parsed.content || parsed.error?.message || 'Send failed');
+        break;
+      default:
+        if (parsed.content) cb?.onToken(parsed.content);
+        break;
     }
   }
 }
