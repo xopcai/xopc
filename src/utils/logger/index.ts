@@ -20,7 +20,7 @@ import type {
   LogFileMeta,
   LogQuery,
   LogStats,
-} from './types.js';
+} from '../logger.types.js';
 
 // Internal modules
 import { config, getLogDir, getLoggerConfig } from './config.js';
@@ -216,18 +216,19 @@ export function isLevelEnabled(level: LogLevel): boolean {
 // Re-exports
 // ============================================
 
+export type {
+  LogLevel,
+  LogContext,
+  LogEntry,
+  LoggerConfig,
+  LogFileMeta,
+  LogQuery,
+  LogStats,
+  RotationResult,
+  ContextualLogger,
+} from '../logger.types.js';
+
 export {
-  // Types
-  type LogLevel,
-  type LogContext,
-  type LogEntry,
-  type LoggerConfig,
-  type LogFileMeta,
-  type LogQuery,
-  type LogStats,
-  type RotationResult,
-  type ContextualLogger,
-  
   // Config
   getLogDir,
   getLoggerConfig,

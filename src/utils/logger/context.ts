@@ -3,7 +3,7 @@
  * Context tracking and propagation for structured logging
  */
 
-import type { LogContext, ContextualLogger } from './types.js';
+import type { LogContext, ContextualLogger } from '../logger.types.js';
 
 const contextStore = new Map<string, LogContext>();
 

@@ -3,7 +3,7 @@
  * Track log counts by level and module
  */
 
-import type { LogLevel } from './types.js';
+import type { LogLevel } from '../logger.types.js';
 
 interface StatsData {
   byLevel: Record<LogLevel, number>;
