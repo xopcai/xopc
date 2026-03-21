@@ -653,30 +653,9 @@ WebSocket events between UI and Gateway:
 
 ### Styling
 
-UI components use CSS variables for theming:
+**Structure:** `ui/src/styles.css` loads design tokens (`styles/00-vars.css`) and Tailwind. Application styles load second via `styles/app/index.css` (numbered partials: utilities → shell → chat → settings → session → drawers/modals → managers → logs → providers/markdown) so component rules override utilities reliably.
 
-```css
-:root {
-  --background: #ffffff;
-  --foreground: #0f172a;
-  --muted: #f1f5f9;
-  --muted-foreground: #64748b;
-  --primary: #3b82f6;
-  --primary-foreground: #ffffff;
-  --border: #e2e8f0;
-  --radius: 0.5rem;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0f172a;
-    --foreground: #f8fafc;
-    --muted: #1e293b;
-    --muted-foreground: #94a3b8;
-    --border: #334155;
-  }
-}
-```
+Tokens use `--bg-*`, `--text-*`, `--accent-*`, `--border-color`, etc. See `ui/src/styles/00-vars.css` and `ui/tailwind.config.js` (`theme.extend` maps Tailwind to those variables).
 
 ---
 

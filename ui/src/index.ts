@@ -2,8 +2,9 @@ import { html, LitElement } from 'lit';
 import { customElement, property, query } from 'lit/decorators.js';
 import type { Agent, AgentEvent } from '@mariozechner/pi-agent-core';
 
-// Import styles
+// Import styles (tokens + Tailwind first, then app components)
 import './styles.css';
+import './styles/app/index.css';
 
 import './components/MessageEditor';
 import './components/MessageList';
