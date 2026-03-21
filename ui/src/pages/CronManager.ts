@@ -4,13 +4,12 @@ import { html, LitElement, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
-import { CronAPIClient, type CronJob, type CronJobExecution, type CronMetrics, type ChannelStatus, type ModelInfo, type SessionChatId } from '../utils/cron-api';
+import { CronAPIClient, cronJobBodyText, type CronJob, type CronJobExecution, type CronMetrics, type ChannelStatus, type ModelInfo, type SessionChatId } from '../utils/cron-api';
 import '../components/ConfirmDialog';
 import '../components/ModelSelector';
 import type { ModelSelectEvent } from '../components/ModelSelector';
 
 export interface CronManagerConfig {
-  /** @deprecated No longer needed - always uses current origin */
   url?: string;
   token?: string;
 }
@@ -164,7 +163,8 @@ export class CronManager extends LitElement {
       // Editing existing job - populate form
       this._formName = job.name || '';
       this._formSchedule = job.schedule;
-      this._formMessage = job.message;
+      const bodyText = cronJobBodyText(job);
+      this._formMessage = bodyText;
       this._formSessionTarget = job.sessionTarget || 'main';
       this._formModel = job.model || '';
       
@@ -173,8 +173,8 @@ export class CronManager extends LitElement {
         this._formChannel = job.delivery.channel || 'telegram';
         this._formChatId = job.delivery.to || '';
       } else {
-        // Try to parse from message format: "channel:chat_id:message"
-        const parts = job.message.split(':');
+        // Try to parse from legacy body format: "channel:chat_id:content"
+        const parts = bodyText.split(':');
         const knownChannels = ['telegram', 'cli', 'gateway'];
         if (parts.length >= 3 && knownChannels.includes(parts[0])) {
           this._formChannel = parts[0];
@@ -235,18 +235,18 @@ export class CronManager extends LitElement {
         to: this._formChatId,
       };
 
-      // Build payload based on session target
-      const _payload = this._formSessionTarget === 'isolated'
+      // Build payload based on session target (must be sent on update or payload stays stale)
+      const payload = this._formSessionTarget === 'isolated'
         ? { kind: 'agentTurn' as const, message, model: this._formModel }
         : { kind: 'systemEvent' as const, text: message };
 
       const jobData = {
         name: this._formName || undefined,
         schedule: this._formSchedule,
-        message,
         sessionTarget: this._formSessionTarget,
         model: this._formSessionTarget === 'isolated' ? this._formModel : undefined,
         delivery,
+        payload,
       };
 
       if (this._formMode === 'edit' && this._formJobId) {
@@ -254,7 +254,7 @@ export class CronManager extends LitElement {
         await this._api.updateJob(this._formJobId, jobData);
       } else {
         // Add new job
-        await this._api.addJob(this._formSchedule, message, jobData);
+        await this._api.addJob(this._formSchedule, jobData);
       }
       
       this._closeForm();
@@ -681,7 +681,7 @@ export class CronManager extends LitElement {
                   </div>
                   <div class="session-detail__row">
                     <span class="session-detail__label">${t('cron.messageLabel')}</span>
-                    <span>${this._detailJob?.message}</span>
+                    <span>${this._detailJob ? cronJobBodyText(this._detailJob) : ''}</span>
                   </div>
                   <div class="session-detail__row">
                     <span class="session-detail__label">${t('cron.mode')}</span>

@@ -79,15 +79,9 @@ export class CronService {
   /**
    * Add a new job
    */
-  async addJob(
-    schedule: string,
-    message: string,
-    options?: AddJobOptions
-  ): Promise<{ id: string; schedule: string }> {
-    // Validate input
+  async addJob(schedule: string, options: AddJobOptions): Promise<{ id: string; schedule: string }> {
     const validationResult = AddJobRequestSchema.safeParse({
       schedule,
-      message,
       ...options,
     });
 
@@ -98,39 +92,22 @@ export class CronService {
 
     const id = uuidv4().slice(0, 8);
     const now = new Date().toISOString();
-
-    // Build payload based on session target
-    let payload;
-    const sessionTarget = options?.sessionTarget || 'main';
-
-    if (sessionTarget === 'isolated') {
-      payload = {
-        kind: 'agentTurn',
-        message,
-        model: options?.model,
-      };
-    } else {
-      payload = {
-        kind: 'systemEvent',
-        text: message,
-      };
-    }
+    const sessionTarget = options.sessionTarget ?? 'main';
 
     const job: JobData = {
       id,
-      name: options?.name,
+      name: options.name,
       schedule,
-      message,
       enabled: true,
-      timezone: options?.timezone,
-      maxRetries: options?.maxRetries ?? 3,
-      timeout: options?.timeout ?? 60000,
+      timezone: options.timezone,
+      maxRetries: options.maxRetries ?? 3,
+      timeout: options.timeout ?? 60000,
       created_at: now,
       updated_at: now,
       sessionTarget,
-      payload,
-      delivery: options?.delivery,
-      model: options?.model,
+      payload: options.payload,
+      delivery: options.delivery,
+      model: options.model,
     };
 
     // Save to persistence
@@ -166,7 +143,6 @@ export class CronService {
         id: job.id,
         name: job.name,
         schedule: job.schedule,
-        message: job.message,
         enabled: job.enabled,
         timezone: job.timezone,
         maxRetries: job.maxRetries,

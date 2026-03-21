@@ -65,41 +65,40 @@ const CronDeliverySchema = z.object({
   bestEffort: z.boolean().optional(),
 });
 
-export const JobDataSchema = z.object({
-  id: z.string().min(1).max(32),
-  name: z.string().max(100).optional(),
-  schedule: cronExpression,
-  message: z.string().min(1).max(10000),
-  enabled: z.boolean(),
-  timezone: z.string().superRefine((val, ctx) => {
-    if (val && !validTimezones.includes(val)) {
-      ctx.addIssue({
-        code: z.ZodIssueCode.custom,
-        message: `Invalid timezone: ${val}. Use IANA timezone names.`,
-      });
-    }
-  }).optional(),
-  maxRetries: z.number().int().min(0).max(10).default(3),
-  timeout: z.number().int().min(1000).max(300000).default(60000),
-  created_at: z.string().datetime(),
-  updated_at: z.string().datetime(),
-  // New fields
-  sessionTarget: z.enum(['main', 'isolated']).optional(),
-  payload: CronPayloadSchema.optional(),
-  delivery: CronDeliverySchema.optional(),
-  model: z.string().max(100).optional(),
-});
+export const JobDataSchema = z
+  .object({
+    id: z.string().min(1).max(32),
+    name: z.string().max(100).optional(),
+    schedule: cronExpression,
+    enabled: z.boolean(),
+    timezone: z.string().superRefine((val, ctx) => {
+      if (val && !validTimezones.includes(val)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `Invalid timezone: ${val}. Use IANA timezone names.`,
+        });
+      }
+    }).optional(),
+    maxRetries: z.number().int().min(0).max(10).default(3),
+    timeout: z.number().int().min(1000).max(300000).default(60000),
+    created_at: z.string().datetime(),
+    updated_at: z.string().datetime(),
+    sessionTarget: z.enum(['main', 'isolated']).optional(),
+    payload: CronPayloadSchema,
+    delivery: CronDeliverySchema.optional(),
+    model: z.string().max(100).optional(),
+    state: z.any().optional(),
+  })
+  .strict();
 
 export const AddJobRequestSchema = z.object({
   schedule: cronExpression,
-  message: z.string().min(1).max(10000),
   name: z.string().max(100).optional(),
   timezone: z.string().optional(),
   maxRetries: z.number().int().min(0).max(10).optional(),
   timeout: z.number().int().min(1000).max(300000).optional(),
-  // New fields
   sessionTarget: z.enum(['main', 'isolated']).optional(),
-  payload: CronPayloadSchema.optional(),
+  payload: CronPayloadSchema,
   delivery: CronDeliverySchema.optional(),
   model: z.string().max(100).optional(),
 });
@@ -107,12 +106,10 @@ export const AddJobRequestSchema = z.object({
 export const UpdateJobRequestSchema = z.object({
   name: z.string().max(100).optional(),
   schedule: cronExpression.optional(),
-  message: z.string().min(1).max(10000).optional(),
   timezone: z.string().optional(),
   maxRetries: z.number().int().min(0).max(10).optional(),
   timeout: z.number().int().min(1000).max(300000).optional(),
   enabled: z.boolean().optional(),
-  // New fields
   sessionTarget: z.enum(['main', 'isolated']).optional(),
   payload: CronPayloadSchema.optional(),
   delivery: CronDeliverySchema.optional(),

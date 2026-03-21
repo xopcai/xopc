@@ -687,19 +687,20 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // POST /api/cron - Add new job
   authenticated.post('/api/cron', async (c) => {
     const body = await c.req.json();
-    const { schedule, message, name, timezone, sessionTarget, model, delivery } = body;
+    const { schedule, name, timezone, sessionTarget, model, delivery, payload } = body;
 
-    if (!schedule || !message) {
-      return c.json({ error: 'Missing required fields: schedule, message' }, 400);
+    if (!schedule || !payload) {
+      return c.json({ error: 'Missing required fields: schedule, payload' }, 400);
     }
 
     try {
-      const result = await service.cronServiceInstance.addJob(schedule, message, { 
-        name, 
+      const result = await service.cronServiceInstance.addJob(schedule, {
+        name,
         timezone,
         sessionTarget,
         model,
         delivery,
+        payload,
       });
       return c.json(result, 201);
     } catch (err) {

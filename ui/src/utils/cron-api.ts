@@ -19,7 +19,6 @@ export interface CronJob {
   id: string;
   name?: string;
   schedule: string;
-  message: string;
   enabled: boolean;
   timezone?: string;
   maxRetries: number;
@@ -29,7 +28,7 @@ export interface CronJob {
   updated_at: string;
   // New fields
   sessionTarget?: 'main' | 'isolated';
-  payload?: CronPayload;
+  payload: CronPayload;
   delivery?: CronDelivery;
   model?: string;
 }
@@ -40,6 +39,14 @@ export interface AddJobOptions {
   sessionTarget?: 'main' | 'isolated';
   model?: string;
   delivery?: CronDelivery;
+  payload: CronPayload;
+}
+
+/** Body text from `payload` (form / detail display). */
+export function cronJobBodyText(job: Pick<CronJob, 'payload'>): string {
+  const p = job.payload;
+  if (p.kind === 'systemEvent') return p.text;
+  return p.message;
 }
 
 export interface ModelInfo {
@@ -97,7 +104,6 @@ export interface CronMetrics {
 export interface CronJobUpdate {
   name?: string;
   schedule?: string;
-  message?: string;
   enabled?: boolean;
   timezone?: string;
   maxRetries?: number;
@@ -105,6 +111,7 @@ export interface CronJobUpdate {
   sessionTarget?: 'main' | 'isolated';
   model?: string;
   delivery?: CronDelivery;
+  payload?: CronPayload;
 }
 
 export class CronAPIClient {
@@ -159,10 +166,9 @@ export class CronAPIClient {
     }
   }
 
-  async addJob(schedule: string, message: string, options?: AddJobOptions): Promise<{ id: string; schedule: string }> {
+  async addJob(schedule: string, options: AddJobOptions): Promise<{ id: string; schedule: string }> {
     return await this.request<{ id: string; schedule: string }>('POST', '/api/cron', {
       schedule,
-      message,
       ...options,
     });
   }

@@ -10,6 +10,7 @@ import {
 import { dirname } from 'path';
 import { createLogger } from '../utils/logger.js';
 import type { JobData } from './types.js';
+import { JobDataSchema } from './validation.js';
 
 const log = createLogger('CronPersistence');
 
@@ -67,6 +68,29 @@ export class CronPersistence {
         log.warn('Invalid jobs file structure, resetting');
         this.cache = DEFAULT_JOBS_FILE;
         return this.cache;
+      }
+
+      const valid: JobData[] = [];
+      for (const j of data.jobs) {
+        const r = JobDataSchema.safeParse(j);
+        if (r.success) {
+          valid.push(r.data as JobData);
+        } else {
+          log.warn(
+            { jobId: (j as { id?: string }).id, issues: r.error.flatten() },
+            'Dropped invalid cron job'
+          );
+        }
+      }
+
+      if (valid.length !== data.jobs.length) {
+        data.jobs = valid;
+        data.version = (data.version ?? 1) + 1;
+        this.cache = data;
+        await this.writeToDisk(data);
+        this.dirty = false;
+        log.info({ count: valid.length }, 'Persisted cron jobs after validation');
+        return data;
       }
 
       this.cache = data;
