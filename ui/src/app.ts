@@ -55,7 +55,7 @@ export class XopcbotApp extends LitElement {
 
   private _parseInitialRoute(): ChatRoute {
     const hash = location.hash.slice(1);
-    if (hash.startsWith('chat')) {
+    if (hash.startsWith('/chat') || hash.startsWith('chat')) {
       const chatRoute = parseChatHash(hash);
       if (chatRoute) return chatRoute;
     }
@@ -207,8 +207,8 @@ export class XopcbotApp extends LitElement {
   private _loadRouteFromHash(): void {
     const hash = location.hash.slice(1);
     
-    // Check if it's a chat route with session
-    if (hash.startsWith('chat')) {
+    // Check if it's a chat route with session (#/chat/...)
+    if (hash.startsWith('/chat') || hash.startsWith('chat')) {
       const chatRoute = parseChatHash(hash);
       if (chatRoute) {
         if (this._activeTab !== 'chat') {

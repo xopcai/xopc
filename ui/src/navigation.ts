@@ -42,12 +42,13 @@ export type ChatRoute =
 
 // Parse hash to get chat route
 export function parseChatHash(hash: string): ChatRoute | null {
-  const cleanHash = hash.replace(/^#\/?chat\/?/, '');
-  
+  const withoutHash = hash.startsWith('#') ? hash.slice(1) : hash;
+  const cleanHash = withoutHash.replace(/^\/?chat\/?/, '');
+
   if (!cleanHash || cleanHash === '/') {
     return { type: 'recent' };
   }
-  
+
   const path = cleanHash.replace(/^\/?/, '');
   
   if (path === 'new') {

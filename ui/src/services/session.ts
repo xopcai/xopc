@@ -4,6 +4,7 @@
 import { getStore } from '../core/store.js';
 import { apiUrl, authHeaders } from '../utils/api.js';
 import type { Session } from '../core/store.js';
+import { isWebUiSessionKey } from '../chat/session.js';
 
 const store = getStore();
 
@@ -53,7 +54,7 @@ export class SessionService {
       const data: SessionListResponse = await res.json();
       
       const gatewaySessions = data.items
-        .filter((s) => s.key.startsWith('gateway:') || s.key.includes(':gateway:'))
+        .filter((s) => isWebUiSessionKey(s.key))
         .sort((a, b) => 
           new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
         );

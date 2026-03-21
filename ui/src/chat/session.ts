@@ -1,6 +1,11 @@
 import type { Message, GatewayClientConfig, SessionInfo } from './types.js';
 import { apiUrl, authHeaders } from './helpers.js';
 
+/** Web UI chat sessions use source segment `webchat` (API) or legacy `gateway`. */
+export function isWebUiSessionKey(key: string): boolean {
+  return key.startsWith('gateway:') || key.includes(':gateway:') || key.includes(':webchat:');
+}
+
 export class SessionManager {
   constructor(private _config: GatewayClientConfig) {}
 
@@ -11,7 +16,7 @@ export class SessionManager {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     return (data.items || [])
-      .filter((s: SessionInfo) => s.key.includes(':gateway:'))
+      .filter((s: SessionInfo) => isWebUiSessionKey(s.key))
       .sort((a: SessionInfo, b: SessionInfo) =>
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
       );

@@ -41,6 +41,8 @@ export class MessageSender {
       throw new Error(body.error?.message || `HTTP ${res.status}`);
     }
 
+    await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
+
     const ct = res.headers.get('Content-Type') || '';
     if (ct.includes('text/event-stream') && res.body) {
       await this._consumeSSE(res.body, callbacks);
