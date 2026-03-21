@@ -9,7 +9,7 @@
  */
 
 import { input, confirm, select } from '@inquirer/prompts';
-import type { Config } from '../../../config/schema.js';
+import type { Config } from '../../../../config/schema.js';
 import type { ChannelConfigurator, DmPolicy, GroupPolicy } from './types.js';
 
 const CHANNEL_ID = 'telegram';
@@ -20,17 +20,17 @@ const CHANNEL_DESC = 'Telegram messaging via Bot API';
  * 检查 Telegram 是否已配置
  */
 function isTelegramConfigured(config: Config): boolean {
-  const telegram = config.channels?.telegram;
+  const telegram = config.channels?.telegram as any;
   if (!telegram) return false;
   
   // 检查顶层配置
-  if (telegram.botToken && telegram.enabled) return true;
+  if ((telegram as any).botToken && (telegram as any).enabled) return true;
   
   // 检查多账号配置
-  const accounts = telegram.accounts;
+  const accounts = (telegram as any).accounts;
   if (accounts) {
     for (const account of Object.values(accounts)) {
-      if (account.botToken && account.enabled) return true;
+      if ((account as any).botToken && (account as any).enabled) return true;
     }
   }
   
@@ -49,7 +49,7 @@ function detectEnvToken(): string | null {
  */
 async function promptBotToken(config: Config): Promise<string | null> {
   const envToken = detectEnvToken();
-  const existing = config.channels?.telegram?.botToken;
+  const existing = (config.channels?.telegram as any)?.botToken;
   
   // 如果有环境变量，询问是否使用
   if (envToken && !existing) {
@@ -215,24 +215,61 @@ export const telegramConfigurator: ChannelConfigurator = {
     }
     
     // 构建新配置
-    const newConfig: Config = {
+    const telegramConfig: any = {
+      enabled: true,
+      botToken,
+      dmPolicy,
+      groupPolicy,
+      debug: false,
+      replyToMode: 'off',
+      historyLimit: 50,
+      textChunkLimit: 4000,
+      allowFrom: allowFrom || [],
+      groupAllowFrom: groupAllowFrom || [],
+    };
+
+    // Merge with existing config, then override new fields
+    const existingTelegramConfig = config.channels?.telegram as any;
+    if (existingTelegramConfig) {
+      Object.assign(telegramConfig, existingTelegramConfig);
+      telegramConfig.enabled = true;
+      telegramConfig.botToken = botToken;
+      telegramConfig.dmPolicy = dmPolicy;
+      telegramConfig.groupPolicy = groupPolicy;
+      if (allowFrom) telegramConfig.allowFrom = allowFrom;
+      if (groupAllowFrom) telegramConfig.groupAllowFrom = groupAllowFrom;
+    }
+
+    const newConfig: any = {
       ...config,
       channels: {
         ...config.channels,
-        telegram: {
-          enabled: true,
-          botToken,
-          dmPolicy,
-          groupPolicy,
-          ...(allowFrom ? { allowFrom } : {}),
-          ...(groupAllowFrom ? { groupAllowFrom } : {}),
-          // 保留其他现有配置
-          ...((config.channels?.telegram as Record<string, unknown> | undefined) ?? {}),
-        },
+        telegram: telegramConfig,
       },
     };
     
     console.log('\n✅ Telegram 配置完成\n');
-    return newConfig;
+    return newConfig as Config;
   },
 };
+
+/**
+ * Telegram onboarding entry point (used by onboard.ts)
+ */
+export async function setupTelegramOnboard(
+  config: Config,
+  options: {
+    confirmMessage?: string;
+    confirmDefault?: boolean;
+  } = {}
+): Promise<Config> {
+  const shouldEnable = await confirm({
+    message: options.confirmMessage || 'Enable Telegram channel?',
+    default: options.confirmDefault ?? true,
+  });
+  if (!shouldEnable) {
+    console.log('ℹ️ Telegram skipped.');
+    return config;
+  }
+  return telegramConfigurator.configure(config);
+}

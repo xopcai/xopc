@@ -4,7 +4,7 @@
  * TODO: Full implementation in future iteration
  */
 
-import type { Config } from '../../../config/schema.js';
+import type { Config } from '../../../../config/schema.js';
 import type { ChannelConfigurator } from './types.js';
 
 export const discordConfigurator: ChannelConfigurator = {

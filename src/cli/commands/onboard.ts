@@ -28,7 +28,7 @@ import {
 } from '../../providers/index.js';
 import { colors } from '../utils/colors.js';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
-import { setupTelegramOnboard } from './onboard/channels.js';
+import { setupTelegramOnboard } from './onboard/channels/index.js';
 
 // Import workspace utilities
 import { isWorkspaceSetup, setupWorkspace as _setupWorkspace, isConfigSetup as _isConfigSetup, setupConfig as _setupConfig, quickSetup } from '../utils/workspace.js';

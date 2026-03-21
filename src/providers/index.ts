@@ -49,6 +49,19 @@ export const PROVIDER_ENV_MAP: Record<string, string[]> = {
 };
 
 /**
+ * Get API key synchronously: checks registry (models.json) first, then environment variables.
+ * Use this for Agent's getApiKey callback which must be synchronous.
+ */
+export function getApiKeySync(provider: string): string | undefined {
+  const registry = getModelRegistry();
+  const registryKey = registry.getApiKey(provider);
+  if (registryKey) {
+    return registryKey;
+  }
+  return getApiKeyFromEnv(provider);
+}
+
+/**
  * Get API key from environment variables for a provider
  */
 export function getApiKeyFromEnv(provider: string): string | undefined {
@@ -157,6 +170,11 @@ export function isProviderConfiguredSync(provider: string): boolean {
 }
 
 export async function isProviderConfigured(provider: string): Promise<boolean> {
+	// Check registry first for custom providers (from models.json)
+	const registry = getModelRegistry();
+	if (registry.getApiKey(provider)) {
+		return true;
+	}
 	return await hasCredentials(provider);
 }
 

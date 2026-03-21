@@ -9,7 +9,7 @@ import { Agent, type AgentMessage, type AgentEvent, type ThinkingLevel } from '@
 import type { Model, Api } from '@mariozechner/pi-ai';
 import type { Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
-import { resolveModel, getDefaultModelSync, getApiKeyFromEnv } from '../providers/index.js';
+import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
 import { resolveBundledSkillsDir } from '../config/paths.js';
 import { loadBootstrapFiles, extractTextContent } from './helpers.js';
 import { SkillManager } from './skills/index.js';
@@ -174,7 +174,7 @@ export class AgentManager {
         tools,
         messages: [],
       },
-      getApiKey: (provider: string) => getApiKeyFromEnv(provider),
+      getApiKey: (provider: string) => getApiKeySync(provider),
     });
   }
 

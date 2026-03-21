@@ -5,7 +5,7 @@
  */
 
 import { select, confirm } from '@inquirer/prompts';
-import type { Config } from '../../../config/schema.js';
+import type { Config } from '../../../../config/schema.js';
 
 import type { ChannelConfigurator, ChannelStatus } from './types.js';
 import { telegramConfigurator } from './telegram.js';
@@ -120,3 +120,6 @@ export type { ChannelConfigurator, ChannelStatus, DmPolicy, GroupPolicy } from '
 export { telegramConfigurator } from './telegram.js';
 export { discordConfigurator } from './discord.js';
 export { slackConfigurator } from './slack.js';
+
+// Export setupTelegramOnboard for use in onboard.ts
+export { setupTelegramOnboard } from './telegram.js';
