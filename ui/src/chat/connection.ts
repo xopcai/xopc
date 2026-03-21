@@ -30,9 +30,9 @@ export class ChatConnection {
 
     this._eventSource = new EventSource(url.toString());
 
+    // onopen and the server's first SSE `connected` event both fire on connect; only run once.
     this._eventSource.onopen = () => {
       this._reconnectCount = 0;
-      this._callbacks.onConnected();
     };
 
     this._eventSource.addEventListener('connected', () => {
