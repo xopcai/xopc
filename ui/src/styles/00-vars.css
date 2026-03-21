@@ -2,19 +2,6 @@
    CSS Variables & Base Styles
    ============================================ */
 
-/* Debug: Force fallback colors if CSS vars fail */
-@layer base {
-  html {
-    background-color: #fafaf9 !important;
-    color: #1c1917 !important;
-  }
-  
-  html.dark {
-    background-color: #121212 !important;
-    color: #fafaf9 !important;
-  }
-}
-
 /* Base styles */
 @layer base {
   * {
@@ -63,6 +50,7 @@ html.light {
   --accent-warning: #d97706;
   --accent-warning-light: #fef3c7;
   --accent-error: #dc2626;
+  --accent-error-hover: #b91c1c;
   --accent-error-light: #fee2e2;
   --accent-info: #0891b2;
   --accent-info-light: #cffafe;
@@ -78,6 +66,7 @@ html.light {
   --shadow-glow: 0 0 20px -5px rgb(79 70 229 / 0.3);
   
   /* Radius */
+  --radius-xs: 0.25rem;
   --radius-sm: 0.375rem;
   --radius-md: 0.5rem;
   --radius-lg: 0.75rem;
@@ -90,6 +79,18 @@ html.light {
   
   /* Transition */
   --transition-fast: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --transition-normal: 250ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  --shadow-xl: 0 20px 25px -5px rgb(28 25 23 / 0.1), 0 8px 10px -6px rgb(28 25 23 / 0.1);
+  --border-subtle: color-mix(in srgb, var(--border-color) 55%, transparent);
+  --accent-error-soft: color-mix(in srgb, var(--accent-error) 35%, transparent);
+  --border-hover: var(--border-strong);
+
+  /* Aliases used in settings / logs */
+  --color-primary: var(--accent-primary);
+  --color-primary-hover: var(--accent-primary-hover);
+  --color-primary-alpha: color-mix(in srgb, var(--accent-primary) 20%, transparent);
+  --primary: var(--accent-primary);
 }
 
 /* Dark Theme */
@@ -113,10 +114,13 @@ html.dark {
 
   --border-color: #333333;
   --border-strong: #444444;
+
+  --accent-error-hover: #f87171;
   
   --shadow-sm: 0 1px 2px 0 rgb(0 0 0 / 0.3);
   --shadow-md: 0 4px 6px -1px rgb(0 0 0 / 0.4);
   --shadow-lg: 0 10px 15px -3px rgb(0 0 0 / 0.5);
+  --shadow-xl: 0 20px 25px -5px rgb(0 0 0 / 0.45), 0 8px 10px -6px rgb(0 0 0 / 0.35);
 }
 
 /* Custom Scrollbar */
