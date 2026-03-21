@@ -714,6 +714,14 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json(metrics);
   });
 
+  // GET /api/cron/runs/history - Recent runs across all jobs (must be before /:id)
+  authenticated.get('/api/cron/runs/history', async (c) => {
+    const raw = c.req.query('limit');
+    const limit = raw ? parseInt(raw, 10) : 50;
+    const runs = await service.cronServiceInstance.getAllRunsHistory(Number.isFinite(limit) ? limit : 50);
+    return c.json({ runs });
+  });
+
   // GET /api/cron/:id - Get single job (must be after /metrics)
   authenticated.get('/api/cron/:id', async (c) => {
     const id = c.req.param('id');
@@ -753,8 +761,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // GET /api/cron/:id/history - Get job execution history
   authenticated.get('/api/cron/:id/history', async (c) => {
     const id = c.req.param('id');
-    const limit = c.req.query('limit') ? parseInt(c.req.query('limit')!) : 10;
-    const history = service.cronServiceInstance.getJobHistory(id, limit);
+    const raw = c.req.query('limit');
+    const limit = raw ? parseInt(raw, 10) : 10;
+    const history = await service.cronServiceInstance.getJobHistory(id, Number.isFinite(limit) ? limit : 10);
     return c.json({ history });
   });
 

@@ -4,7 +4,7 @@ import { html, LitElement, nothing } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
-import { CronAPIClient, cronJobBodyText, type CronJob, type CronJobExecution, type CronMetrics, type ChannelStatus, type ModelInfo, type SessionChatId } from '../utils/cron-api';
+import { CronAPIClient, cronJobBodyText, type CronJob, type CronJobExecution, type CronMetrics, type ChannelStatus, type ModelInfo, type SessionChatId, type CronRunHistoryRow } from '../utils/cron-api';
 import '../components/ConfirmDialog';
 import '../components/ModelSelector';
 import type { ModelSelectEvent } from '../components/ModelSelector';
@@ -26,6 +26,8 @@ export class CronManager extends LitElement {
   @state() private _sessionChatIds: SessionChatId[] = [];
   @state() private _loading = false;
   @state() private _error: string | null = null;
+  @state() private _runHistory: CronRunHistoryRow[] = [];
+  @state() private _runHistoryLoading = false;
 
   // Form state
   @state() private _formOpen = false;
@@ -98,11 +100,23 @@ export class CronManager extends LitElement {
 
     try {
       this._jobs = await this._api.listJobs();
+      await this._loadRunHistory();
     } catch (err) {
       this._error = err instanceof Error ? (err.message || t('cron.failedToLoadJobs')) : t('cron.failedToLoadJobs');
       console.error('[CronManager] Load error:', err);
     } finally {
       this._loading = false;
+    }
+  }
+
+  private async _loadRunHistory(): Promise<void> {
+    this._runHistoryLoading = true;
+    try {
+      this._runHistory = await this._api.getAllRunsHistory(30);
+    } catch (err) {
+      console.error('[CronManager] Run history:', err);
+    } finally {
+      this._runHistoryLoading = false;
     }
   }
 
@@ -353,6 +367,9 @@ export class CronManager extends LitElement {
         await this._loadMetrics();
       } else if (action === 'delete') {
         await this._api.removeJob(jobId);
+        if (this._detailJob?.id === jobId) {
+          this._closeDetail();
+        }
         await this._loadJobs();
         await this._loadMetrics();
       }
@@ -407,14 +424,18 @@ export class CronManager extends LitElement {
           </div>
         ` : nothing}
 
-        <!-- Job List -->
-        <div class="session-list">
+        <!-- Job cards -->
+        <section class="cron-jobs-section" aria-label=${t('cron.jobsHeading')}>
+          <div class="cron-jobs-section__head">
+            <h2 class="cron-jobs-section__title">${t('cron.jobsHeading')}</h2>
+            ${this._jobs.length > 0 ? html`
+              <span class="cron-jobs-section__count">${this._jobs.length}</span>
+            ` : nothing}
+          </div>
           ${this._loading && this._jobs.length === 0 ? html`
-            <div class="session-list__loading-overlay">
-              <div class="spinner"></div>
-            </div>
+            <div class="cron-jobs-section__loading"><div class="spinner"></div></div>
           ` : this._jobs.length === 0 ? html`
-            <div class="session-list session-list--empty">
+            <div class="cron-jobs-empty">
               <div class="empty-state">
                 <div class="empty-state__icon">${getIcon('clock')}</div>
                 <div class="empty-state__title">${t('cron.emptyStateTitle')}</div>
@@ -422,60 +443,130 @@ export class CronManager extends LitElement {
               </div>
             </div>
           ` : html`
-            <div class="session-list__toolbar">
-              <div class="session-list__count">${this._jobs.length} job${this._jobs.length !== 1 ? 's' : ''}</div>
+            <div class="cron-job-grid">
+              ${this._jobs.map(
+                (job) => html`
+                <article
+                  class="cron-job-card"
+                  role="button"
+                  tabindex="0"
+                  @click=${() => this._openDetail(job)}
+                  @keydown=${(e: KeyboardEvent) => {
+                    if (e.key === 'Enter' || e.key === ' ') {
+                      e.preventDefault();
+                      this._openDetail(job);
+                    }
+                  }}
+                >
+                  <div class="cron-job-card__top">
+                    <h3 class="cron-job-card__title">${job.name || job.id}</h3>
+                    <span class="cron-job-card__badge ${job.enabled ? 'cron-job-card__badge--on' : 'cron-job-card__badge--off'}">
+                      ${job.enabled ? t('cron.enabled') : t('cron.disabled')}
+                    </span>
+                  </div>
+                  ${job.name ? html`<p class="cron-job-card__id"><code>${job.id}</code></p>` : nothing}
+                  <div class="cron-job-card__schedule">
+                    <span class="cron-job-card__label">${t('cron.scheduleLabel')}</span>
+                    <code class="cron-job-card__cron">${job.schedule}</code>
+                  </div>
+                  <div class="cron-job-card__row">
+                    <span class="cron-job-card__label">${t('cron.nextRun')}</span>
+                    <span class="cron-job-card__value">${job.next_run ? this._formatNextRun(job.next_run) : '—'}</span>
+                  </div>
+                  <p class="cron-job-card__preview" title=${cronJobBodyText(job)}>${this._truncate(cronJobBodyText(job), 120)}</p>
+                  <div class="cron-job-card__footer">
+                    <div class="cron-job-card__toggle" @click=${(e: Event) => e.stopPropagation()} title=${t('cron.enabled')}>
+                      <label class="toggle">
+                        <input
+                          type="checkbox"
+                          ?checked=${job.enabled}
+                          @change=${(e: Event) => this._toggleJob(job, (e.target as HTMLInputElement).checked)}
+                        />
+                        <span class="toggle__slider"></span>
+                      </label>
+                    </div>
+                    <div class="cron-job-card__actions" @click=${(e: Event) => e.stopPropagation()}>
+                      <button
+                        type="button"
+                        class="btn btn-icon btn-secondary"
+                        title="${t('cron.edit')}"
+                        @click=${() => this._openForm(job)}
+                      >
+                        ${getIcon('edit')}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-icon btn-secondary"
+                        title="${t('cron.runNow')}"
+                        @click=${() => this._showRunConfirm(job)}
+                      >
+                        ${getIcon('play')}
+                      </button>
+                      <button
+                        type="button"
+                        class="btn btn-icon btn-danger"
+                        title="${t('cron.delete')}"
+                        @click=${() => this._showDeleteConfirm(job)}
+                      >
+                        ${getIcon('trash')}
+                      </button>
+                    </div>
+                  </div>
+                </article>
+              `
+              )}
             </div>
-            <div class="session-list__content">
-              <table class="data-table">
+          `}
+        </section>
+
+        <section class="cron-run-log" aria-label=${t('cron.runHistoryTitle')}>
+          <div class="cron-run-log__head">
+            <div>
+              <h2 class="cron-run-log__title">${t('cron.runHistoryTitle')}</h2>
+              <p class="cron-run-log__hint">${t('cron.runHistoryHint')}</p>
+            </div>
+            <button type="button" class="btn btn-secondary btn-sm" @click=${this._loadRunHistory} ?disabled=${this._runHistoryLoading}>
+              ${getIcon('refresh')} ${t('logs.refresh')}
+            </button>
+          </div>
+          ${this._runHistoryLoading && this._runHistory.length === 0 ? html`
+            <div class="cron-run-log__loading"><div class="spinner"></div></div>
+          ` : this._runHistory.length === 0 ? html`
+            <p class="cron-run-log__empty">${t('cron.noRunsYet')}</p>
+          ` : html`
+            <div class="cron-run-log__table-wrap">
+              <table class="data-table cron-run-log__table">
                 <thead>
                   <tr>
-                    <th>${t('cron.name')}</th>
-                    <th>${t('cron.scheduleLabel')}</th>
-                    <th>${t('cron.nextRun')}</th>
+                    <th>${t('cron.colStarted')}</th>
+                    <th>${t('cron.colJob')}</th>
                     <th>${t('cron.status')}</th>
-                    <th>${t('cron.actions')}</th>
+                    <th>${t('cron.colDuration')}</th>
+                    <th>${t('cron.colDetail')}</th>
                   </tr>
                 </thead>
                 <tbody>
-                  ${this._jobs.map(job => html`
+                  ${this._runHistory.map((row) => html`
                     <tr>
-                      <td style="vertical-align: middle; text-align: center;">
-                        <button class="btn btn-link" @click=${() => this._openDetail(job)}>
-                          ${job.name || job.id}
-                        </button>
+                      <td><time datetime=${row.startedAt}>${this._formatTime(row.startedAt)}</time></td>
+                      <td>
+                        ${this._jobs.some((j) => j.id === row.jobId)
+                          ? html`<button type="button" class="btn btn-link cron-run-log__job-link" @click=${() => {
+                            const j = this._jobs.find((x) => x.id === row.jobId);
+                            if (j) this._openDetail(j);
+                          }}>${row.jobName || row.jobId}</button>`
+                          : html`<span class="cron-run-log__job-id">${row.jobName || row.jobId}</span>`}
                       </td>
-                      <td style="vertical-align: middle; text-align: center;"><code>${job.schedule}</code></td>
-                      <td style="vertical-align: middle; text-align: center;">${job.next_run ? this._formatNextRun(job.next_run) : '-'}</td>
-                      <td style="vertical-align: middle; text-align: center;">
-                        <label class="toggle">
-                          <input 
-                            type="checkbox" 
-                            ?checked=${job.enabled}
-                            @change=${(e: Event) => this._toggleJob(job, (e.target as HTMLInputElement).checked)}
-                          />
-                          <span class="toggle__slider"></span>
-                        </label>
-                      </td>
-                      <td style="vertical-align: middle; text-align: center;">
-                        <div class="action-buttons">
-                          <button class="btn btn-icon btn-secondary" title="Edit" @click=${() => this._openForm(job)}>
-                            ${getIcon('edit')}
-                          </button>
-                          <button class="btn btn-icon btn-secondary" title="${t('cron.runNow')}" @click=${() => this._showRunConfirm(job)}>
-                            ${getIcon('play')}
-                          </button>
-                          <button class="btn btn-icon btn-danger" title="${t('cron.delete')}" @click=${() => this._showDeleteConfirm(job)}>
-                            ${getIcon('trash')}
-                          </button>
-                        </div>
-                      </td>
+                      <td><span class="cron-run-log__status cron-run-log__status--${row.status}">${this._execStatusLabel(row.status)}</span></td>
+                      <td>${this._formatDuration(row.duration)}</td>
+                      <td class="cron-run-log__detail" title=${row.summary || row.error || ''}>${this._truncate(row.summary || row.error, 96)}</td>
                     </tr>
                   `)}
                 </tbody>
               </table>
             </div>
           `}
-        </div>
+        </section>
       </div>
 
       <!-- Add/Edit Job Form Modal -->
@@ -705,6 +796,35 @@ export class CronManager extends LitElement {
                     <span>${this._detailJob?.next_run ? this._formatNextRun(this._detailJob.next_run) : 'N/A'}</span>
                   </div>
                 </div>
+                <div class="cron-detail-history">
+                  <h3 class="cron-detail-history__title">${t('cron.detailRunHistory')}</h3>
+                  ${this._detailHistory.length === 0 ? html`
+                    <p class="cron-run-log__empty">${t('cron.noRunsYet')}</p>
+                  ` : html`
+                    <div class="cron-run-log__table-wrap">
+                      <table class="data-table cron-run-log__table">
+                        <thead>
+                          <tr>
+                            <th>${t('cron.colStarted')}</th>
+                            <th>${t('cron.status')}</th>
+                            <th>${t('cron.colDuration')}</th>
+                            <th>${t('cron.colDetail')}</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          ${this._detailHistory.map((row) => html`
+                            <tr>
+                              <td><time datetime=${row.startedAt}>${this._formatTime(row.startedAt)}</time></td>
+                              <td><span class="cron-run-log__status cron-run-log__status--${row.status}">${this._execStatusLabel(row.status)}</span></td>
+                              <td>${this._formatDuration(row.duration)}</td>
+                              <td class="cron-run-log__detail" title=${row.summary || row.error || ''}>${this._truncate(row.summary || row.error, 120)}</td>
+                            </tr>
+                          `)}
+                        </tbody>
+                      </table>
+                    </div>
+                  `}
+                </div>
               `}
             </div>
           </div>
@@ -725,6 +845,44 @@ export class CronManager extends LitElement {
   }
 
   // ========== Helpers ==========
+
+  private _execStatusLabel(status: CronJobExecution['status']): string {
+    switch (status) {
+      case 'running':
+        return t('cron.execStatusRunning');
+      case 'success':
+        return t('cron.execStatusSuccess');
+      case 'failed':
+        return t('cron.execStatusFailed');
+      case 'cancelled':
+        return t('cron.execStatusCancelled');
+      default:
+        return status;
+    }
+  }
+
+  private _formatDuration(ms?: number): string {
+    if (ms == null || !Number.isFinite(ms)) {
+      return '—';
+    }
+    if (ms < 1000) {
+      return `${Math.round(ms)}ms`;
+    }
+    if (ms < 60000) {
+      return `${(ms / 1000).toFixed(1)}s`;
+    }
+    const m = Math.floor(ms / 60000);
+    const s = Math.round((ms % 60000) / 1000);
+    return `${m}m ${s}s`;
+  }
+
+  private _truncate(text: string | undefined, max: number): string {
+    const s = text?.trim() || '';
+    if (!s) {
+      return '—';
+    }
+    return s.length <= max ? s : `${s.slice(0, max - 1)}…`;
+  }
 
   private _formatNextRun(date: Date | string): string {
     const d = typeof date === 'string' ? new Date(date) : date;

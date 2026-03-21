@@ -7,6 +7,7 @@ import { resolveCronJobsPath } from '../config/paths.js';
 import { createLogger } from '../utils/logger.js';
 import { CronPersistence } from './persistence.js';
 import { DefaultJobExecutor } from './executor.js';
+import { CronRunLogStore } from './run-log-store.js';
 import { z } from 'zod';
 import { AddJobRequestSchema, UpdateJobRequestSchema } from './validation.js';
 import type {
@@ -17,6 +18,7 @@ import type {
   CronHealth,
   AddJobOptions,
   JobWithNextRun,
+  CronRunHistoryRow,
 } from './types.js';
 
 const log = createLogger('CronService');
@@ -29,11 +31,14 @@ export interface CronServiceConfig {
   filePath?: string;
   agentService?: any;
   messageBus?: any;
+  /** Override run log directory (tests) */
+  runsDir?: string;
 }
 
 export class CronService {
   private persistence: CronPersistence;
   private executor: DefaultJobExecutor;
+  private runLogStore: CronRunLogStore;
   private tasks: Map<string, ScheduledTask> = new Map();
   private initialized = false;
   private agentService: any = null;
@@ -43,6 +48,8 @@ export class CronService {
     const filePath = config?.filePath || resolveCronJobsPath();
     this.persistence = new CronPersistence(filePath);
     this.executor = new DefaultJobExecutor();
+    this.runLogStore = new CronRunLogStore(config?.runsDir);
+    this.executor.setRunLogStore(this.runLogStore);
 
     // Set dependencies if provided
     if (config?.agentService || config?.messageBus) {
@@ -206,6 +213,7 @@ export class CronService {
     const removed = await this.persistence.removeJob(id);
 
     if (removed) {
+      await this.runLogStore.deleteJobRuns(id);
       log.info({ jobId: id }, 'Job removed');
     }
 
@@ -233,10 +241,37 @@ export class CronService {
   }
 
   /**
-   * Get execution history for a job
+   * Execution history for one job: merged in-memory (incl. running) + persisted JSONL.
    */
-  getJobHistory(jobId: string, limit?: number): JobExecution[] {
-    return this.executor.getHistory(jobId, limit);
+  async getJobHistory(jobId: string, limit?: number): Promise<JobExecution[]> {
+    const cap = Math.min(Math.max(limit ?? 10, 1), 500);
+    const [disk, memory] = await Promise.all([
+      this.runLogStore.readJobHistory(jobId, cap * 2),
+      Promise.resolve(this.executor.getHistory(jobId, cap * 2)),
+    ]);
+    const byId = new Map<string, JobExecution>();
+    for (const e of memory) {
+      byId.set(e.id, e);
+    }
+    for (const e of disk) {
+      if (!byId.has(e.id)) {
+        byId.set(e.id, e);
+      }
+    }
+    const merged = [...byId.values()].sort(
+      (a, b) => new Date(b.startedAt).getTime() - new Date(a.startedAt).getTime()
+    );
+    return merged.slice(0, cap);
+  }
+
+  /**
+   * Latest runs across all jobs (persisted rows + optional job name).
+   */
+  async getAllRunsHistory(limit?: number): Promise<CronRunHistoryRow[]> {
+    const cap = Math.min(Math.max(limit ?? 50, 1), 500);
+    const jobs = await this.persistence.getJobs();
+    const jobNames = new Map<string, string | undefined>(jobs.map((j) => [j.id, j.name] as const));
+    return this.runLogStore.readAllRuns(cap, jobNames);
   }
 
   /**
