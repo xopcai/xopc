@@ -14,7 +14,7 @@ import type { Config } from '../../../config/schema.js';
 
 import { isWorkspaceSetup, setupWorkspace } from './workspace.js';
 import { setupModel } from './model.js';
-import { setupChannels } from './channels.js';
+import { setupChannels } from './channels/index.js';
 import { setupGateway, startGatewayNow } from './gateway.js';
 
 /**
