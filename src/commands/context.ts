@@ -43,6 +43,8 @@ export interface CommandContextDeps {
   componentHandler?: (component: UIComponent) => Promise<void>;
   typingHandler?: (typing: boolean) => Promise<void>;
   supportedFeatures: PlatformFeature[];
+  /** Called after session files are removed so in-memory agents match disk */
+  invalidateAgentSession?: (sessionKey: string) => void;
   // Model management (optional, will be injected)
   getCurrentModel?: () => string;
   switchModel?: (modelId: string) => Promise<boolean>;
@@ -109,7 +111,8 @@ export class CommandContextImpl implements CommandContext {
 
     // Delete session
     await this.deps.sessionStore.deleteSession(this.sessionKey);
-    
+    this.deps.invalidateAgentSession?.(this.sessionKey);
+
     // Publish outbound message to confirm
     const routing = getRoutingInfo(this.sessionKey);
     await this.deps.bus.publishOutbound({

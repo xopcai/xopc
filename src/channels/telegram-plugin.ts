@@ -357,12 +357,20 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
       const bot = new Bot(account.botToken, botConfig);
       const me = await bot.api.getMe();
       
+      // No cap on getUpdates retry window: transient outages must not crash the process
+      // (the previous 5m limit caused unhandled rejections after short offline periods).
       const runner = run(bot, {
-        runner: { fetch: { timeout: 30 }, silent: true, maxRetryTime: 5 * 60 * 1000, retryInterval: 'exponential' },
+        runner: {
+          fetch: { timeout: 30 },
+          silent: true,
+          maxRetryTime: Number.POSITIVE_INFINITY,
+          retryInterval: 'exponential',
+        },
       });
-      
+
       this.accountManager.registerBot(account.accountId, bot);
       this.accountManager.registerRunner(account.accountId, runner);
+      this.attachRunnerExitHandler(account.accountId, runner);
       this.accountManager.setBotUsername(account.accountId, me.username);
       this.accountManager.updateStatus({
         accountId: account.accountId,
@@ -378,6 +386,17 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
     }
   }
   
+  private attachRunnerExitHandler(accountId: string, runner: ReturnType<typeof run>): void {
+    const task = runner.task();
+    if (!task) return;
+    void task.catch((err) => {
+      log.error({ err, accountId }, 'Telegram polling runner exited');
+      void this.accountManager.stopRunner(accountId).catch((e) => {
+        log.error({ err: e, accountId }, 'Telegram runner cleanup failed');
+      });
+    });
+  }
+
   private setupMessageHandler(accountId: string, bot: Bot): void {
     // Use command handler for Telegram-specific commands
     bot.on('message', async (ctx) => {

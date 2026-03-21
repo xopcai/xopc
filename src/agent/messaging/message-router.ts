@@ -5,6 +5,7 @@
  */
 
 import type { InboundMessage } from '../../bus/index.js';
+import { normalizeTelegramCommandName } from '../../commands/command-parse.js';
 import type { AgentContext } from '../service.js';
 
 export interface MessageRoutingResult {
@@ -94,11 +95,11 @@ export class MessageRouter {
     const spaceIndex = withoutPrefix.indexOf(' ');
 
     if (spaceIndex === -1) {
-      return { command: withoutPrefix, args: '' };
+      return { command: normalizeTelegramCommandName(withoutPrefix), args: '' };
     }
 
     return {
-      command: withoutPrefix.slice(0, spaceIndex),
+      command: normalizeTelegramCommandName(withoutPrefix.slice(0, spaceIndex)),
       args: withoutPrefix.slice(spaceIndex + 1).trim(),
     };
   }

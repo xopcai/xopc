@@ -11,6 +11,7 @@ import type {
   CommandContext,
   CommandResult,
 } from './types.js';
+import { normalizeTelegramCommandName } from './command-parse.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('CommandRegistry');
@@ -207,11 +208,11 @@ export class CommandRegistry {
     const spaceIndex = withoutPrefix.indexOf(' ');
     
     if (spaceIndex === -1) {
-      return { command: withoutPrefix, args: '' };
+      return { command: normalizeTelegramCommandName(withoutPrefix), args: '' };
     }
 
     return {
-      command: withoutPrefix.slice(0, spaceIndex),
+      command: normalizeTelegramCommandName(withoutPrefix.slice(0, spaceIndex)),
       args: withoutPrefix.slice(spaceIndex + 1).trim(),
     };
   }
