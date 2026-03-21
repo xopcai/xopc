@@ -186,6 +186,9 @@ export class AgentService {
       getCurrentModel: () => this.agentOrchestrator.getCurrentModel(),
       switchModelForSession: (sessionKey: string, modelId: string) =>
         this.switchModelForSession(sessionKey, modelId),
+      invalidateAgentSession: (sessionKey: string) => {
+        this.agentManager.removeAgent(sessionKey);
+      },
     });
 
     this.sessionLifecycleManager = new SessionLifecycleManager(

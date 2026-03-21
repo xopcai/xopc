@@ -28,6 +28,8 @@ export interface CommandHandlerConfig {
   sessionStore: SessionStore;
   getCurrentModel: () => string;
   switchModelForSession: (sessionKey: string, modelId: string) => Promise<boolean>;
+  /** Drop in-memory agent after session file is cleared (e.g. /new) */
+  invalidateAgentSession?: (sessionKey: string) => void;
 }
 
 export class CommandHandler {
@@ -36,6 +38,7 @@ export class CommandHandler {
   private sessionStore: SessionStore;
   private getCurrentModel: () => string;
   private switchModelForSession: (sessionKey: string, modelId: string) => Promise<boolean>;
+  private invalidateAgentSession?: (sessionKey: string) => void;
 
   constructor(handlerConfig: CommandHandlerConfig) {
     this.config = handlerConfig.config;
@@ -43,6 +46,7 @@ export class CommandHandler {
     this.sessionStore = handlerConfig.sessionStore;
     this.getCurrentModel = handlerConfig.getCurrentModel;
     this.switchModelForSession = handlerConfig.switchModelForSession;
+    this.invalidateAgentSession = handlerConfig.invalidateAgentSession;
   }
 
   /**
@@ -137,6 +141,8 @@ export class CommandHandler {
           messageCount: messages.length,
         };
       },
+
+      invalidateAgentSession: this.invalidateAgentSession,
     });
 
     // Execute command
