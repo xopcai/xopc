@@ -62,7 +62,8 @@ export class DefaultRenderer implements ToolRenderer {
       }
       const contentRef = createRef<HTMLDivElement>();
       const chevronRef = createRef<HTMLElement>();
-      const defaultExpanded = true;
+      // This branch is only used after `inprogress` (see early return above); keep body collapsed.
+      const defaultExpanded = false;
       const bodyClass = defaultExpanded ? 'tool-call-body--expanded' : 'tool-call-body--collapsed';
       return html`
         <div class="tool-call-card">

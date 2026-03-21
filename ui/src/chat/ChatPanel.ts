@@ -13,11 +13,14 @@ import { SessionManager } from './session.js';
 import { MessageSender } from './messaging.js';
 import type { Message } from '../messages/types.js';
 import {
+  appendThinkingDelta,
   appendTextDelta,
   appendToolStart,
   cloneMessageForRender,
   completeTool,
   ensureAssistantMessage,
+  finalizeStreamingThinking,
+  startThinkingSegment,
 } from '../messages/streaming.js';
 
 export type { GatewayClientConfig, Message, ProgressState, ConnectionState, SessionInfo } from './types.js';
@@ -318,8 +321,9 @@ export class ChatPanel extends LitElement {
         onThinking: (c, isDelta) => this._updateThinking(c, isDelta),
         onThinkingEnd: () => {
           if (this._streamingMsg) {
-            this._streamingMsg.thinkingStreaming = false;
-            this._streamingMsg = cloneMessageForRender(this._streamingMsg);
+            const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
+            finalizeStreamingThinking(msg.content);
+            this._streamingMsg = cloneMessageForRender(msg);
             this.requestUpdate();
           }
         },
@@ -383,8 +387,11 @@ export class ChatPanel extends LitElement {
 
   private _updateThinking(content: string, isDelta: boolean) {
     const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
-    msg.thinking = isDelta ? (msg.thinking || '') + content : content;
-    msg.thinkingStreaming = true;
+    if (!isDelta && content === '') {
+      startThinkingSegment(msg.content);
+    } else {
+      appendThinkingDelta(msg.content, content, isDelta);
+    }
     this._streamingMsg = cloneMessageForRender(msg);
     this.requestUpdate();
     if (this._atBottom) this._scrollToBottom();
@@ -392,8 +399,9 @@ export class ChatPanel extends LitElement {
 
   private _finalizeMessage() {
     if (this._streamingMsg) {
-      this._streamingMsg.thinkingStreaming = false;
-      this._messages = [...this._messages, cloneMessageForRender(this._streamingMsg)];
+      const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
+      finalizeStreamingThinking(msg.content);
+      this._messages = [...this._messages, cloneMessageForRender(msg)];
       this._streamingMsg = null;
     }
     this._streaming = false;

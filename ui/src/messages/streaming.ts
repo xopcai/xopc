@@ -20,7 +20,45 @@ export function cloneMessageForRender(msg: Message): Message {
   };
 }
 
+function closeStreamingThinkingIfAny(content: MessageContent[]): void {
+  const last = content[content.length - 1];
+  if (last?.type === 'thinking' && last.streaming) {
+    last.streaming = false;
+  }
+}
+
+/** Start a new reasoning segment (e.g. SSE `thinking` with status `started`). */
+export function startThinkingSegment(content: MessageContent[]): void {
+  const last = content[content.length - 1];
+  if (last?.type === 'thinking' && last.streaming) {
+    return;
+  }
+  content.push({ type: 'thinking', text: '', streaming: true });
+}
+
+/** Append or replace text in the current thinking block, creating one if needed. */
+export function appendThinkingDelta(content: MessageContent[], text: string, isDelta: boolean): void {
+  const last = content[content.length - 1];
+  if (last?.type === 'thinking') {
+    if (isDelta) {
+      last.text = (last.text || '') + text;
+    } else {
+      last.text = text;
+    }
+    last.streaming = true;
+    return;
+  }
+  content.push({ type: 'thinking', text: isDelta ? text : text, streaming: true });
+}
+
+/** Mark the last open thinking segment as no longer streaming (e.g. `thinking_end`). */
+export function finalizeStreamingThinking(content: MessageContent[]): void {
+  closeStreamingThinkingIfAny(content);
+}
+
 export function appendTextDelta(content: MessageContent[], delta: string): void {
+  closeStreamingThinkingIfAny(content);
+
   const last = content[content.length - 1];
   if (last?.type === 'text') {
     last.text = (last.text || '') + delta;
@@ -30,6 +68,8 @@ export function appendTextDelta(content: MessageContent[], delta: string): void 
 }
 
 export function appendToolStart(content: MessageContent[], toolName: string, args: unknown): void {
+  closeStreamingThinkingIfAny(content);
+
   const block: ToolUseContent = {
     type: 'tool_use',
     id: crypto.randomUUID(),

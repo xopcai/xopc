@@ -36,6 +36,7 @@ export type {
   Attachment as MessageAttachment,
   Message as UIMessage,
   MessageContent,
+  ThinkingContent,
 } from './components/MessageList/types';
 export type {
   ToolRenderer,

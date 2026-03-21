@@ -1,7 +1,7 @@
 import { html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { t } from '../../utils/i18n';
-import type { Message, MessageContent, ToolUseContent } from './types';
+import type { Message, MessageContent, ThinkingContent, ToolUseContent } from './types';
 import './AttachmentRenderer';
 import './UsageBadge';
 import '../MarkdownRenderer';
@@ -41,8 +41,8 @@ export class MessageBubble extends LitElement {
           </div>
 
           <div class="message-bubble ${isUser ? 'bg-primary-light' : 'bg-secondary'}">
-            ${this._renderThinking()}
             ${this._renderContent(this.message.content)}
+            ${this._renderLegacyThinking()}
             ${this.message.attachments?.length ? html`
               <attachment-renderer .attachments=${this.message.attachments}></attachment-renderer>
             ` : ''}
@@ -56,7 +56,11 @@ export class MessageBubble extends LitElement {
     `;
   }
 
-  private _renderThinking(): unknown {
+  /** Older sessions only had top-level `thinking`; new stream uses `content` thinking blocks. */
+  private _renderLegacyThinking(): unknown {
+    if (this.message.content.some((b): b is ThinkingContent => b.type === 'thinking')) {
+      return null;
+    }
     const thinking = this.message.thinking;
     if (!thinking && !this.message.thinkingStreaming) {
       return null;
@@ -97,6 +101,14 @@ export class MessageBubble extends LitElement {
         }
         break;
 
+      case 'thinking':
+        return html`
+          <thinking-block
+            .content=${block.text || ''}
+            .isStreaming=${block.streaming || false}
+          ></thinking-block>
+        `;
+
       case 'tool_use':
         return this._renderToolBlock(block);
 
@@ -133,6 +145,12 @@ export class MessageBubble extends LitElement {
     }
 
     if (this.isStreaming) {
+      const streamingThinking =
+        this.message?.thinkingStreaming ||
+        this.message?.content?.some((b) => b.type === 'thinking' && b.streaming);
+      if (streamingThinking) {
+        return null;
+      }
       return html`<span class="text-primary animate-pulse">${t('chat.thinking')}</span>`;
     }
 

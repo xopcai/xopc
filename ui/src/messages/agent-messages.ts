@@ -1,4 +1,4 @@
-import type { Message, MessageContent, ToolUseContent } from './types.js';
+import type { Message, MessageContent, ThinkingContent, ToolUseContent } from './types.js';
 
 // =============================================================================
 // Type definitions for safe type narrowing (replaces Record<string, unknown> casts)
@@ -91,6 +91,14 @@ export function messageWireSearchText(content: unknown): string {
     const t = item.type;
     if (t === 'text' && typeof item.text === 'string') {
       parts.push(item.text);
+    } else if (t === 'thinking') {
+      const th =
+        typeof (item as WireContentBlock & { thinking?: string }).thinking === 'string'
+          ? (item as { thinking: string }).thinking
+          : typeof item.text === 'string'
+            ? item.text
+            : '';
+      if (th) parts.push(th);
     } else if (t === 'tool_use' || t === 'toolCall' || t === 'tool_call') {
       parts.push(String(item.name ?? 'tool'));
     }
@@ -159,13 +167,18 @@ function buildUserMessage(m: WireMessage): Message {
 
 function buildAssistantMessage(m: WireMessage): Message {
   const content = mergeAssistantContent(m);
+  const hasThinkingBlock = content.some((b): b is ThinkingContent => b.type === 'thinking');
   return {
     role: 'assistant',
     content,
     attachments: m.attachments as Message['attachments'],
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
-    thinking: typeof m.thinking === 'string' ? m.thinking : undefined,
-    thinkingStreaming: typeof m.thinkingStreaming === 'boolean' ? m.thinkingStreaming : undefined,
+    thinking: hasThinkingBlock ? undefined : typeof m.thinking === 'string' ? m.thinking : undefined,
+    thinkingStreaming: hasThinkingBlock
+      ? undefined
+      : typeof m.thinkingStreaming === 'boolean'
+        ? m.thinkingStreaming
+        : undefined,
     usage: m.usage as Message['usage'],
   };
 }
@@ -180,6 +193,11 @@ function parseTs(raw: unknown): number {
 
 function mergeAssistantContent(m: WireMessage): MessageContent[] {
   const blocks = normalizeContentBlocks(m.content);
+
+  const legacyThinking = typeof m.thinking === 'string' ? m.thinking.trim() : '';
+  if (legacyThinking && !blocks.some((b) => b.type === 'thinking')) {
+    blocks.unshift({ type: 'thinking', text: m.thinking as string, streaming: false });
+  }
 
   const tc = m.tool_calls;
   if (Array.isArray(tc)) {
@@ -292,6 +310,14 @@ function normalizeContentBlocks(raw: unknown): MessageContent[] {
     const t = item.type;
     if (t === 'text' && typeof item.text === 'string') {
       out.push({ type: 'text', text: item.text });
+    } else if (t === 'thinking') {
+      const th =
+        typeof (item as WireContentBlock & { thinking?: string }).thinking === 'string'
+          ? (item as { thinking: string }).thinking
+          : typeof item.text === 'string'
+            ? item.text
+            : '';
+      out.push({ type: 'thinking', text: th, streaming: false });
     } else if (t === 'image') {
       out.push({ type: 'image', source: item.source });
     } else if (t === 'tool_use' || t === 'tool_call') {
