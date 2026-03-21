@@ -8,6 +8,7 @@ import type {
 } from './types.js';
 import { createLogger } from '../utils/logger.js';
 import { normalizeTelegramDeliveryChatId } from './telegram-delivery-chat-id.js';
+import { getCronPayloadText } from './job-content.js';
 
 const log = createLogger('CronExecutor');
 
@@ -56,7 +57,7 @@ export class DefaultJobExecutor implements JobExecutor {
     this.runningJobs.set(job.id, new AbortController());
 
     log.info(
-      { jobId: job.id, executionId, message: job.message.slice(0, 100) },
+      { jobId: job.id, executionId, preview: getCronPayloadText(job).slice(0, 100) },
       'Job executing'
     );
 
@@ -157,17 +158,13 @@ export class DefaultJobExecutor implements JobExecutor {
     signal: AbortSignal,
     timeout: number
   ): Promise<CronRunOutcome> {
-    // Get message text from payload or fallback to job message
-    const text = job.payload?.kind === 'systemEvent'
-      ? job.payload.text
-      : job.message;
+    const text = getCronPayloadText(job);
 
     if (!text || !text.trim()) {
       return { status: 'skipped', error: 'Main session job requires non-empty message' };
     }
 
-    // Parse delivery from job config or fallback to parsing from message
-    // Support legacy format: "channel:chat_id:message"
+    // Parse delivery from job config, or parse routing from payload text: "channel:chat_id:content"
     let channel: string;
     let to: string;
     let actualMessage: string;
@@ -178,7 +175,7 @@ export class DefaultJobExecutor implements JobExecutor {
       to = job.delivery.to;
       actualMessage = text;
     } else {
-      // Try to parse from message format: "channel:chat_id:message"
+      // Parse from payload text: "channel:chat_id:content"
       const parts = text.split(':');
       const hasAtLeastThreeParts = parts.length >= 3;
       
@@ -192,7 +189,7 @@ export class DefaultJobExecutor implements JobExecutor {
         actualMessage = parts.slice(2).join(':');
         log.info(
           { jobId: job.id, channel, to, parsedFrom: 'message', originalLength: text.length },
-          'Parsed delivery from message format'
+          'Parsed delivery from payload text'
         );
       } else {
         // Fallback to defaults
@@ -252,10 +249,7 @@ export class DefaultJobExecutor implements JobExecutor {
     signal: AbortSignal,
     timeout: number
   ): Promise<CronRunOutcome> {
-    // Get message from payload or fallback to job message
-    const message = job.payload?.kind === 'agentTurn'
-      ? job.payload.message
-      : job.message;
+    const message = getCronPayloadText(job);
 
     if (!message || !message.trim()) {
       return { status: 'skipped', error: 'Isolated job requires non-empty message' };
@@ -359,7 +353,7 @@ export class DefaultJobExecutor implements JobExecutor {
         } else {
           resolve({
             status: 'ok',
-            summary: `Executed: ${job.message.slice(0, 100)}`,
+            summary: `Executed: ${getCronPayloadText(job).slice(0, 100)}`,
           });
         }
       }, 100);

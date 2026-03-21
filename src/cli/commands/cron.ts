@@ -31,9 +31,10 @@ function createCronCommand(_ctx: CLIContext): Command {
         }
         
         console.log('Scheduled Tasks:\n');
+        const { getCronPayloadText } = await import('../../cron/job-content.js');
         for (const job of jobs) {
           console.log(`  ${job.id} - ${job.schedule}`);
-          console.log(`     ${job.message}`);
+          console.log(`     ${getCronPayloadText({ payload: job.payload })}`);
           console.log(`     Next: ${job.next_run || 'N/A'}`);
           console.log();
         }
@@ -58,11 +59,10 @@ function createCronCommand(_ctx: CLIContext): Command {
         const cronService = new CronService();
         await cronService.initialize();
         
-        const result = await cronService.addJob(
-          options.schedule,
-          options.message,
-          { name: options.name }
-        );
+        const result = await cronService.addJob(options.schedule, {
+          name: options.name,
+          payload: { kind: 'systemEvent', text: options.message },
+        });
         
         console.log(`✅ Added job ${result.id}`);
         console.log(`   Schedule: ${result.schedule}`);

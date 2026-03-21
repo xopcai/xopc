@@ -35,16 +35,14 @@ export interface JobData {
   id: string;
   name?: string;
   schedule: string;
-  message: string;
   enabled: boolean;
   timezone?: string;
   maxRetries: number;
   timeout: number;
   created_at: string;
   updated_at: string;
-  // New fields for agent integration
   sessionTarget?: CronSessionTarget;
-  payload?: CronPayload;
+  payload: CronPayload;
   delivery?: CronDelivery;
   model?: string;
   // Internal state
@@ -149,7 +147,7 @@ export interface AddJobOptions {
   maxRetries?: number;
   timeout?: number;
   sessionTarget?: CronSessionTarget;
-  payload?: CronPayload;
+  payload: CronPayload;
   delivery?: CronDelivery;
   model?: string;
 }
