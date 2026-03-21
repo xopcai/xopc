@@ -23,7 +23,7 @@ import { AcpRuntimeError, normalizeAcpErrorCode } from "../errors.js";
 import type { MessageBus } from "../../../bus/index.js";
 import type { Config } from "../../../config/schema.js";
 import { SessionStore } from "../../../session/index.js";
-import { resolveModel, getDefaultModelSync, getApiKeyFromEnv } from "../../../providers/index.js";
+import { resolveModel, getDefaultModelSync, getApiKeySync } from "../../../providers/index.js";
 import { resolveBundledSkillsDir } from "../../../config/paths.js";
 import { AgentToolsFactory } from "../../../agent/agent-tools-factory.js";
 import { SystemPromptBuilder } from "../../../agent/prompt/service-prompt-builder.js";
@@ -163,9 +163,7 @@ export class LocalAcpRuntime implements AcpRuntime {
         tools: this.tools,
         messages: [],
       },
-      getApiKey: (provider: string) => {
-        return getApiKeyFromEnv(provider);
-      },
+      getApiKey: (provider: string) => getApiKeySync(provider),
     });
   }
 

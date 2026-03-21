@@ -4,7 +4,7 @@
  * Shared types for multi-channel onboarding configuration.
  */
 
-import type { Config } from '../../../config/schema.js';
+import type { Config } from '../../../../config/schema.js';
 
 // DM 策略类型
 export type DmPolicy = 'pairing' | 'allowlist' | 'open' | 'disabled';
