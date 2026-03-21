@@ -64,7 +64,8 @@ export class BashRenderer implements ToolRenderer<BashParams, undefined> {
     const doneShell = (inner: ReturnType<typeof html>) => {
       const contentRef = createRef<HTMLDivElement>();
       const chevronRef = createRef<HTMLElement>();
-      const defaultExpanded = true;
+      // Finished bash: collapsed by default; user expands to see command/output.
+      const defaultExpanded = false;
       const bodyClass = defaultExpanded ? 'tool-call-body--expanded' : 'tool-call-body--collapsed';
       return html`
         <div class="tool-call-card">

@@ -61,7 +61,6 @@ html.dark .glass {
   word-wrap: break-word;
 }
 
-/* Thinking Block */
 .thinking-block {
   border-left: 2px solid var(--border-color);
   padding-left: 0.5rem;

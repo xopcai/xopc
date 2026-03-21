@@ -34,6 +34,9 @@ export class ThinkingBlock extends LitElement {
       ? 'animate-shimmer bg-gradient-to-r from-muted-foreground via-foreground to-muted-foreground bg-[length:200%_100%] bg-clip-text text-transparent'
       : '';
 
+    const bodyText = this.content.trimStart();
+    const placeholder = this.isStreaming && !bodyText ? '…' : bodyText;
+
     return html`
       <div class="thinking-block">
         <div
@@ -48,11 +51,9 @@ export class ThinkingBlock extends LitElement {
           <span class="${shimmerClasses}">${this.isStreaming ? 'Thinking...' : 'Reasoning'}</span>
         </div>
         ${showBody
-          ? html`
-              <div class="thinking-content pl-6 py-2 text-sm text-muted-foreground whitespace-pre-wrap font-mono">
-                ${this.content || (this.isStreaming ? '…' : '')}
-              </div>
-            `
+          ? html`<div
+              class="thinking-content pl-6 py-2 text-sm text-muted-foreground whitespace-pre-wrap font-mono"
+            >${placeholder}</div>`
           : ''}
       </div>
     `;

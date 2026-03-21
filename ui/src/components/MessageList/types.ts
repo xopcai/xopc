@@ -6,5 +6,6 @@ export type {
   MessageContent,
   ProgressState,
   TextContent,
+  ThinkingContent,
   ToolUseContent,
 } from '../../messages/types.js';

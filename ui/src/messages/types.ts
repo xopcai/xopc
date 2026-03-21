@@ -19,7 +19,14 @@ export type ToolUseContent = {
   result?: string;
 };
 
-export type MessageContent = TextContent | ImageContent | ToolUseContent;
+/** Reasoning / thinking segment; order in `content` matches model execution (vs tools & text). */
+export type ThinkingContent = {
+  type: 'thinking';
+  text: string;
+  streaming?: boolean;
+};
+
+export type MessageContent = TextContent | ImageContent | ToolUseContent | ThinkingContent;
 
 export type MessageAttachment = {
   id?: string;
