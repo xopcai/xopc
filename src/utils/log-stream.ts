@@ -7,34 +7,12 @@
  * - Automatic cleanup on disconnect
  */
 
-import { createServer } from 'http'; // eslint-disable-line @typescript-eslint/no-unused-vars
-
-// =============================================================================
-// Types
-// =============================================================================
-
-export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
-
-export interface LogEntry {
-  timestamp: string;
-  level: LogLevel;
-  message: string;
-  module?: string;
-  prefix?: string;
-  service?: string;
-  extension?: string;
-  requestId?: string;
-  sessionId?: string;
-  userId?: string;
-  [key: string]: unknown;
-}
+import type { LogLevel, LogEntry } from './logger.types.js';
+export type { LogLevel, LogEntry };
 
 export interface LogStreamOptions {
-  /** Minimum log level to stream */
   minLevel?: LogLevel;
-  /** Filter by module name */
   module?: string;
-  /** Include these levels (overrides minLevel) */
   levels?: LogLevel[];
 }
 
@@ -53,6 +31,7 @@ const _LOG_LEVELS: Record<LogLevel, number> = {
   warn: 40,
   error: 50,
   fatal: 60,
+  silent: Number.MAX_VALUE,
 };
 
 // =============================================================================
@@ -140,8 +119,9 @@ function createLogStreamHandler() {
     const moduleFilter = url.searchParams.get('module');
     
     // Parse levels
+    const validLevels: LogLevel[] = ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'];
     const allowedLevels: LogLevel[] = levelsParam 
-      ? levelsParam.split(',') as LogLevel[]
+      ? levelsParam.split(',').filter((l): l is LogLevel => validLevels.includes(l as LogLevel))
       : ['info', 'warn', 'error', 'fatal'];
     
     const stream = new ReadableStream({
@@ -223,8 +203,9 @@ export function createLogSSEHandler(): (c: { req: { raw: Request; url: string } 
     const levelsParam = url.searchParams.get('levels');
     const moduleFilter = url.searchParams.get('module');
     
+    const validLevels: LogLevel[] = ['trace', 'debug', 'info', 'warn', 'error', 'fatal', 'silent'];
     const allowedLevels: LogLevel[] = levelsParam
-      ? levelsParam.split(',') as LogLevel[]
+      ? levelsParam.split(',').filter((l): l is LogLevel => validLevels.includes(l as LogLevel))
       : ['info', 'warn', 'error', 'fatal'];
     
     const stream = new ReadableStream({

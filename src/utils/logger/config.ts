@@ -4,7 +4,7 @@
  */
 
 import path from 'path';
-import type { LoggerConfig, LogLevel } from './types.js';
+import type { LoggerConfig, LogLevel } from '../logger.types.js';
 
 const DEFAULT_CONFIG: LoggerConfig = {
   level: 'info',

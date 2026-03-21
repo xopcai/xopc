@@ -133,5 +133,5 @@ export {
   type SessionExport,
 } from '../session/types.js';
 
-// Re-export provider types
-export * from './providers.js';
+// Re-export provider types from pi-ai directly
+export type { Model, Api, Tool, Context, AssistantMessage, Usage } from '@mariozechner/pi-ai';

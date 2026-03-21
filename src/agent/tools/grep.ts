@@ -11,7 +11,7 @@ import {
 	truncateHead,
 	truncateLine,
 } from './truncate.js';
-import { resolveToCwd } from '../../utils/path-utils.js';
+import { resolveToCwd } from '../../utils/helpers.js';
 
 const grepSchema = Type.Object({
 	pattern: Type.String({ description: 'Search pattern (regex or literal string)' }),

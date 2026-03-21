@@ -7,7 +7,7 @@ import { createWriteStream } from 'fs';
 import { existsSync, mkdirSync } from 'fs';
 import path from 'path';
 import type { DestinationStream } from 'pino';
-import type { LogLevel } from './types.js';
+import type { LogLevel } from '../logger.types.js';
 import { config, getLogDir } from './config.js';
 
 // Store file stream references for later cleanup

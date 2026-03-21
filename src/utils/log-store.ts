@@ -157,7 +157,7 @@ function parseLogLine(line: string, source?: string, lineNumber?: number): Parse
     if (match) {
       return {
         timestamp: match[1],
-        level: match[2].toLowerCase(),
+        level: match[2].toLowerCase() as LogLevel,
         message: match[3],
         _source: source,
         _lineNumber: lineNumber,

@@ -23,3 +23,16 @@ export function createPathResolver(extensionDir: string, workspaceDir: string) {
     return input;
   };
 }
+
+/**
+ * Resolve a path to absolute, supporting ~ home directory and cwd-relative paths.
+ */
+export function resolveToCwd(path: string, cwd: string): string {
+  if (path.startsWith('~')) {
+    return path.replace(/^~/, process.env.HOME || process.env.USERPROFILE || '');
+  }
+  if (path.startsWith('/')) {
+    return path;
+  }
+  return `${cwd}/${path}`;
+}

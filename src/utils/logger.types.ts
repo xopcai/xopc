@@ -11,7 +11,7 @@ import type { Logger } from 'pino';
  */
 export interface LogEntry {
   timestamp: string;
-  level: string;
+  level: LogLevel;
   message: string;
   module?: string;
   prefix?: string;
