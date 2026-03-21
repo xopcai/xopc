@@ -7,6 +7,7 @@ import type {
   CronRunOutcome,
 } from './types.js';
 import { createLogger } from '../utils/logger.js';
+import { normalizeTelegramDeliveryChatId } from './telegram-delivery-chat-id.js';
 
 const log = createLogger('CronExecutor');
 
@@ -217,16 +218,19 @@ export class DefaultJobExecutor implements JobExecutor {
         throw new Error('Job was aborted');
       }
 
+      const resolvedTo =
+        channel === 'telegram' ? normalizeTelegramDeliveryChatId(to) : to;
+
       // Publish to message bus (send to channel)
       await this.messageBus.publishOutbound({
         channel,
-        chat_id: to,
+        chat_id: resolvedTo,
         content: actualMessage,
         type: 'message',
       });
 
       log.info(
-        { jobId: job.id, channel, to, messageLength: actualMessage.length },
+        { jobId: job.id, channel, to: resolvedTo, messageLength: actualMessage.length },
         'Sent message to main session'
       );
 
@@ -287,7 +291,10 @@ export class DefaultJobExecutor implements JobExecutor {
       const delivery = job.delivery;
       if (delivery && delivery.mode !== 'none' && delivery.to) {
         const targetChannel = delivery.channel || 'cli';
-        const targetChatId = delivery.to;
+        const targetChatId =
+          targetChannel === 'telegram'
+            ? normalizeTelegramDeliveryChatId(delivery.to)
+            : delivery.to;
 
         await this.messageBus.publishOutbound({
           channel: targetChannel,
