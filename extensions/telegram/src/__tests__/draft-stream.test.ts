@@ -170,19 +170,20 @@ describe('createTelegramDraftStream', () => {
     expect(mockApi.deleteMessage).toHaveBeenCalledWith('123456', 123);
   });
 
-  it('should stop streaming on stop()', async () => {
+  it('should finalize pending text on stop and ignore further updates', async () => {
     const stream = createTelegramDraftStream({
       api: mockApi as any,
       chatId: '123456',
     });
 
     stream.update('Hello');
-    stream.stop();
+    await stream.stop();
 
     stream.update('More text');
     await vi.advanceTimersByTimeAsync(1100);
 
-    expect(mockApi.sendMessage).not.toHaveBeenCalled();
+    expect(mockApi.sendMessage).toHaveBeenCalledTimes(1);
+    expect(mockApi.editMessageText).not.toHaveBeenCalled();
   });
 
   it('should force new message', async () => {
@@ -324,10 +325,7 @@ describe('DraftStreamManager', () => {
       chatId: '123',
     });
 
-    stream.stop();
-
-    // Wait for auto-cleanup
-    await vi.advanceTimersByTimeAsync(100);
+    await stream.stop();
 
     expect(manager.get('chat1')).toBeUndefined();
   });

@@ -189,7 +189,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       startAccount: (account) => this.startAccount(account),
       stopAccount: (accountId) => this.accountManager.stopRunner(accountId),
     });
-    this.streaming = createTelegramStreamingAdapter();
+    this.streaming = createTelegramStreamingAdapter({ accountManager: this.accountManager });
     this.commands = createTelegramCommandAdapter();
   }
 

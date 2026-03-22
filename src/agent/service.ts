@@ -876,10 +876,15 @@ export class AgentService {
       }
 
       if (this.channelManagerRef && msg.channel !== 'cli') {
+        const meta = msg.metadata as Record<string, unknown> | undefined;
         const streamHandle = this.channelManagerRef.startStream(
           msg.channel,
           msg.chat_id,
-          msg.metadata?.accountId as string | undefined
+          meta?.accountId as string | undefined,
+          {
+            threadId: meta?.threadId as string | undefined,
+            replyToMessageId: meta?.messageId as string | undefined,
+          },
         );
 
         if (streamHandle) {
@@ -1025,6 +1030,10 @@ export class AgentService {
     msg: InboundMessage,
     sessionContext: SessionContext
   ): Promise<void> {
+    if (this.streamManager.consumeSkipFinalOutbound()) {
+      return;
+    }
+
     const finalContent = this.agentManager.getLastAssistantContent(sessionContext.sessionKey);
     if (!finalContent?.trim()) return;
 

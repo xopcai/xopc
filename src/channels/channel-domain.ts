@@ -150,6 +150,7 @@ export interface ChannelStreamHandle {
   end: () => Promise<void>;
   abort: () => Promise<void>;
   messageId: () => number | undefined;
+  skipFinalOutbound?: () => boolean;
 }
 
 export interface ChannelStatus {

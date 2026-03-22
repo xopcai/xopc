@@ -404,14 +404,26 @@ export class ChannelManager {
     }
   }
   
-  startStream(channel: string, chatId: string, accountId?: string): ChannelStreamHandle | null {
+  startStream(
+    channel: string,
+    chatId: string,
+    accountId?: string,
+    opts?: { threadId?: string; replyToMessageId?: string },
+  ): ChannelStreamHandle | null {
     const plugin = this.plugins.get(channel);
     if (!plugin) {
       log.error({ channel }, 'Unknown channel');
       return null;
     }
 
-    return plugin.streaming?.startStream?.({ chatId, accountId }) ?? null;
+    return (
+      plugin.streaming?.startStream?.({
+        chatId,
+        accountId,
+        threadId: opts?.threadId,
+        replyToMessageId: opts?.replyToMessageId,
+      }) ?? null
+    );
   }
   
   async getChannelStatus(channel: string): Promise<Record<string, unknown>> {
