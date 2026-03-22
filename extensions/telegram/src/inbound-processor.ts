@@ -18,8 +18,17 @@ import type { TelegramAccountManager } from './account-manager.js';
 import { telegramUpdateDedupe, buildTelegramUpdateKey } from './dedupe.js';
 import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
 import { removeBotMention as stripMentionLegacy } from '@xopcai/xopcbot/channels/security.js';
+import { normalizeTelegramCommandName, parseSlashCommand } from '@xopcai/xopcbot/commands/command-parse.js';
 
 const log = createLogger('TelegramInboundProcessor');
+
+/** Must bypass the per-chat queue so /abort can cancel an in-flight turn. */
+function isAbortSlashCommand(text: string): boolean {
+  const parsed = parseSlashCommand(text);
+  if (!parsed) return false;
+  const cmd = normalizeTelegramCommandName(parsed.command);
+  return cmd === 'abort' || cmd === 'stop' || cmd === 'cancel';
+}
 
 /** Maximum voice message duration for STT in seconds */
 const STT_MAX_VOICE_DURATION_SECONDS = 60;
@@ -496,6 +505,14 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
 
   // Main enqueue function
   return (ctx: Context, accountId: string): Promise<void> => {
+    const message = ctx.message;
+    if (message) {
+      const raw = message.text ?? message.caption ?? '';
+      if (raw.trim() && isAbortSlashCommand(raw.trim())) {
+        return processMessageInternal(ctx, accountId);
+      }
+    }
+
     const chatId = String(ctx.chat?.id);
     const chatKey = getChatKey(accountId, chatId);
 

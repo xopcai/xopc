@@ -6,6 +6,7 @@
  * - /list - List all sessions
  * - /switch - Switch to a different session
  * - /clear - Clear current session without archiving
+ * - /abort - Cancel in-flight assistant reply (generation / streaming)
  */
 
 import type { CommandDefinition, CommandContext, UIComponent } from '../types.js';
@@ -109,6 +110,28 @@ const clearCommand: CommandDefinition = {
   },
 };
 
+const abortCommand: CommandDefinition = {
+  id: 'session.abort',
+  name: 'abort',
+  aliases: ['stop', 'cancel'],
+  description: 'Stop the current assistant reply (in-flight generation or stream)',
+  category: 'session',
+  scope: ['global', 'private', 'group'],
+  handler: async (ctx: CommandContext) => {
+    if (!ctx.abortCurrentTurn) {
+      return {
+        content: 'Abort is not available in this environment.',
+        success: false,
+      };
+    }
+    await ctx.abortCurrentTurn();
+    return {
+      content: '⏹️ Current reply cancelled.',
+      success: true,
+    };
+  },
+};
+
 const archiveCommand: CommandDefinition = {
   id: 'session.archive',
   name: 'archive',
@@ -132,5 +155,6 @@ export function registerSessionCommands(): void {
   commandRegistry.register(newCommand);
   commandRegistry.register(listCommand);
   commandRegistry.register(clearCommand);
+  commandRegistry.register(abortCommand);
   commandRegistry.register(archiveCommand);
 }

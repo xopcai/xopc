@@ -238,6 +238,10 @@ export class AgentService {
       invalidateAgentSession: (sessionKey: string) => {
         this.agentManager.removeAgent(sessionKey);
       },
+      abortSessionTurn: async (sessionKey: string) => {
+        await this.streamManager.abort();
+        this.agentOrchestrator.abort(sessionKey);
+      },
     });
 
     this.sessionLifecycleManager = new SessionLifecycleManager(

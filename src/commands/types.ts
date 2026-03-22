@@ -181,6 +181,9 @@ export interface CommandContext {
 
   /** Persist session thinking level and sync in-memory agent (when wired) */
   setThinkingLevel?(level: ThinkLevel): Promise<void>;
+
+  /** Abort in-flight assistant generation and channel streaming for this session (e.g. /abort) */
+  abortCurrentTurn?(): Promise<void>;
 }
 
 export type PlatformFeature = 

@@ -52,6 +52,8 @@ export interface CommandContextDeps {
   switchModel?: (modelId: string) => Promise<boolean>;
   listModels?: () => Promise<ModelInfo[]>;
   getUsage?: () => Promise<UsageStats>;
+  /** Stop current LLM turn and clear channel preview stream (Telegram draft, etc.) */
+  abortCurrentTurn?: () => Promise<void>;
 }
 
 export class CommandContextImpl implements CommandContext {
@@ -62,6 +64,7 @@ export class CommandContextImpl implements CommandContext {
   readonly senderId: string;
   readonly isGroup: boolean;
   readonly config: Config;
+  readonly abortCurrentTurn?: () => Promise<void>;
 
   private deps: CommandContextDeps;
 
@@ -74,6 +77,13 @@ export class CommandContextImpl implements CommandContext {
     this.isGroup = deps.isGroup;
     this.config = deps.config;
     this.deps = deps;
+
+    if (deps.abortCurrentTurn) {
+      const run = deps.abortCurrentTurn;
+      this.abortCurrentTurn = async () => {
+        await run();
+      };
+    }
   }
 
   // === Reply API ===
