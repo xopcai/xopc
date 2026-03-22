@@ -366,6 +366,8 @@ export interface ChannelStreamHandle {
   end: () => Promise<void>;
   abort: () => Promise<void>;
   messageId: () => number | undefined;
+  /** When true after end(), the final outbound text was already shown via streaming — skip duplicate send. */
+  skipFinalOutbound?: () => boolean;
 }
 
 export interface ChannelStreamingAdapter {

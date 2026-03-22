@@ -14,10 +14,12 @@ export interface StreamHandle {
   end: () => Promise<void>;
   abort: () => Promise<void>;
   messageId: () => number | undefined;
+  skipFinalOutbound?: () => boolean;
 }
 
 export class StreamManager {
   private currentHandle: StreamHandle | null = null;
+  private skipFinalOutboundPending = false;
 
   /**
    * Set the current stream handle
@@ -59,8 +61,12 @@ export class StreamManager {
    */
   async end(): Promise<void> {
     if (this.currentHandle) {
-      await this.currentHandle.end();
+      const handle = this.currentHandle;
+      await handle.end();
+      this.skipFinalOutboundPending = handle.skipFinalOutbound?.() ?? false;
       this.clearHandle();
+    } else {
+      this.skipFinalOutboundPending = false;
     }
   }
 
@@ -70,8 +76,19 @@ export class StreamManager {
   async abort(): Promise<void> {
     if (this.currentHandle) {
       await this.currentHandle.abort();
+      this.skipFinalOutboundPending = false;
       this.clearHandle();
     }
+  }
+
+  /**
+   * Whether the channel already delivered the final assistant text (e.g. Telegram streaming).
+   * Consumes the flag for one outbound decision.
+   */
+  consumeSkipFinalOutbound(): boolean {
+    const v = this.skipFinalOutboundPending;
+    this.skipFinalOutboundPending = false;
+    return v;
   }
 
   /**
