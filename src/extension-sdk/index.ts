@@ -187,14 +187,14 @@ export type {
 } from '../extensions/diagnostics.js';
 
 // ============================================================================
-// Channels
+// Channels (ChannelPlugin registry)
 // ============================================================================
 
 export type {
-  ChannelExtension,
-  SendMessageOptions,
-  ChannelMessage,
-} from '../extensions/types/index.js';
+  ChannelPlugin,
+  ChannelPluginInitOptions,
+  ChannelPluginStartOptions,
+} from '../channels/plugin-types.js';
 
 // ============================================================================
 // HTTP
@@ -273,17 +273,6 @@ export {
   ExtensionLoaderCacheImpl,
   ExtensionDiagnostics,
 } from '../extensions/diagnostics.js';
-
-// ============================================================================
-//  Channel Adapter
-// ============================================================================
-
-export {
-  adaptExtensionChannel,
-  isAdaptableChannel,
-  getRequiredChannelMethods,
-  DEFAULT_CHANNEL_CAPABILITIES,
-} from '../extensions/channel-adapter.js';
 
 // ============================================================================
 // Config

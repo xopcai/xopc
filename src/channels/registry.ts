@@ -14,6 +14,11 @@ export interface ChatChannelMeta {
   label: string;
   description: string;
   capabilities: ChannelCapabilities;
+  /** Optional UI/dock tuning (queue debounce, outbound chunk size). */
+  dock?: {
+    outbound?: { textChunkLimit?: number };
+    queue?: { debounceMs?: number };
+  };
 }
 
 const DEFAULT_CAPABILITIES: ChannelCapabilities = {
@@ -32,6 +37,10 @@ const CHAT_CHANNEL_META: Record<ChatChannelId, ChatChannelMeta> = {
     label: 'Telegram',
     description: 'Telegram Bot API (GrammY)',
     capabilities: DEFAULT_CAPABILITIES,
+    dock: {
+      outbound: { textChunkLimit: 4000 },
+      queue: { debounceMs: 300 },
+    },
   },
 };
 

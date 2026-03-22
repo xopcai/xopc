@@ -8,7 +8,6 @@ import type { Config } from '../../types/index.js';
 import type { TypedEventBus } from './events.js';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type { ExtensionHookEvent, ExtensionHookHandler, HookOptions, HookHandlerMap } from './hooks.js';
-import type { ChannelExtension } from './channels.js';
 import type { ChannelPlugin } from '../../channels/plugin-types.js';
 import type { FlagConfig, FlagValue, ShortcutConfig } from './phase4.js';
 import type { ProviderPlugin } from './providers.js';
@@ -72,9 +71,7 @@ export interface ExtensionApi {
   onHook<K extends ExtensionHookEvent>(hookName: K, handler: HookHandlerMap[K], opts?: { priority?: number }): void;
   
   // Channel Registration
-  registerChannel(channel: ChannelExtension): void;
-  /** Register a full ChannelPlugin (advanced; e.g. non-SDK channel implementations). */
-  registerChannelPlugin(plugin: ChannelPlugin): void;
+  registerChannel(plugin: ChannelPlugin): void;
   
   // HTTP Route Registration
   registerHttpRoute(path: string, handler: HttpRequestHandler): void;

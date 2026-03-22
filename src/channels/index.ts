@@ -1,7 +1,7 @@
 /**
  * Channels Module
- * 
- * Exports all channel implementations.
+ *
+ * Exports shared channel infrastructure (plugins, pipeline, registry).
  */
 
 export * from './types.js';
@@ -43,8 +43,6 @@ export type {
   ChannelOutboundMediaType,
 } from './plugin-types.js';
 
-export { TELEGRAM_CHANNEL_DEFAULTS } from './telegram/plugin-defaults.js';
-
 // Security
 export {
   compileAllowlist,
@@ -74,26 +72,8 @@ export {
   type AgentResponse,
 } from './pipeline.js';
 
-// Extension SDK → ChannelPlugin bridge
-export {
-  ExtensionSdkChannelPlugin,
-  isSdkChannelExtension,
-} from './extension-sdk-channel-plugin.js';
-
-// Telegram Plugin
-export { TelegramChannelPlugin, telegramPlugin } from './telegram-plugin.js';
-export { createTelegramCommandHandler } from './telegram/command-handler.js';
-export { TelegramInlineKeyboards } from './telegram/inline-keyboards.js';
-export { startTelegramWebhook, validateWebhookSecret } from './telegram/webhook.js';
-
 // Manager
 export { ChannelManager, createChannelManager } from './manager.js';
 
-// Telegram-specific utilities
-export * from './telegram/access-control.js';
-export * from './telegram/update-offset-store.js';
-export * from './telegram/draft-stream.js';
-export * from './telegram/format.js';
-
-// Re-export format.ts (backward compatibility alias)
+// Generic markdown helpers (Telegram HTML: `./telegram/format.js`)
 export * from './format.js';
