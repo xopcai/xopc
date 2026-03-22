@@ -8,7 +8,7 @@ import { createLogger } from '../utils/logger.js';
 const log = createLogger('ConfigLoader');
 
 /** Number of backup files to keep */
-const CONFIG_BACKUP_COUNT = 20;
+const CONFIG_BACKUP_COUNT = 10;
 
 /**
  * Rotate config backups before writing new config.
