@@ -58,7 +58,7 @@ function deleteOAuthCredentialsFromCache(provider: string): void {
 /** No-op: OAuth tokens live on disk under auth paths; cache is populated during login. */
 export function loadOAuthCredentialsToCache(_service: GatewayService): void {}
 
-export function createOAuthHandler(service: GatewayService) {
+export function createOAuthHandler(_service: GatewayService) {
   const oauth = new Hono();
 
   /**

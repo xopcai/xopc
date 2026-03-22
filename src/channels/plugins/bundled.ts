@@ -3,6 +3,6 @@
  */
 
 import type { ChannelPlugin } from '../plugin-types.js';
-import { telegramPlugin } from '../../extensions/telegram/index.js';
+import { telegramPlugin } from '@xopcai/xopcbot-extension-telegram';
 
 export const bundledChannelPlugins: ChannelPlugin[] = [telegramPlugin];

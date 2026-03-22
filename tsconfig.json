@@ -16,6 +16,7 @@
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
     "paths": {
+      "@xopcai/xopcbot/*": ["./src/*"],
       "*": ["node_modules/*"]
     }
   },

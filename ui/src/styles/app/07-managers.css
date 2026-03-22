@@ -1,4 +1,8 @@
-/* Cron Manager - reuse session manager styles */
+/* ============================================
+   Managers (Cron, Subagents)
+   ============================================ */
+
+/* ===== Cron Manager ===== */
 .cron-manager {
   display: flex;
   flex-direction: column;
@@ -39,6 +43,7 @@
   margin-bottom: 1rem;
 }
 
+/* ===== Cron Jobs Section ===== */
 .cron-jobs-section {
   display: flex;
   flex-direction: column;
@@ -61,10 +66,10 @@
 .cron-jobs-section__count {
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--text-muted);
-  background: var(--bg-tertiary, rgba(0, 0, 0, 0.06));
+  color: var(--text-disabled);
+  background: var(--hover-bg);
   padding: 0.125rem 0.5rem;
-  border-radius: 999px;
+  border-radius: var(--radius-full);
 }
 
 .cron-jobs-section__loading {
@@ -74,11 +79,12 @@
 }
 
 .cron-jobs-empty {
-  border: 1px dashed var(--border-color);
-  border-radius: var(--radius-md, 8px);
+  border: 1px dashed var(--border-default);
+  border-radius: var(--radius-xl);
   padding: 2rem 1rem;
 }
 
+/* ===== Cron Job Grid ===== */
 .cron-job-grid {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
@@ -91,21 +97,25 @@
   flex-direction: column;
   gap: 0.5rem;
   padding: 1rem 1.125rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md, 8px);
-  background: var(--bg-secondary, var(--bg-elevated));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  background: var(--card-bg);
   cursor: pointer;
   text-align: left;
-  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+  transition: all var(--transition-fast);
 }
 
 .cron-job-card:hover {
-  border-color: var(--accent-primary, #2563eb);
-  box-shadow: 0 1px 8px rgba(0, 0, 0, 0.06);
+  border-color: var(--primary-base);
+  transform: translateY(-2px);
+}
+
+.cron-job-card:active {
+  transform: scale(0.99) translateY(0);
 }
 
 .cron-job-card:focus-visible {
-  outline: 2px solid var(--accent-primary, #2563eb);
+  outline: 2px solid var(--primary-base);
   outline-offset: 2px;
 }
 
@@ -131,24 +141,24 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  padding: 0.2rem 0.45rem;
-  border-radius: 4px;
+  padding: 0.25rem 0.5rem;
+  border-radius: var(--radius-lg);
 }
 
 .cron-job-card__badge--on {
-  color: var(--accent-success, #16a34a);
-  background: color-mix(in srgb, var(--accent-success, #16a34a) 12%, transparent);
+  color: var(--success);
+  background: var(--success-soft);
 }
 
 .cron-job-card__badge--off {
-  color: var(--text-muted);
-  background: var(--bg-tertiary, rgba(0, 0, 0, 0.06));
+  color: var(--text-disabled);
+  background: var(--hover-bg);
 }
 
 .cron-job-card__id {
   margin: 0;
   font-size: 0.75rem;
-  color: var(--text-muted);
+  color: var(--text-disabled);
 }
 
 .cron-job-card__id code {
@@ -166,7 +176,7 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: var(--text-muted);
+  color: var(--text-disabled);
 }
 
 .cron-job-card__cron {
@@ -190,7 +200,7 @@
 .cron-job-card__preview {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
-  line-height: 1.45;
+  line-height: 1.5;
   color: var(--text-secondary);
   display: -webkit-box;
   -webkit-line-clamp: 3;
@@ -205,7 +215,7 @@
   gap: 0.5rem;
   margin-top: auto;
   padding-top: 0.75rem;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-subtle);
 }
 
 .cron-job-card__toggle {
@@ -218,10 +228,11 @@
   gap: 0.25rem;
 }
 
+/* ===== Cron Run Log ===== */
 .cron-run-log {
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md, 8px);
-  background: var(--bg-secondary, var(--bg-elevated));
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  background: var(--card-bg);
   padding: 1rem 1.25rem;
   display: flex;
   flex-direction: column;
@@ -246,8 +257,8 @@
 .cron-run-log__hint {
   margin: 0.25rem 0 0;
   font-size: 0.8125rem;
-  color: var(--text-muted);
-  line-height: 1.4;
+  color: var(--text-disabled);
+  line-height: 1.5;
   max-width: 42rem;
 }
 
@@ -260,7 +271,7 @@
 .cron-run-log__empty {
   margin: 0;
   font-size: 0.875rem;
-  color: var(--text-muted);
+  color: var(--text-disabled);
 }
 
 .cron-run-log__table-wrap {
@@ -277,11 +288,10 @@
 .cron-run-log__job-link {
   padding: 0;
   font-size: inherit;
-  text-align: left;
 }
 
 .cron-run-log__job-id {
-  font-family: ui-monospace, monospace;
+  font-family: var(--font-mono);
   font-size: 0.8125rem;
   color: var(--text-secondary);
 }
@@ -298,25 +308,25 @@
 }
 
 .cron-run-log__status--success {
-  color: var(--accent-success, #16a34a);
+  color: var(--success);
 }
 
 .cron-run-log__status--failed {
-  color: var(--accent-danger, #dc2626);
+  color: var(--error);
 }
 
 .cron-run-log__status--cancelled {
-  color: var(--text-muted);
+  color: var(--text-disabled);
 }
 
 .cron-run-log__status--running {
-  color: var(--accent-primary, #2563eb);
+  color: var(--primary-base);
 }
 
 .cron-detail-history {
   margin-top: 1.25rem;
   padding-top: 1rem;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border-default);
 }
 
 .cron-detail-history__title {
@@ -327,7 +337,7 @@
 }
 
 /* ============================================
-   SUBAGENTS MANAGER
+   Subagents Manager
    ============================================ */
 
 .subagents-manager {
@@ -371,22 +381,26 @@
   gap: 0.75rem;
 }
 
+/* ===== Subagent Card ===== */
 .subagent-card {
   display: flex;
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
   cursor: pointer;
   transition: all var(--transition-fast);
 }
 
 .subagent-card:hover {
   border-color: var(--border-strong);
-  box-shadow: var(--shadow-sm);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
+}
+
+.subagent-card:active {
+  transform: scale(0.99) translateY(0);
 }
 
 .subagent-card__icon {
@@ -395,9 +409,9 @@
   justify-content: center;
   width: 3rem;
   height: 3rem;
-  background: linear-gradient(135deg, var(--accent-primary-soft) 0%, var(--accent-primary-light) 100%);
-  border-radius: var(--radius-md);
-  color: var(--accent-primary);
+  background: var(--primary-soft);
+  border-radius: var(--radius-xl);
+  color: var(--primary-base);
   flex-shrink: 0;
 }
 
@@ -423,7 +437,7 @@
   align-items: center;
   gap: 0.5rem;
   font-size: 0.8125rem;
-  color: var(--text-muted);
+  color: var(--text-disabled);
 }
 
 .subagent-card__meta .meta-item {
@@ -442,21 +456,21 @@
 }
 
 .subagent-card__arrow {
-  color: var(--text-muted);
+  color: var(--text-disabled);
   transition: transform var(--transition-fast);
 }
 
 .subagent-card:hover .subagent-card__arrow {
-  transform: translateX(2px);
+  transform: translateX(4px);
   color: var(--text-secondary);
 }
 
-/* Subagent Detail */
+/* ===== Subagent Detail ===== */
 .subagent-detail {
   display: flex;
   flex-direction: column;
   gap: 1.5rem;
-  animation: fadeIn var(--transition-normal) ease-out;
+  animation: fadeInUp var(--transition-normal);
 }
 
 .subagent-detail__header {
@@ -476,7 +490,7 @@
   align-items: center;
   gap: 0.75rem;
   padding-bottom: 1rem;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .subagent-detail__icon {
@@ -485,8 +499,8 @@
   justify-content: center;
   width: 3rem;
   height: 3rem;
-  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-primary-hover) 100%);
-  border-radius: var(--radius-md);
+  background: var(--primary-base);
+  border-radius: var(--radius-xl);
   color: white;
 }
 
@@ -502,6 +516,7 @@
   margin: 0;
 }
 
+/* ===== Detail Section ===== */
 .detail-section {
   display: flex;
   flex-direction: column;
@@ -528,15 +543,15 @@
   flex-direction: column;
   gap: 0.375rem;
   padding: 0.75rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  background: var(--hover-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
 }
 
 .detail-item__label {
   font-size: 0.75rem;
   font-weight: 500;
-  color: var(--text-muted);
+  color: var(--text-disabled);
 }
 
 .detail-item__value {
@@ -550,28 +565,29 @@
   word-break: break-all;
 }
 
+/* ===== Status Badge ===== */
 .status-badge {
   display: inline-flex;
   padding: 0.25rem 0.625rem;
   font-size: 0.75rem;
   font-weight: 600;
   text-transform: uppercase;
-  border-radius: var(--radius-sm);
+  border-radius: var(--radius-lg);
 }
 
 .status-badge--active {
-  color: var(--accent-success);
-  background: var(--accent-success-light);
+  color: var(--success);
+  background: var(--success-soft);
 }
 
 .status-badge--idle {
-  color: var(--accent-warning);
-  background: var(--accent-warning-light);
+  color: var(--warning);
+  background: var(--warning-soft);
 }
 
 .status-badge--archived {
-  color: var(--text-muted);
-  background: var(--bg-tertiary);
+  color: var(--text-disabled);
+  background: var(--hover-bg);
 }
 
 .tags-list {
@@ -580,7 +596,7 @@
   gap: 0.5rem;
 }
 
-/* Skeleton Loading */
+/* ===== Skeleton Loading ===== */
 .skeleton-list {
   display: flex;
   flex-direction: column;
@@ -592,15 +608,15 @@
   align-items: center;
   gap: 1rem;
   padding: 1rem;
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
 }
 
 .skeleton-card .skeleton--icon {
   width: 3rem;
   height: 3rem;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xl);
   flex-shrink: 0;
 }
 
@@ -621,19 +637,34 @@
   height: 0.75rem;
 }
 
-/* Responsive */
+/* ===== Responsive ===== */
 @media (max-width: 768px) {
+  .cron-manager,
   .subagents-manager {
     padding: 1rem;
   }
 
+  .cron-manager__header,
   .subagents-manager__header {
     flex-direction: column;
     align-items: stretch;
+    gap: 0.75rem;
   }
 
-  .subagents-manager__header .btn {
+  .cron-manager__header .page-title,
+  .subagents-manager__header .page-title {
+    font-size: 1.1rem;
+  }
+
+  .cron-manager__actions,
+  .subagents-manager__actions {
     width: 100%;
+    justify-content: stretch;
+  }
+
+  .cron-manager__actions .btn,
+  .subagents-manager__actions .btn {
+    flex: 1;
   }
 
   .subagent-card {
@@ -649,4 +680,3 @@
     grid-template-columns: 1fr;
   }
 }
-

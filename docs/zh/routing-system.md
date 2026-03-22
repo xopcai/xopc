@@ -101,5 +101,5 @@ console.log(route.agentId);    // main
 ## 相关文件
 
 - `src/routing/` - 路由系统核心
-- `src/channels/telegram/routing-integration.ts` - Telegram 集成
+- `extensions/telegram/src/routing-integration.ts` - Telegram 集成（工作区包 `@xopcai/xopcbot-extension-telegram`）
 - `src/acp/routing-integration.ts` - ACP 集成

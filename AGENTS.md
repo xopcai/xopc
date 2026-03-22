@@ -91,18 +91,20 @@ src/
 │   ├── memory/         #   Session persistence
 │   └── tools/          #   Built-in tools (Typebox schemas)
 ├── bus/                # Event bus for message routing
-├── channels/           # Channel integrations (Telegram, Feishu)
-│   ├── telegram/       #   Telegram extension architecture
-│   │   ├── extension.ts   #     Main extension implementation
-│   │   ├── client.ts   #     Bot client wrapper
-│   │   ├── webhook.ts  #     Webhook server support
-│   │   └── command-handler.ts  # Bot command handlers
-│   ├── types.ts        #   Channel extension interfaces
+├── channels/           # Channel integrations (ChannelPlugin + manager)
+│   ├── plugin-types.ts #   ChannelPlugin interface & adapters
 │   ├── manager.ts      #   Channel lifecycle manager
-│   ├── access-control.ts     # Access control policies
-│   ├── draft-stream.ts       # Streaming message preview
-│   ├── format.ts             # Markdown to HTML formatter
-│   └── update-offset-store.ts # Polling offset persistence
+│   ├── plugins/
+│   │   ├── bundled.ts  #   Built-in workspace plugins (Telegram)
+│   │   └── registry.ts #   Plugin registry / lookup
+│   ├── telegram/
+│   │   └── index.ts    #   Re-exports from @xopcai/xopcbot-extension-telegram (compat)
+│   ├── outbound/       #   Outbound delivery pipeline
+│   ├── security.ts     #   Access control helpers
+│   ├── pipeline.ts     #   Inbound message pipeline
+│   ├── format.ts       #   Markdown to HTML formatter
+│   └── registry.ts     #   Channel metadata registry (UI / CLI)
+├── extension-sdk/      # Official Extension SDK (`@xopcai/xopcbot/extension-sdk`)
 ├── cli/                # CLI commands with self-registration
 ├── config/             # Configuration management
 ├── cron/               # Scheduled tasks
@@ -125,6 +127,9 @@ src/
             ├── i18n.ts
             ├── format.ts
             └── attachment-utils.ts
+
+extensions/
+└── telegram/           # Workspace package: Telegram channel (@xopcai/xopcbot-extension-telegram)
 ```
 
 ## Model Registry Architecture
@@ -299,30 +304,16 @@ const agent = new AgentService(bus, {
 await agent.start();
 ```
 
-### 4. Channel Extension Usage (New)
+### 4. Channel plugins (Telegram)
 
-Channels now use an extension-based architecture:
+Channels are **`ChannelPlugin`** instances. The core **`ChannelManager`** loads bundled plugins from `src/channels/plugins/bundled.ts` (Telegram ships as the workspace package `extensions/telegram`, published name `@xopcai/xopcbot-extension-telegram`).
 
 ```typescript
-import { telegramExtension } from './channels/index.js';
-import { ChannelManager } from './channels/manager.js';
+import { telegramPlugin } from '@xopcai/xopcbot-extension-telegram';
+// Stable path from core: import { telegramPlugin } from './channels/telegram/index.js';
 
-// Initialize extension
-await telegramExtension.init({ bus, config, channelConfig });
-await telegramExtension.start();
-
-// Send message
-await telegramExtension.send({
-  chatId: '123456',
-  content: 'Hello World',
-  accountId: 'personal',
-});
-
-// Streaming message preview
-const stream = telegramExtension.startStream({ chatId: '123456' });
-stream.update('Processing...');
-stream.update('Still working...');
-await stream.end();
+// telegramPlugin is registered via bundledChannelPlugins; ChannelManager drives init/start
+// and outbound delivery. Use config under `channels.telegram` as documented below.
 ```
 
 ### 5. Channel Access Control
@@ -385,25 +376,26 @@ Example for custom endpoint via Vercel AI Gateway:
 
 The frontend fetches available providers via `/api/providers`.
 
-### Adding a New Channel Extension
+### Adding a channel plugin
 
-1. Create extension directory: `src/channels/<name>/`
-2. Implement `ChannelExtension` interface from `src/channels/types.ts`
-3. Add to `src/channels/index.ts` exports
-4. Register in `ChannelManager` for lifecycle management
+1. Implement `ChannelPlugin` (see `src/channels/plugin-types.ts`) in a package or `extensions/<name>/`.
+2. Use `defineChannelPluginEntry` from `@xopcai/xopcbot/extension-sdk` where appropriate.
+3. Add the plugin to `bundledChannelPlugins` in `src/channels/plugins/bundled.ts` if it should ship with the core binary.
 
-### Working with Channel Streaming
+### Working with Telegram draft streaming
+
+Draft streaming for Telegram lives in the bundled extension package:
 
 ```typescript
-import { DraftStreamManager } from './channels/draft-stream.js';
+import { DraftStreamManager } from '@xopcai/xopcbot-extension-telegram/draft-stream.js';
 
-const manager = new DraftStreamManager(bot);
-const stream = manager.getOrCreate('chat-123', { chatId: 123 });
+const manager = new DraftStreamManager();
+const stream = manager.getOrCreate('chat-123', {
+  api: bot.api,
+  chatId: 123,
+});
 
-// Update preview message
 stream.update('Processing your request...');
-
-// Finalize
 await stream.flush();
 ```
 
@@ -760,10 +752,10 @@ console.log(`Errors: ${stats.byLevel.error}`);
 | **UI components** | `ui/src/components/` |
 | **Model registry** | `src/providers/index.ts` (uses `@mariozechner/pi-ai`) |
 | **Providers** | `src/providers/index.ts` |
-| **Channel extensions** | `src/channels/` |
+| **Channel plugins** | `src/channels/`, `extensions/telegram/` (Telegram workspace package) |
 | **Logging system** | `src/utils/logger.ts`, `src/utils/log-store.ts` |
 | **Log UI** | `ui/src/pages/LogManager.ts` |
 
 ---
 
-_Last updated: 2026-02-26_
+_Last updated: 2026-03-22_

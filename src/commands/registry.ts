@@ -11,7 +11,7 @@ import type {
   CommandContext,
   CommandResult,
 } from './types.js';
-import { normalizeTelegramCommandName } from './command-parse.js';
+import { normalizeTelegramCommandName, parseSlashCommand } from './command-parse.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('CommandRegistry');
@@ -195,26 +195,20 @@ export class CommandRegistry {
    */
   parseCommand(text: string): { command: string; args: string } | null {
     const trimmed = text.trim();
-    
-    // Must start with / or :
-    if (!trimmed.startsWith('/') && !trimmed.startsWith(':')) {
-      return null;
+
+    if (trimmed.startsWith(':')) {
+      const withoutPrefix = trimmed.slice(1);
+      const spaceIndex = withoutPrefix.indexOf(' ');
+      if (spaceIndex === -1) {
+        return { command: normalizeTelegramCommandName(withoutPrefix), args: '' };
+      }
+      return {
+        command: normalizeTelegramCommandName(withoutPrefix.slice(0, spaceIndex)),
+        args: withoutPrefix.slice(spaceIndex + 1).trim(),
+      };
     }
 
-    // Remove prefix
-    const withoutPrefix = trimmed.slice(1);
-    
-    // Split into command and args
-    const spaceIndex = withoutPrefix.indexOf(' ');
-    
-    if (spaceIndex === -1) {
-      return { command: normalizeTelegramCommandName(withoutPrefix), args: '' };
-    }
-
-    return {
-      command: normalizeTelegramCommandName(withoutPrefix.slice(0, spaceIndex)),
-      args: withoutPrefix.slice(spaceIndex + 1).trim(),
-    };
+    return parseSlashCommand(text);
   }
 
   /**

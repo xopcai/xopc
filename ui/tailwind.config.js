@@ -1,87 +1,99 @@
 /** @type {import('tailwindcss').Config} */
 export default {
-  content: [
-    "./index.html",
-    "./src/**/*.{ts,js}",
-  ],
   darkMode: 'class',
+  content: [
+    './src/**/*.{js,ts,jsx,tsx}',
+    './components/**/*.{js,ts,jsx,tsx}',
+  ],
   theme: {
     extend: {
       colors: {
-        background: {
-          DEFAULT: 'var(--bg-primary)',
-          secondary: 'var(--bg-secondary)',
-          tertiary: 'var(--bg-tertiary)',
+        ui: {
+          app: 'var(--app-bg)',
+          card: 'var(--card-bg)',
+          hover: 'var(--hover-bg)',
+          border: 'var(--border-default)',
+          'border-subtle': 'var(--border-subtle)',
         },
-        foreground: {
-          DEFAULT: 'var(--text-primary)',
+        text: {
+          primary: 'var(--text-primary)',
           secondary: 'var(--text-secondary)',
-          muted: 'var(--text-muted)',
+          disabled: 'var(--text-disabled)',
+          foreground: 'var(--text-primary)',
+          muted: 'var(--text-secondary)',
         },
-        border: {
-          DEFAULT: 'var(--border-color)',
-          strong: 'var(--border-strong)',
+        background: 'var(--app-bg)',
+        foreground: 'var(--text-primary)',
+        muted: {
+          DEFAULT: 'var(--hover-bg)',
+          foreground: 'var(--text-secondary)',
         },
+        card: {
+          DEFAULT: 'var(--card-bg)',
+          foreground: 'var(--text-primary)',
+        },
+        destructive: {
+          DEFAULT: 'var(--error)',
+          foreground: 'white',
+        },
+        border: 'var(--border-default)',
+        input: 'var(--hover-bg)',
         primary: {
-          DEFAULT: 'var(--accent-primary)',
-          hover: 'var(--accent-primary-hover)',
-          light: 'var(--accent-primary-light)',
+          DEFAULT: 'var(--primary-base)',
+          foreground: 'white',
+          light: 'var(--primary-soft)',
         },
-        success: {
-          DEFAULT: 'var(--accent-success)',
-          light: 'var(--accent-success-light)',
+        secondary: {
+          DEFAULT: 'var(--hover-bg)',
+          foreground: 'var(--text-primary)',
         },
-        warning: {
-          DEFAULT: 'var(--accent-warning)',
-          light: 'var(--accent-warning-light)',
+        accent: {
+          DEFAULT: 'var(--hover-bg)',
+          foreground: 'var(--text-primary)',
         },
-        error: {
-          DEFAULT: 'var(--accent-error)',
-          light: 'var(--accent-error-light)',
+        brand: {
+          DEFAULT: 'var(--primary-base)',
+          base: 'var(--primary-base)',
+          hover: 'var(--primary-hover)',
+          soft: 'var(--primary-soft)',
         },
-        info: {
-          DEFAULT: 'var(--accent-info)',
-          light: 'var(--accent-info-light)',
-        },
-      },
-      fontFamily: {
-        sans: ['var(--font-sans)'],
-        mono: ['var(--font-mono)'],
+        semantic: {
+          success: 'var(--success)',
+          'success-bg': 'var(--success-soft)',
+          error: 'var(--error)',
+          'error-bg': 'var(--error-soft)',
+          warning: 'var(--warning)',
+          'warning-bg': 'var(--warning-soft)',
+        }
       },
       borderRadius: {
-        sm: 'var(--radius-sm)',
-        md: 'var(--radius-md)',
-        lg: 'var(--radius-lg)',
-        xl: 'var(--radius-xl)',
-        full: 'var(--radius-full)',
+        'button': '0.75rem',  // 12px (同 rounded-xl)
+        'card': '1rem',       // 16px (同 rounded-2xl)
+        'modal': '1.5rem',    // 24px (同 rounded-3xl)
       },
       boxShadow: {
-        sm: 'var(--shadow-sm)',
-        md: 'var(--shadow-md)',
-        lg: 'var(--shadow-lg)',
-        glow: 'var(--shadow-glow)',
+        'soft-xl': '0 20px 25px -5px var(--shadow-color)',
+        'popover': '0 20px 25px -5px var(--shadow-color)',
+        'modal': '0 25px 50px -12px var(--shadow-color)',
       },
-      transitionDuration: {
-        fast: 'var(--transition-fast)',
-      },
-      animation: {
-        'fade-in': 'fadeIn 0.2s ease-out',
-        'slide-in': 'slideIn 0.2s ease-out',
-        'pulse-slow': 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite',
-      },
-      keyframes: {
-        fadeIn: {
-          '0%': { opacity: '0', transform: 'translateY(10px)' },
-          '100%': { opacity: '1', transform: 'translateY(0)' },
-        },
-        slideIn: {
-          '0%': { opacity: '0', transform: 'translateX(-10px)' },
-          '100%': { opacity: '1', transform: 'translateX(0)' },
-        },
-      },
+      transitionTimingFunction: {
+        'apple-ease': 'cubic-bezier(0.2, 0.8, 0.2, 1)',
+      }
     },
   },
   plugins: [
-    require('@tailwindcss/forms'),
+    function ({ addUtilities }) {
+      addUtilities({
+        '.focus-ring': {
+          '@apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-brand focus-visible:ring-offset-2 focus-visible:ring-offset-ui-app': {},
+        },
+        '.active-scale': {
+          '@apply active:scale-95 transition-all duration-200 ease-apple-ease': {},
+        },
+        '.hover-float': {
+          '@apply hover:-translate-y-0.5 transition-all duration-200 ease-apple-ease': {},
+        }
+      });
+    },
   ],
 }

@@ -18,6 +18,7 @@ import { deliverOutboundMessage } from './outbound/deliver.js';
 import { OutboundPersistStore } from './outbound/persist-store.js';
 import { syncChannelPluginsFromManager } from './plugins/registry.js';
 import { CHANNEL_RESTART_POLICY, computeBackoff } from './restart-policy.js';
+import { ChannelHealthMonitor, type ChannelHealthState } from './health-monitor.js';
 
 const log = createLogger('ChannelManager');
 
@@ -56,6 +57,7 @@ export class ChannelManager {
   private outboundHooks?: OutboundChannelHooks;
   private persistStore?: OutboundPersistStore;
   private _lastHeartbeatRestartAt = new Map<string, number>();
+  private readonly healthMonitor = new ChannelHealthMonitor();
 
   constructor(config: Config, bus: MessageBus) {
     this.bus = bus;
@@ -276,6 +278,16 @@ export class ChannelManager {
         void (async () => {
           try {
             const r = await hb.check({ cfg: this.config, accountId });
+            this.healthMonitor.set(plugin.id, accountId, {
+              healthy: r.healthy,
+              lastCheckAt: Date.now(),
+              detail:
+                typeof r.details === 'string'
+                  ? r.details
+                  : r.details != null
+                    ? JSON.stringify(r.details)
+                    : undefined,
+            });
             if (!r.healthy) {
               log.warn(
                 { channel: plugin.id, accountId, detail: r.details },
@@ -290,6 +302,11 @@ export class ChannelManager {
               void this._softRestartChannel(plugin.id);
             }
           } catch (err) {
+            this.healthMonitor.set(plugin.id, accountId, {
+              healthy: false,
+              lastCheckAt: Date.now(),
+              detail: err instanceof Error ? err.message : String(err),
+            });
             log.error({ channel: plugin.id, accountId, err }, 'Channel heartbeat check failed');
           }
         })();
@@ -502,6 +519,7 @@ export class ChannelManager {
     initializedPluginIds: string[];
     manuallyStopped: string[];
     restartAttempts: Record<string, number>;
+    channelHealth: Record<string, ChannelHealthState>;
   } {
     return {
       initialized: this.initialized,
@@ -510,7 +528,12 @@ export class ChannelManager {
       initializedPluginIds: [...this.initializedPluginIds],
       manuallyStopped: [...this.manuallyStopped],
       restartAttempts: Object.fromEntries(this.restartAttempts),
+      channelHealth: this.healthMonitor.toJSON(),
     };
+  }
+
+  getHealthMonitor(): ChannelHealthMonitor {
+    return this.healthMonitor;
   }
   
   /**

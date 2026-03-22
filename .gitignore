@@ -6,6 +6,13 @@ yarn.lock
 dist/
 build/
 
+# Accidental tsc emit next to source (real output is under dist/)
+src/**/*.js
+src/**/*.js.map
+src/**/*.d.ts.map
+src/**/*.d.ts
+!src/types/cli-table3.d.ts
+
 # Logs
 *.log
 npm-debug.log*

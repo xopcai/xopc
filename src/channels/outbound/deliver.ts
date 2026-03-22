@@ -59,6 +59,9 @@ export async function deliverOutboundMessage(
   if (outbound.sendPayload) {
     return outbound.sendPayload({ ...outboundCtx, payload: normalizedPayload });
   }
+  if (outbound.sendMedia) {
+    return outbound.sendMedia(outboundCtx);
+  }
   if (outbound.sendText) {
     return outbound.sendText(outboundCtx);
   }

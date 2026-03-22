@@ -5,6 +5,14 @@
   "type": "module",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./*": "./dist/*"
+  },
   "bin": {
     "xopcbot": "./dist/cli/index.js"
   },
@@ -17,10 +25,10 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && cd ui && npm run build",
+    "build": "tsc && pnpm --filter @xopcai/xopcbot-extension-telegram run build && cd ui && npm run build",
     "dev": "tsx src/cli/index.ts",
     "start": "node dist/cli/index.js",
-    "test": "vitest run src",
+    "test": "vitest run src extensions/telegram/src",
     "test:skills": "vitest run src/agent/skills/__tests__",
     "test:skills:regression": "./scripts/test-skills.sh",
     "test:skills:all": "npm run test:skills && npm run test:skills:regression",
@@ -58,6 +66,7 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
+    "@xopcai/xopcbot-extension-telegram": "workspace:*",
     "@agentclientprotocol/sdk": "^0.16.1",
     "@grammyjs/runner": "^2.0.3",
     "@grammyjs/types": "^3.25.0",

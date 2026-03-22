@@ -52,7 +52,7 @@ export {
 } from './session-key.js';
 
 // Command parsing helpers
-export { normalizeTelegramCommandName } from './command-parse.js';
+export { normalizeTelegramCommandName, parseSlashCommand } from './command-parse.js';
 
 // Registry
 export { CommandRegistry, commandRegistry } from './registry.js';

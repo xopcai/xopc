@@ -1,11 +1,12 @@
+/* ============================================
+   Settings Dialog
+   ============================================ */
 
-/* --------------------------------------------
-   SETTINGS DIALOG
-   -------------------------------------------- */
+/* ===== Overlay ===== */
 .settings-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgb(0 0 0 / 0.5);
   backdrop-filter: blur(4px);
   display: flex;
   align-items: center;
@@ -17,22 +18,23 @@
 .settings-dialog {
   width: 100%;
   max-width: 56rem;
-  height: 80vh;
-  background: var(--bg-primary);
-  border-radius: var(--radius-xl);
-  box-shadow: var(--shadow-xl);
+  height: 85vh;
+  background: var(--card-bg);
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--border-default);
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  animation: slideIn var(--transition-normal);
+  animation: fadeInUp var(--transition-normal);
 }
 
+/* ===== Header ===== */
 .settings-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 1rem 1.5rem;
-  border-bottom: 1px solid var(--border-color);
+  padding: 1.25rem 1.5rem;
+  border-bottom: 1px solid var(--border-default);
   flex-shrink: 0;
 }
 
@@ -51,8 +53,8 @@
   justify-content: center;
   width: 2rem;
   height: 2rem;
-  border-radius: var(--radius-md);
-  color: var(--text-muted);
+  border-radius: var(--radius-lg);
+  color: var(--text-disabled);
   background: transparent;
   border: none;
   cursor: pointer;
@@ -60,23 +62,29 @@
 }
 
 .close-btn:hover {
-  background: var(--bg-secondary);
+  background: var(--hover-bg);
   color: var(--text-primary);
 }
 
+.close-btn:active {
+  transform: scale(0.95);
+}
+
+/* ===== Content Layout ===== */
 .settings-content {
   display: flex;
   flex: 1;
   overflow: hidden;
 }
 
+/* ===== Sidebar ===== */
 .settings-sidebar {
   width: 14rem;
-  border-right: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-default);
   padding: 1rem 0.5rem;
   overflow-y: auto;
   flex-shrink: 0;
-  background: var(--bg-primary);
+  background: var(--card-bg);
 }
 
 .sidebar-item {
@@ -85,12 +93,12 @@
   gap: 0.75rem;
   width: 100%;
   padding: 0.625rem 1rem;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-secondary);
   background: transparent;
-  border: 1px solid transparent;
+  border: none;
   cursor: pointer;
   transition: all var(--transition-fast);
   text-align: left;
@@ -98,13 +106,17 @@
 }
 
 .sidebar-item:hover {
-  background: var(--bg-secondary);
+  background: var(--hover-bg);
   color: var(--text-primary);
 }
 
+.sidebar-item:active {
+  transform: scale(0.98);
+}
+
 .sidebar-item.active {
-  background: var(--accent-primary-light);
-  color: var(--accent-primary);
+  background: var(--primary-soft);
+  color: var(--primary-base);
 }
 
 .sidebar-item .chevron {
@@ -117,11 +129,12 @@
   opacity: 1;
 }
 
+/* ===== Main Content ===== */
 .settings-main {
   flex: 1;
   padding: 1.5rem 2rem;
   overflow-y: auto;
-  background: var(--bg-primary);
+  background: var(--app-bg);
 }
 
 .section-header {
@@ -137,7 +150,7 @@
 
 .section-description {
   font-size: 0.875rem;
-  color: var(--text-muted);
+  color: var(--text-disabled);
   margin: 0;
 }
 
@@ -166,35 +179,43 @@
 }
 
 .required-mark {
-  color: var(--accent-error);
+  color: var(--error);
 }
 
 .field-description {
   font-size: 0.8125rem;
-  color: var(--text-muted);
+  color: var(--text-disabled);
   margin: 0;
-  line-height: 1.4;
+  line-height: 1.5;
 }
 
+/* ===== Form Inputs ===== */
 .text-input,
 .textarea-input,
 .select-input {
   width: 100%;
   padding: 0.625rem 0.875rem;
   font-size: 0.875rem;
+  line-height: 1.5;
   color: var(--text-primary);
-  background: var(--bg-secondary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  background: var(--card-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
   outline: none;
   transition: all var(--transition-fast);
+}
+
+.text-input:hover,
+.textarea-input:hover,
+.select-input:hover {
+  border-color: var(--border-strong);
 }
 
 .text-input:focus,
 .textarea-input:focus,
 .select-input:focus {
-  border-color: var(--accent-primary);
-  box-shadow: 0 0 0 2px var(--accent-primary-light);
+  border-color: var(--primary-base);
+  box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
 .textarea-input {
@@ -224,13 +245,15 @@
   height: 2rem;
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: var(--text-disabled);
   cursor: pointer;
   transition: color var(--transition-fast);
+  border-radius: var(--radius-md);
 }
 
 .password-toggle:hover {
   color: var(--text-primary);
+  background: var(--hover-bg);
 }
 
 .field-error {
@@ -238,17 +261,17 @@
   align-items: center;
   gap: 0.375rem;
   font-size: 0.8125rem;
-  color: var(--accent-error);
+  color: var(--error);
   padding-top: 0.25rem;
 }
 
 .field-dirty {
   font-size: 0.75rem;
-  color: var(--accent-warning);
+  color: var(--warning);
   padding-top: 0.25rem;
 }
 
-/* Toggle Switch */
+/* ===== Toggle Switch ===== */
 .toggle-label {
   display: flex;
   align-items: center;
@@ -262,8 +285,8 @@
 
 .toggle-switch {
   width: 2.5rem;
-  height: 1.375rem;
-  background: var(--bg-tertiary);
+  height: 1.5rem;
+  background: var(--bg-hover);
   border-radius: var(--radius-full);
   position: relative;
   transition: background var(--transition-fast);
@@ -273,10 +296,10 @@
 .toggle-switch::after {
   content: '';
   position: absolute;
-  top: 0.125rem;
-  left: 0.125rem;
-  width: 1.125rem;
-  height: 1.125rem;
+  top: 0.25rem;
+  left: 0.25rem;
+  width: 1rem;
+  height: 1rem;
   background: white;
   border-radius: 50%;
   transition: transform var(--transition-fast);
@@ -284,11 +307,11 @@
 }
 
 .toggle-input:checked + .toggle-switch {
-  background: var(--accent-primary);
+  background: var(--primary-base);
 }
 
 .toggle-input:checked + .toggle-switch::after {
-  transform: translateX(1.125rem);
+  transform: translateX(1rem);
 }
 
 .toggle-text {
@@ -296,21 +319,18 @@
   color: var(--text-secondary);
 }
 
-/* Settings Footer */
+/* ===== Footer ===== */
 .settings-footer {
   display: flex;
   justify-content: flex-end;
   gap: 0.75rem;
   padding: 1rem 1.5rem;
-  border-top: 1px solid var(--border-color);
-  background: var(--bg-primary);
+  border-top: 1px solid var(--border-default);
+  background: var(--card-bg);
   flex-shrink: 0;
 }
 
-/* --------------------------------------------
-   SETTINGS PAGE
-   -------------------------------------------- */
-/* Page web component containers */
+/* ===== Settings Page ===== */
 settings-page,
 session-manager,
 cron-manager,
@@ -328,12 +348,12 @@ xopcbot-gateway-chat {
   min-height: 0;
   overflow: hidden;
   position: relative;
-  background: var(--bg-primary);
+  background: var(--app-bg);
 }
 
 .settings-page .settings-sidebar {
   width: 200px;
-  border-right: 1px solid var(--border-color);
+  border-right: 1px solid var(--border-default);
   padding: 0;
   flex-shrink: 0;
   overflow-y: auto;
@@ -341,7 +361,7 @@ xopcbot-gateway-chat {
 
 .settings-page .sidebar-header {
   padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-color);
+  border-bottom: 1px solid var(--border-default);
 }
 
 .settings-page .sidebar-header h3 {
@@ -361,7 +381,7 @@ xopcbot-gateway-chat {
   gap: 0.75rem;
   width: 100%;
   padding: 0.625rem 1rem;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   font-size: 0.875rem;
   font-weight: 500;
   color: var(--text-secondary);
@@ -374,13 +394,17 @@ xopcbot-gateway-chat {
 }
 
 .settings-page .nav-item:hover {
-  background: var(--bg-secondary);
+  background: var(--hover-bg);
   color: var(--text-primary);
 }
 
+.settings-page .nav-item:active {
+  transform: scale(0.98);
+}
+
 .settings-page .nav-item.active {
-  background: var(--accent-primary-light);
-  color: var(--accent-primary);
+  background: var(--primary-soft);
+  color: var(--primary-base);
   font-weight: 600;
 }
 
@@ -461,22 +485,27 @@ xopcbot-gateway-chat {
 .settings-page .select-input {
   width: 100%;
   padding: 0.625rem 0.875rem;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
   font-size: 0.875rem;
-  background: var(--bg-primary);
+  background: var(--card-bg);
   color: var(--text-primary);
   transition: all var(--transition-fast);
+}
+
+.settings-page .text-input:hover,
+.settings-page .select-input:hover {
+  border-color: var(--border-strong);
 }
 
 .settings-page .text-input:focus,
 .settings-page .select-input:focus {
   outline: none;
-  border-color: var(--color-primary);
-  box-shadow: 0 0 0 3px var(--color-primary-alpha);
+  border-color: var(--primary-base);
+  box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
-/* Select with search */
+/* ===== Select with Search ===== */
 .settings-page .select-with-search {
   display: flex;
   flex-direction: column;
@@ -486,6 +515,7 @@ xopcbot-gateway-chat {
 .settings-page .select-with-search .search-input {
   padding: 0.5rem 0.75rem;
   font-size: 0.875rem;
+  border-radius: var(--radius-lg);
 }
 
 .settings-page .select-with-search .select-input {
@@ -495,16 +525,17 @@ xopcbot-gateway-chat {
 
 .settings-page .select-with-search .select-input option.group-header {
   font-weight: 600;
-  color: var(--color-primary);
-  background: var(--bg-secondary);
+  color: var(--primary-base);
+  background: var(--hover-bg);
 }
 
 .settings-page .select-with-search .select-input option:disabled {
   font-weight: 600;
-  color: var(--text-muted);
-  background: var(--bg-secondary);
+  color: var(--text-disabled);
+  background: var(--hover-bg);
 }
 
+/* ===== Toggle (Settings Page) ===== */
 .settings-page .toggle-label {
   display: flex;
   align-items: center;
@@ -518,31 +549,32 @@ xopcbot-gateway-chat {
 
 .settings-page .toggle-switch {
   position: relative;
-  width: 44px;
-  height: 24px;
-  background: var(--bg-secondary);
-  border-radius: 12px;
+  width: 2.75rem;
+  height: 1.5rem;
+  background: var(--bg-hover);
+  border-radius: var(--radius-full);
   transition: all var(--transition-fast);
 }
 
 .settings-page .toggle-switch::after {
   content: '';
   position: absolute;
-  top: 2px;
-  left: 2px;
-  width: 20px;
-  height: 20px;
+  top: 0.25rem;
+  left: 0.25rem;
+  width: 1rem;
+  height: 1rem;
   background: white;
   border-radius: 50%;
   transition: all var(--transition-fast);
+  box-shadow: var(--shadow-sm);
 }
 
 .settings-page .toggle-input:checked + .toggle-switch {
-  background: var(--accent-primary);
+  background: var(--primary-base);
 }
 
 .settings-page .toggle-input:checked + .toggle-switch::after {
-  transform: translateX(20px);
+  transform: translateX(1.25rem);
 }
 
 .settings-page .toggle-text {
@@ -550,6 +582,7 @@ xopcbot-gateway-chat {
   color: var(--text-secondary);
 }
 
+/* ===== Loading State ===== */
 .settings-page .loading-state {
   display: flex;
   flex-direction: column;
@@ -562,8 +595,8 @@ xopcbot-gateway-chat {
 .settings-page .loading-state .spinner {
   width: 32px;
   height: 32px;
-  border: 3px solid var(--border-color);
-  border-top-color: var(--accent-primary);
+  border: 3px solid var(--border-default);
+  border-top-color: var(--primary-base);
   border-radius: 50%;
   animation: spin 0.8s linear infinite;
 }
@@ -573,6 +606,7 @@ xopcbot-gateway-chat {
   font-size: 0.875rem;
 }
 
+/* ===== Floating Save ===== */
 .settings-page .floating-save {
   position: absolute;
   bottom: 2rem;
@@ -581,10 +615,9 @@ xopcbot-gateway-chat {
   align-items: center;
   gap: 1rem;
   padding: 0.75rem 1rem;
-  background: var(--bg-primary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-lg);
+  background: var(--card-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
 }
 
 .settings-page .dirty-count {
@@ -592,31 +625,22 @@ xopcbot-gateway-chat {
   color: var(--text-secondary);
 }
 
-.settings-page .spinner-sm {
-  width: 14px;
-  height: 14px;
-  border: 2px solid rgba(255,255,255,0.3);
-  border-top-color: white;
-  border-radius: 50%;
-  animation: spin 0.8s linear infinite;
-  display: inline-block;
-}
-
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
+/* ===== Buttons ===== */
 .btn {
   display: inline-flex;
   align-items: center;
   gap: 0.5rem;
   padding: 0.625rem 1rem;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-xl);
   font-size: 0.875rem;
   font-weight: 500;
   cursor: pointer;
   transition: all var(--transition-fast);
   border: 1px solid transparent;
+}
+
+.btn:active {
+  transform: scale(0.98);
 }
 
 .btn-ghost {
@@ -625,19 +649,17 @@ xopcbot-gateway-chat {
 }
 
 .btn-ghost:hover {
-  background: var(--bg-secondary);
+  background: var(--hover-bg);
   color: var(--text-primary);
 }
 
 .btn-primary {
-  background: var(--accent-primary);
+  background: var(--primary-base);
   color: white;
-  box-shadow: var(--shadow-sm);
 }
 
 .btn-primary:hover {
-  background: var(--accent-primary-hover);
-  box-shadow: var(--shadow-md);
+  background: var(--primary-hover);
 }
 
 .btn-primary:disabled {
@@ -645,9 +667,7 @@ xopcbot-gateway-chat {
   cursor: not-allowed;
 }
 
-/* --------------------------------------------
-   IMAGE GALLERY - THUMBNAIL SIZE
-   -------------------------------------------- */
+/* ===== Image Gallery ===== */
 .image-gallery {
   display: grid;
   gap: 0.25rem;
@@ -661,9 +681,9 @@ xopcbot-gateway-chat {
   width: 80px;
   height: 80px;
   object-fit: cover;
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: transform 0.15s ease;
+  transition: transform var(--transition-fast);
 }
 
 .image-gallery img:hover {
@@ -680,27 +700,23 @@ xopcbot-gateway-chat {
   grid-template-columns: repeat(auto-fill, minmax(60px, 1fr));
 }
 
-/* --------------------------------------------
-   ATTACHMENT PREVIEW (in editor)
-   -------------------------------------------- */
+/* ===== Attachment Preview ===== */
 .attachments-row {
   display: flex;
   flex-wrap: wrap;
   gap: 0.5rem;
   padding: 0 0.5rem 0.5rem;
   margin: 0 0.5rem;
-  border-bottom: none;
 }
 
 .attachment-chip {
   display: flex;
   align-items: center;
   gap: 0.375rem;
-  padding: 0.2rem 0.4rem;
-  background: var(--bg-tertiary);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  font-size: 0.75rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--hover-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
   font-size: 0.75rem;
 }
 
@@ -711,7 +727,7 @@ xopcbot-gateway-chat {
   align-items: center;
   justify-content: center;
   overflow: hidden;
-  border-radius: var(--radius-xs);
+  border-radius: var(--radius-sm);
 }
 
 .attachment-preview img {
@@ -737,20 +753,18 @@ xopcbot-gateway-chat {
   padding: 0;
   background: transparent;
   border: none;
-  color: var(--text-muted);
+  color: var(--text-disabled);
   cursor: pointer;
   border-radius: var(--radius-full);
   transition: all var(--transition-fast);
 }
 
 .attachment-remove:hover {
-  background: var(--bg-tertiary);
-  color: var(--accent-error);
+  background: var(--bg-hover);
+  color: var(--error);
 }
 
-/* --------------------------------------------
-   RESPONSIVE SETTINGS
-   -------------------------------------------- */
+/* ===== Responsive ===== */
 @media (max-width: 768px) {
   .settings-dialog {
     height: 100vh;
@@ -765,7 +779,7 @@ xopcbot-gateway-chat {
   .settings-sidebar {
     width: 100%;
     border-right: none;
-    border-bottom: 1px solid var(--border-color);
+    border-bottom: 1px solid var(--border-default);
     padding: 0.5rem;
     display: flex;
     overflow-x: auto;
@@ -794,4 +808,3 @@ xopcbot-gateway-chat {
     flex: 1;
   }
 }
-

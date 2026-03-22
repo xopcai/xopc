@@ -709,6 +709,14 @@ export class GatewayService {
     return this.sessionManager;
   }
 
+  async getSessionAgentConfig(sessionKey: string) {
+    return this.agentService.getSessionAgentConfig(sessionKey);
+  }
+
+  async patchSessionAgentConfig(sessionKey: string, body: { thinkingLevel?: string }) {
+    return this.agentService.patchSessionAgentConfig(sessionKey, body);
+  }
+
   /**
    * Process a message directly through the agent (for CLI mode)
    */

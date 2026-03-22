@@ -38,6 +38,8 @@ export interface CommandContextDeps {
   bus: MessageBus;
   sessionStore: SessionStore;
   sessionConfigStore?: SessionConfigStore;
+  /** After persisting session thinking, sync pi-agent in-memory state */
+  applySessionThinkingLevel?: (sessionKey: string, level: ThinkLevel) => void;
   // Callbacks for platform-specific operations
   replyHandler: (text: string, options?: ReplyOptions) => Promise<void>;
   componentHandler?: (component: UIComponent) => Promise<void>;
@@ -286,6 +288,7 @@ export class CommandContextImpl implements CommandContext {
     if (configStore) {
       await configStore.update(this.sessionKey, { thinkingLevel: level });
     }
+    this.deps.applySessionThinkingLevel?.(this.sessionKey, level);
   }
 
   /**

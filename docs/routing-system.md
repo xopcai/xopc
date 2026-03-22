@@ -101,5 +101,5 @@ console.log(route.agentId);    // main
 ## Related Files
 
 - `src/routing/` - Routing system core
-- `src/channels/telegram/routing-integration.ts` - Telegram integration
+- `extensions/telegram/src/routing-integration.ts` - Telegram integration (workspace package `@xopcai/xopcbot-extension-telegram`)
 - `src/acp/routing-integration.ts` - ACP integration

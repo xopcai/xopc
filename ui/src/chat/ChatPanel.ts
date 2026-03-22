@@ -223,6 +223,12 @@ export class ChatPanel extends LitElement {
         this._messages = messages;
         this._lastLoadedKey = key;
         this._notifySessionRoute(key);
+        try {
+          const cfg = await this._sessionMgr.loadSessionAgentConfig(key);
+          this._thinkingLevel = cfg.thinkingLevel as ThinkingLevel;
+        } catch {
+          /* keep pill; gateway may be older */
+        }
       }
       this._atBottom = true;
       this.requestUpdate();

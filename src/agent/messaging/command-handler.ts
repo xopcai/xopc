@@ -7,7 +7,8 @@
 import type { MessageBus } from '../../bus/index.js';
 import type { Config } from '../../config/schema.js';
 import { isProviderConfiguredSync } from '../../providers/index.js';
-import type { SessionStore } from '../../session/index.js';
+import type { SessionConfigStore, SessionStore } from '../../session/index.js';
+import type { ThinkLevel } from '../../types/thinking.js';
 import { createLogger } from '../../utils/logger.js';
 import { commandRegistry, createCommandContext } from '../../commands/index.js';
 import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
@@ -26,6 +27,9 @@ export interface CommandHandlerConfig {
   config: Config;
   bus: MessageBus;
   sessionStore: SessionStore;
+  sessionConfigStore?: SessionConfigStore;
+  /** After /think persists, sync pi-agent */
+  applySessionThinkingLevel?: (sessionKey: string, level: ThinkLevel) => void;
   getCurrentModel: () => string;
   switchModelForSession: (sessionKey: string, modelId: string) => Promise<boolean>;
   /** Drop in-memory agent after session file is cleared (e.g. /new) */
@@ -36,6 +40,8 @@ export class CommandHandler {
   private config: Config;
   private bus: MessageBus;
   private sessionStore: SessionStore;
+  private sessionConfigStore?: SessionConfigStore;
+  private applySessionThinkingLevel?: (sessionKey: string, level: ThinkLevel) => void;
   private getCurrentModel: () => string;
   private switchModelForSession: (sessionKey: string, modelId: string) => Promise<boolean>;
   private invalidateAgentSession?: (sessionKey: string) => void;
@@ -44,6 +50,8 @@ export class CommandHandler {
     this.config = handlerConfig.config;
     this.bus = handlerConfig.bus;
     this.sessionStore = handlerConfig.sessionStore;
+    this.sessionConfigStore = handlerConfig.sessionConfigStore;
+    this.applySessionThinkingLevel = handlerConfig.applySessionThinkingLevel;
     this.getCurrentModel = handlerConfig.getCurrentModel;
     this.switchModelForSession = handlerConfig.switchModelForSession;
     this.invalidateAgentSession = handlerConfig.invalidateAgentSession;
@@ -75,6 +83,8 @@ export class CommandHandler {
       config: this.config,
       bus: this.bus,
       sessionStore: this.sessionStore,
+      sessionConfigStore: this.sessionConfigStore,
+      applySessionThinkingLevel: this.applySessionThinkingLevel,
 
       replyHandler: async (text: string, _options?) => {
         await this.bus.publishOutbound({
