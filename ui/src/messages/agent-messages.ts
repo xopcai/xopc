@@ -36,6 +36,8 @@ interface ToolCallBlock extends WireContentBlock {
   type?: string;
   name?: string;
   args?: Record<string, unknown>;
+  /** Session/pi format often uses `arguments` (same role as `args`). */
+  arguments?: unknown;
   input?: unknown;
   function?: { name?: string; arguments?: string | unknown };
   result?: string;
@@ -55,6 +57,22 @@ function isToolCallBlock(item: unknown): item is ToolCallBlock {
 function extractToolBlockId(block: ToolCallBlock): string {
   if (typeof block.id === 'string' && block.id.length > 0) return block.id;
   return crypto.randomUUID();
+}
+
+function parseMaybeJsonString(raw: unknown): unknown {
+  if (typeof raw !== 'string') return raw;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return raw;
+  }
+}
+
+/** Prefer pi `args`, then session `arguments`, then `input` / OpenAI `function.arguments`. */
+function extractToolCallBlockInput(block: ToolCallBlock): unknown {
+  const raw = block.args ?? block.arguments ?? block.input ?? block.function?.arguments;
+  const parsed = parseMaybeJsonString(raw);
+  return parsed !== undefined && parsed !== null ? parsed : {};
 }
 
 // =============================================================================
@@ -336,13 +354,12 @@ function normalizeContentBlocks(raw: unknown): MessageContent[] {
     } else if (t === 'toolCall') {
       if (!isToolCallBlock(item)) continue;
       const id = extractToolBlockId(item);
-      const name = String(item.name ?? 'tool');
-      const input = item.args ?? item.input ?? {};
+      const name = String(item.name ?? item.function?.name ?? 'tool');
       out.push({
         type: 'tool_use',
         id,
         name,
-        input,
+        input: extractToolCallBlockInput(item),
         status: 'done',
         result: typeof item.result === 'string' ? item.result : undefined,
       });
