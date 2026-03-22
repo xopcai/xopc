@@ -245,9 +245,17 @@
 
 .textarea-input {
   resize: vertical;
-  min-height: 6rem;
+  min-height: calc(0.875rem * 1.5 + 1.25rem);
   max-height: 12rem;
   font-family: inherit;
+}
+
+/* JSON / multi-line editors need a floor height */
+.textarea-input.textarea-input--code {
+  min-height: 8rem;
+  max-height: 20rem;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.8125rem;
 }
 
 .input-wrapper {

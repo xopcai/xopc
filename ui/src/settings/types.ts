@@ -9,6 +9,8 @@ export interface TelegramAccount {
   name: string;
   enabled: boolean;
   botToken: string;
+  /** Path to token file (alternative to inline botToken) */
+  tokenFile?: string;
   allowFrom: (string | number)[];
   groupAllowFrom?: (string | number)[];
   dmPolicy: DmPolicy;
@@ -19,6 +21,8 @@ export interface TelegramAccount {
   historyLimit: number;
   textChunkLimit: number;
   streamMode: StreamMode;
+  /** Per-account group overrides; see TelegramGroupConfigSchema */
+  groups?: Record<string, unknown>;
 }
 
 export interface TelegramConfig {
@@ -85,7 +89,7 @@ export const DEFAULT_SETTINGS: SettingsData = {
   providers: {},
   telegram: {
     enabled: false,
-    token: '',
+    botToken: '',
     apiRoot: '',
     debug: false,
     allowFrom: [],

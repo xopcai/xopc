@@ -1,7 +1,8 @@
 import { html, LitElement } from 'lit';
+import type { PropertyValues } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons.js';
-import type { SettingsData, DmPolicy, GroupPolicy, ReplyToMode, StreamMode } from './types.js';
+import type { SettingsData, DmPolicy, GroupPolicy, ReplyToMode, StreamMode, TelegramAccount } from './types.js';
 
 @customElement('channels-section')
 export class ChannelsSection extends LitElement {
@@ -12,9 +13,47 @@ export class ChannelsSection extends LitElement {
   private _showToken = false;
   private _copied = false;
 
+  /** Draft for `channels.telegram.accounts` JSON (synced when server-side accounts change) */
+  private _accountsDraft = '';
+  private _accountsParseError = '';
+
   createRenderRoot() { return this; }
 
+  override willUpdate(changedProperties: PropertyValues) {
+    super.willUpdate(changedProperties);
+    if (changedProperties.has('settings')) {
+      const prev = changedProperties.get('settings') as SettingsData | undefined;
+      const prevAcc = JSON.stringify(prev?.telegram?.accounts ?? {});
+      const nextAcc = JSON.stringify(this.settings.telegram.accounts ?? {});
+      if (prev === undefined || prevAcc !== nextAcc) {
+        this._accountsDraft = JSON.stringify(this.settings.telegram.accounts ?? {}, null, 2);
+        this._accountsParseError = '';
+      }
+    }
+  }
+
   private _field(path: string, value: unknown) { this.onChange(path, value); }
+
+  private _onAccountsJsonBlur(e: Event) {
+    const raw = (e.target as HTMLTextAreaElement).value.trim();
+    if (!raw) {
+      this._field('telegram.accounts', {});
+      this._accountsParseError = '';
+      this.requestUpdate();
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error('Accounts must be a JSON object');
+      }
+      this._field('telegram.accounts', parsed as Record<string, TelegramAccount>);
+      this._accountsParseError = '';
+    } catch (err) {
+      this._accountsParseError = err instanceof Error ? err.message : 'Invalid JSON';
+    }
+    this.requestUpdate();
+  }
 
   private _toggleToken() { this._showToken = !this._showToken; this.requestUpdate(); }
 
@@ -67,7 +106,7 @@ export class ChannelsSection extends LitElement {
 
             <div class="field-group">
               <div class="field-header"><label class="field-label">Allow From (User IDs)</label></div>
-              <textarea class="textarea-input" rows="2" placeholder="123456789, 987654321"
+              <textarea class="textarea-input" rows="1" placeholder="123456789, 987654321"
                 .value=${tg.allowFrom.join(', ')}
                 @change=${(e: Event) => this._field('telegram.allowFrom',
                   (e.target as HTMLTextAreaElement).value.split(/[,\n]/).map(s => s.trim()).filter(Boolean)
@@ -128,7 +167,7 @@ export class ChannelsSection extends LitElement {
 
         <div class="field-group">
           <div class="field-header"><label class="field-label">Allow From Groups</label></div>
-          <textarea class="textarea-input" rows="2" placeholder="-1001234567890"
+          <textarea class="textarea-input" rows="1" placeholder="-1001234567890"
             .value=${tg.groupAllowFrom.join(', ')}
             @change=${(e: Event) => this._field('telegram.groupAllowFrom',
               (e.target as HTMLTextAreaElement).value.split(/[,\n]/).map(s => s.trim()).filter(Boolean)
@@ -155,6 +194,18 @@ export class ChannelsSection extends LitElement {
             <span class="toggle-switch"></span>
             <span class="toggle-text">Debug Mode</span>
           </label>
+        </div>
+
+        <div class="field-group">
+          <div class="field-header"><label class="field-label">Multi-account (JSON)</label></div>
+          <textarea class="textarea-input textarea-input--code" rows="6"
+            .value=${this._accountsDraft}
+            @input=${(e: Event) => { this._accountsDraft = (e.target as HTMLTextAreaElement).value; }}
+            @blur=${this._onAccountsJsonBlur}
+            placeholder='{ "personal": { "accountId": "personal", "botToken": "...", ... } }'></textarea>
+          ${this._accountsParseError
+            ? html`<p class="field-desc" style="color:var(--error);">${this._accountsParseError}</p>`
+            : html`<p class="field-desc">Optional. When set, each account can use <code>botToken</code> or <code>tokenFile</code>, plus per-account policies and <code>groups</code>. Empty <code>{}</code> uses the single bot token above only.</p>`}
         </div>
       </div>
     `;
