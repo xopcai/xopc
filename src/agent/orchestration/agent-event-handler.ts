@@ -111,9 +111,6 @@ export class AgentEventHandler {
     this.taskStartTime = Date.now();
     this.progressManager.startTask();
 
-    // Start a new tool chain for this turn
-    this.toolChainTracker.startChain(context.sessionKey);
-
     const result = this.requestLimiter.recordRequest();
 
     this.lifecycleManager.emit('llm_request', context.sessionKey, {
@@ -136,9 +133,11 @@ export class AgentEventHandler {
     }
   }
 
-  private handleTurnStart(_event: AgentEvent, _context: SessionContext): void {
+  private handleTurnStart(_event: AgentEvent, context: SessionContext): void {
     log.debug('Turn started');
     this.progressManager.onTurnStart();
+    // One chain per LLM turn (pi-agent emits turn_start each round; turn_end clears the chain)
+    this.toolChainTracker.startChain(context.sessionKey);
   }
 
   private handleMessageStart(event: AgentEvent, _context: SessionContext): void {
