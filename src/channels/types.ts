@@ -216,6 +216,7 @@ export interface ChannelStatus {
   mode: 'polling' | 'webhook' | 'stopped';
 }
 
+/** Legacy monolithic channel API (init/start/send/stream). Prefer `ChannelPlugin` for new work. */
 export interface ChannelExtension {
   /** Channel identifier */
   id: ChannelType;

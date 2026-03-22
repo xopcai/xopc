@@ -9,9 +9,12 @@ import { Bot, type Context } from 'grammy';
 import { run } from '@grammyjs/runner';
 import type { Message } from '@grammyjs/types';
 
+import type { Config } from '../config/index.js';
 import type {
   ChannelPlugin,
+  ChannelPluginDefaults,
   ChannelPluginInitOptions,
+  ChannelPluginReloadMeta,
   ChannelPluginStartOptions,
   ChannelOutboundContext,
   OutboundDeliveryResult,
@@ -19,9 +22,7 @@ import type {
   ChannelStatusAdapter,
   ChannelSecurityAdapter,
   ChannelConfigAdapter,
-  ChannelCapabilities,
   ChannelMetadata,
-  ChannelAccountSnapshot,
   ChannelSecurityContext,
 } from './plugin-types.js';
 import type { OutboundMessage } from '../types/index.js';
@@ -29,32 +30,43 @@ import { generateSessionKey } from '../commands/session-key.js';
 
 import { createLogger } from '../utils/logger.js';
 import { createInboundDebouncer } from '../infra/debounce.js';
-import { removeBotMention, evaluateAccess, resolveDmPolicy, resolveGroupPolicy } from './security.js';
+import { getChatChannelMeta } from './registry.js';
+import { getMimeType } from '../utils/media.js';
+import { transcribe as sttTranscribe, isSTTAvailable } from '../stt/index.js';
+import type { STTConfig } from '../stt/types.js';
 
 // Reuse telegram/ modules
 import { TelegramAccountManager } from './telegram/account-manager.js';
 import { createOutboundSender } from './telegram/outbound-sender.js';
 import { createTelegramCommandHandler } from './telegram/command-handler.js';
+import { createInboundProcessor } from './telegram/inbound-processor.js';
+import {
+  normalizeAllowFromWithStore,
+  evaluateGroupBaseAccess,
+  resolveRequireMention,
+  hasBotMention,
+  removeBotMention as removeBotMentionAccess,
+} from './telegram/access-control.js';
+import { TELEGRAM_CHANNEL_DEFAULTS } from './telegram/plugin-defaults.js';
+import {
+  createTelegramPluginAdapters,
+  type TelegramResolvedAccount,
+} from './telegram/telegram-plugin-adapters.js';
 
 const log = createLogger('TelegramPlugin');
 
-// ============================================
-// Types (compatible with both plugin-types and telegram/types)
-// ============================================
+const TELEGRAM_REGISTRY_META = getChatChannelMeta('telegram');
 
-interface TelegramAccount {
-  accountId: string;
-  name?: string;
-  enabled: boolean;
-  botToken: string;
-  apiRoot?: string;
-  dmPolicy?: 'pairing' | 'allowlist' | 'open' | 'disabled';
-  groupPolicy?: 'open' | 'disabled' | 'allowlist';
-  allowFrom?: Array<string | number>;
-  groupAllowFrom?: Array<string | number>;
-  requireMention?: boolean;
-  streamMode?: 'off' | 'partial' | 'block';
-}
+const telegramInboundAccessControl = {
+  normalizeAllowFromWithStore: (opts: { allowFrom?: Array<string | number>; storeAllowFrom?: string[] }) =>
+    normalizeAllowFromWithStore(opts),
+  evaluateGroupBaseAccess: (opts: Parameters<typeof evaluateGroupBaseAccess>[0]) => evaluateGroupBaseAccess(opts),
+  resolveRequireMention: (opts: Parameters<typeof resolveRequireMention>[0]) => resolveRequireMention(opts),
+  hasBotMention: (opts: Parameters<typeof hasBotMention>[0]) => hasBotMention(opts),
+  removeBotMention: (text: string, botUsername: string) => removeBotMentionAccess(text, botUsername),
+};
+
+export type { TelegramResolvedAccount as TelegramAccount } from './telegram/telegram-plugin-adapters.js';
 
 interface TelegramMessageEvent {
   ctx: Context;
@@ -66,22 +78,23 @@ interface TelegramMessageEvent {
 // Plugin Implementation
 // ============================================
 
-export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
+export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAccount> {
   readonly id = 'telegram' as const;
-  
+
+  readonly reload: ChannelPluginReloadMeta = {
+    configPrefixes: ['channels.telegram'],
+  };
+
   readonly meta: ChannelMetadata = {
-    id: 'telegram',
-    name: 'Telegram',
-    description: 'Telegram messaging channel',
-    capabilities: {
-      chatTypes: ['direct', 'group', 'channel', 'thread'],
-      reactions: true,
-      threads: true,
-      media: true,
-      polls: false,
-      nativeCommands: true,
-      blockStreaming: true,
-    } as ChannelCapabilities,
+    id: TELEGRAM_REGISTRY_META.id,
+    name: TELEGRAM_REGISTRY_META.label,
+    description: TELEGRAM_REGISTRY_META.description,
+    capabilities: TELEGRAM_REGISTRY_META.capabilities,
+  };
+
+  readonly defaults: ChannelPluginDefaults = {
+    queue: { debounceMs: TELEGRAM_CHANNEL_DEFAULTS.queue.debounceMs },
+    outbound: { textChunkLimit: TELEGRAM_CHANNEL_DEFAULTS.outbound.textChunkLimit },
   };
   
   // Internal state
@@ -93,11 +106,12 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
   private accountManager!: TelegramAccountManager;
   private outboundSender!: ReturnType<typeof createOutboundSender>;
   private commandHandler!: ReturnType<typeof createTelegramCommandHandler>;
-  
+  private inboundProcessor!: ReturnType<typeof createInboundProcessor>;
+
   // Interface implementations
-  configAdapter!: ChannelConfigAdapter<TelegramAccount>;
-  securityAdapter!: ChannelSecurityAdapter<TelegramAccount>;
-  statusAdapter!: ChannelStatusAdapter<TelegramAccount>;
+  configAdapter!: ChannelConfigAdapter<TelegramResolvedAccount>;
+  securityAdapter!: ChannelSecurityAdapter<TelegramResolvedAccount>;
+  statusAdapter!: ChannelStatusAdapter<TelegramResolvedAccount>;
   
   // Outbound adapter
   outbound = {
@@ -118,9 +132,9 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
       return chunks;
     },
     chunkerMode: 'text' as const,
-    textChunkLimit: 4000,
+    textChunkLimit: TELEGRAM_CHANNEL_DEFAULTS.outbound.textChunkLimit,
     sendText: async (ctx) => this.doSendText(ctx),
-    sendMedia: async (ctx) => ({ messageId: '', chatId: ctx.to, success: false, error: 'Not implemented' }),
+    sendMedia: async (ctx) => this.doSendMedia(ctx),
     sendPayload: async (ctx) => this.doSendPayload(ctx),
   };
   
@@ -135,23 +149,12 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
     // Initialize reused components
     this.accountManager = new TelegramAccountManager();
     this.loadAccounts();
-    
-    this.outboundSender = createOutboundSender({
-      accountManager: this.accountManager,
-      config: this.cfg,
-    });
-    
-    this.commandHandler = createTelegramCommandHandler({
-      bus: this.bus,
-      config: this.cfg,
-      getSessionModel: () => undefined,
-      setSessionModel: () => {},
-    });
-    
-    this.initAdapters();
-    
+    this.bindOutboundComponents();
+
+    const debounceMs =
+      this.defaults.queue?.debounceMs ?? TELEGRAM_CHANNEL_DEFAULTS.queue.debounceMs;
     this.debouncer = createInboundDebouncer<TelegramMessageEvent>({
-      debounceMs: 300,
+      debounceMs,
       buildKey: (item) => {
         const chatId = item.ctx.chat?.id?.toString();
         const userId = item.ctx.from?.id?.toString();
@@ -173,6 +176,71 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
     });
     
     log.info('Telegram plugin initialized');
+  }
+
+  private bindOutboundComponents(): void {
+    this.outboundSender = createOutboundSender({
+      accountManager: this.accountManager,
+      config: this.cfg,
+    });
+    this.commandHandler = createTelegramCommandHandler({
+      bus: this.bus,
+      config: this.cfg,
+      getSessionModel: () => undefined,
+      setSessionModel: () => {},
+    });
+    const adapters = createTelegramPluginAdapters({
+      accountManager: this.accountManager,
+    });
+    this.configAdapter = adapters.configAdapter;
+    this.securityAdapter = adapters.securityAdapter;
+    this.statusAdapter = adapters.statusAdapter;
+
+    this.inboundProcessor = createInboundProcessor({
+      bus: this.bus,
+      config: this.cfg,
+      accountManager: this.accountManager,
+      accessControl: telegramInboundAccessControl,
+      sessionKeyService: {
+        generateSessionKey: (opts) =>
+          generateSessionKey({
+            source: 'telegram',
+            chatId: opts.chatId,
+            senderId: opts.senderId,
+            isGroup: opts.isGroup,
+            threadId: opts.threadId,
+            accountId: opts.accountId,
+          }),
+      },
+      sttService: {
+        transcribe: async (buffer, config, options) => {
+          const result = await sttTranscribe(buffer, config as STTConfig, options);
+          return { text: result.text };
+        },
+        isSTTAvailable: (config) => isSTTAvailable(config as STTConfig | undefined),
+      },
+      mediaUtils: { getMimeType },
+      externalAccessGate: true,
+    });
+  }
+
+  async onConfigUpdated(cfg: Config): Promise<void> {
+    await this.reapplyFromConfig(cfg);
+  }
+
+  private async reapplyFromConfig(cfg: Config): Promise<void> {
+    this.cfg = cfg;
+    await this.stop();
+    this.accountManager.reset();
+    const telegramCfg = cfg.channels?.telegram as Record<string, unknown> | undefined;
+    const enabled = Boolean(telegramCfg && telegramCfg.enabled !== false);
+    if (!enabled) {
+      this.bindOutboundComponents();
+      return;
+    }
+    this.loadAccounts();
+    this.bindOutboundComponents();
+    await this.start();
   }
   
   private loadAccounts(): void {
@@ -202,125 +270,12 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
     }
   }
   
-  private initAdapters(): void {
-    // Config Adapter
-    this.configAdapter = {
-      listAccountIds: () => this.accountManager.getAllAccounts().map(a => a.accountId),
-      resolveAccount: (_cfg, accountId = 'default') => {
-        const account = this.accountManager.getAccount(accountId);
-        if (!account) return { accountId, enabled: false, botToken: '' };
-        return {
-          accountId: account.accountId,
-          name: account.name,
-          enabled: account.enabled !== false,
-          botToken: account.botToken || '',
-          apiRoot: account.apiRoot,
-          dmPolicy: account.dmPolicy as any,
-          groupPolicy: account.groupPolicy as any,
-          allowFrom: account.allowFrom,
-          groupAllowFrom: account.groupAllowFrom,
-          requireMention: (account as any).requireMention,
-          streamMode: account.streamMode,
-        } as TelegramAccount;
-      },
-      isEnabled: (account) => account.enabled !== false,
-      disabledReason: (account) => {
-        if (account.enabled === false) return 'Account disabled';
-        if (!account.botToken) return 'No token configured';
-        return '';
-      },
-      isConfigured: async (account) => !!account.botToken,
-      describeAccount: (account) => {
-        const status = this.accountManager.getStatus(account.accountId);
-        return {
-          accountId: account.accountId,
-          channelId: 'telegram',
-          enabled: account.enabled !== false,
-          configured: !!account.botToken,
-          status: status?.running ? 'running' : 'stopped',
-        } as ChannelAccountSnapshot;
-      },
-    };
-    
-    // Security Adapter
-    this.securityAdapter = {
-      resolveDmPolicy: ({ account }) => resolveDmPolicy(account.dmPolicy as any, 'open'),
-      resolveGroupPolicy: ({ account }) => resolveGroupPolicy(account.groupPolicy as any, 'open'),
-      resolveAllowFrom: ({ account }) => account.allowFrom,
-      checkAccess: (ctx, account) => {
-        const isGroup = ctx.isGroup;
-        const allowFrom = isGroup 
-          ? (account.groupAllowFrom ?? account.allowFrom ?? [])
-          : (account.allowFrom ?? []);
-        const result = evaluateAccess({
-          context: {
-            channel: 'telegram',
-            accountId: account.accountId,
-            chatId: ctx.chatId,
-            senderId: ctx.senderId,
-            senderName: ctx.senderName,
-            isGroup,
-            isDm: !isGroup,
-          },
-          dmPolicy: account.dmPolicy as any,
-          groupPolicy: account.groupPolicy as any,
-          allowFrom,
-          groupAllowFrom: account.groupAllowFrom,
-        });
-        return { allowed: result.allowed, reason: result.reason };
-      },
-    };
-    
-    // Status Adapter
-    this.statusAdapter = {
-      defaultRuntime: {
-        accountId: 'default',
-        channelId: 'telegram',
-        enabled: true,
-        configured: false,
-      },
-      buildChannelSummary: async ({ account }) => {
-        const status = this.accountManager.getStatus(account.accountId);
-        return {
-          accountId: account.accountId,
-          enabled: account.enabled !== false,
-          configured: !!account.botToken,
-          running: status?.running ?? false,
-          username: this.accountManager.getBotUsername(account.accountId),
-        };
-      },
-      probeAccount: async ({ account, timeoutMs }) => {
-        const bot = this.accountManager.getBot(account.accountId);
-        if (!bot) throw new Error('Bot not initialized');
-        try {
-          const controller = new AbortController();
-          const timeout = setTimeout(() => controller.abort(), timeoutMs);
-          const me = await bot.api.getMe();
-          clearTimeout(timeout);
-          return { ok: true, username: me.username, id: me.id };
-        } catch (err) {
-          return { ok: false, error: String(err) };
-        }
-      },
-      buildAccountSnapshot: async ({ account }) => {
-        const status = this.accountManager.getStatus(account.accountId);
-        return {
-          accountId: account.accountId,
-          channelId: 'telegram',
-          enabled: account.enabled !== false,
-          configured: !!account.botToken,
-          status: status?.running ? 'running' : 'stopped',
-        } as ChannelAccountSnapshot;
-      },
-      resolveAccountState: ({ account, configured, enabled }) => {
-        if (!configured) return 'offline';
-        if (!enabled) return 'disabled';
-        const status = this.accountManager.getStatus(account.accountId);
-        return status?.running ? 'online' : 'offline';
-      },
-    };
+  channelIsRunning(cfg: Config): boolean {
+    return this.accountManager.getAllAccounts().some(
+      (a) => a.enabled !== false && !!a.botToken && this.accountManager.isRunning(a.accountId),
+    );
   }
-  
+
   async start(options?: ChannelPluginStartOptions): Promise<void> {
     const accountIds = options?.accountId 
       ? [options.accountId] 
@@ -346,7 +301,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
   // Private Methods
   // ========================================
   
-  private async startAccount(account: TelegramAccount): Promise<void> {
+  private async startAccount(account: TelegramResolvedAccount): Promise<void> {
     if (this.accountManager.isRunning(account.accountId)) return;
     if (!account.botToken) return;
     
@@ -480,13 +435,13 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
     const last = items[items.length - 1];
     const ctx = last.ctx;
     const accountId = last.accountId;
-    const account = this.accountManager.getAccount(accountId);
-    
-    if (!account) {
+    if (!this.accountManager.getAccount(accountId)) {
       log.warn({ accountId }, 'Unknown account');
       return;
     }
-    
+
+    const account = this.configAdapter.resolveAccount(this.cfg, accountId);
+
     const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
     const senderId = ctx.from?.id?.toString() ?? '';
     const senderUsername = ctx.from?.username;
@@ -501,56 +456,14 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
       isGroup,
     };
     
-    const accessResult = this.securityAdapter.checkAccess(securityCtx, account as any, this.cfg);
+    const accessResult = this.securityAdapter.checkAccess?.(securityCtx, account, this.cfg);
     
     if (!accessResult?.allowed) {
       log.debug({ accountId, chatId, reason: accessResult?.reason }, 'Access denied');
       return;
     }
-    
-    const botUsername = this.accountManager.getBotUsername(accountId) ?? '';
-    const text = ctx.message.text ?? ctx.message.caption ?? '';
-    const cleanedText = (account as any).requireMention && isGroup
-      ? removeBotMention({ text, botUsername })
-      : text;
-    
-    // Media processing is simplified - in production, use createInboundProcessor
-    // For now, just extract text content
-    const finalContent = cleanedText;
 
-    // Generate proper session key with new routing format
-    const sessionKey = generateSessionKey({
-      source: 'telegram',
-      chatId,
-      senderId,
-      isGroup,
-      threadId: ctx.message.message_thread_id?.toString(),
-      accountId,
-    });
-
-    const inboundMsg = {
-      channel: 'telegram' as const,
-      chat_id: chatId,
-      sender_id: senderId,
-      content: finalContent,
-      metadata: {
-        accountId,
-        senderUsername,
-        messageId: ctx.message.message_id?.toString(),
-        threadId: ctx.message.message_thread_id?.toString(),
-        isGroup,
-        sessionKey,
-      },
-    };
-    
-    log.info({
-      accountId,
-      chatId,
-      senderId,
-      contentLength: finalContent.length,
-    }, 'Processing Telegram message');
-    
-    this.bus.publishInbound(inboundMsg);
+    await this.inboundProcessor(ctx, accountId);
   }
   
   private async doSendText(ctx: ChannelOutboundContext): Promise<OutboundDeliveryResult> {
@@ -586,6 +499,30 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramAccount> {
       audioAsVoice: ctx.audioAsVoice,
     });
     
+    return {
+      messageId: result.messageId,
+      chatId: result.chatId,
+      success: result.success,
+      error: result.error,
+    };
+  }
+
+  private async doSendMedia(ctx: ChannelOutboundContext): Promise<OutboundDeliveryResult> {
+    const mediaUrl = ctx.mediaUrl?.trim();
+    if (!mediaUrl) {
+      return { messageId: '', chatId: ctx.to, success: false, error: 'No media URL' };
+    }
+    const result = await this.outboundSender.send({
+      chatId: ctx.to,
+      content: ctx.text ?? '',
+      accountId: ctx.accountId,
+      threadId: ctx.threadId?.toString(),
+      replyToMessageId: ctx.replyToId?.toString(),
+      silent: ctx.silent,
+      mediaUrl,
+      mediaType: ctx.mediaType,
+      audioAsVoice: ctx.audioAsVoice,
+    });
     return {
       messageId: result.messageId,
       chatId: result.chatId,

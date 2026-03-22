@@ -172,6 +172,43 @@ describe('MessageSanitizer', () => {
       expect(result.removed).toBe(0);
     });
 
+    it('should keep assistant messages with image blocks without type (data + mimeType only)', () => {
+      const messages: AgentMessage[] = [
+        { role: 'user', content: 'Hello', timestamp: 1 },
+        {
+          role: 'assistant',
+          content: [{ data: 'base64...', mimeType: 'image/jpeg' } as unknown as { type: 'text'; text: string }],
+          timestamp: 2,
+        },
+      ];
+
+      const result = sanitizeMessages(messages);
+
+      expect(result.messages).toHaveLength(2);
+      expect(result.removed).toBe(0);
+    });
+
+    it('should keep assistant messages with image_url style blocks', () => {
+      const messages: AgentMessage[] = [
+        { role: 'user', content: 'Hello', timestamp: 1 },
+        {
+          role: 'assistant',
+          content: [
+            {
+              type: 'image_url',
+              image_url: { url: 'https://example.com/a.png' },
+            } as unknown as { type: 'text'; text: string },
+          ],
+          timestamp: 2,
+        },
+      ];
+
+      const result = sanitizeMessages(messages);
+
+      expect(result.messages).toHaveLength(2);
+      expect(result.removed).toBe(0);
+    });
+
     it('should preserve non-assistant messages', () => {
       const messages: AgentMessage[] = [
         { role: 'user', content: 'Hello', timestamp: 1 },

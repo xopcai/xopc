@@ -20,6 +20,7 @@ import type {
   ExtensionHookEvent,
   HookExecutionMode,
 } from './types/index.js';
+import type { ChannelPlugin } from '../channels/plugin-types.js';
 import {
   HOOK_EXECUTION_MODES,
 } from './types/hooks.js';
@@ -57,8 +58,7 @@ export class ExtensionApiImpl implements ExtensionApi {
       logger: _logger,
     });
     
-    // Initialize unified registry
-    this._registry = new ExtensionRegistryImpl();
+    this._registry = _coreRegistry ?? new ExtensionRegistryImpl();
   }
 
   get logger(): ExtensionLogger {
@@ -132,8 +132,14 @@ export class ExtensionApiImpl implements ExtensionApi {
   }
 
   registerChannel(channel: ChannelExtension): void {
+    this._registry.addChannel(channel);
     this._eventBus.emit('channel:register', channel);
     this._logger.info(`Registered channel: ${channel.name}`);
+  }
+
+  registerChannelPlugin(plugin: ChannelPlugin): void {
+    this._registry.addChannelPlugin(plugin);
+    this._logger.info(`Registered channel plugin: ${plugin.id}`);
   }
 
   registerHttpRoute(path: string, handler: HttpRequestHandler): void {

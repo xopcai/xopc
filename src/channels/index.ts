@@ -6,10 +6,23 @@
 
 export * from './types.js';
 
+export {
+  CHAT_CHANNEL_ORDER,
+  getChatChannelMeta,
+  isChatChannelId,
+  listChatChannelMeta,
+  type ChatChannelId,
+  type ChatChannelMeta,
+} from './registry.js';
+
+export { getChannelDock, getDockForBuiltinChannel, type ChannelDock } from './dock.js';
+
 // ChannelPlugin v2 types
 export type {
   ChannelPlugin,
+  ChannelPluginDefaults,
   ChannelPluginInitOptions,
+  ChannelPluginReloadMeta,
   ChannelPluginStartOptions,
   ChannelOutboundContext,
   ChannelOutboundPayloadContext,
@@ -27,7 +40,10 @@ export type {
   ReplyToMode,
   StreamMode,
   ChatType,
+  ChannelOutboundMediaType,
 } from './plugin-types.js';
+
+export { TELEGRAM_CHANNEL_DEFAULTS } from './telegram/plugin-defaults.js';
 
 // Security
 export {
@@ -57,6 +73,12 @@ export {
   type DeliveryHandler,
   type AgentResponse,
 } from './pipeline.js';
+
+// Extension SDK → ChannelPlugin bridge
+export {
+  ExtensionSdkChannelPlugin,
+  isSdkChannelExtension,
+} from './extension-sdk-channel-plugin.js';
 
 // Telegram Plugin
 export { TelegramChannelPlugin, telegramPlugin } from './telegram-plugin.js';

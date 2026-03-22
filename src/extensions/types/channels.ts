@@ -1,12 +1,16 @@
 /**
  * Extension System - Channel Types
- * 
+ *
  * Channel extension definitions and message types.
  */
 
 // ============================================================================
-// Channel Extension
+// Channel Extension (extension SDK — minimal connect/send surface)
 // ============================================================================
+//
+// Not to be confused with `ChannelPlugin` in `src/channels/plugin-types.ts`
+// (built-in multi-adapter integration) or `ChannelExtension` in
+// `src/channels/types.ts` (legacy monolithic channel shape).
 
 export interface ChannelExtension {
   name: string;

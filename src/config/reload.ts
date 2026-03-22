@@ -23,15 +23,17 @@ export interface ReloadResult {
 /**
  * Callback types for different reload actions
  */
+export type ReloadCallback = (newConfig: Config) => void | Promise<void>;
+
 export interface ReloadCallbacks {
-  onModelsReload?: (newConfig: Config) => void;
-  onAgentDefaultsReload?: (newConfig: Config) => void;
-  onChannelsReload?: (newConfig: Config) => void;
-  onCronReload?: (newConfig: Config) => void;
-  onHeartbeatReload?: (newConfig: Config) => void;
-  onToolsReload?: (newConfig: Config) => void;
-  onWebSearchReload?: (newConfig: Config) => void;
-  onFullRestart?: (newConfig: Config) => void;
+  onModelsReload?: ReloadCallback;
+  onAgentDefaultsReload?: ReloadCallback;
+  onChannelsReload?: ReloadCallback;
+  onCronReload?: ReloadCallback;
+  onHeartbeatReload?: ReloadCallback;
+  onToolsReload?: ReloadCallback;
+  onWebSearchReload?: ReloadCallback;
+  onFullRestart?: ReloadCallback;
 }
 
 /**
@@ -178,49 +180,49 @@ export class ConfigHotReloader {
   private async applyHotPath(path: string, newConfig: Config): Promise<void> {
     if (path.startsWith('models.')) {
       if (this.callbacks.onModelsReload) {
-        this.callbacks.onModelsReload(newConfig);
+        await Promise.resolve(this.callbacks.onModelsReload(newConfig));
       }
       return;
     }
 
     if (path.startsWith('agents.defaults.')) {
       if (this.callbacks.onAgentDefaultsReload) {
-        this.callbacks.onAgentDefaultsReload(newConfig);
+        await Promise.resolve(this.callbacks.onAgentDefaultsReload(newConfig));
       }
       return;
     }
 
     if (path.startsWith('channels.')) {
       if (this.callbacks.onChannelsReload) {
-        this.callbacks.onChannelsReload(newConfig);
+        await Promise.resolve(this.callbacks.onChannelsReload(newConfig));
       }
       return;
     }
 
     if (path.startsWith('cron.')) {
       if (this.callbacks.onCronReload) {
-        this.callbacks.onCronReload(newConfig);
+        await Promise.resolve(this.callbacks.onCronReload(newConfig));
       }
       return;
     }
 
     if (path.startsWith('heartbeat.')) {
       if (this.callbacks.onHeartbeatReload) {
-        this.callbacks.onHeartbeatReload(newConfig);
+        await Promise.resolve(this.callbacks.onHeartbeatReload(newConfig));
       }
       return;
     }
 
     if (path.startsWith('tools.')) {
       if (this.callbacks.onToolsReload) {
-        this.callbacks.onToolsReload(newConfig);
+        await Promise.resolve(this.callbacks.onToolsReload(newConfig));
       }
       return;
     }
 
     if (path.startsWith('webSearch.') || path.startsWith('webTools.')) {
       if (this.callbacks.onWebSearchReload) {
-        this.callbacks.onWebSearchReload(newConfig);
+        await Promise.resolve(this.callbacks.onWebSearchReload(newConfig));
       }
       return;
     }

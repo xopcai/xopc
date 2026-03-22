@@ -16,6 +16,7 @@ import type { AgentManager } from '../agent-manager.js';
 import { sanitizeMessages, cleanTrailingErrors } from '../memory/message-sanitizer.js';
 import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygiene.js';
 import { createLogger } from '../../utils/logger.js';
+import { maybeRetryTurnAfterTransientLlmFailure } from './llm-turn-retry.js';
 
 const log = createLogger('AgentOrchestrator');
 
@@ -140,6 +141,12 @@ export class AgentOrchestrator {
 
     // Wait for agent to become idle (AI response generation)
     await agent.waitForIdle();
+
+    // Provider may finish with stopReason "error" + "fetch failed" without throwing; retry transient network failures.
+    await maybeRetryTurnAfterTransientLlmFailure(agent, {
+      sessionKey: context.sessionKey,
+      log,
+    });
   }
 
   /**
