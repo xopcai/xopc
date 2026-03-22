@@ -19,6 +19,7 @@ import type {
   ChannelStreamHandle,
   ChannelStatus,
 } from '../channels/types.js';
+import { randomUUID } from 'node:crypto';
 
 // ============================================================================
 // Default Values
@@ -79,7 +80,7 @@ export function adaptExtensionChannel(
       };
       try {
         await extensionChannel.sendMessage(options.chatId, options.content, sendOptions);
-        return { messageId: `ext-${Date.now()}`, chatId: options.chatId, success: true };
+        return { messageId: `ext-${randomUUID()}`, chatId: options.chatId, success: true };
       } catch (error) {
         return {
           messageId: '',

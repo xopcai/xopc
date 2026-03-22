@@ -29,6 +29,7 @@ describe('inbound-processor', () => {
   let mockConfig: Config;
   let processor: ReturnType<typeof createInboundProcessor>;
   let mockBot: Bot;
+  let deps: InboundProcessorDeps;
 
   // Mock services for dependency injection
   const mockAccessControl = {
@@ -80,7 +81,7 @@ describe('inbound-processor', () => {
     mockConfig = {};
 
     // Create processor with injected dependencies (P1 improvement)
-    const deps: InboundProcessorDeps = {
+    deps = {
       bus: mockBus,
       config: mockConfig,
       accountManager,
@@ -232,6 +233,54 @@ describe('inbound-processor', () => {
       expect(mockMediaUtils.getMimeType).toHaveBeenCalled();
     });
   });
+
+  describe('externalAccessGate (plugin path)', () => {
+    beforeEach(() => {
+      accountManager.registerAccount({
+        accountId: 'default',
+        name: 'Default',
+        enabled: true,
+        botToken: 'test-token',
+        requireMention: true,
+      } as any);
+      processor = createInboundProcessor({ ...deps, externalAccessGate: true });
+    });
+
+    it('strips @bot mention in group when requireMention is set (legacy strip)', async () => {
+      const mockCtx = createMockContext({
+        text: '@test_bot please read',
+        chatId: -100123,
+        fromId: 67890,
+        chatType: 'supergroup',
+      });
+
+      await processor(mockCtx as Context, 'default');
+
+      const call = (mockBus.publishInbound as any).mock.calls[0][0];
+      expect(call.content).toBe('please read');
+    });
+
+    it('does not strip mention in private chat (externalAccessGate)', async () => {
+      const mockCtx = createMockContext({
+        text: '@test_bot hello',
+        chatId: 12345,
+        fromId: 67890,
+        chatType: 'private',
+      });
+
+      await processor(mockCtx as Context, 'default');
+
+      const call = (mockBus.publishInbound as any).mock.calls[0][0];
+      expect(call.content).toBe('@test_bot hello');
+    });
+
+    it('skips inbound access gates but still dedupes', async () => {
+      const mockCtx = createMockContext({ text: 'plain', chatId: 12345 });
+      await processor(mockCtx as Context, 'default');
+      expect(mockAccessControl.evaluateGroupBaseAccess).not.toHaveBeenCalled();
+      expect(mockBus.publishInbound).toHaveBeenCalled();
+    });
+  });
 });
 
 // Helper to create mock context
@@ -240,11 +289,12 @@ function createMockContext(options: {
   caption?: string;
   chatId?: number;
   fromId?: number;
+  chatType?: 'private' | 'group' | 'supergroup';
 }): Partial<Context> {
   return {
     chat: {
       id: options.chatId ?? 12345,
-      type: 'private',
+      type: options.chatType ?? 'private',
     } as any,
     from: {
       id: options.fromId ?? 67890,
