@@ -37,6 +37,9 @@
     "abort": "Abort",
     "retry": "Retry",
     "reasoning": "Reasoning",
+    "thoughts": "Thoughts",
+    "thoughtsExpandHint": "Expand to view model thoughts",
+    "thoughtsStreaming": "Thinking…",
     "thinkingLevel": "Thinking Level",
     "thinkingLevels": {
       "off": "Off",

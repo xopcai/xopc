@@ -37,7 +37,7 @@ export function renderHeader(
     case 'complete':
       return html`
         <div class="flex items-center gap-2 text-sm text-muted-foreground">
-          ${statusIcon(toolIcon, 'text-green-600 dark:text-green-500')}
+          ${statusIcon(toolIcon, 'text-muted-foreground opacity-90')}
           ${text}
         </div>
       `;
@@ -74,8 +74,8 @@ export function renderCollapsibleHeader(
         const upIcon = chevron.querySelector('.chevron-up');
         const downIcon = chevron.querySelector('.chevrons-up-down');
         if (upIcon && downIcon) {
-          upIcon.classList.remove('hidden');
-          downIcon.classList.add('hidden');
+          upIcon.classList.remove('tool-call-chevron-hidden');
+          downIcon.classList.add('tool-call-chevron-hidden');
         }
       } else {
         content.classList.remove('tool-call-body--expanded');
@@ -83,8 +83,8 @@ export function renderCollapsibleHeader(
         const upIcon = chevron.querySelector('.chevron-up');
         const downIcon = chevron.querySelector('.chevrons-up-down');
         if (upIcon && downIcon) {
-          upIcon.classList.add('hidden');
-          downIcon.classList.remove('hidden');
+          upIcon.classList.add('tool-call-chevron-hidden');
+          downIcon.classList.remove('tool-call-chevron-hidden');
         }
       }
     }
@@ -92,7 +92,7 @@ export function renderCollapsibleHeader(
 
   const toolIconColor =
     state === 'complete'
-      ? 'text-green-600 dark:text-green-500'
+      ? 'text-muted-foreground opacity-90'
       : state === 'error'
         ? 'text-red-600 dark:text-red-400'
         : 'text-foreground';
@@ -108,9 +108,11 @@ export function renderCollapsibleHeader(
         ${statusIcon(toolIcon, `${toolIconColor} shrink-0`)}
         <span class="min-w-0">${text}</span>
       </div>
-      <span class="tool-call-chevron inline-block text-muted-foreground shrink-0" ${ref(chevronRef)}>
-        <span class="chevron-up ${defaultExpanded ? '' : 'hidden'}">${lucideIcon(ChevronUp, 'w-4 h-4')}</span>
-        <span class="chevrons-up-down ${defaultExpanded ? 'hidden' : ''}"
+      <span class="tool-call-chevron text-muted-foreground shrink-0" ${ref(chevronRef)}>
+        <span class="chevron-up ${defaultExpanded ? '' : 'tool-call-chevron-hidden'}"
+          >${lucideIcon(ChevronUp, 'w-4 h-4')}</span
+        >
+        <span class="chevrons-up-down ${defaultExpanded ? 'tool-call-chevron-hidden' : ''}"
           >${lucideIcon(ChevronsUpDown, 'w-4 h-4')}</span
         >
       </span>

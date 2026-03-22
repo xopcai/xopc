@@ -37,6 +37,9 @@
     "abort": "中止",
     "retry": "重试",
     "reasoning": "推理",
+    "thoughts": "思考过程",
+    "thoughtsExpandHint": "展开查看模型思考过程",
+    "thoughtsStreaming": "思考中…",
     "thinkingLevel": "思考级别",
     "thinkingLevels": {
       "off": "关闭",

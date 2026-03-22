@@ -76,4 +76,11 @@ describe('messages/streaming', () => {
     finalizeStreamingThinking(c);
     if (c[0].type === 'thinking') expect(c[0].streaming).toBe(false);
   });
+
+  it('finalizeStreamingThinking trims thinking text', () => {
+    const c: MessageContent[] = [];
+    appendThinkingDelta(c, '  \n hello \n ', false);
+    finalizeStreamingThinking(c);
+    if (c[0].type === 'thinking') expect(c[0].text).toBe('hello');
+  });
 });

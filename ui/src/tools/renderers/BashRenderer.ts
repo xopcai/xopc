@@ -69,9 +69,7 @@ export class BashRenderer implements ToolRenderer<BashParams, undefined> {
       const bodyClass = defaultExpanded ? 'tool-call-body--expanded' : 'tool-call-body--collapsed';
       return html`
         <div class="tool-call-card">
-          <div class="px-0 pt-2">
-            ${renderCollapsibleHeader(state, SquareTerminal, title, contentRef, chevronRef, defaultExpanded)}
-          </div>
+          ${renderCollapsibleHeader(state, SquareTerminal, title, contentRef, chevronRef, defaultExpanded)}
           <div ${ref(contentRef)} class="tool-call-body ${bodyClass}">
             <div class="tool-call-body-inner">${inner}</div>
           </div>
@@ -85,7 +83,7 @@ export class BashRenderer implements ToolRenderer<BashParams, undefined> {
       return {
         content: doneShell(html`
           <pre
-            class="text-xs font-mono p-2 rounded bg-background border border-border overflow-auto max-h-64 whitespace-pre-wrap ${result.isError ? 'text-red-600 dark:text-red-400' : ''}"
+            class="tool-call-code max-h-64 whitespace-pre-wrap ${result.isError ? 'text-red-600 dark:text-red-400' : ''}"
           >${combined}</pre>
         `),
         isCustom: true,
@@ -95,9 +93,7 @@ export class BashRenderer implements ToolRenderer<BashParams, undefined> {
     if (cmd) {
       return {
         content: runningShell(html`
-          <pre
-            class="text-xs font-mono p-2 rounded bg-background border border-border overflow-auto whitespace-pre-wrap"
-          >${`> ${cmd}`}</pre>
+          <pre class="tool-call-code whitespace-pre-wrap">${`> ${cmd}`}</pre>
         `),
         isCustom: true,
       };

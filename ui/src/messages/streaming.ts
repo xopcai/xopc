@@ -54,6 +54,11 @@ export function appendThinkingDelta(content: MessageContent[], text: string, isD
 /** Mark the last open thinking segment as no longer streaming (e.g. `thinking_end`). */
 export function finalizeStreamingThinking(content: MessageContent[]): void {
   closeStreamingThinkingIfAny(content);
+  for (const b of content) {
+    if (b.type === 'thinking' && typeof b.text === 'string') {
+      b.text = b.text.trim();
+    }
+  }
 }
 
 export function appendTextDelta(content: MessageContent[], delta: string): void {

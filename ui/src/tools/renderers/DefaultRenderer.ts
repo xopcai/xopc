@@ -67,9 +67,7 @@ export class DefaultRenderer implements ToolRenderer {
       const bodyClass = defaultExpanded ? 'tool-call-body--expanded' : 'tool-call-body--collapsed';
       return html`
         <div class="tool-call-card">
-          <div class="px-0 pt-2">
-            ${renderCollapsibleHeader(state, Code, title, contentRef, chevronRef, defaultExpanded)}
-          </div>
+          ${renderCollapsibleHeader(state, Code, title, contentRef, chevronRef, defaultExpanded)}
           <div ${ref(contentRef)} class="tool-call-body ${bodyClass}">
             <div class="tool-call-body-inner">${inner}</div>
           </div>
@@ -99,17 +97,13 @@ export class DefaultRenderer implements ToolRenderer {
         content: shell(html`
           ${paramsJson
             ? html`<div>
-                <div class="text-xs font-medium mb-1 text-muted-foreground">${t('chat.toolInput')}</div>
-                <pre
-                  class="text-xs p-2 rounded bg-background overflow-auto max-h-40 border border-border font-mono"
-                >${unsafeHTML(escapeHtml(paramsJson))}</pre>
+                <div class="tool-call-code-label">${t('chat.toolInput')}</div>
+                <pre class="tool-call-code max-h-40">${unsafeHTML(escapeHtml(paramsJson))}</pre>
               </div>`
             : ''}
           <div>
-            <div class="text-xs font-medium mb-1 text-muted-foreground">${t('chat.toolOutput')}</div>
-            <pre
-              class="text-xs p-2 rounded bg-background overflow-auto max-h-48 border border-border font-mono"
-            >${unsafeHTML(escapeHtml(outputText))}</pre>
+            <div class="tool-call-code-label">${t('chat.toolOutput')}</div>
+            <pre class="tool-call-code max-h-48">${unsafeHTML(escapeHtml(outputText))}</pre>
           </div>
         `),
         isCustom: true,
@@ -137,10 +131,8 @@ export class DefaultRenderer implements ToolRenderer {
       return {
         content: shell(html`
           <div>
-            <div class="text-xs font-medium mb-1 text-muted-foreground">${t('chat.toolInput')}</div>
-            <pre
-              class="text-xs p-2 rounded bg-background overflow-auto max-h-40 border border-border font-mono"
-            >${unsafeHTML(escapeHtml(paramsJson))}</pre>
+            <div class="tool-call-code-label">${t('chat.toolInput')}</div>
+            <pre class="tool-call-code max-h-40">${unsafeHTML(escapeHtml(paramsJson))}</pre>
           </div>
         `),
         isCustom: true,
