@@ -4,7 +4,9 @@
  * Core extension definitions and Extension API interface.
  */
 
+import type { Command } from 'commander';
 import type { Config } from '../../types/index.js';
+import type { MessageBus } from '../../bus/index.js';
 import type { TypedEventBus } from './events.js';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type { ExtensionHookEvent, ExtensionHookHandler, HookOptions, HookHandlerMap } from './hooks.js';
@@ -42,6 +44,29 @@ export type ExtensionKind = 'channel' | 'provider' | 'memory' | 'tool' | 'utilit
 export type ExtensionModule = ExtensionDefinition | ((api: ExtensionApi) => void | Promise<void>);
 
 // ============================================================================
+// Extension runtime (Gateway-injected)
+// ============================================================================
+
+/** Optional: session manager when extension runs inside Gateway. */
+export type ExtensionSessionManager = {
+  initialize?: () => Promise<void>;
+};
+
+export interface ExtensionRuntime {
+  config: Config;
+  /** Present when ExtensionLoader.setRuntimeContext was used (e.g. Gateway). */
+  bus?: MessageBus;
+  log: ExtensionLogger;
+  sessionManager?: ExtensionSessionManager;
+}
+
+export interface ExtensionCliRegistration {
+  extensionId: string;
+  commands: string[];
+  factory: (ctx: { program: Command }) => void;
+}
+
+// ============================================================================
 // Extension API
 // ============================================================================
 
@@ -70,8 +95,8 @@ export interface ExtensionApi {
   //  Strongly Typed Hook Registration
   onHook<K extends ExtensionHookEvent>(hookName: K, handler: HookHandlerMap[K], opts?: { priority?: number }): void;
   
-  // Channel Registration
-  registerChannel(plugin: ChannelPlugin): void;
+  /** Register a channel plugin (object form aligns with OpenClaw). */
+  registerChannel(registration: { plugin: ChannelPlugin }): void;
   
   // HTTP Route Registration
   registerHttpRoute(path: string, handler: HttpRequestHandler): void;
@@ -84,6 +109,18 @@ export interface ExtensionApi {
   
   // Gateway Method Registration
   registerGatewayMethod(method: string, handler: GatewayMethodHandler): void;
+
+  /**
+   * Register Commander subcommands (OpenClaw-style). Apply with
+   * `registerExtensionCliProgram(program, registry)` when wiring CLI.
+   */
+  registerCli(
+    factory: (ctx: { program: Command }) => void,
+    opts?: { commands: string[] },
+  ): void;
+
+  /** Gateway-injected runtime (bus, full config, session). Only set when ExtensionLoader.setRuntimeContext was used. */
+  readonly runtime: ExtensionRuntime;
   
   // Path Resolution
   resolvePath(input: string): string;
@@ -170,4 +207,6 @@ export interface ExtensionRegistry {
   getTool(name: string): AgentTool | undefined;
   getAllTools(): AgentTool[];
   getCommand(name: string): ExtensionCommand | undefined;
+  addCliRegistration(reg: ExtensionCliRegistration): void;
+  getCliRegistrations(): readonly ExtensionCliRegistration[];
 }

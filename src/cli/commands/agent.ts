@@ -83,6 +83,8 @@ function createAgentCommand(_ctx: CLIContext): Command {
               workspaceDir: workspace,
               extensionsDir: join(workspace, '.extensions'),
             });
+            extensionLoader.setConfig(config as Parameters<ExtensionLoader['setConfig']>[0]);
+            extensionLoader.setRuntimeContext({ bus });
             await extensionLoader.loadExtensions(enabledExtensions);
             log.info({ count: enabledExtensions.length }, 'Extensions loaded');
           }

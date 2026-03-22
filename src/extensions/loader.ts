@@ -20,11 +20,14 @@ import {
   resolveExtensionSdkPath,
 } from '../config/paths.js';
 import type { Config } from '../types/index.js';
+import type { MessageBus } from '../bus/index.js';
+import type { SessionManager } from '../session/manager.js';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type {
   ExtensionApi,
   ExtensionModule,
   ExtensionRegistry,
+  ExtensionCliRegistration,
   GatewayMethodHandler,
   HttpRequestHandler,
   ExtensionCommand,
@@ -36,7 +39,7 @@ import type {
   ResolvedExtensionConfig,
 } from './types/index.js';
 import type { ChannelPlugin } from '../channels/plugin-types.js';
-import { telegramPlugin } from '../channels/telegram-plugin.js';
+import { bundledChannelPlugins } from '../channels/plugins/bundled.js';
 import { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './api.js';
 import { createLogger, createServiceLogger } from '../utils/logger.js';
 
@@ -96,6 +99,7 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
   gatewayMethods = new Map<string, GatewayMethodHandler>();
   tools = new Map<string, AgentTool>();
   channelPlugins: ChannelPlugin[] = [];
+  private cliRegistrations: ExtensionCliRegistration[] = [];
 
   addExtension(record: ExtensionRecord): void {
     this.extensions.set(record.id, record);
@@ -126,6 +130,7 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
   }
 
   addChannelPlugin(plugin: ChannelPlugin): void {
+    this.channelPlugins = this.channelPlugins.filter((p) => p.id !== plugin.id);
     this.channelPlugins.push(plugin);
   }
 
@@ -196,6 +201,14 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
   getAllTools(): AgentTool[] {
     return Array.from(this.tools.values());
   }
+
+  addCliRegistration(reg: ExtensionCliRegistration): void {
+    this.cliRegistrations.push(reg);
+  }
+
+  getCliRegistrations(): readonly ExtensionCliRegistration[] {
+    return this.cliRegistrations;
+  }
 }
 
 // ============================================================================
@@ -213,6 +226,8 @@ export class ExtensionLoader {
   private options: ExtensionLoaderOptions;
   private extensionInstances: Map<string, ExtensionApi> = new Map();
   private jiti: ReturnType<typeof createJiti>;
+  private _appConfig?: Config;
+  private _runtimeContext?: { bus: MessageBus; sessionManager?: SessionManager };
   
   //  Security
   private securityConfig: SecurityConfig;
@@ -230,7 +245,9 @@ export class ExtensionLoader {
 
   constructor(options?: ExtensionLoaderOptions) {
     this.registry = new ExtensionRegistryImpl();
-    this.registry.addChannelPlugin(telegramPlugin);
+    for (const p of bundledChannelPlugins) {
+      this.registry.addChannelPlugin(p);
+    }
     this.options = options || {
       workspaceDir: resolveWorkspaceDir(),
       extensionsDir: resolveWorkspaceExtensionsDir(),
@@ -303,6 +320,7 @@ export class ExtensionLoader {
    * Set configuration from main Config object 
    */
   setConfig(config: Config): void {
+    this._appConfig = config;
     // Wire slot config
     const slots = (config.extensions as any)?.slots || {};
     this.slotsConfig = {
@@ -323,6 +341,13 @@ export class ExtensionLoader {
         allowPromptInjection: security.allowPromptInjection ?? false,
       };
     }
+  }
+
+  /**
+   * Inject MessageBus and optional SessionManager for ExtensionApi.runtime (Gateway).
+   */
+  setRuntimeContext(ctx: { bus: MessageBus; sessionManager?: SessionManager }): void {
+    this._runtimeContext = ctx;
   }
 
   getRegistry(): ExtensionRegistryImpl {
@@ -737,22 +762,41 @@ export class ExtensionLoader {
 
   private createExtensionApi(
     manifest: ExtensionManifest,
-    config: ResolvedExtensionConfig,
+    resolved: ResolvedExtensionConfig,
     extensionDir: string,
   ): ExtensionApi {
     const logger = createExtensionLogger(`[${manifest.id}]`);
     const resolvePath = createPathResolver(extensionDir, this.options.workspaceDir || '');
+
+    const appConfig = this._appConfig ?? ({} as Config);
+    const extensionOnly = (resolved.config ?? {}) as Record<string, unknown>;
+
+    const runtime =
+      this._appConfig && this._runtimeContext
+        ? {
+            config: this._appConfig,
+            bus: this._runtimeContext.bus,
+            log: logger,
+            sessionManager: this._runtimeContext.sessionManager,
+          }
+        : this._appConfig
+          ? {
+              config: this._appConfig,
+              log: logger,
+            }
+          : undefined;
 
     return new ExtensionApiImpl(
       manifest.id,
       manifest.name,
       manifest.version,
       extensionDir,
-      config.config as unknown as Record<string, unknown>,
-      config.config,
+      appConfig,
+      extensionOnly,
       logger,
       resolvePath,
-      this.registry, // Pass registry to sync tools
+      this.registry,
+      runtime,
     );
   }
 

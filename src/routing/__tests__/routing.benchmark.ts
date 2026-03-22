@@ -18,7 +18,7 @@ import {
   type BindingRule,
   type RouteContext,
 } from '../index.js';
-import { generateSessionKeyWithRouting } from '../../channels/telegram/routing-integration.js';
+import { generateSessionKeyWithRouting } from '../../extensions/telegram/telegram/routing-integration.js';
 import type { Config } from '../../config/schema.js';
 
 // =============================================================================

@@ -5,37 +5,33 @@
 import type { Config } from '../config/index.js';
 import type { MessageBus } from '../bus/index.js';
 
-// ============================================
-// Channel ID & Metadata
-// ============================================
+import type { ChannelId, ChannelMeta, ChannelCapabilities } from './plugins/types.core.js';
+import type {
+  ChannelPairingAdapter,
+  ChannelAllowlistAdapter,
+  ChannelThreadingAdapter,
+  ChannelLifecycleAdapter,
+  ChannelHeartbeatAdapter,
+  ChannelConfiguredBindingProvider,
+  ChannelMessagingAdapter,
+  ChannelDirectoryAdapter,
+  ChannelResolverAdapter,
+  ChannelAuthAdapter,
+  ChannelElevatedAdapter,
+  ChannelExecApprovalAdapter,
+  ChannelAgentPromptAdapter,
+  ChannelSetupWizard,
+} from './plugins/types.adapters.js';
 
-export type ChannelId = string;
+export type { ChannelId, ChatType, ChannelMeta, ChannelCapabilities } from './plugins/types.core.js';
 
-export type ChatType = 'direct' | 'group' | 'channel' | 'thread';
+import type { DmPolicy, GroupPolicy } from './channel-domain.js';
 
-export interface ChannelCapabilities {
-  chatTypes: ChatType[];
-  reactions: boolean;
-  threads: boolean;
-  media: boolean;
-  polls: boolean;
-  nativeCommands: boolean;
-  blockStreaming: boolean;
-}
-
-export interface ChannelMetadata {
-  id: ChannelId;
-  name: string;
-  description: string;
-  capabilities: ChannelCapabilities;
-}
+export type { DmPolicy, GroupPolicy };
 
 // ============================================
 // Configuration Types
 // ============================================
-
-export type DmPolicy = 'pairing' | 'allowlist' | 'open' | 'disabled';
-export type GroupPolicy = 'open' | 'allowlist' | 'block';
 export type ReplyToMode = 'off' | 'first' | 'all';
 export type StreamMode = 'off' | 'partial' | 'block';
 
@@ -104,95 +100,79 @@ export interface ChannelPluginReloadMeta {
 }
 
 export interface ChannelPlugin<ResolvedAccount = any> {
-  /** Channel identifier */
   id: ChannelId;
-  
-  /** Channel metadata */
-  meta: ChannelMetadata;
+  meta: ChannelMeta;
+  capabilities: ChannelCapabilities;
 
-  /** Optional defaults (debounce, chunk limits); should match dock for built-in channels. */
   defaults?: ChannelPluginDefaults;
 
-  /** Declares which config subtrees can be hot-applied (see plugin `onConfigUpdated`). */
   reload?: ChannelPluginReloadMeta;
-  
-  /** Initialize plugin (called once) */
+
   init(options: ChannelPluginInitOptions): Promise<void>;
-  
-  /** Start channel listener */
+
   start(options?: ChannelPluginStartOptions): Promise<void>;
-  
-  /** Stop channel */
+
   stop(accountId?: string): Promise<void>;
 
-  /**
-   * Whether this channel has at least one connected runtime (e.g. polling bot).
-   * Used for gateway/UI status; omit if not applicable.
-   */
   channelIsRunning?(cfg: Config): boolean;
 
-  /**
-   * Apply updated config after hot reload or gateway merge (optional).
-   */
   onConfigUpdated?(cfg: Config): void | Promise<void>;
 
-  /**
-   * When true, `channels.<id>` may be absent; init/start run unless `channels.<id>.enabled === false`.
-   * Used for extension-registered channels whose primary config lives under `extensions.*`.
-   */
   extensionManagedConfig?: boolean;
-  
-  // Configuration adapter
-  
-  /** Configuration adapter - account management */
-  configAdapter?: ChannelConfigAdapter<ResolvedAccount>;
-  
-  /** Configuration schema */
+
+  /** Required account/config surface (OpenClaw: formerly configAdapter). */
+  config: ChannelConfigAdapter<ResolvedAccount>;
+
   configSchema?: ChannelConfigSchema;
-  
-  /** Setup adapter */
+
   setup?: ChannelSetupAdapter;
-  
-  // Outbound adapter
-  
-  /** Outbound message adapter */
+
+  setupWizard?: ChannelSetupWizard;
+
   outbound?: ChannelOutboundAdapter;
-  
-  /** Streaming response adapter */
+
   streaming?: ChannelStreamingAdapter;
-  
-  // Security adapter
-  
-  /** Security adapter - access control */
+
   security?: ChannelSecurityAdapter<ResolvedAccount>;
-  
-  /** Group policy adapter */
+
+  pairing?: ChannelPairingAdapter;
+
+  allowlist?: ChannelAllowlistAdapter;
+
   groups?: ChannelGroupAdapter;
-  
-  /** Mention adapter */
+
   mentions?: ChannelMentionAdapter;
-  
-  // Status adapter
-  
-  /** Status adapter - health checks */
-  status?: ChannelStatusAdapter<ResolvedAccount>;
-  
-  // Command adapter
-  
-  /** Command adapter */
-  commands?: ChannelCommandAdapter;
-  
-  /** Message action adapter */
-  actions?: ChannelMessageActionAdapter;
-  
-  // Gateway
-  
-  /** Gateway adapter */
+
+  messaging?: ChannelMessagingAdapter;
+
+  threading?: ChannelThreadingAdapter;
+
+  bindings?: ChannelConfiguredBindingProvider;
+
   gateway?: ChannelGatewayAdapter<ResolvedAccount>;
-  
-  // Tools
-  
-  /** Channel-specific Agent tools */
+
+  lifecycle?: ChannelLifecycleAdapter;
+
+  status?: ChannelStatusAdapter<ResolvedAccount>;
+
+  directory?: ChannelDirectoryAdapter;
+
+  resolver?: ChannelResolverAdapter;
+
+  commands?: ChannelCommandAdapter;
+
+  actions?: ChannelMessageActionAdapter;
+
+  auth?: ChannelAuthAdapter;
+
+  elevated?: ChannelElevatedAdapter;
+
+  execApprovals?: ChannelExecApprovalAdapter;
+
+  heartbeat?: ChannelHeartbeatAdapter;
+
+  agentPrompt?: ChannelAgentPromptAdapter;
+
   agentTools?: ChannelAgentTool[];
 }
 
@@ -227,6 +207,20 @@ export interface ChannelConfigAdapter<ResolvedAccount> {
     cfg: Config;
     accountId?: string | null;
   }): Array<string | number> | undefined;
+
+  defaultAccountId?(cfg: Config): string;
+
+  resolveDefaultTo?(params: { cfg: Config; accountId?: string | null }): string | undefined;
+
+  formatAllowFrom?(params: { allowFrom: Array<string | number> }): string[];
+
+  setAccountEnabled?(params: {
+    cfg: Config;
+    accountId: string;
+    enabled: boolean;
+  }): Config;
+
+  deleteAccount?(params: { cfg: Config; accountId: string }): Config;
 }
 
 // ============================================
@@ -329,6 +323,7 @@ export interface ChannelOutboundAdapter {
   
   /** Resolve target */
   resolveTarget?(params: {
+    cfg?: Config;
     to?: string;
     allowFrom?: string[];
     accountId?: string | null;
@@ -590,15 +585,17 @@ export interface ChannelGatewayContext<ResolvedAccount = unknown> {
 }
 
 export interface ChannelGatewayAdapter<ResolvedAccount> {
-  /** Gateway method list */
   methods?: string[];
-  
-  /** Handle Gateway request */
+
   handle?(params: {
     method: string;
     params: Record<string, unknown>;
     context: ChannelGatewayContext<ResolvedAccount>;
   }): Promise<unknown>;
+
+  startAccount?(ctx: ChannelGatewayContext<ResolvedAccount>): Promise<unknown>;
+
+  stopAccount?(ctx: ChannelGatewayContext<ResolvedAccount>): Promise<void>;
 }
 
 // ============================================

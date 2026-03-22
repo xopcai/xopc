@@ -18,7 +18,7 @@ import {
   parseSessionKey,
   type BindingRule,
 } from '../routing/index.js';
-import { generateSessionKeyWithRouting } from '../channels/telegram/routing-integration.js';
+import { generateSessionKeyWithRouting } from '../extensions/telegram/telegram/routing-integration.js';
 import { buildAcpSessionKey } from '../acp/routing-integration.js';
 
 describe('Complete Routing E2E Flow', () => {
