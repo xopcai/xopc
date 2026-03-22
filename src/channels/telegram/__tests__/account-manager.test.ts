@@ -203,6 +203,22 @@ describe('TelegramAccountManager', () => {
     });
   });
 
+  describe('reset', () => {
+    it('should clear accounts and runtime maps', () => {
+      manager.registerAccount({
+        accountId: 'a',
+        name: 'A',
+        enabled: true,
+        botToken: 't',
+      });
+      manager.setBotUsername('a', 'bot');
+      manager.reset();
+      expect(manager.getAccount('a')).toBeUndefined();
+      expect(manager.getAllAccounts()).toHaveLength(0);
+      expect(manager.getBotUsername('a')).toBeUndefined();
+    });
+  });
+
   describe('integration', () => {
     it('should manage complete account lifecycle', () => {
       const account: TelegramAccountConfig = {

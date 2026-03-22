@@ -63,12 +63,15 @@ export class ChannelManager {
     
     for (const [id, plugin] of this.plugins) {
       const channelConfig = this.config.channels?.[id];
-      if (!channelConfig?.enabled) {
+      if (!this.shouldRunChannelPlugin(plugin, channelConfig)) {
         log.debug({ channel: id }, 'Channel disabled in config, skipping');
         continue;
       }
-      
-      const initPromise = this.initializePlugin(plugin, channelConfig as Record<string, unknown>);
+
+      const initPromise = this.initializePlugin(
+        plugin,
+        (channelConfig ?? {}) as Record<string, unknown>,
+      );
       initPromises.push(initPromise);
     }
     
@@ -77,6 +80,19 @@ export class ChannelManager {
     log.info('All channel plugins initialized');
   }
   
+  /**
+   * Builtin channels require `channels.<id>.enabled`. Extension-managed channels run unless explicitly disabled.
+   */
+  private shouldRunChannelPlugin(
+    plugin: ChannelPlugin,
+    channelConfig: Record<string, unknown> | undefined,
+  ): boolean {
+    if (plugin.extensionManagedConfig) {
+      return channelConfig?.enabled !== false;
+    }
+    return !!channelConfig?.enabled;
+  }
+
   private async initializePlugin(
     plugin: ChannelPlugin, 
     channelConfig: Record<string, unknown>
@@ -109,8 +125,8 @@ export class ChannelManager {
     
     for (const [id, plugin] of this.plugins) {
       const channelConfig = this.config.channels?.[id];
-      if (!channelConfig?.enabled) continue;
-      
+      if (!this.shouldRunChannelPlugin(plugin, channelConfig)) continue;
+
       const startPromise = this.startPlugin(plugin).catch(err => {
         log.error({ channel: id, err }, 'Failed to start channel plugin');
       });
@@ -195,6 +211,7 @@ export class ChannelManager {
       to: processedMsg.chat_id,
       text: processedMsg.content ?? '',
       mediaUrl: processedMsg.mediaUrl,
+      mediaType: processedMsg.mediaType,
       threadId: processedMsg.metadata?.threadId as string | number | null,
       replyToId: processedMsg.replyToMessageId,
       accountId: processedMsg.metadata?.accountId as string ?? undefined,
@@ -251,8 +268,14 @@ export class ChannelManager {
     }
   }
   
-  updateConfig(config: Config): void {
+  async updateConfig(config: Config): Promise<void> {
     this.config = config;
+    for (const id of this.initializedPluginIds) {
+      const plugin = this.plugins.get(id);
+      if (plugin?.onConfigUpdated) {
+        await Promise.resolve(plugin.onConfigUpdated(config));
+      }
+    }
     log.info('Channel config updated');
   }
   
@@ -281,8 +304,21 @@ export class ChannelManager {
     return this.stop();
   }
   
+  /**
+   * Channel IDs whose runtime reports connected (e.g. Telegram polling active).
+   */
   getRunningChannels(): string[] {
-    return Array.from(this.plugins.keys());
+    const result: string[] = [];
+    for (const id of this.initializedPluginIds) {
+      const plugin = this.plugins.get(id);
+      if (!plugin?.channelIsRunning) {
+        continue;
+      }
+      if (plugin.channelIsRunning(this.config)) {
+        result.push(id);
+      }
+    }
+    return result;
   }
   
   getAllChannels(): ChannelPlugin[] {

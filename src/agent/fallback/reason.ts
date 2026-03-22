@@ -73,5 +73,16 @@ export function classifyFailoverReason(err: unknown): FailoverReason {
   if (isAuthErrorMessage(message)) return 'auth';
   if (isFormatErrorMessage(message)) return 'format';
 
+  const lower = message.toLowerCase();
+  if (
+    lower.includes('fetch failed') ||
+    lower.includes('econnreset') ||
+    lower.includes('enotfound') ||
+    lower.includes('socket hang up') ||
+    lower.includes('getaddrinfo')
+  ) {
+    return 'timeout';
+  }
+
   return 'unknown';
 }

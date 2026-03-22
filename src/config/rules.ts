@@ -48,8 +48,9 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'gateway.cors', kind: 'restart', description: 'CORS settings' },
   { prefix: 'gateway.enableHotReload', kind: 'hot', description: 'Hot reload toggle' },
   
-  // Channels - hot reload
+  // Channels - hot reload (longest specific matches first via matchReloadRule order)
   { prefix: 'channels.telegram', kind: 'hot', description: 'Telegram settings' },
+  { prefix: 'channels', kind: 'hot', description: 'Any channel subtree (e.g. future extensions)' },
   
   // Cron - hot reload
   { prefix: 'cron', kind: 'hot', description: 'Scheduled tasks' },
@@ -68,20 +69,21 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'tools', kind: 'hot', description: 'Tools configuration' },
 ];
 
-// Map for O(1) prefix lookup
-const rulesMap = new Map(BASE_RELOAD_RULES.map(r => [r.prefix, r]));
+// Map for O(1) exact prefix lookup
+const rulesMap = new Map(BASE_RELOAD_RULES.map((r) => [r.prefix, r]));
+
+/** Longest prefix wins so `channels.telegram` beats `channels`. */
+const RULES_BY_PREFIX_LENGTH = [...BASE_RELOAD_RULES].sort((a, b) => b.prefix.length - a.prefix.length);
 
 /**
  * Find matching rule for a config path
  */
 export function matchReloadRule(path: string): ReloadRule | null {
-  // Check exact match first
   if (rulesMap.has(path)) {
     return rulesMap.get(path)!;
   }
-  // Then check prefix match
-  for (const [prefix, rule] of rulesMap) {
-    if (path.startsWith(`${prefix}.`)) {
+  for (const rule of RULES_BY_PREFIX_LENGTH) {
+    if (path === rule.prefix || path.startsWith(`${rule.prefix}.`)) {
       return rule;
     }
   }

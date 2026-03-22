@@ -35,6 +35,7 @@ import type {
   ExtensionRecord,
   ResolvedExtensionConfig,
 } from './types/index.js';
+import type { ChannelPlugin } from '../channels/plugin-types.js';
 import { ExtensionRegistryImpl as ExtensionRegistry } from './loader.js';
 import { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './api.js';
 import { createLogger, createServiceLogger } from '../utils/logger.js';
@@ -95,6 +96,7 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
   services = new Map<string, ExtensionService>();
   gatewayMethods = new Map<string, GatewayMethodHandler>();
   tools = new Map<string, AgentTool>();
+  channelPlugins: ChannelPlugin[] = [];
 
   addExtension(record: ExtensionRecord): void {
     this.extensions.set(record.id, record);
@@ -133,6 +135,10 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
 
   getChannel(name: string): ChannelExtension | undefined {
     return this.channels.get(name);
+  }
+
+  addChannelPlugin(plugin: ChannelPlugin): void {
+    this.channelPlugins.push(plugin);
   }
 
   addHttpRoute(path: string, handler: HttpRequestHandler): void {

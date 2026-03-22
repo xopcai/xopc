@@ -38,6 +38,16 @@ export class TelegramAccountManager {
     return Array.from(this.accounts.values());
   }
 
+  /** Clear all accounts and runtime state (used when reloading channel config). */
+  reset(): void {
+    this.accounts.clear();
+    this.bots.clear();
+    this.runners.clear();
+    this.statuses.clear();
+    this.botUsernames.clear();
+    this.startingAccounts.clear();
+  }
+
   registerBot(accountId: string, bot: Bot): void {
     this.bots.set(accountId, bot);
   }

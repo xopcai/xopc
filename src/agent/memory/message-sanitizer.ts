@@ -17,6 +17,54 @@ import { createLogger } from '../../utils/logger.js';
 const log = createLogger('MessageSanitizer');
 
 /**
+ * Single multimodal / structured block is meaningful for history persistence.
+ * Handles blocks without `type` (e.g. { data, mimeType } only) that some providers emit.
+ */
+function isMeaningfulContentBlock(item: unknown): boolean {
+  if (typeof item === 'string') {
+    return item.trim().length > 0;
+  }
+  if (!item || typeof item !== 'object') {
+    return false;
+  }
+  const o = item as Record<string, unknown>;
+  const t = o.type;
+
+  if (t === 'text') {
+    return String(o.text ?? '').trim().length > 0;
+  }
+  if (t === 'toolCall') {
+    return String(o.name ?? '').trim().length > 0;
+  }
+  if (t === 'thinking') {
+    return true;
+  }
+  if (
+    t === 'image' ||
+    t === 'image_url' ||
+    t === 'input_image' ||
+    t === 'file' ||
+    t === 'audio' ||
+    t === 'video'
+  ) {
+    return true;
+  }
+  if (o.image_url !== undefined || o.imageUrl !== undefined) {
+    return true;
+  }
+  if (o.inlineData !== undefined || o.inline_data !== undefined) {
+    return true;
+  }
+  if (typeof o.data === 'string' && o.data.length > 0 && typeof o.mimeType === 'string') {
+    return true;
+  }
+  if (typeof t === 'string' && t.length > 0) {
+    return true;
+  }
+  return false;
+}
+
+/**
  * Check if a message has valid, non-empty content
  */
 function hasValidContent(message: AgentMessage): boolean {
@@ -38,21 +86,7 @@ function hasValidContent(message: AgentMessage): boolean {
 
   // Array content must have at least one meaningful item
   if (Array.isArray(content)) {
-    return content.some((item) => {
-      if (item.type === 'text') {
-        return (item.text || '').trim().length > 0;
-      }
-      if (item.type === 'toolCall') {
-        // Tool calls are valid even without arguments
-        return (item.name || '').trim().length > 0;
-      }
-      if (item.type === 'thinking') {
-        // Thinking blocks are valid
-        return true;
-      }
-      // Images and other types are valid
-      return item.type !== undefined;
-    });
+    return content.some((item) => isMeaningfulContentBlock(item));
   }
 
   return false;

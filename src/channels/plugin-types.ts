@@ -82,12 +82,39 @@ export interface ChannelPluginStartOptions {
   accountId?: string;
 }
 
+/** Default tuning for queue, outbound, and streaming (single source for plugins + dock). */
+export interface ChannelPluginDefaults {
+  queue?: {
+    debounceMs?: number;
+  };
+  outbound?: {
+    textChunkLimit?: number;
+  };
+  streaming?: {
+    blockStreamingCoalesce?: {
+      minChars?: number;
+      idleMs?: number;
+    };
+  };
+}
+
+export interface ChannelPluginReloadMeta {
+  /** Config path prefixes that hot-reload this plugin (for docs and tooling). */
+  configPrefixes: string[];
+}
+
 export interface ChannelPlugin<ResolvedAccount = any> {
   /** Channel identifier */
   id: ChannelId;
   
   /** Channel metadata */
   meta: ChannelMetadata;
+
+  /** Optional defaults (debounce, chunk limits); should match dock for built-in channels. */
+  defaults?: ChannelPluginDefaults;
+
+  /** Declares which config subtrees can be hot-applied (see plugin `onConfigUpdated`). */
+  reload?: ChannelPluginReloadMeta;
   
   /** Initialize plugin (called once) */
   init(options: ChannelPluginInitOptions): Promise<void>;
@@ -97,6 +124,23 @@ export interface ChannelPlugin<ResolvedAccount = any> {
   
   /** Stop channel */
   stop(accountId?: string): Promise<void>;
+
+  /**
+   * Whether this channel has at least one connected runtime (e.g. polling bot).
+   * Used for gateway/UI status; omit if not applicable.
+   */
+  channelIsRunning?(cfg: Config): boolean;
+
+  /**
+   * Apply updated config after hot reload or gateway merge (optional).
+   */
+  onConfigUpdated?(cfg: Config): void | Promise<void>;
+
+  /**
+   * When true, `channels.<id>` may be absent; init/start run unless `channels.<id>.enabled === false`.
+   * Used for extension-registered channels whose primary config lives under `extensions.*`.
+   */
+  extensionManagedConfig?: boolean;
   
   // Configuration adapter
   
@@ -221,11 +265,15 @@ export interface ChannelSetupInput {
 
 export type ChannelOutboundTargetMode = 'default' | 'thread' | 'channel';
 
+export type ChannelOutboundMediaType = 'photo' | 'video' | 'audio' | 'document' | 'animation';
+
 export interface ChannelOutboundContext {
   cfg: Config;
   to: string;
   text: string;
   mediaUrl?: string;
+  /** Hint for remote URL fetch + send (e.g. photo vs document). */
+  mediaType?: ChannelOutboundMediaType;
   mediaLocalRoots?: readonly string[];
   gifPlayback?: boolean;
   forceDocument?: boolean;

@@ -3,11 +3,17 @@ import { join } from 'path';
 import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
 import { telegramPlugin } from '../channels/telegram-plugin.js';
+import { CHAT_CHANNEL_ORDER } from '../channels/registry.js';
 import { MessageBus } from '../bus/index.js';
 import { loadConfig, saveConfig } from '../config/index.js';
 import { getWorkspacePath } from '../config/schema.js';
 import { CronService } from '../cron/index.js';
 import { ExtensionLoader, normalizeExtensionConfig } from '../extensions/index.js';
+import type { ResolvedExtensionConfig } from '../extensions/types/index.js';
+import {
+  ExtensionSdkChannelPlugin,
+  isSdkChannelExtension,
+} from '../channels/extension-sdk-channel-plugin.js';
 import { HeartbeatService } from '../heartbeat/index.js';
 import { ConfigHotReloader } from '../config/reload.js';
 import { SessionManager } from '../session/index.js';
@@ -48,6 +54,7 @@ export class GatewayService {
   private channelManager: ChannelManager;
   private cronService: CronService;
   private extensionLoader: ExtensionLoader | null = null;
+  private resolvedExtensionConfigs: ResolvedExtensionConfig[] = [];
   private heartbeatService: HeartbeatService;
   private sessionManager: SessionManager;
   private running = false;
@@ -90,7 +97,7 @@ export class GatewayService {
 
     // Initialize extension loader
     this.workspacePath = getWorkspacePath(this.config) || './workspace';
-    this.initializeExtensions();
+    this.initializeExtensionLoader();
 
     // Initialize ModelRegistry (loads from models.json)
     const registry = getModelRegistry();
@@ -129,34 +136,58 @@ export class GatewayService {
   }
 
   /**
-   * Initialize extensions from config
+   * Create extension loader and resolve configs (load runs in start() before channels).
    */
-  private initializeExtensions(): void {
+  private initializeExtensionLoader(): void {
     try {
-      const extensionsConfig = (this.config as any).extensions;
+      const extensionsConfig = (this.config as Record<string, unknown>).extensions as
+        | Record<string, unknown>
+        | undefined;
       if (!extensionsConfig) {
         log.debug('No extensions configured');
         return;
       }
 
-      const resolvedConfigs = normalizeExtensionConfig(extensionsConfig);
-      
       this.extensionLoader = new ExtensionLoader({
         workspaceDir: this.workspacePath,
         extensionsDir: join(this.workspacePath, '.extensions'),
       });
-
-      // Load enabled extensions
-      const enabledExtensions = resolvedConfigs.filter(c => c.enabled);
-      if (enabledExtensions.length > 0) {
-        this.extensionLoader.loadExtensions(enabledExtensions).then(() => {
-          log.debug({ count: enabledExtensions.length }, 'Extensions loaded');
-        }).catch(err => {
-          log.warn({ err }, 'Failed to load some extensions');
-        });
-      }
+      this.extensionLoader.setConfig(this.config as Parameters<ExtensionLoader['setConfig']>[0]);
+      this.resolvedExtensionConfigs = normalizeExtensionConfig(extensionsConfig).filter((c) => c.enabled);
     } catch (error) {
-      log.warn({ error }, 'Failed to initialize extensions');
+      log.warn({ error }, 'Failed to initialize extension loader');
+    }
+  }
+
+  /**
+   * Load extensions and register SDK / full ChannelPlugin instances with ChannelManager.
+   */
+  private async loadExtensionsAndRegisterChannels(): Promise<void> {
+    if (!this.extensionLoader || this.resolvedExtensionConfigs.length === 0) {
+      return;
+    }
+    try {
+      await this.extensionLoader.loadExtensions(this.resolvedExtensionConfigs);
+      const reg = this.extensionLoader.getRegistry();
+      for (const plugin of reg.channelPlugins) {
+        this.channelManager.registerPlugin(plugin);
+      }
+      for (const [, ch] of reg.channels) {
+        if (isSdkChannelExtension(ch)) {
+          this.channelManager.registerPlugin(new ExtensionSdkChannelPlugin(ch));
+        } else {
+          log.warn(
+            { channel: (ch as { name?: string }).name },
+            'Extension channel is not SDK-compatible (missing connect/disconnect/sendMessage); use api.registerChannelPlugin() with a full ChannelPlugin',
+          );
+        }
+      }
+      log.debug(
+        { extensions: this.resolvedExtensionConfigs.length, channels: reg.channels.size },
+        'Extensions loaded and channel plugins registered',
+      );
+    } catch (err) {
+      log.warn({ err }, 'Failed to load extensions');
     }
   }
 
@@ -187,6 +218,8 @@ export class GatewayService {
     log.debug('Starting gateway service...');
     this.startTime = Date.now();
     this.running = true;
+
+    await this.loadExtensionsAndRegisterChannels();
 
     // Start channels (initialize first, then start)
     await this.channelManager.initializeChannels();
@@ -320,10 +353,10 @@ export class GatewayService {
   /**
    * Handle channels config hot reload
    */
-  private handleChannelsReload(newConfig: Config): void {
+  private async handleChannelsReload(newConfig: Config): Promise<void> {
     log.debug('Reloading channels config...');
     this.config = newConfig;
-    this.channelManager.updateConfig(newConfig);
+    await this.channelManager.updateConfig(newConfig);
     this.emit('config.reload', { section: 'channels' });
     this.emit('channels.status', { channels: this.getChannelsStatus() });
     log.debug('Channels config reloaded');
@@ -516,16 +549,34 @@ export class GatewayService {
     connected: boolean;
   }> {
     const runningChannels = new Set(this.channelManager.getRunningChannels());
+    const channels = this.config.channels as Record<string, { enabled?: boolean } | undefined> | undefined;
+    const builtinOrder = CHAT_CHANNEL_ORDER as readonly string[];
 
-    // Check which channels are configured
-    const configChannels = [
-      { name: 'telegram', enabled: !!this.config.channels?.telegram?.enabled },
-    ];
+    const rows: Array<{ name: string; enabled: boolean; connected: boolean }> = CHAT_CHANNEL_ORDER.map(
+      (name) => ({
+        name,
+        enabled: !!channels?.[name]?.enabled,
+        connected: runningChannels.has(name),
+      }),
+    );
 
-    return configChannels.map((ch) => ({
-      ...ch,
-      connected: runningChannels.has(ch.name),
-    }));
+    const extReg = this.extensionLoader?.getRegistry();
+    if (!extReg?.channels.size) {
+      return rows;
+    }
+
+    const seen = new Set(builtinOrder);
+    for (const name of extReg.channels.keys()) {
+      if (seen.has(name)) continue;
+      seen.add(name);
+      rows.push({
+        name,
+        enabled: channels?.[name]?.enabled !== false,
+        connected: runningChannels.has(name),
+      });
+    }
+
+    return rows;
   }
 
   /**

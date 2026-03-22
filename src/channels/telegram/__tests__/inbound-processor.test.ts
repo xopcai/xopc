@@ -161,6 +161,7 @@ describe('inbound-processor', () => {
         senderId: '67890',
         isGroup: false,
         threadId: undefined,
+        accountId: 'default',
       });
     });
 
