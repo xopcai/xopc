@@ -29,6 +29,26 @@ import { CredentialResolver } from '../../auth/credentials.js';
 
 const log = createLogger('OAuthAsync');
 
+/** User-facing message when undici/fetch fails (often DNS, firewall, or wrong machine for localhost callback). */
+function formatOAuthAsyncError(err: unknown): string {
+	const base = err instanceof Error ? err.message : 'OAuth login failed';
+	const cause =
+		err instanceof Error && err.cause instanceof Error
+			? err.cause.message
+			: err instanceof Error && typeof err.cause === 'string'
+				? err.cause
+				: '';
+	const detail = cause ? ` (${cause})` : '';
+	if (/^fetch failed$/i.test(base) || base.includes('fetch failed')) {
+		return (
+			`Network request failed${detail}. If the browser opened on another device, the redirect goes to that device's localhost — ` +
+			`copy the full URL from the browser address bar after sign-in (starts with http://127.0.0.1 or http://localhost) and paste it below. ` +
+			`Otherwise check VPN/proxy/DNS/firewall access to Google OAuth.`
+		);
+	}
+	return base;
+}
+
 // Static OAuth providers map
 const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = {
   'kimi': kimiOAuthProvider,
@@ -339,7 +359,7 @@ async function runOAuthFlow(
       session.message = 'OAuth flow cancelled by user';
     } else {
       session.status = 'failed';
-      session.error = err instanceof Error ? err.message : 'OAuth login failed';
+      session.error = formatOAuthAsyncError(err);
       log.error({ sessionId: session.id, provider: session.provider, error: err }, 'OAuth login failed');
     }
   } finally {
