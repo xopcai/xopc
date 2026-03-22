@@ -30,6 +30,30 @@ describe('sessionWireToUiMessages', () => {
     }
   });
 
+  it('maps toolCall blocks with session `arguments` (not only args)', () => {
+    const raw = [
+      {
+        role: 'assistant',
+        content: [
+          {
+            type: 'toolCall',
+            id: 'call1',
+            name: 'find',
+            arguments: { pattern: '**/*.md', path: '/proj', limit: 30 },
+          },
+        ],
+        timestamp: 1,
+      },
+    ];
+
+    const messages = sessionWireToUiMessages(raw);
+    const tool = messages[0].content.find((b) => b.type === 'tool_use');
+    expect(tool?.type).toBe('tool_use');
+    if (tool?.type === 'tool_use') {
+      expect(tool.input).toEqual({ pattern: '**/*.md', path: '/proj', limit: 30 });
+    }
+  });
+
   it('maps OpenAI tool_calls on assistant messages', () => {
     const raw = [
       {
