@@ -494,6 +494,11 @@ export class GatewayService {
           peerKind: 'direct',
           peerId: chatId,
         });
+
+        // Fire-and-forget: save user message immediately so it survives page refresh
+        this._saveUserMessage(sessionKey, message, attachments).catch((err) => {
+          log.error({ err, sessionKey }, 'Failed to save user message');
+        });
         
         try {
           const eventStream = this.agentService.processDirectStreaming(
@@ -761,6 +766,44 @@ export class GatewayService {
     const idx = buf.findIndex((e) => e.id === lastEventId);
     if (idx === -1) return buf; // can't find cursor — send everything in buffer
     return buf.slice(idx + 1);
+  }
+
+  /**
+   * Save user message to session for webchat (fire-and-forget).
+   * Called at the start of runAgent to ensure message survives page refresh.
+   */
+  private async _saveUserMessage(
+    sessionKey: string,
+    message: string,
+    attachments?: Array<{
+      type: string;
+      mimeType?: string;
+      data?: string;
+      name?: string;
+      size?: number;
+    }>,
+  ): Promise<void> {
+    // Load existing messages
+    const existingMessages = await this.sessionManager.loadMessages(sessionKey);
+
+    // Build user message
+    const userMessage = {
+      role: 'user' as const,
+      content: [{ type: 'text' as const, text: message }],
+      attachments: attachments?.map(a => ({
+        type: a.type,
+        mimeType: a.mimeType,
+        name: a.name,
+        size: a.size,
+        // Note: we don't store data (base64) to keep session file small
+      })),
+      timestamp: Date.now(),
+    };
+
+    // Append and save
+    const updatedMessages = [...existingMessages, userMessage];
+    await this.sessionManager.saveMessages(sessionKey, updatedMessages);
+    log.debug({ sessionKey, messageCount: updatedMessages.length }, 'User message saved');
   }
 
   // ========== Session Management API ==========
