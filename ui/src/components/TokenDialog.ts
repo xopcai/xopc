@@ -63,7 +63,7 @@ export class TokenDialog extends LitElement {
 
             <div class="field-group">
               <label class="field-label">Token</label>
-              <div class="token-input-wrapper">
+              <div class="input-with-actions">
                 <input
                   type=${this._showToken ? 'text' : 'password'}
                   class="text-input"
@@ -75,13 +75,16 @@ export class TokenDialog extends LitElement {
                   }}
                   @keydown=${this._handleKeydown}
                 />
-                <button
-                  class="btn btn-icon toggle-visibility"
-                  @click=${() => this._showToken = !this._showToken}
-                  title=${this._showToken ? 'Hide token' : 'Show token'}
-                >
-                  ${this._showToken ? getIcon('eyeOff') : getIcon('eye')}
-                </button>
+                <div class="input-actions">
+                  <button
+                    type="button"
+                    class="btn-icon"
+                    @click=${() => this._showToken = !this._showToken}
+                    title=${this._showToken ? 'Hide token' : 'Show token'}
+                  >
+                    ${this._showToken ? getIcon('eyeOff') : getIcon('eye')}
+                  </button>
+                </div>
               </div>
               ${this._error ? html`<span class="field-error">${this._error}</span>` : ''}
             </div>

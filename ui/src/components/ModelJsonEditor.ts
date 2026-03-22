@@ -148,11 +148,18 @@ export class ModelJsonEditor extends LitElement {
     
     .input-with-actions {
       display: flex;
+      flex-direction: row;
+      flex-wrap: nowrap;
+      align-items: center;
       gap: 0.5rem;
+      width: 100%;
+      min-width: 0;
     }
     
     .input-with-actions .text-input {
-      flex: 1;
+      flex: 1 1 0%;
+      min-width: 0;
+      width: auto;
     }
     
     .btn {

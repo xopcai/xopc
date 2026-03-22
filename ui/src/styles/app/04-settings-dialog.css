@@ -218,6 +218,31 @@
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
+/* Token / secret: input + copy / eye buttons on one row */
+.input-with-actions {
+  display: flex;
+  flex-direction: row;
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 0.5rem;
+  width: 100%;
+  min-width: 0;
+}
+
+.input-with-actions .text-input {
+  flex: 1 1 0%;
+  min-width: 0;
+  width: auto;
+}
+
+.input-actions {
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  gap: 0.25rem;
+  flex-shrink: 0;
+}
+
 .textarea-input {
   resize: vertical;
   min-height: 6rem;
@@ -418,8 +443,25 @@ xopcbot-gateway-chat {
 }
 
 .settings-page .section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
   max-width: 100%;
   min-height: min-content;
+}
+
+/* Gateway section: title + form blocks */
+.settings-page .settings-section {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.settings-page .settings-section > .section-title {
+  margin: 0;
+  font-size: 1.125rem;
+  font-weight: 600;
+  color: var(--text-primary);
 }
 
 @media (min-width: 768px) {
@@ -432,6 +474,11 @@ xopcbot-gateway-chat {
   .settings-page .section-content {
     max-width: 900px;
   }
+}
+
+/* Spacing from section-content gap; avoid stacking with flex gap */
+.settings-page .section-content > .section-header {
+  margin-bottom: 0;
 }
 
 .settings-page .section-header {
@@ -505,6 +552,12 @@ xopcbot-gateway-chat {
   box-shadow: 0 0 0 3px var(--primary-soft);
 }
 
+.settings-page .input-with-actions .text-input {
+  flex: 1 1 0%;
+  min-width: 0;
+  width: auto;
+}
+
 /* ===== Select with Search ===== */
 .settings-page .select-with-search {
   display: flex;
@@ -541,6 +594,10 @@ xopcbot-gateway-chat {
   align-items: center;
   gap: 0.75rem;
   cursor: pointer;
+}
+
+.settings-page .field-group > .toggle-label {
+  padding-block: 0.375rem;
 }
 
 .settings-page .toggle-input {
