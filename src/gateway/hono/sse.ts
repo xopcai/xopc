@@ -148,6 +148,65 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
 }
 
 /**
+ * POST /api/agent/resume — Re-attach to an in-progress agent run via SSE.
+ *
+ * Request body: { runId, chatId }
+ * The relay replays all buffered events from the beginning and then live-tails
+ * until the run completes.
+ *
+ * SSE events are identical to those from POST /api/agent.
+ */
+export function createAgentResumeHandler(config: SSEHandlerConfig) {
+  const { service } = config;
+
+  return async (c: Context) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid JSON body' } }, 400);
+    }
+
+    const { runId } = body as { runId?: string; chatId?: string };
+    if (!runId || typeof runId !== 'string') {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing required field: runId' } }, 400);
+    }
+
+    if (!service.runRelay.hasRun(runId)) {
+      return c.json({ ok: false, error: { code: 'NOT_FOUND', message: 'Run not found or already expired' } }, 404);
+    }
+
+    c.header('X-Accel-Buffering', 'no');
+    return streamSSE(c, async (stream) => {
+      let eventId = 0;
+      try {
+        for await (const event of service.runRelay.subscribe(runId)) {
+          await stream.writeSSE({
+            id: String(++eventId),
+            event: event.type || 'message',
+            data: JSON.stringify(event),
+          });
+        }
+        // Run completed — send a final result event
+        await stream.writeSSE({
+          id: String(++eventId),
+          event: 'result',
+          data: JSON.stringify({ ok: true, payload: { status: 'ok', summary: 'Resumed run completed' } }),
+        });
+      } catch (error) {
+        log.error({ err: error, runId }, 'Resume stream failed');
+        await stream.writeSSE({
+          id: String(++eventId),
+          event: 'error',
+          data: JSON.stringify({
+            ok: false,
+            error: { code: 'INTERNAL_ERROR', message: error instanceof Error ? error.message : 'Unknown error' },
+          }),
+        });
+      }
+    });
+  };
+}
+
+/**
  * POST /api/send — Send a message through a channel (non-streaming).
  */
 export function createSendHandler(config: SSEHandlerConfig) {
