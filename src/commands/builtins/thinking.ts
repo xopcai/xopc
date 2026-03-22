@@ -32,13 +32,14 @@ const thinkCommand: CommandDefinition = {
   handler: async (ctx: CommandContext, args: string) => {
     await ctx.setTyping(true);
     
-    // Get the extended context with session config store
-    const extendedCtx = ctx as any;
-    const configStore = extendedCtx.getSessionConfigStore?.();
+    const extendedCtx = ctx as CommandContext & {
+      getThinkingLevel?: () => Promise<ThinkLevel | undefined>;
+      getSessionConfigStore?: () => unknown;
+    };
     
     if (!args.trim()) {
       // Show current thinking level
-      const currentLevel = await extendedCtx.getThinkingLevel?.()() || ctx.getConfig()?.agents?.defaults?.thinkingDefault;
+      const currentLevel = await extendedCtx.getThinkingLevel?.() || ctx.getConfig()?.agents?.defaults?.thinkingDefault;
       
       return {
         content: `🧠 *Thinking Level*\n\n` +
@@ -70,9 +71,8 @@ const thinkCommand: CommandDefinition = {
       };
     }
     
-    // Set the thinking level
-    if (configStore) {
-      await configStore.update(ctx.sessionKey, { thinkingLevel: level });
+    if (ctx.setThinkingLevel) {
+      await ctx.setThinkingLevel(level);
     }
     
     const levelDescriptions: Record<ThinkLevel, string> = {

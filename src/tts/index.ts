@@ -28,6 +28,12 @@ export interface SpeakOptions {
  */
 export { isTTSAvailable, isProviderConfigured, getAvailableProviders } from './factory.js';
 
+export {
+  mergeTtsConfigFromAppConfig,
+  formatTtsSetupHint,
+  appendTtsReadinessNote,
+} from './merge-config.js';
+
 /**
  * Preprocess text for TTS
  */

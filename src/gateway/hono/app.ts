@@ -125,6 +125,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         'PATCH /api/config',
         'POST /api/config/reload',
         '...  /api/cron/*',
+        'GET/PATCH /api/sessions/:key/agent-config',
         '...  /api/sessions/*',
       ],
     });
@@ -869,6 +870,23 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     const channel = c.req.query('channel');
     const chatIds = await service.getSessionChatIds(channel || undefined);
     return c.json({ ok: true, payload: { chatIds } });
+  });
+
+  // GET /api/sessions/:key/agent-config — resolved session agent settings (thinking, etc.)
+  authenticated.get('/api/sessions/:key/agent-config', async (c) => {
+    const key = c.req.param('key');
+    const payload = await service.getSessionAgentConfig(key);
+    return c.json({ ok: true, payload });
+  });
+
+  authenticated.patch('/api/sessions/:key/agent-config', async (c) => {
+    const key = c.req.param('key');
+    const body = await c.req.json().catch(() => ({}));
+    const result = await service.patchSessionAgentConfig(key, body);
+    if (!result.ok) {
+      return c.json({ ok: false, error: result.error }, 400);
+    }
+    return c.json({ ok: true });
   });
 
   // GET /api/sessions/:key - Get single session (must be after /stats and /chat-ids)

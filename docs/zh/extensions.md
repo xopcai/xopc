@@ -101,7 +101,7 @@ xopcbot extension create my-extension --name "My Extension" --kind utility
 
 这将创建：
 - `package.json` - npm 配置
-- `index.ts` - 扩展入口（TypeScript，使用 xopcbot/extension-sdk）
+- `index.ts` - 扩展入口（TypeScript，推荐使用 `@xopcai/xopcbot/extension-sdk`）
 - `xopcbot.extension.json` - 扩展清单
 - `README.md` - 文档模板
 
@@ -126,6 +126,8 @@ xopcbot 支持三级扩展存储，按优先级从高到低：
   - Global：常用的共享扩展（如 telegram-channel）
   - Bundled：随 xopcbot 发布的官方扩展
 
+**Monorepo 说明：** Telegram 通道是仓库内 **`extensions/telegram`** 工作区包（`@xopcai/xopcbot-extension-telegram`），由核心通过 `src/channels/plugins/bundled.ts` 接入；与上表中 **Bundled** 扩展目录 `xopcbot/extensions/` 不是同一条加载路径。
+
 ### Global 扩展目录
 
 ```bash
@@ -140,15 +142,15 @@ export XOPCBOT_GLOBAL_EXTENSIONS=/path/to/global/extensions
 
 ## Extension SDK
 
-xopcbot 提供官方 Extension SDK，统一导出所有扩展开发所需的类型和接口。
+xopcbot 提供官方 Extension SDK。发布包名为 **`@xopcai/xopcbot`**，请通过子路径 **`@xopcai/xopcbot/extension-sdk`** 导入。
 
 ### 使用 SDK
 
 ```typescript
-// 推荐方式：使用官方 SDK
-import type { ExtensionApi, ExtensionDefinition } from 'xopcbot/extension-sdk';
+// 推荐：与 npm 发布包一致
+import type { ExtensionApi, ExtensionDefinition } from '@xopcai/xopcbot/extension-sdk';
 
-// 不推荐使用内部路径
+// 不推荐直接依赖内部路径
 // import type { ... } from 'xopcbot/extensions';  ❌
 ```
 
@@ -160,62 +162,45 @@ import type {
   ExtensionDefinition,      // 扩展定义
   ExtensionApi,             // 扩展 API
   ExtensionLogger,          // 日志接口
-} from 'xopcbot/extension-sdk';
+} from '@xopcai/xopcbot/extension-sdk';
 
-// 工具
+// 工具（由 pi-agent-core 再导出）
 import type {
-  ExtensionTool,            // 工具定义
-  ExtensionToolContext,     // 工具上下文
-} from 'xopcbot/extension-sdk';
+  AgentTool,
+  AgentToolResult,
+} from '@xopcai/xopcbot/extension-sdk';
 
 // 钩子
 import type {
   ExtensionHookEvent,       // 钩子事件类型
   ExtensionHookHandler,     // 钩子处理器
-  HookOptions,           // 钩子选项
-} from 'xopcbot/extension-sdk';
+  HookOptions,              // 钩子选项
+} from '@xopcai/xopcbot/extension-sdk';
 
-// 通道
+// 通道（ChannelPlugin）
 import type {
-  ChannelExtension,         // 通道扩展
-  OutboundMessage,       // 出站消息
-} from 'xopcbot/extension-sdk';
+  ChannelPlugin,
+  ChannelPluginInitOptions,
+  ChannelPluginStartOptions,
+} from '@xopcai/xopcbot/extension-sdk';
+
+import {
+  defineChannelPluginEntry,
+  registerExtensionCliProgram,
+} from '@xopcai/xopcbot/extension-sdk';
 
 // 命令
-import type {
-  ExtensionCommand,         // 命令定义
-  CommandContext,        // 命令上下文
-  CommandResult,         // 命令结果
-} from 'xopcbot/extension-sdk';
+import type { ExtensionCommand } from '@xopcai/xopcbot/extension-sdk';
 
 // 服务
-import type {
-  ExtensionService,         // 服务定义
-  ServiceContext,        // 服务上下文
-} from 'xopcbot/extension-sdk';
+import type { ExtensionService } from '@xopcai/xopcbot/extension-sdk';
 ```
 
 ### SDK 路径解析
 
-在底层，xopcbot 使用 jiti 配置路径别名：
+在本地开发时，xopcbot 可通过 jiti 将别名 `xopcbot/extension-sdk` 解析到 `src/extension-sdk/index.ts`，便于不依赖发布包路径。使用已安装的 **`@xopcai/xopcbot`** 时，请优先使用 **`@xopcai/xopcbot/extension-sdk`**。
 
-```typescript
-// jiti 配置
-{
-  alias: {
-    'xopcbot/extension-sdk': './src/extension-sdk/index.ts'
-  }
-}
-```
-
-这意味着扩展开发时无需关心 xopcbot 源码位置，SDK 路径会自动解析。
-```
-
-这将创建：
-- `package.json` - npm 配置
-- `index.ts` - 扩展入口（TypeScript，支持 jiti 即时加载）
-- `xopcbot.extension.json` - 扩展清单
-- `README.md` - 文档模板
+---
 
 ## CLI 命令参考
 
@@ -339,7 +324,7 @@ xopcbot extension create discord-channel --name "Discord Channel" --kind channel
 
 ```javascript
 // index.js
-import type { ExtensionApi } from 'xopcbot-extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopcbot/extension-sdk';
 
 const extension = {
   id: 'my-extension',
@@ -590,7 +575,7 @@ api.off('my-event', handler);
 ## 完整示例
 
 ```javascript
-import type { ExtensionApi } from 'xopcbot-extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopcbot/extension-sdk';
 
 const extension = {
   id: 'example',

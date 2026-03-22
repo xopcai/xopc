@@ -2,8 +2,17 @@ import type { AgentEvent, AgentMessage, ThinkingLevel } from '@mariozechner/pi-a
 import { MessageBusShutdownError, type MessageBus, type InboundMessage } from '../bus/index.js';
 import type { Config, AgentDefaults } from '../config/schema.js';
 import type { ChannelManager } from '../channels/manager.js';
+import { mkdirSync } from 'fs';
+import { join } from 'path';
 
-import { SessionStore, type CompactionConfig, type WindowConfig } from '../session/index.js';
+import {
+  SessionStore,
+  SessionConfigStore,
+  resolveEffectiveThinkingLevel,
+  type CompactionConfig,
+  type WindowConfig,
+} from '../session/index.js';
+import { normalizeThinkLevel, type ThinkLevel } from '../types/thinking.js';
 import { createLogger } from '../utils/logger.js';
 import { ExtensionRegistryImpl as ExtensionRegistry, ExtensionHookRunner } from '../extensions/index.js';
 import {
@@ -75,6 +84,7 @@ export interface StreamHandle {
 
 export class AgentService {
   private sessionStore: SessionStore;
+  private sessionConfigStore: SessionConfigStore;
   private hookRunner?: ExtensionHookRunner;
   private running = false;
   private agentId: string;
@@ -129,6 +139,8 @@ export class AgentService {
     log.debug('Command system initialized');
 
     this.sessionStore = this.createSessionStore();
+    this.sessionConfigStore = new SessionConfigStore(this.workspaceDir);
+    mkdirSync(join(this.workspaceDir, '.sessions', 'config'), { recursive: true });
 
     this.hookRunner = this.createHookRunner();
     this.hookHandler = new HookHandler({
@@ -183,6 +195,8 @@ export class AgentService {
       modelManager: this.modelManager,
       eventHandler: this.agentEventHandler,
       feedbackCoordinator: this.feedbackCoordinator,
+      sessionConfigStore: this.sessionConfigStore,
+      getThinkingDefault: () => this.config.config?.agents?.defaults?.thinkingDefault,
     });
 
     this.messageRouter = new MessageRouter({ workspace: config.workspace });
@@ -190,6 +204,10 @@ export class AgentService {
       config: config.config!,
       bus,
       sessionStore: this.sessionStore,
+      sessionConfigStore: this.sessionConfigStore,
+      applySessionThinkingLevel: (sessionKey: string, level: ThinkLevel) => {
+        this.agentManager.setThinkingLevel(sessionKey, level as ThinkingLevel);
+      },
       getCurrentModel: () => this.agentOrchestrator.getCurrentModel(),
       switchModelForSession: (sessionKey: string, modelId: string) =>
         this.switchModelForSession(sessionKey, modelId),
@@ -349,6 +367,7 @@ export class AgentService {
 
   async start(): Promise<void> {
     this.running = true;
+    await this.sessionConfigStore.initialize();
     await this.hookHandler.trigger('gateway_start', { port: 0, host: 'cli' });
     log.debug('Agent service started');
     await this.hookHandler.trigger('session_start', { sessionId: this.agentId });
@@ -508,6 +527,40 @@ export class AgentService {
     };
   }
 
+  private async applyResolvedThinkingLevel(sessionKey: string, requestOverride?: string | null): Promise<void> {
+    const def = this.config.config?.agents?.defaults?.thinkingDefault;
+    const level = await resolveEffectiveThinkingLevel(
+      this.sessionConfigStore,
+      sessionKey,
+      requestOverride,
+      def,
+    );
+    this.agentManager.setThinkingLevel(sessionKey, level);
+  }
+
+  /** Resolved thinking level for a session (for Web UI pill sync). */
+  async getSessionAgentConfig(sessionKey: string): Promise<{ thinkingLevel: ThinkingLevel }> {
+    const def = this.config.config?.agents?.defaults?.thinkingDefault ?? 'medium';
+    const level = await resolveEffectiveThinkingLevel(this.sessionConfigStore, sessionKey, null, def);
+    return { thinkingLevel: level };
+  }
+
+  async patchSessionAgentConfig(
+    sessionKey: string,
+    partial: { thinkingLevel?: string },
+  ): Promise<{ ok: boolean; error?: string }> {
+    if (partial.thinkingLevel === undefined) {
+      return { ok: true };
+    }
+    const normalized = normalizeThinkLevel(partial.thinkingLevel);
+    if (!normalized) {
+      return { ok: false, error: 'Invalid thinking level' };
+    }
+    await this.sessionConfigStore.update(sessionKey, { thinkingLevel: normalized });
+    this.agentManager.setThinkingLevel(sessionKey, normalized as ThinkingLevel);
+    return { ok: true };
+  }
+
   async *processDirectStreaming(
     content: string,
     sessionKey = 'cli:direct',
@@ -639,9 +692,7 @@ export class AgentService {
       const loaded = await this.sessionStore.load(sessionKey);
       agent.replaceMessages(this.prepareLoadedSessionMessages(sessionKey, loaded));
 
-      if (thinking) {
-        this.agentManager.setThinkingLevel(sessionKey, thinking as ThinkingLevel);
-      }
+      await this.applyResolvedThinkingLevel(sessionKey, thinking);
 
       const messageContent = this.buildMessageContent(content, attachments);
 
@@ -714,10 +765,7 @@ export class AgentService {
       const loaded = await this.sessionStore.load(sessionKey);
       agent.replaceMessages(this.prepareLoadedSessionMessages(sessionKey, loaded));
 
-      // Set thinking level if provided
-      if (thinking) {
-        this.agentManager.setThinkingLevel(sessionKey, thinking as ThinkingLevel);
-      }
+      await this.applyResolvedThinkingLevel(sessionKey, thinking);
 
       const messageContent = this.buildMessageContent(content, attachments);
 

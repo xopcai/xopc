@@ -5,7 +5,7 @@
  */
 
 import type { InboundMessage } from '../../bus/index.js';
-import { normalizeTelegramCommandName } from '../../commands/command-parse.js';
+import { parseSlashCommand } from '../../commands/command-parse.js';
 import type { AgentContext } from '../service.js';
 
 export interface MessageRoutingResult {
@@ -48,7 +48,7 @@ export class MessageRouter {
     const isSystemMessage = msg.channel === 'system';
 
     // Check if message contains a command
-    const commandInfo = this.parseCommand(msg.content);
+    const commandInfo = parseSlashCommand(msg.content);
 
     return {
       sessionKey,
@@ -79,29 +79,6 @@ export class MessageRouter {
 
     // Default: combine channel and chat_id
     return `${msg.channel}:${msg.chat_id}`;
-  }
-
-  /**
-   * Parse a command from message text
-   */
-  private parseCommand(text: string): { command: string; args: string } | null {
-    const trimmed = text.trim();
-
-    if (!trimmed.startsWith('/')) {
-      return null;
-    }
-
-    const withoutPrefix = trimmed.slice(1);
-    const spaceIndex = withoutPrefix.indexOf(' ');
-
-    if (spaceIndex === -1) {
-      return { command: normalizeTelegramCommandName(withoutPrefix), args: '' };
-    }
-
-    return {
-      command: normalizeTelegramCommandName(withoutPrefix.slice(0, spaceIndex)),
-      args: withoutPrefix.slice(spaceIndex + 1).trim(),
-    };
   }
 
   /**

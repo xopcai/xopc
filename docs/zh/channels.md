@@ -10,6 +10,10 @@ xopcbot 支持多种通信通道，采用基于扩展的架构。
 | Feishu/Lark | ✅ | 机器人消息、@提及 |
 | Web UI | ✅ | Gateway 连接的聊天界面 |
 
+## 实现说明（开发者）
+
+Telegram 通道以 **pnpm 工作区包** 形式位于 `extensions/telegram`（`@xopcai/xopcbot-extension-telegram`）。核心在 `src/channels/plugins/bundled.ts` 中注册该插件。为保持从核心代码导入路径稳定，`src/channels/telegram/index.ts` 会从该包再导出插件及相关类型。通道采用 **`ChannelPlugin`** 模型（见 `src/channels/plugin-types.ts`），不再使用旧的 `telegramExtension` API。
+
 ## Telegram 通道
 
 ### 多账户配置

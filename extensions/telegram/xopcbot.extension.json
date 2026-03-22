@@ -1,0 +1,8 @@
+{
+  "id": "telegram",
+  "name": "Telegram Channel",
+  "description": "Bundled Telegram Bot channel (workspace package @xopcai/xopcbot-extension-telegram)",
+  "version": "0.2.2",
+  "kind": "channel",
+  "main": "dist/index.js"
+}

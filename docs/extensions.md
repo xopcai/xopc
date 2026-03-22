@@ -92,16 +92,20 @@ xopcbot supports three-tier extension storage:
 - Global: Commonly used shared extensions (like telegram-channel)
 - Bundled: Official extensions shipped with xopcbot
 
+**Monorepo note:** The Telegram channel is a **workspace package** under `extensions/telegram` (`@xopcai/xopcbot-extension-telegram`) and is wired into the core via `src/channels/plugins/bundled.ts`. It is not loaded from `xopcbot/extensions/` at runtime; that path refers to other bundled extension assets.
+
 ---
 
 ## Extension SDK
 
-xopcbot provides an official Extension SDK:
+The npm package name is **`@xopcai/xopcbot`**. Import the SDK through the published subpath:
 
 ```typescript
-// Recommended: Use official SDK
-import type { ExtensionApi, ExtensionDefinition } from 'xopcbot/extension-sdk';
+// Recommended: published package subpath
+import type { ExtensionApi, ExtensionDefinition } from '@xopcai/xopcbot/extension-sdk';
 ```
+
+When developing extensions against a local checkout, the loader may still resolve the legacy alias `xopcbot/extension-sdk` to `src/extension-sdk/index.ts`.
 
 ### Exported Types
 
@@ -111,39 +115,38 @@ import type {
   ExtensionDefinition,      // Extension definition
   ExtensionApi,             // Extension API
   ExtensionLogger,          // Logger interface
-} from 'xopcbot/extension-sdk';
+} from '@xopcai/xopcbot/extension-sdk';
 
-// Tools
+// Tools (re-exported from pi-agent-core)
 import type {
-  ExtensionTool,            // Tool definition
-  ExtensionToolContext,     // Tool context
-} from 'xopcbot/extension-sdk';
+  AgentTool,
+  AgentToolResult,
+} from '@xopcai/xopcbot/extension-sdk';
 
 // Hooks
 import type {
   ExtensionHookEvent,       // Hook event type
   ExtensionHookHandler,     // Hook handler
   HookOptions,              // Hook options
-} from 'xopcbot/extension-sdk';
+} from '@xopcai/xopcbot/extension-sdk';
 
-// Channels
+// Channels (ChannelPlugin registry)
 import type {
-  ChannelExtension,         // Channel extension
-  OutboundMessage,          // Outbound message
-} from 'xopcbot/extension-sdk';
+  ChannelPlugin,
+  ChannelPluginInitOptions,
+  ChannelPluginStartOptions,
+} from '@xopcai/xopcbot/extension-sdk';
+
+import {
+  defineChannelPluginEntry,
+  registerExtensionCliProgram,
+} from '@xopcai/xopcbot/extension-sdk';
 
 // Commands
-import type {
-  ExtensionCommand,         // Command definition
-  CommandContext,           // Command context
-  CommandResult,            // Command result
-} from 'xopcbot/extension-sdk';
+import type { ExtensionCommand } from '@xopcai/xopcbot/extension-sdk';
 
 // Services
-import type {
-  ExtensionService,         // Service definition
-  ServiceContext,           // Service context
-} from 'xopcbot/extension-sdk';
+import type { ExtensionService } from '@xopcai/xopcbot/extension-sdk';
 ```
 
 ---
@@ -177,7 +180,7 @@ Each extension must include `xopcbot.extension.json`:
 ### Extension Entry File
 
 ```typescript
-import type { ExtensionApi } from 'xopcbot/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopcbot/extension-sdk';
 
 const extension = {
   id: 'my-extension',
@@ -434,7 +437,7 @@ api.off('my-event', handler);
 ## Complete Example
 
 ```typescript
-import type { ExtensionApi } from 'xopcbot/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopcbot/extension-sdk';
 
 const extension = {
   id: 'example',

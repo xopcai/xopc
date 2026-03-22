@@ -18,4 +18,9 @@ export class ChannelHealthMonitor {
   get(channelId: string, accountId: string): ChannelHealthState | undefined {
     return this.state.get(`${channelId}:${accountId}`);
   }
+
+  /** Snapshot for diagnostics / `getRuntimeSnapshot()`. */
+  toJSON(): Record<string, ChannelHealthState> {
+    return Object.fromEntries(this.state);
+  }
 }

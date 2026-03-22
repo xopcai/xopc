@@ -10,6 +10,10 @@ xopcbot supports multiple communication channels with an extension-based archite
 | Feishu/Lark | ✅ | Bot messages, mentions |
 | Web UI | ✅ | Gateway-connected chat interface |
 
+## Implementation note (developers)
+
+The Telegram channel is shipped as a **pnpm workspace package** at `extensions/telegram` (`@xopcai/xopcbot-extension-telegram`). The core registers it through `src/channels/plugins/bundled.ts`. For stable imports from core code, `src/channels/telegram/index.ts` re-exports the plugin and related symbols from that package. Channels use the **`ChannelPlugin`** model (see `src/channels/plugin-types.ts`), not the legacy `telegramExtension` API.
+
 ## Telegram Channel
 
 ### Multi-Account Configuration

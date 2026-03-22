@@ -54,17 +54,20 @@ src/
 │   ├── tools/          #   Built-in tools (Typebox schemas)
 │   └── progress.ts     #   Progress feedback system
 ├── bus/                # Event bus for message routing
-├── channels/           # Channel integrations
-│   ├── telegram/       #   Telegram extension (multi-account)
-│   │   ├── extension.ts   #     Main implementation
-│   │   ├── client.ts      #     Bot client wrapper
-│   │   ├── webhook.ts     #     Webhook server support
-│   │   └── command-handler.ts  # Bot command handlers
-│   ├── types.ts        #   Channel extension interfaces
+├── channels/           # Channel integrations (ChannelPlugin + manager)
+│   ├── plugin-types.ts #   ChannelPlugin interface & adapters
 │   ├── manager.ts      #   Channel lifecycle manager
-│   ├── access-control.ts     # Access control policies
-│   ├── draft-stream.ts       # Streaming message preview
-│   └── format.ts             # Markdown to HTML formatter
+│   ├── plugins/
+│   │   ├── bundled.ts  #   Built-in workspace plugins (Telegram)
+│   │   ├── registry.ts #   Plugin registry / lookup
+│   │   └── types.*.ts  #   Registry type helpers
+│   ├── telegram/
+│   │   └── index.ts    #   Re-exports from @xopcai/xopcbot-extension-telegram (compat)
+│   ├── outbound/       #   Outbound delivery pipeline
+│   ├── security.ts     #   Access control helpers
+│   ├── draft-stream.ts #   Streaming message preview
+│   └── format.ts       #   Markdown to HTML formatter
+├── extension-sdk/      # Official Extension SDK (re-exported as @xopcai/xopcbot/extension-sdk)
 ├── cli/                # CLI commands with self-registration
 │   ├── commands/       #   Individual command modules
 │   ├── registry.ts     #   Command registration system
@@ -87,6 +90,9 @@ src/
     ├── logger.ts       #   Contextual logging
     ├── log-store.ts    #   Log storage & querying
     └── markdown/       #   Markdown processing
+
+extensions/
+└── telegram/           # Workspace package: Telegram channel (@xopcai/xopcbot-extension-telegram)
 ```
 
 ## Core Modules
@@ -184,36 +190,23 @@ src/agent/memory/
 - `abstractive` - LLM-based summarization
 - `structured` - Preserve structured data
 
-### Channel Extensions (`src/channels/`)
+### Channel plugins (`src/channels/`)
 
-Extension-based channel architecture:
+Channels are implemented as **`ChannelPlugin`** instances. The core **`ChannelManager`** loads plugins from `bundledChannelPlugins` in `src/channels/plugins/bundled.ts` (Telegram is provided by the workspace package `extensions/telegram`). Each plugin exposes `init` / `start` / outbound delivery and optional adapters (config, security, streaming, gateway, etc.).
 
-```typescript
-import { telegramExtension } from './channels/index.js';
-
-// Initialize
-await telegramExtension.init({ bus, config, channelConfig });
-await telegramExtension.start();
-
-// Send message
-await telegramExtension.send({
-  chatId: '123456',
-  content: 'Hello World',
-  accountId: 'personal',
-});
-
-// Streaming preview
-const stream = telegramExtension.startStream({ chatId: '123456' });
-stream.update('Processing...');
-await stream.end();
-```
-
-**Features**:
+**Features** (Telegram):
 - Multi-account support
 - Access control (allowlist, group policies)
 - Streaming message preview
 - Voice messages (STT/TTS)
 - Document/file support
+
+**Imports** (extension or core code):
+
+```typescript
+import { telegramPlugin } from '@xopcai/xopcbot-extension-telegram';
+// Re-exported for stable paths: import { telegramPlugin } from './channels/telegram/index.js';
+```
 
 ### Extension System (`src/extensions/`)
 
@@ -335,9 +328,8 @@ api.registerHook('before_tool_call', async (event, ctx) => {
 });
 ```
 
-### Adding Channel Extensions
+### Adding channel plugins
 
-1. Create `src/channels/<name>/` directory
-2. Implement `ChannelExtension` interface
-3. Add to `src/channels/index.ts` exports
-4. Register in `ChannelManager`
+1. Implement `ChannelPlugin` in a package or under `extensions/<name>/` (see `src/channels/plugin-types.ts` and `defineChannelPluginEntry` in `@xopcai/xopcbot/extension-sdk`).
+2. Export the plugin object and add it to `bundledChannelPlugins` in `src/channels/plugins/bundled.ts` if it should ship with the core binary.
+3. Ensure `ChannelManager` startup loads your plugin (bundled plugins are registered automatically when listed in `bundled.ts`).

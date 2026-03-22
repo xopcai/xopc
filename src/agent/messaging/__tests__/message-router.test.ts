@@ -27,4 +27,22 @@ describe('MessageRouter', () => {
     expect(r.command).toBe('switch');
     expect(r.commandArgs).toBe('minimax/foo');
   });
+
+  it('treats slash command on a line after STT/transcript prefix as command', async () => {
+    const r = await router.routeMessage(
+      makeInbound('voice transcript here\n\n/tts on'),
+    );
+    expect(r.isCommand).toBe(true);
+    expect(r.command).toBe('tts');
+    expect(r.commandArgs).toBe('on');
+  });
+
+  it('parses /skills reload when not at start of message', async () => {
+    const r = await router.routeMessage(
+      makeInbound('note\n/skills reload'),
+    );
+    expect(r.isCommand).toBe(true);
+    expect(r.command).toBe('skills');
+    expect(r.commandArgs).toBe('reload');
+  });
 });

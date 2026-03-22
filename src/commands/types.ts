@@ -7,6 +7,7 @@
 
 import type { Config } from '../config/schema.js';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import type { ThinkLevel } from '../types/thinking.js';
 
 // ============================================================================
 // Unified Message Format (Platform Agnostic)
@@ -177,6 +178,9 @@ export interface CommandContext {
   getConfig?(): Config;
   /** Update configuration value */
   updateConfig?(path: string, value: unknown): Promise<boolean>;
+
+  /** Persist session thinking level and sync in-memory agent (when wired) */
+  setThinkingLevel?(level: ThinkLevel): Promise<void>;
 }
 
 export type PlatformFeature = 

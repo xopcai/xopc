@@ -7,7 +7,9 @@
 
 import type { Agent, AgentMessage } from '@mariozechner/pi-agent-core';
 import type { InboundMessage } from '../../bus/index.js';
-import type { SessionStore } from '../../session/index.js';
+import type { SessionConfigStore, SessionStore } from '../../session/index.js';
+import { resolveEffectiveThinkingLevel } from '../../session/thinking-resolve.js';
+import type { ThinkLevel } from '../../types/thinking.js';
 import type { ModelManager } from '../models/index.js';
 import type { SessionContext } from '../session/session-context.js';
 import type { AgentEventHandler } from './agent-event-handler.js';
@@ -26,6 +28,8 @@ export interface AgentOrchestratorConfig {
   modelManager: ModelManager;
   eventHandler: AgentEventHandler;
   feedbackCoordinator: FeedbackCoordinator;
+  sessionConfigStore: SessionConfigStore;
+  getThinkingDefault: () => ThinkLevel | undefined;
 }
 
 export class AgentOrchestrator {
@@ -34,6 +38,8 @@ export class AgentOrchestrator {
   private modelManager: ModelManager;
   private eventHandler: AgentEventHandler;
   private feedbackCoordinator: FeedbackCoordinator;
+  private sessionConfigStore: SessionConfigStore;
+  private getThinkingDefault: () => ThinkLevel | undefined;
 
   constructor(config: AgentOrchestratorConfig) {
     this.agentManager = config.agentManager;
@@ -41,6 +47,8 @@ export class AgentOrchestrator {
     this.modelManager = config.modelManager;
     this.eventHandler = config.eventHandler;
     this.feedbackCoordinator = config.feedbackCoordinator;
+    this.sessionConfigStore = config.sessionConfigStore;
+    this.getThinkingDefault = config.getThinkingDefault;
   }
 
   /**
@@ -72,6 +80,14 @@ export class AgentOrchestrator {
 
       // 2. Apply model configuration for session
       await this.modelManager.applyModelForSession(agent, sessionKey);
+
+      const thinkingLevel = await resolveEffectiveThinkingLevel(
+        this.sessionConfigStore,
+        sessionKey,
+        null,
+        this.getThinkingDefault(),
+      );
+      this.agentManager.setThinkingLevel(sessionKey, thinkingLevel);
 
       // 3. Build user message
       const userMessage = this.buildUserMessage(msg);

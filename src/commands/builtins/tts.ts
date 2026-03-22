@@ -16,6 +16,12 @@
 import type { CommandDefinition, CommandContext } from '../types.js';
 import { commandRegistry } from '../registry.js';
 import type { TTSAutoMode, TTSProvider } from '../../tts/types.js';
+import {
+  appendTtsReadinessNote,
+  formatTtsSetupHint,
+  isTTSAvailable,
+  mergeTtsConfigFromAppConfig,
+} from '../../tts/index.js';
 
 const ttsCommand: CommandDefinition = {
   id: 'tts.manage',
@@ -46,6 +52,9 @@ const ttsCommand: CommandDefinition = {
       ttsConfig?.[currentProvider]?.voice ??
       (currentProvider === 'openai' ? 'alloy' : 'Cherry');
 
+    const effectiveTts = mergeTtsConfigFromAppConfig(ttsConfig);
+    const ttsRuntimeOk = isTTSAvailable(effectiveTts);
+
     // Parse arguments
     const arg = args.trim().toLowerCase();
 
@@ -61,6 +70,18 @@ const ttsCommand: CommandDefinition = {
       const status = isEnabled ? '✅ Enabled' : '❌ Disabled';
       const trigger = triggerLabels[currentTrigger] ?? currentTrigger;
 
+      const runtimeLine =
+        !isEnabled
+          ? ''
+          : ttsRuntimeOk
+            ? `Runtime: ✅ *Ready* (audio can be generated)
+`
+            : `Runtime: ⚠️ *Not ready* — no provider can run with current config
+`;
+
+      const setupHint =
+        isEnabled && !ttsRuntimeOk ? `\n${formatTtsSetupHint()}\n` : ''
+
       return {
         content:
           `🔊 *TTS Settings*
@@ -73,8 +94,9 @@ const ttsCommand: CommandDefinition = {
           `Provider: *${currentProvider}*
 ` +
           `Voice: *${currentVoice}*
-
 ` +
+          (runtimeLine ? `\n${runtimeLine}` : '') +
+          setupHint +
           `*Commands:*
 ` +
           `/tts on - Enable TTS
@@ -99,10 +121,11 @@ const ttsCommand: CommandDefinition = {
       case 'on':
       case 'enable': {
         const success = await ctx.updateConfig?.('tts.enabled', true);
+        const base = success
+          ? '✅ TTS enabled. Use `/tts always` or `/tts inbound` to set trigger mode.'
+          : '❌ Failed to enable TTS.';
         return {
-          content: success
-            ? '✅ TTS enabled. Use `/tts always` or `/tts inbound` to set trigger mode.'
-            : '❌ Failed to enable TTS.',
+          content: success ? appendTtsReadinessNote(base, ctx.getConfig?.()) : base,
           success: !!success,
         };
       }
@@ -127,10 +150,11 @@ const ttsCommand: CommandDefinition = {
           // Also enable TTS if setting a trigger mode
           await ctx.updateConfig?.('tts.enabled', true);
         }
+        const base = success
+          ? `✅ TTS trigger mode set to *${mode}*${!isEnabled ? ' and TTS enabled' : ''}.`
+          : `❌ Failed to set TTS trigger mode.`;
         return {
-          content: success
-            ? `✅ TTS trigger mode set to *${mode}*${!isEnabled ? ' and TTS enabled' : ''}.`
-            : `❌ Failed to set TTS trigger mode.`,
+          content: success ? appendTtsReadinessNote(base, ctx.getConfig?.()) : base,
           success: !!success,
         };
       }
@@ -160,10 +184,11 @@ const ttsCommand: CommandDefinition = {
             };
           }
           const success = await ctx.updateConfig?.('tts.provider', provider);
+          const base = success
+            ? `✅ TTS provider set to *${provider}*.`
+            : '❌ Failed to set TTS provider.';
           return {
-            content: success
-              ? `✅ TTS provider set to *${provider}*.`
-              : '❌ Failed to set TTS provider.',
+            content: success ? appendTtsReadinessNote(base, ctx.getConfig?.()) : base,
             success: !!success,
           };
         }
