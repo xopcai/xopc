@@ -43,12 +43,25 @@ export class HookHandler {
 
   async runMessageSending(
     to: string,
-    content: string
+    content: string,
+    channel?: string,
   ): Promise<{ send: boolean; content?: string; reason?: string }> {
     if (!this.deps.hookRunner) return { send: true, content };
 
     const ctx = this.getContext();
-    return this.deps.hookRunner.runMessageSending(to, content, ctx);
+    return this.deps.hookRunner.runMessageSending(to, content, ctx, channel ? { channel } : undefined);
+  }
+
+  async runMessageSent(
+    to: string,
+    content: string,
+    success: boolean,
+    error: string | undefined,
+    channel?: string,
+  ): Promise<void> {
+    if (!this.deps.hookRunner) return;
+    const ctx = this.getContext();
+    await this.deps.hookRunner.runMessageSent(to, content, success, error, ctx, channel ? { channel } : undefined);
   }
 
   async runInputHook(

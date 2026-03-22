@@ -11,6 +11,7 @@ import type {
   BeforeToolCallResult,
   MessageSendingContext,
   MessageSendingResult,
+  MessageSentContext,
 } from './types/hooks.js';
 
 import { ExtensionRegistryImpl as ExtensionRegistry } from './loader.js';
@@ -154,11 +155,13 @@ export class ExtensionHookRunner {
     to: string,
     content: string,
     context: HookContext,
+    opts?: { channel?: string },
   ): Promise<{ send: boolean; content?: string; reason?: string }> {
     const event: MessageSendingContext = {
       ...context,
       to,
       content,
+      channel: opts?.channel,
       timestamp: new Date(),
     };
 
@@ -193,6 +196,39 @@ export class ExtensionHookRunner {
     }
 
     return { send: true, content: modifiedContent };
+  }
+
+  async runMessageSent(
+    to: string,
+    content: string,
+    success: boolean,
+    error: string | undefined,
+    context: HookContext,
+    opts?: { channel?: string },
+  ): Promise<void> {
+    const event: MessageSentContext = {
+      ...context,
+      to,
+      content,
+      success,
+      error,
+      channel: opts?.channel,
+      timestamp: new Date(),
+    };
+
+    const handlers = this.registry.getHooks('message_sent');
+    for (const handler of handlers) {
+      try {
+        await handler(event, context);
+      } catch (err) {
+        if (!this.options.catchErrors) {
+          throw err;
+        }
+        this.options.logger?.warn?.(
+          `message_sent hook error: ${err instanceof Error ? err.message : String(err)}`,
+        );
+      }
+    }
   }
 
   //  Enhanced Hook Methods

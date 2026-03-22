@@ -147,7 +147,7 @@ function evaluateGroupAccess(params: {
   allowNameMatching?: boolean;
 }): SecurityResult {
   const { context, policy, allowFrom } = params;
-  if (policy === 'block') return { allowed: false, reason: 'Group messages are blocked', policy };
+  if (policy === 'disabled') return { allowed: false, reason: 'Group messages are blocked', policy };
   if (policy === 'open') return { allowed: true, policy };
   
   if (policy === 'allowlist') {

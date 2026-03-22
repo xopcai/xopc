@@ -1,0 +1,19 @@
+{
+  "name": "@xopcai/xopcbot-extension-telegram",
+  "private": true,
+  "version": "0.2.2",
+  "description": "Bundled Telegram channel plugin. Implementation is compiled from src/extensions/telegram with the core package (this folder is the logical package boundary for tooling).",
+  "type": "module",
+  "main": "../../dist/extensions/telegram/index.js",
+  "types": "../../dist/extensions/telegram/index.d.ts",
+  "peerDependencies": {
+    "@xopcai/xopcbot": ">=0.2.0"
+  },
+  "exports": {
+    ".": {
+      "types": "../../src/extensions/telegram/index.ts",
+      "import": "../../dist/extensions/telegram/index.js",
+      "default": "../../dist/extensions/telegram/index.js"
+    }
+  }
+}

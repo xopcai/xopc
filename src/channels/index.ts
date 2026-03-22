@@ -4,7 +4,7 @@
  * Exports shared channel infrastructure (plugins, pipeline, registry).
  */
 
-export * from './types.js';
+export * from './channel-domain.js';
 
 export {
   CHAT_CHANNEL_ORDER,
@@ -33,13 +33,9 @@ export type {
   ChannelConfigAdapter,
   ChannelStreamingAdapter,
   ChannelCapabilities,
-  ChannelMetadata,
+  ChannelMeta,
   ChannelAccountSnapshot,
-  DmPolicy,
-  GroupPolicy,
-  ReplyToMode,
   StreamMode,
-  ChatType,
   ChannelOutboundMediaType,
 } from './plugin-types.js';
 
@@ -73,7 +69,17 @@ export {
 } from './pipeline.js';
 
 // Manager
-export { ChannelManager, createChannelManager } from './manager.js';
+export { ChannelManager, createChannelManager, type OutboundChannelHooks } from './manager.js';
+export { collectSetupWizardChannels } from './setup-wizard-discovery.js';
+
+export {
+  listChannelPlugins,
+  getChannelPlugin,
+  getChannelRegistryVersion,
+  syncChannelPluginsFromManager,
+} from './plugins/registry.js';
+
+export { bundledChannelPlugins } from './plugins/bundled.js';
 
 // Generic markdown helpers (Telegram HTML: `./telegram/format.js`)
 export * from './format.js';

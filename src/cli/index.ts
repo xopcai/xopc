@@ -3,6 +3,7 @@ import { Command } from 'commander';
 import { registry, createDefaultContext, type CLIContext } from './registry.js';
 import pkg from '../../package.json' with { type: 'json' };
 import { flushAndClose } from '../utils/logger.js'; // Import flushAndClose for graceful shutdown
+import { registerExtensionCliCommands } from './bootstrap-extensions.js';
 
 // Import order determines display order in help
 import './commands/setup.js';
@@ -86,5 +87,7 @@ if (isMainModule) {
     // (i.e., comes after the script name and before actual args)
     return index < 2; // Keep '--' if it's a script argument (index 0 or 1)
   });
-  program.parse(argv);
+  void registerExtensionCliCommands(program).then(() => {
+    program.parse(argv);
+  });
 }

@@ -214,11 +214,27 @@ export class GatewayService {
     this.startTime = Date.now();
     this.running = true;
 
+    this.channelManager.setOutboundHooks({
+      runMessageSending: (to, content, channel) =>
+        this.agentService.invokeOutboundMessageSending(to, content, channel),
+      runMessageSent: (to, content, success, error, channel) =>
+        this.agentService.invokeOutboundMessageSent(to, content, success, error, channel),
+    });
+    this.channelManager.enableOutboundPersistence(this.workspacePath);
+
+    if (this.extensionLoader) {
+      this.extensionLoader.setRuntimeContext({
+        bus: this.bus,
+        sessionManager: this.sessionManager,
+      });
+    }
+
     await this.loadExtensionsAndRegisterChannels();
 
     // Start channels (initialize first, then start)
     await this.channelManager.initializeChannels();
     await this.channelManager.startAll();
+    await this.channelManager.replayPendingOutboundMessages();
 
     // Initialize session manager
     await this.sessionManager.initialize();

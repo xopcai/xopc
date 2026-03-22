@@ -504,6 +504,8 @@ export interface MessageReceivedContext extends HookContext {
 export interface MessageSendingContext extends HookContext {
   to: string;
   content: string;
+  /** Channel id (e.g. telegram) when sending through ChannelManager. */
+  channel?: string;
   metadata?: Record<string, unknown>;
 }
 
@@ -518,6 +520,7 @@ export interface MessageSentContext extends HookContext {
   content: string;
   success: boolean;
   error?: string;
+  channel?: string;
 }
 
 export interface BeforeToolCallContext extends HookContext {

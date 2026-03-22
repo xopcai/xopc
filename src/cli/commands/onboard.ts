@@ -11,6 +11,8 @@ import { setupModel as runModelSetup } from './onboard/model.js';
 import { colors } from '../utils/colors.js';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
 import { setupTelegramOnboard } from './onboard/channels/index.js';
+import { bundledChannelPlugins } from '../../channels/plugins/bundled.js';
+import { collectSetupWizardChannels } from '../../channels/setup-wizard-discovery.js';
 
 // Import workspace utilities
 import { isWorkspaceSetup, setupWorkspace as _setupWorkspace, isConfigSetup as _isConfigSetup, setupConfig as _setupConfig, quickSetup } from '../utils/workspace.js';
@@ -122,6 +124,10 @@ async function runOnboard(
     }
 
     if (doChannels) {
+      const wizardIds = collectSetupWizardChannels(bundledChannelPlugins);
+      if (wizardIds.length > 0) {
+        console.log(colors.gray(`\nRegistered channel setup wizards: ${wizardIds.join(', ')}\n`));
+      }
       config = await setupChannels(config);
     }
 

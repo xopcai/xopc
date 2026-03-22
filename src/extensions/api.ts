@@ -5,9 +5,12 @@
  */
 
 import type { AgentTool } from '@mariozechner/pi-agent-core';
+import type { Command } from 'commander';
 import type {
   ExtensionApi,
   ExtensionLogger,
+  ExtensionRuntime,
+  ExtensionCliRegistration,
   GatewayMethodHandler,
   HttpRequestHandler,
   ExtensionCommand,
@@ -41,6 +44,8 @@ export class ExtensionApiImpl implements ExtensionApi {
   //  Unified Registry
   private _registry: ExtensionRegistryImpl;
 
+  private readonly _runtime: ExtensionRuntime;
+
   constructor(
     public readonly id: string,
     public readonly name: string,
@@ -51,6 +56,7 @@ export class ExtensionApiImpl implements ExtensionApi {
     private readonly _logger: ExtensionLogger,
     private readonly _resolvePath: (input: string) => string,
     private readonly _coreRegistry?: ExtensionRegistryImpl,
+    runtime?: ExtensionRuntime,
   ) {
     // Initialize typed event bus
     this._typedEventBus = new TypedEventBus({
@@ -58,10 +64,20 @@ export class ExtensionApiImpl implements ExtensionApi {
     });
     
     this._registry = _coreRegistry ?? new ExtensionRegistryImpl();
+    this._runtime =
+      runtime ??
+      ({
+        config: this.config,
+        log: this._logger,
+      } as ExtensionRuntime);
   }
 
   get logger(): ExtensionLogger {
     return this._logger;
+  }
+
+  get runtime(): ExtensionRuntime {
+    return this._runtime;
   }
 
   registerTool(tool: AgentTool): void {
@@ -131,7 +147,8 @@ export class ExtensionApiImpl implements ExtensionApi {
   }
 
   /** Adds a ChannelPlugin to the extension registry; emits `channel:register` for observability. */
-  registerChannel(plugin: ChannelPlugin): void {
+  registerChannel(registration: { plugin: ChannelPlugin }): void {
+    const plugin = registration.plugin;
     this._registry.addChannelPlugin(plugin);
     this._eventBus.emit('channel:register', plugin);
     this._logger.info(`Registered channel plugin: ${plugin.id}`);
@@ -155,6 +172,22 @@ export class ExtensionApiImpl implements ExtensionApi {
   registerGatewayMethod(method: string, handler: GatewayMethodHandler): void {
     this._eventBus.emit('gateway:method', { method, handler });
     this._logger.info(`Registered gateway method: ${method}`);
+  }
+
+  registerCli(
+    factory: (ctx: { program: Command }) => void,
+    opts?: { commands: string[] },
+  ): void {
+    const reg: ExtensionCliRegistration = {
+      extensionId: this.id,
+      commands: opts?.commands ?? [],
+      factory,
+    };
+    this._registry.addCliRegistration(reg);
+    this._eventBus.emit('cli:register', reg);
+    this._logger.info(
+      `Registered CLI factory${opts?.commands?.length ? ` (${opts.commands.join(', ')})` : ''}`,
+    );
   }
 
   resolvePath(input: string): string {

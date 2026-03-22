@@ -22,6 +22,8 @@ export type {
   ExtensionRecord,
   ExtensionRegistry,
   ResolvedExtensionConfig,
+  ExtensionRuntime,
+  ExtensionCliRegistration,
 } from '../extensions/types/index.js';
 
 // ============================================================================
@@ -239,6 +241,9 @@ export { ExtensionRegistryImpl } from '../extensions/loader.js';
 export { ProviderPluginRegistry, getProviderRegistry } from '../providers/plugin-registry.js';
 export { SlotRegistry, getSlotRegistry, registerSlotType } from '../extensions/slots.js';
 export { HOOK_EXECUTION_MODES } from '../extensions/types/hooks.js';
+
+export { defineChannelPluginEntry } from './channel-entry.js';
+export { registerExtensionCliProgram } from './channel-helpers.js';
 
 // ============================================================================
 // Export Hook Runner and Utilities

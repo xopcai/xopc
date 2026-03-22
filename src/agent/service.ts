@@ -857,7 +857,11 @@ export class AgentService {
 
       const finalContent = this.agentManager.getLastAssistantContent(context.sessionKey);
       if (finalContent) {
-        const hookResult = await this.hookHandler.runMessageSending(context.chatId, finalContent);
+        const hookResult = await this.hookHandler.runMessageSending(
+          context.chatId,
+          finalContent,
+          context.channel,
+        );
         if (hookResult.send) {
           await this.bus.publishOutbound({
             channel: context.channel,
@@ -954,7 +958,11 @@ export class AgentService {
     const finalContent = this.agentManager.getLastAssistantContent(sessionContext.sessionKey);
     if (!finalContent?.trim()) return;
 
-    const hookResult = await this.hookHandler.runMessageSending(sessionContext.chatId, finalContent);
+    const hookResult = await this.hookHandler.runMessageSending(
+      sessionContext.chatId,
+      finalContent,
+      sessionContext.channel,
+    );
     if (!hookResult.send) return;
 
     // TTS is handled by ChannelManager, just send text message here
@@ -969,6 +977,25 @@ export class AgentService {
         transcribedVoice: sessionContext.metadata?.transcribedVoice,
       },
     });
+  }
+
+  /** Extension hooks for ChannelManager outbound pipeline (Gateway). */
+  async invokeOutboundMessageSending(
+    to: string,
+    content: string,
+    channel: string,
+  ): Promise<{ send: boolean; content?: string; reason?: string }> {
+    return this.hookHandler.runMessageSending(to, content, channel);
+  }
+
+  async invokeOutboundMessageSent(
+    to: string,
+    content: string,
+    success: boolean,
+    error: string | undefined,
+    channel: string,
+  ): Promise<void> {
+    return this.hookHandler.runMessageSent(to, content, success, error, channel);
   }
 
   private dispose(): void {
