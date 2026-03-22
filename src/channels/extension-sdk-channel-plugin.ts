@@ -16,6 +16,7 @@ import type {
   ChannelCapabilities,
 } from './plugin-types.js';
 import type { OutboundMessage } from '../types/index.js';
+import { randomUUID } from 'node:crypto';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('ExtensionSdkChannel');
@@ -83,7 +84,7 @@ export class ExtensionSdkChannelPlugin implements ChannelPlugin {
     sendText: async (ctx: ChannelOutboundContext): Promise<OutboundDeliveryResult> => {
       try {
         await this.sdk.sendMessage(ctx.to, ctx.text, { parseMode: 'plain' });
-        return { messageId: `ext-${Date.now()}`, chatId: ctx.to, success: true };
+        return { messageId: `ext-${randomUUID()}`, chatId: ctx.to, success: true };
       } catch (err) {
         return {
           messageId: '',
@@ -113,7 +114,7 @@ export class ExtensionSdkChannelPlugin implements ChannelPlugin {
           replyTo: payload.replyToMessageId,
           threadId: payload.metadata?.threadId as string | undefined,
         });
-        return { messageId: `ext-${Date.now()}`, chatId: ctx.to, success: true };
+        return { messageId: `ext-${randomUUID()}`, chatId: ctx.to, success: true };
       } catch (err) {
         return {
           messageId: '',

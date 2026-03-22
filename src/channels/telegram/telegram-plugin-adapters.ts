@@ -116,6 +116,7 @@ export function createTelegramPluginAdapters(options: {
       const status = accountManager.getStatus(account.accountId);
       return {
         accountId: account.accountId,
+        channelId: 'telegram',
         enabled: account.enabled !== false,
         configured: !!account.botToken,
         running: status?.running ?? false,
