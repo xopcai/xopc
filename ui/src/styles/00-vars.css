@@ -104,6 +104,14 @@ html.light {
   --accent-error-light: var(--error-soft);
   --accent-info: #0891b2;
   --accent-info-light: #cffafe;
+
+  /* Tool / execution strip (chat) */
+  --tool-surface-bg: rgb(241 245 249 / 0.85);
+  --tool-surface-bg-active: rgb(241 245 249 / 0.95);
+  --tool-surface-border: rgb(226 232 240 / 0.9);
+  --tool-code-bg: rgb(255 255 255 / 0.65);
+  --thoughts-surface-bg: rgb(241 245 249 / 0.55);
+  --thoughts-surface-border: rgb(226 232 240 / 0.85);
 }
 
 /* ===== Dark Theme ===== */
@@ -171,6 +179,14 @@ html.dark {
   --accent-error-light: var(--error-soft);
   --accent-info: #22d3ee;
   --accent-info-light: rgb(22 78 99 / 0.5);
+
+  /* Tool / execution strip (chat) */
+  --tool-surface-bg: rgb(42 42 42 / 0.65);
+  --tool-surface-bg-active: rgb(42 42 42 / 0.9);
+  --tool-surface-border: rgb(255 255 255 / 0.06);
+  --tool-code-bg: rgb(0 0 0 / 0.25);
+  --thoughts-surface-bg: rgb(30 30 30 / 0.85);
+  --thoughts-surface-border: rgb(255 255 255 / 0.07);
 }
 
 /* ===== Custom Scrollbar ===== */

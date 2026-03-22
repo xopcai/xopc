@@ -54,5 +54,5 @@ export function renderToolToHtml(
   if (isCustom) {
     return content;
   }
-  return html`<div class="tool-call-card p-3">${content}</div>`;
+  return html`<div class="tool-call-card tool-call-card--custom-wrap">${content}</div>`;
 }

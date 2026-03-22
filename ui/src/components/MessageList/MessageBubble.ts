@@ -32,7 +32,7 @@ export class MessageBubble extends LitElement {
           ${avatarLetter}
         </div>
 
-        <div class="flex flex-col gap-1 max-w-[85%]">
+        <div class="flex flex-col gap-1 max-w-[85%] min-w-0">
           <div class="flex items-center gap-2 text-xs text-muted">
             <span class="font-medium">${roleLabel}</span>
             <span>·</span>
@@ -40,7 +40,7 @@ export class MessageBubble extends LitElement {
             ${this._renderStatusIndicator()}
           </div>
 
-          <div class="message-bubble ${isUser ? 'bg-primary-light' : 'bg-secondary'}">
+          <div class="message-bubble ${isUser ? 'user bg-primary-light' : 'bg-secondary'}">
             ${this._renderContent(this.message.content)}
             ${this._renderLegacyThinking()}
             ${this.message.attachments?.length ? html`

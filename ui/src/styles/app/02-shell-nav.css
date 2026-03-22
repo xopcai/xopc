@@ -265,6 +265,20 @@
 /* ===== Markdown Content ===== */
 .markdown-content {
   line-height: 1.7;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+/* Block-level custom elements so column flex aligns thinking + tools; do not force 100% width on all children (breaks shrink-wrapped user bubbles). */
+.markdown-content thinking-block,
+.markdown-content .tool-call-card,
+.markdown-content markdown-renderer {
+  display: block;
+  box-sizing: border-box;
+  max-width: 100%;
 }
 
 .markdown-content p {
