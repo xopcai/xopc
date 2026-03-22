@@ -44,6 +44,7 @@ export class ProviderConfig extends LitElement {
   @state() private _oauthMessage?: string;
   @state() private _sessionId?: string;
   @state() private _authUrl?: string;
+  @state() private _oauthInstructions?: string;
   @state() private _pollingInterval?: number;
   @state() private _expanded: boolean = false;
   
@@ -484,6 +485,8 @@ export class ProviderConfig extends LitElement {
     this._oauthStatus = 'waiting';
     this._oauthMessage = 'Starting OAuth login...';
     this._sessionId = undefined;
+    this._authUrl = undefined;
+    this._oauthInstructions = undefined;
     
     try {
       const result = await startAsyncOAuthLogin(this.provider, this.token);
@@ -508,14 +511,16 @@ export class ProviderConfig extends LitElement {
 
       try {
         const status = await fetchOAuthSessionStatus(this._sessionId, this.token);
-        
+        const prevAuthUrl = this._authUrl;
+
         this._oauthMessage = status.message;
         this._authUrl = status.authUrl;
-        
+        this._oauthInstructions = status.instructions;
+
         if (status.status === 'waiting_auth' || status.status === 'waiting_code') {
           this._oauthStatus = status.status === 'waiting_code' ? 'waiting_code' : 'waiting';
-          
-          if (status.authUrl && !this._authUrl) {
+
+          if (status.authUrl && status.authUrl !== prevAuthUrl) {
             window.open(status.authUrl, '_blank');
           }
         } else if (status.status === 'completed') {
@@ -558,10 +563,11 @@ export class ProviderConfig extends LitElement {
   }
 
   private async _onSubmitCode(code: string) {
-    if (!this._sessionId || !code) return;
+    const trimmed = code.trim();
+    if (!this._sessionId || !trimmed) return;
 
     try {
-      await submitOAuthCode(this._sessionId, code, this.token);
+      await submitOAuthCode(this._sessionId, trimmed, this.token);
       this._oauthMessage = 'Processing authorization code...';
     } catch (err) {
       this._oauthStatus = 'error';
@@ -579,6 +585,8 @@ export class ProviderConfig extends LitElement {
       this._loading = false;
       this._oauthMessage = 'OAuth cancelled';
       this._sessionId = undefined;
+      this._authUrl = undefined;
+      this._oauthInstructions = undefined;
     } catch (err) {
       console.error('Failed to cancel OAuth:', err);
     }
@@ -738,11 +746,26 @@ export class ProviderConfig extends LitElement {
               </div>
             ` : ''}
 
+            ${this._oauthInstructions ? html`
+              <div class="help-text oauth-instructions">
+                ${getIcon('info')}
+                <span>${this._oauthInstructions}</span>
+              </div>
+            ` : ''}
+
             ${this._oauthStatus === 'waiting_code' ? html`
+              <div class="help-text oauth-instructions">
+                ${getIcon('info')}
+                <span>
+                  After Google redirects your browser, copy the full address bar URL (it should contain <code>code=</code> and <code>state=</code>) and paste it below.
+                  If the gateway runs on another machine, the browser may open there — you must paste the redirect URL here so this server can finish the login.
+                </span>
+              </div>
               <div class="code-input">
                 <input 
+                  id="oauthCodeInput"
                   type="text" 
-                  placeholder="Paste redirect URL or code..."
+                  placeholder="Paste full redirect URL (http://127.0.0.1:.../oauth-callback?code=...&state=...)"
                   @keydown=${(e: KeyboardEvent) => {
                     if (e.key === 'Enter') {
                       const input = e.target as HTMLInputElement;
@@ -754,8 +777,8 @@ export class ProviderConfig extends LitElement {
                 <button 
                   class="btn btn-primary"
                   @click=${() => {
-                    const input = this.shadowRoot?.querySelector('.code-input input') as HTMLInputElement;
-                    if (input?.value) {
+                    const input = this.renderRoot.querySelector('#oauthCodeInput') as HTMLInputElement | null;
+                    if (input?.value?.trim()) {
                       this._onSubmitCode(input.value);
                       input.value = '';
                     }

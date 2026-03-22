@@ -18,6 +18,7 @@ export interface OAuthSessionStatus {
   provider: string;
   status: 'pending' | 'waiting_auth' | 'waiting_code' | 'completed' | 'failed' | 'cancelled';
   authUrl?: string;
+  /** Server hint text (e.g. paste redirect URL for localhost callback flows). */
   instructions?: string;
   deviceCode?: string;
   verificationUri?: string;
