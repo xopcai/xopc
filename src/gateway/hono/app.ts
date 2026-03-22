@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { logger } from './middleware/logger.js';
 import { auth } from './middleware/auth.js';
-import { createAgentSSEHandler, createSendHandler, createEventsSSEHandler } from './sse.js';
+import { createAgentSSEHandler, createAgentResumeHandler, createSendHandler, createEventsSSEHandler } from './sse.js';
 import type { GatewayService } from '../service.js';
 import type { Config } from '../../config/schema.js';
 import { getVoiceModelsConfig } from '../../config/voice.js';
@@ -177,6 +177,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   // POST /api/agent — Agent message (SSE stream or JSON fallback)
   authenticated.post('/api/agent', createAgentSSEHandler(sseConfig));
+
+  // POST /api/agent/resume — Resume an in-progress agent run
+  authenticated.post('/api/agent/resume', createAgentResumeHandler(sseConfig));
 
   // POST /api/send — Send a message through a channel
   authenticated.post('/api/send', createSendHandler(sseConfig));

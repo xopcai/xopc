@@ -1,6 +1,10 @@
 import type { ProgressState, GatewayClientConfig } from './types.js';
 import { apiUrl, authHeaders } from './helpers.js';
 
+export function pendingAgentRunStorageKey(chatId: string): string {
+  return `xopcbot:pendingRun:${chatId}`;
+}
+
 export type MessagingCallbacks = {
   onStreamStart: () => void;
   onToken: (delta: string) => void;
@@ -15,6 +19,7 @@ export type MessagingCallbacks = {
 
 export class MessageSender {
   private _abort?: AbortController;
+  private _sseChatId = '';
 
   constructor(private _config: GatewayClientConfig) {}
 
@@ -30,6 +35,7 @@ export class MessageSender {
     callbacks?: MessagingCallbacks,
   ): Promise<void> {
     this._abort = new AbortController();
+    this._sseChatId = chatId;
 
     const res = await fetch(apiUrl('/api/agent'), {
       method: 'POST',
@@ -56,12 +62,45 @@ export class MessageSender {
       }
     }
 
+    this._clearPendingRun();
     this._abort = undefined;
   }
 
   abort(): void {
     this._abort?.abort();
     this._abort = undefined;
+  }
+
+  async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks): Promise<void> {
+    this._abort = new AbortController();
+    this._sseChatId = chatId;
+
+    const res = await fetch(apiUrl('/api/agent/resume'), {
+      method: 'POST',
+      headers: { ...authHeaders(this._config.token), Accept: 'text/event-stream' },
+      body: JSON.stringify({ runId, chatId }),
+      signal: this._abort.signal,
+    });
+
+    if (!res.ok) {
+      this._clearPendingRun();
+      this._abort = undefined;
+      return;
+    }
+
+    const ct = res.headers.get('Content-Type') || '';
+    if (ct.includes('text/event-stream') && res.body) {
+      await this._consumeSSE(res.body, callbacks);
+    }
+
+    this._clearPendingRun();
+    this._abort = undefined;
+  }
+
+  private _clearPendingRun(): void {
+    if (this._sseChatId) {
+      try { sessionStorage.removeItem(pendingAgentRunStorageKey(this._sseChatId)); } catch { /* ignore */ }
+    }
   }
 
   private async _consumeSSE(body: ReadableStream<Uint8Array>, callbacks?: MessagingCallbacks): Promise<void> {
@@ -113,6 +152,14 @@ export class MessageSender {
 
     switch (event) {
       case 'status':
+        if (typeof parsed.runId === 'string' && this._sseChatId) {
+          try {
+            sessionStorage.setItem(
+              pendingAgentRunStorageKey(this._sseChatId),
+              JSON.stringify({ runId: parsed.runId }),
+            );
+          } catch { /* quota exceeded or private mode */ }
+        }
         cb?.onStreamStart();
         break;
       case 'token': {

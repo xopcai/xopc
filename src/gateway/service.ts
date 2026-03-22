@@ -23,6 +23,7 @@ import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extract
 import { getModelRegistry } from '../providers/index.js';
 import { getLogDir, getLogStats, createLogger } from '../utils/logger.js';
 import { resolveConfigPath, resolveCronJobsPath } from '../config/paths.js';
+import { AgentRunRelay } from './agent-run-relay.js';
 
 const log = createLogger('GatewayService');
 import { registerAcpRuntimeBackend } from '../acp/runtime/registry.js';
@@ -69,6 +70,9 @@ export class GatewayService {
   private eventCounter = 0;
   private subscribers = new Map<string, EventListener>();
   private eventBuffers = new Map<string, ServiceEvent[]>();
+
+  // Agent run relay for resuming SSE streams
+  public readonly runRelay = new AgentRunRelay();
 
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
@@ -460,7 +464,22 @@ export class GatewayService {
   ): AsyncGenerator<{ type: string; content?: string; status?: string; runId?: string }, { status: string; summary: string }, unknown> {
     const runId = crypto.randomUUID();
 
-    yield { type: 'status', status: 'accepted', runId };
+    // For webchat, register the run in the relay before yielding the first event
+    if (channel === 'webchat') {
+      const parsedKey = parseSessionKey(chatId);
+      const sessionKey = parsedKey ? chatId : buildSessionKey({
+        agentId: 'main',
+        source: 'webchat',
+        accountId: 'default',
+        peerKind: 'direct',
+        peerId: chatId,
+      });
+      this.runRelay.ensureRun(runId, sessionKey);
+    }
+
+    const statusEvent = { type: 'status', status: 'accepted', runId };
+    if (channel === 'webchat') this.runRelay.publish(runId, statusEvent);
+    yield statusEvent;
 
     try {
       // For 'webchat' channel (web UI), process through agent service
@@ -482,13 +501,18 @@ export class GatewayService {
           );
 
           for await (const event of eventStream) {
+            this.runRelay.publish(runId, event);
             yield event as { type: string; content?: string; status?: string; runId?: string };
           }
 
+          this.runRelay.complete(runId);
           return { status: 'ok', summary: 'Message processed successfully' };
         } catch (error) {
           log.error({ error }, 'Agent processing failed');
-          yield { type: 'error', content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` };
+          const errorEvent = { type: 'error', content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` };
+          this.runRelay.publish(runId, errorEvent);
+          this.runRelay.complete(runId);
+          yield errorEvent;
           return { status: 'error', summary: error instanceof Error ? error.message : 'Unknown error' };
         }
       }

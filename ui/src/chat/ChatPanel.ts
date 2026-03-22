@@ -10,7 +10,7 @@ import type { ChatRoute } from '../navigation.js';
 import type { GatewayClientConfig, ProgressState, ConnectionState, SessionInfo } from './types.js';
 import { ChatConnection } from './connection.js';
 import { SessionManager } from './session.js';
-import { MessageSender } from './messaging.js';
+import { MessageSender, pendingAgentRunStorageKey } from './messaging.js';
 import type { Message } from '../messages/types.js';
 import {
   appendThinkingDelta,
@@ -227,6 +227,7 @@ export class ChatPanel extends LitElement {
       this._atBottom = true;
       this.requestUpdate();
       if (offset === 0) this._scrollToBottom(false);
+      if (offset === 0) this._tryResumeAgentRun(key);
     } catch (_err: unknown) {
       if (offset === 0) await this._fallbackToRecent();
     } finally {
@@ -374,6 +375,76 @@ export class ChatPanel extends LitElement {
     this._streamingMsg = null;
     this._progress = null;
     this.requestUpdate();
+  }
+
+  private _tryResumeAgentRun(chatId: string): void {
+    if (!this._sender || this._isSending || this._streaming) return;
+    let stored: { runId: string } | null = null;
+    try {
+      const raw = sessionStorage.getItem(pendingAgentRunStorageKey(chatId));
+      if (raw) stored = JSON.parse(raw);
+    } catch { /* ignore */ }
+    if (!stored?.runId) return;
+
+    const { runId } = stored;
+    this._isSending = true;
+    this._streaming = true;
+    this.requestUpdate();
+
+    this._sender.resume(runId, chatId, {
+      onStreamStart: () => {
+        const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
+        this._streamingMsg = cloneMessageForRender(msg);
+        this.requestUpdate();
+        if (this._atBottom) this._scrollToBottom();
+      },
+      onToken: (delta) => this._appendToken(delta),
+      onThinking: (c, isDelta) => this._updateThinking(c, isDelta),
+      onThinkingEnd: () => {
+        if (this._streamingMsg) {
+          const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
+          finalizeStreamingThinking(msg.content);
+          this._streamingMsg = cloneMessageForRender(msg);
+          this.requestUpdate();
+        }
+      },
+      onToolStart: (toolName, args) => {
+        const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
+        appendToolStart(msg.content, toolName, args);
+        this._streamingMsg = cloneMessageForRender(msg);
+        this._streaming = true;
+        this.requestUpdate();
+      },
+      onToolEnd: (toolName, isError, result) => {
+        const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
+        completeTool(msg.content, toolName, isError, result);
+        this._streamingMsg = cloneMessageForRender(msg);
+        this.requestUpdate();
+      },
+      onProgress: (p) => {
+        this._progress = p;
+        this.requestUpdate();
+        if (this._atBottom) this._scrollToBottom();
+      },
+      onResult: () => this._finalizeMessage(),
+      onError: (msg) => {
+        this._error = msg;
+        this._streaming = false;
+        this._isSending = false;
+        this._streamingMsg = null;
+        this._progress = null;
+        this.requestUpdate();
+      },
+    }).catch((err) => {
+      if ((err as Error).name !== 'AbortError') {
+        console.error('[ChatPanel] resume failed:', err);
+      }
+      this._streaming = false;
+      this._isSending = false;
+      this._streamingMsg = null;
+      this._progress = null;
+      this.requestUpdate();
+    });
   }
 
   private _appendToken(delta: string) {
