@@ -1,31 +1,8 @@
 /**
- * Telegram Message Formatting Utilities
- *
- * Re-exports from telegram/format.ts for backward compatibility.
- * All implementations now use the robust @src/markdown/ package.
+ * Generic markdown utilities for channel code paths.
+ * Telegram-specific HTML rendering lives in `./telegram/format.js`.
  */
 
-// Re-export everything from the telegram format module
-export {
-  // Core formatting functions
-  escapeHtml,
-  escapeHtmlAttr,
-  markdownToTelegramHtml,
-  markdownToPlainText,
-  wrapFileReferencesInHtml,
-  formatTelegramMessage,
-  splitTelegramMessageSmart,
-  isValidTelegramHtml,
-  fixMalformedHtml,
-  // IR-based functions
-  markdownToTelegramChunks,
-  renderTelegramHtmlText,
-  renderIRToTelegramHtml,
-  // Types
-  type FormattedChunk,
-} from "./telegram/format.js";
-
-// Re-export from markdown package for advanced use cases
 export {
   markdownToIR,
   markdownToIRWithMeta,
@@ -35,4 +12,21 @@ export {
   type MarkdownStyleSpan,
   type MarkdownLinkSpan,
   type MarkdownParseOptions,
-} from "../markdown/index.js";
+  renderMarkdownWithMarkers,
+  type RenderStyleMarker,
+  type RenderStyleMap,
+  type RenderLink,
+  type RenderOptions,
+  convertMarkdownTables,
+  parseFrontmatterBlock,
+  type ParsedFrontmatter,
+  parseFenceSpans,
+  findFenceSpanAt,
+  isSafeFenceBreak,
+  type FenceSpan,
+  createInlineCodeState,
+  buildCodeSpanIndex,
+  type InlineCodeState,
+  type CodeSpanIndex,
+  chunkText,
+} from '../markdown/index.js';

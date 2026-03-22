@@ -2,7 +2,6 @@ import crypto from 'crypto';
 import { join } from 'path';
 import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
-import { telegramPlugin } from '../channels/telegram-plugin.js';
 import { CHAT_CHANNEL_ORDER } from '../channels/registry.js';
 import { MessageBus } from '../bus/index.js';
 import { loadConfig, saveConfig } from '../config/index.js';
@@ -10,10 +9,6 @@ import { getWorkspacePath } from '../config/schema.js';
 import { CronService } from '../cron/index.js';
 import { ExtensionLoader, normalizeExtensionConfig } from '../extensions/index.js';
 import type { ResolvedExtensionConfig } from '../extensions/types/index.js';
-import {
-  ExtensionSdkChannelPlugin,
-  isSdkChannelExtension,
-} from '../channels/extension-sdk-channel-plugin.js';
 import { HeartbeatService } from '../heartbeat/index.js';
 import { ConfigHotReloader } from '../config/reload.js';
 import { SessionManager } from '../session/index.js';
@@ -97,7 +92,6 @@ export class GatewayService {
 
     // Initialize channel manager
     this.channelManager = new ChannelManager(this.config, this.bus);
-    this.channelManager.registerPlugin(telegramPlugin);
 
     // Initialize extension loader
     this.workspacePath = getWorkspacePath(this.config) || './workspace';
@@ -144,19 +138,21 @@ export class GatewayService {
    */
   private initializeExtensionLoader(): void {
     try {
-      const extensionsConfig = (this.config as Record<string, unknown>).extensions as
-        | Record<string, unknown>
-        | undefined;
-      if (!extensionsConfig) {
-        log.debug('No extensions configured');
-        return;
-      }
-
       this.extensionLoader = new ExtensionLoader({
         workspaceDir: this.workspacePath,
         extensionsDir: join(this.workspacePath, '.extensions'),
       });
       this.extensionLoader.setConfig(this.config as Parameters<ExtensionLoader['setConfig']>[0]);
+
+      const extensionsConfig = (this.config as Record<string, unknown>).extensions as
+        | Record<string, unknown>
+        | undefined;
+      if (!extensionsConfig) {
+        log.debug('No extensions config block; built-in channel plugins only');
+        this.resolvedExtensionConfigs = [];
+        return;
+      }
+
       this.resolvedExtensionConfigs = normalizeExtensionConfig(extensionsConfig).filter((c) => c.enabled);
     } catch (error) {
       log.warn({ error }, 'Failed to initialize extension loader');
@@ -167,27 +163,22 @@ export class GatewayService {
    * Load extensions and register SDK / full ChannelPlugin instances with ChannelManager.
    */
   private async loadExtensionsAndRegisterChannels(): Promise<void> {
-    if (!this.extensionLoader || this.resolvedExtensionConfigs.length === 0) {
+    if (!this.extensionLoader) {
       return;
     }
     try {
-      await this.extensionLoader.loadExtensions(this.resolvedExtensionConfigs);
+      if (this.resolvedExtensionConfigs.length > 0) {
+        await this.extensionLoader.loadExtensions(this.resolvedExtensionConfigs);
+      }
       const reg = this.extensionLoader.getRegistry();
       for (const plugin of reg.channelPlugins) {
         this.channelManager.registerPlugin(plugin);
       }
-      for (const [, ch] of reg.channels) {
-        if (isSdkChannelExtension(ch)) {
-          this.channelManager.registerPlugin(new ExtensionSdkChannelPlugin(ch));
-        } else {
-          log.warn(
-            { channel: (ch as { name?: string }).name },
-            'Extension channel is not SDK-compatible (missing connect/disconnect/sendMessage); use api.registerChannelPlugin() with a full ChannelPlugin',
-          );
-        }
-      }
       log.debug(
-        { extensions: this.resolvedExtensionConfigs.length, channels: reg.channels.size },
+        {
+          extensions: this.resolvedExtensionConfigs.length,
+          channelPlugins: reg.channelPlugins.length,
+        },
         'Extensions loaded and channel plugins registered',
       );
     } catch (err) {
@@ -590,12 +581,13 @@ export class GatewayService {
     );
 
     const extReg = this.extensionLoader?.getRegistry();
-    if (!extReg?.channels.size) {
+    const extraIds = extReg?.channelPlugins.map((p) => p.id).filter((id) => !builtinOrder.includes(id)) ?? [];
+    if (extraIds.length === 0) {
       return rows;
     }
 
     const seen = new Set(builtinOrder);
-    for (const name of extReg.channels.keys()) {
+    for (const name of extraIds) {
       if (seen.has(name)) continue;
       seen.add(name);
       rows.push({

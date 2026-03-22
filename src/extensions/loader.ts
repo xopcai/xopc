@@ -24,7 +24,7 @@ import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type {
   ExtensionApi,
   ExtensionModule,
-  ChannelExtension,
+  ExtensionRegistry,
   GatewayMethodHandler,
   HttpRequestHandler,
   ExtensionCommand,
@@ -36,7 +36,7 @@ import type {
   ResolvedExtensionConfig,
 } from './types/index.js';
 import type { ChannelPlugin } from '../channels/plugin-types.js';
-import { ExtensionRegistryImpl as ExtensionRegistry } from './loader.js';
+import { telegramPlugin } from '../channels/telegram-plugin.js';
 import { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './api.js';
 import { createLogger, createServiceLogger } from '../utils/logger.js';
 
@@ -90,7 +90,6 @@ interface DiscoveredExtension {
 export class ExtensionRegistryImpl implements ExtensionRegistry {
   extensions = new Map<string, ExtensionRecord>();
   hooks = new Map<ExtensionHookEvent, ExtensionHookHandler[]>();
-  channels = new Map<string, ChannelExtension>();
   httpRoutes = new Map<string, HttpRequestHandler>();
   commands = new Map<string, ExtensionCommand>();
   services = new Map<string, ExtensionService>();
@@ -124,17 +123,6 @@ export class ExtensionRegistryImpl implements ExtensionRegistry {
 
   getHooks(event: ExtensionHookEvent): ExtensionHookHandler[] {
     return this.hooks.get(event) || [];
-  }
-
-  addChannel(channel: ChannelExtension): void {
-    if (this.channels.has(channel.name)) {
-      log.warn({ channel: channel.name }, `Channel already registered, overwriting`);
-    }
-    this.channels.set(channel.name, channel);
-  }
-
-  getChannel(name: string): ChannelExtension | undefined {
-    return this.channels.get(name);
   }
 
   addChannelPlugin(plugin: ChannelPlugin): void {
@@ -242,6 +230,7 @@ export class ExtensionLoader {
 
   constructor(options?: ExtensionLoaderOptions) {
     this.registry = new ExtensionRegistryImpl();
+    this.registry.addChannelPlugin(telegramPlugin);
     this.options = options || {
       workspaceDir: resolveWorkspaceDir(),
       extensionsDir: resolveWorkspaceExtensionsDir(),

@@ -8,7 +8,6 @@ import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type {
   ExtensionApi,
   ExtensionLogger,
-  ChannelExtension,
   GatewayMethodHandler,
   HttpRequestHandler,
   ExtensionCommand,
@@ -131,15 +130,10 @@ export class ExtensionApiImpl implements ExtensionApi {
     return hooks ? Array.from(hooks) as HookHandlerMap[K][] : [];
   }
 
-  /** Adds to the extension registry; emits `channel:register` for observability (no separate listener registers twice). */
-  registerChannel(channel: ChannelExtension): void {
-    this._registry.addChannel(channel);
-    this._eventBus.emit('channel:register', channel);
-    this._logger.info(`Registered channel: ${channel.name}`);
-  }
-
-  registerChannelPlugin(plugin: ChannelPlugin): void {
+  /** Adds a ChannelPlugin to the extension registry; emits `channel:register` for observability. */
+  registerChannel(plugin: ChannelPlugin): void {
     this._registry.addChannelPlugin(plugin);
+    this._eventBus.emit('channel:register', plugin);
     this._logger.info(`Registered channel plugin: ${plugin.id}`);
   }
 
