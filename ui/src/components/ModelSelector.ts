@@ -1,9 +1,12 @@
 /**
  * Model selector component - loads models dynamically from backend API.
+ * Searchable combobox for long model lists.
  */
 
 import { html, LitElement, css } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
+
+import { t } from '../utils/i18n.js';
 
 export interface Model {
   id: string;
@@ -24,6 +27,20 @@ export interface ModelSelectEvent {
   model: Model | null;
 }
 
+function modelSearchHaystack(m: Model): string {
+  return `${m.id} ${m.name} ${m.provider}`.toLowerCase();
+}
+
+function modelsMatchingQuery(models: Model[], query: string): Model[] {
+  const raw = query.trim().toLowerCase();
+  if (!raw) return models;
+  const tokens = raw.split(/\s+/).filter(Boolean);
+  return models.filter((m) => {
+    const hay = modelSearchHaystack(m);
+    return tokens.every((tok) => hay.includes(tok));
+  });
+}
+
 @customElement('model-selector')
 export class ModelSelector extends LitElement {
   @property({ type: String }) value: string = '';
@@ -39,14 +56,32 @@ export class ModelSelector extends LitElement {
   @state() private _models: Model[] = [];
   @state() private _loading: boolean = false;
   @state() private _error: string | null = null;
+  @state() private _open = false;
+  @state() private _query = '';
 
   static styles = css`
-    :host { display: block; }
+    :host {
+      --model-selector-max-width: 22rem;
+
+      display: inline-block;
+      width: max-content;
+      max-width: min(var(--model-selector-max-width), 100%);
+      min-width: min(8.75rem, 100%);
+      vertical-align: middle;
+      box-sizing: border-box;
+    }
+
+    :host([compact]) {
+      --model-selector-max-width: min(22rem, calc(100vw - 2rem));
+    }
 
     .model-selector {
       display: flex;
       flex-direction: column;
       gap: 0.375rem;
+      width: max-content;
+      max-width: min(var(--model-selector-max-width), 100%);
+      min-width: 0;
     }
 
     .label {
@@ -57,35 +92,47 @@ export class ModelSelector extends LitElement {
 
     .required { color: var(--accent-error, #dc2626); }
 
-    .select-wrapper { position: relative; }
+    .combobox {
+      position: relative;
+      width: max-content;
+      max-width: 100%;
+      min-width: 0;
+    }
 
-    .model-select {
-      width: 100%;
-      padding: 0.5rem 0.75rem;
-      padding-right: 2rem;
+    .model-trigger {
+      display: block;
+      width: max-content;
+      max-width: 100%;
+      min-width: 0;
+      margin: 0;
+      padding: 0.5rem 2rem 0.5rem 0.75rem;
       border: 1px solid var(--border-color, #e7e5e4);
       border-radius: var(--radius-md, 0.5rem);
       font-size: 0.8125rem;
       background: var(--bg-primary, #fafaf9);
       color: var(--text-primary, #1c1917);
       cursor: pointer;
-      appearance: none;
+      text-align: left;
       transition: all var(--transition-fast, 150ms);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      box-sizing: border-box;
     }
 
-    .model-select:focus {
+    .model-trigger:focus {
       outline: none;
       border-color: var(--accent-primary, #4f46e5);
       box-shadow: 0 0 0 2px var(--accent-primary-light, #e0e7ff);
     }
 
-    .model-select:disabled {
+    .model-trigger:disabled {
       background: var(--bg-secondary, #f5f5f4);
       cursor: not-allowed;
       opacity: 0.6;
     }
 
-    :host([compact]) .model-select {
+    :host([compact]) .model-trigger {
       padding: 0.35rem 1.75rem 0.35rem 0.65rem;
       min-height: 2rem;
       font-size: 0.8125rem;
@@ -110,11 +157,106 @@ export class ModelSelector extends LitElement {
       font-size: 0.625rem;
     }
 
+    .model-panel {
+      position: absolute;
+      left: 0;
+      right: auto;
+      top: calc(100% + 4px);
+      z-index: 200;
+      display: flex;
+      flex-direction: column;
+      gap: 0.35rem;
+      padding: 0.5rem;
+      box-sizing: border-box;
+      min-width: 100%;
+      width: max(100%, min(22rem, calc(100vw - 2rem)));
+      max-width: min(100vw - 2rem, 36rem);
+      border: 1px solid var(--border-color, #e7e5e4);
+      border-radius: var(--radius-md, 0.5rem);
+      background: var(--bg-primary, #fafaf9);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+    }
+
+    .model-search {
+      width: 100%;
+      box-sizing: border-box;
+      padding: 0.4rem 0.55rem;
+      border: 1px solid var(--border-color, #e7e5e4);
+      border-radius: var(--radius-sm, 0.375rem);
+      font-size: 0.8125rem;
+      background: var(--bg-secondary, #f5f5f4);
+      color: var(--text-primary, #1c1917);
+    }
+
+    .model-search:focus {
+      outline: none;
+      border-color: var(--accent-primary, #4f46e5);
+      box-shadow: 0 0 0 2px var(--accent-primary-light, #e0e7ff);
+      background: var(--bg-primary, #fafaf9);
+    }
+
+    .model-list {
+      margin: 0;
+      padding: 0;
+      list-style: none;
+      max-height: 240px;
+      overflow-y: auto;
+    }
+
+    .model-option {
+      display: block;
+      width: 100%;
+      margin: 0;
+      padding: 0.4rem 0.5rem;
+      border: none;
+      border-radius: var(--radius-sm, 0.375rem);
+      font-size: 0.8125rem;
+      text-align: left;
+      cursor: pointer;
+      background: transparent;
+      color: var(--text-primary, #1c1917);
+    }
+
+    .model-option:hover,
+    .model-option:focus-visible {
+      outline: none;
+      background: var(--hover-bg, #f5f5f4);
+    }
+
+    .model-option[aria-selected="true"] {
+      background: var(--accent-primary-light, #e0e7ff);
+      font-weight: 500;
+    }
+
+    .model-option-primary {
+      display: block;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .model-option-secondary {
+      display: block;
+      font-size: 0.6875rem;
+      color: var(--text-muted, #a8a29e);
+      margin-top: 0.125rem;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .model-no-matches {
+      padding: 0.5rem;
+      font-size: 0.8125rem;
+      color: var(--text-secondary, #57534e);
+    }
+
     .loading-state {
       display: flex;
       align-items: center;
       gap: 0.5rem;
       padding: 0.5rem 0.75rem;
+      min-width: min(8.75rem, 100%);
       color: var(--text-secondary, #57534e);
       font-size: 0.8125rem;
     }
@@ -149,21 +291,69 @@ export class ModelSelector extends LitElement {
 
   connectedCallback() {
     super.connectedCallback();
+    document.addEventListener('pointerdown', this._onDocPointerDown, true);
     this._loadModels();
   }
 
-  protected willUpdate(): void {
-    // After models are loaded, ensure the select value is properly set
-    // This handles the case where value is set before models are loaded
-    if (this.value && this._models.length > 0) {
-      const hasMatchingModel = this._models.some(m => m.id === this.value);
-      if (!hasMatchingModel) {
-        console.warn('[ModelSelector] Current value not found in models:', {
-          value: this.value,
-          availableModels: this._models.map(m => m.id),
-        });
-      }
+  disconnectedCallback() {
+    document.removeEventListener('pointerdown', this._onDocPointerDown, true);
+    super.disconnectedCallback();
+  }
+
+  private _onDocPointerDown = (e: PointerEvent) => {
+    if (!this._open) return;
+    if (e.composedPath().includes(this)) return;
+    this._closePanel();
+  };
+
+  private _closePanel() {
+    this._open = false;
+    this._query = '';
+  }
+
+  private _toggleOpen() {
+    if (this.disabled) return;
+    this._open = !this._open;
+    if (this._open) {
+      this._query = '';
+      void this.updateComplete.then(() => {
+        const input = this.renderRoot.querySelector<HTMLInputElement>('.model-search');
+        input?.focus();
+      });
+    } else {
+      this._query = '';
     }
+  }
+
+  private _onSearchInput(e: Event) {
+    this._query = (e.target as HTMLInputElement).value;
+  }
+
+  private _onPanelKeydown = (e: KeyboardEvent) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      this._closePanel();
+    }
+  };
+
+  private _selectModel(modelId: string) {
+    const model = this._models.find((m) => m.id === modelId) || null;
+    this._closePanel();
+    this.dispatchEvent(
+      new CustomEvent<ModelSelectEvent>('change', {
+        detail: { modelId, model },
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
+  private _displayLabel(): string {
+    if (!this.value) return this.placeholder;
+    const m = this._models.find((x) => x.id === this.value);
+    if (m) return `${m.provider}/${m.name}`;
+    return this.value;
   }
 
   private async _loadModels() {
@@ -189,7 +379,7 @@ export class ModelSelector extends LitElement {
       let models: Model[] = data.payload.models;
 
       if (this.filter === 'vision') {
-        models = models.filter(m => m.vision);
+        models = models.filter((m) => m.vision);
       }
 
       models.sort((a, b) => {
@@ -203,14 +393,6 @@ export class ModelSelector extends LitElement {
       });
 
       this._models = models;
-
-      // Debug logging for model selection
-      console.log('[ModelSelector] Models loaded:', {
-        count: models.length,
-        currentValue: this.value,
-        hasMatchingModel: models.some(m => m.id === this.value),
-        matchingModel: models.find(m => m.id === this.value),
-      });
     } catch (err) {
       console.error('[ModelSelector] Failed to load models:', err);
       this._error = err instanceof Error ? err.message : 'Failed to load models';
@@ -219,64 +401,92 @@ export class ModelSelector extends LitElement {
     }
   }
 
-  private _onChange(e: Event) {
-    const target = e.target as HTMLSelectElement;
-    const modelId = target.value;
-    const model = this._models.find(m => m.id === modelId) || null;
-
-    this.dispatchEvent(new CustomEvent<ModelSelectEvent>('change', {
-      detail: { modelId, model },
-      bubbles: true,
-      composed: true,
-    }));
-  }
-
   render() {
+    const filtered = modelsMatchingQuery(this._models, this._query);
+
     return html`
       <div class="model-selector">
-        ${this.label ? html`
-          <label class="label">
-            ${this.label}
-            ${this.required ? html`<span class="required">*</span>` : ''}
-          </label>
-        ` : ''}
+        ${this.label
+          ? html`
+              <label class="label">
+                ${this.label}
+                ${this.required ? html`<span class="required">*</span>` : ''}
+              </label>
+            `
+          : ''}
 
-        ${this._loading ? html`
-          <div class="loading-state">
-            <span class="spinner"></span>
-            <span>Loading models...</span>
-          </div>
-        ` : this._error ? html`
-          <div class="error-state">
-            ${this._error}
-          </div>
-        ` : this._models.length === 0 ? html`
-          <div class="empty-state">
-            No models available. Please configure a provider first.
-          </div>
-        ` : html`
-          <div class="select-wrapper">
-            <select
-              class="model-select"
-              .value=${this.value || ''}
-              @change=${this._onChange}
-              ?disabled=${this.disabled}
-            >
-              <option value="" disabled ?selected=${!this.value}>
-                ${this.placeholder}
-              </option>
-              ${this._models.map(model => html`
-                <option 
-                  value="${model.id}"
-                  ?selected=${model.id === this.value}
-                >
-                  ${model.provider}/${model.name}
-                </option>
-              `)}
-            </select>
-            <span class="select-arrow">▼</span>
-          </div>
-        `}
+        ${this._loading
+          ? html`
+              <div class="loading-state">
+                <span class="spinner"></span>
+                <span>Loading models...</span>
+              </div>
+            `
+          : this._error
+            ? html`
+                <div class="error-state">
+                  ${this._error}
+                </div>
+              `
+            : this._models.length === 0
+              ? html`
+                  <div class="empty-state">
+                    No models available. Please configure a provider first.
+                  </div>
+                `
+              : html`
+                  <div class="combobox">
+                    <button
+                      type="button"
+                      class="model-trigger"
+                      @click=${() => this._toggleOpen()}
+                      ?disabled=${this.disabled}
+                      aria-haspopup="listbox"
+                      aria-expanded=${this._open}
+                    >
+                      ${this._displayLabel()}
+                    </button>
+                    <span class="select-arrow" aria-hidden="true">▼</span>
+                    ${this._open
+                      ? html`
+                          <div class="model-panel" @keydown=${this._onPanelKeydown}>
+                            <input
+                              type="search"
+                              class="model-search"
+                              .value=${this._query}
+                              placeholder=${t('chat.modelSearchPlaceholder')}
+                              autocomplete="off"
+                              spellcheck="false"
+                              @input=${this._onSearchInput}
+                              @click=${(e: Event) => e.stopPropagation()}
+                            />
+                            ${filtered.length === 0
+                              ? html`<div class="model-no-matches">${t('chat.modelNoMatches')}</div>`
+                              : html`
+                                  <ul class="model-list" role="listbox" aria-label=${t('chat.model')}>
+                                    ${filtered.map(
+                                      (model) => html`
+                                        <li role="presentation">
+                                          <button
+                                            type="button"
+                                            class="model-option"
+                                            role="option"
+                                            aria-selected=${model.id === this.value}
+                                            @click=${() => this._selectModel(model.id)}
+                                          >
+                                            <span class="model-option-primary">${model.provider}/${model.name}</span>
+                                            <span class="model-option-secondary">${model.id}</span>
+                                          </button>
+                                        </li>
+                                      `,
+                                    )}
+                                  </ul>
+                                `}
+                          </div>
+                        `
+                      : ''}
+                  </div>
+                `}
       </div>
     `;
   }
