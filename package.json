@@ -3,31 +3,30 @@
   "version": "0.2.2",
   "description": "Ultra-Lightweight Personal AI Assistant - Node.js + TypeScript",
   "type": "module",
-  "main": "dist/index.js",
-  "types": "dist/index.d.ts",
+  "main": "dist/src/index.js",
+  "types": "dist/src/index.d.ts",
   "exports": {
     ".": {
-      "types": "./dist/index.d.ts",
-      "import": "./dist/index.js",
-      "default": "./dist/index.js"
+      "types": "./dist/src/index.d.ts",
+      "import": "./dist/src/index.js",
+      "default": "./dist/src/index.js"
     },
-    "./*": "./dist/*"
+    "./*": "./dist/src/*"
   },
   "bin": {
-    "xopcbot": "./dist/cli/index.js"
+    "xopcbot": "./dist/src/cli/index.js"
   },
   "files": [
     "dist",
-    "skills",
-    "extensions"
+    "skills"
   ],
   "publishConfig": {
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && pnpm --filter @xopcai/xopcbot-extension-telegram run build && cd ui && npm run build",
+    "build": "tsc && cd ui && npm run build",
     "dev": "tsx src/cli/index.ts",
-    "start": "node dist/cli/index.js",
+    "start": "node dist/src/cli/index.js",
     "test": "vitest run src extensions/telegram/src",
     "test:skills": "vitest run src/agent/skills/__tests__",
     "test:skills:regression": "./scripts/test-skills.sh",
@@ -74,7 +73,6 @@
     "@mariozechner/pi-agent-core": "^0.61.0",
     "@mariozechner/pi-ai": "^0.61.0",
     "@sinclair/typebox": "^0.34.48",
-    "@xopcai/xopcbot-extension-telegram": "workspace:*",
     "adm-zip": "^0.5.16",
     "commander": "^14.0.3",
     "cron-parser": "^5.5.0",
