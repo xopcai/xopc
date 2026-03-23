@@ -32,9 +32,6 @@ importers:
       '@sinclair/typebox':
         specifier: ^0.34.48
         version: 0.34.48
-      '@xopcai/xopcbot-extension-telegram':
-        specifier: workspace:*
-        version: link:extensions/telegram
       adm-zip:
         specifier: ^0.5.16
         version: 0.5.16
