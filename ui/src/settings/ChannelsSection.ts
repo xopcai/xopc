@@ -1,6 +1,6 @@
 import { html, LitElement } from 'lit';
 import type { PropertyValues } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons.js';
 import { t } from '../utils/i18n.js';
 import type { SettingsData, DmPolicy, GroupPolicy, ReplyToMode, StreamMode, TelegramAccount, WeixinAccount } from './types.js';
@@ -21,12 +21,22 @@ export class ChannelsSection extends LitElement {
   private _weixinAccountsDraft = '';
   private _weixinAccountsParseError = '';
 
+  /** Section body visible when channel is enabled (user can still collapse while enabled). */
+  @state() private _telegramExpanded = true;
+  @state() private _weixinExpanded = true;
+
   createRenderRoot() { return this; }
 
   override willUpdate(changedProperties: PropertyValues) {
     super.willUpdate(changedProperties);
     if (changedProperties.has('settings')) {
       const prev = changedProperties.get('settings') as SettingsData | undefined;
+      if (prev && !prev.telegram.enabled && this.settings.telegram.enabled) {
+        this._telegramExpanded = true;
+      }
+      if (prev && !prev.weixin.enabled && this.settings.weixin.enabled) {
+        this._weixinExpanded = true;
+      }
       const prevAcc = JSON.stringify(prev?.telegram?.accounts ?? {});
       const nextAcc = JSON.stringify(this.settings.telegram.accounts ?? {});
       if (prev === undefined || prevAcc !== nextAcc) {
@@ -97,15 +107,62 @@ export class ChannelsSection extends LitElement {
     setTimeout(() => { this._copied = false; this.requestUpdate(); }, 2000);
   }
 
+  private _onTelegramEnabledChange(e: Event) {
+    const checked = (e.target as HTMLInputElement).checked;
+    if (checked) this._telegramExpanded = true;
+    this._field('telegram.enabled', checked);
+  }
+
+  private _onWeixinEnabledChange(e: Event) {
+    const checked = (e.target as HTMLInputElement).checked;
+    if (checked) this._weixinExpanded = true;
+    this._field('weixin.enabled', checked);
+  }
+
+  private _toggleTelegramSection() {
+    if (!this.settings.telegram.enabled) return;
+    this._telegramExpanded = !this._telegramExpanded;
+  }
+
+  private _toggleWeixinSection() {
+    if (!this.settings.weixin.enabled) return;
+    this._weixinExpanded = !this._weixinExpanded;
+  }
+
+  private _onTelegramHeaderClick(e: Event) {
+    if ((e.target as HTMLElement).closest('.channel-card__toggle')) return;
+    this._toggleTelegramSection();
+  }
+
+  private _onWeixinHeaderClick(e: Event) {
+    if ((e.target as HTMLElement).closest('.channel-card__toggle')) return;
+    this._toggleWeixinSection();
+  }
+
+  private _onTelegramHeaderKeydown(e: KeyboardEvent) {
+    if ((e.target as HTMLElement).closest('.channel-card__toggle')) return;
+    if (!this.settings.telegram.enabled) return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    this._toggleTelegramSection();
+  }
+
+  private _onWeixinHeaderKeydown(e: KeyboardEvent) {
+    if ((e.target as HTMLElement).closest('.channel-card__toggle')) return;
+    if (!this.settings.weixin.enabled) return;
+    if (e.key !== 'Enter' && e.key !== ' ') return;
+    e.preventDefault();
+    this._toggleWeixinSection();
+  }
+
   override render() {
-    const tg = this.settings.telegram;
     return html`
       <div class="section-content">
         <div class="section-header">
           <h2>${t('settings.sections.channels')}</h2>
           <p class="section-desc">${t('settings.descriptions.channels')}</p>
         </div>
-        <div class="fields-grid">
+        <div class="channels-layout">
           ${this._renderTelegram()}
           ${this._renderWeixin()}
         </div>
@@ -115,17 +172,38 @@ export class ChannelsSection extends LitElement {
 
   private _renderTelegram() {
     const tg = this.settings.telegram;
+    const showBody = tg.enabled && this._telegramExpanded;
     return html`
-      <div class="channel-section">
-        <label class="toggle-label">
-          <input class="toggle-input" type="checkbox" .checked=${tg.enabled}
-            @change=${(e: Event) => this._field('telegram.enabled', (e.target as HTMLInputElement).checked)} />
-          <span class="toggle-switch"></span>
-          <span class="toggle-text">${t('settings.fields.telegramEnabled')}</span>
-        </label>
+      <article class="channel-card ${tg.enabled && !this._telegramExpanded ? 'channel-card--collapsed' : ''}" aria-labelledby="channel-telegram-title">
+        <header
+          class="channel-card__header ${tg.enabled ? 'channel-card__header--interactive' : ''}"
+          tabindex=${tg.enabled ? 0 : -1}
+          aria-controls="channel-telegram-body"
+          aria-expanded=${tg.enabled ? String(this._telegramExpanded) : 'false'}
+          aria-label=${tg.enabled
+            ? (this._telegramExpanded ? t('settings.channelsUi.collapseDetails') : t('settings.channelsUi.expandDetails'))
+            : undefined}
+          @click=${this._onTelegramHeaderClick}
+          @keydown=${this._onTelegramHeaderKeydown}
+        >
+          <div class="channel-card__headline">
+            <span class="channel-card__icon" aria-hidden="true">${getIcon('send')}</span>
+            <div class="channel-card__titles">
+              <h3 class="channel-card__title" id="channel-telegram-title">${t('settings.fields.telegramEnabled')}</h3>
+              <p class="channel-card__subtitle">${t('settings.channelsUi.telegramCardSubtitle')}</p>
+            </div>
+          </div>
+          <label class="toggle-label toggle-label--compact channel-card__toggle" @click=${(e: Event) => e.stopPropagation()}>
+            <input class="toggle-input" type="checkbox" .checked=${tg.enabled}
+              aria-label="${t('settings.descriptionsFields.telegramEnabled')}"
+              @change=${this._onTelegramEnabledChange} />
+            <span class="toggle-switch"></span>
+          </label>
+        </header>
 
-        ${tg.enabled ? html`
-          <div class="channel-nested">
+        ${showBody ? html`
+          <div class="channel-card__body" id="channel-telegram-body">
+            <div class="channel-card__stack">
 
             <div class="field-group">
               <div class="field-header"><label class="field-label">${t('settings.fields.telegramToken')} <span class="required-mark">*</span></label></div>
@@ -160,26 +238,48 @@ export class ChannelsSection extends LitElement {
             </div>
 
             ${tg.advancedMode ? this._renderAdvanced() : ''}
+            </div>
           </div>
         ` : ''}
-      </div>
+      </article>
     `;
   }
 
   private _renderWeixin() {
     const wx = this.settings.weixin;
+    const showBody = wx.enabled && this._weixinExpanded;
     return html`
-      <div class="channel-section channel-section--weixin">
-        <label class="toggle-label">
-          <input class="toggle-input" type="checkbox" .checked=${wx.enabled}
-            @change=${(e: Event) => this._field('weixin.enabled', (e.target as HTMLInputElement).checked)} />
-          <span class="toggle-switch"></span>
-          <span class="toggle-text">${t('settings.fields.weixinEnabled')}</span>
-        </label>
+      <article class="channel-card ${wx.enabled && !this._weixinExpanded ? 'channel-card--collapsed' : ''}" aria-labelledby="channel-weixin-title">
+        <header
+          class="channel-card__header ${wx.enabled ? 'channel-card__header--interactive' : ''}"
+          tabindex=${wx.enabled ? 0 : -1}
+          aria-controls="channel-weixin-body"
+          aria-expanded=${wx.enabled ? String(this._weixinExpanded) : 'false'}
+          aria-label=${wx.enabled
+            ? (this._weixinExpanded ? t('settings.channelsUi.collapseDetails') : t('settings.channelsUi.expandDetails'))
+            : undefined}
+          @click=${this._onWeixinHeaderClick}
+          @keydown=${this._onWeixinHeaderKeydown}
+        >
+          <div class="channel-card__headline">
+            <span class="channel-card__icon" aria-hidden="true">${getIcon('messageSquare')}</span>
+            <div class="channel-card__titles">
+              <h3 class="channel-card__title" id="channel-weixin-title">${t('settings.fields.weixinEnabled')}</h3>
+              <p class="channel-card__subtitle">${t('settings.channelsUi.weixinCardSubtitle')}</p>
+            </div>
+          </div>
+          <label class="toggle-label toggle-label--compact channel-card__toggle" @click=${(e: Event) => e.stopPropagation()}>
+            <input class="toggle-input" type="checkbox" .checked=${wx.enabled}
+              aria-label="${t('settings.descriptionsFields.weixinEnabled')}"
+              @change=${this._onWeixinEnabledChange} />
+            <span class="toggle-switch"></span>
+          </label>
+        </header>
 
-        ${wx.enabled ? html`
-          <div class="channel-nested">
-            <p class="field-desc">${t('settings.descriptionsFields.weixinLogin')}</p>
+        ${showBody ? html`
+          <div class="channel-card__body" id="channel-weixin-body">
+            <div class="channel-card__stack">
+            <p class="field-desc field-desc--callout">${t('settings.descriptionsFields.weixinLogin')}</p>
 
             <div class="field-group">
               <div class="field-header"><label class="field-label">${t('settings.fields.weixinAllowFrom')}</label></div>
@@ -200,9 +300,10 @@ export class ChannelsSection extends LitElement {
             </div>
 
             ${wx.advancedMode ? this._renderWeixinAdvanced() : ''}
+            </div>
           </div>
         ` : ''}
-      </div>
+      </article>
     `;
   }
 
@@ -217,7 +318,7 @@ export class ChannelsSection extends LitElement {
     ];
 
     return html`
-      <div class="channel-advanced-divider">
+      <div class="channel-card__advanced">
         ${this._renderSelect('DM Policy', 'weixin.dmPolicy', wx.dmPolicy, dmOpts)}
         ${this._renderSelect('Stream Mode', 'weixin.streamMode', wx.streamMode, streamOpts)}
 
@@ -284,7 +385,7 @@ export class ChannelsSection extends LitElement {
     ];
 
     return html`
-      <div class="channel-advanced-divider">
+      <div class="channel-card__advanced">
 
         <div class="field-group">
           <div class="field-header"><label class="field-label">${t('settings.fields.telegramApiRoot')}</label></div>

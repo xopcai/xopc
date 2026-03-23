@@ -343,7 +343,11 @@
     },
     "channelsUi": {
       "advancedShow": "显示高级设置",
-      "advancedHide": "隐藏高级设置"
+      "advancedHide": "隐藏高级设置",
+      "telegramCardSubtitle": "@BotFather 机器人令牌、白名单与可选的多账号 JSON。",
+      "weixinCardSubtitle": "在网关主机上通过 CLI 登录后，在此配置白名单与路由。",
+      "expandDetails": "展开设置",
+      "collapseDetails": "收起设置"
     }
   },
   "errors": {

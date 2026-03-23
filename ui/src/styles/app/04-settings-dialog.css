@@ -183,11 +183,128 @@
   gap: 1.25rem;
 }
 
-/* Second channel block (e.g. Weixin below Telegram) */
-.settings-page .channel-section + .channel-section {
+/* Channels — stacked cards (design system §2.1: surface + border, no drop shadow) */
+.settings-page .channels-layout {
+  display: flex;
+  flex-direction: column;
+  gap: 1.5rem;
+}
+
+.settings-page .channel-card {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  overflow: hidden;
+  background: var(--card-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+}
+
+.settings-page .channel-card__header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 1rem 1.25rem;
+  padding: 1rem 1.25rem;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.settings-page .channel-card:not(:has(.channel-card__body)) .channel-card__header {
+  border-bottom: none;
+}
+
+.settings-page .channel-card__headline {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.75rem;
+  min-width: 0;
+  flex: 1 1 12rem;
+}
+
+.settings-page .channel-card__header--interactive {
+  cursor: pointer;
+  transition: background var(--transition-fast);
+}
+
+.settings-page .channel-card__header--interactive:hover {
+  background: var(--hover-bg);
+}
+
+.settings-page .channel-card__header--interactive:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--primary-base);
+  border-radius: var(--radius-lg);
+}
+
+.settings-page .channel-card__icon {
+  display: flex;
+  flex-shrink: 0;
+  margin-top: 0.125rem;
+  color: var(--text-secondary);
+}
+
+.settings-page .channel-card__icon svg {
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.settings-page .channel-card__titles {
+  min-width: 0;
+}
+
+.settings-page .channel-card__title {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  line-height: 1.5rem;
+  letter-spacing: -0.025em;
+  color: var(--text-primary);
+}
+
+.settings-page .channel-card__subtitle {
+  margin: 0.25rem 0 0;
+  font-size: 0.8125rem;
+  line-height: 1.375rem;
+  font-weight: 400;
+  color: var(--text-secondary);
+}
+
+.settings-page .channel-card__toggle {
+  flex-shrink: 0;
+  align-self: center;
+}
+
+.settings-page .channel-card__body {
+  padding: 1.25rem 1.25rem 1.5rem;
+}
+
+.settings-page .channel-card__stack {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+}
+
+.settings-page .field-desc--callout {
+  margin: 0;
+  padding: 0.75rem 1rem;
+  font-size: 0.8125rem;
+  line-height: 1.5;
+  color: var(--text-secondary);
+  background: var(--app-bg);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+}
+
+.settings-page .channel-card__advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
   margin-top: 0.25rem;
-  padding-top: 1.25rem;
-  border-top: 1px solid var(--border-default);
+  padding: 1rem 1rem 1.25rem;
+  border-radius: var(--radius-lg);
+  background: var(--app-bg);
+  border: 1px solid var(--border-subtle);
 }
 
 .field-group {
@@ -382,6 +499,14 @@
   color: var(--text-secondary);
 }
 
+.toggle-label--compact {
+  gap: 0;
+}
+
+.toggle-label--compact:focus-within .toggle-switch {
+  box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--primary-base);
+}
+
 /* ===== Footer ===== */
 .settings-footer {
   display: flex;
@@ -557,19 +682,6 @@ xopcbot-gateway-chat {
 
 .settings-page .section-content > .alert {
   margin-bottom: 1rem;
-}
-
-/* Telegram nested fields */
-.settings-page .channel-nested {
-  margin-top: 1.5rem;
-  padding-left: 1rem;
-  border-left: 2px solid var(--border-default);
-}
-
-.settings-page .channel-advanced-divider {
-  margin-top: 1.5rem;
-  padding-top: 1.5rem;
-  border-top: 1px solid var(--border-default);
 }
 
 .settings-page .settings-field-row {
