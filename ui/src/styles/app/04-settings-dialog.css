@@ -183,6 +183,13 @@
   gap: 1.25rem;
 }
 
+/* Second channel block (e.g. Weixin below Telegram) */
+.settings-page .channel-section + .channel-section {
+  margin-top: 0.25rem;
+  padding-top: 1.25rem;
+  border-top: 1px solid var(--border-default);
+}
+
 .field-group {
   display: flex;
   flex-direction: column;

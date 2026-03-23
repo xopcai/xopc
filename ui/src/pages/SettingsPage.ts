@@ -30,7 +30,11 @@ export class SettingsPage extends LitElement {
   @state() private _saveSuccess = false;
   @state() private _dirty = false;
   @state() private _tokenExpired = false;
-  @state() private _settings: SettingsData = { ...DEFAULT_SETTINGS, telegram: { ...DEFAULT_SETTINGS.telegram } };
+  @state() private _settings: SettingsData = {
+    ...DEFAULT_SETTINGS,
+    telegram: { ...DEFAULT_SETTINGS.telegram },
+    weixin: { ...DEFAULT_SETTINGS.weixin },
+  };
   @state() private _providers: ProviderInfo[] = [];
   @state() private _loadingProviders = false;
   @state() private _models: Model[] = [];
@@ -90,6 +94,18 @@ export class SettingsPage extends LitElement {
           textChunkLimit: c.channels?.telegram?.textChunkLimit || 4000,
           proxy: c.channels?.telegram?.proxy || '',
           accounts: c.channels?.telegram?.accounts || {},
+          advancedMode: false,
+        },
+        weixin: {
+          enabled: c.channels?.weixin?.enabled || false,
+          dmPolicy: c.channels?.weixin?.dmPolicy || 'pairing',
+          allowFrom: c.channels?.weixin?.allowFrom || [],
+          debug: c.channels?.weixin?.debug || false,
+          streamMode: c.channels?.weixin?.streamMode ?? 'partial',
+          historyLimit: c.channels?.weixin?.historyLimit ?? 50,
+          textChunkLimit: c.channels?.weixin?.textChunkLimit ?? 4000,
+          routeTag: c.channels?.weixin?.routeTag != null ? String(c.channels.weixin.routeTag) : '',
+          accounts: c.channels?.weixin?.accounts || {},
           advancedMode: false,
         },
         gateway: {
@@ -168,6 +184,12 @@ export class SettingsPage extends LitElement {
     const token = this.config?.token;
     const s = this._settings;
     const tg = s.telegram;
+    const wx = s.weixin;
+    const weixinRouteTag: string | number | null = (() => {
+      const raw = wx.routeTag.trim();
+      if (!raw) return null;
+      return /^\d+$/.test(raw) ? Number(raw) : raw;
+    })();
 
     const body = {
       agents: { defaults: { model: s.model, maxTokens: s.maxTokens, temperature: s.temperature, maxToolIterations: s.maxToolIterations, workspace: s.workspace, thinkingDefault: s.thinkingDefault, reasoningDefault: s.reasoningDefault, verboseDefault: s.verboseDefault } },
@@ -179,6 +201,17 @@ export class SettingsPage extends LitElement {
           dmPolicy: tg.dmPolicy, groupPolicy: tg.groupPolicy, replyToMode: tg.replyToMode,
           streamMode: tg.streamMode, historyLimit: tg.historyLimit, textChunkLimit: tg.textChunkLimit,
           proxy: tg.proxy || undefined, accounts: Object.keys(tg.accounts).length ? tg.accounts : undefined,
+        },
+        weixin: {
+          enabled: wx.enabled,
+          dmPolicy: wx.dmPolicy,
+          allowFrom: wx.allowFrom,
+          debug: wx.debug,
+          streamMode: wx.streamMode,
+          historyLimit: wx.historyLimit,
+          textChunkLimit: wx.textChunkLimit,
+          routeTag: weixinRouteTag,
+          accounts: Object.keys(wx.accounts).length ? wx.accounts : undefined,
         },
       },
       gateway: {

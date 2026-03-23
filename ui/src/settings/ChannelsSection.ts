@@ -3,7 +3,7 @@ import type { PropertyValues } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons.js';
 import { t } from '../utils/i18n.js';
-import type { SettingsData, DmPolicy, GroupPolicy, ReplyToMode, StreamMode, TelegramAccount } from './types.js';
+import type { SettingsData, DmPolicy, GroupPolicy, ReplyToMode, StreamMode, TelegramAccount, WeixinAccount } from './types.js';
 
 @customElement('channels-section')
 export class ChannelsSection extends LitElement {
@@ -18,6 +18,9 @@ export class ChannelsSection extends LitElement {
   private _accountsDraft = '';
   private _accountsParseError = '';
 
+  private _weixinAccountsDraft = '';
+  private _weixinAccountsParseError = '';
+
   createRenderRoot() { return this; }
 
   override willUpdate(changedProperties: PropertyValues) {
@@ -29,6 +32,12 @@ export class ChannelsSection extends LitElement {
       if (prev === undefined || prevAcc !== nextAcc) {
         this._accountsDraft = JSON.stringify(this.settings.telegram.accounts ?? {}, null, 2);
         this._accountsParseError = '';
+      }
+      const prevWx = JSON.stringify(prev?.weixin?.accounts ?? {});
+      const nextWx = JSON.stringify(this.settings.weixin?.accounts ?? {});
+      if (prev === undefined || prevWx !== nextWx) {
+        this._weixinAccountsDraft = JSON.stringify(this.settings.weixin?.accounts ?? {}, null, 2);
+        this._weixinAccountsParseError = '';
       }
     }
   }
@@ -56,6 +65,27 @@ export class ChannelsSection extends LitElement {
     this.requestUpdate();
   }
 
+  private _onWeixinAccountsJsonBlur(e: Event) {
+    const raw = (e.target as HTMLTextAreaElement).value.trim();
+    if (!raw) {
+      this._field('weixin.accounts', {});
+      this._weixinAccountsParseError = '';
+      this.requestUpdate();
+      return;
+    }
+    try {
+      const parsed = JSON.parse(raw) as unknown;
+      if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+        throw new Error('Accounts must be a JSON object');
+      }
+      this._field('weixin.accounts', parsed as Record<string, WeixinAccount>);
+      this._weixinAccountsParseError = '';
+    } catch (err) {
+      this._weixinAccountsParseError = err instanceof Error ? err.message : 'Invalid JSON';
+    }
+    this.requestUpdate();
+  }
+
   private _toggleToken() { this._showToken = !this._showToken; this.requestUpdate(); }
 
   private async _copyToken() {
@@ -75,7 +105,10 @@ export class ChannelsSection extends LitElement {
           <h2>${t('settings.sections.channels')}</h2>
           <p class="section-desc">${t('settings.descriptions.channels')}</p>
         </div>
-        <div class="fields-grid">${this._renderTelegram()}</div>
+        <div class="fields-grid">
+          ${this._renderTelegram()}
+          ${this._renderWeixin()}
+        </div>
       </div>
     `;
   }
@@ -129,6 +162,107 @@ export class ChannelsSection extends LitElement {
             ${tg.advancedMode ? this._renderAdvanced() : ''}
           </div>
         ` : ''}
+      </div>
+    `;
+  }
+
+  private _renderWeixin() {
+    const wx = this.settings.weixin;
+    return html`
+      <div class="channel-section channel-section--weixin">
+        <label class="toggle-label">
+          <input class="toggle-input" type="checkbox" .checked=${wx.enabled}
+            @change=${(e: Event) => this._field('weixin.enabled', (e.target as HTMLInputElement).checked)} />
+          <span class="toggle-switch"></span>
+          <span class="toggle-text">${t('settings.fields.weixinEnabled')}</span>
+        </label>
+
+        ${wx.enabled ? html`
+          <div class="channel-nested">
+            <p class="field-desc">${t('settings.descriptionsFields.weixinLogin')}</p>
+
+            <div class="field-group">
+              <div class="field-header"><label class="field-label">${t('settings.fields.weixinAllowFrom')}</label></div>
+              <textarea class="textarea-input" rows="1" placeholder="wxid_..., openid_..."
+                .value=${wx.allowFrom.join(', ')}
+                @change=${(e: Event) => this._field('weixin.allowFrom',
+                  (e.target as HTMLTextAreaElement).value.split(/[,\n]/).map(s => s.trim()).filter(Boolean)
+                )}></textarea>
+              <p class="field-desc">${t('settings.descriptionsFields.weixinAllowFrom')}</p>
+            </div>
+
+            <div class="field-group">
+              <button type="button" class="btn btn-ghost"
+                @click=${() => this._field('weixin.advancedMode', !wx.advancedMode)}>
+                ${getIcon(wx.advancedMode ? 'chevronUp' : 'chevronDown')}
+                <span>${wx.advancedMode ? t('settings.channelsUi.advancedHide') : t('settings.channelsUi.advancedShow')}</span>
+              </button>
+            </div>
+
+            ${wx.advancedMode ? this._renderWeixinAdvanced() : ''}
+          </div>
+        ` : ''}
+      </div>
+    `;
+  }
+
+  private _renderWeixinAdvanced() {
+    const wx = this.settings.weixin;
+    const dmOpts: { value: DmPolicy; label: string }[] = [
+      { value: 'pairing', label: 'Pairing' }, { value: 'allowlist', label: 'Allowlist' },
+      { value: 'open', label: 'Open' }, { value: 'disabled', label: 'Disabled' },
+    ];
+    const streamOpts: { value: StreamMode; label: string }[] = [
+      { value: 'off', label: 'Off' }, { value: 'partial', label: 'Partial' }, { value: 'block', label: 'Block' },
+    ];
+
+    return html`
+      <div class="channel-advanced-divider">
+        ${this._renderSelect('DM Policy', 'weixin.dmPolicy', wx.dmPolicy, dmOpts)}
+        ${this._renderSelect('Stream Mode', 'weixin.streamMode', wx.streamMode, streamOpts)}
+
+        <div class="settings-field-row">
+          <div class="field-group">
+            <div class="field-header"><label class="field-label">${t('settings.fields.weixinHistoryLimit')}</label></div>
+            <input class="text-input" type="number" min="10" max="200" .value=${wx.historyLimit}
+              @change=${(e: Event) => this._field('weixin.historyLimit', parseInt((e.target as HTMLInputElement).value) || 50)} />
+          </div>
+          <div class="field-group">
+            <div class="field-header"><label class="field-label">${t('settings.fields.weixinTextChunkLimit')}</label></div>
+            <input class="text-input" type="number" min="1000" max="10000" step="100" .value=${wx.textChunkLimit}
+              @change=${(e: Event) => this._field('weixin.textChunkLimit', parseInt((e.target as HTMLInputElement).value) || 4000)} />
+          </div>
+        </div>
+
+        <div class="field-group">
+          <div class="field-header"><label class="field-label">${t('settings.fields.weixinRouteTag')}</label></div>
+          <input class="text-input" type="text" .value=${wx.routeTag}
+            placeholder="${t('settings.placeholders.weixinRouteTag')}"
+            @change=${(e: Event) => this._field('weixin.routeTag', (e.target as HTMLInputElement).value)} />
+          <p class="field-desc">${t('settings.descriptionsFields.weixinRouteTag')}</p>
+        </div>
+
+        <div class="field-group">
+          <label class="toggle-label">
+            <input class="toggle-input" type="checkbox" .checked=${wx.debug}
+              @change=${(e: Event) => this._field('weixin.debug', (e.target as HTMLInputElement).checked)} />
+            <span class="toggle-switch"></span>
+            <span class="toggle-text">${t('settings.fields.weixinDebug')}</span>
+          </label>
+          <p class="field-desc">${t('settings.descriptionsFields.weixinDebug')}</p>
+        </div>
+
+        <div class="field-group">
+          <div class="field-header"><label class="field-label">${t('settings.fields.weixinAccountsJson')}</label></div>
+          <textarea class="textarea-input textarea-input--code" rows="6"
+            .value=${this._weixinAccountsDraft}
+            @input=${(e: Event) => { this._weixinAccountsDraft = (e.target as HTMLTextAreaElement).value; }}
+            @blur=${this._onWeixinAccountsJsonBlur}
+            placeholder='{ "personal": { "name": "...", "cdnBaseUrl": "...", "enabled": true } }'></textarea>
+          ${this._weixinAccountsParseError
+            ? html`<p class="field-desc field-desc--error">${this._weixinAccountsParseError}</p>`
+            : html`<p class="field-desc">${t('settings.descriptionsFields.weixinAccountsJson')}</p>`}
+        </div>
       </div>
     `;
   }
