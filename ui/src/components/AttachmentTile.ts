@@ -1,10 +1,15 @@
 import { LitElement, html, type TemplateResult } from 'lit';
-import { customElement, property } from 'lit/decorators.js';
+import { customElement, property, state } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { FileSpreadsheet, FileText, X } from 'lucide';
 import type { Attachment } from '../utils/attachment-utils';
-import { getAttachmentBinaryPayload, resolveDataUrlForDisplay } from '../utils/attachment-utils';
+import {
+  arrayBufferToBase64,
+  getAttachmentBinaryPayload,
+  resolveDataUrlForDisplay,
+} from '../utils/attachment-utils';
 import { i18n } from '../utils/i18n';
+import { apiUrl, authHeaders } from '../chat/helpers.js';
 
 function iconToSvg(iconData: unknown, sizeClass = ''): string {
   if (!iconData || !Array.isArray(iconData)) return '';
@@ -38,8 +43,12 @@ function iconToSvg(iconData: unknown, sizeClass = ''): string {
 @customElement('attachment-tile')
 export class AttachmentTile extends LitElement {
   @property({ type: Object }) attachment!: Attachment;
+  @property({ attribute: false }) authToken?: string;
   @property({ type: Boolean }) showDelete = false;
   @property() onDelete?: () => void;
+
+  @state() private _hydrated: Attachment | null = null;
+  private _fetching = false;
 
   protected override createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -48,25 +57,70 @@ export class AttachmentTile extends LitElement {
   private handleClick = () => {
     this.dispatchEvent(
       new CustomEvent('attachment-click', {
-        detail: this.attachment,
+        detail: this._effective,
         bubbles: true,
         composed: true,
       }),
     );
   };
 
+  private get _effective(): Attachment {
+    return this._hydrated ?? this.attachment;
+  }
+
+  override updated(changed: Map<PropertyKey, unknown>): void {
+    super.updated(changed);
+    if (changed.has('attachment')) {
+      this._hydrated = null;
+    }
+    void this._maybeHydrateFromGateway();
+  }
+
+  private async _maybeHydrateFromGateway(): Promise<void> {
+    const base = this.attachment;
+    if (!base?.workspaceRelativePath || getAttachmentBinaryPayload(base)) {
+      return;
+    }
+    if (!this.authToken || this._fetching || this._hydrated) {
+      return;
+    }
+    this._fetching = true;
+    try {
+      const url = apiUrl(
+        `/api/workspace/inbound-file?rel=${encodeURIComponent(base.workspaceRelativePath)}`,
+      );
+      const res = await fetch(url, { headers: authHeaders(this.authToken) });
+      if (!res.ok) return;
+      const buf = await res.arrayBuffer();
+      const b64 = arrayBufferToBase64(buf);
+      const isImg = base.mimeType?.startsWith('image/') || base.type === 'image';
+      this._hydrated = {
+        ...base,
+        content: b64,
+        data: b64,
+        preview: isImg ? b64 : base.preview,
+        type: isImg ? 'image' : 'document',
+      };
+    } catch {
+      /* ignore */
+    } finally {
+      this._fetching = false;
+    }
+  }
+
   override render(): TemplateResult {
-    const previewBase64 = this.attachment.preview ?? getAttachmentBinaryPayload(this.attachment);
+    const att = this._effective;
+    const previewBase64 = att.preview ?? getAttachmentBinaryPayload(att);
     const isImageMime =
-      this.attachment.mimeType?.startsWith('image/') || this.attachment.type === 'image';
-    const isPdf = this.attachment.mimeType === 'application/pdf';
+      att.mimeType?.startsWith('image/') || att.type === 'image';
+    const isPdf = att.mimeType === 'application/pdf';
     const isExcel =
-      this.attachment.mimeType?.includes('spreadsheetml') ||
-      this.attachment.name?.toLowerCase().endsWith('.xlsx') ||
-      this.attachment.name?.toLowerCase().endsWith('.xls');
-    const displayName = this.attachment.name ?? 'file';
-    const imgMime = this.attachment.mimeType?.startsWith('image/')
-      ? this.attachment.mimeType
+      att.mimeType?.includes('spreadsheetml') ||
+      att.name?.toLowerCase().endsWith('.xlsx') ||
+      att.name?.toLowerCase().endsWith('.xls');
+    const displayName = att.name ?? 'file';
+    const imgMime = att.mimeType?.startsWith('image/')
+      ? att.mimeType
       : 'image/png';
     const thumbSrc =
       previewBase64 && isImageMime ? resolveDataUrlForDisplay(imgMime, previewBase64) : '';

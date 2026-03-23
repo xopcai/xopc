@@ -969,7 +969,7 @@ export class SessionStore {
             ? c
             : this.extractTextContent(c);
 
-      return {
+      const row: Message = {
         role: m.role as 'system' | 'user' | 'assistant' | 'tool' | 'toolResult',
         content,
         timestamp: m.timestamp ? new Date(m.timestamp).toISOString() : undefined,
@@ -977,6 +977,10 @@ export class SessionStore {
         tool_calls: m.tool_calls,
         name: m.name,
       };
+      if (Array.isArray(m.attachments) && m.attachments.length > 0) {
+        row.attachments = m.attachments;
+      }
+      return row;
     });
   }
 

@@ -1,6 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { readFileSync } from 'node:fs';
+import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { logger } from './middleware/logger.js';
@@ -8,6 +9,8 @@ import { auth } from './middleware/auth.js';
 import { createAgentSSEHandler, createAgentResumeHandler, createSendHandler, createEventsSSEHandler } from './sse.js';
 import type { GatewayService } from '../service.js';
 import type { Config } from '../../config/schema.js';
+import { getWorkspacePath } from '../../config/schema.js';
+import { resolveSafeInboundFilePath } from '../../attachments/inbound-persist.js';
 import { getVoiceModelsConfig } from '../../config/voice.js';
 import { createLogger } from '../../utils/logger.js';
 import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../utils/log-store.js';
@@ -167,6 +170,47 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       channels: health.channels,
       uptime: health.uptime,
     });
+  });
+
+  /** Serve a persisted inbound upload from workspace `.xopcbot/inbound/` (Web UI preview after reload). */
+  authenticated.get('/api/workspace/inbound-file', async (c) => {
+    const rel = c.req.query('rel');
+    if (!rel || typeof rel !== 'string') {
+      return c.json({ ok: false, error: { message: 'Missing rel' } }, 400);
+    }
+    const workspaceRoot = getWorkspacePath(service.currentConfig);
+    const abs = resolveSafeInboundFilePath(workspaceRoot, rel);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Forbidden' } }, 403);
+    }
+    try {
+      const buf = await readFile(abs);
+      const ext = rel.split('.').pop()?.toLowerCase() ?? '';
+      const mimeByExt: Record<string, string> = {
+        pdf: 'application/pdf',
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        webp: 'image/webp',
+        gif: 'image/gif',
+        md: 'text/markdown',
+        txt: 'text/plain',
+        json: 'application/json',
+        html: 'text/html',
+        css: 'text/css',
+        js: 'text/javascript',
+        ts: 'text/typescript',
+      };
+      const contentType = mimeByExt[ext] || 'application/octet-stream';
+      return new Response(buf, {
+        headers: {
+          'Content-Type': contentType,
+          'Cache-Control': 'private, max-age=3600',
+        },
+      });
+    } catch {
+      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    }
   });
 
   // ========== Core SSE API ==========

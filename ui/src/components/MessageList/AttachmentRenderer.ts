@@ -7,6 +7,7 @@ import type { Attachment } from '../../utils/attachment-utils';
 @customElement('attachment-renderer')
 export class AttachmentRenderer extends LitElement {
   @property({ attribute: false }) attachments: Attachment[] = [];
+  @property({ attribute: false }) authToken?: string;
 
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -42,6 +43,7 @@ export class AttachmentRenderer extends LitElement {
         ${images.map((img) => html`
           <attachment-tile
             .attachment=${img}
+            .authToken=${this.authToken}
             @attachment-click=${() => this._handleAttachmentClick(img)}
           ></attachment-tile>
         `)}
@@ -55,6 +57,7 @@ export class AttachmentRenderer extends LitElement {
         ${documents.map((doc) => html`
           <attachment-tile
             .attachment=${doc}
+            .authToken=${this.authToken}
             @attachment-click=${() => this._handleAttachmentClick(doc)}
           ></attachment-tile>
         `)}
@@ -63,6 +66,6 @@ export class AttachmentRenderer extends LitElement {
   }
 
   private _handleAttachmentClick(attachment: Attachment): void {
-    AttachmentOverlay.open(attachment);
+    AttachmentOverlay.open(attachment, undefined, { authToken: this.authToken });
   }
 }

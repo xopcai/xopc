@@ -8,6 +8,8 @@ import './MessageBubble';
 @customElement('message-list')
 export class MessageList extends LitElement {
   @property({ attribute: false }) messages: Message[] = [];
+  /** Gateway bearer token for loading persisted inbound files after reload */
+  @property({ attribute: false }) authToken?: string;
   @property({ type: Boolean }) isStreaming = false;
   /** Shown on the last bubble while the assistant message is streaming. */
   @property({ attribute: false }) progress: ProgressState | null = null;
@@ -39,6 +41,7 @@ export class MessageList extends LitElement {
         ${this.messages.map((message, index) => html`
           <message-bubble 
             .message=${message}
+            .authToken=${this.authToken}
             .isStreaming=${this.isStreaming && index === this.messages.length - 1}
             .progress=${this.isStreaming && index === this.messages.length - 1 ? this.progress : null}
           ></message-bubble>
@@ -56,6 +59,7 @@ export class MessageList extends LitElement {
             <div class="py-2">
               <message-bubble 
                 .message=${message}
+                .authToken=${this.authToken}
                 .isStreaming=${this.isStreaming && index === this.messages.length - 1}
                 .progress=${this.isStreaming && index === this.messages.length - 1 ? this.progress : null}
               ></message-bubble>

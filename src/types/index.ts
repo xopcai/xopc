@@ -6,10 +6,12 @@ export interface InboundMessage {
   media?: Array<{ type: string; fileId: string }>;
   attachments?: Array<{
     type: string;
-    mimeType: string;
-    data: string;
+    mimeType?: string;
+    data?: string;
     name?: string;
     size?: number;
+    /** Relative to configured workspace (`agents.defaults.workspace`), POSIX `/`. */
+    workspaceRelativePath?: string;
   }>;
   metadata?: Record<string, unknown>;
 }
@@ -58,6 +60,14 @@ export interface Message {
   toolName?: string; // pi-ai format
   isError?: boolean; // pi-ai format
   name?: string;
+  /** Webchat early-save: inbound file refs (workspace paths), no base64. */
+  attachments?: Array<{
+    type?: string;
+    mimeType?: string;
+    name?: string;
+    size?: number;
+    workspaceRelativePath?: string;
+  }>;
 }
 
 export interface SessionInfo {
