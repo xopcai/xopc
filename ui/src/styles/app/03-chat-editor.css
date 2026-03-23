@@ -178,6 +178,25 @@
   flex: 1;
 }
 
+/* Model selector (chat toolbar) */
+.chat-model-picker {
+  flex: 0 1 min(14rem, 46vw);
+  min-width: 0;
+}
+
+.chat-model-picker model-selector {
+  --model-select-max-width: 100%;
+}
+
+.chat-header-model {
+  display: inline-block;
+  max-width: min(280px, 40vw);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  vertical-align: bottom;
+}
+
 /* ===== Toolbar Buttons ===== */
 .toolbar-btn {
   display: flex;

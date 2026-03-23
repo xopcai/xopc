@@ -69,7 +69,10 @@
     "connectionError": "连接错误",
     "reconnecting": "重新连接中...",
     "online": "在线",
-    "offline": "离线"
+    "offline": "离线",
+    "model": "模型",
+    "currentModel": "当前对话使用的模型",
+    "modelPlaceholder": "选择模型…"
   },
   "settings": {
     "title": "设置",
@@ -309,7 +312,8 @@
     "sendFailed": "发送消息失败",
     "invalidFileType": "无效的文件类型",
     "fileTooLarge": "文件过大（最大 {{size}}）",
-    "readFileFailed": "读取文件失败"
+    "readFileFailed": "读取文件失败",
+    "modelSwitchFailed": "切换模型失败"
   },
   "fileUpload": {
     "dropHere": "拖放文件到此处",

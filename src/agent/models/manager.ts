@@ -95,12 +95,7 @@ export class ModelManager {
    */
   async switchModelForSession(sessionKey: string, modelId: string): Promise<boolean> {
     try {
-      const found = resolveModel(modelId);
-      if (!found) {
-        log.warn({ modelId }, 'Model not found');
-        return false;
-      }
-
+      resolveModel(modelId);
       this.sessionModels.set(sessionKey, modelId);
       log.info({ sessionKey, modelId }, 'Model switched for session');
       return true;
@@ -108,6 +103,11 @@ export class ModelManager {
       log.error({ err, sessionKey, modelId }, 'Failed to switch model');
       return false;
     }
+  }
+
+  /** Drop in-memory session override so the global default is used again. */
+  clearSessionModelOverride(sessionKey: string): void {
+    this.sessionModels.delete(sessionKey);
   }
 
   /**

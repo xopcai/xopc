@@ -749,7 +749,7 @@ export class GatewayService {
     return this.agentService.getSessionAgentConfig(sessionKey);
   }
 
-  async patchSessionAgentConfig(sessionKey: string, body: { thinkingLevel?: string }) {
+  async patchSessionAgentConfig(sessionKey: string, body: { thinkingLevel?: string; model?: string | null }) {
     return this.agentService.patchSessionAgentConfig(sessionKey, body);
   }
 
