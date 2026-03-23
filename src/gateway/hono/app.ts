@@ -680,6 +680,72 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ ok: true, payload: { providers: meta } });
   });
 
+  // ========== Skills (managed global skills under ~/.xopcbot/skills) ==========
+
+  authenticated.get('/api/skills', (c) => {
+    const payload = service.getSkillsApi();
+    return c.json({ ok: true, payload });
+  });
+
+  authenticated.post('/api/skills/reload', (c) => {
+    service.reloadSkillsFromDisk();
+    return c.json({ ok: true });
+  });
+
+  authenticated.post('/api/skills/upload', async (c) => {
+    let body: Record<string, unknown>;
+    try {
+      body = await c.req.parseBody({ all: true });
+    } catch {
+      return c.json({ ok: false, error: 'Invalid multipart body' }, 400);
+    }
+    const file = body['file'];
+    if (!file || typeof file !== 'object') {
+      return c.json({ ok: false, error: 'Missing file field' }, 400);
+    }
+    let buf: Buffer;
+    if (file instanceof File) {
+      buf = Buffer.from(await file.arrayBuffer());
+    } else if (typeof (file as Blob).arrayBuffer === 'function') {
+      buf = Buffer.from(await (file as Blob).arrayBuffer());
+    } else {
+      return c.json({ ok: false, error: 'Invalid file upload' }, 400);
+    }
+    const skillIdRaw = body['skillId'];
+    const overwriteRaw = body['overwrite'];
+    const skillId = typeof skillIdRaw === 'string' && skillIdRaw.trim() ? skillIdRaw.trim() : undefined;
+    const overwrite =
+      overwriteRaw === 'true' ||
+      overwriteRaw === true ||
+      overwriteRaw === '1';
+
+    try {
+      const result = service.installManagedSkillZip(buf, { skillId, overwrite });
+      return c.json({ ok: true, payload: result });
+    } catch (err) {
+      return c.json(
+        { ok: false, error: err instanceof Error ? err.message : 'Install failed' },
+        400,
+      );
+    }
+  });
+
+  authenticated.delete('/api/skills/:id', (c) => {
+    const id = c.req.param('id');
+    if (!id) {
+      return c.json({ ok: false, error: 'Missing id' }, 400);
+    }
+    try {
+      service.deleteManagedSkill(id);
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json(
+        { ok: false, error: err instanceof Error ? err.message : 'Delete failed' },
+        400,
+      );
+    }
+  });
+
   // ========== Cron REST API (/api/cron) ==========
 
   // GET /api/cron - List all jobs

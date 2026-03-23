@@ -5,6 +5,7 @@ import './pages/SessionManager';
 import './pages/CronManager';
 // Pages
 import './pages/LogManager';
+import './pages/SkillManager';
 import './pages/SettingsPage';
 // Components
 import './components/TokenDialog';
@@ -223,7 +224,7 @@ export class XopcbotApp extends LitElement {
     }
     
     const tab = hash as Tab;
-    const validTabs: Tab[] = ['sessions', 'cron', 'logs', 'settings'];
+    const validTabs: Tab[] = ['sessions', 'cron', 'skills', 'logs', 'settings'];
     
     if (validTabs.includes(tab)) {
       if (this._activeTab !== tab) {
@@ -498,6 +499,7 @@ export class XopcbotApp extends LitElement {
             ${this._activeTab === 'chat' ? this._renderChat() : nothing}
             ${this._activeTab === 'sessions' ? this._renderSessions() : nothing}
             ${this._activeTab === 'cron' ? this._renderCron() : nothing}
+            ${this._activeTab === 'skills' ? this._renderSkills() : nothing}
             ${this._activeTab === 'logs' ? this._renderLogs() : nothing}
             ${this._activeTab === 'settings' ? this._renderSettings() : nothing}
           </main>
@@ -536,6 +538,16 @@ export class XopcbotApp extends LitElement {
       <cron-manager
         .config=${{ token }}
       ></cron-manager>
+    `;
+  }
+
+  private _renderSkills(): unknown {
+    const token = getToken() || this._gatewayConfig?.token;
+
+    return html`
+      <skill-manager
+        .config=${{ token }}
+      ></skill-manager>
     `;
   }
 

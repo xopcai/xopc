@@ -41,7 +41,7 @@ import { MessageRouter, CommandHandler, StreamManager } from './messaging/index.
 import { SessionContextManager, SessionLifecycleManager, type SessionContext } from './session/index.js';
 import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
 import { FeedbackCoordinator } from './feedback/index.js';
-import { AgentManager } from './agent-manager.js';
+import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 
 import { createTypingController, type TypingController } from './typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
@@ -372,6 +372,14 @@ export class AgentService {
   setChannelManager(channelManager: ChannelManager): void {
     this.modelManager.setChannelManager(channelManager);
     this.channelManagerRef = channelManager;
+  }
+
+  getSkillCatalog(): SkillCatalogEntry[] {
+    return this.agentManager.getSkillCatalog();
+  }
+
+  refreshSkillsAfterDiskChange(): void {
+    this.agentManager.refreshSkillsAfterDiskChange();
   }
 
   async switchModelForSession(sessionKey: string, modelId: string): Promise<boolean> {

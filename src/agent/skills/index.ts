@@ -257,7 +257,6 @@ export function loadSkills(options: {
   const globalDirs = [
     options.globalDir,
     join(resolveStateDir(), 'skills'),
-    join(process.env.HOME || '', '.agents', 'skills'),
   ].filter((d): d is string => !!d && existsSync(d));
 
   for (const dir of globalDirs) {

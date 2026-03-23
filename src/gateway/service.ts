@@ -19,6 +19,13 @@ import { getModelRegistry } from '../providers/index.js';
 import { getLogDir, getLogStats, createLogger } from '../utils/logger.js';
 import { resolveConfigPath, resolveCronJobsPath } from '../config/paths.js';
 import { AgentRunRelay } from './agent-run-relay.js';
+import {
+  deleteManagedSkill as deleteManagedSkillDir,
+  installSkillFromZip,
+  listManagedSkillDirs,
+} from '../agent/skills/managed-store.js';
+import type { SkillCatalogEntry } from '../agent/agent-manager.js';
+import type { ManagedSkillListItem } from '../agent/skills/managed-store.js';
 
 const log = createLogger('GatewayService');
 import { registerAcpRuntimeBackend } from '../acp/runtime/registry.js';
@@ -703,6 +710,31 @@ export class GatewayService {
 
   get cronServiceInstance(): CronService {
     return this.cronService;
+  }
+
+  getSkillsApi(): { catalog: SkillCatalogEntry[]; managed: ManagedSkillListItem[] } {
+    return {
+      catalog: this.agentService.getSkillCatalog(),
+      managed: listManagedSkillDirs(),
+    };
+  }
+
+  deleteManagedSkill(skillId: string): void {
+    deleteManagedSkillDir(skillId);
+    this.agentService.refreshSkillsAfterDiskChange();
+  }
+
+  installManagedSkillZip(
+    buffer: Buffer,
+    opts: { skillId?: string; overwrite?: boolean },
+  ): { skillId: string; path: string } {
+    const result = installSkillFromZip(buffer, opts);
+    this.agentService.refreshSkillsAfterDiskChange();
+    return result;
+  }
+
+  reloadSkillsFromDisk(): void {
+    this.agentService.refreshSkillsAfterDiskChange();
   }
 
   get sessionManagerInstance(): SessionManager {
