@@ -5,8 +5,7 @@ import { FileSpreadsheet, FileText, X } from 'lucide';
 import type { Attachment } from '../utils/attachment-utils';
 import { i18n } from '../utils/i18n';
 
-// Convert lucide icon array format to SVG string
-function iconToSvg(iconData: unknown, className = ''): string {
+function iconToSvg(iconData: unknown, sizeClass = ''): string {
   if (!iconData || !Array.isArray(iconData)) return '';
 
   const [_tag, attrs, children] = iconData as [string, Record<string, string>, unknown[]];
@@ -16,19 +15,21 @@ function iconToSvg(iconData: unknown, className = ''): string {
     .join(' ');
 
   const childrenStr = Array.isArray(children)
-    ? children.map(child => {
-        if (Array.isArray(child)) {
-          const [cTag, cAttrs] = child;
-          const cAttrStr = Object.entries(cAttrs || {})
-            .map(([k, v]) => `${k}="${v}"`)
-            .join(' ');
-          return `<${cTag} ${cAttrStr} />`;
-        }
-        return '';
-      }).join('')
+    ? children
+        .map((child) => {
+          if (Array.isArray(child)) {
+            const [cTag, cAttrs] = child;
+            const cAttrStr = Object.entries(cAttrs || {})
+              .map(([k, v]) => `${k}="${v}"`)
+              .join(' ');
+            return `<${cTag} ${cAttrStr} />`;
+          }
+          return '';
+        })
+        .join('')
     : '';
 
-  const finalAttrs = className ? `${attrStr} class="${className}"` : attrStr;
+  const finalAttrs = sizeClass ? `${attrStr} class="${sizeClass}"` : attrStr;
 
   return `<svg ${finalAttrs}>${childrenStr}</svg>`;
 }
@@ -43,19 +44,14 @@ export class AttachmentTile extends LitElement {
     return this;
   }
 
-  override connectedCallback(): void {
-    super.connectedCallback();
-    this.style.display = 'block';
-    this.classList.add('max-h-16');
-  }
-
   private handleClick = () => {
-    // Dispatch event for parent to handle
-    this.dispatchEvent(new CustomEvent('attachment-click', {
-      detail: this.attachment,
-      bubbles: true,
-      composed: true
-    }));
+    this.dispatchEvent(
+      new CustomEvent('attachment-click', {
+        detail: this.attachment,
+        bubbles: true,
+        composed: true,
+      }),
+    );
   };
 
   override render(): TemplateResult {
@@ -67,60 +63,54 @@ export class AttachmentTile extends LitElement {
       this.attachment.name.toLowerCase().endsWith('.xlsx') ||
       this.attachment.name.toLowerCase().endsWith('.xls');
 
-    // Choose the appropriate icon
     const getDocumentIcon = () => {
-      if (isExcel) return iconToSvg(FileSpreadsheet, 'md');
-      return iconToSvg(FileText, 'md');
+      if (isExcel) return iconToSvg(FileSpreadsheet, 'attachment-tile__icon');
+      return iconToSvg(FileText, 'attachment-tile__icon');
     };
 
     return html`
-      <div class="relative group inline-block">
+      <div class="attachment-tile-root relative group inline-block">
         ${hasPreview
           ? html`
-              <div class="relative">
+              <div class="attachment-tile__preview-wrap">
                 <img
                   src="data:${isImage ? this.attachment.mimeType : 'image/png'};base64,${this.attachment.preview}"
-                  class="w-16 h-16 object-cover rounded-lg border border-input cursor-pointer hover:opacity-80 transition-opacity"
+                  class="attachment-tile__preview-img"
                   alt="${this.attachment.name}"
                   title="${this.attachment.name}"
                   @click=${this.handleClick}
                 />
                 ${isPdf
                   ? html`
-                      <!-- PDF badge overlay -->
-                      <div class="absolute bottom-0 left-0 right-0 bg-background/90 px-1 py-0.5 rounded-b-lg">
-                        <div class="text-[10px] text-muted-foreground text-center font-medium">PDF</div>
+                      <div class="attachment-tile__pdf-badge" aria-hidden="true">
+                        <span>PDF</span>
                       </div>
                     `
                   : ''}
               </div>
             `
           : html`
-              <!-- Fallback: document icon + filename -->
               <div
-                class="w-16 h-16 rounded-lg border border-input cursor-pointer hover:opacity-80 transition-opacity bg-muted text-muted-foreground flex flex-col items-center justify-center p-2"
+                class="attachment-tile__doc"
                 @click=${this.handleClick}
                 title="${this.attachment.name}"
               >
                 ${unsafeHTML(getDocumentIcon())}
-                <div class="text-[10px] text-center truncate w-full">
-                  ${this.attachment.name.length > 10
-                    ? `${this.attachment.name.substring(0, 8)}...`
-                    : this.attachment.name}
-                </div>
+                <div class="attachment-tile__name">${this.attachment.name}</div>
               </div>
             `}
         ${this.showDelete
           ? html`
               <button
+                type="button"
+                class="attachment-tile__remove"
                 @click=${(e: Event) => {
                   e.stopPropagation();
                   this.onDelete?.();
                 }}
-                class="absolute -top-1 -right-1 w-5 h-5 bg-background hover:bg-muted text-muted-foreground hover:text-foreground rounded-full flex items-center justify-center opacity-100 hover:opacity-100 [@media(hover:hover)]:opacity-0 [@media(hover:hover)]:group-hover:opacity-100 transition-opacity border border-input shadow-sm"
                 title="${i18n('Remove')}"
               >
-                ${unsafeHTML(iconToSvg(X, 'xs'))}
+                ${unsafeHTML(iconToSvg(X, 'attachment-tile__remove-icon'))}
               </button>
             `
           : ''}

@@ -23,7 +23,7 @@ export class AttachmentRenderer extends LitElement {
     );
 
     return html`
-      <div class="flex flex-col gap-2 mt-2">
+      <div class="attachment-renderer">
         ${images.length > 0 ? this._renderImageGallery(images) : ''}
         ${documents.length > 0 ? this._renderDocumentList(documents) : ''}
       </div>
@@ -51,7 +51,7 @@ export class AttachmentRenderer extends LitElement {
 
   private _renderDocumentList(documents: Attachment[]): unknown {
     return html`
-      <div class="flex flex-wrap gap-2">
+      <div class="attachment-renderer__docs">
         ${documents.map((doc) => html`
           <attachment-tile
             .attachment=${doc}
