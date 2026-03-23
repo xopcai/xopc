@@ -1,5 +1,5 @@
 import { html, LitElement } from 'lit';
-import { customElement, property, query } from 'lit/decorators.js';
+import { customElement, property, query, state } from 'lit/decorators.js';
 import type { Agent, AgentEvent } from '@mariozechner/pi-agent-core';
 
 // Import styles (tokens + Tailwind first, then app components)
@@ -17,6 +17,8 @@ import { i18n } from './utils/i18n';
 import type { Attachment } from './utils/attachment-utils';
 import type { MessageEditor } from './components/MessageEditor';
 import { normalizeAgentMessages } from './messages/agent-messages.js';
+import { modelSupportsReasoning } from './utils/model-capabilities.js';
+import { getToken } from './utils/storage.js';
 
 // Utils
 export { t, i18n, setLanguage, getCurrentLanguage, initI18n, type Language } from './utils/i18n';
@@ -85,10 +87,17 @@ export class XopcbotChat extends LitElement {
   @property({ type: Boolean }) enableAttachments = true;
   @property({ type: Boolean }) enableModelSelector = true;
   @property({ type: Boolean }) enableThinkingSelector = true;
+  /** Optional gateway Bearer token for resolving model capabilities (same as app token). */
+  @property({ type: String }) gatewayToken?: string;
   /** Called when the user picks a model in the header (embed mode; wire to your Agent if supported). */
   @property({ attribute: false }) onModelChange?: (modelId: string) => void;
 
   @query('message-editor') private _messageEditor!: MessageEditor;
+
+  @state() private _modelSupportsThinking = false;
+  private _thinkingSupportGen = 0;
+  private _lastEmbedModelId = '';
+  private _didEmbedThinkingInit = false;
 
   private _autoScroll = true;
   private _lastScrollTop = 0;
@@ -116,6 +125,39 @@ export class XopcbotChat extends LitElement {
     this._resizeObserver?.disconnect();
     this._scrollContainer?.removeEventListener('scroll', this._handleScroll);
     this._unsubscribeSession?.();
+  }
+
+  override updated(_changed: Map<PropertyKey, unknown>): void {
+    super.updated(_changed);
+    if (!this.enableThinkingSelector) {
+      if (this._modelSupportsThinking) {
+        this._modelSupportsThinking = false;
+      }
+      this._didEmbedThinkingInit = false;
+      return;
+    }
+    const id = this._modelIdString();
+    if (id !== this._lastEmbedModelId || !this._didEmbedThinkingInit) {
+      this._lastEmbedModelId = id;
+      this._didEmbedThinkingInit = true;
+      void this._refreshEmbedThinkingSupport(id);
+    }
+  }
+
+  private async _refreshEmbedThinkingSupport(modelId: string): Promise<void> {
+    const gen = ++this._thinkingSupportGen;
+    if (!modelId.trim()) {
+      if (gen === this._thinkingSupportGen) {
+        this._modelSupportsThinking = false;
+        this.requestUpdate();
+      }
+      return;
+    }
+    const token = (this.gatewayToken ?? getToken()) || undefined;
+    const supports = await modelSupportsReasoning(modelId, token);
+    if (gen !== this._thinkingSupportGen) return;
+    this._modelSupportsThinking = supports;
+    this.requestUpdate();
   }
 
   private setupSessionSubscription(): void {
@@ -265,7 +307,7 @@ export class XopcbotChat extends LitElement {
               .thinkingLevel=${state.thinkingLevel}
               .showAttachmentButton=${this.enableAttachments}
               .showModelSelector=${false}
-              .showThinkingSelector=${this.enableThinkingSelector}
+              .showThinkingSelector=${this.enableThinkingSelector && this._modelSupportsThinking}
               .onSend=${(input: string, attachments: Attachment[]) => this.sendMessage(input, attachments)}
               .onAbort=${() => this.agent?.abort()}
             ></message-editor>

@@ -13,6 +13,7 @@ import { ChatConnection } from './connection.js';
 import { SessionManager } from './session.js';
 import { MessageSender, pendingAgentRunStorageKey } from './messaging.js';
 import type { Message } from '../messages/types.js';
+import { modelSupportsReasoning } from '../utils/model-capabilities.js';
 import {
   appendThinkingDelta,
   appendTextDelta,
@@ -50,7 +51,9 @@ export class ChatPanel extends LitElement {
   @state() private _loadingMore = false;
   @state() private _thinkingLevel: ThinkingLevel = 'medium';
   @state() private _sessionModel = '';
+  @state() private _modelSupportsThinking = false;
 
+  private _thinkingSupportGen = 0;
   private _conn?: ChatConnection;
   private _sessionMgr?: SessionManager;
   private _sender?: MessageSender;
@@ -148,6 +151,21 @@ export class ChatPanel extends LitElement {
     this.requestUpdate();
   }
 
+  private async _refreshModelThinkingSupport(modelId: string): Promise<void> {
+    const gen = ++this._thinkingSupportGen;
+    if (!modelId.trim()) {
+      if (gen === this._thinkingSupportGen) {
+        this._modelSupportsThinking = false;
+        this.requestUpdate();
+      }
+      return;
+    }
+    const supports = await modelSupportsReasoning(modelId, this.config?.token);
+    if (gen !== this._thinkingSupportGen) return;
+    this._modelSupportsThinking = supports;
+    this.requestUpdate();
+  }
+
   private async _handleRouteChange() {
     const route = this.route;
     if (!route) return;
@@ -232,6 +250,7 @@ export class ChatPanel extends LitElement {
         } catch {
           /* keep pill; gateway may be older */
         }
+        void this._refreshModelThinkingSupport(this._sessionModel);
       }
       this._atBottom = true;
       this.requestUpdate();
@@ -261,6 +280,7 @@ export class ChatPanel extends LitElement {
         throw new Error((e as { error?: string }).error || `HTTP ${res.status}`);
       }
       this._sessionModel = modelId;
+      void this._refreshModelThinkingSupport(modelId);
       this._error = null;
       this.requestUpdate();
     } catch (err) {
@@ -301,6 +321,7 @@ export class ChatPanel extends LitElement {
       } catch {
         /* ignore */
       }
+      void this._refreshModelThinkingSupport(this._sessionModel);
       return;
     }
     try {
@@ -318,6 +339,7 @@ export class ChatPanel extends LitElement {
       } catch {
         /* ignore */
       }
+      void this._refreshModelThinkingSupport(this._sessionModel);
       this.requestUpdate();
       this._scrollToBottom();
     } catch (err) {
@@ -358,8 +380,12 @@ export class ChatPanel extends LitElement {
     await this.updateComplete;
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
 
+    const effectiveThinking = this._modelSupportsThinking
+      ? (thinkingLevel ?? this._thinkingLevel)
+      : 'off';
+
     try {
-      await this._sender.send(content, this._sessionKey || 'default', attachments, thinkingLevel, {
+      await this._sender.send(content, this._sessionKey || 'default', attachments, effectiveThinking, {
         onStreamStart: () => {
           this._streaming = true;
           const msg = ensureAssistantMessage(this._streamingMsg, Date.now());
@@ -748,7 +774,7 @@ export class ChatPanel extends LitElement {
         .isStreaming=${this._streaming}
         .showAttachmentButton=${this.enableAttachments}
         .showModelSelector=${false}
-        .showThinkingSelector=${true}
+        .showThinkingSelector=${this._modelSupportsThinking}
         .thinkingLevel=${this._thinkingLevel}
         .onSend=${(input: string, attachments: Attachment[], level?: string) => {
           if (level) this._thinkingLevel = level as ThinkingLevel;
