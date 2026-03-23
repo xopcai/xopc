@@ -387,6 +387,8 @@
   },
   "cron": {
     "title": "定时任务",
+    "subtitle": "按计划向渠道发送消息或由代理处理后再发送。",
+    "statsRegion": "概览",
     "jobsHeading": "定时任务",
     "addJob": "添加定时任务",
     "editJob": "编辑定时任务",
@@ -434,6 +436,7 @@
     "total": "总计",
     "totalJobs": "任务总数",
     "emptyStateTitle": "暂无定时任务",
+    "emptyStateHint": "创建任务即可按 cron 计划发送——直连渠道或经 AI 代理处理。",
     "emptyStateCta": "创建第一个任务",
     "channel": "渠道",
     "recipient": "收件人 *",
