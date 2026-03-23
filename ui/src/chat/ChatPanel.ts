@@ -48,6 +48,7 @@ export class ChatPanel extends LitElement {
   @state() private _hasMore = true;
   @state() private _loadingMore = false;
   @state() private _thinkingLevel: ThinkingLevel = 'medium';
+  @state() private _sessionModel = '';
 
   private _conn?: ChatConnection;
   private _sessionMgr?: SessionManager;
@@ -226,6 +227,7 @@ export class ChatPanel extends LitElement {
         try {
           const cfg = await this._sessionMgr.loadSessionAgentConfig(key);
           this._thinkingLevel = cfg.thinkingLevel as ThinkingLevel;
+          this._sessionModel = cfg.model || '';
         } catch {
           /* keep pill; gateway may be older */
         }
@@ -238,6 +240,32 @@ export class ChatPanel extends LitElement {
       if (offset === 0) await this._fallbackToRecent();
     } finally {
       this._loadingSession = false;
+    }
+  }
+
+  private async _onSessionModelChange(modelId: string) {
+    if (!this._sessionKey || !this.config) return;
+    try {
+      const { apiUrl, authHeaders } = await import('./helpers.js');
+      const res = await fetch(
+        apiUrl(`/api/sessions/${encodeURIComponent(this._sessionKey)}/agent-config`),
+        {
+          method: 'PATCH',
+          headers: { 'Content-Type': 'application/json', ...authHeaders(this.config.token) },
+          body: JSON.stringify({ model: modelId }),
+        },
+      );
+      if (!res.ok) {
+        const e = await res.json().catch(() => ({}));
+        throw new Error((e as { error?: string }).error || `HTTP ${res.status}`);
+      }
+      this._sessionModel = modelId;
+      this._error = null;
+      this.requestUpdate();
+    } catch (err) {
+      console.error('[ChatPanel] Failed to set session model:', err);
+      this._error = err instanceof Error ? err.message : t('errors.modelSwitchFailed');
+      this.requestUpdate();
     }
   }
 
@@ -265,6 +293,13 @@ export class ChatPanel extends LitElement {
       this._lastLoadedKey = empty.key;
       this._sessionMgr.updateUrl(empty.key);
       this._notifySessionRoute(empty.key);
+      try {
+        const cfg = await this._sessionMgr.loadSessionAgentConfig(empty.key);
+        this._thinkingLevel = cfg.thinkingLevel as ThinkingLevel;
+        this._sessionModel = cfg.model || '';
+      } catch {
+        /* ignore */
+      }
       return;
     }
     try {
@@ -275,6 +310,13 @@ export class ChatPanel extends LitElement {
       this._lastLoadedKey = session.key;
       this._sessionMgr.updateUrl(session.key);
       this._notifySessionRoute(session.key);
+      try {
+        const cfg = await this._sessionMgr.loadSessionAgentConfig(session.key);
+        this._thinkingLevel = cfg.thinkingLevel as ThinkingLevel;
+        this._sessionModel = cfg.model || '';
+      } catch {
+        /* ignore */
+      }
       this.requestUpdate();
       this._scrollToBottom();
     } catch (err) {
@@ -609,6 +651,11 @@ export class ChatPanel extends LitElement {
           ${this._sessionKey
             ? html`<span class="text-xs text-muted ml-2">${this._sessions.find((s) => s.key === this._sessionKey)?.name || this._sessionKey}</span>`
             : ''}
+          ${this._sessionKey && this._sessionModel
+            ? html`<span class="chat-header-model text-xs text-muted-foreground ml-2 font-mono" title=${this._sessionModel}
+                >${t('chat.model')}: ${this._sessionModel}</span
+              >`
+            : ''}
         </div>
         <button class="new-session-btn" @click=${() => this._createSession()}>
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -678,6 +725,11 @@ export class ChatPanel extends LitElement {
         .showModelSelector=${this.enableModelSelector}
         .showThinkingSelector=${true}
         .thinkingLevel=${this._thinkingLevel}
+        .currentModel=${this._sessionModel}
+        .gatewayToken=${this.config?.token}
+        .onModelChange=${(modelId: string) => {
+          void this._onSessionModelChange(modelId);
+        }}
         .onSend=${(input: string, attachments: Attachment[], level?: string) => {
           if (level) this._thinkingLevel = level as ThinkingLevel;
           const data = attachments?.map((a) => ({

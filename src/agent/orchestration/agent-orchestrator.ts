@@ -51,6 +51,13 @@ export class AgentOrchestrator {
     this.getThinkingDefault = config.getThinkingDefault;
   }
 
+  private async hydrateSessionModelFromStore(sessionKey: string): Promise<void> {
+    const cfg = await this.sessionConfigStore.get(sessionKey);
+    if (cfg?.modelOverride) {
+      await this.modelManager.switchModelForSession(sessionKey, cfg.modelOverride);
+    }
+  }
+
   /**
    * Process a message through the agent orchestration pipeline
    */
@@ -63,6 +70,8 @@ export class AgentOrchestrator {
     const agent = this.agentManager.getOrCreateAgent(sessionKey);
 
     try {
+      await this.hydrateSessionModelFromStore(sessionKey);
+
       // 1. Load session history
       let messages = await this.sessionStore.load(sessionKey);
 

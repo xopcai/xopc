@@ -6,6 +6,7 @@ import { Paperclip, Send, Square, X, FileText, Mic } from 'lucide';
 import { loadAttachment, formatFileSize, type Attachment } from '../utils/attachment-utils';
 import { iconToSvg } from '../utils/lucide-icon.js';
 import { i18n } from '../utils/i18n';
+import './ModelSelector.js';
 
 // Thinking level type
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'adaptive';
@@ -21,10 +22,14 @@ export class MessageEditor extends LitElement {
   @property({ type: Boolean }) showModelSelector = true;
   @property({ type: Boolean }) showThinkingSelector = true;
   @property({ type: String }) thinkingLevel: ThinkingLevel = 'medium';
-  
+  /** Effective model ref (e.g. provider/model-id) for this chat session */
+  @property({ type: String }) currentModel = '';
+  @property({ type: String }) gatewayToken?: string;
+
   @property({ attribute: false }) onSend?: (input: string, attachments: Attachment[], thinkingLevel?: ThinkingLevel) => void;
   @property({ attribute: false }) onAbort?: () => void;
-  @property({ attribute: false }) onModelSelect?: () => void;
+  /** Called when the user picks another model from the chat toolbar */
+  @property({ attribute: false }) onModelChange?: (modelId: string) => void;
   @property({ attribute: false }) onThinkingChange?: (level: ThinkingLevel) => void;
 
   @state() private _isComposing = false;
@@ -107,6 +112,7 @@ export class MessageEditor extends LitElement {
         <div class="toolbar-row">
           ${this.showAttachmentButton ? this._renderAttachmentButton() : ''}
           ${this._renderVoiceButton()}
+          ${this.showModelSelector ? this._renderModelSelector() : ''}
           ${this._renderThinkingSelector()}
           <div class="toolbar-spacer"></div>
           ${this._renderSendButton()}
@@ -161,6 +167,27 @@ export class MessageEditor extends LitElement {
       <button type="button" class="toolbar-btn voice-btn" title=${i18n('Voice input') + ' (coming soon)'}>
         ${unsafeHTML(iconToSvg(Mic, 'w-4 h-4'))}
       </button>
+    `;
+  }
+
+  private _renderModelSelector(): unknown {
+    return html`
+      <div class="chat-model-picker" title=${i18n('chat.currentModel')}>
+        <model-selector
+          .value=${this.currentModel || ''}
+          .label=${''}
+          .placeholder=${i18n('chat.modelPlaceholder')}
+          .filter=${'configured'}
+          .token=${this.gatewayToken}
+          .disabled=${this.isStreaming}
+          @change=${(e: CustomEvent<{ modelId: string }>) => {
+            const id = e.detail?.modelId;
+            if (id && id !== this.currentModel) {
+              this.onModelChange?.(id);
+            }
+          }}
+        ></model-selector>
+      </div>
     `;
   }
 

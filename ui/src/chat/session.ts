@@ -24,7 +24,7 @@ export class SessionManager {
       );
   }
 
-  async loadSessionAgentConfig(sessionKey: string): Promise<{ thinkingLevel: string }> {
+  async loadSessionAgentConfig(sessionKey: string): Promise<{ thinkingLevel: string; model: string }> {
     const res = await fetch(
       apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`),
       { headers: authHeaders(this._config.token) },
@@ -32,7 +32,8 @@ export class SessionManager {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = await res.json();
     const thinkingLevel = data.payload?.thinkingLevel ?? 'medium';
-    return { thinkingLevel };
+    const model = typeof data.payload?.model === 'string' ? data.payload.model : '';
+    return { thinkingLevel, model };
   }
 
   async loadSession(sessionKey: string, offset = 0): Promise<{ messages: Message[]; hasMore: boolean }> {

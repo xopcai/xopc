@@ -69,7 +69,10 @@
     "connectionError": "Connection error",
     "reconnecting": "Reconnecting...",
     "online": "Online",
-    "offline": "Offline"
+    "offline": "Offline",
+    "model": "Model",
+    "currentModel": "Model used for this conversation",
+    "modelPlaceholder": "Select a model…"
   },
   "settings": {
     "title": "Settings",
@@ -309,7 +312,8 @@
     "sendFailed": "Failed to send message",
     "invalidFileType": "Invalid file type",
     "fileTooLarge": "File too large (max {{size}})",
-    "readFileFailed": "Failed to read file"
+    "readFileFailed": "Failed to read file",
+    "modelSwitchFailed": "Failed to switch model"
   },
   "fileUpload": {
     "dropHere": "Drop files here",

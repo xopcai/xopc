@@ -395,12 +395,30 @@ export class AgentService {
   }
 
   async switchModelForSession(sessionKey: string, modelId: string): Promise<boolean> {
-    // Use AgentManager to set model for the session's agent
+    const ok = await this.modelManager.switchModelForSession(sessionKey, modelId);
+    if (!ok) return false;
+    await this.sessionConfigStore.update(sessionKey, { modelOverride: modelId });
     const result = this.agentManager.setModelForSession(sessionKey, modelId);
     if (result) {
       this.sessionTracker.touchSession(sessionKey);
     }
-    return result;
+    return true;
+  }
+
+  private async clearSessionModelOverride(sessionKey: string): Promise<void> {
+    this.modelManager.clearSessionModelOverride(sessionKey);
+    await this.sessionConfigStore.update(sessionKey, { modelOverride: undefined });
+    const agent = this.agentManager.getAgent(sessionKey);
+    if (agent) {
+      await this.modelManager.applyModelForSession(agent, sessionKey);
+    }
+  }
+
+  private async hydrateSessionModelFromStore(sessionKey: string): Promise<void> {
+    const cfg = await this.sessionConfigStore.get(sessionKey);
+    if (cfg?.modelOverride) {
+      await this.modelManager.switchModelForSession(sessionKey, cfg.modelOverride);
+    }
   }
 
   setStreamHandle(handle: StreamHandle): void {
@@ -586,26 +604,41 @@ export class AgentService {
     this.agentManager.setThinkingLevel(sessionKey, level);
   }
 
-  /** Resolved thinking level for a session (for Web UI pill sync). */
-  async getSessionAgentConfig(sessionKey: string): Promise<{ thinkingLevel: ThinkingLevel }> {
+  /** Resolved thinking level and effective model ref for a session (Web UI). */
+  async getSessionAgentConfig(sessionKey: string): Promise<{ thinkingLevel: ThinkingLevel; model: string }> {
+    await this.hydrateSessionModelFromStore(sessionKey);
     const def = this.config.config?.agents?.defaults?.thinkingDefault ?? 'medium';
     const level = await resolveEffectiveThinkingLevel(this.sessionConfigStore, sessionKey, null, def);
-    return { thinkingLevel: level };
+    const model = this.modelManager.getModelForSession(sessionKey);
+    return { thinkingLevel: level, model };
   }
 
   async patchSessionAgentConfig(
     sessionKey: string,
-    partial: { thinkingLevel?: string },
+    partial: { thinkingLevel?: string; model?: string | null },
   ): Promise<{ ok: boolean; error?: string }> {
-    if (partial.thinkingLevel === undefined) {
-      return { ok: true };
+    if (partial.model !== undefined) {
+      if (partial.model === null || partial.model === '') {
+        await this.clearSessionModelOverride(sessionKey);
+      } else {
+        const ok = await this.modelManager.switchModelForSession(sessionKey, partial.model);
+        if (!ok) {
+          return { ok: false, error: 'Invalid model' };
+        }
+        await this.sessionConfigStore.update(sessionKey, { modelOverride: partial.model });
+        this.agentManager.setModelForSession(sessionKey, partial.model);
+      }
     }
-    const normalized = normalizeThinkLevel(partial.thinkingLevel);
-    if (!normalized) {
-      return { ok: false, error: 'Invalid thinking level' };
+
+    if (partial.thinkingLevel !== undefined) {
+      const normalized = normalizeThinkLevel(partial.thinkingLevel);
+      if (!normalized) {
+        return { ok: false, error: 'Invalid thinking level' };
+      }
+      await this.sessionConfigStore.update(sessionKey, { thinkingLevel: normalized });
+      this.agentManager.setThinkingLevel(sessionKey, normalized as ThinkingLevel);
     }
-    await this.sessionConfigStore.update(sessionKey, { thinkingLevel: normalized });
-    this.agentManager.setThinkingLevel(sessionKey, normalized as ThinkingLevel);
+
     return { ok: true };
   }
 
@@ -641,6 +674,7 @@ export class AgentService {
     };
 
     const agent = this.agentManager.getOrCreateAgent(sessionKey);
+    await this.hydrateSessionModelFromStore(sessionKey);
     const unsubscribeStreaming = agent.subscribe((event: AgentEvent) => {
       this.agentEventHandler.handle(event, context);
 
@@ -808,6 +842,8 @@ export class AgentService {
     try {
       // Get or create agent for this session
       const agent = this.agentManager.getOrCreateAgent(sessionKey);
+
+      await this.hydrateSessionModelFromStore(sessionKey);
 
       const loaded = await this.sessionStore.load(sessionKey);
       agent.replaceMessages(this.prepareLoadedSessionMessages(sessionKey, loaded));
