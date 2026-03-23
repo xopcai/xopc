@@ -305,6 +305,29 @@
         "duration": "Voice messages longer than 60 seconds will not be transcribed.",
         "envVars": "Environment variables supported: {{vars}}"
       }
+    },
+    "page": {
+      "unsavedBanner": "You have unsaved changes",
+      "saveSuccess": "Saved",
+      "providersIntro": "Configure API keys for the providers you use.",
+      "modelsIntro": "Configure custom model providers via models.json.",
+      "modelsJsonLoading": "Loading models.json…",
+      "selectSection": "Select a section"
+    },
+    "gatewayEditor": {
+      "title": "Gateway configuration",
+      "accessToken": "Access token",
+      "tokenHelp": "Token for API authentication. Leave empty to auto-generate.",
+      "tokenPlaceholder": "Enter token or leave empty to generate",
+      "changeToken": "Change token",
+      "updateToken": "Update token",
+      "tokenExpired": "Token expired or invalid. Update it to continue.",
+      "enableHeartbeat": "Enable heartbeat",
+      "heartbeatInterval": "Heartbeat interval (ms)"
+    },
+    "channelsUi": {
+      "advancedShow": "Show advanced settings",
+      "advancedHide": "Hide advanced settings"
     }
   },
   "errors": {

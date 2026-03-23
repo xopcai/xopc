@@ -18,7 +18,10 @@ export class AgentSection extends LitElement {
     const s = this.settings;
     return html`
       <div class="section-content">
-        <div class="section-header"><h2>${t('settings.sections.agent')}</h2></div>
+        <div class="section-header">
+          <h2>${t('settings.sections.agent')}</h2>
+          <p class="section-desc">${t('settings.descriptions.agent')}</p>
+        </div>
         <div class="fields-grid">
 
           <div class="field-group">
@@ -38,7 +41,7 @@ export class AgentSection extends LitElement {
               @change=${(e: Event) => this._field('workspace', (e.target as HTMLInputElement).value)} />
           </div>
 
-          <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+          <div class="settings-field-row">
             <div class="field-group">
               <div class="field-header"><label class="field-label">${t('settings.fields.maxTokens')}</label></div>
               <input class="text-input" type="number" .value=${s.maxTokens}
@@ -58,7 +61,7 @@ export class AgentSection extends LitElement {
           </div>
 
           <div class="field-group">
-            <div class="field-header"><label class="field-label">Thinking Level</label></div>
+            <div class="field-header"><label class="field-label">${t('settings.fields.thinkingDefault')}</label></div>
             <select class="select-input" .value=${s.thinkingDefault || 'medium'}
               @change=${(e: Event) => this._field('thinkingDefault', (e.target as HTMLSelectElement).value)}>
               <option value="off">Off</option>
@@ -72,7 +75,7 @@ export class AgentSection extends LitElement {
           </div>
 
           <div class="field-group">
-            <div class="field-header"><label class="field-label">Reasoning Display</label></div>
+            <div class="field-header"><label class="field-label">${t('settings.fields.reasoningDefault')}</label></div>
             <select class="select-input" .value=${s.reasoningDefault || 'off'}
               @change=${(e: Event) => this._field('reasoningDefault', (e.target as HTMLSelectElement).value)}>
               <option value="off">Off</option>
@@ -83,7 +86,7 @@ export class AgentSection extends LitElement {
           </div>
 
           <div class="field-group">
-            <div class="field-header"><label class="field-label">Verbose Mode</label></div>
+            <div class="field-header"><label class="field-label">${t('settings.fields.verboseDefault')}</label></div>
             <select class="select-input" .value=${s.verboseDefault || 'off'}
               @change=${(e: Event) => this._field('verboseDefault', (e.target as HTMLSelectElement).value)}>
               <option value="off">Off</option>

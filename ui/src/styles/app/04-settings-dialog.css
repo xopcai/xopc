@@ -42,7 +42,9 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 1.125rem;
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  letter-spacing: -0.025em;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -111,7 +113,7 @@
 }
 
 .sidebar-item:active {
-  transform: scale(0.98);
+  transform: scale(0.95);
 }
 
 .sidebar-item.active {
@@ -129,6 +131,24 @@
   opacity: 1;
 }
 
+/* Modal settings nav: same icon rules as full-page settings (§6.3) */
+.settings-dialog .sidebar-item svg {
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.settings-dialog .sidebar-item:hover svg {
+  color: var(--text-primary);
+}
+
+.settings-dialog .sidebar-item.active {
+  color: var(--text-primary);
+}
+
+.settings-dialog .sidebar-item.active svg {
+  color: var(--text-primary);
+}
+
 /* ===== Main Content ===== */
 .settings-main {
   flex: 1;
@@ -143,6 +163,8 @@
 
 .section-header h2 {
   font-size: 1.25rem;
+  line-height: 1.75rem;
+  letter-spacing: -0.025em;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 0.25rem 0;
@@ -150,7 +172,8 @@
 
 .section-description {
   font-size: 0.875rem;
-  color: var(--text-disabled);
+  line-height: 1.375rem;
+  color: var(--text-secondary);
   margin: 0;
 }
 
@@ -386,11 +409,12 @@ xopcbot-gateway-chat {
 }
 
 .settings-page .settings-sidebar {
-  width: 200px;
+  width: 15rem; /* 240px — workbench nav */
   border-right: 1px solid var(--border-default);
   padding: 0;
   flex-shrink: 0;
   overflow-y: auto;
+  background: var(--app-bg);
 }
 
 .settings-page .sidebar-header {
@@ -407,6 +431,34 @@ xopcbot-gateway-chat {
 
 .settings-page .sidebar-nav {
   padding: 0.75rem 0.5rem;
+}
+
+/* Nav: iconography §6.3 — muted icons; active row uses soft blue bg + primary text (not blue type) */
+.settings-page .sidebar-item {
+  border-radius: var(--radius-xl);
+  font-size: 0.875rem;
+  line-height: 1.5rem;
+  font-weight: 500;
+}
+
+.settings-page .sidebar-item svg {
+  width: 1.25rem;
+  height: 1.25rem;
+  color: var(--text-secondary);
+  flex-shrink: 0;
+}
+
+.settings-page .sidebar-item:hover svg {
+  color: var(--text-primary);
+}
+
+.settings-page .sidebar-item.active {
+  background: var(--primary-soft);
+  color: var(--text-primary);
+}
+
+.settings-page .sidebar-item.active svg {
+  color: var(--text-primary);
 }
 
 .settings-page .nav-item {
@@ -433,7 +485,7 @@ xopcbot-gateway-chat {
 }
 
 .settings-page .nav-item:active {
-  transform: scale(0.98);
+  transform: scale(0.95);
 }
 
 .settings-page .nav-item.active {
@@ -449,6 +501,7 @@ xopcbot-gateway-chat {
   padding: 2rem;
   position: relative;
   max-width: 100%;
+  background: var(--card-bg);
 }
 
 .settings-page .section-content {
@@ -468,7 +521,8 @@ xopcbot-gateway-chat {
 
 .settings-page .settings-section > .section-title {
   margin: 0;
-  font-size: 1.125rem;
+  font-size: 1rem;
+  line-height: 1.5rem;
   font-weight: 600;
   color: var(--text-primary);
 }
@@ -495,7 +549,9 @@ xopcbot-gateway-chat {
 }
 
 .settings-page .section-header h2 {
-  font-size: 1.5rem;
+  font-size: 1.25rem;
+  line-height: 1.75rem;
+  letter-spacing: -0.025em;
   font-weight: 600;
   color: var(--text-primary);
   margin: 0 0 0.5rem 0;
@@ -503,6 +559,7 @@ xopcbot-gateway-chat {
 
 .settings-page .section-desc {
   font-size: 0.875rem;
+  line-height: 1.375rem;
   color: var(--text-secondary);
   margin: 0;
 }
@@ -533,8 +590,76 @@ xopcbot-gateway-chat {
 
 .settings-page .field-desc {
   font-size: 0.8125rem;
+  line-height: 1.25rem;
   color: var(--text-secondary);
   margin: 0;
+}
+
+.settings-page .field-desc.field-desc--error {
+  color: var(--error);
+}
+
+/* Semantic inline alerts (§2.4) */
+.settings-page .alert {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-xl);
+  font-size: 0.875rem;
+  line-height: 1.375rem;
+}
+
+.settings-page .alert svg {
+  flex-shrink: 0;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+.settings-page .alert-error {
+  color: var(--error);
+  background: var(--error-soft);
+  border: 1px solid rgb(252 165 165 / 0.6);
+}
+
+:root.dark .settings-page .alert-error {
+  border-color: rgb(127 29 29 / 0.45);
+}
+
+.settings-page .alert-error .alert-actions {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+}
+
+.settings-page .section-content > .alert {
+  margin-bottom: 1rem;
+}
+
+/* Telegram nested fields */
+.settings-page .channel-nested {
+  margin-top: 1.5rem;
+  padding-left: 1rem;
+  border-left: 2px solid var(--border-default);
+}
+
+.settings-page .channel-advanced-divider {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border-default);
+}
+
+.settings-page .settings-field-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+@media (max-width: 640px) {
+  .settings-page .settings-field-row {
+    grid-template-columns: 1fr;
+  }
 }
 
 .settings-page .text-input,
@@ -558,7 +683,31 @@ xopcbot-gateway-chat {
 .settings-page .select-input:focus {
   outline: none;
   border-color: var(--primary-base);
-  box-shadow: 0 0 0 3px var(--primary-soft);
+  box-shadow: 0 0 0 1px var(--primary-base);
+}
+
+.settings-page .textarea-input {
+  width: 100%;
+  padding: 0.625rem 0.875rem;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  font-size: 0.875rem;
+  line-height: 1.5;
+  background: var(--card-bg);
+  color: var(--text-primary);
+  transition: border-color var(--transition-fast), box-shadow var(--transition-fast);
+  resize: vertical;
+  font-family: inherit;
+}
+
+.settings-page .textarea-input:hover {
+  border-color: var(--border-strong);
+}
+
+.settings-page .textarea-input:focus {
+  outline: none;
+  border-color: var(--primary-base);
+  box-shadow: 0 0 0 1px var(--primary-base);
 }
 
 .settings-page .input-with-actions .text-input {
@@ -587,7 +736,7 @@ xopcbot-gateway-chat {
 
 .settings-page .select-with-search .select-input option.group-header {
   font-weight: 600;
-  color: var(--primary-base);
+  color: var(--text-secondary);
   background: var(--hover-bg);
 }
 
@@ -684,11 +833,39 @@ xopcbot-gateway-chat {
   background: var(--card-bg);
   border: 1px solid var(--border-default);
   border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-lg);
+}
+
+:root.dark .settings-page .floating-save {
+  box-shadow: none;
+  border-color: var(--border-strong);
 }
 
 .settings-page .dirty-count {
   font-size: 0.8125rem;
+  line-height: 1.25rem;
   color: var(--text-secondary);
+}
+
+.settings-page .save-success {
+  position: absolute;
+  bottom: 2rem;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 0.5rem 1rem;
+  border-radius: var(--radius-xl);
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: rgb(4 120 87);
+  background: var(--success-soft);
+  border: 1px solid rgb(167 243 208 / 0.8);
+  animation: fadeIn var(--transition-fast) ease-out;
+}
+
+:root.dark .settings-page .save-success {
+  color: var(--success);
+  background: var(--success-soft);
+  border-color: rgb(6 78 59 / 0.45);
 }
 
 /* ===== Buttons ===== */
@@ -706,7 +883,7 @@ xopcbot-gateway-chat {
 }
 
 .btn:active {
-  transform: scale(0.98);
+  transform: scale(0.95);
 }
 
 .btn-ghost {

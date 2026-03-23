@@ -70,7 +70,13 @@ html.dark .glass {
 }
 
 .btn:active {
-  transform: scale(0.98);
+  transform: scale(0.95);
+}
+
+.btn-sm {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.8125rem;
+  line-height: 1.25rem;
 }
 
 .btn-ghost {
