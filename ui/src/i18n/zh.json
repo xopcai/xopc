@@ -305,6 +305,29 @@
         "duration": "超过 60 秒的语音消息将不会被转录。",
         "envVars": "支持的环境变量：{{vars}}"
       }
+    },
+    "page": {
+      "unsavedBanner": "有未保存的更改",
+      "saveSuccess": "已保存",
+      "providersIntro": "为要使用的提供商配置 API 密钥。",
+      "modelsIntro": "通过 models.json 配置自定义模型提供商。",
+      "modelsJsonLoading": "正在加载 models.json…",
+      "selectSection": "请选择一个分类"
+    },
+    "gatewayEditor": {
+      "title": "网关配置",
+      "accessToken": "访问令牌",
+      "tokenHelp": "用于 API 认证的令牌。留空则自动生成。",
+      "tokenPlaceholder": "输入令牌或留空以自动生成",
+      "changeToken": "更换令牌",
+      "updateToken": "更新令牌",
+      "tokenExpired": "令牌无效或已过期，请更新后继续。",
+      "enableHeartbeat": "启用心跳",
+      "heartbeatInterval": "心跳间隔（毫秒）"
+    },
+    "channelsUi": {
+      "advancedShow": "显示高级设置",
+      "advancedHide": "隐藏高级设置"
     }
   },
   "errors": {

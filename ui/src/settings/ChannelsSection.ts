@@ -2,6 +2,7 @@ import { html, LitElement } from 'lit';
 import type { PropertyValues } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons.js';
+import { t } from '../utils/i18n.js';
 import type { SettingsData, DmPolicy, GroupPolicy, ReplyToMode, StreamMode, TelegramAccount } from './types.js';
 
 @customElement('channels-section')
@@ -70,7 +71,10 @@ export class ChannelsSection extends LitElement {
     const tg = this.settings.telegram;
     return html`
       <div class="section-content">
-        <div class="section-header"><h2>Channels</h2></div>
+        <div class="section-header">
+          <h2>${t('settings.sections.channels')}</h2>
+          <p class="section-desc">${t('settings.descriptions.channels')}</p>
+        </div>
         <div class="fields-grid">${this._renderTelegram()}</div>
       </div>
     `;
@@ -84,14 +88,14 @@ export class ChannelsSection extends LitElement {
           <input class="toggle-input" type="checkbox" .checked=${tg.enabled}
             @change=${(e: Event) => this._field('telegram.enabled', (e.target as HTMLInputElement).checked)} />
           <span class="toggle-switch"></span>
-          <span class="toggle-text">Enable Telegram</span>
+          <span class="toggle-text">${t('settings.fields.telegramEnabled')}</span>
         </label>
 
         ${tg.enabled ? html`
-          <div class="channel-fields" style="margin-top:1.5rem;padding-left:1rem;border-left:2px solid var(--border-color);">
+          <div class="channel-nested">
 
             <div class="field-group">
-              <div class="field-header"><label class="field-label">Bot Token <span class="required-mark">*</span></label></div>
+              <div class="field-header"><label class="field-label">${t('settings.fields.telegramToken')} <span class="required-mark">*</span></label></div>
               <div class="input-with-actions">
                 <input class="text-input" type="${this._showToken ? 'text' : 'password'}" .value=${tg.botToken}
                   placeholder="123456789:ABCdefGHIjklMNOpqrsTUVwxyz"
@@ -101,24 +105,24 @@ export class ChannelsSection extends LitElement {
                   <button class="btn-icon" @click=${this._toggleToken} title="${this._showToken ? 'Hide' : 'Show'}">${getIcon(this._showToken ? 'eyeOff' : 'eye')}</button>
                 </div>
               </div>
-              <p class="field-desc">Get your token from @BotFather</p>
+              <p class="field-desc">${t('settings.descriptionsFields.telegramToken')}</p>
             </div>
 
             <div class="field-group">
-              <div class="field-header"><label class="field-label">Allow From (User IDs)</label></div>
+              <div class="field-header"><label class="field-label">${t('settings.fields.telegramAllowFrom')}</label></div>
               <textarea class="textarea-input" rows="1" placeholder="123456789, 987654321"
                 .value=${tg.allowFrom.join(', ')}
                 @change=${(e: Event) => this._field('telegram.allowFrom',
                   (e.target as HTMLTextAreaElement).value.split(/[,\n]/).map(s => s.trim()).filter(Boolean)
                 )}></textarea>
-              <p class="field-desc">Comma-separated user IDs allowed to use the bot</p>
+              <p class="field-desc">${t('settings.descriptionsFields.telegramAllowFrom')}</p>
             </div>
 
-            <div class="field-group" style="margin-top:1rem;">
-              <button class="btn btn-ghost" style="display:flex;align-items:center;gap:.5rem;"
+            <div class="field-group">
+              <button type="button" class="btn btn-ghost"
                 @click=${() => this._field('telegram.advancedMode', !tg.advancedMode)}>
                 ${getIcon(tg.advancedMode ? 'chevronUp' : 'chevronDown')}
-                <span>${tg.advancedMode ? 'Hide' : 'Show'} Advanced Settings</span>
+                <span>${tg.advancedMode ? t('settings.channelsUi.advancedHide') : t('settings.channelsUi.advancedShow')}</span>
               </button>
             </div>
 
@@ -146,10 +150,10 @@ export class ChannelsSection extends LitElement {
     ];
 
     return html`
-      <div style="margin-top:1.5rem;padding-top:1.5rem;border-top:1px solid var(--border-color);">
+      <div class="channel-advanced-divider">
 
         <div class="field-group">
-          <div class="field-header"><label class="field-label">API Root</label></div>
+          <div class="field-header"><label class="field-label">${t('settings.fields.telegramApiRoot')}</label></div>
           <input class="text-input" type="text" .value=${tg.apiRoot} placeholder="https://api.telegram.org"
             @change=${(e: Event) => this._field('telegram.apiRoot', (e.target as HTMLInputElement).value)} />
         </div>
@@ -174,7 +178,7 @@ export class ChannelsSection extends LitElement {
             )}></textarea>
         </div>
 
-        <div style="display:grid;grid-template-columns:1fr 1fr;gap:1rem;">
+        <div class="settings-field-row">
           <div class="field-group">
             <div class="field-header"><label class="field-label">History Limit</label></div>
             <input class="text-input" type="number" min="10" max="200" .value=${tg.historyLimit}
@@ -204,7 +208,7 @@ export class ChannelsSection extends LitElement {
             @blur=${this._onAccountsJsonBlur}
             placeholder='{ "personal": { "accountId": "personal", "botToken": "...", ... } }'></textarea>
           ${this._accountsParseError
-            ? html`<p class="field-desc" style="color:var(--error);">${this._accountsParseError}</p>`
+            ? html`<p class="field-desc field-desc--error">${this._accountsParseError}</p>`
             : html`<p class="field-desc">Optional. When set, each account can use <code>botToken</code> or <code>tokenFile</code>, plus per-account policies and <code>groups</code>. Empty <code>{}</code> uses the single bot token above only.</p>`}
         </div>
       </div>

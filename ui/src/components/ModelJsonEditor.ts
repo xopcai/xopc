@@ -22,6 +22,7 @@ import {
   testApiKey,
   getApiKeyType,
   maskApiKey,
+  normalizeModelsJsonConfig,
 } from '../config/models-json-client.js';
 import './ModelEditDialog.js';
 import type { ModelEditDialog, ModelEditDialogResult } from './ModelEditDialog.js';
@@ -49,7 +50,12 @@ export class ModelJsonEditor extends LitElement {
   @property({ attribute: false }) config: ModelsJsonConfig = { providers: {} };
   @property({ type: String }) token?: string;
   @property({ type: String }) error?: string;
-  
+
+  /** Safe view of `config` when the server returns a partial object (e.g. validation failed on load). */
+  private _safeConfig(): ModelsJsonConfig {
+    return normalizeModelsJsonConfig(this['config']);
+  }
+
   @state() private _loading = false;
   @state() private _saving = false;
   @state() private _validation: ValidationResult | null = null;
@@ -528,7 +534,7 @@ export class ModelJsonEditor extends LitElement {
   }
 
   private _updateProvider(providerId: string, updates: Partial<ProviderConfig>) {
-    const newConfig = { ...this.config };
+    const newConfig = { ...this._safeConfig() };
     newConfig.providers = { ...newConfig.providers };
     newConfig.providers[providerId] = {
       ...newConfig.providers[providerId],
@@ -542,7 +548,7 @@ export class ModelJsonEditor extends LitElement {
       this._providerEditDialog.removeEventListener('close', handleClose as EventListener);
       
       if (e.detail.confirmed && e.detail.providerId && e.detail.config) {
-        const newConfig = { ...this.config };
+        const newConfig = { ...this._safeConfig() };
         newConfig.providers = { ...newConfig.providers };
         newConfig.providers[e.detail.providerId] = e.detail.config;
         
@@ -564,7 +570,7 @@ export class ModelJsonEditor extends LitElement {
       this._providerEditDialog.removeEventListener('close', handleClose as EventListener);
       
       if (e.detail.confirmed && e.detail.providerId && e.detail.config) {
-        const newConfig = { ...this.config };
+        const newConfig = { ...this._safeConfig() };
         newConfig.providers = { ...newConfig.providers };
         newConfig.providers[e.detail.providerId] = e.detail.config;
         
@@ -596,7 +602,7 @@ export class ModelJsonEditor extends LitElement {
   private _removeProvider(providerId: string) {
     if (!confirm(`Remove provider "${providerId}"?`)) return;
     
-    const newConfig = { ...this.config };
+    const newConfig = { ...this._safeConfig() };
     newConfig.providers = { ...newConfig.providers };
     delete newConfig.providers[providerId];
     this._emitChange(newConfig);
@@ -609,7 +615,7 @@ export class ModelJsonEditor extends LitElement {
       this._editDialog.removeEventListener('close', handleClose as EventListener);
       
       if (e.detail.confirmed && e.detail.model) {
-        const provider = this.config.providers[providerId];
+        const provider = this._safeConfig().providers[providerId];
         this._updateProvider(providerId, {
           models: [...(provider.models || []), e.detail.model],
         });
@@ -621,14 +627,14 @@ export class ModelJsonEditor extends LitElement {
   }
 
   private _removeModel(providerId: string, modelId: string) {
-    const provider = this.config.providers[providerId];
+    const provider = this._safeConfig().providers[providerId];
     this._updateProvider(providerId, {
       models: (provider.models || []).filter(m => m.id !== modelId),
     });
   }
 
   private _updateModel(providerId: string, modelId: string, updates: Partial<CustomModel>) {
-    const provider = this.config.providers[providerId];
+    const provider = this._safeConfig().providers[providerId];
     this._updateProvider(providerId, {
       models: (provider.models || []).map(m =>
         m.id === modelId ? { ...m, ...updates } : m
@@ -647,7 +653,7 @@ export class ModelJsonEditor extends LitElement {
   private async _validate() {
     this._loading = true;
     try {
-      this._validation = await validateModelsJson(this.config, this.token);
+      this._validation = await validateModelsJson(this._safeConfig(), this.token);
     } catch (err) {
       console.error('Validation failed:', err);
     } finally {
@@ -658,7 +664,7 @@ export class ModelJsonEditor extends LitElement {
   private async _save() {
     this._saving = true;
     try {
-      await saveModelsJson(this.config, this.token);
+      await saveModelsJson(this._safeConfig(), this.token);
       this.dispatchEvent(new CustomEvent('save', { bubbles: true, composed: true }));
     } catch (err) {
       console.error('Save failed:', err);
@@ -712,7 +718,7 @@ export class ModelJsonEditor extends LitElement {
   render() {
     const editingModel = this._editorState.editingModel;
     const _currentModel = editingModel 
-      ? this.config.providers[editingModel.provider]?.models?.find(m => m.id === editingModel.modelId)
+      ? this._safeConfig().providers[editingModel.provider]?.models?.find(m => m.id === editingModel.modelId)
       : undefined;
     
     return html`
@@ -737,8 +743,8 @@ export class ModelJsonEditor extends LitElement {
   }
 
   private _renderHeader() {
-    const providerCount = Object.keys(this.config.providers).length;
-    const modelCount = Object.values(this.config.providers).reduce(
+    const providerCount = Object.keys(this._safeConfig().providers).length;
+    const modelCount = Object.values(this._safeConfig().providers).reduce(
       (sum, p) => sum + (p.models?.length || 0), 0
     );
 
@@ -775,7 +781,7 @@ export class ModelJsonEditor extends LitElement {
   }
 
   private _renderProviders() {
-    const providers = Object.entries(this.config.providers);
+    const providers = Object.entries(this._safeConfig().providers);
     
     if (providers.length === 0) {
       return html`
@@ -971,7 +977,7 @@ export class ModelJsonEditor extends LitElement {
       this._editDialog.removeEventListener('close', handleClose as EventListener);
       
       if (e.detail.confirmed && e.detail.model) {
-        const provider = this.config.providers[providerId];
+        const provider = this._safeConfig().providers[providerId];
         const updatedModels = (provider.models || []).map(m =>
           m.id === model.id ? e.detail.model! : m
         );
@@ -1002,7 +1008,7 @@ export class ModelJsonEditor extends LitElement {
 
   private _renderRawJson() {
     return html`
-      <div class="raw-json">${JSON.stringify(this.config, null, 2)}</div>
+      <div class="raw-json">${JSON.stringify(this._safeConfig(), null, 2)}</div>
     `;
   }
 }

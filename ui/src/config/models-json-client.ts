@@ -28,6 +28,22 @@ export interface ApiKeyTestResult {
 }
 
 /**
+ * Ensure `providers` exists. The gateway may return a partial object when validation failed on load,
+ * which would otherwise break the editor (`config.providers` undefined).
+ */
+export function normalizeModelsJsonConfig(input: unknown): ModelsJsonConfig {
+  if (!input || typeof input !== 'object') {
+    return { providers: {} };
+  }
+  const o = input as Record<string, unknown>;
+  const raw = o.providers;
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return input as ModelsJsonConfig;
+  }
+  return { ...o, providers: {} } as ModelsJsonConfig;
+}
+
+/**
  * Fetch models.json configuration
  */
 export async function fetchModelsJson(token?: string): Promise<ModelsJsonStatus> {

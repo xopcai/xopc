@@ -1,6 +1,7 @@
 import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons.js';
+import { t } from '../utils/i18n.js';
 import type { SettingsData } from './types.js';
 
 @customElement('gateway-section')
@@ -33,43 +34,48 @@ export class GatewaySection extends LitElement {
   override render() {
     const gw = this.settings.gateway;
     return html`
-      <div class="settings-section">
-        <h3 class="section-title">Gateway Configuration</h3>
+      <div class="section-content">
+        <div class="section-header">
+          <h2>${t('settings.gatewayEditor.title')}</h2>
+          <p class="section-desc">${t('settings.descriptions.gateway')}</p>
+        </div>
 
         ${this.tokenExpired ? html`
-          <div class="alert alert-error" style="margin-bottom:1rem;padding:.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:.375rem;color:#dc2626;display:flex;align-items:center;gap:.5rem;">
+          <div class="alert alert-error" role="alert">
             ${getIcon('alertCircle')}
-            <span>Token is invalid or expired. Please update it.</span>
-            <button class="btn btn-sm btn-error" @click=${this._openTokenDialog} style="margin-left:auto;">
-              ${getIcon('refresh')} Update Token
-            </button>
+            <span>${t('settings.gatewayEditor.tokenExpired')}</span>
+            <div class="alert-actions">
+              <button type="button" class="btn btn-secondary btn-sm" @click=${this._openTokenDialog}>
+                ${getIcon('refresh')} ${t('settings.gatewayEditor.updateToken')}
+              </button>
+            </div>
           </div>
         ` : ''}
 
-        <div class="section-content">
+        <div class="fields-grid">
           <div class="field-group">
-            <div class="field-header"><label class="field-label">Access Token</label></div>
+            <div class="field-header"><label class="field-label">${t('settings.gatewayEditor.accessToken')}</label></div>
             <div class="input-with-actions">
               <input class="text-input" type="${this._showToken ? 'text' : 'password'}"
                 .value=${gw.auth?.token || ''}
-                placeholder="Enter access token or leave empty to generate"
+                placeholder=${t('settings.gatewayEditor.tokenPlaceholder')}
                 @change=${(e: Event) => this._field('gateway.auth.token', (e.target as HTMLInputElement).value)} />
               <div class="input-actions">
                 ${gw.auth?.token ? html`
-                  <button class="btn-icon" @click=${this._copyToken} title="${this._copied ? 'Copied!' : 'Copy Token'}">
+                  <button type="button" class="btn-icon" @click=${this._copyToken} title="${this._copied ? t('settings.tokenCopied') : t('settings.copyToken')}">
                     ${getIcon(this._copied ? 'check' : 'copy')}
                   </button>` : ''}
-                <button class="btn-icon" @click=${this._toggleToken} title="${this._showToken ? 'Hide' : 'Show'} Token">
+                <button type="button" class="btn-icon" @click=${this._toggleToken} title="${this._showToken ? t('settings.hideToken') : t('settings.showToken')}">
                   ${getIcon(this._showToken ? 'eyeOff' : 'eye')}
                 </button>
               </div>
             </div>
-            <p class="field-desc">Token used to authenticate API requests. Leave empty to auto-generate.</p>
+            <p class="field-desc">${t('settings.gatewayEditor.tokenHelp')}</p>
           </div>
 
           <div class="field-group">
-            <button class="btn btn-secondary" @click=${this._openTokenDialog} style="display:inline-flex;align-items:center;gap:.5rem;">
-              ${getIcon('refresh')} Change Token
+            <button type="button" class="btn btn-secondary" @click=${this._openTokenDialog}>
+              ${getIcon('refresh')} ${t('settings.gatewayEditor.changeToken')}
             </button>
           </div>
 
@@ -78,12 +84,12 @@ export class GatewaySection extends LitElement {
               <input class="toggle-input" type="checkbox" .checked=${gw.heartbeat.enabled}
                 @change=${(e: Event) => this._field('gateway.heartbeat.enabled', (e.target as HTMLInputElement).checked)} />
               <span class="toggle-switch"></span>
-              <span class="toggle-text">Enable Heartbeat</span>
+              <span class="toggle-text">${t('settings.gatewayEditor.enableHeartbeat')}</span>
             </label>
           </div>
 
           <div class="field-group">
-            <div class="field-header"><label class="field-label">Heartbeat Interval (ms)</label></div>
+            <div class="field-header"><label class="field-label">${t('settings.gatewayEditor.heartbeatInterval')}</label></div>
             <input class="text-input" type="number" .value=${gw.heartbeat.intervalMs}
               @change=${(e: Event) => this._field('gateway.heartbeat.intervalMs', parseInt((e.target as HTMLInputElement).value))} />
           </div>

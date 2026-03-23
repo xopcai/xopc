@@ -11,7 +11,7 @@ import '../settings/GatewaySection.js';
 import { fetchConfiguredModels, fetchProviderMeta } from '../config/registry-client.js';
 import type { Model } from '../config/registry-client.js';
 import type { ProviderInfo, ProviderListChangeEvent, ProviderListOAuthEvent } from '../components/ProviderList.js';
-import { fetchModelsJson, saveModelsJson } from '../config/models-json-client.js';
+import { fetchModelsJson, normalizeModelsJsonConfig, saveModelsJson } from '../config/models-json-client.js';
 import type { ModelsJsonConfig } from '../config/models-json-client.js';
 import { DEFAULT_SETTINGS } from '../settings/types.js';
 import type { SettingsData } from '../settings/types.js';
@@ -138,9 +138,9 @@ export class SettingsPage extends LitElement {
   private async _loadModelsJson() {
     this._loadingModelsJson = true;
     try {
-      const { config, loadError } = await fetchModelsJson(this.config?.token);
-      this._modelsJson = config;
-      this._modelsJsonError = loadError;
+      const payload = await fetchModelsJson(this.config?.token);
+      this._modelsJson = normalizeModelsJsonConfig(payload.config);
+      this._modelsJsonError = payload.loadError;
     } catch (err) {
       this._modelsJsonError = err instanceof Error ? err.message : 'Failed to load models.json';
     } finally {
@@ -216,7 +216,12 @@ export class SettingsPage extends LitElement {
   // ── Render ────────────────────────────────────────────────
 
   override render() {
-    if (this._loading) return html`<div class="loading-state"><span class="spinner"></span><p>Loading settings...</p></div>`;
+    if (this._loading) {
+      return html`
+        <div class="settings-page">
+          <div class="loading-state"><span class="spinner"></span><p>${t('settings.loading')}</p></div>
+        </div>`;
+    }
 
     return html`
       <div class="settings-page">
@@ -225,12 +230,12 @@ export class SettingsPage extends LitElement {
           ${this._renderSection()}
           ${this._dirty ? html`
             <div class="floating-save">
-              <span class="dirty-count">You have unsaved changes</span>
+              <span class="dirty-count">${t('settings.page.unsavedBanner')}</span>
               <button class="btn btn-primary" ?disabled=${this._saving} @click=${this._save}>
-                ${this._saving ? html`<span class="spinner-sm"></span> Saving...` : 'Save Changes'}
+                ${this._saving ? html`<span class="spinner-sm"></span> ${t('settings.saving')}` : t('settings.saveChanges')}
               </button>
             </div>` : ''}
-          ${this._saveSuccess ? html`<div class="save-success">Settings saved successfully!</div>` : ''}
+          ${this._saveSuccess ? html`<div class="save-success" role="status">${t('settings.page.saveSuccess')}</div>` : ''}
         </main>
       </div>
     `;
@@ -263,7 +268,7 @@ export class SettingsPage extends LitElement {
       case 'channels': return html`<channels-section .settings=${s} .onChange=${(p: string, v: unknown) => this._update(p, v)}></channels-section>`;
       case 'voice': return html`<voice-config-section .config=${{ stt: s.stt, tts: s.tts }} .token=${this.config?.token} .onChange=${(p: string, v: unknown) => this._update(p, v)}></voice-config-section>`;
       case 'gateway': return html`<gateway-section .settings=${s} .tokenExpired=${this._tokenExpired} .onChange=${(p: string, v: unknown) => this._update(p, v)}></gateway-section>`;
-      default: return html`<div>Select a section</div>`;
+      default: return html`<div class="section-content"><p class="section-desc">${t('settings.page.selectSection')}</p></div>`;
     }
   }
 
@@ -276,7 +281,7 @@ export class SettingsPage extends LitElement {
       <div class="section-content">
         <div class="section-header">
           <h2>${t('settings.sections.providers')}</h2>
-          <p class="section-desc">Configure API keys for the providers you want to use.</p>
+          <p class="section-desc">${t('settings.page.providersIntro')}</p>
         </div>
         <provider-list
           .providers=${providers}
@@ -292,11 +297,11 @@ export class SettingsPage extends LitElement {
     return html`
       <div class="section-content">
         <div class="section-header">
-          <h2>${t('settings.sections.models') || 'Custom Models'}</h2>
-          <p class="section-desc">Configure custom model providers via models.json.</p>
+          <h2>${t('settings.sections.models')}</h2>
+          <p class="section-desc">${t('settings.page.modelsIntro')}</p>
         </div>
-        ${this._modelsJsonError ? html`<div class="alert alert-error" style="margin-bottom:1rem;padding:.75rem;background:#fef2f2;border:1px solid #fecaca;border-radius:.375rem;color:#dc2626;">${this._modelsJsonError}</div>` : ''}
-        ${this._loadingModelsJson ? html`<div class="loading-state"><span class="spinner"></span><p>Loading models.json...</p></div>` : html`
+        ${this._modelsJsonError ? html`<div class="alert alert-error" role="alert">${this._modelsJsonError}</div>` : ''}
+        ${this._loadingModelsJson ? html`<div class="loading-state"><span class="spinner"></span><p>${t('settings.page.modelsJsonLoading')}</p></div>` : html`
           <model-json-editor
             .config=${this._modelsJson}
             .token=${this.config?.token}
