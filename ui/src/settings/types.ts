@@ -43,6 +43,32 @@ export interface TelegramConfig {
   advancedMode: boolean;
 }
 
+/** Per-account overrides; see WeixinAccountConfigSchema */
+export interface WeixinAccount {
+  name?: string;
+  enabled?: boolean;
+  cdnBaseUrl?: string;
+  routeTag?: string | number;
+  dmPolicy?: DmPolicy;
+  allowFrom?: string[];
+  streamMode?: StreamMode;
+  debug?: boolean;
+}
+
+export interface WeixinConfig {
+  enabled: boolean;
+  dmPolicy: DmPolicy;
+  allowFrom: string[];
+  debug: boolean;
+  streamMode: StreamMode;
+  historyLimit: number;
+  textChunkLimit: number;
+  /** Serialized as string in the form; empty means unset */
+  routeTag: string;
+  accounts: Record<string, WeixinAccount>;
+  advancedMode: boolean;
+}
+
 export interface SettingsData {
   model: string;
   maxTokens: number;
@@ -54,6 +80,7 @@ export interface SettingsData {
   verboseDefault?: string;
   providers: Record<string, string>;
   telegram: TelegramConfig;
+  weixin: WeixinConfig;
   gateway: {
     heartbeat: { enabled: boolean; intervalMs: number };
     auth?: { mode: 'none' | 'token'; token?: string };
@@ -101,6 +128,18 @@ export const DEFAULT_SETTINGS: SettingsData = {
     historyLimit: 50,
     textChunkLimit: 4000,
     proxy: '',
+    accounts: {},
+    advancedMode: false,
+  },
+  weixin: {
+    enabled: false,
+    dmPolicy: 'pairing',
+    allowFrom: [],
+    debug: false,
+    streamMode: 'partial',
+    historyLimit: 50,
+    textChunkLimit: 4000,
+    routeTag: '',
     accounts: {},
     advancedMode: false,
   },

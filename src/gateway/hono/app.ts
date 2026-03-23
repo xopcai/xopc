@@ -279,6 +279,17 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           proxy: config.channels?.telegram?.proxy || '',
           accounts: config.channels?.telegram?.accounts || {},
         },
+        weixin: {
+          enabled: config.channels?.weixin?.enabled ?? false,
+          dmPolicy: config.channels?.weixin?.dmPolicy || 'pairing',
+          allowFrom: config.channels?.weixin?.allowFrom || [],
+          debug: config.channels?.weixin?.debug ?? false,
+          streamMode: config.channels?.weixin?.streamMode ?? 'partial',
+          historyLimit: config.channels?.weixin?.historyLimit ?? 50,
+          textChunkLimit: config.channels?.weixin?.textChunkLimit ?? 4000,
+          routeTag: config.channels?.weixin?.routeTag,
+          accounts: config.channels?.weixin?.accounts || {},
+        },
       },
       // Provider API keys - check credential system for configured status
       providers: Object.fromEntries(
@@ -399,6 +410,36 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       if (body.channels.telegram.accounts !== undefined) {
         config.channels.telegram.accounts = body.channels.telegram.accounts;
       }
+    }
+
+    if (body.channels?.weixin) {
+      if (!config.channels) config.channels = {} as any;
+      if (!config.channels.weixin) {
+        config.channels.weixin = {
+          enabled: false,
+          dmPolicy: 'pairing',
+          allowFrom: [],
+          debug: false,
+          historyLimit: 50,
+          textChunkLimit: 4000,
+        };
+      }
+      const wx = body.channels.weixin;
+      if (wx.enabled !== undefined) config.channels.weixin.enabled = wx.enabled;
+      if (wx.dmPolicy !== undefined) config.channels.weixin.dmPolicy = wx.dmPolicy;
+      if (wx.allowFrom !== undefined) config.channels.weixin.allowFrom = wx.allowFrom;
+      if (wx.debug !== undefined) config.channels.weixin.debug = wx.debug;
+      if (wx.streamMode !== undefined) config.channels.weixin.streamMode = wx.streamMode;
+      if (wx.historyLimit !== undefined) config.channels.weixin.historyLimit = wx.historyLimit;
+      if (wx.textChunkLimit !== undefined) config.channels.weixin.textChunkLimit = wx.textChunkLimit;
+      if ('routeTag' in wx) {
+        if (wx.routeTag === null || wx.routeTag === undefined || wx.routeTag === '') {
+          delete config.channels.weixin.routeTag;
+        } else {
+          config.channels.weixin.routeTag = wx.routeTag as string | number;
+        }
+      }
+      if (wx.accounts !== undefined) config.channels.weixin.accounts = wx.accounts;
     }
     
     // Update gateway
