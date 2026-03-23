@@ -124,7 +124,6 @@ install:
 
 3. **Global** - 全局技能
    - 位置：`~/.xopcbot/skills/`
-   - 位置：`~/.agents/skills/`
 
 4. **Extra** - 额外配置的技能目录
    - 通过配置文件指定

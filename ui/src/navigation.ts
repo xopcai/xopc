@@ -7,12 +7,12 @@ import { t } from './utils/i18n';
 export function getTabGroups() {
   return [
     { label: t('nav.chat'), tabs: ['chat'] as const },
-    { label: t('nav.management'), tabs: ['sessions', 'cron', 'logs'] as const },
+    { label: t('nav.management'), tabs: ['sessions', 'cron', 'skills', 'logs'] as const },
     { label: t('nav.settings'), tabs: ['settings'] as const },
   ];
 }
 
-export type Tab = 'chat' | 'sessions' | 'cron' | 'logs' | 'settings';
+export type Tab = 'chat' | 'sessions' | 'cron' | 'skills' | 'logs' | 'settings';
 
 export interface NavItem {
   id: Tab;
@@ -30,6 +30,7 @@ const TAB_ICONS: Record<Tab, string> = {
   chat: 'messageSquare',
   sessions: 'folderOpen',
   cron: 'clock',
+  skills: 'layers',
   logs: 'fileText',
   settings: 'settings',
 };

@@ -367,6 +367,7 @@
 settings-page,
 session-manager,
 cron-manager,
+skill-manager,
 log-manager,
 xopcbot-gateway-chat {
   display: flex;

@@ -7,6 +7,7 @@
     "chat": "Chat",
     "sessions": "Sessions",
     "cron": "Cron Jobs",
+    "skills": "Skills",
     "logs": "Logs",
     "settings": "Settings",
     "management": "Management"
@@ -468,6 +469,43 @@
       "minutesAgo": "{{count}}m ago",
       "hoursAgo": "{{count}}h ago",
       "daysAgo": "{{count}}d ago"
+    }
+  },
+  "skills": {
+    "title": "Skills",
+    "hint": "Upload a .zip containing SKILL.md at the archive root or inside one folder (e.g. my-skill/SKILL.md). Managed skills are stored under ~/.xopcbot/skills. Reload updates the running agent’s skill list.",
+    "refresh": "Refresh list",
+    "reloadRuntime": "Reload from disk",
+    "uploadSection": "Install or update (zip)",
+    "chooseZip": "Choose .zip",
+    "uploading": "Uploading…",
+    "skillIdPlaceholder": "Optional folder id (override name)",
+    "overwrite": "Replace existing folder",
+    "tableTitle": "Loaded skills",
+    "loading": "Loading…",
+    "empty": "No skills loaded.",
+    "loadFailed": "Failed to load skills",
+    "reloadFailed": "Failed to reload skills",
+    "uploadFailed": "Upload failed",
+    "zipOnly": "Please choose a .zip file",
+    "delete": "Delete",
+    "deleteTitle": "Delete skill",
+    "deleteMessage": "Remove folder \"{{id}}\" from managed skills? This cannot be undone.",
+    "deleteConfirm": "Delete",
+    "deleteFailed": "Failed to delete skill",
+    "yes": "Yes",
+    "no": "No",
+    "source": {
+      "builtin": "Bundled",
+      "workspace": "Workspace",
+      "global": "Global"
+    },
+    "col": {
+      "name": "Name",
+      "description": "Description",
+      "source": "Source",
+      "managed": "Managed",
+      "actions": "Actions"
     }
   },
   "common": {

@@ -66,7 +66,6 @@
     "node": ">=22.0.0"
   },
   "dependencies": {
-    "@xopcai/xopcbot-extension-telegram": "workspace:*",
     "@agentclientprotocol/sdk": "^0.16.1",
     "@grammyjs/runner": "^2.0.3",
     "@grammyjs/types": "^3.25.0",
@@ -75,6 +74,8 @@
     "@mariozechner/pi-agent-core": "^0.61.0",
     "@mariozechner/pi-ai": "^0.61.0",
     "@sinclair/typebox": "^0.34.48",
+    "@xopcai/xopcbot-extension-telegram": "workspace:*",
+    "adm-zip": "^0.5.16",
     "commander": "^14.0.3",
     "cron-parser": "^5.5.0",
     "dotenv": "^17.3.1",
@@ -92,6 +93,7 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@types/adm-zip": "^0.5.8",
     "@types/js-yaml": "^4.0.9",
     "@types/markdown-it": "^14.1.2",
     "@types/node": "^25.2.3",

@@ -124,7 +124,6 @@ Skills can be loaded from these locations:
 
 3. **Global** - Global skills
    - Location: `~/.xopcbot/skills/`
-   - Location: `~/.agents/skills/`
 
 4. **Extra** - Extra configured skill directories
    - Specified via config file

@@ -18,8 +18,20 @@ import { AgentToolsFactory } from './agent-tools-factory.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { MessageBus } from '../bus/index.js';
 import type { SessionContext } from './session/session-context.js';
+import type { Skill } from './skills/types.js';
+import { isUnderManagedSkillsDir } from './skills/managed-store.js';
+import { resolve, sep } from 'node:path';
 
 const log = createLogger('AgentManager');
+
+export interface SkillCatalogEntry {
+  directoryId: string;
+  name: string;
+  description: string;
+  source: Skill['source'];
+  path: string;
+  managed: boolean;
+}
 
 export interface AgentManagerConfig {
   workspace: string;
@@ -47,6 +59,7 @@ export class AgentManager {
   private config: AgentManagerConfig;
   private toolsFactory: AgentToolsFactory;
   private systemPromptBuilder: SystemPromptBuilder;
+  private skillManager: SkillManager;
   private defaultModel: string;
   private bootstrapFiles: ReturnType<typeof loadBootstrapFiles>;
 
@@ -54,11 +67,11 @@ export class AgentManager {
     this.config = config;
     this.bootstrapFiles = loadBootstrapFiles(config.workspace);
 
-    const skillManager = new SkillManager(config.workspace, resolveBundledSkillsDir());
+    this.skillManager = new SkillManager(config.workspace, resolveBundledSkillsDir());
     this.systemPromptBuilder = new SystemPromptBuilder({
       workspace: config.workspace,
       config: config.config!,
-      skillManager,
+      skillManager: this.skillManager,
     });
 
     this.toolsFactory = new AgentToolsFactory({
@@ -70,6 +83,36 @@ export class AgentManager {
     });
 
     this.defaultModel = config.model || getDefaultModelSync(config.config);
+  }
+
+  /**
+   * Skills currently loaded (merged). `managed` means the skill directory is under ~/.xopcbot/skills.
+   */
+  getSkillCatalog(): SkillCatalogEntry[] {
+    return this.skillManager.getSkills().map((s) => {
+      const base = resolve(s.baseDir);
+      const managed = isUnderManagedSkillsDir(s.baseDir);
+      const directoryId = base.split(sep).filter(Boolean).pop() || s.name;
+      return {
+        directoryId,
+        name: s.name,
+        description: s.description,
+        source: s.source,
+        path: s.baseDir,
+        managed,
+      };
+    });
+  }
+
+  /**
+   * Reload skills from disk and refresh system prompt on all active Agent instances.
+   */
+  refreshSkillsAfterDiskChange(): void {
+    const newPrompt = this.systemPromptBuilder.rebuild(this.bootstrapFiles);
+    for (const instance of this.agents.values()) {
+      instance.agent.setSystemPrompt(newPrompt);
+    }
+    log.info({ agents: this.agents.size }, 'Skills refreshed; system prompt updated');
   }
 
   /**
