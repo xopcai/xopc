@@ -180,11 +180,16 @@ html.dark .tool-call-header:hover {
    ============================================ */
 
 .message-bubble {
+  display: flex;
+  flex-direction: column;
+  gap: 0.625rem;
+  align-items: stretch;
   border-radius: var(--radius-xl);
   padding: 0.875rem 1rem;
   transition: all var(--transition-fast);
   width: 100%;
   max-width: 100%;
+  min-width: 0;
   box-sizing: border-box;
   word-wrap: break-word;
 }
@@ -280,31 +285,229 @@ html.dark .thinking-block-header:hover {
 /* ===== User Message ===== */
 .message-bubble.user,
 .message-bubble.bg-primary-light {
-  /* Beat Tailwind bg-primary-light / text utilities on the bubble */
   background: var(--primary-base) !important;
   color: white !important;
 }
 
-.message-bubble.user *,
-.message-bubble.bg-primary-light * {
+/* White text only inside the markdown/tool body — not attachment tiles (they need their own contrast) */
+.message-bubble.user .markdown-content,
+.message-bubble.user .markdown-content *,
+.message-bubble.bg-primary-light .markdown-content,
+.message-bubble.bg-primary-light .markdown-content * {
   color: white !important;
 }
 
-.message-bubble.user code,
-.message-bubble.bg-primary-light code {
+.message-bubble.user .markdown-content code,
+.message-bubble.bg-primary-light .markdown-content code {
   background: rgb(255 255 255 / 0.2) !important;
   color: white !important;
 }
 
-.message-bubble.user pre,
-.message-bubble.bg-primary-light pre {
+.message-bubble.user .markdown-content pre,
+.message-bubble.bg-primary-light .markdown-content pre {
   background: rgb(0 0 0 / 0.2) !important;
 }
 
-.message-bubble.user a,
-.message-bubble.bg-primary-light a {
+.message-bubble.user .markdown-content a,
+.message-bubble.bg-primary-light .markdown-content a {
   color: var(--primary-soft) !important;
   text-decoration: underline;
+}
+
+/* File / image previews: neutral card on top of the blue bubble */
+.attachment-renderer {
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  min-width: 0;
+}
+
+.attachment-renderer__docs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.message-bubble.user .attachment-renderer,
+.message-bubble.bg-primary-light .attachment-renderer {
+  color: var(--text-primary);
+}
+
+.message-bubble.user .attachment-tile__doc,
+.message-bubble.bg-primary-light .attachment-tile__doc {
+  background: rgb(255 255 255 / 0.98);
+  color: var(--text-primary);
+  border-color: rgb(255 255 255 / 0.35);
+}
+
+html.dark .message-bubble.user .attachment-tile__doc,
+html.dark .message-bubble.bg-primary-light .attachment-tile__doc {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+
+.message-bubble.user .attachment-tile__icon,
+.message-bubble.bg-primary-light .attachment-tile__icon {
+  color: var(--text-secondary);
+  stroke: currentColor;
+}
+
+.message-bubble.user .attachment-tile__name,
+.message-bubble.bg-primary-light .attachment-tile__name {
+  color: var(--text-secondary);
+}
+
+.message-bubble.user .attachment-tile__preview-img,
+.message-bubble.bg-primary-light .attachment-tile__preview-img {
+  border-color: rgb(255 255 255 / 0.45) !important;
+}
+
+.message-bubble.user .attachment-tile__pdf-badge,
+.message-bubble.bg-primary-light .attachment-tile__pdf-badge {
+  background: rgb(0 0 0 / 0.55);
+  color: white;
+}
+
+.message-bubble.user .attachment-tile__pdf-badge span,
+.message-bubble.bg-primary-light .attachment-tile__pdf-badge span {
+  color: white !important;
+}
+
+/* Attachment tiles — shared (assistant + user overrides above) */
+.attachment-tile__preview-wrap {
+  position: relative;
+  display: inline-block;
+  line-height: 0;
+}
+
+.attachment-tile__preview-img {
+  width: 4rem;
+  height: 4rem;
+  object-fit: cover;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+  vertical-align: middle;
+}
+
+.attachment-tile__preview-img:hover {
+  opacity: 0.88;
+}
+
+.attachment-tile__pdf-badge {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  padding: 0.125rem 0.25rem;
+  border-radius: 0 0 var(--radius-lg) var(--radius-lg);
+  background: rgb(0 0 0 / 0.52);
+  font-size: 0.625rem;
+  font-weight: 600;
+  text-align: center;
+  color: white;
+  line-height: 1.2;
+}
+
+.attachment-tile__doc {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  width: 4rem;
+  height: 4rem;
+  padding: 0.375rem 0.25rem;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-default);
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  cursor: pointer;
+  transition: opacity var(--transition-fast);
+  box-sizing: border-box;
+  min-width: 0;
+}
+
+.attachment-tile__doc:hover {
+  opacity: 0.88;
+}
+
+.attachment-tile__doc .attachment-tile__icon {
+  flex-shrink: 0;
+  color: var(--text-secondary);
+  stroke: currentColor;
+}
+
+.attachment-tile__name {
+  font-size: 0.625rem;
+  line-height: 1.25;
+  text-align: center;
+  width: 100%;
+  min-width: 0;
+  margin-top: 0.125rem;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  word-break: break-word;
+  color: var(--text-secondary);
+}
+
+.attachment-tile__icon {
+  width: 1.25rem;
+  height: 1.25rem;
+  flex-shrink: 0;
+}
+
+.attachment-tile-root {
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  vertical-align: top;
+}
+
+.attachment-tile__remove {
+  position: absolute;
+  top: -0.25rem;
+  right: -0.25rem;
+  z-index: 2;
+  width: 1.25rem;
+  height: 1.25rem;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+  transition:
+    opacity var(--transition-fast),
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+@media (hover: hover) {
+  .attachment-tile-root .attachment-tile__remove {
+    opacity: 0;
+  }
+
+  .attachment-tile-root:hover .attachment-tile__remove {
+    opacity: 1;
+  }
+}
+
+.attachment-tile__remove:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+}
+
+.attachment-tile__remove-icon {
+  width: 0.75rem;
+  height: 0.75rem;
 }
 
 /* ===== Assistant Message ===== */
