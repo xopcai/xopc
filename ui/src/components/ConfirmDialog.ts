@@ -78,10 +78,14 @@ export class ConfirmDialog extends LitElement {
           </div>
           
           <div class="modal__actions">
-            <button class="btn btn--secondary" @click=${() => this._emit(false)}>
+            <button type="button" class="btn btn-secondary" @click=${() => this._emit(false)}>
               ${this.cancelText}
             </button>
-            <button class="btn btn--${this.type === 'danger' ? 'danger' : 'primary'}" @click=${() => this._emit(true)}>
+            <button
+              type="button"
+              class="btn ${this.type === 'danger' ? 'btn-destructive' : 'btn-primary'}"
+              @click=${() => this._emit(true)}
+            >
               ${this.confirmText}
             </button>
           </div>

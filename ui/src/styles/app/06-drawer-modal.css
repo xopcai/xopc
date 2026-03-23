@@ -33,6 +33,11 @@
   flex-direction: column;
   z-index: 101;
   animation: slideInRight var(--transition-normal);
+  box-shadow: none;
+}
+
+html.dark .drawer {
+  box-shadow: none;
 }
 
 /* ===== Drawer Header ===== */
@@ -54,8 +59,10 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  font-size: 1rem;
+  font-size: 1.25rem;
+  line-height: 1.75rem;
   font-weight: 600;
+  letter-spacing: -0.025em;
   color: var(--text-primary);
   margin: 0;
   word-break: break-all;
@@ -86,6 +93,11 @@
 
 .btn-icon:active {
   transform: scale(0.95);
+}
+
+.btn-icon:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--primary-base);
 }
 
 .btn-icon svg {
@@ -254,10 +266,15 @@
 }
 
 .search-highlight {
-  background: var(--primary-base);
-  color: white;
+  background: var(--primary-soft);
+  color: var(--text-primary);
   padding: 0.125rem 0.25rem;
   border-radius: var(--radius-sm);
+}
+
+html.dark .search-highlight {
+  background: rgb(30 58 138 / 0.35);
+  color: var(--text-primary);
 }
 
 /* ===== Drawer Actions ===== */

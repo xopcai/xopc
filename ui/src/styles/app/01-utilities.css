@@ -116,6 +116,21 @@ html.dark .glass {
   background: var(--accent-error-light);
 }
 
+.btn-destructive {
+  background: var(--error);
+  color: white;
+  border: 1px solid transparent;
+}
+
+.btn-destructive:hover {
+  background: var(--accent-error-hover);
+}
+
+.btn-destructive:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .btn-outline {
   border: 1px dashed var(--border-color);
   background: transparent;

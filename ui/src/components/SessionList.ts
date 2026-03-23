@@ -4,6 +4,7 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 
 import { getIcon } from '../utils/icons';
+import { t } from '../utils/i18n';
 import './SessionCard';
 import type { SessionMetadata } from '../utils/session-api';
 import type { SessionCardEventDetail } from './SessionCard';
@@ -75,9 +76,9 @@ export class SessionList extends LitElement {
 
         ${this.hasMore ? html`
           <div class="session-list__load-more">
-            <button class="btn btn--secondary" @click=${this._loadMore}>
+            <button class="btn btn-secondary" type="button" @click=${this._loadMore}>
               ${getIcon('chevronDown')}
-              Load More
+              ${t('sessions.loadMore')}
             </button>
           </div>
         ` : ''}
@@ -95,18 +96,20 @@ export class SessionList extends LitElement {
     return html`
       <div class="session-list__toolbar">
         <div class="session-list__count">
-          ${this.sessions.length} sessions
+          ${t('sessions.sessionCount', { count: this.sessions.length })}
         </div>
         
         <div class="session-list__view-toggle">
           <button 
+            type="button"
             class="btn-icon ${this._viewMode === 'grid' ? 'btn-icon--active' : ''}"
-            title="Grid view"
+            title=${t('sessions.gridView')}
             @click=${() => this._viewMode = 'grid'}
           >${getIcon('grid')}</button>
           <button 
+            type="button"
             class="btn-icon ${this._viewMode === 'list' ? 'btn-icon--active' : ''}"
-            title="List view"
+            title=${t('sessions.listView')}
             @click=${() => this._viewMode = 'list'}
           >${getIcon('list')}</button>
         </div>
@@ -135,9 +138,9 @@ export class SessionList extends LitElement {
       <div class="session-list session-list--empty">
         <div class="empty-state">
           <div class="empty-state__icon">${getIcon('folderOpen')}</div>
-          <div class="empty-state__title">No sessions found</div>
+          <div class="empty-state__title">${t('sessions.noSessions')}</div>
           <div class="empty-state__description">
-            Start a conversation to create your first session.
+            ${t('sessions.noSessionsDescription')}
           </div>
         </div>
       </div>
