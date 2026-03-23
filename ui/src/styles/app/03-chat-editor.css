@@ -260,6 +260,12 @@
   grid-template-columns: auto auto;
 }
 
+/* Only actions visible (model in header + no thinking): single row, pin icons to the end */
+.toolbar-row.toolbar-row--no-model.toolbar-row--no-thinking {
+  grid-template-columns: 1fr;
+  justify-items: end;
+}
+
 .toolbar-row.toolbar-row--no-thinking:not(.toolbar-row--no-model) {
   grid-template-columns: minmax(0, 1fr) auto;
 }
