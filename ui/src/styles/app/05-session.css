@@ -319,12 +319,6 @@
   margin-top: auto;
   padding-top: 0.5rem;
   border-top: 1px solid var(--border-subtle);
-  opacity: 0;
-  transition: opacity var(--transition-fast);
-}
-
-.session-card:hover .session-card__actions {
-  opacity: 1;
 }
 
 /* ===== Empty State ===== */
@@ -440,9 +434,5 @@
 
   .session-list__content--grid {
     grid-template-columns: 1fr;
-  }
-
-  .session-card__actions {
-    opacity: 1;
   }
 }

@@ -66,12 +66,14 @@
 .chat-header-model-picker {
   flex: 0 1 auto;
   min-width: 0;
-  max-width: min(12rem, 42vw);
+  width: auto;
+  max-width: 100%;
 }
 
 .chat-header-model-picker model-selector {
-  display: block;
-  width: 100%;
+  display: inline-block;
+  width: auto;
+  max-width: 100%;
 }
 
 /* xopcbot-chat (embed): model strip above messages */
@@ -83,8 +85,8 @@
 }
 
 .xopcbot-chat-header .chat-header-model-picker {
-  width: 100%;
-  max-width: min(12rem, 100%);
+  width: auto;
+  max-width: 100%;
 }
 
 .new-session-btn {
@@ -270,14 +272,18 @@
   grid-template-columns: minmax(0, 1fr) auto;
 }
 
-/* Model selector (chat toolbar) — fills model column */
+/* Model selector (chat toolbar) — width follows selected model, capped by column */
 .chat-model-picker {
-  width: 100%;
+  justify-self: start;
+  width: fit-content;
+  max-width: 100%;
   min-width: 0;
 }
 
 .chat-model-picker model-selector {
-  width: 100%;
+  display: inline-block;
+  width: auto;
+  max-width: 100%;
 }
 
 /* Legacy: header used to show model as text; picker lives in .chat-header-model-picker */
@@ -535,7 +541,8 @@
 
   .chat-header-model-picker {
     flex: 0 1 auto;
-    max-width: min(12rem, 100%);
+    width: auto;
+    max-width: 100%;
   }
 
   .chat-header-model {

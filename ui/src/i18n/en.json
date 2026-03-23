@@ -73,6 +73,8 @@
     "model": "Model",
     "currentModel": "Model used for this conversation",
     "modelPlaceholder": "Select a model…",
+    "modelSearchPlaceholder": "Search by name, provider, or ID…",
+    "modelNoMatches": "No models match your search",
     "inputPlaceholder": "Plan, @ for context, / for commands"
   },
   "settings": {
