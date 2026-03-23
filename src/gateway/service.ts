@@ -123,6 +123,10 @@ export class GatewayService {
 
     // Set channel manager reference for model switching
     this.agentService.setChannelManager(this.channelManager);
+    this.channelManager.setSessionModelHooks({
+      getModelForSession: (sk) => this.agentService.getModelForSession(sk),
+      switchModelForSession: (sk, id) => this.agentService.switchModelForSession(sk, id),
+    });
 
     // Initialize cron service
     this.cronService = new CronService({

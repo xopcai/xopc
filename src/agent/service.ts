@@ -395,6 +395,10 @@ export class AgentService {
     this.agentManager.refreshSkillsAfterDiskChange();
   }
 
+  getModelForSession(sessionKey: string): string {
+    return this.modelManager.getModelForSession(sessionKey);
+  }
+
   async switchModelForSession(sessionKey: string, modelId: string): Promise<boolean> {
     const ok = await this.modelManager.switchModelForSession(sessionKey, modelId);
     if (!ok) return false;

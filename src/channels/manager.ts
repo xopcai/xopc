@@ -8,6 +8,7 @@ import type { OutboundMessage } from '../types/index.js';
 import type {
   ChannelPlugin,
   ChannelPluginInitOptions,
+  ChannelPluginSessionModelHooks,
   ChannelPluginStartOptions,
   ChannelStreamHandle,
 } from './plugin-types.js';
@@ -58,6 +59,7 @@ export class ChannelManager {
   private persistStore?: OutboundPersistStore;
   private _lastHeartbeatRestartAt = new Map<string, number>();
   private readonly healthMonitor = new ChannelHealthMonitor();
+  private sessionModelHooks?: ChannelPluginSessionModelHooks;
 
   constructor(config: Config, bus: MessageBus) {
     this.bus = bus;
@@ -66,6 +68,11 @@ export class ChannelManager {
   
   setOutboundHooks(hooks: OutboundChannelHooks): void {
     this.outboundHooks = hooks;
+  }
+
+  /** Call before `initialize()` so plugins can persist per-session model overrides (e.g. Telegram /models UI). */
+  setSessionModelHooks(hooks: ChannelPluginSessionModelHooks | undefined): void {
+    this.sessionModelHooks = hooks;
   }
 
   enableOutboundPersistence(workspaceDir: string): void {
@@ -154,6 +161,7 @@ export class ChannelManager {
         bus: this.bus,
         config: this.config,
         channelConfig,
+        sessionModel: this.sessionModelHooks,
       };
       await plugin.init(options);
       this.initializedPluginIds.add(plugin.id);

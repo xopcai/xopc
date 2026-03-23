@@ -68,10 +68,17 @@ export interface ChannelAccountSnapshot {
 // Channel Plugin Interface
 // ============================================
 
+/** Wired from Gateway so channel UIs (e.g. Telegram inline keyboards) use the same model store as AgentService. */
+export interface ChannelPluginSessionModelHooks {
+  getModelForSession: (sessionKey: string) => string;
+  switchModelForSession: (sessionKey: string, modelId: string) => Promise<boolean>;
+}
+
 export interface ChannelPluginInitOptions {
   bus: MessageBus;
   config: Config;
   channelConfig: Record<string, unknown>;
+  sessionModel?: ChannelPluginSessionModelHooks;
 }
 
 export interface ChannelPluginStartOptions {
