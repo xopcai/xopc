@@ -1,0 +1,27 @@
+{
+  "name": "@xopcai/xopcbot-extension-weixin",
+  "version": "0.1.0",
+  "description": "Bundled Weixin (WeChat ilink) channel for xopcbot",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "import": "./dist/index.js",
+      "default": "./dist/index.js"
+    },
+    "./*": "./dist/*"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json"
+  },
+  "peerDependencies": {
+    "@xopcai/xopcbot": ">=0.2.0"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.3"
+  },
+  "keywords": ["xopcbot", "weixin", "wechat"],
+  "license": "MIT"
+}

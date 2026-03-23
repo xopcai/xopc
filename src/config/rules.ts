@@ -50,6 +50,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   
   // Channels - hot reload (longest specific matches first via matchReloadRule order)
   { prefix: 'channels.telegram', kind: 'hot', description: 'Telegram settings' },
+  { prefix: 'channels.weixin', kind: 'hot', description: 'Weixin settings' },
   { prefix: 'channels', kind: 'hot', description: 'Any channel subtree (e.g. future extensions)' },
   
   // Cron - hot reload

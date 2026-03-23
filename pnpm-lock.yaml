@@ -71,6 +71,12 @@ importers:
       pino:
         specifier: ^10.3.1
         version: 10.3.1
+      qrcode-terminal:
+        specifier: ^0.12.0
+        version: 0.12.0
+      silk-wasm:
+        specifier: ^3.7.1
+        version: 3.7.1
       uuid:
         specifier: ^13.0.0
         version: 13.0.0
@@ -96,6 +102,9 @@ importers:
       '@types/node-cron':
         specifier: ^3.0.11
         version: 3.0.11
+      '@types/qrcode-terminal':
+        specifier: ^0.12.2
+        version: 0.12.2
       '@types/ws':
         specifier: ^8.18.1
         version: 8.18.1
@@ -145,6 +154,16 @@ importers:
       grammy:
         specifier: ^1.40.0
         version: 1.40.1
+    devDependencies:
+      typescript:
+        specifier: ^5.9.3
+        version: 5.9.3
+
+  extensions/weixin:
+    dependencies:
+      '@xopcai/xopcbot':
+        specifier: '>=0.2.0'
+        version: 0.2.1(@types/node@25.3.2)(sharp@0.34.5)
     devDependencies:
       typescript:
         specifier: ^5.9.3
@@ -1834,6 +1853,9 @@ packages:
   '@types/node@25.3.2':
     resolution: {integrity: sha512-RpV6r/ij22zRRdyBPcxDeKAzH43phWVKEjL2iksqo1Vz3CuBUrgmPpPhALKiRfU7OMCmeeO9vECBMsV0hMTG8Q==}
 
+  '@types/qrcode-terminal@0.12.2':
+    resolution: {integrity: sha512-v+RcIEJ+Uhd6ygSQ0u5YYY7ZM+la7GgPbs0V/7l/kFs2uO4S8BcIUEMoP7za4DNIqNnUD5npf0A/7kBhrCKG5Q==}
+
   '@types/retry@0.12.0':
     resolution: {integrity: sha512-wWKOClTTiizcZhXnPY4wikVAwmdYHp8q6DmC+EJUzAMsycb7HB32Kh9RN4+0gExjmPmZSAQjgURXIGATPegAvA==}
 
@@ -3487,6 +3509,10 @@ packages:
     resolution: {integrity: sha512-4q61YgkHbY6gmwkqm0BsxyLDO3UYdrdiJTJ7JiaZb3xpW1duxn135SB7KqUEkCiuu5O4W+TtwEWP2VjmSRanvA==}
     engines: {node: '>=20'}
 
+  qrcode-terminal@0.12.0:
+    resolution: {integrity: sha512-EXtzRZmC+YGmGlDFbXKxQiMZNwCLEO6BANKXG4iCtSIM0yqc/pappSx3RIKr4r0uh5JsBckOXeKrB3Iz7mdQpQ==}
+    hasBin: true
+
   queue-microtask@1.2.3:
     resolution: {integrity: sha512-NuaNSa6flKT5JaSYQzJok04JzTL1CA6aGhv5rfLW3PgqA+M2ChpZQnAC8h8i4ZFkBS8X5RqkDBHA7r4hej3K9A==}
 
@@ -3610,6 +3636,10 @@ packages:
   signal-exit@4.1.0:
     resolution: {integrity: sha512-bzyZ1e88w9O1iNJbKnOlvYTrWPDl46O1bG0D3XInv+9tkPrxrN8jUUTiFlDkkmKWgn1M6CfIA13SuGqOa9Korw==}
     engines: {node: '>=14'}
+
+  silk-wasm@3.7.1:
+    resolution: {integrity: sha512-mXPwLRtZxrYV3TZx41jMAeKc80wvmyrcXIcs8HctFxK15Ahz2OJQENYhNgEPeCEOdI6Mbx1NxQsqxzwc3DKerw==}
+    engines: {node: '>=16.11.0'}
 
   sirv@2.0.4:
     resolution: {integrity: sha512-94Bdh3cC2PKrbgSOUqTiGPWVZeSiXfKOVZNJniWoqrWrRkB1CJzBU3NEbiTsPcYy1lDsANA/THzS+9WBiy5nfQ==}
@@ -5915,6 +5945,8 @@ snapshots:
     dependencies:
       undici-types: 7.18.2
 
+  '@types/qrcode-terminal@0.12.2': {}
+
   '@types/retry@0.12.0': {}
 
   '@types/trusted-types@2.0.7': {}
@@ -7819,6 +7851,8 @@ snapshots:
     dependencies:
       hookified: 2.1.0
 
+  qrcode-terminal@0.12.0: {}
+
   queue-microtask@1.2.3: {}
 
   quick-format-unescaped@4.0.4: {}
@@ -7981,6 +8015,8 @@ snapshots:
   siginfo@2.0.0: {}
 
   signal-exit@4.1.0: {}
+
+  silk-wasm@3.7.1: {}
 
   sirv@2.0.4:
     dependencies:
