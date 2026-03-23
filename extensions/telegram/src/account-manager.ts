@@ -9,7 +9,7 @@
  * - Bot username mapping
  */
 
-import type { Bot } from 'grammy';
+import type { Bot, Context } from 'grammy';
 import { run } from '@grammyjs/runner';
 import type { TelegramAccountConfig, ChannelStatus } from '@xopcai/xopcbot/channels/channel-domain.js';
 
@@ -115,5 +115,20 @@ export class TelegramAccountManager {
 
   getBotUsername(accountId: string): string | undefined {
     return this.botUsernames.get(accountId);
+  }
+
+  /** Map the bot handling this update to a configured account id (session keys must match inbound). */
+  resolveAccountIdFromContext(ctx: Context): string {
+    const botId = ctx.me?.id;
+    if (botId == null) {
+      const accounts = this.getAllAccounts();
+      return accounts[0]?.accountId ?? 'default';
+    }
+    for (const [accountId, bot] of this.bots) {
+      if (bot.botInfo?.id === botId) return accountId;
+    }
+    const accounts = this.getAllAccounts();
+    if (accounts.length === 1) return accounts[0]!.accountId;
+    return 'default';
   }
 }

@@ -6,6 +6,8 @@
  */
 
 import type { Context } from 'grammy';
+
+import type { TelegramAccountManager } from './account-manager.js';
 import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
 import type { Config } from '@xopcai/xopcbot/config/index.js';
 import { isProviderConfiguredSync } from '@xopcai/xopcbot/providers/index.js';
@@ -18,8 +20,9 @@ const log = createLogger('TelegramCommandHandler');
 export interface TelegramCommandHandlerDeps {
   bus: any;
   config: Config;
+  accountManager: TelegramAccountManager;
   getSessionModel: (sessionKey: string) => string | undefined;
-  setSessionModel: (sessionKey: string, modelId: string) => void;
+  setSessionModel: (sessionKey: string, modelId: string) => void | Promise<void>;
   // Optional callbacks for inline keyboard handling
   showProviderModels?: (ctx: Context, providerId: string) => Promise<void>;
   showProvidersAgain?: (ctx: Context) => Promise<void>;
@@ -27,7 +30,7 @@ export interface TelegramCommandHandlerDeps {
 }
 
 export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
-  const { config, getSessionModel, setSessionModel, bus } = deps;
+  const { config, accountManager, getSessionModel, setSessionModel, bus } = deps;
 
   // ========== Helper Functions ==========
 
@@ -69,7 +72,11 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     const chatId = String(ctx.chat?.id);
     const senderId = String(ctx.from?.id);
     const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
-    const threadId = (ctx.message as { message_thread_id?: number })?.message_thread_id;
+    const threadId =
+      (ctx.message as { message_thread_id?: number })?.message_thread_id ??
+      (ctx.callbackQuery?.message as { message_thread_id?: number } | undefined)?.message_thread_id;
+
+    const accountId = accountManager.resolveAccountIdFromContext(ctx);
 
     return generateSessionKey({
       source: 'telegram',
@@ -77,6 +84,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
       senderId,
       isGroup,
       threadId: threadId ? String(threadId) : undefined,
+      accountId,
     });
   };
 
@@ -191,7 +199,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
   const handleModelSelect = async (ctx: Context, modelId: string): Promise<void> => {
     try {
       const sessionKey = getSessionKeyFromCtx(ctx);
-      setSessionModel(sessionKey, modelId);
+      await Promise.resolve(setSessionModel(sessionKey, modelId));
 
       const modelName = modelId.split('/').pop() || modelId;
       await ctx.editMessageText(

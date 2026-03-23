@@ -22,6 +22,7 @@ export type {
   ChannelPlugin,
   ChannelPluginDefaults,
   ChannelPluginInitOptions,
+  ChannelPluginSessionModelHooks,
   ChannelPluginReloadMeta,
   ChannelPluginStartOptions,
   ChannelOutboundContext,

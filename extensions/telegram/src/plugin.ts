@@ -14,6 +14,7 @@ import type {
   ChannelPluginDefaults,
   ChannelPluginInitOptions,
   ChannelPluginReloadMeta,
+  ChannelPluginSessionModelHooks,
   ChannelPluginStartOptions,
   ChannelOutboundAdapter,
   ChannelSecurityContext,
@@ -91,6 +92,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   private outboundSender!: ReturnType<typeof createOutboundSender>;
   private commandHandler!: ReturnType<typeof createTelegramCommandHandler>;
   private inboundProcessor!: ReturnType<typeof createInboundProcessor>;
+  private sessionModelHooks?: ChannelPluginSessionModelHooks;
 
   config!: import('@xopcai/xopcbot/channels/plugin-types.js').ChannelConfigAdapter<TelegramResolvedAccount>;
   security!: import('@xopcai/xopcbot/channels/plugin-types.js').ChannelSecurityAdapter<TelegramResolvedAccount>;
@@ -107,6 +109,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   async init(options: ChannelPluginInitOptions): Promise<void> {
     this.bus = options.bus;
     this.cfg = options.config;
+    this.sessionModelHooks = options.sessionModel;
 
     this.accountManager = new TelegramAccountManager();
     this.loadAccounts();
@@ -134,11 +137,16 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       accountManager: this.accountManager,
       config: this.cfg,
     });
+    const sm = this.sessionModelHooks;
     this.commandHandler = createTelegramCommandHandler({
       bus: this.bus,
       config: this.cfg,
-      getSessionModel: () => undefined,
-      setSessionModel: () => {},
+      accountManager: this.accountManager,
+      getSessionModel: (sessionKey) => sm?.getModelForSession(sessionKey),
+      setSessionModel: (sessionKey, modelId) => {
+        if (!sm) return;
+        void sm.switchModelForSession(sessionKey, modelId);
+      },
     });
     const adapters = createTelegramPluginAdapters({
       accountManager: this.accountManager,
