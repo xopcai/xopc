@@ -64,8 +64,9 @@
 }
 
 .chat-header-model-picker {
-  flex: 0 1 min(18rem, 40vw);
+  flex: 0 1 auto;
   min-width: 0;
+  max-width: min(12rem, 42vw);
 }
 
 .chat-header-model-picker model-selector {
@@ -83,7 +84,7 @@
 
 .xopcbot-chat-header .chat-header-model-picker {
   width: 100%;
-  max-width: min(20rem, 100%);
+  max-width: min(12rem, 100%);
 }
 
 .new-session-btn {
@@ -235,6 +236,8 @@
 
 .toolbar-slot-model {
   min-width: 0;
+  max-width: min(14rem, 100%);
+  justify-self: start;
 }
 
 .toolbar-slot-actions {
@@ -525,8 +528,8 @@
   }
 
   .chat-header-model-picker {
-    flex: 1 1 100%;
-    max-width: 100%;
+    flex: 0 1 auto;
+    max-width: min(12rem, 100%);
   }
 
   .chat-header-model {

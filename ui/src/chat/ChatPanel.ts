@@ -650,12 +650,15 @@ export class ChatPanel extends LitElement {
 
   private _renderHeader() {
     const showModelPicker = this.enableModelSelector && !!this._sessionKey;
+    const sessionDisplayName = this._sessionKey
+      ? this._sessions.find((s) => s.key === this._sessionKey)?.name?.trim()
+      : '';
     return html`
       <div class="chat-header">
         <div class="chat-header-title">
           <span class="font-semibold">${t('chat.title') || 'XopcBot'}</span>
-          ${this._sessionKey
-            ? html`<span class="text-xs text-muted ml-2">${this._sessions.find((s) => s.key === this._sessionKey)?.name || this._sessionKey}</span>`
+          ${sessionDisplayName
+            ? html`<span class="text-xs text-muted ml-2">${sessionDisplayName}</span>`
             : ''}
         </div>
         ${showModelPicker
