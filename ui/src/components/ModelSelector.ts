@@ -87,10 +87,10 @@ export class ModelSelector extends LitElement {
     .label {
       font-size: 0.8125rem;
       font-weight: 500;
-      color: var(--text-primary, #1c1917);
+      color: var(--text-primary);
     }
 
-    .required { color: var(--accent-error, #dc2626); }
+    .required { color: var(--accent-error); }
 
     .combobox {
       position: relative;
@@ -99,52 +99,66 @@ export class ModelSelector extends LitElement {
       min-width: 0;
     }
 
+    /* Aligned with secondary toolbar controls (e.g. chat new-session): card surface, UI type scale, xl radius */
     .model-trigger {
       display: block;
       width: max-content;
       max-width: 100%;
       min-width: 0;
       margin: 0;
-      padding: 0.5rem 2rem 0.5rem 0.75rem;
-      border: 1px solid var(--border-color, #e7e5e4);
-      border-radius: var(--radius-md, 0.5rem);
-      font-size: 0.8125rem;
-      background: var(--bg-primary, #fafaf9);
-      color: var(--text-primary, #1c1917);
+      padding: 0.5rem 2rem 0.5rem 0.875rem;
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-xl);
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      font-weight: 500;
+      line-height: 1.5;
+      background: var(--card-bg);
+      color: var(--text-primary);
       cursor: pointer;
       text-align: left;
-      transition: all var(--transition-fast, 150ms);
+      transition:
+        background var(--transition-fast),
+        border-color var(--transition-fast),
+        color var(--transition-fast),
+        transform var(--transition-fast);
       white-space: nowrap;
       overflow: hidden;
       text-overflow: ellipsis;
       box-sizing: border-box;
     }
 
+    .model-trigger:hover:not(:disabled) {
+      background: var(--hover-bg);
+      border-color: var(--border-strong);
+    }
+
     .model-trigger:focus {
       outline: none;
-      border-color: var(--accent-primary, #4f46e5);
-      box-shadow: 0 0 0 2px var(--accent-primary-light, #e0e7ff);
+    }
+
+    .model-trigger:focus-visible {
+      outline: none;
+      box-shadow: 0 0 0 2px var(--card-bg), 0 0 0 4px var(--primary-base);
+    }
+
+    .model-trigger:active:not(:disabled) {
+      transform: scale(0.98);
     }
 
     .model-trigger:disabled {
-      background: var(--bg-secondary, #f5f5f4);
+      background: var(--hover-bg);
       cursor: not-allowed;
-      opacity: 0.6;
+      opacity: 0.5;
     }
 
     :host([compact]) .model-trigger {
-      padding: 0.35rem 1.75rem 0.35rem 0.65rem;
-      min-height: 2rem;
-      font-size: 0.8125rem;
-      font-weight: 500;
-      border-radius: var(--radius-lg, 0.5rem);
-      background: var(--hover-bg, #f5f5f4);
+      padding: 0.5rem 1.75rem 0.5rem 0.875rem;
     }
 
     :host([compact]) .select-arrow {
-      right: 0.45rem;
-      font-size: 0.5rem;
-      opacity: 0.7;
+      right: 0.5rem;
+      font-size: 0.625rem;
     }
 
     .select-arrow {
@@ -153,7 +167,7 @@ export class ModelSelector extends LitElement {
       top: 50%;
       transform: translateY(-50%);
       pointer-events: none;
-      color: var(--text-muted, #a8a29e);
+      color: var(--text-secondary);
       font-size: 0.625rem;
     }
 
@@ -165,34 +179,43 @@ export class ModelSelector extends LitElement {
       z-index: 200;
       display: flex;
       flex-direction: column;
-      gap: 0.35rem;
+      gap: 0.5rem;
       padding: 0.5rem;
       box-sizing: border-box;
       min-width: 100%;
       width: max(100%, min(22rem, calc(100vw - 2rem)));
       max-width: min(100vw - 2rem, 36rem);
-      border: 1px solid var(--border-color, #e7e5e4);
-      border-radius: var(--radius-md, 0.5rem);
-      background: var(--bg-primary, #fafaf9);
-      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12);
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-xl);
+      background: var(--card-bg);
+      box-shadow: var(--shadow-lg);
     }
 
     .model-search {
       width: 100%;
       box-sizing: border-box;
-      padding: 0.4rem 0.55rem;
-      border: 1px solid var(--border-color, #e7e5e4);
-      border-radius: var(--radius-sm, 0.375rem);
-      font-size: 0.8125rem;
-      background: var(--bg-secondary, #f5f5f4);
-      color: var(--text-primary, #1c1917);
+      padding: 0.5rem 0.75rem;
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-xl);
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      line-height: 1.5;
+      background: var(--card-bg);
+      color: var(--text-primary);
+      transition:
+        border-color var(--transition-fast),
+        box-shadow var(--transition-fast);
+    }
+
+    .model-search:hover:not(:disabled) {
+      border-color: var(--border-strong);
     }
 
     .model-search:focus {
       outline: none;
-      border-color: var(--accent-primary, #4f46e5);
-      box-shadow: 0 0 0 2px var(--accent-primary-light, #e0e7ff);
-      background: var(--bg-primary, #fafaf9);
+      border-color: var(--primary-base);
+      box-shadow: 0 0 0 1px var(--primary-base);
+      background: var(--card-bg);
     }
 
     .model-list {
@@ -207,24 +230,27 @@ export class ModelSelector extends LitElement {
       display: block;
       width: 100%;
       margin: 0;
-      padding: 0.4rem 0.5rem;
+      padding: 0.5rem 0.625rem;
       border: none;
-      border-radius: var(--radius-sm, 0.375rem);
-      font-size: 0.8125rem;
+      border-radius: var(--radius-lg);
+      font-family: var(--font-sans);
+      font-size: 0.875rem;
+      line-height: 1.5;
       text-align: left;
       cursor: pointer;
       background: transparent;
-      color: var(--text-primary, #1c1917);
+      color: var(--text-primary);
+      transition: background var(--transition-fast);
     }
 
     .model-option:hover,
     .model-option:focus-visible {
       outline: none;
-      background: var(--hover-bg, #f5f5f4);
+      background: var(--hover-bg);
     }
 
     .model-option[aria-selected="true"] {
-      background: var(--accent-primary-light, #e0e7ff);
+      background: var(--primary-soft);
       font-weight: 500;
     }
 
@@ -237,8 +263,9 @@ export class ModelSelector extends LitElement {
 
     .model-option-secondary {
       display: block;
-      font-size: 0.6875rem;
-      color: var(--text-muted, #a8a29e);
+      font-size: 0.75rem;
+      line-height: 1.4;
+      color: var(--text-secondary);
       margin-top: 0.125rem;
       overflow: hidden;
       text-overflow: ellipsis;
@@ -247,25 +274,31 @@ export class ModelSelector extends LitElement {
 
     .model-no-matches {
       padding: 0.5rem;
-      font-size: 0.8125rem;
-      color: var(--text-secondary, #57534e);
+      font-size: 0.875rem;
+      color: var(--text-secondary);
     }
 
     .loading-state {
       display: flex;
       align-items: center;
       gap: 0.5rem;
-      padding: 0.5rem 0.75rem;
+      padding: 0.5rem 0.875rem;
       min-width: min(8.75rem, 100%);
-      color: var(--text-secondary, #57534e);
-      font-size: 0.8125rem;
+      min-height: 2.5rem;
+      box-sizing: border-box;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      font-weight: 500;
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-xl);
+      background: var(--card-bg);
     }
 
     .spinner {
       width: 14px;
       height: 14px;
-      border: 2px solid var(--border-color, #e7e5e4);
-      border-top-color: var(--accent-primary, #4f46e5);
+      border: 2px solid var(--border-default);
+      border-top-color: var(--primary-base);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -276,16 +309,20 @@ export class ModelSelector extends LitElement {
 
     .error-state {
       padding: 0.5rem 0.75rem;
-      color: var(--accent-error, #dc2626);
-      font-size: 0.8125rem;
-      background: var(--accent-error-light, #fee2e2);
-      border-radius: var(--radius-md, 0.5rem);
+      color: var(--accent-error);
+      font-size: 0.875rem;
+      background: var(--accent-error-light);
+      border-radius: var(--radius-xl);
+      border: 1px solid var(--border-default);
     }
 
     .empty-state {
       padding: 0.5rem 0.75rem;
-      color: var(--text-secondary, #57534e);
-      font-size: 0.8125rem;
+      color: var(--text-secondary);
+      font-size: 0.875rem;
+      border: 1px solid var(--border-default);
+      border-radius: var(--radius-xl);
+      background: var(--card-bg);
     }
   `;
 
