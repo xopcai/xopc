@@ -1,6 +1,5 @@
 {
   "name": "@xopcai/xopcbot-extension-telegram",
-  "private": true,
   "version": "0.2.2",
   "description": "Bundled Telegram channel plugin for xopcbot (workspace package; ships with the core distribution).",
   "type": "module",
