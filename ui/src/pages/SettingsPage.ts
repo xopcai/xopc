@@ -1,6 +1,5 @@
 import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
-import { getIcon } from '../utils/icons.js';
 import { t } from '../utils/i18n.js';
 import '../components/ProviderList.js';
 import '../components/VoiceConfigSection.js';
@@ -15,16 +14,14 @@ import { fetchModelsJson, normalizeModelsJsonConfig, saveModelsJson } from '../c
 import type { ModelsJsonConfig } from '../config/models-json-client.js';
 import { DEFAULT_SETTINGS } from '../settings/types.js';
 import type { SettingsData } from '../settings/types.js';
+import type { SettingsSectionId } from '../navigation.js';
 
 export interface SettingsPageConfig { token?: string; }
-
-type Section = 'agent' | 'providers' | 'models' | 'channels' | 'voice' | 'gateway';
 
 @customElement('settings-page')
 export class SettingsPage extends LitElement {
   @property({ attribute: false }) config?: SettingsPageConfig;
-
-  @state() private _section: Section = 'agent';
+  @property({ type: String }) section: SettingsSectionId = 'agent';
   @state() private _loading = false;
   @state() private _saving = false;
   @state() private _saveSuccess = false;
@@ -258,7 +255,6 @@ export class SettingsPage extends LitElement {
 
     return html`
       <div class="settings-page">
-        <aside class="settings-sidebar">${this._renderNav()}</aside>
         <main class="settings-main">
           ${this._renderSection()}
           ${this._dirty ? html`
@@ -274,27 +270,9 @@ export class SettingsPage extends LitElement {
     `;
   }
 
-  private _renderNav() {
-    const items: { id: Section; title: string; icon: string }[] = [
-      { id: 'agent', title: t('settings.sections.agent'), icon: 'bot' },
-      { id: 'providers', title: t('settings.sections.providers'), icon: 'cloud' },
-      { id: 'models', title: t('settings.sections.models') || 'Models', icon: 'cpu' },
-      { id: 'channels', title: t('settings.sections.channels'), icon: 'plug' },
-      { id: 'voice', title: t('settings.sections.voice') || 'Voice', icon: 'mic' },
-      { id: 'gateway', title: t('settings.sections.gateway'), icon: 'globe' },
-    ];
-    return html`
-      <nav class="sidebar-nav">
-        ${items.map(item => html`
-          <button class="sidebar-item ${this._section === item.id ? 'active' : ''}" @click=${() => { this._section = item.id; }}>
-            ${getIcon(item.icon)}<span>${item.title}</span>
-          </button>`)}
-      </nav>`;
-  }
-
   private _renderSection() {
     const s = this._settings;
-    switch (this._section) {
+    switch (this.section) {
       case 'agent': return html`<agent-section .settings=${s} .token=${this.config?.token} .onChange=${(p: string, v: unknown) => this._update(p, v)}></agent-section>`;
       case 'providers': return this._renderProviders();
       case 'models': return this._renderModels();

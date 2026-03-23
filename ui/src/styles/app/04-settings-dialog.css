@@ -408,97 +408,12 @@ xopcbot-gateway-chat {
 
 .settings-page {
   display: flex;
+  flex-direction: column;
   flex: 1;
   min-height: 0;
   overflow: hidden;
   position: relative;
   background: var(--app-bg);
-}
-
-.settings-page .settings-sidebar {
-  width: 15rem; /* 240px — workbench nav */
-  border-right: 1px solid var(--border-default);
-  padding: 0;
-  flex-shrink: 0;
-  overflow-y: auto;
-  background: var(--app-bg);
-}
-
-.settings-page .sidebar-header {
-  padding: 1rem 1.25rem;
-  border-bottom: 1px solid var(--border-default);
-}
-
-.settings-page .sidebar-header h3 {
-  font-size: 1rem;
-  font-weight: 600;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.settings-page .sidebar-nav {
-  padding: 0.75rem 0.5rem;
-}
-
-/* Nav: iconography §6.3 — muted icons; active row uses soft blue bg + primary text (not blue type) */
-.settings-page .sidebar-item {
-  border-radius: var(--radius-xl);
-  font-size: 0.875rem;
-  line-height: 1.5rem;
-  font-weight: 500;
-}
-
-.settings-page .sidebar-item svg {
-  width: 1.25rem;
-  height: 1.25rem;
-  color: var(--text-secondary);
-  flex-shrink: 0;
-}
-
-.settings-page .sidebar-item:hover svg {
-  color: var(--text-primary);
-}
-
-.settings-page .sidebar-item.active {
-  background: var(--primary-soft);
-  color: var(--text-primary);
-}
-
-.settings-page .sidebar-item.active svg {
-  color: var(--text-primary);
-}
-
-.settings-page .nav-item {
-  display: flex;
-  align-items: center;
-  gap: 0.75rem;
-  width: 100%;
-  padding: 0.625rem 1rem;
-  border-radius: var(--radius-lg);
-  font-size: 0.875rem;
-  font-weight: 500;
-  color: var(--text-secondary);
-  background: transparent;
-  border: none;
-  cursor: pointer;
-  transition: all var(--transition-fast);
-  text-align: left;
-  margin-bottom: 0.25rem;
-}
-
-.settings-page .nav-item:hover {
-  background: var(--hover-bg);
-  color: var(--text-primary);
-}
-
-.settings-page .nav-item:active {
-  transform: scale(0.95);
-}
-
-.settings-page .nav-item.active {
-  background: var(--primary-soft);
-  color: var(--primary-base);
-  font-weight: 600;
 }
 
 .settings-page .settings-main {
