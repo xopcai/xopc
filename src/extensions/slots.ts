@@ -1,7 +1,7 @@
 /**
  * Extension Slot System
  * 
- *  Slot独占机制 for exclusive capabilities.
+ * Slot exclusivity for capabilities that allow only one active implementation.
  * Some capabilities (memory backend, TTS provider) can only have one active implementation.
  */
 

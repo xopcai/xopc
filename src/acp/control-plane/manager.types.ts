@@ -28,7 +28,7 @@ export type {
   AcpSessionStatus,
 };
 
-/** Session Entry (简化版，避免循环依赖) */
+/** Session entry (minimal shape to avoid cyclic imports) */
 export type SessionEntry = {
   sessionId?: string;
   sessionKey?: string;

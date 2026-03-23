@@ -4,7 +4,7 @@
  * Error types for ACP runtime operations.
  */
 
-/** ACP Runtime 错误代码 */
+/** ACP runtime error code */
 export type AcpRuntimeErrorCode =
   | "ACP_SESSION_INIT_FAILED"
   | "ACP_SESSION_RESET_FAILED"
@@ -13,7 +13,7 @@ export type AcpRuntimeErrorCode =
   | "ACP_BACKEND_UNAVAILABLE"
   | "ACP_BACKEND_UNSUPPORTED_CONTROL";
 
-/** ACP Runtime 错误 */
+/** ACP runtime error */
 export class AcpRuntimeError extends Error {
   constructor(
     public readonly code: AcpRuntimeErrorCode,
@@ -25,7 +25,7 @@ export class AcpRuntimeError extends Error {
   }
 }
 
-/** 标准化 ACP 错误代码 */
+/** Normalize string to a known ACP error code */
 export function normalizeAcpErrorCode(code: string | undefined): AcpRuntimeErrorCode {
   const validCodes: AcpRuntimeErrorCode[] = [
     "ACP_SESSION_INIT_FAILED",
@@ -42,7 +42,7 @@ export function normalizeAcpErrorCode(code: string | undefined): AcpRuntimeError
   return "ACP_TURN_FAILED";
 }
 
-/** 转换为 AcpRuntimeError */
+/** Wrap unknown errors as `AcpRuntimeError` */
 export function toAcpRuntimeError(params: {
   error: unknown;
   fallbackCode: AcpRuntimeErrorCode;
@@ -60,7 +60,7 @@ export function toAcpRuntimeError(params: {
   });
 }
 
-/** ACP Runtime 错误边界 */
+/** Run async work and map failures to `AcpRuntimeError` */
 export async function withAcpRuntimeErrorBoundary<T>(params: {
   run: () => Promise<T>;
   fallbackCode: AcpRuntimeErrorCode;
@@ -77,7 +77,7 @@ export async function withAcpRuntimeErrorBoundary<T>(params: {
   }
 }
 
-/** 创建不支持的控制错误 */
+/** Build unsupported-control error */
 export function createUnsupportedControlError(params: {
   backend: string;
   control: string;

@@ -12,7 +12,7 @@ import type {
   SessionAcpMeta,
 } from "./types.js";
 
-/** 标准化文本值 */
+/** Normalize string text */
 function normalizeText(value: unknown): string | undefined {
   if (typeof value !== "string") {
     return undefined;
@@ -21,7 +21,7 @@ function normalizeText(value: unknown): string | undefined {
   return trimmed || undefined;
 }
 
-/** 标准化身份来源 */
+/** Normalize identity source */
 function normalizeIdentitySource(value: unknown): SessionIdentitySource | undefined {
   if (value !== "ensure" && value !== "status" && value !== "event") {
     return undefined;
@@ -29,7 +29,7 @@ function normalizeIdentitySource(value: unknown): SessionIdentitySource | undefi
   return value;
 }
 
-/** 标准化身份状态 */
+/** Normalize identity state */
 function normalizeIdentityState(value: unknown): "resolved" | "pending" | undefined {
   if (value !== "resolved" && value !== "pending") {
     return undefined;
@@ -37,7 +37,7 @@ function normalizeIdentityState(value: unknown): "resolved" | "pending" | undefi
   return value;
 }
 
-/** 标准化身份对象 */
+/** Normalize identity object */
 function normalizeIdentity(identity: SessionIdentity | undefined): SessionIdentity | undefined {
   if (!identity) {
     return undefined;
@@ -58,7 +58,6 @@ function normalizeIdentity(identity: SessionIdentity | undefined): SessionIdenti
     return undefined;
   }
 
-  // 如果有 acpxSessionId 或 agentSessionId，则认为已 resolved
   const resolved = Boolean(acpxSessionId || agentSessionId);
   const normalizedState = state ?? (resolved ? "resolved" : "pending");
 
@@ -72,7 +71,7 @@ function normalizeIdentity(identity: SessionIdentity | undefined): SessionIdenti
   };
 }
 
-/** 从 Ensure 结果创建身份 */
+/** Build identity from ensure handle */
 export function createIdentityFromEnsure(params: {
   handle: AcpRuntimeHandle;
   now: number;
@@ -87,7 +86,6 @@ export function createIdentityFromEnsure(params: {
     return undefined;
   }
 
-  // 如果有 acpxSessionId 或 agentSessionId，则为 resolved
   const resolved = Boolean(acpxSessionId || agentSessionId);
 
   return {
@@ -100,7 +98,7 @@ export function createIdentityFromEnsure(params: {
   };
 }
 
-/** 从 Status 结果创建身份 */
+/** Build identity from runtime status */
 export function createIdentityFromStatus(params: {
   status: AcpRuntimeStatus | undefined;
   now: number;
@@ -138,7 +136,7 @@ export function createIdentityFromStatus(params: {
   };
 }
 
-/** 合并 Session 身份 */
+/** Merge two identity snapshots */
 export function mergeSessionIdentity(params: {
   current: SessionIdentity | undefined;
   incoming: SessionIdentity | undefined;
@@ -161,8 +159,6 @@ export function mergeSessionIdentity(params: {
   const currentResolved = current.state === "resolved";
   const incomingResolved = incoming.state === "resolved";
   
-  // 如果 incoming 是 resolved，使用 incoming 的值
-  // 如果 current 是 resolved，保留 current 的 resolved 状态
   const allowIncomingValue = !currentResolved || incomingResolved;
   
   const nextAcpxRecordId =
@@ -193,13 +189,13 @@ export function mergeSessionIdentity(params: {
   return next;
 }
 
-/** 检查身份是否有稳定的 session ID */
+/** Whether identity has a stable session id */
 export function identityHasStableSessionId(identity: SessionIdentity | undefined): boolean {
   const normalized = normalizeIdentity(identity);
   return Boolean(normalized?.acpxSessionId || normalized?.agentSessionId);
 }
 
-/** 检查身份是否相等 */
+/** Equality for normalized identities */
 export function identityEquals(
   a: SessionIdentity | undefined,
   b: SessionIdentity | undefined,
@@ -223,7 +219,7 @@ export function identityEquals(
   );
 }
 
-/** 检查 Session 身份是否为 pending */
+/** Whether identity is missing or pending */
 export function isSessionIdentityPending(identity: SessionIdentity | undefined): boolean {
   const normalized = normalizeIdentity(identity);
   if (!normalized) {
@@ -232,7 +228,7 @@ export function isSessionIdentityPending(identity: SessionIdentity | undefined):
   return normalized.state === "pending";
 }
 
-/** 从元数据解析 Session 身份 */
+/** Read identity from session meta */
 export function resolveSessionIdentityFromMeta(meta: SessionAcpMeta | undefined): SessionIdentity | undefined {
   if (!meta) {
     return undefined;
@@ -240,7 +236,7 @@ export function resolveSessionIdentityFromMeta(meta: SessionAcpMeta | undefined)
   return normalizeIdentity(meta.identity);
 }
 
-/** 从身份解析 Runtime Handle 标识符 */
+/** Map identity to backend/agent session ids for handles */
 export function resolveRuntimeHandleIdentifiersFromIdentity(identity: SessionIdentity | undefined): {
   backendSessionId?: string;
   agentSessionId?: string;

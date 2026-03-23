@@ -6,14 +6,14 @@
 
 import type { AcpSessionRuntimeOptions, SessionAcpMeta } from "../runtime/types.js";
 
-/** 标准化文本 */
+/** Normalize optional string */
 export function normalizeText(value: unknown): string | undefined {
   if (typeof value !== "string") return undefined;
   const trimmed = value.trim();
   return trimmed || undefined;
 }
 
-/** 标准化 Runtime 选项 */
+/** Normalize runtime options object */
 export function normalizeRuntimeOptions(options: Partial<AcpSessionRuntimeOptions> | undefined): AcpSessionRuntimeOptions {
   if (!options) return {};
   
@@ -27,7 +27,6 @@ export function normalizeRuntimeOptions(options: Partial<AcpSessionRuntimeOption
     result.runtimeMode = options.runtimeMode.trim();
   }
   
-  // 复制其他选项
   for (const [key, value] of Object.entries(options)) {
     if (key !== "cwd" && key !== "runtimeMode") {
       result[key] = value;
@@ -37,7 +36,7 @@ export function normalizeRuntimeOptions(options: Partial<AcpSessionRuntimeOption
   return result;
 }
 
-/** 合并 Runtime 选项 */
+/** Merge runtime option patches */
 export function mergeRuntimeOptions(params: {
   current: AcpSessionRuntimeOptions | undefined;
   patch: Partial<AcpSessionRuntimeOptions>;
@@ -49,7 +48,7 @@ export function mergeRuntimeOptions(params: {
   });
 }
 
-/** 检查 Runtime 选项是否相等 */
+/** Shallow equality for runtime options */
 export function runtimeOptionsEqual(
   a: AcpSessionRuntimeOptions | undefined,
   b: AcpSessionRuntimeOptions | undefined,
@@ -71,12 +70,12 @@ export function runtimeOptionsEqual(
   return true;
 }
 
-/** 从 Meta 解析 Runtime 选项 */
+/** Options from session meta */
 export function resolveRuntimeOptionsFromMeta(meta: SessionAcpMeta): AcpSessionRuntimeOptions {
   return meta.runtimeOptions ?? {};
 }
 
-/** 验证 Runtime 模式输入 */
+/** Validate non-empty runtime mode string */
 export function validateRuntimeModeInput(mode: string): string {
   const trimmed = mode.trim();
   if (!trimmed) {
@@ -85,7 +84,7 @@ export function validateRuntimeModeInput(mode: string): string {
   return trimmed;
 }
 
-/** 验证 Runtime 配置选项输入 */
+/** Validate config option key/value pair */
 export function validateRuntimeConfigOptionInput(
   key: string,
   value: string,
@@ -104,7 +103,7 @@ export function validateRuntimeConfigOptionInput(
   return { key: normalizedKey, value: normalizedValue };
 }
 
-/** 验证 Runtime 选项补丁 */
+/** Validate a partial runtime options patch */
 export function validateRuntimeOptionPatch(
   patch: Partial<AcpSessionRuntimeOptions>,
 ): Partial<AcpSessionRuntimeOptions> {
@@ -127,7 +126,7 @@ export function validateRuntimeOptionPatch(
   return result;
 }
 
-/** 从配置选项推断 Runtime 选项补丁 */
+/** Map a single config key/value to a runtime options patch */
 export function inferRuntimeOptionPatchFromConfigOption(
   key: string,
   value: string,
@@ -143,7 +142,6 @@ export function inferRuntimeOptionPatchFromConfigOption(
       result.runtimeMode = value;
       break;
     default:
-      // 存储为任意选项
       result[key] = value;
       break;
   }

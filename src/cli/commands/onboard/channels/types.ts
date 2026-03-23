@@ -6,43 +6,43 @@
 
 import type { Config } from '../../../../config/schema.js';
 
-// DM 策略类型
+// DM policy type
 export type DmPolicy = 'pairing' | 'allowlist' | 'open' | 'disabled';
 
-// Group 策略类型  
+// Group policy type
 export type GroupPolicy = 'open' | 'disabled' | 'allowlist';
 
 /**
- * 频道配置器接口
- * 每个频道需要实现此接口
+ * Channel configurator interface.
+ * Each channel plugin implements this interface.
  */
 export interface ChannelConfigurator {
-  /** 频道唯一标识 */
+  /** Stable channel id */
   id: string;
   
-  /** 显示名称 */
+  /** Display name */
   name: string;
   
-  /** 简短描述 */
+  /** Short description */
   description: string;
   
   /**
-   * 检查是否已配置
-   * @param config 当前配置
-   * @returns 是否已配置基本凭证
+   * Whether this channel has the minimum credentials configured.
+   * @param config Current config snapshot
+   * @returns True if basic credentials are present
    */
   isConfigured(config: Config): boolean;
   
   /**
-   * 执行配置流程
-   * @param config 当前配置
-   * @returns 更新后的配置
+   * Run the interactive configuration flow.
+   * @param config Current config snapshot
+   * @returns Updated config
    */
   configure(config: Config): Promise<Config>;
 }
 
 /**
- * 频道状态信息
+ * Channel status for onboarding UI.
  */
 export interface ChannelStatus {
   id: string;

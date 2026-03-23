@@ -1,12 +1,11 @@
 /**
- * MiniMax CN (国内版) OAuth Provider
- * 
- * OAuth 2.0 authentication for MiniMax 国内版 Platform.
- * https://platform.minimax.chat/ (国内版)
- * 
- * 注意：国内版和国际版的 OAuth 端点不同
- * - 国际版: platform.minimaxi.com
- * - 国内版: platform.minimax.chat
+ * MiniMax CN (China region) OAuth provider
+ *
+ * OAuth 2.0 for the MiniMax China platform: https://platform.minimax.chat/
+ *
+ * Endpoints differ from the international product:
+ * - International: platform.minimaxi.com
+ * - China: platform.minimax.chat
  */
 
 import type { OAuthCredentials, OAuthProviderInterface, OAuthLoginCallbacks } from './types.js';

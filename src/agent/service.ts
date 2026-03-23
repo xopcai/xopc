@@ -680,7 +680,7 @@ export class AgentService {
     let resolveWaiting: (() => void) | null = null;
     let agentDone = false;
 
-    // Track last sent content for delta calculation (增量推送优化)
+    // Track last sent content for delta calculation (incremental push optimization)
     let lastSentContent = '';
     let lastSentThinking = '';
 
@@ -763,7 +763,7 @@ export class AgentService {
         case 'message_start': {
           const msgEvent = event as Extract<AgentEvent, { type: 'message_start' }>;
           if (msgEvent.message?.role === 'assistant') {
-            // 重置增量追踪
+            // Reset incremental tracking
             lastSentContent = '';
             lastSentThinking = '';
             pushEvent({ type: 'thinking', status: 'started' });

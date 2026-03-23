@@ -342,7 +342,7 @@ _Review and update this periodically from daily memory files._
   if (!existsSync(contextPath)) {
     const contextContent = `# CONTEXT.md - Current Focus
 
-> 当前工作上下文，切换项目时更新
+> Current working context; update when you switch projects
 
 ## Active Project
 
@@ -364,7 +364,7 @@ _Review and update this periodically from daily memory files._
   if (!existsSync(skillsPath)) {
     const skillsContent = `# SKILLS.md - Active Skills
 
-> 当前工作区已激活的 Skills (Auto-maintained)
+> Active skills for this workspace (auto-maintained)
 
 ## Activated
 

@@ -12,7 +12,7 @@ import { telegramConfigurator } from './telegram.js';
 import { discordConfigurator } from './discord.js';
 import { slackConfigurator } from './slack.js';
 
-// 注册所有频道配置器
+// All channel configurators for the onboarding flow
 const configurators: ChannelConfigurator[] = [
   telegramConfigurator,
   discordConfigurator,
@@ -20,7 +20,7 @@ const configurators: ChannelConfigurator[] = [
 ];
 
 /**
- * 获取所有频道的状态
+ * Build status rows for each registered channel.
  */
 function getChannelStatuses(config: Config): ChannelStatus[] {
   return configurators.map(cfg => ({
@@ -32,7 +32,7 @@ function getChannelStatuses(config: Config): ChannelStatus[] {
 }
 
 /**
- * 显示频道选择界面
+ * Prompt to pick a channel to configure (or finish).
  */
 async function promptChannelSelection(
   statuses: ChannelStatus[]
@@ -43,7 +43,7 @@ async function promptChannelSelection(
     description: status.description,
   }));
   
-  // 添加"完成"选项
+  // "Done" option to exit the loop
   choices.push({
     value: 'done',
     name: '[完成配置]',
@@ -59,7 +59,7 @@ async function promptChannelSelection(
 }
 
 /**
- * 配置单个频道
+ * Run configure() for one channel id.
  */
 async function configureChannel(
   config: Config,
@@ -75,7 +75,7 @@ async function configureChannel(
 }
 
 /**
- * 主配置流程
+ * Interactive multi-channel onboarding entry point.
  */
 export async function setupChannels(config: Config): Promise<Config> {
   console.log('\n💬 频道配置\n');
@@ -84,21 +84,21 @@ export async function setupChannels(config: Config): Promise<Config> {
   let currentConfig = config;
   
   while (true) {
-    // 获取当前状态
+    // Refresh channel configured flags
     const statuses = getChannelStatuses(currentConfig);
     
-    // 显示选择界面
+    // Channel picker or "done"
     const selected = await promptChannelSelection(statuses);
     
-    // 用户选择完成
+    // User chose "done"
     if (selected === null) {
       break;
     }
     
-    // 配置选中的频道
+    // Run that channel's wizard
     currentConfig = await configureChannel(currentConfig, selected);
     
-    // 询问是否继续配置其他频道
+    // Optionally configure another channel
     const continueConfig = await confirm({
       message: '是否继续配置其他频道?',
       default: true,
@@ -115,7 +115,7 @@ export async function setupChannels(config: Config): Promise<Config> {
   return currentConfig;
 }
 
-// 重新导出类型和配置器
+// Re-export types and configurators
 export type { ChannelConfigurator, ChannelStatus, DmPolicy, GroupPolicy } from './types.js';
 export { telegramConfigurator } from './telegram.js';
 export { discordConfigurator } from './discord.js';

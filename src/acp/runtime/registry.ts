@@ -15,7 +15,7 @@ export type AcpRuntimeBackend = {
   healthy?: () => boolean;
 };
 
-/** Registry 全局状态 */
+/** Global registry singleton state */
 type AcpRuntimeRegistryGlobalState = {
   backendsById: Map<string, AcpRuntimeBackend>;
 };
@@ -40,12 +40,12 @@ function resolveAcpRuntimeRegistryGlobalState(): AcpRuntimeRegistryGlobalState {
 
 const ACP_BACKENDS_BY_ID = resolveAcpRuntimeRegistryGlobalState().backendsById;
 
-/** 标准化 Backend ID */
+/** Normalize backend id */
 function normalizeBackendId(id: string | undefined): string {
   return id?.trim().toLowerCase() || "";
 }
 
-/** 检查 Backend 是否健康 */
+/** Whether backend passes optional health check */
 function isBackendHealthy(backend: AcpRuntimeBackend): boolean {
   if (!backend.healthy) {
     return true;
@@ -57,7 +57,7 @@ function isBackendHealthy(backend: AcpRuntimeBackend): boolean {
   }
 }
 
-/** 注册 ACP Runtime Backend */
+/** Register an ACP runtime backend */
 export function registerAcpRuntimeBackend(backend: AcpRuntimeBackend): void {
   const id = normalizeBackendId(backend.id);
   if (!id) {
@@ -72,7 +72,7 @@ export function registerAcpRuntimeBackend(backend: AcpRuntimeBackend): void {
   });
 }
 
-/** 注销 ACP Runtime Backend */
+/** Unregister a backend by id */
 export function unregisterAcpRuntimeBackend(id: string): void {
   const normalized = normalizeBackendId(id);
   if (!normalized) {
@@ -81,7 +81,7 @@ export function unregisterAcpRuntimeBackend(id: string): void {
   ACP_BACKENDS_BY_ID.delete(normalized);
 }
 
-/** 获取 ACP Runtime Backend */
+/** Get backend by id, or first healthy backend if id omitted */
 export function getAcpRuntimeBackend(id?: string): AcpRuntimeBackend | null {
   const normalized = normalizeBackendId(id);
   if (normalized) {
@@ -90,7 +90,6 @@ export function getAcpRuntimeBackend(id?: string): AcpRuntimeBackend | null {
   if (ACP_BACKENDS_BY_ID.size === 0) {
     return null;
   }
-  // 返回第一个健康的 backend
   for (const backend of ACP_BACKENDS_BY_ID.values()) {
     if (isBackendHealthy(backend)) {
       return backend;
@@ -99,7 +98,7 @@ export function getAcpRuntimeBackend(id?: string): AcpRuntimeBackend | null {
   return ACP_BACKENDS_BY_ID.values().next().value ?? null;
 }
 
-/** 获取必需的 ACP Runtime Backend */
+/** Require a registered healthy backend */
 export function requireAcpRuntimeBackend(id?: string): AcpRuntimeBackend {
   const normalized = normalizeBackendId(id);
   const backend = getAcpRuntimeBackend(normalized || undefined);
@@ -124,17 +123,17 @@ export function requireAcpRuntimeBackend(id?: string): AcpRuntimeBackend {
   return backend;
 }
 
-/** 列出所有已注册的 Backend */
+/** List registered backends */
 export function listAcpRuntimeBackends(): AcpRuntimeBackend[] {
   return Array.from(ACP_BACKENDS_BY_ID.values());
 }
 
-/** 检查是否有任何 Backend 注册 */
+/** Whether any backend is registered */
 export function hasAcpRuntimeBackend(): boolean {
   return ACP_BACKENDS_BY_ID.size > 0;
 }
 
-/** 测试工具 */
+/** Test-only helpers */
 export const __testing = {
   resetAcpRuntimeBackendsForTests(): void {
     ACP_BACKENDS_BY_ID.clear();

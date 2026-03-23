@@ -4,13 +4,13 @@
  * Core type definitions for Agent Control Protocol runtime abstraction.
  */
 
-/** ACP Prompt 模式 */
+/** ACP prompt mode */
 export type AcpRuntimePromptMode = "prompt" | "steer";
 
-/** ACP Session 模式 */
+/** ACP session mode */
 export type AcpRuntimeSessionMode = "persistent" | "oneshot";
 
-/** ACP Session Update 标签 */
+/** ACP session update tag */
 export type AcpSessionUpdateTag =
   | "agent_message_chunk"
   | "agent_thought_chunk"
@@ -24,29 +24,29 @@ export type AcpSessionUpdateTag =
   | "plan"
   | (string & {});
 
-/** ACP Runtime Control 能力 */
+/** ACP runtime control capability */
 export type AcpRuntimeControl = 
   | "session/set_mode" 
   | "session/set_config_option" 
   | "session/status"
   | "session/reset";
 
-/** ACP Runtime Handle - Session 句柄 */
+/** ACP runtime handle (session reference) */
 export type AcpRuntimeHandle = {
   sessionKey: string;
   backend: string;
   runtimeSessionName: string;
-  /** 有效的工作目录 */
+  /** Effective working directory */
   cwd?: string;
-  /** Backend 本地记录标识符 */
+  /** Local backend record id */
   acpxRecordId?: string;
-  /** Backend 级别的 ACP Session 标识符 */
+  /** Backend-level ACP session id */
   backendSessionId?: string;
-  /** 上游 harness session 标识符 */
+  /** Upstream harness session id */
   agentSessionId?: string;
 };
 
-/** ACP Session 初始化输入 */
+/** ACP session ensure / init input */
 export type AcpRuntimeEnsureInput = {
   sessionKey: string;
   agent: string;
@@ -56,13 +56,13 @@ export type AcpRuntimeEnsureInput = {
   env?: Record<string, string>;
 };
 
-/** ACP Turn 附件 */
+/** ACP turn attachment */
 export type AcpRuntimeTurnAttachment = {
   mediaType: string;
   data: string;
 };
 
-/** ACP Turn 输入 */
+/** ACP turn input */
 export type AcpRuntimeTurnInput = {
   handle: AcpRuntimeHandle;
   text: string;
@@ -72,31 +72,31 @@ export type AcpRuntimeTurnInput = {
   signal?: AbortSignal;
 };
 
-/** ACP Runtime 能力 */
+/** ACP runtime capabilities */
 export type AcpRuntimeCapabilities = {
   controls: AcpRuntimeControl[];
   /**
-   * 可选的 backend 广告配置选项键
-   * 空值表示 backend 接受键，但没有严格列表
+   * Optional advertised config option keys.
+   * Empty/omitted means the backend accepts keys without a fixed list.
    */
   configOptionKeys?: string[];
-  /** 可选的 backend 支持的工具列表 */
+  /** Optional tool names supported by the backend */
   toolNames?: string[];
 };
 
-/** ACP Runtime 状态 */
+/** ACP runtime status snapshot */
 export type AcpRuntimeStatus = {
   summary?: string;
-  /** Backend 本地记录标识符 */
+  /** Local backend record id */
   acpxRecordId?: string;
-  /** Backend 级别的 ACP Session 标识符 */
+  /** Backend-level ACP session id */
   backendSessionId?: string;
-  /** 上游 harness session 标识符 */
+  /** Upstream harness session id */
   agentSessionId?: string;
   details?: Record<string, unknown>;
 };
 
-/** ACP Doctor 报告 */
+/** ACP doctor (health) report */
 export type AcpRuntimeDoctorReport = {
   ok: boolean;
   code?: string;
@@ -105,7 +105,7 @@ export type AcpRuntimeDoctorReport = {
   details?: string[];
 };
 
-/** ACP Runtime 事件 */
+/** ACP runtime event */
 export type AcpRuntimeEvent =
   | {
       type: "text_delta";
@@ -142,42 +142,42 @@ export type AcpRuntimeEvent =
       retryable?: boolean;
     };
 
-/** ACP Runtime 接口 */
+/** ACP runtime implementation */
 export interface AcpRuntime {
-  /** 确保 Session 存在 */
+  /** Ensure a session exists (create or resume) */
   ensureSession(input: AcpRuntimeEnsureInput): Promise<AcpRuntimeHandle>;
 
-  /** 运行一个 Turn */
+  /** Run one turn */
   runTurn(input: AcpRuntimeTurnInput): AsyncIterable<AcpRuntimeEvent>;
 
-  /** 获取能力 */
+  /** Advertised capabilities */
   getCapabilities?(input: {
     handle?: AcpRuntimeHandle;
   }): Promise<AcpRuntimeCapabilities> | AcpRuntimeCapabilities;
 
-  /** 获取状态 */
+  /** Current status */
   getStatus?(input: { handle: AcpRuntimeHandle; signal?: AbortSignal }): Promise<AcpRuntimeStatus>;
 
-  /** 设置模式 */
+  /** Set session mode */
   setMode?(input: { handle: AcpRuntimeHandle; mode: string }): Promise<void>;
 
-  /** 设置配置选项 */
+  /** Set a config option */
   setConfigOption?(input: { handle: AcpRuntimeHandle; key: string; value: string }): Promise<void>;
 
-  /** 重置 Session */
+  /** Reset session */
   resetSession?(input: { handle: AcpRuntimeHandle }): Promise<void>;
 
-  /** 健康检查 */
+  /** Health check */
   doctor?(): Promise<AcpRuntimeDoctorReport>;
 
-  /** 取消当前操作 */
+  /** Cancel in-flight work */
   cancel(input: { handle: AcpRuntimeHandle; reason?: string }): Promise<void>;
 
-  /** 关闭 Session */
+  /** Close session */
   close(input: { handle: AcpRuntimeHandle; reason: string }): Promise<void>;
 }
 
-/** ACP Session 元数据 */
+/** ACP session metadata */
 export type SessionAcpMeta = {
   backend: string;
   agent: string;
@@ -191,30 +191,30 @@ export type SessionAcpMeta = {
   lastError?: string;
 };
 
-/** Session Identity 来源 */
+/** Session identity source */
 export type SessionIdentitySource = "ensure" | "status" | "event";
 
-/** Session 身份标识 */
+/** Session identity */
 export type SessionIdentity = {
   state: "resolved" | "pending";
   source: SessionIdentitySource;
-  /** Backend 本地记录标识符 (acpx record id) */
+  /** Local backend record id (acpx record id) */
   acpxRecordId?: string;
-  /** Backend 级别的 ACP Session 标识符 */
+  /** Backend-level ACP session id */
   acpxSessionId?: string;
-  /** 上游 harness session 标识符 */
+  /** Upstream harness session id */
   agentSessionId?: string;
   lastUpdatedAt: number;
 };
 
-/** ACP Session Runtime 选项 */
+/** ACP session runtime options */
 export type AcpSessionRuntimeOptions = {
   cwd?: string;
   runtimeMode?: string;
   [key: string]: unknown;
 };
 
-/** ACP Session 状态 */
+/** ACP session status (control plane) */
 export type AcpSessionStatus = {
   sessionKey: string;
   backend: string;
@@ -229,7 +229,7 @@ export type AcpSessionStatus = {
   lastError?: string;
 };
 
-/** ACP Session 解析结果 */
+/** ACP session resolution outcome */
 export type AcpSessionResolution =
   | { kind: "ready"; sessionKey: string; meta: SessionAcpMeta }
   | { kind: "stale"; sessionKey: string; error: Error }

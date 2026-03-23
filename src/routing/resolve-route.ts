@@ -1,7 +1,7 @@
 /**
- * 路由决策引擎
- * 
- * 综合 binding 规则、identity links 和配置，决定消息应该路由到哪个 agent。
+ * Route resolution
+ *
+ * Combines binding rules, identity links, and config to pick an agent and session keys.
  */
 
 import type { BindingRule, RouteInput, RouteResult } from './bindings.js';
@@ -15,22 +15,21 @@ import { buildSessionKey, normalizeSessionKey, parseSessionKey } from './session
 import { normalizeAccountId } from './account-id.js';
 
 /**
- * Identity Link 配置
- * 
- * 用于跨平台用户身份合并
- * 格式：{ canonicalName: [alias1, alias2, ...] }
+ * Identity link map: canonical peer id -> aliases across channels.
+ *
+ * Shape: `{ canonicalName: [alias1, alias2, ...] }`
  */
 export type IdentityLinks = Record<string, string[]>;
 
 /**
- * 会话配置
+ * Session-related routing options.
  */
 export interface SessionConfig {
-  /** DM 会话作用域策略 */
+  /** How DM sessions are scoped / merged */
   dmScope?: 'main' | 'per-peer' | 'per-channel-peer' | 'per-account-channel-peer';
-  /** 身份链接 */
+  /** Cross-channel identity aliases */
   identityLinks?: IdentityLinks;
-  /** 存储配置 */
+  /** Optional session store tuning */
   storage?: {
     pruneAfterMs?: number;
     maxEntries?: number;
@@ -38,12 +37,12 @@ export interface SessionConfig {
 }
 
 /**
- * Agent 配置
+ * Agent list and default id from config.
  */
 export interface AgentConfig {
-  /** 默认 Agent ID */
+  /** Default agent id */
   default?: string;
-  /** Agent 列表 */
+  /** Registered agents */
   list?: Array<{
     id: string;
     name?: string;
@@ -52,7 +51,7 @@ export interface AgentConfig {
 }
 
 /**
- * 完整配置
+ * Subset of app config used for routing.
  */
 export interface RoutingConfig {
   agents?: AgentConfig;
@@ -61,29 +60,29 @@ export interface RoutingConfig {
 }
 
 /**
- * 路由输入
+ * Input to `resolveRoute`.
  */
 export interface ResolveRouteInput extends RouteInput {
-  /** 配置对象 */
+  /** Routing config snapshot */
   config: RoutingConfig;
-  /** 线程 ID（可选） */
+  /** Optional thread id for threaded channels */
   threadId?: string | null;
 }
 
 /**
- * 路由结果
+ * Resolved route including session keys.
  */
 export interface ResolveRouteResult extends RouteResult {
-  /** 生成的 session key */
+  /** Active session key for this turn */
   sessionKey: string;
-  /** 主 session key（用于 DM 会话合并） */
+  /** Main session key (DM merge target) */
   mainSessionKey: string;
-  /** 最后路由策略 */
+  /** Whether routing used the main or a per-session key */
   lastRoutePolicy: 'main' | 'session';
 }
 
 /**
- * 应用 Identity Links，解析规范化的 peer ID
+ * Apply identity links and return a canonical lowercased peer id.
  */
 export function applyIdentityLinks(
   peerId: string,
@@ -99,17 +98,15 @@ export function applyIdentityLinks(
     return normalizedPeerId;
   }
   
-  // 构建候选 ID 集合
   const candidates = new Set<string>();
   candidates.add(normalizedPeerId);
   
-  // 添加带 channel 前缀的候选
   const channelPrefix = channel.trim().toLowerCase();
   if (channelPrefix) {
     candidates.add(`${channelPrefix}:${normalizedPeerId}`);
   }
   
-  // 查找匹配的 canonical name
+  // Match any alias to its canonical id
   for (const [canonical, aliases] of Object.entries(identityLinks)) {
     if (!Array.isArray(aliases)) {
       continue;
@@ -127,7 +124,7 @@ export function applyIdentityLinks(
 }
 
 /**
- * 获取默认 Agent ID
+ * Default agent id from config, falling back to `main`.
  */
 export function getDefaultAgentId(config: RoutingConfig): string {
   // Try 'default' field first (RoutingConfig interface)
@@ -148,11 +145,11 @@ export function getDefaultAgentId(config: RoutingConfig): string {
 }
 
 /**
- * 检查 Agent 是否存在
+ * Whether `agentId` appears in the enabled agent list (or list is absent).
  */
 export function agentExists(agentId: string, config: RoutingConfig): boolean {
   if (!config.agents?.list) {
-    return true; // 没有配置列表时认为所有 agent 都存在
+    return true; // No list: treat every id as valid
   }
   
   return config.agents.list.some(
@@ -161,7 +158,7 @@ export function agentExists(agentId: string, config: RoutingConfig): boolean {
 }
 
 /**
- * 选择第一个存在的 Agent ID
+ * Return `agentId` if listed, otherwise the default agent id.
  */
 export function pickFirstExistingAgentId(agentId: string, config: RoutingConfig): string {
   if (!agentId) {
@@ -176,7 +173,7 @@ export function pickFirstExistingAgentId(agentId: string, config: RoutingConfig)
 }
 
 /**
- * 构建 session key
+ * Thin wrapper around `buildSessionKey` for route inputs.
  */
 export function buildRouteSessionKey(
   agentId: string,
@@ -199,7 +196,7 @@ export function buildRouteSessionKey(
 }
 
 /**
- * 推导最后路由策略
+ * Map session vs main key to policy label.
  */
 export function deriveLastRoutePolicy(
   sessionKey: string,
@@ -209,26 +206,22 @@ export function deriveLastRoutePolicy(
 }
 
 /**
- * 解析路由决策（主函数）
+ * Resolve agent and session keys from channel context and config.
  */
 export function resolveRoute(input: ResolveRouteInput): ResolveRouteResult {
   const { config, threadId } = input;
   
-  // 规范化输入
   const channel = (input.channel ?? '').trim().toLowerCase() || 'unknown';
   const accountId = normalizeAccountId(input.accountId);
   const peerKind = (input.peerKind ?? 'dm').toLowerCase();
   const rawPeerId = (input.peerId ?? '').trim();
   
-  // 应用 identity links
   const peerId = applyIdentityLinks(rawPeerId, channel, config.session?.identityLinks ?? {});
   
-  // 解析 binding 规则
   const rules = Array.isArray(config.bindings)
     ? parseBindingRules({ bindings: config.bindings })
     : [];
   
-  // 解析 binding 路由
   const bindingResult = resolveBindingRoute(
     {
       channel,
@@ -243,18 +236,15 @@ export function resolveRoute(input: ResolveRouteInput): ResolveRouteResult {
     getDefaultAgentId(config)
   );
   
-  // 选择存在的 agent
   const agentId = pickFirstExistingAgentId(bindingResult.agentId, config);
   
-  // 确定 DM scope
   const dmScope = config.session?.dmScope ?? 'per-account-channel-peer';
   
-  // 构建 session key
   let sessionKey: string;
   let mainSessionKey: string;
   
   if (peerKind === 'dm' || peerKind === 'direct') {
-    // DM 会话：根据 scope 策略决定是否合并
+    // DM: merge or split sessions depending on dmScope
     mainSessionKey = buildRouteSessionKey(agentId, channel, accountId, 'dm', 'main');
     
     switch (dmScope) {
@@ -273,17 +263,15 @@ export function resolveRoute(input: ResolveRouteInput): ResolveRouteResult {
         break;
     }
   } else {
-    // 群组/频道会话
+    // Group / channel / other peer kinds
     sessionKey = buildRouteSessionKey(agentId, channel, accountId, peerKind, peerId, threadId);
     mainSessionKey = buildRouteSessionKey(agentId, channel, accountId, peerKind, 'main');
   }
   
-  // 添加 thread 后缀（如果有）
   if (threadId && !sessionKey.includes(':thread:')) {
     sessionKey = `${sessionKey}:thread:${threadId.toLowerCase()}`;
   }
   
-  // 标准化 session keys
   sessionKey = normalizeSessionKey(sessionKey);
   mainSessionKey = normalizeSessionKey(mainSessionKey);
   
@@ -297,7 +285,7 @@ export function resolveRoute(input: ResolveRouteInput): ResolveRouteResult {
 }
 
 /**
- * 从 session key 解析路由信息
+ * Parse basic routing fields from a session key string.
  */
 export function resolveRouteFromSessionKey(
   sessionKey: string,

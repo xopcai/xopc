@@ -1,5 +1,5 @@
 /**
- * ToolErrorTracker 单元测试
+ * ToolErrorTracker unit tests
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
