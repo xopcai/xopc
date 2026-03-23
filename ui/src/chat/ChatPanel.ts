@@ -1,6 +1,7 @@
 import { html, LitElement } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import '../components/MessageEditor.js';
+import '../components/ModelSelector.js';
 import '../components/MessageList/index.js';
 import { t, initI18n } from '../utils/i18n.js';
 import { getLanguage } from '../utils/storage.js';
@@ -66,7 +67,7 @@ export class ChatPanel extends LitElement {
 
   override connectedCallback() {
     super.connectedCallback();
-    this.classList.add('chat-container');
+    this.classList.add('chat-shell');
     initI18n(getLanguage());
   }
 
@@ -620,16 +621,23 @@ export class ChatPanel extends LitElement {
 
   override render() {
     return html`
-      ${this._renderStatus()}
-      ${this._renderHeader()}
-      <div class="chat-messages">
-        <div class="chat-messages-inner">${this._renderMessages()}</div>
+      <div class="chat-layout">
+        <div class="chat-top">
+          ${this._renderStatus()}
+          ${this._renderHeader()}
+        </div>
+        <div class="chat-messages">
+          <div class="chat-messages-inner">${this._renderMessages()}</div>
+        </div>
+        <div class="chat-input-container">
+          <div class="chat-input-inner">${this._renderInput()}</div>
+        </div>
       </div>
       ${!this._atBottom
         ? html`
             <button
-              class="scroll-to-bottom-btn"
-              style="position:fixed;right:1.5rem;bottom:120px;width:48px;height:48px;border-radius:50%;background:#3b82f6;color:white;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;box-shadow:0 4px 12px rgba(0,0,0,.15);z-index:100;"
+              type="button"
+              class="scroll-to-bottom-btn chat-scroll-fab"
               @click=${() => this._scrollToBottom()}
               title="Scroll to bottom"
             >
@@ -637,13 +645,11 @@ export class ChatPanel extends LitElement {
             </button>
           `
         : ''}
-      <div class="chat-input-container">
-        <div class="chat-input-inner">${this._renderInput()}</div>
-      </div>
     `;
   }
 
   private _renderHeader() {
+    const showModelPicker = this.enableModelSelector && !!this._sessionKey;
     return html`
       <div class="chat-header">
         <div class="chat-header-title">
@@ -651,12 +657,28 @@ export class ChatPanel extends LitElement {
           ${this._sessionKey
             ? html`<span class="text-xs text-muted ml-2">${this._sessions.find((s) => s.key === this._sessionKey)?.name || this._sessionKey}</span>`
             : ''}
-          ${this._sessionKey && this._sessionModel
-            ? html`<span class="chat-header-model text-xs text-muted-foreground ml-2 font-mono" title=${this._sessionModel}
-                >${t('chat.model')}: ${this._sessionModel}</span
-              >`
-            : ''}
         </div>
+        ${showModelPicker
+          ? html`
+              <div class="chat-header-model-picker" title=${t('chat.currentModel')}>
+                <model-selector
+                  .compact=${true}
+                  .value=${this._sessionModel || ''}
+                  .label=${''}
+                  .placeholder=${t('chat.modelPlaceholder')}
+                  .filter=${'configured'}
+                  .token=${this.config?.token}
+                  .disabled=${this._streaming}
+                  @change=${(e: CustomEvent<{ modelId: string }>) => {
+                    const id = e.detail?.modelId;
+                    if (id && id !== this._sessionModel) {
+                      void this._onSessionModelChange(id);
+                    }
+                  }}
+                ></model-selector>
+              </div>
+            `
+          : ''}
         <button class="new-session-btn" @click=${() => this._createSession()}>
           <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
             <line x1="12" y1="5" x2="12" y2="19" />
@@ -722,14 +744,9 @@ export class ChatPanel extends LitElement {
       <message-editor
         .isStreaming=${this._streaming}
         .showAttachmentButton=${this.enableAttachments}
-        .showModelSelector=${this.enableModelSelector}
+        .showModelSelector=${false}
         .showThinkingSelector=${true}
         .thinkingLevel=${this._thinkingLevel}
-        .currentModel=${this._sessionModel}
-        .gatewayToken=${this.config?.token}
-        .onModelChange=${(modelId: string) => {
-          void this._onSessionModelChange(modelId);
-        }}
         .onSend=${(input: string, attachments: Attachment[], level?: string) => {
           if (level) this._thinkingLevel = level as ThinkingLevel;
           const data = attachments?.map((a) => ({

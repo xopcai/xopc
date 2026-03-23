@@ -33,6 +33,8 @@ export class ModelSelector extends LitElement {
   @property({ type: Boolean }) disabled: boolean = false;
   @property({ type: String }) filter: 'all' | 'configured' | 'vision' = 'configured';
   @property({ type: String }) token?: string;
+  /** Denser padding for chat toolbar */
+  @property({ type: Boolean, reflect: true }) compact = false;
 
   @state() private _models: Model[] = [];
   @state() private _loading: boolean = false;
@@ -81,6 +83,21 @@ export class ModelSelector extends LitElement {
       background: var(--bg-secondary, #f5f5f4);
       cursor: not-allowed;
       opacity: 0.6;
+    }
+
+    :host([compact]) .model-select {
+      padding: 0.35rem 1.75rem 0.35rem 0.65rem;
+      min-height: 2rem;
+      font-size: 0.8125rem;
+      font-weight: 500;
+      border-radius: var(--radius-lg, 0.5rem);
+      background: var(--hover-bg, #f5f5f4);
+    }
+
+    :host([compact]) .select-arrow {
+      right: 0.45rem;
+      font-size: 0.5rem;
+      opacity: 0.7;
     }
 
     .select-arrow {

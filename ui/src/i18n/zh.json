@@ -72,7 +72,8 @@
     "offline": "离线",
     "model": "模型",
     "currentModel": "当前对话使用的模型",
-    "modelPlaceholder": "选择模型…"
+    "modelPlaceholder": "选择模型…",
+    "inputPlaceholder": "输入计划，@ 引用上下文，/ 使用命令"
   },
   "settings": {
     "title": "设置",
