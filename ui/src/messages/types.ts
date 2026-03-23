@@ -36,6 +36,9 @@ export type MessageAttachment = {
   size?: number;
   content?: string;
   data?: string;
+  /** Thumbnail / first-page preview (base64), optional */
+  preview?: string;
+  extractedText?: string;
 };
 
 /** Alias for message attachments (API / editor payloads). */

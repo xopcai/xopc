@@ -240,7 +240,7 @@ export class XopcbotChat extends LitElement {
 
     if (attachments && attachments.length > 0) {
       const imageContents = attachments
-        .filter((att) => att.mimeType.startsWith('image/'))
+        .filter((att) => att.mimeType?.startsWith('image/'))
         .map((att) => ({
           type: 'image' as const,
           mimeType: att.mimeType,

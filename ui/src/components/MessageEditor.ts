@@ -139,7 +139,7 @@ export class MessageEditor extends LitElement {
         ${this.attachments.map((att, index) => html`
           <div class="attachment-chip">
             <div class="attachment-preview">
-              ${att.mimeType.startsWith('image/') ? html`
+              ${att.mimeType?.startsWith('image/') ? html`
                 <img src="${att.content}" alt="${att.name}" />
               ` : html`
                 ${unsafeHTML(iconToSvg(FileText, 'w-4 h-4'))}

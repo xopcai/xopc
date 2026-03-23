@@ -621,6 +621,205 @@ html.dark .glass {
   display: inline-block;
 }
 
+/* ===== Attachment full-screen overlay (tokens; avoids Tailwind bg-background/95 bugs) ===== */
+.attachment-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+  background: rgb(0 0 0 / 0.88);
+}
+
+.attachment-overlay__toolbar {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.75rem;
+  padding: 0.5rem 1rem;
+  background: var(--card-bg);
+  border-bottom: 1px solid var(--border-default);
+  color: var(--text-primary);
+}
+
+.attachment-overlay__toolbar-inner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  gap: 0.75rem;
+  min-width: 0;
+}
+
+.attachment-overlay__title-wrap {
+  min-width: 0;
+  flex: 1;
+}
+
+.attachment-overlay__title {
+  display: block;
+  font-size: 0.875rem;
+  font-weight: 500;
+  color: var(--text-primary);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.attachment-overlay__actions {
+  display: flex;
+  align-items: center;
+  gap: 0.5rem;
+  flex-shrink: 0;
+}
+
+.attachment-overlay__icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 2.25rem;
+  height: 2.25rem;
+  padding: 0;
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  background: var(--card-bg);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast),
+    border-color var(--transition-fast);
+}
+
+.attachment-overlay__icon-btn:hover {
+  background: var(--hover-bg);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.attachment-overlay__svg {
+  width: 1.125rem;
+  height: 1.125rem;
+  stroke: currentColor;
+  flex-shrink: 0;
+}
+
+.attachment-overlay__body {
+  flex: 1;
+  overflow: auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 1rem;
+  min-height: 0;
+}
+
+.attachment-overlay__toggle {
+  display: flex;
+  align-items: center;
+  gap: 0.125rem;
+  padding: 0.125rem;
+  border-radius: var(--radius-md);
+  background: var(--hover-bg);
+  border: 1px solid var(--border-default);
+}
+
+.attachment-overlay__toggle-btn {
+  padding: 0.375rem 0.75rem;
+  font-size: 0.75rem;
+  border-radius: var(--radius-sm);
+  border: none;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition:
+    background var(--transition-fast),
+    color var(--transition-fast);
+}
+
+.attachment-overlay__toggle-btn--active {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+.attachment-overlay__img {
+  max-width: 100%;
+  max-height: 100%;
+  width: auto;
+  height: auto;
+  object-fit: contain;
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-md);
+}
+
+.attachment-overlay__panel {
+  background: var(--card-bg);
+  border: 1px solid var(--border-default);
+  color: var(--text-primary);
+  border-radius: var(--radius-lg);
+  width: 100%;
+  max-width: 56rem;
+  max-height: 100%;
+  overflow: auto;
+}
+
+.attachment-overlay__panel--text {
+  padding: 1.5rem;
+}
+
+.attachment-overlay__panel--empty {
+  padding: 1.5rem;
+  max-width: 28rem;
+  text-align: center;
+  font-size: 0.875rem;
+}
+
+.attachment-overlay__pre {
+  margin: 0;
+  white-space: pre-wrap;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+  font-size: 0.875rem;
+  line-height: 1.5;
+}
+
+.attachment-overlay__pre--sm {
+  font-size: 0.75rem;
+  line-height: 1.45;
+}
+
+.attachment-overlay__doc-container {
+  background: var(--card-bg);
+  color: var(--text-primary);
+  overflow: auto;
+  box-shadow: var(--shadow-md);
+  border: 1px solid var(--border-default);
+  width: 100%;
+  height: 100%;
+  max-width: 62.5rem;
+  border-radius: var(--radius-lg);
+}
+
+.attachment-overlay__error {
+  background: var(--accent-error-light);
+  border: 1px solid color-mix(in srgb, var(--accent-error) 35%, transparent);
+  color: var(--accent-error);
+  padding: 1rem;
+  border-radius: var(--radius-lg);
+  max-width: 32rem;
+}
+
+.attachment-overlay__error-title {
+  font-weight: 600;
+  margin-bottom: 0.25rem;
+}
+
+.attachment-overlay__error-msg {
+  font-size: 0.8125rem;
+  opacity: 0.95;
+}
+
 /* ============================================
    Responsive
    ============================================ */
