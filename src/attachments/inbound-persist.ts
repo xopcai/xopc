@@ -118,6 +118,23 @@ export function formatInboundFileTextBlock(
 }
 
 /**
+ * Remove inbound file transcript blocks from a string (e.g. auto session titles).
+ * Matches Web UI `stripInboundFileMachineText`, plus bare `[File: …]` lines when paths are absent.
+ */
+export function stripInboundFileMetadataFromText(text: string): string {
+  if (!text.includes('[File:') && !text.includes('xopcbot-path:')) return text;
+  let out = text;
+  out = out.replace(
+    /\s*\[File:[^\]]+\]\s*\r?\nxopcbot-path:rel:[^\r\n]+\r?\n\s*xopcbot-path:abs:[^\r\n]+/g,
+    '',
+  );
+  out = out.replace(/\s*\[File:[^\]]+\]\s+xopcbot-path:rel:\S+\s+xopcbot-path:abs:\S+/g, '');
+  out = out.replace(/\s*\[File:[^\]]+\]\s*xopcbot-path:rel:\S+\s*xopcbot-path:abs:\S+/g, '');
+  out = out.replace(/\s*\[File:[^\]]+\]\s*/g, ' ');
+  return out.replace(/\n{3,}/g, '\n\n').replace(/\s{2,}/g, ' ').trim();
+}
+
+/**
  * Resolve a stored relative path and ensure it stays under workspace `.xopcbot/inbound/`.
  */
 export function resolveSafeInboundFilePath(workspaceRoot: string, relRaw: string): string | null {
