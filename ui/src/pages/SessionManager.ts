@@ -45,6 +45,7 @@ export class SessionManager extends LitElement {
   private _api!: SessionAPIClient;
   private _limit = 20;
   private _initialized = false;
+  private _eventSource: EventSource | null = null;
 
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
@@ -69,12 +70,41 @@ export class SessionManager extends LitElement {
     const httpUrl = window.location.origin;
     this._api = new SessionAPIClient(httpUrl, this.config?.token);
     this._initialized = true;
+    this._setupSessionEvents();
     this._loadSessions();
     this._loadStats();
   }
 
+  private _setupSessionEvents(): void {
+    if (this._eventSource) return;
+    try {
+      const url = new URL('/api/events', window.location.origin);
+      if (this.config?.token) url.searchParams.set('token', this.config.token);
+      this._eventSource = new EventSource(url.toString());
+      this._eventSource.addEventListener('session.updated', ((e: MessageEvent) => {
+        try {
+          const detail = JSON.parse(e.data) as { key?: string; name?: string };
+          if (!detail.key || detail.name === undefined) return;
+          this._sessions = this._sessions.map((s) =>
+            s.key === detail.key ? { ...s, name: detail.name } : s,
+          );
+          if (this._detailSession?.key === detail.key) {
+            this._detailSession = { ...this._detailSession, name: detail.name };
+          }
+          this.requestUpdate();
+        } catch {
+          /* ignore */
+        }
+      }) as EventListener);
+    } catch {
+      /* ignore */
+    }
+  }
+
   override disconnectedCallback(): void {
     super.disconnectedCallback();
+    this._eventSource?.close();
+    this._eventSource = null;
   }
 
   private async _loadSessions(reset = false): Promise<void> {

@@ -247,6 +247,10 @@ export class GatewayService {
     await this.sessionManager.initialize();
     log.debug('Session manager initialized');
 
+    this.sessionManager.on('sessionUpdated', (data: { key: string; name?: string; tags?: string[] }) => {
+      this.emit('session.updated', { key: data.key, name: data.name, tags: data.tags });
+    });
+
     // Initialize ACP runtime backend
     await this.initializeAcpRuntime();
 
@@ -529,6 +533,14 @@ export class GatewayService {
           }
 
           this.runRelay.complete(runId);
+          try {
+            const metaAfter = await this.sessionManager.getSessionMetadata(sessionKey);
+            if (metaAfter?.name) {
+              this.emit('session.updated', { key: sessionKey, name: metaAfter.name });
+            }
+          } catch {
+            /* ignore */
+          }
           return { status: 'ok', summary: 'Message processed successfully' };
         } catch (error) {
           log.error({ error }, 'Agent processing failed');

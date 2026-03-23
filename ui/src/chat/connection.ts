@@ -39,7 +39,7 @@ export class ChatConnection {
       this._callbacks.onConnected();
     });
 
-    for (const evt of ['config.reload', 'channels.status', 'message.sent']) {
+    for (const evt of ['config.reload', 'channels.status', 'message.sent', 'session.updated']) {
       this._eventSource.addEventListener(evt, (e: MessageEvent) => {
         this._callbacks.onEvent(evt, e.data);
       });

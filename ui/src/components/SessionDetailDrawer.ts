@@ -125,14 +125,21 @@ export class SessionDetailDrawer extends LitElement {
 
     const isArchived = this.session.status === 'archived';
     const isPinned = this.session.status === 'pinned';
+    const displayTitle = this.session.name?.trim() || this.session.key;
+    const showKeySubtitle = !!this.session.name?.trim();
 
     return html`
       <div class="drawer-header">
         <div class="drawer-header__info">
-          <div class="drawer-header__title">
-            ${this.session.name || this.session.key}
-            ${isPinned ? html`<span class="pin-badge">${getIcon('pin')}</span>` : ''}
-            ${isArchived ? html`<span class="archive-badge">${t('sessions.archivedBadge')}</span>` : ''}
+          <div class="drawer-header__title-row">
+            <div class="drawer-header__title">
+              ${displayTitle}
+              ${isPinned ? html`<span class="pin-badge">${getIcon('pin')}</span>` : ''}
+              ${isArchived ? html`<span class="archive-badge">${t('sessions.archivedBadge')}</span>` : ''}
+            </div>
+            ${showKeySubtitle
+              ? html`<div class="drawer-header__subtitle" title=${this.session.key}>${this.session.key}</div>`
+              : ''}
           </div>
           <div class="drawer-header__meta">
             <span>${this.session.sourceChannel}</span>

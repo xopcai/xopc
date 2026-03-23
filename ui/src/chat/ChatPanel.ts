@@ -1,4 +1,4 @@
-import { html, LitElement } from 'lit';
+import { html, LitElement, nothing } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import '../components/MessageEditor.js';
 import '../components/ModelSelector.js';
@@ -46,6 +46,7 @@ export class ChatPanel extends LitElement {
   @state() private _reconnectCount = 0;
   @state() private _atBottom = true;
   @state() private _sessionKey: string | null = null;
+  @state() private _sessionName: string | null = null;
   @state() private _sessions: SessionInfo[] = [];
   @state() private _hasMore = true;
   @state() private _loadingMore = false;
@@ -124,7 +125,10 @@ export class ChatPanel extends LitElement {
       },
       onEvent: (evt, data) => {
         try {
-          const detail = JSON.parse(data);
+          const detail = JSON.parse(data) as { key?: string; name?: string };
+          if (evt === 'session.updated') {
+            this._onSessionUpdated(detail);
+          }
           this.dispatchEvent(new CustomEvent(evt.replace('.', '-'), { detail }));
         } catch {
           /* ignore */
@@ -212,6 +216,17 @@ export class ChatPanel extends LitElement {
     }
   }
 
+  private _onSessionUpdated(detail: { key?: string; name?: string }): void {
+    if (!detail.key || detail.name === undefined) return;
+    if (this._sessionKey === detail.key) {
+      this._sessionName = detail.name || null;
+    }
+    this._sessions = this._sessions.map((s: SessionInfo) =>
+      s.key === detail.key ? { ...s, name: detail.name } : s,
+    );
+    this.requestUpdate();
+  }
+
   private _notifySessionRoute(sessionKey: string) {
     this.dispatchEvent(
       new CustomEvent<ChatRoute>('route-change', {
@@ -232,9 +247,12 @@ export class ChatPanel extends LitElement {
     this._loadingSession = true;
 
     try {
-      const { messages, hasMore } = await this._sessionMgr.loadSession(key, offset);
+      const { messages, hasMore, name } = await this._sessionMgr.loadSession(key, offset);
       this._sessionKey = key;
       this._hasMore = hasMore;
+      if (offset === 0) {
+        this._sessionName = name ?? null;
+      }
 
       if (offset > 0) {
         const existing = new Set(this._messages.map((m) => m.timestamp));
@@ -310,6 +328,7 @@ export class ChatPanel extends LitElement {
     const empty = this._sessions.find((s: SessionInfo) => (s.messageCount ?? 0) === 0);
     if (empty) {
       this._sessionKey = empty.key;
+      this._sessionName = empty.name ?? null;
       this._messages = [];
       this._lastLoadedKey = empty.key;
       this._sessionMgr.updateUrl(empty.key);
@@ -327,6 +346,7 @@ export class ChatPanel extends LitElement {
     try {
       const session = await this._sessionMgr.createSession();
       this._sessionKey = session.key;
+      this._sessionName = session.name ?? null;
       this._messages = [];
       this._sessions = [session, ...this._sessions];
       this._lastLoadedKey = session.key;
@@ -555,6 +575,32 @@ export class ChatPanel extends LitElement {
     this._isSending = false;
     this.requestUpdate();
     if (this._atBottom) this._scrollToBottom();
+    void this._pollSessionNameAfterTurn();
+  }
+
+  /** Auto-title runs async on the server; poll name in case SSE is missed or delayed. */
+  private async _pollSessionNameAfterTurn(): Promise<void> {
+    if (!this._sessionKey || !this._sessionMgr) return;
+    const key = this._sessionKey;
+    if (this._sessionName?.trim()) return;
+    for (let i = 0; i < 8; i++) {
+      await new Promise<void>((r) => setTimeout(r, i === 0 ? 500 : 700));
+      if (this._sessionKey !== key) return;
+      if (this._sessionName?.trim()) return;
+      try {
+        const name = await this._sessionMgr.fetchSessionName(key);
+        if (name) {
+          this._sessionName = name;
+          this._sessions = this._sessions.map((s: SessionInfo) =>
+            s.key === key ? { ...s, name } : s,
+          );
+          this.requestUpdate();
+          return;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
   }
 
   private _onScroll = () => {
@@ -676,13 +722,13 @@ export class ChatPanel extends LitElement {
 
   private _renderHeader() {
     const showModelPicker = this.enableModelSelector && !!this._sessionKey;
+    const headline = this._sessionKey
+      ? (this._sessionName?.trim() || this._sessionKey)
+      : t('nav.chat');
     return html`
       <div class="chat-header">
         <div class="chat-header-title">
-          <span class="chat-header-brand">${t('chat.title') || 'XopcBot'}</span>
-          ${this._sessionKey
-            ? html`<span class="chat-header-session-id" title=${this._sessionKey}>${this._sessionKey}</span>`
-            : ''}
+          <span class="chat-header-title-text" title=${this._sessionKey ?? nothing}>${headline}</span>
         </div>
         ${showModelPicker
           ? html`
