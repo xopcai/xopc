@@ -72,7 +72,8 @@
     "offline": "Offline",
     "model": "Model",
     "currentModel": "Model used for this conversation",
-    "modelPlaceholder": "Select a model…"
+    "modelPlaceholder": "Select a model…",
+    "inputPlaceholder": "Plan, @ for context, / for commands"
   },
   "settings": {
     "title": "Settings",

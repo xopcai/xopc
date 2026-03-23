@@ -7,6 +7,7 @@ import './styles.css';
 import './styles/app/index.css';
 
 import './components/MessageEditor';
+import './components/ModelSelector';
 import './components/MessageList';
 import './components/AttachmentTile';
 import './dialogs/AttachmentOverlay';
@@ -84,6 +85,8 @@ export class XopcbotChat extends LitElement {
   @property({ type: Boolean }) enableAttachments = true;
   @property({ type: Boolean }) enableModelSelector = true;
   @property({ type: Boolean }) enableThinkingSelector = true;
+  /** Called when the user picks a model in the header (embed mode; wire to your Agent if supported). */
+  @property({ attribute: false }) onModelChange?: (modelId: string) => void;
 
   @query('message-editor') private _messageEditor!: MessageEditor;
 
@@ -174,6 +177,16 @@ export class XopcbotChat extends LitElement {
     this._autoScroll = enabled;
   }
 
+  private _modelIdString(): string {
+    const m = this.agent?.state.model as unknown;
+    if (m == null) return '';
+    if (typeof m === 'string') return m;
+    if (typeof m === 'object' && m !== null && 'id' in m) {
+      return String((m as { id: unknown }).id);
+    }
+    return '';
+  }
+
   public async sendMessage(input: string, attachments?: Attachment[]): Promise<void> {
     if ((!input.trim() && attachments?.length === 0) || this.agent?.state.isStreaming) return;
     if (!this.agent) throw new Error('No agent set');
@@ -221,7 +234,27 @@ export class XopcbotChat extends LitElement {
     const state = this.agent.state;
     return html`
       <div class="flex flex-col h-full bg-background text-foreground">
-        <div class="flex-1 overflow-y-auto">
+        ${this.enableModelSelector
+          ? html`
+              <div class="xopcbot-chat-header">
+                <div class="chat-header-model-picker">
+                  <model-selector
+                    .compact=${true}
+                    .value=${this._modelIdString()}
+                    .label=${''}
+                    .placeholder=${i18n('chat.modelPlaceholder')}
+                    .filter=${'configured'}
+                    .disabled=${state.isStreaming}
+                    @change=${(e: CustomEvent<{ modelId: string }>) => {
+                      const id = e.detail?.modelId;
+                      if (id) this.onModelChange?.(id);
+                    }}
+                  ></model-selector>
+                </div>
+              </div>
+            `
+          : ''}
+        <div class="flex-1 overflow-y-auto min-h-0">
           <div class="max-w-3xl mx-auto p-4 pb-0">${this.renderMessages()}</div>
         </div>
 
@@ -229,10 +262,9 @@ export class XopcbotChat extends LitElement {
           <div class="max-w-3xl mx-auto px-2">
             <message-editor
               .isStreaming=${state.isStreaming}
-              .currentModel=${state.model}
               .thinkingLevel=${state.thinkingLevel}
               .showAttachmentButton=${this.enableAttachments}
-              .showModelSelector=${this.enableModelSelector}
+              .showModelSelector=${false}
               .showThinkingSelector=${this.enableThinkingSelector}
               .onSend=${(input: string, attachments: Attachment[]) => this.sendMessage(input, attachments)}
               .onAbort=${() => this.agent?.abort()}

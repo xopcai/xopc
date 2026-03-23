@@ -2,7 +2,7 @@ import { html, LitElement } from 'lit';
 import { customElement, property, state, query } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
-import { Paperclip, Send, Square, X, FileText, Mic } from 'lucide';
+import { Ban, File, Mic, Send, Sparkles, Square, X, FileText } from 'lucide';
 import { loadAttachment, formatFileSize, type Attachment } from '../utils/attachment-utils';
 import { iconToSvg } from '../utils/lucide-icon.js';
 import { i18n } from '../utils/i18n';
@@ -10,6 +10,11 @@ import './ModelSelector.js';
 
 // Thinking level type
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'adaptive';
+
+/** Thinking pill: Sparkles for brand consistency; Ban when off */
+function thinkingLevelIcon(level: ThinkingLevel): typeof Sparkles {
+  return level === 'off' ? Ban : Sparkles;
+}
 
 @customElement('message-editor')
 export class MessageEditor extends LitElement {
@@ -91,14 +96,14 @@ export class MessageEditor extends LitElement {
 
   override render(): unknown {
     return html`
-      <div class="editor-container">
+      <div class="editor-container editor-card ${this._isDragging ? 'dragging' : ''}">
         ${this.attachments.length > 0 ? this._renderAttachments() : ''}
-        
-        <div class="input-row ${this._isDragging ? 'dragging' : ''}">
+
+        <div class="editor-input-area">
           <textarea
             ${ref(this.textareaRef)}
             class="text-input"
-            placeholder=${i18n('Type a message...')}
+            placeholder=${i18n('chat.inputPlaceholder')}
             .value=${this.value}
             @input=${this._handleInput}
             @keydown=${this._handleKeydown}
@@ -109,13 +114,18 @@ export class MessageEditor extends LitElement {
           ></textarea>
         </div>
 
-        <div class="toolbar-row">
-          ${this.showAttachmentButton ? this._renderAttachmentButton() : ''}
-          ${this._renderVoiceButton()}
-          ${this.showModelSelector ? this._renderModelSelector() : ''}
-          ${this._renderThinkingSelector()}
-          <div class="toolbar-spacer"></div>
-          ${this._renderSendButton()}
+        <div
+          class="toolbar-row ${!this.showModelSelector ? 'toolbar-row--no-model' : ''} ${!this.showThinkingSelector ? 'toolbar-row--no-thinking' : ''}"
+        >
+          <div class="toolbar-slot toolbar-slot-thinking">${this._renderThinkingSelector()}</div>
+          <div class="toolbar-slot toolbar-slot-model">
+            ${this.showModelSelector ? this._renderModelSelector() : ''}
+          </div>
+          <div class="toolbar-slot toolbar-slot-actions">
+            ${this.showAttachmentButton ? this._renderAttachmentButton() : ''}
+            ${this._renderVoiceButton()}
+            ${this._renderSendButton()}
+          </div>
         </div>
 
         ${this._isDragging ? this._renderDropOverlay() : ''}
@@ -147,24 +157,34 @@ export class MessageEditor extends LitElement {
 
   private _renderAttachmentButton(): unknown {
     return html`
-      <button type="button" class="attach-btn" @click=${() => this._triggerFileSelect('all')} title=${i18n('Attach file')}>
-        ${unsafeHTML(iconToSvg(Paperclip, 'w-4 h-4'))}
+      <button
+        type="button"
+        class="toolbar-icon-btn"
+        @click=${() => this._triggerFileSelect('all')}
+        title=${i18n('Attach file')}
+      >
+        ${unsafeHTML(iconToSvg(File, 'w-4 h-4'))}
       </button>
-      
+
       <input
         ${ref(this.fileInputRef)}
         type="file"
-          multiple
-          accept=${this.acceptedTypes}
-          class="hidden"
-          @change=${this._handleFileInputChange}
-        />
+        multiple
+        accept=${this.acceptedTypes}
+        class="hidden file-input-hidden"
+        @change=${this._handleFileInputChange}
+      />
     `;
   }
 
   private _renderVoiceButton(): unknown {
     return html`
-      <button type="button" class="toolbar-btn voice-btn" title=${i18n('Voice input') + ' (coming soon)'}>
+      <button
+        type="button"
+        class="toolbar-icon-btn voice-btn voice-btn-emphasis"
+        title=${i18n('Voice input') + ' (coming soon)'}
+        disabled
+      >
         ${unsafeHTML(iconToSvg(Mic, 'w-4 h-4'))}
       </button>
     `;
@@ -174,6 +194,7 @@ export class MessageEditor extends LitElement {
     return html`
       <div class="chat-model-picker" title=${i18n('chat.currentModel')}>
         <model-selector
+          .compact=${true}
           .value=${this.currentModel || ''}
           .label=${''}
           .placeholder=${i18n('chat.modelPlaceholder')}
@@ -197,19 +218,13 @@ export class MessageEditor extends LitElement {
       return null;
     }
 
-    const levelLabels: Record<ThinkingLevel, string> = {
-      off: '💭',
-      minimal: '🧠',
-      low: '💡',
-      medium: '🧠',
-      high: '🧠',
-      xhigh: '🧠',
-      adaptive: '✨',
-    };
+    const Icon = thinkingLevelIcon(this.thinkingLevel);
 
     return html`
       <div class="thinking-pill" title=${i18n('Thinking level') + ': ' + this.thinkingLevel}>
-        <span class="thinking-icon">${levelLabels[this.thinkingLevel] || '🧠'}</span>
+        <span class="thinking-icon" aria-hidden="true"
+          >${unsafeHTML(iconToSvg(Icon, 'w-3.5 h-3.5 thinking-level-svg'))}</span
+        >
         <select 
           class="thinking-select-hidden"
           .value=${this.thinkingLevel}
@@ -236,7 +251,12 @@ export class MessageEditor extends LitElement {
 
     if (this.isStreaming) {
       return html`
-        <button type="button" class="stop-btn" @click=${() => this.onAbort?.()} title=${i18n('Abort')}>
+        <button
+          type="button"
+          class="toolbar-icon-btn stop-btn"
+          @click=${() => this.onAbort?.()}
+          title=${i18n('Abort')}
+        >
           ${unsafeHTML(iconToSvg(Square, 'w-4 h-4'))}
         </button>
       `;
@@ -245,7 +265,7 @@ export class MessageEditor extends LitElement {
     return html`
       <button
         type="button"
-        class="send-btn ${canSend ? 'active' : ''}"
+        class="toolbar-icon-btn send-btn ${canSend ? 'active' : ''}"
         ?disabled=${!canSend}
         @click=${this._send}
         title=${i18n('Send message')}
