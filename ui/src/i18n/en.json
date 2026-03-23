@@ -34,6 +34,8 @@
     },
     "typeMessage": "Type a message...",
     "attachFile": "Attach file",
+    "maxAttachmentsReached": "Maximum {{max}} files per message. Remove some to add more.",
+    "maxAttachmentsTruncated": "{{dropped}} file(s) not added (limit {{max}} per message).",
     "sendMessage": "Send message",
     "abort": "Abort",
     "retry": "Retry",
