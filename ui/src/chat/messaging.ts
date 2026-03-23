@@ -1,5 +1,6 @@
 import type { ProgressState, GatewayClientConfig } from './types.js';
 import { apiUrl, authHeaders } from './helpers.js';
+import { MAX_CHAT_ATTACHMENTS } from '../utils/attachment-utils.js';
 
 export function pendingAgentRunStorageKey(chatId: string): string {
   return `xopcbot:pendingRun:${chatId}`;
@@ -37,10 +38,15 @@ export class MessageSender {
     this._abort = new AbortController();
     this._sseChatId = chatId;
 
+    const capped =
+      attachments && attachments.length > MAX_CHAT_ATTACHMENTS
+        ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
+        : attachments;
+
     const res = await fetch(apiUrl('/api/agent'), {
       method: 'POST',
       headers: { ...authHeaders(this._config.token), Accept: 'text/event-stream' },
-      body: JSON.stringify({ message: content, channel: 'webchat', chatId, attachments, thinking: thinkingLevel }),
+      body: JSON.stringify({ message: content, channel: 'webchat', chatId, attachments: capped, thinking: thinkingLevel }),
       signal: this._abort.signal,
     });
 

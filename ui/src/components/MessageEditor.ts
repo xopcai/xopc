@@ -3,9 +3,9 @@ import { customElement, property, state, query } from 'lit/decorators.js';
 import { createRef, ref } from 'lit/directives/ref.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { Ban, File, Mic, Send, Sparkles, Square, X, FileText } from 'lucide';
-import { loadAttachment, formatFileSize, type Attachment } from '../utils/attachment-utils';
+import { loadAttachment, formatFileSize, type Attachment, MAX_CHAT_ATTACHMENTS } from '../utils/attachment-utils';
 import { iconToSvg } from '../utils/lucide-icon.js';
-import { i18n } from '../utils/i18n';
+import { i18n, t } from '../utils/i18n';
 import './ModelSelector.js';
 
 // Thinking level type
@@ -156,12 +156,17 @@ export class MessageEditor extends LitElement {
   }
 
   private _renderAttachmentButton(): unknown {
+    const atLimit = this.attachments.length >= MAX_CHAT_ATTACHMENTS;
+    const attachTitle = atLimit
+      ? t('chat.maxAttachmentsReached', { max: MAX_CHAT_ATTACHMENTS })
+      : `${i18n('Attach file')} (${this.attachments.length}/${MAX_CHAT_ATTACHMENTS})`;
     return html`
       <button
         type="button"
         class="toolbar-icon-btn"
+        ?disabled=${atLimit}
         @click=${() => this._triggerFileSelect('all')}
-        title=${i18n('Attach file')}
+        title=${attachTitle}
       >
         ${unsafeHTML(iconToSvg(File, 'w-4 h-4'))}
       </button>
@@ -284,6 +289,11 @@ export class MessageEditor extends LitElement {
   }
 
   private _triggerFileSelect(type: 'image' | 'document' | 'all'): void {
+    if (this.attachments.length >= MAX_CHAT_ATTACHMENTS) {
+      console.warn(t('chat.maxAttachmentsReached', { max: MAX_CHAT_ATTACHMENTS }));
+      return;
+    }
+
     // Try ref first
     let input: HTMLInputElement | null = this.fileInputRef.value ?? null;
 
@@ -386,10 +396,26 @@ export class MessageEditor extends LitElement {
   };
 
   private async _processFiles(files: File[]): Promise<void> {
+    if (files.length === 0) return;
+
+    const max = MAX_CHAT_ATTACHMENTS;
+    const remaining = max - this.attachments.length;
+    if (remaining <= 0) {
+      console.warn(t('chat.maxAttachmentsReached', { max }));
+      return;
+    }
+
+    const slice = files.slice(0, remaining);
+    if (files.length > slice.length) {
+      console.warn(
+        t('chat.maxAttachmentsTruncated', { max, dropped: files.length - slice.length }),
+      );
+    }
+
     this._processingFiles = true;
 
     try {
-      for (const file of files) {
+      for (const file of slice) {
         if (file.size > this.maxFileSize) {
           console.warn(`File ${file.name} exceeds max size of ${this.maxFileSize} bytes`);
           continue;

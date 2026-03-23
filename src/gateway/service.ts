@@ -31,6 +31,7 @@ const log = createLogger('GatewayService');
 import { registerAcpRuntimeBackend } from '../acp/runtime/registry.js';
 import { createLocalAcpRuntimeBackend } from '../acp/runtime/backends/local.js';
 import { buildSessionKey, parseSessionKey } from '../routing/session-key.js';
+import { MAX_CHAT_ATTACHMENTS } from './chat-limits.js';
 
 // ========== SSE Event System ==========
 
@@ -488,6 +489,17 @@ export class GatewayService {
     }>,
     thinking?: string,
   ): AsyncGenerator<{ type: string; content?: string; status?: string; runId?: string }, { status: string; summary: string }, unknown> {
+    const cappedAttachments =
+      attachments && attachments.length > MAX_CHAT_ATTACHMENTS
+        ? attachments.slice(0, MAX_CHAT_ATTACHMENTS)
+        : attachments;
+    if (attachments && cappedAttachments && attachments.length > cappedAttachments.length) {
+      log.debug(
+        { dropped: attachments.length - cappedAttachments.length, max: MAX_CHAT_ATTACHMENTS },
+        'Attachments capped for webchat',
+      );
+    }
+
     const runId = crypto.randomUUID();
 
     // For webchat, register the run in the relay before yielding the first event
@@ -521,7 +533,7 @@ export class GatewayService {
           peerId: chatId,
         });
 
-        const prepared = await this.agentService.prepareInboundAttachments(sessionKey, attachments);
+        const prepared = await this.agentService.prepareInboundAttachments(sessionKey, cappedAttachments);
 
         // Persist before streaming so a mid-turn refresh still sees text + attachment refs on disk.
         try {

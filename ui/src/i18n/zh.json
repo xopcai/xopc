@@ -34,6 +34,8 @@
     },
     "typeMessage": "输入消息...",
     "attachFile": "附加文件",
+    "maxAttachmentsReached": "每条消息最多 {{max}} 个文件，请先移除部分附件。",
+    "maxAttachmentsTruncated": "未添加 {{dropped}} 个文件（每条消息最多 {{max}} 个）。",
     "sendMessage": "发送消息",
     "abort": "中止",
     "retry": "重试",

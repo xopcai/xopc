@@ -3,6 +3,9 @@ import JSZip from 'jszip';
 import * as pdfjsLib from 'pdfjs-dist';
 import * as XLSX from 'xlsx';
 
+/** Max files per chat message (keep in sync with `src/gateway/chat-limits.ts`). */
+export const MAX_CHAT_ATTACHMENTS = 10;
+
 // Configure PDF.js worker
 pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
   'pdfjs-dist/build/pdf.worker.min.mjs',
