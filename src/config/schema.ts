@@ -654,3 +654,16 @@ export function getWorkspacePath(config: Config): string {
   }
   return workspace;
 }
+
+/**
+ * Primary model ref from `agents.defaults.model` (string or `{ primary }`).
+ * Returns undefined when unset or empty.
+ */
+export function getAgentDefaultModelRef(config: Config): string | undefined {
+  const raw = config.agents?.defaults?.model;
+  if (raw === undefined || raw === null) return undefined;
+  const ref = typeof raw === 'string' ? raw : raw.primary;
+  if (ref === undefined || ref === null) return undefined;
+  const s = String(ref).trim();
+  return s ? s : undefined;
+}

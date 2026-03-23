@@ -1,6 +1,6 @@
 import type { AgentEvent, AgentMessage, ThinkingLevel } from '@mariozechner/pi-agent-core';
 import { MessageBusShutdownError, type MessageBus, type InboundMessage } from '../bus/index.js';
-import type { Config, AgentDefaults } from '../config/schema.js';
+import { type Config, type AgentDefaults, getAgentDefaultModelRef } from '../config/schema.js';
 import type { ChannelManager } from '../channels/manager.js';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
@@ -374,6 +374,18 @@ export class AgentService {
     this.channelManagerRef = channelManager;
   }
 
+  /**
+   * Apply config after save or hot reload so the default model updates without restarting the gateway.
+   */
+  applyAgentDefaultsFromConfig(config: Config): void {
+    this.config.config = config;
+    const ref = getAgentDefaultModelRef(config);
+    this.config.model = ref;
+    this.modelManager.updateFromConfig(config);
+    this.agentManager.updateAgentDefaults(config);
+    this.commandHandler.updateAgentConfig(config);
+  }
+
   getSkillCatalog(): SkillCatalogEntry[] {
     return this.agentManager.getSkillCatalog();
   }
@@ -726,6 +738,7 @@ export class AgentService {
       const loaded = await this.sessionStore.load(sessionKey);
       agent.replaceMessages(this.prepareLoadedSessionMessages(sessionKey, loaded));
 
+      await this.modelManager.applyModelForSession(agent, sessionKey);
       await this.applyResolvedThinkingLevel(sessionKey, thinking);
 
       const messageContent = this.buildMessageContent(content, attachments);
@@ -799,6 +812,7 @@ export class AgentService {
       const loaded = await this.sessionStore.load(sessionKey);
       agent.replaceMessages(this.prepareLoadedSessionMessages(sessionKey, loaded));
 
+      await this.modelManager.applyModelForSession(agent, sessionKey);
       await this.applyResolvedThinkingLevel(sessionKey, thinking);
 
       const messageContent = this.buildMessageContent(content, attachments);
