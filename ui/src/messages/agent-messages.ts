@@ -1,4 +1,4 @@
-import type { Message, MessageContent, ThinkingContent, ToolUseContent } from './types.js';
+import type { Message, MessageAttachment, MessageContent, ThinkingContent, ToolUseContent } from './types.js';
 
 // =============================================================================
 // Type definitions for safe type narrowing (replaces Record<string, unknown> casts)
@@ -165,6 +165,47 @@ export function sessionWireToUiMessages(raw: readonly unknown[]): Message[] {
   return out;
 }
 
+function normalizeWireAttachments(raw: unknown): Message['attachments'] {
+  if (!Array.isArray(raw)) return undefined;
+  return raw.map((item) => normalizeOneAttachment(item));
+}
+
+function normalizeOneAttachment(item: unknown): MessageAttachment {
+  if (!item || typeof item !== 'object') {
+    return { name: 'file', mimeType: 'application/octet-stream' };
+  }
+  const a = item as Record<string, unknown>;
+  const data = typeof a.data === 'string' ? a.data : undefined;
+  const content =
+    typeof a.content === 'string' && a.content.length > 0 ? a.content : data;
+  const name = typeof a.name === 'string' && a.name.length > 0 ? a.name : 'file';
+  let mimeType = typeof a.mimeType === 'string' && a.mimeType.length > 0 ? a.mimeType : '';
+  if (!mimeType && typeof a.type === 'string' && a.type.includes('/')) {
+    mimeType = a.type;
+  }
+  if (!mimeType) {
+    mimeType = 'application/octet-stream';
+  }
+  const preview =
+    typeof a.preview === 'string' && a.preview.length > 0
+      ? a.preview
+      : mimeType.startsWith('image/') && content
+        ? content
+        : undefined;
+
+  return {
+    id: typeof a.id === 'string' ? a.id : undefined,
+    name,
+    mimeType,
+    type: typeof a.type === 'string' ? a.type : undefined,
+    size: typeof a.size === 'number' ? a.size : undefined,
+    content,
+    data: data ?? content,
+    preview,
+    extractedText: typeof a.extractedText === 'string' ? a.extractedText : undefined,
+  };
+}
+
 function buildUserMessage(m: WireMessage): Message {
   const roleRaw = String(m.role ?? 'user');
   const role: Message['role'] =
@@ -175,7 +216,7 @@ function buildUserMessage(m: WireMessage): Message {
   return {
     role,
     content: normalizeContentBlocks(m.content),
-    attachments: m.attachments as Message['attachments'],
+    attachments: normalizeWireAttachments(m.attachments),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     thinking: typeof m.thinking === 'string' ? m.thinking : undefined,
     thinkingStreaming: typeof m.thinkingStreaming === 'boolean' ? m.thinkingStreaming : undefined,
@@ -189,7 +230,7 @@ function buildAssistantMessage(m: WireMessage): Message {
   return {
     role: 'assistant',
     content,
-    attachments: m.attachments as Message['attachments'],
+    attachments: normalizeWireAttachments(m.attachments),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     thinking: hasThinkingBlock ? undefined : typeof m.thinking === 'string' ? m.thinking : undefined,
     thinkingStreaming: hasThinkingBlock

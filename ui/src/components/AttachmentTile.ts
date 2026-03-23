@@ -3,6 +3,7 @@ import { customElement, property } from 'lit/decorators.js';
 import { unsafeHTML } from 'lit/directives/unsafe-html.js';
 import { FileSpreadsheet, FileText, X } from 'lucide';
 import type { Attachment } from '../utils/attachment-utils';
+import { getAttachmentBinaryPayload, resolveDataUrlForDisplay } from '../utils/attachment-utils';
 import { i18n } from '../utils/i18n';
 
 function iconToSvg(iconData: unknown, sizeClass = ''): string {
@@ -55,13 +56,21 @@ export class AttachmentTile extends LitElement {
   };
 
   override render(): TemplateResult {
-    const hasPreview = !!this.attachment.preview;
-    const isImage = this.attachment.type === 'image';
+    const previewBase64 = this.attachment.preview ?? getAttachmentBinaryPayload(this.attachment);
+    const isImageMime =
+      this.attachment.mimeType?.startsWith('image/') || this.attachment.type === 'image';
     const isPdf = this.attachment.mimeType === 'application/pdf';
     const isExcel =
       this.attachment.mimeType?.includes('spreadsheetml') ||
-      this.attachment.name.toLowerCase().endsWith('.xlsx') ||
-      this.attachment.name.toLowerCase().endsWith('.xls');
+      this.attachment.name?.toLowerCase().endsWith('.xlsx') ||
+      this.attachment.name?.toLowerCase().endsWith('.xls');
+    const displayName = this.attachment.name ?? 'file';
+    const imgMime = this.attachment.mimeType?.startsWith('image/')
+      ? this.attachment.mimeType
+      : 'image/png';
+    const thumbSrc =
+      previewBase64 && isImageMime ? resolveDataUrlForDisplay(imgMime, previewBase64) : '';
+    const showImageThumb = !!thumbSrc;
 
     const getDocumentIcon = () => {
       if (isExcel) return iconToSvg(FileSpreadsheet, 'attachment-tile__icon');
@@ -70,14 +79,14 @@ export class AttachmentTile extends LitElement {
 
     return html`
       <div class="attachment-tile-root relative group inline-block">
-        ${hasPreview
+        ${showImageThumb
           ? html`
               <div class="attachment-tile__preview-wrap">
                 <img
-                  src="data:${isImage ? this.attachment.mimeType : 'image/png'};base64,${this.attachment.preview}"
+                  src="${thumbSrc}"
                   class="attachment-tile__preview-img"
-                  alt="${this.attachment.name}"
-                  title="${this.attachment.name}"
+                  alt="${displayName}"
+                  title="${displayName}"
                   @click=${this.handleClick}
                 />
                 ${isPdf
@@ -93,10 +102,10 @@ export class AttachmentTile extends LitElement {
               <div
                 class="attachment-tile__doc"
                 @click=${this.handleClick}
-                title="${this.attachment.name}"
+                title="${displayName}"
               >
                 ${unsafeHTML(getDocumentIcon())}
-                <div class="attachment-tile__name">${this.attachment.name}</div>
+                <div class="attachment-tile__name">${displayName}</div>
               </div>
             `}
         ${this.showDelete

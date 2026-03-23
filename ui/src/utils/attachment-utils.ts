@@ -16,8 +16,36 @@ export interface Attachment {
   mimeType: string;
   size: number;
   content: string; // base64 encoded original data (without data URL prefix)
+  /** Wire/API payloads may use `data` instead of `content` */
+  data?: string;
   extractedText?: string; // For documents: extracted text content
   preview?: string; // base64 image preview (first page for PDFs, or same as content for images)
+}
+
+/** Prefer `content`, then `data` (gateway / webchat wire format). */
+export function getAttachmentBinaryPayload(att: {
+  content?: string;
+  data?: string;
+}): string | undefined {
+  if (typeof att.content === 'string' && att.content.length > 0) return att.content;
+  if (typeof att.data === 'string' && att.data.length > 0) return att.data;
+  return undefined;
+}
+
+/**
+ * Build a valid `data:` URL for `<img src>` / preview.
+ * If payload is already a data URL, returns it unchanged.
+ * Otherwise strips whitespace from base64 and uses `mime` (falls back if invalid).
+ */
+export function resolveDataUrlForDisplay(mime: string, payload: string): string {
+  const trimmed = payload.trim();
+  if (trimmed.startsWith('data:')) {
+    return trimmed;
+  }
+  const compact = trimmed.replace(/\s/g, '');
+  const mimeSafe =
+    mime && typeof mime === 'string' && mime.includes('/') ? mime : 'application/octet-stream';
+  return `data:${mimeSafe};base64,${compact}`;
 }
 
 /**
@@ -134,7 +162,8 @@ export async function loadAttachment(
       id,
       type: 'document',
       name: detectedFileName,
-      mimeType: mimeType.startsWith('application/vnd')
+      mimeType:
+        mimeType && mimeType.startsWith('application/vnd')
         ? mimeType
         : 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
       size,
@@ -143,7 +172,7 @@ export async function loadAttachment(
     };
   }
 
-  if (mimeType.startsWith('image/')) {
+  if (mimeType?.startsWith('image/')) {
     return {
       id,
       type: 'image',
@@ -161,7 +190,7 @@ export async function loadAttachment(
     '.jsx', '.tsx', '.yml', '.yaml',
   ];
   const isTextFile =
-    mimeType.startsWith('text/') ||
+    (mimeType?.startsWith('text/') ?? false) ||
     textExtensions.some((ext) => detectedFileName.toLowerCase().endsWith(ext));
 
   if (isTextFile) {
@@ -171,7 +200,7 @@ export async function loadAttachment(
       id,
       type: 'document',
       name: detectedFileName,
-      mimeType: mimeType.startsWith('text/') ? mimeType : 'text/plain',
+      mimeType: mimeType?.startsWith('text/') ? mimeType : 'text/plain',
       size,
       content: base64Content,
       extractedText: text,
@@ -385,6 +414,7 @@ async function processExcel(
  * Get file icon based on mime type
  */
 export function getFileIcon(mimeType: string): string {
+  if (!mimeType) return '📎';
   if (mimeType.includes('pdf')) return '📄';
   if (mimeType.includes('word') || mimeType.includes('document')) return '📝';
   if (mimeType.includes('sheet') || mimeType.includes('excel')) return '📊';
@@ -411,7 +441,10 @@ export function formatFileSize(bytes: number): string {
 /**
  * Convert base64 to ArrayBuffer
  */
-export function base64ToArrayBuffer(base64: string): ArrayBuffer {
+export function base64ToArrayBuffer(base64: string | undefined | null): ArrayBuffer {
+  if (base64 == null || base64 === '') {
+    throw new Error('Missing file data');
+  }
   // Remove data URL prefix if present
   let base64Data = base64;
   if (base64.startsWith('data:')) {
@@ -433,7 +466,7 @@ export function base64ToArrayBuffer(base64: string): ArrayBuffer {
  * Check if file is an image
  */
 export function isImageFile(mimeType: string): boolean {
-  return mimeType.startsWith('image/');
+  return Boolean(mimeType?.startsWith('image/'));
 }
 
 /**
