@@ -35,20 +35,21 @@ export class ProviderList extends LitElement {
   @property({ type: String }) token?: string;
   @property({ type: Boolean }) loading: boolean = false;
 
-  @state() private _expandedCategories: Set<string> = new Set(['common']);
+  /** Collapsed by default — expand only what you need (calmer density). */
+  @state() private _expandedCategories: Set<string> = new Set();
 
   static styles = css`
     :host { display: block; }
 
     .section-desc {
-      margin: 0 0 1.5rem 0;
+      margin: 0 0 1rem 0;
       color: var(--text-secondary, #57534e);
-      font-size: 0.875rem;
+      font-size: 0.8125rem;
       line-height: 1.5;
     }
 
     .section-desc a {
-      color: var(--accent-primary, #4f46e5);
+      color: var(--accent-primary, #2563eb);
       text-decoration: none;
     }
 
@@ -56,13 +57,14 @@ export class ProviderList extends LitElement {
       text-decoration: underline;
     }
 
-    /* Subsection style - matching voice/stt/tts */
+    /* Subsection — card on app background (design system §2.1) */
     .subsection {
-      margin-bottom: 1.5rem;
-      background: var(--bg-secondary, #f5f5f4);
-      border-radius: 0.75rem;
-      padding: 1.25rem;
-      border: 1px solid var(--border-color, #e7e5e4);
+      margin-bottom: 1rem;
+      background: var(--card-bg, #ffffff);
+      border-radius: var(--radius-lg, 0.75rem);
+      padding: 0;
+      border: 1px solid var(--border-default, #e2e8f0);
+      overflow: hidden;
     }
 
     .subsection:last-child {
@@ -73,15 +75,19 @@ export class ProviderList extends LitElement {
       display: flex;
       align-items: center;
       justify-content: space-between;
-      padding-bottom: 0.75rem;
-      border-bottom: 1px solid var(--border-color, #e7e5e4);
-      margin-bottom: 1rem;
+      padding: 0.75rem 1rem;
       cursor: pointer;
       user-select: none;
+      background: var(--border-subtle, #f1f5f9);
+      transition: background var(--transition-fast, 150ms) ease;
+    }
+
+    .subsection-header:hover {
+      background: var(--hover-bg, #f1f5f9);
     }
 
     .subsection-header:hover .subsection-title {
-      color: var(--accent-primary, #4f46e5);
+      color: var(--text-primary, #0f172a);
     }
 
     .subsection-title {
@@ -89,15 +95,15 @@ export class ProviderList extends LitElement {
       align-items: center;
       gap: 0.5rem;
       font-weight: 600;
-      font-size: 1rem;
-      color: var(--text-primary, #1c1917);
+      font-size: 0.875rem;
+      color: var(--text-primary, #0f172a);
       transition: color var(--transition-fast, 150ms) ease;
     }
 
     .subsection-title svg {
-      width: 1.25rem;
-      height: 1.25rem;
-      color: var(--accent-primary, #4f46e5);
+      width: 1.125rem;
+      height: 1.125rem;
+      color: var(--text-tertiary, #64748b);
     }
 
     .subsection-meta {
@@ -107,22 +113,19 @@ export class ProviderList extends LitElement {
     }
 
     .badge {
-      font-size: 0.6875rem;
-      padding: 0.125rem 0.5rem;
-      border-radius: 9999px;
-      background: var(--text-muted, #a8a29e);
-      color: white;
+      font-size: 0.625rem;
+      padding: 0.125rem 0.375rem;
+      border-radius: 0.25rem;
+      background: var(--bg-secondary, #f1f5f9);
+      color: var(--text-tertiary, #64748b);
       font-weight: 500;
+      letter-spacing: 0.02em;
+      text-transform: uppercase;
     }
 
-    .badge.common { background: #059669; }
-    .badge.specialty { background: #0891b2; }
-    .badge.enterprise { background: #8b5cf6; }
-    .badge.oauth { background: #d97706; }
-
     .configured-count {
-      font-size: 0.75rem;
-      color: var(--accent-success, #059669);
+      font-size: 0.6875rem;
+      color: var(--text-tertiary, #64748b);
       font-weight: 500;
       display: flex;
       align-items: center;
@@ -151,7 +154,9 @@ export class ProviderList extends LitElement {
     .subsection-content {
       display: none;
       flex-direction: column;
-      gap: 0.625rem;
+      gap: 0;
+      padding: 0.75rem 0.75rem 0.75rem 0.75rem;
+      border-top: 1px solid var(--border-subtle, #f1f5f9);
     }
 
     .subsection-content.expanded { 
@@ -177,7 +182,7 @@ export class ProviderList extends LitElement {
       width: 16px;
       height: 16px;
       border: 2px solid var(--border-color, #e7e5e4);
-      border-top-color: var(--accent-primary, #4f46e5);
+      border-top-color: var(--primary-base, #2563eb);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -186,31 +191,7 @@ export class ProviderList extends LitElement {
       to { transform: rotate(360deg); }
     }
 
-    /* Info box */
-    .info-box {
-      margin-top: 1.5rem;
-      padding: 1rem 1.25rem;
-      background: var(--accent-primary-light, #e0e7ff);
-      border: 1px solid rgba(79, 70, 229, 0.2);
-      border-radius: 0.75rem;
-    }
-
-    .info-box p {
-      margin: 0;
-      font-size: 0.8125rem;
-      color: var(--text-primary, #1c1917);
-      line-height: 1.5;
-    }
-
-    .info-box strong {
-      color: var(--accent-primary, #4f46e5);
-    }
-
     @media (max-width: 640px) {
-      .subsection {
-        padding: 1rem;
-      }
-      
       .subsection-header {
         flex-wrap: wrap;
         gap: 0.5rem;
@@ -286,16 +267,6 @@ export class ProviderList extends LitElement {
     return icons[category] || 'cloud';
   }
 
-  private _getCategoryDescription(category: string): string {
-    const descriptions: Record<string, string> = {
-      common: 'Popular AI providers with extensive model support',
-      specialty: 'Specialized providers with unique capabilities',
-      enterprise: 'Enterprise-grade cloud AI services',
-      oauth: 'Providers supporting OAuth authentication',
-    };
-    return descriptions[category] || '';
-  }
-
   render() {
     if (this.loading) {
       return html`
@@ -318,8 +289,8 @@ export class ProviderList extends LitElement {
 
     return html`
       <p class="section-desc">
-        Configure API keys for AI providers. Click on a provider to expand and configure.
-        <a href="https://github.com/xopc/xopcbot/blob/main/docs/models.md" target="_blank">Learn more</a>
+        Expand a group, then a provider to set an API key or use OAuth where available.
+        <a href="https://github.com/xopc/xopcbot/blob/main/docs/models.md" target="_blank" rel="noopener noreferrer">Docs</a>
       </p>
 
       <div class="provider-list">
@@ -338,9 +309,7 @@ export class ProviderList extends LitElement {
                 <div class="subsection-title">
                   ${getIcon(this._getCategoryIcon(category))}
                   <span>${this._getCategoryLabel(category)}</span>
-                  <span class="badge ${category}">
-                    ${providers.length}
-                  </span>
+                  <span class="badge">${providers.length}</span>
                 </div>
                 
                 <div class="subsection-meta">
@@ -356,8 +325,13 @@ export class ProviderList extends LitElement {
               </div>
 
               <div class="subsection-content ${isExpanded ? 'expanded' : ''}">
-                ${providers.map(provider => html`
+                ${providers.map((provider, rowIndex) => {
+                  const n = providers.length;
+                  const listSegment =
+                    n === 1 ? 'single' : rowIndex === 0 ? 'first' : rowIndex === n - 1 ? 'last' : 'mid';
+                  return html`
                   <provider-config
+                    .listSegment=${listSegment}
                     .provider=${provider.id}
                     .displayName=${provider.name}
                     .apiKey=${provider.apiKey || ''}
@@ -368,18 +342,12 @@ export class ProviderList extends LitElement {
                     @change=${this._onProviderChange}
                     @oauth=${this._onProviderOAuth}
                   ></provider-config>
-                `)}
+                `;
+                })}
               </div>
             </div>
           `;
         })}
-      </div>
-
-      <div class="info-box">
-        <p>
-          <strong>Tip:</strong> Some providers support OAuth for secure authentication. 
-          Click the expand button on a provider to see configuration options.
-        </p>
       </div>
     `;
   }

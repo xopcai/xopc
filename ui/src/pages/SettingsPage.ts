@@ -270,7 +270,7 @@ export class SettingsPage extends LitElement {
   private _renderProviders() {
     const providers: ProviderInfo[] = this._providers.map(p => ({
       ...p,
-      apiKey: this._settings.providers[p.id] || (p.configured ? '••••••••••••' : ''),
+      apiKey: this._settings.providers[p.id] || (p.configured ? '***' : ''),
     }));
     return html`
       <div class="section-content">
