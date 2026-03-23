@@ -36,7 +36,10 @@ export class SessionManager {
     return { thinkingLevel, model };
   }
 
-  async loadSession(sessionKey: string, offset = 0): Promise<{ messages: Message[]; hasMore: boolean }> {
+  async loadSession(
+    sessionKey: string,
+    offset = 0,
+  ): Promise<{ messages: Message[]; hasMore: boolean; name?: string }> {
     const res = await fetch(
       apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=${offset}&limit=50`),
       { headers: authHeaders(this._config.token) },
@@ -45,7 +48,23 @@ export class SessionManager {
     const data = await res.json();
     const raw = data.session?.messages || [];
     const messages = sessionWireToUiMessages(raw);
-    return { messages, hasMore: raw.length >= 50 };
+    const name =
+      typeof data.session?.name === 'string' && data.session.name.trim()
+        ? data.session.name.trim()
+        : undefined;
+    return { messages, hasMore: raw.length >= 50, name };
+  }
+
+  /** Lightweight read of session name from GET /api/sessions/:key (used after auto-title). */
+  async fetchSessionName(sessionKey: string): Promise<string | undefined> {
+    const res = await fetch(
+      apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=0&limit=1`),
+      { headers: authHeaders(this._config.token) },
+    );
+    if (!res.ok) return undefined;
+    const data = await res.json();
+    const n = data.session?.name;
+    return typeof n === 'string' && n.trim() ? n.trim() : undefined;
   }
 
   async createSession(): Promise<SessionInfo> {

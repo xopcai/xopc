@@ -56,7 +56,8 @@ export class SessionCard extends LitElement {
   }
 
   override render(): unknown {
-    const displayName = this.session.name || this.session.key;
+    const displayName = this.session.name?.trim() || this.session.key;
+    const showKeySubtitle = !!this.session.name?.trim();
     const isArchived = this.session.status === 'archived';
     const isPinned = this.session.status === 'pinned';
 
@@ -76,8 +77,11 @@ export class SessionCard extends LitElement {
           </div>
         </div>
 
-        <div class="session-card__title">
-          ${displayName}
+        <div class="session-card__title-block">
+          <div class="session-card__title">${displayName}</div>
+          ${showKeySubtitle
+            ? html`<div class="session-card__subtitle" title=${this.session.key}>${this.session.key}</div>`
+            : ''}
         </div>
 
         <div class="session-card__stats">

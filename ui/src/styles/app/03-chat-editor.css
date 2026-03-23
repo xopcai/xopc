@@ -63,32 +63,23 @@
 .chat-header-title {
   display: flex;
   flex-wrap: wrap;
-  align-items: baseline;
+  align-items: center;
   gap: 0.25rem 0.5rem;
   flex: 1 1 auto;
   min-width: 0;
-  font-size: 1rem;
-  color: var(--text-primary);
 }
 
-.chat-header-brand {
+/* Primary headline: session title (replaces brand + mono session id) */
+.chat-header-title-text {
+  font-family: var(--font-sans);
+  font-size: 1.0625rem;
   font-weight: 600;
-  letter-spacing: -0.025em;
+  letter-spacing: -0.02em;
+  line-height: 1.35;
   color: var(--text-primary);
-  flex-shrink: 0;
-}
-
-/* Session id — full text, wraps within the title row (remaining width after brand) */
-.chat-header-session-id {
-  font-size: 0.6875rem;
-  font-weight: 500;
-  color: var(--text-secondary);
   flex: 1 1 auto;
   min-width: 0;
   max-width: 100%;
-  font-family: var(--font-mono);
-  letter-spacing: -0.02em;
-  line-height: 1.45;
   overflow-wrap: anywhere;
   word-break: break-word;
 }
@@ -737,7 +728,7 @@ html.dark .chat-status-retry:hover {
     white-space: nowrap;
   }
 
-  .chat-header-session-id {
+  .chat-header-title-text {
     min-width: 0;
     flex: 1 1 100%;
   }

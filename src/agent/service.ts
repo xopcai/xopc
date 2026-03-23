@@ -1,6 +1,7 @@
 import type { AgentEvent, AgentMessage, ThinkingLevel } from '@mariozechner/pi-agent-core';
 import { MessageBusShutdownError, type MessageBus, type InboundMessage } from '../bus/index.js';
 import { type Config, type AgentDefaults, getAgentDefaultModelRef } from '../config/schema.js';
+import { maybeAutoTitleSessionStore } from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
@@ -486,6 +487,24 @@ export class AgentService {
     await this.sessionStore.save(sessionKey, toSave);
   }
 
+  /** After processDirect / processDirectStreaming, generate webchat session title when still unnamed. */
+  private async _maybeAutoTitleAfterDirectTurn(sessionKey: string): Promise<void> {
+    try {
+      let modelRef =
+        getAgentDefaultModelRef(this.config.config ?? ({} as Config)) ?? this.config.model;
+      if (!modelRef?.trim()) {
+        try {
+          modelRef = this.modelManager.getModelForSession(sessionKey);
+        } catch {
+          modelRef = undefined;
+        }
+      }
+      await maybeAutoTitleSessionStore(this.sessionStore, sessionKey, modelRef?.trim() || undefined);
+    } catch (err) {
+      log.warn({ err, sessionKey }, 'Auto session title failed');
+    }
+  }
+
   private prepareLoadedSessionMessages(sessionKey: string, messages: AgentMessage[]): AgentMessage[] {
     let out = cleanTrailingErrors(messages);
     try {
@@ -818,6 +837,7 @@ export class AgentService {
       }
 
       await this.persistAgentSessionMessages(sessionKey);
+      await this._maybeAutoTitleAfterDirectTurn(sessionKey);
     } finally {
       unsubscribeStreaming();
       this.endDirectRequestContext();
@@ -862,6 +882,7 @@ export class AgentService {
 
       const response = this.agentManager.getLastAssistantContent(sessionKey) || '';
       await this.persistAgentSessionMessages(sessionKey);
+      await this._maybeAutoTitleAfterDirectTurn(sessionKey);
 
       return response;
     } finally {

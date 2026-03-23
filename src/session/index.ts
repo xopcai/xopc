@@ -22,3 +22,11 @@ export {
 // Re-export memory types for compatibility
 export type { CompactionConfig, CompactionResult } from '../agent/memory/compaction.js';
 export type { WindowConfig } from '../agent/memory/window.js';
+
+export {
+  maybeAutoTitleSessionStore,
+  generateSessionTitleFromMessages,
+  sanitizeSessionTitle,
+  fallbackTitleFromMessages,
+  isWebchatSessionKey,
+} from './session-title.js';

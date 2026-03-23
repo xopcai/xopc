@@ -368,12 +368,31 @@ html.dark .session-list__loading-overlay {
   color: var(--text-disabled);
 }
 
+.session-card__title-block {
+  margin-bottom: 0.75rem;
+  min-width: 0;
+}
+
 .session-card__title {
   font-size: 1rem;
   line-height: 1.5rem;
   font-weight: 600;
   color: var(--text-primary);
-  margin-bottom: 0.75rem;
+  margin-bottom: 0;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.session-card__subtitle {
+  margin-top: 0.25rem;
+  font-size: 0.6875rem;
+  line-height: 1.35;
+  font-weight: 400;
+  font-family: var(--font-mono);
+  color: var(--text-secondary);
+  word-break: break-all;
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
