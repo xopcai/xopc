@@ -13,7 +13,7 @@ import type { ThinkLevel } from '../types/thinking.js';
 // Unified Message Format (Platform Agnostic)
 // ============================================================================
 
-export type MessageSource = 'telegram' | 'webui' | 'cli' | 'api' | 'system' | 'gateway';
+export type MessageSource = 'telegram' | 'weixin' | 'webui' | 'cli' | 'api' | 'system' | 'gateway';
 
 export interface UnifiedMessage {
   /** Message source platform */

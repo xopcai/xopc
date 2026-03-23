@@ -19,9 +19,11 @@
       "@xopcai/xopcbot/*": ["./src/*"],
       "@xopcai/xopcbot-extension-telegram": ["./extensions/telegram/src/index.ts"],
       "@xopcai/xopcbot-extension-telegram/*": ["./extensions/telegram/src/*"],
+      "@xopcai/xopcbot-extension-weixin": ["./extensions/weixin/src/index.ts"],
+      "@xopcai/xopcbot-extension-weixin/*": ["./extensions/weixin/src/*"],
       "*": ["node_modules/*"]
     }
   },
-  "include": ["src/**/*", "extensions/telegram/src/**/*"],
+  "include": ["src/**/*", "extensions/telegram/src/**/*", "extensions/weixin/src/**/*"],
   "exclude": ["node_modules", "dist", "**/__tests__/**/*"]
 }
