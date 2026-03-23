@@ -17,8 +17,8 @@ export const discordConfigurator: ChannelConfigurator = {
   },
   
   async configure(config: Config): Promise<Config> {
-    console.log('\n⚠️  Discord 配置尚未实现\n');
-    console.log('   目前仅支持 Telegram 频道\n');
+    console.log('\n⚠️  Discord setup is not implemented yet.\n');
+    console.log('   Only Telegram is supported for now.\n');
     return config;
   },
 };

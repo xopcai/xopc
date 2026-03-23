@@ -39,19 +39,19 @@ async function promptChannelSelection(
 ): Promise<string | null> {
   const choices = statuses.map(status => ({
     value: status.id,
-    name: `${status.name.padEnd(12)} ${status.configured ? '[已配置]' : '[未配置]'}`,
+    name: `${status.name.padEnd(12)} ${status.configured ? '[configured]' : '[not configured]'}`,
     description: status.description,
   }));
   
   // "Done" option to exit the loop
   choices.push({
     value: 'done',
-    name: '[完成配置]',
-    description: '保存当前配置并退出',
+    name: '[Done]',
+    description: 'Save and exit channel setup',
   });
   
   const selected = await select<string>({
-    message: '选择要配置的频道:',
+    message: 'Select a channel to configure:',
     choices,
   });
   
@@ -67,7 +67,7 @@ async function configureChannel(
 ): Promise<Config> {
   const configurator = configurators.find(c => c.id === channelId);
   if (!configurator) {
-    console.log(`⚠️  未知频道: ${channelId}`);
+    console.log(`⚠️  Unknown channel: ${channelId}`);
     return config;
   }
   
@@ -78,7 +78,7 @@ async function configureChannel(
  * Interactive multi-channel onboarding entry point.
  */
 export async function setupChannels(config: Config): Promise<Config> {
-  console.log('\n💬 频道配置\n');
+  console.log('\n💬 Channel setup\n');
   console.log('═'.repeat(50));
   
   let currentConfig = config;
@@ -100,7 +100,7 @@ export async function setupChannels(config: Config): Promise<Config> {
     
     // Optionally configure another channel
     const continueConfig = await confirm({
-      message: '是否继续配置其他频道?',
+      message: 'Configure another channel?',
       default: true,
     });
     
@@ -111,7 +111,7 @@ export async function setupChannels(config: Config): Promise<Config> {
     console.log('\n' + '─'.repeat(50) + '\n');
   }
   
-  console.log('\n✅ 频道配置完成\n');
+  console.log('\n✅ Channel setup complete\n');
   return currentConfig;
 }
 
