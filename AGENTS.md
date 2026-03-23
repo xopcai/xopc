@@ -1,6 +1,6 @@
 # AGENTS.md - xopcbot Development Guide
 
-> This file guides AI assistants working on the xopcbot codebase.
+> Guide for AI assistants working on this repository.
 
 ---
 
@@ -10,7 +10,8 @@
 - [Quick Start](#quick-start)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
-- [Code Style Guidelines](#code-style-guidelines)
+- [Model Registry](#model-registry-architecture)
+- [Code Style](#code-style-guidelines)
 - [Key Patterns](#key-patterns)
 - [Common Tasks](#common-tasks)
 - [Configuration](#configuration)
@@ -19,427 +20,160 @@
 - [Web UI](#web-ui)
 - [Debugging](#debugging)
 - [Troubleshooting](#troubleshooting)
+- [When Making Changes](#when-making-changes)
 
 ---
 
 ## Project Overview
 
-**xopcbot** is an ultra-lightweight personal AI assistant built with Node.js + TypeScript. It provides a CLI-based interface to LLMs with multi-channel support (Telegram, Feishu, Web UI).
+**xopcbot** (`@xopcai/xopcbot`) is a personal AI assistant on Node.js + TypeScript: CLI, HTTP/WebSocket **gateway**, and **Lit** web UI. Channels (e.g. Telegram) load as extensions; additional backends appear in config/registry as the project evolves.
 
 | Metric | Value |
 |--------|-------|
-| Codebase | ~6,000 lines of TypeScript |
-| Test Coverage | 99+ unit tests |
-| LLM Providers | 20+ via `@mariozechner/pi-ai` |
-| Node.js | >= 22 |
+| Core | TypeScript on Node.js **>= 22** |
+| LLM layer | **20+** providers via `@mariozechner/pi-ai` |
+| Tests | **vitest** (`src/**/__tests__/*.test.ts`) |
 
 ---
 
 ## Quick Start
 
 ```bash
-# 1. Install dependencies (use pnpm, NOT npm)
 pnpm install
-
-# 2. Run CLI commands directly (no build needed)
-pnpm run dev -- <command>
-
-# Examples:
-pnpm run dev -- agent -i              # Interactive agent
-pnpm run dev -- agent -m "Hello"      # Single message
-
-# 3. Build for production
-pnpm run build
-
-# 4. Run tests
+pnpm run dev -- <command>    # no build required for dev CLI
+pnpm run build               # production compile
 pnpm test
 ```
+
+Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 
 ---
 
 ## Tech Stack
 
-| Component | Technology |
-|-----------|------------|
-| Runtime | Node.js >=22 |
-| Language | TypeScript 5.x |
-| AI Framework | `@mariozechner/pi-agent-core` |
-| CLI Framework | `commander` |
-| Validation | `zod` (config), `@sinclair/typebox` (tools) |
-| Testing | `vitest` |
-| UI Components | `lit` (Web Components) |
-
-### Key Dependencies
-
-| Package | Purpose |
-|---------|---------|
-| `@mariozechner/pi-agent-core` | Agent loop, tools, events |
-| `@mariozechner/pi-ai` | LLM providers, streaming |
-| `@sinclair/typebox` | JSON Schema generation |
-| `commander` | CLI framework |
-| `zod` | Config validation |
-| `lit` | Web component library |
+| Area | Stack |
+|------|--------|
+| Agent | `@mariozechner/pi-agent-core`, `@mariozechner/pi-ai` |
+| CLI | `commander` |
+| Config | `zod` |
+| Tools (schemas) | `@sinclair/typebox` |
+| Web UI | `lit`, Tailwind, Vite (`ui/` package) |
+| Tests | `vitest` |
 
 ---
 
 ## Project Structure
 
-```
-src/
-├── agent/              # Core agent logic (pi-agent-core based)
-│   ├── service.ts      #   Main AgentService class
-│   ├── memory/         #   Session persistence
-│   └── tools/          #   Built-in tools (Typebox schemas)
-├── bus/                # Event bus for message routing
-├── channels/           # Channel integrations (ChannelPlugin + manager)
-│   ├── plugin-types.ts #   ChannelPlugin interface & adapters
-│   ├── manager.ts      #   Channel lifecycle manager
-│   ├── plugins/
-│   │   ├── bundled.ts  #   Built-in workspace plugins (Telegram)
-│   │   └── registry.ts #   Plugin registry / lookup
-│   ├── telegram/
-│   │   └── index.ts    #   Re-exports from @xopcai/xopcbot-extension-telegram (compat)
-│   ├── outbound/       #   Outbound delivery pipeline
-│   ├── security.ts     #   Access control helpers
-│   ├── pipeline.ts     #   Inbound message pipeline
-│   ├── format.ts       #   Markdown to HTML formatter
-│   └── registry.ts     #   Channel metadata registry (UI / CLI)
-├── extension-sdk/      # Official Extension SDK (`@xopcai/xopcbot/extension-sdk`)
-├── cli/                # CLI commands with self-registration
-├── config/             # Configuration management
-├── cron/               # Scheduled tasks
-├── gateway/            # HTTP/WebSocket gateway server
-├── heartbeat/          # Proactive monitoring
-├── providers/          # LLM provider registry
-├── session/            # Conversation session management
-├── types/              # Shared TypeScript types
-└── ui/                 # Web UI components (Lit-based)
-    └── src/
-        ├── index.ts              # Main entry with XopcbotChat
-        ├── gateway-chat.ts       # Gateway-connected chat component
-        ├── components/           # UI components
-        │   ├── MessageEditor.ts
-        │   ├── MessageList.ts
-        │   └── StreamingMessageContainer.ts
-        ├── dialogs/              # Dialog components
-        │   └── ConfigDialog.ts
-        └── utils/                # Utilities
-            ├── i18n.ts
-            ├── format.ts
-            └── attachment-utils.ts
+**Runtime (`src/`)** — main areas agents touch:
 
-extensions/
-└── telegram/           # Workspace package: Telegram channel (@xopcai/xopcbot-extension-telegram)
-```
+| Path | Role |
+|------|------|
+| `agent/` | `AgentService`, tools, memory, orchestration |
+| `channels/` | `ChannelPlugin`, manager, inbound/outbound, `plugins/bundled.ts` |
+| `gateway/` | HTTP/WebSocket server, API for UI |
+| `cli/` | Commands (self-registration via `registry`) |
+| `config/` | Schema, loader, paths |
+| `providers/` | `resolveModel`, API keys, pi-ai bridge |
+| `session/` | Conversation session store |
+| `bus/` | Message bus |
+| `extension-sdk/` | `@xopcai/xopcbot/extension-sdk` helpers |
+
+Also present (follow local patterns): `acp/`, `auth/`, `commands/`, `cron/`, `daemon/`, `routing/`, `stt/`, `tts/`, `utils/`, `markdown/`, `infra/`, `errors/`, `heartbeat/`, `extensions/` (core hooks), etc.
+
+**UI (`ui/`)** — separate package: Lit components, `ui/src/styles/` tokens, gateway-connected pages.
+
+**Extensions (`extensions/`)** — workspace packages (e.g. `telegram` → `@xopcai/xopcbot-extension-telegram`).
+
+---
 
 ## Model Registry Architecture
 
-xopcbot uses `@mariozechner/pi-ai` as the unified model layer, providing 20+ LLM providers through a single consistent API.
-
-### Architecture Overview
-
-```
-┌──────────────────────────────┐
-│      @mariozechner/pi-ai     │ ← Built-in provider/model definitions
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│     src/providers/index.ts   │ ← Provider lookup, API key resolution
-└──────────────┬───────────────┘
-               │
-               ▼
-┌──────────────────────────────┐
-│    Config (API Keys)        │ ← Environment variables for auth
-└──────────────────────────────┘
-```
-
-### Key Functions
+`src/providers/index.ts` sits on **`@mariozechner/pi-ai`**: resolve models, map API keys from config/env, expose provider lists to CLI/UI. Provider list and categories live in **`PROVIDER_META`** (e.g. common / specialty / enterprise / oauth). Keys load at process start—restart after credential changes.
 
 | Function | Purpose |
 |----------|---------|
-| `resolveModel(ref)` | Resolve model reference with optional provider prefix |
-| `getAllProviders()` | Get all available providers from pi-ai |
-| `getModelsByProvider(provider)` | Get models for a specific provider |
-| `getApiKey(config, provider)` | Resolve API key from config or env vars |
-| `isProviderConfigured(config, provider)` | Check if provider has valid credentials |
-| `getProviderEnvVars(provider)` | Get required env vars for provider |
-| `detectProvider(modelId)` | Auto-detect provider from model ID |
+| `resolveModel(ref)` | Model id + optional `provider/` prefix |
+| `getApiKey` / `isProviderConfigured` | Auth from config or env |
+| `getAllProviders` / `getModelsByProvider` | Discovery for UI |
 
-### Provider Metadata
-
-The `PROVIDER_META` object provides display names and categories:
-
-- **common**: OpenAI, Anthropic, Google, Groq, DeepSeek, MiniMax, Kimi
-- **specialty**: xAI, Mistral, Cerebras, OpenRouter, HuggingFace, OpenCode, Z.ai
-- **enterprise**: Amazon Bedrock, Azure OpenAI, Google Vertex, Vercel AI Gateway
-- **oauth**: GitHub Copilot, OpenAI Codex, Google Gemini CLI, Google Antigravity
-
-### Hot Reload
-
-Provider configurations are loaded from environment variables at startup. No hot reload needed for API key changes - just restart or update config.
-
-See [docs/models.md](./docs/models.md) for full documentation.
+Details: [docs/models.md](./docs/models.md).
 
 ---
 
 ## Code Style Guidelines
 
-### Comments
-
-- **All comments must be in English**
-- **Keep comments minimal** - only for:
-  - Complex logic that isn't self-explanatory
-  - Non-obvious business rules or edge cases
-  - Public API documentation (JSDoc for exported functions)
-- **Avoid obvious comments** - don't state what the code already shows
-- Prefer self-documenting code with clear variable/function names
-
-### Naming Conventions
-
-| Type | Convention | Example |
-|------|------------|---------|
-| Variables, functions, methods | `camelCase` | `getUserById()` |
-| Classes, interfaces, types | `PascalCase` | `AgentService` |
-| Constants | `UPPER_SNAKE_CASE` | `MAX_RETRY_COUNT` |
-| Unused parameters | Prefix with `_` | `_unusedParam` |
-| Private methods | Prefix with `_` | `_internalHelper()` |
-
-### Import Organization
-
-Order of imports (separate groups with blank lines):
-
-```typescript
-// 1. External dependencies
-import { Type } from '@sinclair/typebox';
-import { Command } from 'commander';
-
-// 2. Internal absolute imports
-import { AgentService } from './agent/index.js';
-import { MessageBus } from './bus/index.js';
-
-// 3. Relative imports (sibling files last)
-import { register } from '../registry.js';
-import { utils } from './utils.js';
-```
-
-### File Naming
-
-| File Type | Pattern | Example |
-|-----------|---------|---------|
-| Source files | `camelCase.ts` | `agentService.ts` |
-| Test files | `<name>.test.ts` | `filesystem.test.ts` |
-| Type definitions | `<name>.types.ts` | `config.types.ts` |
-| Index exports | `index.ts` | `index.ts` |
+- **Comments:** English only; minimal—non-obvious logic, edge cases, exported APIs (JSDoc).
+- **Naming:** `camelCase` (code), `PascalCase` (types/classes), `UPPER_SNAKE_CASE` (constants), `_unused` for unused params, `_privateMethod` for private helpers.
+- **Imports:** external deps → internal absolute → relative (blank lines between groups). Example in repo: `src/agent/tools/*.ts`.
+- **Files:** `camelCase.ts` sources; `*.test.ts` tests; `*.types.ts` for dedicated type modules.
 
 ---
 
 ## Key Patterns
 
-### 1. Command Self-Registration
+### CLI self-registration
 
-Commands register themselves via side-effect imports:
+`src/cli/commands/<name>.ts` calls `register({ id, factory, metadata })`; wire the module from `src/cli/index.ts`.
 
-```typescript
-// src/cli/commands/mycommand.ts
-import { register } from '../registry.js';
-
-function createCommand(ctx: CLIContext): Command {
-  return new Command('mycommand')
-    .description('My command')
-    .action(async () => { 
-      // Implementation
-    });
-}
-
-register({
-  id: 'mycommand',
-  factory: createCommand,
-  metadata: { category: 'utility' },
-});
-```
-
-### 2. Tool Definition (pi-agent-core)
-
-Tools use Typebox schemas:
+### Tools (Typebox)
 
 ```typescript
-import { Type } from '@sinclair/typebox';
-import type { AgentTool } from '@mariozechner/pi-agent-core';
-
-const MyToolSchema = Type.Object({
-  param: Type.String({ description: 'Parameter description' }),
-});
-
+const MyToolSchema = Type.Object({ param: Type.String() });
 export const myTool: AgentTool<typeof MyToolSchema, {}> = {
   name: 'my_tool',
-  description: 'What this tool does',
   parameters: MyToolSchema,
-  label: '🔧 My Tool',
-
   async execute(toolCallId, params, signal, onUpdate) {
-    // Return AgentToolResult
-    return {
-      content: [{ type: 'text', text: 'Result' }],
-      details: {},
-    };
+    return { content: [{ type: 'text', text: '…' }], details: {} };
   },
 };
 ```
 
-### 3. AgentService Usage
+Register in `AgentService` / tools index as existing tools do.
+
+### AgentService
+
+`MessageBus` + `AgentService` with `workspace`, `model`, optional `braveApiKey`; `await agent.start()`.
+
+### Channels
+
+Implement `ChannelPlugin` (`src/channels/plugin-types.ts`). Bundled list: `src/channels/plugins/bundled.ts`. Telegram: `extensions/telegram` (`@xopcai/xopcbot-extension-telegram`), re-exported from `src/channels/telegram/index.js`.
+
+**Access:** DM policies `pairing` \| `allowlist` \| `open` \| `disabled`; group `open` \| `disabled` \| `allowlist`. See [Configuration](#configuration).
+
+### Telegram draft streaming
 
 ```typescript
-import { AgentService } from './agent/index.js';
-import { MessageBus } from './bus/index.js';
-
-const bus = new MessageBus();
-const agent = new AgentService(bus, {
-  workspace: '/path/to/workspace',
-  model: 'minimax/minimax-m2.1',
-  braveApiKey: process.env.BRAVE_API_KEY,
-});
-
-// Start processing messages
-await agent.start();
-```
-
-### 4. Channel plugins (Telegram)
-
-Channels are **`ChannelPlugin`** instances. The core **`ChannelManager`** loads bundled plugins from `src/channels/plugins/bundled.ts` (Telegram ships as the workspace package `extensions/telegram`, published name `@xopcai/xopcbot-extension-telegram`).
-
-```typescript
-import { telegramPlugin } from '@xopcai/xopcbot-extension-telegram';
-// Stable path from core: import { telegramPlugin } from './channels/telegram/index.js';
-
-// telegramPlugin is registered via bundledChannelPlugins; ChannelManager drives init/start
-// and outbound delivery. Use config under `channels.telegram` as documented below.
-```
-
-### 5. Channel Access Control
-
-Channels support hierarchical access control:
-
-```typescript
-// DM policies: 'pairing' | 'allowlist' | 'open' | 'disabled'
-// Group policies: 'open' | 'disabled' | 'allowlist'
-
-// Config example
-{
-  "channels": {
-    "telegram": {
-      "accounts": {
-        "personal": {
-          "dmPolicy": "allowlist",
-          "groupPolicy": "open",
-          "allowFrom": [123456, 789012]
-        }
-      }
-    }
-  }
-}
+import { DraftStreamManager } from '@xopcai/xopcbot-extension-telegram/draft-stream.js';
 ```
 
 ---
 
 ## Common Tasks
 
-### Adding a New CLI Command
-
-1. Create `src/cli/commands/<name>.ts`
-2. Use the [self-registration pattern](#1-command-self-registration)
-3. Import it in `src/cli/index.ts`
-
-### Adding a New Tool
-
-1. Add to `src/agent/tools/<category>.ts`
-2. Export from `src/agent/tools/index.ts`
-3. Add to `AgentService` constructor
-
-### Adding a New Provider
-
-Providers are managed by `@mariozechner/pi-ai` package. To add support for a new provider:
-
-1. **Check if pi-ai already supports it** - Run `node -e "const {getProviders} = require('@mariozechner/pi-ai'); console.log(getProviders())"` to see all available
-2. **Request addition in pi-ai** - If not supported, open an issue/PR in the [pi-ai repository](https://github.com/mariozechner/pi-ai)
-
-For custom model endpoints, you can use the generic `openrouter` or `vercel-ai-gateway` providers which support custom base URLs.
-
-Example for custom endpoint via Vercel AI Gateway:
-```json
-{
-  "providers": {
-    "vercel-ai-gateway": "${VERCEL_AI_GATEWAY_API_KEY}"
-  }
-}
-```
-
-The frontend fetches available providers via `/api/providers`.
-
-### Adding a channel plugin
-
-1. Implement `ChannelPlugin` (see `src/channels/plugin-types.ts`) in a package or `extensions/<name>/`.
-2. Use `defineChannelPluginEntry` from `@xopcai/xopcbot/extension-sdk` where appropriate.
-3. Add the plugin to `bundledChannelPlugins` in `src/channels/plugins/bundled.ts` if it should ship with the core binary.
-
-### Working with Telegram draft streaming
-
-Draft streaming for Telegram lives in the bundled extension package:
-
-```typescript
-import { DraftStreamManager } from '@xopcai/xopcbot-extension-telegram/draft-stream.js';
-
-const manager = new DraftStreamManager();
-const stream = manager.getOrCreate('chat-123', {
-  api: bot.api,
-  chatId: 123,
-});
-
-stream.update('Processing your request...');
-await stream.flush();
-```
-
-### Package Management
-
-⚠️ **Always use pnpm, NEVER npm.**
-
-```bash
-# Install dependencies
-pnpm install
-
-# Add new dependency
-pnpm add <package>
-
-# Add dev dependency
-pnpm add -D <package>
-
-# Remove dependency
-pnpm remove <package>
-
-# Update lockfile
-pnpm install --frozen-lockfile
-```
-
-> ⚠️ **Never commit `package-lock.json`** - This project uses `pnpm-lock.yaml`.
+| Task | Steps |
+|------|--------|
+| New CLI command | `src/cli/commands/<name>.ts` + register + import in `src/cli/index.ts` |
+| New tool | `src/agent/tools/<area>.ts` → export from `src/agent/tools/index.ts` → wire in `AgentService` |
+| New provider | Prefer upstream **`pi-ai`**; else OpenRouter / Vercel AI Gateway for custom bases. See [pi-ai](https://github.com/mariozechner/pi-ai). |
+| New channel plugin | `ChannelPlugin` + optional `defineChannelPluginEntry` → `bundled.ts` if shipping in core |
+| Dependencies | **`pnpm` only** — never commit `package-lock.json` (use `pnpm-lock.yaml`). |
 
 ---
 
 ## Configuration
 
-**Config location:** `~/.xopcbot/config.json`
+**Default path:** `~/.xopcbot/config.json` (override with `XOPCBOT_CONFIG`).
 
-**Key sections:**
-
-| Section | Description |
-|---------|-------------|
+| Section | Purpose |
+|---------|---------|
 | `providers` | LLM API keys |
-| `agents.defaults` | Default model, tokens, temperature |
-| `channels` | Telegram settings |
-| `gateway` | HTTP server settings |
-| `cron` | Scheduled task settings |
-| `extensions` | Extension enable/disable configuration |
+| `agents.defaults` | Default model, limits, temperature |
+| `channels` | Telegram and other channel configs |
+| `gateway` | HTTP/WebSocket |
+| `cron` | Scheduled jobs |
+| `extensions` | Enable/disable extensions |
 
-### Telegram Multi-Account Configuration
+### Telegram (multi-account sketch)
 
 ```json
 {
@@ -448,24 +182,11 @@ pnpm install --frozen-lockfile
       "enabled": true,
       "accounts": {
         "personal": {
-          "name": "Personal Bot",
-          "botToken": "BOT_TOKEN_1",
+          "botToken": "…",
           "dmPolicy": "allowlist",
           "groupPolicy": "open",
           "allowFrom": [123456789],
           "streamMode": "partial"
-        },
-        "work": {
-          "name": "Work Bot",
-          "botToken": "BOT_TOKEN_2",
-          "dmPolicy": "disabled",
-          "groupPolicy": "allowlist",
-          "groups": {
-            "-1001234567890": {
-              "requireMention": true,
-              "systemPrompt": "You are a work assistant"
-            }
-          }
         }
       }
     }
@@ -473,289 +194,100 @@ pnpm install --frozen-lockfile
 }
 ```
 
-**Policies:**
-- `dmPolicy`: `pairing` | `allowlist` | `open` | `disabled`
-- `groupPolicy`: `open` | `disabled` | `allowlist`
-- `streamMode`: `off` | `partial` | `block`
+`dmPolicy` / `groupPolicy` / `streamMode` (`off` \| `partial` \| `block`) — full examples in repo docs or tests.
 
 ---
 
 ## Environment Variables
 
-| Variable | Purpose | Required |
-|----------|---------|----------|
-| `OPENAI_API_KEY` | OpenAI API authentication | Optional* |
-| `ANTHROPIC_API_KEY` | Anthropic API authentication | Optional* |
-| `BRAVE_API_KEY` | Brave Search API key | Optional |
-| `TELEGRAM_BOT_TOKEN` | Telegram bot integration | Optional |
-| `XOPCBOT_CONFIG` | Custom config file path | Optional |
-| `XOPCBOT_WORKSPACE` | Custom workspace directory | Optional |
-| `XOPCBOT_LOG_LEVEL` | Log level (trace/debug/info/warn/error/fatal) | Optional |
-| `XOPCBOT_LOG_DIR` | Log directory path | Optional |
-| `XOPCBOT_LOG_CONSOLE` | Enable console output (true/false) | Optional |
-| `XOPCBOT_LOG_FILE` | Enable file output (true/false) | Optional |
-| `XOPCBOT_LOG_RETENTION_DAYS` | Days to retain log files | Optional |
-| `XOPCBOT_PRETTY_LOGS` | Pretty print logs for development | Optional |
-
-\* At least one LLM provider key is required
+| Variable | Purpose |
+|----------|---------|
+| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, … | Provider keys (at least one LLM key needed to run agents) |
+| `BRAVE_API_KEY` | Web search tool |
+| `TELEGRAM_BOT_TOKEN` | Telegram (if not only in config) |
+| `XOPCBOT_CONFIG` | Config file path |
+| `XOPCBOT_WORKSPACE` | Workspace directory |
+| `XOPCBOT_LOG_LEVEL` | `trace` … `fatal` (default `info`) |
+| `XOPCBOT_LOG_DIR`, `XOPCBOT_LOG_CONSOLE`, `XOPCBOT_LOG_FILE`, `XOPCBOT_LOG_RETENTION_DAYS` | Logging |
+| `XOPCBOT_PRETTY_LOGS` | Dev-friendly log formatting |
 
 ---
 
 ## Testing
 
-### Running Tests
-
 ```bash
-# Run all tests
 pnpm test
-
-# Run specific test file
-pnpm vitest run src/agent/tools/__tests__/filesystem.test.ts
-
-# Watch mode
+pnpm vitest run src/agent/tools/__tests__/send-media.test.ts
 pnpm vitest --watch
-
-# With coverage
 pnpm vitest run --coverage
 ```
 
-### Test Guidelines
-
-- Tests live alongside source: `src/**/__tests__/*.test.ts`
-- Use `vitest` APIs: `describe`, `it`, `expect`, `vi.mock`
-- Mock filesystem operations with `vi.mock('fs')`
-
-### Example Test Structure
-
-```typescript
-import { describe, it, expect, vi } from 'vitest';
-import { myFunction } from '../myModule.js';
-
-describe('myModule', () => {
-  it('should do something', async () => {
-    // Arrange
-    const input = 'test';
-    
-    // Act
-    const result = await myFunction(input);
-    
-    // Assert
-    expect(result).toBe('expected');
-  });
-});
-```
+Co-located tests: `src/**/__tests__/*.test.ts`. Use `describe` / `it` / `expect` / `vi.mock` like existing files.
 
 ---
 
 ## Web UI
 
-The `ui/` directory contains web-based UI components for xopcbot, inspired by [pi-mono/web-ui](https://github.com/mariozechner/pi-mono/tree/main/packages/web-ui).
-
-### Building the UI
+Separate **`ui/`** package (Vite + Lit + Tailwind). Inspired by [pi-mono/web-ui](https://github.com/mariozechner/pi-mono/tree/main/packages/web-ui).
 
 ```bash
-cd ui
-
-# Install dependencies
-pnpm install
-
-# Development mode with hot reload
-pnpm run dev
-
-# Build for production
-pnpm run build
+cd ui && pnpm install && pnpm run dev   # or pnpm run build
 ```
 
-### UI Components
+**Components:** `XopcbotChat` (local `Agent`), `XopcbotGatewayChat` (`config.url` WebSocket to gateway), `XopcbotConfig` (sections + `onSave`). Imports: `@xopcbot/web-ui` (package name from `ui/package.json`).
 
-#### XopcbotChat
+**Gateway:** `XopcbotGatewayChat` talks to the gateway over **WebSocket** (`config.url`, optional `token`). Message and config event names/payloads are documented in **`ui/README.md`** (Gateway Protocol). Server routes live under **`src/gateway/`** (e.g. Hono app, SSE agent stream).
 
-Main chat component that wraps an Agent instance:
+### UI design system
 
-```typescript
-import { XopcbotChat } from '@xopcbot/web-ui';
-import { Agent } from '@mariozechner/pi-agent-core';
+Canonical spec: [`docs/design/ui-design-system.md`](./docs/design/ui-design-system.md) (xopc workstation family). **Calm UI:** slate neutrals, **blue** only for primary CTA, links, and AI hints; tokens in **`ui/src/styles/00-vars.css`**; Tailwind in **`ui/tailwind.config.js`**. Lucide icons; full **focus-visible** rings; dark mode favors borders over heavy shadows. Copy: short and precise (Brand voice in design doc).
 
-const agent = new Agent({ /* config */ });
-const chat = document.querySelector('xopcbot-chat') as XopcbotChat;
-chat.agent = agent;
-```
+### Styling load order
 
-#### XopcbotGatewayChat
-
-WebSocket-connected chat component for remote gateway access:
-
-```typescript
-import { XopcbotGatewayChat } from '@xopcbot/web-ui';
-
-const chat = document.querySelector('xopcbot-gateway-chat') as XopcbotGatewayChat;
-chat.config = {
-  url: 'ws://localhost:3000/ws',
-  token: 'optional-auth-token',
-};
-```
-
-#### XopcbotConfig
-
-Configuration dialog component:
-
-```typescript
-import { XopcbotConfig } from '@xopcbot/web-ui';
-
-const config = document.querySelector('xopcbot-config') as XopcbotConfig;
-config.sections = [
-  {
-    id: 'general',
-    title: 'General',
-    fields: [
-      { 
-        key: 'language', 
-        label: 'Language', 
-        type: 'select', 
-        options: [
-          { value: 'en', label: 'English' },
-          { value: 'zh', label: '中文' },
-        ]
-      },
-    ],
-  },
-];
-config.onSave = (values) => console.log('Save:', values);
-```
-
-### Gateway Integration
-
-WebSocket events between UI and Gateway:
-
-| Event | Direction | Purpose |
-|-------|-----------|---------|
-| `chat.send` | UI → Gateway | Send user message |
-| `chat.history` | UI → Gateway | Load chat history |
-| `chat` | Gateway → UI | Chat updates (delta/final/error) |
-| `config.get` | UI → Gateway | Load configuration |
-| `config.set` | UI → Gateway | Save configuration |
-| `logs.query` | UI → Gateway | Query log entries |
-| `logs.files` | UI → Gateway | List log files |
-| `logs.stats` | UI → Gateway | Get log statistics |
-| `cron.jobs` | UI → Gateway | List cron jobs |
-| `cron.create` | UI → Gateway | Create cron job |
-| `cron.delete` | UI → Gateway | Delete cron job |
-| `cron.toggle` | UI → Gateway | Enable/disable cron job |
-| `cron.run` | UI → Gateway | Trigger cron job manually |
-
-### Styling
-
-**Structure:** `ui/src/styles.css` loads design tokens (`styles/00-vars.css`) and Tailwind. Application styles load second via `styles/app/index.css` (numbered partials: utilities → shell → chat → settings → session → drawers/modals → managers → logs → providers/markdown) so component rules override utilities reliably.
-
-Tokens use `--bg-*`, `--text-*`, `--accent-*`, `--border-color`, etc. See `ui/src/styles/00-vars.css` and `ui/tailwind.config.js` (`theme.extend` maps Tailwind to those variables).
+`ui/src/styles.css` → tokens (`00-vars.css`) + Tailwind → `ui/src/styles/app/index.css` (numbered partials: shell, chat, settings, managers, logs, …).
 
 ---
 
 ## Debugging
 
-### Log Levels
-
-Set via `XOPCBOT_LOG_LEVEL` environment variable:
-
-| Level | Description |
-|-------|-------------|
-| `trace` | Development debugging only (function entry/exit) |
-| `debug` | Verbose logging including internal details |
-| `info` | General information (default) |
-| `warn` | Warnings and non-critical issues |
-| `error` | Failures with impact |
-| `fatal` | System cannot continue |
-
-### Contextual Logging
-
-```typescript
-import { createRequestLogger, clearRequestContext } from './utils/logger.js';
-
-// Create request-scoped logger
-const requestLogger = createRequestLogger('req-123', { userId: 'user-456' });
-requestLogger.info('Processing request');  // Includes requestId automatically
-
-// Clean up when done
-clearRequestContext('req-123');
-```
-
-### Debug Commands
-
-```bash
-# Run with debug logging
-XOPCBOT_LOG_LEVEL=debug pnpm run dev -- agent -i
-
-# Check config
-pnpm run dev -- config --show
-
-# Validate config
-pnpm run dev -- config --validate
-
-# View logs via Log Manager UI
-# Access: http://localhost:18790 → Log Manager tab
-```
-
-### Log Querying
-
-```typescript
-import { queryLogs, getLogStats } from './utils/log-store.js';
-
-// Query by level and module
-const errors = await queryLogs({
-  levels: ['error', 'fatal'],
-  module: 'AgentService',
-  limit: 100,
-});
-
-// Get statistics
-const stats = await getLogStats();
-console.log(`Errors: ${stats.byLevel.error}`);
-```
+- **Level:** `XOPCBOT_LOG_LEVEL=debug` (or `trace`).
+- **CLI:** `pnpm run dev -- config --show` · `config --validate`.
+- **Code:** `createRequestLogger` / `clearRequestContext` in `src/utils/logger.ts`; `queryLogs` / `getLogStats` in `src/utils/log-store.ts`.
+- **UI logs:** gateway + Log Manager tab (default dev URL is project-specific—use your configured gateway port).
 
 ---
 
 ## Troubleshooting
 
-| Issue | Solution |
-|-------|----------|
-| `ERR_MODULE_NOT_FOUND` | Run `pnpm install` to ensure dependencies are installed |
-| `Cannot find module '@xopcbot/...'` | Run `pnpm run build` to compile the project |
-| Tests failing with timeout | Check if LLM API keys are set and valid |
-| Config not loading | Verify `~/.xopcbot/config.json` syntax is valid JSON |
-| UI not connecting | Check gateway is running and WebSocket URL is correct |
-| `package-lock.json` conflicts | Remove it and run `pnpm install` |
-| Telegram bot not responding | Check `TELEGRAM_BOT_TOKEN` and bot status with BotFather |
-| Telegram @mention not working | Verify bot username is correct in group settings |
-| Logs not appearing in UI | Check `XOPCBOT_LOG_LEVEL` and `XOPCBOT_LOG_FILE` settings |
-| Log files growing too large | Enable rotation with `XOPCBOT_LOG_RETENTION_DAYS` |
-| Cron jobs not triggering | Verify `cron.enabled: true` in config |
-| Streaming preview not showing | Check `streamMode` setting in Telegram account config |
-
-### Getting Help
-
-1. Check existing tests for usage examples
-2. Review similar implementations in the codebase
-3. Verify environment variables are set correctly
-4. Check logs via Log Manager UI for error details
+| Symptom | Check |
+|---------|--------|
+| `ERR_MODULE_NOT_FOUND` | `pnpm install` |
+| `@xopcbot/...` not found | `pnpm run build` |
+| Tests timeout | API keys / network for live calls |
+| Bad config | JSON syntax of `~/.xopcbot/config.json` |
+| UI offline | Gateway running, correct WS URL |
+| `package-lock.json` | Remove; use pnpm only |
+| Telegram silent | Token, BotFather, policies |
+| No logs in UI | `XOPCBOT_LOG_LEVEL`, file logging flags |
+| Cron idle | `cron.enabled` in config |
 
 ---
 
 ## When Making Changes
 
-| If you're changing... | Check these files |
-|----------------------|-------------------|
-| **Agent logic** | `src/agent/service.ts` |
-| **Tools** | `src/agent/tools/` |
-| **CLI commands** | `src/cli/commands/` |
-| **Configuration** | `src/config/schema.ts` |
-| **Tests** | `src/**/__tests__/` alongside source |
-| **UI components** | `ui/src/components/` |
-| **Model registry** | `src/providers/index.ts` (uses `@mariozechner/pi-ai`) |
-| **Providers** | `src/providers/index.ts` |
-| **Channel plugins** | `src/channels/`, `extensions/telegram/` (Telegram workspace package) |
-| **Logging system** | `src/utils/logger.ts`, `src/utils/log-store.ts` |
-| **Log UI** | `ui/src/pages/LogManager.ts` |
+| Area | Primary locations |
+|------|-------------------|
+| Agent | `src/agent/service.ts`, `src/agent/tools/` |
+| CLI | `src/cli/commands/` |
+| Config | `src/config/schema.ts` (and related) |
+| Gateway / API | `src/gateway/` |
+| Models & providers | `src/providers/index.ts` |
+| Channels | `src/channels/`, `extensions/telegram/` |
+| Web UI & styles | `ui/src/`, `ui/src/styles/`, [ui-design-system.md](./docs/design/ui-design-system.md) |
+| Logging | `src/utils/logger.ts`, `src/utils/log-store.ts` |
+| Log Manager UI | `ui/src/pages/LogManager.ts` |
+| Tests | Colocated `__tests__` |
 
 ---
 
-_Last updated: 2026-03-22_
+_Last updated: 2026-03-23_
