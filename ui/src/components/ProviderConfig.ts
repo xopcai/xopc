@@ -15,6 +15,11 @@ import {
   revokeOAuth 
 } from '../utils/oauth-api.js';
 
+/** Matches GET /api/config masked keys and legacy UI placeholder */
+function isMaskedApiKey(value: string): boolean {
+  return value === '***' || value === '••••••••••••';
+}
+
 export interface ProviderConfigChangeEvent {
   provider: string;
   apiKey: string;
@@ -36,6 +41,8 @@ export class ProviderConfig extends LitElement {
   @property({ type: String }) displayName: string = '';
   @property({ type: String }) category: string = 'common';
   @property({ type: String }) token?: string;
+  /** Stacked list inside provider-list: shared borders between rows */
+  @property({ type: String }) listSegment: 'single' | 'first' | 'mid' | 'last' = 'single';
   
   @state() private _showKey: boolean = false;
   @state() private _copied: boolean = false;
@@ -54,21 +61,39 @@ export class ProviderConfig extends LitElement {
     .provider-row {
       display: flex;
       align-items: center;
-      gap: 1rem;
-      padding: 0.875rem 1rem;
-      background: var(--bg-primary, #fafaf9);
-      border: 1px solid var(--border-color, #e7e5e4);
-      border-radius: 0.5rem;
-      transition: all var(--transition-fast, 150ms) ease;
+      gap: 0.75rem;
+      padding: 0.75rem 1rem;
+      background: var(--card-bg, #ffffff);
+      border-style: solid;
+      border-color: var(--border-default, #e2e8f0);
+      transition: background var(--transition-fast, 150ms) ease,
+        border-color var(--transition-fast, 150ms) ease;
     }
 
     .provider-row:hover {
-      border-color: var(--accent-primary, #4f46e5);
-      box-shadow: 0 2px 8px rgba(79, 70, 229, 0.08);
+      background: var(--hover-bg, #f8fafc);
     }
 
-    .provider-row.configured {
-      border-left: 3px solid var(--accent-success, #059669);
+    .provider-row.seg-single {
+      border-width: 1px;
+      border-radius: var(--radius-lg, 0.75rem);
+    }
+
+    .provider-row.seg-first {
+      border-width: 1px 1px 0 1px;
+      border-radius: var(--radius-lg, 0.75rem) var(--radius-lg, 0.75rem) 0 0;
+      border-bottom: 1px solid var(--border-subtle, #f1f5f9);
+    }
+
+    .provider-row.seg-mid {
+      border-width: 0 1px 0 1px;
+      border-bottom: 1px solid var(--border-subtle, #f1f5f9);
+      border-radius: 0;
+    }
+
+    .provider-row.seg-last {
+      border-width: 0 1px 1px 1px;
+      border-radius: 0 0 var(--radius-lg, 0.75rem) var(--radius-lg, 0.75rem);
     }
 
     .provider-row.expanded {
@@ -86,24 +111,20 @@ export class ProviderConfig extends LitElement {
     }
 
     .provider-icon {
-      width: 36px;
-      height: 36px;
+      width: 2rem;
+      height: 2rem;
       display: flex;
       align-items: center;
       justify-content: center;
-      background: var(--bg-secondary, #f5f5f4);
-      border-radius: 0.5rem;
+      background: var(--border-subtle, #f1f5f9);
+      border-radius: var(--radius-md, 0.5rem);
       flex-shrink: 0;
     }
 
     .provider-icon svg {
-      width: 18px;
-      height: 18px;
-      color: var(--text-muted, #a8a29e);
-    }
-
-    .provider-icon.configured svg {
-      color: var(--accent-success, #059669);
+      width: 1rem;
+      height: 1rem;
+      color: var(--text-secondary, #64748b);
     }
 
     .provider-details {
@@ -114,7 +135,8 @@ export class ProviderConfig extends LitElement {
     .provider-name {
       font-weight: 600;
       font-size: 0.875rem;
-      color: var(--text-primary, #1c1917);
+      line-height: 1.25rem;
+      color: var(--text-primary, #0f172a);
       margin-bottom: 0.125rem;
       display: flex;
       align-items: center;
@@ -123,60 +145,20 @@ export class ProviderConfig extends LitElement {
 
     .provider-category-tag {
       font-size: 0.625rem;
-      padding: 0.125rem 0.375rem;
-      border-radius: 0.25rem;
-      background: var(--bg-secondary, #f5f5f4);
-      color: var(--text-muted, #a8a29e);
+      line-height: 1rem;
+      padding: 0.0625rem 0.375rem;
+      border-radius: var(--radius-xs, 0.25rem);
+      background: var(--border-subtle, #f1f5f9);
+      color: var(--text-secondary, #64748b);
       text-transform: uppercase;
-      letter-spacing: 0.3px;
+      letter-spacing: 0.025em;
       font-weight: 500;
-    }
-
-    .provider-category-tag.oauth { 
-      background: rgba(245, 158, 11, 0.15); 
-      color: #d97706; 
-    }
-    
-    .provider-category-tag.enterprise { 
-      background: rgba(139, 92, 246, 0.15); 
-      color: #8b5cf6; 
-    }
-    
-    .provider-category-tag.specialty { 
-      background: rgba(6, 182, 212, 0.15); 
-      color: #0891b2; 
     }
 
     .provider-meta {
       font-size: 0.75rem;
-      color: var(--text-muted, #a8a29e);
-    }
-
-    /* Status Indicator */
-    .status-indicator {
-      display: flex;
-      align-items: center;
-      gap: 0.375rem;
-      padding: 0.25rem 0.625rem;
-      border-radius: 9999px;
-      font-size: 0.6875rem;
-      font-weight: 500;
-      flex-shrink: 0;
-    }
-
-    .status-indicator.configured {
-      background: var(--accent-success-light, #d1fae5);
-      color: var(--accent-success, #059669);
-    }
-
-    .status-indicator.not-configured {
-      background: var(--bg-secondary, #f5f5f4);
-      color: var(--text-muted, #a8a29e);
-    }
-
-    .status-indicator svg {
-      width: 12px;
-      height: 12px;
+      line-height: 1.125rem;
+      color: var(--text-secondary, #64748b);
     }
 
     /* Expand Button */
@@ -185,8 +167,8 @@ export class ProviderConfig extends LitElement {
       border: none;
       background: transparent;
       cursor: pointer;
-      border-radius: 0.375rem;
-      color: var(--text-muted, #a8a29e);
+      border-radius: var(--radius-sm, 0.375rem);
+      color: var(--text-disabled, #94a3b8);
       display: flex;
       align-items: center;
       justify-content: center;
@@ -195,8 +177,8 @@ export class ProviderConfig extends LitElement {
     }
 
     .expand-btn:hover {
-      background: var(--bg-secondary, #f5f5f4);
-      color: var(--text-primary, #1c1917);
+      background: var(--border-subtle, #f1f5f9);
+      color: var(--text-primary, #0f172a);
     }
 
     .expand-btn svg {
@@ -212,9 +194,9 @@ export class ProviderConfig extends LitElement {
     /* Expanded Content */
     .provider-expanded {
       width: 100%;
-      margin-top: 1rem;
-      padding-top: 1rem;
-      border-top: 1px solid var(--border-color, #e7e5e4);
+      margin-top: 0.75rem;
+      padding-top: 0.75rem;
+      border-top: 1px solid var(--border-subtle, #f1f5f9);
     }
 
     /* Input Section */
@@ -235,24 +217,25 @@ export class ProviderConfig extends LitElement {
       width: 100%;
       padding: 0.5rem 0.75rem;
       padding-right: 4rem;
-      border: 1px solid var(--border-color, #e7e5e4);
-      border-radius: 0.5rem;
+      border: 1px solid var(--border-default, #e2e8f0);
+      border-radius: var(--radius-md, 0.5rem);
       font-size: 0.8125rem;
+      line-height: 1.25rem;
       font-family: var(--font-mono, monospace);
-      background: var(--bg-primary, #fafaf9);
-      color: var(--text-primary, #1c1917);
+      background: var(--card-bg, #ffffff);
+      color: var(--text-primary, #0f172a);
       transition: all var(--transition-fast, 150ms);
       box-sizing: border-box;
     }
 
     .api-key-input:focus {
       outline: none;
-      border-color: var(--accent-primary, #4f46e5);
-      box-shadow: 0 0 0 3px rgba(79, 70, 229, 0.1);
+      border-color: var(--accent-primary, #2563eb);
+      box-shadow: 0 0 0 1px var(--accent-primary, #2563eb);
     }
 
     .api-key-input::placeholder {
-      color: var(--text-muted, #a8a29e);
+      color: var(--text-disabled, #94a3b8);
     }
 
     .input-actions {
@@ -289,9 +272,9 @@ export class ProviderConfig extends LitElement {
 
     .btn-oauth {
       padding: 0.5rem 0.875rem;
-      border: 1px solid var(--accent-primary, #4f46e5);
+      border: 1px solid var(--accent-primary, #2563eb);
       background: transparent;
-      color: var(--accent-primary, #4f46e5);
+      color: var(--accent-primary, #2563eb);
       border-radius: 0.5rem;
       font-size: 0.75rem;
       font-weight: 500;
@@ -305,7 +288,7 @@ export class ProviderConfig extends LitElement {
     }
 
     .btn-oauth:hover {
-      background: var(--accent-primary, #4f46e5);
+      background: var(--accent-primary, #2563eb);
       color: white;
     }
 
@@ -362,7 +345,7 @@ export class ProviderConfig extends LitElement {
       width: 14px;
       height: 14px;
       border: 2px solid var(--border-color, #e7e5e4);
-      border-top-color: var(--accent-primary, #4f46e5);
+      border-top-color: var(--accent-primary, #2563eb);
       border-radius: 50%;
       animation: spin 1s linear infinite;
     }
@@ -393,13 +376,13 @@ export class ProviderConfig extends LitElement {
     }
 
     .btn-primary {
-      background: var(--accent-primary, #4f46e5);
+      background: var(--accent-primary, #2563eb);
       color: white;
       border: none;
     }
 
     .btn-primary:hover {
-      background: var(--accent-primary-hover, #4338ca);
+      background: var(--accent-primary-hover, #1d4ed8);
     }
 
     .btn-secondary {
@@ -471,13 +454,20 @@ export class ProviderConfig extends LitElement {
     this._expanded = !this._expanded;
   }
   
-  private _onApiKeyChange(e: Event) {
-    const target = e.target as HTMLInputElement;
+  private _emitApiKey(target: HTMLInputElement) {
     this.dispatchEvent(new CustomEvent<ProviderConfigChangeEvent>('change', {
       detail: { provider: this.provider, apiKey: target.value },
       bubbles: true,
       composed: true,
     }));
+  }
+
+  private _onApiKeyInput(e: Event) {
+    this._emitApiKey(e.target as HTMLInputElement);
+  }
+
+  private _onApiKeyChange(e: Event) {
+    this._emitApiKey(e.target as HTMLInputElement);
   }
   
   private async _onOAuthClick() {
@@ -617,36 +607,29 @@ export class ProviderConfig extends LitElement {
   }
   
   render() {
-    const categoryClass = this.category.toLowerCase();
-    const isMasked = this.apiKey === '••••••••••••';
+    const isMasked = isMaskedApiKey(this.apiKey);
     const inputValue = isMasked && !this._showKey ? '' : this.apiKey;
     const isOAuthConfigured = this.configured && !isMasked;
     
     return html`
-      <div class="provider-row ${this.configured ? 'configured' : ''} ${this._expanded ? 'expanded' : ''}">
+      <div class="provider-row ${this._expanded ? 'expanded' : ''} seg-${this.listSegment}">
         <div class="provider-main">
-          <div class="provider-icon ${this.configured ? 'configured' : ''}">
+          <div class="provider-icon">
             ${this.configured ? getIcon('checkCircle') : getIcon('key')}
           </div>
           
           <div class="provider-details">
             <div class="provider-name">
               ${this.displayName || this.provider}
-              <span class="provider-category-tag ${categoryClass}">${this.category}</span>
+              <span class="provider-category-tag">${this.category}</span>
             </div>
             <div class="provider-meta">
-              ${isMasked 
-                ? 'Configured via environment variable' 
-                : (this.configured ? 'API key configured' : 'Not configured')
-              }
+              ${this.configured
+                ? (isMasked
+                  ? 'Credential on file — enter a new key to replace'
+                  : 'API key will be saved with Save changes')
+                : 'Not configured'}
             </div>
-          </div>
-          
-          <div class="status-indicator ${this.configured ? 'configured' : 'not-configured'}">
-            ${this.configured 
-              ? html`${getIcon('check')} Configured` 
-              : html`${getIcon('circle')} Not set`
-            }
           </div>
           
           <button 
@@ -666,7 +649,8 @@ export class ProviderConfig extends LitElement {
                   class="api-key-input"
                   type="${this._showKey ? 'text' : 'password'}"
                   .value=${inputValue}
-                  placeholder="${isMasked ? 'Configured via environment variable' : (this.configured ? 'Configured (leave empty to keep)' : 'sk-...')}"
+                  placeholder="${isMasked ? 'Enter new key to override' : (this.configured ? 'Leave empty to keep current' : 'API key')}"
+                  @input=${this._onApiKeyInput}
                   @change=${this._onApiKeyChange}
                   ?disabled=${this._loading}
                 />

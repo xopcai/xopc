@@ -373,7 +373,13 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     if (body.providers) {
       const resolver = new CredentialResolver();
       for (const [key, apiKey] of Object.entries(body.providers)) {
-        if (apiKey !== undefined && typeof apiKey === 'string' && apiKey.trim() && apiKey !== '***') {
+        if (
+          apiKey !== undefined &&
+          typeof apiKey === 'string' &&
+          apiKey.trim() &&
+          apiKey !== '***' &&
+          apiKey !== '••••••••••••'
+        ) {
           await resolver.saveApiKey(key, apiKey, { profileName: 'default' });
         }
       }
