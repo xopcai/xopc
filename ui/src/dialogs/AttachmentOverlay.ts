@@ -8,6 +8,7 @@ import { parseAsync } from 'docx-preview';
 import type { Attachment } from '../utils/attachment-utils';
 import {
   base64ToArrayBuffer,
+  extractTextForPreview,
   getAttachmentBinaryPayload,
   resolveDataUrlForDisplay,
 } from '../utils/attachment-utils';
@@ -258,11 +259,11 @@ export class AttachmentOverlay extends LitElement {
     const fileType = this.getFileType();
 
     if (this.showExtractedText && fileType !== 'image') {
+      const text =
+        extractTextForPreview(this.attachment) || i18n('No text content available');
       return html`
         <div class="attachment-overlay__panel attachment-overlay__panel--text">
-          <pre class="attachment-overlay__pre attachment-overlay__pre--sm">${
-            this.attachment.extractedText || i18n('No text content available')
-          }</pre>
+          <pre class="attachment-overlay__pre attachment-overlay__pre--sm">${text}</pre>
         </div>
       `;
     }
@@ -308,12 +309,15 @@ export class AttachmentOverlay extends LitElement {
           <div id="pptx-container" class="attachment-overlay__doc-container"></div>
         `;
 
-      default:
+      default: {
+        const text =
+          extractTextForPreview(this.attachment) || i18n('No content available');
         return html`
           <div class="attachment-overlay__panel attachment-overlay__panel--text">
-            <pre class="attachment-overlay__pre">${this.attachment.extractedText || i18n('No content available')}</pre>
+            <pre class="attachment-overlay__pre">${text}</pre>
           </div>
         `;
+      }
     }
   }
 
@@ -589,7 +593,8 @@ export class AttachmentOverlay extends LitElement {
 
       const pre = document.createElement('pre');
       pre.className = 'whitespace-pre-wrap text-sm text-foreground font-mono';
-      pre.textContent = this.attachment.extractedText || i18n('No text content available');
+      pre.textContent =
+        extractTextForPreview(this.attachment) || i18n('No text content available');
 
       wrapper.appendChild(pre);
       container.appendChild(wrapper);
