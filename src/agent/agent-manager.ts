@@ -10,6 +10,7 @@ import type { Model, Api } from '@mariozechner/pi-ai';
 import type { Config } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
+import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir } from '../config/paths.js';
 import { loadBootstrapFiles, extractTextContent } from './helpers.js';
 import { SkillManager } from './skills/index.js';
@@ -62,6 +63,8 @@ export class AgentManager {
   private skillManager: SkillManager;
   private defaultModel: string;
   private bootstrapFiles: ReturnType<typeof loadBootstrapFiles>;
+  private credentialCache = new Map<string, string>();
+  private credentialResolver: CredentialResolver;
 
   constructor(config: AgentManagerConfig) {
     this.config = config;
@@ -83,6 +86,11 @@ export class AgentManager {
     });
 
     this.defaultModel = config.model || getDefaultModelSync(config.config);
+
+    this.credentialResolver = new CredentialResolver();
+    this.warmCredentialCache().catch((err) => {
+      log.warn({ err }, 'Failed to pre-warm credential cache');
+    });
   }
 
   /**
@@ -202,6 +210,27 @@ export class AgentManager {
     log.debug('All agent instances disposed');
   }
 
+  async warmCredentialCache(): Promise<void> {
+    const profiles = await this.credentialResolver.listProfiles();
+    for (const profile of profiles) {
+      if (profile.key) {
+        this.credentialCache.set(profile.provider, profile.key);
+      }
+    }
+    log.debug({ count: this.credentialCache.size }, 'Credential cache warmed');
+  }
+
+  async refreshCredentials(): Promise<void> {
+    this.credentialCache.clear();
+    await this.warmCredentialCache();
+  }
+
+  private resolveApiKeyWithCache(provider: string): string | undefined {
+    const cached = this.credentialCache.get(provider);
+    if (cached) return cached;
+    return getApiKeySync(provider);
+  }
+
   /**
    * Create a new Agent instance
    */
@@ -217,7 +246,7 @@ export class AgentManager {
         tools,
         messages: [],
       },
-      getApiKey: (provider: string) => getApiKeySync(provider),
+      getApiKey: (provider: string) => this.resolveApiKeyWithCache(provider),
     });
   }
 
