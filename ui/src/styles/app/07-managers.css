@@ -384,10 +384,10 @@
   border: 1px solid var(--border-default);
   border-radius: var(--radius-2xl);
   background: var(--card-bg);
-  padding: 1rem 1.25rem;
+  padding: 1.25rem 1.5rem;
   display: flex;
   flex-direction: column;
-  gap: 0.75rem;
+  gap: 1rem;
 }
 
 .cron-run-log__head {
@@ -427,13 +427,92 @@
 
 .cron-run-log__table-wrap {
   overflow-x: auto;
-  margin: 0 -0.25rem;
+  margin: 0;
+  min-width: 0;
+}
+
+.cron-run-log__table {
+  width: 100%;
+  border-collapse: collapse;
+  table-layout: fixed;
+  font-size: 0.875rem;
+  line-height: 1.45;
 }
 
 .cron-run-log__table th,
 .cron-run-log__table td {
-  font-size: 0.8125rem;
+  padding: 0.75rem 1rem;
+  text-align: left;
   vertical-align: top;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.cron-run-log__table thead th {
+  font-weight: 600;
+  font-size: 0.75rem;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--text-secondary);
+  padding-top: 0.5rem;
+  padding-bottom: 0.625rem;
+}
+
+/* Main run log: Started | Job | Status | Duration | Result */
+.cron-run-log__table--full th:nth-child(1),
+.cron-run-log__table--full td:nth-child(1) {
+  width: 11.5rem;
+  white-space: nowrap;
+}
+
+.cron-run-log__table--full th:nth-child(2),
+.cron-run-log__table--full td:nth-child(2) {
+  width: 9rem;
+  word-break: break-word;
+}
+
+.cron-run-log__table--full th:nth-child(3),
+.cron-run-log__table--full td:nth-child(3) {
+  width: 6.5rem;
+}
+
+.cron-run-log__table--full th:nth-child(4),
+.cron-run-log__table--full td:nth-child(4) {
+  width: 5rem;
+  white-space: nowrap;
+}
+
+.cron-run-log__table--full th:nth-child(5),
+.cron-run-log__table--full td:nth-child(5) {
+  width: auto;
+  min-width: 0;
+}
+
+/* Job detail drawer: Started | Status | Duration | Result */
+.cron-run-log__table--drawer th:nth-child(1),
+.cron-run-log__table--drawer td:nth-child(1) {
+  width: 11.5rem;
+  white-space: nowrap;
+}
+
+.cron-run-log__table--drawer th:nth-child(2),
+.cron-run-log__table--drawer td:nth-child(2) {
+  width: 6.5rem;
+}
+
+.cron-run-log__table--drawer th:nth-child(3),
+.cron-run-log__table--drawer td:nth-child(3) {
+  width: 5rem;
+  white-space: nowrap;
+}
+
+.cron-run-log__table--drawer th:nth-child(4),
+.cron-run-log__table--drawer td:nth-child(4) {
+  width: auto;
+  min-width: 0;
+}
+
+.cron-run-log__table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .cron-run-log__job-link {
@@ -464,9 +543,10 @@
 }
 
 .cron-run-log__detail {
-  max-width: 22rem;
   word-break: break-word;
+  overflow-wrap: anywhere;
   color: var(--text-secondary);
+  line-height: 1.5;
 }
 
 .cron-run-log__pill {
@@ -475,8 +555,9 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.02em;
-  padding: 0.25rem 0.5rem;
+  padding: 0.3125rem 0.625rem;
   border-radius: var(--radius-lg);
+  vertical-align: middle;
 }
 
 .cron-run-log__pill--success {

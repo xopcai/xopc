@@ -580,7 +580,7 @@ export class CronManager extends LitElement {
               ? html`<p class="cron-run-log__empty">${t('cron.noRunsYet')}</p>`
               : html`
                   <div class="cron-run-log__table-wrap">
-                    <table class="data-table cron-run-log__table">
+                    <table class="data-table cron-run-log__table cron-run-log__table--full">
                       <thead>
                         <tr>
                           <th>${t('cron.colStarted')}</th>
@@ -865,7 +865,7 @@ export class CronManager extends LitElement {
                           ? html`<p class="cron-run-log__empty">${t('cron.noRunsYet')}</p>`
                           : html`
                               <div class="cron-run-log__table-wrap">
-                                <table class="data-table cron-run-log__table">
+                                <table class="data-table cron-run-log__table cron-run-log__table--drawer">
                                   <thead>
                                     <tr>
                                       <th>${t('cron.colStarted')}</th>
