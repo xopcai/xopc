@@ -3,16 +3,87 @@ import type { TemplateResult } from 'lit';
 import { getIcon } from './utils/icons';
 import { t } from './utils/i18n';
 
+/** URL segment under `#/settings/...` — must match SettingsPage sections */
+export type SettingsSectionId = 'agent' | 'providers' | 'models' | 'channels' | 'voice' | 'gateway';
+
+export type SettingsTab =
+  | 'settingsAgent'
+  | 'settingsProviders'
+  | 'settingsModels'
+  | 'settingsChannels'
+  | 'settingsVoice'
+  | 'settingsGateway';
+
+export type Tab =
+  | 'chat'
+  | 'sessions'
+  | 'cron'
+  | 'skills'
+  | 'logs'
+  | SettingsTab;
+
+const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, SettingsTab> = {
+  agent: 'settingsAgent',
+  providers: 'settingsProviders',
+  models: 'settingsModels',
+  channels: 'settingsChannels',
+  voice: 'settingsVoice',
+  gateway: 'settingsGateway',
+};
+
+const TAB_TO_SETTINGS_SECTION: Record<SettingsTab, SettingsSectionId> = {
+  settingsAgent: 'agent',
+  settingsProviders: 'providers',
+  settingsModels: 'models',
+  settingsChannels: 'channels',
+  settingsVoice: 'voice',
+  settingsGateway: 'gateway',
+};
+
 // Get tab groups with i18n labels
 export function getTabGroups() {
   return [
     { label: t('nav.chat'), tabs: ['chat'] as const },
     { label: t('nav.management'), tabs: ['sessions', 'cron', 'skills', 'logs'] as const },
-    { label: t('nav.settings'), tabs: ['settings'] as const },
+    {
+      label: t('nav.settings'),
+      tabs: [
+        'settingsAgent',
+        'settingsProviders',
+        'settingsModels',
+        'settingsChannels',
+        'settingsVoice',
+        'settingsGateway',
+      ] as const,
+    },
   ];
 }
 
-export type Tab = 'chat' | 'sessions' | 'cron' | 'skills' | 'logs' | 'settings';
+export function settingsSectionToTab(section: SettingsSectionId): SettingsTab {
+  return SETTINGS_SECTION_TO_TAB[section];
+}
+
+export function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
+  return TAB_TO_SETTINGS_SECTION[tab as SettingsTab] ?? null;
+}
+
+/** Parse `#/settings/agent` etc. Returns null if not a settings route. */
+export function parseSettingsHash(hash: string): SettingsSectionId | null {
+  let h = hash.startsWith('#') ? hash.slice(1) : hash;
+  if (h.startsWith('/')) h = h.slice(1);
+  if (h === 'settings' || h === 'settings/') {
+    return 'agent';
+  }
+  if (!h.startsWith('settings/')) return null;
+  const rest = h.slice('settings/'.length);
+  const section = rest.split('/')[0] as string;
+  if (!section) return 'agent';
+  return SETTINGS_SECTION_TO_TAB[section as SettingsSectionId] ? (section as SettingsSectionId) : null;
+}
+
+export function getSettingsHash(section: SettingsSectionId): string {
+  return `#/settings/${section}`;
+}
 
 export interface NavItem {
   id: Tab;
@@ -22,6 +93,10 @@ export interface NavItem {
 
 // Get tab label (supports i18n)
 export function getTabLabel(tab: Tab): string {
+  const section = tabToSettingsSection(tab);
+  if (section) {
+    return t(`settings.sections.${section}`);
+  }
   return t(`nav.${tab}`);
 }
 
@@ -32,7 +107,12 @@ const TAB_ICONS: Record<Tab, string> = {
   cron: 'clock',
   skills: 'layers',
   logs: 'fileText',
-  settings: 'settings',
+  settingsAgent: 'bot',
+  settingsProviders: 'cloud',
+  settingsModels: 'cpu',
+  settingsChannels: 'plug',
+  settingsVoice: 'mic',
+  settingsGateway: 'globe',
 };
 
 // Chat route with optional session key

@@ -15,7 +15,11 @@ import {
   renderNavItem,
   parseChatHash,
   getChatHash,
-  type ChatRoute
+  parseSettingsHash,
+  getSettingsHash,
+  tabToSettingsSection,
+  settingsSectionToTab,
+  type ChatRoute,
 } from './navigation';
 import { getIcon } from './utils/icons';
 import { getToken, setToken, clearToken, getTheme, setTheme, getLanguage, setLanguage as setStoredLanguage } from './utils/storage';
@@ -50,17 +54,56 @@ export class XopcbotApp extends LitElement {
 
   constructor() {
     super();
-    // Parse URL hash immediately to set correct initial route
-    this._chatRoute = this._parseInitialRoute();
+    this._chatRoute = { type: 'recent' };
+    this._applyHashFromLocation();
   }
 
-  private _parseInitialRoute(): ChatRoute {
-    const hash = location.hash.slice(1);
-    if (hash.startsWith('/chat') || hash.startsWith('chat')) {
-      const chatRoute = parseChatHash(hash);
-      if (chatRoute) return chatRoute;
+  private _isSettingsTab(tab: Tab): boolean {
+    return tabToSettingsSection(tab) !== null;
+  }
+
+  /** Sync `_activeTab` and `_chatRoute` from `location.hash` (constructor + hashchange). */
+  private _applyHashFromLocation(): void {
+    const raw = location.hash.slice(1);
+
+    if (raw.startsWith('/chat') || raw.startsWith('chat')) {
+      const chatRoute = parseChatHash(location.hash);
+      if (chatRoute) {
+        this._activeTab = 'chat';
+        this._chatRoute = chatRoute;
+      }
+      return;
     }
-    return { type: 'recent' };
+
+    if (raw === 'settings') {
+      this._activeTab = settingsSectionToTab('agent');
+      if (location.hash !== '#/settings/agent') {
+        history.replaceState(null, '', '#/settings/agent');
+      }
+      return;
+    }
+
+    const settingsSection = parseSettingsHash(location.hash);
+    if (settingsSection) {
+      this._activeTab = settingsSectionToTab(settingsSection);
+      return;
+    }
+
+    const validTabs: Tab[] = [
+      'sessions',
+      'cron',
+      'skills',
+      'logs',
+      'settingsAgent',
+      'settingsProviders',
+      'settingsModels',
+      'settingsChannels',
+      'settingsVoice',
+      'settingsGateway',
+    ];
+    if (validTabs.includes(raw as Tab)) {
+      this._activeTab = raw as Tab;
+    }
   }
   @state() private _showTokenDialog = false;
   @state() private _tokenExpired = false;
@@ -161,7 +204,7 @@ export class XopcbotApp extends LitElement {
 
     this._loadTheme();
     this._loadLanguage();
-    this._loadRouteFromHash();
+    this._applyHashFromLocation();
 
     // Setup 401 interceptor to detect token expiration
     this._setupAuthInterceptor();
@@ -180,7 +223,8 @@ export class XopcbotApp extends LitElement {
 
     // Listen for hash changes (browser back/forward)
     window.addEventListener('hashchange', () => {
-      this._loadRouteFromHash();
+      this._applyHashFromLocation();
+      this.requestUpdate();
     });
 
     // Listen for navigate-to-chat event from session manager
@@ -203,55 +247,23 @@ export class XopcbotApp extends LitElement {
   }
 
   /**
-   * Load current tab from URL hash
-   */
-  private _loadRouteFromHash(): void {
-    const hash = location.hash.slice(1);
-    
-    // Check if it's a chat route with session (#/chat/...)
-    if (hash.startsWith('/chat') || hash.startsWith('chat')) {
-      const chatRoute = parseChatHash(hash);
-      if (chatRoute) {
-        if (this._activeTab !== 'chat') {
-          this._activeTab = 'chat';
-        }
-        // Only update if route changed
-        if (JSON.stringify(this._chatRoute) !== JSON.stringify(chatRoute)) {
-          this._chatRoute = chatRoute;
-        }
-      }
-      return;
-    }
-    
-    const tab = hash as Tab;
-    const validTabs: Tab[] = ['sessions', 'cron', 'skills', 'logs', 'settings'];
-    
-    if (validTabs.includes(tab)) {
-      if (this._activeTab !== tab) {
-        this._activeTab = tab;
-      }
-    }
-  }
-
-  /**
    * Update URL hash when switching tabs
    */
   private _switchTab(tab: Tab): void {
     this._activeTab = tab;
-    
-    // Update URL hash without triggering hashchange
+
     let newHash: string;
     if (tab === 'chat') {
       newHash = getChatHash(this._chatRoute);
     } else {
-      newHash = `#${tab}`;
+      const section = tabToSettingsSection(tab);
+      newHash = section ? getSettingsHash(section) : `#${tab}`;
     }
-    
+
     if (location.hash !== newHash) {
       history.pushState(null, '', newHash);
     }
-    
-    // Close mobile nav if open
+
     this._navMobileOpen = false;
   }
 
@@ -501,7 +513,7 @@ export class XopcbotApp extends LitElement {
             ${this._activeTab === 'cron' ? this._renderCron() : nothing}
             ${this._activeTab === 'skills' ? this._renderSkills() : nothing}
             ${this._activeTab === 'logs' ? this._renderLogs() : nothing}
-            ${this._activeTab === 'settings' ? this._renderSettings() : nothing}
+            ${this._isSettingsTab(this._activeTab) ? this._renderSettings() : nothing}
           </main>
         </div>
       </div>
@@ -563,10 +575,12 @@ export class XopcbotApp extends LitElement {
 
   private _renderSettings(): unknown {
     const token = getToken() || this._gatewayConfig?.token;
+    const section = tabToSettingsSection(this._activeTab) ?? 'agent';
 
     return html`
       <settings-page
         .config=${{ token }}
+        .section=${section}
       ></settings-page>
     `;
   }
