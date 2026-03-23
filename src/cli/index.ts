@@ -13,6 +13,7 @@ import './commands/gateway.js';
 import './commands/session.js';
 import './commands/cron.js';
 import './commands/config.js';
+import './commands/channels.js';
 import './commands/models.js';
 import './commands/extension.js';
 import './commands/auth.js';
