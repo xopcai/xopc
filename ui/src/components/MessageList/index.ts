@@ -35,7 +35,7 @@ export class MessageList extends LitElement {
 
   private _renderSimpleList(): unknown {
     return html`
-      <div class="flex flex-col gap-4 pb-4">
+      <div class="message-list-stack">
         ${this.messages.map((message, index) => html`
           <message-bubble 
             .message=${message}

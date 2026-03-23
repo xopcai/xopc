@@ -237,8 +237,10 @@
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding: 0.5rem 1rem;
+  padding: 0.625rem 1.25rem;
   font-size: 0.875rem;
+  line-height: 1.45;
+  border-bottom: 1px solid var(--border-subtle);
 }
 
 .status-bar.error {
@@ -249,6 +251,22 @@
 .status-bar.warning {
   background: var(--warning-soft);
   color: var(--warning);
+}
+
+.status-bar__spinner {
+  display: inline-block;
+  width: 1rem;
+  height: 1rem;
+  border: 2px solid rgb(15 23 42 / 0.12);
+  border-top-color: var(--warning);
+  border-radius: 50%;
+  animation: spin 0.75s linear infinite;
+  flex-shrink: 0;
+}
+
+html.dark .status-bar__spinner {
+  border-color: rgb(255 255 255 / 0.2);
+  border-top-color: var(--warning);
 }
 
 /* ===== Streaming Cursor ===== */

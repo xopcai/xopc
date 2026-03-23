@@ -676,15 +676,12 @@ export class ChatPanel extends LitElement {
 
   private _renderHeader() {
     const showModelPicker = this.enableModelSelector && !!this._sessionKey;
-    const sessionDisplayName = this._sessionKey
-      ? this._sessions.find((s) => s.key === this._sessionKey)?.name?.trim()
-      : '';
     return html`
       <div class="chat-header">
         <div class="chat-header-title">
-          <span class="font-semibold">${t('chat.title') || 'XopcBot'}</span>
-          ${sessionDisplayName
-            ? html`<span class="text-xs text-muted ml-2">${sessionDisplayName}</span>`
+          <span class="chat-header-brand">${t('chat.title') || 'XopcBot'}</span>
+          ${this._sessionKey
+            ? html`<span class="chat-header-session-id" title=${this._sessionKey}>${this._sessionKey}</span>`
             : ''}
         </div>
         ${showModelPicker
@@ -729,14 +726,14 @@ export class ChatPanel extends LitElement {
             <line x1="12" y1="16" x2="12.01" y2="16" />
           </svg>
           <span>${this._error}</span>
-          <button class="underline ml-auto" @click=${() => this.reconnect()}>${t('chat.retry')}</button>
+          <button type="button" class="chat-status-retry" @click=${() => this.reconnect()}>${t('chat.retry')}</button>
         </div>
       `;
     }
     if (this._connState === 'reconnecting' || this._connState === 'connecting') {
       return html`
         <div class="status-bar warning">
-          <div class="w-4 h-4 border-2 border-white border-t-transparent rounded-full animate-spin"></div>
+          <span class="status-bar__spinner" aria-hidden="true"></span>
           <span>${this._connState === 'reconnecting' ? t('chat.reconnecting') : t('chat.connecting')}</span>
         </div>
       `;
@@ -750,10 +747,10 @@ export class ChatPanel extends LitElement {
 
     if (!list.length && !this._streaming) {
       return html`
-        <div class="empty-state" style="padding-top:30vh;">
-          <div class="icon">🤖</div>
-          <div class="title">${t('chat.welcomeTitle')}</div>
-          <div class="description">${t('chat.welcomeDescription')}</div>
+        <div class="chat-empty-state">
+          <div class="chat-empty-state__icon" aria-hidden="true">🤖</div>
+          <div class="chat-empty-state__title">${t('chat.welcomeTitle')}</div>
+          <div class="chat-empty-state__description">${t('chat.welcomeDescription')}</div>
         </div>
       `;
     }
