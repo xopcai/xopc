@@ -411,7 +411,7 @@ export class ProgressFeedbackManager {
 
   // Get stage label
   getStageLabel(stage: ProgressStage): string {
-    return STAGE_LABEL[stage] || '未知';
+    return STAGE_LABEL[stage] || 'Unknown';
   }
 
   /**
