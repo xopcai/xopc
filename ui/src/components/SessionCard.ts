@@ -4,6 +4,7 @@ import { html, LitElement } from 'lit';
 import { customElement, property } from 'lit/decorators.js';
 
 import { getIcon } from '../utils/icons';
+import { t } from '../utils/i18n';
 import type { SessionMetadata } from '../utils/session-api';
 
 export interface SessionCardEventDetail {
@@ -54,17 +55,6 @@ export class SessionCard extends LitElement {
     return icons[channel] || 'messageSquare';
   }
 
-  private _getStatusBadge(): string {
-    switch (this.session.status) {
-      case 'archived':
-        return 'bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400';
-      case 'pinned':
-        return 'bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400';
-      default:
-        return 'bg-green-100 text-green-600 dark:bg-green-900/30 dark:text-green-400';
-    }
-  }
-
   override render(): unknown {
     const displayName = this.session.name || this.session.key;
     const isArchived = this.session.status === 'archived';
@@ -81,7 +71,7 @@ export class SessionCard extends LitElement {
             <span class="channel-name">${this.session.sourceChannel}</span>
           </div>
           <div class="session-card__meta">
-            ${isPinned ? html`<span class="pin-badge" title="Pinned">${getIcon('pin')}</span>` : ''}
+            ${isPinned ? html`<span class="pin-badge" title=${t('sessions.pin')}>${getIcon('pin')}</span>` : ''}
             <span class="date">${this._formatDate(this.session.updatedAt)}</span>
           </div>
         </div>
@@ -114,48 +104,55 @@ export class SessionCard extends LitElement {
 
         <div class="session-card__actions" @click=${(e: Event) => e.stopPropagation()}>
           <button
-            class="btn-icon btn-icon--primary"
-            title="Continue Chat"
+            type="button"
+            class="session-card__icon-btn"
+            title=${t('sessions.continueChat')}
             @click=${() => this._emit('continue')}
           >${getIcon('messageSquare')}</button>
 
           ${isArchived ? html`
             <button 
-              class="btn-icon btn-icon--success" 
-              title="Unarchive"
+              type="button"
+              class="session-card__icon-btn" 
+              title=${t('sessions.unarchive')}
               @click=${() => this._emit('unarchive')}
             >${getIcon('archiveRestore')}</button>
           ` : html`
             <button 
-              class="btn-icon" 
-              title="Archive"
+              type="button"
+              class="session-card__icon-btn" 
+              title=${t('sessions.archive')}
               @click=${() => this._emit('archive')}
             >${getIcon('archive')}</button>
           `}
           
           ${isPinned ? html`
             <button 
-              class="btn-icon btn-icon--primary" 
-              title="Unpin"
+              type="button"
+              class="session-card__icon-btn" 
+              title=${t('sessions.unpin')}
               @click=${() => this._emit('unpin')}
             >${getIcon('pinOff')}</button>
           ` : html`
             <button 
-              class="btn-icon" 
-              title="Pin"
+              type="button"
+              class="session-card__icon-btn" 
+              title=${t('sessions.pin')}
               @click=${() => this._emit('pin')}
             >${getIcon('pin')}</button>
           `}
           
           <button 
-            class="btn-icon" 
-            title="Export"
+            type="button"
+            class="session-card__icon-btn" 
+            title=${t('sessions.export')}
             @click=${() => this._emit('export')}
           >${getIcon('download')}</button>
           
           <button 
-            class="btn-icon btn-icon--danger" 
-            title="Delete"
+            type="button"
+            class="session-card__icon-btn session-card__icon-btn--danger" 
+            title=${t('sessions.delete')}
             @click=${() => this._emit('delete')}
           >${getIcon('trash')}</button>
         </div>

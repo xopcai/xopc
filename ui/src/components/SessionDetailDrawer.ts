@@ -3,6 +3,7 @@
 import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons';
+import { t } from '../utils/i18n';
 import type { SessionDetail } from '../utils/session-api';
 import { messageWireSearchText } from '../messages/agent-messages.js';
 
@@ -131,7 +132,7 @@ export class SessionDetailDrawer extends LitElement {
           <div class="drawer-header__title">
             ${this.session.name || this.session.key}
             ${isPinned ? html`<span class="pin-badge">${getIcon('pin')}</span>` : ''}
-            ${isArchived ? html`<span class="archive-badge">Archived</span>` : ''}
+            ${isArchived ? html`<span class="archive-badge">${t('sessions.archivedBadge')}</span>` : ''}
           </div>
           <div class="drawer-header__meta">
             <span>${this.session.sourceChannel}</span>
@@ -141,7 +142,7 @@ export class SessionDetailDrawer extends LitElement {
             <span>${this._formatDate(this.session.updatedAt)}</span>
           </div>
         </div>
-        <button class="btn-icon" @click=${this._handleClose} title="Close">
+        <button type="button" class="btn-icon" @click=${this._handleClose} title=${t('sessions.close')}>
           ${getIcon('x')}
         </button>
       </div>
@@ -157,12 +158,12 @@ export class SessionDetailDrawer extends LitElement {
           ${getIcon('search')}
           <input
             type="text"
-            placeholder="Search in session..."
+            placeholder=${t('sessions.searchInSession')}
             .value=${this._searchQuery}
             @input=${this._handleSearch}
           />
           ${this._searchQuery ? html`
-            <button class="btn-icon btn-icon--sm" @click=${() => { this._searchQuery = ''; this._performSearch(); }}>
+            <button type="button" class="btn-icon btn-icon--small" @click=${() => { this._searchQuery = ''; this._performSearch(); }} title=${t('sessions.clearSearch')}>
               ${getIcon('x')}
             </button>
           ` : ''}
@@ -171,10 +172,10 @@ export class SessionDetailDrawer extends LitElement {
         ${this._searchResults.length > 0 ? html`
           <div class="search-nav">
             <span class="search-count">${this._currentResultIndex + 1} / ${this._searchResults.length}</span>
-            <button class="btn-icon btn-icon--sm" @click=${() => this._navigateSearch('prev')} title="Previous">
+            <button type="button" class="btn-icon btn-icon--small" @click=${() => this._navigateSearch('prev')} title=${t('sessions.previousResult')}>
               ${getIcon('chevronUp')}
             </button>
-            <button class="btn-icon btn-icon--sm" @click=${() => this._navigateSearch('next')} title="Next">
+            <button type="button" class="btn-icon btn-icon--small" @click=${() => this._navigateSearch('next')} title=${t('sessions.nextResult')}>
               ${getIcon('chevronDown')}
             </button>
           </div>
@@ -188,7 +189,7 @@ export class SessionDetailDrawer extends LitElement {
       return html`
         <div class="drawer-content drawer-content--loading">
           <div class="spinner"></div>
-          <span>Loading...</span>
+          <span>${t('sessions.loadingSession')}</span>
         </div>
       `;
     }
@@ -196,7 +197,7 @@ export class SessionDetailDrawer extends LitElement {
     if (!this.session) {
       return html`
         <div class="drawer-content drawer-content--empty">
-          <span>No session selected</span>
+          <span>${t('sessions.noSessionSelected')}</span>
         </div>
       `;
     }
@@ -233,31 +234,31 @@ export class SessionDetailDrawer extends LitElement {
     return html`
       <div class="drawer-actions">
         ${isArchived ? html`
-          <button class="btn btn--secondary" @click=${() => this._emit('unarchive')}>
-            ${getIcon('archiveRestore')} Unarchive
+          <button type="button" class="btn btn-secondary" @click=${() => this._emit('unarchive')}>
+            ${getIcon('archiveRestore')} ${t('sessions.unarchive')}
           </button>
         ` : html`
-          <button class="btn btn--secondary" @click=${() => this._emit('archive')}>
-            ${getIcon('archive')} Archive
+          <button type="button" class="btn btn-secondary" @click=${() => this._emit('archive')}>
+            ${getIcon('archive')} ${t('sessions.archive')}
           </button>
         `}
 
         ${isPinned ? html`
-          <button class="btn btn--secondary" @click=${() => this._emit('unpin')}>
-            ${getIcon('pinOff')} Unpin
+          <button type="button" class="btn btn-secondary" @click=${() => this._emit('unpin')}>
+            ${getIcon('pinOff')} ${t('sessions.unpin')}
           </button>
         ` : html`
-          <button class="btn btn--secondary" @click=${() => this._emit('pin')}>
-            ${getIcon('pin')} Pin
+          <button type="button" class="btn btn-secondary" @click=${() => this._emit('pin')}>
+            ${getIcon('pin')} ${t('sessions.pin')}
           </button>
         `}
 
-        <button class="btn btn--secondary" @click=${() => this._emit('export')}>
-          ${getIcon('download')} Export
+        <button type="button" class="btn btn-secondary" @click=${() => this._emit('export')}>
+          ${getIcon('download')} ${t('sessions.export')}
         </button>
 
-        <button class="btn btn--danger" @click=${() => this._emit('delete')}>
-          ${getIcon('trash')} Delete
+        <button type="button" class="btn btn-destructive" @click=${() => this._emit('delete')}>
+          ${getIcon('trash')} ${t('sessions.delete')}
         </button>
       </div>
     `;

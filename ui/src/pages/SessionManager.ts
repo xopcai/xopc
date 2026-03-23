@@ -179,10 +179,12 @@ export class SessionManager extends LitElement {
   // ========== Confirm Dialog ==========
 
   private _showConfirm(key: string): void {
+    const session = this._sessions.find(s => s.key === key);
+    const displayName = session?.name || key;
     this._confirmKey = key;
     this._confirmAction = 'delete';
-    this._confirmTitle = 'Delete Session';
-    this._confirmMessage = `Are you sure you want to delete session "${key}"?\n\nThis action cannot be undone.`;
+    this._confirmTitle = t('sessions.deleteSessionTitle');
+    this._confirmMessage = t('sessions.deleteSessionMessage', { name: displayName });
     this._confirmOpen = true;
   }
 
@@ -389,8 +391,8 @@ export class SessionManager extends LitElement {
         .open=${this._confirmOpen}
         .title=${this._confirmTitle}
         .message=${this._confirmMessage}
-        .confirmText="Delete"
-        .cancelText="Cancel"
+        .confirmText=${t('sessions.delete')}
+        .cancelText=${t('settings.cancel')}
         .type="danger"
         @confirm=${this._handleConfirm}
       ></confirm-dialog>
@@ -416,16 +418,17 @@ export class SessionManager extends LitElement {
 
   private _renderFilters(): unknown {
     const filters = [
-      { key: 'all', label: 'All', icon: 'layers' },
-      { key: 'active', label: 'Active', icon: 'circle' },
-      { key: 'pinned', label: 'Pinned', icon: 'pin' },
-      { key: 'archived', label: 'Archived', icon: 'archive' },
+      { key: 'all', label: t('sessions.filterAll'), icon: 'layers' },
+      { key: 'active', label: t('sessions.filterActive'), icon: 'circle' },
+      { key: 'pinned', label: t('sessions.filterPinned'), icon: 'pin' },
+      { key: 'archived', label: t('sessions.filterArchived'), icon: 'archive' },
     ] as const;
 
     return html`
       <div class="session-manager__filters">
         ${filters.map(f => html`
           <button
+            type="button"
             class="filter-btn ${this._statusFilter === f.key ? 'filter-btn--active' : ''}"
             @click=${() => this._handleStatusFilter(f.key)}
           >
