@@ -343,7 +343,11 @@
     },
     "channelsUi": {
       "advancedShow": "Show advanced settings",
-      "advancedHide": "Hide advanced settings"
+      "advancedHide": "Hide advanced settings",
+      "telegramCardSubtitle": "Bot token from @BotFather, allowlists, and optional multi-account JSON.",
+      "weixinCardSubtitle": "CLI login on the gateway host, then allowlists and routing here.",
+      "expandDetails": "Expand settings",
+      "collapseDetails": "Collapse settings"
     }
   },
   "errors": {
