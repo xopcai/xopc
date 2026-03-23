@@ -203,7 +203,120 @@ function normalizeOneAttachment(item: unknown): MessageAttachment {
     data: data ?? content,
     preview,
     extractedText: typeof a.extractedText === 'string' ? a.extractedText : undefined,
+    workspaceRelativePath:
+      typeof a.workspaceRelativePath === 'string' && a.workspaceRelativePath.length > 0
+        ? a.workspaceRelativePath
+        : undefined,
   };
+}
+
+/** Remove persisted inbound machine lines from bubble text (attachments show separately). */
+export function stripInboundFileMachineText(text: string): string {
+  if (!text.includes('xopcbot-path:')) return text;
+  let out = text;
+  // Multiline (canonical persist format)
+  out = out.replace(
+    /\s*\[File:[^\]]+\]\s*\r?\nxopcbot-path:rel:[^\r\n]+\r?\n\s*xopcbot-path:abs:[^\r\n]+/g,
+    '',
+  );
+  // Single line (e.g. markdown collapsed whitespace)
+  out = out.replace(/\s*\[File:[^\]]+\]\s+xopcbot-path:rel:\S+\s+xopcbot-path:abs:\S+/g, '');
+  out = out.replace(/\s*\[File:[^\]]+\]\s*xopcbot-path:rel:\S+\s*xopcbot-path:abs:\S+/g, '');
+  return out.replace(/\n{3,}/g, '\n\n').trim();
+}
+
+function parseFileLineMeta(fileMeta: string): { name: string; mimeType: string; size: number } {
+  const nameMatch = fileMeta.match(/^([^(]+?)\s*\(/);
+  const name = nameMatch ? nameMatch[1].trim() : 'file';
+  const mimeMatch = fileMeta.match(/\(\s*([^,]+)\s*,\s*(\d+)\s*bytes\s*\)/i);
+  const mimeType = mimeMatch ? mimeMatch[1].trim() : 'application/octet-stream';
+  const size = mimeMatch ? parseInt(mimeMatch[2], 10) : 0;
+  return { name, mimeType, size };
+}
+
+function extractAttachmentsFromUserContent(raw: unknown): Message['attachments'] | undefined {
+  const chunks: string[] = [];
+  if (typeof raw === 'string') {
+    chunks.push(raw);
+  } else if (Array.isArray(raw)) {
+    for (const item of raw) {
+      if (item && typeof item === 'object' && (item as { type?: string }).type === 'text') {
+        const t = (item as { text?: string }).text;
+        if (typeof t === 'string') chunks.push(t);
+      }
+    }
+  }
+  const text = chunks.join('\n');
+  if (!text.includes('xopcbot-path:rel:')) return undefined;
+
+  const out: NonNullable<Message['attachments']> = [];
+  const seen = new Set<string>();
+
+  // Single line: rel is \S+ so it stops before " xopcbot-path:abs:" (fixes greedy [^\n]+ bug)
+  const reSingle = /\[File: ([^\]]+)\]\s*xopcbot-path:rel:(\S+)\s*xopcbot-path:abs:\S+/g;
+  let m: RegExpExecArray | null;
+  while ((m = reSingle.exec(text)) !== null) {
+    const rel = m[2].trim();
+    if (seen.has(rel)) continue;
+    seen.add(rel);
+    const { name, mimeType, size } = parseFileLineMeta(m[1]);
+    out.push({
+      name,
+      mimeType,
+      size,
+      type: 'document',
+      workspaceRelativePath: rel,
+    });
+  }
+
+  const reMulti =
+    /\[File: ([^\]]+)\]\s*\r?\nxopcbot-path:rel:([^\r\n]+)\r?\n\s*xopcbot-path:abs:[^\r\n]+/g;
+  while ((m = reMulti.exec(text)) !== null) {
+    const rel = m[2].trim();
+    if (seen.has(rel)) continue;
+    seen.add(rel);
+    const { name, mimeType, size } = parseFileLineMeta(m[1]);
+    out.push({
+      name,
+      mimeType,
+      size,
+      type: 'document',
+      workspaceRelativePath: rel,
+    });
+  }
+
+  return out.length ? out : undefined;
+}
+
+function applyStripToUserContent(
+  role: Message['role'],
+  blocks: MessageContent[],
+): MessageContent[] {
+  if (role !== 'user' && role !== 'user-with-attachments') return blocks;
+  const mapped = blocks.map((b) => {
+    if (b.type === 'text' && typeof b.text === 'string') {
+      return { ...b, text: stripInboundFileMachineText(b.text) };
+    }
+    return b;
+  });
+  return mapped.filter((b) => {
+    if (b.type === 'text' && (!b.text || !b.text.trim())) return false;
+    return true;
+  });
+}
+
+function mergeUserAttachments(
+  wire: Message['attachments'] | undefined,
+  fromContent: Message['attachments'] | undefined,
+): Message['attachments'] | undefined {
+  if (wire?.length && fromContent?.length) {
+    const keys = new Set(
+      wire.map((a) => `${a.name}|${a.workspaceRelativePath ?? ''}`),
+    );
+    const extra = fromContent.filter((a) => !keys.has(`${a.name}|${a.workspaceRelativePath ?? ''}`));
+    return [...wire, ...extra];
+  }
+  return wire?.length ? wire : fromContent;
 }
 
 function buildUserMessage(m: WireMessage): Message {
@@ -213,10 +326,12 @@ function buildUserMessage(m: WireMessage): Message {
       ? (roleRaw as Message['role'])
       : 'assistant';
 
+  const fromContent = extractAttachmentsFromUserContent(m.content);
+
   return {
     role,
-    content: normalizeContentBlocks(m.content),
-    attachments: normalizeWireAttachments(m.attachments),
+    content: applyStripToUserContent(role, normalizeContentBlocks(m.content)),
+    attachments: mergeUserAttachments(normalizeWireAttachments(m.attachments), fromContent),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     thinking: typeof m.thinking === 'string' ? m.thinking : undefined,
     thinkingStreaming: typeof m.thinkingStreaming === 'boolean' ? m.thinkingStreaming : undefined,

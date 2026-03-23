@@ -12,6 +12,7 @@ import { stringToToolResultMessage } from '../../tools/result-adapter.js';
 @customElement('message-bubble')
 export class MessageBubble extends LitElement {
   @property({ attribute: false }) message!: Message;
+  @property({ attribute: false }) authToken?: string;
   @property({ type: Boolean }) isStreaming = false;
   @property({ attribute: false }) progress: { stage: string; message: string; detail?: string } | null = null;
 
@@ -44,7 +45,10 @@ export class MessageBubble extends LitElement {
             ${this._renderContent(this.message.content)}
             ${this._renderLegacyThinking()}
             ${this.message.attachments?.length ? html`
-              <attachment-renderer .attachments=${this.message.attachments}></attachment-renderer>
+              <attachment-renderer
+                .attachments=${this.message.attachments}
+                .authToken=${this.authToken}
+              ></attachment-renderer>
             ` : ''}
           </div>
 

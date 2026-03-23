@@ -804,6 +804,7 @@ export class ChatPanel extends LitElement {
     return html`
       <message-list
         .messages=${list}
+        .authToken=${this.config?.token}
         .isStreaming=${streamingLast}
         .progress=${streamingLast ? this._progress : null}
         .useVirtualScroll=${false}

@@ -19,6 +19,10 @@ import { sanitizeMessages, cleanTrailingErrors } from '../memory/message-sanitiz
 import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygiene.js';
 import { createLogger } from '../../utils/logger.js';
 import { maybeRetryTurnAfterTransientLlmFailure } from './llm-turn-retry.js';
+import {
+  persistInboundAttachmentsToWorkspace,
+  formatInboundFileTextBlock,
+} from '../../attachments/inbound-persist.js';
 
 const log = createLogger('AgentOrchestrator');
 
@@ -30,6 +34,8 @@ export interface AgentOrchestratorConfig {
   feedbackCoordinator: FeedbackCoordinator;
   sessionConfigStore: SessionConfigStore;
   getThinkingDefault: () => ThinkLevel | undefined;
+  /** `agents.defaults.workspace` (resolved); used to persist inbound files per session. */
+  workspaceRoot: string;
 }
 
 export class AgentOrchestrator {
@@ -40,6 +46,7 @@ export class AgentOrchestrator {
   private feedbackCoordinator: FeedbackCoordinator;
   private sessionConfigStore: SessionConfigStore;
   private getThinkingDefault: () => ThinkLevel | undefined;
+  private workspaceRoot: string;
 
   constructor(config: AgentOrchestratorConfig) {
     this.agentManager = config.agentManager;
@@ -49,6 +56,7 @@ export class AgentOrchestrator {
     this.feedbackCoordinator = config.feedbackCoordinator;
     this.sessionConfigStore = config.sessionConfigStore;
     this.getThinkingDefault = config.getThinkingDefault;
+    this.workspaceRoot = config.workspaceRoot;
   }
 
   private async hydrateSessionModelFromStore(sessionKey: string): Promise<void> {
@@ -98,8 +106,16 @@ export class AgentOrchestrator {
       );
       this.agentManager.setThinkingLevel(sessionKey, thinkingLevel);
 
-      // 3. Build user message
-      const userMessage = this.buildUserMessage(msg);
+      // 3. Persist inbound files (Telegram, etc.) under workspace, then build user message
+      const persistedAttachments = await persistInboundAttachmentsToWorkspace(
+        this.workspaceRoot,
+        sessionKey,
+        msg.attachments,
+      );
+      const userMessage = this.buildUserMessage({
+        ...msg,
+        attachments: persistedAttachments ?? msg.attachments,
+      });
 
       // 4. Start task feedback
       this.feedbackCoordinator.startTask();
@@ -198,9 +214,17 @@ export class AgentOrchestrator {
           const mimeType = att.mimeType || 'image/jpeg';  // Fixed: JPEG is Telegram's default
           messageContent.push({ type: 'image', data: att.data, mimeType });
         } else {
-          // Non-image attachments: include as text description
-          const fileInfo = `[File: ${att.name || 'unknown'} (${att.mimeType || 'unknown type'}, ${att.size || 0} bytes)]`;
-          messageContent.push({ type: 'text', text: fileInfo });
+          const fileBlock = formatInboundFileTextBlock(
+            {
+              type: att.type,
+              mimeType: att.mimeType,
+              name: att.name,
+              size: att.size,
+              workspaceRelativePath: att.workspaceRelativePath,
+            },
+            this.workspaceRoot,
+          );
+          messageContent.push({ type: 'text', text: fileBlock });
         }
       }
 

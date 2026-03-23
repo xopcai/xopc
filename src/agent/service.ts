@@ -47,6 +47,10 @@ import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 import { createTypingController, type TypingController } from './typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
 import { tryApplySessionTranscriptHygiene } from './transcript/transcript-hygiene.js';
+import {
+  persistInboundAttachmentsToWorkspace,
+  formatInboundFileTextBlock,
+} from '../attachments/inbound-persist.js';
 
 const log = createLogger('AgentService');
 
@@ -222,6 +226,7 @@ export class AgentService {
       feedbackCoordinator: this.feedbackCoordinator,
       sessionConfigStore: this.sessionConfigStore,
       getThinkingDefault: () => this.config.config?.agents?.defaults?.thinkingDefault,
+      workspaceRoot: this.workspaceDir,
     });
 
     this.messageRouter = new MessageRouter({ workspace: config.workspace });
@@ -564,6 +569,7 @@ export class AgentService {
       data?: string;
       name?: string;
       size?: number;
+      workspaceRelativePath?: string;
     }>,
   ): Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> {
     const messageContent: Array<
@@ -583,13 +589,41 @@ export class AgentService {
             mimeType: att.mimeType || 'image/png',
           });
         } else {
-          const fileInfo = `[File: ${att.name || 'unknown'} (${att.mimeType || 'unknown type'}, ${att.size || 0} bytes)]`;
-          messageContent.push({ type: 'text', text: fileInfo });
+          const fileBlock = formatInboundFileTextBlock(att, this.workspaceDir);
+          messageContent.push({ type: 'text', text: fileBlock });
         }
       }
     }
 
     return messageContent;
+  }
+
+  /**
+   * Persist inbound file attachments under the session workspace (non-images with data).
+   * Idempotent if `workspaceRelativePath` is already set on an attachment.
+   */
+  async prepareInboundAttachments(
+    sessionKey: string,
+    attachments?: Array<{
+      type: string;
+      mimeType?: string;
+      data?: string;
+      name?: string;
+      size?: number;
+      workspaceRelativePath?: string;
+    }>,
+  ): Promise<
+    | Array<{
+        type: string;
+        mimeType?: string;
+        data?: string;
+        name?: string;
+        size?: number;
+        workspaceRelativePath?: string;
+      }>
+    | undefined
+  > {
+    return persistInboundAttachmentsToWorkspace(this.workspaceDir, sessionKey, attachments);
   }
 
   private endDirectRequestContext(): void {
@@ -674,6 +708,7 @@ export class AgentService {
       data?: string;
       name?: string;
       size?: number;
+      workspaceRelativePath?: string;
     }>,
     thinking?: string,
   ): AsyncGenerator<{ type: string; [key: string]: unknown }, void, unknown> {
@@ -792,13 +827,18 @@ export class AgentService {
     });
 
     try {
-      const loaded = await this.sessionStore.load(sessionKey);
+      const prepared = await this.prepareInboundAttachments(sessionKey, attachments);
+      let loaded = await this.sessionStore.load(sessionKey);
+      const lastMsg = loaded[loaded.length - 1] as { role?: string; webchatEarlySave?: boolean } | undefined;
+      if (lastMsg?.role === 'user' && lastMsg.webchatEarlySave === true) {
+        loaded = loaded.slice(0, -1);
+      }
       agent.replaceMessages(this.prepareLoadedSessionMessages(sessionKey, loaded));
 
       await this.modelManager.applyModelForSession(agent, sessionKey);
       await this.applyResolvedThinkingLevel(sessionKey, thinking);
 
-      const messageContent = this.buildMessageContent(content, attachments);
+      const messageContent = this.buildMessageContent(content, prepared);
 
       const agentPromise = (async () => {
         await agent.prompt({
@@ -857,6 +897,7 @@ export class AgentService {
       data?: string;
       name?: string;
       size?: number;
+      workspaceRelativePath?: string;
     }>,
     thinking?: string,
   ): Promise<string> {
@@ -875,7 +916,8 @@ export class AgentService {
       await this.modelManager.applyModelForSession(agent, sessionKey);
       await this.applyResolvedThinkingLevel(sessionKey, thinking);
 
-      const messageContent = this.buildMessageContent(content, attachments);
+      const prepared = await this.prepareInboundAttachments(sessionKey, attachments);
+      const messageContent = this.buildMessageContent(content, prepared);
 
       await agent.prompt({
         role: 'user',

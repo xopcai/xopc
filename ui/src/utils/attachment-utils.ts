@@ -10,7 +10,7 @@ pdfjsLib.GlobalWorkerOptions.workerSrc = new URL(
 ).toString();
 
 export interface Attachment {
-  id: string;
+  id?: string;
   type: 'image' | 'document';
   name: string;
   mimeType: string;
@@ -20,6 +20,8 @@ export interface Attachment {
   data?: string;
   extractedText?: string; // For documents: extracted text content
   preview?: string; // base64 image preview (first page for PDFs, or same as content for images)
+  /** Server-persisted path under workspace (gateway `/api/workspace/inbound-file`) */
+  workspaceRelativePath?: string;
 }
 
 /** Prefer `content`, then `data` (gateway / webchat wire format). */
@@ -489,6 +491,18 @@ export function formatFileSize(bytes: number): string {
     unitIndex++;
   }
   return `${size.toFixed(1)} ${units[unitIndex]}`;
+}
+
+/** Encode binary as base64 (chunked for large buffers). */
+export function arrayBufferToBase64(buffer: ArrayBuffer): string {
+  const bytes = new Uint8Array(buffer);
+  let binary = '';
+  const chunkSize = 0x8000;
+  for (let i = 0; i < bytes.length; i += chunkSize) {
+    const chunk = bytes.subarray(i, i + chunkSize);
+    binary += String.fromCharCode(...chunk);
+  }
+  return btoa(binary);
 }
 
 /**

@@ -7,12 +7,14 @@ import * as XLSX from 'xlsx';
 import { parseAsync } from 'docx-preview';
 import type { Attachment } from '../utils/attachment-utils';
 import {
+  arrayBufferToBase64,
   base64ToArrayBuffer,
   extractTextForPreview,
   getAttachmentBinaryPayload,
   resolveDataUrlForDisplay,
 } from '../utils/attachment-utils';
 import { i18n } from '../utils/i18n';
+import { apiUrl, authHeaders } from '../chat/helpers.js';
 
 // Convert lucide icon array format to SVG string
 function iconToSvg(iconData: unknown, className = ''): string {
@@ -49,6 +51,8 @@ export class AttachmentOverlay extends LitElement {
   @state() private attachment?: Attachment;
   @state() private showExtractedText = false;
   @state() private error: string | null = null;
+  @state() private _loadingGatewayFile = false;
+  private authToken?: string;
 
   private currentLoadingTask: any = null;
   private onCloseCallback?: () => void;
@@ -58,12 +62,49 @@ export class AttachmentOverlay extends LitElement {
     return this;
   }
 
-  static open(attachment: Attachment, onClose?: () => void) {
+  static open(
+    attachment: Attachment,
+    onClose?: () => void,
+    options?: { authToken?: string },
+  ) {
     const overlay = new AttachmentOverlay();
     overlay.attachment = attachment;
+    overlay.authToken = options?.authToken;
     overlay.onCloseCallback = onClose;
     document.body.appendChild(overlay);
     overlay.setupEventListeners();
+    void overlay.fetchGatewayPayloadIfNeeded();
+  }
+
+  private async fetchGatewayPayloadIfNeeded(): Promise<void> {
+    const a = this.attachment;
+    if (!a?.workspaceRelativePath || getAttachmentBinaryPayload(a)) {
+      return;
+    }
+    if (!this.authToken) {
+      this.error = i18n('Missing authentication');
+      return;
+    }
+    this._loadingGatewayFile = true;
+    this.requestUpdate();
+    try {
+      const url = apiUrl(
+        `/api/workspace/inbound-file?rel=${encodeURIComponent(a.workspaceRelativePath)}`,
+      );
+      const res = await fetch(url, { headers: authHeaders(this.authToken) });
+      if (!res.ok) {
+        this.error = `${i18n('Error loading file')} (HTTP ${res.status})`;
+        return;
+      }
+      const buf = await res.arrayBuffer();
+      const b64 = arrayBufferToBase64(buf);
+      this.attachment = { ...a, content: b64, data: b64 };
+      this.error = null;
+    } catch (e) {
+      this.error = e instanceof Error ? e.message : String(e);
+    } finally {
+      this._loadingGatewayFile = false;
+    }
   }
 
   private setupEventListeners() {
@@ -240,6 +281,14 @@ export class AttachmentOverlay extends LitElement {
 
   private renderContent() {
     if (!this.attachment) return html``;
+
+    if (this._loadingGatewayFile) {
+      return html`
+        <div class="attachment-overlay__panel attachment-overlay__panel--empty">
+          ${i18n('Loading...')}
+        </div>
+      `;
+    }
 
     if (this.error) {
       return html`

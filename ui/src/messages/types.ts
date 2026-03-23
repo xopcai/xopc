@@ -39,6 +39,8 @@ export type MessageAttachment = {
   /** Thumbnail / first-page preview (base64), optional */
   preview?: string;
   extractedText?: string;
+  /** Persisted under workspace `.xopcbot/inbound/` — fetch via gateway for preview */
+  workspaceRelativePath?: string;
 };
 
 /** Alias for message attachments (API / editor payloads). */

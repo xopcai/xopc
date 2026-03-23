@@ -521,14 +521,18 @@ export class GatewayService {
           peerId: chatId,
         });
 
-        // Fire-and-forget: save user message immediately so it survives page refresh
-        this._saveUserMessage(sessionKey, message, attachments).catch((err) => {
+        const prepared = await this.agentService.prepareInboundAttachments(sessionKey, attachments);
+
+        // Persist before streaming so a mid-turn refresh still sees text + attachment refs on disk.
+        try {
+          await this._saveUserMessage(sessionKey, message, prepared);
+        } catch (err) {
           log.error({ err, sessionKey }, 'Failed to save user message');
-        });
-        
+        }
+
         try {
           const eventStream = this.agentService.processDirectStreaming(
-            message, sessionKey, attachments, thinking
+            message, sessionKey, prepared, thinking
           );
 
           for await (const event of eventStream) {
@@ -849,23 +853,27 @@ export class GatewayService {
       data?: string;
       name?: string;
       size?: number;
+      workspaceRelativePath?: string;
     }>,
   ): Promise<void> {
     // Load existing messages
     const existingMessages = await this.sessionManager.loadMessages(sessionKey);
 
-    // Build user message
+    // Build user message (marker stripped in SessionStore.convertMessages for API clients)
     const userMessage = {
       role: 'user' as const,
       content: [{ type: 'text' as const, text: message }],
-      attachments: attachments?.map(a => ({
+      attachments: attachments?.map((a) => ({
         type: a.type,
         mimeType: a.mimeType,
         name: a.name,
         size: a.size,
+        workspaceRelativePath: a.workspaceRelativePath,
         // Note: we don't store data (base64) to keep session file small
       })),
       timestamp: Date.now(),
+      /** Dropped before `agent.prompt` so we don't duplicate the turn; not exposed via GET session */
+      webchatEarlySave: true as const,
     };
 
     // Append and save

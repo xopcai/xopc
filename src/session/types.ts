@@ -14,6 +14,14 @@ export interface Message {
     };
   }>;
   name?: string;
+  /** Webchat early-save / UI: inbound file metadata (no base64). Omitted when absent. */
+  attachments?: Array<{
+    type?: string;
+    mimeType?: string;
+    name?: string;
+    size?: number;
+    workspaceRelativePath?: string;
+  }>;
 }
 
 /** Session status enum */
