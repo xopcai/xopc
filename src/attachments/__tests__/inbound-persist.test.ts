@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { resolveSafeInboundFilePath, formatInboundFileTextBlock } from '../inbound-persist.js';
+import {
+  resolveSafeInboundFilePath,
+  formatInboundFileTextBlock,
+  stripInboundFileMetadataFromText,
+} from '../inbound-persist.js';
 
 describe('inbound-persist', () => {
   const ws = '/home/user/ws';
@@ -25,5 +29,20 @@ describe('inbound-persist', () => {
     expect(text).toContain('[File: a.md (text/plain, 10 bytes)]');
     expect(text).toContain('xopcbot-path:rel:.xopcbot/inbound/k/a.md');
     expect(text).toContain('xopcbot-path:abs:');
+  });
+
+  it('stripInboundFileMetadataFromText removes file blocks for session titles', () => {
+    const block = formatInboundFileTextBlock(
+      {
+        type: 'document',
+        mimeType: 'text/plain',
+        name: 'design-system.md',
+        size: 34298,
+        workspaceRelativePath: '.xopcbot/inbound/k/f.md',
+      },
+      ws,
+    );
+    const joined = `分析 ${block}`;
+    expect(stripInboundFileMetadataFromText(joined)).toBe('分析');
   });
 });

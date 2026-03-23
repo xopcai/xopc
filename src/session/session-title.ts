@@ -5,6 +5,7 @@
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { complete, type UserMessage } from '@mariozechner/pi-ai';
 
+import { stripInboundFileMetadataFromText } from '../attachments/inbound-persist.js';
 import { parseSessionKey } from '../routing/session-key.js';
 import { resolveModel } from '../providers/index.js';
 import { createLogger } from '../utils/logger.js';
@@ -36,7 +37,10 @@ function extractTextFromMessage(m: AgentMessage): string {
 
 function firstUserText(messages: AgentMessage[]): string {
   const u = messages.find((m) => m.role === 'user');
-  return u ? extractTextFromMessage(u) : '';
+  if (!u) return '';
+  const raw = extractTextFromMessage(u);
+  // User turns include `formatInboundFileTextBlock` text blocks; do not feed [File:…] into title LLM / fallback.
+  return stripInboundFileMetadataFromText(raw);
 }
 
 /** First assistant message that has visible text (skips tool-only assistant rows). */
