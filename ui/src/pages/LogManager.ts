@@ -1,4 +1,4 @@
-// Log Manager Page Component
+// Log Manager — calm, scannable diagnostics view (design system aligned)
 
 import { html, LitElement } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
@@ -10,7 +10,6 @@ import {
   type LogFile,
   type LogLevel,
   LOG_LEVELS,
-  LOG_LEVEL_COLORS,
 } from '../utils/log-api';
 
 export interface LogManagerConfig {
@@ -28,9 +27,7 @@ export class LogManager extends LitElement {
   @state() private _hasMore = false;
   @state() private _files: LogFile[] = [];
   @state() private _modules: string[] = [];
-  @state() private _showFilesPanel = false;
 
-  // Filters
   @state() private _selectedLevels: Set<LogLevel> = new Set();
   @state() private _searchQuery = '';
   @state() private _selectedModule = '';
@@ -39,8 +36,8 @@ export class LogManager extends LitElement {
   @state() private _offset = 0;
   @state() private _error: string | null = null;
 
-  // Detail view
   @state() private _selectedLog: LogEntry | null = null;
+  @state() private _showFilesPanel = false;
   @state() private _autoRefresh = false;
   @state() private _refreshInterval?: number;
 
@@ -48,12 +45,26 @@ export class LogManager extends LitElement {
   private _limit = 50;
   private _initialized = false;
 
+  private _debouncedSearch = this._debounce(() => {
+    this._loadLogs(true);
+  }, 300);
+
+  private _onDocKeydown = (e: KeyboardEvent): void => {
+    if (e.key !== 'Escape') return;
+    if (this._selectedLog) {
+      this._closeDetail();
+    } else if (this._showFilesPanel) {
+      this._showFilesPanel = false;
+    }
+  };
+
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
   }
 
   override connectedCallback(): void {
     super.connectedCallback();
+    document.addEventListener('keydown', this._onDocKeydown);
     this._tryInitialize();
   }
 
@@ -66,11 +77,11 @@ export class LogManager extends LitElement {
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
+    document.removeEventListener('keydown', this._onDocKeydown);
     this._stopAutoRefresh();
   }
 
   override firstUpdated(): void {
-    // Ensure initialization happens even if config was set before connectedCallback
     this._tryInitialize();
   }
 
@@ -116,12 +127,10 @@ export class LogManager extends LitElement {
         this._logs = [...this._logs, ...result.logs];
       }
 
-      console.log('[LogManager] Total logs in state:', this._logs.length);
       this._hasMore = result.logs.length === this._limit;
       this._offset = this._offset + result.logs.length;
     } catch (err) {
       this._error = err instanceof Error ? err.message : 'Failed to load logs';
-      console.error('[LogManager] Load error:', err);
     } finally {
       this._loading = false;
     }
@@ -130,16 +139,16 @@ export class LogManager extends LitElement {
   private async _loadFiles(): Promise<void> {
     try {
       this._files = await this._api.getLogFiles();
-    } catch (err) {
-      console.error('[LogManager] Files error:', err);
+    } catch {
+      /* optional */
     }
   }
 
   private async _loadModules(): Promise<void> {
     try {
       this._modules = await this._api.getLogModules();
-    } catch (err) {
-      console.error('[LogManager] Modules error:', err);
+    } catch {
+      /* optional */
     }
   }
 
@@ -158,10 +167,6 @@ export class LogManager extends LitElement {
     this._searchQuery = target.value;
     this._debouncedSearch();
   }
-
-  private _debouncedSearch = this._debounce(() => {
-    this._loadLogs(true);
-  }, 300);
 
   private _debounce(fn: () => void, ms: number): () => void {
     let timeout: ReturnType<typeof setTimeout>;
@@ -248,305 +253,356 @@ export class LogManager extends LitElement {
     }
   }
 
+  private _formatTimeCompact(timestamp: string): string {
+    try {
+      const date = new Date(timestamp);
+      return date.toLocaleTimeString([], {
+        hour: '2-digit',
+        minute: '2-digit',
+        second: '2-digit',
+        hour12: false,
+      });
+    } catch {
+      return timestamp;
+    }
+  }
+
   private _formatFileSize(bytes: number): string {
     if (bytes < 1024) return `${bytes} B`;
     if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
     return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
   }
 
-  override render(): unknown {
-    return html`
-      <div class="log-manager">
-        ${this._renderHeader()}
-        <div class="log-manager__main">
-          ${this._renderFilters()}
-          ${this._renderLogTable()}
-          ${this._renderFilesPanel()}
-        </div>
-        ${this._error ? html`<div class="error-banner">${this._error}</div>` : ''}
-      </div>
-
-      ${this._selectedLog ? this._renderDetailDrawer() : ''}
-    `;
+  private _moduleLabel(log: LogEntry): string {
+    return String(log.module || log.prefix || log.service || log.extension || '—');
   }
 
-  private _renderHeader(): unknown {
-    return html`
-      <div class="log-manager__header">
-        <div class="log-manager__title">
-          <span class="title-icon">${getIcon('fileText')}</span>
-          <div class="title-text">
-            <h1>${t('logs.title')}</h1>
-            <span class="title-subtitle">System logs and diagnostics</span>
-          </div>
-        </div>
-        <div class="log-manager__actions">
-          <button
-            class="btn-icon"
-            @click=${this._toggleFilesPanel}
-            title="Toggle log files"
-          >
-            ${getIcon('folder')}
-            ${this._files.length > 0 ? html`<span class="badge">${this._files.length}</span>` : ''}
-          </button>
-          <button
-            class="btn-icon ${this._autoRefresh ? 'btn-icon--active' : ''}"
-            @click=${this._toggleAutoRefresh}
-            title=${this._autoRefresh ? t('logs.pause') : t('logs.autoRefresh')}
-          >
-            ${getIcon(this._autoRefresh ? 'pause' : 'play')}
-          </button>
-          <button
-            class="btn-icon"
-            @click=${() => this._loadLogs(true)}
-            title=${t('logs.refresh')}
-          >
-            ${getIcon('refreshCw')}
-          </button>
-        </div>
-      </div>
-    `;
-  }
-
-  private _renderFilters(): unknown {
-    return html`
-      <div class="log-manager__filters">
-        <div class="log-manager__filters-row">
-          <div class="filter-group">
-            <label class="filter-label">${t('logs.level')}</label>
-            <div class="level-filters">
-              ${LOG_LEVELS.map((level) => html`
-                <button
-                  class="level-badge ${this._selectedLevels.has(level) ? 'level-badge--active' : ''}"
-                  style="--level-color: ${LOG_LEVEL_COLORS[level]}"
-                  @click=${() => this._toggleLevel(level)}
-                >
-                  ${level}
-                </button>
-              `)}
-            </div>
-          </div>
-
-          <div class="filter-group">
-            <label class="filter-label">${t('logs.search')}</label>
-            <div class="search-box">
-              ${getIcon('search')}
-              <input
-                type="text"
-                placeholder="${t('logs.searchPlaceholder')}"
-                .value=${this._searchQuery}
-                @input=${this._handleSearch}
-              />
-            </div>
-          </div>
-        </div>
-
-        <div class="filter-row">
-          <div class="filter-group">
-            <label class="filter-label">Module</label>
-            <select @change=${this._handleModuleChange}>
-              <option value="">All modules</option>
-              ${this._modules.map((m) => html`<option value="${m}">${m}</option>`)}
-            </select>
-          </div>
-
-          <div class="filter-group">
-            <label class="filter-label">From</label>
-            <input
-              type="datetime-local"
-              .value=${this._dateFrom}
-              @input=${this._handleDateFromChange}
-            />
-          </div>
-
-          <div class="filter-group">
-            <label class="filter-label">To</label>
-            <input
-              type="datetime-local"
-              .value=${this._dateTo}
-              @input=${this._handleDateToChange}
-            />
-          </div>
-
-          <button class="btn btn-ghost" @click=${this._clearFilters}>
-            ${getIcon('x')}
-            Clear
-          </button>
-        </div>
-      </div>
-    `;
-  }
-
-
-
-  private _renderLogTable(): unknown {
-    if (this._loading && this._logs.length === 0) {
-      return this._renderLoading();
+  private _messagePreview(log: LogEntry): string {
+    if (log.message) return log.message;
+    try {
+      return JSON.stringify(log);
+    } catch {
+      return '';
     }
-
-    if (this._logs.length === 0) {
-      return html`
-        <div class="log-manager__empty">
-          <div class="empty-state">
-            <div class="empty-state__icon">${getIcon('fileText')}</div>
-            <div class="empty-state__title">${t('logs.noLogs')}</div>
-            <div class="empty-state__description">
-              ${t('logs.noLogsDescription')}
-            </div>
-          </div>
-        </div>
-      `;
-    }
-
-    return html`
-      <div class="log-table-container">
-        <table class="log-table">
-          <thead>
-            <tr>
-              <th>${t('logs.time')}</th>
-              <th>${t('logs.level')}</th>
-              <th>${t('logs.module')}</th>
-              <th>${t('logs.message')}</th>
-            </tr>
-          </thead>
-          <tbody>
-            ${this._logs.length === 0 ? html`
-              <tr>
-                <td colspan="4" style="padding: 2rem; text-align: center; color: var(--text-muted);">
-                  No logs to display
-                </td>
-              </tr>
-            ` : this._logs.map((log) => html`
-                <tr class="log-row log-row--${log.level || 'info'}" @click=${() => this._selectLog(log)}>
-                  <td class="log-cell log-cell--time">${this._formatTimestamp(log.timestamp)}</td>
-                  <td class="log-cell log-cell--level">
-                    <span
-                      class="level-badge level-badge--small"
-                      style="--level-color: ${LOG_LEVEL_COLORS[log.level as LogLevel] || LOG_LEVEL_COLORS.info}"
-                    >
-                      ${log.level || 'info'}
-                    </span>
-                  </td>
-                  <td class="log-cell log-cell--module">${log.module || log.prefix || log.service || '-'}</td>
-                  <td class="log-cell log-cell--message">${log.message || JSON.stringify(log)}</td>
-                </tr>
-            `)}
-          </tbody>
-        </table>
-
-        ${this._hasMore ? html`
-          <div class="log-table__load-more">
-            <button class="btn btn-secondary" @click=${this._handleLoadMore} ?disabled=${this._loading}>
-              ${this._loading ? html`<span class="spinner"></span>` : getIcon('chevronDown')}
-              Load More
-            </button>
-          </div>
-        ` : ''}
-      </div>
-    `;
   }
 
   private _toggleFilesPanel(): void {
     this._showFilesPanel = !this._showFilesPanel;
   }
 
+  override render(): unknown {
+    return html`
+      <div class="log-page">
+        ${this._renderHeader()}
+        ${this._error ? html`<div class="log-page__error" role="alert">${this._error}</div>` : ''}
+        ${this._renderToolbar()}
+        ${this._renderFeed()}
+        ${this._renderFilesPanel()}
+        ${this._selectedLog ? this._renderDetailDrawer() : ''}
+      </div>
+    `;
+  }
+
+  private _renderHeader(): unknown {
+    return html`
+      <header class="log-page__header">
+        <div class="log-page__header-main">
+          <div class="log-page__icon" aria-hidden="true">${getIcon('terminal')}</div>
+          <div class="log-page__titles">
+            <h1 class="log-page__title">${t('logs.title')}</h1>
+            <p class="log-page__subtitle">${t('logs.subtitle')}</p>
+          </div>
+        </div>
+        <div class="log-page__header-actions">
+          <button
+            type="button"
+            class="log-icon-btn"
+            @click=${this._toggleFilesPanel}
+            title=${t('logs.logFiles')}
+            aria-label=${t('logs.logFiles')}
+          >
+            ${getIcon('folder')}
+            ${this._files.length > 0
+              ? html`<span class="log-page__badge">${this._files.length}</span>`
+              : ''}
+          </button>
+          <button
+            type="button"
+            class="log-icon-btn ${this._autoRefresh ? 'log-icon-btn--on' : ''}"
+            @click=${this._toggleAutoRefresh}
+            title=${this._autoRefresh ? t('logs.pause') : t('logs.autoRefresh')}
+            aria-label=${this._autoRefresh ? t('logs.pause') : t('logs.autoRefresh')}
+          >
+            ${getIcon(this._autoRefresh ? 'pause' : 'play')}
+          </button>
+          <button
+            type="button"
+            class="log-icon-btn"
+            @click=${() => this._loadLogs(true)}
+            title=${t('logs.refresh')}
+            aria-label=${t('logs.refresh')}
+          >
+            ${getIcon('refreshCw')}
+          </button>
+        </div>
+      </header>
+    `;
+  }
+
+  private _renderToolbar(): unknown {
+    return html`
+      <section class="log-toolbar" aria-label=${t('logs.filters')}>
+        <div class="log-toolbar__primary">
+          <label class="log-search">
+            <span class="log-search__icon">${getIcon('search')}</span>
+            <input
+              type="search"
+              class="log-search__input"
+              placeholder="${t('logs.searchPlaceholder')}"
+              .value=${this._searchQuery}
+              @input=${this._handleSearch}
+              autocomplete="off"
+              spellcheck="false"
+            />
+          </label>
+        </div>
+
+        <div class="log-toolbar__levels" role="group" aria-label=${t('logs.level')}>
+          ${LOG_LEVELS.map(
+            (level) => html`
+              <button
+                type="button"
+                class="log-level-chip ${this._selectedLevels.has(level) ? 'log-level-chip--active' : ''}"
+                data-level=${level}
+                @click=${() => this._toggleLevel(level)}
+              >
+                ${level}
+              </button>
+            `,
+          )}
+        </div>
+
+        <div class="log-toolbar__secondary">
+          <div class="log-field">
+            <label class="log-field__label" for="log-module">${t('logs.module')}</label>
+            <select id="log-module" class="log-select" @change=${this._handleModuleChange}>
+              <option value="">${t('logs.allModules')}</option>
+              ${this._modules.map((m) => html`<option value="${m}">${m}</option>`)}
+            </select>
+          </div>
+
+          <details class="log-advanced">
+            <summary class="log-advanced__summary">${t('logs.timeRange')}</summary>
+            <div class="log-advanced__body">
+              <div class="log-field log-field--inline">
+                <label class="log-field__label" for="log-from">${t('logs.from')}</label>
+                <input
+                  id="log-from"
+                  type="datetime-local"
+                  class="log-input"
+                  .value=${this._dateFrom}
+                  @input=${this._handleDateFromChange}
+                />
+              </div>
+              <div class="log-field log-field--inline">
+                <label class="log-field__label" for="log-to">${t('logs.to')}</label>
+                <input
+                  id="log-to"
+                  type="datetime-local"
+                  class="log-input"
+                  .value=${this._dateTo}
+                  @input=${this._handleDateToChange}
+                />
+              </div>
+            </div>
+          </details>
+
+          <button type="button" class="btn btn-ghost log-toolbar__clear" @click=${this._clearFilters}>
+            ${getIcon('x')}
+            ${t('logs.clear')}
+          </button>
+        </div>
+
+        ${this._autoRefresh
+          ? html`<p class="log-toolbar__hint">${t('logs.liveHint')}</p>`
+          : ''}
+      </section>
+    `;
+  }
+
+  private _renderFeed(): unknown {
+    if (this._loading && this._logs.length === 0) {
+      return this._renderSkeleton();
+    }
+
+    if (this._logs.length === 0) {
+      return html`
+        <div class="log-feed log-feed--empty">
+          <div class="log-empty">
+            <div class="log-empty__icon" aria-hidden="true">${getIcon('fileText')}</div>
+            <h2 class="log-empty__title">${t('logs.noLogs')}</h2>
+            <p class="log-empty__text">${t('logs.noLogsDescription')}</p>
+          </div>
+        </div>
+      `;
+    }
+
+    return html`
+      <div class="log-feed">
+        <div class="log-feed__meta">
+          <span class="log-feed__count"
+            >${t('logs.showingCount', { count: String(this._logs.length) })}</span
+          >
+          ${this._hasMore
+            ? html`<span class="log-feed__hint">${t('logs.moreAvailable')}</span>`
+            : ''}
+        </div>
+        <ul class="log-feed__list" role="list">
+          ${this._logs.map(
+            (log) => html`
+              <li>
+                <button
+                  type="button"
+                  class="log-line"
+                  data-level=${log.level || 'info'}
+                  @click=${() => this._selectLog(log)}
+                >
+                  <span class="log-line__time">${this._formatTimeCompact(log.timestamp)}</span>
+                  <span class="log-line__level" data-level=${log.level || 'info'}>${log.level || 'info'}</span>
+                  <span class="log-line__module" title=${this._moduleLabel(log)}>${this._moduleLabel(log)}</span>
+                  <span class="log-line__msg">${this._messagePreview(log)}</span>
+                </button>
+              </li>
+            `,
+          )}
+        </ul>
+        ${this._hasMore
+          ? html`
+              <div class="log-feed__more">
+                <button
+                  type="button"
+                  class="btn btn-secondary log-feed__more-btn"
+                  @click=${this._handleLoadMore}
+                  ?disabled=${this._loading}
+                >
+                  ${this._loading
+                    ? html`<span class="log-spinner" aria-hidden="true"></span>`
+                    : getIcon('chevronDown')}
+                  ${t('logs.loadMore')}
+                </button>
+              </div>
+            `
+          : ''}
+      </div>
+    `;
+  }
+
+  private _renderSkeleton(): unknown {
+    return html`
+      <div class="log-feed log-feed--loading" aria-busy="true">
+        ${Array.from({ length: 12 }).map(
+          () => html`
+            <div class="log-skel">
+              <div class="log-skel__t"></div>
+              <div class="log-skel__l"></div>
+              <div class="log-skel__m"></div>
+              <div class="log-skel__x"></div>
+            </div>
+          `,
+        )}
+      </div>
+    `;
+  }
+
   private _renderFilesPanel(): unknown {
     return html`
-      ${this._showFilesPanel ? html`
-        <div class="drawer-overlay" @click=${this._toggleFilesPanel}></div>
-      ` : ''}
-      <div class="files-panel ${this._showFilesPanel ? 'files-panel--open' : ''}">
-        <div class="files-panel__header">
-          <span class="files-panel__title">
+      ${this._showFilesPanel
+        ? html`<div class="log-files-backdrop" @click=${this._toggleFilesPanel}></div>`
+        : ''}
+      <aside
+        class="log-files-panel ${this._showFilesPanel ? 'log-files-panel--open' : ''}"
+        aria-hidden=${!this._showFilesPanel}
+      >
+        <div class="log-files-panel__head">
+          <span class="log-files-panel__title">
             ${getIcon('folder')}
-            Log Files
+            ${t('logs.logFiles')}
           </span>
-          <button class="btn btn-icon" @click=${this._toggleFilesPanel}>
+          <button
+            type="button"
+            class="log-icon-btn"
+            @click=${this._toggleFilesPanel}
+            aria-label=${t('settings.close')}
+          >
             ${getIcon('x')}
           </button>
         </div>
-        <div class="files-panel__content">
-          ${this._files.length === 0 ? html`
-            <div class="files-panel__empty">No log files found</div>
-          ` : html`
-            <div class="file-list">
-              ${this._files.map((file) => html`
-                <div class="file-item">
-                  <span class="file-name">${getIcon('file')}${file.name}</span>
-                  <span class="file-meta">
-                    <span class="file-size">${this._formatFileSize(file.size)}</span>
-                    <span class="file-time">${this._formatTimestamp(file.modified)}</span>
-                  </span>
-                </div>
-              `)}
-            </div>
-          `}
+        <div class="log-files-panel__body">
+          ${this._files.length === 0
+            ? html`<p class="log-files-panel__empty">${t('logs.filesEmpty')}</p>`
+            : html`
+                <ul class="log-files-list">
+                  ${this._files.map(
+                    (file) => html`
+                      <li class="log-files-list__item">
+                        <span class="log-files-list__name">${getIcon('file')}${file.name}</span>
+                        <span class="log-files-list__meta">
+                          <span>${this._formatFileSize(file.size)}</span>
+                          <span>${this._formatTimestamp(file.modified)}</span>
+                        </span>
+                      </li>
+                    `,
+                  )}
+                </ul>
+              `}
         </div>
-      </div>
+      </aside>
     `;
   }
 
   private _renderDetailDrawer(): unknown {
     if (!this._selectedLog) return '';
-
     const log = this._selectedLog;
+    const level = (log.level || 'info') as LogLevel;
 
     return html`
       <div class="drawer-overlay" @click=${this._closeDetail}></div>
-      <div class="drawer drawer--right">
+      <aside class="drawer drawer--right log-detail-drawer">
         <div class="drawer-header">
-          <h3 class="drawer-header__title">${t('logs.details')}</h3>
-          <button class="btn btn-icon" @click=${this._closeDetail}>${getIcon('x')}</button>
+          <h2 class="drawer-header__title">${t('logs.details')}</h2>
+          <button type="button" class="btn-icon" @click=${this._closeDetail} aria-label=${t('settings.close')}>
+            ${getIcon('x')}
+          </button>
         </div>
-        <div class="drawer__content">
+        <div class="drawer-content">
           <div class="log-detail">
-            <div class="log-detail__field">
-              <label>${t('logs.time')}</label>
-              <code>${log.timestamp}</code>
+            <div class="log-detail__row">
+              <span class="log-detail__k">${t('logs.time')}</span>
+              <code class="log-detail__v">${log.timestamp}</code>
             </div>
-            <div class="log-detail__field">
-              <label>${t('logs.level')}</label>
-              <span
-                class="level-badge"
-                style="--level-color: ${LOG_LEVEL_COLORS[log.level]}"
-              >
-                ${log.level}
-              </span>
+            <div class="log-detail__row">
+              <span class="log-detail__k">${t('logs.level')}</span>
+              <span class="log-line__level log-line__level--badge" data-level=${level}>${level}</span>
             </div>
-            <div class="log-detail__field">
-              <label>${t('logs.module')}</label>
-              <code>${log.module}</code>
+            <div class="log-detail__row">
+              <span class="log-detail__k">${t('logs.module')}</span>
+              <code class="log-detail__v">${this._moduleLabel(log)}</code>
             </div>
-            <div class="log-detail__field">
-              <label>${t('logs.message')}</label>
-              <pre class="log-detail__message">${log.message}</pre>
+            <div class="log-detail__block">
+              <span class="log-detail__k">${t('logs.message')}</span>
+              <pre class="log-detail__pre">${log.message || '—'}</pre>
             </div>
-            ${log.meta ? html`
-              <div class="log-detail__field">
-                <label>Metadata</label>
-                <pre class="log-detail__meta">${JSON.stringify(log.meta, null, 2)}</pre>
-              </div>
-            ` : ''}
+            ${log.meta
+              ? html`
+                  <div class="log-detail__block">
+                    <span class="log-detail__k">${t('logs.metadata')}</span>
+                    <pre class="log-detail__pre">${JSON.stringify(log.meta, null, 2)}</pre>
+                  </div>
+                `
+              : ''}
           </div>
         </div>
-      </div>
-    `;
-  }
-
-  private _renderLoading(): unknown {
-    return html`
-      <div class="log-manager__loading">
-        <div class="skeleton-table">
-          ${Array.from({ length: 10 }).map(() => html`
-            <div class="skeleton-row">
-              <div class="skeleton skeleton--time"></div>
-              <div class="skeleton skeleton--level"></div>
-              <div class="skeleton skeleton--module"></div>
-              <div class="skeleton skeleton--message"></div>
-            </div>
-          `)}
-        </div>
-      </div>
+      </aside>
     `;
   }
 }

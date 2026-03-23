@@ -39,15 +39,6 @@ export type LogLevel = 'trace' | 'debug' | 'info' | 'warn' | 'error' | 'fatal';
 
 export const LOG_LEVELS: LogLevel[] = ['trace', 'debug', 'info', 'warn', 'error', 'fatal'];
 
-export const LOG_LEVEL_COLORS: Record<LogLevel, string> = {
-  trace: '#9ca3af',
-  debug: '#6b7280',
-  info: '#3b82f6',
-  warn: '#f59e0b',
-  error: '#ef4444',
-  fatal: '#dc2626',
-};
-
 export class LogAPIClient {
   private baseUrl: string;
   private token?: string;
