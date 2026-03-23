@@ -635,7 +635,7 @@ export type AcpConfig = z.infer<typeof AcpConfigSchema>;
 // ============================================
 
 /**
- * 解析模型引用
+ * Parse a model reference string.
  */
 export interface ParsedModelRef {
   provider: string;
@@ -645,7 +645,7 @@ export interface ParsedModelRef {
 export { isProviderConfigured } from '../providers/index.js';
 
 /**
- * 获取工作空间路径
+ * Resolve the workspace directory path from config.
  */
 export function getWorkspacePath(config: Config): string {
   const workspace = config.agents.defaults.workspace;

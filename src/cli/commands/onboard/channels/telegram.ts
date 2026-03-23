@@ -17,16 +17,16 @@ const CHANNEL_NAME = 'Telegram';
 const CHANNEL_DESC = 'Telegram messaging via Bot API';
 
 /**
- * 检查 Telegram 是否已配置
+ * Whether Telegram has usable credentials in config.
  */
 function isTelegramConfigured(config: Config): boolean {
   const telegram = config.channels?.telegram as any;
   if (!telegram) return false;
   
-  // 检查顶层配置
+  // Top-level single-account config
   if ((telegram as any).botToken && (telegram as any).enabled) return true;
   
-  // 检查多账号配置
+  // Multi-account config
   const accounts = (telegram as any).accounts;
   if (accounts) {
     for (const account of Object.values(accounts)) {
@@ -38,20 +38,20 @@ function isTelegramConfigured(config: Config): boolean {
 }
 
 /**
- * 检测环境变量
+ * Read TELEGRAM_BOT_TOKEN from the environment if set.
  */
 function detectEnvToken(): string | null {
   return process.env.TELEGRAM_BOT_TOKEN?.trim() || null;
 }
 
 /**
- * 配置 Bot Token
+ * Prompt for or reuse the bot token.
  */
 async function promptBotToken(config: Config): Promise<string | null> {
   const envToken = detectEnvToken();
   const existing = (config.channels?.telegram as any)?.botToken;
   
-  // 如果有环境变量，询问是否使用
+  // Offer env var when present and no saved token
   if (envToken && !existing) {
     const useEnv = await confirm({
       message: '检测到 TELEGRAM_BOT_TOKEN 环境变量，是否使用?',
@@ -60,7 +60,7 @@ async function promptBotToken(config: Config): Promise<string | null> {
     if (useEnv) return envToken;
   }
   
-  // 如果已有配置，询问是否保留
+  // Ask whether to keep an existing saved token
   if (existing) {
     const keep = await confirm({
       message: 'Telegram Bot Token 已配置，是否保留?',
@@ -69,7 +69,7 @@ async function promptBotToken(config: Config): Promise<string | null> {
     if (keep) return existing;
   }
   
-  // 提示用户获取 token
+  // Help text for obtaining a token from BotFather
   console.log('\n📝 Telegram Bot Token:');
   console.log('   1. 在 Telegram 中找到 @BotFather');
   console.log('   2. 发送 /newbot 创建新机器人');
@@ -84,7 +84,7 @@ async function promptBotToken(config: Config): Promise<string | null> {
 }
 
 /**
- * 配置 DM 策略
+ * Prompt for DM (private chat) policy.
  */
 async function promptDmPolicy(): Promise<DmPolicy> {
   const policy = await select<DmPolicy>({
@@ -118,7 +118,7 @@ async function promptDmPolicy(): Promise<DmPolicy> {
 }
 
 /**
- * 配置 Allowlist
+ * Prompt for an allowlist (IDs or usernames).
  */
 async function promptAllowlist(message: string): Promise<Array<string | number>> {
   const value = await input({
@@ -128,13 +128,13 @@ async function promptAllowlist(message: string): Promise<Array<string | number>>
   
   if (!value.trim()) return [];
   
-  // 解析输入（支持逗号、空格、换行分隔）
+  // Split on comma, whitespace, or newlines
   const entries = value
     .split(/[,\s\n]+/)
     .map(s => s.trim())
     .filter(Boolean);
   
-  // 尝试将数字 ID 转为 number 类型
+  // Coerce numeric-looking strings to numbers
   return entries.map(e => {
     const num = parseInt(e, 10);
     return !isNaN(num) && String(num) === e ? num : e;
@@ -142,7 +142,7 @@ async function promptAllowlist(message: string): Promise<Array<string | number>>
 }
 
 /**
- * 配置 Group 策略
+ * Prompt for group chat policy.
  */
 async function promptGroupPolicy(): Promise<GroupPolicy> {
   const policy = await select<GroupPolicy>({
@@ -171,7 +171,7 @@ async function promptGroupPolicy(): Promise<GroupPolicy> {
 }
 
 /**
- * Telegram 配置器实现
+ * Telegram channel configurator implementation.
  */
 export const telegramConfigurator: ChannelConfigurator = {
   id: CHANNEL_ID,
@@ -192,10 +192,10 @@ export const telegramConfigurator: ChannelConfigurator = {
       return config;
     }
     
-    // Step 2: DM 策略
+    // Step 2: DM policy
     const dmPolicy = await promptDmPolicy();
     
-    // Step 3: DM Allowlist（如果选择 allowlist）
+    // Step 3: DM allowlist (when policy is allowlist)
     let allowFrom: Array<string | number> | undefined;
     if (dmPolicy === 'allowlist') {
       allowFrom = await promptAllowlist(
@@ -203,10 +203,10 @@ export const telegramConfigurator: ChannelConfigurator = {
       );
     }
     
-    // Step 4: Group 策略
+    // Step 4: Group policy
     const groupPolicy = await promptGroupPolicy();
     
-    // Step 5: Group Allowlist（如果选择 allowlist）
+    // Step 5: Group allowlist (when policy is allowlist)
     let groupAllowFrom: Array<string | number> | undefined;
     if (groupPolicy === 'allowlist') {
       groupAllowFrom = await promptAllowlist(
@@ -214,7 +214,7 @@ export const telegramConfigurator: ChannelConfigurator = {
       );
     }
     
-    // 构建新配置
+    // Build merged Telegram channel config
     const telegramConfig: any = {
       enabled: true,
       botToken,

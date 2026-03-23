@@ -1,50 +1,50 @@
 /**
- * Binding 规则管理
- * 
- * 支持优先级匹配、glob 模式匹配 peerId、多条件匹配
+ * Binding rules
+ *
+ * Priority-ordered rules with optional glob patterns on peer id and related fields.
  */
 
 import { normalizeAccountId } from './account-id.js';
 import { sanitizeSegment } from './session-key.js';
 
 /**
- * Binding 匹配条件
+ * Single binding match clause.
  */
 export interface BindingMatch {
-  /** Channel ID（必需） */
+  /** Channel id (required) */
   channel: string;
-  /** Account ID 模式（支持 * 通配符） */
+  /** Account id pattern (`*` allowed) */
   accountId?: string;
-  /** Peer 类型（dm, group, channel 等） */
+  /** Peer kind (dm, group, channel, …) */
   peerKind?: string;
-  /** Peer ID（支持 glob 模式） */
+  /** Peer id glob */
   peerId?: string;
-  /** Guild ID（Discord 服务器） */
+  /** Discord guild id */
   guildId?: string;
-  /** Team ID（Slack 工作区） */
+  /** Slack team id */
   teamId?: string;
-  /** 角色 ID 列表（用于基于角色的路由） */
+  /** Role ids (any match wins) */
   memberRoleIds?: string[];
 }
 
 /**
- * Binding 规则
+ * One routing rule with priority.
  */
 export interface BindingRule {
-  /** 规则 ID */
+  /** Stable rule id */
   id: string;
-  /** 目标 Agent ID */
+  /** Target agent id */
   agentId: string;
-  /** 优先级（数字越小优先级越高） */
+  /** Lower number = higher priority */
   priority: number;
-  /** 匹配条件 */
+  /** Match clause */
   match: BindingMatch;
-  /** 是否启用 */
+  /** Disabled rules are skipped */
   enabled?: boolean;
 }
 
 /**
- * 路由决策输入
+ * Incoming message context for binding resolution.
  */
 export interface RouteInput {
   channel: string;
@@ -57,7 +57,7 @@ export interface RouteInput {
 }
 
 /**
- * 路由决策结果
+ * Result of binding resolution.
  */
 export interface RouteResult {
   agentId: string;
@@ -67,14 +67,13 @@ export interface RouteResult {
 }
 
 /**
- * 简单的 glob 匹配（支持 * 通配符）
+ * Simple glob match (`*` only).
  */
 export function globMatch(pattern: string, value: string): boolean {
   if (pattern === '*') {
     return true;
   }
   
-  // 转义特殊字符，将 * 转换为 .*
   const regexPattern = pattern
     .split('*')
     .map((segment) => segment.replace(/[.+?^${}()|[\]\\]/g, '\\$&'))
@@ -85,15 +84,13 @@ export function globMatch(pattern: string, value: string): boolean {
 }
 
 /**
- * 检查输入是否匹配 binding 规则
+ * Whether `input` satisfies `match`.
  */
 export function matchesBinding(input: RouteInput, match: BindingMatch): boolean {
-  // Channel 必须匹配
   if (input.channel.toLowerCase() !== match.channel.toLowerCase()) {
     return false;
   }
   
-  // Account ID 匹配（支持 * 通配符）
   if (match.accountId && match.accountId !== '*') {
     const inputAccountId = normalizeAccountId(input.accountId);
     const patternAccountId = normalizeAccountId(match.accountId);
@@ -102,7 +99,6 @@ export function matchesBinding(input: RouteInput, match: BindingMatch): boolean 
     }
   }
   
-  // PeerKind 匹配
   if (match.peerKind) {
     const inputPeerKind = (input.peerKind ?? '').toLowerCase();
     if (inputPeerKind !== match.peerKind.toLowerCase()) {
@@ -110,7 +106,6 @@ export function matchesBinding(input: RouteInput, match: BindingMatch): boolean 
     }
   }
   
-  // PeerId 匹配（支持 glob 模式）
   if (match.peerId) {
     const inputPeerId = (input.peerId ?? '').toLowerCase();
     if (!globMatch(match.peerId.toLowerCase(), inputPeerId)) {
@@ -118,7 +113,6 @@ export function matchesBinding(input: RouteInput, match: BindingMatch): boolean 
     }
   }
   
-  // GuildId 匹配
   if (match.guildId) {
     const inputGuildId = (input.guildId ?? '').toLowerCase();
     if (inputGuildId !== match.guildId.toLowerCase()) {
@@ -126,7 +120,6 @@ export function matchesBinding(input: RouteInput, match: BindingMatch): boolean 
     }
   }
   
-  // TeamId 匹配
   if (match.teamId) {
     const inputTeamId = (input.teamId ?? '').toLowerCase();
     if (inputTeamId !== match.teamId.toLowerCase()) {
@@ -134,7 +127,6 @@ export function matchesBinding(input: RouteInput, match: BindingMatch): boolean 
     }
   }
   
-  // MemberRoleIds 匹配（任一匹配即可）
   if (match.memberRoleIds && match.memberRoleIds.length > 0) {
     const inputRoleIds = new Set((input.memberRoleIds ?? []).map((r) => r.toLowerCase()));
     const hasMatchingRole = match.memberRoleIds.some((role) =>
@@ -149,7 +141,7 @@ export function matchesBinding(input: RouteInput, match: BindingMatch): boolean 
 }
 
 /**
- * 从配置中解析 binding 规则
+ * Parse binding rules from config JSON.
  */
 export function parseBindingRules(config: any): BindingRule[] {
   const rules: BindingRule[] = [];
@@ -165,12 +157,11 @@ export function parseBindingRules(config: any): BindingRule[] {
     }
   }
   
-  // 按优先级排序（高优先级在前）
   return rules.sort((a, b) => b.priority - a.priority);
 }
 
 /**
- * 解析单个 binding 规则
+ * Parse one raw binding object or return null.
  */
 export function parseBindingRule(raw: any, index: number): BindingRule | null {
   if (!raw || typeof raw !== 'object') {
@@ -200,7 +191,7 @@ export function parseBindingRule(raw: any, index: number): BindingRule | null {
 }
 
 /**
- * 解析路由决策
+ * Pick the first matching rule or fall back to `defaultAgentId`.
  */
 export function resolveRoute(
   input: RouteInput,
@@ -209,7 +200,6 @@ export function resolveRoute(
 ): RouteResult {
   const normalizedAccountId = normalizeAccountId(input.accountId);
   
-  // 查找第一个匹配的规则
   for (const rule of rules) {
     if (rule.enabled === false) {
       continue;
@@ -225,7 +215,6 @@ export function resolveRoute(
     }
   }
   
-  // 默认路由
   return {
     agentId: defaultAgentId,
     accountId: normalizedAccountId,

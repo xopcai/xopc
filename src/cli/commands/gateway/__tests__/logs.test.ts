@@ -10,7 +10,7 @@ process.env.HOME = '/root';
 
 import { createLogsCommand } from '../logs.js';
 
-// Mock child_process - 需要导出所有被依赖的函数
+// Mock child_process — re-export everything the module under test needs
 vi.mock('child_process', async (importOriginal) => {
   const actual = await importOriginal<typeof import('child_process')>();
   return {

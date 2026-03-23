@@ -1,5 +1,5 @@
 /**
- * RequestLimiter 单元测试
+ * RequestLimiter unit tests
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';

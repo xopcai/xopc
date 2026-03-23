@@ -1,7 +1,7 @@
 /**
- * Account ID 规范化工具
- * 
- * Account ID 用于标识不同的账户配置，支持多账户路由。
+ * Account id normalization
+ *
+ * Used to distinguish channel account configs in multi-account routing.
  */
 
 export const DEFAULT_ACCOUNT_ID = 'default';
@@ -16,13 +16,13 @@ const normalizeAccountIdCache = new Map<string, string>();
 const normalizeOptionalAccountIdCache = new Map<string, string | undefined>();
 
 /**
- * 规范化 Account ID
- * 
- * 规则：
- * - 只允许 a-z0-9_- 字符
- * - 不能以 - 或 _ 开头
- * - 最大长度 64 字符
- * - 空值返回 'default'
+ * Normalize an account id string.
+ *
+ * Rules:
+ * - Only `a-z`, `0-9`, `_`, `-`
+ * - Must not start with `-` or `_`
+ * - Max length 64
+ * - Empty input -> `default`
  */
 export function normalizeAccountId(value: string | undefined | null): string {
   const trimmed = (value ?? '').trim();
@@ -41,9 +41,7 @@ export function normalizeAccountId(value: string | undefined | null): string {
 }
 
 /**
- * 规范化可选 Account ID
- * 
- * 空值返回 undefined 而不是 'default'
+ * Like `normalizeAccountId`, but empty input yields `undefined` (not `default`).
  */
 export function normalizeOptionalAccountId(value: string | undefined | null): string | undefined {
   const trimmed = (value ?? '').trim();
@@ -61,7 +59,7 @@ export function normalizeOptionalAccountId(value: string | undefined | null): st
 }
 
 /**
- * 验证 Account ID 是否有效
+ * Whether the value already matches the strict account id pattern.
  */
 export function isValidAccountId(value: string | undefined | null): boolean {
   const trimmed = (value ?? '').trim();
@@ -69,7 +67,7 @@ export function isValidAccountId(value: string | undefined | null): boolean {
 }
 
 /**
- * 清理 Account ID（同 sanitizeSegment）
+ * Alias for `normalizeAccountId` (same canonicalization as session segments).
  */
 export function sanitizeAccountId(value: string | undefined | null): string {
   return normalizeAccountId(value);

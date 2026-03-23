@@ -1,10 +1,10 @@
 /**
- * Session 路由系统
- * 
- * 提供完整的 session key 管理、binding 规则解析和路由决策功能。
+ * Session routing
+ *
+ * Session key helpers, binding rules, and route resolution.
  */
 
-// Session Key 工具
+// Session key utilities
 export {
   buildSessionKey,
   parseSessionKey,
@@ -21,7 +21,7 @@ export {
   type ParsedSessionKey,
 } from './session-key.js';
 
-// Account ID 规范化
+// Account id normalization
 export {
   normalizeAccountId,
   normalizeOptionalAccountId,
@@ -30,7 +30,7 @@ export {
   DEFAULT_ACCOUNT_ID,
 } from './account-id.js';
 
-// Binding 规则管理
+// Binding rules
 export {
   globMatch,
   matchesBinding,
@@ -43,7 +43,7 @@ export {
   type RouteResult,
 } from './bindings.js';
 
-// 路由决策引擎
+// Route resolution
 export {
   applyIdentityLinks,
   getDefaultAgentId,
