@@ -387,6 +387,8 @@
   },
   "cron": {
     "title": "Cron Jobs",
+    "subtitle": "Schedule messages and agent turns on a fixed cadence.",
+    "statsRegion": "Overview",
     "jobsHeading": "Scheduled jobs",
     "addJob": "Add Cron Job",
     "editJob": "Edit Cron Job",
@@ -433,7 +435,8 @@
     "cancel": "Cancel",
     "total": "Total",
     "totalJobs": "Total jobs",
-    "emptyStateTitle": "No cron jobs yet",
+    "emptyStateTitle": "No scheduled jobs yet",
+    "emptyStateHint": "Create a job to send on a cron schedule—directly or via the agent.",
     "emptyStateCta": "Create your first job",
     "channel": "Channel",
     "recipient": "Recipient *",

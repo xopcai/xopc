@@ -58,12 +58,22 @@ export class CronManager extends LitElement {
   private _api!: CronAPIClient;
   private _initialized = false;
 
+  private _onDocKeydown = (e: KeyboardEvent): void => {
+    if (e.key !== 'Escape') return;
+    if (this._formOpen) {
+      this._closeForm();
+    } else if (this._detailOpen) {
+      this._closeDetail();
+    }
+  };
+
   createRenderRoot(): HTMLElement | DocumentFragment {
     return this;
   }
 
   override connectedCallback(): void {
     super.connectedCallback();
+    document.addEventListener('keydown', this._onDocKeydown);
     this._tryInitialize();
   }
 
@@ -90,6 +100,7 @@ export class CronManager extends LitElement {
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
+    document.removeEventListener('keydown', this._onDocKeydown);
     this._api?.disconnect();
   }
 
@@ -382,67 +393,87 @@ export class CronManager extends LitElement {
 
   override render(): ReturnType<typeof html> {
     return html`
-      <div class="cron-manager">
-        ${this._error ? html`<div class="error-banner">${this._error}</div>` : ''}
+      <div class="cron-page">
+        ${this._error ? html`<div class="cron-page__error" role="alert">${this._error}</div>` : nothing}
 
-        <!-- Header -->
-        <div class="cron-manager__header">
-          <h1 class="page-title">${getIcon('clock')} ${t('cron.title')}</h1>
-          <div class="cron-manager__actions">
-            <button class="btn btn-secondary" @click=${this._loadJobs} ?disabled=${this._loading}>
-              ${getIcon('refresh')} ${t('logs.refresh')}
+        <header class="cron-page__header">
+          <div class="cron-page__header-main">
+            <div class="cron-page__icon" aria-hidden="true">${getIcon('clock')}</div>
+            <div class="cron-page__titles">
+              <h1 class="cron-page__title">${t('cron.title')}</h1>
+              <p class="cron-page__subtitle">${t('cron.subtitle')}</p>
+            </div>
+          </div>
+          <div class="cron-page__actions">
+            <button
+              type="button"
+              class="log-icon-btn"
+              @click=${this._loadJobs}
+              ?disabled=${this._loading}
+              title=${t('logs.refresh')}
+              aria-label=${t('logs.refresh')}
+            >
+              ${getIcon('refreshCw')}
             </button>
-            <button class="btn btn-primary" @click=${() => this._openForm()}>
-              ${getIcon('plus')} ${t('cron.addJob')}
+            <button type="button" class="btn btn-primary cron-page__add" @click=${() => this._openForm()}>
+              ${getIcon('plus')}
+              ${t('cron.addJob')}
             </button>
           </div>
-        </div>
+        </header>
 
-        <!-- Stats -->
-        ${this._metrics ? html`
-          <div class="cron-manager__stats">
-            <div class="stat-card" style="text-align: center;">
-              <div class="stat-value">${this._metrics.totalJobs}</div>
-              <div class="stat-label">${t('cron.totalJobs')}</div>
-            </div>
-            <div class="stat-card" style="text-align: center;">
-              <div class="stat-value">${this._metrics.enabledJobs}</div>
-              <div class="stat-label">${t('cron.enabled')}</div>
-            </div>
-            <div class="stat-card" style="text-align: center;">
-              <div class="stat-value">${this._metrics.runningJobs}</div>
-              <div class="stat-label">${t('cron.running')}</div>
-            </div>
-            <div class="stat-card" style="text-align: center;">
-              <div class="stat-value" style="font-size: 0.875rem;">
-                ${this._metrics.nextScheduledJob 
-                  ? this._formatNextRun(this._metrics.nextScheduledJob.runAt)
-                  : 'N/A'}
+        ${this._metrics
+          ? html`
+              <div class="cron-stats" role="region" aria-label=${t('cron.statsRegion')}>
+                <div class="cron-stat">
+                  <div class="cron-stat__value">${this._metrics.totalJobs}</div>
+                  <div class="cron-stat__label">${t('cron.totalJobs')}</div>
+                </div>
+                <div class="cron-stat">
+                  <div class="cron-stat__value">${this._metrics.enabledJobs}</div>
+                  <div class="cron-stat__label">${t('cron.enabled')}</div>
+                </div>
+                <div class="cron-stat">
+                  <div class="cron-stat__value">${this._metrics.runningJobs}</div>
+                  <div class="cron-stat__label">${t('cron.running')}</div>
+                </div>
+                <div class="cron-stat cron-stat--wide">
+                  <div class="cron-stat__value cron-stat__value--muted">
+                    ${this._metrics.nextScheduledJob
+                      ? this._formatNextRun(this._metrics.nextScheduledJob.runAt)
+                      : '—'}
+                  </div>
+                  <div class="cron-stat__label">${t('cron.nextRun')}</div>
+                </div>
               </div>
-              <div class="stat-label">${t('cron.nextRun')}</div>
-            </div>
-          </div>
-        ` : nothing}
+            `
+          : nothing}
 
-        <!-- Job cards -->
-        <section class="cron-jobs-section" aria-label=${t('cron.jobsHeading')}>
+        <section class="cron-section cron-jobs-section" aria-label=${t('cron.jobsHeading')}>
           <div class="cron-jobs-section__head">
             <h2 class="cron-jobs-section__title">${t('cron.jobsHeading')}</h2>
-            ${this._jobs.length > 0 ? html`
-              <span class="cron-jobs-section__count">${this._jobs.length}</span>
-            ` : nothing}
+            ${this._jobs.length > 0
+              ? html`<span class="cron-jobs-section__count">${this._jobs.length}</span>`
+              : nothing}
           </div>
-          ${this._loading && this._jobs.length === 0 ? html`
-            <div class="cron-jobs-section__loading"><div class="spinner"></div></div>
-          ` : this._jobs.length === 0 ? html`
-            <div class="cron-jobs-empty">
-              <div class="empty-state">
-                <div class="empty-state__icon">${getIcon('clock')}</div>
-                <div class="empty-state__title">${t('cron.emptyStateTitle')}</div>
-                <button class="btn btn-primary" @click=${this._openForm}>${t('cron.emptyStateCta')}</button>
-              </div>
-            </div>
-          ` : html`
+          ${this._loading && this._jobs.length === 0
+            ? html`
+                <div class="cron-jobs-section__loading" aria-busy="true">
+                  <div class="cron-spinner"></div>
+                </div>
+              `
+            : this._jobs.length === 0
+              ? html`
+                  <div class="cron-empty">
+                    <div class="cron-empty__icon" aria-hidden="true">${getIcon('clock')}</div>
+                    <h3 class="cron-empty__title">${t('cron.emptyStateTitle')}</h3>
+                    <p class="cron-empty__text">${t('cron.emptyStateHint')}</p>
+                    <button type="button" class="btn btn-primary cron-empty__cta" @click=${this._openForm}>
+                      ${t('cron.emptyStateCta')}
+                    </button>
+                  </div>
+                `
+              : html`
             <div class="cron-job-grid">
               ${this._jobs.map(
                 (job) => html`
@@ -488,24 +519,27 @@ export class CronManager extends LitElement {
                     <div class="cron-job-card__actions" @click=${(e: Event) => e.stopPropagation()}>
                       <button
                         type="button"
-                        class="btn btn-icon btn-secondary"
+                        class="btn-icon"
                         title="${t('cron.edit')}"
+                        aria-label="${t('cron.edit')}"
                         @click=${() => this._openForm(job)}
                       >
                         ${getIcon('edit')}
                       </button>
                       <button
                         type="button"
-                        class="btn btn-icon btn-secondary"
+                        class="btn-icon"
                         title="${t('cron.runNow')}"
+                        aria-label="${t('cron.runNow')}"
                         @click=${() => this._showRunConfirm(job)}
                       >
                         ${getIcon('play')}
                       </button>
                       <button
                         type="button"
-                        class="btn btn-icon btn-danger"
+                        class="btn-icon cron-job-card__btn--danger"
                         title="${t('cron.delete')}"
+                        aria-label="${t('cron.delete')}"
                         @click=${() => this._showDeleteConfirm(job)}
                       >
                         ${getIcon('trash')}
@@ -519,53 +553,76 @@ export class CronManager extends LitElement {
           `}
         </section>
 
-        <section class="cron-run-log" aria-label=${t('cron.runHistoryTitle')}>
+        <section class="cron-section cron-run-log" aria-label=${t('cron.runHistoryTitle')}>
           <div class="cron-run-log__head">
             <div>
               <h2 class="cron-run-log__title">${t('cron.runHistoryTitle')}</h2>
               <p class="cron-run-log__hint">${t('cron.runHistoryHint')}</p>
             </div>
-            <button type="button" class="btn btn-secondary btn-sm" @click=${this._loadRunHistory} ?disabled=${this._runHistoryLoading}>
-              ${getIcon('refresh')} ${t('logs.refresh')}
+            <button
+              type="button"
+              class="log-icon-btn"
+              @click=${this._loadRunHistory}
+              ?disabled=${this._runHistoryLoading}
+              title=${t('logs.refresh')}
+              aria-label=${t('logs.refresh')}
+            >
+              ${getIcon('refreshCw')}
             </button>
           </div>
-          ${this._runHistoryLoading && this._runHistory.length === 0 ? html`
-            <div class="cron-run-log__loading"><div class="spinner"></div></div>
-          ` : this._runHistory.length === 0 ? html`
-            <p class="cron-run-log__empty">${t('cron.noRunsYet')}</p>
-          ` : html`
-            <div class="cron-run-log__table-wrap">
-              <table class="data-table cron-run-log__table">
-                <thead>
-                  <tr>
-                    <th>${t('cron.colStarted')}</th>
-                    <th>${t('cron.colJob')}</th>
-                    <th>${t('cron.status')}</th>
-                    <th>${t('cron.colDuration')}</th>
-                    <th>${t('cron.colDetail')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${this._runHistory.map((row) => html`
-                    <tr>
-                      <td><time datetime=${row.startedAt}>${this._formatTime(row.startedAt)}</time></td>
-                      <td>
-                        ${this._jobs.some((j) => j.id === row.jobId)
-                          ? html`<button type="button" class="btn btn-link cron-run-log__job-link" @click=${() => {
-                            const j = this._jobs.find((x) => x.id === row.jobId);
-                            if (j) this._openDetail(j);
-                          }}>${row.jobName || row.jobId}</button>`
-                          : html`<span class="cron-run-log__job-id">${row.jobName || row.jobId}</span>`}
-                      </td>
-                      <td><span class="cron-run-log__status cron-run-log__status--${row.status}">${this._execStatusLabel(row.status)}</span></td>
-                      <td>${this._formatDuration(row.duration)}</td>
-                      <td class="cron-run-log__detail" title=${row.summary || row.error || ''}>${this._truncate(row.summary || row.error, 96)}</td>
-                    </tr>
-                  `)}
-                </tbody>
-              </table>
-            </div>
-          `}
+          ${this._runHistoryLoading && this._runHistory.length === 0
+            ? html`
+                <div class="cron-run-log__loading" aria-busy="true">
+                  <div class="cron-spinner"></div>
+                </div>
+              `
+            : this._runHistory.length === 0
+              ? html`<p class="cron-run-log__empty">${t('cron.noRunsYet')}</p>`
+              : html`
+                  <div class="cron-run-log__table-wrap">
+                    <table class="data-table cron-run-log__table">
+                      <thead>
+                        <tr>
+                          <th>${t('cron.colStarted')}</th>
+                          <th>${t('cron.colJob')}</th>
+                          <th>${t('cron.status')}</th>
+                          <th>${t('cron.colDuration')}</th>
+                          <th>${t('cron.colDetail')}</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        ${this._runHistory.map((row) => html`
+                          <tr>
+                            <td><time datetime=${row.startedAt}>${this._formatTime(row.startedAt)}</time></td>
+                            <td>
+                              ${this._jobs.some((j) => j.id === row.jobId)
+                                ? html`<button
+                                    type="button"
+                                    class="cron-run-log__job-link"
+                                    @click=${() => {
+                                      const j = this._jobs.find((x) => x.id === row.jobId);
+                                      if (j) this._openDetail(j);
+                                    }}
+                                  >
+                                    ${row.jobName || row.jobId}
+                                  </button>`
+                                : html`<span class="cron-run-log__job-id">${row.jobName || row.jobId}</span>`}
+                            </td>
+                            <td>
+                              <span class="cron-run-log__pill cron-run-log__pill--${row.status}"
+                                >${this._execStatusLabel(row.status)}</span
+                              >
+                            </td>
+                            <td>${this._formatDuration(row.duration)}</td>
+                            <td class="cron-run-log__detail" title=${row.summary || row.error || ''}>
+                              ${this._truncate(row.summary || row.error, 96)}
+                            </td>
+                          </tr>
+                        `)}
+                      </tbody>
+                    </table>
+                  </div>
+                `}
         </section>
       </div>
 
@@ -575,7 +632,9 @@ export class CronManager extends LitElement {
           <div class="modal modal--form" @click=${(e: Event) => e.stopPropagation()}>
             <div class="modal__header">
               <h2 class="modal__title">${this._formMode === 'edit' ? t('cron.editJob') : t('cron.addJob')}</h2>
-              <button class="btn-icon" @click=${this._closeForm}>${getIcon('x')}</button>
+              <button type="button" class="btn-icon" @click=${this._closeForm} aria-label=${t('settings.close')}>
+                ${getIcon('x')}
+              </button>
             </div>
             <div class="modal__content">
               <div class="form-field">
@@ -590,18 +649,16 @@ export class CronManager extends LitElement {
               </div>
               <div class="form-field">
                 <label class="form-field__label">${t('cron.schedule')}</label>
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <div class="cron-form__inline">
                   <input
                     type="text"
-                    class="form-field__input"
-                    style="flex: 2; min-width: 0;"
+                    class="form-field__input cron-form__input-grow"
                     .value=${this._formSchedule ?? '*/5 * * * *'}
                     @input=${(e: Event) => this._formSchedule = (e.target as HTMLInputElement).value}
                     placeholder="*/5 * * * *"
                   />
                   <select
-                    class="form-field__select"
-                    style="flex: 1; min-width: 0;"
+                    class="form-field__select cron-form__select-shrink"
                     .value=${this._formSchedule ?? '*/5 * * * *'}
                     @change=${(e: Event) => {
                       const value = (e.target as HTMLSelectElement).value;
@@ -678,30 +735,28 @@ export class CronManager extends LitElement {
                 </select>
               </div>
               <div class="form-field">
-                <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 0.5rem;">
-                  <label class="form-field__label" style="margin: 0;">${t('cron.recipient')}</label>
-                  <button 
-                    type="button" 
-                    class="btn btn-secondary btn-sm" 
+                <div class="cron-form__label-row">
+                  <label class="form-field__label cron-form__label-inline">${t('cron.recipient')}</label>
+                  <button
+                    type="button"
+                    class="btn btn-ghost btn-sm cron-form__mini"
                     @click=${() => this._loadSessionChatIds()}
                     title=${t('cron.refreshRecipientHint')}
-                    style="padding: 0.25rem 0.5rem; font-size: 0.75rem;"
                   >
-                    ${getIcon('refresh')} ${t('cron.refreshList')}
+                    ${getIcon('refreshCw')}
+                    ${t('cron.refreshList')}
                   </button>
                 </div>
-                <div style="display: flex; gap: 0.5rem; align-items: center;">
+                <div class="cron-form__inline">
                   <input
                     type="text"
-                    class="form-field__input"
-                    style="flex: 2; min-width: 0;"
+                    class="form-field__input cron-form__input-grow"
                     .value=${this._formChatId ?? ''}
                     @input=${(e: Event) => this._formChatId = (e.target as HTMLInputElement).value}
                     placeholder=${t('cron.recipientPlaceholder')}
                   />
                   <select
-                    class="form-field__select"
-                    style="flex: 1; min-width: 0;"
+                    class="form-field__select cron-form__select-shrink"
                     .value=${this._formChatId ?? ''}
                     @change=${(e: Event) => {
                       const value = (e.target as HTMLSelectElement).value;
@@ -751,85 +806,99 @@ export class CronManager extends LitElement {
         </div>
       ` : nothing}
 
-      <!-- Detail Drawer -->
-      ${this._detailOpen ? html`
-        <div class="drawer-backdrop" @click=${this._closeDetail}>
-          <div class="drawer drawer--open" @click=${(e: Event) => e.stopPropagation()}>
-            <div class="drawer-header">
-              <div class="drawer-header__info">
-                <div class="drawer-header__title">${this._detailJob?.name || this._detailJob?.id}</div>
+      ${this._detailOpen
+        ? html`
+            <div class="drawer-overlay" @click=${this._closeDetail}></div>
+            <aside class="drawer drawer--right cron-detail-drawer">
+              <div class="drawer-header">
+                <div class="drawer-header__info">
+                  <h2 class="drawer-header__title">${this._detailJob?.name || this._detailJob?.id}</h2>
+                </div>
+                <button type="button" class="btn-icon" @click=${this._closeDetail} aria-label=${t('settings.close')}>
+                  ${getIcon('x')}
+                </button>
               </div>
-              <button class="btn-icon" @click=${this._closeDetail}>${getIcon('x')}</button>
-            </div>
-            <div class="drawer-content ${this._detailLoading ? 'drawer-content--loading' : ''}">
-              ${this._detailLoading ? html`
-                <div class="spinner"></div>
-              ` : html`
-                <div class="session-detail">
-                  <div class="session-detail__row">
-                    <span class="session-detail__label">${t('cron.scheduleLabel')}</span>
-                    <code>${this._detailJob?.schedule}</code>
-                  </div>
-                  <div class="session-detail__row">
-                    <span class="session-detail__label">${t('cron.messageLabel')}</span>
-                    <span>${this._detailJob ? cronJobBodyText(this._detailJob) : ''}</span>
-                  </div>
-                  <div class="session-detail__row">
-                    <span class="session-detail__label">${t('cron.mode')}</span>
-                    <span>${this._detailJob?.sessionTarget === 'isolated'
-                      ? t('cron.modeAgentOption')
-                      : t('cron.modeDirectOption')}</span>
-                  </div>
-                  ${this._detailJob?.delivery?.to
-                    ? html`
-                  <div class="session-detail__row">
-                    <span class="session-detail__label">${t('cron.deliveryTarget')}</span>
-                    <span><code>${this._detailJob.delivery?.channel ?? ''}</code> → ${this._formatDeliveryToSummary(this._detailJob)}</span>
-                  </div>`
-                    : nothing}
-                  <div class="session-detail__row">
-                    <span class="session-detail__label">${t('cron.status')}</span>
-                    <span>${this._detailJob?.enabled ? t('cron.enabled') : t('cron.disabled')}</span>
-                  </div>
-                  <div class="session-detail__row">
-                    <span class="session-detail__label">${t('cron.nextRun')}</span>
-                    <span>${this._detailJob?.next_run ? this._formatNextRun(this._detailJob.next_run) : 'N/A'}</span>
-                  </div>
-                </div>
-                <div class="cron-detail-history">
-                  <h3 class="cron-detail-history__title">${t('cron.detailRunHistory')}</h3>
-                  ${this._detailHistory.length === 0 ? html`
-                    <p class="cron-run-log__empty">${t('cron.noRunsYet')}</p>
-                  ` : html`
-                    <div class="cron-run-log__table-wrap">
-                      <table class="data-table cron-run-log__table">
-                        <thead>
-                          <tr>
-                            <th>${t('cron.colStarted')}</th>
-                            <th>${t('cron.status')}</th>
-                            <th>${t('cron.colDuration')}</th>
-                            <th>${t('cron.colDetail')}</th>
-                          </tr>
-                        </thead>
-                        <tbody>
-                          ${this._detailHistory.map((row) => html`
-                            <tr>
-                              <td><time datetime=${row.startedAt}>${this._formatTime(row.startedAt)}</time></td>
-                              <td><span class="cron-run-log__status cron-run-log__status--${row.status}">${this._execStatusLabel(row.status)}</span></td>
-                              <td>${this._formatDuration(row.duration)}</td>
-                              <td class="cron-run-log__detail" title=${row.summary || row.error || ''}>${this._truncate(row.summary || row.error, 120)}</td>
-                            </tr>
-                          `)}
-                        </tbody>
-                      </table>
-                    </div>
-                  `}
-                </div>
-              `}
-            </div>
-          </div>
-        </div>
-      ` : nothing}
+              <div class="drawer-content ${this._detailLoading ? 'drawer-content--loading' : ''}">
+                ${this._detailLoading
+                  ? html`<div class="cron-spinner" aria-hidden="true"></div>`
+                  : html`
+                      <div class="cron-detail-fields">
+                        <div class="cron-detail-fields__row">
+                          <span class="cron-detail-fields__k">${t('cron.scheduleLabel')}</span>
+                          <code class="cron-detail-fields__code">${this._detailJob?.schedule}</code>
+                        </div>
+                        <div class="cron-detail-fields__row">
+                          <span class="cron-detail-fields__k">${t('cron.messageLabel')}</span>
+                          <span class="cron-detail-fields__v">${this._detailJob ? cronJobBodyText(this._detailJob) : ''}</span>
+                        </div>
+                        <div class="cron-detail-fields__row">
+                          <span class="cron-detail-fields__k">${t('cron.mode')}</span>
+                          <span class="cron-detail-fields__v"
+                            >${this._detailJob?.sessionTarget === 'isolated'
+                              ? t('cron.modeAgentOption')
+                              : t('cron.modeDirectOption')}</span
+                          >
+                        </div>
+                        ${this._detailJob?.delivery?.to
+                          ? html`
+                              <div class="cron-detail-fields__row">
+                                <span class="cron-detail-fields__k">${t('cron.deliveryTarget')}</span>
+                                <span class="cron-detail-fields__v">
+                                  <code>${this._detailJob.delivery?.channel ?? ''}</code> →
+                                  ${this._formatDeliveryToSummary(this._detailJob)}
+                                </span>
+                              </div>
+                            `
+                          : nothing}
+                        <div class="cron-detail-fields__row">
+                          <span class="cron-detail-fields__k">${t('cron.status')}</span>
+                          <span class="cron-detail-fields__v">${this._detailJob?.enabled ? t('cron.enabled') : t('cron.disabled')}</span>
+                        </div>
+                        <div class="cron-detail-fields__row">
+                          <span class="cron-detail-fields__k">${t('cron.nextRun')}</span>
+                          <span class="cron-detail-fields__v">${this._detailJob?.next_run ? this._formatNextRun(this._detailJob.next_run) : '—'}</span>
+                        </div>
+                      </div>
+                      <div class="cron-detail-history">
+                        <h3 class="cron-detail-history__title">${t('cron.detailRunHistory')}</h3>
+                        ${this._detailHistory.length === 0
+                          ? html`<p class="cron-run-log__empty">${t('cron.noRunsYet')}</p>`
+                          : html`
+                              <div class="cron-run-log__table-wrap">
+                                <table class="data-table cron-run-log__table">
+                                  <thead>
+                                    <tr>
+                                      <th>${t('cron.colStarted')}</th>
+                                      <th>${t('cron.status')}</th>
+                                      <th>${t('cron.colDuration')}</th>
+                                      <th>${t('cron.colDetail')}</th>
+                                    </tr>
+                                  </thead>
+                                  <tbody>
+                                    ${this._detailHistory.map((row) => html`
+                                      <tr>
+                                        <td><time datetime=${row.startedAt}>${this._formatTime(row.startedAt)}</time></td>
+                                        <td>
+                                          <span class="cron-run-log__pill cron-run-log__pill--${row.status}"
+                                            >${this._execStatusLabel(row.status)}</span
+                                          >
+                                        </td>
+                                        <td>${this._formatDuration(row.duration)}</td>
+                                        <td class="cron-run-log__detail" title=${row.summary || row.error || ''}>
+                                          ${this._truncate(row.summary || row.error, 120)}
+                                        </td>
+                                      </tr>
+                                    `)}
+                                  </tbody>
+                                </table>
+                              </div>
+                            `}
+                      </div>
+                    `}
+              </div>
+            </aside>
+          `
+        : nothing}
 
       <!-- Confirm Dialog -->
       <confirm-dialog
