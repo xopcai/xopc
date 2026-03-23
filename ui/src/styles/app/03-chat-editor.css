@@ -187,6 +187,76 @@
   box-shadow: 0 0 0 2px var(--primary-soft);
 }
 
+/* Attachment chips above textarea — inset from card rim (8pt grid, design system §4) */
+.editor-container.editor-card .attachments-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem 0.5rem;
+  margin: 0;
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+/* When chips are shown, tighten textarea block top so spacing stays one rhythm unit */
+.editor-container .attachments-row + .editor-input-area {
+  padding-top: 0.5rem;
+}
+
+.editor-container .attachment-chip {
+  display: flex;
+  align-items: center;
+  gap: 0.375rem;
+  padding: 0.25rem 0.5rem;
+  background: var(--hover-bg);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-lg);
+  font-size: 0.75rem;
+}
+
+.editor-container .attachment-preview {
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  border-radius: var(--radius-sm);
+}
+
+.editor-container .attachment-preview img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: cover;
+}
+
+.editor-container .attachment-name {
+  max-width: 100px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--text-secondary);
+}
+
+.editor-container .attachment-remove {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  background: transparent;
+  border: none;
+  color: var(--text-disabled);
+  cursor: pointer;
+  border-radius: var(--radius-full);
+  transition: all var(--transition-fast);
+}
+
+.editor-container .attachment-remove:hover {
+  background: var(--bg-hover);
+  color: var(--error);
+}
+
 /* Text area (top of card) */
 .editor-input-area {
   padding: 0.75rem 1rem 0.5rem;
@@ -504,6 +574,14 @@
     padding: 0.625rem 0.75rem 0.375rem;
   }
 
+  .editor-container.editor-card .attachments-row {
+    padding: 0.625rem 0.75rem 0.375rem;
+  }
+
+  .editor-container .attachments-row + .editor-input-area {
+    padding-top: 0.375rem;
+  }
+
   .text-input {
     min-height: 2rem;
     max-height: 6rem;
@@ -566,6 +644,14 @@
 
   .editor-input-area {
     padding: 0.5rem 0.625rem 0.375rem;
+  }
+
+  .editor-container.editor-card .attachments-row {
+    padding: 0.5rem 0.625rem 0.375rem;
+  }
+
+  .editor-container .attachments-row + .editor-input-area {
+    padding-top: 0.375rem;
   }
 
   .toolbar-row {
