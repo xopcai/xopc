@@ -7,7 +7,7 @@
 
 import { Agent, type AgentMessage, type AgentEvent, type ThinkingLevel } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
-import type { Config } from '../config/schema.js';
+import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
 import { CredentialResolver } from '../auth/credentials.js';
@@ -91,6 +91,16 @@ export class AgentManager {
     this.warmCredentialCache().catch((err) => {
       log.warn({ err }, 'Failed to pre-warm credential cache');
     });
+  }
+
+  /**
+   * Keep defaults in sync when config is hot-reloaded or saved from the UI.
+   */
+  updateAgentDefaults(config: Config): void {
+    this.config.config = config;
+    const ref = getAgentDefaultModelRef(config);
+    this.config.model = ref;
+    this.defaultModel = ref || getDefaultModelSync(config);
   }
 
   /**

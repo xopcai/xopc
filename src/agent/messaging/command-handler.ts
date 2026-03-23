@@ -61,6 +61,11 @@ export class CommandHandler {
     this.abortSessionTurn = handlerConfig.abortSessionTurn;
   }
 
+  /** Replace config reference after hot reload or gateway PATCH so commands see current defaults. */
+  updateAgentConfig(config: Config): void {
+    this.config = config;
+  }
+
   /**
    * Execute a command using the unified command system
    */

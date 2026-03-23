@@ -364,6 +364,7 @@ export class GatewayService {
   private handleAgentDefaultsReload(newConfig: Config): void {
     log.debug('Reloading agent defaults...');
     this.config = newConfig;
+    this.agentService.applyAgentDefaultsFromConfig(newConfig);
     this.emit('config.reload', { section: 'agents' });
     log.debug('Agent defaults reloaded');
   }
@@ -430,6 +431,7 @@ export class GatewayService {
     try {
       await saveConfig(config, this.configPath);
       this.config = config;
+      this.agentService.applyAgentDefaultsFromConfig(config);
       return { saved: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
@@ -450,6 +452,8 @@ export class GatewayService {
       
       // Save to disk
       await saveConfig(this.config, this.configPath);
+
+      this.agentService.applyAgentDefaultsFromConfig(this.config);
       
       log.debug('Configuration updated successfully');
       return { updated: true };

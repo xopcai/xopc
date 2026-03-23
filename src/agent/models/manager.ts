@@ -7,7 +7,7 @@
 
 import { Agent, type AgentMessage } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
-import type { Config } from '../../config/schema.js';
+import { type Config, getAgentDefaultModelRef } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 import { resolveModel, getAllModels as getAllModelsFromProviders, getDefaultModelSync } from '../../providers/index.js';
 import { isFailoverError, describeFailoverError, resolveFallbackCandidates } from '../fallback/index.js';
@@ -65,6 +65,15 @@ export class ModelManager {
    */
   setChannelManager(channelManager: any): void {
     this.channelManager = channelManager;
+  }
+
+  /**
+   * Apply updated config so default model and failover metadata match disk/runtime config.
+   */
+  updateFromConfig(config: Config): void {
+    this.config = config;
+    const ref = getAgentDefaultModelRef(config);
+    this.defaultModel = ref ? ref : getDefaultModelSync(config);
   }
 
   /**
@@ -127,26 +136,27 @@ export class ModelManager {
    */
   async applyModelForSession(agent: Agent, sessionKey: string): Promise<void> {
     const targetModelId = this.getModelForSession(sessionKey);
-    
-    if (targetModelId === this.currentModelName) {
-      return; // No change needed
-    }
 
+    let found: Model<Api>;
     try {
-      const found = resolveModel(targetModelId);
-      if (!found) {
-        log.warn({ modelId: targetModelId }, 'Model not found, keeping current');
-        return;
-      }
-
-      agent.setModel(found);
-      this.currentModelName = targetModelId;
-      this.currentProvider = found.provider || 'unknown';
-      
-      log.info({ sessionKey, modelId: targetModelId }, 'Applied model for session');
+      found = resolveModel(targetModelId);
     } catch (err) {
       log.error({ err, sessionKey, modelId: targetModelId }, 'Failed to apply model');
+      return;
     }
+
+    const sm = agent.state.model as Model<Api> | undefined;
+    if (sm && sm.provider === found.provider && sm.id === found.id) {
+      this.currentModelName = targetModelId;
+      this.currentProvider = found.provider || 'unknown';
+      return;
+    }
+
+    agent.setModel(found);
+    this.currentModelName = targetModelId;
+    this.currentProvider = found.provider || 'unknown';
+
+    log.info({ sessionKey, modelId: targetModelId }, 'Applied model for session');
   }
 
   /**
