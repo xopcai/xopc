@@ -56,8 +56,8 @@ export function ModelSelector({
           disabled={disabled || isLoading}
           title={placeholder}
           className={cn(
-            'flex max-w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-edge bg-surface-base px-3 py-2 text-left text-sm font-medium text-fg shadow-sm transition-colors',
-            'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+            'flex max-w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-edge bg-surface-panel px-3 py-2 text-left text-sm font-medium text-fg transition-colors duration-150',
+            'hover:border-edge-strong hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
             'disabled:cursor-not-allowed disabled:opacity-50',
             compact && 'py-1.5 text-[13px]',
           )}
@@ -68,7 +68,7 @@ export function ModelSelector({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-lg border border-edge bg-surface-panel p-1 shadow-lg dark:border-edge"
+          className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-1 shadow-lg shadow-slate-200/60 dark:border-slate-700 dark:shadow-slate-900/40"
           sideOffset={4}
           align="end"
           onOpenAutoFocus={(e) => e.preventDefault()}

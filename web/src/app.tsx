@@ -1,9 +1,10 @@
 import { useEffect } from 'react';
-import { createHashRouter, Navigate, Outlet, RouterProvider } from 'react-router-dom';
+import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import { AppShell } from '@/components/shell/app-shell';
-import { SwrProvider } from '@/providers/swr-provider';
 import { ChatPage } from '@/features/chat/chat-page';
+import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
+import { SwrProvider } from '@/providers/swr-provider';
 import { CronPage } from '@/pages/cron-page';
 import { LogsPage } from '@/pages/logs-page';
 import { SessionsPage } from '@/pages/sessions-page';
@@ -19,7 +20,7 @@ const router = createHashRouter([
       { index: true, element: <Navigate to="/chat" replace /> },
       {
         path: 'chat',
-        element: <Outlet />,
+        element: <ChatRouteLayout />,
         children: [
           { index: true, element: <ChatPage /> },
           { path: 'new', element: <ChatPage /> },
@@ -53,8 +54,12 @@ function ThemeEffects() {
 export function App() {
   return (
     <SwrProvider>
-      <ThemeEffects />
-      <RouterProvider router={router} />
+      <div className="flex min-h-0 flex-1 flex-col">
+        <ThemeEffects />
+        <div className="flex min-h-0 flex-1 flex-col [&>*]:min-h-0 [&>*]:flex-1">
+          <RouterProvider router={router} />
+        </div>
+      </div>
     </SwrProvider>
   );
 }

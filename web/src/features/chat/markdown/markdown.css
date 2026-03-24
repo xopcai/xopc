@@ -95,6 +95,35 @@
   margin: 1.5em 0;
 }
 
+.markdown-body table {
+  width: 100%;
+  border-collapse: collapse;
+  margin: 0 0 1em;
+  font-size: 0.875rem;
+  line-height: 1.5;
+  border: 1px solid var(--color-edge);
+  border-radius: var(--radius-lg);
+  overflow: hidden;
+}
+
+.markdown-body th,
+.markdown-body td {
+  border: 1px solid var(--color-edge-subtle);
+  padding: 0.5rem 0.75rem;
+  text-align: left;
+  vertical-align: top;
+}
+
+.markdown-body th {
+  background: var(--color-surface-hover);
+  font-weight: 600;
+  color: var(--color-fg);
+}
+
+.markdown-body tbody tr:hover td {
+  background: var(--color-surface-hover);
+}
+
 .markdown-body p {
   margin: 0 0 0.75em;
 }

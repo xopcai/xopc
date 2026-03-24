@@ -10,7 +10,7 @@ import { TabIcon } from '@/components/shell/tab-icons';
 const navLinkClass = ({ isActive }: { isActive: boolean }) =>
   cn(
     'flex w-full items-center gap-2 rounded-md px-2.5 py-2 text-left text-sm transition-colors',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
     isActive
       ? 'bg-accent-soft text-accent-fg'
       : 'text-fg-muted hover:bg-surface-hover hover:text-fg',

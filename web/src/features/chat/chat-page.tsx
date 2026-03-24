@@ -98,7 +98,7 @@ export function ChatPage() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8 text-sm text-fg-muted">
+      <div className="mx-auto max-w-4xl px-4 py-16 text-center text-sm leading-relaxed text-fg-muted sm:px-8">
         {m.chat.needToken}
       </div>
     );
@@ -106,14 +106,14 @@ export function ChatPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-3xl px-4 py-8 text-sm text-fg-muted">
+      <div className="mx-auto max-w-4xl px-4 py-16 text-center text-sm text-fg-muted sm:px-8">
         {m.chat.loading}
       </div>
     );
   }
 
   return (
-    <div className="chat-shell flex min-h-0 flex-1 flex-col">
+    <div className="chat-shell flex h-full min-h-0 flex-1 flex-col bg-surface-panel">
       <ChatSseStatus />
       <ChatHeader
         sessionKey={sessionKey}
@@ -129,7 +129,7 @@ export function ChatPage() {
         className="chat-messages min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]"
         onScroll={onScroll}
       >
-        <div className="chat-messages-inner mx-auto max-w-3xl px-4 py-4">
+        <div className="chat-messages-inner mx-auto max-w-4xl px-4 py-6 sm:px-8">
           {loadingMore ? (
             <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
           ) : null}
