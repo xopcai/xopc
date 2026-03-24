@@ -771,7 +771,7 @@ export function ModelsSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto flex max-w-4xl flex-col gap-3 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
         <h1 className="text-lg font-semibold text-fg">{m.settingsSections.models}</h1>
         <p className="text-sm text-fg-muted">{ms.needToken}</p>
       </div>
@@ -779,7 +779,7 @@ export function ModelsSettingsPanel() {
   }
 
   return (
-    <div className="mx-auto flex max-w-4xl flex-col gap-4 px-4 py-8">
+    <div className="mx-auto flex w-full max-w-app-main flex-col gap-4 px-4 py-8">
       <div className="flex flex-col gap-1">
         <h1 className="text-lg font-semibold text-fg">{m.settingsSections.models}</h1>
         <p className="text-sm text-fg-muted">{ms.subtitle}</p>

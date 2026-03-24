@@ -287,7 +287,7 @@ export function LogsPage() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-10">
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10">
         <div className="flex items-start gap-3 rounded-lg border border-edge bg-surface-panel p-6 dark:border-edge">
           <Terminal className="mt-0.5 size-5 shrink-0 text-fg-subtle" strokeWidth={1.75} />
           <div>
@@ -300,7 +300,7 @@ export function LogsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-5xl flex-col gap-5 px-4 py-6">
+    <div className="mx-auto flex w-full max-w-app-main flex-col gap-5 px-4 py-6">
       {/* Header */}
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">

@@ -125,7 +125,7 @@ export function ChatComposer({
     <div className="shrink-0 border-t border-edge-subtle bg-surface-panel px-3 pb-2 pt-1.5 sm:px-4 dark:border-edge">
       <div
         className={cn(
-          'relative mx-auto max-w-4xl rounded-xl border border-edge bg-surface-panel p-1.5 shadow-sm shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-900/40 dark:shadow-none',
+          'relative mx-auto w-full max-w-app-main rounded-xl border border-edge bg-surface-panel p-1.5 shadow-sm shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-900/40 dark:shadow-none',
           isDragging && 'ring-2 ring-accent ring-inset',
         )}
         onDragOver={(e) => {

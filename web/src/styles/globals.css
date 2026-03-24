@@ -51,6 +51,9 @@
   --radius-pill: 9999px;
 
   --shadow-popover: 0 20px 25px -5px rgb(148 163 184 / 0.5);
+
+  /* Main column under AppShell <main> — docs/design/ui-design-system.md §13.1 Web */
+  --max-width-app-main: 56rem;
 }
 
 html.dark {

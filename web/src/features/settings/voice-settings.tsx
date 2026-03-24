@@ -199,7 +199,7 @@ export function VoiceSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
         <h1 className="text-lg font-semibold text-fg">{m.settingsSections.voice}</h1>
         <p className="text-sm text-fg-muted">{v.needToken}</p>
       </div>
@@ -208,7 +208,7 @@ export function VoiceSettingsPanel() {
 
   if (loading) {
     return (
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
         <div className="flex items-center gap-2 text-sm text-fg-muted">
           <Loader2 className="size-4 animate-spin" />
           {v.loading}
@@ -219,7 +219,7 @@ export function VoiceSettingsPanel() {
 
   if (!form) {
     return (
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
         <p className="text-sm text-fg-muted">{error ?? v.loadError}</p>
         <Button type="button" variant="secondary" onClick={() => void load()}>
           {v.retry}
@@ -232,7 +232,7 @@ export function VoiceSettingsPanel() {
   const tts = form.tts;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
+    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.voice}</h1>
