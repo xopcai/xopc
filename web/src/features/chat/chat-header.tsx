@@ -39,7 +39,7 @@ export function ChatHeader({
         : sessionName?.trim() || titleKey;
 
   return (
-    <header className="flex flex-wrap items-center gap-3 border-b border-edge-subtle bg-surface-panel px-4 py-3.5 sm:px-8 dark:border-edge">
+    <header className="flex flex-wrap items-center gap-3 border-b border-edge-subtle bg-surface-panel px-4 py-4 sm:px-8 dark:border-edge">
       <div className="min-w-0 flex-1">
         <h1
           className="truncate text-base font-semibold tracking-tight text-fg"

@@ -27,7 +27,7 @@ export function ThinkingBlock({
   }
 
   return (
-    <div className="my-1 rounded-xl border border-edge-subtle bg-surface-hover/90 dark:border-slate-700/80">
+    <div className="my-1 rounded-xl border border-edge-subtle bg-surface-hover/90 dark:border-edge/80">
       <button
         type="button"
         disabled={isStreaming}

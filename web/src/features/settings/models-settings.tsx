@@ -1018,7 +1018,7 @@ export function ModelsSettingsPanel() {
                             'shrink-0 rounded-full px-2 py-0.5 text-[10px] font-medium',
                             keyType === 'shell' && 'bg-blue-100 text-blue-800 dark:bg-blue-950 dark:text-blue-200',
                             keyType === 'env' && 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200',
-                            keyType === 'literal' && 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300',
+                            keyType === 'literal' && 'bg-slate-100 text-slate-700 dark:bg-surface-hover dark:text-fg-muted',
                           )}
                         >
                           {keyType === 'shell' ? ms.badgeShell : keyType === 'env' ? ms.badgeEnv : ms.badgeLiteral}

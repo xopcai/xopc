@@ -14,11 +14,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 const ACCEPT =
   'image/*,application/pdf,.docx,.pptx,.xlsx,.xls,.txt,.md,.json,.xml,.html,.css,.js,.ts,.jsx,.tsx,.yml,.yaml,.zip';
 
-/** Matches `leading-5` + `py-1`; `adjustHeight` caps growth. */
-const TEXTAREA_LINE_PX = 20;
-const TEXTAREA_MAX_LINES = 8;
-/** Total vertical padding from `py-1` (4px × 2). */
-const TEXTAREA_V_PAD_PX = 8;
+/** Matches ui `03-chat-editor.css` `.text-input`: max-height 8rem, line-height 1.55. */
+const TEXTAREA_MAX_HEIGHT_PX = 128;
 
 function interpolate(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
@@ -68,10 +65,9 @@ export function ChatComposer({
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
-    const maxHeight = TEXTAREA_LINE_PX * TEXTAREA_MAX_LINES + TEXTAREA_V_PAD_PX;
     // Reset before measuring — `height: auto` often leaves an inflated scrollHeight in WebKit/Blink.
     el.style.height = '0px';
-    const next = Math.min(el.scrollHeight, maxHeight);
+    const next = Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT_PX);
     el.style.height = `${next}px`;
   }, []);
 
@@ -121,11 +117,12 @@ export function ChatComposer({
 
   const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
 
+  // Layout/spacing aligned with ui/src/styles/app/03-chat-editor.css (.chat-input-inner, .editor-card, .toolbar-row).
   return (
-    <div className="shrink-0 border-t border-edge-subtle bg-surface-panel px-3 pb-2 pt-1.5 sm:px-4 dark:border-edge">
+    <div className="shrink-0 border-t border-edge-subtle bg-surface-panel px-4 py-4 sm:px-8 dark:border-edge">
       <div
         className={cn(
-          'relative mx-auto w-full max-w-app-main rounded-xl border border-edge bg-surface-panel p-1.5 shadow-sm shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-900/40 dark:shadow-none',
+          'relative mx-auto w-full max-w-app-main overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-sm shadow-slate-200/40 dark:border-edge dark:bg-surface-panel/60 dark:shadow-none',
           isDragging && 'ring-2 ring-accent ring-inset',
         )}
         onDragOver={(e) => {
@@ -145,20 +142,20 @@ export function ChatComposer({
         }}
       >
         {attachments.length > 0 ? (
-          <div className="mb-1.5 flex flex-wrap gap-1.5">
+          <div className="flex flex-wrap gap-2 border-b border-edge-subtle px-4 pb-2 pt-3 dark:border-edge/80">
             {attachments.map((att, index) => (
               <div
                 key={`${att.name}-${index}`}
-                className="flex max-w-[200px] items-center gap-2 rounded-lg border border-edge-subtle bg-surface-hover px-2 py-1 text-xs dark:border-slate-600"
+                className="flex max-w-[200px] items-center gap-1.5 rounded-lg border border-edge bg-surface-hover px-2 py-1 text-xs dark:border-edge-strong"
               >
                 {att.mimeType?.startsWith('image/') && att.content ? (
                   <img
                     src={`data:${att.mimeType};base64,${att.content}`}
                     alt=""
-                    className="h-8 w-8 rounded object-cover"
+                    className="h-6 w-6 rounded object-cover"
                   />
                 ) : (
-                  <File className="h-4 w-4 shrink-0 text-fg-muted" />
+                  <File className="h-3.5 w-3.5 shrink-0 text-fg-muted" />
                 )}
                 <span className="min-w-0 flex-1 truncate">{att.name}</span>
                 <span className="text-fg-disabled">{formatFileSize(att.size)}</span>
@@ -180,48 +177,55 @@ export function ChatComposer({
           </div>
         ) : null}
 
-        <textarea
-          ref={textareaRef}
-          className="max-h-[168px] min-h-[32px] w-full resize-none overflow-y-auto border-0 bg-transparent px-1.5 py-1 text-sm leading-5 text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0 disabled:opacity-50"
-          placeholder={m.chat.inputPlaceholder}
-          value={value}
-          disabled={disabled || busy}
-          rows={1}
-          onChange={(e) => setValue(e.target.value)}
-          onCompositionStart={() => setIsComposing(true)}
-          onCompositionEnd={() => setIsComposing(false)}
-          onPaste={async (e) => {
-            const items = e.clipboardData?.items;
-            if (!items) return;
-            const imageFiles: File[] = [];
-            for (const item of Array.from(items)) {
-              if (item.type.startsWith('image/')) {
-                const f = item.getAsFile();
-                if (f) imageFiles.push(f);
+        <div
+          className={cn(
+            'px-4 pb-2 pt-3',
+            attachments.length > 0 && 'pt-2',
+          )}
+        >
+          <textarea
+            ref={textareaRef}
+            className="max-h-32 min-h-[1.5rem] w-full resize-none overflow-y-auto border-0 bg-transparent p-0 text-[0.9375rem] leading-[1.55] text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0 disabled:opacity-50"
+            placeholder={m.chat.inputPlaceholder}
+            value={value}
+            disabled={disabled || busy}
+            rows={1}
+            onChange={(e) => setValue(e.target.value)}
+            onCompositionStart={() => setIsComposing(true)}
+            onCompositionEnd={() => setIsComposing(false)}
+            onPaste={async (e) => {
+              const items = e.clipboardData?.items;
+              if (!items) return;
+              const imageFiles: File[] = [];
+              for (const item of Array.from(items)) {
+                if (item.type.startsWith('image/')) {
+                  const f = item.getAsFile();
+                  if (f) imageFiles.push(f);
+                }
               }
-            }
-            if (imageFiles.length > 0) {
-              e.preventDefault();
-              await processFiles(imageFiles);
-            }
-          }}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
-              e.preventDefault();
-              if (!busy && (value.trim() || attachments.length > 0)) send();
-            }
-          }}
-        />
+              if (imageFiles.length > 0) {
+                e.preventDefault();
+                await processFiles(imageFiles);
+              }
+            }}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
+                e.preventDefault();
+                if (!busy && (value.trim() || attachments.length > 0)) send();
+              }
+            }}
+          />
+        </div>
 
-        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 border-t border-edge-subtle pt-2 dark:border-slate-700/80">
+        <div className="flex flex-wrap items-center gap-2 border-t border-edge-subtle px-3 pb-2.5 pt-2 dark:border-edge/80">
           {showThinkingSelector ? (
             <div
-              className="inline-flex items-center gap-1 rounded-full border border-edge bg-surface-hover px-2 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800/80"
+              className="inline-flex min-h-8 items-center gap-1 rounded-full border border-edge bg-surface-hover px-2.5 py-1 text-xs dark:border-edge-strong dark:bg-surface-hover/80"
               title={`${m.chat.thinkingLevel}: ${thinkingLevel}`}
             >
-              <ThinkingIcon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" aria-hidden />
+              <ThinkingIcon className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden />
               <select
-                className="max-w-[min(10rem,40vw)] cursor-pointer bg-transparent text-xs font-medium text-fg focus:outline-none"
+                className="max-w-[min(10rem,40vw)] cursor-pointer bg-transparent text-[0.8125rem] font-medium text-fg focus:outline-none"
                 value={thinkingLevel}
                 disabled={disabled || busy}
                 onChange={(e) => onThinkingChange(e.target.value)}
@@ -235,10 +239,10 @@ export function ChatComposer({
             </div>
           ) : null}
 
-          <div className="ml-auto flex items-center gap-0.5">
+          <div className="ml-auto flex items-center gap-1">
             <button
               type="button"
-              className="rounded-lg p-1.5 text-fg-subtle transition-colors duration-150 hover:bg-surface-hover hover:text-fg disabled:opacity-50"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel text-fg-subtle transition-colors duration-150 hover:bg-surface-hover hover:text-fg disabled:opacity-50 dark:border-edge-strong"
               disabled={attachments.length >= MAX_CHAT_ATTACHMENTS || disabled || busy}
               title={
                 attachments.length >= MAX_CHAT_ATTACHMENTS
@@ -264,7 +268,7 @@ export function ChatComposer({
 
             <button
               type="button"
-              className="rounded-lg p-1.5 text-fg-disabled opacity-70"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent bg-transparent text-fg-disabled opacity-80"
               disabled
               title={m.chat.voiceComingSoon}
             >
@@ -274,7 +278,7 @@ export function ChatComposer({
             {busy ? (
               <button
                 type="button"
-                className="rounded-lg p-1.5 text-fg-muted transition-colors duration-150 hover:bg-surface-hover hover:text-fg"
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel text-fg-muted transition-colors duration-150 hover:bg-surface-hover hover:text-fg dark:border-edge-strong"
                 title={m.chat.abort}
                 onClick={onAbort}
               >
@@ -284,10 +288,10 @@ export function ChatComposer({
               <button
                 type="button"
                 className={cn(
-                  'rounded-lg p-1.5 transition-colors duration-150 active:scale-95',
+                  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150 active:scale-95',
                   value.trim() || attachments.length > 0
-                    ? 'text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50'
-                    : 'text-fg-disabled',
+                    ? 'border-transparent text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50'
+                    : 'border-transparent text-fg-disabled',
                 )}
                 disabled={disabled || (!value.trim() && attachments.length === 0)}
                 title={m.chat.sendMessage}
