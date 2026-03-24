@@ -14,11 +14,11 @@ import { useLocaleStore } from '@/stores/locale-store';
 const ACCEPT =
   'image/*,application/pdf,.docx,.pptx,.xlsx,.xls,.txt,.md,.json,.xml,.html,.css,.js,.ts,.jsx,.tsx,.yml,.yaml,.zip';
 
-/** Matches `leading-5` + `py-1.5`; `adjustHeight` caps growth. */
+/** Matches `leading-5` + `py-1`; `adjustHeight` caps growth. */
 const TEXTAREA_LINE_PX = 20;
 const TEXTAREA_MAX_LINES = 8;
-/** Total vertical padding from `py-1.5` (6px × 2). */
-const TEXTAREA_V_PAD_PX = 12;
+/** Total vertical padding from `py-1` (4px × 2). */
+const TEXTAREA_V_PAD_PX = 8;
 
 function interpolate(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
@@ -122,10 +122,10 @@ export function ChatComposer({
   const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
 
   return (
-    <div className="shrink-0 border-t border-edge-subtle bg-surface-panel px-3 pb-3 pt-2 sm:px-4 dark:border-edge">
+    <div className="shrink-0 border-t border-edge-subtle bg-surface-panel px-3 pb-2 pt-1.5 sm:px-4 dark:border-edge">
       <div
         className={cn(
-          'relative mx-auto max-w-4xl rounded-xl border border-edge bg-surface-panel p-2 shadow-sm shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-900/40 dark:shadow-none',
+          'relative mx-auto max-w-4xl rounded-xl border border-edge bg-surface-panel p-1.5 shadow-sm shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-900/40 dark:shadow-none',
           isDragging && 'ring-2 ring-accent ring-inset',
         )}
         onDragOver={(e) => {
@@ -182,7 +182,7 @@ export function ChatComposer({
 
         <textarea
           ref={textareaRef}
-          className="max-h-[172px] min-h-[32px] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-1.5 text-sm leading-5 text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0 disabled:opacity-50"
+          className="max-h-[168px] min-h-[32px] w-full resize-none overflow-y-auto border-0 bg-transparent px-1.5 py-1 text-sm leading-5 text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0 disabled:opacity-50"
           placeholder={m.chat.inputPlaceholder}
           value={value}
           disabled={disabled || busy}
