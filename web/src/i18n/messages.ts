@@ -284,6 +284,319 @@ const bundles: Record<
       requestId: string;
       sessionId: string;
     };
+    agentSettings: {
+      subtitle: string;
+      sectionDesc: string;
+      needToken: string;
+      loadError: string;
+      save: string;
+      saving: string;
+      saved: string;
+      saveError: string;
+      cardModelsTitle: string;
+      cardModelsSubtitle: string;
+      cardWorkspaceTitle: string;
+      cardWorkspaceSubtitle: string;
+      cardGenerationTitle: string;
+      cardGenerationSubtitle: string;
+      cardBehaviorTitle: string;
+      cardBehaviorSubtitle: string;
+      label: {
+        model: string;
+        imageModel: string;
+        imageGenerationModel: string;
+        mediaMaxMb: string;
+        workspace: string;
+        maxTokens: string;
+        temperature: string;
+        maxToolIterations: string;
+        thinkingDefault: string;
+        reasoningDefault: string;
+        verboseDefault: string;
+      };
+      desc: {
+        model: string;
+        imageModel: string;
+        imageGenerationModel: string;
+        mediaMaxMb: string;
+        workspace: string;
+        maxTokens: string;
+        temperature: string;
+        maxToolIterations: string;
+        thinkingDefault: string;
+        reasoningDefault: string;
+        verboseDefault: string;
+      };
+      reasoning: { off: string; on: string; stream: string };
+      verbose: { off: string; on: string; full: string };
+    };
+    providersSettings: {
+      subtitle: string;
+      intro: string;
+      docsLink: string;
+      needToken: string;
+      loadError: string;
+      save: string;
+      saving: string;
+      saved: string;
+      saveError: string;
+      empty: string;
+      categories: {
+        common: string;
+        specialty: string;
+        enterprise: string;
+        oauth: string;
+      };
+      configuredCount: string;
+      metaMasked: string;
+      metaWillSave: string;
+      metaNotConfigured: string;
+      placeholderKey: string;
+      placeholderKeep: string;
+      placeholderOverride: string;
+      show: string;
+      hide: string;
+      copy: string;
+      copied: string;
+      oauth: string;
+      revoke: string;
+      revokeConfirm: string;
+      oauthStarting: string;
+      oauthProcessingCode: string;
+      openAuthPage: string;
+      cancelOAuth: string;
+      pasteRedirectUrl: string;
+      submitCode: string;
+      envHint: string;
+      oauthHint: string;
+    };
+    modelsSettings: {
+      needToken: string;
+      subtitle: string;
+      docsLink: string;
+      loadError: string;
+      loadFileWarning: string;
+      filePath: string;
+      addProvider: string;
+      validate: string;
+      validating: string;
+      validateError: string;
+      save: string;
+      saving: string;
+      saved: string;
+      saveError: string;
+      reload: string;
+      reloading: string;
+      reloadError: string;
+      showJson: string;
+      hideJson: string;
+      statsProviders: string;
+      statsModels: string;
+      unsavedHint: string;
+      loading: string;
+      jsonParseError: string;
+      jsonReset: string;
+      jsonApply: string;
+      emptyTitle: string;
+      emptyDesc: string;
+      emptyCta: string;
+      presetOllama: string;
+      presetLmStudio: string;
+      presetOpenRouter: string;
+      presetLabel: string;
+      presetCustom: string;
+      addProviderTitle: string;
+      addProviderSubtitle: string;
+      providerIdLabel: string;
+      providerIdPlaceholder: string;
+      providerIdRequired: string;
+      addProviderConfirm: string;
+      cancel: string;
+      close: string;
+      baseUrl: string;
+      apiType: string;
+      apiKey: string;
+      apiKeyPlaceholder: string;
+      apiKeyHint: string;
+      authHeader: string;
+      testKey: string;
+      show: string;
+      hide: string;
+      badgeShell: string;
+      badgeEnv: string;
+      badgeLiteral: string;
+      removeProvider: string;
+      removeProviderConfirm: string;
+      modelsSection: string;
+      modelsEmpty: string;
+      addModel: string;
+      editModel: string;
+      removeModel: string;
+      removeModelConfirm: string;
+      addModelTitle: string;
+      editModelTitle: string;
+      modelProviderLabel: string;
+      modelId: string;
+      displayName: string;
+      inputTypes: string;
+      inputTextOnly: string;
+      inputTextVision: string;
+      reasoning: string;
+      contextWindow: string;
+      maxOutputTokens: string;
+      costSection: string;
+      costInput: string;
+      costOutput: string;
+      modelIdRequired: string;
+      mustBePositive: string;
+      addModelConfirm: string;
+      saveModelConfirm: string;
+      validationErrors: string;
+      validationWarnings: string;
+      testError: string;
+      testOk: string;
+    };
+    channelsSettings: {
+      needToken: string;
+      subtitle: string;
+      docsLink: string;
+      loadError: string;
+      loading: string;
+      save: string;
+      saving: string;
+      saved: string;
+      saveError: string;
+      retry: string;
+      unsavedHint: string;
+      telegramTitle: string;
+      telegramSubtitle: string;
+      weixinTitle: string;
+      weixinSubtitle: string;
+      enableTelegramAria: string;
+      enableWeixinAria: string;
+      telegramToken: string;
+      telegramTokenDesc: string;
+      allowFromDm: string;
+      allowFromDmDesc: string;
+      advancedShow: string;
+      advancedHide: string;
+      apiRoot: string;
+      proxy: string;
+      dmPolicy: string;
+      groupPolicy: string;
+      replyToMode: string;
+      streamMode: string;
+      allowFromGroups: string;
+      historyLimit: string;
+      textChunkLimit: string;
+      telegramDebug: string;
+      multiAccountJson: string;
+      multiAccountJsonDesc: string;
+      weixinLoginCallout: string;
+      weixinAllowFrom: string;
+      weixinAllowFromDesc: string;
+      weixinRouteTag: string;
+      weixinRouteTagDesc: string;
+      routeTagPlaceholder: string;
+      weixinDebug: string;
+      weixinDebugDesc: string;
+      weixinAccountsJson: string;
+      weixinAccountsJsonDesc: string;
+      jsonObjectAccounts: string;
+      jsonInvalid: string;
+      copy: string;
+      copied: string;
+      show: string;
+      hide: string;
+      policy: {
+        dm: Record<'pairing' | 'allowlist' | 'open' | 'disabled', string>;
+        group: Record<'open' | 'disabled' | 'allowlist', string>;
+        reply: Record<'off' | 'first' | 'all', string>;
+        stream: Record<'off' | 'partial' | 'block', string>;
+      };
+    };
+    voiceSettings: {
+      needToken: string;
+      subtitle: string;
+      docsLink: string;
+      loadError: string;
+      loading: string;
+      save: string;
+      saving: string;
+      saved: string;
+      saveError: string;
+      retry: string;
+      unsavedHint: string;
+      stt: {
+        title: string;
+        description: string;
+        enable: string;
+        enableDesc: string;
+        provider: string;
+        alibaba: string;
+        openai: string;
+        apiKey: string;
+        apiKeyDesc: string;
+        model: string;
+        fallback: string;
+        fallbackDesc: string;
+      };
+      tts: {
+        title: string;
+        description: string;
+        enable: string;
+        enableDesc: string;
+        trigger: string;
+        triggerOff: string;
+        triggerAlways: string;
+        triggerInbound: string;
+        triggerTagged: string;
+        triggerDescOff: string;
+        triggerDescAlways: string;
+        triggerDescInbound: string;
+        triggerDescTagged: string;
+        provider: string;
+        providerOpenai: string;
+        providerEdge: string;
+        voice: string;
+        edgeHint: string;
+      };
+      notes: {
+        title: string;
+        duration: string;
+        envVars: string;
+      };
+    };
+    gatewaySettings: {
+      needToken: string;
+      subtitle: string;
+      docsLink: string;
+      loadError: string;
+      loading: string;
+      save: string;
+      saving: string;
+      saved: string;
+      saveError: string;
+      retry: string;
+      unsavedHint: string;
+      tokenExpired: string;
+      updateToken: string;
+      changeToken: string;
+      accessToken: string;
+      tokenPlaceholder: string;
+      tokenHelp: string;
+      copy: string;
+      copied: string;
+      show: string;
+      hide: string;
+      listenHost: string;
+      listenPort: string;
+      listenHint: string;
+      enableHeartbeat: string;
+      heartbeatInterval: string;
+      heartbeatHint: string;
+      authModeNone: string;
+    };
   }
 > = {
   en: {
@@ -593,6 +906,340 @@ const bundles: Record<
       requestId: 'Request ID',
       sessionId: 'Session ID',
     },
+    agentSettings: {
+      subtitle: 'Defaults for models, workspace, sampling, and how responses are shown.',
+      sectionDesc:
+        'Changes are written to your gateway config file. Some values apply on the next agent turn or session.',
+      needToken: 'Save a gateway token to load and change agent defaults.',
+      loadError: 'Failed to load settings',
+      save: 'Save changes',
+      saving: 'Saving…',
+      saved: 'Saved',
+      saveError: 'Failed to save',
+      cardModelsTitle: 'Models',
+      cardModelsSubtitle: 'Chat, vision, and image generation defaults',
+      cardWorkspaceTitle: 'Workspace & attachments',
+      cardWorkspaceSubtitle: 'Working directory and inbound media limits',
+      cardGenerationTitle: 'Sampling & tools',
+      cardGenerationSubtitle: 'Token budget, randomness, and tool loop depth',
+      cardBehaviorTitle: 'Reasoning & output',
+      cardBehaviorSubtitle: 'Thinking depth, traces, and verbosity',
+      label: {
+        model: 'Model',
+        imageModel: 'Image model',
+        imageGenerationModel: 'Image generation model',
+        mediaMaxMb: 'Image load limit (MB)',
+        workspace: 'Workspace',
+        maxTokens: 'Max tokens',
+        temperature: 'Temperature',
+        maxToolIterations: 'Max tool iterations',
+        thinkingDefault: 'Thinking level',
+        reasoningDefault: 'Reasoning visibility',
+        verboseDefault: 'Verbose mode',
+      },
+      desc: {
+        model: 'Default model for new sessions.',
+        imageModel: 'Optional. Used for image understanding / vision.',
+        imageGenerationModel: 'Optional. For image_generate (e.g. openai/gpt-image-1).',
+        mediaMaxMb: 'Max size when loading images in the image tool.',
+        workspace: 'Working directory for agent files.',
+        maxTokens: 'Maximum tokens in the model response.',
+        temperature: 'Randomness (0–2).',
+        maxToolIterations: 'Maximum tool calls per user message.',
+        thinkingDefault: 'Default thinking level for new sessions.',
+        reasoningDefault: 'Whether to surface model reasoning to users.',
+        verboseDefault: 'How much detail the agent prints by default.',
+      },
+      reasoning: { off: 'Off', on: 'On', stream: 'Stream' },
+      verbose: { off: 'Off', on: 'On', full: 'Full' },
+    },
+    providersSettings: {
+      subtitle: 'Provider API keys and OAuth. Keys are stored via the gateway credential store.',
+      intro: 'Expand a group, then a provider to set an API key or use OAuth where available.',
+      docsLink: 'Model & provider docs',
+      needToken: 'Save a gateway token to manage provider credentials.',
+      loadError: 'Failed to load providers',
+      save: 'Save changes',
+      saving: 'Saving…',
+      saved: 'Saved',
+      saveError: 'Failed to save',
+      empty: 'No providers available.',
+      categories: {
+        common: 'Common providers',
+        specialty: 'Specialty providers',
+        enterprise: 'Enterprise / cloud',
+        oauth: 'OAuth only',
+      },
+      configuredCount: '{{count}} configured',
+      metaMasked: 'Credential on file — enter a new key to replace.',
+      metaWillSave: 'API key will be saved when you click Save changes.',
+      metaNotConfigured: 'Not configured.',
+      placeholderKey: 'API key',
+      placeholderKeep: 'Leave empty to keep current',
+      placeholderOverride: 'Enter new key to override',
+      show: 'Show',
+      hide: 'Hide',
+      copy: 'Copy',
+      copied: 'Copied',
+      oauth: 'OAuth',
+      revoke: 'Revoke',
+      revokeConfirm: 'Revoke OAuth credentials for "{{name}}"?',
+      oauthStarting: 'Starting OAuth…',
+      oauthProcessingCode: 'Processing authorization…',
+      openAuthPage: 'Open auth page',
+      cancelOAuth: 'Cancel',
+      pasteRedirectUrl:
+        'Paste full redirect URL (e.g. http://127.0.0.1:…/oauth-callback?code=…&state=…)',
+      submitCode: 'Submit',
+      envHint: 'API key is set via environment variable. Enter a new key above to override.',
+      oauthHint: 'Use OAuth for secure authentication, or enter an API key manually.',
+    },
+    modelsSettings: {
+      needToken: 'Save a gateway token to edit models.json.',
+      subtitle: 'Custom providers and models (models.json). Changes apply after save; reload picks up disk edits.',
+      docsLink: 'Model & provider docs',
+      loadError: 'Failed to load models.json',
+      loadFileWarning: 'File warning',
+      filePath: 'Path',
+      addProvider: 'Add provider',
+      validate: 'Validate',
+      validating: 'Validating…',
+      validateError: 'Validation request failed',
+      save: 'Save',
+      saving: 'Saving…',
+      saved: 'Saved',
+      saveError: 'Failed to save',
+      reload: 'Reload',
+      reloading: 'Reloading…',
+      reloadError: 'Reload failed',
+      showJson: 'Show JSON',
+      hideJson: 'Hide JSON',
+      statsProviders: '{{count}} providers',
+      statsModels: '{{count}} models',
+      unsavedHint: 'You have unsaved changes.',
+      loading: 'Loading…',
+      jsonParseError: 'Invalid JSON',
+      jsonReset: 'Reset from editor',
+      jsonApply: 'Apply JSON',
+      emptyTitle: 'No custom providers',
+      emptyDesc:
+        'Add OpenAI-compatible endpoints (Ollama, LM Studio, OpenRouter, vLLM, etc.) and optional per-model overrides.',
+      emptyCta: 'Add your first provider',
+      presetOllama: 'Ollama',
+      presetLmStudio: 'LM Studio',
+      presetOpenRouter: 'OpenRouter',
+      presetLabel: 'Preset',
+      presetCustom: 'Custom',
+      addProviderTitle: 'Add provider',
+      addProviderSubtitle: 'Provider id must be unique (e.g. ollama, my-openai).',
+      providerIdLabel: 'Provider ID',
+      providerIdPlaceholder: 'e.g. ollama',
+      providerIdRequired: 'Provider ID is required',
+      addProviderConfirm: 'Add provider',
+      cancel: 'Cancel',
+      close: 'Close',
+      baseUrl: 'Base URL',
+      apiType: 'API type',
+      apiKey: 'API key',
+      apiKeyPlaceholder: 'sk-…, ENV_VAR, or !command',
+      apiKeyHint: 'Literal key, ENV name (uppercase), or shell command prefixed with !',
+      authHeader: 'Send Authorization header automatically',
+      testKey: 'Test',
+      show: 'Show',
+      hide: 'Hide',
+      badgeShell: 'shell',
+      badgeEnv: 'env',
+      badgeLiteral: 'literal',
+      removeProvider: 'Remove provider',
+      removeProviderConfirm: 'Remove provider "{{id}}" and its models?',
+      modelsSection: 'Models',
+      modelsEmpty: 'No custom models; built-in defaults apply where available.',
+      addModel: 'Add model',
+      editModel: 'Edit model',
+      removeModel: 'Remove model',
+      removeModelConfirm: 'Remove model "{{id}}"?',
+      addModelTitle: 'Add model',
+      editModelTitle: 'Edit model',
+      modelProviderLabel: 'Provider',
+      modelId: 'Model ID',
+      displayName: 'Display name',
+      inputTypes: 'Input types',
+      inputTextOnly: 'Text only',
+      inputTextVision: 'Text + vision',
+      reasoning: 'Supports reasoning',
+      contextWindow: 'Context window',
+      maxOutputTokens: 'Max output tokens',
+      costSection: 'Cost (per 1M tokens)',
+      costInput: 'Input',
+      costOutput: 'Output',
+      modelIdRequired: 'Model ID is required',
+      mustBePositive: 'Must be greater than 0',
+      addModelConfirm: 'Add model',
+      saveModelConfirm: 'Save changes',
+      validationErrors: 'Validation issues',
+      validationWarnings: 'Warnings',
+      testError: 'Error',
+      testOk: 'Resolved',
+    },
+    channelsSettings: {
+      needToken: 'Save a gateway token to edit channel settings.',
+      subtitle: 'Telegram and Weixin inbound channels. Changes are written to the gateway config file.',
+      docsLink: 'Channel documentation',
+      loadError: 'Failed to load channel settings',
+      loading: 'Loading…',
+      save: 'Save changes',
+      saving: 'Saving…',
+      saved: 'Saved',
+      saveError: 'Failed to save',
+      retry: 'Retry',
+      unsavedHint: 'You have unsaved changes.',
+      telegramTitle: 'Telegram',
+      telegramSubtitle: 'Bot token, allowlists, and optional multi-account JSON.',
+      weixinTitle: 'Weixin',
+      weixinSubtitle: 'Inbound Weixin bridge; advanced routing and per-account JSON.',
+      enableTelegramAria: 'Enable Telegram channel',
+      enableWeixinAria: 'Enable Weixin channel',
+      telegramToken: 'Bot token',
+      telegramTokenDesc: 'From BotFather. Stored in the gateway config.',
+      allowFromDm: 'Allow from (DM)',
+      allowFromDmDesc: 'Comma-separated user IDs allowed to DM the bot (when policy uses allowlist).',
+      advancedShow: 'Advanced options',
+      advancedHide: 'Hide advanced options',
+      apiRoot: 'API root',
+      proxy: 'Proxy',
+      dmPolicy: 'DM policy',
+      groupPolicy: 'Group policy',
+      replyToMode: 'Reply-to mode',
+      streamMode: 'Stream mode',
+      allowFromGroups: 'Allow from (groups)',
+      historyLimit: 'History limit',
+      textChunkLimit: 'Text chunk limit',
+      telegramDebug: 'Debug mode',
+      multiAccountJson: 'Multi-account (JSON)',
+      multiAccountJsonDesc:
+        'Optional. Per-account botToken or tokenFile, policies, and groups. Empty {} uses the single token above only.',
+      weixinLoginCallout: 'Weixin login and bridge setup are configured outside this form (see documentation).',
+      weixinAllowFrom: 'Allow from',
+      weixinAllowFromDesc: 'Comma-separated wxid / openid allowlist when applicable.',
+      weixinRouteTag: 'Route tag',
+      weixinRouteTagDesc: 'Optional tag for routing; numeric or string.',
+      routeTagPlaceholder: 'e.g. tag name or number',
+      weixinDebug: 'Debug mode',
+      weixinDebugDesc: 'Extra logging for the Weixin channel.',
+      weixinAccountsJson: 'Accounts (JSON)',
+      weixinAccountsJsonDesc: 'Per-account name, CDN base URL, route tag, and policies.',
+      jsonObjectAccounts: 'Accounts must be a JSON object',
+      jsonInvalid: 'Invalid JSON',
+      copy: 'Copy',
+      copied: 'Copied',
+      show: 'Show',
+      hide: 'Hide',
+      policy: {
+        dm: {
+          pairing: 'Pairing',
+          allowlist: 'Allowlist',
+          open: 'Open',
+          disabled: 'Disabled',
+        },
+        group: {
+          open: 'Open',
+          disabled: 'Disabled',
+          allowlist: 'Allowlist',
+        },
+        reply: {
+          off: 'Off',
+          first: 'First',
+          all: 'All',
+        },
+        stream: {
+          off: 'Off',
+          partial: 'Partial',
+          block: 'Block',
+        },
+      },
+    },
+    voiceSettings: {
+      needToken: 'Save a gateway token to edit voice settings.',
+      subtitle: 'Speech-to-text and text-to-speech for channels. Keys can also be set via environment variables.',
+      docsLink: 'Voice documentation',
+      loadError: 'Failed to load voice settings',
+      loading: 'Loading…',
+      save: 'Save changes',
+      saving: 'Saving…',
+      saved: 'Saved',
+      saveError: 'Failed to save',
+      retry: 'Retry',
+      unsavedHint: 'You have unsaved changes.',
+      stt: {
+        title: 'Speech-to-text (STT)',
+        description: 'Transcribe inbound voice using Alibaba DashScope or OpenAI Whisper.',
+        enable: 'Enable STT',
+        enableDesc: 'When on, voice messages can be transcribed for the agent.',
+        provider: 'STT provider',
+        alibaba: 'Alibaba DashScope',
+        openai: 'OpenAI',
+        apiKey: 'API key',
+        apiKeyDesc: 'Optional if the key is already in the environment.',
+        model: 'Model',
+        fallback: 'Fallback between providers',
+        fallbackDesc: 'Try the other provider if the primary request fails.',
+      },
+      tts: {
+        title: 'Text-to-speech (TTS)',
+        description: 'Synthesize assistant replies as audio when enabled.',
+        enable: 'Enable TTS',
+        enableDesc: 'When on, TTS runs according to the trigger mode below.',
+        trigger: 'Trigger',
+        triggerOff: 'Off',
+        triggerAlways: 'Always',
+        triggerInbound: 'Inbound voice only',
+        triggerTagged: 'Tagged ([[tts]])',
+        triggerDescOff: 'TTS is completely disabled.',
+        triggerDescAlways: 'Apply TTS to all assistant messages.',
+        triggerDescInbound: 'Only reply with voice when the user sends voice.',
+        triggerDescTagged: 'Only when the [[tts]] directive is used.',
+        provider: 'TTS provider',
+        providerOpenai: 'OpenAI TTS',
+        providerEdge: 'Microsoft Edge (free)',
+        voice: 'Voice',
+        edgeHint: 'Microsoft Edge TTS — no API key required.',
+      },
+      notes: {
+        title: 'Note',
+        duration: 'Long audio is split automatically; quality depends on provider and model.',
+        envVars: 'Environment variables: DASHSCOPE_API_KEY, OPENAI_API_KEY (when not set in this form).',
+      },
+    },
+    gatewaySettings: {
+      needToken: 'Save a gateway token to load and edit gateway options.',
+      subtitle: 'HTTP API access token and heartbeat. Values are stored in the gateway config file.',
+      docsLink: 'Gateway documentation',
+      loadError: 'Failed to load gateway settings',
+      loading: 'Loading…',
+      save: 'Save changes',
+      saving: 'Saving…',
+      saved: 'Saved',
+      saveError: 'Failed to save',
+      retry: 'Retry',
+      unsavedHint: 'You have unsaved changes.',
+      tokenExpired: 'Your session token was rejected. Update the client token or fix the access token in config.',
+      updateToken: 'Update client token',
+      changeToken: 'Open token dialog',
+      accessToken: 'Gateway access token',
+      tokenPlaceholder: 'Token stored in config (optional if using env)',
+      tokenHelp: 'Used to authenticate HTTP/WebSocket API requests. You can also set XOPCBOT_GATEWAY_TOKEN.',
+      copy: 'Copy',
+      copied: 'Copied',
+      show: 'Show',
+      hide: 'Hide',
+      listenHost: 'Listen address',
+      listenPort: 'Port',
+      listenHint: 'Effective after gateway restart if changed outside this UI.',
+      enableHeartbeat: 'Enable heartbeat',
+      heartbeatInterval: 'Heartbeat interval (ms)',
+      heartbeatHint: 'Interval for gateway heartbeat events (SSE / UI).',
+      authModeNone: 'Auth mode is set to none — token in config may be ignored.',
+    },
   },
   zh: {
     appBrand: 'XOPCBOT Gateway',
@@ -901,8 +1548,345 @@ const bundles: Record<
       requestId: '请求 ID',
       sessionId: '会话 ID',
     },
+    agentSettings: {
+      subtitle: '模型、工作区、采样与输出方式的默认配置。',
+      sectionDesc: '修改将写入网关配置文件；部分项在下一轮对话或新会话中生效。',
+      needToken: '请先保存网关 Token 后再加载或修改代理默认项。',
+      loadError: '加载设置失败',
+      save: '保存更改',
+      saving: '保存中…',
+      saved: '已保存',
+      saveError: '保存失败',
+      cardModelsTitle: '模型',
+      cardModelsSubtitle: '对话、视觉与图像生成默认模型',
+      cardWorkspaceTitle: '工作区与附件',
+      cardWorkspaceSubtitle: '工作目录与入站媒体大小限制',
+      cardGenerationTitle: '采样与工具',
+      cardGenerationSubtitle: 'Token 上限、随机性与工具循环深度',
+      cardBehaviorTitle: '推理与输出',
+      cardBehaviorSubtitle: '思考深度、推理可见性与详细程度',
+      label: {
+        model: '模型',
+        imageModel: '图像理解模型',
+        imageGenerationModel: '图像生成模型',
+        mediaMaxMb: '图像加载上限 (MB)',
+        workspace: '工作区',
+        maxTokens: '最大 token',
+        temperature: '温度',
+        maxToolIterations: '最大工具迭代',
+        thinkingDefault: '思考级别',
+        reasoningDefault: '推理可见性',
+        verboseDefault: '详细程度',
+      },
+      desc: {
+        model: '新会话的默认模型。',
+        imageModel: '可选，用于图像理解 / 视觉。',
+        imageGenerationModel: '可选，用于 image_generate（如 openai/gpt-image-1）。',
+        mediaMaxMb: '图像工具加载单张图片时的最大体积。',
+        workspace: '代理读写文件的工作目录。',
+        maxTokens: '模型回复的最大 token 数。',
+        temperature: '随机性（0–2）。',
+        maxToolIterations: '单条用户消息内最多工具调用轮数。',
+        thinkingDefault: '新会话的默认思考级别。',
+        reasoningDefault: '是否向用户展示模型推理过程。',
+        verboseDefault: '代理默认输出的详细程度。',
+      },
+      reasoning: { off: '关闭', on: '开启', stream: '流式' },
+      verbose: { off: '关闭', on: '开启', full: '完整' },
+    },
+    providersSettings: {
+      subtitle: '提供商 API Key 与 OAuth。凭据由网关凭据存储保存。',
+      intro: '展开分组与提供商，填写 API Key 或在支持时使用 OAuth。',
+      docsLink: '模型与提供商文档',
+      needToken: '请先保存网关 Token 后再管理提供商凭据。',
+      loadError: '加载提供商失败',
+      save: '保存更改',
+      saving: '保存中…',
+      saved: '已保存',
+      saveError: '保存失败',
+      empty: '暂无可用提供商。',
+      categories: {
+        common: '常用提供商',
+        specialty: '专业 / 特色',
+        enterprise: '企业 / 云端',
+        oauth: '仅 OAuth',
+      },
+      configuredCount: '已配置 {{count}} 个',
+      metaMasked: '已有凭据 — 输入新 Key 可覆盖。',
+      metaWillSave: '点击「保存更改」后写入 API Key。',
+      metaNotConfigured: '未配置。',
+      placeholderKey: 'API Key',
+      placeholderKeep: '留空则保留当前',
+      placeholderOverride: '输入新 Key 覆盖',
+      show: '显示',
+      hide: '隐藏',
+      copy: '复制',
+      copied: '已复制',
+      oauth: 'OAuth 登录',
+      revoke: '撤销',
+      revokeConfirm: '撤销「{{name}}」的 OAuth 凭据？',
+      oauthStarting: '正在启动 OAuth…',
+      oauthProcessingCode: '正在处理授权…',
+      openAuthPage: '打开授权页',
+      cancelOAuth: '取消',
+      pasteRedirectUrl: '粘贴完整重定向 URL（含 code= 与 state=）',
+      submitCode: '提交',
+      envHint: 'API Key 来自环境变量。在上方输入新 Key 可覆盖。',
+      oauthHint: '可使用 OAuth 安全登录，或手动填写 API Key。',
+    },
+    modelsSettings: {
+      needToken: '请先保存网关 Token 后再编辑 models.json。',
+      subtitle: '自定义提供商与模型（models.json）。保存后生效；重新加载可读取磁盘上的修改。',
+      docsLink: '模型与提供商文档',
+      loadError: '加载 models.json 失败',
+      loadFileWarning: '文件提示',
+      filePath: '路径',
+      addProvider: '添加提供商',
+      validate: '校验',
+      validating: '校验中…',
+      validateError: '校验请求失败',
+      save: '保存',
+      saving: '保存中…',
+      saved: '已保存',
+      saveError: '保存失败',
+      reload: '重新加载',
+      reloading: '加载中…',
+      reloadError: '重新加载失败',
+      showJson: '显示 JSON',
+      hideJson: '隐藏 JSON',
+      statsProviders: '{{count}} 个提供商',
+      statsModels: '{{count}} 个模型',
+      unsavedHint: '有未保存的更改。',
+      loading: '加载中…',
+      jsonParseError: 'JSON 无效',
+      jsonReset: '从编辑器还原',
+      jsonApply: '应用 JSON',
+      emptyTitle: '暂无自定义提供商',
+      emptyDesc: '可添加 OpenAI 兼容端点（Ollama、LM Studio、OpenRouter、vLLM 等）及可选的逐模型覆盖。',
+      emptyCta: '添加第一个提供商',
+      presetOllama: 'Ollama',
+      presetLmStudio: 'LM Studio',
+      presetOpenRouter: 'OpenRouter',
+      presetLabel: '预设',
+      presetCustom: '自定义',
+      addProviderTitle: '添加提供商',
+      addProviderSubtitle: '提供商 ID 须唯一（如 ollama、my-openai）。',
+      providerIdLabel: '提供商 ID',
+      providerIdPlaceholder: '例如 ollama',
+      providerIdRequired: '请填写提供商 ID',
+      addProviderConfirm: '添加',
+      cancel: '取消',
+      close: '关闭',
+      baseUrl: 'Base URL',
+      apiType: 'API 类型',
+      apiKey: 'API Key',
+      apiKeyPlaceholder: 'sk-…、环境变量名 或 !命令',
+      apiKeyHint: '直接填写密钥、大写环境变量名，或以 ! 开头的 shell 命令',
+      authHeader: '自动发送 Authorization 头',
+      testKey: '测试',
+      show: '显示',
+      hide: '隐藏',
+      badgeShell: 'shell',
+      badgeEnv: 'env',
+      badgeLiteral: '字面量',
+      removeProvider: '删除提供商',
+      removeProviderConfirm: '删除提供商「{{id}}」及其模型？',
+      modelsSection: '模型',
+      modelsEmpty: '无自定义模型；在可用处将使用内置默认。',
+      addModel: '添加模型',
+      editModel: '编辑模型',
+      removeModel: '删除模型',
+      removeModelConfirm: '删除模型「{{id}}」？',
+      addModelTitle: '添加模型',
+      editModelTitle: '编辑模型',
+      modelProviderLabel: '提供商',
+      modelId: '模型 ID',
+      displayName: '显示名称',
+      inputTypes: '输入类型',
+      inputTextOnly: '仅文本',
+      inputTextVision: '文本 + 视觉',
+      reasoning: '支持推理',
+      contextWindow: '上下文窗口',
+      maxOutputTokens: '最大输出 token',
+      costSection: '费用（每百万 token）',
+      costInput: '输入',
+      costOutput: '输出',
+      modelIdRequired: '请填写模型 ID',
+      mustBePositive: '必须大于 0',
+      addModelConfirm: '添加模型',
+      saveModelConfirm: '保存更改',
+      validationErrors: '校验问题',
+      validationWarnings: '警告',
+      testError: '错误',
+      testOk: '解析结果',
+    },
+    channelsSettings: {
+      needToken: '请先保存网关 Token 后再编辑渠道设置。',
+      subtitle: 'Telegram 与微信入站渠道。更改将写入网关配置文件。',
+      docsLink: '渠道文档',
+      loadError: '加载渠道设置失败',
+      loading: '加载中…',
+      save: '保存更改',
+      saving: '保存中…',
+      saved: '已保存',
+      saveError: '保存失败',
+      retry: '重试',
+      unsavedHint: '有未保存的更改。',
+      telegramTitle: 'Telegram',
+      telegramSubtitle: 'Bot Token、白名单及可选的多账号 JSON。',
+      weixinTitle: '微信',
+      weixinSubtitle: '微信桥接入站；高级路由与分账号 JSON。',
+      enableTelegramAria: '启用 Telegram 渠道',
+      enableWeixinAria: '启用微信渠道',
+      telegramToken: 'Bot Token',
+      telegramTokenDesc: '来自 BotFather，保存在网关配置中。',
+      allowFromDm: '允许私聊（用户 ID）',
+      allowFromDmDesc: '逗号分隔的用户 ID（策略为白名单时生效）。',
+      advancedShow: '高级选项',
+      advancedHide: '收起高级选项',
+      apiRoot: 'API 根地址',
+      proxy: '代理',
+      dmPolicy: '私聊策略',
+      groupPolicy: '群组策略',
+      replyToMode: '回复引用模式',
+      streamMode: '流式模式',
+      allowFromGroups: '允许群组（ID）',
+      historyLimit: '历史条数上限',
+      textChunkLimit: '文本分块上限',
+      telegramDebug: '调试模式',
+      multiAccountJson: '多账号（JSON）',
+      multiAccountJsonDesc:
+        '可选。每账号可配置 botToken 或 tokenFile、策略与群组。留空 {} 则仅使用上方单一 Token。',
+      weixinLoginCallout: '微信登录与桥接需在表单外按文档配置。',
+      weixinAllowFrom: '允许来源',
+      weixinAllowFromDesc: '逗号分隔的 wxid / openid 白名单（如适用）。',
+      weixinRouteTag: '路由标签',
+      weixinRouteTagDesc: '可选路由标签，可为数字或字符串。',
+      routeTagPlaceholder: '例如标签名或数字',
+      weixinDebug: '调试模式',
+      weixinDebugDesc: '为微信渠道输出更详细的日志。',
+      weixinAccountsJson: '账号（JSON）',
+      weixinAccountsJsonDesc: '分账号名称、CDN 地址、路由标签与策略。',
+      jsonObjectAccounts: '账号必须为 JSON 对象',
+      jsonInvalid: 'JSON 无效',
+      copy: '复制',
+      copied: '已复制',
+      show: '显示',
+      hide: '隐藏',
+      policy: {
+        dm: {
+          pairing: '配对',
+          allowlist: '白名单',
+          open: '开放',
+          disabled: '关闭',
+        },
+        group: {
+          open: '开放',
+          disabled: '关闭',
+          allowlist: '白名单',
+        },
+        reply: {
+          off: '关闭',
+          first: '首条',
+          all: '全部',
+        },
+        stream: {
+          off: '关闭',
+          partial: '部分',
+          block: '阻塞',
+        },
+      },
+    },
+    voiceSettings: {
+      needToken: '请先保存网关 Token 后再编辑语音设置。',
+      subtitle: '渠道的语音转文字与文字转语音。API Key 也可通过环境变量配置。',
+      docsLink: '语音文档',
+      loadError: '加载语音设置失败',
+      loading: '加载中…',
+      save: '保存更改',
+      saving: '保存中…',
+      saved: '已保存',
+      saveError: '保存失败',
+      retry: '重试',
+      unsavedHint: '有未保存的更改。',
+      stt: {
+        title: '语音转文字（STT）',
+        description: '使用阿里云 DashScope 或 OpenAI Whisper 将入站语音转为文本。',
+        enable: '启用 STT',
+        enableDesc: '开启后，可将语音消息转写给代理使用。',
+        provider: 'STT 提供商',
+        alibaba: '阿里云 DashScope',
+        openai: 'OpenAI',
+        apiKey: 'API Key',
+        apiKeyDesc: '若环境变量已配置密钥，此处可留空。',
+        model: '模型',
+        fallback: '提供商回退',
+        fallbackDesc: '主提供商失败时尝试另一提供商。',
+      },
+      tts: {
+        title: '文字转语音（TTS）',
+        description: '在启用时把助手回复合成为语音。',
+        enable: '启用 TTS',
+        enableDesc: '开启后，按下方触发模式执行 TTS。',
+        trigger: '触发',
+        triggerOff: '关闭',
+        triggerAlways: '始终',
+        triggerInbound: '仅入站语音',
+        triggerTagged: '标签（[[tts]]）',
+        triggerDescOff: '完全关闭 TTS。',
+        triggerDescAlways: '对助手消息尝试使用 TTS。',
+        triggerDescInbound: '仅当用户发送语音时以语音回复。',
+        triggerDescTagged: '仅在使用 [[tts]] 指令时。',
+        provider: 'TTS 提供商',
+        providerOpenai: 'OpenAI TTS',
+        providerEdge: 'Microsoft Edge（免费）',
+        voice: '音色',
+        edgeHint: 'Microsoft Edge TTS — 无需 API Key。',
+      },
+      notes: {
+        title: '说明',
+        duration: '长音频会自动分段；效果取决于提供商与模型。',
+        envVars: '环境变量：DASHSCOPE_API_KEY、OPENAI_API_KEY（未在表单填写时）。',
+      },
+    },
+    gatewaySettings: {
+      needToken: '请先保存网关 Token 后再加载或修改网关选项。',
+      subtitle: 'HTTP API 访问令牌与心跳。配置写入网关配置文件。',
+      docsLink: '网关文档',
+      loadError: '加载网关设置失败',
+      loading: '加载中…',
+      save: '保存更改',
+      saving: '保存中…',
+      saved: '已保存',
+      saveError: '保存失败',
+      retry: '重试',
+      unsavedHint: '有未保存的更改。',
+      tokenExpired: '会话 Token 无效。请在客户端更新 Token，或修正配置文件中的访问令牌。',
+      updateToken: '更新客户端 Token',
+      changeToken: '打开 Token 对话框',
+      accessToken: '网关访问令牌',
+      tokenPlaceholder: '保存在配置中的令牌（若使用环境变量可留空）',
+      tokenHelp: '用于 HTTP/WebSocket API 鉴权。也可通过环境变量 XOPCBOT_GATEWAY_TOKEN 提供。',
+      copy: '复制',
+      copied: '已复制',
+      show: '显示',
+      hide: '隐藏',
+      listenHost: '监听地址',
+      listenPort: '端口',
+      listenHint: '若在 UI 外修改监听地址，需重启网关后生效。',
+      enableHeartbeat: '启用心跳',
+      heartbeatInterval: '心跳间隔（毫秒）',
+      heartbeatHint: '网关心跳事件（SSE / UI）的间隔。',
+      authModeNone: '当前认证模式为 none，配置文件中的令牌可能被忽略。',
+    },
   },
 };
+
+export type ProvidersSettingsMessages = (typeof bundles)['en']['providersSettings'];
+export type ModelsSettingsMessages = (typeof bundles)['en']['modelsSettings'];
+export type ChannelsSettingsMessages = (typeof bundles)['en']['channelsSettings'];
+export type VoiceSettingsMessages = (typeof bundles)['en']['voiceSettings'];
+export type GatewaySettingsMessages = (typeof bundles)['en']['gatewaySettings'];
 
 export type TabGroup = { label: string; tabs: readonly Tab[] };
 
