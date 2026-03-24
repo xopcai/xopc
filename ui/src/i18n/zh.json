@@ -101,8 +101,18 @@
       "voice": "语音 (STT/TTS)",
       "gateway": "网关"
     },
+    "agentUi": {
+      "cardModelsTitle": "模型",
+      "cardModelsSubtitle": "对话、视觉与图像生成的默认模型",
+      "cardWorkspaceTitle": "工作区与附件",
+      "cardWorkspaceSubtitle": "工作目录与入站媒体大小上限",
+      "cardGenerationTitle": "采样与工具",
+      "cardGenerationSubtitle": "Token 上限、随机性与工具循环深度",
+      "cardBehaviorTitle": "推理与输出",
+      "cardBehaviorSubtitle": "思考深度、推理过程与详细程度"
+    },
     "descriptions": {
-      "agent": "配置代理设置",
+      "agent": "模型、工作区、采样与回复展示的默认行为",
       "providers": "配置提供商 API 密钥",
       "channels": "配置消息渠道",
       "gateway": "配置网关设置"

@@ -101,8 +101,18 @@
       "voice": "Voice (STT/TTS)",
       "gateway": "Gateway"
     },
+    "agentUi": {
+      "cardModelsTitle": "Models",
+      "cardModelsSubtitle": "Chat, vision, and image generation defaults",
+      "cardWorkspaceTitle": "Workspace & attachments",
+      "cardWorkspaceSubtitle": "Working directory and inbound media limits",
+      "cardGenerationTitle": "Sampling & tools",
+      "cardGenerationSubtitle": "Token budget, randomness, and tool loop depth",
+      "cardBehaviorTitle": "Reasoning & output",
+      "cardBehaviorSubtitle": "Thinking depth, traces, and verbosity"
+    },
     "descriptions": {
-      "agent": "Configure your agent settings",
+      "agent": "Defaults for models, workspace, sampling, and how responses are shown",
       "providers": "Configure your provider API keys",
       "channels": "Configure messaging channels",
       "gateway": "Configure gateway settings"
