@@ -83,6 +83,8 @@ export class AgentManager {
       extensionRegistry: config.extensionRegistry,
       getCurrentContext: config.getCurrentContext,
       bus: config.bus,
+      getConfig: () => this.config.config,
+      getPrimaryModel: () => this.resolveModel(),
     });
 
     this.defaultModel = config.model || getDefaultModelSync(config.config);

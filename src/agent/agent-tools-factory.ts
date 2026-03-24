@@ -10,6 +10,8 @@
  */
 
 import type { AgentTool } from '@mariozechner/pi-agent-core';
+import type { Model, Api } from '@mariozechner/pi-ai';
+import type { Config } from '../config/schema.js';
 import type { MessageBus } from '../bus/index.js';
 import {
   readFileTool,
@@ -26,6 +28,8 @@ import {
   createMemorySearchTool,
   createMemoryGetTool,
 } from './tools/index.js';
+import { createImageTool } from './tools/image-tool.js';
+import { createImageGenerateTool } from './tools/image-generate-tool.js';
 import { createLogger } from '../utils/logger.js';
 import { wrapToolsWithProtection, type ToolExecutorConfig } from './tool-executor.js';
 
@@ -38,6 +42,10 @@ export interface ToolFactoryDeps {
   getCurrentContext: () => { channel: string; chatId: string; sessionKey: string } | null;
   bus: MessageBus;
   toolExecutorConfig?: Partial<ToolExecutorConfig>;
+  /** Agent defaults (image tools, etc.); use getter so hot-reloaded config applies. */
+  getConfig?: () => Config | undefined;
+  /** Session / default chat model for vision tool description. */
+  getPrimaryModel?: () => Model<Api>;
   // TTS config removed - handled at dispatch layer
 }
 
@@ -46,6 +54,23 @@ export class AgentToolsFactory {
 
   createCoreTools(): AgentTool<any, any>[] {
     const { workspace, braveApiKey, bus } = this.deps;
+
+    const primary = this.deps.getPrimaryModel?.();
+    const modelHasVision = primary?.input?.includes('image') ?? false;
+    const cfg = this.deps.getConfig?.();
+    const imageTool = createImageTool({
+      config: cfg,
+      workspace,
+      modelHasVision,
+    });
+    const imageGenerateTool = createImageGenerateTool({
+      config: cfg,
+      workspace,
+    });
+
+    const optionalTools = [imageTool, imageGenerateTool].filter(
+      (t): t is AgentTool<any, any> => t != null,
+    );
 
     return [
       readFileTool,
@@ -63,6 +88,7 @@ export class AgentToolsFactory {
       createSendMediaTool(bus, () => this.deps.getCurrentContext()),
       createMemorySearchTool(workspace),
       createMemoryGetTool(workspace),
+      ...optionalTools,
     ];
   }
 

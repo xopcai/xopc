@@ -29,6 +29,9 @@ export { createMessageTool } from './communication.js';
 
 export { createSendMediaTool } from './send-media.js';
 
+export { createImageTool, resolveImageModelConfigForTool } from './image-tool.js';
+export { createImageGenerateTool, resolveImageGenerationModelConfigForTool } from './image-generate-tool.js';
+
 // Utility exports
 export {
   truncateHead,
