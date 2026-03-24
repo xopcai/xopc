@@ -4,7 +4,7 @@ import type { Config } from '../../config/schema.js';
 import { getAgentDefaultModelRef, parseModelRef } from '../../config/schema.js';
 import { extractTextContent } from '../helpers.js';
 import type { ImageAttempt } from './image-model-fallback.js';
-import { coerceToolModelConfig, type ToolModelConfig } from './model-config.helpers.js';
+import { coerceToolModelConfig, type ToolModelConfig } from './tool-model-config.js';
 
 export type ImageModelConfig = ToolModelConfig;
 
@@ -59,7 +59,6 @@ export function coerceImageAssistantText(params: {
 export function coerceImageModelConfig(cfg?: Config): ImageModelConfig {
   return coerceToolModelConfig(cfg?.agents?.defaults?.imageModel);
 }
-
 
 export function applyImageModelConfigDefaults(
   cfg: Config | undefined,

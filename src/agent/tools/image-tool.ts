@@ -1,22 +1,22 @@
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { Config } from '../../config/schema.js';
-import { getModelsByProvider } from '../../providers/index.js';
-import { describeImagesWithPiAi } from './describe-images.js';
+import { describeImagesWithPiAi } from '../image/describe-images.js';
 import {
   buildImageToolTextResult,
   coerceImageModelConfig,
   resolvePromptAndModelOverride,
-} from './image-tool.helpers.js';
-import { runWithImageModelFallback } from './image-model-fallback.js';
-import { loadImageForToolInput } from './media-load.js';
+} from '../image/image-helpers.js';
+import { runWithImageModelFallback } from '../image/image-model-fallback.js';
+import { loadImageForToolInput } from '../image/load-image-media.js';
 import {
   buildToolModelConfigFromCandidates,
   coerceToolModelConfig,
   hasToolModelConfig,
   resolveDefaultModelRef,
   type ToolModelConfig,
-} from './model-config.helpers.js';
+} from '../image/tool-model-config.js';
+import { getModelsByProvider } from '../../providers/index.js';
 
 const DEFAULT_PROMPT = 'Describe the image.';
 const DEFAULT_MAX_IMAGES = 20;

@@ -1,4 +1,4 @@
-import type { ToolModelConfig } from './model-config.helpers.js';
+import type { ToolModelConfig } from './tool-model-config.js';
 
 export type ImageAttempt = { provider: string; model: string; error: string };
 

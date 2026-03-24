@@ -1,6 +1,6 @@
 import { complete, type Api, type Context, type Model } from '@mariozechner/pi-ai';
 import { resolveModel, getApiKey } from '../../providers/index.js';
-import { coerceImageAssistantText } from './image-tool.helpers.js';
+import { coerceImageAssistantText } from './image-helpers.js';
 
 function resolveImageToolMaxTokens(modelMaxTokens: number | undefined, requestedMaxTokens = 4096) {
   if (
