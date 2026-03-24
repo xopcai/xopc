@@ -228,7 +228,8 @@ Co-located tests: `src/**/__tests__/*.test.ts`. Use `describe` / `it` / `expect`
 
 ## Web UI
 
-Separate **`ui/`** package (Vite + Lit + Tailwind). Inspired by [pi-mono/web-ui](https://github.com/mariozechner/pi-mono/tree/main/packages/web-ui).
+- **React 控制台（新）**：`web/`（Vite + React + Tailwind v4）。迁移计划见 [docs/web-migration-plan.md](./docs/web-migration-plan.md)。
+- **Lit 包（既有）**：`ui/`（Vite + Lit + Tailwind）。Inspired by [pi-mono/web-ui](https://github.com/mariozechner/pi-mono/tree/main/packages/web-ui).
 
 ```bash
 cd ui && pnpm install && pnpm run dev   # or pnpm run build
