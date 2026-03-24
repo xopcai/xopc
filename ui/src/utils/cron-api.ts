@@ -46,8 +46,8 @@ export interface AddJobOptions {
 /** Body text from `payload` (form / detail display). */
 export function cronJobBodyText(job: Pick<CronJob, 'payload'>): string {
   const p = job.payload;
-  if (p.kind === 'systemEvent') return p.text;
-  return p.message;
+  if (p.kind === 'systemEvent') return p.text ?? '';
+  return p.message ?? '';
 }
 
 export interface ModelInfo {
@@ -58,6 +58,19 @@ export interface ModelInfo {
 
 export interface ConfigInfo {
   model?: string;
+}
+
+/** Same resolution as SettingsPage / `getAgentDefaultModelRef`: string or `{ primary }`. */
+function agentDefaultModelFromGatewayConfig(c: unknown): string {
+  if (!c || typeof c !== 'object') return '';
+  const raw = (c as { agents?: { defaults?: { model?: unknown } } }).agents?.defaults?.model;
+  if (raw === undefined || raw === null) return '';
+  if (typeof raw === 'string') return raw.trim();
+  if (typeof raw === 'object' && raw !== null && 'primary' in raw) {
+    const p = (raw as { primary?: unknown }).primary;
+    return typeof p === 'string' ? p.trim() : '';
+  }
+  return '';
 }
 
 export interface ChannelStatus {
@@ -228,11 +241,10 @@ export class CronAPIClient {
   }
 
   async getConfig(): Promise<ConfigInfo> {
-    const result = await this.request<{ config: ConfigInfo }>('GET', '/api/config');
-    // Extract model from nested config structure
-    const config = result.config || {};
+    const result = await this.request<{ ok?: boolean; payload?: { config?: unknown } }>('GET', '/api/config');
+    const c = result.payload?.config;
     return {
-      model: (config as any).agents?.defaults?.model || '',
+      model: agentDefaultModelFromGatewayConfig(c),
     };
   }
 
