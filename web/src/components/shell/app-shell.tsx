@@ -1,9 +1,9 @@
-import * as Dialog from '@radix-ui/react-dialog';
-import { Menu } from 'lucide-react';
+import { Menu, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
+import { BrandLogo } from '@/components/shell/brand-logo';
 import { ConnectionIndicator } from '@/components/shell/connection-indicator';
 import { LanguageToggle } from '@/components/shell/language-toggle';
 import { SidebarNav } from '@/components/shell/sidebar';
@@ -13,6 +13,9 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useSidebarStore } from '@/stores/sidebar-store';
+
+const LG_MIN = '(min-width: 1024px)';
 
 /** Align with `ui` `navigate-to-chat` custom event from session manager. */
 function NavigateToChatListener() {
@@ -37,6 +40,28 @@ export function AppShell() {
   const { pathname } = useLocation();
   const isChatRoute = pathname.startsWith('/chat');
 
+  const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
+  const toggleSidebarCollapsed = useSidebarStore((s) => s.toggleCollapsed);
+
+  const navCollapsed = sidebarCollapsed && !mobileNavOpen;
+
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') setMobileNavOpen(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  useEffect(() => {
+    const mq = window.matchMedia(LG_MIN);
+    const onChange = () => {
+      if (mq.matches) setMobileNavOpen(false);
+    };
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
       <GatewaySseBridge />
@@ -44,56 +69,84 @@ export function AppShell() {
       <TokenDialog />
 
       {/* Full-width app bar (design: content surface + top strip) */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-edge bg-surface-panel px-3 py-2.5 sm:px-4 lg:px-5 dark:border-edge">
-        <div className="min-w-0 flex-1">
-          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-            <span className="truncate text-sm font-semibold tracking-tight text-fg">{m.appBrand}</span>
-            <span className="truncate text-xs font-normal text-fg-subtle">{m.appSubtitle}</span>
+      <header className="flex shrink-0 items-center gap-3 border-b border-edge bg-surface-panel px-4 py-2.5 sm:px-6 lg:px-8 dark:border-edge">
+        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+          <Button
+            type="button"
+            variant="ghost"
+            className="hidden size-8 shrink-0 rounded-xl p-0 lg:inline-flex"
+            aria-expanded={!sidebarCollapsed}
+            aria-controls="app-sidebar"
+            aria-label={sidebarCollapsed ? m.sidebarExpand : m.sidebarCollapse}
+            onClick={() => toggleSidebarCollapsed()}
+          >
+            <Menu className="size-4" strokeWidth={1.5} />
+          </Button>
+          <BrandLogo className="size-8 rounded-xl max-[374px]:size-7" alt="" aria-hidden />
+          <div className="min-w-0">
+            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
+              <span className="truncate text-sm font-semibold tracking-tight text-fg">{m.appBrand}</span>
+              <span className="truncate text-xs font-normal text-fg-subtle">{m.appSubtitle}</span>
+            </div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
+        <div className="flex shrink-0 items-center gap-3">
           <ConnectionIndicator className="max-w-[min(42vw,9rem)] lg:hidden" />
           <LanguageToggle />
           <ThemeToggle />
-          <Dialog.Root open={mobileNavOpen} onOpenChange={setMobileNavOpen}>
-            <Dialog.Trigger asChild>
-              <Button type="button" variant="secondary" className="h-9 px-2 lg:hidden" aria-label="Menu">
-                <Menu className="size-4" strokeWidth={1.75} />
-              </Button>
-            </Dialog.Trigger>
-            <Dialog.Portal>
-              <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/40 lg:hidden" />
-              <Dialog.Content
-                className={cn(
-                  'fixed left-0 top-0 z-50 flex h-full w-[min(100%-3rem,18rem)] flex-col border-r border-edge bg-surface-panel shadow-popover lg:hidden',
-                  'dark:border-edge',
-                )}
-              >
-                <div className="min-h-0 flex-1 overflow-y-auto">
-                  <SidebarNav onNavigate={() => setMobileNavOpen(false)} />
-                </div>
-                <div className="shrink-0 border-t border-edge-subtle px-3 py-3 dark:border-edge">
-                  <ConnectionIndicator />
-                </div>
-              </Dialog.Content>
-            </Dialog.Portal>
-          </Dialog.Root>
+          <Button
+            type="button"
+            variant="secondary"
+            className="h-8 px-2 lg:hidden"
+            aria-expanded={mobileNavOpen}
+            aria-controls="app-sidebar"
+            aria-label="Menu"
+            onClick={() => setMobileNavOpen((o) => !o)}
+          >
+            <Menu className="size-3.5" strokeWidth={1.5} />
+          </Button>
         </div>
       </header>
 
+      {/* Sidebar + main: flex push (no fixed overlay on mobile). */}
       <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
         <aside
+          id="app-sidebar"
           className={cn(
-            'hidden h-full min-h-0 w-60 shrink-0 flex-col border-r border-edge bg-surface-base',
-            'dark:border-edge',
-            'lg:flex',
+            'app-sidebar-push flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base',
+            'max-lg:min-w-0',
+            mobileNavOpen
+              ? 'max-lg:w-[min(18rem,85vw)] max-lg:border-r max-lg:border-edge dark:max-lg:border-edge'
+              : 'max-lg:w-0 max-lg:border-0',
+            sidebarCollapsed ? 'lg:w-[4.5rem] lg:border-r lg:border-edge dark:lg:border-edge' : 'lg:w-60 lg:border-r lg:border-edge dark:lg:border-edge',
           )}
         >
-          <div className="min-h-0 flex-1 overflow-y-auto">
-            <SidebarNav />
+          {mobileNavOpen ? (
+            <div className="flex shrink-0 items-center justify-end border-b border-edge-subtle px-3 py-2 lg:hidden dark:border-edge">
+              <Button
+                type="button"
+                variant="ghost"
+                className="size-8 shrink-0 rounded-xl p-0"
+                aria-label={m.closeMenu}
+                onClick={() => setMobileNavOpen(false)}
+              >
+                <X className="size-4" strokeWidth={1.5} />
+              </Button>
+            </div>
+          ) : null}
+          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pt-2">
+            <SidebarNav
+              collapsed={navCollapsed}
+              onNavigate={() => setMobileNavOpen(false)}
+            />
           </div>
-          <div className="shrink-0 border-t border-edge-subtle px-3 py-3 dark:border-edge">
-            <ConnectionIndicator />
+          <div
+            className={cn(
+              'shrink-0 border-t border-edge-subtle dark:border-edge',
+              navCollapsed ? 'px-1 py-2' : 'px-4 py-3',
+            )}
+          >
+            <ConnectionIndicator compact={navCollapsed} />
           </div>
         </aside>
 

@@ -7,7 +7,14 @@ import { cn } from '@/lib/cn';
 import { useGatewaySseStore } from '@/stores/gateway-sse-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export function ConnectionIndicator({ className }: { className?: string }) {
+export function ConnectionIndicator({
+  className,
+  compact = false,
+}: {
+  className?: string;
+  /** Icon-first footer when the sidebar is collapsed. */
+  compact?: boolean;
+}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language).connection;
   const connectionState = useGatewaySseStore((s) => s.connectionState);
@@ -26,7 +33,11 @@ export function ConnectionIndicator({ className }: { className?: string }) {
 
   return (
     <div
-      className={cn('flex min-w-0 items-center gap-1.5 text-xs', className)}
+      className={cn(
+        'flex min-w-0 gap-1.5 text-xs',
+        compact ? 'flex-col items-center px-0.5 py-1' : 'items-center',
+        className,
+      )}
       role="status"
       aria-live="polite"
       aria-atomic="true"
@@ -40,9 +51,13 @@ export function ConnectionIndicator({ className }: { className?: string }) {
           <WifiOff className="size-3.5 text-fg-subtle" strokeWidth={1.75} />
         )}
       </span>
-      <span className="min-w-0 truncate text-fg-muted" title={label}>
-        {label}
-      </span>
+      {compact ? (
+        <span className="sr-only">{label}</span>
+      ) : (
+        <span className="min-w-0 truncate text-fg-muted" title={label}>
+          {label}
+        </span>
+      )}
       {connectionState !== 'connected' &&
       connectionState !== 'connecting' &&
       connectionState !== 'reconnecting' &&
@@ -50,7 +65,7 @@ export function ConnectionIndicator({ className }: { className?: string }) {
         <Button
           type="button"
           variant="ghost"
-          className="h-7 shrink-0 px-1.5"
+          className={cn('h-7 shrink-0 px-1.5', compact && 'h-8 w-full px-0')}
           aria-label={m.reconnect}
           title={m.reconnect}
           onClick={() => reconnectGatewaySse()}

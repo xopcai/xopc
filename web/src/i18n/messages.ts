@@ -20,6 +20,9 @@ const bundles: Record<
   {
     appBrand: string;
     appSubtitle: string;
+    sidebarCollapse: string;
+    sidebarExpand: string;
+    closeMenu: string;
     nav: Record<Tab | 'management' | 'settings', string>;
     settingsSections: Record<SettingsSectionId, string>;
     token: {
@@ -105,6 +108,7 @@ const bundles: Record<
       loadError: string;
       gridView: string;
       listView: string;
+      layoutToggleGroup: string;
       detailLoading: string;
       detailMessages: string;
       detailExport: string;
@@ -602,6 +606,9 @@ const bundles: Record<
   en: {
     appBrand: 'XOPCBOT Gateway',
     appSubtitle: 'Console',
+    sidebarCollapse: 'Collapse sidebar',
+    sidebarExpand: 'Expand sidebar',
+    closeMenu: 'Close menu',
     nav: {
       chat: 'Chat',
       management: 'Management',
@@ -716,6 +723,7 @@ const bundles: Record<
       loadError: 'Failed to load sessions',
       gridView: 'Grid',
       listView: 'List',
+      layoutToggleGroup: 'Session layout',
       detailLoading: 'Loading session…',
       detailMessages: 'Messages',
       detailExport: 'Export',
@@ -1244,6 +1252,9 @@ const bundles: Record<
   zh: {
     appBrand: 'XOPCBOT Gateway',
     appSubtitle: '控制台',
+    sidebarCollapse: '收起侧边栏',
+    sidebarExpand: '展开侧边栏',
+    closeMenu: '关闭菜单',
     nav: {
       chat: '对话',
       management: '管理',
@@ -1358,6 +1369,7 @@ const bundles: Record<
       loadError: '加载会话失败',
       gridView: '网格',
       listView: '列表',
+      layoutToggleGroup: '会话布局',
       detailLoading: '加载会话…',
       detailMessages: '消息',
       detailExport: '导出',

@@ -26,6 +26,11 @@ import {
 } from '@/features/sessions/session-api';
 import type { SessionDetail, SessionMetadata, SessionStats } from '@/features/sessions/session.types';
 import { Button } from '@/components/ui/button';
+import {
+  segmentedThumbActiveClassName,
+  segmentedThumbBaseClassName,
+  segmentedTrackClassName,
+} from '@/components/ui/segmented-styles';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -351,29 +356,37 @@ export function SessionsPage() {
 
         <div className="flex items-center justify-between gap-2">
           <p className="text-xs text-fg-muted">{interpolate(s.sessionCount, { count: sessions.length })}</p>
-          <div className="flex rounded-md border border-edge bg-surface-panel p-0.5 dark:border-edge">
-            <button
+          <div className={segmentedTrackClassName} role="group" aria-label={s.layoutToggleGroup}>
+            <Button
               type="button"
+              variant="ghost"
               title={s.gridView}
+              aria-pressed={viewMode === 'grid'}
               onClick={() => setViewMode('grid')}
               className={cn(
-                'rounded-sm p-1.5 text-fg-subtle transition-colors',
-                viewMode === 'grid' ? 'bg-surface-active text-accent-fg' : 'hover:text-fg',
+                segmentedThumbBaseClassName,
+                'size-7 p-0',
+                viewMode === 'grid' && segmentedThumbActiveClassName,
+                viewMode === 'grid' && 'text-accent-fg hover:text-accent-fg',
               )}
             >
-              <LayoutGrid className="size-4" strokeWidth={1.75} />
-            </button>
-            <button
+              <LayoutGrid className="size-3.5" strokeWidth={1.5} />
+            </Button>
+            <Button
               type="button"
+              variant="ghost"
               title={s.listView}
+              aria-pressed={viewMode === 'list'}
               onClick={() => setViewMode('list')}
               className={cn(
-                'rounded-sm p-1.5 text-fg-subtle transition-colors',
-                viewMode === 'list' ? 'bg-surface-active text-accent-fg' : 'hover:text-fg',
+                segmentedThumbBaseClassName,
+                'size-9 p-0',
+                viewMode === 'list' && segmentedThumbActiveClassName,
+                viewMode === 'list' && 'text-accent-fg hover:text-accent-fg',
               )}
             >
-              <LayoutList className="size-4" strokeWidth={1.75} />
-            </button>
+              <LayoutList className="size-3.5" strokeWidth={1.5} />
+            </Button>
           </div>
         </div>
 
