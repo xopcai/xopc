@@ -216,6 +216,37 @@ const bundles: Record<
         daysAgo: string;
       };
     };
+    skills: {
+      title: string;
+      needToken: string;
+      hint: string;
+      refresh: string;
+      refreshSuccess: string;
+      reloadSuccess: string;
+      reloadRuntime: string;
+      uploadSection: string;
+      dropHint: string;
+      searchPlaceholder: string;
+      noSearchResults: string;
+      uploading: string;
+      tableTitle: string;
+      loading: string;
+      empty: string;
+      loadFailed: string;
+      reloadFailed: string;
+      uploadFailed: string;
+      zipOnly: string;
+      delete: string;
+      deleteTitle: string;
+      deleteMessage: string;
+      deleteConfirm: string;
+      deleteFailed: string;
+      yes: string;
+      no: string;
+      cancel: string;
+      source: { builtin: string; workspace: string; global: string };
+      col: { name: string; description: string; source: string; managed: string; actions: string };
+    };
   }
 > = {
   en: {
@@ -447,6 +478,47 @@ const bundles: Record<
         daysAgo: '{{count}}d ago',
       },
     },
+    skills: {
+      title: 'Skills',
+      needToken: 'Save a gateway token to manage skills.',
+      hint: 'Upload a .zip containing SKILL.md at the archive root or inside one folder (e.g. my-skill/SKILL.md). Managed skills are stored under ~/.xopcbot/skills. Reload updates the running agent’s skill list.',
+      refresh: 'Refresh list',
+      refreshSuccess: 'List refreshed.',
+      reloadSuccess: 'Reloaded from disk and list updated.',
+      reloadRuntime: 'Reload from disk',
+      uploadSection: 'Install or update (zip)',
+      dropHint: 'Drag and drop a .zip here, or click this area to choose a file.',
+      searchPlaceholder: 'Search by name, description, folder…',
+      noSearchResults: 'No skills match your search.',
+      uploading: 'Uploading…',
+      tableTitle: 'Loaded skills',
+      loading: 'Loading…',
+      empty: 'No skills loaded.',
+      loadFailed: 'Failed to load skills',
+      reloadFailed: 'Failed to reload skills',
+      uploadFailed: 'Upload failed',
+      zipOnly: 'Please choose a .zip file',
+      delete: 'Delete',
+      deleteTitle: 'Delete skill',
+      deleteMessage: 'Remove folder "{{id}}" from managed skills? This cannot be undone.',
+      deleteConfirm: 'Delete',
+      deleteFailed: 'Failed to delete skill',
+      yes: 'Yes',
+      no: 'No',
+      cancel: 'Cancel',
+      source: {
+        builtin: 'Bundled',
+        workspace: 'Workspace',
+        global: 'Global',
+      },
+      col: {
+        name: 'Name',
+        description: 'Description',
+        source: 'Source',
+        managed: 'Managed',
+        actions: 'Actions',
+      },
+    },
   },
   zh: {
     appBrand: 'XOPCBOT Gateway',
@@ -675,6 +747,47 @@ const bundles: Record<
         minutesAgo: '{{count}} 分钟前',
         hoursAgo: '{{count}} 小时前',
         daysAgo: '{{count}} 天前',
+      },
+    },
+    skills: {
+      title: '技能',
+      needToken: '请先保存网关 Token 后再管理技能。',
+      hint: '上传包含 SKILL.md 的 .zip（根目录或单层文件夹，如 my-skill/SKILL.md）。已安装技能保存在 ~/.xopcbot/skills。「从磁盘重载」会刷新运行中代理的技能列表。',
+      refresh: '刷新列表',
+      refreshSuccess: '列表已刷新。',
+      reloadSuccess: '已从磁盘重载并更新列表。',
+      reloadRuntime: '从磁盘重载',
+      uploadSection: '安装或更新（zip）',
+      dropHint: '将 .zip 拖到此处，或点击此区域选择文件。',
+      searchPlaceholder: '按名称、描述、文件夹搜索…',
+      noSearchResults: '没有匹配的技能。',
+      uploading: '上传中…',
+      tableTitle: '已加载技能',
+      loading: '加载中…',
+      empty: '暂无技能。',
+      loadFailed: '加载技能失败',
+      reloadFailed: '重载失败',
+      uploadFailed: '上传失败',
+      zipOnly: '请选择 .zip 文件',
+      delete: '删除',
+      deleteTitle: '删除技能',
+      deleteMessage: '确定删除已管理技能目录「{{id}}」？此操作不可恢复。',
+      deleteConfirm: '删除',
+      deleteFailed: '删除失败',
+      yes: '是',
+      no: '否',
+      cancel: '取消',
+      source: {
+        builtin: '内置',
+        workspace: '工作区',
+        global: '全局',
+      },
+      col: {
+        name: '名称',
+        description: '描述',
+        source: '来源',
+        managed: '可管理',
+        actions: '操作',
       },
     },
   },
