@@ -4,15 +4,15 @@ import path from 'node:path';
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { Config } from '../../config/schema.js';
-import { OPENAI_DEFAULT_IMAGE_MODEL } from '../../image-generation/constants.js';
-import { generateImage, listImageGenerationProvidersSummary } from '../../image-generation/runtime.js';
-import { applyImageGenerationModelConfigDefaults } from './image-tool.helpers.js';
+import { OPENAI_DEFAULT_IMAGE_MODEL } from '../image/generation/constants.js';
+import { generateImage, listImageGenerationProvidersSummary } from '../image/generation/runtime.js';
+import { applyImageGenerationModelConfigDefaults } from '../image/image-helpers.js';
 import {
   buildToolModelConfigFromCandidates,
   coerceToolModelConfig,
   hasToolModelConfig,
   type ToolModelConfig,
-} from './model-config.helpers.js';
+} from '../image/tool-model-config.js';
 
 const DEFAULT_COUNT = 1;
 const MAX_COUNT = 4;

@@ -2,7 +2,7 @@ import { promises as fs } from 'node:fs';
 import { homedir } from 'node:os';
 import path from 'node:path';
 import { checkFileSafety } from '../prompt/safety.js';
-import { decodeDataUrl } from './image-tool.helpers.js';
+import { decodeDataUrl } from './image-helpers.js';
 
 export type LoadedImage = { buffer: Buffer; mimeType: string };
 

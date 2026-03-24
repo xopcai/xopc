@@ -1,10 +1,10 @@
-import { parseModelRef } from '../config/schema.js';
-import type { Config } from '../config/schema.js';
+import { parseModelRef } from '../../../config/schema.js';
+import type { Config } from '../../../config/schema.js';
 import {
   resolveAgentModelFallbackValues,
   resolveAgentModelPrimaryValue,
-} from '../config/model-input.js';
-import { getApiKey } from '../providers/index.js';
+} from '../../../config/model-input.js';
+import { getApiKey } from '../../../providers/index.js';
 import { OPENAI_DEFAULT_IMAGE_MODEL } from './constants.js';
 import { runOpenAiImageGeneration } from './openai-generate.js';
 import type { ImageGenFallbackAttempt, ImageGenerationResult } from './types.js';
