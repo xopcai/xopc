@@ -96,6 +96,11 @@ export interface SessionMetadata {
   acp?: SessionAcpMeta;
   /** Session statistics */
   stats?: SessionStats;
+  /**
+   * High-level origin for filtering/UI (e.g. `cron`, `webchat`).
+   * Distinct from `sourceChannel` (routing namespace).
+   */
+  sessionType?: string;
 }
 
 /** Session detail (metadata + messages) */

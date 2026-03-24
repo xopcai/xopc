@@ -27,6 +27,16 @@ function errorBackoffMs(consecutiveErrors: number): number {
   return ERROR_BACKOFF_MS[Math.max(0, idx)];
 }
 
+function resolveIsolatedCronJobModel(job: JobData): string | undefined {
+  const fromJob = job.model?.trim();
+  if (fromJob) return fromJob;
+  if (job.payload?.kind === 'agentTurn') {
+    const m = job.payload.model?.trim();
+    if (m) return m;
+  }
+  return undefined;
+}
+
 export class DefaultJobExecutor implements JobExecutor {
   private history: Map<string, JobExecution[]> = new Map();
   private runningJobs = new Map<string, AbortController>();
@@ -86,6 +96,7 @@ export class DefaultJobExecutor implements JobExecutor {
       execution.error = result.error;
       execution.sessionId = result.sessionId;
       execution.sessionKey = result.sessionKey;
+      execution.sessionType = result.sessionType;
       execution.model = result.model;
 
       if (result.status === 'ok') {
@@ -178,7 +189,11 @@ export class DefaultJobExecutor implements JobExecutor {
     let to: string;
     let actualMessage: string;
 
-    if (job.delivery?.channel && job.delivery?.to) {
+    if (job.delivery?.channel === 'local') {
+      channel = 'local';
+      to = '';
+      actualMessage = text;
+    } else if (job.delivery?.channel && job.delivery?.to) {
       // Use explicit delivery config
       channel = job.delivery.channel;
       to = job.delivery.to;
@@ -189,7 +204,7 @@ export class DefaultJobExecutor implements JobExecutor {
       const hasAtLeastThreeParts = parts.length >= 3;
       
       // Check if first part looks like a known channel
-      const knownChannels = ['telegram', 'cli', 'gateway'];
+      const knownChannels = ['telegram', 'cli', 'gateway', 'local'];
       const firstPartIsChannel = knownChannels.includes(parts[0]);
       
       if (hasAtLeastThreeParts && firstPartIsChannel) {
@@ -222,6 +237,17 @@ export class DefaultJobExecutor implements JobExecutor {
       // Check for abort
       if (signal.aborted) {
         throw new Error('Job was aborted');
+      }
+
+      if (channel === 'local') {
+        log.info(
+          { jobId: job.id, messageLength: actualMessage.length },
+          'Cron main session: local channel — no outbound publish'
+        );
+        return {
+          status: 'ok' as const,
+          summary: actualMessage.slice(0, 200),
+        };
       }
 
       const resolvedTo =
@@ -267,9 +293,6 @@ export class DefaultJobExecutor implements JobExecutor {
     // Create session key for this cron job
     const sessionKey = `cron:${job.id}`;
 
-    // Get model override if specified
-    const model = job.model || (job.payload?.kind === 'agentTurn' ? job.payload.model : undefined);
-
     // Create timeout promise
     const timeoutPromise = new Promise<never>((_, reject) => {
       setTimeout(() => reject(new Error(`Job timed out after ${timeout}ms`)), timeout);
@@ -282,18 +305,37 @@ export class DefaultJobExecutor implements JobExecutor {
         throw new Error('Job was aborted');
       }
 
-      // Call agent service
+      const jobModel = resolveIsolatedCronJobModel(job);
+      if (jobModel) {
+        const ok = await this.agentService.switchModelForSession(sessionKey, jobModel);
+        if (!ok) {
+          log.warn({ jobId: job.id, sessionKey, model: jobModel }, 'Cron job model invalid; using agent default');
+          await this.agentService.resetSessionModelToAgentDefault(sessionKey);
+        }
+      } else {
+        await this.agentService.resetSessionModelToAgentDefault(sessionKey);
+      }
+
       const response = await this.agentService.processDirect(message, sessionKey);
 
+      const model = this.agentService.getModelForSession(sessionKey);
+
       log.info(
-        { jobId: job.id, sessionKey, responseLength: response.length },
+        { jobId: job.id, sessionKey, responseLength: response.length, model },
         'Agent execution completed'
       );
 
-      // Handle delivery
+      // Handle delivery (`local` channel or `mode: none` = no outbound; transcript in SessionStore)
       const delivery = job.delivery;
-      if (delivery && delivery.mode !== 'none' && delivery.to) {
-        const targetChannel = delivery.channel || 'cli';
+      const outboundChannel = delivery?.channel;
+      const shouldPublish =
+        delivery &&
+        delivery.mode !== 'none' &&
+        outboundChannel !== 'local' &&
+        delivery.to;
+
+      if (shouldPublish) {
+        const targetChannel = outboundChannel || 'cli';
         const targetChatId =
           targetChannel === 'telegram'
             ? normalizeTelegramDeliveryChatId(delivery.to)
@@ -314,16 +356,20 @@ export class DefaultJobExecutor implements JobExecutor {
         return {
           status: 'ok' as const,
           summary: response.slice(0, 200),
+          sessionId: sessionKey,
           sessionKey,
+          sessionType: 'cron',
           model,
         };
       }
 
-      // No delivery configured, return response as summary
+      // No outbound delivery: transcript is in SessionStore under `sessionKey`.
       return {
         status: 'ok' as const,
         summary: response.slice(0, 200),
+        sessionId: sessionKey,
         sessionKey,
+        sessionType: 'cron',
         model,
       };
     })();

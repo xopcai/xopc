@@ -78,6 +78,21 @@ describe('SessionStore', () => {
 
       expect(metadata?.routing).toBeUndefined();
     });
+
+    it('should tag cron isolated session keys with sessionType and cronJobId', async () => {
+      const messages: any[] = [
+        { role: 'user', content: 'Run report' },
+        { role: 'assistant', content: 'Done.' },
+      ];
+
+      await store.saveMessages('cron:abc12def', messages);
+      const metadata = await store.getMetadata('cron:abc12def');
+
+      expect(metadata?.sourceChannel).toBe('cron');
+      expect(metadata?.sourceChatId).toBe('abc12def');
+      expect(metadata?.sessionType).toBe('cron');
+      expect(metadata?.customData).toMatchObject({ cronJobId: 'abc12def' });
+    });
   });
 
   describe('getByAgent', () => {

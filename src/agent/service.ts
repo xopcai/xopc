@@ -424,6 +424,14 @@ export class AgentService {
     }
   }
 
+  /**
+   * Clears per-session model override so the next turn uses the configured agent default
+   * (e.g. cron isolated job with no explicit model).
+   */
+  async resetSessionModelToAgentDefault(sessionKey: string): Promise<void> {
+    await this.clearSessionModelOverride(sessionKey);
+  }
+
   private async hydrateSessionModelFromStore(sessionKey: string): Promise<void> {
     const cfg = await this.sessionConfigStore.get(sessionKey);
     if (cfg?.modelOverride) {

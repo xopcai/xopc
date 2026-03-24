@@ -8,8 +8,8 @@ export type CronDeliveryMode = 'none' | 'announce' | 'direct';
 
 export interface CronDelivery {
   mode: CronDeliveryMode;
-  channel?: string;  // 'telegram' | 'cli'
-  to?: string;       // recipient chat id
+  channel?: string;  // 'telegram' | 'cli' | 'local'
+  to?: string;       // recipient chat id (omit for `local`)
   bestEffort?: boolean;
 }
 
@@ -77,6 +77,8 @@ export interface JobExecution {
   summary?: string;
   sessionId?: string;
   sessionKey?: string;
+  /** Persisted for local run logs (e.g. `cron` for isolated agent jobs). */
+  sessionType?: string;
   model?: string;
   provider?: string;
   usage?: CronUsageSummary;
@@ -101,6 +103,7 @@ export interface CronRunOutcome {
   summary?: string;
   sessionId?: string;
   sessionKey?: string;
+  sessionType?: string;
   model?: string;
   provider?: string;
   usage?: CronUsageSummary;

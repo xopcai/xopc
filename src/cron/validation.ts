@@ -35,9 +35,17 @@ const validTimezones = [
   'Pacific/Auckland',
 ];
 
-// Valid delivery channels
-const validChannels = ['telegram', 'cli'] as const;
 const CronDeliveryMode = z.enum(['none', 'announce', 'direct']);
+
+/** Treat `''` / `null` / whitespace-only as absent so optional fields do not fail `.min(1)` */
+function optionalTrimmedString(max: number, min = 1) {
+  return z.preprocess((v) => {
+    if (v === null || v === undefined) return undefined;
+    if (typeof v !== 'string') return v;
+    const t = v.trim();
+    return t.length === 0 ? undefined : t;
+  }, z.string().min(min).max(max).optional());
+}
 
 // CronPayload validation
 const CronSystemEventPayloadSchema = z.object({
@@ -48,7 +56,7 @@ const CronSystemEventPayloadSchema = z.object({
 const CronAgentTurnPayloadSchema = z.object({
   kind: z.literal('agentTurn'),
   message: z.string().min(1).max(50000),
-  model: z.string().max(100).optional(),
+  model: optionalTrimmedString(100, 1),
   timeoutSeconds: z.number().int().min(10).max(3600).optional(),
 });
 
@@ -57,11 +65,14 @@ const CronPayloadSchema = z.union([
   CronAgentTurnPayloadSchema,
 ]);
 
-// CronDelivery validation
+// CronDelivery validation — channel must match gateway UI / message bus ids (telegram, weixin, cli, local, …)
 const CronDeliverySchema = z.object({
   mode: CronDeliveryMode.default('none'),
-  channel: z.enum(validChannels).optional(),
-  to: z.string().max(100).optional(),
+  channel: optionalTrimmedString(32, 1),
+  to: z.preprocess(
+    (v) => (v === '' || v === null || v === undefined ? undefined : v),
+    z.string().max(100).optional(),
+  ),
   bestEffort: z.boolean().optional(),
 });
 
@@ -86,7 +97,7 @@ export const JobDataSchema = z
     sessionTarget: z.enum(['main', 'isolated']).optional(),
     payload: CronPayloadSchema,
     delivery: CronDeliverySchema.optional(),
-    model: z.string().max(100).optional(),
+    model: optionalTrimmedString(100, 1),
     state: z.any().optional(),
   })
   .strict();
@@ -100,7 +111,7 @@ export const AddJobRequestSchema = z.object({
   sessionTarget: z.enum(['main', 'isolated']).optional(),
   payload: CronPayloadSchema,
   delivery: CronDeliverySchema.optional(),
-  model: z.string().max(100).optional(),
+  model: optionalTrimmedString(100, 1),
 });
 
 export const UpdateJobRequestSchema = z.object({
@@ -113,7 +124,7 @@ export const UpdateJobRequestSchema = z.object({
   sessionTarget: z.enum(['main', 'isolated']).optional(),
   payload: CronPayloadSchema.optional(),
   delivery: CronDeliverySchema.optional(),
-  model: z.string().max(100).optional(),
+  model: optionalTrimmedString(100, 1),
 }).refine(
   (data) => Object.keys(data).length > 0,
   { message: 'At least one field must be provided for update' }
