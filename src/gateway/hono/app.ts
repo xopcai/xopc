@@ -39,6 +39,17 @@ import { CredentialResolver } from '../../auth/credentials.js';
 
 const log = createLogger('HonoApp');
 
+/** Normalize agent model ref (string | `{ primary }`) for API clients. */
+function agentModelRefToString(ref: unknown): string | undefined {
+  if (ref === undefined || ref === null) return undefined;
+  if (typeof ref === 'string') return ref;
+  if (typeof ref === 'object' && ref !== null && 'primary' in ref) {
+    const p = (ref as { primary?: string }).primary;
+    return typeof p === 'string' ? p : undefined;
+  }
+  return undefined;
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const UI_STATIC_ROOT = join(__dirname, '../../gateway/static/root');
@@ -250,7 +261,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     const safeConfig = {
       agents: {
         defaults: {
-          model: config.agents?.defaults?.model,
+          model: agentModelRefToString(config.agents?.defaults?.model) ?? '',
+          imageModel: agentModelRefToString(config.agents?.defaults?.imageModel),
+          imageGenerationModel: agentModelRefToString(config.agents?.defaults?.imageGenerationModel),
+          mediaMaxMb: config.agents?.defaults?.mediaMaxMb,
           maxTokens: config.agents?.defaults?.maxTokens,
           temperature: config.agents?.defaults?.temperature,
           maxToolIterations: config.agents?.defaults?.maxToolIterations,
@@ -361,6 +375,33 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       if (body.agents.defaults.verboseDefault !== undefined) {
         config.agents.defaults.verboseDefault = body.agents.defaults.verboseDefault;
       }
+      if (body.agents.defaults.imageModel !== undefined) {
+        const v = body.agents.defaults.imageModel;
+        if (v === '' || v === null) {
+          delete (config.agents.defaults as Record<string, unknown>).imageModel;
+        } else {
+          config.agents.defaults.imageModel = v as string;
+        }
+      }
+      if (body.agents.defaults.imageGenerationModel !== undefined) {
+        const v = body.agents.defaults.imageGenerationModel;
+        if (v === '' || v === null) {
+          delete (config.agents.defaults as Record<string, unknown>).imageGenerationModel;
+        } else {
+          config.agents.defaults.imageGenerationModel = v as string;
+        }
+      }
+      if (body.agents.defaults.mediaMaxMb !== undefined) {
+        const v = body.agents.defaults.mediaMaxMb;
+        if (v === null) {
+          delete (config.agents.defaults as Record<string, unknown>).mediaMaxMb;
+        } else {
+          const n = typeof v === 'number' ? v : Number(v);
+          if (!Number.isNaN(n) && n > 0) {
+            config.agents.defaults.mediaMaxMb = n;
+          }
+        }
+      }
     }
     
     // Update channels
@@ -453,7 +494,18 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       if (!config.gateway.heartbeat) config.gateway.heartbeat = { enabled: true, intervalMs: 60000 };
       config.gateway.heartbeat.intervalMs = body.gateway.heartbeat.intervalMs;
     }
-    
+    if (body.gateway?.auth !== undefined) {
+      if (!config.gateway) config.gateway = { host: '0.0.0.0', port: 18790, heartbeat: { enabled: true, intervalMs: 60000 }, maxSseConnections: 100, corsOrigins: ['*'] };
+      if (!config.gateway.auth) config.gateway.auth = { mode: 'token' };
+      const a = body.gateway.auth;
+      if (a.mode !== undefined) {
+        config.gateway.auth.mode = a.mode;
+      }
+      if (a.token !== undefined) {
+        config.gateway.auth.token = a.token;
+      }
+    }
+
     // Update providers config - save to credential system instead of config
     if (body.providers) {
       const resolver = new CredentialResolver();
