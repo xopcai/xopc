@@ -14,7 +14,7 @@
 |------|------|------|
 | **A** | Hash 路由、应用壳（侧栏 + 分组导航）、网关 URL/Token、`apiFetch` + 401、Token 弹窗、各页占位、旧版 Hash 兼容 | **已完成** |
 | **B** | SSE（`/api/events`）、连接状态、`window` 自定义事件（与 `ui` 对齐） | **已完成** |
-| **C** | 聊天：`POST /api/agent` 响应体 **SSE** 流式（非 WebSocket）、`MessageList`/`ChatComposer`、会话 CRUD、resume、`sessionWireToUiMessages`；附件 / 富工具 UI 可后续对齐 `ui` | **进行中（核心已通）** |
+| **C** | 聊天：`POST /api/agent` 响应体 **SSE** 流式（非 WebSocket）、`MessageList`/`ChatComposer`、会话 CRUD、resume、`sessionWireToUiMessages`；Markdown 渲染、虚拟列表、`GET/PATCH /api/sessions/:key/agent-config` 模型与思考级别工具栏；附件 / 富工具 UI 可后续对齐 `ui` | **已完成（核心 + 聊天体验）** |
 | **D** | 会话 / Cron / Skills / 日志 四页（SWR + API） | 待开始 |
 | **E** | 设置六段（Agent、Providers、Models、Channels、Voice、Gateway） | 待开始 |
 | **F** | 根 `build` 切换至 `web`、回归测试、废弃 `ui` | 待开始 |
@@ -29,7 +29,7 @@
 | `core/store.ts` | Zustand 分域 |
 | `xopcbot-app` 壳 | `AppShell` + `createHashRouter` |
 | `ChatConnection` | `web/src/features/gateway/`（`GatewaySseConnection` + `GatewaySseBridge`） |
-| `ChatPanel` | 待：`features/chat` |
+| `ChatPanel` | `web/src/features/chat/`（`ChatPage`、`useChatSession` 等） |
 
 ## 路由约定（React Router）
 

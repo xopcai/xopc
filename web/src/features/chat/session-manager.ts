@@ -29,6 +29,21 @@ export class SessionManager {
     return { thinkingLevel, model };
   }
 
+  async patchSessionAgentConfig(
+    sessionKey: string,
+    patch: { thinkingLevel?: string; model?: string | null },
+  ): Promise<void> {
+    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`), {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(patch),
+    });
+    if (!res.ok) {
+      const j = (await res.json().catch(() => ({}))) as { error?: string };
+      throw new Error(j.error ?? `HTTP ${res.status}`);
+    }
+  }
+
   async loadSession(
     sessionKey: string,
     offset = 0,
@@ -57,6 +72,17 @@ export class SessionManager {
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as { session: SessionInfo };
     return data.session;
+  }
+
+  /** Lightweight name read after auto-title (matches `ui` SessionManager). */
+  async fetchSessionName(sessionKey: string): Promise<string | undefined> {
+    const res = await apiFetch(
+      apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}?offset=0&limit=1`),
+    );
+    if (!res.ok) return undefined;
+    const data = (await res.json()) as { session?: { name?: string } };
+    const n = data.session?.name;
+    return typeof n === 'string' && n.trim() ? n.trim() : undefined;
   }
 
   updateUrl(sessionKey: string): void {

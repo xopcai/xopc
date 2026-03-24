@@ -14,14 +14,20 @@
   },
   "dependencies": {
     "@radix-ui/react-dialog": "^1.1.15",
+    "@radix-ui/react-popover": "^1.1.15",
     "@radix-ui/react-slot": "^1.2.4",
     "clsx": "^2.1.1",
+    "docx-preview": "^0.3.7",
+    "dompurify": "^3.3.3",
+    "jszip": "^3.10.1",
     "lucide-react": "^0.554.0",
-    "tailwind-merge": "^3.4.0",
+    "pdfjs-dist": "^5.5.207",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.6",
     "swr": "^2.3.6",
+    "tailwind-merge": "^3.4.0",
+    "xlsx": "https://cdn.sheetjs.com/xlsx-0.20.3/xlsx-0.20.3.tgz",
     "zustand": "^5.0.9"
   },
   "devDependencies": {
