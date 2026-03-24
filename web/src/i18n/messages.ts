@@ -247,6 +247,43 @@ const bundles: Record<
       source: { builtin: string; workspace: string; global: string };
       col: { name: string; description: string; source: string; managed: string; actions: string };
     };
+    logs: {
+      title: string;
+      subtitle: string;
+      needToken: string;
+      filters: string;
+      level: string;
+      searchPlaceholder: string;
+      module: string;
+      allModules: string;
+      timeRange: string;
+      from: string;
+      to: string;
+      clear: string;
+      refresh: string;
+      autoRefresh: string;
+      pause: string;
+      liveHint: string;
+      logFiles: string;
+      filesEmpty: string;
+      loadMore: string;
+      showingCount: string;
+      moreAvailable: string;
+      noLogs: string;
+      noLogsDescription: string;
+      loading: string;
+      loadError: string;
+      details: string;
+      close: string;
+      time: string;
+      message: string;
+      metadata: string;
+      statsRegion: string;
+      statsHint: string;
+      logDir: string;
+      requestId: string;
+      sessionId: string;
+    };
   }
 > = {
   en: {
@@ -519,6 +556,43 @@ const bundles: Record<
         actions: 'Actions',
       },
     },
+    logs: {
+      title: 'Logs',
+      subtitle: 'Runtime diagnostics and history from the gateway.',
+      needToken: 'Save a gateway token to view logs.',
+      filters: 'Filters',
+      level: 'Level',
+      searchPlaceholder: 'Search message or module…',
+      module: 'Module',
+      allModules: 'All modules',
+      timeRange: 'Time range',
+      from: 'From',
+      to: 'To',
+      clear: 'Clear',
+      refresh: 'Refresh',
+      autoRefresh: 'Auto refresh',
+      pause: 'Pause',
+      liveHint: 'Refreshing every 5s',
+      logFiles: 'Log files',
+      filesEmpty: 'No log files on disk',
+      loadMore: 'Load more',
+      showingCount: '{{count}} entries loaded',
+      moreAvailable: 'Earlier entries may be available',
+      noLogs: 'No matching entries',
+      noLogsDescription: 'Adjust filters or search, or try again later.',
+      loading: 'Loading…',
+      loadError: 'Failed to load logs',
+      details: 'Log details',
+      close: 'Close',
+      time: 'Time',
+      message: 'Message',
+      metadata: 'Metadata',
+      statsRegion: 'Sample (recent files)',
+      statsHint: 'Counts are sampled from recent log files, not totals.',
+      logDir: 'Directory',
+      requestId: 'Request ID',
+      sessionId: 'Session ID',
+    },
   },
   zh: {
     appBrand: 'XOPCBOT Gateway',
@@ -789,6 +863,43 @@ const bundles: Record<
         managed: '可管理',
         actions: '操作',
       },
+    },
+    logs: {
+      title: '日志',
+      subtitle: '网关运行时的诊断与历史记录。',
+      needToken: '请先保存网关 Token 后再查看日志。',
+      filters: '筛选',
+      level: '级别',
+      searchPlaceholder: '搜索消息或模块…',
+      module: '模块',
+      allModules: '全部模块',
+      timeRange: '时间范围',
+      from: '开始',
+      to: '结束',
+      clear: '清除',
+      refresh: '刷新',
+      autoRefresh: '自动刷新',
+      pause: '暂停',
+      liveHint: '每 5 秒自动刷新',
+      logFiles: '日志文件',
+      filesEmpty: '磁盘上暂无日志文件',
+      loadMore: '加载更多',
+      showingCount: '已加载 {{count}} 条',
+      moreAvailable: '可能还有更早的条目',
+      noLogs: '没有匹配的条目',
+      noLogsDescription: '请调整筛选或搜索，或稍后再试。',
+      loading: '加载中…',
+      loadError: '加载日志失败',
+      details: '日志详情',
+      close: '关闭',
+      time: '时间',
+      message: '消息',
+      metadata: '元数据',
+      statsRegion: '抽样（近期文件）',
+      statsHint: '数量为近期日志文件抽样统计，非全量。',
+      logDir: '目录',
+      requestId: '请求 ID',
+      sessionId: '会话 ID',
     },
   },
 };
