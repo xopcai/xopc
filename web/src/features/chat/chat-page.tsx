@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import { ChatComposer } from '@/features/chat/chat-composer';
 import { ChatHeader } from '@/features/chat/chat-header';
@@ -20,6 +20,8 @@ export function ChatPage() {
   const atBottomRef = useRef(true);
   const lastScrollTopRef = useRef(0);
   const lastClientHeightRef = useRef(0);
+  /** Tracks loading→idle so we scroll to bottom once after refresh / session load. */
+  const prevLoadingRef = useRef(true);
 
   useEffect(() => {
     atBottomRef.current = atBottom;
@@ -87,6 +89,25 @@ export function ChatPage() {
       void loadMoreMessages();
     }
   }, [hasMore, loadingMore, loadMoreMessages]);
+
+  useLayoutEffect(() => {
+    if (!hasToken) return;
+    if (loading) {
+      prevLoadingRef.current = true;
+      return;
+    }
+    if (prevLoadingRef.current !== true) return;
+    prevLoadingRef.current = false;
+    setAtBottom(true);
+    const el = scrollRef.current;
+    if (el) {
+      el.scrollTop = el.scrollHeight;
+    }
+    requestAnimationFrame(() => {
+      scrollToBottom(false);
+      requestAnimationFrame(() => scrollToBottom(false));
+    });
+  }, [loading, hasToken, scrollToBottom]);
 
   useEffect(() => {
     if (atBottom) scrollToBottom(false);
