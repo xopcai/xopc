@@ -25,6 +25,8 @@
   },
   "scripts": {
     "build": "tsc && cd ui && npm run build",
+    "build:web": "pnpm -C web run build",
+    "dev:web": "pnpm -C web run dev",
     "dev": "tsx src/cli/index.ts",
     "start": "node dist/src/cli/index.js",
     "test": "vitest run src extensions/telegram/src",
