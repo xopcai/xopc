@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
 import type { Message, ProgressState } from '@/features/chat/messages.types';
@@ -120,6 +121,32 @@ export function useChatSession() {
       }
     }
   }, []);
+
+  /**
+   * Commit streaming assistant bubble into `messages` and clear `streamingMsg`.
+   * Do not call `setMessages` inside `setStreamingMsg`'s updater — React Strict Mode
+   * invokes that updater twice in development, which duplicated assistant rows.
+   */
+  const finalizeMessage = useCallback(() => {
+    let finalMsg: Message | null = null;
+    flushSync(() => {
+      setStreamingMsg((prev) => {
+        if (!prev) return null;
+        const msg = ensureAssistantMessage(prev, Date.now());
+        finalizeStreamingThinking(msg.content);
+        finalMsg = cloneMessageForRender(msg);
+        return null;
+      });
+    });
+    const appended = finalMsg;
+    if (appended) {
+      setMessages((m) => [...m, appended]);
+    }
+    setStreaming(false);
+    setProgress(null);
+    setSending(false);
+    void pollSessionNameAfterTurn();
+  }, [pollSessionNameAfterTurn]);
 
   const loadSessionById = useCallback(
     async (key: string, offset = 0) => {
@@ -314,19 +341,7 @@ export function useChatSession() {
           });
         },
         onProgress: (p) => setProgress(p),
-        onResult: () => {
-          setStreamingMsg((prev) => {
-            if (!prev) return null;
-            const msg = ensureAssistantMessage(prev, Date.now());
-            finalizeStreamingThinking(msg.content);
-            setMessages((m) => [...m, cloneMessageForRender(msg)]);
-            return null;
-          });
-          setStreaming(false);
-          setSending(false);
-          setProgress(null);
-          void pollSessionNameAfterTurn();
-        },
+        onResult: finalizeMessage,
         onError: (msg) => {
           setError(msg);
           setStreamingMsg(null);
@@ -344,21 +359,7 @@ export function useChatSession() {
       setStreamingMsg(null);
       setProgress(null);
     }
-  }, [pollSessionNameAfterTurn]);
-
-  const finalizeMessage = useCallback(() => {
-    setStreamingMsg((prev) => {
-      if (!prev) return null;
-      const msg = ensureAssistantMessage(prev, Date.now());
-      finalizeStreamingThinking(msg.content);
-      setMessages((m) => [...m, cloneMessageForRender(msg)]);
-      return null;
-    });
-    setStreaming(false);
-    setProgress(null);
-    setSending(false);
-    void pollSessionNameAfterTurn();
-  }, [pollSessionNameAfterTurn]);
+  }, [finalizeMessage, pollSessionNameAfterTurn]);
 
   const sendMessage = useCallback(
     async (
