@@ -31,6 +31,9 @@ export function ChatPage() {
     messages: chatMessages,
     sessionKey,
     sessionName,
+    decodedKey,
+    sessionRoutePending,
+    showSessionLoading,
     sessionModel,
     thinkingLevel,
     setThinkingLevel,
@@ -40,7 +43,6 @@ export function ChatPage() {
     loadMoreMessages,
     onSessionModelChange,
     createNewSession,
-    loading,
     error,
     streaming,
     sending,
@@ -92,7 +94,7 @@ export function ChatPage() {
 
   useLayoutEffect(() => {
     if (!hasToken) return;
-    if (loading) {
+    if (showSessionLoading) {
       prevLoadingRef.current = true;
       return;
     }
@@ -107,27 +109,20 @@ export function ChatPage() {
       scrollToBottom(false);
       requestAnimationFrame(() => scrollToBottom(false));
     });
-  }, [loading, hasToken, scrollToBottom]);
+  }, [showSessionLoading, hasToken, scrollToBottom]);
 
   // Follow the bottom whenever message content updates (not just length): streaming updates
   // the same assistant bubble without changing length.
   useEffect(() => {
+    if (showSessionLoading) return;
     if (!atBottom) return;
     scrollToBottom(false);
-  }, [chatMessages, atBottom, scrollToBottom]);
+  }, [chatMessages, atBottom, scrollToBottom, showSessionLoading]);
 
   if (!hasToken) {
     return (
       <div className="mx-auto max-w-4xl px-4 py-16 text-center text-sm leading-relaxed text-fg-muted sm:px-8">
         {m.chat.needToken}
-      </div>
-    );
-  }
-
-  if (loading) {
-    return (
-      <div className="mx-auto max-w-4xl px-4 py-16 text-center text-sm text-fg-muted sm:px-8">
-        {m.chat.loading}
       </div>
     );
   }
@@ -140,6 +135,9 @@ export function ChatPage() {
         sessionName={sessionName}
         sessionModel={sessionModel}
         streaming={streaming}
+        loading={showSessionLoading}
+        sessionRoutePending={sessionRoutePending}
+        routeTargetKey={decodedKey}
         onModelChange={onSessionModelChange}
         onNewSession={() => void createNewSession()}
       />
@@ -150,28 +148,39 @@ export function ChatPage() {
         onScroll={onScroll}
       >
         <div className="chat-messages-inner mx-auto max-w-4xl px-4 py-6 sm:px-8">
-          {loadingMore ? (
-            <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
-          ) : null}
-          {error ? (
-            <div className="mb-4 rounded-md border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
-              {error}
+          {showSessionLoading ? (
+            <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-3 py-12 text-center text-sm text-fg-muted">
+              {m.chat.loading}
             </div>
-          ) : null}
-          <MessageList
-            messages={chatMessages}
-            authToken={token ?? undefined}
-            streaming={streaming}
-            progress={progress}
-          />
+          ) : (
+            <>
+              {loadingMore ? (
+                <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
+              ) : null}
+              {error ? (
+                <div className="mb-4 rounded-md border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
+                  {error}
+                </div>
+              ) : null}
+              <MessageList
+                messages={chatMessages}
+                authToken={token ?? undefined}
+                streaming={streaming}
+                progress={progress}
+              />
+            </>
+          )}
         </div>
       </div>
 
-      <ScrollToBottomButton visible={!atBottom} onClick={() => scrollToBottom(true)} />
+      <ScrollToBottomButton
+        visible={!showSessionLoading && !atBottom}
+        onClick={() => scrollToBottom(true)}
+      />
 
       <div className="chat-input-container shrink-0">
         <ChatComposer
-          disabled={false}
+          disabled={showSessionLoading || sessionRoutePending}
           sending={sending}
           streaming={streaming}
           thinkingLevel={thinkingLevel}
