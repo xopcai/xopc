@@ -26,7 +26,7 @@
 
 ## Project Overview
 
-**xopcbot** (`@xopcai/xopcbot`) is a personal AI assistant on Node.js + TypeScript: CLI, HTTP/WebSocket **gateway**, and **Lit** web UI. Channels (e.g. Telegram) load as extensions; additional backends appear in config/registry as the project evolves.
+**xopcbot** (`@xopcai/xopcbot`) is a personal AI assistant on Node.js + TypeScript: CLI, HTTP/WebSocket **gateway**, and a **React** gateway console (`web/`). Channels (e.g. Telegram) load as extensions; additional backends appear in config/registry as the project evolves.
 
 | Metric | Value |
 |--------|-------|
@@ -57,7 +57,7 @@ Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 | CLI | `commander` |
 | Config | `zod` |
 | Tools (schemas) | `@sinclair/typebox` |
-| Web UI | `lit`, Tailwind, Vite (`ui/` package) |
+| Gateway console | **React** + Vite + Tailwind v4 (`web/` package) |
 | Tests | `vitest` |
 
 ---
@@ -80,7 +80,7 @@ Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 
 Also present (follow local patterns): `acp/`, `auth/`, `commands/`, `cron/`, `daemon/`, `routing/`, `stt/`, `tts/`, `utils/`, `markdown/`, `infra/`, `errors/`, `heartbeat/`, `extensions/` (core hooks), etc.
 
-**UI (`ui/`)** — separate package: Lit components, `ui/src/styles/` tokens, gateway-connected pages.
+**Gateway console (`web/`)** — React SPA (Vite + Tailwind v4): hash router, REST + SSE to the gateway, Zustand + SWR. Production build outputs to `dist/gateway/static/root` (same static root the gateway serves).
 
 **Extensions (`extensions/`)** — workspace packages (e.g. `telegram` → `@xopcai/xopcbot-extension-telegram`).
 
@@ -156,6 +156,7 @@ import { DraftStreamManager } from '@xopcai/xopcbot-extension-telegram/draft-str
 | New tool | `src/agent/tools/<area>.ts` → export from `src/agent/tools/index.ts` → wire in `AgentService` |
 | New provider | Prefer upstream **`pi-ai`**; else OpenRouter / Vercel AI Gateway for custom bases. See [pi-ai](https://github.com/mariozechner/pi-ai). |
 | New channel plugin | `ChannelPlugin` + optional `defineChannelPluginEntry` → `bundled.ts` if shipping in core |
+| New gateway console screen | `web/src/pages/<name>.tsx` or `web/src/features/<area>/`; register route in `web/src/app.tsx`; follow [Web UI](#web-ui). |
 | Dependencies | **`pnpm` only** — never commit `package-lock.json` (use `pnpm-lock.yaml`). |
 
 ---
@@ -228,24 +229,38 @@ Co-located tests: `src/**/__tests__/*.test.ts`. Use `describe` / `it` / `expect`
 
 ## Web UI
 
-- **React 控制台（新）**：`web/`（Vite + React + Tailwind v4）。迁移计划见 [docs/web-migration-plan.md](./docs/web-migration-plan.md)。
-- **Lit 包（既有）**：`ui/`（Vite + Lit + Tailwind）。Inspired by [pi-mono/web-ui](https://github.com/mariozechner/pi-mono/tree/main/packages/web-ui).
+### Gateway console (React)
+
+The **gateway console** is the **`web/`** package: **React 19**, **React Router 7** (`createHashRouter`), **Vite**, **Tailwind CSS v4** (`@import "tailwindcss"` in app CSS), **Zustand** (gateway/theme/locale stores), **SWR** (`SwrProvider`), **Lucide** icons, **Radix** primitives where needed (e.g. `Dialog`). Roadmap and parity notes: [docs/web-migration-plan.md](./docs/web-migration-plan.md).
 
 ```bash
-cd ui && pnpm install && pnpm run dev   # or pnpm run build
+cd web && pnpm install && pnpm run dev    # Vite dev server
+cd web && pnpm run build                  # → ../dist/gateway/static/root (gateway static root)
 ```
 
-**Components:** `XopcbotChat` (local `Agent`), `XopcbotGatewayChat` (`config.url` WebSocket to gateway), `XopcbotConfig` (sections + `onSave`). Imports: `@xopcbot/web-ui` (package name from `ui/package.json`).
+| Area | Location / convention |
+|------|------------------------|
+| App shell, nav | `web/src/components/shell/` (`app-shell.tsx`, `sidebar.tsx`, …) |
+| Routes | `web/src/app.tsx` (`createHashRouter`); pages under `web/src/pages/` |
+| Feature modules | `web/src/features/<domain>/` (e.g. `chat/`, `gateway/`, `sessions/`) |
+| Component primitives | `web/src/components/ui/` (Radix-oriented building blocks) |
+| API access | `web/src/lib/fetch.ts` (`apiFetch` / `fetchJson`) + `apiUrl()`; sends `Authorization: Bearer <token>` from `gateway-store` |
+| Gateway token / URL | `web/src/stores/gateway-store.ts` |
+| i18n | `web/src/i18n/messages.ts` (`en` / `zh`) |
+| Global styles + tokens | `web/src/styles/globals.css` (`@theme { … }` for semantic colors) |
 
-**Gateway:** `XopcbotGatewayChat` talks to the gateway over **WebSocket** (`config.url`, optional `token`). Message and config event names/payloads are documented in **`ui/README.md`** (Gateway Protocol). Server routes live under **`src/gateway/`** (e.g. Hono app, SSE agent stream).
+**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`; management `/sessions`, `/cron`, `/skills`, `/logs`; settings `/settings/:section`. Older `#sessions`-style hashes are normalized at startup (`web/src/lib/legacy-hash.ts`).
 
-### UI design system
+**Gateway integration:**
 
-Canonical spec: [`docs/design/ui-design-system.md`](./docs/design/ui-design-system.md) (xopc workstation family). **Calm UI:** slate neutrals, **blue** only for primary CTA, links, and AI hints; tokens in **`ui/src/styles/00-vars.css`**; Tailwind in **`ui/tailwind.config.js`**. Lucide icons; full **focus-visible** rings; dark mode favors borders over heavy shadows. Copy: short and precise (Brand voice in design doc).
+- **REST:** same origin `fetch` via `apiUrl('/api/...')`; 401 → `gateway-store` `onUnauthorized`.
+- **Agent streaming:** `POST /api/agent` with `Accept: text/event-stream`, response body parsed as SSE (not WebSocket). See `web/src/features/chat/`.
+- **Broadcast SSE:** `GET /api/events` via `EventSource` (optional `?token=`); bridge in `web/src/features/gateway/gateway-sse-bridge.tsx` + `dispatch-sse-event.ts`. Dots in event names become hyphenated `window` events (e.g. `config.reload` → `config-reload`).
+- **Navigate to chat from other pages:** `window.dispatchEvent(new CustomEvent('navigate-to-chat', { detail: { sessionKey } }))` — handled in `AppShell`.
 
-### Styling load order
+**Design system:** Follow **[docs/design/ui-design-system.md](./docs/design/ui-design-system.md)** — calm slate neutrals, **blue** only for primary actions / links / AI hints; prefer borders over heavy shadows in dark mode; short copy. Implement with **`web/src/styles/globals.css`** semantic tokens (`bg-surface-*`, `text-fg*`, `border-edge`, `accent`, etc.) and Tailwind utilities—do not add a second token system under `web/` unless extending `@theme` there.
 
-`ui/src/styles.css` → tokens (`00-vars.css`) + Tailwind → `ui/src/styles/app/index.css` (numbered partials: shell, chat, settings, managers, logs, …).
+**Lint / typecheck:** `cd web && pnpm run lint` · `pnpm run type-check`. Tests: when added, colocate `web/src/**/__tests__/*.test.ts` and run with root **vitest** if wired; until then, rely on `pnpm run build` for the `web` project.
 
 ---
 
@@ -254,7 +269,7 @@ Canonical spec: [`docs/design/ui-design-system.md`](./docs/design/ui-design-syst
 - **Level:** `XOPCBOT_LOG_LEVEL=debug` (or `trace`).
 - **CLI:** `pnpm run dev -- config --show` · `config --validate`.
 - **Code:** `createRequestLogger` / `clearRequestContext` in `src/utils/logger.ts`; `queryLogs` / `getLogStats` in `src/utils/log-store.ts`.
-- **UI logs:** gateway + Log Manager tab (default dev URL is project-specific—use your configured gateway port).
+- **Console logs:** gateway + Log Manager tab (default dev URL is project-specific—use your configured gateway port).
 
 ---
 
@@ -266,10 +281,10 @@ Canonical spec: [`docs/design/ui-design-system.md`](./docs/design/ui-design-syst
 | `@xopcbot/...` not found | `pnpm run build` |
 | Tests timeout | API keys / network for live calls |
 | Bad config | JSON syntax of `~/.xopcbot/config.json` |
-| UI offline | Gateway running, correct WS URL |
+| Console unreachable | Gateway running; browser origin matches gateway URL (REST/SSE) |
 | `package-lock.json` | Remove; use pnpm only |
 | Telegram silent | Token, BotFather, policies |
-| No logs in UI | `XOPCBOT_LOG_LEVEL`, file logging flags |
+| No logs in console | `XOPCBOT_LOG_LEVEL`, file logging flags |
 | Cron idle | `cron.enabled` in config |
 
 ---
@@ -284,11 +299,11 @@ Canonical spec: [`docs/design/ui-design-system.md`](./docs/design/ui-design-syst
 | Gateway / API | `src/gateway/` |
 | Models & providers | `src/providers/index.ts` |
 | Channels | `src/channels/`, `extensions/telegram/` |
-| Web UI & styles | `ui/src/`, `ui/src/styles/`, [ui-design-system.md](./docs/design/ui-design-system.md) |
+| Gateway console (React) | `web/src/`, [ui-design-system.md](./docs/design/ui-design-system.md) |
 | Logging | `src/utils/logger.ts`, `src/utils/log-store.ts` |
-| Log Manager UI | `ui/src/pages/LogManager.ts` |
+| Log Manager | `web/src/` (logs feature / pages) |
 | Tests | Colocated `__tests__` |
 
 ---
 
-_Last updated: 2026-03-23_
+_Last updated: 2026-03-25_
