@@ -284,7 +284,7 @@ export function SessionsPage() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-16 text-center text-sm text-fg-muted sm:px-8">
+      <div className="mx-auto w-full max-w-app-main px-4 py-16 text-center text-sm text-fg-muted sm:px-8">
         {s.needToken}
       </div>
     );
@@ -292,7 +292,7 @@ export function SessionsPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
-      <div className="mx-auto flex w-full max-w-6xl flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-fg">
             <FolderOpen className="size-5 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />

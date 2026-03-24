@@ -250,7 +250,7 @@ export function ChannelsSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
         <h1 className="text-lg font-semibold text-fg">{m.settingsSections.channels}</h1>
         <p className="text-sm text-fg-muted">{ch.needToken}</p>
       </div>
@@ -259,7 +259,7 @@ export function ChannelsSettingsPanel() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-3xl px-4 py-8">
+      <div className="mx-auto w-full max-w-app-main px-4 py-8">
         <div className="h-8 w-48 animate-pulse rounded bg-surface-hover" />
         <div className="mt-6 h-32 animate-pulse rounded-xl bg-surface-hover" />
         <p className="mt-4 text-sm text-fg-muted">{ch.loading}</p>
@@ -269,7 +269,7 @@ export function ChannelsSettingsPanel() {
 
   if (!form) {
     return (
-      <div className="mx-auto flex max-w-3xl flex-col gap-3 px-4 py-8">
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
         <p className="text-sm text-fg-muted">{error ?? ch.loadError}</p>
         <Button type="button" variant="secondary" onClick={() => void load()}>
           {ch.retry}
@@ -284,7 +284,7 @@ export function ChannelsSettingsPanel() {
   const showWxBody = wx.enabled && wxExpanded;
 
   return (
-    <div className="mx-auto flex w-full max-w-3xl flex-col gap-6 px-4 py-6">
+    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
