@@ -77,6 +77,22 @@ const bundles: Record<
       voiceComingSoon: string;
       loadOlder: string;
       scrollToBottom: string;
+      attachmentPreviewClose: string;
+      attachmentPreviewDownload: string;
+      attachmentPreviewRemove: string;
+      attachmentPreviewLoading: string;
+      attachmentPreviewText: string;
+      attachmentPreviewPdf: string;
+      attachmentPreviewDocument: string;
+      attachmentPreviewPresentation: string;
+      attachmentPreviewSpreadsheet: string;
+      attachmentPreviewNoText: string;
+      attachmentPreviewMissingData: string;
+      attachmentPreviewLoadError: string;
+      attachmentPreviewMissingAuth: string;
+      attachmentPreviewFailedPdf: string;
+      attachmentPreviewFailedDocx: string;
+      attachmentPreviewFailedExcel: string;
     };
     sessions: {
       title: string;
@@ -692,6 +708,22 @@ const bundles: Record<
       voiceComingSoon: 'Voice input (coming soon)',
       loadOlder: 'Loading older messages…',
       scrollToBottom: 'Scroll to bottom',
+      attachmentPreviewClose: 'Close',
+      attachmentPreviewDownload: 'Download',
+      attachmentPreviewRemove: 'Remove',
+      attachmentPreviewLoading: 'Loading file…',
+      attachmentPreviewText: 'Text',
+      attachmentPreviewPdf: 'PDF',
+      attachmentPreviewDocument: 'Document',
+      attachmentPreviewPresentation: 'Presentation',
+      attachmentPreviewSpreadsheet: 'Spreadsheet',
+      attachmentPreviewNoText: 'No text content available',
+      attachmentPreviewMissingData: 'Missing file data',
+      attachmentPreviewLoadError: 'Error loading file',
+      attachmentPreviewMissingAuth: 'Missing authentication',
+      attachmentPreviewFailedPdf: 'Failed to load PDF',
+      attachmentPreviewFailedDocx: 'Failed to load document',
+      attachmentPreviewFailedExcel: 'Failed to load spreadsheet',
     },
     sessions: {
       title: 'Sessions',
@@ -1338,6 +1370,22 @@ const bundles: Record<
       voiceComingSoon: '语音输入（即将推出）',
       loadOlder: '正在加载更早的消息…',
       scrollToBottom: '回到底部',
+      attachmentPreviewClose: '关闭',
+      attachmentPreviewDownload: '下载',
+      attachmentPreviewRemove: '移除',
+      attachmentPreviewLoading: '正在加载文件…',
+      attachmentPreviewText: '文本',
+      attachmentPreviewPdf: 'PDF',
+      attachmentPreviewDocument: '文档',
+      attachmentPreviewPresentation: '演示文稿',
+      attachmentPreviewSpreadsheet: '表格',
+      attachmentPreviewNoText: '无可用文本',
+      attachmentPreviewMissingData: '缺少文件数据',
+      attachmentPreviewLoadError: '加载文件失败',
+      attachmentPreviewMissingAuth: '缺少身份验证',
+      attachmentPreviewFailedPdf: '无法加载 PDF',
+      attachmentPreviewFailedDocx: '无法加载文档',
+      attachmentPreviewFailedExcel: '无法加载表格',
     },
     sessions: {
       title: '会话',
