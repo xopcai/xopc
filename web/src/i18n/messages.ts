@@ -78,8 +78,8 @@ const bundles: Record<
   }
 > = {
   en: {
-    appBrand: 'xopcbot',
-    appSubtitle: 'Gateway console',
+    appBrand: 'XOPCBOT Gateway',
+    appSubtitle: 'Console',
     nav: {
       chat: 'Chat',
       management: 'Management',
@@ -166,8 +166,8 @@ const bundles: Record<
     },
   },
   zh: {
-    appBrand: 'xopcbot',
-    appSubtitle: '网关控制台',
+    appBrand: 'XOPCBOT Gateway',
+    appSubtitle: '控制台',
     nav: {
       chat: '对话',
       management: '管理',
