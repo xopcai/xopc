@@ -1,5 +1,5 @@
 import type { Message, MessageContent, ProgressState } from '@/features/chat/messages.types';
-import { resolveDataUrlForDisplay } from '@/features/chat/attachment-utils';
+import { AttachmentRenderer } from '@/features/chat/attachment-renderer';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { ThinkingBlock } from '@/features/chat/thinking-block';
 import { ToolCallCard } from '@/features/chat/tool-call-card';
@@ -77,58 +77,9 @@ function renderBlock(
   return null;
 }
 
-function UserAttachments({
-  attachments,
-}: {
-  attachments: NonNullable<Message['attachments']>;
-}) {
-  const images = attachments.filter((a) => a.type === 'image' || a.mimeType?.startsWith('image/'));
-  const docs = attachments.filter((a) => a.type !== 'image' && !a.mimeType?.startsWith('image/'));
-
-  return (
-    <div className="mt-2 flex flex-col gap-2">
-      {images.length > 0 ? (
-        <div
-          className={cn(
-            'grid gap-2',
-            images.length === 1 && 'grid-cols-1',
-            images.length === 2 && 'grid-cols-2',
-            images.length >= 3 && 'grid-cols-2 sm:grid-cols-3',
-          )}
-        >
-          {images.map((att, i) => {
-            const payload = att.content ?? att.data ?? '';
-            const src = resolveDataUrlForDisplay(att.mimeType || 'image/png', payload);
-            return (
-              <img
-                key={att.id ?? i}
-                src={src}
-                alt={att.name ?? ''}
-                className="max-h-48 w-full rounded-md object-cover"
-              />
-            );
-          })}
-        </div>
-      ) : null}
-      {docs.length > 0 ? (
-        <ul className="flex flex-wrap gap-1.5">
-          {docs.map((d, i) => (
-            <li
-              key={d.id ?? i}
-              className="rounded-md border border-edge bg-surface-hover px-2 py-1 text-[11px] text-fg-muted dark:border-edge"
-            >
-              {d.name ?? 'file'}
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </div>
-  );
-}
-
 export function MessageBubble({
   message,
-  authToken: _authToken,
+  authToken,
   isStreaming,
   progress,
 }: {
@@ -216,7 +167,9 @@ export function MessageBubble({
             />
           ) : null}
 
-          {message.attachments?.length ? <UserAttachments attachments={message.attachments} /> : null}
+          {message.attachments?.length ? (
+            <AttachmentRenderer attachments={message.attachments} authToken={authToken} />
+          ) : null}
         </div>
 
         {isAssistant && message.usage ? <UsageBadge usage={message.usage} /> : null}

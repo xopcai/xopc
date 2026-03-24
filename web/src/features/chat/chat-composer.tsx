@@ -2,11 +2,7 @@ import { Ban, File, Mic, Send, Sparkles, Square } from 'lucide-react';
 import { useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Attachment } from '@/features/chat/attachment-utils';
-import {
-  formatFileSize,
-  loadAttachment,
-  MAX_CHAT_ATTACHMENTS,
-} from '@/features/chat/attachment-utils';
+import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment-utils';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -88,6 +84,7 @@ export function ChatComposer({
         interpolate(m.chat.maxAttachmentsTruncated, { max: MAX_CHAT_ATTACHMENTS, dropped: files.length - slice.length }),
       );
     }
+    const { loadAttachment } = await import('@/features/chat/attachment-load');
     const next: Attachment[] = [];
     for (const file of slice) {
       if (file.size > maxFileSize) {
