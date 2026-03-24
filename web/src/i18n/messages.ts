@@ -75,6 +75,41 @@ const bundles: Record<
       loadOlder: string;
       scrollToBottom: string;
     };
+    sessions: {
+      title: string;
+      needToken: string;
+      searchPlaceholder: string;
+      filterAll: string;
+      filterActive: string;
+      filterPinned: string;
+      filterArchived: string;
+      totalSessions: string;
+      activeSessions: string;
+      pinnedSessions: string;
+      archivedSessions: string;
+      sessionCount: string;
+      loadMore: string;
+      noSessions: string;
+      noSessionsDescription: string;
+      continueChat: string;
+      archive: string;
+      unarchive: string;
+      pin: string;
+      unpin: string;
+      export: string;
+      delete: string;
+      deleteSessionTitle: string;
+      deleteSessionMessage: string;
+      cancel: string;
+      loading: string;
+      loadError: string;
+      gridView: string;
+      listView: string;
+      detailLoading: string;
+      detailMessages: string;
+      detailExport: string;
+      close: string;
+    };
   }
 > = {
   en: {
@@ -164,6 +199,41 @@ const bundles: Record<
       loadOlder: 'Loading older messages…',
       scrollToBottom: 'Scroll to bottom',
     },
+    sessions: {
+      title: 'Sessions',
+      needToken: 'Save a gateway token to manage sessions.',
+      searchPlaceholder: 'Search sessions…',
+      filterAll: 'All',
+      filterActive: 'Active',
+      filterPinned: 'Pinned',
+      filterArchived: 'Archived',
+      totalSessions: 'Total',
+      activeSessions: 'Active',
+      pinnedSessions: 'Pinned',
+      archivedSessions: 'Archived',
+      sessionCount: '{{count}} shown',
+      loadMore: 'Load more',
+      noSessions: 'No sessions yet',
+      noSessionsDescription: 'Start a conversation in Chat; sessions will appear here.',
+      continueChat: 'Continue in chat',
+      archive: 'Archive',
+      unarchive: 'Unarchive',
+      pin: 'Pin',
+      unpin: 'Unpin',
+      export: 'Export JSON',
+      delete: 'Delete',
+      deleteSessionTitle: 'Delete session?',
+      deleteSessionMessage: 'Delete “{{name}}”? This cannot be undone.',
+      cancel: 'Cancel',
+      loading: 'Loading…',
+      loadError: 'Failed to load sessions',
+      gridView: 'Grid',
+      listView: 'List',
+      detailLoading: 'Loading session…',
+      detailMessages: 'Messages',
+      detailExport: 'Export',
+      close: 'Close',
+    },
   },
   zh: {
     appBrand: 'XOPCBOT Gateway',
@@ -251,6 +321,41 @@ const bundles: Record<
       voiceComingSoon: '语音输入（即将推出）',
       loadOlder: '正在加载更早的消息…',
       scrollToBottom: '回到底部',
+    },
+    sessions: {
+      title: '会话',
+      needToken: '请先保存网关 Token 后再管理会话。',
+      searchPlaceholder: '搜索会话…',
+      filterAll: '全部',
+      filterActive: '活跃',
+      filterPinned: '置顶',
+      filterArchived: '归档',
+      totalSessions: '总计',
+      activeSessions: '活跃',
+      pinnedSessions: '置顶',
+      archivedSessions: '归档',
+      sessionCount: '已显示 {{count}} 个',
+      loadMore: '加载更多',
+      noSessions: '暂无会话',
+      noSessionsDescription: '在「对话」中开始聊天后，会话将显示在这里。',
+      continueChat: '在对话中继续',
+      archive: '归档',
+      unarchive: '取消归档',
+      pin: '置顶',
+      unpin: '取消置顶',
+      export: '导出 JSON',
+      delete: '删除',
+      deleteSessionTitle: '删除会话？',
+      deleteSessionMessage: '确定删除「{{name}}」吗？此操作不可恢复。',
+      cancel: '取消',
+      loading: '加载中…',
+      loadError: '加载会话失败',
+      gridView: '网格',
+      listView: '列表',
+      detailLoading: '加载会话…',
+      detailMessages: '消息',
+      detailExport: '导出',
+      close: '关闭',
     },
   },
 };
