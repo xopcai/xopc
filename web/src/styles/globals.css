@@ -56,24 +56,25 @@
   --max-width-app-main: 56rem;
 }
 
+/* Dark theme — aligned with ui/src/styles/00-vars.css :root.dark (neutral, not slate-blue) */
 html.dark {
-  --color-surface-base: #020617;
-  --color-surface-panel: #0f172a;
-  --color-surface-hover: #1e293b;
-  --color-surface-active: #334155;
+  --color-surface-base: #121212;
+  --color-surface-panel: #1a1a1a;
+  --color-surface-hover: #2a2a2a;
+  --color-surface-active: #404040;
 
-  --color-fg: #f8fafc;
-  --color-fg-muted: #cbd5e1;
-  --color-fg-subtle: #94a3b8;
-  --color-fg-disabled: #64748b;
+  --color-fg: #fafaf9;
+  --color-fg-muted: #a8a29e;
+  --color-fg-subtle: #948f8a;
+  --color-fg-disabled: #78716c;
 
-  --color-edge-subtle: #1e293b;
-  --color-edge: #334155;
-  --color-edge-strong: #475569;
+  --color-edge-subtle: #3a3a3a;
+  --color-edge: #333333;
+  --color-edge-strong: #4a4a4a;
 
   --color-accent: #3b82f6;
-  --color-accent-hover: #2563eb;
-  --color-accent-soft: rgb(30 58 138 / 0.4);
+  --color-accent-hover: #60a5fa;
+  --color-accent-soft: rgb(30 58 138 / 0.6);
   --color-accent-fg: #60a5fa;
 
   --color-success: #34d399;

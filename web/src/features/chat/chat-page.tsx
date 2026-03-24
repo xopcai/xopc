@@ -147,7 +147,7 @@ export function ChatPage() {
         className="chat-messages min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]"
         onScroll={onScroll}
       >
-        <div className="chat-messages-inner mx-auto w-full max-w-app-main px-4 py-6 sm:px-8">
+        <div className="chat-messages-inner mx-auto w-full max-w-app-main px-4 py-4 sm:px-8">
           {showSessionLoading ? (
             <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-3 py-12 text-center text-sm text-fg-muted">
               {m.chat.loading}

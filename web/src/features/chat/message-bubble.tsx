@@ -164,7 +164,7 @@ export function MessageBubble({
       <div
         className={cn(
           'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
-          isUser ? 'bg-blue-600 dark:bg-blue-500' : isAssistant ? 'bg-slate-600 dark:bg-slate-500' : 'bg-slate-400',
+          isUser ? 'bg-blue-600 dark:bg-blue-500' : isAssistant ? 'bg-neutral-600 dark:bg-neutral-500' : 'bg-neutral-400',
         )}
         aria-hidden
       >
@@ -190,7 +190,7 @@ export function MessageBubble({
             'rounded-2xl border px-4 py-3 text-sm leading-relaxed',
             isUser
               ? 'border-blue-100 bg-blue-50/80 text-fg dark:border-blue-900/50 dark:bg-blue-950/35'
-              : 'border-edge-subtle bg-surface-panel text-fg shadow-sm shadow-slate-200/30 dark:border-slate-700 dark:bg-slate-900/60 dark:shadow-none',
+              : 'border-edge-subtle bg-surface-panel text-fg shadow-sm shadow-slate-200/30 dark:border-edge dark:bg-surface-panel/70 dark:shadow-none',
           )}
         >
           {message.content?.length ? (

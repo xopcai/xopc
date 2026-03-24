@@ -68,7 +68,7 @@ export function ModelSelector({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-1 shadow-lg shadow-slate-200/60 dark:border-slate-700 dark:shadow-slate-900/40"
+          className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-1 shadow-lg shadow-slate-200/60 dark:border-edge dark:shadow-black/40"
           sideOffset={4}
           align="end"
           onOpenAutoFocus={(e) => e.preventDefault()}

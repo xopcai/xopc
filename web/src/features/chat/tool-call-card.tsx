@@ -48,7 +48,7 @@ export function ToolCallCard({
   }
 
   return (
-    <div className="rounded-xl border border-edge-subtle bg-surface-hover/30 dark:border-slate-700 dark:bg-surface-hover/20">
+    <div className="rounded-xl border border-edge-subtle bg-surface-hover/30 dark:border-edge dark:bg-surface-hover/20">
       <button
         type="button"
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-fg-muted hover:bg-surface-hover"
