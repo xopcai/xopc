@@ -14,6 +14,12 @@ import { useLocaleStore } from '@/stores/locale-store';
 const ACCEPT =
   'image/*,application/pdf,.docx,.pptx,.xlsx,.xls,.txt,.md,.json,.xml,.html,.css,.js,.ts,.jsx,.tsx,.yml,.yaml,.zip';
 
+/** Matches `leading-5` + `py-1.5`; `adjustHeight` caps growth. */
+const TEXTAREA_LINE_PX = 20;
+const TEXTAREA_MAX_LINES = 8;
+/** Total vertical padding from `py-1.5` (6px × 2). */
+const TEXTAREA_V_PAD_PX = 12;
+
 function interpolate(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
 }
@@ -62,11 +68,11 @@ export function ChatComposer({
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
     if (!el) return;
-    const lineHeight = 24;
-    const maxLines = 8;
-    const maxHeight = lineHeight * maxLines;
-    el.style.height = 'auto';
-    el.style.height = `${Math.min(el.scrollHeight, maxHeight)}px`;
+    const maxHeight = TEXTAREA_LINE_PX * TEXTAREA_MAX_LINES + TEXTAREA_V_PAD_PX;
+    // Reset before measuring — `height: auto` often leaves an inflated scrollHeight in WebKit/Blink.
+    el.style.height = '0px';
+    const next = Math.min(el.scrollHeight, maxHeight);
+    el.style.height = `${next}px`;
   }, []);
 
   useEffect(() => {
@@ -116,10 +122,10 @@ export function ChatComposer({
   const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
 
   return (
-    <div className="border-t border-edge bg-surface-panel dark:border-edge">
+    <div className="shrink-0 border-t border-edge-subtle bg-surface-panel px-3 pb-3 pt-2 sm:px-4 dark:border-edge">
       <div
         className={cn(
-          'relative mx-auto max-w-3xl px-3 py-3',
+          'relative mx-auto max-w-4xl rounded-xl border border-edge bg-surface-panel p-2 shadow-sm shadow-slate-200/40 dark:border-slate-700 dark:bg-slate-900/40 dark:shadow-none',
           isDragging && 'ring-2 ring-accent ring-inset',
         )}
         onDragOver={(e) => {
@@ -139,11 +145,11 @@ export function ChatComposer({
         }}
       >
         {attachments.length > 0 ? (
-          <div className="mb-2 flex flex-wrap gap-2">
+          <div className="mb-1.5 flex flex-wrap gap-1.5">
             {attachments.map((att, index) => (
               <div
                 key={`${att.name}-${index}`}
-                className="flex max-w-[200px] items-center gap-2 rounded-lg border border-edge bg-surface-hover px-2 py-1 text-xs dark:border-edge"
+                className="flex max-w-[200px] items-center gap-2 rounded-lg border border-edge-subtle bg-surface-hover px-2 py-1 text-xs dark:border-slate-600"
               >
                 {att.mimeType?.startsWith('image/') && att.content ? (
                   <img
@@ -169,14 +175,14 @@ export function ChatComposer({
         ) : null}
 
         {isDragging ? (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-lg bg-accent/10 text-sm font-medium text-accent-fg">
+          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-accent-soft/80 text-sm font-medium text-accent-fg backdrop-blur-[1px]">
             {m.chat.dropFiles}
           </div>
         ) : null}
 
         <textarea
           ref={textareaRef}
-          className="min-h-[88px] w-full resize-y rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg placeholder:text-fg-disabled focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent disabled:opacity-50"
+          className="max-h-[172px] min-h-[32px] w-full resize-none overflow-y-auto border-0 bg-transparent px-1 py-1.5 text-sm leading-5 text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0 disabled:opacity-50"
           placeholder={m.chat.inputPlaceholder}
           value={value}
           disabled={disabled || busy}
@@ -207,13 +213,13 @@ export function ChatComposer({
           }}
         />
 
-        <div className="mt-2 flex flex-wrap items-center gap-2">
+        <div className="mt-0.5 flex flex-wrap items-center gap-1.5 border-t border-edge-subtle pt-2 dark:border-slate-700/80">
           {showThinkingSelector ? (
             <div
-              className="inline-flex items-center gap-1 rounded-full border border-edge bg-surface-base px-2 py-1 text-xs dark:border-edge"
+              className="inline-flex items-center gap-1 rounded-full border border-edge bg-surface-hover px-2 py-0.5 text-xs dark:border-slate-600 dark:bg-slate-800/80"
               title={`${m.chat.thinkingLevel}: ${thinkingLevel}`}
             >
-              <ThinkingIcon className="h-3.5 w-3.5 text-accent-fg" aria-hidden />
+              <ThinkingIcon className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" aria-hidden />
               <select
                 className="max-w-[min(10rem,40vw)] cursor-pointer bg-transparent text-xs font-medium text-fg focus:outline-none"
                 value={thinkingLevel}
@@ -229,10 +235,10 @@ export function ChatComposer({
             </div>
           ) : null}
 
-          <div className="ml-auto flex items-center gap-1">
+          <div className="ml-auto flex items-center gap-0.5">
             <button
               type="button"
-              className="rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg disabled:opacity-50"
+              className="rounded-lg p-1.5 text-fg-subtle transition-colors duration-150 hover:bg-surface-hover hover:text-fg disabled:opacity-50"
               disabled={attachments.length >= MAX_CHAT_ATTACHMENTS || disabled || busy}
               title={
                 attachments.length >= MAX_CHAT_ATTACHMENTS
@@ -258,36 +264,36 @@ export function ChatComposer({
 
             <button
               type="button"
-              className="rounded-lg p-2 text-fg-muted opacity-60"
+              className="rounded-lg p-1.5 text-fg-disabled opacity-70"
               disabled
               title={m.chat.voiceComingSoon}
             >
-              <Mic className="h-4 w-4" />
+              <Mic className="h-4 w-4 stroke-[1.75]" />
             </button>
 
             {busy ? (
               <button
                 type="button"
-                className="rounded-lg p-2 text-fg-muted hover:bg-surface-hover hover:text-fg"
+                className="rounded-lg p-1.5 text-fg-muted transition-colors duration-150 hover:bg-surface-hover hover:text-fg"
                 title={m.chat.abort}
                 onClick={onAbort}
               >
-                <Square className="h-4 w-4" />
+                <Square className="h-4 w-4 stroke-[1.75]" />
               </button>
             ) : (
               <button
                 type="button"
                 className={cn(
-                  'rounded-lg p-2',
+                  'rounded-lg p-1.5 transition-colors duration-150 active:scale-95',
                   value.trim() || attachments.length > 0
-                    ? 'text-accent-fg hover:bg-accent/10'
+                    ? 'text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50'
                     : 'text-fg-disabled',
                 )}
                 disabled={disabled || (!value.trim() && attachments.length === 0)}
                 title={m.chat.sendMessage}
                 onClick={send}
               >
-                <Send className="h-4 w-4" />
+                <Send className="h-4 w-4 stroke-[1.75]" />
               </button>
             )}
           </div>

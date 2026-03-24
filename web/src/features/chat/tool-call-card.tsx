@@ -49,7 +49,7 @@ export function ToolCallCard({
 
   if (isStreaming) {
     return (
-      <div className="rounded-lg border border-edge bg-surface-base dark:border-edge">
+      <div className="rounded-xl border border-edge-subtle bg-surface-hover/50 dark:border-slate-700">
         <div className="flex items-center gap-2 border-b border-edge px-3 py-2 text-xs font-medium text-fg-muted dark:border-edge">
           <Code className="h-3.5 w-3.5 shrink-0" aria-hidden />
           <span className="rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[11px] text-accent-fg">{displayName}</span>
@@ -68,7 +68,7 @@ export function ToolCallCard({
   }
 
   return (
-    <div className="rounded-lg border border-edge bg-surface-base dark:border-edge">
+    <div className="rounded-xl border border-edge-subtle bg-surface-hover/30 dark:border-slate-700">
       <button
         type="button"
         className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-fg-muted hover:bg-surface-hover"

@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { Menu } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
 import { ConnectionIndicator } from '@/components/shell/connection-indicator';
@@ -34,16 +34,18 @@ export function AppShell() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const { pathname } = useLocation();
+  const isChatRoute = pathname.startsWith('/chat');
 
   return (
-    <div className="flex min-h-screen bg-surface-base">
+    <div className="flex h-full min-h-0 w-full flex-1 flex-row overflow-hidden bg-surface-base">
       <GatewaySseBridge />
       <NavigateToChatListener />
       <TokenDialog />
 
       <aside
         className={cn(
-          'hidden w-56 shrink-0 flex-col border-r border-edge bg-surface-panel lg:flex',
+          'hidden h-full min-h-0 w-56 shrink-0 flex-col border-r border-edge bg-surface-base lg:flex',
           'dark:border-edge',
         )}
       >
@@ -63,7 +65,7 @@ export function AppShell() {
         </div>
       </aside>
 
-      <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
         <header className="flex shrink-0 items-center justify-between gap-2 border-b border-edge bg-surface-panel px-3 py-2 lg:hidden dark:border-edge">
           <div className="min-w-0">
             <div className="truncate text-sm font-semibold text-fg">{m.appBrand}</div>
@@ -99,7 +101,12 @@ export function AppShell() {
           </div>
         </header>
 
-        <main className="min-h-0 flex-1 overflow-auto">
+        <main
+          className={cn(
+            'flex min-h-0 flex-1 flex-col',
+            isChatRoute ? 'overflow-hidden' : 'overflow-y-auto',
+          )}
+        >
           <Outlet />
         </main>
       </div>

@@ -15,11 +15,11 @@ export function ChatSseStatus() {
 
   if (connectionState === 'error' && error) {
     return (
-      <div className="flex items-center gap-2 border-b border-red-200 bg-red-50 px-4 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
+      <div className="flex items-center gap-2 border-b border-red-100 bg-red-50 px-4 py-2 text-sm text-red-600 dark:border-red-900/40 dark:bg-red-950/50 dark:text-red-400">
         <span className="min-w-0 flex-1 truncate">{error}</span>
         <button
           type="button"
-          className="shrink-0 rounded-md border border-red-300 px-2 py-1 text-xs font-medium hover:bg-red-100 dark:border-red-800 dark:hover:bg-red-900/50"
+          className="shrink-0 rounded-xl border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700 transition-colors duration-150 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/70"
           onClick={() => reconnectGatewaySse()}
         >
           {m.connection.reconnect}
@@ -30,7 +30,7 @@ export function ChatSseStatus() {
 
   if (connectionState === 'connecting' || connectionState === 'reconnecting') {
     return (
-      <div className="flex items-center gap-2 border-b border-amber-200 bg-amber-50 px-4 py-2 text-sm text-amber-900 dark:border-amber-900/50 dark:bg-amber-950/40 dark:text-amber-100">
+      <div className="flex items-center gap-2 border-b border-amber-100 bg-amber-50 px-4 py-2 text-sm text-amber-800 dark:border-amber-900/40 dark:bg-amber-950/50 dark:text-amber-200">
         <span
           className="inline-block h-3 w-3 animate-spin rounded-full border-2 border-amber-500 border-t-transparent"
           aria-hidden

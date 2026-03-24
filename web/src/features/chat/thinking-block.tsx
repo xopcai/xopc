@@ -27,7 +27,7 @@ export function ThinkingBlock({
   }
 
   return (
-    <div className="my-1 rounded-lg border border-edge bg-surface-hover/80 dark:border-edge">
+    <div className="my-1 rounded-xl border border-edge-subtle bg-surface-hover/90 dark:border-slate-700/80">
       <button
         type="button"
         disabled={isStreaming}
@@ -35,7 +35,7 @@ export function ThinkingBlock({
         onClick={() => !isStreaming && setExpanded(!expanded)}
         aria-expanded={showBody}
       >
-        <Sparkles className="h-4 w-4 shrink-0 text-accent-fg" aria-hidden />
+        <Sparkles className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden />
         <span className="font-medium text-fg">
           {isStreaming ? (
             <span className="animate-pulse text-fg-subtle">{labels.thoughtsStreaming}</span>

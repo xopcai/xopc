@@ -20,14 +20,14 @@ export function MessageList({
   const showWelcome = list.length === 0 && !streaming;
 
   return (
-    <div className="flex flex-col gap-4 pb-4">
+    <div className="flex flex-col gap-6 pb-4">
       {showWelcome ? (
-        <div className="flex flex-col items-center justify-center gap-3 py-16 text-center">
+        <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
           <div className="text-4xl" aria-hidden>
             🤖
           </div>
-          <div className="text-lg font-semibold text-fg">{m.chat.welcomeTitle}</div>
-          <div className="max-w-sm text-sm text-fg-muted">{m.chat.welcomeDescription}</div>
+          <div className="text-xl font-semibold tracking-tight text-fg">{m.chat.welcomeTitle}</div>
+          <div className="max-w-sm text-sm leading-relaxed text-fg-muted">{m.chat.welcomeDescription}</div>
         </div>
       ) : (
         list.map((msg, index) => {
