@@ -1,11 +1,13 @@
 import type { ReactNode } from 'react';
 import { SWRConfig } from 'swr';
 
+import { apiFetch } from '@/lib/fetch';
+
 async function defaultFetcher<T>(url: string): Promise<T> {
-  const res = await fetch(url);
+  const res = await apiFetch(url);
   if (!res.ok) {
-    const err = new Error(`Request failed: ${res.status}`);
-    throw err;
+    const errorBody = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    throw new Error(errorBody.error?.message || `HTTP ${res.status}: ${res.statusText}`);
   }
   return res.json() as Promise<T>;
 }
