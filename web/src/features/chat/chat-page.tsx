@@ -111,6 +111,14 @@ export function ChatPage() {
     });
   }, [showSessionLoading, hasToken, scrollToBottom]);
 
+  // User scrolled up then sent: re-enable follow mode and scroll to the new message.
+  useEffect(() => {
+    if (!sending) return;
+    if (showSessionLoading) return;
+    setAtBottom(true);
+    scrollToBottom(true);
+  }, [sending, showSessionLoading, scrollToBottom]);
+
   // Follow the bottom whenever message content updates (not just length): streaming updates
   // the same assistant bubble without changing length.
   useEffect(() => {
