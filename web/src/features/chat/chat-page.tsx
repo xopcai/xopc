@@ -109,13 +109,12 @@ export function ChatPage() {
     });
   }, [loading, hasToken, scrollToBottom]);
 
+  // Follow the bottom whenever message content updates (not just length): streaming updates
+  // the same assistant bubble without changing length.
   useEffect(() => {
-    if (atBottom) scrollToBottom(false);
-  }, [chatMessages.length, atBottom, scrollToBottom]);
-
-  useEffect(() => {
-    if (streaming && atBottom) scrollToBottom(true);
-  }, [chatMessages.length, streaming, atBottom, scrollToBottom]);
+    if (!atBottom) return;
+    scrollToBottom(false);
+  }, [chatMessages, atBottom, scrollToBottom]);
 
   if (!hasToken) {
     return (
