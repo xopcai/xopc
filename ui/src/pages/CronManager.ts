@@ -71,6 +71,8 @@ export class CronManager extends LitElement {
 
   private _api!: CronAPIClient;
   private _initialized = false;
+  /** After user picks a model in the cron form, do not overwrite with agent default when config finishes loading. */
+  private _formModelUserTouched = false;
 
   private _onDocKeydown = (e: KeyboardEvent): void => {
     if (e.key !== 'Escape') return;
@@ -169,6 +171,19 @@ export class CronManager extends LitElement {
     } catch (err) {
       console.error('[CronManager] Models error:', err);
     }
+    this._syncCronFormModelDefaultAfterConfigLoad();
+  }
+
+  /** New cron form may open before `/api/config` returns — fill Model with agent default once it is known. */
+  private _syncCronFormModelDefaultAfterConfigLoad(): void {
+    if (!this._formOpen || this._formMode !== 'add' || this._formModelUserTouched) {
+      return;
+    }
+    const next = this._defaultModelForCronForm();
+    if (!next) {
+      return;
+    }
+    this._formModel = next;
   }
 
   private _defaultModelForCronForm(): string {
@@ -251,6 +266,7 @@ export class CronManager extends LitElement {
   // ========== Form ==========
 
   private _openForm(job?: CronJob): void {
+    this._formModelUserTouched = false;
     this._formOpen = true;
     this._formMode = job ? 'edit' : 'add';
     this._formJobId = job?.id || null;
@@ -301,7 +317,7 @@ export class CronManager extends LitElement {
         this._formChatId = '';
       }
     } else {
-      // Adding new job
+      // Adding new job — default model = agent defaults (may fill again when _loadModels finishes)
       this._formName = '';
       this._formSchedule = '*/5 * * * *';
       this._formChannel = 'local';
@@ -311,6 +327,8 @@ export class CronManager extends LitElement {
       this._formAgentLocalOnly = false;
       this._formModel = this._defaultModelForCronForm();
     }
+
+    this._syncCronFormModelDefaultAfterConfigLoad();
 
     // After all fields match this job, load recent chat ids for the selected channel
     void this._loadSessionChatIds();
@@ -328,6 +346,7 @@ export class CronManager extends LitElement {
     this._formSessionTarget = 'main';
     this._formAgentLocalOnly = false;
     this._formModel = '';
+    this._formModelUserTouched = false;
   }
 
   private async _submitForm(): Promise<void> {
@@ -809,6 +828,8 @@ export class CronManager extends LitElement {
                     this._formSessionTarget = v;
                     if (v === 'main') {
                       this._formAgentLocalOnly = false;
+                    } else if (v === 'isolated' && !this._formModel?.trim()) {
+                      this._formModel = this._defaultModelForCronForm();
                     }
                   }}
                 >
@@ -828,7 +849,10 @@ export class CronManager extends LitElement {
                     .filter=${'configured'}
                     .token=${this.config?.token}
                     .label=${t('cron.model')}
-                    @change=${(e: CustomEvent<ModelSelectEvent>) => this._formModel = e.detail.modelId}
+                    @change=${(e: CustomEvent<ModelSelectEvent>) => {
+                      this._formModelUserTouched = true;
+                      this._formModel = e.detail.modelId;
+                    }}
                   ></model-selector>
                 </div>
                 <div class="form-field">
