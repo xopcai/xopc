@@ -110,6 +110,8 @@
     "fields": {
       "model": "Model",
       "imageModel": "Image Model",
+      "imageGenerationModel": "Image Generation Model",
+      "mediaMaxMb": "Image load limit (MB)",
       "workspace": "Workspace",
       "maxTokens": "Max Tokens",
       "temperature": "Temperature",
@@ -145,6 +147,8 @@
     "descriptionsFields": {
       "model": "Default AI model to use",
       "imageModel": "Model for image understanding (optional)",
+      "imageGenerationModel": "Model for image_generate tool (e.g. openai/gpt-image-1)",
+      "mediaMaxMb": "Max size when loading images in the image tool",
       "workspace": "Working directory for agent files",
       "maxTokens": "Maximum tokens in response",
       "temperature": "Randomness in responses (0-2)",

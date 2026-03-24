@@ -66,8 +66,18 @@ export class SettingsPage extends LitElement {
       let model = c.agents?.defaults?.model;
       if (model && typeof model === 'object') model = model.primary || '';
 
+      let imageModel = c.agents?.defaults?.imageModel;
+      if (imageModel && typeof imageModel === 'object') imageModel = imageModel.primary || '';
+      let imageGenerationModel = c.agents?.defaults?.imageGenerationModel;
+      if (imageGenerationModel && typeof imageGenerationModel === 'object') {
+        imageGenerationModel = imageGenerationModel.primary || '';
+      }
+
       this._settings = {
         model: model || 'anthropic/claude-sonnet-4-5',
+        imageModel: (typeof imageModel === 'string' ? imageModel : '') || '',
+        imageGenerationModel: (typeof imageGenerationModel === 'string' ? imageGenerationModel : '') || '',
+        mediaMaxMb: c.agents?.defaults?.mediaMaxMb,
         maxTokens: c.agents?.defaults?.maxTokens || 8192,
         temperature: c.agents?.defaults?.temperature ?? 0.7,
         maxToolIterations: c.agents?.defaults?.maxToolIterations || 20,
@@ -189,7 +199,23 @@ export class SettingsPage extends LitElement {
     })();
 
     const body = {
-      agents: { defaults: { model: s.model, maxTokens: s.maxTokens, temperature: s.temperature, maxToolIterations: s.maxToolIterations, workspace: s.workspace, thinkingDefault: s.thinkingDefault, reasoningDefault: s.reasoningDefault, verboseDefault: s.verboseDefault } },
+      agents: {
+        defaults: {
+          model: s.model,
+          maxTokens: s.maxTokens,
+          temperature: s.temperature,
+          maxToolIterations: s.maxToolIterations,
+          workspace: s.workspace,
+          thinkingDefault: s.thinkingDefault,
+          reasoningDefault: s.reasoningDefault,
+          verboseDefault: s.verboseDefault,
+          ...(s.imageModel?.trim() ? { imageModel: s.imageModel.trim() } : {}),
+          ...(s.imageGenerationModel?.trim() ? { imageGenerationModel: s.imageGenerationModel.trim() } : {}),
+          ...(typeof s.mediaMaxMb === 'number' && Number.isFinite(s.mediaMaxMb) && s.mediaMaxMb > 0
+            ? { mediaMaxMb: s.mediaMaxMb }
+            : {}),
+        },
+      },
       providers: s.providers,
       channels: {
         telegram: {

@@ -71,6 +71,12 @@ export interface WeixinConfig {
 
 export interface SettingsData {
   model: string;
+  /** provider/model for vision / image tool */
+  imageModel?: string;
+  /** provider/model for image_generate (e.g. openai/gpt-image-1) */
+  imageGenerationModel?: string;
+  /** Max MB per image load for image tool */
+  mediaMaxMb?: number;
   maxTokens: number;
   temperature: number;
   maxToolIterations: number;

@@ -36,6 +36,39 @@ export class AgentSection extends LitElement {
           </div>
 
           <div class="field-group">
+            <div class="field-header"><label class="field-label">${t('settings.fields.imageModel')}</label></div>
+            <model-selector
+              .value=${s.imageModel || ''}
+              .filter=${'configured'}
+              .token=${this.token}
+              @change=${(e: CustomEvent) => this._field('imageModel', e.detail.modelId)}
+            ></model-selector>
+            <p class="field-desc">${t('settings.descriptionsFields.imageModel')}</p>
+          </div>
+
+          <div class="field-group">
+            <div class="field-header"><label class="field-label">${t('settings.fields.imageGenerationModel')}</label></div>
+            <model-selector
+              .value=${s.imageGenerationModel || ''}
+              .filter=${'configured'}
+              .token=${this.token}
+              @change=${(e: CustomEvent) => this._field('imageGenerationModel', e.detail.modelId)}
+            ></model-selector>
+            <p class="field-desc">${t('settings.descriptionsFields.imageGenerationModel')}</p>
+          </div>
+
+          <div class="field-group">
+            <div class="field-header"><label class="field-label">${t('settings.fields.mediaMaxMb')}</label></div>
+            <input class="text-input" type="number" min="1" step="1" .value=${s.mediaMaxMb ?? ''}
+              placeholder="20"
+              @change=${(e: Event) => {
+                const v = (e.target as HTMLInputElement).value;
+                this._field('mediaMaxMb', v === '' ? undefined : parseFloat(v));
+              }} />
+            <p class="field-desc">${t('settings.descriptionsFields.mediaMaxMb')}</p>
+          </div>
+
+          <div class="field-group">
             <div class="field-header"><label class="field-label">${t('settings.fields.workspace')}</label></div>
             <input class="text-input" type="text" .value=${s.workspace}
               @change=${(e: Event) => this._field('workspace', (e.target as HTMLInputElement).value)} />

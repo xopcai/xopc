@@ -5,6 +5,18 @@ import { homedir } from 'os';
 // Agent Configs
 // ============================================
 
+export const AgentModelRefSchema = z.union([
+  z.string(),
+  z
+    .object({
+      primary: z.string().optional(),
+      fallbacks: z.array(z.string()).optional(),
+    })
+    .strict(),
+]);
+
+export type AgentModelConfig = z.infer<typeof AgentModelRefSchema>;
+
 export const AgentDefaultsSchema = z.object({
   workspace: z.string().default('~/.xopcbot/workspace'),
   model: z.union([
@@ -14,6 +26,12 @@ export const AgentDefaultsSchema = z.object({
       fallbacks: z.array(z.string()).optional(),
     }).strict(),
   ]).default(''), // Empty default - will be resolved dynamically at runtime
+  /** Vision / image understanding model (provider/model). Falls back to heuristics when unset. */
+  imageModel: AgentModelRefSchema.optional(),
+  /** Image generation model (provider/model), e.g. openai/gpt-image-1. Thin REST wrapper; OpenAI supported. */
+  imageGenerationModel: AgentModelRefSchema.optional(),
+  /** Max image size for image tool loads (MB). */
+  mediaMaxMb: z.number().positive().optional(),
   maxTokens: z.number().default(8192),
   temperature: z.number().default(0.7),
   maxToolIterations: z.number().default(20),
@@ -691,4 +709,14 @@ export function getAgentDefaultModelRef(config: Config): string | undefined {
   if (ref === undefined || ref === null) return undefined;
   const s = String(ref).trim();
   return s ? s : undefined;
+}
+
+/** `provider/model` or null when invalid. */
+export function parseModelRef(ref: string): ParsedModelRef | null {
+  const trimmed = ref.trim();
+  const idx = trimmed.indexOf('/');
+  if (idx <= 0 || idx === trimmed.length - 1) {
+    return null;
+  }
+  return { provider: trimmed.slice(0, idx).trim(), model: trimmed.slice(idx + 1).trim() };
 }
