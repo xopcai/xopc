@@ -71,6 +71,18 @@ export function useChatSession() {
   const isNewRoute = location.pathname.endsWith('/new');
   const decodedKey = sessionKeyParam ? decodeURIComponent(sessionKeyParam) : undefined;
 
+  /** URL session param does not match loaded state yet (switching sessions or first paint). */
+  const sessionRoutePending = Boolean(decodedKey !== undefined && sessionKey !== decodedKey);
+  /**
+   * Full-height loading in the message column — only when we have no session key in state yet
+   * or we're on `/chat` without a param (pick-session flow). Never when switching `/chat/A`→`/chat/B`
+   * (matches legacy Lit: keep layout, swap messages when fetch completes).
+   */
+  const showSessionLoading = useMemo(
+    () => loading && (sessionKey == null || decodedKey === undefined),
+    [loading, sessionKey, decodedKey],
+  );
+
   const navigateToSession = useCallback(
     (key: string, replace = true) => {
       navigate(`/chat/${encodeURIComponent(key)}`, { replace });
@@ -474,7 +486,10 @@ export function useChatSession() {
     let cancelled = false;
 
     const run = async () => {
-      setLoading(true);
+      const needsFullBlockingLoad = isNewRoute || decodedKey === undefined;
+      if (needsFullBlockingLoad) {
+        setLoading(true);
+      }
       setError(null);
 
       try {
@@ -564,6 +579,9 @@ export function useChatSession() {
     messages: displayMessages,
     sessionKey,
     sessionName,
+    decodedKey,
+    sessionRoutePending,
+    showSessionLoading,
     sessionModel,
     thinkingLevel,
     setThinkingLevel,
