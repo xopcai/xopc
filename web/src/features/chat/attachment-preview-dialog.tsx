@@ -152,7 +152,7 @@ function PreviewBody({
 
   if (loadingGateway) {
     return (
-      <div className="flex min-h-[40vh] items-center justify-center text-sm text-fg-muted">
+      <div className="flex min-h-0 flex-1 items-center justify-center py-12 text-sm text-fg-muted">
         {labels.attachmentPreviewLoading}
       </div>
     );
@@ -161,9 +161,9 @@ function PreviewBody({
   const err = fetchError || renderError;
   if (err) {
     return (
-      <div className="space-y-2 p-4 text-center">
+      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
         <div className="text-sm font-medium text-fg">{labels.attachmentPreviewLoadError}</div>
-        <div className="text-xs text-fg-muted">{err}</div>
+        <div className="max-w-lg text-xs text-fg-muted">{err}</div>
       </div>
     );
   }
@@ -171,7 +171,7 @@ function PreviewBody({
   if (showExtractedText && fileType !== 'image') {
     const text = extractTextForPreview(attachment) || labels.attachmentPreviewNoText;
     return (
-      <div className="max-h-[min(70vh,32rem)] overflow-auto rounded-lg border border-edge-subtle bg-surface-hover/40 p-4 dark:border-edge">
+      <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle bg-surface-hover/40 p-4 dark:border-edge">
         <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-fg-muted">
           {text}
         </pre>
@@ -184,23 +184,27 @@ function PreviewBody({
       const p = getAttachmentBinaryPayload(attachment);
       if (!p) {
         return (
-          <div className="p-6 text-center text-sm text-fg-muted">{labels.attachmentPreviewMissingData}</div>
+          <div className="flex min-h-0 flex-1 items-center justify-center p-6 text-sm text-fg-muted">
+            {labels.attachmentPreviewMissingData}
+          </div>
         );
       }
       const mime = attachment.mimeType?.startsWith('image/') ? attachment.mimeType : 'image/png';
       return (
-        <img
-          src={resolveDataUrlForDisplay(mime, p)}
-          alt={attachment.name ?? ''}
-          className="max-h-[min(70vh,40rem)] w-auto max-w-full rounded-lg object-contain"
-        />
+        <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto p-2">
+          <img
+            src={resolveDataUrlForDisplay(mime, p)}
+            alt={attachment.name ?? ''}
+            className="max-h-full max-w-full object-contain"
+          />
+        </div>
       );
     }
 
     case 'pptx': {
       const text = extractTextForPreview(attachment) || labels.attachmentPreviewNoText;
       return (
-        <div className="max-h-[min(70vh,32rem)] overflow-auto rounded-lg border border-edge-subtle p-4 dark:border-edge">
+        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle p-4 dark:border-edge">
           <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-fg">{text}</pre>
         </div>
       );
@@ -212,14 +216,14 @@ function PreviewBody({
       return (
         <div
           ref={containerRef}
-          className="docx-preview-host max-h-[min(70vh,40rem)] min-h-[200px] overflow-auto rounded-lg border border-edge-subtle bg-surface-panel p-2 dark:border-edge"
+          className="docx-preview-host min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle bg-surface-panel p-2 dark:border-edge"
         />
       );
 
     default: {
       const text = extractTextForPreview(attachment) || labels.attachmentPreviewNoText;
       return (
-        <div className="max-h-[min(70vh,32rem)] overflow-auto rounded-lg border border-edge-subtle p-4 dark:border-edge">
+        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle p-4 dark:border-edge">
           <pre className="whitespace-pre-wrap font-mono text-sm text-fg">{text}</pre>
         </div>
       );
@@ -330,77 +334,81 @@ export function AttachmentPreviewDialog({
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
         <Dialog.Overlay className="fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-[1px]" />
-        <Dialog.Content className="fixed left-1/2 top-1/2 z-[80] flex max-h-[90vh] w-[min(100%-2rem,56rem)] -translate-x-1/2 -translate-y-1/2 flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-xl dark:border-edge">
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3 dark:border-edge">
-            <Dialog.Title className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
-              {preview?.name ?? ''}
-            </Dialog.Title>
-            <div className="flex shrink-0 items-center gap-1">
-              {showToggle ? (
-                <div
-                  className="mr-2 flex rounded-lg border border-edge p-0.5 dark:border-edge"
-                  role="group"
-                  aria-label={labels.attachmentPreviewText}
-                >
-                  <button
-                    type="button"
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                      !showExtractedText ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg'
-                    }`}
-                    onClick={() => {
-                      setShowExtractedText(false);
-                      setFetchError(null);
-                    }}
+        <Dialog.Content className="fixed inset-0 z-[81] flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col overflow-hidden border-0 bg-surface-panel shadow-none outline-none">
+          <div className="shrink-0 border-b border-edge dark:border-edge">
+            <div className="mx-auto flex w-full max-w-app-main items-center justify-between gap-2 px-4 py-3 sm:px-8">
+              <Dialog.Title className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
+                {preview?.name ?? ''}
+              </Dialog.Title>
+              <div className="flex shrink-0 items-center gap-1">
+                {showToggle ? (
+                  <div
+                    className="mr-2 flex rounded-lg border border-edge p-0.5 dark:border-edge"
+                    role="group"
+                    aria-label={labels.attachmentPreviewText}
                   >
-                    {fileTypeLabel(fileType, labels)}
-                  </button>
-                  <button
-                    type="button"
-                    className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                      showExtractedText ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg'
-                    }`}
-                    onClick={() => {
-                      setShowExtractedText(true);
-                      setFetchError(null);
-                    }}
-                  >
-                    {labels.attachmentPreviewText}
-                  </button>
-                </div>
-              ) : null}
-              <button
-                type="button"
-                className="rounded-md p-2 text-fg-muted hover:bg-surface-hover hover:text-fg"
-                title={labels.attachmentPreviewDownload}
-                aria-label={labels.attachmentPreviewDownload}
-                onClick={handleDownload}
-              >
-                <Download className="h-4 w-4" />
-              </button>
-              <Dialog.Close asChild>
+                    <button
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                        !showExtractedText ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg'
+                      }`}
+                      onClick={() => {
+                        setShowExtractedText(false);
+                        setFetchError(null);
+                      }}
+                    >
+                      {fileTypeLabel(fileType, labels)}
+                    </button>
+                    <button
+                      type="button"
+                      className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                        showExtractedText ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg'
+                      }`}
+                      onClick={() => {
+                        setShowExtractedText(true);
+                        setFetchError(null);
+                      }}
+                    >
+                      {labels.attachmentPreviewText}
+                    </button>
+                  </div>
+                ) : null}
                 <button
                   type="button"
                   className="rounded-md p-2 text-fg-muted hover:bg-surface-hover hover:text-fg"
-                  title={labels.attachmentPreviewClose}
-                  aria-label={labels.attachmentPreviewClose}
+                  title={labels.attachmentPreviewDownload}
+                  aria-label={labels.attachmentPreviewDownload}
+                  onClick={handleDownload}
                 >
-                  <X className="h-4 w-4" />
+                  <Download className="h-4 w-4" />
                 </button>
-              </Dialog.Close>
+                <Dialog.Close asChild>
+                  <button
+                    type="button"
+                    className="rounded-md p-2 text-fg-muted hover:bg-surface-hover hover:text-fg"
+                    title={labels.attachmentPreviewClose}
+                    aria-label={labels.attachmentPreviewClose}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </Dialog.Close>
+              </div>
             </div>
           </div>
 
-          <div className="min-h-0 flex-1 overflow-auto px-4 py-4">
-            {preview ? (
-              <PreviewBody
-                attachment={preview}
-                fileType={fileType}
-                showExtractedText={showExtractedText}
-                loadingGateway={loadingGateway}
-                fetchError={fetchError}
-                language={language}
-              />
-            ) : null}
+          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div className="mx-auto flex h-full min-h-0 w-full max-w-app-main flex-col overflow-hidden px-4 pb-4 pt-2 sm:px-8">
+              {preview ? (
+                <PreviewBody
+                  attachment={preview}
+                  fileType={fileType}
+                  showExtractedText={showExtractedText}
+                  loadingGateway={loadingGateway}
+                  fetchError={fetchError}
+                  language={language}
+                />
+              ) : null}
+            </div>
           </div>
         </Dialog.Content>
       </Dialog.Portal>
