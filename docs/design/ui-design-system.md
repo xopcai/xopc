@@ -270,8 +270,11 @@ xopc 工作站有两种核心使用场景，对应两种布局密度，通过用
 |----------|-------|------|------|
 | 卡片、弹窗、大容器 | `rounded-2xl` | 16px | 主要容器，有机感的核心 |
 | 按钮、输入框 | `rounded-xl` | 12px | 交互组件，亲切但不失专业 |
+| **分段控件**（顶栏语言 / 主题、列表网格切换等） | 轨道 `rounded-full` + 滑块 `rounded-full` | CSS `--radius-pill` → `rounded-pill` | 灰色轨道 (`bg-surface-hover`)、浅色浮起滑块 (`bg-surface-panel` + 轻阴影)，与参考图一致的大圆角「胶囊」语义，不是直角分段 |
 | 小型标签、Badge | `rounded-lg` | 8px | 微小元素 |
 | 头像、图标容器 | `rounded-full` | 50% | 完全圆形，用于人物和品牌标识 |
+
+**分段控件实现约定（Gateway / Web）**：轨道与每项使用同一套 class，避免顶栏各开关风格漂移。共享常量见 `web/src/components/ui/segmented-styles.ts`（`segmentedTrackClassName`、`segmentedThumbBaseClassName`、`segmentedThumbActiveClassName`）。选中项需要强调色时在外层追加 `text-accent-fg`（如主题、图标型分段）。
 
 > **有机感原则**：圆角应该让人感觉"柔软"，而不是"锋利"。当你不确定用多大圆角时，选更大的那个。
 

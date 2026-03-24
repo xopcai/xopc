@@ -1,6 +1,11 @@
 import { Monitor, Moon, Sun } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
+import {
+  segmentedThumbActiveClassName,
+  segmentedThumbBaseClassName,
+  segmentedTrackClassName,
+} from '@/components/ui/segmented-styles';
 import { cn } from '@/lib/cn';
 import { type ThemePreference, useThemeStore } from '@/stores/theme-store';
 
@@ -15,11 +20,7 @@ export function ThemeToggle() {
   const setPreference = useThemeStore((s) => s.setPreference);
 
   return (
-    <div
-      className="inline-flex rounded-md border border-edge bg-surface-panel p-0.5 dark:border-edge"
-      role="group"
-      aria-label="Color theme"
-    >
+    <div className={segmentedTrackClassName} role="group" aria-label="Color theme">
       {options.map(({ value, label, icon: Icon }) => (
         <Button
           key={value}
@@ -29,11 +30,13 @@ export function ThemeToggle() {
           aria-label={label}
           onClick={() => setPreference(value)}
           className={cn(
-            'h-8 w-8 rounded-sm p-0 text-fg-subtle hover:text-fg',
-            preference === value && 'bg-surface-active text-accent-fg',
+            segmentedThumbBaseClassName,
+            'size-7 p-0',
+            preference === value && segmentedThumbActiveClassName,
+            preference === value && 'text-accent-fg hover:text-accent-fg',
           )}
         >
-          <Icon className="size-4" strokeWidth={1.75} />
+          <Icon className="size-3.5" strokeWidth={1.5} />
         </Button>
       ))}
     </div>

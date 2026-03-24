@@ -14,10 +14,31 @@ function resolveTheme(pref: ThemePreference): 'light' | 'dark' {
   return pref;
 }
 
-function applyDomTheme(mode: 'light' | 'dark') {
+function prefersReducedMotion(): boolean {
+  return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
+}
+
+/** Apply light/dark on `<html>`. Uses View Transitions when available for a softer cross-fade (not instant snap). */
+function applyDomTheme(mode: 'light' | 'dark', useViewTransition: boolean) {
   const root = document.documentElement;
-  root.classList.toggle('dark', mode === 'dark');
-  root.dataset.theme = mode;
+  const run = () => {
+    root.classList.toggle('dark', mode === 'dark');
+    root.dataset.theme = mode;
+  };
+
+  const doc = document as Document & {
+    startViewTransition?: (cb: () => void) => { finished: Promise<void> };
+  };
+
+  if (
+    useViewTransition &&
+    !prefersReducedMotion() &&
+    typeof doc.startViewTransition === 'function'
+  ) {
+    doc.startViewTransition(run);
+  } else {
+    run();
+  }
 }
 
 /** Sync DOM from localStorage before React paint (zustand persist hydrates async). */
@@ -29,9 +50,9 @@ export function bootstrapTheme() {
       const parsed = JSON.parse(raw) as { state?: { preference?: ThemePreference } };
       if (parsed.state?.preference) pref = parsed.state.preference;
     }
-    applyDomTheme(resolveTheme(pref));
+    applyDomTheme(resolveTheme(pref), false);
   } catch {
-    applyDomTheme(resolveTheme('system'));
+    applyDomTheme(resolveTheme('system'), false);
   }
 }
 
@@ -49,7 +70,8 @@ export const useThemeStore = create(
 
       setPreference: (preference) => {
         const resolved = resolveTheme(preference);
-        applyDomTheme(resolved);
+        const prevResolved = useThemeStore.getState().resolved;
+        applyDomTheme(resolved, resolved !== prevResolved);
         set({ preference, resolved });
       },
     }),
@@ -62,7 +84,7 @@ export const useThemeStore = create(
 export function syncThemeAfterHydration() {
   const { preference } = useThemeStore.getState();
   const resolved = resolveTheme(preference);
-  applyDomTheme(resolved);
+  applyDomTheme(resolved, false);
   useThemeStore.setState({ resolved });
 }
 
@@ -74,7 +96,8 @@ export function subscribeSystemTheme() {
     const { preference } = useThemeStore.getState();
     if (preference !== 'system') return;
     const resolved = resolveTheme('system');
-    applyDomTheme(resolved);
+    const prevResolved = useThemeStore.getState().resolved;
+    applyDomTheme(resolved, resolved !== prevResolved);
     useThemeStore.setState({ resolved });
   };
 
