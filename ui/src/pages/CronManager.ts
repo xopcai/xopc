@@ -1,10 +1,21 @@
 // Cron Manager Page Component
 
-import { html, LitElement, nothing } from 'lit';
+import { html, LitElement, nothing, type PropertyValues } from 'lit';
 import { customElement, property, state } from 'lit/decorators.js';
 import { getIcon } from '../utils/icons';
 import { t } from '../utils/i18n';
-import { CronAPIClient, cronJobBodyText, type CronJob, type CronJobExecution, type CronMetrics, type ChannelStatus, type ModelInfo, type SessionChatId, type CronRunHistoryRow } from '../utils/cron-api';
+import {
+  CronAPIClient,
+  cronJobBodyText,
+  type CronDelivery,
+  type CronJob,
+  type CronJobExecution,
+  type CronMetrics,
+  type ChannelStatus,
+  type SessionChatId,
+  type CronRunHistoryRow,
+  type ModelInfo,
+} from '../utils/cron-api';
 import '../components/ConfirmDialog';
 import '../components/ModelSelector';
 import type { ModelSelectEvent } from '../components/ModelSelector';
@@ -35,10 +46,13 @@ export class CronManager extends LitElement {
   @state() private _formJobId: string | null = null;
   @state() private _formName = '';
   @state() private _formSchedule = '*/5 * * * *'; 
-  @state() private _formChannel = 'telegram';
+  /** Default `local` so it matches the first `<option>` and does not require Recipient before channels load. */
+  @state() private _formChannel = 'local';
   @state() private _formChatId = '';
   @state() private _formMessage = '';
   @state() private _formSessionTarget: 'main' | 'isolated' = 'main';
+  /** Isolated agent: run locally only; transcript stored under session key `cron:<jobId>`, no outbound send. */
+  @state() private _formAgentLocalOnly = false;
   @state() private _formModel = '';
   @state() private _formSubmitting = false;
 
@@ -149,22 +163,82 @@ export class CronManager extends LitElement {
 
   private async _loadModels(): Promise<void> {
     try {
-      // Load available models from configured providers
       this._availableModels = await this._api.getModels();
-      
-      // Load config to get default model
       const config = await this._api.getConfig();
       this._defaultModel = config.model || '';
-      
-      // Set form default model
-      this._formModel = this._defaultModel;
-      
     } catch (err) {
       console.error('[CronManager] Models error:', err);
     }
   }
 
+  private _defaultModelForCronForm(): string {
+    return (
+      this._defaultModel ||
+      (this._availableModels.length > 0 ? this._availableModels[0].id : '')
+    );
+  }
+
+  private _needsDeliveryChat(): boolean {
+    if (this._formChannel === 'local') {
+      return false;
+    }
+    return (
+      this._formSessionTarget === 'main' ||
+      (this._formSessionTarget === 'isolated' && !this._formAgentLocalOnly)
+    );
+  }
+
+  /** Align with visible fields: schedule/message must be non-empty after trim (same rules as submit). */
+  private _canSubmitCronForm(): boolean {
+    if (!(this._formName ?? '').trim()) {
+      return false;
+    }
+    if (!(this._formSchedule ?? '').trim()) {
+      return false;
+    }
+    if (!(this._formMessage ?? '').trim()) {
+      return false;
+    }
+    if (this._needsDeliveryChat() && !(this._formChatId ?? '').trim()) {
+      return false;
+    }
+    return true;
+  }
+
+  /** Show channel dropdown for main, or isolated jobs that use explicit channel (not checkbox-only local). */
+  private _showChannelPicker(): boolean {
+    if (this._formSessionTarget === 'main') {
+      return true;
+    }
+    return this._formSessionTarget === 'isolated' && !this._formAgentLocalOnly;
+  }
+
+  /**
+   * New job: if `_formChannel` is not yet in the dropdown (e.g. default was `telegram` while `_channels` is still empty),
+   * coerce to `local` so UI state matches the visible selection and Recipient stays hidden for local.
+   */
+  private _syncChannelValueForAddForm(): void {
+    if (!this._formOpen || this._formMode !== 'add') {
+      return;
+    }
+    const valid = new Set(['local', ...this._channels.map((c) => c.name)]);
+    if (!valid.has(this._formChannel)) {
+      this._formChannel = 'local';
+    }
+  }
+
+  override updated(changed: PropertyValues): void {
+    super.updated(changed);
+    if (changed.has('_channels') || changed.has('_formOpen') || changed.has('_formMode')) {
+      this._syncChannelValueForAddForm();
+    }
+  }
+
   private async _loadSessionChatIds(): Promise<void> {
+    if (this._formChannel === 'local') {
+      this._sessionChatIds = [];
+      return;
+    }
     try {
       const chatIds = await this._api.getSessionChatIds(this._formChannel);
       this._sessionChatIds = chatIds;
@@ -180,27 +254,40 @@ export class CronManager extends LitElement {
     this._formOpen = true;
     this._formMode = job ? 'edit' : 'add';
     this._formJobId = job?.id || null;
-    
-    // Refresh session chat IDs when opening form
-    this._loadSessionChatIds();
 
     if (job) {
       // Editing existing job - populate form
       this._formName = job.name || '';
-      this._formSchedule = job.schedule;
+      // Never leave schedule undefined: template falls back for display but state would stay empty → Save disabled
+      this._formSchedule = (job.schedule && String(job.schedule).trim()) || '*/5 * * * *';
       const bodyText = cronJobBodyText(job);
-      this._formMessage = bodyText;
+      this._formMessage = bodyText ?? '';
       this._formSessionTarget = job.sessionTarget || 'main';
-      this._formModel = job.model || '';
-      
+      {
+        const fromPayload =
+          job.payload?.kind === 'agentTurn' && job.payload.model?.trim()
+            ? job.payload.model.trim()
+            : '';
+        const stored = job.model?.trim() || fromPayload;
+        this._formModel = stored || this._defaultModelForCronForm();
+      }
+      const hasLocalChannel = job.delivery?.channel === 'local';
+      this._formAgentLocalOnly =
+        (job.sessionTarget || 'main') === 'isolated' &&
+        !hasLocalChannel &&
+        (!job.delivery?.to || job.delivery.mode === 'none');
+
       // Parse delivery info
-      if (job.delivery) {
+      if (hasLocalChannel) {
+        this._formChannel = 'local';
+        this._formChatId = '';
+      } else if (job.delivery && job.delivery.mode !== 'none' && job.delivery.to) {
         this._formChannel = job.delivery.channel || 'telegram';
         this._formChatId = job.delivery.to || '';
-      } else {
+      } else if (!this._formAgentLocalOnly) {
         // Try to parse from legacy body format: "channel:chat_id:content"
         const parts = bodyText.split(':');
-        const knownChannels = ['telegram', 'cli', 'gateway'];
+        const knownChannels = ['telegram', 'cli', 'gateway', 'local'];
         if (parts.length >= 3 && knownChannels.includes(parts[0])) {
           this._formChannel = parts[0];
           this._formChatId = parts[1];
@@ -209,17 +296,24 @@ export class CronManager extends LitElement {
           this._formChannel = 'telegram';
           this._formChatId = '';
         }
+      } else {
+        this._formChannel = 'telegram';
+        this._formChatId = '';
       }
     } else {
       // Adding new job
       this._formName = '';
       this._formSchedule = '*/5 * * * *';
-      this._formChannel = 'telegram';
+      this._formChannel = 'local';
       this._formChatId = '';
       this._formMessage = '';
       this._formSessionTarget = 'main';
-      this._formModel = this._defaultModel || (this._availableModels.length > 0 ? this._availableModels[0].id : '');
+      this._formAgentLocalOnly = false;
+      this._formModel = this._defaultModelForCronForm();
     }
+
+    // After all fields match this job, load recent chat ids for the selected channel
+    void this._loadSessionChatIds();
   }
 
   private _closeForm(): void {
@@ -228,20 +322,25 @@ export class CronManager extends LitElement {
     this._formJobId = null;
     this._formName = '';
     this._formSchedule = '*/5 * * * *';
-    this._formChannel = 'telegram';
+    this._formChannel = 'local';
     this._formChatId = '';
     this._formMessage = '';
     this._formSessionTarget = 'main';
+    this._formAgentLocalOnly = false;
     this._formModel = '';
   }
 
   private async _submitForm(): Promise<void> {
-    if (!this._formSchedule || !this._formMessage) {
+    if (!this._formName?.trim()) {
+      this._error = t('cron.nameRequired');
+      return;
+    }
+    if (!this._formSchedule?.trim() || !this._formMessage?.trim()) {
       this._error = t('cron.scheduleRequired');
       return;
     }
 
-    if (!this._formChatId) {
+    if (this._needsDeliveryChat() && !this._formChatId.trim()) {
       this._error = t('cron.chatIdRequired');
       return;
     }
@@ -251,35 +350,48 @@ export class CronManager extends LitElement {
 
     try {
       // Build message (just the content, not prefixed with channel:chat_id)
-      const message = this._formMessage;
-      
-      // Build delivery config
-      const delivery = {
-        mode: 'direct' as const,
-        channel: this._formChannel,
-        to: this._formChatId,
-      };
+      const message = this._formMessage.trim();
 
-      // Build payload based on session target (must be sent on update or payload stays stale)
-      const payload = this._formSessionTarget === 'isolated'
-        ? { kind: 'agentTurn' as const, message, model: this._formModel }
-        : { kind: 'systemEvent' as const, text: message };
+      // Delivery: checkbox-only local → none; explicit local channel → direct + local (no `to`);
+      // other channels → direct + channel + recipient
+      let delivery: CronDelivery;
+      if (this._formSessionTarget === 'isolated' && this._formAgentLocalOnly) {
+        delivery = { mode: 'none' };
+      } else if (this._formChannel === 'local') {
+        delivery = { mode: 'direct', channel: 'local' };
+      } else {
+        delivery = {
+          mode: 'direct',
+          channel: this._formChannel,
+          to: this._formChatId.trim(),
+        };
+      }
 
+      const payload =
+        this._formSessionTarget === 'isolated'
+          ? {
+              kind: 'agentTurn' as const,
+              message,
+              ...(this._formModel?.trim() ? { model: this._formModel.trim() } : {}),
+            }
+          : { kind: 'systemEvent' as const, text: message };
+
+      const modelTrimmed = this._formModel?.trim() || '';
       const jobData = {
-        name: this._formName || undefined,
-        schedule: this._formSchedule,
+        name: this._formName.trim(),
+        schedule: this._formSchedule.trim(),
         sessionTarget: this._formSessionTarget,
-        model: this._formSessionTarget === 'isolated' ? this._formModel : undefined,
+        model:
+          this._formSessionTarget === 'isolated' && modelTrimmed ? modelTrimmed : undefined,
         delivery,
         payload,
       };
 
       if (this._formMode === 'edit' && this._formJobId) {
-        // Update existing job
         await this._api.updateJob(this._formJobId, jobData);
       } else {
-        // Add new job
-        await this._api.addJob(this._formSchedule, jobData);
+        const { schedule: sched, ...addRest } = jobData;
+        await this._api.addJob(sched, addRest);
       }
       
       this._closeForm();
@@ -692,7 +804,13 @@ export class CronManager extends LitElement {
                 <select
                   class="form-field__select"
                   .value=${this._formSessionTarget ?? 'main'}
-                  @change=${(e: Event) => this._formSessionTarget = (e.target as HTMLSelectElement).value as 'main' | 'isolated'}
+                  @change=${(e: Event) => {
+                    const v = (e.target as HTMLSelectElement).value as 'main' | 'isolated';
+                    this._formSessionTarget = v;
+                    if (v === 'main') {
+                      this._formAgentLocalOnly = false;
+                    }
+                  }}
                 >
                   <option value="main">${t('cron.modeDirectOption') || 'Direct (send message directly)'}</option>
                   <option value="isolated">${t('cron.modeAgentOption') || 'AI Agent (process with AI then send)'}</option>
@@ -713,20 +831,37 @@ export class CronManager extends LitElement {
                     @change=${(e: CustomEvent<ModelSelectEvent>) => this._formModel = e.detail.modelId}
                   ></model-selector>
                 </div>
+                <div class="form-field">
+                  <label class="form-field__label cron-form__checkbox-label">
+                    <input
+                      type="checkbox"
+                      .checked=${this._formAgentLocalOnly}
+                      @change=${(e: Event) => {
+                        this._formAgentLocalOnly = (e.target as HTMLInputElement).checked;
+                      }}
+                    />
+                    ${t('cron.agentLocalOnly')}
+                  </label>
+                  <p class="form-field__hint">${t('cron.agentLocalOnlyHint')}</p>
+                </div>
               ` : nothing}
+              ${this._showChannelPicker()
+                ? html`
               <div class="form-field">
                 <label class="form-field__label">${t('cron.channel')}</label>
                 <select
                   class="form-field__select"
-                  .value=${this._formChannel ?? 'telegram'}
+                  .value=${this._formChannel ?? 'local'}
                   @change=${(e: Event) => {
                     this._formChannel = (e.target as HTMLSelectElement).value;
-                    // Reload chat IDs for selected channel
-                    this._loadSessionChatIds();
-                    // Clear chat ID when channel changes
+                    if (this._formChannel === 'local') {
+                      this._formAgentLocalOnly = false;
+                    }
                     this._formChatId = '';
+                    this._loadSessionChatIds();
                   }}
                 >
+                  <option value="local">${t('cron.channelLocal')}</option>
                   ${this._channels.map(ch => html`
                     <option value=${ch.name} ?disabled=${!ch.enabled}>
                       ${ch.name} ${!ch.enabled ? '(disabled)' : ''}
@@ -734,6 +869,8 @@ export class CronManager extends LitElement {
                   `)}
                 </select>
               </div>
+              ${this._needsDeliveryChat()
+                ? html`
               <div class="form-field">
                 <div class="cron-form__label-row">
                   <label class="form-field__label cron-form__label-inline">${t('cron.recipient')}</label>
@@ -781,6 +918,10 @@ export class CronManager extends LitElement {
                     : t('cron.noRecentChats')}
                 </p>
               </div>
+              `
+                : nothing}
+              `
+                : nothing}
               <div class="form-field">
                 <label class="form-field__label">${t('cron.message')}</label>
                 <textarea 
@@ -797,7 +938,7 @@ export class CronManager extends LitElement {
               <button 
                 class="btn btn-primary" 
                 @click=${this._submitForm}
-                ?disabled=${this._formSubmitting || !this._formSchedule || !this._formChatId || !this._formMessage}
+                ?disabled=${this._formSubmitting || !this._canSubmitCronForm()}
               >
                 ${this._formSubmitting ? t('common.loading') : (this._formMode === 'edit' ? t('cron.save') : t('cron.create'))}
               </button>
@@ -839,17 +980,29 @@ export class CronManager extends LitElement {
                               : t('cron.modeDirectOption')}</span
                           >
                         </div>
-                        ${this._detailJob?.delivery?.to
+                        ${this._detailJob?.delivery?.channel === 'local' ||
+                        (this._detailJob?.sessionTarget === 'isolated' && !this._detailJob?.delivery?.to)
                           ? html`
                               <div class="cron-detail-fields__row">
                                 <span class="cron-detail-fields__k">${t('cron.deliveryTarget')}</span>
-                                <span class="cron-detail-fields__v">
-                                  <code>${this._detailJob.delivery?.channel ?? ''}</code> →
-                                  ${this._formatDeliveryToSummary(this._detailJob)}
-                                </span>
+                                <span class="cron-detail-fields__v"
+                                  >${this._detailJob?.delivery?.channel === 'local'
+                                    ? t('cron.deliveryTargetLocalChannel')
+                                    : t('cron.deliveryLocalOnly')}</span
+                                >
                               </div>
                             `
-                          : nothing}
+                          : this._detailJob?.delivery?.to
+                            ? html`
+                                <div class="cron-detail-fields__row">
+                                  <span class="cron-detail-fields__k">${t('cron.deliveryTarget')}</span>
+                                  <span class="cron-detail-fields__v">
+                                    <code>${this._detailJob.delivery?.channel ?? ''}</code> →
+                                    ${this._formatDeliveryToSummary(this._detailJob)}
+                                  </span>
+                                </div>
+                              `
+                            : nothing}
                         <div class="cron-detail-fields__row">
                           <span class="cron-detail-fields__k">${t('cron.status')}</span>
                           <span class="cron-detail-fields__v">${this._detailJob?.enabled ? t('cron.enabled') : t('cron.disabled')}</span>
@@ -982,6 +1135,9 @@ export class CronManager extends LitElement {
   }
 
   private _formatDeliveryToSummary(job: CronJob): string {
+    if (job.delivery?.channel === 'local') {
+      return t('cron.channelLocal');
+    }
     const to = job.delivery?.to ?? '';
     const parts = to.split(':');
     if (parts.length === 3 && (parts[1] === 'dm' || parts[1] === 'group')) {

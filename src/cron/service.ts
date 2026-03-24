@@ -97,24 +97,25 @@ export class CronService {
       throw new Error(`Validation failed: ${errorMsg}`);
     }
 
+    const data = validationResult.data;
     const id = uuidv4().slice(0, 8);
     const now = new Date().toISOString();
-    const sessionTarget = options.sessionTarget ?? 'main';
+    const sessionTarget = data.sessionTarget ?? 'main';
 
     const job: JobData = {
       id,
-      name: options.name,
-      schedule,
+      name: data.name,
+      schedule: data.schedule,
       enabled: true,
-      timezone: options.timezone,
-      maxRetries: options.maxRetries ?? 3,
-      timeout: options.timeout ?? 60000,
+      timezone: data.timezone,
+      maxRetries: data.maxRetries ?? 3,
+      timeout: data.timeout ?? 60000,
       created_at: now,
       updated_at: now,
       sessionTarget,
-      payload: options.payload,
-      delivery: options.delivery,
-      model: options.model,
+      payload: data.payload,
+      delivery: data.delivery,
+      model: data.model,
     };
 
     // Save to persistence
@@ -123,8 +124,8 @@ export class CronService {
     // Schedule the job
     this.scheduleJob(job);
 
-    log.info({ jobId: id, name: options?.name, sessionTarget }, 'Job added');
-    return { id, schedule };
+    log.info({ jobId: id, name: data.name, sessionTarget }, 'Job added');
+    return { id, schedule: data.schedule };
   }
 
   /**

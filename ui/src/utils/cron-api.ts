@@ -2,6 +2,7 @@
 
 export interface CronDelivery {
   mode: 'none' | 'announce' | 'direct';
+  /** `local` = store/run only, no Telegram or CLI delivery */
   channel?: string;
   to?: string;
   bestEffort?: boolean;
@@ -88,6 +89,8 @@ export interface CronJobExecution {
   retryCount: number;
   summary?: string;
   sessionKey?: string;
+  sessionId?: string;
+  sessionType?: string;
   model?: string;
 }
 

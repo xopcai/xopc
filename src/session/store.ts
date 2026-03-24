@@ -305,6 +305,7 @@ export class SessionStore {
 
     const { channel, chatId } = this.parseSessionKey(key);
     const routing = this.extractRoutingFromKey(key, channel);
+    const isCronSession = channel === 'cron';
 
     return {
       key,
@@ -319,6 +320,12 @@ export class SessionStore {
       sourceChannel: channel,
       sourceChatId: chatId,
       routing,
+      ...(isCronSession
+        ? {
+            sessionType: 'cron',
+            customData: { cronJobId: chatId },
+          }
+        : {}),
       stats: {
         messageCount: messages.length,
         tokenCount: this.estimateTokens(messages),
@@ -629,17 +636,28 @@ export class SessionStore {
 
     const { channel, chatId } = this.parseSessionKey(key);
     const routing = this.extractRoutingFromKey(key, channel);
+    const isCronSession = channel === 'cron';
 
     if (existingIdx !== -1) {
+      const prev = index.sessions[existingIdx];
       index.sessions[existingIdx] = {
-        ...index.sessions[existingIdx],
+        ...prev,
         messageCount: messages.length,
         estimatedTokens: this.estimateTokens(messages),
         updatedAt: now,
         lastAccessedAt: now,
-        routing: routing || index.sessions[existingIdx].routing,
+        routing: routing || prev.routing,
+        ...(isCronSession
+          ? {
+              sessionType: 'cron',
+              customData: {
+                ...prev.customData,
+                cronJobId: chatId,
+              },
+            }
+          : {}),
         stats: {
-          ...index.sessions[existingIdx].stats,
+          ...prev.stats,
           messageCount: messages.length,
           tokenCount: this.estimateTokens(messages),
           lastTurnAt: Date.now(),
@@ -659,6 +677,12 @@ export class SessionStore {
         sourceChannel: channel,
         sourceChatId: chatId,
         routing,
+        ...(isCronSession
+          ? {
+              sessionType: 'cron',
+              customData: { cronJobId: chatId },
+            }
+          : {}),
         stats: {
           messageCount: messages.length,
           tokenCount: this.estimateTokens(messages),
@@ -927,6 +951,10 @@ export class SessionStore {
     // ACP session key format: {agentId}:acp:{uuid}
     if (parts.length === 3 && parts[1] === 'acp') {
       return { channel: 'acp', chatId: parts[2] };
+    }
+    // Cron isolated jobs: `cron:<jobId>` (transcript + metadata under agent sessions dir)
+    if (parts.length >= 2 && parts[0] === 'cron') {
+      return { channel: 'cron', chatId: parts.slice(1).join(':') };
     }
     return { channel: 'unknown', chatId: key };
   }
