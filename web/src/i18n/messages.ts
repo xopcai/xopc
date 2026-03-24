@@ -110,6 +110,112 @@ const bundles: Record<
       detailExport: string;
       close: string;
     };
+    cron: {
+      title: string;
+      subtitle: string;
+      needToken: string;
+      statsRegion: string;
+      jobsHeading: string;
+      addJob: string;
+      editJob: string;
+      name: string;
+      namePlaceholder: string;
+      nameRequired: string;
+      schedule: string;
+      message: string;
+      messagePlaceholder: string;
+      create: string;
+      runNow: string;
+      delete: string;
+      edit: string;
+      enabled: string;
+      disabled: string;
+      running: string;
+      nextRun: string;
+      status: string;
+      runHistoryTitle: string;
+      runHistoryHint: string;
+      detailRunHistory: string;
+      colStarted: string;
+      colJob: string;
+      colDuration: string;
+      colDetail: string;
+      execStatusRunning: string;
+      execStatusSuccess: string;
+      execStatusFailed: string;
+      execStatusCancelled: string;
+      noRunsYet: string;
+      confirmDelete: string;
+      confirmRun: string;
+      scheduleLabel: string;
+      messageLabel: string;
+      totalJobs: string;
+      emptyStateTitle: string;
+      emptyStateHint: string;
+      emptyStateCta: string;
+      channel: string;
+      channelLocal: string;
+      deliveryTargetLocalChannel: string;
+      recipient: string;
+      recipientPlaceholder: string;
+      refreshList: string;
+      refreshRecipientHint: string;
+      selectRecipient: string;
+      noRecentChatsOption: string;
+      deliveryTarget: string;
+      scheduleHintPreset: string;
+      mode: string;
+      modeDirect: string;
+      modeAgent: string;
+      modeDirectOption: string;
+      modeAgentOption: string;
+      agentLocalOnly: string;
+      agentLocalOnlyHint: string;
+      deliveryLocalOnly: string;
+      model: string;
+      save: string;
+      failedToLoadJobs: string;
+      scheduleRequired: string;
+      chatIdRequired: string;
+      failedToCreateJob: string;
+      failedToUpdateJob: string;
+      failedToToggleJob: string;
+      actionFailed: string;
+      enterManuallyOrSelect: string;
+      noRecentChats: string;
+      refresh: string;
+      close: string;
+      cancel: string;
+      loading: string;
+      schedulePresets: {
+        custom: string;
+        everyMinute: string;
+        every5Minutes: string;
+        every10Minutes: string;
+        every15Minutes: string;
+        every30Minutes: string;
+        everyHour: string;
+        every2Hours: string;
+        every4Hours: string;
+        every6Hours: string;
+        every12Hours: string;
+        everyDayMidnight: string;
+        everyDay9AM: string;
+        everyDay9PM: string;
+      };
+      timeLabels: {
+        overdue: string;
+        lessThanMinute: string;
+        minutes: string;
+        hours: string;
+      };
+      lastActiveLabels: {
+        justNow: string;
+        minutesAgo: string;
+        hoursAgo: string;
+        daysAgo: string;
+      };
+    };
   }
 > = {
   en: {
@@ -234,6 +340,113 @@ const bundles: Record<
       detailExport: 'Export',
       close: 'Close',
     },
+    cron: {
+      title: 'Cron Jobs',
+      subtitle: 'Schedule messages and agent turns on a fixed cadence.',
+      needToken: 'Save a gateway token to manage cron jobs.',
+      statsRegion: 'Overview',
+      jobsHeading: 'Scheduled jobs',
+      addJob: 'Add Cron Job',
+      editJob: 'Edit Cron Job',
+      name: 'Name *',
+      namePlaceholder: 'My scheduled task',
+      nameRequired: 'Name is required',
+      schedule: 'Schedule (cron expression) *',
+      message: 'Message *',
+      messagePlaceholder: 'What should the assistant do?',
+      create: 'Create Job',
+      runNow: 'Run Now',
+      delete: 'Delete',
+      edit: 'Edit',
+      enabled: 'Enabled',
+      disabled: 'Disabled',
+      running: 'Running',
+      nextRun: 'Next Run',
+      status: 'Status',
+      runHistoryTitle: 'Run log',
+      runHistoryHint: 'Completed runs are stored on disk (state/cron/runs). Use Refresh to update.',
+      detailRunHistory: 'Recent runs',
+      colStarted: 'Started',
+      colJob: 'Job',
+      colDuration: 'Duration',
+      colDetail: 'Result',
+      execStatusRunning: 'Running',
+      execStatusSuccess: 'Success',
+      execStatusFailed: 'Failed',
+      execStatusCancelled: 'Skipped',
+      noRunsYet: 'No executions recorded yet.',
+      confirmDelete: 'Are you sure you want to delete this cron job?',
+      confirmRun: 'Run this cron job now?',
+      scheduleLabel: 'Schedule',
+      messageLabel: 'Message',
+      totalJobs: 'Total jobs',
+      emptyStateTitle: 'No scheduled jobs yet',
+      emptyStateHint: 'Create a job to send on a cron schedule—directly or via the agent.',
+      emptyStateCta: 'Create your first job',
+      channel: 'Channel',
+      channelLocal: 'Local (no outbound)',
+      deliveryTargetLocalChannel: 'Local channel — transcript or message stays on this machine',
+      recipient: 'Recipient *',
+      recipientPlaceholder: 'Telegram: numeric id, or pick from recent sessions',
+      refreshList: 'Refresh',
+      refreshRecipientHint: 'Reload list from recent sessions',
+      selectRecipient: '— Select —',
+      noRecentChatsOption: 'No recent sessions',
+      deliveryTarget: 'Delivery',
+      scheduleHintPreset: 'Select a preset or enter custom cron expression',
+      mode: 'Mode',
+      modeDirect: 'Send message directly to the channel without AI processing',
+      modeAgent: 'Use AI agent to process the message, then send the response',
+      modeDirectOption: 'Direct (send message directly)',
+      modeAgentOption: 'AI Agent (process with AI then send)',
+      agentLocalOnly: 'Local only (save transcript, no channel send)',
+      agentLocalOnlyHint:
+        'Runs the agent on this machine. Conversation is stored as a session (key cron:<job id>) with type cron; no Telegram or CLI delivery.',
+      deliveryLocalOnly: 'Local only — transcript saved under session key cron:<job id>',
+      model: 'Model',
+      save: 'Save',
+      failedToLoadJobs: 'Failed to load jobs',
+      scheduleRequired: 'Schedule and message are required',
+      chatIdRequired: 'Chat ID is required',
+      failedToCreateJob: 'Failed to create job',
+      failedToUpdateJob: 'Failed to save job',
+      failedToToggleJob: 'Failed to toggle job',
+      actionFailed: 'Action failed',
+      enterManuallyOrSelect: 'Enter manually or select from recent chats',
+      noRecentChats: 'No recent chats found. Enter chat ID manually (e.g., 123456789 for Telegram)',
+      refresh: 'Refresh',
+      close: 'Close',
+      cancel: 'Cancel',
+      loading: 'Loading…',
+      schedulePresets: {
+        custom: '-- Custom (enter below) --',
+        everyMinute: 'Every minute',
+        every5Minutes: 'Every 5 minutes (default)',
+        every10Minutes: 'Every 10 minutes',
+        every15Minutes: 'Every 15 minutes',
+        every30Minutes: 'Every 30 minutes',
+        everyHour: 'Every hour',
+        every2Hours: 'Every 2 hours',
+        every4Hours: 'Every 4 hours',
+        every6Hours: 'Every 6 hours',
+        every12Hours: 'Every 12 hours',
+        everyDayMidnight: 'Every day at midnight',
+        everyDay9AM: 'Every day at 9:00 AM',
+        everyDay9PM: 'Every day at 9:00 PM',
+      },
+      timeLabels: {
+        overdue: 'Overdue',
+        lessThanMinute: 'Less than a minute',
+        minutes: '{{count}} min',
+        hours: '{{count}} hours',
+      },
+      lastActiveLabels: {
+        justNow: 'just now',
+        minutesAgo: '{{count}}m ago',
+        hoursAgo: '{{count}}h ago',
+        daysAgo: '{{count}}d ago',
+      },
+    },
   },
   zh: {
     appBrand: 'XOPCBOT Gateway',
@@ -356,6 +569,113 @@ const bundles: Record<
       detailMessages: '消息',
       detailExport: '导出',
       close: '关闭',
+    },
+    cron: {
+      title: '定时任务',
+      subtitle: '按计划发送消息或执行代理回合。',
+      needToken: '请先保存网关 Token 后再管理定时任务。',
+      statsRegion: '概览',
+      jobsHeading: '计划任务',
+      addJob: '添加定时任务',
+      editJob: '编辑定时任务',
+      name: '名称 *',
+      namePlaceholder: '我的定时任务',
+      nameRequired: '请填写名称',
+      schedule: '计划（cron 表达式）*',
+      message: '消息 *',
+      messagePlaceholder: '助手应该做什么？',
+      create: '创建任务',
+      runNow: '立即执行',
+      delete: '删除',
+      edit: '编辑',
+      enabled: '已启用',
+      disabled: '已禁用',
+      running: '运行中',
+      nextRun: '下次执行',
+      status: '状态',
+      runHistoryTitle: '执行记录',
+      runHistoryHint: '已完成的执行会保存在本地（state/cron/runs）。点击刷新更新列表。',
+      detailRunHistory: '最近执行',
+      colStarted: '开始时间',
+      colJob: '任务',
+      colDuration: '耗时',
+      colDetail: '结果',
+      execStatusRunning: '运行中',
+      execStatusSuccess: '成功',
+      execStatusFailed: '失败',
+      execStatusCancelled: '已跳过',
+      noRunsYet: '暂无执行记录。',
+      confirmDelete: '确定要删除此定时任务吗？',
+      confirmRun: '立即执行此定时任务？',
+      scheduleLabel: '计划',
+      messageLabel: '消息',
+      totalJobs: '任务总数',
+      emptyStateTitle: '暂无定时任务',
+      emptyStateHint: '创建任务即可按 cron 计划发送——直连渠道或经 AI 代理处理。',
+      emptyStateCta: '创建第一个任务',
+      channel: '渠道',
+      channelLocal: '本地（不发出）',
+      deliveryTargetLocalChannel: '本地渠道 — 内容仅保存在本机',
+      recipient: '收件人 *',
+      recipientPlaceholder: 'Telegram：填写数字 id，或从下方最近会话选择',
+      refreshList: '刷新',
+      refreshRecipientHint: '从最近会话重新加载列表',
+      selectRecipient: '— 请选择 —',
+      noRecentChatsOption: '暂无最近会话',
+      deliveryTarget: '投递目标',
+      scheduleHintPreset: '选择预设或输入自定义 cron 表达式',
+      mode: '模式',
+      modeDirect: '直接发送消息到渠道，不经过 AI 处理',
+      modeAgent: '使用 AI 代理处理消息，然后发送回复',
+      modeDirectOption: '直接发送（直接发送到渠道）',
+      modeAgentOption: 'AI 代理（经过 AI 处理后发送）',
+      agentLocalOnly: '仅本地运行（保存对话，不发送到渠道）',
+      agentLocalOnlyHint:
+        '在本机执行代理。对话会存为会话（键 cron:<任务 id>），类型为 cron；不向 Telegram/CLI 投递。',
+      deliveryLocalOnly: '仅本地 — 对话保存在会话键 cron:<任务 id>',
+      model: '模型',
+      save: '保存',
+      failedToLoadJobs: '加载任务失败',
+      scheduleRequired: '计划表达式和消息为必填项',
+      chatIdRequired: 'Chat ID 为必填项',
+      failedToCreateJob: '创建任务失败',
+      failedToUpdateJob: '保存任务失败',
+      failedToToggleJob: '切换任务状态失败',
+      actionFailed: '操作失败',
+      enterManuallyOrSelect: '手动输入或从最近聊天中选择',
+      noRecentChats: '未找到最近聊天。请手动输入 chat ID（例如：Telegram 为 123456789）',
+      refresh: '刷新',
+      close: '关闭',
+      cancel: '取消',
+      loading: '加载中…',
+      schedulePresets: {
+        custom: '-- 自定义（在下方输入） --',
+        everyMinute: '每分钟',
+        every5Minutes: '每 5 分钟（默认）',
+        every10Minutes: '每 10 分钟',
+        every15Minutes: '每 15 分钟',
+        every30Minutes: '每 30 分钟',
+        everyHour: '每小时',
+        every2Hours: '每 2 小时',
+        every4Hours: '每 4 小时',
+        every6Hours: '每 6 小时',
+        every12Hours: '每 12 小时',
+        everyDayMidnight: '每天午夜',
+        everyDay9AM: '每天早上 9 点',
+        everyDay9PM: '每天晚上 9 点',
+      },
+      timeLabels: {
+        overdue: '已过期',
+        lessThanMinute: '不到 1 分钟',
+        minutes: '{{count}} 分钟',
+        hours: '{{count}} 小时',
+      },
+      lastActiveLabels: {
+        justNow: '刚刚',
+        minutesAgo: '{{count}} 分钟前',
+        hoursAgo: '{{count}} 小时前',
+        daysAgo: '{{count}} 天前',
+      },
     },
   },
 };
