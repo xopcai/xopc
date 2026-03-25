@@ -9,7 +9,7 @@ import { getWorkspacePath } from '../config/schema.js';
 import { CronService } from '../cron/index.js';
 import { ExtensionLoader, normalizeExtensionConfig } from '../extensions/index.js';
 import type { ResolvedExtensionConfig } from '../extensions/types/index.js';
-import { HeartbeatService } from './heartbeat/index.js';
+import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { ConfigHotReloader } from '../config/reload.js';
 import { SessionManager } from '../session/index.js';
 import type { Config } from '../config/schema.js';
@@ -141,8 +141,18 @@ export class GatewayService {
       workspace: this.workspacePath,
     });
 
-    // Initialize heartbeat service
-    this.heartbeatService = new HeartbeatService(this.cronService);
+    this.heartbeatService = new HeartbeatService({
+      agentService: this.agentService,
+      messageBus: this.bus,
+      cronService: this.cronService,
+      workspacePath: this.workspacePath,
+    });
+
+    this.cronService.setDeps({
+      agentService: this.agentService,
+      messageBus: this.bus,
+      heartbeatService: this.heartbeatService,
+    });
   }
 
   /**
@@ -264,12 +274,7 @@ export class GatewayService {
       await this.cronService.initialize();
     }
 
-    // Start heartbeat service
-    const heartbeatConfig = this.config.gateway?.heartbeat;
-    this.heartbeatService.start({
-      intervalMs: heartbeatConfig?.intervalMs || 60000,
-      enabled: heartbeatConfig?.enabled ?? true,
-    });
+    this.heartbeatService.start(heartbeatRunnerConfigFromConfig(this.config));
 
     // Start agent service (runs in background)
     this.agentService.start().catch((err) => {

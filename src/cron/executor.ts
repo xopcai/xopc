@@ -1,15 +1,22 @@
 // Cron job executor with timeout, retry logic and agent integration
 import type {
+  CronRunOutcome,
+  HeartbeatWakeSink,
   JobData,
   JobExecution,
   JobExecutor,
   JobExecutorDeps,
-  CronRunOutcome,
 } from './types.js';
 import { createLogger } from '../utils/logger.js';
 import { normalizeTelegramDeliveryChatId } from './telegram-delivery-chat-id.js';
 import { getCronPayloadText } from './job-content.js';
 import type { CronRunLogStore } from './run-log-store.js';
+import {
+  DEFAULT_ACK_MAX_CHARS,
+  NO_REPLY,
+  shouldSilence,
+  stripHeartbeatToken,
+} from '../heartbeat/tokens.js';
 
 const log = createLogger('CronExecutor');
 
@@ -42,6 +49,7 @@ export class DefaultJobExecutor implements JobExecutor {
   private runningJobs = new Map<string, AbortController>();
   private agentService: any = null;
   private messageBus: any = null;
+  private heartbeatService: HeartbeatWakeSink | null = null;
   private runLogStore: CronRunLogStore | null = null;
 
   setRunLogStore(store: CronRunLogStore | null): void {
@@ -51,6 +59,7 @@ export class DefaultJobExecutor implements JobExecutor {
   setDeps(deps: JobExecutorDeps): void {
     this.agentService = deps.agentService;
     this.messageBus = deps.messageBus;
+    this.heartbeatService = deps.heartbeatService ?? null;
   }
 
   async execute(job: JobData, signal: AbortSignal, deps?: JobExecutorDeps): Promise<void> {
@@ -111,6 +120,14 @@ export class DefaultJobExecutor implements JobExecutor {
           { jobId: job.id, executionId, error: result.error },
           'Job failed'
         );
+      }
+
+      if (result.status === 'ok' && this.heartbeatService) {
+        try {
+          this.heartbeatService.requestNow({ reason: `cron:${job.id}` });
+        } catch (e) {
+          log.warn({ jobId: job.id, err: e }, 'Heartbeat wake after cron failed');
+        }
       }
     } catch (error) {
       execution.status = 'failed';
@@ -335,6 +352,19 @@ export class DefaultJobExecutor implements JobExecutor {
         delivery.to;
 
       if (shouldPublish) {
+        if (shouldSilence(response, DEFAULT_ACK_MAX_CHARS) || response.trim() === NO_REPLY) {
+          return {
+            status: 'ok' as const,
+            summary: response.slice(0, 200),
+            sessionId: sessionKey,
+            sessionKey,
+            sessionType: 'cron',
+            model,
+          };
+        }
+        const { stripped } = stripHeartbeatToken(response);
+        const outboundText = stripped || response.trim();
+
         const targetChannel = outboundChannel || 'cli';
         const targetChatId =
           targetChannel === 'telegram'
@@ -344,7 +374,7 @@ export class DefaultJobExecutor implements JobExecutor {
         await this.messageBus.publishOutbound({
           channel: targetChannel,
           chat_id: targetChatId,
-          content: response,
+          content: outboundText,
           type: 'message',
         });
 
