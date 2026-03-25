@@ -34,7 +34,7 @@ export function SidebarFooter({
   return (
     <div
       className={cn(
-        'flex shrink-0 flex-col gap-2 border-t border-edge-subtle dark:border-edge',
+        'flex shrink-0 flex-col gap-2',
         collapsed ? 'items-center px-1 py-2' : 'px-3 py-3',
       )}
     >
@@ -111,7 +111,7 @@ export function SidebarFooter({
                     <span className="truncate">{tabLabel(language, tab)}</span>
                   </NavLink>
                 ))}
-                <div className="my-2 border-t border-edge-subtle dark:border-edge" />
+                <div className="h-2 shrink-0" aria-hidden />
                 <NavLink
                   to="/sessions"
                   className={({ isActive }) =>

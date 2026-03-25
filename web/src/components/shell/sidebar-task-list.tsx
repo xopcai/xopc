@@ -257,7 +257,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     return (
       <div className="flex flex-col gap-1.5">
         <div className="px-4 text-xs font-normal leading-5 text-fg-subtle">{sb.tasksHeading}</div>
-        <div className="rounded-xl border border-edge bg-surface-panel px-3 py-3 dark:border-edge">
+        <div className="rounded-xl bg-surface-panel px-3 py-3">
           <p className="text-xs leading-relaxed text-fg-muted">{sb.taskListNeedToken}</p>
           <Button
             type="button"
