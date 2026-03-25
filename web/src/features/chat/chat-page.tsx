@@ -160,7 +160,7 @@ export function ChatPage() {
 
       <div
         className={cn(
-          'flex gap-2 border-b border-edge-subtle px-4 sm:gap-3 sm:px-8 dark:border-edge',
+          'flex gap-2 px-4 sm:gap-3 sm:px-8',
           APP_TOP_HEADER_BAR_CLASS,
           sidebarCollapsed && 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-3',
         )}
@@ -182,7 +182,7 @@ export function ChatPage() {
             <Link
               to="/chat/new"
               className={cn(
-                'hidden h-8 shrink-0 items-center gap-2 rounded-lg border border-edge bg-surface-panel px-2.5 text-sm font-medium leading-none text-fg transition-colors hover:bg-surface-hover dark:border-edge',
+                'hidden h-8 shrink-0 items-center gap-2 rounded-lg bg-surface-panel px-2.5 text-sm font-medium leading-none text-fg transition-colors hover:bg-surface-hover',
                 'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
                 'lg:inline-flex',
               )}

@@ -79,14 +79,14 @@ export function AppShell() {
           'app-sidebar-push flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base',
           'max-lg:min-w-0',
           mobileNavOpen
-            ? 'max-lg:w-[min(18rem,85vw)] max-lg:border-r max-lg:border-edge dark:max-lg:border-edge'
-            : 'max-lg:w-0 max-lg:border-0',
-          sidebarCollapsed ? 'lg:w-[4.5rem] lg:border-r lg:border-edge dark:lg:border-edge' : 'lg:w-60 lg:border-r lg:border-edge dark:lg:border-edge',
+            ? 'max-lg:w-[min(18rem,85vw)]'
+            : 'max-lg:w-0',
+          sidebarCollapsed ? 'lg:w-[4.5rem]' : 'lg:w-60',
         )}
       >
         <div
           className={cn(
-            'flex justify-end gap-0.5 border-b border-edge bg-surface-base px-2 dark:border-edge',
+            'flex justify-end gap-0.5 bg-surface-base px-2',
             APP_TOP_HEADER_BAR_CLASS,
           )}
         >
