@@ -170,14 +170,14 @@ export function ChatComposer({
 
   const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
 
-  // Layout/spacing aligned with ui/src/styles/app/03-chat-editor.css (.chat-input-inner, .editor-card, .toolbar-row).
+  // Outer column (px + max-w-app-main) lives in chat-page — matches chat-messages-inner span.
   return (
-    <div className="shrink-0 border-t border-edge-subtle bg-surface-panel px-4 py-4 sm:px-8 dark:border-edge">
-      <div
-        className={cn(
-          'relative mx-auto w-full max-w-app-main overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-sm shadow-slate-200/40 dark:border-edge dark:bg-surface-panel/60 dark:shadow-none',
-          isDragging && 'ring-2 ring-accent ring-inset',
-        )}
+    <div
+      className={cn(
+        // ring (not border) so inner text width matches chat-messages-inner; border costs 2px in border-box.
+        'relative w-full overflow-hidden rounded-xl bg-surface-panel shadow-sm shadow-slate-200/40 ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:ring-edge dark:shadow-none',
+        isDragging && 'ring-2 ring-accent ring-inset',
+      )}
         onDragOver={(e) => {
           if (e.dataTransfer?.types.includes('Files')) {
             e.preventDefault();
@@ -285,7 +285,7 @@ export function ChatComposer({
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-edge-subtle px-3 pb-2.5 pt-2 dark:border-edge/80">
+        <div className="flex flex-wrap items-center gap-2 border-t border-edge-subtle px-4 pb-2.5 pt-2 dark:border-edge/80">
           {showThinkingSelector ? (
             <div
               className="inline-flex min-h-8 items-center gap-1 rounded-full border border-edge bg-surface-hover px-2.5 py-1 text-xs dark:border-edge-strong dark:bg-surface-hover/80"
@@ -370,7 +370,6 @@ export function ChatComposer({
             )}
           </div>
         </div>
-      </div>
     </div>
   );
 }

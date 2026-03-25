@@ -155,29 +155,31 @@ export function ChatPage() {
         className="chat-messages min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]"
         onScroll={onScroll}
       >
-        <div className="chat-messages-inner mx-auto w-full max-w-app-main px-4 py-4 sm:px-8">
-          {showSessionLoading ? (
-            <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-3 py-12 text-center text-sm text-fg-muted">
-              {m.chat.loading}
-            </div>
-          ) : (
-            <>
-              {loadingMore ? (
-                <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
-              ) : null}
-              {error ? (
-                <div className="mb-4 rounded-md border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
-                  {error}
-                </div>
-              ) : null}
-              <MessageList
-                messages={chatMessages}
-                authToken={token ?? undefined}
-                streaming={streaming}
-                progress={progress}
-              />
-            </>
-          )}
+        <div className="px-4 py-4 sm:px-8">
+          <div className="chat-messages-inner mx-auto w-full max-w-app-main">
+            {showSessionLoading ? (
+              <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-3 py-12 text-center text-sm text-fg-muted">
+                {m.chat.loading}
+              </div>
+            ) : (
+              <>
+                {loadingMore ? (
+                  <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
+                ) : null}
+                {error ? (
+                  <div className="mb-4 rounded-md border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
+                    {error}
+                  </div>
+                ) : null}
+                <MessageList
+                  messages={chatMessages}
+                  authToken={token ?? undefined}
+                  streaming={streaming}
+                  progress={progress}
+                />
+              </>
+            )}
+          </div>
         </div>
       </div>
 
@@ -186,18 +188,22 @@ export function ChatPage() {
         onClick={() => scrollToBottom(true)}
       />
 
-      <div className="chat-input-container shrink-0">
-        <ChatComposer
-          disabled={showSessionLoading || sessionRoutePending}
-          sending={sending}
-          streaming={streaming}
-          progress={progress}
-          thinkingLevel={thinkingLevel}
-          showThinkingSelector={modelSupportsThinking}
-          onThinkingChange={setThinkingLevel}
-          onSend={sendMessage}
-          onAbort={abort}
-        />
+      <div className="chat-input-container shrink-0 bg-surface-panel">
+        <div className="px-4 py-4 sm:px-8">
+          <div className="chat-messages-inner mx-auto w-full max-w-app-main">
+            <ChatComposer
+              disabled={showSessionLoading || sessionRoutePending}
+              sending={sending}
+              streaming={streaming}
+              progress={progress}
+              thinkingLevel={thinkingLevel}
+              showThinkingSelector={modelSupportsThinking}
+              onThinkingChange={setThinkingLevel}
+              onSend={sendMessage}
+              onAbort={abort}
+            />
+          </div>
+        </div>
       </div>
     </div>
   );
