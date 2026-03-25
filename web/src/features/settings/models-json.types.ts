@@ -1,4 +1,4 @@
-/** Mirrors `ui/src/config/models-json-types.ts` / gateway `models.json` schema. */
+/** Gateway `models.json` schema (custom models editor). */
 
 export interface ModelCost {
   input: number;

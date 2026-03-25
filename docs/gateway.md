@@ -516,14 +516,14 @@ To access from browser, add CORS headers:
 
 ## Web UI
 
-The gateway serves the Web UI at `/ui/`:
+The gateway serves the Web UI at `/` (hash-router SPA; assets under `/assets/*`):
 
 ```bash
 # Start gateway
 xopcbot gateway
 
 # Open in browser
-open http://localhost:18790/ui/
+open http://localhost:18790/
 ```
 
 **Features:**

@@ -1,5 +1,5 @@
 /**
- * LocalStorage keys aligned with `ui/src/utils/storage.ts` for migration overlap.
+ * LocalStorage keys for gateway token and UI locale.
  */
 
 const TOKEN_KEY = 'xopcbot.token';

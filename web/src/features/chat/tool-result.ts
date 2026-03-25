@@ -3,7 +3,7 @@ export type ToolResultMessage = {
   isError: boolean;
 };
 
-/** Same contract as `ui/src/tools/result-adapter.ts`. */
+/** Normalizes tool output text for the transcript. */
 export function stringToToolResultMessage(text: string | undefined, isError: boolean): ToolResultMessage {
   return { content: [{ type: 'text', text: text ?? '' }], isError };
 }

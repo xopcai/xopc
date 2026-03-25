@@ -1,6 +1,6 @@
 /**
  * Segmented control shell — pill track + floating thumb (ui-design-system §5.1).
- * Densities aligned with legacy `ui/src/styles/app/02-shell-nav.css` (`.pill-toggle` / `.pill-btn`).
+ * Pill track + thumb densities for shell controls.
  */
 
 export const segmentedTrackClassName =

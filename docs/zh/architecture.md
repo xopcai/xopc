@@ -79,17 +79,13 @@ src/
 ├── providers/          # LLM 提供商注册表（pi-ai 包装）
 ├── session/            # 对话会话管理
 ├── types/              # 共享 TypeScript 类型
-├── ui/                 # Web UI 组件（基于 Lit）
-│   └── src/
-│       ├── index.ts              # 主入口
-│       ├── gateway-chat.ts       # Gateway 连接聊天
-│       ├── components/           # UI 组件
-│       ├── dialogs/              # 对话框组件
-│       └── utils/                # 工具函数（i18n, format）
 └── utils/              # 共享工具函数
     ├── logger.ts       #   上下文日志
     ├── log-store.ts    #   日志存储和查询
     └── markdown/       #   Markdown 处理
+
+web/                    # 网关控制台 SPA（React + Vite + Tailwind v4）
+└── src/                #   应用源码；生产构建输出至 dist/gateway/static/root
 
 extensions/
 └── telegram/           # 工作区包：Telegram 通道（@xopcai/xopcbot-extension-telegram）

@@ -21,7 +21,7 @@ export type MessagingCallbacks = {
 
 /**
  * POST `/api/agent` with `Accept: text/event-stream` and consume SSE from the response body
- * (same protocol as `ui/src/chat/messaging.ts`).
+ * (SSE events on the HTTP response body).
  */
 export class MessageSender {
   private _abort?: AbortController;

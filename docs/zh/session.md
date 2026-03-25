@@ -140,7 +140,7 @@ xopcbot session stats
 
 ## Web UI
 
-Web UI 在 `/ui/` 提供可视化的会话管理界面。
+Web UI 在网关根路径提供可视化会话管理（hash 路由，会话列表为 `#/sessions`）。
 
 ### 功能
 
@@ -160,7 +160,7 @@ Web UI 在 `/ui/` 提供可视化的会话管理界面。
 xopcbot gateway start
 
 # 在浏览器中打开
-open http://localhost:18790/ui/
+open http://localhost:18790/#/sessions
 ```
 
 ---

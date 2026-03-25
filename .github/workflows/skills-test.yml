@@ -50,9 +50,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       
-      - name: Install UI dependencies
-        run: cd ui && pnpm install --frozen-lockfile
-      
       - name: Build
         run: pnpm run build
       
@@ -113,9 +110,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
       
-      - name: Install UI dependencies
-        run: cd ui && pnpm install --frozen-lockfile
-      
       - name: Build
         run: pnpm run build
       
@@ -158,9 +152,6 @@ jobs:
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
-      - name: Install UI dependencies
-        run: cd ui && pnpm install --frozen-lockfile
       
       - name: Build
         run: pnpm run build
@@ -206,9 +197,6 @@ jobs:
       
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
-      
-      - name: Install UI dependencies
-        run: cd ui && pnpm install --frozen-lockfile
       
       - name: Build
         timeout-minutes: 10

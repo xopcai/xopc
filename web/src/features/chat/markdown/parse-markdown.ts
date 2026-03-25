@@ -1,5 +1,5 @@
 /**
- * Lightweight markdown → HTML (parity with `ui/src/components/MarkdownRenderer.ts`).
+ * Lightweight markdown → HTML for chat bubbles.
  * Output is intended to be passed through DOMPurify before `dangerouslySetInnerHTML`.
  */
 export function parseMarkdown(text: string): string {

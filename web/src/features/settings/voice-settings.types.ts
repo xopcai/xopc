@@ -1,4 +1,4 @@
-/** STT/TTS settings aligned with gateway config and `ui/src/components/VoiceConfigSection.ts`. */
+/** STT/TTS settings aligned with gateway config. */
 
 export interface VoiceModel {
   id: string;
