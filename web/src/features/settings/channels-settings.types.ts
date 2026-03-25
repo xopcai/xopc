@@ -1,4 +1,4 @@
-/** Mirrors `ui/src/settings/types.ts` for gateway `channels` config. */
+/** Telegram / channel settings shapes for gateway `channels` config. */
 
 export type DmPolicy = 'pairing' | 'allowlist' | 'open' | 'disabled';
 export type GroupPolicy = 'open' | 'disabled' | 'allowlist';

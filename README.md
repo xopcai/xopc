@@ -167,8 +167,9 @@ src/
 ├── gateway/            # HTTP/WebSocket gateway server
 ├── providers/          # LLM provider registry
 ├── session/            # Conversation session management
-├── ui/                 # Web UI components (Lit-based)
 └── utils/              # Shared utilities
+
+web/                    # Gateway console (React + Vite + Tailwind v4)
 ```
 
 ---

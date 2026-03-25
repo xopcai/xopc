@@ -140,7 +140,7 @@ xopcbot session stats
 
 ## Web UI
 
-The Web UI provides a visual interface for session management at `/ui/`.
+The Web UI provides a visual interface for session management at the gateway root (hash router; sessions live under `#/sessions`).
 
 ### Features
 
@@ -160,7 +160,7 @@ The Web UI provides a visual interface for session management at `/ui/`.
 xopcbot gateway start
 
 # Open in browser
-open http://localhost:18790/ui/
+open http://localhost:18790/#/sessions
 ```
 
 ---

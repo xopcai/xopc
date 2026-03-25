@@ -79,17 +79,13 @@ src/
 ├── providers/          # LLM provider registry (pi-ai wrapper)
 ├── session/            # Conversation session management
 ├── types/              # Shared TypeScript types
-├── ui/                 # Web UI components (Lit-based)
-│   └── src/
-│       ├── index.ts              # Main entry
-│       ├── gateway-chat.ts       # Gateway-connected chat
-│       ├── components/           # UI components
-│       ├── dialogs/              # Dialog components
-│       └── utils/                # Utilities (i18n, format)
 └── utils/              # Shared utilities
     ├── logger.ts       #   Contextual logging
     ├── log-store.ts    #   Log storage & querying
     └── markdown/       #   Markdown processing
+
+web/                    # Gateway console SPA (React + Vite + Tailwind v4)
+└── src/                #   App source; production build → dist/gateway/static/root
 
 extensions/
 └── telegram/           # Workspace package: Telegram channel (@xopcai/xopcbot-extension-telegram)

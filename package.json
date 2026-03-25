@@ -30,7 +30,7 @@
     "access": "public"
   },
   "scripts": {
-    "build": "tsc && cd ui && npm run build",
+    "build": "tsc && pnpm run build:web",
     "build:web": "pnpm -C web run build",
     "dev:web": "pnpm -C web run dev",
     "dev": "tsx src/cli/index.ts",

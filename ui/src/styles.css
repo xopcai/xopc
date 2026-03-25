@@ -1,6 +1,0 @@
-/* Design tokens (variables, scrollbar, base) — must load before @tailwind */
-@import './styles/00-vars.css';
-
-@tailwind base;
-@tailwind components;
-@tailwind utilities;

@@ -11,7 +11,7 @@ export type GatewaySseCallbacks = {
 };
 
 /**
- * Server-Sent Events client for `/api/events` (parity with `ui/src/chat/connection.ts`).
+ * Server-Sent Events client for `/api/events`.
  */
 export class GatewaySseConnection {
   private _eventSource?: EventSource;
