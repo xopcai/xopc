@@ -112,6 +112,7 @@ const bundles: Record<
       loadMore: string;
       noSessions: string;
       noSessionsDescription: string;
+      startNewChat: string;
       continueChat: string;
       archive: string;
       unarchive: string;
@@ -744,6 +745,7 @@ const bundles: Record<
       loadMore: 'Load more',
       noSessions: 'No sessions yet',
       noSessionsDescription: 'Start a conversation in Chat; sessions will appear here.',
+      startNewChat: 'Start New Chat',
       continueChat: 'Continue in chat',
       archive: 'Archive',
       unarchive: 'Unarchive',
@@ -1407,6 +1409,7 @@ const bundles: Record<
       loadMore: '加载更多',
       noSessions: '暂无会话',
       noSessionsDescription: '在「对话」中开始聊天后，会话将显示在这里。',
+      startNewChat: '开始新对话',
       continueChat: '在对话中继续',
       archive: '归档',
       unarchive: '取消归档',

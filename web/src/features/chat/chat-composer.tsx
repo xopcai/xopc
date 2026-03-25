@@ -220,7 +220,7 @@ export function ChatComposer({
               className="inline-flex min-h-8 items-center gap-1 rounded-full border border-edge bg-surface-hover px-2.5 py-1 text-xs dark:border-edge-strong dark:bg-surface-hover/80"
               title={`${m.chat.thinkingLevel}: ${thinkingLevel}`}
             >
-              <ThinkingIcon className="h-3.5 w-3.5 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden />
+              <ThinkingIcon className="h-3.5 w-3.5 shrink-0 text-accent-fg" aria-hidden />
               <select
                 className="max-w-[min(10rem,40vw)] cursor-pointer bg-transparent text-[0.8125rem] font-medium text-fg focus:outline-none"
                 value={thinkingLevel}
@@ -287,7 +287,7 @@ export function ChatComposer({
                 className={cn(
                   'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150 active:scale-95',
                   value.trim() || attachments.length > 0
-                    ? 'border-transparent text-blue-600 hover:bg-blue-50 dark:text-blue-400 dark:hover:bg-blue-950/50'
+                    ? 'border-transparent text-accent-fg hover:bg-accent-soft dark:text-accent-fg dark:hover:bg-accent-soft'
                     : 'border-transparent text-fg-disabled',
                 )}
                 disabled={disabled || (!value.trim() && attachments.length === 0)}

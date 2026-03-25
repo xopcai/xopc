@@ -35,7 +35,7 @@ export function ThinkingBlock({
         onClick={() => !isStreaming && setExpanded(!expanded)}
         aria-expanded={showBody}
       >
-        <Sparkles className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden />
+        <Sparkles className="h-4 w-4 shrink-0 text-accent-fg" aria-hidden />
         <span className="font-medium text-fg">
           {isStreaming ? (
             <span className="animate-pulse text-fg-subtle">{labels.thoughtsStreaming}</span>

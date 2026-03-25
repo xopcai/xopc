@@ -531,6 +531,32 @@ export function LogsPage() {
           <FileText className="size-8 text-fg-subtle" strokeWidth={1.5} aria-hidden />
           <h2 className="text-base font-medium text-fg">{L.noLogs}</h2>
           <p className="max-w-sm text-sm text-fg-muted">{L.noLogsDescription}</p>
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-4 gap-1"
+            onClick={() => {
+              void (async () => {
+                setLoading(true);
+                setError(null);
+                try {
+                  const result = await queryLogs({ ...queryParams, offset: 0 });
+                  setLogs(result.logs);
+                  setHasMore(result.logs.length === PAGE_LIMIT);
+                  const [st, fileList] = await Promise.all([getLogStats(), getLogFiles()]);
+                  setStats(st);
+                  setFiles(fileList);
+                } catch (e) {
+                  setError(e instanceof Error ? e.message : L.loadError);
+                } finally {
+                  setLoading(false);
+                }
+              })();
+            }}
+          >
+            <RefreshCw className="size-4" />
+            {L.refresh}
+          </Button>
         </div>
       ) : null}
 
@@ -594,10 +620,10 @@ export function LogsPage() {
       {/* Detail drawer */}
       <Dialog.Root open={selectedLog !== null} onOpenChange={(o) => !o && setSelectedLog(null)}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/40" />
+          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-50 bg-slate-900/40" />
           <Dialog.Content
             className={cn(
-              'fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-xl outline-none',
+              'xopcbot-drawer-right fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-xl outline-none',
               'dark:border-edge',
             )}
             aria-describedby={undefined}
@@ -633,10 +659,10 @@ export function LogsPage() {
       {/* Files dialog */}
       <Dialog.Root open={filesOpen} onOpenChange={setFilesOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-50 bg-slate-900/40" />
+          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-50 bg-slate-900/40" />
           <Dialog.Content
             className={cn(
-              'fixed left-1/2 top-1/2 z-50 flex max-h-[min(32rem,85vh)] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-lg border border-edge bg-surface-panel shadow-xl outline-none',
+              'xopcbot-dialog-content fixed left-1/2 top-1/2 z-50 flex max-h-[min(32rem,85vh)] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-edge bg-surface-panel shadow-xl outline-none',
               'dark:border-edge',
             )}
           >
