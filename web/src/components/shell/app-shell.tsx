@@ -1,6 +1,6 @@
-import { Menu, PanelLeft, PanelRight, X } from 'lucide-react';
+import { Menu, PanelLeft, PanelRight, Plus, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
 import { ConnectionIndicator } from '@/components/shell/connection-indicator';
@@ -37,12 +37,24 @@ export function AppShell() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
+  const [isLg, setIsLg] = useState(false);
   const { pathname } = useLocation();
 
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const toggleSidebarCollapsed = useSidebarStore((s) => s.toggleCollapsed);
 
   const navCollapsed = sidebarCollapsed && !mobileNavOpen;
+
+  /** Desktop collapsed rail or mobile drawer closed: new chat lives in the header. */
+  const showHeaderNewChat = (isLg && sidebarCollapsed) || (!isLg && !mobileNavOpen);
+
+  useEffect(() => {
+    const mq = window.matchMedia(LG_MIN);
+    const sync = () => setIsLg(mq.matches);
+    sync();
+    mq.addEventListener('change', sync);
+    return () => mq.removeEventListener('change', sync);
+  }, []);
 
   // Key for the content area — changes only on top-level route segment so sub-routes
   // (e.g. /chat/new → /chat/:key) don't re-trigger the enter animation.
@@ -73,7 +85,7 @@ export function AppShell() {
 
       {/* Full-width app bar (design: content surface + top strip) */}
       <header className="flex shrink-0 items-center gap-2 border-b border-edge bg-surface-panel px-3 py-2 sm:gap-3 sm:px-6 lg:px-8 dark:border-edge">
-        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
+        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
           <Button
             type="button"
             variant="ghost"
@@ -89,12 +101,35 @@ export function AppShell() {
               <PanelLeft className="size-4" strokeWidth={1.5} aria-hidden />
             )}
           </Button>
-          <div className="min-w-0">
-            <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
-              <span className="truncate text-sm font-semibold tracking-tight text-fg">{m.appBrand}</span>
-              <span className="hidden truncate text-xs font-normal text-fg-subtle sm:inline">{m.appSubtitle}</span>
-            </div>
-          </div>
+          <Button
+            type="button"
+            variant="ghost"
+            className="size-8 shrink-0 rounded-xl p-0 lg:hidden"
+            aria-expanded={mobileNavOpen}
+            aria-controls="app-sidebar"
+            aria-label={mobileNavOpen ? m.closeMenu : m.openMenu}
+            onClick={() => setMobileNavOpen((o) => !o)}
+          >
+            {mobileNavOpen ? (
+              <X className="size-4" strokeWidth={1.5} aria-hidden />
+            ) : (
+              <Menu className="size-4" strokeWidth={1.5} aria-hidden />
+            )}
+          </Button>
+          {showHeaderNewChat ? (
+            <Link
+              to="/chat/new"
+              className={cn(
+                'inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-fg-muted transition-colors',
+                'hover:bg-surface-hover hover:text-accent-fg',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+              )}
+              aria-label={m.sidebar.newTask}
+              title={m.sidebar.newTask}
+            >
+              <Plus className="size-4" strokeWidth={1.75} aria-hidden />
+            </Link>
+          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1 sm:gap-2 lg:gap-3">
           <ConnectionIndicator iconOnly className="lg:hidden" />
@@ -105,21 +140,6 @@ export function AppShell() {
           <div className="lg:hidden">
             <HeaderPreferencesPopover />
           </div>
-          <Button
-            type="button"
-            variant="secondary"
-            className="h-8 shrink-0 px-2 lg:hidden"
-            aria-expanded={mobileNavOpen}
-            aria-controls="app-sidebar"
-            aria-label={mobileNavOpen ? m.closeMenu : m.openMenu}
-            onClick={() => setMobileNavOpen((o) => !o)}
-          >
-            {mobileNavOpen ? (
-              <X className="size-3.5" strokeWidth={1.5} aria-hidden />
-            ) : (
-              <Menu className="size-3.5" strokeWidth={1.5} aria-hidden />
-            )}
-          </Button>
         </div>
       </header>
 
@@ -138,6 +158,7 @@ export function AppShell() {
         >
           <SidebarNav
             collapsed={navCollapsed}
+            hideNewTaskLink={showHeaderNewChat}
             onNavigate={() => setMobileNavOpen(false)}
           />
         </aside>
