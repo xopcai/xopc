@@ -1,7 +1,7 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-import { fetchConfiguredModels } from '@/features/chat/registry-api';
+import { fetchConfiguredModelsCached } from '@/features/chat/registry-api';
 
 /** Matches GET /api/config masked keys and legacy UI placeholder */
 export function isMaskedKey(value: string): boolean {
@@ -42,7 +42,7 @@ export async function loadProviderRows(): Promise<ProviderRowModel[]> {
   const [meta, configKeys, models] = await Promise.all([
     fetchProviderMetaList(),
     fetchProvidersConfig(),
-    fetchConfiguredModels(),
+    fetchConfiguredModelsCached(),
   ]);
   const configuredFromModels = new Set(models.map((m) => m.provider));
   return meta.map((p) => ({

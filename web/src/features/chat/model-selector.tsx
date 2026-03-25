@@ -3,7 +3,7 @@ import { Check, ChevronsUpDown } from 'lucide-react';
 import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
-import { fetchConfiguredModels, type ConfiguredModel } from '@/features/chat/registry-api';
+import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
 import { cn } from '@/lib/cn';
 
 function haystack(m: ConfiguredModel): string {
@@ -43,7 +43,7 @@ export function ModelSelector({
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
-  const { data: models = [], isLoading, error } = useSWR('gateway-configured-models', fetchConfiguredModels, {
+  const { data: models = [], isLoading, error } = useSWR('gateway-configured-models', fetchConfiguredModelsCached, {
     revalidateOnFocus: false,
   });
 
