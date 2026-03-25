@@ -534,7 +534,7 @@ export function LogsPage() {
           <Button
             type="button"
             variant="secondary"
-            className="mt-4 gap-1"
+            className="mt-6 gap-1"
             onClick={() => {
               void (async () => {
                 setLoading(true);
