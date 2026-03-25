@@ -39,12 +39,15 @@ export function AppShell() {
   const m = messages(language);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { pathname } = useLocation();
-  const isChatRoute = pathname.startsWith('/chat');
 
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const toggleSidebarCollapsed = useSidebarStore((s) => s.toggleCollapsed);
 
   const navCollapsed = sidebarCollapsed && !mobileNavOpen;
+
+  // Key for the content area — changes only on top-level route segment so sub-routes
+  // (e.g. /chat/new → /chat/:key) don't re-trigger the enter animation.
+  const routeKey = pathname.split('/')[1] ?? 'root';
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -157,13 +160,12 @@ export function AppShell() {
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
-          <main
-            className={cn(
-              'flex min-h-0 flex-1 flex-col',
-              isChatRoute ? 'overflow-hidden' : 'overflow-y-auto',
-            )}
-          >
-            <Outlet />
+          <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            {/* key on the top-level segment so sub-route changes (e.g. /chat/new → /chat/:id)
+                don't re-trigger the enter animation, only real page switches do. */}
+            <div key={routeKey} className="page-enter flex min-h-0 flex-1 flex-col">
+              <Outlet />
+            </div>
           </main>
         </div>
       </div>
