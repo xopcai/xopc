@@ -1,4 +1,4 @@
-import { Clock, Layers, MessageSquare, Plus } from 'lucide-react';
+import { Clock, Layers, Plus } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
@@ -56,16 +56,6 @@ export function SidebarNav({
               <span className="truncate">{m.sidebar.newTask}</span>
             </Link>
           ) : null}
-          <NavLink
-            to="/chat"
-            end
-            className={(props) => secondaryNavClass(props, collapsed)}
-            title={m.nav.chat}
-            onClick={() => onNavigate?.()}
-          >
-            <MessageSquare className="size-5 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-            {!collapsed ? <span className="truncate">{m.nav.chat}</span> : null}
-          </NavLink>
           <NavLink
             to="/skills"
             className={(props) => secondaryNavClass(props, collapsed)}
