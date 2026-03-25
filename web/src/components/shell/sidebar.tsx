@@ -51,7 +51,6 @@ export function SidebarNav({
                 key={tab}
                 to={pathForTab(tab)}
                 className={(props) => navLinkClass(props, collapsed)}
-                end={tab === 'chat'}
                 title={tabLabel(language, tab)}
                 onClick={() => onNavigate?.()}
               >
