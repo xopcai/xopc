@@ -38,6 +38,13 @@ export async function deleteSession(key: string): Promise<void> {
   await fetchJson(apiUrl(`/api/sessions/${encodeURIComponent(key)}`), { method: 'DELETE' });
 }
 
+export async function renameSession(key: string, name: string): Promise<{ renamed: boolean }> {
+  return fetchJson<{ renamed: boolean }>(apiUrl(`/api/sessions/${encodeURIComponent(key)}/rename`), {
+    method: 'POST',
+    body: JSON.stringify({ name }),
+  });
+}
+
 export async function archiveSession(key: string): Promise<void> {
   await fetchJson(apiUrl(`/api/sessions/${encodeURIComponent(key)}/archive`), { method: 'POST' });
 }
