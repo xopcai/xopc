@@ -234,7 +234,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   }, RATE_LIMIT_CLEANUP_INTERVAL);
 
   // Helper middleware for strict rate limiting (10 req/min for expensive operations)
+  // NOTE: Currently disabled for local development. Re-enable with proper IP detection for production.
   const strictRateLimitMiddleware = createMiddleware(async (c, next) => {
+    /*
     const clientIp = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
       ?? c.req.header('x-real-ip')
       ?? 'unknown';
@@ -252,6 +254,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
 
     c.header('X-RateLimit-Remaining', String(result.remaining));
+    */
     await next();
   });
 
