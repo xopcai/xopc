@@ -42,7 +42,6 @@ export function ChatPage() {
     loadingMore,
     loadMoreMessages,
     onSessionModelChange,
-    createNewSession,
     error,
     streaming,
     sending,
@@ -141,10 +140,8 @@ export function ChatPage() {
       <ChatHeader
         sessionKey={sessionKey}
         sessionName={sessionName}
-        loading={showSessionLoading}
         sessionRoutePending={sessionRoutePending}
         routeTargetKey={decodedKey}
-        onNewSession={() => void createNewSession()}
       />
 
       <div className="flex min-h-0 flex-1 flex-col">

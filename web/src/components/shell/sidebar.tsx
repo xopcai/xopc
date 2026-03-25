@@ -24,12 +24,9 @@ function secondaryNavClass({ isActive }: { isActive: boolean }, collapsed: boole
 export function SidebarNav({
   onNavigate,
   collapsed = false,
-  /** When the new-chat control is shown in the app header (collapsed rail / mobile drawer closed). */
-  hideNewTaskLink = false,
 }: {
   onNavigate?: () => void;
   collapsed?: boolean;
-  hideNewTaskLink?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -41,24 +38,22 @@ export function SidebarNav({
         aria-label="Main"
       >
         <div className="flex flex-col gap-0.5">
-          {!hideNewTaskLink ? (
-            <Link
-              to="/chat/new"
-              className={cn(
-                'flex w-full items-center text-sm font-medium leading-5 transition-colors duration-200 ease-out',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-                collapsed
-                  ? 'justify-center rounded-lg px-2 py-2'
-                  : 'gap-2 rounded-lg px-3 py-2 text-left',
-                'border border-edge bg-surface-panel text-fg hover:bg-surface-hover dark:border-edge',
-              )}
-              title={m.sidebar.newTask}
-              onClick={() => onNavigate?.()}
-            >
-              <Plus className="size-4 shrink-0 text-accent-fg" strokeWidth={2} aria-hidden />
-              {!collapsed ? <span className="truncate">{m.sidebar.newTask}</span> : null}
-            </Link>
-          ) : null}
+          <Link
+            to="/chat/new"
+            className={cn(
+              'flex w-full items-center text-sm font-medium leading-5 transition-colors duration-200 ease-out',
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+              collapsed
+                ? 'justify-center rounded-lg px-2 py-2'
+                : 'gap-2 rounded-lg px-3 py-2 text-left',
+              'border border-edge bg-surface-panel text-fg hover:bg-surface-hover dark:border-edge',
+            )}
+            title={m.sidebar.newTask}
+            onClick={() => onNavigate?.()}
+          >
+            <Plus className="size-4 shrink-0 text-accent-fg" strokeWidth={2} aria-hidden />
+            {!collapsed ? <span className="truncate">{m.sidebar.newTask}</span> : null}
+          </Link>
           <NavLink
             to="/chat"
             end
