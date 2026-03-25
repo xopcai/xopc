@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import { AppShell } from '@/components/shell/app-shell';
+import { SecondaryPageLayout } from '@/components/shell/secondary-page-layout';
 import { ChatPage } from '@/features/chat/chat-page';
 import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
 import { SwrProvider } from '@/providers/swr-provider';
@@ -27,11 +28,16 @@ const router = createHashRouter([
           { path: ':sessionKey', element: <ChatPage /> },
         ],
       },
-      { path: 'sessions', element: <SessionsPage /> },
-      { path: 'cron', element: <CronPage /> },
-      { path: 'skills', element: <SkillsPage /> },
-      { path: 'logs', element: <LogsPage /> },
-      { path: 'settings/:section', element: <SettingsPage /> },
+      {
+        element: <SecondaryPageLayout />,
+        children: [
+          { path: 'sessions', element: <SessionsPage /> },
+          { path: 'cron', element: <CronPage /> },
+          { path: 'skills', element: <SkillsPage /> },
+          { path: 'logs', element: <LogsPage /> },
+          { path: 'settings/:section', element: <SettingsPage /> },
+        ],
+      },
     ],
   },
 ]);
