@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-/** Mobile drawer open state (sidebar push). Desktop collapse uses `useSidebarStore`. */
+/** Mobile drawer open state (fixed overlay + backdrop). Desktop collapse uses `useSidebarStore`. */
 type AppShellState = {
   mobileNavOpen: boolean;
   setMobileNavOpen: (open: boolean) => void;

@@ -83,7 +83,10 @@ export function SidebarNav({
           </NavLink>
         </div>
 
-        {!collapsed ? <SidebarTaskList onNavigate={onNavigate} /> : null}
+        {/* Keep mounted when collapsed to avoid SWR remount + layout thrash on expand. */}
+        <div className={cn(collapsed && 'hidden')} aria-hidden={collapsed ? true : undefined}>
+          <SidebarTaskList onNavigate={onNavigate} />
+        </div>
       </nav>
 
       <SidebarFooter collapsed={collapsed} onNavigate={onNavigate} />

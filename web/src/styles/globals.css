@@ -134,13 +134,18 @@ html.dark {
 }
 
 /*
- * Sidebar width push — easing matches ui/src/styles/00-vars.css `--transition-normal`
- * (250ms cubic-bezier(0.4, 0, 0.2, 1)); duration 220ms for a slightly snappier feel than 300ms ease-out.
+ * Desktop sidebar: width transition only at lg+ (see SidebarColumn). Mobile uses
+ * transform on the fixed drawer — animating width here would reflow the main column every frame.
  * translateZ(0) promotes a layer so width animation stutters less on some GPUs.
  */
 .app-sidebar-push {
-  transition: width 220ms cubic-bezier(0.4, 0, 0.2, 1);
   transform: translateZ(0);
+}
+
+@media (min-width: 1024px) {
+  .app-sidebar-push {
+    transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
 }
 
 @media (prefers-reduced-motion: reduce) {

@@ -27,8 +27,8 @@ type SidebarState = {
 export const useSidebarStore = create<SidebarState>((set, get) => ({
   collapsed: readCollapsed(),
   setCollapsed: (collapsed) => {
-    writeCollapsed(collapsed);
     set({ collapsed });
+    queueMicrotask(() => writeCollapsed(collapsed));
   },
   toggleCollapsed: () => {
     get().setCollapsed(!get().collapsed);
