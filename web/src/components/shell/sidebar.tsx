@@ -33,11 +33,9 @@ export function SidebarNav({
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {/* Fixed: primary links do not scroll with the task list */}
       <nav
-        className={cn(
-          'app-sidebar-nav-scroll flex min-h-0 flex-1 flex-col overflow-y-auto',
-          collapsed ? 'gap-3 px-1.5 pt-2' : 'gap-6 px-4 pt-4',
-        )}
+        className={cn('shrink-0', collapsed ? 'px-1.5 pt-2' : 'px-4 pt-4')}
         aria-label="Main"
       >
         <div className="flex flex-col gap-0.5">
@@ -75,12 +73,18 @@ export function SidebarNav({
             {!collapsed ? <span className="truncate">{m.nav.cron}</span> : null}
           </NavLink>
         </div>
-
-        {/* Keep mounted when collapsed to avoid SWR remount + layout thrash on expand. */}
-        <div className={cn(collapsed && 'hidden')} aria-hidden={collapsed ? true : undefined}>
-          <SidebarTaskList onNavigate={onNavigate} />
-        </div>
       </nav>
+
+      {/* Scroll + load-more: task list only */}
+      <div
+        className={cn(
+          'flex min-h-0 flex-1 flex-col overflow-hidden',
+          collapsed && 'hidden',
+        )}
+        aria-hidden={collapsed ? true : undefined}
+      >
+        <SidebarTaskList onNavigate={onNavigate} />
+      </div>
 
       <SidebarFooter collapsed={collapsed} onNavigate={onNavigate} />
     </div>

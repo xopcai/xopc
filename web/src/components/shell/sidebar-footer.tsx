@@ -35,13 +35,15 @@ export function SidebarFooter({
     <div
       className={cn(
         'flex shrink-0 flex-col gap-2',
+        /* Collapsed rail: task list is hidden — pin brand + settings to column bottom */
+        collapsed && 'mt-auto',
         collapsed ? 'items-center px-1 py-2' : 'px-3 py-3',
       )}
     >
       <div
         className={cn(
-          'flex min-w-0 items-start gap-2',
-          collapsed ? 'flex-col items-center' : 'flex-row',
+          'flex min-w-0 gap-2',
+          collapsed ? 'flex-col items-center' : 'flex-row items-center',
         )}
       >
         <Link
@@ -59,9 +61,8 @@ export function SidebarFooter({
           />
         </Link>
         {!collapsed ? (
-          <div className="min-w-0 flex-1 pt-0.5">
+          <div className="min-w-0 flex-1">
             <div className="truncate text-sm font-semibold leading-tight text-fg">{m.appBrand}</div>
-            <div className="truncate text-xs leading-normal text-fg-subtle">{m.appSubtitle}</div>
           </div>
         ) : null}
         <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
@@ -81,22 +82,29 @@ export function SidebarFooter({
           </Popover.Trigger>
           <Popover.Portal>
             <Popover.Content
-              className="z-50 w-[min(18rem,calc(100vw-2rem))] max-h-[min(24rem,70vh)] overflow-y-auto rounded-xl border border-edge bg-surface-panel p-2 shadow-lg shadow-slate-200/60 dark:border-edge dark:shadow-black/40"
+              className={cn(
+                'z-50 w-[min(13.75rem,calc(100vw-2rem))]',
+                'max-h-[min(22rem,70vh)] overflow-y-auto overscroll-contain',
+                'rounded-xl border border-edge bg-surface-panel p-1 shadow-lg shadow-slate-200/50 outline-none',
+                'dark:border-edge dark:shadow-black/40',
+              )}
               side={collapsed ? 'right' : 'top'}
               align="end"
-              sideOffset={8}
+              sideOffset={6}
               collisionPadding={12}
               onCloseAutoFocus={(e) => e.preventDefault()}
             >
-              <div className="px-4 pb-2 pt-1 text-xs font-medium text-fg-subtle">{m.nav.settings}</div>
-              <nav className="flex flex-col gap-0.5" aria-label={m.nav.settings}>
+              <div className="px-2.5 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
+                {m.nav.settings}
+              </div>
+              <nav className="flex flex-col gap-px" aria-label={m.nav.settings}>
                 {SETTINGS_TABS.map((tab) => (
                   <NavLink
                     key={tab}
                     to={pathForTab(tab)}
                     className={({ isActive }) =>
                       cn(
-                        'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
+                        'flex min-h-8 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium leading-snug transition-colors duration-150',
                         isActive
                           ? 'bg-accent-soft text-accent-fg'
                           : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
@@ -107,16 +115,20 @@ export function SidebarFooter({
                       onNavigate?.();
                     }}
                   >
-                    <TabIcon tab={tab} className="size-4 shrink-0 opacity-90" />
-                    <span className="truncate">{tabLabel(language, tab)}</span>
+                    <TabIcon tab={tab} className="size-3.5 shrink-0 opacity-90" />
+                    <span className="min-w-0 flex-1 truncate">{tabLabel(language, tab)}</span>
                   </NavLink>
                 ))}
-                <div className="h-2 shrink-0" aria-hidden />
+                <div
+                  className="my-1 border-t border-edge-subtle dark:border-edge"
+                  role="separator"
+                  aria-hidden
+                />
                 <NavLink
                   to="/sessions"
                   className={({ isActive }) =>
                     cn(
-                      'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
+                      'flex min-h-8 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium leading-snug transition-colors duration-150',
                       isActive
                         ? 'bg-accent-soft text-accent-fg'
                         : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
@@ -127,14 +139,14 @@ export function SidebarFooter({
                     onNavigate?.();
                   }}
                 >
-                  <FolderOpen className="size-4 shrink-0 opacity-90" strokeWidth={1.75} />
-                  <span className="truncate">{m.nav.sessions}</span>
+                  <FolderOpen className="size-3.5 shrink-0 opacity-90" strokeWidth={1.75} />
+                  <span className="min-w-0 flex-1 truncate">{m.nav.sessions}</span>
                 </NavLink>
                 <NavLink
                   to="/logs"
                   className={({ isActive }) =>
                     cn(
-                      'flex items-center gap-2.5 rounded-lg px-3 py-2 text-sm transition-colors',
+                      'flex min-h-8 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium leading-snug transition-colors duration-150',
                       isActive
                         ? 'bg-accent-soft text-accent-fg'
                         : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
@@ -145,8 +157,8 @@ export function SidebarFooter({
                     onNavigate?.();
                   }}
                 >
-                  <FileText className="size-4 shrink-0 opacity-90" strokeWidth={1.75} />
-                  <span className="truncate">{m.nav.logs}</span>
+                  <FileText className="size-3.5 shrink-0 opacity-90" strokeWidth={1.75} />
+                  <span className="min-w-0 flex-1 truncate">{m.nav.logs}</span>
                 </NavLink>
               </nav>
             </Popover.Content>

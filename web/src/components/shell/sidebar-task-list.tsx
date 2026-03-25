@@ -1,9 +1,9 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { ClipboardCopy, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { ClipboardCopy, Loader2, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import { useCallback, useEffect, useMemo, useState, type UIEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import useSWR from 'swr';
+import useSWRInfinite from 'swr/infinite';
 
 import { Button } from '@/components/ui/button';
 import { isWebUiSessionKey } from '@/features/chat/session-manager';
@@ -19,6 +19,13 @@ import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+
+const PAGE_SIZE = 20;
+
+type SidebarTaskPage = {
+  items: SessionMetadata[];
+  hasMore: boolean;
+};
 
 function sessionTitle(s: SessionMetadata, unnamedLabel: string): string {
   return s.name?.trim() || unnamedLabel;
@@ -97,7 +104,7 @@ function SidebarTaskRow({
     <div className={rowShellClass(isActive)}>
       <Link
         to={`/chat/${encodeURIComponent(session.key)}`}
-        className="min-w-0 flex-1 truncate rounded-xl px-4 py-2 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+        className="min-w-0 flex-1 truncate rounded-xl px-2 py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
         title={title}
         onClick={() => onNavigate?.()}
       >
@@ -193,13 +200,52 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const [renameDraft, setRenameDraft] = useState('');
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
 
-  const { data, mutate } = useSWR(
-    token ? ['sidebar-tasks', token] : null,
-    async () => {
-      const result = await listSessions({ limit: 20, offset: 0 });
-      return result.items.filter((s) => isWebUiSessionKey(s.key));
+  const { data, size, setSize, isValidating, mutate } = useSWRInfinite<SidebarTaskPage>(
+    (pageIndex, previousPageData) => {
+      if (!token) return null;
+      if (previousPageData && !previousPageData.hasMore) return null;
+      return ['sidebar-tasks', token, pageIndex] as const;
+    },
+    async ([, , pageIndex]: readonly ['sidebar-tasks', string, number]) => {
+      const offset = pageIndex * PAGE_SIZE;
+      const result = await listSessions({ limit: PAGE_SIZE, offset });
+      return {
+        items: result.items.filter((s) => isWebUiSessionKey(s.key)),
+        hasMore: result.hasMore,
+      };
     },
     { revalidateOnFocus: true },
+  );
+
+  const items = useMemo(() => {
+    const pages = data ?? [];
+    const out: SessionMetadata[] = [];
+    const seen = new Set<string>();
+    for (const p of pages) {
+      for (const s of p.items) {
+        if (!seen.has(s.key)) {
+          seen.add(s.key);
+          out.push(s);
+        }
+      }
+    }
+    return out;
+  }, [data]);
+
+  const loadingMore = Boolean(data && size > data.length);
+  const lastPage = data?.[data.length - 1];
+  const hasMorePages = lastPage?.hasMore ?? false;
+  const loadingFirst = Boolean(token && !data && isValidating);
+
+  const onScroll = useCallback(
+    (e: UIEvent<HTMLDivElement>) => {
+      const el = e.currentTarget;
+      if (!hasMorePages || loadingMore) return;
+      const { scrollTop, scrollHeight, clientHeight } = el;
+      if (scrollHeight - scrollTop - clientHeight > 100) return;
+      void setSize((s) => s + 1);
+    },
+    [hasMorePages, loadingMore, setSize],
   );
 
   useEffect(() => {
@@ -222,10 +268,18 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     };
   }, [token, mutate]);
 
+  // If a server page has no web UI sessions after filtering, fetch the next page until we have rows or run out.
+  useEffect(() => {
+    if (!token || !data?.length || loadingMore) return;
+    if (items.length > 0) return;
+    if (!lastPage?.hasMore) return;
+    void setSize((s) => s + 1);
+  }, [token, data, items.length, loadingMore, lastPage?.hasMore, setSize]);
+
   const activeSessionKey = chatSessionKeyFromPath(pathname);
 
   const openRename = (key: string) => {
-    const row = (data ?? []).find((s) => s.key === key);
+    const row = items.find((s) => s.key === key);
     setRenameKey(key);
     setRenameDraft(row?.name?.trim() ?? '');
   };
@@ -255,37 +309,51 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     }
   };
 
+  const renameTarget = renameKey ? items.find((s) => s.key === renameKey) : undefined;
+
   if (!token) {
     return (
-      <div className="flex flex-col gap-1.5">
-        <div className="px-4 text-xs font-normal leading-5 text-fg-subtle">{sb.tasksHeading}</div>
-        <div className="rounded-xl bg-surface-panel px-3 py-3">
-          <p className="text-xs leading-relaxed text-fg-muted">{sb.taskListNeedToken}</p>
-          <Button
-            type="button"
-            variant="secondary"
-            className="mt-3 h-8 w-full text-xs font-medium"
-            onClick={() => {
-              openTokenDialog();
-              onNavigate?.();
-            }}
-          >
-            {sb.taskListAddToken}
-          </Button>
+      <div className="flex min-h-0 flex-1 flex-col">
+        <div className="flex flex-col gap-1.5 px-4 pt-2">
+          <div className="text-xs font-normal leading-5 text-fg-subtle">{sb.tasksHeading}</div>
+          <div className="rounded-xl bg-surface-panel px-3 py-3">
+            <p className="text-xs leading-relaxed text-fg-muted">{sb.taskListNeedToken}</p>
+            <Button
+              type="button"
+              variant="secondary"
+              className="mt-3 h-8 w-full text-xs font-medium"
+              onClick={() => {
+                openTokenDialog();
+                onNavigate?.();
+              }}
+            >
+              {sb.taskListAddToken}
+            </Button>
+          </div>
         </div>
       </div>
     );
   }
 
-  const items = data ?? [];
-  const renameTarget = renameKey ? items.find((s) => s.key === renameKey) : undefined;
-
   return (
-    <>
-      {items.length > 0 ? (
-        <div className="flex flex-col gap-1.5">
-          <div className="px-4 text-xs font-normal leading-5 text-fg-subtle">{sb.tasksHeading}</div>
-          <div className="flex flex-col gap-0.5">
+    <div className="flex min-h-0 flex-1 flex-col">
+      <div
+        className={cn(
+          'app-sidebar-nav-scroll min-h-0 flex-1 overflow-y-auto overscroll-y-contain',
+          'pb-2',
+        )}
+        onScroll={onScroll}
+      >
+        <div className="sticky top-0 z-[1] bg-surface-base px-4 pb-1 pt-2">
+          <div className="text-xs font-normal leading-5 text-fg-subtle">{sb.tasksHeading}</div>
+        </div>
+
+        {loadingFirst ? (
+          <div className="flex justify-center py-6">
+            <Loader2 className="size-5 animate-spin text-fg-subtle" strokeWidth={1.75} aria-hidden />
+          </div>
+        ) : items.length > 0 ? (
+          <div className="flex flex-col gap-1.5 px-2.5">
             {items.map((session) => (
               <SidebarTaskRow
                 key={session.key}
@@ -301,8 +369,14 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
               />
             ))}
           </div>
-        </div>
-      ) : null}
+        ) : null}
+
+        {loadingMore ? (
+          <div className="flex justify-center py-2" aria-busy>
+            <Loader2 className="size-4 animate-spin text-fg-subtle" strokeWidth={1.75} aria-hidden />
+          </div>
+        ) : null}
+      </div>
 
       <Dialog.Root open={renameKey !== null} onOpenChange={(o) => !o && setRenameKey(null)}>
         <Dialog.Portal>
@@ -369,6 +443,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </>
+    </div>
   );
 }
