@@ -68,6 +68,20 @@ const bundles: Record<
       toolInput: string;
       toolOutput: string;
       noOutput: string;
+      viewSteps_one: string;
+      viewSteps_other: string;
+      stepSearchedWeb: string;
+      stepReadFile: string;
+      stepDetails: string;
+      composerRunStatusSending: string;
+      composerRunStatusDefault: string;
+      composerRunningTool: string;
+      composerStageThinking: string;
+      composerStageSearching: string;
+      composerStageReading: string;
+      composerStageWriting: string;
+      composerStageExecuting: string;
+      composerStageAnalyzing: string;
       attachFile: string;
       maxAttachmentsReached: string;
       maxAttachmentsTruncated: string;
@@ -701,6 +715,20 @@ const bundles: Record<
       toolInput: 'Input',
       toolOutput: 'Output',
       noOutput: '(no output)',
+      viewSteps_one: 'View {{count}} step',
+      viewSteps_other: 'View {{count}} steps',
+      stepSearchedWeb: 'Searched web',
+      stepReadFile: 'Read file',
+      stepDetails: 'Details',
+      composerRunStatusSending: 'Sending…',
+      composerRunStatusDefault: 'Working…',
+      composerRunningTool: 'Running {{name}}',
+      composerStageThinking: 'Thinking…',
+      composerStageSearching: 'Searching…',
+      composerStageReading: 'Reading…',
+      composerStageWriting: 'Writing…',
+      composerStageExecuting: 'Executing…',
+      composerStageAnalyzing: 'Analyzing…',
       attachFile: 'Attach file',
       maxAttachmentsReached: 'Maximum {{max}} files per message. Remove some to add more.',
       maxAttachmentsTruncated: '{{dropped}} file(s) not added (limit {{max}} per message).',
@@ -1365,6 +1393,20 @@ const bundles: Record<
       toolInput: '输入',
       toolOutput: '输出',
       noOutput: '（无输出）',
+      viewSteps_one: '查看 {{count}} 步',
+      viewSteps_other: '查看 {{count}} 步',
+      stepSearchedWeb: '搜索网页',
+      stepReadFile: '读取文件',
+      stepDetails: '详情',
+      composerRunStatusSending: '发送中…',
+      composerRunStatusDefault: '处理中…',
+      composerRunningTool: '执行：{{name}}',
+      composerStageThinking: '思考中…',
+      composerStageSearching: '搜索中…',
+      composerStageReading: '阅读中…',
+      composerStageWriting: '写作中…',
+      composerStageExecuting: '执行中…',
+      composerStageAnalyzing: '分析中…',
       attachFile: '添加附件',
       maxAttachmentsReached: '每条消息最多 {{max}} 个文件，请先移除部分附件。',
       maxAttachmentsTruncated: '已忽略 {{dropped}} 个文件（每条最多 {{max}} 个）。',
