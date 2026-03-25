@@ -261,6 +261,7 @@ export function SessionsPage() {
     unpin: s.unpin,
     export: s.export,
     delete: s.delete,
+    unnamedSession: m.chat.newSession,
   };
 
   const detailLabels = {
@@ -273,6 +274,7 @@ export function SessionsPage() {
     pin: s.pin,
     unpin: s.unpin,
     delete: s.delete,
+    unnamedSession: m.chat.newSession,
   };
 
   const filters: { key: StatusFilter; label: string; icon: typeof Layers }[] = [
@@ -469,7 +471,8 @@ export function SessionsPage() {
             <p className="mt-2 text-sm text-fg-muted">
               {confirmKey
                 ? interpolate(s.deleteSessionMessage, {
-                    name: sessions.find((x) => x.key === confirmKey)?.name?.trim() || confirmKey,
+                    name:
+                      sessions.find((x) => x.key === confirmKey)?.name?.trim() || m.chat.newSession,
                   })
                 : ''}
             </p>

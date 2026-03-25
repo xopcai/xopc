@@ -20,8 +20,8 @@ import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-function sessionTitle(s: SessionMetadata): string {
-  return s.name?.trim() || s.key;
+function sessionTitle(s: SessionMetadata, unnamedLabel: string): string {
+  return s.name?.trim() || unnamedLabel;
 }
 
 /** Active chat session key from `/chat/:key` (excludes `/chat/new`). */
@@ -54,6 +54,7 @@ function SidebarTaskRow({
   onRequestDelete,
   sb,
   sess,
+  defaultUnnamedTitle,
 }: {
   session: SessionMetadata;
   isActive: boolean;
@@ -63,9 +64,10 @@ function SidebarTaskRow({
   onRequestDelete: (key: string) => void;
   sb: ReturnType<typeof messages>['sidebar'];
   sess: ReturnType<typeof messages>['sessions'];
+  defaultUnnamedTitle: string;
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
-  const title = sessionTitle(session);
+  const title = sessionTitle(session, defaultUnnamedTitle);
   const isPinned = session.status === 'pinned';
 
   const handlePinToggle = async () => {
@@ -295,6 +297,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
                 onRequestDelete={setDeleteKey}
                 sb={sb}
                 sess={sess}
+                defaultUnnamedTitle={m.chat.newSession}
               />
             ))}
           </div>
@@ -315,7 +318,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
               value={renameDraft}
               onChange={(e) => setRenameDraft(e.target.value)}
               className="mt-1.5 w-full rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent dark:border-edge"
-              placeholder={renameTarget ? sessionTitle(renameTarget) : ''}
+              placeholder={renameTarget ? sessionTitle(renameTarget, m.chat.newSession) : ''}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {
                   e.preventDefault();
@@ -343,7 +346,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
             <p className="mt-2 text-sm text-fg-muted">
               {deleteKey
                 ? interpolate(sess.deleteSessionMessage, {
-                    name: items.find((x) => x.key === deleteKey)?.name?.trim() || deleteKey,
+                    name: items.find((x) => x.key === deleteKey)?.name?.trim() || m.chat.newSession,
                   })
                 : ''}
             </p>
