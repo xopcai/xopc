@@ -18,15 +18,13 @@ interface CacheEntry {
 const commandResultCache = new Map<string, CacheEntry>();
 
 // Allowed safe commands for API key resolution (whitelist approach)
+// Only password manager commands are allowed. File reading commands (cat, head, tail, echo)
+// have been removed to prevent arbitrary file access. Use 'file:' prefix or env vars instead.
 const ALLOWED_COMMANDS = [
 	'op', // 1Password CLI
 	'security', // macOS Keychain
 	'pass', // pass password manager
 	'gpg', // GPG
-	'cat', // Read file (careful with this)
-	'head',
-	'tail',
-	'echo',
 ];
 
 // Dangerous characters/patterns that should never be allowed

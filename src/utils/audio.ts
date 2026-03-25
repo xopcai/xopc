@@ -2,15 +2,27 @@
  * Audio Compression Utilities
  */
 
-import { exec } from 'child_process';
-import { promisify } from 'util';
+import { spawn } from 'child_process';
 import { writeFile, unlink } from 'fs/promises';
 import { tmpdir } from 'os';
 import { join } from 'path';
 import { createLogger } from './logger.js';
 
 const log = createLogger('AudioUtils');
-const execAsync = promisify(exec);
+
+/**
+ * Execute a command using spawn (avoids shell injection)
+ */
+function spawnAsync(command: string, args: string[]): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const process = spawn(command, args, { stdio: 'ignore' });
+    process.on('close', (code) => {
+      if (code === 0) resolve();
+      else reject(new Error(`${command} exited with code ${code}`));
+    });
+    process.on('error', reject);
+  });
+}
 
 export interface CompressionResult {
   buffer: Buffer;
@@ -37,8 +49,15 @@ export async function compressAudio(
     // Write input file
     await writeFile(inputPath, audioBuffer);
 
-    // Compress using ffmpeg
-    await execAsync(`ffmpeg -i "${inputPath}" -c:a libopus -b:a 24k -vbr on "${outputPath}" -y`);
+    // Compress using ffmpeg with spawn (avoids shell injection)
+    await spawnAsync('ffmpeg', [
+      '-i', inputPath,
+      '-c:a', 'libopus',
+      '-b:a', '24k',
+      '-vbr', 'on',
+      outputPath,
+      '-y',
+    ]);
 
     // Read output file
     const { readFile } = await import('fs/promises');
