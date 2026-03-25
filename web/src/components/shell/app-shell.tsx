@@ -1,6 +1,6 @@
-import { Menu, PanelLeft, PanelRight, Plus, X } from 'lucide-react';
+import { Menu, PanelLeft, PanelRight, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
 import { ConnectionIndicator } from '@/components/shell/connection-indicator';
@@ -37,24 +37,12 @@ export function AppShell() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const [mobileNavOpen, setMobileNavOpen] = useState(false);
-  const [isLg, setIsLg] = useState(false);
   const { pathname } = useLocation();
 
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const toggleSidebarCollapsed = useSidebarStore((s) => s.toggleCollapsed);
 
   const navCollapsed = sidebarCollapsed && !mobileNavOpen;
-
-  /** Desktop collapsed rail or mobile drawer closed: new chat lives in the header. */
-  const showHeaderNewChat = (isLg && sidebarCollapsed) || (!isLg && !mobileNavOpen);
-
-  useEffect(() => {
-    const mq = window.matchMedia(LG_MIN);
-    const sync = () => setIsLg(mq.matches);
-    sync();
-    mq.addEventListener('change', sync);
-    return () => mq.removeEventListener('change', sync);
-  }, []);
 
   // Key for the content area — changes only on top-level route segment so sub-routes
   // (e.g. /chat/new → /chat/:key) don't re-trigger the enter animation.
@@ -116,20 +104,6 @@ export function AppShell() {
               <Menu className="size-4" strokeWidth={1.5} aria-hidden />
             )}
           </Button>
-          {showHeaderNewChat ? (
-            <Link
-              to="/chat/new"
-              className={cn(
-                'inline-flex size-8 shrink-0 items-center justify-center rounded-xl text-fg-muted transition-colors',
-                'hover:bg-surface-hover hover:text-accent-fg',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
-              )}
-              aria-label={m.sidebar.newTask}
-              title={m.sidebar.newTask}
-            >
-              <Plus className="size-4" strokeWidth={1.75} aria-hidden />
-            </Link>
-          ) : null}
         </div>
         <div className="flex shrink-0 items-center gap-1 sm:gap-2 lg:gap-3">
           <ConnectionIndicator iconOnly className="lg:hidden" />
@@ -156,11 +130,7 @@ export function AppShell() {
             sidebarCollapsed ? 'lg:w-[4.5rem] lg:border-r lg:border-edge dark:lg:border-edge' : 'lg:w-60 lg:border-r lg:border-edge dark:lg:border-edge',
           )}
         >
-          <SidebarNav
-            collapsed={navCollapsed}
-            hideNewTaskLink={showHeaderNewChat}
-            onNavigate={() => setMobileNavOpen(false)}
-          />
+          <SidebarNav collapsed={navCollapsed} onNavigate={() => setMobileNavOpen(false)} />
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">

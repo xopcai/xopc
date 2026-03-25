@@ -1,26 +1,18 @@
-import { Plus } from 'lucide-react';
-
 import { messages } from '@/i18n/messages';
-import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export function ChatHeader({
   sessionKey,
   sessionName,
-  loading,
   sessionRoutePending,
   routeTargetKey,
-  onNewSession,
 }: {
   sessionKey: string | null;
   sessionName: string | null;
-  /** Blocking init (e.g. `/chat` pick-session) — avoid competing navigations */
-  loading?: boolean;
   /** URL session differs from loaded session (switching or first load of `/chat/:key`) */
   sessionRoutePending?: boolean;
   /** Hash route target when `sessionRoutePending` — avoids showing stale title/model */
   routeTargetKey?: string;
-  onNewSession: () => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -42,17 +34,6 @@ export function ChatHeader({
           {headline}
         </h1>
       </div>
-      <button
-        type="button"
-        disabled={loading || sessionRoutePending}
-        className={cn(
-          'inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-edge bg-surface-panel px-2.5 py-2 text-sm font-medium text-fg-muted transition-colors duration-150 hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel disabled:pointer-events-none disabled:opacity-50 lg:px-3 dark:border-edge',
-        )}
-        onClick={() => onNewSession()}
-      >
-        <Plus className="h-4 w-4 shrink-0 stroke-[1.75]" aria-hidden />
-        <span className="max-lg:sr-only">{m.chat.newSession}</span>
-      </button>
     </header>
   );
 }
