@@ -1,17 +1,14 @@
-import { Menu, PanelLeft, PanelRight, X } from 'lucide-react';
-import { useEffect, useState } from 'react';
+import { PanelLeft, PanelRight, X } from 'lucide-react';
+import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
-import { ConnectionIndicator } from '@/components/shell/connection-indicator';
-import { HeaderPreferencesPopover } from '@/components/shell/header-preferences-popover';
-import { LanguageToggle } from '@/components/shell/language-toggle';
 import { SidebarNav } from '@/components/shell/sidebar';
-import { ThemeToggle } from '@/components/shell/theme-toggle';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
+import { useAppShellStore } from '@/stores/app-shell-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
@@ -36,11 +33,13 @@ function NavigateToChatListener() {
 export function AppShell() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
-  const [mobileNavOpen, setMobileNavOpen] = useState(false);
   const { pathname } = useLocation();
 
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const toggleSidebarCollapsed = useSidebarStore((s) => s.toggleCollapsed);
+
+  const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
+  const setMobileNavOpen = useAppShellStore((s) => s.setMobileNavOpen);
 
   const navCollapsed = sidebarCollapsed && !mobileNavOpen;
 
@@ -54,7 +53,7 @@ export function AppShell() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, []);
+  }, [setMobileNavOpen]);
 
   useEffect(() => {
     const mq = window.matchMedia(LG_MIN);
@@ -63,7 +62,7 @@ export function AppShell() {
     };
     mq.addEventListener('change', onChange);
     return () => mq.removeEventListener('change', onChange);
-  }, []);
+  }, [setMobileNavOpen]);
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
@@ -71,9 +70,32 @@ export function AppShell() {
       <NavigateToChatListener />
       <TokenDialog />
 
-      {/* Full-width app bar (design: content surface + top strip) */}
-      <header className="flex shrink-0 items-center gap-2 border-b border-edge bg-surface-panel px-3 py-2 sm:gap-3 sm:px-6 lg:px-8 dark:border-edge">
-        <div className="flex min-w-0 flex-1 items-center gap-1.5 sm:gap-2">
+      <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
+      {/* Left column: sidebar rail + top-right collapse (desktop) / close (mobile drawer) */}
+      <aside
+        id="app-sidebar"
+        className={cn(
+          'app-sidebar-push flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base',
+          'max-lg:min-w-0',
+          mobileNavOpen
+            ? 'max-lg:w-[min(18rem,85vw)] max-lg:border-r max-lg:border-edge dark:max-lg:border-edge'
+            : 'max-lg:w-0 max-lg:border-0',
+          sidebarCollapsed ? 'lg:w-[4.5rem] lg:border-r lg:border-edge dark:lg:border-edge' : 'lg:w-60 lg:border-r lg:border-edge dark:lg:border-edge',
+        )}
+      >
+        <div className="flex h-10 shrink-0 items-center justify-end gap-0.5 border-b border-edge bg-surface-base px-2 dark:border-edge">
+          {mobileNavOpen ? (
+            <Button
+              type="button"
+              variant="ghost"
+              className="size-8 shrink-0 rounded-xl p-0 lg:hidden"
+              aria-label={m.closeMenu}
+              title={m.closeMenu}
+              onClick={() => setMobileNavOpen(false)}
+            >
+              <X className="size-4" strokeWidth={1.5} aria-hidden />
+            </Button>
+          ) : null}
           <Button
             type="button"
             variant="ghost"
@@ -81,6 +103,7 @@ export function AppShell() {
             aria-expanded={!sidebarCollapsed}
             aria-controls="app-sidebar"
             aria-label={sidebarCollapsed ? m.sidebarExpand : m.sidebarCollapse}
+            title={sidebarCollapsed ? m.sidebarExpand : m.sidebarCollapse}
             onClick={() => toggleSidebarCollapsed()}
           >
             {sidebarCollapsed ? (
@@ -89,59 +112,18 @@ export function AppShell() {
               <PanelLeft className="size-4" strokeWidth={1.5} aria-hidden />
             )}
           </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className="size-8 shrink-0 rounded-xl p-0 lg:hidden"
-            aria-expanded={mobileNavOpen}
-            aria-controls="app-sidebar"
-            aria-label={mobileNavOpen ? m.closeMenu : m.openMenu}
-            onClick={() => setMobileNavOpen((o) => !o)}
-          >
-            {mobileNavOpen ? (
-              <X className="size-4" strokeWidth={1.5} aria-hidden />
-            ) : (
-              <Menu className="size-4" strokeWidth={1.5} aria-hidden />
-            )}
-          </Button>
         </div>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2 lg:gap-3">
-          <ConnectionIndicator iconOnly className="lg:hidden" />
-          <div className="hidden items-center gap-1.5 sm:gap-2 lg:flex">
-            <LanguageToggle />
-            <ThemeToggle />
-          </div>
-          <div className="lg:hidden">
-            <HeaderPreferencesPopover />
-          </div>
-        </div>
-      </header>
+        <SidebarNav collapsed={navCollapsed} onNavigate={() => setMobileNavOpen(false)} />
+      </aside>
 
-      {/* Sidebar + main: flex push (no fixed overlay on mobile). */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
-        <aside
-          id="app-sidebar"
-          className={cn(
-            'app-sidebar-push flex h-full min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base',
-            'max-lg:min-w-0',
-            mobileNavOpen
-              ? 'max-lg:w-[min(18rem,85vw)] max-lg:border-r max-lg:border-edge dark:max-lg:border-edge'
-              : 'max-lg:w-0 max-lg:border-0',
-            sidebarCollapsed ? 'lg:w-[4.5rem] lg:border-r lg:border-edge dark:lg:border-edge' : 'lg:w-60 lg:border-r lg:border-edge dark:lg:border-edge',
-          )}
-        >
-          <SidebarNav collapsed={navCollapsed} onNavigate={() => setMobileNavOpen(false)} />
-        </aside>
-
-        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
-          <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            {/* key on the top-level segment so sub-route changes (e.g. /chat/new → /chat/:id)
-                don't re-trigger the enter animation, only real page switches do. */}
-            <div key={routeKey} className="page-enter flex min-h-0 flex-1 flex-col">
-              <Outlet />
-            </div>
-          </main>
-        </div>
+      {/* Right column: chat title + prefs live in ChatPage (same row); other routes fill as needed */}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
+        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <div key={routeKey} className="page-enter flex min-h-0 flex-1 flex-col">
+            <Outlet />
+          </div>
+        </main>
+      </div>
       </div>
     </div>
   );

@@ -1,12 +1,19 @@
-import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { Menu } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import { ConnectionIndicator } from '@/components/shell/connection-indicator';
+import { HeaderPreferencesPopover } from '@/components/shell/header-preferences-popover';
+import { LanguageToggle } from '@/components/shell/language-toggle';
+import { ThemeToggle } from '@/components/shell/theme-toggle';
+import { Button } from '@/components/ui/button';
+import { cn } from '@/lib/cn';
 import { ChatComposer } from '@/features/chat/chat-composer';
-import { ChatHeader } from '@/features/chat/chat-header';
 import { ChatSseStatus } from '@/features/chat/chat-sse-status';
 import { MessageList } from '@/features/chat/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll-to-bottom-button';
 import { useChatSession } from '@/features/chat/use-chat-session';
 import { messages } from '@/i18n/messages';
+import { useAppShellStore } from '@/stores/app-shell-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -50,6 +57,16 @@ export function ChatPage() {
     abort,
     hasToken,
   } = useChatSession();
+
+  const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
+  const setMobileNavOpen = useAppShellStore((s) => s.setMobileNavOpen);
+
+  const chatHeadline = useMemo(() => {
+    const titleKey = sessionRoutePending && decodedKey ? decodedKey : sessionKey;
+    if (!titleKey) return m.nav.chat;
+    if (sessionRoutePending && decodedKey) return decodedKey;
+    return sessionName?.trim() || titleKey;
+  }, [sessionKey, sessionName, sessionRoutePending, decodedKey, m.nav.chat]);
 
   const scrollToBottom = useCallback((smooth = true) => {
     const el = scrollRef.current;
@@ -137,12 +154,37 @@ export function ChatPage() {
   return (
     <div className="chat-shell flex h-full min-h-0 flex-1 flex-col bg-surface-panel">
       <ChatSseStatus />
-      <ChatHeader
-        sessionKey={sessionKey}
-        sessionName={sessionName}
-        sessionRoutePending={sessionRoutePending}
-        routeTargetKey={decodedKey}
-      />
+
+      <div className="flex shrink-0 items-center gap-2 border-b border-edge-subtle px-4 py-3 sm:gap-3 sm:px-8 dark:border-edge">
+        <Button
+          type="button"
+          variant="ghost"
+          className={cn('size-8 shrink-0 rounded-xl p-0 lg:hidden', mobileNavOpen && 'hidden')}
+          aria-expanded={mobileNavOpen}
+          aria-controls="app-sidebar"
+          aria-label={m.openMenu}
+          title={m.openMenu}
+          onClick={() => setMobileNavOpen(true)}
+        >
+          <Menu className="size-4" strokeWidth={1.5} aria-hidden />
+        </Button>
+        <h1
+          className="min-w-0 flex-1 truncate text-left text-base font-semibold tracking-tight text-fg"
+          title={chatHeadline}
+        >
+          {chatHeadline}
+        </h1>
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
+          <ConnectionIndicator iconOnly className="lg:hidden" />
+          <div className="hidden items-center gap-1.5 sm:gap-2 lg:flex">
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
+          <div className="lg:hidden">
+            <HeaderPreferencesPopover />
+          </div>
+        </div>
+      </div>
 
       <div className="flex min-h-0 flex-1 flex-col">
         {/* Single main column: same horizontal inset + max width for messages and composer (no duplicate wrappers). */}
