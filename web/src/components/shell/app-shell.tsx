@@ -6,6 +6,7 @@ import { messages } from '@/i18n/messages';
 import { SidebarNav } from '@/components/shell/sidebar';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { Button } from '@/components/ui/button';
+import { APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
 import { cn } from '@/lib/cn';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { useAppShellStore } from '@/stores/app-shell-store';
@@ -83,7 +84,12 @@ export function AppShell() {
           sidebarCollapsed ? 'lg:w-[4.5rem] lg:border-r lg:border-edge dark:lg:border-edge' : 'lg:w-60 lg:border-r lg:border-edge dark:lg:border-edge',
         )}
       >
-        <div className="flex shrink-0 items-center justify-end gap-0.5 border-b border-edge bg-surface-base px-2 py-3 dark:border-edge">
+        <div
+          className={cn(
+            'flex justify-end gap-0.5 border-b border-edge bg-surface-base px-2 dark:border-edge',
+            APP_TOP_HEADER_BAR_CLASS,
+          )}
+        >
           {mobileNavOpen ? (
             <Button
               type="button"
