@@ -113,9 +113,15 @@ export interface CronRunOutcome {
 // Executor Interface
 // ============================================================================
 
+/** Optional hook after a successful cron run (e.g. wake gateway heartbeat). */
+export interface HeartbeatWakeSink {
+  requestNow(opts?: { reason?: string }): void;
+}
+
 export interface JobExecutorDeps {
   agentService?: any;
   messageBus?: any;
+  heartbeatService?: HeartbeatWakeSink;
 }
 
 export interface JobExecutor {

@@ -44,6 +44,7 @@ import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
 import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 
+import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
 import { tryApplySessionTranscriptHygiene } from './transcript/transcript-hygiene.js';
@@ -1173,6 +1174,16 @@ export class AgentService {
 
     const finalContent = this.agentManager.getLastAssistantContent(sessionContext.sessionKey);
     if (!finalContent?.trim()) return;
+
+    const ackMax =
+      this.config.config?.gateway?.heartbeat?.ackMaxChars ?? DEFAULT_ACK_MAX_CHARS;
+    if (shouldSilence(finalContent, ackMax) || finalContent.trim() === NO_REPLY) {
+      log.debug(
+        { sessionKey: sessionContext.sessionKey },
+        'Silent reply — skipping outbound',
+      );
+      return;
+    }
 
     const hookResult = await this.hookHandler.runMessageSending(
       sessionContext.chatId,

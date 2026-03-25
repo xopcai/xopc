@@ -293,13 +293,27 @@ export const GatewayAuthSchema = z.object({
   mode: 'token',
 });
 
-export const HeartbeatConfigSchema = z.object({
-  enabled: z.boolean(),
-  intervalMs: z.number(),
-}).default({
-  enabled: true,
-  intervalMs: 60000,
-});
+export const HeartbeatConfigSchema = z
+  .object({
+    enabled: z.boolean(),
+    intervalMs: z.number(),
+    target: z.string().optional(),
+    targetChatId: z.string().optional(),
+    prompt: z.string().optional(),
+    ackMaxChars: z.number().optional(),
+    isolatedSession: z.boolean().optional(),
+    activeHours: z
+      .object({
+        start: z.string(),
+        end: z.string(),
+        timezone: z.string().optional(),
+      })
+      .optional(),
+  })
+  .default({
+    enabled: true,
+    intervalMs: 60000,
+  });
 
 export const GatewayConfigSchema = z.object({
   host: z.string().optional(),
