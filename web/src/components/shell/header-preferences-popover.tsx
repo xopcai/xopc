@@ -25,7 +25,7 @@ export function HeaderPreferencesPopover() {
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          className="z-50 w-[min(20rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-3 shadow-lg shadow-slate-200/60 dark:border-edge dark:shadow-black/40"
+          className="z-50 w-fit min-w-[8rem] max-w-[calc(100vw-2rem)] rounded-xl border border-edge bg-surface-panel p-3 shadow-lg shadow-slate-200/60 dark:border-edge dark:shadow-black/40"
           sideOffset={8}
           align="end"
           collisionPadding={12}
