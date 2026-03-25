@@ -56,6 +56,14 @@ const bundles: Record<
       taskListAddToken: string;
       taskListStartChat: string;
       appMenuAria: string;
+      taskSessionMenuAria: string;
+      taskRename: string;
+      taskCopyChatId: string;
+      taskDeleteTask: string;
+      taskRenameTitle: string;
+      taskRenamePlaceholder: string;
+      taskRenameSave: string;
+      taskRenameCancel: string;
     };
     chat: {
       typeMessage: string;
@@ -706,6 +714,14 @@ const bundles: Record<
       taskListAddToken: 'Add token',
       taskListStartChat: 'Start a chat',
       appMenuAria: 'App menu and settings',
+      taskSessionMenuAria: 'Session actions',
+      taskRename: 'Rename',
+      taskCopyChatId: 'Copy chat ID',
+      taskDeleteTask: 'Delete task',
+      taskRenameTitle: 'Rename task',
+      taskRenamePlaceholder: 'Session name',
+      taskRenameSave: 'Save',
+      taskRenameCancel: 'Cancel',
     },
     chat: {
       typeMessage: 'Type a message…',
@@ -1395,6 +1411,14 @@ const bundles: Record<
       taskListAddToken: '添加 Token',
       taskListStartChat: '开始对话',
       appMenuAria: '应用菜单与设置',
+      taskSessionMenuAria: '会话操作',
+      taskRename: '重命名',
+      taskCopyChatId: 'Chat ID',
+      taskDeleteTask: '删除任务',
+      taskRenameTitle: '重命名任务',
+      taskRenamePlaceholder: '会话名称',
+      taskRenameSave: '保存',
+      taskRenameCancel: '取消',
     },
     chat: {
       typeMessage: '输入消息…',
