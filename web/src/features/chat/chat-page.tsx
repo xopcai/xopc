@@ -1,7 +1,7 @@
-import { Menu } from 'lucide-react';
+import { Menu, Plus } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 
-import { ConnectionIndicator } from '@/components/shell/connection-indicator';
 import { HeaderPreferencesPopover } from '@/components/shell/header-preferences-popover';
 import { LanguageToggle } from '@/components/shell/language-toggle';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
@@ -16,6 +16,7 @@ import { messages } from '@/i18n/messages';
 import { useAppShellStore } from '@/stores/app-shell-store';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useSidebarStore } from '@/stores/sidebar-store';
 
 export function ChatPage() {
   const language = useLocaleStore((s) => s.language);
@@ -60,6 +61,7 @@ export function ChatPage() {
 
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useAppShellStore((s) => s.setMobileNavOpen);
+  const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
 
   const chatHeadline = useMemo(() => {
     const titleKey = sessionRoutePending && decodedKey ? decodedKey : sessionKey;
@@ -155,27 +157,50 @@ export function ChatPage() {
     <div className="chat-shell flex h-full min-h-0 flex-1 flex-col bg-surface-panel">
       <ChatSseStatus />
 
-      <div className="flex shrink-0 items-center gap-2 border-b border-edge-subtle px-4 py-3 sm:gap-3 sm:px-8 dark:border-edge">
-        <Button
-          type="button"
-          variant="ghost"
-          className={cn('size-8 shrink-0 rounded-xl p-0 lg:hidden', mobileNavOpen && 'hidden')}
-          aria-expanded={mobileNavOpen}
-          aria-controls="app-sidebar"
-          aria-label={m.openMenu}
-          title={m.openMenu}
-          onClick={() => setMobileNavOpen(true)}
-        >
-          <Menu className="size-4" strokeWidth={1.5} aria-hidden />
-        </Button>
+      <div
+        className={cn(
+          'flex shrink-0 items-center gap-2 border-b border-edge-subtle px-4 py-3 sm:gap-3 sm:px-8 dark:border-edge',
+          sidebarCollapsed && 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-3',
+        )}
+      >
+        <div className="flex min-w-0 shrink-0 items-center gap-2">
+          <Button
+            type="button"
+            variant="ghost"
+            className={cn('size-8 shrink-0 rounded-xl p-0 lg:hidden', mobileNavOpen && 'hidden')}
+            aria-expanded={mobileNavOpen}
+            aria-controls="app-sidebar"
+            aria-label={m.openMenu}
+            title={m.openMenu}
+            onClick={() => setMobileNavOpen(true)}
+          >
+            <Menu className="size-4" strokeWidth={1.5} aria-hidden />
+          </Button>
+          {sidebarCollapsed ? (
+            <Link
+              to="/chat/new"
+              className={cn(
+                'hidden shrink-0 items-center gap-2 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm font-medium leading-5 text-fg transition-colors hover:bg-surface-hover dark:border-edge',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+                'lg:inline-flex',
+              )}
+              title={m.sidebar.newTask}
+            >
+              <Plus className="size-4 shrink-0 text-accent-fg" strokeWidth={2} aria-hidden />
+              <span className="max-w-[10rem] truncate sm:max-w-[14rem]">{m.sidebar.newTask}</span>
+            </Link>
+          ) : null}
+        </div>
         <h1
-          className="min-w-0 flex-1 truncate text-left text-base font-semibold tracking-tight text-fg"
+          className={cn(
+            'min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-fg',
+            sidebarCollapsed ? 'text-left lg:text-center' : 'text-left',
+          )}
           title={chatHeadline}
         >
           {chatHeadline}
         </h1>
-        <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-          <ConnectionIndicator iconOnly className="lg:hidden" />
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2 lg:justify-self-end">
           <div className="hidden items-center gap-1.5 sm:gap-2 lg:flex">
             <LanguageToggle />
             <ThemeToggle />

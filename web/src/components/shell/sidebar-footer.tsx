@@ -4,7 +4,6 @@ import { useState } from 'react';
 import { Link, NavLink } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
-import { ConnectionIndicator } from '@/components/shell/connection-indicator';
 import { TabIcon } from '@/components/shell/tab-icons';
 import { Button } from '@/components/ui/button';
 import { messages, tabLabel, type Tab } from '@/i18n/messages';
@@ -154,7 +153,6 @@ export function SidebarFooter({
           </Popover.Portal>
         </Popover.Root>
       </div>
-      <ConnectionIndicator compact={collapsed} className={collapsed ? 'w-full' : undefined} />
     </div>
   );
 }
