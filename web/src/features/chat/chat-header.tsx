@@ -1,6 +1,5 @@
 import { Plus } from 'lucide-react';
 
-import { ModelSelector } from '@/features/chat/model-selector';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -8,25 +7,19 @@ import { useLocaleStore } from '@/stores/locale-store';
 export function ChatHeader({
   sessionKey,
   sessionName,
-  sessionModel,
-  streaming,
   loading,
   sessionRoutePending,
   routeTargetKey,
-  onModelChange,
   onNewSession,
 }: {
   sessionKey: string | null;
   sessionName: string | null;
-  sessionModel: string;
-  streaming: boolean;
   /** Blocking init (e.g. `/chat` pick-session) — avoid competing navigations */
   loading?: boolean;
   /** URL session differs from loaded session (switching or first load of `/chat/:key`) */
   sessionRoutePending?: boolean;
   /** Hash route target when `sessionRoutePending` — avoids showing stale title/model */
   routeTargetKey?: string;
-  onModelChange: (modelId: string) => void;
   onNewSession: () => void;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -49,20 +42,6 @@ export function ChatHeader({
           {headline}
         </h1>
       </div>
-      {sessionKey && !sessionRoutePending ? (
-        <div className="min-w-0 max-w-[min(18rem,calc(100vw-9rem))] shrink">
-          <ModelSelector
-            value={sessionModel}
-            disabled={streaming || loading}
-            placeholder={m.chat.modelPlaceholder}
-            searchPlaceholder={m.chat.modelSearchPlaceholder}
-            noMatches={m.chat.modelNoMatches}
-            compact
-            showProviderInTrigger={false}
-            onChange={onModelChange}
-          />
-        </div>
-      ) : null}
       <button
         type="button"
         disabled={loading || sessionRoutePending}

@@ -4,6 +4,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Attachment } from '@/features/chat/attachment-utils';
 import type { ProgressState } from '@/features/chat/messages.types';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment-utils';
+import { ModelSelector } from '@/features/chat/model-selector';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -79,6 +80,9 @@ export function ChatComposer({
   sending,
   streaming,
   progress,
+  sessionModel,
+  showModelSelector,
+  onModelChange,
   thinkingLevel,
   showThinkingSelector,
   onThinkingChange,
@@ -90,6 +94,10 @@ export function ChatComposer({
   streaming: boolean;
   /** Gateway `progress` SSE — status text + optional tool name / detail. */
   progress: ProgressState | null;
+  sessionModel: string;
+  /** Show model picker when a session is active and route matches loaded session. */
+  showModelSelector: boolean;
+  onModelChange: (modelId: string) => void;
   thinkingLevel: string;
   showThinkingSelector: boolean;
   onThinkingChange: (level: string) => void;
@@ -286,6 +294,22 @@ export function ChatComposer({
         </div>
 
         <div className="flex flex-wrap items-center gap-2 border-t border-edge-subtle px-4 pb-2.5 pt-2 dark:border-edge/80">
+          {showModelSelector ? (
+            <div className="min-w-0 max-w-[min(14rem,calc(100vw-10rem))] shrink">
+              <ModelSelector
+                value={sessionModel}
+                disabled={disabled || streaming}
+                placeholder={m.chat.modelPlaceholder}
+                searchPlaceholder={m.chat.modelSearchPlaceholder}
+                noMatches={m.chat.modelNoMatches}
+                compact
+                showProviderInTrigger={false}
+                contentSide="top"
+                contentAlign="start"
+                onChange={onModelChange}
+              />
+            </div>
+          ) : null}
           {showThinkingSelector ? (
             <div
               className="inline-flex min-h-8 items-center gap-1 rounded-full border border-edge bg-surface-hover px-2.5 py-1 text-xs dark:border-edge-strong dark:bg-surface-hover/80"
@@ -293,7 +317,7 @@ export function ChatComposer({
             >
               <ThinkingIcon className="h-3.5 w-3.5 shrink-0 text-accent-fg" aria-hidden />
               <select
-                className="max-w-[min(10rem,40vw)] cursor-pointer bg-transparent text-[0.8125rem] font-medium text-fg focus:outline-none"
+                className="max-w-[min(6.5rem,30vw)] cursor-pointer appearance-none bg-transparent pl-0 pr-0 text-[0.8125rem] font-medium text-fg focus:outline-none"
                 value={thinkingLevel}
                 disabled={disabled || busy}
                 onChange={(e) => onThinkingChange(e.target.value)}
