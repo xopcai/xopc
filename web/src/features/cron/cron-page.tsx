@@ -740,10 +740,11 @@ export function CronPage() {
       <Dialog.Root open={formOpen} onOpenChange={(o) => !o && closeForm()}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-slate-900/40" />
-          <Dialog.Content
-            className="xopcbot-dialog-content fixed left-1/2 top-1/2 z-[60] flex max-h-[min(90vh,800px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-edge bg-surface-panel shadow-xl outline-none dark:border-edge"
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
+          <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
+            <Dialog.Content
+              className="xopcbot-dialog-content-pane pointer-events-auto relative flex max-h-[min(90vh,800px)] w-full max-w-md flex-col rounded-xl border border-edge bg-surface-panel shadow-xl outline-none dark:border-edge"
+              onOpenAutoFocus={(e) => e.preventDefault()}
+            >
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3">
               <Dialog.Title className="text-base font-semibold text-fg">
                 {formMode === 'edit' ? c.editJob : c.addJob}
@@ -949,7 +950,8 @@ export function CronPage() {
                 {formSubmitting ? c.loading : formMode === 'edit' ? c.save : c.create}
               </Button>
             </div>
-          </Dialog.Content>
+            </Dialog.Content>
+          </div>
         </Dialog.Portal>
       </Dialog.Root>
 
@@ -1093,7 +1095,8 @@ export function CronPage() {
       <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[70] bg-slate-900/40" />
-          <Dialog.Content className="xopcbot-dialog-content fixed left-1/2 top-1/2 z-[70] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-xl dark:border-edge">
+          <div className="fixed inset-0 z-[70] flex items-center justify-center p-4 pointer-events-none">
+            <Dialog.Content className="xopcbot-dialog-content-pane pointer-events-auto relative w-full max-w-md rounded-xl border border-edge bg-surface-panel p-4 shadow-xl dark:border-edge">
             <Dialog.Title className="text-base font-semibold text-fg">
               {confirmAction === 'delete' ? c.delete : c.runNow}
             </Dialog.Title>
@@ -1121,7 +1124,8 @@ export function CronPage() {
                 {confirmAction === 'delete' ? c.delete : c.runNow}
               </Button>
             </div>
-          </Dialog.Content>
+            </Dialog.Content>
+          </div>
         </Dialog.Portal>
       </Dialog.Root>
     </div>
