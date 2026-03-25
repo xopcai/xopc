@@ -23,6 +23,8 @@ const bundles: Record<
     sidebarCollapse: string;
     sidebarExpand: string;
     closeMenu: string;
+    /** App header: language & theme in overflow popover (small screens). */
+    appBarPreferences: string;
     nav: Record<Tab | 'management' | 'settings', string>;
     settingsSections: Record<SettingsSectionId, string>;
     token: {
@@ -625,6 +627,7 @@ const bundles: Record<
     sidebarCollapse: 'Collapse sidebar',
     sidebarExpand: 'Expand sidebar',
     closeMenu: 'Close menu',
+    appBarPreferences: 'Language and theme',
     nav: {
       chat: 'Chat',
       management: 'Management',
@@ -1287,6 +1290,7 @@ const bundles: Record<
     sidebarCollapse: '收起侧边栏',
     sidebarExpand: '展开侧边栏',
     closeMenu: '关闭菜单',
+    appBarPreferences: '语言与主题',
     nav: {
       chat: '对话',
       management: '管理',

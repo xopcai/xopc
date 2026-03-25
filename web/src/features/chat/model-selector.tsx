@@ -27,6 +27,7 @@ export function ModelSelector({
   searchPlaceholder,
   noMatches,
   compact,
+  showProviderInTrigger = true,
   onChange,
 }: {
   value: string;
@@ -35,6 +36,8 @@ export function ModelSelector({
   searchPlaceholder: string;
   noMatches: string;
   compact?: boolean;
+  /** When false, trigger shows model name only (dropdown rows still include provider). */
+  showProviderInTrigger?: boolean;
   onChange: (modelId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -46,7 +49,11 @@ export function ModelSelector({
 
   const filtered = useMemo(() => modelsMatchingQuery(models, query), [models, query]);
   const selected = models.find((m) => m.id === value);
-  const label = selected ? `${selected.name} (${selected.provider})` : value || placeholder;
+  const label = selected
+    ? showProviderInTrigger
+      ? `${selected.name} (${selected.provider})`
+      : selected.name
+    : value || placeholder;
 
   return (
     <Popover.Root open={open} onOpenChange={setOpen}>
@@ -54,7 +61,7 @@ export function ModelSelector({
         <button
           type="button"
           disabled={disabled || isLoading}
-          title={placeholder}
+          title={selected ? `${selected.name} (${selected.provider})` : placeholder}
           className={cn(
             'flex max-w-full min-w-0 items-center justify-between gap-2 rounded-xl border border-edge bg-surface-panel px-3 py-2 text-left text-sm font-medium text-fg transition-colors duration-150',
             'hover:border-edge-strong hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',

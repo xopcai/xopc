@@ -10,10 +10,13 @@ import { useLocaleStore } from '@/stores/locale-store';
 export function ConnectionIndicator({
   className,
   compact = false,
+  iconOnly = false,
 }: {
   className?: string;
   /** Icon-first footer when the sidebar is collapsed. */
   compact?: boolean;
+  /** Status text hidden (screen reader only) — tight app header on small screens. */
+  iconOnly?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language).connection;
@@ -51,7 +54,7 @@ export function ConnectionIndicator({
           <WifiOff className="size-3.5 text-fg-subtle" strokeWidth={1.75} />
         )}
       </span>
-      {compact ? (
+      {compact || iconOnly ? (
         <span className="sr-only">{label}</span>
       ) : (
         <span className="min-w-0 truncate text-fg-muted" title={label}>
