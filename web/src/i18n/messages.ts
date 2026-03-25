@@ -23,6 +23,7 @@ const bundles: Record<
     sidebarCollapse: string;
     sidebarExpand: string;
     closeMenu: string;
+    openMenu: string;
     /** App header: language & theme in overflow popover (small screens). */
     appBarPreferences: string;
     nav: Record<Tab | 'management' | 'settings', string>;
@@ -44,6 +45,17 @@ const bundles: Record<
       offline: string;
       error: string;
       reconnect: string;
+    };
+    /** Sidebar IA: primary actions, task list, footer (logo + app menu). */
+    sidebar: {
+      newTask: string;
+      tasksHeading: string;
+      viewAllSessions: string;
+      taskListEmpty: string;
+      taskListNeedToken: string;
+      taskListAddToken: string;
+      taskListStartChat: string;
+      appMenuAria: string;
     };
     chat: {
       typeMessage: string;
@@ -642,6 +654,7 @@ const bundles: Record<
     sidebarCollapse: 'Collapse sidebar',
     sidebarExpand: 'Expand sidebar',
     closeMenu: 'Close menu',
+    openMenu: 'Open menu',
     appBarPreferences: 'Language and theme',
     nav: {
       chat: 'Chat',
@@ -683,6 +696,16 @@ const bundles: Record<
       offline: 'Offline',
       error: 'Connection error',
       reconnect: 'Reconnect',
+    },
+    sidebar: {
+      newTask: 'New task',
+      tasksHeading: 'Tasks',
+      viewAllSessions: 'All sessions',
+      taskListEmpty: 'No chats yet',
+      taskListNeedToken: 'Save a gateway token to load your chats.',
+      taskListAddToken: 'Add token',
+      taskListStartChat: 'Start a chat',
+      appMenuAria: 'App menu and settings',
     },
     chat: {
       typeMessage: 'Type a message…',
@@ -1320,6 +1343,7 @@ const bundles: Record<
     sidebarCollapse: '收起侧边栏',
     sidebarExpand: '展开侧边栏',
     closeMenu: '关闭菜单',
+    openMenu: '打开菜单',
     appBarPreferences: '语言与主题',
     nav: {
       chat: '对话',
@@ -1361,6 +1385,16 @@ const bundles: Record<
       offline: '离线',
       error: '连接异常',
       reconnect: '重连',
+    },
+    sidebar: {
+      newTask: '新任务',
+      tasksHeading: '任务',
+      viewAllSessions: '全部会话',
+      taskListEmpty: '暂无会话',
+      taskListNeedToken: '保存网关 Token 后即可在此查看最近会话。',
+      taskListAddToken: '添加 Token',
+      taskListStartChat: '开始对话',
+      appMenuAria: '应用菜单与设置',
     },
     chat: {
       typeMessage: '输入消息…',
