@@ -9,7 +9,7 @@ import type { Agent, AgentMessage } from '@mariozechner/pi-agent-core';
 import type { InboundMessage } from '../../infra/bus/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
 import { resolveEffectiveThinkingLevel } from '../../session/thinking-resolve.js';
-import type { ThinkLevel } from '../thinking-types.js';
+import type { ThinkLevel } from '../transcript/thinking-types.js';
 import type { ModelManager } from '../models/index.js';
 import type { SessionContext } from '../session/session-context.js';
 import type { AgentEventHandler } from './agent-event-handler.js';

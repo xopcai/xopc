@@ -13,7 +13,7 @@ import {
   type CompactionConfig,
   type WindowConfig,
 } from '../session/index.js';
-import { normalizeThinkLevel, type ThinkLevel } from './thinking-types.js';
+import { normalizeThinkLevel, type ThinkLevel } from './transcript/thinking-types.js';
 import { createLogger } from '../utils/logger.js';
 import { ExtensionRegistryImpl as ExtensionRegistry, ExtensionHookRunner } from '../extensions/index.js';
 import {

@@ -266,4 +266,12 @@ export {
 
 // Backward compatibility
 export { logger as default };
+export { logger as baseLogger };
 export { pino as Pino };
+
+export function registerShutdownHandler(): void {}
+
+export {
+  setRequestContext as setRequestLogger,
+  clearRequestContext as clearRequestLogger,
+} from './context.js';

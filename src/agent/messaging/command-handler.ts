@@ -8,7 +8,7 @@ import type { MessageBus } from '../../infra/bus/index.js';
 import type { Config } from '../../config/schema.js';
 import { isProviderConfiguredSync } from '../../providers/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
-import type { ThinkLevel } from '../thinking-types.js';
+import type { ThinkLevel } from '../transcript/thinking-types.js';
 import { createLogger } from '../../utils/logger.js';
 import { commandRegistry, createCommandContext } from '../../chat-commands/index.js';
 import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';

@@ -10,7 +10,7 @@ import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
 import { createLogger } from '../utils/logger.js';
-import type { ThinkLevel, ReasoningLevel, VerboseLevel, ElevatedMode } from '../agent/thinking-types.js';
+import type { ThinkLevel, ReasoningLevel, VerboseLevel, ElevatedMode } from '../agent/transcript/thinking-types.js';
 
 const log = createLogger('SessionConfigStore');
 
