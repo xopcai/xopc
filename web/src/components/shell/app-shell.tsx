@@ -5,6 +5,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { messages } from '@/i18n/messages';
 import { BrandLogo } from '@/components/shell/brand-logo';
 import { ConnectionIndicator } from '@/components/shell/connection-indicator';
+import { HeaderPreferencesPopover } from '@/components/shell/header-preferences-popover';
 import { LanguageToggle } from '@/components/shell/language-toggle';
 import { SidebarNav } from '@/components/shell/sidebar';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
@@ -69,8 +70,8 @@ export function AppShell() {
       <TokenDialog />
 
       {/* Full-width app bar (design: content surface + top strip) */}
-      <header className="flex shrink-0 items-center gap-3 border-b border-edge bg-surface-panel px-4 py-2.5 sm:px-6 lg:px-8 dark:border-edge">
-        <div className="flex min-w-0 flex-1 items-center gap-2.5">
+      <header className="flex shrink-0 items-center gap-2 border-b border-edge bg-surface-panel px-3 py-2 sm:gap-3 sm:px-6 lg:px-8 dark:border-edge">
+        <div className="flex min-w-0 flex-1 items-center gap-2 sm:gap-2.5">
           <Button
             type="button"
             variant="ghost"
@@ -86,18 +87,23 @@ export function AppShell() {
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="truncate text-sm font-semibold tracking-tight text-fg">{m.appBrand}</span>
-              <span className="truncate text-xs font-normal text-fg-subtle">{m.appSubtitle}</span>
+              <span className="hidden truncate text-xs font-normal text-fg-subtle sm:inline">{m.appSubtitle}</span>
             </div>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-3">
-          <ConnectionIndicator className="max-w-[min(42vw,9rem)] lg:hidden" />
-          <LanguageToggle />
-          <ThemeToggle />
+        <div className="flex shrink-0 items-center gap-1 sm:gap-2 lg:gap-3">
+          <ConnectionIndicator iconOnly className="lg:hidden" />
+          <div className="hidden items-center gap-1.5 sm:gap-2 lg:flex">
+            <LanguageToggle />
+            <ThemeToggle />
+          </div>
+          <div className="lg:hidden">
+            <HeaderPreferencesPopover />
+          </div>
           <Button
             type="button"
             variant="secondary"
-            className="h-8 px-2 lg:hidden"
+            className="h-8 shrink-0 px-2 lg:hidden"
             aria-expanded={mobileNavOpen}
             aria-controls="app-sidebar"
             aria-label="Menu"
