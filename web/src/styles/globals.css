@@ -56,21 +56,21 @@
   --max-width-app-main: 56rem;
 }
 
-/* Dark theme — aligned with ui/src/styles/00-vars.css :root.dark (neutral, not slate-blue) */
+/* Dark theme — slate gray-blue system per design spec §2.1, §10 */
 html.dark {
-  --color-surface-base: #121212;
-  --color-surface-panel: #1a1a1a;
-  --color-surface-hover: #2a2a2a;
-  --color-surface-active: #404040;
+  --color-surface-base: #020617;     /* slate-950 */
+  --color-surface-panel: #0f172a;    /* slate-900 */
+  --color-surface-hover: #1e293b;    /* slate-800 */
+  --color-surface-active: #334155;   /* slate-700 */
 
-  --color-fg: #fafaf9;
-  --color-fg-muted: #a8a29e;
-  --color-fg-subtle: #948f8a;
-  --color-fg-disabled: #78716c;
+  --color-fg: #f8fafc;              /* slate-50 */
+  --color-fg-muted: #cbd5e1;        /* slate-300 */
+  --color-fg-subtle: #94a3b8;       /* slate-400 */
+  --color-fg-disabled: #64748b;     /* slate-500 */
 
-  --color-edge-subtle: #3a3a3a;
-  --color-edge: #333333;
-  --color-edge-strong: #4a4a4a;
+  --color-edge-subtle: #1e293b;     /* slate-800 */
+  --color-edge: #334155;            /* slate-700 */
+  --color-edge-strong: #475569;     /* slate-600 */
 
   --color-accent: #3b82f6;
   --color-accent-hover: #60a5fa;
