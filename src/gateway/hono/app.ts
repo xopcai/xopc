@@ -38,6 +38,7 @@ import {
   validateModelsConfig,
 } from '../../config/models-json.js';
 import { CredentialResolver } from '../../auth/credentials.js';
+import { createFixedWindowRateLimiter } from '../../infra/rate-limit.js';
 
 const log = createLogger('HonoApp');
 
@@ -216,6 +217,44 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // Authenticated routes
   const authenticated = new Hono();
   authenticated.use(auth({ token }));
+
+  // Rate limiting for authenticated API endpoints (P1-1)
+  // Per-IP rate limiter: 60 requests per minute
+  const apiRateLimiter = new Map<string, ReturnType<typeof createFixedWindowRateLimiter>>();
+  
+  // Cleanup old limiters every 5 minutes to prevent memory leak
+  const RATE_LIMIT_CLEANUP_INTERVAL = 5 * 60 * 1000;
+  setInterval(() => {
+    const now = Date.now();
+    for (const [ip, limiter] of apiRateLimiter.entries()) {
+      // Reset and check if limiter has been idle (window expired)
+      const result = limiter.consume();
+      if (result.remaining === 59) { // Fresh window means idle
+        apiRateLimiter.delete(ip);
+      }
+    }
+  }, RATE_LIMIT_CLEANUP_INTERVAL);
+
+  authenticated.use('/api/*', createMiddleware(async (c, next) => {
+    const clientIp = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
+      ?? c.req.header('x-real-ip')
+      ?? 'unknown';
+
+    let limiter = apiRateLimiter.get(clientIp);
+    if (!limiter) {
+      limiter = createFixedWindowRateLimiter({ maxRequests: 60, windowMs: 60_000 });
+      apiRateLimiter.set(clientIp, limiter);
+    }
+
+    const result = limiter.consume();
+    if (!result.allowed) {
+      c.header('Retry-After', String(Math.ceil(result.retryAfterMs / 1000)));
+      return c.json({ error: 'Too many requests' }, 429);
+    }
+
+    c.header('X-RateLimit-Remaining', String(result.remaining));
+    await next();
+  }));
 
   // Protected status endpoint
   authenticated.get('/status', (c) => {
