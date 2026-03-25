@@ -1,5 +1,6 @@
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { fetchConfiguredModelsCached } from '@/features/chat/registry-api';
 
 export interface CronDelivery {
   mode: 'none' | 'announce' | 'direct';
@@ -217,8 +218,13 @@ export async function getChannels(): Promise<ChannelStatus[]> {
 }
 
 export async function getModels(): Promise<ModelInfo[]> {
-  const result = await fetchJsonCron<{ ok: boolean; payload: { models: ModelInfo[] } }>(apiUrl('/api/models'));
-  return result.payload?.models || [];
+  const models = await fetchConfiguredModelsCached();
+  // Map ConfiguredModel to ModelInfo (they have compatible fields)
+  return models.map((m) => ({
+    id: m.id,
+    name: m.name,
+    provider: m.provider,
+  }));
 }
 
 export async function getConfig(): Promise<ConfigInfo> {
