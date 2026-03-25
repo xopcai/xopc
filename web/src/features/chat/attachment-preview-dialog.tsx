@@ -333,7 +333,7 @@ export function AttachmentPreviewDialog({
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[80] bg-slate-900/50 backdrop-blur-[1px]" />
+        <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[1px]" />
         <Dialog.Content className="xopcbot-dialog-content-fullscreen fixed inset-0 z-[81] flex h-[100dvh] max-h-[100dvh] w-screen max-w-none flex-col overflow-hidden border-0 bg-surface-panel shadow-none outline-none">
           <div className="shrink-0 border-b border-edge dark:border-edge">
             <div className="mx-auto flex w-full max-w-app-main items-center justify-between gap-2 px-4 py-3 sm:px-8">
