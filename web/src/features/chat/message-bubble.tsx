@@ -1,9 +1,14 @@
-import type { Message, MessageContent, ProgressState } from '@/features/chat/messages.types';
+import type { ReactNode } from 'react';
+import type {
+  Message,
+  MessageContent,
+  ProgressState,
+  ThinkingContent,
+  ToolUseContent,
+} from '@/features/chat/messages.types';
+import { AssistantStepsBlock } from '@/features/chat/assistant-steps-block';
 import { AttachmentRenderer } from '@/features/chat/attachment-renderer';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
-import { ThinkingBlock } from '@/features/chat/thinking-block';
-import { ToolCallCard } from '@/features/chat/tool-call-card';
-import { stringToToolResultMessage } from '@/features/chat/tool-result';
 import { UsageBadge } from '@/features/chat/usage-badge';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
@@ -27,11 +32,9 @@ function progressEmoji(stage: string): string {
   return map[stage] || '💬';
 }
 
-function renderBlock(
+function renderTextOrImageBlock(
   block: MessageContent,
   key: string,
-  toolLabels: { input: string; output: string; noOutput: string },
-  thinkingLabels: { thoughts: string; thoughtsStreaming: string; thoughtsExpandHint: string },
 ) {
   if (block.type === 'text') {
     return (
@@ -45,36 +48,47 @@ function renderBlock(
       <img key={key} src={block.source.data} className="max-h-96 max-w-full rounded-lg" alt="" />
     );
   }
-  if (block.type === 'thinking') {
-    return (
-      <ThinkingBlock
-        key={key}
-        content={block.text || ''}
-        isStreaming={Boolean(block.streaming)}
-        labels={thinkingLabels}
-      />
-    );
-  }
-  if (block.type === 'tool_use') {
-    const isStreaming = block.status === 'running';
-    const resultMsg = !isStreaming ? stringToToolResultMessage(block.result, block.status === 'error') : undefined;
-    const resultText = resultMsg?.content
-      .filter((c) => c.type === 'text')
-      .map((c) => c.text ?? '')
-      .join('\n');
-    return (
-      <ToolCallCard
-        key={key}
-        toolName={block.name}
-        params={block.input}
-        resultText={resultText}
-        isStreaming={isStreaming}
-        isError={block.status === 'error'}
-        labels={toolLabels}
-      />
-    );
-  }
   return null;
+}
+
+function renderChunkedContent(
+  content: MessageContent[],
+  toolLabels: { input: string; output: string; noOutput: string },
+  stepLabels: {
+    thoughts: string;
+    thoughtsStreaming: string;
+    viewSteps_one: string;
+    viewSteps_other: string;
+    searchedWeb: string;
+    readFile: string;
+    stepDetails: string;
+  },
+) {
+  const nodes: ReactNode[] = [];
+  let i = 0;
+  while (i < content.length) {
+    const b = content[i];
+    if (b.type === 'thinking' || b.type === 'tool_use') {
+      const start = i;
+      while (i < content.length && (content[i].type === 'thinking' || content[i].type === 'tool_use')) {
+        i++;
+      }
+      const slice = content.slice(start, i) as Array<ThinkingContent | ToolUseContent>;
+      nodes.push(
+        <AssistantStepsBlock
+          key={`steps-${start}`}
+          blocks={slice}
+          toolLabels={toolLabels}
+          stepLabels={stepLabels}
+        />,
+      );
+    } else {
+      const el = renderTextOrImageBlock(b, `block-${i}`);
+      if (el) nodes.push(el);
+      i++;
+    }
+  }
+  return nodes;
 }
 
 export function MessageBubble({
@@ -97,10 +111,14 @@ export function MessageBubble({
   const avatarLetter = roleLabel.charAt(0);
 
   const toolLabels = { input: m.chat.toolInput, output: m.chat.toolOutput, noOutput: m.chat.noOutput };
-  const thinkingLabels = {
+  const stepLabels = {
     thoughts: m.chat.thoughts,
     thoughtsStreaming: m.chat.thoughtsStreaming,
-    thoughtsExpandHint: m.chat.thoughtsExpandHint,
+    viewSteps_one: m.chat.viewSteps_one,
+    viewSteps_other: m.chat.viewSteps_other,
+    searchedWeb: m.chat.stepSearchedWeb,
+    readFile: m.chat.stepReadFile,
+    stepDetails: m.chat.stepDetails,
   };
 
   const streamingThinking =
@@ -138,38 +156,42 @@ export function MessageBubble({
 
         <div
           className={cn(
-            'rounded-2xl border px-4 py-3 text-sm leading-relaxed',
+            'min-w-0 rounded-2xl border px-4 py-3 text-sm leading-relaxed',
             isUser
               ? 'border-accent-soft bg-accent-soft/40 text-fg dark:border-accent-soft dark:bg-accent-soft/30'
               : 'border-edge-subtle bg-surface-panel text-fg shadow-sm shadow-slate-200/30 dark:border-edge dark:bg-surface-panel/70 dark:shadow-none',
           )}
         >
-          {message.content?.length ? (
-            <div className="flex flex-col gap-2">
-              {message.content.map((block, j) => renderBlock(block, `${j}`, toolLabels, thinkingLabels))}
-              {isStreaming ? (
-                <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
-              ) : null}
-            </div>
-          ) : isStreaming ? (
-            <span className="inline-block h-3 w-0.5 animate-pulse bg-accent" />
-          ) : null}
+          <div className="flex min-w-0 flex-col gap-2">
+            {message.content?.length ? (
+              <>
+                {renderChunkedContent(message.content, toolLabels, stepLabels)}
+                {isStreaming ? (
+                  <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
+                ) : null}
+              </>
+            ) : isStreaming ? (
+              <span className="inline-block h-3 w-0.5 animate-pulse bg-accent" />
+            ) : null}
 
-          {legacyThinking ? (
-            <ThinkingBlock
-              content={message.thinking || ''}
-              isStreaming={Boolean(message.thinkingStreaming)}
-              labels={{
-                thoughts: m.chat.thoughts,
-                thoughtsStreaming: m.chat.thoughtsStreaming,
-                thoughtsExpandHint: m.chat.thoughtsExpandHint,
-              }}
-            />
-          ) : null}
+            {legacyThinking ? (
+              <AssistantStepsBlock
+                blocks={[
+                  {
+                    type: 'thinking',
+                    text: message.thinking || '',
+                    streaming: Boolean(message.thinkingStreaming),
+                  },
+                ]}
+                toolLabels={toolLabels}
+                stepLabels={stepLabels}
+              />
+            ) : null}
 
-          {message.attachments?.length ? (
-            <AttachmentRenderer attachments={message.attachments} authToken={authToken} />
-          ) : null}
+            {message.attachments?.length ? (
+              <AttachmentRenderer attachments={message.attachments} authToken={authToken} />
+            ) : null}
+          </div>
         </div>
 
         {isAssistant && message.usage ? <UsageBadge usage={message.usage} /> : null}

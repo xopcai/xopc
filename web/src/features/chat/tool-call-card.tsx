@@ -48,37 +48,43 @@ export function ToolCallCard({
   }
 
   return (
-    <div className="rounded-xl border border-edge-subtle bg-surface-hover/30 dark:border-edge dark:bg-surface-hover/20">
+    <div className="w-full min-w-0 overflow-hidden rounded-xl border border-edge-subtle bg-surface-hover/30 dark:border-edge dark:bg-surface-hover/20">
       <button
         type="button"
-        className="flex w-full items-center gap-2 px-3 py-2 text-left text-xs font-medium text-fg-muted hover:bg-surface-hover"
+        className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left text-xs font-medium text-fg-muted hover:bg-surface-hover"
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >
-        <Code className="h-3.5 w-3.5 shrink-0" aria-hidden />
-        <span className="rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[11px] text-accent-fg">{displayName}</span>
-        {isStreaming ? (
-          <span className="text-fg-disabled">running…</span>
-        ) : isError ? (
-          <span className="text-red-600 dark:text-red-400">error</span>
-        ) : null}
+        <Code className="mt-0.5 h-3.5 w-3.5 shrink-0" aria-hidden />
+        <div className="min-w-0">
+          <div className="flex min-w-0 flex-wrap items-center gap-x-2 gap-y-1">
+            <span className="max-w-full truncate rounded bg-accent/15 px-1.5 py-0.5 font-mono text-[11px] text-accent-fg">
+              {displayName}
+            </span>
+            {isStreaming ? (
+              <span className="shrink-0 text-fg-disabled">running…</span>
+            ) : isError ? (
+              <span className="shrink-0 text-red-600 dark:text-red-400">error</span>
+            ) : null}
+          </div>
+        </div>
         <ChevronDown
-          className={cn('ml-auto h-4 w-4 shrink-0 transition-transform', expanded && 'rotate-180')}
+          className={cn('mt-0.5 h-4 w-4 shrink-0 transition-transform', expanded && 'rotate-180')}
           aria-hidden
         />
       </button>
       {expanded ? (
-        <div className="max-h-80 overflow-auto border-t border-edge p-3 font-mono text-xs dark:border-edge">
+        <div className="max-h-80 w-full min-w-0 max-w-full overflow-x-auto overflow-y-auto border-t border-edge p-3 font-mono text-xs dark:border-edge">
           {paramsJson ? (
-            <div className="mb-3">
+            <div className="mb-3 min-w-0">
               <div className="mb-1 text-[10px] uppercase tracking-wide text-fg-disabled">{labels.input}</div>
-              <pre className="whitespace-pre-wrap text-fg-muted">{paramsJson}</pre>
+              <pre className="whitespace-pre-wrap break-words text-fg-muted [overflow-wrap:anywhere]">{paramsJson}</pre>
             </div>
           ) : null}
           {!isStreaming ? (
-            <div>
+            <div className="min-w-0">
               <div className="mb-1 text-[10px] uppercase tracking-wide text-fg-disabled">{labels.output}</div>
-              <pre className="whitespace-pre-wrap text-fg-muted">{outputText}</pre>
+              <pre className="whitespace-pre-wrap break-words text-fg-muted [overflow-wrap:anywhere]">{outputText}</pre>
             </div>
           ) : null}
         </div>

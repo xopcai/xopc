@@ -191,6 +191,7 @@ export function ChatPage() {
           disabled={showSessionLoading || sessionRoutePending}
           sending={sending}
           streaming={streaming}
+          progress={progress}
           thinkingLevel={thinkingLevel}
           showThinkingSelector={modelSupportsThinking}
           onThinkingChange={setThinkingLevel}
