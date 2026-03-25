@@ -218,32 +218,31 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   const authenticated = new Hono();
   authenticated.use(auth({ token }));
 
-  // Rate limiting for authenticated API endpoints (P1-1)
-  // Per-IP rate limiter: 60 requests per minute
-  const apiRateLimiter = new Map<string, ReturnType<typeof createFixedWindowRateLimiter>>();
-  
+  // Rate limiting for high-cost API endpoints (P1-1)
+  // Strict limit for LLM calls and config changes; GET queries are unrestricted
+  const strictRateLimiter = new Map<string, ReturnType<typeof createFixedWindowRateLimiter>>();
+
   // Cleanup old limiters every 5 minutes to prevent memory leak
   const RATE_LIMIT_CLEANUP_INTERVAL = 5 * 60 * 1000;
   setInterval(() => {
-    const now = Date.now();
-    for (const [ip, limiter] of apiRateLimiter.entries()) {
-      // Reset and check if limiter has been idle (window expired)
+    for (const [ip, limiter] of strictRateLimiter.entries()) {
       const result = limiter.consume();
-      if (result.remaining === 59) { // Fresh window means idle
-        apiRateLimiter.delete(ip);
+      if (result.remaining === 9) { // Fresh window means idle (max=10)
+        strictRateLimiter.delete(ip);
       }
     }
   }, RATE_LIMIT_CLEANUP_INTERVAL);
 
-  authenticated.use('/api/*', createMiddleware(async (c, next) => {
+  // Helper middleware for strict rate limiting (10 req/min for expensive operations)
+  const strictRateLimitMiddleware = createMiddleware(async (c, next) => {
     const clientIp = c.req.header('x-forwarded-for')?.split(',')[0]?.trim()
       ?? c.req.header('x-real-ip')
       ?? 'unknown';
 
-    let limiter = apiRateLimiter.get(clientIp);
+    let limiter = strictRateLimiter.get(clientIp);
     if (!limiter) {
-      limiter = createFixedWindowRateLimiter({ maxRequests: 60, windowMs: 60_000 });
-      apiRateLimiter.set(clientIp, limiter);
+      limiter = createFixedWindowRateLimiter({ maxRequests: 10, windowMs: 60_000 });
+      strictRateLimiter.set(clientIp, limiter);
     }
 
     const result = limiter.consume();
@@ -254,7 +253,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
     c.header('X-RateLimit-Remaining', String(result.remaining));
     await next();
-  }));
+  });
 
   // Protected status endpoint
   authenticated.get('/status', (c) => {
@@ -316,13 +315,14 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   };
 
   // POST /api/agent — Agent message (SSE stream or JSON fallback)
-  authenticated.post('/api/agent', createAgentSSEHandler(sseConfig));
+  // Apply strict rate limit: 10 req/min (prevents LLM API abuse)
+  authenticated.post('/api/agent', strictRateLimitMiddleware, createAgentSSEHandler(sseConfig));
 
   // POST /api/agent/resume — Resume an in-progress agent run
-  authenticated.post('/api/agent/resume', createAgentResumeHandler(sseConfig));
+  authenticated.post('/api/agent/resume', strictRateLimitMiddleware, createAgentResumeHandler(sseConfig));
 
   // POST /api/send — Send a message through a channel
-  authenticated.post('/api/send', createSendHandler(sseConfig));
+  authenticated.post('/api/send', strictRateLimitMiddleware, createSendHandler(sseConfig));
 
   // GET /api/events — Server-pushed event stream
   authenticated.get('/api/events', createEventsSSEHandler(sseConfig));
@@ -334,7 +334,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   // POST /api/config/reload
-  authenticated.post('/api/config/reload', async (c) => {
+  // Apply strict rate limit: 10 req/min (prevents config abuse)
+  authenticated.post('/api/config/reload', strictRateLimitMiddleware, async (c) => {
     const result = await service.reloadConfig();
     return c.json({ ok: true, payload: result });
   });
@@ -424,7 +425,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   // PATCH /api/config - Update partial config
-  authenticated.patch('/api/config', async (c) => {
+  // Apply strict rate limit: 10 req/min (prevents config abuse)
+  authenticated.patch('/api/config', strictRateLimitMiddleware, async (c) => {
     const body = await c.req.json();
     
     // Merge updates into current config
