@@ -23,7 +23,7 @@ import type { SessionStore, SessionConfigStore } from '../session/index.js';
 import { createLogger } from '../utils/logger.js';
 import { getRoutingInfo } from './session-key.js';
 import { saveConfig } from '../config/loader.js';
-import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../agent/thinking-types.js';
+import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../agent/transcript/thinking-types.js';
 
 const log = createLogger('CommandContext');
 

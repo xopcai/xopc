@@ -1,6 +1,6 @@
 /**
  * Thinking Types
- * 
+ *
  * Defines types for thinking ability management across the application.
  * Based on OpenClaw's thinking system.
  */
@@ -13,7 +13,7 @@
  * Thinking level for models that support extended thinking.
  * - off: No thinking
  * - minimal: Minimal thinking effort
- * - low: Low thinking effort  
+ * - low: Low thinking effort
  * - medium: Medium thinking effort
  * - high: High thinking effort
  * - xhigh: Extra high thinking (for supported models only)
@@ -83,7 +83,7 @@ export function normalizeThinkLevel(raw?: string | null): ThinkLevel | undefined
   }
   const key = raw.trim().toLowerCase();
   const collapsed = key.replace(/[\s_-]+/g, '');
-  
+
   if (collapsed === 'adaptive' || collapsed === 'auto') {
     return 'adaptive';
   }
@@ -184,15 +184,15 @@ export function listThinkingLevels(provider?: string | null, model?: string | nu
   if (normalizedProvider === 'z.ai' || normalizedProvider === 'zai') {
     return ['off', 'on'];
   }
-  
+
   const levels: (ThinkLevel | 'on')[] = ['off', 'minimal', 'low', 'medium', 'high'];
-  
+
   // xhigh is only supported for specific models
   const normalizedModel = model?.trim().toLowerCase();
-  if (normalizedModel && ['gpt-5.4', 'gpt-5.4-pro', 'gpt-5.2'].some(m => normalizedModel.includes(m))) {
+  if (normalizedModel && ['gpt-5.4', 'gpt-5.4-pro', 'gpt-5.2'].some((m) => normalizedModel.includes(m))) {
     levels.push('xhigh');
   }
-  
+
   levels.push('adaptive');
   return levels;
 }
