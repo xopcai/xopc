@@ -150,13 +150,14 @@ export function ChatPage() {
         onNewSession={() => void createNewSession()}
       />
 
-      <div
-        ref={scrollRef}
-        className="chat-messages min-h-0 flex-1 overflow-y-auto [scrollbar-gutter:stable]"
-        onScroll={onScroll}
-      >
-        <div className="px-4 py-4 sm:px-8">
-          <div className="chat-messages-inner mx-auto w-full max-w-app-main">
+      <div className="flex min-h-0 flex-1 flex-col">
+        {/* Single main column: same horizontal inset + max width for messages and composer (no duplicate wrappers). */}
+        <div className="mx-auto flex w-full min-h-0 max-w-app-main flex-1 flex-col px-4 sm:px-8">
+          <div
+            ref={scrollRef}
+            className="chat-messages min-h-0 flex-1 overflow-y-auto py-4 [scrollbar-gutter:stable]"
+            onScroll={onScroll}
+          >
             {showSessionLoading ? (
               <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-3 py-12 text-center text-sm text-fg-muted">
                 {m.chat.loading}
@@ -180,17 +181,8 @@ export function ChatPage() {
               </>
             )}
           </div>
-        </div>
-      </div>
 
-      <ScrollToBottomButton
-        visible={!showSessionLoading && !atBottom}
-        onClick={() => scrollToBottom(true)}
-      />
-
-      <div className="chat-input-container shrink-0 bg-surface-panel">
-        <div className="px-4 py-4 sm:px-8">
-          <div className="chat-messages-inner mx-auto w-full max-w-app-main">
+          <div className="chat-input-container shrink-0 bg-surface-panel py-4">
             <ChatComposer
               disabled={showSessionLoading || sessionRoutePending}
               sending={sending}
@@ -205,6 +197,11 @@ export function ChatPage() {
           </div>
         </div>
       </div>
+
+      <ScrollToBottomButton
+        visible={!showSessionLoading && !atBottom}
+        onClick={() => scrollToBottom(true)}
+      />
     </div>
   );
 }

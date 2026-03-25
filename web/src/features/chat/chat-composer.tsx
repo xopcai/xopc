@@ -170,11 +170,11 @@ export function ChatComposer({
 
   const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
 
-  // Outer column (px + max-w-app-main) lives in chat-page — matches chat-messages-inner span.
+  // Outer column (px + max-w-app-main) lives in chat-page — matches the message list column.
   return (
     <div
       className={cn(
-        // ring (not border) so inner text width matches chat-messages-inner; border costs 2px in border-box.
+        // ring (not border) so inner text width matches the main column; border costs 2px in border-box.
         'relative w-full overflow-hidden rounded-xl bg-surface-panel shadow-sm shadow-slate-200/40 ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:ring-edge dark:shadow-none',
         isDragging && 'ring-2 ring-accent ring-inset',
       )}
