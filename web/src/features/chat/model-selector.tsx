@@ -28,6 +28,8 @@ export function ModelSelector({
   noMatches,
   compact,
   showProviderInTrigger = true,
+  contentSide = 'bottom',
+  contentAlign = 'end',
   onChange,
 }: {
   value: string;
@@ -38,6 +40,9 @@ export function ModelSelector({
   compact?: boolean;
   /** When false, trigger shows model name only (dropdown rows still include provider). */
   showProviderInTrigger?: boolean;
+  /** Radix popover placement — use `top` when the trigger sits near the viewport bottom (e.g. chat composer). */
+  contentSide?: 'top' | 'bottom';
+  contentAlign?: 'start' | 'center' | 'end';
   onChange: (modelId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -76,8 +81,9 @@ export function ModelSelector({
       <Popover.Portal>
         <Popover.Content
           className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-1 shadow-lg shadow-slate-200/60 dark:border-edge dark:shadow-black/40"
+          side={contentSide}
           sideOffset={4}
-          align="end"
+          align={contentAlign}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
           <input

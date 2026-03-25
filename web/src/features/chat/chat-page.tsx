@@ -141,12 +141,9 @@ export function ChatPage() {
       <ChatHeader
         sessionKey={sessionKey}
         sessionName={sessionName}
-        sessionModel={sessionModel}
-        streaming={streaming}
         loading={showSessionLoading}
         sessionRoutePending={sessionRoutePending}
         routeTargetKey={decodedKey}
-        onModelChange={onSessionModelChange}
         onNewSession={() => void createNewSession()}
       />
 
@@ -188,6 +185,9 @@ export function ChatPage() {
               sending={sending}
               streaming={streaming}
               progress={progress}
+              sessionModel={sessionModel}
+              showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
+              onModelChange={onSessionModelChange}
               thinkingLevel={thinkingLevel}
               showThinkingSelector={modelSupportsThinking}
               onThinkingChange={setThinkingLevel}
