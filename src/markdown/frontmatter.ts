@@ -155,3 +155,47 @@ export function parseFrontmatterBlock(content: string): ParsedFrontmatter {
   }
   return merged;
 }
+
+// --- Full-document YAML frontmatter (body split) — used by skills, workspace bootstrap ---
+
+export interface FrontmatterSplit<T = Record<string, unknown>> {
+  frontmatter: T;
+  content: string;
+}
+
+/**
+ * Parse YAML frontmatter from markdown: returns metadata plus body after the closing `---`.
+ */
+export function parseFrontmatter<T = Record<string, unknown>>(content: string): FrontmatterSplit<T> {
+  const frontmatterMatch = content.match(/^---\r?\n([\s\S]*?)\r?\n---\r?\n([\s\S]*)$/);
+
+  if (!frontmatterMatch) {
+    return {
+      frontmatter: {} as T,
+      content: content.trim(),
+    };
+  }
+
+  const [, frontmatterRaw, bodyContent] = frontmatterMatch;
+
+  try {
+    const frontmatter = yaml.load(frontmatterRaw) as Record<string, unknown>;
+    return {
+      frontmatter: (frontmatter || {}) as T,
+      content: bodyContent.trim(),
+    };
+  } catch (error) {
+    console.warn('Failed to parse frontmatter:', error);
+    return {
+      frontmatter: {} as T,
+      content: bodyContent.trim(),
+    };
+  }
+}
+
+/**
+ * Serialize frontmatter to YAML format (with closing --- only; opening --- included in dump by yaml.dump pattern from original util).
+ */
+export function serializeFrontmatter(frontmatter: Record<string, unknown>): string {
+  return '---\n' + yaml.dump(frontmatter) + '---';
+}

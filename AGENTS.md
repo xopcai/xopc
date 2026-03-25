@@ -68,17 +68,17 @@ Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 
 | Path | Role |
 |------|------|
-| `agent/` | `AgentService`, tools, memory, orchestration |
-| `channels/` | `ChannelPlugin`, manager, inbound/outbound, `plugins/bundled.ts` |
-| `gateway/` | HTTP/WebSocket server, API for UI |
+| `agent/` | `AgentService`, tools, memory, orchestration (core entry files at root; helpers grouped under `context/`, `lifecycle/`, `prompt/`, `subagent/`, etc.) |
+| `channels/` | `ChannelPlugin`, manager, inbound/outbound, `attachments/`, `plugins/bundled.ts` |
+| `gateway/` | HTTP/WebSocket server, API for UI; `heartbeat/` keep-alive service |
 | `cli/` | Commands (self-registration via `registry`) |
 | `config/` | Schema, loader, paths |
 | `providers/` | `resolveModel`, API keys, pi-ai bridge |
 | `session/` | Conversation session store |
-| `bus/` | Message bus |
-| `extension-sdk/` | `@xopcai/xopcbot/extension-sdk` helpers |
+| `infra/` | Infrastructure primitives (`retry`, rate-limit, `bus/` message bus) |
+| `extensions/` | Extension runtime; `extensions/sdk/` re-exports `@xopcai/xopcbot/extension-sdk` |
 
-Also present (follow local patterns): `acp/`, `auth/`, `commands/`, `cron/`, `daemon/`, `routing/`, `stt/`, `tts/`, `utils/`, `markdown/`, `infra/`, `errors/`, `heartbeat/`, `extensions/` (core hooks), etc.
+Also present (follow local patterns): `acp/`, `auth/`, `chat-commands/` (in-chat slash commands), `cron/`, `daemon/`, `routing/`, `stt/`, `tts/`, `utils/` (logger + `helpers.ts`), `markdown/`, `errors/`, etc.
 
 **Gateway console (`web/`)** — React SPA (Vite + Tailwind v4): hash router, REST + SSE to the gateway, Zustand + SWR. Production build outputs to `dist/gateway/static/root` (same static root the gateway serves).
 
@@ -268,7 +268,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 - **Level:** `XOPCBOT_LOG_LEVEL=debug` (or `trace`).
 - **CLI:** `pnpm run dev -- config --show` · `config --validate`.
-- **Code:** `createRequestLogger` / `clearRequestContext` in `src/utils/logger.ts`; `queryLogs` / `getLogStats` in `src/utils/log-store.ts`.
+- **Code:** `createRequestLogger` / `clearRequestContext` in `src/utils/logger.ts`; `queryLogs` / `getLogStats` in `src/utils/logger/log-store.ts`.
 - **Console logs:** gateway + Log Manager tab (default dev URL is project-specific—use your configured gateway port).
 
 ---
@@ -293,14 +293,15 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 | Area | Primary locations |
 |------|-------------------|
-| Agent | `src/agent/service.ts`, `src/agent/tools/` |
+| Agent | `src/agent/service.ts`, `src/agent/tools/`, `src/agent/context/`, `src/agent/lifecycle/` |
 | CLI | `src/cli/commands/` |
+| In-chat slash commands | `src/chat-commands/` |
 | Config | `src/config/schema.ts` (and related) |
 | Gateway / API | `src/gateway/` |
 | Models & providers | `src/providers/index.ts` |
 | Channels | `src/channels/`, `extensions/telegram/` |
 | Gateway console (React) | `web/src/`, [ui-design-system.md](./docs/design/ui-design-system.md) |
-| Logging | `src/utils/logger.ts`, `src/utils/log-store.ts` |
+| Logging | `src/utils/logger/` (including `log-store.ts`, `log-stream.ts`) |
 | Log Manager | `web/src/` (logs feature / pages) |
 | Tests | Colocated `__tests__` |
 

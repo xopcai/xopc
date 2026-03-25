@@ -12,11 +12,11 @@ import { createAgentSSEHandler, createAgentResumeHandler, createSendHandler, cre
 import type { GatewayService } from '../service.js';
 import type { Config } from '../../config/schema.js';
 import { getWorkspacePath } from '../../config/schema.js';
-import { resolveSafeInboundFilePath } from '../../attachments/inbound-persist.js';
+import { resolveSafeInboundFilePath } from '../../channels/attachments/inbound-persist.js';
 import { getVoiceModelsConfig } from '../../config/voice.js';
 import { createLogger } from '../../utils/logger.js';
-import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../utils/log-store.js';
-import type { LogLevel } from '../../utils/logger.types.js';
+import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../utils/logger/log-store.js';
+import type { LogLevel } from '../../utils/logger.js';
 import { 
   getAllModels, 
   getAvailableModels, 
@@ -1324,7 +1324,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // GET /api/logs/health - Get log system health status
   authenticated.get('/api/logs/health', async (c) => {
     const { getLogDir, getLogStats, isLoggerShuttingDown } = await import('../../utils/logger.js');
-    const { getLogFiles } = await import('../../utils/log-store.js');
+    const { getLogFiles } = await import('../../utils/logger/log-store.js');
     
     const stats = getLogStats();
     const files = getLogFiles().slice(0, 5);
@@ -1400,7 +1400,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   // GET /api/logs/stream - Stream logs in real-time via SSE
   authenticated.get('/api/logs/stream', async (c) => {
-    const { createLogSSEHandler } = await import('../../utils/log-stream.js');
+    const { createLogSSEHandler } = await import('../../utils/logger/log-stream.js');
     return createLogSSEHandler()(c);
   });
 

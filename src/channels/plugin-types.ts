@@ -3,7 +3,7 @@
  */
 
 import type { Config } from '../config/index.js';
-import type { MessageBus } from '../bus/index.js';
+import type { MessageBus } from '../infra/bus/index.js';
 
 import type { ChannelId, ChannelMeta, ChannelCapabilities } from './plugins/types.core.js';
 import type {

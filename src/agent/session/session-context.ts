@@ -4,7 +4,7 @@
  * Manages session context state and provides utilities for context extraction.
  */
 
-import type { InboundMessage } from '../../bus/index.js';
+import type { InboundMessage } from '../../infra/bus/index.js';
 
 export interface SessionContext {
   sessionKey: string;

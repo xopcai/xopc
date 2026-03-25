@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ToolErrorTracker } from '../tool-error-tracker.js';
+import { ToolErrorTracker } from '../tools/error-tracker.js';
 
 describe('ToolErrorTracker', () => {
   let tracker: ToolErrorTracker;

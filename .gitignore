@@ -11,7 +11,7 @@ src/**/*.js
 src/**/*.js.map
 src/**/*.d.ts.map
 src/**/*.d.ts
-!src/types/cli-table3.d.ts
+!src/cli/types/cli-table3.d.ts
 
 # Logs
 *.log

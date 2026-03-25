@@ -31,7 +31,10 @@ export { convertMarkdownTables } from "./tables.js";
 // Frontmatter parsing
 export {
   parseFrontmatterBlock,
+  parseFrontmatter,
+  serializeFrontmatter,
   type ParsedFrontmatter,
+  type FrontmatterSplit,
 } from "./frontmatter.js";
 
 // Fence parsing (for code blocks)

@@ -3,7 +3,7 @@
  */
 
 import { createLogger } from '../../../utils/logger.js';
-import type { SessionListQuery, ExportFormat, SessionStatus } from '../../../types/index.js';
+import type { SessionListQuery, ExportFormat, SessionStatus } from '../../../session/types.js';
 import { getManager } from './utils.js';
 
 const log = createLogger('SessionCommand');

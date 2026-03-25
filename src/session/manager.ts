@@ -12,7 +12,7 @@ import type {
   ExportFormat,
   SessionStatus,
 } from './types.js';
-import type { Message } from '../types/index.js';
+import type { Message } from './types.js';
 import type { CompactionConfig, CompactionResult } from '../agent/memory/compaction.js';
 import type { WindowConfig } from '../agent/memory/window.js';
 

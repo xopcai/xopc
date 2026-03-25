@@ -4,13 +4,13 @@
  * Handles command execution using the unified command system.
  */
 
-import type { MessageBus } from '../../bus/index.js';
+import type { MessageBus } from '../../infra/bus/index.js';
 import type { Config } from '../../config/schema.js';
 import { isProviderConfiguredSync } from '../../providers/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
-import type { ThinkLevel } from '../../types/thinking.js';
+import type { ThinkLevel } from '../thinking-types.js';
 import { createLogger } from '../../utils/logger.js';
-import { commandRegistry, createCommandContext } from '../../commands/index.js';
+import { commandRegistry, createCommandContext } from '../../chat-commands/index.js';
 import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
 
 const log = createLogger('CommandHandler');

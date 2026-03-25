@@ -17,7 +17,7 @@ import type {
   SessionExport,
 } from './types.js';
 import { SessionStatus } from './types.js';
-import type { Message } from '../types/index.js';
+import type { Message } from './types.js';
 import { SessionCompactor, type CompactionConfig, type CompactionResult } from '../agent/memory/compaction.js';
 import { SlidingWindow, type WindowConfig } from '../agent/memory/window.js';
 import { cleanTrailingErrors, hasProblematicMessages } from '../agent/memory/message-sanitizer.js';

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { RequestLimiter } from '../request-limiter.js';
+import { RequestLimiter } from '../models/request-limiter.js';
 
 describe('RequestLimiter', () => {
   let limiter: RequestLimiter;

@@ -11,6 +11,12 @@
       "import": "./dist/src/index.js",
       "default": "./dist/src/index.js"
     },
+    "./extension-sdk": {
+      "types": "./dist/src/extensions/sdk/index.d.ts",
+      "import": "./dist/src/extensions/sdk/index.js",
+      "default": "./dist/src/extensions/sdk/index.js"
+    },
+    "./extension-sdk/*": "./dist/src/extensions/sdk/*",
     "./*": "./dist/src/*"
   },
   "bin": {

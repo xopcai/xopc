@@ -22,12 +22,12 @@ import type {
   ChannelStreamingAdapter,
   ChannelCommandAdapter,
 } from '@xopcai/xopcbot/channels/plugin-types.js';
-import { generateSessionKey } from '@xopcai/xopcbot/commands/session-key.js';
+import { generateSessionKey } from '@xopcai/xopcbot/chat-commands/session-key.js';
 
 import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
 import { createInboundDebouncer } from '@xopcai/xopcbot/infra/debounce.js';
 import { getChatChannelMeta } from '@xopcai/xopcbot/channels/registry.js';
-import { getMimeType } from '@xopcai/xopcbot/utils/media.js';
+import { getMimeType } from '@xopcai/xopcbot/channels/media.js';
 import { transcribe as sttTranscribe, isSTTAvailable } from '@xopcai/xopcbot/stt/index.js';
 import type { STTConfig } from '@xopcai/xopcbot/stt/types.js';
 

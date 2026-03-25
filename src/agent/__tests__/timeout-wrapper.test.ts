@@ -6,7 +6,7 @@ import {
   TimeoutManager,
   TimeoutError,
   DEFAULT_TIMEOUT_CONFIG,
-} from '../timeout-wrapper.js';
+} from '../lifecycle/timeout-wrapper.js';
 
 describe('TimeoutWrapper Module', () => {
   beforeEach(() => {

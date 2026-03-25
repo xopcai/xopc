@@ -3,8 +3,8 @@ import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 
 import type { Config } from '@xopcai/xopcbot/config/schema.js';
-import type { MessageBus } from '@xopcai/xopcbot/bus/index.js';
-import { generateSessionKey } from '@xopcai/xopcbot/commands/session-key.js';
+import type { MessageBus } from '@xopcai/xopcbot/infra/bus/index.js';
+import { generateSessionKey } from '@xopcai/xopcbot/chat-commands/session-key.js';
 import { resolveAllowlistMatch } from '@xopcai/xopcbot/channels/security.js';
 import type { WeixinMessage } from '../api/types.js';
 import { MessageItemType } from '../api/types.js';

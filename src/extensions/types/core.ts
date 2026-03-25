@@ -5,8 +5,8 @@
  */
 
 import type { Command } from 'commander';
-import type { Config } from '../../types/index.js';
-import type { MessageBus } from '../../bus/index.js';
+import type { Config } from '../../config/config-surface.js';
+import type { MessageBus } from '../../infra/bus/index.js';
 import type { TypedEventBus } from './events.js';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type { ExtensionHookEvent, ExtensionHookHandler, HookOptions, HookHandlerMap } from './hooks.js';

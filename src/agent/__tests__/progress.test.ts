@@ -10,7 +10,7 @@ import {
   formatHeartbeatMessage,
   type ProgressMessage,
   type ProgressStage,
-} from '../progress.js';
+} from '../lifecycle/progress.js';
 
 describe('ProgressFeedbackManager', () => {
   let manager: ProgressFeedbackManager;

@@ -1,7 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   formatProjectContextForPrompt,
-} from '../project-context.js';
+} from '../context/project-context.js';
 
 describe('Project Context', () => {
   describe('formatProjectContextForPrompt', () => {

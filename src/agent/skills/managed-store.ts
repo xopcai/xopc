@@ -14,7 +14,7 @@ import {
 } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { resolveSkillsDir } from '../../config/paths.js';
-import { parseFrontmatter } from '../../utils/frontmatter.js';
+import { parseFrontmatter } from '../../markdown/frontmatter.js';
 
 export const MAX_SKILL_ZIP_BYTES = 15 * 1024 * 1024;
 

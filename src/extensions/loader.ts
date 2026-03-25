@@ -19,8 +19,8 @@ import {
   resolveBundledExtensionsDir,
   resolveExtensionSdkPath,
 } from '../config/paths.js';
-import type { Config } from '../types/index.js';
-import type { MessageBus } from '../bus/index.js';
+import type { Config } from '../config/config-surface.js';
+import type { MessageBus } from '../infra/bus/index.js';
 import type { SessionManager } from '../session/manager.js';
 import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type {

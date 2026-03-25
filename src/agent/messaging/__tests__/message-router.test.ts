@@ -1,6 +1,6 @@
 import { describe, it, expect } from 'vitest';
 import { MessageRouter } from '../message-router.js';
-import type { InboundMessage } from '../../../bus/index.js';
+import type { InboundMessage } from '../../../infra/bus/index.js';
 
 function makeInbound(content: string, sessionKey = 'telegram:acc:dm:1:u:2'): InboundMessage {
   return {

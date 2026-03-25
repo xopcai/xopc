@@ -22,7 +22,7 @@
  */
 
 import { randomBytes } from 'crypto';
-import type { LogContext, ContextualLogger } from '../../utils/logger.types.js';
+import type { LogContext, ContextualLogger } from '../../utils/logger.js';
 import { logger as baseLogger } from '../../utils/logger/index.js';
 
 const log = baseLogger.child({ module: 'ContextMiddleware' });

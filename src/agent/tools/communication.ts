@@ -1,6 +1,6 @@
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
-import type { MessageBus, OutboundMessage } from '../../bus/index.js';
+import type { MessageBus, OutboundMessage } from '../../infra/bus/index.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('MessageTool');

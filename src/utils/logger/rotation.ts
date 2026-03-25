@@ -8,7 +8,7 @@ import { writeFile } from 'fs/promises';
 import { join } from 'path';
 import { gzip } from 'zlib';
 import { promisify } from 'util';
-import type { RotationResult } from '../logger.types.js';
+import type { RotationResult } from './types.js';
 import { config, getLogDir } from './config.js';
 
 const compressAsync = promisify(gzip);

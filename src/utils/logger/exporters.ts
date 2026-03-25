@@ -8,7 +8,7 @@
  * - Custom HTTP endpoints
  */
 
-import type { LogEntry, LogLevel } from '../logger.types.js';
+import type { LogEntry, LogLevel } from './types.js';
 
 // ============================================
 // Types

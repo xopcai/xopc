@@ -5,7 +5,7 @@
  * and streaming responses.
  */
 
-import type { ProgressStage } from '../progress.js';
+import type { ProgressStage } from '../lifecycle/progress.js';
 
 export interface StreamHandle {
   update: (text: string) => void;

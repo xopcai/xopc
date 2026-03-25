@@ -1,9 +1,9 @@
 import { Command } from 'commander';
 import { join } from 'path';
-import { MessageBus } from '../bus/index.js';
+import { MessageBus } from '../infra/bus/index.js';
 import { loadConfig, getWorkspacePath } from '../config/index.js';
 import { ExtensionLoader, normalizeExtensionConfig } from '../extensions/index.js';
-import { registerExtensionCliProgram } from '../extension-sdk/channel-helpers.js';
+import { registerExtensionCliProgram } from '../extensions/sdk/channel-helpers.js';
 import { createDefaultContext } from './registry.js';
 
 /**

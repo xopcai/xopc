@@ -16,6 +16,8 @@
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
     "paths": {
+      "@xopcai/xopcbot/extension-sdk": ["./src/extensions/sdk/index.ts"],
+      "@xopcai/xopcbot/extension-sdk/*": ["./src/extensions/sdk/*"],
       "@xopcai/xopcbot/*": ["./src/*"],
       "@xopcai/xopcbot-extension-telegram": ["./extensions/telegram/src/index.ts"],
       "@xopcai/xopcbot-extension-telegram/*": ["./extensions/telegram/src/*"],

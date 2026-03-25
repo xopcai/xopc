@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ProgressFeedbackManager } from '../progress.js';
+import { ProgressFeedbackManager } from '../lifecycle/progress.js';
 
 describe('ProgressFeedbackManager - Enhanced', () => {
   let manager: ProgressFeedbackManager;

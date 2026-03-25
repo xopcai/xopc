@@ -13,12 +13,12 @@
 import type { Bot, Context } from 'grammy';
 import type { Message } from '@grammyjs/types';
 import type { Config } from '@xopcai/xopcbot/config/schema.js';
-import type { MessageBus } from '@xopcai/xopcbot/bus/index.js';
+import type { MessageBus } from '@xopcai/xopcbot/infra/bus/index.js';
 import type { TelegramAccountManager } from './account-manager.js';
 import { telegramUpdateDedupe, buildTelegramUpdateKey } from './dedupe.js';
 import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
 import { removeBotMention as stripMentionLegacy } from '@xopcai/xopcbot/channels/security.js';
-import { normalizeTelegramCommandName, parseSlashCommand } from '@xopcai/xopcbot/commands/command-parse.js';
+import { normalizeTelegramCommandName, parseSlashCommand } from '@xopcai/xopcbot/chat-commands/command-parse.js';
 
 const log = createLogger('TelegramInboundProcessor');
 
