@@ -19,7 +19,6 @@ const bundles: Record<
   StoredLanguage,
   {
     appBrand: string;
-    appSubtitle: string;
     sidebarCollapse: string;
     sidebarExpand: string;
     closeMenu: string;
@@ -657,8 +656,7 @@ const bundles: Record<
   }
 > = {
   en: {
-    appBrand: 'XOPCBOT Gateway',
-    appSubtitle: 'Console',
+    appBrand: 'XOPCBOT',
     sidebarCollapse: 'Collapse sidebar',
     sidebarExpand: 'Expand sidebar',
     closeMenu: 'Close menu',
@@ -1354,8 +1352,7 @@ const bundles: Record<
     },
   },
   zh: {
-    appBrand: 'XOPCBOT Gateway',
-    appSubtitle: '控制台',
+    appBrand: 'XOPCBOT',
     sidebarCollapse: '收起侧边栏',
     sidebarExpand: '展开侧边栏',
     closeMenu: '关闭菜单',
