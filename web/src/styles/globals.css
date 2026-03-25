@@ -1,6 +1,7 @@
 /**
  * xopc workstation — design tokens (see docs/design/ui-design-system.md).
  * Tailwind v4: semantic --color-* names map to bg-*, text-*, border-* utilities.
+ * Neutrals + motion tuned toward Apple system UI (SF stack, grouped grays, soft elevation).
  */
 
 @import "tailwindcss";
@@ -8,28 +9,30 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: -apple-system, system-ui, "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC",
-    "Noto Sans", "Noto Sans CJK SC", "Microsoft YaHei", 微软雅黑, sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Monaco, Consolas, monospace;
+  /* macOS / iOS first: SF Pro via system fonts; sensible fallbacks elsewhere */
+  --font-sans: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", system-ui,
+    "Segoe UI", Roboto, "Helvetica Neue", "PingFang SC", "Hiragino Sans GB", "Noto Sans CJK SC",
+    "Microsoft YaHei", 微软雅黑, sans-serif;
+  --font-mono: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 
-  /* Surfaces */
-  --color-surface-base: #f8fafc;
+  /* Surfaces — light: Apple-style grouped background + white content */
+  --color-surface-base: #f5f5f7;
   --color-surface-panel: #ffffff;
-  --color-surface-hover: #f1f5f9;
-  --color-surface-active: #e2e8f0;
+  --color-surface-hover: #e8e8ed;
+  --color-surface-active: #dcdcde;
 
-  /* Foreground */
-  --color-fg: #0f172a;
-  --color-fg-muted: #475569;
-  --color-fg-subtle: #64748b;
-  --color-fg-disabled: #94a3b8;
+  /* Foreground — Apple label hierarchy (light) */
+  --color-fg: #1d1d1f;
+  --color-fg-muted: #6e6e73;
+  --color-fg-subtle: #86868b;
+  --color-fg-disabled: #aeaeb2;
 
   /* Borders */
-  --color-edge-subtle: #f1f5f9;
-  --color-edge: #e2e8f0;
-  --color-edge-strong: #cbd5e1;
+  --color-edge-subtle: #ebebed;
+  --color-edge: #d2d2d7;
+  --color-edge-strong: #bcbcc0;
 
-  /* Brand */
+  /* Brand (unchanged — xopc accent) */
   --color-accent: #2563eb;
   --color-accent-hover: #1d4ed8;
   --color-accent-soft: #eff6ff;
@@ -43,38 +46,45 @@
   --color-warning: #d97706;
   --color-warning-soft: #fef3c7;
 
-  --radius-sm: 0.375rem;
-  --radius-md: 0.5rem;
-  --radius-lg: 0.75rem;
-  --radius-xl: 1rem;
-  /* Pill / track (segmented controls): full caps, maps to `rounded-full` or `rounded-pill` */
+  /* Modal / drawer dimming */
+  --color-scrim: rgb(0 0 0 / 0.36);
+
+  /* Radii — slightly rounder, closer to macOS controls */
+  --radius-sm: 0.625rem;
+  --radius-md: 0.75rem;
+  --radius-lg: 0.875rem;
+  --radius-xl: 1.125rem;
   --radius-pill: 9999px;
 
-  --shadow-popover: 0 20px 25px -5px rgb(148 163 184 / 0.5);
+  /* Elevation — soft layered shadows (light); dark relies more on borders */
+  --shadow-surface: 0 1px 2px rgb(0 0 0 / 0.04), 0 1px 6px rgb(0 0 0 / 0.06);
+  --shadow-elevated: 0 2px 8px rgb(0 0 0 / 0.06), 0 4px 24px rgb(0 0 0 / 0.08);
+  --shadow-float: 0 4px 16px rgb(0 0 0 / 0.1), 0 12px 40px rgb(0 0 0 / 0.08);
+  --shadow-popover: 0 8px 32px rgb(0 0 0 / 0.12), 0 2px 12px rgb(0 0 0 / 0.08);
 
   /* Main column under AppShell <main> — docs/design/ui-design-system.md §13.1 Web */
   --max-width-app-main: 56rem;
 }
 
-/* Dark theme — slate gray-blue system per design spec §2.1, §10 */
+/* Dark — Apple-style elevated grays + rim light via borders (see design spec §2.3) */
 html.dark {
-  --color-surface-base: #020617;     /* slate-950 */
-  --color-surface-panel: #0f172a;    /* slate-900 */
-  --color-surface-hover: #1e293b;    /* slate-800 */
-  --color-surface-active: #334155;   /* slate-700 */
+  --color-surface-base: #1c1c1e;
+  --color-surface-panel: #2c2c2e;
+  --color-surface-hover: #3a3a3c;
+  --color-surface-active: #48484a;
 
-  --color-fg: #f8fafc;              /* slate-50 */
-  --color-fg-muted: #cbd5e1;        /* slate-300 */
-  --color-fg-subtle: #94a3b8;       /* slate-400 */
-  --color-fg-disabled: #64748b;     /* slate-500 */
+  --color-fg: #f5f5f7;
+  --color-fg-muted: #a1a1a6;
+  --color-fg-subtle: #8e8e93;
+  --color-fg-disabled: #636366;
 
-  --color-edge-subtle: #1e293b;     /* slate-800 */
-  --color-edge: #334155;            /* slate-700 */
-  --color-edge-strong: #475569;     /* slate-600 */
+  --color-edge-subtle: #3a3a3c;
+  --color-edge: #48484a;
+  --color-edge-strong: #636366;
 
   --color-accent: #3b82f6;
   --color-accent-hover: #60a5fa;
-  --color-accent-soft: rgb(30 58 138 / 0.6);
+  --color-accent-soft: rgb(30 58 138 / 0.55);
   --color-accent-fg: #60a5fa;
 
   --color-success: #34d399;
@@ -84,7 +94,12 @@ html.dark {
   --color-warning: #fbbf24;
   --color-warning-soft: rgb(113 63 18 / 0.5);
 
-  --shadow-popover: 0 20px 25px -5px rgb(0 0 0 / 0.4);
+  --color-scrim: rgb(0 0 0 / 0.52);
+
+  --shadow-surface: 0 0 0 1px rgb(255 255 255 / 0.06);
+  --shadow-elevated: 0 8px 32px rgb(0 0 0 / 0.45);
+  --shadow-float: 0 12px 48px rgb(0 0 0 / 0.55);
+  --shadow-popover: 0 16px 48px rgb(0 0 0 / 0.5);
 }
 
 @layer base {
@@ -98,8 +113,12 @@ html.dark {
     font-family: var(--font-sans);
     background-color: var(--color-surface-base);
     color: var(--color-fg);
+    color-scheme: light dark;
     -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
   }
 
   body {
@@ -107,6 +126,10 @@ html.dark {
     height: 100%;
     min-height: 100%;
     overflow: hidden;
+    /* Slightly smaller UI body than 16px root — matches dense workstation + SF conventions */
+    font-size: 0.9375rem;
+    line-height: 1.47059;
+    letter-spacing: -0.006em;
   }
 
   #root {

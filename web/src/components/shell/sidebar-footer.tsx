@@ -85,7 +85,7 @@ export function SidebarFooter({
               className={cn(
                 'z-50 w-[min(13.75rem,calc(100vw-2rem))]',
                 'max-h-[min(22rem,70vh)] overflow-y-auto overscroll-contain',
-                'rounded-xl border border-edge bg-surface-panel p-1 shadow-lg shadow-slate-200/50 outline-none',
+                'rounded-xl border border-edge bg-surface-panel p-1 shadow-elevated outline-none',
                 'dark:border-edge dark:shadow-black/40',
               )}
               side={collapsed ? 'right' : 'top'}

@@ -61,7 +61,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
       {mobileNavOpen ? (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-slate-900/40 lg:hidden"
+          className="fixed inset-0 z-40 bg-scrim lg:hidden"
           aria-label={m.closeMenu}
           onClick={() => setMobileNavOpen(false)}
         />

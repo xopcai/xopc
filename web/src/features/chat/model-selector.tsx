@@ -80,7 +80,7 @@ export function ModelSelector({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-1 shadow-lg shadow-slate-200/60 dark:border-edge dark:shadow-black/40"
+          className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-1 shadow-elevated dark:border-edge"
           side={contentSide}
           sideOffset={4}
           align={contentAlign}

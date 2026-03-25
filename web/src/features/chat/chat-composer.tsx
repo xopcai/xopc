@@ -183,7 +183,7 @@ export function ChatComposer({
     <div
       className={cn(
         // ring (not border) so inner text width matches the main column; border costs 2px in border-box.
-        'relative w-full overflow-hidden rounded-xl bg-surface-panel shadow-sm shadow-slate-200/40 ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:ring-edge dark:shadow-none',
+        'relative w-full overflow-hidden rounded-xl bg-surface-panel shadow-surface ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:ring-edge dark:shadow-none',
         isDragging && 'ring-2 ring-accent ring-inset',
       )}
         onDragOver={(e) => {
