@@ -279,46 +279,27 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const renameTarget = renameKey ? items.find((s) => s.key === renameKey) : undefined;
 
   return (
-    <div className="flex flex-col gap-1.5">
-      <div className="px-4 text-xs font-normal leading-5 text-fg-subtle">{sb.tasksHeading}</div>
-      <div className="flex flex-col gap-0.5">
-        {items.length === 0 ? (
-          <div className="px-4 py-2">
-            <p className="text-xs leading-relaxed text-fg-subtle">{sb.taskListEmpty}</p>
-            <Link
-              to="/chat/new"
-              className="mt-2 inline-flex text-xs font-medium text-accent-fg hover:underline"
-              onClick={() => onNavigate?.()}
-            >
-              {sb.taskListStartChat}
-            </Link>
+    <>
+      {items.length > 0 ? (
+        <div className="flex flex-col gap-1.5">
+          <div className="px-4 text-xs font-normal leading-5 text-fg-subtle">{sb.tasksHeading}</div>
+          <div className="flex flex-col gap-0.5">
+            {items.map((session) => (
+              <SidebarTaskRow
+                key={session.key}
+                session={session}
+                isActive={activeSessionKey === session.key}
+                onNavigate={onNavigate}
+                mutate={mutate}
+                onRequestRename={openRename}
+                onRequestDelete={setDeleteKey}
+                sb={sb}
+                sess={sess}
+              />
+            ))}
           </div>
-        ) : (
-          items.map((session) => (
-            <SidebarTaskRow
-              key={session.key}
-              session={session}
-              isActive={activeSessionKey === session.key}
-              onNavigate={onNavigate}
-              mutate={mutate}
-              onRequestRename={openRename}
-              onRequestDelete={setDeleteKey}
-              sb={sb}
-              sess={sess}
-            />
-          ))
-        )}
-        <Link
-          to="/sessions"
-          className={cn(
-            'px-4 pt-1.5 text-xs font-medium text-fg-muted transition-colors hover:text-accent-fg',
-            pathname === '/sessions' && 'text-accent-fg',
-          )}
-          onClick={() => onNavigate?.()}
-        >
-          {sb.viewAllSessions}
-        </Link>
-      </div>
+        </div>
+      ) : null}
 
       <Dialog.Root open={renameKey !== null} onOpenChange={(o) => !o && setRenameKey(null)}>
         <Dialog.Portal>
@@ -385,6 +366,6 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </div>
+    </>
   );
 }

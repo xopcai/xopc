@@ -83,7 +83,7 @@ export function AppShell() {
           sidebarCollapsed ? 'lg:w-[4.5rem] lg:border-r lg:border-edge dark:lg:border-edge' : 'lg:w-60 lg:border-r lg:border-edge dark:lg:border-edge',
         )}
       >
-        <div className="flex h-10 shrink-0 items-center justify-end gap-0.5 border-b border-edge bg-surface-base px-2 dark:border-edge">
+        <div className="flex shrink-0 items-center justify-end gap-0.5 border-b border-edge bg-surface-base px-2 py-3 dark:border-edge">
           {mobileNavOpen ? (
             <Button
               type="button"
