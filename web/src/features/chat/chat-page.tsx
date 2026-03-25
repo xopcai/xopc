@@ -54,9 +54,8 @@ export function ChatPage() {
   const chatHeadline = useMemo(() => {
     const titleKey = sessionRoutePending && decodedKey ? decodedKey : sessionKey;
     if (!titleKey) return m.nav.chat;
-    if (sessionRoutePending && decodedKey) return decodedKey;
-    return sessionName?.trim() || titleKey;
-  }, [sessionKey, sessionName, sessionRoutePending, decodedKey, m.nav.chat]);
+    return sessionName?.trim() || m.chat.newSession;
+  }, [sessionKey, sessionName, sessionRoutePending, decodedKey, m.nav.chat, m.chat.newSession]);
 
   const scrollToBottom = useCallback((smooth = true) => {
     const el = scrollRef.current;

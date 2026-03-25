@@ -43,6 +43,7 @@ export function SessionDetailDrawer({
     pin: string;
     unpin: string;
     delete: string;
+    unnamedSession: string;
   };
   onClose: () => void;
   onArchive: () => void;
@@ -68,7 +69,7 @@ export function SessionDetailDrawer({
         >
           <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3 dark:border-edge">
             <Dialog.Title className="min-w-0 truncate text-base font-semibold tracking-tight text-fg">
-              {session?.name?.trim() || session?.key || '—'}
+              {session?.name?.trim() || labels.unnamedSession}
             </Dialog.Title>
             <Dialog.Close asChild>
               <Button type="button" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={labels.close}>

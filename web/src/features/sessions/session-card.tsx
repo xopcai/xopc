@@ -55,11 +55,13 @@ export function SessionCard({
     unpin: string;
     export: string;
     delete: string;
+    /** Shown when `session.name` is empty (e.g. new chat before auto-title). */
+    unnamedSession: string;
   };
   onOpen: () => void;
   onAction: (action: SessionCardAction) => void;
 }) {
-  const displayName = session.name?.trim() || session.key;
+  const displayName = session.name?.trim() || labels.unnamedSession;
   const showKeySubtitle = Boolean(session.name?.trim());
   const isArchived = session.status === 'archived';
   const isPinned = session.status === 'pinned';
