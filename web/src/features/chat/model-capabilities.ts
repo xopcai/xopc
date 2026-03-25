@@ -1,5 +1,3 @@
-import { apiFetch } from '@/lib/fetch';
-import { apiUrl } from '@/lib/url';
 import { fetchConfiguredModelsCached } from '@/features/chat/registry-api';
 
 /**
