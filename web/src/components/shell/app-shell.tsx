@@ -1,9 +1,8 @@
-import { Menu, X } from 'lucide-react';
+import { Menu, PanelLeft, PanelRight, X } from 'lucide-react';
 import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
-import { BrandLogo } from '@/components/shell/brand-logo';
 import { ConnectionIndicator } from '@/components/shell/connection-indicator';
 import { HeaderPreferencesPopover } from '@/components/shell/header-preferences-popover';
 import { LanguageToggle } from '@/components/shell/language-toggle';
@@ -84,9 +83,12 @@ export function AppShell() {
             aria-label={sidebarCollapsed ? m.sidebarExpand : m.sidebarCollapse}
             onClick={() => toggleSidebarCollapsed()}
           >
-            <Menu className="size-4" strokeWidth={1.5} />
+            {sidebarCollapsed ? (
+              <PanelRight className="size-4" strokeWidth={1.5} aria-hidden />
+            ) : (
+              <PanelLeft className="size-4" strokeWidth={1.5} aria-hidden />
+            )}
           </Button>
-          <BrandLogo className="size-8 rounded-xl max-[374px]:size-7" alt="" aria-hidden />
           <div className="min-w-0">
             <div className="flex min-w-0 flex-wrap items-baseline gap-x-2 gap-y-0.5">
               <span className="truncate text-sm font-semibold tracking-tight text-fg">{m.appBrand}</span>
@@ -109,10 +111,14 @@ export function AppShell() {
             className="h-8 shrink-0 px-2 lg:hidden"
             aria-expanded={mobileNavOpen}
             aria-controls="app-sidebar"
-            aria-label="Menu"
+            aria-label={mobileNavOpen ? m.closeMenu : m.openMenu}
             onClick={() => setMobileNavOpen((o) => !o)}
           >
-            <Menu className="size-3.5" strokeWidth={1.5} />
+            {mobileNavOpen ? (
+              <X className="size-3.5" strokeWidth={1.5} aria-hidden />
+            ) : (
+              <Menu className="size-3.5" strokeWidth={1.5} aria-hidden />
+            )}
           </Button>
         </div>
       </header>
@@ -130,33 +136,10 @@ export function AppShell() {
             sidebarCollapsed ? 'lg:w-[4.5rem] lg:border-r lg:border-edge dark:lg:border-edge' : 'lg:w-60 lg:border-r lg:border-edge dark:lg:border-edge',
           )}
         >
-          {mobileNavOpen ? (
-            <div className="flex shrink-0 items-center justify-end border-b border-edge-subtle px-3 py-2 lg:hidden dark:border-edge">
-              <Button
-                type="button"
-                variant="ghost"
-                className="size-8 shrink-0 rounded-xl p-0"
-                aria-label={m.closeMenu}
-                onClick={() => setMobileNavOpen(false)}
-              >
-                <X className="size-4" strokeWidth={1.5} />
-              </Button>
-            </div>
-          ) : null}
-          <div className="min-h-0 flex-1 overflow-x-hidden overflow-y-auto pt-2">
-            <SidebarNav
-              collapsed={navCollapsed}
-              onNavigate={() => setMobileNavOpen(false)}
-            />
-          </div>
-          <div
-            className={cn(
-              'shrink-0 border-t border-edge-subtle dark:border-edge',
-              navCollapsed ? 'px-1 py-2' : 'px-4 py-3',
-            )}
-          >
-            <ConnectionIndicator compact={navCollapsed} />
-          </div>
+          <SidebarNav
+            collapsed={navCollapsed}
+            onNavigate={() => setMobileNavOpen(false)}
+          />
         </aside>
 
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
