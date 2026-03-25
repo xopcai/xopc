@@ -19,19 +19,6 @@ function formatTime(ts?: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function progressEmoji(stage: string): string {
-  const map: Record<string, string> = {
-    thinking: '🤔',
-    searching: '🔍',
-    reading: '📖',
-    writing: '✍️',
-    executing: '⚙️',
-    analyzing: '📊',
-    idle: '💬',
-  };
-  return map[stage] || '💬';
-}
-
 function renderTextOrImageBlock(
   block: MessageContent,
   key: string,
@@ -108,7 +95,6 @@ export function MessageBubble({
   const isUser = message.role === 'user' || message.role === 'user-with-attachments';
   const isAssistant = message.role === 'assistant';
   const roleLabel = isUser ? m.chat.you : isAssistant ? m.chat.assistant : m.chat.tool;
-  const avatarLetter = roleLabel.charAt(0);
 
   const toolLabels = { input: m.chat.toolInput, output: m.chat.toolOutput, noOutput: m.chat.noOutput };
   const stepLabels = {
@@ -128,38 +114,49 @@ export function MessageBubble({
   const legacyThinking =
     !message.content.some((b) => b.type === 'thinking') && (message.thinking || message.thinkingStreaming);
 
+  const showMeta =
+    Boolean(message.timestamp) ||
+    Boolean(progress?.message) ||
+    (isStreaming && !streamingThinking);
+
   return (
-    <div className={cn('flex gap-3', isUser && 'flex-row-reverse')}>
+    <article className={cn('flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
-          isUser ? 'bg-accent dark:bg-accent' : isAssistant ? 'bg-neutral-600 dark:bg-neutral-500' : 'bg-neutral-400',
+          'min-w-0 max-w-[min(85%,42rem)]',
+          isUser ? 'w-max' : 'w-full',
         )}
-        aria-hidden
       >
-        {avatarLetter}
-      </div>
-      <div className="flex min-w-0 max-w-[min(85%,42rem)] flex-col gap-1.5">
-        <div className="flex flex-wrap items-center gap-2 text-xs text-fg-subtle">
-          <span className="font-medium text-fg">{roleLabel}</span>
-          <span className="text-fg-disabled">·</span>
-          <span className="tabular-nums">{formatTime(message.timestamp)}</span>
-          {progress ? (
-            <span className="animate-pulse text-accent-fg" title={progress.detail ?? ''}>
-              {progressEmoji(progress.stage)} {progress.message}
-            </span>
-          ) : null}
-          {isStreaming && !streamingThinking ? (
-            <span className="animate-pulse text-accent-fg">{m.chat.thinkingLabel}</span>
-          ) : null}
-        </div>
+        <span className="sr-only">{roleLabel}</span>
+
+        {showMeta ? (
+          <div
+            className={cn(
+              'mb-2 flex flex-wrap items-baseline gap-x-2 gap-y-0.5 text-xs text-fg-disabled',
+              isUser && 'justify-end',
+            )}
+          >
+            {message.timestamp ? (
+              <time className="tabular-nums" dateTime={new Date(message.timestamp).toISOString()}>
+                {formatTime(message.timestamp)}
+              </time>
+            ) : null}
+            {progress?.message ? (
+              <span className="text-fg-subtle" title={progress.detail ?? ''}>
+                {progress.message}
+              </span>
+            ) : null}
+            {isStreaming && !streamingThinking ? (
+              <span className="text-fg-subtle">{m.chat.thinkingLabel}</span>
+            ) : null}
+          </div>
+        ) : null}
 
         <div
           className={cn(
-            'min-w-0 rounded-2xl border px-4 py-3 text-sm leading-relaxed',
-            isUser
-              ? 'border-accent-soft bg-accent-soft/40 text-fg dark:border-accent-soft dark:bg-accent-soft/30'
-              : 'border-edge-subtle bg-surface-panel text-fg shadow-sm shadow-slate-200/30 dark:border-edge dark:bg-surface-panel/70 dark:shadow-none',
+            'min-w-0 text-sm leading-relaxed text-fg',
+            isUser &&
+              'rounded-xl bg-accent-soft/55 px-4 py-3 text-right dark:bg-accent-soft/35',
           )}
         >
           <div className="flex min-w-0 flex-col gap-2">
@@ -194,8 +191,12 @@ export function MessageBubble({
           </div>
         </div>
 
-        {isAssistant && message.usage ? <UsageBadge usage={message.usage} /> : null}
+        {isAssistant && message.usage ? (
+          <div className="mt-3">
+            <UsageBadge usage={message.usage} />
+          </div>
+        ) : null}
       </div>
-    </div>
+    </article>
   );
 }
