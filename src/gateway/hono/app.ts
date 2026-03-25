@@ -1,5 +1,7 @@
 import { Hono } from 'hono';
 import { cors } from 'hono/cors';
+import { createMiddleware } from 'hono/factory';
+import { bodyLimit } from 'hono/body-limit';
 import { readFileSync } from 'node:fs';
 import { readFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
@@ -91,18 +93,23 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   const app = new Hono();
 
   // CORS configuration
-  // Development: allow all origins by default
-  // Production: use config, default to denying all if not configured
-  const isProduction = process.env.NODE_ENV === 'production';
+  // Compute safe default origins based on gateway bind address and port
+  const gatewayPort = service.currentConfig.gateway.port ?? 18790;
   const configuredOrigins = service.currentConfig.gateway.corsOrigins;
-  
+
   let corsOrigin: string | string[];
-  if (isProduction) {
-    // Production: use configured origins, or '*' if explicitly allowed
-    corsOrigin = configuredOrigins && configuredOrigins.length > 0 ? configuredOrigins : '*';
+  if (configuredOrigins && configuredOrigins.length > 0) {
+    // User explicitly configured origins — respect them
+    corsOrigin = configuredOrigins;
   } else {
-    // Development: allow all origins by default
-    corsOrigin = '*';
+    // No explicit config: allow only loopback origins (safe default)
+    corsOrigin = [
+      `http://localhost:${gatewayPort}`,
+      `http://127.0.0.1:${gatewayPort}`,
+      // Vite dev server default port
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+    ];
   }
 
   const CORS_OPTIONS = {
@@ -116,6 +123,44 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // Global middleware
   app.use(logger());
   app.use(cors(CORS_OPTIONS));
+
+  // Security headers middleware (FIX-1)
+  app.use(createMiddleware(async (c, next) => {
+    await next();
+    // Prevent clickjacking
+    c.header('X-Frame-Options', 'DENY');
+    // Prevent MIME type sniffing
+    c.header('X-Content-Type-Options', 'nosniff');
+    // Control referrer information leakage
+    c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
+    // Prevent reflected XSS (legacy browsers)
+    c.header('X-XSS-Protection', '1; mode=block');
+    // Restrict permissions API access
+    c.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=()');
+    // Basic CSP: allow same-origin resources, inline styles (Tailwind), and data: URIs (icons)
+    c.header(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
+    );
+  }));
+
+  // Request body size limit (FIX-3)
+  // Larger limit for skill ZIP uploads (10MB) - must be before /api/*
+  app.use('/api/skills/upload', bodyLimit({
+    maxSize: 10 * 1024 * 1024,
+    onError: (c) => {
+      return c.json({ error: 'Skill package too large', maxSize: '10MB' }, 413);
+    },
+  }));
+
+  // Default body limit for all API routes (1MB, prevents OOM DoS)
+  const MAX_BODY_SIZE = 1 * 1024 * 1024; // 1MB
+  app.use('/api/*', bodyLimit({
+    maxSize: MAX_BODY_SIZE,
+    onError: (c) => {
+      return c.json({ error: 'Request body too large', maxSize: '1MB' }, 413);
+    },
+  }));
 
   // Health endpoint (no auth required)
   app.get('/health', (c) => {

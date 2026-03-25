@@ -40,7 +40,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
         'xopcbot gateway token --generate # Generate new token',
       ])
     )
-    .option('--host <address>', 'Host to bind to', '0.0.0.0')
+    .option('--host <address>', 'Host to bind to', '127.0.0.1')
     .option('--port <number>', 'Port to listen on', '18790')
     .option('--token <token>', 'Authentication token')
     .option('--force', 'Force kill existing process on port', false)
