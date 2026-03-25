@@ -309,7 +309,7 @@ export const GatewayConfigSchema = z.object({
   maxSseConnections: z.number().optional(),
   corsOrigins: z.array(z.string()).optional(),
 }).default({
-  host: '0.0.0.0',
+  host: '127.0.0.1',
   port: 18790,
   auth: {
     mode: 'token',
@@ -319,7 +319,7 @@ export const GatewayConfigSchema = z.object({
     intervalMs: 60000,
   },
   maxSseConnections: 100,
-  corsOrigins: ['*'],
+  corsOrigins: [],
 });
 
 export const CronConfigSchema = z.object({
@@ -572,7 +572,7 @@ export const ConfigSchema = z.object({
     },
   },
   gateway: {
-    host: '0.0.0.0',
+    host: '127.0.0.1',
     port: 18790,
     auth: {
       mode: 'token',
@@ -582,7 +582,7 @@ export const ConfigSchema = z.object({
       intervalMs: 60000,
     },
     maxSseConnections: 100,
-    corsOrigins: ['*'],
+    corsOrigins: [],
   },
   tools: {
     web: {
