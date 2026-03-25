@@ -34,7 +34,10 @@ export function SidebarNav({
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <nav
-        className={cn('flex min-h-0 flex-1 flex-col overflow-y-auto', collapsed ? 'gap-3 px-1.5 pt-2' : 'gap-6 px-4 pt-4')}
+        className={cn(
+          'app-sidebar-nav-scroll flex min-h-0 flex-1 flex-col overflow-y-auto',
+          collapsed ? 'gap-3 px-1.5 pt-2' : 'gap-6 px-4 pt-4',
+        )}
         aria-label="Main"
       >
         <div className="flex flex-col gap-0.5">
