@@ -17,7 +17,7 @@ export type {
   VerboseLevel,
   ElevatedMode,
   SessionAgentConfig,
-} from '../types/thinking.js';
+} from '../agent/thinking-types.js';
 export {
   normalizeThinkLevel,
   normalizeReasoningLevel,
@@ -26,7 +26,7 @@ export {
   listThinkingLevels,
   formatThinkingLevels,
   thinkLevelToNumber,
-} from '../types/thinking.js';
+} from '../agent/thinking-types.js';
 
 // Re-export types from types.models (avoid conflict with schema.js)
 export type {

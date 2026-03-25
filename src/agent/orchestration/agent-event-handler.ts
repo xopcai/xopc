@@ -7,17 +7,17 @@
 
 import type { AgentEvent } from '@mariozechner/pi-agent-core';
 import type { SessionContext } from '../session/session-context.js';
-import type { ProgressFeedbackManager } from '../progress.js';
-import type { ToolErrorTracker } from '../tool-error-tracker.js';
-import type { RequestLimiter } from '../request-limiter.js';
+import type { ProgressFeedbackManager } from '../lifecycle/progress.js';
+import type { ToolErrorTracker } from '../tools/error-tracker.js';
+import type { RequestLimiter } from '../models/request-limiter.js';
 import type { LifecycleManager } from '../lifecycle/index.js';
-import type { ToolChainTracker } from '../tool-chain-tracker.js';
+import type { ToolChainTracker } from '../tools/chain-tracker.js';
 import type { SelfVerifyMiddleware } from '../middleware/self-verify.js';
-import type { SystemReminder } from '../system-reminder.js';
-import type { ToolUsageAnalyzer } from '../tool-usage-analyzer.js';
-import type { ErrorPatternMatcher } from '../error-pattern-matcher.js';
+import type { SystemReminder } from '../prompt/system-reminder.js';
+import type { ToolUsageAnalyzer } from '../tools/usage-analyzer.js';
+import type { ErrorPatternMatcher } from '../tools/error-pattern-matcher.js';
 import type { ModelManager } from '../models/index.js';
-import { extractTextContent } from '../helpers.js';
+import { extractTextContent } from '../context/helpers.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('AgentEventHandler');

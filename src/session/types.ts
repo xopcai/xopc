@@ -2,6 +2,7 @@
 
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
+  /** Plain text (legacy) or structured content blocks from the agent (tool calls, multimodal). */
   content: string | unknown[];
   timestamp?: string;
   tool_call_id?: string;
@@ -13,6 +14,9 @@ export interface Message {
       arguments: string;
     };
   }>;
+  tool_call_id$?: string;
+  toolName?: string;
+  isError?: boolean;
   name?: string;
   /** Webchat early-save / UI: inbound file metadata (no base64). Omitted when absent. */
   attachments?: Array<{

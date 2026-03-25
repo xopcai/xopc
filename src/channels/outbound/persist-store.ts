@@ -5,7 +5,7 @@
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'node:crypto';
-import type { OutboundMessage } from '../../types/index.js';
+import type { OutboundMessage } from '../transport-types.js';
 
 export interface PendingOutbound {
   id: string;

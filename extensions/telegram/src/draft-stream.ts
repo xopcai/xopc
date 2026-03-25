@@ -7,7 +7,7 @@
 
 import type { Bot } from 'grammy';
 import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
-import type { ProgressStage } from '@xopcai/xopcbot/agent/progress.js';
+import type { ProgressStage } from '@xopcai/xopcbot/agent/lifecycle/progress.js';
 import { createFinalizableDraftLifecycle } from './draft-stream-lifecycle.js';
 import {
   isSafeToRetrySendError,

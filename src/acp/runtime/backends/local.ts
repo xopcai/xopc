@@ -20,15 +20,15 @@ import type {
   SessionAcpMeta,
 } from "../types.js";
 import { AcpRuntimeError, normalizeAcpErrorCode } from "../errors.js";
-import type { MessageBus } from "../../../bus/index.js";
+import type { MessageBus } from "../../../infra/bus/index.js";
 import type { Config } from "../../../config/schema.js";
 import { SessionStore } from "../../../session/index.js";
 import { resolveModel, getDefaultModelSync, getApiKeySync } from "../../../providers/index.js";
 import { resolveBundledSkillsDir } from "../../../config/paths.js";
-import { AgentToolsFactory } from "../../../agent/agent-tools-factory.js";
+import { AgentToolsFactory } from "../../../agent/tools/factory.js";
 import { SystemPromptBuilder } from "../../../agent/prompt/service-prompt-builder.js";
 import { SkillManager } from "../../../agent/skills/index.js";
-import { loadBootstrapFiles, extractTextContent } from "../../../agent/helpers.js";
+import { loadBootstrapFiles, extractTextContent } from "../../../agent/context/helpers.js";
 import { cleanTrailingErrors, sanitizeMessages } from "../../../agent/memory/message-sanitizer.js";
 import { tryApplySessionTranscriptHygiene } from "../../../agent/transcript/transcript-hygiene.js";
 import { createLogger } from "../../../utils/logger.js";

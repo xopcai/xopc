@@ -7,7 +7,7 @@ import type {
   ChannelStreamingAdapter,
 } from '@xopcai/xopcbot/channels/plugin-types.js';
 import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
-import type { ProgressStage } from '@xopcai/xopcbot/agent/progress.js';
+import type { ProgressStage } from '@xopcai/xopcbot/agent/lifecycle/progress.js';
 import type { TelegramAccountManager } from '../account-manager.js';
 import { createTelegramDraftStream } from '../draft-stream.js';
 import { renderTelegramHtmlText } from '../format.js';

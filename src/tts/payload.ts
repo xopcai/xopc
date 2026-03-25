@@ -1,8 +1,8 @@
-import type { OutboundMessage } from '../types/index.js';
+import type { OutboundMessage } from '../channels/transport-types.js';
 import type { TTSConfig, TTSAutoMode } from './types.js';
 import { shouldUseTTS, getChannelOutputFormat } from './service.js';
 import { speak } from './index.js';
-import { compressAudio } from '../utils/audio.js';
+import { compressAudio } from './audio.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('TTS/Payload');

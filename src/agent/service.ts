@@ -1,5 +1,5 @@
 import type { AgentEvent, AgentMessage, ThinkingLevel } from '@mariozechner/pi-agent-core';
-import { MessageBusShutdownError, type MessageBus, type InboundMessage } from '../bus/index.js';
+import { MessageBusShutdownError, type MessageBus, type InboundMessage } from '../infra/bus/index.js';
 import { type Config, type AgentDefaults, getAgentDefaultModelRef } from '../config/schema.js';
 import { maybeAutoTitleSessionStore } from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
@@ -13,7 +13,7 @@ import {
   type CompactionConfig,
   type WindowConfig,
 } from '../session/index.js';
-import { normalizeThinkLevel, type ThinkLevel } from '../types/thinking.js';
+import { normalizeThinkLevel, type ThinkLevel } from './thinking-types.js';
 import { createLogger } from '../utils/logger.js';
 import { ExtensionRegistryImpl as ExtensionRegistry, ExtensionHookRunner } from '../extensions/index.js';
 import {
@@ -21,18 +21,18 @@ import {
   extractTextContent,
   extractThinkingContent,
   extractThinkingFromAssistantMessage,
-} from './helpers.js';
-import { SessionTracker } from './session-tracker.js';
+} from './context/helpers.js';
+import { SessionTracker } from './session/tracker.js';
 import { ModelManager } from './models/index.js';
-import { initializeCommands } from '../commands/index.js';
-import { ProgressFeedbackManager, type ProgressStage } from './progress.js';
-import { HookHandler } from './hook-handler.js';
-import { ToolErrorTracker } from './tool-error-tracker.js';
-import { RequestLimiter } from './request-limiter.js';
-import { SystemReminder } from './system-reminder.js';
-import { ToolUsageAnalyzer } from './tool-usage-analyzer.js';
-import { ToolChainTracker } from './tool-chain-tracker.js';
-import { ErrorPatternMatcher } from './error-pattern-matcher.js';
+import { initializeCommands } from '../chat-commands/index.js';
+import { ProgressFeedbackManager, type ProgressStage } from './lifecycle/progress.js';
+import { HookHandler } from './lifecycle/hook-handler.js';
+import { ToolErrorTracker } from './tools/error-tracker.js';
+import { RequestLimiter } from './models/request-limiter.js';
+import { SystemReminder } from './prompt/system-reminder.js';
+import { ToolUsageAnalyzer } from './tools/usage-analyzer.js';
+import { ToolChainTracker } from './tools/chain-tracker.js';
+import { ErrorPatternMatcher } from './tools/error-pattern-matcher.js';
 import { SelfVerifyMiddleware } from './middleware/self-verify.js';
 import { ContextMiddleware } from './middleware/context.js';
 import { LifecycleManager } from './lifecycle/index.js';
@@ -44,13 +44,13 @@ import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
 import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 
-import { createTypingController, type TypingController } from './typing.js';
+import { createTypingController, type TypingController } from './lifecycle/typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
 import { tryApplySessionTranscriptHygiene } from './transcript/transcript-hygiene.js';
 import {
   persistInboundAttachmentsToWorkspace,
   formatInboundFileTextBlock,
-} from '../attachments/inbound-persist.js';
+} from '../channels/attachments/inbound-persist.js';
 
 const log = createLogger('AgentService');
 

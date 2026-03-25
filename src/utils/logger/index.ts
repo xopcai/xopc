@@ -10,7 +10,7 @@
 
 import pino from 'pino';
 import type { Logger as PinoLogger } from 'pino';
-import type { LogLevel, LogContext, ContextualLogger } from '../logger.types.js';
+import type { LogLevel, LogContext, ContextualLogger } from './types.js';
 
 // Internal modules
 import { config, getLogDir, getLoggerConfig } from './config.js';
@@ -216,7 +216,7 @@ export type {
   LogStats,
   RotationResult,
   ContextualLogger,
-} from '../logger.types.js';
+} from './types.js';
 
 export {
   // Config

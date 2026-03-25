@@ -4,8 +4,8 @@
  * Handles message classification, session key resolution, and routing logic.
  */
 
-import type { InboundMessage } from '../../bus/index.js';
-import { parseSlashCommand } from '../../commands/command-parse.js';
+import type { InboundMessage } from '../../infra/bus/index.js';
+import { parseSlashCommand } from '../../chat-commands/command-parse.js';
 import type { AgentContext } from '../service.js';
 
 export interface MessageRoutingResult {

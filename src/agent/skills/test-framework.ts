@@ -8,7 +8,7 @@
 import { existsSync, readFileSync, readdirSync } from 'fs';
 import { basename, join, relative } from 'path';
 import { createLogger } from '../../utils/logger.js';
-import { parseFrontmatter } from '../../utils/frontmatter.js';
+import { parseFrontmatter } from '../../markdown/frontmatter.js';
 import { scanSkillDirectory } from './scanner.js';
 import { hasBinary } from './installer.js';
 import type { SkillMetadata, SkillInstallSpec, SkillRequires } from './types.js';

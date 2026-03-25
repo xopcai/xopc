@@ -13,7 +13,7 @@ import type { Config } from '@xopcai/xopcbot/config/index.js';
 import { isProviderConfiguredSync } from '@xopcai/xopcbot/providers/index.js';
 import { TelegramInlineKeyboards, type ProviderInfo } from './inline-keyboards.js';
 import { getProviderDisplayName, getModelsByProvider, getDefaultModelSync, getAllProviders } from '@xopcai/xopcbot/providers/index.js';
-import { generateSessionKey } from '@xopcai/xopcbot/commands/session-key.js';
+import { generateSessionKey } from '@xopcai/xopcbot/chat-commands/session-key.js';
 
 const log = createLogger('TelegramCommandHandler');
 

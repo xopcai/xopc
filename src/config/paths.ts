@@ -482,21 +482,21 @@ export function resolveExtensionSdkPath(): string {
   try {
     const currentFile = fileURLToPath(import.meta.url);
     const srcDir = dirname(currentFile);
-    const adjacent = join(srcDir, '..', 'extension-sdk', 'index.ts');
+    const adjacent = join(srcDir, '..', 'extensions', 'sdk', 'index.ts');
     if (existsSync(adjacent)) {
       return adjacent;
     }
-    const fromPackageRoot = join(srcDir, '..', '..', 'src', 'extension-sdk', 'index.ts');
+    const fromPackageRoot = join(srcDir, '..', '..', 'src', 'extensions', 'sdk', 'index.ts');
     if (existsSync(fromPackageRoot)) {
       return fromPackageRoot;
     }
-    const cwd = join(process.cwd(), 'src', 'extension-sdk', 'index.ts');
+    const cwd = join(process.cwd(), 'src', 'extensions', 'sdk', 'index.ts');
     if (existsSync(cwd)) {
       return cwd;
     }
     return adjacent;
   } catch {
-    return join(process.cwd(), 'src', 'extension-sdk', 'index.ts');
+    return join(process.cwd(), 'src', 'extensions', 'sdk', 'index.ts');
   }
 }
 

@@ -2,7 +2,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 import { readFile } from 'fs/promises';
 import { AgentTool, type AgentToolResult } from '@mariozechner/pi-agent-core';
-import type { MessageBus, OutboundMessage } from '../../bus/index.js';
+import type { MessageBus, OutboundMessage } from '../../infra/bus/index.js';
 
 const SendMediaSchema = Type.Object({
   filePath: Type.String({ description: 'Local file path to send' }),

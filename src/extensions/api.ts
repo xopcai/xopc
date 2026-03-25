@@ -26,7 +26,7 @@ import type { ChannelPlugin } from '../channels/plugin-types.js';
 import {
   HOOK_EXECUTION_MODES,
 } from './types/hooks.js';
-import type { Config } from '../types/index.js';
+import type { Config } from '../config/config-surface.js';
 import { resolve, isAbsolute } from 'path';
 import { EventEmitter } from 'events';
 import { createLogger } from '../utils/logger.js';

@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { MessageBus, InboundMessage, OutboundMessage } from '@xopcai/xopcbot/bus/index.js';
+import { MessageBus, InboundMessage, OutboundMessage } from '@xopcai/xopcbot/infra/bus/index.js';
 
 /**
  * 集成测试 - 验证消息能正确传递给 Agent 执行

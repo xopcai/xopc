@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { MessageBus, InboundMessage, OutboundMessage } from '../../bus/index.js';
+import { MessageBus, InboundMessage, OutboundMessage } from '../../infra/bus/index.js';
 
 describe('Media Processing Integration', () => {
   let bus: MessageBus;

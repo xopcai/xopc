@@ -6,10 +6,10 @@
  */
 
 import type { Agent, AgentMessage } from '@mariozechner/pi-agent-core';
-import type { InboundMessage } from '../../bus/index.js';
+import type { InboundMessage } from '../../infra/bus/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
 import { resolveEffectiveThinkingLevel } from '../../session/thinking-resolve.js';
-import type { ThinkLevel } from '../../types/thinking.js';
+import type { ThinkLevel } from '../thinking-types.js';
 import type { ModelManager } from '../models/index.js';
 import type { SessionContext } from '../session/session-context.js';
 import type { AgentEventHandler } from './agent-event-handler.js';
@@ -22,7 +22,7 @@ import { maybeRetryTurnAfterTransientLlmFailure } from './llm-turn-retry.js';
 import {
   persistInboundAttachmentsToWorkspace,
   formatInboundFileTextBlock,
-} from '../../attachments/inbound-persist.js';
+} from '../../channels/attachments/inbound-persist.js';
 
 const log = createLogger('AgentOrchestrator');
 

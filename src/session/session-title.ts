@@ -5,7 +5,7 @@
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { complete, type UserMessage } from '@mariozechner/pi-ai';
 
-import { stripInboundFileMetadataFromText } from '../attachments/inbound-persist.js';
+import { stripInboundFileMetadataFromText } from '../channels/attachments/inbound-persist.js';
 import { parseSessionKey } from '../routing/session-key.js';
 import { resolveModel } from '../providers/index.js';
 import { createLogger } from '../utils/logger.js';

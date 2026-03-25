@@ -5,7 +5,7 @@
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 import type { SessionConfigStore } from './config-store.js';
 import { resolveThinkingLevel } from './config-store.js';
-import { normalizeThinkLevel, type ThinkLevel } from '../types/thinking.js';
+import { normalizeThinkLevel, type ThinkLevel } from '../agent/thinking-types.js';
 
 const FALLBACK: ThinkingLevel = 'medium';
 

@@ -5,7 +5,7 @@
  */
 
 import type { SessionStore } from '../../session/index.js';
-import type { SessionTracker } from '../session-tracker.js';
+import type { SessionTracker } from './tracker.js';
 import type { LifecycleManager } from '../lifecycle/index.js';
 import type { SessionContext } from './session-context.js';
 import { createLogger } from '../../utils/logger.js';

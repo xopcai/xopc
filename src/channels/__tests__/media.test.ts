@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import type { InboundMessage } from '../../types/index.js';
+import type { InboundMessage } from '../transport-types.js';
 
 describe('Media Download and Conversion', () => {
   // Mock fetch for testing

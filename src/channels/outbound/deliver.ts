@@ -8,7 +8,7 @@ import type {
   ChannelPlugin,
   OutboundDeliveryResult,
 } from '../plugin-types.js';
-import type { OutboundMessage } from '../../types/index.js';
+import type { OutboundMessage } from '../transport-types.js';
 import { normalizePayloadForPlugin } from './normalize.js';
 
 export interface DeliverOutboundMessageParams {

@@ -1,6 +1,6 @@
 import { existsSync, readdirSync, readFileSync } from 'fs';
 import { basename, dirname, join, relative, sep } from 'path';
-import { parseFrontmatter } from '../../utils/frontmatter.js';
+import { parseFrontmatter } from '../../markdown/frontmatter.js';
 import { resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import type { 

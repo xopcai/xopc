@@ -3,8 +3,8 @@
  */
 
 import type { Config } from '../config/index.js';
-import type { MessageBus } from '../bus/index.js';
-import type { OutboundMessage } from '../types/index.js';
+import type { MessageBus } from '../infra/bus/index.js';
+import type { OutboundMessage } from './transport-types.js';
 import type {
   ChannelPlugin,
   ChannelPluginInitOptions,

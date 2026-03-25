@@ -13,7 +13,7 @@ import {
   cleanOldLogs,
   type LogQuery,
   type LogEntry,
-} from '../../utils/log-store.js';
+} from '../../utils/logger/log-store.js';
 import { getLoggerConfig } from '../../utils/logger/config.js';
 import { rotateLogs } from '../../utils/logger/rotation.js';
 

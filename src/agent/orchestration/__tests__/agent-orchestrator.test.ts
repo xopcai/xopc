@@ -7,7 +7,7 @@
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { AgentOrchestrator } from '../agent-orchestrator.js';
-import type { InboundMessage } from '../../../bus/index.js';
+import type { InboundMessage } from '../../../infra/bus/index.js';
 import type { Agent, AgentMessage } from '@mariozechner/pi-agent-core';
 import type { SessionStore } from '../../../session/index.js';
 import type { ModelManager } from '../../models/index.js';

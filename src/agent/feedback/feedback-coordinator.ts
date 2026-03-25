@@ -5,11 +5,11 @@
  * into a single coherent feedback system.
  */
 
-import type { MessageBus } from '../../bus/index.js';
+import type { MessageBus } from '../../infra/bus/index.js';
 import type { SessionContext } from '../session/session-context.js';
-import type { ProgressFeedbackManager, ProgressStage, ProgressMessage } from '../progress.js';
+import type { ProgressFeedbackManager, ProgressStage, ProgressMessage } from '../lifecycle/progress.js';
 import type { StreamHandle } from '../messaging/stream-manager.js';
-import { formatProgressMessage, formatHeartbeatMessage } from '../progress.js';
+import { formatProgressMessage, formatHeartbeatMessage } from '../lifecycle/progress.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('FeedbackCoordinator');
