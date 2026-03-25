@@ -67,7 +67,7 @@ export function ChatHeader({
         type="button"
         disabled={loading || sessionRoutePending}
         className={cn(
-          'inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-edge bg-surface-panel px-2.5 py-2 text-sm font-medium text-fg-muted transition-colors duration-150 hover:bg-surface-hover hover:text-fg active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel disabled:pointer-events-none disabled:opacity-50 lg:px-3 dark:border-edge',
+          'inline-flex shrink-0 items-center gap-1.5 rounded-xl border border-edge bg-surface-panel px-2.5 py-2 text-sm font-medium text-fg-muted transition-colors duration-150 hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel disabled:pointer-events-none disabled:opacity-50 lg:px-3 dark:border-edge',
         )}
         onClick={() => onNewSession()}
       >

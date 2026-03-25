@@ -198,8 +198,62 @@ html.dark {
   }
 }
 
+/* Dialog overlay and content animations */
+@keyframes xopcbot-dialog-overlay-in {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes xopcbot-dialog-overlay-out {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes xopcbot-dialog-content-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+  to { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes xopcbot-dialog-content-out {
+  from { opacity: 1; transform: translate(-50%, -50%) scale(1); }
+  to { opacity: 0; transform: translate(-50%, -50%) scale(0.96); }
+}
+
+/* Drawer (right-side panel) animations */
+@keyframes xopcbot-drawer-right-in {
+  from { transform: translate3d(100%, 0, 0); }
+  to { transform: translate3d(0, 0, 0); }
+}
+@keyframes xopcbot-drawer-right-out {
+  from { transform: translate3d(0, 0, 0); }
+  to { transform: translate3d(100%, 0, 0); }
+}
+
+/* Animation classes for Radix Dialog */
+.xopcbot-dialog-overlay[data-state='open'] {
+  animation: xopcbot-dialog-overlay-in 0.2s ease-out both;
+}
+.xopcbot-dialog-overlay[data-state='closed'] {
+  animation: xopcbot-dialog-overlay-out 0.15s ease-in both;
+}
+
+.xopcbot-dialog-content[data-state='open'] {
+  animation: xopcbot-dialog-content-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.xopcbot-dialog-content[data-state='closed'] {
+  animation: xopcbot-dialog-content-out 0.2s ease-in both;
+}
+
+.xopcbot-drawer-right[data-state='open'] {
+  animation: xopcbot-drawer-right-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.xopcbot-drawer-right[data-state='closed'] {
+  animation: xopcbot-drawer-right-out 0.2s ease-in both;
+}
+
 .xopcbot-mobile-nav-overlay[data-state='open'] {
   animation: xopcbot-overlay-in 0.2s ease-out both;
+}
+.xopcbot-mobile-nav-overlay[data-state='closed'] {
+  animation: xopcbot-dialog-overlay-out 0.15s ease-in both;
 }
 
 .xopcbot-mobile-nav-content[data-state='open'] {

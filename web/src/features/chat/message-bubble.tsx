@@ -115,7 +115,7 @@ export function MessageBubble({
       <div
         className={cn(
           'flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-xs font-semibold text-white',
-          isUser ? 'bg-blue-600 dark:bg-blue-500' : isAssistant ? 'bg-neutral-600 dark:bg-neutral-500' : 'bg-neutral-400',
+          isUser ? 'bg-accent dark:bg-accent' : isAssistant ? 'bg-neutral-600 dark:bg-neutral-500' : 'bg-neutral-400',
         )}
         aria-hidden
       >
@@ -127,12 +127,12 @@ export function MessageBubble({
           <span className="text-fg-disabled">·</span>
           <span className="tabular-nums">{formatTime(message.timestamp)}</span>
           {progress ? (
-            <span className="animate-pulse text-blue-600 dark:text-blue-400" title={progress.detail ?? ''}>
+            <span className="animate-pulse text-accent-fg" title={progress.detail ?? ''}>
               {progressEmoji(progress.stage)} {progress.message}
             </span>
           ) : null}
           {isStreaming && !streamingThinking ? (
-            <span className="animate-pulse text-blue-600 dark:text-blue-400">{m.chat.thinkingLabel}</span>
+            <span className="animate-pulse text-accent-fg">{m.chat.thinkingLabel}</span>
           ) : null}
         </div>
 
@@ -140,7 +140,7 @@ export function MessageBubble({
           className={cn(
             'rounded-2xl border px-4 py-3 text-sm leading-relaxed',
             isUser
-              ? 'border-blue-100 bg-blue-50/80 text-fg dark:border-blue-900/50 dark:bg-blue-950/35'
+              ? 'border-accent-soft bg-accent-soft/40 text-fg dark:border-accent-soft dark:bg-accent-soft/30'
               : 'border-edge-subtle bg-surface-panel text-fg shadow-sm shadow-slate-200/30 dark:border-edge dark:bg-surface-panel/70 dark:shadow-none',
           )}
         >
@@ -148,11 +148,11 @@ export function MessageBubble({
             <div className="flex flex-col gap-2">
               {message.content.map((block, j) => renderBlock(block, `${j}`, toolLabels, thinkingLabels))}
               {isStreaming ? (
-                <span className="inline-block h-3 w-0.5 animate-pulse bg-blue-600 align-middle dark:bg-blue-400" />
+                <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
               ) : null}
             </div>
           ) : isStreaming ? (
-            <span className="inline-block h-3 w-0.5 animate-pulse bg-blue-600 dark:bg-blue-400" />
+            <span className="inline-block h-3 w-0.5 animate-pulse bg-accent" />
           ) : null}
 
           {legacyThinking ? (

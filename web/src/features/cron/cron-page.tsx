@@ -739,9 +739,9 @@ export function CronPage() {
       {/* Form dialog */}
       <Dialog.Root open={formOpen} onOpenChange={(o) => !o && closeForm()}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[60] bg-slate-900/40" />
+          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-slate-900/40" />
           <Dialog.Content
-            className="fixed left-1/2 top-1/2 z-[60] flex max-h-[min(90vh,800px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-edge bg-surface-panel shadow-xl outline-none dark:border-edge"
+            className="xopcbot-dialog-content fixed left-1/2 top-1/2 z-[60] flex max-h-[min(90vh,800px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-edge bg-surface-panel shadow-xl outline-none dark:border-edge"
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3">
@@ -964,10 +964,10 @@ export function CronPage() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[60] bg-slate-900/40" />
+          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-slate-900/40" />
           <Dialog.Content
             className={cn(
-              'fixed right-0 top-0 z-[60] flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-xl outline-none',
+              'xopcbot-drawer-right fixed right-0 top-0 z-[60] flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-xl outline-none',
               'dark:border-edge',
             )}
             aria-describedby={undefined}
@@ -1092,8 +1092,8 @@ export function CronPage() {
       {/* Confirm run/delete */}
       <Dialog.Root open={confirmOpen} onOpenChange={setConfirmOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="fixed inset-0 z-[70] bg-slate-900/40" />
-          <Dialog.Content className="fixed left-1/2 top-1/2 z-[70] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-xl dark:border-edge">
+          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[70] bg-slate-900/40" />
+          <Dialog.Content className="xopcbot-dialog-content fixed left-1/2 top-1/2 z-[70] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-xl dark:border-edge">
             <Dialog.Title className="text-base font-semibold text-fg">
               {confirmAction === 'delete' ? c.delete : c.runNow}
             </Dialog.Title>
