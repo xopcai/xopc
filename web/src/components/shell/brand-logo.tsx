@@ -1,22 +1,51 @@
-import type { ImgHTMLAttributes } from 'react';
+import type { SVGAttributes } from 'react';
 
 import { cn } from '@/lib/cn';
 
+/** Matches `web/public/logo.svg`; stroke/fill use CSS variables for light/dark. */
+const HUB_PATH =
+  'M 61.000 50.000 L 61.159 50.548 L 61.629 51.145 L 62.381 51.837 L 63.374 52.660 L 64.550 53.645 L 65.843 54.806 L 67.178 56.146 L 68.478 57.654 L 69.667 59.302 L 70.676 61.051 L 71.443 62.853 L 71.921 64.647 L 72.075 66.372 L 71.888 67.963 L 71.359 69.359 L 70.506 70.506 L 69.359 71.359 L 67.963 71.888 L 66.372 72.075 L 64.647 71.921 L 62.853 71.443 L 61.051 70.676 L 59.302 69.667 L 57.654 68.478 L 56.146 67.178 L 54.806 65.843 L 53.645 64.550 L 52.660 63.374 L 51.837 62.381 L 51.145 61.629 L 50.548 61.159 L 50.000 61.000 L 49.452 61.159 L 48.855 61.629 L 48.163 62.381 L 47.340 63.374 L 46.355 64.550 L 45.194 65.843 L 43.854 67.178 L 42.346 68.478 L 40.698 69.667 L 38.949 70.676 L 37.147 71.443 L 35.353 71.921 L 33.628 72.075 L 32.037 71.888 L 30.641 71.359 L 29.494 70.506 L 28.641 69.359 L 28.112 67.963 L 27.925 66.372 L 28.079 64.647 L 28.557 62.853 L 29.324 61.051 L 30.333 59.302 L 31.522 57.654 L 32.822 56.146 L 34.157 54.806 L 35.450 53.645 L 36.626 52.660 L 37.619 51.837 L 38.371 51.145 L 38.841 50.548 L 39.000 50.000 L 38.841 49.452 L 38.371 48.855 L 37.619 48.163 L 36.626 47.340 L 35.450 46.355 L 34.157 45.194 L 32.822 43.854 L 31.522 42.346 L 30.333 40.698 L 29.324 38.949 L 28.557 37.147 L 28.079 35.353 L 27.925 33.628 L 28.112 32.037 L 28.641 30.641 L 29.494 29.494 L 30.641 28.641 L 32.037 28.112 L 33.628 27.925 L 35.353 28.079 L 37.147 28.557 L 38.949 29.324 L 40.698 30.333 L 42.346 31.522 L 43.854 32.822 L 45.194 34.157 L 46.355 35.450 L 47.340 36.626 L 48.163 37.619 L 48.855 38.371 L 49.452 38.841 L 50.000 39.000 L 50.548 38.841 L 51.145 38.371 L 51.837 37.619 L 52.660 36.626 L 53.645 35.450 L 54.806 34.157 L 56.146 32.822 L 57.654 31.522 L 59.302 30.333 L 61.051 29.324 L 62.853 28.557 L 64.647 28.079 L 66.372 27.925 L 67.963 28.112 L 69.359 28.641 L 70.506 29.494 L 71.359 30.641 L 71.888 32.037 L 72.075 33.628 L 71.921 35.353 L 71.443 37.147 L 70.676 38.949 L 69.667 40.698 L 68.478 42.346 L 67.178 43.854 L 65.843 45.194 L 64.550 46.355 L 63.374 47.340 L 62.381 48.163 L 61.629 48.855 L 61.159 49.452 L 61.000 50.000 Z';
+
+const RING_PATHS = [
+  'M 29.375 23.602 A 33.5 33.5 0 0 1 70.625 23.602',
+  'M 76.398 29.375 A 33.5 33.5 0 0 1 76.398 70.625',
+  'M 70.625 76.398 A 33.5 33.5 0 0 1 29.375 76.398',
+  'M 23.602 70.625 A 33.5 33.5 0 0 1 23.602 29.375',
+  'M 35.011 29.370 A 25.5 25.5 0 0 1 64.989 29.370',
+  'M 70.630 35.011 A 25.5 25.5 0 0 1 70.630 64.989',
+  'M 64.989 70.630 A 25.5 25.5 0 0 1 35.011 70.630',
+  'M 29.370 64.989 A 25.5 25.5 0 0 1 29.370 35.011',
+] as const;
+
 type BrandLogoProps = {
   className?: string;
-} & Pick<ImgHTMLAttributes<HTMLImageElement>, 'alt' | 'aria-hidden'>;
+  alt?: string;
+} & Pick<SVGAttributes<SVGSVGElement>, 'aria-hidden'>;
 
-/** Serves from `web/public/logo.png` at `/logo.png`. */
 export function BrandLogo({ alt, className, 'aria-hidden': ariaHidden }: BrandLogoProps) {
+  const label = alt?.trim() ? alt : undefined;
+  const hide = ariaHidden ?? (label ? undefined : true);
+
   return (
-    <img
-      src="/logo.png"
-      alt={alt ?? ''}
-      aria-hidden={ariaHidden}
-      className={cn('shrink-0 object-contain', className)}
-      width={256}
-      height={256}
-      decoding="async"
-    />
+    <svg
+      xmlns="http://www.w3.org/2000/svg"
+      viewBox="0 0 100 100"
+      className={cn('shrink-0', className)}
+      fill="none"
+      role="img"
+      aria-hidden={hide}
+      aria-label={label}
+    >
+      <g
+        className="[stroke:var(--color-accent)]"
+        strokeWidth={3.2}
+        strokeLinecap="round"
+      >
+        {RING_PATHS.map((d, i) => (
+          <path key={i} d={d} />
+        ))}
+      </g>
+      <path className="[fill:var(--color-fg)] [fill-opacity:0.82]" d={HUB_PATH} />
+    </svg>
   );
 }

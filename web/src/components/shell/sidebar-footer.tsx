@@ -56,10 +56,7 @@ export function SidebarFooter({
             )}
             onClick={() => onNavigate?.()}
           >
-            <BrandLogo
-              className="size-full rounded-full object-cover object-center"
-              alt={m.appBrand}
-            />
+            <BrandLogo className="size-full rounded-full" alt={m.appBrand} />
           </Link>
         ) : null}
         {!collapsed ? (
