@@ -5,7 +5,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { TabIcon } from '@/components/shell/tab-icons';
 import { messages, tabLabel } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { HELP_DOCS_URL, pathForTab, SETTINGS_SHELL_NAV_TABS } from '@/navigation';
+import { helpDocsHomeUrl, pathForTab, SETTINGS_SHELL_NAV_TABS } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 
 /** Aligned with `SidebarNav` secondary links (§4.3 — same rail rhythm as main app sidebar). */
@@ -80,7 +80,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
               </NavLink>
             ))}
             <a
-              href={HELP_DOCS_URL}
+              href={helpDocsHomeUrl(language)}
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
@@ -112,7 +112,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
           </nav>
           <div className="shrink-0 border-t border-edge-subtle px-4 pb-4 pt-3 dark:border-edge-subtle">
             <a
-              href={HELP_DOCS_URL}
+              href={helpDocsHomeUrl(language)}
               target="_blank"
               rel="noopener noreferrer"
               className={helpLinkClass}

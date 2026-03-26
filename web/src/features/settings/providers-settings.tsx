@@ -34,11 +34,11 @@ import {
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages, type ProvidersSettingsMessages } from '@/i18n/messages';
+import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const CATEGORY_ORDER: ProviderCategory[] = ['common', 'specialty', 'enterprise', 'oauth'];
-const DOCS_URL = 'https://github.com/xopc/xopcbot/blob/main/docs/models.md';
 
 function groupByCategory(rows: ProviderRowModel[]): Map<ProviderCategory, ProviderRowModel[]> {
   const map = new Map<ProviderCategory, ProviderRowModel[]>();
@@ -194,7 +194,7 @@ export function ProvidersSettingsPanel() {
       <p className="text-sm leading-relaxed text-fg-muted">
         {p.intro}{' '}
         <a
-          href={DOCS_URL}
+          href={docsGuidePageUrl(language, 'models')}
           target="_blank"
           rel="noopener noreferrer"
           className="font-medium text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"

@@ -12,10 +12,9 @@ import {
 import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages, type VoiceSettingsMessages } from '@/i18n/messages';
+import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-
-const DOCS_URL = 'https://github.com/xopc/xopcbot/blob/main/docs/voice.md';
 
 function inputClassName(): string {
   return cn(
@@ -239,7 +238,7 @@ export function VoiceSettingsPanel() {
           <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.voice}</h1>
           <p className="mt-1 text-sm text-fg-muted">{v.subtitle}</p>
           <a
-            href={DOCS_URL}
+            href={docsGuidePageUrl(language, 'voice')}
             target="_blank"
             rel="noreferrer"
             className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"

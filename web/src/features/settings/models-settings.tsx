@@ -23,6 +23,7 @@ import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-fi
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages, type ModelsSettingsMessages } from '@/i18n/messages';
+import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -43,8 +44,6 @@ import {
   type ProviderConfig,
   type ValidationResult,
 } from './models-json-api';
-
-const DOCS_URL = 'https://github.com/xopc/xopcbot/blob/main/docs/models.md';
 
 const PROVIDER_PRESETS: Record<string, Partial<ProviderConfig>> = {
   ollama: {
@@ -792,7 +791,7 @@ export function ModelsSettingsPanel() {
         <h1 className="text-lg font-semibold text-fg">{m.settingsSections.models}</h1>
         <p className="text-sm text-fg-muted">{ms.subtitle}</p>
         <a
-          href={DOCS_URL}
+          href={docsGuidePageUrl(language, 'models')}
           target="_blank"
           rel="noreferrer"
           className="inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
