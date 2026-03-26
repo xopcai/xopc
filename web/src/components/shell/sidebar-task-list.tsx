@@ -47,7 +47,7 @@ function interpolate(template: string, params: Record<string, string | number>):
 function rowShellClass(isActive: boolean): string {
   return cn(
     // `px-4` list + `pl-3` row = same inset as nav `px-4` + item `px-3` → aligns with menu icons.
-    'group flex w-full min-w-0 items-center gap-0.5 rounded-xl pl-3 pr-1 text-left text-sm font-medium leading-6 transition-colors duration-200 ease-out',
+    'group flex w-full min-w-0 items-center gap-0.5 rounded-xl pl-3 pr-1 text-left text-sm font-medium leading-5 transition-colors duration-200 ease-out',
     'focus-within:outline-none',
     isActive ? 'bg-surface-active text-fg' : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
   );
@@ -105,7 +105,7 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
     <div className={rowShellClass(isActive)}>
       <Link
         to={`/chat/${encodeURIComponent(session.key)}`}
-        className="min-w-0 flex-1 truncate rounded-xl py-1.5 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+        className="min-w-0 flex-1 truncate rounded-xl py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
         title={title}
         onClick={() => onNavigate?.()}
       >
@@ -354,7 +354,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
             <Loader2 className="size-5 animate-spin text-fg-subtle" strokeWidth={1.75} aria-hidden />
           </div>
         ) : items.length > 0 ? (
-          <div className="flex flex-col gap-1.5 px-4">
+          <div className="flex flex-col gap-0.5 px-4">
             {items.map((session) => (
               <SidebarTaskRow
                 key={session.key}
