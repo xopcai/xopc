@@ -3,6 +3,7 @@ import { MessageBusShutdownError, type MessageBus, type InboundMessage } from '.
 import { type Config, type AgentDefaults, getAgentDefaultModelRef } from '../config/schema.js';
 import { maybeAutoTitleSessionStore } from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
+import { INTERNAL_OUTBOUND_DROP_CHANNEL } from '../channels/internal-outbound.js';
 import { mkdirSync } from 'fs';
 import { join } from 'path';
 
@@ -535,9 +536,28 @@ export class AgentService {
   }
 
   private parseSessionKey(sessionKey: string): { channel: string; chatId: string } {
-    const parts = sessionKey.split(':');
+    const parts = sessionKey.split(':').filter(Boolean);
+    const first = parts[0] || 'cli';
+
+    // Heartbeat sessions use keys like `heartbeat:main` / `heartbeat:isolated:ts` — not a real channel id.
+    // Route tool outbounds to configured delivery target, or a synthetic channel that ChannelManager drops.
+    if (first === 'heartbeat') {
+      const hb = this.config.config?.gateway?.heartbeat;
+      const target = hb?.target?.trim();
+      const targetChatId = hb?.targetChatId?.trim();
+      if (target && targetChatId) {
+        return { channel: target, chatId: targetChatId };
+      }
+      return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: parts.slice(1).join(':') || 'heartbeat' };
+    }
+
+    // Cron `processDirect` uses `cron:<jobId>` — not a channel plugin id.
+    if (first === 'cron') {
+      return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: parts.slice(1).join(':') || 'cron' };
+    }
+
     return {
-      channel: parts[0] || 'cli',
+      channel: first,
       chatId: parts.slice(1).join(':') || 'direct',
     };
   }

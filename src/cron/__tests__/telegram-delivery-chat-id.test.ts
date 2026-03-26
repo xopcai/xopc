@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { normalizeTelegramDeliveryChatId } from '../telegram-delivery-chat-id.js';
+import { normalizeTelegramDeliveryChatId } from '../../channels/telegram-delivery-chat-id.js';
 
 describe('normalizeTelegramDeliveryChatId', () => {
   it('passes through plain numeric chat id', () => {

@@ -14,6 +14,7 @@ import type {
 } from './plugin-types.js';
 
 import { createLogger } from '../utils/logger.js';
+import { INTERNAL_OUTBOUND_DROP_CHANNEL } from './internal-outbound.js';
 import { maybeApplyTtsToPayload } from '../tts/payload.js';
 import { deliverOutboundMessage } from './outbound/deliver.js';
 import { OutboundPersistStore } from './outbound/persist-store.js';
@@ -366,6 +367,15 @@ export class ChannelManager {
           return;
         }
         processedMsg = { ...processedMsg, content: hookResult.content ?? processedMsg.content };
+      }
+
+      if (processedMsg.channel === INTERNAL_OUTBOUND_DROP_CHANNEL) {
+        log.debug(
+          { chatId: processedMsg.chat_id },
+          'Outbound dropped (internal session — not a real channel)',
+        );
+        if (queueId) this.persistStore!.ack(queueId);
+        return;
       }
 
       const plugin = this.plugins.get(processedMsg.channel);

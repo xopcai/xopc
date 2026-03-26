@@ -9,6 +9,7 @@ import type {
   OutboundDeliveryResult,
 } from '../plugin-types.js';
 import type { OutboundMessage } from '../transport-types.js';
+import { normalizeTelegramDeliveryChatId } from '../telegram-delivery-chat-id.js';
 import { normalizePayloadForPlugin } from './normalize.js';
 
 export interface DeliverOutboundMessageParams {
@@ -24,19 +25,26 @@ export async function deliverOutboundMessage(
   const outbound = plugin.outbound;
   if (!outbound) return undefined;
 
-  const normalizedPayload = normalizePayloadForPlugin(processedMsg, plugin);
+  const chatId =
+    plugin.id === 'telegram' && typeof processedMsg.chat_id === 'string'
+      ? normalizeTelegramDeliveryChatId(processedMsg.chat_id)
+      : processedMsg.chat_id;
 
-  if (processedMsg.type === 'typing_on' || processedMsg.type === 'typing_off') {
+  const msg: OutboundMessage = { ...processedMsg, chat_id: chatId };
+
+  const normalizedPayload = normalizePayloadForPlugin(msg, plugin);
+
+  if (msg.type === 'typing_on' || msg.type === 'typing_off') {
     if (outbound.sendPayload) {
       return outbound.sendPayload({
         cfg,
-        to: processedMsg.chat_id,
-        text: processedMsg.content ?? '',
-        mediaUrl: processedMsg.mediaUrl,
-        threadId: processedMsg.metadata?.threadId as string | number | null,
-        replyToId: processedMsg.replyToMessageId,
-        accountId: processedMsg.metadata?.accountId as string ?? undefined,
-        silent: processedMsg.silent,
+        to: chatId,
+        text: msg.content ?? '',
+        mediaUrl: msg.mediaUrl,
+        threadId: msg.metadata?.threadId as string | number | null,
+        replyToId: msg.replyToMessageId,
+        accountId: msg.metadata?.accountId as string ?? undefined,
+        silent: msg.silent,
         payload: normalizedPayload,
       });
     }
@@ -45,15 +53,15 @@ export async function deliverOutboundMessage(
 
   const outboundCtx: ChannelOutboundContext = {
     cfg,
-    to: processedMsg.chat_id,
-    text: processedMsg.content ?? '',
-    mediaUrl: processedMsg.mediaUrl,
-    mediaType: processedMsg.mediaType,
-    threadId: processedMsg.metadata?.threadId as string | number | null,
-    replyToId: processedMsg.replyToMessageId,
-    accountId: processedMsg.metadata?.accountId as string ?? undefined,
-    silent: processedMsg.silent,
-    audioAsVoice: processedMsg.audioAsVoice,
+    to: chatId,
+    text: msg.content ?? '',
+    mediaUrl: msg.mediaUrl,
+    mediaType: msg.mediaType,
+    threadId: msg.metadata?.threadId as string | number | null,
+    replyToId: msg.replyToMessageId,
+    accountId: msg.metadata?.accountId as string ?? undefined,
+    silent: msg.silent,
+    audioAsVoice: msg.audioAsVoice,
   };
 
   if (outbound.sendPayload) {
@@ -65,5 +73,5 @@ export async function deliverOutboundMessage(
   if (outbound.sendText) {
     return outbound.sendText(outboundCtx);
   }
-  return { messageId: '', chatId: processedMsg.chat_id, success: false, error: 'No send method' };
+  return { messageId: '', chatId, success: false, error: 'No send method' };
 }
