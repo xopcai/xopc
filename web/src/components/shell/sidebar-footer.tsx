@@ -1,24 +1,12 @@
-import * as Popover from '@radix-ui/react-popover';
-import { FileText, FolderOpen, Settings } from 'lucide-react';
-import { useState } from 'react';
-import { Link, NavLink } from 'react-router-dom';
+import { Settings } from 'lucide-react';
+import { useEffect } from 'react';
+import { Link, NavLink, useLocation } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
-import { TabIcon } from '@/components/shell/tab-icons';
-import { Button } from '@/components/ui/button';
-import { messages, tabLabel, type Tab } from '@/i18n/messages';
+import { messages } from '@/i18n/messages';
 import { pathForTab } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
-
-const SETTINGS_TABS: Tab[] = [
-  'settingsAgent',
-  'settingsProviders',
-  'settingsModels',
-  'settingsChannels',
-  'settingsVoice',
-  'settingsGateway',
-];
 
 export function SidebarFooter({
   collapsed = false,
@@ -29,7 +17,14 @@ export function SidebarFooter({
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
-  const [menuOpen, setMenuOpen] = useState(false);
+  const { pathname } = useLocation();
+  const settingsActive = pathname.startsWith('/settings');
+
+  useEffect(() => {
+    void import('@/pages/settings-page');
+    void import('@/pages/sessions-page');
+    void import('@/pages/logs-page');
+  }, []);
 
   return (
     <div
@@ -65,105 +60,23 @@ export function SidebarFooter({
             <div className="truncate text-sm font-semibold leading-tight text-fg">{m.appBrand}</div>
           </div>
         ) : null}
-        <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
-          <Popover.Trigger asChild>
-            <Button
-              type="button"
-              variant="ghost"
-              className={cn(
-                'shrink-0 rounded-xl p-0 text-fg-muted hover:bg-surface-hover hover:text-fg',
-                collapsed ? 'size-8' : 'size-10',
-              )}
-              aria-label={m.sidebar.appMenuAria}
-              title={m.sidebar.appMenuAria}
-            >
-              <Settings className="size-[18px]" strokeWidth={1.5} />
-            </Button>
-          </Popover.Trigger>
-          <Popover.Portal>
-            <Popover.Content
-              className={cn(
-                'z-50 w-[min(13.75rem,calc(100vw-2rem))]',
-                'max-h-[min(22rem,70vh)] overflow-y-auto overscroll-contain',
-                'rounded-xl border border-edge bg-surface-panel p-1 shadow-elevated outline-none',
-                'dark:border-edge dark:shadow-black/40',
-              )}
-              side={collapsed ? 'right' : 'top'}
-              align="end"
-              sideOffset={6}
-              collisionPadding={12}
-              onCloseAutoFocus={(e) => e.preventDefault()}
-            >
-              <div className="px-2.5 pb-1 pt-1.5 text-[11px] font-medium uppercase tracking-wide text-fg-subtle">
-                {m.nav.settings}
-              </div>
-              <nav className="flex flex-col gap-px" aria-label={m.nav.settings}>
-                {SETTINGS_TABS.map((tab) => (
-                  <NavLink
-                    key={tab}
-                    to={pathForTab(tab)}
-                    className={({ isActive }) =>
-                      cn(
-                        'flex min-h-8 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium leading-snug transition-colors duration-150',
-                        isActive
-                          ? 'bg-accent-soft text-accent-fg'
-                          : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-                      )
-                    }
-                    onClick={() => {
-                      setMenuOpen(false);
-                      onNavigate?.();
-                    }}
-                  >
-                    <TabIcon tab={tab} className="size-3.5 shrink-0 opacity-90" />
-                    <span className="min-w-0 flex-1 truncate">{tabLabel(language, tab)}</span>
-                  </NavLink>
-                ))}
-                <div
-                  className="my-1 border-t border-edge-subtle dark:border-edge"
-                  role="separator"
-                  aria-hidden
-                />
-                <NavLink
-                  to="/sessions"
-                  className={({ isActive }) =>
-                    cn(
-                      'flex min-h-8 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium leading-snug transition-colors duration-150',
-                      isActive
-                        ? 'bg-accent-soft text-accent-fg'
-                        : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-                    )
-                  }
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onNavigate?.();
-                  }}
-                >
-                  <FolderOpen className="size-3.5 shrink-0 opacity-90" strokeWidth={1.75} />
-                  <span className="min-w-0 flex-1 truncate">{m.nav.sessions}</span>
-                </NavLink>
-                <NavLink
-                  to="/logs"
-                  className={({ isActive }) =>
-                    cn(
-                      'flex min-h-8 items-center gap-2 rounded-lg px-2.5 py-1.5 text-sm font-medium leading-snug transition-colors duration-150',
-                      isActive
-                        ? 'bg-accent-soft text-accent-fg'
-                        : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-                    )
-                  }
-                  onClick={() => {
-                    setMenuOpen(false);
-                    onNavigate?.();
-                  }}
-                >
-                  <FileText className="size-3.5 shrink-0 opacity-90" strokeWidth={1.75} />
-                  <span className="min-w-0 flex-1 truncate">{m.nav.logs}</span>
-                </NavLink>
-              </nav>
-            </Popover.Content>
-          </Popover.Portal>
-        </Popover.Root>
+
+        <NavLink
+          to={pathForTab('settingsAgent')}
+          title={m.nav.settings}
+          aria-label={m.nav.settings}
+          aria-current={settingsActive ? 'page' : undefined}
+          className={({ isActive }) =>
+            cn(
+              'flex shrink-0 items-center justify-center rounded-xl p-0 text-fg-muted transition-colors duration-150 hover:bg-surface-hover hover:text-fg',
+              collapsed ? 'size-8' : 'size-10',
+              (isActive || settingsActive) && 'bg-accent-soft text-accent-fg hover:bg-accent-soft hover:text-accent-fg',
+            )
+          }
+          onClick={() => onNavigate?.()}
+        >
+          <Settings className="size-[18px]" strokeWidth={1.5} aria-hidden />
+        </NavLink>
       </div>
     </div>
   );

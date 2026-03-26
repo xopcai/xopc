@@ -3,6 +3,7 @@ import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import { AppShell } from '@/components/shell/app-shell';
 import { SecondaryPageLayout } from '@/components/shell/secondary-page-layout';
+import { SettingsPageLayout } from '@/components/shell/settings-page-layout';
 import { ChatPage } from '@/features/chat/chat-page';
 import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
 import { SwrProvider } from '@/providers/swr-provider';
@@ -29,6 +30,19 @@ function SecondaryRouteFallback() {
   );
 }
 
+function SettingsRouteFallback() {
+  return (
+    <div className="flex min-h-0 flex-1 flex-col" aria-busy>
+      <div className="mx-auto w-full max-w-app-main flex-1 px-4 py-8">
+        <div className="h-8 w-48 max-w-full animate-pulse rounded-md bg-surface-hover" />
+        <div className="mt-6 h-36 animate-pulse rounded-xl bg-surface-hover" />
+        <div className="mt-4 h-24 animate-pulse rounded-xl bg-surface-hover" />
+        <p className="mt-6 text-sm text-fg-muted">Loading…</p>
+      </div>
+    </div>
+  );
+}
+
 const router = createHashRouter([
   {
     path: '/',
@@ -45,16 +59,16 @@ const router = createHashRouter([
         ],
       },
       {
+        path: 'sessions',
+        element: <Navigate to="/settings/sessions" replace />,
+      },
+      {
+        path: 'logs',
+        element: <Navigate to="/settings/logs" replace />,
+      },
+      {
         element: <SecondaryPageLayout />,
         children: [
-          {
-            path: 'sessions',
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <SessionsPage />
-              </Suspense>
-            ),
-          },
           {
             path: 'cron',
             element: (
@@ -71,6 +85,21 @@ const router = createHashRouter([
               </Suspense>
             ),
           },
+        ],
+      },
+      {
+        path: 'settings',
+        element: <SettingsPageLayout />,
+        children: [
+          { index: true, element: <Navigate to="agent" replace /> },
+          {
+            path: 'sessions',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <SessionsPage />
+              </Suspense>
+            ),
+          },
           {
             path: 'logs',
             element: (
@@ -80,9 +109,9 @@ const router = createHashRouter([
             ),
           },
           {
-            path: 'settings/:section',
+            path: ':section',
             element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
+              <Suspense fallback={<SettingsRouteFallback />}>
                 <SettingsPage />
               </Suspense>
             ),

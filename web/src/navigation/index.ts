@@ -41,6 +41,22 @@ export function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
   return TAB_TO_SETTINGS_SECTION[tab as keyof typeof TAB_TO_SETTINGS_SECTION] ?? null;
 }
 
+/** Order of items in the full-screen settings sidebar (subset of `Tab`). */
+export const SETTINGS_NAV_TABS: readonly Tab[] = [
+  'settingsAgent',
+  'settingsProviders',
+  'settingsModels',
+  'settingsChannels',
+  'settingsVoice',
+  'settingsGateway',
+];
+
+/** Settings shell: configuration tabs + sessions + logs (same left rail). */
+export const SETTINGS_SHELL_NAV_TABS: readonly Tab[] = [...SETTINGS_NAV_TABS, 'sessions', 'logs'];
+
+/** Official docs (gateway console help link). */
+export const HELP_DOCS_URL = 'https://xopcai.github.io/xopcbot';
+
 /** Parse `#/settings/agent` etc. Returns null if not a settings route. */
 export function parseSettingsHash(hash: string): SettingsSectionId | null {
   let h = hash.startsWith('#') ? hash.slice(1) : hash;
@@ -96,5 +112,6 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
+  if (tab === 'sessions' || tab === 'logs') return `/settings/${tab}`;
   return `/${tab}`;
 }

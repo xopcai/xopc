@@ -5,7 +5,16 @@ export function bootstrapLegacyHash(): void {
   const raw = window.location.hash.slice(1);
   if (!raw) return;
 
-  const legacyTabs = ['sessions', 'cron', 'skills', 'logs'] as const;
+  if (raw === 'sessions') {
+    window.history.replaceState(null, '', '#/settings/sessions');
+    return;
+  }
+  if (raw === 'logs') {
+    window.history.replaceState(null, '', '#/settings/logs');
+    return;
+  }
+
+  const legacyTabs = ['cron', 'skills'] as const;
   if ((legacyTabs as readonly string[]).includes(raw)) {
     window.history.replaceState(null, '', `#/${raw}`);
     return;
