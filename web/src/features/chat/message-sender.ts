@@ -68,7 +68,13 @@ export class MessageSender {
 
     const ct = res.headers.get('Content-Type') || '';
     if (ct.includes('text/event-stream') && res.body) {
-      await this._consumeSSE(res.body, callbacks);
+      const terminal = this._wrapTerminalCallbacks(callbacks);
+      await this._consumeSSE(res.body, terminal.wrapped);
+      // If the HTTP body closed without a `result` / `error` event (proxy drop, parse miss, etc.),
+      // the UI would otherwise keep `streaming` true and block the next send — see use-chat-session guard.
+      if (!terminal.sawTerminal && !this._abort?.signal.aborted) {
+        terminal.onMissingTerminal();
+      }
     } else {
       const json = (await res.json()) as { ok?: boolean; payload?: { content?: string } };
       if (json.ok && json.payload?.content) {
@@ -105,11 +111,53 @@ export class MessageSender {
 
     const ct = res.headers.get('Content-Type') || '';
     if (ct.includes('text/event-stream') && res.body) {
-      await this._consumeSSE(res.body, callbacks);
+      const terminal = this._wrapTerminalCallbacks(callbacks);
+      await this._consumeSSE(res.body, terminal.wrapped);
+      if (!terminal.sawTerminal && !this._abort?.signal.aborted) {
+        terminal.onMissingTerminal();
+      }
     }
 
     this._clearPendingRun();
     this._abort = undefined;
+  }
+
+  /** Ensures at most one of onResult/onError fires from the wrapped callbacks. */
+  private _wrapTerminalCallbacks(cb?: MessagingCallbacks): {
+    wrapped: MessagingCallbacks | undefined;
+    sawTerminal: boolean;
+    onMissingTerminal: () => void;
+  } {
+    if (!cb) {
+      return { wrapped: undefined, sawTerminal: false, onMissingTerminal: () => {} };
+    }
+    let sawTerminal = false;
+    const markTerminal = () => {
+      sawTerminal = true;
+    };
+    return {
+      get sawTerminal() {
+        return sawTerminal;
+      },
+      wrapped: {
+        ...cb,
+        onResult: () => {
+          if (sawTerminal) return;
+          markTerminal();
+          cb.onResult();
+        },
+        onError: (msg: string) => {
+          if (sawTerminal) return;
+          markTerminal();
+          cb.onError(msg);
+        },
+      },
+      onMissingTerminal: () => {
+        if (sawTerminal) return;
+        markTerminal();
+        cb.onResult();
+      },
+    };
   }
 
   private _clearPendingRun(): void {
@@ -166,6 +214,10 @@ export class MessageSender {
     try {
       parsed = JSON.parse(data) as Record<string, unknown>;
     } catch {
+      // Still complete the turn so the chat does not stay in a permanent "streaming" state.
+      if (event === 'result') {
+        cb?.onResult();
+      }
       return;
     }
 
