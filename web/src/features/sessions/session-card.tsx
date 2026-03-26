@@ -71,7 +71,8 @@ export function SessionCard({
       role="button"
       tabIndex={0}
       className={cn(
-        'group flex cursor-pointer flex-col rounded-xl border border-edge bg-surface-panel text-left transition-colors duration-150',
+        // min-w-0: grid/flex children default to min-width:auto — long unbroken titles (URLs) otherwise expand the track
+        'group flex min-w-0 w-full max-w-full cursor-pointer flex-col rounded-xl border border-edge bg-surface-panel text-left transition-colors duration-150',
         'hover:border-edge-strong hover:bg-surface-hover',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
         variant === 'list' && 'sm:flex-row sm:items-center sm:gap-4',
@@ -86,7 +87,7 @@ export function SessionCard({
     >
       <div
         className={cn(
-          'flex items-start justify-between gap-2 border-b border-edge-subtle px-3 py-2 dark:border-edge',
+          'flex min-w-0 items-start justify-between gap-2 border-b border-edge-subtle px-3 py-2 dark:border-edge',
           variant === 'list' && 'sm:border-b-0 sm:py-3',
         )}
       >
@@ -102,9 +103,14 @@ export function SessionCard({
       </div>
 
       <div className={cn('min-w-0 flex-1 px-3 py-2', variant === 'list' && 'sm:py-3')}>
-        <div className="truncate text-sm font-semibold text-fg">{displayName}</div>
+        <div className="min-w-0 max-w-full truncate text-sm font-semibold text-fg" title={displayName}>
+          {displayName}
+        </div>
         {showKeySubtitle ? (
-          <div className="mt-0.5 truncate font-mono text-[11px] text-fg-subtle" title={session.key}>
+          <div
+            className="mt-0.5 min-w-0 max-w-full truncate font-mono text-[11px] text-fg-subtle"
+            title={session.key}
+          >
             {session.key}
           </div>
         ) : null}
@@ -123,7 +129,7 @@ export function SessionCard({
             {session.tags.slice(0, 3).map((tag) => (
               <span
                 key={tag}
-                className="rounded-md border border-edge-subtle bg-surface-hover px-1.5 py-0.5 text-[11px] text-fg-muted dark:border-edge"
+                className="max-w-full break-words rounded-md border border-edge-subtle bg-surface-hover px-1.5 py-0.5 text-[11px] text-fg-muted dark:border-edge"
               >
                 {tag}
               </span>

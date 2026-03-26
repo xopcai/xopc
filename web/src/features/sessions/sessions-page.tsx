@@ -286,15 +286,15 @@ export function SessionsPage() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto w-full max-w-app-main px-4 py-16 text-center text-sm text-fg-muted sm:px-8">
+      <div className="mx-auto w-full max-w-2xl px-4 py-16 text-center text-sm text-fg-muted sm:px-8 lg:max-w-app-main">
         {s.needToken}
       </div>
     );
   }
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-4 px-4 py-6 sm:px-6 lg:px-8">
+    <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden bg-surface-panel">
+      <div className="mx-auto flex w-full min-w-0 max-w-2xl flex-col gap-4 px-4 py-6 sm:px-6 lg:max-w-app-main lg:px-8">
         <header className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <h1 className="flex items-center gap-2 text-xl font-semibold tracking-tight text-fg">
             <FolderOpen className="size-5 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
@@ -420,7 +420,7 @@ export function SessionsPage() {
           <>
             <div
               className={cn(
-                'grid gap-3',
+                'grid min-w-0 gap-3',
                 viewMode === 'grid' ? 'sm:grid-cols-2 lg:grid-cols-3' : 'grid-cols-1',
               )}
             >
