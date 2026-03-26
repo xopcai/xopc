@@ -32,6 +32,7 @@ export function ModelSelector({
   showProviderInTrigger = true,
   contentSide = 'bottom',
   contentAlign = 'end',
+  className,
   onChange,
 }: {
   value: string;
@@ -45,6 +46,8 @@ export function ModelSelector({
   /** Radix popover placement — use `top` when the trigger sits near the viewport bottom (e.g. chat composer). */
   contentSide?: 'top' | 'bottom';
   contentAlign?: 'start' | 'center' | 'end';
+  /** Merged onto the trigger button (e.g. full width in wide forms). */
+  className?: string;
   onChange: (modelId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -78,6 +81,7 @@ export function ModelSelector({
             'disabled:cursor-not-allowed disabled:opacity-50',
             'dark:border-edge-subtle dark:hover:bg-surface-hover/55',
             compact && 'py-1.5 text-[13px]',
+            className,
           )}
         >
           <span className="min-w-0 truncate">{isLoading ? '…' : label}</span>

@@ -80,6 +80,17 @@ function selectClassName(): string {
   return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
 }
 
+/** Native `<select>` beside a text field: full width when stacked; fixed width on the right on `sm+` (avoid `selectClassName()` which adds `w-full`). */
+const cronScheduleSelectClass = cn(
+  selectControlBaseClass,
+  'w-full text-xs sm:w-auto sm:min-w-[10rem] sm:max-w-[15rem] sm:shrink-0',
+);
+
+const cronRecipientSelectClass = cn(
+  selectControlBaseClass,
+  'w-full text-xs sm:w-auto sm:min-w-[11rem] sm:max-w-[17rem] sm:shrink-0',
+);
+
 export function CronPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -749,7 +760,7 @@ export function CronPage() {
           <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
           <div className="fixed inset-0 z-[60] flex items-center justify-center p-4 pointer-events-none">
             <Dialog.Content
-              className="xopcbot-dialog-content-pane pointer-events-auto relative flex max-h-[min(90vh,800px)] w-full max-w-md flex-col rounded-xl border border-edge bg-surface-panel shadow-xl outline-none dark:border-edge"
+              className="xopcbot-dialog-content-pane pointer-events-auto relative flex max-h-[min(90vh,800px)] w-full max-w-md flex-col rounded-xl border border-edge bg-surface-panel shadow-xl outline-none sm:max-w-lg lg:max-w-xl dark:border-edge"
               onOpenAutoFocus={(e) => e.preventDefault()}
             >
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3">
@@ -776,16 +787,16 @@ export function CronPage() {
                 </label>
                 <div className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-fg-muted">{c.schedule}</span>
-                  <div className="flex gap-2">
+                  <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-2">
                     <input
                       type="text"
-                      className={cn(inputClassName(), 'min-w-0 flex-1 font-mono text-xs')}
+                      className={cn(inputClassName(), 'min-w-0 w-full font-mono text-xs sm:flex-1')}
                       value={formSchedule}
                       onChange={(e) => setFormSchedule(e.target.value)}
                       placeholder="*/5 * * * *"
                     />
                     <select
-                      className={cn(selectClassName(), 'max-w-[11rem] shrink-0 text-xs')}
+                      className={cronScheduleSelectClass}
                       value={schedulePresetSelectValue}
                       onChange={(e) => {
                         const v = e.target.value;
@@ -838,6 +849,7 @@ export function CronPage() {
                         placeholder={chatM.modelPlaceholder}
                         searchPlaceholder={chatM.modelSearchPlaceholder}
                         noMatches={chatM.modelNoMatches}
+                        className="w-full max-w-none min-w-0"
                         onChange={(id) => {
                           formModelUserTouched.current = true;
                           setFormModel(id);
@@ -895,16 +907,16 @@ export function CronPage() {
                             {c.refreshList}
                           </Button>
                         </div>
-                        <div className="flex gap-2">
+                        <div className="flex flex-col gap-2 sm:flex-row sm:items-stretch sm:gap-2">
                           <input
                             type="text"
-                            className={cn(inputClassName(), 'min-w-0 flex-1')}
+                            className={cn(inputClassName(), 'min-w-0 w-full sm:flex-1')}
                             value={formChatId}
                             onChange={(e) => setFormChatId(e.target.value)}
                             placeholder={c.recipientPlaceholder}
                           />
                           <select
-                            className={cn(selectClassName(), 'max-w-[10rem] shrink-0 text-xs')}
+                            className={cronRecipientSelectClass}
                             value={formChatId}
                             onChange={(e) => {
                               const v = e.target.value;
