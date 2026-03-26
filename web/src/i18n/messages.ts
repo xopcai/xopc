@@ -6,6 +6,7 @@ export type Tab =
   | 'cron'
   | 'skills'
   | 'logs'
+  | 'settingsAppearance'
   | 'settingsAgent'
   | 'settingsProviders'
   | 'settingsModels'
@@ -13,7 +14,14 @@ export type Tab =
   | 'settingsVoice'
   | 'settingsGateway';
 
-export type SettingsSectionId = 'agent' | 'providers' | 'models' | 'channels' | 'voice' | 'gateway';
+export type SettingsSectionId =
+  | 'appearance'
+  | 'agent'
+  | 'providers'
+  | 'models'
+  | 'channels'
+  | 'voice'
+  | 'gateway';
 
 const bundles: Record<
   StoredLanguage,
@@ -627,6 +635,13 @@ const bundles: Record<
         envVars: string;
       };
     };
+    appearanceSettings: {
+      subtitle: string;
+      languageTitle: string;
+      languageDescription: string;
+      themeTitle: string;
+      themeDescription: string;
+    };
     gatewaySettings: {
       needToken: string;
       subtitle: string;
@@ -674,6 +689,7 @@ const bundles: Record<
       cron: 'Cron Jobs',
       skills: 'Skills',
       logs: 'Logs',
+      settingsAppearance: 'Appearance',
       settingsAgent: 'Agent',
       settingsProviders: 'Providers',
       settingsModels: 'Models',
@@ -682,6 +698,7 @@ const bundles: Record<
       settingsGateway: 'Gateway',
     },
     settingsSections: {
+      appearance: 'Appearance',
       agent: 'Agent',
       providers: 'Providers',
       models: 'Models',
@@ -1356,6 +1373,13 @@ const bundles: Record<
       heartbeatHint: 'Interval for gateway heartbeat events (SSE / UI).',
       authModeNone: 'Auth mode is set to none — token in config may be ignored.',
     },
+    appearanceSettings: {
+      subtitle: 'Interface language and color theme apply to this browser only.',
+      languageTitle: 'Language',
+      languageDescription: 'Choose the UI language for the gateway console.',
+      themeTitle: 'Theme',
+      themeDescription: 'Light, dark, or follow your system setting.',
+    },
   },
   zh: {
     appBrand: 'XOPCBOT',
@@ -1372,6 +1396,7 @@ const bundles: Record<
       cron: '定时任务',
       skills: '技能',
       logs: '日志',
+      settingsAppearance: '外观',
       settingsAgent: '代理',
       settingsProviders: '提供商',
       settingsModels: '模型',
@@ -1380,6 +1405,7 @@ const bundles: Record<
       settingsGateway: '网关',
     },
     settingsSections: {
+      appearance: '外观',
       agent: '代理',
       providers: '提供商',
       models: '模型',
@@ -2051,6 +2077,13 @@ const bundles: Record<
       heartbeatHint: '网关心跳事件（SSE / UI）的间隔。',
       authModeNone: '当前认证模式为 none，配置文件中的令牌可能被忽略。',
     },
+    appearanceSettings: {
+      subtitle: '界面语言与配色仅保存在本浏览器。',
+      languageTitle: '语言',
+      languageDescription: '选择网关控制台界面语言。',
+      themeTitle: '主题',
+      themeDescription: '浅色、深色或跟随系统。',
+    },
   },
 };
 
@@ -2070,6 +2103,7 @@ export function getTabGroups(lang: StoredLanguage): TabGroup[] {
     {
       label: m.nav.settings,
       tabs: [
+        'settingsAppearance',
         'settingsAgent',
         'settingsProviders',
         'settingsModels',

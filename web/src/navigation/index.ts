@@ -10,6 +10,7 @@ export type ChatRoute =
   | { type: 'new' };
 
 const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
+  appearance: 'settingsAppearance',
   agent: 'settingsAgent',
   providers: 'settingsProviders',
   models: 'settingsModels',
@@ -19,6 +20,7 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
 };
 
 const TAB_TO_SETTINGS_SECTION: Record<
+  | 'settingsAppearance'
   | 'settingsAgent'
   | 'settingsProviders'
   | 'settingsModels'
@@ -27,6 +29,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsGateway',
   SettingsSectionId
 > = {
+  settingsAppearance: 'appearance',
   settingsAgent: 'agent',
   settingsProviders: 'providers',
   settingsModels: 'models',
@@ -45,6 +48,7 @@ export function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
 
 /** Order of items in the full-screen settings sidebar (subset of `Tab`). */
 export const SETTINGS_NAV_TABS: readonly Tab[] = [
+  'settingsAppearance',
   'settingsAgent',
   'settingsProviders',
   'settingsModels',
@@ -76,17 +80,17 @@ export function docsGuidePageUrl(language: StoredLanguage, page: string): string
   return `${HELP_DOCS_BASE_URL}/${slug}`;
 }
 
-/** Parse `#/settings/agent` etc. Returns null if not a settings route. */
+/** Parse `#/settings/<section>` etc. Returns null if not a settings route. */
 export function parseSettingsHash(hash: string): SettingsSectionId | null {
   let h = hash.startsWith('#') ? hash.slice(1) : hash;
   if (h.startsWith('/')) h = h.slice(1);
   if (h === 'settings' || h === 'settings/') {
-    return 'agent';
+    return 'appearance';
   }
   if (!h.startsWith('settings/')) return null;
   const rest = h.slice('settings/'.length);
   const section = rest.split('/')[0];
-  if (!section) return 'agent';
+  if (!section) return 'appearance';
   return section in SETTINGS_SECTION_TO_TAB ? (section as SettingsSectionId) : null;
 }
 

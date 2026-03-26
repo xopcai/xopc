@@ -69,7 +69,7 @@ export function SidebarFooter({
         ) : null}
 
         <NavLink
-          to={pathForTab('settingsAgent')}
+          to={pathForTab('settingsAppearance')}
           title={m.nav.settings}
           aria-label={m.nav.settings}
           aria-current={settingsActive ? 'page' : undefined}

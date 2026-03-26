@@ -10,6 +10,7 @@ import {
   Layers,
   MessageSquare,
   Mic,
+  Palette,
   Plug,
 } from 'lucide-react';
 
@@ -21,6 +22,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   cron: Clock,
   skills: Layers,
   logs: FileText,
+  settingsAppearance: Palette,
   settingsAgent: Bot,
   settingsProviders: Cloud,
   settingsModels: Cpu,
