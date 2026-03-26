@@ -22,7 +22,8 @@ export const ScrollToBottomButton = memo(function ScrollToBottomButton({
     <button
       type="button"
       className={cn(
-        'fixed bottom-[calc(6.5rem+env(safe-area-inset-bottom,0px))] right-6 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-subtle shadow-float',
+        // Fixed above composer (not in layout flow). `12rem` + safe area — better clearance on narrow viewports.
+        'fixed bottom-[calc(11rem+env(safe-area-inset-bottom,0px))] right-6 z-20 flex h-11 w-11 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-subtle shadow-float',
         'hover:bg-surface-hover hover:text-fg dark:border-edge dark:shadow-none md:right-10',
         interaction.transition,
         interaction.press,
