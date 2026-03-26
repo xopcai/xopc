@@ -160,7 +160,7 @@ export function resolveAgentAuthProfilesPath(agentId?: string): string {
 }
 
 /**
- * Resolve the sessions directory for an agent
+ * Agent session store root. Transcript files are stored in subfolders (users/…, system/cron, …), not as a flat list.
  */
 export function resolveSessionsDir(agentId?: string): string {
   return join(resolveAgentDir(agentId), 'sessions');
@@ -174,7 +174,7 @@ export function resolveSessionsIndexPath(agentId?: string): string {
 }
 
 /**
- * Resolve a specific session file path
+ * Legacy helper: flat `{sessionId}.jsonl` under the sessions root. Runtime storage is sharded; prefer SessionStore.
  */
 export function resolveSessionPath(sessionId: string, agentId?: string): string {
   return join(resolveSessionsDir(agentId), `${sessionId}.jsonl`);
