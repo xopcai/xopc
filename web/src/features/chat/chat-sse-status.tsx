@@ -1,6 +1,8 @@
 import { memo } from 'react';
 
 import { reconnectGatewaySse } from '@/features/gateway/sse-controller';
+import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useGatewaySseStore } from '@/stores/gateway-sse-store';
@@ -22,7 +24,13 @@ export const ChatSseStatus = memo(function ChatSseStatus() {
         <span className="min-w-0 flex-1 truncate">{error}</span>
         <button
           type="button"
-          className="shrink-0 rounded-xl border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700 transition-colors duration-150 hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/70"
+          className={cn(
+            'shrink-0 rounded-xl border border-red-200 bg-white px-2.5 py-1 text-xs font-medium text-red-700',
+            'hover:bg-red-50 dark:border-red-800 dark:bg-red-950/40 dark:text-red-300 dark:hover:bg-red-950/70',
+            interaction.transition,
+            interaction.press,
+            interaction.focusRingPanel,
+          )}
           onClick={() => reconnectGatewaySse()}
         >
           {m.connection.reconnect}

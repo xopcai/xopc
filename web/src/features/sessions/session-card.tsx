@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 
 import type { SessionMetadata } from '@/features/sessions/session.types';
+import { ghostIconButton } from '@/lib/interaction';
 import { cn } from '@/lib/cn';
 
 export type SessionCardAction =
@@ -72,8 +73,8 @@ export function SessionCard({
       tabIndex={0}
       className={cn(
         // min-w-0: grid/flex children default to min-width:auto — long unbroken titles (URLs) otherwise expand the track
-        'group flex min-w-0 w-full max-w-full cursor-pointer flex-col rounded-xl bg-surface-base text-left transition-colors duration-150',
-        'hover:bg-surface-hover',
+        'group flex min-w-0 w-full max-w-full cursor-pointer flex-col rounded-xl bg-surface-base text-left transition-colors duration-150 ease-out',
+        'hover:bg-surface-hover active:scale-[0.99]',
         'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
         variant === 'list' && 'sm:flex-row sm:items-center sm:gap-4',
       )}
@@ -148,8 +149,9 @@ export function SessionCard({
       >
         <button
           type="button"
-          className="rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+          className={ghostIconButton}
           title={labels.continueChat}
+          aria-label={labels.continueChat}
           onClick={() => onAction('continue')}
         >
           <MessageSquare className="size-4" strokeWidth={1.75} />
@@ -157,8 +159,9 @@ export function SessionCard({
         {isArchived ? (
           <button
             type="button"
-            className="rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+            className={ghostIconButton}
             title={labels.unarchive}
+            aria-label={labels.unarchive}
             onClick={() => onAction('unarchive')}
           >
             <ArchiveRestore className="size-4" strokeWidth={1.75} />
@@ -166,8 +169,9 @@ export function SessionCard({
         ) : (
           <button
             type="button"
-            className="rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+            className={ghostIconButton}
             title={labels.archive}
+            aria-label={labels.archive}
             onClick={() => onAction('archive')}
           >
             <Archive className="size-4" strokeWidth={1.75} />
@@ -176,8 +180,9 @@ export function SessionCard({
         {isPinned ? (
           <button
             type="button"
-            className="rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+            className={ghostIconButton}
             title={labels.unpin}
+            aria-label={labels.unpin}
             onClick={() => onAction('unpin')}
           >
             <PinOff className="size-4" strokeWidth={1.75} />
@@ -185,8 +190,9 @@ export function SessionCard({
         ) : (
           <button
             type="button"
-            className="rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+            className={ghostIconButton}
             title={labels.pin}
+            aria-label={labels.pin}
             onClick={() => onAction('pin')}
           >
             <Pin className="size-4" strokeWidth={1.75} />
@@ -194,16 +200,21 @@ export function SessionCard({
         )}
         <button
           type="button"
-          className="rounded-lg p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+          className={ghostIconButton}
           title={labels.export}
+          aria-label={labels.export}
           onClick={() => onAction('export')}
         >
           <Download className="size-4" strokeWidth={1.75} />
         </button>
         <button
           type="button"
-          className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+          className={cn(
+            ghostIconButton,
+            'text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
+          )}
           title={labels.delete}
+          aria-label={labels.delete}
           onClick={() => onAction('delete')}
         >
           <Trash2 className="size-4" strokeWidth={1.75} />

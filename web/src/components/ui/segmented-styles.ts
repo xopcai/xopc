@@ -7,7 +7,7 @@ export const segmentedTrackClassName =
   'inline-flex items-center gap-px rounded-pill border border-edge bg-surface-hover px-1 py-0.5 dark:border-edge';
 
 export const segmentedThumbBaseClassName =
-  'inline-flex shrink-0 items-center justify-center rounded-pill text-xs font-medium leading-none transition-colors text-fg-subtle hover:text-fg';
+  'inline-flex shrink-0 items-center justify-center rounded-pill text-xs font-medium leading-none transition-colors text-fg-subtle hover:text-fg active:scale-100';
 
 /** Selected segment: raised surface on the gray track (reference: light “pill” thumb). */
 export const segmentedThumbActiveClassName =

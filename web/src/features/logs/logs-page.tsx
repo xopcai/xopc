@@ -77,7 +77,7 @@ function formatFileSize(bytes: number): string {
 
 function levelChipClasses(level: LogLevel, active: boolean): string {
   const base =
-    'rounded-md border px-2 py-1 text-xs font-medium capitalize transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel';
+    'rounded-md border px-2 py-1 text-xs font-medium capitalize transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel';
   if (!active) {
     return cn(
       base,
@@ -575,8 +575,8 @@ export function LogsPage() {
                     type="button"
                     onClick={() => setSelectedLog(log)}
                     className={cn(
-                      'flex w-full min-w-0 gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',
-                      'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
+                      'flex w-full min-w-0 gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors duration-150 ease-out active:scale-[0.99]',
+                      'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
                     )}
                   >
                     <span className="shrink-0 font-mono text-xs tabular-nums text-fg-subtle">

@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react';
 import { ChevronDown, Sparkles } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 
 export function ThinkingBlock({
   content,
@@ -33,7 +34,15 @@ export function ThinkingBlock({
       <button
         type="button"
         disabled={isStreaming}
-        className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left text-xs text-fg-muted hover:bg-surface-hover disabled:cursor-default disabled:opacity-100"
+        aria-busy={isStreaming}
+        className={cn(
+          'grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left text-xs text-fg-muted',
+          interaction.transition,
+          interaction.press,
+          'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+          /* Loading (streaming): pulse in label; keep full opacity — not a generic disabled control. */
+          'disabled:cursor-not-allowed disabled:opacity-100',
+        )}
         onClick={() => !isStreaming && setExpanded(!expanded)}
         aria-expanded={showBody}
       >

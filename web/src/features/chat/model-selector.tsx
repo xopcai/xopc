@@ -5,6 +5,7 @@ import useSWR from 'swr';
 
 import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 
 function haystack(m: ConfiguredModel): string {
   return `${m.id} ${m.name} ${m.provider}`.toLowerCase();
@@ -68,8 +69,10 @@ export function ModelSelector({
           disabled={disabled || isLoading}
           title={selected ? `${selected.name} (${selected.provider})` : placeholder}
           className={cn(
-            'flex max-w-full min-w-0 items-center justify-between gap-2 rounded-xl bg-surface-base px-3 py-2 text-left text-sm font-medium text-fg transition-colors duration-150',
-            'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
+            'flex max-w-full min-w-0 items-center justify-between gap-2 rounded-xl bg-surface-base px-3 py-2 text-left text-sm font-medium text-fg',
+            interaction.transition,
+            /* Combobox trigger: no active scale (feels wrong on dropdown open). */
+            'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
             'disabled:cursor-not-allowed disabled:opacity-50',
             compact && 'py-1.5 text-[13px]',
           )}

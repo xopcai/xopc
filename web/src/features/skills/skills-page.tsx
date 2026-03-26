@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import {
   deleteSkill,
   getSkills,
@@ -322,7 +323,13 @@ export function SkillsPage() {
                           {row.managed ? (
                             <button
                               type="button"
-                              className="rounded-md px-2 py-1 text-sm font-medium text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40"
+                              className={cn(
+                                'rounded-md px-2 py-1 text-sm font-medium text-red-600 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
+                                interaction.transition,
+                                interaction.press,
+                                interaction.focusRingPanel,
+                              )}
+                              aria-label={sk.delete}
                               onClick={() => {
                                 setConfirmId(row.directoryId);
                                 setConfirmOpen(true);

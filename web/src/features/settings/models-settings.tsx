@@ -20,6 +20,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { messages, type ModelsSettingsMessages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -955,26 +956,38 @@ export function ModelsSettingsPanel() {
           <div className="flex flex-wrap justify-center gap-2">
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg transition hover:border-accent hover:text-accent dark:border-edge"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg hover:border-accent hover:text-accent dark:border-edge',
+                interaction.transition,
+                interaction.focusRingBase,
+              )}
               onClick={() => openAddProvider('ollama')}
             >
-              <Zap className="size-3.5" />
+              <Zap className="size-3.5" aria-hidden />
               {ms.presetOllama}
             </button>
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg transition hover:border-accent hover:text-accent dark:border-edge"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg hover:border-accent hover:text-accent dark:border-edge',
+                interaction.transition,
+                interaction.focusRingBase,
+              )}
               onClick={() => openAddProvider('openrouter')}
             >
-              <Box className="size-3.5" />
+              <Box className="size-3.5" aria-hidden />
               {ms.presetOpenRouter}
             </button>
             <button
               type="button"
-              className="inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg transition hover:border-accent hover:text-accent dark:border-edge"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg hover:border-accent hover:text-accent dark:border-edge',
+                interaction.transition,
+                interaction.focusRingBase,
+              )}
               onClick={() => openAddProvider('lmstudio')}
             >
-              <Cpu className="size-3.5" />
+              <Cpu className="size-3.5" aria-hidden />
               {ms.presetLmStudio}
             </button>
           </div>

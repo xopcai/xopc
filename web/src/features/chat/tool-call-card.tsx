@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { ChevronDown, Code } from 'lucide-react';
 
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 
 function formatParamsJson(params: unknown): string {
   if (params === undefined) return '';
@@ -51,7 +52,13 @@ export function ToolCallCard({
     <div className="w-full min-w-0 overflow-hidden rounded-xl bg-surface-hover/35 dark:bg-surface-hover/25">
       <button
         type="button"
-        className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left text-xs font-medium text-fg-muted hover:bg-surface-hover"
+        className={cn(
+          'grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left text-xs font-medium text-fg-muted',
+          interaction.transition,
+          interaction.press,
+          'hover:bg-surface-hover',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+        )}
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >

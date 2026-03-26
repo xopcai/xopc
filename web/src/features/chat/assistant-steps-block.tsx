@@ -4,6 +4,7 @@ import { CheckCircle2, ChevronDown, CircleDot, Loader2, XCircle } from 'lucide-r
 import type { ThinkingContent, ToolUseContent } from '@/features/chat/messages.types';
 import { stringToToolResultMessage } from '@/features/chat/tool-result';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 
 function formatParamsJson(params: unknown): string {
   if (params === undefined) return '';
@@ -115,7 +116,13 @@ export function AssistantStepsBlock({
     <div className="my-1 w-full min-w-0 overflow-hidden rounded-xl bg-surface-hover/50 dark:bg-surface-hover/30">
       <button
         type="button"
-        className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left hover:bg-surface-hover/80 dark:hover:bg-surface-hover/50"
+        className={cn(
+          'grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left',
+          interaction.transition,
+          interaction.press,
+          'hover:bg-surface-hover/80 dark:hover:bg-surface-hover/50',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+        )}
         onClick={() => setExpanded(!expanded)}
         aria-expanded={expanded}
       >

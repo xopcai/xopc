@@ -31,12 +31,12 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatH
   return (
     <div
       className={cn(
-        'flex gap-2 px-4 sm:gap-3 sm:px-8',
+        'flex gap-3 px-4 sm:gap-4 sm:px-8',
         APP_TOP_HEADER_BAR_CLASS,
-        sidebarCollapsed && 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-3',
+        sidebarCollapsed && 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-4',
       )}
     >
-      <div className="flex min-w-0 shrink-0 items-center gap-2">
+      <div className="flex min-w-0 shrink-0 items-center gap-2.5">
         <Button
           type="button"
           variant="ghost"
@@ -73,8 +73,8 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatH
       >
         {chatHeadline}
       </h1>
-      <div className="flex shrink-0 items-center gap-1 sm:gap-2 lg:justify-self-end">
-        <div className="hidden items-center gap-1.5 sm:gap-2 lg:flex">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-2.5 lg:justify-self-end">
+        <div className="hidden items-center gap-2 sm:gap-2.5 lg:flex">
           <LanguageToggle />
           <ThemeToggle />
         </div>
