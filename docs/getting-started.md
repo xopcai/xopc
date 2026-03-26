@@ -145,6 +145,7 @@ Explore these guides to unlock more features:
 | [Skills](/skills) | Add domain-specific knowledge |
 | [Tools](/tools) | Built-in tools reference |
 | [Channels](/channels) | Multi-channel setup |
+| [Routing](/routing-system) | Session keys and agent bindings |
 | [Models](/models) | LLM provider configuration |
 
 ## Troubleshooting

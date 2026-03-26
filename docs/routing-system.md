@@ -27,50 +27,53 @@ main:cli:default:direct:cli
 
 ## Configuration
 
-### Agent Configuration
+Routing is configured in **`~/.xopcbot/config.json`** (override path with `XOPCBOT_CONFIG`). Use JSON — not YAML.
 
-```yaml
-agents:
-  default: main
-  list:
-    - id: main
-      name: Main Assistant
-    - id: coder
-      name: Coding Assistant
+### Agents and bindings
+
+Register agents under `agents.list`. **Binding rules** (`bindings`) are evaluated in **priority order** (higher `priority` wins first). Each `match` requires an exact **`channel`** id (e.g. `telegram`, `gateway`) — matching is case-insensitive and **does not** support `*` for “all channels”. Use one rule per channel, or rely on the **default agent** when nothing matches: first **enabled** entry in `agents.list`, otherwise `main`.
+
+`match.peerId` supports simple `*` glob patterns (e.g. `-100*` for Telegram supergroups).
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-sonnet-4-5"
+    },
+    "list": [
+      { "id": "main", "name": "Main Assistant" },
+      { "id": "coder", "name": "Coding Assistant" }
+    ]
+  },
+  "bindings": [
+    {
+      "agentId": "coder",
+      "priority": 100,
+      "match": {
+        "channel": "telegram",
+        "peerId": "-100*"
+      }
+    }
+  ],
+  "session": {
+    "identityLinks": {
+      "alice": ["telegram:123456789", "discord:987654321"]
+    }
+  }
+}
 ```
 
-### Binding Routing Rules
+### Identity links (cross-platform aliases)
 
-```yaml
-bindings:
-  - agentId: coder
-    match:
-      channel: telegram
-      peerId: "-100*"
-    priority: 100
-
-  - agentId: main
-    match:
-      channel: "*"
-    priority: 0
-```
-
-### Identity Links (Cross-platform Identity Merging)
-
-```yaml
-session:
-  identityLinks:
-    alice:
-      - telegram:123456789
-      - discord:987654321
-```
+`session.identityLinks` maps a **canonical** id to a list of **`channel:peerId`** aliases so routing can treat the same person across channels consistently. See [Configuration](/configuration) for `session.dmScope` and other session options.
 
 ## API
 
 ### Generate Session Key
 
 ```typescript
-import { buildSessionKey } from './routing/index.js';
+import { buildSessionKey } from '@xopcai/xopcbot/routing/index.js';
 
 const sessionKey = buildSessionKey({
   agentId: 'main',
@@ -84,18 +87,18 @@ const sessionKey = buildSessionKey({
 ### Route Resolution
 
 ```typescript
-import { resolveRoute } from './routing/index.js';
+import { resolveRoute } from '@xopcai/xopcbot/routing/index.js';
 
 const route = resolveRoute({
   config,
   channel: 'telegram',
   accountId: 'default',
-  peerKind: 'group',
-  peerId: '-100123456',
+  peerKind: 'dm',
+  peerId: '123456',
 });
 
-console.log(route.sessionKey); // main:telegram:default:group:-100123456
-console.log(route.agentId);    // main
+console.log(route.sessionKey); // e.g. main:telegram:default:dm:123456 (depends on dmScope)
+console.log(route.agentId); // default agent when no binding matches (e.g. main)
 ```
 
 ## Related Files

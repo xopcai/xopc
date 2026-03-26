@@ -143,6 +143,7 @@ xopcbot gateway
 | [技能](/zh/skills) | 添加领域特定知识 |
 | [工具](/zh/tools) | 内置工具参考 |
 | [通道](/zh/channels) | 多通道设置 |
+| [路由](/zh/routing-system) | Session key 与 Agent 绑定 |
 | [模型](/zh/models) | LLM 提供商配置 |
 
 ## 故障排除
@@ -159,6 +160,6 @@ xopcbot gateway
 
 ### 获取帮助
 
-- 查看 [文档](/) 获取详细指南
+- 查看 [简体中文文档](/zh/) 获取详细指南
 - 查看 [AGENTS.md](https://github.com/xopcai/xopcbot/blob/main/AGENTS.md) 获取开发指南
 - 查看日志：`xopcbot gateway logs --follow`

@@ -53,7 +53,8 @@ src/
 │   ├── prompt/         #   Prompt builder system
 │   ├── tools/          #   Built-in tools (Typebox schemas)
 │   └── progress.ts     #   Progress feedback system
-├── bus/                # Event bus for message routing
+├── infra/
+│   └── bus/            # Message bus primitives (queue, etc.)
 ├── channels/           # Channel integrations (ChannelPlugin + manager)
 │   ├── plugin-types.ts #   ChannelPlugin interface & adapters
 │   ├── manager.ts      #   Channel lifecycle manager
@@ -67,7 +68,9 @@ src/
 │   ├── security.ts     #   Access control helpers
 │   ├── draft-stream.ts #   Streaming message preview
 │   └── format.ts       #   Markdown to HTML formatter
-├── extension-sdk/      # Official Extension SDK (re-exported as @xopcai/xopcbot/extension-sdk)
+├── extensions/         # Extension runtime (loader, hooks); `sdk/` → @xopcai/xopcbot/extension-sdk
+├── routing/            # Session keys, bindings, route resolution
+├── acp/                # Agent Control Protocol (optional multi-runtime bridge)
 ├── cli/                # CLI commands with self-registration
 │   ├── commands/       #   Individual command modules
 │   ├── registry.ts     #   Command registration system
@@ -80,9 +83,8 @@ src/
 ├── session/            # Conversation session management
 ├── types/              # Shared TypeScript types
 └── utils/              # Shared utilities
-    ├── logger.ts       #   Contextual logging
-    ├── log-store.ts    #   Log storage & querying
-    └── markdown/       #   Markdown processing
+    ├── logger.ts       #   Logging barrel → `logger/` (context, log-store, …)
+    └── helpers.ts      #   Misc helpers
 
 web/                    # Gateway console SPA (React + Vite + Tailwind v4)
 └── src/                #   App source; production build → dist/gateway/static/root
@@ -303,7 +305,7 @@ register({
 | Logging | Pino |
 | Cron | node-cron |
 | HTTP Server | Hono |
-| Web UI | Lit (Web Components) |
+| Web UI | React + Vite + Tailwind v4 (gateway console in `web/`) |
 | Testing | Vitest |
 
 ## Extension Points

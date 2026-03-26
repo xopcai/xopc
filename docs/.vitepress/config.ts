@@ -34,6 +34,8 @@ export default defineConfig({
             items: [
               { text: 'Architecture', link: '/architecture' },
               { text: 'Configuration', link: '/configuration' },
+              { text: 'Routing System', link: '/routing-system' },
+              { text: 'Agent Control Protocol (ACP)', link: '/acp' },
               { text: 'CLI', link: '/cli' },
               { text: 'Tools', link: '/tools' },
               { text: 'Extensions', link: '/extensions' },
@@ -44,6 +46,7 @@ export default defineConfig({
             text: 'Features',
             items: [
               { text: 'Channels', link: '/channels' },
+              { text: 'Voice (STT/TTS)', link: '/voice' },
               { text: 'Progress Feedback', link: '/progress' },
               { text: 'Gateway', link: '/gateway' },
               { text: 'Session', link: '/session' },
@@ -56,7 +59,9 @@ export default defineConfig({
           {
             text: 'Reference',
             items: [
-              { text: 'Templates', link: '/reference/templates' }
+              { text: 'Templates', link: '/reference/templates' },
+              { text: 'UI Design System', link: '/design/ui-design-system' },
+              { text: 'Web Console Notes', link: '/web-migration-plan' }
             ]
           }
         ],
@@ -91,6 +96,8 @@ export default defineConfig({
             items: [
               { text: '架构设计', link: '/zh/architecture' },
               { text: '配置参考', link: '/zh/configuration' },
+              { text: 'Session 路由', link: '/zh/routing-system' },
+              { text: 'ACP 协议', link: '/zh/acp' },
               { text: 'CLI 命令', link: '/zh/cli' },
               { text: '内置工具', link: '/zh/tools' },
               { text: '扩展系统', link: '/zh/extensions' },
@@ -101,6 +108,7 @@ export default defineConfig({
             text: '功能特性',
             items: [
               { text: '消息通道', link: '/zh/channels' },
+              { text: '语音（STT/TTS）', link: '/zh/voice' },
               { text: '进度反馈', link: '/zh/progress' },
               { text: '网关服务', link: '/zh/gateway' },
               { text: '会话管理', link: '/zh/session' },
@@ -113,7 +121,9 @@ export default defineConfig({
           {
             text: '参考',
             items: [
-              { text: '模板文件', link: '/zh/reference/templates' }
+              { text: '模板文件', link: '/zh/reference/templates' },
+              { text: '控制台 UI 设计规范', link: '/design/ui-design-system' },
+              { text: '网关控制台说明', link: '/web-migration-plan' }
             ]
           }
         ],

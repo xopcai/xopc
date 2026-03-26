@@ -5,6 +5,7 @@
 - **Core Concepts**
   - [Architecture](architecture.md)
   - [Routing System](routing-system.md)
+  - [Agent Control Protocol (ACP)](acp.md)
   - [Session Management](session.md)
   - [Skills System](skills.md)
   - [Skills Testing](skills-testing.md)
@@ -14,6 +15,7 @@
   - [CLI Reference](cli.md)
   - [LLM Models](models.md)
   - [Voice (STT/TTS)](voice.md)
+  - [UI Design System](design/ui-design-system.md)
   - [Channels (Telegram)](channels.md)
   - [Progress Feedback](progress.md)
   - [Extensions](extensions.md)

@@ -450,6 +450,6 @@ Get runtime metrics via `getObservabilitySnapshot()`:
 
 ## See Also
 
-- [Runtime Types](./types.ts) - Core type definitions
-- [Session Manager](./control-plane/manager.ts) - Main implementation
-- [CLI Commands](../cli/commands/acp.ts) - Command implementations
+- [Source: `src/acp/`](https://github.com/xopcai/xopcbot/tree/main/src/acp) — runtime, control plane, types
+- [CLI `acp` commands](https://github.com/xopcai/xopcbot/tree/main/src/cli/commands/acp) — command implementations
+- [Session routing](/routing-system) — how ACP integrates with session keys

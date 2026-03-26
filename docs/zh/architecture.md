@@ -53,7 +53,8 @@ src/
 │   ├── prompt/         #   Prompt 构建系统
 │   ├── tools/          #   内置工具（Typebox schema）
 │   └── progress.ts     #   进度反馈系统
-├── bus/                # 消息路由事件总线
+├── infra/
+│   └── bus/            # 消息总线原语（队列等）
 ├── channels/           # 通道集成（ChannelPlugin + 管理器）
 │   ├── plugin-types.ts #   ChannelPlugin 接口与适配器
 │   ├── manager.ts      #   通道生命周期管理器
@@ -67,7 +68,9 @@ src/
 │   ├── security.ts     #   访问控制辅助
 │   ├── draft-stream.ts #   流式消息预览
 │   └── format.ts       #   Markdown 到 HTML 格式化
-├── extension-sdk/      # 官方 Extension SDK（`@xopcai/xopcbot/extension-sdk` 再导出）
+├── extensions/         # 扩展运行时（loader、hooks）；`sdk/` → @xopcai/xopcbot/extension-sdk
+├── routing/            # Session key、bindings、路由解析
+├── acp/                # Agent Control Protocol（可选多运行时桥接）
 ├── cli/                # CLI 命令（自注册）
 │   ├── commands/       #   独立命令模块
 │   ├── registry.ts     #   命令注册系统
@@ -79,10 +82,9 @@ src/
 ├── providers/          # LLM 提供商注册表（pi-ai 包装）
 ├── session/            # 对话会话管理
 ├── types/              # 共享 TypeScript 类型
-└── utils/              # 共享工具函数
-    ├── logger.ts       #   上下文日志
-    ├── log-store.ts    #   日志存储和查询
-    └── markdown/       #   Markdown 处理
+└── utils/              # 共享工具
+    ├── logger.ts       #   日志入口，实现见 `logger/`（context、log-store 等）
+    └── helpers.ts      #   杂项辅助函数
 
 web/                    # 网关控制台 SPA（React + Vite + Tailwind v4）
 └── src/                #   应用源码；生产构建输出至 dist/gateway/static/root
@@ -303,7 +305,7 @@ register({
 | 日志 | Pino |
 | Cron | node-cron |
 | HTTP 服务器 | Hono |
-| Web UI | Lit (Web Components) |
+| Web UI | React + Vite + Tailwind v4（网关控制台 `web/`） |
 | 测试 | Vitest |
 
 ## 扩展点

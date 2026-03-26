@@ -27,50 +27,53 @@ main:cli:default:direct:cli
 
 ## 配置
 
-### Agent 配置
+路由写在 **`~/.xopcbot/config.json`** 中（可用环境变量 `XOPCBOT_CONFIG` 覆盖路径）。请使用 **JSON**，不要使用 YAML。
 
-```yaml
-agents:
-  default: main
-  list:
-    - id: main
-      name: 主助手
-    - id: coder
-      name: 编程助手
+### Agent 与 bindings
+
+在 `agents.list` 中注册多个 Agent。**绑定规则** `bindings` 按 **priority** 从高到低匹配；每条 `match` 中的 **`channel`** 为**精确**通道 id（如 `telegram`、`gateway`），匹配时不区分大小写，**不支持**用 `*` 表示「所有通道」。可按通道分别写规则；若没有任何规则匹配，则使用**默认 Agent**：`agents.list` 中第一个 **enabled** 的 `id`，否则为 `main`。
+
+`match.peerId` 支持简单的 `*` 通配（例如 Telegram 超级群 `-100*`）。
+
+```json
+{
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-sonnet-4-5"
+    },
+    "list": [
+      { "id": "main", "name": "主助手" },
+      { "id": "coder", "name": "编程助手" }
+    ]
+  },
+  "bindings": [
+    {
+      "agentId": "coder",
+      "priority": 100,
+      "match": {
+        "channel": "telegram",
+        "peerId": "-100*"
+      }
+    }
+  ],
+  "session": {
+    "identityLinks": {
+      "alice": ["telegram:123456789", "discord:987654321"]
+    }
+  }
+}
 ```
 
-### Binding 路由规则
+### Identity links（跨通道别名）
 
-```yaml
-bindings:
-  - agentId: coder
-    match:
-      channel: telegram
-      peerId: "-100*"
-    priority: 100
-
-  - agentId: main
-    match:
-      channel: "*"
-    priority: 0
-```
-
-### Identity Links（跨平台身份合并）
-
-```yaml
-session:
-  identityLinks:
-    alice:
-      - telegram:123456789
-      - discord:987654321
-```
+`session.identityLinks` 将 **规范名** 映射到 **`channel:peerId`** 别名列表，便于跨通道识别同一用户。`session.dmScope` 等选项见 [配置参考](/zh/configuration)。
 
 ## API
 
 ### 生成 Session Key
 
 ```typescript
-import { buildSessionKey } from './routing/index.js';
+import { buildSessionKey } from '@xopcai/xopcbot/routing/index.js';
 
 const sessionKey = buildSessionKey({
   agentId: 'main',
@@ -84,18 +87,18 @@ const sessionKey = buildSessionKey({
 ### 路由决策
 
 ```typescript
-import { resolveRoute } from './routing/index.js';
+import { resolveRoute } from '@xopcai/xopcbot/routing/index.js';
 
 const route = resolveRoute({
   config,
   channel: 'telegram',
   accountId: 'default',
-  peerKind: 'group',
-  peerId: '-100123456',
+  peerKind: 'dm',
+  peerId: '123456',
 });
 
-console.log(route.sessionKey); // main:telegram:default:group:-100123456
-console.log(route.agentId);    // main
+console.log(route.sessionKey); // 例如 main:telegram:default:dm:123456（受 dmScope 影响）
+console.log(route.agentId); // 无匹配规则时的默认 Agent（例如 main）
 ```
 
 ## 相关文件
