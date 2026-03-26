@@ -2,7 +2,6 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import type { Message } from '@/features/chat/messages.types';
 import { ChatComposer } from '@/features/chat/chat-composer';
-import { ComposerProgressProvider } from '@/features/chat/composer-progress-context';
 import { ChatHeaderBar } from '@/features/chat/chat-header-bar';
 import { ChatSseStatus } from '@/features/chat/chat-sse-status';
 import { MessageList } from '@/features/chat/message-list';
@@ -207,21 +206,19 @@ export function ChatPage() {
           </div>
 
           <div className="chat-input-container shrink-0 bg-surface-panel py-4">
-            <ComposerProgressProvider value={progress}>
-              <ChatComposer
-                disabled={showSessionLoading || sessionRoutePending}
-                sending={sending}
-                streaming={streaming}
-                sessionModel={sessionModel}
-                showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
-                onModelChange={onSessionModelChange}
-                thinkingLevel={thinkingLevel}
-                showThinkingSelector={modelSupportsThinking}
-                onThinkingChange={setThinkingLevel}
-                onSend={sendMessage}
-                onAbort={abort}
-              />
-            </ComposerProgressProvider>
+            <ChatComposer
+              disabled={showSessionLoading || sessionRoutePending}
+              sending={sending}
+              streaming={streaming}
+              sessionModel={sessionModel}
+              showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
+              onModelChange={onSessionModelChange}
+              thinkingLevel={thinkingLevel}
+              showThinkingSelector={modelSupportsThinking}
+              onThinkingChange={setThinkingLevel}
+              onSend={sendMessage}
+              onAbort={abort}
+            />
           </div>
         </div>
       </div>

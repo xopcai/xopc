@@ -102,10 +102,7 @@ export function AssistantStepsBlock({
   useEffect(() => {
     if (anyActive) {
       setExpanded(true);
-      return;
     }
-    const t = window.setTimeout(() => setExpanded(false), 280);
-    return () => window.clearTimeout(t);
   }, [anyActive]);
 
   if (stepCount === 0) {

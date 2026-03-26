@@ -2,7 +2,6 @@ import { Ban, File, Mic, Send, Sparkles, Square } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Attachment } from '@/features/chat/attachment-utils';
-import { ComposerRunStatus } from '@/features/chat/composer-run-status';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment-utils';
 import { ModelSelector } from '@/features/chat/model-selector';
 import { messages } from '@/i18n/messages';
@@ -183,8 +182,6 @@ export const ChatComposer = memo(function ChatComposer({
             {m.chat.dropFiles}
           </div>
         ) : null}
-
-        {busy ? <ComposerRunStatus sending={sending} streaming={streaming} /> : null}
 
         <div
           className={cn(
