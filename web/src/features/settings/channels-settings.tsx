@@ -319,11 +319,11 @@ export function ChannelsSettingsPanel() {
         {/* Telegram */}
         <section
           className={cn(
-            'overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-sm dark:border-edge dark:shadow-none',
+            'overflow-hidden rounded-2xl bg-surface-base',
             tg.enabled && !tgExpanded && 'opacity-95',
           )}
         >
-          <div className="flex items-center justify-between gap-3 border-b border-edge-subtle bg-surface-base/50 px-4 py-3 dark:border-edge">
+          <div className="flex items-center justify-between gap-3 border-b border-edge-subtle bg-surface-hover/30 px-4 py-3 dark:border-edge-subtle">
             <button
               type="button"
               className={cn(
@@ -344,7 +344,7 @@ export function ChannelsSettingsPanel() {
               }}
             >
               <span
-                className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel dark:border-edge"
+                className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover/80 dark:bg-surface-hover/50"
                 aria-hidden
               >
                 <Send className="size-4 text-accent" strokeWidth={1.75} />
@@ -461,11 +461,11 @@ export function ChannelsSettingsPanel() {
         {/* Weixin */}
         <section
           className={cn(
-            'overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-sm dark:border-edge dark:shadow-none',
+            'overflow-hidden rounded-2xl bg-surface-base',
             wx.enabled && !wxExpanded && 'opacity-95',
           )}
         >
-          <div className="flex items-center justify-between gap-3 border-b border-edge-subtle bg-surface-base/50 px-4 py-3 dark:border-edge">
+          <div className="flex items-center justify-between gap-3 border-b border-edge-subtle bg-surface-hover/30 px-4 py-3 dark:border-edge-subtle">
             <button
               type="button"
               className={cn(
@@ -486,7 +486,7 @@ export function ChannelsSettingsPanel() {
               }}
             >
               <span
-                className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel dark:border-edge"
+                className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover/80 dark:bg-surface-hover/50"
                 aria-hidden
               >
                 <MessageSquare className="size-4 text-accent" strokeWidth={1.75} />

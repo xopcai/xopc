@@ -993,9 +993,9 @@ export function ModelsSettingsPanel() {
               return (
                 <section
                   key={id}
-                  className="overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-sm dark:border-edge dark:shadow-none"
+                  className="overflow-hidden rounded-2xl bg-surface-base"
                 >
-                  <div className="flex items-center justify-between gap-2 border-b border-edge-subtle bg-surface-base/60 px-3 py-2 dark:border-edge">
+                  <div className="flex items-center justify-between gap-2 border-b border-edge-subtle bg-surface-hover/35 px-3 py-2 dark:border-edge-subtle">
                     <button
                       type="button"
                       className="flex min-w-0 flex-1 items-center gap-2 text-left text-sm font-semibold text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"

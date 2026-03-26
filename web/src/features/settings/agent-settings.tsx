@@ -4,49 +4,16 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Button } from '@/components/ui/button';
 import { ModelSelector } from '@/features/chat/model-selector';
 import { fetchAgentDefaults, patchAgentDefaults, type AgentDefaultsState } from '@/features/settings/config-api';
+import {
+  SettingsFormSection,
+  SettingsFormSectionHeader,
+} from '@/features/settings/settings-form-section';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const THINKING_KEYS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive'] as const;
-
-function SettingsCard({
-  icon: Icon,
-  title,
-  subtitle,
-  children,
-}: {
-  icon: typeof Cpu;
-  title: string;
-  subtitle: string;
-  children: ReactNode;
-}) {
-  return (
-    <section
-      className={cn(
-        'rounded-xl border border-edge bg-surface-panel shadow-sm dark:border-edge',
-        'dark:shadow-none',
-      )}
-    >
-      <div className="border-b border-edge-subtle px-4 py-3 dark:border-edge">
-        <div className="flex items-start gap-3">
-          <div
-            className="flex size-9 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-base dark:border-edge"
-            aria-hidden
-          >
-            <Icon className="size-4 text-fg-muted" strokeWidth={1.75} />
-          </div>
-          <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-fg">{title}</h2>
-            <p className="mt-0.5 text-xs text-fg-muted">{subtitle}</p>
-          </div>
-        </div>
-      </div>
-      <div className="flex flex-col gap-5 px-4 py-4">{children}</div>
-    </section>
-  );
-}
 
 function Field({
   label,
@@ -148,7 +115,7 @@ export function AgentSettingsPanel() {
   if (!hasToken) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10">
-        <div className="flex items-start gap-3 rounded-lg border border-edge bg-surface-panel p-6 dark:border-edge">
+        <div className="flex items-start gap-3 rounded-2xl bg-surface-base p-6">
           <Cpu className="mt-0.5 size-5 shrink-0 text-fg-subtle" strokeWidth={1.75} />
           <div>
             <h1 className="text-base font-semibold text-fg">{m.settingsSections.agent}</h1>
@@ -208,7 +175,9 @@ export function AgentSettingsPanel() {
       ) : null}
 
       <div className="flex flex-col gap-5">
-        <SettingsCard icon={Cpu} title={a.cardModelsTitle} subtitle={a.cardModelsSubtitle}>
+        <SettingsFormSection>
+          <SettingsFormSectionHeader icon={Cpu} title={a.cardModelsTitle} subtitle={a.cardModelsSubtitle} />
+          <div className="flex flex-col gap-5">
           <Field label={a.label.model} description={a.desc.model}>
             <ModelSelector
               value={form.model}
@@ -236,9 +205,12 @@ export function AgentSettingsPanel() {
               onChange={(modelId) => update({ imageGenerationModel: modelId })}
             />
           </Field>
-        </SettingsCard>
+          </div>
+        </SettingsFormSection>
 
-        <SettingsCard icon={Folder} title={a.cardWorkspaceTitle} subtitle={a.cardWorkspaceSubtitle}>
+        <SettingsFormSection>
+          <SettingsFormSectionHeader icon={Folder} title={a.cardWorkspaceTitle} subtitle={a.cardWorkspaceSubtitle} />
+          <div className="flex flex-col gap-5">
           <Field label={a.label.workspace} description={a.desc.workspace}>
             <input
               type="text"
@@ -262,43 +234,49 @@ export function AgentSettingsPanel() {
               }}
             />
           </Field>
-        </SettingsCard>
+          </div>
+        </SettingsFormSection>
 
-        <SettingsCard icon={Layers} title={a.cardGenerationTitle} subtitle={a.cardGenerationSubtitle}>
-          <div className="grid gap-5 sm:grid-cols-2">
-            <Field label={a.label.maxTokens} description={a.desc.maxTokens}>
+        <SettingsFormSection>
+          <SettingsFormSectionHeader icon={Layers} title={a.cardGenerationTitle} subtitle={a.cardGenerationSubtitle} />
+          <div className="flex flex-col gap-5">
+            <div className="grid gap-5 sm:grid-cols-2">
+              <Field label={a.label.maxTokens} description={a.desc.maxTokens}>
+                <input
+                  type="number"
+                  className={inputClassName()}
+                  value={form.maxTokens}
+                  min={1}
+                  onChange={(e) => update({ maxTokens: Number.parseInt(e.target.value, 10) || 0 })}
+                />
+              </Field>
+              <Field label={a.label.temperature} description={a.desc.temperature}>
+                <input
+                  type="number"
+                  className={inputClassName()}
+                  value={form.temperature}
+                  min={0}
+                  max={2}
+                  step={0.1}
+                  onChange={(e) => update({ temperature: Number.parseFloat(e.target.value) || 0 })}
+                />
+              </Field>
+            </div>
+            <Field label={a.label.maxToolIterations} description={a.desc.maxToolIterations}>
               <input
                 type="number"
                 className={inputClassName()}
-                value={form.maxTokens}
+                value={form.maxToolIterations}
                 min={1}
-                onChange={(e) => update({ maxTokens: Number.parseInt(e.target.value, 10) || 0 })}
-              />
-            </Field>
-            <Field label={a.label.temperature} description={a.desc.temperature}>
-              <input
-                type="number"
-                className={inputClassName()}
-                value={form.temperature}
-                min={0}
-                max={2}
-                step={0.1}
-                onChange={(e) => update({ temperature: Number.parseFloat(e.target.value) || 0 })}
+                onChange={(e) => update({ maxToolIterations: Number.parseInt(e.target.value, 10) || 0 })}
               />
             </Field>
           </div>
-          <Field label={a.label.maxToolIterations} description={a.desc.maxToolIterations}>
-            <input
-              type="number"
-              className={inputClassName()}
-              value={form.maxToolIterations}
-              min={1}
-              onChange={(e) => update({ maxToolIterations: Number.parseInt(e.target.value, 10) || 0 })}
-            />
-          </Field>
-        </SettingsCard>
+        </SettingsFormSection>
 
-        <SettingsCard icon={Zap} title={a.cardBehaviorTitle} subtitle={a.cardBehaviorSubtitle}>
+        <SettingsFormSection>
+          <SettingsFormSectionHeader icon={Zap} title={a.cardBehaviorTitle} subtitle={a.cardBehaviorSubtitle} />
+          <div className="flex flex-col gap-5">
           <Field label={a.label.thinkingDefault} description={a.desc.thinkingDefault}>
             <select
               className={selectClassName()}
@@ -334,7 +312,8 @@ export function AgentSettingsPanel() {
               <option value="full">{a.verbose.full}</option>
             </select>
           </Field>
-        </SettingsCard>
+          </div>
+        </SettingsFormSection>
       </div>
     </div>
   );

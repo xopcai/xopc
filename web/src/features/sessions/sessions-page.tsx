@@ -300,7 +300,7 @@ export function SessionsPage() {
             <FolderOpen className="size-5 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
             {s.title}
           </h1>
-          <div className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-edge bg-surface-panel px-3 py-2 transition-colors focus-within:border-accent sm:max-w-md dark:border-edge">
+          <div className="flex w-full min-w-0 items-center gap-2 rounded-xl bg-surface-base px-3 py-2 transition-colors focus-within:ring-2 focus-within:ring-accent/35 sm:max-w-md dark:bg-surface-hover/40">
             <Search className="size-4 shrink-0 text-fg-disabled" strokeWidth={1.75} aria-hidden />
             <input
               type="search"
@@ -319,10 +319,10 @@ export function SessionsPage() {
               type="button"
               onClick={() => setStatusFilter(key)}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-xl border px-3 py-2 text-sm font-medium transition-colors duration-150',
+                'inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-150',
                 statusFilter === key
-                  ? 'border-accent bg-accent-soft text-accent-fg'
-                  : 'border-edge bg-surface-panel text-fg-muted hover:bg-surface-hover hover:text-fg dark:border-edge',
+                  ? 'bg-accent-soft text-accent-fg'
+                  : 'bg-surface-base text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/35',
               )}
             >
               <Icon className="size-4" strokeWidth={1.75} aria-hidden />
@@ -341,7 +341,7 @@ export function SessionsPage() {
             ].map(([value, label]) => (
               <div
                 key={label}
-                className="rounded-xl border border-edge-subtle bg-surface-hover/40 px-3 py-3 dark:border-edge"
+                className="rounded-xl bg-surface-base px-3 py-3 dark:bg-surface-hover/30"
               >
                 <div className="text-lg font-semibold tabular-nums text-fg">{value}</div>
                 <div className="text-xs text-fg-muted">{label}</div>
@@ -397,12 +397,12 @@ export function SessionsPage() {
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="h-40 animate-pulse rounded-xl border border-edge-subtle bg-surface-hover/60 dark:border-edge"
+                className="h-40 animate-pulse rounded-xl bg-surface-hover/60 dark:bg-surface-hover/40"
               />
             ))}
           </div>
         ) : sessions.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-2xl border border-dashed border-edge-subtle py-16 text-center dark:border-edge">
+          <div className="flex flex-col items-center justify-center rounded-2xl bg-surface-base py-16 text-center dark:bg-surface-hover/25">
             <FolderOpen className="mb-3 size-12 text-fg-disabled" strokeWidth={1.25} aria-hidden />
             <p className="text-base font-semibold text-fg">{s.noSessions}</p>
             <p className="mt-1 max-w-sm text-sm text-fg-muted">{s.noSessionsDescription}</p>
