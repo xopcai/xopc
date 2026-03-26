@@ -198,8 +198,18 @@ html.dark {
   animation: page-enter 200ms cubic-bezier(0.25, 0.1, 0.25, 1) both;
 }
 
+/* Full-screen settings: slightly longer, softer ease to reduce a “snap” vs main chrome. */
+.page-enter--gentle {
+  animation-duration: 280ms;
+  animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
 @media (prefers-reduced-motion: reduce) {
   .page-enter {
+    animation: none;
+  }
+
+  .page-enter--gentle {
     animation: none;
   }
 }

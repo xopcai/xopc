@@ -4,6 +4,7 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
+import { cn } from '@/lib/cn';
 
 /** Align with `ui` `navigate-to-chat` custom event from session manager. */
 function NavigateToChatListener() {
@@ -23,6 +24,7 @@ function NavigateToChatListener() {
 
 export function AppShell() {
   const { pathname } = useLocation();
+  const isSettingsRoute = pathname.startsWith('/settings');
 
   // Key for the content area — changes only on top-level route segment so sub-routes
   // (e.g. /chat/new → /chat/:key) don't re-trigger the enter animation.
@@ -35,16 +37,22 @@ export function AppShell() {
       <TokenDialog />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
-      <SidebarColumn />
+        {!isSettingsRoute ? <SidebarColumn /> : null}
 
-      {/* Right column: chat title + prefs live in ChatPage (same row); other routes fill as needed */}
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
-        <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
-          <div key={routeKey} className="page-enter flex min-h-0 flex-1 flex-col">
-            <Outlet />
-          </div>
-        </main>
-      </div>
+        {/* Right column: chat title + prefs live in ChatPage (same row); settings are full-width */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
+          <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+            <div
+              key={routeKey}
+              className={cn(
+                'page-enter flex min-h-0 flex-1 flex-col',
+                routeKey === 'settings' && 'page-enter--gentle',
+              )}
+            >
+              <Outlet />
+            </div>
+          </main>
+        </div>
       </div>
     </div>
   );

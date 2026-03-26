@@ -63,6 +63,10 @@ const bundles: Record<
       taskRenamePlaceholder: string;
       taskRenameSave: string;
       taskRenameCancel: string;
+      /** Settings full-screen: return to main app (chat). */
+      backToApp: string;
+      /** Link to public documentation (opens in new tab). */
+      helpDocs: string;
     };
     chat: {
       typeMessage: string;
@@ -720,6 +724,8 @@ const bundles: Record<
       taskRenamePlaceholder: 'Session name',
       taskRenameSave: 'Save',
       taskRenameCancel: 'Cancel',
+      backToApp: 'Back to app',
+      helpDocs: 'Documentation',
     },
     chat: {
       typeMessage: 'Type a message…',
@@ -1416,6 +1422,8 @@ const bundles: Record<
       taskRenamePlaceholder: '会话名称',
       taskRenameSave: '保存',
       taskRenameCancel: '取消',
+      backToApp: '返回应用',
+      helpDocs: '帮助文档',
     },
     chat: {
       typeMessage: '输入消息…',
@@ -2058,7 +2066,7 @@ export function getTabGroups(lang: StoredLanguage): TabGroup[] {
   const m = messages(lang);
   return [
     { label: m.nav.chat, tabs: ['chat'] as const },
-    { label: m.nav.management, tabs: ['sessions', 'cron', 'skills', 'logs'] as const },
+    { label: m.nav.management, tabs: ['cron', 'skills'] as const },
     {
       label: m.nav.settings,
       tabs: [
@@ -2068,6 +2076,8 @@ export function getTabGroups(lang: StoredLanguage): TabGroup[] {
         'settingsChannels',
         'settingsVoice',
         'settingsGateway',
+        'sessions',
+        'logs',
       ] as const,
     },
   ];
