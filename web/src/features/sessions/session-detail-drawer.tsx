@@ -67,8 +67,8 @@ export function SessionDetailDrawer({
           )}
           aria-describedby={undefined}
         >
-          <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3 dark:border-edge">
-            <Dialog.Title className="min-w-0 truncate text-base font-semibold tracking-tight text-fg">
+          <div className="flex min-w-0 shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3 dark:border-edge">
+            <Dialog.Title className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-fg">
               {session?.name?.trim() || labels.unnamedSession}
             </Dialog.Title>
             <Dialog.Close asChild>
