@@ -103,7 +103,7 @@ export function AttachmentTile({
             title={displayName}
             aria-label={displayName}
           >
-            <img src={thumbSrc} alt={displayName} className="max-h-48 w-full object-cover" />
+            <img src={thumbSrc} alt={displayName} className="max-h-16 w-full object-cover" />
           </button>
           {isPdf ? (
             <div

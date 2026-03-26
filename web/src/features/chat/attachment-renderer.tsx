@@ -30,7 +30,7 @@ export function AttachmentRenderer({
         {images.length > 0 ? (
           <div
             className={cn(
-              'grid gap-2',
+              'grid w-full max-w-40 gap-1',
               images.length === 1 && 'grid-cols-1',
               images.length === 2 && 'grid-cols-2',
               images.length >= 3 && 'grid-cols-2 sm:grid-cols-3',
