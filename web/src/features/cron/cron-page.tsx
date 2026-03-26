@@ -445,7 +445,7 @@ export function CronPage() {
 
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6 sm:px-6 lg:px-8">
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6 sm:px-8">
         {error ? (
           <div
             className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"

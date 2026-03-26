@@ -14,7 +14,7 @@ function secondaryNavClass({ isActive }: { isActive: boolean }, collapsed: boole
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
     collapsed
       ? 'justify-center rounded-xl px-2 py-2.5'
-      : 'gap-2.5 rounded-xl px-4 py-2 text-left',
+      : 'gap-2 rounded-lg px-3 py-2 text-left',
     isActive
       ? 'bg-accent-soft text-accent-fg'
       : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
@@ -60,7 +60,7 @@ export function SidebarNav({
             title={m.nav.skills}
             onClick={() => onNavigate?.()}
           >
-            <Layers className="size-5 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+            <Layers className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
             {!collapsed ? <span className="truncate">{m.nav.skills}</span> : null}
           </NavLink>
           <NavLink
@@ -69,7 +69,7 @@ export function SidebarNav({
             title={m.nav.cron}
             onClick={() => onNavigate?.()}
           >
-            <Clock className="size-5 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+            <Clock className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
             {!collapsed ? <span className="truncate">{m.nav.cron}</span> : null}
           </NavLink>
         </div>
