@@ -4,6 +4,7 @@ import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
+import { comboboxTriggerLayoutClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
@@ -69,21 +70,23 @@ export function ModelSelector({
           disabled={disabled || isLoading}
           title={selected ? `${selected.name} (${selected.provider})` : placeholder}
           className={cn(
-            'flex max-w-full min-w-0 items-center justify-between gap-2 rounded-xl bg-surface-base px-3 py-2 text-left text-sm font-medium text-fg',
+            comboboxTriggerLayoutClass,
+            'items-center gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-left text-sm font-normal text-fg',
             interaction.transition,
-            /* Combobox trigger: no active scale (feels wrong on dropdown open). */
-            'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+            'hover:border-edge hover:bg-surface-hover/45',
+            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/18 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
             'disabled:cursor-not-allowed disabled:opacity-50',
+            'dark:border-edge-subtle dark:hover:bg-surface-hover/55',
             compact && 'py-1.5 text-[13px]',
           )}
         >
           <span className="min-w-0 truncate">{isLoading ? '…' : label}</span>
-          <ChevronsUpDown className="h-4 w-4 shrink-0 opacity-50" aria-hidden />
+          <ChevronsUpDown className="h-4 w-4 shrink-0 text-fg-subtle opacity-70" aria-hidden />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge bg-surface-panel p-1 shadow-elevated dark:border-edge"
+          className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge-subtle bg-surface-panel p-1 shadow-elevated dark:border-edge-subtle"
           side={contentSide}
           sideOffset={4}
           align={contentAlign}
@@ -91,7 +94,7 @@ export function ModelSelector({
         >
           <input
             type="search"
-            className="mb-1 w-full rounded-md border border-edge bg-surface-base px-2 py-1.5 text-sm text-fg placeholder:text-fg-disabled focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+            className="mb-1 w-full rounded-lg border border-edge-subtle bg-surface-base px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-disabled focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/18 dark:bg-surface-hover/40"
             placeholder={searchPlaceholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}
@@ -110,8 +113,8 @@ export function ModelSelector({
                 key={m.id}
                 type="button"
                 className={cn(
-                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm hover:bg-surface-hover',
-                  m.id === value && 'bg-accent/10',
+                  'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-hover',
+                  m.id === value && 'bg-surface-hover/90 font-medium dark:bg-surface-hover/70',
                 )}
                 onClick={() => {
                   onChange(m.id);

@@ -11,6 +11,7 @@ import {
   type ReplyToMode,
   type StreamMode,
 } from '@/features/settings/channels-config-api';
+import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages, type ChannelsSettingsMessages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -27,7 +28,7 @@ function inputClassName(): string {
 }
 
 function selectClassName(): string {
-  return cn(inputClassName(), 'cursor-pointer');
+  return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
 }
 
 function parseIdList(raw: string): (string | number)[] {
@@ -371,7 +372,7 @@ export function ChannelsSettingsPanel() {
               <span className="sr-only">{ch.enableTelegramAria}</span>
               <input
                 type="checkbox"
-                className="size-4 rounded border-edge text-accent focus:ring-accent/30"
+                className="ui-checkbox"
                 checked={tg.enabled}
                 onChange={(e) => {
                   const on = e.target.checked;
@@ -509,7 +510,7 @@ export function ChannelsSettingsPanel() {
               <span className="sr-only">{ch.enableWeixinAria}</span>
               <input
                 type="checkbox"
-                className="size-4 rounded border-edge text-accent focus:ring-accent/30"
+                className="ui-checkbox"
                 checked={wx.enabled}
                 onChange={(e) => {
                   const on = e.target.checked;
@@ -678,7 +679,7 @@ function TelegramAdvanced({
       <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
         <input
           type="checkbox"
-          className="size-4 rounded border-edge text-accent focus:ring-accent/30"
+          className="ui-checkbox"
           checked={tg.debug}
           onChange={(e) => updateTelegram({ debug: e.target.checked })}
         />
@@ -772,7 +773,7 @@ function WeixinAdvanced({
       <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
         <input
           type="checkbox"
-          className="size-4 rounded border-edge text-accent focus:ring-accent/30"
+          className="ui-checkbox"
           checked={wx.debug}
           onChange={(e) => updateWeixin({ debug: e.target.checked })}
         />

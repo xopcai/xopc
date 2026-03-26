@@ -228,7 +228,7 @@ export const ChatComposer = memo(function ChatComposer({
 
         <div className="flex flex-wrap items-center gap-2 border-t border-edge-subtle/90 px-4 pb-2.5 pt-2 dark:border-edge-subtle">
           {showModelSelector ? (
-            <div className="min-w-0 max-w-[min(14rem,calc(100vw-10rem))] shrink">
+            <div className="min-w-0 w-fit max-w-[min(32rem,calc(100vw-2rem))] shrink">
               <ModelSelector
                 value={sessionModel}
                 disabled={disabled || streaming}

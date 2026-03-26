@@ -19,6 +19,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages, type ModelsSettingsMessages } from '@/i18n/messages';
@@ -77,7 +78,7 @@ function inputClassName(): string {
 }
 
 function selectClassName(): string {
-  return cn(inputClassName(), 'cursor-pointer');
+  return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
 }
 
 function parseInputSelect(model: CustomModel): string {
@@ -452,7 +453,7 @@ function ModelEditDialogContent({
               <label className="mt-6 flex cursor-pointer items-center gap-2 text-sm text-fg">
                 <input
                   type="checkbox"
-                  className="size-4 rounded border-edge text-accent focus:ring-accent/30"
+                  className="ui-checkbox"
                   checked={form.reasoning || false}
                   onChange={(e) => update('reasoning', e.target.checked)}
                 />
@@ -1145,7 +1146,7 @@ export function ModelsSettingsPanel() {
                       <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
                         <input
                           type="checkbox"
-                          className="size-4 rounded border-edge text-accent focus:ring-accent/30"
+                          className="ui-checkbox"
                           checked={prov.authHeader || false}
                           onChange={(e) =>
                             setConfig((c) => updateProvider(c, id, { authHeader: e.target.checked }))

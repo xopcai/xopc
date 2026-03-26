@@ -38,6 +38,9 @@
   --color-accent-soft: #eff6ff;
   --color-accent-fg: #2563eb;
 
+  /* Native checkbox checked fill — neutral gray (not brand blue); keeps forms calm vs primary CTAs */
+  --color-checkbox-accent: #3c3c43;
+
   /* Semantic */
   --color-success: #059669;
   --color-success-soft: #d1fae5;
@@ -86,6 +89,8 @@ html.dark {
   --color-accent-hover: #60a5fa;
   --color-accent-soft: rgb(30 58 138 / 0.55);
   --color-accent-fg: #60a5fa;
+
+  --color-checkbox-accent: #c7c7cc;
 
   --color-success: #34d399;
   --color-success-soft: rgb(6 78 59 / 0.5);
@@ -153,6 +158,44 @@ html.dark {
 
   :focus:not(:focus-visible) {
     outline: none;
+  }
+}
+
+@layer components {
+  /**
+   * Native `<input type="checkbox">` — restrained checked color via `accent-color`.
+   * Do not use `text-accent` on checkboxes (it reads as loud brand fill).
+   */
+  .ui-checkbox {
+    @apply size-4 shrink-0 cursor-pointer rounded border border-edge bg-surface-panel;
+    accent-color: var(--color-checkbox-accent);
+  }
+
+  .ui-checkbox:disabled {
+    @apply cursor-not-allowed opacity-50;
+  }
+
+  /**
+   * Native `<select>` — soft border, light hover, quiet focus (avoid heavy ring + loud edge).
+   */
+  .ui-select {
+    @apply rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-sm font-normal leading-snug text-fg;
+    @apply cursor-pointer transition-[border-color,background-color,box-shadow] duration-150 ease-out;
+    @apply hover:border-edge hover:bg-surface-hover/45;
+    /* Override global :focus-visible outline so only the soft ring shows */
+    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/18;
+  }
+
+  html.dark .ui-select {
+    @apply border-edge-subtle bg-surface-panel;
+  }
+
+  html.dark .ui-select:hover {
+    @apply border-edge bg-surface-hover/55;
+  }
+
+  .ui-select:disabled {
+    @apply cursor-not-allowed opacity-50;
   }
 }
 

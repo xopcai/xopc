@@ -43,6 +43,7 @@ import {
   formatTime,
   truncate,
 } from '@/features/cron/cron-utils';
+import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
@@ -73,6 +74,10 @@ function inputClassName(disabled?: boolean): string {
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
     disabled && 'cursor-not-allowed opacity-60',
   );
+}
+
+function selectClassName(): string {
+  return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
 }
 
 export function CronPage() {
@@ -596,7 +601,7 @@ export function CronPage() {
                     <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-fg-muted">
                       <input
                         type="checkbox"
-                        className="size-4 rounded border-edge text-accent focus-visible:ring-2 focus-visible:ring-accent"
+                        className="ui-checkbox"
                         checked={job.enabled}
                         onChange={(e) => void onToggle(job, e.target.checked)}
                         aria-label={c.enabled}
@@ -780,7 +785,7 @@ export function CronPage() {
                       placeholder="*/5 * * * *"
                     />
                     <select
-                      className={cn(inputClassName(), 'max-w-[11rem] shrink-0 text-xs')}
+                      className={cn(selectClassName(), 'max-w-[11rem] shrink-0 text-xs')}
                       value={schedulePresetSelectValue}
                       onChange={(e) => {
                         const v = e.target.value;
@@ -808,7 +813,7 @@ export function CronPage() {
                 <label className="flex flex-col gap-1">
                   <span className="text-xs font-medium text-fg-muted">{c.mode}</span>
                   <select
-                    className={inputClassName()}
+                    className={selectClassName()}
                     value={formSessionTarget}
                     onChange={(e) => {
                       const v = e.target.value as 'main' | 'isolated';
@@ -842,7 +847,7 @@ export function CronPage() {
                     <label className="flex cursor-pointer items-start gap-2 rounded-md bg-surface-hover/45 px-3 py-2 dark:bg-surface-hover/30">
                       <input
                         type="checkbox"
-                        className="mt-0.5 size-4 rounded border-edge"
+                        className={cn('ui-checkbox', 'mt-0.5')}
                         checked={formAgentLocalOnly}
                         onChange={(e) => setFormAgentLocalOnly(e.target.checked)}
                       />
@@ -858,7 +863,7 @@ export function CronPage() {
                     <label className="flex flex-col gap-1">
                       <span className="text-xs font-medium text-fg-muted">{c.channel}</span>
                       <select
-                        className={inputClassName()}
+                        className={selectClassName()}
                         value={formChannel}
                         onChange={(e) => {
                           const v = e.target.value;
@@ -899,7 +904,7 @@ export function CronPage() {
                             placeholder={c.recipientPlaceholder}
                           />
                           <select
-                            className={cn(inputClassName(), 'max-w-[10rem] shrink-0 text-xs')}
+                            className={cn(selectClassName(), 'max-w-[10rem] shrink-0 text-xs')}
                             value={formChatId}
                             onChange={(e) => {
                               const v = e.target.value;

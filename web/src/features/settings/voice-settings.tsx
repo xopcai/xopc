@@ -9,6 +9,7 @@ import {
   type VoiceModelsPayload,
   type VoiceSettingsState,
 } from '@/features/settings/voice-config-api';
+import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages, type VoiceSettingsMessages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -25,7 +26,7 @@ function inputClassName(): string {
 }
 
 function selectClassName(): string {
-  return cn(inputClassName(), 'cursor-pointer');
+  return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
 }
 
 const STT_ALIBABA_FALLBACK = [
@@ -327,7 +328,7 @@ function SttSection({
           </div>
           <input
             type="checkbox"
-            className="size-4 rounded border-edge text-accent focus:ring-accent/30"
+            className="ui-checkbox"
             checked={stt.enabled}
             onChange={(e) => updateStt({ enabled: e.target.checked })}
           />
@@ -420,7 +421,7 @@ function SttSection({
               </div>
               <input
                 type="checkbox"
-                className="size-4 rounded border-edge text-accent focus:ring-accent/30"
+                className="ui-checkbox"
                 checked={stt.fallback?.enabled ?? true}
                 onChange={(e) => updateSttFallback({ enabled: e.target.checked })}
               />
@@ -480,7 +481,7 @@ function TtsSection({
           </div>
           <input
             type="checkbox"
-            className="size-4 rounded border-edge text-accent focus:ring-accent/30"
+            className="ui-checkbox"
             checked={tts.enabled}
             onChange={(e) => updateTts({ enabled: e.target.checked })}
           />

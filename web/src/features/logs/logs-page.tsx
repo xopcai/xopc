@@ -13,6 +13,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import {
   getLogDir,
@@ -454,10 +455,7 @@ export function LogsPage() {
               id="log-module"
               value={moduleFilter}
               onChange={(e) => setModuleFilter(e.target.value)}
-              className={cn(
-                'w-full rounded-md border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
-                'focus:border-edge-strong focus:outline-none focus:ring-2 focus:ring-accent/30 dark:border-edge',
-              )}
+              className={cn(selectControlBaseClass, nativeSelectMaxWidthClass)}
             >
               <option value="">{L.allModules}</option>
               {modules.map((mod) => (
