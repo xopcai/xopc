@@ -9,10 +9,9 @@ import {
 } from '@/features/settings/gateway-config-api';
 import { cn } from '@/lib/cn';
 import { messages, type GatewaySettingsMessages } from '@/i18n/messages';
+import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-
-const DOCS_URL = 'https://github.com/xopc/xopcbot/blob/main/docs/gateway.md';
 
 function inputClassName(): string {
   return cn(
@@ -144,7 +143,7 @@ export function GatewaySettingsPanel() {
           <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.gateway}</h1>
           <p className="mt-1 text-sm text-fg-muted">{g.subtitle}</p>
           <a
-            href={DOCS_URL}
+            href={docsGuidePageUrl(language, 'gateway')}
             target="_blank"
             rel="noreferrer"
             className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"

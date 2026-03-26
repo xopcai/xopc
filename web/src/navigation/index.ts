@@ -1,3 +1,5 @@
+import type { StoredLanguage } from '@/lib/storage';
+
 import type { SettingsSectionId, Tab } from '@/i18n/messages';
 
 export type { SettingsSectionId, Tab } from '@/i18n/messages';
@@ -54,8 +56,25 @@ export const SETTINGS_NAV_TABS: readonly Tab[] = [
 /** Settings shell: configuration tabs + sessions + logs (same left rail). */
 export const SETTINGS_SHELL_NAV_TABS: readonly Tab[] = [...SETTINGS_NAV_TABS, 'sessions', 'logs'];
 
-/** Official docs (gateway console help link). */
-export const HELP_DOCS_URL = 'https://xopcai.github.io/xopcbot';
+/** Official docs site (VitePress `base: /xopcbot/`). */
+export const HELP_DOCS_BASE_URL = 'https://xopcai.github.io/xopcbot';
+
+/** Sidebar “Documentation” — English root vs `zh/` locale home. */
+export function helpDocsHomeUrl(language: StoredLanguage): string {
+  return language === 'zh' ? `${HELP_DOCS_BASE_URL}/zh/` : `${HELP_DOCS_BASE_URL}/`;
+}
+
+/**
+ * Path to a VitePress guide page (e.g. `models` → `/models.md` in repo root `docs/`).
+ * Chinese lives under `docs/zh/` → `/zh/<page>` on the site.
+ */
+export function docsGuidePageUrl(language: StoredLanguage, page: string): string {
+  const slug = page.replace(/^\/+/, '').replace(/\.md$/, '');
+  if (language === 'zh') {
+    return `${HELP_DOCS_BASE_URL}/zh/${slug}`;
+  }
+  return `${HELP_DOCS_BASE_URL}/${slug}`;
+}
 
 /** Parse `#/settings/agent` etc. Returns null if not a settings route. */
 export function parseSettingsHash(hash: string): SettingsSectionId | null {
