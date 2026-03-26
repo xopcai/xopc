@@ -49,7 +49,7 @@ export function SidebarFooter({
             to="/chat"
             title={m.nav.chat}
             className={cn(
-              'size-10 shrink-0 overflow-hidden rounded-full ring-offset-surface-base transition-transform duration-150 ease-out',
+              'size-8 shrink-0 overflow-hidden rounded-full ring-offset-surface-base transition-transform duration-150 ease-out',
               'hover:opacity-95 active:scale-95',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
               'motion-reduce:hover:opacity-100 motion-reduce:active:scale-100',
