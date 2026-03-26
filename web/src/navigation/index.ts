@@ -17,6 +17,7 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   channels: 'settingsChannels',
   voice: 'settingsVoice',
   gateway: 'settingsGateway',
+  heartbeat: 'settingsHeartbeat',
 };
 
 const TAB_TO_SETTINGS_SECTION: Record<
@@ -26,7 +27,8 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsModels'
   | 'settingsChannels'
   | 'settingsVoice'
-  | 'settingsGateway',
+  | 'settingsGateway'
+  | 'settingsHeartbeat',
   SettingsSectionId
 > = {
   settingsAppearance: 'appearance',
@@ -36,6 +38,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsChannels: 'channels',
   settingsVoice: 'voice',
   settingsGateway: 'gateway',
+  settingsHeartbeat: 'heartbeat',
 };
 
 export function settingsSectionToTab(section: SettingsSectionId): Tab {
@@ -55,6 +58,7 @@ export const SETTINGS_NAV_TABS: readonly Tab[] = [
   'settingsChannels',
   'settingsVoice',
   'settingsGateway',
+  'settingsHeartbeat',
 ];
 
 /** Settings shell: configuration tabs + sessions + logs (same left rail). */

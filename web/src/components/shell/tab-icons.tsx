@@ -7,6 +7,7 @@ import {
   FileText,
   FolderOpen,
   Globe,
+  Heart,
   Layers,
   MessageSquare,
   Mic,
@@ -29,6 +30,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsChannels: Plug,
   settingsVoice: Mic,
   settingsGateway: Globe,
+  settingsHeartbeat: Heart,
 };
 
 export function TabIcon({ tab, className }: { tab: Tab; className?: string }) {

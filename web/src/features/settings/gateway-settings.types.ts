@@ -7,8 +7,4 @@ export interface GatewaySettingsState {
     mode: GatewayAuthMode;
     token: string;
   };
-  heartbeat: {
-    enabled: boolean;
-    intervalMs: number;
-  };
 }
