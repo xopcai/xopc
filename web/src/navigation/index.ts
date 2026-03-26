@@ -49,20 +49,38 @@ export function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
   return TAB_TO_SETTINGS_SECTION[tab as keyof typeof TAB_TO_SETTINGS_SECTION] ?? null;
 }
 
-/** Order of items in the full-screen settings sidebar (subset of `Tab`). */
-export const SETTINGS_NAV_TABS: readonly Tab[] = [
-  'settingsAppearance',
-  'settingsAgent',
-  'settingsProviders',
-  'settingsModels',
-  'settingsChannels',
-  'settingsVoice',
-  'settingsGateway',
-  'settingsHeartbeat',
-];
+/** Group keys for `messages(lang).settingsNavGroups` — left rail sections + sort order. */
+export type SettingsNavGroupId =
+  | 'interface'
+  | 'agentAndModels'
+  | 'channelsAndVoice'
+  | 'gateway'
+  | 'data';
 
-/** Settings shell: configuration tabs + sessions + logs (same left rail). */
-export const SETTINGS_SHELL_NAV_TABS: readonly Tab[] = [...SETTINGS_NAV_TABS, 'sessions', 'logs'];
+export type SettingsShellNavGroup = {
+  id: SettingsNavGroupId;
+  tabs: readonly Tab[];
+};
+
+/**
+ * Priority: connection → AI (keys → model → agent) → common ops (sessions/logs) →
+ * UI prefs → integrations. See `settingsNavGroups` copy in i18n.
+ */
+export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
+  { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat'] },
+  { id: 'agentAndModels', tabs: ['settingsProviders', 'settingsModels', 'settingsAgent'] },
+  { id: 'data', tabs: ['sessions', 'logs'] },
+  { id: 'interface', tabs: ['settingsAppearance'] },
+  { id: 'channelsAndVoice', tabs: ['settingsChannels', 'settingsVoice'] },
+] as const;
+
+/** Flat order: settings routes only (excludes sessions/logs). */
+export const SETTINGS_NAV_TABS: readonly Tab[] = SETTINGS_SHELL_NAV_GROUPS.filter((g) => g.id !== 'data').flatMap(
+  (g) => [...g.tabs],
+);
+
+/** Settings shell: full left rail including sessions + logs. */
+export const SETTINGS_SHELL_NAV_TABS: readonly Tab[] = SETTINGS_SHELL_NAV_GROUPS.flatMap((g) => [...g.tabs]);
 
 /** Official docs site (VitePress `base: /xopcbot/`). */
 export const HELP_DOCS_BASE_URL = 'https://xopcai.github.io/xopcbot';
@@ -89,12 +107,12 @@ export function parseSettingsHash(hash: string): SettingsSectionId | null {
   let h = hash.startsWith('#') ? hash.slice(1) : hash;
   if (h.startsWith('/')) h = h.slice(1);
   if (h === 'settings' || h === 'settings/') {
-    return 'appearance';
+    return 'gateway';
   }
   if (!h.startsWith('settings/')) return null;
   const rest = h.slice('settings/'.length);
   const section = rest.split('/')[0];
-  if (!section) return 'appearance';
+  if (!section) return 'gateway';
   return section in SETTINGS_SECTION_TO_TAB ? (section as SettingsSectionId) : null;
 }
 

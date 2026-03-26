@@ -92,3 +92,12 @@ export async function putHeartbeatMd(content: string): Promise<void> {
     body: JSON.stringify({ content }),
   });
 }
+
+/** Queue one heartbeat run (same path as the interval timer). */
+export async function triggerHeartbeat(reason?: string): Promise<void> {
+  await fetchJson(apiUrl('/api/heartbeat/trigger'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(reason ? { reason } : {}),
+  });
+}

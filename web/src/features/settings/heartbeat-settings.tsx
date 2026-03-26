@@ -1,4 +1,4 @@
-import { ExternalLink, Heart, Loader2, RefreshCw } from 'lucide-react';
+import { ExternalLink, Heart, Loader2, Play, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -14,6 +14,7 @@ import {
   normalizeHeartbeatFromConfig,
   patchHeartbeatSettings,
   putHeartbeatMd,
+  triggerHeartbeat,
 } from '@/features/settings/heartbeat-config-api';
 import type { HeartbeatSettingsState } from '@/features/settings/heartbeat-settings.types';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
@@ -58,6 +59,9 @@ export function HeartbeatSettingsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [saveConfigOk, setSaveConfigOk] = useState(false);
   const [saveDocOk, setSaveDocOk] = useState(false);
+  const [triggerLoading, setTriggerLoading] = useState(false);
+  const [triggerOk, setTriggerOk] = useState(false);
+  const [triggerError, setTriggerError] = useState<string | null>(null);
   const [channels, setChannels] = useState<ChannelStatus[]>([]);
   const [sessionChatIds, setSessionChatIds] = useState<SessionChatId[]>([]);
 
@@ -140,6 +144,21 @@ export function HeartbeatSettingsPanel() {
     if (!t) return;
     void getSessionChatIds(t).then(setSessionChatIds);
   }, [form?.target]);
+
+  const runHeartbeatNow = useCallback(async () => {
+    setTriggerLoading(true);
+    setTriggerOk(false);
+    setTriggerError(null);
+    try {
+      await triggerHeartbeat();
+      setTriggerOk(true);
+      window.setTimeout(() => setTriggerOk(false), 3000);
+    } catch (e) {
+      setTriggerError(e instanceof Error ? e.message : h.triggerError);
+    } finally {
+      setTriggerLoading(false);
+    }
+  }, [h.triggerError]);
 
   const dirtyConfig = useMemo(() => {
     if (!form || !baseline) return false;
@@ -245,10 +264,31 @@ export function HeartbeatSettingsPanel() {
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
       <SettingsFormSection>
-        <div className="mb-4 flex items-center gap-2 text-sm font-semibold text-fg">
-          <Heart className="size-4 text-accent" strokeWidth={1.75} />
-          {h.configSection}
+        <div className="mb-2 flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div className="flex items-center gap-2 text-sm font-semibold text-fg">
+            <Heart className="size-4 text-accent" strokeWidth={1.75} />
+            {h.configSection}
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="inline-flex items-center gap-2"
+              disabled={triggerLoading}
+              onClick={() => void runHeartbeatNow()}
+            >
+              {triggerLoading ? (
+                <Loader2 className="size-4 animate-spin" aria-hidden />
+              ) : (
+                <Play className="size-4" strokeWidth={1.75} aria-hidden />
+              )}
+              {triggerLoading ? h.triggering : h.triggerNow}
+            </Button>
+            {triggerOk ? <span className="text-sm text-fg-muted">{h.triggered}</span> : null}
+          </div>
         </div>
+        <p className="mb-4 text-xs text-fg-subtle">{h.triggerHint}</p>
+        {triggerError ? <p className="mb-3 text-sm text-red-600 dark:text-red-400">{triggerError}</p> : null}
         <HeartbeatConfigFields
           h={h}
           cron={m.cron}

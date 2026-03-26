@@ -185,6 +185,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         'GET  /api/config',
         'PATCH /api/config',
         'POST /api/config/reload',
+        'POST /api/heartbeat/trigger',
         '...  /api/cron/*',
         'GET/PATCH /api/sessions/:key/agent-config',
         '...  /api/sessions/*',
@@ -380,6 +381,22 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   authenticated.post('/api/config/reload', strictRateLimitMiddleware, async (c) => {
     const result = await service.reloadConfig();
     return c.json({ ok: true, payload: result });
+  });
+
+  /** Queue an immediate heartbeat run (same coalescing path as interval/cron). */
+  authenticated.post('/api/heartbeat/trigger', strictRateLimitMiddleware, async (c) => {
+    let reason = 'manual';
+    try {
+      const body = await c.req.json();
+      if (body && typeof body === 'object' && typeof (body as { reason?: unknown }).reason === 'string') {
+        const r = (body as { reason: string }).reason.trim();
+        if (r) reason = r.slice(0, 120);
+      }
+    } catch {
+      /* empty or invalid body */
+    }
+    service.requestHeartbeatNow({ reason });
+    return c.json({ ok: true, payload: { scheduled: true } });
   });
 
   // GET /api/config

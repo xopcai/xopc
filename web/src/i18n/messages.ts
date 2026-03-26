@@ -37,6 +37,11 @@ const bundles: Record<
     appBarPreferences: string;
     nav: Record<Tab | 'management' | 'settings', string>;
     settingsSections: Record<SettingsSectionId, string>;
+    /** Full-screen settings left rail — group headings above each block of links. */
+    settingsNavGroups: Record<
+      'interface' | 'agentAndModels' | 'channelsAndVoice' | 'gateway' | 'data',
+      string
+    >;
     token: {
       title: string;
       description: string;
@@ -681,6 +686,11 @@ const bundles: Record<
       savingConfig: string;
       savedConfig: string;
       saveConfigError: string;
+      triggerNow: string;
+      triggering: string;
+      triggered: string;
+      triggerError: string;
+      triggerHint: string;
       saveDoc: string;
       savingDoc: string;
       savedDoc: string;
@@ -750,6 +760,13 @@ const bundles: Record<
       voice: 'Voice',
       gateway: 'Gateway',
       heartbeat: 'Heartbeat',
+    },
+    settingsNavGroups: {
+      gateway: 'Connection & service',
+      agentAndModels: 'Providers & models',
+      data: 'Sessions & logs',
+      interface: 'Interface',
+      channelsAndVoice: 'Channels & voice',
     },
     token: {
       title: 'Authentication required',
@@ -1426,6 +1443,12 @@ const bundles: Record<
       savingConfig: 'Saving…',
       savedConfig: 'Configuration saved',
       saveConfigError: 'Failed to save configuration',
+      triggerNow: 'Run now',
+      triggering: 'Queuing…',
+      triggered: 'Heartbeat queued',
+      triggerError: 'Failed to trigger heartbeat',
+      triggerHint:
+        'Queues one heartbeat run (same as the timer). Skipped if HEARTBEAT.md is empty, outside active hours, or heartbeat is disabled.',
       saveDoc: 'Save HEARTBEAT.md',
       savingDoc: 'Saving…',
       savedDoc: 'Document saved',
@@ -1503,6 +1526,13 @@ const bundles: Record<
       voice: '语音',
       gateway: '网关',
       heartbeat: '心跳',
+    },
+    settingsNavGroups: {
+      gateway: '连接与服务',
+      agentAndModels: '提供商与模型',
+      data: '会话与日志',
+      interface: '界面',
+      channelsAndVoice: '通道与语音',
     },
     token: {
       title: '需要身份验证',
@@ -2176,6 +2206,12 @@ const bundles: Record<
       savingConfig: '保存中…',
       savedConfig: '配置已保存',
       saveConfigError: '保存配置失败',
+      triggerNow: '立即触发',
+      triggering: '排队中…',
+      triggered: '已加入心跳队列',
+      triggerError: '触发心跳失败',
+      triggerHint:
+        '与定时器相同的一次心跳（会受 HEARTBEAT.md、活跃时段与是否启用心跳影响）。',
       saveDoc: '保存 HEARTBEAT.md',
       savingDoc: '保存中…',
       savedDoc: '文档已保存',
@@ -2235,20 +2271,16 @@ export function getTabGroups(lang: StoredLanguage): TabGroup[] {
   return [
     { label: m.nav.chat, tabs: ['chat'] as const },
     { label: m.nav.management, tabs: ['cron', 'skills'] as const },
+    { label: m.settingsNavGroups.gateway, tabs: ['settingsGateway', 'settingsHeartbeat'] as const },
     {
-      label: m.nav.settings,
-      tabs: [
-        'settingsAppearance',
-        'settingsAgent',
-        'settingsProviders',
-        'settingsModels',
-        'settingsChannels',
-        'settingsVoice',
-        'settingsGateway',
-        'settingsHeartbeat',
-        'sessions',
-        'logs',
-      ] as const,
+      label: m.settingsNavGroups.agentAndModels,
+      tabs: ['settingsProviders', 'settingsModels', 'settingsAgent'] as const,
+    },
+    { label: m.settingsNavGroups.data, tabs: ['sessions', 'logs'] as const },
+    { label: m.settingsNavGroups.interface, tabs: ['settingsAppearance'] as const },
+    {
+      label: m.settingsNavGroups.channelsAndVoice,
+      tabs: ['settingsChannels', 'settingsVoice'] as const,
     },
   ];
 }

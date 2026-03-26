@@ -29,7 +29,7 @@ export function SettingsPage() {
   const m = messages(language);
 
   if (!section || !SECTIONS.includes(section as SettingsSectionId)) {
-    return <Navigate to="/settings/appearance" replace />;
+    return <Navigate to="/settings/gateway" replace />;
   }
 
   const id = section as SettingsSectionId;
