@@ -93,6 +93,18 @@ describe('SessionStore', () => {
       expect(metadata?.sessionType).toBe('cron');
       expect(metadata?.customData).toMatchObject({ cronJobId: 'abc12def' });
     });
+
+    it('stores cron and routing sessions in separate shard directories', async () => {
+      await store.saveMessages('cron:job1', [{ role: 'user', content: 'c' }]);
+      await store.saveMessages('main:webchat:default:direct:u1', [{ role: 'user', content: 'w' }]);
+
+      expect(existsSync(join(tempDir, '.sessions', 'system', 'cron', 'cron_job1.json'))).toBe(true);
+      expect(
+        existsSync(
+          join(tempDir, '.sessions', 'users', 'main', 'webchat', 'default', 'direct', 'u1', 'main_webchat_default_direct_u1.json')
+        )
+      ).toBe(true);
+    });
   });
 
   describe('getByAgent', () => {
@@ -242,7 +254,8 @@ describe('SessionStore', () => {
         const migrated = new SessionStore({ workspace: legacyWs, sessionsDir: targetSessions });
         await migrated.initialize();
 
-        expect(existsSync(join(targetSessions, 'main_telegram_default_dm_99.json'))).toBe(true);
+        const shardRel = join('users', 'main', 'telegram', 'default', 'dm', '99');
+        expect(existsSync(join(targetSessions, shardRel, 'main_telegram_default_dm_99.json'))).toBe(true);
         const detail = await migrated.get('main:telegram:default:dm:99');
         expect(detail?.messages.length).toBeGreaterThan(0);
       } finally {

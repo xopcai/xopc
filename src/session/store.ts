@@ -1,9 +1,10 @@
 // Session store - manages session persistence, indexing, compaction, and sliding window
 
-import { readFile, writeFile, mkdir, unlink, readdir, stat, cp } from 'fs/promises';
-import { join } from 'path';
+import { readFile, writeFile, mkdir, unlink, readdir, stat, cp, rename } from 'fs/promises';
+import { basename, join } from 'path';
 import { existsSync } from 'fs';
 import { resolveSessionsDir, resolveAgentId, FILENAMES } from '../config/paths.js';
+import { resolveSessionShardRelativePath } from './shard-path.js';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { createLogger } from '../utils/logger.js';
 import type {
@@ -28,7 +29,8 @@ const INDEX_VERSION = '1.0';
 const DEFAULT_LIMIT = 50;
 
 /**
- * Session files live under `resolveSessionsDir(agentId)` (ADR-003).
+ * Session files live under `resolveSessionsDir(agentId)` (ADR-003), sharded by
+ * `resolveSessionShardRelativePath(sessionKey)` (users/… vs system/cron, system/heartbeat, …).
  * Optional `workspace` enables one-time migration from legacy `<workspace>/.sessions`.
  */
 export interface SessionStoreOptions {
@@ -76,10 +78,18 @@ export class SessionStore {
 
     await this.maybeMigrateLegacyWorkspace();
 
+    const migratedFlat = await this.maybeMigrateFlatSessionFiles();
+
     if (!existsSync(this.indexFile)) {
       await this.rebuildIndex();
     } else {
       await this.loadIndex();
+    }
+
+    if (migratedFlat > 0) {
+      this.indexCache = null;
+      this.indexCacheTime = 0;
+      await this.rebuildIndex();
     }
 
     log.debug('Session store initialized');
@@ -124,6 +134,64 @@ export class SessionStore {
     } catch (err) {
       log.warn({ err, legacyDir, target: this.sessionsDir }, 'Failed to migrate legacy sessions');
     }
+  }
+
+  /**
+   * Move legacy flat `sessions/<stem>.json` into sharded subdirectories (one-time per file).
+   */
+  private async maybeMigrateFlatSessionFiles(): Promise<number> {
+    let moved = 0;
+    let entries;
+    try {
+      entries = await readdir(this.sessionsDir, { withFileTypes: true });
+    } catch {
+      return 0;
+    }
+    for (const ent of entries) {
+      if (!ent.isFile()) continue;
+      if (ent.name === FILENAMES.SESSIONS_INDEX || !ent.name.endsWith('.json') || ent.name.endsWith('.meta.json')) {
+        continue;
+      }
+      const key = this.fileNameToKey(ent.name.replace(/\.json$/, ''));
+      const shard = resolveSessionShardRelativePath(key);
+      const destDir = join(this.sessionsDir, shard);
+      const destJson = join(destDir, ent.name);
+      const srcJson = join(this.sessionsDir, ent.name);
+      if (srcJson === destJson) continue;
+      try {
+        await mkdir(destDir, { recursive: true });
+        await rename(srcJson, destJson);
+        moved++;
+        const metaName = ent.name.replace(/\.json$/, '.meta.json');
+        const srcMeta = join(this.sessionsDir, metaName);
+        if (existsSync(srcMeta)) {
+          await rename(srcMeta, join(destDir, metaName));
+        }
+        log.debug({ key, shard }, 'Migrated flat session file into shard directory');
+      } catch (err) {
+        log.warn({ err, srcJson, destJson }, 'Failed to migrate session file to shard');
+      }
+    }
+    return moved;
+  }
+
+  private sessionPathsForKey(key: string): { dir: string; jsonPath: string; metaPath: string } {
+    const safeKey = this.sanitizeKey(key);
+    const shard = resolveSessionShardRelativePath(key);
+    const dir = join(this.sessionsDir, shard);
+    return {
+      dir,
+      jsonPath: join(dir, `${safeKey}.json`),
+      metaPath: join(dir, `${safeKey}.meta.json`),
+    };
+  }
+
+  private legacyFlatPathsForKey(key: string): { jsonPath: string; metaPath: string } {
+    const safeKey = this.sanitizeKey(key);
+    return {
+      jsonPath: join(this.sessionsDir, `${safeKey}.json`),
+      metaPath: join(this.sessionsDir, `${safeKey}.meta.json`),
+    };
   }
 
   private async hasNonEmptyIndex(indexPath: string): Promise<boolean> {
@@ -253,7 +321,8 @@ export class SessionStore {
 
     for (const file of files) {
       if (file.endsWith('.json') && !file.endsWith('.meta.json')) {
-        const key = this.fileNameToKey(file.replace('.json', ''));
+        const stem = basename(file, '.json');
+        const key = this.fileNameToKey(stem);
         try {
           const metadata = await this.scanSessionFile(key);
           if (metadata) {
@@ -287,21 +356,39 @@ export class SessionStore {
   }
 
   private async scanSessionFiles(): Promise<string[]> {
-    try {
-      const files = await readdir(this.sessionsDir);
-      return files.filter((f) => f.endsWith('.json') && f !== 'index.json');
-    } catch {
-      return [];
-    }
+    const out: string[] = [];
+    const walk = async (rel: string): Promise<void> => {
+      const abs = join(this.sessionsDir, rel);
+      let entries;
+      try {
+        entries = await readdir(abs, { withFileTypes: true });
+      } catch {
+        return;
+      }
+      for (const ent of entries) {
+        const childRel = rel ? join(rel, ent.name) : ent.name;
+        if (ent.isDirectory()) {
+          if (ent.name === 'archive') continue;
+          await walk(childRel);
+        } else if (
+          ent.name.endsWith('.json') &&
+          ent.name !== FILENAMES.SESSIONS_INDEX &&
+          !ent.name.endsWith('.meta.json')
+        ) {
+          out.push(childRel);
+        }
+      }
+    };
+    await walk('');
+    return out;
   }
 
   private async scanSessionFile(key: string): Promise<SessionMetadata | null> {
     const messages = await this.loadMessages(key);
     if (messages.length === 0) return null;
 
-    const safeKey = this.sanitizeKey(key);
-    const filePath = join(this.sessionsDir, `${safeKey}.json`);
-    const stats = await stat(filePath);
+    const { jsonPath } = this.sessionPathsForKey(key);
+    const stats = await stat(jsonPath);
 
     const { channel, chatId } = this.parseSessionKey(key);
     const routing = this.extractRoutingFromKey(key, channel);
@@ -479,21 +566,22 @@ export class SessionStore {
     const index = await this.loadIndex();
     const idx = index.sessions.findIndex((s) => s.key === key);
 
-    // Delete files
-    const safeKey = this.sanitizeKey(key);
-    const sessionPath = join(this.sessionsDir, `${safeKey}.json`);
-    const metaPath = join(this.sessionsDir, `${safeKey}.meta.json`);
+    const primary = this.sessionPathsForKey(key);
+    const legacy = this.legacyFlatPathsForKey(key);
 
-    try {
-      await unlink(sessionPath);
-    } catch (err: any) {
-      if (err.code !== 'ENOENT') throw err;
+    for (const p of [primary.jsonPath, legacy.jsonPath]) {
+      try {
+        await unlink(p);
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') throw err;
+      }
     }
-
-    try {
-      await unlink(metaPath);
-    } catch (err: any) {
-      if (err.code !== 'ENOENT') throw err;
+    for (const p of [primary.metaPath, legacy.metaPath]) {
+      try {
+        await unlink(p);
+      } catch (err: any) {
+        if (err.code !== 'ENOENT') throw err;
+      }
     }
 
     // Remove from index
@@ -554,80 +642,96 @@ export class SessionStore {
   // ========== Message Operations ==========
 
   async loadMessages(key: string, options?: { fromArchive?: boolean }): Promise<AgentMessage[]> {
-    const safeKey = this.sanitizeKey(key);
-    const path = join(this.sessionsDir, `${safeKey}.json`);
+    const primary = this.sessionPathsForKey(key);
+    const legacy = this.legacyFlatPathsForKey(key);
 
-    try {
-      const data = await readFile(path, 'utf-8');
-      const messages = JSON.parse(data) as AgentMessage[];
-
-      // Defensive: Clean any trailing error messages from previous sessions
-      // This prevents the vicious cycle where error messages cause subsequent API failures
-      if (hasProblematicMessages(messages)) {
-        const cleaned = cleanTrailingErrors(messages);
-        if (cleaned.length !== messages.length) {
-          log.info(
-            { key, original: messages.length, cleaned: cleaned.length },
-            'Cleaned problematic messages on load'
-          );
-        }
-        return cleaned;
-      }
-
-      return messages;
-    } catch {
-      // Only check archive if explicitly requested (e.g., for restore command)
-      // This prevents accidentally loading archived sessions after /new command
-      if (options?.fromArchive) {
-        const archivedFile = await this.findMostRecentArchive(safeKey);
-        if (!archivedFile) {
-          return [];
-        }
-        try {
-          const data = await readFile(archivedFile, 'utf-8');
-          const messages = JSON.parse(data) as AgentMessage[];
-
-          // Also clean archived messages
-          if (hasProblematicMessages(messages)) {
-            return cleanTrailingErrors(messages);
+    const readAndNormalize = async (path: string): Promise<AgentMessage[] | null> => {
+      try {
+        const data = await readFile(path, 'utf-8');
+        const messages = JSON.parse(data) as AgentMessage[];
+        if (hasProblematicMessages(messages)) {
+          const cleaned = cleanTrailingErrors(messages);
+          if (cleaned.length !== messages.length) {
+            log.info(
+              { key, original: messages.length, cleaned: cleaned.length },
+              'Cleaned problematic messages on load'
+            );
           }
-          return messages;
-        } catch {
-          return [];
+          return cleaned;
         }
+        return messages;
+      } catch {
+        return null;
       }
-      return [];
+    };
+
+    let path = primary.jsonPath;
+    let messages = await readAndNormalize(path);
+
+    if (messages === null && legacy.jsonPath !== primary.jsonPath) {
+      const legacyMessages = await readAndNormalize(legacy.jsonPath);
+      if (legacyMessages !== null) {
+        await mkdir(primary.dir, { recursive: true });
+        try {
+          await rename(legacy.jsonPath, primary.jsonPath);
+          if (existsSync(legacy.metaPath)) {
+            await rename(legacy.metaPath, primary.metaPath);
+          }
+          log.debug({ key }, 'Lazy-migrated session file from flat layout to shard');
+        } catch (err) {
+          log.warn({ err, key }, 'Failed to lazy-migrate session file to shard');
+        }
+        messages = legacyMessages;
+      }
     }
+
+    if (messages !== null) {
+      return messages;
+    }
+
+    if (options?.fromArchive) {
+      const archivedFile = await this.findMostRecentArchive(key);
+      if (!archivedFile) {
+        return [];
+      }
+      const archived = await readAndNormalize(archivedFile);
+      return archived ?? [];
+    }
+    return [];
   }
 
   /**
    * Find the most recent archived session file for a given key.
    * Archived files have format: {safeKey}.{timestamp}.json
    */
-  private async findMostRecentArchive(safeKey: string): Promise<string | null> {
-    try {
-      const files = await readdir(this.archiveDir);
-      const matchingFiles = files
-        .filter((f) => f.startsWith(`${safeKey}.`) && f.endsWith('.json') && !f.endsWith('.meta.json'))
-        .sort()
-        .reverse();
+  private async findMostRecentArchive(sessionKey: string): Promise<string | null> {
+    const safeKey = this.sanitizeKey(sessionKey);
+    const shardDir = join(this.archiveDir, resolveSessionShardRelativePath(sessionKey));
 
-      if (matchingFiles.length === 0) {
+    const scanDir = async (dir: string): Promise<string | null> => {
+      try {
+        const files = await readdir(dir);
+        const matchingFiles = files
+          .filter((f) => f.startsWith(`${safeKey}.`) && f.endsWith('.json') && !f.endsWith('.meta.json'))
+          .sort()
+          .reverse();
+        if (matchingFiles.length === 0) return null;
+        return join(dir, matchingFiles[0]);
+      } catch {
         return null;
       }
+    };
 
-      return join(this.archiveDir, matchingFiles[0]);
-    } catch {
-      return null;
-    }
+    const inShard = await scanDir(shardDir);
+    if (inShard) return inShard;
+    return await scanDir(this.archiveDir);
   }
 
   async saveMessages(key: string, messages: AgentMessage[]): Promise<void> {
-    const safeKey = this.sanitizeKey(key);
-    const path = join(this.sessionsDir, `${safeKey}.json`);
+    const { dir, jsonPath } = this.sessionPathsForKey(key);
 
-    await mkdir(this.sessionsDir, { recursive: true });
-    await writeFile(path, JSON.stringify(messages, null, 2));
+    await mkdir(dir, { recursive: true });
+    await writeFile(jsonPath, JSON.stringify(messages, null, 2));
 
     // Update or create metadata
     const index = await this.loadIndex();
@@ -1014,20 +1118,25 @@ export class SessionStore {
 
   private async moveToArchive(key: string): Promise<void> {
     const safeKey = this.sanitizeKey(key);
-    const sourcePath = join(this.sessionsDir, `${safeKey}.json`);
+    const primary = this.sessionPathsForKey(key);
+    const legacy = this.legacyFlatPathsForKey(key);
+    const sourcePath = existsSync(primary.jsonPath) ? primary.jsonPath : legacy.jsonPath;
+    if (!existsSync(sourcePath)) {
+      return;
+    }
 
-    // Use timestamped filename to avoid overwriting previous archives
     const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-    const targetPath = join(this.archiveDir, `${safeKey}.${timestamp}.json`);
+    const archiveShard = join(this.archiveDir, resolveSessionShardRelativePath(key));
+    await mkdir(archiveShard, { recursive: true });
+    const targetPath = join(archiveShard, `${safeKey}.${timestamp}.json`);
 
     try {
       const data = await readFile(sourcePath, 'utf-8');
       await writeFile(targetPath, data);
       await unlink(sourcePath);
 
-      // Move meta file if exists
-      const metaSource = join(this.sessionsDir, `${safeKey}.meta.json`);
-      const metaTarget = join(this.archiveDir, `${safeKey}.${timestamp}.meta.json`);
+      const metaSource = existsSync(primary.metaPath) ? primary.metaPath : legacy.metaPath;
+      const metaTarget = join(archiveShard, `${safeKey}.${timestamp}.meta.json`);
       try {
         const metaData = await readFile(metaSource, 'utf-8');
         await writeFile(metaTarget, metaData);
@@ -1041,22 +1150,22 @@ export class SessionStore {
   }
 
   private async moveFromArchive(key: string): Promise<void> {
-    const safeKey = this.sanitizeKey(key);
-    const sourcePath = await this.findMostRecentArchive(safeKey);
+    const sourcePath = await this.findMostRecentArchive(key);
     if (!sourcePath) {
       return;
     }
 
-    const targetPath = join(this.sessionsDir, `${safeKey}.json`);
+    const primary = this.sessionPathsForKey(key);
+    await mkdir(primary.dir, { recursive: true });
+    const targetPath = primary.jsonPath;
 
     try {
       const data = await readFile(sourcePath, 'utf-8');
       await writeFile(targetPath, data);
       await unlink(sourcePath);
 
-      // Move meta file if exists (find the corresponding meta file)
       const metaSource = sourcePath.replace('.json', '.meta.json');
-      const metaTarget = join(this.sessionsDir, `${safeKey}.meta.json`);
+      const metaTarget = primary.metaPath;
       try {
         const metaData = await readFile(metaSource, 'utf-8');
         await writeFile(metaTarget, metaData);
@@ -1078,7 +1187,7 @@ export class SessionStore {
 
     for (const file of files) {
       if (file.endsWith('.json') && !file.endsWith('.meta.json')) {
-        const key = this.fileNameToKey(file.replace('.json', ''));
+        const key = this.fileNameToKey(basename(file, '.json'));
         const metadata = await this.getMetadata(key);
         if (!metadata) {
           const scanned = await this.scanSessionFile(key);
