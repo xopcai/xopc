@@ -4,6 +4,7 @@ import { AgentSettingsPanel } from '@/features/settings/agent-settings';
 import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
 import { ChannelsSettingsPanel } from '@/features/settings/channels-settings';
 import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
+import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
 import { ModelsSettingsPanel } from '@/features/settings/models-settings';
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { ProvidersSettingsPanel } from '@/features/settings/providers-settings';
@@ -19,6 +20,7 @@ const SECTIONS: SettingsSectionId[] = [
   'channels',
   'voice',
   'gateway',
+  'heartbeat',
 ];
 
 export function SettingsPage() {
@@ -59,6 +61,10 @@ export function SettingsPage() {
 
   if (id === 'gateway') {
     return <GatewaySettingsPanel />;
+  }
+
+  if (id === 'heartbeat') {
+    return <HeartbeatSettingsPanel />;
   }
 
   return (

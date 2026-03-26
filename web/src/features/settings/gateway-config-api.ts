@@ -12,7 +12,6 @@ function isRecord(v: unknown): v is Record<string, unknown> {
 export function normalizeGatewayFromConfig(config: unknown): GatewaySettingsState {
   const c = isRecord(config) ? config : {};
   const gw = isRecord(c.gateway) ? c.gateway : {};
-  const hb = isRecord(gw.heartbeat) ? gw.heartbeat : {};
   const auth = isRecord(gw.auth) ? gw.auth : {};
   const mode = auth.mode === 'none' || auth.mode === 'token' ? auth.mode : 'token';
   return {
@@ -21,10 +20,6 @@ export function normalizeGatewayFromConfig(config: unknown): GatewaySettingsStat
     auth: {
       mode,
       token: typeof auth.token === 'string' ? auth.token : '',
-    },
-    heartbeat: {
-      enabled: Boolean(hb.enabled),
-      intervalMs: typeof hb.intervalMs === 'number' && Number.isFinite(hb.intervalMs) ? hb.intervalMs : 60000,
     },
   };
 }
@@ -44,7 +39,6 @@ export async function patchGatewaySettings(state: GatewaySettingsState): Promise
     method: 'PATCH',
     body: JSON.stringify({
       gateway: {
-        heartbeat: state.heartbeat,
         auth,
       },
     }),

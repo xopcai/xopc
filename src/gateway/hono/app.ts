@@ -3,7 +3,7 @@ import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { bodyLimit } from 'hono/body-limit';
 import { readFileSync } from 'node:fs';
-import { readFile } from 'node:fs/promises';
+import { readFile, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { logger } from './middleware/logger.js';
@@ -12,6 +12,7 @@ import { createAgentSSEHandler, createAgentResumeHandler, createSendHandler, cre
 import type { GatewayService } from '../service.js';
 import type { Config } from '../../config/schema.js';
 import { getWorkspacePath } from '../../config/schema.js';
+import { resolveHeartbeatMdPath } from '../workspace-heartbeat-path.js';
 import { resolveSafeInboundFilePath } from '../../channels/attachments/inbound-persist.js';
 import { getVoiceModelsConfig } from '../../config/voice.js';
 import { createLogger } from '../../utils/logger.js';
@@ -310,6 +311,44 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
   });
 
+  /** Read workspace `HEARTBEAT.md` (empty string if missing). */
+  authenticated.get('/api/workspace/heartbeat-md', async (c) => {
+    const abs = resolveHeartbeatMdPath(service.currentConfig);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    }
+    try {
+      const content = await readFile(abs, 'utf-8');
+      return c.json({ ok: true, payload: { content: content, file: 'HEARTBEAT.md' } });
+    } catch {
+      return c.json({ ok: true, payload: { content: '', file: 'HEARTBEAT.md' } });
+    }
+  });
+
+  /** Write workspace `HEARTBEAT.md`. */
+  authenticated.put('/api/workspace/heartbeat-md', async (c) => {
+    const abs = resolveHeartbeatMdPath(service.currentConfig);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    }
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const content = typeof body === 'object' && body !== null && 'content' in body && typeof (body as { content: unknown }).content === 'string'
+      ? (body as { content: string }).content
+      : '';
+    try {
+      await writeFile(abs, content, 'utf-8');
+      return c.json({ ok: true, payload: { file: 'HEARTBEAT.md' } });
+    } catch (err) {
+      log.error({ err, path: abs }, 'Failed to write HEARTBEAT.md');
+      return c.json({ ok: false, error: { message: 'Write failed' } }, 500);
+    }
+  });
+
   // ========== Core SSE API ==========
 
   const sseConfig = { 
@@ -412,6 +451,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         heartbeat: {
           enabled: config.gateway?.heartbeat?.enabled,
           intervalMs: config.gateway?.heartbeat?.intervalMs,
+          target: config.gateway?.heartbeat?.target,
+          targetChatId: config.gateway?.heartbeat?.targetChatId,
+          prompt: config.gateway?.heartbeat?.prompt,
+          ackMaxChars: config.gateway?.heartbeat?.ackMaxChars,
+          isolatedSession: config.gateway?.heartbeat?.isolatedSession,
+          activeHours: config.gateway?.heartbeat?.activeHours,
         },
       },
       cron: { enabled: config.cron?.enabled },
@@ -572,16 +617,67 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       if (wx.accounts !== undefined) config.channels.weixin.accounts = wx.accounts;
     }
     
-    // Update gateway
-    if (body.gateway?.heartbeat?.enabled !== undefined) {
-      if (!config.gateway) config.gateway = { host: '0.0.0.0', port: 18790, heartbeat: { enabled: true, intervalMs: 60000 }, maxSseConnections: 100, corsOrigins: ['*'] };
+    // Update gateway heartbeat (partial merge)
+    if (body.gateway?.heartbeat !== undefined && typeof body.gateway.heartbeat === 'object') {
+      if (!config.gateway) {
+        config.gateway = {
+          host: '0.0.0.0',
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 60000 },
+          maxSseConnections: 100,
+          corsOrigins: ['*'],
+        };
+      }
       if (!config.gateway.heartbeat) config.gateway.heartbeat = { enabled: true, intervalMs: 60000 };
-      config.gateway.heartbeat.enabled = body.gateway.heartbeat.enabled;
-    }
-    if (body.gateway?.heartbeat?.intervalMs !== undefined) {
-      if (!config.gateway) config.gateway = { host: '0.0.0.0', port: 18790, heartbeat: { enabled: true, intervalMs: 60000 }, maxSseConnections: 100, corsOrigins: ['*'] };
-      if (!config.gateway.heartbeat) config.gateway.heartbeat = { enabled: true, intervalMs: 60000 };
-      config.gateway.heartbeat.intervalMs = body.gateway.heartbeat.intervalMs;
+      const h = config.gateway.heartbeat;
+      const p = body.gateway.heartbeat as Record<string, unknown>;
+      if (p.enabled !== undefined) h.enabled = Boolean(p.enabled);
+      if (p.intervalMs !== undefined && typeof p.intervalMs === 'number' && Number.isFinite(p.intervalMs)) {
+        h.intervalMs = p.intervalMs;
+      }
+      if (p.target !== undefined) {
+        if (p.target === null || p.target === '') delete (h as { target?: string }).target;
+        else (h as { target?: string }).target = String(p.target);
+      }
+      if (p.targetChatId !== undefined) {
+        if (p.targetChatId === null || p.targetChatId === '') delete (h as { targetChatId?: string }).targetChatId;
+        else (h as { targetChatId?: string }).targetChatId = String(p.targetChatId);
+      }
+      if (p.prompt !== undefined) {
+        if (p.prompt === null || p.prompt === '') delete (h as { prompt?: string }).prompt;
+        else (h as { prompt?: string }).prompt = String(p.prompt);
+      }
+      if (p.ackMaxChars !== undefined) {
+        if (p.ackMaxChars === null || p.ackMaxChars === '') delete (h as { ackMaxChars?: number }).ackMaxChars;
+        else if (typeof p.ackMaxChars === 'number' && Number.isFinite(p.ackMaxChars)) {
+          (h as { ackMaxChars?: number }).ackMaxChars = p.ackMaxChars;
+        }
+      }
+      if (p.isolatedSession !== undefined) {
+        if (p.isolatedSession === null || p.isolatedSession === false) {
+          delete (h as { isolatedSession?: boolean }).isolatedSession;
+        } else {
+          (h as { isolatedSession?: boolean }).isolatedSession = Boolean(p.isolatedSession);
+        }
+      }
+      if (p.activeHours !== undefined) {
+        if (p.activeHours === null) {
+          delete (h as { activeHours?: unknown }).activeHours;
+        } else if (typeof p.activeHours === 'object' && p.activeHours !== null) {
+          const ah = p.activeHours as Record<string, unknown>;
+          const start = typeof ah.start === 'string' ? ah.start : '';
+          const end = typeof ah.end === 'string' ? ah.end : '';
+          if (start && end) {
+            (h as { activeHours?: { start: string; end: string; timezone?: string } }).activeHours = {
+              start,
+              end,
+              ...(typeof ah.timezone === 'string' && ah.timezone.trim() ? { timezone: ah.timezone } : {}),
+            };
+          } else {
+            delete (h as { activeHours?: unknown }).activeHours;
+          }
+        }
+      }
     }
     if (body.gateway?.auth !== undefined) {
       if (!config.gateway) config.gateway = { host: '0.0.0.0', port: 18790, heartbeat: { enabled: true, intervalMs: 60000 }, maxSseConnections: 100, corsOrigins: ['*'] };

@@ -12,7 +12,8 @@ export type Tab =
   | 'settingsModels'
   | 'settingsChannels'
   | 'settingsVoice'
-  | 'settingsGateway';
+  | 'settingsGateway'
+  | 'settingsHeartbeat';
 
 export type SettingsSectionId =
   | 'appearance'
@@ -21,7 +22,8 @@ export type SettingsSectionId =
   | 'models'
   | 'channels'
   | 'voice'
-  | 'gateway';
+  | 'gateway'
+  | 'heartbeat';
 
 const bundles: Record<
   StoredLanguage,
@@ -667,10 +669,51 @@ const bundles: Record<
       listenHost: string;
       listenPort: string;
       listenHint: string;
-      enableHeartbeat: string;
-      heartbeatInterval: string;
-      heartbeatHint: string;
       authModeNone: string;
+    };
+    heartbeatSettings: {
+      needToken: string;
+      subtitle: string;
+      docsLink: string;
+      loadError: string;
+      loading: string;
+      saveConfig: string;
+      savingConfig: string;
+      savedConfig: string;
+      saveConfigError: string;
+      saveDoc: string;
+      savingDoc: string;
+      savedDoc: string;
+      saveDocError: string;
+      retry: string;
+      unsavedConfig: string;
+      unsavedDoc: string;
+      workspaceLabel: string;
+      configSection: string;
+      docSection: string;
+      docHint: string;
+      enable: string;
+      interval: string;
+      intervalHint: string;
+      deliveryTitle: string;
+      channelNone: string;
+      customChannelSuffix: string;
+      deliveryHint: string;
+      prompt: string;
+      promptPlaceholder: string;
+      promptHint: string;
+      ackMaxChars: string;
+      ackMaxCharsHint: string;
+      ackDefaultPlaceholder: string;
+      isolatedSession: string;
+      isolatedSessionHint: string;
+      activeHoursTitle: string;
+      activeStart: string;
+      activeEnd: string;
+      activeTimezone: string;
+      activeHoursHint: string;
+      addActiveHours: string;
+      clearActiveHours: string;
     };
   }
 > = {
@@ -696,6 +739,7 @@ const bundles: Record<
       settingsChannels: 'Channels',
       settingsVoice: 'Voice',
       settingsGateway: 'Gateway',
+      settingsHeartbeat: 'Heartbeat',
     },
     settingsSections: {
       appearance: 'Appearance',
@@ -705,6 +749,7 @@ const bundles: Record<
       channels: 'Channels',
       voice: 'Voice',
       gateway: 'Gateway',
+      heartbeat: 'Heartbeat',
     },
     token: {
       title: 'Authentication required',
@@ -1345,7 +1390,7 @@ const bundles: Record<
     },
     gatewaySettings: {
       needToken: 'Save a gateway token to load and edit gateway options.',
-      subtitle: 'HTTP API access token and heartbeat. Values are stored in the gateway config file.',
+      subtitle: 'HTTP API access token and listen address. Values are stored in the gateway config file.',
       docsLink: 'Gateway documentation',
       loadError: 'Failed to load gateway settings',
       loading: 'Loading…',
@@ -1368,10 +1413,54 @@ const bundles: Record<
       listenHost: 'Listen address',
       listenPort: 'Port',
       listenHint: 'Effective after gateway restart if changed outside this UI.',
-      enableHeartbeat: 'Enable heartbeat',
-      heartbeatInterval: 'Heartbeat interval (ms)',
-      heartbeatHint: 'Interval for gateway heartbeat events (SSE / UI).',
       authModeNone: 'Auth mode is set to none — token in config may be ignored.',
+    },
+    heartbeatSettings: {
+      needToken: 'Save a gateway token to load and edit heartbeat options.',
+      subtitle:
+        'Periodic agent wake, optional delivery to a channel, and HEARTBEAT.md in your workspace. Stored in the gateway config file and workspace.',
+      docsLink: 'Heartbeat documentation',
+      loadError: 'Failed to load heartbeat settings',
+      loading: 'Loading…',
+      saveConfig: 'Save configuration',
+      savingConfig: 'Saving…',
+      savedConfig: 'Configuration saved',
+      saveConfigError: 'Failed to save configuration',
+      saveDoc: 'Save HEARTBEAT.md',
+      savingDoc: 'Saving…',
+      savedDoc: 'Document saved',
+      saveDocError: 'Failed to save HEARTBEAT.md',
+      retry: 'Retry',
+      unsavedConfig: 'You have unsaved configuration changes.',
+      unsavedDoc: 'You have unsaved changes to HEARTBEAT.md.',
+      workspaceLabel: 'Workspace',
+      configSection: 'Heartbeat configuration',
+      docSection: 'HEARTBEAT.md',
+      docHint:
+        'Tasks and reminders read by the agent on each heartbeat. Leave empty or comment-only to skip LLM calls and save tokens.',
+      enable: 'Enable heartbeat',
+      interval: 'Interval (ms)',
+      intervalHint: 'How often the gateway requests a heartbeat run (when enabled).',
+      deliveryTitle: 'Delivery (optional)',
+      channelNone: '— None —',
+      customChannelSuffix: 'custom',
+      deliveryHint:
+        'Both channel and chat id are required to send non-silent replies somewhere. Otherwise the reply is only logged.',
+      prompt: 'Custom system prompt (optional)',
+      promptPlaceholder: 'Override the default heartbeat instruction…',
+      promptHint: 'Leave empty to use the built-in default prompt.',
+      ackMaxChars: 'Max reply length before treating as silent (ackMaxChars)',
+      ackMaxCharsHint: 'Leave empty for server default (300).',
+      ackDefaultPlaceholder: 'Default',
+      isolatedSession: 'Use a fresh session key each run',
+      isolatedSessionHint: 'Avoids mixing heartbeat context with the main chat session.',
+      activeHoursTitle: 'Active hours (optional)',
+      activeStart: 'Start',
+      activeEnd: 'End',
+      activeTimezone: 'Timezone (IANA)',
+      activeHoursHint: 'Restrict heartbeats to this window. Clear to run any time.',
+      addActiveHours: 'Add active hours',
+      clearActiveHours: 'Clear active hours',
     },
     appearanceSettings: {
       subtitle: 'Interface language and color theme apply to this browser only.',
@@ -1403,6 +1492,7 @@ const bundles: Record<
       settingsChannels: '渠道',
       settingsVoice: '语音',
       settingsGateway: '网关',
+      settingsHeartbeat: '心跳',
     },
     settingsSections: {
       appearance: '外观',
@@ -1412,6 +1502,7 @@ const bundles: Record<
       channels: '渠道',
       voice: '语音',
       gateway: '网关',
+      heartbeat: '心跳',
     },
     token: {
       title: '需要身份验证',
@@ -2049,7 +2140,7 @@ const bundles: Record<
     },
     gatewaySettings: {
       needToken: '请先保存网关 Token 后再加载或修改网关选项。',
-      subtitle: 'HTTP API 访问令牌与心跳。配置写入网关配置文件。',
+      subtitle: 'HTTP API 访问令牌与监听地址。配置写入网关配置文件。',
       docsLink: '网关文档',
       loadError: '加载网关设置失败',
       loading: '加载中…',
@@ -2072,10 +2163,53 @@ const bundles: Record<
       listenHost: '监听地址',
       listenPort: '端口',
       listenHint: '若在 UI 外修改监听地址，需重启网关后生效。',
-      enableHeartbeat: '启用心跳',
-      heartbeatInterval: '心跳间隔（毫秒）',
-      heartbeatHint: '网关心跳事件（SSE / UI）的间隔。',
       authModeNone: '当前认证模式为 none，配置文件中的令牌可能被忽略。',
+    },
+    heartbeatSettings: {
+      needToken: '请先保存网关 Token 后再加载或修改心跳选项。',
+      subtitle:
+        '定时唤醒代理、可选投递到渠道，以及工作区中的 HEARTBEAT.md。配置写入网关配置文件与工作区文件。',
+      docsLink: '心跳机制文档',
+      loadError: '加载心跳设置失败',
+      loading: '加载中…',
+      saveConfig: '保存配置',
+      savingConfig: '保存中…',
+      savedConfig: '配置已保存',
+      saveConfigError: '保存配置失败',
+      saveDoc: '保存 HEARTBEAT.md',
+      savingDoc: '保存中…',
+      savedDoc: '文档已保存',
+      saveDocError: '保存 HEARTBEAT.md 失败',
+      retry: '重试',
+      unsavedConfig: '有未保存的配置更改。',
+      unsavedDoc: 'HEARTBEAT.md 有未保存的更改。',
+      workspaceLabel: '工作区',
+      configSection: '心跳配置',
+      docSection: 'HEARTBEAT.md',
+      docHint:
+        '每次心跳时代理会读取的任务与提醒。若留空或仅有注释，将跳过 LLM 调用以节省用量。',
+      enable: '启用心跳',
+      interval: '间隔（毫秒）',
+      intervalHint: '启用时，网关请求心跳运行的频率。',
+      deliveryTitle: '投递（可选）',
+      channelNone: '— 无 —',
+      customChannelSuffix: '自定义',
+      deliveryHint: '需同时填写渠道与会话 ID 才会发送非静默回复；否则仅记录日志。',
+      prompt: '自定义系统提示（可选）',
+      promptPlaceholder: '覆盖默认心跳指令…',
+      promptHint: '留空则使用内置默认提示。',
+      ackMaxChars: '视为静默前的最大回复长度（ackMaxChars）',
+      ackMaxCharsHint: '留空则使用服务端默认值（300）。',
+      ackDefaultPlaceholder: '默认',
+      isolatedSession: '每次使用新的会话键',
+      isolatedSessionHint: '避免与主对话会话混淆上下文。',
+      activeHoursTitle: '活跃时段（可选）',
+      activeStart: '开始',
+      activeEnd: '结束',
+      activeTimezone: '时区（IANA）',
+      activeHoursHint: '仅在该时间窗口内运行心跳。清除则不限时段。',
+      addActiveHours: '添加活跃时段',
+      clearActiveHours: '清除活跃时段',
     },
     appearanceSettings: {
       subtitle: '界面语言与配色仅保存在本浏览器。',
@@ -2092,6 +2226,7 @@ export type ModelsSettingsMessages = (typeof bundles)['en']['modelsSettings'];
 export type ChannelsSettingsMessages = (typeof bundles)['en']['channelsSettings'];
 export type VoiceSettingsMessages = (typeof bundles)['en']['voiceSettings'];
 export type GatewaySettingsMessages = (typeof bundles)['en']['gatewaySettings'];
+export type HeartbeatSettingsMessages = (typeof bundles)['en']['heartbeatSettings'];
 
 export type TabGroup = { label: string; tabs: readonly Tab[] };
 
@@ -2110,6 +2245,7 @@ export function getTabGroups(lang: StoredLanguage): TabGroup[] {
         'settingsChannels',
         'settingsVoice',
         'settingsGateway',
+        'settingsHeartbeat',
         'sessions',
         'logs',
       ] as const,

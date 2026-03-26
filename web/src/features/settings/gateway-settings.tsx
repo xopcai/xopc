@@ -71,10 +71,6 @@ export function GatewaySettingsPanel() {
     return JSON.stringify(form) !== JSON.stringify(baseline);
   }, [form, baseline]);
 
-  const updateHeartbeat = useCallback((patch: Partial<GatewaySettingsState['heartbeat']>) => {
-    setForm((f) => (f ? { ...f, heartbeat: { ...f.heartbeat, ...patch } } : null));
-  }, []);
-
   const updateAuth = useCallback((patch: Partial<GatewaySettingsState['auth']>) => {
     setForm((f) => (f ? { ...f, auth: { ...f.auth, ...patch } } : null));
   }, []);
@@ -223,31 +219,6 @@ export function GatewaySettingsPanel() {
           <Button type="button" variant="secondary" className="w-full sm:w-auto" onClick={() => openTokenDialog()}>
             {g.changeToken}
           </Button>
-
-          <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
-            <input
-              type="checkbox"
-              className="ui-checkbox"
-              checked={form.heartbeat.enabled}
-              onChange={(e) => updateHeartbeat({ enabled: e.target.checked })}
-            />
-            {g.enableHeartbeat}
-          </label>
-
-          <div>
-            <div className="mb-1 text-sm font-medium text-fg">{g.heartbeatInterval}</div>
-            <input
-              type="number"
-              min={1000}
-              step={1000}
-              className={inputClassName()}
-              value={form.heartbeat.intervalMs}
-              onChange={(e) =>
-                updateHeartbeat({ intervalMs: parseInt(e.target.value, 10) || 60000 })
-              }
-            />
-            <p className="mt-1 text-xs text-fg-subtle">{g.heartbeatHint}</p>
-          </div>
         </div>
       </section>
     </div>
