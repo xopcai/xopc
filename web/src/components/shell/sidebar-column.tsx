@@ -83,7 +83,9 @@ export const SidebarColumn = memo(function SidebarColumn() {
       >
         <div
           className={cn(
-            'flex justify-end gap-0.5 bg-surface-base px-2',
+            'flex gap-0.5 bg-surface-base',
+            /* Collapsed rail: center toggle with nav icons below (same inset as `SidebarNav` px-1.5). */
+            sidebarCollapsed ? 'justify-center px-1.5' : 'justify-end px-2',
             APP_TOP_HEADER_BAR_CLASS,
           )}
         >
