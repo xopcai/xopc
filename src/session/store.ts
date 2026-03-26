@@ -393,6 +393,7 @@ export class SessionStore {
     const { channel, chatId } = this.parseSessionKey(key);
     const routing = this.extractRoutingFromKey(key, channel);
     const isCronSession = channel === 'cron';
+    const isHeartbeatSession = channel === 'heartbeat';
 
     return {
       key,
@@ -411,6 +412,12 @@ export class SessionStore {
         ? {
             sessionType: 'cron',
             customData: { cronJobId: chatId },
+          }
+        : {}),
+      ...(isHeartbeatSession
+        ? {
+            sessionType: 'heartbeat',
+            customData: { heartbeatTarget: chatId },
           }
         : {}),
       stats: {
@@ -741,11 +748,14 @@ export class SessionStore {
     const { channel, chatId } = this.parseSessionKey(key);
     const routing = this.extractRoutingFromKey(key, channel);
     const isCronSession = channel === 'cron';
+    const isHeartbeatSession = channel === 'heartbeat';
 
     if (existingIdx !== -1) {
       const prev = index.sessions[existingIdx];
       index.sessions[existingIdx] = {
         ...prev,
+        sourceChannel: channel,
+        sourceChatId: chatId,
         messageCount: messages.length,
         estimatedTokens: this.estimateTokens(messages),
         updatedAt: now,
@@ -757,6 +767,15 @@ export class SessionStore {
               customData: {
                 ...prev.customData,
                 cronJobId: chatId,
+              },
+            }
+          : {}),
+        ...(isHeartbeatSession
+          ? {
+              sessionType: 'heartbeat',
+              customData: {
+                ...prev.customData,
+                heartbeatTarget: chatId,
               },
             }
           : {}),
@@ -785,6 +804,12 @@ export class SessionStore {
           ? {
               sessionType: 'cron',
               customData: { cronJobId: chatId },
+            }
+          : {}),
+        ...(isHeartbeatSession
+          ? {
+              sessionType: 'heartbeat',
+              customData: { heartbeatTarget: chatId },
             }
           : {}),
         stats: {
@@ -1059,6 +1084,10 @@ export class SessionStore {
     // Cron isolated jobs: `cron:<jobId>` (transcript + metadata under agent sessions dir)
     if (parts.length >= 2 && parts[0] === 'cron') {
       return { channel: 'cron', chatId: parts.slice(1).join(':') };
+    }
+    // Gateway heartbeat: `heartbeat:main` / `heartbeat:isolated:<ts>`
+    if (parts.length >= 2 && parts[0] === 'heartbeat') {
+      return { channel: 'heartbeat', chatId: parts.slice(1).join(':') };
     }
     return { channel: 'unknown', chatId: key };
   }

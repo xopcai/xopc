@@ -101,7 +101,7 @@ export interface SessionMetadata {
   /** Session statistics */
   stats?: SessionStats;
   /**
-   * High-level origin for filtering/UI (e.g. `cron`, `webchat`).
+   * High-level origin for filtering/UI (e.g. `cron`, `heartbeat`, `webchat`).
    * Distinct from `sourceChannel` (routing namespace).
    */
   sessionType?: string;
