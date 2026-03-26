@@ -183,6 +183,24 @@ xopcbot onboard
 
 ---
 
+### bindings
+
+可选的规则数组，用于将入站流量分配到指定 **`agentId`**。按 **`priority`** 从高到低匹配；每条 **`match`** 中的 **`channel`** 须为精确通道 id（如 `telegram`），**`peerId`** 可使用 `*` 通配。若无匹配，则使用默认 Agent（**`agents.list`** 中第一个启用的 id，否则为 `main`）。详见 [Session 路由系统](/zh/routing-system)。
+
+---
+
+### session
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `dmScope` | string | `main` | DM 会话合并/拆分策略：`main`、`per-peer`、`per-channel-peer`、`per-account-channel-peer` |
+| `identityLinks` | object | - | 规范 id → `["channel:peerId", …]` 别名，用于跨通道身份 |
+| `storage` | object | - | 可选会话存储调优（`pruneAfterMs`、`maxEntries`） |
+
+更多说明与示例见 [Session 路由系统](/zh/routing-system)。
+
+---
+
 ### channels
 
 通信通道配置。

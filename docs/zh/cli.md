@@ -42,6 +42,7 @@ pnpm run dev -- <command>
 | `extension` | 管理扩展 |
 | `skills` | 管理技能（安装、启用、配置、测试） |
 | `config` | 查看和编辑配置（非交互式） |
+| `session` | 管理会话 |
 
 ---
 

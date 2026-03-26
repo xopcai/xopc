@@ -183,6 +183,24 @@ See [Models Documentation](/models) for custom provider configuration.
 
 ---
 
+### bindings
+
+Optional array of rules that assign an **`agentId`** to incoming traffic. Rules are sorted by **`priority`** (higher first). Each rule’s **`match`** requires an exact **`channel`** value (e.g. `telegram`); **`peerId`** may use `*` glob patterns. If nothing matches, routing falls back to the default agent (first enabled entry in **`agents.list`**, otherwise `main`). See [Session Routing System](/routing-system).
+
+---
+
+### session
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `dmScope` | string | `main` | How DM sessions are merged or split: `main`, `per-peer`, `per-channel-peer`, `per-account-channel-peer` |
+| `identityLinks` | object | - | Map of canonical id → `["channel:peerId", ...]` aliases for cross-channel identity |
+| `storage` | object | - | Optional session store tuning (`pruneAfterMs`, `maxEntries`) |
+
+Details and examples: [Session Routing System](/routing-system).
+
+---
+
 ### channels
 
 Communication channels configuration.
