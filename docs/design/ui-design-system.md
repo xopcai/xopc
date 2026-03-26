@@ -435,6 +435,12 @@ disabled:bg-surface-hover disabled:text-fg-disabled disabled:cursor-not-allowed
 - 错误信息内联显示在字段下方，提交时自动聚焦到第一个错误字段
 - 提交按钮在请求发起前保持可用，请求进行中显示 spinner
 
+**复选框（原生 `<input type="checkbox">`）**
+
+- **不要用品牌蓝作选中填充**：`text-accent` / 误用会把勾选块做成高饱和主色块，和「表面中性 + 蓝仅用于主按钮/链接」冲突，易显花哨。
+- **做法**：用语义变量 `--color-checkbox-accent`（浅灰黑 / 深灰白）控制 `accent-color`，Web 侧统一类名 `ui-checkbox`（见 `web/src/styles/globals.css`）。未选：与输入框一致的 `border-edge` + `bg-surface-panel`；选：中性填充，键盘聚焦仍跟全局 `focus-visible` 环。
+- **质感**：克制、偏系统设置类控件；需要强确认的勾选仍靠文案与布局，不靠彩色块。
+
 ---
 
 ## 8. 动效与交互 (Motion & Interaction)

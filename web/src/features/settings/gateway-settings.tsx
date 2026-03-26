@@ -228,7 +228,7 @@ export function GatewaySettingsPanel() {
           <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
             <input
               type="checkbox"
-              className="size-4 rounded border-edge text-accent focus:ring-accent/30"
+              className="ui-checkbox"
               checked={form.heartbeat.enabled}
               onChange={(e) => updateHeartbeat({ enabled: e.target.checked })}
             />

@@ -4,10 +4,8 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import { Button } from '@/components/ui/button';
 import { ModelSelector } from '@/features/chat/model-selector';
 import { fetchAgentDefaults, patchAgentDefaults, type AgentDefaultsState } from '@/features/settings/config-api';
-import {
-  SettingsFormSection,
-  SettingsFormSectionHeader,
-} from '@/features/settings/settings-form-section';
+import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
+import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -42,7 +40,7 @@ function inputClassName(): string {
 }
 
 function selectClassName(): string {
-  return cn(inputClassName(), 'cursor-pointer');
+  return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
 }
 
 export function AgentSettingsPanel() {
