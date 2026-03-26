@@ -94,6 +94,21 @@ describe('SessionStore', () => {
       expect(metadata?.customData).toMatchObject({ cronJobId: 'abc12def' });
     });
 
+    it('should tag heartbeat session keys with sessionType and heartbeatTarget', async () => {
+      const messages: any[] = [
+        { role: 'user', content: 'Poll HEARTBEAT.md' },
+        { role: 'assistant', content: 'HEARTBEAT_OK' },
+      ];
+
+      await store.saveMessages('heartbeat:main', messages);
+      const metadata = await store.getMetadata('heartbeat:main');
+
+      expect(metadata?.sourceChannel).toBe('heartbeat');
+      expect(metadata?.sourceChatId).toBe('main');
+      expect(metadata?.sessionType).toBe('heartbeat');
+      expect(metadata?.customData).toMatchObject({ heartbeatTarget: 'main' });
+    });
+
     it('stores cron and routing sessions in separate shard directories', async () => {
       await store.saveMessages('cron:job1', [{ role: 'user', content: 'c' }]);
       await store.saveMessages('main:webchat:default:direct:u1', [{ role: 'user', content: 'w' }]);
