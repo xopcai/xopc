@@ -1,6 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
+import type { Message } from '@/features/chat/messages.types';
 import { ChatComposer } from '@/features/chat/chat-composer';
+import { ComposerProgressProvider } from '@/features/chat/composer-progress-context';
 import { ChatHeaderBar } from '@/features/chat/chat-header-bar';
 import { ChatSseStatus } from '@/features/chat/chat-sse-status';
 import { MessageList } from '@/features/chat/message-list';
@@ -22,6 +24,13 @@ export function ChatPage() {
   const lastClientHeightRef = useRef(0);
   /** Tracks loading→idle so we scroll to bottom once after refresh / session load. */
   const prevLoadingRef = useRef(true);
+
+  /** After prepending older messages, preserve viewport (virtual + non-virtual lists). */
+  const listScrollMetricsRef = useRef<{
+    first: Message | undefined;
+    len: number;
+    scrollHeight: number;
+  }>({ first: undefined, len: 0, scrollHeight: 0 });
 
   useEffect(() => {
     atBottomRef.current = atBottom;
@@ -132,6 +141,24 @@ export function ChatPage() {
     scrollToBottom(false);
   }, [chatMessages, atBottom, scrollToBottom, showSessionLoading]);
 
+  useLayoutEffect(() => {
+    const el = scrollRef.current;
+    if (!el || showSessionLoading) return;
+
+    const prev = listScrollMetricsRef.current;
+    const first = chatMessages[0];
+    const len = chatMessages.length;
+    const newHeight = el.scrollHeight;
+
+    const prepended = len > prev.len && prev.len > 0 && first !== undefined && first !== prev.first;
+
+    if (prepended && prev.scrollHeight > 0) {
+      el.scrollTop += newHeight - prev.scrollHeight;
+    }
+
+    listScrollMetricsRef.current = { first, len, scrollHeight: newHeight };
+  }, [chatMessages, showSessionLoading]);
+
   if (!hasToken) {
     return (
       <div className="mx-auto w-full max-w-app-main px-4 py-16 text-center text-sm leading-relaxed text-fg-muted sm:px-8">
@@ -173,26 +200,28 @@ export function ChatPage() {
                   authToken={token ?? undefined}
                   streaming={streaming}
                   progress={progress}
+                  scrollElementRef={scrollRef}
                 />
               </>
             )}
           </div>
 
           <div className="chat-input-container shrink-0 bg-surface-panel py-4">
-            <ChatComposer
-              disabled={showSessionLoading || sessionRoutePending}
-              sending={sending}
-              streaming={streaming}
-              progress={progress}
-              sessionModel={sessionModel}
-              showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
-              onModelChange={onSessionModelChange}
-              thinkingLevel={thinkingLevel}
-              showThinkingSelector={modelSupportsThinking}
-              onThinkingChange={setThinkingLevel}
-              onSend={sendMessage}
-              onAbort={abort}
-            />
+            <ComposerProgressProvider value={progress}>
+              <ChatComposer
+                disabled={showSessionLoading || sessionRoutePending}
+                sending={sending}
+                streaming={streaming}
+                sessionModel={sessionModel}
+                showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
+                onModelChange={onSessionModelChange}
+                thinkingLevel={thinkingLevel}
+                showThinkingSelector={modelSupportsThinking}
+                onThinkingChange={setThinkingLevel}
+                onSend={sendMessage}
+                onAbort={abort}
+              />
+            </ComposerProgressProvider>
           </div>
         </div>
       </div>

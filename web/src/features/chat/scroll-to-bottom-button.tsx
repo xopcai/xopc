@@ -1,9 +1,16 @@
 import { ChevronDown } from 'lucide-react';
+import { memo } from 'react';
 
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
-export function ScrollToBottomButton({ visible, onClick }: { visible: boolean; onClick: () => void }) {
+export const ScrollToBottomButton = memo(function ScrollToBottomButton({
+  visible,
+  onClick,
+}: {
+  visible: boolean;
+  onClick: () => void;
+}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
 
@@ -19,4 +26,4 @@ export function ScrollToBottomButton({ visible, onClick }: { visible: boolean; o
       <ChevronDown className="h-6 w-6" aria-hidden />
     </button>
   );
-}
+});

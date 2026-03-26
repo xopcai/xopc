@@ -1,8 +1,8 @@
-import { Ban, CircleDot, File, Mic, Send, Sparkles, Square } from 'lucide-react';
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Ban, File, Mic, Send, Sparkles, Square } from 'lucide-react';
+import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Attachment } from '@/features/chat/attachment-utils';
-import type { ProgressState } from '@/features/chat/messages.types';
+import { ComposerRunStatus } from '@/features/chat/composer-run-status';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment-utils';
 import { ModelSelector } from '@/features/chat/model-selector';
 import { messages } from '@/i18n/messages';
@@ -19,67 +19,16 @@ function interpolate(template: string, params: Record<string, string | number>):
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
 }
 
-function formatElapsed(ms: number): string {
-  const s = ms / 1000;
-  if (s < 60) return `${s.toFixed(1)}s`;
-  const m = Math.floor(s / 60);
-  const r = Math.floor(s % 60);
-  return `${m}:${r.toString().padStart(2, '0')}`;
-}
-
-function runStatusLabel(
-  progress: ProgressState | null,
-  sending: boolean,
-  streaming: boolean,
-  chat: ReturnType<typeof messages>['chat'],
-): string {
-  if (sending && !streaming) return chat.composerRunStatusSending;
-  if (progress?.message) return progress.message;
-  if (progress?.toolName) return interpolate(chat.composerRunningTool, { name: progress.toolName });
-  const stage = progress?.stage ?? '';
-  switch (stage) {
-    case 'thinking':
-      return chat.composerStageThinking;
-    case 'searching':
-      return chat.composerStageSearching;
-    case 'reading':
-      return chat.composerStageReading;
-    case 'writing':
-      return chat.composerStageWriting;
-    case 'executing':
-      return chat.composerStageExecuting;
-    case 'analyzing':
-      return chat.composerStageAnalyzing;
-    default:
-      return chat.composerRunStatusDefault;
-  }
-}
-
-function useRunElapsedMs(active: boolean): number {
-  const [ms, setMs] = useState(0);
-  useEffect(() => {
-    if (!active) {
-      setMs(0);
-      return;
-    }
-    const t0 = Date.now();
-    const id = window.setInterval(() => setMs(Date.now() - t0), 100);
-    return () => window.clearInterval(id);
-  }, [active]);
-  return ms;
-}
-
 export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhigh' | 'adaptive';
 
 function thinkingIcon(level: ThinkingLevel) {
   return level === 'off' ? Ban : Sparkles;
 }
 
-export function ChatComposer({
+export const ChatComposer = memo(function ChatComposer({
   disabled,
   sending,
   streaming,
-  progress,
   sessionModel,
   showModelSelector,
   onModelChange,
@@ -92,8 +41,6 @@ export function ChatComposer({
   disabled: boolean;
   sending: boolean;
   streaming: boolean;
-  /** Gateway `progress` SSE — status text + optional tool name / detail. */
-  progress: ProgressState | null;
   sessionModel: string;
   /** Show model picker when a session is active and route matches loaded session. */
   showModelSelector: boolean;
@@ -119,8 +66,6 @@ export function ChatComposer({
   const maxFileSize = 20 * 1024 * 1024;
 
   const busy = sending || streaming;
-  const elapsedMs = useRunElapsedMs(busy);
-  const statusText = runStatusLabel(progress, sending, streaming, m.chat);
 
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -238,20 +183,7 @@ export function ChatComposer({
           </div>
         ) : null}
 
-        {busy ? (
-          <div
-            className="flex min-h-9 w-full min-w-0 items-center justify-between gap-3 border-b border-blue-100 bg-blue-50 px-4 py-2 text-xs dark:border-blue-900/40 dark:bg-blue-950/50"
-            title={progress?.detail ?? undefined}
-            role="status"
-            aria-live="polite"
-          >
-            <div className="flex min-w-0 flex-1 items-center gap-2">
-              <CircleDot className="h-4 w-4 shrink-0 text-blue-600 dark:text-blue-400" aria-hidden />
-              <span className="min-w-0 truncate font-medium text-blue-600 dark:text-blue-400">{statusText}</span>
-            </div>
-            <span className="shrink-0 tabular-nums text-blue-600/90 dark:text-blue-400/90">{formatElapsed(elapsedMs)}</span>
-          </div>
-        ) : null}
+        {busy ? <ComposerRunStatus sending={sending} streaming={streaming} /> : null}
 
         <div
           className={cn(
@@ -396,4 +328,4 @@ export function ChatComposer({
         </div>
     </div>
   );
-}
+});

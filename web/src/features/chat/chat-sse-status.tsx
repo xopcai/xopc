@@ -1,9 +1,12 @@
+import { memo } from 'react';
+
 import { reconnectGatewaySse } from '@/features/gateway/sse-controller';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useGatewaySseStore } from '@/stores/gateway-sse-store';
 
-export function ChatSseStatus() {
+/** Isolated from chat body — only re-renders when SSE store / locale changes. */
+export const ChatSseStatus = memo(function ChatSseStatus() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const connectionState = useGatewaySseStore((s) => s.connectionState);
@@ -43,4 +46,4 @@ export function ChatSseStatus() {
   }
 
   return null;
-}
+});

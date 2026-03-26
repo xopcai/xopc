@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import { type ReactNode, memo, useMemo } from 'react';
 import type {
   Message,
   MessageContent,
@@ -78,7 +78,7 @@ function renderChunkedContent(
   return nodes;
 }
 
-export function MessageBubble({
+export const MessageBubble = memo(function MessageBubble({
   message,
   authToken,
   isStreaming,
@@ -96,16 +96,31 @@ export function MessageBubble({
   const isAssistant = message.role === 'assistant';
   const roleLabel = isUser ? m.chat.you : isAssistant ? m.chat.assistant : m.chat.tool;
 
-  const toolLabels = { input: m.chat.toolInput, output: m.chat.toolOutput, noOutput: m.chat.noOutput };
-  const stepLabels = {
-    thoughts: m.chat.thoughts,
-    thoughtsStreaming: m.chat.thoughtsStreaming,
-    viewSteps_one: m.chat.viewSteps_one,
-    viewSteps_other: m.chat.viewSteps_other,
-    searchedWeb: m.chat.stepSearchedWeb,
-    readFile: m.chat.stepReadFile,
-    stepDetails: m.chat.stepDetails,
-  };
+  const toolLabels = useMemo(
+    () => ({ input: m.chat.toolInput, output: m.chat.toolOutput, noOutput: m.chat.noOutput }),
+    [language, m.chat.toolInput, m.chat.toolOutput, m.chat.noOutput],
+  );
+  const stepLabels = useMemo(
+    () => ({
+      thoughts: m.chat.thoughts,
+      thoughtsStreaming: m.chat.thoughtsStreaming,
+      viewSteps_one: m.chat.viewSteps_one,
+      viewSteps_other: m.chat.viewSteps_other,
+      searchedWeb: m.chat.stepSearchedWeb,
+      readFile: m.chat.stepReadFile,
+      stepDetails: m.chat.stepDetails,
+    }),
+    [
+      language,
+      m.chat.thoughts,
+      m.chat.thoughtsStreaming,
+      m.chat.viewSteps_one,
+      m.chat.viewSteps_other,
+      m.chat.stepSearchedWeb,
+      m.chat.stepReadFile,
+      m.chat.stepDetails,
+    ],
+  );
 
   const streamingThinking =
     message.thinkingStreaming ||
@@ -199,4 +214,4 @@ export function MessageBubble({
       </div>
     </article>
   );
-}
+});

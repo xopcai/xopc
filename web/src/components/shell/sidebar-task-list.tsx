@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import { ClipboardCopy, Loader2, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type UIEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useState, type UIEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWRInfinite from 'swr/infinite';
 
@@ -52,7 +52,7 @@ function rowShellClass(isActive: boolean): string {
   );
 }
 
-function SidebarTaskRow({
+const SidebarTaskRow = memo(function SidebarTaskRow({
   session,
   isActive,
   onNavigate,
@@ -184,7 +184,7 @@ function SidebarTaskRow({
       </Popover.Root>
     </div>
   );
-}
+});
 
 export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const language = useLocaleStore((s) => s.language);
@@ -278,11 +278,11 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
 
   const activeSessionKey = chatSessionKeyFromPath(pathname);
 
-  const openRename = (key: string) => {
+  const openRename = useCallback((key: string) => {
     const row = items.find((s) => s.key === key);
     setRenameKey(key);
     setRenameDraft(row?.name?.trim() ?? '');
-  };
+  }, [items]);
 
   const runRename = async () => {
     if (!renameKey) return;
