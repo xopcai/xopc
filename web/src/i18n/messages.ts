@@ -705,6 +705,19 @@ const bundles: Record<
       enable: string;
       interval: string;
       intervalHint: string;
+      intervalHintPreset: string;
+      intervalSecondsLabel: string;
+      intervalPresets: {
+        custom: string;
+        every30s: string;
+        every1min: string;
+        every5min: string;
+        every10min: string;
+        every15min: string;
+        every30min: string;
+        every1h: string;
+        every2h: string;
+      };
       deliveryTitle: string;
       channelNone: string;
       customChannelSuffix: string;
@@ -1462,8 +1475,21 @@ const bundles: Record<
       docHint:
         'Tasks and reminders read by the agent on each heartbeat. Leave empty or comment-only to skip LLM calls and save tokens.',
       enable: 'Enable heartbeat',
-      interval: 'Interval (ms)',
-      intervalHint: 'How often the gateway requests a heartbeat run (when enabled).',
+      interval: 'Interval',
+      intervalHint: 'Minimum 1 second. Saved to the gateway as milliseconds.',
+      intervalHintPreset: 'Quick preset or type seconds in the field.',
+      intervalSecondsLabel: 'Seconds',
+      intervalPresets: {
+        custom: 'Custom',
+        every30s: 'Every 30 seconds',
+        every1min: 'Every 1 minute',
+        every5min: 'Every 5 minutes',
+        every10min: 'Every 10 minutes',
+        every15min: 'Every 15 minutes',
+        every30min: 'Every 30 minutes',
+        every1h: 'Every 1 hour',
+        every2h: 'Every 2 hours',
+      },
       deliveryTitle: 'Delivery (optional)',
       channelNone: '— None —',
       customChannelSuffix: 'custom',
@@ -2225,8 +2251,21 @@ const bundles: Record<
       docHint:
         '每次心跳时代理会读取的任务与提醒。若留空或仅有注释，将跳过 LLM 调用以节省用量。',
       enable: '启用心跳',
-      interval: '间隔（毫秒）',
-      intervalHint: '启用时，网关请求心跳运行的频率。',
+      interval: '间隔',
+      intervalHint: '最短 1 秒；保存到网关配置时为毫秒。',
+      intervalHintPreset: '快速选择，或在左侧输入秒数。',
+      intervalSecondsLabel: '秒',
+      intervalPresets: {
+        custom: '自定义',
+        every30s: '每 30 秒',
+        every1min: '每 1 分钟',
+        every5min: '每 5 分钟',
+        every10min: '每 10 分钟',
+        every15min: '每 15 分钟',
+        every30min: '每 30 分钟',
+        every1h: '每 1 小时',
+        every2h: '每 2 小时',
+      },
       deliveryTitle: '投递（可选）',
       channelNone: '— 无 —',
       customChannelSuffix: '自定义',
