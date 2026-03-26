@@ -10,9 +10,7 @@ import type { Config } from '../../config/schema.js';
 import { setupModel as runModelSetup } from './onboard/model.js';
 import { colors } from '../utils/colors.js';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
-import { setupTelegramOnboard } from './onboard/channels/index.js';
-import { bundledChannelPlugins } from '../../channels/plugins/bundled.js';
-import { collectSetupWizardChannels } from '../../channels/setup-wizard-discovery.js';
+import { setupChannels as runChannelOnboard, getChannelConfigurators } from './onboard/channels/index.js';
 
 // Import workspace utilities
 import { isWorkspaceSetup, setupWorkspace as _setupWorkspace, isConfigSetup as _isConfigSetup, setupConfig as _setupConfig, quickSetup } from '../utils/workspace.js';
@@ -124,11 +122,9 @@ async function runOnboard(
     }
 
     if (doChannels) {
-      const wizardIds = collectSetupWizardChannels(bundledChannelPlugins);
-      if (wizardIds.length > 0) {
-        console.log(colors.gray(`\nRegistered channel setup wizards: ${wizardIds.join(', ')}\n`));
-      }
-      config = await setupChannels(config);
+      const channelIds = getChannelConfigurators().map(c => c.id);
+      console.log(colors.gray(`\nChannel onboarding: ${channelIds.join(', ')}\n`));
+      config = await runChannelOnboard(config);
     }
 
     if (doGateway) {
@@ -274,65 +270,6 @@ async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
   console.log('   xopcbot gateway stop      # Stop gateway');
   console.log('   xopcbot gateway restart   # Restart gateway');
   console.log('   xopcbot gateway logs      # View logs');
-}
-
-async function setupChannels(config: Config): Promise<Config> {
-  console.log(colors.cyan('\n💬 Step 3: Messaging Channels\n'));
-
-  config = await setupTelegramOnboard(config, {
-    confirmMessage: 'Enable Telegram channel?',
-    confirmDefault: true,
-  });
-
-  const enableSlack = await confirm({
-    message: 'Enable Slack channel?',
-    default: false,
-  });
-
-  if (enableSlack) {
-    (config as any).channels = (config as any).channels || {};
-    (config as any).channels.slack = (config as any).channels.slack || {};
-
-    console.log('\n📝 Slack Configuration:');
-    console.log('   Create a Slack app at https://api.slack.com/apps\n');
-
-    const botToken = await input({
-      message: 'Enter Slack Bot Token (xoxb-...):',
-      validate: (input) => input.length > 0 || 'Bot token is required',
-    });
-
-    const signingSecret = await input({
-      message: 'Enter Slack Signing Secret:',
-      validate: (input) => input.length > 0 || 'Signing secret is required',
-    });
-
-    (config as any).channels.slack.botToken = botToken;
-    (config as any).channels.slack.signingSecret = signingSecret;
-    console.log('✅ Slack configured.');
-  }
-
-  const enableDiscord = await confirm({
-    message: 'Enable Discord channel?',
-    default: false,
-  });
-
-  if (enableDiscord) {
-    (config as any).channels = (config as any).channels || {};
-    (config as any).channels.discord = (config as any).channels.discord || {};
-
-    console.log('\n📝 Discord Configuration:');
-    console.log('   Create a bot at https://discord.com/developers/applications\n');
-
-    const botToken = await input({
-      message: 'Enter Discord Bot Token:',
-      validate: (input) => input.length > 0 || 'Bot token is required',
-    });
-
-    (config as any).channels.discord.botToken = botToken;
-    console.log('✅ Discord configured.');
-  }
-
-  return config;
 }
 
 async function setupGateway(config: Config): Promise<Config> {

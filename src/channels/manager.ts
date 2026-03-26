@@ -23,6 +23,13 @@ import { ChannelHealthMonitor, type ChannelHealthState } from './health-monitor.
 
 const log = createLogger('ChannelManager');
 
+function asChannelConfig(raw: unknown): Record<string, unknown> | undefined {
+  if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+    return raw as Record<string, unknown>;
+  }
+  return undefined;
+}
+
 /** Hooks wired from AgentService for `message_sending` / `message_sent` on outbound delivery. */
 export interface OutboundChannelHooks {
   runMessageSending: (
@@ -121,7 +128,7 @@ export class ChannelManager {
     const initPromises: Promise<void>[] = [];
     
     for (const [id, plugin] of this.plugins) {
-      const channelConfig = this.config.channels?.[id];
+      const channelConfig = asChannelConfig(this.config.channels?.[id]);
       if (!this.shouldRunChannelPlugin(plugin, channelConfig)) {
         log.debug({ channel: id }, 'Channel disabled in config, skipping');
         continue;
@@ -129,7 +136,7 @@ export class ChannelManager {
 
       const initPromise = this.initializePlugin(
         plugin,
-        (channelConfig ?? {}) as Record<string, unknown>,
+        channelConfig ?? {},
       );
       initPromises.push(initPromise);
     }
@@ -184,7 +191,7 @@ export class ChannelManager {
     const startPromises: Promise<void>[] = [];
     
     for (const [id, plugin] of this.plugins) {
-      const channelConfig = this.config.channels?.[id];
+      const channelConfig = asChannelConfig(this.config.channels?.[id]);
       if (!this.shouldRunChannelPlugin(plugin, channelConfig)) continue;
 
       const startPromise = this.startPlugin(plugin, {}).catch((err) => {
@@ -520,7 +527,7 @@ export class ChannelManager {
       log.warn({ channel: channelId }, 'Channels not initialized');
       return;
     }
-    const channelConfig = this.config.channels?.[channelId];
+    const channelConfig = asChannelConfig(this.config.channels?.[channelId]);
     if (!this.shouldRunChannelPlugin(plugin, channelConfig)) {
       log.debug({ channel: channelId }, 'Channel disabled in config, skipping start');
       return;

@@ -19,9 +19,9 @@ export interface BindingMatch {
   peerKind?: string;
   /** Peer id glob */
   peerId?: string;
-  /** Discord guild id */
+  /** Guild / server id (channel-specific, optional) */
   guildId?: string;
-  /** Slack team id */
+  /** Workspace / team id (channel-specific, optional) */
   teamId?: string;
   /** Role ids (any match wins) */
   memberRoleIds?: string[];

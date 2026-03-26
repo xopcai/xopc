@@ -95,7 +95,7 @@ export function generateSessionKeyWithRouting(
  * (Currently returns empty array as Telegram doesn't have direct role mapping)
  */
 export function extractMemberRoleIds(ctx: Context): string[] {
-  // Telegram doesn't have a direct role system like Discord
+  // Telegram doesn't expose a first-class role id list like some other chat APIs
   // Could implement custom role mapping based on admin status
   const chatMember = ctx.chatMember;
   if (!chatMember?.new_chat_member) {

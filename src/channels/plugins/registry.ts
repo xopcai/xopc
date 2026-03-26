@@ -9,7 +9,7 @@ let sorted: ChannelPlugin[] = [];
 const byId = new Map<string, ChannelPlugin>();
 let lastPluginIdSignature = '';
 
-const CHANNEL_ORDER = ['telegram', 'feishu', 'discord', 'slack', 'web'] as const;
+const CHANNEL_ORDER = ['telegram', 'feishu', 'web'] as const;
 
 function sortPlugins(plugins: ChannelPlugin[]): ChannelPlugin[] {
   return plugins.toSorted((a, b) => {
