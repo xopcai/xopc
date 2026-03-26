@@ -5,6 +5,9 @@ hero:
   name: xopcbot
   text: 超轻量级个人 AI 助手
   tagline: 基于 Node.js + TypeScript 的本地运行 AI 代理
+  image:
+    src: /xopcbot/logo.svg
+    alt: xopcbot
   actions:
     - theme: brand
       text: 快速开始

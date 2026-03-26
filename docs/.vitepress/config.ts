@@ -7,7 +7,8 @@ export default defineConfig({
   cleanUrls: true,
   ignoreDeadLinks: true,
   head: [
-    ['link', { rel: 'icon', href: '/xopcbot/favicon.ico' }]
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/xopcbot/logo.svg' }],
+    ['link', { rel: 'apple-touch-icon', href: '/xopcbot/logo.svg' }],
   ],
   locales: {
     root: {
