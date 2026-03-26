@@ -2,7 +2,7 @@
  * Unified Command System - Core Types
  * 
  * Provides a platform-agnostic command system that works across
- * Telegram, Feishu, Discord, Web UI, and CLI.
+ * Telegram, Feishu, Web UI, CLI, and other channel surfaces.
  */
 
 import type { Config } from '../config/schema.js';

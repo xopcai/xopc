@@ -2,7 +2,7 @@
  * Unified Command System
  *
  * Provides a platform-agnostic command system that works across
- * Telegram, Feishu, Discord, Web UI, and CLI.
+ * Telegram, Feishu, Web UI, CLI, and other channel surfaces.
  */
 
 // Built-in Commands (import first to avoid circular deps)

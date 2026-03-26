@@ -241,23 +241,27 @@ export const SessionConfigSchema = z.object({
   dmScope: 'main',
 });
 
-export const ChannelsConfigSchema = z.object({
-  telegram: TelegramConfigSchema.optional(),
-  weixin: WeixinConfigSchema.optional(),
-}).default({
-  telegram: {
-    enabled: false,
-    botToken: '',
-    allowFrom: [],
-    groupAllowFrom: [],
-    debug: false,
-    dmPolicy: 'pairing' as const,
-    groupPolicy: 'open' as const,
-    replyToMode: 'off' as const,
-    historyLimit: 50,
-    textChunkLimit: 4000,
-  },
-});
+/** Known channel entries; `.passthrough()` keeps extension-defined channel ids on save. */
+export const ChannelsConfigSchema = z
+  .object({
+    telegram: TelegramConfigSchema.optional(),
+    weixin: WeixinConfigSchema.optional(),
+  })
+  .passthrough()
+  .default({
+    telegram: {
+      enabled: false,
+      botToken: '',
+      allowFrom: [],
+      groupAllowFrom: [],
+      debug: false,
+      dmPolicy: 'pairing' as const,
+      groupPolicy: 'open' as const,
+      replyToMode: 'off' as const,
+      historyLimit: 50,
+      textChunkLimit: 4000,
+    },
+  });
 
 export const WebSearchConfigSchema = z.object({
   apiKey: z.string(),

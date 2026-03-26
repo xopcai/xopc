@@ -2,7 +2,6 @@ import type { TTSConfig, TTSAutoMode, TTSResult } from './types.js';
 
 const CHANNEL_OUTPUT_FORMATS: Record<string, { format: string; voiceCompatible: boolean }> = {
   telegram: { format: 'opus', voiceCompatible: true },
-  discord: { format: 'opus', voiceCompatible: true },
   feishu: { format: 'opus', voiceCompatible: true },
   whatsapp: { format: 'ogg', voiceCompatible: true },
   default: { format: 'mp3', voiceCompatible: false },
