@@ -83,7 +83,7 @@ export class HeartbeatService {
     }
 
     this.runnerConfig = config;
-    log.debug({ intervalMs: config.intervalMs }, 'Starting heartbeat service');
+    log.info({ intervalMs: config.intervalMs }, 'Heartbeat timer started (interval wake)');
 
     this.intervalId = setInterval(() => {
       this.wake.request({ reason: 'interval' });
@@ -120,21 +120,26 @@ export class HeartbeatService {
   }
 
   private async runHeartbeatOnce(reasons: string[]): Promise<void> {
+    const reasonSummary = [...new Set(reasons)].join(', ') || 'unknown';
+
     const cfg = this.runnerConfig;
-    if (!cfg?.enabled) return;
+    if (!cfg?.enabled) {
+      log.debug({ reasons: reasonSummary }, 'Heartbeat: skip (disabled)');
+      return;
+    }
 
     try {
       const metrics = await this.deps.cronService.getMetrics();
       log.trace(
         { runningJobs: metrics.runningJobs, enabledJobs: metrics.enabledJobs },
-        'Heartbeat wake',
+        'Heartbeat: cron metrics',
       );
     } catch {
       /* optional */
     }
 
     if (cfg.activeHours && !isWithinActiveHours(cfg.activeHours)) {
-      log.debug('Heartbeat: outside active hours, skipping');
+      log.debug({ reasons: reasonSummary }, 'Heartbeat: skip (outside active hours)');
       return;
     }
 
@@ -142,11 +147,11 @@ export class HeartbeatService {
     try {
       const raw = await readFile(heartbeatPath, 'utf-8');
       if (isHeartbeatContentEmpty(raw)) {
-        log.debug({ path: heartbeatPath }, 'Heartbeat: HEARTBEAT.md empty, skipping LLM');
+        log.debug({ path: heartbeatPath, reasons: reasonSummary }, 'Heartbeat: skip (HEARTBEAT.md empty)');
         return;
       }
     } catch {
-      log.debug({ path: heartbeatPath }, 'Heartbeat: HEARTBEAT.md missing or unreadable, continuing');
+      log.debug({ path: heartbeatPath, reasons: reasonSummary }, 'Heartbeat: HEARTBEAT.md missing; continuing');
     }
 
     const sessionKey = cfg.isolatedSession
@@ -159,21 +164,26 @@ export class HeartbeatService {
 
     const ackMax = cfg.ackMaxChars ?? DEFAULT_ACK_MAX_CHARS;
 
+    log.debug({ sessionKey, reasons: reasonSummary }, 'Heartbeat: invoking agent');
+
     let reply: string;
     try {
       reply = await this.deps.agentService.processDirect(prompt, sessionKey);
     } catch (error) {
-      log.error({ err: error }, 'Heartbeat: LLM call failed');
+      log.error({ err: error }, 'Heartbeat: agent call failed');
       return;
     }
 
     if (!reply?.trim()) {
-      log.debug('Heartbeat: empty reply, skipping');
+      log.debug({ reasons: reasonSummary }, 'Heartbeat: skip (empty model reply)');
       return;
     }
 
     if (shouldSilence(reply, ackMax)) {
-      log.debug('Heartbeat: HEARTBEAT_OK — silent');
+      log.info(
+        { ackMax, replyChars: reply.length, reasons: reasonSummary },
+        'Heartbeat: not sent — silent (HEARTBEAT_OK / short ack)',
+      );
       return;
     }
 
@@ -181,20 +191,38 @@ export class HeartbeatService {
     const finalText = stripped || reply.trim();
 
     if (this.isDuplicate(finalText)) {
-      log.debug('Heartbeat: duplicate content within 24h, skipping');
+      log.info(
+        { finalTextChars: finalText.length, reasons: reasonSummary },
+        'Heartbeat: not sent — duplicate within 24h',
+      );
       return;
     }
 
-    if (cfg.target && cfg.targetChatId) {
+    const target = cfg.target?.trim();
+    const targetChatId = cfg.targetChatId?.trim();
+    const hasDeliveryTarget = Boolean(target && targetChatId);
+
+    if (hasDeliveryTarget) {
       await this.deps.messageBus.publishOutbound({
-        channel: cfg.target,
-        chat_id: cfg.targetChatId,
+        channel: target!,
+        chat_id: targetChatId!,
         content: finalText,
         type: 'message',
       });
-      log.info({ channel: cfg.target, reasons }, 'Heartbeat: message delivered');
+      log.info(
+        {
+          reasons: reasonSummary,
+          channel: target,
+          chatId: targetChatId,
+          contentChars: finalText.length,
+        },
+        'Heartbeat: sent — outbound queued',
+      );
     } else {
-      log.warn('Heartbeat: no delivery target configured, reply generated but not sent');
+      log.info(
+        { reasons: reasonSummary, finalTextChars: finalText.length },
+        'Heartbeat: not sent — no delivery target (set gateway.heartbeat.target + targetChatId)',
+      );
     }
 
     this.lastHeartbeatText = finalText;
