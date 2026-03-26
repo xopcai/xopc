@@ -586,8 +586,11 @@ export function ModelsSettingsPanel() {
     isNew: boolean;
   } | null>(null);
 
-  const load = useCallback(async () => {
-    setLoading(true);
+  const load = useCallback(async (opts?: { skipFullPageLoading?: boolean }) => {
+    const showFullPageLoading = !opts?.skipFullPageLoading;
+    if (showFullPageLoading) {
+      setLoading(true);
+    }
     setError(null);
     try {
       const st = await fetchModelsJson();
@@ -603,7 +606,9 @@ export function ModelsSettingsPanel() {
       setConfig({ providers: {} });
       setBaseline({ providers: {} });
     } finally {
-      setLoading(false);
+      if (showFullPageLoading) {
+        setLoading(false);
+      }
     }
   }, [ms.loadError]);
 
@@ -702,7 +707,8 @@ export function ModelsSettingsPanel() {
     setError(null);
     try {
       await reloadModelsJson();
-      await load();
+      // Keep list mounted — full-page loading would swap content and cause layout jump.
+      await load({ skipFullPageLoading: true });
     } catch (e) {
       setError(e instanceof Error ? e.message : ms.reloadError);
     } finally {
@@ -822,7 +828,13 @@ export function ModelsSettingsPanel() {
           <Plus className="mr-1 size-4" />
           {ms.addProvider}
         </Button>
-        <Button type="button" variant="secondary" onClick={runValidate} disabled={loading || validating}>
+        <Button
+          type="button"
+          variant="secondary"
+          className="inline-flex min-h-9 min-w-[7.5rem] justify-center"
+          onClick={runValidate}
+          disabled={loading || validating}
+        >
           {validating ? (
             <>
               <Loader2 className="mr-1 size-4 animate-spin" />
@@ -835,6 +847,7 @@ export function ModelsSettingsPanel() {
         <Button
           type="button"
           variant="secondary"
+          className="inline-flex min-h-9 min-w-[7.5rem] justify-center"
           onClick={runSave}
           disabled={loading || saving || !dirty}
         >
@@ -847,7 +860,13 @@ export function ModelsSettingsPanel() {
             ms.save
           )}
         </Button>
-        <Button type="button" variant="secondary" onClick={runReload} disabled={loading || reloading}>
+        <Button
+          type="button"
+          variant="secondary"
+          className="inline-flex min-h-9 min-w-[8.5rem] justify-center"
+          onClick={runReload}
+          disabled={loading || reloading}
+        >
           {reloading ? (
             <>
               <Loader2 className="mr-1 size-4 animate-spin" />
