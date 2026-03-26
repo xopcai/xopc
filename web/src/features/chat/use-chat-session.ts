@@ -461,10 +461,10 @@ export function useChatSession() {
     setProgress(null);
   }, []);
 
+  /** Avoid copying `messages` on every render when no streaming row — keeps stable array ref for memoized bubbles. */
   const displayMessages = useMemo(() => {
-    const list = [...messages];
-    if (streamingMsg) list.push(streamingMsg);
-    return list;
+    if (!streamingMsg) return messages;
+    return [...messages, streamingMsg];
   }, [messages, streamingMsg]);
 
   useEffect(() => {

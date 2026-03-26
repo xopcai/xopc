@@ -1,11 +1,11 @@
 import DOMPurify from 'dompurify';
-import { useMemo } from 'react';
+import { memo, useMemo } from 'react';
 
 import { parseMarkdown } from '@/features/chat/markdown/parse-markdown';
 
 import '@/features/chat/markdown/markdown.css';
 
-export function MarkdownView({ content }: { content: string }) {
+function MarkdownViewImpl({ content }: { content: string }) {
   const safe = useMemo(() => {
     if (!content.trim()) return '';
     const raw = parseMarkdown(content);
@@ -18,3 +18,7 @@ export function MarkdownView({ content }: { content: string }) {
 
   return <div className="markdown-body" dangerouslySetInnerHTML={{ __html: safe }} />;
 }
+
+/** Pure markdown render — memo avoids DOMPurify + parse when sibling bubbles re-render (e.g. streaming). */
+export const MarkdownView = memo(MarkdownViewImpl);
+MarkdownView.displayName = 'MarkdownView';
