@@ -21,11 +21,12 @@ export function bootstrapLegacyHash(): void {
   }
 
   if (raw === 'settings') {
-    window.history.replaceState(null, '', '#/settings/agent');
+    window.history.replaceState(null, '', '#/settings/appearance');
     return;
   }
 
   const legacySettings: Record<string, string> = {
+    settingsAppearance: 'appearance',
     settingsAgent: 'agent',
     settingsProviders: 'providers',
     settingsModels: 'models',

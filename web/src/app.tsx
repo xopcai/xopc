@@ -91,7 +91,7 @@ const router = createHashRouter([
         path: 'settings',
         element: <SettingsPageLayout />,
         children: [
-          { index: true, element: <Navigate to="agent" replace /> },
+          { index: true, element: <Navigate to="appearance" replace /> },
           {
             path: 'sessions',
             element: (

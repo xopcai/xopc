@@ -2,9 +2,6 @@ import { Menu } from 'lucide-react';
 import { memo } from 'react';
 
 import { APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
-import { HeaderPreferencesPopover } from '@/components/shell/header-preferences-popover';
-import { LanguageToggle } from '@/components/shell/language-toggle';
-import { ThemeToggle } from '@/components/shell/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -12,7 +9,7 @@ import { useAppShellStore } from '@/stores/app-shell-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 /**
- * Mobile / small viewports: secondary routes mirror `ChatHeaderBar` (menu + preferences).
+ * Mobile / small viewports: secondary routes show the menu button (same rail as chat).
  * Desktop (`lg+`) uses the persistent sidebar — this bar is hidden there.
  */
 export const SecondaryPageTopBar = memo(function SecondaryPageTopBar() {
@@ -44,15 +41,6 @@ export const SecondaryPageTopBar = memo(function SecondaryPageTopBar() {
         </Button>
       </div>
       <div className="min-w-0 flex-1" />
-      <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
-        <div className="hidden items-center gap-2 sm:gap-2.5 lg:flex">
-          <LanguageToggle />
-          <ThemeToggle />
-        </div>
-        <div className="lg:hidden">
-          <HeaderPreferencesPopover />
-        </div>
-      </div>
     </div>
   );
 });

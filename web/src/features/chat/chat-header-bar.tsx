@@ -3,7 +3,6 @@ import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
-import { HeaderPreferencesPopover } from '@/components/shell/header-preferences-popover';
 import { LanguageToggle } from '@/components/shell/language-toggle';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
 import { Button } from '@/components/ui/button';
@@ -73,14 +72,9 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatH
       >
         {chatHeadline}
       </h1>
-      <div className="flex shrink-0 items-center gap-2 sm:gap-2.5 lg:justify-self-end">
-        <div className="hidden items-center gap-2 sm:gap-2.5 lg:flex">
-          <LanguageToggle />
-          <ThemeToggle />
-        </div>
-        <div className="lg:hidden">
-          <HeaderPreferencesPopover />
-        </div>
+      <div className="hidden shrink-0 items-center gap-2 sm:gap-2.5 lg:flex lg:justify-self-end">
+        <LanguageToggle />
+        <ThemeToggle />
       </div>
     </div>
   );
