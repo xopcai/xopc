@@ -8,6 +8,8 @@ import {
   resolveDataUrlForDisplay,
 } from '@/features/chat/attachment-utils-core';
 import { apiFetch } from '@/lib/fetch';
+import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -91,9 +93,15 @@ export function AttachmentTile({
         <div className="relative">
           <button
             type="button"
-            className="block overflow-hidden rounded-md border border-edge focus:outline-none focus:ring-2 focus:ring-accent dark:border-edge"
+            className={cn(
+              'block overflow-hidden rounded-md border border-edge dark:border-edge',
+              interaction.transition,
+              interaction.press,
+              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+            )}
             onClick={() => onOpen(effective)}
             title={displayName}
+            aria-label={displayName}
           >
             <img src={thumbSrc} alt={displayName} className="max-h-48 w-full object-cover" />
           </button>
@@ -111,7 +119,13 @@ export function AttachmentTile({
           type="button"
           onClick={() => onOpen(effective)}
           title={displayName}
-          className="flex max-w-[14rem] items-center gap-2 rounded-md border border-edge bg-surface-hover px-2 py-1.5 text-left text-xs text-fg-muted transition hover:bg-surface-active dark:border-edge"
+          aria-label={displayName}
+          className={cn(
+            'flex max-w-[14rem] items-center gap-2 rounded-md border border-edge bg-surface-hover px-2 py-1.5 text-left text-xs text-fg-muted hover:bg-surface-active dark:border-edge',
+            interaction.transition,
+            interaction.press,
+            interaction.focusRingPanel,
+          )}
         >
           {isExcel ? (
             <FileSpreadsheet className="h-8 w-8 shrink-0 text-fg-subtle" aria-hidden />
@@ -124,12 +138,18 @@ export function AttachmentTile({
       {showDelete ? (
         <button
           type="button"
-          className="absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-muted shadow-sm hover:text-fg dark:border-edge"
+          className={cn(
+            'absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-muted shadow-sm hover:text-fg dark:border-edge',
+            interaction.transition,
+            interaction.press,
+            interaction.focusRingPanel,
+          )}
           onClick={(e) => {
             e.stopPropagation();
             onDelete?.();
           }}
           title={m.chat.attachmentPreviewRemove}
+          aria-label={m.chat.attachmentPreviewRemove}
         >
           <X className="h-3 w-3" />
         </button>

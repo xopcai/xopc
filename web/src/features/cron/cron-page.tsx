@@ -44,6 +44,7 @@ import {
   truncate,
 } from '@/features/cron/cron-utils';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -539,9 +540,10 @@ export function CronPage() {
                   role="button"
                   tabIndex={0}
                   className={cn(
-                    'flex cursor-pointer flex-col rounded-xl bg-surface-base text-left transition-colors duration-150',
+                    'flex cursor-pointer flex-col rounded-xl bg-surface-base text-left transition-colors duration-150 ease-out',
                     'hover:bg-surface-hover',
-                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
+                    interaction.press,
+                    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
                   )}
                   onClick={() => void openDetail(job)}
                   onKeyDown={(e) => {

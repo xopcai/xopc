@@ -32,6 +32,7 @@ import {
   segmentedTrackClassName,
 } from '@/components/ui/segmented-styles';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -317,9 +318,13 @@ export function SessionsPage() {
             <button
               key={key}
               type="button"
+              aria-pressed={statusFilter === key}
               onClick={() => setStatusFilter(key)}
               className={cn(
-                'inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-150',
+                'inline-flex items-center gap-1.5 rounded-xl px-3 py-2 text-sm font-medium',
+                interaction.transition,
+                /* Filter chips (selection): no press scale. */
+                interaction.focusRingPanel,
                 statusFilter === key
                   ? 'bg-accent-soft text-accent-fg'
                   : 'bg-surface-base text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/35',

@@ -24,12 +24,12 @@ export const SecondaryPageTopBar = memo(function SecondaryPageTopBar() {
   return (
     <div
       className={cn(
-        'flex gap-2 border-b border-edge-subtle px-4 sm:gap-3 sm:px-8 lg:hidden',
+        'flex gap-3 border-b border-edge-subtle px-4 sm:gap-4 sm:px-8 lg:hidden',
         APP_TOP_HEADER_BAR_CLASS,
         'bg-surface-panel',
       )}
     >
-      <div className="flex min-w-0 shrink-0 items-center gap-1">
+      <div className="flex min-w-0 shrink-0 items-center gap-2">
         <Button
           type="button"
           variant="ghost"
@@ -44,8 +44,8 @@ export const SecondaryPageTopBar = memo(function SecondaryPageTopBar() {
         </Button>
       </div>
       <div className="min-w-0 flex-1" />
-      <div className="flex shrink-0 items-center gap-1 sm:gap-2">
-        <div className="hidden items-center gap-1.5 sm:gap-2 lg:flex">
+      <div className="flex shrink-0 items-center gap-2 sm:gap-2.5">
+        <div className="hidden items-center gap-2 sm:gap-2.5 lg:flex">
           <LanguageToggle />
           <ThemeToggle />
         </div>

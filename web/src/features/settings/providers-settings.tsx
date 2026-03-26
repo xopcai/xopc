@@ -32,6 +32,7 @@ import {
   type ProviderRowModel,
 } from '@/features/settings/providers-api';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { messages, type ProvidersSettingsMessages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -471,8 +472,14 @@ function ProviderCredentialRow({
                   {value && !masked ? (
                     <button
                       type="button"
-                      className="rounded p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg"
+                      className={cn(
+                        'rounded p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg',
+                        interaction.transition,
+                        interaction.press,
+                        interaction.focusRingPanel,
+                      )}
                       title={copied ? labels.copied : labels.copy}
+                      aria-label={copied ? labels.copied : labels.copy}
                       onClick={() => void copyKey()}
                     >
                       {copied ? <CheckCircle2 className="size-4" /> : <Copy className="size-4" />}
@@ -480,8 +487,14 @@ function ProviderCredentialRow({
                   ) : null}
                   <button
                     type="button"
-                    className="rounded p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg disabled:opacity-40"
+                    className={cn(
+                      'rounded p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg disabled:opacity-40',
+                      interaction.transition,
+                      interaction.press,
+                      interaction.focusRingPanel,
+                    )}
                     title={showKey ? labels.hide : labels.show}
+                    aria-label={showKey ? labels.hide : labels.show}
                     disabled={masked}
                     onClick={() => setShowKey((s) => !s)}
                   >

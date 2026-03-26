@@ -8,9 +8,10 @@ import { cn } from '@/lib/cn';
 import { HELP_DOCS_URL, pathForTab, SETTINGS_SHELL_NAV_TABS } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 
+/** Aligned with `SidebarNav` secondary links (§4.3 — same rail rhythm as main app sidebar). */
 function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
   return cn(
-    'flex min-h-9 shrink-0 items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium leading-snug transition-colors duration-150',
+    'flex w-full shrink-0 items-center gap-2.5 rounded-xl px-4 py-2 text-sm font-medium leading-6 transition-colors duration-200 ease-out',
     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
     isActive
       ? 'bg-accent-soft text-accent-fg'
@@ -19,17 +20,17 @@ function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
 }
 
 const helpLinkClass = cn(
-  'flex min-h-9 items-center gap-2 rounded-lg px-2.5 py-2 text-sm font-medium leading-snug transition-colors duration-150',
+  'flex w-full items-center gap-2.5 rounded-xl px-4 py-2 text-sm font-medium leading-6 transition-colors duration-200 ease-out',
   'text-fg-muted hover:bg-surface-hover hover:text-fg',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
 );
 
 /** Compact control — hover only on the pill, not full rail width. */
 const backLinkClass = cn(
-  'inline-flex max-w-full items-center gap-1.5 rounded-xl px-2 py-1.5 text-sm font-medium transition-colors duration-150 ease-out',
+  'inline-flex max-w-full items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium transition-colors duration-200 ease-out',
   'text-fg-muted hover:bg-surface-hover hover:text-fg',
   'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
-  'sm:gap-2 sm:px-2.5',
+  'sm:px-4',
 );
 
 /** Full-screen settings: left rail (back + nav + help) vs right panel — color only, no divider borders. */
@@ -53,12 +54,12 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
           'md:h-full md:min-h-0 md:w-[min(15rem,40vw)] md:shrink-0 md:overflow-hidden',
         )}
       >
-        <div className="shrink-0 px-2 pb-2 pt-2 sm:px-3">{backControl}</div>
+        <div className="shrink-0 px-4 pb-2 pt-4">{backControl}</div>
 
         {/* Mobile: horizontal tabs + help */}
         <div className="md:hidden">
           <nav
-            className="flex gap-1 overflow-x-auto overflow-y-hidden px-2 pb-3"
+            className="flex gap-1.5 overflow-x-auto overflow-y-hidden px-4 pb-3 pt-1"
             aria-label={m.nav.settings}
           >
             {SETTINGS_SHELL_NAV_TABS.map((tab) => (
@@ -67,14 +68,14 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
                 to={pathForTab(tab)}
                 className={({ isActive }) =>
                   cn(
-                    'flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium transition-colors duration-150',
+                    'flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium leading-snug transition-colors duration-200 ease-out',
                     isActive
                       ? 'bg-accent-soft text-accent-fg'
                       : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
                   )
                 }
               >
-                <TabIcon tab={tab} className="size-3.5 shrink-0 opacity-90" />
+                <TabIcon tab={tab} className="size-4 shrink-0 opacity-90" />
                 <span className="max-w-[7.5rem] truncate">{tabLabel(language, tab)}</span>
               </NavLink>
             ))}
@@ -83,11 +84,11 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
               target="_blank"
               rel="noopener noreferrer"
               className={cn(
-                'flex shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-medium text-fg-muted transition-colors duration-150',
+                'flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium leading-snug text-fg-muted transition-colors duration-200 ease-out',
                 'hover:bg-surface-hover hover:text-fg',
               )}
             >
-              <BookOpen className="size-3.5 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+              <BookOpen className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
               <span className="max-w-[6rem] truncate">{m.sidebar.helpDocs}</span>
               <ExternalLink className="size-3 shrink-0 opacity-70" aria-hidden />
             </a>
@@ -97,26 +98,26 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
         {/* Desktop: vertical nav (scroll) + help — flex column fills rail height */}
         <div className="hidden min-h-0 flex-1 flex-col md:flex md:min-h-0">
           <nav
-            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-2 pb-2 pt-1 sm:px-3"
+            className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-2 pt-2"
             aria-label={m.nav.settings}
           >
-            <div className="flex flex-col gap-px">
+            <div className="flex flex-col gap-0.5">
               {SETTINGS_SHELL_NAV_TABS.map((tab) => (
                 <NavLink key={tab} to={pathForTab(tab)} className={settingsNavLinkClass}>
-                  <TabIcon tab={tab} className="size-3.5 shrink-0 opacity-90" />
+                  <TabIcon tab={tab} className="size-5 shrink-0 opacity-90" />
                   <span className="min-w-0 flex-1 truncate">{tabLabel(language, tab)}</span>
                 </NavLink>
               ))}
             </div>
           </nav>
-          <div className="shrink-0 px-2 pb-3 pt-1 sm:px-3">
+          <div className="shrink-0 border-t border-edge-subtle px-4 pb-4 pt-3 dark:border-edge-subtle">
             <a
               href={HELP_DOCS_URL}
               target="_blank"
               rel="noopener noreferrer"
               className={helpLinkClass}
             >
-              <BookOpen className="size-3.5 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+              <BookOpen className="size-5 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
               <span className="min-w-0 flex-1 truncate">{m.sidebar.helpDocs}</span>
               <ExternalLink className="size-3 shrink-0 opacity-70" aria-hidden />
             </a>

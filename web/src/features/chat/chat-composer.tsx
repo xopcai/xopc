@@ -7,6 +7,7 @@ import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment
 import { ModelSelector } from '@/features/chat/model-selector';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const ACCEPT =
@@ -266,7 +267,13 @@ export const ChatComposer = memo(function ChatComposer({
           <div className="ml-auto flex items-center gap-1">
             <button
               type="button"
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-subtle transition-colors duration-150 hover:bg-surface-hover hover:text-fg disabled:opacity-50 dark:bg-surface-hover/50"
+              className={cn(
+                'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-subtle hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
+                interaction.transition,
+                interaction.press,
+                interaction.focusRingPanel,
+                'disabled:opacity-50 disabled:cursor-not-allowed',
+              )}
               disabled={attachments.length >= MAX_CHAT_ATTACHMENTS || disabled || busy}
               title={
                 attachments.length >= MAX_CHAT_ATTACHMENTS
@@ -292,9 +299,13 @@ export const ChatComposer = memo(function ChatComposer({
 
             <button
               type="button"
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent bg-transparent text-fg-disabled opacity-80"
+              className={cn(
+                'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent bg-transparent text-fg-disabled opacity-80',
+                interaction.focusRingPanel,
+              )}
               disabled
               title={m.chat.voiceComingSoon}
+              aria-label={m.chat.voiceComingSoon}
             >
               <Mic className="h-4 w-4 stroke-[1.75]" />
             </button>
@@ -302,8 +313,14 @@ export const ChatComposer = memo(function ChatComposer({
             {busy ? (
               <button
                 type="button"
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-muted transition-colors duration-150 hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50"
+                className={cn(
+                  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
+                  interaction.transition,
+                  interaction.press,
+                  interaction.focusRingPanel,
+                )}
                 title={m.chat.abort}
+                aria-label={m.chat.abort}
                 onClick={onAbort}
               >
                 <Square className="h-4 w-4 stroke-[1.75]" />
@@ -312,13 +329,16 @@ export const ChatComposer = memo(function ChatComposer({
               <button
                 type="button"
                 className={cn(
-                  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150 active:scale-95',
+                  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150 ease-out',
+                  interaction.press,
+                  interaction.focusRingPanel,
                   value.trim() || attachments.length > 0
                     ? 'border-transparent text-accent-fg hover:bg-accent-soft dark:text-accent-fg dark:hover:bg-accent-soft'
                     : 'border-transparent text-fg-disabled',
                 )}
                 disabled={disabled || (!value.trim() && attachments.length === 0)}
                 title={m.chat.sendMessage}
+                aria-label={m.chat.sendMessage}
                 onClick={send}
               >
                 <Send className="h-4 w-4 stroke-[1.75]" />
