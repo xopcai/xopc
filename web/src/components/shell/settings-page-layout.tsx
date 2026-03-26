@@ -5,7 +5,7 @@ import { Link, NavLink, Outlet } from 'react-router-dom';
 import { TabIcon } from '@/components/shell/tab-icons';
 import { messages, tabLabel } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
-import { helpDocsHomeUrl, pathForTab, SETTINGS_SHELL_NAV_TABS } from '@/navigation';
+import { helpDocsHomeUrl, pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 
 /** Aligned with `SidebarNav` secondary links (§4.3 — same rail rhythm as main app sidebar). */
@@ -62,22 +62,32 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
             className="flex gap-1.5 overflow-x-auto overflow-y-hidden px-4 pb-3 pt-1"
             aria-label={m.nav.settings}
           >
-            {SETTINGS_SHELL_NAV_TABS.map((tab) => (
-              <NavLink
-                key={tab}
-                to={pathForTab(tab)}
-                className={({ isActive }) =>
-                  cn(
-                    'flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium leading-snug transition-colors duration-200 ease-out',
-                    isActive
-                      ? 'bg-accent-soft text-accent-fg'
-                      : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
-                  )
-                }
+            {SETTINGS_SHELL_NAV_GROUPS.map((group, groupIndex) => (
+              <div
+                key={group.id}
+                className={cn(
+                  'flex shrink-0 gap-1.5',
+                  groupIndex > 0 && 'border-l border-edge-subtle pl-2',
+                )}
               >
-                <TabIcon tab={tab} className="size-4 shrink-0 opacity-90" />
-                <span className="max-w-[7.5rem] truncate">{tabLabel(language, tab)}</span>
-              </NavLink>
+                {group.tabs.map((tab) => (
+                  <NavLink
+                    key={tab}
+                    to={pathForTab(tab)}
+                    className={({ isActive }) =>
+                      cn(
+                        'flex shrink-0 items-center gap-1.5 rounded-xl px-3 py-2 text-xs font-medium leading-snug transition-colors duration-200 ease-out',
+                        isActive
+                          ? 'bg-accent-soft text-accent-fg'
+                          : 'text-fg-muted hover:bg-surface-hover hover:text-fg',
+                      )
+                    }
+                  >
+                    <TabIcon tab={tab} className="size-4 shrink-0 opacity-90" />
+                    <span className="max-w-[7.5rem] truncate">{tabLabel(language, tab)}</span>
+                  </NavLink>
+                ))}
+              </div>
             ))}
             <a
               href={helpDocsHomeUrl(language)}
@@ -101,12 +111,26 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
             className="min-h-0 flex-1 overflow-y-auto overflow-x-hidden px-4 pb-2 pt-2"
             aria-label={m.nav.settings}
           >
-            <div className="flex flex-col gap-0.5">
-              {SETTINGS_SHELL_NAV_TABS.map((tab) => (
-                <NavLink key={tab} to={pathForTab(tab)} className={settingsNavLinkClass}>
-                  <TabIcon tab={tab} className="size-5 shrink-0 opacity-90" />
-                  <span className="min-w-0 flex-1 truncate">{tabLabel(language, tab)}</span>
-                </NavLink>
+            <div className="flex flex-col gap-1">
+              {SETTINGS_SHELL_NAV_GROUPS.map((group, groupIndex) => (
+                <div key={group.id}>
+                  <p
+                    className={cn(
+                      'px-4 pb-1 pt-2 text-[11px] font-semibold uppercase tracking-wider text-fg-muted',
+                      groupIndex === 0 && 'pt-0',
+                    )}
+                  >
+                    {m.settingsNavGroups[group.id]}
+                  </p>
+                  <div className="flex flex-col gap-0.5">
+                    {group.tabs.map((tab) => (
+                      <NavLink key={tab} to={pathForTab(tab)} className={settingsNavLinkClass}>
+                        <TabIcon tab={tab} className="size-5 shrink-0 opacity-90" />
+                        <span className="min-w-0 flex-1 truncate">{tabLabel(language, tab)}</span>
+                      </NavLink>
+                    ))}
+                  </div>
+                </div>
               ))}
             </div>
           </nav>

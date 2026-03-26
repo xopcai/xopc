@@ -21,7 +21,7 @@ export function bootstrapLegacyHash(): void {
   }
 
   if (raw === 'settings') {
-    window.history.replaceState(null, '', '#/settings/appearance');
+    window.history.replaceState(null, '', '#/settings/gateway');
     return;
   }
 

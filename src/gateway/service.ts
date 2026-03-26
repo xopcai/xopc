@@ -665,6 +665,13 @@ export class GatewayService {
   }
 
   /**
+   * Request an immediate heartbeat run (coalesced like interval/cron wakes).
+   */
+  requestHeartbeatNow(opts?: { reason?: string }): void {
+    this.heartbeatService.requestNow({ reason: opts?.reason ?? 'manual' });
+  }
+
+  /**
    * Get health status
    */
   getHealth(): {
