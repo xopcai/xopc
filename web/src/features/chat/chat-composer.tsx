@@ -148,11 +148,11 @@ export const ChatComposer = memo(function ChatComposer({
         }}
       >
         {attachments.length > 0 ? (
-          <div className="flex flex-wrap gap-2 border-b border-edge-subtle px-4 pb-2 pt-3 dark:border-edge/80">
+          <div className="flex flex-wrap gap-2 border-b border-edge-subtle/90 bg-surface-hover/20 px-4 pb-2 pt-3 dark:border-edge-subtle">
             {attachments.map((att, index) => (
               <div
                 key={`${att.name}-${index}`}
-                className="flex max-w-[200px] items-center gap-1.5 rounded-lg border border-edge bg-surface-hover px-2 py-1 text-xs dark:border-edge-strong"
+                className="flex max-w-[200px] items-center gap-1.5 rounded-lg bg-surface-hover px-2 py-1 text-xs dark:bg-surface-hover/80"
               >
                 {att.mimeType?.startsWith('image/') && att.content ? (
                   <img
@@ -225,7 +225,7 @@ export const ChatComposer = memo(function ChatComposer({
           />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-edge-subtle px-4 pb-2.5 pt-2 dark:border-edge/80">
+        <div className="flex flex-wrap items-center gap-2 border-t border-edge-subtle/90 px-4 pb-2.5 pt-2 dark:border-edge-subtle">
           {showModelSelector ? (
             <div className="min-w-0 max-w-[min(14rem,calc(100vw-10rem))] shrink">
               <ModelSelector
@@ -244,7 +244,7 @@ export const ChatComposer = memo(function ChatComposer({
           ) : null}
           {showThinkingSelector ? (
             <div
-              className="inline-flex min-h-8 items-center gap-1 rounded-full border border-edge bg-surface-hover px-2.5 py-1 text-xs dark:border-edge-strong dark:bg-surface-hover/80"
+              className="inline-flex min-h-8 items-center gap-1 rounded-full bg-surface-hover px-2.5 py-1 text-xs dark:bg-surface-hover/80"
               title={`${m.chat.thinkingLevel}: ${thinkingLevel}`}
             >
               <ThinkingIcon className="h-3.5 w-3.5 shrink-0 text-accent-fg" aria-hidden />
@@ -266,7 +266,7 @@ export const ChatComposer = memo(function ChatComposer({
           <div className="ml-auto flex items-center gap-1">
             <button
               type="button"
-              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel text-fg-subtle transition-colors duration-150 hover:bg-surface-hover hover:text-fg disabled:opacity-50 dark:border-edge-strong"
+              className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-subtle transition-colors duration-150 hover:bg-surface-hover hover:text-fg disabled:opacity-50 dark:bg-surface-hover/50"
               disabled={attachments.length >= MAX_CHAT_ATTACHMENTS || disabled || busy}
               title={
                 attachments.length >= MAX_CHAT_ATTACHMENTS
@@ -302,7 +302,7 @@ export const ChatComposer = memo(function ChatComposer({
             {busy ? (
               <button
                 type="button"
-                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-panel text-fg-muted transition-colors duration-150 hover:bg-surface-hover hover:text-fg dark:border-edge-strong"
+                className="inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-muted transition-colors duration-150 hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50"
                 title={m.chat.abort}
                 onClick={onAbort}
               >

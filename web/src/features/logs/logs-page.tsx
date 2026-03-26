@@ -288,7 +288,7 @@ export function LogsPage() {
   if (!hasToken) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10">
-        <div className="flex items-start gap-3 rounded-lg border border-edge bg-surface-panel p-6 dark:border-edge">
+        <div className="flex items-start gap-3 rounded-2xl bg-surface-base p-6">
           <Terminal className="mt-0.5 size-5 shrink-0 text-fg-subtle" strokeWidth={1.75} />
           <div>
             <h1 className="text-base font-semibold text-fg">{L.title}</h1>
@@ -305,7 +305,7 @@ export function LogsPage() {
       <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <div
-            className="flex size-10 shrink-0 items-center justify-center rounded-lg border border-edge bg-surface-base dark:border-edge"
+            className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface-hover/80 dark:bg-surface-hover/50"
             aria-hidden
           >
             <Terminal className="size-5 text-fg-muted" strokeWidth={1.75} />
@@ -426,8 +426,8 @@ export function LogsPage() {
             autoComplete="off"
             spellCheck={false}
             className={cn(
-              'w-full rounded-lg border border-edge bg-surface-panel py-2 pl-10 pr-3 text-sm text-fg placeholder:text-fg-subtle',
-              'focus:border-edge-strong focus:outline-none focus:ring-2 focus:ring-accent/30 dark:border-edge',
+              'w-full rounded-lg bg-surface-base py-2 pl-10 pr-3 text-sm text-fg placeholder:text-fg-subtle',
+              'focus:outline-none focus:ring-2 focus:ring-accent/35 dark:bg-surface-hover/35',
             )}
           />
         </label>
@@ -468,11 +468,11 @@ export function LogsPage() {
             </select>
           </div>
 
-          <details className="min-w-[14rem] flex-1 rounded-lg border border-edge bg-surface-panel open:pb-3 dark:border-edge">
-            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-fg hover:bg-surface-hover">
+          <details className="min-w-[14rem] flex-1 rounded-lg bg-surface-base open:pb-3 dark:bg-surface-hover/30">
+            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-fg hover:bg-surface-hover/70">
               {L.timeRange}
             </summary>
-            <div className="flex flex-col gap-3 border-t border-edge-subtle px-3 pt-3 dark:border-edge sm:flex-row">
+            <div className="flex flex-col gap-3 border-t border-edge-subtle px-3 pt-3 dark:border-edge-subtle sm:flex-row">
               <div className="min-w-0 flex-1">
                 <label htmlFor="log-from" className="mb-1 block text-xs text-fg-muted">
                   {L.from}
@@ -515,7 +515,7 @@ export function LogsPage() {
           {Array.from({ length: 10 }).map((_, i) => (
             <div
               key={i}
-              className="flex gap-3 rounded-md border border-edge-subtle bg-surface-panel p-3 dark:border-edge"
+              className="flex gap-3 rounded-md bg-surface-base p-3 dark:bg-surface-hover/25"
             >
               <div className="h-4 w-16 animate-pulse rounded bg-surface-hover" />
               <div className="h-4 w-12 animate-pulse rounded bg-surface-hover" />
@@ -527,7 +527,7 @@ export function LogsPage() {
       ) : null}
 
       {!loading && logs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-lg border border-dashed border-edge py-16 text-center dark:border-edge">
+        <div className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-surface-base py-16 text-center dark:bg-surface-hover/25">
           <FileText className="size-8 text-fg-subtle" strokeWidth={1.5} aria-hidden />
           <h2 className="text-base font-medium text-fg">{L.noLogs}</h2>
           <p className="max-w-sm text-sm text-fg-muted">{L.noLogsDescription}</p>
@@ -575,9 +575,8 @@ export function LogsPage() {
                     type="button"
                     onClick={() => setSelectedLog(log)}
                     className={cn(
-                      'flex w-full min-w-0 gap-2 rounded-md border border-transparent px-2 py-2 text-left text-sm transition-colors',
-                      'hover:border-edge hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
-                      'dark:hover:border-edge',
+                      'flex w-full min-w-0 gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors',
+                      'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent',
                     )}
                   >
                     <span className="shrink-0 font-mono text-xs tabular-nums text-fg-subtle">
@@ -685,7 +684,7 @@ export function LogsPage() {
                   {files.map((f) => (
                     <li
                       key={f.name}
-                      className="flex flex-col gap-1 rounded-md border border-edge-subtle px-3 py-2 dark:border-edge"
+                      className="flex flex-col gap-1 rounded-md bg-surface-hover/50 px-3 py-2 dark:bg-surface-hover/35"
                     >
                       <span className="break-all font-mono text-xs text-fg">{f.name}</span>
                       <span className="flex flex-wrap gap-x-2 text-xs text-fg-subtle">
@@ -752,14 +751,14 @@ function LogDetailBody({
       </div>
       <div>
         <span className="text-xs font-medium text-fg-muted">{labels.message}</span>
-        <pre className="mt-1 whitespace-pre-wrap break-words rounded-md border border-edge-subtle bg-surface-base p-3 font-mono text-xs text-fg dark:border-edge">
+        <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-surface-hover/60 p-3 font-mono text-xs text-fg dark:bg-surface-hover/40">
           {log.message || '—'}
         </pre>
       </div>
       {log.meta && Object.keys(log.meta).length > 0 ? (
         <div>
           <span className="text-xs font-medium text-fg-muted">{labels.metadata}</span>
-          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-words rounded-md border border-edge-subtle bg-surface-base p-3 font-mono text-xs text-fg dark:border-edge">
+          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-surface-hover/60 p-3 font-mono text-xs text-fg dark:bg-surface-hover/40">
             {JSON.stringify(log.meta, null, 2)}
           </pre>
         </div>

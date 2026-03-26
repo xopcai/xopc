@@ -48,7 +48,7 @@ export function ToolCallCard({
   }
 
   return (
-    <div className="w-full min-w-0 overflow-hidden rounded-xl border border-edge-subtle bg-surface-hover/30 dark:border-edge dark:bg-surface-hover/20">
+    <div className="w-full min-w-0 overflow-hidden rounded-xl bg-surface-hover/35 dark:bg-surface-hover/25">
       <button
         type="button"
         className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left text-xs font-medium text-fg-muted hover:bg-surface-hover"
@@ -74,7 +74,7 @@ export function ToolCallCard({
         />
       </button>
       {expanded ? (
-        <div className="max-h-80 w-full min-w-0 max-w-full overflow-x-auto overflow-y-auto border-t border-edge p-3 font-mono text-xs dark:border-edge">
+        <div className="max-h-80 w-full min-w-0 max-w-full overflow-x-auto overflow-y-auto border-t border-edge-subtle/90 bg-surface-hover/20 p-3 font-mono text-xs dark:border-edge-subtle">
           {paramsJson ? (
             <div className="mb-3 min-w-0">
               <div className="mb-1 text-[10px] uppercase tracking-wide text-fg-disabled">{labels.input}</div>

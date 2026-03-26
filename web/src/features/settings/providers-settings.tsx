@@ -51,13 +51,6 @@ function groupByCategory(rows: ProviderRowModel[]): Map<ProviderCategory, Provid
   return map;
 }
 
-function listSegment(n: number, i: number): 'single' | 'first' | 'mid' | 'last' {
-  if (n <= 1) return 'single';
-  if (i === 0) return 'first';
-  if (i === n - 1) return 'last';
-  return 'mid';
-}
-
 export function ProvidersSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -148,7 +141,7 @@ export function ProvidersSettingsPanel() {
   if (!hasToken) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10">
-        <div className="flex items-start gap-3 rounded-lg border border-edge bg-surface-panel p-6 dark:border-edge">
+        <div className="flex items-start gap-3 rounded-2xl bg-surface-base p-6">
           <KeyRound className="mt-0.5 size-5 shrink-0 text-fg-subtle" strokeWidth={1.75} />
           <div>
             <h1 className="text-base font-semibold text-fg">{m.settingsSections.providers}</h1>
@@ -227,11 +220,11 @@ export function ProvidersSettingsPanel() {
           return (
             <section
               key={cat}
-              className="overflow-hidden rounded-xl border border-edge bg-surface-panel dark:border-edge"
+              className="overflow-hidden rounded-2xl bg-surface-base"
             >
               <button
                 type="button"
-                className="flex w-full items-center justify-between gap-2 border-b border-edge-subtle bg-surface-base px-4 py-3 text-left transition-colors hover:bg-surface-hover dark:border-edge"
+                className="flex w-full items-center justify-between gap-2 border-b border-edge-subtle px-4 py-3 text-left transition-colors hover:bg-surface-hover/60 dark:border-edge-subtle"
                 onClick={() => toggleCat(cat)}
               >
                 <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
@@ -254,12 +247,11 @@ export function ProvidersSettingsPanel() {
                 </span>
               </button>
               {expanded ? (
-                <div className="flex flex-col">
-                  {list.map((row, i) => (
+                <div className="divide-y divide-edge-subtle">
+                  {list.map((row) => (
                     <ProviderCredentialRow
                       key={row.id}
                       row={row}
-                      segment={listSegment(list.length, i)}
                       value={draft[row.id] ?? ''}
                       labels={p}
                       onChange={(id, v) => setDraft((d) => ({ ...d, [id]: v }))}
@@ -282,14 +274,12 @@ function interpolate(template: string, params: Record<string, string>): string {
 
 function ProviderCredentialRow({
   row,
-  segment,
   value,
   labels,
   onChange,
   onReload,
 }: {
   row: ProviderRowModel;
-  segment: 'single' | 'first' | 'mid' | 'last';
   value: string;
   labels: ProvidersSettingsMessages;
   onChange: (id: string, v: string) => void;
@@ -417,20 +407,11 @@ function ProviderCredentialRow({
     }
   };
 
-  const segClass =
-    segment === 'single'
-      ? 'rounded-lg border border-edge dark:border-edge'
-      : segment === 'first'
-        ? 'rounded-t-lg border border-b-0 border-edge dark:border-edge'
-        : segment === 'last'
-          ? 'rounded-b-lg border border-t border-edge-subtle dark:border-edge'
-          : 'border-x border-b border-t border-edge-subtle dark:border-edge';
-
   return (
-    <div className={cn('bg-surface-panel', segClass)}>
+    <div className="bg-surface-panel">
       <div className="flex items-center gap-3 px-3 py-3 sm:px-4">
         <div
-          className="flex size-8 shrink-0 items-center justify-center rounded-md border border-edge-subtle bg-surface-base dark:border-edge"
+          className="flex size-8 shrink-0 items-center justify-center rounded-md bg-surface-hover/80 dark:bg-surface-hover/50"
           aria-hidden
         >
           {row.configured ? (
@@ -466,7 +447,7 @@ function ProviderCredentialRow({
       </div>
 
       {expanded ? (
-        <div className="space-y-3 border-t border-edge-subtle px-3 py-3 dark:border-edge sm:px-4">
+        <div className="space-y-3 border-t border-edge-subtle bg-surface-base/40 px-3 py-3 dark:bg-surface-base/20 sm:px-4">
           {row.supportsApiKey !== false ? (
             <div className="relative flex gap-2">
               <div className="relative min-w-0 flex-1">
@@ -565,7 +546,7 @@ function ProviderCredentialRow({
           )}
 
           {instructions ? (
-            <div className="flex gap-2 rounded-md border border-dashed border-edge bg-surface-base px-3 py-2 text-xs text-fg-muted dark:border-edge">
+            <div className="flex gap-2 rounded-md bg-surface-hover/60 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/40">
               <Info className="mt-0.5 size-4 shrink-0" />
               <span>{instructions}</span>
             </div>
@@ -591,7 +572,7 @@ function ProviderCredentialRow({
           ) : null}
 
           {masked ? (
-            <div className="flex gap-2 rounded-md border border-dashed border-edge bg-surface-base px-3 py-2 text-xs text-fg-muted dark:border-edge">
+            <div className="flex gap-2 rounded-md bg-surface-hover/60 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/40">
               <Info className="mt-0.5 size-4 shrink-0" />
               <span>{labels.envHint}</span>
             </div>

@@ -244,8 +244,8 @@ export function SkillsPage() {
 
         <section
           className={cn(
-            'rounded-xl border border-dashed border-edge bg-surface-panel p-6 transition-colors dark:border-edge',
-            dropActive && 'border-accent bg-accent-soft/30',
+            'rounded-2xl bg-surface-base p-6 transition-colors dark:bg-surface-hover/30',
+            dropActive && 'bg-accent-soft/40 dark:bg-accent-soft/25',
           )}
           onDragLeave={onDragLeave}
           onDragOver={onDragOver}
@@ -269,7 +269,7 @@ export function SkillsPage() {
         <section className="flex flex-col gap-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-medium text-fg">{sk.tableTitle}</h2>
-            <div className="flex w-full min-w-0 items-center gap-2 rounded-xl border border-edge bg-surface-panel px-3 py-2 transition-colors focus-within:border-accent sm:max-w-md dark:border-edge">
+            <div className="flex w-full min-w-0 items-center gap-2 rounded-xl bg-surface-base px-3 py-2 transition-colors focus-within:ring-2 focus-within:ring-accent/35 sm:max-w-md dark:bg-surface-hover/40">
               <Search className="size-4 shrink-0 text-fg-disabled" strokeWidth={1.75} aria-hidden />
               <input
                 type="search"
@@ -285,7 +285,7 @@ export function SkillsPage() {
           {loading ? (
             <div className="py-12 text-center text-sm text-fg-muted">{sk.loading}</div>
           ) : (
-            <div className="overflow-x-auto rounded-xl border border-edge dark:border-edge">
+            <div className="overflow-x-auto rounded-2xl bg-surface-base dark:bg-surface-hover/25">
               <table className="w-full min-w-[640px] border-collapse text-left text-sm">
                 <thead>
                   <tr className="border-b border-edge bg-surface-hover/50 dark:border-edge">

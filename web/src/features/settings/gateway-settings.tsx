@@ -187,25 +187,23 @@ export function GatewaySettingsPanel() {
         </p>
       ) : null}
 
-      <section className="rounded-xl border border-edge bg-surface-panel shadow-sm dark:border-edge dark:shadow-none">
-        <div className="border-b border-edge-subtle px-4 py-3 dark:border-edge">
-          <div className="flex items-center gap-2 text-sm font-semibold text-fg">
-            <Server className="size-4 text-accent" strokeWidth={1.75} />
-            {m.settingsSections.gateway}
-          </div>
+      <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
+        <div className="mb-5 flex items-center gap-2 text-sm font-semibold text-fg">
+          <Server className="size-4 text-accent" strokeWidth={1.75} />
+          {m.settingsSections.gateway}
         </div>
-        <div className="space-y-4 px-4 py-4">
+        <div className="space-y-4">
           {(form.host || form.port != null) && (
             <div className="grid gap-3 sm:grid-cols-2">
               <div>
                 <div className="mb-1 text-sm font-medium text-fg">{g.listenHost}</div>
-                <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-2 font-mono text-xs text-fg-muted dark:border-edge">
+                <div className="rounded-lg bg-surface-hover/80 px-3 py-2 font-mono text-xs text-fg-muted dark:bg-surface-hover/50">
                   {form.host || '—'}
                 </div>
               </div>
               <div>
                 <div className="mb-1 text-sm font-medium text-fg">{g.listenPort}</div>
-                <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-2 font-mono text-xs text-fg-muted dark:border-edge">
+                <div className="rounded-lg bg-surface-hover/80 px-3 py-2 font-mono text-xs text-fg-muted dark:bg-surface-hover/50">
                   {form.port != null ? String(form.port) : '—'}
                 </div>
               </div>

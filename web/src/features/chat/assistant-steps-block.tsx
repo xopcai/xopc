@@ -112,7 +112,7 @@ export function AssistantStepsBlock({
   }
 
   return (
-    <div className="my-1 w-full min-w-0 overflow-hidden rounded-xl border border-edge-subtle bg-surface-hover/50 dark:border-edge/80 dark:bg-surface-hover/30">
+    <div className="my-1 w-full min-w-0 overflow-hidden rounded-xl bg-surface-hover/50 dark:bg-surface-hover/30">
       <button
         type="button"
         className="grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left hover:bg-surface-hover/80 dark:hover:bg-surface-hover/50"
@@ -131,8 +131,8 @@ export function AssistantStepsBlock({
         />
       </button>
       {expanded ? (
-        <div className="border-t border-edge-subtle px-3 pb-3 pt-2 dark:border-edge/80">
-          <div className="ml-1 space-y-3 border-l-2 border-edge pl-3 dark:border-edge">
+        <div className="border-t border-edge-subtle/90 px-3 pb-3 pt-2 dark:border-edge-subtle">
+          <div className="ml-1 space-y-3 border-l border-edge-subtle pl-3 dark:border-edge-subtle">
             {visibleBlocks.map((b, i) => (
               <StepRow
                 key={b.type === 'tool_use' ? b.id : `thinking-${i}`}
@@ -253,7 +253,7 @@ function StepRow({
             <summary className="cursor-pointer select-none text-fg-subtle underline-offset-2 hover:text-fg-muted group-open:text-fg-muted">
               {stepLabels.stepDetails}
             </summary>
-            <div className="mt-2 max-h-48 w-full min-w-0 max-w-full overflow-auto rounded-md border border-edge-subtle bg-surface-panel p-2 font-mono dark:border-edge">
+            <div className="mt-2 max-h-48 w-full min-w-0 max-w-full overflow-auto rounded-md bg-surface-hover/60 p-2 font-mono dark:bg-surface-hover/35">
               {paramsJson ? (
                 <div className="mb-2">
                   <div className="mb-0.5 text-[10px] uppercase tracking-wide text-fg-disabled">{toolLabels.input}</div>

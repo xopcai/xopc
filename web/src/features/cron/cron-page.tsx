@@ -452,7 +452,7 @@ export function CronPage() {
         <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
           <div className="flex items-start gap-3">
             <div
-              className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-edge bg-surface-base text-fg-muted"
+              className="flex size-10 shrink-0 items-center justify-center rounded-xl bg-surface-base text-fg-muted dark:bg-surface-hover/40"
               aria-hidden
             >
               <Clock className="size-5" strokeWidth={1.75} />
@@ -487,19 +487,19 @@ export function CronPage() {
             role="region"
             aria-label={c.statsRegion}
           >
-            <div className="rounded-xl border border-edge bg-surface-base px-4 py-3 dark:border-edge">
+            <div className="rounded-xl bg-surface-base px-4 py-3 dark:bg-surface-hover/30">
               <div className="text-2xl font-semibold tabular-nums text-fg">{metrics.totalJobs}</div>
               <div className="text-xs font-medium text-fg-muted">{c.totalJobs}</div>
             </div>
-            <div className="rounded-xl border border-edge bg-surface-base px-4 py-3 dark:border-edge">
+            <div className="rounded-xl bg-surface-base px-4 py-3 dark:bg-surface-hover/30">
               <div className="text-2xl font-semibold tabular-nums text-fg">{metrics.enabledJobs}</div>
               <div className="text-xs font-medium text-fg-muted">{c.enabled}</div>
             </div>
-            <div className="rounded-xl border border-edge bg-surface-base px-4 py-3 dark:border-edge">
+            <div className="rounded-xl bg-surface-base px-4 py-3 dark:bg-surface-hover/30">
               <div className="text-2xl font-semibold tabular-nums text-fg">{metrics.runningJobs}</div>
               <div className="text-xs font-medium text-fg-muted">{c.running}</div>
             </div>
-            <div className="col-span-2 rounded-xl border border-edge bg-surface-base px-4 py-3 sm:col-span-1 dark:border-edge">
+            <div className="col-span-2 rounded-xl bg-surface-base px-4 py-3 sm:col-span-1 dark:bg-surface-hover/30">
               <div className="truncate text-sm font-medium text-fg-muted">{nextMetricRun}</div>
               <div className="text-xs font-medium text-fg-muted">{c.nextRun}</div>
             </div>
@@ -523,7 +523,7 @@ export function CronPage() {
               <Loader2 className="size-8 animate-spin text-accent" strokeWidth={1.75} />
             </div>
           ) : jobs.length === 0 ? (
-            <div className="flex flex-col items-center rounded-xl border border-dashed border-edge bg-surface-base px-6 py-14 text-center">
+            <div className="flex flex-col items-center rounded-2xl bg-surface-base px-6 py-14 text-center dark:bg-surface-hover/25">
               <Clock className="mb-3 size-10 text-fg-disabled" strokeWidth={1.25} aria-hidden />
               <h3 className="text-base font-semibold text-fg">{c.emptyStateTitle}</h3>
               <p className="mt-2 max-w-md text-sm text-fg-muted">{c.emptyStateHint}</p>
@@ -539,8 +539,8 @@ export function CronPage() {
                   role="button"
                   tabIndex={0}
                   className={cn(
-                    'flex cursor-pointer flex-col rounded-xl border border-edge bg-surface-panel text-left transition-colors duration-150',
-                    'hover:border-edge-strong hover:bg-surface-hover',
+                    'flex cursor-pointer flex-col rounded-xl bg-surface-base text-left transition-colors duration-150',
+                    'hover:bg-surface-hover',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
                   )}
                   onClick={() => void openDetail(job)}
@@ -551,7 +551,7 @@ export function CronPage() {
                     }
                   }}
                 >
-                  <div className="flex items-start justify-between gap-2 border-b border-edge px-4 py-3">
+                  <div className="flex items-start justify-between gap-2 border-b border-edge-subtle/90 bg-surface-hover/30 px-4 py-3 dark:border-edge-subtle">
                     <h3 className="min-w-0 truncate font-semibold text-fg">{job.name || job.id}</h3>
                     <span
                       className={cn(
@@ -587,7 +587,7 @@ export function CronPage() {
                     </p>
                   </div>
                   <div
-                    className="flex items-center justify-between gap-2 border-t border-edge px-4 py-2"
+                    className="flex items-center justify-between gap-2 border-t border-edge-subtle/90 bg-surface-hover/20 px-4 py-2 dark:border-edge-subtle"
                     onClick={(e) => e.stopPropagation()}
                     onKeyDown={(e) => e.stopPropagation()}
                   >
@@ -647,8 +647,8 @@ export function CronPage() {
           )}
         </section>
 
-        <section className="rounded-xl border border-edge bg-surface-base dark:border-edge">
-          <div className="flex items-start justify-between gap-2 border-b border-edge px-4 py-3">
+        <section className="rounded-2xl bg-surface-base dark:bg-surface-hover/20">
+          <div className="flex items-start justify-between gap-2 border-b border-edge-subtle px-4 py-3 dark:border-edge-subtle">
             <div>
               <h2 className="text-base font-semibold text-fg">{c.runHistoryTitle}</h2>
               <p className="mt-1 text-xs text-fg-muted">{c.runHistoryHint}</p>
@@ -837,7 +837,7 @@ export function CronPage() {
                         }}
                       />
                     </div>
-                    <label className="flex cursor-pointer items-start gap-2 rounded-md border border-edge px-3 py-2">
+                    <label className="flex cursor-pointer items-start gap-2 rounded-md bg-surface-hover/45 px-3 py-2 dark:bg-surface-hover/30">
                       <input
                         type="checkbox"
                         className="mt-0.5 size-4 rounded border-edge"

@@ -29,7 +29,7 @@ export function ThinkingBlock({
   const showHint = !showBody && !isStreaming && Boolean(bodyText);
 
   return (
-    <div className="my-1 w-full min-w-0 overflow-hidden rounded-xl border border-edge-subtle bg-surface-hover/90 dark:border-edge/80">
+    <div className="my-1 w-full min-w-0 overflow-hidden rounded-xl bg-surface-hover/90 dark:bg-surface-hover/40">
       <button
         type="button"
         disabled={isStreaming}
@@ -67,7 +67,7 @@ export function ThinkingBlock({
       </button>
       {showBody ? (
         <>
-          <div className="border-t border-edge dark:border-edge" role="presentation" />
+          <div className="border-t border-edge-subtle/90 dark:border-edge-subtle" role="presentation" />
           <div
             className={cn(
               'max-h-64 w-full min-w-0 max-w-full overflow-x-auto overflow-y-auto whitespace-pre-wrap break-words px-3 py-2 text-xs text-fg-muted [overflow-wrap:anywhere]',
