@@ -1,6 +1,6 @@
 /**
  * Maps a session key to a relative directory under the agent sessions root.
- * Routing keys → users/... (per peer / conversation); cron & heartbeat → system/...
+ * Routing keys → flat `users/` (one dir, files named by sanitized session key); cron & heartbeat → system/...
  */
 
 import { join } from 'path';
@@ -42,21 +42,5 @@ export function resolveSessionShardRelativePath(sessionKey: string): string {
     return join('system', 'misc');
   }
 
-  const segments = [
-    'users',
-    sanitizeSessionPathSegment(parsed.agentId),
-    sanitizeSessionPathSegment(parsed.source),
-    sanitizeSessionPathSegment(parsed.accountId),
-    sanitizeSessionPathSegment(parsed.peerKind),
-    sanitizeSessionPathSegment(parsed.peerId),
-  ];
-
-  if (parsed.threadId) {
-    segments.push('thread', sanitizeSessionPathSegment(parsed.threadId));
-  }
-  if (parsed.scopeId) {
-    segments.push('scope', sanitizeSessionPathSegment(parsed.scopeId));
-  }
-
-  return join(...segments);
+  return 'users';
 }
