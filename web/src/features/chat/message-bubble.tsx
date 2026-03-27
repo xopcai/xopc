@@ -26,7 +26,7 @@ function renderTextOrImageBlock(
   if (block.type === 'text') {
     return (
       <div key={key} className="markdown-content min-w-0">
-        <MarkdownView content={block.text} />
+        <MarkdownView content={block.text} compact />
       </div>
     );
   }
