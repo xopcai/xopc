@@ -236,7 +236,7 @@ export const ChatComposer = memo(function ChatComposer({
 
   const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
 
-  // Outer column (px + max-w-app-main) lives in chat-page — matches the message list column.
+  // Outer column (px + max-w-[var(--max-width-chat)]) lives in chat-page — matches the message list column.
   return (
     <div
       className={cn(

@@ -3,6 +3,7 @@ import { memo, type RefObject } from 'react';
 
 import { MessageBubble } from '@/features/chat/message-bubble';
 import type { Message, ProgressState } from '@/features/chat/messages.types';
+import { messageRowKey } from '@/features/chat/thinking-blocks';
 import { messages } from '@/i18n/messages';
 import { useChatDisplayStore } from '@/stores/chat-display-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -11,16 +12,14 @@ import { useLocaleStore } from '@/stores/locale-store';
 const MESSAGE_GAP_PX = 40;
 const MESSAGE_LIST_PADDING_END_PX = 32;
 
-function messageRowKey(msg: Message, index: number): string {
-  return `${msg.timestamp ?? 'n'}-${index}`;
-}
-
 export const MessageList = memo(function MessageList({
   messages: list,
   authToken,
   streaming,
   progress,
   scrollElementRef,
+  activeThinking,
+  onToggleThinking,
 }: {
   messages: Message[];
   authToken?: string;
@@ -28,6 +27,10 @@ export const MessageList = memo(function MessageList({
   progress: ProgressState | null;
   /** Scrollable viewport (ChatPage `chat-messages`); required whenever the list is shown. */
   scrollElementRef: RefObject<HTMLDivElement | null>;
+  /** Which step group has the thinking drawer open (same keys as `toggle`). */
+  activeThinking: { key: string; groupStart: number } | null;
+  /** Concise mode: open/close right-side thinking drawer; same key+groupStart closes. */
+  onToggleThinking?: (messageKey: string, groupStart: number) => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const conciseMode = useChatDisplayStore((s) => s.conciseMessageView);
@@ -82,11 +85,14 @@ export const MessageList = memo(function MessageList({
             }}
           >
             <MessageBubble
+              messageKey={messageRowKey(msg, virtualRow.index)}
               message={msg}
               authToken={authToken}
               isStreaming={isStreamRow}
               progress={isStreamRow ? progress : null}
               conciseMode={conciseMode}
+              activeThinking={activeThinking}
+              onToggleThinking={onToggleThinking}
             />
           </div>
         );
