@@ -779,7 +779,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     if (!result.saved) {
       return c.json({ ok: false, error: result.error }, 500);
     }
-    
+
+    if (body.gateway?.heartbeat !== undefined && typeof body.gateway.heartbeat === 'object') {
+      service.reloadHeartbeatFromCurrentConfig();
+    }
+
     return c.json({ ok: true, payload: { config } });
   });
 

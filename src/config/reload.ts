@@ -206,7 +206,7 @@ export class ConfigHotReloader {
       return;
     }
 
-    if (path.startsWith('heartbeat.')) {
+    if (path === 'gateway.heartbeat' || path.startsWith('gateway.heartbeat.')) {
       if (this.callbacks.onHeartbeatReload) {
         await Promise.resolve(this.callbacks.onHeartbeatReload(newConfig));
       }
