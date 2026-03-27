@@ -344,6 +344,11 @@ export function useChatSession() {
         onTtsAudio: (p) => {
           setStreamingMsg((prev) => {
             const msg = ensureAssistantMessage(prev, Date.now());
+            const rel = p.workspaceRelativePath?.replace(/\\/g, '/').trim();
+            const existing = msg.attachments ?? [];
+            if (rel && existing.some((a) => a.workspaceRelativePath?.replace(/\\/g, '/').trim() === rel)) {
+              return cloneMessageForRender(msg);
+            }
             const nextAtt = {
               name: p.name,
               mimeType: p.mimeType,
@@ -351,7 +356,7 @@ export function useChatSession() {
               workspaceRelativePath: p.workspaceRelativePath,
               size: 0,
             };
-            msg.attachments = [...(msg.attachments ?? []), nextAtt];
+            msg.attachments = [...existing, nextAtt];
             return cloneMessageForRender(msg);
           });
         },
@@ -448,6 +453,11 @@ export function useChatSession() {
           onTtsAudio: (p) => {
             setStreamingMsg((prev) => {
               const msg = ensureAssistantMessage(prev, Date.now());
+              const rel = p.workspaceRelativePath?.replace(/\\/g, '/').trim();
+              const existing = msg.attachments ?? [];
+              if (rel && existing.some((a) => a.workspaceRelativePath?.replace(/\\/g, '/').trim() === rel)) {
+                return cloneMessageForRender(msg);
+              }
               const nextAtt = {
                 name: p.name,
                 mimeType: p.mimeType,
@@ -455,7 +465,7 @@ export function useChatSession() {
                 workspaceRelativePath: p.workspaceRelativePath,
                 size: 0,
               };
-              msg.attachments = [...(msg.attachments ?? []), nextAtt];
+              msg.attachments = [...existing, nextAtt];
               return cloneMessageForRender(msg);
             });
           },
