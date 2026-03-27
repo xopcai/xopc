@@ -1,0 +1,31 @@
+appId: com.xopcai.xopcbot
+productName: xopcbot
+directories:
+  output: dist/release
+
+files:
+  - out/**/*
+  - package.json
+  - dist/**/*
+
+extraMetadata:
+  main: out/main/index.js
+
+extraResources:
+  - from: node_modules/@vscode/ripgrep/bin
+    to: bin
+    filter:
+      - rg
+      - rg.exe
+
+mac:
+  category: public.app-category.productivity
+
+win:
+  target:
+    - nsis
+
+linux:
+  target:
+    - AppImage
+    - deb

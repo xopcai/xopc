@@ -4,6 +4,7 @@ package-lock.json
 yarn.lock
 # Build output
 dist/
+out/
 build/
 
 # Accidental tsc emit next to source (real output is under dist/)
