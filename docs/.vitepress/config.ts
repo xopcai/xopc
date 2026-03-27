@@ -7,8 +7,8 @@ export default defineConfig({
   cleanUrls: true,
   ignoreDeadLinks: true,
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/xopcbot/logo.svg' }],
-    ['link', { rel: 'apple-touch-icon', href: '/xopcbot/logo.svg' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
+    ['link', { rel: 'apple-touch-icon', href: '/logo.svg' }],
   ],
   locales: {
     root: {
@@ -16,7 +16,7 @@ export default defineConfig({
       lang: 'en',
       themeConfig: {
         siteTitle: 'xopcbot',
-        logo: '/xopcbot/logo.svg',
+        logo: '/logo.svg',
         nav: [
           { text: 'Home', link: '/' },
           { text: 'Guide', link: '/getting-started' },
@@ -78,7 +78,7 @@ export default defineConfig({
       link: '/zh/',
       themeConfig: {
         siteTitle: 'xopcbot',
-        logo: '/xopcbot/logo.svg',
+        logo: '/logo.svg',
         nav: [
           { text: '首页', link: '/zh/' },
           { text: '指南', link: '/zh/getting-started' },
