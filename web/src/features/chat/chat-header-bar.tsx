@@ -33,7 +33,7 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatH
   return (
     <div
       className={cn(
-        'flex gap-3 px-4 sm:gap-4 sm:px-8',
+        'flex gap-3 px-3 sm:gap-4 sm:px-5 xl:px-6',
         APP_TOP_HEADER_BAR_CLASS,
         sidebarCollapsed && 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-4',
       )}

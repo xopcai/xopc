@@ -8,6 +8,7 @@ import type {
 } from '@/features/chat/messages.types';
 import { AssistantStepsBlock } from '@/features/chat/assistant-steps-block';
 import { AttachmentRenderer } from '@/features/chat/attachment-renderer';
+import { ThinkingEntryRow } from '@/features/chat/thinking-entry-row';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { UsageBadge } from '@/features/chat/usage-badge';
 import { cn } from '@/lib/cn';
@@ -51,6 +52,9 @@ function renderChunkedContent(
     stepDetails: string;
   },
   conciseMode: boolean,
+  messageKey: string,
+  activeThinking: { key: string; groupStart: number } | null,
+  onToggleThinking?: (messageKey: string, groupStart: number) => void,
 ) {
   const nodes: ReactNode[] = [];
   let i = 0;
@@ -61,8 +65,25 @@ function renderChunkedContent(
       while (i < content.length && (content[i].type === 'thinking' || content[i].type === 'tool_use')) {
         i++;
       }
-      if (!conciseMode) {
-        const slice = content.slice(start, i) as Array<ThinkingContent | ToolUseContent>;
+      const slice = content.slice(start, i) as Array<ThinkingContent | ToolUseContent>;
+      if (conciseMode && slice.length > 0 && onToggleThinking) {
+        const anyStreaming = slice.some(
+          (bl) =>
+            (bl.type === 'thinking' && bl.streaming) || (bl.type === 'tool_use' && bl.status === 'running'),
+        );
+        const isDrawerForThis =
+          activeThinking !== null &&
+          activeThinking.key === messageKey &&
+          activeThinking.groupStart === start;
+        nodes.push(
+          <ThinkingEntryRow
+            key={`entry-${start}`}
+            isStreaming={anyStreaming}
+            isActive={isDrawerForThis}
+            onClick={() => onToggleThinking(messageKey, start)}
+          />,
+        );
+      } else if (!conciseMode) {
         nodes.push(
           <AssistantStepsBlock
             key={`steps-${start}`}
@@ -82,17 +103,23 @@ function renderChunkedContent(
 }
 
 export const MessageBubble = memo(function MessageBubble({
+  messageKey,
   message,
   authToken,
   isStreaming,
   progress,
   conciseMode,
+  activeThinking,
+  onToggleThinking,
 }: {
+  messageKey: string;
   message: Message;
   authToken?: string;
   isStreaming: boolean;
   progress: ProgressState | null;
   conciseMode: boolean;
+  activeThinking: { key: string; groupStart: number } | null;
+  onToggleThinking?: (messageKey: string, groupStart: number) => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -132,21 +159,26 @@ export const MessageBubble = memo(function MessageBubble({
     (message.thinkingStreaming ||
       message.content?.some((b) => b.type === 'thinking' && b.streaming));
 
+  const hasStepContent = Boolean(
+    message.content?.some((b) => b.type === 'thinking' || b.type === 'tool_use') ||
+      message.thinking ||
+      message.thinkingStreaming,
+  );
+
   const legacyThinking =
-    !conciseMode &&
     !message.content.some((b) => b.type === 'thinking') &&
     (message.thinking || message.thinkingStreaming);
 
   const showMeta =
     Boolean(message.timestamp) ||
     Boolean(progress?.message) ||
-    (isStreaming && !streamingThinking);
+    (isStreaming && !streamingThinking && !(conciseMode && hasStepContent));
 
   return (
     <article className={cn('flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
       <div
         className={cn(
-          'min-w-0 max-w-[min(85%,42rem)]',
+          'min-w-0 max-w-[min(85%,var(--max-width-chat))]',
           isUser ? 'w-max' : 'w-full',
         )}
       >
@@ -169,7 +201,7 @@ export const MessageBubble = memo(function MessageBubble({
                 {progress.message}
               </span>
             ) : null}
-            {isStreaming && !streamingThinking ? (
+            {isStreaming && !streamingThinking && !(conciseMode && hasStepContent) ? (
               <span className="text-fg-subtle">{m.chat.thinkingLabel}</span>
             ) : null}
           </div>
@@ -181,7 +213,7 @@ export const MessageBubble = memo(function MessageBubble({
             isUser &&
               'rounded-xl bg-accent-soft/55 px-4 py-3 text-right dark:bg-accent-soft/35',
             isUser && message.attachments?.length
-              ? 'min-w-[min(16rem,90vw)] max-w-[min(85%,42rem)]'
+              ? 'min-w-[min(16rem,90vw)] max-w-[min(85%,var(--max-width-chat))]'
               : '',
           )}
         >
@@ -193,7 +225,15 @@ export const MessageBubble = memo(function MessageBubble({
           >
             {message.content?.length ? (
               <>
-                {renderChunkedContent(message.content, toolLabels, stepLabels, conciseMode)}
+                {renderChunkedContent(
+                  message.content,
+                  toolLabels,
+                  stepLabels,
+                  conciseMode,
+                  messageKey,
+                  activeThinking,
+                  onToggleThinking,
+                )}
                 {isStreaming ? (
                   <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
                 ) : null}
@@ -203,17 +243,29 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
 
             {legacyThinking ? (
-              <AssistantStepsBlock
-                blocks={[
-                  {
-                    type: 'thinking',
-                    text: message.thinking || '',
-                    streaming: Boolean(message.thinkingStreaming),
-                  },
-                ]}
-                toolLabels={toolLabels}
-                stepLabels={stepLabels}
-              />
+              conciseMode && onToggleThinking ? (
+                <ThinkingEntryRow
+                  isStreaming={Boolean(message.thinkingStreaming)}
+                  isActive={
+                    activeThinking !== null &&
+                    activeThinking.key === messageKey &&
+                    activeThinking.groupStart === -1
+                  }
+                  onClick={() => onToggleThinking(messageKey, -1)}
+                />
+              ) : !conciseMode ? (
+                <AssistantStepsBlock
+                  blocks={[
+                    {
+                      type: 'thinking',
+                      text: message.thinking || '',
+                      streaming: Boolean(message.thinkingStreaming),
+                    },
+                  ]}
+                  toolLabels={toolLabels}
+                  stepLabels={stepLabels}
+                />
+              ) : null
             ) : null}
 
             {message.attachments?.length ? (

@@ -157,6 +157,23 @@ const bundles: Record<
       /** Toggle: show only assistant text/images (hide thinking/tools). */
       conciseModeEnableHint: string;
       conciseModeDisableHint: string;
+      /** Right-side thinking drawer (concise mode). */
+      thinkingDrawerTitle: string;
+      thinkingDrawerClose: string;
+      thinkingEntryDone: string;
+      thinkingEntryStreaming: string;
+      thinkingEntryOpenHint: string;
+      thinkingEntryCollapseHint: string;
+      stepTimelineThinkingStreaming: string;
+      stepTimelineThinkingDone: string;
+      stepTimelineToolSearchRunning: string;
+      stepTimelineToolSearchComplete: string;
+      stepTimelineToolSearchError: string;
+      stepTimelineToolGenericRunning: string;
+      stepTimelineToolGenericComplete: string;
+      stepTimelineToolGenericError: string;
+      /** "Search sources · {{count}}" */
+      searchSourcesHeading: string;
     };
     sessions: {
       title: string;
@@ -910,6 +927,21 @@ const bundles: Record<
       attachmentPreviewFailedExcel: 'Failed to load spreadsheet',
       conciseModeEnableHint: 'Concise: hide thinking and tool details',
       conciseModeDisableHint: 'Full: show thinking and tool steps',
+      thinkingDrawerTitle: 'Thinking',
+      thinkingDrawerClose: 'Close thinking panel',
+      thinkingEntryDone: 'Thinking finished',
+      thinkingEntryStreaming: 'Thinking…',
+      thinkingEntryOpenHint: 'Show thinking steps',
+      thinkingEntryCollapseHint: 'Hide thinking steps',
+      stepTimelineThinkingStreaming: 'Thinking…',
+      stepTimelineThinkingDone: 'Thinking complete',
+      stepTimelineToolSearchRunning: 'Searching the web…',
+      stepTimelineToolSearchComplete: 'Web search complete',
+      stepTimelineToolSearchError: 'Web search failed',
+      stepTimelineToolGenericRunning: '{{name}}…',
+      stepTimelineToolGenericComplete: '{{name}} complete',
+      stepTimelineToolGenericError: '{{name}} failed',
+      searchSourcesHeading: 'Search sources · {{count}}',
     },
     sessions: {
       title: 'Sessions',
@@ -1698,6 +1730,21 @@ const bundles: Record<
       attachmentPreviewFailedExcel: '无法加载表格',
       conciseModeEnableHint: '简洁：隐藏思考与工具步骤',
       conciseModeDisableHint: '完整：显示思考与工具步骤',
+      thinkingDrawerTitle: '思考过程',
+      thinkingDrawerClose: '关闭思考过程面板',
+      thinkingEntryDone: '已完成思考',
+      thinkingEntryStreaming: '正在思考…',
+      thinkingEntryOpenHint: '查看思考过程',
+      thinkingEntryCollapseHint: '收起思考过程',
+      stepTimelineThinkingStreaming: '正在思考…',
+      stepTimelineThinkingDone: '思考完成',
+      stepTimelineToolSearchRunning: '搜索网络中…',
+      stepTimelineToolSearchComplete: '搜索网络完成',
+      stepTimelineToolSearchError: '搜索失败',
+      stepTimelineToolGenericRunning: '{{name}}中…',
+      stepTimelineToolGenericComplete: '{{name}}完成',
+      stepTimelineToolGenericError: '{{name}}失败',
+      searchSourcesHeading: '搜索来源 · {{count}}',
     },
     sessions: {
       title: '会话',
