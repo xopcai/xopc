@@ -1008,7 +1008,11 @@ export class AgentService {
     for (let i = loaded.length - 1; i >= 0; i--) {
       const m = loaded[i] as { role?: string; attachments?: unknown[] };
       if (m.role === 'assistant') {
-        const next = [...(m.attachments ?? []), att];
+        const prev = (m.attachments ?? []) as Array<{ workspaceRelativePath?: string }>;
+        if (prev.some((x) => x.workspaceRelativePath === att.workspaceRelativePath)) {
+          return;
+        }
+        const next = [...prev, att];
         loaded[i] = { ...m, attachments: next } as unknown as AgentMessage;
         await this.sessionStore.save(sessionKey, loaded);
         return;

@@ -293,18 +293,32 @@ function applyStripToUserContent(
   });
 }
 
+/** Deduplicate attachments that refer to the same workspace file (wire + parsed content often disagree on `name`). */
+function attachmentStableKey(a: MessageAttachment): string {
+  const rel = a.workspaceRelativePath?.replace(/\\/g, '/').trim();
+  if (rel) return `rel:${rel}`;
+  if (a.id) return `id:${a.id}`;
+  return `name:${a.name ?? 'file'}|${a.mimeType ?? ''}`;
+}
+
+function dedupeAttachments(list: Message['attachments'] | undefined): Message['attachments'] | undefined {
+  if (!list?.length) return undefined;
+  const out: NonNullable<Message['attachments']> = [];
+  const seen = new Set<string>();
+  for (const a of list) {
+    const k = attachmentStableKey(a);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    out.push(a);
+  }
+  return out.length ? out : undefined;
+}
+
 function mergeUserAttachments(
   wire: Message['attachments'] | undefined,
   fromContent: Message['attachments'] | undefined,
 ): Message['attachments'] | undefined {
-  if (wire?.length && fromContent?.length) {
-    const keys = new Set(
-      wire.map((a) => `${a.name}|${a.workspaceRelativePath ?? ''}`),
-    );
-    const extra = fromContent.filter((a) => !keys.has(`${a.name}|${a.workspaceRelativePath ?? ''}`));
-    return [...wire, ...extra];
-  }
-  return wire?.length ? wire : fromContent;
+  return dedupeAttachments([...(wire ?? []), ...(fromContent ?? [])]);
 }
 
 function buildUserMessage(m: WireMessage): Message {
@@ -333,7 +347,7 @@ function buildAssistantMessage(m: WireMessage): Message {
   return {
     role: 'assistant',
     content,
-    attachments: normalizeWireAttachments(m.attachments),
+    attachments: dedupeAttachments(normalizeWireAttachments(m.attachments)),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
     thinking: hasThinkingBlock ? undefined : typeof m.thinking === 'string' ? m.thinking : undefined,
     thinkingStreaming: hasThinkingBlock
