@@ -50,6 +50,7 @@ function renderChunkedContent(
     readFile: string;
     stepDetails: string;
   },
+  conciseMode: boolean,
 ) {
   const nodes: ReactNode[] = [];
   let i = 0;
@@ -60,15 +61,17 @@ function renderChunkedContent(
       while (i < content.length && (content[i].type === 'thinking' || content[i].type === 'tool_use')) {
         i++;
       }
-      const slice = content.slice(start, i) as Array<ThinkingContent | ToolUseContent>;
-      nodes.push(
-        <AssistantStepsBlock
-          key={`steps-${start}`}
-          blocks={slice}
-          toolLabels={toolLabels}
-          stepLabels={stepLabels}
-        />,
-      );
+      if (!conciseMode) {
+        const slice = content.slice(start, i) as Array<ThinkingContent | ToolUseContent>;
+        nodes.push(
+          <AssistantStepsBlock
+            key={`steps-${start}`}
+            blocks={slice}
+            toolLabels={toolLabels}
+            stepLabels={stepLabels}
+          />,
+        );
+      }
     } else {
       const el = renderTextOrImageBlock(b, `block-${i}`);
       if (el) nodes.push(el);
@@ -83,11 +86,13 @@ export const MessageBubble = memo(function MessageBubble({
   authToken,
   isStreaming,
   progress,
+  conciseMode,
 }: {
   message: Message;
   authToken?: string;
   isStreaming: boolean;
   progress: ProgressState | null;
+  conciseMode: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -123,11 +128,14 @@ export const MessageBubble = memo(function MessageBubble({
   );
 
   const streamingThinking =
-    message.thinkingStreaming ||
-    message.content?.some((b) => b.type === 'thinking' && b.streaming);
+    !conciseMode &&
+    (message.thinkingStreaming ||
+      message.content?.some((b) => b.type === 'thinking' && b.streaming));
 
   const legacyThinking =
-    !message.content.some((b) => b.type === 'thinking') && (message.thinking || message.thinkingStreaming);
+    !conciseMode &&
+    !message.content.some((b) => b.type === 'thinking') &&
+    (message.thinking || message.thinkingStreaming);
 
   const showMeta =
     Boolean(message.timestamp) ||
@@ -185,7 +193,7 @@ export const MessageBubble = memo(function MessageBubble({
           >
             {message.content?.length ? (
               <>
-                {renderChunkedContent(message.content, toolLabels, stepLabels)}
+                {renderChunkedContent(message.content, toolLabels, stepLabels, conciseMode)}
                 {isStreaming ? (
                   <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
                 ) : null}

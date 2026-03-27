@@ -153,6 +153,9 @@ const bundles: Record<
       attachmentPreviewFailedPdf: string;
       attachmentPreviewFailedDocx: string;
       attachmentPreviewFailedExcel: string;
+      /** Toggle: show only assistant text/images (hide thinking/tools). */
+      conciseModeEnableHint: string;
+      conciseModeDisableHint: string;
     };
     sessions: {
       title: string;
@@ -903,6 +906,8 @@ const bundles: Record<
       attachmentPreviewFailedPdf: 'Failed to load PDF',
       attachmentPreviewFailedDocx: 'Failed to load document',
       attachmentPreviewFailedExcel: 'Failed to load spreadsheet',
+      conciseModeEnableHint: 'Concise: hide thinking and tool details',
+      conciseModeDisableHint: 'Full: show thinking and tool steps',
     },
     sessions: {
       title: 'Sessions',
@@ -1688,6 +1693,8 @@ const bundles: Record<
       attachmentPreviewFailedPdf: '无法加载 PDF',
       attachmentPreviewFailedDocx: '无法加载文档',
       attachmentPreviewFailedExcel: '无法加载表格',
+      conciseModeEnableHint: '简洁：隐藏思考与工具步骤',
+      conciseModeDisableHint: '完整：显示思考与工具步骤',
     },
     sessions: {
       title: '会话',
