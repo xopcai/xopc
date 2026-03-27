@@ -172,9 +172,17 @@ export const MessageBubble = memo(function MessageBubble({
             'min-w-0 text-sm leading-relaxed text-fg',
             isUser &&
               'rounded-xl bg-accent-soft/55 px-4 py-3 text-right dark:bg-accent-soft/35',
+            isUser && message.attachments?.length
+              ? 'min-w-[min(16rem,90vw)] max-w-[min(85%,42rem)]'
+              : '',
           )}
         >
-          <div className="flex min-w-0 flex-col gap-2">
+          <div
+            className={cn(
+              'flex min-w-0 flex-col gap-2',
+              isUser && message.attachments?.length ? 'items-end' : '',
+            )}
+          >
             {message.content?.length ? (
               <>
                 {renderChunkedContent(message.content, toolLabels, stepLabels)}
@@ -201,7 +209,11 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
 
             {message.attachments?.length ? (
-              <AttachmentRenderer attachments={message.attachments} authToken={authToken} />
+              <AttachmentRenderer
+                attachments={message.attachments}
+                authToken={authToken}
+                layout={isUser ? 'user' : 'assistant'}
+              />
             ) : null}
           </div>
         </div>

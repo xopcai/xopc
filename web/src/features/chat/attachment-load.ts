@@ -137,6 +137,17 @@ export async function loadAttachment(
     };
   }
 
+  if (mimeType?.startsWith('audio/')) {
+    return {
+      id,
+      type: 'voice',
+      name: detectedFileName,
+      mimeType,
+      size,
+      content: base64Content,
+    };
+  }
+
   const isTextFile = isTextLikeFileNameAndMime(detectedFileName, mimeType ?? '');
 
   if (isTextFile) {

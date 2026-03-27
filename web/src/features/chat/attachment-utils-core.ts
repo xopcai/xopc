@@ -1,9 +1,18 @@
 /** Max files per chat message (keep in sync with `src/gateway/chat-limits.ts`). */
 export const MAX_CHAT_ATTACHMENTS = 10;
 
+/** Path under workspace for gateway `GET` (inbound vs TTS). */
+export function workspaceRelativePathToApiPath(rel: string): string {
+  const q = encodeURIComponent(rel.replace(/\\/g, '/'));
+  if (rel.replace(/\\/g, '/').startsWith('.xopcbot/tts/')) {
+    return `/api/workspace/tts-file?rel=${q}`;
+  }
+  return `/api/workspace/inbound-file?rel=${q}`;
+}
+
 export interface Attachment {
   id?: string;
-  type: 'image' | 'document';
+  type: 'image' | 'document' | 'voice';
   name: string;
   mimeType: string;
   size: number;

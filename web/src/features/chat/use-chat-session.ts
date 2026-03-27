@@ -341,6 +341,20 @@ export function useChatSession() {
           });
         },
         onProgress: (p) => setProgress(p),
+        onTtsAudio: (p) => {
+          setStreamingMsg((prev) => {
+            const msg = ensureAssistantMessage(prev, Date.now());
+            const nextAtt = {
+              name: p.name,
+              mimeType: p.mimeType,
+              type: 'voice' as const,
+              workspaceRelativePath: p.workspaceRelativePath,
+              size: 0,
+            };
+            msg.attachments = [...(msg.attachments ?? []), nextAtt];
+            return cloneMessageForRender(msg);
+          });
+        },
         onResult: finalizeMessage,
         onError: (msg) => {
           setError(msg);
@@ -431,6 +445,20 @@ export function useChatSession() {
             });
           },
           onProgress: (p) => setProgress(p),
+          onTtsAudio: (p) => {
+            setStreamingMsg((prev) => {
+              const msg = ensureAssistantMessage(prev, Date.now());
+              const nextAtt = {
+                name: p.name,
+                mimeType: p.mimeType,
+                type: 'voice' as const,
+                workspaceRelativePath: p.workspaceRelativePath,
+                size: 0,
+              };
+              msg.attachments = [...(msg.attachments ?? []), nextAtt];
+              return cloneMessageForRender(msg);
+            });
+          },
           onResult: finalizeMessage,
           onError: (msg) => {
             setError(msg);
