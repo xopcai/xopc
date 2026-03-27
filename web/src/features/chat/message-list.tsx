@@ -4,6 +4,7 @@ import { memo, type RefObject } from 'react';
 import { MessageBubble } from '@/features/chat/message-bubble';
 import type { Message, ProgressState } from '@/features/chat/messages.types';
 import { messages } from '@/i18n/messages';
+import { useChatDisplayStore } from '@/stores/chat-display-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 /** Tailwind `gap-10` (2.5rem) between bubbles; `pb-8` (2rem) bottom padding — match pre-virtual layout. */
@@ -29,6 +30,7 @@ export const MessageList = memo(function MessageList({
   scrollElementRef: RefObject<HTMLDivElement | null>;
 }) {
   const language = useLocaleStore((s) => s.language);
+  const conciseMode = useChatDisplayStore((s) => s.conciseMessageView);
   const m = messages(language);
 
   const showWelcome = list.length === 0 && !streaming;
@@ -84,6 +86,7 @@ export const MessageList = memo(function MessageList({
               authToken={authToken}
               isStreaming={isStreamRow}
               progress={isStreamRow ? progress : null}
+              conciseMode={conciseMode}
             />
           </div>
         );

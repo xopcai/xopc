@@ -1,4 +1,4 @@
-import { Menu, Plus } from 'lucide-react';
+import { ListCollapse, ListTree, Menu, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useAppShellStore } from '@/stores/app-shell-store';
+import { useChatDisplayStore } from '@/stores/chat-display-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
@@ -26,6 +27,8 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatH
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useAppShellStore((s) => s.setMobileNavOpen);
+  const conciseMessageView = useChatDisplayStore((s) => s.conciseMessageView);
+  const setConciseMessageView = useChatDisplayStore((s) => s.setConciseMessageView);
 
   return (
     <div
@@ -72,9 +75,26 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatH
       >
         {chatHeadline}
       </h1>
-      <div className="hidden shrink-0 items-center gap-2 sm:gap-2.5 lg:flex lg:justify-self-end">
-        <LanguageToggle />
-        <ThemeToggle />
+      <div className="flex shrink-0 items-center gap-2 sm:gap-2.5 lg:justify-self-end">
+        <Button
+          type="button"
+          variant="ghost"
+          className="size-8 shrink-0 rounded-xl p-0"
+          aria-pressed={conciseMessageView}
+          aria-label={conciseMessageView ? m.chat.conciseModeDisableHint : m.chat.conciseModeEnableHint}
+          title={conciseMessageView ? m.chat.conciseModeDisableHint : m.chat.conciseModeEnableHint}
+          onClick={() => setConciseMessageView(!conciseMessageView)}
+        >
+          {conciseMessageView ? (
+            <ListCollapse className="size-4 text-accent-fg" strokeWidth={1.5} aria-hidden />
+          ) : (
+            <ListTree className="size-4" strokeWidth={1.5} aria-hidden />
+          )}
+        </Button>
+        <div className="hidden items-center gap-2 sm:gap-2.5 lg:flex">
+          <LanguageToggle />
+          <ThemeToggle />
+        </div>
       </div>
     </div>
   );
