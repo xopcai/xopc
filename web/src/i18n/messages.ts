@@ -5,6 +5,7 @@ export type Tab =
   | 'sessions'
   | 'cron'
   | 'skills'
+  | 'editor'
   | 'logs'
   | 'settingsAppearance'
   | 'settingsAgent'
@@ -763,6 +764,7 @@ const bundles: Record<
       sessions: 'Sessions',
       cron: 'Cron Jobs',
       skills: 'Skills',
+      editor: 'Editor',
       logs: 'Logs',
       settingsAppearance: 'Appearance',
       settingsAgent: 'Agent',
@@ -1550,6 +1552,7 @@ const bundles: Record<
       sessions: '会话',
       cron: '定时任务',
       skills: '技能',
+      editor: '编辑器',
       logs: '日志',
       settingsAppearance: '外观',
       settingsAgent: '代理',

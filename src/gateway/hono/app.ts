@@ -3,9 +3,9 @@ import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { bodyLimit } from 'hono/body-limit';
 import { readFileSync } from 'node:fs';
-import { readFile, writeFile } from 'node:fs/promises';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { dirname, extname, join, resolve } from 'node:path';
 import { logger } from './middleware/logger.js';
 import { auth } from './middleware/auth.js';
 import { createAgentSSEHandler, createAgentResumeHandler, createSendHandler, createEventsSSEHandler } from './sse.js';
@@ -13,6 +13,12 @@ import type { GatewayService } from '../service.js';
 import type { Config } from '../../config/schema.js';
 import { getWorkspacePath } from '../../config/schema.js';
 import { resolveHeartbeatMdPath } from '../workspace-heartbeat-path.js';
+import {
+  isPathUnderWorkspace,
+  resolveWorkspaceSafePath,
+  toWorkspaceRelativePosix,
+} from '../workspace-editor-path.js';
+import { runRipgrepInDirectory } from '../workspace-ripgrep.js';
 import { resolveSafeInboundFilePath } from '../../channels/attachments/inbound-persist.js';
 import { resolveSafeTtsFilePath } from '../../channels/attachments/outbound-tts-persist.js';
 import { getVoiceModelsConfig } from '../../config/voice.js';
@@ -388,6 +394,170 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       log.error({ err, path: abs }, 'Failed to write HEARTBEAT.md');
       return c.json({ ok: false, error: { message: 'Write failed' } }, 500);
     }
+  });
+
+  const EDITOR_FILE_EXTENSIONS = new Set(['.md', '.txt', '.json', '.ts', '.js']);
+
+  /** List directory under workspace (dir = relative path, default ""). */
+  authenticated.get('/api/workspace/editor/list', async (c) => {
+    const workspaceRoot = getWorkspacePath(service.currentConfig);
+    if (!workspaceRoot) {
+      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    }
+    const dirRel = typeof c.req.query('dir') === 'string' ? c.req.query('dir')! : '';
+    const absDir = resolveWorkspaceSafePath(workspaceRoot, dirRel);
+    if (!absDir) {
+      return c.json({ ok: false, error: { message: 'Invalid path' } }, 400);
+    }
+    let st: Awaited<ReturnType<typeof stat>>;
+    try {
+      st = await stat(absDir);
+    } catch {
+      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    }
+    if (!st.isDirectory()) {
+      return c.json({ ok: false, error: { message: 'Not a directory' } }, 400);
+    }
+    const dirents = await readdir(absDir, { withFileTypes: true });
+    const entries: { name: string; path: string; isDirectory: boolean }[] = [];
+    for (const entry of dirents) {
+      if (entry.name.startsWith('.')) continue;
+      const fullPath = join(absDir, entry.name);
+      if (entry.isDirectory()) {
+        entries.push({
+          name: entry.name,
+          path: toWorkspaceRelativePosix(workspaceRoot, fullPath),
+          isDirectory: true,
+        });
+      } else if (EDITOR_FILE_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+        entries.push({
+          name: entry.name,
+          path: toWorkspaceRelativePosix(workspaceRoot, fullPath),
+          isDirectory: false,
+        });
+      }
+    }
+    entries.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    return c.json({ ok: true, payload: { entries } });
+  });
+
+  authenticated.get('/api/workspace/editor/read', async (c) => {
+    const pathRel = typeof c.req.query('path') === 'string' ? c.req.query('path')! : '';
+    if (!pathRel.trim()) {
+      return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
+    }
+    const workspaceRoot = getWorkspacePath(service.currentConfig);
+    if (!workspaceRoot) {
+      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    }
+    const abs = resolveWorkspaceSafePath(workspaceRoot, pathRel);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Invalid path' } }, 400);
+    }
+    let st: Awaited<ReturnType<typeof stat>>;
+    try {
+      st = await stat(abs);
+    } catch {
+      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    }
+    if (!st.isFile()) {
+      return c.json({ ok: false, error: { message: 'Not a file' } }, 400);
+    }
+    try {
+      const content = await readFile(abs, 'utf-8');
+      return c.json({
+        ok: true,
+        payload: { content, path: toWorkspaceRelativePosix(workspaceRoot, abs) },
+      });
+    } catch {
+      return c.json({ ok: false, error: { message: 'Read failed' } }, 500);
+    }
+  });
+
+  authenticated.put('/api/workspace/editor/write', async (c) => {
+    const workspaceRoot = getWorkspacePath(service.currentConfig);
+    if (!workspaceRoot) {
+      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    }
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const pathRel =
+      typeof body === 'object' &&
+      body !== null &&
+      'path' in body &&
+      typeof (body as { path: unknown }).path === 'string'
+        ? (body as { path: string }).path
+        : '';
+    const content =
+      typeof body === 'object' &&
+      body !== null &&
+      'content' in body &&
+      typeof (body as { content: unknown }).content === 'string'
+        ? (body as { content: string }).content
+        : '';
+    if (!pathRel.trim()) {
+      return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
+    }
+    const abs = resolveWorkspaceSafePath(workspaceRoot, pathRel);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Invalid path' } }, 400);
+    }
+    let st: Awaited<ReturnType<typeof stat>> | undefined;
+    try {
+      st = await stat(abs);
+    } catch {
+      st = undefined;
+    }
+    if (st && !st.isFile()) {
+      return c.json({ ok: false, error: { message: 'Not a file' } }, 400);
+    }
+    try {
+      await writeFile(abs, content, 'utf-8');
+      return c.json({ ok: true, payload: { path: toWorkspaceRelativePosix(workspaceRoot, abs) } });
+    } catch (err) {
+      log.error({ err, path: abs }, 'workspace editor write failed');
+      return c.json({ ok: false, error: { message: 'Write failed' } }, 500);
+    }
+  });
+
+  authenticated.get('/api/workspace/editor/search', async (c) => {
+    const q = typeof c.req.query('q') === 'string' ? c.req.query('q')!.trim() : '';
+    const dirRel = typeof c.req.query('dir') === 'string' ? c.req.query('dir')! : '';
+    if (!q) {
+      return c.json({ ok: true, payload: { results: [] as { filePath: string; lineNumber: number; lineContent: string; matchStart: number; matchEnd: number }[] } });
+    }
+    const workspaceRoot = getWorkspacePath(service.currentConfig);
+    if (!workspaceRoot) {
+      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    }
+    const absDir = resolveWorkspaceSafePath(workspaceRoot, dirRel);
+    if (!absDir) {
+      return c.json({ ok: false, error: { message: 'Invalid path' } }, 400);
+    }
+    let st: Awaited<ReturnType<typeof stat>>;
+    try {
+      st = await stat(absDir);
+    } catch {
+      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    }
+    if (!st.isDirectory()) {
+      return c.json({ ok: false, error: { message: 'Not a directory' } }, 400);
+    }
+    const raw = await runRipgrepInDirectory(q, absDir);
+    const results = raw
+      .filter((r) => isPathUnderWorkspace(workspaceRoot, r.filePath))
+      .map((r) => ({
+        ...r,
+        filePath: toWorkspaceRelativePosix(workspaceRoot, resolve(r.filePath)),
+      }));
+    return c.json({ ok: true, payload: { results } });
   });
 
   // ========== Core SSE API ==========
