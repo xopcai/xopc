@@ -6,6 +6,7 @@ import {
   arrayBufferToBase64,
   getAttachmentBinaryPayload,
   resolveDataUrlForDisplay,
+  workspaceRelativePathToApiPath,
 } from '@/features/chat/attachment-utils-core';
 import { apiFetch } from '@/lib/fetch';
 import { cn } from '@/lib/cn';
@@ -49,9 +50,7 @@ export function AttachmentTile({
     let cancelled = false;
     void (async () => {
       try {
-        const url = apiUrl(
-          `/api/workspace/inbound-file?rel=${encodeURIComponent(base.workspaceRelativePath!)}`,
-        );
+        const url = apiUrl(workspaceRelativePathToApiPath(base.workspaceRelativePath!));
         const res = await apiFetch(url);
         if (!res.ok || cancelled) return;
         const buf = await res.arrayBuffer();

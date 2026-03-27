@@ -4,6 +4,8 @@ const CHANNEL_OUTPUT_FORMATS: Record<string, { format: string; voiceCompatible: 
   telegram: { format: 'opus', voiceCompatible: true },
   feishu: { format: 'opus', voiceCompatible: true },
   whatsapp: { format: 'ogg', voiceCompatible: true },
+  /** Web UI: MP3 plays in all major browsers without extra codecs. */
+  webchat: { format: 'mp3', voiceCompatible: false },
   default: { format: 'mp3', voiceCompatible: false },
 };
 
@@ -27,7 +29,8 @@ export function shouldUseTTS(config: TTSConfig | undefined, inboundAudio?: boole
     return { useTTS: false, reason: 'TTS disabled' };
   }
 
-  const trigger = config.trigger || 'off';
+  const triggerRaw = (config.trigger ?? 'off') as string;
+  const trigger = triggerRaw === 'auto' ? 'inbound' : triggerRaw;
 
   switch (trigger) {
     case 'off':

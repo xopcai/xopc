@@ -1,4 +1,4 @@
-import { Ban, File, Mic, Send, Sparkles, Square } from 'lucide-react';
+import { Ban, File as FileIcon, Mic, Send, Sparkles, Square } from 'lucide-react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Attachment } from '@/features/chat/attachment-utils';
@@ -63,9 +63,26 @@ export const ChatComposer = memo(function ChatComposer({
   const [isComposing, setIsComposing] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaChunksRef = useRef<Blob[]>([]);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
+  const [voiceRecording, setVoiceRecording] = useState(false);
+  /** Set when unmounting so `MediaRecorder` `onstop` does not auto-send. */
+  const voiceSkipAutoSendRef = useRef(false);
+  const valueRef = useRef(value);
+  const attachmentsRef = useRef(attachments);
+  const thinkingLevelRef = useRef(thinkingLevel);
+  const busyRef = useRef(false);
+  const onSendRef = useRef(onSend);
   const maxFileSize = 20 * 1024 * 1024;
 
   const busy = sending || streaming;
+
+  valueRef.current = value;
+  attachmentsRef.current = attachments;
+  thinkingLevelRef.current = thinkingLevel;
+  busyRef.current = busy;
+  onSendRef.current = onSend;
 
   const adjustHeight = useCallback(() => {
     const el = textareaRef.current;
@@ -105,11 +122,107 @@ export const ChatComposer = memo(function ChatComposer({
     setAttachments((a) => [...a, ...next]);
   };
 
+  const stopVoiceRecording = useCallback(() => {
+    const rec = mediaRecorderRef.current;
+    if (rec && rec.state !== 'inactive') {
+      rec.stop();
+    }
+    mediaRecorderRef.current = null;
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaStreamRef.current = null;
+    setVoiceRecording(false);
+  }, []);
+
+  const attachmentToWire = useCallback((a: Attachment) => {
+    return {
+      type: a.type === 'voice' ? 'voice' : a.type || 'file',
+      mimeType: a.mimeType,
+      data: a.content,
+      name: a.name,
+      size: a.size,
+    };
+  }, []);
+
+  const toggleVoiceRecording = useCallback(async () => {
+    if (busy || disabled) return;
+    if (voiceRecording) {
+      stopVoiceRecording();
+      return;
+    }
+    if (attachments.length >= MAX_CHAT_ATTACHMENTS) {
+      console.warn(interpolate(m.chat.maxAttachmentsReached, { max: MAX_CHAT_ATTACHMENTS }));
+      return;
+    }
+    voiceSkipAutoSendRef.current = false;
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      mediaStreamRef.current = stream;
+      const mimeType = MediaRecorder.isTypeSupported('audio/webm;codecs=opus')
+        ? 'audio/webm;codecs=opus'
+        : MediaRecorder.isTypeSupported('audio/webm')
+          ? 'audio/webm'
+          : '';
+      const rec = mimeType
+        ? new MediaRecorder(stream, { mimeType })
+        : new MediaRecorder(stream);
+      mediaChunksRef.current = [];
+      rec.ondataavailable = (e) => {
+        if (e.data.size > 0) mediaChunksRef.current.push(e.data);
+      };
+      rec.onstop = async () => {
+        if (voiceSkipAutoSendRef.current) {
+          voiceSkipAutoSendRef.current = false;
+          return;
+        }
+        if (busyRef.current) return;
+        const chunks = mediaChunksRef.current;
+        mediaChunksRef.current = [];
+        const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+        if (blob.size < 32) return;
+        const ext = blob.type.includes('webm') ? 'webm' : 'ogg';
+        const { loadAttachment } = await import('@/features/chat/attachment-load');
+        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: blob.type });
+        const att = await loadAttachment(file, file.name);
+        const payload = [...attachmentsRef.current.map(attachmentToWire), attachmentToWire(att)];
+        onSendRef.current(valueRef.current, payload, thinkingLevelRef.current);
+        setValue('');
+        setAttachments([]);
+        requestAnimationFrame(() => adjustHeight());
+      };
+      mediaRecorderRef.current = rec;
+      rec.start(250);
+      setVoiceRecording(true);
+    } catch (e) {
+      console.warn(m.chat.voiceMicDenied, e);
+    }
+  }, [
+    attachmentToWire,
+    attachments.length,
+    busy,
+    disabled,
+    m.chat.maxAttachmentsReached,
+    m.chat.voiceMicDenied,
+    stopVoiceRecording,
+    voiceRecording,
+    adjustHeight,
+  ]);
+
+  useEffect(() => {
+    return () => {
+      voiceSkipAutoSendRef.current = true;
+      stopVoiceRecording();
+    };
+  }, [stopVoiceRecording]);
+
   const send = () => {
     if (busy) return;
+    if (voiceRecording) {
+      stopVoiceRecording();
+      return;
+    }
     if (!value.trim() && attachments.length === 0) return;
     const payload = attachments.map((a) => ({
-      type: a.type || 'file',
+      type: a.type === 'voice' ? 'voice' : a.type || 'file',
       mimeType: a.mimeType,
       data: a.content,
       name: a.name,
@@ -160,8 +273,10 @@ export const ChatComposer = memo(function ChatComposer({
                     alt=""
                     className="h-6 w-6 rounded object-cover"
                   />
+                ) : att.type === 'voice' || att.mimeType?.startsWith('audio/') ? (
+                  <Mic className="h-3.5 w-3.5 shrink-0 text-accent-fg" aria-hidden />
                 ) : (
-                  <File className="h-3.5 w-3.5 shrink-0 text-fg-muted" />
+                  <FileIcon className="h-3.5 w-3.5 shrink-0 text-fg-muted" />
                 )}
                 <span className="min-w-0 flex-1 truncate">{att.name}</span>
                 <span className="text-fg-disabled">{formatFileSize(att.size)}</span>
@@ -279,7 +394,7 @@ export const ChatComposer = memo(function ChatComposer({
               }
               onClick={() => fileInputRef.current?.click()}
             >
-              <File className="h-4 w-4" />
+              <FileIcon className="h-4 w-4" />
             </button>
             <input
               ref={fileInputRef}
@@ -297,14 +412,21 @@ export const ChatComposer = memo(function ChatComposer({
             <button
               type="button"
               className={cn(
-                'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent bg-transparent text-fg-disabled opacity-80',
+                'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent',
+                interaction.transition,
+                interaction.press,
                 interaction.focusRingPanel,
+                voiceRecording
+                  ? 'bg-red-500/20 text-red-600 dark:bg-red-500/25 dark:text-red-400'
+                  : 'text-fg-subtle hover:bg-surface-hover hover:text-fg',
+                'disabled:opacity-50 disabled:cursor-not-allowed',
               )}
-              disabled
-              title={m.chat.voiceComingSoon}
-              aria-label={m.chat.voiceComingSoon}
+              disabled={disabled || attachments.length >= MAX_CHAT_ATTACHMENTS}
+              title={voiceRecording ? m.chat.voiceRecordingStop : m.chat.voiceRecording}
+              aria-label={voiceRecording ? m.chat.voiceRecordingStop : m.chat.voiceRecording}
+              onClick={() => void toggleVoiceRecording()}
             >
-              <Mic className="h-4 w-4 stroke-[1.75]" />
+              <Mic className={cn('h-4 w-4 stroke-[1.75]', voiceRecording && 'animate-pulse')} />
             </button>
 
             {busy ? (

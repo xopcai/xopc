@@ -36,7 +36,8 @@ function isImageAttachment(att: InboundAttachmentInput): boolean {
   return att.type === 'image' || att.type === 'photo' || att.mimeType?.startsWith('image/') === true;
 }
 
-function decodeBase64Payload(data: string): Buffer {
+/** Decode base64 or data-URL payload for inbound attachments (also used by voice STT). */
+export function decodeInboundAttachmentBase64(data: string): Buffer {
   const trimmed = data.trim();
   const b64 = trimmed.startsWith('data:') ? (trimmed.split(/base64,/)[1] ?? trimmed) : trimmed;
   return Buffer.from(b64.replace(/\s/g, ''), 'base64');
@@ -74,7 +75,7 @@ export async function persistInboundAttachmentsToWorkspace(
     }
 
     try {
-      const buf = decodeBase64Payload(att.data);
+      const buf = decodeInboundAttachmentBase64(att.data);
       const id = randomBytes(8).toString('hex');
       const fname = `${id}_${sanitizeFilename(att.name || 'file')}`;
       const absFile = join(inboundAbs, fname);

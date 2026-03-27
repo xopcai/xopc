@@ -53,6 +53,16 @@ import {
   persistInboundAttachmentsToWorkspace,
   formatInboundFileTextBlock,
 } from '../channels/attachments/inbound-persist.js';
+import {
+  mergeVoiceTranscriptsIntoUserText,
+  mergeSttConfigFromAppConfig,
+} from '../channels/attachments/voice-stt-webchat.js';
+import { persistOutboundTtsAudio } from '../channels/attachments/outbound-tts-persist.js';
+import { compressAudio } from '../tts/audio.js';
+import { speak } from '../tts/index.js';
+import { mergeTtsConfigFromAppConfig } from '../tts/merge-config.js';
+import { shouldUseTTS, getChannelOutputFormat } from '../tts/service.js';
+import { isTTSAvailable } from '../tts/factory.js';
 
 const log = createLogger('AgentService');
 
@@ -867,7 +877,15 @@ export class AgentService {
       await this.modelManager.applyModelForSession(agent, sessionKey);
       await this.applyResolvedThinkingLevel(sessionKey, thinking);
 
-      const messageContent = this.buildMessageContent(content, prepared);
+      const sttCfg = mergeSttConfigFromAppConfig(this.config.config?.stt);
+      const { text: mergedUserText, inboundVoice } = await mergeVoiceTranscriptsIntoUserText(
+        this.workspaceDir,
+        prepared,
+        content,
+        sttCfg,
+      );
+
+      const messageContent = this.buildMessageContent(mergedUserText, prepared);
 
       const agentPromise = (async () => {
         await agent.prompt({
@@ -910,10 +928,91 @@ export class AgentService {
       }
 
       await this.persistAgentSessionMessages(sessionKey);
+
+      const ttsAudioEvent = await this.maybeEmitWebchatTts(sessionKey, inboundVoice);
+      if (ttsAudioEvent) {
+        yield ttsAudioEvent;
+      }
+
       await this._maybeAutoTitleAfterDirectTurn(sessionKey);
     } finally {
       unsubscribeStreaming();
       this.endDirectRequestContext();
+    }
+  }
+
+  /**
+   * Generate TTS for webchat when config allows, persist under `.xopcbot/tts/`, attach to last assistant turn.
+   */
+  private async maybeEmitWebchatTts(
+    sessionKey: string,
+    hadInboundVoice: boolean,
+  ): Promise<{ type: 'tts_audio'; workspaceRelativePath: string; mimeType: string; name: string } | null> {
+    const ttsConfig = mergeTtsConfigFromAppConfig(this.config.config?.tts);
+    if (!isTTSAvailable(ttsConfig)) {
+      return null;
+    }
+    const decision = shouldUseTTS(ttsConfig, hadInboundVoice);
+    if (!decision.useTTS) {
+      return null;
+    }
+    const text = this.agentManager.getLastAssistantContent(sessionKey)?.trim();
+    if (!text) {
+      return null;
+    }
+    try {
+      const fmt = getChannelOutputFormat('webchat').format as 'opus' | 'mp3' | 'wav';
+      const ttsResult = await speak(text, ttsConfig, {
+        tts: { format: fmt },
+      });
+      const { buffer, format } = await compressAudio(Buffer.from(ttsResult.audio), ttsResult.format);
+      const normalizedMime =
+        format === 'opus' || format === 'ogg'
+          ? 'audio/ogg'
+          : format === 'mp3' || format === 'mpeg'
+            ? 'audio/mpeg'
+            : format === 'wav'
+              ? 'audio/wav'
+              : `audio/${format}`;
+      const persisted = await persistOutboundTtsAudio(this.workspaceDir, sessionKey, buffer, format);
+      await this.appendAttachmentToLastAssistant(sessionKey, {
+        type: 'audio',
+        mimeType: normalizedMime,
+        name: persisted.name,
+        size: persisted.size,
+        workspaceRelativePath: persisted.workspaceRelativePath,
+      });
+      return {
+        type: 'tts_audio',
+        workspaceRelativePath: persisted.workspaceRelativePath,
+        mimeType: normalizedMime,
+        name: persisted.name,
+      };
+    } catch (err) {
+      log.warn({ err, sessionKey }, 'Webchat TTS failed');
+      return null;
+    }
+  }
+
+  private async appendAttachmentToLastAssistant(
+    sessionKey: string,
+    att: {
+      type: string;
+      mimeType: string;
+      name: string;
+      size: number;
+      workspaceRelativePath: string;
+    },
+  ): Promise<void> {
+    const loaded = await this.sessionStore.load(sessionKey);
+    for (let i = loaded.length - 1; i >= 0; i--) {
+      const m = loaded[i] as { role?: string; attachments?: unknown[] };
+      if (m.role === 'assistant') {
+        const next = [...(m.attachments ?? []), att];
+        loaded[i] = { ...m, attachments: next } as unknown as AgentMessage;
+        await this.sessionStore.save(sessionKey, loaded);
+        return;
+      }
     }
   }
 

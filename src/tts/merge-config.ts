@@ -6,6 +6,13 @@ import { isTTSAvailable } from './factory.js';
  * Merge persisted app config `tts` with defaults to a full {@link TTSConfig}
  * for validation (provider chain, env-based keys, etc.).
  */
+function normalizeTtsTrigger(raw: unknown): TTSConfig['trigger'] {
+  const t = typeof raw === 'string' ? raw.toLowerCase() : '';
+  if (t === 'auto') return 'inbound';
+  if (t === 'off' || t === 'always' || t === 'inbound' || t === 'tagged') return t;
+  return DEFAULT_TTS_CONFIG.trigger;
+}
+
 export function mergeTtsConfigFromAppConfig(tts: Config['tts'] | undefined): TTSConfig {
   const p = (tts ?? {}) as Partial<TTSConfig>;
   return {
@@ -13,7 +20,7 @@ export function mergeTtsConfigFromAppConfig(tts: Config['tts'] | undefined): TTS
     ...p,
     enabled: p.enabled ?? DEFAULT_TTS_CONFIG.enabled,
     provider: p.provider ?? DEFAULT_TTS_CONFIG.provider,
-    trigger: p.trigger ?? DEFAULT_TTS_CONFIG.trigger,
+    trigger: normalizeTtsTrigger((p as { trigger?: unknown }).trigger ?? DEFAULT_TTS_CONFIG.trigger),
     fallback: {
       ...DEFAULT_TTS_CONFIG.fallback!,
       ...p.fallback,

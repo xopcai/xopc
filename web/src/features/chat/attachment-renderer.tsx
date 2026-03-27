@@ -3,14 +3,26 @@ import { useState } from 'react';
 import { AttachmentPreviewDialog } from '@/features/chat/attachment-preview-dialog';
 import { AttachmentTile } from '@/features/chat/attachment-tile';
 import type { MessageAttachment } from '@/features/chat/messages.types';
+import { VoiceMessageBar } from '@/features/chat/voice-message-bar';
 import { cn } from '@/lib/cn';
+
+function isAudioAttachment(att: MessageAttachment): boolean {
+  return (
+    att.type === 'voice' ||
+    att.type === 'audio' ||
+    att.mimeType?.startsWith('audio/') === true
+  );
+}
 
 export function AttachmentRenderer({
   attachments,
   authToken,
+  layout = 'assistant',
 }: {
   attachments: MessageAttachment[];
   authToken?: string;
+  /** User bubbles align voice pills to the right (WeChat-style). */
+  layout?: 'user' | 'assistant';
 }) {
   const [open, setOpen] = useState(false);
   const [active, setActive] = useState<MessageAttachment | null>(null);
@@ -20,8 +32,12 @@ export function AttachmentRenderer({
   const images = attachments.filter(
     (att) => att.type === 'image' || att.mimeType?.startsWith('image/'),
   );
+  const audioItems = attachments.filter(isAudioAttachment);
   const documents = attachments.filter(
-    (att) => att.type !== 'image' && !att.mimeType?.startsWith('image/'),
+    (att) =>
+      att.type !== 'image' &&
+      !att.mimeType?.startsWith('image/') &&
+      !isAudioAttachment(att),
   );
 
   return (
@@ -45,6 +61,18 @@ export function AttachmentRenderer({
                   setActive(att);
                   setOpen(true);
                 }}
+              />
+            ))}
+          </div>
+        ) : null}
+        {audioItems.length > 0 ? (
+          <div className={cn('flex flex-col gap-2', layout === 'user' && 'w-full items-end')}>
+            {audioItems.map((a, i) => (
+              <VoiceMessageBar
+                key={a.id ?? `${a.name}-${i}`}
+                att={a}
+                align={layout === 'user' ? 'end' : 'start'}
+                variant={layout === 'user' ? 'compact' : 'default'}
               />
             ))}
           </div>

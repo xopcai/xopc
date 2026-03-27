@@ -14,6 +14,7 @@ import type { Config } from '../../config/schema.js';
 import { getWorkspacePath } from '../../config/schema.js';
 import { resolveHeartbeatMdPath } from '../workspace-heartbeat-path.js';
 import { resolveSafeInboundFilePath } from '../../channels/attachments/inbound-persist.js';
+import { resolveSafeTtsFilePath } from '../../channels/attachments/outbound-tts-persist.js';
 import { getVoiceModelsConfig } from '../../config/voice.js';
 import { createLogger } from '../../utils/logger.js';
 import { queryLogs, getLogFiles, getLogLevels, getLogStats, getLogModules, LOG_DIR } from '../../utils/logger/log-store.js';
@@ -299,6 +300,45 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         css: 'text/css',
         js: 'text/javascript',
         ts: 'text/typescript',
+        webm: 'audio/webm',
+        ogg: 'audio/ogg',
+        opus: 'audio/ogg',
+        mp3: 'audio/mpeg',
+        wav: 'audio/wav',
+        m4a: 'audio/mp4',
+      };
+      const contentType = mimeByExt[ext] || 'application/octet-stream';
+      return new Response(buf, {
+        headers: {
+          'Content-Type': contentType,
+          'Cache-Control': 'private, max-age=3600',
+        },
+      });
+    } catch {
+      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    }
+  });
+
+  /** Serve generated TTS audio from workspace `.xopcbot/tts/` (webchat assistant voice). */
+  authenticated.get('/api/workspace/tts-file', async (c) => {
+    const rel = c.req.query('rel');
+    if (!rel || typeof rel !== 'string') {
+      return c.json({ ok: false, error: { message: 'Missing rel' } }, 400);
+    }
+    const workspaceRoot = getWorkspacePath(service.currentConfig);
+    const abs = resolveSafeTtsFilePath(workspaceRoot, rel);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Forbidden' } }, 403);
+    }
+    try {
+      const buf = await readFile(abs);
+      const ext = rel.split('.').pop()?.toLowerCase() ?? '';
+      const mimeByExt: Record<string, string> = {
+        ogg: 'audio/ogg',
+        opus: 'audio/ogg',
+        mp3: 'audio/mpeg',
+        wav: 'audio/wav',
+        m4a: 'audio/mp4',
       };
       const contentType = mimeByExt[ext] || 'application/octet-stream';
       return new Response(buf, {

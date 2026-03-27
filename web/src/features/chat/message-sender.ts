@@ -15,6 +15,8 @@ export type MessagingCallbacks = {
   onToolStart: (toolName: string, args?: unknown) => void;
   onToolEnd: (toolName: string, isError: boolean, result?: string) => void;
   onProgress: (progress: ProgressState) => void;
+  /** Assistant TTS audio persisted under workspace `.xopcbot/tts/` (before `result`). */
+  onTtsAudio?: (payload: { workspaceRelativePath: string; mimeType: string; name: string }) => void;
   onResult: () => void;
   onError: (msg: string) => void;
 };
@@ -273,6 +275,13 @@ export class MessageSender {
           detail: parsed.detail as string | undefined,
           toolName: parsed.toolName as string | undefined,
           timestamp: Date.now(),
+        });
+        break;
+      case 'tts_audio':
+        cb?.onTtsAudio?.({
+          workspaceRelativePath: String(parsed.workspaceRelativePath || ''),
+          mimeType: String(parsed.mimeType || 'audio/mpeg'),
+          name: String(parsed.name || 'voice.mp3'),
         });
         break;
       case 'result':

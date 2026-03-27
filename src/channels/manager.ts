@@ -15,6 +15,7 @@ import type {
 
 import { createLogger } from '../utils/logger.js';
 import { INTERNAL_OUTBOUND_DROP_CHANNEL } from './internal-outbound.js';
+import { mergeTtsConfigFromAppConfig } from '../tts/merge-config.js';
 import { maybeApplyTtsToPayload } from '../tts/payload.js';
 import { deliverOutboundMessage } from './outbound/deliver.js';
 import { OutboundPersistStore } from './outbound/persist-store.js';
@@ -489,9 +490,9 @@ export class ChannelManager {
     if (!msg.content?.trim()) return msg;
     if (msg.mediaUrl) return msg;
     
-    const ttsConfig = this.config.tts ?? { enabled: false, provider: 'openai' as const, trigger: 'always' as const };
+    const ttsConfig = mergeTtsConfigFromAppConfig(this.config.tts);
     if (!ttsConfig.enabled) return msg;
-    
+
     const inboundAudio = msg.metadata?.transcribedVoice === true;
     return maybeApplyTtsToPayload(msg, { config: ttsConfig, channel: msg.channel, inboundAudio });
   }

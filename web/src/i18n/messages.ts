@@ -128,7 +128,13 @@ const bundles: Record<
       modelSearchPlaceholder: string;
       modelNoMatches: string;
       dropFiles: string;
-      voiceComingSoon: string;
+      voiceRecording: string;
+      voiceRecordingStop: string;
+      voiceMicDenied: string;
+      voicePlay: string;
+      voicePause: string;
+      voiceLoading: string;
+      voiceMessage: string;
       loadOlder: string;
       scrollToBottom: string;
       attachmentPreviewClose: string;
@@ -872,7 +878,13 @@ const bundles: Record<
       modelSearchPlaceholder: 'Search by name, provider, or ID…',
       modelNoMatches: 'No models match your search',
       dropFiles: 'Drop files here to attach',
-      voiceComingSoon: 'Voice input (coming soon)',
+      voiceRecording: 'Record voice',
+      voiceRecordingStop: 'Stop recording',
+      voiceMicDenied: 'Microphone access denied or unavailable.',
+      voicePlay: 'Play voice',
+      voicePause: 'Pause',
+      voiceLoading: 'Loading audio…',
+      voiceMessage: 'Voice',
       loadOlder: 'Loading older messages…',
       scrollToBottom: 'Scroll to bottom',
       attachmentPreviewClose: 'Close',
@@ -1651,7 +1663,13 @@ const bundles: Record<
       modelSearchPlaceholder: '按名称、提供商或 ID 搜索…',
       modelNoMatches: '没有匹配的模型',
       dropFiles: '将文件拖放到此处添加',
-      voiceComingSoon: '语音输入（即将推出）',
+      voiceRecording: '录制语音',
+      voiceRecordingStop: '停止录音',
+      voiceMicDenied: '无法使用麦克风（权限被拒绝或设备不可用）。',
+      voicePlay: '播放语音',
+      voicePause: '暂停',
+      voiceLoading: '正在加载音频…',
+      voiceMessage: '语音',
       loadOlder: '正在加载更早的消息…',
       scrollToBottom: '回到底部',
       attachmentPreviewClose: '关闭',

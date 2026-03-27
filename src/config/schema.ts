@@ -423,7 +423,11 @@ export const TTSEdgeConfigSchema = z.object({
 export const TTSConfigSchema = z.object({
   enabled: z.boolean().default(false),
   provider: z.enum(['openai', 'alibaba', 'edge']).default('openai'),
-  trigger: z.enum(['off', 'always', 'inbound', 'tagged']).default('always'),
+  trigger: z
+    .preprocess(
+      (v) => (v === 'auto' ? 'inbound' : v),
+      z.enum(['off', 'always', 'inbound', 'tagged']).default('always'),
+    ),
   fallback: TTSFallbackConfigSchema.optional(),
   maxTextLength: z.number().int().min(1).default(512), // Conservative default to accommodate all providers (Alibaba limit is 512)
   timeoutMs: z.number().int().min(1000).max(120000).default(30000),
