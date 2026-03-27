@@ -56,8 +56,8 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   // Cron - hot reload
   { prefix: 'cron', kind: 'hot', description: 'Scheduled tasks' },
   
-  // Heartbeat - hot reload
-  { prefix: 'heartbeat', kind: 'hot', description: 'Heartbeat settings' },
+  // Heartbeat lives under gateway.heartbeat in config JSON (not top-level `heartbeat`)
+  { prefix: 'gateway.heartbeat', kind: 'hot', description: 'Heartbeat settings' },
   
   // Web search - hot reload
   { prefix: 'webSearch', kind: 'hot', description: 'Web search settings' },

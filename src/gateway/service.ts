@@ -418,6 +418,14 @@ export class GatewayService {
   }
 
   /**
+   * Apply `gateway.heartbeat` from current config after PATCH /api/config (and when hot reload is off).
+   * File watcher uses `handleHeartbeatReload` with the same effect when paths match.
+   */
+  reloadHeartbeatFromCurrentConfig(): void {
+    this.handleHeartbeatReload(this.config);
+  }
+
+  /**
    * Handle tools config hot reload
    */
   private handleToolsReload(newConfig: Config): void {
