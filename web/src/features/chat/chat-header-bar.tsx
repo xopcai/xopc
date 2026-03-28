@@ -15,13 +15,18 @@ import { useSidebarStore } from '@/stores/sidebar-store';
 
 type ChatHeaderBarProps = {
   chatHeadline: string;
+  /** xl + thinking rail open: match main column horizontal inset (slightly wider content). */
+  thinkingRailOpen?: boolean;
 };
 
 /**
  * Subscribes to sidebar / mobile-nav stores in isolation so collapsing the rail
  * does not re-render the chat body (messages, composer, scroll state).
  */
-export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatHeaderBarProps) {
+export const ChatHeaderBar = memo(function ChatHeaderBar({
+  chatHeadline,
+  thinkingRailOpen = false,
+}: ChatHeaderBarProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
@@ -33,7 +38,8 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatH
   return (
     <div
       className={cn(
-        'flex gap-3 px-3 sm:gap-4 sm:px-5 xl:px-6',
+        'flex gap-3 px-3 sm:gap-4 sm:px-5',
+        thinkingRailOpen ? 'xl:px-5' : 'xl:px-6',
         APP_TOP_HEADER_BAR_CLASS,
         sidebarCollapsed && 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-4',
       )}
