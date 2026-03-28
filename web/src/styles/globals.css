@@ -67,8 +67,8 @@
 
   /* Main column under AppShell <main> — docs/design/ui-design-system.md §13.1 Web */
   --max-width-app-main: 56rem;
-  /** Chat column (message list + composer); slightly narrower than app-main so drawer can be wider. */
-  --max-width-chat: 48rem;
+  /** Chat column (message list + composer); solo layout readable width; xl rail uses remaining space. */
+  --max-width-chat: 52rem;
   /** Thinking drawer / rail width (md overlay + xl side column). */
   --width-thinking-drawer: 28rem;
 }
@@ -397,6 +397,47 @@ html.dark {
 
 ::-webkit-scrollbar-thumb:hover {
   background: var(--color-fg-subtle);
+}
+
+/**
+ * Chat message list: stable gutter + thin overlay-style thumb (calmer than global 6px bar).
+ */
+.chat-messages {
+  scrollbar-gutter: stable;
+  scrollbar-width: thin;
+  scrollbar-color: color-mix(in srgb, var(--color-edge-strong) 58%, transparent) transparent;
+  overscroll-behavior-y: contain;
+}
+
+html.dark .chat-messages {
+  scrollbar-color: color-mix(in srgb, var(--color-edge) 72%, transparent) transparent;
+}
+
+.chat-messages::-webkit-scrollbar {
+  width: 10px;
+}
+
+.chat-messages::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+.chat-messages::-webkit-scrollbar-thumb {
+  border-radius: 9999px;
+  border: 3px solid transparent;
+  background-clip: content-box;
+  background-color: color-mix(in srgb, var(--color-edge-strong) 50%, transparent);
+}
+
+.chat-messages::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--color-fg-subtle) 38%, transparent);
+}
+
+html.dark .chat-messages::-webkit-scrollbar-thumb {
+  background-color: color-mix(in srgb, var(--color-edge) 55%, transparent);
+}
+
+html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
+  background-color: color-mix(in srgb, var(--color-fg-muted) 45%, transparent);
 }
 
 /**

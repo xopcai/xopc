@@ -268,18 +268,26 @@ export function ChatPage() {
     );
   }
 
+  /** xl: thinking rail open — main column fills space left of drawer; tighter xl padding for more width. */
+  const thinkingRailOpen = thinkingDrawer !== null && drawerBlocks !== null;
+
   return (
     <div className="chat-shell flex h-full min-h-0 flex-1 flex-col bg-surface-panel">
       <ChatSseStatus />
 
-      <ChatHeaderBar chatHeadline={chatHeadline} />
+      <ChatHeaderBar chatHeadline={chatHeadline} thinkingRailOpen={thinkingRailOpen} />
 
       <div className="relative flex min-h-0 flex-1 flex-col xl:flex-row">
-        {/* Main column: same horizontal inset + max width for messages and composer. */}
-        <div className="mx-auto flex w-full min-h-0 max-w-[var(--max-width-chat)] flex-1 flex-col px-3 sm:px-5 xl:min-w-0 xl:px-6">
+        {/* Main column: max width + centered when solo; full remaining width when xl thinking rail is open. */}
+        <div
+          className={cn(
+            'mx-auto flex w-full min-h-0 max-w-[var(--max-width-chat)] flex-1 flex-col px-3 sm:px-5 xl:min-w-0',
+            thinkingRailOpen ? 'xl:mx-0 xl:max-w-none xl:px-5' : 'xl:px-6',
+          )}
+        >
           <div
             ref={scrollRef}
-            className="chat-messages min-h-0 flex-1 overflow-y-auto py-4 [scrollbar-gutter:stable]"
+            className="chat-messages min-h-0 flex-1 overflow-y-auto py-4"
             onScroll={onScroll}
           >
             {showSessionLoading ? (
@@ -341,8 +349,8 @@ export function ChatPage() {
             />
             <div
               className={cn(
-                'xl:flex xl:h-full xl:min-h-0 xl:shrink-0 xl:overflow-hidden xl:border-edge xl:transition-[width] xl:duration-[280ms] xl:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:xl:transition-none',
-                drawerRailExpanded ? 'xl:w-[var(--width-thinking-drawer)] xl:border-l' : 'xl:w-0 xl:border-transparent',
+                'xl:flex xl:h-full xl:min-h-0 xl:shrink-0 xl:overflow-hidden xl:transition-[width] xl:duration-[280ms] xl:ease-[cubic-bezier(0.22,1,0.36,1)] motion-reduce:xl:transition-none',
+                drawerRailExpanded ? 'xl:w-[var(--width-thinking-drawer)]' : 'xl:w-0',
               )}
             >
               <ThinkingDrawer
