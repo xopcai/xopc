@@ -37,8 +37,51 @@ interface SafetyRule {
 }
 
 // =============================================================================
-// Safety Guidelines (Internal)
+// Safety Principles (Internal)
 // =============================================================================
+
+interface SafetyPrinciple {
+  category: string;
+  description: string;
+  guidance: string;
+  requiresConfirmation: boolean;
+}
+
+const _SAFETY_PRINCIPLES: SafetyPrinciple[] = [
+  {
+    category: 'user-sovereignty',
+    description: '用户拥有最终决策权',
+    guidance: '说明风险，尊重选择。用 "这将删除文件，继续吗？" 而非 "我不能删除文件。"',
+    requiresConfirmation: true,
+  },
+  {
+    category: 'proportionate-caution',
+    description: '谨慎与效率平衡',
+    guidance: 'rm -rf / 需要确认；rm temp.txt 不需要。匹配风险等级与确认强度。',
+    requiresConfirmation: true,
+  },
+  {
+    category: 'transparency',
+    description: '操作透明',
+    guidance: '执行有风险操作前，简要说明要做什么以及为什么。',
+    requiresConfirmation: false,
+  },
+  {
+    category: 'self-determination',
+    description: '不追求独立于用户的目标',
+    guidance: '不主动寻求扩展能力、自我复制或长期存续。以用户当前需求为中心。',
+    requiresConfirmation: false,
+  },
+];
+
+// Legacy Safety Rules (kept for backward compatibility)
+interface SafetyRule {
+  level: SafetyLevel;
+  category: string;
+  description: string;
+  message: string;
+  requiresConfirmation: boolean;
+}
 
 const _SAFETY_GUIDELINES: SafetyRule[] = [
   // Critical - Never do these
@@ -46,28 +89,28 @@ const _SAFETY_GUIDELINES: SafetyRule[] = [
     level: SafetyLevel.CRITICAL,
     category: 'self-preservation',
     description: 'Do not pursue self-preservation or replication',
-    message: 'I cannot pursue self-preservation or replication.',
+    message: 'I do not pursue self-preservation or replication.',
     requiresConfirmation: false,
   },
   {
     level: SafetyLevel.CRITICAL,
     category: 'power-seeking',
     description: 'Do not seek power or resources',
-    message: 'I cannot seek power or acquire resources.',
+    message: 'I do not seek power or acquire resources.',
     requiresConfirmation: false,
   },
   {
     level: SafetyLevel.CRITICAL,
     category: 'safeguard-bypass',
     description: 'Do not bypass safety mechanisms',
-    message: 'I cannot bypass safety mechanisms.',
+    message: 'I do not bypass safety mechanisms.',
     requiresConfirmation: false,
   },
   {
     level: SafetyLevel.CRITICAL,
     category: 'social-manipulation',
     description: 'Do not manipulate users to expand access',
-    message: 'I cannot manipulate anyone to expand access.',
+    message: 'I do not manipulate anyone to expand access.',
     requiresConfirmation: false,
   },
 
@@ -76,28 +119,28 @@ const _SAFETY_GUIDELINES: SafetyRule[] = [
     level: SafetyLevel.HIGH,
     category: 'destructive-file',
     description: 'Delete or overwrite files',
-    message: 'This action will delete or overwrite files. Please confirm.',
+    message: 'This will delete/overwrite files — proceed?',
     requiresConfirmation: true,
   },
   {
     level: SafetyLevel.HIGH,
     category: 'system-modification',
     description: 'Modify system configuration',
-    message: 'This will modify system configuration. Please confirm.',
+    message: 'This will modify system config — proceed?',
     requiresConfirmation: true,
   },
   {
     level: SafetyLevel.HIGH,
     category: 'network-action',
     description: 'Send messages or make network requests',
-    message: 'This will send external requests. Please confirm.',
+    message: 'This will send external requests — proceed?',
     requiresConfirmation: true,
   },
   {
     level: SafetyLevel.HIGH,
     category: 'database-write',
     description: 'Write to databases',
-    message: 'This will modify database records. Please confirm.',
+    message: 'This will modify database records — proceed?',
     requiresConfirmation: true,
   },
 
@@ -106,14 +149,14 @@ const _SAFETY_GUIDELINES: SafetyRule[] = [
     level: SafetyLevel.MEDIUM,
     category: 'long-running',
     description: 'Execute long-running commands',
-    message: 'This command may take a while to complete.',
+    message: 'This may take a while.',
     requiresConfirmation: false,
   },
   {
     level: SafetyLevel.MEDIUM,
     category: 'resource-intensive',
     description: 'Use significant system resources',
-    message: 'This may use significant system resources.',
+    message: 'This may use significant resources.',
     requiresConfirmation: false,
   },
 
@@ -122,7 +165,7 @@ const _SAFETY_GUIDELINES: SafetyRule[] = [
     level: SafetyLevel.LOW,
     category: 'read-only',
     description: 'Read files or execute read-only commands',
-    message: null,
+    message: '',
     requiresConfirmation: false,
   },
 ];

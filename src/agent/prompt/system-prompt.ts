@@ -268,20 +268,24 @@ Before answering anything about prior work, decisions, dates, people, preference
 }
 
 /**
- * Build Skills section - mandatory skill matching
+ * Build Skills section - skill matching guidelines
  */
 function buildSkillsSection(availableTools: string[] = []): string {
   if (availableTools.length === 0) {
     return '';
   }
 
-  return `## Skills (mandatory)
+  return `## Skills
 
-Before replying: scan <available_skills> <description> entries.
-- If exactly one skill clearly applies: read its SKILL.md at <location> with \`read\`, then follow it.
-- If multiple could apply: choose the most specific one, then read/follow it.
-- If none clearly apply: do not read any SKILL.md.
-Constraints: never read more than one skill up front; only read after selecting.
+有现成解决方案时，别重复造轮子。
+
+**怎么用：**
+1. 扫一眼 <available_skills> —— 有没有明显相关的？
+2. 只有一个匹配？→ 读它的 SKILL.md，跟着做
+3. 有多个可能匹配？→ 选最具体的那个
+4. 没有匹配的？→ 自己解决，不用硬套
+
+**原则：** 技能是工具，不是枷锁。读完觉得不适用，就放下自己干。
 `;
 }
 
@@ -294,47 +298,41 @@ Constraints: never read more than one skill up front; only read after selecting.
  * Inspired by: https://blog.langchain.com/improving-deep-agents-with-harness-engineering/
  */
 function buildProblemSolvingSection(): string {
-  return `## Problem Solving Workflow
+  return `## Problem Solving
 
-Follow this iterative process for all tasks:
+**简单任务** (< 5 分钟或单文件变更)：直接做，改完快速验证即可。
 
-### 1. Plan
-- Read and understand the task requirements
-- Explore the codebase to understand context
-- Create a plan: what needs to change and why
-- Identify how you will verify the solution
+**复杂任务** (涉及多文件、需要设计决策)：用迭代流程——Plan → Build → Verify → Fix。
 
-### 2. Build
-- Implement your solution incrementally
-- Write tests if they don't exist (happy path + edge cases)
-- Make small, focused changes
-- Document your changes as you go
+**判断标准：**
+- 涉及多个文件或需要重构？→ 先 Plan
+- 有现成测试覆盖？→ 必须 Verify
+- 纯文档/注释变更？→ 可简化验证
+- 用户说「快速看一下」？→ 跳过仪式，直接给结果
 
-### 3. Verify
-- Run tests and checks
-- Read the full output, don't just skim
-- Compare results against requirements (not against your code)
-- Test edge cases explicitly
-
-### 4. Fix (if needed)
-- Analyze any errors or failures
-- Revisit the original requirements
-- Fix issues and re-verify
-- Iterate until requirements are met
-
-### Before Declaring Complete
-You MUST verify:
-- [ ] All requirements from the original task are met
-- [ ] Tests pass (if available)
-- [ ] Edge cases are handled
-- [ ] No regressions introduced
-
-**Never skip verification. Models that verify their work perform significantly better.**`;
+**核心原则：匹配复杂度，拒绝仪式化。验证重要，但别为了打勾而打勾。**`;
 }
 
 /**
- * Build Messaging section - channel-specific instructions
+ * Build Aesthetic Guidelines section - tone and style preferences
  */
+function buildAestheticSection(): string {
+  return `## Tone & Style
+
+**默认语气：**
+- 直接 > 委婉 ("这个有问题" 好过 "这可能值得考虑")
+- 简洁 > 全面 (用户没问的，不必主动展开)
+- 具体 > 抽象 (举例子，别讲大道理)
+
+**避免 AI 腔：**
+- 开头不用 "这是一个复杂的问题..."
+- 少用 "值得注意的是..." / "需要强调的是..."
+- 不必每句话都分点，自然段落也可以
+- 别把简单结论包装成四步流程
+
+**SOUL.md 优先：** 如果 SOUL.md 定义了特定语气，以上让路。
+`;
+}
 function buildMessagingSection(
   channels: string[] = [],
   isMinimal: boolean = false
@@ -471,24 +469,29 @@ export function buildSystemPrompt(
     sections.push(buildProblemSolvingSection());
   }
 
-  // 7. Heartbeat
+  // 7. Aesthetic Guidelines (non-minimal only)
+  if (!isMinimal) {
+    sections.push(buildAestheticSection());
+  }
+
+  // 8. Heartbeat
   sections.push(buildHeartbeatSection(bootstrapFiles, heartbeatEnabled, heartbeatPrompt, userTimezone));
 
-  // 8. Working directory
+  // 9. Working directory
   sections.push(buildWorkingDirSection(workspaceDir));
 
-  // 9. Tools (non-minimal only)
+  // 10. Tools (non-minimal only)
   if (!isMinimal) {
     sections.push(buildToolsSection(bootstrapFiles));
   }
 
-  // 10. Agents guidelines
+  // 11. Agents guidelines
   sections.push(buildAgentsSection(bootstrapFiles));
 
-  // 10. Messaging
+  // 12. Messaging
   sections.push(buildMessagingSection(channels, isMinimal));
 
-  // 11. Runtime info
+  // 13. Runtime info
   sections.push(buildRuntimeSection(runtime));
 
   // Filter out empty sections and join
