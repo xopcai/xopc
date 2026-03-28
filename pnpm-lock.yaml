@@ -32,6 +32,9 @@ importers:
       '@sinclair/typebox':
         specifier: ^0.34.48
         version: 0.34.48
+      '@vscode/ripgrep':
+        specifier: ^1.17.1
+        version: 1.17.1
       adm-zip:
         specifier: ^0.5.16
         version: 0.5.16
@@ -114,9 +117,6 @@ importers:
       '@vitejs/plugin-react-swc':
         specifier: ^4.3.0
         version: 4.3.0(vite@7.3.1(@types/node@25.3.2)(jiti@2.6.1)(lightningcss@1.32.0)(terser@5.46.1)(tsx@4.21.0))
-      '@vscode/ripgrep':
-        specifier: ^1.17.1
-        version: 1.17.1
       electron:
         specifier: ^41.1.0
         version: 41.1.0
