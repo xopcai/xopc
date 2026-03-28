@@ -1,32 +1,37 @@
 /**
- * System Reminder - Injects fixed reminders after tool execution
+ * System Reminder - Contextual tips after tool execution
  * 
  * Based on Agent Harness theory: "Fixed system reminders appended after 
  * tool execution are more effective than instructions in System Prompt alone"
+ * 
+ * Optimized: Contextual reminders instead of fixed spam
  */
 
 export interface SystemReminderConfig {
   enabled: boolean;
-  reminders: string[];
+  defaultReminders: string[];
+  contextualReminders: Record<string, string[]>;
   appendToToolResults: boolean;
   maxRemindersPerTurn: number;
 }
 
-const DEFAULT_REMINDERS = [
-  '[System Reminder]',
-  '- Always check file exists before reading',
-  '- Use edit instead of write for small changes',
-  '- Confirm before destructive operations (delete, remove, etc.)',
-  '- Keep context under 80K tokens',
-  '- Use grep/search before reading multiple files',
-  '- Batch file operations when possible',
-].join('\n');
+// Default minimal reminders (only essentials)
+const DEFAULT_REMINDERS: string[] = [];
+
+// Contextual reminders based on tool type
+const CONTEXTUAL_REMINDERS: Record<string, string[]> = {
+  'file.write': ['💡 Tip: edit > write for small changes'],
+  'file.delete': ['⚠️ Confirming: file deletion'],
+  'shell.exec': ['🐚 Shell: use pty=true for interactive commands'],
+  'web.fetch': ['🌐 Web: check for rate limits on repeated calls'],
+};
 
 const DEFAULT_CONFIG: SystemReminderConfig = {
   enabled: true,
-  reminders: [DEFAULT_REMINDERS],
+  defaultReminders: DEFAULT_REMINDERS,
+  contextualReminders: CONTEXTUAL_REMINDERS,
   appendToToolResults: true,
-  maxRemindersPerTurn: 3, // Don't spam too many reminders
+  maxRemindersPerTurn: 2, // Reduced from 3
 };
 
 export class SystemReminder {
@@ -38,7 +43,7 @@ export class SystemReminder {
   }
 
   /**
-   * Get the system reminder text to append
+   * Get the system reminder text to append (legacy, uses default reminders)
    */
   getReminderText(): string {
     if (!this.config.enabled) {
@@ -49,19 +54,49 @@ export class SystemReminder {
       return ''; // Don't spam too many reminders
     }
 
+    if (this.config.defaultReminders.length === 0) {
+      return '';
+    }
+
     this.reminderCountThisTurn++;
-    return this.config.reminders.join('\n\n');
+    return this.config.defaultReminders.join('\n');
+  }
+
+  /**
+   * Get contextual reminder based on tool name
+   */
+  getContextualReminder(toolName: string): string {
+    if (!this.config.enabled) {
+      return '';
+    }
+
+    if (this.reminderCountThisTurn >= this.config.maxRemindersPerTurn) {
+      return '';
+    }
+
+    const reminders = this.config.contextualReminders[toolName];
+    if (!reminders || reminders.length === 0) {
+      return '';
+    }
+
+    this.reminderCountThisTurn++;
+    // Pick first matching reminder (could randomize if multiple)
+    return reminders[0];
   }
 
   /**
    * Append reminder to tool result content
    */
-  appendToResult(result: unknown): unknown {
+  appendToResult(result: unknown, toolName?: string): unknown {
     if (!this.config.enabled || !this.config.appendToToolResults) {
       return result;
     }
 
-    const reminderText = this.getReminderText();
+    // Try contextual reminder first, fall back to default
+    const reminderText = toolName 
+      ? this.getContextualReminder(toolName) 
+      : this.getReminderText();
+      
     if (!reminderText) {
       return result;
     }
@@ -74,11 +109,11 @@ export class SystemReminder {
         // Append to content array
         res.content = [
           ...res.content,
-          { type: 'text', text: `\n\n${reminderText}` },
+          { type: 'text', text: `\n${reminderText}` },
         ];
       } else if (typeof res.content === 'string') {
         // Append to string content
-        res.content = `${res.content}\n\n${reminderText}`;
+        res.content = `${res.content}\n${reminderText}`;
       }
       
       return res;
