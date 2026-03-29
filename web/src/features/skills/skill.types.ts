@@ -4,7 +4,7 @@ export interface SkillCatalogEntry {
   directoryId: string;
   name: string;
   description: string;
-  source: 'builtin' | 'workspace' | 'global';
+  source: 'builtin' | 'workspace' | 'global' | 'extra';
   path: string;
   managed: boolean;
 }
