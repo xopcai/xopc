@@ -1,6 +1,13 @@
 appId: com.xopcai.xopcbot
 productName: xopcbot
 
+# Workaround for electron-builder 26.x + pnpm compatibility
+npmRebuild: false
+nodeGypRebuild: false
+
+# Scoped npm name (@xopcai/xopcbot) would otherwise produce paths like dist/release/@xopcai/*.deb (parent dir missing).
+artifactName: ${productName}-${version}-${arch}.${ext}
+
 # Do not auto-publish to GitHub Releases (CI sets CI=true). Artifacts are uploaded via Actions.
 # Prevents implicit GH upload + temp .dmg ENOENT when release is missing or multi-arch build overlaps.
 publish: null
@@ -30,7 +37,12 @@ win:
   target:
     - nsis
 
+# Avoid combined universal NSIS on multi-arch CI (smaller, clearer per-arch installers).
+nsis:
+  buildUniversalInstaller: false
+
 linux:
+  category: Utility
   target:
     - AppImage
     - deb

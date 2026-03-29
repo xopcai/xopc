@@ -1,10 +1,14 @@
 # Build distributable Electron apps (electron-vite + electron-builder).
 # Artifacts: dist/release/* per job (see electron-builder.yml).
 #
+# If you previously had `.github/workflows/electron.yml` and see two "Electron Build" in Actions,
+# the old workflow is orphaned after rename: disable it with:
+#   gh api -X PUT repos/<owner>/<repo>/actions/workflows/<old-workflow-id>/disable
+#
 # Coverage (GitHub-hosted runners):
 #   - macOS: Apple Silicon runner builds both Intel (x64) + arm64 in one job
 #   - Windows: x64 + arm64 (separate runners)
-#   - Linux: x64 + arm64 (separate runners; labels: ubuntu-* / ubuntu-*-arm)
+#   - Linux: x64 (AppImage+deb) + arm64 AppImage only on ubuntu-24.04-arm (deb/fpm on arm64 CI is unreliable).
 #
 # Triggers:
 #   - workflow_dispatch (manual)
@@ -15,6 +19,11 @@
 #
 # Optional secrets (macOS signing / notarization):
 #   - CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+#
+# Inspect runs locally (after `gh auth login`):
+#   ./scripts/gh-electron-build-runs.sh
+#   gh run list --workflow=electron-build.yml --limit 15
+#   gh run view <run-id> --log-failed
 
 name: Electron Build
 
@@ -39,6 +48,7 @@ jobs:
   package:
     name: ${{ matrix.artifact_name }}
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 90
     strategy:
       fail-fast: false
       matrix:
@@ -58,7 +68,7 @@ jobs:
             electron_builder_args: '--linux --x64'
           - os: ubuntu-24.04-arm
             artifact_name: linux-arm64
-            electron_builder_args: '--linux --arm64'
+            electron_builder_args: '--linux appimage --arm64'
 
     steps:
       - name: Checkout
@@ -83,9 +93,41 @@ jobs:
 
       - name: Build Electron app
         shell: bash
+        env:
+          # Avoid hard-link issues on some Windows runners when packaging.
+          USE_HARD_LINKS: false
         run: |
           pnpm run electron:vite:build
-          node scripts/electron-builder.mjs ${{ matrix.electron_builder_args }}
+          # macOS: build architectures sequentially to avoid DMG temp file conflicts
+          if [[ "${{ matrix.os }}" == "macos-latest" ]]; then
+            echo "Building macOS x64..."
+            node scripts/electron-builder.mjs --mac --x64
+            echo "Building macOS arm64..."
+            node scripts/electron-builder.mjs --mac --arm64
+          else
+            node scripts/electron-builder.mjs ${{ matrix.electron_builder_args }}
+          fi
+
+      - name: Verify artifacts
+        shell: bash
+        run: |
+          echo "Checking build artifacts..."
+          if [ ! -d "dist/release" ]; then
+            echo "❌ dist/release directory not found!"
+            exit 1
+          fi
+          
+          # Count actual artifact files (not directories)
+          artifact_count=$(find dist/release -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.snap" \) | wc -l)
+          if [ "$artifact_count" -eq 0 ]; then
+            echo "❌ No installable artifacts found in dist/release!"
+            echo "Contents of dist/release:"
+            find dist/release -type f
+            exit 1
+          fi
+          
+          echo "✅ Found $artifact_count artifact(s):"
+          find dist/release -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.snap" \)
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
