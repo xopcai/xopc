@@ -31,6 +31,7 @@ import {
   type ProviderCategory,
   type ProviderRowModel,
 } from '@/features/settings/providers-api';
+import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages, type ProvidersSettingsMessages } from '@/i18n/messages';
@@ -456,7 +457,8 @@ function ProviderCredentialRow({
                   type={showKey || !masked ? 'text' : 'password'}
                   className={cn(
                     'w-full rounded-lg border border-edge bg-surface-panel py-2 pl-3 pr-20 font-mono text-sm text-fg',
-                    'placeholder:text-fg-subtle focus:border-edge-strong focus:outline-none focus:ring-2 focus:ring-accent/30',
+                    'placeholder:text-fg-subtle',
+                    settingsInputFocusClass,
                     'dark:border-edge',
                   )}
                   value={inputValue}
@@ -571,7 +573,8 @@ function ProviderCredentialRow({
                 type="text"
                 className={cn(
                   'min-w-0 flex-1 rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
-                  'focus:border-edge-strong focus:outline-none focus:ring-2 focus:ring-accent/30 dark:border-edge',
+                  settingsInputFocusClass,
+                  'dark:border-edge',
                 )}
                 value={codeInput}
                 placeholder={labels.pasteRedirectUrl}

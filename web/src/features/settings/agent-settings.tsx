@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { ModelSelector } from '@/features/chat/model-selector';
 import { fetchAgentDefaults, patchAgentDefaults, type AgentDefaultsState } from '@/features/settings/config-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
-import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
+import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -34,7 +34,8 @@ function Field({
 function inputClassName(): string {
   return cn(
     'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
-    'placeholder:text-fg-subtle focus:border-edge-strong focus:outline-none focus:ring-2 focus:ring-accent/30',
+    'placeholder:text-fg-subtle',
+    settingsInputFocusClass,
     'dark:border-edge',
   );
 }

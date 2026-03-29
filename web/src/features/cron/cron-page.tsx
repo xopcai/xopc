@@ -49,7 +49,11 @@ import {
   formatTime,
   truncate,
 } from '@/features/cron/cron-utils';
-import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
+import {
+  formControlBorderFocusClass,
+  nativeSelectMaxWidthClass,
+  selectControlBaseClass,
+} from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
@@ -82,7 +86,7 @@ const DEFAULT_SCHEDULE = '*/5 * * * *';
 function inputClassName(disabled?: boolean): string {
   return cn(
     'w-full rounded-md border border-edge bg-surface-base px-3 py-2 text-sm text-fg placeholder:text-fg-disabled',
-    'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+    formControlBorderFocusClass,
     disabled && 'cursor-not-allowed opacity-60',
   );
 }

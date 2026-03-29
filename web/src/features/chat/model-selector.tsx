@@ -4,7 +4,11 @@ import { useMemo, useState } from 'react';
 import useSWR from 'swr';
 
 import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
-import { comboboxTriggerLayoutClass } from '@/lib/form-field-width';
+import {
+  comboboxTriggerLayoutClass,
+  formControlBorderFocusClass,
+  selectComboboxTriggerFocusClass,
+} from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
@@ -77,7 +81,7 @@ export function ModelSelector({
             'items-center gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-left text-sm font-normal text-fg',
             interaction.transition,
             'hover:border-edge hover:bg-surface-hover/45',
-            'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/18 focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+            selectComboboxTriggerFocusClass,
             'disabled:cursor-not-allowed disabled:opacity-50',
             'dark:border-edge-subtle dark:hover:bg-surface-hover/55',
             compact && 'py-1.5 text-[13px]',
@@ -98,7 +102,10 @@ export function ModelSelector({
         >
           <input
             type="search"
-            className="mb-1 w-full rounded-lg border border-edge-subtle bg-surface-base px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-disabled focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/18 dark:bg-surface-hover/40"
+            className={cn(
+              'mb-1 w-full rounded-lg border border-edge-subtle bg-surface-base px-2.5 py-1.5 text-sm text-fg placeholder:text-fg-disabled dark:bg-surface-hover/40',
+              formControlBorderFocusClass,
+            )}
             placeholder={searchPlaceholder}
             value={query}
             onChange={(e) => setQuery(e.target.value)}

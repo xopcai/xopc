@@ -2,7 +2,7 @@ import { CronExpressionParser } from 'cron-parser';
 import { useCallback, useEffect, useMemo, useState, type ChangeEvent } from 'react';
 
 import { cn } from '@/lib/cn';
-import { selectControlBaseClass } from '@/lib/form-field-width';
+import { formControlBorderFocusClass, selectControlBaseClass } from '@/lib/form-field-width';
 
 /** Matches design order: 不重复 → 间隔 → 每小时 → 每天 → 每周 → 每月 → 自定义 */
 export type SchedulePickerMode =
@@ -44,22 +44,23 @@ const pickerSelectClass = cn(
 
 const timeInputClass = cn(
   'h-9 min-w-[6.5rem] shrink-0 rounded-lg border border-edge-subtle bg-surface-panel px-2 py-1.5 text-sm text-fg',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/18 dark:bg-surface-panel',
+  formControlBorderFocusClass,
+  'dark:bg-surface-panel',
 );
 
 const dateInputClass = cn(
   'h-9 min-w-[9.5rem] shrink-0 rounded-lg border border-edge-subtle bg-surface-panel px-2 py-1.5 text-sm text-fg',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/18',
+  formControlBorderFocusClass,
 );
 
 const numberInputClass = cn(
   'h-9 w-14 shrink-0 rounded-lg border border-edge-subtle bg-surface-panel px-2 py-1.5 text-center text-sm tabular-nums text-fg',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/18',
+  formControlBorderFocusClass,
 );
 
 const cronTextareaClass = cn(
   'min-h-[2.5rem] w-full rounded-lg border border-edge-subtle bg-surface-base px-3 py-2 font-mono text-xs text-fg',
-  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/18',
+  formControlBorderFocusClass,
 );
 
 function defaultTodayYmd(): string {

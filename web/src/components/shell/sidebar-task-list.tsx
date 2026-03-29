@@ -16,6 +16,7 @@ import {
 } from '@/features/sessions/session-api';
 import type { SessionMetadata } from '@/features/sessions/session.types';
 import { messages } from '@/i18n/messages';
+import { formControlBorderFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -392,7 +393,11 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
               type="text"
               value={renameDraft}
               onChange={(e) => setRenameDraft(e.target.value)}
-              className="mt-1.5 w-full rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg outline-none focus-visible:ring-2 focus-visible:ring-accent dark:border-edge"
+              className={cn(
+                'mt-1.5 w-full rounded-lg border border-edge bg-surface-base px-3 py-2 text-sm text-fg',
+                formControlBorderFocusClass,
+                'dark:border-edge',
+              )}
               placeholder={renameTarget ? sessionTitle(renameTarget, m.chat.newSession) : ''}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') {

@@ -270,7 +270,7 @@ export function SkillsPage() {
         <section className="flex flex-col gap-3">
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <h2 className="text-sm font-medium text-fg">{sk.tableTitle}</h2>
-            <div className="flex w-full min-w-0 items-center gap-2 rounded-xl bg-surface-base px-3 py-2 transition-colors focus-within:ring-2 focus-within:ring-accent/35 sm:max-w-md dark:bg-surface-hover/40">
+            <div className="flex w-full min-w-0 items-center gap-2 rounded-xl bg-surface-base px-3 py-2 transition-colors sm:max-w-md dark:bg-surface-hover/40">
               <Search className="size-4 shrink-0 text-fg-disabled" strokeWidth={1.75} aria-hidden />
               <input
                 type="search"

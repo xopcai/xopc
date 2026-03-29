@@ -19,7 +19,7 @@ import {
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
+import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import { messages, type ModelsSettingsMessages } from '@/i18n/messages';
@@ -71,7 +71,8 @@ const INPUT_OPTIONS = [
 function inputClassName(): string {
   return cn(
     'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
-    'placeholder:text-fg-subtle focus:border-edge-strong focus:outline-none focus:ring-2 focus:ring-accent/30',
+    'placeholder:text-fg-subtle',
+    settingsInputFocusClass,
     'dark:border-edge',
   );
 }

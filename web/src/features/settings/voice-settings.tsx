@@ -9,7 +9,7 @@ import {
   type VoiceModelsPayload,
   type VoiceSettingsState,
 } from '@/features/settings/voice-config-api';
-import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
+import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages, type VoiceSettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
@@ -19,7 +19,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 function inputClassName(): string {
   return cn(
     'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
-    'placeholder:text-fg-subtle focus:border-edge-strong focus:outline-none focus:ring-2 focus:ring-accent/30',
+    'placeholder:text-fg-subtle',
+    settingsInputFocusClass,
     'dark:border-edge',
   );
 }
