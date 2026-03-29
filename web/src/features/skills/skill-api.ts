@@ -15,7 +15,7 @@ async function readErrorMessage(res: Response): Promise<string> {
 }
 
 export async function getSkills(): Promise<SkillsPayload> {
-  const res = await apiFetch(apiUrl('/api/skills'));
+  const res = await apiFetch(apiUrl('/api/skills'), { cache: 'no-store' });
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));
   }
@@ -85,4 +85,32 @@ export async function deleteSkill(skillId: string): Promise<void> {
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));
   }
+}
+
+export async function patchSkillEnabled(skillName: string, enabled: boolean): Promise<void> {
+  const res = await apiFetch(apiUrl('/api/skills/enabled'), {
+    method: 'PATCH',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ skillName, enabled }),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+}
+
+export async function getSkillMarkdown(skillName: string): Promise<{ name: string; markdown: string }> {
+  const res = await apiFetch(apiUrl(`/api/skills/${encodeURIComponent(skillName)}/content`), {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  const data = (await res.json()) as {
+    ok?: boolean;
+    payload?: { name: string; markdown: string };
+  };
+  if (!data.payload?.markdown) {
+    throw new Error('Invalid response');
+  }
+  return data.payload;
 }

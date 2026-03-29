@@ -11,7 +11,7 @@ import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
 import { CredentialResolver } from '../auth/credentials.js';
-import { resolveBundledSkillsDir } from '../config/paths.js';
+import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
 import { loadBootstrapFiles, extractTextContent } from './context/helpers.js';
 import { SkillManager } from './skills/index.js';
 import { SystemPromptBuilder } from './prompt/service-prompt-builder.js';
@@ -20,7 +20,9 @@ import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/i
 import type { MessageBus } from '../infra/bus/index.js';
 import type { SessionContext } from './session/session-context.js';
 import type { Skill } from './skills/types.js';
+import { createSkillConfigManager } from './skills/config.js';
 import { isUnderManagedSkillsDir } from './skills/managed-store.js';
+import { readFileSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 
 const log = createLogger('AgentManager');
@@ -32,6 +34,10 @@ export interface SkillCatalogEntry {
   source: Skill['source'];
   path: string;
   managed: boolean;
+  /** User toggle in ~/.xopcbot/skills.json (`entries[name].enabled`). Default true. */
+  enabled: boolean;
+  /** When true, skill is never injected into `<available_skills>` (SKILL.md frontmatter). */
+  disableModelInvocation: boolean;
 }
 
 export interface AgentManagerConfig {
@@ -108,11 +114,28 @@ export class AgentManager {
   /**
    * Skills currently loaded (merged). `managed` means the skill directory is under ~/.xopcbot/skills.
    */
+  /**
+   * Read raw SKILL.md from disk (including frontmatter) for UI preview.
+   */
+  getSkillMarkdownSource(skillName: string): { name: string; markdown: string } | null {
+    const skill = this.skillManager.findSkill(skillName);
+    if (!skill) return null;
+    try {
+      const markdown = readFileSync(skill.filePath, 'utf-8');
+      return { name: skill.name, markdown };
+    } catch (err) {
+      log.warn({ err, skillName, path: skill.filePath }, 'Failed to read SKILL.md');
+      return null;
+    }
+  }
+
   getSkillCatalog(): SkillCatalogEntry[] {
+    const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     return this.skillManager.getSkills().map((s) => {
       const base = resolve(s.baseDir);
       const managed = isUnderManagedSkillsDir(s.baseDir);
       const directoryId = base.split(sep).filter(Boolean).pop() || s.name;
+      const enabled = !(skillsConfig.entries?.[s.name]?.enabled === false);
       return {
         directoryId,
         name: s.name,
@@ -120,8 +143,22 @@ export class AgentManager {
         source: s.source,
         path: s.baseDir,
         managed,
+        enabled,
+        disableModelInvocation: s.disableModelInvocation,
       };
     });
+  }
+
+  /**
+   * After ~/.xopcbot/skills.json changes (enable/disable), refresh `<available_skills>` on active agents.
+   */
+  refreshSkillsAfterSkillConfigChange(): void {
+    this.skillManager.refreshPromptFromConfig();
+    const newPrompt = this.systemPromptBuilder.build(this.bootstrapFiles);
+    for (const instance of this.agents.values()) {
+      instance.agent.setSystemPrompt(newPrompt);
+    }
+    log.info({ agents: this.agents.size }, 'Skill toggles applied; system prompt updated');
   }
 
   /**

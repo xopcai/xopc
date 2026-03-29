@@ -1246,9 +1246,50 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ ok: true, payload });
   });
 
+  authenticated.get('/api/skills/:skillName/content', (c) => {
+    const raw = c.req.param('skillName');
+    if (!raw) {
+      return c.json({ ok: false, error: 'Missing skill name' }, 400);
+    }
+    let skillName: string;
+    try {
+      skillName = decodeURIComponent(raw);
+    } catch {
+      return c.json({ ok: false, error: 'Invalid skill name' }, 400);
+    }
+    const data = service.getSkillMarkdownSource(skillName);
+    if (!data) {
+      return c.json({ ok: false, error: 'Skill not found' }, 404);
+    }
+    return c.json({ ok: true, payload: data });
+  });
+
   authenticated.post('/api/skills/reload', (c) => {
     service.reloadSkillsFromDisk();
     return c.json({ ok: true });
+  });
+
+  authenticated.patch('/api/skills/enabled', async (c) => {
+    let body: { skillName?: unknown; enabled?: unknown };
+    try {
+      body = (await c.req.json()) as { skillName?: unknown; enabled?: unknown };
+    } catch {
+      return c.json({ ok: false, error: 'Invalid JSON' }, 400);
+    }
+    const skillName = typeof body.skillName === 'string' ? body.skillName.trim() : '';
+    const enabled = body.enabled;
+    if (!skillName || typeof enabled !== 'boolean') {
+      return c.json({ ok: false, error: 'Expected { skillName: string, enabled: boolean }' }, 400);
+    }
+    try {
+      service.patchSkillEnabled(skillName, enabled);
+      return c.json({ ok: true });
+    } catch (err) {
+      return c.json(
+        { ok: false, error: err instanceof Error ? err.message : 'Update failed' },
+        400,
+      );
+    }
   });
 
   authenticated.post('/api/skills/upload', async (c) => {

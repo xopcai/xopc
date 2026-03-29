@@ -17,13 +17,14 @@ import type { SessionListQuery, ExportFormat } from '../session/types.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { getModelRegistry } from '../providers/index.js';
 import { getLogDir, getLogStats, createLogger } from '../utils/logger.js';
-import { resolveConfigPath, resolveCronJobsPath } from '../config/paths.js';
+import { resolveConfigPath, resolveCronJobsPath, resolveStateDir } from '../config/paths.js';
 import { AgentRunRelay } from './agent-run-relay.js';
 import {
   deleteManagedSkill as deleteManagedSkillDir,
   installSkillFromZip,
   listManagedSkillDirs,
 } from '../agent/skills/managed-store.js';
+import { createSkillConfigManager } from '../agent/skills/config.js';
 import type { SkillCatalogEntry } from '../agent/agent-manager.js';
 import type { ManagedSkillListItem } from '../agent/skills/managed-store.js';
 
@@ -775,6 +776,10 @@ export class GatewayService {
     };
   }
 
+  getSkillMarkdownSource(skillName: string): { name: string; markdown: string } | null {
+    return this.agentService.getSkillMarkdownSource(skillName);
+  }
+
   deleteManagedSkill(skillId: string): void {
     deleteManagedSkillDir(skillId);
     this.agentService.refreshSkillsAfterDiskChange();
@@ -791,6 +796,11 @@ export class GatewayService {
 
   reloadSkillsFromDisk(): void {
     this.agentService.refreshSkillsAfterDiskChange();
+  }
+
+  patchSkillEnabled(skillName: string, enabled: boolean): void {
+    createSkillConfigManager(resolveStateDir()).setSkillEnabled(skillName, enabled);
+    this.agentService.refreshSkillsAfterSkillConfigChange();
   }
 
   get sessionManagerInstance(): SessionManager {

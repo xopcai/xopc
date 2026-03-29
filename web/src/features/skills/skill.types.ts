@@ -7,6 +7,10 @@ export interface SkillCatalogEntry {
   source: 'builtin' | 'workspace' | 'global' | 'extra';
   path: string;
   managed: boolean;
+  /** User toggle (default true). */
+  enabled: boolean;
+  /** When true, skill is never shown to the model (SKILL.md). */
+  disableModelInvocation: boolean;
 }
 
 export interface ManagedSkillDir {
