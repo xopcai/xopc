@@ -1,14 +1,20 @@
 # Build distributable Electron apps (electron-vite + electron-builder).
-# Artifacts: dist/release/* per platform (see electron-builder.yml).
+# Artifacts: dist/release/* per job (see electron-builder.yml).
+#
+# Coverage (GitHub-hosted runners):
+#   - macOS: Apple Silicon runner builds both Intel (x64) + arm64 in one job
+#   - Windows: x64 + arm64 (separate runners)
+#   - Linux: x64 + arm64 (separate runners; labels: ubuntu-* / ubuntu-*-arm)
 #
 # Triggers:
 #   - workflow_dispatch (manual)
 #   - git tag push: v* (e.g. v0.2.3)
 #
-# Optional secrets (macOS signing / notarization — only if you ship signed builds):
-#   - CSC_LINK: base64-encoded .p12 or path (see electron-builder docs)
-#   - CSC_KEY_PASSWORD
-#   - APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID (notarization)
+# Private repos: arm64 Linux/Windows runners require available quota on your plan
+# (see GitHub docs: “Standard GitHub-hosted runners for private repositories”).
+#
+# Optional secrets (macOS signing / notarization):
+#   - CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
 
 name: Electron Build
 
@@ -24,18 +30,28 @@ concurrency:
 
 jobs:
   package:
-    name: Package (${{ matrix.os }})
+    name: ${{ matrix.artifact_name }}
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
       matrix:
         include:
+          # macOS arm64 host → produce Intel + Apple Silicon artifacts (dmg/zip per arch).
           - os: macos-latest
-            artifact_name: macos
+            artifact_name: macos-x64-arm64
+            electron_builder_args: '--mac --x64 --arm64'
           - os: windows-latest
-            artifact_name: windows
+            artifact_name: windows-x64
+            electron_builder_args: '--win --x64'
+          - os: windows-11-arm
+            artifact_name: windows-arm64
+            electron_builder_args: '--win --arm64'
           - os: ubuntu-latest
-            artifact_name: linux
+            artifact_name: linux-x64
+            electron_builder_args: '--linux --x64'
+          - os: ubuntu-24.04-arm
+            artifact_name: linux-arm64
+            electron_builder_args: '--linux --arm64'
 
     steps:
       - name: Checkout
@@ -55,12 +71,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      # Full Node + web bundle (electron-builder packs dist/** per electron-builder.yml).
       - name: Build project (node + web)
         run: pnpm run build
 
       - name: Build Electron app
-        run: pnpm run electron:build
+        shell: bash
+        run: |
+          pnpm run electron:vite:build
+          node scripts/electron-builder.mjs ${{ matrix.electron_builder_args }}
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v4
