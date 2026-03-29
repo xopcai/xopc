@@ -61,15 +61,15 @@ export function SearchSourceList({ blocks }: SearchSourceListProps) {
             : undefined;
 
           return (
-            <li key={`${source.url}-${index}`} className="flex gap-2.5">
+            <li key={`${source.url}-${index}`} className="flex min-w-0 gap-2.5">
               <span className="mt-0.5 shrink-0 text-xs text-fg-disabled">{index + 1}.</span>
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
+                <div className="flex min-w-0 flex-wrap items-start gap-1.5">
                   {faviconUrl ? (
                     <img
                       src={faviconUrl}
                       alt=""
-                      className="h-3.5 w-3.5 shrink-0 rounded-sm"
+                      className="mt-0.5 h-3.5 w-3.5 shrink-0 rounded-sm"
                       aria-hidden
                     />
                   ) : null}
@@ -77,13 +77,15 @@ export function SearchSourceList({ blocks }: SearchSourceListProps) {
                     href={source.url}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="truncate text-xs font-medium text-accent-fg hover:underline"
+                    className="min-w-0 flex-1 break-words text-xs font-medium text-accent-fg [overflow-wrap:anywhere] hover:underline"
                   >
                     {source.title}
                   </a>
                 </div>
                 {source.snippet ? (
-                  <p className="mt-0.5 line-clamp-2 text-xs text-fg-muted">{source.snippet}</p>
+                  <p className="mt-0.5 line-clamp-4 text-xs break-words text-fg-muted [overflow-wrap:anywhere]">
+                    {source.snippet}
+                  </p>
                 ) : null}
               </div>
             </li>

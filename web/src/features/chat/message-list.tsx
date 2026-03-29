@@ -60,7 +60,7 @@ export const MessageList = memo(function MessageList({
   const totalSize = virtualizer.getTotalSize();
 
   return (
-    <div className="relative w-full" style={{ height: totalSize }}>
+    <div className="relative w-full min-w-0" style={{ height: totalSize }}>
       {virtualizer.getVirtualItems().map((virtualRow) => {
         const msg = list[virtualRow.index];
         if (!msg) return null;
@@ -81,6 +81,7 @@ export const MessageList = memo(function MessageList({
               authToken={authToken}
               isStreaming={isStreamRow}
               progress={isStreamRow ? progress : null}
+              messageIndex={virtualRow.index}
             />
           </div>
         );

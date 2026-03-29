@@ -321,6 +321,50 @@ html.dark {
   overscroll-behavior-y: contain;
 }
 
+/**
+ * Chat markdown bubbles: keep long lines / code / tables from widening the main column
+ * (avoids horizontal scrollbars on the message list while streaming).
+ */
+.markdown-content {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.markdown-content .markdown-body {
+  min-width: 0;
+  max-width: 100%;
+  overflow-wrap: anywhere;
+  word-break: break-word;
+}
+
+.markdown-content .markdown-body pre {
+  max-width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.markdown-content .markdown-body pre code.hljs {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.markdown-content .markdown-body table {
+  max-width: 100%;
+  table-layout: fixed;
+}
+
+.markdown-content .markdown-body th,
+.markdown-content .markdown-body td {
+  word-break: break-word;
+  overflow-wrap: anywhere;
+}
+
+/** Execution process drawer (right): no horizontal scroll; wrap long tool/thinking lines */
+.chat-execution-drawer {
+  min-width: 0;
+  overflow-x: hidden;
+}
+
 html.dark .chat-messages {
   scrollbar-color: color-mix(in srgb, var(--color-edge) 72%, transparent) transparent;
 }
