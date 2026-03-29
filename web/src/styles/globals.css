@@ -128,6 +128,16 @@ html.dark {
     text-rendering: optimizeLegibility;
     -webkit-text-size-adjust: 100%;
     text-size-adjust: 100%;
+    font-size: 100%;
+  }
+
+  /* UI text scale — rem-based layout follows root (settings → appearance). */
+  html[data-font-scale='compact'] {
+    font-size: 87.5%;
+  }
+
+  html[data-font-scale='large'] {
+    font-size: 112.5%;
   }
 
   body {

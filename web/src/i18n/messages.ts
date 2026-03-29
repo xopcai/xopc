@@ -675,6 +675,11 @@ const bundles: Record<
       languageDescription: string;
       themeTitle: string;
       themeDescription: string;
+      fontScaleTitle: string;
+      fontScaleDescription: string;
+      fontScaleCompact: string;
+      fontScaleDefault: string;
+      fontScaleLarge: string;
     };
     gatewaySettings: {
       needToken: string;
@@ -1563,11 +1568,16 @@ const bundles: Record<
       clearActiveHours: 'Clear active hours',
     },
     appearanceSettings: {
-      subtitle: 'Interface language and color theme apply to this browser only.',
+      subtitle: 'Interface language, color theme, and text size apply to this browser only.',
       languageTitle: 'Language',
       languageDescription: 'Choose the UI language for the gateway console.',
       themeTitle: 'Theme',
       themeDescription: 'Light, dark, or follow your system setting.',
+      fontScaleTitle: 'Text size',
+      fontScaleDescription: 'Adjust the gateway console scale. Uses the browser’s root font size.',
+      fontScaleCompact: 'Compact',
+      fontScaleDefault: 'Default',
+      fontScaleLarge: 'Large',
     },
   },
   zh: {
@@ -2362,11 +2372,16 @@ const bundles: Record<
       clearActiveHours: '清除活跃时段',
     },
     appearanceSettings: {
-      subtitle: '界面语言与配色仅保存在本浏览器。',
+      subtitle: '界面语言、配色与文字大小仅保存在本浏览器。',
       languageTitle: '语言',
       languageDescription: '选择网关控制台界面语言。',
       themeTitle: '主题',
       themeDescription: '浅色、深色或跟随系统。',
+      fontScaleTitle: '文字大小',
+      fontScaleDescription: '调整控制台整体字号比例（基于浏览器根字号）。',
+      fontScaleCompact: '紧凑',
+      fontScaleDefault: '默认',
+      fontScaleLarge: '较大',
     },
   },
 };
