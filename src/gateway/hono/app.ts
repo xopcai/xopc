@@ -63,7 +63,25 @@ function agentModelRefToString(ref: unknown): string | undefined {
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
-const UI_STATIC_ROOT = join(__dirname, '../../gateway/static/root');
+
+/**
+ * Web UI build output: `pnpm run build:web` → `dist/gateway/static/root` (see web/vite.config.ts).
+ * This file compiles to `dist/src/gateway/hono/`, so we must go up to `dist/` then into `gateway/static/root`.
+ * Dev (`tsx` from `src/gateway/hono/`): use `dist/gateway/static/root` under the repo root.
+ */
+function resolveUiStaticRoot(): string {
+  const env = process.env['XOPCBOT_UI_STATIC_ROOT']?.trim();
+  if (env) return resolve(env);
+
+  const here = __dirname;
+  const normalized = here.replace(/\\/g, '/');
+  if (normalized.includes('/dist/src/gateway/')) {
+    return resolve(here, '../../../gateway/static/root');
+  }
+  return resolve(here, '../../../dist/gateway/static/root');
+}
+
+const UI_STATIC_ROOT = resolveUiStaticRoot();
 
 // MIME type mapping for static assets
 const MIME_TYPES: Record<string, string> = {
