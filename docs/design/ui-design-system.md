@@ -1,6 +1,6 @@
 # xopc 工作站 · 产品设计系统 (Design System)
 
-> **版本**: v1.2 · **建立时间**: 2026-03 · **修订**: 2026-03-26（Vercel Web Interface Guidelines 对齐：§7 无障碍与焦点规范、§8 动效合规（prefers-reduced-motion）、§11.5 排版细节、§13 Touch 交互与 URL 状态同步、新增 §14 工程合规规范）
+> **版本**: v1.2 · **建立时间**: 2026-03 · **修订**: 2026-03-29（§9.2.1 列表/网格刷新反馈：骨架屏 + 行内状态，避免成功 Toast；此前 2026-03-26：Vercel Web Interface Guidelines 对齐等）
 > 本文档是 xopc 所有产品的设计宪法，所有 UI 决策应以此为准。
 >
 > **工程实现（Gateway 控制台）**：`web/src/styles/globals.css`（Tailwind v4 `@theme`）为语义 token 的单一来源；本文数值与其保持一致。
@@ -526,9 +526,10 @@ focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-
 ### 9.2 加载态规范
 
 **骨架屏 (Skeleton)** — 用于列表、卡片等有固定结构的内容
-- 使用 `bg-surface-active animate-pulse rounded-lg`（或 `bg-edge`）模拟内容形状
+- 使用 `bg-surface-active animate-pulse rounded-lg`（或 `bg-edge`）模拟内容形状；需尊重 `prefers-reduced-motion` 时关闭脉冲（如 `motion-reduce:animate-none`）
 - 骨架屏的形状必须与真实内容的布局一致，不能随意画矩形
 - 颜色：亮色可用 `bg-surface-active`，暗色可用 `bg-surface-hover`，与表面层级一致即可
+- **列表/网格刷新**时与刷新按钮状态如何配合、为何不用成功 Toast，见 **§9.2.1**
 
 **行内 Spinner** — 用于按钮点击后的等待、局部数据刷新
 - 使用 Lucide 的 `Loader2` 图标配合 `animate-spin`
@@ -538,6 +539,19 @@ focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-
 **全屏加载** — 仅用于应用初始化，不用于页面切换
 - 居中显示品牌 Logo + 细线进度条
 - 超过 3 秒必须显示"加载较慢，请检查网络"的友好提示
+
+### 9.2.1 列表 / 卡片网格：刷新与重载的反馈（Gateway Web）
+
+当用户触发**重新拉取数据**或**从磁盘重载**（例如技能列表、任务列表的「刷新」）时，反馈应**安静、就地**，与 §0「沉静智能 (Calm Intelligence)」一致：
+
+| 做法 | 说明 |
+|------|------|
+| ✅ **骨架屏** | 在数据返回前，用与真实卡片**同布局**的骨架占位（图标块 + 标题条 + 若干正文条，`animate-pulse`，`motion-reduce:animate-none`），网格列数与加载完成后一致。 |
+| ✅ **刷新按钮状态** | 触发中的刷新按钮使用 `RefreshCw` + `animate-spin`（或等价），并 `disabled`，避免重复提交。 |
+| ❌ **成功 Toast / 顶栏成功条** | **不要**在页面顶部弹出「已刷新」「已从磁盘重载并更新列表」等成功提示——成功由**内容区被新数据替换**即可感知，额外文案是噪音。 |
+| ✅ **失败** | 仍使用**内联错误**（页面内 `role="alert"` 或简短错误条）或必要时的错误说明；失败需要用户知晓原因。 |
+
+**参考实现**：`web/src/features/skills/skills-page.tsx`（刷新时网格骨架 + 无成功 Toast）。
 
 ---
 

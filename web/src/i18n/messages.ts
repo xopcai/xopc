@@ -366,23 +366,41 @@ const bundles: Record<
     skills: {
       title: string;
       needToken: string;
-      hint: string;
+      tagline: string;
       refresh: string;
-      refreshSuccess: string;
-      reloadSuccess: string;
       reloadRuntime: string;
-      uploadSection: string;
-      dropHint: string;
+      reloadDiskAria: string;
+      heroFeaturedTitle: string;
+      heroFeaturedDesc: string;
+      marketplaceTitle: string;
+      tabBuiltin: string;
+      tabUser: string;
+      filterAll: string;
+      filterGlobal: string;
+      filterWorkspace: string;
+      filterExtra: string;
+      sectionOfficial: string;
+      sectionUser: string;
+      installCta: string;
+      createViaCursor: string;
+      installModalTitle: string;
+      installModalDropHint: string;
+      installModalReqTitle: string;
+      installModalReq1: string;
+      installModalReq2: string;
+      installAction: string;
+      installClose: string;
       searchPlaceholder: string;
       noSearchResults: string;
       uploading: string;
-      tableTitle: string;
       loading: string;
       empty: string;
       loadFailed: string;
       reloadFailed: string;
       uploadFailed: string;
+      installSuccess: string;
       zipOnly: string;
+      invalidFile: string;
       delete: string;
       deleteTitle: string;
       deleteMessage: string;
@@ -391,7 +409,7 @@ const bundles: Record<
       yes: string;
       no: string;
       cancel: string;
-      source: { builtin: string; workspace: string; global: string };
+      source: { builtin: string; workspace: string; global: string; extra: string };
       col: { name: string; description: string; source: string; managed: string; actions: string };
     };
     logs: {
@@ -1187,23 +1205,42 @@ const bundles: Record<
     skills: {
       title: 'Skills',
       needToken: 'Save a gateway token to manage skills.',
-      hint: 'Upload a .zip containing SKILL.md at the archive root or inside one folder (e.g. my-skill/SKILL.md). Managed skills are stored under ~/.xopcbot/skills. Reload updates the running agent’s skill list.',
+      tagline: 'Install and manage skills to extend xopcbot in conversation.',
       refresh: 'Refresh list',
-      refreshSuccess: 'List refreshed.',
-      reloadSuccess: 'Reloaded from disk and list updated.',
       reloadRuntime: 'Reload from disk',
-      uploadSection: 'Install or update (zip)',
-      dropHint: 'Drag and drop a .zip here, or click this area to choose a file.',
-      searchPlaceholder: 'Search by name, description, folder…',
+      reloadDiskAria: 'Reload skills from disk',
+      heroFeaturedTitle: 'Curated skills for your workflow',
+      heroFeaturedDesc:
+        'Writing, productivity, design, data, and more — install in one click. Managed skills live under ~/.xopcbot/skills.',
+      marketplaceTitle: 'Skill marketplace',
+      tabBuiltin: 'Built-in',
+      tabUser: 'Installed',
+      filterAll: 'All',
+      filterGlobal: 'Global',
+      filterWorkspace: 'Workspace',
+      filterExtra: 'Extra',
+      sectionOfficial: 'Official picks',
+      sectionUser: 'Your skills',
+      installCta: 'Install skill',
+      createViaCursor: 'Create in Cursor',
+      installModalTitle: 'Install skill',
+      installModalDropHint: 'Drop a .zip or SKILL.md file, or click to choose.',
+      installModalReqTitle: 'Requirements',
+      installModalReq1: 'A .zip archive that contains SKILL.md',
+      installModalReq2: 'Or drop a SKILL.md file directly',
+      installAction: 'Install',
+      installClose: 'Close',
+      searchPlaceholder: 'Search skills',
       noSearchResults: 'No skills match your search.',
       uploading: 'Uploading…',
-      tableTitle: 'Loaded skills',
       loading: 'Loading…',
       empty: 'No skills loaded.',
       loadFailed: 'Failed to load skills',
       reloadFailed: 'Failed to reload skills',
       uploadFailed: 'Upload failed',
+      installSuccess: 'Skill installed.',
       zipOnly: 'Please choose a .zip file',
+      invalidFile: 'Choose a .zip or SKILL.md file',
       delete: 'Delete',
       deleteTitle: 'Delete skill',
       deleteMessage: 'Remove folder "{{id}}" from managed skills? This cannot be undone.',
@@ -1216,6 +1253,7 @@ const bundles: Record<
         builtin: 'Bundled',
         workspace: 'Workspace',
         global: 'Global',
+        extra: 'Extra',
       },
       col: {
         name: 'Name',
@@ -2042,23 +2080,41 @@ const bundles: Record<
     skills: {
       title: '技能',
       needToken: '请先保存网关 Token 后再管理技能。',
-      hint: '上传包含 SKILL.md 的 .zip（根目录或单层文件夹，如 my-skill/SKILL.md）。已安装技能保存在 ~/.xopcbot/skills。「从磁盘重载」会刷新运行中代理的技能列表。',
+      tagline: '安装与管理技能，在对话中扩展 xopcbot 的能力。',
       refresh: '刷新列表',
-      refreshSuccess: '列表已刷新。',
-      reloadSuccess: '已从磁盘重载并更新列表。',
       reloadRuntime: '从磁盘重载',
-      uploadSection: '安装或更新（zip）',
-      dropHint: '将 .zip 拖到此处，或点击此区域选择文件。',
-      searchPlaceholder: '按名称、描述、文件夹搜索…',
+      reloadDiskAria: '从磁盘重载技能',
+      heroFeaturedTitle: '为你精选的技能',
+      heroFeaturedDesc: '涵盖写作、效率、设计、数据分析等多种场景，一键安装。技能保存在 ~/.xopcbot/skills。',
+      marketplaceTitle: '技能广场',
+      tabBuiltin: '内置',
+      tabUser: '用户安装',
+      filterAll: '全部',
+      filterGlobal: '全局',
+      filterWorkspace: '工作区',
+      filterExtra: '扩展',
+      sectionOfficial: '官方精选',
+      sectionUser: '已安装',
+      installCta: '安装技能',
+      createViaCursor: '通过 Cursor 创建',
+      installModalTitle: '安装技能',
+      installModalDropHint: '拖放 .zip 或 SKILL.md 文件，或点击选择',
+      installModalReqTitle: '文件要求',
+      installModalReq1: '包含 SKILL.md 文件的 .zip 压缩包',
+      installModalReq2: '或直接拖入 SKILL.md 文件',
+      installAction: '安装',
+      installClose: '关闭',
+      searchPlaceholder: '搜索技能',
       noSearchResults: '没有匹配的技能。',
       uploading: '上传中…',
-      tableTitle: '已加载技能',
       loading: '加载中…',
       empty: '暂无技能。',
       loadFailed: '加载技能失败',
       reloadFailed: '重载失败',
       uploadFailed: '上传失败',
+      installSuccess: '技能已安装。',
       zipOnly: '请选择 .zip 文件',
+      invalidFile: '请选择 .zip 或 SKILL.md 文件',
       delete: '删除',
       deleteTitle: '删除技能',
       deleteMessage: '确定删除已管理技能目录「{{id}}」？此操作不可恢复。',
@@ -2071,6 +2127,7 @@ const bundles: Record<
         builtin: '内置',
         workspace: '工作区',
         global: '全局',
+        extra: '扩展',
       },
       col: {
         name: '名称',
