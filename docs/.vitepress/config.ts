@@ -123,6 +123,7 @@ export default defineConfig({
             text: '参考',
             items: [
               { text: '模板文件', link: '/zh/reference/templates' },
+              { text: '构建与发布', link: '/zh/build-and-release' },
               { text: '控制台 UI 设计规范', link: '/design/ui-design-system' },
               { text: '网关控制台说明', link: '/web-migration-plan' }
             ]
