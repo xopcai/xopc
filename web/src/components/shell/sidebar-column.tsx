@@ -72,13 +72,13 @@ export const SidebarColumn = memo(function SidebarColumn() {
         className={cn(
           'app-sidebar-push flex min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base',
           // Mobile: overlay; animate with transform only (no main-column width reflow).
-          'max-lg:fixed max-lg:left-0 max-lg:top-0 max-lg:z-50 max-lg:h-[100dvh] max-lg:w-[min(18rem,85vw)]',
+          'max-lg:fixed max-lg:left-0 max-lg:top-0 max-lg:z-50 max-lg:h-[100dvh] max-lg:w-[min(16rem,85vw)]',
           'max-lg:transition-transform max-lg:duration-200 max-lg:ease-out',
           'motion-reduce:max-lg:transition-none',
           mobileNavOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
           // Desktop: in-flow rail
           'lg:relative lg:h-full lg:translate-x-0',
-          sidebarCollapsed ? 'lg:w-[4.5rem]' : 'lg:w-60',
+          sidebarCollapsed ? 'lg:w-[4.5rem]' : 'lg:w-64',
         )}
       >
         <div
