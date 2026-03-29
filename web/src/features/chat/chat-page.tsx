@@ -24,6 +24,10 @@ export function ChatPage() {
   const atBottomRef = useRef(true);
   const lastScrollTopRef = useRef(0);
   const lastClientHeightRef = useRef(0);
+  /** While true, ignore scroll events (layout from drawer toggle can fire scroll before we re-pin to bottom). */
+  const suppressScrollPinRef = useRef(false);
+  /** Virtual list must use `scrollToIndex`; set `pin` when drawer toggles and user was at bottom. */
+  const drawerPinIntentRef = useRef({ pin: false });
   /** Tracks loading→idle so we scroll to bottom once after refresh / session load. */
   const prevLoadingRef = useRef(true);
 
@@ -37,9 +41,6 @@ export function ChatPage() {
   useEffect(() => {
     atBottomRef.current = atBottom;
   }, [atBottom]);
-
-  const closeExecutionDrawer = useChatExecutionDrawerStore((s) => s.closeDrawer);
-  const executionDrawerOpen = useChatExecutionDrawerStore((s) => s.open);
 
   const {
     messages: chatMessages,
@@ -64,6 +65,19 @@ export function ChatPage() {
     abort,
     hasToken,
   } = useChatSession();
+
+  const closeExecutionDrawer = useChatExecutionDrawerStore((s) => s.closeDrawer);
+  const executionDrawerOpen = useChatExecutionDrawerStore((s) => s.open);
+  const prevDrawerOpenForPinRef = useRef(executionDrawerOpen);
+
+  if (prevDrawerOpenForPinRef.current !== executionDrawerOpen) {
+    prevDrawerOpenForPinRef.current = executionDrawerOpen;
+    if (!showSessionLoading) {
+      const pin = atBottomRef.current;
+      drawerPinIntentRef.current = { pin };
+      suppressScrollPinRef.current = pin;
+    }
+  }
 
   const prevFirstMessageRef = useRef<Message | undefined>(undefined);
   useEffect(() => {
@@ -102,7 +116,21 @@ export function ChatPage() {
     });
   }, []);
 
+  // Clear suppress after virtualizer + ResizeObserver pin (MessageList); until then ignore spurious onScroll.
+  useLayoutEffect(() => {
+    if (showSessionLoading) {
+      suppressScrollPinRef.current = false;
+      return;
+    }
+    if (!suppressScrollPinRef.current) return;
+    const t = window.setTimeout(() => {
+      suppressScrollPinRef.current = false;
+    }, 340);
+    return () => window.clearTimeout(t);
+  }, [executionDrawerOpen, showSessionLoading]);
+
   const onScroll = useCallback(() => {
+    if (suppressScrollPinRef.current) return;
     const el = scrollRef.current;
     if (!el) return;
     const { scrollTop, scrollHeight, clientHeight } = el;
@@ -201,7 +229,8 @@ export function ChatPage() {
       <div
         className={cn(
           'flex min-h-0 flex-1 flex-col',
-          'lg:grid lg:min-h-0 lg:grid-rows-1 lg:transition-[grid-template-columns] lg:duration-300 lg:ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:lg:transition-none',
+          /* No transition on grid-template-columns: animating fr widths reflows wrapped text every frame → visible flicker. */
+          'lg:grid lg:min-h-0 lg:grid-rows-1',
           executionDrawerOpen
             ? 'lg:grid-cols-[minmax(0,1.618fr)_minmax(0,1fr)]'
             : 'lg:grid-cols-[minmax(0,1fr)_minmax(0,0fr)]',
@@ -275,6 +304,8 @@ export function ChatPage() {
                         streaming={streaming}
                         progress={progress}
                         scrollElementRef={scrollRef}
+                        executionDrawerOpen={executionDrawerOpen}
+                        drawerPinBottomIntentRef={drawerPinIntentRef}
                       />
                     </>
                   )}

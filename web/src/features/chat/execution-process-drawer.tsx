@@ -60,8 +60,10 @@ export function ExecutionProcessDrawer({ messages: list }: { messages: Message[]
     return null;
   }
 
-  const motionClass =
-    'transition-[transform,opacity] duration-300 ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none motion-reduce:duration-0';
+  const overlayMotionClass =
+    'transition-opacity duration-300 ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none motion-reduce:duration-0';
+  const drawerSlideClass =
+    'transition-transform duration-300 ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:transition-none motion-reduce:duration-0';
 
   return (
     <>
@@ -69,7 +71,7 @@ export function ExecutionProcessDrawer({ messages: list }: { messages: Message[]
         type="button"
         className={cn(
           'fixed inset-0 z-30 bg-black/20 lg:hidden',
-          motionClass,
+          overlayMotionClass,
           entered ? 'opacity-100' : 'opacity-0 pointer-events-none',
         )}
         aria-label={m.chat.executionDrawerClose}
@@ -81,10 +83,11 @@ export function ExecutionProcessDrawer({ messages: list }: { messages: Message[]
           /* Shell split vs main chat: color only — no vertical border between large zones */
           'chat-execution-drawer flex min-h-0 w-[min(100%,420px)] max-w-[min(100%,420px)] min-w-0 flex-col overflow-x-hidden bg-surface-base text-fg',
           'fixed inset-y-0 right-0 z-40 max-h-full lg:static lg:z-auto lg:h-full lg:min-h-0 lg:w-full lg:max-w-none',
-          motionClass,
+          drawerSlideClass,
+          /* lg: no opacity fade on open — avoids stacking with main column reflow; mobile: slide in from right */
           entered
             ? 'translate-x-0 opacity-100'
-            : 'translate-x-full opacity-100 lg:translate-x-0 lg:opacity-0',
+            : 'translate-x-full opacity-100 lg:translate-x-0 lg:opacity-100',
           'motion-reduce:translate-x-0 motion-reduce:opacity-100',
         )}
         aria-label={m.chat.executionDrawerTitle}
