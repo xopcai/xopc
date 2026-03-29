@@ -16,11 +16,6 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Button } from '@/components/ui/button';
-import {
-  segmentedThumbActiveClassName,
-  segmentedThumbBaseClassName,
-  segmentedTrackClassName,
-} from '@/components/ui/segmented-styles';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import {
@@ -265,7 +260,21 @@ export function SkillsPage() {
     await load();
   };
 
-  const userCount = useMemo(() => catalog.filter((r) => r.source !== 'builtin').length, [catalog]);
+  const builtinTabStats = useMemo(() => {
+    const rows = catalog.filter((r) => r.source === 'builtin');
+    return {
+      total: rows.length,
+      enabled: rows.filter((r) => r.enabled).length,
+    };
+  }, [catalog]);
+
+  const userTabStats = useMemo(() => {
+    const rows = catalog.filter((r) => r.source !== 'builtin');
+    return {
+      total: rows.length,
+      enabled: rows.filter((r) => r.enabled).length,
+    };
+  }, [catalog]);
 
   const detailFromCatalog = useMemo(
     () => (detailTitle ? catalog.find((r) => r.name === detailTitle) : undefined),
@@ -482,42 +491,36 @@ export function SkillsPage() {
         </header>
 
         <section className="flex flex-col gap-4">
-          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
-            <div
-              className={cn(
-                segmentedTrackClassName,
-                'w-full items-stretch gap-px px-1 py-0.5 sm:w-auto',
-              )}
-              role="tablist"
-              aria-label={sk.skillsNavAria}
-            >
+          <div className="flex flex-col gap-3 border-b border-edge-subtle pb-3 sm:flex-row sm:items-center sm:justify-between dark:border-edge-subtle">
+            <div className="flex gap-1" role="tablist" aria-label={sk.skillsNavAria}>
               <button
                 type="button"
                 role="tab"
                 aria-selected={mainTab === 'builtin'}
                 className={cn(
-                  segmentedThumbBaseClassName,
-                  'h-7 min-h-7 flex-1 px-2.5 sm:flex-initial',
-                  mainTab === 'builtin' && segmentedThumbActiveClassName,
+                  'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  mainTab === 'builtin' ? 'text-fg' : 'text-fg-muted hover:text-fg',
                 )}
                 onClick={() => setMainTab('builtin')}
               >
                 {sk.tabBuiltin}
+                <span className="ml-1 tabular-nums text-fg-muted">
+                  ({builtinTabStats.enabled}/{builtinTabStats.total})
+                </span>
               </button>
               <button
                 type="button"
                 role="tab"
                 aria-selected={mainTab === 'user'}
                 className={cn(
-                  segmentedThumbBaseClassName,
-                  'inline-flex h-7 min-h-7 flex-1 items-center justify-center gap-1 px-2.5 sm:flex-initial',
-                  mainTab === 'user' && segmentedThumbActiveClassName,
+                  'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  mainTab === 'user' ? 'text-fg' : 'text-fg-muted hover:text-fg',
                 )}
                 onClick={() => setMainTab('user')}
               >
                 {sk.tabUser}
-                <span className="rounded bg-surface-hover px-1.5 py-px text-[10px] font-medium tabular-nums leading-none text-fg-subtle dark:bg-surface-active">
-                  {userCount}
+                <span className="ml-1 tabular-nums text-fg-muted">
+                  ({userTabStats.enabled}/{userTabStats.total})
                 </span>
               </button>
               <button
@@ -525,60 +528,67 @@ export function SkillsPage() {
                 role="tab"
                 aria-selected={mainTab === 'marketplace'}
                 className={cn(
-                  segmentedThumbBaseClassName,
-                  'h-7 min-h-7 flex-1 px-2.5 sm:flex-initial',
-                  mainTab === 'marketplace' && segmentedThumbActiveClassName,
+                  'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  mainTab === 'marketplace' ? 'text-fg' : 'text-fg-muted hover:text-fg',
                 )}
                 onClick={() => setMainTab('marketplace')}
               >
                 {sk.tabMarketplace}
               </button>
             </div>
-
-            {mainTab === 'user' ? (
-              <DropdownMenu.Root>
-                <DropdownMenu.Trigger asChild>
-                  <button
-                    type="button"
-                    className={cn(
-                      'inline-flex h-7 min-h-7 min-w-[9rem] shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-sm',
-                      interaction.transition,
-                      interaction.focusRingPanel,
-                    )}
-                  >
-                    <Funnel className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
-                    <span>{filterLabel}</span>
-                    <ChevronDown className="size-3.5 text-fg-subtle" strokeWidth={1.75} aria-hidden />
-                  </button>
-                </DropdownMenu.Trigger>
-                <DropdownMenu.Portal>
-                  <DropdownMenu.Content
-                    className="z-50 min-w-[10rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
-                    sideOffset={6}
-                    align="end"
-                  >
-                    {(['all', 'global', 'workspace', 'extra'] as const).map((key) => (
-                      <DropdownMenu.Item
-                        key={key}
-                        className={cn(
-                          'cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none',
-                          'hover:bg-surface-hover data-[highlighted]:bg-surface-hover',
-                        )}
-                        onSelect={() => setSourceFilter(key)}
-                      >
-                        {key === 'all'
-                          ? sk.filterAll
-                          : key === 'global'
-                            ? sk.filterGlobal
-                            : key === 'workspace'
-                              ? sk.filterWorkspace
-                              : sk.filterExtra}
-                      </DropdownMenu.Item>
-                    ))}
-                  </DropdownMenu.Content>
-                </DropdownMenu.Portal>
-              </DropdownMenu.Root>
-            ) : null}
+            <div
+              className={cn(
+                'flex min-w-0 items-center gap-2',
+                mainTab === 'user'
+                  ? 'flex-nowrap overflow-x-auto pb-0.5 sm:justify-end'
+                  : 'flex-wrap sm:justify-end',
+              )}
+            >
+              {mainTab === 'user' ? (
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex h-9 min-h-9 min-w-[9rem] shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-sm',
+                        interaction.transition,
+                        interaction.focusRingPanel,
+                      )}
+                    >
+                      <Funnel className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                      <span>{filterLabel}</span>
+                      <ChevronDown className="size-3.5 text-fg-subtle" strokeWidth={1.75} aria-hidden />
+                    </button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      className="z-50 min-w-[10rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
+                      sideOffset={6}
+                      align="end"
+                    >
+                      {(['all', 'global', 'workspace', 'extra'] as const).map((key) => (
+                        <DropdownMenu.Item
+                          key={key}
+                          className={cn(
+                            'cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none',
+                            'hover:bg-surface-hover data-[highlighted]:bg-surface-hover',
+                          )}
+                          onSelect={() => setSourceFilter(key)}
+                        >
+                          {key === 'all'
+                            ? sk.filterAll
+                            : key === 'global'
+                              ? sk.filterGlobal
+                              : key === 'workspace'
+                                ? sk.filterWorkspace
+                                : sk.filterExtra}
+                        </DropdownMenu.Item>
+                      ))}
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
+              ) : null}
+            </div>
           </div>
 
           {mainTab === 'marketplace' ? (
