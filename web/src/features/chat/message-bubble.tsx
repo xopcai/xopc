@@ -224,7 +224,6 @@ export const MessageBubble = memo(function MessageBubble({
         className={cn(
           'mb-2 flex w-full max-w-full items-center gap-2 text-left text-sm text-fg-subtle',
           interaction.transition,
-          interaction.press,
           'hover:text-fg-muted',
           'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
           drawerOpenForThis && 'text-accent-fg',
