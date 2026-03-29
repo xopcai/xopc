@@ -108,7 +108,7 @@ export function ExecutionProcessDrawer({ messages: list }: { messages: Message[]
             <X className="h-4 w-4" aria-hidden />
           </button>
         </div>
-        <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 [overflow-wrap:anywhere]">
+        <div className="chat-execution-drawer-scroll min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden px-4 py-4 [overflow-wrap:anywhere]">
           {stepBlocks.length === 0 ? (
             <p className="text-sm text-fg-muted">{m.chat.executionDrawerEmpty}</p>
           ) : (
