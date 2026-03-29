@@ -3,8 +3,6 @@ import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
 import { APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
-import { LanguageToggle } from '@/components/shell/language-toggle';
-import { ThemeToggle } from '@/components/shell/theme-toggle';
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -32,7 +30,7 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatH
       className={cn(
         'flex gap-3 px-3 sm:gap-4 sm:px-5 xl:px-6',
         APP_TOP_HEADER_BAR_CLASS,
-        sidebarCollapsed && 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-4',
+        sidebarCollapsed && 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center lg:gap-4',
       )}
     >
       <div className="flex min-w-0 shrink-0 items-center gap-2.5">
@@ -72,12 +70,6 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatH
       >
         {chatHeadline}
       </h1>
-      <div className="flex shrink-0 items-center gap-2 sm:gap-2.5 lg:justify-self-end">
-        <div className="hidden items-center gap-2 sm:gap-2.5 lg:flex">
-          <LanguageToggle />
-          <ThemeToggle />
-        </div>
-      </div>
     </div>
   );
 });

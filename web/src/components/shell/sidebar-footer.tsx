@@ -1,12 +1,14 @@
+import * as Popover from '@radix-ui/react-popover';
 import { Settings } from 'lucide-react';
-import { useEffect } from 'react';
-import { Link, NavLink, useLocation } from 'react-router-dom';
+import { useEffect, useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import { BrandLogo } from '@/components/shell/brand-logo';
+import { PreferenceSelectFields } from '@/components/shell/preference-select-fields';
 import { messages } from '@/i18n/messages';
 import { pathForTab } from '@/navigation';
-import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
+import { useLocaleStore } from '@/stores/locale-store';
 
 export function SidebarFooter({
   collapsed = false,
@@ -17,8 +19,8 @@ export function SidebarFooter({
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
-  const { pathname } = useLocation();
-  const settingsActive = pathname.startsWith('/settings');
+  const a = m.appearanceSettings;
+  const [open, setOpen] = useState(false);
 
   useEffect(() => {
     void import('@/pages/settings-page');
@@ -30,63 +32,112 @@ export function SidebarFooter({
     <div
       className={cn(
         'flex shrink-0 flex-col',
-        /* §7.1 whole-row hover: rectangular block, no radius (ui-design-system.md) */
         'transition-colors duration-150 ease-out hover:bg-surface-hover',
         'motion-reduce:transition-none',
-        /* Collapsed rail: task list is hidden — pin brand + settings to column bottom */
         collapsed && 'mt-auto',
         collapsed ? 'items-center px-1 py-2' : 'px-3 py-3',
       )}
     >
-      <div
-        className={cn(
-          'flex min-w-0 gap-2',
-          collapsed ? 'flex-col items-center' : 'flex-row items-center',
-        )}
-      >
-        {!collapsed ? (
-          <Link
-            to="/chat"
-            title={m.nav.chat}
-            className={cn(
-              'size-8 shrink-0 overflow-hidden rounded-full ring-offset-surface-base transition-transform duration-150 ease-out',
-              'hover:opacity-95 active:scale-95',
-              'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
-              'motion-reduce:hover:opacity-100 motion-reduce:active:scale-100',
-            )}
-            onClick={() => onNavigate?.()}
-          >
-            <BrandLogo className="size-full rounded-full" alt={m.appBrand} />
-          </Link>
-        ) : null}
-        {!collapsed ? (
-          <div className="min-w-0 flex-1">
-            <div className="truncate text-sm font-semibold leading-tight text-fg">{m.appBrand}</div>
+      <Popover.Root open={open} onOpenChange={setOpen}>
+        {collapsed ? (
+          <Popover.Trigger asChild>
+            <button
+              type="button"
+              className={cn(
+                'flex size-10 shrink-0 items-center justify-center overflow-hidden rounded-full outline-none ring-offset-surface-base transition-transform',
+                'hover:opacity-95 active:scale-95',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
+                open && 'ring-2 ring-accent',
+                'motion-reduce:opacity-100 motion-reduce:active:scale-100',
+              )}
+              aria-expanded={open}
+              aria-haspopup="dialog"
+              title={m.sidebar.appMenuAria}
+              aria-label={m.sidebar.appMenuAria}
+            >
+              <BrandLogo className="size-full rounded-full" alt={m.appBrand} />
+            </button>
+          </Popover.Trigger>
+        ) : (
+          <div className="flex min-w-0 items-center gap-2">
+            <Link
+              to="/chat"
+              title={m.nav.chat}
+              className={cn(
+                'size-8 shrink-0 overflow-hidden rounded-full ring-offset-surface-base transition-transform duration-150 ease-out',
+                'hover:opacity-95 active:scale-95',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
+                'motion-reduce:hover:opacity-100 motion-reduce:active:scale-100',
+              )}
+              onClick={() => onNavigate?.()}
+            >
+              <BrandLogo className="size-full rounded-full" alt={m.appBrand} />
+            </Link>
+            <Popover.Trigger asChild>
+              <button
+                type="button"
+                className={cn(
+                  'flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1 py-1 text-left outline-none',
+                  'hover:bg-surface-active/70',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+                )}
+                aria-expanded={open}
+                aria-haspopup="dialog"
+                title={m.sidebar.appMenuAria}
+                aria-label={m.sidebar.appMenuAria}
+              >
+                <div className="min-w-0 flex-1">
+                  <div className="truncate text-sm font-semibold leading-tight text-fg">{m.appBrand}</div>
+                  <div className="truncate text-xs text-fg-muted">{a.quickMenuHint}</div>
+                </div>
+                <span
+                  className={cn(
+                    'flex size-9 shrink-0 items-center justify-center rounded-xl text-fg-muted transition-colors',
+                    open && 'bg-accent-soft text-accent-fg',
+                  )}
+                  aria-hidden
+                >
+                  <Settings className="size-[18px]" strokeWidth={1.5} />
+                </span>
+              </button>
+            </Popover.Trigger>
           </div>
-        ) : null}
+        )}
 
-        <NavLink
-          to={pathForTab('settingsGateway')}
-          title={m.nav.settings}
-          aria-label={m.nav.settings}
-          aria-current={settingsActive ? 'page' : undefined}
-          className={({ isActive }) => {
-            const on = isActive || settingsActive;
-            return cn(
-              'flex shrink-0 items-center justify-center rounded-xl p-0 transition-colors duration-150 ease-out',
-              'active:scale-95 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
-              'motion-reduce:active:scale-100',
-              collapsed ? 'size-8' : 'size-10',
-              on
-                ? 'bg-accent-soft text-accent-fg hover:bg-accent-soft hover:text-accent-fg'
-                : 'text-fg-muted hover:bg-surface-active hover:text-fg',
-            );
-          }}
-          onClick={() => onNavigate?.()}
-        >
-          <Settings className="size-[18px]" strokeWidth={1.5} aria-hidden />
-        </NavLink>
-      </div>
+        <Popover.Portal>
+          <Popover.Content
+            className={cn(
+              'z-50 max-h-[min(70vh,28rem)] w-[min(calc(100vw-1.5rem),20rem)] overflow-y-auto overflow-x-hidden',
+              'rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
+            )}
+            side="top"
+            align={collapsed ? 'center' : 'start'}
+            sideOffset={8}
+            collisionPadding={12}
+            onCloseAutoFocus={(e) => e.preventDefault()}
+          >
+            <div className="flex flex-col gap-4">
+              <PreferenceSelectFields variant="sidebar" />
+              <div className="h-px bg-edge-subtle" role="separator" />
+              <Link
+                to={pathForTab('settingsAppearance')}
+                className={cn(
+                  'inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-accent-fg',
+                  'bg-accent-soft transition-colors hover:bg-accent-soft/90',
+                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+                )}
+                onClick={() => {
+                  setOpen(false);
+                  onNavigate?.();
+                }}
+              >
+                <Settings className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+                {a.openFullPreferences}
+              </Link>
+            </div>
+          </Popover.Content>
+        </Popover.Portal>
+      </Popover.Root>
     </div>
   );
 }

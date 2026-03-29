@@ -723,6 +723,7 @@ const bundles: Record<
       };
     };
     appearanceSettings: {
+      pageTitle: string;
       subtitle: string;
       languageTitle: string;
       languageDescription: string;
@@ -733,6 +734,13 @@ const bundles: Record<
       fontScaleCompact: string;
       fontScaleDefault: string;
       fontScaleLarge: string;
+      langOptionEn: string;
+      langOptionZh: string;
+      themeOptionLight: string;
+      themeOptionDark: string;
+      themeOptionSystem: string;
+      openFullPreferences: string;
+      quickMenuHint: string;
     };
     gatewaySettings: {
       needToken: string;
@@ -841,7 +849,7 @@ const bundles: Record<
       skills: 'Skills',
       editor: 'Editor',
       logs: 'Logs',
-      settingsAppearance: 'Appearance',
+      settingsAppearance: 'Preferences',
       settingsAgent: 'Agent',
       settingsProviders: 'Providers',
       settingsModels: 'Models',
@@ -851,7 +859,7 @@ const bundles: Record<
       settingsHeartbeat: 'Heartbeat',
     },
     settingsSections: {
-      appearance: 'Appearance',
+      appearance: 'Preferences',
       agent: 'Agent',
       providers: 'Providers',
       models: 'Models',
@@ -864,7 +872,7 @@ const bundles: Record<
       gateway: 'Connection & service',
       agentAndModels: 'Providers & models',
       data: 'Sessions & logs',
-      interface: 'Interface',
+      interface: 'General',
       channelsAndVoice: 'Channels & voice',
     },
     token: {
@@ -1680,16 +1688,25 @@ const bundles: Record<
       clearActiveHours: 'Clear active hours',
     },
     appearanceSettings: {
-      subtitle: 'Interface language, color theme, and text size apply to this browser only.',
+      pageTitle: 'Preferences',
+      subtitle:
+        'Language, appearance, and text size for daily use. Stored in this browser only.',
       languageTitle: 'Language',
-      languageDescription: 'Choose the UI language for the gateway console.',
+      languageDescription: 'Choose the interface language.',
       themeTitle: 'Theme',
       themeDescription: 'Light, dark, or follow your system setting.',
-      fontScaleTitle: 'Text size',
-      fontScaleDescription: 'Adjust the gateway console scale. Uses the browser’s root font size.',
-      fontScaleCompact: 'Compact',
-      fontScaleDefault: 'Default',
+      fontScaleTitle: 'Conversation text size',
+      fontScaleDescription: 'Adjust text size in chat and reading areas.',
+      fontScaleCompact: 'Small',
+      fontScaleDefault: 'Medium',
       fontScaleLarge: 'Large',
+      langOptionEn: 'English',
+      langOptionZh: '中文',
+      themeOptionLight: 'Light',
+      themeOptionDark: 'Dark',
+      themeOptionSystem: 'System',
+      openFullPreferences: 'Open full preferences',
+      quickMenuHint: 'Language, theme, and text size',
     },
   },
   zh: {
@@ -1708,7 +1725,7 @@ const bundles: Record<
       skills: '技能',
       editor: '编辑器',
       logs: '日志',
-      settingsAppearance: '外观',
+      settingsAppearance: '偏好设置',
       settingsAgent: '代理',
       settingsProviders: '提供商',
       settingsModels: '模型',
@@ -1718,7 +1735,7 @@ const bundles: Record<
       settingsHeartbeat: '心跳',
     },
     settingsSections: {
-      appearance: '外观',
+      appearance: '偏好设置',
       agent: '代理',
       providers: '提供商',
       models: '模型',
@@ -1731,7 +1748,7 @@ const bundles: Record<
       gateway: '连接与服务',
       agentAndModels: '提供商与模型',
       data: '会话与日志',
-      interface: '界面',
+      interface: '通用',
       channelsAndVoice: '通道与语音',
     },
     token: {
@@ -2542,16 +2559,24 @@ const bundles: Record<
       clearActiveHours: '清除活跃时段',
     },
     appearanceSettings: {
-      subtitle: '界面语言、配色与文字大小仅保存在本浏览器。',
+      pageTitle: '偏好设置',
+      subtitle: '语言、界面外观与对话字号等日常使用的显示行为，仅保存在本浏览器。',
       languageTitle: '语言',
-      languageDescription: '选择网关控制台界面语言。',
-      themeTitle: '主题',
-      themeDescription: '浅色、深色或跟随系统。',
-      fontScaleTitle: '文字大小',
-      fontScaleDescription: '调整控制台整体字号比例（基于浏览器根字号）。',
-      fontScaleCompact: '紧凑',
-      fontScaleDefault: '默认',
-      fontScaleLarge: '较大',
+      languageDescription: '选择界面语言。',
+      themeTitle: '主题亮暗',
+      themeDescription: '浅色、深色，或跟随系统。',
+      fontScaleTitle: '对话字号',
+      fontScaleDescription: '调整对话与阅读区域的文字大小。',
+      fontScaleCompact: '小',
+      fontScaleDefault: '中',
+      fontScaleLarge: '大',
+      langOptionEn: 'English',
+      langOptionZh: '中文',
+      themeOptionLight: '亮色',
+      themeOptionDark: '深色',
+      themeOptionSystem: '跟随系统',
+      openFullPreferences: '打开完整偏好设置',
+      quickMenuHint: '语言、主题与字号',
     },
   },
 };
