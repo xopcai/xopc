@@ -8,7 +8,6 @@ export default defineConfig({
   resolve: {
     alias: {
       '@xopcai/xopcbot': path.resolve(__dirname, 'src'),
-      '@xopcai/xopcbot-extension-telegram': path.resolve(__dirname, 'extensions/telegram/src'),
     },
   },
   test: {
