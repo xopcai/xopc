@@ -67,10 +67,8 @@
 
   /* Main column under AppShell <main> — docs/design/ui-design-system.md §13.1 Web */
   --max-width-app-main: 56rem;
-  /** Chat column (message list + composer); solo layout readable width; xl rail uses remaining space. */
+  /** Chat column (message list + composer); readable width within app main. */
   --max-width-chat: 52rem;
-  /** Thinking drawer / rail width (md overlay + xl side column). */
-  --width-thinking-drawer: 28rem;
 }
 
 /* Dark — Apple-style elevated grays + rim light via borders (see design spec §2.3) */
@@ -280,114 +278,6 @@ html.dark {
 
   .page-enter--gentle {
     animation: none;
-  }
-}
-
-/*
- * Chat thinking drawer — enter only (side panel / bottom sheet + scrim). Easing matches
- * page-enter “gentle” curve; mobile sheet uses a slightly longer ease similar to system sheets.
- */
-@keyframes thinking-drawer-side-in {
-  from {
-    opacity: 0;
-    transform: translate3d(1.25rem, 0, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-@keyframes thinking-drawer-sheet-up {
-  from {
-    opacity: 0;
-    transform: translate3d(0, 100%, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
-@keyframes thinking-drawer-backdrop-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
-}
-
-.thinking-drawer-panel {
-  animation-fill-mode: both;
-  transform: translateZ(0);
-}
-
-@media (max-width: 767px) {
-  .thinking-drawer-panel {
-    animation-name: thinking-drawer-sheet-up;
-    animation-duration: 320ms;
-    animation-timing-function: cubic-bezier(0.32, 0.72, 0, 1);
-  }
-}
-
-@media (min-width: 768px) {
-  .thinking-drawer-panel {
-    animation-name: thinking-drawer-side-in;
-    animation-duration: 280ms;
-    animation-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
-  }
-}
-
-.thinking-drawer-backdrop {
-  opacity: 0;
-  animation: thinking-drawer-backdrop-in 240ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
-}
-
-/* Overlay / sheet exit — xl rail width is animated separately in ChatPage. */
-.thinking-drawer-panel--exit {
-  animation: none !important;
-}
-
-@media (max-width: 767px) {
-  .thinking-drawer-panel--exit {
-    transform: translate3d(0, 100%, 0);
-    opacity: 0.92;
-    transition:
-      transform 320ms cubic-bezier(0.32, 0.72, 0, 1),
-      opacity 220ms ease-out;
-  }
-}
-
-@media (min-width: 768px) and (max-width: 1279px) {
-  .thinking-drawer-panel--exit {
-    transform: translate3d(100%, 0, 0);
-    opacity: 0.92;
-    transition:
-      transform 280ms cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 220ms ease-out;
-  }
-}
-
-@media (min-width: 1280px) {
-  .thinking-drawer-panel--exit {
-    opacity: 0.97;
-    transition: opacity 180ms ease-out;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .thinking-drawer-panel,
-  .thinking-drawer-backdrop {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-  }
-
-  .thinking-drawer-panel--exit {
-    opacity: 1 !important;
-    transform: none !important;
-    transition: none !important;
   }
 }
 

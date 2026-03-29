@@ -154,16 +154,6 @@ const bundles: Record<
       attachmentPreviewFailedPdf: string;
       attachmentPreviewFailedDocx: string;
       attachmentPreviewFailedExcel: string;
-      /** Toggle: show only assistant text/images (hide thinking/tools). */
-      conciseModeEnableHint: string;
-      conciseModeDisableHint: string;
-      /** Right-side thinking drawer (concise mode). */
-      thinkingDrawerTitle: string;
-      thinkingDrawerClose: string;
-      thinkingEntryDone: string;
-      thinkingEntryStreaming: string;
-      thinkingEntryOpenHint: string;
-      thinkingEntryCollapseHint: string;
       stepTimelineThinkingStreaming: string;
       stepTimelineThinkingDone: string;
       stepTimelineToolSearchRunning: string;
@@ -993,14 +983,6 @@ const bundles: Record<
       attachmentPreviewFailedPdf: 'Failed to load PDF',
       attachmentPreviewFailedDocx: 'Failed to load document',
       attachmentPreviewFailedExcel: 'Failed to load spreadsheet',
-      conciseModeEnableHint: 'Concise: hide thinking and tool details',
-      conciseModeDisableHint: 'Full: show thinking and tool steps',
-      thinkingDrawerTitle: 'Thinking',
-      thinkingDrawerClose: 'Close thinking panel',
-      thinkingEntryDone: 'Thinking finished',
-      thinkingEntryStreaming: 'Thinking…',
-      thinkingEntryOpenHint: 'Show thinking steps',
-      thinkingEntryCollapseHint: 'Hide thinking steps',
       stepTimelineThinkingStreaming: 'Thinking…',
       stepTimelineThinkingDone: 'Thinking complete',
       stepTimelineToolSearchRunning: 'Searching the web…',
@@ -1868,14 +1850,6 @@ const bundles: Record<
       attachmentPreviewFailedPdf: '无法加载 PDF',
       attachmentPreviewFailedDocx: '无法加载文档',
       attachmentPreviewFailedExcel: '无法加载表格',
-      conciseModeEnableHint: '简洁：隐藏思考与工具步骤',
-      conciseModeDisableHint: '完整：显示思考与工具步骤',
-      thinkingDrawerTitle: '思考过程',
-      thinkingDrawerClose: '关闭思考过程面板',
-      thinkingEntryDone: '已完成思考',
-      thinkingEntryStreaming: '正在思考…',
-      thinkingEntryOpenHint: '查看思考过程',
-      thinkingEntryCollapseHint: '收起思考过程',
       stepTimelineThinkingStreaming: '正在思考…',
       stepTimelineThinkingDone: '思考完成',
       stepTimelineToolSearchRunning: '搜索网络中…',

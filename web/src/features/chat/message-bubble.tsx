@@ -8,7 +8,6 @@ import type {
 } from '@/features/chat/messages.types';
 import { AssistantStepsBlock } from '@/features/chat/assistant-steps-block';
 import { AttachmentRenderer } from '@/features/chat/attachment-renderer';
-import { ThinkingEntryRow } from '@/features/chat/thinking-entry-row';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { UsageBadge } from '@/features/chat/usage-badge';
 import { cn } from '@/lib/cn';
@@ -51,10 +50,6 @@ function renderChunkedContent(
     readFile: string;
     stepDetails: string;
   },
-  conciseMode: boolean,
-  messageKey: string,
-  activeThinking: { key: string; groupStart: number } | null,
-  onToggleThinking?: (messageKey: string, groupStart: number) => void,
 ) {
   const nodes: ReactNode[] = [];
   let i = 0;
@@ -66,24 +61,7 @@ function renderChunkedContent(
         i++;
       }
       const slice = content.slice(start, i) as Array<ThinkingContent | ToolUseContent>;
-      if (conciseMode && slice.length > 0 && onToggleThinking) {
-        const anyStreaming = slice.some(
-          (bl) =>
-            (bl.type === 'thinking' && bl.streaming) || (bl.type === 'tool_use' && bl.status === 'running'),
-        );
-        const isDrawerForThis =
-          activeThinking !== null &&
-          activeThinking.key === messageKey &&
-          activeThinking.groupStart === start;
-        nodes.push(
-          <ThinkingEntryRow
-            key={`entry-${start}`}
-            isStreaming={anyStreaming}
-            isActive={isDrawerForThis}
-            onClick={() => onToggleThinking(messageKey, start)}
-          />,
-        );
-      } else if (!conciseMode) {
+      if (slice.length > 0) {
         nodes.push(
           <AssistantStepsBlock
             key={`steps-${start}`}
@@ -103,23 +81,15 @@ function renderChunkedContent(
 }
 
 export const MessageBubble = memo(function MessageBubble({
-  messageKey,
   message,
   authToken,
   isStreaming,
   progress,
-  conciseMode,
-  activeThinking,
-  onToggleThinking,
 }: {
-  messageKey: string;
   message: Message;
   authToken?: string;
   isStreaming: boolean;
   progress: ProgressState | null;
-  conciseMode: boolean;
-  activeThinking: { key: string; groupStart: number } | null;
-  onToggleThinking?: (messageKey: string, groupStart: number) => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -155,15 +125,8 @@ export const MessageBubble = memo(function MessageBubble({
   );
 
   const streamingThinking =
-    !conciseMode &&
-    (message.thinkingStreaming ||
-      message.content?.some((b) => b.type === 'thinking' && b.streaming));
-
-  const hasStepContent = Boolean(
-    message.content?.some((b) => b.type === 'thinking' || b.type === 'tool_use') ||
-      message.thinking ||
-      message.thinkingStreaming,
-  );
+    message.thinkingStreaming ||
+    message.content?.some((b) => b.type === 'thinking' && b.streaming);
 
   const legacyThinking =
     !message.content.some((b) => b.type === 'thinking') &&
@@ -172,7 +135,7 @@ export const MessageBubble = memo(function MessageBubble({
   const showMeta =
     Boolean(message.timestamp) ||
     Boolean(progress?.message) ||
-    (isStreaming && !streamingThinking && !(conciseMode && hasStepContent));
+    (isStreaming && !streamingThinking);
 
   return (
     <article className={cn('flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
@@ -201,7 +164,7 @@ export const MessageBubble = memo(function MessageBubble({
                 {progress.message}
               </span>
             ) : null}
-            {isStreaming && !streamingThinking && !(conciseMode && hasStepContent) ? (
+            {isStreaming && !streamingThinking ? (
               <span className="text-fg-subtle">{m.chat.thinkingLabel}</span>
             ) : null}
           </div>
@@ -225,15 +188,7 @@ export const MessageBubble = memo(function MessageBubble({
           >
             {message.content?.length ? (
               <>
-                {renderChunkedContent(
-                  message.content,
-                  toolLabels,
-                  stepLabels,
-                  conciseMode,
-                  messageKey,
-                  activeThinking,
-                  onToggleThinking,
-                )}
+                {renderChunkedContent(message.content, toolLabels, stepLabels)}
                 {isStreaming ? (
                   <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
                 ) : null}
@@ -243,29 +198,17 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
 
             {legacyThinking ? (
-              conciseMode && onToggleThinking ? (
-                <ThinkingEntryRow
-                  isStreaming={Boolean(message.thinkingStreaming)}
-                  isActive={
-                    activeThinking !== null &&
-                    activeThinking.key === messageKey &&
-                    activeThinking.groupStart === -1
-                  }
-                  onClick={() => onToggleThinking(messageKey, -1)}
-                />
-              ) : !conciseMode ? (
-                <AssistantStepsBlock
-                  blocks={[
-                    {
-                      type: 'thinking',
-                      text: message.thinking || '',
-                      streaming: Boolean(message.thinkingStreaming),
-                    },
-                  ]}
-                  toolLabels={toolLabels}
-                  stepLabels={stepLabels}
-                />
-              ) : null
+              <AssistantStepsBlock
+                blocks={[
+                  {
+                    type: 'thinking',
+                    text: message.thinking || '',
+                    streaming: Boolean(message.thinkingStreaming),
+                  },
+                ]}
+                toolLabels={toolLabels}
+                stepLabels={stepLabels}
+              />
             ) : null}
 
             {message.attachments?.length ? (

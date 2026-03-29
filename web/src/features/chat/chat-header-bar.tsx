@@ -1,4 +1,4 @@
-import { ListCollapse, ListTree, Menu, Plus } from 'lucide-react';
+import { Menu, Plus } from 'lucide-react';
 import { memo } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -9,37 +9,28 @@ import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useAppShellStore } from '@/stores/app-shell-store';
-import { useChatDisplayStore } from '@/stores/chat-display-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
 type ChatHeaderBarProps = {
   chatHeadline: string;
-  /** xl + thinking rail open: match main column horizontal inset (slightly wider content). */
-  thinkingRailOpen?: boolean;
 };
 
 /**
  * Subscribes to sidebar / mobile-nav stores in isolation so collapsing the rail
  * does not re-render the chat body (messages, composer, scroll state).
  */
-export const ChatHeaderBar = memo(function ChatHeaderBar({
-  chatHeadline,
-  thinkingRailOpen = false,
-}: ChatHeaderBarProps) {
+export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatHeaderBarProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useAppShellStore((s) => s.setMobileNavOpen);
-  const conciseMessageView = useChatDisplayStore((s) => s.conciseMessageView);
-  const setConciseMessageView = useChatDisplayStore((s) => s.setConciseMessageView);
 
   return (
     <div
       className={cn(
-        'flex gap-3 px-3 sm:gap-4 sm:px-5',
-        thinkingRailOpen ? 'xl:px-5' : 'xl:px-6',
+        'flex gap-3 px-3 sm:gap-4 sm:px-5 xl:px-6',
         APP_TOP_HEADER_BAR_CLASS,
         sidebarCollapsed && 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-4',
       )}
@@ -82,21 +73,6 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({
         {chatHeadline}
       </h1>
       <div className="flex shrink-0 items-center gap-2 sm:gap-2.5 lg:justify-self-end">
-        <Button
-          type="button"
-          variant="ghost"
-          className="size-8 shrink-0 rounded-xl p-0"
-          aria-pressed={conciseMessageView}
-          aria-label={conciseMessageView ? m.chat.conciseModeDisableHint : m.chat.conciseModeEnableHint}
-          title={conciseMessageView ? m.chat.conciseModeDisableHint : m.chat.conciseModeEnableHint}
-          onClick={() => setConciseMessageView(!conciseMessageView)}
-        >
-          {conciseMessageView ? (
-            <ListCollapse className="size-4 text-accent-fg" strokeWidth={1.5} aria-hidden />
-          ) : (
-            <ListTree className="size-4" strokeWidth={1.5} aria-hidden />
-          )}
-        </Button>
         <div className="hidden items-center gap-2 sm:gap-2.5 lg:flex">
           <LanguageToggle />
           <ThemeToggle />
