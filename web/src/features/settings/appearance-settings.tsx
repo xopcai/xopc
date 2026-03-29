@@ -1,11 +1,11 @@
-import { Languages, Palette, Type } from 'lucide-react';
-
-import { FontScaleToggle } from '@/components/shell/font-scale-toggle';
-import { LanguageToggle } from '@/components/shell/language-toggle';
-import { ThemeToggle } from '@/components/shell/theme-toggle';
-import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
+import { PreferenceSelectFields } from '@/components/shell/preference-select-fields';
 import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
+
+function preferenceCardClassName() {
+  return cn('rounded-xl border border-edge-subtle bg-surface-base px-4 py-1 sm:px-5');
+}
 
 export function AppearanceSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
@@ -15,43 +15,23 @@ export function AppearanceSettingsPanel() {
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
       <header className="flex flex-col gap-1">
-        <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.appearance}</h1>
+        <h1 className="text-xl font-semibold tracking-tight text-fg">{a.pageTitle}</h1>
         <p className="text-sm text-fg-muted">{a.subtitle}</p>
       </header>
 
-      <SettingsFormSection>
-        <SettingsFormSectionHeader
-          icon={Languages}
-          title={a.languageTitle}
-          subtitle={a.languageDescription}
-        />
-        <LanguageToggle />
-      </SettingsFormSection>
+      <section className={preferenceCardClassName()} aria-labelledby="pref-language-heading">
+        <h2 id="pref-language-heading" className="sr-only">
+          {a.languageTitle}
+        </h2>
+        <PreferenceSelectFields variant="page" sections={['language']} />
+      </section>
 
-      <SettingsFormSection>
-        <SettingsFormSectionHeader
-          icon={Palette}
-          title={a.themeTitle}
-          subtitle={a.themeDescription}
-        />
-        <ThemeToggle />
-      </SettingsFormSection>
-
-      <SettingsFormSection>
-        <SettingsFormSectionHeader
-          icon={Type}
-          title={a.fontScaleTitle}
-          subtitle={a.fontScaleDescription}
-        />
-        <FontScaleToggle
-          ariaLabel={a.fontScaleTitle}
-          labels={{
-            compact: a.fontScaleCompact,
-            default: a.fontScaleDefault,
-            large: a.fontScaleLarge,
-          }}
-        />
-      </SettingsFormSection>
+      <section className={preferenceCardClassName()} aria-labelledby="pref-appearance-heading">
+        <h2 id="pref-appearance-heading" className="sr-only">
+          {a.themeTitle}
+        </h2>
+        <PreferenceSelectFields variant="page" sections={['theme', 'font']} />
+      </section>
     </div>
   );
 }
