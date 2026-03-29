@@ -51,7 +51,9 @@
     "docs:build": "vitepress build docs",
     "docs:preview": "vitepress preview docs",
     "electron:dev": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite dev",
-    "electron:build": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite build && electron-builder",
+    "electron:vite:build": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite build",
+    "electron:package": "node scripts/electron-builder.mjs",
+    "electron:build": "pnpm run electron:vite:build && pnpm run electron:package",
     "electron:preview": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite preview"
   },
   "keywords": [
