@@ -61,6 +61,23 @@ export function finalizeStreamingThinking(content: MessageContent[]): void {
   }
 }
 
+/**
+ * Mark any `tool_use` still `running` as `done` when the turn commits.
+ * Matches persisted session after refresh: SSE `tool_end` can be missed (parse edge cases)
+ * or `toolName` may not match `completeTool`'s strict equality vs `tool_start`.
+ */
+export function finalizeRunningTools(content: MessageContent[]): void {
+  for (const b of content) {
+    if (b.type === 'tool_use' && b.status === 'running') {
+      b.status = 'done';
+    }
+  }
+}
+
+function toolNameMatches(stored: string, fromEvent: string): boolean {
+  return stored.trim().toLowerCase() === fromEvent.trim().toLowerCase();
+}
+
 export function appendTextDelta(content: MessageContent[], delta: string): void {
   closeStreamingThinkingIfAny(content);
 
@@ -93,7 +110,11 @@ export function completeTool(
 ): void {
   for (let i = content.length - 1; i >= 0; i--) {
     const b = content[i];
-    if (b.type === 'tool_use' && b.name === toolName && b.status === 'running') {
+    if (
+      b.type === 'tool_use' &&
+      b.status === 'running' &&
+      toolNameMatches(b.name, toolName)
+    ) {
       b.status = isError ? 'error' : 'done';
       b.result = result;
       return;

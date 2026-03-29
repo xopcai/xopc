@@ -266,7 +266,11 @@ export class MessageSender {
         cb?.onToolStart(String(parsed.toolName || 'unknown'), parsed.args);
         break;
       case 'tool_end':
-        cb?.onToolEnd(String(parsed.toolName), !!parsed.isError, parsed.result as string | undefined);
+        cb?.onToolEnd(
+          typeof parsed.toolName === 'string' && parsed.toolName ? parsed.toolName : 'unknown',
+          !!parsed.isError,
+          parsed.result as string | undefined,
+        );
         break;
       case 'progress':
         cb?.onProgress({

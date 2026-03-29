@@ -786,18 +786,26 @@ export class AgentService {
       switch (event.type) {
         case 'tool_execution_start': {
           const toolEvent = event as Extract<AgentEvent, { type: 'tool_execution_start' }>;
+          const toolName =
+            typeof toolEvent.toolName === 'string' && toolEvent.toolName.trim()
+              ? toolEvent.toolName.trim()
+              : 'unknown';
           pushEvent({
             type: 'tool_start',
-            toolName: toolEvent.toolName,
+            toolName,
             args: toolEvent.args,
           });
           break;
         }
         case 'tool_execution_end': {
           const toolEvent = event as Extract<AgentEvent, { type: 'tool_execution_end' }>;
+          const toolName =
+            typeof toolEvent.toolName === 'string' && toolEvent.toolName.trim()
+              ? toolEvent.toolName.trim()
+              : 'unknown';
           pushEvent({
             type: 'tool_end',
-            toolName: toolEvent.toolName,
+            toolName,
             isError: toolEvent.isError,
             result: serializeAgentToolResultForSse(toolEvent.result),
           });

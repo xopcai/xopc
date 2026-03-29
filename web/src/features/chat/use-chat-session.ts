@@ -15,6 +15,7 @@ import {
   cloneMessageForRender,
   completeTool,
   ensureAssistantMessage,
+  finalizeRunningTools,
   finalizeStreamingThinking,
   startThinkingSegment,
 } from '@/features/chat/streaming';
@@ -135,6 +136,7 @@ export function useChatSession() {
         if (!prev) return null;
         const msg = ensureAssistantMessage(prev, Date.now());
         finalizeStreamingThinking(msg.content);
+        finalizeRunningTools(msg.content);
         finalMsg = cloneMessageForRender(msg);
         return null;
       });

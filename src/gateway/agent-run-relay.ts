@@ -4,6 +4,10 @@
  * background pump drains processDirectStreaming.
  */
 
+import { createLogger } from '../utils/logger.js';
+
+const log = createLogger('Gateway:AgentRunRelay');
+
 export type RelayEvent = { type: string; [key: string]: unknown };
 
 type RunState = {
@@ -36,7 +40,12 @@ export class AgentRunRelay {
   publish(runId: string, event: RelayEvent): void {
     const state = this.runs.get(runId);
     if (!state) return;
-    if (state.events.length < MAX_EVENTS) {
+    if (state.events.length >= MAX_EVENTS) {
+      log.warn(
+        { runId, max: MAX_EVENTS, droppedType: event.type },
+        'Relay buffer full; dropping event (resume may miss tool_end/tokens)',
+      );
+    } else {
       state.events.push(event);
     }
     const waiters = state.waiters.splice(0);
