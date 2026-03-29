@@ -217,6 +217,31 @@ const bundles: Record<
       subtitle: string;
       needToken: string;
       statsRegion: string;
+      tabMyTasks: string;
+      tabRunHistory: string;
+      wakeBanner: string;
+      keepAwake: string;
+      wakeLockUnavailable: string;
+      sortCreatedDesc: string;
+      sortCreatedAsc: string;
+      historyRangeDay: string;
+      historyRangeWeek: string;
+      historyRangeMonth: string;
+      filterAllTasks: string;
+      filterAllStatuses: string;
+      emptyHistoryTitle: string;
+      emptyHistoryHint: string;
+      jobCardMenuAria: string;
+      scheduleBadge: {
+        everyMinute: string;
+        everyNMinutes: string;
+        everyNHours: string;
+        hourly: string;
+        dailyAt: string;
+        weekdaysAt: string;
+        weeklyOn: string;
+        cronExpr: string;
+      };
       jobsHeading: string;
       addJob: string;
       editJob: string;
@@ -266,6 +291,26 @@ const bundles: Record<
       noRecentChatsOption: string;
       deliveryTarget: string;
       scheduleHintPreset: string;
+      schedulePicker: {
+        scheduleTimeLabel: string;
+        modeNoRepeat: string;
+        modeInterval: string;
+        intervalKindMinutes: string;
+        intervalKindHours: string;
+        modeHourly: string;
+        modeDaily: string;
+        modeWeekly: string;
+        modeMonthly: string;
+        modeCustom: string;
+        minuteUnit: string;
+        minuteAtHour: string;
+        intervalMinutes: string;
+        intervalHours: string;
+        hourUnit: string;
+        dayOfMonth: string;
+        customCronHint: string;
+        weekdays: [string, string, string, string, string, string, string];
+      };
       mode: string;
       modeDirect: string;
       modeAgent: string;
@@ -784,7 +829,7 @@ const bundles: Record<
       management: 'Management',
       settings: 'Settings',
       sessions: 'Sessions',
-      cron: 'Cron Jobs',
+      cron: 'Scheduled Tasks',
       skills: 'Skills',
       editor: 'Editor',
       logs: 'Logs',
@@ -986,13 +1031,40 @@ const bundles: Record<
       close: 'Close',
     },
     cron: {
-      title: 'Cron Jobs',
-      subtitle: 'Schedule messages and agent turns on a fixed cadence.',
-      needToken: 'Save a gateway token to manage cron jobs.',
+      title: 'Scheduled Tasks',
+      subtitle:
+        'Tasks run automatically on schedule and can be triggered manually anytime. Describe what you want to do regularly in any chat to create one quickly.',
+      needToken: 'Save a gateway token to manage scheduled tasks.',
       statsRegion: 'Overview',
+      tabMyTasks: 'My Scheduled Tasks',
+      tabRunHistory: 'Run History',
+      wakeBanner:
+        'Scheduled tasks only run while this device is awake. When the system or display sleeps, runs may be skipped.',
+      keepAwake: 'Keep screen awake',
+      wakeLockUnavailable: 'Screen wake lock is not available in this browser or context.',
+      sortCreatedDesc: 'Created (newest first)',
+      sortCreatedAsc: 'Created (oldest first)',
+      historyRangeDay: 'Day',
+      historyRangeWeek: 'Week',
+      historyRangeMonth: 'Month',
+      filterAllTasks: 'All tasks',
+      filterAllStatuses: 'All statuses',
+      emptyHistoryTitle: 'No execution records',
+      emptyHistoryHint: 'Records will appear here once scheduled tasks start running.',
+      jobCardMenuAria: 'Task actions',
+      scheduleBadge: {
+        everyMinute: 'Every minute',
+        everyNMinutes: 'Every {{n}} minutes',
+        everyNHours: 'Every {{n}} hours',
+        hourly: 'Hourly',
+        dailyAt: 'Daily, {{time}}',
+        weekdaysAt: 'Weekdays, {{time}}',
+        weeklyOn: '{{day}}, {{time}}',
+        cronExpr: '{{expr}}',
+      },
       jobsHeading: 'Scheduled jobs',
-      addJob: 'Add Cron Job',
-      editJob: 'Edit Cron Job',
+      addJob: 'New task',
+      editJob: 'Edit task',
       name: 'Name *',
       namePlaceholder: 'My scheduled task',
       nameRequired: 'Name is required',
@@ -1008,7 +1080,7 @@ const bundles: Record<
       running: 'Running',
       nextRun: 'Next Run',
       status: 'Status',
-      runHistoryTitle: 'Run log',
+      runHistoryTitle: 'Run History',
       runHistoryHint: 'Completed runs are stored on disk (state/cron/runs). Use Refresh to update.',
       detailRunHistory: 'Recent runs',
       colStarted: 'Started',
@@ -1019,7 +1091,7 @@ const bundles: Record<
       execStatusSuccess: 'Success',
       execStatusFailed: 'Failed',
       execStatusCancelled: 'Skipped',
-      noRunsYet: 'No executions recorded yet.',
+      noRunsYet: 'No executions in this range.',
       confirmDelete: 'Are you sure you want to delete this cron job?',
       confirmRun: 'Run this cron job now?',
       scheduleLabel: 'Schedule',
@@ -1039,6 +1111,26 @@ const bundles: Record<
       noRecentChatsOption: 'No recent sessions',
       deliveryTarget: 'Delivery',
       scheduleHintPreset: 'Select a preset or enter custom cron expression',
+      schedulePicker: {
+        scheduleTimeLabel: 'Scheduled time',
+        modeNoRepeat: 'Does not repeat (yearly date)',
+        modeInterval: 'Interval',
+        intervalKindMinutes: 'Minutes',
+        intervalKindHours: 'Hours',
+        modeHourly: 'Every hour',
+        modeDaily: 'Daily',
+        modeWeekly: 'Weekly',
+        modeMonthly: 'Monthly',
+        modeCustom: 'Custom (cron)',
+        minuteUnit: 'min',
+        minuteAtHour: 'Minute',
+        intervalMinutes: 'Interval in minutes',
+        intervalHours: 'Interval in hours',
+        hourUnit: 'h',
+        dayOfMonth: 'Day of month',
+        customCronHint: 'Five-field cron: minute hour day-of-month month day-of-week',
+        weekdays: ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'],
+      },
       mode: 'Mode',
       modeDirect: 'Send message directly to the channel without AI processing',
       modeAgent: 'Use AI agent to process the message, then send the response',
@@ -1795,12 +1887,39 @@ const bundles: Record<
     },
     cron: {
       title: '定时任务',
-      subtitle: '按计划发送消息或执行代理回合。',
+      subtitle:
+        '任务会按计划自动执行，也可随时手动触发。在任意对话里描述你想定期做的事，即可快速创建任务。',
       needToken: '请先保存网关 Token 后再管理定时任务。',
       statsRegion: '概览',
+      tabMyTasks: '我的定时任务',
+      tabRunHistory: '运行记录',
+      wakeBanner:
+        '定时任务仅在设备保持唤醒时运行；系统或屏幕休眠时，执行可能会被跳过。',
+      keepAwake: '保持屏幕常亮',
+      wakeLockUnavailable: '当前浏览器或环境不支持屏幕唤醒锁。',
+      sortCreatedDesc: '创建时间（新→旧）',
+      sortCreatedAsc: '创建时间（旧→新）',
+      historyRangeDay: '日',
+      historyRangeWeek: '周',
+      historyRangeMonth: '月',
+      filterAllTasks: '全部任务',
+      filterAllStatuses: '全部状态',
+      emptyHistoryTitle: '暂无执行记录',
+      emptyHistoryHint: '定时任务开始运行后，记录将显示在这里。',
+      jobCardMenuAria: '任务操作',
+      scheduleBadge: {
+        everyMinute: '每分钟',
+        everyNMinutes: '每 {{n}} 分钟',
+        everyNHours: '每 {{n}} 小时',
+        hourly: '每小时',
+        dailyAt: '每天 {{time}}',
+        weekdaysAt: '工作日 {{time}}',
+        weeklyOn: '{{day}} {{time}}',
+        cronExpr: '{{expr}}',
+      },
       jobsHeading: '计划任务',
-      addJob: '添加定时任务',
-      editJob: '编辑定时任务',
+      addJob: '新建任务',
+      editJob: '编辑任务',
       name: '名称 *',
       namePlaceholder: '我的定时任务',
       nameRequired: '请填写名称',
@@ -1816,7 +1935,7 @@ const bundles: Record<
       running: '运行中',
       nextRun: '下次执行',
       status: '状态',
-      runHistoryTitle: '执行记录',
+      runHistoryTitle: '运行记录',
       runHistoryHint: '已完成的执行会保存在本地（state/cron/runs）。点击刷新更新列表。',
       detailRunHistory: '最近执行',
       colStarted: '开始时间',
@@ -1827,7 +1946,7 @@ const bundles: Record<
       execStatusSuccess: '成功',
       execStatusFailed: '失败',
       execStatusCancelled: '已跳过',
-      noRunsYet: '暂无执行记录。',
+      noRunsYet: '该时间范围内暂无执行记录。',
       confirmDelete: '确定要删除此定时任务吗？',
       confirmRun: '立即执行此定时任务？',
       scheduleLabel: '计划',
@@ -1847,6 +1966,26 @@ const bundles: Record<
       noRecentChatsOption: '暂无最近会话',
       deliveryTarget: '投递目标',
       scheduleHintPreset: '选择预设或输入自定义 cron 表达式',
+      schedulePicker: {
+        scheduleTimeLabel: '计划时间',
+        modeNoRepeat: '不重复',
+        modeInterval: '间隔',
+        intervalKindMinutes: '分钟',
+        intervalKindHours: '小时',
+        modeHourly: '每小时',
+        modeDaily: '每天',
+        modeWeekly: '每周',
+        modeMonthly: '每月',
+        modeCustom: '自定义表达式',
+        minuteUnit: '分',
+        minuteAtHour: '分钟',
+        intervalMinutes: '间隔分钟数',
+        intervalHours: '间隔小时数',
+        hourUnit: '小时',
+        dayOfMonth: '日期',
+        customCronHint: '标准五段 cron：分 时 日 月 周',
+        weekdays: ['一', '二', '三', '四', '五', '六', '日'],
+      },
       mode: '模式',
       modeDirect: '直接发送消息到渠道，不经过 AI 处理',
       modeAgent: '使用 AI 代理处理消息，然后发送回复',
