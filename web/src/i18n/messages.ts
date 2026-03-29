@@ -164,6 +164,15 @@ const bundles: Record<
       stepTimelineToolGenericError: string;
       /** "Search sources · {{count}}" */
       searchSourcesHeading: string;
+      /** Right drawer: agent thinking + tool execution log */
+      executionDrawerTitle: string;
+      executionDrawerClose: string;
+      executionDrawerEmpty: string;
+      /** Line above assistant reply; opens drawer when clicked */
+      executionProgressDone: string;
+      executionProgressRunning: string;
+      /** Tooltip on elapsed time in the execution progress line */
+      executionElapsedTitle: string;
     };
     sessions: {
       title: string;
@@ -1000,6 +1009,12 @@ const bundles: Record<
       stepTimelineToolGenericComplete: '{{name}} complete',
       stepTimelineToolGenericError: '{{name}} failed',
       searchSourcesHeading: 'Search sources · {{count}}',
+      executionDrawerTitle: 'Execution',
+      executionDrawerClose: 'Close',
+      executionDrawerEmpty: 'No steps for this reply yet.',
+      executionProgressDone: 'Thinking complete',
+      executionProgressRunning: 'Thinking & tools…',
+      executionElapsedTitle: 'Elapsed time for this run',
     },
     sessions: {
       title: 'Sessions',
@@ -1876,6 +1891,12 @@ const bundles: Record<
       stepTimelineToolGenericComplete: '{{name}}完成',
       stepTimelineToolGenericError: '{{name}}失败',
       searchSourcesHeading: '搜索来源 · {{count}}',
+      executionDrawerTitle: '执行过程',
+      executionDrawerClose: '关闭',
+      executionDrawerEmpty: '暂无执行步骤。',
+      executionProgressDone: '已完成思考',
+      executionProgressRunning: '思考与工具执行中…',
+      executionElapsedTitle: '本次执行已耗时',
     },
     sessions: {
       title: '会话',

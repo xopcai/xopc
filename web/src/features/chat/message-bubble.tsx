@@ -1,17 +1,21 @@
 import { type ReactNode, memo, useMemo } from 'react';
-import type {
-  Message,
-  MessageContent,
-  ProgressState,
-  ThinkingContent,
-  ToolUseContent,
-} from '@/features/chat/messages.types';
-import { AssistantStepsBlock } from '@/features/chat/assistant-steps-block';
+import { ChevronRight } from 'lucide-react';
+
+import type { Message, MessageContent, ProgressState } from '@/features/chat/messages.types';
+import {
+  collectAssistantStepBlocks,
+  describeCurrentExecutionStep,
+  stepBlocksActive,
+} from '@/features/chat/assistant-steps-block';
+import { formatExecutionElapsedMs } from '@/features/chat/format-execution-elapsed';
+import { useExecutionElapsedMs } from '@/features/chat/use-execution-elapsed-ms';
 import { AttachmentRenderer } from '@/features/chat/attachment-renderer';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { UsageBadge } from '@/features/chat/usage-badge';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
+import { useChatExecutionDrawerStore } from '@/stores/chat-execution-drawer-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 function formatTime(ts?: number): string {
@@ -19,10 +23,7 @@ function formatTime(ts?: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function renderTextOrImageBlock(
-  block: MessageContent,
-  key: string,
-) {
+function renderTextOrImageBlock(block: MessageContent, key: string) {
   if (block.type === 'text') {
     return (
       <div key={key} className="markdown-content min-w-0">
@@ -38,44 +39,19 @@ function renderTextOrImageBlock(
   return null;
 }
 
-function renderChunkedContent(
-  content: MessageContent[],
-  toolLabels: { input: string; output: string; noOutput: string },
-  stepLabels: {
-    thoughts: string;
-    thoughtsStreaming: string;
-    viewSteps_one: string;
-    viewSteps_other: string;
-    searchedWeb: string;
-    readFile: string;
-    stepDetails: string;
-  },
-) {
+/** Renders only user-visible assistant content (text / image); thinking & tools live in the side drawer. */
+function renderVisibleContent(content: MessageContent[]) {
   const nodes: ReactNode[] = [];
   let i = 0;
   while (i < content.length) {
     const b = content[i];
     if (b.type === 'thinking' || b.type === 'tool_use') {
-      const start = i;
-      while (i < content.length && (content[i].type === 'thinking' || content[i].type === 'tool_use')) {
-        i++;
-      }
-      const slice = content.slice(start, i) as Array<ThinkingContent | ToolUseContent>;
-      if (slice.length > 0) {
-        nodes.push(
-          <AssistantStepsBlock
-            key={`steps-${start}`}
-            blocks={slice}
-            toolLabels={toolLabels}
-            stepLabels={stepLabels}
-          />,
-        );
-      }
-    } else {
-      const el = renderTextOrImageBlock(b, `block-${i}`);
-      if (el) nodes.push(el);
       i++;
+      continue;
     }
+    const el = renderTextOrImageBlock(b, `block-${i}`);
+    if (el) nodes.push(el);
+    i++;
   }
   return nodes;
 }
@@ -85,11 +61,14 @@ export const MessageBubble = memo(function MessageBubble({
   authToken,
   isStreaming,
   progress,
+  messageIndex,
 }: {
   message: Message;
   authToken?: string;
+  /** True only for the assistant row currently receiving the SSE stream (progress + live steps). */
   isStreaming: boolean;
   progress: ProgressState | null;
+  messageIndex: number;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -98,44 +77,100 @@ export const MessageBubble = memo(function MessageBubble({
   const isAssistant = message.role === 'assistant';
   const roleLabel = isUser ? m.chat.you : isAssistant ? m.chat.assistant : m.chat.tool;
 
-  const toolLabels = useMemo(
-    () => ({ input: m.chat.toolInput, output: m.chat.toolOutput, noOutput: m.chat.noOutput }),
-    [language, m.chat.toolInput, m.chat.toolOutput, m.chat.noOutput],
-  );
-  const stepLabels = useMemo(
+  const stepBlocks = useMemo(() => collectAssistantStepBlocks(message), [message]);
+  const hasSteps = stepBlocks.length > 0;
+  const stepsRunning = stepBlocksActive(stepBlocks);
+  const executionElapsedMs = useExecutionElapsedMs(stepsRunning);
+
+  const executionStepLabels = useMemo(
     () => ({
-      thoughts: m.chat.thoughts,
-      thoughtsStreaming: m.chat.thoughtsStreaming,
-      viewSteps_one: m.chat.viewSteps_one,
-      viewSteps_other: m.chat.viewSteps_other,
       searchedWeb: m.chat.stepSearchedWeb,
       readFile: m.chat.stepReadFile,
-      stepDetails: m.chat.stepDetails,
+      thoughtsStreaming: m.chat.thoughtsStreaming,
+      composerRunningTool: m.chat.composerRunningTool,
+      composerStageThinking: m.chat.composerStageThinking,
+      composerStageSearching: m.chat.composerStageSearching,
+      composerStageReading: m.chat.composerStageReading,
+      composerStageWriting: m.chat.composerStageWriting,
+      composerStageExecuting: m.chat.composerStageExecuting,
+      composerStageAnalyzing: m.chat.composerStageAnalyzing,
+      fallback: m.chat.executionProgressRunning,
     }),
     [
-      language,
-      m.chat.thoughts,
-      m.chat.thoughtsStreaming,
-      m.chat.viewSteps_one,
-      m.chat.viewSteps_other,
       m.chat.stepSearchedWeb,
       m.chat.stepReadFile,
-      m.chat.stepDetails,
+      m.chat.thoughtsStreaming,
+      m.chat.composerRunningTool,
+      m.chat.composerStageThinking,
+      m.chat.composerStageSearching,
+      m.chat.composerStageReading,
+      m.chat.composerStageWriting,
+      m.chat.composerStageExecuting,
+      m.chat.composerStageAnalyzing,
+      m.chat.executionProgressRunning,
     ],
   );
+
+  const runningProgressText = useMemo(() => {
+    if (!stepsRunning) return '';
+    return describeCurrentExecutionStep(
+      stepBlocks,
+      isStreaming ? progress : null,
+      isStreaming,
+      executionStepLabels,
+    );
+  }, [stepsRunning, stepBlocks, isStreaming, progress, executionStepLabels]);
+
+  const drawerOpenForThis = useChatExecutionDrawerStore(
+    (s) => s.open && s.focusedMessageIndex === messageIndex,
+  );
+  const toggleExecutionDrawer = useChatExecutionDrawerStore((s) => s.toggleForMessage);
 
   const streamingThinking =
     message.thinkingStreaming ||
     message.content?.some((b) => b.type === 'thinking' && b.streaming);
 
-  const legacyThinking =
-    !message.content.some((b) => b.type === 'thinking') &&
-    (message.thinking || message.thinkingStreaming);
-
+  /** Assistant: never show gateway progress / "thinking…" in the meta row — use the execution line + drawer only. */
   const showMeta =
     Boolean(message.timestamp) ||
-    Boolean(progress?.message) ||
-    (isStreaming && !streamingThinking);
+    (!isAssistant && Boolean(progress?.message)) ||
+    (!isAssistant && isStreaming && !streamingThinking);
+
+  const elapsedText =
+    stepsRunning && executionElapsedMs >= 0
+      ? formatExecutionElapsedMs(executionElapsedMs, language)
+      : '';
+
+  const progressLine =
+    isAssistant && hasSteps ? (
+      <button
+        type="button"
+        onClick={() => toggleExecutionDrawer(messageIndex)}
+        className={cn(
+          'mb-2 flex w-full max-w-full items-center gap-2 text-left text-sm text-fg-subtle',
+          interaction.transition,
+          interaction.press,
+          'hover:text-fg-muted',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+          drawerOpenForThis && 'text-accent-fg',
+        )}
+        aria-expanded={drawerOpenForThis}
+        aria-controls="chat-execution-drawer"
+      >
+        <span className="min-w-0 flex-1 truncate">
+          {stepsRunning ? runningProgressText : m.chat.executionProgressDone}
+        </span>
+        {stepsRunning && elapsedText ? (
+          <span className="shrink-0 tabular-nums text-xs text-fg-disabled" title={m.chat.executionElapsedTitle}>
+            {elapsedText}
+          </span>
+        ) : null}
+        <ChevronRight
+          className={cn('h-4 w-4 shrink-0 transition-transform', drawerOpenForThis && 'rotate-90')}
+          aria-hidden
+        />
+      </button>
+    ) : null;
 
   return (
     <article className={cn('flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
@@ -159,16 +194,18 @@ export const MessageBubble = memo(function MessageBubble({
                 {formatTime(message.timestamp)}
               </time>
             ) : null}
-            {progress?.message ? (
+            {!isAssistant && progress?.message ? (
               <span className="text-fg-subtle" title={progress.detail ?? ''}>
                 {progress.message}
               </span>
             ) : null}
-            {isStreaming && !streamingThinking ? (
+            {!isAssistant && isStreaming && !streamingThinking ? (
               <span className="text-fg-subtle">{m.chat.thinkingLabel}</span>
             ) : null}
           </div>
         ) : null}
+
+        {progressLine}
 
         <div
           className={cn(
@@ -188,27 +225,13 @@ export const MessageBubble = memo(function MessageBubble({
           >
             {message.content?.length ? (
               <>
-                {renderChunkedContent(message.content, toolLabels, stepLabels)}
+                {renderVisibleContent(message.content)}
                 {isStreaming ? (
                   <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
                 ) : null}
               </>
             ) : isStreaming ? (
               <span className="inline-block h-3 w-0.5 animate-pulse bg-accent" />
-            ) : null}
-
-            {legacyThinking ? (
-              <AssistantStepsBlock
-                blocks={[
-                  {
-                    type: 'thinking',
-                    text: message.thinking || '',
-                    streaming: Boolean(message.thinkingStreaming),
-                  },
-                ]}
-                toolLabels={toolLabels}
-                stepLabels={stepLabels}
-              />
             ) : null}
 
             {message.attachments?.length ? (

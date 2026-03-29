@@ -7,6 +7,7 @@ import type { SessionInfo } from '@/features/chat/chat.types';
 import { modelSupportsReasoning } from '@/features/chat/model-capabilities';
 import { pendingAgentRunStorageKey, MessageSender } from '@/features/chat/message-sender';
 import { SessionManager } from '@/features/chat/session-manager';
+import { mergeConsecutiveAssistantMessages } from '@/features/chat/agent-messages';
 import {
   appendThinkingDelta,
   appendTextDelta,
@@ -175,7 +176,8 @@ export function useChatSession() {
         } else {
           setMessages((prev) => {
             const existing = new Set(prev.map((m) => m.timestamp));
-            return [...loaded.filter((m) => !existing.has(m.timestamp)), ...prev];
+            const prepended = loaded.filter((m) => !existing.has(m.timestamp));
+            return mergeConsecutiveAssistantMessages([...prepended, ...prev]);
           });
           setHasMore(more);
         }

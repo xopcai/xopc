@@ -120,6 +120,39 @@ export function normalizeAgentMessages(raw: readonly unknown[]): Message[] {
 }
 
 /**
+ * Merge consecutive assistant bubbles into one (same as a single live streaming turn).
+ * Persisted sessions often store one wire `assistant` row per thinking/tool fragment; without this,
+ * the chat shows repeated "execution" lines after refresh.
+ */
+export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[] {
+  if (messages.length < 2) return messages;
+  const out: Message[] = [];
+  for (const m of messages) {
+    if (m.role !== 'assistant') {
+      out.push(m);
+      continue;
+    }
+    const prev = out[out.length - 1];
+    if (prev?.role === 'assistant') {
+      prev.content = [...prev.content, ...m.content];
+      if (m.timestamp != null) prev.timestamp = m.timestamp;
+      if (m.usage) prev.usage = m.usage;
+      if (m.thinking && !prev.thinking) prev.thinking = m.thinking;
+      if (m.thinkingStreaming && !prev.thinkingStreaming) prev.thinkingStreaming = m.thinkingStreaming;
+      if (m.attachments?.length) {
+        prev.attachments = dedupeAttachments([...(prev.attachments ?? []), ...m.attachments]);
+      }
+    } else {
+      out.push({
+        ...m,
+        content: [...m.content],
+      });
+    }
+  }
+  return out;
+}
+
+/**
  * Convert session/API wire format (including toolResult rows) into chat UI messages.
  */
 export function sessionWireToUiMessages(raw: readonly unknown[]): Message[] {
@@ -150,7 +183,7 @@ export function sessionWireToUiMessages(raw: readonly unknown[]): Message[] {
     }
   }
 
-  return out;
+  return mergeConsecutiveAssistantMessages(out);
 }
 
 function normalizeWireAttachments(raw: unknown): Message['attachments'] {

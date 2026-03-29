@@ -4,11 +4,14 @@ import type { Message } from '@/features/chat/messages.types';
 import { ChatComposer } from '@/features/chat/chat-composer';
 import { ChatHeaderBar } from '@/features/chat/chat-header-bar';
 import { ChatSseStatus } from '@/features/chat/chat-sse-status';
+import { ExecutionProcessDrawer } from '@/features/chat/execution-process-drawer';
 import { MessageList } from '@/features/chat/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll-to-bottom-button';
 import { useChatSession } from '@/features/chat/use-chat-session';
+import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { useChatExecutionDrawerStore } from '@/stores/chat-execution-drawer-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 export function ChatPage() {
@@ -35,6 +38,9 @@ export function ChatPage() {
     atBottomRef.current = atBottom;
   }, [atBottom]);
 
+  const closeExecutionDrawer = useChatExecutionDrawerStore((s) => s.closeDrawer);
+  const executionDrawerOpen = useChatExecutionDrawerStore((s) => s.open);
+
   const {
     messages: chatMessages,
     sessionKey,
@@ -58,6 +64,20 @@ export function ChatPage() {
     abort,
     hasToken,
   } = useChatSession();
+
+  const prevFirstMessageRef = useRef<Message | undefined>(undefined);
+  useEffect(() => {
+    const first = chatMessages[0];
+    const prev = prevFirstMessageRef.current;
+    if (prev !== undefined && first !== undefined && first !== prev) {
+      closeExecutionDrawer();
+    }
+    prevFirstMessageRef.current = first;
+  }, [chatMessages, closeExecutionDrawer]);
+
+  useEffect(() => {
+    closeExecutionDrawer();
+  }, [sessionKey, closeExecutionDrawer]);
 
   const chatHeadline = useMemo(() => {
     const titleKey = sessionRoutePending && decodedKey ? decodedKey : sessionKey;
@@ -170,56 +190,82 @@ export function ChatPage() {
     <div className="chat-shell flex h-full min-h-0 flex-1 flex-col bg-surface-panel">
       <ChatSseStatus />
 
-      <ChatHeaderBar chatHeadline={chatHeadline} />
+      {/* Drawer closed: single centered column. Drawer open (lg): golden ratio — main left, execution panel right. */}
+      <div
+        className={cn(
+          'flex min-h-0 flex-1 flex-col',
+          executionDrawerOpen && 'lg:flex-row',
+        )}
+      >
+        <div
+          className={cn(
+            'flex min-h-0 min-w-0 flex-1 flex-col',
+            executionDrawerOpen
+              ? 'lg:min-w-0 lg:flex-[1.618_1_0%]'
+              : 'mx-auto w-full max-w-[var(--max-width-chat)]',
+          )}
+        >
+          <ChatHeaderBar chatHeadline={chatHeadline} />
 
-      <div className="relative flex min-h-0 flex-1 flex-col">
-        <div className="mx-auto flex w-full min-h-0 max-w-[var(--max-width-chat)] flex-1 flex-col px-3 sm:px-5 xl:px-6">
           <div
-            ref={scrollRef}
-            className="chat-messages min-h-0 flex-1 overflow-y-auto py-4"
-            onScroll={onScroll}
-          >
-            {showSessionLoading ? (
-              <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-3 py-12 text-center text-sm text-fg-muted">
-                {m.chat.loading}
-              </div>
-            ) : (
-              <>
-                {loadingMore ? (
-                  <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
-                ) : null}
-                {error ? (
-                  <div className="mb-4 rounded-md border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
-                    {error}
-                  </div>
-                ) : null}
-                <MessageList
-                  messages={chatMessages}
-                  authToken={token ?? undefined}
-                  streaming={streaming}
-                  progress={progress}
-                  scrollElementRef={scrollRef}
-                />
-              </>
+            className={cn(
+              'flex min-h-0 min-w-0 flex-1 flex-col px-3 sm:px-5 xl:px-6',
+              executionDrawerOpen && 'mx-auto w-full max-w-[var(--max-width-chat)]',
             )}
-          </div>
+          >
+            <div
+              ref={scrollRef}
+              className="chat-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-4"
+              onScroll={onScroll}
+            >
+              {showSessionLoading ? (
+                <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-3 py-12 text-center text-sm text-fg-muted">
+                  {m.chat.loading}
+                </div>
+              ) : (
+                <>
+                  {loadingMore ? (
+                    <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
+                  ) : null}
+                  {error ? (
+                    <div className="mb-4 rounded-md border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
+                      {error}
+                    </div>
+                  ) : null}
+                  <MessageList
+                    messages={chatMessages}
+                    authToken={token ?? undefined}
+                    streaming={streaming}
+                    progress={progress}
+                    scrollElementRef={scrollRef}
+                  />
+                </>
+              )}
+            </div>
 
-          <div className="chat-input-container shrink-0 bg-surface-panel py-4">
-            <ChatComposer
-              disabled={showSessionLoading || sessionRoutePending}
-              sending={sending}
-              streaming={streaming}
-              sessionModel={sessionModel}
-              showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
-              onModelChange={onSessionModelChange}
-              thinkingLevel={thinkingLevel}
-              showThinkingSelector={modelSupportsThinking}
-              onThinkingChange={setThinkingLevel}
-              onSend={sendMessage}
-              onAbort={abort}
-            />
+            <div className="chat-input-container shrink-0 bg-surface-panel py-4">
+              <ChatComposer
+                disabled={showSessionLoading || sessionRoutePending}
+                sending={sending}
+                streaming={streaming}
+                sessionModel={sessionModel}
+                showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
+                onModelChange={onSessionModelChange}
+                thinkingLevel={thinkingLevel}
+                showThinkingSelector={modelSupportsThinking}
+                onThinkingChange={setThinkingLevel}
+                onSend={sendMessage}
+                onAbort={abort}
+              />
+            </div>
           </div>
         </div>
+
+        {executionDrawerOpen ? (
+          <div className="relative w-0 min-w-0 shrink-0 self-stretch overflow-visible lg:flex lg:min-h-0 lg:w-auto lg:flex-[1_1_0%] lg:flex-col">
+            <ExecutionProcessDrawer messages={chatMessages} />
+          </div>
+        ) : null}
       </div>
 
       <ScrollToBottomButton
