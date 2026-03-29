@@ -1,5 +1,10 @@
 appId: com.xopcai.xopcbot
 productName: xopcbot
+
+# Do not auto-publish to GitHub Releases (CI sets CI=true). Artifacts are uploaded via Actions.
+# Prevents implicit GH upload + temp .dmg ENOENT when release is missing or multi-arch build overlaps.
+publish: null
+
 directories:
   output: dist/release
 

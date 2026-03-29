@@ -31,5 +31,8 @@ if (process.env['ELECTRON_BUILDER_KEEP_PROXY'] !== '1') {
 }
 
 const extra = process.argv.slice(2);
-const r = spawnSync(process.execPath, [cli, ...extra], { stdio: 'inherit', env, cwd: root });
+const hasPublishFlag = extra.some((a) => a === '--publish' || a.startsWith('--publish='));
+const publishArgs =
+  process.env['ELECTRON_PUBLISH'] === '1' || hasPublishFlag ? [] : ['--publish', 'never'];
+const r = spawnSync(process.execPath, [cli, ...publishArgs, ...extra], { stdio: 'inherit', env, cwd: root });
 process.exit(r.status ?? 1);
