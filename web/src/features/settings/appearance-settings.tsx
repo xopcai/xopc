@@ -1,5 +1,6 @@
-import { Languages, Palette } from 'lucide-react';
+import { Languages, Palette, Type } from 'lucide-react';
 
+import { FontScaleToggle } from '@/components/shell/font-scale-toggle';
 import { LanguageToggle } from '@/components/shell/language-toggle';
 import { ThemeToggle } from '@/components/shell/theme-toggle';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
@@ -34,6 +35,22 @@ export function AppearanceSettingsPanel() {
           subtitle={a.themeDescription}
         />
         <ThemeToggle />
+      </SettingsFormSection>
+
+      <SettingsFormSection>
+        <SettingsFormSectionHeader
+          icon={Type}
+          title={a.fontScaleTitle}
+          subtitle={a.fontScaleDescription}
+        />
+        <FontScaleToggle
+          ariaLabel={a.fontScaleTitle}
+          labels={{
+            compact: a.fontScaleCompact,
+            default: a.fontScaleDefault,
+            large: a.fontScaleLarge,
+          }}
+        />
       </SettingsFormSection>
     </div>
   );

@@ -7,6 +7,7 @@ import { SettingsPageLayout } from '@/components/shell/settings-page-layout';
 import { ChatPage } from '@/features/chat/chat-page';
 import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
 import { SwrProvider } from '@/providers/swr-provider';
+import { syncFontScaleAfterHydration, useFontScaleStore } from '@/stores/font-scale-store';
 import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/stores/theme-store';
 
 const SessionsPage = lazy(() =>
@@ -135,12 +136,16 @@ const router = createHashRouter([
 
 function ThemeEffects() {
   useEffect(() => {
-    const offHydration = useThemeStore.persist.onFinishHydration(() => {
+    const offTheme = useThemeStore.persist.onFinishHydration(() => {
       syncThemeAfterHydration();
+    });
+    const offFont = useFontScaleStore.persist.onFinishHydration(() => {
+      syncFontScaleAfterHydration();
     });
     const offSystem = subscribeSystemTheme();
     return () => {
-      offHydration?.();
+      offTheme?.();
+      offFont?.();
       offSystem();
     };
   }, []);
