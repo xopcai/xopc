@@ -12,6 +12,9 @@ permissions:
   pages: write
   id-token: write
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 concurrency:
   group: pages
   cancel-in-progress: false
