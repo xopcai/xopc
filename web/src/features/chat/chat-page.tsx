@@ -190,19 +190,20 @@ export function ChatPage() {
     <div className="chat-shell flex h-full min-h-0 flex-1 flex-col bg-surface-panel">
       <ChatSseStatus />
 
-      {/* Drawer closed: single centered column. Drawer open (lg): golden ratio — main left, execution panel right. */}
+      {/* Drawer closed: single centered column. Drawer open (lg): grid animates column widths (no abrupt flex jump). */}
       <div
         className={cn(
           'flex min-h-0 flex-1 flex-col',
-          executionDrawerOpen && 'lg:flex-row',
+          'lg:grid lg:min-h-0 lg:grid-rows-1 lg:transition-[grid-template-columns] lg:duration-300 lg:ease-[cubic-bezier(0.33,1,0.68,1)] motion-reduce:lg:transition-none',
+          executionDrawerOpen
+            ? 'lg:grid-cols-[minmax(0,1.618fr)_minmax(0,1fr)]'
+            : 'lg:grid-cols-[minmax(0,1fr)_minmax(0,0fr)]',
         )}
       >
         <div
           className={cn(
             'flex min-h-0 min-w-0 flex-1 flex-col',
-            executionDrawerOpen
-              ? 'lg:min-w-0 lg:flex-[1.618_1_0%]'
-              : 'mx-auto w-full max-w-[var(--max-width-chat)]',
+            executionDrawerOpen ? 'lg:min-w-0' : 'mx-auto w-full max-w-[var(--max-width-chat)]',
           )}
         >
           <ChatHeaderBar chatHeadline={chatHeadline} />
@@ -261,11 +262,9 @@ export function ChatPage() {
           </div>
         </div>
 
-        {executionDrawerOpen ? (
-          <div className="relative w-0 min-w-0 shrink-0 self-stretch overflow-visible lg:flex lg:min-h-0 lg:w-auto lg:flex-[1_1_0%] lg:flex-col">
-            <ExecutionProcessDrawer messages={chatMessages} />
-          </div>
-        ) : null}
+        <div className="relative h-0 w-0 min-w-0 shrink-0 self-stretch overflow-visible lg:h-auto lg:min-h-0 lg:w-auto lg:min-w-0">
+          {executionDrawerOpen ? <ExecutionProcessDrawer messages={chatMessages} /> : null}
+        </div>
       </div>
 
       <ScrollToBottomButton

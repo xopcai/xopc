@@ -173,6 +173,10 @@ const bundles: Record<
       executionProgressRunning: string;
       /** Tooltip on elapsed time in the execution progress line */
       executionElapsedTitle: string;
+      /** Assistant bubble: copy as plain text vs Markdown source */
+      messageCopyPlainText: string;
+      messageCopyMarkdown: string;
+      messageCopied: string;
     };
     sessions: {
       title: string;
@@ -1015,6 +1019,9 @@ const bundles: Record<
       executionProgressDone: 'Thinking complete',
       executionProgressRunning: 'Thinking & tools…',
       executionElapsedTitle: 'Elapsed time for this run',
+      messageCopyPlainText: 'Copy plain text',
+      messageCopyMarkdown: 'Copy Markdown',
+      messageCopied: 'Copied',
     },
     sessions: {
       title: 'Sessions',
@@ -1897,6 +1904,9 @@ const bundles: Record<
       executionProgressDone: '已完成思考',
       executionProgressRunning: '思考与工具执行中…',
       executionElapsedTitle: '本次执行已耗时',
+      messageCopyPlainText: '复制纯文本',
+      messageCopyMarkdown: '复制 Markdown 格式',
+      messageCopied: '已复制',
     },
     sessions: {
       title: '会话',
