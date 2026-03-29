@@ -1,7 +1,7 @@
 /**
- * Compatibility re-export for legacy `src/channels/telegram` import paths.
- * Prefer importing from `@xopcai/xopcbot-extension-telegram` in new code.
+ * Stable imports for the bundled Telegram channel (implementation under extensions/telegram).
  */
 
-export { telegramPlugin, defineChannelPluginEntry } from '@xopcai/xopcbot-extension-telegram';
-export type { TelegramAccount } from '@xopcai/xopcbot-extension-telegram';
+export { telegramPlugin, defineChannelPluginEntry } from '../../../extensions/telegram/src/index.js';
+export type { TelegramAccount } from '../../../extensions/telegram/src/index.js';
+export { generateSessionKeyWithRouting } from '../../../extensions/telegram/src/routing-integration.js';

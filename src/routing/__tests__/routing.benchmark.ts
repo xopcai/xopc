@@ -18,7 +18,7 @@ import {
   type BindingRule,
   type RouteContext,
 } from '../index.js';
-import { generateSessionKeyWithRouting } from '@xopcai/xopcbot-extension-telegram/routing-integration.js';
+import { generateSessionKeyWithRouting } from '../../channels/telegram/index.js';
 import type { Config } from '../../config/schema.js';
 
 // =============================================================================

@@ -1,7 +1,7 @@
 {
   "id": "weixin",
   "name": "Weixin Channel",
-  "description": "WeChat ilink channel (bundled workspace package @xopcai/xopcbot-extension-weixin)",
+  "description": "WeChat ilink channel (private workspace sources; ships inside @xopcai/xopcbot dist/)",
   "version": "0.1.0",
   "kind": "channel",
   "main": "dist/index.js"

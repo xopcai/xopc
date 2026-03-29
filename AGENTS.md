@@ -41,7 +41,7 @@
 ```bash
 pnpm install
 pnpm run dev -- <command>    # no build required for dev CLI
-pnpm run build               # production compile
+pnpm run build               # Node: tsdown (`tsdown.config.ts`) + web; types: `pnpm run typecheck`
 pnpm test
 ```
 
@@ -82,7 +82,7 @@ Also present (follow local patterns): `acp/`, `auth/`, `chat-commands/` (in-chat
 
 **Gateway console (`web/`)** — React SPA (Vite + Tailwind v4): hash router, REST + SSE to the gateway, Zustand + SWR. Production build outputs to `dist/gateway/static/root` (same static root the gateway serves).
 
-**Extensions (`extensions/`)** — workspace packages (e.g. `telegram` → `@xopcai/xopcbot-extension-telegram`).
+**Extensions (`extensions/`)** — optional add-ons; **Telegram / Weixin** channel *sources* live in `extensions/telegram` and `extensions/weixin` but are **`private`** workspace packages (not published). Built like OpenClaw: **`tsdown`** (Rolldown) **unbundle** mode emits `dist/src/**` and `dist/extensions/**` in one pass. Wiring: `src/generated/bundled-channel-plugins.ts` (`pnpm run generate:bundled-channels`) and `src/channels/plugins/bundled.ts`.
 
 ---
 
@@ -136,14 +136,14 @@ Register in `AgentService` / tools index as existing tools do.
 
 ### Channels
 
-Implement `ChannelPlugin` (`src/channels/plugin-types.ts`). Bundled list: `src/channels/plugins/bundled.ts`. Telegram: `extensions/telegram` (`@xopcai/xopcbot-extension-telegram`), re-exported from `src/channels/telegram/index.js`.
+Implement `ChannelPlugin` (`src/channels/plugin-types.ts`). Bundled list: `src/channels/plugins/bundled.ts` (imports `src/generated/bundled-channel-plugins.ts`). Telegram / Weixin: sources under `extensions/telegram`, `extensions/weixin`; stable imports from `src/channels/telegram/index.js`, `src/channels/weixin/index.js`.
 
 **Access:** DM policies `pairing` \| `allowlist` \| `open` \| `disabled`; group `open` \| `disabled` \| `allowlist`. See [Configuration](#configuration).
 
 ### Telegram draft streaming
 
 ```typescript
-import { DraftStreamManager } from '@xopcai/xopcbot-extension-telegram/draft-stream.js';
+import { DraftStreamManager } from '@xopcai/xopcbot/channels/telegram/draft-stream.js';
 ```
 
 ---
@@ -278,6 +278,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | Symptom | Check |
 |---------|--------|
 | `ERR_MODULE_NOT_FOUND` | `pnpm install` |
+| `@vscode/ripgrep` missing at runtime | Allow install scripts: `pnpm approve-builds` (ships the `rg` binary) |
 | `@xopcbot/...` not found | `pnpm run build` |
 | Tests timeout | API keys / network for live calls |
 | Bad config | JSON syntax of `~/.xopcbot/config.json` |
@@ -299,7 +300,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | Config | `src/config/schema.ts` (and related) |
 | Gateway / API | `src/gateway/` |
 | Models & providers | `src/providers/index.ts` |
-| Channels | `src/channels/`, `extensions/telegram/` |
+| Channels | `src/channels/` (+ `extensions/telegram`, `extensions/weixin` sources → `dist/extensions/`) |
 | Gateway console (React) | `web/src/`, [ui-design-system.md](./docs/design/ui-design-system.md) |
 | Logging | `src/utils/logger.ts` (barrel) → `src/utils/logger/` (`index.ts`, `context.ts`, `log-store.ts`, `log-stream.ts`, …) |
 | Log Manager | `web/src/` (logs feature / pages) |

@@ -51,7 +51,7 @@ function createChannelsCommand(ctx: CLIContext): Command {
       const timeoutMs = Math.max(60_000, Number.parseInt(String(options.timeout), 10) || 480_000);
       const verbose = ctx.isVerbose;
 
-      const { runWeixinQrLoginCli } = await import('@xopcai/xopcbot-extension-weixin');
+      const { runWeixinQrLoginCli } = await import('../../channels/weixin/index.js');
 
       const result = await runWeixinQrLoginCli({
         configPath,

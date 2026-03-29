@@ -3,7 +3,6 @@
  */
 
 import type { ChannelPlugin } from '../plugin-types.js';
-import { telegramPlugin } from '@xopcai/xopcbot-extension-telegram';
-import { weixinPlugin } from '@xopcai/xopcbot-extension-weixin';
+import { telegramPlugin, weixinPlugin } from '../../generated/bundled-channel-plugins.js';
 
 export const bundledChannelPlugins: ChannelPlugin[] = [telegramPlugin, weixinPlugin];
