@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { Button } from '@/components/ui/button';
 
@@ -69,7 +70,10 @@ export function TokenDialog() {
                 <input
                   type={show ? 'text' : 'password'}
                   autoComplete="off"
-                  className="min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-disabled focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                  className={cn(
+                    'min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-disabled',
+                    settingsInputFocusClass,
+                  )}
                   placeholder={t.placeholder}
                   value={value}
                   onChange={(e) => {

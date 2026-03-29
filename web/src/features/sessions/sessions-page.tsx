@@ -301,7 +301,7 @@ export function SessionsPage() {
             <FolderOpen className="size-5 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
             {s.title}
           </h1>
-          <div className="flex w-full min-w-0 items-center gap-2 rounded-xl bg-surface-base px-3 py-2 transition-colors focus-within:ring-2 focus-within:ring-accent/35 sm:max-w-md dark:bg-surface-hover/40">
+          <div className="flex w-full min-w-0 items-center gap-2 rounded-xl bg-surface-base px-3 py-2 transition-colors sm:max-w-md dark:bg-surface-hover/40">
             <Search className="size-4 shrink-0 text-fg-disabled" strokeWidth={1.75} aria-hidden />
             <input
               type="search"

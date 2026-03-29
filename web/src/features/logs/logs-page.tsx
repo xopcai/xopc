@@ -13,7 +13,7 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
-import { nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
+import { bareInputFocusClass, nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import {
   getLogDir,
@@ -428,7 +428,8 @@ export function LogsPage() {
             spellCheck={false}
             className={cn(
               'w-full rounded-lg bg-surface-base py-2 pl-10 pr-3 text-sm text-fg placeholder:text-fg-subtle',
-              'focus:outline-none focus:ring-2 focus:ring-accent/35 dark:bg-surface-hover/35',
+              bareInputFocusClass,
+              'dark:bg-surface-hover/35',
             )}
           />
         </label>

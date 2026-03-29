@@ -7,6 +7,7 @@ import {
   patchGatewaySettings,
   type GatewaySettingsState,
 } from '@/features/settings/gateway-config-api';
+import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages, type GatewaySettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
@@ -16,7 +17,8 @@ import { useLocaleStore } from '@/stores/locale-store';
 function inputClassName(): string {
   return cn(
     'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
-    'placeholder:text-fg-subtle focus:border-edge-strong focus:outline-none focus:ring-2 focus:ring-accent/30',
+    'placeholder:text-fg-subtle',
+    settingsInputFocusClass,
     'dark:border-edge',
   );
 }

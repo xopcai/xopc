@@ -173,6 +173,17 @@ html.dark {
   :focus:not(:focus-visible) {
     outline: none;
   }
+
+  /**
+   * Native `<select>` — UA + global :focus-visible both draw an outer ring; strip it.
+   * Focus styling comes from `.ui-select` (border only) or page-specific classes.
+   */
+  select:focus,
+  select:focus-visible {
+    outline: none;
+    outline-offset: 0;
+    box-shadow: none;
+  }
 }
 
 @layer components {
@@ -190,14 +201,15 @@ html.dark {
   }
 
   /**
-   * Native `<select>` — soft border, light hover, quiet focus (avoid heavy ring + loud edge).
+   * Native `<select>` — soft border, light hover; focus uses border only (no ring / outer shadow).
    */
   .ui-select {
     @apply rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-sm font-normal leading-snug text-fg;
-    @apply cursor-pointer transition-[border-color,background-color,box-shadow] duration-150 ease-out;
+    @apply cursor-pointer transition-[border-color,background-color] duration-150 ease-out;
     @apply hover:border-edge hover:bg-surface-hover/45;
-    /* Override global :focus-visible outline so only the soft ring shows */
-    @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/18;
+    @apply focus:outline-none focus-visible:outline-none;
+    @apply focus:ring-0 focus-visible:ring-0 focus-visible:ring-offset-0 focus-visible:shadow-none;
+    @apply focus-visible:border-edge;
   }
 
   html.dark .ui-select {
