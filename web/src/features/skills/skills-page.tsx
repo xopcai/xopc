@@ -4,16 +4,17 @@ import {
   ChevronDown,
   FileArchive,
   Funnel,
+  Info,
   MoreVertical,
   Plus,
   RefreshCw,
   Search,
-  Sparkles,
   Trash2,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 
+import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Button } from '@/components/ui/button';
 import {
   segmentedThumbActiveClassName,
@@ -24,7 +25,9 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import {
   deleteSkill,
+  getSkillMarkdown,
   getSkills,
+  patchSkillEnabled,
   reloadSkills,
   uploadSkillZip,
 } from '@/features/skills/skill-api';
@@ -32,8 +35,6 @@ import type { SkillCatalogEntry } from '@/features/skills/skill.types';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-
-const CREATE_SKILL_URL = 'https://cursor.com/docs';
 
 function interpolate(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
@@ -63,8 +64,53 @@ function SkillCardIcon({ name }: { name: string }) {
   );
 }
 
-type MainTab = 'builtin' | 'user';
+type MainTab = 'builtin' | 'user' | 'marketplace';
 type SourceFilter = 'all' | 'global' | 'workspace' | 'extra';
+
+function normalizeCatalogEntry(r: SkillCatalogEntry): SkillCatalogEntry {
+  return {
+    ...r,
+    enabled: r.enabled ?? true,
+    disableModelInvocation: r.disableModelInvocation ?? false,
+  };
+}
+
+function SkillEnableSwitch({
+  checked,
+  busy,
+  onChange,
+}: {
+  checked: boolean;
+  busy?: boolean;
+  onChange: (next: boolean) => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      aria-busy={busy}
+      disabled={busy}
+      className={cn(
+        'relative h-7 w-12 shrink-0 rounded-full transition-colors',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+        checked ? 'bg-emerald-500' : 'bg-surface-active',
+        busy && 'cursor-not-allowed opacity-60',
+      )}
+      onClick={() => {
+        if (busy) return;
+        onChange(!checked);
+      }}
+    >
+      <span
+        className={cn(
+          'pointer-events-none absolute left-0.5 top-0.5 block h-6 w-6 rounded-full bg-white shadow transition-transform',
+          checked ? 'translate-x-[1.375rem]' : 'translate-x-0',
+        )}
+      />
+    </button>
+  );
+}
 
 async function fileToZipUpload(file: File): Promise<File> {
   const lower = file.name.toLowerCase();
@@ -80,44 +126,19 @@ async function fileToZipUpload(file: File): Promise<File> {
   throw new Error('invalid');
 }
 
-const SKILL_GRID_SKELETON_COUNT = 9;
+const SKILL_LIST_SKELETON_COUNT = 6;
 
-function SkillCardSkeleton() {
+function SkillListRowSkeleton() {
   const skel =
     'animate-pulse motion-reduce:animate-none rounded-md bg-surface-hover dark:bg-surface-active/50';
   return (
-    <div
-      className="flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base p-4 dark:border-edge-subtle"
-      aria-hidden
-    >
-      <div className="flex gap-3">
-        <div className={cn('size-11 shrink-0 rounded-xl', skel)} />
-        <div className="min-w-0 flex-1 space-y-2 pt-0.5">
-          <div className={cn('h-4 max-w-[12rem]', skel)} />
-          <div className={cn('h-3 w-full rounded', skel)} />
-          <div className={cn('h-3 w-[80%] rounded', skel)} />
-        </div>
+    <div className="flex items-center gap-4 px-4 py-3.5" aria-hidden>
+      <div className={cn('size-11 shrink-0 rounded-xl', skel)} />
+      <div className="min-w-0 flex-1 space-y-2">
+        <div className={cn('h-4 max-w-[10rem]', skel)} />
+        <div className={cn('h-3 w-full max-w-xl rounded', skel)} />
       </div>
-    </div>
-  );
-}
-
-function HeroIllustration() {
-  return (
-    <div className="pointer-events-none hidden shrink-0 select-none sm:block" aria-hidden>
-      <svg width="168" height="112" viewBox="0 0 168 112" className="text-blue-200/80 dark:text-blue-400/30">
-        <defs>
-          <linearGradient id="skillHeroA" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="rgb(147 197 253)" />
-            <stop offset="100%" stopColor="rgb(96 165 250)" />
-          </linearGradient>
-        </defs>
-        <rect x="52" y="8" width="72" height="88" rx="10" fill="url(#skillHeroA)" transform="rotate(8 88 52)" opacity="0.9" />
-        <rect x="36" y="20" width="72" height="88" rx="10" fill="rgb(191 219 254)" transform="rotate(-6 72 64)" opacity="0.95" />
-        <rect x="56" y="28" width="72" height="88" rx="10" fill="rgb(239 246 255)" className="dark:fill-blue-950/80" transform="rotate(4 92 72)" />
-        <circle cx="92" cy="58" r="12" fill="rgb(59 130 246 / 0.35)" />
-        <circle cx="108" cy="78" r="6" fill="rgb(37 99 235 / 0.4)" />
-      </svg>
+      <div className={cn('h-7 w-12 shrink-0 rounded-full', skel)} />
     </div>
   );
 }
@@ -148,22 +169,37 @@ export function SkillsPage() {
 
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
+  const [togglingSkillName, setTogglingSkillName] = useState<string | null>(null);
 
-  const load = useCallback(async (): Promise<{ ok: true } | { ok: false; message: string }> => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await getSkills();
-      setCatalog(data.catalog);
-      return { ok: true };
-    } catch (e) {
-      const message = e instanceof Error ? e.message : sk.loadFailed;
-      setError(message);
-      return { ok: false, message };
-    } finally {
-      setLoading(false);
-    }
-  }, [sk.loadFailed]);
+  const [detailOpen, setDetailOpen] = useState(false);
+  const [detailTitle, setDetailTitle] = useState('');
+  const [detailMarkdown, setDetailMarkdown] = useState('');
+  const [detailLoading, setDetailLoading] = useState(false);
+  const [detailError, setDetailError] = useState<string | null>(null);
+
+  const load = useCallback(
+    async (opts?: { silent?: boolean }): Promise<{ ok: true } | { ok: false; message: string }> => {
+      const silent = opts?.silent === true;
+      if (!silent) {
+        setLoading(true);
+      }
+      setError(null);
+      try {
+        const data = await getSkills();
+        setCatalog(data.catalog.map(normalizeCatalogEntry));
+        return { ok: true };
+      } catch (e) {
+        const message = e instanceof Error ? e.message : sk.loadFailed;
+        setError(message);
+        return { ok: false, message };
+      } finally {
+        if (!silent) {
+          setLoading(false);
+        }
+      }
+    },
+    [sk.loadFailed],
+  );
 
   useEffect(() => {
     if (!hasToken) return;
@@ -174,6 +210,45 @@ export function SkillsPage() {
     setActionFeedback({ kind, message });
     window.setTimeout(() => setActionFeedback(null), durationMs);
   }, []);
+
+  const openSkillDetail = useCallback(
+    async (row: SkillCatalogEntry) => {
+      setDetailOpen(true);
+      setDetailTitle(row.name);
+      setDetailMarkdown('');
+      setDetailError(null);
+      setDetailLoading(true);
+      try {
+        const { markdown, name } = await getSkillMarkdown(row.name);
+        setDetailMarkdown(markdown);
+        setDetailTitle(name);
+      } catch (e) {
+        setDetailError(e instanceof Error ? e.message : sk.detailLoadFailed);
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [sk.detailLoadFailed],
+  );
+
+  const onSkillToggle = useCallback(
+    async (name: string, next: boolean): Promise<boolean> => {
+      setTogglingSkillName(name);
+      setActionFeedback(null);
+      try {
+        await patchSkillEnabled(name, next);
+        await load({ silent: true });
+        return true;
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : sk.skillToggleFailed;
+        showFeedback('error', msg);
+        return false;
+      } finally {
+        setTogglingSkillName(null);
+      }
+    },
+    [load, showFeedback, sk.skillToggleFailed],
+  );
 
   const onReloadClick = async () => {
     setActionFeedback(null);
@@ -192,7 +267,16 @@ export function SkillsPage() {
 
   const userCount = useMemo(() => catalog.filter((r) => r.source !== 'builtin').length, [catalog]);
 
+  const detailFromCatalog = useMemo(
+    () => (detailTitle ? catalog.find((r) => r.name === detailTitle) : undefined),
+    [catalog, detailTitle],
+  );
+  const detailEnabled = detailFromCatalog?.enabled ?? true;
+
   const filteredCatalog = useMemo(() => {
+    if (mainTab === 'marketplace') {
+      return [];
+    }
     const q = searchQuery.trim().toLowerCase();
     let rows = catalog;
 
@@ -348,7 +432,7 @@ export function SkillsPage() {
         ) : null}
 
         <header className="flex flex-col gap-4">
-          <div className="flex w-full shrink-0 flex-nowrap items-center justify-end gap-2">
+          <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
             <Button
               type="button"
               variant="ghost"
@@ -360,21 +444,28 @@ export function SkillsPage() {
             >
               <RefreshCw className={cn('size-4', loading && 'animate-spin')} strokeWidth={1.75} />
             </Button>
-            <Button
-              type="button"
-              variant="secondary"
-              className="gap-2"
-              onClick={() => {
-                window.open(CREATE_SKILL_URL, '_blank', 'noopener,noreferrer');
-              }}
-            >
-              <Sparkles className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
-              {sk.createViaCursor}
-            </Button>
+            <label className="relative flex min-h-9 min-w-0 max-w-sm cursor-text items-center rounded-pill border border-edge bg-surface-base py-1.5 pl-9 pr-3 shadow-sm dark:bg-surface-hover/40 sm:max-w-md">
+              <Search
+                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-disabled"
+                strokeWidth={1.75}
+                aria-hidden
+              />
+              <input
+                type="text"
+                role="searchbox"
+                enterKeyHint="search"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder={sk.searchPlaceholder}
+                autoComplete="off"
+                spellCheck={false}
+                className="min-w-0 flex-1 appearance-none border-0 bg-transparent py-0.5 text-sm leading-normal text-fg caret-current placeholder:text-fg-disabled focus:border-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none"
+              />
+            </label>
             <Button
               type="button"
               variant="primary"
-              className="gap-2"
+              className="shrink-0 gap-2"
               onClick={() => {
                 setPendingFile(null);
                 setInstallOpen(true);
@@ -390,70 +481,58 @@ export function SkillsPage() {
           </div>
         </header>
 
-        <div className="w-full min-w-0 max-w-xl">
-          <label className="flex w-full items-center gap-2 rounded-pill border border-edge bg-surface-base px-4 py-2.5 shadow-sm dark:bg-surface-hover/40">
-            <Search className="size-4 shrink-0 text-fg-disabled" strokeWidth={1.75} aria-hidden />
-            <input
-              type="search"
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              placeholder={sk.searchPlaceholder}
-              autoComplete="off"
-              className="min-w-0 flex-1 border-0 bg-transparent text-sm text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0"
-            />
-          </label>
-        </div>
-
-        {/* Featured hero */}
-        <section
-          className="flex flex-col gap-4 rounded-2xl border border-edge-subtle bg-blue-50/90 px-5 py-6 sm:flex-row sm:items-center sm:justify-between sm:px-8 dark:border-edge dark:bg-blue-950/35"
-          aria-labelledby="skills-hero-heading"
-        >
-          <div className="min-w-0 flex-1 space-y-2">
-            <h2 id="skills-hero-heading" className="text-base font-semibold text-fg">
-              {sk.heroFeaturedTitle}
-            </h2>
-            <p className="text-sm leading-relaxed text-fg-muted">{sk.heroFeaturedDesc}</p>
-          </div>
-          <HeroIllustration />
-        </section>
-
-        {/* Marketplace */}
         <section className="flex flex-col gap-4">
-          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:gap-6">
-              <h2 className="text-base font-semibold text-fg">{sk.marketplaceTitle}</h2>
-              <div className={segmentedTrackClassName} role="tablist" aria-label={sk.marketplaceTitle}>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={mainTab === 'builtin'}
-                  className={cn(
-                    segmentedThumbBaseClassName,
-                    'px-3 py-1.5',
-                    mainTab === 'builtin' && segmentedThumbActiveClassName,
-                  )}
-                  onClick={() => setMainTab('builtin')}
-                >
-                  {sk.tabBuiltin}
-                </button>
-                <button
-                  type="button"
-                  role="tab"
-                  aria-selected={mainTab === 'user'}
-                  className={cn(
-                    segmentedThumbBaseClassName,
-                    'inline-flex items-center gap-1.5 px-3 py-1.5',
-                    mainTab === 'user' && segmentedThumbActiveClassName,
-                  )}
-                  onClick={() => setMainTab('user')}
-                >
-                  {sk.tabUser}
-                  <span className="rounded-md bg-surface-hover px-1.5 py-0 text-[10px] font-medium text-fg-subtle dark:bg-surface-active">
-                    {userCount}
-                  </span>
-                </button>
-              </div>
+          <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:justify-between sm:gap-3">
+            <div
+              className={cn(
+                segmentedTrackClassName,
+                'w-full items-stretch gap-px px-1 py-0.5 sm:w-auto',
+              )}
+              role="tablist"
+              aria-label={sk.skillsNavAria}
+            >
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mainTab === 'builtin'}
+                className={cn(
+                  segmentedThumbBaseClassName,
+                  'h-7 min-h-7 flex-1 px-2.5 sm:flex-initial',
+                  mainTab === 'builtin' && segmentedThumbActiveClassName,
+                )}
+                onClick={() => setMainTab('builtin')}
+              >
+                {sk.tabBuiltin}
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mainTab === 'user'}
+                className={cn(
+                  segmentedThumbBaseClassName,
+                  'inline-flex h-7 min-h-7 flex-1 items-center justify-center gap-1 px-2.5 sm:flex-initial',
+                  mainTab === 'user' && segmentedThumbActiveClassName,
+                )}
+                onClick={() => setMainTab('user')}
+              >
+                {sk.tabUser}
+                <span className="rounded bg-surface-hover px-1.5 py-px text-[10px] font-medium tabular-nums leading-none text-fg-subtle dark:bg-surface-active">
+                  {userCount}
+                </span>
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={mainTab === 'marketplace'}
+                className={cn(
+                  segmentedThumbBaseClassName,
+                  'h-7 min-h-7 flex-1 px-2.5 sm:flex-initial',
+                  mainTab === 'marketplace' && segmentedThumbActiveClassName,
+                )}
+                onClick={() => setMainTab('marketplace')}
+              >
+                {sk.tabMarketplace}
+              </button>
             </div>
 
             {mainTab === 'user' ? (
@@ -462,14 +541,14 @@ export function SkillsPage() {
                   <button
                     type="button"
                     className={cn(
-                      'inline-flex items-center gap-2 rounded-xl border border-edge bg-surface-panel px-3 py-2 text-sm text-fg shadow-sm',
+                      'inline-flex h-7 min-h-7 min-w-[9rem] shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-sm',
                       interaction.transition,
                       interaction.focusRingPanel,
                     )}
                   >
-                    <Funnel className="size-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                    <Funnel className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
                     <span>{filterLabel}</span>
-                    <ChevronDown className="size-4 text-fg-subtle" strokeWidth={1.75} aria-hidden />
+                    <ChevronDown className="size-3.5 text-fg-subtle" strokeWidth={1.75} aria-hidden />
                   </button>
                 </DropdownMenu.Trigger>
                 <DropdownMenu.Portal>
@@ -502,103 +581,199 @@ export function SkillsPage() {
             ) : null}
           </div>
 
-          <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">
-            {mainTab === 'builtin' ? sk.sectionOfficial : sk.sectionUser}
-          </p>
-
-          {loading ? (
-            <div
-              className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3"
-              aria-busy="true"
-              aria-label={sk.loading}
-            >
-              {Array.from({ length: SKILL_GRID_SKELETON_COUNT }, (_, i) => (
-                <SkillCardSkeleton key={i} />
-              ))}
+          {mainTab === 'marketplace' ? (
+            <div className="rounded-2xl border border-dashed border-edge bg-surface-base/40 px-6 py-16 text-center text-sm text-fg-muted">
+              {sk.marketplacePlaceholder}
             </div>
           ) : (
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {catalog.length === 0 ? (
-                <div className="col-span-full rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
+            <>
+              <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">
+                {mainTab === 'builtin' ? sk.sectionBuiltinList : sk.sectionUser}
+              </p>
+
+              {loading ? (
+                <div
+                  className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle"
+                  aria-busy="true"
+                  aria-label={sk.loading}
+                >
+                  {Array.from({ length: SKILL_LIST_SKELETON_COUNT }, (_, i) => (
+                    <SkillListRowSkeleton key={i} />
+                  ))}
+                </div>
+              ) : catalog.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
                   {sk.empty}
                 </div>
               ) : filteredCatalog.length === 0 ? (
-                <div className="col-span-full rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
+                <div className="rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
                   {sk.noSearchResults}
                 </div>
               ) : (
-                filteredCatalog.map((row) => (
-                  <article
-                    key={`${row.directoryId}-${row.path}`}
-                    className={cn(
-                      'group relative flex flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-base p-4 shadow-sm',
-                      'transition-[border-color,box-shadow] duration-150 hover:border-edge hover:shadow-md dark:border-edge-subtle',
-                      interaction.transition,
-                    )}
-                  >
-                    <div className="flex gap-3">
-                      <SkillCardIcon name={row.name} />
-                      <div className="min-w-0 flex-1">
-                        <h3 className="font-semibold leading-snug text-fg">{row.name}</h3>
-                        <p className="mt-1 line-clamp-3 text-sm leading-relaxed text-fg-muted">
-                          {row.description || '—'}
-                        </p>
-                      </div>
-                      {row.managed ? (
-                        <DropdownMenu.Root>
-                          <DropdownMenu.Trigger asChild>
-                            <button
-                              type="button"
-                              className={cn(
-                                'absolute right-2 top-2 flex size-8 items-center justify-center rounded-lg text-fg-muted opacity-0 hover:bg-surface-hover hover:text-fg group-hover:opacity-100',
-                                interaction.focusRingPanel,
-                              )}
-                              aria-label={sk.col.actions}
-                            >
-                              <MoreVertical className="size-4" strokeWidth={1.75} />
-                            </button>
-                          </DropdownMenu.Trigger>
-                          <DropdownMenu.Portal>
-                            <DropdownMenu.Content
-                              className="z-50 min-w-[8rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
-                              sideOffset={4}
-                              align="end"
-                            >
-                              <DropdownMenu.Item
+                <div className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle">
+                  {filteredCatalog.map((row) => (
+                    <article
+                      key={`${row.directoryId}-${row.path}`}
+                      className="group relative flex items-center gap-4 border-b border-edge-subtle px-4 py-3.5 last:border-b-0"
+                    >
+                      <button
+                        type="button"
+                        className={cn(
+                          'flex min-w-0 flex-1 cursor-pointer items-center gap-4 rounded-lg text-left outline-none',
+                          'hover:bg-surface-hover/50 dark:hover:bg-surface-hover/30',
+                          interaction.focusRingPanel,
+                        )}
+                        onClick={() => void openSkillDetail(row)}
+                      >
+                        <SkillCardIcon name={row.name} />
+                        <div className="min-w-0 flex-1 pr-2">
+                          <h3 className="font-semibold leading-snug text-fg">{row.name}</h3>
+                          <p className="mt-0.5 line-clamp-2 text-sm leading-relaxed text-fg-muted">
+                            {row.description || '—'}
+                          </p>
+                          <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
+                            <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
+                              {sourceLabel(row.source)}
+                            </span>
+                            {row.managed ? (
+                              <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
+                                {sk.col.managed}: {sk.yes}
+                              </span>
+                            ) : null}
+                          </div>
+                        </div>
+                      </button>
+                      <div
+                        className="flex shrink-0 items-center gap-1"
+                        onClick={(e) => e.stopPropagation()}
+                        role="presentation"
+                      >
+                        {row.managed ? (
+                          <DropdownMenu.Root>
+                            <DropdownMenu.Trigger asChild>
+                              <button
+                                type="button"
                                 className={cn(
-                                  'flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 outline-none',
-                                  'hover:bg-red-50 data-[highlighted]:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
+                                  'flex size-9 items-center justify-center rounded-lg text-fg-muted hover:bg-surface-hover hover:text-fg',
+                                  interaction.focusRingPanel,
                                 )}
-                                onSelect={() => {
-                                  setConfirmId(row.directoryId);
-                                  setConfirmOpen(true);
-                                }}
+                                aria-label={sk.col.actions}
                               >
-                                <Trash2 className="size-4" strokeWidth={1.75} aria-hidden />
-                                {sk.delete}
-                              </DropdownMenu.Item>
-                            </DropdownMenu.Content>
-                          </DropdownMenu.Portal>
-                        </DropdownMenu.Root>
-                      ) : null}
-                    </div>
-                    <div className="flex flex-wrap gap-2 text-[11px] text-fg-subtle">
-                      <span className="rounded-md bg-surface-base px-2 py-0.5 dark:bg-surface-hover/60">
-                        {sourceLabel(row.source)}
-                      </span>
-                      {row.managed ? (
-                        <span className="rounded-md bg-surface-base px-2 py-0.5 dark:bg-surface-hover/60">
-                          {sk.col.managed}: {sk.yes}
-                        </span>
-                      ) : null}
-                    </div>
-                  </article>
-                ))
+                                <MoreVertical className="size-4" strokeWidth={1.75} />
+                              </button>
+                            </DropdownMenu.Trigger>
+                            <DropdownMenu.Portal>
+                              <DropdownMenu.Content
+                                className="z-50 min-w-[8rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
+                                sideOffset={4}
+                                align="end"
+                              >
+                                <DropdownMenu.Item
+                                  className={cn(
+                                    'flex cursor-pointer items-center gap-2 rounded-lg px-3 py-2 text-sm text-red-600 outline-none',
+                                    'hover:bg-red-50 data-[highlighted]:bg-red-50 dark:text-red-400 dark:hover:bg-red-950/40',
+                                  )}
+                                  onSelect={() => {
+                                    setConfirmId(row.directoryId);
+                                    setConfirmOpen(true);
+                                  }}
+                                >
+                                  <Trash2 className="size-4" strokeWidth={1.75} aria-hidden />
+                                  {sk.delete}
+                                </DropdownMenu.Item>
+                              </DropdownMenu.Content>
+                            </DropdownMenu.Portal>
+                          </DropdownMenu.Root>
+                        ) : null}
+                        <SkillEnableSwitch
+                          checked={row.enabled}
+                          busy={togglingSkillName === row.name}
+                          onChange={(next) => void onSkillToggle(row.name, next)}
+                        />
+                      </div>
+                    </article>
+                  ))}
+                </div>
               )}
-            </div>
+            </>
           )}
         </section>
       </div>
+
+      {/* SKILL.md preview */}
+      <Dialog.Root
+        open={detailOpen}
+        onOpenChange={(open) => {
+          setDetailOpen(open);
+          if (!open) {
+            setDetailMarkdown('');
+            setDetailError(null);
+            setDetailTitle('');
+          }
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
+          <Dialog.Content
+            className={cn(
+              'xopcbot-dialog-content fixed left-1/2 top-1/2 z-[60] flex max-h-[min(90vh,56rem)] w-[min(100%-2rem,min(92vw,56rem))] -translate-x-1/2 -translate-y-1/2 flex-col',
+              'rounded-2xl border border-edge bg-surface-panel shadow-float dark:border-edge',
+            )}
+          >
+            <div className="flex shrink-0 items-center gap-3 border-b border-edge px-4 py-3">
+              <SkillCardIcon name={detailTitle || '?'} />
+              <Dialog.Title className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
+                {detailTitle || '—'}
+              </Dialog.Title>
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className={cn(
+                    'rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg',
+                    interaction.focusRingPanel,
+                  )}
+                  aria-label={sk.detailCloseAria}
+                >
+                  <X className="size-5" strokeWidth={1.75} aria-hidden />
+                </button>
+              </Dialog.Close>
+            </div>
+            <div className="flex shrink-0 items-start gap-2 border-b border-blue-200/80 bg-blue-50/95 px-4 py-2.5 text-sm text-fg dark:border-blue-900/50 dark:bg-blue-950/45">
+              <Info className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400" strokeWidth={1.75} aria-hidden />
+              <p className="leading-relaxed">{sk.detailModalBanner}</p>
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+              {detailLoading ? (
+                <div className="space-y-2" aria-busy="true">
+                  <div className="h-4 w-2/3 animate-pulse rounded bg-surface-hover" />
+                  <div className="h-4 w-full animate-pulse rounded bg-surface-hover" />
+                  <div className="h-4 w-5/6 animate-pulse rounded bg-surface-hover" />
+                </div>
+              ) : detailError ? (
+                <p className="text-sm text-red-600 dark:text-red-400">{detailError}</p>
+              ) : (
+                <div className="markdown-content min-w-0">
+                  <MarkdownView content={detailMarkdown} />
+                </div>
+              )}
+            </div>
+            <div className="flex shrink-0 justify-end border-t border-edge px-4 py-3">
+              <Button
+                type="button"
+                variant="primary"
+                disabled={!detailTitle || togglingSkillName === detailTitle}
+                onClick={async () => {
+                  if (!detailTitle) return;
+                  const ok = await onSkillToggle(detailTitle, !detailEnabled);
+                  if (ok) setDetailOpen(false);
+                }}
+              >
+                {detailEnabled ? sk.detailModalDisable : sk.detailModalEnable}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
 
       {/* Install modal */}
       <Dialog.Root
@@ -615,8 +790,8 @@ export function SkillsPage() {
           <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
           <Dialog.Content
             className={cn(
-              'xopcbot-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,26rem)] -translate-x-1/2 -translate-y-1/2',
-              'rounded-2xl border border-edge bg-surface-panel p-5 shadow-float dark:border-edge',
+              'xopcbot-dialog-content fixed left-1/2 top-1/2 z-[60] max-h-[min(100vh-2rem,44rem)] w-[min(100%-2rem,min(92vw,48rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto',
+              'rounded-2xl border border-edge bg-surface-panel p-6 shadow-float dark:border-edge',
             )}
           >
             <div className="flex items-start justify-between gap-3">
@@ -638,7 +813,7 @@ export function SkillsPage() {
 
             <label
               className={cn(
-                'mt-4 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-4 py-10 text-center transition-colors',
+                'mt-4 flex min-h-[11rem] cursor-pointer flex-col items-center justify-center gap-3 rounded-xl border-2 border-dashed px-6 py-12 text-center transition-colors',
                 dropActive
                   ? 'border-accent bg-accent-soft/60 dark:bg-blue-950/40'
                   : 'border-edge bg-surface-base dark:bg-surface-hover/30',

@@ -408,8 +408,16 @@ export class AgentService {
     return this.agentManager.getSkillCatalog();
   }
 
+  getSkillMarkdownSource(skillName: string): { name: string; markdown: string } | null {
+    return this.agentManager.getSkillMarkdownSource(skillName);
+  }
+
   refreshSkillsAfterDiskChange(): void {
     this.agentManager.refreshSkillsAfterDiskChange();
+  }
+
+  refreshSkillsAfterSkillConfigChange(): void {
+    this.agentManager.refreshSkillsAfterSkillConfigChange();
   }
 
   getModelForSession(sessionKey: string): string {

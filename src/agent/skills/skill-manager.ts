@@ -5,8 +5,9 @@
  */
 
 import { createSkillLoader, type Skill } from './index.js';
-import { resolveBundledSkillsDir } from '../../config/paths.js';
+import { resolveBundledSkillsDir, resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
+import { createSkillConfigManager, isSkillEnabled } from './config.js';
 
 const log = createLogger('SkillManager');
 
@@ -60,6 +61,14 @@ export class SkillManager {
   }
 
   /**
+   * Recompute skill XML prompt from current skills.json (no disk rescan).
+   */
+  refreshPromptFromConfig(): void {
+    this.skillLoader.refreshPromptFromConfig();
+    this.skillPrompt = this.skillLoader.getPrompt();
+  }
+
+  /**
    * Reload skills from disk
    */
   reload(): void {
@@ -99,7 +108,15 @@ export class SkillManager {
    * Get skill names
    */
   getSkillNames(): string[] {
-    return this.skills.map(s => s.name);
+    return this.skills.map((s) => s.name);
+  }
+
+  /** Names of skills included in the agent system prompt (`<available_skills>`). */
+  getSkillNamesForPrompt(): string[] {
+    const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+    return this.getSkills()
+      .filter((s) => !s.disableModelInvocation && isSkillEnabled(s, skillsConfig))
+      .map((s) => s.name);
   }
 
   /**

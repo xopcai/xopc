@@ -3,14 +3,16 @@ import { basename, dirname, join, relative, sep } from 'path';
 import { parseFrontmatter } from '../../markdown/frontmatter.js';
 import { resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
-import type { 
-  Skill, 
-  SkillMetadata, 
-  SkillDiagnostic, 
+import { createSkillConfigManager, isSkillEnabled } from './config.js';
+import type {
+  Skill,
+  SkillMetadata,
+  SkillDiagnostic,
   LoadSkillsResult,
   SkillConfig,
   SkillInstallSpec,
   SkillRequires,
+  SkillsConfig,
 } from './types.js';
 
 const log = createLogger('SkillLoader');
@@ -108,8 +110,10 @@ function formatSkillXml(skill: Skill): string {
   ].join('\n');
 }
 
-function formatSkillsForPrompt(skills: Skill[]): string {
-  const visibleSkills = skills.filter(s => !s.disableModelInvocation);
+function formatSkillsForPrompt(skills: Skill[], skillsConfig?: SkillsConfig): string {
+  const visibleSkills = skills.filter(
+    (s) => !s.disableModelInvocation && isSkillEnabled(s, skillsConfig),
+  );
   if (visibleSkills.length === 0) return '';
 
   const lines = [
@@ -310,9 +314,12 @@ export function loadSkills(options: {
     }
   }
 
+  const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+  const merged = Array.from(skillMap.values());
+
   return {
-    skills: Array.from(skillMap.values()),
-    prompt: formatSkillsForPrompt(Array.from(skillMap.values())),
+    skills: merged,
+    prompt: formatSkillsForPrompt(merged, skillsConfig),
     diagnostics,
   };
 }
@@ -321,6 +328,8 @@ export interface SkillLoader {
   init: (workspace: string, builtin: string | null) => LoadSkillsResult;
   load: () => LoadSkillsResult;
   reload: () => LoadSkillsResult;
+  /** Recompute `<available_skills>` from disk-loaded skills and current ~/.xopcbot/skills.json (no filesystem rescan). */
+  refreshPromptFromConfig: () => void;
   getSkills: () => Skill[];
   getPrompt: () => string;
   getDiagnostics: () => SkillDiagnostic[];
@@ -361,7 +370,13 @@ export function createSkillLoader(): SkillLoader {
       log.info('Reloading skills');
       return updateCache(loadSkills({ workspaceDir, builtinDir, extraDirs }));
     },
-    
+
+    refreshPromptFromConfig: () => {
+      const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+      cachedPrompt = formatSkillsForPrompt(cachedSkills, skillsConfig);
+      lastLoadTime = Date.now();
+    },
+
     getSkills: () => cachedSkills,
     getPrompt: () => cachedPrompt,
     getDiagnostics: () => cachedDiagnostics,
@@ -371,18 +386,12 @@ export function createSkillLoader(): SkillLoader {
       return cachedSkills.find(s => s.name === name);
     },
     
-    getEnabledSkills: (config?: Record<string, SkillConfig>) => {
-      if (!config) {
-        return cachedSkills.filter(s => !s.disableModelInvocation);
-      }
-      
-      return cachedSkills.filter(skill => {
-        const skillConfig = config[skill.name];
-        if (skillConfig?.enabled === false) {
-          return false;
-        }
-        return !skill.disableModelInvocation;
-      });
+    getEnabledSkills: (entries?: Record<string, SkillConfig>) => {
+      const skillsConfig: SkillsConfig =
+        entries !== undefined ? { entries } : createSkillConfigManager(resolveStateDir()).load();
+      return cachedSkills.filter(
+        (skill) => !skill.disableModelInvocation && isSkillEnabled(skill, skillsConfig),
+      );
     },
   };
 }

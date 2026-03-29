@@ -165,11 +165,32 @@ html.dark {
   :focus-visible {
     outline: 2px solid var(--color-accent);
     outline-offset: 2px;
+  }
+
+  /**
+   * Focus ring corner shape — not on plain text inputs.
+   * Applying border-radius on :focus-visible to inputs changes the box geometry and causes
+   * caret / IME rendering to flicker (often a thin dark line at the text origin) in WebKit/Blink.
+   */
+  :focus-visible:not(input):not(textarea) {
     border-radius: var(--radius-sm);
   }
 
   :focus:not(:focus-visible) {
     outline: none;
+  }
+
+  /**
+   * Native `<input>` / `<textarea>` — strip global focus ring; pages use border/ring utilities.
+   * (Same rationale as `<select>` below.)
+   */
+  input:focus,
+  input:focus-visible,
+  textarea:focus,
+  textarea:focus-visible {
+    outline: none;
+    outline-offset: 0;
+    box-shadow: none;
   }
 
   /**

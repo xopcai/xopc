@@ -373,19 +373,18 @@ const bundles: Record<
       refresh: string;
       reloadRuntime: string;
       reloadDiskAria: string;
-      heroFeaturedTitle: string;
-      heroFeaturedDesc: string;
-      marketplaceTitle: string;
+      skillsNavAria: string;
       tabBuiltin: string;
       tabUser: string;
+      tabMarketplace: string;
+      marketplacePlaceholder: string;
+      sectionBuiltinList: string;
       filterAll: string;
       filterGlobal: string;
       filterWorkspace: string;
       filterExtra: string;
-      sectionOfficial: string;
       sectionUser: string;
       installCta: string;
-      createViaCursor: string;
       installModalTitle: string;
       installModalDropHint: string;
       installModalReqTitle: string;
@@ -400,6 +399,7 @@ const bundles: Record<
       empty: string;
       loadFailed: string;
       reloadFailed: string;
+      skillToggleFailed: string;
       uploadFailed: string;
       installSuccess: string;
       zipOnly: string;
@@ -414,6 +414,11 @@ const bundles: Record<
       cancel: string;
       source: { builtin: string; workspace: string; global: string; extra: string };
       col: { name: string; description: string; source: string; managed: string; actions: string };
+      detailModalBanner: string;
+      detailModalEnable: string;
+      detailModalDisable: string;
+      detailLoadFailed: string;
+      detailCloseAria: string;
     };
     logs: {
       title: string;
@@ -1217,24 +1222,23 @@ const bundles: Record<
     skills: {
       title: 'Skills',
       needToken: 'Save a gateway token to manage skills.',
-      tagline: 'Install and manage skills to extend xopcbot in conversation.',
+      tagline:
+        'Install and manage skills to extend xopcbot in conversation. Managed skills live under ~/.xopcbot/skills.',
       refresh: 'Refresh list',
       reloadRuntime: 'Reload from disk',
       reloadDiskAria: 'Reload skills from disk',
-      heroFeaturedTitle: 'Curated skills for your workflow',
-      heroFeaturedDesc:
-        'Writing, productivity, design, data, and more — install in one click. Managed skills live under ~/.xopcbot/skills.',
-      marketplaceTitle: 'Skill marketplace',
+      skillsNavAria: 'Skill sources',
       tabBuiltin: 'Built-in',
       tabUser: 'Installed',
+      tabMarketplace: 'Marketplace',
+      marketplacePlaceholder: 'The skill marketplace is coming soon.',
+      sectionBuiltinList: 'Built-in skills',
       filterAll: 'All',
       filterGlobal: 'Global',
       filterWorkspace: 'Workspace',
       filterExtra: 'Extra',
-      sectionOfficial: 'Official picks',
       sectionUser: 'Your skills',
       installCta: 'Install skill',
-      createViaCursor: 'Create in Cursor',
       installModalTitle: 'Install skill',
       installModalDropHint: 'Drop a .zip or SKILL.md file, or click to choose.',
       installModalReqTitle: 'Requirements',
@@ -1249,6 +1253,7 @@ const bundles: Record<
       empty: 'No skills loaded.',
       loadFailed: 'Failed to load skills',
       reloadFailed: 'Failed to reload skills',
+      skillToggleFailed: 'Failed to update skill',
       uploadFailed: 'Upload failed',
       installSuccess: 'Skill installed.',
       zipOnly: 'Please choose a .zip file',
@@ -1274,6 +1279,11 @@ const bundles: Record<
         managed: 'Managed',
         actions: 'Actions',
       },
+      detailModalBanner: 'The following is the original SKILL.md for this skill.',
+      detailModalEnable: 'Enable',
+      detailModalDisable: 'Disable',
+      detailLoadFailed: 'Failed to load SKILL.md',
+      detailCloseAria: 'Close',
     },
     logs: {
       title: 'Logs',
@@ -2102,23 +2112,22 @@ const bundles: Record<
     skills: {
       title: '技能',
       needToken: '请先保存网关 Token 后再管理技能。',
-      tagline: '安装与管理技能，在对话中扩展 xopcbot 的能力。',
+      tagline: '安装与管理技能，在对话中扩展 xopcbot 的能力。技能保存在 ~/.xopcbot/skills。',
       refresh: '刷新列表',
       reloadRuntime: '从磁盘重载',
       reloadDiskAria: '从磁盘重载技能',
-      heroFeaturedTitle: '为你精选的技能',
-      heroFeaturedDesc: '涵盖写作、效率、设计、数据分析等多种场景，一键安装。技能保存在 ~/.xopcbot/skills。',
-      marketplaceTitle: '技能广场',
+      skillsNavAria: '技能分区',
       tabBuiltin: '内置',
       tabUser: '用户安装',
+      tabMarketplace: '技能广场',
+      marketplacePlaceholder: '技能广场即将上线，敬请期待。',
+      sectionBuiltinList: '内置技能',
       filterAll: '全部',
       filterGlobal: '全局',
       filterWorkspace: '工作区',
       filterExtra: '扩展',
-      sectionOfficial: '官方精选',
       sectionUser: '已安装',
       installCta: '安装技能',
-      createViaCursor: '通过 Cursor 创建',
       installModalTitle: '安装技能',
       installModalDropHint: '拖放 .zip 或 SKILL.md 文件，或点击选择',
       installModalReqTitle: '文件要求',
@@ -2133,6 +2142,7 @@ const bundles: Record<
       empty: '暂无技能。',
       loadFailed: '加载技能失败',
       reloadFailed: '重载失败',
+      skillToggleFailed: '更新技能状态失败',
       uploadFailed: '上传失败',
       installSuccess: '技能已安装。',
       zipOnly: '请选择 .zip 文件',
@@ -2158,6 +2168,11 @@ const bundles: Record<
         managed: '可管理',
         actions: '操作',
       },
+      detailModalBanner: '以下内容来自该技能的 SKILL.md 原文',
+      detailModalEnable: '启用',
+      detailModalDisable: '停用',
+      detailLoadFailed: '无法加载 SKILL.md',
+      detailCloseAria: '关闭',
     },
     logs: {
       title: '日志',

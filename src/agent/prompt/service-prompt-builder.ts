@@ -104,7 +104,7 @@ export class SystemPromptBuilder {
    * Get list of available tool names from skills
    */
   private getAvailableTools(): string[] {
-    return this.skillManager.getSkillNames();
+    return this.skillManager.getSkillNamesForPrompt();
   }
 
   /**
