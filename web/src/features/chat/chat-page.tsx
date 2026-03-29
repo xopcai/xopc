@@ -160,6 +160,13 @@ export function ChatPage() {
     scrollToBottom(false);
   }, [chatMessages, atBottom, scrollToBottom, showSessionLoading]);
 
+  const isNewChat =
+    !showSessionLoading &&
+    !sessionRoutePending &&
+    chatMessages.length === 0 &&
+    !sending &&
+    !streaming;
+
   useLayoutEffect(() => {
     const el = scrollRef.current;
     if (!el || showSessionLoading) return;
@@ -206,7 +213,13 @@ export function ChatPage() {
             executionDrawerOpen ? 'lg:min-w-0' : 'mx-auto w-full max-w-[var(--max-width-chat)]',
           )}
         >
-          <ChatHeaderBar chatHeadline={chatHeadline} />
+          <ChatHeaderBar
+            chatHeadline={chatHeadline}
+            sessionModel={sessionModel}
+            showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
+            onModelChange={onSessionModelChange}
+            modelDisabled={showSessionLoading || sessionRoutePending || streaming}
+          />
 
           <div
             className={cn(
@@ -214,51 +227,73 @@ export function ChatPage() {
               executionDrawerOpen && 'mx-auto w-full max-w-[var(--max-width-chat)]',
             )}
           >
-            <div
-              ref={scrollRef}
-              className="chat-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-4"
-              onScroll={onScroll}
-            >
-              {showSessionLoading ? (
-                <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-3 py-12 text-center text-sm text-fg-muted">
-                  {m.chat.loading}
+            {isNewChat ? (
+              <div className="flex min-h-0 flex-1 flex-col items-center justify-center px-1 pb-10 pt-4 sm:px-2">
+                <div className="flex w-full max-w-2xl flex-col items-center -translate-y-[min(10vh,7rem)] sm:-translate-y-[min(12vh,8rem)]">
+                  <h1 className="mb-6 max-w-2xl text-center text-2xl font-semibold tracking-tight text-fg">
+                    {m.chat.newChatHeadline}
+                  </h1>
+                  <div className="w-full max-w-2xl">
+                    <ChatComposer
+                      centerMode
+                      disabled={showSessionLoading || sessionRoutePending}
+                      sending={sending}
+                      streaming={streaming}
+                      thinkingLevel={thinkingLevel}
+                      showThinkingSelector={modelSupportsThinking}
+                      onThinkingChange={setThinkingLevel}
+                      onSend={sendMessage}
+                      onAbort={abort}
+                    />
+                  </div>
                 </div>
-              ) : (
-                <>
-                  {loadingMore ? (
-                    <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
-                  ) : null}
-                  {error ? (
-                    <div className="mb-4 rounded-md border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
-                      {error}
+              </div>
+            ) : (
+              <div className="flex min-h-0 flex-1 flex-col">
+                <div
+                  ref={scrollRef}
+                  className="chat-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-4 [scrollbar-gutter:stable]"
+                  onScroll={onScroll}
+                >
+                  {showSessionLoading ? (
+                    <div className="flex min-h-[min(40vh,20rem)] flex-col items-center justify-center gap-3 py-12 text-center text-sm text-fg-muted">
+                      {m.chat.loading}
                     </div>
-                  ) : null}
-                  <MessageList
-                    messages={chatMessages}
-                    authToken={token ?? undefined}
-                    streaming={streaming}
-                    progress={progress}
-                    scrollElementRef={scrollRef}
-                  />
-                </>
-              )}
-            </div>
+                  ) : (
+                    <>
+                      {loadingMore ? (
+                        <div className="mb-3 text-center text-xs text-fg-muted">{m.chat.loadOlder}</div>
+                      ) : null}
+                      {error ? (
+                        <div className="mb-4 rounded-md border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300">
+                          {error}
+                        </div>
+                      ) : null}
+                      <MessageList
+                        messages={chatMessages}
+                        authToken={token ?? undefined}
+                        streaming={streaming}
+                        progress={progress}
+                        scrollElementRef={scrollRef}
+                      />
+                    </>
+                  )}
+                </div>
 
-            <div className="chat-input-container shrink-0 bg-surface-panel py-4">
-              <ChatComposer
-                disabled={showSessionLoading || sessionRoutePending}
-                sending={sending}
-                streaming={streaming}
-                sessionModel={sessionModel}
-                showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
-                onModelChange={onSessionModelChange}
-                thinkingLevel={thinkingLevel}
-                showThinkingSelector={modelSupportsThinking}
-                onThinkingChange={setThinkingLevel}
-                onSend={sendMessage}
-                onAbort={abort}
-              />
-            </div>
+                <div className="chat-input-container shrink-0 bg-surface-panel py-4">
+                  <ChatComposer
+                    disabled={showSessionLoading || sessionRoutePending}
+                    sending={sending}
+                    streaming={streaming}
+                    thinkingLevel={thinkingLevel}
+                    showThinkingSelector={modelSupportsThinking}
+                    onThinkingChange={setThinkingLevel}
+                    onSend={sendMessage}
+                    onAbort={abort}
+                  />
+                </div>
+              </div>
+            )}
           </div>
         </div>
 

@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 
 import { APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
+import { ModelSelector } from '@/features/chat/model-selector';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useAppShellStore } from '@/stores/app-shell-store';
@@ -12,13 +13,23 @@ import { useSidebarStore } from '@/stores/sidebar-store';
 
 type ChatHeaderBarProps = {
   chatHeadline: string;
+  sessionModel: string;
+  showModelSelector: boolean;
+  onModelChange: (modelId: string) => void;
+  modelDisabled: boolean;
 };
 
 /**
  * Subscribes to sidebar / mobile-nav stores in isolation so collapsing the rail
  * does not re-render the chat body (messages, composer, scroll state).
  */
-export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatHeaderBarProps) {
+export const ChatHeaderBar = memo(function ChatHeaderBar({
+  chatHeadline,
+  sessionModel,
+  showModelSelector,
+  onModelChange,
+  modelDisabled,
+}: ChatHeaderBarProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
@@ -30,7 +41,10 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatH
       className={cn(
         'flex gap-3 px-3 sm:gap-4 sm:px-5 xl:px-6',
         APP_TOP_HEADER_BAR_CLASS,
-        sidebarCollapsed && 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center lg:gap-4',
+        sidebarCollapsed &&
+          (showModelSelector
+            ? 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-4'
+            : 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center lg:gap-4'),
       )}
     >
       <div className="flex min-w-0 shrink-0 items-center gap-2.5">
@@ -70,6 +84,22 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({ chatHeadline }: ChatH
       >
         {chatHeadline}
       </h1>
+      {showModelSelector ? (
+        <div className="min-w-0 w-fit max-w-[min(20rem,calc(100vw-10rem))] shrink-0">
+          <ModelSelector
+            value={sessionModel}
+            disabled={modelDisabled}
+            placeholder={m.chat.modelPlaceholder}
+            searchPlaceholder={m.chat.modelSearchPlaceholder}
+            noMatches={m.chat.modelNoMatches}
+            compact
+            showProviderInTrigger={false}
+            contentSide="bottom"
+            contentAlign="end"
+            onChange={onModelChange}
+          />
+        </div>
+      ) : null}
     </div>
   );
 });
