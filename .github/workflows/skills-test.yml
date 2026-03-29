@@ -13,6 +13,9 @@ on:
       - 'src/cli/commands/skills*.ts'
   workflow_dispatch:
 
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 jobs:
   test-skills:
     name: Test Skills

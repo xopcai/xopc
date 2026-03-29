@@ -24,6 +24,13 @@ on:
     tags:
       - 'v*'
 
+# @vscode/ripgrep postinstall uses GITHUB_TOKEN for api.github.com (avoids 403 / rate limits on shared runners).
+env:
+  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+permissions:
+  contents: read
+
 concurrency:
   group: electron-build-${{ github.ref }}
   cancel-in-progress: true
