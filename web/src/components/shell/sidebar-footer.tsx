@@ -107,7 +107,7 @@ export function SidebarFooter({
         <Popover.Portal>
           <Popover.Content
             className={cn(
-              'z-50 max-h-[min(70vh,28rem)] w-[min(calc(100vw-1.5rem),20rem)] overflow-y-auto overflow-x-hidden',
+              'z-50 max-h-[min(70vh,28rem)] w-[min(calc(100vw-1.5rem),16rem)] overflow-y-auto overflow-x-hidden',
               'rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
             )}
             side="top"
