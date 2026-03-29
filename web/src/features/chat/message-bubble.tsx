@@ -1,5 +1,6 @@
-import { type ReactNode, memo, useMemo } from 'react';
-import { ChevronRight } from 'lucide-react';
+import { type ReactNode, memo, useCallback, useMemo, useState } from 'react';
+import { Check, ChevronRight, Copy, FileCode2 } from 'lucide-react';
+import { marked } from 'marked';
 
 import type { Message, MessageContent, ProgressState } from '@/features/chat/messages.types';
 import {
@@ -55,6 +56,50 @@ function renderVisibleContent(content: MessageContent[]) {
   }
   return nodes;
 }
+
+/** Markdown source for clipboard: visible text blocks + `[image]` placeholders; skips thinking/tools. */
+function getAssistantCopyMarkdown(content: MessageContent[]): string {
+  const parts: string[] = [];
+  for (const b of content) {
+    if (b.type === 'thinking' || b.type === 'tool_use') continue;
+    if (b.type === 'text') {
+      parts.push(b.text);
+    } else if (b.type === 'image') {
+      parts.push('[image]');
+    }
+  }
+  return parts.join('\n\n').trim();
+}
+
+function markdownToPlainText(md: string): string {
+  if (!md.trim()) return '';
+  const html = marked.parse(md, { gfm: true, breaks: false }) as string;
+  const doc = new DOMParser().parseFromString(`<div>${html}</div>`, 'text/html');
+  return doc.body.textContent?.trim() ?? '';
+}
+
+/** Plain text for clipboard: rendered text per block + `[image]` placeholders. */
+function getAssistantCopyPlainText(content: MessageContent[]): string {
+  const parts: string[] = [];
+  for (const b of content) {
+    if (b.type === 'thinking' || b.type === 'tool_use') continue;
+    if (b.type === 'text') {
+      parts.push(markdownToPlainText(b.text));
+    } else if (b.type === 'image') {
+      parts.push('[image]');
+    }
+  }
+  return parts.join('\n\n').trim();
+}
+
+/** Toolbar icon buttons: non-shrinking hit targets; inset focus ring so parent overflow-x-hidden does not clip. */
+const messageActionIconButton = cn(
+  'inline-flex size-9 shrink-0 items-center justify-center rounded-lg',
+  'text-fg-muted transition-colors transition-transform duration-150 ease-out',
+  'hover:bg-surface-hover hover:text-fg active:scale-95',
+  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-inset focus-visible:ring-accent',
+  interaction.disabled,
+);
 
 export const MessageBubble = memo(function MessageBubble({
   message,
@@ -125,6 +170,36 @@ export const MessageBubble = memo(function MessageBubble({
     (s) => s.open && s.focusedMessageIndex === messageIndex,
   );
   const toggleExecutionDrawer = useChatExecutionDrawerStore((s) => s.toggleForMessage);
+
+  const copyMarkdown = useMemo(
+    () => (isAssistant ? getAssistantCopyMarkdown(message.content ?? []) : ''),
+    [isAssistant, message.content],
+  );
+  const copyPlainText = useMemo(
+    () => (isAssistant && copyMarkdown ? getAssistantCopyPlainText(message.content ?? []) : ''),
+    [isAssistant, copyMarkdown, message.content],
+  );
+  const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | null>(null);
+  const handleCopyPlain = useCallback(async () => {
+    if (!copyPlainText) return;
+    try {
+      await navigator.clipboard.writeText(copyPlainText);
+      setCopyFeedback('plain');
+      window.setTimeout(() => setCopyFeedback((f) => (f === 'plain' ? null : f)), 2000);
+    } catch {
+      /* clipboard denied or unavailable */
+    }
+  }, [copyPlainText]);
+  const handleCopyMd = useCallback(async () => {
+    if (!copyMarkdown) return;
+    try {
+      await navigator.clipboard.writeText(copyMarkdown);
+      setCopyFeedback('markdown');
+      window.setTimeout(() => setCopyFeedback((f) => (f === 'markdown' ? null : f)), 2000);
+    } catch {
+      /* clipboard denied or unavailable */
+    }
+  }, [copyMarkdown]);
 
   const streamingThinking =
     message.thinkingStreaming ||
@@ -243,6 +318,38 @@ export const MessageBubble = memo(function MessageBubble({
             ) : null}
           </div>
         </div>
+
+        {isAssistant && copyMarkdown ? (
+          <div className="mt-2 flex shrink-0 flex-wrap items-center gap-2 overflow-visible">
+            <button
+              type="button"
+              className={messageActionIconButton}
+              onClick={() => void handleCopyPlain()}
+              disabled={!copyPlainText}
+              title={copyFeedback === 'plain' ? m.chat.messageCopied : m.chat.messageCopyPlainText}
+              aria-label={copyFeedback === 'plain' ? m.chat.messageCopied : m.chat.messageCopyPlainText}
+            >
+              {copyFeedback === 'plain' ? (
+                <Check className="h-4 w-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+              ) : (
+                <Copy className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+              )}
+            </button>
+            <button
+              type="button"
+              className={messageActionIconButton}
+              onClick={() => void handleCopyMd()}
+              title={copyFeedback === 'markdown' ? m.chat.messageCopied : m.chat.messageCopyMarkdown}
+              aria-label={copyFeedback === 'markdown' ? m.chat.messageCopied : m.chat.messageCopyMarkdown}
+            >
+              {copyFeedback === 'markdown' ? (
+                <Check className="h-4 w-4 text-fg-muted" strokeWidth={1.75} aria-hidden />
+              ) : (
+                <FileCode2 className="h-4 w-4" strokeWidth={1.75} aria-hidden />
+              )}
+            </button>
+          </div>
+        ) : null}
 
         {isAssistant && message.usage ? (
           <div className="mt-3">
