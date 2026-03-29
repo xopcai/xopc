@@ -51,6 +51,22 @@ export default defineConfig({
     },
     server: {
       port: 5173,
+      // Same-origin API calls use `window.location.origin` (this dev server). Mirror `web/vite.config.ts`
+      // so `/api/*` reaches the xopcbot gateway — required for Electron dev (renderer loads from :5173).
+      proxy: {
+        '/api': {
+          target: 'http://localhost:18790',
+          changeOrigin: true,
+        },
+        '/health': {
+          target: 'http://localhost:18790',
+          changeOrigin: true,
+        },
+        '/status': {
+          target: 'http://localhost:18790',
+          changeOrigin: true,
+        },
+      },
     },
   },
 });
