@@ -2,6 +2,7 @@ import { streamSSE } from 'hono/streaming';
 import type { Context } from 'hono';
 import type { GatewayService } from '../service.js';
 import { createLogger } from '../../utils/logger.js';
+import { stringifySSEData } from './sse-json.js';
 
 const log = createLogger('Hono:SSE');
 
@@ -129,7 +130,7 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
           await stream.writeSSE({
             id: String(++eventId),
             event: chunk.type || 'message',
-            data: JSON.stringify(chunk),
+            data: stringifySSEData(chunk),
           });
         }
       } catch (error) {
@@ -182,7 +183,7 @@ export function createAgentResumeHandler(config: SSEHandlerConfig) {
           await stream.writeSSE({
             id: String(++eventId),
             event: event.type || 'message',
-            data: JSON.stringify(event),
+            data: stringifySSEData(event),
           });
         }
         // Run completed — send a final result event
