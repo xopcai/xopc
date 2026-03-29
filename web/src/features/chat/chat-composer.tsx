@@ -3,7 +3,6 @@ import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Attachment } from '@/features/chat/attachment-utils';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment-utils';
-import { ModelSelector } from '@/features/chat/model-selector';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -14,6 +13,8 @@ const ACCEPT =
 
 /** Matches ui `03-chat-editor.css` `.text-input`: max-height 8rem, line-height 1.55. */
 const TEXTAREA_MAX_HEIGHT_PX = 128;
+/** Above this measured `scrollHeight`, treat as multiline (toolbar moves below in center mode). */
+const SINGLE_LINE_SCROLL_HEIGHT_MAX_PX = 40;
 
 function interpolate(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
@@ -29,22 +30,16 @@ export const ChatComposer = memo(function ChatComposer({
   disabled,
   sending,
   streaming,
-  sessionModel,
-  showModelSelector,
-  onModelChange,
   thinkingLevel,
   showThinkingSelector,
   onThinkingChange,
   onSend,
   onAbort,
+  centerMode = false,
 }: {
   disabled: boolean;
   sending: boolean;
   streaming: boolean;
-  sessionModel: string;
-  /** Show model picker when a session is active and route matches loaded session. */
-  showModelSelector: boolean;
-  onModelChange: (modelId: string) => void;
   thinkingLevel: string;
   showThinkingSelector: boolean;
   onThinkingChange: (level: string) => void;
@@ -54,6 +49,8 @@ export const ChatComposer = memo(function ChatComposer({
     thinkingLevel?: string,
   ) => void;
   onAbort: () => void;
+  /** New-chat landing: single-line row; expands to stacked toolbar when textarea grows. */
+  centerMode?: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -67,6 +64,8 @@ export const ChatComposer = memo(function ChatComposer({
   const mediaChunksRef = useRef<Blob[]>([]);
   const mediaStreamRef = useRef<MediaStream | null>(null);
   const [voiceRecording, setVoiceRecording] = useState(false);
+  /** In center mode, false = one horizontal row; true = textarea block + toolbar row below. */
+  const [multiline, setMultiline] = useState(false);
   /** Set when unmounting so `MediaRecorder` `onstop` does not auto-send. */
   const voiceSkipAutoSendRef = useRef(false);
   const valueRef = useRef(value);
@@ -91,6 +90,8 @@ export const ChatComposer = memo(function ChatComposer({
     el.style.height = '0px';
     const next = Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT_PX);
     el.style.height = `${next}px`;
+    const hasNewline = valueRef.current.includes('\n');
+    setMultiline(hasNewline || next > SINGLE_LINE_SCROLL_HEIGHT_MAX_PX);
   }, []);
 
   useEffect(() => {
@@ -236,12 +237,17 @@ export const ChatComposer = memo(function ChatComposer({
 
   const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
 
+  const stackedLayout = !centerMode || multiline || attachments.length > 0;
+
   // Outer column (px + max-w-[var(--max-width-chat)]) lives in chat-page — matches the message list column.
   return (
     <div
       className={cn(
         // ring (not border) so inner text width matches the main column; border costs 2px in border-box.
-        'relative w-full overflow-hidden rounded-xl bg-surface-panel shadow-surface ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:ring-edge dark:shadow-none',
+        'relative w-full overflow-hidden ring-1 ring-inset ring-edge',
+        centerMode
+          ? 'rounded-2xl bg-surface-hover/60 shadow-none dark:bg-surface-hover/40'
+          : 'rounded-xl bg-surface-panel shadow-surface dark:bg-surface-panel/60 dark:shadow-none',
         isDragging && 'ring-2 ring-accent ring-inset',
       )}
         onDragOver={(e) => {
@@ -293,94 +299,177 @@ export const ChatComposer = memo(function ChatComposer({
         ) : null}
 
         {isDragging ? (
-          <div className="pointer-events-none absolute inset-0 z-10 flex items-center justify-center rounded-xl bg-accent-soft/80 text-sm font-medium text-accent-fg backdrop-blur-[1px]">
+          <div
+            className={cn(
+              'pointer-events-none absolute inset-0 z-10 flex items-center justify-center bg-accent-soft/80 text-sm font-medium text-accent-fg backdrop-blur-[1px]',
+              centerMode ? 'rounded-2xl' : 'rounded-xl',
+            )}
+          >
             {m.chat.dropFiles}
           </div>
         ) : null}
 
-        <div
-          className={cn(
-            'px-4 pb-2 pt-3',
-            attachments.length > 0 && 'pt-2',
-          )}
-        >
-          <textarea
-            ref={textareaRef}
-            className="max-h-32 min-h-[1.5rem] w-full resize-none overflow-y-auto border-0 bg-transparent p-0 text-[0.9375rem] leading-[1.55] text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0 disabled:opacity-50"
-            placeholder={m.chat.inputPlaceholder}
-            value={value}
-            disabled={disabled || busy}
-            rows={1}
-            onChange={(e) => setValue(e.target.value)}
-            onCompositionStart={() => setIsComposing(true)}
-            onCompositionEnd={() => setIsComposing(false)}
-            onPaste={async (e) => {
-              const items = e.clipboardData?.items;
-              if (!items) return;
-              const imageFiles: File[] = [];
-              for (const item of Array.from(items)) {
-                if (item.type.startsWith('image/')) {
-                  const f = item.getAsFile();
-                  if (f) imageFiles.push(f);
-                }
-              }
-              if (imageFiles.length > 0) {
-                e.preventDefault();
-                await processFiles(imageFiles);
-              }
-            }}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
-                e.preventDefault();
-                if (!busy && (value.trim() || attachments.length > 0)) send();
-              }
-            }}
-          />
-        </div>
+        <input
+          ref={fileInputRef}
+          type="file"
+          multiple
+          accept={ACCEPT}
+          className="hidden"
+          onChange={async (e) => {
+            const files = e.target.files;
+            if (files) await processFiles(Array.from(files));
+            e.target.value = '';
+          }}
+        />
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-edge-subtle/90 px-4 pb-2.5 pt-2 dark:border-edge-subtle">
-          {showModelSelector ? (
-            <div className="min-w-0 w-fit max-w-[min(32rem,calc(100vw-2rem))] shrink">
-              <ModelSelector
-                value={sessionModel}
-                disabled={disabled || streaming}
-                placeholder={m.chat.modelPlaceholder}
-                searchPlaceholder={m.chat.modelSearchPlaceholder}
-                noMatches={m.chat.modelNoMatches}
-                compact
-                showProviderInTrigger={false}
-                contentSide="top"
-                contentAlign="start"
-                onChange={onModelChange}
+        {stackedLayout ? (
+          <>
+            <div
+              className={cn(
+                'px-4 py-3',
+                attachments.length > 0 && 'pt-2',
+              )}
+            >
+              <textarea
+                ref={textareaRef}
+                className="max-h-32 min-h-[1.5rem] w-full resize-none overflow-y-auto border-0 bg-transparent p-0 text-[0.9375rem] leading-[1.55] text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0 disabled:opacity-50"
+                placeholder={m.chat.inputPlaceholder}
+                value={value}
+                disabled={disabled || busy}
+                rows={1}
+                onChange={(e) => setValue(e.target.value)}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={() => setIsComposing(false)}
+                onPaste={async (e) => {
+                  const items = e.clipboardData?.items;
+                  if (!items) return;
+                  const imageFiles: File[] = [];
+                  for (const item of Array.from(items)) {
+                    if (item.type.startsWith('image/')) {
+                      const f = item.getAsFile();
+                      if (f) imageFiles.push(f);
+                    }
+                  }
+                  if (imageFiles.length > 0) {
+                    e.preventDefault();
+                    await processFiles(imageFiles);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
+                    e.preventDefault();
+                    if (!busy && (value.trim() || attachments.length > 0)) send();
+                  }
+                }}
               />
             </div>
-          ) : null}
-          {showThinkingSelector ? (
-            <div
-              className="inline-flex min-h-8 items-center gap-1 rounded-full bg-surface-hover px-2.5 py-1 text-xs dark:bg-surface-hover/80"
-              title={`${m.chat.thinkingLevel}: ${thinkingLevel}`}
-            >
-              <ThinkingIcon className="h-3.5 w-3.5 shrink-0 text-accent-fg" aria-hidden />
-              <select
-                className="max-w-[min(6.5rem,30vw)] cursor-pointer appearance-none bg-transparent pl-0 pr-0 text-[0.8125rem] font-medium text-fg focus:outline-none"
-                value={thinkingLevel}
-                disabled={disabled || busy}
-                onChange={(e) => onThinkingChange(e.target.value)}
-              >
-                {(Object.keys(m.chat.thinkingLevels) as ThinkingLevel[]).map((lvl) => (
-                  <option key={lvl} value={lvl}>
-                    {m.chat.thinkingLevels[lvl]}
-                  </option>
-                ))}
-              </select>
-            </div>
-          ) : null}
 
-          <div className="ml-auto flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-2 border-t border-edge-subtle/90 px-4 py-2.5 dark:border-edge-subtle">
+              {showThinkingSelector ? (
+                <div
+                  className="inline-flex min-h-8 items-center gap-1 rounded-full bg-surface-hover px-2.5 py-1 text-xs dark:bg-surface-hover/80"
+                  title={`${m.chat.thinkingLevel}: ${thinkingLevel}`}
+                >
+                  <ThinkingIcon className="h-3.5 w-3.5 shrink-0 text-accent-fg" aria-hidden />
+                  <select
+                    className="max-w-[min(6.5rem,30vw)] cursor-pointer appearance-none bg-transparent pl-0 pr-0 text-[0.8125rem] font-medium text-fg focus:outline-none"
+                    value={thinkingLevel}
+                    disabled={disabled || busy}
+                    onChange={(e) => onThinkingChange(e.target.value)}
+                  >
+                    {(Object.keys(m.chat.thinkingLevels) as ThinkingLevel[]).map((lvl) => (
+                      <option key={lvl} value={lvl}>
+                        {m.chat.thinkingLevels[lvl]}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+
+              <div className="ml-auto flex items-center gap-1">
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-subtle hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
+                    interaction.transition,
+                    interaction.press,
+                    interaction.focusRingPanel,
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                  )}
+                  disabled={attachments.length >= MAX_CHAT_ATTACHMENTS || disabled || busy}
+                  title={
+                    attachments.length >= MAX_CHAT_ATTACHMENTS
+                      ? interpolate(m.chat.maxAttachmentsReached, { max: MAX_CHAT_ATTACHMENTS })
+                      : `${m.chat.attachFile} (${attachments.length}/${MAX_CHAT_ATTACHMENTS})`
+                  }
+                  onClick={() => fileInputRef.current?.click()}
+                >
+                  <FileIcon className="h-4 w-4" />
+                </button>
+
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent',
+                    interaction.transition,
+                    interaction.press,
+                    interaction.focusRingPanel,
+                    voiceRecording
+                      ? 'bg-red-500/20 text-red-600 dark:bg-red-500/25 dark:text-red-400'
+                      : 'text-fg-subtle hover:bg-surface-hover hover:text-fg',
+                    'disabled:opacity-50 disabled:cursor-not-allowed',
+                  )}
+                  disabled={disabled || attachments.length >= MAX_CHAT_ATTACHMENTS}
+                  title={voiceRecording ? m.chat.voiceRecordingStop : m.chat.voiceRecording}
+                  aria-label={voiceRecording ? m.chat.voiceRecordingStop : m.chat.voiceRecording}
+                  onClick={() => void toggleVoiceRecording()}
+                >
+                  <Mic className={cn('h-4 w-4 stroke-[1.75]', voiceRecording && 'animate-pulse')} />
+                </button>
+
+                {busy ? (
+                  <button
+                    type="button"
+                    className={cn(
+                      'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
+                      interaction.transition,
+                      interaction.press,
+                      interaction.focusRingPanel,
+                    )}
+                    title={m.chat.abort}
+                    aria-label={m.chat.abort}
+                    onClick={onAbort}
+                  >
+                    <Square className="h-4 w-4 stroke-[1.75]" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    className={cn(
+                      'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150 ease-out',
+                      interaction.press,
+                      interaction.focusRingPanel,
+                      value.trim() || attachments.length > 0
+                        ? 'border-transparent text-accent-fg hover:bg-accent-soft dark:text-accent-fg dark:hover:bg-accent-soft'
+                        : 'border-transparent text-fg-disabled',
+                    )}
+                    disabled={disabled || (!value.trim() && attachments.length === 0)}
+                    title={m.chat.sendMessage}
+                    aria-label={m.chat.sendMessage}
+                    onClick={send}
+                  >
+                    <Send className="h-4 w-4 stroke-[1.75]" />
+                  </button>
+                )}
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="flex flex-row flex-wrap items-center gap-x-2 gap-y-2 px-4 py-3">
             <button
               type="button"
               className={cn(
-                'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-subtle hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
+                'inline-flex size-8 shrink-0 items-center justify-center rounded-full bg-surface-panel text-fg-subtle shadow-sm ring-1 ring-edge/80 hover:bg-surface-hover hover:text-fg dark:bg-surface-panel/80 dark:ring-edge',
                 interaction.transition,
                 interaction.press,
                 interaction.focusRingPanel,
@@ -396,75 +485,117 @@ export const ChatComposer = memo(function ChatComposer({
             >
               <FileIcon className="h-4 w-4" />
             </button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              accept={ACCEPT}
-              className="hidden"
-              onChange={async (e) => {
-                const files = e.target.files;
-                if (files) await processFiles(Array.from(files));
-                e.target.value = '';
-              }}
-            />
-
-            <button
-              type="button"
-              className={cn(
-                'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent',
-                interaction.transition,
-                interaction.press,
-                interaction.focusRingPanel,
-                voiceRecording
-                  ? 'bg-red-500/20 text-red-600 dark:bg-red-500/25 dark:text-red-400'
-                  : 'text-fg-subtle hover:bg-surface-hover hover:text-fg',
-                'disabled:opacity-50 disabled:cursor-not-allowed',
-              )}
-              disabled={disabled || attachments.length >= MAX_CHAT_ATTACHMENTS}
-              title={voiceRecording ? m.chat.voiceRecordingStop : m.chat.voiceRecording}
-              aria-label={voiceRecording ? m.chat.voiceRecordingStop : m.chat.voiceRecording}
-              onClick={() => void toggleVoiceRecording()}
-            >
-              <Mic className={cn('h-4 w-4 stroke-[1.75]', voiceRecording && 'animate-pulse')} />
-            </button>
-
-            {busy ? (
+            <div className="min-w-0 flex-1 basis-[min(100%,10rem)]">
+              <textarea
+                ref={textareaRef}
+                className="max-h-32 min-h-[1.5rem] w-full resize-none overflow-y-auto border-0 bg-transparent p-0 text-[0.9375rem] leading-[1.55] text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0 disabled:opacity-50"
+                placeholder={m.chat.inputPlaceholder}
+                value={value}
+                disabled={disabled || busy}
+                rows={1}
+                onChange={(e) => setValue(e.target.value)}
+                onCompositionStart={() => setIsComposing(true)}
+                onCompositionEnd={() => setIsComposing(false)}
+                onPaste={async (e) => {
+                  const items = e.clipboardData?.items;
+                  if (!items) return;
+                  const imageFiles: File[] = [];
+                  for (const item of Array.from(items)) {
+                    if (item.type.startsWith('image/')) {
+                      const f = item.getAsFile();
+                      if (f) imageFiles.push(f);
+                    }
+                  }
+                  if (imageFiles.length > 0) {
+                    e.preventDefault();
+                    await processFiles(imageFiles);
+                  }
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
+                    e.preventDefault();
+                    if (!busy && (value.trim() || attachments.length > 0)) send();
+                  }
+                }}
+              />
+            </div>
+            {showThinkingSelector ? (
+              <div
+                className="inline-flex min-h-8 shrink-0 items-center gap-1 rounded-full bg-surface-panel px-2.5 py-1 text-xs shadow-sm ring-1 ring-edge/60 dark:bg-surface-panel/80 dark:ring-edge"
+                title={`${m.chat.thinkingLevel}: ${thinkingLevel}`}
+              >
+                <ThinkingIcon className="h-3.5 w-3.5 shrink-0 text-accent-fg" aria-hidden />
+                <select
+                  className="max-w-[min(6.5rem,28vw)] cursor-pointer appearance-none bg-transparent pl-0 pr-0 text-[0.8125rem] font-medium text-fg focus:outline-none"
+                  value={thinkingLevel}
+                  disabled={disabled || busy}
+                  onChange={(e) => onThinkingChange(e.target.value)}
+                >
+                  {(Object.keys(m.chat.thinkingLevels) as ThinkingLevel[]).map((lvl) => (
+                    <option key={lvl} value={lvl}>
+                      {m.chat.thinkingLevels[lvl]}
+                    </option>
+                  ))}
+                </select>
+              </div>
+            ) : null}
+            <div className="ml-auto flex shrink-0 items-center gap-1 sm:ml-0">
               <button
                 type="button"
                 className={cn(
-                  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
+                  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent',
                   interaction.transition,
                   interaction.press,
                   interaction.focusRingPanel,
+                  voiceRecording
+                    ? 'bg-red-500/20 text-red-600 dark:bg-red-500/25 dark:text-red-400'
+                    : 'text-fg-subtle hover:bg-surface-hover hover:text-fg',
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
                 )}
-                title={m.chat.abort}
-                aria-label={m.chat.abort}
-                onClick={onAbort}
+                disabled={disabled || attachments.length >= MAX_CHAT_ATTACHMENTS}
+                title={voiceRecording ? m.chat.voiceRecordingStop : m.chat.voiceRecording}
+                aria-label={voiceRecording ? m.chat.voiceRecordingStop : m.chat.voiceRecording}
+                onClick={() => void toggleVoiceRecording()}
               >
-                <Square className="h-4 w-4 stroke-[1.75]" />
+                <Mic className={cn('h-4 w-4 stroke-[1.75]', voiceRecording && 'animate-pulse')} />
               </button>
-            ) : (
-              <button
-                type="button"
-                className={cn(
-                  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150 ease-out',
-                  interaction.press,
-                  interaction.focusRingPanel,
-                  value.trim() || attachments.length > 0
-                    ? 'border-transparent text-accent-fg hover:bg-accent-soft dark:text-accent-fg dark:hover:bg-accent-soft'
-                    : 'border-transparent text-fg-disabled',
-                )}
-                disabled={disabled || (!value.trim() && attachments.length === 0)}
-                title={m.chat.sendMessage}
-                aria-label={m.chat.sendMessage}
-                onClick={send}
-              >
-                <Send className="h-4 w-4 stroke-[1.75]" />
-              </button>
-            )}
+              {busy ? (
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
+                    interaction.transition,
+                    interaction.press,
+                    interaction.focusRingPanel,
+                  )}
+                  title={m.chat.abort}
+                  aria-label={m.chat.abort}
+                  onClick={onAbort}
+                >
+                  <Square className="h-4 w-4 stroke-[1.75]" />
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  className={cn(
+                    'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border transition-colors duration-150 ease-out',
+                    interaction.press,
+                    interaction.focusRingPanel,
+                    value.trim() || attachments.length > 0
+                      ? 'border-transparent text-accent-fg hover:bg-accent-soft dark:text-accent-fg dark:hover:bg-accent-soft'
+                      : 'border-transparent text-fg-disabled',
+                  )}
+                  disabled={disabled || (!value.trim() && attachments.length === 0)}
+                  title={m.chat.sendMessage}
+                  aria-label={m.chat.sendMessage}
+                  onClick={send}
+                >
+                  <Send className="h-4 w-4 stroke-[1.75]" />
+                </button>
+              )}
+            </div>
           </div>
-        </div>
+        )}
     </div>
   );
 });
