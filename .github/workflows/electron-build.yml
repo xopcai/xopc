@@ -1,0 +1,71 @@
+# Build distributable Electron apps (electron-vite + electron-builder).
+# Artifacts: dist/release/* per platform (see electron-builder.yml).
+#
+# Triggers:
+#   - workflow_dispatch (manual)
+#   - git tag push: v* (e.g. v0.2.3)
+#
+# Optional secrets (macOS signing / notarization — only if you ship signed builds):
+#   - CSC_LINK: base64-encoded .p12 or path (see electron-builder docs)
+#   - CSC_KEY_PASSWORD
+#   - APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID (notarization)
+
+name: Electron Build
+
+on:
+  workflow_dispatch:
+  push:
+    tags:
+      - 'v*'
+
+concurrency:
+  group: electron-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    name: Package (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: macos-latest
+            artifact_name: macos
+          - os: windows-latest
+            artifact_name: windows
+          - os: ubuntu-latest
+            artifact_name: linux
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: 9
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Full Node + web bundle (electron-builder packs dist/** per electron-builder.yml).
+      - name: Build project (node + web)
+        run: pnpm run build
+
+      - name: Build Electron app
+        run: pnpm run electron:build
+
+      - name: Upload release artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: xopcbot-electron-${{ matrix.artifact_name }}
+          path: dist/release
+          if-no-files-found: error
+          retention-days: 14
