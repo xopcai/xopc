@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -15,6 +16,9 @@ import { registerFileIpc } from './ipc/file-ipc.js';
 import { registerSearchIpc } from './ipc/search-ipc.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/** Dev / unpackaged: window icon (Linux/Windows). Packaged apps use the bundle icon from electron-builder. */
+const devWindowIcon = join(__dirname, '../../electron/resources/icon.png');
 
 function shouldEmbedGateway(): boolean {
   if (process.env['ELECTRON_RENDERER_URL']) return false;
@@ -64,6 +68,7 @@ function createWindow(): void {
     width: 1400,
     height: 900,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
+    ...(!app.isPackaged && existsSync(devWindowIcon) ? { icon: devWindowIcon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.mjs'),
       contextIsolation: true,
