@@ -1,4 +1,4 @@
-import { Cpu, Folder, Layers, Zap } from 'lucide-react';
+import { Cpu, Folder, Layers, Plus, Trash2, Zap } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -185,6 +185,49 @@ export function AgentSettingsPanel() {
               noMatches={chat.modelNoMatches}
               onChange={(modelId) => update({ model: modelId })}
             />
+          </Field>
+          <Field label={a.label.modelFallbacks} description={a.desc.modelFallbacks}>
+            <div className="flex flex-col gap-2">
+              {form.modelFallbacks.map((fb, idx) => (
+                <div key={idx} className="flex items-start gap-2">
+                  <div className="min-w-0 flex-1">
+                    <ModelSelector
+                      value={fb}
+                      placeholder={chat.modelPlaceholder}
+                      searchPlaceholder={chat.modelSearchPlaceholder}
+                      noMatches={chat.modelNoMatches}
+                      onChange={(modelId) => {
+                        const next = [...form.modelFallbacks];
+                        next[idx] = modelId;
+                        update({ modelFallbacks: next });
+                      }}
+                    />
+                  </div>
+                  <Button
+                    type="button"
+                    variant="secondary"
+                    className="shrink-0"
+                    aria-label={a.removeModelFallback}
+                    onClick={() =>
+                      update({
+                        modelFallbacks: form.modelFallbacks.filter((_, j) => j !== idx),
+                      })
+                    }
+                  >
+                    <Trash2 className="size-4" strokeWidth={1.75} />
+                  </Button>
+                </div>
+              ))}
+              <Button
+                type="button"
+                variant="secondary"
+                className="w-fit gap-1.5"
+                onClick={() => update({ modelFallbacks: [...form.modelFallbacks, ''] })}
+              >
+                <Plus className="size-4 shrink-0" strokeWidth={1.75} />
+                {a.addModelFallback}
+              </Button>
+            </div>
           </Field>
           <Field label={a.label.imageModel} description={a.desc.imageModel}>
             <ModelSelector

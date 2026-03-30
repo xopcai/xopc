@@ -26,13 +26,31 @@ export function isTransientLlmErrorMessage(message: string): boolean {
   return TRANSIENT_LLM_ERROR_SUBSTRINGS.some((s) => lower.includes(s));
 }
 
-function getLastAssistantMessage(messages: AgentMessage[]): AgentMessage | undefined {
+export function getLastAssistantMessage(messages: AgentMessage[]): AgentMessage | undefined {
   for (let i = messages.length - 1; i >= 0; i--) {
     if (messages[i].role === 'assistant') {
       return messages[i];
     }
   }
   return undefined;
+}
+
+/** After waitForIdle + transient retries, true if the last assistant turn ended in error. */
+export function isAssistantTurnFailed(agent: Agent): boolean {
+  const last = getLastAssistantMessage(agent.state.messages);
+  if (!last) {
+    return true;
+  }
+  return (last as { stopReason?: string }).stopReason === 'error';
+}
+
+/** User or client aborted the assistant turn — do not try another model. */
+export function isAssistantTurnAborted(agent: Agent): boolean {
+  const last = getLastAssistantMessage(agent.state.messages);
+  if (!last) {
+    return false;
+  }
+  return (last as { stopReason?: string }).stopReason === 'aborted';
 }
 
 /**

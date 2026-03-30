@@ -480,6 +480,7 @@ const bundles: Record<
       cardBehaviorSubtitle: string;
       label: {
         model: string;
+        modelFallbacks: string;
         imageModel: string;
         imageGenerationModel: string;
         mediaMaxMb: string;
@@ -493,6 +494,7 @@ const bundles: Record<
       };
       desc: {
         model: string;
+        modelFallbacks: string;
         imageModel: string;
         imageGenerationModel: string;
         mediaMaxMb: string;
@@ -504,6 +506,8 @@ const bundles: Record<
         reasoningDefault: string;
         verboseDefault: string;
       };
+      addModelFallback: string;
+      removeModelFallback: string;
       reasoning: { off: string; on: string; stream: string };
       verbose: { off: string; on: string; full: string };
     };
@@ -1389,6 +1393,7 @@ const bundles: Record<
       cardBehaviorSubtitle: 'Thinking depth, traces, and verbosity',
       label: {
         model: 'Model',
+        modelFallbacks: 'Fallback models',
         imageModel: 'Image model',
         imageGenerationModel: 'Image generation model',
         mediaMaxMb: 'Image load limit (MB)',
@@ -1402,6 +1407,8 @@ const bundles: Record<
       },
       desc: {
         model: 'Default model for new sessions.',
+        modelFallbacks:
+          'Tried in order when the primary model returns an error after transient retries. Requires API keys for each provider.',
         imageModel: 'Optional. Used for image understanding / vision.',
         imageGenerationModel: 'Optional. For image_generate (e.g. openai/gpt-image-1).',
         mediaMaxMb: 'Max size when loading images in the image tool.',
@@ -1413,6 +1420,8 @@ const bundles: Record<
         reasoningDefault: 'Whether to surface model reasoning to users.',
         verboseDefault: 'How much detail the agent prints by default.',
       },
+      addModelFallback: 'Add fallback model',
+      removeModelFallback: 'Remove fallback model',
       reasoning: { off: 'Off', on: 'On', stream: 'Stream' },
       verbose: { off: 'Off', on: 'On', full: 'Full' },
     },
@@ -2325,6 +2334,7 @@ const bundles: Record<
       cardBehaviorSubtitle: '思考深度、推理可见性与详细程度',
       label: {
         model: '模型',
+        modelFallbacks: '备用模型',
         imageModel: '图像理解模型',
         imageGenerationModel: '图像生成模型',
         mediaMaxMb: '图像加载上限 (MB)',
@@ -2338,6 +2348,8 @@ const bundles: Record<
       },
       desc: {
         model: '新会话的默认模型。',
+        modelFallbacks:
+          '主模型在瞬时重试后仍失败时，按顺序尝试。每个提供商需配置 API Key。',
         imageModel: '可选，用于图像理解 / 视觉。',
         imageGenerationModel: '可选，用于 image_generate（如 openai/gpt-image-1）。',
         mediaMaxMb: '图像工具加载单张图片时的最大体积。',
@@ -2349,6 +2361,8 @@ const bundles: Record<
         reasoningDefault: '是否向用户展示模型推理过程。',
         verboseDefault: '代理默认输出的详细程度。',
       },
+      addModelFallback: '添加备用模型',
+      removeModelFallback: '移除备用模型',
       reasoning: { off: '关闭', on: '开启', stream: '流式' },
       verbose: { off: '关闭', on: '开启', full: '完整' },
     },

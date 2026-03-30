@@ -10,7 +10,18 @@ import type { Model, Api } from '@mariozechner/pi-ai';
 import { type Config, getAgentDefaultModelRef } from '../../config/schema.js';
 import { createLogger } from '../../utils/logger.js';
 import { resolveModel, getAllModels as getAllModelsFromProviders, getDefaultModelSync } from '../../providers/index.js';
-import { isFailoverError, describeFailoverError, resolveFallbackCandidates } from '../fallback/index.js';
+import {
+  isFailoverError,
+  describeFailoverError,
+  resolveFallbackCandidates,
+  type ModelCandidate,
+} from '../fallback/index.js';
+import { parseModelRef } from './selection.js';
+import {
+  isAssistantTurnAborted,
+  isAssistantTurnFailed,
+  maybeRetryTurnAfterTransientLlmFailure,
+} from '../orchestration/llm-turn-retry.js';
 
 const log = createLogger('ModelManager');
 
@@ -160,6 +171,31 @@ export class ModelManager {
   }
 
   /**
+   * Ordered model candidates for the session (primary + `agents.defaults.model.fallbacks`).
+   */
+  getFallbackCandidatesForSession(sessionKey: string): ModelCandidate[] {
+    const ref = this.getModelForSession(sessionKey);
+    const parsed = parseModelRef(ref);
+    if (!parsed) {
+      return [];
+    }
+    return resolveFallbackCandidates({
+      cfg: this.config,
+      provider: parsed.provider,
+      model: parsed.model,
+    });
+  }
+
+  /**
+   * Apply a resolved pi-ai model and sync {@link currentModelName} / {@link currentProvider}.
+   */
+  applyResolvedModel(agent: Agent, model: Model<Api>, modelRef: string): void {
+    agent.setModel(model);
+    this.currentModelName = modelRef;
+    this.currentProvider = model.provider || 'unknown';
+  }
+
+  /**
    * Run the agent with automatic model fallback on failure.
    */
   async runWithFallback(
@@ -176,110 +212,100 @@ export class ModelManager {
     });
 
     let lastError: unknown;
+    const AGENT_TURN_TIMEOUT_MS = 120_000;
 
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i];
-      
+      const modelRef = `${candidate.provider}/${candidate.model}`;
+
       let candidateModel: Model<Api>;
       try {
-        candidateModel = resolveModel(`${candidate.provider}/${candidate.model}`);
+        candidateModel = resolveModel(modelRef);
       } catch {
-        log.warn(
-          { provider: candidate.provider, model: candidate.model },
-          'Fallback model not found'
-        );
+        log.warn({ provider: candidate.provider, model: candidate.model }, 'Fallback model not found');
         continue;
       }
 
       log.info(
         { attempt: i + 1, total: candidates.length, provider: candidate.provider, model: candidate.model },
-        'Attempting model'
+        'Attempting model',
       );
 
+      const beforeLen = agent.state.messages.length;
+
       try {
-        // Update the agent with the new model
-        agent.setModel(candidateModel);
-        this.currentProvider = candidate.provider;
-        this.currentModelName = candidate.model;
+        this.applyResolvedModel(agent, candidateModel, modelRef);
 
-        // Execute the prompt with timeout to prevent infinite hangs
-        const AGENT_TURN_TIMEOUT_MS = 120_000; // 2 minutes
-
-        const turnPromise = (async () => {
+        const runTurn = async () => {
           await agent.prompt(userMessage);
           await agent.waitForIdle();
-        })();
-
-        const timeoutPromise = new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`Agent turn timed out after ${AGENT_TURN_TIMEOUT_MS / 1000}s`)),
-            AGENT_TURN_TIMEOUT_MS
-          )
-        );
-
-        await Promise.race([turnPromise, timeoutPromise]);
-
-        // Get usage from agent state if available
-        const usage = (agent.state as any).lastUsage || undefined;
-
-        // Log the successfully used model
-        log.info(
-          { provider: candidate.provider, model: candidate.model, success: true },
-          'Model call completed'
-        );
-
-        return {
-          content: getLastAssistantContent(agent),
-          usage,
+          await maybeRetryTurnAfterTransientLlmFailure(agent, { sessionKey, log });
         };
+
+        await Promise.race([
+          runTurn(),
+          new Promise<never>((_, reject) =>
+            setTimeout(
+              () => reject(new Error(`Agent turn timed out after ${AGENT_TURN_TIMEOUT_MS / 1000}s`)),
+              AGENT_TURN_TIMEOUT_MS,
+            ),
+          ),
+        ]);
+
+        if (isAssistantTurnAborted(agent)) {
+          const usage = (agent.state as { lastUsage?: RunResult['usage'] }).lastUsage;
+          return { content: getLastAssistantContent(agent), usage };
+        }
+
+        if (!isAssistantTurnFailed(agent)) {
+          const usage = (agent.state as { lastUsage?: RunResult['usage'] }).lastUsage;
+          log.info(
+            { provider: candidate.provider, model: candidate.model, success: true },
+            'Model call completed',
+          );
+          return { content: getLastAssistantContent(agent), usage };
+        }
+
+        lastError = new Error(`Assistant turn failed: ${modelRef}`);
+        log.warn(
+          { attempt: i + 1, sessionKey, modelRef },
+          'Model turn failed after retries, trying fallback',
+        );
       } catch (err) {
         lastError = err;
+        if (err instanceof DOMException && err.name === 'AbortError') {
+          log.info({ sessionKey }, 'User aborted model call');
+          throw err;
+        }
 
-        // Enhanced error logging
         const errorDetails = {
           attempt: i + 1,
           provider: candidate.provider,
           model: candidate.model,
           errorMessage: err instanceof Error ? err.message : String(err),
-          errorName: err instanceof Error ? err.name : 'Unknown',
-          errorStack: err instanceof Error ? err.stack : undefined,
-          isTimeout: err instanceof Error && err.message.includes('timed out'),
-          isAbort: err instanceof DOMException && err.name === 'AbortError',
         };
-
-        // Don't fallback on user abort
-        if (err instanceof DOMException && err.name === 'AbortError') {
-          log.info(errorDetails, 'User aborted model call');
-          throw err;
-        }
 
         if (isFailoverError(err)) {
           const described = describeFailoverError(err);
-          log.warn(
-            { ...errorDetails, ...described },
-            'Model call failed, trying fallback'
-          );
+          log.warn({ ...errorDetails, ...described }, 'Model call failed, trying fallback');
         } else {
-          log.warn(
-            errorDetails,
-            'Model call failed with non-failover error'
-          );
+          log.warn(errorDetails, 'Model call failed, trying fallback');
         }
-
-        // Continue to next candidate
-        continue;
       }
+
+      agent.replaceMessages(agent.state.messages.slice(0, beforeLen));
     }
 
-    // All models failed
     if (lastError) {
-      log.error({
-        lastError: lastError instanceof Error ? lastError.message : String(lastError),
-        lastErrorStack: lastError instanceof Error ? lastError.stack : undefined,
-        attemptedCandidates: candidates.length,
-        sessionKey,
-      }, 'All model candidates failed');
-      throw lastError;
+      log.error(
+        {
+          lastError: lastError instanceof Error ? lastError.message : String(lastError),
+          attemptedCandidates: candidates.length,
+          sessionKey,
+        },
+        'All model candidates failed',
+      );
+      throw lastError instanceof Error ? lastError : new Error(String(lastError));
     }
 
     return { content: null };

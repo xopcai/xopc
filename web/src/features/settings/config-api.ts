@@ -3,6 +3,8 @@ import { apiUrl } from '@/lib/url';
 
 export interface AgentDefaultsState {
   model: string;
+  /** provider/model refs tried when the primary fails (stored as `agents.defaults.model.fallbacks`). */
+  modelFallbacks: string[];
   imageModel: string;
   imageGenerationModel: string;
   mediaMaxMb: number | undefined;
@@ -25,11 +27,26 @@ function normalizeModelRef(raw: unknown): string {
   return '';
 }
 
+function normalizeModelFallbacks(raw: unknown): string[] {
+  if (typeof raw !== 'object' || raw === null || !('fallbacks' in raw)) {
+    return [];
+  }
+  const f = (raw as { fallbacks?: unknown }).fallbacks;
+  if (!Array.isArray(f)) {
+    return [];
+  }
+  return f.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
+}
+
 export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
   const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'));
   const d = (res.payload?.config as { agents?: { defaults?: Record<string, unknown> } })?.agents?.defaults ?? {};
+  const mf = (d as { modelFallbacks?: unknown }).modelFallbacks;
+  const modelFallbacksFromApi =
+    Array.isArray(mf) && mf.every((x) => typeof x === 'string') ? (mf as string[]) : normalizeModelFallbacks(d.model);
   return {
     model: normalizeModelRef(d.model),
+    modelFallbacks: modelFallbacksFromApi,
     imageModel: normalizeModelRef(d.imageModel),
     imageGenerationModel: normalizeModelRef(d.imageGenerationModel),
     mediaMaxMb: typeof d.mediaMaxMb === 'number' && !Number.isNaN(d.mediaMaxMb) ? d.mediaMaxMb : undefined,
@@ -44,12 +61,16 @@ export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
 }
 
 export async function patchAgentDefaults(state: AgentDefaultsState): Promise<void> {
+  const fallbacks = state.modelFallbacks.map((s) => s.trim()).filter(Boolean);
+  const modelField =
+    fallbacks.length > 0 ? { primary: state.model, fallbacks } : state.model;
+
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',
     body: JSON.stringify({
       agents: {
         defaults: {
-          model: state.model,
+          model: modelField,
           imageModel: state.imageModel || '',
           imageGenerationModel: state.imageGenerationModel || '',
           mediaMaxMb: state.mediaMaxMb ?? null,
