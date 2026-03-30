@@ -263,17 +263,34 @@ export const ChannelsConfigSchema = z
     },
   });
 
-export const WebSearchConfigSchema = z.object({
-  apiKey: z.string(),
-  maxResults: z.number(),
-}).default({
-  apiKey: '',
-  maxResults: 5,
+export const SearchProviderEntrySchema = z.object({
+  type: z.enum(['brave', 'tavily', 'bing', 'searxng']),
+  apiKey: z.string().optional(),
+  /** SearXNG instance base URL (e.g. http://localhost:8080) */
+  url: z.string().optional(),
+  disabled: z.boolean().optional(),
 });
 
+export type SearchProviderEntry = z.infer<typeof SearchProviderEntrySchema>;
+
+export const WebSearchConfigSchema = z.object({
+  apiKey: z.string().default(''),
+  maxResults: z.number().default(5),
+  /** Ordered API providers; when omitted, legacy single Brave key applies */
+  providers: z.array(SearchProviderEntrySchema).optional(),
+  /** Deprecated no-op placeholder for older configs */
+  provider: z.string().optional(),
+});
+
+export type WebSearchConfig = z.infer<typeof WebSearchConfigSchema>;
+
 export const WebToolsConfigSchema = z.object({
+  /** Search result HTML fallback: cn → Bing, otherwise DuckDuckGo */
+  region: z.enum(['cn', 'global']).optional(),
   search: WebSearchConfigSchema.optional(),
 });
+
+export type WebToolsConfig = z.infer<typeof WebToolsConfigSchema>;
 
 export const ToolsConfigSchema = z.object({
   web: WebToolsConfigSchema.optional(),

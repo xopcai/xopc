@@ -50,8 +50,6 @@ function createAgentCommand(_ctx: CLIContext): Command {
       const modelId = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
       const bus = new MessageBus();
 
-      const braveApiKey = config.tools?.web?.search?.apiKey;
-
       if (ctx.isVerbose) {
         log.info({ model: modelId, workspace, session: options.session }, 'Starting agent');
       }
@@ -96,7 +94,6 @@ function createAgentCommand(_ctx: CLIContext): Command {
       const agent = new AgentService(bus, {
         workspace,
         model: modelId,
-        braveApiKey,
         config,
         extensionRegistry: extensionLoader?.getRegistry(),
       });

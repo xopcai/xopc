@@ -93,7 +93,6 @@ function serializeAgentToolResultForSse(result: unknown): string | undefined {
 export interface AgentServiceConfig {
   workspace: string;
   model?: string;
-  braveApiKey?: string;
   config?: Config;
   agentDefaults?: AgentDefaults;
   extensionRegistry?: ExtensionRegistry;
@@ -208,7 +207,6 @@ export class AgentService {
       workspace: config.workspace,
       model: config.model,
       config: config.config,
-      braveApiKey: config.braveApiKey,
       extensionRegistry: config.extensionRegistry,
       bus,
       getCurrentContext: () => this.sessionContextManager.getContext(),
