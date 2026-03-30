@@ -4,6 +4,8 @@ import {
   isTransientLlmErrorMessage,
   stripTrailingErrorAssistantMessages,
   maybeRetryTurnAfterTransientLlmFailure,
+  isAssistantTurnFailed,
+  isAssistantTurnAborted,
 } from '../llm-turn-retry.js';
 
 describe('llm-turn-retry', () => {
@@ -58,5 +60,47 @@ describe('llm-turn-retry', () => {
     expect(replaceMessages).toHaveBeenCalledWith([user]);
     expect(continueFn).toHaveBeenCalledTimes(1);
     expect(waitForIdle).toHaveBeenCalledTimes(1);
+  });
+
+  it('isAssistantTurnFailed reflects last assistant stopReason', () => {
+    const user: AgentMessage = { role: 'user', content: 'hi', timestamp: 1 };
+    const okAssistant: AgentMessage = {
+      role: 'assistant',
+      content: [{ type: 'text', text: 'ok' }],
+      stopReason: 'stop',
+      timestamp: 2,
+    } as AgentMessage;
+    const errAssistant: AgentMessage = {
+      role: 'assistant',
+      content: [{ type: 'text', text: '' }],
+      stopReason: 'error',
+      timestamp: 3,
+    } as AgentMessage;
+
+    expect(
+      isAssistantTurnFailed({
+        state: { messages: [user, okAssistant] },
+      } as unknown as import('@mariozechner/pi-agent-core').Agent),
+    ).toBe(false);
+    expect(
+      isAssistantTurnFailed({
+        state: { messages: [user, errAssistant] },
+      } as unknown as import('@mariozechner/pi-agent-core').Agent),
+    ).toBe(true);
+  });
+
+  it('isAssistantTurnAborted detects aborted assistant', () => {
+    const user: AgentMessage = { role: 'user', content: 'hi', timestamp: 1 };
+    const aborted: AgentMessage = {
+      role: 'assistant',
+      content: [{ type: 'text', text: '' }],
+      stopReason: 'aborted',
+      timestamp: 2,
+    } as AgentMessage;
+    expect(
+      isAssistantTurnAborted({
+        state: { messages: [user, aborted] },
+      } as unknown as import('@mariozechner/pi-agent-core').Agent),
+    ).toBe(true);
   });
 });

@@ -21,7 +21,7 @@ import {
   tryApplySessionTranscriptHygieneForPersistence,
 } from '../transcript/transcript-hygiene.js';
 import { createLogger } from '../../utils/logger.js';
-import { maybeRetryTurnAfterTransientLlmFailure } from './llm-turn-retry.js';
+import { runAgentTurnWithModelFallbacks } from './run-agent-turn-with-fallbacks.js';
 import {
   persistInboundAttachmentsToWorkspace,
   formatInboundFileTextBlock,
@@ -163,34 +163,29 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Execute the agent with a user message
+   * Execute the agent with a user message (primary model, then `agents.defaults.model.fallbacks` on failure).
    */
   private async executeAgent(
     agent: Agent,
     userMessage: AgentMessage,
     context: SessionContext
   ): Promise<void> {
-    // Prompt agent with user message - this adds the message to agent's internal state
-    await agent.prompt(userMessage);
-
-    // Immediately save user message to local file before waiting for AI response
-    // This ensures user messages are persisted even if the process crashes
-    // or is interrupted while waiting for AI
-    try {
-      const { messages: sanitizedTurn } = sanitizeMessages(agent.state.messages);
-      await this.saveSessionSnapshot(context.sessionKey, sanitizedTurn);
-      log.debug({ sessionKey: context.sessionKey }, 'User message saved immediately after prompt');
-    } catch (err) {
-      log.warn({ err, sessionKey: context.sessionKey }, 'Failed to save user message immediately');
-    }
-
-    // Wait for agent to become idle (AI response generation)
-    await agent.waitForIdle();
-
-    // Provider may finish with stopReason "error" + "fetch failed" without throwing; retry transient network failures.
-    await maybeRetryTurnAfterTransientLlmFailure(agent, {
-      sessionKey: context.sessionKey,
+    const sessionKey = context.sessionKey;
+    await runAgentTurnWithModelFallbacks({
+      agent,
+      sessionKey,
+      modelManager: this.modelManager,
+      userMessage,
       log,
+      afterUserPrompt: async () => {
+        try {
+          const { messages: sanitizedTurn } = sanitizeMessages(agent.state.messages);
+          await this.saveSessionSnapshot(sessionKey, sanitizedTurn);
+          log.debug({ sessionKey }, 'User message saved immediately after prompt');
+        } catch (err) {
+          log.warn({ err, sessionKey }, 'Failed to save user message immediately');
+        }
+      },
     });
   }
 

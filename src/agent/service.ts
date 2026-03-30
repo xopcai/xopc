@@ -42,6 +42,7 @@ import { CompactionLifecycleHandler } from './lifecycle/handlers/compaction.js';
 import { MessageRouter, CommandHandler, StreamManager } from './messaging/index.js';
 import { SessionContextManager, SessionLifecycleManager, type SessionContext } from './session/index.js';
 import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
+import { runAgentTurnWithModelFallbacks } from './orchestration/run-agent-turn-with-fallbacks.js';
 import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 
@@ -930,12 +931,17 @@ export class AgentService {
 
       if (!abortHandled) {
         const agentPromise = (async () => {
-          await agent.prompt({
-            role: 'user',
-            content: messageContent,
-            timestamp: Date.now(),
+          await runAgentTurnWithModelFallbacks({
+            agent,
+            sessionKey,
+            modelManager: this.modelManager,
+            userMessage: {
+              role: 'user',
+              content: messageContent,
+              timestamp: Date.now(),
+            },
+            log,
           });
-          await agent.waitForIdle();
         })();
 
         agentPromise
@@ -1102,12 +1108,17 @@ export class AgentService {
       const prepared = await this.prepareInboundAttachments(sessionKey, attachments);
       const messageContent = this.buildMessageContent(content, prepared);
 
-      await agent.prompt({
-        role: 'user',
-        content: messageContent,
-        timestamp: Date.now(),
+      await runAgentTurnWithModelFallbacks({
+        agent,
+        sessionKey,
+        modelManager: this.modelManager,
+        userMessage: {
+          role: 'user',
+          content: messageContent,
+          timestamp: Date.now(),
+        },
+        log,
       });
-      await agent.waitForIdle();
 
       const response = this.agentManager.getLastAssistantContent(sessionKey) || '';
       await this.persistAgentSessionMessages(sessionKey);
