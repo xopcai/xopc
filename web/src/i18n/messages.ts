@@ -14,7 +14,8 @@ export type Tab =
   | 'settingsChannels'
   | 'settingsVoice'
   | 'settingsGateway'
-  | 'settingsHeartbeat';
+  | 'settingsHeartbeat'
+  | 'settingsSearch';
 
 export type SettingsSectionId =
   | 'appearance'
@@ -24,7 +25,8 @@ export type SettingsSectionId =
   | 'channels'
   | 'voice'
   | 'gateway'
-  | 'heartbeat';
+  | 'heartbeat'
+  | 'search';
 
 const bundles: Record<
   StoredLanguage,
@@ -851,6 +853,46 @@ const bundles: Record<
       addActiveHours: string;
       clearActiveHours: string;
     };
+    webSearchSettings: {
+      title: string;
+      subtitle: string;
+      docsLink: string;
+      needToken: string;
+      loading: string;
+      loadError: string;
+      save: string;
+      saving: string;
+      saved: string;
+      saveError: string;
+      unsavedHint: string;
+      sectionRegion: string;
+      sectionRegionHint: string;
+      sectionSearch: string;
+      sectionSearchHint: string;
+      regionLabel: string;
+      regionDesc: string;
+      regionAuto: string;
+      regionCn: string;
+      regionGlobal: string;
+      maxResultsLabel: string;
+      maxResultsDesc: string;
+      providersTitle: string;
+      addProvider: string;
+      apiKeyLabel: string;
+      apiKeyDesc: string;
+      urlLabel: string;
+      urlDesc: string;
+      keyPlaceholder: string;
+      keyPlaceholderMasked: string;
+      disabled: string;
+      footerHint: string;
+      providerTypes: {
+        brave: string;
+        tavily: string;
+        bing: string;
+        searxng: string;
+      };
+    };
   }
 > = {
   en: {
@@ -877,6 +919,7 @@ const bundles: Record<
       settingsVoice: 'Voice',
       settingsGateway: 'Gateway',
       settingsHeartbeat: 'Heartbeat',
+      settingsSearch: 'Web search',
     },
     settingsSections: {
       appearance: 'Preferences',
@@ -887,6 +930,7 @@ const bundles: Record<
       voice: 'Voice',
       gateway: 'Gateway',
       heartbeat: 'Heartbeat',
+      search: 'Web search',
     },
     settingsNavGroups: {
       gateway: 'Connection & service',
@@ -1722,6 +1766,51 @@ const bundles: Record<
       addActiveHours: 'Add active hours',
       clearActiveHours: 'Clear active hours',
     },
+    webSearchSettings: {
+      title: 'Web search',
+      subtitle:
+        'Configure region and search providers for the web_search tool. Without API keys, a built-in HTML fallback is used.',
+      docsLink: 'Gateway documentation',
+      needToken: 'Save a gateway token to edit web search settings.',
+      loading: 'Loading…',
+      loadError: 'Failed to load web search settings',
+      save: 'Save',
+      saving: 'Saving…',
+      saved: 'Saved',
+      saveError: 'Failed to save',
+      unsavedHint: 'You have unsaved changes.',
+      sectionRegion: 'Region',
+      sectionRegionHint:
+        'Controls which zero-config HTML fallback is used when no API provider succeeds (China → Bing; otherwise DuckDuckGo).',
+      sectionSearch: 'Search providers',
+      sectionSearchHint:
+        'Providers are tried in order. Keys are stored in the gateway config file. Leave the list empty to use only the HTML fallback.',
+      regionLabel: 'Fallback region',
+      regionDesc:
+        'Auto uses your system timezone. Override if you are on a VPN or need a specific fallback.',
+      regionAuto: 'Auto (timezone)',
+      regionCn: 'China (Bing HTML fallback)',
+      regionGlobal: 'Global (DuckDuckGo HTML fallback)',
+      maxResultsLabel: 'Default max results',
+      maxResultsDesc: 'Used when the model does not pass a count (1–50).',
+      providersTitle: 'Providers (ordered)',
+      addProvider: 'Add provider',
+      apiKeyLabel: 'API key',
+      apiKeyDesc: 'Optional for some setups. Leave masked to keep the saved value.',
+      urlLabel: 'Instance URL',
+      urlDesc: 'SearXNG base URL (e.g. http://localhost:8080). No trailing slash required.',
+      keyPlaceholder: 'API key or env var name',
+      keyPlaceholderMasked: '•••••••• (unchanged)',
+      disabled: 'Skip',
+      footerHint:
+        'HTML fallbacks depend on third-party pages and may change. For production, use a supported search API (Brave, Tavily, Bing, or self-hosted SearXNG).',
+      providerTypes: {
+        brave: 'Brave Search API',
+        tavily: 'Tavily',
+        bing: 'Bing Web Search API',
+        searxng: 'SearXNG',
+      },
+    },
     appearanceSettings: {
       pageTitle: 'Preferences',
       subtitle:
@@ -1768,6 +1857,7 @@ const bundles: Record<
       settingsVoice: '语音',
       settingsGateway: '网关',
       settingsHeartbeat: '心跳',
+      settingsSearch: '网络搜索',
     },
     settingsSections: {
       appearance: '偏好设置',
@@ -1778,6 +1868,7 @@ const bundles: Record<
       voice: '语音',
       gateway: '网关',
       heartbeat: '心跳',
+      search: '网络搜索',
     },
     settingsNavGroups: {
       gateway: '连接与服务',
@@ -2608,6 +2699,50 @@ const bundles: Record<
       addActiveHours: '添加活跃时段',
       clearActiveHours: '清除活跃时段',
     },
+    webSearchSettings: {
+      title: '网络搜索',
+      subtitle:
+        '为 web_search 工具配置地区与搜索提供方。未配置 API 时将使用内置 HTML 兜底。',
+      docsLink: '网关文档',
+      needToken: '请先保存网关令牌后再编辑网络搜索。',
+      loading: '加载中…',
+      loadError: '加载网络搜索设置失败',
+      save: '保存',
+      saving: '保存中…',
+      saved: '已保存',
+      saveError: '保存失败',
+      unsavedHint: '有未保存的更改。',
+      sectionRegion: '地区',
+      sectionRegionHint:
+        '在无可用 API 时，用于选择内置 HTML 兜底（国内优先必应，否则 DuckDuckGo）。',
+      sectionSearch: '搜索提供方',
+      sectionSearchHint:
+        '按列表顺序依次尝试。密钥写在网关配置文件中。列表为空则仅使用 HTML 兜底。',
+      regionLabel: '兜底地区',
+      regionDesc: '自动根据系统时区判断。若使用代理或需固定策略，可手动覆盖。',
+      regionAuto: '自动（时区）',
+      regionCn: '中国（必应 HTML 兜底）',
+      regionGlobal: '全球（DuckDuckGo HTML 兜底）',
+      maxResultsLabel: '默认结果条数',
+      maxResultsDesc: '模型未指定 count 时使用（1–50）。',
+      providersTitle: '提供方（按顺序）',
+      addProvider: '添加提供方',
+      apiKeyLabel: 'API 密钥',
+      apiKeyDesc: '部分场景可选。留空且显示为已掩码时保留原值。',
+      urlLabel: '实例地址',
+      urlDesc: 'SearXNG 根地址（如 http://localhost:8080），无需末尾斜杠。',
+      keyPlaceholder: '密钥或环境变量名',
+      keyPlaceholderMasked: '••••••••（未修改）',
+      disabled: '跳过',
+      footerHint:
+        'HTML 兜底依赖第三方页面，可能随站点改版变化。生产环境建议使用正式搜索 API（Brave、Tavily、必应或自建 SearXNG）。',
+      providerTypes: {
+        brave: 'Brave Search API',
+        tavily: 'Tavily',
+        bing: 'Bing Web Search API',
+        searxng: 'SearXNG',
+      },
+    },
     appearanceSettings: {
       pageTitle: '偏好设置',
       subtitle: '语言、界面外观与对话字号等日常使用的显示行为，仅保存在本浏览器。',
@@ -2637,6 +2772,7 @@ export type ChannelsSettingsMessages = (typeof bundles)['en']['channelsSettings'
 export type VoiceSettingsMessages = (typeof bundles)['en']['voiceSettings'];
 export type GatewaySettingsMessages = (typeof bundles)['en']['gatewaySettings'];
 export type HeartbeatSettingsMessages = (typeof bundles)['en']['heartbeatSettings'];
+export type WebSearchSettingsMessages = (typeof bundles)['en']['webSearchSettings'];
 
 export type TabGroup = { label: string; tabs: readonly Tab[] };
 
@@ -2648,7 +2784,7 @@ export function getTabGroups(lang: StoredLanguage): TabGroup[] {
     { label: m.settingsNavGroups.gateway, tabs: ['settingsGateway', 'settingsHeartbeat'] as const },
     {
       label: m.settingsNavGroups.agentAndModels,
-      tabs: ['settingsProviders', 'settingsModels', 'settingsAgent'] as const,
+      tabs: ['settingsProviders', 'settingsModels', 'settingsAgent', 'settingsSearch'] as const,
     },
     { label: m.settingsNavGroups.data, tabs: ['sessions', 'logs'] as const },
     { label: m.settingsNavGroups.interface, tabs: ['settingsAppearance'] as const },

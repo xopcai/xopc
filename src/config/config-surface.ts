@@ -27,7 +27,6 @@ export interface Config {
     web?: {
       region?: 'cn' | 'global';
       search?: {
-        apiKey?: string;
         maxResults?: number;
         providers?: Array<{
           type: 'brave' | 'tavily' | 'bing' | 'searxng';
@@ -35,7 +34,6 @@ export interface Config {
           url?: string;
           disabled?: boolean;
         }>;
-        provider?: string;
       };
     };
   };

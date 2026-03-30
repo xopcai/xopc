@@ -274,12 +274,9 @@ export const SearchProviderEntrySchema = z.object({
 export type SearchProviderEntry = z.infer<typeof SearchProviderEntrySchema>;
 
 export const WebSearchConfigSchema = z.object({
-  apiKey: z.string().default(''),
   maxResults: z.number().default(5),
-  /** Ordered API providers; when omitted, legacy single Brave key applies */
-  providers: z.array(SearchProviderEntrySchema).optional(),
-  /** Deprecated no-op placeholder for older configs */
-  provider: z.string().optional(),
+  /** Ordered API providers; empty → HTML fallback only */
+  providers: z.array(SearchProviderEntrySchema).default([]),
 });
 
 export type WebSearchConfig = z.infer<typeof WebSearchConfigSchema>;
@@ -297,8 +294,8 @@ export const ToolsConfigSchema = z.object({
 }).default({
   web: {
     search: {
-      apiKey: '',
       maxResults: 5,
+      providers: [],
     },
   },
 });
@@ -638,8 +635,8 @@ export const ConfigSchema = z.object({
   tools: {
     web: {
       search: {
-        apiKey: '',
         maxResults: 5,
+        providers: [],
       },
     },
   },

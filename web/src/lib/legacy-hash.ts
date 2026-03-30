@@ -34,6 +34,7 @@ export function bootstrapLegacyHash(): void {
     settingsVoice: 'voice',
     settingsGateway: 'gateway',
     settingsHeartbeat: 'heartbeat',
+    settingsSearch: 'search',
   };
   if (raw in legacySettings) {
     window.history.replaceState(null, '', `#/settings/${legacySettings[raw]}`);

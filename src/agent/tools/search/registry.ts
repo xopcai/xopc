@@ -26,12 +26,7 @@ export class SearchProviderRegistry {
   private buildProviders(config: ResolvedWebSearchConfig): SearchProvider[] {
     const list: SearchProvider[] = [];
 
-    if (config.providers === undefined && config.apiKey) {
-      list.push(new BraveProvider(config.apiKey));
-      return list;
-    }
-
-    for (const p of config.providers ?? []) {
+    for (const p of config.providers) {
       if (p.disabled) continue;
       switch (p.type) {
         case 'brave':

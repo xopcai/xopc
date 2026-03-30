@@ -7,6 +7,7 @@ import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
 import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
 import { ModelsSettingsPanel } from '@/features/settings/models-settings';
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
+import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
 import { ProvidersSettingsPanel } from '@/features/settings/providers-settings';
 import { messages } from '@/i18n/messages';
 import type { SettingsSectionId } from '@/navigation';
@@ -21,6 +22,7 @@ const SECTIONS: SettingsSectionId[] = [
   'voice',
   'gateway',
   'heartbeat',
+  'search',
 ];
 
 export function SettingsPage() {
@@ -65,6 +67,10 @@ export function SettingsPage() {
 
   if (id === 'heartbeat') {
     return <HeartbeatSettingsPanel />;
+  }
+
+  if (id === 'search') {
+    return <WebSearchSettingsPanel />;
   }
 
   return (

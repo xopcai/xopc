@@ -112,12 +112,21 @@ xopcbot 内置了一组工具供 Agent 调用。
 
 ## 🔍 web_search
 
-使用 Brave Search API 搜索网页。
+按 `tools.web.search.providers` 配置依次尝试搜索；全部失败则按地区使用 HTML 兜底。
 
-### 配置
+### 配置示例
 
-```bash
-export BRAVE_SEARCH_API_KEY="your-api-key"
+```json
+{
+  "tools": {
+    "web": {
+      "search": {
+        "maxResults": 5,
+        "providers": [{ "type": "brave", "apiKey": "BSA_your_key_here" }]
+      }
+    }
+  }
+}
 ```
 
 ---

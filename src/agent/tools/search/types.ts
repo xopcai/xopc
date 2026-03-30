@@ -19,10 +19,9 @@ export interface ResolvedSearchProviderEntry {
   disabled?: boolean;
 }
 
-/** Normalized input for SearchProviderRegistry (after env + resolveConfigValue) */
+/** Normalized input for SearchProviderRegistry (after resolveConfigValue on keys) */
 export interface ResolvedWebSearchConfig {
   region: 'cn' | 'global';
-  apiKey: string;
   maxResults: number;
-  providers?: ResolvedSearchProviderEntry[];
+  providers: ResolvedSearchProviderEntry[];
 }

@@ -211,26 +211,25 @@ Execute shell command. Output automatically truncated to last 50KB.
 
 ### 🔍 web_search
 
-Search the web using Brave Search API.
+Search the web using configured providers (`tools.web.search.providers`), then region-based HTML fallback if none succeed.
 
 **Parameters:**
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
 | `query` | string | ✅ | Search query |
-| `max_results` | number | ❌ | Maximum results (default: 5) |
+| `count` | number | ❌ | Maximum results (default: `tools.web.search.maxResults`) |
 
 **Configuration:**
-
-Set `BRAVE_API_KEY` environment variable or configure in `config.json`:
 
 ```json
 {
   "tools": {
     "web": {
+      "region": "global",
       "search": {
-        "api_key": "${BRAVE_API_KEY}",
-        "max_results": 5
+        "maxResults": 5,
+        "providers": [{ "type": "brave", "apiKey": "BSA_your_key_here" }]
       }
     }
   }
@@ -243,7 +242,7 @@ Set `BRAVE_API_KEY` environment variable or configure in `config.json`:
   "name": "web_search",
   "arguments": {
     "query": "TypeScript best practices 2026",
-    "max_results": 10
+    "count": 10
   }
 }
 ```

@@ -132,7 +132,7 @@ Register in `AgentService` / tools index as existing tools do.
 
 ### AgentService
 
-`MessageBus` + `AgentService` with `workspace`, `model`, optional `braveApiKey`; `await agent.start()`.
+`MessageBus` + `AgentService` with `workspace`, `model`, and `config` (including `tools.web.search` for web search); `await agent.start()`.
 
 ### Channels
 
@@ -204,7 +204,6 @@ import { DraftStreamManager } from '@xopcai/xopcbot/channels/telegram/draft-stre
 | Variable | Purpose |
 |----------|---------|
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, … | Provider keys (at least one LLM key needed to run agents) |
-| `BRAVE_API_KEY` | Web search tool |
 | `TELEGRAM_BOT_TOKEN` | Telegram (if not only in config) |
 | `XOPCBOT_CONFIG` | Config file path |
 | `XOPCBOT_WORKSPACE` | Workspace directory |
