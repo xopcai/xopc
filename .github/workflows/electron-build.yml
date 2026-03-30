@@ -24,6 +24,9 @@
 #   ./scripts/gh-electron-build-runs.sh
 #   gh run list --workflow=electron-build.yml --limit 15
 #   gh run view <run-id> --log-failed
+#
+# Release uploads: use `gh` with per-file uploads + backoff to reduce GitHub REST secondary rate limits
+# (bulk upload actions can burst the API and fail with "exceeded a secondary rate limit").
 
 name: Electron Build
 
@@ -155,8 +158,43 @@ jobs:
           merge-multiple: true
 
       - name: Publish release assets
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ github.ref_name }}
-          generate_release_notes: true
-          files: release-assets/**/*
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          set -euo pipefail
+          TAG="${{ github.ref_name }}"
+          REPO="${{ github.repository }}"
+          mapfile -t FILES < <(find release-assets -type f | sort)
+          if [ ${#FILES[@]} -eq 0 ]; then
+            echo "No files under release-assets"
+            exit 1
+          fi
+          echo "Publishing ${#FILES[@]} file(s) to release ${TAG}"
+
+          if ! gh release view "$TAG" --repo "$REPO" >/dev/null 2>&1; then
+            for attempt in $(seq 1 8); do
+              if gh release create "$TAG" --generate-notes --title "$TAG" --repo "$REPO"; then
+                break
+              fi
+              echo "gh release create failed (attempt ${attempt})"
+              if [ "$attempt" -eq 8 ]; then
+                exit 1
+              fi
+              sleep $((45 + attempt * 15))
+            done
+          fi
+
+          for f in "${FILES[@]}"; do
+            for attempt in $(seq 1 8); do
+              if gh release upload "$TAG" "$f" --clobber --repo "$REPO"; then
+                echo "Uploaded: $f"
+                break
+              fi
+              echo "Upload failed for $f (attempt ${attempt})"
+              if [ "$attempt" -eq 8 ]; then
+                exit 1
+              fi
+              sleep $((20 + attempt * 10))
+            done
+            sleep 12
+          done
