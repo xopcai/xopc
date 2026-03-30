@@ -11,8 +11,8 @@
 #   - Linux: x64 (AppImage+deb) + arm64 AppImage only on ubuntu-24.04-arm (deb/fpm on arm64 CI is unreliable).
 #
 # Triggers:
-#   - workflow_dispatch (manual)
-#   - git tag push: v* (e.g. v0.2.3)
+#   - workflow_dispatch (manual) — builds only; no GitHub Release
+#   - git tag push: v* (e.g. v0.2.3) — builds + Release assets when every matrix job succeeds
 #
 # Private repos: arm64 Linux/Windows runners require available quota on your plan
 # (see GitHub docs: “Standard GitHub-hosted runners for private repositories”).
@@ -136,3 +136,27 @@ jobs:
           path: dist/release
           if-no-files-found: error
           retention-days: 14
+
+  # Runs only when all `package` matrix jobs succeed. If any platform fails, this job is skipped
+  # (no partial GitHub Release).
+  release:
+    name: Publish GitHub Release
+    needs: package
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download all build artifacts
+        uses: actions/download-artifact@v4
+        with:
+          pattern: xopcbot-electron-*
+          path: release-assets
+          merge-multiple: true
+
+      - name: Publish release assets
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: ${{ github.ref_name }}
+          generate_release_notes: true
+          files: release-assets/**/*
