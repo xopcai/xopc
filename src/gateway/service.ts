@@ -3,7 +3,7 @@ import { join } from 'path';
 import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
 import { CHAT_CHANNEL_ORDER } from '../channels/registry.js';
-import { MessageBus } from '../infra/bus/index.js';
+import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig } from '../config/index.js';
 import { getWorkspacePath } from '../config/schema.js';
 import { CronService } from '../cron/index.js';
@@ -312,12 +312,16 @@ export class GatewayService {
     this.heartbeatService.stop();
 
     this.agentService.stop();
+
+    // Unblock `consumeOutbound()` / `consumeInbound()` waiters before stopping channels (CLI agent does the same).
+    this.running = false;
+    this.bus.shutdown();
+
     await this.channelManager.stopAll();
-    
+
     // Stop cron service
     await this.cronService.stop();
 
-    this.running = false;
     log.debug('Gateway service stopped');
   }
 
@@ -331,6 +335,9 @@ export class GatewayService {
         const msg = await this.bus.consumeOutbound();
         await this.channelManager.send(msg);
       } catch (error) {
+        if (error instanceof MessageBusShutdownError) {
+          break;
+        }
         log.error({ error }, 'Error processing outbound message');
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }

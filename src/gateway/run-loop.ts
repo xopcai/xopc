@@ -82,7 +82,8 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
 
   // Signal handling
   const DRAIN_TIMEOUT_MS = 30_000;
-  const SHUTDOWN_TIMEOUT_MS = 5_000;
+  /** Allow slow channel plugin `stop()` + HTTP close; primary path should finish sooner after bus shutdown. */
+  const SHUTDOWN_TIMEOUT_MS = 15_000;
 
   const requestShutdown = (action: GatewayRunSignalAction, signal: string) => {
     if (shuttingDown) {
