@@ -24,11 +24,11 @@ importers:
         specifier: ^8.2.1
         version: 8.3.0(@types/node@25.3.2)
       '@mariozechner/pi-agent-core':
-        specifier: ^0.61.0
-        version: 0.61.0(ws@8.19.0)(zod@4.3.6)
+        specifier: ^0.64.0
+        version: 0.64.0(ws@8.19.0)(zod@4.3.6)
       '@mariozechner/pi-ai':
-        specifier: ^0.61.0
-        version: 0.61.0(ws@8.19.0)(zod@4.3.6)
+        specifier: ^0.64.0
+        version: 0.64.0(ws@8.19.0)(zod@4.3.6)
       '@mozilla/readability':
         specifier: ^0.6.0
         version: 0.6.0
@@ -80,6 +80,9 @@ importers:
       openai:
         specifier: ^6.25.0
         version: 6.25.0(ws@8.19.0)(zod@4.3.6)
+      partial-json:
+        specifier: ^0.1.7
+        version: 0.1.7
       pino:
         specifier: ^10.3.1
         version: 10.3.1
@@ -1870,8 +1873,8 @@ packages:
     resolution: {integrity: sha512-fBQdwLMvTteHUP9nJxMjtMpEHH4I8tdGnkerOoCFnS9y03AHdqy96IhtL+zZjw9N3dmVCOVqh8gwGjAGLZT31Q==}
     engines: {node: '>=20.0.0'}
 
-  '@mariozechner/pi-agent-core@0.61.0':
-    resolution: {integrity: sha512-MBCZfcYDmc5ssZGitv66nSsjma0W+4VwnfzPDRXdOcIhtxiJYux2t8mZe23CbUb4WNkeY3eMU2N6pe4YWeGexg==}
+  '@mariozechner/pi-agent-core@0.64.0':
+    resolution: {integrity: sha512-IN/sIxWOD0v1OFVXHB605SGiZhO5XdEWG5dO8EAV08n3jz/p12o4OuYGvhGXmHhU28WXa/FGWC+FO5xiIih8Uw==}
     engines: {node: '>=20.0.0'}
 
   '@mariozechner/pi-ai@0.52.12':
@@ -1879,8 +1882,8 @@ packages:
     engines: {node: '>=20.0.0'}
     hasBin: true
 
-  '@mariozechner/pi-ai@0.61.0':
-    resolution: {integrity: sha512-iiTiZ91aEND1AfP314exsissbPJnMMZv0NWLkazFf8TwYlUo9qD+6TlXEUYnX1ZRMCnZ7RjSEVerRrQ63FGZXw==}
+  '@mariozechner/pi-ai@0.64.0':
+    resolution: {integrity: sha512-Z/Jnf+JSVDPLRcxJsa8XhYTJKIqKekNueaCpBLGQHgizL1F9RQ1Rur3rIfZpfXkt2cLu/AIPtOs223ueuoWaWg==}
     engines: {node: '>=20.0.0'}
     hasBin: true
 
@@ -8042,9 +8045,9 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-agent-core@0.61.0(ws@8.19.0)(zod@4.3.6)':
+  '@mariozechner/pi-agent-core@0.64.0(ws@8.19.0)(zod@4.3.6)':
     dependencies:
-      '@mariozechner/pi-ai': 0.61.0(ws@8.19.0)(zod@4.3.6)
+      '@mariozechner/pi-ai': 0.64.0(ws@8.19.0)(zod@4.3.6)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
       - aws-crt
@@ -8078,7 +8081,7 @@ snapshots:
       - ws
       - zod
 
-  '@mariozechner/pi-ai@0.61.0(ws@8.19.0)(zod@4.3.6)':
+  '@mariozechner/pi-ai@0.64.0(ws@8.19.0)(zod@4.3.6)':
     dependencies:
       '@anthropic-ai/sdk': 0.73.0(zod@4.3.6)
       '@aws-sdk/client-bedrock-runtime': 3.999.0
@@ -8091,7 +8094,7 @@ snapshots:
       openai: 6.26.0(ws@8.19.0)(zod@4.3.6)
       partial-json: 0.1.7
       proxy-agent: 6.5.0
-      undici: 7.22.0
+      undici: 7.24.6
       zod-to-json-schema: 3.25.1(zod@4.3.6)
     transitivePeerDependencies:
       - '@modelcontextprotocol/sdk'
