@@ -75,8 +75,8 @@ Or create manually:
   "tools": {
     "web": {
       "search": {
-        "api_key": "${BRAVE_API_KEY}",
-        "max_results": 5
+        "maxResults": 5,
+        "providers": [{ "type": "brave", "apiKey": "BSA_your_key_here" }]
       }
     }
   },
@@ -308,9 +308,10 @@ Tool configurations.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `provider` | string | `brave` | Search provider |
-| `api_key` | string | - | API key |
-| `max_results` | number | `5` | Max results |
+| `maxResults` | number | `5` | Default result count when the tool omits `count` |
+| `providers` | array | `[]` | Ordered list of search backends (`brave`, `tavily`, `bing`, `searxng`). Empty → HTML fallback only. |
+
+Each provider entry: `type`, optional `apiKey`, optional `url` (SearXNG base URL), optional `disabled`.
 
 ---
 
@@ -464,7 +465,6 @@ xopcbot supports environment variables for sensitive data:
 | `GROQ_API_KEY` | Groq API key |
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
 | `MINIMAX_API_KEY` | MiniMax API key |
-| `BRAVE_API_KEY` | Brave Search API key |
 | `DASHSCOPE_API_KEY` | Alibaba DashScope API key (STT/TTS) |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `XOPCBOT_CONFIG` | Custom config file path |

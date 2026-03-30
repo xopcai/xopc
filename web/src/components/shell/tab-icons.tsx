@@ -14,6 +14,7 @@ import {
   Mic,
   Palette,
   Plug,
+  Search,
 } from 'lucide-react';
 
 import type { Tab } from '@/i18n/messages';
@@ -33,6 +34,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   settingsVoice: Mic,
   settingsGateway: Globe,
   settingsHeartbeat: Heart,
+  settingsSearch: Search,
 };
 
 export function TabIcon({ tab, className }: { tab: Tab; className?: string }) {

@@ -18,6 +18,7 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   voice: 'settingsVoice',
   gateway: 'settingsGateway',
   heartbeat: 'settingsHeartbeat',
+  search: 'settingsSearch',
 };
 
 const TAB_TO_SETTINGS_SECTION: Record<
@@ -28,7 +29,8 @@ const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsChannels'
   | 'settingsVoice'
   | 'settingsGateway'
-  | 'settingsHeartbeat',
+  | 'settingsHeartbeat'
+  | 'settingsSearch',
   SettingsSectionId
 > = {
   settingsAppearance: 'appearance',
@@ -39,6 +41,7 @@ const TAB_TO_SETTINGS_SECTION: Record<
   settingsVoice: 'voice',
   settingsGateway: 'gateway',
   settingsHeartbeat: 'heartbeat',
+  settingsSearch: 'search',
 };
 
 export function settingsSectionToTab(section: SettingsSectionId): Tab {
@@ -68,7 +71,10 @@ export type SettingsShellNavGroup = {
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat'] },
-  { id: 'agentAndModels', tabs: ['settingsProviders', 'settingsModels', 'settingsAgent'] },
+  {
+    id: 'agentAndModels',
+    tabs: ['settingsProviders', 'settingsModels', 'settingsAgent', 'settingsSearch'],
+  },
   { id: 'data', tabs: ['sessions', 'logs'] },
   { id: 'interface', tabs: ['settingsAppearance'] },
   { id: 'channelsAndVoice', tabs: ['settingsChannels', 'settingsVoice'] },

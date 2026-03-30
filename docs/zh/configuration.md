@@ -75,8 +75,8 @@ xopcbot onboard
   "tools": {
     "web": {
       "search": {
-        "api_key": "${BRAVE_API_KEY}",
-        "max_results": 5
+        "maxResults": 5,
+        "providers": [{ "type": "brave", "apiKey": "BSA_your_key_here" }]
       }
     }
   },
@@ -308,9 +308,10 @@ HTTP API 网关配置。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
-| `provider` | string | `brave` | 搜索提供商 |
-| `api_key` | string | - | API 密钥 |
-| `max_results` | number | `5` | 最大结果数 |
+| `maxResults` | number | `5` | 工具未传 `count` 时的默认条数 |
+| `providers` | array | `[]` | 按顺序尝试的搜索后端（`brave`、`tavily`、`bing`、`searxng`）。空数组则仅 HTML 兜底 |
+
+每项可含 `type`、可选 `apiKey`、SearXNG 可选 `url`、可选 `disabled`。
 
 ---
 
@@ -464,7 +465,6 @@ xopcbot 支持环境变量存储敏感数据：
 | `GROQ_API_KEY` | Groq API 密钥 |
 | `DEEPSEEK_API_KEY` | DeepSeek API 密钥 |
 | `MINIMAX_API_KEY` | MiniMax API 密钥 |
-| `BRAVE_API_KEY` | Brave Search API 密钥 |
 | `DASHSCOPE_API_KEY` | 阿里云 DashScope API 密钥（STT/TTS） |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `XOPCBOT_CONFIG` | 自定义配置文件路径 |

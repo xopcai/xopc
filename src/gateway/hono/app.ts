@@ -46,6 +46,7 @@ import {
   validateModelsConfig,
 } from '../../config/models-json.js';
 import { CredentialResolver } from '../../auth/credentials.js';
+import { applyToolsWebPatch, safeToolsWebForGet } from '../config-tools-web.js';
 import { createFixedWindowRateLimiter } from '../../infra/rate-limit.js';
 
 const log = createLogger('HonoApp');
@@ -712,6 +713,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       cron: { enabled: config.cron?.enabled },
       stt: config.stt,
       tts: config.tts,
+      tools: safeToolsWebForGet(config),
     };
     return c.json({ ok: true, payload: { config: safeConfig } });
   });
@@ -966,7 +968,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     if (body.tts !== undefined) {
       config.tts = body.tts;
     }
-    
+
+    const toolsPatchErr = applyToolsWebPatch(config, body as Record<string, unknown>);
+    if (toolsPatchErr) {
+      return c.json({ ok: false, error: { message: toolsPatchErr } }, 400);
+    }
+
     // Save config
     const result = await service.saveConfig(config);
     if (!result.saved) {
