@@ -2,6 +2,7 @@
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { spawn } from 'child_process';
+import { prepareSafeToolEnv } from '../sandbox/sanitize-env-vars.js';
 import { checkShellSafety } from '../prompt/safety.js';
 import { createWriteStream } from 'fs';
 
@@ -93,7 +94,7 @@ export function createShellTool(cwd: string): AgentTool<typeof ShellSchema, Shel
         const proc = spawn(params.command, [], {
           shell: true,
           cwd,
-          env: { ...process.env, COLUMNS: '200' },
+          env: { ...prepareSafeToolEnv(process.env), COLUMNS: '200' },
         });
 
         proc.stdout?.on('data', (data) => {

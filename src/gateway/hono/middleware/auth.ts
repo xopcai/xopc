@@ -1,10 +1,19 @@
 import { createMiddleware } from 'hono/factory';
+import type { GatewayAuthConfig } from '../../../config/schema.js';
+import {
+  getAuthFailureRateLimiter,
+  getClientIpFromHeaders,
+  isAuthRateLimitGloballyDisabled,
+  resolveAuthRateLimitConfig,
+} from '../../auth-rate-limit.js';
 import { createLogger } from '../../../utils/logger.js';
 
 const log = createLogger('Hono:Auth');
 
 export interface AuthConfig {
   token?: string;
+  /** Current gateway auth from config (for rate-limit settings); optional. */
+  getGatewayAuth?: () => GatewayAuthConfig | undefined;
 }
 
 /**
@@ -41,12 +50,37 @@ function extractTokenFromQuery(url: string): string | null {
  * Create auth middleware for HTTP routes
  */
 export function auth(config?: AuthConfig) {
-  const { token } = config || {};
+  const { token, getGatewayAuth } = config || {};
+  const limiter = getAuthFailureRateLimiter();
 
   return createMiddleware(async (c, next) => {
     // If no token configured, allow all
     if (!token) {
       return next();
+    }
+
+    const rlInput = getGatewayAuth?.()?.rateLimit;
+    const rlCfg = resolveAuthRateLimitConfig(rlInput);
+    const rateLimitActive =
+      rlCfg.enabled && !isAuthRateLimitGloballyDisabled();
+
+    const clientIp = getClientIpFromHeaders({
+      get: (name: string) => c.req.header(name) ?? undefined,
+    });
+
+    if (rateLimitActive) {
+      const blocked = limiter.checkBlocked(clientIp, rlCfg);
+      if (blocked.blocked) {
+        c.header('Retry-After', String(blocked.retryAfterSec));
+        return c.json(
+          {
+            error: 'Too Many Requests',
+            message: 'Too many authentication attempts',
+            retryAfter: blocked.retryAfterSec,
+          },
+          429,
+        );
+      }
     }
 
     // Try header first, then query param
@@ -56,13 +90,23 @@ export function auth(config?: AuthConfig) {
     const providedToken = authHeader || queryToken;
 
     if (!providedToken) {
+      if (rateLimitActive) {
+        limiter.recordFailure(clientIp, rlCfg);
+      }
       log.warn('Missing authorization');
       return c.json({ error: 'Unauthorized', message: 'Missing authentication token' }, 401);
     }
 
     if (!validateToken(providedToken, token)) {
+      if (rateLimitActive) {
+        limiter.recordFailure(clientIp, rlCfg);
+      }
       log.warn('Invalid token');
       return c.json({ error: 'Unauthorized', message: 'Invalid authentication token' }, 401);
+    }
+
+    if (rateLimitActive) {
+      limiter.recordSuccess(clientIp);
     }
 
     await next();

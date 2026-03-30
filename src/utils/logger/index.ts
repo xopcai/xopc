@@ -19,6 +19,7 @@ import { incrementStats, getLogStats } from './stats.js';
 import { isLoggerShuttingDown, flushAndClose, setShuttingDown } from './shutdown.js';
 import { rotateLogs, cleanOldLogs } from './rotation.js';
 import { mergeContext } from './context.js';
+import { redactLogRecord } from './redact.js';
 
 // ============================================
 // Base Logger Creation
@@ -67,7 +68,7 @@ const pinoOptions: pino.LoggerOptions = {
           };
         }
       }
-      return object;
+      return redactLogRecord(object as Record<string, unknown>);
     },
   },
   customLevels,
@@ -249,6 +250,14 @@ export {
   flushExporters,
   getExporters,
 } from './exporters.js';
+
+export {
+  redactSensitiveInfo,
+  redactObject,
+  redactPemBlock,
+  redactSecret,
+  isLogRedactionEnabled,
+} from './redact.js';
 
 //  Audit Log
 export {

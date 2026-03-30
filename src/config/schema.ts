@@ -290,12 +290,24 @@ export const ToolsConfigSchema = z.object({
 // Gateway Configuration
 // ============================================
 
-export const GatewayAuthSchema = z.object({
-  mode: z.enum(['none', 'token']).default('token'),
-  token: z.string().optional(),
-}).default({
-  mode: 'token',
-});
+export const GatewayAuthRateLimitSchema = z
+  .object({
+    enabled: z.boolean().default(true),
+    maxAttempts: z.number().int().min(1).default(5),
+    windowMs: z.number().default(900_000),
+    blockDurationMs: z.number().default(300_000),
+  })
+  .optional();
+
+export const GatewayAuthSchema = z
+  .object({
+    mode: z.enum(['none', 'token']).default('token'),
+    token: z.string().optional(),
+    rateLimit: GatewayAuthRateLimitSchema,
+  })
+  .default({
+    mode: 'token',
+  });
 
 export const HeartbeatConfigSchema = z
   .object({
@@ -689,6 +701,7 @@ export const ConfigSchema = z.object({
 export type Config = z.infer<typeof ConfigSchema>;
 export type AgentDefaults = z.infer<typeof AgentDefaultsSchema>;
 export type GatewayAuthConfig = z.infer<typeof GatewayAuthSchema>;
+export type GatewayAuthRateLimitConfig = z.infer<typeof GatewayAuthRateLimitSchema>;
 export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
 export type WeixinConfig = z.infer<typeof WeixinConfigSchema>;
 export type STTConfig = z.infer<typeof STTConfigSchema>;

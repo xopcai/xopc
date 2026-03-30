@@ -243,7 +243,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   // Authenticated routes
   const authenticated = new Hono();
-  authenticated.use(auth({ token }));
+  authenticated.use(
+    auth({
+      token,
+      getGatewayAuth: () => service.currentConfig.gateway?.auth,
+    }),
+  );
 
   // Rate limiting for high-cost API endpoints (P1-1)
   // Strict limit for LLM calls and config changes; GET queries are unrestricted

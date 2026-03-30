@@ -1,7 +1,8 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { createHonoApp } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 import { GatewayConfigSchema } from '../../config/schema.js';
+import { getAuthFailureRateLimiter } from '../auth-rate-limit.js';
 
 // Mock GatewayService for testing
 function createMockService(config: any = {}): GatewayService {
@@ -165,6 +166,48 @@ describe('Gateway Security Fixes', () => {
       
       // Should not be 413 (Payload Too Large)
       expect(res.status).not.toBe(413);
+    });
+  });
+
+  describe('Auth failure rate limiting', () => {
+    beforeEach(() => {
+      getAuthFailureRateLimiter().resetForTests();
+    });
+    afterEach(() => {
+      getAuthFailureRateLimiter().resetForTests();
+    });
+
+    it('returns 429 after repeated invalid gateway tokens', async () => {
+      const service = createMockService({
+        gateway: {
+          auth: {
+            mode: 'token',
+            token: 'real',
+            rateLimit: {
+              enabled: true,
+              maxAttempts: 2,
+              windowMs: 60_000,
+              blockDurationMs: 60_000,
+            },
+          },
+        },
+      });
+      const app = createHonoApp({ service, token: 'real' });
+
+      const r1 = await app.request('/api/config', {
+        headers: { Authorization: 'Bearer wrong' },
+      });
+      expect(r1.status).toBe(401);
+
+      const r2 = await app.request('/api/config', {
+        headers: { Authorization: 'Bearer wrong' },
+      });
+      expect(r2.status).toBe(401);
+
+      const r3 = await app.request('/api/config', {
+        headers: { Authorization: 'Bearer wrong' },
+      });
+      expect(r3.status).toBe(429);
     });
   });
 
