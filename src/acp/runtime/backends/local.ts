@@ -30,7 +30,10 @@ import { SystemPromptBuilder } from "../../../agent/prompt/service-prompt-builde
 import { SkillManager } from "../../../agent/skills/index.js";
 import { loadBootstrapFiles, extractTextContent } from "../../../agent/context/helpers.js";
 import { cleanTrailingErrors, sanitizeMessages } from "../../../agent/memory/message-sanitizer.js";
-import { tryApplySessionTranscriptHygiene } from "../../../agent/transcript/transcript-hygiene.js";
+import {
+  tryApplySessionTranscriptHygiene,
+  tryApplySessionTranscriptHygieneForPersistence,
+} from "../../../agent/transcript/transcript-hygiene.js";
 import { createLogger } from "../../../utils/logger.js";
 
 const log = createLogger("LocalAcpRuntime");
@@ -506,7 +509,7 @@ export class LocalAcpRuntime implements AcpRuntime {
 
         // Save session messages
         const { messages: sanitized } = sanitizeMessages(this.agent.state.messages);
-        const persisted = tryApplySessionTranscriptHygiene(sanitized, this.agentModel);
+        const persisted = tryApplySessionTranscriptHygieneForPersistence(sanitized, this.agentModel);
         session.messages = [...persisted];
         await this.sessionStore.save(input.handle.sessionKey, persisted);
 

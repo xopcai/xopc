@@ -124,6 +124,49 @@ export function normalizeAgentMessages(raw: readonly unknown[]): Message[] {
  * Persisted sessions often store one wire `assistant` row per thinking/tool fragment; without this,
  * the chat shows repeated "execution" lines after refresh.
  */
+function thinkingBlockComparableText(b: MessageContent): string {
+  if (b.type !== 'thinking') {
+    return '';
+  }
+  const x = b as ThinkingContent & { thinking?: string };
+  return typeof x.text === 'string' ? x.text : typeof x.thinking === 'string' ? x.thinking : '';
+}
+
+/**
+ * Merge two assistant content arrays when consecutive wire rows represent one turn.
+ * - tool_use with the same id: keep the later block (e.g. completed tool after a fragment).
+ * - adjacent thinking blocks with identical text: drop duplicate (streaming + persist overlap).
+ */
+function mergeAssistantContentFragments(left: MessageContent[], right: MessageContent[]): MessageContent[] {
+  const out: MessageContent[] = left.map((b) => ({ ...b }));
+  const toolIndexById = new Map<string, number>();
+  for (let i = 0; i < out.length; i++) {
+    const b = out[i];
+    if (b.type === 'tool_use') {
+      toolIndexById.set(b.id, i);
+    }
+  }
+
+  for (const b of right) {
+    if (b.type === 'tool_use' && toolIndexById.has(b.id)) {
+      const idx = toolIndexById.get(b.id)!;
+      out[idx] = { ...b };
+      continue;
+    }
+    if (b.type === 'thinking' && out.length > 0) {
+      const last = out[out.length - 1];
+      if (last.type === 'thinking' && thinkingBlockComparableText(last) === thinkingBlockComparableText(b)) {
+        continue;
+      }
+    }
+    if (b.type === 'tool_use') {
+      toolIndexById.set(b.id, out.length);
+    }
+    out.push({ ...b });
+  }
+  return out;
+}
+
 export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[] {
   if (messages.length < 2) return messages;
   const out: Message[] = [];
@@ -134,7 +177,7 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
     }
     const prev = out[out.length - 1];
     if (prev?.role === 'assistant') {
-      prev.content = [...prev.content, ...m.content];
+      prev.content = mergeAssistantContentFragments(prev.content, m.content);
       if (m.timestamp != null) prev.timestamp = m.timestamp;
       if (m.usage) prev.usage = m.usage;
       if (m.thinking && !prev.thinking) prev.thinking = m.thinking;

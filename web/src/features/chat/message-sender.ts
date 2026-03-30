@@ -90,8 +90,33 @@ export class MessageSender {
   }
 
   abort(): void {
+    this._notifyServerAbort();
     this._abort?.abort();
     this._abort = undefined;
+  }
+
+  /** Best-effort server-side abort (runId) so the agent stops even if the HTTP signal is flaky. */
+  private _notifyServerAbort(): void {
+    if (!this._sseChatId) {
+      return;
+    }
+    try {
+      const raw = sessionStorage.getItem(pendingAgentRunStorageKey(this._sseChatId));
+      if (!raw) {
+        return;
+      }
+      const parsed = JSON.parse(raw) as { runId?: string };
+      if (typeof parsed.runId !== 'string' || !parsed.runId) {
+        return;
+      }
+      void apiFetch(apiUrl('/api/agent/abort'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ runId: parsed.runId }),
+      }).catch(() => {});
+    } catch {
+      /* ignore */
+    }
   }
 
   async resume(runId: string, chatId: string, callbacks?: MessagingCallbacks): Promise<void> {

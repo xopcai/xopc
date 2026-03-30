@@ -16,7 +16,10 @@ import type { AgentEventHandler } from './agent-event-handler.js';
 import type { FeedbackCoordinator } from '../feedback/feedback-coordinator.js';
 import type { AgentManager } from '../agent-manager.js';
 import { sanitizeMessages, cleanTrailingErrors } from '../memory/message-sanitizer.js';
-import { tryApplySessionTranscriptHygiene } from '../transcript/transcript-hygiene.js';
+import {
+  tryApplySessionTranscriptHygiene,
+  tryApplySessionTranscriptHygieneForPersistence,
+} from '../transcript/transcript-hygiene.js';
 import { createLogger } from '../../utils/logger.js';
 import { maybeRetryTurnAfterTransientLlmFailure } from './llm-turn-retry.js';
 import {
@@ -146,12 +149,13 @@ export class AgentOrchestrator {
 
   /**
    * Transcript hygiene (OpenClaw-style) + persist. Expects messages already passed through {@link sanitizeMessages}.
+   * Keeps thinking blocks on disk for UI; agent load path applies full hygiene including dropThinking.
    */
   private async saveSessionSnapshot(sessionKey: string, messages: AgentMessage[]): Promise<void> {
     let toPersist = messages;
     try {
       const model = this.modelManager.getResolvedModelForSession(sessionKey);
-      toPersist = tryApplySessionTranscriptHygiene(messages, model);
+      toPersist = tryApplySessionTranscriptHygieneForPersistence(messages, model);
     } catch (err) {
       log.warn({ err, sessionKey }, 'Transcript hygiene on save skipped');
     }

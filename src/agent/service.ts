@@ -48,7 +48,10 @@ import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
-import { tryApplySessionTranscriptHygiene } from './transcript/transcript-hygiene.js';
+import {
+  tryApplySessionTranscriptHygiene,
+  tryApplySessionTranscriptHygieneForPersistence,
+} from './transcript/transcript-hygiene.js';
 import {
   persistInboundAttachmentsToWorkspace,
   formatInboundFileTextBlock,
@@ -505,6 +508,7 @@ export class AgentService {
 
   /**
    * Persist agent messages with the same sanitizer + transcript hygiene as AgentOrchestrator.
+   * Uses persistence hygiene so `thinking` blocks remain on disk for the web UI (LLM load path still drops them).
    */
   private async persistAgentSessionMessages(sessionKey: string): Promise<void> {
     const raw = this.agentManager.getMessages(sessionKey);
@@ -515,7 +519,7 @@ export class AgentService {
     let toSave = messages;
     try {
       const model = this.modelManager.getResolvedModelForSession(sessionKey);
-      toSave = tryApplySessionTranscriptHygiene(messages, model);
+      toSave = tryApplySessionTranscriptHygieneForPersistence(messages, model);
     } catch (err) {
       log.warn({ err, sessionKey }, 'Transcript hygiene on save skipped');
     }
@@ -756,6 +760,7 @@ export class AgentService {
       workspaceRelativePath?: string;
     }>,
     thinking?: string,
+    options?: { signal?: AbortSignal },
   ): AsyncGenerator<{ type: string; [key: string]: unknown }, void, unknown> {
     const { channel, chatId } = this.parseSessionKey(sessionKey);
     const context = this.initSessionContext(sessionKey, channel, chatId);
@@ -775,6 +780,10 @@ export class AgentService {
         resolveWaiting = null;
       }
     };
+
+    const signal = options?.signal;
+    let userAborted = false;
+    let abortHandled = false;
 
     const agent = this.agentManager.getOrCreateAgent(sessionKey);
     await this.hydrateSessionModelFromStore(sessionKey);
@@ -901,25 +910,51 @@ export class AgentService {
 
       const messageContent = this.buildMessageContent(mergedUserText, prepared);
 
-      const agentPromise = (async () => {
-        await agent.prompt({
-          role: 'user',
-          content: messageContent,
-          timestamp: Date.now(),
-        });
-        await agent.waitForIdle();
-      })();
+      const armAbort = () => {
+        if (abortHandled) {
+          return;
+        }
+        abortHandled = true;
+        userAborted = true;
+        this.agentOrchestrator.abort(sessionKey);
+        agentDone = true;
+        pushEvent({ type: '__done__' });
+      };
+      if (signal) {
+        if (signal.aborted) {
+          armAbort();
+        } else {
+          signal.addEventListener('abort', armAbort, { once: true });
+        }
+      }
 
-      agentPromise
-        .then(() => {
-          agentDone = true;
-          pushEvent({ type: '__done__' });
-        })
-        .catch((err) => {
-          agentDone = true;
-          pushEvent({ type: 'error', content: err instanceof Error ? err.message : String(err) });
-          pushEvent({ type: '__done__' });
-        });
+      if (!abortHandled) {
+        const agentPromise = (async () => {
+          await agent.prompt({
+            role: 'user',
+            content: messageContent,
+            timestamp: Date.now(),
+          });
+          await agent.waitForIdle();
+        })();
+
+        agentPromise
+          .then(() => {
+            if (abortHandled) {
+              return;
+            }
+            agentDone = true;
+            pushEvent({ type: '__done__' });
+          })
+          .catch((err) => {
+            if (abortHandled) {
+              return;
+            }
+            agentDone = true;
+            pushEvent({ type: 'error', content: err instanceof Error ? err.message : String(err) });
+            pushEvent({ type: '__done__' });
+          });
+      }
 
       while (true) {
         if (eventQueue.length > 0) {
@@ -943,12 +978,14 @@ export class AgentService {
 
       await this.persistAgentSessionMessages(sessionKey);
 
-      const ttsAudioEvent = await this.maybeEmitWebchatTts(sessionKey, inboundVoice);
-      if (ttsAudioEvent) {
-        yield ttsAudioEvent;
-      }
+      if (!userAborted) {
+        const ttsAudioEvent = await this.maybeEmitWebchatTts(sessionKey, inboundVoice);
+        if (ttsAudioEvent) {
+          yield ttsAudioEvent;
+        }
 
-      await this._maybeAutoTitleAfterDirectTurn(sessionKey);
+        await this._maybeAutoTitleAfterDirectTurn(sessionKey);
+      }
     } finally {
       unsubscribeStreaming();
       this.endDirectRequestContext();

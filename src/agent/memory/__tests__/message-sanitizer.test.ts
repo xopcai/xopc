@@ -44,6 +44,24 @@ describe('MessageSanitizer', () => {
       expect(result.messages[0].role).toBe('user');
     });
 
+    it('should keep assistant messages with stopReason: aborted when text is non-empty', () => {
+      const messages: AgentMessage[] = [
+        { role: 'user', content: 'Hello', timestamp: 1 },
+        {
+          role: 'assistant',
+          content: [{ type: 'text', text: 'Partial answer…' }],
+          stopReason: 'aborted',
+          timestamp: 2,
+        },
+      ];
+
+      const result = sanitizeMessages(messages);
+
+      expect(result.messages).toHaveLength(2);
+      expect(result.removed).toBe(0);
+      expect((result.messages[1] as { stopReason?: string }).stopReason).toBe('aborted');
+    });
+
     it('should remove messages with errorMessage field', () => {
       const messages: AgentMessage[] = [
         { role: 'user', content: 'Hello', timestamp: 1 },

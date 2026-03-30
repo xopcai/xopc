@@ -69,10 +69,20 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
 
     const accept = c.req.header('Accept') || '';
     const wantSSE = accept.includes('text/event-stream');
-    const generator = service.runAgent(message, channel, chatId, attachments, thinking);
+
+    const clientAbort = new AbortController();
+    const raw = c.req.raw;
+    if (raw.signal.aborted) {
+      clientAbort.abort();
+    } else {
+      raw.signal.addEventListener('abort', () => clientAbort.abort(), { once: true });
+    }
 
     // --- Non-streaming fallback: collect everything, return JSON ---
     if (!wantSSE) {
+      const generator = service.runAgent(message, channel, chatId, attachments, thinking, {
+        signal: clientAbort.signal,
+      });
       try {
         let finalResult: { status: string; summary: string } | undefined;
         const tokens: string[] = [];
@@ -108,6 +118,14 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
     // --- SSE streaming ---
     c.header('X-Accel-Buffering', 'no');
     return streamSSE(c, async (stream) => {
+      stream.onAbort(() => {
+        clientAbort.abort();
+      });
+
+      const generator = service.runAgent(message, channel, chatId, attachments, thinking, {
+        signal: clientAbort.signal,
+      });
+
       let eventId = 0;
 
       try {
