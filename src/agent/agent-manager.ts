@@ -44,7 +44,6 @@ export interface AgentManagerConfig {
   workspace: string;
   model?: string;
   config?: Config;
-  braveApiKey?: string;
   extensionRegistry?: ExtensionRegistry;
   bus: MessageBus;
   getCurrentContext: () => SessionContext | null;
@@ -85,7 +84,6 @@ export class AgentManager {
 
     this.toolsFactory = new AgentToolsFactory({
       workspace: config.workspace,
-      braveApiKey: config.braveApiKey,
       extensionRegistry: config.extensionRegistry,
       getCurrentContext: config.getCurrentContext,
       bus: config.bus,

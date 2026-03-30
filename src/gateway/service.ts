@@ -118,7 +118,6 @@ export class GatewayService {
     this.agentService = new AgentService(this.bus, {
       workspace: this.workspacePath,
       model: typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary,
-      braveApiKey: this.config.tools?.web?.search?.apiKey,
       config: this.config,
       extensionRegistry: this.extensionLoader?.getRegistry(),
     });

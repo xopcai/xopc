@@ -25,9 +25,17 @@ export interface Config {
   };
   tools?: {
     web?: {
+      region?: 'cn' | 'global';
       search?: {
         apiKey?: string;
         maxResults?: number;
+        providers?: Array<{
+          type: 'brave' | 'tavily' | 'bing' | 'searxng';
+          apiKey?: string;
+          url?: string;
+          disabled?: boolean;
+        }>;
+        provider?: string;
       };
     };
   };

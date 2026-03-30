@@ -37,7 +37,6 @@ const log = createLogger('AgentToolsFactory');
 
 export interface ToolFactoryDeps {
   workspace: string;
-  braveApiKey?: string;
   extensionRegistry?: any;
   getCurrentContext: () => { channel: string; chatId: string; sessionKey: string } | null;
   bus: MessageBus;
@@ -53,7 +52,7 @@ export class AgentToolsFactory {
   constructor(private deps: ToolFactoryDeps) {}
 
   createCoreTools(): AgentTool<any, any>[] {
-    const { workspace, braveApiKey, bus } = this.deps;
+    const { workspace, bus } = this.deps;
 
     const primary = this.deps.getPrimaryModel?.();
     const modelHasVision = primary?.input?.includes('image') ?? false;
@@ -80,7 +79,7 @@ export class AgentToolsFactory {
       grepTool,
       findTool,
       createShellTool(workspace),
-      createWebSearchTool(braveApiKey),
+      createWebSearchTool(() => this.deps.getConfig?.()),
       webFetchTool,
       // Note: TTS is NOT handled by send_message tool anymore
       // TTS is applied at the ChannelManager dispatch layer
