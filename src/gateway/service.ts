@@ -78,6 +78,9 @@ export class GatewayService {
   // Agent run relay for resuming SSE streams
   public readonly runRelay = new AgentRunRelay();
 
+  /** Per-run abort for webchat (POST /api/agent/abort or client disconnect). */
+  private runAbortControllers = new Map<string, AbortController>();
+
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
@@ -489,6 +492,9 @@ export class GatewayService {
   /**
    * Run agent with a message and stream events
    */
+  /**
+   * @param runOptions.signal — When set (e.g. client disconnect), aborts in-flight generation and persists partial output.
+   */
   async *runAgent(
     message: string,
     channel: string,
@@ -501,6 +507,7 @@ export class GatewayService {
       size?: number;
     }>,
     thinking?: string,
+    runOptions?: { signal?: AbortSignal },
   ): AsyncGenerator<{ type: string; content?: string; status?: string; runId?: string }, { status: string; summary: string }, unknown> {
     const cappedAttachments =
       attachments && attachments.length > MAX_CHAT_ATTACHMENTS
@@ -526,6 +533,7 @@ export class GatewayService {
         peerId: chatId,
       });
       this.runRelay.ensureRun(runId, sessionKey);
+      this.runAbortControllers.set(runId, new AbortController());
     }
 
     const statusEvent = { type: 'status', status: 'accepted', runId };
@@ -555,10 +563,18 @@ export class GatewayService {
           log.error({ err, sessionKey }, 'Failed to save user message');
         }
 
+        const runAbort = this.runAbortControllers.get(runId);
+        if (!runAbort) {
+          throw new Error('run abort controller missing for webchat');
+        }
+        const mergedSignal = runOptions?.signal
+          ? AbortSignal.any([runOptions.signal, runAbort.signal])
+          : runAbort.signal;
+
         try {
-          const eventStream = this.agentService.processDirectStreaming(
-            message, sessionKey, prepared, thinking
-          );
+          const eventStream = this.agentService.processDirectStreaming(message, sessionKey, prepared, thinking, {
+            signal: mergedSignal,
+          });
 
           for await (const event of eventStream) {
             this.runRelay.publish(runId, event);
@@ -574,7 +590,10 @@ export class GatewayService {
           } catch {
             /* ignore */
           }
-          return { status: 'ok', summary: 'Message processed successfully' };
+          return {
+            status: mergedSignal.aborted ? 'aborted' : 'ok',
+            summary: mergedSignal.aborted ? 'Interrupted' : 'Message processed successfully',
+          };
         } catch (error) {
           log.error({ error }, 'Agent processing failed');
           const errorEvent = { type: 'error', content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` };
@@ -582,6 +601,8 @@ export class GatewayService {
           this.runRelay.complete(runId);
           yield errorEvent;
           return { status: 'error', summary: error instanceof Error ? error.message : 'Unknown error' };
+        } finally {
+          this.runAbortControllers.delete(runId);
         }
       }
 
@@ -607,6 +628,16 @@ export class GatewayService {
       log.error({ error }, 'Agent run failed');
       throw error;
     }
+  }
+
+  /** Abort an in-flight webchat agent run (matches `runId` from SSE `status`). */
+  abortAgentRun(runId: string): boolean {
+    const c = this.runAbortControllers.get(runId);
+    if (!c) {
+      return false;
+    }
+    c.abort();
+    return true;
   }
 
   /**

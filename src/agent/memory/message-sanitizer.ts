@@ -101,10 +101,14 @@ function isErrorMessage(message: AgentMessage): boolean {
     return false;
   }
 
-  // Check for explicit error indicators
-  const msg = message as any;
-  if (msg.stopReason === 'error' || msg.stopReason === 'aborted') {
+  const msg = message as { stopReason?: string; errorMessage?: string };
+  if (msg.stopReason === 'error') {
     return true;
+  }
+
+  // User interrupt: keep partial assistant text in session history when non-empty
+  if (msg.stopReason === 'aborted') {
+    return !hasValidContent(message);
   }
 
   // Check for errorMessage field (added by pi-agent-core on API errors)
@@ -167,7 +171,8 @@ export interface SanitizeResult {
  * Sanitize messages before saving to history.
  *
  * Removes:
- * - Assistant messages with stopReason: "error" or "aborted"
+ * - Assistant messages with stopReason: "error"
+ * - Assistant messages with stopReason: "aborted" only when empty (partial interrupted text is kept)
  * - Assistant messages with errorMessage field
  * - Assistant messages with empty/invalid content
  *

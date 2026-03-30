@@ -15,8 +15,10 @@ export {
 export { resolveTranscriptPolicy, type TranscriptPolicy } from './transcript-policy.js';
 export {
   applySessionTranscriptHygiene,
+  applySessionTranscriptHygieneForPersistence,
   applySessionTranscriptHygieneWithPolicy,
   tryApplySessionTranscriptHygiene,
+  tryApplySessionTranscriptHygieneForPersistence,
   resolvePolicyForModel,
   type TranscriptHygieneParams,
 } from './transcript-hygiene.js';

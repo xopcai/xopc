@@ -80,3 +80,33 @@ export function tryApplySessionTranscriptHygiene(
     return messages;
   }
 }
+
+/**
+ * Hygiene for **writing session files** (gateway UI, history replay).
+ *
+ * Does **not** strip `thinking` blocks — those must remain on disk so web chat can show
+ * reasoning after refresh. `dropThinkingBlocks` exists for **LLM** safety when loading
+ * into the agent (`tryApplySessionTranscriptHygiene` in {@link prepareLoadedSessionMessages}).
+ */
+export function applySessionTranscriptHygieneForPersistence(
+  messages: AgentMessage[],
+  model: Model<Api>,
+): AgentMessage[] {
+  const policy = resolvePolicyForModel(model);
+  return applySessionTranscriptHygieneWithPolicy(messages, {
+    ...policy,
+    dropThinkingBlocks: false,
+  });
+}
+
+export function tryApplySessionTranscriptHygieneForPersistence(
+  messages: AgentMessage[],
+  model: Model<Api>,
+): AgentMessage[] {
+  try {
+    return applySessionTranscriptHygieneForPersistence(messages, model);
+  } catch (err) {
+    log.warn({ err }, 'Persistence transcript hygiene failed; using unmodified messages');
+    return messages;
+  }
+}

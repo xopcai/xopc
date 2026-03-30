@@ -205,6 +205,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         'GET  /health',
         'GET  /status',
         'POST /api/agent           (SSE stream / JSON)',
+        'POST /api/agent/abort',
         'POST /api/send',
         'GET  /api/events          (SSE stream)',
         'GET  /api/channels/status',
@@ -597,6 +598,23 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   // POST /api/agent/resume — Resume an in-progress agent run
   authenticated.post('/api/agent/resume', strictRateLimitMiddleware, createAgentResumeHandler(sseConfig));
+
+  // POST /api/agent/abort — Abort an in-flight webchat run (by runId from SSE status)
+  authenticated.post('/api/agent/abort', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => null);
+    const runId =
+      body && typeof body === 'object' && typeof (body as { runId?: unknown }).runId === 'string'
+        ? (body as { runId: string }).runId.trim()
+        : '';
+    if (!runId) {
+      return c.json(
+        { ok: false, error: { code: 'BAD_REQUEST', message: 'Missing runId' } },
+        400,
+      );
+    }
+    const aborted = service.abortAgentRun(runId);
+    return c.json({ ok: true, payload: { aborted } });
+  });
 
   // POST /api/send — Send a message through a channel
   authenticated.post('/api/send', strictRateLimitMiddleware, createSendHandler(sseConfig));

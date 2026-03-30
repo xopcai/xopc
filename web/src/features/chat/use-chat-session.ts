@@ -17,6 +17,7 @@ import {
   ensureAssistantMessage,
   finalizeRunningTools,
   finalizeStreamingThinking,
+  hasRenderableAssistantContent,
   startThinkingSegment,
 } from '@/features/chat/streaming';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -38,6 +39,8 @@ export function useChatSession() {
   const sessionKeyRef = useRef<string | null>(null);
   const sessionNameRef = useRef<string | null>(null);
   const thinkingSupportGenRef = useRef(0);
+  /** Skip duplicate finalize when user already committed via `abort()` (SSE may still send `result`). */
+  const userAbortedRef = useRef(false);
 
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingMsg, setStreamingMsg] = useState<Message | null>(null);
@@ -142,7 +145,7 @@ export function useChatSession() {
       });
     });
     const appended = finalMsg;
-    if (appended) {
+    if (appended && hasRenderableAssistantContent(appended)) {
       setMessages((m) => [...m, appended]);
     }
     setStreaming(false);
@@ -296,6 +299,7 @@ export function useChatSession() {
     }
     if (!stored?.runId) return;
 
+    userAbortedRef.current = false;
     setSending(true);
     setStreaming(true);
     setProgress(null);
@@ -364,7 +368,13 @@ export function useChatSession() {
             return cloneMessageForRender(msg);
           });
         },
-        onResult: finalizeMessage,
+        onResult: () => {
+          if (userAbortedRef.current) {
+            userAbortedRef.current = false;
+            return;
+          }
+          finalizeMessage();
+        },
         onError: (msg) => {
           setError(msg);
           setStreamingMsg(null);
@@ -396,6 +406,7 @@ export function useChatSession() {
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
 
       const sender = senderRef.current;
+      userAbortedRef.current = false;
       setSending(true);
       setError(null);
       setMessages((m) => [
@@ -473,7 +484,13 @@ export function useChatSession() {
               return cloneMessageForRender(msg);
             });
           },
-          onResult: finalizeMessage,
+          onResult: () => {
+            if (userAbortedRef.current) {
+              userAbortedRef.current = false;
+              return;
+            }
+            finalizeMessage();
+          },
           onError: (msg) => {
             setError(msg);
             setStreamingMsg(null);
@@ -496,12 +513,19 @@ export function useChatSession() {
   );
 
   const abort = useCallback(() => {
+    userAbortedRef.current = true;
     senderRef.current.abort();
-    setStreaming(false);
-    setSending(false);
-    setStreamingMsg(null);
+    sendingRef.current = false;
+    streamingRef.current = false;
+    finalizeMessage();
     setProgress(null);
-  }, []);
+    const key = sessionKeyRef.current;
+    if (key) {
+      window.setTimeout(() => {
+        void loadSessionById(key, 0);
+      }, 300);
+    }
+  }, [finalizeMessage, loadSessionById]);
 
   /** Avoid copying `messages` on every render when no streaming row — keeps stable array ref for memoized bubbles. */
   const displayMessages = useMemo(() => {

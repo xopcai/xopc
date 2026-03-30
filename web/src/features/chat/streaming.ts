@@ -1,5 +1,39 @@
 import type { Message, MessageContent, ToolUseContent } from '@/features/chat/messages.types';
 
+/** Pi / wire format may use `thinking` on blocks; UI streaming uses `text`. */
+function thinkingBlockVisibleText(b: MessageContent): string {
+  if (b.type !== 'thinking') {
+    return '';
+  }
+  const x = b as { text?: string; thinking?: string };
+  const raw =
+    typeof x.text === 'string' && x.text.length > 0
+      ? x.text
+      : typeof x.thinking === 'string'
+        ? x.thinking
+        : '';
+  return raw.trim();
+}
+
+/** True if the assistant bubble has something worth keeping (text, thinking, or tools). */
+export function hasRenderableAssistantContent(msg: Message): boolean {
+  if (msg.role !== 'assistant') {
+    return false;
+  }
+  for (const b of msg.content) {
+    if (b.type === 'text' && (b.text || '').trim().length > 0) {
+      return true;
+    }
+    if (b.type === 'thinking' && thinkingBlockVisibleText(b).length > 0) {
+      return true;
+    }
+    if (b.type === 'tool_use') {
+      return true;
+    }
+  }
+  return false;
+}
+
 export function ensureAssistantMessage(msg: Message | null | undefined, timestamp: number): Message {
   if (msg && msg.role === 'assistant') {
     return msg;
