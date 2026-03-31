@@ -43,7 +43,7 @@ export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
   const d = (res.payload?.config as { agents?: { defaults?: Record<string, unknown> } })?.agents?.defaults ?? {};
   const mf = (d as { modelFallbacks?: unknown }).modelFallbacks;
   const modelFallbacksFromApi =
-    Array.isArray(mf) && mf.every((x) => typeof x === 'string') ? (mf as string[]) : normalizeModelFallbacks(d.model);
+    Array.isArray(mf) && mf.every((x) => typeof x === 'string') ? mf : normalizeModelFallbacks(d.model);
   return {
     model: normalizeModelRef(d.model),
     modelFallbacks: modelFallbacksFromApi,
