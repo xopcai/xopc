@@ -1,7 +1,6 @@
 import type { AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { AssistantMessage } from '@mariozechner/pi-ai';
 import type { Config } from '../../config/schema.js';
-import { getAgentDefaultModelRef, parseModelRef } from '../../config/schema.js';
 import { extractTextContent } from '../context/workspace.js';
 import type { ImageAttempt } from './image-model-fallback.js';
 import { coerceToolModelConfig, type ToolModelConfig } from './tool-model-config.js';
@@ -60,25 +59,6 @@ export function coerceImageModelConfig(cfg?: Config): ImageModelConfig {
   return coerceToolModelConfig(cfg?.agents?.defaults?.imageModel);
 }
 
-export function applyImageModelConfigDefaults(
-  cfg: Config | undefined,
-  imageModelConfig: ImageModelConfig,
-): Config | undefined {
-  if (!cfg) {
-    return undefined;
-  }
-  return {
-    ...cfg,
-    agents: {
-      ...cfg.agents,
-      defaults: {
-        ...cfg.agents?.defaults,
-        imageModel: imageModelConfig,
-      },
-    },
-  };
-}
-
 export function applyImageGenerationModelConfigDefaults(
   cfg: Config | undefined,
   imageGenerationModelConfig: ToolModelConfig,
@@ -124,12 +104,4 @@ export function buildImageToolTextResult(
       attempts: result.attempts,
     },
   };
-}
-
-export function primaryProviderFromConfig(cfg?: Config): string | undefined {
-  const ref = cfg ? getAgentDefaultModelRef(cfg) : undefined;
-  if (!ref) {
-    return undefined;
-  }
-  return parseModelRef(ref)?.provider;
 }

@@ -4,7 +4,7 @@ import path from 'node:path';
 import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { Config } from '../../config/schema.js';
-import { OPENAI_DEFAULT_IMAGE_MODEL } from '../image/generation/constants.js';
+import { OPENAI_DEFAULT_IMAGE_MODEL, QWEN_DEFAULT_IMAGE_MODEL } from '../image/generation/constants.js';
 import { generateImage, listImageGenerationProvidersSummary } from '../image/generation/runtime.js';
 import { applyImageGenerationModelConfigDefaults } from '../image/image-helpers.js';
 import {
@@ -24,7 +24,11 @@ const ImageGenerateToolSchema = Type.Object({
     }),
   ),
   prompt: Type.Optional(Type.String({ description: 'Image generation prompt.' })),
-  model: Type.Optional(Type.String({ description: 'Optional provider/model override, e.g. openai/gpt-image-1.' })),
+  model: Type.Optional(
+    Type.String({
+      description: 'Optional provider/model override, e.g. openai/gpt-image-1 or qwen/wan2.6-t2i (DashScope Beijing).',
+    }),
+  ),
   filename: Type.Optional(Type.String({ description: 'Optional basename hint for saved files.' })),
   size: Type.Optional(Type.String({ description: 'Optional size, e.g. 1024x1024.' })),
   count: Type.Optional(
@@ -44,7 +48,7 @@ export function resolveImageGenerationModelConfigForTool(params: { cfg?: Config 
   }
   return buildToolModelConfigFromCandidates({
     explicit,
-    candidates: [`openai/${OPENAI_DEFAULT_IMAGE_MODEL}`],
+    candidates: [`openai/${OPENAI_DEFAULT_IMAGE_MODEL}`, `qwen/${QWEN_DEFAULT_IMAGE_MODEL}`],
   });
 }
 
