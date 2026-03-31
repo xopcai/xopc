@@ -68,6 +68,22 @@ export function auth(config?: AuthConfig) {
       get: (name: string) => c.req.header(name) ?? undefined,
     });
 
+    // Try header first, then query param
+    const authHeader = extractTokenFromHeader(c.req.header('authorization'));
+    const queryToken = extractTokenFromQuery(c.req.url);
+
+    const providedToken = authHeader || queryToken;
+
+    // Allow valid credentials to pass immediately and clear historical failures for this client.
+    // This avoids lockout after a user fixes token configuration.
+    if (providedToken && validateToken(providedToken, token)) {
+      if (rateLimitActive) {
+        limiter.recordSuccess(clientIp);
+      }
+      await next();
+      return;
+    }
+
     if (rateLimitActive) {
       const blocked = limiter.checkBlocked(clientIp, rlCfg);
       if (blocked.blocked) {
@@ -82,12 +98,6 @@ export function auth(config?: AuthConfig) {
         );
       }
     }
-
-    // Try header first, then query param
-    const authHeader = extractTokenFromHeader(c.req.header('authorization'));
-    const queryToken = extractTokenFromQuery(c.req.url);
-
-    const providedToken = authHeader || queryToken;
 
     if (!providedToken) {
       if (rateLimitActive) {
@@ -104,12 +114,6 @@ export function auth(config?: AuthConfig) {
       log.warn('Invalid token');
       return c.json({ error: 'Unauthorized', message: 'Invalid authentication token' }, 401);
     }
-
-    if (rateLimitActive) {
-      limiter.recordSuccess(clientIp);
-    }
-
-    await next();
   });
 }
 

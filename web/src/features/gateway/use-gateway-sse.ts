@@ -13,6 +13,12 @@ export function useGatewaySse(): void {
   const token = useGatewayStore((s) => s.token);
 
   useEffect(() => {
+    if (!token) {
+      registerGatewaySseConnection(null);
+      setSseConnectionState({ connectionState: 'disconnected', error: null, reconnectAttempt: 0 });
+      return;
+    }
+
     const config = { token, autoReconnect: true, maxReconnectAttempts: 10 };
 
     const conn = new GatewaySseConnection(config, {

@@ -209,6 +209,82 @@ describe('Gateway Security Fixes', () => {
       });
       expect(r3.status).toBe(429);
     });
+
+    it('allows immediate recovery with a valid token after block', async () => {
+      const service = createMockService({
+        gateway: {
+          auth: {
+            mode: 'token',
+            token: 'real',
+            rateLimit: {
+              enabled: true,
+              maxAttempts: 2,
+              windowMs: 60_000,
+              blockDurationMs: 60_000,
+            },
+          },
+        },
+      });
+      const app = createHonoApp({ service, token: 'real' });
+
+      // Drive the client into blocked state.
+      const bad1 = await app.request('/api/config', {
+        headers: { Authorization: 'Bearer wrong' },
+      });
+      expect(bad1.status).toBe(401);
+      const bad2 = await app.request('/api/config', {
+        headers: { Authorization: 'Bearer wrong' },
+      });
+      expect(bad2.status).toBe(401);
+      const blocked = await app.request('/api/config', {
+        headers: { Authorization: 'Bearer wrong' },
+      });
+      expect(blocked.status).toBe(429);
+
+      // Correct token should bypass historical block and clear limiter state.
+      const good = await app.request('/api/config', {
+        headers: { Authorization: 'Bearer real' },
+      });
+      expect(good.status).toBe(200);
+
+      // After successful auth, failures are counted from a clean slate.
+      const badAfterSuccess = await app.request('/api/config', {
+        headers: { Authorization: 'Bearer wrong' },
+      });
+      expect(badAfterSuccess.status).toBe(401);
+    });
+
+    it('allows immediate recovery with a valid token after missing-token lockout', async () => {
+      const service = createMockService({
+        gateway: {
+          auth: {
+            mode: 'token',
+            token: 'real',
+            rateLimit: {
+              enabled: true,
+              maxAttempts: 2,
+              windowMs: 60_000,
+              blockDurationMs: 60_000,
+            },
+          },
+        },
+      });
+      const app = createHonoApp({ service, token: 'real' });
+
+      // Missing token attempts should also lead to lockout.
+      const miss1 = await app.request('/api/config');
+      expect(miss1.status).toBe(401);
+      const miss2 = await app.request('/api/config');
+      expect(miss2.status).toBe(401);
+      const blocked = await app.request('/api/config');
+      expect(blocked.status).toBe(429);
+
+      // Correct token should still recover immediately.
+      const good = await app.request('/api/config', {
+        headers: { Authorization: 'Bearer real' },
+      });
+      expect(good.status).toBe(200);
+    });
   });
 
   describe('FIX-4: Default Host Binding', () => {
