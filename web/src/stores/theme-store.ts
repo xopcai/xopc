@@ -3,6 +3,25 @@ import { persist } from 'zustand/middleware';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 
+const THEME_META_COLOR = {
+  light: '#f5f5f7',
+  dark: '#1c1c1e',
+} as const;
+
+function syncThemeColorMeta(mode: 'light' | 'dark') {
+  const head = document.head;
+  if (!head) return;
+  const selector = 'meta[name="theme-color"][data-xopcbot-theme-color="true"]';
+  let meta = head.querySelector<HTMLMetaElement>(selector);
+  if (!meta) {
+    meta = document.createElement('meta');
+    meta.setAttribute('name', 'theme-color');
+    meta.setAttribute('data-xopcbot-theme-color', 'true');
+    head.appendChild(meta);
+  }
+  meta.setAttribute('content', THEME_META_COLOR[mode]);
+}
+
 function getSystemDark(): boolean {
   return globalThis.matchMedia?.('(prefers-color-scheme: dark)').matches ?? false;
 }
@@ -24,6 +43,7 @@ function applyDomTheme(mode: 'light' | 'dark', useViewTransition: boolean) {
   const run = () => {
     root.classList.toggle('dark', mode === 'dark');
     root.dataset.theme = mode;
+    syncThemeColorMeta(mode);
   };
 
   const doc = document as Document & {

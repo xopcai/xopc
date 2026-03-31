@@ -13,6 +13,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Button } from '@/components/ui/button';
@@ -61,6 +62,8 @@ function SkillCardIcon({ name }: { name: string }) {
 
 type MainTab = 'builtin' | 'user' | 'marketplace';
 type SourceFilter = 'all' | 'global' | 'workspace' | 'extra';
+const MAIN_TAB_SET = new Set<MainTab>(['builtin', 'user', 'marketplace']);
+const SOURCE_FILTER_SET = new Set<SourceFilter>(['all', 'global', 'workspace', 'extra']);
 
 function normalizeCatalogEntry(r: SkillCatalogEntry): SkillCatalogEntry {
   return {
@@ -144,19 +147,30 @@ export function SkillsPage() {
   const sk = m.skills;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [catalog, setCatalog] = useState<SkillCatalogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [uploading, setUploading] = useState(false);
-  const [searchQuery, setSearchQuery] = useState('');
+  const initialSearch = searchParams.get('q') ?? '';
+  const initialTabRaw = searchParams.get('tab');
+  const initialSourceRaw = searchParams.get('source');
+  const initialTab: MainTab = MAIN_TAB_SET.has(initialTabRaw as MainTab)
+    ? (initialTabRaw as MainTab)
+    : 'builtin';
+  const initialSourceFilter: SourceFilter = SOURCE_FILTER_SET.has(initialSourceRaw as SourceFilter)
+    ? (initialSourceRaw as SourceFilter)
+    : 'all';
+
+  const [searchQuery, setSearchQuery] = useState(initialSearch);
   const [actionFeedback, setActionFeedback] = useState<{
     kind: 'success' | 'error';
     message: string;
   } | null>(null);
 
-  const [mainTab, setMainTab] = useState<MainTab>('builtin');
-  const [sourceFilter, setSourceFilter] = useState<SourceFilter>('all');
+  const [mainTab, setMainTab] = useState<MainTab>(initialTab);
+  const [sourceFilter, setSourceFilter] = useState<SourceFilter>(initialSourceFilter);
 
   const [installOpen, setInstallOpen] = useState(false);
   const [pendingFile, setPendingFile] = useState<File | null>(null);
@@ -200,6 +214,36 @@ export function SkillsPage() {
     if (!hasToken) return;
     void load();
   }, [hasToken, load]);
+
+  useEffect(() => {
+    const nextQ = searchParams.get('q') ?? '';
+    const nextTabRaw = searchParams.get('tab');
+    const nextSourceRaw = searchParams.get('source');
+    const nextTab: MainTab = MAIN_TAB_SET.has(nextTabRaw as MainTab)
+      ? (nextTabRaw as MainTab)
+      : 'builtin';
+    const nextSource: SourceFilter = SOURCE_FILTER_SET.has(nextSourceRaw as SourceFilter)
+      ? (nextSourceRaw as SourceFilter)
+      : 'all';
+    setSearchQuery((prev) => (prev === nextQ ? prev : nextQ));
+    setMainTab((prev) => (prev === nextTab ? prev : nextTab));
+    setSourceFilter((prev) => (prev === nextSource ? prev : nextSource));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    const nextQ = searchQuery.trim();
+    if (nextQ) params.set('q', nextQ);
+    else params.delete('q');
+    if (mainTab !== 'builtin') params.set('tab', mainTab);
+    else params.delete('tab');
+    if (sourceFilter !== 'all') params.set('source', sourceFilter);
+    else params.delete('source');
+    const next = params.toString();
+    if (next !== searchParams.toString()) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [mainTab, searchParams, searchQuery, setSearchParams, sourceFilter]);
 
   const showFeedback = useCallback((kind: 'success' | 'error', message: string, durationMs = 5000) => {
     setActionFeedback({ kind, message });

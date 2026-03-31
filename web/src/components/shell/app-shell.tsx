@@ -5,6 +5,7 @@ import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { cn } from '@/lib/cn';
+import { useLocaleStore } from '@/stores/locale-store';
 
 /** Align with `ui` `navigate-to-chat` custom event from session manager. */
 function NavigateToChatListener() {
@@ -25,6 +26,7 @@ function NavigateToChatListener() {
 export function AppShell() {
   const { pathname } = useLocation();
   const isSettingsRoute = pathname.startsWith('/settings');
+  const language = useLocaleStore((s) => s.language);
 
   // Key for the content area — changes only on top-level route segment so sub-routes
   // (e.g. /chat/new → /chat/:key) don't re-trigger the enter animation.
@@ -32,6 +34,12 @@ export function AppShell() {
 
   return (
     <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
+      <a
+        href="#app-main-content"
+        className="sr-only z-[80] rounded-lg bg-surface-panel px-3 py-2 text-sm text-fg shadow-elevated focus:not-sr-only focus:absolute focus:left-4 focus:top-3 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+      >
+        {language === 'zh' ? '跳到主要内容' : 'Skip to main content'}
+      </a>
       <GatewaySseBridge />
       <NavigateToChatListener />
       <TokenDialog />
@@ -41,7 +49,7 @@ export function AppShell() {
 
         {/* Right column: chat title + prefs live in ChatPage (same row); settings are full-width */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
-          <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
+          <main id="app-main-content" className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div
               key={routeKey}
               className={cn(
