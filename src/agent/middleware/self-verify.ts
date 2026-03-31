@@ -243,8 +243,3 @@ If you're confident, proceed. If unsure, continue refining.`;
     return { ...this.config };
   }
 }
-
-/**
- * Singleton instance for global use
- */
-export const selfVerifyMiddleware = new SelfVerifyMiddleware();

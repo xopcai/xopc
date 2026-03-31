@@ -34,8 +34,7 @@ import { SystemReminder } from './prompt/system-reminder.js';
 import { ToolUsageAnalyzer } from './tools/usage-analyzer.js';
 import { ToolChainTracker } from './tools/chain-tracker.js';
 import { ErrorPatternMatcher } from './tools/error-pattern-matcher.js';
-import { SelfVerifyMiddleware } from './middleware/self-verify.js';
-import { ContextMiddleware } from './middleware/context.js';
+import { ContextMiddleware, SelfVerifyMiddleware } from './middleware/index.js';
 import { LifecycleManager } from './lifecycle/index.js';
 import { CompactionLifecycleHandler } from './lifecycle/handlers/compaction.js';
 
