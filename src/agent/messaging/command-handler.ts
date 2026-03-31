@@ -185,11 +185,4 @@ export class CommandHandler {
 
     return true;
   }
-
-  /**
-   * Check if a command is a legacy skills command that should be handled separately
-   */
-  isLegacySkillsCommand(commandName: string): boolean {
-    return commandName === 'skills';
-  }
 }

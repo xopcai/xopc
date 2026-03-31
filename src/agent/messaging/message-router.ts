@@ -9,33 +9,19 @@ import { parseSlashCommand } from '../../chat-commands/command-parse.js';
 import type { AgentContext } from '../service.js';
 
 export interface MessageRoutingResult {
-  sessionKey: string;
   context: AgentContext;
-  isSystemMessage: boolean;
   isCommand: boolean;
   command?: string;
   commandArgs?: string;
 }
 
-export interface MessageRouterConfig {
-  workspace: string;
-}
-
 export class MessageRouter {
-  private config: MessageRouterConfig;
-
-  constructor(config: MessageRouterConfig) {
-    this.config = config;
-  }
-
   /**
    * Route an inbound message and determine handling strategy
    */
   async routeMessage(msg: InboundMessage): Promise<MessageRoutingResult> {
-    // Resolve session key from metadata or derive from channel/chat_id
     const sessionKey = this.resolveSessionKey(msg);
-    
-    // Build context
+
     const context: AgentContext = {
       channel: msg.channel,
       chatId: msg.chat_id,
@@ -44,16 +30,10 @@ export class MessageRouter {
       isGroup: (msg.metadata?.isGroup as boolean) || false,
     };
 
-    // Determine if this is a system message
-    const isSystemMessage = msg.channel === 'system';
-
-    // Check if message contains a command
     const commandInfo = parseSlashCommand(msg.content);
 
     return {
-      sessionKey,
       context,
-      isSystemMessage,
       isCommand: commandInfo !== null,
       command: commandInfo?.command,
       commandArgs: commandInfo?.args,
@@ -79,15 +59,5 @@ export class MessageRouter {
 
     // Default: combine channel and chat_id
     return `${msg.channel}:${msg.chat_id}`;
-  }
-
-  /**
-   * Check if a message should be handled as a system command request
-   * (e.g., from Telegram /new, /usage handlers sent via system channel)
-   */
-  isSystemCommandRequest(msg: InboundMessage): boolean {
-    return msg.channel === 'system' && 
-           msg.metadata?.sessionKey !== undefined && 
-           msg.content.trim().startsWith('/');
   }
 }

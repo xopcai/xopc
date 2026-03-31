@@ -242,7 +242,7 @@ export class AgentService {
       workspaceRoot: this.workspaceDir,
     });
 
-    this.messageRouter = new MessageRouter({ workspace: config.workspace });
+    this.messageRouter = new MessageRouter();
     this.commandHandler = new CommandHandler({
       config: config.config!,
       bus,
