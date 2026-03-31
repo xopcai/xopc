@@ -160,33 +160,21 @@ export function SessionsPage() {
 
   useEffect(() => {
     if (!hasToken) return;
-    const url = new URL('/api/events', window.location.origin);
-    if (token) url.searchParams.set('token', token);
-    let es: EventSource;
-    try {
-      es = new EventSource(url.toString());
-    } catch {
-      return;
-    }
-    const handler = (e: MessageEvent) => {
-      try {
-        const detail = JSON.parse(e.data as string) as { key?: string; name?: string };
-        if (!detail.key || detail.name === undefined) return;
-        setSessions((prev) =>
-          prev.map((row) => (row.key === detail.key ? { ...row, name: detail.name } : row)),
-        );
-        setDetailSession((prev) =>
-          prev && prev.key === detail.key ? { ...prev, name: detail.name } : prev,
-        );
-      } catch {
-        /* ignore */
-      }
+    const handler = (e: Event) => {
+      const detail = (e as CustomEvent<{ key?: string; name?: string }>).detail;
+      if (!detail?.key || detail.name === undefined) return;
+      setSessions((prev) =>
+        prev.map((row) => (row.key === detail.key ? { ...row, name: detail.name } : row)),
+      );
+      setDetailSession((prev) =>
+        prev && prev.key === detail.key ? { ...prev, name: detail.name } : prev,
+      );
     };
-    es.addEventListener('session.updated', handler as EventListener);
+    window.addEventListener('session-updated', handler as EventListener);
     return () => {
-      es.close();
+      window.removeEventListener('session-updated', handler as EventListener);
     };
-  }, [hasToken, token]);
+  }, [hasToken]);
 
   const loadMore = useCallback(async () => {
     if (!hasToken || loading || !hasMore) return;
