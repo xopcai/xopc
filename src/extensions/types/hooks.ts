@@ -48,12 +48,7 @@ export type ExtensionHookEvent =
   //  Reset hook
   | 'before_reset'
   //  Message write hook
-  | 'before_message_write'
-  //  Subagent hooks
-  | 'subagent_start'
-  | 'subagent_end'
-  | 'subagent_error'
-  | 'subagent_result';
+  | 'before_message_write';
 
 // ============================================================================
 // Hook Execution Modes 
@@ -89,9 +84,6 @@ export const HOOK_EXECUTION_MODES: Record<ExtensionHookEvent, HookExecutionMode>
   'tool_execution_start': 'void',
   'tool_execution_update': 'void',
   'tool_execution_end': 'void',
-  'subagent_start': 'void',
-  'subagent_end': 'void',
-  'subagent_error': 'void',
   'before_reset': 'void',
   
   // Modifying: Sequential execution, results merge
@@ -103,7 +95,6 @@ export const HOOK_EXECUTION_MODES: Record<ExtensionHookEvent, HookExecutionMode>
   'context': 'modifying',
   'input': 'modifying',
   'before_message_write': 'modifying',
-  'subagent_result': 'modifying',
   
   // Claiming: First handler with handled:true wins
   'inbound_claim': 'claiming',
@@ -213,34 +204,6 @@ export interface HookBeforeMessageWriteResult {
   content?: string;
   cancel?: boolean;
   reason?: string;
-}
-
-// Subagent Hook Types
-export interface HookSubagentStartEvent {
-  subagentId: string;
-  task: string;
-  context?: Record<string, unknown>;
-}
-
-export interface HookSubagentEndEvent {
-  subagentId: string;
-  task: string;
-  result?: string;
-  error?: string;
-  durationMs?: number;
-}
-
-export interface HookSubagentErrorEvent {
-  subagentId: string;
-  task: string;
-  error: string;
-}
-
-export interface HookSubagentResultEvent {
-  subagentId: string;
-  task: string;
-  result: string;
-  metadata?: Record<string, unknown>;
 }
 
 // Turn Hook Types
@@ -431,27 +394,6 @@ export type HookHandlerMap = {
     event: HookBeforeResetEvent,
     ctx: HookAgentContext,
   ) => Promise<HookBeforeResetResult | void> | HookBeforeResetResult | void;
-  
-  // Subagent
-  subagent_start: (
-    event: HookSubagentStartEvent,
-    ctx: HookAgentContext,
-  ) => Promise<void> | void;
-  
-  subagent_end: (
-    event: HookSubagentEndEvent,
-    ctx: HookAgentContext,
-  ) => Promise<void> | void;
-  
-  subagent_error: (
-    event: HookSubagentErrorEvent,
-    ctx: HookAgentContext,
-  ) => Promise<void> | void;
-  
-  subagent_result: (
-    event: HookSubagentResultEvent,
-    ctx: HookAgentContext,
-  ) => Promise<void> | void;
 };
 
 // ============================================================================

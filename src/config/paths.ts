@@ -31,7 +31,6 @@ export const FILENAMES = {
   MODELS_JSON: 'models.json',
   AGENT_JSON: 'agent.json',
   SESSIONS_INDEX: 'index.json',
-  SUBAGENTS_REGISTRY: 'runs.json',
   EXTENSIONS_LOCK: 'extensions-lock.json',
   CREDENTIALS_PROFILES: 'auth-profiles.json',
   CRON_JOBS: 'jobs.json',
@@ -242,13 +241,6 @@ export function resolveStatusPath(agentId?: string): string {
  */
 export function resolveSocketPath(agentId?: string): string {
   return join(resolveRunDir(agentId), FILENAMES.SOCKET);
-}
-
-/**
- * Resolve the subagents registry path (global)
- */
-export function resolveSubagentRegistryPath(): string {
-  return join(resolveStateDir(), 'subagents', FILENAMES.SUBAGENTS_REGISTRY);
 }
 
 /**

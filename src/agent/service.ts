@@ -525,24 +525,30 @@ export class AgentService {
       log.warn({ err, sessionKey }, 'Transcript hygiene on save skipped');
     }
     await this.sessionStore.save(sessionKey, toSave);
+    this.enqueueMaybeAutoTitleAfterPersist(sessionKey);
   }
 
-  /** After processDirect / processDirectStreaming, generate webchat session title when still unnamed. */
-  private async _maybeAutoTitleAfterDirectTurn(sessionKey: string): Promise<void> {
-    try {
-      let modelRef =
-        getAgentDefaultModelRef(this.config.config ?? ({} as Config)) ?? this.config.model;
-      if (!modelRef?.trim()) {
-        try {
-          modelRef = this.modelManager.getModelForSession(sessionKey);
-        } catch {
-          modelRef = undefined;
+  /**
+   * Fire-and-forget: `maybeAutoTitleSessionStore` no-ops for non-webchat keys.
+   * Runs after persist so the store has the latest transcript; does not block SSE / callers.
+   */
+  private enqueueMaybeAutoTitleAfterPersist(sessionKey: string): void {
+    void (async () => {
+      try {
+        let modelRef =
+          getAgentDefaultModelRef(this.config.config ?? ({} as Config)) ?? this.config.model;
+        if (!modelRef?.trim()) {
+          try {
+            modelRef = this.modelManager.getModelForSession(sessionKey);
+          } catch {
+            modelRef = undefined;
+          }
         }
+        await maybeAutoTitleSessionStore(this.sessionStore, sessionKey, modelRef?.trim() || undefined);
+      } catch (err) {
+        log.warn({ err, sessionKey }, 'Auto session title failed');
       }
-      await maybeAutoTitleSessionStore(this.sessionStore, sessionKey, modelRef?.trim() || undefined);
-    } catch (err) {
-      log.warn({ err, sessionKey }, 'Auto session title failed');
-    }
+    })();
   }
 
   private prepareLoadedSessionMessages(sessionKey: string, messages: AgentMessage[]): AgentMessage[] {
@@ -989,8 +995,6 @@ export class AgentService {
         if (ttsAudioEvent) {
           yield ttsAudioEvent;
         }
-
-        await this._maybeAutoTitleAfterDirectTurn(sessionKey);
       }
     } finally {
       unsubscribeStreaming();
@@ -1122,7 +1126,6 @@ export class AgentService {
 
       const response = this.agentManager.getLastAssistantContent(sessionKey) || '';
       await this.persistAgentSessionMessages(sessionKey);
-      await this._maybeAutoTitleAfterDirectTurn(sessionKey);
 
       return response;
     } finally {

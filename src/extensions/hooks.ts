@@ -516,10 +516,6 @@ export function isHookEvent(value: string): value is ExtensionHookEvent {
     'inbound_claim',
     'before_reset',
     'before_message_write',
-    'subagent_start',
-    'subagent_end',
-    'subagent_error',
-    'subagent_result',
   ];
   return hookEvents.includes(value as ExtensionHookEvent);
 }

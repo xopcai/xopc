@@ -16,7 +16,6 @@ import {
   resolveSessionsDir,
   resolveInboxDir,
   resolveRunDir,
-  resolveSubagentRegistryPath,
   resolveConfigPath,
   resolveAgentMetadataPath,
   resolveInboxPendingDir,
@@ -69,7 +68,6 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   await mkdir(resolveLogsDir(), { recursive: true });
   await mkdir(resolveBinDir(), { recursive: true });
   await mkdir(resolveToolsDir(), { recursive: true });
-  await mkdir(join(resolveStateDir(), 'subagents'), { recursive: true });
 
   // ============================================
   // Create agent directory structure
@@ -122,20 +120,6 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
     };
     await writeFile(agentMetadataPath, JSON.stringify(agentMetadata, null, 2), 'utf-8');
     log.info({ agentId, agentMetadataPath }, 'Created agent metadata');
-  }
-
-  // ============================================
-  // Create subagent registry if not exists
-  // ============================================
-  const subagentRegistryPath = resolveSubagentRegistryPath();
-  if (!existsSync(subagentRegistryPath) || options.force) {
-    const subagentRegistry = {
-      version: 2,
-      runs: {},
-    };
-    await mkdir(join(subagentRegistryPath, '..'), { recursive: true });
-    await writeFile(subagentRegistryPath, JSON.stringify(subagentRegistry, null, 2), 'utf-8');
-    log.info({ subagentRegistryPath }, 'Created subagent registry');
   }
 
   // ============================================
