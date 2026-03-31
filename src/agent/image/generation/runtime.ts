@@ -5,7 +5,8 @@ import {
   resolveAgentModelPrimaryValue,
 } from '../../../config/model-input.js';
 import { getApiKey } from '../../../providers/index.js';
-import { OPENAI_DEFAULT_IMAGE_MODEL } from './constants.js';
+import { OPENAI_DEFAULT_IMAGE_MODEL, QWEN_DEFAULT_IMAGE_MODEL } from './constants.js';
+import { runDashScopeImageGeneration } from './dashscope-generate.js';
 import { runOpenAiImageGeneration } from './openai-generate.js';
 import type { ImageGenFallbackAttempt, ImageGenerationResult } from './types.js';
 
@@ -63,7 +64,7 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   const candidates = parseCandidates({ cfg: params.cfg, modelOverride: params.modelOverride });
   if (candidates.length === 0) {
     throw new Error(
-      'No image-generation model configured. Set agents.defaults.imageGenerationModel.primary or fallbacks (e.g. openai/gpt-image-1).',
+      'No image-generation model configured. Set agents.defaults.imageGenerationModel.primary or fallbacks (e.g. openai/gpt-image-1 or qwen/wan2.6-t2i).',
     );
   }
 
@@ -71,40 +72,65 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   let lastError: unknown;
 
   for (const candidate of candidates) {
-    if (candidate.provider !== 'openai') {
+    try {
+      if (candidate.provider === 'openai') {
+        const apiKey = await getApiKey('openai');
+        if (!apiKey) {
+          throw new Error('OpenAI API key missing');
+        }
+        const result = await runOpenAiImageGeneration({
+          provider: 'openai',
+          model: candidate.model,
+          prompt: params.prompt,
+          cfg: params.cfg,
+          apiKey,
+          count: params.count,
+          size: params.size,
+          signal: params.signal,
+        });
+        if (!result.images?.length) {
+          throw new Error('Image generation returned no images');
+        }
+        return {
+          images: result.images,
+          provider: 'openai',
+          model: result.model ?? candidate.model,
+          attempts,
+        };
+      }
+
+      if (candidate.provider === 'qwen') {
+        const apiKey = await getApiKey('qwen');
+        if (!apiKey) {
+          throw new Error('Qwen/DashScope API key missing (DASHSCOPE_API_KEY or QWEN_API_KEY)');
+        }
+        const result = await runDashScopeImageGeneration({
+          provider: 'qwen',
+          model: candidate.model,
+          prompt: params.prompt,
+          cfg: params.cfg,
+          apiKey,
+          count: params.count,
+          size: params.size,
+          signal: params.signal,
+        });
+        if (!result.images?.length) {
+          throw new Error('Image generation returned no images');
+        }
+        return {
+          images: result.images,
+          provider: 'qwen',
+          model: result.model ?? candidate.model,
+          attempts,
+        };
+      }
+
       attempts.push({
         provider: candidate.provider,
         model: candidate.model,
-        error: 'Only OpenAI image generation is supported in this build.',
+        error: `Image generation provider not supported: ${candidate.provider}`,
       });
       lastError = new Error('unsupported provider');
-      continue;
-    }
-
-    try {
-      const apiKey = await getApiKey('openai');
-      if (!apiKey) {
-        throw new Error('OpenAI API key missing');
-      }
-      const result = await runOpenAiImageGeneration({
-        provider: 'openai',
-        model: candidate.model,
-        prompt: params.prompt,
-        cfg: params.cfg,
-        apiKey,
-        count: params.count,
-        size: params.size,
-        signal: params.signal,
-      });
-      if (!result.images?.length) {
-        throw new Error('Image generation returned no images');
-      }
-      return {
-        images: result.images,
-        provider: 'openai',
-        model: result.model ?? candidate.model,
-        attempts,
-      };
     } catch (err) {
       lastError = err;
       attempts.push({
@@ -131,6 +157,11 @@ export function listImageGenerationProvidersSummary(): Array<{
       id: 'openai',
       defaultModel: OPENAI_DEFAULT_IMAGE_MODEL,
       models: [OPENAI_DEFAULT_IMAGE_MODEL, 'dall-e-3', 'dall-e-2'],
+    },
+    {
+      id: 'qwen',
+      defaultModel: QWEN_DEFAULT_IMAGE_MODEL,
+      models: [QWEN_DEFAULT_IMAGE_MODEL],
     },
   ];
 }
