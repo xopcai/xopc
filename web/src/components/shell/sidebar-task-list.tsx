@@ -252,21 +252,14 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
 
   useEffect(() => {
     if (!token) return;
-    const url = new URL('/api/events', window.location.origin);
-    url.searchParams.set('token', token);
-    let es: EventSource;
-    try {
-      es = new EventSource(url.toString());
-    } catch {
-      return;
-    }
     const onSessionUpdated = () => {
       void mutate();
     };
-    es.addEventListener('session.updated', onSessionUpdated);
-    es.addEventListener('session.created', onSessionUpdated);
+    window.addEventListener('session-updated', onSessionUpdated as EventListener);
+    window.addEventListener('session-created', onSessionUpdated as EventListener);
     return () => {
-      es.close();
+      window.removeEventListener('session-updated', onSessionUpdated as EventListener);
+      window.removeEventListener('session-created', onSessionUpdated as EventListener);
     };
   }, [token, mutate]);
 
