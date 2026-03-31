@@ -1,22 +1,12 @@
 /**
- * Agent Middleware - Harness engineering improvements
- *
- * Middleware modules for improving agent behavior:
- * - SelfVerifyMiddleware: Build & self-verify pattern
- * - ContextMiddleware: Automatic request context injection
+ * Agent middleware — request-scoped log context (`ContextMiddleware`) and
+ * harness-style self-verify tracking (`SelfVerifyMiddleware`).
  */
 
 export {
   SelfVerifyMiddleware,
-  selfVerifyMiddleware,
   type FileEditRecord,
   type SelfVerifyConfig,
 } from './self-verify.js';
 
-export {
-  ContextMiddleware,
-  contextMiddleware,
-  withContext,
-  withContextAndLogger,
-  type RequestContext,
-} from './context.js';
+export { ContextMiddleware, type RequestContext } from './context.js';
