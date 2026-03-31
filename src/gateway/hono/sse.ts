@@ -72,10 +72,15 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
 
     const clientAbort = new AbortController();
     const raw = c.req.raw;
-    if (raw.signal.aborted) {
-      clientAbort.abort();
-    } else {
-      raw.signal.addEventListener('abort', () => clientAbort.abort(), { once: true });
+    // Keep webchat runs alive across transient disconnects (page refresh / tab route switch)
+    // so the client can reattach via /api/agent/resume using runId from `status`.
+    // Explicit cancellation still goes through /api/agent/abort.
+    if (channel !== 'webchat') {
+      if (raw.signal.aborted) {
+        clientAbort.abort();
+      } else {
+        raw.signal.addEventListener('abort', () => clientAbort.abort(), { once: true });
+      }
     }
 
     // --- Non-streaming fallback: collect everything, return JSON ---
@@ -118,9 +123,11 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
     // --- SSE streaming ---
     c.header('X-Accel-Buffering', 'no');
     return streamSSE(c, async (stream) => {
-      stream.onAbort(() => {
-        clientAbort.abort();
-      });
+      if (channel !== 'webchat') {
+        stream.onAbort(() => {
+          clientAbort.abort();
+        });
+      }
 
       const generator = service.runAgent(message, channel, chatId, attachments, thinking, {
         signal: clientAbort.signal,

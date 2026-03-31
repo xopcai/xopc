@@ -37,6 +37,8 @@ export function useChatSession() {
   const sendingRef = useRef(false);
   const streamingRef = useRef(false);
   const sessionKeyRef = useRef<string | null>(null);
+  const routeSessionKeyRef = useRef<string | null>(null);
+  const activeStreamSessionKeyRef = useRef<string | null>(null);
   const sessionNameRef = useRef<string | null>(null);
   const thinkingSupportGenRef = useRef(0);
   /** Skip duplicate finalize when user already committed via `abort()` (SSE may still send `result`). */
@@ -76,6 +78,9 @@ export function useChatSession() {
 
   const isNewRoute = location.pathname.endsWith('/new');
   const decodedKey = sessionKeyParam ? decodeURIComponent(sessionKeyParam) : undefined;
+  // Keep route key in sync during render so refresh-time resume callbacks are not gated
+  // by effect scheduling order.
+  routeSessionKeyRef.current = decodedKey ?? null;
 
   /** URL session param does not match loaded state yet (switching sessions or first paint). */
   const sessionRoutePending = Boolean(decodedKey !== undefined && sessionKey !== decodedKey);
@@ -151,8 +156,22 @@ export function useChatSession() {
     setStreaming(false);
     setProgress(null);
     setSending(false);
+    activeStreamSessionKeyRef.current = null;
     void pollSessionNameAfterTurn();
   }, [pollSessionNameAfterTurn]);
+
+  /**
+   * Only apply streaming deltas to the visible chat when the browser route still points
+   * at the same session that started this stream. Prevents cross-session bleed while
+   * preserving the ability to switch back and continue seeing live updates.
+   */
+  const shouldApplyStreamUpdate = useCallback((streamSessionKey: string) => {
+    const routeKey = routeSessionKeyRef.current;
+    if (routeKey) {
+      return routeKey === streamSessionKey;
+    }
+    return sessionKeyRef.current === streamSessionKey;
+  }, []);
 
   const loadSessionById = useCallback(
     async (key: string, offset = 0) => {
@@ -300,6 +319,7 @@ export function useChatSession() {
     if (!stored?.runId) return;
 
     userAbortedRef.current = false;
+    activeStreamSessionKeyRef.current = chatId;
     setSending(true);
     setStreaming(true);
     setProgress(null);
@@ -307,9 +327,11 @@ export function useChatSession() {
     try {
       await sender.resume(stored.runId, chatId, {
         onStreamStart: () => {
+          if (!shouldApplyStreamUpdate(chatId)) return;
           setStreamingMsg((prev) => cloneMessageForRender(ensureAssistantMessage(prev, Date.now())));
         },
         onToken: (delta) => {
+          if (!shouldApplyStreamUpdate(chatId)) return;
           setStreamingMsg((prev) => {
             const msg = ensureAssistantMessage(prev, Date.now());
             appendTextDelta(msg.content, delta);
@@ -318,6 +340,7 @@ export function useChatSession() {
           setStreaming(true);
         },
         onThinking: (c, isDelta) => {
+          if (!shouldApplyStreamUpdate(chatId)) return;
           setStreamingMsg((prev) => {
             const msg = ensureAssistantMessage(prev, Date.now());
             if (!isDelta && c === '') startThinkingSegment(msg.content);
@@ -326,6 +349,7 @@ export function useChatSession() {
           });
         },
         onThinkingEnd: () => {
+          if (!shouldApplyStreamUpdate(chatId)) return;
           setStreamingMsg((prev) => {
             if (!prev) return prev;
             const msg = ensureAssistantMessage(prev, Date.now());
@@ -334,6 +358,7 @@ export function useChatSession() {
           });
         },
         onToolStart: (toolName, args) => {
+          if (!shouldApplyStreamUpdate(chatId)) return;
           setStreamingMsg((prev) => {
             const msg = ensureAssistantMessage(prev, Date.now());
             appendToolStart(msg.content, toolName, args);
@@ -342,14 +367,19 @@ export function useChatSession() {
           setStreaming(true);
         },
         onToolEnd: (toolName, isErr, result) => {
+          if (!shouldApplyStreamUpdate(chatId)) return;
           setStreamingMsg((prev) => {
             const msg = ensureAssistantMessage(prev, Date.now());
             completeTool(msg.content, toolName, isErr, result);
             return cloneMessageForRender(msg);
           });
         },
-        onProgress: (p) => setProgress(p),
+        onProgress: (p) => {
+          if (!shouldApplyStreamUpdate(chatId)) return;
+          setProgress(p);
+        },
         onTtsAudio: (p) => {
+          if (!shouldApplyStreamUpdate(chatId)) return;
           setStreamingMsg((prev) => {
             const msg = ensureAssistantMessage(prev, Date.now());
             const rel = p.workspaceRelativePath?.replace(/\\/g, '/').trim();
@@ -369,6 +399,13 @@ export function useChatSession() {
           });
         },
         onResult: () => {
+          if (!shouldApplyStreamUpdate(chatId)) {
+            activeStreamSessionKeyRef.current = null;
+            setStreaming(false);
+            setSending(false);
+            setProgress(null);
+            return;
+          }
           if (userAbortedRef.current) {
             userAbortedRef.current = false;
             return;
@@ -376,6 +413,13 @@ export function useChatSession() {
           finalizeMessage();
         },
         onError: (msg) => {
+          if (!shouldApplyStreamUpdate(chatId)) {
+            activeStreamSessionKeyRef.current = null;
+            setStreaming(false);
+            setSending(false);
+            setProgress(null);
+            return;
+          }
           setError(msg);
           setStreamingMsg(null);
           setStreaming(false);
@@ -391,8 +435,11 @@ export function useChatSession() {
       setSending(false);
       setStreamingMsg(null);
       setProgress(null);
+      if (activeStreamSessionKeyRef.current === chatId) {
+        activeStreamSessionKeyRef.current = null;
+      }
     }
-  }, [finalizeMessage, pollSessionNameAfterTurn]);
+  }, [finalizeMessage, pollSessionNameAfterTurn, shouldApplyStreamUpdate]);
 
   const sendMessage = useCallback(
     async (
@@ -406,7 +453,9 @@ export function useChatSession() {
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
 
       const sender = senderRef.current;
+      const chatId = sessionKey;
       userAbortedRef.current = false;
+      activeStreamSessionKeyRef.current = chatId;
       setSending(true);
       setError(null);
       setMessages((m) => [
@@ -420,12 +469,14 @@ export function useChatSession() {
       ]);
 
       try {
-        await sender.send(content, sessionKey, attachments, effectiveThinking, {
+        await sender.send(content, chatId, attachments, effectiveThinking, {
           onStreamStart: () => {
+            if (!shouldApplyStreamUpdate(chatId)) return;
             setStreaming(true);
             setStreamingMsg((prev) => cloneMessageForRender(ensureAssistantMessage(prev, Date.now())));
           },
           onToken: (delta) => {
+            if (!shouldApplyStreamUpdate(chatId)) return;
             setStreamingMsg((prev) => {
               const msg = ensureAssistantMessage(prev, Date.now());
               appendTextDelta(msg.content, delta);
@@ -434,6 +485,7 @@ export function useChatSession() {
             setStreaming(true);
           },
           onThinking: (c, isDelta) => {
+            if (!shouldApplyStreamUpdate(chatId)) return;
             setStreamingMsg((prev) => {
               const msg = ensureAssistantMessage(prev, Date.now());
               if (!isDelta && c === '') startThinkingSegment(msg.content);
@@ -442,6 +494,7 @@ export function useChatSession() {
             });
           },
           onThinkingEnd: () => {
+            if (!shouldApplyStreamUpdate(chatId)) return;
             setStreamingMsg((prev) => {
               if (!prev) return prev;
               const msg = ensureAssistantMessage(prev, Date.now());
@@ -450,6 +503,7 @@ export function useChatSession() {
             });
           },
           onToolStart: (toolName, args) => {
+            if (!shouldApplyStreamUpdate(chatId)) return;
             setStreamingMsg((prev) => {
               const msg = ensureAssistantMessage(prev, Date.now());
               appendToolStart(msg.content, toolName, args);
@@ -458,14 +512,19 @@ export function useChatSession() {
             setStreaming(true);
           },
           onToolEnd: (toolName, isErr, result) => {
+            if (!shouldApplyStreamUpdate(chatId)) return;
             setStreamingMsg((prev) => {
               const msg = ensureAssistantMessage(prev, Date.now());
               completeTool(msg.content, toolName, isErr, result);
               return cloneMessageForRender(msg);
             });
           },
-          onProgress: (p) => setProgress(p),
+          onProgress: (p) => {
+            if (!shouldApplyStreamUpdate(chatId)) return;
+            setProgress(p);
+          },
           onTtsAudio: (p) => {
+            if (!shouldApplyStreamUpdate(chatId)) return;
             setStreamingMsg((prev) => {
               const msg = ensureAssistantMessage(prev, Date.now());
               const rel = p.workspaceRelativePath?.replace(/\\/g, '/').trim();
@@ -485,6 +544,13 @@ export function useChatSession() {
             });
           },
           onResult: () => {
+            if (!shouldApplyStreamUpdate(chatId)) {
+              activeStreamSessionKeyRef.current = null;
+              setStreaming(false);
+              setSending(false);
+              setProgress(null);
+              return;
+            }
             if (userAbortedRef.current) {
               userAbortedRef.current = false;
               return;
@@ -492,6 +558,13 @@ export function useChatSession() {
             finalizeMessage();
           },
           onError: (msg) => {
+            if (!shouldApplyStreamUpdate(chatId)) {
+              activeStreamSessionKeyRef.current = null;
+              setStreaming(false);
+              setSending(false);
+              setProgress(null);
+              return;
+            }
             setError(msg);
             setStreamingMsg(null);
             setStreaming(false);
@@ -507,13 +580,17 @@ export function useChatSession() {
         }
       } finally {
         setSending(false);
+        if (activeStreamSessionKeyRef.current === chatId) {
+          activeStreamSessionKeyRef.current = null;
+        }
       }
     },
-    [sessionKey, thinkingLevel, modelSupportsThinking, finalizeMessage],
+    [sessionKey, thinkingLevel, modelSupportsThinking, finalizeMessage, shouldApplyStreamUpdate],
   );
 
   const abort = useCallback(() => {
     userAbortedRef.current = true;
+    activeStreamSessionKeyRef.current = null;
     senderRef.current.abort();
     sendingRef.current = false;
     streamingRef.current = false;
@@ -526,6 +603,16 @@ export function useChatSession() {
       }, 300);
     }
   }, [finalizeMessage, loadSessionById]);
+
+  useEffect(() => {
+    const active = activeStreamSessionKeyRef.current;
+    if (!active) return;
+    if (!decodedKey || decodedKey === active) return;
+    setStreamingMsg(null);
+    setProgress(null);
+    setStreaming(false);
+    setSending(false);
+  }, [decodedKey]);
 
   /** Avoid copying `messages` on every render when no streaming row — keeps stable array ref for memoized bubbles. */
   const displayMessages = useMemo(() => {
