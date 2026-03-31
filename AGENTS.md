@@ -68,7 +68,7 @@ Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 
 | Path | Role |
 |------|------|
-| `agent/` | `AgentService`, tools, memory, orchestration (core entry files at root; helpers grouped under `context/`, `lifecycle/`, `prompt/`, `subagent/`, `transcript/` — transcript hygiene, thinking-level types, etc.) |
+| `agent/` | `AgentService`, tools, memory, orchestration (core entry files at root; helpers grouped under `context/`, `lifecycle/`, `prompt/`, `transcript/` — transcript hygiene, thinking-level types, etc.) |
 | `channels/` | `ChannelPlugin`, manager, inbound/outbound, `attachments/`, `plugins/bundled.ts` |
 | `gateway/` | HTTP/WebSocket server, API for UI; `heartbeat/` keep-alive service |
 | `cli/` | Commands (self-registration via `registry`) |

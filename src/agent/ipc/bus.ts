@@ -27,22 +27,6 @@ export interface TaskOptions {
   timeoutMs?: number;
 }
 
-export interface SpawnOptions extends TaskOptions {
-  /** Agent ID to use for the subagent (auto-generated if not provided) */
-  agentId?: string;
-  /** Cleanup mode after completion */
-  cleanup?: 'keep' | 'delete' | 'archive';
-  /** Model override */
-  model?: string;
-}
-
-export interface SubagentResult {
-  success: boolean;
-  output?: string;
-  error?: string;
-  runId: string;
-}
-
 // ============================================
 // Agent Bus
 // ============================================
@@ -204,49 +188,6 @@ export class AgentBus {
       { messageId: message.id, to: toAgentId, success },
       'Response sent'
     );
-  }
-
-  /**
-   * Spawn a subagent and execute a task
-   * This is a high-level convenience method
-   */
-  async spawnSubagent(task: string, options: SpawnOptions = {}): Promise<SubagentResult> {
-    // Generate subagent ID if not provided
-    const subagentId = options.agentId || `sub-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const runId = `run-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-
-    log.info({ subagentId, task: task.slice(0, 100) }, 'Spawning subagent');
-
-    try {
-      // TODO: Create subagent through AgentRegistry
-      // For now, we assume it exists or will be created
-
-      // Send task to subagent
-      const messageId = await this.sendTask(subagentId, task, {
-        ...options,
-        callbackAgentId: this.agentId,
-      });
-
-      // Wait for completion with timeout
-      const response = await this.waitForResponse(messageId, options.timeoutMs || 600000);
-
-      // TODO: Handle cleanup based on options.cleanup
-
-      return {
-        success: response.payload.success,
-        output: response.payload.data as string,
-        error: response.payload.error,
-        runId,
-      };
-    } catch (error) {
-      log.error({ subagentId, error }, 'Subagent execution failed');
-
-      return {
-        success: false,
-        error: error instanceof Error ? error.message : String(error),
-        runId,
-      };
-    }
   }
 
   /**

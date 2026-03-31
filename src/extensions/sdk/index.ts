@@ -75,11 +75,6 @@ export type {
   //  Message write hook
   HookBeforeMessageWriteEvent,
   HookBeforeMessageWriteResult,
-  //  Subagent hooks
-  HookSubagentStartEvent,
-  HookSubagentEndEvent,
-  HookSubagentErrorEvent,
-  HookSubagentResultEvent,
   //  Turn hooks
   HookTurnStartEvent,
   HookTurnEndEvent,
