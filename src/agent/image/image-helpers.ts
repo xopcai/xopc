@@ -2,7 +2,7 @@ import type { AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { AssistantMessage } from '@mariozechner/pi-ai';
 import type { Config } from '../../config/schema.js';
 import { getAgentDefaultModelRef, parseModelRef } from '../../config/schema.js';
-import { extractTextContent } from '../context/helpers.js';
+import { extractTextContent } from '../context/workspace.js';
 import type { ImageAttempt } from './image-model-fallback.js';
 import { coerceToolModelConfig, type ToolModelConfig } from './tool-model-config.js';
 

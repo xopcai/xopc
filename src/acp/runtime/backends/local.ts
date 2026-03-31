@@ -28,7 +28,7 @@ import { resolveBundledSkillsDir } from "../../../config/paths.js";
 import { AgentToolsFactory } from "../../../agent/tools/factory.js";
 import { SystemPromptBuilder } from "../../../agent/prompt/service-prompt-builder.js";
 import { SkillManager } from "../../../agent/skills/index.js";
-import { loadBootstrapFiles, extractTextContent } from "../../../agent/context/helpers.js";
+import { loadBootstrapFiles, extractTextContent } from "../../../agent/context/workspace.js";
 import { cleanTrailingErrors, sanitizeMessages } from "../../../agent/memory/message-sanitizer.js";
 import {
   tryApplySessionTranscriptHygiene,

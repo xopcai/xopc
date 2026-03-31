@@ -12,7 +12,7 @@ import { createLogger } from '../utils/logger.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
 import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
-import { loadBootstrapFiles, extractTextContent } from './context/helpers.js';
+import { loadBootstrapFiles, extractTextContent } from './context/workspace.js';
 import { SkillManager } from './skills/index.js';
 import { SystemPromptBuilder } from './prompt/service-prompt-builder.js';
 import { AgentToolsFactory } from './tools/factory.js';

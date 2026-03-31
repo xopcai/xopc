@@ -7,9 +7,9 @@
 
 import type { Config } from '../../config/schema.js';
 import type { SkillManager } from '../skills/skill-manager.js';
-import type { BootstrapFile } from '../context/helpers.js';
+import type { BootstrapFile } from '../context/workspace.js';
 import { buildSystemPrompt as buildBaseSystemPrompt } from './system-prompt.js';
-import { toWorkspaceBootstrapFile } from '../context/helpers.js';
+import { toWorkspaceBootstrapFile } from '../context/workspace.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('SystemPromptBuilder');

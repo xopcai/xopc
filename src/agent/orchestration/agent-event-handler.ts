@@ -17,7 +17,7 @@ import type { SystemReminder } from '../prompt/system-reminder.js';
 import type { ToolUsageAnalyzer } from '../tools/usage-analyzer.js';
 import type { ErrorPatternMatcher } from '../tools/error-pattern-matcher.js';
 import type { ModelManager } from '../models/index.js';
-import { extractTextContent } from '../context/helpers.js';
+import { extractTextContent } from '../context/workspace.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('AgentEventHandler');

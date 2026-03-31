@@ -22,7 +22,7 @@ import {
   extractTextContent,
   extractThinkingContent,
   extractThinkingFromAssistantMessage,
-} from './context/helpers.js';
+} from './context/workspace.js';
 import { SessionTracker } from './session/tracker.js';
 import { ModelManager } from './models/index.js';
 import { initializeCommands } from '../chat-commands/index.js';
