@@ -26,7 +26,7 @@
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
-    "@xopcai/xopcbot": ">=0.2.0"
+    "@xopcai/xopcbot": "workspace:*"
   },
   "keywords": ["xopcbot", "xopcbot-extension", "telegram"],
   "license": "MIT"

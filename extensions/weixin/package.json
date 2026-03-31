@@ -18,7 +18,7 @@
     "build": "tsc -p tsconfig.json"
   },
   "peerDependencies": {
-    "@xopcai/xopcbot": ">=0.2.0"
+    "@xopcai/xopcbot": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
