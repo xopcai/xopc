@@ -54,6 +54,23 @@ export function cloneMessageForRender(msg: Message): Message {
   };
 }
 
+/**
+ * Resume/reconnect can replay part of a stream; append only the non-overlapping suffix.
+ * Example: base="abc", incoming="bcdef" => "abcdef", incoming="abc" => unchanged.
+ */
+function appendWithOverlap(base: string, incoming: string): string {
+  if (!incoming) return base;
+  if (!base) return incoming;
+  if (base.endsWith(incoming)) return base;
+  const max = Math.min(base.length, incoming.length, 512);
+  for (let overlap = max; overlap > 0; overlap--) {
+    if (base.slice(-overlap) === incoming.slice(0, overlap)) {
+      return base + incoming.slice(overlap);
+    }
+  }
+  return base + incoming;
+}
+
 function closeStreamingThinkingIfAny(content: MessageContent[]): void {
   const last = content[content.length - 1];
   if (last?.type === 'thinking' && last.streaming) {
@@ -75,7 +92,7 @@ export function appendThinkingDelta(content: MessageContent[], text: string, isD
   const last = content[content.length - 1];
   if (last?.type === 'thinking') {
     if (isDelta) {
-      last.text = (last.text || '') + text;
+      last.text = appendWithOverlap(last.text || '', text);
     } else {
       last.text = text;
     }
@@ -117,7 +134,7 @@ export function appendTextDelta(content: MessageContent[], delta: string): void 
 
   const last = content[content.length - 1];
   if (last?.type === 'text') {
-    last.text = (last.text || '') + delta;
+    last.text = appendWithOverlap(last.text || '', delta);
     return;
   }
   content.push({ type: 'text', text: delta });

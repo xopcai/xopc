@@ -39,6 +39,7 @@ export function useChatSession() {
   const sessionKeyRef = useRef<string | null>(null);
   const routeSessionKeyRef = useRef<string | null>(null);
   const activeStreamSessionKeyRef = useRef<string | null>(null);
+  const activeResumeRunIdRef = useRef<string | null>(null);
   const sessionNameRef = useRef<string | null>(null);
   const thinkingSupportGenRef = useRef(0);
   /** Skip duplicate finalize when user already committed via `abort()` (SSE may still send `result`). */
@@ -150,12 +151,15 @@ export function useChatSession() {
     });
     const appended = finalMsg;
     if (appended && hasRenderableAssistantContent(appended)) {
-      setMessages((m) => [...m, appended]);
+      setMessages((m) => mergeConsecutiveAssistantMessages([...m, appended]));
     }
     setStreaming(false);
     setProgress(null);
     setSending(false);
+    sendingRef.current = false;
+    streamingRef.current = false;
     activeStreamSessionKeyRef.current = null;
+    activeResumeRunIdRef.current = null;
     void pollSessionNameAfterTurn();
   }, [pollSessionNameAfterTurn]);
 
@@ -316,21 +320,45 @@ export function useChatSession() {
       /* ignore */
     }
     if (!stored?.runId) return;
+    if (activeResumeRunIdRef.current === stored.runId) return;
 
     userAbortedRef.current = false;
+    activeResumeRunIdRef.current = stored.runId;
     activeStreamSessionKeyRef.current = chatId;
+    sendingRef.current = true;
+    streamingRef.current = true;
     setSending(true);
     setStreaming(true);
     setProgress(null);
+    let hydratedResumeTail = false;
+    const hydrateResumeTailAssistant = () => {
+      if (hydratedResumeTail) return;
+      hydratedResumeTail = true;
+      let extractedTail: Message | null = null;
+      flushSync(() => {
+        setMessages((prev) => {
+          if (prev.length === 0) return prev;
+          const last = prev[prev.length - 1];
+          if (last?.role !== 'assistant') return prev;
+          extractedTail = cloneMessageForRender(last);
+          return prev.slice(0, -1);
+        });
+        if (extractedTail) {
+          setStreamingMsg((prev) => prev ?? extractedTail);
+        }
+      });
+    };
 
     try {
       await sender.resume(stored.runId, chatId, {
         onStreamStart: () => {
           if (!shouldApplyStreamUpdate(chatId)) return;
+          hydrateResumeTailAssistant();
           setStreamingMsg((prev) => cloneMessageForRender(ensureAssistantMessage(prev, Date.now())));
         },
         onToken: (delta) => {
           if (!shouldApplyStreamUpdate(chatId)) return;
+          hydrateResumeTailAssistant();
           setStreamingMsg((prev) => {
             const msg = ensureAssistantMessage(prev, Date.now());
             appendTextDelta(msg.content, delta);
@@ -340,6 +368,7 @@ export function useChatSession() {
         },
         onThinking: (c, isDelta) => {
           if (!shouldApplyStreamUpdate(chatId)) return;
+          hydrateResumeTailAssistant();
           setStreamingMsg((prev) => {
             const msg = ensureAssistantMessage(prev, Date.now());
             if (!isDelta && c === '') startThinkingSegment(msg.content);
@@ -349,6 +378,7 @@ export function useChatSession() {
         },
         onThinkingEnd: () => {
           if (!shouldApplyStreamUpdate(chatId)) return;
+          hydrateResumeTailAssistant();
           setStreamingMsg((prev) => {
             if (!prev) return prev;
             const msg = ensureAssistantMessage(prev, Date.now());
@@ -358,6 +388,7 @@ export function useChatSession() {
         },
         onToolStart: (toolName, args) => {
           if (!shouldApplyStreamUpdate(chatId)) return;
+          hydrateResumeTailAssistant();
           setStreamingMsg((prev) => {
             const msg = ensureAssistantMessage(prev, Date.now());
             appendToolStart(msg.content, toolName, args);
@@ -367,6 +398,7 @@ export function useChatSession() {
         },
         onToolEnd: (toolName, isErr, result) => {
           if (!shouldApplyStreamUpdate(chatId)) return;
+          hydrateResumeTailAssistant();
           setStreamingMsg((prev) => {
             const msg = ensureAssistantMessage(prev, Date.now());
             completeTool(msg.content, toolName, isErr, result);
@@ -400,6 +432,9 @@ export function useChatSession() {
         onResult: () => {
           if (!shouldApplyStreamUpdate(chatId)) {
             activeStreamSessionKeyRef.current = null;
+            activeResumeRunIdRef.current = null;
+            sendingRef.current = false;
+            streamingRef.current = false;
             setStreaming(false);
             setSending(false);
             setProgress(null);
@@ -414,11 +449,17 @@ export function useChatSession() {
         onError: (msg) => {
           if (!shouldApplyStreamUpdate(chatId)) {
             activeStreamSessionKeyRef.current = null;
+            activeResumeRunIdRef.current = null;
+            sendingRef.current = false;
+            streamingRef.current = false;
             setStreaming(false);
             setSending(false);
             setProgress(null);
             return;
           }
+          activeResumeRunIdRef.current = null;
+          sendingRef.current = false;
+          streamingRef.current = false;
           setError(msg);
           setStreamingMsg(null);
           setStreaming(false);
@@ -430,6 +471,9 @@ export function useChatSession() {
       if ((err as Error).name !== 'AbortError') {
         console.error('[chat] resume failed:', err);
       }
+      activeResumeRunIdRef.current = null;
+      sendingRef.current = false;
+      streamingRef.current = false;
       setStreaming(false);
       setSending(false);
       setStreamingMsg(null);
@@ -438,7 +482,7 @@ export function useChatSession() {
         activeStreamSessionKeyRef.current = null;
       }
     }
-  }, [finalizeMessage, pollSessionNameAfterTurn, shouldApplyStreamUpdate]);
+  }, [finalizeMessage, shouldApplyStreamUpdate]);
 
   const sendMessage = useCallback(
     async (
@@ -545,6 +589,8 @@ export function useChatSession() {
           onResult: () => {
             if (!shouldApplyStreamUpdate(chatId)) {
               activeStreamSessionKeyRef.current = null;
+              sendingRef.current = false;
+              streamingRef.current = false;
               setStreaming(false);
               setSending(false);
               setProgress(null);
@@ -559,11 +605,15 @@ export function useChatSession() {
           onError: (msg) => {
             if (!shouldApplyStreamUpdate(chatId)) {
               activeStreamSessionKeyRef.current = null;
+              sendingRef.current = false;
+              streamingRef.current = false;
               setStreaming(false);
               setSending(false);
               setProgress(null);
               return;
             }
+            sendingRef.current = false;
+            streamingRef.current = false;
             setError(msg);
             setStreamingMsg(null);
             setStreaming(false);
@@ -578,6 +628,8 @@ export function useChatSession() {
           setStreaming(false);
         }
       } finally {
+      sendingRef.current = false;
+      streamingRef.current = false;
         setSending(false);
         if (activeStreamSessionKeyRef.current === chatId) {
           activeStreamSessionKeyRef.current = null;
@@ -595,6 +647,7 @@ export function useChatSession() {
 
   const abort = useCallback(() => {
     userAbortedRef.current = true;
+    activeResumeRunIdRef.current = null;
     activeStreamSessionKeyRef.current = null;
     senderRef.current.abort();
     sendingRef.current = false;

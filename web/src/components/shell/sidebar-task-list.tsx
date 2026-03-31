@@ -1,7 +1,7 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
 import { ClipboardCopy, Loader2, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
-import { memo, useCallback, useEffect, useMemo, useState, type UIEvent } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWRInfinite from 'swr/infinite';
 
@@ -201,6 +201,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const [renameKey, setRenameKey] = useState<string | null>(null);
   const [renameDraft, setRenameDraft] = useState('');
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
+  const lastActiveSessionKeyRef = useRef<string | null>(null);
 
   const { data, size, setSize, isValidating, mutate } = useSWRInfinite<SidebarTaskPage>(
     (pageIndex, previousPageData) => {
@@ -277,6 +278,12 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   // Session SSE events can be delayed or absent until later turn metadata updates.
   useEffect(() => {
     if (!token || !activeSessionKey) return;
+    if (lastActiveSessionKeyRef.current === null) {
+      lastActiveSessionKeyRef.current = activeSessionKey;
+      return;
+    }
+    if (lastActiveSessionKeyRef.current === activeSessionKey) return;
+    lastActiveSessionKeyRef.current = activeSessionKey;
     void mutate();
   }, [token, activeSessionKey, mutate]);
 
