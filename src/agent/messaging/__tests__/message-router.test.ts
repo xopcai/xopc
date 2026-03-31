@@ -13,7 +13,7 @@ function makeInbound(content: string, sessionKey = 'telegram:acc:dm:1:u:2'): Inb
 }
 
 describe('MessageRouter', () => {
-  const router = new MessageRouter({ workspace: '/tmp' });
+  const router = new MessageRouter();
 
   it('treats /new@BotName as command new', async () => {
     const r = await router.routeMessage(makeInbound('/new@xopcbot_bot'));
