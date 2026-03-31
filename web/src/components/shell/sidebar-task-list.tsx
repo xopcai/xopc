@@ -280,6 +280,13 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
 
   const activeSessionKey = chatSessionKeyFromPath(pathname);
 
+  // Ensure sidebar list reflects newly created/selected sessions immediately.
+  // Session SSE events can be delayed or absent until later turn metadata updates.
+  useEffect(() => {
+    if (!token || !activeSessionKey) return;
+    void mutate();
+  }, [token, activeSessionKey, mutate]);
+
   const openRename = useCallback((key: string) => {
     const row = items.find((s) => s.key === key);
     setRenameKey(key);

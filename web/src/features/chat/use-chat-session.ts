@@ -115,7 +115,6 @@ export function useChatSession() {
   const pollSessionNameAfterTurn = useCallback(async () => {
     const key = sessionKeyRef.current;
     if (!key) return;
-    if (sessionNameRef.current?.trim()) return;
     for (let i = 0; i < 8; i++) {
       await new Promise<void>((r) => setTimeout(r, i === 0 ? 500 : 700));
       if (sessionKeyRef.current !== key) return;
@@ -585,7 +584,13 @@ export function useChatSession() {
         }
       }
     },
-    [sessionKey, thinkingLevel, modelSupportsThinking, finalizeMessage, shouldApplyStreamUpdate],
+    [
+      sessionKey,
+      thinkingLevel,
+      modelSupportsThinking,
+      finalizeMessage,
+      shouldApplyStreamUpdate,
+    ],
   );
 
   const abort = useCallback(() => {
