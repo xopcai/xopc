@@ -11,6 +11,7 @@ import {
   X,
 } from 'lucide-react';
 import { useEffect, useMemo, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import { bareInputFocusClass, nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
@@ -30,6 +31,25 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 const PAGE_LIMIT = 50;
 const REFRESH_MS = 5000;
+const LOG_LEVEL_SET = new Set<LogLevel>(LOG_LEVELS);
+
+function parseLogLevelsParam(raw: string | null): Set<LogLevel> {
+  if (!raw) return new Set<LogLevel>();
+  const out = new Set<LogLevel>();
+  for (const part of raw.split(',')) {
+    const level = part.trim() as LogLevel;
+    if (LOG_LEVEL_SET.has(level)) out.add(level);
+  }
+  return out;
+}
+
+function isSameLogLevelSet(a: Set<LogLevel>, b: Set<LogLevel>): boolean {
+  if (a.size !== b.size) return false;
+  for (const level of a) {
+    if (!b.has(level)) return false;
+  }
+  return true;
+}
 
 function interpolate(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
@@ -124,18 +144,26 @@ export function LogsPage() {
   const L = m.logs;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const initialSearch = searchParams.get('q') ?? '';
+  const initialLevels = parseLogLevelsParam(searchParams.get('level'));
+  const initialModule = searchParams.get('module') ?? '';
+  const initialFrom = searchParams.get('from') ?? '';
+  const initialTo = searchParams.get('to') ?? '';
+  const initialAutoRefresh = searchParams.get('live') === '1';
 
   const [logs, setLogs] = useState<LogEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
 
-  const [searchInput, setSearchInput] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [selectedLevels, setSelectedLevels] = useState<Set<LogLevel>>(new Set());
-  const [moduleFilter, setModuleFilter] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch.trim());
+  const [selectedLevels, setSelectedLevels] = useState<Set<LogLevel>>(initialLevels);
+  const [moduleFilter, setModuleFilter] = useState(initialModule);
+  const [dateFrom, setDateFrom] = useState(initialFrom);
+  const [dateTo, setDateTo] = useState(initialTo);
 
   const [modules, setModules] = useState<string[]>([]);
   const [files, setFiles] = useState<LogFile[]>([]);
@@ -144,12 +172,67 @@ export function LogsPage() {
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
   const [logDir, setLogDir] = useState<string | null>(null);
-  const [autoRefresh, setAutoRefresh] = useState(false);
+  const [autoRefresh, setAutoRefresh] = useState(initialAutoRefresh);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  useEffect(() => {
+    const nextQ = searchParams.get('q') ?? '';
+    const nextModule = searchParams.get('module') ?? '';
+    const nextFrom = searchParams.get('from') ?? '';
+    const nextTo = searchParams.get('to') ?? '';
+    const nextAutoRefresh = searchParams.get('live') === '1';
+    const nextLevels = parseLogLevelsParam(searchParams.get('level'));
+    const nextDebouncedQ = nextQ.trim();
+
+    setSearchInput((prev) => (prev === nextQ ? prev : nextQ));
+    setDebouncedSearch((prev) => (prev === nextDebouncedQ ? prev : nextDebouncedQ));
+    setSelectedLevels((prev) => (isSameLogLevelSet(nextLevels, prev) ? prev : nextLevels));
+    setModuleFilter((prev) => (prev === nextModule ? prev : nextModule));
+    setDateFrom((prev) => (prev === nextFrom ? prev : nextFrom));
+    setDateTo((prev) => (prev === nextTo ? prev : nextTo));
+    setAutoRefresh((prev) => (prev === nextAutoRefresh ? prev : nextAutoRefresh));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    const nextQ = debouncedSearch.trim();
+    if (nextQ) params.set('q', nextQ);
+    else params.delete('q');
+
+    if (selectedLevels.size > 0) {
+      const serializedLevels = Array.from(selectedLevels).sort().join(',');
+      params.set('level', serializedLevels);
+    } else {
+      params.delete('level');
+    }
+
+    if (moduleFilter) params.set('module', moduleFilter);
+    else params.delete('module');
+    if (dateFrom) params.set('from', dateFrom);
+    else params.delete('from');
+    if (dateTo) params.set('to', dateTo);
+    else params.delete('to');
+    if (autoRefresh) params.set('live', '1');
+    else params.delete('live');
+
+    const next = params.toString();
+    if (next !== searchParams.toString()) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [
+    autoRefresh,
+    dateFrom,
+    dateTo,
+    debouncedSearch,
+    moduleFilter,
+    searchParams,
+    selectedLevels,
+    setSearchParams,
+  ]);
 
   const queryParams = useMemo(
     () => ({
