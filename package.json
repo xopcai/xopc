@@ -92,6 +92,8 @@
     "@sinclair/typebox": "^0.34.48",
     "@vscode/ripgrep": "^1.17.1",
     "adm-zip": "^0.5.16",
+    "ajv": "^8.17.1",
+    "ajv-formats": "^3.0.1",
     "cli-table3": "^0.6.5",
     "commander": "^14.0.3",
     "cron-parser": "^5.5.0",
