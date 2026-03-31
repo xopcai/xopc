@@ -10,6 +10,7 @@ import {
   Search,
 } from 'lucide-react';
 import { useCallback, useEffect, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 
 import { SessionCard, type SessionCardAction } from '@/features/sessions/session-card';
 import { SessionDetailDrawer } from '@/features/sessions/session-detail-drawer';
@@ -44,6 +45,10 @@ function interpolate(template: string, params: Record<string, string | number>):
 }
 
 type StatusFilter = 'all' | 'active' | 'pinned' | 'archived';
+type SessionsViewMode = 'grid' | 'list';
+
+const SESSION_STATUS_FILTER_SET = new Set<StatusFilter>(['all', 'active', 'pinned', 'archived']);
+const SESSION_VIEW_MODE_SET = new Set<SessionsViewMode>(['grid', 'list']);
 
 export function SessionsPage() {
   const language = useLocaleStore((s) => s.language);
@@ -51,11 +56,22 @@ export function SessionsPage() {
   const s = m.sessions;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
+  const [searchParams, setSearchParams] = useSearchParams();
 
-  const [searchInput, setSearchInput] = useState('');
-  const [debouncedSearch, setDebouncedSearch] = useState('');
-  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
-  const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
+  const initialSearch = searchParams.get('q') ?? '';
+  const initialStatus = searchParams.get('status');
+  const initialView = searchParams.get('view');
+  const initialStatusFilter: StatusFilter = SESSION_STATUS_FILTER_SET.has(initialStatus as StatusFilter)
+    ? (initialStatus as StatusFilter)
+    : 'all';
+  const initialViewMode: SessionsViewMode = SESSION_VIEW_MODE_SET.has(initialView as SessionsViewMode)
+    ? (initialView as SessionsViewMode)
+    : 'grid';
+
+  const [searchInput, setSearchInput] = useState(initialSearch);
+  const [debouncedSearch, setDebouncedSearch] = useState(initialSearch.trim());
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>(initialStatusFilter);
+  const [viewMode, setViewMode] = useState<SessionsViewMode>(initialViewMode);
 
   const [sessions, setSessions] = useState<SessionMetadata[]>([]);
   const [loading, setLoading] = useState(false);
@@ -74,6 +90,39 @@ export function SessionsPage() {
     const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
     return () => clearTimeout(t);
   }, [searchInput]);
+
+  useEffect(() => {
+    const nextQ = searchParams.get('q') ?? '';
+    const nextStatusRaw = searchParams.get('status');
+    const nextViewRaw = searchParams.get('view');
+    const nextStatus: StatusFilter = SESSION_STATUS_FILTER_SET.has(nextStatusRaw as StatusFilter)
+      ? (nextStatusRaw as StatusFilter)
+      : 'all';
+    const nextView: SessionsViewMode = SESSION_VIEW_MODE_SET.has(nextViewRaw as SessionsViewMode)
+      ? (nextViewRaw as SessionsViewMode)
+      : 'grid';
+    const nextDebouncedQ = nextQ.trim();
+
+    setSearchInput((prev) => (prev === nextQ ? prev : nextQ));
+    setDebouncedSearch((prev) => (prev === nextDebouncedQ ? prev : nextDebouncedQ));
+    setStatusFilter((prev) => (prev === nextStatus ? prev : nextStatus));
+    setViewMode((prev) => (prev === nextView ? prev : nextView));
+  }, [searchParams]);
+
+  useEffect(() => {
+    const params = new URLSearchParams(searchParams);
+    const nextQ = debouncedSearch.trim();
+    if (nextQ) params.set('q', nextQ);
+    else params.delete('q');
+    if (statusFilter !== 'all') params.set('status', statusFilter);
+    else params.delete('status');
+    if (viewMode !== 'grid') params.set('view', viewMode);
+    else params.delete('view');
+    const next = params.toString();
+    if (next !== searchParams.toString()) {
+      setSearchParams(params, { replace: true });
+    }
+  }, [debouncedSearch, searchParams, setSearchParams, statusFilter, viewMode]);
 
   useEffect(() => {
     if (!hasToken) return;
