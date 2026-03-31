@@ -11,7 +11,6 @@ import { runWithImageModelFallback } from '../image/image-model-fallback.js';
 import { loadImageForToolInput } from '../image/load-image-media.js';
 import {
   buildToolModelConfigFromCandidates,
-  coerceToolModelConfig,
   hasToolModelConfig,
   resolveDefaultModelRef,
   type ToolModelConfig,
