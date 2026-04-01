@@ -1,7 +1,11 @@
 /**
  * Built-in channel plugins: sources under extensions/*, compiled to dist/extensions/*.
- * Regenerate: node scripts/generate-bundled-channel-plugins.mjs
+ * Regenerate: pnpm run generate:bundled-channels
  */
 
-export { telegramPlugin } from '../../extensions/telegram/src/index.js';
-export { weixinPlugin } from '../../extensions/weixin/src/index.js';
+import type { ChannelPlugin } from '../channels/plugin-types.js';
+import { telegramPlugin } from '../../extensions/telegram/src/index.js';
+import { weixinPlugin } from '../../extensions/weixin/src/index.js';
+
+export { telegramPlugin, weixinPlugin };
+export const bundledChannelPlugins: ChannelPlugin[] = [telegramPlugin, weixinPlugin];

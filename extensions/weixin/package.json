@@ -23,6 +23,12 @@
   "devDependencies": {
     "typescript": "^5.9.3"
   },
+  "xopcbot": {
+    "bundledChannel": {
+      "export": "weixinPlugin",
+      "order": 20
+    }
+  },
   "keywords": ["xopcbot", "weixin", "wechat"],
   "license": "MIT"
 }
