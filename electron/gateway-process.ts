@@ -14,11 +14,13 @@ export function getDefaultGatewayPort(): number {
 }
 
 /**
- * Path to bundled `dist/src/cli/index.js` (dev: repo `dist/`, packaged: inside app.asar).
+ * CLI entry for the gateway subprocess.
+ * Packaged: esbuild bundle at `out/server/index.js` (self-contained).
+ * Dev: tsdown output at `dist/src/cli/index.js` (resolves deps from node_modules).
  */
 export function resolveCliEntry(): string {
   if (app.isPackaged) {
-    return join(app.getAppPath(), 'dist/src/cli/index.js');
+    return join(app.getAppPath(), 'out/server/index.js');
   }
   const mainDir = dirname(fileURLToPath(import.meta.url));
   return join(mainDir, '../../dist/src/cli/index.js');
@@ -58,7 +60,8 @@ export function spawnGatewayProcess(opts: {
         XOPCBOT_CONFIG_PATH: opts.configPath,
         XOPCBOT_WORKSPACE: opts.workspacePath,
       },
-      cwd: app.isPackaged ? app.getAppPath() : dirname(dirname(dirname(cli))),
+      // app.getAppPath() is the app.asar archive — not a real directory; using it as cwd causes spawn ENOTDIR.
+      cwd: app.isPackaged ? opts.workspacePath : dirname(dirname(dirname(cli))),
       stdio: app.isPackaged ? 'pipe' : 'inherit',
     },
   );

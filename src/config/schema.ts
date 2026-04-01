@@ -734,8 +734,6 @@ export interface ParsedModelRef {
   model: string;
 }
 
-export { isProviderConfigured } from '../providers/index.js';
-
 /**
  * Resolve the workspace directory path from config.
  */

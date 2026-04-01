@@ -5,8 +5,14 @@
  * "proxyconnect tcp: dial tcp 127.0.0.1:7899: connect: connection refused".
  * Set ELECTRON_BUILDER_KEEP_PROXY=1 to pass the parent environment through unchanged.
  *
+ * Gateway server for packaged apps is pre-bundled to `out/server/index.js` by
+ * `scripts/build-electron-server.mjs` (run via `pnpm run electron:server:build` before this step).
+ * electron-builder packs the `out/` tree into the asar; it does not include raw `dist/` + node_modules.
+ *
  * Extra CLI args (e.g. `--mac --x64 --arm64`) are forwarded for CI matrix builds.
  */
+
+// Main
 import { spawnSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
