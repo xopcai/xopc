@@ -1,5 +1,5 @@
 import { Menu, Plus } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
@@ -10,6 +10,9 @@ import { cn } from '@/lib/cn';
 import { useAppShellStore } from '@/stores/app-shell-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
+
+/** Tailwind `lg` breakpoint — matches sidebar drawer vs in-flow rail. */
+const MAX_LG = '(max-width: 1023px)';
 
 type ChatHeaderBarProps = {
   chatHeadline: string;
@@ -36,12 +39,26 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useAppShellStore((s) => s.setMobileNavOpen);
 
+  const [isMobileLayout, setIsMobileLayout] = useState(() =>
+    typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia(MAX_LG).matches : false,
+  );
+  useEffect(() => {
+    const mq = globalThis.matchMedia(MAX_LG);
+    const onChange = () => setIsMobileLayout(mq.matches);
+    onChange();
+    mq.addEventListener('change', onChange);
+    return () => mq.removeEventListener('change', onChange);
+  }, []);
+
+  /** Desktop: mirror collapsed rail. Mobile: drawer closed — same need as sidebar `navCollapsed`. */
+  const showNewChatLink = isMobileLayout ? !mobileNavOpen : sidebarCollapsed;
+
   return (
     <div
       className={cn(
         'flex gap-3 px-3 sm:gap-4 sm:px-5 xl:px-6',
         APP_TOP_HEADER_BAR_CLASS,
-        sidebarCollapsed &&
+        showNewChatLink &&
           (showModelSelector
             ? 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-4'
             : 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center lg:gap-4'),
@@ -60,13 +77,12 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({
         >
           <Menu className="size-4" strokeWidth={1.5} aria-hidden />
         </Button>
-        {sidebarCollapsed ? (
+        {showNewChatLink ? (
           <Link
             to="/chat/new"
             className={cn(
-              'hidden h-8 shrink-0 items-center gap-2 rounded-lg bg-surface-panel px-2.5 text-sm font-medium leading-none text-fg transition-colors hover:bg-surface-hover',
+              'inline-flex h-8 shrink-0 items-center gap-2 rounded-lg bg-surface-panel px-2.5 text-sm font-medium leading-none text-fg transition-colors hover:bg-surface-hover',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
-              'lg:inline-flex',
             )}
             title={m.sidebar.newTask}
           >
@@ -78,7 +94,7 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({
       <h1
         className={cn(
           'min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-fg',
-          sidebarCollapsed ? 'text-left lg:text-center' : 'text-left',
+          showNewChatLink ? 'text-left lg:text-center' : 'text-left',
         )}
         title={chatHeadline}
       >
