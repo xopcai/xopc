@@ -1,6 +1,6 @@
-# Architecture Design
+# Architecture
 
-This document describes xopcbot's overall architecture and module relationships.
+This page describes how xopcbot is structured and how the main pieces fit together.
 
 ## System Architecture
 
@@ -157,11 +157,11 @@ Real-time progress tracking for long-running tasks:
 ```typescript
 // Tool execution feedback
 manager.onToolStart('read_file', { path: '/file.txt' });
-// → Shows: 📖 读取中...
+// → e.g. 📖 Reading...
 
 // Heartbeat for tasks > 30s
 manager.onHeartbeat(elapsed, stage);
-// → Shows: ⏱️ 已进行 45 秒
+// → e.g. ⏱️ Running for 45s
 ```
 
 **Progress Stages**:

@@ -1,6 +1,6 @@
 # Getting Started
 
-This guide provides a complete walkthrough for setting up **xopcbot** for the first time.
+Install **xopcbot**, add at least one LLM provider key, then run the CLI or gateway. This page covers a first-time setup from scratch.
 
 ## 1. Prerequisites
 

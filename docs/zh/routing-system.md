@@ -1,6 +1,6 @@
-# Session 路由系统
+# Session 路由
 
-xopcbot 的 Session 路由系统提供统一的消息路由和会话管理机制。
+说明入站流量如何映射到 **session key**、**agent**，以及跨通道的 **identity link**（身份关联）。
 
 ## Session Key 格式
 

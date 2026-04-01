@@ -1,6 +1,6 @@
-# Session Routing System
+# Session Routing
 
-xopcbot's Session Routing System provides unified message routing and session management.
+How inbound traffic maps to **session keys**, **agents**, and optional **identity links** across channels.
 
 ## Session Key Format
 

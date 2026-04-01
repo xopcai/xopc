@@ -43,11 +43,11 @@ edit               → writing
 
 ### 3. Long-running Task Heartbeat
 
-For tasks longer than 30 seconds, periodic heartbeat messages are sent:
+For tasks longer than 30 seconds, periodic heartbeat messages are sent (wording may be localized in the UI):
 
 ```
-🔍 搜索中...
-⏱️ 已进行 45 秒
+🔍 Searching…
+⏱️ Running for 45s
 ```
 
 **Heartbeat Settings:**
@@ -59,9 +59,9 @@ For tasks longer than 30 seconds, periodic heartbeat messages are sent:
 For Telegram channels, progress indicators are displayed inline with streaming messages:
 
 ```
-🔍 搜索中
+🔍 Searching…
 
-正在搜索："how to build a react app"
+Searching: "how to build a react app"
 ```
 
 ---

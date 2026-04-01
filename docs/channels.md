@@ -196,9 +196,9 @@ Open `http://localhost:18790` in your browser.
 
 ### Features
 
-- ✅ Real-time chat with WebSocket
+- ✅ Chat via the gateway (REST; agent replies stream with **SSE** on `/api/agent`)
 - ✅ Session management
-- ✅ Configuration dialog
+- ✅ Configuration UI
 - ✅ Log viewer
 - ✅ Cron job management
 
