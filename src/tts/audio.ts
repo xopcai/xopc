@@ -71,7 +71,11 @@ export async function compressAudio(
 
     return { buffer: compressedBuffer, format: 'opus' };
   } catch (error) {
-    log.warn({ error, inputFormat }, 'Audio compression failed, using original');
+    const hint =
+      error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT'
+        ? ' (install ffmpeg and ensure it is on PATH for wav→opus compression)'
+        : '';
+    log.warn({ error, inputFormat }, `Audio compression failed, using original${hint}`);
     return { buffer: audioBuffer, format: inputFormat };
   } finally {
     // Cleanup temp files
