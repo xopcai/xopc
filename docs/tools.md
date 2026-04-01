@@ -379,7 +379,7 @@ Agent processes
             ▼
 ┌─────────────────────────┐
 │  Progress Feedback      │
-│  → Shows: 🔍 搜索中...   │
+│  → e.g. 🔍 Searching…   │
 └───────────┬─────────────┘
             │
             ▼

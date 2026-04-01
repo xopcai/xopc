@@ -1,22 +1,25 @@
-# Web 前端（网关控制台）
+# Gateway Console (Web UI)
 
-网关控制台位于仓库根目录的 `web/`：**React + Vite + Tailwind v4**，生产构建输出到 `dist/gateway/static/root`，由网关静态托管。设计规范见 [ui-design-system.md](./design/ui-design-system.md)。
+The **gateway console** is the React single-page app in the `web/` package (Vite, Tailwind CSS v4, hash-based routing). It is the browser UI served by the gateway alongside the HTTP API.
 
-## 路由约定（React Router / hash）
+## How it connects
 
-- 默认：`/` → 重定向到 `/chat`。
-- 聊天：`/chat`、`/chat/new`、`/chat/:sessionKey`。
-- 管理：`/sessions`、`/cron`、`/skills`、`/logs`。
-- 设置：`/settings/:section`（`agent` \| `providers` \| `models` \| `channels` \| `voice` \| `gateway`）。
+| Mechanism | Use |
+|-----------|-----|
+| REST | Settings, sessions, cron, logs, config, etc. |
+| SSE | Agent streaming (`POST /api/agent` with `Accept: text/event-stream`) |
+| EventSource | Broadcast channel events (`GET /api/events`, optional `?token=`) |
 
-旧版 Hash（如 `#sessions`）在启动时会规范化为 `#/...`，见 `web/src/lib/legacy-hash.ts`。
+Authentication uses the gateway token (see `gateway` / `onboard` docs).
 
-## 网关集成
+## Stack (summary)
 
-- **REST**：`apiFetch` / `fetchJson`，`Authorization: Bearer <token>`（见 `web/src/lib/fetch.ts`）。
-- **Agent 流式**：`POST /api/agent`，`Accept: text/event-stream`，响应体按 SSE 解析（见 `web/src/features/chat/`）。
-- **广播**：`GET /api/events`（`EventSource`），事件名中的点号映射为 `window` 上的连字符事件（如 `config.reload` → `config-reload`）。
+- React 19, React Router 7 (`createHashRouter`), Zustand, SWR, Lucide, Radix UI where needed
 
----
+## Related docs
 
-_历史说明：早期 Lit 实现已移除；本文档保留路由与协议约定。_
+- [UI design system](/design/ui-design-system) — tokens and layout for the console
+- [Gateway](/gateway) — API and process management
+- [Configuration](/configuration) — `gateway` section in `config.json`
+
+For contributor-oriented details, see **Web UI** in the repository root [`AGENTS.md`](https://github.com/xopcai/xopcbot/blob/main/AGENTS.md).

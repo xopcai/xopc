@@ -62,7 +62,7 @@ export default defineConfig({
             items: [
               { text: 'Templates', link: '/reference/templates' },
               { text: 'UI Design System', link: '/design/ui-design-system' },
-              { text: 'Web Console Notes', link: '/web-migration-plan' }
+              { text: 'Gateway Console (Web UI)', link: '/web-migration-plan' }
             ]
           }
         ],
@@ -125,7 +125,7 @@ export default defineConfig({
               { text: '模板文件', link: '/zh/reference/templates' },
               { text: '构建与发布', link: '/zh/build-and-release' },
               { text: '控制台 UI 设计规范', link: '/design/ui-design-system' },
-              { text: '网关控制台说明', link: '/web-migration-plan' }
+              { text: '网关控制台 (Web UI)', link: '/zh/web-migration-plan' }
             ]
           }
         ],

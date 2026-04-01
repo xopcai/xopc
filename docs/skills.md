@@ -1,6 +1,6 @@
 # Skills System Guide
 
-xopcbot's skills system is , allowing you to add domain-specific capabilities and knowledge to your AI assistant through SKILL.md files.
+xopcbot's skills system is file-based: add domain-specific capabilities and knowledge to your assistant through `SKILL.md` files in the workspace.
 
 ## Table of Contents
 

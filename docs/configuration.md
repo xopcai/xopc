@@ -502,7 +502,7 @@ xopcbot config --edit
 
 ---
 
-## Q&A
+## FAQ
 
 ### Q: How to use multiple providers?
 
