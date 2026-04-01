@@ -53,7 +53,8 @@
     "electron:dev": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite dev",
     "electron:vite:build": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite build",
     "electron:package": "node scripts/electron-builder.mjs",
-    "electron:build": "pnpm run electron:vite:build && pnpm run electron:package",
+    "electron:server:build": "node scripts/build-electron-server.mjs",
+    "electron:build": "pnpm run electron:vite:build && pnpm run electron:server:build && pnpm run electron:package",
     "electron:preview": "cross-env ELECTRON_ENTRY=out/main/index.js electron-vite preview"
   },
   "keywords": [
@@ -125,6 +126,7 @@
     "electron": "^41.1.0",
     "electron-builder": "^26.8.1",
     "electron-vite": "^5.0.0",
+    "esbuild": "^0.25.0",
     "eslint": "^10.0.0",
     "markdown-it": "^14.1.1",
     "pino-pretty": "^13.1.3",

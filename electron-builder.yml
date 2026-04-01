@@ -20,7 +20,6 @@ directories:
 files:
   - out/**/*
   - package.json
-  - dist/**/*
 
 extraMetadata:
   main: out/main/index.js
