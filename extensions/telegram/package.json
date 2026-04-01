@@ -28,6 +28,12 @@
   "peerDependencies": {
     "@xopcai/xopcbot": "workspace:*"
   },
+  "xopcbot": {
+    "bundledChannel": {
+      "export": "telegramPlugin",
+      "order": 10
+    }
+  },
   "keywords": ["xopcbot", "xopcbot-extension", "telegram"],
   "license": "MIT"
 }
