@@ -114,6 +114,10 @@ function resolveUiStaticRoot(): string {
   if (normalized.includes('/dist/src/gateway/')) {
     return resolve(here, '../../../gateway/static/root');
   }
+  // esbuild Electron bundle: `out/server/index.js` → __dirname is `.../out/server` (two levels up to app root)
+  if (normalized.includes('/out/server')) {
+    return resolve(here, '../../dist/gateway/static/root');
+  }
   return resolve(here, '../../../dist/gateway/static/root');
 }
 

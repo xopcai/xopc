@@ -59,6 +59,9 @@ export function spawnGatewayProcess(opts: {
         XOPCBOT_STATE_DIR: dirname(opts.configPath),
         XOPCBOT_CONFIG_PATH: opts.configPath,
         XOPCBOT_WORKSPACE: opts.workspacePath,
+        ...(app.isPackaged
+          ? { XOPCBOT_UI_STATIC_ROOT: join(app.getAppPath(), 'dist/gateway/static/root') }
+          : {}),
       },
       // app.getAppPath() is the app.asar archive — not a real directory; using it as cwd causes spawn ENOTDIR.
       cwd: app.isPackaged ? opts.workspacePath : dirname(dirname(dirname(cli))),
