@@ -4,7 +4,10 @@ import { readFile, writeFile, mkdir, unlink, readdir, stat, cp, rename } from 'f
 import { basename, join } from 'path';
 import { existsSync } from 'fs';
 import { resolveSessionsDir, resolveAgentId, FILENAMES } from '../config/paths.js';
-import { resolveSessionShardRelativePath } from './shard-path.js';
+import {
+  resolveLegacyDeepWebShardRelativePath,
+  resolveSessionShardRelativePath,
+} from './shard-path.js';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { createLogger } from '../utils/logger.js';
 import type {
@@ -30,7 +33,8 @@ const DEFAULT_LIMIT = 50;
 
 /**
  * Session files live under `resolveSessionsDir(agentId)` (ADR-003), sharded by
- * `resolveSessionShardRelativePath(sessionKey)` (users/… vs system/cron, system/heartbeat, …).
+ * `resolveSessionShardRelativePath(sessionKey)` (users/… vs system/cron, system/heartbeat; web UI uses
+ * compact `users/{agent}/web/{peerId}` for gateway/webchat direct sessions).
  * Optional `workspace` enables one-time migration from legacy `<workspace>/.sessions`.
  */
 export interface SessionStoreOptions {
@@ -191,6 +195,19 @@ export class SessionStore {
     return {
       jsonPath: join(this.sessionsDir, `${safeKey}.json`),
       metaPath: join(this.sessionsDir, `${safeKey}.meta.json`),
+    };
+  }
+
+  /** Pre-compact web UI shard: `users/.../webchat/default/direct/...` */
+  private legacyDeepWebPathsForKey(key: string): { dir: string; jsonPath: string; metaPath: string } | null {
+    const rel = resolveLegacyDeepWebShardRelativePath(key);
+    if (!rel) return null;
+    const safeKey = this.sanitizeKey(key);
+    const dir = join(this.sessionsDir, rel);
+    return {
+      dir,
+      jsonPath: join(dir, `${safeKey}.json`),
+      metaPath: join(dir, `${safeKey}.meta.json`),
     };
   }
 
@@ -692,6 +709,24 @@ export class SessionStore {
       }
     }
 
+    const deepLegacy = this.legacyDeepWebPathsForKey(key);
+    if (messages === null && deepLegacy && deepLegacy.jsonPath !== primary.jsonPath) {
+      const deepMessages = await readAndNormalize(deepLegacy.jsonPath);
+      if (deepMessages !== null) {
+        await mkdir(primary.dir, { recursive: true });
+        try {
+          await rename(deepLegacy.jsonPath, primary.jsonPath);
+          if (existsSync(deepLegacy.metaPath)) {
+            await rename(deepLegacy.metaPath, primary.metaPath);
+          }
+          log.debug({ key }, 'Lazy-migrated web session from deep shard to compact shard');
+        } catch (err) {
+          log.warn({ err, key }, 'Failed to lazy-migrate web session to compact shard');
+        }
+        messages = deepMessages;
+      }
+    }
+
     if (messages !== null) {
       return messages;
     }
@@ -731,6 +766,14 @@ export class SessionStore {
 
     const inShard = await scanDir(shardDir);
     if (inShard) return inShard;
+    const legacyRel = resolveLegacyDeepWebShardRelativePath(sessionKey);
+    if (legacyRel) {
+      const legacyShard = join(this.archiveDir, legacyRel);
+      if (legacyShard !== shardDir) {
+        const inLegacy = await scanDir(legacyShard);
+        if (inLegacy) return inLegacy;
+      }
+    }
     return await scanDir(this.archiveDir);
   }
 
@@ -1149,8 +1192,15 @@ export class SessionStore {
     const safeKey = this.sanitizeKey(key);
     const primary = this.sessionPathsForKey(key);
     const legacy = this.legacyFlatPathsForKey(key);
-    const sourcePath = existsSync(primary.jsonPath) ? primary.jsonPath : legacy.jsonPath;
-    if (!existsSync(sourcePath)) {
+    const deepLegacy = this.legacyDeepWebPathsForKey(key);
+    const sourcePath = existsSync(primary.jsonPath)
+      ? primary.jsonPath
+      : existsSync(legacy.jsonPath)
+        ? legacy.jsonPath
+        : deepLegacy && existsSync(deepLegacy.jsonPath)
+          ? deepLegacy.jsonPath
+          : null;
+    if (!sourcePath) {
       return;
     }
 
@@ -1164,7 +1214,13 @@ export class SessionStore {
       await writeFile(targetPath, data);
       await unlink(sourcePath);
 
-      const metaSource = existsSync(primary.metaPath) ? primary.metaPath : legacy.metaPath;
+      const metaSource = existsSync(primary.metaPath)
+        ? primary.metaPath
+        : existsSync(legacy.metaPath)
+          ? legacy.metaPath
+          : deepLegacy && existsSync(deepLegacy.metaPath)
+            ? deepLegacy.metaPath
+            : primary.metaPath;
       const metaTarget = join(archiveShard, `${safeKey}.${timestamp}.meta.json`);
       try {
         const metaData = await readFile(metaSource, 'utf-8');

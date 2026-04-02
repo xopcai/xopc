@@ -116,9 +116,42 @@ describe('SessionStore', () => {
       expect(existsSync(join(tempDir, '.sessions', 'system', 'cron', 'cron_job1.json'))).toBe(true);
       expect(
         existsSync(
-          join(tempDir, '.sessions', 'users', 'main', 'webchat', 'default', 'direct', 'u1', 'main_webchat_default_direct_u1.json')
+          join(tempDir, '.sessions', 'users', 'main', 'web', 'u1', 'main_webchat_default_direct_u1.json')
         )
       ).toBe(true);
+    });
+
+    it('lazy-migrates web session from legacy deep shard to compact layout', async () => {
+      const key = 'main:gateway:default:direct:chat_mig';
+      const legacyDir = join(
+        tempDir,
+        '.sessions',
+        'users',
+        'main',
+        'gateway',
+        'default',
+        'direct',
+        'chat_mig'
+      );
+      await mkdir(legacyDir, { recursive: true });
+      await writeFile(
+        join(legacyDir, 'main_gateway_default_direct_chat_mig.json'),
+        JSON.stringify([{ role: 'user', content: 'hi' }])
+      );
+
+      const msgs = await store.loadMessages(key);
+      expect(msgs).toHaveLength(1);
+      const compactJson = join(
+        tempDir,
+        '.sessions',
+        'users',
+        'main',
+        'web',
+        'chat_mig',
+        'main_gateway_default_direct_chat_mig.json'
+      );
+      expect(existsSync(compactJson)).toBe(true);
+      expect(existsSync(join(legacyDir, 'main_gateway_default_direct_chat_mig.json'))).toBe(false);
     });
   });
 
