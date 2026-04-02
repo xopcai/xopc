@@ -1,4 +1,5 @@
-import { CheckCircle2, Loader2, XCircle } from 'lucide-react';
+import { useEffect, useMemo, useState } from 'react';
+import { CheckCircle2, ChevronDown, CircleDot, Loader2, XCircle } from 'lucide-react';
 
 import type {
   Message,
@@ -8,6 +9,7 @@ import type {
 } from '@/features/chat/messages.types';
 import { stringToToolResultMessage } from '@/features/chat/tool-result';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 
 function formatParamsJson(params: unknown): string {
   if (params === undefined) return '';
@@ -111,6 +113,93 @@ function filterVisibleSteps(blocks: Array<ThinkingContent | ToolUseContent>): Ar
       b.type !== 'thinking' ||
       Boolean(b.text?.trim()) ||
       Boolean(b.streaming),
+  );
+}
+
+function viewStepsLabel(
+  count: number,
+  m: { viewSteps_one: string; viewSteps_other: string },
+): string {
+  const key = count === 1 ? m.viewSteps_one : m.viewSteps_other;
+  return key.replace(/\{\{count\}\}/g, String(count));
+}
+
+/** Collapsible inline block: “View N steps” header + timeline (main chat column). */
+export function AssistantStepsBlock({
+  blocks,
+  toolLabels,
+  stepLabels,
+}: {
+  blocks: Array<ThinkingContent | ToolUseContent>;
+  toolLabels: { input: string; output: string; noOutput: string };
+  stepLabels: {
+    thoughts: string;
+    thoughtsStreaming: string;
+    viewSteps_one: string;
+    viewSteps_other: string;
+    searchedWeb: string;
+    readFile: string;
+    stepDetails: string;
+  };
+}) {
+  const visibleBlocks = useMemo(() => filterVisibleSteps(blocks), [blocks]);
+  const stepCount = visibleBlocks.length;
+  const anyActive = visibleBlocks.some(
+    (b) =>
+      (b.type === 'thinking' && b.streaming) || (b.type === 'tool_use' && b.status === 'running'),
+  );
+
+  const [expanded, setExpanded] = useState(anyActive);
+
+  useEffect(() => {
+    if (anyActive) {
+      setExpanded(true);
+    }
+  }, [anyActive]);
+
+  if (stepCount === 0) {
+    return null;
+  }
+
+  const timelineLabels = {
+    thoughts: stepLabels.thoughts,
+    thoughtsStreaming: stepLabels.thoughtsStreaming,
+    searchedWeb: stepLabels.searchedWeb,
+    readFile: stepLabels.readFile,
+    stepDetails: stepLabels.stepDetails,
+  };
+
+  return (
+    <div className="my-1 w-full min-w-0 overflow-hidden rounded-xl bg-surface-hover/50 dark:bg-surface-hover/30">
+      <button
+        type="button"
+        className={cn(
+          'grid w-full min-w-0 grid-cols-[auto_minmax(0,1fr)_auto] items-start gap-x-2 rounded-t-xl px-3 py-2 text-left',
+          interaction.transition,
+          interaction.press,
+          'hover:bg-surface-hover/80 dark:hover:bg-surface-hover/50',
+          'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+        )}
+        onClick={() => setExpanded(!expanded)}
+        aria-expanded={expanded}
+      >
+        <CircleDot className="mt-0.5 h-4 w-4 shrink-0 text-accent-fg" aria-hidden />
+        <div className="min-w-0">
+          <span className="inline-flex max-w-full rounded-md bg-accent-soft/70 px-2 py-0.5 text-xs font-medium text-fg [overflow-wrap:anywhere] dark:bg-accent-soft/40">
+            {viewStepsLabel(stepCount, stepLabels)}
+          </span>
+        </div>
+        <ChevronDown
+          className={cn('mt-0.5 h-4 w-4 shrink-0 text-fg-muted transition-transform', expanded && 'rotate-180')}
+          aria-hidden
+        />
+      </button>
+      {expanded ? (
+        <div className="border-t border-edge-subtle/90 px-3 pb-3 pt-2 dark:border-edge-subtle">
+          <AssistantStepsTimeline blocks={blocks} toolLabels={toolLabels} stepLabels={timelineLabels} />
+        </div>
+      ) : null}
+    </div>
   );
 }
 
