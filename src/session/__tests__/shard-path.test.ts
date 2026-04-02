@@ -1,7 +1,10 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'path';
 
-import { resolveSessionShardRelativePath } from '../shard-path.js';
+import {
+  resolveLegacyDeepWebShardRelativePath,
+  resolveSessionShardRelativePath,
+} from '../shard-path.js';
 
 describe('resolveSessionShardRelativePath', () => {
   it('places cron sessions under system/cron', () => {
@@ -16,6 +19,27 @@ describe('resolveSessionShardRelativePath', () => {
   it('places routing keys under users/.../peer', () => {
     expect(resolveSessionShardRelativePath('main:telegram:default:dm:123456')).toBe(
       join('users', 'main', 'telegram', 'default', 'dm', '123456')
+    );
+  });
+
+  it('compacts webchat and gateway direct sessions under users/{agent}/web/{peer}', () => {
+    expect(resolveSessionShardRelativePath('main:webchat:default:direct:chat_1')).toBe(
+      join('users', 'main', 'web', 'chat_1')
+    );
+    expect(resolveSessionShardRelativePath('main:gateway:default:direct:chat_2')).toBe(
+      join('users', 'main', 'web', 'chat_2')
+    );
+  });
+
+  it('keeps non-default account in web UI shard path', () => {
+    expect(resolveSessionShardRelativePath('main:gateway:work:direct:chat_3')).toBe(
+      join('users', 'main', 'web', 'work', 'chat_3')
+    );
+  });
+
+  it('exposes legacy deep path for web UI sessions', () => {
+    expect(resolveLegacyDeepWebShardRelativePath('main:webchat:default:direct:u1')).toBe(
+      join('users', 'main', 'webchat', 'default', 'direct', 'u1')
     );
   });
 
