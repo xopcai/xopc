@@ -1,7 +1,7 @@
 import { Menu } from 'lucide-react';
 import { memo } from 'react';
 
-import { APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
+import { APP_CHROME_NO_DRAG_CLASS, APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -30,7 +30,11 @@ export const SecondaryPageTopBar = memo(function SecondaryPageTopBar() {
         <Button
           type="button"
           variant="ghost"
-          className={cn('size-8 shrink-0 rounded-xl p-0', mobileNavOpen && 'hidden')}
+          className={cn(
+            'size-8 shrink-0 rounded-xl p-0',
+            APP_CHROME_NO_DRAG_CLASS,
+            mobileNavOpen && 'hidden',
+          )}
           aria-expanded={mobileNavOpen}
           aria-controls="app-sidebar"
           aria-label={m.openMenu}

@@ -2,7 +2,7 @@ import { Menu, Plus } from 'lucide-react';
 import { memo, useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
-import { APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
+import { APP_CHROME_NO_DRAG_CLASS, APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
 import { Button } from '@/components/ui/button';
 import { ModelSelector } from '@/features/chat/model-selector';
 import { messages } from '@/i18n/messages';
@@ -68,7 +68,11 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({
         <Button
           type="button"
           variant="ghost"
-          className={cn('size-8 shrink-0 rounded-xl p-0 lg:hidden', mobileNavOpen && 'hidden')}
+          className={cn(
+            'size-8 shrink-0 rounded-xl p-0 lg:hidden',
+            APP_CHROME_NO_DRAG_CLASS,
+            mobileNavOpen && 'hidden',
+          )}
           aria-expanded={mobileNavOpen}
           aria-controls="app-sidebar"
           aria-label={m.openMenu}
@@ -83,6 +87,7 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({
             className={cn(
               'inline-flex h-8 shrink-0 items-center gap-2 rounded-lg bg-surface-panel px-2.5 text-sm font-medium leading-none text-fg transition-colors hover:bg-surface-hover',
               'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+              APP_CHROME_NO_DRAG_CLASS,
             )}
             title={m.sidebar.newTask}
           >
@@ -101,7 +106,12 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({
         {chatHeadline}
       </h1>
       {showModelSelector ? (
-        <div className="min-w-0 w-fit max-w-[min(20rem,calc(100vw-10rem))] shrink-0">
+        <div
+          className={cn(
+            'min-w-0 w-fit max-w-[min(20rem,calc(100vw-10rem))] shrink-0',
+            APP_CHROME_NO_DRAG_CLASS,
+          )}
+        >
           <ModelSelector
             value={sessionModel}
             disabled={modelDisabled}

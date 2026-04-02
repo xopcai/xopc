@@ -1,7 +1,7 @@
 import { PanelLeft, PanelRight, X } from 'lucide-react';
 import { memo, useEffect } from 'react';
 
-import { APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
+import { APP_CHROME_NO_DRAG_CLASS, APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
 import { SidebarNav } from '@/components/shell/sidebar';
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
@@ -92,7 +92,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
             <Button
               type="button"
               variant="ghost"
-              className="size-8 shrink-0 rounded-xl p-0 lg:hidden"
+              className={cn('size-8 shrink-0 rounded-xl p-0 lg:hidden', APP_CHROME_NO_DRAG_CLASS)}
               aria-label={m.closeMenu}
               title={m.closeMenu}
               onClick={() => setMobileNavOpen(false)}
@@ -103,7 +103,10 @@ export const SidebarColumn = memo(function SidebarColumn() {
           <Button
             type="button"
             variant="ghost"
-            className="hidden size-8 shrink-0 rounded-xl p-0 lg:inline-flex"
+            className={cn(
+              'hidden size-8 shrink-0 rounded-xl p-0 lg:inline-flex',
+              APP_CHROME_NO_DRAG_CLASS,
+            )}
             aria-expanded={!sidebarCollapsed}
             aria-controls="app-sidebar"
             aria-label={sidebarCollapsed ? m.sidebarExpand : m.sidebarCollapse}
