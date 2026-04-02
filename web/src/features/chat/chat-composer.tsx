@@ -365,6 +365,26 @@ export const ChatComposer = memo(function ChatComposer({
             </div>
 
             <div className="flex flex-wrap items-center gap-2 border-t border-edge-subtle/90 px-4 py-2.5 dark:border-edge-subtle">
+              <button
+                type="button"
+                className={cn(
+                  'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-subtle hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
+                  interaction.transition,
+                  interaction.press,
+                  interaction.focusRingPanel,
+                  'disabled:opacity-50 disabled:cursor-not-allowed',
+                )}
+                disabled={attachments.length >= MAX_CHAT_ATTACHMENTS || disabled || busy}
+                title={
+                  attachments.length >= MAX_CHAT_ATTACHMENTS
+                    ? interpolate(m.chat.maxAttachmentsReached, { max: MAX_CHAT_ATTACHMENTS })
+                    : `${m.chat.attachFile} (${attachments.length}/${MAX_CHAT_ATTACHMENTS})`
+                }
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <FileIcon className="h-4 w-4" />
+              </button>
+
               {showThinkingSelector ? (
                 <div
                   className="inline-flex min-h-8 items-center gap-1 rounded-full bg-surface-hover px-2.5 py-1 text-xs dark:bg-surface-hover/80"
@@ -387,26 +407,6 @@ export const ChatComposer = memo(function ChatComposer({
               ) : null}
 
               <div className="ml-auto flex items-center gap-1">
-                <button
-                  type="button"
-                  className={cn(
-                    'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-subtle hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
-                    interaction.transition,
-                    interaction.press,
-                    interaction.focusRingPanel,
-                    'disabled:opacity-50 disabled:cursor-not-allowed',
-                  )}
-                  disabled={attachments.length >= MAX_CHAT_ATTACHMENTS || disabled || busy}
-                  title={
-                    attachments.length >= MAX_CHAT_ATTACHMENTS
-                      ? interpolate(m.chat.maxAttachmentsReached, { max: MAX_CHAT_ATTACHMENTS })
-                      : `${m.chat.attachFile} (${attachments.length}/${MAX_CHAT_ATTACHMENTS})`
-                  }
-                  onClick={() => fileInputRef.current?.click()}
-                >
-                  <FileIcon className="h-4 w-4" />
-                </button>
-
                 <button
                   type="button"
                   className={cn(
