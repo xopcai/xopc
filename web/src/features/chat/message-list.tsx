@@ -1,5 +1,5 @@
 import { measureElement, useVirtualizer } from '@tanstack/react-virtual';
-import { memo, useLayoutEffect, useRef, type MutableRefObject, type RefObject } from 'react';
+import { memo, type RefObject } from 'react';
 
 import { MessageBubble } from '@/features/chat/message-bubble';
 import type { Message, ProgressState } from '@/features/chat/messages.types';
@@ -17,8 +17,6 @@ export const MessageList = memo(function MessageList({
   streaming,
   progress,
   scrollElementRef,
-  executionDrawerOpen = false,
-  drawerPinBottomIntentRef,
 }: {
   messages: Message[];
   authToken?: string;
@@ -26,10 +24,6 @@ export const MessageList = memo(function MessageList({
   progress: ProgressState | null;
   /** Scrollable viewport (ChatPage `chat-messages`); required whenever the list is shown. */
   scrollElementRef: RefObject<HTMLDivElement | null>;
-  /** When the execution drawer toggles, column width changes and row heights remeasure — DOM scrollTop alone is not enough. */
-  executionDrawerOpen?: boolean;
-  /** Set `{ pin: true }` in the same render as `executionDrawerOpen` changes when the user was at the bottom. */
-  drawerPinBottomIntentRef?: MutableRefObject<{ pin: boolean }>;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -48,45 +42,6 @@ export const MessageList = memo(function MessageList({
     getItemKey: (index) => messageRowKey(list[index], index),
     measureElement,
   });
-
-  const prevDrawerOpenRef = useRef(executionDrawerOpen);
-
-  useLayoutEffect(() => {
-    if (showWelcome || count === 0) return;
-    if (prevDrawerOpenRef.current === executionDrawerOpen) return;
-    prevDrawerOpenRef.current = executionDrawerOpen;
-    const intent = drawerPinBottomIntentRef?.current;
-    if (!intent?.pin) return;
-    intent.pin = false;
-
-    const lastIdx = count - 1;
-    const pinToEnd = () => {
-      virtualizer.scrollToIndex(lastIdx, { align: 'end', behavior: 'auto' });
-    };
-
-    pinToEnd();
-    requestAnimationFrame(pinToEnd);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(pinToEnd);
-    });
-
-    const scrollEl = scrollElementRef.current;
-    if (!scrollEl) return;
-
-    let resizeCalls = 0;
-    const ro = new ResizeObserver(() => {
-      pinToEnd();
-      resizeCalls += 1;
-      if (resizeCalls >= 16) ro.disconnect();
-    });
-    ro.observe(scrollEl);
-    const t = window.setTimeout(() => ro.disconnect(), 280);
-    return () => {
-      window.clearTimeout(t);
-      ro.disconnect();
-    };
-    // virtualizer intentionally omitted: identity can change every render; scrollToIndex uses latest closure.
-  }, [count, drawerPinBottomIntentRef, executionDrawerOpen, scrollElementRef, showWelcome]);
 
   if (showWelcome) {
     return (
@@ -126,7 +81,6 @@ export const MessageList = memo(function MessageList({
               authToken={authToken}
               isStreaming={isStreamRow}
               progress={isStreamRow ? progress : null}
-              messageIndex={virtualRow.index}
             />
           </div>
         );
