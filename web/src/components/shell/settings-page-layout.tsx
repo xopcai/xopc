@@ -2,6 +2,7 @@ import { ArrowLeft, BookOpen, ExternalLink } from 'lucide-react';
 import { memo } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 
+import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { TabIcon } from '@/components/shell/tab-icons';
 import { messages, tabLabel } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -39,7 +40,12 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
   const m = messages(language);
 
   const backControl = (
-    <Link to="/chat" replace={false} className={backLinkClass} title={m.sidebar.backToApp}>
+    <Link
+      to="/chat"
+      replace={false}
+      className={cn(backLinkClass, APP_CHROME_NO_DRAG_CLASS)}
+      title={m.sidebar.backToApp}
+    >
       <ArrowLeft className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
       <span>{m.sidebar.backToApp}</span>
     </Link>
@@ -54,7 +60,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
           'md:h-full md:min-h-0 md:w-[min(15rem,40vw)] md:shrink-0 md:overflow-hidden',
         )}
       >
-        <div className="shrink-0 px-4 pb-2 pt-4">{backControl}</div>
+        <div className={cn('shrink-0 px-4 pb-2 pt-4', APP_CHROME_DRAG_CLASS)}>{backControl}</div>
 
         {/* Mobile: horizontal tabs + help */}
         <div className="md:hidden">
