@@ -20,6 +20,8 @@ directories:
 files:
   - out/**/*
   - package.json
+  # Gateway UI: `pnpm run build:web` → dist/gateway/static/root (not in esbuild server bundle)
+  - dist/gateway/static/root/**/*
 
 extraMetadata:
   main: out/main/index.js

@@ -12,6 +12,7 @@ import {
 import type { Config } from '../config/schema.js';
 import { getModelRegistry } from './model-registry.js';
 import { resolveApiKey, hasCredentials } from '../auth/credentials.js';
+import { hasProviderAuthOnDiskSync } from '../auth/sync-provider-auth.js';
 import { getApiKeyFromEnv } from './env-keys.js';
 
 export { getApiKeyFromEnv, PROVIDER_ENV_MAP } from './env-keys.js';
@@ -116,7 +117,11 @@ export function isProviderConfiguredSync(provider: string): boolean {
 		return true;
 	}
 	// Check environment variables
-	return !!getApiKeyFromEnv(provider);
+	if (getApiKeyFromEnv(provider)) {
+		return true;
+	}
+	// Gateway UI / CLI store keys in auth-profiles.json (async CredentialResolver); sync path for fallback list
+	return hasProviderAuthOnDiskSync(provider);
 }
 
 export async function isProviderConfigured(provider: string): Promise<boolean> {
