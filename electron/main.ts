@@ -65,8 +65,10 @@ async function resolveWindowLoad(): Promise<
 
 function createWindow(): void {
   const win = new BrowserWindow({
-    width: 1400,
-    height: 900,
+    width: 1100,
+    height: 720,
+    minWidth: 800,
+    minHeight: 560,
     titleBarStyle: process.platform === 'darwin' ? 'hiddenInset' : 'default',
     ...(!app.isPackaged && existsSync(devWindowIcon) ? { icon: devWindowIcon } : {}),
     webPreferences: {
