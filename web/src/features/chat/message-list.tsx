@@ -1,5 +1,5 @@
 import { measureElement, useVirtualizer } from '@tanstack/react-virtual';
-import { memo, type RefObject } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 
 import { MessageBubble } from '@/features/chat/message-bubble';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages.types';
@@ -18,6 +18,7 @@ export const MessageList = memo(function MessageList({
   progress,
   reasoningLevel,
   scrollElementRef,
+  pinToBottom,
 }: {
   messages: Message[];
   authToken?: string;
@@ -26,6 +27,8 @@ export const MessageList = memo(function MessageList({
   reasoningLevel: ReasoningLevel;
   /** Scrollable viewport (ChatPage `chat-messages`); required whenever the list is shown. */
   scrollElementRef: RefObject<HTMLDivElement | null>;
+  /** When true, keep the last row aligned to the bottom as virtual row heights are measured. */
+  pinToBottom: boolean;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -45,6 +48,42 @@ export const MessageList = memo(function MessageList({
     measureElement,
   });
 
+  const contentRef = useRef<HTMLDivElement>(null);
+  const pinToBottomRef = useRef(pinToBottom);
+  pinToBottomRef.current = pinToBottom;
+
+  const scrollLastToEnd = useCallback(() => {
+    const c = virtualizer.options.count;
+    if (c === 0) return;
+    virtualizer.scrollToIndex(c - 1, { align: 'end', behavior: 'auto' });
+  }, [virtualizer]);
+
+  /** User clicked “scroll to bottom” or list length changed while pinned — height may not change. */
+  useLayoutEffect(() => {
+    if (!pinToBottom || list.length === 0) return;
+    scrollLastToEnd();
+  }, [pinToBottom, list.length, scrollLastToEnd]);
+
+  /** Virtual row heights grow after first paint; keep pinned without waiting for `chatMessages` identity changes. */
+  useEffect(() => {
+    if (!pinToBottom || list.length === 0) return;
+    const el = contentRef.current;
+    if (!el) return;
+
+    const ro = new ResizeObserver(() => {
+      requestAnimationFrame(() => {
+        if (!pinToBottomRef.current) return;
+        scrollLastToEnd();
+      });
+    });
+    ro.observe(el);
+    requestAnimationFrame(() => {
+      if (!pinToBottomRef.current) return;
+      scrollLastToEnd();
+    });
+    return () => ro.disconnect();
+  }, [pinToBottom, list.length, scrollLastToEnd]);
+
   if (showWelcome) {
     return (
       <div className="flex flex-col gap-10 pb-8">
@@ -62,7 +101,7 @@ export const MessageList = memo(function MessageList({
   const totalSize = virtualizer.getTotalSize();
 
   return (
-    <div className="relative w-full min-w-0" style={{ height: totalSize }}>
+    <div ref={contentRef} className="relative w-full min-w-0" style={{ height: totalSize }}>
       {virtualizer.getVirtualItems().map((virtualRow) => {
         const msg = list[virtualRow.index];
         if (!msg) return null;
