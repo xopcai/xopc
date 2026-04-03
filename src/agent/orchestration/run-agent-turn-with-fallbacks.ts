@@ -13,8 +13,9 @@ import {
   isAssistantTurnFailed,
   maybeRetryTurnAfterTransientLlmFailure,
 } from './llm-turn-retry.js';
+import { AGENT_TURN_TIMEOUT_MS, runAgentTurnWithTimeout } from './run-agent-turn-with-timeout.js';
 
-export const AGENT_TURN_TIMEOUT_MS = 120_000;
+export { AGENT_TURN_TIMEOUT_MS };
 
 type FallbackLog = {
   info: (obj: Record<string, unknown>, msg: string) => void;
@@ -75,15 +76,7 @@ export async function runAgentTurnWithModelFallbacks(params: {
         await maybeRetryTurnAfterTransientLlmFailure(agent, { sessionKey, log });
       };
 
-      await Promise.race([
-        runTurn(),
-        new Promise<never>((_, reject) =>
-          setTimeout(
-            () => reject(new Error(`Agent turn timed out after ${timeoutMs / 1000}s`)),
-            timeoutMs,
-          ),
-        ),
-      ]);
+      await runAgentTurnWithTimeout(agent, runTurn, timeoutMs);
 
       if (isAssistantTurnAborted(agent)) {
         return;
