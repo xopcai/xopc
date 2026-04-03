@@ -67,6 +67,16 @@ export async function deliverOutboundMessage(
   if (outbound.sendPayload) {
     return outbound.sendPayload({ ...outboundCtx, payload: normalizedPayload });
   }
+
+  const hasMediaUrl = Boolean(msg.mediaUrl?.trim());
+
+  // Plugins often expose both sendText and sendMedia; text-only replies must use sendText.
+  if (!hasMediaUrl && outbound.sendText) {
+    return outbound.sendText(outboundCtx);
+  }
+  if (hasMediaUrl && outbound.sendMedia) {
+    return outbound.sendMedia(outboundCtx);
+  }
   if (outbound.sendMedia) {
     return outbound.sendMedia(outboundCtx);
   }

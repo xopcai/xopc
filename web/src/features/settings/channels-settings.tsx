@@ -523,27 +523,14 @@ export function ChannelsSettingsPanel() {
 
           {showWxBody ? (
             <div className="space-y-4 px-4 py-4">
-              <p className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-2 text-xs text-fg-muted dark:border-edge">
-                {ch.weixinLoginCallout}
-              </p>
-
-              <div className="flex flex-col gap-1.5">
-                <FieldLabel>{ch.weixinAllowFrom}</FieldLabel>
-                <textarea
-                  className={cn(inputClassName(), 'min-h-[2.75rem] resize-y font-mono text-xs')}
-                  rows={2}
-                  placeholder="wxid_..., openid_..."
-                  value={wx.allowFrom.join(', ')}
-                  onChange={(e) =>
-                    updateWeixin({
-                      allowFrom: e.target.value
-                        .split(/[,\n]/)
-                        .map((s) => s.trim())
-                        .filter(Boolean),
-                    })
-                  }
-                />
-                <FieldHint>{ch.weixinAllowFromDesc}</FieldHint>
+              <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-3 text-xs text-fg dark:border-edge">
+                <p className="font-medium text-fg">{ch.weixinQuickStartTitle}</p>
+                <ol className="mt-2 list-decimal space-y-2 pl-4 text-fg-muted marker:text-fg-subtle">
+                  <li>{ch.weixinStepLogin}</li>
+                  <li>{ch.weixinStepEnable}</li>
+                  <li>{ch.weixinStepPairing}</li>
+                </ol>
+                <p className="mt-3 text-fg-subtle">{ch.weixinAdvancedHint}</p>
               </div>
 
               <Button
@@ -728,6 +715,24 @@ function WeixinAdvanced({
 }) {
   return (
     <div className="space-y-4 border-t border-edge-subtle pt-4 dark:border-edge">
+      <div className="flex flex-col gap-1.5">
+        <FieldLabel>{ch.weixinAllowFrom}</FieldLabel>
+        <textarea
+          className={cn(inputClassName(), 'min-h-[2.75rem] resize-y font-mono text-xs')}
+          rows={2}
+          placeholder="wxid_..., openid_..."
+          value={wx.allowFrom.join(', ')}
+          onChange={(e) =>
+            updateWeixin({
+              allowFrom: e.target.value
+                .split(/[,\n]/)
+                .map((s) => s.trim())
+                .filter(Boolean),
+            })
+          }
+        />
+        <FieldHint>{ch.weixinAllowFromDesc}</FieldHint>
+      </div>
       <SelectField label={ch.dmPolicy} value={wx.dmPolicy} onChange={(v) => updateWeixin({ dmPolicy: v })} options={dmOpts} />
       <SelectField
         label={ch.streamMode}

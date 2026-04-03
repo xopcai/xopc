@@ -671,7 +671,11 @@ const bundles: Record<
       telegramDebug: string;
       multiAccountJson: string;
       multiAccountJsonDesc: string;
-      weixinLoginCallout: string;
+      weixinQuickStartTitle: string;
+      weixinStepLogin: string;
+      weixinStepEnable: string;
+      weixinStepPairing: string;
+      weixinAdvancedHint: string;
       weixinAllowFrom: string;
       weixinAllowFromDesc: string;
       weixinRouteTag: string;
@@ -1565,7 +1569,7 @@ const bundles: Record<
       telegramTitle: 'Telegram',
       telegramSubtitle: 'Bot token, allowlists, and optional multi-account JSON.',
       weixinTitle: 'Weixin',
-      weixinSubtitle: 'Inbound Weixin bridge; advanced routing and per-account JSON.',
+      weixinSubtitle: 'Scan QR via CLI once, then enable here. No bot token field—login is stored on disk.',
       enableTelegramAria: 'Enable Telegram channel',
       enableWeixinAria: 'Enable Weixin channel',
       telegramToken: 'Bot token',
@@ -1587,9 +1591,16 @@ const bundles: Record<
       multiAccountJson: 'Multi-account (JSON)',
       multiAccountJsonDesc:
         'Optional. Per-account botToken or tokenFile, policies, and groups. Empty {} uses the single token above only.',
-      weixinLoginCallout: 'Weixin login and bridge setup are configured outside this form (see documentation).',
+      weixinQuickStartTitle: 'Quick start',
+      weixinStepLogin:
+        'On the host that runs the gateway, run: xopcbot channels login --channel weixin — then scan the QR code with WeChat. (From the repo: pnpm run dev -- channels login --channel weixin.)',
+      weixinStepEnable: 'Turn on Weixin below and save. Restart the gateway process if it was already running.',
+      weixinStepPairing:
+        'After QR login, DMs work immediately. Use allowlist DM policy only if you want to restrict who can message the bot.',
+      weixinAdvancedHint: 'Optional: allowlist, route tag, streaming, and per-account JSON—only if you need them.',
       weixinAllowFrom: 'Allow from',
-      weixinAllowFromDesc: 'Comma-separated wxid / openid allowlist when applicable.',
+      weixinAllowFromDesc:
+        'When DM policy is allowlist: comma-separated wxid / openid. Default pairing allows all contacts after QR login.',
       weixinRouteTag: 'Route tag',
       weixinRouteTagDesc: 'Optional tag for routing; numeric or string.',
       routeTagPlaceholder: 'e.g. tag name or number',
@@ -2503,7 +2514,7 @@ const bundles: Record<
       telegramTitle: 'Telegram',
       telegramSubtitle: 'Bot Token、白名单及可选的多账号 JSON。',
       weixinTitle: '微信',
-      weixinSubtitle: '微信桥接入站；高级路由与分账号 JSON。',
+      weixinSubtitle: '命令行扫码登录一次，再在此启用。无 Bot Token 输入框——凭据保存在本机。',
       enableTelegramAria: '启用 Telegram 渠道',
       enableWeixinAria: '启用微信渠道',
       telegramToken: 'Bot Token',
@@ -2525,9 +2536,14 @@ const bundles: Record<
       multiAccountJson: '多账号（JSON）',
       multiAccountJsonDesc:
         '可选。每账号可配置 botToken 或 tokenFile、策略与群组。留空 {} 则仅使用上方单一 Token。',
-      weixinLoginCallout: '微信登录与桥接需在表单外按文档配置。',
+      weixinQuickStartTitle: '最简步骤',
+      weixinStepLogin:
+        '在运行网关的机器上执行：xopcbot channels login --channel weixin，用微信扫码完成登录。（源码目录可用：pnpm run dev -- channels login --channel weixin）',
+      weixinStepEnable: '下方打开「启用微信」并保存。若网关已在运行，请重启网关进程。',
+      weixinStepPairing: '扫码登录后即可正常收发；仅在需要限制谁可私聊时，将私聊策略改为白名单并配置允许来源。',
+      weixinAdvancedHint: '可选：白名单、路由标签、流式与分账号 JSON——仅在需要时展开。',
       weixinAllowFrom: '允许来源',
-      weixinAllowFromDesc: '逗号分隔的 wxid / openid 白名单（如适用）。',
+      weixinAllowFromDesc: '私聊策略为白名单时使用，逗号分隔的 wxid / openid。默认配对在扫码后即可与任意联系人私聊。',
       weixinRouteTag: '路由标签',
       weixinRouteTagDesc: '可选路由标签，可为数字或字符串。',
       routeTagPlaceholder: '例如标签名或数字',
