@@ -1,5 +1,5 @@
 import { decryptAesEcb } from "./aes-ecb.js";
-import { buildCdnDownloadUrl } from "./cdn-url.js";
+import { buildCdnDownloadUrl, ENABLE_CDN_URL_FALLBACK } from "./cdn-url.js";
 import { logger } from "../util/logger.js";
 
 /**
@@ -43,7 +43,6 @@ function parseAesKey(aesKeyBase64: string, label: string): Buffer {
     return decoded;
   }
   if (decoded.length === 32 && /^[0-9a-fA-F]{32}$/.test(decoded.toString("ascii"))) {
-    // hex-encoded key: base64 → hex string → raw bytes
     return Buffer.from(decoded.toString("ascii"), "hex");
   }
   const msg = `${label}: aes_key must decode to 16 raw bytes or 32-char hex string, got ${decoded.length} bytes (base64="${aesKeyBase64}")`;
@@ -60,9 +59,17 @@ export async function downloadAndDecryptBuffer(
   aesKeyBase64: string,
   cdnBaseUrl: string,
   label: string,
+  fullUrl?: string,
 ): Promise<Buffer> {
   const key = parseAesKey(aesKeyBase64, label);
-  const url = buildCdnDownloadUrl(encryptedQueryParam, cdnBaseUrl);
+  let url: string;
+  if (fullUrl) {
+    url = fullUrl;
+  } else if (ENABLE_CDN_URL_FALLBACK) {
+    url = buildCdnDownloadUrl(encryptedQueryParam, cdnBaseUrl);
+  } else {
+    throw new Error(`${label}: fullUrl is required (CDN URL fallback is disabled)`);
+  }
   logger.debug(`${label}: fetching url=${url}`);
   const encrypted = await fetchCdnBytes(url, label);
   logger.debug(`${label}: downloaded ${encrypted.byteLength} bytes, decrypting`);
@@ -78,8 +85,16 @@ export async function downloadPlainCdnBuffer(
   encryptedQueryParam: string,
   cdnBaseUrl: string,
   label: string,
+  fullUrl?: string,
 ): Promise<Buffer> {
-  const url = buildCdnDownloadUrl(encryptedQueryParam, cdnBaseUrl);
+  let url: string;
+  if (fullUrl) {
+    url = fullUrl;
+  } else if (ENABLE_CDN_URL_FALLBACK) {
+    url = buildCdnDownloadUrl(encryptedQueryParam, cdnBaseUrl);
+  } else {
+    throw new Error(`${label}: fullUrl is required (CDN URL fallback is disabled)`);
+  }
   logger.debug(`${label}: fetching url=${url}`);
   return fetchCdnBytes(url, label);
 }

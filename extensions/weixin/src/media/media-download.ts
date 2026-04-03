@@ -34,30 +34,32 @@ export async function downloadMediaFromItem(
     label: string;
   },
 ): Promise<WeixinInboundMediaOpts> {
-  const { cdnBaseUrl, saveMedia, log, errLog, label } = deps;
+  const { cdnBaseUrl, saveMedia, errLog, label } = deps;
   const result: WeixinInboundMediaOpts = {};
 
   if (item.type === MessageItemType.IMAGE) {
     const img = item.image_item;
-    if (!img?.media?.encrypt_query_param) return result;
+    if (!img?.media?.encrypt_query_param && !img?.media?.full_url) return result;
     const aesKeyBase64 = img.aeskey
       ? Buffer.from(img.aeskey, "hex").toString("base64")
       : img.media.aes_key;
     logger.debug(
-      `${label} image: encrypt_query_param=${img.media.encrypt_query_param.slice(0, 40)}... hasAesKey=${Boolean(aesKeyBase64)} aeskeySource=${img.aeskey ? "image_item.aeskey" : "media.aes_key"}`,
+      `${label} image: encrypt_query_param=${(img.media.encrypt_query_param ?? "").slice(0, 40)}... hasAesKey=${Boolean(aesKeyBase64)} aeskeySource=${img.aeskey ? "image_item.aeskey" : "media.aes_key"} full_url=${Boolean(img.media.full_url)}`,
     );
     try {
       const buf = aesKeyBase64
         ? await downloadAndDecryptBuffer(
-            img.media.encrypt_query_param,
+            img.media.encrypt_query_param ?? "",
             aesKeyBase64,
             cdnBaseUrl,
             `${label} image`,
+            img.media.full_url,
           )
         : await downloadPlainCdnBuffer(
-            img.media.encrypt_query_param,
+            img.media.encrypt_query_param ?? "",
             cdnBaseUrl,
             `${label} image-plain`,
+            img.media.full_url,
           );
       const saved = await saveMedia(buf, undefined, "inbound", WEIXIN_MEDIA_MAX_BYTES);
       result.decryptedPicPath = saved.path;
@@ -68,13 +70,15 @@ export async function downloadMediaFromItem(
     }
   } else if (item.type === MessageItemType.VOICE) {
     const voice = item.voice_item;
-    if (!voice?.media?.encrypt_query_param || !voice.media.aes_key) return result;
+    if ((!voice?.media?.encrypt_query_param && !voice?.media?.full_url) || !voice.media.aes_key)
+      return result;
     try {
       const silkBuf = await downloadAndDecryptBuffer(
-        voice.media.encrypt_query_param,
+        voice.media.encrypt_query_param ?? "",
         voice.media.aes_key,
         cdnBaseUrl,
         `${label} voice`,
+        voice.media.full_url,
       );
       logger.debug(`${label} voice: decrypted ${silkBuf.length} bytes, attempting silk transcode`);
       const wavBuf = await silkToWav(silkBuf);
@@ -95,13 +99,15 @@ export async function downloadMediaFromItem(
     }
   } else if (item.type === MessageItemType.FILE) {
     const fileItem = item.file_item;
-    if (!fileItem?.media?.encrypt_query_param || !fileItem.media.aes_key) return result;
+    if ((!fileItem?.media?.encrypt_query_param && !fileItem?.media?.full_url) || !fileItem.media.aes_key)
+      return result;
     try {
       const buf = await downloadAndDecryptBuffer(
-        fileItem.media.encrypt_query_param,
+        fileItem.media.encrypt_query_param ?? "",
         fileItem.media.aes_key,
         cdnBaseUrl,
         `${label} file`,
+        fileItem.media.full_url,
       );
       const mime = getMimeFromFilename(fileItem.file_name ?? "file.bin");
       const saved = await saveMedia(
@@ -120,13 +126,15 @@ export async function downloadMediaFromItem(
     }
   } else if (item.type === MessageItemType.VIDEO) {
     const videoItem = item.video_item;
-    if (!videoItem?.media?.encrypt_query_param || !videoItem.media.aes_key) return result;
+    if ((!videoItem?.media?.encrypt_query_param && !videoItem?.media?.full_url) || !videoItem.media.aes_key)
+      return result;
     try {
       const buf = await downloadAndDecryptBuffer(
-        videoItem.media.encrypt_query_param,
+        videoItem.media.encrypt_query_param ?? "",
         videoItem.media.aes_key,
         cdnBaseUrl,
         `${label} video`,
+        videoItem.media.full_url,
       );
       const saved = await saveMedia(buf, "video/mp4", "inbound", WEIXIN_MEDIA_MAX_BYTES);
       result.decryptedVideoPath = saved.path;

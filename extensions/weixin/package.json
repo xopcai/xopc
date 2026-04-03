@@ -30,5 +30,6 @@
     }
   },
   "keywords": ["xopcbot", "weixin", "wechat"],
-  "license": "MIT"
+  "license": "MIT",
+  "ilink_appid": "bot"
 }

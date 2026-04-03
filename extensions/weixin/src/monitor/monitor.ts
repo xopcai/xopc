@@ -23,6 +23,9 @@ export type MonitorWeixinOpts = {
   longPollTimeoutMs?: number;
 };
 
+/**
+ * Long-poll loop: getUpdates → process inbound (aligned with openclaw-weixin monitor behavior).
+ */
 export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<void> {
   const { account, config, bus, abortSignal, longPollTimeoutMs } = opts;
   const accountId = account.accountId;
@@ -34,16 +37,34 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
   const aLog = logger;
 
   const syncFilePath = getSyncBufFilePath(accountId);
-  const previousGetUpdatesBuf = loadGetUpdatesBuf(syncFilePath);
-  let getUpdatesBuf = previousGetUpdatesBuf ?? "";
+  aLog.debug(`syncFilePath: ${syncFilePath}`);
 
-  const configManager = new WeixinConfigManager({ baseUrl, token, routeTag }, () => {});
+  const previousGetUpdatesBuf = loadGetUpdatesBuf(syncFilePath);
+  let getUpdatesBuf = previousGetUpdatesBuf ?? '';
+
+  if (previousGetUpdatesBuf) {
+    aLog.debug(`Using previous get_updates_buf (${getUpdatesBuf.length} bytes)`);
+  } else {
+    aLog.info(`No previous get_updates_buf found, starting fresh`);
+  }
+
+  const configLog = (msg: string) => {
+    aLog.debug(msg);
+  };
+  const configManager = new WeixinConfigManager({ baseUrl, token, routeTag }, configLog);
 
   let nextTimeoutMs = longPollTimeoutMs ?? DEFAULT_LONG_POLL_TIMEOUT_MS;
   let consecutiveFailures = 0;
 
+  aLog.info(
+    `Weixin monitor started: baseUrl=${baseUrl} account=${accountId} timeoutMs=${nextTimeoutMs}`,
+  );
+
   while (!abortSignal?.aborted) {
     try {
+      aLog.debug(
+        `getUpdates: get_updates_buf=${getUpdatesBuf.substring(0, 50)}..., timeoutMs=${nextTimeoutMs}`,
+      );
       const resp = await getUpdates({
         baseUrl,
         token,
@@ -52,11 +73,12 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
         routeTag,
       });
       aLog.debug(
-        `getUpdates response: ret=${resp.ret}, msgs=${resp.msgs?.length ?? 0}`,
+        `getUpdates response: ret=${resp.ret}, msgs=${resp.msgs?.length ?? 0}, get_updates_buf_length=${resp.get_updates_buf?.length ?? 0}`,
       );
 
       if (resp.longpolling_timeout_ms != null && resp.longpolling_timeout_ms > 0) {
         nextTimeoutMs = resp.longpolling_timeout_ms;
+        aLog.debug(`Updated next poll timeout: ${nextTimeoutMs}ms`);
       }
       const isApiError =
         (resp.ret !== undefined && resp.ret !== 0) ||
@@ -69,7 +91,7 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
           pauseSession(accountId);
           const pauseMs = getRemainingPauseMs(accountId);
           aLog.error(
-            `weixin getUpdates: session expired, pausing ${Math.ceil(pauseMs / 60_000)} min`,
+            `getUpdates: session expired (errcode=${resp.errcode} ret=${resp.ret}), pausing all requests for ${Math.ceil(pauseMs / 60_000)} min`,
           );
           consecutiveFailures = 0;
           await sleep(pauseMs, abortSignal);
@@ -78,9 +100,12 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
 
         consecutiveFailures += 1;
         aLog.error(
-          `getUpdates failed: ret=${resp.ret} errcode=${resp.errcode} body=${redactBody(JSON.stringify(resp))}`,
+          `getUpdates failed: ret=${resp.ret} errcode=${resp.errcode} errmsg=${resp.errmsg ?? ''} response=${redactBody(JSON.stringify(resp))}`,
         );
         if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+          aLog.error(
+            `getUpdates: ${MAX_CONSECUTIVE_FAILURES} consecutive failures, backing off 30s`,
+          );
           consecutiveFailures = 0;
           await sleep(BACKOFF_DELAY_MS, abortSignal);
         } else {
@@ -89,13 +114,18 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
         continue;
       }
       consecutiveFailures = 0;
-      if (resp.get_updates_buf != null && resp.get_updates_buf !== "") {
+      if (resp.get_updates_buf != null && resp.get_updates_buf !== '') {
         saveGetUpdatesBuf(syncFilePath, resp.get_updates_buf);
         getUpdatesBuf = resp.get_updates_buf;
+        aLog.debug(`Saved new get_updates_buf (${getUpdatesBuf.length} bytes)`);
       }
       const list = resp.msgs ?? [];
       for (const full of list) {
-        const fromUserId = full.from_user_id ?? "";
+        aLog.info(
+          `inbound message: from=${full.from_user_id} types=${full.item_list?.map((i) => i.type).join(',') ?? 'none'}`,
+        );
+
+        const fromUserId = full.from_user_id ?? '';
         await configManager.getForUser(fromUserId, full.context_token);
 
         await processWeixinInboundMessage(full, {
@@ -111,11 +141,15 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
       }
     } catch (err) {
       if (abortSignal?.aborted) {
+        aLog.info(`Weixin monitor stopped (aborted)`);
         return;
       }
       consecutiveFailures += 1;
-      aLog.error(`getUpdates error: ${String(err)}`);
+      aLog.error(`getUpdates error: ${String(err)}, stack=${(err as Error).stack ?? ''}`);
       if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        aLog.error(
+          `getUpdates: ${MAX_CONSECUTIVE_FAILURES} consecutive failures, backing off 30s`,
+        );
         consecutiveFailures = 0;
         await sleep(30_000, abortSignal);
       } else {
@@ -123,16 +157,17 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
       }
     }
   }
+  aLog.info(`Weixin monitor ended`);
 }
 
 function sleep(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
     const t = setTimeout(resolve, ms);
     signal?.addEventListener(
-      "abort",
+      'abort',
       () => {
         clearTimeout(t);
-        reject(new Error("aborted"));
+        reject(new Error('aborted'));
       },
       { once: true },
     );
