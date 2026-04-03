@@ -1161,6 +1161,9 @@ export class AgentService {
 
     await this.sessionLifecycleManager.startSession(sessionContext);
 
+    /** Declared on the function so `finally` can clear typing after outbound (TTS + send). */
+    let typingController: TypingController | null = null;
+
     try {
       if (msg.channel === 'system') {
         await this.handleSystemMessage(msg, sessionContext);
@@ -1182,7 +1185,6 @@ export class AgentService {
       }
 
       // Start continuous typing indicator (renews every 5 seconds)
-      let typingController: TypingController | null = null;
       if (msg.channel !== 'cli') {
         typingController = createTypingController({
           intervalSeconds: 5,
@@ -1231,17 +1233,17 @@ export class AgentService {
         }
       }
 
-      try {
-        await this.agentOrchestrator.process(msg, sessionContext);
-      } finally {
-        // Clear typing (Weixin needs sendTyping cancel; Telegram outbound ignores typing_off)
-        await typingController?.stop();
-      }
+      await this.agentOrchestrator.process(msg, sessionContext);
 
     } finally {
       await this.sessionLifecycleManager.endSession(sessionContext);
       await this.streamManager.end();
-      await this.sendFinalResponse(msg, sessionContext);
+      try {
+        await this.sendFinalResponse(msg, sessionContext);
+      } finally {
+        // After outbound (incl. TTS); previously we cleared typing right after LLM finished, so Weixin showed typing_off before the message.
+        await typingController?.stop();
+      }
       this.feedbackCoordinator.endTask();
       this.sessionContextManager.clearContext();
       this.feedbackCoordinator.clearContext();
@@ -1320,10 +1322,14 @@ export class AgentService {
    * Handle events from a specific session's agent
    */
   private handleSessionEvent(sessionKey: string, event: AgentEvent): void {
-    // Only process events for the current context session
     const currentContext = this.sessionContextManager.getContext();
-    if (currentContext?.sessionKey !== sessionKey) {
-      // Event from a different session - still process but don't update stream
+    if (!currentContext) {
+      // Inbound `finally` clears context before trailing agent `message_update` events finish — ignore (not a bug).
+      return;
+    }
+
+    if (currentContext.sessionKey !== sessionKey) {
+      // Event from a different session — still process with current context where applicable
       this.agentEventHandler.handle(event, currentContext);
       return;
     }
