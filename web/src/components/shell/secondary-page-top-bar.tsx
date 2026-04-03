@@ -10,7 +10,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 /**
  * Mobile / small viewports: secondary routes show the menu button (same rail as chat).
- * Desktop (`lg+`) uses the persistent sidebar — this bar is hidden there.
+ * Tablet+ (`md+`) uses the persistent sidebar — this bar is hidden there.
  */
 export const SecondaryPageTopBar = memo(function SecondaryPageTopBar() {
   const language = useLocaleStore((s) => s.language);
@@ -21,7 +21,7 @@ export const SecondaryPageTopBar = memo(function SecondaryPageTopBar() {
   return (
     <div
       className={cn(
-        'flex gap-3 border-b border-edge-subtle px-4 sm:gap-4 sm:px-8 lg:hidden',
+        'flex gap-3 border-b border-edge-subtle px-4 sm:gap-4 sm:px-8 md:hidden',
         APP_TOP_HEADER_BAR_CLASS,
         'bg-surface-panel',
       )}
