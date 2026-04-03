@@ -208,6 +208,7 @@ export function ChatPage() {
                     progress={progress}
                     reasoningLevel={reasoningLevel}
                     scrollElementRef={scrollRef}
+                    pinToBottom={atBottom}
                   />
                 </>
               )}
