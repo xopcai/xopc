@@ -1,6 +1,7 @@
 export type TypingController = {
   start: () => void;
-  stop: () => void;
+  /** Clears the renew timer and awaits `onStop` (e.g. typing_off) before returning. */
+  stop: () => Promise<void>;
 };
 
 export function createTypingController(params: {
@@ -19,20 +20,20 @@ export function createTypingController(params: {
     onStart().catch(() => {}); // typing is best-effort; errors must not propagate
     typingTimer = setInterval(() => {
       if (stopped) {
-        stop();
+        void stop();
       } else {
         onStart().catch(() => {});
       }
     }, intervalSeconds * 1000);
   };
 
-  const stop = () => {
+  const stop = async (): Promise<void> => {
     if (typingTimer) {
       clearInterval(typingTimer);
       typingTimer = null;
     }
     if (!stopped) {
-      onStop().catch(() => {}); // best-effort
+      await onStop().catch(() => {}); // best-effort
     }
     stopped = true;
   };
