@@ -66,7 +66,9 @@ export class AgentEventHandler {
    */
   handle(event: AgentEvent, context: SessionContext | null): void {
     if (!context) {
-      log.warn({ eventType: event.type }, 'No context available for event');
+      if (event.type !== 'message_update') {
+        log.warn({ eventType: event.type }, 'No context available for event');
+      }
       return;
     }
 
