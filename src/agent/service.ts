@@ -1194,7 +1194,16 @@ export class AgentService {
             });
           },
           onStop: async () => {
-            // Telegram doesn't have typing_off, but keep for consistency
+            await this.bus.publishOutbound({
+              channel: msg.channel,
+              chat_id: msg.chat_id,
+              content: '',
+              type: 'typing_off',
+              metadata: {
+                accountId: msg.metadata?.accountId,
+                threadId: msg.metadata?.threadId,
+              },
+            });
           },
         });
         typingController.start();
@@ -1220,8 +1229,8 @@ export class AgentService {
       try {
         await this.agentOrchestrator.process(msg, sessionContext);
       } finally {
-        // Stop typing indicator after processing completes
-        typingController?.stop();
+        // Clear typing (Weixin needs sendTyping cancel; Telegram outbound ignores typing_off)
+        await typingController?.stop();
       }
 
     } finally {

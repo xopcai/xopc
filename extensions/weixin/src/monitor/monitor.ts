@@ -5,6 +5,7 @@ import { getUpdates } from '../api/api.js';
 import { WeixinConfigManager } from '../api/config-cache.js';
 import { SESSION_EXPIRED_ERRCODE, pauseSession, getRemainingPauseMs } from '../api/session-guard.js';
 import { processWeixinInboundMessage } from '../messaging/process-message.js';
+import { setWeixinTypingTicket } from '../messaging/typing-ticket-store.js';
 import { getSyncBufFilePath, loadGetUpdatesBuf, saveGetUpdatesBuf } from '../storage/sync-buf.js';
 import { logger } from '../util/logger.js';
 import { redactBody } from '../util/redact.js';
@@ -126,7 +127,8 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
         );
 
         const fromUserId = full.from_user_id ?? '';
-        await configManager.getForUser(fromUserId, full.context_token);
+        const cached = await configManager.getForUser(fromUserId, full.context_token);
+        setWeixinTypingTicket(accountId, fromUserId, cached.typingTicket);
 
         await processWeixinInboundMessage(full, {
           accountId,
