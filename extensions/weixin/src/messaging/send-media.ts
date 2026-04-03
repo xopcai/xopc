@@ -13,6 +13,8 @@ import { uploadFileAttachmentToWeixin, uploadFileToWeixin, uploadVideoToWeixin }
  *
  * Used by both the auto-reply deliver path (monitor.ts) and the outbound
  * sendMedia path (channel.ts) so they stay in sync.
+ *
+ * `audio/*` (e.g. TTS mp3) hits the `else` branch — same as openclaw-weixin (file attachment, not VoiceItem).
  */
 export async function sendWeixinMediaFile(params: {
   filePath: string;
@@ -23,7 +25,11 @@ export async function sendWeixinMediaFile(params: {
 }): Promise<{ messageId: string }> {
   const { filePath, to, text, opts, cdnBaseUrl } = params;
   const mime = getMimeFromFilename(filePath);
-  const uploadOpts: WeixinApiOptions = { baseUrl: opts.baseUrl, token: opts.token, routeTag: opts.routeTag };
+  /** openclaw-weixin `channel.ts`: `{ baseUrl, token }` only; xopcbot adds `routeTag` for `SKRouteTag` on getUploadUrl. */
+  const uploadOpts: WeixinApiOptions = { baseUrl: opts.baseUrl, token: opts.token };
+  if (opts.routeTag?.trim()) {
+    uploadOpts.routeTag = opts.routeTag;
+  }
 
   if (mime.startsWith("video/")) {
     logger.info(`[weixin] sendWeixinMediaFile: uploading video filePath=${filePath} to=${to}`);

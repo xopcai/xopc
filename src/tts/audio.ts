@@ -29,13 +29,17 @@ export interface CompressionResult {
   format: string;
 }
 
+/** When TTS returns WAV, ffmpeg can target Opus (Telegram, etc.) or MP3 (Weixin VoiceItem, webchat). */
+export type WavCompressionTarget = 'opus' | 'mp3';
+
 /**
- * Compress audio buffer using ffmpeg (wav -> opus)
- * Returns original buffer if compression fails
+ * Compress WAV using ffmpeg. Non-WAV inputs are returned unchanged.
+ * Default `wavTarget` is Opus for backward compatibility.
  */
 export async function compressAudio(
   audioBuffer: Buffer,
-  inputFormat: string
+  inputFormat: string,
+  wavTarget: WavCompressionTarget = 'opus',
 ): Promise<CompressionResult> {
   if (inputFormat !== 'wav') {
     return { buffer: audioBuffer, format: inputFormat };
@@ -43,42 +47,53 @@ export async function compressAudio(
 
   const tempDir = tmpdir();
   const inputPath = join(tempDir, `input_${Date.now()}.wav`);
-  const outputPath = join(tempDir, `output_${Date.now()}.opus`);
+  const outExt = wavTarget === 'mp3' ? 'mp3' : 'opus';
+  const outputPath = join(tempDir, `output_${Date.now()}.${outExt}`);
 
   try {
-    // Write input file
     await writeFile(inputPath, audioBuffer);
 
-    // Compress using ffmpeg with spawn (avoids shell injection)
-    await spawnAsync('ffmpeg', [
-      '-i', inputPath,
-      '-c:a', 'libopus',
-      '-b:a', '24k',
-      '-vbr', 'on',
-      outputPath,
-      '-y',
-    ]);
+    if (wavTarget === 'mp3') {
+      await spawnAsync('ffmpeg', [
+        '-i', inputPath,
+        '-c:a', 'libmp3lame',
+        '-b:a', '64k',
+        outputPath,
+        '-y',
+      ]);
+    } else {
+      await spawnAsync('ffmpeg', [
+        '-i', inputPath,
+        '-c:a', 'libopus',
+        '-b:a', '24k',
+        '-vbr', 'on',
+        outputPath,
+        '-y',
+      ]);
+    }
 
-    // Read output file
     const { readFile } = await import('fs/promises');
     const compressedBuffer = await readFile(outputPath);
 
-    log.info({
-      originalSize: audioBuffer.length,
-      compressedSize: compressedBuffer.length,
-      ratio: ((compressedBuffer.length / audioBuffer.length) * 100).toFixed(1) + '%',
-    }, 'Audio compressed successfully');
+    log.info(
+      {
+        originalSize: audioBuffer.length,
+        compressedSize: compressedBuffer.length,
+        ratio: ((compressedBuffer.length / audioBuffer.length) * 100).toFixed(1) + '%',
+        wavTarget,
+      },
+      'Audio compressed successfully',
+    );
 
-    return { buffer: compressedBuffer, format: 'opus' };
+    return { buffer: compressedBuffer, format: wavTarget === 'mp3' ? 'mp3' : 'opus' };
   } catch (error) {
     const hint =
       error instanceof Error && (error as NodeJS.ErrnoException).code === 'ENOENT'
-        ? ' (install ffmpeg and ensure it is on PATH for wav→opus compression)'
+        ? ' (install ffmpeg and ensure it is on PATH for wav compression)'
         : '';
-    log.warn({ error, inputFormat }, `Audio compression failed, using original${hint}`);
+    log.warn({ error, inputFormat, wavTarget }, `Audio compression failed, using original${hint}`);
     return { buffer: audioBuffer, format: inputFormat };
   } finally {
-    // Cleanup temp files
     try {
       await unlink(inputPath).catch(() => {});
       await unlink(outputPath).catch(() => {});

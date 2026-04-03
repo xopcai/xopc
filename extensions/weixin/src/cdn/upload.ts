@@ -155,3 +155,4 @@ export async function uploadFileAttachmentToWeixin(params: {
     label: "uploadFileAttachmentToWeixin",
   });
 }
+

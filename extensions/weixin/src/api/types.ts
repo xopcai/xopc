@@ -102,6 +102,8 @@ export interface VoiceItem {
   media?: CDNMedia;
   /** 语音编码类型：1=pcm 2=adpcm 3=feature 4=speex 5=amr 6=silk 7=mp3 8=ogg-speex */
   encode_type?: number;
+  /** Ciphertext size after AES-128-ECB (same role as ImageItem.mid_size). */
+  voice_size?: number;
   bits_per_sample?: number;
   /** 采样率 (Hz) */
   sample_rate?: number;
@@ -194,8 +196,15 @@ export interface SendMessageReq {
   msg?: WeixinMessage;
 }
 
+/** Parsed `ilink/bot/sendmessage` JSON (proto may omit fields on success). */
 export interface SendMessageResp {
-  // empty
+  ret?: number;
+  errcode?: number;
+  errmsg?: string;
+  /** Updated session context for the next outbound bubble (multi-part sends). */
+  msg?: WeixinMessage;
+  /** Some responses carry `context_token` at top level instead of under `msg`. */
+  context_token?: string;
 }
 
 /** Typing status: 1 = typing (default), 2 = cancel typing. */

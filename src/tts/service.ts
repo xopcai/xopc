@@ -2,8 +2,8 @@ import type { TTSConfig, TTSAutoMode, TTSResult } from './types.js';
 
 const CHANNEL_OUTPUT_FORMATS: Record<string, { format: string; voiceCompatible: boolean }> = {
   telegram: { format: 'opus', voiceCompatible: true },
-  feishu: { format: 'opus', voiceCompatible: true },
-  whatsapp: { format: 'ogg', voiceCompatible: true },
+  /** Weixin ilink: VoiceItem encode_type 7 = MP3 per API types. */
+  weixin: { format: 'mp3', voiceCompatible: true },
   /** Web UI: MP3 plays in all major browsers without extra codecs. */
   webchat: { format: 'mp3', voiceCompatible: false },
   default: { format: 'mp3', voiceCompatible: false },

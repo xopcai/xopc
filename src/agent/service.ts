@@ -1021,11 +1021,16 @@ export class AgentService {
       return null;
     }
     try {
-      const fmt = getChannelOutputFormat('webchat').format as 'opus' | 'mp3' | 'wav';
+      const webOut = getChannelOutputFormat('webchat');
+      const fmt = webOut.format as 'opus' | 'mp3' | 'wav';
       const ttsResult = await speak(text, ttsConfig, {
         tts: { format: fmt },
       });
-      const { buffer, format } = await compressAudio(Buffer.from(ttsResult.audio), ttsResult.format);
+      const { buffer, format } = await compressAudio(
+        Buffer.from(ttsResult.audio),
+        ttsResult.format,
+        webOut.format === 'mp3' ? 'mp3' : 'opus',
+      );
       const normalizedMime =
         format === 'opus' || format === 'ogg'
           ? 'audio/ogg'

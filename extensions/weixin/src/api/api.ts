@@ -13,6 +13,7 @@ import type {
   GetUpdatesReq,
   GetUpdatesResp,
   SendMessageReq,
+  SendMessageResp,
   SendTypingReq,
   GetConfigResp,
 } from "./types.js";
@@ -269,11 +270,20 @@ export async function getUploadUrl(
   return resp;
 }
 
-/** Send a single message downstream. */
+function assertSendMessageOk(resp: SendMessageResp): void {
+  if (typeof resp.ret === "number" && resp.ret !== 0) {
+    throw new Error(`sendMessage ret=${resp.ret} errmsg=${resp.errmsg ?? ""}`);
+  }
+  if (typeof resp.errcode === "number" && resp.errcode !== 0) {
+    throw new Error(`sendMessage errcode=${resp.errcode} errmsg=${resp.errmsg ?? ""}`);
+  }
+}
+
+/** Send a single message downstream. Returns parsed body (incl. refreshed `context_token` when present). */
 export async function sendMessage(
   params: WeixinApiOptions & { body: SendMessageReq },
-): Promise<void> {
-  await apiPostFetch({
+): Promise<SendMessageResp> {
+  const rawText = await apiPostFetch({
     baseUrl: params.baseUrl,
     endpoint: "ilink/bot/sendmessage",
     body: JSON.stringify({ ...params.body, base_info: buildBaseInfo() }),
@@ -282,6 +292,18 @@ export async function sendMessage(
     label: "sendMessage",
     routeTag: params.routeTag,
   });
+  const t = rawText.trim();
+  if (!t.startsWith("{")) {
+    return {};
+  }
+  let resp: SendMessageResp;
+  try {
+    resp = JSON.parse(t) as SendMessageResp;
+  } catch (e) {
+    throw new Error(`sendMessage invalid JSON: ${String(e)}`);
+  }
+  assertSendMessageOk(resp);
+  return resp;
 }
 
 /** Fetch bot config (includes typing_ticket) for a given user. */
