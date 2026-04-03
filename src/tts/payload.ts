@@ -41,21 +41,28 @@ export async function maybeApplyTtsToPayload(
   }
 
   try {
+    const outFmt = getChannelOutputFormat(channel);
     const ttsResult = await speak(msg.content, config, {
       tts: {
-        format: getChannelOutputFormat(channel).format as 'opus' | 'mp3' | 'wav',
+        format: outFmt.format as 'opus' | 'mp3' | 'wav',
       },
     });
 
+    const wavTarget = outFmt.format === 'mp3' ? 'mp3' : 'opus';
     const { buffer: compressedAudio, format: compressedFormat } = await compressAudio(
       Buffer.from(ttsResult.audio),
-      ttsResult.format
+      ttsResult.format,
+      wavTarget,
     );
 
-    const mimeType = compressedFormat === 'opus' ? 'audio/ogg' : `audio/${compressedFormat}`;
+    const mimeType =
+      compressedFormat === 'opus'
+        ? 'audio/ogg'
+        : compressedFormat === 'mp3' || compressedFormat === 'mpeg'
+          ? 'audio/mpeg'
+          : `audio/${compressedFormat}`;
     const base64 = compressedAudio.toString('base64');
     const dataUrl = `data:${mimeType};base64,${base64}`;
-    const outputFormat = getChannelOutputFormat(channel);
 
     log.info({ channel, provider: ttsResult.provider, format: compressedFormat }, 'TTS generated');
 
@@ -63,7 +70,7 @@ export async function maybeApplyTtsToPayload(
       ...msg,
       mediaUrl: dataUrl,
       mediaType: 'audio',
-      audioAsVoice: outputFormat.voiceCompatible,
+      audioAsVoice: outFmt.voiceCompatible,
     };
   } catch (error) {
     log.warn({ error }, 'TTS failed, sending text');

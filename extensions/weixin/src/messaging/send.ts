@@ -113,6 +113,7 @@ async function sendMediaItems(params: {
   items.push(mediaItem);
 
   let lastClientId = "";
+  /** Same token as openclaw-weixin: each request uses `opts.contextToken` (no per-bubble refresh). */
   for (const item of items) {
     lastClientId = generateClientId();
     const req: SendMessageReq = {

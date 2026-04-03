@@ -20,6 +20,7 @@ import { downloadRemoteImageToTemp } from './cdn/upload.js';
 import { getContextToken, findAccountIdsByContextToken } from './messaging/inbound.js';
 import { mapWeixinOutboundErrorNotice, sendWeixinErrorNotice } from './messaging/error-notice.js';
 import { StreamingMarkdownFilter } from './messaging/markdown-filter.js';
+import { parseDataUrl, writeDataUrlBufferToTemp } from './media/data-url.js';
 import { markdownToPlainText, sendMessageWeixin } from './messaging/send.js';
 import { sendWeixinMediaFile } from './messaging/send-media.js';
 import { getWeixinTypingTicket } from './messaging/typing-ticket-store.js';
@@ -39,6 +40,7 @@ export function formatWeixinOutboundText(text: string): string {
 }
 
 function isLocalFilePath(mediaUrl: string): boolean {
+  if (mediaUrl.startsWith('data:')) return false;
   return !mediaUrl.includes('://');
 }
 
@@ -160,7 +162,18 @@ export function createWeixinOutboundHandlers() {
     const caption = formatWeixinOutboundText(ctx.text ?? '');
     try {
       let filePath: string;
-      if (isLocalFilePath(mediaUrl) || mediaUrl.startsWith('file://')) {
+
+      if (mediaUrl.startsWith('data:')) {
+        const parsed = parseDataUrl(mediaUrl);
+        if (!parsed) {
+          return { messageId: '', chatId: ctx.to, success: false, error: 'Invalid data URL' };
+        }
+        filePath = await writeDataUrlBufferToTemp({
+          buffer: parsed.buffer,
+          mimeType: parsed.mimeType,
+          destDir: MEDIA_OUTBOUND_TEMP_DIR,
+        });
+      } else if (isLocalFilePath(mediaUrl) || mediaUrl.startsWith('file://')) {
         filePath = resolveLocalPath(mediaUrl);
       } else if (isRemoteUrl(mediaUrl)) {
         filePath = await downloadRemoteImageToTemp(mediaUrl, MEDIA_OUTBOUND_TEMP_DIR);
@@ -177,16 +190,20 @@ export function createWeixinOutboundHandlers() {
         });
         return { messageId: '', chatId: ctx.to, success: true };
       }
+
+      const uploadOpts = {
+        baseUrl: account.baseUrl,
+        token: account.token,
+        routeTag: account.routeTag,
+        contextToken: ctxTok,
+      };
+
+      /** openclaw-weixin: audio (e.g. TTS mp3) is not VoiceItem — same as other non-image/video files (FILE attachment). */
       const r = await sendWeixinMediaFile({
         filePath,
         to: ctx.to,
         text: caption,
-        opts: {
-          baseUrl: account.baseUrl,
-          token: account.token,
-          routeTag: account.routeTag,
-          contextToken: ctxTok,
-        },
+        opts: uploadOpts,
         cdnBaseUrl: account.cdnBaseUrl,
       });
       return { messageId: r.messageId, chatId: ctx.to, success: true };
