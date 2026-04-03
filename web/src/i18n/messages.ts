@@ -96,8 +96,6 @@ const bundles: Record<
       modelPlaceholder: string;
       thinkingLevel: string;
       newSession: string;
-      /** Centered landing headline on empty new chat */
-      newChatHeadline: string;
       welcomeTitle: string;
       welcomeDescription: string;
       you: string;
@@ -991,7 +989,6 @@ const bundles: Record<
       modelPlaceholder: 'Select a model…',
       thinkingLevel: 'Thinking',
       newSession: 'New chat',
-      newChatHeadline: 'What do you want to explore?',
       welcomeTitle: 'Welcome to xopcbot',
       welcomeDescription: 'Send a message to get started',
       you: 'You',
@@ -1934,7 +1931,6 @@ const bundles: Record<
       modelPlaceholder: '选择模型…',
       thinkingLevel: '思考级别',
       newSession: '新对话',
-      newChatHeadline: '你想探索什么？',
       welcomeTitle: '欢迎使用 xopcbot',
       welcomeDescription: '在下方输入消息开始对话',
       you: '你',
