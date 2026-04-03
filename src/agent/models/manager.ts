@@ -22,6 +22,7 @@ import {
   isAssistantTurnFailed,
   maybeRetryTurnAfterTransientLlmFailure,
 } from '../orchestration/llm-turn-retry.js';
+import { AGENT_TURN_TIMEOUT_MS, runAgentTurnWithTimeout } from '../orchestration/run-agent-turn-with-timeout.js';
 
 const log = createLogger('ModelManager');
 
@@ -212,7 +213,6 @@ export class ModelManager {
     });
 
     let lastError: unknown;
-    const AGENT_TURN_TIMEOUT_MS = 120_000;
 
     for (let i = 0; i < candidates.length; i++) {
       const candidate = candidates[i];
@@ -242,15 +242,7 @@ export class ModelManager {
           await maybeRetryTurnAfterTransientLlmFailure(agent, { sessionKey, log });
         };
 
-        await Promise.race([
-          runTurn(),
-          new Promise<never>((_, reject) =>
-            setTimeout(
-              () => reject(new Error(`Agent turn timed out after ${AGENT_TURN_TIMEOUT_MS / 1000}s`)),
-              AGENT_TURN_TIMEOUT_MS,
-            ),
-          ),
-        ]);
+        await runAgentTurnWithTimeout(agent, runTurn, AGENT_TURN_TIMEOUT_MS);
 
         if (isAssistantTurnAborted(agent)) {
           const usage = (agent.state as { lastUsage?: RunResult['usage'] }).lastUsage;
