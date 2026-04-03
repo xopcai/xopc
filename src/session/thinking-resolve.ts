@@ -4,8 +4,12 @@
 
 import type { ThinkingLevel } from '@mariozechner/pi-agent-core';
 import type { SessionConfigStore } from './config-store.js';
-import { resolveThinkingLevel } from './config-store.js';
-import { normalizeThinkLevel, type ThinkLevel } from '../agent/transcript/thinking-types.js';
+import { resolveThinkingLevel, resolveReasoningLevel } from './config-store.js';
+import {
+  normalizeThinkLevel,
+  type ThinkLevel,
+  type ReasoningLevel,
+} from '../agent/transcript/thinking-types.js';
 
 const FALLBACK: ThinkingLevel = 'medium';
 
@@ -30,4 +34,19 @@ export async function resolveEffectiveThinkingLevel(
 
   const def = agentDefault ?? FALLBACK;
   return def as ThinkingLevel;
+}
+
+const REASONING_FALLBACK: ReasoningLevel = 'off';
+
+/**
+ * Session override > agent default (`agents.defaults.reasoningDefault`).
+ */
+export async function resolveEffectiveReasoningLevel(
+  sessionConfigStore: SessionConfigStore,
+  sessionKey: string,
+  agentDefault?: ReasoningLevel,
+): Promise<ReasoningLevel> {
+  const def = agentDefault ?? REASONING_FALLBACK;
+  const resolved = await resolveReasoningLevel(sessionConfigStore, sessionKey, def);
+  return resolved ?? def;
 }

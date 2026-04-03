@@ -1432,8 +1432,10 @@ const bundles: Record<
         temperature: 'Randomness (0–2).',
         maxToolIterations: 'Maximum tool calls per user message.',
         thinkingDefault: 'Default thinking level for new sessions.',
-        reasoningDefault: 'Whether to surface model reasoning to users.',
-        verboseDefault: 'How much detail the agent prints by default.',
+        reasoningDefault:
+          'Whether to surface model reasoning in the chat UI. Per-session overrides (e.g. /reasoning) take precedence until cleared.',
+        verboseDefault:
+          'Agent verbosity for logs/tool detail elsewhere — not the reasoning/thinking panel. Use Reasoning visibility to hide reasoning.',
       },
       addModelFallback: 'Add fallback model',
       removeModelFallback: 'Remove fallback model',
@@ -2396,8 +2398,10 @@ const bundles: Record<
         temperature: '随机性（0–2）。',
         maxToolIterations: '单条用户消息内最多工具调用轮数。',
         thinkingDefault: '新会话的默认思考级别。',
-        reasoningDefault: '是否向用户展示模型推理过程。',
-        verboseDefault: '代理默认输出的详细程度。',
+        reasoningDefault:
+          '是否在聊天界面展示模型推理。若会话曾设置 /reasoning 等，会覆盖此默认直至清除会话配置。',
+        verboseDefault:
+          '代理在日志/工具细节等处的详细程度，不控制聊天里的推理/思考区块；隐藏推理请用「推理可见性」。',
       },
       addModelFallback: '添加备用模型',
       removeModelFallback: '移除备用模型',

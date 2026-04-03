@@ -20,18 +20,25 @@ export class SessionManager {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
-  async loadSessionAgentConfig(sessionKey: string): Promise<{ thinkingLevel: string; model: string }> {
+  async loadSessionAgentConfig(sessionKey: string): Promise<{
+    thinkingLevel: string;
+    model: string;
+    reasoningLevel: string;
+  }> {
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = (await res.json()) as { payload?: { thinkingLevel?: string; model?: string } };
+    const data = (await res.json()) as {
+      payload?: { thinkingLevel?: string; model?: string; reasoningLevel?: string };
+    };
     const thinkingLevel = data.payload?.thinkingLevel ?? 'medium';
     const model = typeof data.payload?.model === 'string' ? data.payload.model : '';
-    return { thinkingLevel, model };
+    const reasoningLevel = data.payload?.reasoningLevel ?? 'off';
+    return { thinkingLevel, model, reasoningLevel };
   }
 
   async patchSessionAgentConfig(
     sessionKey: string,
-    patch: { thinkingLevel?: string; model?: string | null },
+    patch: { thinkingLevel?: string; model?: string | null; reasoningLevel?: string },
   ): Promise<void> {
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`), {
       method: 'PATCH',

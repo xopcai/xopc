@@ -9,7 +9,7 @@ export {
   sanitizeSessionPathSegment,
 } from './shard-path.js';
 export { SessionConfigStore, resolveThinkingLevel, resolveReasoningLevel, resolveVerboseLevel } from './config-store.js';
-export { resolveEffectiveThinkingLevel } from './thinking-resolve.js';
+export { resolveEffectiveThinkingLevel, resolveEffectiveReasoningLevel } from './thinking-resolve.js';
 export type { SessionAgentConfig } from './config-store.js';
 
 export {
