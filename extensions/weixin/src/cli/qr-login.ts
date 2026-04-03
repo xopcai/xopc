@@ -34,7 +34,7 @@ export type WeixinQrLoginCliOptions = {
   writeConfig?: boolean;
 };
 
-function getLoginApiContext(cfg: Config, accountHint?: string): { baseUrl: string; routeTag?: string } {
+export function getWeixinLoginApiContext(cfg: Config, accountHint?: string): { baseUrl: string; routeTag?: string } {
   const section = cfg.channels?.weixin as { routeTag?: string | number } | undefined;
   const routeTagRaw = section?.routeTag;
   const sectionRouteTag =
@@ -55,7 +55,7 @@ function getLoginApiContext(cfg: Config, accountHint?: string): { baseUrl: strin
   return { baseUrl: DEFAULT_BASE_URL, routeTag: sectionRouteTag };
 }
 
-function mergeWeixinConfigAfterLogin(cfg: Config, normalizedAccountId: string): Config {
+export function mergeWeixinConfigAfterLogin(cfg: Config, normalizedAccountId: string): Config {
   const prev = cfg.channels?.weixin as Record<string, unknown> | undefined;
   const prevAccounts = (prev?.accounts as Record<string, Record<string, unknown>> | undefined) ?? {};
   const merged = {
@@ -88,7 +88,7 @@ export async function runWeixinQrLoginCli(opts: WeixinQrLoginCliOptions): Promis
 }> {
   const configPath = opts.configPath ?? process.env.XOPCBOT_CONFIG_PATH;
   const cfg = loadConfig(configPath);
-  const { baseUrl, routeTag } = getLoginApiContext(cfg, opts.account);
+  const { baseUrl, routeTag } = getWeixinLoginApiContext(cfg, opts.account);
   const timeoutMs = opts.timeoutMs ?? 480_000;
   const verbose = Boolean(opts.verbose);
 

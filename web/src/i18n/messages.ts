@@ -685,6 +685,20 @@ const bundles: Record<
       weixinDebugDesc: string;
       weixinAccountsJson: string;
       weixinAccountsJsonDesc: string;
+      weixinQrLoginTitle: string;
+      weixinQrLoginDesc: string;
+      weixinQrLoginButton: string;
+      weixinQrLoginBusy: string;
+      weixinQrLoginScanned: string;
+      weixinQrLoginSuccess: string;
+      weixinQrLoginCancel: string;
+      weixinQrImageError: string;
+      weixinQrOpenLink: string;
+      weixinQrEncoding: string;
+      weixinQrModalTitle: string;
+      weixinQrModalSubtitle: string;
+      weixinQrRegenerate: string;
+      weixinQrModalCloseAria: string;
       jsonObjectAccounts: string;
       jsonInvalid: string;
       copy: string;
@@ -1569,7 +1583,8 @@ const bundles: Record<
       telegramTitle: 'Telegram',
       telegramSubtitle: 'Bot token, allowlists, and optional multi-account JSON.',
       weixinTitle: 'Weixin',
-      weixinSubtitle: 'Scan QR via CLI once, then enable here. No bot token field—login is stored on disk.',
+      weixinSubtitle:
+        'Sign in with WeChat via QR (browser or CLI), then enable below. Credentials stay on the gateway host.',
       enableTelegramAria: 'Enable Telegram channel',
       enableWeixinAria: 'Enable Weixin channel',
       telegramToken: 'Bot token',
@@ -1593,7 +1608,7 @@ const bundles: Record<
         'Optional. Per-account botToken or tokenFile, policies, and groups. Empty {} uses the single token above only.',
       weixinQuickStartTitle: 'Quick start',
       weixinStepLogin:
-        'On the host that runs the gateway, run: xopcbot channels login --channel weixin — then scan the QR code with WeChat. (From the repo: pnpm run dev -- channels login --channel weixin.)',
+        'Use “Sign in with WeChat (QR)” below in this console, or on the gateway host run: xopcbot channels login --channel weixin (repo: pnpm run dev -- channels login --channel weixin).',
       weixinStepEnable: 'Turn on Weixin below and save. Restart the gateway process if it was already running.',
       weixinStepPairing:
         'After QR login, DMs work immediately. Use allowlist DM policy only if you want to restrict who can message the bot.',
@@ -1608,6 +1623,22 @@ const bundles: Record<
       weixinDebugDesc: 'Extra logging for the Weixin channel.',
       weixinAccountsJson: 'Accounts (JSON)',
       weixinAccountsJsonDesc: 'Per-account name, CDN base URL, route tag, and policies.',
+      weixinQrLoginTitle: 'Browser QR login',
+      weixinQrLoginDesc:
+        'Starts a login on the gateway. Scan with WeChat; when it succeeds, settings refresh automatically.',
+      weixinQrLoginButton: 'Sign in with WeChat (QR)',
+      weixinQrLoginBusy: 'Starting…',
+      weixinQrLoginScanned: 'Scanned — confirm in WeChat',
+      weixinQrLoginSuccess: 'Weixin connected.',
+      weixinQrLoginCancel: 'Dismiss QR',
+      weixinQrImageError:
+        'Could not render the QR code here. You can open the link in a new tab, or tap Regenerate to try again.',
+      weixinQrOpenLink: 'Open in new tab',
+      weixinQrEncoding: 'Rendering QR…',
+      weixinQrModalTitle: 'Scan to sign in',
+      weixinQrModalSubtitle: 'Use WeChat to scan the QR code below to connect.',
+      weixinQrRegenerate: 'Regenerate QR code',
+      weixinQrModalCloseAria: 'Close',
       jsonObjectAccounts: 'Accounts must be a JSON object',
       jsonInvalid: 'Invalid JSON',
       copy: 'Copy',
@@ -2514,7 +2545,7 @@ const bundles: Record<
       telegramTitle: 'Telegram',
       telegramSubtitle: 'Bot Token、白名单及可选的多账号 JSON。',
       weixinTitle: '微信',
-      weixinSubtitle: '命令行扫码登录一次，再在此启用。无 Bot Token 输入框——凭据保存在本机。',
+      weixinSubtitle: '用微信扫码登录（网页或命令行）后在此启用。凭据保存在运行网关的本机。',
       enableTelegramAria: '启用 Telegram 渠道',
       enableWeixinAria: '启用微信渠道',
       telegramToken: 'Bot Token',
@@ -2538,7 +2569,7 @@ const bundles: Record<
         '可选。每账号可配置 botToken 或 tokenFile、策略与群组。留空 {} 则仅使用上方单一 Token。',
       weixinQuickStartTitle: '最简步骤',
       weixinStepLogin:
-        '在运行网关的机器上执行：xopcbot channels login --channel weixin，用微信扫码完成登录。（源码目录可用：pnpm run dev -- channels login --channel weixin）',
+        '在本页使用下方「微信扫码登录」，或在网关所在机器执行：xopcbot channels login --channel weixin（源码目录：pnpm run dev -- channels login --channel weixin）。',
       weixinStepEnable: '下方打开「启用微信」并保存。若网关已在运行，请重启网关进程。',
       weixinStepPairing: '扫码登录后即可正常收发；仅在需要限制谁可私聊时，将私聊策略改为白名单并配置允许来源。',
       weixinAdvancedHint: '可选：白名单、路由标签、流式与分账号 JSON——仅在需要时展开。',
@@ -2551,6 +2582,21 @@ const bundles: Record<
       weixinDebugDesc: '为微信渠道输出更详细的日志。',
       weixinAccountsJson: '账号（JSON）',
       weixinAccountsJsonDesc: '分账号名称、CDN 地址、路由标签与策略。',
+      weixinQrLoginTitle: '网页扫码登录',
+      weixinQrLoginDesc: '在网关上发起登录，使用微信扫码；成功后本页会自动刷新配置。',
+      weixinQrLoginButton: '微信扫码登录',
+      weixinQrLoginBusy: '正在启动…',
+      weixinQrLoginScanned: '已扫码，请在微信中确认',
+      weixinQrLoginSuccess: '微信已连接。',
+      weixinQrLoginCancel: '关闭二维码',
+      weixinQrImageError:
+        '无法在页面内生成二维码，可在新标签页打开链接完成扫码，或点击「重新生成」重试。',
+      weixinQrOpenLink: '新标签页打开',
+      weixinQrEncoding: '正在生成二维码…',
+      weixinQrModalTitle: '扫码登录',
+      weixinQrModalSubtitle: '请使用微信扫描下方二维码完成连接',
+      weixinQrRegenerate: '重新生成',
+      weixinQrModalCloseAria: '关闭',
       jsonObjectAccounts: '账号必须为 JSON 对象',
       jsonInvalid: 'JSON 无效',
       copy: '复制',

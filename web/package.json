@@ -35,6 +35,7 @@
     "marked": "^17.0.5",
     "marked-highlight": "^2.2.3",
     "pdfjs-dist": "^5.5.207",
+    "qrcode": "^1.5.4",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
     "react-router-dom": "^7.9.6",
@@ -47,6 +48,7 @@
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.17",
     "@types/marked": "^6.0.0",
+    "@types/qrcode": "^1.5.5",
     "@types/react": "^19.2.7",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react-swc": "^4.2.2",
