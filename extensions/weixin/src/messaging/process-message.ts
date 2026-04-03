@@ -5,16 +5,15 @@ import { randomBytes } from 'node:crypto';
 import type { Config } from '@xopcai/xopcbot/config/schema.js';
 import type { MessageBus } from '@xopcai/xopcbot/infra/bus/index.js';
 import { generateSessionKey } from '@xopcai/xopcbot/chat-commands/session-key.js';
-import { resolveAllowlistMatch } from '@xopcai/xopcbot/channels/security.js';
+import { evaluateAccess } from '@xopcai/xopcbot/channels/security.js';
 import type { WeixinMessage } from '../api/types.js';
 import { MessageItemType } from '../api/types.js';
 import type { ResolvedWeixinAccount } from '../auth/accounts.js';
-import { readFrameworkAllowFromList, registerUserInFrameworkStore } from '../auth/pairing.js';
+import { readFrameworkAllowFromList } from '../auth/pairing.js';
 import { downloadMediaFromItem } from '../media/media-download.js';
 import { logger } from '../util/logger.js';
 import { resolveWeixinRootDir } from '../storage/state-dir.js';
 import { handleSlashCommand } from './slash-commands.js';
-import { sendMessageWeixin } from './send.js';
 import {
   setContextToken,
   weixinMessageToMsgContext,
@@ -37,18 +36,6 @@ function extractTextBody(itemList?: import('../api/types.js').MessageItem[]): st
 function mergeAllowFrom(account: ResolvedWeixinAccount, accountId: string): string[] {
   const store = readFrameworkAllowFromList(accountId);
   return [...new Set([...(account.allowFrom ?? []).map(String), ...store])];
-}
-
-function isDmAllowed(account: ResolvedWeixinAccount, accountId: string, senderId: string): boolean {
-  const policy = account.dmPolicy ?? 'pairing';
-  if (policy === 'disabled') return false;
-  if (policy === 'open') return true;
-  const merged = mergeAllowFrom(account, accountId);
-  const match = resolveAllowlistMatch({
-    allowFrom: merged,
-    senderId,
-  });
-  return match.allowed;
 }
 
 async function saveMediaBuffer(
@@ -89,24 +76,6 @@ export async function processWeixinInboundMessage(
   const receivedAt = Date.now();
   const textBody = extractTextBody(full.item_list);
 
-  if (textBody.trim() === '/start') {
-    const uid = full.from_user_id ?? '';
-    if (uid) {
-      await registerUserInFrameworkStore({ accountId: deps.accountId, userId: uid });
-      await sendMessageWeixin({
-        to: uid,
-        text: '已登记，你可以开始对话。',
-        opts: {
-          baseUrl: deps.baseUrl,
-          token: deps.token,
-          routeTag: deps.routeTag,
-          contextToken: full.context_token,
-        },
-      });
-    }
-    return;
-  }
-
   if (textBody.startsWith('/')) {
     const slashResult = await handleSlashCommand(
       textBody,
@@ -128,8 +97,23 @@ export async function processWeixinInboundMessage(
   }
 
   const senderId = full.from_user_id ?? '';
-  if (!isDmAllowed(deps.account, deps.accountId, senderId)) {
-    logger.info(`weixin: dropped message from=${senderId} (dm policy / allowlist)`);
+  const mergedAllow = mergeAllowFrom(deps.account, deps.accountId);
+  const access = evaluateAccess({
+    context: {
+      channel: 'weixin',
+      accountId: deps.accountId,
+      chatId: senderId,
+      senderId,
+      isGroup: false,
+      isDm: true,
+    },
+    dmPolicy: deps.account.dmPolicy ?? 'pairing',
+    allowFrom: mergedAllow,
+  });
+  if (!access.allowed) {
+    logger.info(
+      `weixin: dropped message from=${senderId} dmPolicy=${deps.account.dmPolicy ?? 'pairing'} reason=${access.reason ?? 'not allowed'}`,
+    );
     return;
   }
 
