@@ -2,7 +2,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 
-import type { Message, ProgressState } from '@/features/chat/messages.types';
+import {
+  coerceReasoningLevel,
+  type Message,
+  type ProgressState,
+  type ReasoningLevel,
+} from '@/features/chat/messages.types';
 import type { SessionInfo } from '@/features/chat/chat.types';
 import { modelSupportsReasoning } from '@/features/chat/model-capabilities';
 import { pendingAgentRunStorageKey, MessageSender } from '@/features/chat/message-sender';
@@ -23,6 +28,7 @@ import {
 import { useGatewayStore } from '@/stores/gateway-store';
 
 const DEFAULT_THINKING = 'medium';
+const DEFAULT_REASONING: ReasoningLevel = 'off';
 
 export function useChatSession() {
   const navigate = useNavigate();
@@ -56,6 +62,7 @@ export function useChatSession() {
   const [loading, setLoading] = useState(true);
   const [sessionModel, setSessionModel] = useState('');
   const [thinkingLevel, setThinkingLevel] = useState(DEFAULT_THINKING);
+  const [reasoningLevel, setReasoningLevel] = useState<ReasoningLevel>(DEFAULT_REASONING);
   const [modelSupportsThinking, setModelSupportsThinking] = useState(false);
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -196,6 +203,7 @@ export function useChatSession() {
             const cfg = await sessionMgrRef.current.loadSessionAgentConfig(key);
             setSessionModel(cfg.model);
             setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
+            setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
             void refreshModelThinkingSupport(cfg.model);
           } catch {
             /* gateway may be older */
@@ -228,6 +236,7 @@ export function useChatSession() {
                 const cfg = await sessionMgrRef.current.loadSessionAgentConfig(session.key);
                 setSessionModel(cfg.model);
                 setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
+                setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
                 void refreshModelThinkingSupport(cfg.model);
               } catch {
                 /* ignore */
@@ -284,6 +293,7 @@ export function useChatSession() {
           const cfg = await sessionMgrRef.current.loadSessionAgentConfig(empty.key);
           setSessionModel(cfg.model);
           setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
+          setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
           void refreshModelThinkingSupport(cfg.model);
         } catch {
           /* ignore */
@@ -300,6 +310,7 @@ export function useChatSession() {
         const cfg = await sessionMgrRef.current.loadSessionAgentConfig(session.key);
         setSessionModel(cfg.model);
         setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
+        setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
         void refreshModelThinkingSupport(cfg.model);
       } catch {
         /* ignore */
@@ -688,6 +699,25 @@ export function useChatSession() {
     return () => window.removeEventListener('session-updated', handler as EventListener);
   }, [sessionKey]);
 
+  /** After settings PATCH / gateway reload, resolved reasoning/thinking use new defaults (session overrides still win). */
+  useEffect(() => {
+    const onConfigReload = () => {
+      const key = sessionKeyRef.current;
+      if (!key) return;
+      void sessionMgrRef.current
+        .loadSessionAgentConfig(key)
+        .then((cfg) => {
+          setSessionModel(cfg.model);
+          setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
+          setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
+          void refreshModelThinkingSupport(cfg.model);
+        })
+        .catch(() => {});
+    };
+    window.addEventListener('config-reload', onConfigReload as EventListener);
+    return () => window.removeEventListener('config-reload', onConfigReload as EventListener);
+  }, [refreshModelThinkingSupport]);
+
   useEffect(() => {
     if (!token) {
       setLoading(false);
@@ -719,6 +749,7 @@ export function useChatSession() {
               const cfg = await sessionMgrRef.current.loadSessionAgentConfig(empty.key);
               setSessionModel(cfg.model);
               setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
+              setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
               void refreshModelThinkingSupport(cfg.model);
             } catch {
               /* ignore */
@@ -735,6 +766,7 @@ export function useChatSession() {
               const cfg = await sessionMgrRef.current.loadSessionAgentConfig(session.key);
               setSessionModel(cfg.model);
               setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
+              setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
               void refreshModelThinkingSupport(cfg.model);
             } catch {
               /* ignore */
@@ -768,6 +800,7 @@ export function useChatSession() {
               const cfg = await sessionMgrRef.current.loadSessionAgentConfig(session.key);
               setSessionModel(cfg.model);
               setThinkingLevel(cfg.thinkingLevel || DEFAULT_THINKING);
+              setReasoningLevel(coerceReasoningLevel(cfg.reasoningLevel));
               void refreshModelThinkingSupport(cfg.model);
             } catch {
               /* ignore */
@@ -797,6 +830,7 @@ export function useChatSession() {
     sessionModel,
     thinkingLevel,
     setThinkingLevel,
+    reasoningLevel,
     modelSupportsThinking,
     hasMore,
     loadingMore,

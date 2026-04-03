@@ -45,6 +45,7 @@ export function ChatPage() {
     sessionModel,
     thinkingLevel,
     setThinkingLevel,
+    reasoningLevel,
     modelSupportsThinking,
     hasMore,
     loadingMore,
@@ -205,6 +206,7 @@ export function ChatPage() {
                     authToken={token ?? undefined}
                     streaming={streaming}
                     progress={progress}
+                    reasoningLevel={reasoningLevel}
                     scrollElementRef={scrollRef}
                   />
                 </>

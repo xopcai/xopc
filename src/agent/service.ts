@@ -11,10 +11,16 @@ import {
   SessionStore,
   SessionConfigStore,
   resolveEffectiveThinkingLevel,
+  resolveEffectiveReasoningLevel,
   type CompactionConfig,
   type WindowConfig,
 } from '../session/index.js';
-import { normalizeThinkLevel, type ThinkLevel } from './transcript/thinking-types.js';
+import {
+  normalizeThinkLevel,
+  normalizeReasoningLevel,
+  type ThinkLevel,
+  type ReasoningLevel,
+} from './transcript/thinking-types.js';
 import { createLogger } from '../utils/logger.js';
 import { ExtensionRegistryImpl as ExtensionRegistry, ExtensionHookRunner } from '../extensions/index.js';
 import {
@@ -42,6 +48,7 @@ import { MessageRouter, CommandHandler, StreamManager } from './messaging/index.
 import { SessionContextManager, SessionLifecycleManager, type SessionContext } from './session/index.js';
 import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
 import { runAgentTurnWithModelFallbacks } from './orchestration/run-agent-turn-with-fallbacks.js';
+import { applyReasoningVisibilityToSseEvent } from './streaming/reasoning-visibility-sse.js';
 import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 
@@ -717,17 +724,23 @@ export class AgentService {
   }
 
   /** Resolved thinking level and effective model ref for a session (Web UI). */
-  async getSessionAgentConfig(sessionKey: string): Promise<{ thinkingLevel: ThinkingLevel; model: string }> {
+  async getSessionAgentConfig(sessionKey: string): Promise<{
+    thinkingLevel: ThinkingLevel;
+    model: string;
+    reasoningLevel: ReasoningLevel;
+  }> {
     await this.hydrateSessionModelFromStore(sessionKey);
-    const def = this.config.config?.agents?.defaults?.thinkingDefault ?? 'medium';
-    const level = await resolveEffectiveThinkingLevel(this.sessionConfigStore, sessionKey, null, def);
+    const defThink = this.config.config?.agents?.defaults?.thinkingDefault ?? 'medium';
+    const level = await resolveEffectiveThinkingLevel(this.sessionConfigStore, sessionKey, null, defThink);
+    const defReason = (this.config.config?.agents?.defaults?.reasoningDefault ?? 'off') as ReasoningLevel;
+    const reasoningLevel = await resolveEffectiveReasoningLevel(this.sessionConfigStore, sessionKey, defReason);
     const model = this.modelManager.getModelForSession(sessionKey);
-    return { thinkingLevel: level, model };
+    return { thinkingLevel: level, model, reasoningLevel };
   }
 
   async patchSessionAgentConfig(
     sessionKey: string,
-    partial: { thinkingLevel?: string; model?: string | null },
+    partial: { thinkingLevel?: string; model?: string | null; reasoningLevel?: string },
   ): Promise<{ ok: boolean; error?: string }> {
     if (partial.model !== undefined) {
       if (partial.model === null || partial.model === '') {
@@ -749,6 +762,14 @@ export class AgentService {
       }
       await this.sessionConfigStore.update(sessionKey, { thinkingLevel: normalized });
       this.agentManager.setThinkingLevel(sessionKey, normalized as ThinkingLevel);
+    }
+
+    if (partial.reasoningLevel !== undefined) {
+      const normalized = normalizeReasoningLevel(partial.reasoningLevel);
+      if (!normalized) {
+        return { ok: false, error: 'Invalid reasoning level' };
+      }
+      await this.sessionConfigStore.update(sessionKey, { reasoningLevel: normalized });
     }
 
     return { ok: true };
@@ -778,12 +799,21 @@ export class AgentService {
     // Track last sent content for delta calculation (incremental push optimization)
     let lastSentContent = '';
     let lastSentThinking = '';
+    /** Resolved before the agent runs; used only by outbound SSE visibility filter. */
+    let reasoningLevel: ReasoningLevel = 'off';
 
-    const pushEvent = (event: { type: string; [key: string]: unknown }) => {
+    const enqueueSseEvent = (event: { type: string; [key: string]: unknown }) => {
       eventQueue.push(event);
       if (resolveWaiting) {
         resolveWaiting();
         resolveWaiting = null;
+      }
+    };
+
+    const pushEvent = (event: { type: string; [key: string]: unknown }) => {
+      const visible = applyReasoningVisibilityToSseEvent(event, reasoningLevel);
+      if (visible !== null) {
+        enqueueSseEvent(visible);
       }
     };
 
@@ -905,6 +935,10 @@ export class AgentService {
 
       await this.modelManager.applyModelForSession(agent, sessionKey);
       await this.applyResolvedThinkingLevel(sessionKey, thinking);
+      {
+        const defReason = (this.config.config?.agents?.defaults?.reasoningDefault ?? 'off') as ReasoningLevel;
+        reasoningLevel = await resolveEffectiveReasoningLevel(this.sessionConfigStore, sessionKey, defReason);
+      }
 
       const sttCfg = mergeSttConfigFromAppConfig(this.config.config?.stt);
       const { text: mergedUserText, inboundVoice } = await mergeVoiceTranscriptsIntoUserText(

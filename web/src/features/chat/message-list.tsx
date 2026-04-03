@@ -2,7 +2,7 @@ import { measureElement, useVirtualizer } from '@tanstack/react-virtual';
 import { memo, type RefObject } from 'react';
 
 import { MessageBubble } from '@/features/chat/message-bubble';
-import type { Message, ProgressState } from '@/features/chat/messages.types';
+import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages.types';
 import { messageRowKey } from '@/features/chat/thinking-blocks';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -16,12 +16,14 @@ export const MessageList = memo(function MessageList({
   authToken,
   streaming,
   progress,
+  reasoningLevel,
   scrollElementRef,
 }: {
   messages: Message[];
   authToken?: string;
   streaming: boolean;
   progress: ProgressState | null;
+  reasoningLevel: ReasoningLevel;
   /** Scrollable viewport (ChatPage `chat-messages`); required whenever the list is shown. */
   scrollElementRef: RefObject<HTMLDivElement | null>;
 }) {
@@ -81,6 +83,7 @@ export const MessageList = memo(function MessageList({
               authToken={authToken}
               isStreaming={isStreamRow}
               progress={isStreamRow ? progress : null}
+              reasoningLevel={reasoningLevel}
             />
           </div>
         );

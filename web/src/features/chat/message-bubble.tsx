@@ -6,6 +6,7 @@ import type {
   Message,
   MessageContent,
   ProgressState,
+  ReasoningLevel,
   ThinkingContent,
   ToolUseContent,
 } from '@/features/chat/messages.types';
@@ -130,11 +131,13 @@ export const MessageBubble = memo(function MessageBubble({
   authToken,
   isStreaming,
   progress,
+  reasoningLevel = 'off',
 }: {
   message: Message;
   authToken?: string;
   isStreaming: boolean;
   progress: ProgressState | null;
+  reasoningLevel?: ReasoningLevel;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -168,17 +171,29 @@ export const MessageBubble = memo(function MessageBubble({
     ],
   );
 
-  const streamingThinking =
-    message.thinkingStreaming ||
-    message.content?.some((b) => b.type === 'thinking' && b.streaming);
+  const reasoningHidden = reasoningLevel === 'off';
+
+  const displayContent = useMemo(() => {
+    if (!reasoningHidden) return message.content ?? [];
+    return (message.content ?? []).filter((b) => b.type !== 'thinking');
+  }, [message.content, reasoningHidden]);
+
+  const progressForMeta =
+    reasoningHidden && progress?.stage === 'thinking' ? null : progress;
+
+  const streamingThinking = reasoningHidden
+    ? false
+    : message.thinkingStreaming ||
+      message.content?.some((b) => b.type === 'thinking' && b.streaming);
 
   const legacyThinking =
+    !reasoningHidden &&
     !(message.content ?? []).some((b) => b.type === 'thinking') &&
     (message.thinking || message.thinkingStreaming);
 
   const showMeta =
     Boolean(message.timestamp) ||
-    Boolean(progress?.message) ||
+    Boolean(progressForMeta?.message) ||
     (isStreaming && !streamingThinking);
 
   const copyMarkdown = useMemo(
@@ -211,7 +226,11 @@ export const MessageBubble = memo(function MessageBubble({
     }
   }, [copyMarkdown]);
 
-  const stepBlocksForSources = useMemo(() => collectAssistantStepBlocks(message), [message]);
+  const stepBlocksForSources = useMemo(() => {
+    const blocks = collectAssistantStepBlocks(message);
+    if (reasoningHidden) return blocks.filter((b) => b.type !== 'thinking');
+    return blocks;
+  }, [message, reasoningHidden]);
 
   return (
     <article className={cn('flex w-full min-w-0', isUser ? 'justify-end' : 'justify-start')}>
@@ -235,12 +254,12 @@ export const MessageBubble = memo(function MessageBubble({
                 {formatTime(message.timestamp)}
               </time>
             ) : null}
-            {progress?.message ? (
-              <span className="text-fg-subtle" title={progress.detail ?? ''}>
-                {progress.message}
+            {progressForMeta?.message ? (
+              <span className="text-fg-subtle" title={progressForMeta.detail ?? ''}>
+                {progressForMeta.message}
               </span>
             ) : null}
-            {isStreaming && !streamingThinking ? (
+            {isStreaming && !streamingThinking && !progressForMeta?.message ? (
               <span className="text-fg-subtle">{m.chat.thinkingLabel}</span>
             ) : null}
           </div>
@@ -262,9 +281,9 @@ export const MessageBubble = memo(function MessageBubble({
               isUser && message.attachments?.length ? 'items-end' : '',
             )}
           >
-            {message.content?.length ? (
+            {(displayContent?.length ?? 0) > 0 ? (
               <>
-                {renderChunkedContent(message.content, toolLabels, stepLabels)}
+                {renderChunkedContent(displayContent, toolLabels, stepLabels)}
                 {isStreaming ? (
                   <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
                 ) : null}
