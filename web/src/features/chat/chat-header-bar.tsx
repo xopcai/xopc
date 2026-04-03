@@ -11,8 +11,8 @@ import { useAppShellStore } from '@/stores/app-shell-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
-/** Tailwind `lg` breakpoint — matches sidebar drawer vs in-flow rail. */
-const MAX_LG = '(max-width: 1023px)';
+/** Tailwind `md` breakpoint — matches sidebar drawer vs in-flow rail. */
+const MAX_MD = '(max-width: 767px)';
 
 type ChatHeaderBarProps = {
   chatHeadline: string;
@@ -40,10 +40,10 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({
   const setMobileNavOpen = useAppShellStore((s) => s.setMobileNavOpen);
 
   const [isMobileLayout, setIsMobileLayout] = useState(() =>
-    typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia(MAX_LG).matches : false,
+    typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia(MAX_MD).matches : false,
   );
   useEffect(() => {
-    const mq = globalThis.matchMedia(MAX_LG);
+    const mq = globalThis.matchMedia(MAX_MD);
     const onChange = () => setIsMobileLayout(mq.matches);
     onChange();
     mq.addEventListener('change', onChange);
@@ -60,8 +60,8 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({
         APP_TOP_HEADER_BAR_CLASS,
         showNewChatLink &&
           (showModelSelector
-            ? 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)_auto] lg:items-center lg:gap-4'
-            : 'lg:grid lg:grid-cols-[auto_minmax(0,1fr)] lg:items-center lg:gap-4'),
+            ? 'md:grid md:grid-cols-[auto_minmax(0,1fr)_auto] md:items-center md:gap-4'
+            : 'md:grid md:grid-cols-[auto_minmax(0,1fr)] md:items-center md:gap-4'),
       )}
     >
       <div className="flex min-w-0 shrink-0 items-center gap-2.5">
@@ -69,7 +69,7 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({
           type="button"
           variant="ghost"
           className={cn(
-            'size-8 shrink-0 rounded-xl p-0 lg:hidden',
+            'size-8 shrink-0 rounded-xl p-0 md:hidden',
             APP_CHROME_NO_DRAG_CLASS,
             mobileNavOpen && 'hidden',
           )}
@@ -99,7 +99,7 @@ export const ChatHeaderBar = memo(function ChatHeaderBar({
       <h1
         className={cn(
           'min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-fg',
-          showNewChatLink ? 'text-left lg:text-center' : 'text-left',
+          showNewChatLink ? 'text-left md:text-center' : 'text-left',
         )}
         title={chatHeadline}
       >

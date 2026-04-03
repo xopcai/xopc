@@ -10,14 +10,14 @@ import { useAppShellStore } from '@/stores/app-shell-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
 
-const LG_MIN = '(min-width: 1024px)';
+const MD_MIN = '(min-width: 768px)';
 
 /**
  * Isolated sidebar shell: subscribes to nav/collapse stores here only so toggling
  * the rail does not re-render the main `<Outlet />` tree.
  *
- * Mobile (`max-lg`): fixed overlay drawer + `transform` (GPU-friendly); main column
- * stays full width. Desktop (`lg+`): flex sibling with width transition on `.app-sidebar-push`.
+ * Small viewports (`max-md`): fixed overlay drawer + `transform` (GPU-friendly); main column
+ * stays full width. Tablet+ (`md+`): flex sibling with width transition on `.app-sidebar-push`.
  */
 export const SidebarColumn = memo(function SidebarColumn() {
   const language = useLocaleStore((s) => s.language);
@@ -37,7 +37,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
   }, [setMobileNavOpen]);
 
   useEffect(() => {
-    const mq = window.matchMedia(LG_MIN);
+    const mq = window.matchMedia(MD_MIN);
     const onChange = () => {
       if (mq.matches) setMobileNavOpen(false);
     };
@@ -47,7 +47,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
 
   useEffect(() => {
     if (!mobileNavOpen) return;
-    const mq = window.matchMedia('(max-width: 1023px)');
+    const mq = window.matchMedia('(max-width: 767px)');
     if (!mq.matches) return;
     const prev = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -61,7 +61,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
       {mobileNavOpen ? (
         <button
           type="button"
-          className="fixed inset-0 z-40 bg-scrim lg:hidden"
+          className="fixed inset-0 z-40 bg-scrim md:hidden"
           aria-label={m.closeMenu}
           onClick={() => setMobileNavOpen(false)}
         />
@@ -72,13 +72,13 @@ export const SidebarColumn = memo(function SidebarColumn() {
         className={cn(
           'app-sidebar-push flex min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base',
           // Mobile: overlay; animate with transform only (no main-column width reflow).
-          'max-lg:fixed max-lg:left-0 max-lg:top-0 max-lg:z-50 max-lg:h-[100dvh] max-lg:w-[min(16rem,85vw)]',
-          'max-lg:transition-transform max-lg:duration-200 max-lg:ease-out',
-          'motion-reduce:max-lg:transition-none',
-          mobileNavOpen ? 'max-lg:translate-x-0' : 'max-lg:-translate-x-full',
-          // Desktop: in-flow rail
-          'lg:relative lg:h-full lg:translate-x-0',
-          sidebarCollapsed ? 'lg:w-[4.5rem]' : 'lg:w-64',
+          'max-md:fixed max-md:left-0 max-md:top-0 max-md:z-50 max-md:h-[100dvh] max-md:w-[min(16rem,85vw)]',
+          'max-md:transition-transform max-md:duration-200 max-md:ease-out',
+          'motion-reduce:max-md:transition-none',
+          mobileNavOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
+          // Tablet+: in-flow rail
+          'md:relative md:h-full md:translate-x-0',
+          sidebarCollapsed ? 'md:w-[4.5rem]' : 'md:w-64',
         )}
       >
         <div
@@ -92,7 +92,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
             <Button
               type="button"
               variant="ghost"
-              className={cn('size-8 shrink-0 rounded-xl p-0 lg:hidden', APP_CHROME_NO_DRAG_CLASS)}
+              className={cn('size-8 shrink-0 rounded-xl p-0 md:hidden', APP_CHROME_NO_DRAG_CLASS)}
               aria-label={m.closeMenu}
               title={m.closeMenu}
               onClick={() => setMobileNavOpen(false)}
@@ -104,7 +104,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
             type="button"
             variant="ghost"
             className={cn(
-              'hidden size-8 shrink-0 rounded-xl p-0 lg:inline-flex',
+              'hidden size-8 shrink-0 rounded-xl p-0 md:inline-flex',
               APP_CHROME_NO_DRAG_CLASS,
             )}
             aria-expanded={!sidebarCollapsed}
