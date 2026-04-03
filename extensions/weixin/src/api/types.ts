@@ -44,6 +44,8 @@ export interface GetUploadUrlResp {
   upload_param?: string;
   /** 缩略图上传加密参数，无缩略图时为空 */
   thumb_upload_param?: string;
+  /** 完整上传 URL（服务端直接返回，无需客户端拼接） */
+  upload_full_url?: string;
 }
 
 export const MessageType = {
@@ -77,6 +79,8 @@ export interface CDNMedia {
   aes_key?: string;
   /** 加密类型: 0=只加密fileid, 1=打包缩略图/中图等信息 */
   encrypt_type?: number;
+  /** 服务端返回的完整 CDN URL（优先于客户端拼接） */
+  full_url?: string;
 }
 
 export interface ImageItem {

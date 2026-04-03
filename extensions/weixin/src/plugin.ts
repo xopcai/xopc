@@ -117,6 +117,16 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
     startStream: () => null,
   };
 
+  /** Hints aligned with openclaw-weixin channel plugin (cron targets, media paths). */
+  agentPrompt = {
+    augmentSystemPrompt: (): string =>
+      [
+        'Weixin (ilink): direct chat only. To send an image or file, use the message tool with action send and set media to a local absolute path or an HTTPS URL; relative paths may fail.',
+        'For cron or scheduled delivery to a Weixin contact, set delivery.to to the user Weixin id (ending in @im.wechat) and delivery.accountId to the bot account id, or outbound may pick the wrong account.',
+        'When using MEDIA: to attach a file, put the MEDIA: line alone on its own line, not inline with other text.',
+      ].join('\n'),
+  };
+
   async init(options: ChannelPluginInitOptions): Promise<void> {
     this.bus = options.bus;
     this.cfg = options.config;

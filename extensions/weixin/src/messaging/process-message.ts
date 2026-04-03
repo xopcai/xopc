@@ -135,21 +135,24 @@ export async function processWeixinInboundMessage(
 
   const mediaOpts: WeixinInboundMediaOpts = {};
 
+  const hasDownloadableMedia = (m?: { encrypt_query_param?: string; full_url?: string }) =>
+    Boolean(m?.encrypt_query_param || m?.full_url);
+
   const mainMediaItem =
     full.item_list?.find(
-      (i) => i.type === MessageItemType.IMAGE && i.image_item?.media?.encrypt_query_param,
+      (i) => i.type === MessageItemType.IMAGE && hasDownloadableMedia(i.image_item?.media),
     ) ??
     full.item_list?.find(
-      (i) => i.type === MessageItemType.VIDEO && i.video_item?.media?.encrypt_query_param,
+      (i) => i.type === MessageItemType.VIDEO && hasDownloadableMedia(i.video_item?.media),
     ) ??
     full.item_list?.find(
-      (i) => i.type === MessageItemType.FILE && i.file_item?.media?.encrypt_query_param,
+      (i) => i.type === MessageItemType.FILE && hasDownloadableMedia(i.file_item?.media),
     ) ??
     full.item_list?.find(
       (i) =>
         i.type === MessageItemType.VOICE &&
-        i.voice_item?.media?.encrypt_query_param &&
-        !i.voice_item.text,
+        hasDownloadableMedia(i.voice_item?.media) &&
+        !i.voice_item?.text,
     );
   const refMediaItem = !mainMediaItem
     ? full.item_list?.find(

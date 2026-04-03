@@ -13,15 +13,25 @@ const UPLOAD_MAX_RETRIES = 3;
  */
 export async function uploadBufferToCdn(params: {
   buf: Buffer;
-  uploadParam: string;
+  /** From getUploadUrl.upload_full_url; POST target when set (takes precedence over uploadParam). */
+  uploadFullUrl?: string;
+  uploadParam?: string;
   filekey: string;
   cdnBaseUrl: string;
   label: string;
   aeskey: Buffer;
 }): Promise<{ downloadParam: string }> {
-  const { buf, uploadParam, filekey, cdnBaseUrl, label, aeskey } = params;
+  const { buf, uploadFullUrl, uploadParam, filekey, cdnBaseUrl, label, aeskey } = params;
   const ciphertext = encryptAesEcb(buf, aeskey);
-  const cdnUrl = buildCdnUploadUrl({ cdnBaseUrl, uploadParam, filekey });
+  const trimmedFull = uploadFullUrl?.trim();
+  let cdnUrl: string;
+  if (trimmedFull) {
+    cdnUrl = trimmedFull;
+  } else if (uploadParam) {
+    cdnUrl = buildCdnUploadUrl({ cdnBaseUrl, uploadParam, filekey });
+  } else {
+    throw new Error(`${label}: CDN upload URL missing (need upload_full_url or upload_param)`);
+  }
   logger.debug(`${label}: CDN POST url=${redactUrl(cdnUrl)} ciphertextSize=${ciphertext.length}`);
 
   let downloadParam: string | undefined;

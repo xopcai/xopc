@@ -2,6 +2,9 @@
  * Unified CDN URL construction for Weixin CDN upload/download.
  */
 
+/** When true, if the server omits `full_url`, fall back to client-built URLs; when false, require `full_url`. */
+export const ENABLE_CDN_URL_FALLBACK = true;
+
 /** Build a CDN download URL from encrypt_query_param. */
 export function buildCdnDownloadUrl(encryptedQueryParam: string, cdnBaseUrl: string): string {
   return `${cdnBaseUrl}/download?encrypted_query_param=${encodeURIComponent(encryptedQueryParam)}`;

@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Config } from '@xopcai/xopcbot/config/schema.js';
+import { resolveStateDir as resolveXopcbotStateDir } from '@xopcai/xopcbot/config/paths.js';
 
 import { clearContextTokensForAccount } from '../messaging/inbound.js';
 import { resolveWeixinRootDir } from '../storage/state-dir.js';
@@ -116,6 +117,27 @@ function readAccountFile(filePath: string): WeixinAccountData | null {
   return null;
 }
 
+/**
+ * Legacy single-file token: `~/.xopcbot/credentials/openclaw-weixin/credentials.json`
+ * (same layout as OpenClaw / openclaw-weixin before per-account files).
+ */
+function loadLegacyOpenclawWeixinToken(): string | undefined {
+  const legacyPath = path.join(
+    resolveXopcbotStateDir(),
+    'credentials',
+    'openclaw-weixin',
+    'credentials.json',
+  );
+  try {
+    if (!fs.existsSync(legacyPath)) return undefined;
+    const raw = fs.readFileSync(legacyPath, 'utf-8');
+    const parsed = JSON.parse(raw) as { token?: string };
+    return typeof parsed.token === 'string' ? parsed.token : undefined;
+  } catch {
+    return undefined;
+  }
+}
+
 export function loadWeixinAccount(accountId: string): WeixinAccountData | null {
   const primary = readAccountFile(resolveAccountPath(accountId));
   if (primary) return primary;
@@ -125,6 +147,9 @@ export function loadWeixinAccount(accountId: string): WeixinAccountData | null {
     const compat = readAccountFile(resolveAccountPath(rawId));
     if (compat) return compat;
   }
+
+  const legacyToken = loadLegacyOpenclawWeixinToken();
+  if (legacyToken) return { token: legacyToken };
 
   return null;
 }
