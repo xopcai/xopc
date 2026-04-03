@@ -106,6 +106,32 @@ export async function fetchChannelsSettings(): Promise<ChannelsSettingsState> {
   return normalizeChannelsFromConfig(c ?? {});
 }
 
+export type WeixinGatewayQrLoginStatusPayload =
+  | { phase: 'polling'; qrcodeUrl: string; qrStatus?: string }
+  | { phase: 'done'; ok: true; accountId: string }
+  | { phase: 'done'; ok: false; message: string }
+  | { phase: 'unknown'; message: string };
+
+export async function fetchWeixinGatewayQrLoginStart(body?: {
+  account?: string;
+  timeoutMs?: number;
+}): Promise<{ sessionKey: string; qrcodeUrl: string }> {
+  const res = await fetchJson<{ ok: boolean; payload: { sessionKey: string; qrcodeUrl: string } }>(
+    apiUrl('/api/channels/weixin/login/start'),
+    { method: 'POST', body: JSON.stringify(body ?? {}) },
+  );
+  return res.payload;
+}
+
+export async function fetchWeixinGatewayQrLoginStatus(
+  sessionKey: string,
+): Promise<WeixinGatewayQrLoginStatusPayload> {
+  const res = await fetchJson<{ ok: boolean; payload: { status: WeixinGatewayQrLoginStatusPayload } }>(
+    apiUrl(`/api/channels/weixin/login/${encodeURIComponent(sessionKey)}`),
+  );
+  return res.payload.status;
+}
+
 export async function patchChannelsSettings(state: ChannelsSettingsState): Promise<void> {
   const tg = state.telegram;
   const wx = state.weixin;

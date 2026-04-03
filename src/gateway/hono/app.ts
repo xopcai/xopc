@@ -207,7 +207,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     // Basic CSP: allow same-origin resources, inline styles (Tailwind), and data: URIs (icons)
     c.header(
       'Content-Security-Policy',
-      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob: https:; font-src 'self'; connect-src 'self'; frame-ancestors 'none'",
     );
   }));
 
@@ -248,6 +248,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         'POST /api/send',
         'GET  /api/events          (SSE stream)',
         'GET  /api/channels/status',
+        'POST /api/channels/weixin/login/start',
+        'GET  /api/channels/weixin/login/:sessionKey',
         'GET  /api/config',
         'PATCH /api/config',
         'POST /api/config/reload',
@@ -665,6 +667,53 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   authenticated.get('/api/channels/status', (c) => {
     const channels = service.getChannelsStatus();
     return c.json({ ok: true, payload: { channels } });
+  });
+
+  // POST /api/channels/weixin/login/start — QR login (persists credentials on the gateway host)
+  authenticated.post('/api/channels/weixin/login/start', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => ({}));
+    const account =
+      body && typeof body === 'object' && typeof (body as { account?: unknown }).account === 'string'
+        ? (body as { account: string }).account.trim() || undefined
+        : undefined;
+    const rawTimeout =
+      body && typeof body === 'object' ? (body as { timeoutMs?: unknown }).timeoutMs : undefined;
+    const timeoutMs =
+      typeof rawTimeout === 'number' && Number.isFinite(rawTimeout) ? Math.max(60_000, rawTimeout) : undefined;
+
+    const { startWeixinGatewayQrLogin } = await import('../../channels/weixin/index.js');
+    const result = await startWeixinGatewayQrLogin({
+      configPath: service.getHealth().configPath,
+      account,
+      timeoutMs,
+      onPersisted: async (r) => {
+        if (r.ok) {
+          await service.reloadConfig();
+        }
+      },
+    });
+
+    if (result.ok === false) {
+      return c.json(
+        { ok: false, error: { code: 'WEIXIN_LOGIN_FAILED', message: result.message } },
+        400,
+      );
+    }
+    return c.json({
+      ok: true,
+      payload: { sessionKey: result.sessionKey, qrcodeUrl: result.qrcodeUrl },
+    });
+  });
+
+  // GET /api/channels/weixin/login/:sessionKey — poll QR login state
+  authenticated.get('/api/channels/weixin/login/:sessionKey', async (c) => {
+    const sessionKey = c.req.param('sessionKey')?.trim() ?? '';
+    if (!sessionKey) {
+      return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing sessionKey' } }, 400);
+    }
+    const { getWeixinGatewayQrLoginStatus } = await import('../../channels/weixin/index.js');
+    const status = getWeixinGatewayQrLoginStatus(sessionKey);
+    return c.json({ ok: true, payload: { status } });
   });
 
   // POST /api/config/reload

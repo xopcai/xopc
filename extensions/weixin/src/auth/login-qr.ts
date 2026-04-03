@@ -171,9 +171,22 @@ export async function startWeixinLoginWithQr(opts: {
 
 const MAX_QR_REFRESH_COUNT = 3;
 
+export function getWeixinActiveLoginSnapshot(sessionKey: string): {
+  qrcodeUrl: string;
+  status?: ActiveLogin["status"];
+} | null {
+  const login = activeLogins.get(sessionKey);
+  if (!login || !isLoginFresh(login)) {
+    return null;
+  }
+  return { qrcodeUrl: login.qrcodeUrl, status: login.status };
+}
+
 export async function waitForWeixinLogin(opts: {
   timeoutMs?: number;
   verbose?: boolean;
+  /** When true, do not write to stdout (browser / gateway QR flow). */
+  silent?: boolean;
   sessionKey: string;
   /** Kept for API compatibility; polling starts from fixed host then follows redirect. */
   apiBaseUrl: string;
@@ -204,6 +217,7 @@ export async function waitForWeixinLogin(opts: {
   const deadline = Date.now() + timeoutMs;
   let scannedPrinted = false;
   let qrRefreshCount = 1;
+  const silent = Boolean(opts.silent);
 
   activeLogin.currentApiBaseUrl = FIXED_BASE_URL;
 
@@ -225,8 +239,10 @@ export async function waitForWeixinLogin(opts: {
           }
           break;
         case "scaned":
-          if (!scannedPrinted) {
+          if (!scannedPrinted && !silent) {
             process.stdout.write("\n👀 已扫码，在微信继续操作...\n");
+            scannedPrinted = true;
+          } else if (!scannedPrinted) {
             scannedPrinted = true;
           }
           break;
@@ -243,7 +259,9 @@ export async function waitForWeixinLogin(opts: {
             };
           }
 
-          process.stdout.write(`\n⏳ 二维码已过期，正在刷新...(${qrRefreshCount}/${MAX_QR_REFRESH_COUNT})\n`);
+          if (!silent) {
+            process.stdout.write(`\n⏳ 二维码已过期，正在刷新...(${qrRefreshCount}/${MAX_QR_REFRESH_COUNT})\n`);
+          }
           logger.info(
             `waitForWeixinLogin: QR expired, refreshing (${qrRefreshCount}/${MAX_QR_REFRESH_COUNT})`,
           );
@@ -256,15 +274,17 @@ export async function waitForWeixinLogin(opts: {
             activeLogin.startedAt = Date.now();
             scannedPrinted = false;
             logger.info(`waitForWeixinLogin: new QR code obtained qrcode=${redactToken(qrResponse.qrcode)}`);
-            process.stdout.write(`🔄 新二维码已生成，请重新扫描\n\n`);
-            try {
-              const qrterm = await import("qrcode-terminal");
-              qrterm.default.generate(qrResponse.qrcode_img_content, { small: true });
-              process.stdout.write(`如果二维码未能成功展示，请用浏览器打开以下链接扫码：\n`);
-              process.stdout.write(`${qrResponse.qrcode_img_content}\n`);
-            } catch {
-              process.stdout.write(`二维码未加载成功，请用浏览器打开以下链接扫码：\n`);
-              process.stdout.write(`${qrResponse.qrcode_img_content}\n`);
+            if (!silent) {
+              process.stdout.write(`🔄 新二维码已生成，请重新扫描\n\n`);
+              try {
+                const qrterm = await import("qrcode-terminal");
+                qrterm.default.generate(qrResponse.qrcode_img_content, { small: true });
+                process.stdout.write(`如果二维码未能成功展示，请用浏览器打开以下链接扫码：\n`);
+                process.stdout.write(`${qrResponse.qrcode_img_content}\n`);
+              } catch {
+                process.stdout.write(`二维码未加载成功，请用浏览器打开以下链接扫码：\n`);
+                process.stdout.write(`${qrResponse.qrcode_img_content}\n`);
+              }
             }
           } catch (refreshErr) {
             logger.error(`waitForWeixinLogin: failed to refresh QR code: ${String(refreshErr)}`);

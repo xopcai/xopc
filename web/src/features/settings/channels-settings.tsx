@@ -1,9 +1,13 @@
-import { Check, ChevronDown, Copy, ExternalLink, Eye, EyeOff, MessageSquare, Send } from 'lucide-react';
+import * as Dialog from '@radix-ui/react-dialog';
+import { Check, ChevronDown, Copy, ExternalLink, Eye, EyeOff, MessageSquare, Send, X } from 'lucide-react';
+import QRCode from 'qrcode';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
   fetchChannelsSettings,
+  fetchWeixinGatewayQrLoginStart,
+  fetchWeixinGatewayQrLoginStatus,
   patchChannelsSettings,
   type ChannelsSettingsState,
   type DmPolicy,
@@ -70,6 +74,259 @@ function SelectField<T extends string>({ label, value, onChange, options }: Sele
         ))}
       </select>
     </div>
+  );
+}
+
+function WeixinQrLoginCard({
+  ch,
+  onLoginSuccess,
+}: {
+  ch: ChannelsSettingsMessages;
+  onLoginSuccess: () => void | Promise<void>;
+}) {
+  const [modalOpen, setModalOpen] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [sessionKey, setSessionKey] = useState<string | null>(null);
+  const [qrcodeUrl, setQrcodeUrl] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [hint, setHint] = useState<string | null>(null);
+  /** PNG data URL from encoding `qrcodeUrl` (ilink payload string), not a remote image URL. */
+  const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
+  const [qrGenFailed, setQrGenFailed] = useState(false);
+
+  useEffect(() => {
+    if (!sessionKey) return;
+    let cancelled = false;
+    let intervalId: number | undefined;
+
+    const poll = async () => {
+      try {
+        const st = await fetchWeixinGatewayQrLoginStatus(sessionKey);
+        if (cancelled) return;
+        if (st.phase === 'polling') {
+          setQrcodeUrl(st.qrcodeUrl);
+          if (st.qrStatus === 'scaned') {
+            setHint(ch.weixinQrLoginScanned);
+          } else {
+            setHint(null);
+          }
+          return;
+        }
+        if (st.phase === 'done') {
+          if (intervalId !== undefined) {
+            window.clearInterval(intervalId);
+            intervalId = undefined;
+          }
+          setSessionKey(null);
+          if (st.ok) {
+            setModalOpen(false);
+            setHint(ch.weixinQrLoginSuccess);
+            setQrcodeUrl(null);
+            await onLoginSuccess();
+            window.setTimeout(() => setHint(null), 4000);
+          } else {
+            setError(st.message);
+            setQrcodeUrl(null);
+          }
+          return;
+        }
+        if (st.phase === 'unknown') {
+          setHint(null);
+        }
+      } catch (e) {
+        if (!cancelled) {
+          if (intervalId !== undefined) {
+            window.clearInterval(intervalId);
+          }
+          setError(e instanceof Error ? e.message : 'Request failed');
+          setSessionKey(null);
+          setQrcodeUrl(null);
+        }
+      }
+    };
+
+    intervalId = window.setInterval(() => void poll(), 2000);
+    void poll();
+    return () => {
+      cancelled = true;
+      if (intervalId !== undefined) {
+        window.clearInterval(intervalId);
+      }
+    };
+  }, [sessionKey, ch.weixinQrLoginScanned, ch.weixinQrLoginSuccess, onLoginSuccess]);
+
+  useEffect(() => {
+    if (!qrcodeUrl) {
+      setQrDataUrl(null);
+      setQrGenFailed(false);
+      return;
+    }
+    let cancelled = false;
+    setQrGenFailed(false);
+    void QRCode.toDataURL(qrcodeUrl, {
+      width: 208,
+      margin: 2,
+      errorCorrectionLevel: 'M',
+      color: { dark: '#000000ff', light: '#ffffffff' },
+    })
+      .then((url) => {
+        if (!cancelled) setQrDataUrl(url);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setQrGenFailed(true);
+          setQrDataUrl(null);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [qrcodeUrl]);
+
+  const start = async () => {
+    setError(null);
+    setHint(null);
+    setSessionKey(null);
+    setBusy(true);
+    try {
+      const r = await fetchWeixinGatewayQrLoginStart();
+      setQrcodeUrl(r.qrcodeUrl);
+      setSessionKey(r.sessionKey);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Start failed');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const dismiss = () => {
+    setModalOpen(false);
+    setSessionKey(null);
+    setQrcodeUrl(null);
+    setHint(null);
+    setError(null);
+    setQrDataUrl(null);
+    setQrGenFailed(false);
+  };
+
+  const openModal = () => {
+    setModalOpen(true);
+    void start();
+  };
+
+  const showQr = Boolean(qrcodeUrl && sessionKey);
+
+  return (
+    <>
+      <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-3 dark:border-edge">
+        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
+          <div>
+            <p className="text-sm font-medium text-fg">{ch.weixinQrLoginTitle}</p>
+            <p className="mt-1 text-xs text-fg-muted">{ch.weixinQrLoginDesc}</p>
+          </div>
+          <Button
+            type="button"
+            variant="primary"
+            className="shrink-0 text-xs"
+            disabled={busy && modalOpen}
+            onClick={() => openModal()}
+          >
+            {busy && modalOpen ? ch.weixinQrLoginBusy : ch.weixinQrLoginButton}
+          </Button>
+        </div>
+        {hint && !modalOpen && !error ? <p className="mt-2 text-xs text-accent">{hint}</p> : null}
+      </div>
+
+      <Dialog.Root
+        open={modalOpen}
+        onOpenChange={(open) => {
+          if (!open) dismiss();
+        }}
+      >
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Content
+            className={cn(
+              'fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,22rem)] -translate-x-1/2 -translate-y-1/2',
+              'rounded-2xl border border-edge bg-surface-panel px-6 pb-6 pt-12 shadow-xl outline-none dark:border-edge',
+            )}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <div className="pointer-events-none absolute left-1/2 top-0 z-10 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#07C160] shadow-md ring-4 ring-surface-panel">
+              <MessageSquare className="size-7 text-white" strokeWidth={2} aria-hidden />
+            </div>
+
+            <Dialog.Close asChild>
+              <button
+                type="button"
+                className="absolute right-3 top-3 z-20 rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                aria-label={ch.weixinQrModalCloseAria}
+              >
+                <X className="size-4" />
+              </button>
+            </Dialog.Close>
+
+            <Dialog.Title className="sr-only">{ch.weixinQrModalTitle}</Dialog.Title>
+            <Dialog.Description className="sr-only">{ch.weixinQrModalSubtitle}</Dialog.Description>
+
+            <div className="text-center">
+              <p className="text-lg font-semibold tracking-tight text-fg">{ch.weixinQrModalTitle}</p>
+              <p className="mt-1.5 text-sm text-fg-muted">{ch.weixinQrModalSubtitle}</p>
+            </div>
+
+            <div className="mt-6 flex min-h-[200px] flex-col items-center justify-center">
+              {busy && !showQr ? (
+                <p className="text-sm text-fg-muted">{ch.weixinQrLoginBusy}</p>
+              ) : null}
+              {error ? (
+                <p className="text-center text-sm text-red-600 dark:text-red-400">{error}</p>
+              ) : null}
+              {hint && !error ? <p className="mb-3 text-center text-sm text-accent">{hint}</p> : null}
+              {showQr && qrcodeUrl && !error ? (
+                <div className="flex w-full flex-col items-center gap-3">
+                  {qrDataUrl && !qrGenFailed ? (
+                    <img
+                      src={qrDataUrl}
+                      alt=""
+                      className="h-52 w-52 rounded-lg border border-edge-subtle bg-white object-contain p-3 dark:border-edge"
+                    />
+                  ) : null}
+                  {!qrDataUrl && !qrGenFailed ? (
+                    <p className="text-sm text-fg-muted">{ch.weixinQrEncoding}</p>
+                  ) : null}
+                  {qrGenFailed ? (
+                    <div className="flex w-full flex-col items-center gap-3">
+                      <p className="max-w-[16rem] text-center text-sm text-fg-muted">{ch.weixinQrImageError}</p>
+                      <a
+                        href={qrcodeUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                        className="inline-flex items-center gap-1.5 text-sm text-accent underline-offset-2 hover:underline"
+                      >
+                        <ExternalLink className="size-3.5 shrink-0" />
+                        {ch.weixinQrOpenLink}
+                      </a>
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
+            </div>
+
+            <div className="mt-6">
+              <Button
+                type="button"
+                variant="secondary"
+                className="h-11 w-full rounded-full border-0 bg-fg text-surface-panel hover:opacity-90 dark:bg-fg dark:text-surface-panel"
+                disabled={busy}
+                onClick={() => void start()}
+              >
+                {busy ? ch.weixinQrLoginBusy : ch.weixinQrRegenerate}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+    </>
   );
 }
 
@@ -532,6 +789,8 @@ export function ChannelsSettingsPanel() {
                 </ol>
                 <p className="mt-3 text-fg-subtle">{ch.weixinAdvancedHint}</p>
               </div>
+
+              <WeixinQrLoginCard ch={ch} onLoginSuccess={() => void load()} />
 
               <Button
                 type="button"
