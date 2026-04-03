@@ -882,7 +882,7 @@ export class AgentService {
           break;
         }
         case 'agent_start': {
-          pushEvent({ type: 'progress', stage: 'thinking', message: '🤔 Thinking...' });
+          pushEvent({ type: 'progress', stage: 'thinking', message: 'Thinking...' });
           break;
         }
         case 'agent_end': {
