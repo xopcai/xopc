@@ -1,18 +1,70 @@
 # 通道配置
 
-xopcbot 支持多种通信通道，采用基于扩展的架构。
+xopcbot 支持多种通信通道，采用基于扩展的架构。**核心配置**（`src/config/schema.ts`）在 `channels` 下明确定义 **`telegram`** 与 **`weixin`**；其余键名可通过 **`.passthrough()`** 保留，供扩展写入。
 
 ## 概述
 
 | 通道 | 状态 | 功能 |
 |------|------|------|
-| Telegram | ✅ | 多账户、流式传输、语音、文档 |
-| Feishu/Lark | ✅ | 机器人消息、@提及 |
-| Web UI | ✅ | Gateway 连接的聊天界面 |
+| **Telegram** | ✅ | Bot Token 或多账号 JSON、流式、语音、文档 |
+| **微信（Weixin）** | ✅ | 在网关所在机扫码登录、私聊策略、可选按账号 JSON |
+| **网页（Web UI）** | ✅ | 网关控制台内嵌聊天，与其它客户端共用 HTTP API |
 
-## 实现说明（开发者）
+其它第三方或实验性通道可作为**扩展**接入，仍可能出现在 `channels.<id>` 中（视构建与扩展而定）。
 
-Telegram 通道以 **pnpm 工作区包** 形式位于 `extensions/telegram`（`@xopcai/xopcbot-extension-telegram`）。核心在 `src/channels/plugins/bundled.ts` 中注册该插件。为保持从核心代码导入路径稳定，`src/channels/telegram/index.ts` 会从该包再导出插件及相关类型。通道采用 **`ChannelPlugin`** 模型（见 `src/channels/plugin-types.ts`），不再使用旧的 `telegramExtension` API。
+## 网关控制台 — IM 频道
+
+网关运行时可使用 React 控制台中的 **IM 频道** 专页：
+
+- **路由：** `#/channels`（侧栏 **IM 频道**）。
+- **前提：** 已在设置中保存 **网关 Token**，以便调用需鉴权的 API。
+- **当前产品界面：** 仅配置 **微信** 与 **Telegram**（与核心 `channels` 结构一致）。
+
+### 微信
+
+- 弹窗内 **扫码登录**，与网关交互：
+  - `POST /api/channels/weixin/login/start` — 创建会话并返回二维码载荷。
+  - `GET /api/channels/weixin/login/:sessionKey` — 轮询直至完成；凭据写入 **运行网关的本机**（不会上传到云端）。
+- 登录成功后从 `GET /api/config` 刷新表单。可选 **高级选项**（白名单、`dmPolicy`、`streamMode`、多账号 JSON 等）在同一弹窗内编辑并通过 **保存** 写入配置。
+- 也可在网关主机用 CLI 登录，例如：`pnpm run dev -- channels login --channel weixin`（具体以本机安装与 `--help` 为准）。
+
+### Telegram
+
+- 弹窗表单：Bot Token、白名单、启用开关及 **高级选项**（API 根地址、代理、策略、多账号 JSON 等）。
+- **保存** 通过 `PATCH /api/config` 写入 `channels.telegram`，并保留配置中其它字段。
+
+### 列表行（配置完成后）
+
+当通道被视为 **已配置**（例如 Telegram：已填 Token 或有 `accounts`；微信：已启用、或有 `accounts`、或 `allowFrom` 非空等），卡片展示 **已连接**、**⋯** 菜单（**编辑配置** / **移除配置**）以及 **开关**（立即通过同一配置接口持久化）。**移除配置** 会将该通道块恢复为默认值并保存。
+
+配置写入 **网关配置文件**（默认 `~/.xopcbot/config.json`，或由 `XOPCBOT_CONFIG` 指定）。
+
+## 微信（Weixin）通道
+
+### 最小配置示例
+
+```json
+{
+  "channels": {
+    "weixin": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "allowFrom": [],
+      "streamMode": "partial",
+      "historyLimit": 50,
+      "textChunkLimit": 4000,
+      "routeTag": "",
+      "accounts": {}
+    }
+  }
+}
+```
+
+- **`dmPolicy`**：与 Telegram 同一套（`pairing`、`allowlist`、`open`、`disabled`）。
+- **`allowFrom`**：在需要白名单式私聊策略时，填写允许的 wxid / openid。
+- **`accounts`**：可选，按账号覆盖（名称、`cdnBaseUrl`、`routeTag`、策略等），详见 `src/config/schema.ts` 中 `WeixinConfigSchema` / `WeixinAccountConfigSchema`。
+
+修改凭据后若网关已在运行，请按你的部署方式**重启或热加载**。
 
 ## Telegram 通道
 
@@ -152,37 +204,15 @@ Telegram 通道以 **pnpm 工作区包** 形式位于 `extensions/telegram`（`@
 - **语音消息**: STT 限制 60 秒
 - **TTS 文本**: 限制 4000 字符
 
----
+## 实现说明（开发者）
 
-## Feishu/Lark 通道
-
-### 配置
-
-```json
-{
-  "channels": {
-    "feishu": {
-      "enabled": true,
-      "appId": "APP_ID",
-      "appSecret": "APP_SECRET",
-      "verificationToken": "VERIFICATION_TOKEN"
-    }
-  }
-}
-```
-
-### 功能
-
-- ✅ 机器人消息
-- ✅ @提及处理
-- ✅ 富文本格式化
-- ✅ 文件附件
+Telegram 通道以 **pnpm 工作区包** 形式位于 `extensions/telegram`（`@xopcai/xopcbot-extension-telegram`）。核心在 `src/channels/plugins/bundled.ts` 中注册该插件。为保持从核心代码导入路径稳定，`src/channels/telegram/index.ts` 会从该包再导出插件及相关类型。微信通道同理（`extensions/weixin`，私有工作区包）。通道采用 **`ChannelPlugin`** 模型（见 `src/channels/plugin-types.ts`），不再使用旧的 `telegramExtension` API。
 
 ---
 
-## Web UI 通道
+## 网页（Web UI）通道
 
-Web UI 提供基于浏览器的聊天界面。
+Web UI 由网关提供静态资源（`web/` 的 Vite 构建产物，与网关静态根目录一并发布）。
 
 ### 启动 Gateway
 
@@ -192,15 +222,29 @@ xopcbot gateway --port 18790
 
 ### 访问
 
-在浏览器中打开 `http://localhost:18790`。
+在浏览器中打开 `http://localhost:18790`（或你配置的监听地址）。
 
 ### 功能
 
 - ✅ 通过网关聊天（REST；代理回复在 `/api/agent` 上以 **SSE** 流式输出）
-- ✅ 会话管理
-- ✅ 配置界面
+- ✅ 会话管理（`#/sessions`、侧栏任务列表）
+- ✅ **IM 频道** 页 `#/channels`，配置 Telegram 与微信（见上文）
+- ✅ 其它设置（模型、网关 Token、语音等）
 - ✅ 日志查看
 - ✅ Cron 任务管理
+
+### 侧栏：按通道筛选会话
+
+侧栏会话列表支持 **网页** / **Telegram** / **微信**：
+
+- **网页** — 在 `GET /api/sessions` 结果上按会话 key 做客户端筛选，仅显示网页会话。
+- **Telegram** / **微信** — 使用 `GET /api/sessions?channel=telegram` 或 `channel=weixin`，与 `SessionMetadata.sourceChannel` 一致。
+
+---
+
+## 其它通道类型（扩展）
+
+部分部署会通过扩展增加飞书/钉钉/Discord 等通道，可能在 `channels.<id>` 中增加字段并由运行时加载；请参阅对应扩展说明及 `src/channels/plugins/bundled.ts`、生成的 bundled 插件列表。**控制台 IM 频道** 页目前只提供 **Telegram** 与 **微信** 的产品化配置入口。
 
 ---
 
