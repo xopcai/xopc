@@ -1,18 +1,70 @@
 # Channel Configuration
 
-xopcbot supports multiple communication channels with an extension-based architecture.
+xopcbot supports multiple communication channels with an extension-based architecture. The **core config schema** (`src/config/schema.ts`) defines **`channels.telegram`** and **`channels.weixin`**; unknown keys are preserved via **`.passthrough()`** so extensions can add more channel ids.
 
 ## Overview
 
 | Channel | Status | Features |
 |---------|--------|----------|
-| Telegram | ✅ | Multi-account, streaming, voice, documents |
-| Feishu/Lark | ✅ | Bot messages, mentions |
-| Web UI | ✅ | Gateway-connected chat interface |
+| **Telegram** | ✅ | Bot token or multi-account JSON, streaming, voice, documents |
+| **Weixin (WeChat)** | ✅ | QR login on the gateway host, DM policies, optional per-account JSON |
+| **Web UI** | ✅ | Gateway console chat (browser), same HTTP API as other clients |
 
-## Implementation note (developers)
+Third-party or experimental channel types may ship as **extensions** and still persist under `channels.<id>` when valid for your build.
 
-The Telegram channel is shipped as a **pnpm workspace package** at `extensions/telegram` (`@xopcai/xopcbot-extension-telegram`). The core registers it through `src/channels/plugins/bundled.ts`. For stable imports from core code, `src/channels/telegram/index.ts` re-exports the plugin and related symbols from that package. Channels use the **`ChannelPlugin`** model (see `src/channels/plugin-types.ts`), not the legacy `telegramExtension` API.
+## Gateway console — IM channels
+
+When the gateway is running, the React console includes a dedicated **IM channels** screen:
+
+- **Route:** `#/channels` (sidebar: **IM 频道** / *IM channels*).
+- **Requires:** a saved **gateway token** (settings) so the UI can call authenticated APIs.
+- **Supported here:** **Weixin** and **Telegram** only (aligned with the first-class `channels` schema).
+
+### Weixin
+
+- Opens a **QR login** dialog that talks to the gateway:
+  - `POST /api/channels/weixin/login/start` — begin session, returns QR payload.
+  - `GET /api/channels/weixin/login/:sessionKey` — poll until login completes; credentials are written on the **gateway host** (not uploaded to a cloud).
+- After login, settings reload from `GET /api/config`. Optional **advanced** fields (allowlist, `dmPolicy`, `streamMode`, per-account JSON) are edited in the same dialog and saved with **Save**.
+- You can also sign in from the host CLI, e.g. `pnpm run dev -- channels login --channel weixin` (see CLI help for your install).
+
+### Telegram
+
+- Modal form: bot token, allowlists, enable flag, and **Advanced** (API root, proxy, policies, multi-account JSON).
+- **Save** writes `PATCH /api/config` with `channels.telegram` (and preserves other config).
+
+### Hub cards (after setup)
+
+Once a channel is considered **configured** (e.g. Telegram: token or `accounts`; Weixin: enabled, accounts, or allowlist), the list row shows **Connected**, a **⋯** menu (**Edit configuration** / **Remove configuration**), and an **enable** switch that persists immediately via the same config patch. **Remove** resets that channel block to defaults and saves.
+
+Configuration is stored in the **gateway config file** (default `~/.xopcbot/config.json` or `XOPCBOT_CONFIG`).
+
+## Weixin (WeChat) channel
+
+### Minimal shape
+
+```json
+{
+  "channels": {
+    "weixin": {
+      "enabled": true,
+      "dmPolicy": "pairing",
+      "allowFrom": [],
+      "streamMode": "partial",
+      "historyLimit": 50,
+      "textChunkLimit": 4000,
+      "routeTag": "",
+      "accounts": {}
+    }
+  }
+}
+```
+
+- **`dmPolicy`**: same family as Telegram (`pairing`, `allowlist`, `open`, `disabled`).
+- **`allowFrom`**: when using allowlist-style DM policy, list allowed wxid / openid strings.
+- **`accounts`**: optional per-account overrides (name, `cdnBaseUrl`, `routeTag`, policies, etc.) — see schema `WeixinConfigSchema` / `WeixinAccountConfigSchema` in `src/config/schema.ts`.
+
+Restart or reload the gateway after changing credentials if your deployment requires it.
 
 ## Telegram Channel
 
@@ -152,37 +204,15 @@ Connection is automatically verified on startup.
 - **Voice messages**: 60 second limit for STT
 - **TTS text**: 4000 character limit
 
----
+## Implementation note (developers)
 
-## Feishu/Lark Channel
-
-### Configuration
-
-```json
-{
-  "channels": {
-    "feishu": {
-      "enabled": true,
-      "appId": "APP_ID",
-      "appSecret": "APP_SECRET",
-      "verificationToken": "VERIFICATION_TOKEN"
-    }
-  }
-}
-```
-
-### Features
-
-- ✅ Bot messages
-- ✅ @mention handling
-- ✅ Rich text formatting
-- ✅ File attachments
+The Telegram channel is shipped as a **pnpm workspace package** at `extensions/telegram` (`@xopcai/xopcbot-extension-telegram`). The core registers it through `src/channels/plugins/bundled.ts`. For stable imports from core code, `src/channels/telegram/index.ts` re-exports the plugin and related symbols from that package. The Weixin channel follows the same pattern (`extensions/weixin`, private workspace package). Channels use the **`ChannelPlugin`** model (see `src/channels/plugin-types.ts`), not the legacy `telegramExtension` API.
 
 ---
 
-## Web UI Channel
+## Web UI channel
 
-The Web UI provides a browser-based chat interface.
+The Web UI provides a browser-based chat interface served as static assets from the gateway (Vite build under `web/`, output co-located with the gateway static root).
 
 ### Start Gateway
 
@@ -192,15 +222,29 @@ xopcbot gateway --port 18790
 
 ### Access
 
-Open `http://localhost:18790` in your browser.
+Open `http://localhost:18790` in your browser (or your configured bind address).
 
 ### Features
 
 - ✅ Chat via the gateway (REST; agent replies stream with **SSE** on `/api/agent`)
-- ✅ Session management
-- ✅ Configuration UI
+- ✅ Session management (`#/sessions`, sidebar task list)
+- ✅ **IM channels** screen `#/channels` for Telegram + Weixin (see above)
+- ✅ Other settings (models, gateway token, voice, etc.)
 - ✅ Log viewer
 - ✅ Cron job management
+
+### Sidebar: filter sessions by channel
+
+The sidebar session list can show **Web** / **Telegram** / **Weixin** sessions:
+
+- **Web** — lists sessions whose keys are treated as web UI sessions (client-side filter after `GET /api/sessions`).
+- **Telegram** / **Weixin** — `GET /api/sessions?channel=telegram` or `channel=weixin`, matching `SessionMetadata.sourceChannel`.
+
+---
+
+## Other channel types (extensions)
+
+Some deployments add extra channel plugins (Feishu/Lark, Discord, etc.). Those may introduce additional `channels.<id>` blocks and runtime wiring; refer to the extension’s own README and to `src/channels/plugins/bundled.ts` / generated bundled plugins. The core UI **IM channels** page only surfaces **Telegram** and **Weixin** from the product console.
 
 ---
 
