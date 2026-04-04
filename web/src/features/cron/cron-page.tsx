@@ -55,7 +55,6 @@ import {
   selectControlBaseClass,
 } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
-import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -157,6 +156,18 @@ export function CronPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmAction, setConfirmAction] = useState<'delete' | 'run' | null>(null);
   const [confirmJobId, setConfirmJobId] = useState<string | null>(null);
+
+  /** Radix menu is portaled; after selecting an item the same pointer `click` can hit the card underneath. */
+  const absorbCardClickJobIdRef = useRef<string | null>(null);
+
+  const scheduleAbsorbNextMenuCardClick = useCallback((jobId: string) => {
+    absorbCardClickJobIdRef.current = jobId;
+    window.setTimeout(() => {
+      if (absorbCardClickJobIdRef.current === jobId) {
+        absorbCardClickJobIdRef.current = null;
+      }
+    }, 400);
+  }, []);
 
   const defaultModelForForm = useCallback(() => {
     return defaultModel || (availableModels.length > 0 ? availableModels[0].id : '');
@@ -731,13 +742,22 @@ export function CronPage() {
                     className={cn(
                       'flex cursor-pointer flex-col rounded-xl border border-edge-subtle bg-surface-base text-left transition-colors duration-150 ease-out dark:border-edge-subtle',
                       'hover:bg-surface-hover',
-                      interaction.press,
                       'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
                     )}
-                    onClick={() => void openDetail(job)}
+                    onClick={() => {
+                      if (absorbCardClickJobIdRef.current === job.id) {
+                        absorbCardClickJobIdRef.current = null;
+                        return;
+                      }
+                      void openDetail(job);
+                    }}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' || e.key === ' ') {
                         e.preventDefault();
+                        if (absorbCardClickJobIdRef.current === job.id) {
+                          absorbCardClickJobIdRef.current = null;
+                          return;
+                        }
                         void openDetail(job);
                       }
                     }}
@@ -779,13 +799,17 @@ export function CronPage() {
                           >
                             <DropdownMenu.Item
                               className="cursor-pointer select-none rounded-lg px-2 py-1.5 text-sm text-fg outline-none data-highlighted:bg-surface-hover"
-                              onSelect={() => openForm(job)}
+                              onSelect={() => {
+                                scheduleAbsorbNextMenuCardClick(job.id);
+                                openForm(job);
+                              }}
                             >
                               {c.edit}
                             </DropdownMenu.Item>
                             <DropdownMenu.Item
                               className="cursor-pointer select-none rounded-lg px-2 py-1.5 text-sm text-fg outline-none data-highlighted:bg-surface-hover"
                               onSelect={() => {
+                                scheduleAbsorbNextMenuCardClick(job.id);
                                 setConfirmAction('run');
                                 setConfirmJobId(job.id);
                                 setConfirmOpen(true);
@@ -796,6 +820,7 @@ export function CronPage() {
                             <DropdownMenu.Item
                               className="cursor-pointer select-none rounded-lg px-2 py-1.5 text-sm text-red-600 outline-none data-highlighted:bg-red-500/10 dark:text-red-400"
                               onSelect={() => {
+                                scheduleAbsorbNextMenuCardClick(job.id);
                                 setConfirmAction('delete');
                                 setConfirmJobId(job.id);
                                 setConfirmOpen(true);
