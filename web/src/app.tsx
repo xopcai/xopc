@@ -18,6 +18,9 @@ const SkillsPage = lazy(() => import('@/pages/skills-page').then((m) => ({ defau
 const EditorPage = lazy(() =>
   import('@/features/editor/editor-page').then((m) => ({ default: m.EditorPage })),
 );
+const ChannelsPage = lazy(() =>
+  import('@/pages/channels-page').then((m) => ({ default: m.ChannelsPage })),
+);
 const LogsPage = lazy(() => import('@/pages/logs-page').then((m) => ({ default: m.LogsPage })));
 const SettingsPage = lazy(() =>
   import('@/pages/settings-page').then((m) => ({ default: m.SettingsPage })),
@@ -94,6 +97,14 @@ const router = createHashRouter([
             element: (
               <Suspense fallback={<SecondaryRouteFallback />}>
                 <EditorPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'channels',
+            element: (
+              <Suspense fallback={<SecondaryRouteFallback />}>
+                <ChannelsPage />
               </Suspense>
             ),
           },
