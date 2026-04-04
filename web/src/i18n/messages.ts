@@ -653,6 +653,18 @@ const bundles: Record<
       saveError: string;
       retry: string;
       unsavedHint: string;
+      /** Hub: card row action (Qoder-style). */
+      hubConfigureButton: string;
+      /** Hub: card row when channel has saved credentials. */
+      hubConnectedBadge: string;
+      enableChannelAria: string;
+      menuMoreAria: string;
+      menuEditConfig: string;
+      menuRemoveConfig: string;
+      removeChannelTitle: string;
+      removeChannelConfirm: string;
+      removeChannelAction: string;
+      modalCancel: string;
       telegramTitle: string;
       telegramSubtitle: string;
       weixinTitle: string;
@@ -1593,6 +1605,17 @@ const bundles: Record<
       saveError: 'Failed to save',
       retry: 'Retry',
       unsavedHint: 'You have unsaved changes.',
+      hubConfigureButton: 'Configure',
+      hubConnectedBadge: 'Connected',
+      enableChannelAria: 'Enable or disable this channel',
+      menuMoreAria: 'More actions',
+      menuEditConfig: 'Edit configuration',
+      menuRemoveConfig: 'Remove configuration',
+      removeChannelTitle: 'Remove configuration?',
+      removeChannelConfirm:
+        'Remove {{name}} settings and clear saved credentials on the gateway? You can configure again later.',
+      removeChannelAction: 'Remove',
+      modalCancel: 'Cancel',
       telegramTitle: 'Telegram',
       telegramSubtitle: 'Bot token, allowlists, and optional multi-account JSON.',
       weixinTitle: 'Weixin',
@@ -2562,6 +2585,16 @@ const bundles: Record<
       saveError: '保存失败',
       retry: '重试',
       unsavedHint: '有未保存的更改。',
+      hubConfigureButton: '配置',
+      hubConnectedBadge: '已连接',
+      enableChannelAria: '启用或停用此频道',
+      menuMoreAria: '更多操作',
+      menuEditConfig: '编辑配置',
+      menuRemoveConfig: '移除配置',
+      removeChannelTitle: '移除配置？',
+      removeChannelConfirm: '将移除 {{name}} 的网关配置并清除已保存的凭据？之后可重新配置。',
+      removeChannelAction: '移除',
+      modalCancel: '取消',
       telegramTitle: 'Telegram',
       telegramSubtitle: 'Bot Token、白名单及可选的多账号 JSON。',
       weixinTitle: '微信',

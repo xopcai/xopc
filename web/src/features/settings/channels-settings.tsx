@@ -1,10 +1,25 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { Check, ChevronDown, Copy, ExternalLink, Eye, EyeOff, MessageSquare, Send, X } from 'lucide-react';
+import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import {
+  Check,
+  ChevronDown,
+  Copy,
+  ExternalLink,
+  Eye,
+  EyeOff,
+  MessageSquare,
+  MoreHorizontal,
+  Pencil,
+  Send,
+  Trash2,
+  X,
+} from 'lucide-react';
 import QRCode from 'qrcode';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
+  defaultChannelsState,
   fetchChannelsSettings,
   fetchWeixinGatewayQrLoginStart,
   fetchWeixinGatewayQrLoginStatus,
@@ -47,6 +62,14 @@ function joinAllowFrom(ids: (string | number)[]): string {
   return ids.map(String).join(', ');
 }
 
+function isTelegramConfigured(tg: ChannelsSettingsState['telegram']): boolean {
+  return Boolean(tg.botToken?.trim()) || Object.keys(tg.accounts ?? {}).length > 0;
+}
+
+function isWeixinConfigured(wx: ChannelsSettingsState['weixin']): boolean {
+  return wx.enabled || Object.keys(wx.accounts ?? {}).length > 0 || wx.allowFrom.length > 0;
+}
+
 function FieldLabel({ children }: { children: ReactNode }) {
   return <div className="text-sm font-medium text-fg">{children}</div>;
 }
@@ -77,14 +100,19 @@ function SelectField<T extends string>({ label, value, onChange, options }: Sele
   );
 }
 
-function WeixinQrLoginCard({
+function WeixinQrLoginDialog({
+  open,
+  onOpenChange,
   ch,
   onLoginSuccess,
+  moreSettings,
 }: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
   ch: ChannelsSettingsMessages;
   onLoginSuccess: () => void | Promise<void>;
+  moreSettings?: ReactNode;
 }) {
-  const [modalOpen, setModalOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [sessionKey, setSessionKey] = useState<string | null>(null);
   const [qrcodeUrl, setQrcodeUrl] = useState<string | null>(null);
@@ -93,6 +121,35 @@ function WeixinQrLoginCard({
   /** PNG data URL from encoding `qrcodeUrl` (ilink payload string), not a remote image URL. */
   const [qrDataUrl, setQrDataUrl] = useState<string | null>(null);
   const [qrGenFailed, setQrGenFailed] = useState(false);
+
+  const start = useCallback(async () => {
+    setError(null);
+    setHint(null);
+    setSessionKey(null);
+    setBusy(true);
+    try {
+      const r = await fetchWeixinGatewayQrLoginStart();
+      setQrcodeUrl(r.qrcodeUrl);
+      setSessionKey(r.sessionKey);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Start failed');
+    } finally {
+      setBusy(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setSessionKey(null);
+      setQrcodeUrl(null);
+      setError(null);
+      setQrDataUrl(null);
+      setQrGenFailed(false);
+      setHint(null);
+      return;
+    }
+    void start();
+  }, [open, start]);
 
   useEffect(() => {
     if (!sessionKey) return;
@@ -119,11 +176,9 @@ function WeixinQrLoginCard({
           }
           setSessionKey(null);
           if (st.ok) {
-            setModalOpen(false);
-            setHint(ch.weixinQrLoginSuccess);
             setQrcodeUrl(null);
+            onOpenChange(false);
             await onLoginSuccess();
-            window.setTimeout(() => setHint(null), 4000);
           } else {
             setError(st.message);
             setQrcodeUrl(null);
@@ -153,7 +208,7 @@ function WeixinQrLoginCard({
         window.clearInterval(intervalId);
       }
     };
-  }, [sessionKey, ch.weixinQrLoginScanned, ch.weixinQrLoginSuccess, onLoginSuccess]);
+  }, [sessionKey, ch.weixinQrLoginScanned, ch.weixinQrLoginSuccess, onLoginSuccess, onOpenChange]);
 
   useEffect(() => {
     if (!qrcodeUrl) {
@@ -183,79 +238,19 @@ function WeixinQrLoginCard({
     };
   }, [qrcodeUrl]);
 
-  const start = async () => {
-    setError(null);
-    setHint(null);
-    setSessionKey(null);
-    setBusy(true);
-    try {
-      const r = await fetchWeixinGatewayQrLoginStart();
-      setQrcodeUrl(r.qrcodeUrl);
-      setSessionKey(r.sessionKey);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : 'Start failed');
-    } finally {
-      setBusy(false);
-    }
-  };
-
-  const dismiss = () => {
-    setModalOpen(false);
-    setSessionKey(null);
-    setQrcodeUrl(null);
-    setHint(null);
-    setError(null);
-    setQrDataUrl(null);
-    setQrGenFailed(false);
-  };
-
-  const openModal = () => {
-    setModalOpen(true);
-    void start();
-  };
-
   const showQr = Boolean(qrcodeUrl && sessionKey);
 
   return (
-    <>
-      <div className="rounded-lg border border-edge-subtle bg-surface-panel px-3 py-3 dark:border-edge">
-        <div className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-          <div>
-            <p className="text-sm font-medium text-fg">{ch.weixinQrLoginTitle}</p>
-            <p className="mt-1 text-xs text-fg-muted">{ch.weixinQrLoginDesc}</p>
-          </div>
-          <Button
-            type="button"
-            variant="primary"
-            className="shrink-0 text-xs"
-            disabled={busy && modalOpen}
-            onClick={() => openModal()}
-          >
-            {busy && modalOpen ? ch.weixinQrLoginBusy : ch.weixinQrLoginButton}
-          </Button>
-        </div>
-        {hint && !modalOpen && !error ? <p className="mt-2 text-xs text-accent">{hint}</p> : null}
-      </div>
-
-      <Dialog.Root
-        open={modalOpen}
-        onOpenChange={(open) => {
-          if (!open) dismiss();
-        }}
-      >
-        <Dialog.Portal>
-          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim backdrop-blur-[1px]" />
-          <Dialog.Content
-            className={cn(
-              'fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,22rem)] -translate-x-1/2 -translate-y-1/2',
-              'rounded-2xl border border-edge bg-surface-panel px-6 pb-6 pt-12 shadow-xl outline-none dark:border-edge',
-            )}
-            onOpenAutoFocus={(e) => e.preventDefault()}
-          >
-            <div className="pointer-events-none absolute left-1/2 top-0 z-10 flex h-14 w-14 -translate-x-1/2 -translate-y-1/2 items-center justify-center rounded-full bg-[#07C160] shadow-md ring-4 ring-surface-panel">
-              <MessageSquare className="size-7 text-white" strokeWidth={2} aria-hidden />
-            </div>
-
+    <Dialog.Root open={open} onOpenChange={onOpenChange}>
+      <Dialog.Portal>
+        <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim backdrop-blur-[1px]" />
+        <Dialog.Content
+          className={cn(
+            'fixed left-1/2 top-1/2 z-[60] max-h-[min(90vh,52rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2',
+            'overflow-y-auto rounded-2xl border border-edge bg-surface-panel p-6 shadow-xl outline-none dark:border-edge',
+          )}
+          onOpenAutoFocus={(e) => e.preventDefault()}
+        >
             <Dialog.Close asChild>
               <button
                 type="button"
@@ -323,10 +318,121 @@ function WeixinQrLoginCard({
                 {busy ? ch.weixinQrLoginBusy : ch.weixinQrRegenerate}
               </Button>
             </div>
+
+            {moreSettings ? (
+              <div className="mt-6 border-t border-edge-subtle pt-4 dark:border-edge-subtle">{moreSettings}</div>
+            ) : null}
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </>
+  );
+}
+
+type ChannelImHubCardProps = {
+  icon: ReactNode;
+  title: string;
+  subtitle: string;
+  configured: boolean;
+  enabled: boolean;
+  onToggle: (next: boolean) => void | Promise<void>;
+  toggleDisabled: boolean;
+  onConfigure: () => void;
+  onEdit: () => void;
+  onRemove: () => void;
+  ch: ChannelsSettingsMessages;
+};
+
+function ChannelImHubCard({
+  icon,
+  title,
+  subtitle,
+  configured,
+  enabled,
+  onToggle,
+  toggleDisabled,
+  onConfigure,
+  onEdit,
+  onRemove,
+  ch,
+}: ChannelImHubCardProps) {
+  return (
+    <div className="flex flex-col gap-3 rounded-2xl border border-edge bg-surface-base px-4 py-4 dark:border-edge sm:flex-row sm:items-center sm:gap-4">
+      <div className="flex min-w-0 flex-1 items-start gap-4">
+        <div className="flex size-12 shrink-0 items-center justify-center rounded-xl bg-surface-hover" aria-hidden>
+          {icon}
+        </div>
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <h2 className="text-sm font-semibold text-fg">{title}</h2>
+            {configured ? (
+              <span className="inline-flex items-center rounded-full bg-success-soft px-2 py-0.5 text-xs font-medium text-success">
+                {ch.hubConnectedBadge}
+              </span>
+            ) : null}
+          </div>
+          <p className="mt-1 text-xs text-fg-muted">{subtitle}</p>
+        </div>
+      </div>
+
+      {!configured ? (
+        <div className="flex shrink-0 justify-end sm:justify-end">
+          <Button type="button" variant="primary" className="shrink-0" onClick={onConfigure}>
+            {ch.hubConfigureButton}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex shrink-0 flex-wrap items-center justify-end gap-2 sm:gap-3">
+          <DropdownMenu.Root>
+            <DropdownMenu.Trigger asChild>
+              <Button type="button" variant="ghost" className="size-9 shrink-0 p-0" aria-label={ch.menuMoreAria}>
+                <MoreHorizontal className="size-5 text-fg-muted" strokeWidth={1.75} />
+              </Button>
+            </DropdownMenu.Trigger>
+            <DropdownMenu.Portal>
+              <DropdownMenu.Content
+                className="z-[70] min-w-[11rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
+                sideOffset={6}
+                align="end"
+              >
+                <DropdownMenu.Item
+                  className="cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none hover:bg-surface-hover data-[highlighted]:bg-surface-hover"
+                  onSelect={() => onEdit()}
+                >
+                  <span className="flex items-center gap-2">
+                    <Pencil className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} />
+                    {ch.menuEditConfig}
+                  </span>
+                </DropdownMenu.Item>
+                <DropdownMenu.Item
+                  className="cursor-pointer rounded-lg px-3 py-2 text-sm text-danger outline-none hover:bg-surface-hover data-[highlighted]:bg-surface-hover"
+                  onSelect={() => onRemove()}
+                >
+                  <span className="flex items-center gap-2">
+                    <Trash2 className="size-4 shrink-0" strokeWidth={1.75} />
+                    {ch.menuRemoveConfig}
+                  </span>
+                </DropdownMenu.Item>
+              </DropdownMenu.Content>
+            </DropdownMenu.Portal>
+          </DropdownMenu.Root>
+          <button
+            type="button"
+            role="switch"
+            aria-checked={enabled}
+            aria-label={`${title} — ${ch.enableChannelAria}`}
+            disabled={toggleDisabled}
+            className={cn(
+              'inline-flex h-6 w-10 shrink-0 items-center rounded-full border border-edge p-0.5 transition-colors',
+              enabled ? 'justify-end bg-accent' : 'justify-start bg-surface-hover',
+              toggleDisabled && 'cursor-not-allowed opacity-50',
+            )}
+            onClick={() => void onToggle(!enabled)}
+          >
+            <span className="size-4 rounded-full bg-surface-panel shadow-sm ring-1 ring-black/5 dark:ring-white/10" />
+          </button>
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -344,10 +450,11 @@ export function ChannelsSettingsPanel() {
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
 
-  const [tgExpanded, setTgExpanded] = useState(true);
-  const [wxExpanded, setWxExpanded] = useState(true);
+  const [weixinModalOpen, setWeixinModalOpen] = useState(false);
+  const [telegramModalOpen, setTelegramModalOpen] = useState(false);
+  const [removeTarget, setRemoveTarget] = useState<'weixin' | 'telegram' | null>(null);
+  const [weixinSuccessBanner, setWeixinSuccessBanner] = useState<string | null>(null);
   const [tgAdvanced, setTgAdvanced] = useState(false);
-  const [wxAdvanced, setWxAdvanced] = useState(false);
   const [showToken, setShowToken] = useState(false);
   const [copied, setCopied] = useState(false);
 
@@ -400,8 +507,8 @@ export function ChannelsSettingsPanel() {
     setForm((f) => (f ? { ...f, weixin: { ...f.weixin, ...patch } } : null));
   }, []);
 
-  const save = useCallback(async () => {
-    if (!form || saving) return;
+  const save = useCallback(async (): Promise<boolean> => {
+    if (!form || saving) return false;
     setSaving(true);
     setError(null);
     setSaveOk(false);
@@ -415,12 +522,69 @@ export function ChannelsSettingsPanel() {
       setWxAccountsError('');
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
+      return true;
+    } catch (e) {
+      setError(e instanceof Error ? e.message : ch.saveError);
+      return false;
+    } finally {
+      setSaving(false);
+    }
+  }, [form, saving, ch.saveError]);
+
+  const toggleChannelEnabled = useCallback(
+    async (which: 'weixin' | 'telegram', enabled: boolean) => {
+      if (!form || saving) return;
+      const prev = form;
+      const next: ChannelsSettingsState =
+        which === 'weixin'
+          ? { ...form, weixin: { ...form.weixin, enabled } }
+          : { ...form, telegram: { ...form.telegram, enabled } };
+      setForm(next);
+      setSaving(true);
+      setError(null);
+      try {
+        await patchChannelsSettings(next);
+        const synced = structuredClone(next);
+        setBaseline(synced);
+        setTgAccountsDraft(JSON.stringify(synced.telegram.accounts ?? {}, null, 2));
+        setWxAccountsDraft(JSON.stringify(synced.weixin.accounts ?? {}, null, 2));
+      } catch (e) {
+        setError(e instanceof Error ? e.message : ch.saveError);
+        setForm(prev);
+      } finally {
+        setSaving(false);
+      }
+    },
+    [form, saving, ch.saveError],
+  );
+
+  const removeChannel = useCallback(async () => {
+    if (!form || !removeTarget || saving) return;
+    const defaults = defaultChannelsState();
+    const next: ChannelsSettingsState =
+      removeTarget === 'weixin'
+        ? { ...form, weixin: defaults.weixin }
+        : { ...form, telegram: defaults.telegram };
+    setSaving(true);
+    setError(null);
+    try {
+      await patchChannelsSettings(next);
+      const synced = structuredClone(next);
+      setForm(synced);
+      setBaseline(synced);
+      setTgAccountsDraft(JSON.stringify(synced.telegram.accounts ?? {}, null, 2));
+      setWxAccountsDraft(JSON.stringify(synced.weixin.accounts ?? {}, null, 2));
+      setTgAccountsError('');
+      setWxAccountsError('');
+      setRemoveTarget(null);
+      setSaveOk(true);
+      window.setTimeout(() => setSaveOk(false), 2500);
     } catch (e) {
       setError(e instanceof Error ? e.message : ch.saveError);
     } finally {
       setSaving(false);
     }
-  }, [form, saving, ch.saveError]);
+  }, [form, removeTarget, saving, ch.saveError]);
 
   const copyToken = useCallback(async () => {
     const t = form?.telegram.botToken;
@@ -538,213 +702,155 @@ export function ChannelsSettingsPanel() {
 
   const tg = form.telegram;
   const wx = form.weixin;
-  const showTgBody = tg.enabled && tgExpanded;
-  const showWxBody = wx.enabled && wxExpanded;
+  const weixinConfigured = isWeixinConfigured(wx);
+  const telegramConfigured = isTelegramConfigured(tg);
+
+  const weixinMoreSettings = (
+    <details className="group rounded-xl border border-edge-subtle bg-surface-base open:pb-3 dark:border-edge">
+      <summary className="cursor-pointer list-none px-3 py-2.5 text-sm font-medium text-fg transition-colors hover:bg-surface-hover [&::-webkit-details-marker]:hidden">
+        <span className="inline-flex items-center gap-2">
+          <ChevronDown className="size-4 shrink-0 text-fg-muted transition-transform group-open:rotate-180" />
+          {ch.advancedShow}
+        </span>
+      </summary>
+      <div className="space-y-4 border-t border-edge-subtle px-3 pb-3 pt-3 dark:border-edge-subtle">
+        <p className="text-xs leading-relaxed text-fg-muted">{ch.weixinAdvancedHint}</p>
+        <label className="flex cursor-pointer items-start gap-2 text-sm text-fg">
+          <input
+            type="checkbox"
+            className="ui-checkbox mt-0.5"
+            checked={wx.enabled}
+            onChange={(e) => updateWeixin({ enabled: e.target.checked })}
+          />
+          <span>{ch.enableWeixinAria}</span>
+        </label>
+        <div className="[&>div]:border-0 [&>div]:pt-0">
+          <WeixinAdvanced
+            wx={wx}
+            updateWeixin={updateWeixin}
+            ch={ch}
+            dmOpts={dmOpts}
+            streamOpts={streamOpts}
+            wxAccountsDraft={wxAccountsDraft}
+            setWxAccountsDraft={setWxAccountsDraft}
+            wxAccountsError={wxAccountsError}
+            onWxAccountsBlur={onWxAccountsBlur}
+          />
+        </div>
+        <Button
+          type="button"
+          variant="primary"
+          className="w-full"
+          disabled={!dirty || saving}
+          onClick={async () => {
+            await save();
+          }}
+        >
+          {saving ? ch.saving : ch.save}
+        </Button>
+      </div>
+    </details>
+  );
 
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
-          <p className="mt-1 text-sm text-fg-muted">{ch.subtitle}</p>
-          <a
-            href={docsGuidePageUrl(language, 'channels')}
-            target="_blank"
-            rel="noreferrer"
-            className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
-          >
-            {ch.docsLink}
-            <ExternalLink className="size-3.5" />
-          </a>
-        </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {saveOk ? <span className="text-sm text-fg-muted">{ch.saved}</span> : null}
-          <Button
-            type="button"
-            variant="primary"
-            disabled={!dirty || saving}
-            onClick={() => void save()}
-          >
-            {saving ? ch.saving : ch.save}
-          </Button>
-        </div>
+      <header>
+        <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
+        <p className="mt-1 text-sm text-fg-muted">{ch.subtitle}</p>
+        <a
+          href={docsGuidePageUrl(language, 'channels')}
+          target="_blank"
+          rel="noreferrer"
+          className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+        >
+          {ch.docsLink}
+          <ExternalLink className="size-3.5" />
+        </a>
       </header>
 
       {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{ch.unsavedHint}</p> : null}
+      {saveOk ? <p className="text-xs text-fg-muted">{ch.saved}</p> : null}
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+      {weixinSuccessBanner ? <p className="text-xs text-accent">{weixinSuccessBanner}</p> : null}
 
-      <div className="flex flex-col gap-4">
-        {/* Weixin */}
-        <section
-          className={cn(
-            'overflow-hidden rounded-2xl bg-surface-base',
-            wx.enabled && !wxExpanded && 'opacity-95',
-          )}
-        >
-          <div className="flex items-center justify-between gap-3 border-b border-edge-subtle bg-surface-hover/30 px-4 py-3 dark:border-edge-subtle">
-            <button
-              type="button"
-              className={cn(
-                'flex min-w-0 flex-1 items-start gap-3 text-left',
-                wx.enabled && 'cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-              )}
-              tabIndex={wx.enabled ? 0 : -1}
-              aria-expanded={wx.enabled ? wxExpanded : false}
-              onClick={() => {
-                if (!wx.enabled) return;
-                setWxExpanded((e) => !e);
-              }}
-              onKeyDown={(e) => {
-                if (!wx.enabled) return;
-                if (e.key !== 'Enter' && e.key !== ' ') return;
-                e.preventDefault();
-                setWxExpanded((x) => !x);
-              }}
-            >
-              <span
-                className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover/80 dark:bg-surface-hover/50"
-                aria-hidden
-              >
-                <MessageSquare className="size-4 text-accent" strokeWidth={1.75} />
-              </span>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-fg">{ch.weixinTitle}</h2>
-                  {wx.enabled ? (
-                    wxExpanded ? (
-                      <ChevronDown className="size-4 text-fg-muted" />
-                    ) : (
-                      <ChevronDown className="size-4 rotate-[-90deg] text-fg-muted" />
-                    )
-                  ) : null}
-                </div>
-                <p className="mt-0.5 text-xs text-fg-muted">{ch.weixinSubtitle}</p>
+      <div className="flex flex-col gap-3">
+        <ChannelImHubCard
+          icon={<MessageSquare className="size-6 text-accent" strokeWidth={1.75} />}
+          title={ch.weixinTitle}
+          subtitle={ch.weixinSubtitle}
+          configured={weixinConfigured}
+          enabled={wx.enabled}
+          toggleDisabled={saving}
+          onToggle={(next) => void toggleChannelEnabled('weixin', next)}
+          onConfigure={() => setWeixinModalOpen(true)}
+          onEdit={() => setWeixinModalOpen(true)}
+          onRemove={() => setRemoveTarget('weixin')}
+          ch={ch}
+        />
+        <ChannelImHubCard
+          icon={<Send className="size-6 text-accent" strokeWidth={1.75} />}
+          title={ch.telegramTitle}
+          subtitle={ch.telegramSubtitle}
+          configured={telegramConfigured}
+          enabled={tg.enabled}
+          toggleDisabled={saving}
+          onToggle={(next) => void toggleChannelEnabled('telegram', next)}
+          onConfigure={() => setTelegramModalOpen(true)}
+          onEdit={() => setTelegramModalOpen(true)}
+          onRemove={() => setRemoveTarget('telegram')}
+          ch={ch}
+        />
+      </div>
+
+      <WeixinQrLoginDialog
+        open={weixinModalOpen}
+        onOpenChange={setWeixinModalOpen}
+        ch={ch}
+        onLoginSuccess={async () => {
+          await load();
+          setWeixinSuccessBanner(ch.weixinQrLoginSuccess);
+          window.setTimeout(() => setWeixinSuccessBanner(null), 4000);
+        }}
+        moreSettings={weixinMoreSettings}
+      />
+
+      <Dialog.Root open={telegramModalOpen} onOpenChange={setTelegramModalOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Content
+            className={cn(
+              'fixed left-1/2 top-1/2 z-[60] max-h-[min(90vh,48rem)] w-[min(100%-2rem,36rem)] -translate-x-1/2 -translate-y-1/2',
+              'overflow-y-auto rounded-2xl border border-edge bg-surface-panel p-6 shadow-xl outline-none dark:border-edge',
+            )}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <Dialog.Title className="text-lg font-semibold tracking-tight text-fg">{ch.telegramTitle}</Dialog.Title>
+                <Dialog.Description className="mt-1 text-sm text-fg-muted">{ch.telegramSubtitle}</Dialog.Description>
               </div>
-            </button>
-            <label className="flex shrink-0 cursor-pointer items-center gap-2" onClick={(e) => e.stopPropagation()}>
-              <span className="sr-only">{ch.enableWeixinAria}</span>
-              <input
-                type="checkbox"
-                className="ui-checkbox"
-                checked={wx.enabled}
-                onChange={(e) => {
-                  const on = e.target.checked;
-                  if (on) setWxExpanded(true);
-                  updateWeixin({ enabled: on });
-                }}
-              />
-            </label>
-          </div>
-
-          {showWxBody ? (
-            <div className="space-y-4 px-4 py-4">
-              <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-3 text-xs text-fg dark:border-edge">
-                <p className="font-medium text-fg">{ch.weixinQuickStartTitle}</p>
-                <ol className="mt-2 list-decimal space-y-2 pl-4 text-fg-muted marker:text-fg-subtle">
-                  <li>{ch.weixinStepLogin}</li>
-                  <li>{ch.weixinStepEnable}</li>
-                  <li>{ch.weixinStepPairing}</li>
-                </ol>
-                <p className="mt-3 text-fg-subtle">{ch.weixinAdvancedHint}</p>
-              </div>
-
-              <WeixinQrLoginCard ch={ch} onLoginSuccess={() => void load()} />
-
-              <Button
-                type="button"
-                variant="ghost"
-                className="-ml-2 h-auto justify-start px-2 py-1 text-sm text-fg-muted hover:text-fg"
-                onClick={() => setWxAdvanced((a) => !a)}
-              >
-                <ChevronDown className={cn('mr-1 size-4 transition-transform', wxAdvanced && 'rotate-180')} />
-                {wxAdvanced ? ch.advancedHide : ch.advancedShow}
-              </Button>
-
-              {wxAdvanced ? (
-                <WeixinAdvanced
-                  wx={wx}
-                  updateWeixin={updateWeixin}
-                  ch={ch}
-                  dmOpts={dmOpts}
-                  streamOpts={streamOpts}
-                  wxAccountsDraft={wxAccountsDraft}
-                  setWxAccountsDraft={setWxAccountsDraft}
-                  wxAccountsError={wxAccountsError}
-                  onWxAccountsBlur={onWxAccountsBlur}
-                />
-              ) : null}
+              <Dialog.Close asChild>
+                <button
+                  type="button"
+                  className="rounded-lg p-1.5 text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  aria-label={ch.modalCancel}
+                >
+                  <X className="size-4" />
+                </button>
+              </Dialog.Close>
             </div>
-          ) : null}
-        </section>
 
-        {/* Telegram */}
-        <section
-          className={cn(
-            'overflow-hidden rounded-2xl bg-surface-base',
-            tg.enabled && !tgExpanded && 'opacity-95',
-          )}
-        >
-          <div className="flex items-center justify-between gap-3 border-b border-edge-subtle bg-surface-hover/30 px-4 py-3 dark:border-edge-subtle">
-            <button
-              type="button"
-              className={cn(
-                'flex min-w-0 flex-1 items-start gap-3 text-left',
-                tg.enabled && 'cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-              )}
-              tabIndex={tg.enabled ? 0 : -1}
-              aria-expanded={tg.enabled ? tgExpanded : false}
-              onClick={() => {
-                if (!tg.enabled) return;
-                setTgExpanded((e) => !e);
-              }}
-              onKeyDown={(e) => {
-                if (!tg.enabled) return;
-                if (e.key !== 'Enter' && e.key !== ' ') return;
-                e.preventDefault();
-                setTgExpanded((x) => !x);
-              }}
-            >
-              <span
-                className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover/80 dark:bg-surface-hover/50"
-                aria-hidden
-              >
-                <Send className="size-4 text-accent" strokeWidth={1.75} />
-              </span>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-fg">{ch.telegramTitle}</h2>
-                  {tg.enabled ? (
-                    tgExpanded ? (
-                      <ChevronDown className="size-4 text-fg-muted" />
-                    ) : (
-                      <ChevronDown className="size-4 rotate-[-90deg] text-fg-muted" />
-                    )
-                  ) : null}
-                </div>
-                <p className="mt-0.5 text-xs text-fg-muted">{ch.telegramSubtitle}</p>
-              </div>
-            </button>
-            <label
-              className="flex shrink-0 cursor-pointer items-center gap-2"
-              onClick={(e) => e.stopPropagation()}
-              onKeyDown={(e) => e.stopPropagation()}
-            >
-              <span className="sr-only">{ch.enableTelegramAria}</span>
+            <label className="mt-6 flex cursor-pointer items-center gap-2 text-sm text-fg">
               <input
                 type="checkbox"
                 className="ui-checkbox"
                 checked={tg.enabled}
-                onChange={(e) => {
-                  const on = e.target.checked;
-                  if (on) setTgExpanded(true);
-                  updateTelegram({ enabled: on });
-                }}
+                onChange={(e) => updateTelegram({ enabled: e.target.checked })}
               />
+              <span>{ch.enableTelegramAria}</span>
             </label>
-          </div>
 
-          {showTgBody ? (
-            <div className="space-y-4 px-4 py-4">
+            <div className="mt-6 space-y-4">
               <div className="flex flex-col gap-1.5">
                 <FieldLabel>
                   {ch.telegramToken}
@@ -816,9 +922,63 @@ export function ChannelsSettingsPanel() {
                 />
               ) : null}
             </div>
-          ) : null}
-        </section>
-      </div>
+
+            <div className="mt-8 flex flex-wrap justify-end gap-2 border-t border-edge-subtle pt-4 dark:border-edge-subtle">
+              <Button type="button" variant="secondary" onClick={() => setTelegramModalOpen(false)}>
+                {ch.modalCancel}
+              </Button>
+              <Button
+                type="button"
+                variant="primary"
+                disabled={!dirty || saving}
+                onClick={async () => {
+                  const ok = await save();
+                  if (ok) setTelegramModalOpen(false);
+                }}
+              >
+                {saving ? ch.saving : ch.save}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
+      <Dialog.Root open={removeTarget !== null} onOpenChange={(o) => !o && setRemoveTarget(null)}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[70] bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Content
+            className={cn(
+              'fixed left-1/2 top-1/2 z-[70] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
+              'rounded-2xl border border-edge bg-surface-panel p-6 shadow-xl outline-none dark:border-edge',
+            )}
+            onOpenAutoFocus={(e) => e.preventDefault()}
+          >
+            <Dialog.Title className="text-base font-semibold text-fg">{ch.removeChannelTitle}</Dialog.Title>
+            <Dialog.Description className="mt-2 text-sm text-fg-muted">
+              {removeTarget
+                ? ch.removeChannelConfirm.replace(
+                    '{{name}}',
+                    removeTarget === 'weixin' ? ch.weixinTitle : ch.telegramTitle,
+                  )
+                : '\u00a0'}
+            </Dialog.Description>
+            <div className="mt-6 flex justify-end gap-2">
+              <Button type="button" variant="secondary" onClick={() => setRemoveTarget(null)}>
+                {ch.modalCancel}
+              </Button>
+              <Button
+                type="button"
+                variant="secondary"
+                className="border-danger/40 bg-danger text-white hover:bg-danger/90 dark:border-danger/40"
+                disabled={saving}
+                onClick={() => void removeChannel()}
+              >
+                {saving ? ch.saving : ch.removeChannelAction}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
     </div>
   );
 }
