@@ -39,6 +39,8 @@ export interface AgentOrchestratorConfig {
   getThinkingDefault: () => ThinkLevel | undefined;
   /** `agents.defaults.workspace` (resolved); used to persist inbound files per session. */
   workspaceRoot: string;
+  /** Fire-and-forget after full session persist (e.g. LLM session title); not called from mid-turn snapshots. */
+  enqueueAutoTitle?: (sessionKey: string) => void;
 }
 
 export class AgentOrchestrator {
@@ -50,6 +52,7 @@ export class AgentOrchestrator {
   private sessionConfigStore: SessionConfigStore;
   private getThinkingDefault: () => ThinkLevel | undefined;
   private workspaceRoot: string;
+  private enqueueAutoTitle?: (sessionKey: string) => void;
 
   constructor(config: AgentOrchestratorConfig) {
     this.agentManager = config.agentManager;
@@ -60,6 +63,7 @@ export class AgentOrchestrator {
     this.sessionConfigStore = config.sessionConfigStore;
     this.getThinkingDefault = config.getThinkingDefault;
     this.workspaceRoot = config.workspaceRoot;
+    this.enqueueAutoTitle = config.enqueueAutoTitle;
   }
 
   private async hydrateSessionModelFromStore(sessionKey: string): Promise<void> {
@@ -136,6 +140,8 @@ export class AgentOrchestrator {
 
       // 7. Save session messages (transcript hygiene aligned with OpenClaw)
       await this.saveSessionSnapshot(sessionKey, sanitizedMessages);
+
+      this.enqueueAutoTitle?.(sessionKey);
 
       // 8. End task feedback
       this.feedbackCoordinator.endTask();

@@ -247,6 +247,7 @@ export class AgentService {
       sessionConfigStore: this.sessionConfigStore,
       getThinkingDefault: () => this.config.config?.agents?.defaults?.thinkingDefault,
       workspaceRoot: this.workspaceDir,
+      enqueueAutoTitle: (sessionKey: string) => this.enqueueMaybeAutoTitleAfterPersist(sessionKey),
     });
 
     this.messageRouter = new MessageRouter();
@@ -535,7 +536,7 @@ export class AgentService {
   }
 
   /**
-   * Fire-and-forget: `maybeAutoTitleSessionStore` no-ops for non-webchat keys.
+   * Fire-and-forget: `maybeAutoTitleSessionStore` no-ops for cron/heartbeat keys.
    * Runs after persist so the store has the latest transcript; does not block SSE / callers.
    */
   private enqueueMaybeAutoTitleAfterPersist(sessionKey: string): void {

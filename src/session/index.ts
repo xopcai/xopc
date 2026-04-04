@@ -34,4 +34,5 @@ export {
   sanitizeSessionTitle,
   fallbackTitleFromMessages,
   isWebchatSessionKey,
+  shouldAutoTitleSessionKey,
 } from './session-title.js';
