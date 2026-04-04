@@ -336,6 +336,8 @@ export function CronSchedulePicker({ value, onChange, labels, disabled }: CronSc
   const [weekDays, setWeekDays] = useState<boolean[]>(parsed.weekDays);
   const [dayOfMonth, setDayOfMonth] = useState(parsed.dayOfMonth);
   const [rawCron, setRawCron] = useState(parsed.rawCron);
+  const [intervalMinutesDraft, setIntervalMinutesDraft] = useState<string | null>(null);
+  const [intervalHoursDraft, setIntervalHoursDraft] = useState<string | null>(null);
 
   useEffect(() => {
     const p = cronExpressionToPickerState(value);
@@ -349,6 +351,8 @@ export function CronSchedulePicker({ value, onChange, labels, disabled }: CronSc
     setWeekDays(p.weekDays);
     setDayOfMonth(p.dayOfMonth);
     setRawCron(p.rawCron);
+    setIntervalMinutesDraft(null);
+    setIntervalHoursDraft(null);
   }, [value]);
 
   const emit = useCallback(
@@ -450,6 +454,8 @@ export function CronSchedulePicker({ value, onChange, labels, disabled }: CronSc
             onChange={(e) => {
               const k = e.target.value as IntervalKind;
               setIntervalKind(k);
+              setIntervalMinutesDraft(null);
+              setIntervalHoursDraft(null);
               emit({ intervalKind: k });
             }}
             aria-label={labels.modeInterval}
@@ -465,12 +471,26 @@ export function CronSchedulePicker({ value, onChange, labels, disabled }: CronSc
                 max={59}
                 disabled={disabled}
                 className={numberInputClass}
-                value={intervalMinutes}
+                value={intervalMinutesDraft ?? String(intervalMinutes)}
                 onChange={(e) => {
-                  const n = parseInt(e.target.value, 10);
-                  const v = Number.isNaN(n) ? 5 : n;
+                  const next = e.target.value;
+                  setIntervalMinutesDraft(next);
+                  const raw = parseInt(next, 10);
+                  if (Number.isFinite(raw) && raw >= 1 && raw <= 59) {
+                    setIntervalMinutes(raw);
+                    emit({ intervalMinutes: raw });
+                  }
+                }}
+                onBlur={() => {
+                  if (intervalMinutesDraft === null) return;
+                  const raw = parseInt(intervalMinutesDraft, 10);
+                  const v =
+                    !Number.isFinite(raw) || raw < 1
+                      ? 5
+                      : Math.min(59, Math.max(1, Math.round(raw)));
                   setIntervalMinutes(v);
                   emit({ intervalMinutes: v });
+                  setIntervalMinutesDraft(null);
                 }}
                 aria-label={labels.intervalMinutes}
               />
@@ -484,12 +504,26 @@ export function CronSchedulePicker({ value, onChange, labels, disabled }: CronSc
                 max={23}
                 disabled={disabled}
                 className={numberInputClass}
-                value={intervalHours}
+                value={intervalHoursDraft ?? String(intervalHours)}
                 onChange={(e) => {
-                  const n = parseInt(e.target.value, 10);
-                  const v = Number.isNaN(n) ? 2 : n;
+                  const next = e.target.value;
+                  setIntervalHoursDraft(next);
+                  const raw = parseInt(next, 10);
+                  if (Number.isFinite(raw) && raw >= 1 && raw <= 23) {
+                    setIntervalHours(raw);
+                    emit({ intervalHours: raw });
+                  }
+                }}
+                onBlur={() => {
+                  if (intervalHoursDraft === null) return;
+                  const raw = parseInt(intervalHoursDraft, 10);
+                  const v =
+                    !Number.isFinite(raw) || raw < 1
+                      ? 2
+                      : Math.min(23, Math.max(1, Math.round(raw)));
                   setIntervalHours(v);
                   emit({ intervalHours: v });
+                  setIntervalHoursDraft(null);
                 }}
                 aria-label={labels.intervalHours}
               />
