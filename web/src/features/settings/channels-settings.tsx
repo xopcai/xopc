@@ -267,6 +267,9 @@ function WeixinQrLoginDialog({
             <div className="text-center">
               <p className="text-lg font-semibold tracking-tight text-fg">{ch.weixinQrModalTitle}</p>
               <p className="mt-1.5 text-sm text-fg-muted">{ch.weixinQrModalSubtitle}</p>
+              <p className="mt-3 text-left text-xs leading-relaxed text-fg-subtle whitespace-pre-line">
+                {ch.weixinCliConfigHint}
+              </p>
             </div>
 
             <div className="mt-6 flex min-h-[200px] flex-col items-center justify-center">
@@ -828,6 +831,7 @@ export function ChannelsSettingsPanel() {
               <div>
                 <Dialog.Title className="text-lg font-semibold tracking-tight text-fg">{ch.telegramTitle}</Dialog.Title>
                 <Dialog.Description className="mt-1 text-sm text-fg-muted">{ch.telegramSubtitle}</Dialog.Description>
+                <p className="mt-3 text-xs leading-relaxed text-fg-subtle whitespace-pre-line">{ch.telegramCliConfigHint}</p>
               </div>
               <Dialog.Close asChild>
                 <button

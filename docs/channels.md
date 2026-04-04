@@ -33,6 +33,23 @@ When the gateway is running, the React console includes a dedicated **IM channel
 - Modal form: bot token, allowlists, enable flag, and **Advanced** (API root, proxy, policies, multi-account JSON).
 - **Save** writes `PATCH /api/config` with `channels.telegram` (and preserves other config).
 
+### CLI configuration (same config file as the gateway)
+
+The gateway reads the same JSON as the CLI (default `~/.xopcbot/config.json`; override with `XOPCBOT_CONFIG` or the global `--config` flag on commands). You can configure channels without the browser console:
+
+**Telegram**
+
+- **Interactive wizard:** `xopcbot onboard --channels` — prompts for bot token, DM/group policies, and allowlists, then writes `channels.telegram`.
+- **Manual / env:** set `TELEGRAM_BOT_TOKEN` in the environment, or edit `channels.telegram` in the config file directly (including `accounts` for multi-bot setups).
+
+**Weixin (WeChat ilink)**
+
+- **QR login in the terminal:** `xopcbot channels login --channel weixin` — scan with WeChat; credentials are stored on **that host** (under the extension state directory; the command can also merge `channels.weixin` into the config unless `--credentials-only` is used).
+- **Useful options:** `--account <id>` when re-logging an existing bot, `--timeout <ms>` (default 480000), `--credentials-only` to save token files without updating the main config JSON.
+- Run `xopcbot channels login --help` for details.
+
+After changing credentials or enabled flags via CLI, **restart or reload the gateway** if it is already running so the channel runtime picks up the new settings.
+
 ### Hub cards (after setup)
 
 Once a channel is considered **configured** (e.g. Telegram: token or `accounts`; Weixin: enabled, accounts, or allowlist), the list row shows **Connected**, a **⋯** menu (**Edit configuration** / **Remove configuration**), and an **enable** switch that persists immediately via the same config patch. **Remove** resets that channel block to defaults and saves.
