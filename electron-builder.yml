@@ -22,6 +22,8 @@ files:
   - package.json
   # Gateway UI: `pnpm run build:web` → dist/gateway/static/root (not in esbuild server bundle)
   - dist/gateway/static/root/**/*
+  # Built-in skills: bundled SKILL.md files for the agent
+  - skills/**/*
 
 extraMetadata:
   main: out/main/index.js
