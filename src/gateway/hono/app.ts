@@ -1656,6 +1656,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     const result = await service.listSessions({
       status: query.status as any,
       search: query.search,
+      channel: query.channel,
       limit: query.limit ? parseInt(query.limit) : undefined,
       offset: query.offset ? parseInt(query.offset) : undefined,
     });

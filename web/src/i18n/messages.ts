@@ -6,6 +6,7 @@ export type Tab =
   | 'cron'
   | 'skills'
   | 'editor'
+  | 'channels'
   | 'logs'
   | 'settingsAppearance'
   | 'settingsAgent'
@@ -85,6 +86,11 @@ const bundles: Record<
       backToApp: string;
       /** Link to public documentation (opens in new tab). */
       helpDocs: string;
+      /** Segmented filter above task list: Web / Telegram / Weixin. */
+      sessionChannelFilterAria: string;
+      sessionChannelWeb: string;
+      sessionChannelTelegram: string;
+      sessionChannelWeixin: string;
     };
     chat: {
       typeMessage: string;
@@ -930,6 +936,7 @@ const bundles: Record<
       cron: 'Scheduled Tasks',
       skills: 'Skills',
       editor: 'Editor',
+      channels: 'Channels',
       logs: 'Logs',
       settingsAppearance: 'Preferences',
       settingsAgent: 'Agent',
@@ -996,6 +1003,10 @@ const bundles: Record<
       taskRenameCancel: 'Cancel',
       backToApp: 'Back to app',
       helpDocs: 'Documentation',
+      sessionChannelFilterAria: 'Filter tasks by channel',
+      sessionChannelWeb: 'Web',
+      sessionChannelTelegram: 'Telegram',
+      sessionChannelWeixin: 'WeChat',
     },
     chat: {
       typeMessage: 'Type a message…',
@@ -1898,12 +1909,13 @@ const bundles: Record<
       cron: '定时任务',
       skills: '技能',
       editor: '编辑器',
+      channels: 'IM 频道',
       logs: '日志',
       settingsAppearance: '偏好设置',
       settingsAgent: '代理',
       settingsProviders: '提供商',
       settingsModels: '模型',
-      settingsChannels: '渠道',
+      settingsChannels: 'IM 频道',
       settingsVoice: '语音',
       settingsGateway: '网关',
       settingsHeartbeat: '心跳',
@@ -1914,7 +1926,7 @@ const bundles: Record<
       agent: '代理',
       providers: '提供商',
       models: '模型',
-      channels: '渠道',
+      channels: 'IM 频道',
       voice: '语音',
       gateway: '网关',
       heartbeat: '心跳',
@@ -1925,7 +1937,7 @@ const bundles: Record<
       agentAndModels: '提供商与模型',
       data: '会话与日志',
       interface: '通用',
-      channelsAndVoice: '通道与语音',
+      channelsAndVoice: 'IM 频道与语音',
     },
     token: {
       title: '需要身份验证',
@@ -1964,6 +1976,10 @@ const bundles: Record<
       taskRenameCancel: '取消',
       backToApp: '返回应用',
       helpDocs: '帮助文档',
+      sessionChannelFilterAria: '按 IM 频道筛选任务',
+      sessionChannelWeb: '网页',
+      sessionChannelTelegram: 'Telegram',
+      sessionChannelWeixin: '微信',
     },
     chat: {
       typeMessage: '输入消息…',
@@ -2167,11 +2183,11 @@ const bundles: Record<
       messageLabel: '消息',
       totalJobs: '任务总数',
       emptyStateTitle: '暂无定时任务',
-      emptyStateHint: '创建任务即可按 cron 计划发送——直连渠道或经 AI 代理处理。',
+      emptyStateHint: '创建任务即可按 cron 计划发送——直连 IM 频道或经 AI 代理处理。',
       emptyStateCta: '创建第一个任务',
-      channel: '渠道',
+      channel: 'IM 频道',
       channelLocal: '本地（不发出）',
-      deliveryTargetLocalChannel: '本地渠道 — 内容仅保存在本机',
+      deliveryTargetLocalChannel: '本地 IM 频道 — 内容仅保存在本机',
       recipient: '收件人 *',
       recipientPlaceholder: 'Telegram：填写数字 id，或从下方最近会话选择',
       refreshList: '刷新',
@@ -2201,11 +2217,11 @@ const bundles: Record<
         weekdays: ['一', '二', '三', '四', '五', '六', '日'],
       },
       mode: '模式',
-      modeDirect: '直接发送消息到渠道，不经过 AI 处理',
+      modeDirect: '直接发送消息到 IM 频道，不经过 AI 处理',
       modeAgent: '使用 AI 代理处理消息，然后发送回复',
-      modeDirectOption: '直接发送（直接发送到渠道）',
+      modeDirectOption: '直接发送（直接发送到 IM 频道）',
       modeAgentOption: 'AI 代理（经过 AI 处理后发送）',
-      agentLocalOnly: '仅本地运行（保存对话，不发送到渠道）',
+      agentLocalOnly: '仅本地运行（保存对话，不发送到 IM 频道）',
       agentLocalOnlyHint:
         '在本机执行代理。对话会存为会话（键 cron:<任务 id>），类型为 cron；不向 Telegram/CLI 投递。',
       deliveryLocalOnly: '仅本地 — 对话保存在会话键 cron:<任务 id>',
@@ -2535,10 +2551,10 @@ const bundles: Record<
       testOk: '解析结果',
     },
     channelsSettings: {
-      needToken: '请先保存网关 Token 后再编辑渠道设置。',
-      subtitle: 'Telegram 与微信入站渠道。更改将写入网关配置文件。',
-      docsLink: '渠道文档',
-      loadError: '加载渠道设置失败',
+      needToken: '请先保存网关 Token 后再编辑 IM 频道设置。',
+      subtitle: 'Telegram 与微信 IM 入站。更改将写入网关配置文件。',
+      docsLink: 'IM 频道文档',
+      loadError: '加载 IM 频道设置失败',
       loading: '加载中…',
       save: '保存更改',
       saving: '保存中…',
@@ -2550,8 +2566,8 @@ const bundles: Record<
       telegramSubtitle: 'Bot Token、白名单及可选的多账号 JSON。',
       weixinTitle: '微信',
       weixinSubtitle: '用微信扫码登录（网页或命令行）后在此启用。凭据保存在运行网关的本机。',
-      enableTelegramAria: '启用 Telegram 渠道',
-      enableWeixinAria: '启用微信渠道',
+      enableTelegramAria: '启用 Telegram IM 频道',
+      enableWeixinAria: '启用微信 IM 频道',
       telegramToken: 'Bot Token',
       telegramTokenDesc: '来自 BotFather，保存在网关配置中。',
       allowFromDm: '允许私聊（用户 ID）',
@@ -2583,7 +2599,7 @@ const bundles: Record<
       weixinRouteTagDesc: '可选路由标签，可为数字或字符串。',
       routeTagPlaceholder: '例如标签名或数字',
       weixinDebug: '调试模式',
-      weixinDebugDesc: '为微信渠道输出更详细的日志。',
+      weixinDebugDesc: '为微信 IM 频道输出更详细的日志。',
       weixinAccountsJson: '账号（JSON）',
       weixinAccountsJsonDesc: '分账号名称、CDN 地址、路由标签与策略。',
       weixinQrLoginTitle: '网页扫码登录',
@@ -2633,7 +2649,7 @@ const bundles: Record<
     },
     voiceSettings: {
       needToken: '请先保存网关 Token 后再编辑语音设置。',
-      subtitle: '渠道的语音转文字与文字转语音。API Key 也可通过环境变量配置。',
+      subtitle: 'IM 频道的语音转文字与文字转语音。API Key 也可通过环境变量配置。',
       docsLink: '语音文档',
       loadError: '加载语音设置失败',
       loading: '加载中…',
@@ -2713,7 +2729,7 @@ const bundles: Record<
     heartbeatSettings: {
       needToken: '请先保存网关 Token 后再加载或修改心跳选项。',
       subtitle:
-        '定时唤醒代理、可选投递到渠道，以及工作区中的 HEARTBEAT.md。配置写入网关配置文件与工作区文件。',
+        '定时唤醒代理、可选投递到 IM 频道，以及工作区中的 HEARTBEAT.md。配置写入网关配置文件与工作区文件。',
       docsLink: '心跳机制文档',
       loadError: '加载心跳设置失败',
       loading: '加载中…',
@@ -2758,7 +2774,7 @@ const bundles: Record<
       deliveryTitle: '投递（可选）',
       channelNone: '— 无 —',
       customChannelSuffix: '自定义',
-      deliveryHint: '需同时填写渠道与会话 ID 才会发送非静默回复；否则仅记录日志。',
+      deliveryHint: '需同时填写 IM 频道与会话 ID 才会发送非静默回复；否则仅记录日志。',
       prompt: '自定义系统提示（可选）',
       promptPlaceholder: '覆盖默认心跳指令…',
       promptHint: '留空则使用内置默认提示。',

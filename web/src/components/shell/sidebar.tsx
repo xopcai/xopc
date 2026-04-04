@@ -1,4 +1,4 @@
-import { Clock, FileEdit, Layers, Plus } from 'lucide-react';
+import { Clock, FileEdit, Layers, Plug, Plus } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
@@ -80,6 +80,15 @@ export function SidebarNav({
           >
             <FileEdit className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
             {!collapsed ? <span className="truncate">{m.nav.editor}</span> : null}
+          </NavLink>
+          <NavLink
+            to="/channels"
+            className={(props) => secondaryNavClass(props, collapsed)}
+            title={m.nav.channels}
+            onClick={() => onNavigate?.()}
+          >
+            <Plug className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+            {!collapsed ? <span className="truncate">{m.nav.channels}</span> : null}
           </NavLink>
         </div>
       </nav>

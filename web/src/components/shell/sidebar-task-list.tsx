@@ -6,6 +6,11 @@ import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWRInfinite from 'swr/infinite';
 
 import { Button } from '@/components/ui/button';
+import {
+  segmentedThumbActiveClassName,
+  segmentedThumbBaseClassName,
+  segmentedTrackClassName,
+} from '@/components/ui/segmented-styles';
 import { isWebUiSessionKey } from '@/features/chat/session-manager';
 import {
   deleteSession,
@@ -22,6 +27,8 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 const PAGE_SIZE = 20;
+
+type SessionSidebarFilter = 'web' | 'telegram' | 'weixin';
 
 type SidebarTaskPage = {
   items: SessionMetadata[];
@@ -202,23 +209,41 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
   const [renameDraft, setRenameDraft] = useState('');
   const [deleteKey, setDeleteKey] = useState<string | null>(null);
   const lastActiveSessionKeyRef = useRef<string | null>(null);
+  const [sessionFilter, setSessionFilter] = useState<SessionSidebarFilter>('web');
 
   const { data, size, setSize, isValidating, mutate } = useSWRInfinite<SidebarTaskPage>(
     (pageIndex, previousPageData) => {
       if (!token) return null;
       if (previousPageData && !previousPageData.hasMore) return null;
-      return ['sidebar-tasks', token, pageIndex] as const;
+      return ['sidebar-tasks', token, sessionFilter, pageIndex] as const;
     },
-    async ([, , pageIndex]: readonly ['sidebar-tasks', string, number]) => {
+    async ([, , filter, pageIndex]: readonly [
+      'sidebar-tasks',
+      string,
+      SessionSidebarFilter,
+      number,
+    ]) => {
       const offset = pageIndex * PAGE_SIZE;
-      const result = await listSessions({ limit: PAGE_SIZE, offset });
+      if (filter === 'web') {
+        const result = await listSessions({ limit: PAGE_SIZE, offset });
+        return {
+          items: result.items.filter((s) => isWebUiSessionKey(s.key)),
+          hasMore: result.hasMore,
+        };
+      }
+      const channel = filter === 'telegram' ? 'telegram' : 'weixin';
+      const result = await listSessions({ channel, limit: PAGE_SIZE, offset });
       return {
-        items: result.items.filter((s) => isWebUiSessionKey(s.key)),
+        items: result.items,
         hasMore: result.hasMore,
       };
     },
     { revalidateOnFocus: true },
   );
+
+  useEffect(() => {
+    void setSize(1);
+  }, [sessionFilter, setSize]);
 
   const items = useMemo(() => {
     const pages = data ?? [];
@@ -269,8 +294,9 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
     if (!token || !data?.length || loadingMore) return;
     if (items.length > 0) return;
     if (!lastPage?.hasMore) return;
+    if (sessionFilter !== 'web') return;
     void setSize((s) => s + 1);
-  }, [token, data, items.length, loadingMore, lastPage?.hasMore, setSize]);
+  }, [token, data, items.length, loadingMore, lastPage?.hasMore, setSize, sessionFilter]);
 
   const activeSessionKey = chatSessionKeyFromPath(pathname);
 
@@ -355,6 +381,38 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
       >
         <div className="sticky top-0 z-[1] bg-surface-base px-4 pb-1 pt-2">
           <div className="pl-3 text-xs font-normal leading-5 text-fg-subtle">{sb.tasksHeading}</div>
+          <div className="mt-2">
+            <div
+              className={cn(segmentedTrackClassName, 'flex w-full max-w-full')}
+              role="group"
+              aria-label={sb.sessionChannelFilterAria}
+            >
+              {(
+                [
+                  ['web', sb.sessionChannelWeb] as const,
+                  ['telegram', sb.sessionChannelTelegram] as const,
+                  ['weixin', sb.sessionChannelWeixin] as const,
+                ] as const
+              ).map(([id, label]) => (
+                <Button
+                  key={id}
+                  type="button"
+                  variant="ghost"
+                  aria-pressed={sessionFilter === id}
+                  title={label}
+                  onClick={() => setSessionFilter(id)}
+                  className={cn(
+                    segmentedThumbBaseClassName,
+                    'h-7 min-w-0 flex-1 px-1.5 py-0 text-[11px] leading-tight',
+                    sessionFilter === id && segmentedThumbActiveClassName,
+                    sessionFilter === id && 'text-accent-fg hover:text-accent-fg',
+                  )}
+                >
+                  <span className="truncate">{label}</span>
+                </Button>
+              ))}
+            </div>
+          </div>
         </div>
 
         {loadingFirst ? (
@@ -378,7 +436,13 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
               />
             ))}
           </div>
-        ) : null}
+        ) : (
+          <div className="px-4 pb-2">
+            <p className="rounded-xl bg-surface-panel px-3 py-3 text-xs leading-relaxed text-fg-muted">
+              {sb.taskListEmpty}
+            </p>
+          </div>
+        )}
 
         {loadingMore ? (
           <div className="flex justify-center py-2" aria-busy>

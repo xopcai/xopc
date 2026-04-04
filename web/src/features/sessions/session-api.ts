@@ -14,6 +14,7 @@ function buildListQuery(query?: SessionListQuery): string {
   if (!query) return '';
   if (query.status) params.set('status', query.status);
   if (query.search) params.set('search', query.search);
+  if (query.channel) params.set('channel', query.channel);
   if (query.limit != null) params.set('limit', String(query.limit));
   if (query.offset != null) params.set('offset', String(query.offset));
   const qs = params.toString();

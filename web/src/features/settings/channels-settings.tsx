@@ -574,6 +574,109 @@ export function ChannelsSettingsPanel() {
       {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
 
       <div className="flex flex-col gap-4">
+        {/* Weixin */}
+        <section
+          className={cn(
+            'overflow-hidden rounded-2xl bg-surface-base',
+            wx.enabled && !wxExpanded && 'opacity-95',
+          )}
+        >
+          <div className="flex items-center justify-between gap-3 border-b border-edge-subtle bg-surface-hover/30 px-4 py-3 dark:border-edge-subtle">
+            <button
+              type="button"
+              className={cn(
+                'flex min-w-0 flex-1 items-start gap-3 text-left',
+                wx.enabled && 'cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+              )}
+              tabIndex={wx.enabled ? 0 : -1}
+              aria-expanded={wx.enabled ? wxExpanded : false}
+              onClick={() => {
+                if (!wx.enabled) return;
+                setWxExpanded((e) => !e);
+              }}
+              onKeyDown={(e) => {
+                if (!wx.enabled) return;
+                if (e.key !== 'Enter' && e.key !== ' ') return;
+                e.preventDefault();
+                setWxExpanded((x) => !x);
+              }}
+            >
+              <span
+                className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover/80 dark:bg-surface-hover/50"
+                aria-hidden
+              >
+                <MessageSquare className="size-4 text-accent" strokeWidth={1.75} />
+              </span>
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h2 className="text-sm font-semibold text-fg">{ch.weixinTitle}</h2>
+                  {wx.enabled ? (
+                    wxExpanded ? (
+                      <ChevronDown className="size-4 text-fg-muted" />
+                    ) : (
+                      <ChevronDown className="size-4 rotate-[-90deg] text-fg-muted" />
+                    )
+                  ) : null}
+                </div>
+                <p className="mt-0.5 text-xs text-fg-muted">{ch.weixinSubtitle}</p>
+              </div>
+            </button>
+            <label className="flex shrink-0 cursor-pointer items-center gap-2" onClick={(e) => e.stopPropagation()}>
+              <span className="sr-only">{ch.enableWeixinAria}</span>
+              <input
+                type="checkbox"
+                className="ui-checkbox"
+                checked={wx.enabled}
+                onChange={(e) => {
+                  const on = e.target.checked;
+                  if (on) setWxExpanded(true);
+                  updateWeixin({ enabled: on });
+                }}
+              />
+            </label>
+          </div>
+
+          {showWxBody ? (
+            <div className="space-y-4 px-4 py-4">
+              <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-3 text-xs text-fg dark:border-edge">
+                <p className="font-medium text-fg">{ch.weixinQuickStartTitle}</p>
+                <ol className="mt-2 list-decimal space-y-2 pl-4 text-fg-muted marker:text-fg-subtle">
+                  <li>{ch.weixinStepLogin}</li>
+                  <li>{ch.weixinStepEnable}</li>
+                  <li>{ch.weixinStepPairing}</li>
+                </ol>
+                <p className="mt-3 text-fg-subtle">{ch.weixinAdvancedHint}</p>
+              </div>
+
+              <WeixinQrLoginCard ch={ch} onLoginSuccess={() => void load()} />
+
+              <Button
+                type="button"
+                variant="ghost"
+                className="-ml-2 h-auto justify-start px-2 py-1 text-sm text-fg-muted hover:text-fg"
+                onClick={() => setWxAdvanced((a) => !a)}
+              >
+                <ChevronDown className={cn('mr-1 size-4 transition-transform', wxAdvanced && 'rotate-180')} />
+                {wxAdvanced ? ch.advancedHide : ch.advancedShow}
+              </Button>
+
+              {wxAdvanced ? (
+                <WeixinAdvanced
+                  wx={wx}
+                  updateWeixin={updateWeixin}
+                  ch={ch}
+                  dmOpts={dmOpts}
+                  streamOpts={streamOpts}
+                  wxAccountsDraft={wxAccountsDraft}
+                  setWxAccountsDraft={setWxAccountsDraft}
+                  wxAccountsError={wxAccountsError}
+                  onWxAccountsBlur={onWxAccountsBlur}
+                />
+              ) : null}
+            </div>
+          ) : null}
+        </section>
+
         {/* Telegram */}
         <section
           className={cn(
@@ -710,109 +813,6 @@ export function ChannelsSettingsPanel() {
                   setTgAccountsDraft={setTgAccountsDraft}
                   tgAccountsError={tgAccountsError}
                   onTgAccountsBlur={onTgAccountsBlur}
-                />
-              ) : null}
-            </div>
-          ) : null}
-        </section>
-
-        {/* Weixin */}
-        <section
-          className={cn(
-            'overflow-hidden rounded-2xl bg-surface-base',
-            wx.enabled && !wxExpanded && 'opacity-95',
-          )}
-        >
-          <div className="flex items-center justify-between gap-3 border-b border-edge-subtle bg-surface-hover/30 px-4 py-3 dark:border-edge-subtle">
-            <button
-              type="button"
-              className={cn(
-                'flex min-w-0 flex-1 items-start gap-3 text-left',
-                wx.enabled && 'cursor-pointer rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-              )}
-              tabIndex={wx.enabled ? 0 : -1}
-              aria-expanded={wx.enabled ? wxExpanded : false}
-              onClick={() => {
-                if (!wx.enabled) return;
-                setWxExpanded((e) => !e);
-              }}
-              onKeyDown={(e) => {
-                if (!wx.enabled) return;
-                if (e.key !== 'Enter' && e.key !== ' ') return;
-                e.preventDefault();
-                setWxExpanded((x) => !x);
-              }}
-            >
-              <span
-                className="mt-0.5 flex size-9 shrink-0 items-center justify-center rounded-lg bg-surface-hover/80 dark:bg-surface-hover/50"
-                aria-hidden
-              >
-                <MessageSquare className="size-4 text-accent" strokeWidth={1.75} />
-              </span>
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h2 className="text-sm font-semibold text-fg">{ch.weixinTitle}</h2>
-                  {wx.enabled ? (
-                    wxExpanded ? (
-                      <ChevronDown className="size-4 text-fg-muted" />
-                    ) : (
-                      <ChevronDown className="size-4 rotate-[-90deg] text-fg-muted" />
-                    )
-                  ) : null}
-                </div>
-                <p className="mt-0.5 text-xs text-fg-muted">{ch.weixinSubtitle}</p>
-              </div>
-            </button>
-            <label className="flex shrink-0 cursor-pointer items-center gap-2" onClick={(e) => e.stopPropagation()}>
-              <span className="sr-only">{ch.enableWeixinAria}</span>
-              <input
-                type="checkbox"
-                className="ui-checkbox"
-                checked={wx.enabled}
-                onChange={(e) => {
-                  const on = e.target.checked;
-                  if (on) setWxExpanded(true);
-                  updateWeixin({ enabled: on });
-                }}
-              />
-            </label>
-          </div>
-
-          {showWxBody ? (
-            <div className="space-y-4 px-4 py-4">
-              <div className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-3 text-xs text-fg dark:border-edge">
-                <p className="font-medium text-fg">{ch.weixinQuickStartTitle}</p>
-                <ol className="mt-2 list-decimal space-y-2 pl-4 text-fg-muted marker:text-fg-subtle">
-                  <li>{ch.weixinStepLogin}</li>
-                  <li>{ch.weixinStepEnable}</li>
-                  <li>{ch.weixinStepPairing}</li>
-                </ol>
-                <p className="mt-3 text-fg-subtle">{ch.weixinAdvancedHint}</p>
-              </div>
-
-              <WeixinQrLoginCard ch={ch} onLoginSuccess={() => void load()} />
-
-              <Button
-                type="button"
-                variant="ghost"
-                className="-ml-2 h-auto justify-start px-2 py-1 text-sm text-fg-muted hover:text-fg"
-                onClick={() => setWxAdvanced((a) => !a)}
-              >
-                <ChevronDown className={cn('mr-1 size-4 transition-transform', wxAdvanced && 'rotate-180')} />
-                {wxAdvanced ? ch.advancedHide : ch.advancedShow}
-              </Button>
-
-              {wxAdvanced ? (
-                <WeixinAdvanced
-                  wx={wx}
-                  updateWeixin={updateWeixin}
-                  ch={ch}
-                  dmOpts={dmOpts}
-                  streamOpts={streamOpts}
-                  wxAccountsDraft={wxAccountsDraft}
-                  setWxAccountsDraft={setWxAccountsDraft}
-                  wxAccountsError={wxAccountsError}
-                  onWxAccountsBlur={onWxAccountsBlur}
                 />
               ) : null}
             </div>
