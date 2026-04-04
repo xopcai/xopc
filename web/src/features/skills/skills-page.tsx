@@ -1,14 +1,23 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
+import type { LucideIcon } from 'lucide-react';
 import {
+  BookOpen,
   ChevronDown,
   FileArchive,
+  FileText,
+  FileType,
   Funnel,
   Info,
   MoreVertical,
+  Package,
   Plus,
+  Presentation,
+  Puzzle,
   RefreshCw,
   Search,
+  Sparkles,
+  Table2,
   Trash2,
   X,
 } from 'lucide-react';
@@ -36,26 +45,37 @@ function interpolate(template: string, params: Record<string, string | number>):
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
 }
 
-function hashHue(name: string): number {
-  let h = 0;
-  for (let i = 0; i < name.length; i++) {
-    h = (h * 31 + name.charCodeAt(i)) | 0;
-  }
-  return Math.abs(h) % 360;
+/** Distinct glyph per skill id — avoids duplicate “first letter” collisions (e.g. create-skill vs install-skill-dependency). */
+function resolveSkillIcon(name: string): LucideIcon {
+  const n = name.toLowerCase().replace(/_/g, '-');
+  if (n.includes('find-skill')) return Search;
+  if (n.includes('install') && (n.includes('depend') || n.includes('dependency'))) return Package;
+  if (n.includes('create-skill')) return Sparkles;
+  if (n === 'docx' || n.endsWith('-docx')) return FileText;
+  if (n === 'pdf' || n.endsWith('-pdf')) return FileType;
+  if (n === 'pptx' || n.includes('pptx')) return Presentation;
+  if (n === 'xlsx' || n.includes('xlsx')) return Table2;
+  if (n.includes('markdown') || n.includes('md')) return BookOpen;
+  return Puzzle;
 }
 
-function SkillCardIcon({ name }: { name: string }) {
-  const h = hashHue(name);
-  const letter = name[0]?.toUpperCase() ?? '?';
+function SkillCardIcon({ name, className }: { name: string; className?: string }) {
+  const Icon = resolveSkillIcon(name);
   return (
     <div
-      className="flex size-11 shrink-0 items-center justify-center rounded-xl text-sm font-semibold text-white shadow-sm"
-      style={{
-        background: `linear-gradient(135deg, hsl(${h}, 58%, 42%), hsl(${(h + 40) % 360}, 52%, 32%))`,
-      }}
+      className={cn(
+        'flex size-11 shrink-0 items-center justify-center rounded-xl',
+        'bg-surface-hover/90 shadow-surface ring-1 ring-inset ring-black/[0.05] dark:bg-surface-active/80 dark:ring-white/[0.08]',
+        'transition-[transform,box-shadow] duration-200 ease-out group-hover:ring-black/[0.09] dark:group-hover:ring-white/[0.14]',
+        'group-hover:-translate-y-px',
+        className,
+      )}
       aria-hidden
     >
-      {letter}
+      <Icon
+        className="size-[1.35rem] text-fg-muted transition-colors duration-200 group-hover:text-fg"
+        strokeWidth={1.75}
+      />
     </div>
   );
 }
@@ -75,11 +95,9 @@ function normalizeCatalogEntry(r: SkillCatalogEntry): SkillCatalogEntry {
 
 function SkillEnableSwitch({
   checked,
-  busy,
   onChange,
 }: {
   checked: boolean;
-  busy?: boolean;
   onChange: (next: boolean) => void;
 }) {
   return (
@@ -87,24 +105,22 @@ function SkillEnableSwitch({
       type="button"
       role="switch"
       aria-checked={checked}
-      aria-busy={busy}
-      disabled={busy}
       className={cn(
-        'relative h-7 w-12 shrink-0 rounded-full transition-colors',
-        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
-        checked ? 'bg-emerald-500' : 'bg-surface-active',
-        busy && 'cursor-not-allowed opacity-60',
+        'relative h-6 w-10 shrink-0 overflow-hidden rounded-full border border-edge p-0.5',
+        'transition-[border-color,background-color] duration-200 ease-out',
+        'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+        'active:scale-[0.97] motion-reduce:transition-none motion-reduce:active:scale-100',
+        checked ? 'bg-accent' : 'bg-surface-hover',
       )}
-      onClick={() => {
-        if (busy) return;
-        onChange(!checked);
-      }}
+      onClick={() => onChange(!checked)}
     >
       <span
         className={cn(
-          'pointer-events-none absolute left-0.5 top-0.5 block h-6 w-6 rounded-full bg-white shadow transition-transform',
-          checked ? 'translate-x-[1.375rem]' : 'translate-x-0',
+          'pointer-events-none absolute left-0.5 top-1/2 block size-4 -translate-y-1/2 rounded-full bg-surface-panel shadow-sm ring-1 ring-black/5 dark:ring-white/10',
+          'transition-transform duration-200 ease-out motion-reduce:transition-none',
+          checked ? 'translate-x-5' : 'translate-x-0',
         )}
+        aria-hidden
       />
     </button>
   );
@@ -136,7 +152,7 @@ function SkillListRowSkeleton() {
         <div className={cn('h-4 max-w-[10rem]', skel)} />
         <div className={cn('h-3 w-full max-w-xl rounded', skel)} />
       </div>
-      <div className={cn('h-7 w-12 shrink-0 rounded-full', skel)} />
+      <div className={cn('h-6 w-10 shrink-0 rounded-full', skel)} />
     </div>
   );
 }
@@ -179,6 +195,8 @@ export function SkillsPage() {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [confirmId, setConfirmId] = useState<string | null>(null);
   const [togglingSkillName, setTogglingSkillName] = useState<string | null>(null);
+  /** Optimistic `enabled` until `load` completes — avoids switch lag + disabled/opacity flicker. */
+  const [enabledOverride, setEnabledOverride] = useState<Record<string, boolean>>({});
 
   const [detailOpen, setDetailOpen] = useState(false);
   const [detailTitle, setDetailTitle] = useState('');
@@ -273,17 +291,26 @@ export function SkillsPage() {
   const onSkillToggle = useCallback(
     async (name: string, next: boolean): Promise<boolean> => {
       setTogglingSkillName(name);
+      setEnabledOverride((prev) => ({ ...prev, [name]: next }));
       setActionFeedback(null);
       try {
         await patchSkillEnabled(name, next);
         await load({ silent: true });
         return true;
       } catch (e) {
+        setEnabledOverride((prev) => {
+          const { [name]: _, ...rest } = prev;
+          return rest;
+        });
         const msg = e instanceof Error ? e.message : sk.skillToggleFailed;
         showFeedback('error', msg);
         return false;
       } finally {
         setTogglingSkillName(null);
+        setEnabledOverride((prev) => {
+          const { [name]: _, ...rest } = prev;
+          return rest;
+        });
       }
     },
     [load, showFeedback, sk.skillToggleFailed],
@@ -308,23 +335,26 @@ export function SkillsPage() {
     const rows = catalog.filter((r) => r.source === 'builtin');
     return {
       total: rows.length,
-      enabled: rows.filter((r) => r.enabled).length,
+      enabled: rows.filter((r) => enabledOverride[r.name] ?? r.enabled).length,
     };
-  }, [catalog]);
+  }, [catalog, enabledOverride]);
 
   const userTabStats = useMemo(() => {
     const rows = catalog.filter((r) => r.source !== 'builtin');
     return {
       total: rows.length,
-      enabled: rows.filter((r) => r.enabled).length,
+      enabled: rows.filter((r) => enabledOverride[r.name] ?? r.enabled).length,
     };
-  }, [catalog]);
+  }, [catalog, enabledOverride]);
 
   const detailFromCatalog = useMemo(
     () => (detailTitle ? catalog.find((r) => r.name === detailTitle) : undefined),
     [catalog, detailTitle],
   );
-  const detailEnabled = detailFromCatalog?.enabled ?? true;
+  const detailEnabled =
+    detailFromCatalog == null
+      ? true
+      : (enabledOverride[detailTitle] ?? detailFromCatalog.enabled);
 
   const filteredCatalog = useMemo(() => {
     if (mainTab === 'marketplace') {
@@ -542,8 +572,10 @@ export function SkillsPage() {
                 role="tab"
                 aria-selected={mainTab === 'builtin'}
                 className={cn(
-                  'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   mainTab === 'builtin' ? 'text-fg' : 'text-fg-muted hover:text-fg',
+                  mainTab === 'builtin' &&
+                    'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
                 )}
                 onClick={() => setMainTab('builtin')}
               >
@@ -557,8 +589,10 @@ export function SkillsPage() {
                 role="tab"
                 aria-selected={mainTab === 'user'}
                 className={cn(
-                  'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   mainTab === 'user' ? 'text-fg' : 'text-fg-muted hover:text-fg',
+                  mainTab === 'user' &&
+                    'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
                 )}
                 onClick={() => setMainTab('user')}
               >
@@ -572,8 +606,10 @@ export function SkillsPage() {
                 role="tab"
                 aria-selected={mainTab === 'marketplace'}
                 className={cn(
-                  'rounded-md px-3 py-2 text-sm font-medium transition-colors',
+                  'relative rounded-md px-3 py-2 text-sm font-medium transition-colors',
                   mainTab === 'marketplace' ? 'text-fg' : 'text-fg-muted hover:text-fg',
+                  mainTab === 'marketplace' &&
+                    'after:absolute after:bottom-0 after:left-1/2 after:h-0.5 after:w-9 after:-translate-x-1/2 after:rounded-full after:bg-accent',
                 )}
                 onClick={() => setMainTab('marketplace')}
               >
@@ -668,33 +704,44 @@ export function SkillsPage() {
                   {filteredCatalog.map((row) => (
                     <article
                       key={`${row.directoryId}-${row.path}`}
-                      className="group relative flex items-center gap-4 border-b border-edge-subtle px-4 py-3.5 last:border-b-0"
+                      className={cn(
+                        'group relative flex items-center gap-4 border-b border-edge-subtle px-4 py-3.5 last:border-b-0',
+                        'transition-colors hover:bg-surface-hover/50 dark:hover:bg-surface-hover/25',
+                      )}
                     >
                       <button
                         type="button"
                         className={cn(
                           'flex min-w-0 flex-1 cursor-pointer items-center gap-4 rounded-lg text-left outline-none',
-                          'hover:bg-surface-hover/50 dark:hover:bg-surface-hover/30',
                           interaction.focusRingPanel,
                         )}
                         onClick={() => void openSkillDetail(row)}
                       >
                         <SkillCardIcon name={row.name} />
                         <div className="min-w-0 flex-1 pr-2">
-                          <h3 className="font-semibold leading-snug text-fg">{row.name}</h3>
-                          <p className="mt-0.5 line-clamp-2 text-sm leading-relaxed text-fg-muted">
+                          <h3 className="text-[15px] font-semibold leading-snug tracking-tight text-fg">
+                            {row.name}
+                          </h3>
+                          <p
+                            className="mt-0.5 truncate text-sm leading-relaxed text-fg-muted"
+                            title={row.description ? row.description : undefined}
+                          >
                             {row.description || '—'}
                           </p>
-                          <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
-                            <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
-                              {sourceLabel(row.source)}
-                            </span>
-                            {row.managed ? (
-                              <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
-                                {sk.col.managed}: {sk.yes}
-                              </span>
-                            ) : null}
-                          </div>
+                          {mainTab !== 'builtin' || row.managed ? (
+                            <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
+                              {mainTab !== 'builtin' ? (
+                                <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
+                                  {sourceLabel(row.source)}
+                                </span>
+                              ) : null}
+                              {row.managed ? (
+                                <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
+                                  {sk.col.managed}: {sk.yes}
+                                </span>
+                              ) : null}
+                            </div>
+                          ) : null}
                         </div>
                       </button>
                       <div
@@ -740,8 +787,7 @@ export function SkillsPage() {
                           </DropdownMenu.Root>
                         ) : null}
                         <SkillEnableSwitch
-                          checked={row.enabled}
-                          busy={togglingSkillName === row.name}
+                          checked={enabledOverride[row.name] ?? row.enabled}
                           onChange={(next) => void onSkillToggle(row.name, next)}
                         />
                       </div>
@@ -774,7 +820,7 @@ export function SkillsPage() {
               'rounded-2xl border border-edge bg-surface-panel shadow-float dark:border-edge',
             )}
           >
-            <div className="flex shrink-0 items-center gap-3 border-b border-edge px-4 py-3">
+            <div className="group flex shrink-0 items-center gap-3 border-b border-edge px-4 py-3">
               <SkillCardIcon name={detailTitle || '?'} />
               <Dialog.Title className="min-w-0 flex-1 truncate text-base font-semibold text-fg">
                 {detailTitle || '—'}
