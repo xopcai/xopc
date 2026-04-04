@@ -5,7 +5,7 @@
  */
 
 import { Command } from 'commander';
-import { AuthStorage, anthropicOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import { anthropicOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
 import {
 	listProfilesForProvider,
 	listAllProfiles,
@@ -17,19 +17,9 @@ import { getAllProviders } from '../../providers/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { colors, colorizeStatus } from '../utils/colors.js';
-import { homedir } from 'os';
-import { join } from 'path';
 import { getOAuthProvider, getSupportedOAuthProviders } from '../utils/oauth-providers.js';
 
 const log = createLogger('AuthCommand');
-
-// Create a shared AuthStorage instance (legacy)
-function getAuthStorage(): AuthStorage {
-	const authPath = join(homedir(), '.xopcbot', 'auth.json');
-	const storage = new AuthStorage({ filename: authPath });
-	storage.registerOAuthProvider(anthropicOAuthProvider);
-	return storage;
-}
 
 function createAuthCommand(_ctx: CLIContext): Command {
 	const cmd = new Command('auth')
@@ -48,17 +38,12 @@ function createAuthCommand(_ctx: CLIContext): Command {
 			])
 		);
 
-	// List command - shows both legacy auth and AuthProfiles
+	// List command - shows auth profiles
 	cmd
 		.command('list')
 		.description('List all configured authentication credentials')
-		.option('--profiles', 'Show auth profiles instead of legacy auth')
-		.action((options) => {
-			if (options.profiles) {
-				listAuthProfiles();
-				return;
-			}
-			listLegacyAuth();
+		.action(() => {
+			listAuthProfiles();
 		});
 
 	// Set command
@@ -89,17 +74,6 @@ function createAuthCommand(_ctx: CLIContext): Command {
 			
 			if (profiles.length === 0) {
 				log.error(`No credentials found for provider: ${provider}`);
-				// Try legacy auth
-				const storage = getAuthStorage();
-				const key = await storage.getApiKey(provider);
-				if (key) {
-					const masked = key.length > 8 
-						? `${key.substring(0, 4)}${'*'.repeat(key.length - 8)}${key.substring(key.length - 4)}`
-						: '****';
-					console.log(`\nProvider: ${provider} (legacy)`);
-					console.log(`API Key: ${masked}\n`);
-					return;
-				}
 				process.exit(1);
 			}
 
@@ -214,10 +188,7 @@ function createAuthCommand(_ctx: CLIContext): Command {
 			// Remove all profiles for provider
 			const profiles = listProfilesForProvider(provider);
 			if (profiles.length === 0) {
-				// Try legacy auth
-				const storage = getAuthStorage();
-				storage.logout(provider);
-				log.info(`Logged out from: ${provider} (legacy)`);
+				log.warn(`No profiles found for provider: ${provider}`);
 				return;
 			}
 			
@@ -277,10 +248,6 @@ function createAuthCommand(_ctx: CLIContext): Command {
 		.command('clear')
 		.description('Clear all authentication credentials')
 		.action(() => {
-			const storage = getAuthStorage();
-			storage.clear();
-			
-			// Also clear profiles
 			const profiles = listAllProfiles();
 			for (const profile of profiles) {
 				removeAuthProfile(profile.profileId);
@@ -308,27 +275,6 @@ function createAuthCommand(_ctx: CLIContext): Command {
 		});
 
 	return cmd;
-}
-
-function listLegacyAuth(): void {
-	const storage = getAuthStorage();
-	const configured = storage.getConfiguredProviders();
-	
-	if (configured.length === 0) {
-		log.info('No legacy authentication credentials configured.');
-		log.info('Set an API key: xopcbot auth set <provider> <key>');
-		log.info('Or login with OAuth: xopcbot auth login <provider>');
-		return;
-	}
-
-	console.log('\nConfigured authentication providers (legacy):\n');
-	for (const provider of configured) {
-		const type = storage.getCredentialType(provider) || 'unknown';
-		const hasAuth = storage.hasAuth(provider);
-		const status = hasAuth ? colors.green('✓ Configured') : colors.red('✗ Missing');
-		console.log(`  ${provider.padEnd(20)} ${type.padEnd(12)} ${status}`);
-	}
-	console.log('');
 }
 
 function listAuthProfiles(): void {
