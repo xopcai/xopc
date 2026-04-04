@@ -6,7 +6,7 @@ import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { complete, type UserMessage } from '@mariozechner/pi-ai';
 
 import { stripInboundFileMetadataFromText } from '../channels/attachments/inbound-persist.js';
-import { parseSessionKey } from '../routing/session-key.js';
+import { isCronSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { resolveModel } from '../providers/index.js';
 import { createLogger } from '../utils/logger.js';
 import type { SessionStore } from './store.js';
@@ -58,6 +58,15 @@ export function isWebchatSessionKey(sessionKey: string): boolean {
   const p = parseSessionKey(sessionKey);
   if (p?.source === 'webchat') return true;
   return sessionKey.includes(':webchat:');
+}
+
+/** Whether to run LLM/fallback session naming for this key (excludes cron, heartbeat). */
+export function shouldAutoTitleSessionKey(sessionKey: string): boolean {
+  const raw = (sessionKey ?? '').trim();
+  if (!raw) return false;
+  if (isCronSessionKey(raw)) return false;
+  if (raw.toLowerCase().startsWith('heartbeat:')) return false;
+  return true;
 }
 
 export function sanitizeSessionTitle(raw: string): string {
@@ -158,15 +167,15 @@ Title:`;
 }
 
 /**
- * If the session is webchat and still unnamed, set `name` (LLM when possible, else first-line fallback).
- * Ensures index row exists by re-saving when metadata is missing (fixes index lag).
+ * If the session is still unnamed, set `name` (LLM when possible, else first-line fallback).
+ * Skips cron/heartbeat keys. Ensures index row exists by re-saving when metadata is missing (fixes index lag).
  */
 export async function maybeAutoTitleSessionStore(
   sessionStore: SessionStore,
   sessionKey: string,
   modelRef: string | undefined,
 ): Promise<void> {
-  if (!isWebchatSessionKey(sessionKey)) return;
+  if (!shouldAutoTitleSessionKey(sessionKey)) return;
 
   let messages = await sessionStore.load(sessionKey);
   if (!messages.length) return;
