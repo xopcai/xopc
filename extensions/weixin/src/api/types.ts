@@ -232,4 +232,6 @@ export interface GetConfigResp {
   errmsg?: string;
   /** Base64-encoded typing ticket for sendTyping. */
   typing_ticket?: string;
+  /** Present when the server can establish DM context without a prior inbound bubble (e.g. proactive send). */
+  context_token?: string;
 }

@@ -144,7 +144,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
 
       if (this.abortControllers.has(accountId)) continue;
 
-      restoreContextTokens(accountId);
+      restoreContextTokens(account.accountId);
 
       const ac = new AbortController();
       this.abortControllers.set(accountId, ac);

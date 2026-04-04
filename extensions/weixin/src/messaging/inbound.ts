@@ -5,41 +5,99 @@ import { logger } from "../util/logger.js";
 import { generateId } from "../util/random.js";
 import type { WeixinMessage, MessageItem } from "../api/types.js";
 import { MessageItemType } from "../api/types.js";
+import { canonicalWeixinPeerId, normalizeWeixinAccountId } from "../auth/weixin-account-id.js";
 import { resolveWeixinRootDir } from "../storage/state-dir.js";
 
 // ---------------------------------------------------------------------------
 // Context token store (in-process cache + disk persistence)
 // ---------------------------------------------------------------------------
 
+type WeixinContextTokenEntry = { token: string; sendTo?: string };
+
 /**
  * contextToken is issued per-message by the Weixin getupdates API and must
  * be echoed verbatim in every outbound send. The in-memory map is the primary
  * lookup; a disk-backed file per account ensures tokens survive gateway restarts.
+ *
+ * `sendTo` is the last inbound `from_user_id` verbatim. ilink often requires `to_user_id`
+ * in sendmessage to match that string exactly (session/cron peer ids are sanitized).
  */
-const contextTokenStore = new Map<string, string>();
+const contextTokenStore = new Map<string, WeixinContextTokenEntry>();
+
+function parsePersistedPeerVal(val: unknown): WeixinContextTokenEntry | null {
+  if (typeof val === "string" && val.trim()) {
+    return { token: val.trim() };
+  }
+  if (val && typeof val === "object" && "token" in val) {
+    const o = val as { token: unknown; sendTo?: unknown };
+    if (typeof o.token !== "string" || !o.token.trim()) return null;
+    const sendTo = typeof o.sendTo === "string" && o.sendTo.trim() ? o.sendTo.trim() : undefined;
+    return { token: o.token.trim(), ...(sendTo ? { sendTo } : {}) };
+  }
+  return null;
+}
+
+/**
+ * Session keys use {@link canonicalWeixinPeerId} (same as `buildSessionKey`); cron `delivery.to`
+ * and outbound `ctx.to` use that shape. ilink `from_user_id` is often `…@im.wechat` while the
+ * session peer is `…-im-wechat`. Normalize so context_token cache keys match lookups.
+ */
+function normalizeIlinkUserIdForContext(userId: string): string {
+  return canonicalWeixinPeerId(userId);
+}
+
+/** ilink may use a shorter openid in one path and a suffixed id in another; treat as same peer when unambiguous. */
+function ilinkPeerKeysLikelySame(storedKey: string, queryPeer: string): boolean {
+  const a = normalizeIlinkUserIdForContext(storedKey);
+  const b = normalizeIlinkUserIdForContext(queryPeer);
+  if (a === b) return true;
+  if (a.length < 12 || b.length < 12) return false;
+  return a.startsWith(b) || b.startsWith(a);
+}
 
 function contextTokenKey(accountId: string, userId: string): string {
-  return `${accountId}:${userId}`;
+  return `${normalizeWeixinAccountId(accountId)}:${normalizeIlinkUserIdForContext(userId)}`;
 }
 
 // ---------------------------------------------------------------------------
 // Disk persistence helpers
 // ---------------------------------------------------------------------------
 
-function resolveContextTokenFilePath(accountId: string): string {
-  return path.join(resolveWeixinRootDir(), "accounts", `${accountId}.context-tokens.json`);
+function canonicalContextTokenFilePath(accountId: string): string {
+  const norm = normalizeWeixinAccountId(accountId);
+  return path.join(resolveWeixinRootDir(), "accounts", `${norm}.context-tokens.json`);
 }
 
-/** Persist all context tokens for a given account to disk. */
+/** Older builds wrote `${rawListId}.context-tokens.json`; read both until migrated. */
+function listContextTokenFilePathsForRead(accountId: string): string[] {
+  const primary = canonicalContextTokenFilePath(accountId);
+  const legacy = path.join(
+    resolveWeixinRootDir(),
+    "accounts",
+    `${accountId.trim()}.context-tokens.json`,
+  );
+  if (path.resolve(primary) === path.resolve(legacy)) {
+    return [primary];
+  }
+  return [primary, legacy];
+}
+
+/** Persist all context tokens for a given account to disk (canonical filename only). */
 function persistContextTokens(accountId: string): void {
-  const prefix = `${accountId}:`;
-  const tokens: Record<string, string> = {};
+  const norm = normalizeWeixinAccountId(accountId);
+  const prefix = `${norm}:`;
+  const tokens: Record<string, string | { token: string; sendTo?: string }> = {};
   for (const [k, v] of contextTokenStore) {
     if (k.startsWith(prefix)) {
-      tokens[k.slice(prefix.length)] = v;
+      const peerSuffix = k.slice(prefix.length);
+      if (v.sendTo?.trim()) {
+        tokens[peerSuffix] = { token: v.token, sendTo: v.sendTo.trim() };
+      } else {
+        tokens[peerSuffix] = v.token;
+      }
     }
   }
-  const filePath = resolveContextTokenFilePath(accountId);
+  const filePath = canonicalContextTokenFilePath(accountId);
   try {
     const dir = path.dirname(filePath);
     fs.mkdirSync(dir, { recursive: true });
@@ -54,57 +112,117 @@ function persistContextTokens(accountId: string): void {
  * Called once during gateway startAccount to survive restarts.
  */
 export function restoreContextTokens(accountId: string): void {
-  const filePath = resolveContextTokenFilePath(accountId);
-  try {
-    if (!fs.existsSync(filePath)) return;
-    const raw = fs.readFileSync(filePath, "utf-8");
-    const tokens = JSON.parse(raw) as Record<string, string>;
-    let count = 0;
-    for (const [userId, token] of Object.entries(tokens)) {
-      if (typeof token === "string" && token) {
-        contextTokenStore.set(contextTokenKey(accountId, userId), token);
-        count++;
+  let count = 0;
+  const norm = normalizeWeixinAccountId(accountId);
+  for (const filePath of listContextTokenFilePathsForRead(accountId)) {
+    try {
+      if (!fs.existsSync(filePath)) continue;
+      const raw = fs.readFileSync(filePath, "utf-8");
+      const tokens = JSON.parse(raw) as Record<string, unknown>;
+      for (const [userId, val] of Object.entries(tokens)) {
+        const entry = parsePersistedPeerVal(val);
+        if (entry?.token) {
+          contextTokenStore.set(contextTokenKey(norm, userId), entry);
+          count++;
+        }
       }
+    } catch (err) {
+      logger.warn(`restoreContextTokens: failed to read ${filePath}: ${String(err)}`);
     }
-    logger.info(`restoreContextTokens: restored ${count} tokens for account=${accountId}`);
-  } catch (err) {
-    logger.warn(`restoreContextTokens: failed to read ${filePath}: ${String(err)}`);
+  }
+  if (count > 0) {
+    logger.info(`restoreContextTokens: restored ${count} tokens for account=${norm}`);
   }
 }
 
 /** Remove all context tokens for a given account (memory + disk). */
 export function clearContextTokensForAccount(accountId: string): void {
-  const prefix = `${accountId}:`;
+  const norm = normalizeWeixinAccountId(accountId);
+  const prefix = `${norm}:`;
   for (const k of [...contextTokenStore.keys()]) {
     if (k.startsWith(prefix)) {
       contextTokenStore.delete(k);
     }
   }
-  const filePath = resolveContextTokenFilePath(accountId);
-  try {
-    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-  } catch (err) {
-    logger.warn(`clearContextTokensForAccount: failed to remove ${filePath}: ${String(err)}`);
+  for (const filePath of listContextTokenFilePathsForRead(accountId)) {
+    try {
+      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+    } catch (err) {
+      logger.warn(`clearContextTokensForAccount: failed to remove ${filePath}: ${String(err)}`);
+    }
   }
-  logger.info(`clearContextTokensForAccount: cleared tokens for account=${accountId}`);
+  logger.info(`clearContextTokensForAccount: cleared tokens for account=${norm}`);
+}
+
+function tryHydratePeerEntryFromDisk(accountId: string, userId: string): WeixinContextTokenEntry | undefined {
+  const peer = normalizeIlinkUserIdForContext(userId);
+  const norm = normalizeWeixinAccountId(accountId);
+  for (const filePath of listContextTokenFilePathsForRead(accountId)) {
+    if (!fs.existsSync(filePath)) continue;
+    try {
+      const raw = fs.readFileSync(filePath, "utf-8");
+      const tokens = JSON.parse(raw) as Record<string, unknown>;
+      for (const [jsonKey, val] of Object.entries(tokens)) {
+        const entry = parsePersistedPeerVal(val);
+        if (!entry?.token) continue;
+        if (!ilinkPeerKeysLikelySame(jsonKey, peer)) continue;
+        contextTokenStore.set(contextTokenKey(norm, peer), entry);
+        persistContextTokens(accountId);
+        return entry;
+      }
+    } catch (err) {
+      logger.debug(`tryHydratePeerEntryFromDisk: ${filePath}: ${String(err)}`);
+    }
+  }
+  return undefined;
+}
+
+function getWeixinContextPeerEntry(
+  accountId: string,
+  userId: string,
+): WeixinContextTokenEntry | undefined {
+  const k = contextTokenKey(accountId, userId);
+  let e = contextTokenStore.get(k);
+  if (e?.token) {
+    return e;
+  }
+  const hydrated = tryHydratePeerEntryFromDisk(accountId, userId);
+  if (hydrated) return hydrated;
+  return contextTokenStore.get(k);
+}
+
+/** Last inbound `from_user_id` for API `to_user_id` (verbatim), when known. */
+export function getWeixinOutboundSendUserId(accountId: string, userId: string): string | undefined {
+  return getWeixinContextPeerEntry(accountId, userId)?.sendTo?.trim() || undefined;
 }
 
 /** Store a context token for a given account+user pair (memory + disk). */
-export function setContextToken(accountId: string, userId: string, token: string): void {
+export function setContextToken(
+  accountId: string,
+  userId: string,
+  token: string,
+  options?: { sendToUserId?: string },
+): void {
   const k = contextTokenKey(accountId, userId);
-  logger.debug(`setContextToken: key=${k}`);
-  contextTokenStore.set(k, token);
+  const prev = contextTokenStore.get(k);
+  const sendTo =
+    options && options.sendToUserId !== undefined
+      ? options.sendToUserId.trim() || undefined
+      : prev?.sendTo;
+  const next: WeixinContextTokenEntry = { token, ...(sendTo ? { sendTo } : {}) };
+  logger.debug(`setContextToken: key=${k} sendTo=${sendTo ? "yes" : "no"}`);
+  contextTokenStore.set(k, next);
   persistContextTokens(accountId);
 }
 
 /** Retrieve the cached context token for a given account+user pair. */
 export function getContextToken(accountId: string, userId: string): string | undefined {
   const k = contextTokenKey(accountId, userId);
-  const val = contextTokenStore.get(k);
+  const e = getWeixinContextPeerEntry(accountId, userId);
   logger.debug(
-    `getContextToken: key=${k} found=${val !== undefined} storeSize=${contextTokenStore.size}`,
+    `getContextToken: key=${k} found=${e?.token !== undefined} storeSize=${contextTokenStore.size}`,
   );
-  return val;
+  return e?.token;
 }
 
 /**
@@ -120,6 +238,80 @@ export function findAccountIdsByContextToken(
   userId: string,
 ): string[] {
   return accountIds.filter((id) => contextTokenStore.has(contextTokenKey(id, userId)));
+}
+
+/** In-memory entries whose peer id matches (exact or ilink prefix/suffix variant). */
+export function findContextTokenEntriesByPeer(
+  peerUserId: string,
+): Array<{ accountId: string; token: string; sendTo?: string }> {
+  const peer = normalizeIlinkUserIdForContext(peerUserId);
+  const out: Array<{ accountId: string; token: string; sendTo?: string }> = [];
+  for (const [k, entry] of contextTokenStore) {
+    if (!entry?.token?.trim()) continue;
+    const idx = k.indexOf(':');
+    if (idx <= 0 || idx >= k.length - 1) continue;
+    const accountId = k.slice(0, idx);
+    const storedPeer = k.slice(idx + 1);
+    if (!ilinkPeerKeysLikelySame(storedPeer, peer)) continue;
+    if (accountId) {
+      out.push({
+        accountId,
+        token: entry.token,
+        ...(entry.sendTo?.trim() ? { sendTo: entry.sendTo.trim() } : {}),
+      });
+    }
+  }
+  return out;
+}
+
+/**
+ * When the preferred account id does not match the token filename, scan every
+ * `accounts/*.context-tokens.json` for this peer (case-insensitive user key).
+ */
+export function tryHydrateAnyAccountContextTokenFromDisk(
+  peerUserId: string,
+): { accountId: string; token: string; sendTo?: string } | undefined {
+  const peer = normalizeIlinkUserIdForContext(peerUserId);
+  const accountsDir = path.join(resolveWeixinRootDir(), 'accounts');
+  if (!fs.existsSync(accountsDir)) return undefined;
+  const hits: Array<{ accountId: string; token: string; sendTo?: string }> = [];
+  let names: string[];
+  try {
+    names = fs.readdirSync(accountsDir);
+  } catch {
+    return undefined;
+  }
+  const suffix = '.context-tokens.json';
+  for (const name of names) {
+    if (!name.endsWith(suffix)) continue;
+    const accountFromFile = name.slice(0, -suffix.length);
+    const filePath = path.join(accountsDir, name);
+    try {
+      const raw = fs.readFileSync(filePath, 'utf-8');
+      const tokens = JSON.parse(raw) as Record<string, unknown>;
+      for (const [jsonKey, val] of Object.entries(tokens)) {
+        const entry = parsePersistedPeerVal(val);
+        if (!entry?.token) continue;
+        if (!ilinkPeerKeysLikelySame(jsonKey, peer)) continue;
+        hits.push({
+          accountId: normalizeWeixinAccountId(accountFromFile),
+          token: entry.token,
+          ...(entry.sendTo?.trim() ? { sendTo: entry.sendTo.trim() } : {}),
+        });
+      }
+    } catch {
+      /* skip corrupt file */
+    }
+  }
+  if (hits.length === 0) return undefined;
+  const byAccount = new Map<string, { token: string; sendTo?: string }>();
+  for (const h of hits) {
+    if (!byAccount.has(h.accountId)) byAccount.set(h.accountId, { token: h.token, sendTo: h.sendTo });
+  }
+  if (byAccount.size > 1) return undefined;
+  const [accountId, hit] = [...byAccount.entries()][0]!;
+  setContextToken(accountId, peer, hit.token, hit.sendTo ? { sendToUserId: hit.sendTo } : undefined);
+  return { accountId, token: hit.token, sendTo: hit.sendTo };
 }
 
 // ---------------------------------------------------------------------------

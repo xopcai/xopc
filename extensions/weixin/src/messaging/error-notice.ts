@@ -22,6 +22,7 @@ export function mapWeixinOutboundErrorNotice(errMsg: string): string {
  */
 export async function sendWeixinErrorNotice(params: {
   to: string;
+  toUserIdForApi?: string;
   contextToken: string | undefined;
   message: string;
   baseUrl: string;
@@ -35,6 +36,7 @@ export async function sendWeixinErrorNotice(params: {
   try {
     await sendMessageWeixin({
       to: params.to,
+      toUserIdForApi: params.toUserIdForApi,
       text: params.message,
       opts: {
         baseUrl: params.baseUrl,

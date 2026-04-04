@@ -1,5 +1,7 @@
 // Cron types and interfaces
 
+import type { SessionStore } from '../session/store.js';
+
 // ============================================================================
 // Delivery Types
 // ============================================================================
@@ -122,6 +124,8 @@ export interface JobExecutorDeps {
   agentService?: any;
   messageBus?: any;
   heartbeatService?: HeartbeatWakeSink;
+  /** When set, weixin cron `delivery.to` may be a bare ilink user id; accountId is inferred from sessions. */
+  sessionStore?: SessionStore;
 }
 
 export interface JobExecutor {
