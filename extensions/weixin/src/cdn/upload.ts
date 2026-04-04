@@ -2,6 +2,7 @@ import crypto from "node:crypto";
 import fs from "node:fs/promises";
 import path from "node:path";
 
+import { toRawIlinkUserIdForApi } from "../auth/weixin-account-id.js";
 import { getUploadUrl } from "../api/api.js";
 import type { WeixinApiOptions } from "../api/api.js";
 import { aesEcbPaddedSize } from "./aes-ecb.js";
@@ -74,7 +75,7 @@ async function uploadMediaToCdn(params: {
     ...opts,
     filekey,
     media_type: mediaType,
-    to_user_id: toUserId,
+    to_user_id: toRawIlinkUserIdForApi(toUserId),
     rawsize,
     rawfilemd5,
     filesize,

@@ -7,9 +7,12 @@ import type {
   JobExecutor,
   JobExecutorDeps,
 } from './types.js';
+import type { OutboundMessage } from '../channels/transport-types.js';
+import { normalizeWeixinCronDeliveryToResolved } from '../channels/weixin-delivery-to.js';
 import { createLogger } from '../utils/logger.js';
 import { normalizeTelegramDeliveryChatId } from './telegram-delivery-chat-id.js';
 import { getCronPayloadText } from './job-content.js';
+import type { SessionStore } from '../session/store.js';
 import type { CronRunLogStore } from './run-log-store.js';
 import {
   DEFAULT_ACK_MAX_CHARS,
@@ -50,6 +53,7 @@ export class DefaultJobExecutor implements JobExecutor {
   private agentService: any = null;
   private messageBus: any = null;
   private heartbeatService: HeartbeatWakeSink | null = null;
+  private sessionStore: SessionStore | undefined;
   private runLogStore: CronRunLogStore | null = null;
 
   setRunLogStore(store: CronRunLogStore | null): void {
@@ -60,6 +64,40 @@ export class DefaultJobExecutor implements JobExecutor {
     this.agentService = deps.agentService;
     this.messageBus = deps.messageBus;
     this.heartbeatService = deps.heartbeatService ?? null;
+    if (deps.sessionStore !== undefined) {
+      this.sessionStore = deps.sessionStore;
+    }
+  }
+
+  private async buildCronOutboundMessage(
+    channel: string,
+    to: string,
+    content: string,
+  ): Promise<OutboundMessage> {
+    if (channel === 'telegram') {
+      return {
+        channel,
+        chat_id: normalizeTelegramDeliveryChatId(to),
+        content,
+        type: 'message',
+      };
+    }
+    if (channel === 'weixin') {
+      const { chatId, accountId } = await normalizeWeixinCronDeliveryToResolved(to, this.sessionStore);
+      return {
+        channel,
+        chat_id: chatId,
+        content,
+        type: 'message',
+        ...(accountId ? { metadata: { accountId } } : {}),
+      };
+    }
+    return {
+      channel,
+      chat_id: to,
+      content,
+      type: 'message',
+    };
   }
 
   async execute(job: JobData, signal: AbortSignal, deps?: JobExecutorDeps): Promise<void> {
@@ -267,19 +305,12 @@ export class DefaultJobExecutor implements JobExecutor {
         };
       }
 
-      const resolvedTo =
-        channel === 'telegram' ? normalizeTelegramDeliveryChatId(to) : to;
+      const outbound = await this.buildCronOutboundMessage(channel, to, actualMessage);
 
-      // Publish to message bus (send to channel)
-      await this.messageBus.publishOutbound({
-        channel,
-        chat_id: resolvedTo,
-        content: actualMessage,
-        type: 'message',
-      });
+      await this.messageBus.publishOutbound(outbound);
 
       log.info(
-        { jobId: job.id, channel, to: resolvedTo, messageLength: actualMessage.length },
+        { jobId: job.id, channel, to: outbound.chat_id, messageLength: actualMessage.length },
         'Sent message to main session'
       );
 
@@ -366,20 +397,12 @@ export class DefaultJobExecutor implements JobExecutor {
         const outboundText = stripped || response.trim();
 
         const targetChannel = outboundChannel || 'cli';
-        const targetChatId =
-          targetChannel === 'telegram'
-            ? normalizeTelegramDeliveryChatId(delivery.to)
-            : delivery.to;
+        const outbound = await this.buildCronOutboundMessage(targetChannel, delivery.to, outboundText);
 
-        await this.messageBus.publishOutbound({
-          channel: targetChannel,
-          chat_id: targetChatId,
-          content: outboundText,
-          type: 'message',
-        });
+        await this.messageBus.publishOutbound(outbound);
 
         log.info(
-          { jobId: job.id, channel: targetChannel, to: targetChatId },
+          { jobId: job.id, channel: targetChannel, to: outbound.chat_id },
           'Delivered agent response'
         );
 

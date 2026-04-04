@@ -1,9 +1,11 @@
+import { canonicalWeixinPeerId, normalizeWeixinAccountId } from "../auth/weixin-account-id.js";
+
 /** In-memory typing_ticket per (accountId, peer user id) — refreshed from getConfig in monitor. */
 
 const tickets = new Map<string, string>();
 
 function storeKey(accountId: string, ilinkUserId: string): string {
-  return `${accountId}:${ilinkUserId}`;
+  return `${normalizeWeixinAccountId(accountId)}:${canonicalWeixinPeerId(ilinkUserId)}`;
 }
 
 export function setWeixinTypingTicket(

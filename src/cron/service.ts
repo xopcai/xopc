@@ -454,11 +454,7 @@ export class CronService {
     const controller = new AbortController();
 
     try {
-      const deps: JobExecutorDeps = {
-        agentService: this.agentService,
-        messageBus: this.messageBus,
-      };
-      await this.executor.execute(job, controller.signal, deps);
+      await this.executor.execute(job, controller.signal);
     } catch (error) {
       log.error({ jobId: job.id, err: error as Error }, 'Job execution failed');
       // Retry logic can be added here based on error type

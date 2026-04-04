@@ -265,6 +265,13 @@ export class GatewayService {
     await this.sessionManager.initialize();
     log.debug('Session manager initialized');
 
+    this.cronService.setDeps({
+      agentService: this.agentService,
+      messageBus: this.bus,
+      heartbeatService: this.heartbeatService,
+      sessionStore: this.sessionManager.getStore(),
+    });
+
     this.sessionManager.on('sessionUpdated', (data: { key: string; name?: string; tags?: string[] }) => {
       this.emit('session.updated', { key: data.key, name: data.name, tags: data.tags });
     });

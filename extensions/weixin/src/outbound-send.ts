@@ -8,6 +8,7 @@ import type {
 } from '@xopcai/xopcbot/channels/plugin-types.js';
 import type { OutboundMessage } from '@xopcai/xopcbot/channels/transport-types.js';
 
+import { toRawIlinkUserIdForApi } from './auth/weixin-account-id.js';
 import { sendTyping } from './api/api.js';
 import { TypingStatus } from './api/types.js';
 import { assertSessionActive } from './api/session-guard.js';
@@ -17,7 +18,14 @@ import {
   type ResolvedWeixinAccount,
 } from './auth/accounts.js';
 import { downloadRemoteImageToTemp } from './cdn/upload.js';
-import { getContextToken, findAccountIdsByContextToken } from './messaging/inbound.js';
+import { ensureWeixinContextTokenForOutbound } from './messaging/context-token-bootstrap.js';
+import {
+  findAccountIdsByContextToken,
+  findContextTokenEntriesByPeer,
+  getContextToken,
+  getWeixinOutboundSendUserId,
+  tryHydrateAnyAccountContextTokenFromDisk,
+} from './messaging/inbound.js';
 import { mapWeixinOutboundErrorNotice, sendWeixinErrorNotice } from './messaging/error-notice.js';
 import { StreamingMarkdownFilter } from './messaging/markdown-filter.js';
 import { parseDataUrl, writeDataUrlBufferToTemp } from './media/data-url.js';
@@ -77,6 +85,103 @@ type WeixinOutboundPrepared =
   | { ok: true; accountId: string; account: ResolvedWeixinAccount; ctxTok: string | undefined }
   | { ok: false; error: string };
 
+const MISSING_WEIXIN_CONTEXT_TOKEN =
+  'weixin: missing context_token for this user — set cron delivery.to to "{accountId}:dm:{ilinkUserId}", ensure the user has messaged this bot recently, or restart after a fresh inbound so the token is cached.';
+
+const AMBIGUOUS_WEIXIN_CONTEXT_TOKEN =
+  'weixin: multiple bot accounts have a context_token for this user; set cron delivery.to to "{accountId}:dm:{ilinkUserId}" or metadata.accountId.';
+
+async function resolveWeixinSendContext(
+  ctx: ChannelOutboundContext,
+): Promise<
+  | { ok: true; account: ResolvedWeixinAccount; ctxTok: string; ilinkToUserId: string }
+  | { ok: false; error: string }
+> {
+  const prep = prepareWeixinOutboundSend(ctx);
+  if (prep.ok === false) return { ok: false, error: prep.error };
+
+  let account = prep.account;
+  let ctxTok = prep.ctxTok?.trim() || undefined;
+
+  if (!ctxTok) {
+    for (const aid of listWeixinAccountIds(ctx.cfg)) {
+      let a: ResolvedWeixinAccount;
+      try {
+        a = resolveWeixinAccount(ctx.cfg, aid);
+      } catch {
+        continue;
+      }
+      if (!a.configured || !a.token) continue;
+      try {
+        assertSessionActive(a.accountId);
+      } catch {
+        continue;
+      }
+      const t = getContextToken(a.accountId, ctx.to);
+      if (t?.trim()) {
+        ctxTok = t;
+        account = a;
+        break;
+      }
+    }
+  }
+
+  if (!ctxTok) {
+    const entries = findContextTokenEntriesByPeer(ctx.to);
+    const uniqueAccounts = [...new Set(entries.map((e) => e.accountId))];
+    if (uniqueAccounts.length > 1) {
+      return { ok: false, error: AMBIGUOUS_WEIXIN_CONTEXT_TOKEN };
+    }
+    if (entries.length >= 1 && uniqueAccounts.length === 1) {
+      const { accountId: aid, token } = entries[0]!;
+      if (token?.trim()) {
+        try {
+          const a = resolveWeixinAccount(ctx.cfg, aid);
+          assertSessionActive(a.accountId);
+          if (a.configured && a.token) {
+            account = a;
+            ctxTok = token;
+          }
+        } catch {
+          /* keep searching */
+        }
+      }
+    }
+  }
+
+  if (!ctxTok?.trim()) {
+    const diskHit = tryHydrateAnyAccountContextTokenFromDisk(ctx.to);
+    if (diskHit?.token?.trim()) {
+      try {
+        const a = resolveWeixinAccount(ctx.cfg, diskHit.accountId);
+        assertSessionActive(a.accountId);
+        if (a.configured && a.token) {
+          account = a;
+          ctxTok = diskHit.token;
+        }
+      } catch {
+        /* */
+      }
+    }
+  }
+
+  if (!ctxTok?.trim()) {
+    ctxTok =
+      (await ensureWeixinContextTokenForOutbound(account.accountId, ctx.to, account))?.trim() ||
+      undefined;
+  }
+
+  if (!ctxTok?.trim()) {
+    return { ok: false, error: MISSING_WEIXIN_CONTEXT_TOKEN };
+  }
+
+  const ilinkToUserId =
+    getWeixinOutboundSendUserId(account.accountId, ctx.to)?.trim() ||
+    toRawIlinkUserIdForApi(ctx.to);
+
+  return { ok: true, account, ctxTok, ilinkToUserId };
+}
+
 /** Resolve account + session without throwing so ChannelManager can ack durable queue items. */
 function prepareWeixinOutboundSend(ctx: ChannelOutboundContext): WeixinOutboundPrepared {
   let accountId: string;
@@ -92,15 +197,15 @@ function prepareWeixinOutboundSend(ctx: ChannelOutboundContext): WeixinOutboundP
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
   try {
-    assertSessionActive(accountId);
+    assertSessionActive(account.accountId);
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : String(e) };
   }
   if (!account.configured || !account.token) {
     return { ok: false, error: 'weixin not logged in' };
   }
-  const ctxTok = getContextToken(accountId, ctx.to);
-  return { ok: true, accountId, account, ctxTok };
+  const ctxTok = getContextToken(account.accountId, ctx.to);
+  return { ok: true, accountId: account.accountId, account, ctxTok };
 }
 
 async function sendWeixinTypingIndicator(
@@ -110,20 +215,23 @@ async function sendWeixinTypingIndicator(
   try {
     const accountId = resolveOutboundAccountId(ctx.cfg, ctx.to, ctx.accountId);
     const account = resolveWeixinAccount(ctx.cfg, accountId);
-    assertSessionActive(accountId);
+    assertSessionActive(account.accountId);
     if (!account.configured || !account.token) {
       return { messageId: '', chatId: ctx.to, success: true };
     }
-    const ticket = getWeixinTypingTicket(accountId, ctx.to);
+    const ticket = getWeixinTypingTicket(account.accountId, ctx.to);
     if (!ticket) {
       return { messageId: '', chatId: ctx.to, success: true };
     }
+    const typingTo =
+      getWeixinOutboundSendUserId(account.accountId, ctx.to)?.trim() ||
+      toRawIlinkUserIdForApi(ctx.to);
     await sendTyping({
       baseUrl: account.baseUrl,
       token: account.token,
       routeTag: account.routeTag,
       body: {
-        ilink_user_id: ctx.to,
+        ilink_user_id: typingTo,
         typing_ticket: ticket,
         status: mode === 'on' ? TypingStatus.TYPING : TypingStatus.CANCEL,
       },
@@ -140,16 +248,17 @@ async function sendWeixinTypingIndicator(
 
 export function createWeixinOutboundHandlers() {
   const sendTextImpl = async (ctx: ChannelOutboundContext): Promise<OutboundDeliveryResult> => {
-    const prep = prepareWeixinOutboundSend(ctx);
-    if (prep.ok === false) {
-      return { messageId: '', chatId: ctx.to, success: false, error: prep.error };
+    const resolved = await resolveWeixinSendContext(ctx);
+    if (resolved.ok === false) {
+      return { messageId: '', chatId: ctx.to, success: false, error: resolved.error };
     }
-    const { account, ctxTok } = prep;
+    const { account, ctxTok, ilinkToUserId } = resolved;
     const raw = ctx.text ?? '';
     const text = formatWeixinOutboundText(raw);
     try {
       const r = await sendMessageWeixin({
         to: ctx.to,
+        toUserIdForApi: ilinkToUserId,
         text,
         opts: {
           baseUrl: account.baseUrl,
@@ -164,6 +273,7 @@ export function createWeixinOutboundHandlers() {
       logger.error({ err, to: ctx.to }, 'weixin sendText failed');
       void sendWeixinErrorNotice({
         to: ctx.to,
+        toUserIdForApi: ilinkToUserId,
         contextToken: ctxTok,
         message: mapWeixinOutboundErrorNotice(msg),
         baseUrl: account.baseUrl,
@@ -176,11 +286,11 @@ export function createWeixinOutboundHandlers() {
   };
 
   const sendMediaImpl = async (ctx: ChannelOutboundContext): Promise<OutboundDeliveryResult> => {
-    const prep = prepareWeixinOutboundSend(ctx);
-    if (prep.ok === false) {
-      return { messageId: '', chatId: ctx.to, success: false, error: prep.error };
+    const resolved = await resolveWeixinSendContext(ctx);
+    if (resolved.ok === false) {
+      return { messageId: '', chatId: ctx.to, success: false, error: resolved.error };
     }
-    const { account, ctxTok } = prep;
+    const { account, ctxTok, ilinkToUserId } = resolved;
     const mediaUrl = ctx.mediaUrl?.trim();
     if (!mediaUrl) {
       return { messageId: '', chatId: ctx.to, success: false, error: 'No media URL' };
@@ -206,6 +316,7 @@ export function createWeixinOutboundHandlers() {
       } else {
         await sendMessageWeixin({
           to: ctx.to,
+          toUserIdForApi: ilinkToUserId,
           text: caption,
           opts: {
             baseUrl: account.baseUrl,
@@ -228,6 +339,7 @@ export function createWeixinOutboundHandlers() {
       const r = await sendWeixinMediaFile({
         filePath,
         to: ctx.to,
+        toUserIdForApi: ilinkToUserId,
         text: caption,
         opts: uploadOpts,
         cdnBaseUrl: account.cdnBaseUrl,
@@ -238,6 +350,7 @@ export function createWeixinOutboundHandlers() {
       logger.error({ err, to: ctx.to }, 'weixin sendMedia failed');
       void sendWeixinErrorNotice({
         to: ctx.to,
+        toUserIdForApi: ilinkToUserId,
         contextToken: ctxTok,
         message: mapWeixinOutboundErrorNotice(msg),
         baseUrl: account.baseUrl,

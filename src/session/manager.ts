@@ -48,6 +48,11 @@ export class SessionManager extends EventEmitter {
     this.emit('ready');
   }
 
+  /** Low-level store (e.g. cron resolving weixin delivery from session index). */
+  getStore(): SessionStore {
+    return this.store;
+  }
+
   // ========== CRUD Operations ==========
 
   async listSessions(query?: SessionListQuery): Promise<PaginatedResult<SessionMetadata>> {

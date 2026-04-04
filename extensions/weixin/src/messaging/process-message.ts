@@ -17,7 +17,6 @@ import { handleSlashCommand } from './slash-commands.js';
 import {
   setContextToken,
   weixinMessageToMsgContext,
-  getContextTokenFromMsgContext,
   isMediaItem,
   type WeixinInboundMediaOpts,
 } from './inbound.js';
@@ -74,6 +73,13 @@ export async function processWeixinInboundMessage(
   deps: ProcessWeixinMessageDeps,
 ): Promise<void> {
   const receivedAt = Date.now();
+  const senderId = full.from_user_id ?? '';
+  // Persist ilink context_token before slash handling and DM policy. Pairing only gates the agent
+  // pipeline; cron/tools still need a cached token to call sendmessage.
+  if (full.context_token?.trim() && senderId) {
+    setContextToken(deps.accountId, senderId, full.context_token, { sendToUserId: senderId });
+  }
+
   const textBody = extractTextBody(full.item_list);
 
   if (textBody.startsWith('/')) {
@@ -96,7 +102,6 @@ export async function processWeixinInboundMessage(
     }
   }
 
-  const senderId = full.from_user_id ?? '';
   const mergedAllow = mergeAllowFrom(deps.account, deps.accountId);
   const access = evaluateAccess({
     context: {
@@ -171,11 +176,6 @@ export async function processWeixinInboundMessage(
     accountId: deps.accountId,
   });
 
-  const contextToken = getContextTokenFromMsgContext(ctx);
-  if (contextToken && senderId) {
-    setContextToken(deps.accountId, senderId, contextToken);
-  }
-
   const attachments: Array<{ type: string; mimeType?: string; data?: string; name?: string }> = [];
 
   if (mediaOpts.decryptedPicPath) {
@@ -230,7 +230,7 @@ export async function processWeixinInboundMessage(
       messageId: full.message_id != null ? String(full.message_id) : undefined,
       isGroup: false,
       isCommand: body.trim().startsWith('/'),
-      contextToken,
+      contextToken: ctx.context_token,
     },
     attachments: attachments.length ? attachments : undefined,
   });

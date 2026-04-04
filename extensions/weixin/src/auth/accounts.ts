@@ -8,19 +8,12 @@ import { clearContextTokensForAccount } from '../messaging/inbound.js';
 import { resolveWeixinRootDir } from '../storage/state-dir.js';
 import { logger } from '../util/logger.js';
 
+import { normalizeWeixinAccountId } from './weixin-account-id.js';
+
+export { normalizeWeixinAccountId };
+
 export const DEFAULT_BASE_URL = 'https://ilinkai.weixin.qq.com';
 export const CDN_BASE_URL = 'https://novac2c.cdn.weixin.qq.com/c2c';
-
-export function normalizeWeixinAccountId(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/@/g, '-')
-    .replace(/\./g, '-')
-    .replace(/[^a-z0-9_-]+/g, '-')
-    .replace(/-+/g, '-')
-    .replace(/^-|-$/g, '');
-}
 
 export function deriveRawAccountId(normalizedId: string): string | undefined {
   if (normalizedId.endsWith('-im-bot')) {
