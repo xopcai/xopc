@@ -164,9 +164,18 @@ jobs:
           set -euo pipefail
           TAG="${{ github.ref_name }}"
           REPO="${{ github.repository }}"
-          mapfile -t FILES < <(find release-assets -type f | sort)
+          # Only include installable artifacts, exclude metadata (.yml, .blockmap, .yaml)
+          mapfile -t FILES < <(find release-assets -type f \( \
+            -name "*.exe" -o \
+            -name "*.dmg" -o \
+            -name "*.zip" -o \
+            -name "*.AppImage" -o \
+            -name "*.deb" -o \
+            -name "*.rpm" -o \
+            -name "*.snap" \
+          \) | sort)
           if [ ${#FILES[@]} -eq 0 ]; then
-            echo "No files under release-assets"
+            echo "No installable artifacts found under release-assets"
             exit 1
           fi
           echo "Publishing ${#FILES[@]} file(s) to release ${TAG}"
