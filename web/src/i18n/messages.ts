@@ -717,6 +717,9 @@ const bundles: Record<
       weixinQrModalSubtitle: string;
       weixinQrRegenerate: string;
       weixinQrModalCloseAria: string;
+      /** How to configure this channel via CLI (same config file as the gateway). */
+      telegramCliConfigHint: string;
+      weixinCliConfigHint: string;
       jsonObjectAccounts: string;
       jsonInvalid: string;
       copy: string;
@@ -1675,6 +1678,10 @@ const bundles: Record<
       weixinQrModalSubtitle: 'Use WeChat to scan the QR code below to connect.',
       weixinQrRegenerate: 'Regenerate QR code',
       weixinQrModalCloseAria: 'Close',
+      telegramCliConfigHint:
+        'CLI (same config file as this gateway; override path with XOPCBOT_CONFIG or --config):\n• Interactive: xopcbot onboard --channels\n• Or set TELEGRAM_BOT_TOKEN in the environment and/or edit channels.telegram in the JSON file.',
+      weixinCliConfigHint:
+        'CLI on the host that should hold credentials (override config path with XOPCBOT_CONFIG or --config):\n• xopcbot channels login --channel weixin\n• Optional: --account <id>, --timeout <ms>, --credentials-only (save token files without merging config JSON).\nRestart the gateway after login if it was already running.',
       jsonObjectAccounts: 'Accounts must be a JSON object',
       jsonInvalid: 'Invalid JSON',
       copy: 'Copy',
@@ -2650,6 +2657,10 @@ const bundles: Record<
       weixinQrModalSubtitle: '请使用微信扫描下方二维码完成连接',
       weixinQrRegenerate: '重新生成',
       weixinQrModalCloseAria: '关闭',
+      telegramCliConfigHint:
+        '命令行配置（与网关使用同一配置文件；路径可用 XOPCBOT_CONFIG 或全局 --config 覆盖）：\n• 交互向导：xopcbot onboard --channels\n• 或在环境中设置 TELEGRAM_BOT_TOKEN，并直接编辑 JSON 中的 channels.telegram。',
+      weixinCliConfigHint:
+        '在应保存凭据的机器上使用命令行（配置文件路径同上）：\n• xopcbot channels login --channel weixin\n• 可选：--account <id>、--timeout <ms>、--credentials-only（仅写 token 文件，不合并主配置 JSON）。\n若网关已在运行，登录后请重启网关进程。',
       jsonObjectAccounts: '账号必须为 JSON 对象',
       jsonInvalid: 'JSON 无效',
       copy: '复制',

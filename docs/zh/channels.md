@@ -33,6 +33,23 @@ xopcbot 支持多种通信通道，采用基于扩展的架构。**核心配置*
 - 弹窗表单：Bot Token、白名单、启用开关及 **高级选项**（API 根地址、代理、策略、多账号 JSON 等）。
 - **保存** 通过 `PATCH /api/config` 写入 `channels.telegram`，并保留配置中其它字段。
 
+### 命令行配置（与网关共用配置文件）
+
+网关与 CLI 使用同一份 JSON（默认 `~/.xopcbot/config.json`；也可用环境变量 `XOPCBOT_CONFIG` 或命令行全局参数 `--config` 指定）。可在不使用浏览器控制台的情况下配置频道：
+
+**Telegram**
+
+- **交互向导：** `xopcbot onboard --channels` — 引导填写 Bot Token、私聊/群组策略与白名单等，并写入 `channels.telegram`。
+- **手动 / 环境变量：** 在环境中设置 `TELEGRAM_BOT_TOKEN`，或直接编辑配置文件中的 `channels.telegram`（含多机器人时的 `accounts`）。
+
+**微信（Weixin / ilink）**
+
+- **终端扫码登录：** `xopcbot channels login --channel weixin` — 使用微信扫码；凭据保存在 **执行命令的本机**（扩展状态目录；默认也会合并 `channels.weixin`，除非使用 `--credentials-only`）。
+- **常用参数：** `--account <id>` 用于已有机器人重新登录，`--timeout <ms>`（默认 480000），`--credentials-only` 仅保存 token 相关文件、不合并主配置 JSON。
+- 详见 `xopcbot channels login --help`。
+
+通过 CLI 修改凭据或启用状态后，若网关已在运行，请 **重启或热加载网关**，以便频道进程加载新配置。
+
 ### 列表行（配置完成后）
 
 当通道被视为 **已配置**（例如 Telegram：已填 Token 或有 `accounts`；微信：已启用、或有 `accounts`、或 `allowFrom` 非空等），卡片展示 **已连接**、**⋯** 菜单（**编辑配置** / **移除配置**）以及 **开关**（立即通过同一配置接口持久化）。**移除配置** 会将该通道块恢复为默认值并保存。
