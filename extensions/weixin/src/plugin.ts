@@ -2,6 +2,8 @@
  * Weixin (WeChat ilink) channel — long-poll getUpdates, QR login, direct messages only.
  */
 
+import { isDeepStrictEqual } from 'node:util';
+
 import type { Config } from '@xopcai/xopcbot/config/schema.js';
 import type {
   ChannelCapabilities,
@@ -181,6 +183,12 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   }
 
   async onConfigUpdated(cfg: Config): Promise<void> {
+    const prevWx = this.cfg.channels?.weixin;
+    const nextWx = cfg.channels?.weixin;
+    if (isDeepStrictEqual(prevWx, nextWx)) {
+      this.cfg = cfg;
+      return;
+    }
     this.cfg = cfg;
     await this.stop();
     await this.start();

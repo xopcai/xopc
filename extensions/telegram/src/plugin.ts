@@ -5,6 +5,8 @@
  * It reuses components from this package's src tree where possible.
  */
 
+import { isDeepStrictEqual } from 'node:util';
+
 import { Bot, type Context } from 'grammy';
 import { run } from '@grammyjs/runner';
 
@@ -202,6 +204,13 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   }
 
   async onConfigUpdated(cfg: Config): Promise<void> {
+    const prevTg = this.cfg.channels?.telegram;
+    const nextTg = cfg.channels?.telegram;
+    if (isDeepStrictEqual(prevTg, nextTg)) {
+      this.cfg = cfg;
+      this.bindOutboundComponents();
+      return;
+    }
     await this.reapplyFromConfig(cfg);
   }
 
