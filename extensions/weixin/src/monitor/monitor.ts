@@ -73,6 +73,7 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
         get_updates_buf: getUpdatesBuf,
         timeoutMs: nextTimeoutMs,
         routeTag,
+        abortSignal,
       });
       aLog.debug(
         `getUpdates response: ret=${resp.ret}, msgs=${resp.msgs?.length ?? 0}, get_updates_buf_length=${resp.get_updates_buf?.length ?? 0}`,
