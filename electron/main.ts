@@ -10,12 +10,19 @@ import {
   spawnGatewayProcess,
   stopGatewayProcess,
   waitForGatewayHealth,
+  type GatewayProcessOptions,
 } from './gateway-process.js';
 import { registerAgentIpc } from './ipc/agent-ipc.js';
 import { registerFileIpc } from './ipc/file-ipc.js';
 import { registerSearchIpc } from './ipc/search-ipc.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+
+/** Track the main window for gateway exit notifications. */
+let mainWindow: BrowserWindow | null = null;
+
+/** Track if gateway exited unexpectedly so we can show an error dialog. */
+let gatewayExitedUnexpectedly = false;
 
 /** Dev / unpackaged: window icon (Linux/Windows). Packaged apps use the bundle icon from electron-builder. */
 const devWindowIcon = join(__dirname, '../../electron/resources/icon.png');
@@ -38,11 +45,28 @@ async function resolveWindowLoad(): Promise<
     const paths = getElectronUserPaths();
     const { port, token } = await ensureGatewayConfigForElectron(paths);
     try {
-      spawnGatewayProcess({
+      const spawnOpts: GatewayProcessOptions = {
         configPath: paths.configPath,
         workspacePath: paths.workspacePath,
         port,
-      });
+        onUnexpectedExit: (code, signal) => {
+          gatewayExitedUnexpectedly = true;
+          console.error(`[main] Gateway exited unexpectedly: code=${code}, signal=${signal}`);
+
+          // Notify the renderer process if the window is still open.
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('gateway:exited', { code, signal });
+          }
+
+          // Show error dialog to user.
+          void dialog.showErrorBox(
+            'xopcbot - Gateway Stopped',
+            `The gateway process has stopped unexpectedly (exit code: ${code ?? 'unknown'}, signal: ${signal ?? 'none'}).\n\n` +
+            'The application will need to be restarted.',
+          );
+        },
+      };
+      spawnGatewayProcess(spawnOpts);
       await waitForGatewayHealth(port);
     } catch (e) {
       stopGatewayProcess();
@@ -64,6 +88,11 @@ async function resolveWindowLoad(): Promise<
 }
 
 function createWindow(): void {
+  if (mainWindow) {
+    mainWindow.focus();
+    return;
+  }
+
   const win = new BrowserWindow({
     width: 1100,
     height: 720,
@@ -78,9 +107,19 @@ function createWindow(): void {
     },
   });
 
+  mainWindow = win;
+
+  win.on('closed', () => {
+    mainWindow = null;
+  });
+
   void (async () => {
     try {
       const load = await resolveWindowLoad();
+      if (gatewayExitedUnexpectedly) {
+        // Gateway already exited during startup, don't try to load.
+        return;
+      }
       if (load.kind === 'url') {
         void win.loadURL(load.href);
         if (load.openDevTools) {
@@ -111,5 +150,7 @@ app.on('window-all-closed', () => {
 });
 
 app.on('activate', () => {
-  if (BrowserWindow.getAllWindows().length === 0) createWindow();
+  if (BrowserWindow.getAllWindows().length === 0) {
+    createWindow();
+  }
 });
