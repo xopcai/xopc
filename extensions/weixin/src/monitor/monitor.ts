@@ -56,6 +56,7 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
 
   let nextTimeoutMs = longPollTimeoutMs ?? DEFAULT_LONG_POLL_TIMEOUT_MS;
   let consecutiveFailures = 0;
+  let lastHealthCheck = Date.now();
 
   aLog.info(
     `Weixin monitor started: baseUrl=${baseUrl} account=${accountId} timeoutMs=${nextTimeoutMs}`,
@@ -156,6 +157,17 @@ export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<vo
         await sleep(30_000, abortSignal);
       } else {
         await sleep(2000, abortSignal);
+      }
+
+      // 健康检查：每次循环后更新，最后在超时时强制刷新
+      lastHealthCheck = Date.now();
+
+      // 健康检查：定期重置 getUpdatesBuf 防止长轮询卡死
+      // 强制刷新缓冲区，避免网络/VPN 不稳定时卡在旧请求上
+      const HEALTH_CHECK_INTERVAL_MS = 120_000; // 2 分钟
+      if (Date.now() - lastHealthCheck > HEALTH_CHECK_INTERVAL_MS) {
+        aLog.debug(`Health check: resetting get_updates_buf to force fresh poll`);
+        getUpdatesBuf = '';
       }
     }
   }
