@@ -3,6 +3,8 @@ import fs from "node:fs";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { Agent, type Dispatcher } from "undici";
+
 import { logger } from "../util/logger.js";
 import { redactBody, redactUrl } from "../util/redact.js";
 
@@ -76,6 +78,8 @@ export function buildBaseInfo(): BaseInfo {
 
 /** Default timeout for long-poll getUpdates requests. */
 const DEFAULT_LONG_POLL_TIMEOUT_MS = 35_000;
+/** Extra time beyond client long-poll timeout for undici `headersTimeout` (server may idle before first byte). */
+const LONG_POLL_HEADERS_SLACK_MS = 15_000;
 /** Default timeout for regular API requests (sendMessage, getUploadUrl). */
 const DEFAULT_API_TIMEOUT_MS = 15_000;
 /** Default timeout for lightweight API requests (getConfig, sendTyping). */
@@ -83,6 +87,15 @@ const DEFAULT_CONFIG_TIMEOUT_MS = 10_000;
 
 function ensureTrailingSlash(url: string): string {
   return url.endsWith("/") ? url : `${url}/`;
+}
+
+function isUndiciHeadersTimeout(err: unknown): boolean {
+  return (
+    typeof err === "object" &&
+    err !== null &&
+    "code" in err &&
+    (err as { code?: string }).code === "UND_ERR_HEADERS_TIMEOUT"
+  );
 }
 
 /** X-WECHAT-UIN header: random uint32 -> decimal string -> base64. */
@@ -175,6 +188,9 @@ async function apiPostFetch(params: {
   timeoutMs: number;
   label: string;
   routeTag?: string;
+  dispatcher?: Dispatcher;
+  keepalive?: boolean;
+  abortSignal?: AbortSignal;
 }): Promise<string> {
   const base = ensureTrailingSlash(params.baseUrl);
   const url = new URL(params.endpoint, base);
@@ -183,14 +199,19 @@ async function apiPostFetch(params: {
 
   const controller = new AbortController();
   const t = setTimeout(() => controller.abort(), params.timeoutMs);
+  const signal =
+    params.abortSignal != null
+      ? AbortSignal.any([controller.signal, params.abortSignal])
+      : controller.signal;
+  const keepalive = params.keepalive ?? true;
   try {
     const res = await fetch(url.toString(), {
       method: "POST",
       headers: hdrs,
       body: params.body,
-      signal: controller.signal,
-      // 复用连接，避免 VPN/网络不稳定时卡住
-      keepalive: true,
+      signal,
+      keepalive,
+      ...(params.dispatcher ? { dispatcher: params.dispatcher } : {}),
     });
     clearTimeout(t);
     const rawText = await res.text();
@@ -217,9 +238,16 @@ export async function getUpdates(
     token?: string;
     timeoutMs?: number;
     routeTag?: string;
+    abortSignal?: AbortSignal;
   },
 ): Promise<GetUpdatesResp> {
   const timeout = params.timeoutMs ?? DEFAULT_LONG_POLL_TIMEOUT_MS;
+  const headersTimeout = timeout + LONG_POLL_HEADERS_SLACK_MS;
+  const agent = new Agent({
+    connectTimeout: 60_000,
+    headersTimeout,
+    bodyTimeout: headersTimeout,
+  });
   try {
     const rawText = await apiPostFetch({
       baseUrl: params.baseUrl,
@@ -232,15 +260,33 @@ export async function getUpdates(
       timeoutMs: timeout,
       label: "getUpdates",
       routeTag: params.routeTag,
+      dispatcher: agent,
+      keepalive: true,
+      abortSignal: params.abortSignal,
     });
     const resp: GetUpdatesResp = JSON.parse(rawText);
     return resp;
   } catch (err) {
+    if (params.abortSignal?.aborted && err instanceof Error && err.name === "AbortError") {
+      throw err;
+    }
     if (err instanceof Error && err.name === "AbortError") {
       logger.debug(`getUpdates: client-side timeout after ${timeout}ms, returning empty response`);
       return { ret: 0, msgs: [], get_updates_buf: params.get_updates_buf };
     }
+    if (isUndiciHeadersTimeout(err)) {
+      logger.debug(
+        `getUpdates: undici headers timeout (UND_ERR_HEADERS_TIMEOUT), returning empty response`,
+      );
+      return { ret: 0, msgs: [], get_updates_buf: params.get_updates_buf ?? "" };
+    }
     throw err;
+  } finally {
+    try {
+      await agent.close();
+    } catch {
+      // ignore
+    }
   }
 }
 
