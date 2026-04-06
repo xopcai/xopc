@@ -277,8 +277,13 @@ export class AgentService {
       this.lifecycleManager
     );
 
-    process.on('SIGINT', () => this.dispose());
-    process.on('SIGTERM', () => this.dispose());
+    // Register signal handlers only if not running as an Electron subprocess.
+    // In Electron, the parent process manages the lifecycle and signals should not trigger disposal.
+    const isElectronSubprocess = !!process.env.ELECTRON_RUN_AS_NODE;
+    if (!isElectronSubprocess) {
+      process.on('SIGINT', () => this.dispose());
+      process.on('SIGTERM', () => this.dispose());
+    }
 
     log.info('AgentService initialized');
   }
