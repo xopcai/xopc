@@ -148,6 +148,8 @@ export async function apiGetFetch(params: {
       method: "GET",
       headers: hdrs,
       ...(controller ? { signal: controller.signal } : {}),
+      // 复用连接，避免 VPN/网络不稳定时卡住
+      keepalive: true,
     });
     if (t !== undefined) clearTimeout(t);
     const rawText = await res.text();
@@ -187,6 +189,8 @@ async function apiPostFetch(params: {
       headers: hdrs,
       body: params.body,
       signal: controller.signal,
+      // 复用连接，避免 VPN/网络不稳定时卡住
+      keepalive: true,
     });
     clearTimeout(t);
     const rawText = await res.text();
