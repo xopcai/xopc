@@ -89,6 +89,9 @@ importers:
       silk-wasm:
         specifier: ^3.7.1
         version: 3.7.1
+      undici:
+        specifier: ^7.24.6
+        version: 7.24.6
       uuid:
         specifier: ^13.0.0
         version: 13.0.0
