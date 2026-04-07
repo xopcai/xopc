@@ -1,4 +1,4 @@
-import { type ChildProcess, spawn } from 'node:child_process';
+import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -74,9 +74,10 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
       // Use 'pipe' for packaged app to capture logs, but we must drain the pipes to prevent Windows deadlock.
       // Use 'inherit' in dev mode to see logs in terminal.
       stdio: isPackaged ? ['ignore', 'pipe', 'pipe'] : 'inherit',
-      // On Windows, detach the child process so it doesn't die with the parent window.
-      // But we still manage its lifecycle manually via gatewayChild reference.
-      detached: process.platform === 'win32',
+      // Do not detach on Windows: detached children can outlive Electron when the main process
+      // exits before async taskkill completes, leaving the gateway holding the port and causing
+      // the next launch to exit(1) from "port in use" — surfaced as a false "unexpected exit" dialog.
+      detached: false,
       // Hide the console window on Windows when packaged.
       windowsHide: isPackaged && process.platform === 'win32',
     },
@@ -111,8 +112,9 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
       console.error(`[gateway] process killed by signal=${signal}`);
     }
 
-    // Notify if this was an unexpected exit and we have a handler.
-    if (wasCurrentChild && gatewayExitHandler && (code !== 0 || signal)) {
+    // Notify on abnormal exit (not clean code 0). Avoid `code !== 0` alone: `null !== 0` is true in JS.
+    const isCleanExit = code === 0 && signal == null;
+    if (wasCurrentChild && gatewayExitHandler && !isCleanExit) {
       gatewayExitHandler(code, signal);
     }
   });
@@ -150,47 +152,22 @@ export function stopGatewayProcess(): void {
   gatewayExitHandler = null;
 
   try {
-    // On Windows, we need to be more forceful since SIGTERM doesn't work the same way.
-    // First try graceful shutdown via SIGTERM (works on Unix, ignored on Windows).
-    // Then kill the process tree on Windows if needed.
     if (process.platform === 'win32') {
-      // Windows: use taskkill to gracefully terminate the process tree.
-      // /T = terminate process tree, /F = force (use only if graceful fails).
-      const { spawn: spawnCmd } = require('node:child_process');
-      const taskkill = spawnCmd('taskkill', ['/PID', String(child.pid), '/T'], {
-        windowsHide: true,
-        detached: true,
-      });
-      taskkill.on('error', () => {
-        // Fallback to kill() if taskkill fails.
+      // Synchronous tree kill so before-quit can finish before Electron exits; avoids orphaned
+      // gateway processes that keep the HTTP port and make the next session exit with code 1.
+      try {
+        spawnSync('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
+          windowsHide: true,
+          encoding: 'utf8',
+          stdio: 'ignore',
+        });
+      } catch {
         try {
           child.kill();
         } catch {
           /* ignore */
         }
-      });
-
-      // Give it 5 seconds, then force kill if still running.
-      setTimeout(() => {
-        try {
-          // Check if process is still alive by checking exitCode
-          if (child.exitCode === null && child.signalCode === null) {
-            const forceKill = spawnCmd('taskkill', ['/PID', String(child.pid), '/T', '/F'], {
-              windowsHide: true,
-              detached: true,
-            });
-            forceKill.on('error', () => {
-              try {
-                child.kill('SIGKILL');
-              } catch {
-                /* ignore */
-              }
-            });
-          }
-        } catch {
-          /* ignore */
-        }
-      }, 5000);
+      }
     } else {
       // Unix/Mac: SIGTERM for graceful shutdown.
       child.kill('SIGTERM');
