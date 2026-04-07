@@ -37,7 +37,7 @@ export const useGatewayStore = create<GatewayState>((set, get) => ({
 
   onUnauthorized: () => {
     get().clearGatewayToken();
-    set({ tokenDialogOpen: true, tokenExpired: true });
+    set({ tokenDialogOpen: false, tokenExpired: true });
     window.dispatchEvent(new CustomEvent('token-expired'));
   },
 }));
@@ -54,6 +54,6 @@ export function initGatewayFromWindow(): void {
   const stored = getToken();
   useGatewayStore.setState({
     token: stored || undefined,
-    tokenDialogOpen: !stored,
+    tokenDialogOpen: false,
   });
 }

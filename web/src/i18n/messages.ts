@@ -56,6 +56,16 @@ const bundles: Record<
       show: string;
       hide: string;
     };
+    /** Full-page connect prompt when no gateway token is stored (replaces modal on first visit). */
+    gatewayLanding: {
+      headline: string;
+      subline: string;
+      sessionExpired: string;
+      stepOnboard: string;
+      stepPaste: string;
+      stepUrlHint: string;
+      docsGatewayLink: string;
+    };
     connection: {
       connecting: string;
       online: string;
@@ -990,6 +1000,16 @@ const bundles: Record<
       save: 'Save',
       show: 'Show',
       hide: 'Hide',
+    },
+    gatewayLanding: {
+      headline: 'Connect to this gateway',
+      subline:
+        'The Web console needs the same token your server uses. Get it from setup or your config file, then paste it below.',
+      sessionExpired: 'Your session expired or the token was rejected. Enter a valid gateway token to continue.',
+      stepOnboard: 'Run xopcbot onboard (or onboard --gateway) and enable the Web console — the token is printed there.',
+      stepPaste: 'Paste the token here and save. You can also open a link that ends with ?token=… from onboarding.',
+      stepUrlHint: 'Opening a bookmark with ?token= in the URL saves it automatically (the address bar is cleaned afterward).',
+      docsGatewayLink: 'Gateway guide',
     },
     connection: {
       connecting: 'Connecting…',
@@ -1978,6 +1998,15 @@ const bundles: Record<
       save: '保存',
       show: '显示',
       hide: '隐藏',
+    },
+    gatewayLanding: {
+      headline: '连接网关',
+      subline: '网页控制台需要使用与网关相同的 Token。请从初始化向导或配置文件中获取，并在下方粘贴。',
+      sessionExpired: '登录已失效或 Token 被拒绝，请重新输入有效的网关 Token。',
+      stepOnboard: '在终端运行 xopcbot onboard（或 xopcbot onboard --gateway）并启用网页控制台，向导会打印 Token。',
+      stepPaste: '将 Token 粘贴到下方并保存。也可直接打开向导给出的带 ?token= 的链接。',
+      stepUrlHint: '若使用带 ?token= 的链接打开，Token 会自动保存（随后地址栏会去掉参数）。',
+      docsGatewayLink: '网关说明',
     },
     connection: {
       connecting: '连接中…',
