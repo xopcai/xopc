@@ -4,6 +4,8 @@ import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { GatewayConnectLanding } from '@/components/shell/gateway-connect-landing';
 import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { TokenDialog } from '@/components/shell/token-dialog';
+import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
+import { ElectronSetupBanner } from '@/features/electron/electron-setup-banner';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -54,6 +56,8 @@ export function AppShell() {
       <GatewaySseBridge />
       <NavigateToChatListener />
       <TokenDialog />
+      <ElectronGatewayExitBanner />
+      <ElectronSetupBanner />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
         {!isSettingsRoute ? <SidebarColumn /> : null}

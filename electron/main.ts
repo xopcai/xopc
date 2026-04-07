@@ -15,6 +15,7 @@ import {
 import { registerAgentIpc } from './ipc/agent-ipc.js';
 import { registerFileIpc } from './ipc/file-ipc.js';
 import { registerSearchIpc } from './ipc/search-ipc.js';
+import { getLoadingPageDataUrl } from './loading-page.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -31,6 +32,14 @@ function shouldEmbedGateway(): boolean {
   if (process.env['ELECTRON_RENDERER_URL']) return false;
   const force = process.env['ELECTRON_EMBED_GATEWAY'] === '1';
   return (app.isPackaged || force) && isCliBundlePresent();
+}
+
+function buildStartupFailureMessage(detail: string): string {
+  return (
+    `Failed to start the local gateway.\n\n${detail}\n\n` +
+    'Try restarting the app. If this keeps happening, reinstall or check that no other process is using the gateway port.\n\n' +
+    '(Developers: pnpm run build && pnpm run electron:vite:build && pnpm run electron:server:build)'
+  );
 }
 
 async function resolveWindowLoad(): Promise<
@@ -53,29 +62,21 @@ async function resolveWindowLoad(): Promise<
           gatewayExitedUnexpectedly = true;
           console.error(`[main] Gateway exited unexpectedly: code=${code}, signal=${signal}`);
 
-          // Notify the renderer process if the window is still open.
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('gateway:exited', { code, signal });
+          } else {
+            void dialog.showErrorBox(
+              'xopcbot - Gateway stopped',
+              `The gateway process stopped (exit code: ${code ?? 'unknown'}, signal: ${signal ?? 'none'}).\n\n` +
+                'Restart the application.',
+            );
           }
-
-          // Show error dialog to user.
-          void dialog.showErrorBox(
-            'xopcbot - Gateway Stopped',
-            `The gateway process has stopped unexpectedly (exit code: ${code ?? 'unknown'}, signal: ${signal ?? 'none'}).\n\n` +
-            'The application will need to be restarted.',
-          );
         },
       };
       spawnGatewayProcess(spawnOpts);
       await waitForGatewayHealth(port);
     } catch (e) {
       stopGatewayProcess();
-      const msg = e instanceof Error ? e.message : String(e);
-      void dialog.showErrorBox(
-        'xopcbot',
-        `Failed to start gateway.\n\n${msg}\n\nEnsure the app was built with: pnpm run build && pnpm run electron:vite:build`,
-      );
-      app.quit();
       throw e;
     }
     const u = new URL(`http://127.0.0.1:${port}/`);
@@ -114,10 +115,13 @@ function createWindow(): void {
   });
 
   void (async () => {
+    const embed = shouldEmbedGateway();
     try {
+      if (embed) {
+        void win.loadURL(getLoadingPageDataUrl());
+      }
       const load = await resolveWindowLoad();
       if (gatewayExitedUnexpectedly) {
-        // Gateway already exited during startup, don't try to load.
         return;
       }
       if (load.kind === 'url') {
@@ -128,7 +132,12 @@ function createWindow(): void {
       } else {
         void win.loadFile(load.path);
       }
-    } catch {
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      if (embed && !win.isDestroyed()) {
+        win.webContents.send('startup:failed', { message: msg });
+      }
+      void dialog.showErrorBox('xopcbot', buildStartupFailureMessage(msg));
       app.quit();
     }
   })();
