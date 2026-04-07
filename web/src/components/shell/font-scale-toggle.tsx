@@ -30,14 +30,14 @@ export function FontScaleToggle({ labels, ariaLabel }: Props) {
         <Button
           key={value}
           type="button"
-          variant="ghost"
+          variant="segmented"
           aria-pressed={preference === value}
           onClick={() => setPreference(value)}
           className={cn(
             segmentedThumbBaseClassName,
             'h-7 min-w-[4.25rem] shrink-0 px-2 py-0',
             preference === value && segmentedThumbActiveClassName,
-            preference === value && 'text-fg hover:text-fg',
+            preference === value && 'text-fg',
           )}
         >
           {labels[value]}

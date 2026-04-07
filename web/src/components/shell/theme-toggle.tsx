@@ -25,7 +25,7 @@ export function ThemeToggle() {
         <Button
           key={value}
           type="button"
-          variant="ghost"
+          variant="segmented"
           aria-pressed={preference === value}
           aria-label={label}
           onClick={() => setPreference(value)}
@@ -33,7 +33,7 @@ export function ThemeToggle() {
             segmentedThumbBaseClassName,
             'size-7 p-0',
             preference === value && segmentedThumbActiveClassName,
-            preference === value && 'text-accent-fg hover:text-accent-fg',
+            preference === value && 'text-accent-fg',
           )}
         >
           <Icon className="size-3.5" strokeWidth={1.5} />

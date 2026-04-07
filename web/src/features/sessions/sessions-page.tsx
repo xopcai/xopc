@@ -403,7 +403,7 @@ export function SessionsPage() {
           <div className={segmentedTrackClassName} role="group" aria-label={s.layoutToggleGroup}>
             <Button
               type="button"
-              variant="ghost"
+              variant="segmented"
               title={s.gridView}
               aria-pressed={viewMode === 'grid'}
               onClick={() => setViewMode('grid')}
@@ -411,14 +411,14 @@ export function SessionsPage() {
                 segmentedThumbBaseClassName,
                 'size-7 p-0',
                 viewMode === 'grid' && segmentedThumbActiveClassName,
-                viewMode === 'grid' && 'text-accent-fg hover:text-accent-fg',
+                viewMode === 'grid' && 'text-accent-fg',
               )}
             >
               <LayoutGrid className="size-3.5" strokeWidth={1.5} />
             </Button>
             <Button
               type="button"
-              variant="ghost"
+              variant="segmented"
               title={s.listView}
               aria-pressed={viewMode === 'list'}
               onClick={() => setViewMode('list')}
@@ -426,7 +426,7 @@ export function SessionsPage() {
                 segmentedThumbBaseClassName,
                 'size-9 p-0',
                 viewMode === 'list' && segmentedThumbActiveClassName,
-                viewMode === 'list' && 'text-accent-fg hover:text-accent-fg',
+                viewMode === 'list' && 'text-accent-fg',
               )}
             >
               <LayoutList className="size-3.5" strokeWidth={1.5} />
