@@ -138,7 +138,7 @@ export function AttachmentTile({
         <button
           type="button"
           className={cn(
-            'absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-muted shadow-sm hover:text-fg dark:border-edge',
+            'absolute -right-1 -top-1 flex h-5 w-5 items-center justify-center rounded-full border border-edge bg-surface-panel text-fg-muted shadow-surface hover:text-fg dark:border-edge',
             interaction.transition,
             interaction.press,
             interaction.focusRingPanel,

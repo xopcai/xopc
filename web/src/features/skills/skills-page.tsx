@@ -65,8 +65,8 @@ function SkillCardIcon({ name, className }: { name: string; className?: string }
     <div
       className={cn(
         'flex size-11 shrink-0 items-center justify-center rounded-xl',
-        'bg-surface-hover/90 shadow-surface ring-1 ring-inset ring-black/[0.05] dark:bg-surface-active/80 dark:ring-white/[0.08]',
-        'transition-[transform,box-shadow] duration-200 ease-out group-hover:ring-black/[0.09] dark:group-hover:ring-white/[0.14]',
+        'bg-surface-hover/90 shadow-surface ring-1 ring-inset ring-edge/35 dark:bg-surface-active/80 dark:ring-edge/50',
+        'transition-[transform,box-shadow] duration-200 ease-out group-hover:ring-edge/55 dark:group-hover:ring-edge/65',
         'group-hover:-translate-y-px',
         className,
       )}
@@ -116,7 +116,7 @@ function SkillEnableSwitch({
     >
       <span
         className={cn(
-          'pointer-events-none absolute left-0.5 top-1/2 block size-4 -translate-y-1/2 rounded-full bg-surface-panel shadow-sm ring-1 ring-black/5 dark:ring-white/10',
+          'pointer-events-none absolute left-0.5 top-1/2 block size-4 -translate-y-1/2 rounded-full bg-surface-panel shadow-surface ring-1 ring-edge/40 dark:ring-edge/55',
           'transition-transform duration-200 ease-out motion-reduce:transition-none',
           checked ? 'translate-x-5' : 'translate-x-0',
         )}
@@ -527,7 +527,7 @@ export function SkillsPage() {
             >
               <RefreshCw className={cn('size-4', loading && 'animate-spin')} strokeWidth={1.75} />
             </Button>
-            <label className="relative flex min-h-9 min-w-0 max-w-sm cursor-text items-center rounded-pill border border-edge bg-surface-base py-1.5 pl-9 pr-3 shadow-sm dark:bg-surface-hover/40 sm:max-w-md">
+            <label className="relative flex min-h-9 min-w-0 max-w-sm cursor-text items-center rounded-pill border border-edge bg-surface-base py-1.5 pl-9 pr-3 shadow-surface dark:bg-surface-hover/40 sm:max-w-md">
               <Search
                 className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-disabled"
                 strokeWidth={1.75}
@@ -630,7 +630,7 @@ export function SkillsPage() {
                     <button
                       type="button"
                       className={cn(
-                        'inline-flex h-9 min-h-9 min-w-[9rem] shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-sm',
+                        'inline-flex h-9 min-h-9 min-w-[9rem] shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
                         interaction.transition,
                         interaction.focusRingPanel,
                       )}
@@ -953,7 +953,7 @@ export function SkillsPage() {
                 'transition-colors',
                 !pendingFile || uploading
                   ? 'cursor-not-allowed bg-surface-active text-fg-disabled'
-                  : 'bg-[#1d1d1f] text-white hover:opacity-90 dark:bg-white dark:text-[#1d1d1f]',
+                  : 'bg-accent text-white hover:bg-accent-hover',
                 interaction.focusRingPanel,
               )}
               onClick={() => void onInstallSubmit()}
@@ -973,7 +973,7 @@ export function SkillsPage() {
       >
         <Dialog.Portal>
           <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
-          <Dialog.Content className="xopcbot-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-xl dark:border-edge">
+          <Dialog.Content className="xopcbot-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge">
             <Dialog.Title className="text-base font-semibold text-fg">{sk.deleteTitle}</Dialog.Title>
             <p className="mt-2 text-sm text-fg-muted">
               {confirmId ? interpolate(sk.deleteMessage, { id: confirmId }) : ''}

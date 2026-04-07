@@ -62,7 +62,7 @@ export function SessionDetailDrawer({
         <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-50 bg-scrim" />
         <Dialog.Content
           className={cn(
-            'xopcbot-drawer-right fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-xl outline-none',
+            'xopcbot-drawer-right fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
             'dark:border-edge',
           )}
           aria-describedby={undefined}
