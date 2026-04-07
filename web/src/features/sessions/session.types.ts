@@ -26,7 +26,7 @@ export interface SessionDetail extends SessionMetadata {
 export interface SessionListQuery {
   status?: 'active' | 'idle' | 'archived' | 'pinned';
   search?: string;
-  /** Filter by `SessionMetadata.sourceChannel` (e.g. `telegram`, `weixin`). */
+  /** Filter by `SessionMetadata.sourceChannel`, or comma-separated IM channels (e.g. `telegram,weixin`). */
   channel?: string;
   limit?: number;
   offset?: number;

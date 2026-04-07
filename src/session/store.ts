@@ -493,7 +493,17 @@ export class SessionStore {
     }
 
     if (query.channel) {
-      sessions = sessions.filter((s) => s.sourceChannel === query.channel);
+      const channels = query.channel
+        .split(',')
+        .map((c) => c.trim())
+        .filter(Boolean);
+      if (channels.length === 0) {
+        sessions = [];
+      } else if (channels.length === 1) {
+        sessions = sessions.filter((s) => s.sourceChannel === channels[0]);
+      } else {
+        sessions = sessions.filter((s) => channels.includes(s.sourceChannel));
+      }
     }
 
     if (query.tags && query.tags.length > 0) {

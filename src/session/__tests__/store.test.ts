@@ -270,6 +270,15 @@ describe('SessionStore', () => {
       expect(telegramSessions.items[0].sourceChannel).toBe('telegram');
     });
 
+    it('should list sessions matching any channel when channel is comma-separated', async () => {
+      await store.saveMessages('main:telegram:default:dm:1', [{ role: 'user', content: '1' }]);
+      await store.saveMessages('main:weixin:default:dm:2', [{ role: 'user', content: '2' }]);
+      await store.saveMessages('main:discord:default:dm:3', [{ role: 'user', content: '3' }]);
+
+      const im = await store.list({ channel: 'telegram,weixin' });
+      expect(im.items.map((s) => s.sourceChannel).sort()).toEqual(['telegram', 'weixin']);
+    });
+
     it('should list sessions with status filter', async () => {
       await store.saveMessages('main:telegram:default:dm:1', [{ role: 'user', content: '1' }]);
       await store.saveMessages('main:telegram:default:dm:2', [{ role: 'user', content: '2' }]);
