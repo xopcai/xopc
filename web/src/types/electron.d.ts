@@ -28,10 +28,20 @@ export interface ElectronAgentAPI {
   onStream(callback: (chunk: string) => void): void;
 }
 
+export interface ElectronStartupAPI {
+  onFailed(callback: (detail: { message: string }) => void): () => void;
+}
+
+export interface ElectronGatewayShellAPI {
+  onExited(callback: (detail: { code: number | null; signal: string | null }) => void): () => void;
+}
+
 export interface ElectronAPI {
   file: ElectronFileAPI;
   search: ElectronSearchAPI;
   agent: ElectronAgentAPI;
+  startup?: ElectronStartupAPI;
+  gateway?: ElectronGatewayShellAPI;
   platform: 'darwin' | 'win32' | 'linux';
 }
 

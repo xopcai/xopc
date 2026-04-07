@@ -66,6 +66,16 @@ const bundles: Record<
       stepUrlHint: string;
       docsGatewayLink: string;
     };
+    /** Desktop shell (Electron): first-run hints and gateway process messages. */
+    electron: {
+      setupBannerTitle: string;
+      setupBannerBody: string;
+      setupBannerLinkProviders: string;
+      setupBannerLinkModels: string;
+      setupBannerDismiss: string;
+      gatewayExitTitle: string;
+      gatewayExitBody: string;
+    };
     connection: {
       connecting: string;
       online: string;
@@ -1010,6 +1020,16 @@ const bundles: Record<
       stepPaste: 'Paste the token here and save. You can also open a link that ends with ?token=… from onboarding.',
       stepUrlHint: 'Opening a bookmark with ?token= in the URL saves it automatically (the address bar is cleaned afterward).',
       docsGatewayLink: 'Gateway guide',
+    },
+    electron: {
+      setupBannerTitle: 'Finish setup to start chatting',
+      setupBannerBody:
+        'Add at least one model provider API key and choose a default model. You can change this anytime in Settings.',
+      setupBannerLinkProviders: 'Provider keys',
+      setupBannerLinkModels: 'Default model',
+      setupBannerDismiss: 'Dismiss for this session',
+      gatewayExitTitle: 'Local gateway stopped',
+      gatewayExitBody: 'The assistant backend exited unexpectedly. Restart the app to continue.',
     },
     connection: {
       connecting: 'Connecting…',
@@ -2007,6 +2027,15 @@ const bundles: Record<
       stepPaste: '将 Token 粘贴到下方并保存。也可直接打开向导给出的带 ?token= 的链接。',
       stepUrlHint: '若使用带 ?token= 的链接打开，Token 会自动保存（随后地址栏会去掉参数）。',
       docsGatewayLink: '网关说明',
+    },
+    electron: {
+      setupBannerTitle: '完成设置后即可对话',
+      setupBannerBody: '请至少配置一个模型提供商的 API 密钥，并选择默认模型。之后可随时在设置中修改。',
+      setupBannerLinkProviders: '提供商与密钥',
+      setupBannerLinkModels: '默认模型',
+      setupBannerDismiss: '本次会话不再提示',
+      gatewayExitTitle: '本地网关已停止',
+      gatewayExitBody: '助手后端进程异常退出，请重启应用后再试。',
     },
     connection: {
       connecting: '连接中…',

@@ -37,5 +37,19 @@ contextBridge.exposeInMainWorld('electronAPI', {
       ipcRenderer.on('agent:stream-chunk', (_, chunk: string) => callback(chunk));
     },
   },
+  startup: {
+    onFailed: (callback: (detail: { message: string }) => void) => {
+      const handler = (_: unknown, detail: { message: string }) => callback(detail);
+      ipcRenderer.on('startup:failed', handler);
+      return () => ipcRenderer.removeListener('startup:failed', handler);
+    },
+  },
+  gateway: {
+    onExited: (callback: (detail: { code: number | null; signal: string | null }) => void) => {
+      const handler = (_: unknown, detail: { code: number | null; signal: string | null }) => callback(detail);
+      ipcRenderer.on('gateway:exited', handler);
+      return () => ipcRenderer.removeListener('gateway:exited', handler);
+    },
+  },
   platform: process.platform as 'darwin' | 'win32' | 'linux',
 });
