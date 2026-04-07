@@ -2,6 +2,7 @@ import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { GatewayConnectLanding } from '@/components/shell/gateway-connect-landing';
+import { PrimaryAppHeader } from '@/components/shell/primary-app-header';
 import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
@@ -62,8 +63,9 @@ export function AppShell() {
       <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
         {!isSettingsRoute ? <SidebarColumn /> : null}
 
-        {/* Right column: chat title + prefs live in ChatPage (same row); settings are full-width */}
+        {/* Right column: unified primary header + route outlet */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden bg-surface-panel">
+          {!isSettingsRoute ? <PrimaryAppHeader /> : null}
           <main id="app-main-content" className="flex min-h-0 flex-1 flex-col overflow-hidden">
             <div
               key={routeKey}

@@ -21,7 +21,7 @@ import {
   Trash2,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -40,6 +40,7 @@ import type { SkillCatalogEntry } from '@/features/skills/skill.types';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 
 function interpolate(template: string, params: Record<string, string | number>): string {
   return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
@@ -316,7 +317,7 @@ export function SkillsPage() {
     [load, showFeedback, sk.skillToggleFailed],
   );
 
-  const onReloadClick = async () => {
+  const onReloadClick = useCallback(async () => {
     setActionFeedback(null);
     setLoading(true);
     setError(null);
@@ -329,7 +330,7 @@ export function SkillsPage() {
       return;
     }
     await load();
-  };
+  }, [load, sk.reloadFailed]);
 
   const builtinTabStats = useMemo(() => {
     const rows = catalog.filter((r) => r.source === 'builtin');
@@ -481,6 +482,82 @@ export function SkillsPage() {
           ? sk.filterWorkspace
           : sk.filterExtra;
 
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+
+  const skillsHeaderEnd = useMemo(
+    () => (
+      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-9 w-9 shrink-0 p-0"
+          disabled={loading}
+          title={sk.reloadRuntime}
+          aria-label={sk.reloadDiskAria}
+          onClick={() => void onReloadClick()}
+        >
+          <RefreshCw className={cn('size-4', loading && 'animate-spin')} strokeWidth={1.75} />
+        </Button>
+        <label className="relative flex min-h-9 min-w-0 max-w-sm cursor-text items-center rounded-pill border border-edge bg-surface-base py-1.5 pl-9 pr-3 shadow-surface dark:bg-surface-hover/40 sm:max-w-md">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-disabled"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+          <input
+            type="text"
+            role="searchbox"
+            enterKeyHint="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={sk.searchPlaceholder}
+            autoComplete="off"
+            spellCheck={false}
+            className="min-w-0 flex-1 appearance-none border-0 bg-transparent py-0.5 text-sm leading-normal text-fg caret-current placeholder:text-fg-disabled focus:border-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none"
+          />
+        </label>
+        <Button
+          type="button"
+          variant="primary"
+          className="shrink-0 gap-2"
+          onClick={() => {
+            setPendingFile(null);
+            setInstallOpen(true);
+          }}
+        >
+          <Plus className="size-4" strokeWidth={1.75} aria-hidden />
+          {sk.installCta}
+        </Button>
+      </div>
+    ),
+    [
+      loading,
+      onReloadClick,
+      searchQuery,
+      setInstallOpen,
+      setPendingFile,
+      setSearchQuery,
+      sk.installCta,
+      sk.reloadDiskAria,
+      sk.reloadRuntime,
+      sk.searchPlaceholder,
+    ],
+  );
+
+  useLayoutEffect(() => {
+    if (!hasToken) {
+      clearPageHeader();
+      return;
+    }
+    setPageHeader({
+      startExtra: null,
+      main: null,
+      end: skillsHeaderEnd,
+    });
+    return () => clearPageHeader();
+  }, [clearPageHeader, hasToken, setPageHeader, skillsHeaderEnd]);
+
   if (!hasToken) {
     return (
       <div className="mx-auto w-full max-w-app-main px-4 py-16 text-center text-sm text-fg-muted sm:px-8">
@@ -515,49 +592,6 @@ export function SkillsPage() {
         ) : null}
 
         <header className="flex flex-col gap-4">
-          <div className="flex w-full shrink-0 flex-wrap items-center justify-end gap-2 sm:flex-nowrap">
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-9 w-9 shrink-0 p-0"
-              disabled={loading}
-              title={sk.reloadRuntime}
-              aria-label={sk.reloadDiskAria}
-              onClick={() => void onReloadClick()}
-            >
-              <RefreshCw className={cn('size-4', loading && 'animate-spin')} strokeWidth={1.75} />
-            </Button>
-            <label className="relative flex min-h-9 min-w-0 max-w-sm cursor-text items-center rounded-pill border border-edge bg-surface-base py-1.5 pl-9 pr-3 shadow-surface dark:bg-surface-hover/40 sm:max-w-md">
-              <Search
-                className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-disabled"
-                strokeWidth={1.75}
-                aria-hidden
-              />
-              <input
-                type="text"
-                role="searchbox"
-                enterKeyHint="search"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder={sk.searchPlaceholder}
-                autoComplete="off"
-                spellCheck={false}
-                className="min-w-0 flex-1 appearance-none border-0 bg-transparent py-0.5 text-sm leading-normal text-fg caret-current placeholder:text-fg-disabled focus:border-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none"
-              />
-            </label>
-            <Button
-              type="button"
-              variant="primary"
-              className="shrink-0 gap-2"
-              onClick={() => {
-                setPendingFile(null);
-                setInstallOpen(true);
-              }}
-            >
-              <Plus className="size-4" strokeWidth={1.75} aria-hidden />
-              {sk.installCta}
-            </Button>
-          </div>
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight text-fg">{sk.title}</h1>
             <p className="mt-1 max-w-2xl text-sm text-fg-muted">{sk.tagline}</p>

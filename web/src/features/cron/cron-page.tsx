@@ -9,7 +9,7 @@ import {
   RefreshCw,
   X,
 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -58,6 +58,7 @@ import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 
 const RUN_HISTORY_FETCH_LIMIT = 400;
 
@@ -548,6 +549,48 @@ export function CronPage() {
     void loadRunHistoryOnly();
   }, [loadJobs, loadAux, loadRunHistoryOnly]);
 
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+
+  const cronHeaderEnd = useMemo(
+    () => (
+      <div className="flex min-w-0 flex-1 flex-nowrap items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-9 w-9 shrink-0 p-0"
+          disabled={loading || runHistoryLoading}
+          title={c.refresh}
+          aria-label={c.refresh}
+          onClick={() => void refreshAll()}
+        >
+          <RefreshCw
+            className={cn('size-4', (loading || runHistoryLoading) && 'animate-spin')}
+            strokeWidth={1.75}
+          />
+        </Button>
+        <Button type="button" variant="primary" className="gap-2" onClick={() => openForm()}>
+          <Plus className="size-4" strokeWidth={1.75} />
+          {c.addJob}
+        </Button>
+      </div>
+    ),
+    [c.addJob, c.refresh, loading, openForm, refreshAll, runHistoryLoading],
+  );
+
+  useLayoutEffect(() => {
+    if (!hasToken) {
+      clearPageHeader();
+      return;
+    }
+    setPageHeader({
+      startExtra: null,
+      main: null,
+      end: cronHeaderEnd,
+    });
+    return () => clearPageHeader();
+  }, [clearPageHeader, cronHeaderEnd, hasToken, setPageHeader]);
+
   if (!hasToken) {
     return (
       <div className="mx-auto w-full max-w-app-main px-4 py-16 text-center text-sm text-fg-muted sm:px-8">{c.needToken}</div>
@@ -567,26 +610,6 @@ export function CronPage() {
         ) : null}
 
         <header className="flex flex-col gap-4">
-          <div className="flex w-full shrink-0 flex-nowrap items-center justify-end gap-2">
-            <Button
-              type="button"
-              variant="ghost"
-              className="h-9 w-9 shrink-0 p-0"
-              disabled={loading || runHistoryLoading}
-              title={c.refresh}
-              aria-label={c.refresh}
-              onClick={() => void refreshAll()}
-            >
-              <RefreshCw
-                className={cn('size-4', (loading || runHistoryLoading) && 'animate-spin')}
-                strokeWidth={1.75}
-              />
-            </Button>
-            <Button type="button" variant="primary" className="gap-2" onClick={() => openForm()}>
-              <Plus className="size-4" strokeWidth={1.75} />
-              {c.addJob}
-            </Button>
-          </div>
           <div className="min-w-0">
             <h1 className="text-xl font-semibold tracking-tight text-fg">{c.title}</h1>
             <p className="mt-1 max-w-2xl text-sm text-fg-muted">{c.subtitle}</p>

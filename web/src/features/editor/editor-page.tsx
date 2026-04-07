@@ -1,5 +1,5 @@
 import { FolderOpen, Search } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
 
 import { MarkdownSplit } from '@/components/markdown/markdown-split';
 import { FileTree, type TreeEntry } from '@/features/file-tree/file-tree';
@@ -10,6 +10,7 @@ import {
   createGatewayWorkspaceAdapter,
   type WorkspaceFilesAdapter,
 } from '@/lib/workspace-files';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useThemeStore } from '@/stores/theme-store';
 
 async function loadTreeRecursive(adapter: WorkspaceFilesAdapter, dir: string): Promise<TreeEntry[]> {
@@ -131,9 +132,12 @@ export function EditorPage() {
     return 'No matching files in this folder.';
   }, [adapter, rootDir, treeError]);
 
-  return (
-    <div className="bg-surface-base flex min-h-0 flex-1 flex-col">
-      <header className="border-edge flex shrink-0 flex-wrap items-center gap-2 border-b px-4 py-3">
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+
+  const editorHeaderMain = useMemo(
+    () => (
+      <div className="flex w-full min-w-0 flex-wrap items-center gap-2 px-4 sm:px-8">
         {electronMode ? (
           <button
             type="button"
@@ -167,7 +171,22 @@ export function EditorPage() {
             Search
           </button>
         </div>
-      </header>
+      </div>
+    ),
+    [adapter, electronMode, openFolder, rootDir, runSearch, searchQuery],
+  );
+
+  useLayoutEffect(() => {
+    setPageHeader({
+      startExtra: null,
+      main: editorHeaderMain,
+      end: null,
+    });
+    return () => clearPageHeader();
+  }, [clearPageHeader, editorHeaderMain, setPageHeader]);
+
+  return (
+    <div className="bg-surface-base flex min-h-0 flex-1 flex-col">
       <div className="flex min-h-0 flex-1">
         <aside className="border-edge bg-surface-panel flex w-56 shrink-0 flex-col border-r md:w-64">
           <FileTree
