@@ -10,12 +10,14 @@ import {
   MessageSquare,
   MoreHorizontal,
   Pencil,
+  RefreshCw,
   Send,
   Trash2,
   X,
 } from 'lucide-react';
 import QRCode from 'qrcode';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -36,6 +38,7 @@ import { messages, type ChannelsSettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 
 function inputClassName(): string {
   return cn(
@@ -673,6 +676,55 @@ export function ChannelsSettingsPanel() {
     [ch.policy.stream],
   );
 
+  const { pathname } = useLocation();
+  const isPrimaryChannelsRoute = pathname === '/channels';
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+
+  const channelsHeaderEnd = useMemo(
+    () => (
+      <div className="flex min-w-0 flex-1 flex-nowrap items-center justify-end gap-2">
+        <Button
+          type="button"
+          variant="ghost"
+          className="h-9 w-9 shrink-0 p-0"
+          disabled={loading || saving}
+          title={ch.refresh}
+          aria-label={ch.refresh}
+          onClick={() => void load()}
+        >
+          <RefreshCw className={cn('size-4', loading && 'animate-spin')} strokeWidth={1.75} />
+        </Button>
+        <Button asChild variant="secondary" className="h-9 shrink-0 gap-2 px-3">
+          <a
+            href={docsGuidePageUrl(language, 'channels')}
+            target="_blank"
+            rel="noreferrer"
+            aria-label={ch.docsLink}
+          >
+            <ExternalLink className="size-4 shrink-0" strokeWidth={1.75} />
+            {ch.docsLink}
+          </a>
+        </Button>
+      </div>
+    ),
+    [ch.docsLink, ch.refresh, language, load, loading, saving],
+  );
+
+  useLayoutEffect(() => {
+    if (!isPrimaryChannelsRoute) return;
+    if (!hasToken) {
+      clearPageHeader();
+      return () => clearPageHeader();
+    }
+    setPageHeader({
+      startExtra: null,
+      main: null,
+      end: channelsHeaderEnd,
+    });
+    return () => clearPageHeader();
+  }, [channelsHeaderEnd, clearPageHeader, hasToken, isPrimaryChannelsRoute, setPageHeader]);
+
   if (!hasToken) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
@@ -683,6 +735,23 @@ export function ChannelsSettingsPanel() {
   }
 
   if (loading) {
+    if (isPrimaryChannelsRoute) {
+      return (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
+          <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6 sm:px-8">
+            <header className="flex flex-col gap-4">
+              <div className="min-w-0">
+                <h1 className="text-xl font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
+                <p className="mt-1 max-w-2xl text-sm text-fg-muted">{ch.subtitle}</p>
+              </div>
+            </header>
+            <div className="h-8 w-48 animate-pulse rounded bg-surface-hover" />
+            <div className="h-32 animate-pulse rounded-xl bg-surface-hover" />
+            <p className="text-sm text-fg-muted">{ch.loading}</p>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="mx-auto w-full max-w-app-main px-4 py-8">
         <div className="h-8 w-48 animate-pulse rounded bg-surface-hover" />
@@ -693,6 +762,31 @@ export function ChannelsSettingsPanel() {
   }
 
   if (!form) {
+    if (isPrimaryChannelsRoute) {
+      return (
+        <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
+          <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6 sm:px-8">
+            {error ? (
+              <div
+                className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
+                role="alert"
+              >
+                {error}
+              </div>
+            ) : null}
+            <header className="flex flex-col gap-4">
+              <div className="min-w-0">
+                <h1 className="text-xl font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
+                <p className="mt-1 max-w-2xl text-sm text-fg-muted">{ch.subtitle}</p>
+              </div>
+            </header>
+            <Button type="button" variant="secondary" onClick={() => void load()}>
+              {ch.retry}
+            </Button>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
         <p className="text-sm text-fg-muted">{error ?? ch.loadError}</p>
@@ -755,25 +849,45 @@ export function ChannelsSettingsPanel() {
     </details>
   );
 
-  return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
-      <header>
-        <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
-        <p className="mt-1 text-sm text-fg-muted">{ch.subtitle}</p>
-        <a
-          href={docsGuidePageUrl(language, 'channels')}
-          target="_blank"
-          rel="noreferrer"
-          className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+  const pageBody = (
+    <>
+      {error && isPrimaryChannelsRoute ? (
+        <div
+          className="rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
+          role="alert"
         >
-          {ch.docsLink}
-          <ExternalLink className="size-3.5" />
-        </a>
-      </header>
+          {error}
+        </div>
+      ) : null}
+
+      {isPrimaryChannelsRoute ? (
+        <header className="flex flex-col gap-4">
+          <div className="min-w-0">
+            <h1 className="text-xl font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
+            <p className="mt-1 max-w-2xl text-sm text-fg-muted">{ch.subtitle}</p>
+          </div>
+        </header>
+      ) : (
+        <header className="flex flex-col gap-1">
+          <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.channels}</h1>
+          <p className="mt-1 text-sm text-fg-muted">{ch.subtitle}</p>
+          <a
+            href={docsGuidePageUrl(language, 'channels')}
+            target="_blank"
+            rel="noreferrer"
+            className="mt-1 inline-flex items-center gap-1 text-sm text-accent hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+          >
+            {ch.docsLink}
+            <ExternalLink className="size-3.5" />
+          </a>
+        </header>
+      )}
 
       {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{ch.unsavedHint}</p> : null}
       {saveOk ? <p className="text-xs text-fg-muted">{ch.saved}</p> : null}
-      {error ? <p className="text-sm text-red-600 dark:text-red-400">{error}</p> : null}
+      {error && !isPrimaryChannelsRoute ? (
+        <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+      ) : null}
       {weixinSuccessBanner ? <p className="text-xs text-accent">{weixinSuccessBanner}</p> : null}
 
       <div className="flex flex-col gap-3">
@@ -983,8 +1097,18 @@ export function ChannelsSettingsPanel() {
           </Dialog.Content>
         </Dialog.Portal>
       </Dialog.Root>
-    </div>
+    </>
   );
+
+  if (isPrimaryChannelsRoute) {
+    return (
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
+        <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6 sm:px-8">{pageBody}</div>
+      </div>
+    );
+  }
+
+  return <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">{pageBody}</div>;
 }
 
 function TelegramAdvanced({

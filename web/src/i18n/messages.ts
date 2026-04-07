@@ -665,6 +665,7 @@ const bundles: Record<
       needToken: string;
       subtitle: string;
       docsLink: string;
+      refresh: string;
       loadError: string;
       loading: string;
       save: string;
@@ -1640,6 +1641,7 @@ const bundles: Record<
       needToken: 'Save a gateway token to edit channel settings.',
       subtitle: 'Telegram and Weixin inbound channels. Changes are written to the gateway config file.',
       docsLink: 'Channel documentation',
+      refresh: 'Refresh',
       loadError: 'Failed to load channel settings',
       loading: 'Loading…',
       save: 'Save changes',
@@ -2642,6 +2644,7 @@ const bundles: Record<
       needToken: '请先保存网关 Token 后再编辑 IM 频道设置。',
       subtitle: 'Telegram 与微信 IM 入站。更改将写入网关配置文件。',
       docsLink: 'IM 频道文档',
+      refresh: '刷新',
       loadError: '加载 IM 频道设置失败',
       loading: '加载中…',
       save: '保存更改',
