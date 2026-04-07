@@ -32,8 +32,6 @@ export function SidebarFooter({
     <div
       className={cn(
         'flex shrink-0 flex-col',
-        'transition-colors duration-150 ease-out hover:bg-surface-hover',
-        'motion-reduce:transition-none',
         collapsed && 'mt-auto',
         collapsed ? 'items-center px-1 py-2' : 'px-3 py-3',
       )}
@@ -59,49 +57,38 @@ export function SidebarFooter({
             </button>
           </Popover.Trigger>
         ) : (
-          <div className="flex min-w-0 items-center gap-2">
-            <Link
-              to="/chat"
-              title={m.nav.chat}
+          <Popover.Trigger asChild>
+            <button
+              type="button"
               className={cn(
-                'size-8 shrink-0 overflow-hidden rounded-full ring-offset-surface-base transition-transform duration-150 ease-out',
-                'hover:opacity-95 active:scale-95',
-                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2',
-                'motion-reduce:hover:opacity-100 motion-reduce:active:scale-100',
+                'flex w-full min-w-0 items-center gap-2 rounded-xl px-1 py-1 text-left outline-none transition-colors duration-150 ease-out',
+                'hover:bg-surface-active/70',
+                'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+                open && 'bg-surface-active/70',
               )}
-              onClick={() => onNavigate?.()}
+              aria-expanded={open}
+              aria-haspopup="dialog"
+              title={m.sidebar.appMenuAria}
+              aria-label={m.sidebar.appMenuAria}
             >
-              <BrandLogo className="size-full rounded-full" alt={m.appBrand} />
-            </Link>
-            <Popover.Trigger asChild>
-              <button
-                type="button"
+              <span className="size-8 shrink-0 overflow-hidden rounded-full" aria-hidden>
+                <BrandLogo className="size-full rounded-full" alt="" aria-hidden />
+              </span>
+              <div className="min-w-0 flex-1">
+                <div className="truncate text-sm font-semibold leading-tight text-fg">{m.appBrand}</div>
+                <div className="truncate text-xs text-fg-muted">{a.quickMenuHint}</div>
+              </div>
+              <span
                 className={cn(
-                  'flex min-w-0 flex-1 items-center gap-2 rounded-xl px-1 py-1 text-left outline-none',
-                  'hover:bg-surface-active/70',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+                  'flex size-9 shrink-0 items-center justify-center rounded-xl text-fg-muted transition-colors',
+                  open && 'bg-accent-soft text-accent-fg',
                 )}
-                aria-expanded={open}
-                aria-haspopup="dialog"
-                title={m.sidebar.appMenuAria}
-                aria-label={m.sidebar.appMenuAria}
+                aria-hidden
               >
-                <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-semibold leading-tight text-fg">{m.appBrand}</div>
-                  <div className="truncate text-xs text-fg-muted">{a.quickMenuHint}</div>
-                </div>
-                <span
-                  className={cn(
-                    'flex size-9 shrink-0 items-center justify-center rounded-xl text-fg-muted transition-colors',
-                    open && 'bg-accent-soft text-accent-fg',
-                  )}
-                  aria-hidden
-                >
-                  <Settings className="size-[18px]" strokeWidth={1.5} />
-                </span>
-              </button>
-            </Popover.Trigger>
-          </div>
+                <Settings className="size-[18px]" strokeWidth={1.5} />
+              </span>
+            </button>
+          </Popover.Trigger>
         )}
 
         <Popover.Portal>
