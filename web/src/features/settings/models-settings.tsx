@@ -198,7 +198,7 @@ function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m }: Prov
         <Dialog.Content
           className={cn(
             'xopcbot-dialog-content fixed left-1/2 top-1/2 z-50 max-h-[min(90vh,640px)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2',
-            'overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-xl dark:border-edge',
+            'overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
@@ -384,7 +384,7 @@ function ModelEditDialogContent({
         <Dialog.Content
           className={cn(
             'xopcbot-dialog-content fixed left-1/2 top-1/2 z-50 max-h-[min(90vh,720px)] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
-            'overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-xl dark:border-edge',
+            'overflow-y-auto rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
