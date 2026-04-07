@@ -1,12 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
-import { useState } from 'react';
 
+import { GatewayTokenForm } from '@/components/shell/gateway-token-form';
+import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
-import { settingsInputFocusClass } from '@/lib/form-field-width';
-import { cn } from '@/lib/cn';
-import { Button } from '@/components/ui/button';
 
 export function TokenDialog() {
   const open = useGatewayStore((s) => s.tokenDialogOpen);
@@ -19,21 +18,7 @@ export function TokenDialog() {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).token;
 
-  const [value, setValue] = useState('');
-  const [show, setShow] = useState(false);
-  const [error, setError] = useState('');
-
   const canDismiss = Boolean(storedToken) && !tokenExpired;
-
-  function handleSave() {
-    const trimmed = value.trim();
-    if (!trimmed) {
-      setError(language === 'zh' ? '请输入 Token' : 'Please enter a token');
-      return;
-    }
-    setGatewayToken(trimmed);
-    setValue('');
-  }
 
   return (
     <Dialog.Root
@@ -55,53 +40,18 @@ export function TokenDialog() {
           <Dialog.Title className="text-base font-semibold text-fg">{t.title}</Dialog.Title>
           <Dialog.Description className="mt-1 text-sm text-fg-muted">{t.description}</Dialog.Description>
 
-          <div className="mt-4 flex flex-col gap-3">
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-fg-muted">{t.gatewayUrl}</span>
-              <input
-                readOnly
-                className="rounded-md border border-edge bg-surface-hover px-3 py-2 text-sm text-fg-muted"
-                value={baseUrl}
-              />
-            </label>
-            <label className="flex flex-col gap-1.5">
-              <span className="text-xs font-medium text-fg-muted">{t.tokenLabel}</span>
-              <div className="flex gap-2">
-                <input
-                  type={show ? 'text' : 'password'}
-                  autoComplete="off"
-                  className={cn(
-                    'min-w-0 flex-1 rounded-md border border-edge bg-surface-panel px-3 py-2 text-sm text-fg placeholder:text-fg-disabled',
-                    settingsInputFocusClass,
-                  )}
-                  placeholder={t.placeholder}
-                  value={value}
-                  onChange={(e) => {
-                    setValue(e.target.value);
-                    setError('');
-                  }}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter') handleSave();
-                  }}
-                />
-                <Button type="button" variant="secondary" className="shrink-0 px-2" onClick={() => setShow((s) => !s)}>
-                  {show ? t.hide : t.show}
+          <GatewayTokenForm
+            className="mt-4"
+            baseUrl={baseUrl}
+            onSubmit={setGatewayToken}
+            footerLeft={
+              canDismiss ? (
+                <Button type="button" variant="ghost" onClick={() => closeTokenDialog()}>
+                  {language === 'zh' ? '取消' : 'Cancel'}
                 </Button>
-              </div>
-              {error ? <p className="text-xs text-danger">{error}</p> : null}
-            </label>
-          </div>
-
-          <div className="mt-4 flex justify-end gap-2">
-            {canDismiss ? (
-              <Button type="button" variant="ghost" onClick={() => closeTokenDialog()}>
-                {language === 'zh' ? '取消' : 'Cancel'}
-              </Button>
-            ) : null}
-            <Button type="button" variant="primary" onClick={handleSave}>
-              {t.save}
-            </Button>
-          </div>
+              ) : undefined
+            }
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

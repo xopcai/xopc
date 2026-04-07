@@ -1,10 +1,12 @@
 import { useEffect } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
+import { GatewayConnectLanding } from '@/components/shell/gateway-connect-landing';
 import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { cn } from '@/lib/cn';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 /** Align with `ui` `navigate-to-chat` custom event from session manager. */
@@ -24,9 +26,18 @@ function NavigateToChatListener() {
 }
 
 export function AppShell() {
+  const token = useGatewayStore((s) => s.token);
   const { pathname } = useLocation();
   const isSettingsRoute = pathname.startsWith('/settings');
   const language = useLocaleStore((s) => s.language);
+
+  if (!token) {
+    return (
+      <div className="flex h-full min-h-0 w-full flex-1 flex-col overflow-hidden bg-surface-base">
+        <GatewayConnectLanding />
+      </div>
+    );
+  }
 
   // Key for the content area — changes only on top-level route segment so sub-routes
   // (e.g. /chat/new → /chat/:key) don't re-trigger the enter animation.
