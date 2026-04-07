@@ -138,10 +138,43 @@ async function runOnboard(
   console.log('\n' + '═'.repeat(50));
   console.log('\n🎉 Setup Complete!\n');
 
+  const gatewayAuth = (config as any)?.gateway?.auth;
+  const gatewayConfigured =
+    gatewayAuth?.mode === 'token' &&
+    typeof gatewayAuth?.token === 'string' &&
+    gatewayAuth.token.length > 0;
+  const host = (config as any)?.gateway?.host || '0.0.0.0';
+  const port = (config as any)?.gateway?.port ?? 18790;
+  const displayHost = host === '0.0.0.0' ? 'localhost' : host;
+  const gwToken = gatewayConfigured ? (gatewayAuth.token as string) : undefined;
+
+  const showGatewaySummary = Boolean(gatewayConfigured && gwToken && (doGateway || runFullWizard));
+
+  if (showGatewaySummary && gwToken) {
+    const webuiUrl = `http://${displayHost}:${port}?token=${gwToken}`;
+    console.log('🌐 Web console (browser) — start here');
+    console.log(`   Open: http://${displayHost}:${port}`);
+    console.log(`   Token: ${gwToken.slice(0, 8)}...${gwToken.slice(-8)}`);
+    console.log('   Bookmark link (token is saved in the browser when you open it):');
+    console.log(`   ${webuiUrl}`);
+    console.log('');
+  }
+
   if (runFullWizard) {
-    console.log('🚀 Next Steps:');
-    console.log('  1. Read BOOTSTRAP.md in your workspace for first-run guidance');
-    console.log('  2. Chat with your assistant: xopcbot agent -i');
+    console.log('🚀 Next steps:');
+    if (gatewayConfigured) {
+      console.log('  1. Open the Web console in your browser (URL above; start the gateway below if needed)');
+      console.log('  2. Or chat in the terminal: xopcbot agent -i');
+      console.log('  3. Optional: read BOOTSTRAP.md in your workspace for workspace tips');
+    } else {
+      console.log('  1. Chat in the terminal: xopcbot agent -i');
+      console.log('  2. Optional: add the Web console: xopcbot onboard --gateway');
+      console.log('  3. Optional: read BOOTSTRAP.md in your workspace');
+    }
+    console.log('');
+  } else if (doGateway && gatewayConfigured) {
+    console.log('🚀 Next step:');
+    console.log('  Start the gateway if it is not running, then open the Web console URL above.');
     console.log('');
   }
 
@@ -158,25 +191,7 @@ async function runOnboard(
     console.log('  Bootstrap:', join(workspacePath, 'BOOTSTRAP.md'));
   }
 
-  // Handle gateway startup if configured
-  const gatewayConfigured = (config as any)?.gateway?.auth?.mode === 'token' && (config as any)?.gateway?.auth?.token;
-
-  if (gatewayConfigured && (doGateway || runFullWizard)) {
-    const host = (config as any)?.gateway?.host || '0.0.0.0';
-    const port = (config as any)?.gateway?.port || 18790;
-    const displayHost = host === '0.0.0.0' ? 'localhost' : host;
-    const token = (config as any).gateway.auth.token;
-
-    const webuiUrl = `http://${displayHost}:${port}?token=${token}`;
-
-    console.log('\n🌐 WebUI Access:');
-    console.log(`  URL: http://${displayHost}:${port}`);
-    console.log(`  Token: ${token?.slice(0, 8)}...${token?.slice(-8)}`);
-    console.log('');
-    console.log('  Direct Access URL (with token):');
-    console.log(`    ${webuiUrl}`);
-    console.log('');
-
+  if (showGatewaySummary) {
     await startGatewayNow(config as Config, ctx);
   }
 
