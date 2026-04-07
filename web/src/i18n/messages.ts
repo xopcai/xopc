@@ -106,11 +106,10 @@ const bundles: Record<
       backToApp: string;
       /** Link to public documentation (opens in new tab). */
       helpDocs: string;
-      /** Segmented filter above task list: Web / Telegram / Weixin. */
+      /** Segmented filter above task list: Tasks (web) vs IM channels. */
       sessionChannelFilterAria: string;
-      sessionChannelWeb: string;
-      sessionChannelTelegram: string;
-      sessionChannelWeixin: string;
+      sessionTasksTab: string;
+      sessionChannelsTab: string;
     };
     chat: {
       typeMessage: string;
@@ -1059,10 +1058,9 @@ const bundles: Record<
       taskRenameCancel: 'Cancel',
       backToApp: 'Back to app',
       helpDocs: 'Documentation',
-      sessionChannelFilterAria: 'Filter tasks by channel',
-      sessionChannelWeb: 'Web',
-      sessionChannelTelegram: 'Telegram',
-      sessionChannelWeixin: 'WeChat',
+      sessionChannelFilterAria: 'Filter tasks: web app or IM channels',
+      sessionTasksTab: 'Tasks',
+      sessionChannelsTab: 'Channels',
     },
     chat: {
       typeMessage: 'Type a message…',
@@ -2066,10 +2064,9 @@ const bundles: Record<
       taskRenameCancel: '取消',
       backToApp: '返回应用',
       helpDocs: '帮助文档',
-      sessionChannelFilterAria: '按 IM 频道筛选任务',
-      sessionChannelWeb: '网页',
-      sessionChannelTelegram: 'Telegram',
-      sessionChannelWeixin: '微信',
+      sessionChannelFilterAria: '按来源筛选任务：网页或 IM 频道',
+      sessionTasksTab: '任务',
+      sessionChannelsTab: '频道',
     },
     chat: {
       typeMessage: '输入消息…',

@@ -1,16 +1,23 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import * as Popover from '@radix-ui/react-popover';
-import { ClipboardCopy, Loader2, MoreHorizontal, Pencil, Pin, PinOff, Trash2 } from 'lucide-react';
+import {
+  CheckSquare,
+  ClipboardCopy,
+  Loader2,
+  MessageCircle,
+  MoreHorizontal,
+  Pencil,
+  Pin,
+  PinOff,
+  Trash2,
+} from 'lucide-react';
 import { memo, useCallback, useEffect, useMemo, useRef, useState, type UIEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import useSWRInfinite from 'swr/infinite';
 
+import { SessionChannelIcon } from '@/components/shell/session-channel-icon';
 import { Button } from '@/components/ui/button';
-import {
-  segmentedThumbActiveClassName,
-  segmentedThumbBaseClassName,
-  segmentedTrackClassName,
-} from '@/components/ui/segmented-styles';
+import { SlidingSegmented } from '@/components/ui/sliding-segmented';
 import { isWebUiSessionKey } from '@/features/chat/session-manager';
 import {
   deleteSession,
@@ -28,7 +35,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 const PAGE_SIZE = 20;
 
-type SessionSidebarFilter = 'web' | 'telegram' | 'weixin';
+type SessionSidebarFilter = 'web' | 'channels';
 
 type SidebarTaskPage = {
   items: SessionMetadata[];
@@ -64,6 +71,7 @@ function rowShellClass(isActive: boolean): string {
 const SidebarTaskRow = memo(function SidebarTaskRow({
   session,
   isActive,
+  showSourceChannelIcon,
   onNavigate,
   mutate,
   onRequestRename,
@@ -74,6 +82,8 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
 }: {
   session: SessionMetadata;
   isActive: boolean;
+  /** When true (IM list), show a channel glyph before the title. */
+  showSourceChannelIcon?: boolean;
   onNavigate?: () => void;
   mutate: () => void;
   onRequestRename: (key: string) => void;
@@ -113,11 +123,29 @@ const SidebarTaskRow = memo(function SidebarTaskRow({
     <div className={rowShellClass(isActive)}>
       <Link
         to={`/chat/${encodeURIComponent(session.key)}`}
-        className="min-w-0 flex-1 truncate rounded-xl py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base"
+        className={cn(
+          'min-w-0 flex-1 rounded-xl py-1 outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-base',
+          showSourceChannelIcon ? 'flex items-center gap-2' : 'truncate',
+        )}
         title={title}
         onClick={() => onNavigate?.()}
       >
-        {title}
+        {showSourceChannelIcon ? (
+          <>
+            <span
+              className={cn(
+                'flex size-4 shrink-0 items-center justify-center',
+                isActive ? 'text-fg-muted' : 'text-fg-subtle',
+              )}
+              title={session.sourceChannel}
+            >
+              <SessionChannelIcon sourceChannel={session.sourceChannel} className="size-3.5" />
+            </span>
+            <span className="min-w-0 flex-1 truncate">{title}</span>
+          </>
+        ) : (
+          title
+        )}
       </Link>
       <Popover.Root open={menuOpen} onOpenChange={setMenuOpen}>
         <Popover.Trigger asChild>
@@ -231,8 +259,11 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
           hasMore: result.hasMore,
         };
       }
-      const channel = filter === 'telegram' ? 'telegram' : 'weixin';
-      const result = await listSessions({ channel, limit: PAGE_SIZE, offset });
+      const result = await listSessions({
+        channel: 'telegram,weixin',
+        limit: PAGE_SIZE,
+        offset,
+      });
       return {
         items: result.items,
         hasMore: result.hasMore,
@@ -382,36 +413,15 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         <div className="sticky top-0 z-[1] bg-surface-base px-4 pb-1 pt-2">
           <div className="pl-3 text-xs font-normal leading-5 text-fg-subtle">{sb.tasksHeading}</div>
           <div className="mt-2">
-            <div
-              className={cn(segmentedTrackClassName, 'flex w-full max-w-full')}
-              role="group"
+            <SlidingSegmented
+              value={sessionFilter}
+              onChange={setSessionFilter}
               aria-label={sb.sessionChannelFilterAria}
-            >
-              {(
-                [
-                  ['web', sb.sessionChannelWeb] as const,
-                  ['telegram', sb.sessionChannelTelegram] as const,
-                  ['weixin', sb.sessionChannelWeixin] as const,
-                ] as const
-              ).map(([id, label]) => (
-                <Button
-                  key={id}
-                  type="button"
-                  variant="ghost"
-                  aria-pressed={sessionFilter === id}
-                  title={label}
-                  onClick={() => setSessionFilter(id)}
-                  className={cn(
-                    segmentedThumbBaseClassName,
-                    'h-7 min-w-0 flex-1 px-1.5 py-0 text-[11px] leading-tight',
-                    sessionFilter === id && segmentedThumbActiveClassName,
-                    sessionFilter === id && 'text-accent-fg hover:text-accent-fg',
-                  )}
-                >
-                  <span className="truncate">{label}</span>
-                </Button>
-              ))}
-            </div>
+              options={[
+                { value: 'web', label: sb.sessionTasksTab, icon: CheckSquare },
+                { value: 'channels', label: sb.sessionChannelsTab, icon: MessageCircle },
+              ]}
+            />
           </div>
         </div>
 
@@ -426,6 +436,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
                 key={session.key}
                 session={session}
                 isActive={activeSessionKey === session.key}
+                showSourceChannelIcon={sessionFilter === 'channels'}
                 onNavigate={onNavigate}
                 mutate={mutate}
                 onRequestRename={openRename}

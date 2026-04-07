@@ -19,7 +19,7 @@ export function LanguageToggle() {
         <Button
           key={lang}
           type="button"
-          variant="ghost"
+          variant="segmented"
           aria-pressed={language === lang}
           aria-label={lang === 'en' ? 'English' : '中文'}
           onClick={() => setLanguage(lang)}
@@ -27,7 +27,7 @@ export function LanguageToggle() {
             segmentedThumbBaseClassName,
             'h-7 min-w-9 px-2 py-0',
             language === lang && segmentedThumbActiveClassName,
-            language === lang && 'text-fg hover:text-fg',
+            language === lang && 'text-fg',
           )}
         >
           {labels[lang]}

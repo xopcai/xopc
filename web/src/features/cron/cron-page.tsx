@@ -672,6 +672,7 @@ export function CronPage() {
                         segmentedThumbBaseClassName,
                         'px-2.5 py-1',
                         historyRange === r && segmentedThumbActiveClassName,
+                        historyRange === r && 'text-fg',
                       )}
                       onClick={() => setHistoryRange(r)}
                     >

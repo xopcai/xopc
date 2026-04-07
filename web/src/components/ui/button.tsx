@@ -3,7 +3,7 @@ import { forwardRef, type ButtonHTMLAttributes } from 'react';
 
 import { cn } from '@/lib/cn';
 
-export type ButtonVariant = 'primary' | 'secondary' | 'ghost';
+export type ButtonVariant = 'primary' | 'secondary' | 'ghost' | 'segmented';
 
 const variantClass: Record<ButtonVariant, string> = {
   primary:
@@ -12,6 +12,8 @@ const variantClass: Record<ButtonVariant, string> = {
     'bg-surface-panel text-fg border border-edge shadow-surface hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel dark:border-edge',
   ghost:
     'text-fg-muted hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+  /** Pill track segments: no hover styling — visual state is only selected vs unselected (`segmentedThumb*` + focus ring there). */
+  segmented: '',
 };
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {

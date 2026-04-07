@@ -122,6 +122,7 @@ export interface SessionIndex {
 /** Session list query parameters */
 export interface SessionListQuery {
   status?: SessionStatus | SessionStatus[];
+  /** Single `sourceChannel`, or comma-separated list (e.g. `telegram,weixin`). */
   channel?: string;
   tags?: string[];
   search?: string;
