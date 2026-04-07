@@ -247,7 +247,7 @@ function WeixinQrLoginDialog({
         <Dialog.Content
           className={cn(
             'fixed left-1/2 top-1/2 z-[60] max-h-[min(90vh,52rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2',
-            'overflow-y-auto rounded-2xl border border-edge bg-surface-panel p-6 shadow-xl outline-none dark:border-edge',
+            'overflow-y-auto rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
@@ -431,7 +431,7 @@ function ChannelImHubCard({
             )}
             onClick={() => void onToggle(!enabled)}
           >
-            <span className="size-4 rounded-full bg-surface-panel shadow-sm ring-1 ring-black/5 dark:ring-white/10" />
+            <span className="size-4 rounded-full bg-surface-panel shadow-surface ring-1 ring-edge/40 dark:ring-edge/55" />
           </button>
         </div>
       )}
@@ -823,7 +823,7 @@ export function ChannelsSettingsPanel() {
           <Dialog.Content
             className={cn(
               'fixed left-1/2 top-1/2 z-[60] max-h-[min(90vh,48rem)] w-[min(100%-2rem,36rem)] -translate-x-1/2 -translate-y-1/2',
-              'overflow-y-auto rounded-2xl border border-edge bg-surface-panel p-6 shadow-xl outline-none dark:border-edge',
+              'overflow-y-auto rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
             )}
             onOpenAutoFocus={(e) => e.preventDefault()}
           >
@@ -953,7 +953,7 @@ export function ChannelsSettingsPanel() {
           <Dialog.Content
             className={cn(
               'fixed left-1/2 top-1/2 z-[70] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',
-              'rounded-2xl border border-edge bg-surface-panel p-6 shadow-xl outline-none dark:border-edge',
+              'rounded-2xl border border-edge bg-surface-panel p-6 shadow-popover outline-none dark:border-edge',
             )}
             onOpenAutoFocus={(e) => e.preventDefault()}
           >

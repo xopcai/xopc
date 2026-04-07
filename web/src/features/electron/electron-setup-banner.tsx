@@ -76,7 +76,7 @@ export function ElectronSetupBanner() {
     <div
       className={cn(
         'shrink-0 border-b border-accent/25 bg-accent-soft px-4 py-3',
-        'text-sm text-fg shadow-sm',
+        'text-sm text-fg shadow-surface',
       )}
       role="status"
     >

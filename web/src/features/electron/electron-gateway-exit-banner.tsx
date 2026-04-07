@@ -23,7 +23,7 @@ export function ElectronGatewayExitBanner() {
 
   return (
     <div
-      className={cn('shrink-0 border-b border-danger/35 bg-danger/10 px-4 py-3 text-sm text-fg shadow-sm')}
+      className={cn('shrink-0 border-b border-danger/35 bg-danger/10 px-4 py-3 text-sm text-fg shadow-surface')}
       role="alert"
     >
       <p className="font-semibold">{t.gatewayExitTitle}</p>

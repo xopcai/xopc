@@ -119,7 +119,7 @@ export function VoiceMessageBar({
 
     return (
       <div className={cn('flex w-full min-w-0', align === 'end' && 'justify-end')}>
-        <div className="inline-flex max-w-[min(280px,90vw)] items-center gap-3 rounded-full border border-edge bg-surface-hover/80 px-2.5 py-1.5 shadow-sm dark:border-edge dark:bg-surface-hover/50">
+        <div className="inline-flex max-w-[min(280px,90vw)] items-center gap-3 rounded-full border border-edge bg-surface-hover/80 px-2.5 py-1.5 shadow-surface dark:border-edge dark:bg-surface-hover/50">
           <button
             type="button"
             onClick={toggle}
@@ -143,7 +143,7 @@ export function VoiceMessageBar({
 
   return (
     <div className={cn('flex w-full min-w-0', align === 'end' && 'justify-end')}>
-      <div className="inline-flex min-w-[min(240px,85vw)] max-w-sm items-center gap-2 rounded-full border border-edge bg-surface-hover/80 px-3 py-2 text-left shadow-sm dark:border-edge dark:bg-surface-hover/50">
+      <div className="inline-flex min-w-[min(240px,85vw)] max-w-sm items-center gap-2 rounded-full border border-edge bg-surface-hover/80 px-3 py-2 text-left shadow-surface dark:border-edge dark:bg-surface-hover/50">
         <button
           type="button"
           onClick={toggle}

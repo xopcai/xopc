@@ -704,7 +704,7 @@ export function LogsPage() {
           <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-50 bg-scrim" />
           <Dialog.Content
             className={cn(
-              'xopcbot-drawer-right fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-xl outline-none',
+              'xopcbot-drawer-right fixed right-0 top-0 z-50 flex h-full w-full max-w-lg flex-col border-l border-edge bg-surface-panel shadow-popover outline-none',
               'dark:border-edge',
             )}
             aria-describedby={undefined}
@@ -743,7 +743,7 @@ export function LogsPage() {
           <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-50 bg-scrim" />
           <Dialog.Content
             className={cn(
-              'xopcbot-dialog-content fixed left-1/2 top-1/2 z-50 flex max-h-[min(32rem,85vh)] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-edge bg-surface-panel shadow-xl outline-none',
+              'xopcbot-dialog-content fixed left-1/2 top-1/2 z-50 flex max-h-[min(32rem,85vh)] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-edge bg-surface-panel shadow-popover outline-none',
               'dark:border-edge',
             )}
           >
