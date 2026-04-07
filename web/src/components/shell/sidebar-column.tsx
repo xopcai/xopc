@@ -1,7 +1,8 @@
-import { PanelLeft, PanelRight, X } from 'lucide-react';
+import { X } from 'lucide-react';
 import { memo, useEffect } from 'react';
 
 import { APP_CHROME_NO_DRAG_CLASS, APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
+import { SidebarRailToggleButton } from '@/components/shell/sidebar-rail-toggle-button';
 import { SidebarNav } from '@/components/shell/sidebar';
 import { Button } from '@/components/ui/button';
 import { messages } from '@/i18n/messages';
@@ -23,7 +24,6 @@ export const SidebarColumn = memo(function SidebarColumn() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
-  const toggleSidebarCollapsed = useSidebarStore((s) => s.toggleCollapsed);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useAppShellStore((s) => s.setMobileNavOpen);
   const navCollapsed = sidebarCollapsed && !mobileNavOpen;
@@ -100,25 +100,8 @@ export const SidebarColumn = memo(function SidebarColumn() {
               <X className="size-4" strokeWidth={1.5} aria-hidden />
             </Button>
           ) : null}
-          <Button
-            type="button"
-            variant="ghost"
-            className={cn(
-              'hidden size-8 shrink-0 rounded-xl p-0 md:inline-flex',
-              APP_CHROME_NO_DRAG_CLASS,
-            )}
-            aria-expanded={!sidebarCollapsed}
-            aria-controls="app-sidebar"
-            aria-label={sidebarCollapsed ? m.sidebarExpand : m.sidebarCollapse}
-            title={sidebarCollapsed ? m.sidebarExpand : m.sidebarCollapse}
-            onClick={() => toggleSidebarCollapsed()}
-          >
-            {sidebarCollapsed ? (
-              <PanelRight className="size-4" strokeWidth={1.5} aria-hidden />
-            ) : (
-              <PanelLeft className="size-4" strokeWidth={1.5} aria-hidden />
-            )}
-          </Button>
+          {/* md+: expand lives in main column when collapsed; here only show collapse when expanded */}
+          {!sidebarCollapsed ? <SidebarRailToggleButton variant="sidebar" /> : null}
         </div>
         <SidebarNav collapsed={navCollapsed} onNavigate={() => setMobileNavOpen(false)} />
       </aside>

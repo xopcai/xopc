@@ -11,4 +11,5 @@ export const APP_CHROME_NO_DRAG_CLASS = '[-webkit-app-region:no-drag]';
  * Shared top strip height for the sidebar rail header and the main column header
  * (AppShell aside + ChatPage title row).
  */
+/** Sidebar rail top row and primary `PrimaryAppHeader` — fixed `h-14` (DESIGN shell rhythm). */
 export const APP_TOP_HEADER_BAR_CLASS = `h-14 shrink-0 items-center ${APP_CHROME_DRAG_CLASS}`;

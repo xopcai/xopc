@@ -2,7 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import type { Message } from '@/features/chat/messages.types';
 import { ChatComposer } from '@/features/chat/chat-composer';
-import { ChatHeaderBar } from '@/features/chat/chat-header-bar';
+import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatSseStatus } from '@/features/chat/chat-sse-status';
 import { MessageList } from '@/features/chat/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll-to-bottom-button';
@@ -171,15 +171,15 @@ export function ChatPage() {
     <div className="flex h-full min-h-0 flex-1 flex-col bg-surface-panel">
       <ChatSseStatus />
 
-      <div className="mx-auto flex min-h-0 w-full max-w-[var(--max-width-chat)] flex-1 flex-col">
-        <ChatHeaderBar
-          chatHeadline={chatHeadline}
-          sessionModel={sessionModel}
-          showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
-          onModelChange={onSessionModelChange}
-          modelDisabled={showSessionLoading || sessionRoutePending || streaming}
-        />
+      <ChatPageHeaderRegistration
+        chatHeadline={chatHeadline}
+        sessionModel={sessionModel}
+        showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
+        onModelChange={onSessionModelChange}
+        modelDisabled={showSessionLoading || sessionRoutePending || streaming}
+      />
 
+      <div className="mx-auto flex min-h-0 w-full max-w-[var(--max-width-chat)] flex-1 flex-col">
         <div className="flex min-h-0 min-w-0 flex-1 flex-col px-3 sm:px-5 xl:px-6">
           <div className="flex min-h-0 flex-1 flex-col">
             <div
