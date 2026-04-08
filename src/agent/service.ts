@@ -31,7 +31,8 @@ import {
 } from './context/workspace.js';
 import { SessionTracker } from './session/tracker.js';
 import { ModelManager } from './models/index.js';
-import { initializeCommands } from '../chat-commands/index.js';
+import { commandRegistry, initializeCommands } from '../chat-commands/index.js';
+import { parseSlashCommand } from '../chat-commands/command-parse.js';
 import { ProgressFeedbackManager, type ProgressStage } from './lifecycle/progress.js';
 import { HookHandler } from './lifecycle/hook-handler.js';
 import { ToolErrorTracker } from './tools/error-tracker.js';
@@ -954,8 +955,6 @@ export class AgentService {
         sttCfg,
       );
 
-      const messageContent = this.buildMessageContent(mergedUserText, prepared);
-
       const armAbort = () => {
         if (abortHandled) {
           return;
@@ -974,7 +973,39 @@ export class AgentService {
         }
       }
 
-      if (!abortHandled) {
+      const commandInfo = parseSlashCommand(mergedUserText);
+      let ranSlashCommand = false;
+      if (!abortHandled && commandInfo && commandRegistry.has(commandInfo.command)) {
+        ranSlashCommand = true;
+        const { aggregatedText } = await this.commandHandler.executeCommandAndAggregateReply(
+          commandInfo.command,
+          commandInfo.args,
+          {
+            sessionKey,
+            channel,
+            chatId,
+            senderId: context.senderId,
+            isGroup: context.isGroup,
+          },
+        );
+        if (aggregatedText) {
+          pushEvent({ type: 'token', content: aggregatedText });
+        }
+        pushEvent({ type: '__done__' });
+        agentDone = true;
+      }
+
+      let messageContent:
+        | Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>
+        | undefined;
+      if (!abortHandled && !ranSlashCommand) {
+        const textForAgent = mergedUserText.trimStart().startsWith('/skill:')
+          ? this.agentManager.expandSkillUserText(mergedUserText)
+          : mergedUserText;
+        messageContent = this.buildMessageContent(textForAgent, prepared);
+      }
+
+      if (!abortHandled && !ranSlashCommand && messageContent !== undefined) {
         const agentPromise = (async () => {
           await runAgentTurnWithModelFallbacks({
             agent,
@@ -1154,7 +1185,24 @@ export class AgentService {
       await this.applyResolvedThinkingLevel(sessionKey, thinking);
 
       const prepared = await this.prepareInboundAttachments(sessionKey, attachments);
-      const messageContent = this.buildMessageContent(content, prepared);
+
+      const cmd = parseSlashCommand(content);
+      if (cmd && commandRegistry.has(cmd.command)) {
+        const { aggregatedText } = await this.commandHandler.executeCommandAndAggregateReply(cmd.command, cmd.args, {
+          sessionKey,
+          channel,
+          chatId,
+          senderId: '',
+          isGroup: false,
+        });
+        await this.persistAgentSessionMessages(sessionKey);
+        return aggregatedText;
+      }
+
+      const textForDirect = content.trimStart().startsWith('/skill:')
+        ? this.agentManager.expandSkillUserText(content)
+        : content;
+      const messageContent = this.buildMessageContent(textForDirect, prepared);
 
       await runAgentTurnWithModelFallbacks({
         agent,

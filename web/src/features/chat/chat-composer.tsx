@@ -1,8 +1,18 @@
 import { Ban, File as FileIcon, Mic, Send, Sparkles, Square } from 'lucide-react';
+import type { MutableRefObject } from 'react';
 import { memo, useCallback, useEffect, useRef, useState } from 'react';
 
 import type { Attachment } from '@/features/chat/attachment-utils';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment-utils';
+import { CommandPalette } from '@/features/chat/command-palette';
+import type { PaletteItem } from '@/features/chat/command-palette.types';
+import {
+  applyWireToEditor,
+  getWireCaretOffset,
+  handleComposerBackspace,
+  serializeEditorToWire,
+} from '@/features/chat/composer-editor-wire';
+import { useCommandPalette } from '@/features/chat/use-command-palette';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -22,6 +32,151 @@ export type ThinkingLevel = 'off' | 'minimal' | 'low' | 'medium' | 'high' | 'xhi
 function thinkingIcon(level: ThinkingLevel) {
   return level === 'off' ? Ban : Sparkles;
 }
+
+function syncComposerPlaceholderClass(el: HTMLElement, wire: string): void {
+  el.classList.toggle('composer-input-empty', wire.trim().length === 0);
+}
+
+type ComposerKbdContext = {
+  palette: ReturnType<typeof useCommandPalette>;
+  replaceRange: (text: string, start: number, end: number, insert: string) => string;
+  applyPaletteItem: (item: PaletteItem) => void;
+  send: () => void;
+  busy: boolean;
+  attachmentsLen: number;
+  isComposing: boolean;
+  valueRef: MutableRefObject<string>;
+  setValue: (v: string) => void;
+  setCursor: (c: number) => void;
+  adjustHeight: () => void;
+  editorRef: MutableRefObject<HTMLDivElement | null>;
+};
+
+const ChatComposerInput = memo(function ChatComposerInput({
+  editorRef,
+  disabled,
+  busy,
+  placeholder,
+  onWireInput,
+  adjustHeight,
+  processFiles,
+  setIsComposing,
+  kbdRef,
+}: {
+  editorRef: MutableRefObject<HTMLDivElement | null>;
+  disabled: boolean;
+  busy: boolean;
+  placeholder: string;
+  onWireInput: (wire: string, caret: number) => void;
+  adjustHeight: () => void;
+  processFiles: (files: File[]) => Promise<void>;
+  setIsComposing: (v: boolean) => void;
+  kbdRef: MutableRefObject<ComposerKbdContext>;
+}) {
+  return (
+    <div
+      ref={editorRef}
+      role="textbox"
+      aria-multiline="true"
+      aria-label={placeholder}
+      contentEditable={!(disabled || busy)}
+      suppressContentEditableWarning
+      spellCheck
+      className={cn(
+        'composer-input box-border m-0 max-h-32 min-h-10 w-full overflow-y-auto border-0 bg-transparent px-0 py-2 text-[0.9375rem] leading-6 text-fg focus:outline-none focus:ring-0 disabled:opacity-50',
+        'composer-input-empty',
+      )}
+      data-placeholder={placeholder}
+      onInput={(e) => {
+        const el = e.currentTarget;
+        const wire = serializeEditorToWire(el);
+        syncComposerPlaceholderClass(el, wire);
+        onWireInput(wire, getWireCaretOffset(el));
+        adjustHeight();
+      }}
+      onCompositionStart={() => setIsComposing(true)}
+      onCompositionEnd={() => setIsComposing(false)}
+      onPaste={async (e) => {
+        const items = e.clipboardData?.items;
+        if (!items) return;
+        const imageFiles: File[] = [];
+        for (const item of Array.from(items)) {
+          if (item.type.startsWith('image/')) {
+            const f = item.getAsFile();
+            if (f) imageFiles.push(f);
+          }
+        }
+        if (imageFiles.length > 0) {
+          e.preventDefault();
+          await processFiles(imageFiles);
+          return;
+        }
+        const text = e.clipboardData?.getData('text/plain');
+        if (text) {
+          e.preventDefault();
+          document.execCommand('insertText', false, text);
+        }
+      }}
+      onKeyDown={(e) => {
+        const k = kbdRef.current;
+        if (e.key === 'Backspace' && !k.isComposing && editorRef.current) {
+          if (handleComposerBackspace(editorRef.current)) {
+            e.preventDefault();
+            return;
+          }
+        }
+        const { palette } = k;
+        if (palette.open && palette.items.length > 0) {
+          if (e.key === 'ArrowDown') {
+            e.preventDefault();
+            palette.onNavigate('down');
+            return;
+          }
+          if (e.key === 'ArrowUp') {
+            e.preventDefault();
+            palette.onNavigate('up');
+            return;
+          }
+          if (e.key === 'Enter' && !e.shiftKey && !k.isComposing) {
+            e.preventDefault();
+            const item = palette.items[palette.selectedIndex];
+            if (item) k.applyPaletteItem(item);
+            return;
+          }
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            const range = palette.slashRange;
+            if (range) {
+              const v = k.valueRef.current;
+              const next = k.replaceRange(v, range.start, range.end, '');
+              k.valueRef.current = next;
+              k.setValue(next);
+              k.setCursor(range.start);
+              requestAnimationFrame(() => {
+                const el = k.editorRef.current;
+                if (el) {
+                  applyWireToEditor(el, next, range.start);
+                  syncComposerPlaceholderClass(el, next);
+                }
+                k.adjustHeight();
+              });
+            }
+            return;
+          }
+        }
+        if (e.key === 'Enter' && e.shiftKey && !k.isComposing) {
+          e.preventDefault();
+          document.execCommand('insertText', false, '\n');
+          return;
+        }
+        if (e.key === 'Enter' && !e.shiftKey && !k.isComposing) {
+          e.preventDefault();
+          if (!k.busy && (k.valueRef.current.trim() || k.attachmentsLen > 0)) k.send();
+        }
+      }}
+    />
+  );
+});
 
 export const ChatComposer = memo(function ChatComposer({
   disabled,
@@ -49,10 +204,11 @@ export const ChatComposer = memo(function ChatComposer({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const [value, setValue] = useState('');
+  const [cursor, setCursor] = useState(0);
   const [attachments, setAttachments] = useState<Attachment[]>([]);
   const [isDragging, setIsDragging] = useState(false);
   const [isComposing, setIsComposing] = useState(false);
-  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const editorRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaChunksRef = useRef<Blob[]>([]);
@@ -69,6 +225,8 @@ export const ChatComposer = memo(function ChatComposer({
 
   const busy = sending || streaming;
 
+  const palette = useCommandPalette(value, cursor);
+
   valueRef.current = value;
   attachmentsRef.current = attachments;
   thinkingLevelRef.current = thinkingLevel;
@@ -76,9 +234,8 @@ export const ChatComposer = memo(function ChatComposer({
   onSendRef.current = onSend;
 
   const adjustHeight = useCallback(() => {
-    const el = textareaRef.current;
+    const el = editorRef.current;
     if (!el) return;
-    // Reset before measuring — `height: auto` often leaves an inflated scrollHeight in WebKit/Blink.
     el.style.height = '0px';
     const next = Math.min(el.scrollHeight, TEXTAREA_MAX_HEIGHT_PX);
     el.style.height = `${next}px`;
@@ -88,30 +245,44 @@ export const ChatComposer = memo(function ChatComposer({
     adjustHeight();
   }, [value, adjustHeight]);
 
-  const processFiles = async (files: File[]) => {
-    if (files.length === 0) return;
-    const remaining = MAX_CHAT_ATTACHMENTS - attachments.length;
-    if (remaining <= 0) {
-      console.warn(interpolate(m.chat.maxAttachmentsReached, { max: MAX_CHAT_ATTACHMENTS }));
-      return;
-    }
-    const slice = files.slice(0, remaining);
-    if (files.length > slice.length) {
-      console.warn(
-        interpolate(m.chat.maxAttachmentsTruncated, { max: MAX_CHAT_ATTACHMENTS, dropped: files.length - slice.length }),
-      );
-    }
-    const { loadAttachment } = await import('@/features/chat/attachment-load');
-    const next: Attachment[] = [];
-    for (const file of slice) {
-      if (file.size > maxFileSize) {
-        console.warn(`File ${file.name} exceeds max size`);
-        continue;
+  useEffect(() => {
+    const el = editorRef.current;
+    if (!el) return;
+    const onSelectionChange = () => {
+      if (document.activeElement !== el) return;
+      setCursor(getWireCaretOffset(el));
+    };
+    document.addEventListener('selectionchange', onSelectionChange);
+    return () => document.removeEventListener('selectionchange', onSelectionChange);
+  }, []);
+
+  const processFiles = useCallback(
+    async (files: File[]) => {
+      if (files.length === 0) return;
+      const remaining = MAX_CHAT_ATTACHMENTS - attachments.length;
+      if (remaining <= 0) {
+        console.warn(interpolate(m.chat.maxAttachmentsReached, { max: MAX_CHAT_ATTACHMENTS }));
+        return;
       }
-      next.push(await loadAttachment(file, file.name));
-    }
-    setAttachments((a) => [...a, ...next]);
-  };
+      const slice = files.slice(0, remaining);
+      if (files.length > slice.length) {
+        console.warn(
+          interpolate(m.chat.maxAttachmentsTruncated, { max: MAX_CHAT_ATTACHMENTS, dropped: files.length - slice.length }),
+        );
+      }
+      const { loadAttachment } = await import('@/features/chat/attachment-load');
+      const next: Attachment[] = [];
+      for (const file of slice) {
+        if (file.size > maxFileSize) {
+          console.warn(`File ${file.name} exceeds max size`);
+          continue;
+        }
+        next.push(await loadAttachment(file, file.name));
+      }
+      setAttachments((a) => [...a, ...next]);
+    },
+    [attachments.length, m.chat.maxAttachmentsReached, m.chat.maxAttachmentsTruncated, maxFileSize],
+  );
 
   const stopVoiceRecording = useCallback(() => {
     const rec = mediaRecorderRef.current;
@@ -177,8 +348,16 @@ export const ChatComposer = memo(function ChatComposer({
         const payload = [...attachmentsRef.current.map(attachmentToWire), attachmentToWire(att)];
         onSendRef.current(valueRef.current, payload, thinkingLevelRef.current);
         setValue('');
+        valueRef.current = '';
         setAttachments([]);
-        requestAnimationFrame(() => adjustHeight());
+        requestAnimationFrame(() => {
+          const ed = editorRef.current;
+          if (ed) {
+            applyWireToEditor(ed, '');
+            syncComposerPlaceholderClass(ed, '');
+          }
+          adjustHeight();
+        });
       };
       mediaRecorderRef.current = rec;
       rec.start(250);
@@ -205,6 +384,64 @@ export const ChatComposer = memo(function ChatComposer({
     };
   }, [stopVoiceRecording]);
 
+  const replaceRange = (text: string, start: number, end: number, insert: string) =>
+    text.slice(0, start) + insert + text.slice(end);
+
+  const applyPaletteItem = (item: PaletteItem) => {
+    const range = palette.slashRange;
+    if (!range) return;
+
+    if (item.kind === 'skill') {
+      const insert = `/skill:${item.name} `;
+      const next = replaceRange(valueRef.current, range.start, range.end, insert);
+      setValue(next);
+      valueRef.current = next;
+      const pos = range.start + insert.length;
+      requestAnimationFrame(() => {
+        const el = editorRef.current;
+        if (el) {
+          applyWireToEditor(el, next, pos);
+          syncComposerPlaceholderClass(el, next);
+          setCursor(pos);
+        }
+        adjustHeight();
+      });
+      return;
+    }
+
+    const accepts = item.acceptsArgs === true;
+    if (!accepts) {
+      onSend(`/${item.name}`, undefined, thinkingLevel);
+      setValue('');
+      valueRef.current = '';
+      setAttachments([]);
+      requestAnimationFrame(() => {
+        const el = editorRef.current;
+        if (el) {
+          applyWireToEditor(el, '');
+          syncComposerPlaceholderClass(el, '');
+        }
+        adjustHeight();
+      });
+      return;
+    }
+
+    const insert = `/${item.name} `;
+    const next = replaceRange(valueRef.current, range.start, range.end, insert);
+    setValue(next);
+    valueRef.current = next;
+    const pos = range.start + insert.length;
+    requestAnimationFrame(() => {
+      const el = editorRef.current;
+      if (el) {
+        applyWireToEditor(el, next, pos);
+        syncComposerPlaceholderClass(el, next);
+        setCursor(pos);
+      }
+      adjustHeight();
+    });
+  };
+
   const send = () => {
     if (busy) return;
     if (voiceRecording) {
@@ -221,16 +458,47 @@ export const ChatComposer = memo(function ChatComposer({
     }));
     onSend(value, payload.length ? payload : undefined, thinkingLevel);
     setValue('');
+    valueRef.current = '';
     setAttachments([]);
-    requestAnimationFrame(() => adjustHeight());
+    requestAnimationFrame(() => {
+      const el = editorRef.current;
+      if (el) {
+        applyWireToEditor(el, '');
+        syncComposerPlaceholderClass(el, '');
+      }
+      adjustHeight();
+    });
   };
 
+  const onWireInput = useCallback((wire: string, caret: number) => {
+    valueRef.current = wire;
+    setValue(wire);
+    setCursor(caret);
+  }, []);
+
+  const kbdRef = useRef({} as ComposerKbdContext);
+
   const ThinkingIcon = thinkingIcon(thinkingLevel as ThinkingLevel);
+
+  kbdRef.current = {
+    palette,
+    replaceRange,
+    applyPaletteItem,
+    send,
+    busy,
+    attachmentsLen: attachments.length,
+    isComposing,
+    valueRef,
+    setValue,
+    setCursor,
+    adjustHeight,
+    editorRef,
+  };
 
   return (
     <div
       className={cn(
-        'relative w-full overflow-hidden rounded-xl bg-surface-panel shadow-surface ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:shadow-none',
+        'relative w-full overflow-x-hidden overflow-y-visible rounded-xl bg-surface-panel shadow-surface ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:shadow-none',
         isDragging && 'ring-2 ring-accent ring-inset',
       )}
         onDragOver={(e) => {
@@ -302,41 +570,30 @@ export const ChatComposer = memo(function ChatComposer({
 
         <div
           className={cn(
-            'px-4 pb-0 pt-3',
+            'relative px-4 pb-0 pt-3',
             attachments.length > 0 && 'pt-2',
           )}
         >
-            <textarea
-              ref={textareaRef}
-              className="box-border m-0 max-h-32 min-h-10 w-full resize-none overflow-y-auto border-0 bg-transparent px-0 py-2 text-[0.9375rem] leading-6 text-fg placeholder:text-fg-disabled focus:outline-none focus:ring-0 disabled:opacity-50"
+            <CommandPalette
+              open={palette.open}
+              anchorRef={editorRef}
+              items={palette.loadError ? [] : palette.items}
+              selectedIndex={palette.selectedIndex}
+              skillsGroupLabel={m.chat.commandPalette.skillsGroup}
+              commandsGroupLabel={m.chat.commandPalette.commandsGroup}
+              noResults={palette.loadError ?? m.chat.commandPalette.noResults}
+              onSelectItem={applyPaletteItem}
+            />
+            <ChatComposerInput
+              editorRef={editorRef}
+              disabled={disabled}
+              busy={busy}
               placeholder={m.chat.inputPlaceholder}
-              value={value}
-              disabled={disabled || busy}
-              rows={1}
-              onChange={(e) => setValue(e.target.value)}
-              onCompositionStart={() => setIsComposing(true)}
-              onCompositionEnd={() => setIsComposing(false)}
-              onPaste={async (e) => {
-                const items = e.clipboardData?.items;
-                if (!items) return;
-                const imageFiles: File[] = [];
-                for (const item of Array.from(items)) {
-                  if (item.type.startsWith('image/')) {
-                    const f = item.getAsFile();
-                    if (f) imageFiles.push(f);
-                  }
-                }
-                if (imageFiles.length > 0) {
-                  e.preventDefault();
-                  await processFiles(imageFiles);
-                }
-              }}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && !e.shiftKey && !isComposing) {
-                  e.preventDefault();
-                  if (!busy && (value.trim() || attachments.length > 0)) send();
-                }
-              }}
+              onWireInput={onWireInput}
+              adjustHeight={adjustHeight}
+              processFiles={processFiles}
+              setIsComposing={setIsComposing}
+              kbdRef={kbdRef}
             />
         </div>
 
