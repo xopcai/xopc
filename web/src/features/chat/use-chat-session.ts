@@ -502,6 +502,13 @@ export function useChatSession() {
       levelOverride?: string,
     ) => {
       if ((!content.trim() && !attachments?.length) || sendingRef.current || streamingRef.current) return;
+
+      const trimmed = content.trim();
+      if (trimmed === '/new' && !attachments?.length) {
+        await createNewSession();
+        return;
+      }
+
       if (!sessionKey) return;
 
       const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
@@ -653,6 +660,7 @@ export function useChatSession() {
       modelSupportsThinking,
       finalizeMessage,
       shouldApplyStreamUpdate,
+      createNewSession,
     ],
   );
 
