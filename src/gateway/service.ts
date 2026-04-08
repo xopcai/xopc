@@ -149,6 +149,7 @@ export class GatewayService {
       messageBus: this.bus,
       cronService: this.cronService,
       workspacePath: this.workspacePath,
+      sessionStore: this.sessionManager.getStore(),
     });
 
     this.cronService.setDeps({
