@@ -78,6 +78,7 @@ const TOOL_STAGE_MAP: Record<string, ProgressStage> = {
   'web_search': 'searching',
   'search': 'searching',
   'memory_search': 'searching',
+  'session_search': 'searching',
   'find_files': 'searching',
   
   // Web fetching

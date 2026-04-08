@@ -25,6 +25,7 @@ import type { Message } from './types.js';
 import { SessionCompactor, type CompactionConfig, type CompactionResult } from '../agent/memory/compaction.js';
 import { SlidingWindow, type WindowConfig } from '../agent/memory/window.js';
 import { cleanTrailingErrors, hasProblematicMessages } from '../agent/memory/message-sanitizer.js';
+import { invalidateSessionSearchIndexCache } from './search-index-cache.js';
 
 const log = createLogger('SessionStore');
 
@@ -72,6 +73,11 @@ export class SessionStore {
     this.indexFile = join(this.sessionsDir, FILENAMES.SESSIONS_INDEX);
     this.window = new SlidingWindow(windowConfig);
     this.compactor = new SessionCompactor(compactionConfig);
+  }
+
+  /** Root directory of session JSON files (sharded). Used by `session_search` indexing. */
+  getSessionsRoot(): string {
+    return this.sessionsDir;
   }
 
   // ========== Initialization ==========
@@ -875,6 +881,8 @@ export class SessionStore {
 
     this.indexDirty = true;
     await this.saveIndex();
+
+    invalidateSessionSearchIndexCache();
   }
 
   // ========== Sliding Window & Compaction ==========

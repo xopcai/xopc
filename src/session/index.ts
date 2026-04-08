@@ -3,6 +3,12 @@
 export { SessionManager } from './manager.js';
 export { SessionStore } from './store.js';
 export type { SessionStoreOptions } from './store.js';
+export { SessionSearchIndex } from './search-index.js';
+export {
+  getOrLoadSessionSearchIndex,
+  invalidateSessionSearchIndexCache,
+} from './search-index-cache.js';
+export { fileStemToSessionKey } from './session-file-key.js';
 export {
   resolveLegacyDeepWebShardRelativePath,
   resolveSessionShardRelativePath,
