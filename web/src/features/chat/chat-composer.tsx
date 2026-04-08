@@ -1,6 +1,6 @@
 import { Ban, File as FileIcon, Mic, Send, Sparkles, Square } from 'lucide-react';
 import type { MutableRefObject } from 'react';
-import { memo, useCallback, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
 
 import type { Attachment } from '@/features/chat/attachment-utils';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment-utils';
@@ -225,6 +225,9 @@ export const ChatComposer = memo(function ChatComposer({
 
   const busy = sending || streaming;
 
+  /** Focus input when the composer becomes interactive (enter chat / session finished loading). */
+  const pendingFocusAfterEnableRef = useRef(true);
+
   const palette = useCommandPalette(value, cursor);
 
   valueRef.current = value;
@@ -244,6 +247,19 @@ export const ChatComposer = memo(function ChatComposer({
   useEffect(() => {
     adjustHeight();
   }, [value, adjustHeight]);
+
+  useLayoutEffect(() => {
+    if (disabled) {
+      pendingFocusAfterEnableRef.current = true;
+      return;
+    }
+    if (!pendingFocusAfterEnableRef.current) return;
+    pendingFocusAfterEnableRef.current = false;
+    const id = requestAnimationFrame(() => {
+      editorRef.current?.focus({ preventScroll: true });
+    });
+    return () => cancelAnimationFrame(id);
+  }, [disabled]);
 
   useEffect(() => {
     const el = editorRef.current;
