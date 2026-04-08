@@ -222,6 +222,7 @@ export class AgentService {
       extensionRegistry: config.extensionRegistry,
       bus,
       getCurrentContext: () => this.sessionContextManager.getContext(),
+      getSessionStore: () => this.sessionStore,
       thinkingLevel: config.thinkingLevel,
       reasoningLevel: config.reasoningLevel,
       verboseLevel: config.verboseLevel,

@@ -13,6 +13,9 @@ export interface Config {
       memory?: {
         provider?: 'none' | 'stub';
       };
+      sessionSearch?: {
+        summaryModel?: string;
+      };
     };
   };
   channels?: {

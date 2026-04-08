@@ -286,8 +286,9 @@ ${citationInstruction}
 
 Before answering anything about prior work, decisions, dates, people, preferences, or todos:
 1. Run \`memory_search\` on MEMORY.md, \`.xopcbot/memories/*.md\`, and memory/*.md
-2. Use \`memory_get\` to pull only the needed lines
-3. If low confidence after search, say you checked
+2. For **other chat sessions** / cross-session history, use \`session_search\` with keywords (or omit \`query\` to list recent sessions)
+3. Use \`memory_get\` to pull only the needed lines from files
+4. If low confidence after search, say you checked
 
 ### Memory Files
 

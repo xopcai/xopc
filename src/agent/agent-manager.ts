@@ -23,6 +23,7 @@ import { SystemPromptBuilder } from './prompt/service-prompt-builder.js';
 import { AgentToolsFactory } from './tools/factory.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { MessageBus } from '../infra/bus/index.js';
+import type { SessionStore } from '../session/store.js';
 import type { SessionContext } from './session/session-context.js';
 import type { Skill } from './skills/types.js';
 import { createSkillConfigManager } from './skills/config.js';
@@ -59,6 +60,8 @@ export interface AgentManagerConfig {
   extensionRegistry?: ExtensionRegistry;
   bus: MessageBus;
   getCurrentContext: () => SessionContext | null;
+  /** Session persistence (enables `session_search` when set). */
+  getSessionStore?: () => SessionStore;
   // Thinking configuration
   thinkingLevel?: ThinkingLevel;
   reasoningLevel?: 'off' | 'on' | 'stream';
@@ -119,6 +122,7 @@ export class AgentManager {
       getPrimaryModel: () => this.resolveModel(),
       getBuiltinMemoryStore: () => this.builtinMemoryStore,
       getMemoryManager: () => this.memoryManager,
+      getSessionStore: config.getSessionStore,
     });
 
     this.defaultModel = config.model || getDefaultModelSync(config.config);
