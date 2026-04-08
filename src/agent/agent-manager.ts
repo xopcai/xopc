@@ -110,8 +110,12 @@ export class AgentManager {
   }
 
   /**
-   * Skills currently loaded (merged). `managed` means the skill directory is under ~/.xopcbot/skills.
+   * Expand `/skill:name` user text into the full skill block for the current turn (WebChat, channels).
    */
+  expandSkillUserText(text: string): string {
+    return this.skillManager.expandCommand(text);
+  }
+
   /**
    * Read raw SKILL.md from disk (including frontmatter) for UI preview.
    */

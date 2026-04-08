@@ -170,10 +170,8 @@ export class CommandHandler {
         : undefined,
     });
 
-    // Execute command
     const result = await commandRegistry.execute(commandName, cmdCtx, args);
 
-    // Send response if there's content
     if (result.content) {
       await this.bus.publishOutbound({
         channel: context.channel,
@@ -184,5 +182,137 @@ export class CommandHandler {
     }
 
     return true;
+  }
+
+  /**
+   * Run command and return all user-visible text (ctx.reply + result.content) for SSE/CLI.
+   * Same bus side effects as {@link executeCommand}.
+   */
+  async executeCommandAndAggregateReply(
+    commandName: string,
+    args: string,
+    context: CommandContext,
+  ): Promise<{ handled: boolean; aggregatedText: string }> {
+    if (!commandRegistry.has(commandName)) {
+      return { handled: false, aggregatedText: '' };
+    }
+
+    log.info({ command: commandName, sessionKey: context.sessionKey }, 'Executing command (aggregate reply)');
+
+    const { aggregatedText } = await this.runRegistryExecuteWithCapture(args, commandName, context);
+
+    return { handled: true, aggregatedText };
+  }
+
+  private async runRegistryExecuteWithCapture(
+    args: string,
+    commandName: string,
+    context: CommandContext,
+  ): Promise<{ aggregatedText: string }> {
+    const segments: string[] = [];
+
+    const wrapped = createCommandContext({
+      sessionKey: context.sessionKey,
+      source: context.channel as 'telegram' | 'webui' | 'cli' | 'api' | 'system' | 'gateway',
+      channelId: context.channel,
+      chatId: context.chatId,
+      senderId: context.senderId,
+      isGroup: context.isGroup,
+      config: this.config,
+      bus: this.bus,
+      sessionStore: this.sessionStore,
+      sessionConfigStore: this.sessionConfigStore,
+      applySessionThinkingLevel: this.applySessionThinkingLevel,
+
+      replyHandler: async (text: string, _options?) => {
+        segments.push(text);
+        await this.bus.publishOutbound({
+          channel: context.channel,
+          chat_id: context.chatId,
+          content: text,
+          type: 'message',
+        });
+      },
+
+      typingHandler: async (typing: boolean) => {
+        await this.bus.publishOutbound({
+          channel: context.channel,
+          chat_id: context.chatId,
+          type: typing ? 'typing_on' : 'typing_off',
+        });
+      },
+
+      supportedFeatures: ['markdown', 'typing'],
+
+      getCurrentModel: this.getCurrentModel,
+
+      switchModel: async (modelId: string) => {
+        return this.switchModelForSession(context.sessionKey, modelId);
+      },
+
+      listModels: async () => {
+        const providers = getAllProviders();
+        const models: Array<{ id: string; name: string; provider: string }> = [];
+
+        for (const providerId of providers) {
+          if (isProviderConfiguredSync(providerId)) {
+            const providerModels = getModelsByProvider(providerId);
+            for (const m of providerModels) {
+              models.push({
+                id: `${m.provider}/${m.id}`,
+                name: m.name || m.id,
+                provider: getProviderDisplayName(providerId),
+              });
+            }
+          }
+        }
+
+        return models;
+      },
+
+      getUsage: async () => {
+        const messages = await this.sessionStore.load(context.sessionKey);
+        let promptTokens = 0;
+        let completionTokens = 0;
+
+        for (const msg of messages) {
+          if ('usage' in msg && msg.usage) {
+            const usage = msg.usage as { input?: number; output?: number };
+            promptTokens += usage.input || 0;
+            completionTokens += usage.output || 0;
+          }
+        }
+
+        return {
+          promptTokens,
+          completionTokens,
+          totalTokens: promptTokens + completionTokens,
+          messageCount: messages.length,
+        };
+      },
+
+      invalidateAgentSession: this.invalidateAgentSession,
+
+      abortCurrentTurn: this.abortSessionTurn
+        ? async () => {
+            await this.abortSessionTurn!(context.sessionKey);
+          }
+        : undefined,
+    });
+
+    const result = await commandRegistry.execute(commandName, wrapped, args);
+
+    if (result.content) {
+      segments.push(result.content);
+      await this.bus.publishOutbound({
+        channel: context.channel,
+        chat_id: context.chatId,
+        content: result.content,
+        type: 'message',
+      });
+    }
+
+    const aggregatedText = segments.filter((s) => s && s.trim()).join('\n\n');
+    return { aggregatedText };
   }
 }

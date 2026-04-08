@@ -274,6 +274,28 @@ function normalizeOneAttachment(item: unknown): MessageAttachment {
   };
 }
 
+/**
+ * Session stores the server-expanded skill body (see SkillManager.buildSkillBlock).
+ * Collapse back to wire form for UI: `/skill:name` and optional trailing args from `**Arguments**:`.
+ */
+export function collapseExpandedSkillBlockForDisplay(text: string): string {
+  if (typeof text !== 'string' || !text.includes('## Skill:')) {
+    return text;
+  }
+  const nameMatch = text.match(/## Skill:\s*([^\s\r\n]+)/);
+  if (!nameMatch) {
+    return text;
+  }
+  const name = nameMatch[1] ?? '';
+  if (!name) {
+    return text;
+  }
+  const argMatches = [...text.matchAll(/\*\*Arguments\*\*:\s*([^\r\n]+)/g)];
+  const args =
+    argMatches.length > 0 ? (argMatches[argMatches.length - 1]?.[1] ?? '').trim() : '';
+  return args ? `/skill:${name} ${args}` : `/skill:${name}`;
+}
+
 /** Remove persisted inbound machine lines from bubble text (attachments show separately). */
 export function stripInboundFileMachineText(text: string): string {
   if (!text.includes('xopcbot-path:')) return text;
@@ -359,7 +381,8 @@ function applyStripToUserContent(
   if (role !== 'user' && role !== 'user-with-attachments') return blocks;
   const mapped = blocks.map((b) => {
     if (b.type === 'text' && typeof b.text === 'string') {
-      return { ...b, text: stripInboundFileMachineText(b.text) };
+      const stripped = stripInboundFileMachineText(b.text);
+      return { ...b, text: collapseExpandedSkillBlockForDisplay(stripped) };
     }
     return b;
   });

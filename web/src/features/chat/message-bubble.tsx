@@ -14,6 +14,7 @@ import { AssistantStepsBlock, collectAssistantStepBlocks } from '@/features/chat
 import { AttachmentRenderer } from '@/features/chat/attachment-renderer';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { SearchSourceList } from '@/features/chat/search-source-list';
+import { UserMessageSegments } from '@/features/chat/user-message-segments';
 import { UsageBadge } from '@/features/chat/usage-badge';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -25,8 +26,15 @@ function formatTime(ts?: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function renderTextOrImageBlock(block: MessageContent, key: string) {
+function renderTextOrImageBlock(block: MessageContent, key: string, isUser: boolean) {
   if (block.type === 'text') {
+    if (isUser) {
+      return (
+        <div key={key} className="min-w-0 w-full">
+          <UserMessageSegments text={block.text} />
+        </div>
+      );
+    }
     return (
       <div key={key} className="markdown-content min-w-0">
         <MarkdownView content={block.text} compact />
@@ -43,6 +51,7 @@ function renderTextOrImageBlock(block: MessageContent, key: string) {
 
 function renderChunkedContent(
   content: MessageContent[],
+  isUser: boolean,
   toolLabels: { input: string; output: string; noOutput: string },
   stepLabels: {
     thoughts: string;
@@ -75,7 +84,7 @@ function renderChunkedContent(
         );
       }
     } else {
-      const el = renderTextOrImageBlock(b, `block-${i}`);
+      const el = renderTextOrImageBlock(b, `block-${i}`, isUser);
       if (el) nodes.push(el);
       i++;
     }
@@ -283,7 +292,7 @@ export const MessageBubble = memo(function MessageBubble({
           >
             {(displayContent?.length ?? 0) > 0 ? (
               <>
-                {renderChunkedContent(displayContent, toolLabels, stepLabels)}
+                {renderChunkedContent(displayContent, isUser, toolLabels, stepLabels)}
                 {isStreaming ? (
                   <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
                 ) : null}
