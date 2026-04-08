@@ -93,6 +93,10 @@ extensions/
 └── telegram/           # Workspace package: Telegram channel (@xopcai/xopcbot-extension-telegram)
 ```
 
+## State directory & workspace on disk
+
+Runtime data (config, credentials, per-agent sessions, and the Markdown “workspace” used for bootstrap files) lives outside the git repo under the **state directory** (default `~/.xopcbot`). For a full folder-by-folder reference, environment overrides, and how `agents.defaults.workspace` relates to `agents/<id>/workspace/`, see [State directory & workspace layout](workspace.md).
+
 ## Core Modules
 
 ### Agent Service (`src/agent/service.ts`)
