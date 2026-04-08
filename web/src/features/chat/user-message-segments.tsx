@@ -1,9 +1,7 @@
 import { memo, useMemo } from 'react';
 
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
-
-/** Matches wire format used by the composer (`/skill:name`, no spaces in name). */
-const SKILL_TOKEN = /\/skill:([^\s]+)/g;
+import { skillWireTokenRe } from '@/features/chat/skill-wire-pattern';
 
 export type SkillWireSegment = { kind: 'text'; text: string } | { kind: 'skill'; name: string };
 
@@ -11,7 +9,7 @@ export function parseSkillWireSegments(text: string): SkillWireSegment[] {
   const out: SkillWireSegment[] = [];
   let last = 0;
   let m: RegExpExecArray | null;
-  const re = new RegExp(SKILL_TOKEN.source, 'g');
+  const re = skillWireTokenRe();
   while ((m = re.exec(text)) !== null) {
     if (m.index > last) {
       out.push({ kind: 'text', text: text.slice(last, m.index) });
