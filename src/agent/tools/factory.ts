@@ -30,6 +30,7 @@ import {
 } from './index.js';
 import { createCuratedMemoryTool } from './curated-memory-tool.js';
 import type { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
+import type { MemoryManager } from '../memory/manager.js';
 import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
 import { createLogger } from '../../utils/logger.js';
@@ -49,6 +50,8 @@ export interface ToolFactoryDeps {
   getPrimaryModel?: () => Model<Api>;
   /** Built-in curated memory store (`.xopcbot/memories/`). */
   getBuiltinMemoryStore?: () => BuiltinMemoryStore;
+  /** Phase 2 memory orchestration (prefetch/sync + external tools). */
+  getMemoryManager?: () => MemoryManager;
   // TTS config removed - handled at dispatch layer
 }
 
@@ -92,8 +95,15 @@ export class AgentToolsFactory {
       createMemorySearchTool(workspace),
       createMemoryGetTool(workspace),
       ...(this.deps.getBuiltinMemoryStore
-        ? [createCuratedMemoryTool(this.deps.getBuiltinMemoryStore)]
+        ? [
+            createCuratedMemoryTool(this.deps.getBuiltinMemoryStore, {
+              onMemoryWrite: (action, target, content) => {
+                this.deps.getMemoryManager?.().onMemoryWrite(action, target, content);
+              },
+            }),
+          ]
         : []),
+      ...(this.deps.getMemoryManager?.().getAdditionalTools() ?? []),
       ...optionalTools,
     ];
   }

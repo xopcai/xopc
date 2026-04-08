@@ -61,6 +61,12 @@ export const AgentDefaultsSchema = z.object({
     headKeepRatio: z.number().default(0.3),
     tailKeepRatio: z.number().default(0.3),
   }).optional(),
+  /** Pluggable memory backend (Phase 2). Only one external provider at a time. */
+  memory: z
+    .object({
+      provider: z.enum(['none', 'stub']).optional(),
+    })
+    .optional(),
 });
 
 export const AgentConfigSchema = z.object({
