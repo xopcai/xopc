@@ -71,7 +71,8 @@ const TOOL_STAGE_MAP: Record<string, ProgressStage> = {
   'list_dir': 'reading',
   'ls': 'reading',
   'memory_get': 'reading',
-  
+  'curated_memory': 'writing',
+
   // Searching tools
   'grep': 'searching',
   'web_search': 'searching',

@@ -28,6 +28,8 @@ import {
   createMemorySearchTool,
   createMemoryGetTool,
 } from './index.js';
+import { createCuratedMemoryTool } from './curated-memory-tool.js';
+import type { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
 import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
 import { createLogger } from '../../utils/logger.js';
@@ -45,6 +47,8 @@ export interface ToolFactoryDeps {
   getConfig?: () => Config | undefined;
   /** Session / default chat model for vision tool description. */
   getPrimaryModel?: () => Model<Api>;
+  /** Built-in curated memory store (`.xopcbot/memories/`). */
+  getBuiltinMemoryStore?: () => BuiltinMemoryStore;
   // TTS config removed - handled at dispatch layer
 }
 
@@ -87,6 +91,9 @@ export class AgentToolsFactory {
       createSendMediaTool(bus, () => this.deps.getCurrentContext()),
       createMemorySearchTool(workspace),
       createMemoryGetTool(workspace),
+      ...(this.deps.getBuiltinMemoryStore
+        ? [createCuratedMemoryTool(this.deps.getBuiltinMemoryStore)]
+        : []),
       ...optionalTools,
     ];
   }

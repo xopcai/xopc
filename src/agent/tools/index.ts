@@ -7,6 +7,7 @@ export { createShellTool } from './shell.js';
 
 // Memory tools
 export { createMemorySearchTool, createMemoryGetTool } from './memory-tool.js';
+export { createCuratedMemoryTool } from './curated-memory-tool.js';
 
 // Grep and Find tools
 export {

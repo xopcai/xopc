@@ -5,11 +5,15 @@
  * This is the refactored version for AgentService modularization.
  */
 
+import { readFileSync, existsSync } from 'node:fs';
+import { join } from 'node:path';
+
 import type { Config } from '../../config/schema.js';
 import type { SkillManager } from '../skills/skill-manager.js';
 import type { BootstrapFile } from '../context/workspace.js';
 import { buildSystemPrompt as buildBaseSystemPrompt } from './system-prompt.js';
-import { toWorkspaceBootstrapFile } from '../context/workspace.js';
+import { toWorkspaceBootstrapFile, DEFAULT_USER_FILENAME } from '../context/workspace.js';
+import type { MemorySnapshot } from '../memory/types.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('SystemPromptBuilder');
@@ -41,16 +45,19 @@ export class SystemPromptBuilder {
   /**
    * Build the complete system prompt with all components
    */
-  build(bootstrapFiles: BootstrapFile[]): string {
+  build(
+    bootstrapFiles: BootstrapFile[],
+    options?: { curatedMemorySnapshot?: MemorySnapshot },
+  ): string {
     // Check if heartbeat is enabled
     const heartbeatEnabled = this.config.gateway?.heartbeat?.enabled ?? false;
-    
-    // Extract user timezone from USER.md if available
-    const userTimezone = this.extractTimezone(bootstrapFiles);
-    
+
+    const curatedMemorySnapshot = options?.curatedMemorySnapshot;
+    const userTimezone = this.extractTimezone(bootstrapFiles, curatedMemorySnapshot?.user);
+
     // Convert bootstrap files to workspace format
-    const workspaceBootstrapFiles = bootstrapFiles.map(f => 
-      toWorkspaceBootstrapFile(f, this.workspace)
+    const workspaceBootstrapFiles = bootstrapFiles.map(f =>
+      toWorkspaceBootstrapFile(f, this.workspace),
     );
 
     // Build base system prompt
@@ -59,6 +66,7 @@ export class SystemPromptBuilder {
       heartbeatEnabled,
       availableTools: this.getAvailableTools(),
       userTimezone,
+      curatedMemorySnapshot,
     });
 
     // Get skill prompt
@@ -81,23 +89,51 @@ export class SystemPromptBuilder {
   /**
    * Rebuild the system prompt with current skills
    */
-  rebuild(bootstrapFiles: BootstrapFile[]): string {
+  rebuild(
+    bootstrapFiles: BootstrapFile[],
+    options?: { curatedMemorySnapshot?: MemorySnapshot },
+  ): string {
     // Reload skills first
     this.skillManager.reload();
-    return this.build(bootstrapFiles);
+    return this.build(bootstrapFiles, options);
   }
 
   /**
-   * Extract user timezone from USER.md bootstrap file
+   * Extract user timezone from curated snapshot, bootstrap USER.md, or workspace file.
    */
-  private extractTimezone(bootstrapFiles: BootstrapFile[]): string | undefined {
-    const userFile = bootstrapFiles.find(f => f.name === 'USER.md');
-    if (!userFile || userFile.missing || !userFile.content) {
-      return undefined;
+  private extractTimezone(
+    bootstrapFiles: BootstrapFile[],
+    curatedUserBlock?: string,
+  ): string | undefined {
+    if (curatedUserBlock?.trim()) {
+      const m = curatedUserBlock.match(/Timezone:\s*(.+)/i);
+      if (m) {
+        return m[1].trim();
+      }
     }
 
-    const match = userFile.content.match(/Timezone:\s*(.+)/i);
-    return match ? match[1].trim() : undefined;
+    const userFile = bootstrapFiles.find(f => f.name === DEFAULT_USER_FILENAME);
+    if (userFile && !userFile.missing && userFile.content) {
+      const match = userFile.content.match(/Timezone:\s*(.+)/i);
+      if (match) {
+        return match[1].trim();
+      }
+    }
+
+    const path = join(this.workspace, DEFAULT_USER_FILENAME);
+    if (existsSync(path)) {
+      try {
+        const raw = readFileSync(path, 'utf-8');
+        const match = raw.match(/Timezone:\s*(.+)/i);
+        if (match) {
+          return match[1].trim();
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+
+    return undefined;
   }
 
   /**
@@ -117,15 +153,20 @@ export class SystemPromptBuilder {
   /**
    * Get the base system prompt without skills
    */
-  getBasePrompt(bootstrapFiles: BootstrapFile[]): string {
-    const workspaceBootstrapFiles = bootstrapFiles.map(f => 
-      toWorkspaceBootstrapFile(f, this.workspace)
+  getBasePrompt(
+    bootstrapFiles: BootstrapFile[],
+    options?: { curatedMemorySnapshot?: MemorySnapshot },
+  ): string {
+    const workspaceBootstrapFiles = bootstrapFiles.map(f =>
+      toWorkspaceBootstrapFile(f, this.workspace),
     );
 
+    const snap = options?.curatedMemorySnapshot;
     return buildBaseSystemPrompt(this.workspace, {
       bootstrapFiles: workspaceBootstrapFiles,
       heartbeatEnabled: this.config.gateway?.heartbeat?.enabled ?? false,
-      userTimezone: this.extractTimezone(bootstrapFiles),
+      userTimezone: this.extractTimezone(bootstrapFiles, snap?.user),
+      curatedMemorySnapshot: snap,
     });
   }
 }
