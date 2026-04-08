@@ -20,4 +20,11 @@ describe('parseSkillWireSegments', () => {
       { kind: 'text', text: ' rest' },
     ]);
   });
+
+  it('does not merge CJK typed after the skill id into the skill name', () => {
+    expect(parseSkillWireSegments('/skill:docx阿迪')).toEqual([
+      { kind: 'skill', name: 'docx' },
+      { kind: 'text', text: '阿迪' },
+    ]);
+  });
 });

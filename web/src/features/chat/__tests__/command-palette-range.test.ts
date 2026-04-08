@@ -28,6 +28,13 @@ describe('detectSlashRange', () => {
     const r = detectSlashRange(t, t.length);
     expect(r).toEqual({ start: 6, end: t.length, query: 'n' });
   });
+
+  it('returns null for wire /skill:name tokens (pill), not slash palette', () => {
+    const w = '/skill:docx';
+    expect(detectSlashRange(w, w.length)).toBeNull();
+    const mid = 'prefix /skill:foo';
+    expect(detectSlashRange(mid, mid.length)).toBeNull();
+  });
 });
 
 describe('paletteItemMatchRank', () => {

@@ -392,7 +392,7 @@ export const ChatComposer = memo(function ChatComposer({
     if (!range) return;
 
     if (item.kind === 'skill') {
-      const insert = `/skill:${item.name} `;
+      const insert = `/skill:${item.name}`;
       const next = replaceRange(valueRef.current, range.start, range.end, insert);
       setValue(next);
       valueRef.current = next;
@@ -403,6 +403,7 @@ export const ChatComposer = memo(function ChatComposer({
           applyWireToEditor(el, next, pos);
           syncComposerPlaceholderClass(el, next);
           setCursor(pos);
+          el.focus();
         }
         adjustHeight();
       });
@@ -442,6 +443,7 @@ export const ChatComposer = memo(function ChatComposer({
         applyWireToEditor(el, next, pos);
         syncComposerPlaceholderClass(el, next);
         setCursor(pos);
+        el.focus();
       }
       adjustHeight();
     });

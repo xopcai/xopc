@@ -18,10 +18,15 @@ export function detectSlashRange(text: string, cursor: number): SlashRange | nul
   const before = text.slice(0, c);
   const match = before.match(/\/[^\s]*$/);
   if (!match || match.index === undefined) return null;
+  const token = match[0];
+  // Wire `/skill:name` is rendered as a pill, not an active slash palette — otherwise the list stays open with no matches and blocks typing.
+  if (token.startsWith('/skill:')) {
+    return null;
+  }
   return {
     start: match.index,
     end: c,
-    query: match[0].slice(1),
+    query: token.slice(1),
   };
 }
 
