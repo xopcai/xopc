@@ -52,6 +52,7 @@ import { runAgentTurnWithModelFallbacks } from './orchestration/run-agent-turn-w
 import { applyReasoningVisibilityToSseEvent } from './streaming/reasoning-visibility-sse.js';
 import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
+import { extractAgentUserPlainText } from './memory/user-message-text.js';
 
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
@@ -1007,17 +1008,24 @@ export class AgentService {
 
       if (!abortHandled && !ranSlashCommand && messageContent !== undefined) {
         const agentPromise = (async () => {
+          const userMessage = {
+            role: 'user' as const,
+            content: messageContent,
+            timestamp: Date.now(),
+          };
+          const userPlain = extractAgentUserPlainText(userMessage);
+          const userMessageForModel = await this.agentManager.applyMemoryPrefetchToUserMessage(
+            userMessage,
+            sessionKey,
+          );
           await runAgentTurnWithModelFallbacks({
             agent,
             sessionKey,
             modelManager: this.modelManager,
-            userMessage: {
-              role: 'user',
-              content: messageContent,
-              timestamp: Date.now(),
-            },
+            userMessage: userMessageForModel,
             log,
           });
+          this.agentManager.afterAgentTurn(sessionKey, userPlain);
         })();
 
         agentPromise
@@ -1204,17 +1212,26 @@ export class AgentService {
         : content;
       const messageContent = this.buildMessageContent(textForDirect, prepared);
 
+      const userMessage = {
+        role: 'user' as const,
+        content: messageContent,
+        timestamp: Date.now(),
+      };
+      const userPlain = extractAgentUserPlainText(userMessage);
+      const userMessageForModel = await this.agentManager.applyMemoryPrefetchToUserMessage(
+        userMessage,
+        sessionKey,
+      );
+
       await runAgentTurnWithModelFallbacks({
         agent,
         sessionKey,
         modelManager: this.modelManager,
-        userMessage: {
-          role: 'user',
-          content: messageContent,
-          timestamp: Date.now(),
-        },
+        userMessage: userMessageForModel,
         log,
       });
+
+      this.agentManager.afterAgentTurn(sessionKey, userPlain);
 
       const response = this.agentManager.getLastAssistantContent(sessionKey) || '';
       await this.persistAgentSessionMessages(sessionKey);

@@ -43,6 +43,8 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
     mockAgentManager = {
       getOrCreateAgent: vi.fn().mockReturnValue(mockAgent),
       setThinkingLevel: vi.fn(),
+      applyMemoryPrefetchToUserMessage: vi.fn().mockImplementation(async (m) => m),
+      afterAgentTurn: vi.fn(),
     };
 
     mockSessionStore = {
