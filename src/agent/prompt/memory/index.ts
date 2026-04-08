@@ -40,9 +40,17 @@ function getLongTermMemoryPath(baseDir: string): string {
   return join(baseDir, 'MEMORY.md');
 }
 
+function getCuratedMemoryPaths(baseDir: string): string[] {
+  const memDir = join(baseDir, '.xopcbot', 'memories');
+  const curated = [join(memDir, 'MEMORY.md'), join(memDir, 'USER.md')];
+  return curated.filter((p) => existsSync(p));
+}
+
 function getAllMemoryPaths(baseDir: string): string[] {
   const paths: string[] = [];
-  
+
+  paths.push(...getCuratedMemoryPaths(baseDir));
+
   // Long-term memory
   const longTermPath = getLongTermMemoryPath(baseDir);
   if (existsSync(longTermPath)) {

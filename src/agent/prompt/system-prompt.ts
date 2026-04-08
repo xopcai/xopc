@@ -21,6 +21,7 @@ import {
   DEFAULT_TOOLS_FILENAME,
   stripFrontMatter,
 } from '../context/workspace.js';
+import type { MemorySnapshot } from '../memory/types.js';
 
 // =============================================================================
 // Configuration (Internal)
@@ -63,6 +64,8 @@ export interface SystemPromptOptions {
   };
   /** Active messaging channels */
   channels?: string[];
+  /** Frozen curated memory from `.xopcbot/memories/` (session start only). */
+  curatedMemorySnapshot?: MemorySnapshot;
 }
 
 // =============================================================================
@@ -110,6 +113,24 @@ ${truncated}
 
 _Use this context to provide personalized assistance._
 `;
+}
+
+/**
+ * Curated MEMORY.md + USER.md blocks (frozen at session start).
+ */
+function buildCuratedMemorySection(snapshot: MemorySnapshot | undefined): string {
+  const mem = snapshot?.memory?.trim() ?? '';
+  const user = snapshot?.user?.trim() ?? '';
+  if (!mem && !user) {
+    return '';
+  }
+
+  const body = [mem, user].filter(Boolean).join('\n\n');
+  return `## Curated memory (session snapshot)
+
+> Frozen when this session started. Updates use \`curated_memory\` and save under \`.xopcbot/memories/\`; they do not change this block until a new session.
+
+${body}`;
 }
 
 /**
@@ -226,13 +247,13 @@ _Read HEARTBEAT.md for current tasks. If nothing needs attention, reply: HEARTBE
  */
 function buildMemorySection(
   bootstrapFiles: WorkspaceBootstrapFile[],
-  citationsMode: MemoryCitationsMode = 'on'
+  citationsMode: MemoryCitationsMode = 'on',
+  hasCuratedSnapshot = false,
 ): string {
-  // Check if memory files exist
   const memoryFile = bootstrapFiles.find(f => f.name === DEFAULT_MEMORY_FILENAME);
-  const hasMemory = memoryFile && !memoryFile.missing;
+  const hasWorkspaceMemoryFile = !!(memoryFile && !memoryFile.missing);
 
-  if (!hasMemory) {
+  if (!hasWorkspaceMemoryFile && !hasCuratedSnapshot) {
     return '';
   }
 
@@ -242,19 +263,24 @@ function buildMemorySection(
     ? 'Citations: mention file path when it helps (e.g., Source: MEMORY.md).'
     : 'Citations: include Source: <path#line> when it helps the user verify memory snippets.';
 
+  const curatedLines = hasCuratedSnapshot
+    ? `
+- **Curated store:** \`.xopcbot/memories/MEMORY.md\` and \`.xopcbot/memories/USER.md\` — use \`curated_memory\` to add/replace/remove/read structured entries.`
+    : '';
+
   return `## Memory Recall
 
 ${citationInstruction}
 
 Before answering anything about prior work, decisions, dates, people, preferences, or todos:
-1. Run \`memory_search\` on MEMORY.md + memory/*.md
+1. Run \`memory_search\` on MEMORY.md, \`.xopcbot/memories/*.md\`, and memory/*.md
 2. Use \`memory_get\` to pull only the needed lines
 3. If low confidence after search, say you checked
 
 ### Memory Files
 
 - **Daily notes:** \`memory/YYYY-MM-DD.md\` — raw logs of what happened
-- **Long-term:** \`MEMORY.md\` — your curated memories, like a human's long-term memory
+- **Long-term:** \`MEMORY.md\` — your curated memories, like a human's long-term memory${curatedLines}
 
 ### Writing to Memory
 
@@ -436,7 +462,13 @@ export function buildSystemPrompt(
     userTimezone,
     runtime,
     channels = [],
+    curatedMemorySnapshot,
   } = options;
+
+  const curatedUserFrozen = !!(curatedMemorySnapshot?.user?.trim());
+  const hasCuratedSnapshot = !!(
+    curatedMemorySnapshot?.memory?.trim() || curatedMemorySnapshot?.user?.trim()
+  );
 
   const sections: string[] = [];
 
@@ -446,52 +478,57 @@ export function buildSystemPrompt(
     sections.push(buildSoulSection(bootstrapFiles));
   }
 
-  // 2. User context (non-minimal only)
+  // 2. Curated memory snapshot (non-minimal; frozen at session start)
   if (!isMinimal) {
+    sections.push(buildCuratedMemorySection(curatedMemorySnapshot));
+  }
+
+  // 3. User context — workspace USER.md unless curated user block is active
+  if (!isMinimal && !curatedUserFrozen) {
     sections.push(buildUserSection(bootstrapFiles));
   }
 
-  // 3. Time (non-minimal only)
+  // 4. Time (non-minimal only)
   if (!isMinimal) {
     sections.push(buildTimeSection(userTimezone));
   }
 
-  // 4. Memory section (non-minimal only)
+  // 5. Memory section (non-minimal only)
   if (!isMinimal) {
-    sections.push(buildMemorySection(bootstrapFiles, memoryCitationsMode));
+    sections.push(buildMemorySection(bootstrapFiles, memoryCitationsMode, hasCuratedSnapshot));
   }
 
-  // 5. Skills
+  // 6. Skills
   sections.push(buildSkillsSection(availableTools));
 
-  // 6. Problem Solving Workflow (non-minimal only) - Harness Engineering
+  // 7. Problem Solving Workflow (non-minimal only) - Harness Engineering
   if (!isMinimal) {
     sections.push(buildProblemSolvingSection());
   }
 
-  // 7. Aesthetic Guidelines (non-minimal only)
+  // 8. Aesthetic Guidelines (non-minimal only)
   if (!isMinimal) {
     sections.push(buildAestheticSection());
   }
 
-  // 8. Heartbeat
+  // 9. Heartbeat
   sections.push(buildHeartbeatSection(bootstrapFiles, heartbeatEnabled, heartbeatPrompt, userTimezone));
 
-  // 9. Working directory
+  // 10. Working directory
   sections.push(buildWorkingDirSection(workspaceDir));
 
-  // 10. Tools (non-minimal only)
+  // 11. Tools (non-minimal only)
   if (!isMinimal) {
     sections.push(buildToolsSection(bootstrapFiles));
   }
 
-  // 11. Agents guidelines
+  // 12. Agents guidelines
   sections.push(buildAgentsSection(bootstrapFiles));
 
-  // 12. Messaging
+  // 13. Messaging
   sections.push(buildMessagingSection(channels, isMinimal));
 
-  // 13. Runtime info
+  // 14. Runtime info
   sections.push(buildRuntimeSection(runtime));
 
   // Filter out empty sections and join
