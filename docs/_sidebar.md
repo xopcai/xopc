@@ -4,6 +4,7 @@
 
 - **Core Concepts**
   - [Architecture](architecture.md)
+  - [State & workspace layout](workspace.md)
   - [Routing System](routing-system.md)
   - [Agent Control Protocol (ACP)](acp.md)
   - [Session Management](session.md)

@@ -34,6 +34,7 @@ export default defineConfig({
             text: 'Core Concepts',
             items: [
               { text: 'Architecture', link: '/architecture' },
+              { text: 'State & workspace layout', link: '/workspace' },
               { text: 'Configuration', link: '/configuration' },
               { text: 'Routing System', link: '/routing-system' },
               { text: 'Agent Control Protocol (ACP)', link: '/acp' },
@@ -61,8 +62,7 @@ export default defineConfig({
             text: 'Reference',
             items: [
               { text: 'Templates', link: '/reference/templates' },
-              { text: 'UI Design System', link: '/design/ui-design-system' },
-              { text: 'Gateway Console (Web UI)', link: '/web-migration-plan' }
+              { text: 'UI Design System', link: '/design/ui-design-system' }
             ]
           }
         ],
@@ -96,6 +96,7 @@ export default defineConfig({
             text: '核心概念',
             items: [
               { text: '架构设计', link: '/zh/architecture' },
+              { text: '状态目录与工作空间', link: '/zh/workspace' },
               { text: '配置参考', link: '/zh/configuration' },
               { text: 'Session 路由', link: '/zh/routing-system' },
               { text: 'ACP 协议', link: '/zh/acp' },
@@ -123,9 +124,7 @@ export default defineConfig({
             text: '参考',
             items: [
               { text: '模板文件', link: '/zh/reference/templates' },
-              { text: '构建与发布', link: '/zh/build-and-release' },
-              { text: '控制台 UI 设计规范', link: '/design/ui-design-system' },
-              { text: '网关控制台 (Web UI)', link: '/zh/web-migration-plan' }
+              { text: '控制台 UI 设计规范', link: '/design/ui-design-system' }
             ]
           }
         ],
