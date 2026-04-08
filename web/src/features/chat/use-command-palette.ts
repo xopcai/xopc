@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listSkillNamesInWire } from '@/features/chat/composer-editor-wire';
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/command-palette-api';
 import type { PaletteItem, SlashRange } from '@/features/chat/command-palette.types';
+import { paletteDefaultTiebreak } from '@/features/chat/palette-default-order';
 
 /** Max rows in the flat palette (skills and commands mixed, sorted by match then name). */
 const MAX_PALETTE_ITEMS = 20;
@@ -164,11 +165,11 @@ export function useCommandPalette(value: string, cursor: number) {
       if (a.rank !== b.rank) {
         return a.rank - b.rank;
       }
-      const byName = a.item.name.localeCompare(b.item.name);
-      if (byName !== 0) {
-        return byName;
+      const byDefault = paletteDefaultTiebreak(a.item, b.item);
+      if (byDefault !== 0) {
+        return byDefault;
       }
-      return a.item.id.localeCompare(b.item.id);
+      return 0;
     });
 
     return scored.slice(0, MAX_PALETTE_ITEMS).map((s) => s.item);
