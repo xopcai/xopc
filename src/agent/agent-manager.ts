@@ -25,6 +25,9 @@ import { isUnderManagedSkillsDir } from './skills/managed-store.js';
 import { readFileSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 
+import { BuiltinMemoryStore } from './memory/builtin-memory-store.js';
+import type { MemorySnapshot } from './memory/types.js';
+
 const log = createLogger('AgentManager');
 
 export interface SkillCatalogEntry {
@@ -58,6 +61,8 @@ export interface AgentInstance {
   sessionKey: string;
   createdAt: number;
   lastUsedAt: number;
+  /** Curated `.xopcbot/memories/` snapshot frozen at agent creation (prefix cache). */
+  curatedMemorySnapshot: MemorySnapshot;
 }
 
 export class AgentManager {
@@ -70,10 +75,17 @@ export class AgentManager {
   private bootstrapFiles: ReturnType<typeof loadBootstrapFiles>;
   private credentialCache = new Map<string, string>();
   private credentialResolver: CredentialResolver;
+  private readonly builtinMemoryStore: BuiltinMemoryStore;
 
   constructor(config: AgentManagerConfig) {
     this.config = config;
     this.bootstrapFiles = loadBootstrapFiles(config.workspace);
+
+    this.builtinMemoryStore = new BuiltinMemoryStore({
+      workspaceDir: config.workspace,
+      memoryCharLimit: 2200,
+      userCharLimit: 1375,
+    });
 
     this.skillManager = new SkillManager(config.workspace, resolveBundledSkillsDir());
     this.systemPromptBuilder = new SystemPromptBuilder({
@@ -89,6 +101,7 @@ export class AgentManager {
       bus: config.bus,
       getConfig: () => this.config.config,
       getPrimaryModel: () => this.resolveModel(),
+      getBuiltinMemoryStore: () => this.builtinMemoryStore,
     });
 
     this.defaultModel = config.model || getDefaultModelSync(config.config);
@@ -156,8 +169,10 @@ export class AgentManager {
    */
   refreshSkillsAfterSkillConfigChange(): void {
     this.skillManager.refreshPromptFromConfig();
-    const newPrompt = this.systemPromptBuilder.build(this.bootstrapFiles);
     for (const instance of this.agents.values()) {
+      const newPrompt = this.systemPromptBuilder.build(this.bootstrapFiles, {
+        curatedMemorySnapshot: instance.curatedMemorySnapshot,
+      });
       instance.agent.setSystemPrompt(newPrompt);
     }
     log.info({ agents: this.agents.size }, 'Skill toggles applied; system prompt updated');
@@ -167,8 +182,10 @@ export class AgentManager {
    * Reload skills from disk and refresh system prompt on all active Agent instances.
    */
   refreshSkillsAfterDiskChange(): void {
-    const newPrompt = this.systemPromptBuilder.rebuild(this.bootstrapFiles);
     for (const instance of this.agents.values()) {
+      const newPrompt = this.systemPromptBuilder.rebuild(this.bootstrapFiles, {
+        curatedMemorySnapshot: instance.curatedMemorySnapshot,
+      });
       instance.agent.setSystemPrompt(newPrompt);
     }
     log.info({ agents: this.agents.size }, 'Skills refreshed; system prompt updated');
@@ -186,11 +203,13 @@ export class AgentManager {
     }
 
     const agent = this.createAgent();
+    const snap = this.builtinMemoryStore.getSnapshot();
     this.agents.set(sessionKey, {
       agent,
       sessionKey,
       createdAt: Date.now(),
       lastUsedAt: Date.now(),
+      curatedMemorySnapshot: { memory: snap.memory, user: snap.user },
     });
 
     log.debug({ sessionKey, totalAgents: this.agents.size }, 'Created new agent instance');
@@ -289,9 +308,16 @@ export class AgentManager {
     const tools = this.toolsFactory.createAllTools();
     const model = this.resolveModel();
 
+    this.builtinMemoryStore.loadFromDiskSync();
+    const snap = this.builtinMemoryStore.getSnapshot();
+    const curatedMemorySnapshot: MemorySnapshot = {
+      memory: snap.memory,
+      user: snap.user,
+    };
+
     return new Agent({
       initialState: {
-        systemPrompt: this.systemPromptBuilder.build(this.bootstrapFiles),
+        systemPrompt: this.systemPromptBuilder.build(this.bootstrapFiles, { curatedMemorySnapshot }),
         model,
         thinkingLevel: this.config.thinkingLevel || 'medium',
         tools,
