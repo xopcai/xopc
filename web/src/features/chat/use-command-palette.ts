@@ -4,7 +4,8 @@ import { listSkillNamesInWire } from '@/features/chat/composer-editor-wire';
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/command-palette-api';
 import type { PaletteItem, SlashRange } from '@/features/chat/command-palette.types';
 
-const MAX_VISIBLE = 8;
+/** Max rows in the flat palette (skills and commands mixed, sorted by match then name). */
+const MAX_PALETTE_ITEMS = 20;
 
 export function detectSlashRange(text: string, cursor: number): SlashRange | null {
   const len = text.length;
@@ -24,19 +25,52 @@ export function detectSlashRange(text: string, cursor: number): SlashRange | nul
   };
 }
 
-function matchesQuery(item: PaletteItem, q: string): boolean {
+/**
+ * Lower rank = stronger match. `null` = no match.
+ * Name / alias matches rank above description-only (avoids e.g. `/new` listing skills whose description contains "new").
+ */
+export function paletteItemMatchRank(item: PaletteItem, q: string): number | null {
   const needle = q.trim().toLowerCase();
-  if (!needle) return true;
-  const hay = [
-    item.name,
-    item.description,
-    item.category ?? '',
-    ...(item.aliases ?? []),
-    item.kind === 'skill' ? item.source ?? '' : '',
-  ]
-    .join('\n')
-    .toLowerCase();
-  return hay.includes(needle);
+  if (!needle) {
+    return 0;
+  }
+
+  const name = item.name.toLowerCase();
+  if (name === needle) {
+    return 0;
+  }
+  for (const a of item.aliases ?? []) {
+    if (a.toLowerCase() === needle) {
+      return 1;
+    }
+  }
+  if (name.startsWith(needle)) {
+    return 2;
+  }
+  for (const a of item.aliases ?? []) {
+    if (a.toLowerCase().startsWith(needle)) {
+      return 3;
+    }
+  }
+  if (name.includes(needle)) {
+    return 4;
+  }
+  for (const a of item.aliases ?? []) {
+    if (a.toLowerCase().includes(needle)) {
+      return 5;
+    }
+  }
+  const desc = (item.description ?? '').toLowerCase();
+  if (desc.includes(needle)) {
+    return 100;
+  }
+  if ((item.category ?? '').toLowerCase().includes(needle)) {
+    return 101;
+  }
+  if (item.kind === 'skill' && (item.source ?? '').toLowerCase().includes(needle)) {
+    return 102;
+  }
+  return null;
 }
 
 export function useCommandPalette(value: string, cursor: number) {
@@ -100,42 +134,68 @@ export function useCommandPalette(value: string, cursor: number) {
 
   const query = slashRange?.query ?? '';
 
-  const filteredItems = useMemo(() => {
+  /** Slash commands only run when the token is at the start of the composer (`/new`); mid-string `/` is for skills only. */
+  const commandsAllowed = slashRange !== null && slashRange.start === 0;
+
+  const items = useMemo(() => {
     const alreadyPicked = listSkillNamesInWire(value);
-    const list = allItems.filter((item) => {
-      if (item.kind === 'skill' && alreadyPicked.has(item.name)) {
-        return false;
+    const scored: Array<{ item: PaletteItem; rank: number }> = [];
+
+    for (const item of allItems) {
+      if (item.kind === 'command' && !commandsAllowed) {
+        continue;
       }
-      return matchesQuery(item, query);
+      if (item.kind === 'skill' && alreadyPicked.has(item.name)) {
+        continue;
+      }
+      const rank = paletteItemMatchRank(item, query);
+      if (rank === null) {
+        continue;
+      }
+      scored.push({ item, rank });
+    }
+
+    scored.sort((a, b) => {
+      if (a.rank !== b.rank) {
+        return a.rank - b.rank;
+      }
+      const byName = a.item.name.localeCompare(b.item.name);
+      if (byName !== 0) {
+        return byName;
+      }
+      return a.item.id.localeCompare(b.item.id);
     });
-    return list.slice(0, MAX_VISIBLE);
-  }, [allItems, query, value]);
+
+    return scored.slice(0, MAX_PALETTE_ITEMS).map((s) => s.item);
+  }, [allItems, commandsAllowed, query, value]);
 
   useEffect(() => {
     setSelectedIndex(0);
   }, [query]);
 
   useEffect(() => {
-    if (selectedIndex >= filteredItems.length) {
-      setSelectedIndex(Math.max(0, filteredItems.length - 1));
+    if (selectedIndex >= items.length) {
+      setSelectedIndex(Math.max(0, items.length - 1));
     }
-  }, [filteredItems.length, selectedIndex]);
+  }, [items.length, selectedIndex]);
 
   const onNavigate = useCallback(
     (dir: 'up' | 'down') => {
-      if (filteredItems.length === 0) return;
+      if (items.length === 0) return;
       setSelectedIndex((i) => {
-        if (dir === 'down') return (i + 1) % filteredItems.length;
-        return (i - 1 + filteredItems.length) % filteredItems.length;
+        if (dir === 'down') return (i + 1) % items.length;
+        return (i - 1 + items.length) % items.length;
       });
     },
-    [filteredItems.length],
+    [items.length],
   );
 
   return {
     open: paletteActive,
     slashRange,
-    items: filteredItems,
+    /** False when `/` is not at position 0 — palette may still list skills. */
+    commandsAllowed,
+    items,
     selectedIndex,
     query,
     loadError,

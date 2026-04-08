@@ -409,6 +409,11 @@ export const ChatComposer = memo(function ChatComposer({
       return;
     }
 
+    // Slash commands are only valid at the start of the composer (`/new`); mid-string `/` is for skills.
+    if (item.kind === 'command' && range.start !== 0) {
+      return;
+    }
+
     const accepts = item.acceptsArgs === true;
     if (!accepts) {
       onSend(`/${item.name}`, undefined, thinkingLevel);
@@ -579,8 +584,6 @@ export const ChatComposer = memo(function ChatComposer({
               anchorRef={editorRef}
               items={palette.loadError ? [] : palette.items}
               selectedIndex={palette.selectedIndex}
-              skillsGroupLabel={m.chat.commandPalette.skillsGroup}
-              commandsGroupLabel={m.chat.commandPalette.commandsGroup}
               noResults={palette.loadError ?? m.chat.commandPalette.noResults}
               onSelectItem={applyPaletteItem}
             />

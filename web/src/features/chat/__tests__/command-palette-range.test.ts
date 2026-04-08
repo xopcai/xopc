@@ -1,5 +1,6 @@
 import { describe, it, expect } from 'vitest';
-import { detectSlashRange } from '@/features/chat/use-command-palette';
+import type { PaletteItem } from '@/features/chat/command-palette.types';
+import { detectSlashRange, paletteItemMatchRank } from '@/features/chat/use-command-palette';
 
 describe('detectSlashRange', () => {
   it('detects active slash token before cursor', () => {
@@ -20,5 +21,56 @@ describe('detectSlashRange', () => {
 
   it('treats lone slash when cursor not yet synced', () => {
     expect(detectSlashRange('/', 0)).toEqual({ start: 0, end: 1, query: '' });
+  });
+
+  it('detects mid-string slash for palette (commands gated separately by start === 0)', () => {
+    const t = 'hello /n';
+    const r = detectSlashRange(t, t.length);
+    expect(r).toEqual({ start: 6, end: t.length, query: 'n' });
+  });
+});
+
+describe('paletteItemMatchRank', () => {
+  const cmdNew: PaletteItem = {
+    kind: 'command',
+    id: 'cmd:new',
+    name: 'new',
+    description: 'Start a new session',
+    category: 'session',
+  };
+  const skillDocx: PaletteItem = {
+    kind: 'skill',
+    id: 'skill:docx',
+    name: 'docx',
+    description: 'Create a new Word document',
+    category: 'skill',
+  };
+
+  it('ranks exact name above description-only substring', () => {
+    expect(paletteItemMatchRank(cmdNew, 'new')).toBe(0);
+    expect(paletteItemMatchRank(skillDocx, 'new')).toBe(100);
+    expect((paletteItemMatchRank(cmdNew, 'new') ?? 999) < (paletteItemMatchRank(skillDocx, 'new') ?? 999)).toBe(true);
+  });
+
+  it('ranks name prefix above description match', () => {
+    const skillNet: PaletteItem = {
+      kind: 'skill',
+      id: 'skill:net',
+      name: 'network',
+      description: 'Networking help',
+      category: 'skill',
+    };
+    const skillDescOnly: PaletteItem = {
+      kind: 'skill',
+      id: 'skill:x',
+      name: 'zzz',
+      description: 'Uses net protocol',
+      category: 'skill',
+    };
+    expect(paletteItemMatchRank(skillNet, 'net')).toBe(2);
+    expect(paletteItemMatchRank(skillDescOnly, 'net')).toBe(100);
+    expect((paletteItemMatchRank(skillNet, 'net') ?? 999) < (paletteItemMatchRank(skillDescOnly, 'net') ?? 999)).toBe(
+      true,
+    );
   });
 });
