@@ -38,4 +38,18 @@ describe('removeTrailingSkillTokenBeforeCaret', () => {
       caret: 9,
     });
   });
+
+  it('at EOW removes token plus trailing spaces after palette-style insert', () => {
+    const w = '/skill:foo ';
+    expect(removeTrailingSkillTokenBeforeCaret(w, w.length)).toEqual({
+      wire: '',
+      caret: 0,
+    });
+  });
+
+  it('does not remove skill when caret is after a separator space before more text', () => {
+    const w = '/skill:foo bar';
+    // Caret immediately after the space between skill and "bar"
+    expect(removeTrailingSkillTokenBeforeCaret(w, '/skill:foo '.length)).toBeNull();
+  });
 });

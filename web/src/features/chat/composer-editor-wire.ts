@@ -1,5 +1,11 @@
 /** Wire format: `/skill:name` for API. DOM shows pills with visible `/name` only. */
 
+import {
+  SKILL_WIRE_TRAILING_EOW_WS_RE,
+  SKILL_WIRE_TRAILING_PLAIN_RE,
+  skillWireTokenRe,
+} from '@/features/chat/skill-wire-pattern';
+
 const ZWSP = '\u200b';
 const CARET_PROBE = '\u2060'; // word joiner — not used in skill names / user text
 
@@ -33,7 +39,7 @@ export function serializeEditorToWire(root: HTMLElement): string {
 /** All `/skill:name` tokens in wire (for palette dedup). */
 export function listSkillNamesInWire(wire: string): Set<string> {
   const out = new Set<string>();
-  const re = /\/skill:([^\s]+)/g;
+  const re = skillWireTokenRe();
   let m: RegExpExecArray | null;
   while ((m = re.exec(wire)) !== null) {
     const name = m[1];
@@ -80,7 +86,7 @@ function appendSkillPill(root: HTMLElement, name: string): void {
  * remove the whole token on Backspace (contenteditable=false pills are not deleted natively).
  */
 export function removeSkillTokenAtOrBeforeCaret(wire: string, caret: number): { wire: string; caret: number } | null {
-  const re = /\/skill:[^\s]+/g;
+  const re = skillWireTokenRe();
   let m: RegExpExecArray | null;
   while ((m = re.exec(wire)) !== null) {
     const start = m.index;
@@ -95,19 +101,34 @@ export function removeSkillTokenAtOrBeforeCaret(wire: string, caret: number): { 
 
 /**
  * If the text before the caret ends with a full `/skill:name`, remove it (handles caret one past token end).
+ * When the caret is at end-of-wire, also treats ASCII / common whitespace after the token as part of the
+ * removable suffix so a palette-inserted trailing space does not require an extra Backspace before the pill
+ * handler runs (see {@link appendSkillPill} ZWSP).
  */
 export function removeTrailingSkillTokenBeforeCaret(wire: string, caret: number): { wire: string; caret: number } | null {
   if (caret <= 0) {
     return null;
   }
   const head = wire.slice(0, caret);
-  const m = head.match(/(\/skill:[^\s]+)$/);
-  if (!m?.[1]) {
-    return null;
+
+  let m = head.match(SKILL_WIRE_TRAILING_PLAIN_RE);
+  if (m?.[1]) {
+    const tok = m[1];
+    const start = head.length - tok.length;
+    return { wire: wire.slice(0, start) + wire.slice(caret), caret: start };
   }
-  const tok = m[1];
-  const start = head.length - tok.length;
-  return { wire: wire.slice(0, start) + wire.slice(caret), caret: start };
+
+  // Caret at EOW only: remove last `/skill:name` plus any trailing whitespace (not `\n` — new paragraph is real content).
+  if (caret === wire.length) {
+    m = head.match(SKILL_WIRE_TRAILING_EOW_WS_RE);
+    if (m?.[1]) {
+      const full = m[0];
+      const start = head.length - full.length;
+      return { wire: wire.slice(0, start) + wire.slice(caret), caret: start };
+    }
+  }
+
+  return null;
 }
 
 /**
@@ -155,7 +176,7 @@ export function applyWireToEditor(root: HTMLElement, wire: string, caretWireOffs
     w = wire.slice(0, o) + CARET_PROBE + wire.slice(o);
   }
 
-  const re = /\/skill:([^\s]+)/g;
+  const re = skillWireTokenRe();
   let last = 0;
   let m: RegExpExecArray | null;
   while ((m = re.exec(w)) !== null) {
