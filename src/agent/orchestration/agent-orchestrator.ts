@@ -199,13 +199,17 @@ export class AgentOrchestrator {
    * Build an agent message from an inbound message
    */
   private buildUserMessage(msg: InboundMessage): AgentMessage {
+    const textBody = msg.content.trimStart().startsWith('/skill:')
+      ? this.agentManager.expandSkillUserText(msg.content)
+      : msg.content;
+
     // If there are attachments, build array content with text and images
     if (msg.attachments && msg.attachments.length > 0) {
       const messageContent: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
 
       // Add text content if present
       if (msg.content.trim()) {
-        messageContent.push({ type: 'text', text: msg.content });
+        messageContent.push({ type: 'text', text: textBody });
       }
 
       // Add image attachments
@@ -246,7 +250,7 @@ export class AgentOrchestrator {
         log.warn({ attachmentCount: msg.attachments.length }, 'All attachments were skipped, falling back to text message');
         return {
           role: 'user',
-          content: msg.content || '[Image attachment could not be processed]',
+          content: textBody || '[Image attachment could not be processed]',
           timestamp: Date.now(),
         };
       }
@@ -261,7 +265,7 @@ export class AgentOrchestrator {
     // No attachments - use simple string format (backward compatible)
     return {
       role: 'user',
-      content: msg.content,
+      content: textBody,
       timestamp: Date.now(),
     };
   }

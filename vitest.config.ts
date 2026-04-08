@@ -8,6 +8,7 @@ export default defineConfig({
   resolve: {
     alias: {
       '@xopcai/xopcbot': path.resolve(__dirname, 'src'),
+      '@': path.resolve(__dirname, 'web/src'),
     },
   },
   test: {

@@ -204,6 +204,12 @@ const bundles: Record<
       messageCopyPlainText: string;
       messageCopyMarkdown: string;
       messageCopied: string;
+      commandPalette: {
+        skillsGroup: string;
+        commandsGroup: string;
+        noResults: string;
+        placeholder: string;
+      };
     };
     sessions: {
       title: string;
@@ -1158,6 +1164,12 @@ const bundles: Record<
       messageCopyPlainText: 'Copy plain text',
       messageCopyMarkdown: 'Copy Markdown',
       messageCopied: 'Copied',
+      commandPalette: {
+        skillsGroup: 'Skills',
+        commandsGroup: 'Commands',
+        noResults: 'No matching commands or skills',
+        placeholder: 'Search skills and commands…',
+      },
     },
     sessions: {
       title: 'Sessions',
@@ -2164,6 +2176,12 @@ const bundles: Record<
       messageCopyPlainText: '复制纯文本',
       messageCopyMarkdown: '复制 Markdown 格式',
       messageCopied: '已复制',
+      commandPalette: {
+        skillsGroup: '技能',
+        commandsGroup: '命令',
+        noResults: '没有匹配的命令或技能',
+        placeholder: '搜索技能与命令…',
+      },
     },
     sessions: {
       title: '会话',

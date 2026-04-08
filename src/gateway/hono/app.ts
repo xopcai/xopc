@@ -46,6 +46,7 @@ import {
   validateModelsConfig,
 } from '../../config/models-json.js';
 import { CredentialResolver } from '../../auth/credentials.js';
+import { commandRegistry } from '../../chat-commands/index.js';
 import { applyToolsWebPatch, safeToolsWebForGet } from '../config-tools-web.js';
 import { createFixedWindowRateLimiter } from '../../infra/rate-limit.js';
 
@@ -1374,6 +1375,24 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     })));
 
     return c.json({ ok: true, payload: { providers: meta } });
+  });
+
+  // ========== Chat slash commands (CommandRegistry) ==========
+
+  authenticated.get('/api/commands', (c) => {
+    const commands = commandRegistry
+      .list()
+      .filter((cmd) => cmd.scope.includes('global') || cmd.scope.includes('private'))
+      .map((cmd) => ({
+        id: cmd.id,
+        name: cmd.name,
+        aliases: cmd.aliases ?? [],
+        description: cmd.description,
+        category: cmd.category,
+        acceptsArgs: cmd.acceptsArgs ?? false,
+        examples: cmd.examples ?? [],
+      }));
+    return c.json({ ok: true, payload: { commands } });
   });
 
   // ========== Skills (managed global skills under ~/.xopcbot/skills) ==========
