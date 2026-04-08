@@ -67,6 +67,13 @@ export const AgentDefaultsSchema = z.object({
       provider: z.enum(['none', 'stub']).optional(),
     })
     .optional(),
+  /** Cross-session transcript search (`session_search` tool). */
+  sessionSearch: z
+    .object({
+      /** Model ref for per-session summaries (e.g. openai/gpt-4o-mini). */
+      summaryModel: z.string().optional(),
+    })
+    .optional(),
 });
 
 export const AgentConfigSchema = z.object({

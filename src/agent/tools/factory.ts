@@ -29,8 +29,10 @@ import {
   createMemoryGetTool,
 } from './index.js';
 import { createCuratedMemoryTool } from './curated-memory-tool.js';
+import { createSessionSearchTool } from './session-search-tool.js';
 import type { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
 import type { MemoryManager } from '../memory/manager.js';
+import type { SessionStore } from '../../session/store.js';
 import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
 import { createLogger } from '../../utils/logger.js';
@@ -52,6 +54,8 @@ export interface ToolFactoryDeps {
   getBuiltinMemoryStore?: () => BuiltinMemoryStore;
   /** Phase 2 memory orchestration (prefetch/sync + external tools). */
   getMemoryManager?: () => MemoryManager;
+  /** Session store for `session_search` (Phase 3). */
+  getSessionStore?: () => SessionStore;
   // TTS config removed - handled at dispatch layer
 }
 
@@ -104,6 +108,15 @@ export class AgentToolsFactory {
           ]
         : []),
       ...(this.deps.getMemoryManager?.().getAdditionalTools() ?? []),
+      ...(this.deps.getSessionStore
+        ? [
+            createSessionSearchTool({
+              getSessionStore: this.deps.getSessionStore,
+              getConfig: this.deps.getConfig,
+              getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+            }),
+          ]
+        : []),
       ...optionalTools,
     ];
   }
