@@ -66,6 +66,8 @@ export interface SystemPromptOptions {
   channels?: string[];
   /** Frozen curated memory from `.xopcbot/memories/` (session start only). */
   curatedMemorySnapshot?: MemorySnapshot;
+  /** External memory provider static instructions (Phase 2). */
+  externalMemoryInstructions?: string;
 }
 
 // =============================================================================
@@ -118,6 +120,16 @@ _Use this context to provide personalized assistance._
 /**
  * Curated MEMORY.md + USER.md blocks (frozen at session start).
  */
+function buildExternalMemorySection(text: string | undefined): string {
+  const t = text?.trim();
+  if (!t) {
+    return '';
+  }
+  return `## External memory provider
+
+${t}`;
+}
+
 function buildCuratedMemorySection(snapshot: MemorySnapshot | undefined): string {
   const mem = snapshot?.memory?.trim() ?? '';
   const user = snapshot?.user?.trim() ?? '';
@@ -463,6 +475,7 @@ export function buildSystemPrompt(
     runtime,
     channels = [],
     curatedMemorySnapshot,
+    externalMemoryInstructions,
   } = options;
 
   const curatedUserFrozen = !!(curatedMemorySnapshot?.user?.trim());
@@ -481,6 +494,11 @@ export function buildSystemPrompt(
   // 2. Curated memory snapshot (non-minimal; frozen at session start)
   if (!isMinimal) {
     sections.push(buildCuratedMemorySection(curatedMemorySnapshot));
+  }
+
+  // 2b. External memory provider (Phase 2)
+  if (!isMinimal) {
+    sections.push(buildExternalMemorySection(externalMemoryInstructions));
   }
 
   // 3. User context — workspace USER.md unless curated user block is active

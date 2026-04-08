@@ -10,6 +10,9 @@ export interface Config {
       maxTokens?: number;
       temperature?: number;
       max_tool_iterations?: number;
+      memory?: {
+        provider?: 'none' | 'stub';
+      };
     };
   };
   channels?: {

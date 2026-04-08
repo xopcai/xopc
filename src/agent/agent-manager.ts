@@ -5,7 +5,12 @@
  * and concurrent processing across sessions.
  */
 
-import { Agent, type AgentMessage, type AgentEvent, type ThinkingLevel } from '@mariozechner/pi-agent-core';
+import {
+  Agent,
+  type AgentMessage,
+  type AgentEvent,
+  type ThinkingLevel,
+} from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { createLogger } from '../utils/logger.js';
@@ -26,7 +31,11 @@ import { readFileSync } from 'node:fs';
 import { resolve, sep } from 'node:path';
 
 import { BuiltinMemoryStore } from './memory/builtin-memory-store.js';
+import { createMemoryManagerFromConfig } from './memory/create-memory-manager.js';
+import { injectPrefetchIntoUserMessage } from './memory/inject-prefetch.js';
+import type { MemoryManager } from './memory/manager.js';
 import type { MemorySnapshot } from './memory/types.js';
+import { extractAgentUserPlainText } from './memory/user-message-text.js';
 
 const log = createLogger('AgentManager');
 
@@ -76,6 +85,7 @@ export class AgentManager {
   private credentialCache = new Map<string, string>();
   private credentialResolver: CredentialResolver;
   private readonly builtinMemoryStore: BuiltinMemoryStore;
+  private memoryManager: MemoryManager;
 
   constructor(config: AgentManagerConfig) {
     this.config = config;
@@ -86,6 +96,12 @@ export class AgentManager {
       memoryCharLimit: 2200,
       userCharLimit: 1375,
     });
+
+    this.memoryManager = createMemoryManagerFromConfig(
+      config.workspace,
+      this.builtinMemoryStore,
+      config.config,
+    );
 
     this.skillManager = new SkillManager(config.workspace, resolveBundledSkillsDir());
     this.systemPromptBuilder = new SystemPromptBuilder({
@@ -102,6 +118,7 @@ export class AgentManager {
       getConfig: () => this.config.config,
       getPrimaryModel: () => this.resolveModel(),
       getBuiltinMemoryStore: () => this.builtinMemoryStore,
+      getMemoryManager: () => this.memoryManager,
     });
 
     this.defaultModel = config.model || getDefaultModelSync(config.config);
@@ -120,6 +137,36 @@ export class AgentManager {
     const ref = getAgentDefaultModelRef(config);
     this.config.model = ref;
     this.defaultModel = ref || getDefaultModelSync(config);
+    void this.memoryManager.shutdownAll().catch(() => {});
+    this.memoryManager = createMemoryManagerFromConfig(
+      this.config.workspace,
+      this.builtinMemoryStore,
+      config,
+    );
+  }
+
+  getMemoryManager(): MemoryManager {
+    return this.memoryManager;
+  }
+
+  /**
+   * Prefix the user turn with fenced prefetched memory (external providers).
+   */
+  async applyMemoryPrefetchToUserMessage(
+    userMessage: AgentMessage,
+    sessionKey: string,
+  ): Promise<AgentMessage> {
+    const plain = extractAgentUserPlainText(userMessage);
+    return injectPrefetchIntoUserMessage(this.memoryManager, sessionKey, userMessage, plain);
+  }
+
+  /**
+   * After a completed turn: sync external providers and queue next-turn prefetch.
+   */
+  afterAgentTurn(sessionKey: string, userPlainText: string): void {
+    const assistant = this.getLastAssistantContent(sessionKey) ?? '';
+    this.memoryManager.syncAll(userPlainText, assistant, { sessionId: sessionKey });
+    this.memoryManager.queuePrefetchAll(userPlainText, { sessionId: sessionKey });
   }
 
   /**
@@ -172,6 +219,7 @@ export class AgentManager {
     for (const instance of this.agents.values()) {
       const newPrompt = this.systemPromptBuilder.build(this.bootstrapFiles, {
         curatedMemorySnapshot: instance.curatedMemorySnapshot,
+        externalMemoryInstructions: this.memoryManager.buildExternalSystemPrompt(),
       });
       instance.agent.setSystemPrompt(newPrompt);
     }
@@ -185,6 +233,7 @@ export class AgentManager {
     for (const instance of this.agents.values()) {
       const newPrompt = this.systemPromptBuilder.rebuild(this.bootstrapFiles, {
         curatedMemorySnapshot: instance.curatedMemorySnapshot,
+        externalMemoryInstructions: this.memoryManager.buildExternalSystemPrompt(),
       });
       instance.agent.setSystemPrompt(newPrompt);
     }
@@ -201,6 +250,10 @@ export class AgentManager {
       log.debug({ sessionKey }, 'Reusing existing agent instance');
       return existing.agent;
     }
+
+    void this.memoryManager
+      .initializeAll(sessionKey, { workspace: this.config.workspace })
+      .catch((err) => log.warn({ err, sessionKey }, 'memory initializeAll failed'));
 
     const agent = this.createAgent();
     const snap = this.builtinMemoryStore.getSnapshot();
@@ -277,6 +330,7 @@ export class AgentManager {
       instance.agent.abort();
     }
     this.agents.clear();
+    void this.memoryManager.shutdownAll().catch(() => {});
     log.debug('All agent instances disposed');
   }
 
@@ -317,7 +371,10 @@ export class AgentManager {
 
     return new Agent({
       initialState: {
-        systemPrompt: this.systemPromptBuilder.build(this.bootstrapFiles, { curatedMemorySnapshot }),
+        systemPrompt: this.systemPromptBuilder.build(this.bootstrapFiles, {
+          curatedMemorySnapshot,
+          externalMemoryInstructions: this.memoryManager.buildExternalSystemPrompt(),
+        }),
         model,
         thinkingLevel: this.config.thinkingLevel || 'medium',
         tools,

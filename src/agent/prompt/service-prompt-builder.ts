@@ -47,12 +47,13 @@ export class SystemPromptBuilder {
    */
   build(
     bootstrapFiles: BootstrapFile[],
-    options?: { curatedMemorySnapshot?: MemorySnapshot },
+    options?: { curatedMemorySnapshot?: MemorySnapshot; externalMemoryInstructions?: string },
   ): string {
     // Check if heartbeat is enabled
     const heartbeatEnabled = this.config.gateway?.heartbeat?.enabled ?? false;
 
     const curatedMemorySnapshot = options?.curatedMemorySnapshot;
+    const externalMemoryInstructions = options?.externalMemoryInstructions;
     const userTimezone = this.extractTimezone(bootstrapFiles, curatedMemorySnapshot?.user);
 
     // Convert bootstrap files to workspace format
@@ -67,6 +68,7 @@ export class SystemPromptBuilder {
       availableTools: this.getAvailableTools(),
       userTimezone,
       curatedMemorySnapshot,
+      externalMemoryInstructions,
     });
 
     // Get skill prompt
@@ -91,7 +93,7 @@ export class SystemPromptBuilder {
    */
   rebuild(
     bootstrapFiles: BootstrapFile[],
-    options?: { curatedMemorySnapshot?: MemorySnapshot },
+    options?: { curatedMemorySnapshot?: MemorySnapshot; externalMemoryInstructions?: string },
   ): string {
     // Reload skills first
     this.skillManager.reload();
@@ -155,7 +157,7 @@ export class SystemPromptBuilder {
    */
   getBasePrompt(
     bootstrapFiles: BootstrapFile[],
-    options?: { curatedMemorySnapshot?: MemorySnapshot },
+    options?: { curatedMemorySnapshot?: MemorySnapshot; externalMemoryInstructions?: string },
   ): string {
     const workspaceBootstrapFiles = bootstrapFiles.map(f =>
       toWorkspaceBootstrapFile(f, this.workspace),
@@ -167,6 +169,7 @@ export class SystemPromptBuilder {
       heartbeatEnabled: this.config.gateway?.heartbeat?.enabled ?? false,
       userTimezone: this.extractTimezone(bootstrapFiles, snap?.user),
       curatedMemorySnapshot: snap,
+      externalMemoryInstructions: options?.externalMemoryInstructions,
     });
   }
 }

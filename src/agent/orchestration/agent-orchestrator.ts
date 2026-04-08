@@ -21,6 +21,7 @@ import {
   tryApplySessionTranscriptHygieneForPersistence,
 } from '../transcript/transcript-hygiene.js';
 import { createLogger } from '../../utils/logger.js';
+import { extractAgentUserPlainText } from '../memory/user-message-text.js';
 import { runAgentTurnWithModelFallbacks } from './run-agent-turn-with-fallbacks.js';
 import {
   persistInboundAttachmentsToWorkspace,
@@ -123,12 +124,19 @@ export class AgentOrchestrator {
         ...msg,
         attachments: persistedAttachments ?? msg.attachments,
       });
+      const userPlainForMemory = extractAgentUserPlainText(userMessage);
+      const userMessageForModel = await this.agentManager.applyMemoryPrefetchToUserMessage(
+        userMessage,
+        sessionKey,
+      );
 
       // 4. Start task feedback
       this.feedbackCoordinator.startTask();
 
       // 5. Execute agent
-      await this.executeAgent(agent, userMessage, context);
+      await this.executeAgent(agent, userMessageForModel, context);
+
+      this.agentManager.afterAgentTurn(sessionKey, userPlainForMemory);
 
       // 6. Sanitize messages before saving (remove error messages, empty content)
       const rawMessages = agent.state.messages;

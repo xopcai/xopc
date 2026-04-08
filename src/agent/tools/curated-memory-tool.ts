@@ -4,6 +4,14 @@ import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 
 import type { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
 
+export interface CuratedMemoryToolOptions {
+  onMemoryWrite?: (
+    action: 'add' | 'replace' | 'remove',
+    target: 'memory' | 'user',
+    content: string,
+  ) => void;
+}
+
 const CuratedMemorySchema = Type.Object({
   action: Type.Union([
     Type.Literal('add'),
@@ -18,10 +26,10 @@ const CuratedMemorySchema = Type.Object({
   ),
 });
 
-export function createCuratedMemoryTool(getStore: () => BuiltinMemoryStore): AgentTool<
-  typeof CuratedMemorySchema,
-  {}
-> {
+export function createCuratedMemoryTool(
+  getStore: () => BuiltinMemoryStore,
+  options?: CuratedMemoryToolOptions,
+): AgentTool<typeof CuratedMemorySchema, {}> {
   return {
     name: 'curated_memory',
     label: '🧠 Curated memory',
@@ -60,6 +68,7 @@ export function createCuratedMemoryTool(getStore: () => BuiltinMemoryStore): Age
               details: { error: result.error },
             };
           }
+          options?.onMemoryWrite?.('add', target, content);
           return {
             content: [{ type: 'text', text: result.message ?? 'OK' }],
             details: { success: true },
@@ -76,6 +85,7 @@ export function createCuratedMemoryTool(getStore: () => BuiltinMemoryStore): Age
               details: { error: result.error },
             };
           }
+          options?.onMemoryWrite?.('replace', target, newContent);
           return {
             content: [{ type: 'text', text: result.message ?? 'OK' }],
             details: { success: true },
@@ -90,6 +100,7 @@ export function createCuratedMemoryTool(getStore: () => BuiltinMemoryStore): Age
             details: { error: result.error },
           };
         }
+        options?.onMemoryWrite?.('remove', target, oldText);
         return {
           content: [{ type: 'text', text: result.message ?? 'OK' }],
           details: { success: true },
