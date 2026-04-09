@@ -3,7 +3,9 @@
 import { readFile, writeFile, mkdir, unlink, readdir, stat, cp, rename } from 'fs/promises';
 import { basename, join } from 'path';
 import { existsSync } from 'fs';
-import { resolveSessionsDir, resolveAgentId, FILENAMES } from '../config/paths.js';
+import { resolveSessionsDir, FILENAMES } from '../config/paths.js';
+import { resolveDefaultAgentId } from '../agents/agent-scope.js';
+import type { Config } from '../config/schema.js';
 import {
   resolveLegacyDeepWebShardRelativePath,
   resolveSessionShardRelativePath,
@@ -33,13 +35,15 @@ const INDEX_VERSION = '1.0';
 const DEFAULT_LIMIT = 50;
 
 /**
- * Session files live under `resolveSessionsDir(agentId)` (ADR-003), sharded by
+ * Session files live under `resolveSessionsDir(config, agentId)` (ADR-003), sharded by
  * `resolveSessionShardRelativePath(sessionKey)` (users/… vs system/cron, system/heartbeat; web UI uses
  * compact `users/{agent}/web/{peerId}` for gateway/webchat direct sessions).
  * Optional `workspace` enables one-time migration from legacy `<workspace>/.sessions`.
  */
 export interface SessionStoreOptions {
-  /** Agent OS agent id (default: XOPCBOT_AGENT_ID or `main`) */
+  /** Loaded app config (required for OpenClaw-style session paths). */
+  config: Config;
+  /** Agent id for the session store root (default: configured default agent). */
   agentId?: string;
   /**
    * Config workspace path (`agents.defaults.workspace`).
@@ -66,9 +70,9 @@ export class SessionStore {
     windowConfig?: Partial<WindowConfig>,
     compactionConfig?: Partial<CompactionConfig>
   ) {
-    const agentId = options.agentId ?? resolveAgentId();
+    const agentId = options.agentId ?? resolveDefaultAgentId(options.config);
     this.legacyWorkspace = options.workspace;
-    this.sessionsDir = options.sessionsDir ?? resolveSessionsDir(agentId);
+    this.sessionsDir = options.sessionsDir ?? resolveSessionsDir(options.config, agentId);
     this.archiveDir = join(this.sessionsDir, 'archive');
     this.indexFile = join(this.sessionsDir, FILENAMES.SESSIONS_INDEX);
     this.window = new SlidingWindow(windowConfig);

@@ -3,16 +3,15 @@
  * Subagent session keys fall back to the configured default agent id for profile lookup.
  */
 
-import { join } from 'node:path';
-
 import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../agent/transcript/thinking-types.js';
 import type { Config } from './schema.js';
 import type { AgentModelConfig } from './schema.js';
 import { getAgentDefaultModelRef } from './schema.js';
-import { resolveWorkspaceRoot } from './workspace-path.js';
-import { resolveStateDir } from './paths.js';
+import { resolveAgentWorkspaceDir } from '../agents/agent-scope.js';
 import { getDefaultAgentId, agentExists } from '../routing/resolve-route.js';
 import { parseSessionKey } from '../routing/session-key.js';
+
+export { resolveAgentWorkspaceDir } from '../agents/agent-scope.js';
 
 export type { AgentModelConfig };
 
@@ -107,29 +106,6 @@ export function extractProfileAgentId(sessionKey: string | undefined | null, con
     return getDefaultAgentId(config);
   }
   return aid.toLowerCase();
-}
-
-/**
- * Markdown workspace root for an agent id (OpenClaw `resolveAgentWorkspaceDir` semantics).
- */
-export function resolveAgentWorkspaceDir(config: Config, agentId: string): string {
-  const id = agentId.toLowerCase();
-  const defaults = config.agents?.defaults;
-  const list = config.agents?.list;
-  const entry = Array.isArray(list)
-    ? list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === id)
-    : undefined;
-  if (entry?.workspace?.trim()) {
-    return resolveWorkspaceRoot(entry.workspace);
-  }
-  if (entry) {
-    const fallback = defaults?.workspace?.trim();
-    if (fallback) {
-      return join(resolveWorkspaceRoot(fallback), id);
-    }
-    return join(resolveStateDir(), `workspace-${id}`);
-  }
-  return resolveWorkspaceRoot(defaults?.workspace ?? '~/.xopcbot/workspace');
 }
 
 /**

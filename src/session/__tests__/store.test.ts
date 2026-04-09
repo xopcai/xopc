@@ -3,7 +3,10 @@ import { mkdtemp, rm, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { tmpdir } from 'os';
 import { existsSync } from 'fs';
+import { ConfigSchema } from '../../config/schema.js';
 import { SessionStore } from '../store.js';
+
+const testConfig = ConfigSchema.parse({});
 
 describe('SessionStore', () => {
   let tempDir: string;
@@ -11,7 +14,7 @@ describe('SessionStore', () => {
 
   beforeEach(async () => {
     tempDir = await mkdtemp(join(tmpdir(), 'xopcbot-session-test-'));
-    store = new SessionStore({ sessionsDir: join(tempDir, '.sessions') });
+    store = new SessionStore({ config: testConfig, sessionsDir: join(tempDir, '.sessions') });
     await store.initialize();
   });
 
@@ -308,7 +311,11 @@ describe('SessionStore', () => {
         );
 
         const targetSessions = join(root, 'new-sessions');
-        const migrated = new SessionStore({ workspace: legacyWs, sessionsDir: targetSessions });
+        const migrated = new SessionStore({
+          config: testConfig,
+          workspace: legacyWs,
+          sessionsDir: targetSessions,
+        });
         await migrated.initialize();
 
         const shardRel = join('users', 'main', 'telegram', 'default', 'dm', '99');

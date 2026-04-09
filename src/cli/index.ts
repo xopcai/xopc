@@ -20,7 +20,7 @@ import './commands/auth.js';
 import './commands/skills.js';
 import './commands/logs.js';
 import './commands/acp.js';
-import { registerAgentCommands } from './commands/agent-manage.js';
+import { registerAgentsCli } from './commands/agents.js';
 
 // Global parsed options - updated before each command
 export let parsedOpts: { config?: string; workspace?: string; verbose?: boolean } = {};
@@ -73,7 +73,7 @@ program.hook('postAction', async (thisCommand) => {
 // Create initial context (will use env vars and defaults)
 const ctx = getContextWithOpts(process.argv);
 registry.install(program, ctx);
-registerAgentCommands(program);
+registerAgentsCli(program);
 
 // Only parse if this is the main module being executed directly
 // Skip parsing when imported as module (e.g., in tests)

@@ -8,10 +8,10 @@
 import { readFile, writeFile, mkdir } from 'fs/promises';
 import { join } from 'path';
 import { existsSync } from 'fs';
-import { homedir } from 'os';
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/schema.js';
-import { resolveWorkspaceDir } from '../../config/paths.js';
+import { getDefaultWorkspacePath } from '../../agents/agent-scope.js';
+import { loadConfig } from '../../config/loader.js';
 import type { SessionEntry } from './manager.types.js';
 
 const log = createLogger('AcpSessionStore');
@@ -28,7 +28,7 @@ export class AcpSessionStore {
   private indexDirty = false;
 
   constructor(workspace?: string) {
-    this.baseDir = workspace || resolveWorkspaceDir();
+    this.baseDir = workspace || getDefaultWorkspacePath(loadConfig());
     this.sessionsDir = join(this.baseDir, ACP_SESSIONS_DIR);
     this.indexFile = join(this.sessionsDir, ACP_SESSIONS_INDEX_FILE);
   }
@@ -194,14 +194,5 @@ export class AcpSessionStore {
 
 /** Get workspace directory from config */
 export function resolveAcpWorkspace(cfg: Config): string {
-  // Try to get workspace from config, fall back to default
-  const workspace = cfg.agents?.defaults?.workspace;
-  if (workspace && typeof workspace === 'string') {
-    // Expand ~ to home directory
-    if (workspace.startsWith('~/')) {
-      return join(homedir(), workspace.slice(2));
-    }
-    return workspace;
-  }
-  return resolveWorkspaceDir();
+  return getDefaultWorkspacePath(cfg);
 }

@@ -7,10 +7,11 @@ import { existsSync, readFileSync } from 'node:fs';
 
 import {
   resolveAgentAuthProfilesPath,
-  resolveAgentId,
   resolveAuthProfilesPath,
   resolveOAuthPath,
 } from '../config/paths.js';
+import { loadConfig } from '../config/loader.js';
+import { getDefaultAgentId } from '../routing/resolve-route.js';
 
 import type { AuthProfilesFile, ApiKeyProfile, OAuthToken } from './credentials.js';
 
@@ -76,7 +77,8 @@ function hasOAuthTokenSync(provider: string): boolean {
  * matching async CredentialResolver resolution (excluding env — callers check env separately).
  */
 export function hasProviderAuthOnDiskSync(provider: string): boolean {
-  const agentPath = resolveAgentAuthProfilesPath(resolveAgentId());
+  const cfg = loadConfig();
+  const agentPath = resolveAgentAuthProfilesPath(cfg, getDefaultAgentId(cfg));
   if (hasApiKeyInProfilesFile(agentPath, provider)) {
     return true;
   }
