@@ -53,6 +53,10 @@ xopcbot 在单一 **状态目录**（“Agent OS” 根）下保存本机状态�
 
 即 `resolveWorkspaceDir()` 的返回值；`xopcbot init` 会为指定 Agent 创建。
 
+使用 **`xopcbot agent:create <id>`** 创建 Agent 时，会创建该目录并**写入**内置模板中的标准引导 Markdown（与 [工作区模板](/zh/reference/templates) 文件名一致：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`，以及模板包中的 `BOOTSTRAP.md`）。仅当目标文件**尚不存在**时才写入，以便每个 Agent 保留**独立**人格；若需从已有 Agent 复制，可使用 `--copy-from <id>`（在种子化之后用源工作区覆盖同名文件）。
+
+在 **`config.json`** 的 **`agents.list`** 中，若某条**未**写 **`workspace`** 字段，运行时默认使用该路径（`~/.xopcbot/agents/<id>/workspace`），与磁盘上的 Agent 目录一致。
+
 ### 引导用 Markdown（人格与记忆索引）
 
 这些文件会进入系统提示（加载顺序与长度限制见 `src/agent/context/workspace.ts`）。文件名常量见 `WORKSPACE_FILES`（`src/config/paths.ts`）。

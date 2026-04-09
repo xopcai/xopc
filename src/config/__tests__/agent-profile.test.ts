@@ -99,4 +99,17 @@ describe('agent-profile', () => {
     expect(p).not.toContain('~');
     expect(p.length).toBeGreaterThan(4);
   });
+
+  it('uses state agents/<id>/workspace when list entry has no workspace field', () => {
+    const base = minimalConfig();
+    const cfg: Config = {
+      ...base,
+      agents: {
+        ...base.agents!,
+        list: [{ id: 'coder', enabled: true, model: 'openai/gpt-4o' }],
+      },
+    };
+    const p = resolveEffectiveAgentProfile(cfg, 'coder');
+    expect(p.resolvedWorkspacePath).toMatch(/agents[/\\]coder[/\\]workspace$/);
+  });
 });
