@@ -168,7 +168,7 @@ export class ChannelManager {
       };
       await plugin.init(options);
       this.initializedPluginIds.add(plugin.id);
-      log.info({ channel: plugin.id }, 'Channel plugin initialized');
+      log.debug({ channel: plugin.id }, 'Channel plugin initialized');
     } catch (err) {
       log.error({ channel: plugin.id, err }, 'Failed to initialize channel plugin');
     }
@@ -198,7 +198,7 @@ export class ChannelManager {
     
     await Promise.allSettled(startPromises);
     this.running = true;
-    log.debug('All channel plugins started');
+    log.info('All channel plugins started');
   }
   
   private async startPlugin(
@@ -212,7 +212,7 @@ export class ChannelManager {
         this.restartAttempts.delete(plugin.id);
       }
       this._scheduleHeartbeat(plugin);
-      log.info({ channel: plugin.id }, 'Channel plugin started');
+      log.debug({ channel: plugin.id }, 'Channel plugin started');
     } catch (err) {
       const attempt = (this.restartAttempts.get(plugin.id) ?? 0) + 1;
       this.restartAttempts.set(plugin.id, attempt);

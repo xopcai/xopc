@@ -105,4 +105,29 @@ describe('TelegramChannelPlugin onConfigUpdated', () => {
     expect(stopSpy).toHaveBeenCalled();
     expect(startSpy).toHaveBeenCalled();
   });
+
+  it('stops and clears accounts when channels.telegram.enabled becomes false (Weixin-style off)', async () => {
+    const initial = minimalConfig();
+    const plugin = new TelegramChannelPlugin();
+    await plugin.init({
+      bus,
+      config: initial,
+      channelConfig: initial.channels?.telegram as Record<string, unknown>,
+    });
+
+    const stopSpy = vi.spyOn(plugin, 'stop').mockResolvedValue(undefined);
+
+    const disabled = {
+      ...initial,
+      channels: {
+        ...initial.channels,
+        telegram: { enabled: false, botToken: '123:TEST_TOKEN' },
+      },
+    } as Config;
+
+    await plugin.onConfigUpdated(disabled);
+
+    expect(stopSpy).toHaveBeenCalled();
+    expect((plugin as unknown as { cfg: Config }).cfg.channels?.telegram?.enabled).toBe(false);
+  });
 });
