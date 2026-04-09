@@ -61,10 +61,27 @@ export const AgentDefaultsSchema = z.object({
     headKeepRatio: z.number().default(0.3),
     tailKeepRatio: z.number().default(0.3),
   }).optional(),
-  /** Pluggable memory backend (Phase 2). Only one external provider at a time. */
+  /**
+   * Curated memory (`.xopcbot/memories/`) + pluggable external provider (Phase 2–4).
+   * Only one external provider at a time.
+   */
   memory: z
     .object({
+      /** Master switch: curated snapshot, `curated_memory`, prefetch, and external provider. Default true. */
+      enabled: z.boolean().optional(),
+      /** When false, use workspace bootstrap only (no curated snapshot / tool). Default true. */
+      useEnhancedSystem: z.boolean().optional(),
+      /** Include USER.md in snapshot. Default true. */
+      userProfileEnabled: z.boolean().optional(),
+      memoryCharLimit: z.number().positive().optional(),
+      userCharLimit: z.number().positive().optional(),
       provider: z.enum(['none', 'stub']).optional(),
+      /** How often prefetched external memory is injected into the user message. */
+      injectionFrequency: z.enum(['every-turn', 'first-turn']).optional(),
+      /** Inject prefetch on turns 1, 1+N, 1+2N, … (only when injectionFrequency is every-turn). Min 1. */
+      contextCadence: z.number().int().min(1).optional(),
+      /** Reserved for future external “dialectic” sync cadence (not wired yet). */
+      dialecticCadence: z.number().int().min(1).optional(),
     })
     .optional(),
   /** Cross-session transcript search (`session_search` tool). */

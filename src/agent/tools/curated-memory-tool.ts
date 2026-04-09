@@ -46,6 +46,18 @@ export function createCuratedMemoryTool(
       const { action, target } = params;
 
       try {
+        if (target === 'user' && !store.isUserProfileEnabled() && action !== 'read') {
+          return {
+            content: [
+              {
+                type: 'text',
+                text: 'User profile (USER.md) is disabled in config (`agents.defaults.memory.userProfileEnabled`).',
+              },
+            ],
+            details: { error: 'user_profile_disabled' },
+          };
+        }
+
         if (action === 'read') {
           const entries = store.getLiveEntries(target);
           const text = JSON.stringify(
