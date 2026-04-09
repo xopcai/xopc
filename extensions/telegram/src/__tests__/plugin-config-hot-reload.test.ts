@@ -34,6 +34,7 @@ describe('TelegramChannelPlugin onConfigUpdated', () => {
       channelConfig: initial.channels?.telegram as Record<string, unknown>,
     });
 
+    vi.spyOn(plugin, 'channelIsRunning').mockReturnValue(true);
     const stopSpy = vi.spyOn(plugin, 'stop').mockResolvedValue(undefined);
     const startSpy = vi.spyOn(plugin, 'start').mockResolvedValue(undefined);
 
@@ -69,6 +70,33 @@ describe('TelegramChannelPlugin onConfigUpdated', () => {
       channels: {
         ...initial.channels,
         telegram: { enabled: true, botToken: '999:OTHER_TOKEN' },
+      },
+    } as Config;
+
+    await plugin.onConfigUpdated(next);
+
+    expect(stopSpy).toHaveBeenCalled();
+    expect(startSpy).toHaveBeenCalled();
+  });
+
+  it('reapplies when channels.telegram is unchanged but polling is not running', async () => {
+    const initial = minimalConfig();
+    const plugin = new TelegramChannelPlugin();
+    await plugin.init({
+      bus,
+      config: initial,
+      channelConfig: initial.channels?.telegram as Record<string, unknown>,
+    });
+
+    vi.spyOn(plugin, 'channelIsRunning').mockReturnValue(false);
+    const stopSpy = vi.spyOn(plugin, 'stop').mockResolvedValue(undefined);
+    const startSpy = vi.spyOn(plugin, 'start').mockResolvedValue(undefined);
+
+    const next = {
+      ...initial,
+      channels: {
+        ...initial.channels,
+        weixin: { enabled: true, appId: 'wx-changed' },
       },
     } as Config;
 

@@ -233,6 +233,11 @@ function weixinSection(cfg: Config): (WeixinAccountCfg & { accounts?: Record<str
 export function listWeixinAccountIds(cfg: Config): string[] {
   const section = weixinSection(cfg);
   const fromConfig = section?.accounts ? Object.keys(section.accounts) : [];
+  // Only merge disk index when the channel is explicitly enabled. Otherwise removed / disabled
+  // config still leaves token files + accounts.json on disk and monitors would keep running.
+  if (!section || section.enabled !== true) {
+    return fromConfig;
+  }
   const indexed = listIndexedWeixinAccountIds();
   return [...new Set([...indexed, ...fromConfig])];
 }
@@ -264,12 +269,14 @@ export function resolveWeixinAccount(cfg: Config, accountId?: string | null): Re
         ? routeTagRaw.trim()
         : undefined;
 
+  const channelEnabled = section?.enabled === true;
+
   return {
     accountId: id,
     baseUrl: stateBaseUrl || DEFAULT_BASE_URL,
     cdnBaseUrl: accountCfg.cdnBaseUrl?.trim() || CDN_BASE_URL,
     token,
-    enabled: accountCfg.enabled !== false,
+    enabled: channelEnabled && accountCfg.enabled !== false,
     configured: Boolean(token),
     name: accountCfg.name?.trim() || undefined,
     dmPolicy: accountCfg.dmPolicy ?? 'pairing',

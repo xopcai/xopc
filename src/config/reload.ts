@@ -238,6 +238,13 @@ export class ConfigHotReloader {
   }
 
   /**
+   * Align diff baseline with a freshly loaded config (e.g. Weixin QR wrote token files but JSON unchanged).
+   */
+  syncCurrentConfig(config: Config): void {
+    this.currentConfig = config;
+  }
+
+  /**
    * Get current config
    */
   getConfig(): Config {

@@ -4,7 +4,7 @@ import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
 import { CHAT_CHANNEL_ORDER } from '../channels/registry.js';
 import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
-import { loadConfig, saveConfig } from '../config/index.js';
+import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/schema.js';
 import { CronService } from '../cron/index.js';
 import { ExtensionLoader, normalizeExtensionConfig } from '../extensions/index.js';
@@ -403,7 +403,8 @@ export class GatewayService {
   }
 
   /**
-   * Handle channels config hot reload
+   * Apply `latest.channels` to every registered channel plugin (Telegram, Weixin, extensions).
+   * Single runtime path for: file watcher hot reload, API saves, and Weixin QR follow-up.
    */
   private async handleChannelsReload(newConfig: Config): Promise<void> {
     log.debug('Reloading channels config...');
@@ -412,6 +413,12 @@ export class GatewayService {
     this.emit('config.reload', { section: 'channels' });
     this.emit('channels.status', { channels: this.getChannelsStatus() });
     log.debug('Channels config reloaded');
+  }
+
+  /** After persisting config to disk: align plugins + debounced reload baseline (watchers skip duplicate diffs). */
+  private async syncChannelPluginsAfterPersist(): Promise<void> {
+    await this.handleChannelsReload(this.config);
+    this.configReloader?.syncCurrentConfig(this.config);
   }
 
   /**
@@ -466,13 +473,37 @@ export class GatewayService {
   }
 
   /**
+   * After Weixin QR login: token files may change without a `channels.weixin` JSON diff, so run the same
+   * channel apply as an API save, then force Weixin long-poll restart (see `reloadMonitorsWithConfig`).
+   */
+  async afterWeixinCredentialsPersisted(): Promise<void> {
+    const next = loadConfig(this.configPath);
+    this.config = next;
+    this.agentService.applyAgentDefaultsFromConfig(next);
+    this.configReloader?.syncCurrentConfig(next);
+    await this.handleChannelsReload(next);
+    const { weixinPlugin } = await import('../channels/weixin/index.js');
+    await weixinPlugin.reloadMonitorsWithConfig(this.config, this.bus);
+    log.info('Weixin monitors restarted after credential login');
+  }
+
+  /**
    * Save current config to disk
    */
+  /**
+   * Persist and replace `this.config` with the validated file contents so runtime matches disk
+   * (PATCH merge objects can drift from Zod-normalized output).
+   */
+  private async writeConfigAndReloadFromDisk(configToWrite: Config): Promise<void> {
+    await writeConfigToDisk(configToWrite, this.configPath);
+    this.config = loadConfig(this.configPath);
+    this.agentService.applyAgentDefaultsFromConfig(this.config);
+  }
+
   async saveConfig(config: Config): Promise<{ saved: boolean; error?: string }> {
     try {
-      await saveConfig(config, this.configPath);
-      this.config = config;
-      this.agentService.applyAgentDefaultsFromConfig(config);
+      await this.writeConfigAndReloadFromDisk(config);
+      await this.syncChannelPluginsAfterPersist();
       return { saved: true };
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
@@ -490,12 +521,10 @@ export class GatewayService {
       
       // Merge updates
       this.config = { ...this.config, ...updates };
-      
-      // Save to disk
-      await saveConfig(this.config, this.configPath);
 
-      this.agentService.applyAgentDefaultsFromConfig(this.config);
-      
+      await this.writeConfigAndReloadFromDisk(this.config);
+      await this.syncChannelPluginsAfterPersist();
+
       log.debug('Configuration updated successfully');
       return { updated: true };
     } catch (err) {
@@ -1207,9 +1236,8 @@ export class GatewayService {
       },
     };
     
-    // Save to disk
-    await saveConfig(this.config, this.configPath);
-    
+    await this.writeConfigAndReloadFromDisk(this.config);
+
     log.info({ tokenPreview: `${newToken.slice(0, 8)}...` }, 'Gateway token refreshed');
     
     return newToken;
