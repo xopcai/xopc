@@ -223,6 +223,7 @@ export class AgentService {
       bus,
       getCurrentContext: () => this.sessionContextManager.getContext(),
       getSessionStore: () => this.sessionStore,
+      getModelManager: () => this.modelManager,
       thinkingLevel: config.thinkingLevel,
       reasoningLevel: config.reasoningLevel,
       verboseLevel: config.verboseLevel,
@@ -249,7 +250,11 @@ export class AgentService {
       feedbackCoordinator: this.feedbackCoordinator,
       sessionConfigStore: this.sessionConfigStore,
       getThinkingDefault: () => this.config.config?.agents?.defaults?.thinkingDefault,
+      getThinkingDefaultForSession: (sessionKey: string) =>
+        this.agentManager.getThinkingDefaultForSession(sessionKey),
       workspaceRoot: this.workspaceDir,
+      getWorkspaceRootForSession: (sessionKey: string) =>
+        this.agentManager.getResolvedWorkspaceForSession(sessionKey),
       enqueueAutoTitle: (sessionKey: string) => this.enqueueMaybeAutoTitleAfterPersist(sessionKey),
     });
 

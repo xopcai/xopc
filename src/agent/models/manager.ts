@@ -63,6 +63,8 @@ export class ModelManager {
   private currentModelName: string;
   private currentProvider: string;
   private sessionModels: Map<string, string> = new Map();
+  /** Baseline model from `agents.list` / defaults merge when the session agent is created. */
+  private sessionProfileDefaults: Map<string, string> = new Map();
   private channelManager?: any;
 
   constructor(config: ModelManagerConfig = {}) {
@@ -86,6 +88,19 @@ export class ModelManager {
     this.config = config;
     const ref = getAgentDefaultModelRef(config);
     this.defaultModel = ref ? ref : getDefaultModelSync(config);
+    this.sessionProfileDefaults.clear();
+  }
+
+  /**
+   * Set the config-derived default model for a session (from effective agent profile).
+   * Cleared by {@link updateFromConfig} or {@link clearSessionProfileDefault}.
+   */
+  setSessionProfileDefault(sessionKey: string, modelRef: string): void {
+    this.sessionProfileDefaults.set(sessionKey, modelRef);
+  }
+
+  clearSessionProfileDefault(sessionKey: string): void {
+    this.sessionProfileDefaults.delete(sessionKey);
   }
 
   /**
@@ -133,13 +148,16 @@ export class ModelManager {
    * Get model for session, checking session override first
    */
   getModelForSession(sessionKey: string): string {
-    // Check if there's a session-specific model override
     const sessionModel = this.sessionModels.get(sessionKey);
     if (sessionModel) {
       return sessionModel;
     }
 
-    // Fall back to default
+    const profileDefault = this.sessionProfileDefaults.get(sessionKey);
+    if (profileDefault) {
+      return profileDefault;
+    }
+
     return this.defaultModel;
   }
 

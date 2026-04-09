@@ -60,13 +60,29 @@ export interface ToolFactoryDeps {
   // TTS config removed - handled at dispatch layer
 }
 
+export interface CreateCoreToolsOptions {
+  /** Workspace root for file/shell tools (defaults to factory workspace). */
+  workspace?: string;
+  /** Tool `name` values to omit (e.g. `shell`, `extensions` for extension tools). */
+  disabledTools?: Set<string>;
+  /** Optional primary model for image tool heuristics. */
+  getPrimaryModel?: () => Model<Api>;
+  getBuiltinMemoryStore?: () => BuiltinMemoryStore;
+  getMemoryManager?: () => MemoryManager;
+}
+
 export class AgentToolsFactory {
   constructor(private deps: ToolFactoryDeps) {}
 
-  createCoreTools(): AgentTool<any, any>[] {
-    const { workspace, bus } = this.deps;
+  createCoreTools(options?: CreateCoreToolsOptions): AgentTool<any, any>[] {
+    const workspace = options?.workspace ?? this.deps.workspace;
+    const { bus } = this.deps;
+    const getPrimary = options?.getPrimaryModel ?? this.deps.getPrimaryModel;
+    const getBuiltin = options?.getBuiltinMemoryStore ?? this.deps.getBuiltinMemoryStore;
+    const getMemMgr = options?.getMemoryManager ?? this.deps.getMemoryManager;
+    const disabled = options?.disabledTools;
 
-    const primary = this.deps.getPrimaryModel?.();
+    const primary = getPrimary?.();
     const modelHasVision = primary?.input?.includes('image') ?? false;
     const cfg = this.deps.getConfig?.();
     const imageTool = createImageTool({
@@ -83,7 +99,7 @@ export class AgentToolsFactory {
       (t): t is AgentTool<any, any> => t != null,
     );
 
-    return [
+    const core: AgentTool<any, any>[] = [
       readFileTool,
       writeFileTool,
       editFileTool,
@@ -99,16 +115,16 @@ export class AgentToolsFactory {
       createSendMediaTool(bus, () => this.deps.getCurrentContext()),
       createMemorySearchTool(workspace),
       createMemoryGetTool(workspace),
-      ...(this.deps.getBuiltinMemoryStore && shouldRegisterCuratedMemoryTool(this.deps.getConfig?.())
+      ...(getBuiltin && shouldRegisterCuratedMemoryTool(this.deps.getConfig?.())
         ? [
-            createCuratedMemoryTool(this.deps.getBuiltinMemoryStore, {
+            createCuratedMemoryTool(getBuiltin, {
               onMemoryWrite: (action, target, content) => {
-                this.deps.getMemoryManager?.().onMemoryWrite(action, target, content);
+                getMemMgr?.().onMemoryWrite(action, target, content);
               },
             }),
           ]
         : []),
-      ...(this.deps.getMemoryManager?.().getAdditionalTools() ?? []),
+      ...(getMemMgr?.().getAdditionalTools() ?? []),
       ...(this.deps.getSessionStore
         ? [
             createSessionSearchTool({
@@ -120,13 +136,15 @@ export class AgentToolsFactory {
         : []),
       ...optionalTools,
     ];
+
+    return filterToolsByDisabledSet(core, disabled);
   }
 
-  createAllTools(): AgentTool<any, any>[] {
-    const coreTools = this.createCoreTools();
+  createAllTools(coreOptions?: CreateCoreToolsOptions): AgentTool<any, any>[] {
+    const coreTools = this.createCoreTools(coreOptions);
+    const disableExtensions = coreOptions?.disabledTools?.has('extensions');
 
-    if (!this.deps.extensionRegistry) {
-      // Wrap core tools with timeout and retry protection
+    if (!this.deps.extensionRegistry || disableExtensions) {
       return wrapToolsWithProtection(coreTools, this.deps.toolExecutorConfig);
     }
 
@@ -134,8 +152,17 @@ export class AgentToolsFactory {
 
     log.info({ count: extensionTools.length }, 'Loaded extension tools');
 
-    // Combine all tools and wrap with protection
     const allTools = [...coreTools, ...extensionTools];
     return wrapToolsWithProtection(allTools, this.deps.toolExecutorConfig);
   }
+}
+
+function filterToolsByDisabledSet(
+  tools: AgentTool<any, any>[],
+  disabled: Set<string> | undefined,
+): AgentTool<any, any>[] {
+  if (!disabled || disabled.size === 0) {
+    return tools;
+  }
+  return tools.filter((t) => !disabled.has(t.name));
 }

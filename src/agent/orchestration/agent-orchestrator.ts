@@ -38,8 +38,12 @@ export interface AgentOrchestratorConfig {
   feedbackCoordinator: FeedbackCoordinator;
   sessionConfigStore: SessionConfigStore;
   getThinkingDefault: () => ThinkLevel | undefined;
+  /** Per-session default from merged `agents.list` / defaults (optional). */
+  getThinkingDefaultForSession?: (sessionKey: string) => ThinkLevel | undefined;
   /** `agents.defaults.workspace` (resolved); used to persist inbound files per session. */
   workspaceRoot: string;
+  /** Per-agent workspace root for attachments (optional; defaults to `workspaceRoot`). */
+  getWorkspaceRootForSession?: (sessionKey: string) => string;
   /** Fire-and-forget after full session persist (e.g. LLM session title); not called from mid-turn snapshots. */
   enqueueAutoTitle?: (sessionKey: string) => void;
 }
@@ -52,7 +56,9 @@ export class AgentOrchestrator {
   private feedbackCoordinator: FeedbackCoordinator;
   private sessionConfigStore: SessionConfigStore;
   private getThinkingDefault: () => ThinkLevel | undefined;
+  private getThinkingDefaultForSession?: (sessionKey: string) => ThinkLevel | undefined;
   private workspaceRoot: string;
+  private getWorkspaceRootForSession?: (sessionKey: string) => string;
   private enqueueAutoTitle?: (sessionKey: string) => void;
 
   constructor(config: AgentOrchestratorConfig) {
@@ -63,7 +69,9 @@ export class AgentOrchestrator {
     this.feedbackCoordinator = config.feedbackCoordinator;
     this.sessionConfigStore = config.sessionConfigStore;
     this.getThinkingDefault = config.getThinkingDefault;
+    this.getThinkingDefaultForSession = config.getThinkingDefaultForSession;
     this.workspaceRoot = config.workspaceRoot;
+    this.getWorkspaceRootForSession = config.getWorkspaceRootForSession;
     this.enqueueAutoTitle = config.enqueueAutoTitle;
   }
 
@@ -106,17 +114,21 @@ export class AgentOrchestrator {
       // 2. Apply model configuration for session
       await this.modelManager.applyModelForSession(agent, sessionKey);
 
+      const thinkingDefault =
+        this.getThinkingDefaultForSession?.(sessionKey) ?? this.getThinkingDefault();
       const thinkingLevel = await resolveEffectiveThinkingLevel(
         this.sessionConfigStore,
         sessionKey,
         null,
-        this.getThinkingDefault(),
+        thinkingDefault,
       );
       this.agentManager.setThinkingLevel(sessionKey, thinkingLevel);
 
       // 3. Persist inbound files (Telegram, etc.) under workspace, then build user message
+      const attachmentRoot =
+        this.getWorkspaceRootForSession?.(sessionKey) ?? this.workspaceRoot;
       const persistedAttachments = await persistInboundAttachmentsToWorkspace(
-        this.workspaceRoot,
+        attachmentRoot,
         sessionKey,
         msg.attachments,
       );
