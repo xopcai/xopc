@@ -49,7 +49,7 @@ This page describes how xopcbot is structured and how the main pieces fit togeth
 src/
 ├── agent/              # Core agent logic (pi-agent-core based)
 │   ├── service.ts      #   Main AgentService class
-│   ├── memory/         #   Session persistence & compaction
+│   ├── memory/         #   Curated store, MemoryManager, prefetch; session transcripts live under session/
 │   ├── prompt/         #   Prompt builder system
 │   ├── tools/          #   Built-in tools (Typebox schemas)
 │   └── progress.ts     #   Progress feedback system
@@ -105,7 +105,7 @@ AgentService is the core orchestrator responsible for:
 
 1. **Message Processing** - Receive user messages, call LLM, handle tool calls
 2. **Prompt Building** - Build system prompt from SOUL.md/USER.md/AGENTS.md/TOOLS.md
-3. **Memory Management** - Session message storage and context compression
+3. **Memory** - Session message storage and compaction (`src/session/`); curated `.xopcbot/memories/`, pluggable memory providers, and tools (`src/agent/memory/`)
 4. **Tool Execution** - Unified execution of built-in tools + extension tools
 5. **Progress Feedback** - Real-time updates for long-running tasks
 
@@ -151,8 +151,10 @@ src/agent/prompt/
 | 🔍 Web Search | `web_search` | Web search via Brave Search |
 | 📄 Web Fetch | `web_fetch` | Fetch web page content |
 | 📤 Message | `send_message` | Send messages to channels |
-| 🔍 Memory Search | `memory_search` | Search memory files |
+| 🔍 Memory Search | `memory_search` | Search `memory/*.md` snippets in the workspace |
 | 📄 Memory Get | `memory_get` | Read memory snippets |
+| 🧠 Curated memory | `curated_memory` | Edit bounded entries in `.xopcbot/memories/` (when enabled) |
+| 🔎 Session search | `session_search` | Search other sessions’ transcripts (when session store is wired) |
 
 ### Progress Feedback (`src/agent/progress.ts`)
 
@@ -179,18 +181,24 @@ manager.onHeartbeat(elapsed, stage);
 | executing | ⚙️ | shell commands |
 | analyzing | 📊 | Data analysis |
 
-### Session Memory (`src/agent/memory/`)
+### Session transcripts & compaction (`src/session/`)
+
+Session message persistence, search index helpers for `session_search`, and compaction live under **`src/session/`** (on disk: `agents/<id>/sessions/`, not the Markdown workspace tree).
+
+### Curated & pluggable memory (`src/agent/memory/`)
 
 ```
 src/agent/memory/
-├── store.ts       # MemoryStore - session message storage
-└── compaction.ts  # SessionCompactor - context compression
+├── builtin-memory-store.ts  # .xopcbot/memories/MEMORY.md + USER.md (bounded, §-delimited)
+├── manager.ts               # MemoryManager — providers, prefetch, sync, onMemoryWrite
+├── create-memory-manager.ts # Wires builtin + optional stub from config
+├── inject-prefetch.ts       # Prefix user message with <memory-context> when configured
+└── …                        # context-fence, providers, plugin discovery
 ```
 
-**Compaction Modes**:
-- `extractive` - Summarize using key sentences
-- `abstractive` - LLM-based summarization
-- `structured` - Preserve structured data
+Configured under **`agents.defaults.memory`** ([Configuration](configuration.md)). When the whole subsystem is disabled, curated tools and external prefetch are off.
+
+**Compaction** (conversation context) is configured under **`agents.defaults.compaction`** / pruning in the same defaults object—not the curated memory files above.
 
 ### Channel plugins (`src/channels/`)
 
@@ -253,7 +261,7 @@ User (Telegram/Gateway/CLI)
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │
-│  │ Build Prompt  │  │ ← memory_search/memory_get
+│  │ Build Prompt  │  │ ← bootstrap files, curated snapshot, memory_search / memory_get, …
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │

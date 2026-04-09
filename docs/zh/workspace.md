@@ -80,6 +80,16 @@ xopcbot 在单一 **状态目录**（“Agent OS” 根）下保存本机状态�
 | `.sessions/config/` | Agent 服务写入的按会话配置（如模型覆盖），位于 **配置所指向** 的工作空间路径下。 |
 | `.xopcbot/inbound/<session>/` | 入站附件（带二进制数据的非图片）落盘位置，便于 transcript 与 `read_file` 使用稳定路径。 |
 
+### 托管记忆（`.xopcbot/memories/`） {#curated-memory}
+
+与工作区根目录的 `MEMORY.md`（引导用）以及 `memory/*.md`（可检索片段）不同，**`workspace/.xopcbot/memories/`** 使用 **`MEMORY.md`（助手笔记）** 与 **`USER.md`（用户画像）** 存放 **有上限、以 § 分隔** 的条目。在启用增强记忆时，会话开始会注入 **冻结快照**；运行中可通过 **`curated_memory`** 工具读写磁盘上的最新内容。开关与字符上限见 **`agents.defaults.memory`**（[配置参考](zh/configuration.md)）。
+
+若要把已有工作区根目录的 `MEMORY.md` **导入**到托管路径，且避免覆盖已有非空目标，可在仓库根执行：
+
+```bash
+pnpm run migrate:memory /path/to/workspace
+```
+
 ## 运行时到底用哪个「工作空间」？
 
 相关但不同来源的两套逻辑：

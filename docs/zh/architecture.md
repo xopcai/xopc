@@ -49,7 +49,7 @@
 src/
 ├── agent/              # 核心代理逻辑（基于 pi-agent-core）
 │   ├── service.ts      #   主 AgentService 类
-│   ├── memory/         #   会话持久化和压缩
+│   ├── memory/         #   托管记忆、MemoryManager、prefetch；会话 transcript 在 session/ 下
 │   ├── prompt/         #   Prompt 构建系统
 │   ├── tools/          #   内置工具（Typebox schema）
 │   └── progress.ts     #   进度反馈系统
@@ -105,7 +105,7 @@ AgentService 是核心编排器，负责：
 
 1. **消息处理** - 接收用户消息，调用 LLM，处理工具调用
 2. **Prompt 构建** - 从 SOUL.md/USER.md/AGENTS.md/TOOLS.md 构建系统 Prompt
-3. **内存管理** - 会话消息存储和上下文压缩
+3. **记忆与会话** - 会话消息持久化与压缩（`src/session/`）；`.xopcbot/memories/` 托管记忆、可插拔 provider 与工具（`src/agent/memory/`）
 4. **工具执行** - 内置工具 + 扩展工具的统一执行
 5. **进度反馈** - 长任务实时更新
 
@@ -151,8 +151,10 @@ src/agent/prompt/
 | 🔍 网页搜索 | `web_search` | 使用 Brave Search 搜索网页 |
 | 📄 网页抓取 | `web_fetch` | 获取网页内容 |
 | 📨 消息 | `send_message` | 发送消息到通道 |
-| 🔍 记忆搜索 | `memory_search` | 搜索记忆文件 |
+| 🔍 记忆搜索 | `memory_search` | 搜索工作区内 `memory/*.md` 片段 |
 | 📄 记忆读取 | `memory_get` | 读取记忆片段 |
+| 🧠 托管记忆 | `curated_memory` | 编辑 `.xopcbot/memories/` 中有上限的条目（启用时） |
+| 🔎 会话搜索 | `session_search` | 检索其他会话的 transcript（接入会话存储时） |
 
 ### 进度反馈 (`src/agent/progress.ts`)
 
@@ -179,18 +181,24 @@ manager.onHeartbeat(elapsed, stage);
 | executing | ⚙️ | shell 命令 |
 | analyzing | 📊 | 数据分析 |
 
-### 会话内存 (`src/agent/memory/`)
+### 会话 transcript 与压缩（`src/session/`）
+
+会话消息持久化、`session_search` 用的检索索引辅助、压缩逻辑位于 **`src/session/`**（磁盘路径为 `agents/<id>/sessions/`，不在 Markdown 工作空间树内）。
+
+### 托管与可插拔记忆（`src/agent/memory/`）
 
 ```
 src/agent/memory/
-├── store.ts       # MemoryStore - 会话消息存储
-└── compaction.ts  # SessionCompactor - 上下文压缩
+├── builtin-memory-store.ts  # .xopcbot/memories/MEMORY.md + USER.md（有上限、§ 分隔）
+├── manager.ts               # MemoryManager — 提供方、prefetch、sync、onMemoryWrite
+├── create-memory-manager.ts # 内置 + 配置中的可选 stub
+├── inject-prefetch.ts       # 按配置为用户消息加 <memory-context> 前缀
+└── …                        # 围栏、provider、插件发现等
 ```
 
-**压缩模式**：
-- `extractive` - 使用关键句摘要
-- `abstractive` - 基于 LLM 的摘要
-- `structured` - 保留结构化数据
+由 **`agents.defaults.memory`** 配置（[配置参考](zh/configuration.md)）。关闭总开关后，curated 工具与外部 prefetch 均不启用。
+
+**对话压缩**（上下文长度）由 **`agents.defaults.compaction`** / `pruning` 等同级的默认项配置，与上述托管记忆文件不是同一套机制。
 
 ### 通道插件 (`src/channels/`)
 
@@ -253,7 +261,7 @@ before_tool_call → after_tool_call → message_sending → session_end
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │
-│  │ 构建 Prompt   │  │ ← memory_search/memory_get
+│  │ 构建 Prompt   │  │ ← 引导文件、托管快照、memory_search / memory_get 等
 │  └───────┬───────┘  │
 │          ▼          │
 │  ┌───────────────┐  │
