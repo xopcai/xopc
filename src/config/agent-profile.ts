@@ -9,7 +9,7 @@ import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../agent/transcri
 import type { Config } from './schema.js';
 import type { AgentModelConfig } from './schema.js';
 import { getAgentDefaultModelRef } from './schema.js';
-import { expandWorkspacePathString } from './workspace-path.js';
+import { resolveWorkspaceRoot } from './workspace-path.js';
 import { resolveStateDir } from './paths.js';
 import { getDefaultAgentId, agentExists } from '../routing/resolve-route.js';
 import { parseSessionKey } from '../routing/session-key.js';
@@ -120,16 +120,16 @@ export function resolveAgentWorkspaceDir(config: Config, agentId: string): strin
     ? list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === id)
     : undefined;
   if (entry?.workspace?.trim()) {
-    return expandWorkspacePathString(entry.workspace);
+    return resolveWorkspaceRoot(entry.workspace);
   }
   if (entry) {
     const fallback = defaults?.workspace?.trim();
     if (fallback) {
-      return join(expandWorkspacePathString(fallback), id);
+      return join(resolveWorkspaceRoot(fallback), id);
     }
     return join(resolveStateDir(), `workspace-${id}`);
   }
-  return expandWorkspacePathString(defaults?.workspace ?? '~/.xopcbot/workspace');
+  return resolveWorkspaceRoot(defaults?.workspace ?? '~/.xopcbot/workspace');
 }
 
 /**

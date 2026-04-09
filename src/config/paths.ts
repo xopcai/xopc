@@ -120,17 +120,54 @@ export function resolveSessionsIndexPath(agentId?: string): string {
 }
 
 /**
- * Legacy helper: flat `{sessionId}.jsonl` under the sessions root. Runtime storage is sharded; prefer SessionStore.
- */
-export function resolveSessionPath(sessionId: string, agentId?: string): string {
-  return join(resolveSessionsDir(agentId), `${sessionId}.jsonl`);
-}
-
-/**
  * Resolve the sessions archive directory
  */
 export function resolveSessionsArchiveDir(agentId?: string): string {
   return join(resolveSessionsDir(agentId), 'archive');
+}
+
+/**
+ * Resolve a session transcript file path, with optional topic sharding.
+ * Topic IDs are URL-encoded when they are strings to prevent path traversal.
+ */
+export function resolveSessionTranscriptPath(
+  sessionId: string,
+  agentId?: string,
+  topicId?: string | number,
+): string {
+  const safeTopicId =
+    typeof topicId === 'string'
+      ? encodeURIComponent(topicId)
+      : typeof topicId === 'number'
+        ? String(topicId)
+        : undefined;
+  const fileName =
+    safeTopicId !== undefined
+      ? `${sessionId}-topic-${safeTopicId}.jsonl`
+      : `${sessionId}.jsonl`;
+  return join(resolveSessionsDir(agentId), fileName);
+}
+
+/**
+ * Resolve a session transcript path within an explicit sessions directory.
+ * Useful when the caller already holds a resolved sessions dir (e.g. from config).
+ */
+export function resolveSessionTranscriptPathInDir(
+  sessionId: string,
+  sessionsDir: string,
+  topicId?: string | number,
+): string {
+  const safeTopicId =
+    typeof topicId === 'string'
+      ? encodeURIComponent(topicId)
+      : typeof topicId === 'number'
+        ? String(topicId)
+        : undefined;
+  const fileName =
+    safeTopicId !== undefined
+      ? `${sessionId}-topic-${safeTopicId}.jsonl`
+      : `${sessionId}.jsonl`;
+  return join(sessionsDir, fileName);
 }
 
 /**
@@ -163,32 +200,24 @@ export function resolveInboxMessagePath(messageId: string, pending: boolean, age
 }
 
 /**
- * Volatile runtime files live in OpenClaw `agent/` (no separate `run/`).
- * @deprecated Prefer `resolveAgentDir`; kept for call-site compatibility.
- */
-export function resolveRunDir(agentId?: string): string {
-  return resolveAgentDir(agentId);
-}
-
-/**
  * Resolve the pid file path
  */
 export function resolvePidPath(agentId?: string): string {
-  return join(resolveRunDir(agentId), FILENAMES.PID);
+  return join(resolveAgentDir(agentId), FILENAMES.PID);
 }
 
 /**
  * Resolve the status.json path
  */
 export function resolveStatusPath(agentId?: string): string {
-  return join(resolveRunDir(agentId), FILENAMES.STATUS);
+  return join(resolveAgentDir(agentId), FILENAMES.STATUS);
 }
 
 /**
  * Resolve the Unix socket path
  */
 export function resolveSocketPath(agentId?: string): string {
-  return join(resolveRunDir(agentId), FILENAMES.SOCKET);
+  return join(resolveAgentDir(agentId), FILENAMES.SOCKET);
 }
 
 /**

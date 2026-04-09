@@ -17,17 +17,17 @@ export const ENV_VARS = {
   PRETTY_LOGS: 'XOPCBOT_PRETTY_LOGS',
 } as const;
 
-export function resolveHomeDir(): string {
-  return process.env[ENV_VARS.HOME] || homedir();
+export function resolveHomeDir(env: NodeJS.ProcessEnv = process.env): string {
+  return env[ENV_VARS.HOME] || homedir();
 }
 
-export function resolveStateDir(): string {
-  if (process.env[ENV_VARS.STATE_DIR]) {
-    return process.env[ENV_VARS.STATE_DIR]!;
+export function resolveStateDir(env: NodeJS.ProcessEnv = process.env): string {
+  if (env[ENV_VARS.STATE_DIR]) {
+    return env[ENV_VARS.STATE_DIR]!;
   }
 
-  const profile = process.env[ENV_VARS.PROFILE];
-  const home = resolveHomeDir();
+  const profile = env[ENV_VARS.PROFILE];
+  const home = resolveHomeDir(env);
 
   if (profile && profile !== 'default') {
     return join(home, `.xopcbot-${profile}`);
@@ -36,6 +36,6 @@ export function resolveStateDir(): string {
   return join(home, '.xopcbot');
 }
 
-export function resolveAgentId(): string {
-  return process.env[ENV_VARS.AGENT_ID] ?? 'main';
+export function resolveAgentId(env: NodeJS.ProcessEnv = process.env): string {
+  return env[ENV_VARS.AGENT_ID] ?? 'main';
 }
