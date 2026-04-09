@@ -174,11 +174,11 @@ import { DraftStreamManager } from '@xopcai/xopcbot/channels/telegram/draft-stre
 | `cron` | Scheduled jobs |
 | `extensions` | Enable/disable extensions |
 
-### Multiple agents (`agents.list`) vs CLI registry (`~/.xopcbot/agents/`)
+### Multiple agents (`agents.list`)
 
-Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by **`config.json`** — `agents.defaults` merged with the matching entry in **`agents.list`**. Use **`agents.default`** for the routing default id when the session does not specify an agent.
+Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by **`config.json`** — `agents.defaults` merged with the matching entry in **`agents.list`**. Default agent id: **`agents.default`**, else a `list` entry with **`default: true`**, else the first enabled entry, else **`main`**. On-disk paths (`~/.xopcbot/agents/<id>/`, Markdown workspace roots) resolve from the same config via **`src/agents/agent-scope.ts`** (OpenClaw-style).
 
-The **`agent-manage` CLI** and on-disk **`~/.xopcbot/agents/<id>/`** layout are a separate mechanism (process-oriented descriptors). For OpenClaw-style multi-agent alignment, treat **`agents.list` + `agents.defaults` as the source of truth** for the live gateway/agent; keep registry usage limited to CLI workflows unless you explicitly sync the two.
+Use **`xopcbot agents list`**, **`xopcbot agents add`**, **`xopcbot agents delete`** to manage `agents.list` and initialize directories — there is no separate agent registry outside config.
 
 ### Telegram (multi-account sketch)
 

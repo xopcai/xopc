@@ -35,7 +35,7 @@ Register agents under `agents.list`. **Binding rules** (`bindings`) are evaluate
 
 ### Effective runtime profile
 
-For a session key `agentId:…`, the agent runtime merges **`agents.defaults`** with the matching **enabled** row in **`agents.list`** (per-agent `workspace`, `model`, `tools.disable`, `systemPromptOverride`, `skills`, thinking defaults, etc.). If `agentId` is unknown or disabled in `list`, profile resolution falls back to the **default agent** id above. This is independent of the optional on-disk `~/.xopcbot/agents/<id>/` layout used by `agent-manage` — gateway behavior follows **`config.json`**.
+For a session key `agentId:…`, the agent runtime merges **`agents.defaults`** with the matching **enabled** row in **`agents.list`** (per-agent `workspace`, `model`, `agentDir`, `tools.disable`, `systemPromptOverride`, `skills`, thinking defaults, etc.). If `agentId` is unknown or disabled in `list`, profile resolution falls back to the **default agent** id above. On-disk layout under `~/.xopcbot/agents/<id>/` follows the same config-driven resolution — gateway behavior is **`config.json`** only.
 
 `match.peerId` supports simple `*` glob patterns (e.g. `-100*` for Telegram supergroups).
 

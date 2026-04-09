@@ -117,7 +117,7 @@ Agent configuration has three parts: optional **`default`** id, shared **`defaul
 
 | Field | Type | Description |
 |-------|------|-------------|
-| `default` | string | Optional. Default agent id when the session key or API does not specify one. If omitted: first **enabled** entry in `list`, otherwise `main`. |
+| `default` | string | Optional. Default agent id when the session key or API does not specify one. If omitted: first `list` entry with **`default: true`**, else first **enabled** entry in `list`, else `main`. |
 | `defaults` | object | Baseline settings merged into every agent (see **agents.defaults** below). |
 | `list` | array | Registered identities; each object can override fields for that id. |
 
@@ -128,9 +128,11 @@ Each entry must include **`id`**. Other fields are optional overrides (same shap
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | Agent id (also the first segment of the session key). |
+| `default` | boolean | Optional. When `true`, marks this entry as the default agent when top-level **`agents.default`** is unset (OpenClaw-style). |
 | `name` | string | Display name. |
 | `enabled` | boolean | Default `true`. When `false`, the id is ignored for routing defaults and effective profile resolution falls back to the default agent. |
 | `workspace` | string | Per-agent workspace root (`~` expanded). Bootstrap files, inbound attachments, and `.xopcbot/memories/` for this agent use this path. |
+| `agentDir` | string | Optional. Overrides the **internal** agent state directory (`credentials`, `agent.json`, inbox, pid) — default `<stateDir>/agents/<id>/agent`. |
 | `model` | string \| object | Same as `agents.defaults.model` (string or `{ primary, fallbacks }`). |
 | `thinkingDefault` | string | Optional. One of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `adaptive`. |
 | `reasoningDefault` | string | Optional. `off`, `on`, `stream`. |
@@ -142,7 +144,7 @@ Each entry must include **`id`**. Other fields are optional overrides (same shap
 
 The same optional keys can appear under **`agents.defaults`** for global defaults (e.g. `agents.defaults.tools.disable` merged with per-agent disables).
 
-**Note:** The on-disk layout under `~/.xopcbot/agents/<id>/` (CLI `agent-manage`) is separate from **`agents.list`** in config. For gateway/runtime behavior, treat **`config.json`** as the source of truth unless you intentionally sync the two.
+**Note:** On-disk paths (`~/.xopcbot/agents/<id>/` for sessions and internal state, per-agent Markdown workspace beside state) are **derived from `config.json`** (`agents.list`, `agents.defaults`, optional `agentDir` overrides). Use **`xopcbot agents add`** / **`agents delete`** to manage entries and directories; there is no separate agent “registry” outside config.
 
 #### agents.defaults
 
