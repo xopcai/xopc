@@ -53,6 +53,10 @@ Session storage is **not** under the Markdown workspace directory; it always use
 
 This is the directory returned by `resolveWorkspaceDir()` and created by `xopcbot init` for the chosen agent.
 
+**Creating an agent** (`xopcbot agent:create <id>`) creates this folder and **seeds** the standard Markdown bootstrap set from built-in templates (same filenames as [Workspace templates](/reference/templates): `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md`, plus `BOOTSTRAP.md` from the template pack). Files are only written when missing so each agent keeps an **independent** persona tree; use `--copy-from <id>` to overwrite from another agent’s workspace after seeding.
+
+In **`config.json`**, an entry in **`agents.list`** without an explicit **`workspace`** field uses this path automatically (`~/.xopcbot/agents/<id>/workspace`), aligned with the on-disk agent layout.
+
 ### Bootstrap Markdown (persona & memory index)
 
 These files are loaded into the system prompt (see `src/agent/context/workspace.ts` for order and limits). Names are constants in `WORKSPACE_FILES` (`src/config/paths.ts`).
