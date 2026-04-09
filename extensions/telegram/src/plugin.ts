@@ -209,6 +209,10 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     if (isDeepStrictEqual(prevTg, nextTg)) {
       this.cfg = cfg;
       this.bindOutboundComponents();
+      // Config unchanged but runners may be stopped (e.g. disable → enable with identical JSON shape after normalize).
+      if (!this.channelIsRunning(cfg)) {
+        await this.reapplyFromConfig(cfg);
+      }
       return;
     }
     await this.reapplyFromConfig(cfg);

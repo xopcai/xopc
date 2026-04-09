@@ -70,7 +70,8 @@ function isTelegramConfigured(tg: ChannelsSettingsState['telegram']): boolean {
 }
 
 function isWeixinConfigured(wx: ChannelsSettingsState['weixin']): boolean {
-  return wx.enabled || Object.keys(wx.accounts ?? {}).length > 0 || wx.allowFrom.length > 0;
+  // Match Telegram hub semantics: show the badge when there is real setup (accounts / allowlist), not only `enabled`.
+  return Object.keys(wx.accounts ?? {}).length > 0 || wx.allowFrom.length > 0;
 }
 
 function FieldLabel({ children }: { children: ReactNode }) {

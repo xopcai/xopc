@@ -159,7 +159,8 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
           historyLimit: tg.historyLimit,
           textChunkLimit: tg.textChunkLimit,
           proxy: tg.proxy || undefined,
-          accounts: Object.keys(tg.accounts).length ? tg.accounts : undefined,
+          // Always send `accounts` (including `{}`) so PATCH clears stale entries instead of omitting the field.
+          accounts: tg.accounts,
         },
         weixin: {
           enabled: wx.enabled,
@@ -170,7 +171,7 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
           historyLimit: wx.historyLimit,
           textChunkLimit: wx.textChunkLimit,
           routeTag: weixinRouteTag,
-          accounts: Object.keys(wx.accounts).length ? wx.accounts : undefined,
+          accounts: wx.accounts,
         },
       },
     }),

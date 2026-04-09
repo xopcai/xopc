@@ -131,15 +131,9 @@ export class ChannelManager {
     
     for (const [id, plugin] of this.plugins) {
       const channelConfig = asChannelConfig(this.config.channels?.[id]);
-      if (!this.shouldRunChannelPlugin(plugin, channelConfig)) {
-        log.debug({ channel: id }, 'Channel disabled in config, skipping');
-        continue;
-      }
-
-      const initPromise = this.initializePlugin(
-        plugin,
-        channelConfig ?? {},
-      );
+      // Always init so `onConfigUpdated` runs on hot reload (e.g. Weixin turned off after QR-login
+      // started monitors while the plugin was previously skipped here and had no bus/`initialized` id).
+      const initPromise = this.initializePlugin(plugin, channelConfig ?? {});
       initPromises.push(initPromise);
     }
     
@@ -483,6 +477,11 @@ export class ChannelManager {
       }
     }
     log.info('Channel config updated');
+  }
+
+  /** Replace in-memory config without running plugin `onConfigUpdated` hooks. */
+  setRuntimeConfig(config: Config): void {
+    this.config = config;
   }
   
   private async applyTtsIfNeeded(msg: OutboundMessage): Promise<OutboundMessage> {
