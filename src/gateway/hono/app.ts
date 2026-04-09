@@ -39,6 +39,7 @@ import { createOAuthHandler, loadOAuthCredentialsToCache } from './oauth.js';
 import { createOAuthAsyncHandler } from './oauth-async.js';
 import { testApiKeyResolution } from '../../config/resolve-config-value.js';
 import { buildSessionKey } from '../../routing/session-key.js';
+import { agentExists, getDefaultAgentId } from '../../routing/resolve-route.js';
 import { 
   getModelsJsonPath,
   loadModelsJson,
@@ -1619,12 +1620,20 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   authenticated.post('/api/sessions', async (c) => {
     const body = await c.req.json().catch(() => ({}));
     const channel = body.channel || 'webchat';
-    
+    const routingCfg = service.currentConfig;
+    let agentId =
+      typeof body.agentId === 'string' && body.agentId.trim()
+        ? body.agentId.trim().toLowerCase()
+        : getDefaultAgentId(routingCfg);
+    if (!agentExists(agentId, routingCfg)) {
+      agentId = getDefaultAgentId(routingCfg);
+    }
+
     // If a specific chat_id is provided, use it (for advanced use cases)
     // Otherwise, try to find and reuse an existing empty session
     if (body.chat_id) {
       const sessionKey = buildSessionKey({
-        agentId: 'main',
+        agentId,
         source: channel,
         accountId: 'default',
         peerKind: 'direct',
@@ -1656,7 +1665,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     // No empty session found, create a new one
     const chatId = `chat_${Date.now()}`;
     const sessionKey = buildSessionKey({
-      agentId: 'main',
+      agentId,
       source: channel,
       accountId: 'default',
       peerKind: 'direct',

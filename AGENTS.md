@@ -174,6 +174,12 @@ import { DraftStreamManager } from '@xopcai/xopcbot/channels/telegram/draft-stre
 | `cron` | Scheduled jobs |
 | `extensions` | Enable/disable extensions |
 
+### Multiple agents (`agents.list`) vs CLI registry (`~/.xopcbot/agents/`)
+
+Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by **`config.json`** — `agents.defaults` merged with the matching entry in **`agents.list`**. Use **`agents.default`** for the routing default id when the session does not specify an agent.
+
+The **`agent-manage` CLI** and on-disk **`~/.xopcbot/agents/<id>/`** layout are a separate mechanism (process-oriented descriptors). For OpenClaw-style multi-agent alignment, treat **`agents.list` + `agents.defaults` as the source of truth** for the live gateway/agent; keep registry usage limited to CLI workflows unless you explicitly sync the two.
+
 ### Telegram (multi-account sketch)
 
 ```json

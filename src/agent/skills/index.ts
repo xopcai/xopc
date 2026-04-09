@@ -4,6 +4,7 @@ import { parseFrontmatter } from '../../markdown/frontmatter.js';
 import { resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSkillConfigManager, isSkillEnabled } from './config.js';
+import { formatSkillsForPrompt } from './format-skills-prompt.js';
 import type {
   Skill,
   SkillMetadata,
@@ -86,49 +87,6 @@ function shouldIgnore(path: string, ignoredPaths: Set<string>): boolean {
     }
   }
   return false;
-}
-
-function escapeXml(str: string): string {
-  return str
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-function formatSkillXml(skill: Skill): string {
-  const emoji = skill.metadata.emoji || '';
-  const emojiStr = emoji ? `${emoji} ` : '';
-  
-  return [
-    '  <skill>',
-    `    <name>${escapeXml(skill.name)}</name>`,
-    `    <description>${emojiStr}${escapeXml(skill.description)}</description>`,
-    `    <location>${escapeXml(skill.filePath)}</location>`,
-    '  </skill>',
-  ].join('\n');
-}
-
-function formatSkillsForPrompt(skills: Skill[], skillsConfig?: SkillsConfig): string {
-  const visibleSkills = skills.filter(
-    (s) => !s.disableModelInvocation && isSkillEnabled(s, skillsConfig),
-  );
-  if (visibleSkills.length === 0) return '';
-
-  const lines = [
-    '\n\n<available_skills>',
-    'Skills are folders of instructions, scripts, and resources.',
-    'Use the read tool to load a skill\'s file when the task matches its description.',
-    '',
-  ];
-
-  for (const skill of visibleSkills) {
-    lines.push(formatSkillXml(skill));
-  }
-
-  lines.push('</available_skills>');
-  return lines.join('\n');
 }
 
 function discoverSkills(dir: string, source: 'builtin' | 'workspace' | 'global'): Skill[] {

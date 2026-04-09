@@ -8,6 +8,7 @@ import { createSkillLoader, type Skill } from './index.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSkillConfigManager, isSkillEnabled } from './config.js';
+import { formatSkillsForPrompt } from './format-skills-prompt.js';
 
 const log = createLogger('SkillManager');
 
@@ -95,6 +96,23 @@ export class SkillManager {
    */
   getPrompt(): string {
     return this.skillPrompt;
+  }
+
+  /**
+   * Skill XML block filtered to an allowlist (e.g. per-agent `agents.list[].skills`).
+   * When `allowlist` is undefined, returns {@link getPrompt}.
+   */
+  getPromptForSkillAllowlist(allowlist: string[] | undefined): string {
+    if (allowlist === undefined) {
+      return this.getPrompt();
+    }
+    if (allowlist.length === 0) {
+      return '';
+    }
+    const set = new Set(allowlist.map((s) => s.toLowerCase()));
+    const skills = this.getSkills().filter((s) => set.has(s.name.toLowerCase()));
+    const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+    return formatSkillsForPrompt(skills, skillsConfig);
   }
 
   /**

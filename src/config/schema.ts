@@ -91,15 +91,43 @@ export const AgentDefaultsSchema = z.object({
       summaryModel: z.string().optional(),
     })
     .optional(),
+  /** Optional full system prompt replacement (merged with per-agent entry; entry wins). */
+  systemPromptOverride: z.string().optional(),
+  /** Optional allowlist of skill names for `<available_skills>`; when set, replaces unfiltered list. */
+  skills: z.array(z.string()).optional(),
+  /** Disable built-in tools by name (e.g. `shell`, `web_search`). */
+  tools: z
+    .object({
+      disable: z.array(z.string()).optional(),
+    })
+    .optional(),
+  /** Opaque per-process params (reserved for extensions / future use). */
+  params: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const AgentConfigSchema = z.object({
   id: z.string(),
   name: z.string().optional(),
   enabled: z.boolean().default(true),
+  /** Per-agent workspace root (`~` expanded at runtime). */
+  workspace: z.string().optional(),
+  model: AgentModelRefSchema.optional(),
+  thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive']).optional(),
+  reasoningDefault: z.enum(['off', 'on', 'stream']).optional(),
+  verboseDefault: z.enum(['off', 'on', 'full']).optional(),
+  systemPromptOverride: z.string().optional(),
+  skills: z.array(z.string()).optional(),
+  tools: z
+    .object({
+      disable: z.array(z.string()).optional(),
+    })
+    .optional(),
+  params: z.record(z.string(), z.unknown()).optional(),
 });
 
 export const AgentsConfigSchema = z.object({
+  /** Default agent id when not specified (routing / session creation). */
+  default: z.string().optional(),
   defaults: AgentDefaultsSchema.optional(),
   list: z.array(AgentConfigSchema).optional(),
 }).default({

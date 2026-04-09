@@ -1,4 +1,5 @@
 export * from './schema.js';
+export * from './agent-profile.js';
 export * from './loader.js';
 export * from './paths.js';
 export * from './profile.js';

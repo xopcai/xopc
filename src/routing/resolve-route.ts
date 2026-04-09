@@ -47,6 +47,7 @@ export interface AgentConfig {
     id: string;
     name?: string;
     enabled?: boolean;
+    [key: string]: unknown;
   }>;
 }
 

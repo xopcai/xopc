@@ -13,6 +13,12 @@ import {
 } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
+import {
+  type EffectiveAgentProfile,
+  resolveEffectiveAgentProfileForSession,
+  expandWorkspacePathString,
+} from '../config/agent-profile.js';
+import type { ModelManager } from './models/manager.js';
 import { createLogger } from '../utils/logger.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
 import { CredentialResolver } from '../auth/credentials.js';
@@ -68,6 +74,8 @@ export interface AgentManagerConfig {
   getCurrentContext: () => SessionContext | null;
   /** Session persistence (enables `session_search` when set). */
   getSessionStore?: () => SessionStore;
+  /** Clears per-session profile default on teardown. */
+  getModelManager?: () => ModelManager;
   // Thinking configuration
   thinkingLevel?: ThinkingLevel;
   reasoningLevel?: 'off' | 'on' | 'stream';
@@ -81,53 +89,44 @@ export interface AgentInstance {
   lastUsedAt: number;
   /** Curated `.xopcbot/memories/` snapshot frozen at agent creation (prefix cache). */
   curatedMemorySnapshot: MemorySnapshot;
+  effectiveProfile: EffectiveAgentProfile;
+  resolvedWorkspacePath: string;
+}
+
+interface WorkspaceRuntime {
+  skillManager: SkillManager;
+  systemPromptBuilder: SystemPromptBuilder;
+  builtinMemoryStore: BuiltinMemoryStore;
+  memoryManager: MemoryManager;
 }
 
 export class AgentManager {
   private agents = new Map<string, AgentInstance>();
   private config: AgentManagerConfig;
   private toolsFactory: AgentToolsFactory;
-  private systemPromptBuilder: SystemPromptBuilder;
-  private skillManager: SkillManager;
+  /** Default agent workspace (effective profile for `getDefaultAgentId`). */
+  private baseWorkspacePath: string;
   private defaultModel: string;
-  private bootstrapFiles: ReturnType<typeof loadBootstrapFiles>;
   private credentialCache = new Map<string, string>();
   private credentialResolver: CredentialResolver;
-  private builtinMemoryStore: BuiltinMemoryStore;
-  private memoryManager: MemoryManager;
+  private workspaceRuntimes = new Map<string, WorkspaceRuntime>();
   /** Per-session user-message index for prefetch injection cadence. */
   private memoryPrefetchUserTurn = new Map<string, number>();
 
   constructor(config: AgentManagerConfig) {
     this.config = config;
-    this.bootstrapFiles = loadBootstrapFiles(config.workspace);
-
-    this.builtinMemoryStore = new BuiltinMemoryStore(
-      resolveBuiltinMemoryStoreConfig(config.workspace, config.config),
-    );
-
-    this.memoryManager = createMemoryManagerFromConfig(
-      config.workspace,
-      this.builtinMemoryStore,
-      config.config,
-    );
-
-    this.skillManager = new SkillManager(config.workspace, resolveBundledSkillsDir());
-    this.systemPromptBuilder = new SystemPromptBuilder({
-      workspace: config.workspace,
-      config: config.config!,
-      skillManager: this.skillManager,
-    });
+    this.baseWorkspacePath = this.computeBaseWorkspacePath();
+    const baseRt = this.getWorkspaceRuntime(this.baseWorkspacePath);
 
     this.toolsFactory = new AgentToolsFactory({
-      workspace: config.workspace,
+      workspace: this.baseWorkspacePath,
       extensionRegistry: config.extensionRegistry,
       getCurrentContext: config.getCurrentContext,
       bus: config.bus,
       getConfig: () => this.config.config,
-      getPrimaryModel: () => this.resolveModel(),
-      getBuiltinMemoryStore: () => this.builtinMemoryStore,
-      getMemoryManager: () => this.memoryManager,
+      getPrimaryModel: () => this.resolveModelStringToModel(this.pickDefaultModelRef()),
+      getBuiltinMemoryStore: () => baseRt.builtinMemoryStore,
+      getMemoryManager: () => baseRt.memoryManager,
       getSessionStore: config.getSessionStore,
     });
 
@@ -139,6 +138,79 @@ export class AgentManager {
     });
   }
 
+  private computeBaseWorkspacePath(): string {
+    const cfg = this.config.config;
+    if (!cfg) {
+      return expandWorkspacePathString(this.config.workspace);
+    }
+    return resolveEffectiveAgentProfileForSession(cfg, null).resolvedWorkspacePath;
+  }
+
+  /**
+   * Workspace root for inbound attachments / side effects for this session's agent id.
+   */
+  getResolvedWorkspaceForSession(sessionKey: string): string {
+    const cfg = this.config.config!;
+    return resolveEffectiveAgentProfileForSession(cfg, sessionKey).resolvedWorkspacePath;
+  }
+
+  /** Merged `thinkingDefault` for this session's agent id (defaults + `agents.list`). */
+  getThinkingDefaultForSession(
+    sessionKey: string,
+  ): import('./transcript/thinking-types.js').ThinkLevel | undefined {
+    const cfg = this.config.config;
+    if (!cfg) {
+      return undefined;
+    }
+    return resolveEffectiveAgentProfileForSession(cfg, sessionKey).thinkingDefault;
+  }
+
+  private getWorkspaceRuntime(resolvedPath: string): WorkspaceRuntime {
+    const existing = this.workspaceRuntimes.get(resolvedPath);
+    if (existing) {
+      return existing;
+    }
+
+    const builtinMemoryStore = new BuiltinMemoryStore(
+      resolveBuiltinMemoryStoreConfig(resolvedPath, this.config.config),
+    );
+    const memoryManager = createMemoryManagerFromConfig(
+      resolvedPath,
+      builtinMemoryStore,
+      this.config.config,
+    );
+    const skillManager = new SkillManager(resolvedPath, resolveBundledSkillsDir());
+    const systemPromptBuilder = new SystemPromptBuilder({
+      workspace: resolvedPath,
+      config: this.config.config!,
+      skillManager,
+    });
+
+    const rt: WorkspaceRuntime = {
+      skillManager,
+      systemPromptBuilder,
+      builtinMemoryStore,
+      memoryManager,
+    };
+    this.workspaceRuntimes.set(resolvedPath, rt);
+    return rt;
+  }
+
+  private pickDefaultModelRef(): string {
+    const ref = getAgentDefaultModelRef(this.config.config);
+    return ref?.trim() || getDefaultModelSync(this.config.config);
+  }
+
+  private resolveModelStringToModel(modelRef: string): Model<Api> {
+    try {
+      return resolveModel(modelRef);
+    } catch {
+      const fallback = getDefaultModelSync(this.config.config);
+      log.warn({ modelRef, fallback }, 'Model not found, using default');
+      return resolveModel(fallback);
+    }
+  }
+
   /**
    * Keep defaults in sync when config is hot-reloaded or saved from the UI.
    */
@@ -147,19 +219,32 @@ export class AgentManager {
     const ref = getAgentDefaultModelRef(config);
     this.config.model = ref;
     this.defaultModel = ref || getDefaultModelSync(config);
-    this.builtinMemoryStore = new BuiltinMemoryStore(
-      resolveBuiltinMemoryStoreConfig(this.config.workspace, config),
-    );
-    void this.memoryManager.shutdownAll().catch(() => {});
-    this.memoryManager = createMemoryManagerFromConfig(
-      this.config.workspace,
-      this.builtinMemoryStore,
-      config,
-    );
+    this.baseWorkspacePath = this.computeBaseWorkspacePath();
+    for (const rt of this.workspaceRuntimes.values()) {
+      void rt.memoryManager.shutdownAll().catch(() => {});
+    }
+    this.workspaceRuntimes.clear();
+    this.toolsFactory = new AgentToolsFactory({
+      workspace: this.baseWorkspacePath,
+      extensionRegistry: this.config.extensionRegistry,
+      getCurrentContext: this.config.getCurrentContext,
+      bus: this.config.bus,
+      getConfig: () => this.config.config,
+      getPrimaryModel: () => this.resolveModelStringToModel(this.pickDefaultModelRef()),
+      getBuiltinMemoryStore: () => this.getWorkspaceRuntime(this.baseWorkspacePath).builtinMemoryStore,
+      getMemoryManager: () => this.getWorkspaceRuntime(this.baseWorkspacePath).memoryManager,
+      getSessionStore: this.config.getSessionStore,
+    });
   }
 
   getMemoryManager(): MemoryManager {
-    return this.memoryManager;
+    return this.getWorkspaceRuntime(this.baseWorkspacePath).memoryManager;
+  }
+
+  private getMemoryManagerForSession(sessionKey: string): MemoryManager {
+    const cfg = this.config.config!;
+    const path = resolveEffectiveAgentProfileForSession(cfg, sessionKey).resolvedWorkspacePath;
+    return this.getWorkspaceRuntime(path).memoryManager;
   }
 
   /**
@@ -178,7 +263,12 @@ export class AgentManager {
     if (!shouldInjectMemoryPrefetchThisTurn(this.config.config, turn)) {
       return userMessage;
     }
-    return injectPrefetchIntoUserMessage(this.memoryManager, sessionKey, userMessage, plain);
+    return injectPrefetchIntoUserMessage(
+      this.getMemoryManagerForSession(sessionKey),
+      sessionKey,
+      userMessage,
+      plain,
+    );
   }
 
   /**
@@ -189,22 +279,27 @@ export class AgentManager {
       return;
     }
     const assistant = this.getLastAssistantContent(sessionKey) ?? '';
-    this.memoryManager.syncAll(userPlainText, assistant, { sessionId: sessionKey });
-    this.memoryManager.queuePrefetchAll(userPlainText, { sessionId: sessionKey });
+    const mm = this.getMemoryManagerForSession(sessionKey);
+    mm.syncAll(userPlainText, assistant, { sessionId: sessionKey });
+    mm.queuePrefetchAll(userPlainText, { sessionId: sessionKey });
   }
 
   /**
    * Expand `/skill:name` user text into the full skill block for the current turn (WebChat, channels).
    */
   expandSkillUserText(text: string): string {
-    return this.skillManager.expandCommand(text);
+    const ctx = this.config.getCurrentContext?.();
+    const path = ctx?.sessionKey
+      ? this.getResolvedWorkspaceForSession(ctx.sessionKey)
+      : this.baseWorkspacePath;
+    return this.getWorkspaceRuntime(path).skillManager.expandCommand(text);
   }
 
   /**
    * Read raw SKILL.md from disk (including frontmatter) for UI preview.
    */
   getSkillMarkdownSource(skillName: string): { name: string; markdown: string } | null {
-    const skill = this.skillManager.findSkill(skillName);
+    const skill = this.getWorkspaceRuntime(this.baseWorkspacePath).skillManager.findSkill(skillName);
     if (!skill) return null;
     try {
       const markdown = readFileSync(skill.filePath, 'utf-8');
@@ -217,7 +312,7 @@ export class AgentManager {
 
   getSkillCatalog(): SkillCatalogEntry[] {
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
-    return this.skillManager.getSkills().map((s) => {
+    return this.getWorkspaceRuntime(this.baseWorkspacePath).skillManager.getSkills().map((s) => {
       const base = resolve(s.baseDir);
       const managed = isUnderManagedSkillsDir(s.baseDir);
       const directoryId = base.split(sep).filter(Boolean).pop() || s.name;
@@ -239,11 +334,20 @@ export class AgentManager {
    * After ~/.xopcbot/skills.json changes (enable/disable), refresh `<available_skills>` on active agents.
    */
   refreshSkillsAfterSkillConfigChange(): void {
-    this.skillManager.refreshPromptFromConfig();
+    const touched = new Set<string>();
     for (const instance of this.agents.values()) {
-      const newPrompt = this.systemPromptBuilder.build(this.bootstrapFiles, {
+      const rt = this.getWorkspaceRuntime(instance.resolvedWorkspacePath);
+      if (!touched.has(instance.resolvedWorkspacePath)) {
+        rt.skillManager.refreshPromptFromConfig();
+        touched.add(instance.resolvedWorkspacePath);
+      }
+      const bootstrapFiles = loadBootstrapFiles(instance.resolvedWorkspacePath);
+      const newPrompt = rt.systemPromptBuilder.build(bootstrapFiles, {
         curatedMemorySnapshot: instance.curatedMemorySnapshot,
-        externalMemoryInstructions: this.memoryManager.buildExternalSystemPrompt(),
+        externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+        workspaceOverride: instance.resolvedWorkspacePath,
+        systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
+        skillAllowlist: instance.effectiveProfile.skillsAllowlist,
       });
       instance.agent.setSystemPrompt(newPrompt);
     }
@@ -254,10 +358,19 @@ export class AgentManager {
    * Reload skills from disk and refresh system prompt on all active Agent instances.
    */
   refreshSkillsAfterDiskChange(): void {
+    const touched = new Set<string>();
     for (const instance of this.agents.values()) {
-      const newPrompt = this.systemPromptBuilder.rebuild(this.bootstrapFiles, {
+      const rt = this.getWorkspaceRuntime(instance.resolvedWorkspacePath);
+      if (!touched.has(instance.resolvedWorkspacePath)) {
+        touched.add(instance.resolvedWorkspacePath);
+      }
+      const bootstrapFiles = loadBootstrapFiles(instance.resolvedWorkspacePath);
+      const newPrompt = rt.systemPromptBuilder.rebuild(bootstrapFiles, {
         curatedMemorySnapshot: instance.curatedMemorySnapshot,
-        externalMemoryInstructions: this.memoryManager.buildExternalSystemPrompt(),
+        externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+        workspaceOverride: instance.resolvedWorkspacePath,
+        systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
+        skillAllowlist: instance.effectiveProfile.skillsAllowlist,
       });
       instance.agent.setSystemPrompt(newPrompt);
     }
@@ -275,24 +388,40 @@ export class AgentManager {
       return existing.agent;
     }
 
-    if (isMemorySubsystemEnabled(this.config.config)) {
-      void this.memoryManager
-        .initializeAll(sessionKey, { workspace: this.config.workspace })
+    const cfg = this.config.config!;
+    const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
+    const resolvedPath = profile.resolvedWorkspacePath;
+    const rt = this.getWorkspaceRuntime(resolvedPath);
+
+    if (isMemorySubsystemEnabled(cfg)) {
+      void rt.memoryManager
+        .initializeAll(sessionKey, { workspace: resolvedPath })
         .catch((err) => log.warn({ err, sessionKey }, 'memory initializeAll failed'));
     }
 
-    const agent = this.createAgent();
-    const curatedOn = isCuratedMemoryInPrompt(this.config.config);
-    const snap = curatedOn ? this.builtinMemoryStore.getSnapshot() : { memory: '', user: '' };
+    const curatedOn = isCuratedMemoryInPrompt(cfg);
+    if (curatedOn) {
+      rt.builtinMemoryStore.loadFromDiskSync();
+    }
+    const snap = curatedOn ? rt.builtinMemoryStore.getSnapshot() : { memory: '', user: '' };
+    const curatedMemorySnapshot: MemorySnapshot = { memory: snap.memory, user: snap.user };
+
+    const agent = this.createAgentForProfile(sessionKey, profile, rt, curatedMemorySnapshot);
+
     this.agents.set(sessionKey, {
       agent,
       sessionKey,
       createdAt: Date.now(),
       lastUsedAt: Date.now(),
-      curatedMemorySnapshot: { memory: snap.memory, user: snap.user },
+      curatedMemorySnapshot,
+      effectiveProfile: profile,
+      resolvedWorkspacePath: resolvedPath,
     });
 
-    log.debug({ sessionKey, totalAgents: this.agents.size }, 'Created new agent instance');
+    const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
+    this.config.getModelManager?.().setSessionProfileDefault(sessionKey, modelRef);
+
+    log.debug({ sessionKey, totalAgents: this.agents.size, agentId: profile.agentId }, 'Created new agent instance');
     return agent;
   }
 
@@ -319,6 +448,7 @@ export class AgentManager {
       instance.agent.abort();
       this.agents.delete(sessionKey);
       this.memoryPrefetchUserTurn.delete(sessionKey);
+      this.config.getModelManager?.().clearSessionProfileDefault(sessionKey);
       log.info({ sessionKey, totalAgents: this.agents.size }, 'Removed agent instance');
       return true;
     }
@@ -359,7 +489,10 @@ export class AgentManager {
     }
     this.agents.clear();
     this.memoryPrefetchUserTurn.clear();
-    void this.memoryManager.shutdownAll().catch(() => {});
+    for (const rt of this.workspaceRuntimes.values()) {
+      void rt.memoryManager.shutdownAll().catch(() => {});
+    }
+    this.workspaceRuntimes.clear();
     log.debug('All agent instances disposed');
   }
 
@@ -384,52 +517,43 @@ export class AgentManager {
     return getApiKeySync(provider);
   }
 
-  /**
-   * Create a new Agent instance
-   */
-  private createAgent(): Agent {
-    const tools = this.toolsFactory.createAllTools();
-    const model = this.resolveModel();
+  private createAgentForProfile(
+    _sessionKey: string,
+    profile: EffectiveAgentProfile,
+    rt: WorkspaceRuntime,
+    curatedMemorySnapshot: MemorySnapshot,
+  ): Agent {
+    const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
+    const model = this.resolveModelStringToModel(modelRef);
 
-    const curatedOn = isCuratedMemoryInPrompt(this.config.config);
-    if (curatedOn) {
-      this.builtinMemoryStore.loadFromDiskSync();
-    }
-    const snap = curatedOn ? this.builtinMemoryStore.getSnapshot() : { memory: '', user: '' };
-    const curatedMemorySnapshot: MemorySnapshot = {
-      memory: snap.memory,
-      user: snap.user,
-    };
+    const bootstrapFiles = loadBootstrapFiles(profile.resolvedWorkspacePath);
+    const tools = this.toolsFactory.createAllTools({
+      workspace: profile.resolvedWorkspacePath,
+      disabledTools: profile.tools.disable,
+      getPrimaryModel: () => this.resolveModelStringToModel(modelRef),
+      getBuiltinMemoryStore: () => rt.builtinMemoryStore,
+      getMemoryManager: () => rt.memoryManager,
+    });
+
+    const thinkingLevel =
+      (profile.thinkingDefault as ThinkingLevel | undefined) ?? this.config.thinkingLevel ?? 'medium';
 
     return new Agent({
       initialState: {
-        systemPrompt: this.systemPromptBuilder.build(this.bootstrapFiles, {
+        systemPrompt: rt.systemPromptBuilder.build(bootstrapFiles, {
           curatedMemorySnapshot,
-          externalMemoryInstructions: this.memoryManager.buildExternalSystemPrompt(),
+          externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
+          workspaceOverride: profile.resolvedWorkspacePath,
+          systemPromptOverride: profile.systemPromptOverride,
+          skillAllowlist: profile.skillsAllowlist,
         }),
         model,
-        thinkingLevel: this.config.thinkingLevel || 'medium',
+        thinkingLevel,
         tools,
         messages: [],
       },
       getApiKey: (provider: string) => this.resolveApiKeyWithCache(provider),
     });
-  }
-
-  /**
-   * Resolve model for agent
-   */
-  private resolveModel(): Model<Api> {
-    if (this.config.model) {
-      try {
-        return resolveModel(this.config.model);
-      } catch {
-        const defaultModel = getDefaultModelSync(this.config.config);
-        log.warn({ model: this.config.model, defaultModel }, 'Model not found, using default');
-        return resolveModel(defaultModel);
-      }
-    }
-    return resolveModel(getDefaultModelSync(this.config.config));
   }
 
   /**
