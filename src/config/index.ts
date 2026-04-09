@@ -4,7 +4,6 @@ export * from './loader.js';
 export * from './paths.js';
 export * from './workspace-dirs.js';
 export { expandWorkspacePathString, normalizeWorkspaceDir, resolveWorkspaceRoot } from './workspace-path.js';
-export { resolveAgentHomeDir } from './agent-homedir.js';
 export * from './profile.js';
 export * from './reload.js';
 export * from './diff.js';

@@ -3,13 +3,15 @@
  */
 
 import { SessionManager } from '../../session/index.js';
+import { loadConfig } from '../../config/loader.js';
 
 /**
  * Get initialized SessionManager instance
  * Eliminates repeated initialization boilerplate
  */
 export async function getSessionManager(workspace: string): Promise<SessionManager> {
-  const manager = new SessionManager({ workspace });
+  const config = loadConfig();
+  const manager = new SessionManager({ config, workspace });
   await manager.initialize();
   return manager;
 }

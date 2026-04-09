@@ -22,6 +22,7 @@ import type {
 import { AcpRuntimeError, normalizeAcpErrorCode } from "../errors.js";
 import type { MessageBus } from "../../../infra/bus/index.js";
 import type { Config } from "../../../config/schema.js";
+import { loadConfig } from "../../../config/loader.js";
 import { SessionStore } from "../../../session/index.js";
 import { resolveModel, getDefaultModelSync, getApiKeySync } from "../../../providers/index.js";
 import { resolveBundledSkillsDir } from "../../../config/paths.js";
@@ -87,7 +88,8 @@ export class LocalAcpRuntime implements AcpRuntime {
     this.config = runtimeConfig?.config;
 
     // Initialize session store
-    this.sessionStore = new SessionStore({ workspace: this.workspace }, {
+    const appCfg = this.config ?? loadConfig();
+    this.sessionStore = new SessionStore({ config: appCfg, workspace: this.workspace }, {
       maxMessages: 100,
       keepRecentMessages: 20,
       preserveSystemMessages: true,

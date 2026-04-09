@@ -54,6 +54,7 @@ import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 import { extractAgentUserPlainText } from './memory/user-message-text.js';
 
+import { resolveDefaultAgentId } from '../agents/agent-scope.js';
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
@@ -313,7 +314,19 @@ export class AgentService {
       evictionWindow: sessionStoreDefaults?.compaction?.evictionWindow || 0.2,
       retentionWindow: sessionStoreDefaults?.compaction?.retentionWindow || 6,
     };
-    return new SessionStore({ workspace: this.config.workspace }, windowConfig, compactionConfig);
+    const appCfg = this.config.config;
+    if (!appCfg) {
+      throw new Error('AgentService requires config.config for session store paths');
+    }
+    return new SessionStore(
+      {
+        config: appCfg,
+        workspace: this.config.workspace,
+        agentId: resolveDefaultAgentId(appCfg),
+      },
+      windowConfig,
+      compactionConfig,
+    );
   }
 
   private createHookRunner(): ExtensionHookRunner | undefined {

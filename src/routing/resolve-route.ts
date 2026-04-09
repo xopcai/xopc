@@ -4,6 +4,8 @@
  * Combines binding rules, identity links, and config to pick an agent and session keys.
  */
 
+import { resolveDefaultAgentId as resolveDefaultAgentIdFromConfig } from '../agents/agent-scope.js';
+import type { Config } from '../config/schema.js';
 import type { BindingRule, RouteInput, RouteResult } from './bindings.js';
 
 /**
@@ -125,24 +127,10 @@ export function applyIdentityLinks(
 }
 
 /**
- * Default agent id from config, falling back to `main`.
+ * Default agent id from config (OpenClaw-style: `agents.default`, `list[].default`, or `main`).
  */
 export function getDefaultAgentId(config: RoutingConfig): string {
-  // Try 'default' field first (RoutingConfig interface)
-  if ((config.agents as any)?.default) {
-    return (config.agents as any).default;
-  }
-  
-  // Try to find first enabled agent from list
-  const agentList = config.agents?.list;
-  if (Array.isArray(agentList)) {
-    const firstEnabled = agentList.find((a: any) => a.enabled !== false);
-    if (firstEnabled?.id) {
-      return firstEnabled.id;
-    }
-  }
-  
-  return 'main';
+  return resolveDefaultAgentIdFromConfig(config as Config);
 }
 
 /**

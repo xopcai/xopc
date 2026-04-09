@@ -2,6 +2,7 @@ import { createServer, Server, Socket } from 'net';
 import { mkdir } from 'fs/promises';
 import { dirname } from 'path';
 import { createLogger } from '../../utils/logger.js';
+import type { Config } from '../../config/schema.js';
 import { resolveSocketPath } from '../../config/paths.js';
 import type { AgentIPCMessage } from './types.js';
 import { isValidIPCMessage } from './types.js';
@@ -18,8 +19,8 @@ export class AgentSocketServer {
   private connections: Map<string, Socket> = new Map();
   private messageHandler?: (msg: AgentIPCMessage, reply: (response: AgentIPCMessage) => void) => Promise<void>;
 
-  constructor(agentId?: string) {
-    this.socketPath = resolveSocketPath(agentId);
+  constructor(config: Config, agentId: string) {
+    this.socketPath = resolveSocketPath(config, agentId);
   }
 
   /**
@@ -159,8 +160,8 @@ export class AgentSocketClient {
     { resolve: (value: AgentIPCMessage) => void; reject: (reason?: Error) => void; timeout: NodeJS.Timeout }
   > = new Map();
 
-  constructor(targetAgentId: string) {
-    this.socketPath = resolveSocketPath(targetAgentId);
+  constructor(config: Config, targetAgentId: string) {
+    this.socketPath = resolveSocketPath(config, targetAgentId);
   }
 
   /**
@@ -301,8 +302,8 @@ export class AgentSocketClient {
 // Utility Functions
 // ============================================
 
-export async function isSocketAvailable(agentId?: string): Promise<boolean> {
-  const socketPath = resolveSocketPath(agentId);
+export async function isSocketAvailable(config: Config, agentId: string): Promise<boolean> {
+  const socketPath = resolveSocketPath(config, agentId);
 
   return new Promise((resolve) => {
     const socket = new Socket();

@@ -17,7 +17,6 @@ import { join, isAbsolute, resolve } from 'path';
 import { tmpdir } from 'os';
 import {
   resolveExtensionsDir as resolveGlobalExtensionsDir,
-  resolveWorkspaceExtensionsDir,
   resolveBundledExtensionsDir,
 } from '../config/paths.js';
 
@@ -64,7 +63,7 @@ export function resolveExtensionsDir(
     mkdirSync(globalDir, { recursive: true });
     return globalDir;
   }
-  return resolveWorkspaceExtensionsDir(workspaceDir);
+  return join(workspaceDir, '.extensions');
 }
 
 /**
@@ -254,7 +253,7 @@ export function removeExtension(
   workspaceDir: string,
 ): { ok: boolean; removedFrom?: string; error?: string } {
   // Try workspace first
-  const workspaceDir_ = resolveWorkspaceExtensionsDir(workspaceDir);
+  const workspaceDir_ = join(workspaceDir, '.extensions');
   const workspaceExtension = join(workspaceDir_, extensionId);
 
   if (existsSync(workspaceExtension)) {
@@ -296,7 +295,7 @@ export function listAllExtensions(workspaceDir: string): ListedExtension[] {
   const seen = new Set<string>();
 
   // Priority 1: Workspace (highest)
-  const workspaceExtensionsDir = resolveWorkspaceExtensionsDir(workspaceDir);
+  const workspaceExtensionsDir = join(workspaceDir, '.extensions');
   if (existsSync(workspaceExtensionsDir)) {
     for (const entry of readdirSync(workspaceExtensionsDir, { withFileTypes: true })) {
       if (!entry.isDirectory()) continue;

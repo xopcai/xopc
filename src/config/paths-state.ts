@@ -7,8 +7,6 @@ export const ENV_VARS = {
   HOME: 'XOPCBOT_HOME',
   CONFIG_PATH: 'XOPCBOT_CONFIG_PATH',
   CREDENTIALS_DIR: 'XOPCBOT_CREDENTIALS_DIR',
-  AGENT_ID: 'XOPCBOT_AGENT_ID',
-  AGENT_DIR: 'XOPCBOT_AGENT_DIR',
   LOG_LEVEL: 'XOPCBOT_LOG_LEVEL',
   LOG_DIR: 'XOPCBOT_LOG_DIR',
   LOG_CONSOLE: 'XOPCBOT_LOG_CONSOLE',
@@ -34,8 +32,4 @@ export function resolveStateDir(env: NodeJS.ProcessEnv = process.env): string {
   }
 
   return join(home, '.xopcbot');
-}
-
-export function resolveAgentId(env: NodeJS.ProcessEnv = process.env): string {
-  return env[ENV_VARS.AGENT_ID] ?? 'main';
 }
