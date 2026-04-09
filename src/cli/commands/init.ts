@@ -15,7 +15,6 @@ import {
   resolveWorkspaceDir,
   resolveSessionsDir,
   resolveInboxDir,
-  resolveRunDir,
   resolveConfigPath,
   resolveAgentMetadataPath,
   resolveInboxPendingDir,
@@ -23,6 +22,7 @@ import {
   WORKSPACE_FILES,
   FILENAMES,
 } from '../../config/paths.js';
+import { resolveAgentHomeDir } from '../../config/agent-homedir.js';
 import { loadConfig, saveConfig } from '../../config/loader.js';
 
 const log = createLogger('InitCommand');
@@ -70,19 +70,19 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   await mkdir(resolveToolsDir(), { recursive: true });
 
   // ============================================
-  // Create agent directory structure
+  // Create agent directory structure (OpenClaw: agents/<id>/{sessions,agent/}, workspace aside)
   // ============================================
+  await mkdir(resolveAgentHomeDir(agentId), { recursive: true });
+  await mkdir(resolveSessionsDir(agentId), { recursive: true });
+  await mkdir(join(resolveSessionsDir(agentId), 'archive'), { recursive: true });
   await mkdir(resolveAgentDir(agentId), { recursive: true });
   await mkdir(join(resolveAgentDir(agentId), 'credentials'), { recursive: true });
   await mkdir(resolveWorkspaceDir(agentId), { recursive: true });
   await mkdir(join(resolveWorkspaceDir(agentId), '.state'), { recursive: true });
   await mkdir(join(resolveWorkspaceDir(agentId), 'memory'), { recursive: true });
-  await mkdir(resolveSessionsDir(agentId), { recursive: true });
-  await mkdir(join(resolveSessionsDir(agentId), 'archive'), { recursive: true });
   await mkdir(resolveInboxDir(agentId), { recursive: true });
   await mkdir(resolveInboxPendingDir(agentId), { recursive: true });
   await mkdir(resolveInboxProcessedDir(agentId), { recursive: true });
-  await mkdir(resolveRunDir(agentId), { recursive: true });
 
   // ============================================
   // Create initial config file if not exists

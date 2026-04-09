@@ -1,27 +1,14 @@
-import { homedir } from 'os';
 import { join } from 'path';
 import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { existsSync } from 'fs';
 
-// ============================================
-// Environment Variable Names
-// ============================================
-export const ENV_VARS = {
-  STATE_DIR: 'XOPCBOT_STATE_DIR',
-  PROFILE: 'XOPCBOT_PROFILE',
-  HOME: 'XOPCBOT_HOME',
-  CONFIG_PATH: 'XOPCBOT_CONFIG_PATH',
-  CREDENTIALS_DIR: 'XOPCBOT_CREDENTIALS_DIR',
-  AGENT_ID: 'XOPCBOT_AGENT_ID',
-  AGENT_DIR: 'XOPCBOT_AGENT_DIR',
-  LOG_LEVEL: 'XOPCBOT_LOG_LEVEL',
-  LOG_DIR: 'XOPCBOT_LOG_DIR',
-  LOG_CONSOLE: 'XOPCBOT_LOG_CONSOLE',
-  LOG_FILE: 'XOPCBOT_LOG_FILE',
-  LOG_RETENTION_DAYS: 'XOPCBOT_LOG_RETENTION_DAYS',
-  PRETTY_LOGS: 'XOPCBOT_PRETTY_LOGS',
-} as const;
+import { resolveAgentHomeDir } from './agent-homedir.js';
+import { ENV_VARS, resolveHomeDir, resolveStateDir, resolveAgentId } from './paths-state.js';
+import { resolveDefaultAgentWorkspaceDir, resolveWorkspaceDir } from './workspace-defaults.js';
+
+export { ENV_VARS, resolveHomeDir, resolveStateDir, resolveAgentId } from './paths-state.js';
+export { resolveDefaultAgentWorkspaceDir, resolveWorkspaceDir } from './workspace-defaults.js';
 
 // ============================================
 // File Names
@@ -62,32 +49,6 @@ export const WORKSPACE_FILES = {
 // ============================================
 
 /**
- * Resolve the home directory (respects XOPCBOT_HOME)
- */
-export function resolveHomeDir(): string {
-  return process.env[ENV_VARS.HOME] || homedir();
-}
-
-/**
- * Resolve the state directory root
- * Priority: XOPCBOT_STATE_DIR > XOPCBOT_PROFILE > ~/.xopcbot
- */
-export function resolveStateDir(): string {
-  if (process.env[ENV_VARS.STATE_DIR]) {
-    return process.env[ENV_VARS.STATE_DIR]!;
-  }
-
-  const profile = process.env[ENV_VARS.PROFILE];
-  const home = resolveHomeDir();
-
-  if (profile && profile !== 'default') {
-    return join(home, `.xopcbot-${profile}`);
-  }
-
-  return join(home, '.xopcbot');
-}
-
-/**
  * Resolve the main config file path
  */
 export function resolveConfigPath(): string {
@@ -116,25 +77,11 @@ export function resolveOAuthPath(provider: string): string {
 }
 
 /**
- * Resolve the current agent ID
- */
-export function resolveAgentId(): string {
-  return process.env[ENV_VARS.AGENT_ID] ?? 'main';
-}
-
-/**
- * Resolve an agent's root directory
+ * OpenClaw `agentDir`: internal state under `stateDir/agents/<id>/agent/`
+ * (credentials, inbox IPC, pid, agent.json — not the Markdown workspace).
  */
 export function resolveAgentDir(agentId?: string): string {
-  const id = agentId ?? resolveAgentId();
-  return process.env[ENV_VARS.AGENT_DIR] ?? join(resolveStateDir(), 'agents', id);
-}
-
-/**
- * Resolve an agent's workspace directory
- */
-export function resolveWorkspaceDir(agentId?: string): string {
-  return join(resolveAgentDir(agentId), 'workspace');
+  return join(resolveAgentHomeDir(agentId), 'agent');
 }
 
 /**
@@ -162,7 +109,7 @@ export function resolveAgentAuthProfilesPath(agentId?: string): string {
  * Agent session store root. Transcript files are stored in subfolders (users/…, system/cron, …), not as a flat list.
  */
 export function resolveSessionsDir(agentId?: string): string {
-  return join(resolveAgentDir(agentId), 'sessions');
+  return join(resolveAgentHomeDir(agentId), 'sessions');
 }
 
 /**
@@ -216,10 +163,11 @@ export function resolveInboxMessagePath(messageId: string, pending: boolean, age
 }
 
 /**
- * Resolve the run directory (volatile runtime state)
+ * Volatile runtime files live in OpenClaw `agent/` (no separate `run/`).
+ * @deprecated Prefer `resolveAgentDir`; kept for call-site compatibility.
  */
 export function resolveRunDir(agentId?: string): string {
-  return join(resolveAgentDir(agentId), 'run');
+  return resolveAgentDir(agentId);
 }
 
 /**

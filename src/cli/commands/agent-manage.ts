@@ -136,7 +136,8 @@ export function createAgentCreateCommand(): Command {
         });
 
         console.log(colors.green('✓'), `Created agent "${agent.name}" (${agent.id})`);
-        console.log(`\n  Directory: ${agent.agentDir}`);
+        console.log(`\n  Agent home: ${agent.agentHomeDir}`);
+        console.log(`  State (agent/): ${agent.agentDir}`);
         console.log(`  Workspace: ${agent.workspaceDir}`);
         console.log(`  Sessions:  ${agent.sessionsDir}`);
         console.log(`\nTo use this agent:`);
@@ -213,7 +214,8 @@ export function createAgentInfoCommand(): Command {
         console.log(`Tags:        ${agent.tags?.join(', ') || '-'}`);
         console.log(`Last Active: ${agent.lastActiveAt ? new Date(agent.lastActiveAt).toLocaleString() : '-'}`);
         console.log();
-        console.log(`Directory:   ${agent.agentDir}`);
+        console.log(`Agent home:  ${agent.agentHomeDir}`);
+        console.log(`State dir:   ${agent.agentDir}`);
         console.log(`Workspace:   ${agent.workspaceDir}`);
         console.log(`Sessions:    ${agent.sessionsDir}`);
       } catch (error) {

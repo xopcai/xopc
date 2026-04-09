@@ -1,4 +1,4 @@
-import { mkdir, readdir, readFile, writeFile, rm } from 'fs/promises';
+import { mkdir, readdir, readFile, writeFile, rm, unlink } from 'fs/promises';
 import { existsSync } from 'fs';
 import { join } from 'path';
 import { createLogger } from '../utils/logger.js';
@@ -9,9 +9,11 @@ import {
   resolveWorkspaceDir,
   resolveSessionsDir,
   resolveInboxDir,
-  resolveRunDir,
   resolvePidPath,
+  resolveStatusPath,
+  resolveSocketPath,
 } from '../config/paths.js';
+import { resolveAgentHomeDir } from '../config/agent-homedir.js';
 import { copyBootstrapFilesFromWorkspace, seedWorkspaceBootstrapFiles } from './context/workspace-seed.js';
 
 const log = createLogger('AgentRegistry');
@@ -33,8 +35,10 @@ export interface AgentDescriptor {
   status: AgentStatus;
   /** Process ID when running */
   pid?: number;
-  /** Path to agent directory */
+  /** OpenClaw `agent/` state dir (`…/agents/<id>/agent`) */
   agentDir: string;
+  /** Parent of `sessions/` and `agent/` (`…/agents/<id>`) */
+  agentHomeDir: string;
   /** Path to workspace directory */
   workspaceDir: string;
   /** Path to sessions directory */
@@ -120,12 +124,12 @@ export class AgentRegistry {
    * Get a specific agent's descriptor
    */
   async getAgent(agentId: string): Promise<AgentDescriptor | null> {
-    const agentDir = resolveAgentDir(agentId);
-
-    if (!existsSync(agentDir)) {
+    const agentHomeDir = resolveAgentHomeDir(agentId);
+    if (!existsSync(agentHomeDir)) {
       return null;
     }
 
+    const agentDir = resolveAgentDir(agentId);
     const metadata = await this.loadMetadata(agentId);
     const status = await this.checkStatus(agentId);
 
@@ -136,6 +140,7 @@ export class AgentRegistry {
       status: status.status,
       pid: status.pid,
       agentDir,
+      agentHomeDir,
       workspaceDir: resolveWorkspaceDir(agentId),
       sessionsDir: resolveSessionsDir(agentId),
       lastActiveAt: metadata?.lastActiveAt,
@@ -159,15 +164,20 @@ export class AgentRegistry {
       throw new Error('"default" is a reserved agent ID');
     }
 
-    const agentDir = resolveAgentDir(id);
+    const agentHomeDir = resolveAgentHomeDir(id);
 
-    if (existsSync(agentDir)) {
+    if (existsSync(agentHomeDir)) {
       throw new Error(`Agent "${id}" already exists`);
     }
 
-    // Create directory structure
+    await mkdir(agentHomeDir, { recursive: true });
+    await mkdir(resolveSessionsDir(id), { recursive: true });
+    await mkdir(join(resolveSessionsDir(id), 'archive'), { recursive: true });
+
+    const agentDir = resolveAgentDir(id);
     await mkdir(agentDir, { recursive: true });
     await mkdir(join(agentDir, 'credentials'), { recursive: true });
+
     const workspaceRoot = resolveWorkspaceDir(id);
     await mkdir(workspaceRoot, { recursive: true });
     seedWorkspaceBootstrapFiles(workspaceRoot);
@@ -180,12 +190,9 @@ export class AgentRegistry {
     }
     await mkdir(join(workspaceRoot, '.state'), { recursive: true });
     await mkdir(join(workspaceRoot, 'memory'), { recursive: true });
-    await mkdir(resolveSessionsDir(id), { recursive: true });
-    await mkdir(join(resolveSessionsDir(id), 'archive'), { recursive: true });
     await mkdir(resolveInboxDir(id), { recursive: true });
     await mkdir(join(resolveInboxDir(id), 'pending'), { recursive: true });
     await mkdir(join(resolveInboxDir(id), 'processed'), { recursive: true });
-    await mkdir(resolveRunDir(id), { recursive: true });
 
     // Create metadata
     const now = new Date().toISOString();
@@ -214,6 +221,7 @@ export class AgentRegistry {
       description: metadata.description,
       status: 'idle',
       agentDir,
+      agentHomeDir,
       workspaceDir: resolveWorkspaceDir(id),
       sessionsDir: resolveSessionsDir(id),
       lastActiveAt: now,
@@ -230,9 +238,9 @@ export class AgentRegistry {
       throw new Error('Cannot delete the main agent without --force');
     }
 
-    const agentDir = resolveAgentDir(id);
+    const agentHomeDir = resolveAgentHomeDir(id);
 
-    if (!existsSync(agentDir)) {
+    if (!existsSync(agentHomeDir)) {
       throw new Error(`Agent "${id}" does not exist`);
     }
 
@@ -244,7 +252,7 @@ export class AgentRegistry {
       );
     }
 
-    await rm(agentDir, { recursive: true, force: true });
+    await rm(agentHomeDir, { recursive: true, force: true });
 
     log.info({ agentId: id }, 'Deleted agent');
   }
@@ -300,8 +308,7 @@ export class AgentRegistry {
    * Check if an agent exists
    */
   async agentExists(id: string): Promise<boolean> {
-    const agentDir = resolveAgentDir(id);
-    return existsSync(agentDir);
+    return existsSync(resolveAgentHomeDir(id));
   }
 
   /**
@@ -312,9 +319,6 @@ export class AgentRegistry {
     let cleaned = 0;
 
     for (const agent of agents) {
-      const runDir = resolveRunDir(agent.id);
-      if (!existsSync(runDir)) continue;
-
       const pidPath = resolvePidPath(agent.id);
       if (!existsSync(pidPath)) continue;
 
@@ -322,15 +326,14 @@ export class AgentRegistry {
         const pidContent = await readFile(pidPath, 'utf-8');
         const pid = parseInt(pidContent.trim(), 10);
 
-        // Check if process exists
         try {
-          process.kill(pid, 0); // Signal 0 checks if process exists
-          // Process exists, don't clean up
+          process.kill(pid, 0);
         } catch {
-          // Process doesn't exist, clean up
-          await rm(runDir, { recursive: true, force: true });
+          await unlink(pidPath).catch(() => {});
+          await unlink(resolveStatusPath(agent.id)).catch(() => {});
+          await unlink(resolveSocketPath(agent.id)).catch(() => {});
           cleaned++;
-          log.info({ agentId: agent.id, pid }, 'Cleaned up orphaned run directory');
+          log.info({ agentId: agent.id, pid }, 'Cleaned up stale agent pid/socket files');
         }
       } catch (error) {
         log.warn({ agentId: agent.id, error }, 'Failed to check PID file');
@@ -356,10 +359,9 @@ export class AgentRegistry {
   }
 
   private async checkStatus(agentId: string): Promise<{ status: AgentStatus; pid?: number }> {
-    const runDir = resolveRunDir(agentId);
     const pidPath = resolvePidPath(agentId);
 
-    if (!existsSync(runDir) || !existsSync(pidPath)) {
+    if (!existsSync(pidPath)) {
       return { status: 'idle' };
     }
 

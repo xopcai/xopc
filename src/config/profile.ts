@@ -2,7 +2,7 @@ import { join } from 'path';
 import { mkdir, readdir, stat, rm } from 'fs/promises';
 import { existsSync } from 'fs';
 import { createLogger } from '../utils/logger.js';
-import { resolveHomeDir, ENV_VARS } from './paths.js';
+import { resolveHomeDir, ENV_VARS } from './paths-state.js';
 
 const log = createLogger('Profile');
 

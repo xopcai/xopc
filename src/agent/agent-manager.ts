@@ -16,8 +16,8 @@ import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import {
   type EffectiveAgentProfile,
   resolveEffectiveAgentProfileForSession,
-  expandWorkspacePathString,
 } from '../config/agent-profile.js';
+import { expandWorkspacePathString } from '../config/workspace-path.js';
 import type { ModelManager } from './models/manager.js';
 import { createLogger } from '../utils/logger.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';

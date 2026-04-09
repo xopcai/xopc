@@ -3,13 +3,14 @@
  * Subagent session keys fall back to the configured default agent id for profile lookup.
  */
 
-import { homedir } from 'node:os';
+import { join } from 'node:path';
 
 import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../agent/transcript/thinking-types.js';
 import type { Config } from './schema.js';
 import type { AgentModelConfig } from './schema.js';
 import { getAgentDefaultModelRef } from './schema.js';
-import { resolveWorkspaceDir } from './paths.js';
+import { expandWorkspacePathString } from './workspace-path.js';
+import { resolveStateDir } from './paths.js';
 import { getDefaultAgentId, agentExists } from '../routing/resolve-route.js';
 import { parseSessionKey } from '../routing/session-key.js';
 
@@ -35,14 +36,6 @@ export interface EffectiveAgentProfile {
   skillsAllowlist?: string[];
   tools: EffectiveAgentTools;
   params: Record<string, unknown>;
-}
-
-export function expandWorkspacePathString(raw: string): string {
-  const s = raw.trim();
-  if (s.startsWith('~')) {
-    return s.replace(/^~(?=$|[/\\])/, homedir());
-  }
-  return s;
 }
 
 function mergeModelConfig(
@@ -117,6 +110,29 @@ export function extractProfileAgentId(sessionKey: string | undefined | null, con
 }
 
 /**
+ * Markdown workspace root for an agent id (OpenClaw `resolveAgentWorkspaceDir` semantics).
+ */
+export function resolveAgentWorkspaceDir(config: Config, agentId: string): string {
+  const id = agentId.toLowerCase();
+  const defaults = config.agents?.defaults;
+  const list = config.agents?.list;
+  const entry = Array.isArray(list)
+    ? list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === id)
+    : undefined;
+  if (entry?.workspace?.trim()) {
+    return expandWorkspacePathString(entry.workspace);
+  }
+  if (entry) {
+    const fallback = defaults?.workspace?.trim();
+    if (fallback) {
+      return join(expandWorkspacePathString(fallback), id);
+    }
+    return join(resolveStateDir(), `workspace-${id}`);
+  }
+  return expandWorkspacePathString(defaults?.workspace ?? '~/.xopcbot/workspace');
+}
+
+/**
  * Merge `agents.defaults` with the matching `agents.list` entry.
  */
 export function resolveEffectiveAgentProfile(config: Config, agentId: string): EffectiveAgentProfile {
@@ -126,15 +142,7 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
     ? list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === agentId.toLowerCase())
     : undefined;
 
-  let resolvedWorkspacePath: string;
-  if (entry?.workspace?.trim()) {
-    resolvedWorkspacePath = expandWorkspacePathString(entry.workspace);
-  } else if (entry) {
-    // Listed agent with no override → `~/.xopcbot/agents/<id>/workspace` (same layout as `agent:create`)
-    resolvedWorkspacePath = resolveWorkspaceDir(agentId);
-  } else {
-    resolvedWorkspacePath = expandWorkspacePathString(defaults?.workspace ?? '~/.xopcbot/workspace');
-  }
+  const resolvedWorkspacePath = resolveAgentWorkspaceDir(config, agentId);
 
   const mergedModel = mergeModelConfig(defaults?.model as AgentModelConfig | undefined, entry?.model as AgentModelConfig | undefined);
   const { primary: primaryFromMerged, fallbacks: fallbacksFromMerged } = primaryAndFallbacksFromModelConfig(mergedModel);

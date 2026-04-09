@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import type { Config } from '../schema.js';
+import { expandWorkspacePathString } from '../workspace-path.js';
 import {
-  expandWorkspacePathString,
   extractProfileAgentId,
   resolveEffectiveAgentProfile,
   resolveEffectiveAgentProfileForSession,
@@ -100,7 +100,7 @@ describe('agent-profile', () => {
     expect(p.length).toBeGreaterThan(4);
   });
 
-  it('uses state agents/<id>/workspace when list entry has no workspace field', () => {
+  it('uses join(defaults.workspace, id) when list entry has no workspace field (OpenClaw)', () => {
     const base = minimalConfig();
     const cfg: Config = {
       ...base,
@@ -110,6 +110,6 @@ describe('agent-profile', () => {
       },
     };
     const p = resolveEffectiveAgentProfile(cfg, 'coder');
-    expect(p.resolvedWorkspacePath).toMatch(/agents[/\\]coder[/\\]workspace$/);
+    expect(p.resolvedWorkspacePath).toMatch(/workspace[/\\]coder$/);
   });
 });
