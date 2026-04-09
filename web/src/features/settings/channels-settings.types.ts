@@ -1,5 +1,9 @@
 /** Telegram / channel settings shapes for gateway `channels` config. */
 
+import type { BindingRuleWire, ChannelAgentRoutesState as ChannelAgentRoutes } from './channel-bindings-merge';
+
+export type { ChannelAgentRoutesState } from './channel-bindings-merge';
+
 export type DmPolicy = 'pairing' | 'allowlist' | 'open' | 'disabled';
 export type GroupPolicy = 'open' | 'disabled' | 'allowlist';
 export type StreamMode = 'off' | 'partial' | 'block';
@@ -67,4 +71,9 @@ export interface WeixinConfig {
 export interface ChannelsSettingsState {
   telegram: TelegramConfig;
   weixin: WeixinConfig;
+  /** Full bindings array last loaded from the gateway (merge base for saves). */
+  bindingsFull: BindingRuleWire[];
+  channelAgentRoutes: ChannelAgentRoutes;
+  /** `agents.defaultId` — fallback agent when no explicit route. */
+  defaultAgentId: string;
 }

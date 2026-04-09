@@ -3,7 +3,9 @@ import { memo, useEffect, useLayoutEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
+import { ChatAgentSelector } from '@/features/chat/chat-agent-selector';
 import { ModelSelector } from '@/features/chat/model-selector';
+import type { ChatAgentOption } from '@/features/chat/chat-agents-api';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { useAppShellStore } from '@/stores/app-shell-store';
@@ -19,6 +21,11 @@ type ChatPageHeaderRegistrationProps = {
   showModelSelector: boolean;
   onModelChange: (modelId: string) => void;
   modelDisabled: boolean;
+  chatAgents: ChatAgentOption[];
+  showChatAgentSelector: boolean;
+  chatAgentId: string;
+  onChatAgentChange: (agentId: string) => void;
+  chatAgentDisabled: boolean;
 };
 
 /**
@@ -30,6 +37,11 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   showModelSelector,
   onModelChange,
   modelDisabled,
+  chatAgents,
+  showChatAgentSelector,
+  chatAgentId,
+  onChatAgentChange,
+  chatAgentDisabled,
 }: ChatPageHeaderRegistrationProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -80,27 +92,52 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
           </h1>
         </div>
       ),
-      end: showModelSelector ? (
-        <div
-          className={cn(
-            'min-w-0 w-fit max-w-[min(20rem,calc(100vw-10rem))] shrink-0',
-            APP_CHROME_NO_DRAG_CLASS,
-          )}
-        >
-          <ModelSelector
-            value={sessionModel}
-            disabled={modelDisabled}
-            placeholder={m.chat.modelPlaceholder}
-            searchPlaceholder={m.chat.modelSearchPlaceholder}
-            noMatches={m.chat.modelNoMatches}
-            compact
-            showProviderInTrigger={false}
-            contentSide="bottom"
-            contentAlign="end"
-            onChange={onModelChange}
-          />
-        </div>
-      ) : null,
+      end:
+        showChatAgentSelector || showModelSelector ? (
+          <div
+            className={cn(
+              'flex min-w-0 max-w-[min(28rem,calc(100vw-8rem))] shrink-0 items-center justify-end gap-2',
+              APP_CHROME_NO_DRAG_CLASS,
+            )}
+          >
+            {showChatAgentSelector ? (
+              <div className="min-w-0 w-fit max-w-[min(12rem,calc(100vw-12rem))] shrink-0">
+                <ChatAgentSelector
+                  items={chatAgents}
+                  value={chatAgentId}
+                  disabled={chatAgentDisabled}
+                  placeholder={m.chat.agentPlaceholder}
+                  searchPlaceholder={m.chat.agentSearchPlaceholder}
+                  noMatches={m.chat.agentNoMatches}
+                  compact
+                  contentSide="bottom"
+                  contentAlign="end"
+                  onChange={onChatAgentChange}
+                />
+              </div>
+            ) : null}
+            {showModelSelector ? (
+              <div
+                className={cn(
+                  'min-w-0 w-fit max-w-[min(20rem,calc(100vw-10rem))] shrink-0',
+                )}
+              >
+                <ModelSelector
+                  value={sessionModel}
+                  disabled={modelDisabled}
+                  placeholder={m.chat.modelPlaceholder}
+                  searchPlaceholder={m.chat.modelSearchPlaceholder}
+                  noMatches={m.chat.modelNoMatches}
+                  compact
+                  showProviderInTrigger={false}
+                  contentSide="bottom"
+                  contentAlign="end"
+                  onChange={onModelChange}
+                />
+              </div>
+            ) : null}
+          </div>
+        ) : null,
     });
     return () => clearPageHeader();
   }, [
@@ -109,10 +146,18 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     showModelSelector,
     onModelChange,
     modelDisabled,
+    chatAgents,
+    showChatAgentSelector,
+    chatAgentId,
+    onChatAgentChange,
+    chatAgentDisabled,
     showNewChatLink,
     m.chat.modelPlaceholder,
     m.chat.modelSearchPlaceholder,
     m.chat.modelNoMatches,
+    m.chat.agentPlaceholder,
+    m.chat.agentSearchPlaceholder,
+    m.chat.agentNoMatches,
     m.sidebar.newTask,
     setPageHeader,
     clearPageHeader,

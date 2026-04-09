@@ -58,6 +58,10 @@ export function ChatPage() {
     sendMessage,
     abort,
     hasToken,
+    chatAgents,
+    displayAgentId,
+    showChatAgentSelector,
+    onChatAgentChange,
   } = useChatSession();
 
   const chatHeadline = useMemo(() => {
@@ -177,6 +181,11 @@ export function ChatPage() {
         showModelSelector={Boolean(sessionKey && !sessionRoutePending)}
         onModelChange={onSessionModelChange}
         modelDisabled={showSessionLoading || sessionRoutePending || streaming}
+        chatAgents={chatAgents?.items ?? []}
+        showChatAgentSelector={showChatAgentSelector}
+        chatAgentId={displayAgentId}
+        onChatAgentChange={onChatAgentChange}
+        chatAgentDisabled={showSessionLoading || sessionRoutePending || streaming}
       />
 
       <div className="mx-auto flex min-h-0 w-full max-w-[var(--max-width-chat)] flex-1 flex-col">

@@ -83,6 +83,17 @@ const bundles: Record<
       error: string;
       reconnect: string;
     };
+    /** HTTP/API error fallbacks when the server returns a generic message. */
+    api: {
+      errorBadGateway: string;
+      errorServiceUnavailable: string;
+      errorGatewayTimeout: string;
+      errorInternal: string;
+      errorServer: string;
+      errorNotFound: string;
+      errorForbidden: string;
+      errorRequest: string;
+    };
     /** Sidebar IA: primary actions, task list, footer (logo + app menu). */
     sidebar: {
       newTask: string;
@@ -118,6 +129,11 @@ const bundles: Record<
       loading: string;
       model: string;
       modelPlaceholder: string;
+      /** Web chat: multi-agent picker (session `agentId`). */
+      agent: string;
+      agentPlaceholder: string;
+      agentSearchPlaceholder: string;
+      agentNoMatches: string;
       thinkingLevel: string;
       newSession: string;
       welcomeTitle: string;
@@ -743,6 +759,11 @@ const bundles: Record<
       /** How to configure this channel via CLI (same config file as the gateway). */
       telegramCliConfigHint: string;
       weixinCliConfigHint: string;
+      /** `bindings`: which agent handles inbound for each channel account */
+      agentRoutingTitle: string;
+      agentRoutingHint: string;
+      agentRoutingAccountLabel: string;
+      agentRoutingAgentLabel: string;
       jsonObjectAccounts: string;
       jsonInvalid: string;
       copy: string;
@@ -1041,6 +1062,16 @@ const bundles: Record<
       error: 'Connection error',
       reconnect: 'Reconnect',
     },
+    api: {
+      errorBadGateway: 'Bad gateway (502)',
+      errorServiceUnavailable: 'Service unavailable (503)',
+      errorGatewayTimeout: 'Gateway timeout (504)',
+      errorInternal: 'Internal server error (500)',
+      errorServer: 'Server error ({{status}})',
+      errorNotFound: 'Not found (404)',
+      errorForbidden: 'Forbidden (403)',
+      errorRequest: 'Request failed ({{status}})',
+    },
     sidebar: {
       newTask: 'New task',
       tasksHeading: 'Tasks',
@@ -1072,6 +1103,10 @@ const bundles: Record<
       loading: 'Loading conversation…',
       model: 'Model',
       modelPlaceholder: 'Select a model…',
+      agent: 'Agent',
+      agentPlaceholder: 'Select an agent…',
+      agentSearchPlaceholder: 'Search agents…',
+      agentNoMatches: 'No matching agents',
       thinkingLevel: 'Thinking',
       newSession: 'New chat',
       welcomeTitle: 'Welcome to xopcbot',
@@ -1728,6 +1763,11 @@ const bundles: Record<
         'CLI (same config file as this gateway; override path with XOPCBOT_CONFIG or --config):\n• Interactive: xopcbot onboard --channels\n• Or set TELEGRAM_BOT_TOKEN in the environment and/or edit channels.telegram in the JSON file.',
       weixinCliConfigHint:
         'CLI on the host that should hold credentials (override config path with XOPCBOT_CONFIG or --config):\n• xopcbot channels login --channel weixin\n• Optional: --account <id>, --timeout <ms>, --credentials-only (save token files without merging config JSON).\nRestart the gateway after login if it was already running.',
+      agentRoutingTitle: 'Agent routing',
+      agentRoutingHint:
+        'Maps each channel account to an agent via config `bindings`. Inbound messages use a session key for that agent.',
+      agentRoutingAccountLabel: 'Account',
+      agentRoutingAgentLabel: 'Agent',
       jsonObjectAccounts: 'Accounts must be a JSON object',
       jsonInvalid: 'Invalid JSON',
       copy: 'Copy',
@@ -2050,6 +2090,16 @@ const bundles: Record<
       error: '连接异常',
       reconnect: '重连',
     },
+    api: {
+      errorBadGateway: '网关错误 (502)',
+      errorServiceUnavailable: '服务不可用 (503)',
+      errorGatewayTimeout: '网关超时 (504)',
+      errorInternal: '服务器内部错误 (500)',
+      errorServer: '服务器错误 ({{status}})',
+      errorNotFound: '未找到 (404)',
+      errorForbidden: '禁止访问 (403)',
+      errorRequest: '请求失败 ({{status}})',
+    },
     sidebar: {
       newTask: '新任务',
       tasksHeading: '任务',
@@ -2081,6 +2131,10 @@ const bundles: Record<
       loading: '加载对话中…',
       model: '模型',
       modelPlaceholder: '选择模型…',
+      agent: '智能体',
+      agentPlaceholder: '选择智能体…',
+      agentSearchPlaceholder: '搜索智能体…',
+      agentNoMatches: '没有匹配的智能体',
       thinkingLevel: '思考级别',
       newSession: '新对话',
       welcomeTitle: '欢迎使用 xopcbot',
@@ -2728,6 +2782,11 @@ const bundles: Record<
         '命令行配置（与网关使用同一配置文件；路径可用 XOPCBOT_CONFIG 或全局 --config 覆盖）：\n• 交互向导：xopcbot onboard --channels\n• 或在环境中设置 TELEGRAM_BOT_TOKEN，并直接编辑 JSON 中的 channels.telegram。',
       weixinCliConfigHint:
         '在应保存凭据的机器上使用命令行（配置文件路径同上）：\n• xopcbot channels login --channel weixin\n• 可选：--account <id>、--timeout <ms>、--credentials-only（仅写 token 文件，不合并主配置 JSON）。\n若网关已在运行，登录后请重启网关进程。',
+      agentRoutingTitle: '智能体路由',
+      agentRoutingHint:
+        '在配置 `bindings` 中为每个频道账号指定智能体；入站消息会使用对应智能体的会话键。',
+      agentRoutingAccountLabel: '账号',
+      agentRoutingAgentLabel: '智能体',
       jsonObjectAccounts: '账号必须为 JSON 对象',
       jsonInvalid: 'JSON 无效',
       copy: '复制',
