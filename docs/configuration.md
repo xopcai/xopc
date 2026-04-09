@@ -111,7 +111,40 @@ Or create manually:
 
 ### agents
 
-Default configuration for agents.
+Agent configuration has three parts: optional **`default`** id, shared **`defaults`**, and per-identity **`list`** entries. Routing and session keys use the **first segment** of the session key as the agent id; the **effective profile** for that turn merges `defaults` with the matching enabled `list` row (model, workspace, tools, prompts, etc.).
+
+#### Top-level `agents` fields
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `default` | string | Optional. Default agent id when the session key or API does not specify one. If omitted: first **enabled** entry in `list`, otherwise `main`. |
+| `defaults` | object | Baseline settings merged into every agent (see **agents.defaults** below). |
+| `list` | array | Registered identities; each object can override fields for that id. |
+
+#### `agents.list` entries
+
+Each entry must include **`id`**. Other fields are optional overrides (same shapes as in `defaults` where applicable).
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | Agent id (also the first segment of the session key). |
+| `name` | string | Display name. |
+| `enabled` | boolean | Default `true`. When `false`, the id is ignored for routing defaults and effective profile resolution falls back to the default agent. |
+| `workspace` | string | Per-agent workspace root (`~` expanded). Bootstrap files, inbound attachments, and `.xopcbot/memories/` for this agent use this path. |
+| `model` | string \| object | Same as `agents.defaults.model` (string or `{ primary, fallbacks }`). |
+| `thinkingDefault` | string | Optional. One of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `adaptive`. |
+| `reasoningDefault` | string | Optional. `off`, `on`, `stream`. |
+| `verboseDefault` | string | Optional. `off`, `on`, `full`. |
+| `systemPromptOverride` | string | Optional. When set, replaces the usual base system prompt; skills block is still appended (subject to `skills` allowlist). |
+| `skills` | string[] | Optional. Allowlist of skill **names** for `<available_skills>`; when set, only those skills are advertised. |
+| `tools` | object | Optional. `{ "disable": ["tool_name", ...] }` — built-in tools to omit by **tool name** (e.g. `shell`, `web_search`, `session_search`, `image`; use `extensions` to disable extension tools). |
+| `params` | object | Optional. Reserved for future use. |
+
+The same optional keys can appear under **`agents.defaults`** for global defaults (e.g. `agents.defaults.tools.disable` merged with per-agent disables).
+
+**Note:** The on-disk layout under `~/.xopcbot/agents/<id>/` (CLI `agent-manage`) is separate from **`agents.list`** in config. For gateway/runtime behavior, treat **`config.json`** as the source of truth unless you intentionally sync the two.
+
+#### agents.defaults
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -216,7 +249,7 @@ See [Models Documentation](/models) for custom provider configuration.
 
 ### bindings
 
-Optional array of rules that assign an **`agentId`** to incoming traffic. Rules are sorted by **`priority`** (higher first). Each rule’s **`match`** requires an exact **`channel`** value (e.g. `telegram`); **`peerId`** may use `*` glob patterns. If nothing matches, routing falls back to the default agent (first enabled entry in **`agents.list`**, otherwise `main`). See [Session Routing System](/routing-system).
+Optional array of rules that assign an **`agentId`** to incoming traffic. Rules are sorted by **`priority`** (higher first). Each rule’s **`match`** requires an exact **`channel`** value (e.g. `telegram`); **`peerId`** may use `*` glob patterns. If nothing matches, routing uses the default agent id: **`agents.default`** if set, else the first enabled entry in **`agents.list`**, else **`main`**. See [Session Routing System](/routing-system).
 
 ---
 

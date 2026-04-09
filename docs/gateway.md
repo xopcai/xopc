@@ -289,6 +289,16 @@ GET /health
 }
 ```
 
+### Create session (`POST /api/sessions`)
+
+Creates a webchat-scoped session (or returns an existing empty one). JSON body (all optional except as noted):
+
+| Field | Description |
+|-------|-------------|
+| `channel` | Source label for the session key (default `webchat`). |
+| `chat_id` | If set, forces a session key with this peer id. |
+| `agentId` | If set, must match an **enabled** id in `agents.list`; session key uses this agent. If omitted, uses **`agents.default`** or the first enabled list entry (see [Session Routing](/routing-system)). |
+
 ---
 
 ## Complete API List
@@ -298,6 +308,7 @@ GET /health
 | POST | `/api/message` | Send message (async) |
 | POST | `/api/message/sync` | Send message (sync) |
 | POST | `/api/agent` | Agent chat |
+| POST | `/api/sessions` | Create or reuse a webchat session (optional `agentId` in JSON body) |
 | GET | `/api/sessions` | List sessions |
 | GET | `/api/sessions/:key` | Get session |
 | DELETE | `/api/sessions/:key` | Delete session |
