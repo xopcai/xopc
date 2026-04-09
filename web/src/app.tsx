@@ -15,9 +15,6 @@ const SessionsPage = lazy(() =>
 );
 const CronPage = lazy(() => import('@/pages/cron-page').then((m) => ({ default: m.CronPage })));
 const SkillsPage = lazy(() => import('@/pages/skills-page').then((m) => ({ default: m.SkillsPage })));
-const EditorPage = lazy(() =>
-  import('@/features/editor/editor-page').then((m) => ({ default: m.EditorPage })),
-);
 const ChannelsPage = lazy(() =>
   import('@/pages/channels-page').then((m) => ({ default: m.ChannelsPage })),
 );
@@ -89,14 +86,6 @@ const router = createHashRouter([
             element: (
               <Suspense fallback={<SecondaryRouteFallback />}>
                 <SkillsPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: 'editor',
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <EditorPage />
               </Suspense>
             ),
           },

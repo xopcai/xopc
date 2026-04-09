@@ -5,7 +5,6 @@ export type Tab =
   | 'sessions'
   | 'cron'
   | 'skills'
-  | 'editor'
   | 'channels'
   | 'logs'
   | 'settingsAppearance'
@@ -974,7 +973,6 @@ const bundles: Record<
       sessions: 'Sessions',
       cron: 'Scheduled Tasks',
       skills: 'Skills',
-      editor: 'Editor',
       channels: 'Channels',
       logs: 'Logs',
       settingsAppearance: 'Preferences',
@@ -1986,7 +1984,6 @@ const bundles: Record<
       sessions: '会话',
       cron: '定时任务',
       skills: '技能',
-      editor: '编辑器',
       channels: 'IM 频道',
       logs: '日志',
       settingsAppearance: '偏好设置',
