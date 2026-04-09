@@ -6,7 +6,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { type FontScalePreference, useFontScaleStore } from '@/stores/font-scale-store';
 import { type ThemePreference, useThemeStore } from '@/stores/theme-store';
 
-type Variant = 'page' | 'sidebar';
+type Variant = 'page' | 'sidebar' | 'toolbar';
 
 export type PreferenceSection = 'language' | 'theme' | 'font';
 
@@ -34,7 +34,9 @@ export function PreferenceSelectFields({
     selectControlBaseClass,
     variant === 'page'
       ? 'w-full max-w-[min(100%,12rem)] shrink-0 sm:ml-auto sm:w-auto sm:max-w-[11rem]'
-      : 'w-full',
+      : variant === 'toolbar'
+        ? 'w-auto min-w-[6.5rem] max-w-[10rem] shrink-0 sm:min-w-[7.5rem]'
+        : 'w-full',
   );
 
   const rowClass =
@@ -43,6 +45,48 @@ export function PreferenceSelectFields({
       : 'flex flex-col gap-1.5';
 
   const show = (id: PreferenceSection) => sections.includes(id);
+
+  if (variant === 'toolbar') {
+    return (
+      <div className="flex flex-wrap items-center justify-end gap-2">
+        {show('language') ? (
+          <select
+            className={selectClass}
+            value={language}
+            aria-label={a.languageTitle}
+            onChange={(e) => setLanguage(e.target.value as StoredLanguage)}
+          >
+            <option value="en">{a.langOptionEn}</option>
+            <option value="zh">{a.langOptionZh}</option>
+          </select>
+        ) : null}
+        {show('theme') ? (
+          <select
+            className={selectClass}
+            value={themePref}
+            aria-label={a.themeTitle}
+            onChange={(e) => setThemePref(e.target.value as ThemePreference)}
+          >
+            <option value="light">{a.themeOptionLight}</option>
+            <option value="dark">{a.themeOptionDark}</option>
+            <option value="system">{a.themeOptionSystem}</option>
+          </select>
+        ) : null}
+        {show('font') ? (
+          <select
+            className={selectClass}
+            value={fontPref}
+            aria-label={a.fontScaleTitle}
+            onChange={(e) => setFontPref(e.target.value as FontScalePreference)}
+          >
+            <option value="compact">{a.fontScaleCompact}</option>
+            <option value="default">{a.fontScaleDefault}</option>
+            <option value="large">{a.fontScaleLarge}</option>
+          </select>
+        ) : null}
+      </div>
+    );
+  }
 
   return (
     <div className={cn(variant === 'sidebar' && 'flex flex-col gap-4')}>
