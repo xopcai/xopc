@@ -2,12 +2,14 @@ import type { ReactNode } from 'react';
 import { SWRConfig } from 'swr';
 
 import { apiFetch } from '@/lib/fetch';
+import { formatApiHttpError } from '@/lib/http-error-message';
 
 async function defaultFetcher<T>(url: string): Promise<T> {
   const res = await apiFetch(url);
   if (!res.ok) {
     const errorBody = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    throw new Error(errorBody.error?.message || `HTTP ${res.status}: ${res.statusText}`);
+    const msg = formatApiHttpError(res.status, res.statusText, errorBody.error?.message);
+    throw new Error(msg);
   }
   return res.json() as Promise<T>;
 }

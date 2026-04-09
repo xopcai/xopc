@@ -1,3 +1,4 @@
+import { formatApiHttpError } from '@/lib/http-error-message';
 import { useGatewayStore } from '@/stores/gateway-store';
 
 export async function apiFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
@@ -23,7 +24,8 @@ export async function fetchJson<T>(input: RequestInfo | URL, init?: RequestInit)
   const res = await apiFetch(input, init);
   if (!res.ok) {
     const errorBody = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-    throw new Error(errorBody.error?.message || `HTTP ${res.status}: ${res.statusText}`);
+    const msg = formatApiHttpError(res.status, res.statusText, errorBody.error?.message);
+    throw new Error(msg);
   }
   return res.json() as Promise<T>;
 }
