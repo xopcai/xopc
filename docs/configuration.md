@@ -144,6 +144,37 @@ Model configuration supports two formats:
 
 Model ID format: `provider/model-id` (e.g., `anthropic/claude-opus-4-5`).
 
+#### agents.defaults.memory
+
+Curated long-term memory under **`<workspace>/.xopcbot/memories/`** (`MEMORY.md` / `USER.md`), optional **stub** external provider for wiring tests, and controls for **prefetch** injection (fenced `<memory-context>` prefix on user turns). See [Curated memory](workspace.md#curated-memory).
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Master switch. When `false`: no curated snapshot, no `curated_memory` tool, no external memory provider, no prefetch/sync. |
+| `useEnhancedSystem` | boolean | `true` | When `false`: disable curated snapshot and `curated_memory`; workspace bootstrap `MEMORY.md` still applies. |
+| `userProfileEnabled` | boolean | `true` | When `false`: omit `USER.md` from the system prompt; `curated_memory` cannot mutate the `user` target (read still allowed). |
+| `memoryCharLimit` | number | `2200` | Max characters for `MEMORY.md` entries (total). |
+| `userCharLimit` | number | `1375` | Max characters for `USER.md` entries (total). |
+| `provider` | string | `none` | External provider: `none` or `stub` (ignored when `enabled` is `false`). |
+| `injectionFrequency` | string | `every-turn` | Prefetch injection: `every-turn` or `first-turn` (first user message of the session only). |
+| `contextCadence` | number | `1` | When `injectionFrequency` is `every-turn`, inject prefetch on turns 1, 1+N, 1+2N, … (minimum `1`). |
+| `dialecticCadence` | number | — | Reserved for future external sync cadence (not wired yet). |
+
+**Migrate** workspace root `MEMORY.md` into curated storage (one-time):
+
+```bash
+pnpm run migrate:memory [workspaceDir]
+# or: XOPCBOT_WORKSPACE=/path/to/workspace pnpm run migrate:memory
+```
+
+#### agents.defaults.sessionSearch
+
+Cross-session transcript search via the `session_search` tool (when session persistence is available).
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `summaryModel` | string | — | Model ref for per-session summaries (e.g. `openai/gpt-4o-mini`). Overrides env `XOPCBOT_SESSION_SEARCH_MODEL` when set. |
+
 ---
 
 ### providers
@@ -469,6 +500,7 @@ xopcbot supports environment variables for sensitive data:
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `XOPCBOT_CONFIG` | Custom config file path |
 | `XOPCBOT_WORKSPACE` | Custom workspace directory |
+| `XOPCBOT_SESSION_SEARCH_MODEL` | Default model for `session_search` summaries when `agents.defaults.sessionSearch.summaryModel` is unset |
 | `XOPCBOT_LOG_LEVEL` | Log level (trace/debug/info/warn/error/fatal) |
 | `XOPCBOT_LOG_DIR` | Log directory path |
 | `XOPCBOT_LOG_CONSOLE` | Enable console output (true/false) |
