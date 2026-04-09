@@ -1,6 +1,7 @@
 import type { Config } from '../../config/schema.js';
 import { BuiltinMemoryStore } from './builtin-memory-store.js';
 import { BuiltinMemoryProvider } from './builtin-provider.js';
+import { isMemorySubsystemEnabled } from './memory-config.js';
 import { MemoryManager } from './manager.js';
 import { StubMemoryProvider } from './stub-memory-provider.js';
 
@@ -13,6 +14,10 @@ export function createMemoryManagerFromConfig(
 ): MemoryManager {
   const mgr = new MemoryManager();
   mgr.addProvider(new BuiltinMemoryProvider(store));
+
+  if (!isMemorySubsystemEnabled(config)) {
+    return mgr;
+  }
 
   const id = (config?.agents?.defaults?.memory?.provider ?? 'none') as MemoryProviderId;
   if (id === 'stub') {

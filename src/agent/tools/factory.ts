@@ -32,6 +32,7 @@ import { createCuratedMemoryTool } from './curated-memory-tool.js';
 import { createSessionSearchTool } from './session-search-tool.js';
 import type { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
 import type { MemoryManager } from '../memory/manager.js';
+import { shouldRegisterCuratedMemoryTool } from '../memory/memory-config.js';
 import type { SessionStore } from '../../session/store.js';
 import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
@@ -98,7 +99,7 @@ export class AgentToolsFactory {
       createSendMediaTool(bus, () => this.deps.getCurrentContext()),
       createMemorySearchTool(workspace),
       createMemoryGetTool(workspace),
-      ...(this.deps.getBuiltinMemoryStore
+      ...(this.deps.getBuiltinMemoryStore && shouldRegisterCuratedMemoryTool(this.deps.getConfig?.())
         ? [
             createCuratedMemoryTool(this.deps.getBuiltinMemoryStore, {
               onMemoryWrite: (action, target, content) => {

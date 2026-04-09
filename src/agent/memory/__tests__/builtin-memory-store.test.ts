@@ -1,4 +1,4 @@
-import { mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { mkdirSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 
@@ -46,6 +46,21 @@ describe('BuiltinMemoryStore', () => {
     });
     store.loadFromDiskSync();
     expect(store.getSnapshot().memory).toBe('');
+    expect(store.getSnapshot().user).toBe('');
+  });
+
+  it('ignores USER.md when userProfileEnabled is false', () => {
+    dir = mkdtempSync(join(tmpdir(), 'xopc-mem-'));
+    const memDir = join(dir, '.xopcbot', 'memories');
+    mkdirSync(memDir, { recursive: true });
+    writeFileSync(join(memDir, 'USER.md'), 'should not appear', 'utf-8');
+    const store = new BuiltinMemoryStore({
+      workspaceDir: dir,
+      memoryCharLimit: 100,
+      userCharLimit: 100,
+      userProfileEnabled: false,
+    });
+    store.loadFromDiskSync();
     expect(store.getSnapshot().user).toBe('');
   });
 
