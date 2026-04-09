@@ -2,6 +2,8 @@ export * from './schema.js';
 export * from './agent-profile.js';
 export * from './loader.js';
 export * from './paths.js';
+export { expandWorkspacePathString } from './workspace-path.js';
+export { resolveAgentHomeDir } from './agent-homedir.js';
 export * from './profile.js';
 export * from './reload.js';
 export * from './diff.js';

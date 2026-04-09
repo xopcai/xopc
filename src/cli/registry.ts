@@ -1,5 +1,6 @@
 import type { Command } from 'commander';
-import { resolveConfigPath, resolveWorkspaceDir } from '../config/paths.js';
+import { resolveConfigPath } from '../config/paths.js';
+import { resolveWorkspaceDir } from '../config/workspace-defaults.js';
 
 export interface CLIContext {
   configPath: string;
