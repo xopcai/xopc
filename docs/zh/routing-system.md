@@ -31,13 +31,18 @@ main:cli:default:direct:cli
 
 ### Agent 与 bindings
 
-在 `agents.list` 中注册多个 Agent。**绑定规则** `bindings` 按 **priority** 从高到低匹配；每条 `match` 中的 **`channel`** 为**精确**通道 id（如 `telegram`、`gateway`），匹配时不区分大小写，**不支持**用 `*` 表示「所有通道」。可按通道分别写规则；若没有任何规则匹配，则使用**默认 Agent**：`agents.list` 中第一个 **enabled** 的 `id`，否则为 `main`。
+在 `agents.list` 中注册多个 Agent。**绑定规则** `bindings` 按 **priority** 从高到低匹配；每条 `match` 中的 **`channel`** 为**精确**通道 id（如 `telegram`、`gateway`），匹配时不区分大小写，**不支持**用 `*` 表示「所有通道」。可按通道分别写规则；若没有任何规则匹配，**默认 agent id** 为：可选的顶层 **`agents.default`** → 否则 **`agents.list` 中第一个 enabled 的 id** → 否则 **`main`**。
+
+### 运行时有效配置（effective profile）
+
+Session key 的第一段为 `agentId` 时，运行时会将 **`agents.defaults`** 与该 id 在 **`agents.list`** 中**已启用**的条目合并（可覆盖 `workspace`、`model`、`tools.disable`、`systemPromptOverride`、`skills`、思考默认值等）。若 `agentId` 在列表中不存在或已禁用，则按上面的**默认 agent** 解析配置。这与 CLI `agent-manage` 使用的磁盘目录 `~/.xopcbot/agents/<id>/` 是两套机制；**网关/运行时以 `config.json` 为准**。
 
 `match.peerId` 支持简单的 `*` 通配（例如 Telegram 超级群 `-100*`）。
 
 ```json
 {
   "agents": {
+    "default": "main",
     "defaults": {
       "model": "anthropic/claude-sonnet-4-5"
     },

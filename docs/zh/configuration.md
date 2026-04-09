@@ -111,7 +111,40 @@ xopcbot onboard
 
 ### agents
 
-智能体默认配置。
+智能体配置分为三部分：可选的顶层 **`default`**（默认 agent id）、共享的 **`defaults`**、以及 **`list`** 中的多条身份。路由与 session key 的**第一段**即为 agent id；运行时会把 **`agents.defaults`** 与 `list` 里匹配且 **enabled** 的条目**合并**成该会话的**有效配置**（模型、工作区、工具、提示词等）。
+
+#### 顶层 `agents` 字段
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `default` | string | 可选。未在会话键/API 中指定 agent 时使用的默认 id。未设置时：取 **`list` 中第一个 enabled 的 id**，否则为 **`main`**。 |
+| `defaults` | object | 全局基线，见下文 **agents.defaults**。 |
+| `list` | array | 多条 agent 身份；每条可覆盖字段，见 **agents.list 条目**。 |
+
+#### `agents.list` 条目
+
+每条至少包含 **`id`**，其余字段均为可选覆盖（与 `defaults` 中同类字段形状一致）。
+
+| 字段 | 类型 | 说明 |
+|------|------|------|
+| `id` | string | Agent id（也是 session key 的第一段）。 |
+| `name` | string | 显示名称。 |
+| `enabled` | boolean | 默认 `true`。为 `false` 时该 id 不参与路由默认，且有效配置解析会回退到默认 agent。 |
+| `workspace` | string | 可选。该 agent 的工作区根路径（支持 `~`）。引导文件、入站附件、`.xopcbot/memories/` 均相对此路径。 |
+| `model` | string \| object | 同 `agents.defaults.model`（字符串或 `{ primary, fallbacks }`）。 |
+| `thinkingDefault` | string | 可选：`off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`adaptive`。 |
+| `reasoningDefault` | string | 可选：`off`、`on`、`stream`。 |
+| `verboseDefault` | string | 可选：`off`、`on`、`full`。 |
+| `systemPromptOverride` | string | 可选。若设置，则替换常规基础系统提示词；技能 XML 仍会追加（受 `skills` 白名单约束）。 |
+| `skills` | string[] | 可选。技能 **名称** 白名单，仅这些会出现在 `<available_skills>`。 |
+| `tools` | object | 可选。`{ "disable": ["工具名", ...] }`，按内置工具的 **name** 禁用（如 `shell`、`web_search`、`session_search`、`image`；禁用扩展工具用 `extensions`）。 |
+| `params` | object | 可选，预留。 |
+
+同类可选字段也可写在 **`agents.defaults`** 里作为全局默认（例如 `agents.defaults.tools.disable` 会与每条 list 的 disable **合并**）。
+
+**说明：** `~/.xopcbot/agents/<id>/` 磁盘布局（`agent-manage` CLI）与 **`config.json` 的 `agents.list`** 是两套机制；网关/运行时以 **配置文件** 为准，除非你有意同步二者。
+
+#### agents.defaults
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
@@ -216,7 +249,7 @@ pnpm run migrate:memory [workspaceDir]
 
 ### bindings
 
-可选的规则数组，用于将入站流量分配到指定 **`agentId`**。按 **`priority`** 从高到低匹配；每条 **`match`** 中的 **`channel`** 须为精确通道 id（如 `telegram`），**`peerId`** 可使用 `*` 通配。若无匹配，则使用默认 Agent（**`agents.list`** 中第一个启用的 id，否则为 `main`）。详见 [Session 路由系统](/zh/routing-system)。
+可选的规则数组，用于将入站流量分配到指定 **`agentId`**。按 **`priority`** 从高到低匹配；每条 **`match`** 中的 **`channel`** 须为精确通道 id（如 `telegram`），**`peerId`** 可使用 `*` 通配。若无匹配，默认 agent id 为：**已设置的 `agents.default`** → 否则 **`agents.list` 中第一个 enabled 的 id** → 否则 **`main`**。详见 [Session 路由系统](/zh/routing-system)。
 
 ---
 

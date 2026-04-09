@@ -31,13 +31,18 @@ Routing is configured in **`~/.xopcbot/config.json`** (override path with `XOPCB
 
 ### Agents and bindings
 
-Register agents under `agents.list`. **Binding rules** (`bindings`) are evaluated in **priority order** (higher `priority` wins first). Each `match` requires an exact **`channel`** id (e.g. `telegram`, `gateway`) — matching is case-insensitive and **does not** support `*` for “all channels”. Use one rule per channel, or rely on the **default agent** when nothing matches: first **enabled** entry in `agents.list`, otherwise `main`.
+Register agents under `agents.list`. **Binding rules** (`bindings`) are evaluated in **priority order** (higher `priority` wins first). Each `match` requires an exact **`channel`** id (e.g. `telegram`, `gateway`) — matching is case-insensitive and **does not** support `*` for “all channels”. Use one rule per channel, or rely on the **default agent** when nothing matches: optional top-level **`agents.default`**, else first **enabled** entry in `agents.list`, else `main`.
+
+### Effective runtime profile
+
+For a session key `agentId:…`, the agent runtime merges **`agents.defaults`** with the matching **enabled** row in **`agents.list`** (per-agent `workspace`, `model`, `tools.disable`, `systemPromptOverride`, `skills`, thinking defaults, etc.). If `agentId` is unknown or disabled in `list`, profile resolution falls back to the **default agent** id above. This is independent of the optional on-disk `~/.xopcbot/agents/<id>/` layout used by `agent-manage` — gateway behavior follows **`config.json`**.
 
 `match.peerId` supports simple `*` glob patterns (e.g. `-100*` for Telegram supergroups).
 
 ```json
 {
   "agents": {
+    "default": "main",
     "defaults": {
       "model": "anthropic/claude-sonnet-4-5"
     },
