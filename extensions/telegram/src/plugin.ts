@@ -131,7 +131,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
       },
     });
 
-    log.info('Telegram plugin initialized');
+    log.debug('Telegram plugin initialized');
   }
 
   private bindOutboundComponents(): void {
@@ -206,6 +206,16 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   async onConfigUpdated(cfg: Config): Promise<void> {
     const prevTg = this.cfg.channels?.telegram;
     const nextTg = cfg.channels?.telegram;
+    // Match Weixin: only `enabled === true` keeps inbound (polling). Stops immediately on disable / missing section.
+    const channelOff = !nextTg || nextTg.enabled !== true;
+    if (channelOff) {
+      this.cfg = cfg;
+      await this.stop();
+      this.accountManager.reset();
+      this.bindOutboundComponents();
+      return;
+    }
+
     if (isDeepStrictEqual(prevTg, nextTg)) {
       this.cfg = cfg;
       this.bindOutboundComponents();
@@ -223,8 +233,8 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     await this.stop();
     this.accountManager.reset();
     const telegramCfg = cfg.channels?.telegram as Record<string, unknown> | undefined;
-    const enabled = Boolean(telegramCfg && telegramCfg.enabled !== false);
-    if (!enabled) {
+    const channelOn = telegramCfg != null && telegramCfg.enabled === true;
+    if (!channelOn) {
       this.bindOutboundComponents();
       return;
     }
@@ -236,8 +246,22 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   private loadAccounts(): void {
     const telegramCfg = this.cfg.channels?.telegram as Record<string, unknown> | undefined;
     if (!telegramCfg) return;
+    if (telegramCfg.enabled !== true) {
+      return;
+    }
 
-    if (telegramCfg.botToken && !telegramCfg.accounts) {
+    const accounts = telegramCfg.accounts as Record<string, any> | undefined;
+    const hasNamedAccounts = Boolean(accounts && Object.keys(accounts).length > 0);
+
+    if (hasNamedAccounts) {
+      for (const [id, account] of Object.entries(accounts!)) {
+        this.accountManager.registerAccount({ ...account, accountId: id });
+      }
+      return;
+    }
+
+    // Single-token layout: `accounts: {}` is truthy but must not skip root `botToken` registration.
+    if (telegramCfg.botToken) {
       this.accountManager.registerAccount({
         accountId: 'default',
         name: 'Default Account',
@@ -249,14 +273,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         allowFrom: telegramCfg.allowFrom as Array<string | number> | undefined,
         groupAllowFrom: telegramCfg.groupAllowFrom as Array<string | number> | undefined,
       });
-      return;
-    }
-
-    const accounts = telegramCfg.accounts as Record<string, any> | undefined;
-    if (accounts) {
-      for (const [id, account] of Object.entries(accounts)) {
-        this.accountManager.registerAccount({ ...account, accountId: id });
-      }
     }
   }
 
@@ -267,6 +283,11 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   }
 
   async start(options?: ChannelPluginStartOptions): Promise<void> {
+    const section = this.cfg.channels?.telegram as { enabled?: boolean } | undefined;
+    if (!section || section.enabled !== true) {
+      return;
+    }
+
     const accountIds = options?.accountId
       ? [options.accountId]
       : this.config.listAccountIds(this.cfg);
@@ -410,6 +431,11 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   private async processMessages(items: TelegramMessageEvent[]): Promise<void> {
     if (items.length === 0) return;
 
+    const tgSection = this.cfg.channels?.telegram as { enabled?: boolean } | undefined;
+    if (!tgSection || tgSection.enabled !== true) {
+      return;
+    }
+
     const last = items[items.length - 1];
     const ctx = last.ctx;
     const accountId = last.accountId;
@@ -436,7 +462,18 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     const accessResult = this.security.checkAccess?.(securityCtx, account, this.cfg);
 
     if (!accessResult?.allowed) {
-      log.debug({ accountId, chatId, reason: accessResult?.reason }, 'Access denied');
+      log.warn(
+        {
+          accountId,
+          chatId,
+          senderId,
+          isGroup,
+          reason: accessResult?.reason,
+          dmPolicy: account.dmPolicy,
+          groupPolicy: account.groupPolicy,
+        },
+        'Telegram: message dropped by channel security (check dmPolicy/groupPolicy and allowFrom)',
+      );
       return;
     }
 

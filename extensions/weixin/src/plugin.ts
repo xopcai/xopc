@@ -133,7 +133,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   async init(options: ChannelPluginInitOptions): Promise<void> {
     this.bus = options.bus;
     this.cfg = options.config;
-    log.info('Weixin plugin initialized');
+    log.debug('Weixin plugin initialized');
   }
 
   async start(options?: ChannelPluginStartOptions): Promise<void> {
