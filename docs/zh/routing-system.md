@@ -35,7 +35,7 @@ main:cli:default:direct:cli
 
 ### 运行时有效配置（effective profile）
 
-Session key 的第一段为 `agentId` 时，运行时会将 **`agents.defaults`** 与该 id 在 **`agents.list`** 中**已启用**的条目合并（可覆盖 `workspace`、`model`、`tools.disable`、`systemPromptOverride`、`skills`、思考默认值等）。若 `agentId` 在列表中不存在或已禁用，则按上面的**默认 agent** 解析配置。这与 CLI `agent-manage` 使用的磁盘目录 `~/.xopcbot/agents/<id>/` 是两套机制；**网关/运行时以 `config.json` 为准**。
+Session key 的第一段为 `agentId` 时，运行时会将 **`agents.defaults`** 与该 id 在 **`agents.list`** 中**已启用**的条目合并（可覆盖 `workspace`、`model`、`agentDir`、`tools.disable`、`systemPromptOverride`、`skills`、思考默认值等）。若 `agentId` 在列表中不存在或已禁用，则按上面的**默认 agent** 解析配置。磁盘上的 `~/.xopcbot/agents/<id>/` 等路径与上述配置一致解析；**网关/运行时以 `config.json` 为准**。
 
 `match.peerId` 支持简单的 `*` 通配（例如 Telegram 超级群 `-100*`）。
 

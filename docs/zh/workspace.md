@@ -2,7 +2,7 @@
 
 xopcbot 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；其下有 **按 Agent 划分** 的目录树（会话、收件箱、运行时文件等）。**工作空间（workspace）** 是运行时用于引导 Markdown、工具侧数据、扩展安装以及入站附件落盘的目录。
 
-路径解析分散在 `src/config/paths-state.ts`、`src/config/agent-homedir.ts`、`src/config/workspace-defaults.ts` 与 `src/config/paths.ts`；目录骨架由 `xopcbot init` 创建（`src/cli/commands/init.ts`）。布局与 OpenClaw 一致：**Markdown 工作区**不在 `agents/<id>/` 下（默认在状态根旁的 `workspace` / `workspace-<id>`，或配置为 `agents.defaults.workspace/<id>`）。
+路径以 **`config.json` 为唯一事实来源**：`src/agents/agent-scope.ts`（OpenClaw 式 workspace / agentDir 解析），以及 `src/config/paths-state.ts`、`src/config/workspace-defaults.ts`、`src/config/paths.ts`。目录骨架由 **`xopcbot init`**（`src/cli/commands/init.ts`）与 **`xopcbot agents add`** 创建/更新。布局与 OpenClaw 一致：**Markdown 工作区**不在 `agents/<id>/` 下（默认在状态根旁的 `workspace` / `workspace-<id>`，或配置为 `agents.defaults.workspace/<id>`）。
 
 ## 状态目录根
 
@@ -35,8 +35,7 @@ xopcbot 在单一 **状态目录**（“Agent OS” 根）下保存本机状态�
 
 ## 按 Agent：`agents/<agentId>/`
 
-`agentId` 默认为 `main`（`XOPCBOT_AGENT_ID`）。  
-`XOPCBOT_AGENT_DIR` 可覆盖整个 `agents/<id>` **主目录**（其下含 `sessions/` 与 `agent/`）。
+给定 **`agentId`** 时，**agent 主目录**默认为 `~/.xopcbot/agents/<id>/`（仍受上文 `XOPCBOT_STATE_DIR` / profile 规则约束）。配置项 **`agents.list[].agentDir`** 可覆盖 OpenClaw 语义下的 **内部 agent 状态目录**（`…/agent` 子树：凭证、`agent.json`、收件箱、pid/socket 等）。
 
 | 路径 | 作用 |
 |------|------|
@@ -49,7 +48,7 @@ xopcbot 在单一 **状态目录**（“Agent OS” 根）下保存本机状态�
 
 无配置中逐条 `workspace` 覆盖时的启发式路径：默认 agent → `<stateDir>/workspace`；其它 id → `<stateDir>/workspace-<id>`（与 OpenClaw 在未设置 `agents.defaults.workspace` 时的做法一致）。载入 **`config.json`** 时，以合并后的 `resolveAgentWorkspaceDir` / 有效 Agent 配置为准：显式 `workspace`、`join(agents.defaults.workspace, id)`，或回退到 `workspace-<id>`。
 
-`resolveWorkspaceDir()`（未加载配置的 CLI / 工具）遵循同一启发式；**`xopcbot init`** 与 **`agent:create`** 会创建该目录并**写入**内置模板中的标准引导 Markdown（与 [工作区模板](/zh/reference/templates) 文件名一致：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`，以及模板包中的 `BOOTSTRAP.md`）。仅当目标文件**尚不存在**时才写入，以便每个 Agent 保留**独立**人格；若需从已有 Agent 复制，可使用 `--copy-from <id>`（在种子化之后用源工作区覆盖同名文件）。
+未加载配置时，CLI 默认使用 **`resolveDefaultAgentWorkspaceDir()`**（`src/config/workspace-defaults.ts`）：若设置 `XOPCBOT_WORKSPACE` 则用之，否则对主工作区启发式为 `~/.xopcbot/workspace`。**`xopcbot init`** 会加载配置（或 schema 默认值），创建 **`agents/<id>/`** 与解析得到的 Markdown 工作区，并按内置模板**种子化**标准引导 Markdown（与 [工作区模板](/zh/reference/templates) 一致：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md` 及模板包中的 `BOOTSTRAP.md`）。仅当目标文件尚不存在时才写入。**`xopcbot agents add`** 会更新 **`agents.list`**、创建目录并种子化新工作区，用于新增多 Agent（见 [CLI](cli.md#agents)）。
 
 ### 引导用 Markdown（人格与记忆索引）
 
@@ -92,9 +91,9 @@ pnpm run migrate:memory /path/to/workspace
 
 相关但不同来源的两套逻辑：
 
-1. **配置项** `agents.defaults.workspace`（schema 默认 `~/.xopcbot/workspace`）— **网关** 等通过 `getWorkspacePath()`（`src/config/schema.ts`）使用。网关下扩展目录为 `<该路径>/.extensions`。
+1. **合并后的默认 agent 工作区** — **网关** 与 `getWorkspacePath(config)`（`src/config/schema.ts`）根据配置解析**默认 agent id**，再通过 `resolveAgentWorkspaceDir` / 有效 profile 得到 Markdown 根路径。网关扩展目录为 `<该 workspace>/.extensions`。
 
-2. **CLI 默认上下文** — 若设置 `XOPCBOT_WORKSPACE` 则用之，否则 `resolveWorkspaceDir()` → 对 `main` 为 `~/.xopcbot/workspace`（`src/cli/registry.ts` 使用 `src/config/workspace-defaults.ts`）。
+2. **CLI 默认上下文**（根命令未显式传 `--workspace` 时）— 若设置 `XOPCBOT_WORKSPACE` 则用之，否则 **`resolveDefaultAgentWorkspaceDir()`** → 在状态目录启发式下为 `~/.xopcbot/workspace`（`src/cli/registry.ts`、`src/config/workspace-defaults.ts`）。
 
 `xopcbot init` 后，`main` 的引导文件默认在 `~/.xopcbot/workspace/`；若希望网关与 CLI 使用同一套 Markdown，请将 **`agents.defaults.workspace`**（及任意 **`agents.list[].workspace`**）指向同一路径。
 
@@ -106,9 +105,7 @@ pnpm run migrate:memory /path/to/workspace
 | `XOPCBOT_PROFILE` | 按 profile 的状态目录 |
 | `XOPCBOT_HOME` | 默认状态路径中的家目录 |
 | `XOPCBOT_CONFIG` / `XOPCBOT_CONFIG_PATH` | 配置文件路径 |
-| `XOPCBOT_WORKSPACE` | CLI 使用的工作空间目录 |
-| `XOPCBOT_AGENT_ID` | 当前 Agent id（如 `main`） |
-| `XOPCBOT_AGENT_DIR` | 覆盖整个 `agents/<id>` 目录 |
+| `XOPCBOT_WORKSPACE` | 未指定 `--workspace` 时 CLI 使用的默认 Markdown 工作区 |
 | `XOPCBOT_CREDENTIALS_DIR` | 全局凭据目录 |
 | `XOPCBOT_LOG_DIR` | 日志目录 |
 

@@ -2,7 +2,7 @@
 
 xopcbot keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for transcripts, inbox, and runtime files. Separately, the **agent workspace** is the folder the runtime uses for bootstrap Markdown, tools data, extensions under that tree, and inbound attachment persistence.
 
-Path resolution is split across `src/config/paths-state.ts`, `src/config/agent-homedir.ts`, `src/config/workspace-defaults.ts`, and `src/config/paths.ts`; workspace bootstrap is seeded by `xopcbot init` (`src/cli/commands/init.ts`). Layout matches OpenClaw: **Markdown workspace** is **not** under `agents/<id>/` (it lives beside the state root as `workspace` / `workspace-<id>` or under `agents.defaults.workspace/<id>` when configured).
+Path resolution uses **`config.json`** as the source of truth: `src/agents/agent-scope.ts` (OpenClaw-style workspace and agent-dir resolution), plus `src/config/paths-state.ts`, `src/config/workspace-defaults.ts`, and `src/config/paths.ts`. Workspace bootstrap is seeded by **`xopcbot init`** (`src/cli/commands/init.ts`) and by **`xopcbot agents add`**. Layout matches OpenClaw: **Markdown workspace** is **not** under `agents/<id>/` (it lives beside the state root as `workspace` / `workspace-<id>` or under `agents.defaults.workspace/<id>` when configured).
 
 ## State directory root
 
@@ -35,8 +35,7 @@ These are shared across agents unless noted.
 
 ## Per-agent tree: `agents/<agentId>/`
 
-`agentId` defaults to `main` (`XOPCBOT_AGENT_ID`).  
-`XOPCBOT_AGENT_DIR` can replace the entire `agents/<id>` **home** path (the parent of `sessions/` and `agent/`).
+For a given **`agentId`**, the **agent home** is `~/.xopcbot/agents/<id>/` by default (under `XOPCBOT_STATE_DIR` / profile rules above). **`agents.list[].agentDir`** in config can override the inner **OpenClaw agent state** directory (the `…/agent` subtree: credentials, `agent.json`, inbox, pid/socket) — same semantics as OpenClaw.
 
 | Path | Role |
 |------|------|
@@ -49,7 +48,7 @@ Session storage is **not** under the Markdown workspace directory; it always use
 
 Heuristic paths (no per-list `workspace` override in config): default agent id → `<stateDir>/workspace`; other ids → `<stateDir>/workspace-<id>` (same idea as OpenClaw when `agents.defaults.workspace` is unset). With **`config.json`**, use merged resolution via `resolveAgentWorkspaceDir` / effective agent profile: explicit `workspace`, or `join(<agents.defaults.workspace>, <id>)` for a listed agent, or the `workspace-<id>` fallback.
 
-`resolveWorkspaceDir()` (CLI / tools without a loaded config) follows the same heuristic; **`xopcbot init`** and **`agent:create`** create this directory and **seed** the standard Markdown bootstrap set from built-in templates (same filenames as [Workspace templates](/reference/templates): `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md`, plus `BOOTSTRAP.md` from the template pack). Files are only written when missing so each agent keeps an **independent** persona tree; use `--copy-from <id>` to overwrite from another agent’s workspace after seeding.
+When no **`config.json`** is loaded, CLI defaults use **`resolveDefaultAgentWorkspaceDir()`** (`src/config/workspace-defaults.ts`): `XOPCBOT_WORKSPACE` if set, otherwise `~/.xopcbot/workspace` for the primary tree. **`xopcbot init`** loads config (or schema defaults), creates **`agents/<id>/`** and the resolved Markdown workspace, and **seeds** the standard bootstrap set from built-in templates (same filenames as [Workspace templates](/reference/templates): `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md`, plus `BOOTSTRAP.md` from the template pack). Files are only written when missing. **`xopcbot agents add`** updates **`agents.list`**, creates directories, and seeds the new workspace — use that to add additional agents (see [CLI](cli.md#agents)).
 
 ### Bootstrap Markdown (persona & memory index)
 
@@ -92,9 +91,9 @@ pnpm run migrate:memory /path/to/workspace
 
 Two related ideas:
 
-1. **Config field** `agents.defaults.workspace` (default in schema: `~/.xopcbot/workspace`) — used by the **gateway** and related services via `getWorkspacePath()` (`src/config/schema.ts`). Extensions for the gateway use `<that path>/.extensions`.
+1. **Merged default agent workspace** — the **gateway** and `getWorkspacePath(config)` (`src/config/schema.ts`) resolve the **default** agent id from config, then the Markdown root via `resolveAgentWorkspaceDir` / effective profile. Extensions for the gateway use `<that workspace>/.extensions`.
 
-2. **CLI default context** — `XOPCBOT_WORKSPACE` if set, else `resolveWorkspaceDir()` → `~/.xopcbot/workspace` for agent `main` (`src/cli/registry.ts` uses `src/config/workspace-defaults.ts`).
+2. **CLI default context** (no explicit `--workspace` on the root program) — `XOPCBOT_WORKSPACE` if set, else **`resolveDefaultAgentWorkspaceDir()`** → `~/.xopcbot/workspace` when using state-dir heuristics (`src/cli/registry.ts`, `src/config/workspace-defaults.ts`).
 
 After `xopcbot init`, bootstrap files for `main` live under `~/.xopcbot/workspace/` by default; ensure **`agents.defaults.workspace`** (and any **`agents.list[].workspace`**) point at the same tree if you want the gateway and CLI to load identical Markdown without duplication.
 
@@ -106,9 +105,7 @@ After `xopcbot init`, bootstrap files for `main` live under `~/.xopcbot/workspac
 | `XOPCBOT_PROFILE` | Profile-specific state directory |
 | `XOPCBOT_HOME` | Home override for default state path |
 | `XOPCBOT_CONFIG` / `XOPCBOT_CONFIG_PATH` | Config file location |
-| `XOPCBOT_WORKSPACE` | Workspace directory for CLI commands |
-| `XOPCBOT_AGENT_ID` | Current agent id (`main`, …) |
-| `XOPCBOT_AGENT_DIR` | Override entire `agents/<id>` directory |
+| `XOPCBOT_WORKSPACE` | Default Markdown workspace for CLI context when no `--workspace` |
 | `XOPCBOT_CREDENTIALS_DIR` | Global credentials directory |
 | `XOPCBOT_LOG_DIR` | Log file directory |
 
