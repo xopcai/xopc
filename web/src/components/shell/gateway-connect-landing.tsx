@@ -17,9 +17,17 @@ export function GatewayConnectLanding() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const l = m.gatewayLanding;
+  const appearanceLabel = m.appearanceSettings.pageTitle;
 
   return (
-    <div className="flex min-h-full flex-1 flex-col bg-surface-base">
+    <div className="relative flex min-h-full flex-1 flex-col bg-surface-base">
+      <div
+        className="absolute right-3 top-3 z-10 sm:right-4 sm:top-4"
+        role="group"
+        aria-label={appearanceLabel}
+      >
+        <PreferenceSelectFields variant="toolbar" sections={['language', 'theme']} />
+      </div>
       <div className="flex flex-1 flex-col items-center justify-center px-4 py-10 sm:px-6">
         <div className="w-full max-w-lg rounded-xl border border-edge bg-surface-panel p-6 shadow-popover sm:p-8">
           <div className="flex flex-col items-center gap-3 text-center">
@@ -71,12 +79,6 @@ export function GatewayConnectLanding() {
           </div>
         </div>
       </div>
-
-      <footer className="border-t border-edge-subtle bg-surface-panel/80 px-4 py-4">
-        <div className="mx-auto w-full max-w-lg">
-          <PreferenceSelectFields variant="sidebar" sections={['language', 'theme']} />
-        </div>
-      </footer>
     </div>
   );
 }
