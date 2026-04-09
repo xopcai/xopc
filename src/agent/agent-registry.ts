@@ -12,6 +12,7 @@ import {
   resolveRunDir,
   resolvePidPath,
 } from '../config/paths.js';
+import { copyBootstrapFilesFromWorkspace, seedWorkspaceBootstrapFiles } from './context/workspace-seed.js';
 
 const log = createLogger('AgentRegistry');
 
@@ -167,9 +168,18 @@ export class AgentRegistry {
     // Create directory structure
     await mkdir(agentDir, { recursive: true });
     await mkdir(join(agentDir, 'credentials'), { recursive: true });
-    await mkdir(resolveWorkspaceDir(id), { recursive: true });
-    await mkdir(join(resolveWorkspaceDir(id), '.state'), { recursive: true });
-    await mkdir(join(resolveWorkspaceDir(id), 'memory'), { recursive: true });
+    const workspaceRoot = resolveWorkspaceDir(id);
+    await mkdir(workspaceRoot, { recursive: true });
+    seedWorkspaceBootstrapFiles(workspaceRoot);
+    if (options.copyFrom) {
+      const fromWs = resolveWorkspaceDir(options.copyFrom);
+      if (!existsSync(fromWs)) {
+        throw new Error(`Source agent "${options.copyFrom}" has no workspace at ${fromWs}`);
+      }
+      copyBootstrapFilesFromWorkspace(fromWs, workspaceRoot, { overwrite: true });
+    }
+    await mkdir(join(workspaceRoot, '.state'), { recursive: true });
+    await mkdir(join(workspaceRoot, 'memory'), { recursive: true });
     await mkdir(resolveSessionsDir(id), { recursive: true });
     await mkdir(join(resolveSessionsDir(id), 'archive'), { recursive: true });
     await mkdir(resolveInboxDir(id), { recursive: true });
@@ -195,11 +205,6 @@ export class AgentRegistry {
       JSON.stringify(metadata, null, 2),
       'utf-8'
     );
-
-    // If copyFrom is specified, copy workspace files
-    if (options.copyFrom) {
-      await this.copyWorkspace(options.copyFrom, id);
-    }
 
     log.info({ agentId: id }, 'Created new agent');
 
@@ -374,33 +379,6 @@ export class AgentRegistry {
     }
   }
 
-  private async copyWorkspace(fromId: string, toId: string): Promise<void> {
-    const fromDir = resolveWorkspaceDir(fromId);
-    const toDir = resolveWorkspaceDir(toId);
-
-    // Copy essential workspace files if they exist
-    const filesToCopy = [
-      'SOUL.md',
-      'IDENTITY.md',
-      'AGENTS.md',
-      'TOOLS.md',
-      'HEARTBEAT.md',
-    ];
-
-    for (const file of filesToCopy) {
-      const fromPath = join(fromDir, file);
-      const toPath = join(toDir, file);
-
-      if (existsSync(fromPath) && !existsSync(toPath)) {
-        try {
-          const content = await readFile(fromPath, 'utf-8');
-          await writeFile(toPath, content, 'utf-8');
-        } catch (error) {
-          log.warn({ file, error }, 'Failed to copy workspace file');
-        }
-      }
-    }
-  }
 }
 
 // ============================================

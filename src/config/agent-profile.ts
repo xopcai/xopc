@@ -9,6 +9,7 @@ import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../agent/transcri
 import type { Config } from './schema.js';
 import type { AgentModelConfig } from './schema.js';
 import { getAgentDefaultModelRef } from './schema.js';
+import { resolveWorkspaceDir } from './paths.js';
 import { getDefaultAgentId, agentExists } from '../routing/resolve-route.js';
 import { parseSessionKey } from '../routing/session-key.js';
 
@@ -125,8 +126,15 @@ export function resolveEffectiveAgentProfile(config: Config, agentId: string): E
     ? list.find((a) => a && a.enabled !== false && a.id.toLowerCase() === agentId.toLowerCase())
     : undefined;
 
-  const workspaceRaw = entry?.workspace ?? defaults?.workspace ?? '~/.xopcbot/workspace';
-  const resolvedWorkspacePath = expandWorkspacePathString(workspaceRaw);
+  let resolvedWorkspacePath: string;
+  if (entry?.workspace?.trim()) {
+    resolvedWorkspacePath = expandWorkspacePathString(entry.workspace);
+  } else if (entry) {
+    // Listed agent with no override → `~/.xopcbot/agents/<id>/workspace` (same layout as `agent:create`)
+    resolvedWorkspacePath = resolveWorkspaceDir(agentId);
+  } else {
+    resolvedWorkspacePath = expandWorkspacePathString(defaults?.workspace ?? '~/.xopcbot/workspace');
+  }
 
   const mergedModel = mergeModelConfig(defaults?.model as AgentModelConfig | undefined, entry?.model as AgentModelConfig | undefined);
   const { primary: primaryFromMerged, fallbacks: fallbacksFromMerged } = primaryAndFallbacksFromModelConfig(mergedModel);
