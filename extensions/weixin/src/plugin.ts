@@ -5,6 +5,7 @@
 import { isDeepStrictEqual } from 'node:util';
 
 import type { Config } from '@xopcai/xopcbot/config/schema.js';
+import type { MessageBus } from '@xopcai/xopcbot/infra/bus/index.js';
 import type {
   ChannelCapabilities,
   ChannelPlugin,
@@ -185,10 +186,32 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   async onConfigUpdated(cfg: Config): Promise<void> {
     const prevWx = this.cfg.channels?.weixin;
     const nextWx = cfg.channels?.weixin;
-    if (isDeepStrictEqual(prevWx, nextWx)) {
+    const channelOff = !nextWx || nextWx.enabled !== true;
+
+    if (channelOff) {
       this.cfg = cfg;
+      await this.stop();
       return;
     }
+
+    this.cfg = cfg;
+
+    if (isDeepStrictEqual(prevWx, nextWx) && this.channelIsRunning(cfg)) {
+      return;
+    }
+
+    await this.stop();
+    await this.start();
+  }
+
+  /**
+   * Restart long-poll monitors after credentials were written to disk without a `channels.weixin` JSON
+   * delta (e.g. only token files / account index updated). Gateway calls this after QR login completes.
+   *
+   * Pass `bus` explicitly: if Weixin was disabled at gateway boot, `init()` was skipped and `this.bus` was never set.
+   */
+  async reloadMonitorsWithConfig(cfg: Config, bus: MessageBus): Promise<void> {
+    this.bus = bus;
     this.cfg = cfg;
     await this.stop();
     await this.start();

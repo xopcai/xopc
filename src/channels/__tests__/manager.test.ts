@@ -36,7 +36,7 @@ describe('ChannelManager module', () => {
     expect(manager).toBeDefined();
   });
 
-  it('does not call stop on plugins that were never initialized', async () => {
+  it('initializes disabled channels so stop still runs after start (hot-reload / runtime stop)', async () => {
     const { ChannelManager } = await import('../manager.js');
 
     let stopCalls = 0;
@@ -82,6 +82,6 @@ describe('ChannelManager module', () => {
     await manager.start();
     await manager.stop();
 
-    expect(stopCalls).toBe(0);
+    expect(stopCalls).toBe(1);
   });
 });

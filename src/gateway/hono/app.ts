@@ -690,7 +690,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       timeoutMs,
       onPersisted: async (r) => {
         if (r.ok) {
-          await service.reloadConfig();
+          await service.afterWeixinCredentialsPersisted();
         }
       },
     });
@@ -899,83 +899,97 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       }
     }
     
-    // Update channels
-    if (body.channels?.telegram) {
-      if (!config.channels) config.channels = { telegram: { enabled: false, botToken: '', allowFrom: [], groupAllowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const, replyToMode: 'off' as const, historyLimit: 50, textChunkLimit: 4000 } };
-      if (!config.channels.telegram) config.channels.telegram = {} as any;
-      
-      if (body.channels.telegram.enabled !== undefined) {
-        config.channels.telegram.enabled = body.channels.telegram.enabled;
-      }
-      if (body.channels.telegram.botToken !== undefined) {
-        config.channels.telegram.botToken = body.channels.telegram.botToken;
-      }
-      if (body.channels.telegram.allowFrom !== undefined) {
-        config.channels.telegram.allowFrom = body.channels.telegram.allowFrom;
-      }
-      if (body.channels.telegram.apiRoot !== undefined) {
-        config.channels.telegram.apiRoot = body.channels.telegram.apiRoot;
-      }
-      if (body.channels.telegram.debug !== undefined) {
-        config.channels.telegram.debug = body.channels.telegram.debug;
-      }
-      if (body.channels.telegram.streamMode !== undefined) {
-        config.channels.telegram.streamMode = body.channels.telegram.streamMode;
-      }
-      if (body.channels.telegram.groupAllowFrom !== undefined) {
-        config.channels.telegram.groupAllowFrom = body.channels.telegram.groupAllowFrom;
-      }
-      if (body.channels.telegram.dmPolicy !== undefined) {
-        config.channels.telegram.dmPolicy = body.channels.telegram.dmPolicy;
-      }
-      if (body.channels.telegram.groupPolicy !== undefined) {
-        config.channels.telegram.groupPolicy = body.channels.telegram.groupPolicy;
-      }
-      if (body.channels.telegram.replyToMode !== undefined) {
-        config.channels.telegram.replyToMode = body.channels.telegram.replyToMode;
-      }
-      if (body.channels.telegram.historyLimit !== undefined) {
-        config.channels.telegram.historyLimit = body.channels.telegram.historyLimit;
-      }
-      if (body.channels.telegram.textChunkLimit !== undefined) {
-        config.channels.telegram.textChunkLimit = body.channels.telegram.textChunkLimit;
-      }
-      if (body.channels.telegram.proxy !== undefined) {
-        config.channels.telegram.proxy = body.channels.telegram.proxy;
-      }
-      if (body.channels.telegram.accounts !== undefined) {
-        config.channels.telegram.accounts = body.channels.telegram.accounts;
-      }
-    }
+    // Update channels — use `in` / null so `weixin: null` removes the block; avoid `if (ch.weixin)` missing null.
+    const patchChannels = body.channels;
+    if (patchChannels != null && typeof patchChannels === 'object' && !Array.isArray(patchChannels)) {
+      if ('telegram' in patchChannels) {
+        const tgRaw = patchChannels.telegram;
+        if (tgRaw === null) {
+          if (config.channels) delete config.channels.telegram;
+        } else if (typeof tgRaw === 'object' && !Array.isArray(tgRaw)) {
+          const bodyTg = tgRaw as NonNullable<typeof body.channels>['telegram'];
+          if (!config.channels) config.channels = { telegram: { enabled: false, botToken: '', allowFrom: [], groupAllowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const, replyToMode: 'off' as const, historyLimit: 50, textChunkLimit: 4000 } };
+          if (!config.channels.telegram) config.channels.telegram = {} as any;
 
-    if (body.channels?.weixin) {
-      if (!config.channels) config.channels = {} as any;
-      if (!config.channels.weixin) {
-        config.channels.weixin = {
-          enabled: false,
-          dmPolicy: 'pairing',
-          allowFrom: [],
-          debug: false,
-          historyLimit: 50,
-          textChunkLimit: 4000,
-        };
-      }
-      const wx = body.channels.weixin;
-      if (wx.enabled !== undefined) config.channels.weixin.enabled = wx.enabled;
-      if (wx.dmPolicy !== undefined) config.channels.weixin.dmPolicy = wx.dmPolicy;
-      if (wx.allowFrom !== undefined) config.channels.weixin.allowFrom = wx.allowFrom;
-      if (wx.debug !== undefined) config.channels.weixin.debug = wx.debug;
-      if (wx.streamMode !== undefined) config.channels.weixin.streamMode = wx.streamMode;
-      if (wx.historyLimit !== undefined) config.channels.weixin.historyLimit = wx.historyLimit;
-      if (wx.textChunkLimit !== undefined) config.channels.weixin.textChunkLimit = wx.textChunkLimit;
-      if ('routeTag' in wx) {
-        if (wx.routeTag === null || wx.routeTag === undefined || wx.routeTag === '') {
-          delete config.channels.weixin.routeTag;
-        } else {
-          config.channels.weixin.routeTag = wx.routeTag as string | number;
+          if (bodyTg.enabled !== undefined) {
+            config.channels.telegram.enabled = bodyTg.enabled;
+          }
+          if (bodyTg.botToken !== undefined) {
+            config.channels.telegram.botToken = bodyTg.botToken;
+          }
+          if (bodyTg.allowFrom !== undefined) {
+            config.channels.telegram.allowFrom = bodyTg.allowFrom;
+          }
+          if (bodyTg.apiRoot !== undefined) {
+            config.channels.telegram.apiRoot = bodyTg.apiRoot;
+          }
+          if (bodyTg.debug !== undefined) {
+            config.channels.telegram.debug = bodyTg.debug;
+          }
+          if (bodyTg.streamMode !== undefined) {
+            config.channels.telegram.streamMode = bodyTg.streamMode;
+          }
+          if (bodyTg.groupAllowFrom !== undefined) {
+            config.channels.telegram.groupAllowFrom = bodyTg.groupAllowFrom;
+          }
+          if (bodyTg.dmPolicy !== undefined) {
+            config.channels.telegram.dmPolicy = bodyTg.dmPolicy;
+          }
+          if (bodyTg.groupPolicy !== undefined) {
+            config.channels.telegram.groupPolicy = bodyTg.groupPolicy;
+          }
+          if (bodyTg.replyToMode !== undefined) {
+            config.channels.telegram.replyToMode = bodyTg.replyToMode;
+          }
+          if (bodyTg.historyLimit !== undefined) {
+            config.channels.telegram.historyLimit = bodyTg.historyLimit;
+          }
+          if (bodyTg.textChunkLimit !== undefined) {
+            config.channels.telegram.textChunkLimit = bodyTg.textChunkLimit;
+          }
+          if (bodyTg.proxy !== undefined) {
+            config.channels.telegram.proxy = bodyTg.proxy;
+          }
+          if (bodyTg.accounts !== undefined) {
+            config.channels.telegram.accounts = bodyTg.accounts;
+          }
         }
       }
-      if (wx.accounts !== undefined) config.channels.weixin.accounts = wx.accounts;
+
+      if ('weixin' in patchChannels) {
+        const wxRaw = patchChannels.weixin;
+        if (wxRaw === null) {
+          if (config.channels) delete config.channels.weixin;
+        } else if (typeof wxRaw === 'object' && !Array.isArray(wxRaw)) {
+          const wx = wxRaw as NonNullable<typeof body.channels>['weixin'];
+          if (!config.channels) config.channels = {} as any;
+          if (!config.channels.weixin) {
+            config.channels.weixin = {
+              enabled: false,
+              dmPolicy: 'pairing',
+              allowFrom: [],
+              debug: false,
+              historyLimit: 50,
+              textChunkLimit: 4000,
+            };
+          }
+          if (wx.enabled !== undefined) config.channels.weixin.enabled = wx.enabled;
+          if (wx.dmPolicy !== undefined) config.channels.weixin.dmPolicy = wx.dmPolicy;
+          if (wx.allowFrom !== undefined) config.channels.weixin.allowFrom = wx.allowFrom;
+          if (wx.debug !== undefined) config.channels.weixin.debug = wx.debug;
+          if (wx.streamMode !== undefined) config.channels.weixin.streamMode = wx.streamMode;
+          if (wx.historyLimit !== undefined) config.channels.weixin.historyLimit = wx.historyLimit;
+          if (wx.textChunkLimit !== undefined) config.channels.weixin.textChunkLimit = wx.textChunkLimit;
+          if ('routeTag' in wx) {
+            if (wx.routeTag === null || wx.routeTag === undefined || wx.routeTag === '') {
+              delete config.channels.weixin.routeTag;
+            } else {
+              config.channels.weixin.routeTag = wx.routeTag as string | number;
+            }
+          }
+          if (wx.accounts !== undefined) config.channels.weixin.accounts = wx.accounts;
+        }
+      }
     }
     
     // Update gateway heartbeat (partial merge)
