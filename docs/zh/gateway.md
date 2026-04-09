@@ -316,6 +316,16 @@ GET /health
 }
 ```
 
+### 创建会话（`POST /api/sessions`）
+
+创建或复用 Web 侧会话。请求体为 JSON，字段均可选：
+
+| 字段 | 说明 |
+|------|------|
+| `channel` | 写入 session key 的来源段，默认 `webchat`。 |
+| `chat_id` | 若指定，则使用该 peer id 构造会话键。 |
+| `agentId` | 若指定，须为 **`agents.list` 中已启用**的 id；会话键第一段为该 agent。未指定时使用 **`agents.default`** 或列表中第一个启用的 id（见 [Session 路由](/zh/routing-system)）。 |
+
 ## 完整 API 列表
 
 | 方法 | 路径 | 描述 |
@@ -323,6 +333,7 @@ GET /health
 | POST | `/api/message` | 发送消息 (异步) |
 | POST | `/api/message/sync` | 发送消息 (同步) |
 | POST | `/api/agent` | Agent 对话 |
+| POST | `/api/sessions` | 创建或复用会话（JSON 可含 `agentId`） |
 | GET | `/api/sessions` | 列出会话 |
 | GET | `/api/sessions/:key` | 获取会话 |
 | DELETE | `/api/sessions/:key` | 删除会话 |
