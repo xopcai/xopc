@@ -32,6 +32,7 @@ const log = createLogger('GatewayService');
 import { registerAcpRuntimeBackend } from '../acp/runtime/registry.js';
 import { createLocalAcpRuntimeBackend } from '../acp/runtime/backends/local.js';
 import { buildSessionKey, parseSessionKey } from '../routing/session-key.js';
+import { getDefaultAgentId } from '../routing/resolve-route.js';
 import { MAX_CHAT_ATTACHMENTS } from './chat-limits.js';
 
 // ========== SSE Event System ==========
@@ -541,7 +542,7 @@ export class GatewayService {
     if (channel === 'webchat') {
       const parsedKey = parseSessionKey(chatId);
       const sessionKey = parsedKey ? chatId : buildSessionKey({
-        agentId: 'main',
+        agentId: getDefaultAgentId(this.config),
         source: 'webchat',
         accountId: 'default',
         peerKind: 'direct',
@@ -562,7 +563,7 @@ export class GatewayService {
         // Otherwise, build a new session key from the chatId
         const parsedKey = parseSessionKey(chatId);
         const sessionKey = parsedKey ? chatId : buildSessionKey({
-          agentId: 'main',
+          agentId: getDefaultAgentId(this.config),
           source: 'webchat',
           accountId: 'default',
           peerKind: 'direct',
