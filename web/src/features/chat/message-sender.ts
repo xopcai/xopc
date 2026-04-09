@@ -1,6 +1,7 @@
 import type { ProgressState } from '@/features/chat/messages.types';
 import { MAX_CHAT_ATTACHMENTS } from '@/features/chat/constants';
 import { apiFetch } from '@/lib/fetch';
+import { formatApiHttpError } from '@/lib/http-error-message';
 import { apiUrl } from '@/lib/url';
 
 export function pendingAgentRunStorageKey(chatId: string): string {
@@ -63,7 +64,7 @@ export class MessageSender {
 
     if (!res.ok) {
       const body = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
-      throw new Error(body.error?.message || `HTTP ${res.status}`);
+      throw new Error(formatApiHttpError(res.status, res.statusText, body.error?.message));
     }
 
     await new Promise<void>((resolve) => requestAnimationFrame(() => resolve()));
