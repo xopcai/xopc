@@ -11,6 +11,7 @@ import { auth } from './middleware/auth.js';
 import { createAgentSSEHandler, createAgentResumeHandler, createSendHandler, createEventsSSEHandler } from './sse.js';
 import type { GatewayService } from '../service.js';
 import type { Config } from '../../config/schema.js';
+import { BindingsConfigSchema } from '../../config/schema.js';
 import { getWorkspacePath } from '../../config/schema.js';
 import { resolveHeartbeatMdPath } from '../workspace-heartbeat-path.js';
 import {
@@ -38,8 +39,9 @@ import {
 import { createOAuthHandler, loadOAuthCredentialsToCache } from './oauth.js';
 import { createOAuthAsyncHandler } from './oauth-async.js';
 import { testApiKeyResolution } from '../../config/resolve-config-value.js';
-import { buildSessionKey } from '../../routing/session-key.js';
+import { buildSessionKey, parseSessionKey } from '../../routing/session-key.js';
 import { agentExists, getDefaultAgentId } from '../../routing/resolve-route.js';
+import { listAgentEntries, normalizeAgentId, resolveDefaultAgentId } from '../../agents/agent-scope.js';
 import { 
   getModelsJsonPath,
   loadModelsJson,
@@ -746,6 +748,14 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     const config = service.currentConfig;
     const safeConfig = {
       agents: {
+        /** Default routing agent id (`agents.default` / list); safe to expose. */
+        defaultId: resolveDefaultAgentId(config),
+        list: listAgentEntries(config)
+          .filter((e) => e.enabled !== false)
+          .map((e) => ({
+            id: normalizeAgentId(e.id),
+            ...(typeof e.name === 'string' && e.name.trim() ? { name: e.name.trim() } : {}),
+          })),
         defaults: {
           model: agentModelRefToString(config.agents?.defaults?.model) ?? '',
           modelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.model),
@@ -823,6 +833,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       stt: config.stt,
       tts: config.tts,
       tools: safeToolsWebForGet(config),
+      bindings: Array.isArray(config.bindings) ? config.bindings : [],
     };
     return c.json({ ok: true, payload: { config: safeConfig } });
   });
@@ -1095,6 +1106,20 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     const toolsPatchErr = applyToolsWebPatch(config, body as Record<string, unknown>);
     if (toolsPatchErr) {
       return c.json({ ok: false, error: { message: toolsPatchErr } }, 400);
+    }
+
+    if (body.bindings !== undefined) {
+      if (!Array.isArray(body.bindings)) {
+        return c.json({ ok: false, error: { message: 'bindings must be an array' } }, 400);
+      }
+      const parsed = BindingsConfigSchema.safeParse(body.bindings);
+      if (!parsed.success) {
+        return c.json(
+          { ok: false, error: { message: parsed.error.issues.map((i) => i.message).join('; ') } },
+          400,
+        );
+      }
+      config.bindings = parsed.data;
     }
 
     // Save config
@@ -1667,8 +1692,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       sortOrder: 'desc',
     });
     
-    // Find the first empty session (messageCount === 0)
-    const emptySession = existingSessions.items.find(s => s.messageCount === 0);
+    // Reuse an empty session only when it matches the requested agent (session key embeds agent id).
+    const emptySession = existingSessions.items.find((s) => {
+      if (s.messageCount !== 0) return false;
+      const parsed = parseSessionKey(s.key);
+      return parsed?.agentId === agentId;
+    });
     
     if (emptySession) {
       // Return existing empty session instead of creating a new one

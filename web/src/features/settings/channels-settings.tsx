@@ -18,8 +18,11 @@ import {
 import QRCode from 'qrcode';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState, type ReactNode } from 'react';
 import { useLocation } from 'react-router-dom';
+import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { fetchChatAgents } from '@/features/chat/chat-agents-api';
+import { telegramRoutingAccountIds, weixinRoutingAccountIds } from '@/features/settings/channel-bindings-merge';
 import {
   defaultChannelsState,
   fetchChannelsSettings,
@@ -80,6 +83,68 @@ function FieldLabel({ children }: { children: ReactNode }) {
 
 function FieldHint({ children }: { children: ReactNode }) {
   return <p className="text-xs leading-relaxed text-fg-subtle">{children}</p>;
+}
+
+function ChannelAgentRoutingBlock({
+  accountIds,
+  routes,
+  defaultAgentId,
+  agentItems,
+  disabled,
+  onChange,
+  ch,
+}: {
+  accountIds: string[];
+  routes: Record<string, string>;
+  defaultAgentId: string;
+  agentItems: { id: string; name?: string }[];
+  disabled?: boolean;
+  onChange: (accountId: string, agentId: string) => void;
+  ch: ChannelsSettingsMessages;
+}) {
+  if (accountIds.length === 0) return null;
+  const opts = agentItems.length > 0 ? agentItems : [{ id: defaultAgentId }];
+  return (
+    <div className="space-y-3 border-t border-edge-subtle pt-4 dark:border-edge">
+      <div>
+        <FieldLabel>{ch.agentRoutingTitle}</FieldLabel>
+        <FieldHint>{ch.agentRoutingHint}</FieldHint>
+      </div>
+      <div className="space-y-2">
+        {accountIds.map((acc) => (
+          <div
+            key={acc}
+            className="grid grid-cols-1 items-start gap-2 rounded-lg border border-edge-subtle bg-surface-base px-3 py-2.5 sm:grid-cols-2 sm:items-center dark:border-edge"
+          >
+            <div className="min-w-0">
+              <p className="text-xs font-medium text-fg-muted">{ch.agentRoutingAccountLabel}</p>
+              <p className="mt-0.5 truncate font-mono text-sm text-fg" title={acc}>
+                {acc}
+              </p>
+            </div>
+            <div className="min-w-0">
+              <label className="sr-only" htmlFor={`agent-route-${acc}`}>
+                {ch.agentRoutingAgentLabel}
+              </label>
+              <select
+                id={`agent-route-${acc}`}
+                className={cn(inputClassName(), nativeSelectMaxWidthClass)}
+                disabled={disabled}
+                value={(routes[acc] ?? defaultAgentId).toLowerCase()}
+                onChange={(e) => onChange(acc, e.target.value)}
+              >
+                {opts.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.name?.trim() ? `${a.name} (${a.id})` : a.id}
+                  </option>
+                ))}
+              </select>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 type SelectFieldProps<T extends string> = {
@@ -470,6 +535,27 @@ export function ChannelsSettingsPanel() {
   const [wxAccountsDraft, setWxAccountsDraft] = useState('');
   const [wxAccountsError, setWxAccountsError] = useState('');
 
+  const { data: chatAgents } = useSWR(hasToken ? 'gateway-chat-agents-ch' : null, fetchChatAgents, {
+    revalidateOnFocus: false,
+  });
+
+  const updateChannelAgentRoute = useCallback(
+    (channel: 'telegram' | 'weixin', accountId: string, agentId: string) => {
+      setForm((f) => {
+        if (!f) return null;
+        const k = channel === 'telegram' ? 'telegram' : 'weixin';
+        return {
+          ...f,
+          channelAgentRoutes: {
+            ...f.channelAgentRoutes,
+            [k]: { ...f.channelAgentRoutes[k], [accountId]: agentId.trim().toLowerCase() },
+          },
+        };
+      });
+    },
+    [],
+  );
+
   const load = useCallback(async () => {
     setLoading(true);
     setError(null);
@@ -520,12 +606,13 @@ export function ChannelsSettingsPanel() {
     setError(null);
     setSaveOk(false);
     try {
-      await patchChannelsSettings(form);
-      const next = structuredClone(form);
-      setBaseline(next);
-      setTgAccountsDraft(JSON.stringify(next.telegram.accounts ?? {}, null, 2));
+      const next = await patchChannelsSettings(form);
+      setForm(next);
+      const baselineClone = structuredClone(next);
+      setBaseline(baselineClone);
+      setTgAccountsDraft(JSON.stringify(baselineClone.telegram.accounts ?? {}, null, 2));
       setTgAccountsError('');
-      setWxAccountsDraft(JSON.stringify(next.weixin.accounts ?? {}, null, 2));
+      setWxAccountsDraft(JSON.stringify(baselineClone.weixin.accounts ?? {}, null, 2));
       setWxAccountsError('');
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
@@ -550,11 +637,12 @@ export function ChannelsSettingsPanel() {
       setSaving(true);
       setError(null);
       try {
-        await patchChannelsSettings(next);
-        const synced = structuredClone(next);
-        setBaseline(synced);
-        setTgAccountsDraft(JSON.stringify(synced.telegram.accounts ?? {}, null, 2));
-        setWxAccountsDraft(JSON.stringify(synced.weixin.accounts ?? {}, null, 2));
+        const synced = await patchChannelsSettings(next);
+        setForm(synced);
+        const baselineClone = structuredClone(synced);
+        setBaseline(baselineClone);
+        setTgAccountsDraft(JSON.stringify(baselineClone.telegram.accounts ?? {}, null, 2));
+        setWxAccountsDraft(JSON.stringify(baselineClone.weixin.accounts ?? {}, null, 2));
       } catch (e) {
         setError(e instanceof Error ? e.message : ch.saveError);
         setForm(prev);
@@ -575,12 +663,12 @@ export function ChannelsSettingsPanel() {
     setSaving(true);
     setError(null);
     try {
-      await patchChannelsSettings(next);
-      const synced = structuredClone(next);
+      const synced = await patchChannelsSettings(next);
       setForm(synced);
-      setBaseline(synced);
-      setTgAccountsDraft(JSON.stringify(synced.telegram.accounts ?? {}, null, 2));
-      setWxAccountsDraft(JSON.stringify(synced.weixin.accounts ?? {}, null, 2));
+      const baselineClone = structuredClone(synced);
+      setBaseline(baselineClone);
+      setTgAccountsDraft(JSON.stringify(baselineClone.telegram.accounts ?? {}, null, 2));
+      setWxAccountsDraft(JSON.stringify(baselineClone.weixin.accounts ?? {}, null, 2));
       setTgAccountsError('');
       setWxAccountsError('');
       setRemoveTarget(null);
@@ -833,6 +921,11 @@ export function ChannelsSettingsPanel() {
             setWxAccountsDraft={setWxAccountsDraft}
             wxAccountsError={wxAccountsError}
             onWxAccountsBlur={onWxAccountsBlur}
+            channelAgentRoutesWx={form.channelAgentRoutes.weixin}
+            defaultAgentId={form.defaultAgentId}
+            agentItems={chatAgents?.items ?? []}
+            onAgentRouteChange={(acc, aid) => updateChannelAgentRoute('weixin', acc, aid)}
+            routingDisabled={saving}
           />
         </div>
         <Button
@@ -1014,6 +1107,18 @@ export function ChannelsSettingsPanel() {
                 />
                 <FieldHint>{ch.allowFromDmDesc}</FieldHint>
               </div>
+
+              {form ? (
+                <ChannelAgentRoutingBlock
+                  accountIds={telegramRoutingAccountIds(tg)}
+                  routes={form.channelAgentRoutes.telegram}
+                  defaultAgentId={form.defaultAgentId}
+                  agentItems={chatAgents?.items ?? []}
+                  disabled={saving}
+                  onChange={(acc, aid) => updateChannelAgentRoute('telegram', acc, aid)}
+                  ch={ch}
+                />
+              ) : null}
 
               <Button
                 type="button"
@@ -1250,6 +1355,11 @@ function WeixinAdvanced({
   setWxAccountsDraft,
   wxAccountsError,
   onWxAccountsBlur,
+  channelAgentRoutesWx,
+  defaultAgentId,
+  agentItems,
+  onAgentRouteChange,
+  routingDisabled,
 }: {
   wx: ChannelsSettingsState['weixin'];
   updateWeixin: (p: Partial<ChannelsSettingsState['weixin']>) => void;
@@ -1260,6 +1370,11 @@ function WeixinAdvanced({
   setWxAccountsDraft: (s: string) => void;
   wxAccountsError: string;
   onWxAccountsBlur: () => void;
+  channelAgentRoutesWx: Record<string, string>;
+  defaultAgentId: string;
+  agentItems: { id: string; name?: string }[];
+  onAgentRouteChange: (accountId: string, agentId: string) => void;
+  routingDisabled: boolean;
 }) {
   return (
     <div className="space-y-4 border-t border-edge-subtle pt-4 dark:border-edge">
@@ -1349,6 +1464,16 @@ function WeixinAdvanced({
           <FieldHint>{ch.weixinAccountsJsonDesc}</FieldHint>
         )}
       </div>
+
+      <ChannelAgentRoutingBlock
+        accountIds={weixinRoutingAccountIds(wx)}
+        routes={channelAgentRoutesWx}
+        defaultAgentId={defaultAgentId}
+        agentItems={agentItems}
+        disabled={routingDisabled}
+        onChange={onAgentRouteChange}
+        ch={ch}
+      />
     </div>
   );
 }

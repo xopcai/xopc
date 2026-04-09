@@ -71,10 +71,13 @@ export class SessionManager {
     return { messages, hasMore: raw.length >= 50, name };
   }
 
-  async createSession(): Promise<SessionInfo> {
+  async createSession(options?: { agentId?: string }): Promise<SessionInfo> {
+    const body: Record<string, unknown> = { channel: 'webchat' };
+    const raw = options?.agentId?.trim();
+    if (raw) body.agentId = raw.toLowerCase();
     const res = await apiFetch(apiUrl('/api/sessions'), {
       method: 'POST',
-      body: JSON.stringify({ channel: 'webchat' }),
+      body: JSON.stringify(body),
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as { session: SessionInfo };
