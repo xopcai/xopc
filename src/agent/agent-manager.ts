@@ -34,6 +34,12 @@ import { resolve, sep } from 'node:path';
 import { BuiltinMemoryStore } from './memory/builtin-memory-store.js';
 import { createMemoryManagerFromConfig } from './memory/create-memory-manager.js';
 import { injectPrefetchIntoUserMessage } from './memory/inject-prefetch.js';
+import {
+  isCuratedMemoryInPrompt,
+  isMemorySubsystemEnabled,
+  resolveBuiltinMemoryStoreConfig,
+  shouldInjectMemoryPrefetchThisTurn,
+} from './memory/memory-config.js';
 import type { MemoryManager } from './memory/manager.js';
 import type { MemorySnapshot } from './memory/types.js';
 import { extractAgentUserPlainText } from './memory/user-message-text.js';
@@ -87,18 +93,18 @@ export class AgentManager {
   private bootstrapFiles: ReturnType<typeof loadBootstrapFiles>;
   private credentialCache = new Map<string, string>();
   private credentialResolver: CredentialResolver;
-  private readonly builtinMemoryStore: BuiltinMemoryStore;
+  private builtinMemoryStore: BuiltinMemoryStore;
   private memoryManager: MemoryManager;
+  /** Per-session user-message index for prefetch injection cadence. */
+  private memoryPrefetchUserTurn = new Map<string, number>();
 
   constructor(config: AgentManagerConfig) {
     this.config = config;
     this.bootstrapFiles = loadBootstrapFiles(config.workspace);
 
-    this.builtinMemoryStore = new BuiltinMemoryStore({
-      workspaceDir: config.workspace,
-      memoryCharLimit: 2200,
-      userCharLimit: 1375,
-    });
+    this.builtinMemoryStore = new BuiltinMemoryStore(
+      resolveBuiltinMemoryStoreConfig(config.workspace, config.config),
+    );
 
     this.memoryManager = createMemoryManagerFromConfig(
       config.workspace,
@@ -141,6 +147,9 @@ export class AgentManager {
     const ref = getAgentDefaultModelRef(config);
     this.config.model = ref;
     this.defaultModel = ref || getDefaultModelSync(config);
+    this.builtinMemoryStore = new BuiltinMemoryStore(
+      resolveBuiltinMemoryStoreConfig(this.config.workspace, config),
+    );
     void this.memoryManager.shutdownAll().catch(() => {});
     this.memoryManager = createMemoryManagerFromConfig(
       this.config.workspace,
@@ -160,7 +169,15 @@ export class AgentManager {
     userMessage: AgentMessage,
     sessionKey: string,
   ): Promise<AgentMessage> {
+    if (!isMemorySubsystemEnabled(this.config.config)) {
+      return userMessage;
+    }
     const plain = extractAgentUserPlainText(userMessage);
+    const turn = (this.memoryPrefetchUserTurn.get(sessionKey) ?? 0) + 1;
+    this.memoryPrefetchUserTurn.set(sessionKey, turn);
+    if (!shouldInjectMemoryPrefetchThisTurn(this.config.config, turn)) {
+      return userMessage;
+    }
     return injectPrefetchIntoUserMessage(this.memoryManager, sessionKey, userMessage, plain);
   }
 
@@ -168,6 +185,9 @@ export class AgentManager {
    * After a completed turn: sync external providers and queue next-turn prefetch.
    */
   afterAgentTurn(sessionKey: string, userPlainText: string): void {
+    if (!isMemorySubsystemEnabled(this.config.config)) {
+      return;
+    }
     const assistant = this.getLastAssistantContent(sessionKey) ?? '';
     this.memoryManager.syncAll(userPlainText, assistant, { sessionId: sessionKey });
     this.memoryManager.queuePrefetchAll(userPlainText, { sessionId: sessionKey });
@@ -255,12 +275,15 @@ export class AgentManager {
       return existing.agent;
     }
 
-    void this.memoryManager
-      .initializeAll(sessionKey, { workspace: this.config.workspace })
-      .catch((err) => log.warn({ err, sessionKey }, 'memory initializeAll failed'));
+    if (isMemorySubsystemEnabled(this.config.config)) {
+      void this.memoryManager
+        .initializeAll(sessionKey, { workspace: this.config.workspace })
+        .catch((err) => log.warn({ err, sessionKey }, 'memory initializeAll failed'));
+    }
 
     const agent = this.createAgent();
-    const snap = this.builtinMemoryStore.getSnapshot();
+    const curatedOn = isCuratedMemoryInPrompt(this.config.config);
+    const snap = curatedOn ? this.builtinMemoryStore.getSnapshot() : { memory: '', user: '' };
     this.agents.set(sessionKey, {
       agent,
       sessionKey,
@@ -295,6 +318,7 @@ export class AgentManager {
     if (instance) {
       instance.agent.abort();
       this.agents.delete(sessionKey);
+      this.memoryPrefetchUserTurn.delete(sessionKey);
       log.info({ sessionKey, totalAgents: this.agents.size }, 'Removed agent instance');
       return true;
     }
@@ -334,6 +358,7 @@ export class AgentManager {
       instance.agent.abort();
     }
     this.agents.clear();
+    this.memoryPrefetchUserTurn.clear();
     void this.memoryManager.shutdownAll().catch(() => {});
     log.debug('All agent instances disposed');
   }
@@ -366,8 +391,11 @@ export class AgentManager {
     const tools = this.toolsFactory.createAllTools();
     const model = this.resolveModel();
 
-    this.builtinMemoryStore.loadFromDiskSync();
-    const snap = this.builtinMemoryStore.getSnapshot();
+    const curatedOn = isCuratedMemoryInPrompt(this.config.config);
+    if (curatedOn) {
+      this.builtinMemoryStore.loadFromDiskSync();
+    }
+    const snap = curatedOn ? this.builtinMemoryStore.getSnapshot() : { memory: '', user: '' };
     const curatedMemorySnapshot: MemorySnapshot = {
       memory: snap.memory,
       user: snap.user,

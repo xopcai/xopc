@@ -8,6 +8,8 @@ export interface MemoryStoreConfig {
   memoryCharLimit: number;
   /** Max chars for USER.md entries. */
   userCharLimit: number;
+  /** When false, USER.md is not loaded into the snapshot or shown in the system prompt. */
+  userProfileEnabled?: boolean;
 }
 
 /** Frozen at session start; not updated when tools mutate disk mid-session. */

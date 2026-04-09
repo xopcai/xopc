@@ -3,6 +3,13 @@ export { BuiltinMemoryProvider } from './builtin-provider.js';
 export { buildMemoryContextBlock, sanitizeMemoryContextFenceEscapes } from './context-fence.js';
 export { createMemoryManagerFromConfig } from './create-memory-manager.js';
 export { injectPrefetchIntoUserMessage } from './inject-prefetch.js';
+export {
+  isCuratedMemoryInPrompt,
+  isMemorySubsystemEnabled,
+  resolveBuiltinMemoryStoreConfig,
+  shouldInjectMemoryPrefetchThisTurn,
+  shouldRegisterCuratedMemoryTool,
+} from './memory-config.js';
 export { MemoryManager } from './manager.js';
 export { discoverMemoryPlugins } from './plugin-discovery.js';
 export type { MemoryPluginMetadata } from './plugin-discovery.js';

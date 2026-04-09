@@ -22,6 +22,11 @@ export class BuiltinMemoryStore {
 
   constructor(private readonly config: MemoryStoreConfig) {}
 
+  /** When false, USER.md is omitted from the snapshot and should not be edited via `curated_memory`. */
+  isUserProfileEnabled(): boolean {
+    return this.config.userProfileEnabled !== false;
+  }
+
   private get memDir(): string {
     return join(this.config.workspaceDir, '.xopcbot', 'memories');
   }
@@ -38,7 +43,10 @@ export class BuiltinMemoryStore {
     this.memoryEntries = this.parseFileContent(
       this.readPathSync(join(this.memDir, 'MEMORY.md')),
     );
-    this.userEntries = this.parseFileContent(this.readPathSync(join(this.memDir, 'USER.md')));
+    this.userEntries =
+      this.config.userProfileEnabled === false
+        ? []
+        : this.parseFileContent(this.readPathSync(join(this.memDir, 'USER.md')));
     this.memoryEntries = dedupePreserveOrder(this.memoryEntries);
     this.userEntries = dedupePreserveOrder(this.userEntries);
     this.snapshot = {

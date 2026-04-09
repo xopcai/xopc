@@ -37,6 +37,7 @@
     "build:web": "pnpm -C web run build",
     "dev:web": "pnpm -C web run dev",
     "dev": "tsx src/cli/index.ts",
+    "migrate:memory": "tsx scripts/migrate-memory.ts",
     "start": "node dist/src/cli/index.js",
     "test": "vitest run src extensions/telegram/src",
     "test:skills": "vitest run src/agent/skills/__tests__",
