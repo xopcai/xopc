@@ -144,6 +144,37 @@ xopcbot onboard
 
 模型 ID 格式：`provider/model-id`（如 `anthropic/claude-opus-4-5`）。
 
+#### agents.defaults.memory
+
+**`<workspace>/.xopcbot/memories/`** 下的托管长期记忆（`MEMORY.md` / `USER.md`）、可选的 **stub** 外部记忆后端（用于接线测试），以及用户轮次上 **prefetch** 注入（在用户消息前加 `<memory-context>` 围栏）的控制项。目录与迁移说明见 [托管记忆](zh/workspace.md#curated-memory)。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `enabled` | boolean | `true` | 总开关。为 `false` 时：无 curated 快照、无 `curated_memory` 工具、不加载外部 memory 提供方、不做 prefetch/sync。 |
+| `useEnhancedSystem` | boolean | `true` | 为 `false` 时：关闭 curated 快照与 `curated_memory`；工作区引导里的根目录 `MEMORY.md` 仍会通过 bootstrap 参与提示。 |
+| `userProfileEnabled` | boolean | `true` | 为 `false` 时：系统提示不包含 `USER.md`；`curated_memory` 不能修改 `user` 目标（仍可读）。 |
+| `memoryCharLimit` | number | `2200` | `MEMORY.md` 条目合计字符上限。 |
+| `userCharLimit` | number | `1375` | `USER.md` 条目合计字符上限。 |
+| `provider` | string | `none` | 外部提供方：`none` 或 `stub`（`enabled` 为 `false` 时不生效）。 |
+| `injectionFrequency` | string | `every-turn` | Prefetch 注入策略：`every-turn` 或 `first-turn`（仅会话中第一条用户消息）。 |
+| `contextCadence` | number | `1` | 当 `injectionFrequency` 为 `every-turn` 时，在第 1、1+N、1+2N… 轮注入 prefetch（最小为 `1`）。 |
+| `dialecticCadence` | number | — | 预留字段，供将来外部 dialectic 同步节奏使用（尚未接线）。 |
+
+**迁移**：将工作区根目录的 `MEMORY.md` 一次性复制到 curated 路径：
+
+```bash
+pnpm run migrate:memory [workspaceDir]
+# 或: XOPCBOT_WORKSPACE=/path/to/workspace pnpm run migrate:memory
+```
+
+#### agents.defaults.sessionSearch
+
+跨会话 transcript 检索（`session_search` 工具，需会话持久化可用时注册）。
+
+| 字段 | 类型 | 默认值 | 说明 |
+|------|------|--------|------|
+| `summaryModel` | string | — | 按会话摘要所用模型（如 `openai/gpt-4o-mini`）。设置后优先于环境变量 `XOPCBOT_SESSION_SEARCH_MODEL`。 |
+
 ---
 
 ### providers
@@ -469,6 +500,7 @@ xopcbot 支持环境变量存储敏感数据：
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `XOPCBOT_CONFIG` | 自定义配置文件路径 |
 | `XOPCBOT_WORKSPACE` | 自定义工作区目录 |
+| `XOPCBOT_SESSION_SEARCH_MODEL` | 未设置 `agents.defaults.sessionSearch.summaryModel` 时，`session_search` 摘要使用的默认模型 |
 | `XOPCBOT_LOG_LEVEL` | 日志级别（trace/debug/info/warn/error/fatal） |
 | `XOPCBOT_LOG_DIR` | 日志目录路径 |
 | `XOPCBOT_LOG_CONSOLE` | 启用控制台输出（true/false） |

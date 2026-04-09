@@ -80,6 +80,16 @@ These files are loaded into the system prompt (see `src/agent/context/workspace.
 | `.sessions/config/` | Per-session overrides stored by the agent service (e.g. model override), under the **configured** workspace path. |
 | `.xopcbot/inbound/<session>/` | Persisted inbound attachments (non-image with binary data) for stable paths in transcripts and `read_file`. |
 
+### Curated memory (`.xopcbot/memories/`) {#curated-memory}
+
+Separate from workspace root `MEMORY.md` (bootstrap) and from `memory/*.md` (searchable snippets), **`workspace/.xopcbot/memories/`** holds **bounded, §-delimited** entries in `MEMORY.md` (agent notes) and `USER.md` (user profile). A frozen snapshot is injected into the system prompt when enhanced memory is enabled; the agent can update live files via the **`curated_memory`** tool. Behavior and limits are configured under **`agents.defaults.memory`** ([Configuration](configuration.md)).
+
+To **import** an existing workspace-level `MEMORY.md` into curated storage without overwriting non-empty targets, run from the repo (or use `pnpm exec tsx` with the same script path):
+
+```bash
+pnpm run migrate:memory /path/to/workspace
+```
+
 ## Which path is “the” workspace at runtime?
 
 Two related ideas:

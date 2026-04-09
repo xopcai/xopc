@@ -33,6 +33,8 @@ Memory files support dynamic updates:
 
 The agent can search and read memories via `memory_search` and `memory_get` tools.
 
+**Curated memory** (optional): **`workspace/.xopcbot/memories/MEMORY.md`** and **`USER.md`** hold bounded, tool-edited entries separate from the root `MEMORY.md` above. See [Curated memory](../workspace.md#curated-memory) and [Configuration](../configuration.md) (`agents.defaults.memory`).
+
 ## Editing Tips
 
 - Use Markdown format

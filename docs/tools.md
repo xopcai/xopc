@@ -11,7 +11,7 @@ xopcbot provides a comprehensive set of built-in tools for the Agent to use.
 | **Shell** | `shell` |
 | **Web** | `web_search`, `web_fetch` |
 | **Communication** | `send_message` |
-| **Memory** | `memory_search`, `memory_get` |
+| **Memory** | `memory_search`, `memory_get`, `curated_memory` (optional), `session_search` (optional) |
 
 ---
 
@@ -353,6 +353,22 @@ Read snippets from memory files.
 
 ---
 
+### 🧠 curated_memory
+
+Read or edit **bounded** curated memory under **`<workspace>/.xopcbot/memories/`** (`MEMORY.md` and `USER.md`), with entries separated by a section-sign delimiter. The system prompt includes a **frozen snapshot** from session start; this tool reads and writes **live** state on disk. Disabled when `agents.defaults.memory.enabled` is `false` or `useEnhancedSystem` is `false`. If `userProfileEnabled` is `false`, mutations targeting the user profile are rejected (reads still work).
+
+See [Configuration](configuration.md) (**agents.defaults.memory**) and [Curated memory](workspace.md#curated-memory).
+
+---
+
+### 🔎 session_search
+
+Search **other sessions’** transcripts (keyword or semantic-style query with optional LLM summaries per session). Requires session persistence and agent wiring; model for summaries: `agents.defaults.sessionSearch.summaryModel` or `XOPCBOT_SESSION_SEARCH_MODEL`.
+
+See [Configuration](configuration.md) (**agents.defaults.sessionSearch**).
+
+---
+
 ## Security Limits
 
 | Operation | Limit |
@@ -430,7 +446,7 @@ See [Progress Documentation](/progress) for details.
 
 ## Best Practices
 
-1. **Use memory tools first**: Call `memory_search` before answering questions about previous work
+1. **Use memory tools when relevant**: Call `memory_search` / `memory_get` for workspace `memory/` files; use `session_search` for cross-session history when available; use `curated_memory` only when enhanced curated memory is enabled
 2. **Respect limits**: Be aware of truncation limits for large files/outputs
 3. **Error handling**: Tools return errors gracefully - agent should handle them
 4. **Progress feedback**: Long-running tools automatically show progress
