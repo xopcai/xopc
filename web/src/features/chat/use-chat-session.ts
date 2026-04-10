@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
+import useSWR from 'swr';
 
 import {
   coerceReasoningLevel,
@@ -11,7 +12,9 @@ import {
 import type { SessionInfo } from '@/features/chat/chat.types';
 import { modelSupportsReasoning } from '@/features/chat/model-capabilities';
 import { pendingAgentRunStorageKey, MessageSender } from '@/features/chat/message-sender';
-import { SessionManager } from '@/features/chat/session-manager';
+import { fetchChatAgents } from '@/features/chat/chat-agents-api';
+import { SessionManager, isWebUiSessionKey } from '@/features/chat/session-manager';
+import { getAgentIdFromWebSessionKey } from '@/lib/web-session-agent';
 import { mergeConsecutiveAssistantMessages } from '@/features/chat/agent-messages';
 import {
   appendThinkingDelta,
@@ -30,11 +33,97 @@ import { useGatewayStore } from '@/stores/gateway-store';
 const DEFAULT_THINKING = 'medium';
 const DEFAULT_REASONING: ReasoningLevel = 'off';
 
+const WEBCHAT_AGENT_STORAGE_KEY = 'xopcbot.webchat.agentId';
+
+function readStoredWebchatAgentId(): string | null {
+  if (typeof globalThis.localStorage === 'undefined') return null;
+  try {
+    const v = globalThis.localStorage.getItem(WEBCHAT_AGENT_STORAGE_KEY)?.trim().toLowerCase();
+    return v || null;
+  } catch {
+    return null;
+  }
+}
+
+function pickEmptyWebSessionForAgent(
+  sessions: SessionInfo[],
+  agentId: string | undefined,
+): SessionInfo | undefined {
+  if (!agentId) return undefined;
+  return sessions.find(
+    (s) =>
+      isWebUiSessionKey(s.key) &&
+      (s.messageCount ?? 0) === 0 &&
+      getAgentIdFromWebSessionKey(s.key) === agentId,
+  );
+}
+
 export function useChatSession() {
   const navigate = useNavigate();
   const location = useLocation();
   const { sessionKey: sessionKeyParam } = useParams();
   const token = useGatewayStore((s) => s.token);
+
+  const { data: chatAgentsData, mutate: mutateChatAgents } = useSWR(
+    token ? ['gateway-chat-agents', token] : null,
+    fetchChatAgents,
+    { revalidateOnFocus: false },
+  );
+
+  useEffect(() => {
+    const onConfigReload = () => void mutateChatAgents();
+    window.addEventListener('config-reload', onConfigReload as EventListener);
+    return () => window.removeEventListener('config-reload', onConfigReload as EventListener);
+  }, [mutateChatAgents]);
+
+  const [preferredAgentId, setPreferredAgentId] = useState<string | null>(() => readStoredWebchatAgentId());
+  const chatAgentsRef = useRef(chatAgentsData ?? null);
+  const preferredAgentIdRef = useRef<string | null>(readStoredWebchatAgentId());
+
+  useEffect(() => {
+    chatAgentsRef.current = chatAgentsData ?? null;
+  }, [chatAgentsData]);
+
+  useEffect(() => {
+    preferredAgentIdRef.current = preferredAgentId;
+  }, [preferredAgentId]);
+
+  useEffect(() => {
+    if (!chatAgentsData) return;
+    const valid = new Set(chatAgentsData.items.map((i) => i.id));
+    setPreferredAgentId((cur) => {
+      if (cur == null || cur === '') return chatAgentsData.defaultId;
+      if (!valid.has(cur)) return chatAgentsData.defaultId;
+      return cur;
+    });
+  }, [chatAgentsData]);
+
+  const resolveAgentIdForPost = useCallback((): string | undefined => {
+    const agents = chatAgentsRef.current;
+    const pref = (preferredAgentIdRef.current ?? '').trim().toLowerCase();
+    if (!agents) return pref || undefined;
+    const valid = new Set(agents.items.map((i) => i.id));
+    if (pref && valid.has(pref)) return pref;
+    return agents.defaultId;
+  }, []);
+
+  const onChatAgentChange = useCallback(
+    (id: string) => {
+      const next = id.trim().toLowerCase();
+      setPreferredAgentId(next);
+      try {
+        globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, next);
+      } catch {
+        /* noop */
+      }
+      const curKey = sessionKeyRef.current;
+      const curAgent = curKey ? getAgentIdFromWebSessionKey(curKey) : null;
+      if (curAgent !== next) {
+        navigate('/chat/new', { replace: false });
+      }
+    },
+    [navigate],
+  );
 
   const sessionMgrRef = useRef(new SessionManager());
   const senderRef = useRef(new MessageSender());
@@ -83,6 +172,18 @@ export function useChatSession() {
   useEffect(() => {
     messagesLenRef.current = messages.length;
   }, [messages.length]);
+
+  useEffect(() => {
+    if (!sessionKey) return;
+    const a = getAgentIdFromWebSessionKey(sessionKey);
+    if (!a) return;
+    setPreferredAgentId((p) => (a !== p ? a : p));
+    try {
+      globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, a);
+    } catch {
+      /* noop */
+    }
+  }, [sessionKey]);
 
   const isNewRoute = location.pathname.endsWith('/new');
   const decodedKey = sessionKeyParam ? decodeURIComponent(sessionKeyParam) : undefined;
@@ -227,7 +328,10 @@ export function useChatSession() {
             await loadSessionById(target.key, 0);
           } else {
             try {
-              const session = await sessionMgrRef.current.createSession();
+              const aid = resolveAgentIdForPost();
+              const session = await sessionMgrRef.current.createSession(
+                aid ? { agentId: aid } : undefined,
+              );
               navigateToSession(session.key);
               setSessionKey(session.key);
               setMessages([]);
@@ -250,7 +354,7 @@ export function useChatSession() {
         loadingSessionRef.current = false;
       }
     },
-    [navigateToSession, refreshModelThinkingSupport],
+    [navigateToSession, refreshModelThinkingSupport, resolveAgentIdForPost],
   );
 
   const loadMoreMessages = useCallback(async () => {
@@ -282,7 +386,8 @@ export function useChatSession() {
   const createNewSession = useCallback(async () => {
     try {
       const sessions = await sessionMgrRef.current.loadSessions();
-      const empty = sessions.find((s) => (s.messageCount ?? 0) === 0);
+      const aid = resolveAgentIdForPost();
+      const empty = pickEmptyWebSessionForAgent(sessions, aid);
       if (empty) {
         setSessionKey(empty.key);
         setSessionName(empty.name ?? null);
@@ -300,7 +405,9 @@ export function useChatSession() {
         }
         return;
       }
-      const session = await sessionMgrRef.current.createSession();
+      const session = await sessionMgrRef.current.createSession(
+        aid ? { agentId: aid } : undefined,
+      );
       setSessionKey(session.key);
       setSessionName(session.name ?? null);
       setMessages([]);
@@ -318,7 +425,7 @@ export function useChatSession() {
     } catch (err) {
       console.error('[chat] createNewSession failed:', err);
     }
-  }, [navigateToSession, refreshModelThinkingSupport]);
+  }, [navigateToSession, refreshModelThinkingSupport, resolveAgentIdForPost]);
 
   const tryResumeAgentRun = useCallback(async (chatId: string) => {
     const sender = senderRef.current;
@@ -746,7 +853,8 @@ export function useChatSession() {
         if (isNewRoute) {
           const sessions = await sessionMgrRef.current.loadSessions();
           if (cancelled || gen !== initGenRef.current) return;
-          const empty = sessions.find((s) => (s.messageCount ?? 0) === 0);
+          const aid = resolveAgentIdForPost();
+          const empty = pickEmptyWebSessionForAgent(sessions, aid);
           if (empty) {
             setSessionKey(empty.key);
             setSessionName(empty.name ?? null);
@@ -763,7 +871,9 @@ export function useChatSession() {
               /* ignore */
             }
           } else {
-            const session = await sessionMgrRef.current.createSession();
+            const session = await sessionMgrRef.current.createSession(
+              aid ? { agentId: aid } : undefined,
+            );
             if (cancelled || gen !== initGenRef.current) return;
             setSessionKey(session.key);
             setSessionName(session.name ?? null);
@@ -797,7 +907,10 @@ export function useChatSession() {
             if (!keyFromUrl) navigateToSession(target.key);
             await tryResumeAgentRun(target.key);
           } else {
-            const session = await sessionMgrRef.current.createSession();
+            const aid = resolveAgentIdForPost();
+            const session = await sessionMgrRef.current.createSession(
+              aid ? { agentId: aid } : undefined,
+            );
             if (cancelled || gen !== initGenRef.current) return;
             setSessionKey(session.key);
             setSessionName(session.name ?? null);
@@ -826,7 +939,23 @@ export function useChatSession() {
     return () => {
       cancelled = true;
     };
-  }, [token, isNewRoute, decodedKey, navigateToSession, loadSessionById, tryResumeAgentRun, refreshModelThinkingSupport]);
+  }, [
+    token,
+    isNewRoute,
+    decodedKey,
+    navigateToSession,
+    loadSessionById,
+    tryResumeAgentRun,
+    refreshModelThinkingSupport,
+    resolveAgentIdForPost,
+  ]);
+
+  const displayAgentId =
+    (sessionKey && getAgentIdFromWebSessionKey(sessionKey)) ||
+    preferredAgentId ||
+    chatAgentsData?.defaultId ||
+    'main';
+  const showChatAgentSelector = (chatAgentsData?.items.length ?? 0) > 1;
 
   return {
     messages: displayMessages,
@@ -853,5 +982,9 @@ export function useChatSession() {
     sendMessage,
     abort,
     hasToken: Boolean(token),
+    chatAgents: chatAgentsData,
+    displayAgentId,
+    showChatAgentSelector,
+    onChatAgentChange,
   };
 }

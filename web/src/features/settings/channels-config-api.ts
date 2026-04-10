@@ -1,6 +1,13 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
+import {
+  extractChannelAgentRoutes,
+  mergeChannelAgentBindings,
+  telegramRoutingAccountIds,
+  weixinRoutingAccountIds,
+  type BindingRuleWire,
+} from './channel-bindings-merge';
 import type {
   ChannelsSettingsState,
   DmPolicy,
@@ -21,6 +28,9 @@ export type { DmPolicy, GroupPolicy, ReplyToMode, StreamMode };
 
 export function defaultChannelsState(): ChannelsSettingsState {
   return {
+    bindingsFull: [],
+    channelAgentRoutes: { telegram: {}, weixin: {} },
+    defaultAgentId: 'main',
     telegram: {
       enabled: false,
       botToken: '',
@@ -69,7 +79,23 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
       ? (weixinAccounts as Record<string, WeixinAccount>)
       : {};
 
-  return {
+  const bindingsRaw = (() => {
+    const cfgObj = config && typeof config === 'object' ? (config as Record<string, unknown>) : {};
+    const b = cfgObj.bindings;
+    return Array.isArray(b) ? (b as BindingRuleWire[]) : [];
+  })();
+
+  const agents = (() => {
+    const cfgObj = config && typeof config === 'object' ? (config as Record<string, unknown>) : {};
+    const a = cfgObj.agents;
+    return a && typeof a === 'object' ? (a as Record<string, unknown>) : {};
+  })();
+  const defaultAgentId =
+    typeof agents.defaultId === 'string' && agents.defaultId.trim()
+      ? agents.defaultId.trim().toLowerCase()
+      : 'main';
+
+  const base = {
     telegram: {
       enabled: Boolean(tg?.enabled),
       botToken: typeof tg?.botToken === 'string' ? tg.botToken : '',
@@ -97,6 +123,17 @@ export function normalizeChannelsFromConfig(config: unknown): ChannelsSettingsSt
       routeTag: wx?.routeTag != null ? String(wx.routeTag) : '',
       accounts: { ...wxAcc },
     },
+  };
+
+  const tgIds = telegramRoutingAccountIds(base.telegram);
+  const wxIds = weixinRoutingAccountIds(base.weixin);
+  const channelAgentRoutes = extractChannelAgentRoutes(bindingsRaw, tgIds, wxIds, defaultAgentId);
+
+  return {
+    ...base,
+    bindingsFull: bindingsRaw.map((r) => ({ ...r })),
+    channelAgentRoutes,
+    defaultAgentId,
   };
 }
 
@@ -132,18 +169,26 @@ export async function fetchWeixinGatewayQrLoginStatus(
   return res.payload.status;
 }
 
-export async function patchChannelsSettings(state: ChannelsSettingsState): Promise<void> {
+export async function patchChannelsSettings(state: ChannelsSettingsState): Promise<ChannelsSettingsState> {
   const tg = state.telegram;
   const wx = state.weixin;
+  const mergedBindings = mergeChannelAgentBindings(
+    state.bindingsFull,
+    state.channelAgentRoutes,
+    telegramRoutingAccountIds(tg),
+    weixinRoutingAccountIds(wx),
+    state.defaultAgentId,
+  );
   const weixinRouteTag: string | number | null = (() => {
     const raw = wx.routeTag.trim();
     if (!raw) return null;
     return /^\d+$/.test(raw) ? Number(raw) : raw;
   })();
 
-  await fetchJson(apiUrl('/api/config'), {
+  const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'), {
     method: 'PATCH',
     body: JSON.stringify({
+      bindings: mergedBindings,
       channels: {
         telegram: {
           enabled: tg.enabled,
@@ -176,4 +221,10 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
       },
     }),
   });
+  const c = res.payload?.config;
+  if (c) return normalizeChannelsFromConfig(c);
+  return {
+    ...state,
+    bindingsFull: mergedBindings,
+  };
 }
