@@ -31,6 +31,7 @@ pnpm run dev -- <command>
 |---------|-------------|
 | `setup` | Initialize config and workspace |
 | `onboard` | Interactive setup wizard |
+| `agents` | Manage multi-agent entries in config (`list`, add, delete) |
 | `agent` | Chat with Agent |
 | `gateway` | Start REST gateway |
 | `cron` | Manage scheduled tasks |
@@ -106,6 +107,27 @@ xopcbot onboard --channels
 - Configure LLM provider and model
 - Configure messaging channels (Telegram)
 - Configure gateway WebUI with auto-generated token
+
+---
+
+## agents
+
+Manage **`agents.list`** in `config.json` (OpenClaw-style). Paths for workspace and `~/.xopcbot/agents/<id>/` follow the merged config — there is no separate env-based agent registry.
+
+| Subcommand | Description |
+|------------|-------------|
+| `agents list` | Print configured agents and the resolved default agent id (`--json` supported). |
+| `agents add <name>` | **Requires** `--workspace <dir>`. Appends/updates `agents.list`, creates dirs, seeds Markdown bootstrap. Optional: `--model`, `--agent-dir`. |
+| `agents delete <id>` | Removes the agent from `list` and strips matching **`bindings`**. Add **`--purge`** to delete on-disk agent home and workspace (not allowed for `main`). |
+
+Examples:
+
+```bash
+xopcbot agents list
+xopcbot agents add coder --workspace ~/xopcbot-workspaces/coder --model anthropic/claude-sonnet-4-5
+xopcbot agents delete coder
+xopcbot agents delete coder --purge
+```
 
 ---
 

@@ -36,6 +36,7 @@ pnpm run dev -- <command>
 |------|------|
 | `setup` | 初始化配置文件和工作区目录 |
 | `onboard` | 交互式设置向导（LLM、渠道、Gateway） |
+| `agents` | 管理 `config.json` 中的多 Agent（`agents.list`：列出、添加、删除） |
 | `agent` | 与 Agent 对话 |
 | `gateway` | 启动 REST 网关 |
 | `cron` | 管理定时任务 |
@@ -116,9 +117,28 @@ xopcbot onboard --gateway
 - 配置 Gateway WebUI 并自动生成 Token
 - 完成后显示启动网关的命令
 
-**完成后**：
+---
 
-onboard 完成后会显示：
+## agents
+
+管理 **`agents.list`**（OpenClaw 风格）。工作区与 `~/.xopcbot/agents/<id>/` 等路径均由 **配置合并结果** 决定，**不再**使用独立于配置之外的 agent 注册表或 `XOPCBOT_AGENT_ID` 环境变量。
+
+| 子命令 | 说明 |
+|--------|------|
+| `agents list` | 列出已配置的 agent 与当前解析的默认 agent id（可加 `--json`）。 |
+| `agents add <name>` | **必须**提供 `--workspace <dir>`。写入/更新 `agents.list`，创建目录并种子化 Markdown 引导文件。可选：`--model`、`--agent-dir`。 |
+| `agents delete <id>` | 从 `list` 移除该 id，并清理相关的 **`bindings`**。加 **`--purge`** 时同时删除磁盘上的 agent 主目录与工作区（**不可**删除 `main`）。 |
+
+示例：
+
+```bash
+xopcbot agents list
+xopcbot agents add coder --workspace ~/xopcbot-workspaces/coder --model anthropic/claude-sonnet-4-5
+xopcbot agents delete coder
+xopcbot agents delete coder --purge
+```
+
+**Onboard 完成后**会显示：
 - Gateway 访问 URL
 - Token 信息
 - 启动网关的命令

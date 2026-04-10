@@ -117,7 +117,7 @@ xopcbot onboard
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `default` | string | 可选。未在会话键/API 中指定 agent 时使用的默认 id。未设置时：取 **`list` 中第一个 enabled 的 id**，否则为 **`main`**。 |
+| `default` | string | 可选。未在会话键/API 中指定 agent 时使用的默认 id。未设置时：取 **`list` 中带 `default: true` 的条目**，否则 **`list` 中第一个 enabled 的 id**，否则 **`main`**。 |
 | `defaults` | object | 全局基线，见下文 **agents.defaults**。 |
 | `list` | array | 多条 agent 身份；每条可覆盖字段，见 **agents.list 条目**。 |
 
@@ -128,9 +128,11 @@ xopcbot onboard
 | 字段 | 类型 | 说明 |
 |------|------|------|
 | `id` | string | Agent id（也是 session key 的第一段）。 |
+| `default` | boolean | 可选。为 `true` 时，在**未**设置顶层 **`agents.default`** 的情况下将该条目标记为默认 agent（OpenClaw 风格）。 |
 | `name` | string | 显示名称。 |
 | `enabled` | boolean | 默认 `true`。为 `false` 时该 id 不参与路由默认，且有效配置解析会回退到默认 agent。 |
 | `workspace` | string | 可选。该 agent 的工作区根路径（支持 `~`）。引导文件、入站附件、`.xopcbot/memories/` 均相对此路径。 |
+| `agentDir` | string | 可选。覆盖 **内部** agent 状态目录（凭证、`agent.json`、收件箱、pid 等），默认 `<stateDir>/agents/<id>/agent`。 |
 | `model` | string \| object | 同 `agents.defaults.model`（字符串或 `{ primary, fallbacks }`）。 |
 | `thinkingDefault` | string | 可选：`off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`adaptive`。 |
 | `reasoningDefault` | string | 可选：`off`、`on`、`stream`。 |
@@ -142,7 +144,7 @@ xopcbot onboard
 
 同类可选字段也可写在 **`agents.defaults`** 里作为全局默认（例如 `agents.defaults.tools.disable` 会与每条 list 的 disable **合并**）。
 
-**说明：** `~/.xopcbot/agents/<id>/` 磁盘布局（`agent-manage` CLI）与 **`config.json` 的 `agents.list`** 是两套机制；网关/运行时以 **配置文件** 为准，除非你有意同步二者。
+**说明：** 磁盘路径（`~/.xopcbot/agents/<id>/` 下的会话与内部状态、以及各 agent 的 Markdown 工作区）均按 **`config.json`** 解析（`agents.list`、`agents.defaults`、可选的 `agentDir`）。请使用 **`xopcbot agents add`** / **`agents delete`** 管理列表与目录；**不存在**独立于配置之外的 agent「注册表」。
 
 #### agents.defaults
 
