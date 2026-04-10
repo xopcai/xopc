@@ -1,5 +1,6 @@
 import { z } from 'zod';
-import { homedir } from 'os';
+
+import { getDefaultWorkspacePath } from '../agents/agent-scope.js';
 
 // ============================================
 // Agent Configs
@@ -107,10 +108,17 @@ export const AgentDefaultsSchema = z.object({
 
 export const AgentConfigSchema = z.object({
   id: z.string(),
+  /** When true, this entry is the default routing agent (OpenClaw-style). */
+  default: z.boolean().optional(),
   name: z.string().optional(),
   enabled: z.boolean().default(true),
   /** Per-agent workspace root (`~` expanded at runtime). */
   workspace: z.string().optional(),
+  /**
+   * Internal agent state directory (`…/credentials`, `agent.json`, pid, inbox).
+   * Default: `<stateDir>/agents/<id>/agent`.
+   */
+  agentDir: z.string().optional(),
   model: AgentModelRefSchema.optional(),
   thinkingDefault: z.enum(['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive']).optional(),
   reasoningDefault: z.enum(['off', 'on', 'stream']).optional(),
@@ -793,14 +801,10 @@ export interface ParsedModelRef {
 }
 
 /**
- * Resolve the workspace directory path from config.
+ * Default agent Markdown workspace (merged `agents.defaults` + `agents.list`, OpenClaw-style).
  */
 export function getWorkspacePath(config: Config): string {
-  const workspace = config.agents.defaults.workspace;
-  if (workspace.startsWith('~')) {
-    return workspace.replace('~', homedir());
-  }
-  return workspace;
+  return getDefaultWorkspacePath(config);
 }
 
 /**

@@ -142,6 +142,7 @@ export class GatewayService {
 
     // Initialize session manager
     this.sessionManager = new SessionManager({
+      config: this.config,
       workspace: this.workspacePath,
     });
 

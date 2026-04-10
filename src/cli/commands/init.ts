@@ -12,18 +12,19 @@ import {
   resolveBinDir,
   resolveToolsDir,
   resolveAgentDir,
-  resolveWorkspaceDir,
+  resolveAgentWorkspaceDir,
   resolveSessionsDir,
   resolveInboxDir,
   resolveConfigPath,
   resolveAgentMetadataPath,
   resolveInboxPendingDir,
   resolveInboxProcessedDir,
+  resolveAgentHomeDir,
   WORKSPACE_FILES,
   FILENAMES,
 } from '../../config/paths.js';
-import { resolveAgentHomeDir } from '../../config/agent-homedir.js';
 import { loadConfig, saveConfig } from '../../config/loader.js';
+import type { Config } from '../../config/schema.js';
 
 const log = createLogger('InitCommand');
 
@@ -69,35 +70,37 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   await mkdir(resolveBinDir(), { recursive: true });
   await mkdir(resolveToolsDir(), { recursive: true });
 
+  const configPath = resolveConfigPath();
+  const cfg = loadConfig(configPath);
+
   // ============================================
   // Create agent directory structure (OpenClaw: agents/<id>/{sessions,agent/}, workspace aside)
   // ============================================
-  await mkdir(resolveAgentHomeDir(agentId), { recursive: true });
-  await mkdir(resolveSessionsDir(agentId), { recursive: true });
-  await mkdir(join(resolveSessionsDir(agentId), 'archive'), { recursive: true });
-  await mkdir(resolveAgentDir(agentId), { recursive: true });
-  await mkdir(join(resolveAgentDir(agentId), 'credentials'), { recursive: true });
-  await mkdir(resolveWorkspaceDir(agentId), { recursive: true });
-  await mkdir(join(resolveWorkspaceDir(agentId), '.state'), { recursive: true });
-  await mkdir(join(resolveWorkspaceDir(agentId), 'memory'), { recursive: true });
-  await mkdir(resolveInboxDir(agentId), { recursive: true });
-  await mkdir(resolveInboxPendingDir(agentId), { recursive: true });
-  await mkdir(resolveInboxProcessedDir(agentId), { recursive: true });
+  await mkdir(resolveAgentHomeDir(cfg, agentId), { recursive: true });
+  await mkdir(resolveSessionsDir(cfg, agentId), { recursive: true });
+  await mkdir(join(resolveSessionsDir(cfg, agentId), 'archive'), { recursive: true });
+  await mkdir(resolveAgentDir(cfg, agentId), { recursive: true });
+  await mkdir(join(resolveAgentDir(cfg, agentId), 'credentials'), { recursive: true });
+  const wsRoot = resolveAgentWorkspaceDir(cfg, agentId);
+  await mkdir(wsRoot, { recursive: true });
+  await mkdir(join(wsRoot, '.state'), { recursive: true });
+  await mkdir(join(wsRoot, 'memory'), { recursive: true });
+  await mkdir(resolveInboxDir(cfg, agentId), { recursive: true });
+  await mkdir(resolveInboxPendingDir(cfg, agentId), { recursive: true });
+  await mkdir(resolveInboxProcessedDir(cfg, agentId), { recursive: true });
 
   // ============================================
   // Create initial config file if not exists
   // ============================================
-  const configPath = resolveConfigPath();
   if (!existsSync(configPath) || options.force) {
-    const defaultConfig = loadConfig(); // Get default config from schema
-    await saveConfig(defaultConfig, configPath);
+    await saveConfig(cfg, configPath);
     log.info({ configPath }, 'Created initial configuration');
   }
 
   // ============================================
   // Create agent metadata file
   // ============================================
-  const agentMetadataPath = resolveAgentMetadataPath(agentId);
+  const agentMetadataPath = resolveAgentMetadataPath(cfg, agentId);
   if (!existsSync(agentMetadataPath) || options.force) {
     const agentMetadata = {
       version: 1,
@@ -126,7 +129,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   // Create workspace files
   // ============================================
   if (!options.skipWorkspace) {
-    await createWorkspaceFiles(agentId);
+    await createWorkspaceFiles(cfg, agentId);
   }
 
   log.info({ stateDir, agentId }, 'xopcbot Agent OS initialized successfully');
@@ -135,8 +138,8 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
 /**
  * Create default workspace files for an agent
  */
-async function createWorkspaceFiles(agentId: string): Promise<void> {
-  const workspaceDir = resolveWorkspaceDir(agentId);
+async function createWorkspaceFiles(cfg: Config, agentId: string): Promise<void> {
+  const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
 
   // SOUL.md - Agent personality and values
   const soulPath = join(workspaceDir, WORKSPACE_FILES.SOUL);

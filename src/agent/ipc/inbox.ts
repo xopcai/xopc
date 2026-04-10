@@ -1,9 +1,10 @@
 import { readFile, writeFile, readdir, rename, mkdir } from 'fs/promises';
 import { existsSync } from 'fs';
-import { join, dirname } from 'path';
+import { join } from 'path';
 import { watch, type FSWatcher } from 'fs';
 import { createLogger } from '../../utils/logger.js';
-import { resolveInboxDir } from '../../config/paths.js';
+import type { Config } from '../../config/schema.js';
+import { resolveAgentDir } from '../../config/paths.js';
 import type { AgentIPCMessage } from './types.js';
 
 const log = createLogger('AgentInbox');
@@ -23,11 +24,10 @@ export class AgentInbox {
   }
 
   /**
-   * Static factory using agent ID
+   * Static factory using agent ID (OpenClaw-style paths from config).
    */
-  static forAgent(agentId: string): AgentInbox {
-    const inboxDir = resolveInboxDir(agentId);
-    return new AgentInbox(dirname(inboxDir));
+  static forAgent(config: Config, agentId: string): AgentInbox {
+    return new AgentInbox(resolveAgentDir(config, agentId));
   }
 
   /**

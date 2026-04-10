@@ -8,6 +8,7 @@ import {
   resolveAgentAuthProfilesPath,
   resolveOAuthPath,
 } from '../config/paths.js';
+import type { Config } from '../config/schema.js';
 
 const log = createLogger('Credentials');
 
@@ -49,18 +50,26 @@ export interface AuthProfilesFile {
 
 export interface CredentialResolverOptions {
   stateDir?: string;
+  /** When set, per-agent auth profiles are read from `resolveAgentAuthProfilesPath(appConfig, agentId)`. */
   agentId?: string;
+  /** Required when `agentId` is set. */
+  appConfig?: Config;
 }
 
 export class CredentialResolver {
   private readonly credentialsDir: string;
   private readonly agentId?: string;
+  private readonly appConfig?: Config;
 
   constructor(options: CredentialResolverOptions = {}) {
     this.credentialsDir = options.stateDir
       ? join(options.stateDir, 'credentials')
       : resolveCredentialsDir();
     this.agentId = options.agentId;
+    this.appConfig = options.appConfig;
+    if (this.agentId && !this.appConfig) {
+      throw new Error('CredentialResolver: appConfig is required when agentId is set');
+    }
   }
 
   /**
@@ -286,9 +295,9 @@ export class CredentialResolver {
   }
 
   private async loadAgentAuthProfilesFile(): Promise<AuthProfilesFile> {
-    if (!this.agentId) return { version: 2, profiles: {} };
+    if (!this.agentId || !this.appConfig) return { version: 2, profiles: {} };
 
-    const path = resolveAgentAuthProfilesPath(this.agentId);
+    const path = resolveAgentAuthProfilesPath(this.appConfig, this.agentId);
 
     try {
       const content = await readFile(path, 'utf-8');
@@ -313,9 +322,9 @@ export class CredentialResolver {
   }
 
   private async saveAgentAuthProfile(profileId: string, profile: ApiKeyProfile): Promise<void> {
-    if (!this.agentId) throw new Error('Agent ID not set');
+    if (!this.agentId || !this.appConfig) throw new Error('Agent ID and appConfig required for agent-private profiles');
 
-    const path = resolveAgentAuthProfilesPath(this.agentId);
+    const path = resolveAgentAuthProfilesPath(this.appConfig, this.agentId);
     await mkdir(dirname(path), { recursive: true });
 
     const file = await this.loadAgentAuthProfilesFile();
@@ -334,9 +343,9 @@ export class CredentialResolver {
   }
 
   private async deleteAgentAuthProfile(profileId: string): Promise<void> {
-    if (!this.agentId) throw new Error('Agent ID not set');
+    if (!this.agentId || !this.appConfig) throw new Error('Agent ID and appConfig required for agent-private profiles');
 
-    const path = resolveAgentAuthProfilesPath(this.agentId);
+    const path = resolveAgentAuthProfilesPath(this.appConfig, this.agentId);
     const file = await this.loadAgentAuthProfilesFile();
 
     delete file.profiles[profileId];

@@ -408,7 +408,6 @@ describe('createDefaultContext', () => {
     delete process.env.XOPCBOT_WORKSPACE;
     delete process.env.XOPCBOT_CONFIG;
     delete process.env.XOPCBOT_STATE_DIR;
-    delete process.env.XOPCBOT_AGENT_DIR;
     delete process.env.XOPCBOT_PROFILE;
   });
 

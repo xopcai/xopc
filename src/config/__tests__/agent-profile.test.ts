@@ -106,6 +106,7 @@ describe('agent-profile', () => {
       ...base,
       agents: {
         ...base.agents!,
+        default: 'main',
         list: [{ id: 'coder', enabled: true, model: 'openai/gpt-4o' }],
       },
     };

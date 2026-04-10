@@ -1,5 +1,6 @@
 import { createLogger } from '../../utils/logger.js';
-import { resolveAgentId } from '../../config/paths.js';
+import type { Config } from '../../config/schema.js';
+import { resolveDefaultAgentId } from '../../agents/agent-scope.js';
 import { AgentInbox } from './inbox.js';
 import type {
   AgentIPCMessage,
@@ -32,7 +33,7 @@ export interface TaskOptions {
 // ============================================
 
 export class AgentBus {
-  private readonly stateDir: string;
+  private readonly appConfig: Config;
   private readonly agentId: string;
   private readonly inbox: AgentInbox;
   private responseHandlers: Map<
@@ -41,10 +42,10 @@ export class AgentBus {
   > = new Map();
   private unsubscribe?: () => void;
 
-  constructor(stateDir: string, agentId?: string) {
-    this.stateDir = stateDir;
-    this.agentId = agentId || resolveAgentId();
-    this.inbox = AgentInbox.forAgent(this.agentId);
+  constructor(appConfig: Config, _stateDir: string, agentId?: string) {
+    this.appConfig = appConfig;
+    this.agentId = agentId ?? resolveDefaultAgentId(appConfig);
+    this.inbox = AgentInbox.forAgent(appConfig, this.agentId);
   }
 
   /**
@@ -209,7 +210,7 @@ export class AgentBus {
   // ============================================
 
   private async deliverMessage(targetAgentId: string, message: AgentIPCMessage): Promise<void> {
-    const targetInbox = AgentInbox.forAgent(targetAgentId);
+    const targetInbox = AgentInbox.forAgent(this.appConfig, targetAgentId);
     await targetInbox.enqueue(message);
   }
 }

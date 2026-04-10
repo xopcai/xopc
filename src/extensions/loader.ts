@@ -12,8 +12,10 @@ import { join, dirname, isAbsolute } from 'path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createJiti } from 'jiti';
+import { resolveDefaultAgentId } from '../agents/agent-scope.js';
+import { loadConfig } from '../config/loader.js';
 import {
-  resolveWorkspaceDir,
+  resolveAgentWorkspaceDir,
   resolveExtensionsDir,
   resolveWorkspaceExtensionsDir,
   resolveBundledExtensionsDir,
@@ -248,10 +250,14 @@ export class ExtensionLoader {
     for (const p of bundledChannelPlugins) {
       this.registry.addChannelPlugin(p);
     }
-    this.options = options || {
-      workspaceDir: resolveWorkspaceDir(),
-      extensionsDir: resolveWorkspaceExtensionsDir(),
-    };
+    this.options = options || (() => {
+      const c = loadConfig();
+      const aid = resolveDefaultAgentId(c);
+      return {
+        workspaceDir: resolveAgentWorkspaceDir(c, aid),
+        extensionsDir: resolveWorkspaceExtensionsDir(c, aid),
+      };
+    })();
 
     // Initialize security config
     this.securityConfig = DEFAULT_SECURITY_CONFIG;
@@ -374,8 +380,10 @@ export class ExtensionLoader {
     this.discoverInDirectory(globalDir, 'global', discovered);
 
     // Priority 1: Workspace extensions (highest, can override)
-    const workspaceDir = this.options.workspaceDir || resolveWorkspaceDir();
-    const workspaceExtensionsDir = resolveWorkspaceExtensionsDir(workspaceDir);
+    const c = loadConfig();
+    const aid = resolveDefaultAgentId(c);
+    const workspaceDir = this.options.workspaceDir || resolveAgentWorkspaceDir(c, aid);
+    const workspaceExtensionsDir = resolveWorkspaceExtensionsDir(c, aid);
     this.discoverInDirectory(workspaceExtensionsDir, 'workspace', discovered);
 
     return Array.from(discovered.values());
@@ -862,9 +870,11 @@ export class ExtensionLoader {
 // ============================================================================
 
 export function resolveExtensionPath(id: string, options: ExtensionLoaderOptions): string | null {
+  const c = loadConfig();
+  const aid = resolveDefaultAgentId(c);
   // Priority 1: Workspace
-  const workspaceDir = options.workspaceDir || resolveWorkspaceDir();
-  const workspacePath = join(resolveWorkspaceExtensionsDir(workspaceDir), id);
+  const workspaceDir = options.workspaceDir || resolveAgentWorkspaceDir(c, aid);
+  const workspacePath = join(resolveWorkspaceExtensionsDir(c, aid), id);
   if (existsSync(workspacePath)) return workspacePath;
 
   // Priority 2: Global

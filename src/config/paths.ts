@@ -3,12 +3,24 @@ import { fileURLToPath } from 'url';
 import { dirname } from 'path';
 import { existsSync } from 'fs';
 
-import { resolveAgentHomeDir } from './agent-homedir.js';
-import { ENV_VARS, resolveHomeDir, resolveStateDir, resolveAgentId } from './paths-state.js';
-import { resolveDefaultAgentWorkspaceDir, resolveWorkspaceDir } from './workspace-defaults.js';
+import type { Config } from './schema.js';
+import {
+  resolveAgentDir as resolveAgentDirScoped,
+  resolveAgentHomeDir as resolveAgentHomeScoped,
+  resolveAgentWorkspaceDir,
+  resolveSessionsDir as resolveSessionsDirScoped,
+} from '../agents/agent-scope.js';
+import { ENV_VARS, resolveHomeDir, resolveStateDir } from './paths-state.js';
+import { resolveDefaultAgentWorkspaceDir } from './workspace-defaults.js';
 
-export { ENV_VARS, resolveHomeDir, resolveStateDir, resolveAgentId } from './paths-state.js';
-export { resolveDefaultAgentWorkspaceDir, resolveWorkspaceDir } from './workspace-defaults.js';
+export { ENV_VARS, resolveHomeDir, resolveStateDir } from './paths-state.js';
+export { resolveDefaultAgentWorkspaceDir } from './workspace-defaults.js';
+export {
+  resolveAgentWorkspaceDir,
+  resolveAgentDir as resolveAgentDirFromConfig,
+  resolveAgentHomeDir as resolveAgentHomeDirFromConfig,
+  resolveSessionsDir as resolveSessionsDirFromConfig,
+} from '../agents/agent-scope.js';
 
 // ============================================
 // File Names
@@ -80,50 +92,57 @@ export function resolveOAuthPath(provider: string): string {
  * OpenClaw `agentDir`: internal state under `stateDir/agents/<id>/agent/`
  * (credentials, inbox IPC, pid, agent.json — not the Markdown workspace).
  */
-export function resolveAgentDir(agentId?: string): string {
-  return join(resolveAgentHomeDir(agentId), 'agent');
+export function resolveAgentDir(config: Config, agentId: string): string {
+  return resolveAgentDirScoped(config, agentId);
+}
+
+/**
+ * Per-agent home: `stateDir/agents/<id>/` (sessions + `agent/`).
+ */
+export function resolveAgentHomeDir(config: Config, agentId: string): string {
+  return resolveAgentHomeScoped(config, agentId);
 }
 
 /**
  * Resolve a specific workspace file path
  */
-export function resolveWorkspaceFile(filename: string, agentId?: string): string {
-  return join(resolveWorkspaceDir(agentId), filename);
+export function resolveWorkspaceFile(config: Config, filename: string, agentId: string): string {
+  return join(resolveAgentWorkspaceDir(config, agentId), filename);
 }
 
 /**
  * Resolve the agent's private credentials directory
  */
-export function resolveAgentCredentialsDir(agentId?: string): string {
-  return join(resolveAgentDir(agentId), 'credentials');
+export function resolveAgentCredentialsDir(config: Config, agentId: string): string {
+  return join(resolveAgentDir(config, agentId), 'credentials');
 }
 
 /**
  * Resolve agent's private auth-profiles.json path
  */
-export function resolveAgentAuthProfilesPath(agentId?: string): string {
-  return join(resolveAgentCredentialsDir(agentId), FILENAMES.CREDENTIALS_PROFILES);
+export function resolveAgentAuthProfilesPath(config: Config, agentId: string): string {
+  return join(resolveAgentCredentialsDir(config, agentId), FILENAMES.CREDENTIALS_PROFILES);
 }
 
 /**
  * Agent session store root. Transcript files are stored in subfolders (users/…, system/cron, …), not as a flat list.
  */
-export function resolveSessionsDir(agentId?: string): string {
-  return join(resolveAgentHomeDir(agentId), 'sessions');
+export function resolveSessionsDir(config: Config, agentId: string): string {
+  return resolveSessionsDirScoped(config, agentId);
 }
 
 /**
  * Resolve the sessions index file path
  */
-export function resolveSessionsIndexPath(agentId?: string): string {
-  return join(resolveSessionsDir(agentId), FILENAMES.SESSIONS_INDEX);
+export function resolveSessionsIndexPath(config: Config, agentId: string): string {
+  return join(resolveSessionsDir(config, agentId), FILENAMES.SESSIONS_INDEX);
 }
 
 /**
  * Resolve the sessions archive directory
  */
-export function resolveSessionsArchiveDir(agentId?: string): string {
-  return join(resolveSessionsDir(agentId), 'archive');
+export function resolveSessionsArchiveDir(config: Config, agentId: string): string {
+  return join(resolveSessionsDir(config, agentId), 'archive');
 }
 
 /**
@@ -131,8 +150,9 @@ export function resolveSessionsArchiveDir(agentId?: string): string {
  * Topic IDs are URL-encoded when they are strings to prevent path traversal.
  */
 export function resolveSessionTranscriptPath(
+  config: Config,
   sessionId: string,
-  agentId?: string,
+  agentId: string,
   topicId?: string | number,
 ): string {
   const safeTopicId =
@@ -145,7 +165,7 @@ export function resolveSessionTranscriptPath(
     safeTopicId !== undefined
       ? `${sessionId}-topic-${safeTopicId}.jsonl`
       : `${sessionId}.jsonl`;
-  return join(resolveSessionsDir(agentId), fileName);
+  return join(resolveSessionsDir(config, agentId), fileName);
 }
 
 /**
@@ -173,51 +193,56 @@ export function resolveSessionTranscriptPathInDir(
 /**
  * Resolve the inbox directory for an agent
  */
-export function resolveInboxDir(agentId?: string): string {
-  return join(resolveAgentDir(agentId), 'inbox');
+export function resolveInboxDir(config: Config, agentId: string): string {
+  return join(resolveAgentDir(config, agentId), 'inbox');
 }
 
 /**
  * Resolve the pending inbox directory
  */
-export function resolveInboxPendingDir(agentId?: string): string {
-  return join(resolveInboxDir(agentId), 'pending');
+export function resolveInboxPendingDir(config: Config, agentId: string): string {
+  return join(resolveInboxDir(config, agentId), 'pending');
 }
 
 /**
  * Resolve the processed inbox directory
  */
-export function resolveInboxProcessedDir(agentId?: string): string {
-  return join(resolveInboxDir(agentId), 'processed');
+export function resolveInboxProcessedDir(config: Config, agentId: string): string {
+  return join(resolveInboxDir(config, agentId), 'processed');
 }
 
 /**
  * Resolve a specific inbox message path
  */
-export function resolveInboxMessagePath(messageId: string, pending: boolean, agentId?: string): string {
-  const dir = pending ? resolveInboxPendingDir(agentId) : resolveInboxProcessedDir(agentId);
+export function resolveInboxMessagePath(
+  config: Config,
+  messageId: string,
+  pending: boolean,
+  agentId: string,
+): string {
+  const dir = pending ? resolveInboxPendingDir(config, agentId) : resolveInboxProcessedDir(config, agentId);
   return join(dir, `${messageId}.json`);
 }
 
 /**
  * Resolve the pid file path
  */
-export function resolvePidPath(agentId?: string): string {
-  return join(resolveAgentDir(agentId), FILENAMES.PID);
+export function resolvePidPath(config: Config, agentId: string): string {
+  return join(resolveAgentDir(config, agentId), FILENAMES.PID);
 }
 
 /**
  * Resolve the status.json path
  */
-export function resolveStatusPath(agentId?: string): string {
-  return join(resolveAgentDir(agentId), FILENAMES.STATUS);
+export function resolveStatusPath(config: Config, agentId: string): string {
+  return join(resolveAgentDir(config, agentId), FILENAMES.STATUS);
 }
 
 /**
  * Resolve the Unix socket path
  */
-export function resolveSocketPath(agentId?: string): string {
-  return join(resolveAgentDir(agentId), FILENAMES.SOCKET);
+export function resolveSocketPath(config: Config, agentId: string): string {
+  return join(resolveAgentDir(config, agentId), FILENAMES.SOCKET);
 }
 
 /**
@@ -237,8 +262,8 @@ export function resolveExtensionsLockPath(): string {
 /**
  * Resolve the workspace extensions directory
  */
-export function resolveWorkspaceExtensionsDir(agentId?: string): string {
-  return join(resolveWorkspaceDir(agentId), '.extensions');
+export function resolveWorkspaceExtensionsDir(config: Config, agentId: string): string {
+  return join(resolveAgentWorkspaceDir(config, agentId), '.extensions');
 }
 
 /**
@@ -363,43 +388,43 @@ export function resolveModelsJsonPath(): string {
 /**
  * Resolve the agent metadata file path
  */
-export function resolveAgentMetadataPath(agentId?: string): string {
-  return join(resolveAgentDir(agentId), FILENAMES.AGENT_JSON);
+export function resolveAgentMetadataPath(config: Config, agentId: string): string {
+  return join(resolveAgentDir(config, agentId), FILENAMES.AGENT_JSON);
 }
 
 /**
  * Resolve the workspace state directory (.state/)
  */
-export function resolveWorkspaceStateDir(agentId?: string): string {
-  return join(resolveWorkspaceDir(agentId), '.state');
+export function resolveWorkspaceStateDir(config: Config, agentId: string): string {
+  return join(resolveAgentWorkspaceDir(config, agentId), '.state');
 }
 
 /**
  * Resolve the workspace state file path
  */
-export function resolveWorkspaceStatePath(agentId?: string): string {
-  return join(resolveWorkspaceStateDir(agentId), FILENAMES.WORKSPACE_STATE);
+export function resolveWorkspaceStatePath(config: Config, agentId: string): string {
+  return join(resolveWorkspaceStateDir(config, agentId), FILENAMES.WORKSPACE_STATE);
 }
 
 /**
  * Resolve the skills cache file path
  */
-export function resolveSkillsCachePath(agentId?: string): string {
-  return join(resolveWorkspaceStateDir(agentId), FILENAMES.SKILLS_CACHE);
+export function resolveSkillsCachePath(config: Config, agentId: string): string {
+  return join(resolveWorkspaceStateDir(config, agentId), FILENAMES.SKILLS_CACHE);
 }
 
 /**
  * Resolve the memory directory
  */
-export function resolveMemoryDir(agentId?: string): string {
-  return join(resolveWorkspaceDir(agentId), 'memory');
+export function resolveMemoryDir(config: Config, agentId: string): string {
+  return join(resolveAgentWorkspaceDir(config, agentId), 'memory');
 }
 
 /**
  * Resolve a specific memory file path
  */
-export function resolveMemoryPath(date: string, agentId?: string): string {
-  return join(resolveMemoryDir(agentId), `${date}.md`);
+export function resolveMemoryPath(config: Config, date: string, agentId: string): string {
+  return join(resolveMemoryDir(config, agentId), `${date}.md`);
 }
 
 /**
