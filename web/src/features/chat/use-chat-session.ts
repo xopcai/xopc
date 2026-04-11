@@ -32,6 +32,8 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import type { ClarifyPromptState } from '@/features/chat/clarify-prompt';
+import { suggestFollowUpsFromAssistantMessage } from '@/features/chat/follow-up-suggestions';
+import { MAX_PENDING_FOLLOW_UPS, type PendingFollowUp } from '@/features/chat/pending-follow-up.types';
 
 const DEFAULT_THINKING = 'medium';
 const DEFAULT_REASONING: ReasoningLevel = 'off';
@@ -143,6 +145,15 @@ export function useChatSession() {
   /** Skip duplicate finalize when user already committed via `abort()` (SSE may still send `result`). */
   const userAbortedRef = useRef(false);
 
+  const sendMessageRef = useRef<
+    (
+      content: string,
+      attachments?: PendingFollowUp['attachments'],
+      levelOverride?: string,
+    ) => Promise<void>
+  >(async () => {});
+  const flushSteeringQueueRef = useRef<() => void>(() => {});
+
   const [messages, setMessages] = useState<Message[]>([]);
   const [streamingMsg, setStreamingMsg] = useState<Message | null>(null);
   const [streaming, setStreaming] = useState(false);
@@ -162,6 +173,10 @@ export function useChatSession() {
   const [hasMore, setHasMore] = useState(false);
   const [loadingMore, setLoadingMore] = useState(false);
   const messagesLenRef = useRef(0);
+  const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
+  const pendingFollowUpsRef = useRef<PendingFollowUp[]>([]);
+  const [steeringFollowUpId, setSteeringFollowUpId] = useState<string | null>(null);
+  const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
 
   useEffect(() => {
     sendingRef.current = sending;
@@ -181,6 +196,16 @@ export function useChatSession() {
   useEffect(() => {
     messagesLenRef.current = messages.length;
   }, [messages.length]);
+
+  useEffect(() => {
+    pendingFollowUpsRef.current = [];
+    setPendingFollowUps([]);
+    setFollowUpSuggestions([]);
+  }, [sessionKey]);
+
+  useEffect(() => {
+    pendingFollowUpsRef.current = pendingFollowUps;
+  }, [pendingFollowUps]);
 
   useEffect(() => {
     if (!sessionKey) return;
@@ -254,32 +279,41 @@ export function useChatSession() {
    * Do not call `setMessages` inside `setStreamingMsg`'s updater — React Strict Mode
    * invokes that updater twice in development, which duplicated assistant rows.
    */
-  const finalizeMessage = useCallback(() => {
-    let finalMsg: Message | null = null;
-    flushSync(() => {
-      setStreamingMsg((prev) => {
-        if (!prev) return null;
-        const msg = ensureAssistantMessage(prev, Date.now());
-        finalizeStreamingThinking(msg.content);
-        finalizeRunningTools(msg.content);
-        finalMsg = cloneMessageForRender(msg);
-        return null;
+  const finalizeMessage = useCallback(
+    (opts?: { skipSteeringQueueFlush?: boolean }) => {
+      let finalMsg: Message | null = null;
+      flushSync(() => {
+        setStreamingMsg((prev) => {
+          if (!prev) return null;
+          const msg = ensureAssistantMessage(prev, Date.now());
+          finalizeStreamingThinking(msg.content);
+          finalizeRunningTools(msg.content);
+          finalMsg = cloneMessageForRender(msg);
+          return null;
+        });
       });
-    });
-    const appended = finalMsg;
-    if (appended && hasRenderableAssistantContent(appended)) {
-      setMessages((m) => mergeConsecutiveAssistantMessages([...m, appended]));
-    }
-    setStreaming(false);
-    setProgress(null);
-    setSending(false);
-    sendingRef.current = false;
-    streamingRef.current = false;
-    activeStreamSessionKeyRef.current = null;
-    activeResumeRunIdRef.current = null;
-    setClarifyPrompt(null);
-    void pollSessionNameAfterTurn();
-  }, [pollSessionNameAfterTurn]);
+      const appended = finalMsg;
+      if (appended && hasRenderableAssistantContent(appended)) {
+        setMessages((m) => mergeConsecutiveAssistantMessages([...m, appended]));
+        setFollowUpSuggestions(suggestFollowUpsFromAssistantMessage(appended));
+      }
+      setStreaming(false);
+      setProgress(null);
+      setSending(false);
+      sendingRef.current = false;
+      streamingRef.current = false;
+      activeStreamSessionKeyRef.current = null;
+      activeResumeRunIdRef.current = null;
+      setClarifyPrompt(null);
+      void pollSessionNameAfterTurn();
+      if (!opts?.skipSteeringQueueFlush) {
+        queueMicrotask(() => {
+          flushSteeringQueueRef.current();
+        });
+      }
+    },
+    [pollSessionNameAfterTurn],
+  );
 
   /**
    * Only apply streaming deltas to the visible chat when the browser route still points
@@ -619,6 +653,151 @@ export function useChatSession() {
     }
   }, [finalizeMessage, shouldApplyStreamUpdate]);
 
+  const addPendingFollowUp = useCallback(
+    (
+      content: string,
+      attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
+    ) => {
+      const trimmed = content.trim();
+      if (!trimmed && !attachments?.length) return;
+      if (pendingFollowUpsRef.current.length >= MAX_PENDING_FOLLOW_UPS) {
+        return;
+      }
+      const effectiveThinking = modelSupportsThinking ? thinkingLevel : 'off';
+      const row: PendingFollowUp = {
+        id: crypto.randomUUID(),
+        text: trimmed || content,
+        attachments: attachments?.length ? attachments : undefined,
+        thinkingLevel: effectiveThinking,
+      };
+      setPendingFollowUps((prev) => {
+        const next = [...prev, row];
+        pendingFollowUpsRef.current = next;
+        return next;
+      });
+    },
+    [modelSupportsThinking, thinkingLevel],
+  );
+
+  const popPendingFollowUpForComposer = useCallback((id: string) => {
+    const row = pendingFollowUpsRef.current.find((r) => r.id === id);
+    if (!row) return null;
+    setPendingFollowUps((prev) => {
+      const next = prev.filter((r) => r.id !== id);
+      pendingFollowUpsRef.current = next;
+      return next;
+    });
+    return {
+      text: row.text,
+      attachments: row.attachments ?? [],
+      thinkingLevel: row.thinkingLevel,
+    };
+  }, []);
+
+  const removePendingFollowUp = useCallback((id: string) => {
+    setPendingFollowUps((prev) => {
+      const next = prev.filter((r) => r.id !== id);
+      pendingFollowUpsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const movePendingFollowUp = useCallback((id: string, dir: 'up' | 'down') => {
+    setPendingFollowUps((prev) => {
+      const i = prev.findIndex((r) => r.id === id);
+      if (i < 0) return prev;
+      const j = dir === 'up' ? i - 1 : i + 1;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      pendingFollowUpsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const reorderPendingFollowUp = useCallback((fromIndex: number, toIndex: number) => {
+    setPendingFollowUps((prev) => {
+      if (fromIndex < 0 || fromIndex >= prev.length || toIndex < 0 || toIndex >= prev.length) {
+        return prev;
+      }
+      const next = [...prev];
+      const [removed] = next.splice(fromIndex, 1);
+      next.splice(toIndex, 0, removed);
+      pendingFollowUpsRef.current = next;
+      return next;
+    });
+  }, []);
+
+  const steerPendingFollowUp = useCallback(async (id: string) => {
+    const key = sessionKeyRef.current;
+    if (!key) return;
+    const row = pendingFollowUpsRef.current.find((r) => r.id === id);
+    if (!row?.text.trim() || row.attachments?.length) return;
+    setSteeringFollowUpId(id);
+    try {
+      const res = await apiFetch(apiUrl('/api/agent/steer'), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ chatId: key, message: row.text.trim() }),
+      });
+      if (res.ok) {
+        setPendingFollowUps((prev) => {
+          const next = prev.filter((r) => r.id !== id);
+          pendingFollowUpsRef.current = next;
+          return next;
+        });
+      }
+    } catch {
+      /* ignore */
+    } finally {
+      setSteeringFollowUpId(null);
+    }
+  }, []);
+
+  const interruptAndSend = useCallback(
+    async (
+      content: string,
+      attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
+      levelOverride?: string,
+    ) => {
+      if (!content.trim() && !attachments?.length) return;
+      if (!sendingRef.current && !streamingRef.current) return;
+      const trimmed = content.trim();
+      if (trimmed === '/new' && !attachments?.length) {
+        await createNewSession();
+        return;
+      }
+      const key = sessionKeyRef.current;
+      if (!key) return;
+      pendingFollowUpsRef.current = [];
+      setPendingFollowUps([]);
+      const effectiveThinking = modelSupportsThinking ? (levelOverride ?? thinkingLevel) : 'off';
+      userAbortedRef.current = true;
+      activeResumeRunIdRef.current = null;
+      activeStreamSessionKeyRef.current = null;
+      senderRef.current.abort();
+      sendingRef.current = false;
+      streamingRef.current = false;
+      setClarifyPrompt(null);
+      finalizeMessage({ skipSteeringQueueFlush: true });
+      setProgress(null);
+      queueMicrotask(() => {
+        void sendMessageRef.current(content, attachments, effectiveThinking);
+      });
+    },
+    [createNewSession, finalizeMessage, modelSupportsThinking, thinkingLevel],
+  );
+
+  const pickFollowUpSuggestion = useCallback(
+    (text: string) => {
+      const t = text.trim();
+      if (!t) return;
+      setFollowUpSuggestions([]);
+      void sendMessageRef.current(t, undefined, undefined);
+    },
+    [],
+  );
+
   const sendMessage = useCallback(
     async (
       content: string,
@@ -640,6 +819,7 @@ export function useChatSession() {
       const sender = senderRef.current;
       const chatId = sessionKey;
       userAbortedRef.current = false;
+      setFollowUpSuggestions([]);
       activeStreamSessionKeyRef.current = chatId;
       setSending(true);
       setError(null);
@@ -820,11 +1000,13 @@ export function useChatSession() {
     userAbortedRef.current = true;
     activeResumeRunIdRef.current = null;
     activeStreamSessionKeyRef.current = null;
+    pendingFollowUpsRef.current = [];
+    setPendingFollowUps([]);
     senderRef.current.abort();
     sendingRef.current = false;
     streamingRef.current = false;
     setClarifyPrompt(null);
-    finalizeMessage();
+    finalizeMessage({ skipSteeringQueueFlush: true });
     setProgress(null);
     const key = sessionKeyRef.current;
     if (key) {
@@ -1003,6 +1185,23 @@ export function useChatSession() {
     'main';
   const showChatAgentSelector = (chatAgentsData?.items.length ?? 0) > 1;
 
+  sendMessageRef.current = sendMessage;
+  flushSteeringQueueRef.current = () => {
+    let q = pendingFollowUpsRef.current;
+    while (q.length > 0 && !q[0].text.trim() && !q[0].attachments?.length) {
+      q = q.slice(1);
+    }
+    if (q.length === 0) {
+      pendingFollowUpsRef.current = [];
+      setPendingFollowUps([]);
+      return;
+    }
+    const [first, ...rest] = q;
+    pendingFollowUpsRef.current = rest;
+    setPendingFollowUps(rest);
+    void sendMessageRef.current(first.text, first.attachments, first.thinkingLevel);
+  };
+
   return {
     messages: displayMessages,
     sessionKey,
@@ -1026,7 +1225,18 @@ export function useChatSession() {
     sending,
     progress,
     sendMessage,
+    addPendingFollowUp,
+    pendingFollowUps,
+    popPendingFollowUpForComposer,
+    removePendingFollowUp,
+    movePendingFollowUp,
+    reorderPendingFollowUp,
+    steerPendingFollowUp,
+    steeringFollowUpId,
+    interruptAndSend,
     abort,
+    followUpSuggestions,
+    pickFollowUpSuggestion,
     clarifyPrompt,
     clarifySubmitting,
     submitClarifyAnswer,
