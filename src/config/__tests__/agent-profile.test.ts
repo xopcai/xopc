@@ -100,7 +100,7 @@ describe('agent-profile', () => {
     expect(p.length).toBeGreaterThan(4);
   });
 
-  it('uses join(defaults.workspace, id) when list entry has no workspace field (OpenClaw)', () => {
+  it('uses join(defaults.workspace, id) when list entry has no workspace field', () => {
     const base = minimalConfig();
     const cfg: Config = {
       ...base,

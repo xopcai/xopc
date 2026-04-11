@@ -1,5 +1,5 @@
 /**
- * Mutate `agents.list` / bindings when adding or removing agents (OpenClaw-style).
+ * Mutate `agents.list` / bindings when adding or removing agents.
  */
 
 import { rm } from 'node:fs/promises';

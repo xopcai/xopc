@@ -1,5 +1,5 @@
 /**
- * Provider ID normalization (adapted from OpenClaw, MIT).
+ * Provider ID normalization (MIT-licensed upstream pattern).
  */
 
 export function normalizeProviderId(provider: string): string {

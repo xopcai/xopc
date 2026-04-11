@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * Scans each extensions/<name>/package.json for `xopcbot.bundledChannel` and writes
- * src/generated/bundled-channel-plugins.ts (OpenClaw-style single module: re-exports +
+ * src/generated/bundled-channel-plugins.ts (single module: re-exports +
  * bundledChannelPlugins array so tsc emits dist/extensions/).
  */
 import fs from 'node:fs';

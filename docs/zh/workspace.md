@@ -4,7 +4,7 @@
 
 xopcbot 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；其下有 **按 Agent 划分** 的目录树（会话、收件箱、入站/TTS、托管记忆、运行时文件等）。**工作空间（workspace）** 是 Markdown 根目录：工具 `cwd`、按日的 `memory/` 笔记、用户文件，以及其下的扩展安装路径。
 
-路径以 **`config.json` 为唯一事实来源**：`src/agent/agent-scope.ts`（OpenClaw 式 workspace / agentDir 解析），以及 `src/config/paths-state.ts`、`src/config/workspace-defaults.ts`、`src/config/paths.ts`。目录骨架由 **`xopcbot init`**（`src/cli/commands/init.ts`）与 **`xopcbot agents add`** 创建/更新。布局与 OpenClaw 一致：**Markdown 工作区**不在 `agents/<id>/` 下（默认在状态根旁的 `workspace` / `workspace-<id>`，或配置为 `agents.defaults.workspace/<id>`）。
+路径以 **`config.json` 为唯一事实来源**：`src/agent/agent-scope.ts`（workspace / agentDir 解析），以及 `src/config/paths-state.ts`、`src/config/workspace-defaults.ts`、`src/config/paths.ts`。目录骨架由 **`xopcbot init`**（`src/cli/commands/init.ts`）与 **`xopcbot agents add`** 创建/更新。**Markdown 工作区**不在 `agents/<id>/` 下（默认在状态根旁的 `workspace` / `workspace-<id>`，或配置为 `agents.defaults.workspace/<id>`）。
 
 ## 状态目录根
 
@@ -37,18 +37,18 @@ xopcbot 在单一 **状态目录**（“Agent OS” 根）下保存本机状态�
 
 ## 按 Agent：`agents/<agentId>/`
 
-给定 **`agentId`** 时，**agent 主目录**默认为 `~/.xopcbot/agents/<id>/`（仍受上文 `XOPCBOT_STATE_DIR` / profile 规则约束）。配置项 **`agents.list[].agentDir`** 可覆盖 OpenClaw 语义下的 **内部 agent 状态目录**（`…/agent` 子树：凭证、`agent.json`、收件箱、pid/socket 等）。
+给定 **`agentId`** 时，**agent 主目录**默认为 `~/.xopcbot/agents/<id>/`（仍受上文 `XOPCBOT_STATE_DIR` / profile 规则约束）。配置项 **`agents.list[].agentDir`** 可覆盖 **内部 agent 状态目录**（`…/agent` 子树：凭证、`agent.json`、收件箱、pid/socket 等）。
 
 | 路径 | 作用 |
 |------|------|
 | `sessions/` | 会话存储：分片 transcript、`index.json`、`archive/` 归档目录。 |
-| `agent/` | 与 OpenClaw 的 **agent 状态目录**（非 Markdown 工作区）：`agent.json`、`credentials/`、文件收件箱（`inbox/pending`、`inbox/processed`）及易失文件（`pid`、`status.json`、`agent.sock`），**无**单独顶层 `run/`。 |
+| `agent/` | **agent 状态目录**（非 Markdown 工作区）：`agent.json`、`credentials/`、文件收件箱（`inbox/pending`、`inbox/processed`）及易失文件（`pid`、`status.json`、`agent.sock`），**无**单独顶层 `run/`。 |
 
 会话数据 **不在** Markdown 工作空间目录下，固定使用 `agents/<agentId>/sessions/`。
 
 ## 工作空间目录（Markdown 根）
 
-无配置中逐条 `workspace` 覆盖时的启发式路径：默认 agent → `<stateDir>/workspace`；其它 id → `<stateDir>/workspace-<id>`（与 OpenClaw 在未设置 `agents.defaults.workspace` 时的做法一致）。载入 **`config.json`** 时，以合并后的 `resolveAgentWorkspaceDir` / 有效 Agent 配置为准：显式 `workspace`、`join(agents.defaults.workspace, id)`，或回退到 `workspace-<id>`。
+无配置中逐条 `workspace` 覆盖时的启发式路径：默认 agent → `<stateDir>/workspace`；其它 id → `<stateDir>/workspace-<id>`（未设置 `agents.defaults.workspace` 时）。载入 **`config.json`** 时，以合并后的 `resolveAgentWorkspaceDir` / 有效 Agent 配置为准：显式 `workspace`、`join(agents.defaults.workspace, id)`，或回退到 `workspace-<id>`。
 
 未加载配置时，CLI 默认使用 **`resolveDefaultAgentWorkspaceDir()`**（`src/config/workspace-defaults.ts`）：若设置 `XOPCBOT_WORKSPACE` 则用之，否则对主工作区启发式为 `~/.xopcbot/workspace`。**`xopcbot init`** 会加载配置（或 schema 默认值），创建 **`agents/<id>/`** 与解析得到的 Markdown 工作区，并按内置模板**种子化**标准引导 Markdown（与 [工作区模板](/zh/reference/templates) 一致：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md` 及模板包中的 `BOOTSTRAP.md`）。仅当目标文件尚不存在时才写入。**`xopcbot agents add`** 会更新 **`agents.list`**、创建目录并种子化新工作区，用于新增多 Agent（见 [CLI](cli.md#agents)）。
 

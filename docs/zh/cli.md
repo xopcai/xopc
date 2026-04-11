@@ -121,7 +121,7 @@ xopcbot onboard --gateway
 
 ## agents
 
-管理 **`agents.list`**（OpenClaw 风格）。工作区与 `~/.xopcbot/agents/<id>/` 等路径均由 **配置合并结果** 决定，**不再**使用独立于配置之外的 agent 注册表或 `XOPCBOT_AGENT_ID` 环境变量。
+管理 **`agents.list`**。工作区与 `~/.xopcbot/agents/<id>/` 等路径均由 **配置合并结果** 决定，**不再**使用独立于配置之外的 agent 注册表或 `XOPCBOT_AGENT_ID` 环境变量。
 
 | 子命令 | 说明 |
 |--------|------|

@@ -171,7 +171,7 @@ export class AgentOrchestrator {
         log.info({ sessionKey, removed }, 'Removed problematic messages before saving');
       }
 
-      // 7. Save session messages (transcript hygiene aligned with OpenClaw)
+      // 7. Save session messages (transcript hygiene)
       await this.saveSessionSnapshot(sessionKey, sanitizedMessages);
 
       this.enqueueAutoTitle?.(sessionKey);
@@ -187,7 +187,7 @@ export class AgentOrchestrator {
   }
 
   /**
-   * Transcript hygiene (OpenClaw-style) + persist. Expects messages already passed through {@link sanitizeMessages}.
+   * Transcript hygiene + persist. Expects messages already passed through {@link sanitizeMessages}.
    * Keeps thinking blocks on disk for UI; agent load path applies full hygiene including dropThinking.
    */
   private async saveSessionSnapshot(sessionKey: string, messages: AgentMessage[]): Promise<void> {

@@ -1,6 +1,6 @@
 /**
  * Streaming markdown filter — character-level state machine that strips
- * unsupported markdown syntax on-the-fly (aligned with openclaw-weixin).
+ * unsupported markdown syntax on-the-fly.
  */
 export class StreamingMarkdownFilter {
   private buf = "";

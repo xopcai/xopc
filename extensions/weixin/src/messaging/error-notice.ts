@@ -1,7 +1,7 @@
 import { sendMessageWeixin } from "./send.js";
 
 /**
- * Map send failures to user-visible copy (aligned with openclaw-weixin process-message onError).
+ * Map send failures to user-visible copy (process-message onError behavior).
  */
 export function mapWeixinOutboundErrorNotice(errMsg: string): string {
   if (errMsg.includes("remote media download failed") || errMsg.includes("fetch")) {

@@ -1,5 +1,5 @@
 /**
- * Telegram draft stream for streaming message previews (aligned with OpenClaw draft-stream).
+ * Telegram draft stream for streaming message previews.
  *
  * Uses sendMessage + editMessageText, or sendMessageDraft when available (DM / supported clients),
  * with automatic fallback and optional materialize for draft transport.

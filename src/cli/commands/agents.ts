@@ -1,5 +1,5 @@
 /**
- * OpenClaw-style `agents` CLI: config is the source of truth for multi-agent paths.
+ * `agents` CLI: config is the source of truth for multi-agent paths.
  */
 
 import { mkdir } from 'node:fs/promises';
@@ -34,7 +34,7 @@ function requireNonMain(id: string): void {
 export function registerAgentsCli(program: Command): void {
   const agents = program
     .command('agents')
-    .description('Manage agents (config + workspace; OpenClaw-style)');
+    .description('Manage agents (config + workspace)');
 
   agents
     .command('list')

@@ -104,7 +104,7 @@ function randomWechatUin(): string {
   return Buffer.from(String(uint32), "utf-8").toString("base64");
 }
 
-/** Build headers shared by GET and POST requests (aligned with openclaw-weixin). */
+/** Build headers shared by GET and POST requests. */
 function buildCommonHeaders(routeTag?: string): Record<string, string> {
   const headers: Record<string, string> = {
     "iLink-App-Id": ILINK_APP_ID,

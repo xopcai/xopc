@@ -1,5 +1,5 @@
 /**
- * Strip tool / toolResult rows from wire-format history (OpenClaw sessions-helpers pattern).
+ * Strip tool / toolResult rows from wire-format history.
  * Use for display, summaries, or tools that need "last assistant text" without tool spans.
  */
 

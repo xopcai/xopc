@@ -1,7 +1,7 @@
 /**
  * Per-bot debug mode toggle, persisted to disk so it survives gateway restarts.
  *
- * State file: `<stateDir>/openclaw-weixin/debug-mode.json`
+ * State file: `resolveWeixinRootDir()/debug-mode.json`
  * Format:     `{ "accounts": { "<accountId>": true, ... } }`
  *
  * When enabled, processOneMessage appends a timing summary after each

@@ -25,7 +25,7 @@ export type MonitorWeixinOpts = {
 };
 
 /**
- * Long-poll loop: getUpdates → process inbound (aligned with openclaw-weixin monitor behavior).
+ * Long-poll loop: getUpdates → process inbound.
  */
 export async function monitorWeixinProvider(opts: MonitorWeixinOpts): Promise<void> {
   const { account, config, bus, abortSignal, longPollTimeoutMs } = opts;

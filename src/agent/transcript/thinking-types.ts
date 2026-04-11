@@ -2,7 +2,7 @@
  * Thinking Types
  *
  * Defines types for thinking ability management across the application.
- * Based on OpenClaw's thinking system.
+ * Thinking-level labels for transcript hygiene.
  */
 
 // ============================================

@@ -1,5 +1,5 @@
 /**
- * Exponential backoff for channel account restarts (OpenClaw-style).
+ * Exponential backoff for channel account restarts.
  */
 
 export interface RestartPolicy {

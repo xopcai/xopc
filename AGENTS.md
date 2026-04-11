@@ -82,7 +82,7 @@ Also present (follow local patterns): `acp/`, `auth/`, `chat-commands/` (in-chat
 
 **Gateway console (`web/`)** — React SPA (Vite + Tailwind v4): hash router, REST + SSE to the gateway, Zustand + SWR. Production build outputs to `dist/gateway/static/root` (same static root the gateway serves).
 
-**Extensions (`extensions/`)** — optional add-ons; **Telegram / Weixin** channel *sources* live in `extensions/telegram` and `extensions/weixin` but are **`private`** workspace packages (not published). Built like OpenClaw: **`tsdown`** (Rolldown) **unbundle** mode emits `dist/src/**` and `dist/extensions/**` in one pass. Wiring: `src/generated/bundled-channel-plugins.ts` (`pnpm run generate:bundled-channels`) and `src/channels/plugins/bundled.ts`.
+**Extensions (`extensions/`)** — optional add-ons; **Telegram / Weixin** channel *sources* live in `extensions/telegram` and `extensions/weixin` but are **`private`** workspace packages (not published). **`tsdown`** (Rolldown) **unbundle** mode emits `dist/src/**` and `dist/extensions/**` in one pass. Wiring: `src/generated/bundled-channel-plugins.ts` (`pnpm run generate:bundled-channels`) and `src/channels/plugins/bundled.ts`.
 
 ---
 
@@ -176,7 +176,7 @@ import { DraftStreamManager } from '@xopcai/xopcbot/channels/telegram/draft-stre
 
 ### Multiple agents (`agents.list`)
 
-Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by **`config.json`** — `agents.defaults` merged with the matching entry in **`agents.list`**. Default agent id: **`agents.default`**, else a `list` entry with **`default: true`**, else the first enabled entry, else **`main`**. On-disk paths (`~/.xopcbot/agents/<id>/`, Markdown workspace roots) resolve from the same config via **`src/agent/agent-scope.ts`** (OpenClaw-style).
+Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by **`config.json`** — `agents.defaults` merged with the matching entry in **`agents.list`**. Default agent id: **`agents.default`**, else a `list` entry with **`default: true`**, else the first enabled entry, else **`main`**. On-disk paths (`~/.xopcbot/agents/<id>/`, Markdown workspace roots) resolve from the same config via **`src/agent/agent-scope.ts`**.
 
 Use **`xopcbot agents list`**, **`xopcbot agents add`**, **`xopcbot agents delete`** to manage `agents.list` and initialize directories — there is no separate agent registry outside config.
 

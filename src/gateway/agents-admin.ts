@@ -1,5 +1,5 @@
 /**
- * Gateway REST helpers for multi-agent management (OpenClaw-style parity).
+ * Gateway REST helpers for multi-agent management.
  */
 
 import { mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';

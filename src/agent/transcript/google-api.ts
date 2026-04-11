@@ -1,5 +1,5 @@
 /**
- * Google API detection (adapted from OpenClaw pi-embedded-runner/google.ts, MIT).
+ * Google API detection (MIT-licensed upstream pattern).
  */
 
 export function isGoogleModelApi(api?: string | null): boolean {
