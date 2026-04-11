@@ -353,7 +353,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     });
   });
 
-  /** Serve a persisted inbound upload from workspace `.xopcbot/inbound/` (Web UI preview after reload). */
+  /** Serve a persisted inbound upload from agent home `inbound/` (Web UI preview after reload). */
   authenticated.get('/api/workspace/inbound-file', async (c) => {
     const rel = c.req.query('rel');
     if (!rel || typeof rel !== 'string') {
@@ -361,8 +361,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
     const cfg = service.currentConfig;
     const agentHome = resolveAgentHomeDir(cfg, resolveDefaultAgentId(cfg));
-    const legacyWorkspace = getWorkspacePath(cfg) ?? './workspace';
-    const abs = resolveSafeInboundFilePath({ agentHome, legacyWorkspace }, rel);
+    const abs = resolveSafeInboundFilePath({ agentHome }, rel);
     if (!abs) {
       return c.json({ ok: false, error: { message: 'Forbidden' } }, 403);
     }
@@ -402,7 +401,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
   });
 
-  /** Serve generated TTS audio from workspace `.xopcbot/tts/` (webchat assistant voice). */
+  /** Serve generated TTS audio from agent home `tts/` (webchat assistant voice). */
   authenticated.get('/api/workspace/tts-file', async (c) => {
     const rel = c.req.query('rel');
     if (!rel || typeof rel !== 'string') {
@@ -410,8 +409,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
     const cfg = service.currentConfig;
     const agentHome = resolveAgentHomeDir(cfg, resolveDefaultAgentId(cfg));
-    const legacyWorkspace = getWorkspacePath(cfg) ?? './workspace';
-    const abs = resolveSafeTtsFilePath({ agentHome, legacyWorkspace }, rel);
+    const abs = resolveSafeTtsFilePath({ agentHome }, rel);
     if (!abs) {
       return c.json({ ok: false, error: { message: 'Forbidden' } }, 403);
     }

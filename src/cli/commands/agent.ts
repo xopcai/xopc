@@ -42,7 +42,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
 
       // Handle --list option
       if (options.list) {
-        await listSessions(workspace);
+        await listSessions();
         return;
       }
 
@@ -58,7 +58,7 @@ function createAgentCommand(_ctx: CLIContext): Command {
       let sessionKey = options.session || 'cli:direct';
       if (options.session) {
         const { getSessionManager } = await import('../utils/session.js');
-        const manager = await getSessionManager(workspace);
+        const manager = await getSessionManager();
         const session = await manager.getSessionMetadata(options.session);
         if (!session) {
           console.error(`❌ Session not found: ${options.session}`);

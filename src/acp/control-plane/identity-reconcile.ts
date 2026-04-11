@@ -16,7 +16,6 @@ import {
 } from '../runtime/session-identity.js';
 import type { AcpRuntime, AcpRuntimeHandle, AcpRuntimeStatus, SessionAcpMeta } from '../runtime/types.js';
 import type { SessionEntry } from './manager.types.js';
-import { hasLegacyAcpIdentityProjection } from './manager.utils.js';
 
 const log = createLogger('AcpIdentityReconcile');
 
@@ -125,8 +124,7 @@ export async function reconcileRuntimeSessionIdentifiers(
   }
 
   // Check if metadata needs updating
-  const metaChanged =
-    !identityEquals(currentIdentity, nextIdentity) || hasLegacyAcpIdentityProjection(params.meta);
+  const metaChanged = !identityEquals(currentIdentity, nextIdentity);
     
   if (!metaChanged) {
     return {

@@ -7,15 +7,10 @@ import { mkdir, writeFile } from 'fs/promises';
 import { join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { createLogger } from '../../utils/logger.js';
-import { migrateTreeIfTargetMissing } from '../../config/migrate-internal-state.js';
-
 const log = createLogger('InboundPersist');
 
 /** New layout: `<agentHome>/inbound/<session>/` — rel paths use this prefix. */
 export const INBOUND_REL_ROOT = 'inbound';
-
-/** Legacy prefix under markdown workspace (still accepted for resolution). */
-export const LEGACY_INBOUND_REL_PREFIX = '.xopcbot/inbound';
 
 export interface InboundAttachmentInput {
   type: string;
@@ -23,15 +18,13 @@ export interface InboundAttachmentInput {
   data?: string;
   name?: string;
   size?: number;
-  /** Set after persist (relative to agent home or legacy workspace `.xopcbot/inbound/`). */
+  /** Set after persist (relative to agent home). */
   workspaceRelativePath?: string;
 }
 
 export type InternalAttachmentRoots = {
   /** `…/agents/<id>/` — primary storage */
   agentHome: string;
-  /** Markdown workspace; used to resolve legacy `.xopcbot/inbound/` paths */
-  legacyWorkspace?: string;
 };
 
 function sanitizeSessionSegment(sessionKey: string): string {
@@ -160,7 +153,7 @@ export function stripInboundFileMetadataFromText(text: string): string {
 }
 
 /**
- * Resolve a stored relative path under `inbound/` or legacy `.xopcbot/inbound/`.
+ * Resolve a stored relative path under `inbound/`.
  */
 export function resolveSafeInboundFilePath(
   roots: InternalAttachmentRoots,
@@ -175,22 +168,5 @@ export function resolveSafeInboundFilePath(
     return resolveUnderRoot(roots.agentHome, rel, `${INBOUND_REL_ROOT}/`);
   }
 
-  if (rel.startsWith(`${LEGACY_INBOUND_REL_PREFIX}/`)) {
-    const legacy = roots.legacyWorkspace ?? roots.agentHome;
-    const fromLegacy = resolveUnderRoot(legacy, rel, `${LEGACY_INBOUND_REL_PREFIX}/`);
-    if (fromLegacy) {
-      return fromLegacy;
-    }
-    return resolveUnderRoot(roots.agentHome, rel, `${LEGACY_INBOUND_REL_PREFIX}/`);
-  }
-
   return null;
-}
-
-/** Move legacy `<workspace>/.xopcbot/inbound` → `<agentHome>/inbound` when the target tree is absent. */
-export function migrateLegacyInboundTree(agentHome: string, legacyWorkspace: string): void {
-  migrateTreeIfTargetMissing(
-    join(agentHome, INBOUND_REL_ROOT),
-    join(legacyWorkspace, '.xopcbot', 'inbound'),
-  );
 }

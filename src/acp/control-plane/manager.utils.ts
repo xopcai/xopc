@@ -82,11 +82,6 @@ export function resolveMissingMetaError(sessionKey: string): Error {
   );
 }
 
-/** Legacy ACP identity projection hook (unused) */
-export function hasLegacyAcpIdentityProjection(_meta: SessionAcpMeta): boolean {
-  return false;
-}
-
 /** Re-export */
 export { createUnsupportedControlError } from "../runtime/errors.js";
 

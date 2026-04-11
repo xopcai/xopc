@@ -6,9 +6,6 @@
  */
 
 import { parseSessionKey } from '../routing/index.js';
-import { createLogger } from '../utils/logger.js';
-
-const log = createLogger('AcpRouting');
 
 /**
  * Build ACP session key in unified format
@@ -86,33 +83,3 @@ export function isValidAcpSessionKey(sessionKey: string): boolean {
   return true;
 }
 
-/**
- * Convert legacy ACP session key to new format
- * 
- * Legacy formats:
- * - acp:{uuid}
- * - ACP:{uuid}
- * 
- * New format:
- * - {agentId}:acp:{uuid}
- */
-export function migrateLegacyAcpKey(
-  legacyKey: string,
-  defaultAgentId: string = 'main'
-): string {
-  const parts = legacyKey.split(':');
-  
-  // Already in new format
-  if (parts.length >= 3 && parts[1] === 'acp') {
-    return legacyKey;
-  }
-  
-  // Legacy format: acp:{uuid}
-  if (parts[0].toLowerCase() === 'acp' && parts[1]) {
-    return `${defaultAgentId}:acp:${parts[1]}`;
-  }
-  
-  // Unknown format, wrap as-is
-  log.warn({ legacyKey }, 'Unknown ACP key format, wrapping as-is');
-  return `${defaultAgentId}:acp:${legacyKey}`;
-}

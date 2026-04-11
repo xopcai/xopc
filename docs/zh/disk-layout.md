@@ -72,25 +72,9 @@
 | `skills/` | 用户自建技能。 |
 | *任意文件* | `read` / `write` / `edit` 等工具操作对象。 |
 
-新安装不会把内部状态写回 Markdown 工作区。旧数据可能仍留在 legacy 路径，直至一次性迁移完成（见下）。
+新安装不会把内部状态写回 Markdown 工作区。本版本只支持文首表格中的 **单一目录树**：人设与机器状态均在 `agents/<id>/` 下，**不会**从「全部堆在 Markdown 工作区里」的旧布局自动迁移；bootstrap 请用 `xopcbot setup` / `xopcbot onboard`，其他数据需自行搬迁。
 
-## 旧版路径与迁移
-
-旧版曾在 Markdown 工作区内落盘。新位置为空时，运行时对下表所列路径会 **复制或移动** 一次（见 `src/config/migrate-internal-state.ts` 以及 `AgentService.migrateDefaultAgentInternalStateFromWorkspace` / 各 store）。`agents/<id>/bootstrap/` 下的人设 Markdown **不会**再从工作区根目录自动导入；请运行 `xopcbot setup` 或 `xopcbot onboard` 补全缺失的 bootstrap 文件，或手动复制。
-
-|旧版（Markdown 工作空间下） | 现网位置 |
-|------------------------------|----------|
-| 根目录 `SOUL.md`、`HEARTBEAT.md` 等 | `agents/<id>/bootstrap/` |
-| `.xopcbot/memories/` | `agents/<id>/memories/` |
-| `.xopcbot/inbound/` | `agents/<id>/inbound/` |
-| `.xopcbot/tts/` | `agents/<id>/tts/` |
-| `.xopcbot/outbound-pending.json` | `agents/<id>/agent/outbound-pending.json` |
-| `.sessions/config/` | `agents/<id>/sessions/config/` |
-| `.sessions/acp-sessions.json` | `agents/<id>/sessions/acp-sessions.json` |
-| `.state/workspace.json`、`skills-cache.json` | `agents/<id>/agent/state/` |
-| `.extensions/`（每 Agent） | `agents/<id>/agent/extensions/` |
-
-解析 transcript 中的相对路径时，仍接受以 **旧前缀** 开头的路径（例如 `.xopcbot/inbound/...`），并相对当前配置的 Markdown 工作空间解析。
+会话里引用的入站附件 / TTS 路径仅支持相对 `inbound/`、`tts/`（相对 agent home解析）。
 
 ## 运维辅助 API
 

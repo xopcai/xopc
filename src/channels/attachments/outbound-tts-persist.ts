@@ -6,14 +6,11 @@ import { mkdir, writeFile } from 'fs/promises';
 import { join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { createLogger } from '../../utils/logger.js';
-import { migrateTreeIfTargetMissing } from '../../config/migrate-internal-state.js';
 import type { InternalAttachmentRoots } from './inbound-persist.js';
 
 const log = createLogger('OutboundTtsPersist');
 
 export const TTS_REL_ROOT = 'tts';
-
-export const LEGACY_TTS_REL_PREFIX = '.xopcbot/tts';
 
 function sanitizeSessionSegment(sessionKey: string): string {
   return sessionKey.replace(/[^a-zA-Z0-9_.-]+/g, '_').slice(0, 180) || 'session';
@@ -67,7 +64,7 @@ export async function persistOutboundTtsAudio(
 }
 
 /**
- * Resolve a stored relative path under `tts/` or legacy `.xopcbot/tts/`.
+ * Resolve a stored relative path under `tts/`.
  */
 export function resolveSafeTtsFilePath(roots: InternalAttachmentRoots, relRaw: string): string | null {
   const rel = relRaw.replace(/\\/g, '/').replace(/^\/+/, '');
@@ -79,21 +76,5 @@ export function resolveSafeTtsFilePath(roots: InternalAttachmentRoots, relRaw: s
     return resolveUnderRoot(roots.agentHome, rel, `${TTS_REL_ROOT}/`);
   }
 
-  if (rel.startsWith(`${LEGACY_TTS_REL_PREFIX}/`)) {
-    const legacy = roots.legacyWorkspace ?? roots.agentHome;
-    const fromLegacy = resolveUnderRoot(legacy, rel, `${LEGACY_TTS_REL_PREFIX}/`);
-    if (fromLegacy) {
-      return fromLegacy;
-    }
-    return resolveUnderRoot(roots.agentHome, rel, `${LEGACY_TTS_REL_PREFIX}/`);
-  }
-
   return null;
-}
-
-export function migrateLegacyTtsTree(agentHome: string, legacyWorkspace: string): void {
-  migrateTreeIfTargetMissing(
-    join(agentHome, TTS_REL_ROOT),
-    join(legacyWorkspace, '.xopcbot', 'tts'),
-  );
 }

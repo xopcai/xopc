@@ -6,16 +6,14 @@ import {
 } from '../inbound-persist.js';
 
 describe('inbound-persist', () => {
-  const legacyWs = '/home/user/ws';
   const agentHome = '/home/user/.xopcbot/agents/main';
-  const roots = { agentHome, legacyWorkspace: legacyWs };
+  const roots = { agentHome };
 
   it('resolveSafeInboundFilePath rejects traversal and non-inbound paths', () => {
     expect(resolveSafeInboundFilePath(roots, 'inbound/s/doc.txt')).toBeTruthy();
-    expect(resolveSafeInboundFilePath(roots, '.xopcbot/inbound/s/doc.txt')).toBeTruthy();
     expect(resolveSafeInboundFilePath(roots, '../inbound/s/doc.txt')).toBeNull();
     expect(resolveSafeInboundFilePath(roots, 'other/file.txt')).toBeNull();
-    expect(resolveSafeInboundFilePath(roots, '.xopcbot/other/file.txt')).toBeNull();
+    expect(resolveSafeInboundFilePath(roots, '.xopcbot/inbound/s/doc.txt')).toBeNull();
   });
 
   it('formatInboundFileTextBlock includes abs path when persisted', () => {

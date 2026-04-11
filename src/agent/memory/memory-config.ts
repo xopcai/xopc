@@ -5,7 +5,7 @@ import { resolveAgentHomeDir, resolveAgentIdForWorkspacePath } from '../../agent
 
 import type { MemoryStoreConfig } from './types.js';
 
-/** When false, curated `.xopcbot/memories/` + external memory providers are off. */
+/** When false, curated `memories/` (under agent home) + external memory providers are off. */
 export function isMemorySubsystemEnabled(config: Config | undefined): boolean {
   return config?.agents?.defaults?.memory?.enabled !== false;
 }
@@ -33,7 +33,7 @@ export function resolveBuiltinMemoryStoreConfig(
           resolveAgentHomeDir(config, resolveAgentIdForWorkspacePath(config, workspaceDir)),
           'memories',
         )
-      : join(workspaceDir, '.xopcbot', 'memories');
+      : join(workspaceDir, 'memories');
   return {
     workspaceDir,
     memoriesDir,

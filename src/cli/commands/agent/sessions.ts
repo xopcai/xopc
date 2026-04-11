@@ -7,8 +7,8 @@ import { getSessionManager } from '../../utils/session.js';
 /**
  * List available sessions in a table format
  */
-export async function listSessions(workspace: string): Promise<void> {
-  const manager = await getSessionManager(workspace);
+export async function listSessions(): Promise<void> {
+  const manager = await getSessionManager();
   
   const result = await manager.listSessions({ limit: 20, sortBy: 'updatedAt', sortOrder: 'desc' });
   

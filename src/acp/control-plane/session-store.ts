@@ -10,11 +10,7 @@ import { existsSync } from 'fs';
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/schema.js';
 import { loadConfig } from '../../config/loader.js';
-import {
-  getDefaultWorkspacePath,
-  resolveAgentHomeDir,
-  resolveDefaultAgentId,
-} from '../../agents/agent-scope.js';
+import { resolveAgentHomeDir, resolveDefaultAgentId } from '../../agents/agent-scope.js';
 import type { SessionEntry } from './manager.types.js';
 
 const log = createLogger('AcpSessionStore');
@@ -27,40 +23,16 @@ export class AcpSessionStore {
   private sessionsDir: string;
   private indexCache: Map<string, SessionEntry> | null = null;
   private indexDirty = false;
-  private migrateFromLegacyFile?: string;
 
-  /**
-   * @param agentHomeDir — `resolveAgentHomeDir(…)`
-   * @param options.migrateFromWorkspace — markdown workspace; imports `.sessions/acp-sessions.json` if index missing
-   */
-  constructor(
-    agentHomeDir: string,
-    options?: { migrateFromWorkspace?: string },
-  ) {
+  constructor(agentHomeDir: string) {
     this.sessionsDir = join(agentHomeDir, 'sessions');
     this.indexFile = join(this.sessionsDir, ACP_SESSIONS_INDEX_FILE);
-    const ws = options?.migrateFromWorkspace;
-    this.migrateFromLegacyFile = ws ? join(ws, '.sessions', ACP_SESSIONS_INDEX_FILE) : undefined;
   }
 
   /** Initialize the store */
   async initialize(): Promise<void> {
     await mkdir(this.sessionsDir, { recursive: true });
-    await this.maybeMigrateLegacyIndex();
     log.info({ dir: this.sessionsDir }, 'ACP session store initialized');
-  }
-
-  private async maybeMigrateLegacyIndex(): Promise<void> {
-    const legacy = this.migrateFromLegacyFile;
-    if (!legacy || !existsSync(legacy) || existsSync(this.indexFile)) {
-      return;
-    }
-    try {
-      const { copyFile } = await import('fs/promises');
-      await copyFile(legacy, this.indexFile);
-    } catch (error) {
-      log.warn({ error }, 'ACP session index migration failed');
-    }
   }
 
   /** Load session entry from store */
@@ -216,11 +188,6 @@ export class AcpSessionStore {
   }
 }
 
-/** Get workspace directory from config */
-export function resolveAcpWorkspace(cfg: Config): string {
-  return getDefaultWorkspacePath(cfg);
-}
-
 /** Default agent home for ACP persistence (matches main session store agent id). */
 export function resolveAcpAgentHome(cfg: Config): string {
   return resolveAgentHomeDir(cfg, resolveDefaultAgentId(cfg));
@@ -230,6 +197,5 @@ export function resolveAcpAgentHome(cfg: Config): string {
 export function createDefaultAcpSessionStore(): AcpSessionStore {
   const c = loadConfig();
   const home = resolveAcpAgentHome(c);
-  const legacyWs = getDefaultWorkspacePath(c);
-  return new AcpSessionStore(home, { migrateFromWorkspace: legacyWs });
+  return new AcpSessionStore(home);
 }

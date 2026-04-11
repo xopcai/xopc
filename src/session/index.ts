@@ -9,11 +9,7 @@ export {
   invalidateSessionSearchIndexCache,
 } from './search-index-cache.js';
 export { fileStemToSessionKey } from './session-file-key.js';
-export {
-  resolveLegacyDeepWebShardRelativePath,
-  resolveSessionShardRelativePath,
-  sanitizeSessionPathSegment,
-} from './shard-path.js';
+export { resolveSessionShardRelativePath, sanitizeSessionPathSegment } from './shard-path.js';
 export { SessionConfigStore, resolveThinkingLevel, resolveReasoningLevel, resolveVerboseLevel } from './config-store.js';
 export { resolveEffectiveThinkingLevel, resolveEffectiveReasoningLevel } from './thinking-resolve.js';
 export type { SessionAgentConfig } from './config-store.js';

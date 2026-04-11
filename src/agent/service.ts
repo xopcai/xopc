@@ -4,7 +4,6 @@ import { type Config, type AgentDefaults, getAgentDefaultModelRef } from '../con
 import { maybeAutoTitleSessionStore } from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
 import { INTERNAL_OUTBOUND_DROP_CHANNEL } from '../channels/internal-outbound.js';
-import { mkdirSync } from 'fs';
 import { join } from 'path';
 
 import {
@@ -69,26 +68,17 @@ import {
 import {
   persistInboundAttachmentsToWorkspace,
   formatInboundFileTextBlock,
-  migrateLegacyInboundTree,
   type InternalAttachmentRoots,
 } from '../channels/attachments/inbound-persist.js';
 import {
   mergeVoiceTranscriptsIntoUserText,
   mergeSttConfigFromAppConfig,
 } from '../channels/attachments/voice-stt-webchat.js';
-import {
-  migrateLegacyTtsTree,
-  persistOutboundTtsAudio,
-} from '../channels/attachments/outbound-tts-persist.js';
+import { persistOutboundTtsAudio } from '../channels/attachments/outbound-tts-persist.js';
 import { compressAudio } from '../tts/audio.js';
 import { speak } from '../tts/index.js';
 import { mergeTtsConfigFromAppConfig } from '../tts/merge-config.js';
-import { migrateFileIfMissing, migrateTreeIfTargetMissing } from '../config/migrate-internal-state.js';
-import {
-  FILENAMES,
-  resolveAgentDir,
-  resolveWorkspaceStateDir,
-} from '../config/paths.js';
+import { resolveAgentDir } from '../config/paths.js';
 import { shouldUseTTS, getChannelOutputFormat } from '../tts/service.js';
 import { isTTSAvailable } from '../tts/factory.js';
 
@@ -218,9 +208,7 @@ export class AgentService {
     }
     const defaultAid = resolveDefaultAgentId(appCfgForPaths);
     const defaultAgentHome = resolveAgentHomeDir(appCfgForPaths, defaultAid);
-    this.sessionConfigStore = new SessionConfigStore(defaultAgentHome, {
-      migrateSessionConfigsFrom: this.workspaceDir,
-    });
+    this.sessionConfigStore = new SessionConfigStore(defaultAgentHome);
 
     this.hookRunner = this.createHookRunner();
     this.hookHandler = new HookHandler({
@@ -326,32 +314,10 @@ export class AgentService {
     log.info('AgentService initialized');
   }
 
-  /** Best-effort one-time migration from markdown workspace `.xopcbot/` / `.state` for the configured default agent. */
-  private migrateDefaultAgentInternalStateFromWorkspace(): void {
-    const cfg = this.config.config;
-    if (!cfg) {
-      return;
-    }
-    const aid = resolveDefaultAgentId(cfg);
-    const home = resolveAgentHomeDir(cfg, aid);
-    migrateLegacyInboundTree(home, this.workspaceDir);
-    migrateLegacyTtsTree(home, this.workspaceDir);
-    const stateDir = resolveWorkspaceStateDir(cfg, aid);
-    mkdirSync(stateDir, { recursive: true });
-    const legacyState = join(this.workspaceDir, '.state');
-    migrateFileIfMissing(join(stateDir, FILENAMES.WORKSPACE_STATE), join(legacyState, FILENAMES.WORKSPACE_STATE));
-    migrateFileIfMissing(join(stateDir, FILENAMES.SKILLS_CACHE), join(legacyState, FILENAMES.SKILLS_CACHE));
-    migrateTreeIfTargetMissing(
-      join(resolveAgentDir(cfg, aid), 'extensions'),
-      join(this.workspaceDir, '.extensions'),
-    );
-  }
-
   private attachmentRootsForSession(sessionKey: string): InternalAttachmentRoots {
     const cfg = this.config.config!;
     return {
       agentHome: resolveAgentHomeDir(cfg, extractProfileAgentId(sessionKey, cfg)),
-      legacyWorkspace: this.workspaceDir,
     };
   }
 
@@ -379,7 +345,6 @@ export class AgentService {
     return new SessionStore(
       {
         config: appCfg,
-        workspace: this.config.workspace,
         agentId: resolveDefaultAgentId(appCfg),
       },
       windowConfig,
@@ -564,7 +529,6 @@ export class AgentService {
 
   async start(): Promise<void> {
     this.running = true;
-    this.migrateDefaultAgentInternalStateFromWorkspace();
     await this.sessionConfigStore.initialize();
     await this.hookHandler.trigger('gateway_start', { port: 0, host: 'cli' });
     log.debug('Agent service started');

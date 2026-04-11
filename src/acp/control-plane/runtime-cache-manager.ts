@@ -18,7 +18,6 @@ import { requireAcpRuntimeBackend } from "../runtime/registry.js";
 import type { CachedRuntimeState } from "./manager.types.js";
 import { RuntimeCache } from "./runtime-cache.js";
 import {
-  hasLegacyAcpIdentityProjection,
   normalizeActorKey,
   normalizeSessionKey,
   normalizeText,
@@ -158,8 +157,7 @@ export class RuntimeCacheManager {
       !identityEquals(previousIdentity, nextIdentity) ||
       previousMeta.agent !== nextMeta.agent ||
       previousMeta.cwd !== nextMeta.cwd ||
-      !runtimeOptionsEqual(previousMeta.runtimeOptions, nextMeta.runtimeOptions) ||
-      hasLegacyAcpIdentityProjection(previousMeta);
+      !runtimeOptionsEqual(previousMeta.runtimeOptions, nextMeta.runtimeOptions);
 
     if (shouldPersistMeta) {
       await this.deps.persistMeta(normalizedKey, nextMeta);
