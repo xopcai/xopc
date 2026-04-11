@@ -195,13 +195,6 @@ Curated long-term memory under **`agents/<agentId>/memories/`** (`MEMORY.md` / `
 | `contextCadence` | number | `1` | When `injectionFrequency` is `every-turn`, inject prefetch on turns 1, 1+N, 1+2N, … (minimum `1`). |
 | `dialecticCadence` | number | — | Reserved for future external sync cadence (not wired yet). |
 
-**Migrate** a workspace root `MEMORY.md` into the **default agent’s** `memories/MEMORY.md` (one-time; requires readable `config.json` for agent-home resolution):
-
-```bash
-pnpm run migrate:memory [workspaceDir]
-# or: XOPCBOT_WORKSPACE=/path/to/workspace pnpm run migrate:memory
-```
-
 #### agents.defaults.sessionSearch
 
 Cross-session transcript search via the `session_search` tool (when session persistence is available).
