@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } fr
 
 import type { Message } from '@/features/chat/messages.types';
 import { ChatComposer } from '@/features/chat/chat-composer';
+import { ChatFollowUpChips } from '@/features/chat/chat-follow-up-chips';
 import { ChatPageHeaderRegistration } from '@/features/chat/chat-page-header-registration';
 import { ChatSseStatus } from '@/features/chat/chat-sse-status';
 import { MessageList } from '@/features/chat/message-list';
@@ -57,7 +58,18 @@ export function ChatPage() {
     sending,
     progress,
     sendMessage,
+    addPendingFollowUp,
+    pendingFollowUps,
+    popPendingFollowUpForComposer,
+    removePendingFollowUp,
+    movePendingFollowUp,
+    reorderPendingFollowUp,
+    steerPendingFollowUp,
+    steeringFollowUpId,
+    interruptAndSend,
     abort,
+    followUpSuggestions,
+    pickFollowUpSuggestion,
     clarifyPrompt,
     clarifySubmitting,
     submitClarifyAnswer,
@@ -227,12 +239,25 @@ export function ChatPage() {
               )}
             </div>
 
-            <div className="shrink-0 bg-surface-panel py-4">
+            <div className="sticky bottom-0 z-10 shrink-0 bg-surface-panel py-4">
               <ClarifyPrompt
                 prompt={clarifyPrompt}
                 submitting={clarifySubmitting}
                 onSubmit={submitClarifyAnswer}
               />
+              <div className="mx-auto w-full max-w-[var(--max-width-chat)] px-3 sm:px-5 xl:px-6">
+                <ChatFollowUpChips
+                  suggestions={followUpSuggestions}
+                  disabled={
+                    showSessionLoading ||
+                    sessionRoutePending ||
+                    Boolean(clarifyPrompt) ||
+                    sending ||
+                    streaming
+                  }
+                  onPick={pickFollowUpSuggestion}
+                />
+              </div>
               <ChatComposer
                 disabled={showSessionLoading || sessionRoutePending || Boolean(clarifyPrompt)}
                 sending={sending}
@@ -242,6 +267,15 @@ export function ChatPage() {
                 onThinkingChange={setThinkingLevel}
                 onSend={sendMessage}
                 onAbort={abort}
+                onAddPendingFollowUp={(text, atts) => void addPendingFollowUp(text, atts)}
+                onSteeringInterrupt={(text, atts) => void interruptAndSend(text, atts)}
+                pendingFollowUps={pendingFollowUps}
+                onPopPendingFollowUp={popPendingFollowUpForComposer}
+                onPendingFollowUpRemove={removePendingFollowUp}
+                onPendingFollowUpMove={movePendingFollowUp}
+                onPendingFollowUpReorder={reorderPendingFollowUp}
+                onPendingFollowUpSteer={(id) => void steerPendingFollowUp(id)}
+                steeringFollowUpId={steeringFollowUpId}
               />
             </div>
           </div>

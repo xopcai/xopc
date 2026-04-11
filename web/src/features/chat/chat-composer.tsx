@@ -4,7 +4,9 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 
 
 import type { Attachment } from '@/features/chat/attachment-utils';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment-utils';
+import { ChatPendingFollowUpStack } from '@/features/chat/chat-pending-follow-up-stack';
 import { CommandPalette } from '@/features/chat/command-palette';
+import { MAX_PENDING_FOLLOW_UPS, type PendingFollowUp } from '@/features/chat/pending-follow-up.types';
 import type { PaletteItem } from '@/features/chat/command-palette.types';
 import {
   applyWireToEditor,
@@ -89,12 +91,31 @@ function syncComposerPlaceholderClass(el: HTMLElement, wire: string): void {
   el.classList.toggle('composer-input-empty', wire.trim().length === 0);
 }
 
+function wireFollowUpAttachmentsToComposer(
+  wire: NonNullable<PendingFollowUp['attachments']>,
+): Attachment[] {
+  return wire.map((w) => ({
+    type:
+      w.type === 'voice'
+        ? 'voice'
+        : (w.mimeType ?? '').startsWith('image/')
+          ? 'image'
+          : 'document',
+    mimeType: w.mimeType ?? 'application/octet-stream',
+    content: w.data ?? '',
+    name: w.name ?? 'file',
+    size: w.size ?? 0,
+  }));
+}
+
 type ComposerKbdContext = {
   palette: ReturnType<typeof useCommandPalette>;
   replaceRange: (text: string, start: number, end: number, insert: string) => string;
   applyPaletteItem: (item: PaletteItem) => void;
   send: () => void;
-  busy: boolean;
+  runBusy: boolean;
+  flushSteeringDraft?: () => void | Promise<void>;
+  interruptDraft?: () => void;
   attachmentsLen: number;
   isComposing: boolean;
   valueRef: MutableRefObject<string>;
@@ -107,7 +128,6 @@ type ComposerKbdContext = {
 const ChatComposerInput = memo(function ChatComposerInput({
   editorRef,
   disabled,
-  busy,
   placeholder,
   onWireInput,
   adjustHeight,
@@ -117,7 +137,6 @@ const ChatComposerInput = memo(function ChatComposerInput({
 }: {
   editorRef: MutableRefObject<HTMLDivElement | null>;
   disabled: boolean;
-  busy: boolean;
   placeholder: string;
   onWireInput: (wire: string, caret: number) => void;
   adjustHeight: () => void;
@@ -131,7 +150,7 @@ const ChatComposerInput = memo(function ChatComposerInput({
       role="textbox"
       aria-multiline="true"
       aria-label={placeholder}
-      contentEditable={!(disabled || busy)}
+      contentEditable={!disabled}
       suppressContentEditableWarning
       spellCheck
       className={cn(
@@ -222,7 +241,19 @@ const ChatComposerInput = memo(function ChatComposerInput({
         }
         if (e.key === 'Enter' && !e.shiftKey && !k.isComposing) {
           e.preventDefault();
-          if (!k.busy && (k.valueRef.current.trim() || k.attachmentsLen > 0)) k.send();
+          const hasDraft = Boolean(k.valueRef.current.trim() || k.attachmentsLen > 0);
+          if (k.runBusy) {
+            if ((e.metaKey || e.ctrlKey) && hasDraft) {
+              k.interruptDraft?.();
+              return;
+            }
+            if (!e.metaKey && !e.ctrlKey && !e.altKey && hasDraft) {
+              void k.flushSteeringDraft?.();
+              return;
+            }
+            return;
+          }
+          if (hasDraft) k.send();
         }
       }}
     />
@@ -238,6 +269,15 @@ export const ChatComposer = memo(function ChatComposer({
   onThinkingChange,
   onSend,
   onAbort,
+  onAddPendingFollowUp,
+  onSteeringInterrupt,
+  pendingFollowUps,
+  onPopPendingFollowUp,
+  onPendingFollowUpRemove,
+  onPendingFollowUpMove,
+  onPendingFollowUpReorder,
+  onPendingFollowUpSteer,
+  steeringFollowUpId,
 }: {
   disabled: boolean;
   sending: boolean;
@@ -251,6 +291,25 @@ export const ChatComposer = memo(function ChatComposer({
     thinkingLevel?: string,
   ) => void;
   onAbort: () => void;
+  onAddPendingFollowUp?: (
+    text: string,
+    attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
+  ) => void | Promise<void>;
+  onSteeringInterrupt?: (
+    text: string,
+    attachments?: Array<{ type: string; mimeType?: string; data?: string; name?: string; size?: number }>,
+  ) => void;
+  pendingFollowUps: PendingFollowUp[];
+  onPopPendingFollowUp: (id: string) => {
+    text: string;
+    attachments: NonNullable<PendingFollowUp['attachments']>;
+    thinkingLevel?: string;
+  } | null;
+  onPendingFollowUpRemove: (id: string) => void;
+  onPendingFollowUpMove: (id: string, dir: 'up' | 'down') => void;
+  onPendingFollowUpReorder: (fromIndex: number, toIndex: number) => void;
+  onPendingFollowUpSteer: (id: string) => void;
+  steeringFollowUpId: string | null;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -274,7 +333,7 @@ export const ChatComposer = memo(function ChatComposer({
   const onSendRef = useRef(onSend);
   const maxFileSize = 20 * 1024 * 1024;
 
-  const busy = sending || streaming;
+  const runBusy = sending || streaming;
 
   /** Focus input when the composer becomes interactive (enter chat / session finished loading). */
   const pendingFocusAfterEnableRef = useRef(true);
@@ -284,7 +343,7 @@ export const ChatComposer = memo(function ChatComposer({
   valueRef.current = value;
   attachmentsRef.current = attachments;
   thinkingLevelRef.current = thinkingLevel;
-  busyRef.current = busy;
+  busyRef.current = runBusy;
   onSendRef.current = onSend;
 
   const adjustHeight = useCallback(() => {
@@ -377,7 +436,7 @@ export const ChatComposer = memo(function ChatComposer({
   }, []);
 
   const toggleVoiceRecording = useCallback(async () => {
-    if (busy || disabled) return;
+    if (runBusy || disabled) return;
     if (voiceRecording) {
       stopVoiceRecording();
       return;
@@ -439,7 +498,7 @@ export const ChatComposer = memo(function ChatComposer({
   }, [
     attachmentToWire,
     attachments.length,
-    busy,
+    runBusy,
     disabled,
     m.chat.maxAttachmentsReached,
     m.chat.voiceMicDenied,
@@ -461,6 +520,9 @@ export const ChatComposer = memo(function ChatComposer({
   const applyPaletteItem = (item: PaletteItem) => {
     const range = palette.slashRange;
     if (!range) return;
+    if (item.kind === 'command' && range.start === 0 && busyRef.current) {
+      return;
+    }
 
     if (item.kind === 'skill') {
       const insert = `/skill:${item.name}`;
@@ -520,21 +582,16 @@ export const ChatComposer = memo(function ChatComposer({
     });
   };
 
-  const send = () => {
-    if (busy) return;
-    if (voiceRecording) {
-      stopVoiceRecording();
-      return;
-    }
-    if (!value.trim() && attachments.length === 0) return;
-    const payload = attachments.map((a) => ({
+  const wireAttachmentsPayload = () =>
+    attachments.map((a) => ({
       type: a.type === 'voice' ? 'voice' : a.type || 'file',
       mimeType: a.mimeType,
       data: a.content,
       name: a.name,
       size: a.size,
     }));
-    onSend(value, payload.length ? payload : undefined, thinkingLevel);
+
+  const clearComposer = () => {
     setValue('');
     valueRef.current = '';
     setAttachments([]);
@@ -546,6 +603,79 @@ export const ChatComposer = memo(function ChatComposer({
       }
       adjustHeight();
     });
+  };
+
+  const hydrateFollowUpIntoComposer = useCallback(
+    (id: string) => {
+      const popped = onPopPendingFollowUp(id);
+      if (!popped) return;
+      if (popped.thinkingLevel != null && showThinkingSelector) {
+        onThinkingChange(popped.thinkingLevel);
+      }
+      const nextText = popped.text;
+      setValue(nextText);
+      valueRef.current = nextText;
+      setAttachments(wireFollowUpAttachmentsToComposer(popped.attachments));
+      requestAnimationFrame(() => {
+        const el = editorRef.current;
+        if (el) {
+          applyWireToEditor(el, nextText, nextText.length);
+          syncComposerPlaceholderClass(el, nextText);
+          el.focus({ preventScroll: true });
+        }
+        adjustHeight();
+      });
+    },
+    [adjustHeight, onPopPendingFollowUp, onThinkingChange, showThinkingSelector],
+  );
+
+  const flushSteeringDraft = useCallback(async () => {
+    if (!runBusy || !onAddPendingFollowUp) return;
+    if (voiceRecording) {
+      stopVoiceRecording();
+      return;
+    }
+    if (!value.trim() && attachments.length === 0) return;
+    if (pendingFollowUps.length >= MAX_PENDING_FOLLOW_UPS) {
+      console.warn(interpolate(m.chat.followUpQueueMaxReached, { max: MAX_PENDING_FOLLOW_UPS }));
+      return;
+    }
+    const payload = wireAttachmentsPayload();
+    await onAddPendingFollowUp(value, payload.length ? payload : undefined);
+    clearComposer();
+  }, [
+    attachments,
+    m.chat.followUpQueueMaxReached,
+    onAddPendingFollowUp,
+    pendingFollowUps.length,
+    runBusy,
+    stopVoiceRecording,
+    value,
+    voiceRecording,
+  ]);
+
+  const interruptDraft = useCallback(() => {
+    if (!runBusy || !onSteeringInterrupt) return;
+    if (voiceRecording) {
+      stopVoiceRecording();
+      return;
+    }
+    if (!value.trim() && attachments.length === 0) return;
+    const payload = wireAttachmentsPayload();
+    onSteeringInterrupt(value, payload.length ? payload : undefined);
+    clearComposer();
+  }, [attachments, onSteeringInterrupt, runBusy, stopVoiceRecording, value, voiceRecording]);
+
+  const send = () => {
+    if (runBusy) return;
+    if (voiceRecording) {
+      stopVoiceRecording();
+      return;
+    }
+    if (!value.trim() && attachments.length === 0) return;
+    const payload = wireAttachmentsPayload();
+    onSend(value, payload.length ? payload : undefined, thinkingLevel);
+    clearComposer();
   };
 
   const onWireInput = useCallback((wire: string, caret: number) => {
@@ -563,7 +693,9 @@ export const ChatComposer = memo(function ChatComposer({
     replaceRange,
     applyPaletteItem,
     send,
-    busy,
+    runBusy,
+    flushSteeringDraft,
+    interruptDraft,
     attachmentsLen: attachments.length,
     isComposing,
     valueRef,
@@ -576,7 +708,7 @@ export const ChatComposer = memo(function ChatComposer({
   return (
     <div
       className={cn(
-        'relative w-full overflow-x-hidden overflow-y-visible rounded-xl bg-surface-panel shadow-surface ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:shadow-none',
+        'relative flex min-h-0 w-full flex-col overflow-hidden rounded-xl bg-surface-panel shadow-surface ring-1 ring-inset ring-edge dark:bg-surface-panel/60 dark:shadow-none',
         isDragging && 'ring-2 ring-accent ring-inset',
       )}
         onDragOver={(e) => {
@@ -633,6 +765,22 @@ export const ChatComposer = memo(function ChatComposer({
           </div>
         ) : null}
 
+        {runBusy && pendingFollowUps.length > 0 ? (
+          <div className="max-h-[min(30vh,11rem)] shrink-0 overflow-y-auto overflow-x-hidden border-b border-edge-subtle/80 [scrollbar-gutter:stable] dark:border-edge-subtle/70">
+            <ChatPendingFollowUpStack
+              items={pendingFollowUps}
+              disabled={disabled}
+              onEditInComposer={hydrateFollowUpIntoComposer}
+              onRemove={onPendingFollowUpRemove}
+              onMove={onPendingFollowUpMove}
+              onReorder={onPendingFollowUpReorder}
+              onSteer={onPendingFollowUpSteer}
+              steeringBusyId={steeringFollowUpId}
+            />
+          </div>
+        ) : null}
+
+        <div className="flex min-h-0 shrink-0 flex-col">
         <input
           ref={fileInputRef}
           type="file"
@@ -663,8 +811,7 @@ export const ChatComposer = memo(function ChatComposer({
             <ChatComposerInput
               editorRef={editorRef}
               disabled={disabled}
-              busy={busy}
-              placeholder={m.chat.inputPlaceholder}
+              placeholder={runBusy ? m.chat.inputPlaceholderSteering : m.chat.inputPlaceholder}
               onWireInput={onWireInput}
               adjustHeight={adjustHeight}
               processFiles={processFiles}
@@ -673,7 +820,11 @@ export const ChatComposer = memo(function ChatComposer({
             />
         </div>
 
-        <div className="flex flex-wrap items-center gap-2 border-t border-edge-subtle/90 px-4 py-2.5 dark:border-edge-subtle">
+        <div
+          className={cn(
+            'flex flex-wrap items-center gap-2 border-t border-edge-subtle/90 px-4 py-2.5 dark:border-edge-subtle',
+          )}
+        >
             <button
               type="button"
               className={cn(
@@ -683,7 +834,7 @@ export const ChatComposer = memo(function ChatComposer({
                 interaction.focusRingPanel,
                 'disabled:opacity-50 disabled:cursor-not-allowed',
               )}
-              disabled={attachments.length >= MAX_CHAT_ATTACHMENTS || disabled || busy}
+              disabled={attachments.length >= MAX_CHAT_ATTACHMENTS || disabled || runBusy}
               title={
                 attachments.length >= MAX_CHAT_ATTACHMENTS
                   ? interpolate(m.chat.maxAttachmentsReached, { max: MAX_CHAT_ATTACHMENTS })
@@ -703,7 +854,7 @@ export const ChatComposer = memo(function ChatComposer({
                 <select
                   className="max-w-[min(6.5rem,30vw)] cursor-pointer appearance-none bg-transparent pl-0 pr-0 text-[0.8125rem] font-medium text-fg focus:outline-none"
                   value={thinkingLevel}
-                  disabled={disabled || busy}
+                  disabled={disabled || (sending && !streaming)}
                   onChange={(e) => onThinkingChange(e.target.value)}
                 >
                   {(Object.keys(m.chat.thinkingLevels) as ThinkingLevel[]).map((lvl) => (
@@ -728,7 +879,7 @@ export const ChatComposer = memo(function ChatComposer({
                     : 'text-fg-subtle hover:bg-surface-hover hover:text-fg',
                   'disabled:opacity-50 disabled:cursor-not-allowed',
                 )}
-                disabled={disabled || attachments.length >= MAX_CHAT_ATTACHMENTS}
+                disabled={disabled || runBusy || attachments.length >= MAX_CHAT_ATTACHMENTS}
                 title={voiceRecording ? m.chat.voiceRecordingStop : m.chat.voiceRecording}
                 aria-label={voiceRecording ? m.chat.voiceRecordingStop : m.chat.voiceRecording}
                 onClick={() => void toggleVoiceRecording()}
@@ -736,21 +887,39 @@ export const ChatComposer = memo(function ChatComposer({
                 <Mic className={cn('h-4 w-4 stroke-[1.75]', voiceRecording && 'animate-pulse')} />
               </button>
 
-              {busy ? (
-                <button
-                  type="button"
-                  className={cn(
-                    'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
-                    interaction.transition,
-                    interaction.press,
-                    interaction.focusRingPanel,
-                  )}
-                  title={m.chat.abort}
-                  aria-label={m.chat.abort}
-                  onClick={onAbort}
-                >
-                  <Square className="h-4 w-4 stroke-[1.75]" />
-                </button>
+              {runBusy ? (
+                <>
+                  {(value.trim() || attachments.length > 0) && onSteeringInterrupt ? (
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex size-8 shrink-0 items-center justify-center rounded-lg border border-transparent text-accent-fg hover:bg-accent-soft dark:hover:bg-accent-soft',
+                        interaction.transition,
+                        interaction.press,
+                        interaction.focusRingPanel,
+                      )}
+                      title={m.chat.steeringInterruptSend}
+                      aria-label={m.chat.steeringInterruptSend}
+                      onClick={() => void interruptDraft()}
+                    >
+                      <Send className="h-4 w-4 stroke-[1.75]" />
+                    </button>
+                  ) : null}
+                  <button
+                    type="button"
+                    className={cn(
+                      'inline-flex size-8 shrink-0 items-center justify-center rounded-lg bg-surface-hover/70 text-fg-muted hover:bg-surface-hover hover:text-fg dark:bg-surface-hover/50',
+                      interaction.transition,
+                      interaction.press,
+                      interaction.focusRingPanel,
+                    )}
+                    title={m.chat.abort}
+                    aria-label={m.chat.abort}
+                    onClick={onAbort}
+                  >
+                    <Square className="h-4 w-4 stroke-[1.75]" />
+                  </button>
+                </>
               ) : (
                 <button
                   type="button"
@@ -771,6 +940,7 @@ export const ChatComposer = memo(function ChatComposer({
                 </button>
               )}
             </div>
+        </div>
         </div>
     </div>
   );

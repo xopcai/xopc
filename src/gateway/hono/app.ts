@@ -265,6 +265,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         'GET  /status',
         'POST /api/agent           (SSE stream / JSON)',
         'POST /api/agent/abort',
+        'POST /api/agent/steer',
         'POST /api/send',
         'GET  /api/events          (SSE stream)',
         'GET  /api/channels/status',
@@ -682,6 +683,44 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
     const aborted = service.abortAgentRun(runId);
     return c.json({ ok: true, payload: { aborted } });
+  });
+
+  // POST /api/agent/steer — Queue steering text for an in-flight webchat run (pi-agent `steer()`)
+  authenticated.post('/api/agent/steer', strictRateLimitMiddleware, async (c) => {
+    const body = await c.req.json().catch(() => null);
+    if (!body || typeof body !== 'object') {
+      return c.json(
+        { ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid JSON body' } },
+        400,
+      );
+    }
+    const chatId =
+      typeof (body as { chatId?: unknown }).chatId === 'string'
+        ? (body as { chatId: string }).chatId.trim()
+        : '';
+    const message =
+      typeof (body as { message?: unknown }).message === 'string'
+        ? (body as { message: string }).message
+        : '';
+    if (!chatId) {
+      return c.json(
+        { ok: false, error: { code: 'BAD_REQUEST', message: 'Missing chatId' } },
+        400,
+      );
+    }
+    const result = service.steerWebchatAgent(chatId, message);
+    if (result.ok === false) {
+      const code = result.code;
+      const status = code === 'BAD_REQUEST' ? 400 : code === 'NO_ACTIVE_RUN' ? 409 : 500;
+      const msg =
+        code === 'NO_ACTIVE_RUN'
+          ? 'No active agent run for this chat'
+          : code === 'STEER_FAILED'
+            ? 'Steer failed'
+            : 'Message required';
+      return c.json({ ok: false, error: { code, message: msg } }, status);
+    }
+    return c.json({ ok: true, payload: { steered: true } });
   });
 
   // POST /api/clarify/:requestId — Answer a pending `clarify` tool (webchat)

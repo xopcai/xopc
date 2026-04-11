@@ -1172,6 +1172,28 @@ export class AgentService {
   }
 
   /**
+   * Queue a steering user message into pi-agent's in-flight run (delivered after current tool work, before the next LLM call).
+   * See `Agent.steer` in `@mariozechner/pi-agent-core`.
+   */
+  steerWebchatSession(sessionKey: string, text: string): boolean {
+    const trimmed = text.trim();
+    if (!trimmed) return false;
+    try {
+      const agent = this.agentManager.getOrCreateAgent(sessionKey);
+      const msg: AgentMessage = {
+        role: 'user',
+        content: [{ type: 'text', text: trimmed }],
+        timestamp: Date.now(),
+      };
+      agent.steer(msg);
+      return true;
+    } catch (err) {
+      log.warn({ err, sessionKey }, 'steerWebchatSession failed');
+      return false;
+    }
+  }
+
+  /**
    * Generate TTS for webchat when config allows, persist under agent home `tts/`, attach to last assistant turn.
    */
   private async maybeEmitWebchatTts(

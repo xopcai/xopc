@@ -745,6 +745,38 @@ export class GatewayService {
     return true;
   }
 
+  /**
+   * Queue steering text for an active webchat run (`Agent.steer` / tool-boundary injection).
+   * `chatId` is the same as `POST /api/agent` body (`sessionKey` or legacy peer id).
+   */
+  steerWebchatAgent(
+    chatId: string,
+    message: string,
+  ): { ok: true } | { ok: false; code: 'BAD_REQUEST' | 'NO_ACTIVE_RUN' | 'STEER_FAILED' } {
+    const trimmed = message.trim();
+    if (!trimmed) {
+      return { ok: false, code: 'BAD_REQUEST' };
+    }
+    const parsedKey = parseSessionKey(chatId);
+    const sessionKey = parsedKey
+      ? chatId
+      : buildSessionKey({
+          agentId: getDefaultAgentId(this.config),
+          source: 'webchat',
+          accountId: 'default',
+          peerKind: 'direct',
+          peerId: chatId,
+        });
+    if (!this.activeWebchatRunBySession.has(sessionKey)) {
+      return { ok: false, code: 'NO_ACTIVE_RUN' };
+    }
+    const steered = this.agentService.steerWebchatSession(sessionKey, trimmed);
+    if (!steered) {
+      return { ok: false, code: 'STEER_FAILED' };
+    }
+    return { ok: true };
+  }
+
   private async deliverTelegramClarify(ctx: {
     sessionKey: string;
     requestId: string;
