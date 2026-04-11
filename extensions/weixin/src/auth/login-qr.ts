@@ -116,12 +116,9 @@ export async function startWeixinLoginWithQr(opts: {
   timeoutMs?: number;
   force?: boolean;
   accountId?: string;
-  /** Kept for API compatibility; QR fetch uses fixed ilink host. */
-  apiBaseUrl: string;
   botType?: string;
   routeTag?: string;
 }): Promise<WeixinQrStartResult> {
-  void opts.apiBaseUrl;
   const sessionKey = opts.accountId || randomUUID();
 
   purgeExpiredLogins();
@@ -188,12 +185,9 @@ export async function waitForWeixinLogin(opts: {
   /** When true, do not write to stdout (browser / gateway QR flow). */
   silent?: boolean;
   sessionKey: string;
-  /** Kept for API compatibility; polling starts from fixed host then follows redirect. */
-  apiBaseUrl: string;
   botType?: string;
   routeTag?: string;
 }): Promise<WeixinQrWaitResult> {
-  void opts.apiBaseUrl;
   let activeLogin = activeLogins.get(opts.sessionKey);
 
   if (!activeLogin) {

@@ -68,21 +68,7 @@ function canonicalContextTokenFilePath(accountId: string): string {
   return path.join(resolveWeixinRootDir(), "accounts", `${norm}.context-tokens.json`);
 }
 
-/** Older builds wrote `${rawListId}.context-tokens.json`; read both until migrated. */
-function listContextTokenFilePathsForRead(accountId: string): string[] {
-  const primary = canonicalContextTokenFilePath(accountId);
-  const legacy = path.join(
-    resolveWeixinRootDir(),
-    "accounts",
-    `${accountId.trim()}.context-tokens.json`,
-  );
-  if (path.resolve(primary) === path.resolve(legacy)) {
-    return [primary];
-  }
-  return [primary, legacy];
-}
-
-/** Persist all context tokens for a given account to disk (canonical filename only). */
+/** Persist all context tokens for a given account to disk. */
 function persistContextTokens(accountId: string): void {
   const norm = normalizeWeixinAccountId(accountId);
   const prefix = `${norm}:`;
@@ -114,9 +100,9 @@ function persistContextTokens(accountId: string): void {
 export function restoreContextTokens(accountId: string): void {
   let count = 0;
   const norm = normalizeWeixinAccountId(accountId);
-  for (const filePath of listContextTokenFilePathsForRead(accountId)) {
-    try {
-      if (!fs.existsSync(filePath)) continue;
+  const filePath = canonicalContextTokenFilePath(accountId);
+  try {
+    if (fs.existsSync(filePath)) {
       const raw = fs.readFileSync(filePath, "utf-8");
       const tokens = JSON.parse(raw) as Record<string, unknown>;
       for (const [userId, val] of Object.entries(tokens)) {
@@ -126,9 +112,9 @@ export function restoreContextTokens(accountId: string): void {
           count++;
         }
       }
-    } catch (err) {
-      logger.warn(`restoreContextTokens: failed to read ${filePath}: ${String(err)}`);
     }
+  } catch (err) {
+    logger.warn(`restoreContextTokens: failed to read ${filePath}: ${String(err)}`);
   }
   if (count > 0) {
     logger.info(`restoreContextTokens: restored ${count} tokens for account=${norm}`);
@@ -144,12 +130,11 @@ export function clearContextTokensForAccount(accountId: string): void {
       contextTokenStore.delete(k);
     }
   }
-  for (const filePath of listContextTokenFilePathsForRead(accountId)) {
-    try {
-      if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
-    } catch (err) {
-      logger.warn(`clearContextTokensForAccount: failed to remove ${filePath}: ${String(err)}`);
-    }
+  try {
+    const filePath = canonicalContextTokenFilePath(accountId);
+    if (fs.existsSync(filePath)) fs.unlinkSync(filePath);
+  } catch (err) {
+    logger.warn(`clearContextTokensForAccount: failed to remove context tokens file: ${String(err)}`);
   }
   logger.info(`clearContextTokensForAccount: cleared tokens for account=${norm}`);
 }
@@ -157,22 +142,21 @@ export function clearContextTokensForAccount(accountId: string): void {
 function tryHydratePeerEntryFromDisk(accountId: string, userId: string): WeixinContextTokenEntry | undefined {
   const peer = normalizeIlinkUserIdForContext(userId);
   const norm = normalizeWeixinAccountId(accountId);
-  for (const filePath of listContextTokenFilePathsForRead(accountId)) {
-    if (!fs.existsSync(filePath)) continue;
-    try {
-      const raw = fs.readFileSync(filePath, "utf-8");
-      const tokens = JSON.parse(raw) as Record<string, unknown>;
-      for (const [jsonKey, val] of Object.entries(tokens)) {
-        const entry = parsePersistedPeerVal(val);
-        if (!entry?.token) continue;
-        if (!ilinkPeerKeysLikelySame(jsonKey, peer)) continue;
-        contextTokenStore.set(contextTokenKey(norm, peer), entry);
-        persistContextTokens(accountId);
-        return entry;
-      }
-    } catch (err) {
-      logger.debug(`tryHydratePeerEntryFromDisk: ${filePath}: ${String(err)}`);
+  const filePath = canonicalContextTokenFilePath(accountId);
+  if (!fs.existsSync(filePath)) return undefined;
+  try {
+    const raw = fs.readFileSync(filePath, "utf-8");
+    const tokens = JSON.parse(raw) as Record<string, unknown>;
+    for (const [jsonKey, val] of Object.entries(tokens)) {
+      const entry = parsePersistedPeerVal(val);
+      if (!entry?.token) continue;
+      if (!ilinkPeerKeysLikelySame(jsonKey, peer)) continue;
+      contextTokenStore.set(contextTokenKey(norm, peer), entry);
+      persistContextTokens(accountId);
+      return entry;
     }
+  } catch (err) {
+    logger.debug(`tryHydratePeerEntryFromDisk: ${filePath}: ${String(err)}`);
   }
   return undefined;
 }
