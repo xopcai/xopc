@@ -10,7 +10,8 @@ import { join } from 'node:path';
 
 import type { Config } from '../../config/schema.js';
 import type { SkillManager } from '../skills/skill-manager.js';
-import { createSkillConfigManager, isSkillEnabled } from '../skills/config.js';
+import { createSkillConfigManager } from '../skills/config.js';
+import { selectSkillsVisibleInPrompt } from '../skills/format-skills-prompt.js';
 import { resolveStateDir } from '../../config/paths.js';
 import type { BootstrapFile } from '../context/workspace.js';
 import { buildSystemPrompt as buildBaseSystemPrompt } from './system-prompt.js';
@@ -31,6 +32,8 @@ export interface SystemPromptBuildOptions {
   skillPromptText?: string;
   /** Restrict `<available_skills>` to these names (merged with skills.json toggles). */
   skillAllowlist?: string[];
+  /** Registered tool names for this agent session (enables Phase 2 skill tool gating). */
+  registeredToolNames?: string[];
 }
 
 export interface SystemPromptBuilderConfig {
@@ -67,9 +70,10 @@ export class SystemPromptBuilder {
       const skillPrompt =
         options.skillPromptText !== undefined
           ? options.skillPromptText
-          : options.skillAllowlist
-            ? this.skillManager.getPromptForSkillAllowlist(options.skillAllowlist)
-            : this.skillManager.getPrompt();
+          : this.skillManager.getPromptForSkillAllowlist(
+              options.skillAllowlist,
+              options.registeredToolNames,
+            );
       const trimmed = options.systemPromptOverride.trim();
       const fullPrompt = skillPrompt.trim() ? `${trimmed}\n\n${skillPrompt}` : trimmed;
       log.debug({ baseLength: trimmed.length, skillLength: skillPrompt.length, totalLength: fullPrompt.length }, 'System prompt built (override)');
@@ -84,21 +88,30 @@ export class SystemPromptBuilder {
 
     const workspaceBootstrapFiles = bootstrapFiles.map((f) => toWorkspaceBootstrapFile(f, ws));
 
+    const skillsCfg = createSkillConfigManager(resolveStateDir()).load();
+    const skillsPromptMode =
+      skillsCfg.promptStyle === 'legacy-with-paths' ? 'legacy-with-paths' : 'metadata-only';
+
     const basePrompt = buildBaseSystemPrompt(ws, {
       bootstrapFiles: workspaceBootstrapFiles,
       heartbeatEnabled,
-      availableTools: this.getAvailableTools(options?.skillAllowlist),
+      availableTools: this.getSkillNamesForSkillsSection({
+        skillAllowlist: options?.skillAllowlist,
+        registeredToolNames: options?.registeredToolNames,
+      }),
       userTimezone,
       curatedMemorySnapshot,
       externalMemoryInstructions,
+      skillsPromptMode,
     });
 
     const skillPrompt =
       options?.skillPromptText !== undefined
         ? options.skillPromptText
-        : options?.skillAllowlist
-          ? this.skillManager.getPromptForSkillAllowlist(options.skillAllowlist)
-          : this.skillManager.getPrompt();
+        : this.skillManager.getPromptForSkillAllowlist(
+            options?.skillAllowlist,
+            options?.registeredToolNames,
+          );
 
     const fullPrompt = skillPrompt ? `${basePrompt}\n\n${skillPrompt}` : basePrompt;
 
@@ -162,24 +175,16 @@ export class SystemPromptBuilder {
     return undefined;
   }
 
-  /**
-   * Get list of available tool names from skills
-   */
-  private getAvailableTools(skillAllowlist?: string[]): string[] {
-    if (skillAllowlist?.length) {
-      const allow = new Set(skillAllowlist.map((s) => s.toLowerCase()));
-      const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
-      return this.skillManager
-        .getSkills()
-        .filter(
-          (s) =>
-            allow.has(s.name.toLowerCase()) &&
-            !s.disableModelInvocation &&
-            isSkillEnabled(s, skillsConfig),
-        )
-        .map((s) => s.name);
-    }
-    return this.skillManager.getSkillNamesForPrompt();
+  /** Skill names driving the "## Skills" section (aligned with `<available_skills>` indexing). */
+  private getSkillNamesForSkillsSection(options?: {
+    skillAllowlist?: string[];
+    registeredToolNames?: string[];
+  }): string[] {
+    const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+    return selectSkillsVisibleInPrompt(this.skillManager.getSkills(), skillsConfig, {
+      skillAllowlist: options?.skillAllowlist,
+      registeredToolNames: options?.registeredToolNames,
+    }).map((s) => s.name);
   }
 
   /**
