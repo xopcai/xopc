@@ -210,7 +210,6 @@ export class SystemPromptBuilder {
   }
 }
 
-// Re-export the original buildSystemPrompt for compatibility
 export { buildBaseSystemPrompt as buildSystemPrompt };
 
 // Factory function for creating SystemPromptBuilder

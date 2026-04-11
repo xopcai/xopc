@@ -80,14 +80,14 @@ export class AcpSessionManager {
       persistMeta: async (sessionKey, meta) => {
         await this.sessionStore.save(sessionKey, { sessionKey, acp: meta });
       },
-      enforceConcurrentLimit: (sessionKey) => this.enforceConcurrentSessionLimit(sessionKey),
+      enforceConcurrentLimit: () => {},
     });
 
     this.lifecycleManager = new SessionLifecycleManager({
       loadEntry: (key) => this.sessionStore.load(key),
       saveEntry: (key, entry) => this.sessionStore.save(key, entry),
       listEntries: () => this.sessionStore.list(),
-      enforceConcurrentLimit: (key) => this.enforceConcurrentSessionLimit(key),
+      enforceConcurrentLimit: () => {},
     });
   }
 
@@ -595,11 +595,6 @@ export class AcpSessionManager {
         await state.runtime.close({ handle: state.handle, reason: "idle-evicted" });
       },
     });
-  }
-
-  private enforceConcurrentSessionLimit(_sessionKey: string): void {
-    // This will be called by sub-managers; actual check is in initializeSession/ensureHandle
-    // Kept for interface compatibility
   }
 
   private async withSessionActor<T>(

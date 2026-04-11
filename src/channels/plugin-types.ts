@@ -127,7 +127,7 @@ export interface ChannelPlugin<ResolvedAccount = any> {
 
   extensionManagedConfig?: boolean;
 
-  /** Required account/config surface (formerly configAdapter). */
+  /** Required account/config surface. */
   config: ChannelConfigAdapter<ResolvedAccount>;
 
   configSchema?: ChannelConfigSchema;

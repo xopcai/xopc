@@ -273,7 +273,7 @@ export class GatewayService {
       }
 
       // Create and register local ACP runtime backend
-      const backend = createLocalAcpRuntimeBackend(this.agentService, this.bus);
+      const backend = createLocalAcpRuntimeBackend(this.bus);
       registerAcpRuntimeBackend(backend);
       
       log.debug({ backendId: backend.id }, 'ACP runtime backend registered');
@@ -309,8 +309,8 @@ export class GatewayService {
     await this.loadExtensionsAndRegisterChannels();
 
     // Start channels (initialize first, then start)
-    await this.channelManager.initializeChannels();
-    await this.channelManager.startAll();
+    await this.channelManager.initialize();
+    await this.channelManager.start();
     await this.channelManager.replayPendingOutboundMessages();
 
     // Initialize session manager
@@ -378,7 +378,7 @@ export class GatewayService {
     this.running = false;
     this.bus.shutdown();
 
-    await this.channelManager.stopAll();
+    await this.channelManager.stop();
 
     // Stop cron service
     await this.cronService.stop();
@@ -933,14 +933,7 @@ export class GatewayService {
       throw new Error(`Gateway method not found: ${method}`);
     }
 
-    // Merge context into params for backward compatibility
-    const enhancedParams = {
-      ...params,
-      _senderId: params._senderId as string | undefined,
-      _channel: params._channel as string | undefined,
-    };
-
-    return await handler(enhancedParams);
+    return await handler(params);
   }
 
   get currentConfig(): Config {

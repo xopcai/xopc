@@ -328,9 +328,7 @@ export class CronService {
    * Update config (hot reload)
    */
   updateConfig(_config: Config): void {
-    // Cron jobs are managed separately via addJob/removeJob
-    // This method exists for interface compatibility
-    log.debug('Cron config updated (jobs managed separately)');
+    log.debug('Cron config updated (jobs managed separately via addJob/removeJob)');
   }
 
   /**

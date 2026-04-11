@@ -2,7 +2,7 @@
 
 export interface Message {
   role: 'system' | 'user' | 'assistant' | 'tool' | 'toolResult';
-  /** Plain text (legacy) or structured content blocks from the agent (tool calls, multimodal). */
+  /** Plain string or structured content blocks (tool calls, multimodal). */
   content: string | unknown[];
   timestamp?: string;
   tool_call_id?: string;

@@ -115,7 +115,7 @@ export function generateSessionKey(ctx: SessionKeyContext): string {
 /**
  * Parse a session key into its components
  * 
- * Returns legacy-compatible format for backward compatibility in UI/components
+ * Returns a UI-oriented shape (`type`, `chatId`, etc.) derived from the routing key.
  */
 export function parseSessionKey(sessionKey: string): {
   source: MessageSource;
@@ -137,7 +137,7 @@ export function parseSessionKey(sessionKey: string): {
     };
   }
   
-  // Map peerKind to legacy type
+  // Map routing peer kind to coarse UI type
   let type: 'dm' | 'group' | 'thread' | 'direct' | 'other';
   switch (parsed.peerKind) {
     case 'dm':

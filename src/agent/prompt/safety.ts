@@ -74,15 +74,6 @@ const _SAFETY_PRINCIPLES: SafetyPrinciple[] = [
   },
 ];
 
-// Legacy Safety Rules (kept for backward compatibility)
-interface SafetyRule {
-  level: SafetyLevel;
-  category: string;
-  description: string;
-  message: string;
-  requiresConfirmation: boolean;
-}
-
 const _SAFETY_GUIDELINES: SafetyRule[] = [
   // Critical - Never do these
   {

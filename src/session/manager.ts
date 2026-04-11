@@ -242,44 +242,44 @@ export class SessionManager extends EventEmitter {
     this.on('sessionAccessed', callback);
   }
 
-  // ========== Legacy Compatibility (MemoryStore API) ==========
+  // ========== Store delegation (messages, compaction) ==========
 
-  /** Load messages (MemoryStore API) */
+  /** Load messages for a session key */
   async loadMessages(key: string) {
     return this.store.loadMessages(key);
   }
 
-  /** Save messages (MemoryStore API) */
+  /** Save messages for a session key */
   async saveMessages(key: string, messages: any[]) {
     return this.store.saveMessages(key, messages);
   }
 
-  /** Delete session (MemoryStore API) */
+  /** Delete session data */
   async delete(key: string): Promise<void> {
     await this.store.delete(key);
   }
 
-  /** Get window stats (MemoryStore API) */
+  /** Token/window stats for a message list */
   getWindowStats(messages: any[]) {
     return this.store.getWindowStats(messages);
   }
 
-  /** Prepare compaction (MemoryStore API) */
+  /** Prepare compaction run */
   prepareCompaction(key: string, messages: any[], contextWindow: number) {
     return this.store.prepareCompaction(key, messages, contextWindow);
   }
 
-  /** Compact session (MemoryStore API) */
+  /** Compact session messages */
   compact(key: string, messages: any[], contextWindow: number, instructions?: string): Promise<CompactionResult> {
     return this.store.compact(key, messages, contextWindow, instructions);
   }
 
-  /** Get compaction stats (MemoryStore API) */
+  /** Compaction stats for a session */
   async getCompactionStats(key: string) {
     return this.store.getCompactionStats(key);
   }
 
-  /** Estimate token usage (MemoryStore API) */
+  /** Estimate token usage for messages */
   async estimateTokenUsage(key: string, messages: any[]): Promise<number> {
     return this.store.estimateTokens(messages);
   }

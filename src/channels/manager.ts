@@ -496,19 +496,6 @@ export class ChannelManager {
     return maybeApplyTtsToPayload(msg, { config: ttsConfig, channel: msg.channel, inboundAudio });
   }
   
-  // Aliases for backward compatibility
-  async initializeChannels(): Promise<void> {
-    return this.initialize();
-  }
-  
-  async startAll(): Promise<void> {
-    return this.start();
-  }
-  
-  async stopAll(): Promise<void> {
-    return this.stop();
-  }
-
   /**
    * Stop a single channel and suppress automatic restart until `startChannel` is called.
    */
@@ -524,7 +511,7 @@ export class ChannelManager {
   }
 
   /**
-   * Clear manual-stop and start one channel (requires prior `initializeChannels` / init).
+   * Clear manual-stop and start one channel (requires prior `initialize()`).
    */
   async startChannel(channelId: string): Promise<void> {
     this.manuallyStopped.delete(channelId);
@@ -543,7 +530,7 @@ export class ChannelManager {
       return;
     }
     if (!this.initializedPluginIds.has(channelId)) {
-      log.warn({ channel: channelId }, 'Channel was never initialized; call initializeChannels first');
+      log.warn({ channel: channelId }, 'Channel was never initialized; call initialize() first');
       return;
     }
     await this.startPlugin(plugin, {});

@@ -29,9 +29,6 @@ export function resolveAgentTurnTimeoutMs(config?: Config): number {
   return DEFAULT_AGENT_TURN_TIMEOUT_MS;
 }
 
-/** @deprecated Use {@link DEFAULT_AGENT_TURN_TIMEOUT_MS} or {@link resolveAgentTurnTimeoutMs}. */
-export const AGENT_TURN_TIMEOUT_MS = DEFAULT_AGENT_TURN_TIMEOUT_MS;
-
 export function isAgentTurnTimeoutError(err: unknown): boolean {
   return err instanceof Error && err.message.startsWith('Agent turn timed out after');
 }

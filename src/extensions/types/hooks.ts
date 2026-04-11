@@ -101,7 +101,7 @@ export const HOOK_EXECUTION_MODES: Record<ExtensionHookEvent, HookExecutionMode>
 };
 
 // ============================================================================
-// ExtensionHookHandler Type (Weak - for backward compatibility)
+// Untyped hook handler (extensions may use before wiring strong types)
 // ============================================================================
 
 export type ExtensionHookHandler = (event: unknown, context?: unknown) => unknown | Promise<unknown>;
@@ -397,7 +397,7 @@ export type HookHandlerMap = {
 };
 
 // ============================================================================
-// Existing Hook Context Types (for backward compatibility)
+// Shared hook context fields
 // ============================================================================
 
 export interface HookContext {

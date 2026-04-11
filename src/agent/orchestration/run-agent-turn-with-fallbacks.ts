@@ -14,13 +14,9 @@ import {
   isAssistantTurnFailed,
   maybeRetryTurnAfterTransientLlmFailure,
 } from './llm-turn-retry.js';
-import {
-  AGENT_TURN_TIMEOUT_MS,
-  resolveAgentTurnTimeoutMs,
-  runAgentTurnWithTimeout,
-} from './run-agent-turn-with-timeout.js';
+import { resolveAgentTurnTimeoutMs, runAgentTurnWithTimeout } from './run-agent-turn-with-timeout.js';
 
-export { AGENT_TURN_TIMEOUT_MS, resolveAgentTurnTimeoutMs };
+export { resolveAgentTurnTimeoutMs };
 
 type FallbackLog = {
   info: (obj: Record<string, unknown>, msg: string) => void;

@@ -521,5 +521,4 @@ export function isHookEvent(value: string): value is ExtensionHookEvent {
   return hookEvents.includes(value as ExtensionHookEvent);
 }
 
-// Re-export HookContext for backward compatibility
 export type { HookContext };
