@@ -109,6 +109,12 @@ export const AgentDefaultsSchema = z.object({
       headless: z.boolean().optional(),
     })
     .optional(),
+  /** Sub-agent delegation (`delegate_task`). Opt-in. */
+  delegate: z
+    .object({
+      enabled: z.boolean().optional(),
+    })
+    .optional(),
   /** Optional full system prompt replacement (merged with per-agent entry; entry wins). */
   systemPromptOverride: z.string().optional(),
   /** Optional allowlist of skill names for `<available_skills>`; when set, replaces unfiltered list. */
