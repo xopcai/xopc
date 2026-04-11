@@ -37,6 +37,8 @@ export interface SkillsToolsDeps {
   getSkillIndexingContext?: () =>
     | { registeredToolNames: string[]; skillAllowlist?: string[] }
     | undefined;
+  /** Phase 5: register declared env var names for shell / tool passthrough (values never exposed). */
+  registerSkillEnvPassthrough?: (names: string[]) => void;
 }
 
 function maxSkillBytes(): number {
@@ -182,6 +184,13 @@ export function createSkillViewTool(deps: SkillsToolsDeps): AgentTool<typeof Ski
           } else {
             outputText += `\n\n[${truncation.outputLines}/${truncation.totalLines} lines]`;
           }
+        }
+
+        const envNames = skill.requiredEnvVarNames;
+        if (envNames?.length && deps.registerSkillEnvPassthrough) {
+          deps.registerSkillEnvPassthrough(envNames);
+          const setNow = envNames.filter((k) => process.env[k] !== undefined).length;
+          outputText += `\n\n[skill env passthrough] Registered ${envNames.length} declared variable name(s) for this session; ${setNow} are currently defined in the process (values are never shown).`;
         }
 
         return { content: [{ type: 'text', text: outputText }], details: {} };

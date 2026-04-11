@@ -91,6 +91,10 @@ export interface ToolFactoryDeps {
     | undefined;
   /** After skill_manage mutates disk, reload skills + refresh agent prompts (optional). */
   onSkillsFilesystemMutate?: () => void;
+  /** Phase 5: names registered via skill_view for shell env passthrough. */
+  getSkillPassthroughEnvVarNames?: () => string[];
+  /** Phase 5: add declared env names for the current session (no values stored). */
+  registerSkillEnvPassthrough?: (names: string[]) => void;
   // TTS config removed - handled at dispatch layer
 }
 
@@ -185,6 +189,7 @@ export class AgentToolsFactory {
             createSkillViewTool({
               getSkillManager: getSkillMgr,
               getSkillIndexingContext: this.deps.getSkillIndexingContext,
+              registerSkillEnvPassthrough: this.deps.registerSkillEnvPassthrough,
             }),
             createSkillManageTool({
               getSkillManager: getSkillMgr,
@@ -199,7 +204,9 @@ export class AgentToolsFactory {
       listDirTool,
       grepTool,
       findTool,
-      createShellTool(workspace),
+      createShellTool(workspace, {
+        getSkillPassthroughEnvVarNames: this.deps.getSkillPassthroughEnvVarNames,
+      }),
       createWebSearchTool(() => this.deps.getConfig?.()),
       webFetchTool,
       createWebExtractTool({ getConfig: () => this.deps.getConfig?.() }),
