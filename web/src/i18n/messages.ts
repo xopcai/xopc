@@ -702,13 +702,37 @@ const bundles: Record<
       subtitle: string;
       intro: string;
       docsLink: string;
+      modelsLink: string;
+      rotateHint: string;
       needToken: string;
       loadError: string;
       save: string;
       saving: string;
       saved: string;
+      noChangesSaved: string;
       saveError: string;
       empty: string;
+      searchPlaceholder: string;
+      unconfiguredOnly: string;
+      noMatches: string;
+      clearFilters: string;
+      discard: string;
+      unsavedHint: string;
+      runtimeLabelPrefix: string;
+      sourceAgent: string;
+      sourceGateway: string;
+      sourceOauth: string;
+      sourceEnv: string;
+      sourceModelsJson: string;
+      sourceNone: string;
+      testKey: string;
+      testingKey: string;
+      testOkLiteral: string;
+      testOkEnv: string;
+      testOkCommand: string;
+      testFailed: string;
+      revokeFailed: string;
+      expandRowDetails: string;
       categories: {
         common: string;
         specialty: string;
@@ -736,6 +760,7 @@ const bundles: Record<
       pasteRedirectUrl: string;
       submitCode: string;
       envHint: string;
+      maskedStoredHint: string;
       oauthHint: string;
     };
     modelsSettings: {
@@ -1846,16 +1871,41 @@ const bundles: Record<
       cronAgentClear: 'Reset to default',
     },
     providersSettings: {
-      subtitle: 'Provider API keys and OAuth. Keys are stored via the gateway credential store.',
-      intro: 'Expand a group, then a provider to set an API key or use OAuth where available.',
+      subtitle: 'Provider API keys and OAuth. Keys you save here go to the gateway credential store.',
+      intro:
+        'Search or open a group, expand a provider, paste a new key, then Save changes. OAuth opens in your browser when you choose it.',
       docsLink: 'Model & provider docs',
+      modelsLink: 'Custom providers (models.json)',
+      rotateHint: 'Rotating a key: expand the provider, paste the new secret, Save changes — no restart needed.',
       needToken: 'Save a gateway token to manage provider credentials.',
       loadError: 'Failed to load providers',
       save: 'Save changes',
       saving: 'Saving…',
       saved: 'Saved',
+      noChangesSaved: 'No new keys to save.',
       saveError: 'Failed to save',
       empty: 'No providers available.',
+      searchPlaceholder: 'Search providers…',
+      unconfiguredOnly: 'Unconfigured only',
+      noMatches: 'No providers match your filters.',
+      clearFilters: 'Clear filters',
+      discard: 'Discard',
+      unsavedHint: 'You have unsaved changes.',
+      runtimeLabelPrefix: 'Runtime credential:',
+      sourceAgent: 'agent private profile',
+      sourceGateway: 'saved in gateway (this console)',
+      sourceOauth: 'OAuth token',
+      sourceEnv: 'environment variable',
+      sourceModelsJson: 'models.json',
+      sourceNone: 'none',
+      testKey: 'Test value',
+      testingKey: 'Testing…',
+      testOkLiteral: 'Value accepted (direct key or text).',
+      testOkEnv: 'Environment variable resolves.',
+      testOkCommand: 'Command resolved successfully.',
+      testFailed: 'Check failed.',
+      revokeFailed: 'Revoke failed.',
+      expandRowDetails: 'Show credential fields',
       categories: {
         common: 'Common providers',
         specialty: 'Specialty providers',
@@ -1884,6 +1934,7 @@ const bundles: Record<
         'Paste full redirect URL (e.g. http://127.0.0.1:…/oauth-callback?code=…&state=…)',
       submitCode: 'Submit',
       envHint: 'API key is set via environment variable. Enter a new key above to override.',
+      maskedStoredHint: 'Stored credential is not shown. Enter a new key above to replace it.',
       oauthHint: 'Use OAuth for secure authentication, or enter an API key manually.',
     },
     modelsSettings: {
@@ -3019,16 +3070,41 @@ const bundles: Record<
       cronAgentClear: '恢复默认',
     },
     providersSettings: {
-      subtitle: '提供商 API Key 与 OAuth。凭据由网关凭据存储保存。',
-      intro: '展开分组与提供商，填写 API Key 或在支持时使用 OAuth。',
+      subtitle: '提供商 API Key 与 OAuth。在此保存的密钥写入网关凭据存储。',
+      intro:
+        '可搜索或展开分组，再展开具体提供商，粘贴新密钥后点「保存更改」。支持 OAuth 时，在浏览器中完成授权。',
       docsLink: '模型与提供商文档',
+      modelsLink: '自定义提供商（models.json）',
+      rotateHint: '日常轮换密钥：展开对应提供商 → 粘贴新密钥 → 保存更改，一般无需重启。',
       needToken: '请先保存网关 Token 后再管理提供商凭据。',
       loadError: '加载提供商失败',
       save: '保存更改',
       saving: '保存中…',
       saved: '已保存',
+      noChangesSaved: '没有需要保存的新密钥。',
       saveError: '保存失败',
       empty: '暂无可用提供商。',
+      searchPlaceholder: '搜索提供商…',
+      unconfiguredOnly: '仅显示未配置',
+      noMatches: '没有符合筛选条件的提供商。',
+      clearFilters: '清除筛选',
+      discard: '放弃更改',
+      unsavedHint: '有未保存的更改。',
+      runtimeLabelPrefix: '当前生效凭据：',
+      sourceAgent: '代理私有凭据',
+      sourceGateway: '网关已保存（本页写入）',
+      sourceOauth: 'OAuth 令牌',
+      sourceEnv: '环境变量',
+      sourceModelsJson: 'models.json',
+      sourceNone: '无',
+      testKey: '测试输入值',
+      testingKey: '测试中…',
+      testOkLiteral: '格式有效（明文或文本）。',
+      testOkEnv: '环境变量可解析。',
+      testOkCommand: '命令解析成功。',
+      testFailed: '检查未通过。',
+      revokeFailed: '撤销失败。',
+      expandRowDetails: '展开凭据与操作',
       categories: {
         common: '常用提供商',
         specialty: '专业 / 特色',
@@ -3056,6 +3132,7 @@ const bundles: Record<
       pasteRedirectUrl: '粘贴完整重定向 URL（含 code= 与 state=）',
       submitCode: '提交',
       envHint: 'API Key 来自环境变量。在上方输入新 Key 可覆盖。',
+      maskedStoredHint: '已保存的凭据不会显示。在上方输入新 Key 可覆盖。',
       oauthHint: '可使用 OAuth 安全登录，或手动填写 API Key。',
     },
     modelsSettings: {
