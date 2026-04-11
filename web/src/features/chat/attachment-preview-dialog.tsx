@@ -11,6 +11,8 @@ import {
   resolveDataUrlForDisplay,
 } from '@/features/chat/attachment-utils-core';
 import { apiFetch } from '@/lib/fetch';
+import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import type { StoredLanguage } from '@/lib/storage';
 import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
@@ -330,74 +332,98 @@ export function AttachmentPreviewDialog({
     URL.revokeObjectURL(url);
   };
 
+  const sideStripClass = cn(
+    'min-h-0 min-w-0 flex-1 cursor-pointer border-0 p-0',
+    'bg-surface-base transition-colors',
+    'hover:bg-surface-hover/90 dark:bg-black/60 dark:hover:bg-black/70',
+    interaction.focusRingBase,
+  );
+
   return (
     <Dialog.Root open={open} onOpenChange={(o) => !o && onClose()}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[80] bg-scrim backdrop-blur-[1px]" />
-        <Dialog.Content className="xopcbot-dialog-content-fullscreen fixed inset-0 z-[81] flex h-[100dvh] max-h-[100dvh] min-h-0 w-full min-w-0 max-w-none flex-col overflow-hidden border-0 bg-surface-panel shadow-none outline-none">
-          <div className="shrink-0 border-b border-edge dark:border-edge">
-            <div className="mx-auto flex w-full max-w-app-main items-center justify-between gap-2 px-4 py-3 sm:px-8">
-              <Dialog.Title className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
-                {preview?.name ?? ''}
-              </Dialog.Title>
-              <div className="flex shrink-0 items-center gap-1">
-                {showToggle ? (
-                  <div
-                    className="mr-2 flex rounded-lg border border-edge p-0.5 dark:border-edge"
-                    role="group"
-                    aria-label={labels.attachmentPreviewText}
-                  >
-                    <button
-                      type="button"
-                      className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                        !showExtractedText ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg'
-                      }`}
-                      onClick={() => {
-                        setShowExtractedText(false);
-                        setFetchError(null);
-                      }}
+        <Dialog.Content
+          className={cn(
+            'xopcbot-dialog-content-fullscreen fixed inset-0 z-[81] flex h-[100dvh] w-full flex-row overflow-hidden',
+            'border-0 bg-transparent p-0 shadow-none outline-none',
+          )}
+        >
+          <button
+            type="button"
+            className={sideStripClass}
+            onClick={onClose}
+            aria-label={labels.attachmentPreviewClose}
+          />
+
+          <div
+            className={cn(
+              'flex h-full min-h-0 w-[min(100%,var(--max-width-app-main))] shrink-0 flex-col overflow-hidden',
+              'bg-surface-panel sm:border-x sm:border-edge dark:sm:border-edge',
+              'shadow-float dark:shadow-elevated',
+            )}
+          >
+            <div className="shrink-0 border-b border-edge bg-surface-panel dark:border-edge">
+              <div className="flex w-full items-center justify-between gap-2 px-4 py-3 sm:px-8">
+                <Dialog.Title className="min-w-0 flex-1 truncate text-sm font-semibold text-fg">
+                  {preview?.name ?? ''}
+                </Dialog.Title>
+                <div className="flex shrink-0 items-center gap-1">
+                  {showToggle ? (
+                    <div
+                      className="mr-2 flex rounded-lg border border-edge p-0.5 dark:border-edge"
+                      role="group"
+                      aria-label={labels.attachmentPreviewText}
                     >
-                      {fileTypeLabel(fileType, labels)}
-                    </button>
-                    <button
-                      type="button"
-                      className={`rounded-md px-2.5 py-1 text-xs font-medium ${
-                        showExtractedText ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg'
-                      }`}
-                      onClick={() => {
-                        setShowExtractedText(true);
-                        setFetchError(null);
-                      }}
-                    >
-                      {labels.attachmentPreviewText}
-                    </button>
-                  </div>
-                ) : null}
-                <button
-                  type="button"
-                  className="rounded-md p-2 text-fg-muted hover:bg-surface-hover hover:text-fg"
-                  title={labels.attachmentPreviewDownload}
-                  aria-label={labels.attachmentPreviewDownload}
-                  onClick={handleDownload}
-                >
-                  <Download className="h-4 w-4" />
-                </button>
-                <Dialog.Close asChild>
+                      <button
+                        type="button"
+                        className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                          !showExtractedText ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg'
+                        }`}
+                        onClick={() => {
+                          setShowExtractedText(false);
+                          setFetchError(null);
+                        }}
+                      >
+                        {fileTypeLabel(fileType, labels)}
+                      </button>
+                      <button
+                        type="button"
+                        className={`rounded-md px-2.5 py-1 text-xs font-medium ${
+                          showExtractedText ? 'bg-surface-hover text-fg' : 'text-fg-muted hover:text-fg'
+                        }`}
+                        onClick={() => {
+                          setShowExtractedText(true);
+                          setFetchError(null);
+                        }}
+                      >
+                        {labels.attachmentPreviewText}
+                      </button>
+                    </div>
+                  ) : null}
                   <button
                     type="button"
                     className="rounded-md p-2 text-fg-muted hover:bg-surface-hover hover:text-fg"
-                    title={labels.attachmentPreviewClose}
-                    aria-label={labels.attachmentPreviewClose}
+                    title={labels.attachmentPreviewDownload}
+                    aria-label={labels.attachmentPreviewDownload}
+                    onClick={handleDownload}
                   >
-                    <X className="h-4 w-4" />
+                    <Download className="h-4 w-4" />
                   </button>
-                </Dialog.Close>
+                  <Dialog.Close asChild>
+                    <button
+                      type="button"
+                      className="rounded-md p-2 text-fg-muted hover:bg-surface-hover hover:text-fg"
+                      title={labels.attachmentPreviewClose}
+                      aria-label={labels.attachmentPreviewClose}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
+                  </Dialog.Close>
+                </div>
               </div>
             </div>
-          </div>
 
-          <div className="flex min-h-0 flex-1 flex-col overflow-hidden">
-            <div className="mx-auto flex h-full min-h-0 w-full max-w-app-main flex-col overflow-hidden px-4 pb-4 pt-2 sm:px-8">
+            <div className="flex min-h-0 flex-1 flex-col overflow-hidden px-4 pb-4 pt-2 sm:px-8">
               {preview ? (
                 <PreviewBody
                   attachment={preview}
@@ -410,6 +436,13 @@ export function AttachmentPreviewDialog({
               ) : null}
             </div>
           </div>
+
+          <button
+            type="button"
+            className={sideStripClass}
+            onClick={onClose}
+            aria-label={labels.attachmentPreviewClose}
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>
