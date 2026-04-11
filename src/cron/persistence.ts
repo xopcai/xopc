@@ -158,17 +158,25 @@ export class CronPersistence {
   /**
    * Update an existing job
    */
-  async updateJob(id: string, updates: Partial<JobData>): Promise<boolean> {
+  async updateJob(
+    id: string,
+    updates: Partial<JobData>,
+    options?: { clearAgentId?: boolean },
+  ): Promise<boolean> {
     const data = await this.load();
     const index = data.jobs.findIndex((j) => j.id === id);
     
     if (index === -1) return false;
 
-    data.jobs[index] = {
+    const merged: JobData = {
       ...data.jobs[index],
       ...updates,
       updated_at: new Date().toISOString(),
     };
+    if (options?.clearAgentId) {
+      delete merged.agentId;
+    }
+    data.jobs[index] = merged;
     data.version++;
     await this.save(data);
     return true;

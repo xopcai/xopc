@@ -14,6 +14,7 @@ import {
   Palette,
   Plug,
   Search,
+  Users,
 } from 'lucide-react';
 
 import type { Tab } from '@/i18n/messages';
@@ -27,6 +28,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   logs: FileText,
   settingsAppearance: Palette,
   settingsAgent: Bot,
+  settingsAgents: Users,
   settingsProviders: Cloud,
   settingsModels: Cpu,
   settingsChannels: Plug,

@@ -15,7 +15,8 @@ export type Tab =
   | 'settingsVoice'
   | 'settingsGateway'
   | 'settingsHeartbeat'
-  | 'settingsSearch';
+  | 'settingsSearch'
+  | 'settingsAgents';
 
 export type SettingsSectionId =
   | 'appearance'
@@ -26,7 +27,8 @@ export type SettingsSectionId =
   | 'voice'
   | 'gateway'
   | 'heartbeat'
-  | 'search';
+  | 'search'
+  | 'agents';
 
 const bundles: Record<
   StoredLanguage,
@@ -553,6 +555,109 @@ const bundles: Record<
       reasoning: { off: string; on: string; stream: string };
       verbose: { off: string; on: string; full: string };
     };
+    agentsSettings: {
+      title: string;
+      subtitle: string;
+      needToken: string;
+      loadError: string;
+      saveError: string;
+      loading: string;
+      tabOverview: string;
+      tabFiles: string;
+      tabTools: string;
+      tabSkills: string;
+      tabChannels: string;
+      tabCron: string;
+      selectAgent: string;
+      selectAgentHint: string;
+      agent: string;
+      defaultBadge: string;
+      setDefault: string;
+      editAgent: string;
+      editAgentHint: string;
+      displayName: string;
+      workspacePath: string;
+      modelPrimary: string;
+      modelClear: string;
+      save: string;
+      removeFromConfig: string;
+      purgeDisk: string;
+      addAgent: string;
+      addAgentHint: string;
+      newName: string;
+      newWorkspace: string;
+      newModelOptional: string;
+      create: string;
+      addAgentAria: string;
+      createModalCancel: string;
+      closeDialogAria: string;
+      filesHint: string;
+      filesLoading: string;
+      filesEmpty: string;
+      pickFile: string;
+      saveFile: string;
+      filesBootstrapEdit: string;
+      filesBootstrapPreview: string;
+      filesAutoSaveHint: string;
+      filesSavingStatus: string;
+      missing: string;
+      confirmDelete: string;
+      confirmDeletePurge: string;
+      toolsTitle: string;
+      toolsHint: string;
+      toolsSave: string;
+      toolsClearEntry: string;
+      toolsLockedByDefaults: string;
+      toolDescriptions: {
+        read_file: string;
+        write_file: string;
+        edit_file: string;
+        list_dir: string;
+        grep: string;
+        find: string;
+        shell: string;
+        web_search: string;
+        web_fetch: string;
+        send_message: string;
+        send_media: string;
+        memory_search: string;
+        memory_get: string;
+        curated_memory: string;
+        session_search: string;
+        image: string;
+        image_generate: string;
+        extensions: string;
+      };
+      skillsTitle: string;
+      skillsHint: string;
+      skillsInherit: string;
+      skillsCustomize: string;
+      skillsSave: string;
+      skillsCatalogLoading: string;
+      skillsEmptyCatalog: string;
+      skillsNoDescription: string;
+      skillsDefaultsLabel: string;
+      skillsEffectiveLabel: string;
+      skillsAllFromCatalog: string;
+      channelsTitle: string;
+      channelsHint: string;
+      channelsLoading: string;
+      channelsNone: string;
+      channelLabel: string;
+      peerIdLabel: string;
+      addBinding: string;
+      removeBinding: string;
+      cronTitle: string;
+      cronHint: string;
+      cronLoading: string;
+      cronNone: string;
+      cronColSchedule: string;
+      cronColMessage: string;
+      cronColSession: string;
+      cronColAgent: string;
+      cronLegacyAgent: string;
+      cronClearAgent: string;
+    };
     providersSettings: {
       subtitle: string;
       intro: string;
@@ -1005,6 +1110,7 @@ const bundles: Record<
       settingsGateway: 'Gateway',
       settingsHeartbeat: 'Heartbeat',
       settingsSearch: 'Web search',
+      settingsAgents: 'Multi-agent',
     },
     settingsSections: {
       appearance: 'Preferences',
@@ -1016,6 +1122,7 @@ const bundles: Record<
       gateway: 'Gateway',
       heartbeat: 'Heartbeat',
       search: 'Web search',
+      agents: 'Agents',
     },
     settingsNavGroups: {
       gateway: 'Connection & service',
@@ -1548,6 +1655,119 @@ const bundles: Record<
       reasoning: { off: 'Off', on: 'On', stream: 'Stream' },
       verbose: { off: 'Off', on: 'On', full: 'Full' },
     },
+    agentsSettings: {
+      title: 'Agents',
+      subtitle:
+        'Manage agents.list entries (OpenClaw-style): workspaces, default routing, persona bootstrap files.',
+      needToken: 'Save a gateway token to manage agents.',
+      loadError: 'Failed to load agents',
+      saveError: 'Request failed',
+      loading: 'Loading…',
+      tabOverview: 'Agents',
+      tabFiles: 'Bootstrap files',
+      tabTools: 'Tools',
+      tabSkills: 'Skills',
+      tabChannels: 'Channels',
+      tabCron: 'Cron',
+      selectAgent: 'Agent',
+      selectAgentHint: 'Choose an entry to edit or inspect bootstrap Markdown under ~/.xopcbot/agents/<id>/bootstrap/.',
+      agent: 'Agent',
+      defaultBadge: 'default',
+      setDefault: 'Set as default',
+      editAgent: 'Edit entry',
+      editAgentHint: 'Updates agents.list on the gateway. Paths are expanded (~ → home).',
+      displayName: 'Display name',
+      workspacePath: 'Markdown workspace',
+      modelPrimary: 'Model (primary)',
+      modelClear: 'Clear',
+      save: 'Save changes',
+      removeFromConfig: 'Remove from config',
+      purgeDisk: 'Remove + delete data',
+      addAgent: 'Add agent',
+      addAgentHint: 'Same as CLI agents add: creates directories and seeds bootstrap templates.',
+      newName: 'Name / id seed',
+      newWorkspace: 'Workspace directory (required)',
+      newModelOptional: 'Model (optional)',
+      create: 'Create agent',
+      addAgentAria: 'Add agent',
+      createModalCancel: 'Cancel',
+      closeDialogAria: 'Close',
+      filesHint:
+        'Editable persona files (SOUL, IDENTITY, …). Changes save automatically after you stop typing; use Preview to render Markdown.',
+      filesLoading: 'Loading file list…',
+      filesEmpty: 'No files yet.',
+      pickFile: 'Select a file to edit.',
+      saveFile: 'Save file',
+      filesBootstrapEdit: 'Edit',
+      filesBootstrapPreview: 'Preview',
+      filesAutoSaveHint: 'Auto-saves when you pause typing.',
+      filesSavingStatus: 'Saving…',
+      missing: 'missing',
+      confirmDelete: 'Remove this agent from config? Bindings referencing it will be stripped.',
+      confirmDeletePurge:
+        'Remove this agent and delete its workspace + ~/.xopcbot/agents/<id> data? This cannot be undone.',
+      toolsTitle: 'Built-in tools',
+      toolsHint:
+        'Per-agent tool disables (merged with agents.defaults). Tools already disabled in defaults cannot be re-enabled here.',
+      toolsSave: 'Save tool disables',
+      toolsClearEntry: 'Clear per-agent disables',
+      toolsLockedByDefaults: 'disabled in defaults',
+      toolDescriptions: {
+        read_file:
+          'Read text and small files inside the agent workspace (paths are restricted to the workspace sandbox).',
+        write_file: 'Create new files or overwrite existing ones under the workspace.',
+        edit_file: 'Change existing files using locate-and-replace or patch-style edits.',
+        list_dir: 'List files and subfolders in a workspace directory.',
+        grep: 'Search file contents with regular expressions (similar to ripgrep).',
+        find: 'Find files by name or glob pattern under the workspace.',
+        shell:
+          'Run shell commands with workspace context — high impact; turn off for read-only or safer agents.',
+        web_search: 'Search the public web for facts and pages newer than the model may know.',
+        web_fetch: 'Fetch a URL and read its text content for the model.',
+        send_message:
+          'Send outbound chat messages on connected channels (e.g. Telegram, CLI, gateway) when the agent replies.',
+        send_media: 'Send images or other media attachments through those channels.',
+        memory_search: 'Search indexed memories and notes stored for this agent.',
+        memory_get: 'Load a specific memory entry or chunk by id.',
+        curated_memory: 'Read or update curated markdown memories under the agent home directory.',
+        session_search: 'Search across saved conversation transcripts and per-session summaries.',
+        image: 'Analyze or describe images (vision) from the workspace or the current turn.',
+        image_generate: 'Generate images using the configured image / image-generation model.',
+        extensions: 'Expose tools registered by enabled extensions — disable to block all extension tools.',
+      },
+      skillsTitle: 'Skill allowlist',
+      skillsHint:
+        'Optional allowlist for <available_skills>. Inherit uses agents.defaults only; customize sets this agent’s skills array.',
+      skillsInherit: 'Inherit defaults',
+      skillsCustomize: 'Customize allowlist',
+      skillsSave: 'Save skills',
+      skillsCatalogLoading: 'Loading skill catalog…',
+      skillsEmptyCatalog: 'No skills in catalog.',
+      skillsNoDescription: 'No description in SKILL.md metadata.',
+      skillsDefaultsLabel: 'Defaults allowlist:',
+      skillsEffectiveLabel: 'Effective allowlist:',
+      skillsAllFromCatalog: '(all catalog skills)',
+      channelsTitle: 'Routing bindings',
+      channelsHint:
+        'config.bindings rows for this agent. Removing a rule updates the full bindings array on the gateway.',
+      channelsLoading: 'Loading bindings…',
+      channelsNone: 'No bindings target this agent.',
+      channelLabel: 'Channel',
+      peerIdLabel: 'Peer id (optional)',
+      addBinding: 'Add binding',
+      removeBinding: 'Remove',
+      cronTitle: 'Scheduled jobs',
+      cronHint:
+        'Isolated cron jobs can pin an agent id for the session key. Legacy jobs without an agent are listed under the default agent only.',
+      cronLoading: 'Loading cron jobs…',
+      cronNone: 'No matching jobs.',
+      cronColSchedule: 'Schedule',
+      cronColMessage: 'Message',
+      cronColSession: 'Session',
+      cronColAgent: 'Agent',
+      cronLegacyAgent: 'Default (legacy)',
+      cronClearAgent: 'Clear (legacy)',
+    },
     providersSettings: {
       subtitle: 'Provider API keys and OAuth. Keys are stored via the gateway credential store.',
       intro: 'Expand a group, then a provider to set an API key or use OAuth where available.',
@@ -2035,6 +2255,7 @@ const bundles: Record<
       settingsGateway: '网关',
       settingsHeartbeat: '心跳',
       settingsSearch: '网络搜索',
+      settingsAgents: '多代理',
     },
     settingsSections: {
       appearance: '偏好设置',
@@ -2046,6 +2267,7 @@ const bundles: Record<
       gateway: '网关',
       heartbeat: '心跳',
       search: '网络搜索',
+      agents: '多代理',
     },
     settingsNavGroups: {
       gateway: '连接与服务',
@@ -2574,6 +2796,114 @@ const bundles: Record<
       reasoning: { off: '关闭', on: '开启', stream: '流式' },
       verbose: { off: '关闭', on: '开启', full: '完整' },
     },
+    agentsSettings: {
+      title: '多代理',
+      subtitle: '管理 agents.list（OpenClaw 式）：工作区、默认路由、bootstrap 人设文件。',
+      needToken: '请先保存网关 Token 后再管理代理。',
+      loadError: '加载代理列表失败',
+      saveError: '请求失败',
+      loading: '加载中…',
+      tabOverview: '代理列表',
+      tabFiles: 'Bootstrap 文件',
+      tabTools: '工具',
+      tabSkills: '技能',
+      tabChannels: '通道',
+      tabCron: '定时',
+      selectAgent: '代理',
+      selectAgentHint: '选择要编辑的条目；人设 Markdown 位于 ~/.xopcbot/agents/<id>/bootstrap/。',
+      agent: '代理',
+      defaultBadge: '默认',
+      setDefault: '设为默认',
+      editAgent: '编辑条目',
+      editAgentHint: '将更新网关配置中的 agents.list；路径会展开 ~ 为用户目录。',
+      displayName: '显示名称',
+      workspacePath: 'Markdown 工作区',
+      modelPrimary: '模型（主）',
+      modelClear: '清除',
+      save: '保存更改',
+      removeFromConfig: '从配置移除',
+      purgeDisk: '移除并删除数据',
+      addAgent: '添加代理',
+      addAgentHint: '与 CLI「agents add」相同：创建目录并种子化 bootstrap 模板。',
+      newName: '名称 / id 种子',
+      newWorkspace: '工作区目录（必填）',
+      newModelOptional: '模型（可选）',
+      create: '创建代理',
+      addAgentAria: '添加代理',
+      createModalCancel: '取消',
+      closeDialogAria: '关闭',
+      filesHint:
+        '可编辑的人设文件（SOUL、IDENTITY 等）。停笔后会自动保存；可用「预览」查看 Markdown 渲染效果。',
+      filesLoading: '正在加载文件列表…',
+      filesEmpty: '暂无文件。',
+      pickFile: '请选择要编辑的文件。',
+      saveFile: '保存文件',
+      filesBootstrapEdit: '编辑',
+      filesBootstrapPreview: '预览',
+      filesAutoSaveHint: '停笔后自动保存。',
+      filesSavingStatus: '保存中…',
+      missing: '缺失',
+      confirmDelete: '从配置中移除此代理？相关路由绑定会被清除。',
+      confirmDeletePurge:
+        '移除此代理并删除其工作区与 ~/.xopcbot/agents/<id> 数据？此操作不可恢复。',
+      toolsTitle: '内置工具',
+      toolsHint:
+        '按代理禁用工具（与 agents.defaults 合并）。已在默认配置中禁用的工具不能在此处单独启用。',
+      toolsSave: '保存工具禁用',
+      toolsClearEntry: '清除本代理的额外禁用',
+      toolsLockedByDefaults: '已在默认中禁用',
+      toolDescriptions: {
+        read_file: '读取工作区内的文本与小文件（路径限制在工作区沙箱内）。',
+        write_file: '在工作区创建新文件或覆盖已有文件。',
+        edit_file: '通过定位替换或补丁式编辑修改已有文件。',
+        list_dir: '列出工作区某目录下的文件与子目录。',
+        grep: '用正则搜索文件内容（类似 ripgrep）。',
+        find: '按文件名或 glob 在工作区内查找文件。',
+        shell: '在与工作区关联的环境中执行 shell 命令，权限高；只读或更稳妥的代理可关闭。',
+        web_search: '检索公开网页，获取模型训练截止之后的事实与资料。',
+        web_fetch: '请求 URL 并读取页面文本供模型使用。',
+        send_message: '在已连接的通道上发送出站聊天内容（如 Telegram、CLI、网关等）。',
+        send_media: '通过通道发送图片或其他媒体附件。',
+        memory_search: '搜索为本代理建立的记忆与笔记索引。',
+        memory_get: '按 id 读取某条记忆或片段。',
+        curated_memory: '读取或更新代理主目录下的精选 Markdown 记忆。',
+        session_search: '在已保存的会话记录与按会话摘要中搜索。',
+        image: '分析或描述图片（视觉），可来自工作区或当前对话。',
+        image_generate: '使用已配置的图像 / 文生图模型生成图片。',
+        extensions: '启用扩展注册的工具；关闭则屏蔽所有扩展工具。',
+      },
+      skillsTitle: '技能白名单',
+      skillsHint:
+        '可选的 <available_skills> 白名单。「继承默认」仅使用 agents.defaults；「自定义」写入本代理的 skills 数组。',
+      skillsInherit: '继承默认',
+      skillsCustomize: '自定义白名单',
+      skillsSave: '保存技能',
+      skillsCatalogLoading: '正在加载技能目录…',
+      skillsEmptyCatalog: '目录中暂无技能。',
+      skillsNoDescription: 'SKILL.md 元数据中暂无描述。',
+      skillsDefaultsLabel: '默认白名单：',
+      skillsEffectiveLabel: '生效白名单：',
+      skillsAllFromCatalog: '（全部目录技能）',
+      channelsTitle: '路由绑定',
+      channelsHint: '指向本代理的 config.bindings。删除规则会更新网关上的完整 bindings 数组。',
+      channelsLoading: '正在加载绑定…',
+      channelsNone: '没有指向该代理的绑定。',
+      channelLabel: '通道',
+      peerIdLabel: 'Peer id（可选）',
+      addBinding: '添加绑定',
+      removeBinding: '移除',
+      cronTitle: '定时任务',
+      cronHint:
+        '隔离会话的定时任务可指定 agentId 作为会话键。未指定 agent 的旧任务仅列在默认代理下。',
+      cronLoading: '正在加载定时任务…',
+      cronNone: '没有匹配的任务。',
+      cronColSchedule: '计划',
+      cronColMessage: '消息',
+      cronColSession: '会话',
+      cronColAgent: '代理',
+      cronLegacyAgent: '默认（旧版）',
+      cronClearAgent: '清除（旧版）',
+    },
     providersSettings: {
       subtitle: '提供商 API Key 与 OAuth。凭据由网关凭据存储保存。',
       intro: '展开分组与提供商，填写 API Key 或在支持时使用 OAuth。',
@@ -3046,7 +3376,7 @@ export function getTabGroups(lang: StoredLanguage): TabGroup[] {
     { label: m.settingsNavGroups.gateway, tabs: ['settingsGateway', 'settingsHeartbeat'] as const },
     {
       label: m.settingsNavGroups.agentAndModels,
-      tabs: ['settingsProviders', 'settingsModels', 'settingsAgent', 'settingsSearch'] as const,
+      tabs: ['settingsProviders', 'settingsModels', 'settingsAgents', 'settingsAgent', 'settingsSearch'] as const,
     },
     { label: m.settingsNavGroups.data, tabs: ['sessions', 'logs'] as const },
     { label: m.settingsNavGroups.interface, tabs: ['settingsAppearance'] as const },

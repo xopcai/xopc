@@ -29,6 +29,8 @@ export interface CronJob {
   created_at: string;
   updated_at: string;
   sessionTarget?: 'main' | 'isolated';
+  /** Isolated jobs: agent profile for session key; omit = legacy default-agent cron session. */
+  agentId?: string;
   payload: CronPayload;
   delivery?: CronDelivery;
   model?: string;
@@ -38,6 +40,7 @@ export interface AddJobOptions {
   name?: string;
   timezone?: string;
   sessionTarget?: 'main' | 'isolated';
+  agentId?: string;
   model?: string;
   delivery?: CronDelivery;
   payload: CronPayload;
@@ -128,6 +131,7 @@ export interface CronJobUpdate {
   maxRetries?: number;
   timeout?: number;
   sessionTarget?: 'main' | 'isolated';
+  agentId?: string | null;
   model?: string;
   delivery?: CronDelivery;
   payload?: CronPayload;

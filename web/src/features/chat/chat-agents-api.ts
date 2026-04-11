@@ -9,6 +9,28 @@ export type ChatAgentsPayload = {
 };
 
 export async function fetchChatAgents(): Promise<ChatAgentsPayload> {
+  const agentsRes = await apiFetch(apiUrl('/api/agents'));
+  if (agentsRes.ok) {
+    const data = (await agentsRes.json()) as {
+      ok?: boolean;
+      payload?: { defaultId?: string; agents?: Array<{ id?: string; name?: string }> };
+    };
+    if (data.ok && data.payload?.defaultId && Array.isArray(data.payload.agents)) {
+      const defaultId = data.payload.defaultId.trim().toLowerCase();
+      const items: ChatAgentOption[] = data.payload.agents
+        .filter((a): a is { id: string; name?: string } =>
+          Boolean(a && typeof a.id === 'string' && a.id.trim()),
+        )
+        .map((a) => ({
+          id: a.id.trim().toLowerCase(),
+          name: typeof a.name === 'string' && a.name.trim() ? a.name.trim() : undefined,
+        }));
+      if (items.length > 0) {
+        return { defaultId, items };
+      }
+    }
+  }
+
   const res = await apiFetch(apiUrl('/api/config'));
   if (!res.ok) throw new Error(`Config: HTTP ${res.status}`);
   const data = (await res.json()) as {
