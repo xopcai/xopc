@@ -1,6 +1,5 @@
 import { Navigate, useParams } from 'react-router-dom';
 
-import { AgentSettingsPanel } from '@/features/settings/agent-settings';
 import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
 import { ChannelsSettingsPanel } from '@/features/settings/channels-settings';
 import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
@@ -17,7 +16,6 @@ import { useLocaleStore } from '@/stores/locale-store';
 const SECTIONS: SettingsSectionId[] = [
   'appearance',
   'agents',
-  'agent',
   'providers',
   'models',
   'channels',
@@ -32,6 +30,10 @@ export function SettingsPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
 
+  if (section === 'agent') {
+    return <Navigate to="/settings/agents?panel=defaults" replace />;
+  }
+
   if (!section || !SECTIONS.includes(section as SettingsSectionId)) {
     return <Navigate to="/settings/gateway" replace />;
   }
@@ -45,10 +47,6 @@ export function SettingsPage() {
 
   if (id === 'agents') {
     return <AgentsSettingsPanel />;
-  }
-
-  if (id === 'agent') {
-    return <AgentSettingsPanel />;
   }
 
   if (id === 'providers') {

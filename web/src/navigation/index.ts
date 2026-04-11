@@ -11,7 +11,7 @@ export type ChatRoute =
 
 const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
   appearance: 'settingsAppearance',
-  agent: 'settingsAgent',
+  agent: 'settingsAgents',
   agents: 'settingsAgents',
   providers: 'settingsProviders',
   models: 'settingsModels',
@@ -24,7 +24,6 @@ const SETTINGS_SECTION_TO_TAB: Record<SettingsSectionId, Tab> = {
 
 const TAB_TO_SETTINGS_SECTION: Record<
   | 'settingsAppearance'
-  | 'settingsAgent'
   | 'settingsAgents'
   | 'settingsProviders'
   | 'settingsModels'
@@ -36,7 +35,6 @@ const TAB_TO_SETTINGS_SECTION: Record<
   SettingsSectionId
 > = {
   settingsAppearance: 'appearance',
-  settingsAgent: 'agent',
   settingsAgents: 'agents',
   settingsProviders: 'providers',
   settingsModels: 'models',
@@ -76,7 +74,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat'] },
   {
     id: 'agentAndModels',
-    tabs: ['settingsProviders', 'settingsModels', 'settingsAgents', 'settingsAgent', 'settingsSearch'],
+    tabs: ['settingsProviders', 'settingsModels', 'settingsAgents', 'settingsSearch'],
   },
   { id: 'data', tabs: ['sessions', 'logs'] },
   { id: 'interface', tabs: ['settingsAppearance'] },
