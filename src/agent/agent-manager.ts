@@ -314,7 +314,7 @@ export class AgentManager {
   private loadBootstrapForProfile(profile: EffectiveAgentProfile): BootstrapFile[] {
     const cfg = this.config.config!;
     const bootstrapDir = resolveAgentBootstrapDir(cfg, profile.agentId);
-    return loadBootstrapFiles(bootstrapDir, { legacyWorkspaceDir: profile.resolvedWorkspacePath });
+    return loadBootstrapFiles(bootstrapDir);
   }
 
   getSkillCatalog(): SkillCatalogEntry[] {

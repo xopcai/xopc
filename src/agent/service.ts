@@ -29,7 +29,6 @@ import {
   extractThinkingContent,
   extractThinkingFromAssistantMessage,
 } from './context/workspace.js';
-import { migrateBootstrapFilesFromLegacyWorkspace } from './context/workspace-seed.js';
 import { SessionTracker } from './session/tracker.js';
 import { ModelManager } from './models/index.js';
 import { commandRegistry, initializeCommands } from '../chat-commands/index.js';
@@ -198,9 +197,7 @@ export class AgentService {
 
     if (config.config) {
       const aid = resolveDefaultAgentId(config.config);
-      this.bootstrapFiles = loadBootstrapFiles(resolveAgentBootstrapDir(config.config, aid), {
-        legacyWorkspaceDir: this.workspaceDir,
-      });
+      this.bootstrapFiles = loadBootstrapFiles(resolveAgentBootstrapDir(config.config, aid));
     } else {
       this.bootstrapFiles = loadBootstrapFiles(this.workspaceDir);
     }
@@ -337,7 +334,6 @@ export class AgentService {
     }
     const aid = resolveDefaultAgentId(cfg);
     const home = resolveAgentHomeDir(cfg, aid);
-    migrateBootstrapFilesFromLegacyWorkspace(cfg, aid, this.workspaceDir);
     migrateLegacyInboundTree(home, this.workspaceDir);
     migrateLegacyTtsTree(home, this.workspaceDir);
     const stateDir = resolveWorkspaceStateDir(cfg, aid);
