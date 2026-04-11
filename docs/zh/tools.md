@@ -1,27 +1,51 @@
 # 内置工具参考
 
-xopcbot 内置了一组工具供 Agent 调用。
+xopcbot 通过 `AgentToolsFactory`（`src/agent/tools/factory.ts`）组装内置工具。部分工具始终注册；部分依赖 **配置**、**会话**（例如存在 `SessionStore` 时的 `session_search`）或 **网关**（例如接入用户交互的 `clarify`、提供 `CronService` 的 `cronjob`）。
 
 ## 工具列表
 
-| 工具 | 名称 | 描述 |
-|------|------|------|
-| 📄 读取 | `read_file` | 读取文件内容 (截断至 50KB/500 行) |
-| ✍️ 写入 | `write_file` | 创建或覆盖文件 |
-| ✏️ 编辑 | `edit_file` | 替换文件中的文本 |
-| 📂 列表 | `list_dir` | 列出目录内容 |
-| 💻 Shell | `shell` | 执行 Shell 命令 (截断至 50KB) |
-| 🔍 搜索 | `grep` | 在文件中搜索文本 |
-| 📄 查找 | `find` | 按条件查找文件 |
-| 🔍 网页搜索 | `web_search` | 使用 Brave Search |
-| 📄 网页抓取 | `web_fetch` | 获取网页内容 |
-| 📨 消息 | `send_message` | 发送消息到通道 |
-| 🔍 记忆搜索 | `memory_search` | 搜索记忆文件 |
-| 📄 记忆读取 | `memory_get` | 读取记忆片段 |
-| 🧠 托管记忆 | `curated_memory` | 编辑 agent 主目录 `memories/`（可选） |
-| 🔎 会话搜索 | `session_search` | 跨会话检索 transcript（可选） |
+| 类别 | 工具名 |
+|------|--------|
+| **规划与交互** | `clarify`, `todo` |
+| **Skills 运行时** | `skills_list`, `skill_view`, `skill_manage` |
+| **文件系统** | `read_file`, `write_file`, `edit_file`, `list_dir` |
+| **搜索** | `grep`, `find` |
+| **Shell** | `shell` |
+| **网页** | `web_search`, `web_fetch`, `web_extract` |
+| **消息与媒体** | `send_message`, `send_media` |
+| **记忆** | `memory_search`, `memory_get`, `curated_memory`（可选）, `session_search`（可选） |
+| **图像** | `image`（可选）, `image_generate`（可选） |
+| **浏览器** | `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_scroll`, `browser_screenshot`（可选） |
+| **委托与代码** | `delegate_task`（可选）, `execute_code`（可选） |
+| **定时任务** | `cronjob`（可选） |
+
+扩展包在存在扩展注册表时还可追加工具。
+
+### 近期能力增强（工具 + Skill 运行时，约 20 项）
+
+1. **`skills_list` / `skill_view` / `skill_manage`**：发现技能、读取 `SKILL.md` 或 `references/` 等子目录文件、在策略允许下增删改用户技能（见 [Skills 指南](./skills.md)）。
+2. **Skill 环境变量透传**：`skill_view` 后根据 SKILL.md 声明注册变量**名**；**`shell`** 可将进程中已存在的同名变量带入子进程（模型永不看到变量值）。
+3. **`web_extract`**：拉取页面后用 LLM 做面向 Markdown 的抽取（`agents.defaults.webExtract.model` 或 `XOPCBOT_WEB_EXTRACT_MODEL`）。
+4. **`send_media`**：向当前会话通道发送本地图片/视频/音频/文档。
+5. **`clarify`**：在 **Web / Telegram / CLI** 等已接线环境可阻塞等待用户作答；否则返回说明并尽量使用 `default`。
+6. **`todo`**：按会话维护待办，支持按 `id` 合并或整表替换。
+7. **`image` / `image_generate`**：在模型与密钥可用时做视觉理解与文生图。
+8. **浏览器工具**：`agents.defaults.browser.enabled` 时启用 Playwright（需 `npx playwright install chromium`）。
+9. **`delegate_task`**：子 Agent 独立上下文、受限工具集、仅返回摘要（`agents.defaults.delegate.enabled`）。
+10. **`execute_code`**：沙箱 JS 以编程方式调用部分工具（`agents.defaults.executeCode.enabled`）；非强安全边界，仅可信模型场景使用。
+11. **`cronjob`**：网关提供 `CronService` 时管理定时 Agent 轮次，带简单提示注入扫描。
+12. **`session_search`**：跨会话 transcript 检索（可选会话级摘要）。
+13. **`curated_memory`**：操作 agent 主目录 `memories/` 的实时内容，系统提示中保留会话开始时的快照。
+14. **Skill 工具门控**：`skills.toolGating` 与技能元数据可要求「已注册工具」后才出现在 `<available_skills>`。
+15. **`disable-model-invocation`**：技能仍安装，但对模型隐藏列表项。
+16. **Skills Hub CLI**：`xopcbot skills hub pull|update|lock`，安装至 `~/.xopcbot/skills` 并维护 `skills-lock.json`。
+17. **`web_search`**：`tools.web.search.providers` 多提供商链 + 按地区 HTML 兜底。
+18. **`skills.limits.maxSkillFileBytes`**：限制 `skill_view` 单次读取体积。
+19. **Memory 插件**：`MemoryManager.getAdditionalTools()` 可注入额外记忆相关工具。
+20. **多提供商图像路径**：图像工具与 Agent 其他模型共用解析与密钥体系。
 
 ---
+
 
 ## 📄 read_file
 
@@ -173,10 +197,101 @@ xopcbot 内置了一组工具供 Agent 调用。
 
 ---
 
+## 规划与澄清
+
+### ❓ `clarify`
+
+向用户提问并等待回答；可选 `choices`（2–10 项选择题）、可选 `default`。在已接线的 Web/Telegram/CLI 会话中走交互；否则返回提示并尽量使用 `default`。
+
+### ✅ `todo`
+
+会话级待办列表。传入 `todos`（含 `id`、`content`、`status`）；`merge: true` 时按 `id` 合并，否则替换整张表。省略 `todos` 为读取当前列表。
+
+---
+
+## Skills 工具
+
+### 📚 `skills_list`
+
+列出当前会话可见的已启用技能（受 allowlist 与工具门控影响）。可选 `query` 按名称/描述子串过滤。
+
+### 📖 `skill_view`
+
+读取 `SKILL.md` 或 `references/`、`templates/`、`scripts/`、`assets/` 下文件。参数：`name`、可选 `path`、可选 `limit`（行数，默认 500）。成功读取后注册声明的环境变量**名**供透传。
+
+### 🛠️ `skill_manage`
+
+`create` / `edit` / `patch` / `delete` / `write_file` / `remove_file`，受 `skills.agentWritePolicy` 约束；内置技能不可写；写入后做安全扫描。
+
+---
+
+## 网页抽取
+
+### 🧾 `web_extract`
+
+抓取 `url`，可选 `instruction`（关注点）、`maxLength`。模型由 `agents.defaults.webExtract.model` 或 `XOPCBOT_WEB_EXTRACT_MODEL` 指定。
+
+---
+
+## 媒体消息
+
+### 📎 `send_media`
+
+参数：`filePath`、可选 `mediaType`、`caption`。可根据扩展名推断类型。
+
+---
+
+## 图像
+
+### 🖼️ `image` / 🎨 `image_generate`
+
+视觉理解与图像生成；依赖 `agents.defaults.imageModel`、`imageGenerationModel` 及对应密钥。大图受 `agents.defaults.mediaMaxMb` 等限制。
+
+---
+
+## 浏览器工具（可选）
+
+`agents.defaults.browser.enabled` 时注册：`browser_navigate`、`browser_snapshot`、`browser_click`、`browser_type`、`browser_scroll`、`browser_screenshot`。默认禁止 localhost/内网 URL；会话级标签页。
+
+---
+
+## 委托与沙箱代码
+
+### 🤖 `delegate_task`
+
+子 Agent 独立执行，仅返回摘要；工具集受限，不可嵌套委托或使用 clarify/消息/记忆/todo/cronjob/Skills 管理类工具。
+
+### 💾 `execute_code`
+
+VM 内 JS，暴露受限 `tools.*` 与 `console.log`；有执行时间、工具调用次数与输出长度上限。`node:vm` 非强隔离。
+
+---
+
+## 定时任务（网关）
+
+### ⏰ `cronjob`
+
+`list` / `create` / `update` / `remove` / `enable` / `disable` / `history`。需运行时注入 `CronService`（典型为网关）。
+
+---
+
 ## 安全限制
 
 | 操作 | 限制 |
 |------|------|
 | 文件路径 | 限制在 workspace 目录内 |
 | Shell 命令 | 超时 5 分钟 |
+| 文件读取 | 500 行或 50KB |
+| Shell 输出 | 50KB |
 | 文件大小 | 最大 10MB |
+
+---
+
+## 使用建议
+
+- 在 `skills.promptStyle` 为 `metadata-only`（默认）时，优先用 `skills_list` / `skill_view` 读技能，而非直接 `read_file` 技能路径。
+- 谨慎开启 `execute_code`、浏览器与 `delegate_task` 等高能力工具。
+
+---
+
+_最后更新：2026-04-11_
