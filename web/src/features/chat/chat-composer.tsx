@@ -21,6 +21,58 @@ import { useLocaleStore } from '@/stores/locale-store';
 const ACCEPT =
   'image/*,application/pdf,.docx,.pptx,.xlsx,.xls,.txt,.md,.json,.xml,.html,.css,.js,.ts,.jsx,.tsx,.yml,.yaml,.zip';
 
+const ACCEPT_TOKENS = ACCEPT.split(',')
+  .map((t) => t.trim())
+  .filter(Boolean);
+
+/** Matches hidden `<input accept={ACCEPT}>`. Exported for unit tests. */
+export function isComposerAcceptableFile(file: File): boolean {
+  const mime = (file.type || '').toLowerCase();
+  const nameLower = file.name.toLowerCase();
+  for (const token of ACCEPT_TOKENS) {
+    const t = token.toLowerCase();
+    if (t.endsWith('/*')) {
+      const prefix = t.slice(0, -1);
+      if (mime.startsWith(prefix)) return true;
+    } else if (token.startsWith('.')) {
+      if (nameLower.endsWith(token.toLowerCase())) return true;
+    } else if (mime === t) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function fileDedupeKey(f: File): string {
+  return `${f.name}\0${f.size}\0${f.lastModified}`;
+}
+
+/** Merges `DataTransfer.files` and `kind === 'file'` items; dedupes; skips empty blobs. Exported for unit tests. */
+export function collectClipboardFiles(data: DataTransfer | null | undefined): File[] {
+  if (!data) return [];
+  const seen = new Set<string>();
+  const out: File[] = [];
+  const add = (f: File | null) => {
+    if (!f || f.size === 0) return;
+    const key = fileDedupeKey(f);
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(f);
+  };
+  const { files } = data;
+  if (files?.length) {
+    for (let i = 0; i < files.length; i++) {
+      add(files.item(i));
+    }
+  }
+  for (const item of Array.from(data.items ?? [])) {
+    if (item.kind === 'file') {
+      add(item.getAsFile());
+    }
+  }
+  return out;
+}
+
 const TEXTAREA_MAX_HEIGHT_PX = 128;
 
 function interpolate(template: string, params: Record<string, string | number>): string {
@@ -97,21 +149,20 @@ const ChatComposerInput = memo(function ChatComposerInput({
       onCompositionStart={() => setIsComposing(true)}
       onCompositionEnd={() => setIsComposing(false)}
       onPaste={async (e) => {
-        const items = e.clipboardData?.items;
-        if (!items) return;
-        const imageFiles: File[] = [];
-        for (const item of Array.from(items)) {
-          if (item.type.startsWith('image/')) {
-            const f = item.getAsFile();
-            if (f) imageFiles.push(f);
-          }
-        }
-        if (imageFiles.length > 0) {
+        const cd = e.clipboardData;
+        const collected = collectClipboardFiles(cd ?? null);
+        const accepted = collected.filter(isComposerAcceptableFile);
+        if (accepted.length > 0) {
           e.preventDefault();
-          await processFiles(imageFiles);
+          await processFiles(accepted);
           return;
         }
-        const text = e.clipboardData?.getData('text/plain');
+        if (collected.length > 0) {
+          e.preventDefault();
+          console.warn('Clipboard file type not supported for chat attachments');
+          return;
+        }
+        const text = cd?.getData('text/plain');
         if (text) {
           e.preventDefault();
           document.execCommand('insertText', false, text);
@@ -293,7 +344,11 @@ export const ChatComposer = memo(function ChatComposer({
           console.warn(`File ${file.name} exceeds max size`);
           continue;
         }
-        next.push(await loadAttachment(file, file.name));
+        try {
+          next.push(await loadAttachment(file, file.name));
+        } catch (err) {
+          console.warn(`Failed to load attachment ${file.name}:`, err);
+        }
       }
       setAttachments((a) => [...a, ...next]);
     },
