@@ -57,10 +57,9 @@ export function tabToSettingsSection(tab: Tab): SettingsSectionId | null {
 export type SettingsNavGroupId =
   | 'interface'
   | 'agentAndModels'
-  | 'channelsAndVoice'
+  | 'voice'
   | 'gateway'
-  | 'data'
-  | 'management';
+  | 'data';
 
 export type SettingsShellNavGroup = {
   id: SettingsNavGroupId;
@@ -68,8 +67,9 @@ export type SettingsShellNavGroup = {
 };
 
 /**
- * Priority: connection → AI (keys → model → agent) → scheduled tasks & skills →
- * data (sessions/logs) → UI prefs → integrations. See `settingsNavGroups` copy in i18n.
+ * Priority: connection → AI (keys → model → agent) → data (sessions/logs) → UI prefs → voice.
+ * Cron, skills, and IM channels live under the main app shell (`/cron`, `/skills`, `/channels`), not here.
+ * See `settingsNavGroups` copy in i18n.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat'] },
@@ -77,10 +77,9 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
     id: 'agentAndModels',
     tabs: ['settingsProviders', 'settingsModels', 'settingsAgents', 'settingsSearch'],
   },
-  { id: 'management', tabs: ['cron', 'skills'] },
   { id: 'data', tabs: ['sessions', 'logs'] },
   { id: 'interface', tabs: ['settingsAppearance'] },
-  { id: 'channelsAndVoice', tabs: ['settingsChannels', 'settingsVoice'] },
+  { id: 'voice', tabs: ['settingsVoice'] },
 ] as const;
 
 /** Flat order: settings routes only (excludes sessions/logs). */
@@ -168,15 +167,12 @@ export function getChatHash(route: ChatRoute): string {
 /** Path for React Router `to` prop (hash router, no `#`). */
 export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
+  if (tab === 'cron') return '/cron';
+  if (tab === 'skills') return '/skills';
+  if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
-  if (
-    tab === 'sessions' ||
-    tab === 'logs' ||
-    tab === 'cron' ||
-    tab === 'skills' ||
-    tab === 'channels'
-  ) {
+  if (tab === 'sessions' || tab === 'logs') {
     return `/settings/${tab}`;
   }
   return `/${tab}`;
