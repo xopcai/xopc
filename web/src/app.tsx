@@ -18,6 +18,9 @@ const LogsPage = lazy(() => import('@/pages/logs-page').then((m) => ({ default: 
 const SettingsPage = lazy(() =>
   import('@/pages/settings-page').then((m) => ({ default: m.SettingsPage })),
 );
+const AgentsSettingsDetailPage = lazy(() =>
+  import('@/features/settings/agents').then((m) => ({ default: m.AgentsSettingsPanel })),
+);
 
 function SecondaryRouteFallback() {
   return (
@@ -112,6 +115,14 @@ const router = createHashRouter([
             element: (
               <Suspense fallback={<SettingsRouteFallback />}>
                 <SkillsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'agents/:agentId',
+            element: (
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <AgentsSettingsDetailPage />
               </Suspense>
             ),
           },
