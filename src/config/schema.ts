@@ -92,6 +92,13 @@ export const AgentDefaultsSchema = z.object({
       summaryModel: z.string().optional(),
     })
     .optional(),
+  /** LLM pass for `web_extract` (markdown-focused extraction). */
+  webExtract: z
+    .object({
+      model: z.string().optional(),
+      maxLength: z.number().positive().optional(),
+    })
+    .optional(),
   /** Optional full system prompt replacement (merged with per-agent entry; entry wins). */
   systemPromptOverride: z.string().optional(),
   /** Optional allowlist of skill names for `<available_skills>`; when set, replaces unfiltered list. */
