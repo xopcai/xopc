@@ -97,6 +97,8 @@ export interface AgentInstance {
   curatedMemorySnapshot: MemorySnapshot;
   effectiveProfile: EffectiveAgentProfile;
   resolvedWorkspacePath: string;
+  /** Tool names registered on this agent (for skill indexing / tool gating). */
+  registeredToolNames: string[];
 }
 
 interface WorkspaceRuntime {
@@ -136,6 +138,19 @@ export class AgentManager {
       getSessionStore: config.getSessionStore,
       gatewayClarify: config.gatewayClarify,
       getCronService: config.getCronService,
+      getSkillIndexingContext: () => {
+        const ctx = this.config.getCurrentContext?.();
+        if (!ctx?.sessionKey) return undefined;
+        const inst = this.agents.get(ctx.sessionKey);
+        if (!inst) return undefined;
+        return {
+          registeredToolNames: inst.registeredToolNames,
+          skillAllowlist: inst.effectiveProfile.skillsAllowlist,
+        };
+      },
+      onSkillsFilesystemMutate: () => {
+        this.refreshSkillsAfterDiskChange();
+      },
     });
 
     this.defaultModel = config.model || getDefaultModelSync(config.config);
@@ -245,6 +260,19 @@ export class AgentManager {
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
       getCronService: this.config.getCronService,
+      getSkillIndexingContext: () => {
+        const ctx = this.config.getCurrentContext?.();
+        if (!ctx?.sessionKey) return undefined;
+        const inst = this.agents.get(ctx.sessionKey);
+        if (!inst) return undefined;
+        return {
+          registeredToolNames: inst.registeredToolNames,
+          skillAllowlist: inst.effectiveProfile.skillsAllowlist,
+        };
+      },
+      onSkillsFilesystemMutate: () => {
+        this.refreshSkillsAfterDiskChange();
+      },
     });
   }
 
@@ -365,6 +393,7 @@ export class AgentManager {
         workspaceOverride: instance.resolvedWorkspacePath,
         systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
+        registeredToolNames: instance.registeredToolNames,
       });
       instance.agent.setSystemPrompt(newPrompt);
     }
@@ -388,6 +417,7 @@ export class AgentManager {
         workspaceOverride: instance.resolvedWorkspacePath,
         systemPromptOverride: instance.effectiveProfile.systemPromptOverride,
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
+        registeredToolNames: instance.registeredToolNames,
       });
       instance.agent.setSystemPrompt(newPrompt);
     }
@@ -423,7 +453,12 @@ export class AgentManager {
     const snap = curatedOn ? rt.builtinMemoryStore.getSnapshot() : { memory: '', user: '' };
     const curatedMemorySnapshot: MemorySnapshot = { memory: snap.memory, user: snap.user };
 
-    const agent = this.createAgentForProfile(sessionKey, profile, rt, curatedMemorySnapshot);
+    const { agent, registeredToolNames } = this.createAgentForProfile(
+      sessionKey,
+      profile,
+      rt,
+      curatedMemorySnapshot,
+    );
 
     this.agents.set(sessionKey, {
       agent,
@@ -433,6 +468,7 @@ export class AgentManager {
       curatedMemorySnapshot,
       effectiveProfile: profile,
       resolvedWorkspacePath: resolvedPath,
+      registeredToolNames,
     });
 
     const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
@@ -541,7 +577,7 @@ export class AgentManager {
     profile: EffectiveAgentProfile,
     rt: WorkspaceRuntime,
     curatedMemorySnapshot: MemorySnapshot,
-  ): Agent {
+  ): { agent: Agent; registeredToolNames: string[] } {
     const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     const model = this.resolveModelStringToModel(modelRef);
 
@@ -552,12 +588,14 @@ export class AgentManager {
       getPrimaryModel: () => this.resolveModelStringToModel(modelRef),
       getBuiltinMemoryStore: () => rt.builtinMemoryStore,
       getMemoryManager: () => rt.memoryManager,
+      getSkillManager: () => rt.skillManager,
     });
+    const registeredToolNames = tools.map((t) => t.name);
 
     const thinkingLevel =
       (profile.thinkingDefault as ThinkingLevel | undefined) ?? this.config.thinkingLevel ?? 'medium';
 
-    return new Agent({
+    const agent = new Agent({
       initialState: {
         systemPrompt: rt.systemPromptBuilder.build(bootstrapFiles, {
           curatedMemorySnapshot,
@@ -565,6 +603,7 @@ export class AgentManager {
           workspaceOverride: profile.resolvedWorkspacePath,
           systemPromptOverride: profile.systemPromptOverride,
           skillAllowlist: profile.skillsAllowlist,
+          registeredToolNames,
         }),
         model,
         thinkingLevel,
@@ -573,6 +612,7 @@ export class AgentManager {
       },
       getApiKey: (provider: string) => this.resolveApiKeyWithCache(provider),
     });
+    return { agent, registeredToolNames };
   }
 
   /**

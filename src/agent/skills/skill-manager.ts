@@ -8,7 +8,7 @@ import { createSkillLoader, type Skill } from './index.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSkillConfigManager, isSkillEnabled } from './config.js';
-import { formatSkillsForPrompt } from './format-skills-prompt.js';
+import { formatSkillsForPrompt, selectSkillsVisibleInPrompt } from './format-skills-prompt.js';
 
 const log = createLogger('SkillManager');
 
@@ -99,20 +99,30 @@ export class SkillManager {
   }
 
   /**
-   * Skill XML block filtered to an allowlist (e.g. per-agent `agents.list[].skills`).
-   * When `allowlist` is undefined, returns {@link getPrompt}.
+   * `<available_skills>` XML with optional per-agent allowlist and/or tool-based gating (Phase 2).
+   * When both arguments are omitted, returns the cached prompt from disk load (no tool gating).
    */
-  getPromptForSkillAllowlist(allowlist: string[] | undefined): string {
-    if (allowlist === undefined) {
+  getPromptForSkillAllowlist(
+    allowlist: string[] | undefined,
+    registeredToolNames?: string[],
+  ): string {
+    if (allowlist === undefined && registeredToolNames === undefined) {
       return this.getPrompt();
     }
-    if (allowlist.length === 0) {
-      return '';
-    }
-    const set = new Set(allowlist.map((s) => s.toLowerCase()));
-    const skills = this.getSkills().filter((s) => set.has(s.name.toLowerCase()));
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
-    return formatSkillsForPrompt(skills, skillsConfig);
+    return formatSkillsForPrompt(this.getSkills(), skillsConfig, {
+      skillAllowlist: allowlist,
+      registeredToolNames,
+    });
+  }
+
+  /** Skills visible for prompts and skills_list given the same indexing options as {@link getPromptForSkillAllowlist}. */
+  selectSkillsForAgentIndexing(options?: {
+    skillAllowlist?: string[];
+    registeredToolNames?: string[];
+  }): Skill[] {
+    const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+    return selectSkillsVisibleInPrompt(this.getSkills(), skillsConfig, options);
   }
 
   /**
@@ -135,6 +145,26 @@ export class SkillManager {
     return this.getSkills()
       .filter((s) => !s.disableModelInvocation && isSkillEnabled(s, skillsConfig))
       .map((s) => s.name);
+  }
+
+  /**
+   * Skills that are enabled for model discovery (respects skills.json and requirement checks).
+   */
+  getEnabledSkills(): Skill[] {
+    const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+    return this.getSkills().filter(
+      (s) => !s.disableModelInvocation && isSkillEnabled(s, skillsConfig),
+    );
+  }
+
+  /**
+   * Like {@link getEnabledSkills} plus optional allowlist and tool gating (matches `<available_skills>`).
+   */
+  getEnabledSkillsForAgentSession(options?: {
+    skillAllowlist?: string[];
+    registeredToolNames?: string[];
+  }): Skill[] {
+    return this.selectSkillsForAgentIndexing(options);
   }
 
   /**

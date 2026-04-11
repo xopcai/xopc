@@ -47,7 +47,10 @@ import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.
 import { createCronjobTool } from './cronjob-tool.js';
 import type { CronService } from '../../cron/index.js';
 import { createLogger } from '../../utils/logger.js';
+import type { SkillManager } from '../skills/skill-manager.js';
 import { wrapToolsWithProtection, type ToolExecutorConfig } from './executor.js';
+import { createSkillsListTool, createSkillViewTool } from './skills-tools.js';
+import { createSkillManageTool } from './skill-manage-tool.js';
 
 const log = createLogger('AgentToolsFactory');
 
@@ -82,6 +85,12 @@ export interface ToolFactoryDeps {
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   /** Gateway: enables the `cronjob` tool. */
   getCronService?: () => CronService | undefined;
+  /** Current session skill indexing (tool gating + allowlist); used by skills_list / skill_view. */
+  getSkillIndexingContext?: () =>
+    | { registeredToolNames: string[]; skillAllowlist?: string[] }
+    | undefined;
+  /** After skill_manage mutates disk, reload skills + refresh agent prompts (optional). */
+  onSkillsFilesystemMutate?: () => void;
   // TTS config removed - handled at dispatch layer
 }
 
@@ -94,6 +103,8 @@ export interface CreateCoreToolsOptions {
   getPrimaryModel?: () => Model<Api>;
   getBuiltinMemoryStore?: () => BuiltinMemoryStore;
   getMemoryManager?: () => MemoryManager;
+  /** When set, registers `skills_list` and `skill_view` bound to this workspace\'s skills. */
+  getSkillManager?: () => SkillManager;
 }
 
 export class AgentToolsFactory {
@@ -130,6 +141,7 @@ export class AgentToolsFactory {
     const getPrimary = options?.getPrimaryModel ?? this.deps.getPrimaryModel;
     const getBuiltin = options?.getBuiltinMemoryStore ?? this.deps.getBuiltinMemoryStore;
     const getMemMgr = options?.getMemoryManager ?? this.deps.getMemoryManager;
+    const getSkillMgr = options?.getSkillManager;
     const disabled = options?.disabledTools;
 
     const primary = getPrimary?.();
@@ -164,6 +176,23 @@ export class AgentToolsFactory {
       createTodoTool({
         getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
       }),
+      ...(getSkillMgr
+        ? [
+            createSkillsListTool({
+              getSkillManager: getSkillMgr,
+              getSkillIndexingContext: this.deps.getSkillIndexingContext,
+            }),
+            createSkillViewTool({
+              getSkillManager: getSkillMgr,
+              getSkillIndexingContext: this.deps.getSkillIndexingContext,
+            }),
+            createSkillManageTool({
+              getSkillManager: getSkillMgr,
+              getWorkspace: () => workspace,
+              onSkillsFilesystemMutate: this.deps.onSkillsFilesystemMutate,
+            }),
+          ]
+        : []),
       readFileTool,
       writeFileTool,
       editFileTool,

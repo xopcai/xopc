@@ -81,6 +81,8 @@ export class LocalAcpRuntime implements AcpRuntime {
   private tools: AgentTool<any, any>[] = [];
   private workspace: string;
   private config?: Config;
+  private skillManager: SkillManager;
+  private registeredToolNames: string[] = [];
 
   constructor(
     private readonly bus: MessageBus,
@@ -88,6 +90,7 @@ export class LocalAcpRuntime implements AcpRuntime {
   ) {
     this.workspace = runtimeConfig?.workspace || process.cwd();
     this.config = runtimeConfig?.config;
+    this.skillManager = new SkillManager(this.workspace, resolveBundledSkillsDir());
 
     // Initialize session store
     const appCfg = this.config ?? loadConfig();
@@ -106,7 +109,7 @@ export class LocalAcpRuntime implements AcpRuntime {
       retentionWindow: 6,
     });
 
-    // Initialize tools
+    // Initialize tools (registers skill_manage → needs mutate hook before createAgent)
     this.initializeTools();
 
     // Initialize agent
@@ -121,13 +124,39 @@ export class LocalAcpRuntime implements AcpRuntime {
   /**
    * Initialize tools using AgentToolsFactory pattern
    */
+  private refreshAgentAfterSkillDiskChange(): void {
+    this.skillManager.reload();
+    const appCfg = this.config ?? loadConfig();
+    const agentId = normalizeAgentId(this.runtimeConfig?.agent ?? resolveDefaultAgentId(appCfg));
+    const bootstrapFiles = loadBootstrapFiles(resolveAgentBootstrapDir(appCfg, agentId));
+    const agentConfig = this.config || {
+      gateway: {},
+      agents: {},
+      channels: {},
+      tools: {},
+    } as Config;
+    const sp = new SystemPromptBuilder({
+      workspace: this.workspace,
+      config: agentConfig,
+      skillManager: this.skillManager,
+    }).build(bootstrapFiles, { registeredToolNames: this.registeredToolNames });
+    this.agent.setSystemPrompt(sp);
+  }
+
   private initializeTools(): void {
     const toolsFactory = new AgentToolsFactory({
       workspace: this.workspace,
       getCurrentContext: () => null,
       bus: this.bus,
+      getSkillIndexingContext: () => ({
+        registeredToolNames: this.registeredToolNames,
+      }),
+      onSkillsFilesystemMutate: () => this.refreshAgentAfterSkillDiskChange(),
     });
-    this.tools = toolsFactory.createAllTools();
+    this.tools = toolsFactory.createAllTools({
+      getSkillManager: () => this.skillManager,
+    });
+    this.registeredToolNames = this.tools.map((t) => t.name);
     log.info({ toolCount: this.tools.length }, "Local runtime tools initialized");
   }
 
@@ -155,8 +184,6 @@ export class LocalAcpRuntime implements AcpRuntime {
     const appCfg = this.config ?? loadConfig();
     const agentId = normalizeAgentId(this.runtimeConfig?.agent ?? resolveDefaultAgentId(appCfg));
     const bootstrapFiles = loadBootstrapFiles(resolveAgentBootstrapDir(appCfg, agentId));
-    const skillManager = new SkillManager(this.workspace, resolveBundledSkillsDir());
-    
     // Create a minimal config if none provided
     const agentConfig = this.config || {
       gateway: {},
@@ -168,12 +195,14 @@ export class LocalAcpRuntime implements AcpRuntime {
     const systemPromptBuilder = new SystemPromptBuilder({
       workspace: this.workspace,
       config: agentConfig,
-      skillManager,
+      skillManager: this.skillManager,
     });
 
     const agent = new Agent({
       initialState: {
-        systemPrompt: systemPromptBuilder.build(bootstrapFiles),
+        systemPrompt: systemPromptBuilder.build(bootstrapFiles, {
+          registeredToolNames: this.registeredToolNames,
+        }),
         model,
         tools: this.tools,
         messages: [],
