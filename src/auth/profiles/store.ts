@@ -2,7 +2,7 @@
  * Auth Profile Store
  * 
  * Persistent storage for auth profiles.
- * Handles loading, saving, and migration of auth credentials.
+ * Handles loading and saving auth credentials.
  */
 
 import { chmodSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';

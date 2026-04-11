@@ -90,7 +90,7 @@ export async function isDaemonAvailableAsync(): Promise<boolean> {
 }
 
 /**
- * Synchronous check (for compatibility, may be inaccurate in some cases)
+ * Synchronous platform check only; prefer {@link isDaemonAvailableAsync} for accuracy.
  */
 export function isDaemonAvailable(): boolean {
   // For synchronous check, we can only verify platform

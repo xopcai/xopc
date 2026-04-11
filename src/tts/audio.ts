@@ -34,7 +34,7 @@ export type WavCompressionTarget = 'opus' | 'mp3';
 
 /**
  * Compress WAV using ffmpeg. Non-WAV inputs are returned unchanged.
- * Default `wavTarget` is Opus for backward compatibility.
+ * Default `wavTarget` is Opus (common for Telegram voice).
  */
 export async function compressAudio(
   audioBuffer: Buffer,

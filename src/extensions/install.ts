@@ -391,32 +391,3 @@ function readManifest(extensionDir: string): ExtensionManifest | null {
     return null;
   }
 }
-
-/**
- * Legacy: List extensions from single directory (for backward compatibility)
- */
-export function listExtensions(
-  extensionsDir: string,
-): Array<{ id: string; name?: string; version?: string; path: string }> {
-  if (!existsSync(extensionsDir)) {
-    return [];
-  }
-
-  const extensions: Array<{ id: string; name?: string; version?: string; path: string }> = [];
-
-  for (const entry of readdirSync(extensionsDir, { withFileTypes: true })) {
-    if (!entry.isDirectory()) continue;
-
-    const extensionDir = join(extensionsDir, entry.name);
-    const manifest = readManifest(extensionDir);
-
-    extensions.push({
-      id: entry.name,
-      name: manifest?.name,
-      version: manifest?.version,
-      path: extensionDir,
-    });
-  }
-
-  return extensions;
-}

@@ -68,7 +68,7 @@ describe('AgentOrchestrator', () => {
       return orchestrator.buildUserMessage(msg);
     };
 
-    describe('text-only messages (backward compatibility)', () => {
+    describe('text-only user messages', () => {
       it('should create simple string content for text-only message', () => {
         const msg: InboundMessage = {
           channel: 'telegram',

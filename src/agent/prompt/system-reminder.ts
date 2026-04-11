@@ -43,7 +43,7 @@ export class SystemReminder {
   }
 
   /**
-   * Get the system reminder text to append (legacy, uses default reminders)
+   * Append default reminders (when configured and under per-turn cap).
    */
   getReminderText(): string {
     if (!this.config.enabled) {

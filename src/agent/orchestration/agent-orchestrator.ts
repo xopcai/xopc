@@ -41,7 +41,7 @@ export interface AgentOrchestratorConfig {
   getThinkingDefault: () => ThinkLevel | undefined;
   /** Per-session default from merged `agents.list` / defaults (optional). */
   getThinkingDefaultForSession?: (sessionKey: string) => ThinkLevel | undefined;
-  /** `agents.defaults.workspace` (resolved); legacy fallback for attachment storage. */
+  /** Default workspace root when no per-session resolver is set. */
   workspaceRoot: string;
   /** Per-agent workspace root for attachments (optional; defaults to `workspaceRoot`). */
   getWorkspaceRootForSession?: (sessionKey: string) => string;
@@ -297,7 +297,7 @@ export class AgentOrchestrator {
       };
     }
 
-    // No attachments - use simple string format (backward compatible)
+    // No attachments — plain string user content
     return {
       role: 'user',
       content: textBody,

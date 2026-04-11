@@ -99,5 +99,4 @@ export async function saveConfig(config: Config, configPath?: string): Promise<v
   await fsPromises.writeFile(path, content, 'utf-8');
 }
 
-// Re-export for backward compatibility
 export { resolveConfigPath } from './paths.js';

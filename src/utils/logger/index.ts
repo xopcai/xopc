@@ -273,7 +273,6 @@ export {
   getAuditConfig,
 } from './audit.js';
 
-// Backward compatibility
 export { logger as default };
 export { logger as baseLogger };
 export { pino as Pino };
