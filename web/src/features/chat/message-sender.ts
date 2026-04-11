@@ -18,6 +18,13 @@ export type MessagingCallbacks = {
   onProgress: (progress: ProgressState) => void;
   /** Assistant TTS audio persisted under agent home `tts/` (before `result`). */
   onTtsAudio?: (payload: { workspaceRelativePath: string; mimeType: string; name: string }) => void;
+  /** Agent `clarify` tool — user must answer via POST /api/clarify/:requestId */
+  onClarifyRequest?: (payload: {
+    requestId: string;
+    question: string;
+    choices?: string[];
+    default?: string;
+  }) => void;
   onResult: () => void;
   onError: (msg: string) => void;
 };
@@ -314,6 +321,24 @@ export class MessageSender {
           name: String(parsed.name || 'voice.mp3'),
         });
         break;
+      case 'clarify_request': {
+        const requestId = typeof parsed.requestId === 'string' ? parsed.requestId.trim() : '';
+        const question = typeof parsed.question === 'string' ? parsed.question.trim() : '';
+        if (requestId && question && cb?.onClarifyRequest) {
+          const choices = Array.isArray(parsed.choices)
+            ? (parsed.choices as unknown[]).filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+            : undefined;
+          const def =
+            typeof parsed.default === 'string' && parsed.default.trim() ? parsed.default.trim() : undefined;
+          cb.onClarifyRequest({
+            requestId,
+            question,
+            choices: choices && choices.length >= 2 ? choices : undefined,
+            default: def,
+          });
+        }
+        break;
+      }
       case 'result':
         cb?.onResult();
         break;

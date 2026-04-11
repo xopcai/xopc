@@ -91,11 +91,16 @@ function createAgentCommand(_ctx: CLIContext): Command {
         log.warn({ err: error }, 'Failed to load extensions');
       }
 
+      const { createCliReadlineClarifyRequestFn } = await import('../../agent/tools/cli-clarify.js');
+
       const agent = new AgentService(bus, {
         workspace,
         model: modelId,
         config,
         extensionRegistry: extensionLoader?.getRegistry(),
+        gatewayClarify: {
+          requestClarification: createCliReadlineClarifyRequestFn(),
+        },
       });
 
       // Start agent service in background

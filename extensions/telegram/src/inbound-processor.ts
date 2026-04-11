@@ -19,6 +19,7 @@ import { telegramUpdateDedupe, buildTelegramUpdateKey } from './dedupe.js';
 import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
 import { removeBotMention as stripMentionLegacy } from '@xopcai/xopcbot/channels/security.js';
 import { normalizeTelegramCommandName, parseSlashCommand } from '@xopcai/xopcbot/chat-commands/command-parse.js';
+import { tryConsumeTelegramClarifyFreeText } from '@xopcai/xopcbot/gateway/clarify-runtime.js';
 
 const log = createLogger('TelegramInboundProcessor');
 
@@ -482,6 +483,15 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
       attachmentCount: attachments.length,
       isCommand,
     }, 'Processing Telegram message');
+
+    if (
+      finalContent.trim().length > 0 &&
+      !isCommand &&
+      tryConsumeTelegramClarifyFreeText(sessionKey, finalContent.trim())
+    ) {
+      log.debug({ sessionKey }, 'Telegram: consumed message as clarify reply');
+      return;
+    }
 
     await bus.publishInbound({
       channel: 'telegram',

@@ -29,6 +29,7 @@ import {
   createMemorySearchTool,
   createMemoryGetTool,
   createTodoTool,
+  createClarifyTool,
 } from './index.js';
 import { createCuratedMemoryTool } from './curated-memory-tool.js';
 import { createSessionSearchTool } from './session-search-tool.js';
@@ -36,12 +37,25 @@ import type { BuiltinMemoryStore } from '../memory/builtin-memory-store.js';
 import type { MemoryManager } from '../memory/manager.js';
 import { shouldRegisterCuratedMemoryTool } from '../memory/memory-config.js';
 import type { SessionStore } from '../../session/store.js';
+import { parseSessionKey as parseRoutingSessionKey } from '../../routing/session-key.js';
+import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
 import { createLogger } from '../../utils/logger.js';
 import { wrapToolsWithProtection, type ToolExecutorConfig } from './executor.js';
 
 const log = createLogger('AgentToolsFactory');
+
+/** Channels where `clarify` can block for a user answer (web UI, Telegram, CLI readline). */
+const CLARIFY_SUPPORTED_CHANNELS = new Set(['webchat', 'telegram', 'cli']);
+
+function clarifyTransportSource(sessionKey: string): string | undefined {
+  const parsed = parseRoutingSessionKey(sessionKey);
+  if (parsed) return parsed.source;
+  const first = sessionKey.split(':').filter(Boolean)[0] ?? '';
+  if (first === 'cli') return 'cli';
+  return undefined;
+}
 
 export interface ToolFactoryDeps {
   workspace: string;
@@ -59,6 +73,8 @@ export interface ToolFactoryDeps {
   getMemoryManager?: () => MemoryManager;
   /** Session store for `session_search` (Phase 3). */
   getSessionStore?: () => SessionStore;
+  /** When set (gateway webchat), enables the `clarify` tool. */
+  gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
   // TTS config removed - handled at dispatch layer
 }
 
@@ -102,6 +118,17 @@ export class AgentToolsFactory {
     );
 
     const core: AgentTool<any, any>[] = [
+      createClarifyTool({
+        resolveAskUser: () => {
+          const req = this.deps.gatewayClarify?.requestClarification;
+          if (!req) return null;
+          const ctx = this.deps.getCurrentContext();
+          if (!ctx?.sessionKey) return null;
+          const source = clarifyTransportSource(ctx.sessionKey);
+          if (!source || !CLARIFY_SUPPORTED_CHANNELS.has(source)) return null;
+          return (r) => req(ctx.sessionKey, r);
+        },
+      }),
       createTodoTool({
         getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
       }),
