@@ -7,6 +7,9 @@ xopcbot's skills system is file-based: add domain-specific capabilities and know
 - [What is a Skill](#what-is-a-skill)
 - [SKILL.md File Format](#skillmd-file-format)
 - [Skill Sources](#skill-sources)
+- [Skills Hub (git / archives)](#skills-hub-git--archives)
+- [Agent runtime: tools & prompt style](#agent-runtime-tools--prompt-style)
+- [Declaring environment variables](#declaring-environment-variables)
 - [CLI Commands](#cli-commands)
 - [Configure Skills](#configure-skills)
 - [Install Skill Dependencies](#install-skill-dependencies)
@@ -134,6 +137,59 @@ Workspace > Global > Bundled
 
 Skills loaded later will override earlier ones with the same name.
 
+## Skills Hub (git / archives)
+
+Install or refresh skills from a remote Git repository or a local/remote archive (zip/tar.gz) into **`~/.xopcbot/skills`**. Provenance and content hashes are recorded in **`skills-lock.json`** next to the skills directory so you can update deterministically.
+
+```bash
+# Shallow clone or unpack; optional --ref, --path (subdir with SKILL.md), --id (folder name), --force, --strict-scan
+xopcbot skills hub pull https://github.com/org/repo.git
+
+# Re-fetch a managed skill using the lock file
+xopcbot skills hub update my-skill
+
+# Inspect lock entries
+xopcbot skills hub lock
+xopcbot skills hub lock --json
+```
+
+Hub-installed skills behave like **global** skills (same load rules as `~/.xopcbot/skills/`). Use `skills enable` / `skills disable` and `~/.xopcbot/skills.json` entries as usual.
+
+## Agent runtime: tools & prompt style
+
+The agent exposes skill-oriented tools (when a skill manager is wired):
+
+| Tool | Purpose |
+|------|---------|
+| `skills_list` | Names and descriptions visible in this session (honours allowlists and tool gating). |
+| `skill_view` | Read `SKILL.md` or files under `references/`, `templates/`, `scripts/`, `assets/`. |
+| `skill_manage` | Create/edit/patch/delete user skills where `skills.agentWritePolicy` allows. |
+
+**`skills.json` (global file)** supports:
+
+| Field | Meaning |
+|-------|---------|
+| `promptStyle` | `metadata-only` (default): Hermes-style `<available_skills>` without disk paths — use `skill_view` to load bodies. `legacy-with-paths`: older behaviour with paths for `read_file`. |
+| `toolGating` | When true (default), skills that declare required tools/extensions are hidden until those tools are registered. Set `false` to ignore gating. |
+| `agentWritePolicy` | Where `skill_manage` may write: `global`, `workspace`, or `both` (default `global`). |
+| `limits.maxSkillFileBytes` | Maximum bytes `skill_view` will read per file. |
+
+**SKILL.md frontmatter:**
+
+- `disable-model-invocation: true` — keep the skill installed but exclude it from model-facing lists (`<available_skills>`, `skills_list`, `skill_view` eligibility).
+
+See [Built-in Tools Reference](tools.md) for parameters and limits.
+
+## Declaring environment variables
+
+Declare API keys or other env vars the skill needs so the runtime can register **names** for passthrough (values are never injected into the model). Supported sources (merged, deduped):
+
+- Hermes-style **`required_environment_variables`** array with `{ name: "VAR" }` entries
+- **`prerequisites.env_vars`** (list of names)
+- **`requires.env`** or **`metadata.xopcbot.requires.env`**
+
+After a successful **`skill_view`**, declared names are registered for the session; the **`shell`** tool may forward matching variables from the process environment.
+
 ## CLI Commands
 
 ### List Skills
@@ -242,10 +298,16 @@ xopcbot skills test security --deep
 
 ## Configure Skills
 
-Skill configuration file is located at `~/.xopcbot/skills.json`:
+Skill configuration file is located at `~/.xopcbot/skills.json`. Optional **top-level** keys control loading and agent behaviour (see [Agent runtime](#agent-runtime-tools--prompt-style)); **`entries`** hold per-skill overrides:
 
 ```json
 {
+  "promptStyle": "metadata-only",
+  "toolGating": true,
+  "agentWritePolicy": "global",
+  "limits": {
+    "maxSkillFileBytes": 1048576
+  },
   "entries": {
     "weather": {
       "enabled": true,
@@ -475,9 +537,9 @@ metadata:
     install:
       - id: brew-gh
         kind: brew
-    formula: gh
-    bins: [gh]
-    label: Install GitHub CLI (brew)
+        formula: gh
+        bins: [gh]
+        label: Install GitHub CLI (brew)
 ---
 
 # GitHub Skill
@@ -580,4 +642,4 @@ xopcbot skills test --bail
 
 ---
 
-_Last updated: 2026-02-22_
+_Last updated: 2026-04-11_
