@@ -43,6 +43,7 @@ import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
 import { BrowserManager, createBrowserTools } from './browser/index.js';
 import { createDelegateTool } from './delegate-tool.js';
+import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
 import { createLogger } from '../../utils/logger.js';
 import { wrapToolsWithProtection, type ToolExecutorConfig } from './executor.js';
 
@@ -228,17 +229,31 @@ export class AgentToolsFactory {
   createAllTools(coreOptions?: CreateCoreToolsOptions): AgentTool<any, any>[] {
     const coreTools = this.createCoreTools(coreOptions);
     const disableExtensions = coreOptions?.disabledTools?.has('extensions');
+    const cfg = this.deps.getConfig?.();
 
+    let bundled: AgentTool<any, any>[];
     if (!this.deps.extensionRegistry || disableExtensions) {
-      return wrapToolsWithProtection(coreTools, this.deps.toolExecutorConfig);
+      bundled = coreTools;
+    } else {
+      const extensionTools = this.deps.extensionRegistry.getAllTools();
+      log.info({ count: extensionTools.length }, 'Loaded extension tools');
+      bundled = [...coreTools, ...extensionTools];
     }
 
-    const extensionTools = this.deps.extensionRegistry.getAllTools();
+    const wrapped = wrapToolsWithProtection(bundled, this.deps.toolExecutorConfig);
 
-    log.info({ count: extensionTools.length }, 'Loaded extension tools');
+    const executeEnabled =
+      cfg?.agents?.defaults?.executeCode?.enabled === true &&
+      !coreOptions?.disabledTools?.has('execute_code');
 
-    const allTools = [...coreTools, ...extensionTools];
-    return wrapToolsWithProtection(allTools, this.deps.toolExecutorConfig);
+    if (executeEnabled) {
+      const sandboxMap = buildSandboxToolMap(wrapped);
+      const executeTool = createExecuteCodeTool({ getSandboxToolMap: () => sandboxMap });
+      const wrappedExecute = wrapToolsWithProtection([executeTool], this.deps.toolExecutorConfig);
+      return [...wrapped, ...wrappedExecute];
+    }
+
+    return wrapped;
   }
 }
 
