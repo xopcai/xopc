@@ -184,7 +184,6 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
         isSTTAvailable: (config) => isSTTAvailable(config as STTConfig | undefined),
       },
       mediaUtils: { getMimeType },
-      externalAccessGate: true,
     });
 
     const sends = createTelegramOutboundSendMethods((opts) => this.outboundSender.send(opts));
