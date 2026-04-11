@@ -13,6 +13,9 @@ interface WireContentBlock {
   function?: { name?: string; arguments?: string | unknown };
   result?: string;
   source?: { data?: string; media_type?: string };
+  /** Pi / gateway user turns: `{ type: 'image', data: base64, mimeType }` (no `source`). */
+  data?: string;
+  mimeType?: string;
   id?: string;
 }
 
@@ -569,6 +572,28 @@ function extractToolResultText(content: unknown): string {
   return String(content ?? '');
 }
 
+/** Map session/API image blocks to UI `ImageContent` (`source.data` is a usable `img` src). */
+function wireImageBlockToContent(item: WireContentBlock): MessageContent | null {
+  const fromSource = item.source?.data;
+  if (typeof fromSource === 'string' && fromSource.length > 0) {
+    return { type: 'image', source: { data: fromSource } };
+  }
+  const raw = item.data;
+  if (typeof raw !== 'string' || raw.length === 0) {
+    return null;
+  }
+  const trimmed = raw.trim();
+  if (trimmed.startsWith('data:')) {
+    return { type: 'image', source: { data: trimmed } };
+  }
+  const mime =
+    typeof item.mimeType === 'string' && item.mimeType.includes('/')
+      ? item.mimeType
+      : 'image/png';
+  const compact = trimmed.replace(/\s/g, '');
+  return { type: 'image', source: { data: `data:${mime};base64,${compact}` } };
+}
+
 function normalizeContentBlocks(raw: unknown): MessageContent[] {
   if (raw == null) return [];
   if (typeof raw === 'string') {
@@ -594,7 +619,10 @@ function normalizeContentBlocks(raw: unknown): MessageContent[] {
             : '';
       out.push({ type: 'thinking', text: th, streaming: false });
     } else if (t === 'image') {
-      out.push({ type: 'image', source: item.source });
+      const img = wireImageBlockToContent(item);
+      if (img) {
+        out.push(img);
+      }
     } else if (t === 'tool_use' || t === 'tool_call') {
       if (!isToolCallBlock(item)) continue;
       const id = extractToolBlockId(item);
