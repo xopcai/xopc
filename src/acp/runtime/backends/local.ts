@@ -91,7 +91,7 @@ export class LocalAcpRuntime implements AcpRuntime {
 
     // Initialize session store
     const appCfg = this.config ?? loadConfig();
-    this.sessionStore = new SessionStore({ config: appCfg, workspace: this.workspace }, {
+    this.sessionStore = new SessionStore({ config: appCfg }, {
       maxMessages: 100,
       keepRecentMessages: 20,
       preserveSystemMessages: true,

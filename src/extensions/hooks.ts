@@ -469,9 +469,10 @@ export class ExtensionHookRunner {
         const claimingResult = await this.runClaimingHook(hookName, eventData, context);
         return { success: true, result: claimingResult };
 
-      default:
-        const legacyResult = await this.runHooks(hookName, eventData, context);
-        return { success: legacyResult.success };
+      default: {
+        const fallbackResult = await this.runHooks(hookName, eventData, context);
+        return { success: fallbackResult.success };
+      }
     }
   }
 }

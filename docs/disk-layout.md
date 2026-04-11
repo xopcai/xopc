@@ -72,25 +72,9 @@ Resolved by `resolveAgentWorkspaceDir(config, agentId)` — often `<stateDir>/wo
 | `skills/` | User-authored skills. |
 | *arbitrary files* | `read` / `write` / `edit` tool targets. |
 
-Internal state is **not** written here on new installs. Legacy trees may still contain old paths until migration runs (below).
+Internal state is **not** written here on new installs. This tree is the only supported layout: persona and machine state live under `agents/<id>/` (see table at top). There is **no** automatic import from older “everything under the markdown workspace” layouts—use `xopcbot setup` / `xopcbot onboard` for bootstrap templates, and move any old data yourself if you are upgrading from another fork.
 
-## Legacy locations & migration
-
-Upgrades may still have data under the Markdown workspace from older layouts. When the new location is empty, the runtime **copies or moves** once for the paths below (see `src/config/migrate-internal-state.ts` and `AgentService.migrateDefaultAgentInternalStateFromWorkspace` / store constructors). Persona Markdown under `agents/<id>/bootstrap/` is **not** auto-imported from the workspace root; run `xopcbot setup` or `xopcbot onboard` to seed missing bootstrap files, or copy them manually.
-
-| Legacy (under markdown workspace) | Modern location |
-|-------------------------------------|-----------------|
-| `SOUL.md`, `HEARTBEAT.md`, … at workspace root | `agents/<id>/bootstrap/` |
-| `.xopcbot/memories/` | `agents/<id>/memories/` |
-| `.xopcbot/inbound/` | `agents/<id>/inbound/` |
-| `.xopcbot/tts/` | `agents/<id>/tts/` |
-| `.xopcbot/outbound-pending.json` | `agents/<id>/agent/outbound-pending.json` |
-| `.sessions/config/` | `agents/<id>/sessions/config/` |
-| `.sessions/acp-sessions.json` | `agents/<id>/sessions/acp-sessions.json` |
-| `.state/workspace.json`, `skills-cache.json` | `agents/<id>/agent/state/` |
-| `.extensions/` (per-agent) | `agents/<id>/agent/extensions/` |
-
-Transcript resolution still accepts **relative paths** that start with legacy prefixes (e.g. `.xopcbot/inbound/...`) by resolving against the configured markdown workspace.
+Inbound / TTS attachments in transcripts use relative paths under `inbound/` and `tts/` **only** (resolved from agent home).
 
 ## Operations helpers
 

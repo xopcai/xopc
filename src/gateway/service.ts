@@ -149,7 +149,6 @@ export class GatewayService {
     // Initialize session manager
     this.sessionManager = new SessionManager({
       config: this.config,
-      workspace: this.workspacePath,
     });
 
     this.heartbeatService = new HeartbeatService({
@@ -255,9 +254,7 @@ export class GatewayService {
       runMessageSent: (to, content, success, error, channel) =>
         this.agentService.invokeOutboundMessageSent(to, content, success, error, channel),
     });
-    this.channelManager.enableOutboundPersistence(resolveAgentDir(this.config, getDefaultAgentId(this.config)), {
-      migrateFromWorkspace: this.workspacePath,
-    });
+    this.channelManager.enableOutboundPersistence(resolveAgentDir(this.config, getDefaultAgentId(this.config)));
 
     if (this.extensionLoader) {
       this.extensionLoader.setRuntimeContext({

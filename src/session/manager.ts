@@ -21,8 +21,6 @@ const log = createLogger('SessionManager');
 
 export interface SessionManagerConfig {
   config: Config;
-  /** Config workspace path; enables migration from `<workspace>/.sessions` */
-  workspace?: string;
   agentId?: string;
   sessionsDir?: string;
   windowConfig?: Partial<WindowConfig>;
@@ -37,7 +35,6 @@ export class SessionManager extends EventEmitter {
     this.store = new SessionStore(
       {
         config: config.config,
-        workspace: config.workspace,
         agentId: config.agentId,
         sessionsDir: config.sessionsDir,
       },
@@ -205,10 +202,6 @@ export class SessionManager extends EventEmitter {
     const count = await this.store.archiveOld(olderThanDays);
     log.info({ count, olderThanDays }, 'Archived old sessions');
     return count;
-  }
-
-  async migrateFromLegacy(): Promise<number> {
-    return this.store.migrateFromLegacy();
   }
 
   // ========== Event Helpers ==========
