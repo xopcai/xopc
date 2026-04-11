@@ -42,6 +42,7 @@ import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
 import { BrowserManager, createBrowserTools } from './browser/index.js';
+import { createDelegateTool } from './delegate-tool.js';
 import { createLogger } from '../../utils/logger.js';
 import { wrapToolsWithProtection, type ToolExecutorConfig } from './executor.js';
 
@@ -199,6 +200,24 @@ export class AgentToolsFactory {
             getTaskId: () => this.deps.getCurrentContext()?.sessionKey ?? 'default',
             getConfig: () => this.deps.getConfig?.(),
           })
+        : []),
+      ...(cfg?.agents?.defaults?.delegate?.enabled === true && primary
+        ? [
+            createDelegateTool({
+              workspace,
+              getSubagentModel: () => {
+                const gp = options?.getPrimaryModel ?? this.deps.getPrimaryModel;
+                const m = gp?.();
+                if (!m) {
+                  throw new Error('No primary model configured for delegate_task');
+                }
+                return m;
+              },
+              bus: this.deps.bus,
+              getConfig: () => this.deps.getConfig?.(),
+              toolExecutorConfig: this.deps.toolExecutorConfig,
+            }),
+          ]
         : []),
       ...optionalTools,
     ];
