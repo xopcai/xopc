@@ -20,7 +20,7 @@ import {
   shouldSilence,
   stripHeartbeatToken,
 } from '../heartbeat/tokens.js';
-import { normalizeAgentId } from '../agents/agent-scope.js';
+import { normalizeAgentId } from '../agent/agent-scope.js';
 import { buildSessionKey } from '../routing/session-key.js';
 
 const log = createLogger('CronExecutor');

@@ -132,11 +132,13 @@ export class GatewayService {
 
     // Initialize agent service with extension registry
     const modelConfig = this.config.agents?.defaults?.model;
+    const cronRef: { service?: CronService } = {};
     this.agentService = new AgentService(this.bus, {
       workspace: this.workspacePath,
       model: typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary,
       config: this.config,
       extensionRegistry: this.extensionLoader?.getRegistry(),
+      getCronService: () => cronRef.service,
       gatewayClarify: {
         requestClarification: (sessionKey, request) => {
           const runId = this.activeWebchatRunBySession.get(sessionKey);
@@ -183,6 +185,7 @@ export class GatewayService {
       agentService: this.agentService,
       messageBus: this.bus,
     });
+    cronRef.service = this.cronService;
 
     // Initialize session manager
     this.sessionManager = new SessionManager({

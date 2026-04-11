@@ -9,7 +9,7 @@
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-import { resolveAgentHomeDir, resolveDefaultAgentId } from '../src/agents/agent-scope.js';
+import { resolveAgentHomeDir, resolveDefaultAgentId } from '../src/agent/agent-scope.js';
 import { loadConfig } from '../src/config/loader.js';
 
 const srcRoot =

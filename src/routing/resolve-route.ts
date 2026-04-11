@@ -4,7 +4,7 @@
  * Combines binding rules, identity links, and config to pick an agent and session keys.
  */
 
-import { resolveDefaultAgentId as resolveDefaultAgentIdFromConfig } from '../agents/agent-scope.js';
+import { resolveDefaultAgentId as resolveDefaultAgentIdFromConfig } from '../agent/agent-scope.js';
 import type { Config } from '../config/schema.js';
 import type { BindingRule, RouteInput, RouteResult } from './bindings.js';
 

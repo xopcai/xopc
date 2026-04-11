@@ -1,6 +1,6 @@
 # On-disk layout
 
-This page is a **concise map** of where xopcbot reads and writes on disk. Config remains the source of truth; resolution is implemented in `src/agents/agent-scope.ts`, `src/config/paths-state.ts`, `src/config/paths.ts`, and related modules.
+This page is a **concise map** of where xopcbot reads and writes on disk. Config remains the source of truth; resolution is implemented in `src/agent/agent-scope.ts`, `src/config/paths-state.ts`, `src/config/paths.ts`, and related modules.
 
 For narrative setup (init, templates, env vars), see [State directory & workspace layout](workspace.md).
 

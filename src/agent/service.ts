@@ -52,12 +52,13 @@ import { applyReasoningVisibilityToSseEvent } from './streaming/reasoning-visibi
 import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
+import type { CronService } from '../cron/index.js';
 import { extractAgentUserPlainText } from './memory/user-message-text.js';
 
 import {
   resolveAgentHomeDir,
   resolveDefaultAgentId,
-} from '../agents/agent-scope.js';
+} from './agent-scope.js';
 import { extractProfileAgentId, resolveAgentBootstrapDir } from '../config/agent-profile.js';
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
@@ -128,6 +129,7 @@ export interface AgentServiceConfig {
   gatewayClarify?: {
     requestClarification: GatewayClarifyRequestFn;
   };
+  getCronService?: () => CronService | undefined;
 }
 
 export interface AgentContext {
@@ -257,6 +259,7 @@ export class AgentService {
       reasoningLevel: config.reasoningLevel,
       verboseLevel: config.verboseLevel,
       gatewayClarify: config.gatewayClarify,
+      getCronService: config.getCronService,
     });
 
     this.agentEventHandler = new AgentEventHandler({
