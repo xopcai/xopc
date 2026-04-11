@@ -1,6 +1,7 @@
 import type { Message } from '@/features/chat/messages.types';
 import type { SessionInfo } from '@/features/chat/chat.types';
 import { sessionWireToUiMessages } from '@/features/chat/agent-messages';
+import { listSessions } from '@/features/sessions/session-api';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -11,12 +12,17 @@ export function isWebUiSessionKey(key: string): boolean {
 
 /** Session list + history via REST; auth from `apiFetch` (gateway token store). */
 export class SessionManager {
+  /** Same first page as sidebar (`limit=20&offset=0`) so `listSessions` in-flight dedupe applies. */
   async loadSessions(): Promise<SessionInfo[]> {
-    const res = await apiFetch(apiUrl('/api/sessions?limit=20'));
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = (await res.json()) as { items?: SessionInfo[] };
-    return (data.items || [])
+    const data = await listSessions({ limit: 20, offset: 0 });
+    return data.items
       .filter((s) => isWebUiSessionKey(s.key))
+      .map((s) => ({
+        key: s.key,
+        name: s.name,
+        updatedAt: s.updatedAt,
+        messageCount: s.messageCount,
+      }))
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 

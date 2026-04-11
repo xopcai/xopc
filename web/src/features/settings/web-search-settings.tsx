@@ -1,9 +1,10 @@
 import { ExternalLink, Loader2, Plus, Search, Trash2 } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
-  fetchWebSearchSettings,
+  normalizeWebSearchSettingsFromConfig,
   patchWebSearchSettings,
   type SearchProviderRow,
   type WebSearchSettingsState,
@@ -58,41 +59,44 @@ export function WebSearchSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const w = m.webSearchSettings;
+  const logs = m.logs;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
   const [form, setForm] = useState<WebSearchSettingsState | null>(null);
   const [baseline, setBaseline] = useState<WebSearchSettingsState | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
+  const dirtyRef = useRef(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchWebSearchSettings();
-      setForm(data);
-      setBaseline(data);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : w.loadError);
-      setForm(null);
-      setBaseline(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [w.loadError]);
+  const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
+
+  const parsed = useMemo(
+    () =>
+      data?.payload?.config !== undefined
+        ? normalizeWebSearchSettingsFromConfig(data.payload.config)
+        : null,
+    [data],
+  );
 
   useEffect(() => {
     if (!hasToken) {
-      setLoading(false);
       setForm(null);
       setBaseline(null);
+      dirtyRef.current = false;
       return;
     }
-    void load();
-  }, [hasToken, load]);
+    if (parsed === null) return;
+    if (!dirtyRef.current) {
+      setForm(parsed);
+      setBaseline(parsed);
+    }
+  }, [hasToken, parsed]);
+
+  const loading = Boolean(hasToken && isLoading && data === undefined && !swrError);
+  const fetchError =
+    swrError instanceof Error ? swrError.message : swrError ? String(swrError) : null;
 
   const dirty = useMemo(() => {
     if (!form || !baseline) return false;
@@ -100,6 +104,7 @@ export function WebSearchSettingsPanel() {
   }, [form, baseline]);
 
   const update = useCallback((patch: Partial<WebSearchSettingsState>) => {
+    dirtyRef.current = true;
     setForm((f) => (f ? { ...f, ...patch } : null));
   }, []);
 
@@ -110,9 +115,7 @@ export function WebSearchSettingsPanel() {
     setSaveOk(false);
     try {
       await patchWebSearchSettings(form);
-      const next = await fetchWebSearchSettings();
-      setForm(next);
-      setBaseline(next);
+      dirtyRef.current = false;
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
     } catch (e) {
@@ -131,11 +134,22 @@ export function WebSearchSettingsPanel() {
     );
   }
 
-  if (loading || !form) {
+  if (loading) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col items-center gap-3 px-4 py-8">
         <Loader2 className="size-8 animate-spin text-fg-muted" aria-hidden />
         <p className="text-sm text-fg-muted">{w.loading}</p>
+      </div>
+    );
+  }
+
+  if (!form) {
+    return (
+      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
+        <p className="text-sm text-fg-muted">{error ?? fetchError ?? w.loadError}</p>
+        <Button type="button" variant="secondary" onClick={() => void mutate()}>
+          {logs.refresh}
+        </Button>
       </div>
     );
   }

@@ -1,3 +1,4 @@
+import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -43,4 +44,5 @@ export async function patchGatewaySettings(state: GatewaySettingsState): Promise
       },
     }),
   });
+  void revalidateGatewayConfig();
 }

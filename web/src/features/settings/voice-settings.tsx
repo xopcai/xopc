@@ -1,14 +1,17 @@
 import { ExternalLink, Loader2, Mic, Volume2 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   fetchVoiceModels,
-  fetchVoiceSettings,
+  normalizeVoiceSettings,
   patchVoiceSettings,
   type VoiceModelsPayload,
   type VoiceSettingsState,
 } from '@/features/settings/voice-config-api';
+import { apiUrl } from '@/lib/url';
 import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { messages, type VoiceSettingsMessages } from '@/i18n/messages';
@@ -65,43 +68,67 @@ export function VoiceSettingsPanel() {
   const [form, setForm] = useState<VoiceSettingsState | null>(null);
   const [baseline, setBaseline] = useState<VoiceSettingsState | null>(null);
   const [models, setModels] = useState<VoiceModelsPayload | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const [voice, vm] = await Promise.all([fetchVoiceSettings(), fetchVoiceModels()]);
-      setForm(structuredClone(voice));
-      setBaseline(structuredClone(voice));
-      setModels(vm);
-      setSaveOk(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : v.loadError);
-      setForm(null);
-      setBaseline(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [v.loadError]);
+  const {
+    data: cfgData,
+    error: cfgErr,
+    isLoading: cfgLoading,
+    mutate: mutCfg,
+  } = useGatewayConfigSwr(hasToken);
+  const {
+    data: voiceModels,
+    error: vmErr,
+    isLoading: vmLoading,
+    mutate: mutVm,
+  } = useSWR(hasToken ? apiUrl('/api/voice/models') : null, fetchVoiceModels, { revalidateOnFocus: false });
 
-  useEffect(() => {
-    if (!hasToken) {
-      setLoading(false);
-      setForm(null);
-      setBaseline(null);
-      return;
-    }
-    void load();
-  }, [hasToken, load]);
+  const voiceParsed = useMemo(
+    () =>
+      cfgData?.payload?.config !== undefined
+        ? normalizeVoiceSettings(cfgData.payload.config)
+        : null,
+    [cfgData],
+  );
 
   const dirty = useMemo(() => {
     if (!form || !baseline) return false;
     return JSON.stringify(form) !== JSON.stringify(baseline);
   }, [form, baseline]);
+
+  useEffect(() => {
+    if (!hasToken) {
+      setForm(null);
+      setBaseline(null);
+      setModels(null);
+      return;
+    }
+    if (voiceParsed === null || voiceModels === undefined) return;
+    if (!dirty) {
+      setForm(structuredClone(voiceParsed));
+      setBaseline(structuredClone(voiceParsed));
+      setModels(voiceModels);
+      setSaveOk(false);
+    }
+  }, [hasToken, voiceParsed, voiceModels, dirty]);
+
+  const loading = Boolean(
+    hasToken &&
+      (voiceParsed === null || voiceModels === undefined) &&
+      (cfgLoading || vmLoading),
+  );
+  const fetchError =
+    cfgErr instanceof Error
+      ? cfgErr.message
+      : cfgErr
+        ? String(cfgErr)
+        : vmErr instanceof Error
+          ? vmErr.message
+          : vmErr
+            ? String(vmErr)
+            : null;
 
   const updateStt = useCallback((patch: Partial<VoiceSettingsState['stt']>) => {
     setForm((f) => (f ? { ...f, stt: { ...f.stt, ...patch } } : null));
@@ -189,6 +216,7 @@ export function VoiceSettingsPanel() {
       await patchVoiceSettings(form);
       const next = structuredClone(form);
       setBaseline(next);
+      setForm(next);
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
     } catch (e) {
@@ -218,11 +246,18 @@ export function VoiceSettingsPanel() {
     );
   }
 
-  if (!form) {
+  if (!form || models === null) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <p className="text-sm text-fg-muted">{error ?? v.loadError}</p>
-        <Button type="button" variant="secondary" onClick={() => void load()}>
+        <p className="text-sm text-fg-muted">{error ?? fetchError ?? v.loadError}</p>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            void mutCfg();
+            void mutVm();
+          }}
+        >
           {v.retry}
         </Button>
       </div>

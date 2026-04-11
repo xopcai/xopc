@@ -1,3 +1,4 @@
+import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -14,7 +15,7 @@ export type WebSearchSettingsState = {
   providers: SearchProviderRow[];
 };
 
-function normalizeFromConfig(cfg: unknown): WebSearchSettingsState {
+export function normalizeWebSearchSettingsFromConfig(cfg: unknown): WebSearchSettingsState {
   const tools = cfg && typeof cfg === 'object' && 'tools' in cfg ? (cfg as { tools?: unknown }).tools : undefined;
   const web = tools && typeof tools === 'object' && 'web' in tools ? (tools as { web?: unknown }).web : undefined;
   const region =
@@ -56,7 +57,7 @@ function normalizeFromConfig(cfg: unknown): WebSearchSettingsState {
 
 export async function fetchWebSearchSettings(): Promise<WebSearchSettingsState> {
   const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'));
-  return normalizeFromConfig(res.payload?.config);
+  return normalizeWebSearchSettingsFromConfig(res.payload?.config);
 }
 
 export async function patchWebSearchSettings(state: WebSearchSettingsState): Promise<void> {
@@ -89,4 +90,5 @@ export async function patchWebSearchSettings(state: WebSearchSettingsState): Pro
       },
     }),
   });
+  void revalidateGatewayConfig();
 }

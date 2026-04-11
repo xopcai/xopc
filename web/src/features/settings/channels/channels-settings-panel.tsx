@@ -15,10 +15,11 @@ import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import { fetchChatAgents } from '@/features/chat/chat-agents-api';
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import { telegramRoutingAccountIds } from '@/features/settings/channel-bindings-merge';
 import {
   defaultChannelsState,
-  fetchChannelsSettings,
+  normalizeChannelsFromConfig,
   patchChannelsSettings,
   type ChannelsSettingsState,
   type DmPolicy,
@@ -55,7 +56,6 @@ export function ChannelsSettingsPanel() {
 
   const [form, setForm] = useState<ChannelsSettingsState | null>(null);
   const [baseline, setBaseline] = useState<ChannelsSettingsState | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
@@ -77,6 +77,43 @@ export function ChannelsSettingsPanel() {
     revalidateOnFocus: false,
   });
 
+  const { data: cfgData, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
+
+  const parsed = useMemo(
+    () =>
+      cfgData?.payload?.config !== undefined
+        ? normalizeChannelsFromConfig(cfgData.payload.config)
+        : null,
+    [cfgData],
+  );
+
+  const dirty = useMemo(() => {
+    if (!form || !baseline) return false;
+    return JSON.stringify(form) !== JSON.stringify(baseline);
+  }, [form, baseline]);
+
+  useEffect(() => {
+    if (!hasToken) {
+      setForm(null);
+      setBaseline(null);
+      return;
+    }
+    if (parsed === null) return;
+    if (!dirty) {
+      setForm(parsed);
+      setBaseline(structuredClone(parsed));
+      setTgAccountsDraft(JSON.stringify(parsed.telegram.accounts ?? {}, null, 2));
+      setTgAccountsError('');
+      setWxAccountsDraft(JSON.stringify(parsed.weixin.accounts ?? {}, null, 2));
+      setWxAccountsError('');
+      setSaveOk(false);
+    }
+  }, [hasToken, parsed, dirty]);
+
+  const loading = Boolean(hasToken && isLoading && cfgData === undefined && !swrError);
+  const fetchError =
+    swrError instanceof Error ? swrError.message : swrError ? String(swrError) : null;
+
   const updateChannelAgentRoute = useCallback(
     (channel: 'telegram' | 'weixin', accountId: string, agentId: string) => {
       setForm((f) => {
@@ -93,42 +130,6 @@ export function ChannelsSettingsPanel() {
     },
     [],
   );
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchChannelsSettings();
-      setForm(data);
-      setBaseline(structuredClone(data));
-      setTgAccountsDraft(JSON.stringify(data.telegram.accounts ?? {}, null, 2));
-      setTgAccountsError('');
-      setWxAccountsDraft(JSON.stringify(data.weixin.accounts ?? {}, null, 2));
-      setWxAccountsError('');
-      setSaveOk(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : ch.loadError);
-      setForm(null);
-      setBaseline(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [ch.loadError]);
-
-  useEffect(() => {
-    if (!hasToken) {
-      setLoading(false);
-      setForm(null);
-      setBaseline(null);
-      return;
-    }
-    void load();
-  }, [hasToken, load]);
-
-  const dirty = useMemo(() => {
-    if (!form || !baseline) return false;
-    return JSON.stringify(form) !== JSON.stringify(baseline);
-  }, [form, baseline]);
 
   const updateTelegram = useCallback((patch: Partial<ChannelsSettingsState['telegram']>) => {
     setForm((f) => (f ? { ...f, telegram: { ...f.telegram, ...patch } } : null));
@@ -325,8 +326,8 @@ export function ChannelsSettingsPanel() {
   if (!form) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <p className="text-sm text-fg-muted">{error ?? ch.loadError}</p>
-        <Button type="button" variant="secondary" onClick={() => void load()}>
+        <p className="text-sm text-fg-muted">{error ?? fetchError ?? ch.loadError}</p>
+        <Button type="button" variant="secondary" onClick={() => void mutate()}>
           {ch.retry}
         </Button>
       </div>
@@ -445,7 +446,7 @@ export function ChannelsSettingsPanel() {
         onOpenChange={setWeixinModalOpen}
         ch={ch}
         onLoginSuccess={async () => {
-          await load();
+          await mutate();
           setWeixinSuccessBanner(ch.weixinQrLoginSuccess);
           window.setTimeout(() => setWeixinSuccessBanner(null), 4000);
         }}
