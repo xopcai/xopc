@@ -11,7 +11,7 @@ import type { SessionManager } from '../../../session/index.js';
  */
 export async function getManager(): Promise<SessionManager> {
   const ctx = getContextWithOpts();
-  return getSessionManager(ctx.workspacePath);
+  return getSessionManager();
 }
 
 /**

@@ -128,13 +128,7 @@ export class ExtensionApiImpl implements ExtensionApi {
     }
     
     this._typedHooks.get(hookName)!.add(handler);
-    
-    // Also register in legacy hooks map for backward compatibility
-    if (!this._hooks.has(hookName)) {
-      this._hooks.set(hookName, new Set());
-    }
-    this._hooks.get(hookName)!.add(handler);
-    
+
     this._logger.debug(`Registered typed hook: ${hookName} (mode: ${mode})`);
   }
 

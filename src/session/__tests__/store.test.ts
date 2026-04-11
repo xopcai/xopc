@@ -124,38 +124,6 @@ describe('SessionStore', () => {
       ).toBe(true);
     });
 
-    it('lazy-migrates web session from legacy deep shard to compact layout', async () => {
-      const key = 'main:gateway:default:direct:chat_mig';
-      const legacyDir = join(
-        tempDir,
-        '.sessions',
-        'users',
-        'main',
-        'gateway',
-        'default',
-        'direct',
-        'chat_mig'
-      );
-      await mkdir(legacyDir, { recursive: true });
-      await writeFile(
-        join(legacyDir, 'main_gateway_default_direct_chat_mig.json'),
-        JSON.stringify([{ role: 'user', content: 'hi' }])
-      );
-
-      const msgs = await store.loadMessages(key);
-      expect(msgs).toHaveLength(1);
-      const compactJson = join(
-        tempDir,
-        '.sessions',
-        'users',
-        'main',
-        'web',
-        'chat_mig',
-        'main_gateway_default_direct_chat_mig.json'
-      );
-      expect(existsSync(compactJson)).toBe(true);
-      expect(existsSync(join(legacyDir, 'main_gateway_default_direct_chat_mig.json'))).toBe(false);
-    });
   });
 
   describe('getByAgent', () => {
@@ -294,37 +262,4 @@ describe('SessionStore', () => {
     });
   });
 
-  describe('legacy workspace migration', () => {
-    it('copies legacy workspace/.sessions into explicit sessionsDir when new store is empty', async () => {
-      const root = await mkdtemp(join(tmpdir(), 'xopcbot-session-migrate-'));
-      try {
-        const legacyWs = join(root, 'ws');
-        const legacySessions = join(legacyWs, '.sessions');
-        await mkdir(legacySessions, { recursive: true });
-        await writeFile(
-          join(legacySessions, 'index.json'),
-          JSON.stringify({ version: '1.0', lastUpdated: new Date().toISOString(), sessions: [] })
-        );
-        await writeFile(
-          join(legacySessions, 'main_telegram_default_dm_99.json'),
-          JSON.stringify([{ role: 'user', content: 'migrated' }])
-        );
-
-        const targetSessions = join(root, 'new-sessions');
-        const migrated = new SessionStore({
-          config: testConfig,
-          workspace: legacyWs,
-          sessionsDir: targetSessions,
-        });
-        await migrated.initialize();
-
-        const shardRel = join('users', 'main', 'telegram', 'default', 'dm', '99');
-        expect(existsSync(join(targetSessions, shardRel, 'main_telegram_default_dm_99.json'))).toBe(true);
-        const detail = await migrated.get('main:telegram:default:dm:99');
-        expect(detail?.messages.length).toBeGreaterThan(0);
-      } finally {
-        await rm(root, { recursive: true, force: true });
-      }
-    });
-  });
 });

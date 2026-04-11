@@ -1,15 +1,12 @@
 // Session store - manages session persistence, indexing, compaction, and sliding window
 
-import { readFile, writeFile, mkdir, unlink, readdir, stat, cp, rename } from 'fs/promises';
+import { readFile, writeFile, mkdir, unlink, readdir, stat } from 'fs/promises';
 import { basename, join } from 'path';
 import { existsSync } from 'fs';
 import { resolveSessionsDir, FILENAMES } from '../config/paths.js';
 import { resolveDefaultAgentId } from '../agents/agent-scope.js';
 import type { Config } from '../config/schema.js';
-import {
-  resolveLegacyDeepWebShardRelativePath,
-  resolveSessionShardRelativePath,
-} from './shard-path.js';
+import { resolveSessionShardRelativePath } from './shard-path.js';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { createLogger } from '../utils/logger.js';
 import type {
@@ -38,24 +35,17 @@ const DEFAULT_LIMIT = 50;
  * Session files live under `resolveSessionsDir(config, agentId)` (ADR-003), sharded by
  * `resolveSessionShardRelativePath(sessionKey)` (users/… vs system/cron, system/heartbeat; web UI uses
  * compact `users/{agent}/web/{peerId}` for gateway/webchat direct sessions).
- * Optional `workspace` enables one-time migration from legacy `<workspace>/.sessions`.
  */
 export interface SessionStoreOptions {
   /** Loaded app config (required for OpenClaw-style session paths). */
   config: Config;
   /** Agent id for the session store root (default: configured default agent). */
   agentId?: string;
-  /**
-   * Config workspace path (`agents.defaults.workspace`).
-   * If legacy `<workspace>/.sessions` exists and the new store is empty, it is copied here.
-   */
-  workspace?: string;
   /** Override storage root (tests); skips `resolveSessionsDir` */
   sessionsDir?: string;
 }
 
 export class SessionStore {
-  private readonly legacyWorkspace?: string;
   private sessionsDir: string;
   private archiveDir: string;
   private indexFile: string;
@@ -71,7 +61,6 @@ export class SessionStore {
     compactionConfig?: Partial<CompactionConfig>
   ) {
     const agentId = options.agentId ?? resolveDefaultAgentId(options.config);
-    this.legacyWorkspace = options.workspace;
     this.sessionsDir = options.sessionsDir ?? resolveSessionsDir(options.config, agentId);
     this.archiveDir = join(this.sessionsDir, 'archive');
     this.indexFile = join(this.sessionsDir, FILENAMES.SESSIONS_INDEX);
@@ -90,103 +79,13 @@ export class SessionStore {
     await mkdir(this.sessionsDir, { recursive: true });
     await mkdir(this.archiveDir, { recursive: true });
 
-    await this.maybeMigrateLegacyWorkspace();
-
-    const migratedFlat = await this.maybeMigrateFlatSessionFiles();
-
     if (!existsSync(this.indexFile)) {
       await this.rebuildIndex();
     } else {
       await this.loadIndex();
     }
 
-    if (migratedFlat > 0) {
-      this.indexCache = null;
-      this.indexCacheTime = 0;
-      await this.rebuildIndex();
-    }
-
     log.debug('Session store initialized');
-  }
-
-  /**
-   * Copy legacy `<workspace>/.sessions` into `agents/<agentId>/sessions/` when the new location is empty.
-   */
-  private async maybeMigrateLegacyWorkspace(): Promise<void> {
-    if (!this.legacyWorkspace) return;
-
-    const legacyDir = join(this.legacyWorkspace, '.sessions');
-    if (!existsSync(legacyDir)) return;
-    if (legacyDir === this.sessionsDir) return;
-
-    const hasNewSessions = await this.hasNonEmptyIndex(this.indexFile);
-    if (hasNewSessions) return;
-
-    let legacyHasData = false;
-    try {
-      const names = await readdir(legacyDir);
-      legacyHasData = names.some(
-        (n) =>
-          (n.endsWith('.json') && n !== FILENAMES.SESSIONS_INDEX) ||
-          n === 'archive'
-      );
-    } catch {
-      return;
-    }
-    if (!legacyHasData) return;
-
-    try {
-      const entries = await readdir(legacyDir, { withFileTypes: true });
-      for (const ent of entries) {
-        const src = join(legacyDir, ent.name);
-        const dest = join(this.sessionsDir, ent.name);
-        await cp(src, dest, { recursive: true, force: true });
-      }
-      log.info({ from: legacyDir, to: this.sessionsDir }, 'Migrated sessions from legacy workspace/.sessions');
-      this.indexCache = null;
-      this.indexCacheTime = 0;
-    } catch (err) {
-      log.warn({ err, legacyDir, target: this.sessionsDir }, 'Failed to migrate legacy sessions');
-    }
-  }
-
-  /**
-   * Move legacy flat `sessions/<stem>.json` into sharded subdirectories (one-time per file).
-   */
-  private async maybeMigrateFlatSessionFiles(): Promise<number> {
-    let moved = 0;
-    let entries;
-    try {
-      entries = await readdir(this.sessionsDir, { withFileTypes: true });
-    } catch {
-      return 0;
-    }
-    for (const ent of entries) {
-      if (!ent.isFile()) continue;
-      if (ent.name === FILENAMES.SESSIONS_INDEX || !ent.name.endsWith('.json') || ent.name.endsWith('.meta.json')) {
-        continue;
-      }
-      const key = this.fileNameToKey(ent.name.replace(/\.json$/, ''));
-      const shard = resolveSessionShardRelativePath(key);
-      const destDir = join(this.sessionsDir, shard);
-      const destJson = join(destDir, ent.name);
-      const srcJson = join(this.sessionsDir, ent.name);
-      if (srcJson === destJson) continue;
-      try {
-        await mkdir(destDir, { recursive: true });
-        await rename(srcJson, destJson);
-        moved++;
-        const metaName = ent.name.replace(/\.json$/, '.meta.json');
-        const srcMeta = join(this.sessionsDir, metaName);
-        if (existsSync(srcMeta)) {
-          await rename(srcMeta, join(destDir, metaName));
-        }
-        log.debug({ key, shard }, 'Migrated flat session file into shard directory');
-      } catch (err) {
-        log.warn({ err, srcJson, destJson }, 'Failed to migrate session file to shard');
-      }
-    }
-    return moved;
   }
 
   private sessionPathsForKey(key: string): { dir: string; jsonPath: string; metaPath: string } {
@@ -198,38 +97,6 @@ export class SessionStore {
       jsonPath: join(dir, `${safeKey}.json`),
       metaPath: join(dir, `${safeKey}.meta.json`),
     };
-  }
-
-  private legacyFlatPathsForKey(key: string): { jsonPath: string; metaPath: string } {
-    const safeKey = this.sanitizeKey(key);
-    return {
-      jsonPath: join(this.sessionsDir, `${safeKey}.json`),
-      metaPath: join(this.sessionsDir, `${safeKey}.meta.json`),
-    };
-  }
-
-  /** Pre-compact web UI shard: `users/.../webchat/default/direct/...` */
-  private legacyDeepWebPathsForKey(key: string): { dir: string; jsonPath: string; metaPath: string } | null {
-    const rel = resolveLegacyDeepWebShardRelativePath(key);
-    if (!rel) return null;
-    const safeKey = this.sanitizeKey(key);
-    const dir = join(this.sessionsDir, rel);
-    return {
-      dir,
-      jsonPath: join(dir, `${safeKey}.json`),
-      metaPath: join(dir, `${safeKey}.meta.json`),
-    };
-  }
-
-  private async hasNonEmptyIndex(indexPath: string): Promise<boolean> {
-    if (!existsSync(indexPath)) return false;
-    try {
-      const raw = await readFile(indexPath, 'utf-8');
-      const data = JSON.parse(raw) as SessionIndex;
-      return Array.isArray(data.sessions) && data.sessions.length > 0;
-    } catch {
-      return false;
-    }
   }
 
   // ========== Index Management ==========
@@ -611,16 +478,15 @@ export class SessionStore {
     const idx = index.sessions.findIndex((s) => s.key === key);
 
     const primary = this.sessionPathsForKey(key);
-    const legacy = this.legacyFlatPathsForKey(key);
 
-    for (const p of [primary.jsonPath, legacy.jsonPath]) {
+    for (const p of [primary.jsonPath]) {
       try {
         await unlink(p);
       } catch (err: any) {
         if (err.code !== 'ENOENT') throw err;
       }
     }
-    for (const p of [primary.metaPath, legacy.metaPath]) {
+    for (const p of [primary.metaPath]) {
       try {
         await unlink(p);
       } catch (err: any) {
@@ -687,7 +553,6 @@ export class SessionStore {
 
   async loadMessages(key: string, options?: { fromArchive?: boolean }): Promise<AgentMessage[]> {
     const primary = this.sessionPathsForKey(key);
-    const legacy = this.legacyFlatPathsForKey(key);
 
     const readAndNormalize = async (path: string): Promise<AgentMessage[] | null> => {
       try {
@@ -709,43 +574,7 @@ export class SessionStore {
       }
     };
 
-    let path = primary.jsonPath;
-    let messages = await readAndNormalize(path);
-
-    if (messages === null && legacy.jsonPath !== primary.jsonPath) {
-      const legacyMessages = await readAndNormalize(legacy.jsonPath);
-      if (legacyMessages !== null) {
-        await mkdir(primary.dir, { recursive: true });
-        try {
-          await rename(legacy.jsonPath, primary.jsonPath);
-          if (existsSync(legacy.metaPath)) {
-            await rename(legacy.metaPath, primary.metaPath);
-          }
-          log.debug({ key }, 'Lazy-migrated session file from flat layout to shard');
-        } catch (err) {
-          log.warn({ err, key }, 'Failed to lazy-migrate session file to shard');
-        }
-        messages = legacyMessages;
-      }
-    }
-
-    const deepLegacy = this.legacyDeepWebPathsForKey(key);
-    if (messages === null && deepLegacy && deepLegacy.jsonPath !== primary.jsonPath) {
-      const deepMessages = await readAndNormalize(deepLegacy.jsonPath);
-      if (deepMessages !== null) {
-        await mkdir(primary.dir, { recursive: true });
-        try {
-          await rename(deepLegacy.jsonPath, primary.jsonPath);
-          if (existsSync(deepLegacy.metaPath)) {
-            await rename(deepLegacy.metaPath, primary.metaPath);
-          }
-          log.debug({ key }, 'Lazy-migrated web session from deep shard to compact shard');
-        } catch (err) {
-          log.warn({ err, key }, 'Failed to lazy-migrate web session to compact shard');
-        }
-        messages = deepMessages;
-      }
-    }
+    const messages = await readAndNormalize(primary.jsonPath);
 
     if (messages !== null) {
       return messages;
@@ -786,14 +615,6 @@ export class SessionStore {
 
     const inShard = await scanDir(shardDir);
     if (inShard) return inShard;
-    const legacyRel = resolveLegacyDeepWebShardRelativePath(sessionKey);
-    if (legacyRel) {
-      const legacyShard = join(this.archiveDir, legacyRel);
-      if (legacyShard !== shardDir) {
-        const inLegacy = await scanDir(legacyShard);
-        if (inLegacy) return inLegacy;
-      }
-    }
     return await scanDir(this.archiveDir);
   }
 
@@ -1213,15 +1034,7 @@ export class SessionStore {
   private async moveToArchive(key: string): Promise<void> {
     const safeKey = this.sanitizeKey(key);
     const primary = this.sessionPathsForKey(key);
-    const legacy = this.legacyFlatPathsForKey(key);
-    const deepLegacy = this.legacyDeepWebPathsForKey(key);
-    const sourcePath = existsSync(primary.jsonPath)
-      ? primary.jsonPath
-      : existsSync(legacy.jsonPath)
-        ? legacy.jsonPath
-        : deepLegacy && existsSync(deepLegacy.jsonPath)
-          ? deepLegacy.jsonPath
-          : null;
+    const sourcePath = existsSync(primary.jsonPath) ? primary.jsonPath : null;
     if (!sourcePath) {
       return;
     }
@@ -1236,13 +1049,7 @@ export class SessionStore {
       await writeFile(targetPath, data);
       await unlink(sourcePath);
 
-      const metaSource = existsSync(primary.metaPath)
-        ? primary.metaPath
-        : existsSync(legacy.metaPath)
-          ? legacy.metaPath
-          : deepLegacy && existsSync(deepLegacy.metaPath)
-            ? deepLegacy.metaPath
-            : primary.metaPath;
+      const metaSource = primary.metaPath;
       const metaTarget = join(archiveShard, `${safeKey}.${timestamp}.meta.json`);
       try {
         const metaData = await readFile(metaSource, 'utf-8');
@@ -1285,34 +1092,4 @@ export class SessionStore {
     }
   }
 
-  // ========== Legacy Compatibility ==========
-
-  async migrateFromLegacy(): Promise<number> {
-    // Migrate old .sessions/*.json files without index
-    const files = await this.scanSessionFiles();
-    let migrated = 0;
-
-    for (const file of files) {
-      if (file.endsWith('.json') && !file.endsWith('.meta.json')) {
-        const key = this.fileNameToKey(basename(file, '.json'));
-        const metadata = await this.getMetadata(key);
-        if (!metadata) {
-          const scanned = await this.scanSessionFile(key);
-          if (scanned) {
-            const index = await this.loadIndex();
-            index.sessions.push(scanned);
-            migrated++;
-          }
-        }
-      }
-    }
-
-    if (migrated > 0) {
-      this.indexDirty = true;
-      await this.saveIndex();
-    }
-
-    log.info({ migrated }, 'Migrated legacy sessions');
-    return migrated;
-  }
 }

@@ -1,10 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import { join } from 'path';
 
-import {
-  resolveLegacyDeepWebShardRelativePath,
-  resolveSessionShardRelativePath,
-} from '../shard-path.js';
+import { resolveSessionShardRelativePath } from '../shard-path.js';
 
 describe('resolveSessionShardRelativePath', () => {
   it('places cron sessions under system/cron', () => {
@@ -34,12 +31,6 @@ describe('resolveSessionShardRelativePath', () => {
   it('keeps non-default account in web UI shard path', () => {
     expect(resolveSessionShardRelativePath('main:gateway:work:direct:chat_3')).toBe(
       join('users', 'main', 'web', 'work', 'chat_3')
-    );
-  });
-
-  it('exposes legacy deep path for web UI sessions', () => {
-    expect(resolveLegacyDeepWebShardRelativePath('main:webchat:default:direct:u1')).toBe(
-      join('users', 'main', 'webchat', 'default', 'direct', 'u1')
     );
   });
 

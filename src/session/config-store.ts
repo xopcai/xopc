@@ -41,19 +41,10 @@ export interface SessionAgentConfig {
  */
 export class SessionConfigStore {
   private configDir: string;
-  private migrateFromDir?: string;
 
-  /**
-   * @param agentHomeDir — `resolveAgentHomeDir(…)` (parent of `sessions/` transcript store)
-   * @param options.migrateSessionConfigsFrom — markdown workspace root; copies `.sessions/config/*.json` once if new dir has no files
-   */
-  constructor(
-    agentHomeDir: string,
-    options?: { migrateSessionConfigsFrom?: string },
-  ) {
+  /** @param agentHomeDir — `resolveAgentHomeDir(…)` (parent of `sessions/` transcript store) */
+  constructor(agentHomeDir: string) {
     this.configDir = join(agentHomeDir, 'sessions', 'config');
-    const ws = options?.migrateSessionConfigsFrom;
-    this.migrateFromDir = ws ? join(ws, '.sessions', 'config') : undefined;
   }
 
   /**
@@ -61,42 +52,7 @@ export class SessionConfigStore {
    */
   async initialize(): Promise<void> {
     await mkdir(this.configDir, { recursive: true });
-    await this.maybeMigrateFromWorkspace();
     log.debug('Session config store initialized');
-  }
-
-  private async maybeMigrateFromWorkspace(): Promise<void> {
-    if (!this.migrateFromDir || !existsSync(this.migrateFromDir)) {
-      return;
-    }
-    const { readdir, copyFile } = await import('fs/promises');
-    let targetCount = 0;
-    try {
-      for (const f of await readdir(this.configDir)) {
-        if (f.endsWith('.json')) {
-          targetCount++;
-        }
-      }
-    } catch {
-      targetCount = 0;
-    }
-    if (targetCount > 0) {
-      return;
-    }
-    for (const f of await readdir(this.migrateFromDir)) {
-      if (!f.endsWith('.json')) {
-        continue;
-      }
-      const src = join(this.migrateFromDir, f);
-      const dst = join(this.configDir, f);
-      if (!existsSync(dst)) {
-        try {
-          await copyFile(src, dst);
-        } catch (error) {
-          log.warn({ error, f }, 'Session config migration copy failed');
-        }
-      }
-    }
   }
 
   /**

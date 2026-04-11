@@ -9,7 +9,6 @@ import {
   isAcpSessionKey,
   extractAgentIdFromAcpKey,
   isValidAcpSessionKey,
-  migrateLegacyAcpKey,
 } from '../routing-integration.js';
 
 describe('AcpRouting', () => {
@@ -80,25 +79,4 @@ describe('AcpRouting', () => {
     });
   });
 
-  describe('migrateLegacyAcpKey', () => {
-    it('should migrate legacy acp:{uuid} format', () => {
-      const migrated = migrateLegacyAcpKey('acp:abc-123', 'main');
-      expect(migrated).toBe('main:acp:abc-123');
-    });
-
-    it('should handle uppercase ACP prefix', () => {
-      const migrated = migrateLegacyAcpKey('ACP:xyz-789', 'main');
-      expect(migrated).toBe('main:acp:xyz-789');
-    });
-
-    it('should return new format as-is', () => {
-      const migrated = migrateLegacyAcpKey('main:acp:abc-123', 'main');
-      expect(migrated).toBe('main:acp:abc-123');
-    });
-
-    it('should use default agent ID for unknown formats', () => {
-      const migrated = migrateLegacyAcpKey('unknown-format', 'main');
-      expect(migrated).toBe('main:acp:unknown-format');
-    });
-  });
 });

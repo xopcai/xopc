@@ -43,7 +43,7 @@ export async function startInteractiveChat(
     // Handle special commands
     if (trimmed === ':sessions' || trimmed === ':list') {
       rl.pause();
-      await listSessions(workspace);
+      await listSessions();
       rl.resume();
       rl.prompt();
       return;
@@ -51,7 +51,7 @@ export async function startInteractiveChat(
     
     if (trimmed.startsWith(':session ')) {
       const newSessionKey = trimmed.slice(9).trim();
-      const manager = await getSessionManager(workspace);
+      const manager = await getSessionManager();
       const session = await manager.getSessionMetadata(newSessionKey);
       if (session) {
         sessionKey = newSessionKey;

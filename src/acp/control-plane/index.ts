@@ -15,7 +15,6 @@ export type { CachedRuntimeState } from "./runtime-cache.js";
 export { SessionActorQueue } from "./session-actor-queue.js";
 export {
   AcpSessionStore,
-  resolveAcpWorkspace,
   resolveAcpAgentHome,
   createDefaultAcpSessionStore,
 } from "./session-store.js";

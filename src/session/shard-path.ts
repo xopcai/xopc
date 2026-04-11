@@ -2,7 +2,7 @@
  * Maps a session key to a relative directory under the agent sessions root.
  * Routing keys → `users/{agent}/{source}/{account}/{peerKind}/{peerId}/…`; cron & heartbeat → `system/…`.
  * Web UI (`webchat` / `gateway`) + `direct` peers use a shorter `users/{agent}/web/…` layout (no redundant
- * `default`/`direct` segments). See `resolveLegacyDeepWebShardRelativePath` for the previous layout.
+ * `default`/`direct` segments).
  */
 
 import { join } from 'path';
@@ -18,36 +18,6 @@ const MAX_SEG = 120;
 export function sanitizeSessionPathSegment(value: string): string {
   const s = value.replace(/[^a-zA-Z0-9_-]/g, '_').slice(0, MAX_SEG);
   return s || 'unknown';
-}
-
-/**
- * Previous on-disk layout for web UI direct sessions (before compact `users/.../web/...`).
- * Used to lazy-migrate existing files.
- */
-export function resolveLegacyDeepWebShardRelativePath(sessionKey: string): string | null {
-  const raw = (sessionKey ?? '').trim();
-  if (!raw) return null;
-
-  const parsed = parseSessionKey(raw);
-  if (!parsed) return null;
-  if (parsed.peerKind !== 'direct') return null;
-  if (parsed.source !== 'webchat' && parsed.source !== 'gateway') return null;
-
-  const segments: string[] = [
-    'users',
-    sanitizeSessionPathSegment(parsed.agentId),
-    sanitizeSessionPathSegment(parsed.source),
-    sanitizeSessionPathSegment(parsed.accountId),
-    'direct',
-    sanitizeSessionPathSegment(parsed.peerId),
-  ];
-  if (parsed.threadId) {
-    segments.push('thread', sanitizeSessionPathSegment(parsed.threadId));
-  }
-  if (parsed.scopeId) {
-    segments.push('scope', sanitizeSessionPathSegment(parsed.scopeId));
-  }
-  return join(...segments);
 }
 
 /**
