@@ -1155,6 +1155,24 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           }
         }
       }
+      if (body.agents.defaults.browser !== undefined) {
+        const b = body.agents.defaults.browser;
+        if (b === null) {
+          delete (config.agents.defaults as Record<string, unknown>).browser;
+        } else if (typeof b === 'object' && !Array.isArray(b)) {
+          const br = b as Record<string, unknown>;
+          if (!config.agents.defaults.browser) {
+            config.agents.defaults.browser = { enabled: false, headless: true };
+          }
+          const target = config.agents.defaults.browser;
+          if (br.enabled !== undefined) {
+            target.enabled = Boolean(br.enabled);
+          }
+          if (br.headless !== undefined) {
+            target.headless = Boolean(br.headless);
+          }
+        }
+      }
     }
     
     // Update channels — use `in` / null so `weixin: null` removes the block; avoid `if (ch.weixin)` missing null.

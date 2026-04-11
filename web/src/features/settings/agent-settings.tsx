@@ -1,4 +1,4 @@
-import { Cpu, Folder, Layers, Plus, Trash2, Zap } from 'lucide-react';
+import { Cpu, Folder, Globe, Layers, Plus, Trash2, Zap } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
@@ -289,7 +289,35 @@ export function AgentSettingsPanel({ embedded = false }: { embedded?: boolean } 
                 update({ mediaMaxMb: v === '' ? undefined : Number(v) });
               }}
             />
-          </Field>
+            </Field>
+          </div>
+        </SettingsFormSection>
+
+        <SettingsFormSection>
+          <SettingsFormSectionHeader icon={Globe} title={a.cardBrowserTitle} subtitle={a.cardBrowserSubtitle} />
+          <div className="flex flex-col gap-5">
+            <Field label={a.label.browserEnabled} description={a.desc.browserEnabled}>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  className="size-3.5 shrink-0 rounded border-edge"
+                  checked={form.browserEnabled}
+                  onChange={(e) => update({ browserEnabled: e.target.checked })}
+                />
+                <span>{a.browserEnabledOn}</span>
+              </label>
+            </Field>
+            <Field label={a.label.browserHeadless} description={a.desc.browserHeadless}>
+              <label className="flex cursor-pointer items-center gap-2 text-sm text-fg">
+                <input
+                  type="checkbox"
+                  className="size-3.5 shrink-0 rounded border-edge"
+                  checked={form.browserHeadless}
+                  onChange={(e) => update({ browserHeadless: e.target.checked })}
+                />
+                <span>{a.browserHeadlessOn}</span>
+              </label>
+            </Field>
           </div>
         </SettingsFormSection>
 

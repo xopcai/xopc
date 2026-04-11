@@ -549,6 +549,10 @@ const bundles: Record<
       cardModelsSubtitle: string;
       cardWorkspaceTitle: string;
       cardWorkspaceSubtitle: string;
+      cardBrowserTitle: string;
+      cardBrowserSubtitle: string;
+      browserEnabledOn: string;
+      browserHeadlessOn: string;
       cardGenerationTitle: string;
       cardGenerationSubtitle: string;
       cardBehaviorTitle: string;
@@ -560,6 +564,8 @@ const bundles: Record<
         imageGenerationModel: string;
         mediaMaxMb: string;
         workspace: string;
+        browserEnabled: string;
+        browserHeadless: string;
         maxTokens: string;
         temperature: string;
         maxToolIterations: string;
@@ -574,6 +580,8 @@ const bundles: Record<
         imageGenerationModel: string;
         mediaMaxMb: string;
         workspace: string;
+        browserEnabled: string;
+        browserHeadless: string;
         maxTokens: string;
         temperature: string;
         maxToolIterations: string;
@@ -1673,6 +1681,10 @@ const bundles: Record<
       cardModelsSubtitle: 'Chat, vision, and image generation defaults',
       cardWorkspaceTitle: 'Workspace & attachments',
       cardWorkspaceSubtitle: 'Working directory and inbound media limits',
+      cardBrowserTitle: 'Browser automation',
+      cardBrowserSubtitle: 'Playwright tools (browser_navigate, snapshot, click, …)',
+      browserEnabledOn: 'Enable browser tools',
+      browserHeadlessOn: 'Run headless (no visible window)',
       cardGenerationTitle: 'Sampling & tools',
       cardGenerationSubtitle: 'Token budget, randomness, and tool loop depth',
       cardBehaviorTitle: 'Reasoning & output',
@@ -1684,6 +1696,8 @@ const bundles: Record<
         imageGenerationModel: 'Image generation model',
         mediaMaxMb: 'Image load limit (MB)',
         workspace: 'Workspace',
+        browserEnabled: 'Browser tools',
+        browserHeadless: 'Headless mode',
         maxTokens: 'Max tokens',
         temperature: 'Temperature',
         maxToolIterations: 'Max tool iterations',
@@ -1699,6 +1713,10 @@ const bundles: Record<
         imageGenerationModel: 'Optional. For image_generate (e.g. openai/gpt-image-1).',
         mediaMaxMb: 'Max size when loading images in the image tool.',
         workspace: 'Working directory for agent files.',
+        browserEnabled:
+          'Exposes Playwright browser_* tools to the model. Install Chromium once on the gateway host: npx playwright install chromium.',
+        browserHeadless:
+          'When off, Chromium shows a window on the gateway machine (useful for debugging). When on, runs in the background.',
         maxTokens: 'Maximum tokens in the model response.',
         temperature: 'Randomness (0–2).',
         maxToolIterations: 'Maximum tool calls per user message.',
@@ -2841,6 +2859,10 @@ const bundles: Record<
       cardModelsSubtitle: '对话、视觉与图像生成默认模型',
       cardWorkspaceTitle: '工作区与附件',
       cardWorkspaceSubtitle: '工作目录与入站媒体大小限制',
+      cardBrowserTitle: '浏览器自动化',
+      cardBrowserSubtitle: 'Playwright 工具（browser_navigate、快照、点击等）',
+      browserEnabledOn: '启用浏览器工具',
+      browserHeadlessOn: '无头模式（不显示浏览器窗口）',
       cardGenerationTitle: '采样与工具',
       cardGenerationSubtitle: 'Token 上限、随机性与工具循环深度',
       cardBehaviorTitle: '推理与输出',
@@ -2852,6 +2874,8 @@ const bundles: Record<
         imageGenerationModel: '图像生成模型',
         mediaMaxMb: '图像加载上限 (MB)',
         workspace: '工作区',
+        browserEnabled: '浏览器工具',
+        browserHeadless: '无头模式',
         maxTokens: '最大 token',
         temperature: '温度',
         maxToolIterations: '最大工具迭代',
@@ -2867,6 +2891,10 @@ const bundles: Record<
         imageGenerationModel: '可选，用于 image_generate（如 openai/gpt-image-1）。',
         mediaMaxMb: '图像工具加载单张图片时的最大体积。',
         workspace: '代理读写文件的工作目录。',
+        browserEnabled:
+          '向模型暴露 Playwright 的 browser_* 工具。请在网关所在机器执行一次：npx playwright install chromium。',
+        browserHeadless:
+          '关闭时会在网关机器上显示 Chromium 窗口（便于调试）；开启时在后台运行。',
         maxTokens: '模型回复的最大 token 数。',
         temperature: '随机性（0–2）。',
         maxToolIterations: '单条用户消息内最多工具调用轮数。',

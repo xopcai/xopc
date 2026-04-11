@@ -12,6 +12,10 @@ export interface AgentDefaultsState {
   temperature: number;
   maxToolIterations: number;
   workspace: string;
+  /** Playwright `browser_*` tools (`agents.defaults.browser.enabled`). */
+  browserEnabled: boolean;
+  /** Headless Chromium when browser tools are on (`agents.defaults.browser.headless`, default true). */
+  browserHeadless: boolean;
   thinkingDefault: string;
   reasoningDefault: string;
   verboseDefault: string;
@@ -44,6 +48,11 @@ export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
   const mf = (d as { modelFallbacks?: unknown }).modelFallbacks;
   const modelFallbacksFromApi =
     Array.isArray(mf) && mf.every((x) => typeof x === 'string') ? mf : normalizeModelFallbacks(d.model);
+  const browser = d.browser;
+  const browserObj =
+    typeof browser === 'object' && browser !== null && !Array.isArray(browser)
+      ? (browser as Record<string, unknown>)
+      : null;
   return {
     model: normalizeModelRef(d.model),
     modelFallbacks: modelFallbacksFromApi,
@@ -54,6 +63,8 @@ export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
     temperature: typeof d.temperature === 'number' ? d.temperature : 0.7,
     maxToolIterations: typeof d.maxToolIterations === 'number' ? d.maxToolIterations : 20,
     workspace: typeof d.workspace === 'string' ? d.workspace : '~/.xopcbot/workspace',
+    browserEnabled: browserObj?.enabled === true,
+    browserHeadless: browserObj?.headless !== false,
     thinkingDefault: typeof d.thinkingDefault === 'string' ? d.thinkingDefault : 'medium',
     reasoningDefault: typeof d.reasoningDefault === 'string' ? d.reasoningDefault : 'off',
     verboseDefault: typeof d.verboseDefault === 'string' ? d.verboseDefault : 'off',
@@ -78,6 +89,10 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
           temperature: state.temperature,
           maxToolIterations: state.maxToolIterations,
           workspace: state.workspace,
+          browser: {
+            enabled: state.browserEnabled,
+            headless: state.browserHeadless,
+          },
           thinkingDefault: state.thinkingDefault,
           reasoningDefault: state.reasoningDefault,
           verboseDefault: state.verboseDefault,
