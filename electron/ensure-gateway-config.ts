@@ -8,6 +8,8 @@ import { loadConfig, saveConfig } from '../src/config/loader.js';
 import type { Config } from '../src/config/schema.js';
 import { ConfigSchema } from '../src/config/schema.js';
 
+import { pickAvailablePort } from './gateway-process.js';
+
 export type ElectronUserPaths = {
   userData: string;
   configPath: string;
@@ -32,7 +34,6 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
   mkdirSync(paths.userData, { recursive: true });
   mkdirSync(paths.workspacePath, { recursive: true });
 
-  const port = 18790;
   let cfg: Config;
 
   if (existsSync(paths.configPath)) {
@@ -46,6 +47,10 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
     token = randomBytes(24).toString('hex');
   }
 
+  const preferredPort = cfg.gateway?.port ?? 18790;
+  const host = '127.0.0.1';
+  const port = await pickAvailablePort(host, preferredPort, 40);
+
   const next: Config = ConfigSchema.parse({
     ...cfg,
     agents: {
@@ -57,7 +62,7 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
     },
     gateway: {
       ...cfg.gateway,
-      host: '127.0.0.1',
+      host,
       port,
       auth: {
         mode: 'token',
