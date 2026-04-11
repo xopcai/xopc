@@ -88,7 +88,7 @@ export interface AgentInstance {
   sessionKey: string;
   createdAt: number;
   lastUsedAt: number;
-  /** Curated `.xopcbot/memories/` snapshot frozen at agent creation (prefix cache). */
+  /** Curated agent-home `memories/` snapshot frozen at agent creation (prefix cache). */
   curatedMemorySnapshot: MemorySnapshot;
   effectiveProfile: EffectiveAgentProfile;
   resolvedWorkspacePath: string;

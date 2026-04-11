@@ -23,10 +23,11 @@ xopcbot 提供全面的会话管理功能，支持通过 CLI 和 Web UI 管理�
 
 | 属性 | 值 |
 |------|-----|
-| 存储目录 | `workspace/.sessions/` |
-| 索引文件 | `workspace/.sessions/index.json` |
+| 存储目录 | `agents/<agentId>/sessions/`（状态目录下；分片 transcript 文件） |
+| 索引文件 | `agents/<agentId>/sessions/index.json` |
 | 文件格式 | JSON |
-| 归档目录 | `workspace/.sessions/archive/` |
+| 归档目录 | `agents/<agentId>/sessions/archive/` |
+| 会话级覆盖配置 | `agents/<agentId>/sessions/config/<规范化后的-session-key>.json` |
 
 ---
 
@@ -285,8 +286,8 @@ interface Message {
 索引将在下次访问时自动重建。强制重建：
 
 ```bash
-# 删除索引文件
-rm workspace/.sessions/index.json
+# 删除索引文件（将 <agentId> 换成你的 agent id，例如 main）
+rm ~/.xopcbot/agents/<agentId>/sessions/index.json
 
 # 下次列出会话时会重建
 xopcbot session list
@@ -294,10 +295,10 @@ xopcbot session list
 
 ### 会话丢失
 
-如果 `.sessions/` 中存在但无法显示：
+如果磁盘上 `agents/<agentId>/sessions/` 中已有数据但界面不显示：
 
 ```bash
-# 通过迁移强制重建索引
+# 强制重建索引
 xopcbot session list --limit 1000
 ```
 

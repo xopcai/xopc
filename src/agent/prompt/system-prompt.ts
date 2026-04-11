@@ -64,7 +64,7 @@ export interface SystemPromptOptions {
   };
   /** Active messaging channels */
   channels?: string[];
-  /** Frozen curated memory from `.xopcbot/memories/` (session start only). */
+  /** Frozen curated memory from agent home `memories/` (session start only). */
   curatedMemorySnapshot?: MemorySnapshot;
   /** External memory provider static instructions (Phase 2). */
   externalMemoryInstructions?: string;
@@ -140,7 +140,7 @@ function buildCuratedMemorySection(snapshot: MemorySnapshot | undefined): string
   const body = [mem, user].filter(Boolean).join('\n\n');
   return `## Curated memory (session snapshot)
 
-> Frozen when this session started. Updates use \`curated_memory\` and save under \`.xopcbot/memories/\`; they do not change this block until a new session.
+> Frozen when this session started. Updates use \`curated_memory\` and save under agent home \`memories/\`; they do not change this block until a new session.
 
 ${body}`;
 }
@@ -277,7 +277,7 @@ function buildMemorySection(
 
   const curatedLines = hasCuratedSnapshot
     ? `
-- **Curated store:** \`.xopcbot/memories/MEMORY.md\` and \`.xopcbot/memories/USER.md\` — use \`curated_memory\` to add/replace/remove/read structured entries.`
+- **Curated store:** agent home \`memories/MEMORY.md\` and \`memories/USER.md\` — use \`curated_memory\` to add/replace/remove/read structured entries.`
     : '';
 
   return `## Memory Recall
@@ -285,7 +285,7 @@ function buildMemorySection(
 ${citationInstruction}
 
 Before answering anything about prior work, decisions, dates, people, preferences, or todos:
-1. Run \`memory_search\` on MEMORY.md, \`.xopcbot/memories/*.md\`, and memory/*.md
+1. Run \`memory_search\` on bootstrap MEMORY.md, agent-home \`memories/*.md\`, and workspace \`memory/*.md\`
 2. For **other chat sessions** / cross-session history, use \`session_search\` with keywords (or omit \`query\` to list recent sessions)
 3. Use \`memory_get\` to pull only the needed lines from files
 4. If low confidence after search, say you checked

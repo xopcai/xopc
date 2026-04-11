@@ -1,4 +1,4 @@
-// Curated memory tool — `.xopcbot/memories/MEMORY.md` + `USER.md` (session snapshot + live edits)
+// Curated memory tool — agent home `memories/MEMORY.md` + `USER.md` (session snapshot + live edits)
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 
@@ -34,7 +34,7 @@ export function createCuratedMemoryTool(
     name: 'curated_memory',
     label: '🧠 Curated memory',
     description:
-      'Read or edit bounded curated memory in `.xopcbot/memories/` (MEMORY.md = agent notes, USER.md = user profile). Entries are separated by a section-sign delimiter (see store format). System prompt shows a frozen snapshot from session start; this tool reads/writes live state on disk. Use add/replace/remove for structured updates; use read to inspect current entries.',
+      'Read or edit bounded curated memory under agent home `memories/` (MEMORY.md = agent notes, USER.md = user profile). Entries are separated by a section-sign delimiter (see store format). System prompt shows a frozen snapshot from session start; this tool reads/writes live state on disk. Use add/replace/remove for structured updates; use read to inspect current entries.',
     parameters: CuratedMemorySchema,
 
     async execute(

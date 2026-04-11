@@ -105,7 +105,7 @@ AgentService 是核心编排器，负责：
 
 1. **消息处理** - 接收用户消息，调用 LLM，处理工具调用
 2. **Prompt 构建** - 从 SOUL.md/USER.md/AGENTS.md/TOOLS.md 构建系统 Prompt
-3. **记忆与会话** - 会话消息持久化与压缩（`src/session/`）；`.xopcbot/memories/` 托管记忆、可插拔 provider 与工具（`src/agent/memory/`）
+3. **记忆与会话** - 会话消息持久化与压缩（`src/session/`）；agent 主目录 `memories/` 托管记忆、可插拔 provider 与工具（`src/agent/memory/`）
 4. **工具执行** - 内置工具 + 扩展工具的统一执行
 5. **进度反馈** - 长任务实时更新
 
@@ -153,7 +153,7 @@ src/agent/prompt/
 | 📨 消息 | `send_message` | 发送消息到通道 |
 | 🔍 记忆搜索 | `memory_search` | 搜索工作区内 `memory/*.md` 片段 |
 | 📄 记忆读取 | `memory_get` | 读取记忆片段 |
-| 🧠 托管记忆 | `curated_memory` | 编辑 `.xopcbot/memories/` 中有上限的条目（启用时） |
+| 🧠 托管记忆 | `curated_memory` | 编辑 agent 主目录 `memories/` 中有上限的条目（启用时） |
 | 🔎 会话搜索 | `session_search` | 检索其他会话的 transcript（接入会话存储时） |
 
 ### 进度反馈 (`src/agent/progress.ts`)
@@ -189,7 +189,7 @@ manager.onHeartbeat(elapsed, stage);
 
 ```
 src/agent/memory/
-├── builtin-memory-store.ts  # .xopcbot/memories/MEMORY.md + USER.md（有上限、§ 分隔）
+├── builtin-memory-store.ts  # agent 主目录 memories/MEMORY.md + USER.md（有上限、§ 分隔）
 ├── manager.ts               # MemoryManager — 提供方、prefetch、sync、onMemoryWrite
 ├── create-memory-manager.ts # 内置 + 配置中的可选 stub
 ├── inject-prefetch.ts       # 按配置为用户消息加 <memory-context> 前缀

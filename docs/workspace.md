@@ -1,8 +1,8 @@
 # State Directory & Workspace Layout
 
-For a concise map of **bootstrap**, **agent home**, and **legacy migration** paths, see [On-disk layout](disk-layout.md).
+For a concise map of **bootstrap**, **agent home**, and the **Markdown workspace**, see [On-disk layout](disk-layout.md).
 
-xopcbot keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for transcripts, inbox, and runtime files. Separately, the **agent workspace** is the folder the runtime uses for bootstrap Markdown, tools data, extensions under that tree, and inbound attachment persistence.
+xopcbot keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for transcripts, inbox, inbound/TTS blobs, curated memory, and runtime files. Separately, the **agent workspace** is the Markdown root the runtime uses as tool `cwd`, for daily `memory/` notes, user files, and extensions under that tree.
 
 Path resolution uses **`config.json`** as the source of truth: `src/agents/agent-scope.ts` (OpenClaw-style workspace and agent-dir resolution), plus `src/config/paths-state.ts`, `src/config/workspace-defaults.ts`, and `src/config/paths.ts`. Workspace bootstrap is seeded by **`xopcbot init`** (`src/cli/commands/init.ts`) and by **`xopcbot agents add`**. Layout matches OpenClaw: **Markdown workspace** is **not** under `agents/<id>/` (it lives beside the state root as `workspace` / `workspace-<id>` or under `agents.defaults.workspace/<id>` when configured).
 
@@ -44,7 +44,7 @@ For a given **`agentId`**, the **agent home** is `~/.xopcbot/agents/<id>/` by de
 | `sessions/` | Session store: sharded transcript files, `index.json`, `archive/` for archived sessions. |
 | `agent/` | OpenClaw-style **agent state** (not the Markdown workspace): `agent.json`, `credentials/`, file inbox (`inbox/pending`, `inbox/processed`), and volatile files (`pid`, `status.json`, `agent.sock`) — no separate top-level `run/`. |
 
-Session storage is **not** under the Markdown workspace directory; it always uses `agents/<agentId>/sessions/` (with optional one-time migration from legacy `<workspace>/.sessions` when that path still exists).
+Session storage is **not** under the Markdown workspace directory; it always uses `agents/<agentId>/sessions/`.
 
 ## Agent workspace directory (Markdown root)
 
@@ -76,14 +76,14 @@ These files are loaded into the system prompt (see `src/agent/context/workspace.
 | `memory/` | Dated or topical memory snippets (e.g. `YYYY-MM-DD.md`); used with memory tools. |
 | `.state/` | Machine state: `workspace.json` (bootstrap seed metadata), `skills-cache.json`, etc. |
 | `.extensions/` | Per-workspace extension install/cache paths (when used by the extension loader). |
-| `.sessions/config/` | Per-session overrides stored by the agent service (e.g. model override), under the **configured** workspace path. |
-| `.xopcbot/inbound/<session>/` | Persisted inbound attachments (non-image with binary data) for stable paths in transcripts and `read_file`. |
 
-### Curated memory (`.xopcbot/memories/`) {#curated-memory}
+Per-session overrides (`sessions/config/` JSON), **inbound** blobs (`inbound/`), **TTS** cache (`tts/`), and the **curated** store (`memories/`) live under **`agents/<agentId>/`** (agent home), not under this Markdown tree.
 
-Separate from workspace root `MEMORY.md` (bootstrap) and from `memory/*.md` (searchable snippets), **`workspace/.xopcbot/memories/`** holds **bounded, §-delimited** entries in `MEMORY.md` (agent notes) and `USER.md` (user profile). A frozen snapshot is injected into the system prompt when enhanced memory is enabled; the agent can update live files via the **`curated_memory`** tool. Behavior and limits are configured under **`agents.defaults.memory`** ([Configuration](configuration.md)).
+### Curated memory (`agents/<agentId>/memories/`) {#curated-memory}
 
-To **import** an existing workspace-level `MEMORY.md` into curated storage without overwriting non-empty targets, run from the repo (or use `pnpm exec tsx` with the same script path):
+Separate from bootstrap `MEMORY.md` (under `agents/<id>/bootstrap/`) and from workspace `memory/*.md` (searchable snippets), **`agents/<agentId>/memories/`** holds **bounded, §-delimited** entries in `MEMORY.md` (agent notes) and `USER.md` (user profile). A frozen snapshot is injected into the system prompt when enhanced memory is enabled; the agent can update live files via the **`curated_memory`** tool. Behavior and limits are configured under **`agents.defaults.memory`** ([Configuration](configuration.md)).
+
+To **import** an existing workspace-level `MEMORY.md` into the default agent’s curated store without overwriting non-empty targets, run from the repo (or use `pnpm exec tsx` with the same script path):
 
 ```bash
 pnpm run migrate:memory /path/to/workspace

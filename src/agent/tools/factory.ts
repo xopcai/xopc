@@ -51,7 +51,7 @@ export interface ToolFactoryDeps {
   getConfig?: () => Config | undefined;
   /** Session / default chat model for vision tool description. */
   getPrimaryModel?: () => Model<Api>;
-  /** Built-in curated memory store (`.xopcbot/memories/`). */
+  /** Built-in curated memory store (agent home `memories/`). */
   getBuiltinMemoryStore?: () => BuiltinMemoryStore;
   /** Phase 2 memory orchestration (prefetch/sync + external tools). */
   getMemoryManager?: () => MemoryManager;

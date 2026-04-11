@@ -131,7 +131,7 @@ Each entry must include **`id`**. Other fields are optional overrides (same shap
 | `default` | boolean | Optional. When `true`, marks this entry as the default agent when top-level **`agents.default`** is unset (OpenClaw-style). |
 | `name` | string | Display name. |
 | `enabled` | boolean | Default `true`. When `false`, the id is ignored for routing defaults and effective profile resolution falls back to the default agent. |
-| `workspace` | string | Per-agent workspace root (`~` expanded). Bootstrap files, inbound attachments, and `.xopcbot/memories/` for this agent use this path. |
+| `workspace` | string | Per-agent **Markdown workspace** root (`~` expanded). Tool `cwd`, daily `memory/`, and user files. Bootstrap Markdown, inbound/TTS blobs, and curated `memories/` are resolved under **`agents/<id>/`** (agent home), not inside this directory. |
 | `agentDir` | string | Optional. Overrides the **internal** agent state directory (`credentials`, `agent.json`, inbox, pid) — default `<stateDir>/agents/<id>/agent`. |
 | `model` | string \| object | Same as `agents.defaults.model` (string or `{ primary, fallbacks }`). |
 | `thinkingDefault` | string | Optional. One of `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `adaptive`. |
@@ -181,7 +181,7 @@ Model ID format: `provider/model-id` (e.g., `anthropic/claude-opus-4-5`).
 
 #### agents.defaults.memory
 
-Curated long-term memory under **`<workspace>/.xopcbot/memories/`** (`MEMORY.md` / `USER.md`), optional **stub** external provider for wiring tests, and controls for **prefetch** injection (fenced `<memory-context>` prefix on user turns). See [Curated memory](workspace.md#curated-memory).
+Curated long-term memory under **`agents/<agentId>/memories/`** (`MEMORY.md` / `USER.md`), optional **stub** external provider for wiring tests, and controls for **prefetch** injection (fenced `<memory-context>` prefix on user turns). See [Curated memory](workspace.md#curated-memory).
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
@@ -195,7 +195,7 @@ Curated long-term memory under **`<workspace>/.xopcbot/memories/`** (`MEMORY.md`
 | `contextCadence` | number | `1` | When `injectionFrequency` is `every-turn`, inject prefetch on turns 1, 1+N, 1+2N, … (minimum `1`). |
 | `dialecticCadence` | number | — | Reserved for future external sync cadence (not wired yet). |
 
-**Migrate** workspace root `MEMORY.md` into curated storage (one-time):
+**Migrate** a workspace root `MEMORY.md` into the **default agent’s** `memories/MEMORY.md` (one-time; requires readable `config.json` for agent-home resolution):
 
 ```bash
 pnpm run migrate:memory [workspaceDir]
