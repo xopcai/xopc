@@ -37,7 +37,10 @@ describe('inbound-processor', () => {
     evaluateGroupBaseAccess: vi.fn(() => ({ allowed: true })),
     resolveRequireMention: vi.fn(() => false),
     hasBotMention: vi.fn(() => true),
-    removeBotMention: vi.fn((text) => text),
+    removeBotMention: vi.fn((text: string, botUsername: string) => {
+      const escaped = botUsername.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return text.replace(new RegExp(`@${escaped}\\s*`, 'gi'), '').trim();
+    }),
   };
 
   const mockSessionKeyService = {
@@ -234,19 +237,8 @@ describe('inbound-processor', () => {
     });
   });
 
-  describe('externalAccessGate (plugin path)', () => {
-    beforeEach(() => {
-      accountManager.registerAccount({
-        accountId: 'default',
-        name: 'Default',
-        enabled: true,
-        botToken: 'test-token',
-        requireMention: true,
-      } as any);
-      processor = createInboundProcessor({ ...deps, externalAccessGate: true });
-    });
-
-    it('strips @bot mention in group when requireMention is set (legacy strip)', async () => {
+  describe('group mention stripping', () => {
+    it('strips @bot mention in group/supergroup', async () => {
       const mockCtx = createMockContext({
         text: '@test_bot please read',
         chatId: -100123,
@@ -260,7 +252,7 @@ describe('inbound-processor', () => {
       expect(call.content).toBe('please read');
     });
 
-    it('does not strip mention in private chat (externalAccessGate)', async () => {
+    it('does not strip mention in private chat', async () => {
       const mockCtx = createMockContext({
         text: '@test_bot hello',
         chatId: 12345,
@@ -274,10 +266,10 @@ describe('inbound-processor', () => {
       expect(call.content).toBe('@test_bot hello');
     });
 
-    it('skips inbound access gates but still dedupes', async () => {
+    it('runs inbound access control for each message', async () => {
       const mockCtx = createMockContext({ text: 'plain', chatId: 12345 });
       await processor(mockCtx as Context, 'default');
-      expect(mockAccessControl.evaluateGroupBaseAccess).not.toHaveBeenCalled();
+      expect(mockAccessControl.evaluateGroupBaseAccess).toHaveBeenCalled();
       expect(mockBus.publishInbound).toHaveBeenCalled();
     });
   });

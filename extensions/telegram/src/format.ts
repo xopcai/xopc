@@ -2,7 +2,7 @@
  * Telegram Message Formatting Utilities
  *
  * Converts Markdown to Telegram HTML format using the robust @src/markdown/ package.
- * This replaces the legacy markdown-ir.ts with a proper IR-based implementation.
+ * Markdown → Telegram HTML via the shared markdown IR pipeline.
  */
 
 import {
