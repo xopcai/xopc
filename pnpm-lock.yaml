@@ -83,6 +83,9 @@ importers:
       pino:
         specifier: ^10.3.1
         version: 10.3.1
+      playwright-core:
+        specifier: ^1.59.1
+        version: 1.59.1
       proper-lockfile:
         specifier: ^4.1.2
         version: 4.1.2
@@ -4918,6 +4921,11 @@ packages:
 
   pino@10.3.1:
     resolution: {integrity: sha512-r34yH/GlQpKZbU1BvFFqOjhISRo1MNx1tWYsYvmj6KIRHSPMT2+yHOEb1SG6NMvRoHRF0a07kCOox/9yakl1vg==}
+    hasBin: true
+
+  playwright-core@1.59.1:
+    resolution: {integrity: sha512-HBV/RJg81z5BiiZ9yPzIiClYV/QMsDCKUyogwH9p3MCP6IYjUFu/MActgYAvK0oWyV9NlwM3GLBjADyWgydVyg==}
+    engines: {node: '>=18'}
     hasBin: true
 
   plist@3.1.0:
@@ -11129,6 +11137,8 @@ snapshots:
       safe-stable-stringify: 2.5.0
       sonic-boom: 4.2.1
       thread-stream: 4.0.0
+
+  playwright-core@1.59.1: {}
 
   plist@3.1.0:
     dependencies:

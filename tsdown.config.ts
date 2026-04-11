@@ -25,7 +25,7 @@ export default defineConfig({
   env,
   minify: 'dce-only',
   deps: {
-    neverBundle: ['@vscode/ripgrep', 'silk-wasm'],
+    neverBundle: ['@vscode/ripgrep', 'silk-wasm', 'playwright-core'],
     skipNodeModulesBundle: true,
   },
 });
