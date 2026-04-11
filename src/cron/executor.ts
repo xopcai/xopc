@@ -20,6 +20,8 @@ import {
   shouldSilence,
   stripHeartbeatToken,
 } from '../heartbeat/tokens.js';
+import { normalizeAgentId } from '../agents/agent-scope.js';
+import { buildSessionKey } from '../routing/session-key.js';
 
 const log = createLogger('CronExecutor');
 
@@ -338,8 +340,16 @@ export class DefaultJobExecutor implements JobExecutor {
       return { status: 'skipped', error: 'Isolated job requires non-empty message' };
     }
 
-    // Create session key for this cron job
-    const sessionKey = `cron:${job.id}`;
+    const aid = job.agentId?.trim();
+    const sessionKey = aid
+      ? buildSessionKey({
+          agentId: normalizeAgentId(aid),
+          source: 'cron',
+          accountId: 'default',
+          peerKind: 'dm',
+          peerId: job.id,
+        })
+      : `cron:${job.id}`;
 
     // Create timeout promise
     const timeoutPromise = new Promise<never>((_, reject) => {
