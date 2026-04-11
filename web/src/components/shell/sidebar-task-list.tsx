@@ -269,7 +269,7 @@ export function SidebarTaskList({ onNavigate }: { onNavigate?: () => void }) {
         hasMore: result.hasMore,
       };
     },
-    { revalidateOnFocus: true },
+    { revalidateOnFocus: false },
   );
 
   useEffect(() => {

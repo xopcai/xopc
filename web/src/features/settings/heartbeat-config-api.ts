@@ -1,5 +1,8 @@
+import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { heartbeatMdSwrKey } from '@/features/settings/heartbeat-md-swr';
+import { mutate } from 'swr';
 
 import type { HeartbeatSettingsState } from './heartbeat-settings.types';
 
@@ -77,6 +80,7 @@ export async function patchHeartbeatSettings(state: HeartbeatSettingsState): Pro
       },
     }),
   });
+  void revalidateGatewayConfig();
 }
 
 export async function fetchHeartbeatMd(): Promise<string> {
@@ -91,6 +95,7 @@ export async function putHeartbeatMd(content: string): Promise<void> {
     method: 'PUT',
     body: JSON.stringify({ content }),
   });
+  void mutate(heartbeatMdSwrKey());
 }
 
 /** Queue one heartbeat run (same path as the interval timer). */
