@@ -1,5 +1,4 @@
 import { readFile } from 'fs/promises';
-import { join } from 'path';
 
 import type { AgentService } from '../../agent/service.js';
 import type { Config } from '../../config/schema.js';
@@ -16,13 +15,12 @@ import {
 } from '../../heartbeat/tokens.js';
 import { createHeartbeatWake } from '../../heartbeat/wake.js';
 import { createLogger } from '../../utils/logger.js';
+import { resolveHeartbeatMdPath } from '../workspace-heartbeat-path.js';
 
 const log = createLogger('HeartbeatService');
 
 const DEFAULT_PROMPT =
   'Read HEARTBEAT.md if it exists. Follow it strictly. If nothing needs attention, reply HEARTBEAT_OK.';
-
-const HEARTBEAT_FILENAME = 'HEARTBEAT.md';
 
 export interface HeartbeatRunnerConfig {
   enabled: boolean;
@@ -62,8 +60,9 @@ export interface HeartbeatServiceDeps {
   agentService: AgentService;
   messageBus: MessageBus;
   cronService: CronService;
-  workspacePath: string;
   sessionStore: SessionStore;
+  /** Current app config (for HEARTBEAT.md path under agent home `bootstrap/`). */
+  getConfig: () => Config;
 }
 
 export class HeartbeatService {
@@ -145,7 +144,11 @@ export class HeartbeatService {
       return;
     }
 
-    const heartbeatPath = join(this.deps.workspacePath, HEARTBEAT_FILENAME);
+    const heartbeatPath = resolveHeartbeatMdPath(this.deps.getConfig());
+    if (!heartbeatPath) {
+      log.debug({ reasons: reasonSummary }, 'Heartbeat: skip (no HEARTBEAT path)');
+      return;
+    }
     try {
       const raw = await readFile(heartbeatPath, 'utf-8');
       if (isHeartbeatContentEmpty(raw)) {

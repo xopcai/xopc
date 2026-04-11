@@ -34,6 +34,7 @@ export default defineConfig({
             text: 'Core Concepts',
             items: [
               { text: 'Architecture', link: '/architecture' },
+              { text: 'On-disk layout', link: '/disk-layout' },
               { text: 'State & workspace layout', link: '/workspace' },
               { text: 'Configuration', link: '/configuration' },
               { text: 'Routing System', link: '/routing-system' },
@@ -96,6 +97,7 @@ export default defineConfig({
             text: '核心概念',
             items: [
               { text: '架构设计', link: '/zh/architecture' },
+              { text: '磁盘与目录布局', link: '/zh/disk-layout' },
               { text: '状态目录与工作空间', link: '/zh/workspace' },
               { text: '配置参考', link: '/zh/configuration' },
               { text: 'Session 路由', link: '/zh/routing-system' },

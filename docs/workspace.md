@@ -1,5 +1,7 @@
 # State Directory & Workspace Layout
 
+For a concise map of **bootstrap**, **agent home**, and **legacy migration** paths, see [On-disk layout](disk-layout.md).
+
 xopcbot keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for transcripts, inbox, and runtime files. Separately, the **agent workspace** is the folder the runtime uses for bootstrap Markdown, tools data, extensions under that tree, and inbound attachment persistence.
 
 Path resolution uses **`config.json`** as the source of truth: `src/agents/agent-scope.ts` (OpenClaw-style workspace and agent-dir resolution), plus `src/config/paths-state.ts`, `src/config/workspace-defaults.ts`, and `src/config/paths.ts`. Workspace bootstrap is seeded by **`xopcbot init`** (`src/cli/commands/init.ts`) and by **`xopcbot agents add`**. Layout matches OpenClaw: **Markdown workspace** is **not** under `agents/<id>/` (it lives beside the state root as `workspace` / `workspace-<id>` or under `agents.defaults.workspace/<id>` when configured).

@@ -1,5 +1,7 @@
 # 状态目录与工作空间布局
 
+**bootstrap、agent 主目录与旧版迁移**的简明路径表见 [磁盘与目录布局](disk-layout.md)。
+
 xopcbot 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；其下有 **按 Agent 划分** 的目录树（会话、收件箱、运行时文件等）。**工作空间（workspace）** 是运行时用于引导 Markdown、工具侧数据、扩展安装以及入站附件落盘的目录。
 
 路径以 **`config.json` 为唯一事实来源**：`src/agents/agent-scope.ts`（OpenClaw 式 workspace / agentDir 解析），以及 `src/config/paths-state.ts`、`src/config/workspace-defaults.ts`、`src/config/paths.ts`。目录骨架由 **`xopcbot init`**（`src/cli/commands/init.ts`）与 **`xopcbot agents add`** 创建/更新。布局与 OpenClaw 一致：**Markdown 工作区**不在 `agents/<id>/` 下（默认在状态根旁的 `workspace` / `workspace-<id>`，或配置为 `agents.defaults.workspace/<id>`）。
