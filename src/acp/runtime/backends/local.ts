@@ -768,9 +768,8 @@ export class LocalAcpRuntime implements AcpRuntime {
  * Create a local ACP runtime backend
  */
 export function createLocalAcpRuntimeBackend(
-  agentService: any, // AgentService - kept for compatibility but not directly used
   bus: MessageBus,
-  config?: LocalRuntimeConfig
+  config?: LocalRuntimeConfig,
 ): { id: string; runtime: AcpRuntime; healthy: () => boolean } {
   const runtime = new LocalAcpRuntime(bus, config);
 

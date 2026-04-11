@@ -10,7 +10,7 @@ import type {
 import type { OutboundMessage } from '../channels/transport-types.js';
 import { normalizeWeixinCronDeliveryToResolved } from '../channels/weixin-delivery-to.js';
 import { createLogger } from '../utils/logger.js';
-import { normalizeTelegramDeliveryChatId } from './telegram-delivery-chat-id.js';
+import { normalizeTelegramDeliveryChatId } from '../channels/telegram-delivery-chat-id.js';
 import { getCronPayloadText } from './job-content.js';
 import type { SessionStore } from '../session/store.js';
 import type { CronRunLogStore } from './run-log-store.js';
