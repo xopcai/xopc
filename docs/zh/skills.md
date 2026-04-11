@@ -7,6 +7,9 @@ xopcbot 的技能系统基于工作区中的文件：通过 `SKILL.md` 等为 AI
 - [什么是 Skill](#什么是-skill)
 - [SKILL.md 文件格式](#skillmd-文件格式)
 - [技能来源](#技能来源)
+- [Skills Hub（Git / 压缩包）](#skills-hubgit--压缩包)
+- [Agent 运行时：工具与提示风格](#agent-运行时工具与提示风格)
+- [声明环境变量](#声明环境变量)
 - [CLI 命令](#cli-命令)
 - [配置技能](#配置技能)
 - [安装技能依赖](#安装技能依赖)
@@ -134,6 +137,50 @@ Workspace > Global > Bundled
 
 后加载的技能会覆盖先加载的同名技能。
 
+## Skills Hub（Git / 压缩包）
+
+从 **Git 仓库** 或 **本地/远程压缩包**（zip、tar.gz 等）安装或更新技能到 **`~/.xopcbot/skills`**。安装记录在 **`skills-lock.json`**（与 skills 目录同级），便于按哈希与来源做 **`hub update`**。
+
+```bash
+xopcbot skills hub pull https://github.com/org/repo.git   # 可选 --ref、--path、--id、--force、--strict-scan
+xopcbot skills hub update my-skill
+xopcbot skills hub lock
+xopcbot skills hub lock --json
+```
+
+Hub 安装的技能与全局 `~/.xopcbot/skills/` 规则一致，仍可用 `skills enable` / `disable` 与 `skills.json` 条目控制。
+
+## Agent 运行时：工具与提示风格
+
+Agent 在接入 SkillManager 时注册与技能相关的工具：
+
+| 工具 | 作用 |
+|------|------|
+| `skills_list` | 当前会话可见技能（尊重 allowlist 与工具门控） |
+| `skill_view` | 读取 `SKILL.md` 或 `references/` 等允许子路径下的文件 |
+| `skill_manage` | 在 `skills.agentWritePolicy` 允许范围内增删改用户技能 |
+
+**`~/.xopcbot/skills.json` 顶层字段**（除 `entries` 外）示例含义：
+
+| 字段 | 含义 |
+|------|------|
+| `promptStyle` | `metadata-only`（默认）：Hermes 风格 `<available_skills>` 不含磁盘路径，需用 `skill_view` 读正文。`legacy-with-paths`：旧版带路径，可用 `read_file`。 |
+| `toolGating` | 为 `true`（默认）时，声明了所需工具/扩展的技能在未满足条件前不进入列表；设为 `false` 可关闭门控。 |
+| `agentWritePolicy` | `skill_manage` 可写范围：`global`、`workspace` 或 `both`（默认 `global`）。 |
+| `limits.maxSkillFileBytes` | `skill_view` 单文件最大字节数。 |
+
+**SKILL.md frontmatter**：`disable-model-invocation: true` 时技能仍保留在磁盘，但从面向模型的列表（`<available_skills>`、`skills_list`、`skill_view` 可见性）中排除。
+
+参数与限制详见 [内置工具参考](./tools.md)。
+
+## 声明环境变量
+
+在 SKILL.md 中声明技能依赖的 API 密钥等环境变量**名称**，运行时在 **`skill_view` 成功后**注册到会话，供 **`shell`** 等按名从进程环境透传（**模型永不看到变量值**）。支持的来源（合并去重）：
+
+- Hermes 风格 **`required_environment_variables`**（`{ name: "VAR" }` 数组）
+- **`prerequisites.env_vars`**
+- **`requires.env`** 或 **`metadata.xopcbot.requires.env`**
+
 ## CLI 命令
 
 ### 列出技能
@@ -242,10 +289,16 @@ xopcbot skills test security --deep
 
 ## 配置技能
 
-技能配置文件位于 `~/.xopcbot/skills.json`：
+技能配置文件位于 `~/.xopcbot/skills.json`。除 **`entries`** 外可配置全局加载行为（见 [Agent 运行时](#agent-运行时工具与提示风格)）：
 
 ```json
 {
+  "promptStyle": "metadata-only",
+  "toolGating": true,
+  "agentWritePolicy": "global",
+  "limits": {
+    "maxSkillFileBytes": 1048576
+  },
   "entries": {
     "weather": {
       "enabled": true,
@@ -475,9 +528,9 @@ metadata:
     install:
       - id: brew-gh
         kind: brew
-    formula: gh
-    bins: [gh]
-    label: Install GitHub CLI (brew)
+        formula: gh
+        bins: [gh]
+        label: Install GitHub CLI (brew)
 ---
 
 # GitHub Skill
@@ -580,4 +633,4 @@ xopcbot skills test --bail
 
 ---
 
-_最后更新：2026-02-22_
+_最后更新：2026-04-11_
