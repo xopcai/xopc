@@ -9,7 +9,7 @@ import {
   isCliBundlePresent,
   spawnGatewayProcess,
   stopGatewayProcess,
-  waitForGatewayHealth,
+  waitForGatewayReady,
   type GatewayProcessOptions,
 } from './gateway-process.js';
 import { registerAgentIpc } from './ipc/agent-ipc.js';
@@ -37,7 +37,7 @@ function shouldEmbedGateway(): boolean {
 function buildStartupFailureMessage(detail: string): string {
   return (
     `Failed to start the local gateway.\n\n${detail}\n\n` +
-    'Try restarting the app. If this keeps happening, reinstall or check that no other process is using the gateway port.\n\n' +
+    'The app picks a free port starting at 18790 when possible. If startup still fails, quit other xopcbot or gateway processes, then restart.\n\n' +
     '(Developers: pnpm run build && pnpm run electron:vite:build && pnpm run electron:server:build)'
   );
 }
@@ -73,8 +73,8 @@ async function resolveWindowLoad(): Promise<
           }
         },
       };
-      spawnGatewayProcess(spawnOpts);
-      await waitForGatewayHealth(port);
+      const child = spawnGatewayProcess(spawnOpts);
+      await waitForGatewayReady(port, token, child);
     } catch (e) {
       stopGatewayProcess();
       throw e;

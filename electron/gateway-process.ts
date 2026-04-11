@@ -1,5 +1,6 @@
 import { type ChildProcess, spawn, spawnSync } from 'node:child_process';
 import { existsSync } from 'node:fs';
+import { createServer } from 'node:net';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -12,6 +13,44 @@ let gatewayExitHandler: ((code: number | null, signal: string | null) => void) |
 
 export function getDefaultGatewayPort(): number {
   return DEFAULT_PORT;
+}
+
+/**
+ * Find the first TCP port on `hostname` starting at `startPort` that can be bound.
+ * Used before spawning the gateway so we do not collide with another process on the default port.
+ */
+export async function pickAvailablePort(
+  hostname: string,
+  startPort: number,
+  maxAttempts: number,
+): Promise<number> {
+  for (let offset = 0; offset < maxAttempts; offset++) {
+    const port = startPort + offset;
+    const free = await tryListenOnce(hostname, port);
+    if (free) return port;
+  }
+  throw new Error(
+    `No free TCP port on ${hostname} in range ${startPort}–${startPort + maxAttempts - 1} (try closing other xopcbot gateway instances)`,
+  );
+}
+
+function tryListenOnce(hostname: string, port: number): Promise<boolean> {
+  return new Promise((resolve, reject) => {
+    const server = createServer();
+    server.once('error', (err: NodeJS.ErrnoException) => {
+      if (err.code === 'EADDRINUSE') {
+        resolve(false);
+      } else {
+        reject(err);
+      }
+    });
+    server.listen(port, hostname, () => {
+      server.close((closeErr) => {
+        if (closeErr) reject(closeErr);
+        else resolve(true);
+      });
+    });
+  });
 }
 
 /**
@@ -129,19 +168,37 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
   return child;
 }
 
-export async function waitForGatewayHealth(port: number, timeoutMs = 120_000): Promise<void> {
+/**
+ * Wait until our gateway accepts the configured token. `/health` is unauthenticated, so a stale
+ * process on the same port would falsely pass a health-only check; `/api/config` validates auth.
+ */
+export async function waitForGatewayReady(
+  port: number,
+  token: string,
+  child: ChildProcess,
+  timeoutMs = 120_000,
+): Promise<void> {
   const deadline = Date.now() + timeoutMs;
-  const url = `http://127.0.0.1:${port}/health`;
+  const url = `http://127.0.0.1:${port}/api/config`;
   while (Date.now() < deadline) {
+    if (child.exitCode !== null || child.signalCode !== null) {
+      throw new Error(
+        `Gateway process exited before becoming ready (code=${child.exitCode}, signal=${child.signalCode}). ` +
+          `Port ${port} may be in use by another program, or the gateway failed to start.`,
+      );
+    }
     try {
-      const res = await fetch(url, { signal: AbortSignal.timeout(2000) });
+      const res = await fetch(url, {
+        headers: { Authorization: `Bearer ${token}` },
+        signal: AbortSignal.timeout(2000),
+      });
       if (res.ok) return;
     } catch {
       /* retry */
     }
     await new Promise((r) => setTimeout(r, 250));
   }
-  throw new Error(`Gateway did not become healthy at ${url} within ${timeoutMs}ms`);
+  throw new Error(`Gateway did not become ready with expected auth at ${url} within ${timeoutMs}ms`);
 }
 
 export function stopGatewayProcess(): void {
