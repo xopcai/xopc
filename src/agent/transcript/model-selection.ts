@@ -4,6 +4,9 @@
 
 export function normalizeProviderId(provider: string): string {
   const normalized = provider.trim().toLowerCase();
+  if (normalized === 'zhipu-cn' || normalized === 'zhipu') {
+    return 'zhipu-cn';
+  }
   if (normalized === "z.ai" || normalized === "z-ai") {
     return "zai";
   }

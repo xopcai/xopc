@@ -21,7 +21,9 @@ export const PROVIDER_ENV_MAP: Record<string, string[]> = {
 	huggingface: ['HF_TOKEN', 'HUGGINGFACE_TOKEN'],
 	opencode: ['OPENCODE_API_KEY'],
 	zai: ['ZAI_API_KEY'],
-	zhipu: ['ZHIPU_API_KEY'],
+	/** China Bigmodel; same env fallbacks as legacy `zhipu` alias */
+	'zhipu-cn': ['ZHIPU_CN_API_KEY', 'ZHIPU_API_KEY', 'BIGMODEL_API_KEY'],
+	zhipu: ['ZHIPU_CN_API_KEY', 'ZHIPU_API_KEY', 'BIGMODEL_API_KEY'],
 	qwen: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'],
 	kimi: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'],
 	'google-gemini-cli': ['GEMINI_CLI_TOKEN', 'GOOGLE_TOKEN'],

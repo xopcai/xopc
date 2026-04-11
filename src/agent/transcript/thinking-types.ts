@@ -181,7 +181,12 @@ export function normalizeElevatedMode(raw?: string | null): ElevatedMode | undef
 export function listThinkingLevels(provider?: string | null, model?: string | null): (ThinkLevel | 'on')[] {
   // Binary thinking providers (like z.ai)
   const normalizedProvider = provider?.trim().toLowerCase();
-  if (normalizedProvider === 'z.ai' || normalizedProvider === 'zai') {
+  if (
+    normalizedProvider === 'z.ai' ||
+    normalizedProvider === 'zai' ||
+    normalizedProvider === 'zhipu-cn' ||
+    normalizedProvider === 'zhipu'
+  ) {
     return ['off', 'on'];
   }
 
