@@ -1256,12 +1256,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         config.gateway = {
           host: '0.0.0.0',
           port: 18790,
-          heartbeat: { enabled: true, intervalMs: 60000 },
+          heartbeat: { enabled: true, intervalMs: 1_800_000 },
           maxSseConnections: 100,
           corsOrigins: ['*'],
         };
       }
-      if (!config.gateway.heartbeat) config.gateway.heartbeat = { enabled: true, intervalMs: 60000 };
+      if (!config.gateway.heartbeat) config.gateway.heartbeat = { enabled: true, intervalMs: 1_800_000 };
       const h = config.gateway.heartbeat;
       const p = body.gateway.heartbeat as Record<string, unknown>;
       if (p.enabled !== undefined) h.enabled = Boolean(p.enabled);
@@ -1313,7 +1313,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       }
     }
     if (body.gateway?.auth !== undefined) {
-      if (!config.gateway) config.gateway = { host: '0.0.0.0', port: 18790, heartbeat: { enabled: true, intervalMs: 60000 }, maxSseConnections: 100, corsOrigins: ['*'] };
+      if (!config.gateway) config.gateway = { host: '0.0.0.0', port: 18790, heartbeat: { enabled: true, intervalMs: 1_800_000 }, maxSseConnections: 100, corsOrigins: ['*'] };
       if (!config.gateway.auth) config.gateway.auth = { mode: 'token' };
       const a = body.gateway.auth;
       if (a.mode !== undefined) {
