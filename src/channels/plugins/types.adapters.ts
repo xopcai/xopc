@@ -1,5 +1,5 @@
 /**
- * Additional channel adapter contracts (OpenClaw-style optional surfaces).
+ * Additional channel adapter contracts (optional surfaces).
  */
 
 import type { Config } from '../../config/index.js';

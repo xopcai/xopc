@@ -1,5 +1,5 @@
 /**
- * OpenClaw-style agent path and list resolution (config is the single source of truth).
+ * Agent path and list resolution (config is the single source of truth).
  */
 
 import { join, resolve } from 'node:path';
@@ -20,7 +20,7 @@ function normalizeLowercaseStringOrEmpty(s: string): string {
   return s.trim().toLowerCase();
 }
 
-/** Path-safe agent id (OpenClaw `normalizeAgentId`). */
+/** Path-safe agent id. */
 export function normalizeAgentId(value: string | undefined | null): string {
   const trimmed = (value ?? '').trim();
   if (!trimmed) {
@@ -75,7 +75,7 @@ function resolveAgentEntry(cfg: Config, agentId: string): AgentEntry | undefined
 }
 
 /**
- * Markdown workspace root for an agent (OpenClaw `resolveAgentWorkspaceDir`).
+ * Markdown workspace root for an agent.
  */
 export function resolveAgentWorkspaceDir(cfg: Config, agentId: string): string {
   const id = normalizeAgentId(agentId);

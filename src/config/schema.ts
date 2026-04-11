@@ -137,7 +137,7 @@ export const AgentDefaultsSchema = z.object({
 
 export const AgentConfigSchema = z.object({
   id: z.string(),
-  /** When true, this entry is the default routing agent (OpenClaw-style). */
+  /** When true, this entry is the default routing agent. */
   default: z.boolean().optional(),
   name: z.string().optional(),
   enabled: z.boolean().default(true),
@@ -830,7 +830,7 @@ export interface ParsedModelRef {
 }
 
 /**
- * Default agent Markdown workspace (merged `agents.defaults` + `agents.list`, OpenClaw-style).
+ * Default agent Markdown workspace (merged `agents.defaults` + `agents.list`).
  */
 export function getWorkspacePath(config: Config): string {
   return getDefaultWorkspacePath(config);

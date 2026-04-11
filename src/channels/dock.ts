@@ -1,6 +1,6 @@
 /**
  * Lightweight channel surface for gateway/UI/shared code without importing
- * GrammY or full plugin implementations (see OpenClaw ChannelDock pattern).
+ * GrammY or full plugin implementations (channel dock pattern).
  */
 
 import type { ChannelCapabilities } from './plugin-types.js';

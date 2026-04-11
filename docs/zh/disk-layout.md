@@ -10,7 +10,7 @@
 |------|------|
 | **状态目录** | 全局配置、凭据、日志、cron、全局 skills/extensions、托管工具链等。 |
 | **Agent 主目录** `<stateDir>/agents/<agentId>/` | 按 Agent 隔离的运行时数据：会话 transcript、bootstrap 人格 Markdown、托管记忆、入站/TTS 落盘、会话级配置、ACP 索引等。 |
-| **Agent 状态目录** `…/agents/<agentId>/agent/` | OpenClaw 式进程状态：`agent.json`、每 Agent 凭据、IPC 收件箱、pid/socket、小型机器状态、扩展安装、出站崩溃恢复队列。 |
+| **Agent 状态目录** `…/agents/<agentId>/agent/` | 进程状态：`agent.json`、每 Agent 凭据、IPC 收件箱、pid/socket、小型机器状态、扩展安装、出站崩溃恢复队列。 |
 | **Markdown 工作空间** | 用户项目树：工具 **cwd**、每日 `memory/*.md`、`media/generated`、用户 `skills/`、任意用户文件。**不再**作为人格文件或内部状态的主存放位置。 |
 
 下文默认状态根为 `~/.xopcbot/`；可用 `XOPCBOT_STATE_DIR`、`XOPCBOT_PROFILE`、`XOPCBOT_HOME` 覆盖（见 [workspace.md 环境变量](workspace.md#环境变量速查)）。

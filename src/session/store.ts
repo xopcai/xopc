@@ -37,7 +37,7 @@ const DEFAULT_LIMIT = 50;
  * compact `users/{agent}/web/{peerId}` for gateway/webchat direct sessions).
  */
 export interface SessionStoreOptions {
-  /** Loaded app config (required for OpenClaw-style session paths). */
+  /** Loaded app config (required for session path resolution). */
   config: Config;
   /** Agent id for the session store root (default: configured default agent). */
   agentId?: string;

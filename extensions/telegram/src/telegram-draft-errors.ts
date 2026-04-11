@@ -1,5 +1,5 @@
 /**
- * Error classification for Telegram draft streaming (aligned with OpenClaw network-errors).
+ * Error classification for Telegram draft streaming.
  */
 
 export function extractTelegramErrorText(err: unknown): string {

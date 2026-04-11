@@ -21,7 +21,7 @@ function thinkingBlockCount(messages: AgentMessage[]): number {
   return n;
 }
 
-describe('transcript hygiene (OpenClaw-aligned)', () => {
+describe('transcript hygiene', () => {
   it('repairToolUseResultPairing inserts synthetic toolResult for missing id', () => {
     const assistant: AgentMessage = {
       role: 'assistant',

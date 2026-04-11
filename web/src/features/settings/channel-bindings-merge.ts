@@ -1,5 +1,5 @@
 /**
- * Merge UI channel account → agent routes into `config.bindings` (OpenClaw-style routing).
+ * Merge UI channel account → agent routes into `config.bindings`.
  * Managed rules use ids `ui:route:account:<channel>:<accountId>`.
  */
 

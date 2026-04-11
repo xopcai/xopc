@@ -112,7 +112,7 @@ xopcbot onboard --channels
 
 ## agents
 
-Manage **`agents.list`** in `config.json` (OpenClaw-style). Paths for workspace and `~/.xopcbot/agents/<id>/` follow the merged config — there is no separate env-based agent registry.
+Manage **`agents.list`** in `config.json`. Paths for workspace and `~/.xopcbot/agents/<id>/` follow the merged config — there is no separate env-based agent registry.
 
 | Subcommand | Description |
 |------------|-------------|

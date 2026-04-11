@@ -120,7 +120,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
     startStream: () => null,
   };
 
-  /** Hints aligned with openclaw-weixin channel plugin (cron targets, media paths). */
+  /** Channel plugin hints (cron targets, media paths). */
   agentPrompt = {
     augmentSystemPrompt: (): string =>
       [

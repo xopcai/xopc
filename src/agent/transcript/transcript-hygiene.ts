@@ -1,6 +1,6 @@
 /**
- * Session transcript hygiene before LLM calls and after persistence (OpenClaw-style pipeline).
- * See OpenClaw `sanitizeSessionHistory` ordering (subset: no image/async paths here).
+ * Session transcript hygiene before LLM calls and after persistence.
+ * Subset: no image/async paths here.
  */
 
 import type { AgentMessage } from '@mariozechner/pi-agent-core';

@@ -1,5 +1,5 @@
 /**
- * Bundled Telegram channel extension entry (OpenClaw-style registration helper).
+ * Bundled Telegram channel extension entry (registration helper).
  */
 
 export { telegramPlugin } from './plugin.js';

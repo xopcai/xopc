@@ -128,7 +128,7 @@ Each entry must include **`id`**. Other fields are optional overrides (same shap
 | Field | Type | Description |
 |-------|------|-------------|
 | `id` | string | Agent id (also the first segment of the session key). |
-| `default` | boolean | Optional. When `true`, marks this entry as the default agent when top-level **`agents.default`** is unset (OpenClaw-style). |
+| `default` | boolean | Optional. When `true`, marks this entry as the default agent when top-level **`agents.default`** is unset. |
 | `name` | string | Display name. |
 | `enabled` | boolean | Default `true`. When `false`, the id is ignored for routing defaults and effective profile resolution falls back to the default agent. |
 | `workspace` | string | Per-agent **Markdown workspace** root (`~` expanded). Tool `cwd`, daily `memory/`, and user files. Bootstrap Markdown, inbound/TTS blobs, and curated `memories/` are resolved under **`agents/<id>/`** (agent home), not inside this directory. |

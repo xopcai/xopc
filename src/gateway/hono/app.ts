@@ -891,7 +891,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ ok: true, payload: { config: safeConfig } });
   });
 
-  // ========== Multi-agent admin (OpenClaw-style REST) ==========
+  // ========== Multi-agent admin REST ==========
   authenticated.get('/api/agents', async (c) => {
     const cfg = service.currentConfig as Config;
     return c.json({ ok: true, payload: listGatewayAgents(cfg) });

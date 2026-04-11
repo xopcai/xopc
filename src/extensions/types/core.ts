@@ -95,7 +95,7 @@ export interface ExtensionApi {
   //  Strongly Typed Hook Registration
   onHook<K extends ExtensionHookEvent>(hookName: K, handler: HookHandlerMap[K], opts?: { priority?: number }): void;
   
-  /** Register a channel plugin (object form aligns with OpenClaw). */
+  /** Register a channel plugin (object form). */
   registerChannel(registration: { plugin: ChannelPlugin }): void;
   
   // HTTP Route Registration
@@ -111,7 +111,7 @@ export interface ExtensionApi {
   registerGatewayMethod(method: string, handler: GatewayMethodHandler): void;
 
   /**
-   * Register Commander subcommands (OpenClaw-style). Apply with
+   * Register Commander subcommands. Apply with
    * `registerExtensionCliProgram(program, registry)` when wiring CLI.
    */
   registerCli(

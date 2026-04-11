@@ -90,7 +90,7 @@ export function resolveOAuthPath(provider: string): string {
 }
 
 /**
- * OpenClaw `agentDir`: internal state under `stateDir/agents/<id>/agent/`
+ * Internal agent state dir: `stateDir/agents/<id>/agent/`
  * (credentials, inbox IPC, pid, agent.json — not the Markdown workspace).
  */
 export function resolveAgentDir(config: Config, agentId: string): string {

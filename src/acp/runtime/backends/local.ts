@@ -75,7 +75,7 @@ interface LocalSessionState {
 export class LocalAcpRuntime implements AcpRuntime {
   private readonly sessions = new Map<string, LocalSessionState>();
   private agent: Agent;
-  /** Resolved default model for transcript hygiene (OpenClaw-style). */
+  /** Resolved default model for transcript hygiene. */
   private agentModel: Model<Api>;
   private sessionStore: SessionStore;
   private tools: AgentTool<any, any>[] = [];

@@ -10,7 +10,7 @@ For narrative setup (init, templates, env vars), see [State directory & workspac
 |------|------|
 | **State directory** | Global config, credentials, logs, cron, global skills/extensions cache, managed tooling. |
 | **Agent home** `<stateDir>/agents/<agentId>/` | Per-agent runtime: transcripts, bootstrap persona Markdown, curated memory, inbound/TTS blobs, session tooling config, ACP index. |
-| **Agent dir** `…/agents/<agentId>/agent/` | OpenClaw-style process state: `agent.json`, per-agent credentials, IPC inbox, pid/socket, small machine state, extension installs, outbound crash-recovery queue. |
+| **Agent dir** `…/agents/<agentId>/agent/` | Process state: `agent.json`, per-agent credentials, IPC inbox, pid/socket, small machine state, extension installs, outbound crash-recovery queue. |
 | **Markdown workspace** | User project tree: tool `cwd`, daily `memory/*.md`, `media/generated`, user `skills/`, arbitrary files. **Not** the primary home for persona files or internal agent state. |
 
 Paths below use `~/.xopcbot` as the default state root; override with `XOPCBOT_STATE_DIR`, `XOPCBOT_PROFILE`, or `XOPCBOT_HOME` (see [workspace.md](workspace.md#environment-variables-quick-reference)).

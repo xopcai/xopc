@@ -1,5 +1,5 @@
 /**
- * Seed bootstrap persona Markdown files under `…/agents/<id>/bootstrap/` (OpenClaw-style `ensureAgentWorkspace` + `writeFileIfMissing`).
+ * Seed bootstrap persona Markdown files under `…/agents/<id>/bootstrap/` (ensure workspace + write-if-missing).
  * Resolution order per file: `XOPCBOT_TEMPLATE_PATH` or repo `docs/reference/templates`, then bundled `./workspace-templates/`.
  */
 

@@ -322,7 +322,7 @@ function generateMessageSid(): string {
   return generateId("weixin");
 }
 
-/** Inbound context passed to the OpenClaw core pipeline (matches MsgContext shape). */
+/** Inbound context for the core message pipeline (matches MsgContext shape). */
 export type WeixinMsgContext = {
   Body: string;
   From: string;
