@@ -40,6 +40,7 @@ describe('memory-config', () => {
 
   it('resolveBuiltinMemoryStoreConfig applies limits and userProfileEnabled', () => {
     const base = resolveBuiltinMemoryStoreConfig('/w', undefined);
+    expect(base.memoriesDir).toBe('/w/.xopcbot/memories');
     expect(base.memoryCharLimit).toBe(2200);
     expect(base.userCharLimit).toBe(1375);
     expect(base.userProfileEnabled).toBe(true);

@@ -260,10 +260,10 @@ export function resolveExtensionsLockPath(): string {
 }
 
 /**
- * Resolve the workspace extensions directory
+ * Per-agent extension install directory (`…/agent/extensions/`), not under the markdown workspace.
  */
 export function resolveWorkspaceExtensionsDir(config: Config, agentId: string): string {
-  return join(resolveAgentWorkspaceDir(config, agentId), '.extensions');
+  return join(resolveAgentDir(config, agentId), 'extensions');
 }
 
 /**
@@ -393,10 +393,10 @@ export function resolveAgentMetadataPath(config: Config, agentId: string): strin
 }
 
 /**
- * Resolve the workspace state directory (.state/)
+ * Resolve per-agent machine state directory (`…/agent/state/`), not under the markdown workspace.
  */
 export function resolveWorkspaceStateDir(config: Config, agentId: string): string {
-  return join(resolveAgentWorkspaceDir(config, agentId), '.state');
+  return join(resolveAgentDir(config, agentId), 'state');
 }
 
 /**

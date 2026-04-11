@@ -41,7 +41,12 @@ import { createOAuthAsyncHandler } from './oauth-async.js';
 import { testApiKeyResolution } from '../../config/resolve-config-value.js';
 import { buildSessionKey, parseSessionKey } from '../../routing/session-key.js';
 import { agentExists, getDefaultAgentId } from '../../routing/resolve-route.js';
-import { listAgentEntries, normalizeAgentId, resolveDefaultAgentId } from '../../agents/agent-scope.js';
+import {
+  listAgentEntries,
+  normalizeAgentId,
+  resolveAgentHomeDir,
+  resolveDefaultAgentId,
+} from '../../agents/agent-scope.js';
 import { 
   getModelsJsonPath,
   loadModelsJson,
@@ -354,8 +359,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     if (!rel || typeof rel !== 'string') {
       return c.json({ ok: false, error: { message: 'Missing rel' } }, 400);
     }
-    const workspaceRoot = getWorkspacePath(service.currentConfig);
-    const abs = resolveSafeInboundFilePath(workspaceRoot, rel);
+    const cfg = service.currentConfig;
+    const agentHome = resolveAgentHomeDir(cfg, resolveDefaultAgentId(cfg));
+    const legacyWorkspace = getWorkspacePath(cfg) ?? './workspace';
+    const abs = resolveSafeInboundFilePath({ agentHome, legacyWorkspace }, rel);
     if (!abs) {
       return c.json({ ok: false, error: { message: 'Forbidden' } }, 403);
     }
@@ -401,8 +408,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     if (!rel || typeof rel !== 'string') {
       return c.json({ ok: false, error: { message: 'Missing rel' } }, 400);
     }
-    const workspaceRoot = getWorkspacePath(service.currentConfig);
-    const abs = resolveSafeTtsFilePath(workspaceRoot, rel);
+    const cfg = service.currentConfig;
+    const agentHome = resolveAgentHomeDir(cfg, resolveDefaultAgentId(cfg));
+    const legacyWorkspace = getWorkspacePath(cfg) ?? './workspace';
+    const abs = resolveSafeTtsFilePath({ agentHome, legacyWorkspace }, rel);
     if (!abs) {
       return c.json({ ok: false, error: { message: 'Forbidden' } }, 403);
     }

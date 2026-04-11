@@ -40,10 +40,12 @@ export interface AgentOrchestratorConfig {
   getThinkingDefault: () => ThinkLevel | undefined;
   /** Per-session default from merged `agents.list` / defaults (optional). */
   getThinkingDefaultForSession?: (sessionKey: string) => ThinkLevel | undefined;
-  /** `agents.defaults.workspace` (resolved); used to persist inbound files per session. */
+  /** `agents.defaults.workspace` (resolved); legacy fallback for attachment storage. */
   workspaceRoot: string;
   /** Per-agent workspace root for attachments (optional; defaults to `workspaceRoot`). */
   getWorkspaceRootForSession?: (sessionKey: string) => string;
+  /** Agent home (`…/agents/<id>/`) for inbound/TTS files — keeps internal state out of the markdown workspace. */
+  getAgentInternalStorageRootForSession?: (sessionKey: string) => string;
   /** Fire-and-forget after full session persist (e.g. LLM session title); not called from mid-turn snapshots. */
   enqueueAutoTitle?: (sessionKey: string) => void;
 }
@@ -59,6 +61,7 @@ export class AgentOrchestrator {
   private getThinkingDefaultForSession?: (sessionKey: string) => ThinkLevel | undefined;
   private workspaceRoot: string;
   private getWorkspaceRootForSession?: (sessionKey: string) => string;
+  private getAgentInternalStorageRootForSession: (sessionKey: string) => string;
   private enqueueAutoTitle?: (sessionKey: string) => void;
 
   constructor(config: AgentOrchestratorConfig) {
@@ -72,6 +75,9 @@ export class AgentOrchestrator {
     this.getThinkingDefaultForSession = config.getThinkingDefaultForSession;
     this.workspaceRoot = config.workspaceRoot;
     this.getWorkspaceRootForSession = config.getWorkspaceRootForSession;
+    this.getAgentInternalStorageRootForSession =
+      config.getAgentInternalStorageRootForSession ??
+      ((sk) => this.getWorkspaceRootForSession?.(sk) ?? this.workspaceRoot);
     this.enqueueAutoTitle = config.enqueueAutoTitle;
   }
 
@@ -124,18 +130,20 @@ export class AgentOrchestrator {
       );
       this.agentManager.setThinkingLevel(sessionKey, thinkingLevel);
 
-      // 3. Persist inbound files (Telegram, etc.) under workspace, then build user message
-      const attachmentRoot =
-        this.getWorkspaceRootForSession?.(sessionKey) ?? this.workspaceRoot;
+      // 3. Persist inbound files (Telegram, etc.) under agent home, then build user message
+      const storageRoot = this.getAgentInternalStorageRootForSession(sessionKey);
       const persistedAttachments = await persistInboundAttachmentsToWorkspace(
-        attachmentRoot,
+        storageRoot,
         sessionKey,
         msg.attachments,
       );
-      const userMessage = this.buildUserMessage({
-        ...msg,
-        attachments: persistedAttachments ?? msg.attachments,
-      });
+      const userMessage = this.buildUserMessage(
+        {
+          ...msg,
+          attachments: persistedAttachments ?? msg.attachments,
+        },
+        sessionKey,
+      );
       const userPlainForMemory = extractAgentUserPlainText(userMessage);
       const userMessageForModel = await this.agentManager.applyMemoryPrefetchToUserMessage(
         userMessage,
@@ -218,7 +226,8 @@ export class AgentOrchestrator {
   /**
    * Build an agent message from an inbound message
    */
-  private buildUserMessage(msg: InboundMessage): AgentMessage {
+  private buildUserMessage(msg: InboundMessage, sessionKey: string): AgentMessage {
+    const storageRootAbs = this.getAgentInternalStorageRootForSession(sessionKey);
     const textBody = msg.content.trimStart().startsWith('/skill:')
       ? this.agentManager.expandSkillUserText(msg.content)
       : msg.content;
@@ -251,7 +260,7 @@ export class AgentOrchestrator {
               size: att.size,
               workspaceRelativePath: att.workspaceRelativePath,
             },
-            this.workspaceRoot,
+            storageRootAbs,
           );
           messageContent.push({ type: 'text', text: fileBlock });
         }
