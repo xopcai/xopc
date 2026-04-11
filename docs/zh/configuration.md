@@ -195,13 +195,6 @@ xopcbot onboard
 | `contextCadence` | number | `1` | 当 `injectionFrequency` 为 `every-turn` 时，在第 1、1+N、1+2N… 轮注入 prefetch（最小为 `1`）。 |
 | `dialecticCadence` | number | — | 预留字段，供将来外部 dialectic 同步节奏使用（尚未接线）。 |
 
-**迁移**：将某工作区根目录的 `MEMORY.md` 一次性复制到 **默认 agent** 的 `memories/MEMORY.md`（需能读取 `config.json` 以解析 agent 主目录）：
-
-```bash
-pnpm run migrate:memory [workspaceDir]
-# 或: XOPCBOT_WORKSPACE=/path/to/workspace pnpm run migrate:memory
-```
-
 #### agents.defaults.sessionSearch
 
 跨会话 transcript 检索（`session_search` 工具，需会话持久化可用时注册）。

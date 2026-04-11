@@ -83,12 +83,6 @@ Per-session overrides (`sessions/config/` JSON), **inbound** blobs (`inbound/`),
 
 Separate from bootstrap `MEMORY.md` (under `agents/<id>/bootstrap/`) and from workspace `memory/*.md` (searchable snippets), **`agents/<agentId>/memories/`** holds **bounded, §-delimited** entries in `MEMORY.md` (agent notes) and `USER.md` (user profile). A frozen snapshot is injected into the system prompt when enhanced memory is enabled; the agent can update live files via the **`curated_memory`** tool. Behavior and limits are configured under **`agents.defaults.memory`** ([Configuration](configuration.md)).
 
-To **import** an existing workspace-level `MEMORY.md` into the default agent’s curated store without overwriting non-empty targets, run from the repo (or use `pnpm exec tsx` with the same script path):
-
-```bash
-pnpm run migrate:memory /path/to/workspace
-```
-
 ## Which path is “the” workspace at runtime?
 
 Two related ideas:
