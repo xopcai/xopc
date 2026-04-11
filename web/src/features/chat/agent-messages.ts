@@ -25,8 +25,6 @@ interface WireMessage {
   tool_calls?: Array<{ id: string; function: { name: string; arguments: string } }>;
   toolCalls?: Array<{ id?: string; name: string; args?: Record<string, unknown> }>;
   attachments?: unknown;
-  thinking?: string;
-  thinkingStreaming?: boolean;
   usage?: unknown;
   timestamp?: string | number;
   tool_call_id?: string;
@@ -183,8 +181,6 @@ export function mergeConsecutiveAssistantMessages(messages: Message[]): Message[
       prev.content = mergeAssistantContentFragments(prev.content, m.content);
       if (m.timestamp != null) prev.timestamp = m.timestamp;
       if (m.usage) prev.usage = m.usage;
-      if (m.thinking && !prev.thinking) prev.thinking = m.thinking;
-      if (m.thinkingStreaming && !prev.thinkingStreaming) prev.thinkingStreaming = m.thinkingStreaming;
       if (m.attachments?.length) {
         prev.attachments = dedupeAttachments([...(prev.attachments ?? []), ...m.attachments]);
       }
@@ -437,26 +433,17 @@ function buildUserMessage(m: WireMessage): Message {
     content: applyStripToUserContent(role, normalizeContentBlocks(m.content)),
     attachments: mergeUserAttachments(normalizeWireAttachments(m.attachments), fromContent),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
-    thinking: typeof m.thinking === 'string' ? m.thinking : undefined,
-    thinkingStreaming: typeof m.thinkingStreaming === 'boolean' ? m.thinkingStreaming : undefined,
     usage: m.usage as Message['usage'],
   };
 }
 
 function buildAssistantMessage(m: WireMessage): Message {
   const content = mergeAssistantContent(m);
-  const hasThinkingBlock = content.some((b): b is ThinkingContent => b.type === 'thinking');
   return {
     role: 'assistant',
     content,
     attachments: dedupeAttachments(normalizeWireAttachments(m.attachments)),
     timestamp: typeof m.timestamp === 'number' ? m.timestamp : parseTs(m.timestamp),
-    thinking: hasThinkingBlock ? undefined : typeof m.thinking === 'string' ? m.thinking : undefined,
-    thinkingStreaming: hasThinkingBlock
-      ? undefined
-      : typeof m.thinkingStreaming === 'boolean'
-        ? m.thinkingStreaming
-        : undefined,
     usage: m.usage as Message['usage'],
   };
 }
@@ -471,11 +458,6 @@ function parseTs(raw: unknown): number {
 
 function mergeAssistantContent(m: WireMessage): MessageContent[] {
   const blocks = normalizeContentBlocks(m.content);
-
-  const legacyThinking = typeof m.thinking === 'string' ? m.thinking.trim() : '';
-  if (legacyThinking && !blocks.some((b) => b.type === 'thinking')) {
-    blocks.unshift({ type: 'thinking', text: m.thinking as string, streaming: false });
-  }
 
   const tc = m.tool_calls;
   if (Array.isArray(tc)) {

@@ -36,7 +36,7 @@ export function isSimpleAccountOnlyRule(r: BindingRuleWire): boolean {
   return true;
 }
 
-/** Telegram: multi-account keys, or single `default` when only legacy `botToken` is set. */
+/** Telegram: `accounts` keys, or implicit `default` when only top-level `botToken` is set. */
 export function telegramRoutingAccountIds(tg: { botToken?: string; accounts?: Record<string, unknown> }): string[] {
   const keys = Object.keys(tg.accounts ?? {});
   if (keys.length > 0) return [...keys].sort();

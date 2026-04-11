@@ -271,13 +271,7 @@ export const MessageBubble = memo(function MessageBubble({
 
   const streamingThinking = reasoningHidden
     ? false
-    : message.thinkingStreaming ||
-      message.content?.some((b) => b.type === 'thinking' && b.streaming);
-
-  const legacyThinking =
-    !reasoningHidden &&
-    !(message.content ?? []).some((b) => b.type === 'thinking') &&
-    (message.thinking || message.thinkingStreaming);
+    : Boolean(message.content?.some((b) => b.type === 'thinking' && b.streaming));
 
   const showMeta =
     Boolean(message.timestamp) ||
@@ -392,20 +386,6 @@ export const MessageBubble = memo(function MessageBubble({
               </>
             ) : isStreaming ? (
               <span className="inline-block h-3 w-0.5 animate-pulse bg-accent" />
-            ) : null}
-
-            {legacyThinking ? (
-              <AssistantStepsBlock
-                blocks={[
-                  {
-                    type: 'thinking',
-                    text: message.thinking || '',
-                    streaming: Boolean(message.thinkingStreaming),
-                  },
-                ]}
-                toolLabels={toolLabels}
-                stepLabels={stepLabels}
-              />
             ) : null}
 
             {isAssistant && stepBlocksForSources.length > 0 ? (
