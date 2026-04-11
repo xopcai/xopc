@@ -63,6 +63,8 @@ export {
   SANDBOX_ALLOWED_TOOLS,
 } from './execute-code-tool.js';
 
+export { createCronjobTool, scanCronPrompt } from './cronjob-tool.js';
+
 export { createImageTool, resolveImageModelConfigForTool } from './image-tool.js';
 export { createImageGenerateTool, resolveImageGenerationModelConfigForTool } from './image-generate-tool.js';
 

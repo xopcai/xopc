@@ -12,7 +12,7 @@ import { join, dirname, isAbsolute } from 'path';
 import { fileURLToPath } from 'node:url';
 import { createRequire } from 'node:module';
 import { createJiti } from 'jiti';
-import { resolveDefaultAgentId } from '../agents/agent-scope.js';
+import { resolveDefaultAgentId } from '../agent/agent-scope.js';
 import { loadConfig } from '../config/loader.js';
 import {
   resolveAgentWorkspaceDir,

@@ -46,7 +46,7 @@ import {
   normalizeAgentId,
   resolveAgentHomeDir,
   resolveDefaultAgentId,
-} from '../../agents/agent-scope.js';
+} from '../../agent/agent-scope.js';
 import { 
   getModelsJsonPath,
   loadModelsJson,

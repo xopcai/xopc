@@ -44,6 +44,8 @@ import { createImageGenerateTool } from './image-generate-tool.js';
 import { BrowserManager, createBrowserTools } from './browser/index.js';
 import { createDelegateTool } from './delegate-tool.js';
 import { buildSandboxToolMap, createExecuteCodeTool } from './execute-code-tool.js';
+import { createCronjobTool } from './cronjob-tool.js';
+import type { CronService } from '../../cron/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { wrapToolsWithProtection, type ToolExecutorConfig } from './executor.js';
 
@@ -78,6 +80,8 @@ export interface ToolFactoryDeps {
   getSessionStore?: () => SessionStore;
   /** When set (gateway webchat), enables the `clarify` tool. */
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
+  /** Gateway: enables the `cronjob` tool. */
+  getCronService?: () => CronService | undefined;
   // TTS config removed - handled at dispatch layer
 }
 
@@ -192,6 +196,13 @@ export class AgentToolsFactory {
               getSessionStore: this.deps.getSessionStore,
               getConfig: this.deps.getConfig,
               getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+            }),
+          ]
+        : []),
+      ...(this.deps.getCronService
+        ? [
+            createCronjobTool({
+              getCronService: this.deps.getCronService,
             }),
           ]
         : []),

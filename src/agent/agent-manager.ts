@@ -31,6 +31,7 @@ import { AgentToolsFactory } from './tools/factory.js';
 import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { MessageBus } from '../infra/bus/index.js';
+import type { CronService } from '../cron/index.js';
 import type { SessionStore } from '../session/store.js';
 import type { SessionContext } from './session/session-context.js';
 import type { Skill } from './skills/types.js';
@@ -83,6 +84,8 @@ export interface AgentManagerConfig {
   reasoningLevel?: 'off' | 'on' | 'stream';
   verboseLevel?: 'off' | 'on' | 'full';
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
+  /** Gateway: exposes CronService for the `cronjob` tool. */
+  getCronService?: () => CronService | undefined;
 }
 
 export interface AgentInstance {
@@ -132,6 +135,7 @@ export class AgentManager {
       getMemoryManager: () => baseRt.memoryManager,
       getSessionStore: config.getSessionStore,
       gatewayClarify: config.gatewayClarify,
+      getCronService: config.getCronService,
     });
 
     this.defaultModel = config.model || getDefaultModelSync(config.config);
@@ -240,6 +244,7 @@ export class AgentManager {
       getMemoryManager: () => this.getWorkspaceRuntime(this.baseWorkspacePath).memoryManager,
       getSessionStore: this.config.getSessionStore,
       gatewayClarify: this.config.gatewayClarify,
+      getCronService: this.config.getCronService,
     });
   }
 

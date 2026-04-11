@@ -1,6 +1,6 @@
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/schema.js';
-import { resolveDefaultAgentId } from '../../agents/agent-scope.js';
+import { resolveDefaultAgentId } from '../agent-scope.js';
 import { AgentInbox } from './inbox.js';
 import type {
   AgentIPCMessage,

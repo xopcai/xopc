@@ -4,7 +4,7 @@ import { readFile, writeFile, mkdir, unlink, readdir, stat } from 'fs/promises';
 import { basename, join } from 'path';
 import { existsSync } from 'fs';
 import { resolveSessionsDir, FILENAMES } from '../config/paths.js';
-import { resolveDefaultAgentId } from '../agents/agent-scope.js';
+import { resolveDefaultAgentId } from '../agent/agent-scope.js';
 import type { Config } from '../config/schema.js';
 import { resolveSessionShardRelativePath } from './shard-path.js';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';

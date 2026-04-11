@@ -4,7 +4,7 @@
 
 xopcbot 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；其下有 **按 Agent 划分** 的目录树（会话、收件箱、入站/TTS、托管记忆、运行时文件等）。**工作空间（workspace）** 是 Markdown 根目录：工具 `cwd`、按日的 `memory/` 笔记、用户文件，以及其下的扩展安装路径。
 
-路径以 **`config.json` 为唯一事实来源**：`src/agents/agent-scope.ts`（OpenClaw 式 workspace / agentDir 解析），以及 `src/config/paths-state.ts`、`src/config/workspace-defaults.ts`、`src/config/paths.ts`。目录骨架由 **`xopcbot init`**（`src/cli/commands/init.ts`）与 **`xopcbot agents add`** 创建/更新。布局与 OpenClaw 一致：**Markdown 工作区**不在 `agents/<id>/` 下（默认在状态根旁的 `workspace` / `workspace-<id>`，或配置为 `agents.defaults.workspace/<id>`）。
+路径以 **`config.json` 为唯一事实来源**：`src/agent/agent-scope.ts`（OpenClaw 式 workspace / agentDir 解析），以及 `src/config/paths-state.ts`、`src/config/workspace-defaults.ts`、`src/config/paths.ts`。目录骨架由 **`xopcbot init`**（`src/cli/commands/init.ts`）与 **`xopcbot agents add`** 创建/更新。布局与 OpenClaw 一致：**Markdown 工作区**不在 `agents/<id>/` 下（默认在状态根旁的 `workspace` / `workspace-<id>`，或配置为 `agents.defaults.workspace/<id>`）。
 
 ## 状态目录根
 

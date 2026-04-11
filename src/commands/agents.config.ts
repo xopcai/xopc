@@ -13,7 +13,7 @@ import {
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
   DEFAULT_AGENT_ID,
-} from '../agents/agent-scope.js';
+} from '../agent/agent-scope.js';
 
 type AgentEntry = NonNullable<NonNullable<Config['agents']>['list']>[number];
 

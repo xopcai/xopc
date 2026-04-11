@@ -31,7 +31,7 @@ import { SystemPromptBuilder } from "../../../agent/prompt/service-prompt-builde
 import { SkillManager } from "../../../agent/skills/index.js";
 import { loadBootstrapFiles, extractTextContent } from "../../../agent/context/workspace.js";
 import { resolveAgentBootstrapDir } from "../../../config/agent-profile.js";
-import { normalizeAgentId, resolveDefaultAgentId } from "../../../agents/agent-scope.js";
+import { normalizeAgentId, resolveDefaultAgentId } from '../../../agent/agent-scope.js';
 import { cleanTrailingErrors, sanitizeMessages } from "../../../agent/memory/message-sanitizer.js";
 import {
   tryApplySessionTranscriptHygiene,

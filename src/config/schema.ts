@@ -1,6 +1,6 @@
 import { z } from 'zod';
 
-import { getDefaultWorkspacePath } from '../agents/agent-scope.js';
+import { getDefaultWorkspacePath } from '../agent/agent-scope.js';
 
 // ============================================
 // Agent Configs

@@ -9,7 +9,7 @@ import {
   resolveAgentHomeDir as resolveAgentHomeScoped,
   resolveAgentWorkspaceDir,
   resolveSessionsDir as resolveSessionsDirScoped,
-} from '../agents/agent-scope.js';
+} from '../agent/agent-scope.js';
 import { ENV_VARS, resolveHomeDir, resolveStateDir } from './paths-state.js';
 import { resolveDefaultAgentWorkspaceDir } from './workspace-defaults.js';
 
@@ -21,7 +21,7 @@ export {
   resolveAgentDir as resolveAgentDirFromConfig,
   resolveAgentHomeDir as resolveAgentHomeDirFromConfig,
   resolveSessionsDir as resolveSessionsDirFromConfig,
-} from '../agents/agent-scope.js';
+} from '../agent/agent-scope.js';
 
 // ============================================
 // File Names

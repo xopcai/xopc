@@ -14,7 +14,7 @@ import {
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
   resolveUserPath,
-} from '../agents/agent-scope.js';
+} from '../agent/agent-scope.js';
 import { BOOTSTRAP_FILES } from '../agent/context/workspace.js';
 import { seedWorkspaceBootstrapFiles } from '../agent/context/workspace-seed.js';
 import {

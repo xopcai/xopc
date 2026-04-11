@@ -8,7 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { Config } from '../../config/schema.js';
-import { DEFAULT_AGENT_ID, resolveAgentBootstrapDir } from '../../agents/agent-scope.js';
+import { DEFAULT_AGENT_ID, resolveAgentBootstrapDir } from '../agent-scope.js';
 import { WORKSPACE_FILES } from '../../config/paths.js';
 import { BOOTSTRAP_FILES } from './workspace.js';
 import { createLogger } from '../../utils/logger.js';
