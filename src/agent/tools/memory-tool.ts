@@ -17,7 +17,7 @@ export function createMemorySearchTool(workspaceDir: string): AgentTool<typeof M
     name: 'memory_search',
     label: '🔍 Memory Search',
     description:
-      'Mandatory recall step: semantically search MEMORY.md, `.xopcbot/memories/*.md`, and memory/*.md before answering questions about prior work, decisions, dates, people, preferences, or todos; returns top snippets with path + lines.',
+      'Mandatory recall step: semantically search bootstrap MEMORY.md, agent-home `memories/*.md`, and workspace `memory/*.md` before answering questions about prior work, decisions, dates, people, preferences, or todos; returns top snippets with path + lines.',
     parameters: MemorySearchSchema,
 
     async execute(

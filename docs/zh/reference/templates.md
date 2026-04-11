@@ -33,7 +33,7 @@ xopcbot 使用工作区模板文件来自定义代理的行为和知识。这些
 
 代理可以通过 `memory_search` 和 `memory_get` 工具搜索和读取记忆。
 
-**托管记忆**（可选）：**`workspace/.xopcbot/memories/MEMORY.md`** 与 **`USER.md`** 存放有上限、可由 `curated_memory` 维护的条目，与工作区根目录的 `MEMORY.md` 不同。见 [托管记忆](../workspace.md#curated-memory) 与 [配置参考](../configuration.md)（`agents.defaults.memory`）。
+**托管记忆**（可选）：**`agents/<agentId>/memories/MEMORY.md`** 与 **`USER.md`** 存放有上限、可由 `curated_memory` 维护的条目，与 `agents/<id>/bootstrap/` 下的引导用 `MEMORY.md` 不同。见 [托管记忆](../workspace.md#curated-memory) 与 [配置参考](../configuration.md)（`agents.defaults.memory`）。
 
 ## 编辑建议
 

@@ -1,21 +1,26 @@
 /**
- * One-time migration: copy workspace root MEMORY.md into `.xopcbot/memories/MEMORY.md`
- * when the curated file is missing or empty.
+ * Copy workspace root MEMORY.md into the default agent's curated memory file
+ * (`~/.xopcbot/agents/<id>/memories/MEMORY.md`) when missing or empty.
  *
  * Usage: `pnpm exec tsx scripts/migrate-memory.ts [workspaceDir]`
- * Env: `XOPCBOT_WORKSPACE` if no argument.
+ * Env: `XOPCBOT_WORKSPACE` if no argument (source root for MEMORY.md only).
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 
-const workspace =
+import { resolveAgentHomeDir, resolveDefaultAgentId } from '../src/agents/agent-scope.js';
+import { loadConfig } from '../src/config/loader.js';
+
+const srcRoot =
   process.argv[2]?.trim() ||
   process.env.XOPCBOT_WORKSPACE?.trim() ||
   process.cwd();
 
-const src = join(workspace, 'MEMORY.md');
-const destDir = join(workspace, '.xopcbot', 'memories');
+const cfg = loadConfig();
+const agentId = resolveDefaultAgentId(cfg);
+const destDir = join(resolveAgentHomeDir(cfg, agentId), 'memories');
+const src = join(srcRoot, 'MEMORY.md');
 const dest = join(destDir, 'MEMORY.md');
 
 if (!existsSync(src)) {

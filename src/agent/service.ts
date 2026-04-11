@@ -722,7 +722,7 @@ export class AgentService {
   }
 
   /**
-   * Persist inbound file attachments under the session workspace (non-images with data).
+   * Persist inbound file attachments under agent home `inbound/` (non-images with data).
    * Idempotent if `workspaceRelativePath` is already set on an attachment.
    */
   async prepareInboundAttachments(
@@ -1136,7 +1136,7 @@ export class AgentService {
   }
 
   /**
-   * Generate TTS for webchat when config allows, persist under `.xopcbot/tts/`, attach to last assistant turn.
+   * Generate TTS for webchat when config allows, persist under agent home `tts/`, attach to last assistant turn.
    */
   private async maybeEmitWebchatTts(
     sessionKey: string,

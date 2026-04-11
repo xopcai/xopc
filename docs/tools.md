@@ -355,7 +355,7 @@ Read snippets from memory files.
 
 ### 🧠 curated_memory
 
-Read or edit **bounded** curated memory under **`<workspace>/.xopcbot/memories/`** (`MEMORY.md` and `USER.md`), with entries separated by a section-sign delimiter. The system prompt includes a **frozen snapshot** from session start; this tool reads and writes **live** state on disk. Disabled when `agents.defaults.memory.enabled` is `false` or `useEnhancedSystem` is `false`. If `userProfileEnabled` is `false`, mutations targeting the user profile are rejected (reads still work).
+Read or edit **bounded** curated memory under **`agents/<agentId>/memories/`** (`MEMORY.md` and `USER.md`), with entries separated by a section-sign delimiter. The system prompt includes a **frozen snapshot** from session start; this tool reads and writes **live** state on disk. Disabled when `agents.defaults.memory.enabled` is `false` or `useEnhancedSystem` is `false`. If `userProfileEnabled` is `false`, mutations targeting the user profile are rejected (reads still work).
 
 See [Configuration](configuration.md) (**agents.defaults.memory**) and [Curated memory](workspace.md#curated-memory).
 

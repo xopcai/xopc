@@ -18,7 +18,7 @@ xopcbot 内置了一组工具供 Agent 调用。
 | 📨 消息 | `send_message` | 发送消息到通道 |
 | 🔍 记忆搜索 | `memory_search` | 搜索记忆文件 |
 | 📄 记忆读取 | `memory_get` | 读取记忆片段 |
-| 🧠 托管记忆 | `curated_memory` | 编辑 `.xopcbot/memories/`（可选） |
+| 🧠 托管记忆 | `curated_memory` | 编辑 agent 主目录 `memories/`（可选） |
 | 🔎 会话搜索 | `session_search` | 跨会话检索 transcript（可选） |
 
 ---
@@ -159,7 +159,7 @@ xopcbot 内置了一组工具供 Agent 调用。
 
 ## 🧠 curated_memory
 
-读取或编辑 **`<workspace>/.xopcbot/memories/`** 下的 **`MEMORY.md`** 与 **`USER.md`**（条目以 § 分隔，有总字数上限）。系统提示里包含会话开始时的 **冻结快照**；本工具操作的是磁盘上的 **实时** 内容。当 `agents.defaults.memory.enabled` 为 `false` 或 `useEnhancedSystem` 为 `false` 时不注册。若 `userProfileEnabled` 为 `false`，对 user 画像的写入会被拒绝（读仍允许）。
+读取或编辑 **`agents/<agentId>/memories/`** 下的 **`MEMORY.md`** 与 **`USER.md`**（条目以 § 分隔，有总字数上限）。系统提示里包含会话开始时的 **冻结快照**；本工具操作的是磁盘上的 **实时** 内容。当 `agents.defaults.memory.enabled` 为 `false` 或 `useEnhancedSystem` 为 `false` 时不注册。若 `userProfileEnabled` 为 `false`，对 user 画像的写入会被拒绝（读仍允许）。
 
 详见 [配置参考](zh/configuration.md) 中的 **agents.defaults.memory** 与 [托管记忆](zh/workspace.md#curated-memory)。
 

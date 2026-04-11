@@ -1,11 +1,11 @@
 /** Max files per chat message (keep in sync with `src/gateway/chat-limits.ts`). */
 export const MAX_CHAT_ATTACHMENTS = 10;
 
-/** Path for gateway `GET` (inbound vs TTS); rel is under agent home or legacy `.xopcbot/`. */
+/** Path for gateway `GET` (inbound vs TTS); `rel` is relative to agent home (`inbound/…`, `tts/…`). */
 export function workspaceRelativePathToApiPath(rel: string): string {
   const norm = rel.replace(/\\/g, '/');
   const q = encodeURIComponent(norm);
-  if (norm.startsWith('tts/') || norm.startsWith('.xopcbot/tts/')) {
+  if (norm.startsWith('tts/')) {
     return `/api/workspace/tts-file?rel=${q}`;
   }
   return `/api/workspace/inbound-file?rel=${q}`;

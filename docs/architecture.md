@@ -95,7 +95,7 @@ extensions/
 
 ## State directory & workspace on disk
 
-Runtime data (config, credentials, per-agent sessions, the Markdown **workspace** used as tool cwd and user content, and per-agent **bootstrap** persona Markdown under `agents/<id>/bootstrap/`) lives outside the git repo under the **state directory** (default `~/.xopcbot`). For a filesystem map (bootstrap, agent home, migrations), see [On-disk layout](disk-layout.md). For setup, env overrides, and how `agents.defaults.workspace` relates to default paths, see [State directory & workspace layout](workspace.md).
+Runtime data (config, credentials, per-agent sessions, the Markdown **workspace** used as tool cwd and user content, and per-agent **bootstrap** persona Markdown under `agents/<id>/bootstrap/`) lives outside the git repo under the **state directory** (default `~/.xopcbot`). For a filesystem map (bootstrap, agent home, Markdown workspace), see [On-disk layout](disk-layout.md). For setup, env overrides, and how `agents.defaults.workspace` relates to default paths, see [State directory & workspace layout](workspace.md).
 
 ## Core Modules
 
@@ -105,7 +105,7 @@ AgentService is the core orchestrator responsible for:
 
 1. **Message Processing** - Receive user messages, call LLM, handle tool calls
 2. **Prompt Building** - Build system prompt from SOUL.md/USER.md/AGENTS.md/TOOLS.md
-3. **Memory** - Session message storage and compaction (`src/session/`); curated `.xopcbot/memories/`, pluggable memory providers, and tools (`src/agent/memory/`)
+3. **Memory** - Session message storage and compaction (`src/session/`); curated agent-home `memories/`, pluggable memory providers, and tools (`src/agent/memory/`)
 4. **Tool Execution** - Unified execution of built-in tools + extension tools
 5. **Progress Feedback** - Real-time updates for long-running tasks
 
@@ -153,7 +153,7 @@ src/agent/prompt/
 | 📤 Message | `send_message` | Send messages to channels |
 | 🔍 Memory Search | `memory_search` | Search `memory/*.md` snippets in the workspace |
 | 📄 Memory Get | `memory_get` | Read memory snippets |
-| 🧠 Curated memory | `curated_memory` | Edit bounded entries in `.xopcbot/memories/` (when enabled) |
+| 🧠 Curated memory | `curated_memory` | Edit bounded entries in agent-home `memories/` (when enabled) |
 | 🔎 Session search | `session_search` | Search other sessions’ transcripts (when session store is wired) |
 
 ### Progress Feedback (`src/agent/progress.ts`)
@@ -189,7 +189,7 @@ Session message persistence, search index helpers for `session_search`, and comp
 
 ```
 src/agent/memory/
-├── builtin-memory-store.ts  # .xopcbot/memories/MEMORY.md + USER.md (bounded, §-delimited)
+├── builtin-memory-store.ts  # agent home memories/MEMORY.md + USER.md (bounded, §-delimited)
 ├── manager.ts               # MemoryManager — providers, prefetch, sync, onMemoryWrite
 ├── create-memory-manager.ts # Wires builtin + optional stub from config
 ├── inject-prefetch.ts       # Prefix user message with <memory-context> when configured
