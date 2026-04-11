@@ -224,6 +224,7 @@ export class AgentManager {
     this.config.model = ref;
     this.defaultModel = ref || getDefaultModelSync(config);
     this.baseWorkspacePath = this.computeBaseWorkspacePath();
+    void this.toolsFactory.shutdownBrowser();
     for (const rt of this.workspaceRuntimes.values()) {
       void rt.memoryManager.shutdownAll().catch(() => {});
     }
@@ -456,6 +457,7 @@ export class AgentManager {
   removeAgent(sessionKey: string): boolean {
     const instance = this.agents.get(sessionKey);
     if (instance) {
+      void this.toolsFactory.closeBrowserPageForSession(sessionKey);
       instance.agent.abort();
       this.agents.delete(sessionKey);
       this.memoryPrefetchUserTurn.delete(sessionKey);
@@ -495,6 +497,7 @@ export class AgentManager {
    * Dispose all agents
    */
   dispose(): void {
+    void this.toolsFactory.shutdownBrowser();
     for (const instance of this.agents.values()) {
       instance.agent.abort();
     }

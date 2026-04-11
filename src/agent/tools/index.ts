@@ -45,6 +45,12 @@ export {
   type GatewayClarifyRequestFn,
 } from './clarify-tool.js';
 
+export {
+  createBrowserTools,
+  BrowserManager,
+  assertBrowserUrlAllowed,
+} from './browser/index.js';
+
 export { createImageTool, resolveImageModelConfigForTool } from './image-tool.js';
 export { createImageGenerateTool, resolveImageGenerationModelConfigForTool } from './image-generate-tool.js';
 

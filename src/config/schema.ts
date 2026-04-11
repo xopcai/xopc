@@ -99,6 +99,16 @@ export const AgentDefaultsSchema = z.object({
       maxLength: z.number().positive().optional(),
     })
     .optional(),
+  /**
+   * Headless Playwright tools (`browser_*`). Opt-in. Install browsers once: `npx playwright install chromium`.
+   */
+  browser: z
+    .object({
+      enabled: z.boolean().optional(),
+      /** Default true when browser tools are enabled. */
+      headless: z.boolean().optional(),
+    })
+    .optional(),
   /** Optional full system prompt replacement (merged with per-agent entry; entry wins). */
   systemPromptOverride: z.string().optional(),
   /** Optional allowlist of skill names for `<available_skills>`; when set, replaces unfiltered list. */
