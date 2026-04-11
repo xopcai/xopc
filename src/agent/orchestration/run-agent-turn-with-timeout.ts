@@ -5,7 +5,32 @@
 
 import type { Agent } from '@mariozechner/pi-agent-core';
 
-export const AGENT_TURN_TIMEOUT_MS = 120_000;
+import type { Config } from '../../config/schema.js';
+
+/** Minimum per-turn timeout (1 minute). */
+export const MIN_AGENT_TURN_TIMEOUT_MS = 60_000;
+
+/** Maximum per-turn timeout (4 hours), aligned with `maxTaskDurationMs` schema cap. */
+export const MAX_AGENT_TURN_TIMEOUT_MS = 4 * 60 * 60 * 1000;
+
+/** Default when `agents.defaults.maxTaskDurationMs` is unset (30 minutes). */
+export const DEFAULT_AGENT_TURN_TIMEOUT_MS = 30 * 60 * 1000;
+
+/**
+ * Effective turn timeout from config or default.
+ * Uses `agents.defaults.maxTaskDurationMs` when set (clamped to schema bounds).
+ */
+export function resolveAgentTurnTimeoutMs(config?: Config): number {
+  const raw = config?.agents?.defaults?.maxTaskDurationMs;
+  if (typeof raw === 'number' && Number.isFinite(raw)) {
+    const n = Math.floor(raw);
+    return Math.min(MAX_AGENT_TURN_TIMEOUT_MS, Math.max(MIN_AGENT_TURN_TIMEOUT_MS, n));
+  }
+  return DEFAULT_AGENT_TURN_TIMEOUT_MS;
+}
+
+/** @deprecated Use {@link DEFAULT_AGENT_TURN_TIMEOUT_MS} or {@link resolveAgentTurnTimeoutMs}. */
+export const AGENT_TURN_TIMEOUT_MS = DEFAULT_AGENT_TURN_TIMEOUT_MS;
 
 export function isAgentTurnTimeoutError(err: unknown): boolean {
   return err instanceof Error && err.message.startsWith('Agent turn timed out after');

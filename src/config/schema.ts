@@ -36,8 +36,8 @@ export const AgentDefaultsSchema = z.object({
   maxTokens: z.number().default(8192),
   temperature: z.number().default(0.7),
   maxToolIterations: z.number().default(20),
-  // Task timeout (in milliseconds, default: 5 minutes)
-  maxTaskDurationMs: z.number().min(60000).max(3600000).optional(),
+  // Wall-clock limit for one user turn (LLM + tools). Default 30m if unset; cap 4h.
+  maxTaskDurationMs: z.number().min(60000).max(14_400_000).optional(),
   // Reliability settings
   maxRequestsPerTurn: z.number().min(10).max(200).default(50),
   maxToolFailuresPerTurn: z.number().min(1).max(20).default(3),

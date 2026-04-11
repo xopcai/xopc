@@ -34,6 +34,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   
   // Agent defaults - hot reload
   { prefix: 'agents.defaults.model', kind: 'hot', description: 'Model configuration' },
+  { prefix: 'agents.defaults.maxTaskDurationMs', kind: 'hot', description: 'Per-turn wall-clock timeout (ms)' },
   { prefix: 'agents.defaults.maxTokens', kind: 'hot', description: 'Max tokens' },
   { prefix: 'agents.defaults.temperature', kind: 'hot', description: 'Temperature' },
   { prefix: 'agents.defaults.maxToolIterations', kind: 'hot', description: 'Max tool iterations' },

@@ -279,6 +279,7 @@ export class AgentService {
       eventHandler: this.agentEventHandler,
       feedbackCoordinator: this.feedbackCoordinator,
       sessionConfigStore: this.sessionConfigStore,
+      getConfig: () => this.config.config,
       getThinkingDefault: () => this.config.config?.agents?.defaults?.thinkingDefault,
       getThinkingDefaultForSession: (sessionKey: string) =>
         this.agentManager.getThinkingDefaultForSession(sessionKey),
@@ -1097,6 +1098,7 @@ export class AgentService {
             modelManager: this.modelManager,
             userMessage: userMessageForModel,
             log,
+            getConfig: () => this.config.config,
           });
           this.agentManager.afterAgentTurn(sessionKey, userPlain);
         })();
@@ -1320,6 +1322,7 @@ export class AgentService {
         modelManager: this.modelManager,
         userMessage: userMessageForModel,
         log,
+        getConfig: () => this.config.config,
       });
 
       this.agentManager.afterAgentTurn(sessionKey, userPlain);
