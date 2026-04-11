@@ -6,6 +6,7 @@
 import type { Agent, AgentMessage } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 
+import type { Config } from '../../config/schema.js';
 import { resolveModel } from '../../providers/index.js';
 import type { ModelManager } from '../models/index.js';
 import {
@@ -13,9 +14,13 @@ import {
   isAssistantTurnFailed,
   maybeRetryTurnAfterTransientLlmFailure,
 } from './llm-turn-retry.js';
-import { AGENT_TURN_TIMEOUT_MS, runAgentTurnWithTimeout } from './run-agent-turn-with-timeout.js';
+import {
+  AGENT_TURN_TIMEOUT_MS,
+  resolveAgentTurnTimeoutMs,
+  runAgentTurnWithTimeout,
+} from './run-agent-turn-with-timeout.js';
 
-export { AGENT_TURN_TIMEOUT_MS };
+export { AGENT_TURN_TIMEOUT_MS, resolveAgentTurnTimeoutMs };
 
 type FallbackLog = {
   info: (obj: Record<string, unknown>, msg: string) => void;
@@ -31,10 +36,13 @@ export async function runAgentTurnWithModelFallbacks(params: {
   log: FallbackLog;
   /** After `prompt` adds the user message; before `waitForIdle`. */
   afterUserPrompt?: () => Promise<void>;
+  /** Overrides {@link resolveAgentTurnTimeoutMs} when set. */
   timeoutMs?: number;
+  /** Supplies `agents.defaults.maxTaskDurationMs` for the default turn limit. */
+  getConfig?: () => Config | undefined;
 }): Promise<void> {
   const { agent, sessionKey, modelManager, userMessage, log } = params;
-  const timeoutMs = params.timeoutMs ?? AGENT_TURN_TIMEOUT_MS;
+  const timeoutMs = params.timeoutMs ?? resolveAgentTurnTimeoutMs(params.getConfig?.());
   const afterUserPrompt = params.afterUserPrompt ?? (async () => {});
 
   const candidates = modelManager.getFallbackCandidatesForSession(sessionKey);

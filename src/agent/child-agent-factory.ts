@@ -7,13 +7,14 @@ import { getApiKeySync } from '../providers/index.js';
 import { createLogger } from '../utils/logger.js';
 
 import { extractTextContent } from './context/workspace.js';
-import { runAgentTurnWithTimeout } from './orchestration/run-agent-turn-with-timeout.js';
+import {
+  resolveAgentTurnTimeoutMs,
+  runAgentTurnWithTimeout,
+} from './orchestration/run-agent-turn-with-timeout.js';
 import type { ToolExecutorConfig } from './tools/executor.js';
 import { AgentToolsFactory } from './tools/factory.js';
 
 const log = createLogger('delegate-child');
-
-const CHILD_RUN_TIMEOUT_MS = 10 * 60 * 1000;
 
 export function buildChildSystemPrompt(goal: string, context?: string, workspace?: string): string {
   const parts = [
@@ -144,7 +145,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
             await agent.prompt(userText);
             await agent.waitForIdle();
           },
-          CHILD_RUN_TIMEOUT_MS,
+          resolveAgentTurnTimeoutMs(options.getConfig()),
         );
 
         const messages = agent.state.messages;

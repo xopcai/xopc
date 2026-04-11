@@ -8,6 +8,11 @@ import { Script, createContext } from 'node:vm';
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 
+/** Default script wall time when `timeout` omitted (30 minutes). */
+const DEFAULT_TIMEOUT_SEC = 30 * 60;
+/** Hard cap for `timeout` parameter (4 hours). */
+const MAX_TIMEOUT_SEC = 4 * 60 * 60;
+
 const ExecuteCodeSchema = Type.Object({
   code: Type.String({
     description:
@@ -23,8 +28,8 @@ const ExecuteCodeSchema = Type.Object({
   }),
   timeout: Type.Optional(
     Type.Number({
-      description: 'Execution timeout in seconds (default: 120, max: 300)',
-      default: 120,
+      description: 'Execution timeout in seconds (default: 1800 = 30m, max: 14400 = 4h)',
+      default: DEFAULT_TIMEOUT_SEC,
     }),
   ),
 });
@@ -39,8 +44,6 @@ export const SANDBOX_ALLOWED_TOOLS = new Set([
   'shell',
 ]);
 
-const DEFAULT_TIMEOUT_SEC = 120;
-const MAX_TIMEOUT_SEC = 300;
 const MAX_TIMEOUT_MS = MAX_TIMEOUT_SEC * 1000;
 const MAX_TOOL_CALLS = 50;
 const MAX_STDOUT_CHARS = 50_000;
