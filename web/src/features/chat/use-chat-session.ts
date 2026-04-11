@@ -32,7 +32,10 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import type { ClarifyPromptState } from '@/features/chat/clarify-prompt';
-import { suggestFollowUpsFromAssistantMessage } from '@/features/chat/follow-up-suggestions';
+import {
+  suggestFollowUpsFromAssistantMessage,
+  type FollowUpSuggestionId,
+} from '@/features/chat/follow-up-suggestions';
 import { MAX_PENDING_FOLLOW_UPS, type PendingFollowUp } from '@/features/chat/pending-follow-up.types';
 
 const DEFAULT_THINKING = 'medium';
@@ -176,7 +179,7 @@ export function useChatSession() {
   const [pendingFollowUps, setPendingFollowUps] = useState<PendingFollowUp[]>([]);
   const pendingFollowUpsRef = useRef<PendingFollowUp[]>([]);
   const [steeringFollowUpId, setSteeringFollowUpId] = useState<string | null>(null);
-  const [followUpSuggestions, setFollowUpSuggestions] = useState<string[]>([]);
+  const [followUpSuggestions, setFollowUpSuggestions] = useState<FollowUpSuggestionId[]>([]);
 
   useEffect(() => {
     sendingRef.current = sending;
