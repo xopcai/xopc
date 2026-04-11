@@ -170,8 +170,6 @@ export interface WeixinMessage {
 
 /** GetUpdates request: bytes fields are base64 strings in JSON. */
 export interface GetUpdatesReq {
-  /** @deprecated compat only, will be removed */
-  sync_buf?: string;
   /** Full context buf cached locally; send "" when none (first request or after reset). */
   get_updates_buf?: string;
 }
@@ -183,8 +181,6 @@ export interface GetUpdatesResp {
   errcode?: number;
   errmsg?: string;
   msgs?: WeixinMessage[];
-  /** @deprecated compat only */
-  sync_buf?: string;
   /** Full context buf to cache locally and send on next request. */
   get_updates_buf?: string;
   /** Server-suggested timeout (ms) for the next getUpdates long-poll. */

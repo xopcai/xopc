@@ -1,7 +1,6 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import { deriveRawAccountId } from '../auth/accounts.js';
 import { resolveWeixinRootDir } from './state-dir.js';
 
 function resolveAccountsDir(): string {
@@ -30,18 +29,7 @@ function readSyncBufFile(filePath: string): string | undefined {
 }
 
 export function loadGetUpdatesBuf(filePath: string): string | undefined {
-  const value = readSyncBufFile(filePath);
-  if (value !== undefined) return value;
-
-  const accountId = path.basename(filePath, '.sync.json');
-  const rawId = deriveRawAccountId(accountId);
-  if (rawId) {
-    const compatPath = path.join(resolveAccountsDir(), `${rawId}.sync.json`);
-    const compatValue = readSyncBufFile(compatPath);
-    if (compatValue !== undefined) return compatValue;
-  }
-
-  return undefined;
+  return readSyncBufFile(filePath);
 }
 
 export function saveGetUpdatesBuf(filePath: string, getUpdatesBuf: string): void {

@@ -6,8 +6,3 @@ import { resolveStateDir as resolveXopcbotStateDir } from '@xopcai/xopcbot/confi
 export function resolveWeixinRootDir(): string {
   return join(resolveXopcbotStateDir(), 'weixin');
 }
-
-/** @deprecated Use resolveWeixinRootDir; kept for internal modules that expect this name. */
-export function resolveStateDir(): string {
-  return resolveWeixinRootDir();
-}

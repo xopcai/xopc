@@ -2,7 +2,6 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import type { Config } from '@xopcai/xopcbot/config/schema.js';
-import { resolveStateDir as resolveXopcbotStateDir } from '@xopcai/xopcbot/config/paths.js';
 
 import { clearContextTokensForAccount } from '../messaging/inbound.js';
 import { resolveWeixinRootDir } from '../storage/state-dir.js';
@@ -14,16 +13,6 @@ export { normalizeWeixinAccountId };
 
 export const DEFAULT_BASE_URL = 'https://ilinkai.weixin.qq.com';
 export const CDN_BASE_URL = 'https://novac2c.cdn.weixin.qq.com/c2c';
-
-export function deriveRawAccountId(normalizedId: string): string | undefined {
-  if (normalizedId.endsWith('-im-bot')) {
-    return `${normalizedId.slice(0, -7)}@im.bot`;
-  }
-  if (normalizedId.endsWith('-im-wechat')) {
-    return `${normalizedId.slice(0, -10)}@im.wechat`;
-  }
-  return undefined;
-}
 
 function resolveWeixinStateDir(): string {
   return resolveWeixinRootDir();
@@ -110,40 +99,8 @@ function readAccountFile(filePath: string): WeixinAccountData | null {
   return null;
 }
 
-/**
- * Legacy single-file Weixin token before per-account files (fixed path under `credentials/`).
- */
-function loadLegacyWeixinSingleFileToken(): string | undefined {
-  const legacyPath = path.join(
-    resolveXopcbotStateDir(),
-    'credentials',
-    'openclaw-weixin',
-    'credentials.json',
-  );
-  try {
-    if (!fs.existsSync(legacyPath)) return undefined;
-    const raw = fs.readFileSync(legacyPath, 'utf-8');
-    const parsed = JSON.parse(raw) as { token?: string };
-    return typeof parsed.token === 'string' ? parsed.token : undefined;
-  } catch {
-    return undefined;
-  }
-}
-
 export function loadWeixinAccount(accountId: string): WeixinAccountData | null {
-  const primary = readAccountFile(resolveAccountPath(accountId));
-  if (primary) return primary;
-
-  const rawId = deriveRawAccountId(accountId);
-  if (rawId) {
-    const compat = readAccountFile(resolveAccountPath(rawId));
-    if (compat) return compat;
-  }
-
-  const legacyToken = loadLegacyWeixinSingleFileToken();
-  if (legacyToken) return { token: legacyToken };
-
-  return null;
+  return readAccountFile(resolveAccountPath(accountId));
 }
 
 export function saveWeixinAccount(
