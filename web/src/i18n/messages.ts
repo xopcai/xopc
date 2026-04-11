@@ -181,6 +181,13 @@ const bundles: Record<
       steeringInterruptSend: string;
       /** aria-label for follow-up suggestion chip group. */
       followUpSuggestionsAria: string;
+      followUpChipErrorHandling: string;
+      followUpChipRefactorReadability: string;
+      followUpChipShorterSummary: string;
+      followUpChipMainRisks: string;
+      followUpChipSimplerTerms: string;
+      followUpChipConcreteExample: string;
+      followUpChipWhatNext: string;
       /** Cursor-style queue above the composer while a run is active. */
       followUpQueueAria: string;
       followUpQueueHeading: string;
@@ -1285,6 +1292,13 @@ const bundles: Record<
       inputPlaceholderSteering: 'Follow-up: Enter queues a row; click a row to edit here',
       steeringInterruptSend: 'Stop and send now (⌘↵ or Ctrl+↵)',
       followUpSuggestionsAria: 'Suggested follow-up questions',
+      followUpChipErrorHandling: 'Add error handling and edge cases.',
+      followUpChipRefactorReadability: 'Refactor for readability.',
+      followUpChipShorterSummary: 'Give a shorter summary.',
+      followUpChipMainRisks: 'What are the main risks?',
+      followUpChipSimplerTerms: 'Explain that in simpler terms.',
+      followUpChipConcreteExample: 'Give a concrete example.',
+      followUpChipWhatNext: 'What should I do next?',
       followUpQueueAria: 'Follow-up queue (sent after this reply, in order)',
       followUpQueueHeading: 'Follow-ups',
       followUpQueueClickToEdit: 'Edit in composer',
@@ -2444,6 +2458,13 @@ const bundles: Record<
       inputPlaceholderSteering: '后续问题：Enter 加入队列；点击队列一行在此编辑',
       steeringInterruptSend: '中止并立即发送（⌘↵ 或 Ctrl+↵）',
       followUpSuggestionsAria: '建议的后续问题',
+      followUpChipErrorHandling: '补充错误处理和边界情况。',
+      followUpChipRefactorReadability: '重构以提高可读性。',
+      followUpChipShorterSummary: '给一段更短的摘要。',
+      followUpChipMainRisks: '主要风险有哪些？',
+      followUpChipSimplerTerms: '用更通俗的话解释一下。',
+      followUpChipConcreteExample: '举一个具体例子。',
+      followUpChipWhatNext: '我接下来该做什么？',
       followUpQueueAria: '后续问题队列（本轮结束后按顺序发送）',
       followUpQueueHeading: '后续问题',
       followUpQueueClickToEdit: '在输入框中编辑',
