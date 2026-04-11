@@ -44,7 +44,7 @@ function selectClassName(): string {
   return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
 }
 
-export function AgentSettingsPanel() {
+export function AgentSettingsPanel({ embedded = false }: { embedded?: boolean } = {}) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const a = m.agentSettings;
@@ -113,7 +113,12 @@ export function AgentSettingsPanel() {
 
   if (!hasToken) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10">
+      <div
+        className={cn(
+          'mx-auto flex w-full max-w-app-main flex-col gap-3',
+          embedded ? 'py-2' : 'px-4 py-10',
+        )}
+      >
         <div className="flex items-start gap-3 rounded-2xl bg-surface-base p-6">
           <Cpu className="mt-0.5 size-5 shrink-0 text-fg-subtle" strokeWidth={1.75} />
           <div>
@@ -127,7 +132,7 @@ export function AgentSettingsPanel() {
 
   if (loading) {
     return (
-      <div className="mx-auto w-full max-w-app-main px-4 py-8">
+      <div className={cn('mx-auto w-full max-w-app-main', embedded ? 'py-2' : 'px-4 py-8')}>
         <div className="h-8 w-48 animate-pulse rounded bg-surface-hover" />
         <div className="mt-6 h-32 animate-pulse rounded-xl bg-surface-hover" />
         <p className="mt-4 text-sm text-fg-muted">{m.logs.loading}</p>
@@ -137,7 +142,7 @@ export function AgentSettingsPanel() {
 
   if (!form) {
     return (
-      <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10">
+      <div className={cn('mx-auto flex w-full max-w-app-main flex-col gap-3', embedded ? 'py-2' : 'px-4 py-10')}>
         <p className="text-sm text-fg-muted">
           {error ?? a.loadError}
         </p>
@@ -149,10 +154,19 @@ export function AgentSettingsPanel() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
+    <div
+      className={cn(
+        'mx-auto flex w-full max-w-app-main flex-col gap-6',
+        embedded ? 'py-0' : 'px-4 py-6',
+      )}
+    >
       <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
         <div>
-          <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.agent}</h1>
+          {embedded ? (
+            <h2 className="text-base font-semibold tracking-tight text-fg">{m.settingsSections.agent}</h2>
+          ) : (
+            <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.agent}</h1>
+          )}
           <p className="mt-1 text-sm text-fg-muted">{a.subtitle}</p>
           <p className="mt-1 text-xs text-fg-subtle">{a.sectionDesc}</p>
         </div>

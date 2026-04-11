@@ -1,6 +1,5 @@
 import type { LucideIcon } from 'lucide-react';
 import {
-  Bot,
   Clock,
   Cloud,
   Cpu,
@@ -27,7 +26,6 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   channels: Plug,
   logs: FileText,
   settingsAppearance: Palette,
-  settingsAgent: Bot,
   settingsAgents: Users,
   settingsProviders: Cloud,
   settingsModels: Cpu,

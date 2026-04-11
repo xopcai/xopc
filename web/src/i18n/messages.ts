@@ -8,7 +8,6 @@ export type Tab =
   | 'channels'
   | 'logs'
   | 'settingsAppearance'
-  | 'settingsAgent'
   | 'settingsProviders'
   | 'settingsModels'
   | 'settingsChannels'
@@ -563,6 +562,7 @@ const bundles: Record<
       saveError: string;
       loading: string;
       tabOverview: string;
+      tabDefaults: string;
       tabFiles: string;
       tabTools: string;
       tabSkills: string;
@@ -1102,7 +1102,6 @@ const bundles: Record<
       channels: 'Channels',
       logs: 'Logs',
       settingsAppearance: 'Preferences',
-      settingsAgent: 'Agent',
       settingsProviders: 'Providers',
       settingsModels: 'Models',
       settingsChannels: 'Channels',
@@ -1664,6 +1663,7 @@ const bundles: Record<
       saveError: 'Request failed',
       loading: 'Loading…',
       tabOverview: 'Agents',
+      tabDefaults: 'Defaults',
       tabFiles: 'Bootstrap files',
       tabTools: 'Tools',
       tabSkills: 'Skills',
@@ -2247,7 +2247,6 @@ const bundles: Record<
       channels: 'IM 频道',
       logs: '日志',
       settingsAppearance: '偏好设置',
-      settingsAgent: '代理',
       settingsProviders: '提供商',
       settingsModels: '模型',
       settingsChannels: 'IM 频道',
@@ -2804,6 +2803,7 @@ const bundles: Record<
       saveError: '请求失败',
       loading: '加载中…',
       tabOverview: '代理列表',
+      tabDefaults: '全局默认',
       tabFiles: 'Bootstrap 文件',
       tabTools: '工具',
       tabSkills: '技能',
@@ -3376,7 +3376,7 @@ export function getTabGroups(lang: StoredLanguage): TabGroup[] {
     { label: m.settingsNavGroups.gateway, tabs: ['settingsGateway', 'settingsHeartbeat'] as const },
     {
       label: m.settingsNavGroups.agentAndModels,
-      tabs: ['settingsProviders', 'settingsModels', 'settingsAgents', 'settingsAgent', 'settingsSearch'] as const,
+      tabs: ['settingsProviders', 'settingsModels', 'settingsAgents', 'settingsSearch'] as const,
     },
     { label: m.settingsNavGroups.data, tabs: ['sessions', 'logs'] as const },
     { label: m.settingsNavGroups.interface, tabs: ['settingsAppearance'] as const },
