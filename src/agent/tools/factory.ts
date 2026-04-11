@@ -41,6 +41,7 @@ import { parseSessionKey as parseRoutingSessionKey } from '../../routing/session
 import type { GatewayClarifyRequestFn } from './clarify-tool.js';
 import { createImageTool } from './image-tool.js';
 import { createImageGenerateTool } from './image-generate-tool.js';
+import { BrowserManager, createBrowserTools } from './browser/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { wrapToolsWithProtection, type ToolExecutorConfig } from './executor.js';
 
@@ -90,7 +91,32 @@ export interface CreateCoreToolsOptions {
 }
 
 export class AgentToolsFactory {
+  private browserManager: BrowserManager | null = null;
+
   constructor(private deps: ToolFactoryDeps) {}
+
+  private ensureBrowserManager(): BrowserManager {
+    if (!this.browserManager) {
+      this.browserManager = new BrowserManager({
+        getHeadless: () => this.deps.getConfig?.()?.agents?.defaults?.browser?.headless !== false,
+      });
+    }
+    return this.browserManager;
+  }
+
+  /** Close Playwright and all pages (gateway stop, agent manager dispose, or config hot-reload). */
+  async shutdownBrowser(): Promise<void> {
+    if (!this.browserManager) {
+      return;
+    }
+    await this.browserManager.shutdown();
+    this.browserManager = null;
+  }
+
+  /** Drop the tab for a session when its agent instance is removed. */
+  async closeBrowserPageForSession(sessionKey: string): Promise<void> {
+    await this.browserManager?.closePage(sessionKey);
+  }
 
   createCoreTools(options?: CreateCoreToolsOptions): AgentTool<any, any>[] {
     const workspace = options?.workspace ?? this.deps.workspace;
@@ -166,6 +192,13 @@ export class AgentToolsFactory {
               getCurrentSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
             }),
           ]
+        : []),
+      ...(cfg?.agents?.defaults?.browser?.enabled === true
+        ? createBrowserTools({
+            getManager: () => this.ensureBrowserManager(),
+            getTaskId: () => this.deps.getCurrentContext()?.sessionKey ?? 'default',
+            getConfig: () => this.deps.getConfig?.(),
+          })
         : []),
       ...optionalTools,
     ];
