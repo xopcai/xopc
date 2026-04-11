@@ -375,7 +375,15 @@ export function SkillsPage() {
 
     if (!q) return rows;
     return rows.filter((row) => {
-      const blob = [row.name, row.description, row.directoryId, row.path, row.source]
+      const blob = [
+        row.name,
+        row.description,
+        row.directoryId,
+        row.path,
+        row.source,
+        row.hub?.source,
+        row.hub?.ref,
+      ]
         .filter(Boolean)
         .join(' ')
         .toLowerCase();
@@ -772,6 +780,18 @@ export function SkillsPage() {
                               {row.managed ? (
                                 <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
                                   {sk.col.managed}: {sk.yes}
+                                </span>
+                              ) : null}
+                              {row.hub ? (
+                                <span
+                                  className="max-w-full truncate rounded-md bg-surface-hover/60 px-2 py-0.5 font-mono text-[10px] dark:bg-surface-active/50"
+                                  title={`${row.hub.source}${row.hub.ref ? `\nref: ${row.hub.ref}` : ''}\nupdated: ${row.hub.updatedAt}`}
+                                >
+                                  {sk.hubRemote} ·{' '}
+                                  {row.hub.kind === 'git' ? sk.hubKindGit : sk.hubKindArchive} ·{' '}
+                                  {row.hub.source.length > 48
+                                    ? `${row.hub.source.slice(0, 48)}…`
+                                    : row.hub.source}
                                 </span>
                               ) : null}
                             </div>

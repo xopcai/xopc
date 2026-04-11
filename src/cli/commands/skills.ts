@@ -17,7 +17,9 @@ import {
   formatScanSummary,
   type Skill,
 } from '../../agent/skills/index.js';
-import { resolveStateDir, resolveBundledSkillsDir } from '../../config/paths.js';
+import { resolveStateDir, resolveBundledSkillsDir, resolveSkillsLockPath } from '../../config/paths.js';
+import { loadSkillsLock } from '../../agent/skills/hub-lock.js';
+import { pullSkillFromSource, updateSkillFromLock } from '../../agent/skills/hub-pull.js';
 import { register, type CLIContext } from '../registry.js';
 import { createSkillsTestCommand } from './skills-test.js';
 
@@ -406,6 +408,84 @@ function createSkillsCommand(ctx: CLIContext): Command {
       console.log(`✓ Updated configuration for skill "${skillName}"`);
     });
 
+  const hub = new Command('hub').description(
+    'Install or update skills from git or archives (Phase 4; writes ~/.xopcbot/skills + skills-lock.json)',
+  );
+
+  hub
+    .command('pull')
+    .argument('<source>', 'Git URL, https(s) .zip/.tar.gz, file:// URL, or local archive path')
+    .option('--ref <ref>', 'Git branch or tag (optional)')
+    .option('--path <dir>', 'Subdirectory inside the cloned repo containing SKILL.md')
+    .option('--id <skillId>', 'Target folder name under ~/.xopcbot/skills (default: SKILL.md name or repo folder)')
+    .option('--force', 'Replace existing managed skill directory', false)
+    .option('--strict-scan', 'Fail install if security scanner reports critical findings', false)
+    .action(async (source: string, opts: { ref?: string; path?: string; id?: string; force?: boolean; strictScan?: boolean }) => {
+      try {
+        const result = await pullSkillFromSource(source, {
+          ref: opts.ref,
+          subpath: opts.path,
+          skillId: opts.id,
+          force: Boolean(opts.force),
+          strictScan: Boolean(opts.strictScan),
+        });
+        console.log(`\n✓ Installed skill "${result.skillId}"`);
+        console.log(`  Path: ${result.path}`);
+        console.log(`  Source: ${result.source} (${result.kind})`);
+        console.log(`  Tree hash: ${result.contentHash.slice(0, 16)}…\n`);
+      } catch (e) {
+        console.error(e instanceof Error ? e.message : String(e));
+        process.exit(1);
+      }
+    });
+
+  hub
+    .command('update')
+    .argument('<skillId>', 'Managed skill id (folder name under ~/.xopcbot/skills)')
+    .option('--strict-scan', 'Fail if security scanner reports critical findings', false)
+    .action(async (skillId: string, opts: { strictScan?: boolean }) => {
+      try {
+        const result = await updateSkillFromLock(skillId, { strictScan: Boolean(opts.strictScan) });
+        console.log(`\n✓ Updated skill "${result.skillId}"`);
+        console.log(`  Path: ${result.path}`);
+        console.log(`  Source: ${result.source} (${result.kind})`);
+        console.log(`  Tree hash: ${result.contentHash.slice(0, 16)}…\n`);
+      } catch (e) {
+        console.error(e instanceof Error ? e.message : String(e));
+        process.exit(1);
+      }
+    });
+
+  hub
+    .command('lock')
+    .description('Show skills-lock.json (install sources + content hashes)')
+    .option('--json', 'Print raw JSON', false)
+    .action((opts: { json?: boolean }) => {
+      const lock = loadSkillsLock();
+      if (opts.json) {
+        console.log(JSON.stringify(lock, null, 2));
+        return;
+      }
+      const entries = Object.entries(lock.entries);
+      console.log(`\n${resolveSkillsLockPath()}`);
+      if (entries.length === 0) {
+        console.log('(no hub-installed skills)\n');
+        return;
+      }
+      for (const [id, e] of entries.sort((a, b) => a[0].localeCompare(b[0]))) {
+        console.log(`\n• ${id}`);
+        console.log(`  kind: ${e.kind}`);
+        console.log(`  source: ${e.source}`);
+        if (e.ref) console.log(`  ref: ${e.ref}`);
+        if (e.subpath) console.log(`  subpath: ${e.subpath}`);
+        console.log(`  contentHash: ${e.contentHash.slice(0, 16)}…`);
+        console.log(`  updatedAt: ${e.updatedAt}`);
+      }
+      console.log();
+    });
+
+  command.addCommand(hub);
+
   // Add test subcommand
   const testCommand = createSkillsTestCommand(ctx);
   command.addCommand(testCommand);
@@ -422,6 +502,10 @@ register({
   metadata: {
     category: 'utility',
     examples: [
+      'xopcbot skills hub pull https://github.com/org/repo.git   # Shallow-clone skill into ~/.xopcbot/skills',
+      'xopcbot skills hub pull ./pack.zip --force               # Install or replace from local zip',
+      'xopcbot skills hub update my-skill                       # Re-fetch using skills-lock.json',
+      'xopcbot skills hub lock --json                           # Show hub lock file',
       'xopcbot skills list                        # List all available skills',
       'xopcbot skills list -v                     # List with detailed information',
       'xopcbot skills install weather             # Install weather skill dependencies',

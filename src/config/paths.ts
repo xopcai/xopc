@@ -36,6 +36,8 @@ export const FILENAMES = {
   CRON_JOBS: 'jobs.json',
   WORKSPACE_STATE: 'workspace.json',
   SKILLS_CACHE: 'skills-cache.json',
+  /** Hub / CLI install provenance for ~/.xopcbot/skills/<id> (Phase 4). */
+  SKILLS_LOCK: 'skills-lock.json',
   PID: 'pid',
   STATUS: 'status.json',
   SOCKET: 'agent.sock',
@@ -279,6 +281,13 @@ export function resolveSkillsDir(): string {
  */
 export function resolveSkillPath(skillId: string): string {
   return join(resolveSkillsDir(), skillId, 'SKILL.md');
+}
+
+/**
+ * Skills hub lock file (~/.xopcbot/skills-lock.json): install source + content hash per managed skill id.
+ */
+export function resolveSkillsLockPath(): string {
+  return join(resolveStateDir(), FILENAMES.SKILLS_LOCK);
 }
 
 /**
