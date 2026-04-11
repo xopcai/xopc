@@ -27,6 +27,12 @@ export {
 } from './find.js';
 
 export { createWebSearchTool, webFetchTool } from './web.js';
+export {
+  createWebExtractTool,
+  stripHtmlBoilerplate,
+  DEFAULT_WEB_EXTRACT_MAX_LENGTH,
+  MAX_RAW_HTML_CHARS_FOR_WEB_EXTRACT,
+} from './web-extract.js';
 
 export { createMessageTool } from './communication.js';
 

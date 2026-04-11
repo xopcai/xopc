@@ -39,6 +39,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'agents.defaults.maxToolIterations', kind: 'hot', description: 'Max tool iterations' },
   { prefix: 'agents.defaults.compaction', kind: 'hot', description: 'Compaction settings' },
   { prefix: 'agents.defaults.pruning', kind: 'hot', description: 'Pruning settings' },
+  { prefix: 'agents.defaults.webExtract', kind: 'hot', description: 'Web extract model and limits' },
   { prefix: 'agents.defaults.workspace', kind: 'none', description: 'Workspace path - no runtime effect' },
   
   // Gateway - restart required

@@ -23,6 +23,7 @@ import {
   createShellTool,
   createWebSearchTool,
   webFetchTool,
+  createWebExtractTool,
   createMessageTool,
   createSendMediaTool,
   createMemorySearchTool,
@@ -113,6 +114,7 @@ export class AgentToolsFactory {
       createShellTool(workspace),
       createWebSearchTool(() => this.deps.getConfig?.()),
       webFetchTool,
+      createWebExtractTool({ getConfig: () => this.deps.getConfig?.() }),
       // Note: TTS is NOT handled by send_message tool anymore
       // TTS is applied at the ChannelManager dispatch layer
       createMessageTool(bus, () => this.deps.getCurrentContext()),
