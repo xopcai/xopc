@@ -38,8 +38,9 @@ import type { SessionContext } from './session/session-context.js';
 import type { Skill } from './skills/types.js';
 import { createSkillConfigManager } from './skills/config.js';
 import { isUnderManagedSkillsDir } from './skills/managed-store.js';
+import { loadSkillsLock, type SkillHubLockEntry } from './skills/hub-lock.js';
 import { readFileSync } from 'node:fs';
-import { resolve, sep } from 'node:path';
+import { basename, resolve, sep } from 'node:path';
 
 import { BuiltinMemoryStore } from './memory/builtin-memory-store.js';
 import { createMemoryManagerFromConfig } from './memory/create-memory-manager.js';
@@ -67,6 +68,8 @@ export interface SkillCatalogEntry {
   enabled: boolean;
   /** When true, skill is never injected into `<available_skills>` (SKILL.md frontmatter). */
   disableModelInvocation: boolean;
+  /** Hub install provenance when under ~/.xopcbot/skills and listed in skills-lock.json. */
+  hub?: SkillHubLockEntry;
 }
 
 export interface AgentManagerConfig {
@@ -392,11 +395,14 @@ export class AgentManager {
 
   getSkillCatalog(): SkillCatalogEntry[] {
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
+    const lock = loadSkillsLock();
     return this.getWorkspaceRuntime(this.baseWorkspacePath).skillManager.getSkills().map((s) => {
       const base = resolve(s.baseDir);
       const managed = isUnderManagedSkillsDir(s.baseDir);
       const directoryId = base.split(sep).filter(Boolean).pop() || s.name;
       const enabled = !(skillsConfig.entries?.[s.name]?.enabled === false);
+      const hubKey = managed ? basename(base) : '';
+      const hub = managed && hubKey ? lock.entries[hubKey] : undefined;
       return {
         directoryId,
         name: s.name,
@@ -406,6 +412,7 @@ export class AgentManager {
         managed,
         enabled,
         disableModelInvocation: s.disableModelInvocation,
+        ...(hub ? { hub } : {}),
       };
     });
   }

@@ -15,6 +15,7 @@ import {
 import { dirname, join, resolve, sep } from 'node:path';
 import { resolveSkillsDir } from '../../config/paths.js';
 import { parseFrontmatter } from '../../markdown/frontmatter.js';
+import { loadSkillsLock, type SkillHubLockEntry } from './hub-lock.js';
 
 export const MAX_SKILL_ZIP_BYTES = 15 * 1024 * 1024;
 
@@ -59,6 +60,8 @@ export interface ManagedSkillListItem {
   name: string;
   description: string;
   path: string;
+  /** Set when this folder was installed via `skills hub pull` / lock file. */
+  hub?: SkillHubLockEntry;
 }
 
 function readSkillMdMeta(skillMdPath: string): { name: string; description: string } {
@@ -77,6 +80,7 @@ function readSkillMdMeta(skillMdPath: string): { name: string; description: stri
 export function listManagedSkillDirs(): ManagedSkillListItem[] {
   const root = resolveSkillsDir();
   mkdirSync(root, { recursive: true });
+  const lock = loadSkillsLock();
   let dirNames: string[];
   try {
     dirNames = readdirSync(root, { withFileTypes: true })
@@ -91,11 +95,13 @@ export function listManagedSkillDirs(): ManagedSkillListItem[] {
     const skillMd = join(root, id, 'SKILL.md');
     if (!existsSync(skillMd)) continue;
     const meta = readSkillMdMeta(skillMd);
+    const hub = lock.entries[id];
     out.push({
       id,
       name: meta.name || id,
       description: meta.description || '',
       path: join(root, id),
+      ...(hub ? { hub } : {}),
     });
   }
   out.sort((a, b) => a.id.localeCompare(b.id));

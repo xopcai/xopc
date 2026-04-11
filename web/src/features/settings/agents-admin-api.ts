@@ -51,6 +51,13 @@ export type SkillCatalogRow = {
   /** From SKILL.md / catalog (may be empty). */
   description?: string;
   enabled?: boolean;
+  /** Hub install metadata when present (skills-lock.json). */
+  hub?: {
+    kind: 'git' | 'archive';
+    source: string;
+    ref?: string;
+    updatedAt?: string;
+  };
 };
 
 export type AgentBootstrapFileEntry = {

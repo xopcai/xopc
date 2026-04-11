@@ -1,5 +1,15 @@
 /** Skills catalog — managed global skills (~/.xopcbot/skills). */
 
+export interface SkillHubProvenance {
+  kind: 'git' | 'archive';
+  source: string;
+  ref?: string;
+  subpath?: string;
+  contentHash: string;
+  installedAt: string;
+  updatedAt: string;
+}
+
 export interface SkillCatalogEntry {
   directoryId: string;
   name: string;
@@ -11,6 +21,8 @@ export interface SkillCatalogEntry {
   enabled: boolean;
   /** When true, skill is never shown to the model (SKILL.md). */
   disableModelInvocation: boolean;
+  /** Present when installed via CLI `skills hub pull` (skills-lock.json). */
+  hub?: SkillHubProvenance;
 }
 
 export interface ManagedSkillDir {
@@ -18,6 +30,7 @@ export interface ManagedSkillDir {
   name: string;
   description: string;
   path: string;
+  hub?: SkillHubProvenance;
 }
 
 export interface SkillsPayload {

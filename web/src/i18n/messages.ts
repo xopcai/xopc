@@ -495,6 +495,9 @@ const bundles: Record<
       detailModalDisable: string;
       detailLoadFailed: string;
       detailCloseAria: string;
+      hubRemote: string;
+      hubKindGit: string;
+      hubKindArchive: string;
     };
     logs: {
       title: string;
@@ -1615,6 +1618,9 @@ const bundles: Record<
       detailModalDisable: 'Disable',
       detailLoadFailed: 'Failed to load SKILL.md',
       detailCloseAria: 'Close',
+      hubRemote: 'Remote',
+      hubKindGit: 'git',
+      hubKindArchive: 'archive',
     },
     logs: {
       title: 'Logs',
@@ -2781,6 +2787,9 @@ const bundles: Record<
       detailModalDisable: '停用',
       detailLoadFailed: '无法加载 SKILL.md',
       detailCloseAria: '关闭',
+      hubRemote: '远程',
+      hubKindGit: 'git',
+      hubKindArchive: '归档',
     },
     logs: {
       title: '日志',
