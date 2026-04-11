@@ -27,7 +27,7 @@ export function parseSkillWireSegments(text: string): SkillWireSegment[] {
 }
 
 /**
- * User bubble: render `/skill:name` as inline pills (composer parity); other text unchanged vs legacy Markdown when no tokens.
+ * User bubble: render `/skill:name` as inline pills (composer parity); otherwise render Markdown as usual.
  */
 export const UserMessageSegments = memo(function UserMessageSegments({ text }: { text: string }) {
   const parts = useMemo(() => parseSkillWireSegments(text), [text]);

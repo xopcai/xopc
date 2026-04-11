@@ -3,7 +3,7 @@ import { apiUrl } from '@/lib/url';
 
 import { fetchConfiguredModelsCached } from '@/features/chat/registry-api';
 
-/** Matches GET /api/config masked keys and legacy UI placeholder */
+/** True for gateway masked key sentinels (`***` or bullet placeholder). */
 export function isMaskedKey(value: string): boolean {
   return value === '***' || value === '••••••••••••';
 }
@@ -37,7 +37,7 @@ export async function fetchProvidersConfig(): Promise<Record<string, string>> {
   return data.payload?.config?.providers ?? {};
 }
 
-/** Merge meta with config keys and configured-model hints (matches Lit settings behavior). */
+/** Merge provider meta with config keys and configured-model hints. */
 export async function loadProviderRows(): Promise<ProviderRowModel[]> {
   const [meta, configKeys, models] = await Promise.all([
     fetchProviderMetaList(),
