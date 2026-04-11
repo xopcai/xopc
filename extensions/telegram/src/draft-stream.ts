@@ -92,7 +92,7 @@ export interface TelegramDraftStreamOptions {
     parseMode?: 'HTML';
   }) => void;
   warn?: (message: string) => void;
-  /** Legacy: force HTML path; prefer renderText instead. */
+  /** When `renderText` is omitted, controls default text conversion (`HTML` = sanitize only). */
   parseMode?: 'Markdown' | 'HTML' | undefined;
   enableProgress?: boolean;
 }

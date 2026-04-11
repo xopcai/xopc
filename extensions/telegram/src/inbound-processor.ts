@@ -17,7 +17,6 @@ import type { MessageBus } from '@xopcai/xopcbot/infra/bus/index.js';
 import type { TelegramAccountManager } from './account-manager.js';
 import { telegramUpdateDedupe, buildTelegramUpdateKey } from './dedupe.js';
 import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
-import { removeBotMention as stripMentionLegacy } from '@xopcai/xopcbot/channels/security.js';
 import { normalizeTelegramCommandName, parseSlashCommand } from '@xopcai/xopcbot/chat-commands/command-parse.js';
 import { tryConsumeTelegramClarifyFreeText } from '@xopcai/xopcbot/gateway/clarify-runtime.js';
 
@@ -91,11 +90,6 @@ export interface InboundProcessorDeps {
   sessionKeyService: SessionKeyService;
   sttService: STTService;
   mediaUtils: MediaUtils;
-  /**
-   * When true, skip inbound-processor group/DM gates; caller must enforce policy (e.g. ChannelPlugin securityAdapter).
-   * Uses legacy mention stripping to match ChannelPlugin behavior.
-   */
-  externalAccessGate?: boolean;
 }
 
 interface QueuedMessage {
@@ -301,7 +295,6 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
     sessionKeyService,
     sttService,
     mediaUtils,
-    externalAccessGate,
   } = deps;
 
   const messageQueues = new Map<string, QueuedMessage[]>();
@@ -369,64 +362,50 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
     const isGroup = ctx.chat?.type === 'group' || ctx.chat?.type === 'supergroup';
     const threadId = (message as { message_thread_id?: number }).message_thread_id;
 
-    if (!externalAccessGate) {
-      // Access control
-      const effectiveAllowFrom = accessControl.normalizeAllowFromWithStore({
-        allowFrom: isGroup ? account.groupAllowFrom : account.allowFrom,
-      });
+    // Access control (group/topic allowlists, mention gating)
+    const effectiveAllowFrom = accessControl.normalizeAllowFromWithStore({
+      allowFrom: isGroup ? account.groupAllowFrom : account.allowFrom,
+    });
 
-      const baseAccess = accessControl.evaluateGroupBaseAccess({
-        isGroup,
-        groupConfig: account.groups?.[chatId],
+    const baseAccess = accessControl.evaluateGroupBaseAccess({
+      isGroup,
+      groupConfig: account.groups?.[chatId],
+      topicConfig: threadId ? account.groups?.[chatId]?.topics?.[String(threadId)] : undefined,
+      hasGroupAllowOverride: !!(account.groups?.[chatId]?.allowFrom ||
+        (threadId && account.groups?.[chatId]?.topics?.[String(threadId)]?.allowFrom)),
+      effectiveGroupAllow: effectiveAllowFrom,
+      senderId,
+      senderUsername,
+    });
+
+    if (!baseAccess.allowed) {
+      log.debug({ accountId, chatId, reason: baseAccess.reason }, 'Message blocked by base access');
+      return;
+    }
+
+    if (isGroup) {
+      const requireMention = accessControl.resolveRequireMention({
         topicConfig: threadId ? account.groups?.[chatId]?.topics?.[String(threadId)] : undefined,
-        hasGroupAllowOverride: !!(account.groups?.[chatId]?.allowFrom ||
-          (threadId && account.groups?.[chatId]?.topics?.[String(threadId)]?.allowFrom)),
-        effectiveGroupAllow: effectiveAllowFrom,
-        senderId,
-        senderUsername,
+        groupConfig: account.groups?.[chatId],
+        defaultRequireMention: true,
       });
 
-      if (!baseAccess.allowed) {
-        log.debug({ accountId, chatId, reason: baseAccess.reason }, 'Message blocked by base access');
-        return;
-      }
+      // For media messages (photo, video, etc.) without caption, check caption entities too.
+      const hasMedia = !!(message.photo || message.document || message.video || message.audio || message.voice);
+      const captionEntities = (message as any).caption_entities;
+      const hasMention = accessControl.hasBotMention({ botUsername, text: content, entities: message.entities }) ||
+        (hasMedia && accessControl.hasBotMention({ botUsername, text: message.caption ?? '', entities: captionEntities }));
 
-      // Check mention in groups
-      if (isGroup) {
-        const requireMention = accessControl.resolveRequireMention({
-          topicConfig: threadId ? account.groups?.[chatId]?.topics?.[String(threadId)] : undefined,
-          groupConfig: account.groups?.[chatId],
-          defaultRequireMention: true,
-        });
-
-        // For media messages (photo, video, etc.) without caption, check caption entities too.
-        // A media message with a bot mention in caption_entities should pass the mention check.
-        const hasMedia = !!(message.photo || message.document || message.video || message.audio || message.voice);
-        const captionEntities = (message as any).caption_entities;
-        const hasMention = accessControl.hasBotMention({ botUsername, text: content, entities: message.entities }) ||
-          (hasMedia && accessControl.hasBotMention({ botUsername, text: message.caption ?? '', entities: captionEntities }));
-
-        if (requireMention && !hasMention) {
-          // Allow media-only messages (no caption) through if the group policy allows it.
-          // This prevents silently dropping photos sent without a bot mention when
-          // the group is configured to allow media without explicit mention.
-          if (!hasMedia || content.trim().length > 0) {
-            log.debug({ accountId, chatId }, 'Group message without mention ignored');
-            return;
-          }
-          log.debug({ accountId, chatId }, 'Group media message without mention - processing anyway');
+      if (requireMention && !hasMention) {
+        if (!hasMedia || content.trim().length > 0) {
+          log.debug({ accountId, chatId }, 'Group message without mention ignored');
+          return;
         }
+        log.debug({ accountId, chatId }, 'Group media message without mention - processing anyway');
       }
     }
 
-    const accountRequireMention = (account as { requireMention?: boolean }).requireMention;
-    const cleanContent = externalAccessGate
-      ? accountRequireMention && isGroup
-        ? stripMentionLegacy({ text: content, botUsername })
-        : content
-      : isGroup
-        ? accessControl.removeBotMention(content, botUsername)
-        : content;
+    const cleanContent = isGroup ? accessControl.removeBotMention(content, botUsername) : content;
 
     // Generate session key
     const sessionKey = sessionKeyService.generateSessionKey({
