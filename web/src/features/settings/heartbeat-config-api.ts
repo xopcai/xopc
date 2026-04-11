@@ -25,7 +25,7 @@ export function normalizeHeartbeatFromConfig(config: unknown): HeartbeatSettings
       : null;
   return {
     enabled: Boolean(hb.enabled ?? true),
-    intervalMs: typeof hb.intervalMs === 'number' && Number.isFinite(hb.intervalMs) ? hb.intervalMs : 60000,
+    intervalMs: typeof hb.intervalMs === 'number' && Number.isFinite(hb.intervalMs) ? hb.intervalMs : 1_800_000,
     target: typeof hb.target === 'string' ? hb.target : '',
     targetChatId: typeof hb.targetChatId === 'string' ? hb.targetChatId : '',
     prompt: typeof hb.prompt === 'string' ? hb.prompt : '',
