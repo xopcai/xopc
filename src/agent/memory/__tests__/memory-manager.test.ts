@@ -12,6 +12,7 @@ describe('MemoryManager', () => {
     const m = new MemoryManager();
     const store = new BuiltinMemoryStore({
       workspaceDir: '/tmp',
+      memoriesDir: '/tmp/memories',
       memoryCharLimit: 100,
       userCharLimit: 100,
     });
@@ -25,6 +26,7 @@ describe('MemoryManager', () => {
   it('createMemoryManagerFromConfig adds stub when configured', () => {
     const store = new BuiltinMemoryStore({
       workspaceDir: '/tmp',
+      memoriesDir: '/tmp/memories',
       memoryCharLimit: 100,
       userCharLimit: 100,
     });

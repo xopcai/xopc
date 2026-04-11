@@ -20,6 +20,8 @@ import {
   resolveInboxPendingDir,
   resolveInboxProcessedDir,
   resolveAgentHomeDir,
+  resolveWorkspaceStateDir,
+  resolveWorkspaceStatePath,
   WORKSPACE_FILES,
   FILENAMES,
 } from '../../config/paths.js';
@@ -83,7 +85,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
   await mkdir(join(resolveAgentDir(cfg, agentId), 'credentials'), { recursive: true });
   const wsRoot = resolveAgentWorkspaceDir(cfg, agentId);
   await mkdir(wsRoot, { recursive: true });
-  await mkdir(join(wsRoot, '.state'), { recursive: true });
+  await mkdir(resolveWorkspaceStateDir(cfg, agentId), { recursive: true });
   await mkdir(join(wsRoot, 'memory'), { recursive: true });
   await mkdir(resolveInboxDir(cfg, agentId), { recursive: true });
   await mkdir(resolveInboxPendingDir(cfg, agentId), { recursive: true });
@@ -366,8 +368,8 @@ Run \`xopcbot skills list\` to see all available skills.
     log.info({ path: skillsPath }, 'Created SKILLS.md');
   }
 
-  // Workspace state file
-  const workspaceStatePath = join(workspaceDir, '.state', FILENAMES.WORKSPACE_STATE);
+  // Workspace state file (per-agent machine state, not under markdown workspace)
+  const workspaceStatePath = resolveWorkspaceStatePath(cfg, agentId);
   if (!existsSync(workspaceStatePath)) {
     const workspaceState = {
       version: 1,

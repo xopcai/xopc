@@ -84,8 +84,11 @@ export class ChannelManager {
     this.sessionModelHooks = hooks;
   }
 
-  enableOutboundPersistence(workspaceDir: string): void {
-    this.persistStore = new OutboundPersistStore(workspaceDir);
+  enableOutboundPersistence(
+    agentDir: string,
+    options?: { migrateFromWorkspace?: string },
+  ): void {
+    this.persistStore = new OutboundPersistStore(agentDir, options);
   }
 
   /**

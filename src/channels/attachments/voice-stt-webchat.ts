@@ -10,6 +10,7 @@ import { isSTTAvailable, transcribe } from '../../stt/index.js';
 import {
   resolveSafeInboundFilePath,
   type InboundAttachmentInput,
+  type InternalAttachmentRoots,
   decodeInboundAttachmentBase64,
 } from './inbound-persist.js';
 
@@ -33,7 +34,7 @@ export function isVoiceLikeAttachment(att: InboundAttachmentInput): boolean {
 }
 
 export async function mergeVoiceTranscriptsIntoUserText(
-  workspaceRoot: string,
+  attachmentRoots: InternalAttachmentRoots,
   prepared: InboundAttachmentInput[] | undefined,
   userText: string,
   sttConfig: STTConfig,
@@ -58,7 +59,7 @@ export async function mergeVoiceTranscriptsIntoUserText(
 
     let buf: Buffer | null = null;
     if (att.workspaceRelativePath) {
-      const abs = resolveSafeInboundFilePath(workspaceRoot, att.workspaceRelativePath);
+      const abs = resolveSafeInboundFilePath(attachmentRoots, att.workspaceRelativePath);
       if (abs) {
         try {
           buf = await readFile(abs);

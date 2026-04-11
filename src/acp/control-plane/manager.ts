@@ -41,7 +41,7 @@ import {
   validateRuntimeModeInput,
 } from "./runtime-options.js";
 import { SessionActorQueue } from "./session-actor-queue.js";
-import { AcpSessionStore, resolveAcpWorkspace } from "./session-store.js";
+import { AcpSessionStore, createDefaultAcpSessionStore } from "./session-store.js";
 import { TurnManager } from "./turn-manager.js";
 import { RuntimeCacheManager } from "./runtime-cache-manager.js";
 import { SessionLifecycleManager } from "./session-lifecycle-manager.js";
@@ -66,8 +66,9 @@ export class AcpSessionManager {
   private readonly errorCountsByCode = new Map<string, number>();
 
   constructor(private readonly sessionStorePath?: string) {
-    const workspace = sessionStorePath || resolveAcpWorkspace({} as Config);
-    this.sessionStore = new AcpSessionStore(workspace);
+    this.sessionStore = sessionStorePath
+      ? new AcpSessionStore(sessionStorePath)
+      : createDefaultAcpSessionStore();
 
     // Initialize rate limiter with defaults (will be updated when config is available)
     this.rateLimiter = new SessionRateLimiter({
