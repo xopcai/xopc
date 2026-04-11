@@ -28,6 +28,7 @@ import { loadBootstrapFiles, extractTextContent, type BootstrapFile } from './co
 import { SkillManager } from './skills/index.js';
 import { SystemPromptBuilder } from './prompt/service-prompt-builder.js';
 import { AgentToolsFactory } from './tools/factory.js';
+import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/index.js';
 import type { MessageBus } from '../infra/bus/index.js';
 import type { SessionStore } from '../session/store.js';
@@ -81,6 +82,7 @@ export interface AgentManagerConfig {
   thinkingLevel?: ThinkingLevel;
   reasoningLevel?: 'off' | 'on' | 'stream';
   verboseLevel?: 'off' | 'on' | 'full';
+  gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
 }
 
 export interface AgentInstance {
@@ -129,6 +131,7 @@ export class AgentManager {
       getBuiltinMemoryStore: () => baseRt.builtinMemoryStore,
       getMemoryManager: () => baseRt.memoryManager,
       getSessionStore: config.getSessionStore,
+      gatewayClarify: config.gatewayClarify,
     });
 
     this.defaultModel = config.model || getDefaultModelSync(config.config);
@@ -235,6 +238,7 @@ export class AgentManager {
       getBuiltinMemoryStore: () => this.getWorkspaceRuntime(this.baseWorkspacePath).builtinMemoryStore,
       getMemoryManager: () => this.getWorkspaceRuntime(this.baseWorkspacePath).memoryManager,
       getSessionStore: this.config.getSessionStore,
+      gatewayClarify: this.config.gatewayClarify,
     });
   }
 

@@ -25,6 +25,7 @@ import type {
   ChannelCommandAdapter,
 } from '@xopcai/xopcbot/channels/plugin-types.js';
 import { generateSessionKey } from '@xopcai/xopcbot/chat-commands/session-key.js';
+import { submitClarifyChoiceFromChannel } from '@xopcai/xopcbot/gateway/clarify-runtime.js';
 
 import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
 import { createInboundDebouncer } from '@xopcai/xopcbot/infra/debounce.js';
@@ -422,6 +423,21 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
 
     if (data === 'cleanup:confirm') {
       await this.commandHandler.handleCleanupConfirm(ctx);
+      return;
+    }
+
+    if (data.startsWith('clarify:')) {
+      const rest = data.slice('clarify:'.length);
+      const lastColon = rest.lastIndexOf(':');
+      if (lastColon > 0) {
+        const requestId = rest.slice(0, lastColon);
+        const idx = Number.parseInt(rest.slice(lastColon + 1), 10);
+        if (requestId && Number.isFinite(idx) && submitClarifyChoiceFromChannel(requestId, idx)) {
+          await ctx.answerCallbackQuery();
+          return;
+        }
+      }
+      await ctx.answerCallbackQuery('No pending question');
       return;
     }
 

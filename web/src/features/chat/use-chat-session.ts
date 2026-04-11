@@ -29,6 +29,9 @@ import {
   startThinkingSegment,
 } from '@/features/chat/streaming';
 import { useGatewayStore } from '@/stores/gateway-store';
+import { apiFetch } from '@/lib/fetch';
+import { apiUrl } from '@/lib/url';
+import type { ClarifyPromptState } from '@/features/chat/clarify-prompt';
 
 const DEFAULT_THINKING = 'medium';
 const DEFAULT_REASONING: ReasoningLevel = 'off';
@@ -146,6 +149,9 @@ export function useChatSession() {
   const [sending, setSending] = useState(false);
   const [progress, setProgress] = useState<ProgressState | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [clarifyPrompt, setClarifyPrompt] = useState<ClarifyPromptState | null>(null);
+  const [clarifySubmitting, setClarifySubmitting] = useState(false);
+  const clarifyPromptRef = useRef<ClarifyPromptState | null>(null);
   const [sessionKey, setSessionKey] = useState<string | null>(null);
   const [sessionName, setSessionName] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -169,6 +175,9 @@ export function useChatSession() {
   useEffect(() => {
     sessionNameRef.current = sessionName;
   }, [sessionName]);
+  useEffect(() => {
+    clarifyPromptRef.current = clarifyPrompt;
+  }, [clarifyPrompt]);
   useEffect(() => {
     messagesLenRef.current = messages.length;
   }, [messages.length]);
@@ -268,6 +277,7 @@ export function useChatSession() {
     streamingRef.current = false;
     activeStreamSessionKeyRef.current = null;
     activeResumeRunIdRef.current = null;
+    setClarifyPrompt(null);
     void pollSessionNameAfterTurn();
   }, [pollSessionNameAfterTurn]);
 
@@ -547,6 +557,10 @@ export function useChatSession() {
             return cloneMessageForRender(msg);
           });
         },
+        onClarifyRequest: (payload) => {
+          if (!shouldApplyStreamUpdate(chatId)) return;
+          setClarifyPrompt(payload);
+        },
         onResult: () => {
           if (!shouldApplyStreamUpdate(chatId)) {
             activeStreamSessionKeyRef.current = null;
@@ -556,6 +570,7 @@ export function useChatSession() {
             setStreaming(false);
             setSending(false);
             setProgress(null);
+            setClarifyPrompt(null);
             return;
           }
           if (userAbortedRef.current) {
@@ -573,6 +588,7 @@ export function useChatSession() {
             setStreaming(false);
             setSending(false);
             setProgress(null);
+            setClarifyPrompt(null);
             return;
           }
           activeResumeRunIdRef.current = null;
@@ -583,6 +599,7 @@ export function useChatSession() {
           setStreaming(false);
           setSending(false);
           setProgress(null);
+          setClarifyPrompt(null);
         },
       });
     } catch (err) {
@@ -711,6 +728,10 @@ export function useChatSession() {
               return cloneMessageForRender(msg);
             });
           },
+          onClarifyRequest: (payload) => {
+            if (!shouldApplyStreamUpdate(chatId)) return;
+            setClarifyPrompt(payload);
+          },
           onResult: () => {
             if (!shouldApplyStreamUpdate(chatId)) {
               activeStreamSessionKeyRef.current = null;
@@ -719,6 +740,7 @@ export function useChatSession() {
               setStreaming(false);
               setSending(false);
               setProgress(null);
+              setClarifyPrompt(null);
               return;
             }
             if (userAbortedRef.current) {
@@ -735,6 +757,7 @@ export function useChatSession() {
               setStreaming(false);
               setSending(false);
               setProgress(null);
+              setClarifyPrompt(null);
               return;
             }
             sendingRef.current = false;
@@ -744,6 +767,7 @@ export function useChatSession() {
             setStreaming(false);
             setSending(false);
             setProgress(null);
+            setClarifyPrompt(null);
           },
         });
       } catch (err) {
@@ -771,6 +795,27 @@ export function useChatSession() {
     ],
   );
 
+  const submitClarifyAnswer = useCallback(async (answer: string) => {
+    const p = clarifyPromptRef.current;
+    if (!p) return;
+    setClarifySubmitting(true);
+    try {
+      const res = await apiFetch(apiUrl(`/api/clarify/${encodeURIComponent(p.requestId)}`), {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ answer }),
+      });
+      if (!res.ok) {
+        const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+        setError(j.error?.message ?? res.statusText ?? 'Clarify failed');
+        return;
+      }
+      setClarifyPrompt(null);
+    } finally {
+      setClarifySubmitting(false);
+    }
+  }, []);
+
   const abort = useCallback(() => {
     userAbortedRef.current = true;
     activeResumeRunIdRef.current = null;
@@ -778,6 +823,7 @@ export function useChatSession() {
     senderRef.current.abort();
     sendingRef.current = false;
     streamingRef.current = false;
+    setClarifyPrompt(null);
     finalizeMessage();
     setProgress(null);
     const key = sessionKeyRef.current;
@@ -981,6 +1027,9 @@ export function useChatSession() {
     progress,
     sendMessage,
     abort,
+    clarifyPrompt,
+    clarifySubmitting,
+    submitClarifyAnswer,
     hasToken: Boolean(token),
     chatAgents: chatAgentsData,
     displayAgentId,

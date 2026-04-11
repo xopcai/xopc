@@ -51,6 +51,7 @@ import { runAgentTurnWithModelFallbacks } from './orchestration/run-agent-turn-w
 import { applyReasoningVisibilityToSseEvent } from './streaming/reasoning-visibility-sse.js';
 import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
+import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
 import { extractAgentUserPlainText } from './memory/user-message-text.js';
 
 import {
@@ -121,6 +122,12 @@ export interface AgentServiceConfig {
   thinkingLevel?: ThinkingLevel;
   reasoningLevel?: 'off' | 'on' | 'stream';
   verboseLevel?: 'off' | 'on' | 'full';
+  /**
+   * Gateway-only: blocks the `clarify` tool until the user answers via the web UI.
+   */
+  gatewayClarify?: {
+    requestClarification: GatewayClarifyRequestFn;
+  };
 }
 
 export interface AgentContext {
@@ -175,6 +182,12 @@ export class AgentService {
   private agentEventHandler: AgentEventHandler;
   private feedbackCoordinator: FeedbackCoordinator;
   private agentManager: AgentManager;
+
+  /** Webchat SSE queue pushers for `clarify_request` and similar mid-turn UI events. */
+  private webchatSseEnqueueBySession = new Map<
+    string,
+    (event: { type: string; [key: string]: unknown }) => void
+  >();
 
   // Track event unsubscribers per session
   private sessionUnsubscribers: Map<string, () => void> = new Map();
@@ -243,6 +256,7 @@ export class AgentService {
       thinkingLevel: config.thinkingLevel,
       reasoningLevel: config.reasoningLevel,
       verboseLevel: config.verboseLevel,
+      gatewayClarify: config.gatewayClarify,
     });
 
     this.agentEventHandler = new AgentEventHandler({
@@ -880,6 +894,10 @@ export class AgentService {
       }
     };
 
+    if (channel === 'webchat') {
+      this.webchatSseEnqueueBySession.set(sessionKey, (e) => pushEvent(e));
+    }
+
     const signal = options?.signal;
     let userAborted = false;
     let abortHandled = false;
@@ -1130,8 +1148,21 @@ export class AgentService {
         }
       }
     } finally {
+      if (channel === 'webchat') {
+        this.webchatSseEnqueueBySession.delete(sessionKey);
+      }
       unsubscribeStreaming();
       this.endDirectRequestContext();
+    }
+  }
+
+  /**
+   * Inject an SSE event into an in-flight webchat stream (same queue as tokens/tools).
+   */
+  enqueueWebchatSseEvent(sessionKey: string, event: { type: string; [key: string]: unknown }): void {
+    const pub = this.webchatSseEnqueueBySession.get(sessionKey);
+    if (pub) {
+      pub(event);
     }
   }
 
