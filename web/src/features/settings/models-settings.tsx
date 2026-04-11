@@ -61,7 +61,24 @@ const PROVIDER_PRESETS: Record<string, Partial<ProviderConfig>> = {
     api: 'openai-completions',
     apiKey: '',
   },
+  zhipuCn: {
+    baseUrl: 'https://open.bigmodel.cn/api/coding/paas/v4',
+    api: 'openai-completions',
+    apiKey: 'ZHIPU_API_KEY',
+  },
+  zaiGeneral: {
+    baseUrl: 'https://api.z.ai/api/paas/v4',
+    api: 'openai-completions',
+    apiKey: 'ZAI_API_KEY',
+  },
 };
+
+function providerIdForPreset(presetKey: string): string {
+  if (presetKey === 'openrouter') return 'openrouter';
+  if (presetKey === 'zhipuCn') return 'zhipu-cn';
+  if (presetKey === 'zaiGeneral') return 'zai';
+  return presetKey;
+}
 
 const INPUT_OPTIONS = [
   { value: 'text', labelKey: 'inputTextOnly' as const },
@@ -155,7 +172,7 @@ function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m }: Prov
       setBaseUrl(p.baseUrl || '');
       setApi((p.api as ApiType) || 'openai-completions');
       setApiKey(p.apiKey ?? '');
-      setProviderId(pk === 'openrouter' ? 'openrouter' : pk);
+      setProviderId(providerIdForPreset(pk));
     } else {
       setPreset('custom');
       setProviderId('');
@@ -173,6 +190,7 @@ function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m }: Prov
     setBaseUrl(p.baseUrl || '');
     setApi((p.api as ApiType) || 'openai-completions');
     setApiKey(p.apiKey ?? '');
+    setProviderId(providerIdForPreset(key));
   };
 
   const handleSubmit = () => {
@@ -230,6 +248,8 @@ function ProviderAddDialog({ open, onOpenChange, presetKey, onConfirm, m }: Prov
                 <option value="ollama">{m.presetOllama}</option>
                 <option value="lmstudio">{m.presetLmStudio}</option>
                 <option value="openrouter">{m.presetOpenRouter}</option>
+                <option value="zhipuCn">{m.presetZhipuCn}</option>
+                <option value="zaiGeneral">{m.presetZaiGeneral}</option>
               </select>
             </div>
             <div>
@@ -1009,6 +1029,30 @@ export function ModelsSettingsPanel() {
             >
               <Cpu className="size-3.5" aria-hidden />
               {ms.presetLmStudio}
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg hover:border-accent hover:text-accent dark:border-edge',
+                interaction.transition,
+                interaction.focusRingBase,
+              )}
+              onClick={() => openAddProvider('zhipuCn')}
+            >
+              <Zap className="size-3.5" aria-hidden />
+              {ms.presetZhipuCn}
+            </button>
+            <button
+              type="button"
+              className={cn(
+                'inline-flex items-center gap-1.5 rounded-full border border-edge bg-surface-base px-3 py-1.5 text-xs text-fg hover:border-accent hover:text-accent dark:border-edge',
+                interaction.transition,
+                interaction.focusRingBase,
+              )}
+              onClick={() => openAddProvider('zaiGeneral')}
+            >
+              <Box className="size-3.5" aria-hidden />
+              {ms.presetZaiGeneral}
             </button>
           </div>
         </div>

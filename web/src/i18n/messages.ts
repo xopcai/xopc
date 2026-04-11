@@ -796,6 +796,8 @@ const bundles: Record<
       presetOllama: string;
       presetLmStudio: string;
       presetOpenRouter: string;
+      presetZhipuCn: string;
+      presetZaiGeneral: string;
       presetLabel: string;
       presetCustom: string;
       addProviderTitle: string;
@@ -1971,6 +1973,8 @@ const bundles: Record<
       presetOllama: 'Ollama',
       presetLmStudio: 'LM Studio',
       presetOpenRouter: 'OpenRouter',
+      presetZhipuCn: 'Zhipu GLM (China · Coding API)',
+      presetZaiGeneral: 'Zhipu GLM (International · general API)',
       presetLabel: 'Preset',
       presetCustom: 'Custom',
       addProviderTitle: 'Add provider',
@@ -3168,6 +3172,8 @@ const bundles: Record<
       presetOllama: 'Ollama',
       presetLmStudio: 'LM Studio',
       presetOpenRouter: 'OpenRouter',
+      presetZhipuCn: '智谱 GLM（国内 · Coding 端点）',
+      presetZaiGeneral: '智谱 GLM（国际 · 通用 API）',
       presetLabel: '预设',
       presetCustom: '自定义',
       addProviderTitle: '添加提供商',
