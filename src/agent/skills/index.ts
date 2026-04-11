@@ -5,6 +5,7 @@ import { resolveStateDir } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import { createSkillConfigManager, isSkillEnabled } from './config.js';
 import { formatSkillsForPrompt } from './format-skills-prompt.js';
+import { parseSkillToolConditions } from './skill-tool-gating.js';
 import type {
   Skill,
   SkillMetadata,
@@ -173,6 +174,7 @@ function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | '
     if (!description?.trim()) return null;
 
     const metadata = parseSkillMetadata(frontmatter);
+    const toolConditions = parseSkillToolConditions(frontmatter);
 
     return {
       name,
@@ -182,6 +184,7 @@ function loadSkillFromFile(filePath: string, source: 'builtin' | 'workspace' | '
       source,
       disableModelInvocation: frontmatter['disable-model-invocation'] === true,
       metadata,
+      toolConditions,
       content,
     };
   } catch {

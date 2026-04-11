@@ -29,6 +29,9 @@ export const DELEGATE_BLOCKED_TOOLS = new Set([
   'memory_search',
   'memory_get',
   'cronjob',
+  'skills_list',
+  'skill_view',
+  'skill_manage',
 ]);
 
 const DelegateTaskSchema = Type.Object({

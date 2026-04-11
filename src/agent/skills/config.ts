@@ -255,6 +255,27 @@ export function validateSkillConfig(config: SkillsConfig): {
 } {
   const errors: string[] = [];
 
+  if (
+    config.promptStyle !== undefined &&
+    config.promptStyle !== 'metadata-only' &&
+    config.promptStyle !== 'legacy-with-paths'
+  ) {
+    errors.push('promptStyle must be "metadata-only" or "legacy-with-paths"');
+  }
+
+  if (config.toolGating !== undefined && typeof config.toolGating !== 'boolean') {
+    errors.push('toolGating must be a boolean');
+  }
+
+  if (
+    config.agentWritePolicy !== undefined &&
+    config.agentWritePolicy !== 'global' &&
+    config.agentWritePolicy !== 'workspace' &&
+    config.agentWritePolicy !== 'both'
+  ) {
+    errors.push('agentWritePolicy must be "global", "workspace", or "both"');
+  }
+
   // Validate limits
   const limits = config.limits;
   if (limits) {

@@ -40,6 +40,14 @@ export interface SkillRequires {
   anyBins?: string[];
 }
 
+/** Parsed from `metadata.hermes` / `metadata.xopcbot` (Hermes-compatible tool gating). */
+export interface SkillToolConditions {
+  requiresTools: string[];
+  requiresToolsets: string[];
+  fallbackForTools: string[];
+  fallbackForToolsets: string[];
+}
+
 export interface SkillMetadata {
   /** Skill name (from frontmatter) */
   name: string;
@@ -108,7 +116,14 @@ export interface SkillsLimitsConfig {
   maxSkillFileBytes?: number;
 }
 
+export type SkillsPromptStyle = 'metadata-only' | 'legacy-with-paths';
+
 export interface SkillsConfig {
+  /**
+   * How `<available_skills>` is rendered. Default: metadata-only (Hermes-style: no disk paths;
+   * use `skills_list` / `skill_view`). Legacy mode exposes SKILL.md paths for `read_file`.
+   */
+  promptStyle?: SkillsPromptStyle;
   /** Bundled skill allowlist */
   allowBundled?: string[];
   /** Load configuration */
@@ -119,6 +134,15 @@ export interface SkillsConfig {
   limits?: SkillsLimitsConfig;
   /** Per-skill configuration */
   entries?: Record<string, SkillConfig>;
+  /**
+   * When false, ignore requires_tools / toolset conditions for `<available_skills>` and skills_list (default: gate).
+   */
+  toolGating?: boolean;
+  /**
+   * Where `skill_manage` may create or edit skills: global `~/.xopcbot/skills`, workspace `skills/`, or both.
+   * Default `global`.
+   */
+  agentWritePolicy?: 'global' | 'workspace' | 'both';
 }
 
 // ============================================================================
@@ -140,6 +164,8 @@ export interface Skill {
   disableModelInvocation: boolean;
   /** Parsed metadata */
   metadata: SkillMetadata;
+  /** Optional Hermes-style visibility vs registered agent tools */
+  toolConditions?: SkillToolConditions;
   /** Raw content of SKILL.md */
   content: string;
 }

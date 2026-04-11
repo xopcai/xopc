@@ -68,6 +68,8 @@ export interface SystemPromptOptions {
   curatedMemorySnapshot?: MemorySnapshot;
   /** External memory provider static instructions (Phase 2). */
   externalMemoryInstructions?: string;
+  /** How skill instructions are surfaced (metadata-only → use skills_list / skill_view). */
+  skillsPromptMode?: 'metadata-only' | 'legacy-with-paths';
 }
 
 // =============================================================================
@@ -309,9 +311,27 @@ Before answering anything about prior work, decisions, dates, people, preference
 /**
  * Build Skills section - skill matching guidelines
  */
-function buildSkillsSection(availableTools: string[] = []): string {
+function buildSkillsSection(
+  availableTools: string[] = [],
+  skillsPromptMode: 'metadata-only' | 'legacy-with-paths' = 'metadata-only',
+): string {
   if (availableTools.length === 0) {
     return '';
+  }
+
+  if (skillsPromptMode === 'legacy-with-paths') {
+    return `## Skills
+
+有现成解决方案时，别重复造轮子。
+
+**怎么用：**
+1. 扫一眼 <available_skills> —— 有没有明显相关的？
+2. 只有一个匹配？→ 用 read_file 读其 SKILL.md（见 location），跟着做
+3. 有多个可能匹配？→ 选最具体的那个
+4. 没有匹配的？→ 自己解决，不用硬套
+
+**原则：** 技能是工具，不是枷锁。读完觉得不适用，就放下自己干。
+`;
   }
 
   return `## Skills
@@ -320,8 +340,8 @@ function buildSkillsSection(availableTools: string[] = []): string {
 
 **怎么用：**
 1. 扫一眼 <available_skills> —— 有没有明显相关的？
-2. 只有一个匹配？→ 读它的 SKILL.md，跟着做
-3. 有多个可能匹配？→ 选最具体的那个
+2. 只有一个匹配？→ 先 skills_list 确认，再用 skill_view(name) 加载全文，跟着做
+3. 需要子文档/脚本？→ skill_view(name, "references/…") 等（仅 references、templates、scripts、assets）
 4. 没有匹配的？→ 自己解决，不用硬套
 
 **原则：** 技能是工具，不是枷锁。读完觉得不适用，就放下自己干。
@@ -477,6 +497,7 @@ export function buildSystemPrompt(
     channels = [],
     curatedMemorySnapshot,
     externalMemoryInstructions,
+    skillsPromptMode = 'metadata-only',
   } = options;
 
   const curatedUserFrozen = !!(curatedMemorySnapshot?.user?.trim());
@@ -518,7 +539,7 @@ export function buildSystemPrompt(
   }
 
   // 6. Skills
-  sections.push(buildSkillsSection(availableTools));
+  sections.push(buildSkillsSection(availableTools, skillsPromptMode));
 
   // 7. Problem Solving Workflow (non-minimal only) - Harness Engineering
   if (!isMinimal) {

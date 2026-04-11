@@ -42,6 +42,8 @@ export const SANDBOX_ALLOWED_TOOLS = new Set([
   'grep',
   'find',
   'shell',
+  'skills_list',
+  'skill_view',
 ]);
 
 const MAX_TIMEOUT_MS = MAX_TIMEOUT_SEC * 1000;
