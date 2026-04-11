@@ -7,11 +7,11 @@ import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../agent/transcri
 import type { Config } from './schema.js';
 import type { AgentModelConfig } from './schema.js';
 import { getAgentDefaultModelRef } from './schema.js';
-import { resolveAgentWorkspaceDir } from '../agents/agent-scope.js';
+import { resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 import { getDefaultAgentId, agentExists } from '../routing/resolve-route.js';
 import { parseSessionKey } from '../routing/session-key.js';
 
-export { resolveAgentBootstrapDir, resolveAgentWorkspaceDir } from '../agents/agent-scope.js';
+export { resolveAgentBootstrapDir, resolveAgentWorkspaceDir } from '../agent/agent-scope.js';
 
 export type { AgentModelConfig };
 

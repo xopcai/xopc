@@ -10,7 +10,7 @@ import { existsSync } from 'fs';
 import { createLogger } from '../../utils/logger.js';
 import type { Config } from '../../config/schema.js';
 import { loadConfig } from '../../config/loader.js';
-import { resolveAgentHomeDir, resolveDefaultAgentId } from '../../agents/agent-scope.js';
+import { resolveAgentHomeDir, resolveDefaultAgentId } from '../../agent/agent-scope.js';
 import type { SessionEntry } from './manager.types.js';
 
 const log = createLogger('AcpSessionStore');

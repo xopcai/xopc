@@ -1,6 +1,6 @@
 # 磁盘与目录布局
 
-本文是 xopcbot **读写路径的简明对照表**。配置仍是唯一事实来源；具体解析见 `src/agents/agent-scope.ts`、`src/config/paths-state.ts`、`src/config/paths.ts` 及相关模块。
+本文是 xopcbot **读写路径的简明对照表**。配置仍是唯一事实来源；具体解析见 `src/agent/agent-scope.ts`、`src/config/paths-state.ts`、`src/config/paths.ts` 及相关模块。
 
 初始化步骤、模板说明与环境变量详见 [状态目录与工作空间布局](workspace.md)。
 

@@ -1,7 +1,7 @@
 import { join } from 'node:path';
 
 import type { Config } from '../../config/schema.js';
-import { resolveAgentHomeDir, resolveAgentIdForWorkspacePath } from '../../agents/agent-scope.js';
+import { resolveAgentHomeDir, resolveAgentIdForWorkspacePath } from '../agent-scope.js';
 
 import type { MemoryStoreConfig } from './types.js';
 
