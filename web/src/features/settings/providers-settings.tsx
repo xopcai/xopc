@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -24,13 +25,19 @@ import {
   startAsyncOAuthLogin,
   submitOAuthCode,
 } from '@/features/settings/oauth-api';
+import { fetchConfiguredModelsCached } from '@/features/chat/registry-api';
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   isMaskedKey,
-  loadProviderRows,
+  mergeProviderRows,
   patchProviderApiKeys,
+  providersKeysFromConfigRoot,
   type ProviderCategory,
+  type ProviderMeta,
   type ProviderRowModel,
 } from '@/features/settings/providers-api';
+import { fetchJson } from '@/lib/fetch';
+import { apiUrl } from '@/lib/url';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -60,47 +67,70 @@ export function ProvidersSettingsPanel() {
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  const [metaRows, setMetaRows] = useState<ProviderRowModel[]>([]);
   const [draft, setDraft] = useState<Record<string, string>>({});
   const [baseline, setBaseline] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
   const [expandedCats, setExpandedCats] = useState<Set<string>>(() => new Set());
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const rows = await loadProviderRows();
-      setMetaRows(rows);
-      const d: Record<string, string> = {};
-      for (const r of rows) d[r.id] = r.apiKey;
-      setDraft(d);
-      setBaseline({ ...d });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : p.loadError);
-      setMetaRows([]);
-      setDraft({});
-      setBaseline({});
-    } finally {
-      setLoading(false);
-    }
-  }, [p.loadError]);
+  const metaUrl = apiUrl('/api/providers/meta');
+  const fetchMetaList = useCallback(async (url: string) => {
+    const data = await fetchJson<{ ok?: boolean; payload?: { providers?: ProviderMeta[] } }>(url);
+    return data.payload?.providers ?? [];
+  }, []);
 
-  useEffect(() => {
-    if (!hasToken) {
-      setLoading(false);
-      return;
-    }
-    void load();
-  }, [hasToken, load]);
+  const {
+    data: cfgData,
+    error: cfgErr,
+    isLoading: cfgLoading,
+    mutate: mutCfg,
+  } = useGatewayConfigSwr(hasToken);
+  const {
+    data: metaList,
+    error: metaErr,
+    isLoading: metaLoading,
+    mutate: mutMeta,
+  } = useSWR(hasToken ? metaUrl : null, fetchMetaList, { revalidateOnFocus: false });
+  const { data: models } = useSWR(hasToken ? 'gateway-configured-models' : null, () => fetchConfiguredModelsCached(), {
+    revalidateOnFocus: false,
+  });
+
+  const mergedRows = useMemo((): ProviderRowModel[] | null => {
+    if (!metaList || cfgData === undefined) return null;
+    const keys = providersKeysFromConfigRoot(cfgData.payload?.config);
+    return mergeProviderRows(metaList, keys, models ?? []);
+  }, [metaList, cfgData, models]);
+
+  const fetchError =
+    cfgErr instanceof Error
+      ? cfgErr.message
+      : cfgErr
+        ? String(cfgErr)
+        : metaErr instanceof Error
+          ? metaErr.message
+          : metaErr
+            ? String(metaErr)
+            : null;
+
+  const loading = Boolean(
+    hasToken && mergedRows === null && (cfgLoading || metaLoading) && !fetchError,
+  );
 
   const dirty = useMemo(
     () => JSON.stringify(draft) !== JSON.stringify(baseline),
     [draft, baseline],
   );
+
+  useEffect(() => {
+    if (!hasToken || mergedRows === null) return;
+    if (!dirty) {
+      const d: Record<string, string> = {};
+      for (const r of mergedRows) d[r.id] = r.apiKey;
+      setDraft(d);
+      setBaseline({ ...d });
+    }
+  }, [hasToken, mergedRows, dirty]);
 
   const save = useCallback(async () => {
     if (saving) return;
@@ -121,7 +151,17 @@ export function ProvidersSettingsPanel() {
     setSaveOk(false);
     try {
       await patchProviderApiKeys(toPatch);
-      await load();
+      const [nextCfg, nextMeta] = await Promise.all([mutCfg(), mutMeta()]);
+      const list = Array.isArray(nextMeta) ? nextMeta : metaList ?? [];
+      const cfg = nextCfg ?? cfgData;
+      if (cfg?.payload) {
+        const keys = providersKeysFromConfigRoot(cfg.payload.config);
+        const rows = mergeProviderRows(list, keys, models ?? []);
+        const d: Record<string, string> = {};
+        for (const r of rows) d[r.id] = r.apiKey;
+        setDraft(d);
+        setBaseline({ ...d });
+      }
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
     } catch (e) {
@@ -129,7 +169,7 @@ export function ProvidersSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [draft, saving, load, p.saveError]);
+  }, [cfgData, draft, metaList, models, mutCfg, mutMeta, p.saveError, saving]);
 
   const toggleCat = (cat: string) => {
     setExpandedCats((prev) => {
@@ -139,6 +179,11 @@ export function ProvidersSettingsPanel() {
       return next;
     });
   };
+
+  const refreshProviders = useCallback(() => {
+    void mutCfg();
+    void mutMeta();
+  }, [mutCfg, mutMeta]);
 
   if (!hasToken) {
     return (
@@ -164,11 +209,20 @@ export function ProvidersSettingsPanel() {
     );
   }
 
+  const metaRows = mergedRows ?? [];
+
   if (metaRows.length === 0) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10">
-        <p className="text-sm text-fg-muted">{error ?? p.empty}</p>
-        <Button type="button" variant="secondary" onClick={() => void load()}>
+        <p className="text-sm text-fg-muted">{error ?? fetchError ?? p.empty}</p>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            void mutCfg();
+            void mutMeta();
+          }}
+        >
           {m.logs.refresh}
         </Button>
       </div>
@@ -257,7 +311,7 @@ export function ProvidersSettingsPanel() {
                       value={draft[row.id] ?? ''}
                       labels={p}
                       onChange={(id, v) => setDraft((d) => ({ ...d, [id]: v }))}
-                      onReload={() => void load()}
+                      onReload={refreshProviders}
                     />
                   ))}
                 </div>

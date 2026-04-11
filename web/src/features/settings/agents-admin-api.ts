@@ -1,3 +1,4 @@
+import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -114,15 +115,22 @@ export async function deleteGatewayAgent(id: string, purge: boolean): Promise<Ga
   };
 }
 
-export async function fetchGatewayConfigBindings(): Promise<GatewayConfigBinding[]> {
-  const res = await fetchJson<{ ok?: boolean; payload?: { config?: { bindings?: unknown } } }>(
-    apiUrl('/api/config'),
-  );
-  const raw = res.payload?.config?.bindings;
+export function parseGatewayBindingsFromConfig(config: unknown): GatewayConfigBinding[] {
+  if (!config || typeof config !== 'object' || !('bindings' in config)) {
+    return [];
+  }
+  const raw = (config as { bindings?: unknown }).bindings;
   if (!Array.isArray(raw)) {
     return [];
   }
   return raw as GatewayConfigBinding[];
+}
+
+export async function fetchGatewayConfigBindings(): Promise<GatewayConfigBinding[]> {
+  const res = await fetchJson<{ ok?: boolean; payload?: { config?: { bindings?: unknown } } }>(
+    apiUrl('/api/config'),
+  );
+  return parseGatewayBindingsFromConfig(res.payload?.config ?? {});
 }
 
 export async function patchGatewayBindings(bindings: GatewayConfigBinding[]): Promise<void> {
@@ -131,6 +139,7 @@ export async function patchGatewayBindings(bindings: GatewayConfigBinding[]): Pr
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({ bindings }),
   });
+  void revalidateGatewayConfig();
 }
 
 export async function fetchSkillsCatalog(): Promise<SkillCatalogRow[]> {

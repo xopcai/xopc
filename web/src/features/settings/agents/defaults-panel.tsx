@@ -3,7 +3,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 
 import { Button } from '@/components/ui/button';
 import { ModelSelector } from '@/features/chat/model-selector';
-import { fetchAgentDefaults, patchAgentDefaults, type AgentDefaultsState } from '@/features/settings/config-api';
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { parseAgentDefaultsFromConfig, patchAgentDefaults, type AgentDefaultsState } from '@/features/settings/config-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
 import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
@@ -54,54 +55,36 @@ export function AgentSettingsPanel({ embedded = false }: { embedded?: boolean } 
 
   const [form, setForm] = useState<AgentDefaultsState | null>(null);
   const [baseline, setBaseline] = useState<AgentDefaultsState | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
-  const loadGenRef = useRef(0);
+  const dirtyRef = useRef(false);
 
-  const load = useCallback(async () => {
-    const gen = ++loadGenRef.current;
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchAgentDefaults();
-      if (gen !== loadGenRef.current) return;
-      setForm(data);
-      setBaseline(data);
-    } catch (e) {
-      if (gen !== loadGenRef.current) return;
-      setError(e instanceof Error ? e.message : a.loadError);
-      setForm(null);
-      setBaseline(null);
-    } finally {
-      if (gen === loadGenRef.current) {
-        setLoading(false);
-      }
-    }
-  }, [a.loadError]);
+  const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
+
+  const parsed = useMemo(
+    () =>
+      data?.payload?.config !== undefined ? parseAgentDefaultsFromConfig(data.payload.config) : null,
+    [data],
+  );
 
   useEffect(() => {
     if (!hasToken) {
-      setLoading(false);
       setForm(null);
       setBaseline(null);
+      dirtyRef.current = false;
       return;
     }
-    void load();
-  }, [hasToken, load]);
+    if (parsed === null) return;
+    if (!dirtyRef.current) {
+      setForm(parsed);
+      setBaseline(parsed);
+    }
+  }, [hasToken, parsed]);
 
-  useEffect(() => {
-    const onConfigReload = (ev: Event) => {
-      if (!hasToken) return;
-      const d = (ev as CustomEvent<{ section?: string }>).detail;
-      if (d?.section === 'agents' || d?.section === 'full') {
-        void load();
-      }
-    };
-    window.addEventListener('config-reload', onConfigReload as EventListener);
-    return () => window.removeEventListener('config-reload', onConfigReload as EventListener);
-  }, [hasToken, load]);
+  const loading = Boolean(hasToken && isLoading && data === undefined && !swrError);
+  const fetchError =
+    swrError instanceof Error ? swrError.message : swrError ? String(swrError) : null;
 
   const dirty = useMemo(() => {
     if (!form || !baseline) return false;
@@ -109,6 +92,7 @@ export function AgentSettingsPanel({ embedded = false }: { embedded?: boolean } 
   }, [form, baseline]);
 
   const update = useCallback((patch: Partial<AgentDefaultsState>) => {
+    dirtyRef.current = true;
     setForm((f) => (f ? { ...f, ...patch } : null));
   }, []);
 
@@ -119,9 +103,7 @@ export function AgentSettingsPanel({ embedded = false }: { embedded?: boolean } 
     setSaveOk(false);
     try {
       await patchAgentDefaults(form);
-      const fresh = await fetchAgentDefaults();
-      setForm(fresh);
-      setBaseline(fresh);
+      dirtyRef.current = false;
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
     } catch (e) {
@@ -164,9 +146,9 @@ export function AgentSettingsPanel({ embedded = false }: { embedded?: boolean } 
     return (
       <div className={cn('mx-auto flex w-full max-w-app-main flex-col gap-3', embedded ? 'py-2' : 'px-4 py-10')}>
         <p className="text-sm text-fg-muted">
-          {error ?? a.loadError}
+          {error ?? fetchError ?? a.loadError}
         </p>
-        <Button type="button" variant="secondary" onClick={() => void load()}>
+        <Button type="button" variant="secondary" onClick={() => void mutate()}>
           {m.logs.refresh}
         </Button>
       </div>

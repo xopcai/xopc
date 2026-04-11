@@ -1,3 +1,4 @@
+import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -104,6 +105,7 @@ export async function patchVoiceSettings(state: VoiceSettingsState): Promise<voi
     method: 'PATCH',
     body: JSON.stringify({ stt: state.stt, tts: state.tts }),
   });
+  void revalidateGatewayConfig();
 }
 
 export async function fetchVoiceModels(): Promise<VoiceModelsPayload> {

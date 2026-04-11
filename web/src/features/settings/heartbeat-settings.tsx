@@ -1,27 +1,23 @@
 import { ExternalLink, Heart, Loader2, Play, RefreshCw } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
-import {
-  getChannels,
-  getSessionChatIds,
-  type ChannelStatus,
-  type SessionChatId,
-} from '@/features/cron/cron-api';
+import { getSessionChatIds, type ChannelStatus, type SessionChatId } from '@/features/cron/cron-api';
 import { formatRecipientOptionLabel } from '@/features/cron/cron-utils';
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
+import { channelsStatusSwrKey, fetchChannelsStatusSwr } from '@/features/settings/channels-status-swr';
 import {
-  fetchHeartbeatMd,
   normalizeHeartbeatFromConfig,
   patchHeartbeatSettings,
   putHeartbeatMd,
   triggerHeartbeat,
 } from '@/features/settings/heartbeat-config-api';
+import { fetchHeartbeatMdSwr, heartbeatMdSwrKey } from '@/features/settings/heartbeat-md-swr';
 import type { HeartbeatSettingsState } from '@/features/settings/heartbeat-settings.types';
 import { SettingsFormSection } from '@/features/settings/settings-form-section';
-import { fetchJson } from '@/lib/fetch';
 import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
-import { apiUrl } from '@/lib/url';
 import { messages, type HeartbeatSettingsMessages } from '@/i18n/messages';
 import {
   HEARTBEAT_INTERVAL_PRESET_MS,
@@ -45,6 +41,16 @@ function selectClassName(): string {
 }
 
 type CronMessages = ReturnType<typeof messages>['cron'];
+
+function workspacePathFromConfig(cfg: unknown): string {
+  if (!cfg || typeof cfg !== 'object' || Array.isArray(cfg)) return '';
+  const agents = (cfg as { agents?: unknown }).agents;
+  if (!agents || typeof agents !== 'object' || Array.isArray(agents)) return '';
+  const defaults = (agents as { defaults?: unknown }).defaults;
+  if (!defaults || typeof defaults !== 'object' || Array.isArray(defaults)) return '';
+  const w = (defaults as { workspace?: unknown }).workspace;
+  return typeof w === 'string' ? w : '';
+}
 
 function intervalPresetLabel(
   ms: number,
@@ -79,12 +85,10 @@ export function HeartbeatSettingsPanel() {
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
 
-  const [workspacePath, setWorkspacePath] = useState<string>('');
   const [form, setForm] = useState<HeartbeatSettingsState | null>(null);
   const [baseline, setBaseline] = useState<HeartbeatSettingsState | null>(null);
   const [doc, setDoc] = useState<string>('');
   const [docBaseline, setDocBaseline] = useState<string>('');
-  const [loading, setLoading] = useState(true);
   const [savingConfig, setSavingConfig] = useState(false);
   const [savingDoc, setSavingDoc] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -93,63 +97,82 @@ export function HeartbeatSettingsPanel() {
   const [triggerLoading, setTriggerLoading] = useState(false);
   const [triggerOk, setTriggerOk] = useState(false);
   const [triggerError, setTriggerError] = useState<string | null>(null);
-  const [channels, setChannels] = useState<ChannelStatus[]>([]);
   const [sessionChatIds, setSessionChatIds] = useState<SessionChatId[]>([]);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(
-        apiUrl('/api/config'),
-      );
-      const cfg = res.payload?.config;
-      const w =
-        cfg &&
-        typeof cfg === 'object' &&
-        'agents' in cfg &&
-        cfg.agents &&
-        typeof cfg.agents === 'object' &&
-        'defaults' in cfg.agents &&
-        cfg.agents.defaults &&
-        typeof cfg.agents.defaults === 'object' &&
-        'workspace' in cfg.agents.defaults
-          ? String((cfg.agents.defaults as { workspace?: unknown }).workspace ?? '')
-          : '';
-      setWorkspacePath(w);
+  const {
+    data: cfgData,
+    error: cfgErr,
+    isLoading: cfgLoading,
+    mutate: mutCfg,
+  } = useGatewayConfigSwr(hasToken);
+  const {
+    data: mdContent,
+    error: mdErr,
+    isLoading: mdLoading,
+    mutate: mutMd,
+  } = useSWR(hasToken ? heartbeatMdSwrKey() : null, fetchHeartbeatMdSwr, { revalidateOnFocus: false });
+  const { data: channels = [] } = useSWR(hasToken ? channelsStatusSwrKey() : null, fetchChannelsStatusSwr, {
+    revalidateOnFocus: false,
+  });
 
-      const settings = normalizeHeartbeatFromConfig(cfg ?? {});
-      const [md, ch] = await Promise.all([
-        fetchHeartbeatMd(),
-        getChannels().catch(() => [] as ChannelStatus[]),
-      ]);
-      setChannels(ch);
-      setForm(structuredClone(settings));
-      setBaseline(structuredClone(settings));
-      setDoc(md);
-      setDocBaseline(md);
-      setSaveConfigOk(false);
-      setSaveDocOk(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : h.loadError);
-      setForm(null);
-      setBaseline(null);
-      setDoc('');
-      setDocBaseline('');
-    } finally {
-      setLoading(false);
-    }
-  }, [h.loadError]);
+  const workspacePath = useMemo(
+    () => workspacePathFromConfig(cfgData?.payload?.config),
+    [cfgData],
+  );
+
+  const heartbeatParsed = useMemo(
+    () => normalizeHeartbeatFromConfig(cfgData?.payload?.config ?? {}),
+    [cfgData],
+  );
+
+  const dirtyConfig = useMemo(() => {
+    if (!form || !baseline) return false;
+    return JSON.stringify(form) !== JSON.stringify(baseline);
+  }, [form, baseline]);
+
+  const dirtyDoc = useMemo(() => doc !== docBaseline, [doc, docBaseline]);
 
   useEffect(() => {
     if (!hasToken) {
-      setLoading(false);
       setForm(null);
       setBaseline(null);
       return;
     }
-    void load();
-  }, [hasToken, load]);
+    if (cfgData === undefined) return;
+    if (!dirtyConfig) {
+      const next = structuredClone(heartbeatParsed);
+      setForm(next);
+      setBaseline(next);
+      setSaveConfigOk(false);
+    }
+  }, [hasToken, cfgData, heartbeatParsed, dirtyConfig]);
+
+  useEffect(() => {
+    if (!hasToken || mdContent === undefined) return;
+    if (!dirtyDoc) {
+      setDoc(mdContent);
+      setDocBaseline(mdContent);
+      setSaveDocOk(false);
+    }
+  }, [hasToken, mdContent, dirtyDoc]);
+
+  const fetchError =
+    cfgErr instanceof Error
+      ? cfgErr.message
+      : cfgErr
+        ? String(cfgErr)
+        : mdErr instanceof Error
+          ? mdErr.message
+          : mdErr
+            ? String(mdErr)
+            : null;
+
+  const loading = Boolean(
+    hasToken &&
+      (cfgData === undefined || mdContent === undefined) &&
+      !fetchError &&
+      (cfgLoading || mdLoading),
+  );
 
   useEffect(() => {
     if (!hasToken || !form) {
@@ -190,13 +213,6 @@ export function HeartbeatSettingsPanel() {
       setTriggerLoading(false);
     }
   }, [h.triggerError]);
-
-  const dirtyConfig = useMemo(() => {
-    if (!form || !baseline) return false;
-    return JSON.stringify(form) !== JSON.stringify(baseline);
-  }, [form, baseline]);
-
-  const dirtyDoc = useMemo(() => doc !== docBaseline, [doc, docBaseline]);
 
   const update = useCallback((patch: Partial<HeartbeatSettingsState>) => {
     setForm((f) => (f ? { ...f, ...patch } : null));
@@ -260,8 +276,15 @@ export function HeartbeatSettingsPanel() {
   if (!form) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <p className="text-sm text-fg-muted">{error ?? h.loadError}</p>
-        <Button type="button" variant="secondary" onClick={() => void load()}>
+        <p className="text-sm text-fg-muted">{error ?? fetchError ?? h.loadError}</p>
+        <Button
+          type="button"
+          variant="secondary"
+          onClick={() => {
+            void mutCfg();
+            void mutMd();
+          }}
+        >
           {h.retry}
         </Button>
       </div>

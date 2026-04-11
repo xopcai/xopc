@@ -1,7 +1,8 @@
+import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
+import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
-
-import { fetchConfiguredModelsCached } from '@/features/chat/registry-api';
+import { mutate } from 'swr';
 
 /** True for gateway masked key sentinels (`***` or bullet placeholder). */
 export function isMaskedKey(value: string): boolean {
@@ -30,11 +31,37 @@ export async function fetchProviderMetaList(): Promise<ProviderMeta[]> {
   return data.payload?.providers ?? [];
 }
 
+export function providersKeysFromConfigRoot(config: unknown): Record<string, string> {
+  if (!config || typeof config !== 'object' || !('providers' in config)) {
+    return {};
+  }
+  const p = (config as { providers?: unknown }).providers;
+  if (!p || typeof p !== 'object' || Array.isArray(p)) {
+    return {};
+  }
+  const o: Record<string, string> = {};
+  for (const [k, v] of Object.entries(p)) {
+    if (typeof v === 'string') o[k] = v;
+  }
+  return o;
+}
+
 export async function fetchProvidersConfig(): Promise<Record<string, string>> {
-  const data = await fetchJson<{ ok?: boolean; payload?: { config?: { providers?: Record<string, string> } } }>(
-    apiUrl('/api/config'),
-  );
-  return data.payload?.config?.providers ?? {};
+  const data = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'));
+  return providersKeysFromConfigRoot(data.payload?.config);
+}
+
+export function mergeProviderRows(
+  meta: ProviderMeta[],
+  configKeys: Record<string, string>,
+  models: ConfiguredModel[],
+): ProviderRowModel[] {
+  const configuredFromModels = new Set(models.map((m) => m.provider));
+  return meta.map((p) => ({
+    ...p,
+    configured: p.configured || configuredFromModels.has(p.id),
+    apiKey: configKeys[p.id] || (p.configured || configuredFromModels.has(p.id) ? '***' : ''),
+  }));
 }
 
 /** Merge provider meta with config keys and configured-model hints. */
@@ -44,12 +71,7 @@ export async function loadProviderRows(): Promise<ProviderRowModel[]> {
     fetchProvidersConfig(),
     fetchConfiguredModelsCached(),
   ]);
-  const configuredFromModels = new Set(models.map((m) => m.provider));
-  return meta.map((p) => ({
-    ...p,
-    configured: p.configured || configuredFromModels.has(p.id),
-    apiKey: configKeys[p.id] || (p.configured || configuredFromModels.has(p.id) ? '***' : ''),
-  }));
+  return mergeProviderRows(meta, configKeys, models);
 }
 
 export async function patchProviderApiKeys(providers: Record<string, string>): Promise<void> {
@@ -57,4 +79,5 @@ export async function patchProviderApiKeys(providers: Record<string, string>): P
     method: 'PATCH',
     body: JSON.stringify({ providers }),
   });
+  void Promise.all([revalidateGatewayConfig(), mutate(apiUrl('/api/providers/meta'))]);
 }

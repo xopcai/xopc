@@ -1,9 +1,10 @@
 import { AlertCircle, Check, Copy, ExternalLink, Eye, EyeOff, Loader2, Server } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
 import { Button } from '@/components/ui/button';
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
-  fetchGatewaySettings,
+  normalizeGatewayFromConfig,
   patchGatewaySettings,
   type GatewaySettingsState,
 } from '@/features/settings/gateway-config-api';
@@ -34,39 +35,41 @@ export function GatewaySettingsPanel() {
 
   const [form, setForm] = useState<GatewaySettingsState | null>(null);
   const [baseline, setBaseline] = useState<GatewaySettingsState | null>(null);
-  const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
   const [showAccessToken, setShowAccessToken] = useState(false);
   const [copied, setCopied] = useState(false);
+  const dirtyRef = useRef(false);
 
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const data = await fetchGatewaySettings();
-      setForm(structuredClone(data));
-      setBaseline(structuredClone(data));
-      setSaveOk(false);
-    } catch (e) {
-      setError(e instanceof Error ? e.message : g.loadError);
-      setForm(null);
-      setBaseline(null);
-    } finally {
-      setLoading(false);
-    }
-  }, [g.loadError]);
+  const { data, error: swrError, isLoading, mutate } = useGatewayConfigSwr(hasToken);
+
+  const parsed = useMemo(
+    () =>
+      data?.payload?.config !== undefined
+        ? structuredClone(normalizeGatewayFromConfig(data.payload.config))
+        : null,
+    [data],
+  );
 
   useEffect(() => {
     if (!hasToken) {
-      setLoading(false);
       setForm(null);
       setBaseline(null);
+      dirtyRef.current = false;
       return;
     }
-    void load();
-  }, [hasToken, load]);
+    if (parsed === null) return;
+    if (!dirtyRef.current) {
+      setForm(parsed);
+      setBaseline(structuredClone(parsed));
+      setSaveOk(false);
+    }
+  }, [hasToken, parsed]);
+
+  const loading = Boolean(hasToken && isLoading && data === undefined && !swrError);
+  const fetchError =
+    swrError instanceof Error ? swrError.message : swrError ? String(swrError) : null;
 
   const dirty = useMemo(() => {
     if (!form || !baseline) return false;
@@ -74,6 +77,7 @@ export function GatewaySettingsPanel() {
   }, [form, baseline]);
 
   const updateAuth = useCallback((patch: Partial<GatewaySettingsState['auth']>) => {
+    dirtyRef.current = true;
     setForm((f) => (f ? { ...f, auth: { ...f.auth, ...patch } } : null));
   }, []);
 
@@ -84,6 +88,7 @@ export function GatewaySettingsPanel() {
     setSaveOk(false);
     try {
       await patchGatewaySettings(form);
+      dirtyRef.current = false;
       const next = structuredClone(form);
       setBaseline(next);
       setSaveOk(true);
@@ -126,8 +131,8 @@ export function GatewaySettingsPanel() {
   if (!form) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
-        <p className="text-sm text-fg-muted">{error ?? g.loadError}</p>
-        <Button type="button" variant="secondary" onClick={() => void load()}>
+        <p className="text-sm text-fg-muted">{error ?? fetchError ?? g.loadError}</p>
+        <Button type="button" variant="secondary" onClick={() => void mutate()}>
           {g.retry}
         </Button>
       </div>

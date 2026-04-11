@@ -1,3 +1,4 @@
+import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -222,6 +223,7 @@ export async function patchChannelsSettings(state: ChannelsSettingsState): Promi
     }),
   });
   const c = res.payload?.config;
+  void revalidateGatewayConfig();
   if (c) return normalizeChannelsFromConfig(c);
   return {
     ...state,

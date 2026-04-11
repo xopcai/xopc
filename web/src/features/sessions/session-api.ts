@@ -21,8 +21,34 @@ function buildListQuery(query?: SessionListQuery): string {
   return qs ? `?${qs}` : '';
 }
 
+function listSessionsDedupeKey(query?: SessionListQuery): string {
+  if (!query) return 'default';
+  return JSON.stringify({
+    status: query.status,
+    search: query.search,
+    channel: query.channel,
+    limit: query.limit,
+    offset: query.offset,
+  });
+}
+
+const listSessionsInflight = new Map<string, Promise<PaginatedResult<SessionMetadata>>>();
+
+/**
+ * List sessions (paginated). Concurrent calls with the same query share one HTTP request so the
+ * sidebar and chat bootstrap do not triple-fetch the first page on load.
+ */
 export async function listSessions(query?: SessionListQuery): Promise<PaginatedResult<SessionMetadata>> {
-  return fetchJson<PaginatedResult<SessionMetadata>>(apiUrl(`/api/sessions${buildListQuery(query)}`));
+  const key = listSessionsDedupeKey(query);
+  const existing = listSessionsInflight.get(key);
+  if (existing) return existing;
+
+  const url = apiUrl(`/api/sessions${buildListQuery(query)}`);
+  const pending = fetchJson<PaginatedResult<SessionMetadata>>(url).finally(() => {
+    listSessionsInflight.delete(key);
+  });
+  listSessionsInflight.set(key, pending);
+  return pending;
 }
 
 export async function getSessionStats(): Promise<SessionStats> {

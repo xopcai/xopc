@@ -3,13 +3,14 @@ import { useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { useDebouncedCallback } from 'use-debounce';
 
+import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   createGatewayAgent,
   deleteGatewayAgent,
   fetchAgentBootstrapFileContent,
   fetchAgentBootstrapFiles,
   fetchGatewayAgents,
-  fetchGatewayConfigBindings,
+  parseGatewayBindingsFromConfig,
   fetchSkillsCatalog,
   patchGatewayBindings,
   saveAgentBootstrapFileContent,
@@ -55,6 +56,13 @@ export function AgentsSettingsPanel() {
     isLoading: agentsLoading,
     mutate: mutateAgents,
   } = useSWR(agentsSwrKey, fetchGatewayAgents, { revalidateOnFocus: false });
+
+  const { data: gatewayCfgData } = useGatewayConfigSwr(hasToken);
+
+  const bindingsFromConfig = useMemo(
+    () => parseGatewayBindingsFromConfig(gatewayCfgData?.payload?.config ?? {}),
+    [gatewayCfgData],
+  );
 
   const data: GatewayAgentsPayload | null = swrAgentsData ?? null;
   const loading = Boolean(hasToken && agentsLoading);
@@ -147,7 +155,6 @@ export function AgentsSettingsPanel() {
   const [skillsInherit, setSkillsInherit] = useState(true);
 
   const [allBindings, setAllBindings] = useState<GatewayConfigBinding[]>([]);
-  const [bindingsLoading, setBindingsLoading] = useState(false);
   const [newBindChannel, setNewBindChannel] = useState('');
   const [newBindPeerId, setNewBindPeerId] = useState('');
 
@@ -271,28 +278,10 @@ export function AgentsSettingsPanel() {
     if (panel !== 'channels' || !hasToken) {
       return;
     }
-    let cancelled = false;
-    setBindingsLoading(true);
-    void fetchGatewayConfigBindings()
-      .then((b) => {
-        if (!cancelled) {
-          setAllBindings(b);
-        }
-      })
-      .catch(() => {
-        if (!cancelled) {
-          setAllBindings([]);
-        }
-      })
-      .finally(() => {
-        if (!cancelled) {
-          setBindingsLoading(false);
-        }
-      });
-    return () => {
-      cancelled = true;
-    };
-  }, [panel, hasToken]);
+    setAllBindings(bindingsFromConfig);
+  }, [panel, hasToken, bindingsFromConfig]);
+
+  const bindingsLoading = panel === 'channels' && hasToken && gatewayCfgData === undefined;
 
   useEffect(() => {
     if (panel !== 'cron' || !hasToken) {

@@ -1,3 +1,4 @@
+import { revalidateGatewayConfig } from '@/features/gateway/gateway-config-swr';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -70,11 +71,8 @@ function parseBrowserFromDefaults(d: Record<string, unknown>): Pick<AgentDefault
   return { browserEnabled: enabled, browserHeadless: headless };
 }
 
-export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
-  const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'), {
-    cache: 'no-store',
-  });
-  const cfg = configFromApiResponse(res);
+/** Parse `agents.defaults` from a gateway config root object. */
+export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
   const agents =
     cfg && typeof cfg === 'object' && !Array.isArray(cfg) && 'agents' in cfg
       ? (cfg as { agents?: unknown }).agents
@@ -109,6 +107,12 @@ export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
   };
 }
 
+export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
+  const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'));
+  const cfg = configFromApiResponse(res);
+  return parseAgentDefaultsFromConfig(cfg ?? {});
+}
+
 export async function patchAgentDefaults(state: AgentDefaultsState): Promise<void> {
   const fallbacks = state.modelFallbacks.map((s) => s.trim()).filter(Boolean);
   const modelField =
@@ -138,4 +142,5 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
       },
     }),
   });
+  void revalidateGatewayConfig();
 }
