@@ -1,7 +1,6 @@
 import { Navigate, useParams } from 'react-router-dom';
 
 import { AppearanceSettingsPanel } from '@/features/settings/appearance-settings';
-import { ChannelsSettingsPanel } from '@/features/settings/channels-settings';
 import { GatewaySettingsPanel } from '@/features/settings/gateway-settings';
 import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
 import { ModelsSettingsPanel } from '@/features/settings/models-settings';
@@ -18,7 +17,6 @@ const SECTIONS: SettingsSectionId[] = [
   'agents',
   'providers',
   'models',
-  'channels',
   'voice',
   'gateway',
   'heartbeat',
@@ -55,10 +53,6 @@ export function SettingsPage() {
 
   if (id === 'models') {
     return <ModelsSettingsPanel />;
-  }
-
-  if (id === 'channels') {
-    return <ChannelsSettingsPanel />;
   }
 
   if (id === 'voice') {

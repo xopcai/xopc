@@ -21,6 +21,11 @@ const SettingsPage = lazy(() =>
 const AgentsSettingsDetailPage = lazy(() =>
   import('@/features/settings/agents').then((m) => ({ default: m.AgentsSettingsPanel })),
 );
+const ChannelsPage = lazy(() =>
+  import('@/features/settings/channels-settings').then((m) => ({
+    default: m.ChannelsSettingsPanel,
+  })),
+);
 
 function SecondaryRouteFallback() {
   return (
@@ -71,15 +76,27 @@ const router = createHashRouter([
       },
       {
         path: 'cron',
-        element: <Navigate to="/settings/cron" replace />,
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <CronPage />
+          </Suspense>
+        ),
       },
       {
         path: 'skills',
-        element: <Navigate to="/settings/skills" replace />,
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <SkillsPage />
+          </Suspense>
+        ),
       },
       {
         path: 'channels',
-        element: <Navigate to="/settings/channels" replace />,
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <ChannelsPage />
+          </Suspense>
+        ),
       },
       {
         path: 'settings',
@@ -104,19 +121,15 @@ const router = createHashRouter([
           },
           {
             path: 'cron',
-            element: (
-              <Suspense fallback={<SettingsRouteFallback />}>
-                <CronPage />
-              </Suspense>
-            ),
+            element: <Navigate to="/cron" replace />,
           },
           {
             path: 'skills',
-            element: (
-              <Suspense fallback={<SettingsRouteFallback />}>
-                <SkillsPage />
-              </Suspense>
-            ),
+            element: <Navigate to="/skills" replace />,
+          },
+          {
+            path: 'channels',
+            element: <Navigate to="/channels" replace />,
           },
           {
             path: 'agents/:agentId',
