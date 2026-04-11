@@ -1,6 +1,7 @@
 import { streamSSE } from 'hono/streaming';
 import type { Context } from 'hono';
 import type { GatewayService } from '../service.js';
+import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../chat-limits.js';
 import { createLogger } from '../../utils/logger.js';
 import { stringifySSEData } from './sse-json.js';
 
@@ -38,6 +39,11 @@ function isValidAgentRequest(body: unknown): body is AgentRequestBody {
   return hasMessage || hasAttachments;
 }
 
+/** Max base64 character length that can decode to `MAX_WEBCHAT_ATTACHMENT_FILE_BYTES`. */
+function maxBase64CharsForBinary(maxBinaryBytes: number): number {
+  return 4 * Math.ceil(maxBinaryBytes / 3);
+}
+
 /**
  * POST /api/agent — Send a message to the agent, stream response via SSE.
  *
@@ -66,6 +72,26 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
     }
 
     const { message, channel = 'webchat', chatId = 'default', attachments, thinking } = body;
+
+    if (Array.isArray(attachments)) {
+      const maxDataChars = maxBase64CharsForBinary(MAX_WEBCHAT_ATTACHMENT_FILE_BYTES);
+      for (const a of attachments) {
+        if (!a || typeof a !== 'object') continue;
+        const data = (a as { data?: unknown }).data;
+        if (typeof data === 'string' && data.length > maxDataChars) {
+          return c.json(
+            {
+              ok: false,
+              error: {
+                code: 'BAD_REQUEST',
+                message: `Attachment exceeds maximum size (${MAX_WEBCHAT_ATTACHMENT_FILE_BYTES} bytes)`,
+              },
+            },
+            400,
+          );
+        }
+      }
+    }
 
     const accept = c.req.header('Accept') || '';
     const wantSSE = accept.includes('text/event-stream');

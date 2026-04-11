@@ -167,6 +167,7 @@ const bundles: Record<
       attachFile: string;
       maxAttachmentsReached: string;
       maxAttachmentsTruncated: string;
+      attachmentFileTooLarge: string;
       inputPlaceholder: string;
       currentModel: string;
       modelSearchPlaceholder: string;
@@ -1281,6 +1282,7 @@ const bundles: Record<
       attachFile: 'Attach file',
       maxAttachmentsReached: 'Maximum {{max}} files per message. Remove some to add more.',
       maxAttachmentsTruncated: '{{dropped}} file(s) not added (limit {{max}} per message).',
+      attachmentFileTooLarge: 'File "{{name}}" is too large (max {{maxSize}} per file).',
       inputPlaceholder: 'Plan, @ for context, / for commands',
       currentModel: 'Model used for this conversation',
       modelSearchPlaceholder: 'Search by name, provider, or ID…',
@@ -2447,6 +2449,7 @@ const bundles: Record<
       attachFile: '添加附件',
       maxAttachmentsReached: '每条消息最多 {{max}} 个文件，请先移除部分附件。',
       maxAttachmentsTruncated: '已忽略 {{dropped}} 个文件（每条最多 {{max}} 个）。',
+      attachmentFileTooLarge: '文件「{{name}}」过大（单文件最大 {{maxSize}}）。',
       inputPlaceholder: '输入计划，@ 引用上下文，/ 命令',
       currentModel: '当前对话使用的模型',
       modelSearchPlaceholder: '按名称、提供商或 ID 搜索…',
