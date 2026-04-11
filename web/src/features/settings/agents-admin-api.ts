@@ -1,71 +1,23 @@
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
-export type GatewayAgentSkillsInfo = {
-  defaults: string[];
-  entry?: string[];
-  effectiveAllowlist?: string[];
-};
+import type {
+  AgentBootstrapFileEntry,
+  GatewayAgentRow,
+  GatewayAgentsPayload,
+  GatewayConfigBinding,
+  SkillCatalogRow,
+} from './types/agent-gateway';
 
-export type GatewayAgentToolsInfo = {
-  defaultsDisable: string[];
-  entryDisable: string[];
-  effectiveDisable: string[];
-};
-
-export type GatewayAgentRow = {
-  id: string;
-  name?: string;
-  workspace: string;
-  bootstrapDir: string;
-  model?: { primary?: string; fallbacks?: string[] };
-  isDefault: boolean;
-  skills: GatewayAgentSkillsInfo;
-  tools: GatewayAgentToolsInfo;
-};
-
-export type GatewayAgentsPayload = {
-  defaultId: string;
-  agents: GatewayAgentRow[];
-  builtinToolIds: string[];
-};
-
-export type GatewayConfigBinding = {
-  id?: string;
-  agentId: string;
-  priority?: number;
-  match: {
-    channel: string;
-    accountId?: string;
-    peerKind?: string;
-    peerId?: string;
-    guildId?: string;
-    teamId?: string;
-  };
-  enabled?: boolean;
-};
-
-export type SkillCatalogRow = {
-  name: string;
-  directoryId: string;
-  /** From SKILL.md / catalog (may be empty). */
-  description?: string;
-  enabled?: boolean;
-  /** Hub install metadata when present (skills-lock.json). */
-  hub?: {
-    kind: 'git' | 'archive';
-    source: string;
-    ref?: string;
-    updatedAt?: string;
-  };
-};
-
-export type AgentBootstrapFileEntry = {
-  name: string;
-  missing: boolean;
-  size?: number;
-  updatedAtMs?: number;
-};
+export type {
+  AgentBootstrapFileEntry,
+  GatewayAgentRow,
+  GatewayAgentsPayload,
+  GatewayAgentSkillsInfo,
+  GatewayAgentToolsInfo,
+  GatewayConfigBinding,
+  SkillCatalogRow,
+} from './types/agent-gateway';
 
 function normalizeAgentRow(raw: GatewayAgentRow): GatewayAgentRow {
   return {

@@ -3,26 +3,9 @@
  * Managed rules use ids `ui:route:account:<channel>:<accountId>`.
  */
 
-export type BindingRuleWire = {
-  id?: string;
-  agentId: string;
-  priority?: number;
-  enabled?: boolean;
-  match: {
-    channel: string;
-    accountId?: string;
-    peerKind?: string;
-    peerId?: string;
-    guildId?: string;
-    teamId?: string;
-    memberRoleIds?: string[];
-  };
-};
+import type { BindingRuleWire, ChannelAgentRoutesState } from './types/channel-bindings';
 
-export type ChannelAgentRoutesState = {
-  telegram: Record<string, string>;
-  weixin: Record<string, string>;
-};
+export type { BindingRuleWire, ChannelAgentRoutesState } from './types/channel-bindings';
 
 function normAcc(s: string | undefined): string {
   return (s ?? '').trim().toLowerCase();

@@ -3486,6 +3486,8 @@ export type VoiceSettingsMessages = (typeof bundles)['en']['voiceSettings'];
 export type GatewaySettingsMessages = (typeof bundles)['en']['gatewaySettings'];
 export type HeartbeatSettingsMessages = (typeof bundles)['en']['heartbeatSettings'];
 export type WebSearchSettingsMessages = (typeof bundles)['en']['webSearchSettings'];
+export type AgentsSettingsMessages = (typeof bundles)['en']['agentsSettings'];
+export type ChatMessages = (typeof bundles)['en']['chat'];
 
 export function messages(lang: StoredLanguage) {
   return bundles[lang];

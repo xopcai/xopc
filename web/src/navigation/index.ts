@@ -120,8 +120,12 @@ export function parseSettingsHash(hash: string): SettingsSectionId | null {
   }
   if (!h.startsWith('settings/')) return null;
   const rest = h.slice('settings/'.length);
-  const section = rest.split('/')[0];
+  const parts = rest.split('/').filter(Boolean);
+  const section = parts[0];
   if (!section) return 'gateway';
+  if (section === 'agents' && parts.length > 1) {
+    return 'agents';
+  }
   return section in SETTINGS_SECTION_TO_TAB ? (section as SettingsSectionId) : null;
 }
 
