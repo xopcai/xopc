@@ -58,7 +58,7 @@ function truncateTail(content: string, maxLines = DEFAULT_MAX_LINES, maxBytes = 
 }
 
 export interface CreateShellToolOptions {
-  /** Env var names allowed through {@link prepareSafeToolEnv} even if they match secret heuristics (Phase 5 skill passthrough). */
+  /** Env var names allowed through {@link prepareSafeToolEnv} even if they match secret heuristics (skill passthrough). */
   getSkillPassthroughEnvVarNames?: () => string[];
 }
 

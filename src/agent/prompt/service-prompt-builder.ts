@@ -32,7 +32,7 @@ export interface SystemPromptBuildOptions {
   skillPromptText?: string;
   /** Restrict `<available_skills>` to these names (merged with skills.json toggles). */
   skillAllowlist?: string[];
-  /** Registered tool names for this agent session (enables Phase 2 skill tool gating). */
+  /** Registered tool names for this agent session (enables skill tool gating). */
   registeredToolNames?: string[];
 }
 

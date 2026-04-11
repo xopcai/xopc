@@ -1,5 +1,5 @@
 /**
- * Cross-Extension Communication - Phase 3 TypedEventBus Example
+ * Cross-Extension Communication — TypedEventBus example
  *
  * Demonstrates: Event bus for inter-extension communication (RPC pattern)
  *

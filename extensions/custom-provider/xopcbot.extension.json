@@ -1,7 +1,7 @@
 {
   "id": "custom-provider",
   "name": "Custom Provider Example",
-  "description": "Demonstrates Phase 4 provider registration with custom models",
+  "description": "Demonstrates provider registration with custom models",
   "version": "1.0.0",
   "kind": "utility",
   "main": "index.ts",

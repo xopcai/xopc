@@ -1,5 +1,5 @@
 /**
- * Input Guard Extension - Phase 1 Input Hook Example
+ * Input Guard Extension — input hook example
  *
  * Demonstrates: Input hook for content moderation and quick commands
  *

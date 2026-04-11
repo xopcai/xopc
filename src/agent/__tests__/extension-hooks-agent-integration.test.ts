@@ -1,67 +1,16 @@
 /**
- * Agent Service Phase 1 Integration Test
- * 
- * Tests that Phase 1 hooks work correctly in the actual AgentService.
+ * AgentService extension hooks integration tests.
+ *
+ * Verifies input / context / turn lifecycle hooks on ExtensionHookRunner.
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ExtensionRegistryImpl, ExtensionHookRunner } from '../../extensions/index.js';
-import type { 
-  ExtensionDefinition, 
-  InputHookResult,
-  ContextHookResult,
-  AgentMessage,
-} from '../../extensions/types.js';
+import type { AgentMessage } from '../../extensions/types.js';
 
-// Mock extension that uses Phase 1 hooks
-const _createTestExtension = (actions: {
-  onInput?: (text: string) => InputHookResult | undefined;
-  onContext?: (messages: AgentMessage[]) => AgentMessage[] | undefined;
-  onTurnStart?: () => void;
-  onTurnEnd?: () => void;
-}): ExtensionDefinition => ({
-  id: 'test-phase1',
-  name: 'Test Phase 1 Extension',
-  version: '1.0.0',
-  
-  register(api) {
-    // Input hook
-    if (actions.onInput) {
-      api.registerHook('input', async (event): Promise<InputHookResult | void> => {
-        const result = actions.onInput!(event.text);
-        return result;
-      });
-    }
-
-    // Context hook
-    if (actions.onContext) {
-      api.registerHook('context', async (event): Promise<ContextHookResult | void> => {
-        const modified = actions.onContext!(event.messages);
-        if (modified) {
-          return { messages: modified };
-        }
-      });
-    }
-
-    // Turn lifecycle hooks
-    if (actions.onTurnStart) {
-      api.registerHook('turn_start', async () => {
-        actions.onTurnStart!();
-      });
-    }
-
-    if (actions.onTurnEnd) {
-      api.registerHook('turn_end', async () => {
-        actions.onTurnEnd!();
-      });
-    }
-  },
-});
-
-describe('AgentService Phase 1 Integration', () => {
+describe('AgentService extension hooks integration', () => {
   let registry: ExtensionRegistryImpl;
   let hookRunner: ExtensionHookRunner;
-  let _mockBus: MessageBus;
 
   beforeEach(() => {
     registry = new ExtensionRegistryImpl();
@@ -73,15 +22,9 @@ describe('AgentService Phase 1 Integration', () => {
         error: vi.fn(),
       },
     });
-
-    _mockBus = {
-      consumeInbound: vi.fn(),
-      publishOutbound: vi.fn().mockResolvedValue(undefined),
-      publishInbound: vi.fn().mockResolvedValue(undefined),
-    } as unknown as MessageBus;
   });
 
-  it('should have hookRunner with Phase 1 methods', () => {
+  it('should expose input and context hook runners', () => {
     expect(hookRunner.runInputHook).toBeDefined();
     expect(hookRunner.runContextHook).toBeDefined();
     expect(typeof hookRunner.runInputHook).toBe('function');
@@ -104,7 +47,6 @@ describe('AgentService Phase 1 Integration', () => {
       0
     );
 
-    // Simulate !ping command
     const result = await hookRunner.runInputHook('!ping', [], 'telegram', {});
 
     expect(result.skipAgent).toBe(true);
@@ -183,15 +125,17 @@ describe('AgentService Phase 1 Integration', () => {
       0
     );
 
-    // Simulate turn
     await hookRunner.runHooks('turn_start', { turnIndex: 1, timestamp: Date.now() }, {});
-    // ... LLM processing would happen here ...
-    await hookRunner.runHooks('turn_end', { 
-      turnIndex: 1, 
-      message: { role: 'assistant', content: 'Response' },
-      toolResults: [],
-      timestamp: Date.now(),
-    }, {});
+    await hookRunner.runHooks(
+      'turn_end',
+      {
+        turnIndex: 1,
+        message: { role: 'assistant', content: 'Response' },
+        toolResults: [],
+        timestamp: Date.now(),
+      },
+      {}
+    );
 
     expect(events).toEqual(['start:1', 'end:1']);
   });
@@ -199,7 +143,6 @@ describe('AgentService Phase 1 Integration', () => {
   it('should handle multiple extensions with priority', async () => {
     const order: string[] = [];
 
-    // Extension A with priority 10 (runs first)
     registry.addHook(
       'input',
       async () => {
@@ -210,7 +153,6 @@ describe('AgentService Phase 1 Integration', () => {
       10
     );
 
-    // Extension B with priority 5 (runs second)
     registry.addHook(
       'input',
       async () => {
@@ -221,7 +163,6 @@ describe('AgentService Phase 1 Integration', () => {
       5
     );
 
-    // Extension C with priority 1 (runs last)
     registry.addHook(
       'input',
       async () => {
@@ -259,12 +200,10 @@ describe('AgentService Phase 1 Integration', () => {
       0
     );
 
-    // Blocked message
     const blocked = await hookRunner.runInputHook('This is spam!', [], 'telegram', {});
     expect(blocked.skipAgent).toBe(true);
     expect(blocked.response).toContain('blocked');
 
-    // Allowed message
     const allowed = await hookRunner.runInputHook('Hello, how are you?', [], 'telegram', {});
     expect(allowed.skipAgent).toBe(false);
   });
@@ -281,9 +220,8 @@ describe('AgentService Phase 1 Integration', () => {
       async (event) => {
         const text = event.text.trim();
         if (commands[text]) {
-          const response = typeof commands[text] === 'function' 
-            ? (commands[text] as Function)() 
-            : commands[text];
+          const response =
+            typeof commands[text] === 'function' ? (commands[text] as () => string)() : commands[text];
           return {
             action: 'handled',
             response,

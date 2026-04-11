@@ -99,7 +99,7 @@ export class SkillManager {
   }
 
   /**
-   * `<available_skills>` XML with optional per-agent allowlist and/or tool-based gating (Phase 2).
+   * `<available_skills>` XML with optional per-agent allowlist and/or tool-based gating.
    * When both arguments are omitted, returns the cached prompt from disk load (no tool gating).
    */
   getPromptForSkillAllowlist(

@@ -36,7 +36,7 @@ export const FILENAMES = {
   CRON_JOBS: 'jobs.json',
   WORKSPACE_STATE: 'workspace.json',
   SKILLS_CACHE: 'skills-cache.json',
-  /** Hub / CLI install provenance for ~/.xopcbot/skills/<id> (Phase 4). */
+  /** Hub / CLI install provenance for ~/.xopcbot/skills/<id>. */
   SKILLS_LOCK: 'skills-lock.json',
   PID: 'pid',
   STATUS: 'status.json',

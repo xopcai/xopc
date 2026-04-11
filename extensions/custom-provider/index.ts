@@ -1,5 +1,5 @@
 /**
- * Custom Provider Extension - Phase 4 Example
+ * Custom Provider Extension — provider registration example
  *
  * Demonstrates: Provider registration, CLI flags, and shortcuts
  *
