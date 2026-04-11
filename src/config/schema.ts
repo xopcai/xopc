@@ -437,7 +437,7 @@ export const HeartbeatConfigSchema = z
   })
   .default({
     enabled: true,
-    intervalMs: 60000,
+    intervalMs: 1_800_000,
   });
 
 export const GatewayConfigSchema = z.object({
@@ -455,7 +455,7 @@ export const GatewayConfigSchema = z.object({
   },
   heartbeat: {
     enabled: true,
-    intervalMs: 60000,
+    intervalMs: 1_800_000,
   },
   maxSseConnections: 100,
   corsOrigins: [],
@@ -722,7 +722,7 @@ export const ConfigSchema = z.object({
     },
     heartbeat: {
       enabled: true,
-      intervalMs: 60000,
+      intervalMs: 1_800_000,
     },
     maxSseConnections: 100,
     corsOrigins: [],

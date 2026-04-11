@@ -41,7 +41,7 @@ function mapConfigToRunner(cfg: Config | undefined): HeartbeatRunnerConfig {
   const h = cfg?.gateway?.heartbeat;
   return {
     enabled: h?.enabled ?? true,
-    intervalMs: h?.intervalMs ?? 60000,
+    intervalMs: h?.intervalMs ?? 1_800_000,
     target: h?.target,
     targetChatId: h?.targetChatId,
     prompt: h?.prompt,
