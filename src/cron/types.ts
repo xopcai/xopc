@@ -44,6 +44,8 @@ export interface JobData {
   created_at: string;
   updated_at: string;
   sessionTarget?: CronSessionTarget;
+  /** When set, isolated agent runs use this agent id in the session key (multi-agent). */
+  agentId?: string;
   payload: CronPayload;
   delivery?: CronDelivery;
   model?: string;
@@ -165,6 +167,7 @@ export interface AddJobOptions {
   maxRetries?: number;
   timeout?: number;
   sessionTarget?: CronSessionTarget;
+  agentId?: string;
   payload: CronPayload;
   delivery?: CronDelivery;
   model?: string;

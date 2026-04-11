@@ -113,6 +113,7 @@ export class CronService {
       created_at: now,
       updated_at: now,
       sessionTarget,
+      ...(data.agentId ? { agentId: data.agentId } : {}),
       payload: data.payload,
       delivery: data.delivery,
       model: data.model,
@@ -156,6 +157,7 @@ export class CronService {
         maxRetries: job.maxRetries,
         timeout: job.timeout,
         sessionTarget: job.sessionTarget,
+        ...(job.agentId ? { agentId: job.agentId } : {}),
         payload: job.payload,
         delivery: job.delivery,
         model: job.model,
@@ -185,13 +187,23 @@ export class CronService {
     const job = await this.persistence.getJob(id);
     if (!job) return false;
 
+    const validated = validationResult.data;
+    const { agentId: agentIdPatch, ...rest } = validated;
+    const patch: Partial<JobData> = { ...rest };
+    let clearAgentId = false;
+    if (agentIdPatch === null) {
+      clearAgentId = true;
+    } else if (agentIdPatch !== undefined) {
+      patch.agentId = agentIdPatch;
+    }
+
     // Cancel existing task if schedule changes
-    if (updates.schedule && updates.schedule !== job.schedule) {
+    if (patch.schedule && patch.schedule !== job.schedule) {
       this.cancelTask(id);
     }
 
     // Update persistence
-    await this.persistence.updateJob(id, updates);
+    await this.persistence.updateJob(id, patch, { clearAgentId });
 
     // Re-schedule if needed
     const updated = await this.persistence.getJob(id);

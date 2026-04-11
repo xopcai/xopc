@@ -47,6 +47,20 @@ function optionalTrimmedString(max: number, min = 1) {
   }, z.string().min(min).max(max).optional());
 }
 
+/** Optional agent id on create; empty string → undefined. */
+const optionalJobAgentId = optionalTrimmedString(64, 1);
+
+/**
+ * PATCH: set string, or `null` / empty to clear `agentId` on the job.
+ */
+const patchJobAgentId = z.preprocess((v) => {
+  if (v === null) return null;
+  if (v === undefined) return undefined;
+  if (typeof v !== 'string') return v;
+  const t = v.trim();
+  return t.length === 0 ? null : t;
+}, z.union([z.string().min(1).max(64), z.null()]).optional());
+
 // CronPayload validation
 const CronSystemEventPayloadSchema = z.object({
   kind: z.literal('systemEvent'),
@@ -95,6 +109,7 @@ export const JobDataSchema = z
     created_at: z.string().datetime(),
     updated_at: z.string().datetime(),
     sessionTarget: z.enum(['main', 'isolated']).optional(),
+    agentId: optionalTrimmedString(64, 1),
     payload: CronPayloadSchema,
     delivery: CronDeliverySchema.optional(),
     model: optionalTrimmedString(100, 1),
@@ -109,6 +124,7 @@ export const AddJobRequestSchema = z.object({
   maxRetries: z.number().int().min(0).max(10).optional(),
   timeout: z.number().int().min(1000).max(300000).optional(),
   sessionTarget: z.enum(['main', 'isolated']).optional(),
+  agentId: optionalJobAgentId,
   payload: CronPayloadSchema,
   delivery: CronDeliverySchema.optional(),
   model: optionalTrimmedString(100, 1),
@@ -122,6 +138,7 @@ export const UpdateJobRequestSchema = z.object({
   timeout: z.number().int().min(1000).max(300000).optional(),
   enabled: z.boolean().optional(),
   sessionTarget: z.enum(['main', 'isolated']).optional(),
+  agentId: patchJobAgentId,
   payload: CronPayloadSchema.optional(),
   delivery: CronDeliverySchema.optional(),
   model: optionalTrimmedString(100, 1),

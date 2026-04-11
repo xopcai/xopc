@@ -57,6 +57,17 @@ import { CredentialResolver } from '../../auth/credentials.js';
 import { commandRegistry } from '../../chat-commands/index.js';
 import { applyToolsWebPatch, safeToolsWebForGet } from '../config-tools-web.js';
 import { createFixedWindowRateLimiter } from '../../infra/rate-limit.js';
+import {
+  finalizeCreateAgentDirs,
+  listAgentBootstrapFiles,
+  listGatewayAgents,
+  prepareCreateAgent,
+  prepareDeleteAgent,
+  prepareUpdateAgent,
+  readAgentBootstrapFile,
+  runAfterDeletePurge,
+  writeAgentBootstrapFile,
+} from '../agents-admin.js';
 
 const log = createLogger('HonoApp');
 
@@ -260,6 +271,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         'POST /api/channels/weixin/login/start',
         'GET  /api/channels/weixin/login/:sessionKey',
         'GET  /api/config',
+        'GET  /api/agents',
+        'POST /api/agents',
+        'PATCH /api/agents/:id',
+        'DELETE /api/agents/:id',
+        'GET/PUT /api/agents/:id/files/...',
         'PATCH /api/config',
         'POST /api/config/reload',
         'POST /api/heartbeat/trigger',
@@ -843,6 +859,154 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       bindings: Array.isArray(config.bindings) ? config.bindings : [],
     };
     return c.json({ ok: true, payload: { config: safeConfig } });
+  });
+
+  // ========== Multi-agent admin (OpenClaw-style REST) ==========
+  authenticated.get('/api/agents', async (c) => {
+    const cfg = service.currentConfig as Config;
+    return c.json({ ok: true, payload: listGatewayAgents(cfg) });
+  });
+
+  authenticated.post('/api/agents', strictRateLimitMiddleware, async (c) => {
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const name = typeof body.name === 'string' ? body.name : '';
+    const workspace = typeof body.workspace === 'string' ? body.workspace : '';
+    const model = typeof body.model === 'string' ? body.model : undefined;
+    const agentDir = typeof body.agentDir === 'string' ? body.agentDir : undefined;
+    const prep = prepareCreateAgent(service.currentConfig as Config, {
+      name,
+      workspace,
+      model,
+      agentDir,
+    });
+    if (prep.ok === false) {
+      return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
+    }
+    const { nextConfig, agentId } = prep.data;
+    const save = await service.saveConfig(nextConfig);
+    if (!save.saved) {
+      return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
+    }
+    await finalizeCreateAgentDirs(service.currentConfig as Config, agentId);
+    return c.json({
+      ok: true,
+      payload: {
+        agentId,
+        agents: listGatewayAgents(service.currentConfig as Config),
+      },
+    });
+  });
+
+  authenticated.patch('/api/agents/:id', strictRateLimitMiddleware, async (c) => {
+    const id = normalizeAgentId(c.req.param('id') ?? '');
+    let body: Record<string, unknown> = {};
+    try {
+      body = (await c.req.json()) as Record<string, unknown>;
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const skillsPatch =
+      body.skills === null
+        ? null
+        : Array.isArray(body.skills)
+          ? body.skills.map((x: unknown) => String(x).trim()).filter(Boolean)
+          : undefined;
+    const toolsDisablePatch =
+      body.toolsDisable === null
+        ? null
+        : Array.isArray(body.toolsDisable)
+          ? body.toolsDisable.map((x: unknown) => String(x).trim()).filter(Boolean)
+          : undefined;
+
+    const prep = prepareUpdateAgent(service.currentConfig as Config, id, {
+      name: typeof body.name === 'string' ? body.name : undefined,
+      workspace: typeof body.workspace === 'string' ? body.workspace : undefined,
+      model:
+        body.model === null
+          ? null
+          : typeof body.model === 'string'
+            ? body.model
+            : undefined,
+      agentDir:
+        body.agentDir === null
+          ? null
+          : typeof body.agentDir === 'string'
+            ? body.agentDir
+            : undefined,
+      setDefault: body.setDefault === true,
+      ...(skillsPatch !== undefined ? { skills: skillsPatch } : {}),
+      ...(toolsDisablePatch !== undefined ? { toolsDisable: toolsDisablePatch } : {}),
+    });
+    if (prep.ok === false) {
+      return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
+    }
+    const save = await service.saveConfig(prep.data.nextConfig);
+    if (!save.saved) {
+      return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
+    }
+    return c.json({ ok: true, payload: listGatewayAgents(service.currentConfig as Config) });
+  });
+
+  authenticated.delete('/api/agents/:id', strictRateLimitMiddleware, async (c) => {
+    const id = normalizeAgentId(c.req.param('id') ?? '');
+    const purge = c.req.query('purge') === '1' || c.req.query('purge') === 'true';
+    const prep = prepareDeleteAgent(service.currentConfig as Config, id);
+    if (prep.ok === false) {
+      return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
+    }
+    const { nextConfig, agentId } = prep.data;
+    const save = await service.saveConfig(nextConfig);
+    if (!save.saved) {
+      return c.json({ ok: false, error: { message: save.error ?? 'save failed' } }, 500);
+    }
+    if (purge) {
+      await runAfterDeletePurge(service.currentConfig as Config, agentId);
+    }
+    return c.json({
+      ok: true,
+      payload: { agentId, purged: purge, agents: listGatewayAgents(service.currentConfig as Config) },
+    });
+  });
+
+  authenticated.get('/api/agents/:id/files', async (c) => {
+    const id = normalizeAgentId(c.req.param('id') ?? '');
+    const res = await listAgentBootstrapFiles(service.currentConfig as Config, id);
+    if (res.ok === false) {
+      return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
+    }
+    return c.json({ ok: true, payload: res.data });
+  });
+
+  authenticated.get('/api/agents/:id/files/:name', async (c) => {
+    const id = normalizeAgentId(c.req.param('id') ?? '');
+    const name = decodeURIComponent(c.req.param('name') ?? '');
+    const res = await readAgentBootstrapFile(service.currentConfig as Config, id, name);
+    if (res.ok === false) {
+      return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
+    }
+    return c.json({ ok: true, payload: { agentId: res.data.agentId, name, content: res.data.content } });
+  });
+
+  authenticated.put('/api/agents/:id/files/:name', strictRateLimitMiddleware, async (c) => {
+    const id = normalizeAgentId(c.req.param('id') ?? '');
+    const name = decodeURIComponent(c.req.param('name') ?? '');
+    let content = '';
+    try {
+      const body = (await c.req.json()) as { content?: unknown };
+      content = typeof body.content === 'string' ? body.content : '';
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const res = await writeAgentBootstrapFile(service.currentConfig as Config, id, name, content);
+    if (res.ok === false) {
+      return c.json({ ok: false, error: { message: res.error } }, res.status ?? 400);
+    }
+    return c.json({ ok: true, payload: { agentId: res.data.agentId, name } });
   });
 
   // GET /api/voice/models - Get available STT/TTS models
@@ -1560,7 +1724,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // POST /api/cron - Add new job
   authenticated.post('/api/cron', async (c) => {
     const body = await c.req.json();
-    const { schedule, name, timezone, sessionTarget, model, delivery, payload } = body;
+    const { schedule, name, timezone, sessionTarget, agentId, model, delivery, payload } = body;
 
     if (!schedule || !payload) {
       return c.json({ error: 'Missing required fields: schedule, payload' }, 400);
@@ -1571,6 +1735,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         name,
         timezone,
         sessionTarget,
+        ...(typeof agentId === 'string' && agentId.trim() ? { agentId: agentId.trim() } : {}),
         model,
         delivery,
         payload,
