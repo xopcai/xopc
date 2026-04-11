@@ -71,6 +71,9 @@ export function getModelsByProvider(provider: string): readonly Model<Api>[] {
 	return registry.getAll().filter(m => m.provider === provider);
 }
 
+/** Credential/UI providers not always present in pi-ai's static model table. */
+const ADDITIONAL_MANAGED_PROVIDER_IDS: readonly string[] = ['zhipu-cn'];
+
 export function getAllProviders(): string[] {
 	const registry = getModelRegistry();
 	const providers = new Set<string>();
@@ -83,6 +86,10 @@ export function getAllProviders(): string[] {
 	// Add custom providers from registry
 	for (const m of registry.getAll()) {
 		providers.add(m.provider);
+	}
+
+	for (const id of ADDITIONAL_MANAGED_PROVIDER_IDS) {
+		providers.add(id);
 	}
 	
 	return Array.from(providers);
@@ -208,7 +215,10 @@ export const PROVIDER_META: Record<string, ProviderMeta> = {
   'openrouter': { name: 'OpenRouter (Multi-provider)', category: 'specialty', supportsApiKey: true },
   'huggingface': { name: 'Hugging Face', category: 'specialty', supportsApiKey: true },
   'opencode': { name: 'OpenCode', category: 'specialty', supportsApiKey: true },
-  'zai': { name: 'z.ai', category: 'specialty', supportsApiKey: true },
+  /** International GLM (api.z.ai). Auth: API key (ZAI_API_KEY); no published OAuth for this HTTP API. */
+  'zai': { name: 'Zhipu GLM (International · z.ai)', category: 'common', supportsApiKey: true },
+  /** China GLM (open.bigmodel.cn). Add models under this id in models.json; auth: ZHIPU_* / gateway key. */
+  'zhipu-cn': { name: 'Zhipu GLM (China · open.bigmodel.cn)', category: 'common', supportsApiKey: true },
   'amazon-bedrock': { name: 'Amazon Bedrock', category: 'enterprise', supportsApiKey: true },
   'azure-openai-responses': { name: 'Azure OpenAI', category: 'enterprise', supportsApiKey: true },
   'google-vertex': { name: 'Google Vertex AI', category: 'enterprise', supportsApiKey: true },

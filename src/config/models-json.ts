@@ -171,7 +171,7 @@ export interface ValidationResult {
 const PROVIDER_ID_REGEX = /^[a-z0-9]([a-z0-9-_]*[a-z0-9])?$/;
 const RESERVED_PROVIDER_IDS = new Set([
 	'openai', 'anthropic', 'google', 'groq', 'deepseek', 'minimax', 'mistral',
-	'xai', 'cerebras', 'openrouter', 'huggingface', 'opencode', 'zai',
+	'xai', 'cerebras', 'openrouter', 'huggingface', 'opencode', 'zai', 'zhipu-cn',
 	'amazon-bedrock', 'azure-openai-responses', 'google-vertex', 'vercel-ai-gateway',
 	'github-copilot', 'openai-codex', 'google-gemini-cli', 'google-antigravity'
 ]);
