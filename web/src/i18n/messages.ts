@@ -175,6 +175,25 @@ const bundles: Record<
       voiceRecording: string;
       voiceRecordingStop: string;
       voiceMicDenied: string;
+      /** Composer hint while assistant is streaming (steering). */
+      inputPlaceholderSteering: string;
+      /** Stop current run and send the draft immediately (⌘/Ctrl+Enter). */
+      steeringInterruptSend: string;
+      /** aria-label for follow-up suggestion chip group. */
+      followUpSuggestionsAria: string;
+      /** Cursor-style queue above the composer while a run is active. */
+      followUpQueueAria: string;
+      followUpQueueHeading: string;
+      followUpQueueClickToEdit: string;
+      followUpQueueAttachmentOnly: string;
+      followUpQueueEmptyPreview: string;
+      followUpQueueDrag: string;
+      followUpQueueMoveUp: string;
+      followUpQueueMoveDown: string;
+      followUpQueueSteerNow: string;
+      followUpQueueRemove: string;
+      followUpQueueAttachmentsNote: string;
+      followUpQueueMaxReached: string;
       voicePlay: string;
       voicePause: string;
       voiceLoading: string;
@@ -1263,6 +1282,21 @@ const bundles: Record<
       voiceRecording: 'Record voice',
       voiceRecordingStop: 'Stop recording',
       voiceMicDenied: 'Microphone access denied or unavailable.',
+      inputPlaceholderSteering: 'Follow-up: Enter queues a row; click a row to edit here',
+      steeringInterruptSend: 'Stop and send now (⌘↵ or Ctrl+↵)',
+      followUpSuggestionsAria: 'Suggested follow-up questions',
+      followUpQueueAria: 'Follow-up queue (sent after this reply, in order)',
+      followUpQueueHeading: 'Follow-ups',
+      followUpQueueClickToEdit: 'Edit in composer',
+      followUpQueueAttachmentOnly: '(attachment)',
+      followUpQueueEmptyPreview: '(empty)',
+      followUpQueueDrag: 'Drag to reorder',
+      followUpQueueMoveUp: 'Move up',
+      followUpQueueMoveDown: 'Move down',
+      followUpQueueSteerNow: 'Inject as steering (tool boundary)',
+      followUpQueueRemove: 'Remove from queue',
+      followUpQueueAttachmentsNote: 'Rows with attachments cannot use ✨ steer; they send as full messages in order.',
+      followUpQueueMaxReached: 'Follow-up queue is full (max {{max}}). Remove one or wait for the run to finish.',
       voicePlay: 'Play voice',
       voicePause: 'Pause',
       voiceLoading: 'Loading audio…',
@@ -2407,6 +2441,21 @@ const bundles: Record<
       voiceRecording: '录制语音',
       voiceRecordingStop: '停止录音',
       voiceMicDenied: '无法使用麦克风（权限被拒绝或设备不可用）。',
+      inputPlaceholderSteering: '后续问题：Enter 加入队列；点击队列一行在此编辑',
+      steeringInterruptSend: '中止并立即发送（⌘↵ 或 Ctrl+↵）',
+      followUpSuggestionsAria: '建议的后续问题',
+      followUpQueueAria: '后续问题队列（本轮结束后按顺序发送）',
+      followUpQueueHeading: '后续问题',
+      followUpQueueClickToEdit: '在输入框中编辑',
+      followUpQueueAttachmentOnly: '（附件）',
+      followUpQueueEmptyPreview: '（空）',
+      followUpQueueDrag: '拖动排序',
+      followUpQueueMoveUp: '上移',
+      followUpQueueMoveDown: '下移',
+      followUpQueueSteerNow: '作为 steering 注入（工具间隙）',
+      followUpQueueRemove: '从队列移除',
+      followUpQueueAttachmentsNote: '含附件的行不能使用 ✨ steering，将按顺序作为完整消息发送。',
+      followUpQueueMaxReached: '后续问题队列已满（最多 {{max}} 条）。请删除一条或等当前回复结束。',
       voicePlay: '播放语音',
       voicePause: '暂停',
       voiceLoading: '正在加载音频…',
