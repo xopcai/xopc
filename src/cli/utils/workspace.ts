@@ -4,7 +4,6 @@
 
 import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
 import { join } from 'path';
-import type { TemplateFile } from '../templates.js';
 import { loadAllTemplates, TEMPLATE_FILES } from '../templates.js';
 
 export interface WorkspaceStatus {
@@ -87,41 +86,6 @@ export function setupConfig(configPath: string): void {
     console.log('✅ Created config:', configPath);
   } else {
     console.log('ℹ️  Config already exists:', configPath);
-  }
-}
-
-/**
- * Quick setup (non-interactive) - creates minimal files if missing
- */
-export function quickSetup(workspacePath: string): void {
-  // Ensure workspace dir exists
-  if (!existsSync(workspacePath)) {
-    mkdirSync(workspacePath, { recursive: true });
-  }
-
-  // Ensure memory dir exists
-  const memoryDir = join(workspacePath, 'memory');
-  if (!existsSync(memoryDir)) {
-    mkdirSync(memoryDir, { recursive: true });
-  }
-
-  // Create minimal templates
-  const minimalTemplates: Record<TemplateFile, string> = {
-    'BOOTSTRAP.md': '# BOOTSTRAP.md\n\nHello! Delete this when done.\n',
-    'AGENTS.md': '# AGENTS.md\n\nYour workspace.\n',
-    'SOUL.md': '# SOUL.md\n\nWho you are.\n',
-    'IDENTITY.md': '# IDENTITY.md\n\n- Name:\n- Emoji:\n',
-    'USER.md': '# USER.md\n\nAbout your human.\n',
-    'TOOLS.md': '# TOOLS.md\n\nLocal notes.\n',
-    'HEARTBEAT.md': '# HEARTBEAT.md\n\nPeriodic checks.\n',
-    'MEMORY.md': '# MEMORY.md\n\nLong-term memory.\n',
-  };
-
-  for (const [filename, content] of Object.entries(minimalTemplates)) {
-    const filePath = join(workspacePath, filename as TemplateFile);
-    if (!existsSync(filePath)) {
-      writeFileSync(filePath, content, 'utf-8');
-    }
   }
 }
 

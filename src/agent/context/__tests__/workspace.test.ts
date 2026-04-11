@@ -1,4 +1,4 @@
-import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { mkdtempSync, rmSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { describe, expect, it } from 'vitest';
@@ -20,19 +20,4 @@ describe('loadBootstrapFiles', () => {
     }
   });
 
-  it('copies from legacy workspace when bootstrap file is missing', () => {
-    const bootstrap = mkdtempSync(join(tmpdir(), 'xopcbot-bs-'));
-    const legacy = mkdtempSync(join(tmpdir(), 'xopcbot-leg-'));
-    try {
-      writeFileSync(join(legacy, DEFAULT_SOUL_FILENAME), 'legacy soul');
-      const files = loadBootstrapFiles(bootstrap, { legacyWorkspaceDir: legacy });
-      const soul = files.find((f) => f.name === DEFAULT_SOUL_FILENAME);
-      expect(soul!.content).toContain('legacy soul');
-      expect(existsSync(join(bootstrap, DEFAULT_SOUL_FILENAME))).toBe(true);
-      expect(soul!.path).toBe(resolve(join(bootstrap, DEFAULT_SOUL_FILENAME)));
-    } finally {
-      rmSync(bootstrap, { recursive: true, force: true });
-      rmSync(legacy, { recursive: true, force: true });
-    }
-  });
 });

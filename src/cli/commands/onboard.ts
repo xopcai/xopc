@@ -11,9 +11,10 @@ import { setupModel as runModelSetup } from './onboard/model.js';
 import { colors } from '../utils/colors.js';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
 import { setupChannels as runChannelOnboard, getChannelConfigurators } from './onboard/channels/index.js';
+import { seedMainAgentBootstrap } from '../../agent/context/workspace-seed.js';
 
 // Import workspace utilities
-import { isWorkspaceSetup, setupWorkspace as _setupWorkspace, isConfigSetup as _isConfigSetup, setupConfig as _setupConfig, quickSetup } from '../utils/workspace.js';
+import { isWorkspaceSetup, setupWorkspace, isConfigSetup as _isConfigSetup, setupConfig as _setupConfig } from '../utils/workspace.js';
 
 /**
  * Load raw config without schema parsing to avoid default values being added.
@@ -99,7 +100,7 @@ async function runOnboard(
 
   if (runFullWizard && needsSetup) {
     console.log('\n📁 Step 1: Workspace Setup\n');
-    quickSetup(workspacePath);
+    setupWorkspace(workspacePath);
   }
 
   if (!isInteractive()) {
@@ -134,6 +135,8 @@ async function runOnboard(
 
   // Save config once at the end
   await saveConfig(config as Config, configPath);
+
+  seedMainAgentBootstrap(config as Config);
 
   console.log('\n' + '═'.repeat(50));
   console.log('\n🎉 Setup Complete!\n');

@@ -76,7 +76,7 @@ Internal state is **not** written here on new installs. Legacy trees may still c
 
 ## Legacy locations & migration
 
-Upgrades may still have data under the Markdown workspace from older layouts. When the new location is empty, the runtime **copies or moves** once (see `src/config/migrate-internal-state.ts`, `migrateBootstrapFilesFromLegacyWorkspace` in `src/agent/context/workspace-seed.ts`, and call sites in `AgentService` / stores).
+Upgrades may still have data under the Markdown workspace from older layouts. When the new location is empty, the runtime **copies or moves** once for the paths below (see `src/config/migrate-internal-state.ts` and `AgentService.migrateDefaultAgentInternalStateFromWorkspace` / store constructors). Persona Markdown under `agents/<id>/bootstrap/` is **not** auto-imported from the workspace root; run `xopcbot setup` or `xopcbot onboard` to seed missing bootstrap files, or copy them manually.
 
 | Legacy (under markdown workspace) | Modern location |
 |-------------------------------------|-----------------|

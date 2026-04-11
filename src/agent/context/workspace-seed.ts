@@ -1,15 +1,14 @@
 /**
  * Seed bootstrap persona Markdown files under `…/agents/<id>/bootstrap/` (OpenClaw-style `ensureAgentWorkspace` + `writeFileIfMissing`).
- * Templates ship under `./workspace-templates/` next to this module (also copied to `dist/` at build).
+ * Resolution order per file: `XOPCBOT_TEMPLATE_PATH` or repo `docs/reference/templates`, then bundled `./workspace-templates/`.
  */
 
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 import type { Config } from '../../config/schema.js';
-import { resolveAgentBootstrapDir } from '../../agents/agent-scope.js';
-import { migrateFileIfMissing } from '../../config/migrate-internal-state.js';
+import { DEFAULT_AGENT_ID, resolveAgentBootstrapDir } from '../../agents/agent-scope.js';
 import { WORKSPACE_FILES } from '../../config/paths.js';
 import { BOOTSTRAP_FILES } from './workspace.js';
 import { createLogger } from '../../utils/logger.js';
@@ -19,26 +18,16 @@ const log = createLogger('WorkspaceSeed');
 /** Files to copy when seeding a new agent workspace (includes `BOOTSTRAP.md`, not part of system-prompt load order). */
 const SEED_FILENAMES: readonly string[] = [...BOOTSTRAP_FILES, WORKSPACE_FILES.BOOTSTRAP];
 
-/** Persona / index Markdown to migrate from legacy markdown workspace root into `bootstrap/`. */
-const BOOTSTRAP_MIGRATE_FILENAMES: readonly string[] = [
-  ...BOOTSTRAP_FILES,
-  WORKSPACE_FILES.CONTEXT,
-  WORKSPACE_FILES.SKILLS,
-  WORKSPACE_FILES.BOOTSTRAP,
-];
-
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
 function resolveBundledTemplatesDir(): string {
   return join(__dirname, 'workspace-templates');
 }
 
-/**
- * Development fallback: repo `docs/reference/templates` when bundled dir is missing (e.g. partial checkout).
- */
-function resolveFallbackTemplatesDir(): string | null {
+/** Walk ancestors for `docs/reference/templates` (dev checkout or local install with docs). */
+function resolveDocsTemplatesDirFromWalk(): string | null {
   let dir = __dirname;
-  for (let i = 0; i < 8; i++) {
+  for (let i = 0; i < 12; i++) {
     const candidate = join(dir, 'docs', 'reference', 'templates');
     if (existsSync(candidate)) {
       return candidate;
@@ -50,17 +39,26 @@ function resolveFallbackTemplatesDir(): string | null {
   return null;
 }
 
-function readTemplate(name: string): string | null {
-  const bundled = join(resolveBundledTemplatesDir(), name);
-  if (existsSync(bundled)) {
-    return readFileSync(bundled, 'utf-8');
+/** Same convention as CLI `templates.ts`: env override, then docs tree, else null. */
+function resolvePrimaryTemplatesBaseDir(): string | null {
+  const envPath = process.env.XOPCBOT_TEMPLATE_PATH?.trim();
+  if (envPath && existsSync(envPath)) {
+    return envPath;
   }
-  const fallback = resolveFallbackTemplatesDir();
-  if (fallback) {
-    const p = join(fallback, name);
+  return resolveDocsTemplatesDirFromWalk();
+}
+
+function readTemplate(name: string): string | null {
+  const primary = resolvePrimaryTemplatesBaseDir();
+  if (primary) {
+    const p = join(primary, name);
     if (existsSync(p)) {
       return readFileSync(p, 'utf-8');
     }
+  }
+  const bundled = join(resolveBundledTemplatesDir(), name);
+  if (existsSync(bundled)) {
+    return readFileSync(bundled, 'utf-8');
   }
   return null;
 }
@@ -99,36 +97,8 @@ export function seedWorkspaceBootstrapFiles(bootstrapDir: string): void {
 }
 
 /**
- * Copy bootstrap files from another workspace. When `overwrite` is false, only writes if the target is missing.
+ * Ensure default (`main`) agent bootstrap has the same reference templates as the markdown workspace (missing files only).
  */
-/** Copy missing bootstrap Markdown from `legacyWorkspace` into agent home `bootstrap/` (upgrade path). */
-export function migrateBootstrapFilesFromLegacyWorkspace(
-  cfg: Config,
-  agentId: string,
-  legacyWorkspace: string,
-): void {
-  const bootstrapDir = resolveAgentBootstrapDir(cfg, agentId);
-  mkdirSync(bootstrapDir, { recursive: true });
-  for (const name of BOOTSTRAP_MIGRATE_FILENAMES) {
-    migrateFileIfMissing(join(bootstrapDir, name), join(legacyWorkspace, name));
-  }
-}
-
-export function copyBootstrapFilesFromWorkspace(
-  sourceDir: string,
-  targetDir: string,
-  opts?: { overwrite?: boolean },
-): void {
-  mkdirSync(targetDir, { recursive: true });
-  const overwrite = opts?.overwrite === true;
-  for (const name of SEED_FILENAMES) {
-    const from = join(sourceDir, name);
-    const to = join(targetDir, name);
-    if (!existsSync(from)) {
-      continue;
-    }
-    if (overwrite || !existsSync(to)) {
-      copyFileSync(from, to);
-    }
-  }
+export function seedMainAgentBootstrap(cfg: Config): void {
+  seedWorkspaceBootstrapFiles(resolveAgentBootstrapDir(cfg, DEFAULT_AGENT_ID));
 }

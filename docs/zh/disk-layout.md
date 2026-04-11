@@ -76,7 +76,7 @@
 
 ## 旧版路径与迁移
 
-旧版曾在 Markdown 工作区内落盘。新位置为空时，运行时会 **复制或移动** 一次（见 `src/config/migrate-internal-state.ts`、`src/agent/context/workspace-seed.ts` 中的 `migrateBootstrapFilesFromLegacyWorkspace`，以及 `AgentService` / 各 store 的调用点）。
+旧版曾在 Markdown 工作区内落盘。新位置为空时，运行时对下表所列路径会 **复制或移动** 一次（见 `src/config/migrate-internal-state.ts` 以及 `AgentService.migrateDefaultAgentInternalStateFromWorkspace` / 各 store）。`agents/<id>/bootstrap/` 下的人设 Markdown **不会**再从工作区根目录自动导入；请运行 `xopcbot setup` 或 `xopcbot onboard` 补全缺失的 bootstrap 文件，或手动复制。
 
 |旧版（Markdown 工作空间下） | 现网位置 |
 |------------------------------|----------|
