@@ -51,6 +51,12 @@ export {
   assertBrowserUrlAllowed,
 } from './browser/index.js';
 
+export {
+  createDelegateTool,
+  DEFAULT_DELEGATE_TOOLS,
+  DELEGATE_BLOCKED_TOOLS,
+} from './delegate-tool.js';
+
 export { createImageTool, resolveImageModelConfigForTool } from './image-tool.js';
 export { createImageGenerateTool, resolveImageGenerationModelConfigForTool } from './image-generate-tool.js';
 
