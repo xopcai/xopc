@@ -24,7 +24,9 @@ import {
   resolveAgentDir,
   resolveWorkspaceExtensionsDir,
 } from '../config/paths.js';
-import { AgentRunRelay } from './agent-run-relay.js';
+import { AgentRunRelay, type RelayEvent } from './agent-run-relay.js';
+import { ClarifyBridge, type ClarifyBridgeRequest } from './clarify-bridge.js';
+import { registerClarifyBridge } from './clarify-runtime.js';
 import {
   deleteManagedSkill as deleteManagedSkillDir,
   installSkillFromZip,
@@ -88,6 +90,11 @@ export class GatewayService {
   /** Per-run abort for webchat (POST /api/agent/abort or client disconnect). */
   private runAbortControllers = new Map<string, AbortController>();
 
+  private readonly clarifyBridge = new ClarifyBridge();
+
+  /** Maps webchat session key → active `runId` for `clarify` tool routing. */
+  private activeWebchatRunBySession = new Map<string, string>();
+
   constructor(private serviceConfig: GatewayServiceConfig = {}) {
     this.bus = new MessageBus();
     this.configPath = serviceConfig.configPath || resolveConfigPath();
@@ -130,7 +137,38 @@ export class GatewayService {
       model: typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary,
       config: this.config,
       extensionRegistry: this.extensionLoader?.getRegistry(),
+      gatewayClarify: {
+        requestClarification: (sessionKey, request) => {
+          const runId = this.activeWebchatRunBySession.get(sessionKey);
+          const publishSse = runId
+            ? (e: RelayEvent) => {
+                this.agentService.enqueueWebchatSseEvent(sessionKey, e);
+              }
+            : undefined;
+          const parsed = parseSessionKey(sessionKey);
+          const deliver =
+            parsed?.source === 'telegram'
+              ? async (ctx: { sessionKey: string; requestId: string; request: ClarifyBridgeRequest }) => {
+                  await this.deliverTelegramClarify(ctx);
+                }
+              : undefined;
+          if (!runId && !deliver) {
+            return Promise.reject(
+              new Error('Clarify is not available for this session (use webchat, Telegram, or CLI)'),
+            );
+          }
+          return this.clarifyBridge.startRequest({
+            sessionKey,
+            runId,
+            relay: this.runRelay,
+            publishSse,
+            request,
+            deliver,
+          });
+        },
+      },
     });
+
 
     // Set channel manager reference for model switching
     this.agentService.setChannelManager(this.channelManager);
@@ -248,6 +286,8 @@ export class GatewayService {
     this.startTime = Date.now();
     this.running = true;
 
+    registerClarifyBridge(this.clarifyBridge);
+
     this.channelManager.setOutboundHooks({
       runMessageSending: (to, content, channel) =>
         this.agentService.invokeOutboundMessageSending(to, content, channel),
@@ -327,6 +367,8 @@ export class GatewayService {
     // Stop heartbeat service
     this.heartbeatService.stop();
 
+    registerClarifyBridge(null);
+    this.clarifyBridge.dispose();
     this.agentService.stop();
 
     // Unblock `consumeOutbound()` / `consumeInbound()` waiters before stopping channels (CLI agent does the same).
@@ -623,6 +665,7 @@ export class GatewayService {
           ? AbortSignal.any([runOptions.signal, runAbort.signal])
           : runAbort.signal;
 
+        this.activeWebchatRunBySession.set(sessionKey, runId);
         try {
           const eventStream = this.agentService.processDirectStreaming(message, sessionKey, prepared, thinking, {
             signal: mergedSignal,
@@ -654,6 +697,7 @@ export class GatewayService {
           yield errorEvent;
           return { status: 'error', summary: error instanceof Error ? error.message : 'Unknown error' };
         } finally {
+          this.activeWebchatRunBySession.delete(sessionKey);
           this.runAbortControllers.delete(runId);
         }
       }
@@ -684,12 +728,65 @@ export class GatewayService {
 
   /** Abort an in-flight webchat agent run (matches `runId` from SSE `status`). */
   abortAgentRun(runId: string): boolean {
+    this.clarifyBridge.cancelForRun(runId);
+    for (const [sk, id] of this.activeWebchatRunBySession) {
+      if (id === runId) {
+        this.activeWebchatRunBySession.delete(sk);
+      }
+    }
     const c = this.runAbortControllers.get(runId);
     if (!c) {
       return false;
     }
     c.abort();
     return true;
+  }
+
+  private async deliverTelegramClarify(ctx: {
+    sessionKey: string;
+    requestId: string;
+    request: ClarifyBridgeRequest;
+  }): Promise<void> {
+    const parsed = parseSessionKey(ctx.sessionKey);
+    if (!parsed || parsed.source !== 'telegram') {
+      return;
+    }
+
+    let body = ctx.request.question;
+    if (ctx.request.default) {
+      body += `\n\nDefault if unsure: ${ctx.request.default}`;
+    }
+
+    const choices = ctx.request.choices;
+    const buttonRows =
+      choices && choices.length >= 2
+        ? choices.map((c, i) => [
+            {
+              text: c.length > 64 ? `${c.slice(0, 61)}…` : c,
+              callback_data: `clarify:${ctx.requestId}:${i}`,
+            },
+          ])
+        : undefined;
+
+    if (!buttonRows) {
+      body += '\n\nReply with your answer in this chat.';
+    }
+
+    await this.channelManager.send({
+      channel: 'telegram',
+      chat_id: parsed.peerId,
+      content: body,
+      metadata: {
+        accountId: parsed.accountId,
+        ...(parsed.threadId ? { threadId: parsed.threadId } : {}),
+      },
+      buttons: buttonRows,
+    });
+  }
+
+  /** Deliver a user's answer to a pending `clarify` tool call. */
+  submitClarifyResponse(requestId: string, answer: string): boolean {
+    return this.clarifyBridge.handleResponse(requestId, answer);
   }
 
   /**

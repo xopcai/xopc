@@ -7,6 +7,7 @@ import { ChatSseStatus } from '@/features/chat/chat-sse-status';
 import { MessageList } from '@/features/chat/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll-to-bottom-button';
 import { useChatSession } from '@/features/chat/use-chat-session';
+import { ClarifyPrompt } from '@/features/chat/clarify-prompt';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -57,6 +58,9 @@ export function ChatPage() {
     progress,
     sendMessage,
     abort,
+    clarifyPrompt,
+    clarifySubmitting,
+    submitClarifyAnswer,
     hasToken,
     chatAgents,
     displayAgentId,
@@ -224,8 +228,13 @@ export function ChatPage() {
             </div>
 
             <div className="shrink-0 bg-surface-panel py-4">
+              <ClarifyPrompt
+                prompt={clarifyPrompt}
+                submitting={clarifySubmitting}
+                onSubmit={submitClarifyAnswer}
+              />
               <ChatComposer
-                disabled={showSessionLoading || sessionRoutePending}
+                disabled={showSessionLoading || sessionRoutePending || Boolean(clarifyPrompt)}
                 sending={sending}
                 streaming={streaming}
                 thinkingLevel={thinkingLevel}

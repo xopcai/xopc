@@ -684,6 +684,36 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ ok: true, payload: { aborted } });
   });
 
+  // POST /api/clarify/:requestId — Answer a pending `clarify` tool (webchat)
+  authenticated.post('/api/clarify/:requestId', strictRateLimitMiddleware, async (c) => {
+    const requestId = c.req.param('requestId')?.trim() ?? '';
+    if (!requestId) {
+      return c.json(
+        { ok: false, error: { code: 'BAD_REQUEST', message: 'Missing requestId' } },
+        400,
+      );
+    }
+    const body = await c.req.json().catch(() => null);
+    const answer =
+      body && typeof body === 'object' && typeof (body as { answer?: unknown }).answer === 'string'
+        ? (body as { answer: string }).answer.trim()
+        : '';
+    if (!answer) {
+      return c.json(
+        { ok: false, error: { code: 'BAD_REQUEST', message: 'Missing answer field' } },
+        400,
+      );
+    }
+    const handled = service.submitClarifyResponse(requestId, answer);
+    if (!handled) {
+      return c.json(
+        { ok: false, error: { code: 'NOT_FOUND', message: 'No pending clarification with this ID' } },
+        404,
+      );
+    }
+    return c.json({ ok: true, payload: { received: true } });
+  });
+
   // POST /api/send — Send a message through a channel
   authenticated.post('/api/send', strictRateLimitMiddleware, createSendHandler(sseConfig));
 
