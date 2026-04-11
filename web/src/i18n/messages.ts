@@ -43,7 +43,7 @@ const bundles: Record<
     settingsSections: Record<SettingsSectionId, string>;
     /** Full-screen settings left rail — group headings above each block of links. */
     settingsNavGroups: Record<
-      'interface' | 'agentAndModels' | 'channelsAndVoice' | 'gateway' | 'data' | 'management',
+      'interface' | 'agentAndModels' | 'voice' | 'gateway' | 'data',
       string
     >;
     /** Muted one-liner: not all options are editable in the console. */
@@ -1168,10 +1168,9 @@ const bundles: Record<
     settingsNavGroups: {
       gateway: 'Connection & service',
       agentAndModels: 'Providers & models',
-      management: 'Tasks & skills',
       data: 'Sessions & logs',
       interface: 'General',
-      channelsAndVoice: 'Channels & voice',
+      voice: 'Voice',
     },
     settingsConfigNote:
       'Not every server option is available here; some require the CLI or editing the config file on disk.',
@@ -2353,10 +2352,9 @@ const bundles: Record<
     settingsNavGroups: {
       gateway: '连接与服务',
       agentAndModels: '提供商与模型',
-      management: '定时任务与技能',
       data: '会话与日志',
       interface: '通用',
-      channelsAndVoice: 'IM 频道与语音',
+      voice: '语音',
     },
     settingsConfigNote: '并非所有服务器选项都在此界面提供；部分需通过 CLI 或编辑本地配置文件完成。',
     token: {
