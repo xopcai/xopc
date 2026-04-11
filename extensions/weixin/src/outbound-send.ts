@@ -39,7 +39,7 @@ const MEDIA_OUTBOUND_TEMP_DIR = path.join(resolveWeixinRootDir(), 'media', 'outb
 
 /**
  * Weixin ilink text items are plain text (no client-side markdown).
- * Apply StreamingMarkdownFilter (openclaw-weixin), then strip remaining markdown to plain text.
+ * Apply StreamingMarkdownFilter, then strip remaining markdown to plain text.
  */
 export function formatWeixinOutboundText(text: string): string {
   const f = new StreamingMarkdownFilter();
@@ -335,7 +335,7 @@ export function createWeixinOutboundHandlers() {
         contextToken: ctxTok,
       };
 
-      /** openclaw-weixin: audio (e.g. TTS mp3) is not VoiceItem — same as other non-image/video files (FILE attachment). */
+      /** Audio (e.g. TTS mp3) is not VoiceItem — same as other non-image/video files (FILE attachment). */
       const r = await sendWeixinMediaFile({
         filePath,
         to: ctx.to,

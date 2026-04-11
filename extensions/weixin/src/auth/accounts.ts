@@ -111,10 +111,9 @@ function readAccountFile(filePath: string): WeixinAccountData | null {
 }
 
 /**
- * Legacy single-file token: `~/.xopcbot/credentials/openclaw-weixin/credentials.json`
- * (same layout as OpenClaw / openclaw-weixin before per-account files).
+ * Legacy single-file Weixin token before per-account files (fixed path under `credentials/`).
  */
-function loadLegacyOpenclawWeixinToken(): string | undefined {
+function loadLegacyWeixinSingleFileToken(): string | undefined {
   const legacyPath = path.join(
     resolveXopcbotStateDir(),
     'credentials',
@@ -141,7 +140,7 @@ export function loadWeixinAccount(accountId: string): WeixinAccountData | null {
     if (compat) return compat;
   }
 
-  const legacyToken = loadLegacyOpenclawWeixinToken();
+  const legacyToken = loadLegacyWeixinSingleFileToken();
   if (legacyToken) return { token: legacyToken };
 
   return null;

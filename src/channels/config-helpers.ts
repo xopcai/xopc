@@ -1,5 +1,5 @@
 /**
- * Channel config adapter factories (OpenClaw-style).
+ * Channel config adapter factories.
  */
 
 import type { Config } from '../config/index.js';

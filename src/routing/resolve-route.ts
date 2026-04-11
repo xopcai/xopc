@@ -127,7 +127,7 @@ export function applyIdentityLinks(
 }
 
 /**
- * Default agent id from config (OpenClaw-style: `agents.default`, `list[].default`, or `main`).
+ * Default agent id from config (`agents.default`, `list[].default`, or `main`).
  */
 export function getDefaultAgentId(config: RoutingConfig): string {
   return resolveDefaultAgentIdFromConfig(config as Config);

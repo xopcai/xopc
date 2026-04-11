@@ -1,5 +1,5 @@
 /**
- * Channel plugin entry helper for extensions (OpenClaw-style).
+ * Channel plugin entry helper for extensions.
  */
 
 import type { ExtensionApi } from '../types/index.js';

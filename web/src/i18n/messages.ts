@@ -1660,7 +1660,7 @@ const bundles: Record<
     agentsSettings: {
       title: 'Agents',
       subtitle:
-        'Manage agents.list entries (OpenClaw-style): workspaces, default routing, persona bootstrap files.',
+        'Manage agents.list entries: workspaces, default routing, persona bootstrap files.',
       needToken: 'Save a gateway token to manage agents.',
       loadError: 'Failed to load agents',
       saveError: 'Request failed',
@@ -2801,7 +2801,7 @@ const bundles: Record<
     },
     agentsSettings: {
       title: '多代理',
-      subtitle: '管理 agents.list（OpenClaw 式）：工作区、默认路由、bootstrap 人设文件。',
+      subtitle: '管理 agents.list：工作区、默认路由、bootstrap 人设文件。',
       needToken: '请先保存网关 Token 后再管理代理。',
       loadError: '加载代理列表失败',
       saveError: '请求失败',

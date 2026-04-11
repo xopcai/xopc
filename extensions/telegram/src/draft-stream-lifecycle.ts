@@ -1,5 +1,5 @@
 /**
- * Finalizable draft lifecycle helpers (aligned with OpenClaw draft-stream-controls).
+ * Finalizable draft lifecycle helpers for draft streaming.
  */
 
 import { createDraftStreamLoop, type DraftStreamLoop } from './draft-stream-loop.js';

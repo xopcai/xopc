@@ -24,7 +24,7 @@ const QR_LONG_POLL_TIMEOUT_MS = 35_000;
 /** Default `bot_type` for ilink get_bot_qrcode / get_qrcode_status (this channel build). */
 export const DEFAULT_ILINK_BOT_TYPE = "3";
 
-/** Fixed API base URL for all QR code requests (aligned with openclaw-weixin). */
+/** Fixed API base URL for all QR code requests. */
 const FIXED_BASE_URL = "https://ilinkai.weixin.qq.com";
 
 const activeLogins = new Map<string, ActiveLogin>();

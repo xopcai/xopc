@@ -1,5 +1,5 @@
 /**
- * Helpers for building DM/security policy resolvers (OpenClaw-style).
+ * Helpers for building DM/security policy resolvers.
  */
 
 import type { Config } from '../config/index.js';

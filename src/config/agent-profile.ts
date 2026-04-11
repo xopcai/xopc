@@ -1,5 +1,5 @@
 /**
- * Effective agent profile: merges `agents.defaults` with `agents.list` entry (OpenClaw-style).
+ * Effective agent profile: merges `agents.defaults` with `agents.list` entry.
  * Subagent session keys fall back to the configured default agent id for profile lookup.
  */
 

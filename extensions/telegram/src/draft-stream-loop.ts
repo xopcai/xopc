@@ -1,5 +1,5 @@
 /**
- * Throttled draft stream loop (aligned with OpenClaw draft-stream-loop).
+ * Throttled draft stream loop.
  */
 
 export type DraftStreamLoop = {

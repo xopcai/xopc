@@ -24,7 +24,7 @@ export class AgentInbox {
   }
 
   /**
-   * Static factory using agent ID (OpenClaw-style paths from config).
+   * Static factory using agent ID (paths from config).
    */
   static forAgent(config: Config, agentId: string): AgentInbox {
     return new AgentInbox(resolveAgentDir(config, agentId));

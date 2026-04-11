@@ -1,5 +1,5 @@
 /**
- * Telegram channel streaming: live assistant text via draft stream (OpenClaw-style).
+ * Telegram channel streaming: live assistant text via draft stream.
  */
 
 import type {
@@ -64,7 +64,7 @@ export function createTelegramStreamingAdapter(
       const replyToMessageId = Number.isFinite(replyParsed) ? replyParsed : undefined;
       const isPrivate = isProbablyPrivateChat(chatId);
 
-      // OpenClaw: DM uses real message transport to avoid draft→materialize duplicate flash.
+      // DM uses real message transport to avoid draft→materialize duplicate flash.
       const previewTransport = isPrivate ? ('message' as const) : ('auto' as const);
 
       const draft = createTelegramDraftStream({

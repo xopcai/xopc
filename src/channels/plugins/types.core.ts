@@ -1,5 +1,5 @@
 /**
- * Core channel plugin surface (aligned with OpenClaw ChannelMeta / Capabilities).
+ * Core channel plugin surface (metadata and capabilities).
  */
 
 export type ChannelId = string;
