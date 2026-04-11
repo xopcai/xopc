@@ -1,5 +1,5 @@
 import { Cpu, Folder, Globe, Layers, Plus, Trash2, Zap } from 'lucide-react';
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 
 import { Button } from '@/components/ui/button';
 import { ModelSelector } from '@/features/chat/model-selector';
@@ -58,20 +58,26 @@ export function AgentSettingsPanel({ embedded = false }: { embedded?: boolean } 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [saveOk, setSaveOk] = useState(false);
+  const loadGenRef = useRef(0);
 
   const load = useCallback(async () => {
+    const gen = ++loadGenRef.current;
     setLoading(true);
     setError(null);
     try {
       const data = await fetchAgentDefaults();
+      if (gen !== loadGenRef.current) return;
       setForm(data);
       setBaseline(data);
     } catch (e) {
+      if (gen !== loadGenRef.current) return;
       setError(e instanceof Error ? e.message : a.loadError);
       setForm(null);
       setBaseline(null);
     } finally {
-      setLoading(false);
+      if (gen === loadGenRef.current) {
+        setLoading(false);
+      }
     }
   }, [a.loadError]);
 
@@ -83,6 +89,18 @@ export function AgentSettingsPanel({ embedded = false }: { embedded?: boolean } 
       return;
     }
     void load();
+  }, [hasToken, load]);
+
+  useEffect(() => {
+    const onConfigReload = (ev: Event) => {
+      if (!hasToken) return;
+      const d = (ev as CustomEvent<{ section?: string }>).detail;
+      if (d?.section === 'agents' || d?.section === 'full') {
+        void load();
+      }
+    };
+    window.addEventListener('config-reload', onConfigReload as EventListener);
+    return () => window.removeEventListener('config-reload', onConfigReload as EventListener);
   }, [hasToken, load]);
 
   const dirty = useMemo(() => {
@@ -101,7 +119,9 @@ export function AgentSettingsPanel({ embedded = false }: { embedded?: boolean } 
     setSaveOk(false);
     try {
       await patchAgentDefaults(form);
-      setBaseline(form);
+      const fresh = await fetchAgentDefaults();
+      setForm(fresh);
+      setBaseline(fresh);
       setSaveOk(true);
       window.setTimeout(() => setSaveOk(false), 2500);
     } catch (e) {

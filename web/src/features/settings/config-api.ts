@@ -42,17 +42,55 @@ function normalizeModelFallbacks(raw: unknown): string[] {
   return f.filter((x): x is string => typeof x === 'string' && x.trim().length > 0);
 }
 
+function configFromApiResponse(res: unknown): unknown {
+  if (!res || typeof res !== 'object') return undefined;
+  const r = res as Record<string, unknown>;
+  const payload = r.payload;
+  if (payload && typeof payload === 'object' && 'config' in payload) {
+    return (payload as { config?: unknown }).config;
+  }
+  if ('config' in r) return r.config;
+  return undefined;
+}
+
+function truthyBrowserFlag(v: unknown): boolean {
+  return v === true || v === 'true' || v === 1;
+}
+
+function parseBrowserFromDefaults(d: Record<string, unknown>): Pick<AgentDefaultsState, 'browserEnabled' | 'browserHeadless'> {
+  const browser = d.browser;
+  if (!browser || typeof browser !== 'object' || Array.isArray(browser)) {
+    return { browserEnabled: false, browserHeadless: true };
+  }
+  const b = browser as Record<string, unknown>;
+  const enabled = truthyBrowserFlag(b.enabled);
+  const headlessRaw = b.headless;
+  const headless =
+    headlessRaw === false || headlessRaw === 'false' || headlessRaw === 0 ? false : true;
+  return { browserEnabled: enabled, browserHeadless: headless };
+}
+
 export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
-  const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'));
-  const d = (res.payload?.config as { agents?: { defaults?: Record<string, unknown> } })?.agents?.defaults ?? {};
-  const mf = (d as { modelFallbacks?: unknown }).modelFallbacks;
+  const res = await fetchJson<{ ok?: boolean; payload?: { config?: unknown } }>(apiUrl('/api/config'), {
+    cache: 'no-store',
+  });
+  const cfg = configFromApiResponse(res);
+  const agents =
+    cfg && typeof cfg === 'object' && !Array.isArray(cfg) && 'agents' in cfg
+      ? (cfg as { agents?: unknown }).agents
+      : undefined;
+  const defaults =
+    agents && typeof agents === 'object' && !Array.isArray(agents) && 'defaults' in agents
+      ? (agents as { defaults?: unknown }).defaults
+      : undefined;
+  const d =
+    defaults && typeof defaults === 'object' && !Array.isArray(defaults)
+      ? (defaults as Record<string, unknown>)
+      : {};
+  const mf = d.modelFallbacks;
   const modelFallbacksFromApi =
     Array.isArray(mf) && mf.every((x) => typeof x === 'string') ? mf : normalizeModelFallbacks(d.model);
-  const browser = d.browser;
-  const browserObj =
-    typeof browser === 'object' && browser !== null && !Array.isArray(browser)
-      ? (browser as Record<string, unknown>)
-      : null;
+  const { browserEnabled, browserHeadless } = parseBrowserFromDefaults(d);
   return {
     model: normalizeModelRef(d.model),
     modelFallbacks: modelFallbacksFromApi,
@@ -63,8 +101,8 @@ export async function fetchAgentDefaults(): Promise<AgentDefaultsState> {
     temperature: typeof d.temperature === 'number' ? d.temperature : 0.7,
     maxToolIterations: typeof d.maxToolIterations === 'number' ? d.maxToolIterations : 20,
     workspace: typeof d.workspace === 'string' ? d.workspace : '~/.xopcbot/workspace',
-    browserEnabled: browserObj?.enabled === true,
-    browserHeadless: browserObj?.headless !== false,
+    browserEnabled,
+    browserHeadless,
     thinkingDefault: typeof d.thinkingDefault === 'string' ? d.thinkingDefault : 'medium',
     reasoningDefault: typeof d.reasoningDefault === 'string' ? d.reasoningDefault : 'off',
     verboseDefault: typeof d.verboseDefault === 'string' ? d.verboseDefault : 'off',
