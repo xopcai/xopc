@@ -47,6 +47,7 @@ import {
   resolveAgentHomeDir,
   resolveDefaultAgentId,
 } from '../../agent/agent-scope.js';
+import { maxWebchatAgentRequestBodyBytes } from '../chat-limits.js';
 import { 
   getModelsJsonPath,
   loadModelsJson,
@@ -240,14 +241,20 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     },
   }));
 
-  // Default body limit for all API routes (1MB, prevents OOM DoS)
-  const MAX_BODY_SIZE = 1 * 1024 * 1024; // 1MB
-  app.use('/api/*', bodyLimit({
-    maxSize: MAX_BODY_SIZE,
-    onError: (c) => {
-      return c.json({ error: 'Request body too large', maxSize: '1MB' }, 413);
-    },
-  }));
+  // Default body limit for most API routes (1MB, prevents OOM DoS).
+  // Web chat sends base64 attachments on POST /api/agent — use a higher cap (see `chat-limits.ts`).
+  const DEFAULT_API_BODY_MAX = 1 * 1024 * 1024;
+  const WEBCHAT_AGENT_BODY_MAX = maxWebchatAgentRequestBodyBytes();
+
+  app.use('/api/*', async (c, next) => {
+    const maxSize = c.req.path === '/api/agent' ? WEBCHAT_AGENT_BODY_MAX : DEFAULT_API_BODY_MAX;
+    const maxSizeMb = Math.ceil(maxSize / (1024 * 1024));
+    return bodyLimit({
+      maxSize,
+      onError: (ctx) =>
+        ctx.json({ error: 'Request body too large', maxSize: `${maxSizeMb}MB` }, 413),
+    })(c, next);
+  });
 
   // Health endpoint (no auth required)
   app.get('/health', (c) => {

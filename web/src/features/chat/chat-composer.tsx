@@ -4,6 +4,7 @@ import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 
 
 import type { Attachment } from '@/features/chat/attachment-utils';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment-utils';
+import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '@/features/chat/constants';
 import { ChatPendingFollowUpStack } from '@/features/chat/chat-pending-follow-up-stack';
 import { CommandPalette } from '@/features/chat/command-palette';
 import { MAX_PENDING_FOLLOW_UPS, type PendingFollowUp } from '@/features/chat/pending-follow-up.types';
@@ -331,7 +332,6 @@ export const ChatComposer = memo(function ChatComposer({
   const thinkingLevelRef = useRef(thinkingLevel);
   const busyRef = useRef(false);
   const onSendRef = useRef(onSend);
-  const maxFileSize = 20 * 1024 * 1024;
 
   const runBusy = sending || streaming;
 
@@ -399,8 +399,13 @@ export const ChatComposer = memo(function ChatComposer({
       const { loadAttachment } = await import('@/features/chat/attachment-load');
       const next: Attachment[] = [];
       for (const file of slice) {
-        if (file.size > maxFileSize) {
-          console.warn(`File ${file.name} exceeds max size`);
+        if (file.size > MAX_WEBCHAT_ATTACHMENT_FILE_BYTES) {
+          console.warn(
+            interpolate(m.chat.attachmentFileTooLarge, {
+              name: file.name,
+              maxSize: formatFileSize(MAX_WEBCHAT_ATTACHMENT_FILE_BYTES),
+            }),
+          );
           continue;
         }
         try {
@@ -411,7 +416,7 @@ export const ChatComposer = memo(function ChatComposer({
       }
       setAttachments((a) => [...a, ...next]);
     },
-    [attachments.length, m.chat.maxAttachmentsReached, m.chat.maxAttachmentsTruncated, maxFileSize],
+    [attachments.length, m.chat.attachmentFileTooLarge, m.chat.maxAttachmentsReached, m.chat.maxAttachmentsTruncated],
   );
 
   const stopVoiceRecording = useCallback(() => {

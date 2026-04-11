@@ -124,20 +124,22 @@ describe('Gateway Security Fixes', () => {
   });
 
   describe('FIX-3: Body Size Limit', () => {
-    it('should reject requests larger than 1MB on /api/*', async () => {
+    it('should reject requests larger than 1MB on typical /api/* routes', async () => {
       const service = createMockService();
       const app = createHonoApp({ service, token: 'test' });
       
-      // Create a large body (> 1MB)
+      // Create a large body (> 1MB). Set Content-Length so `bodyLimit` can reject without buffering the body.
       const largeBody = { data: 'x'.repeat(2 * 1024 * 1024) };
-      
-      const res = await app.request('/api/agent', {
+      const bodyString = JSON.stringify(largeBody);
+
+      const res = await app.request('/api/config/reload', {
         method: 'POST',
-        headers: { 
+        headers: {
           'Content-Type': 'application/json',
-          'Authorization': 'Bearer test',
+          Authorization: 'Bearer test',
+          'Content-Length': String(Buffer.byteLength(bodyString)),
         },
-        body: JSON.stringify(largeBody),
+        body: bodyString,
       });
       
       // Hono may return 413 from bodyLimit or 400 if the runtime rejects the payload before the limit handler.
