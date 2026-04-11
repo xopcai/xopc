@@ -22,7 +22,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useState } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useLocation, useSearchParams } from 'react-router-dom';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Button } from '@/components/ui/button';
@@ -492,6 +492,8 @@ export function SkillsPage() {
 
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+  const { pathname } = useLocation();
+  const inSettingsShell = pathname.startsWith('/settings/');
 
   const skillsHeaderEnd = useMemo(
     () => (
@@ -554,9 +556,9 @@ export function SkillsPage() {
   );
 
   useLayoutEffect(() => {
-    if (!hasToken) {
+    if (!hasToken || inSettingsShell) {
       clearPageHeader();
-      return;
+      return () => clearPageHeader();
     }
     setPageHeader({
       startExtra: null,
@@ -564,7 +566,7 @@ export function SkillsPage() {
       end: skillsHeaderEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, hasToken, setPageHeader, skillsHeaderEnd]);
+  }, [clearPageHeader, hasToken, inSettingsShell, setPageHeader, skillsHeaderEnd]);
 
   if (!hasToken) {
     return (
@@ -605,6 +607,12 @@ export function SkillsPage() {
             <p className="mt-1 max-w-2xl text-sm text-fg-muted">{sk.tagline}</p>
           </div>
         </header>
+
+        {inSettingsShell ? (
+          <div className="flex flex-col gap-3 border-b border-edge-subtle pb-4 dark:border-edge-subtle sm:flex-row sm:flex-wrap sm:items-center sm:justify-end">
+            {skillsHeaderEnd}
+          </div>
+        ) : null}
 
         <section className="flex flex-col gap-4">
           <div className="flex flex-col gap-3 border-b border-edge-subtle pb-3 sm:flex-row sm:items-center sm:justify-between dark:border-edge-subtle">

@@ -2,7 +2,6 @@ import { lazy, Suspense, useEffect } from 'react';
 import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 
 import { AppShell } from '@/components/shell/app-shell';
-import { SecondaryPageLayout } from '@/components/shell/secondary-page-layout';
 import { SettingsPageLayout } from '@/components/shell/settings-page-layout';
 import { ChatPage } from '@/features/chat/chat-page';
 import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
@@ -15,9 +14,6 @@ const SessionsPage = lazy(() =>
 );
 const CronPage = lazy(() => import('@/pages/cron-page').then((m) => ({ default: m.CronPage })));
 const SkillsPage = lazy(() => import('@/pages/skills-page').then((m) => ({ default: m.SkillsPage })));
-const ChannelsPage = lazy(() =>
-  import('@/pages/channels-page').then((m) => ({ default: m.ChannelsPage })),
-);
 const LogsPage = lazy(() => import('@/pages/logs-page').then((m) => ({ default: m.LogsPage })));
 const SettingsPage = lazy(() =>
   import('@/pages/settings-page').then((m) => ({ default: m.SettingsPage })),
@@ -71,33 +67,16 @@ const router = createHashRouter([
         element: <Navigate to="/settings/logs" replace />,
       },
       {
-        element: <SecondaryPageLayout />,
-        children: [
-          {
-            path: 'cron',
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <CronPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: 'skills',
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <SkillsPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: 'channels',
-            element: (
-              <Suspense fallback={<SecondaryRouteFallback />}>
-                <ChannelsPage />
-              </Suspense>
-            ),
-          },
-        ],
+        path: 'cron',
+        element: <Navigate to="/settings/cron" replace />,
+      },
+      {
+        path: 'skills',
+        element: <Navigate to="/settings/skills" replace />,
+      },
+      {
+        path: 'channels',
+        element: <Navigate to="/settings/channels" replace />,
       },
       {
         path: 'settings',
@@ -117,6 +96,22 @@ const router = createHashRouter([
             element: (
               <Suspense fallback={<SecondaryRouteFallback />}>
                 <LogsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'cron',
+            element: (
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <CronPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'skills',
+            element: (
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <SkillsPage />
               </Suspense>
             ),
           },

@@ -43,9 +43,11 @@ const bundles: Record<
     settingsSections: Record<SettingsSectionId, string>;
     /** Full-screen settings left rail — group headings above each block of links. */
     settingsNavGroups: Record<
-      'interface' | 'agentAndModels' | 'channelsAndVoice' | 'gateway' | 'data',
+      'interface' | 'agentAndModels' | 'channelsAndVoice' | 'gateway' | 'data' | 'management',
       string
     >;
+    /** Muted one-liner: not all options are editable in the console. */
+    settingsConfigNote: string;
     token: {
       title: string;
       description: string;
@@ -1149,7 +1151,7 @@ const bundles: Record<
       settingsGateway: 'Gateway',
       settingsHeartbeat: 'Heartbeat',
       settingsSearch: 'Web search',
-      settingsAgents: 'Multi-agent',
+      settingsAgents: 'Agents',
     },
     settingsSections: {
       appearance: 'Preferences',
@@ -1166,10 +1168,13 @@ const bundles: Record<
     settingsNavGroups: {
       gateway: 'Connection & service',
       agentAndModels: 'Providers & models',
+      management: 'Tasks & skills',
       data: 'Sessions & logs',
       interface: 'General',
       channelsAndVoice: 'Channels & voice',
     },
+    settingsConfigNote:
+      'Not every server option is available here; some require the CLI or editing the config file on disk.',
     token: {
       title: 'Authentication required',
       description: 'Enter your gateway token to continue.',
@@ -2303,7 +2308,7 @@ const bundles: Record<
       themeOptionLight: 'Light',
       themeOptionDark: 'Dark',
       themeOptionSystem: 'System',
-      openFullPreferences: 'Open full preferences',
+      openFullPreferences: 'Open all settings',
       quickMenuHint: 'Language, theme, and text size',
     },
   },
@@ -2348,10 +2353,12 @@ const bundles: Record<
     settingsNavGroups: {
       gateway: '连接与服务',
       agentAndModels: '提供商与模型',
+      management: '定时任务与技能',
       data: '会话与日志',
       interface: '通用',
       channelsAndVoice: 'IM 频道与语音',
     },
+    settingsConfigNote: '并非所有服务器选项都在此界面提供；部分需通过 CLI 或编辑本地配置文件完成。',
     token: {
       title: '需要身份验证',
       description: '请输入网关 Token 以继续。',
@@ -3466,7 +3473,7 @@ const bundles: Record<
       themeOptionLight: '亮色',
       themeOptionDark: '深色',
       themeOptionSystem: '跟随系统',
-      openFullPreferences: '打开完整偏好设置',
+      openFullPreferences: '打开全部设置',
       quickMenuHint: '语言、主题与字号',
     },
   },
@@ -3479,27 +3486,6 @@ export type VoiceSettingsMessages = (typeof bundles)['en']['voiceSettings'];
 export type GatewaySettingsMessages = (typeof bundles)['en']['gatewaySettings'];
 export type HeartbeatSettingsMessages = (typeof bundles)['en']['heartbeatSettings'];
 export type WebSearchSettingsMessages = (typeof bundles)['en']['webSearchSettings'];
-
-export type TabGroup = { label: string; tabs: readonly Tab[] };
-
-export function getTabGroups(lang: StoredLanguage): TabGroup[] {
-  const m = messages(lang);
-  return [
-    { label: m.nav.chat, tabs: ['chat'] as const },
-    { label: m.nav.management, tabs: ['cron', 'skills'] as const },
-    { label: m.settingsNavGroups.gateway, tabs: ['settingsGateway', 'settingsHeartbeat'] as const },
-    {
-      label: m.settingsNavGroups.agentAndModels,
-      tabs: ['settingsProviders', 'settingsModels', 'settingsAgents', 'settingsSearch'] as const,
-    },
-    { label: m.settingsNavGroups.data, tabs: ['sessions', 'logs'] as const },
-    { label: m.settingsNavGroups.interface, tabs: ['settingsAppearance'] as const },
-    {
-      label: m.settingsNavGroups.channelsAndVoice,
-      tabs: ['settingsChannels', 'settingsVoice'] as const,
-    },
-  ];
-}
 
 export function messages(lang: StoredLanguage) {
   return bundles[lang];
