@@ -11,7 +11,7 @@ import {
 } from '@mariozechner/pi-ai';
 import type { Config } from '../config/schema.js';
 import { getModelRegistry } from './model-registry.js';
-import { resolveApiKey, hasCredentials } from '../auth/credentials.js';
+import { CredentialResolver, resolveApiKey, hasCredentials } from '../auth/credentials.js';
 import { hasProviderAuthOnDiskSync } from '../auth/sync-provider-auth.js';
 import { getApiKeyFromEnv } from './env-keys.js';
 
@@ -125,12 +125,31 @@ export function isProviderConfiguredSync(provider: string): boolean {
 }
 
 export async function isProviderConfigured(provider: string): Promise<boolean> {
-	// Check registry first for custom providers (from models.json)
-	const registry = getModelRegistry();
-	if (registry.getApiKey(provider)) {
-		return true;
-	}
-	return await hasCredentials(provider);
+  // Check registry first for custom providers (from models.json)
+  const registry = getModelRegistry();
+  if (registry.getApiKey(provider)) {
+    return true;
+  }
+  return await hasCredentials(provider);
+}
+
+/** Where runtime {@link getApiKey} resolves the key from (no secret values). */
+export type ProviderActiveKeySource = 'none' | 'agent' | 'gateway' | 'oauth' | 'env' | 'models_json';
+
+export async function getProviderActiveKeySource(provider: string): Promise<ProviderActiveKeySource> {
+  const resolver = new CredentialResolver();
+  const fromCredentials = await resolver.resolveApiKeySource(provider);
+  if (fromCredentials === 'agent') return 'agent';
+  if (fromCredentials === 'global') return 'gateway';
+  if (fromCredentials === 'oauth') return 'oauth';
+  if (fromCredentials === 'env') return 'env';
+
+  const registry = getModelRegistry();
+  if (registry.getApiKey(provider)) {
+    return 'models_json';
+  }
+
+  return 'none';
 }
 
 export async function getConfiguredProviders(): Promise<string[]> {

@@ -11,9 +11,11 @@ import {
   Loader2,
   LogIn,
   LogOut,
+  Search,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Link } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { Button } from '@/components/ui/button';
@@ -32,6 +34,8 @@ import {
   mergeProviderRows,
   patchProviderApiKeys,
   providersKeysFromConfigRoot,
+  testProviderKeyResolution,
+  type ProviderActiveKeySource,
   type ProviderCategory,
   type ProviderMeta,
   type ProviderRowModel,
@@ -60,6 +64,27 @@ function groupByCategory(rows: ProviderRowModel[]): Map<ProviderCategory, Provid
   return map;
 }
 
+function interpolate(template: string, params: Record<string, string>): string {
+  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
+}
+
+function activeSourceLabel(labels: ProvidersSettingsMessages, src: ProviderActiveKeySource | undefined): string {
+  switch (src) {
+    case 'agent':
+      return labels.sourceAgent;
+    case 'gateway':
+      return labels.sourceGateway;
+    case 'oauth':
+      return labels.sourceOauth;
+    case 'env':
+      return labels.sourceEnv;
+    case 'models_json':
+      return labels.sourceModelsJson;
+    default:
+      return labels.sourceNone;
+  }
+}
+
 export function ProvidersSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -71,8 +96,11 @@ export function ProvidersSettingsPanel() {
   const [baseline, setBaseline] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [saveOk, setSaveOk] = useState(false);
-  const [expandedCats, setExpandedCats] = useState<Set<string>>(() => new Set());
+  const [saveNotice, setSaveNotice] = useState<null | 'saved' | 'noChanges'>(null);
+  const [expandedCats, setExpandedCats] = useState<Set<string>>(() => new Set(['common']));
+  const [searchQuery, setSearchQuery] = useState('');
+  const [unconfiguredOnly, setUnconfiguredOnly] = useState(false);
+  const prevSearchRef = useRef('');
 
   const metaUrl = apiUrl('/api/providers/meta');
   const fetchMetaList = useCallback(async (url: string) => {
@@ -123,6 +151,16 @@ export function ProvidersSettingsPanel() {
   );
 
   useEffect(() => {
+    if (!dirty) return;
+    const onBeforeUnload = (e: BeforeUnloadEvent) => {
+      e.preventDefault();
+      e.returnValue = '';
+    };
+    window.addEventListener('beforeunload', onBeforeUnload);
+    return () => window.removeEventListener('beforeunload', onBeforeUnload);
+  }, [dirty]);
+
+  useEffect(() => {
     if (!hasToken || mergedRows === null) return;
     if (!dirty) {
       const d: Record<string, string> = {};
@@ -131,6 +169,38 @@ export function ProvidersSettingsPanel() {
       setBaseline({ ...d });
     }
   }, [hasToken, mergedRows, dirty]);
+
+  const metaRows = mergedRows ?? [];
+
+  const filteredRows = useMemo(() => {
+    let rows = metaRows;
+    const q = searchQuery.trim().toLowerCase();
+    if (q) {
+      rows = rows.filter((r) => r.id.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
+    }
+    if (unconfiguredOnly) {
+      rows = rows.filter((r) => !r.configured);
+    }
+    return rows;
+  }, [metaRows, searchQuery, unconfiguredOnly]);
+
+  const groups = useMemo(() => groupByCategory(filteredRows), [filteredRows]);
+
+  useEffect(() => {
+    const prev = prevSearchRef.current;
+    prevSearchRef.current = searchQuery;
+    if (searchQuery.trim()) {
+      const next = new Set<string>();
+      for (const c of CATEGORY_ORDER) {
+        if ((groups.get(c) ?? []).length > 0) next.add(c);
+      }
+      setExpandedCats(next);
+      return;
+    }
+    if (prev.trim()) {
+      setExpandedCats(new Set(['common']));
+    }
+  }, [searchQuery, groups]);
 
   const save = useCallback(async () => {
     if (saving) return;
@@ -142,13 +212,13 @@ export function ProvidersSettingsPanel() {
     }
     if (Object.keys(toPatch).length === 0) {
       setBaseline({ ...draft });
-      setSaveOk(true);
-      window.setTimeout(() => setSaveOk(false), 2500);
+      setSaveNotice('noChanges');
+      window.setTimeout(() => setSaveNotice(null), 2500);
       return;
     }
     setSaving(true);
     setError(null);
-    setSaveOk(false);
+    setSaveNotice(null);
     try {
       await patchProviderApiKeys(toPatch);
       const [nextCfg, nextMeta] = await Promise.all([mutCfg(), mutMeta()]);
@@ -162,14 +232,20 @@ export function ProvidersSettingsPanel() {
         setDraft(d);
         setBaseline({ ...d });
       }
-      setSaveOk(true);
-      window.setTimeout(() => setSaveOk(false), 2500);
+      setSaveNotice('saved');
+      window.setTimeout(() => setSaveNotice(null), 2500);
     } catch (e) {
       setError(e instanceof Error ? e.message : p.saveError);
     } finally {
       setSaving(false);
     }
   }, [cfgData, draft, metaList, models, mutCfg, mutMeta, p.saveError, saving]);
+
+  const discard = useCallback(() => {
+    setDraft({ ...baseline });
+    setError(null);
+    setSaveNotice(null);
+  }, [baseline]);
 
   const toggleCat = (cat: string) => {
     setExpandedCats((prev) => {
@@ -184,6 +260,8 @@ export function ProvidersSettingsPanel() {
     void mutCfg();
     void mutMeta();
   }, [mutCfg, mutMeta]);
+
+  const filtersActive = Boolean(searchQuery.trim() || unconfiguredOnly);
 
   if (!hasToken) {
     return (
@@ -209,12 +287,13 @@ export function ProvidersSettingsPanel() {
     );
   }
 
-  const metaRows = mergedRows ?? [];
-
   if (metaRows.length === 0) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10">
-        <p className="text-sm text-fg-muted">{error ?? fetchError ?? p.empty}</p>
+        <div className="rounded-xl border border-edge-subtle bg-surface-base px-4 py-3">
+          <p className="text-sm font-medium text-fg">{p.loadError}</p>
+          <p className="mt-1 text-sm text-fg-muted">{error ?? fetchError ?? p.empty}</p>
+        </div>
         <Button
           type="button"
           variant="secondary"
@@ -229,22 +308,27 @@ export function ProvidersSettingsPanel() {
     );
   }
 
-  const groups = groupByCategory(metaRows);
-
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
-      <header className="flex flex-col gap-2 sm:flex-row sm:items-start sm:justify-between">
-        <div>
+      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+        <div className="min-w-0">
           <h1 className="text-lg font-semibold tracking-tight text-fg">{m.settingsSections.providers}</h1>
           <p className="mt-1 text-sm text-fg-muted">{p.subtitle}</p>
+          <p className="mt-2 text-xs text-fg-subtle">{p.rotateHint}</p>
         </div>
-        <div className="flex shrink-0 items-center gap-2">
-          {saveOk ? <span className="text-sm text-fg-muted">{p.saved}</span> : null}
+        <div className="flex shrink-0 flex-wrap items-center gap-2">
+          {saveNotice === 'saved' ? <span className="text-sm text-fg-muted">{p.saved}</span> : null}
+          {saveNotice === 'noChanges' ? <span className="text-sm text-fg-muted">{p.noChangesSaved}</span> : null}
+          <Button type="button" variant="secondary" disabled={!dirty || saving} onClick={discard}>
+            {p.discard}
+          </Button>
           <Button type="button" variant="primary" disabled={!dirty || saving} onClick={() => void save()}>
             {saving ? p.saving : p.save}
           </Button>
         </div>
       </header>
+
+      {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{p.unsavedHint}</p> : null}
 
       <p className="text-sm leading-relaxed text-fg-muted">
         {p.intro}{' '}
@@ -256,7 +340,59 @@ export function ProvidersSettingsPanel() {
         >
           {p.docsLink}
         </a>
+        {' · '}
+        <Link
+          to="/settings/models"
+          className="font-medium text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+        >
+          {p.modelsLink}
+        </Link>
       </p>
+
+      <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-center">
+        <div className="relative min-w-0 flex-1 sm:max-w-md">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+          <input
+            type="search"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder={p.searchPlaceholder}
+            autoComplete="off"
+            className={cn(
+              'w-full rounded-lg border border-edge bg-surface-panel py-2 pl-10 pr-3 text-sm text-fg placeholder:text-fg-subtle',
+              settingsInputFocusClass,
+              'dark:border-edge',
+            )}
+            aria-label={p.searchPlaceholder}
+          />
+        </div>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-fg-muted">
+          <input
+            type="checkbox"
+            checked={unconfiguredOnly}
+            onChange={(e) => setUnconfiguredOnly(e.target.checked)}
+            className="size-4 rounded border-edge text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+          />
+          {p.unconfiguredOnly}
+        </label>
+        {filtersActive ? (
+          <Button
+            type="button"
+            variant="ghost"
+            className="h-9 w-fit self-start text-fg-muted"
+            onClick={() => {
+              setSearchQuery('');
+              setUnconfiguredOnly(false);
+            }}
+          >
+            {p.clearFilters}
+          </Button>
+        ) : null}
+      </div>
 
       {error ? (
         <div
@@ -267,76 +403,93 @@ export function ProvidersSettingsPanel() {
         </div>
       ) : null}
 
-      <div className="flex flex-col gap-3">
-        {CATEGORY_ORDER.map((cat) => {
-          const list = groups.get(cat) ?? [];
-          if (list.length === 0) return null;
-          const expanded = expandedCats.has(cat);
-          const configuredCount = list.filter((r) => r.configured).length;
-          return (
-            <section
-              key={cat}
-              className="overflow-hidden rounded-2xl bg-surface-base"
-            >
-              <button
-                type="button"
-                className="flex w-full items-center justify-between gap-2 border-b border-edge-subtle px-4 py-3 text-left transition-colors hover:bg-surface-hover/60 dark:border-edge-subtle"
-                onClick={() => toggleCat(cat)}
-              >
-                <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
-                  <span className="truncate">{p.categories[cat]}</span>
-                  <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
-                    {list.length}
-                  </span>
-                </span>
-                <span className="flex shrink-0 items-center gap-2">
-                  {configuredCount > 0 ? (
-                    <span className="flex items-center gap-1 text-xs text-fg-subtle">
-                      <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden />
-                      {interpolate(p.configuredCount, { count: String(configuredCount) })}
+      {filteredRows.length === 0 ? (
+        <div className="rounded-xl border border-dashed border-edge-subtle bg-surface-base px-4 py-8 text-center text-sm text-fg-muted">
+          <p>{p.noMatches}</p>
+          <Button
+            type="button"
+            variant="secondary"
+            className="mt-4"
+            onClick={() => {
+              setSearchQuery('');
+              setUnconfiguredOnly(false);
+            }}
+          >
+            {p.clearFilters}
+          </Button>
+        </div>
+      ) : (
+        <div className="flex flex-col gap-3">
+          {CATEGORY_ORDER.map((cat) => {
+            const list = groups.get(cat) ?? [];
+            if (list.length === 0) return null;
+            const expanded = expandedCats.has(cat);
+            const configuredCount = list.filter((r) => r.configured).length;
+            const panelId = `providers-cat-${cat}`;
+            return (
+              <section key={cat} className="overflow-hidden rounded-2xl bg-surface-base">
+                <button
+                  type="button"
+                  id={`${panelId}-trigger`}
+                  aria-expanded={expanded}
+                  aria-controls={panelId}
+                  className="flex w-full items-center justify-between gap-2 border-b border-edge-subtle px-4 py-3 text-left transition-colors hover:bg-surface-hover/60 dark:border-edge-subtle"
+                  onClick={() => toggleCat(cat)}
+                >
+                  <span className="flex min-w-0 items-center gap-2 text-sm font-semibold text-fg">
+                    <span className="truncate">{p.categories[cat]}</span>
+                    <span className="shrink-0 rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+                      {list.length}
                     </span>
-                  ) : null}
-                  <ChevronDown
-                    className={cn('size-4 text-fg-subtle transition-transform', expanded && 'rotate-180')}
-                    aria-hidden
-                  />
-                </span>
-              </button>
-              {expanded ? (
-                <div className="divide-y divide-edge-subtle">
-                  {list.map((row) => (
-                    <ProviderCredentialRow
-                      key={row.id}
-                      row={row}
-                      value={draft[row.id] ?? ''}
-                      labels={p}
-                      onChange={(id, v) => setDraft((d) => ({ ...d, [id]: v }))}
-                      onReload={refreshProviders}
+                  </span>
+                  <span className="flex shrink-0 items-center gap-2">
+                    {configuredCount > 0 ? (
+                      <span className="flex items-center gap-1 text-xs text-fg-subtle">
+                        <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden />
+                        {interpolate(p.configuredCount, { count: String(configuredCount) })}
+                      </span>
+                    ) : null}
+                    <ChevronDown
+                      className={cn('size-4 text-fg-subtle transition-transform', expanded && 'rotate-180')}
+                      aria-hidden
                     />
-                  ))}
-                </div>
-              ) : null}
-            </section>
-          );
-        })}
-      </div>
+                  </span>
+                </button>
+                {expanded ? (
+                  <div id={panelId} role="region" aria-labelledby={`${panelId}-trigger`} className="divide-y divide-edge-subtle">
+                    {list.map((row) => (
+                      <ProviderCredentialRow
+                        key={row.id}
+                        row={row}
+                        value={draft[row.id] ?? ''}
+                        rowDirty={(draft[row.id] ?? '') !== (baseline[row.id] ?? '')}
+                        labels={p}
+                        onChange={(id, v) => setDraft((d) => ({ ...d, [id]: v }))}
+                        onReload={refreshProviders}
+                      />
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
-}
-
-function interpolate(template: string, params: Record<string, string>): string {
-  return template.replace(/\{\{(\w+)\}\}/g, (_, key) => String(params[key] ?? ''));
 }
 
 function ProviderCredentialRow({
   row,
   value,
+  rowDirty,
   labels,
   onChange,
   onReload,
 }: {
   row: ProviderRowModel;
   value: string;
+  rowDirty: boolean;
   labels: ProvidersSettingsMessages;
   onChange: (id: string, v: string) => void;
   onReload: () => void;
@@ -344,6 +497,7 @@ function ProviderCredentialRow({
   const [expanded, setExpanded] = useState(false);
   const [showKey, setShowKey] = useState(false);
   const [copied, setCopied] = useState(false);
+  const [revokeError, setRevokeError] = useState<string | null>(null);
   const masked = isMaskedKey(value);
   const inputValue = masked && !showKey ? '' : value;
   const isOAuthConfigured = row.configured && !masked && Boolean(value);
@@ -357,7 +511,12 @@ function ProviderCredentialRow({
   const [authUrl, setAuthUrl] = useState<string | undefined>();
   const [instructions, setInstructions] = useState<string | undefined>();
   const [codeInput, setCodeInput] = useState('');
-  const lastOpenedAuthUrl = useRef<string | undefined>(undefined);
+
+  const [testLoading, setTestLoading] = useState(false);
+  const [testMessage, setTestMessage] = useState<string | null>(null);
+  const [testOk, setTestOk] = useState<boolean | null>(null);
+
+  const activeSrc = row.activeKeySource ?? 'none';
 
   useEffect(() => {
     return () => {
@@ -378,10 +537,6 @@ function ProviderCredentialRow({
           setInstructions(st.instructions);
           if (st.status === 'waiting_auth' || st.status === 'waiting_code') {
             setOauthStatus(st.status === 'waiting_code' ? 'waiting_code' : 'waiting');
-            if (st.authUrl && st.authUrl !== lastOpenedAuthUrl.current) {
-              lastOpenedAuthUrl.current = st.authUrl;
-              window.open(st.authUrl, '_blank', 'noopener,noreferrer');
-            }
           } else if (st.status === 'completed') {
             window.clearInterval(id);
             setOauthLoading(false);
@@ -403,7 +558,6 @@ function ProviderCredentialRow({
   }, [sessionId, oauthLoading, onReload]);
 
   const startOAuth = async () => {
-    lastOpenedAuthUrl.current = undefined;
     setOauthLoading(true);
     setOauthStatus('waiting');
     setOauthMessage(labels.oauthStarting);
@@ -447,9 +601,10 @@ function ProviderCredentialRow({
 
   const doRevoke = () => {
     if (!window.confirm(interpolate(labels.revokeConfirm, { name: row.name }))) return;
+    setRevokeError(null);
     void revokeOAuth(row.id)
       .then(() => onReload())
-      .catch((e) => alert(e instanceof Error ? e.message : 'Revoke failed'));
+      .catch((e) => setRevokeError(e instanceof Error ? e.message : labels.revokeFailed));
   };
 
   const copyKey = async () => {
@@ -462,6 +617,41 @@ function ProviderCredentialRow({
       /* ignore */
     }
   };
+
+  const runTest = async () => {
+    const v = value.trim();
+    if (!v || isMaskedKey(v)) return;
+    setTestLoading(true);
+    setTestMessage(null);
+    setTestOk(null);
+    try {
+      const res = await testProviderKeyResolution(v);
+      if (res.error) {
+        setTestOk(false);
+        setTestMessage(`${labels.testFailed} ${res.error}`);
+        return;
+      }
+      setTestOk(true);
+      if (res.type === 'env') setTestMessage(labels.testOkEnv);
+      else if (res.type === 'command') setTestMessage(labels.testOkCommand);
+      else setTestMessage(labels.testOkLiteral);
+    } catch (e) {
+      setTestOk(false);
+      setTestMessage(e instanceof Error ? e.message : labels.testFailed);
+    } finally {
+      setTestLoading(false);
+    }
+  };
+
+  const secondaryLine = rowDirty
+    ? labels.metaWillSave
+    : row.configured
+      ? masked
+        ? `${labels.metaMasked} · ${labels.runtimeLabelPrefix} ${activeSourceLabel(labels, activeSrc)}`
+        : `${labels.runtimeLabelPrefix} ${activeSourceLabel(labels, activeSrc)}`
+      : labels.metaNotConfigured;
+
+  const detailsId = `provider-details-${row.id}`;
 
   return (
     <div className="bg-surface-panel">
@@ -479,97 +669,136 @@ function ProviderCredentialRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold text-fg">{row.name}</span>
+            <span className="rounded bg-surface-hover px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
+              {row.id}
+            </span>
             <span className="rounded bg-surface-hover px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
               {row.category}
             </span>
           </div>
-          <p className="mt-0.5 text-xs text-fg-muted">
-            {row.configured
-              ? masked
-                ? labels.metaMasked
-                : labels.metaWillSave
-              : labels.metaNotConfigured}
-          </p>
+          <p className="mt-0.5 text-xs text-fg-muted">{secondaryLine}</p>
         </div>
         <Button
           type="button"
           variant="ghost"
           className="h-9 w-9 shrink-0 p-0"
           aria-expanded={expanded}
+          aria-controls={detailsId}
+          aria-label={labels.expandRowDetails}
           onClick={() => setExpanded((e) => !e)}
         >
-          <ChevronDown className={cn('size-4 transition-transform', expanded && 'rotate-180')} />
+          <ChevronDown className={cn('size-4 transition-transform', expanded && 'rotate-180')} aria-hidden />
         </Button>
       </div>
 
       {expanded ? (
-        <div className="space-y-3 border-t border-edge-subtle bg-surface-base/40 px-3 py-3 dark:bg-surface-base/20 sm:px-4">
+        <div
+          id={detailsId}
+          role="region"
+          className="space-y-3 border-t border-edge-subtle bg-surface-base/40 px-3 py-3 dark:bg-surface-base/20 sm:px-4"
+        >
           {row.supportsApiKey !== false ? (
-            <div className="relative flex gap-2">
-              <div className="relative min-w-0 flex-1">
-                <input
-                  type={showKey || !masked ? 'text' : 'password'}
-                  className={cn(
-                    'w-full rounded-lg border border-edge bg-surface-panel py-2 pl-3 pr-20 font-mono text-sm text-fg',
-                    'placeholder:text-fg-subtle',
-                    settingsInputFocusClass,
-                    'dark:border-edge',
-                  )}
-                  value={inputValue}
-                  placeholder={
-                    masked ? labels.placeholderOverride : row.configured ? labels.placeholderKeep : labels.placeholderKey
-                  }
-                  disabled={oauthLoading}
-                  onChange={(e) => onChange(row.id, e.target.value)}
-                  autoComplete="off"
-                  spellCheck={false}
-                />
-                <div className="absolute right-1 top-1/2 flex -translate-y-1/2 gap-0.5">
-                  {value && !masked ? (
+            <div className="flex flex-col gap-2">
+              <div className="relative flex flex-col gap-2 sm:flex-row sm:gap-2">
+                <div className="relative min-w-0 flex-1">
+                  <input
+                    type={showKey || !masked ? 'text' : 'password'}
+                    className={cn(
+                      'w-full rounded-lg border border-edge bg-surface-panel py-2 pl-3 pr-20 font-mono text-sm text-fg',
+                      'placeholder:text-fg-subtle',
+                      settingsInputFocusClass,
+                      'dark:border-edge',
+                    )}
+                    value={inputValue}
+                    placeholder={
+                      masked ? labels.placeholderOverride : row.configured ? labels.placeholderKeep : labels.placeholderKey
+                    }
+                    disabled={oauthLoading}
+                    onChange={(e) => onChange(row.id, e.target.value)}
+                    autoComplete="off"
+                    spellCheck={false}
+                  />
+                  <div className="absolute right-1 top-1/2 flex -translate-y-1/2 gap-0.5">
+                    {value && !masked ? (
+                      <button
+                        type="button"
+                        className={cn(
+                          'rounded p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg',
+                          interaction.transition,
+                          interaction.press,
+                          interaction.focusRingPanel,
+                        )}
+                        title={copied ? labels.copied : labels.copy}
+                        aria-label={copied ? labels.copied : labels.copy}
+                        onClick={() => void copyKey()}
+                      >
+                        {copied ? <CheckCircle2 className="size-4" /> : <Copy className="size-4" />}
+                      </button>
+                    ) : null}
                     <button
                       type="button"
                       className={cn(
-                        'rounded p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg',
+                        'rounded p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg disabled:opacity-40',
                         interaction.transition,
                         interaction.press,
                         interaction.focusRingPanel,
                       )}
-                      title={copied ? labels.copied : labels.copy}
-                      aria-label={copied ? labels.copied : labels.copy}
-                      onClick={() => void copyKey()}
+                      title={showKey ? labels.hide : labels.show}
+                      aria-label={showKey ? labels.hide : labels.show}
+                      disabled={masked}
+                      onClick={() => setShowKey((s) => !s)}
                     >
-                      {copied ? <CheckCircle2 className="size-4" /> : <Copy className="size-4" />}
+                      {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
-                  ) : null}
-                  <button
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-2 sm:shrink-0">
+                  <Button
                     type="button"
-                    className={cn(
-                      'rounded p-1.5 text-fg-subtle hover:bg-surface-hover hover:text-fg disabled:opacity-40',
-                      interaction.transition,
-                      interaction.press,
-                      interaction.focusRingPanel,
-                    )}
-                    title={showKey ? labels.hide : labels.show}
-                    aria-label={showKey ? labels.hide : labels.show}
-                    disabled={masked}
-                    onClick={() => setShowKey((s) => !s)}
+                    variant="secondary"
+                    className="gap-1"
+                    disabled={oauthLoading || testLoading || !value.trim() || isMaskedKey(value)}
+                    onClick={() => void runTest()}
                   >
-                    {showKey ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
-                  </button>
+                    {testLoading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : null}
+                    {testLoading ? labels.testingKey : labels.testKey}
+                  </Button>
+                  {row.supportsOAuth ? (
+                    isOAuthConfigured ? (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="gap-1 text-red-600 dark:text-red-400"
+                        onClick={doRevoke}
+                      >
+                        <LogOut className="size-4" aria-hidden />
+                        {labels.revoke}
+                      </Button>
+                    ) : (
+                      <Button
+                        type="button"
+                        variant="secondary"
+                        className="gap-1"
+                        disabled={oauthLoading}
+                        onClick={() => void startOAuth()}
+                      >
+                        {oauthLoading ? <Loader2 className="size-4 animate-spin" aria-hidden /> : <LogIn className="size-4" aria-hidden />}
+                        {labels.oauth}
+                      </Button>
+                    )
+                  ) : null}
                 </div>
               </div>
-              {row.supportsOAuth ? (
-                isOAuthConfigured ? (
-                  <Button type="button" variant="secondary" className="shrink-0 gap-1 text-red-600 dark:text-red-400" onClick={doRevoke}>
-                    <LogOut className="size-4" />
-                    {labels.revoke}
-                  </Button>
-                ) : (
-                  <Button type="button" variant="secondary" className="shrink-0 gap-1" disabled={oauthLoading} onClick={() => void startOAuth()}>
-                    {oauthLoading ? <Loader2 className="size-4 animate-spin" /> : <LogIn className="size-4" />}
-                    {labels.oauth}
-                  </Button>
-                )
+              {testMessage ? (
+                <p
+                  className={cn(
+                    'text-xs',
+                    testOk === false ? 'text-red-600 dark:text-red-400' : 'text-fg-muted',
+                  )}
+                  role="status"
+                >
+                  {testMessage}
+                </p>
               ) : null}
             </div>
           ) : null}
@@ -584,13 +813,23 @@ function ProviderCredentialRow({
               )}
             >
               {oauthStatus === 'error' ? (
-                <AlertCircle className="mt-0.5 size-4 shrink-0" />
+                <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
               ) : oauthStatus === 'success' ? (
-                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" />
+                <CheckCircle2 className="mt-0.5 size-4 shrink-0 text-emerald-600" aria-hidden />
               ) : (
-                <Info className="mt-0.5 size-4 shrink-0" />
+                <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
               )}
               <span>{oauthMessage}</span>
+            </div>
+          ) : null}
+
+          {revokeError ? (
+            <div
+              className="flex gap-2 rounded-md border border-red-200 bg-red-50 px-3 py-2 text-xs text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-400"
+              role="alert"
+            >
+              <AlertCircle className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <span>{revokeError}</span>
             </div>
           ) : null}
 
@@ -603,12 +842,12 @@ function ProviderCredentialRow({
                   rel="noopener noreferrer"
                   className="inline-flex items-center gap-1.5 rounded-md bg-accent px-3 py-2 text-sm font-medium text-white hover:bg-accent-hover"
                 >
-                  <ExternalLink className="size-4" />
+                  <ExternalLink className="size-4" aria-hidden />
                   {labels.openAuthPage}
                 </a>
               ) : null}
               <Button type="button" variant="secondary" className="gap-1" onClick={() => void cancelFlow()}>
-                <X className="size-4" />
+                <X className="size-4" aria-hidden />
                 {labels.cancelOAuth}
               </Button>
             </div>
@@ -616,7 +855,7 @@ function ProviderCredentialRow({
 
           {instructions ? (
             <div className="flex gap-2 rounded-md bg-surface-hover/60 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/40">
-              <Info className="mt-0.5 size-4 shrink-0" />
+              <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
               <span>{instructions}</span>
             </div>
           ) : null}
@@ -643,8 +882,8 @@ function ProviderCredentialRow({
 
           {masked ? (
             <div className="flex gap-2 rounded-md bg-surface-hover/60 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/40">
-              <Info className="mt-0.5 size-4 shrink-0" />
-              <span>{labels.envHint}</span>
+              <Info className="mt-0.5 size-4 shrink-0" aria-hidden />
+              <span>{activeSrc === 'env' ? labels.envHint : labels.maskedStoredHint}</span>
             </div>
           ) : null}
 
