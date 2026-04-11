@@ -17,6 +17,7 @@ export { ENV_VARS, resolveHomeDir, resolveStateDir } from './paths-state.js';
 export { resolveDefaultAgentWorkspaceDir } from './workspace-defaults.js';
 export {
   resolveAgentWorkspaceDir,
+  resolveAgentBootstrapDir,
   resolveAgentDir as resolveAgentDirFromConfig,
   resolveAgentHomeDir as resolveAgentHomeDirFromConfig,
   resolveSessionsDir as resolveSessionsDirFromConfig,

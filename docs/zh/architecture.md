@@ -95,7 +95,7 @@ extensions/
 
 ## 磁盘上的状态目录与工作空间
 
-运行时数据（配置、凭据、按 Agent 的会话、以及用于引导 Markdown 的「工作空间」）位于仓库之外的 **状态目录**（默认 `~/.xopcbot`）。各子目录说明、环境变量覆盖，以及 `agents.defaults.workspace` 与 `agents/<id>/workspace/` 的关系，见 [状态目录与工作空间布局](workspace.md)。
+运行时数据（配置、凭据、按 Agent 的会话、作为工具 cwd 与用户内容的 Markdown **工作空间**、以及位于 `agents/<id>/bootstrap/` 的人格 Markdown）位于仓库之外的 **状态目录**（默认 `~/.xopcbot`）。路径总览（bootstrap、agent 主目录、迁移）见 [磁盘与目录布局](disk-layout.md)。初始化、环境变量与默认路径说明见 [状态目录与工作空间布局](workspace.md)。
 
 ## 核心模块
 

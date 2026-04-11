@@ -15,6 +15,7 @@ import type { Model, Api } from '@mariozechner/pi-ai';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import {
   type EffectiveAgentProfile,
+  resolveAgentBootstrapDir,
   resolveEffectiveAgentProfileForSession,
 } from '../config/agent-profile.js';
 import { expandWorkspacePathString } from '../config/workspace-path.js';
@@ -23,7 +24,7 @@ import { createLogger } from '../utils/logger.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
 import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
-import { loadBootstrapFiles, extractTextContent } from './context/workspace.js';
+import { loadBootstrapFiles, extractTextContent, type BootstrapFile } from './context/workspace.js';
 import { SkillManager } from './skills/index.js';
 import { SystemPromptBuilder } from './prompt/service-prompt-builder.js';
 import { AgentToolsFactory } from './tools/factory.js';
@@ -310,6 +311,12 @@ export class AgentManager {
     }
   }
 
+  private loadBootstrapForProfile(profile: EffectiveAgentProfile): BootstrapFile[] {
+    const cfg = this.config.config!;
+    const bootstrapDir = resolveAgentBootstrapDir(cfg, profile.agentId);
+    return loadBootstrapFiles(bootstrapDir, { legacyWorkspaceDir: profile.resolvedWorkspacePath });
+  }
+
   getSkillCatalog(): SkillCatalogEntry[] {
     const skillsConfig = createSkillConfigManager(resolveStateDir()).load();
     return this.getWorkspaceRuntime(this.baseWorkspacePath).skillManager.getSkills().map((s) => {
@@ -341,7 +348,7 @@ export class AgentManager {
         rt.skillManager.refreshPromptFromConfig();
         touched.add(instance.resolvedWorkspacePath);
       }
-      const bootstrapFiles = loadBootstrapFiles(instance.resolvedWorkspacePath);
+      const bootstrapFiles = this.loadBootstrapForProfile(instance.effectiveProfile);
       const newPrompt = rt.systemPromptBuilder.build(bootstrapFiles, {
         curatedMemorySnapshot: instance.curatedMemorySnapshot,
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
@@ -364,7 +371,7 @@ export class AgentManager {
       if (!touched.has(instance.resolvedWorkspacePath)) {
         touched.add(instance.resolvedWorkspacePath);
       }
-      const bootstrapFiles = loadBootstrapFiles(instance.resolvedWorkspacePath);
+      const bootstrapFiles = this.loadBootstrapForProfile(instance.effectiveProfile);
       const newPrompt = rt.systemPromptBuilder.rebuild(bootstrapFiles, {
         curatedMemorySnapshot: instance.curatedMemorySnapshot,
         externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
@@ -526,7 +533,7 @@ export class AgentManager {
     const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     const model = this.resolveModelStringToModel(modelRef);
 
-    const bootstrapFiles = loadBootstrapFiles(profile.resolvedWorkspacePath);
+    const bootstrapFiles = this.loadBootstrapForProfile(profile);
     const tools = this.toolsFactory.createAllTools({
       workspace: profile.resolvedWorkspacePath,
       disabledTools: profile.tools.disable,

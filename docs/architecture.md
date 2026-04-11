@@ -95,7 +95,7 @@ extensions/
 
 ## State directory & workspace on disk
 
-Runtime data (config, credentials, per-agent sessions, and the Markdown “workspace” used for bootstrap files) lives outside the git repo under the **state directory** (default `~/.xopcbot`). For a full folder-by-folder reference, environment overrides, and how `agents.defaults.workspace` relates to `agents/<id>/workspace/`, see [State directory & workspace layout](workspace.md).
+Runtime data (config, credentials, per-agent sessions, the Markdown **workspace** used as tool cwd and user content, and per-agent **bootstrap** persona Markdown under `agents/<id>/bootstrap/`) lives outside the git repo under the **state directory** (default `~/.xopcbot`). For a filesystem map (bootstrap, agent home, migrations), see [On-disk layout](disk-layout.md). For setup, env overrides, and how `agents.defaults.workspace` relates to default paths, see [State directory & workspace layout](workspace.md).
 
 ## Core Modules
 
