@@ -166,6 +166,10 @@ export interface Skill {
   metadata: SkillMetadata;
   /** Optional Hermes-style visibility vs registered agent tools */
   toolConditions?: SkillToolConditions;
+  /**
+   * Declared env var names (`required_environment_variables`, `requires.env`, etc.) for session passthrough into shell / tools.
+   */
+  requiredEnvVarNames?: string[];
   /** Raw content of SKILL.md */
   content: string;
 }

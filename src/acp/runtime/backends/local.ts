@@ -29,6 +29,7 @@ import { resolveBundledSkillsDir } from "../../../config/paths.js";
 import { AgentToolsFactory } from "../../../agent/tools/factory.js";
 import { SystemPromptBuilder } from "../../../agent/prompt/service-prompt-builder.js";
 import { SkillManager } from "../../../agent/skills/index.js";
+import { isValidSkillEnvVarName } from "../../../agent/skills/required-env-vars.js";
 import { loadBootstrapFiles, extractTextContent } from "../../../agent/context/workspace.js";
 import { resolveAgentBootstrapDir } from "../../../config/agent-profile.js";
 import { normalizeAgentId, resolveDefaultAgentId } from '../../../agent/agent-scope.js';
@@ -64,6 +65,8 @@ interface LocalSessionState {
   meta: SessionAcpMeta;
   messages: AgentMessage[];
   abortController?: AbortController;
+  /** Declared env names from skill_view; shell reads values from process.env at spawn time. */
+  skillEnvPassthroughKeys: Set<string>;
 }
 
 /**
@@ -83,6 +86,8 @@ export class LocalAcpRuntime implements AcpRuntime {
   private config?: Config;
   private skillManager: SkillManager;
   private registeredToolNames: string[] = [];
+  /** Set during runTurn so skill_view / shell can scope passthrough to the active ACP session. */
+  private toolContextSessionKey: string | null = null;
 
   constructor(
     private readonly bus: MessageBus,
@@ -146,12 +151,38 @@ export class LocalAcpRuntime implements AcpRuntime {
   private initializeTools(): void {
     const toolsFactory = new AgentToolsFactory({
       workspace: this.workspace,
-      getCurrentContext: () => null,
+      getCurrentContext: () => {
+        const k = this.toolContextSessionKey;
+        if (!k) return null;
+        return {
+          sessionKey: k,
+          channel: "acp",
+          chatId: k,
+          senderId: "acp",
+          isGroup: false,
+        };
+      },
       bus: this.bus,
       getSkillIndexingContext: () => ({
         registeredToolNames: this.registeredToolNames,
       }),
       onSkillsFilesystemMutate: () => this.refreshAgentAfterSkillDiskChange(),
+      getSkillPassthroughEnvVarNames: () => {
+        const k = this.toolContextSessionKey;
+        if (!k) return [];
+        return [...(this.sessions.get(k)?.skillEnvPassthroughKeys ?? [])];
+      },
+      registerSkillEnvPassthrough: (names: string[]) => {
+        const k = this.toolContextSessionKey;
+        if (!k) return;
+        const st = this.sessions.get(k);
+        if (!st) return;
+        for (const n of names) {
+          if (isValidSkillEnvVarName(n)) {
+            st.skillEnvPassthroughKeys.add(n.trim());
+          }
+        }
+      },
     });
     this.tools = toolsFactory.createAllTools({
       getSkillManager: () => this.skillManager,
@@ -250,6 +281,7 @@ export class LocalAcpRuntime implements AcpRuntime {
     this.sessions.set(sessionKey, {
       meta,
       messages,
+      skillEnvPassthroughKeys: new Set<string>(),
     });
 
     return {
@@ -313,6 +345,7 @@ export class LocalAcpRuntime implements AcpRuntime {
       this.agent.abort();
     });
 
+    this.toolContextSessionKey = input.handle.sessionKey;
     try {
       // Load session messages into agent (transcript hygiene aligned with main AgentService)
       let loaded = cleanTrailingErrors(session.messages);
@@ -572,6 +605,8 @@ export class LocalAcpRuntime implements AcpRuntime {
       };
 
       throw error;
+    } finally {
+      this.toolContextSessionKey = null;
     }
   }
 

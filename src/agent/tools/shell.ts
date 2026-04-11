@@ -57,7 +57,15 @@ function truncateTail(content: string, maxLines = DEFAULT_MAX_LINES, maxBytes = 
   return { content: outputLinesArr.join('\n'), truncated: true, truncatedBy, totalLines, totalBytes, outputLines: outputLinesArr.length, outputBytes: outputBytesCount };
 }
 
-export function createShellTool(cwd: string): AgentTool<typeof ShellSchema, ShellDetails> {
+export interface CreateShellToolOptions {
+  /** Env var names allowed through {@link prepareSafeToolEnv} even if they match secret heuristics (Phase 5 skill passthrough). */
+  getSkillPassthroughEnvVarNames?: () => string[];
+}
+
+export function createShellTool(
+  cwd: string,
+  options?: CreateShellToolOptions,
+): AgentTool<typeof ShellSchema, ShellDetails> {
   return {
     name: 'shell',
     description: 'Execute shell command.',
@@ -91,10 +99,14 @@ export function createShellTool(cwd: string): AgentTool<typeof ShellSchema, Shel
           proc.kill('SIGKILL');
         }, MAX_SHELL_TIMEOUT * 1000);
 
+        const passthroughNames = options?.getSkillPassthroughEnvVarNames?.() ?? [];
         const proc = spawn(params.command, [], {
           shell: true,
           cwd,
-          env: { ...prepareSafeToolEnv(process.env), COLUMNS: '200' },
+          env: {
+            ...prepareSafeToolEnv(process.env, { allowedVars: passthroughNames }),
+            COLUMNS: '200',
+          },
         });
 
         proc.stdout?.on('data', (data) => {

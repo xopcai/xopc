@@ -33,6 +33,7 @@ import type { ExtensionRegistryImpl as ExtensionRegistry } from '../extensions/i
 import type { MessageBus } from '../infra/bus/index.js';
 import type { CronService } from '../cron/index.js';
 import type { SessionStore } from '../session/store.js';
+import { isValidSkillEnvVarName } from './skills/required-env-vars.js';
 import type { SessionContext } from './session/session-context.js';
 import type { Skill } from './skills/types.js';
 import { createSkillConfigManager } from './skills/config.js';
@@ -99,6 +100,8 @@ export interface AgentInstance {
   resolvedWorkspacePath: string;
   /** Tool names registered on this agent (for skill indexing / tool gating). */
   registeredToolNames: string[];
+  /** Declared env var names from skill_view; shell reads values from process.env at spawn time. */
+  skillEnvPassthroughKeys: Set<string>;
 }
 
 interface WorkspaceRuntime {
@@ -150,6 +153,22 @@ export class AgentManager {
       },
       onSkillsFilesystemMutate: () => {
         this.refreshSkillsAfterDiskChange();
+      },
+      getSkillPassthroughEnvVarNames: () => {
+        const ctx = this.config.getCurrentContext?.();
+        if (!ctx?.sessionKey) return [];
+        return [...(this.agents.get(ctx.sessionKey)?.skillEnvPassthroughKeys ?? [])];
+      },
+      registerSkillEnvPassthrough: (names: string[]) => {
+        const ctx = this.config.getCurrentContext?.();
+        if (!ctx?.sessionKey) return;
+        const inst = this.agents.get(ctx.sessionKey);
+        if (!inst) return;
+        for (const n of names) {
+          if (isValidSkillEnvVarName(n)) {
+            inst.skillEnvPassthroughKeys.add(n.trim());
+          }
+        }
       },
     });
 
@@ -272,6 +291,22 @@ export class AgentManager {
       },
       onSkillsFilesystemMutate: () => {
         this.refreshSkillsAfterDiskChange();
+      },
+      getSkillPassthroughEnvVarNames: () => {
+        const ctx = this.config.getCurrentContext?.();
+        if (!ctx?.sessionKey) return [];
+        return [...(this.agents.get(ctx.sessionKey)?.skillEnvPassthroughKeys ?? [])];
+      },
+      registerSkillEnvPassthrough: (names: string[]) => {
+        const ctx = this.config.getCurrentContext?.();
+        if (!ctx?.sessionKey) return;
+        const inst = this.agents.get(ctx.sessionKey);
+        if (!inst) return;
+        for (const n of names) {
+          if (isValidSkillEnvVarName(n)) {
+            inst.skillEnvPassthroughKeys.add(n.trim());
+          }
+        }
       },
     });
   }
@@ -469,6 +504,7 @@ export class AgentManager {
       effectiveProfile: profile,
       resolvedWorkspacePath: resolvedPath,
       registeredToolNames,
+      skillEnvPassthroughKeys: new Set<string>(),
     });
 
     const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
