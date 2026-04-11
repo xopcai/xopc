@@ -85,7 +85,7 @@ export function AgentsSettingsPanel() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [panel, setPanel] = useState<AgentPanel>('overview');
+  const [panel, setPanel] = useState<AgentPanel>('defaults');
 
   const [createName, setCreateName] = useState('');
   const [createWorkspace, setCreateWorkspace] = useState('');
@@ -713,21 +713,21 @@ export function AgentsSettingsPanel() {
           type="button"
           className={cn(
             'rounded-lg px-3 py-1.5 text-sm font-medium',
-            panel === 'overview' ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover',
-          )}
-          onClick={() => setPanel('overview')}
-        >
-          {a.tabOverview}
-        </button>
-        <button
-          type="button"
-          className={cn(
-            'rounded-lg px-3 py-1.5 text-sm font-medium',
             panel === 'defaults' ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover',
           )}
           onClick={() => setPanel('defaults')}
         >
           {a.tabDefaults}
+        </button>
+        <button
+          type="button"
+          className={cn(
+            'rounded-lg px-3 py-1.5 text-sm font-medium',
+            panel === 'overview' ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover',
+          )}
+          onClick={() => setPanel('overview')}
+        >
+          {a.tabOverview}
         </button>
         <button
           type="button"

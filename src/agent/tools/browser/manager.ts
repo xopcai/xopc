@@ -37,10 +37,20 @@ export class BrowserManager {
 
   async ensureBrowser(): Promise<BrowserContext> {
     if (!this.context) {
-      const { chromium } = await import('playwright-core');
+      const pw = await import('playwright-core');
+      // CJS/ESM interop: some loaders expose only `default` (playwright object), not named `chromium`.
+      const chromium = pw.chromium ?? (pw as { default?: { chromium?: (typeof pw)['chromium'] } }).default?.chromium;
+      if (!chromium?.launch) {
+        throw new Error(
+          'playwright-core did not expose chromium (try reinstall: pnpm install playwright-core; install browser: npx playwright install chromium)',
+        );
+      }
       const headless = this.options.getHeadless() !== false;
+      // Playwright 1.58+ defaults headless launches to `chromium_headless_shell`, which is *not* installed by
+      // `playwright install chromium` alone. `channel: 'chromium'` uses the bundled full Chromium in new headless mode.
       this.browser = await chromium.launch({
         headless,
+        ...(headless ? { channel: 'chromium' } : {}),
         args: ['--no-sandbox', '--disable-setuid-sandbox'],
       });
       this.context = await this.browser.newContext({

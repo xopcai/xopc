@@ -118,6 +118,102 @@ function normalizePatchAgentModel(v: unknown): unknown {
   return v;
 }
 
+/** Sanitized config snapshot for GET/PATCH `/api/config` (matches persisted `service.currentConfig`). */
+async function buildSafeWebConfigPayload(service: GatewayService) {
+  const config = service.currentConfig;
+  return {
+    agents: {
+      defaultId: resolveDefaultAgentId(config),
+      list: listAgentEntries(config)
+        .filter((e) => e.enabled !== false)
+        .map((e) => ({
+          id: normalizeAgentId(e.id),
+          ...(typeof e.name === 'string' && e.name.trim() ? { name: e.name.trim() } : {}),
+        })),
+      defaults: {
+        model: agentModelRefToString(config.agents?.defaults?.model) ?? '',
+        modelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.model),
+        imageModel: agentModelRefToString(config.agents?.defaults?.imageModel),
+        imageGenerationModel: agentModelRefToString(config.agents?.defaults?.imageGenerationModel),
+        mediaMaxMb: config.agents?.defaults?.mediaMaxMb,
+        maxTokens: config.agents?.defaults?.maxTokens,
+        temperature: config.agents?.defaults?.temperature,
+        maxToolIterations: config.agents?.defaults?.maxToolIterations,
+        workspace: config.agents?.defaults?.workspace,
+        thinkingDefault: config.agents?.defaults?.thinkingDefault,
+        reasoningDefault: config.agents?.defaults?.reasoningDefault,
+        verboseDefault: config.agents?.defaults?.verboseDefault,
+        browser: {
+          enabled: config.agents?.defaults?.browser?.enabled === true,
+          headless: config.agents?.defaults?.browser?.headless !== false,
+        },
+        compaction: config.agents?.defaults?.compaction,
+        pruning: config.agents?.defaults?.pruning,
+      },
+    },
+    channels: {
+      telegram: {
+        enabled: config.channels?.telegram?.enabled,
+        botToken: config.channels?.telegram?.botToken || '',
+        allowFrom: config.channels?.telegram?.allowFrom || [],
+        groupAllowFrom: config.channels?.telegram?.groupAllowFrom || [],
+        apiRoot: config.channels?.telegram?.apiRoot || '',
+        debug: config.channels?.telegram?.debug || false,
+        dmPolicy: config.channels?.telegram?.dmPolicy || 'pairing',
+        groupPolicy: config.channels?.telegram?.groupPolicy || 'open',
+        replyToMode: config.channels?.telegram?.replyToMode || 'off',
+        streamMode: config.channels?.telegram?.streamMode || 'partial',
+        historyLimit: config.channels?.telegram?.historyLimit || 50,
+        textChunkLimit: config.channels?.telegram?.textChunkLimit || 4000,
+        proxy: config.channels?.telegram?.proxy || '',
+        accounts: config.channels?.telegram?.accounts || {},
+      },
+      weixin: {
+        enabled: config.channels?.weixin?.enabled ?? false,
+        dmPolicy: config.channels?.weixin?.dmPolicy || 'pairing',
+        allowFrom: config.channels?.weixin?.allowFrom || [],
+        debug: config.channels?.weixin?.debug ?? false,
+        streamMode: config.channels?.weixin?.streamMode ?? 'partial',
+        historyLimit: config.channels?.weixin?.historyLimit ?? 50,
+        textChunkLimit: config.channels?.weixin?.textChunkLimit ?? 4000,
+        routeTag: config.channels?.weixin?.routeTag,
+        accounts: config.channels?.weixin?.accounts || {},
+      },
+    },
+    providers: Object.fromEntries(
+      await Promise.all(
+        getAllProviders().map(async (provider) => [
+          provider,
+          (await isProviderConfigured(provider)) ? '***' : '',
+        ]),
+      ),
+    ),
+    gateway: {
+      host: config.gateway?.host,
+      port: config.gateway?.port,
+      auth: {
+        mode: config.gateway?.auth?.mode || 'token',
+        token: config.gateway?.auth?.token || '',
+      },
+      heartbeat: {
+        enabled: config.gateway?.heartbeat?.enabled,
+        intervalMs: config.gateway?.heartbeat?.intervalMs,
+        target: config.gateway?.heartbeat?.target,
+        targetChatId: config.gateway?.heartbeat?.targetChatId,
+        prompt: config.gateway?.heartbeat?.prompt,
+        ackMaxChars: config.gateway?.heartbeat?.ackMaxChars,
+        isolatedSession: config.gateway?.heartbeat?.isolatedSession,
+        activeHours: config.gateway?.heartbeat?.activeHours,
+      },
+    },
+    cron: { enabled: config.cron?.enabled },
+    stt: config.stt,
+    tts: config.tts,
+    tools: safeToolsWebForGet(config),
+    bindings: Array.isArray(config.bindings) ? config.bindings : [],
+  };
+}
+
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
@@ -844,96 +940,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   // GET /api/config
   authenticated.get('/api/config', async (c) => {
-    const config = service.currentConfig;
-    const safeConfig = {
-      agents: {
-        /** Default routing agent id (`agents.default` / list); safe to expose. */
-        defaultId: resolveDefaultAgentId(config),
-        list: listAgentEntries(config)
-          .filter((e) => e.enabled !== false)
-          .map((e) => ({
-            id: normalizeAgentId(e.id),
-            ...(typeof e.name === 'string' && e.name.trim() ? { name: e.name.trim() } : {}),
-          })),
-        defaults: {
-          model: agentModelRefToString(config.agents?.defaults?.model) ?? '',
-          modelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.model),
-          imageModel: agentModelRefToString(config.agents?.defaults?.imageModel),
-          imageGenerationModel: agentModelRefToString(config.agents?.defaults?.imageGenerationModel),
-          mediaMaxMb: config.agents?.defaults?.mediaMaxMb,
-          maxTokens: config.agents?.defaults?.maxTokens,
-          temperature: config.agents?.defaults?.temperature,
-          maxToolIterations: config.agents?.defaults?.maxToolIterations,
-          workspace: config.agents?.defaults?.workspace,
-          thinkingDefault: config.agents?.defaults?.thinkingDefault,
-          reasoningDefault: config.agents?.defaults?.reasoningDefault,
-          verboseDefault: config.agents?.defaults?.verboseDefault,
-          compaction: config.agents?.defaults?.compaction,
-          pruning: config.agents?.defaults?.pruning,
-        },
-      },
-      channels: {
-        telegram: {
-          enabled: config.channels?.telegram?.enabled,
-          botToken: config.channels?.telegram?.botToken || '',
-          allowFrom: config.channels?.telegram?.allowFrom || [],
-          groupAllowFrom: config.channels?.telegram?.groupAllowFrom || [],
-          apiRoot: config.channels?.telegram?.apiRoot || '',
-          debug: config.channels?.telegram?.debug || false,
-          dmPolicy: config.channels?.telegram?.dmPolicy || 'pairing',
-          groupPolicy: config.channels?.telegram?.groupPolicy || 'open',
-          replyToMode: config.channels?.telegram?.replyToMode || 'off',
-          streamMode: config.channels?.telegram?.streamMode || 'partial',
-          historyLimit: config.channels?.telegram?.historyLimit || 50,
-          textChunkLimit: config.channels?.telegram?.textChunkLimit || 4000,
-          proxy: config.channels?.telegram?.proxy || '',
-          accounts: config.channels?.telegram?.accounts || {},
-        },
-        weixin: {
-          enabled: config.channels?.weixin?.enabled ?? false,
-          dmPolicy: config.channels?.weixin?.dmPolicy || 'pairing',
-          allowFrom: config.channels?.weixin?.allowFrom || [],
-          debug: config.channels?.weixin?.debug ?? false,
-          streamMode: config.channels?.weixin?.streamMode ?? 'partial',
-          historyLimit: config.channels?.weixin?.historyLimit ?? 50,
-          textChunkLimit: config.channels?.weixin?.textChunkLimit ?? 4000,
-          routeTag: config.channels?.weixin?.routeTag,
-          accounts: config.channels?.weixin?.accounts || {},
-        },
-      },
-      // Provider API keys - check credential system for configured status
-      providers: Object.fromEntries(
-        await Promise.all(
-          getAllProviders().map(async (provider) => [
-            provider,
-            (await isProviderConfigured(provider)) ? '***' : ''
-          ])
-        )
-      ),
-      gateway: {
-        host: config.gateway?.host,
-        port: config.gateway?.port,
-        auth: {
-          mode: config.gateway?.auth?.mode || 'token',
-          token: config.gateway?.auth?.token || '',
-        },
-        heartbeat: {
-          enabled: config.gateway?.heartbeat?.enabled,
-          intervalMs: config.gateway?.heartbeat?.intervalMs,
-          target: config.gateway?.heartbeat?.target,
-          targetChatId: config.gateway?.heartbeat?.targetChatId,
-          prompt: config.gateway?.heartbeat?.prompt,
-          ackMaxChars: config.gateway?.heartbeat?.ackMaxChars,
-          isolatedSession: config.gateway?.heartbeat?.isolatedSession,
-          activeHours: config.gateway?.heartbeat?.activeHours,
-        },
-      },
-      cron: { enabled: config.cron?.enabled },
-      stt: config.stt,
-      tts: config.tts,
-      tools: safeToolsWebForGet(config),
-      bindings: Array.isArray(config.bindings) ? config.bindings : [],
-    };
+    const safeConfig = await buildSafeWebConfigPayload(service);
     return c.json({ ok: true, payload: { config: safeConfig } });
   });
 
@@ -1397,7 +1404,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       service.reloadHeartbeatFromCurrentConfig();
     }
 
-    return c.json({ ok: true, payload: { config } });
+    const safeConfig = await buildSafeWebConfigPayload(service);
+    return c.json({ ok: true, payload: { config: safeConfig } });
   });
 
   // ========== Auth API (/api/auth) ==========
