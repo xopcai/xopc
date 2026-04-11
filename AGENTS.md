@@ -254,7 +254,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | i18n | `web/src/i18n/messages.ts` (`en` / `zh`) |
 | Global styles + tokens | `web/src/styles/globals.css` (`@theme { … }` for semantic colors) |
 
-**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`; management `/sessions`, `/cron`, `/skills`, `/logs`; settings `/settings/:section`. Older `#sessions`-style hashes are normalized at startup (`web/src/lib/legacy-hash.ts`).
+**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`; management `/cron`, `/skills`; settings `/settings/:section` (e.g. `/settings/sessions`, `/settings/logs`).
 
 **Gateway integration:**
 

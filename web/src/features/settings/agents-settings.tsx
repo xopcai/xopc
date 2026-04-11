@@ -14,6 +14,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { useDebouncedCallback } from 'use-debounce';
 
 import { MarkdownView } from '@/components/markdown/markdown-view';
@@ -35,6 +36,7 @@ import {
   type GatewayConfigBinding,
   type SkillCatalogRow,
 } from '@/features/settings/agents-admin-api';
+import { AgentSettingsPanel } from '@/features/settings/agent-settings';
 import { suggestWorkspaceFromAgentName } from '@/features/settings/suggest-agent-workspace';
 import { ModelSelector } from '@/features/chat/model-selector';
 import { cronJobBodyText, listJobs, updateJob, type CronJob } from '@/features/cron/cron-api';
@@ -53,7 +55,7 @@ function inputClass(): string {
   );
 }
 
-type AgentPanel = 'overview' | 'files' | 'tools' | 'skills' | 'channels' | 'cron';
+type AgentPanel = 'overview' | 'defaults' | 'files' | 'tools' | 'skills' | 'channels' | 'cron';
 
 function jobMatchesAgent(job: CronJob, agentId: string, defaultId: string): boolean {
   const raw = job.agentId?.trim().toLowerCase();
@@ -77,6 +79,7 @@ export function AgentsSettingsPanel() {
   const chat = m.chat;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
+  const [searchParams, setSearchParams] = useSearchParams();
 
   const [data, setData] = useState<GatewayAgentsPayload | null>(null);
   const [loading, setLoading] = useState(true);
@@ -201,6 +204,16 @@ export function AgentsSettingsPanel() {
     }
     void load();
   }, [hasToken, load]);
+
+  useEffect(() => {
+    if (searchParams.get('panel') !== 'defaults') {
+      return;
+    }
+    setPanel('defaults');
+    const next = new URLSearchParams(searchParams);
+    next.delete('panel');
+    setSearchParams(next, { replace: true });
+  }, [searchParams, setSearchParams]);
 
   const selected = useMemo(
     () => data?.agents.find((x) => x.id === selectedId) ?? null,
@@ -657,7 +670,7 @@ export function AgentsSettingsPanel() {
           <h1 className="text-lg font-semibold text-fg">{a.title}</h1>
           <p className="mt-1 text-sm text-fg-muted">{a.subtitle}</p>
         </div>
-        {data && !loading ? (
+        {data && !loading && panel !== 'defaults' ? (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-end sm:gap-3">
             <div className="w-full max-w-[9rem] shrink-0 sm:w-[9rem]">
               <select
@@ -705,6 +718,16 @@ export function AgentsSettingsPanel() {
           onClick={() => setPanel('overview')}
         >
           {a.tabOverview}
+        </button>
+        <button
+          type="button"
+          className={cn(
+            'rounded-lg px-3 py-1.5 text-sm font-medium',
+            panel === 'defaults' ? 'bg-accent-soft text-accent-fg' : 'text-fg-muted hover:bg-surface-hover',
+          )}
+          onClick={() => setPanel('defaults')}
+        >
+          {a.tabDefaults}
         </button>
         <button
           type="button"
@@ -758,7 +781,9 @@ export function AgentsSettingsPanel() {
         </button>
       </div>
 
-      {loading ? (
+      {panel === 'defaults' ? (
+        <AgentSettingsPanel embedded />
+      ) : loading ? (
         <p className="text-sm text-fg-muted">{a.loading}</p>
       ) : data ? (
         panel === 'overview' ? (
