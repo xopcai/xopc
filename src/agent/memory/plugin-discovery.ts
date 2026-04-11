@@ -3,7 +3,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 /**
- * Discover optional `plugins/memory/<name>/` packages (Phase 2 extension point).
+ * Discover optional `plugins/memory/<name>/` packages (extension point).
  * Compiled layout: `dist/src/plugins/memory/...` relative to this module.
  */
 export interface MemoryPluginMetadata {

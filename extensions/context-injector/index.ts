@@ -1,5 +1,5 @@
 /**
- * Context Injector Extension - Phase 1 Context Hook Example
+ * Context Injector Extension — context hook example
  *
  * Demonstrates: Context hook to inject system messages before LLM
  *

@@ -1,5 +1,5 @@
 /**
- * Pluggable memory provider (Phase 2). Builtin curated files use `BuiltinMemoryStore` + `curated_memory`;
+ * Pluggable memory provider. Builtin curated files use `BuiltinMemoryStore` + `curated_memory`;
  * external providers add instructions, prefetch/sync, and optional tools.
  */
 

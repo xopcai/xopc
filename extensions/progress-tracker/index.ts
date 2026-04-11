@@ -1,5 +1,5 @@
 /**
- * Progress Tracker Extension - Phase 2 Enhanced Tool Example
+ * Progress Tracker Extension — enhanced tool example (streaming updates).
  *
  * Demonstrates: EnhancedTool with streaming updates (onUpdate callback)
  *

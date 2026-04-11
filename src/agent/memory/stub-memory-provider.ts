@@ -1,7 +1,7 @@
 import type { MemoryProvider, MemoryProviderInitOptions } from './provider.js';
 
 /**
- * Phase 2 placeholder external provider — enables wiring tests without cloud deps.
+ * Placeholder external provider — enables wiring tests without cloud deps.
  */
 export class StubMemoryProvider implements MemoryProvider {
   readonly name = 'stub';
@@ -13,7 +13,7 @@ export class StubMemoryProvider implements MemoryProvider {
   async initialize(_sessionId: string, _options?: MemoryProviderInitOptions): Promise<void> {}
 
   systemPromptBlock(): string {
-    return 'External memory provider: stub (Phase 2 wiring only; no cloud backend). Set `agents.defaults.memory.provider` to `none` to hide.';
+    return 'External memory provider: stub (wiring only; no cloud backend). Set `agents.defaults.memory.provider` to `none` to hide.';
   }
 
   async prefetch(query: string): Promise<string> {

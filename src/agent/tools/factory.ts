@@ -77,9 +77,9 @@ export interface ToolFactoryDeps {
   getPrimaryModel?: () => Model<Api>;
   /** Built-in curated memory store (agent home `memories/`). */
   getBuiltinMemoryStore?: () => BuiltinMemoryStore;
-  /** Phase 2 memory orchestration (prefetch/sync + external tools). */
+  /** Memory orchestration (prefetch/sync + external tools). */
   getMemoryManager?: () => MemoryManager;
-  /** Session store for `session_search` (Phase 3). */
+  /** Session store for `session_search`. */
   getSessionStore?: () => SessionStore;
   /** When set (gateway webchat), enables the `clarify` tool. */
   gatewayClarify?: { requestClarification: GatewayClarifyRequestFn };
@@ -91,9 +91,9 @@ export interface ToolFactoryDeps {
     | undefined;
   /** After skill_manage mutates disk, reload skills + refresh agent prompts (optional). */
   onSkillsFilesystemMutate?: () => void;
-  /** Phase 5: names registered via skill_view for shell env passthrough. */
+  /** Names registered via skill_view for shell env passthrough. */
   getSkillPassthroughEnvVarNames?: () => string[];
-  /** Phase 5: add declared env names for the current session (no values stored). */
+  /** Add declared env names for the current session (no values stored). */
   registerSkillEnvPassthrough?: (names: string[]) => void;
   // TTS config removed - handled at dispatch layer
 }

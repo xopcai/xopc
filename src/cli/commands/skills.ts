@@ -409,7 +409,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
     });
 
   const hub = new Command('hub').description(
-    'Install or update skills from git or archives (Phase 4; writes ~/.xopcbot/skills + skills-lock.json)',
+    'Install or update skills from git or archives (writes ~/.xopcbot/skills + skills-lock.json)',
   );
 
   hub
