@@ -97,7 +97,6 @@ export async function runWeixinQrLoginCli(opts: WeixinQrLoginCliOptions): Promis
 
   const startResult = await startWeixinLoginWithQr({
     accountId: opts.account?.trim() || undefined,
-    apiBaseUrl: baseUrl,
     botType: DEFAULT_ILINK_BOT_TYPE,
     routeTag,
     verbose,
@@ -124,7 +123,6 @@ export async function runWeixinQrLoginCli(opts: WeixinQrLoginCliOptions): Promis
 
   const waitResult = await waitForWeixinLogin({
     sessionKey: startResult.sessionKey,
-    apiBaseUrl: baseUrl,
     timeoutMs,
     verbose,
     routeTag,
