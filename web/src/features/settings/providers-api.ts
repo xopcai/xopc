@@ -11,6 +11,8 @@ export function isMaskedKey(value: string): boolean {
 
 export type ProviderCategory = 'common' | 'specialty' | 'enterprise' | 'oauth';
 
+export type ProviderActiveKeySource = 'none' | 'agent' | 'gateway' | 'oauth' | 'env' | 'models_json';
+
 export interface ProviderMeta {
   id: string;
   name: string;
@@ -18,6 +20,7 @@ export interface ProviderMeta {
   supportsOAuth: boolean;
   supportsApiKey: boolean;
   configured: boolean;
+  activeKeySource?: ProviderActiveKeySource;
 }
 
 export interface ProviderRowModel extends ProviderMeta {
@@ -80,4 +83,22 @@ export async function patchProviderApiKeys(providers: Record<string, string>): P
     body: JSON.stringify({ providers }),
   });
   void Promise.all([revalidateGatewayConfig(), mutate(apiUrl('/api/providers/meta'))]);
+}
+
+export type TestApiKeyResolutionPayload = {
+  type: 'literal' | 'env' | 'command';
+  resolved?: string;
+  error?: string;
+};
+
+export async function testProviderKeyResolution(value: string): Promise<TestApiKeyResolutionPayload> {
+  const data = await fetchJson<{ ok?: boolean; payload?: TestApiKeyResolutionPayload }>(
+    apiUrl('/api/models-json/test-api-key'),
+    {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ value }),
+    },
+  );
+  return data.payload ?? { type: 'literal', error: 'No response' };
 }

@@ -29,7 +29,8 @@ import type { LogLevel } from '../../utils/logger.js';
 import { 
   getAllModels, 
   getAvailableModels, 
-  getAllProviders, 
+  getAllProviders,
+  getProviderActiveKeySource,
   isProviderConfigured,
   PROVIDER_META,
   getModelRegistry,
@@ -1678,14 +1679,17 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   authenticated.get('/api/providers/meta', async (c) => {
     const providers = getAllProviders();
     
-    const meta = await Promise.all(providers.map(async provider => ({
-      id: provider,
-      name: PROVIDER_META[provider]?.name || provider,
-      category: PROVIDER_META[provider]?.category || 'specialty',
-      supportsOAuth: PROVIDER_META[provider]?.supportsOAuth ?? false,
-      supportsApiKey: PROVIDER_META[provider]?.supportsApiKey ?? true,
-      configured: await isProviderConfigured(provider),
-    })));
+    const meta = await Promise.all(
+      providers.map(async (provider) => ({
+        id: provider,
+        name: PROVIDER_META[provider]?.name || provider,
+        category: PROVIDER_META[provider]?.category || 'specialty',
+        supportsOAuth: PROVIDER_META[provider]?.supportsOAuth ?? false,
+        supportsApiKey: PROVIDER_META[provider]?.supportsApiKey ?? true,
+        configured: await isProviderConfigured(provider),
+        activeKeySource: await getProviderActiveKeySource(provider),
+      })),
+    );
 
     return c.json({ ok: true, payload: { providers: meta } });
   });

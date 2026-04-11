@@ -122,6 +122,30 @@ export class CredentialResolver {
   }
 
   /**
+   * Which step in {@link resolveApiKey} would supply the key (no secret material).
+   */
+  async resolveApiKeySource(
+    provider: string,
+  ): Promise<'agent' | 'global' | 'oauth' | 'env' | null> {
+    const normalizedProvider = provider.toLowerCase();
+
+    if (this.agentId) {
+      const agentKey = await this.loadFromAgentCredentials(normalizedProvider);
+      if (agentKey) return 'agent';
+    }
+
+    const globalKey = await this.loadFromGlobalCredentials(normalizedProvider);
+    if (globalKey) return 'global';
+
+    const oauthToken = await this.loadOAuthToken(normalizedProvider);
+    if (oauthToken) return 'oauth';
+
+    if (getApiKeyFromEnv(normalizedProvider)) return 'env';
+
+    return null;
+  }
+
+  /**
    * List all available credential profiles
    */
   async listProfiles(): Promise<Array<ApiKeyProfile & { id: string; source: 'agent' | 'global' }>> {
