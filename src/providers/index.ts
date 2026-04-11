@@ -72,7 +72,7 @@ export function getModelsByProvider(provider: string): readonly Model<Api>[] {
 }
 
 /** Credential/UI providers not always present in pi-ai's static model table. */
-const ADDITIONAL_MANAGED_PROVIDER_IDS: readonly string[] = ['zhipu-cn'];
+const ADDITIONAL_MANAGED_PROVIDER_IDS: readonly string[] = ['zhipu-cn', 'qwen'];
 
 export function getAllProviders(): string[] {
 	const registry = getModelRegistry();
@@ -206,9 +206,11 @@ export const PROVIDER_META: Record<string, ProviderMeta> = {
   'google': { name: 'Google Gemini', category: 'common', supportsApiKey: true },
   'groq': { name: 'Groq (Fast Inference)', category: 'common', supportsApiKey: true },
   'deepseek': { name: 'DeepSeek', category: 'common', supportsApiKey: true },
-  'minimax': { name: 'MiniMax', category: 'common', supportsApiKey: true },
-  'minimax-cn': { name: 'MiniMax CN', category: 'common', supportsApiKey: true },
-  'kimi-coding': { name: 'Kimi For Coding', category: 'common', supportsApiKey: true },
+  'minimax': { name: 'MiniMax', category: 'common', supportsApiKey: true, supportsOAuth: true },
+  'minimax-cn': { name: 'MiniMax CN', category: 'common', supportsApiKey: true, supportsOAuth: true },
+  'kimi-coding': { name: 'Kimi For Coding', category: 'common', supportsApiKey: true, supportsOAuth: true },
+  /** DashScope / Qwen Portal; OAuth via gateway UI or `xopcbot auth login qwen`. */
+  'qwen': { name: 'Qwen (DashScope / Portal)', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'xai': { name: 'xAI (Grok)', category: 'specialty', supportsApiKey: true },
   'mistral': { name: 'Mistral AI', category: 'specialty', supportsApiKey: true },
   'cerebras': { name: 'Cerebras', category: 'specialty', supportsApiKey: true },

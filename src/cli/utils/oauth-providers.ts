@@ -10,6 +10,7 @@ import {
   minimaxOAuthProvider,
   minimaxCnOAuthProvider,
   kimiOAuthProvider,
+  qwenPortalOAuthProvider,
   githubCopilotOAuthProvider,
   googleGeminiCliOAuthProvider,
   googleAntigravityOAuthProvider,
@@ -50,6 +51,12 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
     displayName: 'Kimi (月之暗面)',
     provider: kimiOAuthProvider,
     profileId: 'kimi:default',
+    urlPrompt: '🌐 Please open this URL in your browser:\n',
+  },
+  qwen: {
+    displayName: 'Qwen (DashScope / Portal)',
+    provider: qwenPortalOAuthProvider,
+    profileId: 'qwen:default',
     urlPrompt: '🌐 Please open this URL in your browser:\n',
   },
   'github-copilot': {
