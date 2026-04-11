@@ -3,7 +3,9 @@ import { Check, Copy, FileCode2 } from 'lucide-react';
 import { marked } from 'marked';
 
 import type {
+  ImageContent,
   Message,
+  MessageAttachment,
   MessageContent,
   ProgressState,
   ReasoningLevel,
@@ -11,6 +13,7 @@ import type {
   ToolUseContent,
 } from '@/features/chat/messages.types';
 import { AssistantStepsBlock, collectAssistantStepBlocks } from '@/features/chat/assistant-steps-block';
+import { AttachmentPreviewDialog } from '@/features/chat/attachment-preview-dialog';
 import { AttachmentRenderer } from '@/features/chat/attachment-renderer';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { SearchSourceList } from '@/features/chat/search-source-list';
@@ -26,7 +29,48 @@ function formatTime(ts?: number): string {
   return new Date(ts).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 
-function renderTextOrImageBlock(block: MessageContent, key: string, isUser: boolean) {
+/** Build attachment payload for {@link AttachmentPreviewDialog} from an inline content image block. */
+function imageContentToPreviewAttachment(block: ImageContent, index: number): MessageAttachment | null {
+  const raw = block.source?.data?.trim();
+  if (!raw) return null;
+  const m = raw.match(/^data:([^;]+);base64,([\s\S]+)$/i);
+  if (m?.[1] && m[2]) {
+    const b64 = m[2].replace(/\s/g, '');
+    return {
+      name: `image-${index + 1}`,
+      mimeType: m[1],
+      type: 'image',
+      content: b64,
+      data: b64,
+    };
+  }
+  if (raw.startsWith('data:')) {
+    return {
+      name: `image-${index + 1}`,
+      mimeType: 'image/png',
+      type: 'image',
+      content: raw,
+      data: raw,
+    };
+  }
+  const compact = raw.replace(/\s/g, '');
+  return {
+    name: `image-${index + 1}`,
+    mimeType: 'image/png',
+    type: 'image',
+    content: compact,
+    data: compact,
+  };
+}
+
+function renderTextOrImageBlock(
+  block: MessageContent,
+  key: string,
+  isUser: boolean,
+  imagePreviewLabel: string,
+  onImagePreview?: (block: ImageContent, index: number) => void,
+  contentIndex?: number,
+) {
   if (block.type === 'text') {
     if (isUser) {
       return (
@@ -42,6 +86,30 @@ function renderTextOrImageBlock(block: MessageContent, key: string, isUser: bool
     );
   }
   if (block.type === 'image' && block.source?.data) {
+    const idx = contentIndex ?? 0;
+    if (onImagePreview) {
+      return (
+        <button
+          key={key}
+          type="button"
+          className={cn(
+            'inline-block max-w-full rounded-lg p-0 text-left',
+            interaction.press,
+            interaction.focusRingPanel,
+            'cursor-pointer',
+          )}
+          onClick={() => onImagePreview(block, idx)}
+          title={imagePreviewLabel}
+          aria-label={imagePreviewLabel}
+        >
+          <img
+            src={block.source.data}
+            className="max-h-96 max-w-full rounded-lg align-top"
+            alt=""
+          />
+        </button>
+      );
+    }
     return (
       <img key={key} src={block.source.data} className="max-h-96 max-w-full rounded-lg" alt="" />
     );
@@ -62,9 +130,12 @@ function renderChunkedContent(
     readFile: string;
     stepDetails: string;
   },
+  imagePreviewLabel: string,
+  onImagePreview?: (block: ImageContent, index: number) => void,
 ) {
   const nodes: ReactNode[] = [];
   let i = 0;
+  let imageOrdinal = 0;
   while (i < content.length) {
     const b = content[i];
     if (b.type === 'thinking' || b.type === 'tool_use') {
@@ -84,7 +155,15 @@ function renderChunkedContent(
         );
       }
     } else {
-      const el = renderTextOrImageBlock(b, `block-${i}`, isUser);
+      const imgIdx = b.type === 'image' ? imageOrdinal++ : 0;
+      const el = renderTextOrImageBlock(
+        b,
+        `block-${i}`,
+        isUser,
+        imagePreviewLabel,
+        onImagePreview,
+        b.type === 'image' ? imgIdx : i,
+      );
       if (el) nodes.push(el);
       i++;
     }
@@ -214,6 +293,13 @@ export const MessageBubble = memo(function MessageBubble({
     [isAssistant, copyMarkdown, message.content],
   );
   const [copyFeedback, setCopyFeedback] = useState<'plain' | 'markdown' | null>(null);
+  const [inlineImagePreview, setInlineImagePreview] = useState<MessageAttachment | null>(null);
+  const openInlineImagePreview = useCallback((block: ImageContent, index: number) => {
+    const att = imageContentToPreviewAttachment(block, index);
+    if (att) {
+      setInlineImagePreview(att);
+    }
+  }, []);
   const handleCopyPlain = useCallback(async () => {
     if (!copyPlainText) return;
     try {
@@ -292,7 +378,14 @@ export const MessageBubble = memo(function MessageBubble({
           >
             {(displayContent?.length ?? 0) > 0 ? (
               <>
-                {renderChunkedContent(displayContent, isUser, toolLabels, stepLabels)}
+                {renderChunkedContent(
+                  displayContent,
+                  isUser,
+                  toolLabels,
+                  stepLabels,
+                  m.chat.attachmentPreviewImage,
+                  openInlineImagePreview,
+                )}
                 {isStreaming ? (
                   <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
                 ) : null}
@@ -367,6 +460,13 @@ export const MessageBubble = memo(function MessageBubble({
           </div>
         ) : null}
       </div>
+
+      <AttachmentPreviewDialog
+        open={inlineImagePreview !== null}
+        attachment={inlineImagePreview}
+        authToken={authToken}
+        onClose={() => setInlineImagePreview(null)}
+      />
     </article>
   );
 });

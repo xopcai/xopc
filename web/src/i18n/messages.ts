@@ -197,6 +197,8 @@ const bundles: Record<
       attachmentPreviewFailedPdf: string;
       attachmentPreviewFailedDocx: string;
       attachmentPreviewFailedExcel: string;
+      /** Inline / bubble image opens fullscreen preview */
+      attachmentPreviewImage: string;
       stepTimelineThinkingStreaming: string;
       stepTimelineThinkingDone: string;
       stepTimelineToolSearchRunning: string;
@@ -1283,6 +1285,7 @@ const bundles: Record<
       attachmentPreviewFailedPdf: 'Failed to load PDF',
       attachmentPreviewFailedDocx: 'Failed to load document',
       attachmentPreviewFailedExcel: 'Failed to load spreadsheet',
+      attachmentPreviewImage: 'Preview image',
       stepTimelineThinkingStreaming: 'Thinking…',
       stepTimelineThinkingDone: 'Thinking complete',
       stepTimelineToolSearchRunning: 'Searching the web…',
@@ -2426,6 +2429,7 @@ const bundles: Record<
       attachmentPreviewFailedPdf: '无法加载 PDF',
       attachmentPreviewFailedDocx: '无法加载文档',
       attachmentPreviewFailedExcel: '无法加载表格',
+      attachmentPreviewImage: '预览图片',
       stepTimelineThinkingStreaming: '正在思考…',
       stepTimelineThinkingDone: '思考完成',
       stepTimelineToolSearchRunning: '搜索网络中…',
