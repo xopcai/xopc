@@ -26,6 +26,8 @@ export function SidebarFooter({
     void import('@/pages/settings-page');
     void import('@/pages/sessions-page');
     void import('@/pages/logs-page');
+    void import('@/pages/cron-page');
+    void import('@/pages/skills-page');
   }, []);
 
   return (
@@ -107,7 +109,7 @@ export function SidebarFooter({
               <PreferenceSelectFields variant="sidebar" />
               <div className="h-px bg-edge-subtle" role="separator" />
               <Link
-                to={pathForTab('settingsAppearance')}
+                to={pathForTab('settingsGateway')}
                 className={cn(
                   'inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-accent-fg',
                   'bg-accent-soft transition-colors hover:bg-accent-soft/90',

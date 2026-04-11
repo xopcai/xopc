@@ -254,7 +254,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | i18n | `web/src/i18n/messages.ts` (`en` / `zh`) |
 | Global styles + tokens | `web/src/styles/globals.css` (`@theme { … }` for semantic colors) |
 
-**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`; management `/cron`, `/skills`; settings `/settings/:section` (e.g. `/settings/sessions`, `/settings/logs`).
+**Routing (hash):** `/` → `/chat`; chat `/chat`, `/chat/new`, `/chat/:sessionKey`. Full-screen **settings** shell: `/settings/gateway`, `/settings/appearance`, `/settings/providers`, `/settings/models`, `/settings/agents`, `/settings/search`, `/settings/heartbeat`, **`/settings/cron`**, **`/settings/skills`**, `/settings/sessions`, `/settings/logs`, **`/settings/channels`**, `/settings/voice`. Top-level **`/cron`**, **`/skills`**, **`/channels`**, `/sessions`, `/logs` redirect into the matching `/settings/...` route (bookmark-safe).
 
 **Gateway integration:**
 
