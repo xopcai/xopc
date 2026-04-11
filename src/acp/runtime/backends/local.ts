@@ -30,6 +30,8 @@ import { AgentToolsFactory } from "../../../agent/tools/factory.js";
 import { SystemPromptBuilder } from "../../../agent/prompt/service-prompt-builder.js";
 import { SkillManager } from "../../../agent/skills/index.js";
 import { loadBootstrapFiles, extractTextContent } from "../../../agent/context/workspace.js";
+import { resolveAgentBootstrapDir, resolveAgentWorkspaceDir } from "../../../config/agent-profile.js";
+import { normalizeAgentId, resolveDefaultAgentId } from "../../../agents/agent-scope.js";
 import { cleanTrailingErrors, sanitizeMessages } from "../../../agent/memory/message-sanitizer.js";
 import {
   tryApplySessionTranscriptHygiene,
@@ -150,7 +152,12 @@ export class LocalAcpRuntime implements AcpRuntime {
       model = resolveModel(defaultModel);
     }
 
-    const bootstrapFiles = loadBootstrapFiles(this.workspace);
+    const appCfg = this.config ?? loadConfig();
+    const agentId = normalizeAgentId(this.runtimeConfig?.agent ?? resolveDefaultAgentId(appCfg));
+    const markdownWs = resolveAgentWorkspaceDir(appCfg, agentId);
+    const bootstrapFiles = loadBootstrapFiles(resolveAgentBootstrapDir(appCfg, agentId), {
+      legacyWorkspaceDir: markdownWs,
+    });
     const skillManager = new SkillManager(this.workspace, resolveBundledSkillsDir());
     
     // Create a minimal config if none provided

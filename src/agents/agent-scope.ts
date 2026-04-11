@@ -116,6 +116,11 @@ export function resolveAgentHomeDir(cfg: Config, agentId: string): string {
   return join(resolveStateDir(process.env), 'agents', normalizeAgentId(agentId));
 }
 
+/** Bootstrap / persona Markdown (SOUL, AGENTS, …) under agent home — not the markdown project workspace. */
+export function resolveAgentBootstrapDir(cfg: Config, agentId: string): string {
+  return join(resolveAgentHomeDir(cfg, agentId), 'bootstrap');
+}
+
 export function resolveSessionsDir(cfg: Config, agentId: string): string {
   return join(resolveAgentHomeDir(cfg, agentId), 'sessions');
 }

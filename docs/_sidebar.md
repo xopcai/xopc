@@ -4,6 +4,7 @@
 
 - **Core Concepts**
   - [Architecture](architecture.md)
+  - [On-disk layout](disk-layout.md)
   - [State & workspace layout](workspace.md)
   - [Routing System](routing-system.md)
   - [Agent Control Protocol (ACP)](acp.md)

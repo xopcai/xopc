@@ -29,6 +29,7 @@ import {
   extractThinkingContent,
   extractThinkingFromAssistantMessage,
 } from './context/workspace.js';
+import { migrateBootstrapFilesFromLegacyWorkspace } from './context/workspace-seed.js';
 import { SessionTracker } from './session/tracker.js';
 import { ModelManager } from './models/index.js';
 import { commandRegistry, initializeCommands } from '../chat-commands/index.js';
@@ -58,7 +59,7 @@ import {
   resolveAgentHomeDir,
   resolveDefaultAgentId,
 } from '../agents/agent-scope.js';
-import { extractProfileAgentId } from '../config/agent-profile.js';
+import { extractProfileAgentId, resolveAgentBootstrapDir } from '../config/agent-profile.js';
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
@@ -195,7 +196,14 @@ export class AgentService {
     this.agentId = `agent-${Date.now()}`;
     this.workspaceDir = config.workspace;
 
-    this.bootstrapFiles = loadBootstrapFiles(config.workspace);
+    if (config.config) {
+      const aid = resolveDefaultAgentId(config.config);
+      this.bootstrapFiles = loadBootstrapFiles(resolveAgentBootstrapDir(config.config, aid), {
+        legacyWorkspaceDir: this.workspaceDir,
+      });
+    } else {
+      this.bootstrapFiles = loadBootstrapFiles(this.workspaceDir);
+    }
 
     this.sessionTracker = new SessionTracker();
     this.modelManager = new ModelManager({
@@ -329,6 +337,7 @@ export class AgentService {
     }
     const aid = resolveDefaultAgentId(cfg);
     const home = resolveAgentHomeDir(cfg, aid);
+    migrateBootstrapFilesFromLegacyWorkspace(cfg, aid, this.workspaceDir);
     migrateLegacyInboundTree(home, this.workspaceDir);
     migrateLegacyTtsTree(home, this.workspaceDir);
     const stateDir = resolveWorkspaceStateDir(cfg, aid);

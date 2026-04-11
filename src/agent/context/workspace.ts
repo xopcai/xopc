@@ -3,8 +3,8 @@
  * small helpers for message content extraction.
  */
 
-import { readFileSync, existsSync } from 'fs';
-import { join } from 'path';
+import { copyFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
+import { join, resolve } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import { parseFrontmatter } from '../../markdown/frontmatter.js';
 
@@ -134,16 +134,58 @@ export function toWorkspaceBootstrapFile(file: BootstrapFile, workspace: string)
   };
 }
 
+export interface LoadBootstrapFilesOptions {
+  /** Legacy markdown workspace root; if a file is missing under `bootstrapDir`, load (and best-effort copy) from here. */
+  legacyWorkspaceDir?: string;
+}
+
+function tryMigrateFromLegacy(
+  bootstrapDir: string,
+  legacyWorkspaceDir: string | undefined,
+  filename: WorkspaceBootstrapFileName,
+): string | null {
+  if (!legacyWorkspaceDir) {
+    return null;
+  }
+  const primary = join(bootstrapDir, filename);
+  if (existsSync(primary)) {
+    return primary;
+  }
+  const legacyPath = join(legacyWorkspaceDir, filename);
+  if (!existsSync(legacyPath)) {
+    return null;
+  }
+  try {
+    mkdirSync(bootstrapDir, { recursive: true });
+    copyFileSync(legacyPath, primary);
+    return primary;
+  } catch (err) {
+    log.warn({ err, filename }, 'Bootstrap copy from legacy workspace failed; reading from legacy only');
+    return legacyPath;
+  }
+}
+
 /**
- * Load bootstrap files from workspace directory
+ * Load bootstrap persona Markdown from `bootstrapDir` (agent home `bootstrap/`), with optional legacy workspace fallback.
  */
-export function loadBootstrapFiles(bootstrapDir: string): BootstrapFile[] {
+export function loadBootstrapFiles(
+  bootstrapDir: string,
+  options?: LoadBootstrapFilesOptions,
+): BootstrapFile[] {
+  const legacy = options?.legacyWorkspaceDir;
   const files: BootstrapFile[] = [];
   let loadedCount = 0;
   let missingCount = 0;
 
   for (const filename of BOOTSTRAP_FILES) {
-    const filePath = join(bootstrapDir, filename);
+    let filePath = join(bootstrapDir, filename);
+    if (!existsSync(filePath)) {
+      const migratedOrLegacy = tryMigrateFromLegacy(bootstrapDir, legacy, filename);
+      if (migratedOrLegacy) {
+        filePath = migratedOrLegacy;
+      }
+    }
+
     if (existsSync(filePath)) {
       try {
         let content = readFileSync(filePath, 'utf-8');
@@ -153,7 +195,11 @@ export function loadBootstrapFiles(bootstrapDir: string): BootstrapFile[] {
         const result = truncateBootstrapContent(content, BOOTSTRAP_MAX_CHARS);
 
         if (result.content) {
-          files.push({ name: filename, content: result.content });
+          files.push({
+            name: filename,
+            content: result.content,
+            path: resolve(filePath),
+          });
           loadedCount++;
 
           if (result.truncated) {
@@ -173,17 +219,19 @@ export function loadBootstrapFiles(bootstrapDir: string): BootstrapFile[] {
         log.warn({ file: filename, err }, 'Failed to load bootstrap file');
       }
     } else {
+      const hint = join(bootstrapDir, filename);
       files.push({
         name: filename,
-        content: `[MISSING] Create this file at: ${filePath}`,
+        content: `[MISSING] Create this file at: ${hint}`,
         missing: true,
+        path: resolve(hint),
       });
       missingCount++;
       log.debug({ file: filename }, 'Bootstrap file missing');
     }
   }
 
-  log.debug({ loaded: loadedCount, missing: missingCount, dir: bootstrapDir }, 'Workspace bootstrap files loaded');
+  log.debug({ loaded: loadedCount, missing: missingCount, dir: bootstrapDir }, 'Bootstrap files loaded');
 
   return files;
 }
