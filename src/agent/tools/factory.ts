@@ -27,6 +27,7 @@ import {
   createSendMediaTool,
   createMemorySearchTool,
   createMemoryGetTool,
+  createTodoTool,
 } from './index.js';
 import { createCuratedMemoryTool } from './curated-memory-tool.js';
 import { createSessionSearchTool } from './session-search-tool.js';
@@ -100,6 +101,9 @@ export class AgentToolsFactory {
     );
 
     const core: AgentTool<any, any>[] = [
+      createTodoTool({
+        getSessionKey: () => this.deps.getCurrentContext()?.sessionKey,
+      }),
       readFileTool,
       writeFileTool,
       editFileTool,

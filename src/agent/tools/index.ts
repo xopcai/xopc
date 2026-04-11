@@ -32,6 +32,8 @@ export { createMessageTool } from './communication.js';
 
 export { createSendMediaTool } from './send-media.js';
 
+export { createTodoTool, TodoStore, type TodoItem, type TodoStatus } from './todo-tool.js';
+
 export { createImageTool, resolveImageModelConfigForTool } from './image-tool.js';
 export { createImageGenerateTool, resolveImageGenerationModelConfigForTool } from './image-generate-tool.js';
 
