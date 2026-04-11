@@ -657,8 +657,8 @@ const bundles: Record<
       cronColMessage: string;
       cronColSession: string;
       cronColAgent: string;
-      cronLegacyAgent: string;
-      cronClearAgent: string;
+      cronAgentDefault: string;
+      cronAgentClear: string;
     };
     providersSettings: {
       subtitle: string;
@@ -1761,15 +1761,15 @@ const bundles: Record<
       removeBinding: 'Remove',
       cronTitle: 'Scheduled jobs',
       cronHint:
-        'Isolated cron jobs can pin an agent id for the session key. Legacy jobs without an agent are listed under the default agent only.',
+        'Isolated cron jobs can pin an agent id for the session key. Jobs without an agent id use the default agent and appear when that agent is selected.',
       cronLoading: 'Loading cron jobs…',
       cronNone: 'No matching jobs.',
       cronColSchedule: 'Schedule',
       cronColMessage: 'Message',
       cronColSession: 'Session',
       cronColAgent: 'Agent',
-      cronLegacyAgent: 'Default (legacy)',
-      cronClearAgent: 'Clear (legacy)',
+      cronAgentDefault: 'Default agent',
+      cronAgentClear: 'Reset to default',
     },
     providersSettings: {
       subtitle: 'Provider API keys and OAuth. Keys are stored via the gateway credential store.',
@@ -2898,15 +2898,15 @@ const bundles: Record<
       removeBinding: '移除',
       cronTitle: '定时任务',
       cronHint:
-        '隔离会话的定时任务可指定 agentId 作为会话键。未指定 agent 的旧任务仅列在默认代理下。',
+        '隔离会话的定时任务可指定 agentId 作为会话键。未指定 agentId 的任务使用默认代理，并在选中该代理时显示。',
       cronLoading: '正在加载定时任务…',
       cronNone: '没有匹配的任务。',
       cronColSchedule: '计划',
       cronColMessage: '消息',
       cronColSession: '会话',
       cronColAgent: '代理',
-      cronLegacyAgent: '默认（旧版）',
-      cronClearAgent: '清除（旧版）',
+      cronAgentDefault: '默认代理',
+      cronAgentClear: '恢复默认',
     },
     providersSettings: {
       subtitle: '提供商 API Key 与 OAuth。凭据由网关凭据存储保存。',

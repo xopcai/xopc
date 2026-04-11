@@ -42,9 +42,8 @@ export function ensureAssistantMessage(msg: Message | null | undefined, timestam
 }
 
 /**
- * Clone message so Lit child components (e.g. message-bubble) see a new `message` reference
- * after in-place streaming mutations. Without this, @property message skips re-render when
- * only nested content changes.
+ * Clone message so memoized children see new references after in-place streaming mutations
+ * to nested `content` / `attachments`.
  */
 export function cloneMessageForRender(msg: Message): Message {
   return {

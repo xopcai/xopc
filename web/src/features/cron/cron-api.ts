@@ -29,7 +29,7 @@ export interface CronJob {
   created_at: string;
   updated_at: string;
   sessionTarget?: 'main' | 'isolated';
-  /** Isolated jobs: agent profile for session key; omit = legacy default-agent cron session. */
+  /** Isolated jobs: agent profile for session key; omit uses the default agent. */
   agentId?: string;
   payload: CronPayload;
   delivery?: CronDelivery;
@@ -223,7 +223,7 @@ export async function getChannels(): Promise<ChannelStatus[]> {
 
 export async function getModels(): Promise<ModelInfo[]> {
   const models = await fetchConfiguredModelsCached();
-  // Map ConfiguredModel to ModelInfo (they have compatible fields)
+  // Map ConfiguredModel to ModelInfo (id / name / provider)
   return models.map((m) => ({
     id: m.id,
     name: m.name,

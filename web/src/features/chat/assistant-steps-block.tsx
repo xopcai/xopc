@@ -212,16 +212,6 @@ export function collectAssistantStepBlocks(message: Message): Array<ThinkingCont
     }
   }
   if (out.length > 0) return out;
-  const legacy = typeof message.thinking === 'string' ? message.thinking.trim() : '';
-  if (legacy || message.thinkingStreaming) {
-    return [
-      {
-        type: 'thinking',
-        text: message.thinking || '',
-        streaming: Boolean(message.thinkingStreaming),
-      },
-    ];
-  }
   return [];
 }
 

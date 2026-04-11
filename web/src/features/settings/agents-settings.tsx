@@ -1227,8 +1227,8 @@ export function AgentsSettingsPanel() {
                   </thead>
                   <tbody>
                     {agentCronJobs.map((job) => {
-                      const legacy = !job.agentId?.trim();
-                      const value = legacy ? '' : job.agentId!.trim().toLowerCase();
+                      const usesDefaultAgent = !job.agentId?.trim();
+                      const value = usesDefaultAgent ? '' : job.agentId!.trim().toLowerCase();
                       return (
                         <tr key={job.id} className="border-b border-edge-subtle">
                           <td className="py-2 pr-3 font-mono text-xs">{job.schedule}</td>
@@ -1243,7 +1243,9 @@ export function AgentsSettingsPanel() {
                               disabled={busy || job.sessionTarget !== 'isolated'}
                               onChange={(e) => void onSetCronJobAgent(job, e.target.value)}
                             >
-                              <option value="">{legacy ? a.cronLegacyAgent : a.cronClearAgent}</option>
+                              <option value="">
+                                {usesDefaultAgent ? a.cronAgentDefault : a.cronAgentClear}
+                              </option>
                               {data.agents.map((ag) => (
                                 <option key={ag.id} value={ag.id}>
                                   {ag.id}

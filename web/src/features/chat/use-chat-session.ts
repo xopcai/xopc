@@ -205,7 +205,7 @@ export function useChatSession() {
   /**
    * Full-height loading in the message column — only when we have no session key in state yet
    * or we're on `/chat` without a param (pick-session flow). Never when switching `/chat/A`→`/chat/B`
-   * (matches legacy Lit: keep layout, swap messages when fetch completes).
+   * (keeps shell layout while session/messages load).
    */
   const showSessionLoading = useMemo(
     () => loading && (sessionKey == null || decodedKey === undefined),

@@ -57,8 +57,6 @@ export interface Message {
     cost?: number;
   };
   timestamp?: number;
-  thinking?: string;
-  thinkingStreaming?: boolean;
 }
 
 export interface ProgressState {
