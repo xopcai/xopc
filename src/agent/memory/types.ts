@@ -1,9 +1,11 @@
 /**
- * Built-in curated memory (MEMORY.md + USER.md under `.xopcbot/memories/`).
+ * Built-in curated memory (MEMORY.md + USER.md under the agent home `memories/` dir).
  */
 
 export interface MemoryStoreConfig {
   workspaceDir: string;
+  /** Absolute path to `…/agents/<id>/memories/` (not under markdown workspace). */
+  memoriesDir: string;
   /** Max chars for MEMORY.md entries (excluding delimiter overhead in limit check uses joined body). */
   memoryCharLimit: number;
   /** Max chars for USER.md entries. */

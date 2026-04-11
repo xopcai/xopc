@@ -1,4 +1,7 @@
+import { join } from 'node:path';
+
 import type { Config } from '../../config/schema.js';
+import { resolveAgentHomeDir, resolveAgentIdForWorkspacePath } from '../../agents/agent-scope.js';
 
 import type { MemoryStoreConfig } from './types.js';
 
@@ -7,7 +10,7 @@ export function isMemorySubsystemEnabled(config: Config | undefined): boolean {
   return config?.agents?.defaults?.memory?.enabled !== false;
 }
 
-/** Curated snapshot + `curated_memory` tool (`.xopcbot/memories/`). */
+/** Curated snapshot + `curated_memory` tool (agent home `memories/`). */
 export function isCuratedMemoryInPrompt(config: Config | undefined): boolean {
   const m = config?.agents?.defaults?.memory;
   if (m?.enabled === false) {
@@ -24,8 +27,16 @@ export function resolveBuiltinMemoryStoreConfig(
   config: Config | undefined,
 ): MemoryStoreConfig {
   const m = config?.agents?.defaults?.memory;
+  const memoriesDir =
+    config != null
+      ? join(
+          resolveAgentHomeDir(config, resolveAgentIdForWorkspacePath(config, workspaceDir)),
+          'memories',
+        )
+      : join(workspaceDir, '.xopcbot', 'memories');
   return {
     workspaceDir,
+    memoriesDir,
     memoryCharLimit: m?.memoryCharLimit ?? 2200,
     userCharLimit: m?.userCharLimit ?? 1375,
     userProfileEnabled: m?.userProfileEnabled !== false,

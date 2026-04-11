@@ -17,7 +17,13 @@ import type { SessionListQuery, ExportFormat } from '../session/types.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { getModelRegistry } from '../providers/index.js';
 import { getLogDir, getLogStats, createLogger } from '../utils/logger.js';
-import { resolveConfigPath, resolveCronJobsPath, resolveStateDir } from '../config/paths.js';
+import {
+  resolveConfigPath,
+  resolveCronJobsPath,
+  resolveStateDir,
+  resolveAgentDir,
+  resolveWorkspaceExtensionsDir,
+} from '../config/paths.js';
 import { AgentRunRelay } from './agent-run-relay.js';
 import {
   deleteManagedSkill as deleteManagedSkillDir,
@@ -166,9 +172,10 @@ export class GatewayService {
    */
   private initializeExtensionLoader(): void {
     try {
+      const aid = getDefaultAgentId(this.config);
       this.extensionLoader = new ExtensionLoader({
         workspaceDir: this.workspacePath,
-        extensionsDir: join(this.workspacePath, '.extensions'),
+        extensionsDir: resolveWorkspaceExtensionsDir(this.config, aid),
       });
       this.extensionLoader.setConfig(this.config as Parameters<ExtensionLoader['setConfig']>[0]);
 
@@ -248,7 +255,9 @@ export class GatewayService {
       runMessageSent: (to, content, success, error, channel) =>
         this.agentService.invokeOutboundMessageSent(to, content, success, error, channel),
     });
-    this.channelManager.enableOutboundPersistence(this.workspacePath);
+    this.channelManager.enableOutboundPersistence(resolveAgentDir(this.config, getDefaultAgentId(this.config)), {
+      migrateFromWorkspace: this.workspacePath,
+    });
 
     if (this.extensionLoader) {
       this.extensionLoader.setRuntimeContext({

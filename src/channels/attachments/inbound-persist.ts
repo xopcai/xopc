@@ -1,17 +1,21 @@
 /**
- * Persist inbound channel / Web UI uploads under the configured workspace so
- * session transcripts can reference stable paths (read_file + Web UI preview).
+ * Persist inbound channel / Web UI uploads under the agent home dir so the markdown
+ * workspace stays user-visible; session transcripts reference stable relative paths.
  */
 
 import { mkdir, writeFile } from 'fs/promises';
 import { join, resolve } from 'path';
 import { randomBytes } from 'crypto';
 import { createLogger } from '../../utils/logger.js';
+import { migrateTreeIfTargetMissing } from '../../config/migrate-internal-state.js';
 
 const log = createLogger('InboundPersist');
 
-/** Files live under `<workspace>/.xopcbot/inbound/<session>/` */
-export const INBOUND_REL_ROOT = '.xopcbot/inbound';
+/** New layout: `<agentHome>/inbound/<session>/` — rel paths use this prefix. */
+export const INBOUND_REL_ROOT = 'inbound';
+
+/** Legacy prefix under markdown workspace (still accepted for resolution). */
+export const LEGACY_INBOUND_REL_PREFIX = '.xopcbot/inbound';
 
 export interface InboundAttachmentInput {
   type: string;
@@ -19,9 +23,16 @@ export interface InboundAttachmentInput {
   data?: string;
   name?: string;
   size?: number;
-  /** Set after persist */
+  /** Set after persist (relative to agent home or legacy workspace `.xopcbot/inbound/`). */
   workspaceRelativePath?: string;
 }
+
+export type InternalAttachmentRoots = {
+  /** `…/agents/<id>/` — primary storage */
+  agentHome: string;
+  /** Markdown workspace; used to resolve legacy `.xopcbot/inbound/` paths */
+  legacyWorkspace?: string;
+};
 
 function sanitizeSessionSegment(sessionKey: string): string {
   return sessionKey.replace(/[^a-zA-Z0-9_.-]+/g, '_').slice(0, 180) || 'session';
@@ -43,19 +54,32 @@ export function decodeInboundAttachmentBase64(data: string): Buffer {
   return Buffer.from(b64.replace(/\s/g, ''), 'base64');
 }
 
+function resolveUnderRoot(root: string, rel: string, requiredPrefix: string): string | null {
+  const normalized = rel.replace(/\\/g, '/').replace(/^\/+/, '');
+  if (normalized.includes('..') || !normalized.startsWith(requiredPrefix)) {
+    return null;
+  }
+  const abs = resolve(root, ...normalized.split('/'));
+  const rootResolved = resolve(root);
+  if (!abs.startsWith(rootResolved)) {
+    return null;
+  }
+  return abs;
+}
+
 /**
  * Write non-image attachments with binary data to disk; returns a shallow copy
  * of each attachment with `workspaceRelativePath` set (POSIX-style, `/` separators).
  */
 export async function persistInboundAttachmentsToWorkspace(
-  workspaceRoot: string,
+  agentHomeRoot: string,
   sessionKey: string,
   attachments: InboundAttachmentInput[] | undefined,
 ): Promise<InboundAttachmentInput[] | undefined> {
   if (!attachments?.length) return attachments;
 
   const sessionSeg = sanitizeSessionSegment(sessionKey);
-  const inboundAbs = resolve(workspaceRoot, '.xopcbot', 'inbound', sessionSeg);
+  const inboundAbs = resolve(agentHomeRoot, INBOUND_REL_ROOT, sessionSeg);
   await mkdir(inboundAbs, { recursive: true });
 
   const out: InboundAttachmentInput[] = [];
@@ -81,7 +105,7 @@ export async function persistInboundAttachmentsToWorkspace(
       const absFile = join(inboundAbs, fname);
       await writeFile(absFile, buf);
 
-      const workspaceRelativePath = ['.xopcbot', 'inbound', sessionSeg, fname].join('/');
+      const workspaceRelativePath = [INBOUND_REL_ROOT, sessionSeg, fname].join('/');
 
       log.debug({ sessionKey, workspaceRelativePath, bytes: buf.length }, 'Inbound file persisted');
 
@@ -104,7 +128,7 @@ export async function persistInboundAttachmentsToWorkspace(
  */
 export function formatInboundFileTextBlock(
   att: InboundAttachmentInput,
-  workspaceRootAbs: string,
+  storageRootAbs: string,
 ): string {
   const name = att.name || 'unknown';
   const mime = att.mimeType || 'unknown type';
@@ -114,7 +138,7 @@ export function formatInboundFileTextBlock(
     return head;
   }
   const rel = att.workspaceRelativePath.replace(/\\/g, '/');
-  const abs = resolve(workspaceRootAbs, ...rel.split('/').filter(Boolean));
+  const abs = resolve(storageRootAbs, ...rel.split('/').filter(Boolean));
   return `${head}\nxopcbot-path:rel:${rel}\nxopcbot-path:abs:${abs}`;
 }
 
@@ -136,17 +160,37 @@ export function stripInboundFileMetadataFromText(text: string): string {
 }
 
 /**
- * Resolve a stored relative path and ensure it stays under workspace `.xopcbot/inbound/`.
+ * Resolve a stored relative path under `inbound/` or legacy `.xopcbot/inbound/`.
  */
-export function resolveSafeInboundFilePath(workspaceRoot: string, relRaw: string): string | null {
+export function resolveSafeInboundFilePath(
+  roots: InternalAttachmentRoots,
+  relRaw: string,
+): string | null {
   const rel = relRaw.replace(/\\/g, '/').replace(/^\/+/, '');
-  if (rel.includes('..') || !rel.startsWith(`${INBOUND_REL_ROOT}/`)) {
+  if (rel.includes('..')) {
     return null;
   }
-  const abs = resolve(workspaceRoot, ...rel.split('/'));
-  const root = resolve(workspaceRoot);
-  if (!abs.startsWith(root)) {
-    return null;
+
+  if (rel.startsWith(`${INBOUND_REL_ROOT}/`)) {
+    return resolveUnderRoot(roots.agentHome, rel, `${INBOUND_REL_ROOT}/`);
   }
-  return abs;
+
+  if (rel.startsWith(`${LEGACY_INBOUND_REL_PREFIX}/`)) {
+    const legacy = roots.legacyWorkspace ?? roots.agentHome;
+    const fromLegacy = resolveUnderRoot(legacy, rel, `${LEGACY_INBOUND_REL_PREFIX}/`);
+    if (fromLegacy) {
+      return fromLegacy;
+    }
+    return resolveUnderRoot(roots.agentHome, rel, `${LEGACY_INBOUND_REL_PREFIX}/`);
+  }
+
+  return null;
+}
+
+/** Move legacy `<workspace>/.xopcbot/inbound` → `<agentHome>/inbound` when the target tree is absent. */
+export function migrateLegacyInboundTree(agentHome: string, legacyWorkspace: string): void {
+  migrateTreeIfTargetMissing(
+    join(agentHome, INBOUND_REL_ROOT),
+    join(legacyWorkspace, '.xopcbot', 'inbound'),
+  );
 }

@@ -120,6 +120,25 @@ export function resolveSessionsDir(cfg: Config, agentId: string): string {
   return join(resolveAgentHomeDir(cfg, agentId), 'sessions');
 }
 
+/**
+ * Find the agent id whose resolved markdown workspace matches `resolvedWorkspacePath`.
+ * Falls back to {@link resolveDefaultAgentId} when no list entry matches.
+ */
+export function resolveAgentIdForWorkspacePath(cfg: Config, resolvedWorkspacePath: string): string {
+  const target = resolveUserPath(resolvedWorkspacePath);
+  for (const e of listAgentEntries(cfg)) {
+    const id = normalizeAgentId(e.id);
+    if (resolveAgentWorkspaceDir(cfg, id) === target) {
+      return id;
+    }
+  }
+  const def = resolveDefaultAgentId(cfg);
+  if (resolveAgentWorkspaceDir(cfg, def) === target) {
+    return def;
+  }
+  return def;
+}
+
 export function getDefaultWorkspacePath(cfg: Config): string {
   return resolveAgentWorkspaceDir(cfg, resolveDefaultAgentId(cfg));
 }

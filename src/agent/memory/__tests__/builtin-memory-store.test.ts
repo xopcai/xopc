@@ -39,8 +39,10 @@ describe('BuiltinMemoryStore', () => {
 
   it('loads empty snapshot when files missing', () => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-mem-'));
+    const memoriesDir = join(dir, 'memories');
     const store = new BuiltinMemoryStore({
       workspaceDir: dir,
+      memoriesDir,
       memoryCharLimit: 100,
       userCharLimit: 100,
     });
@@ -51,11 +53,12 @@ describe('BuiltinMemoryStore', () => {
 
   it('ignores USER.md when userProfileEnabled is false', () => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-mem-'));
-    const memDir = join(dir, '.xopcbot', 'memories');
+    const memDir = join(dir, 'memories');
     mkdirSync(memDir, { recursive: true });
     writeFileSync(join(memDir, 'USER.md'), 'should not appear', 'utf-8');
     const store = new BuiltinMemoryStore({
       workspaceDir: dir,
+      memoriesDir: memDir,
       memoryCharLimit: 100,
       userCharLimit: 100,
       userProfileEnabled: false,
@@ -66,8 +69,10 @@ describe('BuiltinMemoryStore', () => {
 
   it('persists add and preserves snapshot until reload', async () => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-mem-'));
+    const memoriesDir = join(dir, 'memories');
     const store = new BuiltinMemoryStore({
       workspaceDir: dir,
+      memoriesDir,
       memoryCharLimit: 2000,
       userCharLimit: 2000,
     });
@@ -76,7 +81,7 @@ describe('BuiltinMemoryStore', () => {
     const r = await store.add('memory', 'first entry');
     expect(r.success).toBe(true);
     expect(store.getSnapshot().memory).toBe(snapBefore);
-    const memFile = join(dir, '.xopcbot', 'memories', 'MEMORY.md');
+    const memFile = join(memoriesDir, 'MEMORY.md');
     const raw = readFileSync(memFile, 'utf-8');
     expect(raw).toContain('first entry');
     expect(raw.split(MEMORY_ENTRY_DELIMITER).length).toBeGreaterThanOrEqual(1);
@@ -86,6 +91,7 @@ describe('BuiltinMemoryStore', () => {
     dir = mkdtempSync(join(tmpdir(), 'xopc-mem-'));
     const store = new BuiltinMemoryStore({
       workspaceDir: dir,
+      memoriesDir: join(dir, 'memories'),
       memoryCharLimit: 2000,
       userCharLimit: 2000,
     });

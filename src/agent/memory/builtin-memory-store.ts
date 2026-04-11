@@ -1,9 +1,9 @@
 /**
- * Bounded curated memory: `.xopcbot/memories/MEMORY.md` + `USER.md`, §-delimited entries.
+ * Bounded curated memory: agent home `memories/MEMORY.md` + `USER.md`, §-delimited entries.
  * Snapshot for system prompt is captured at load time and not mutated until next load.
  */
 
-import { existsSync, mkdirSync, readFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync } from 'node:fs';
 import { mkdir, readFile, rename, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import lockfile from 'proper-lockfile';
@@ -28,7 +28,7 @@ export class BuiltinMemoryStore {
   }
 
   private get memDir(): string {
-    return join(this.config.workspaceDir, '.xopcbot', 'memories');
+    return this.config.memoriesDir;
   }
 
   pathFor(target: 'memory' | 'user'): string {
@@ -39,6 +39,7 @@ export class BuiltinMemoryStore {
    * Load from disk and freeze {@link getSnapshot}. Sync for agent creation (prefix cache stability).
    */
   loadFromDiskSync(): void {
+    this.maybeMigrateLegacyMemoriesSync();
     mkdirSync(this.memDir, { recursive: true });
     this.memoryEntries = this.parseFileContent(
       this.readPathSync(join(this.memDir, 'MEMORY.md')),
@@ -53,6 +54,28 @@ export class BuiltinMemoryStore {
       memory: this.renderBlock('memory', this.memoryEntries),
       user: this.renderBlock('user', this.userEntries),
     };
+  }
+
+  private maybeMigrateLegacyMemoriesSync(): void {
+    const legacy = join(this.config.workspaceDir, '.xopcbot', 'memories');
+    if (existsSync(this.memDir)) {
+      return;
+    }
+    if (!existsSync(legacy)) {
+      return;
+    }
+    mkdirSync(this.memDir, { recursive: true });
+    for (const f of ['MEMORY.md', 'USER.md'] as const) {
+      const src = join(legacy, f);
+      const dst = join(this.memDir, f);
+      if (!existsSync(dst) && existsSync(src)) {
+        try {
+          copyFileSync(src, dst);
+        } catch {
+          /* best-effort */
+        }
+      }
+    }
   }
 
   private readPathSync(path: string): string {

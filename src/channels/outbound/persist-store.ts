@@ -1,11 +1,12 @@
 /**
- * Durable outbound queue (crash recovery): JSON file under workspace `.xopcbot/`.
+ * Durable outbound queue (crash recovery): JSON file under agent internal dir.
  */
 
 import { existsSync, mkdirSync, readFileSync, renameSync, writeFileSync } from 'fs';
 import { join } from 'path';
 import { randomUUID } from 'node:crypto';
 import type { OutboundMessage } from '../transport-types.js';
+import { migrateFileIfMissing } from '../../config/migrate-internal-state.js';
 
 export interface PendingOutbound {
   id: string;
@@ -17,10 +18,19 @@ export class OutboundPersistStore {
   private readonly filePath: string;
   private pending: PendingOutbound[] = [];
 
-  constructor(workspaceDir: string) {
-    const dir = join(workspaceDir, '.xopcbot');
-    mkdirSync(dir, { recursive: true });
-    this.filePath = join(dir, 'outbound-pending.json');
+  constructor(
+    agentDir: string,
+    options?: {
+      /** When set, copy `outbound-pending.json` from legacy workspace `.xopcbot/` once. */
+      migrateFromWorkspace?: string;
+    },
+  ) {
+    mkdirSync(agentDir, { recursive: true });
+    this.filePath = join(agentDir, 'outbound-pending.json');
+    if (options?.migrateFromWorkspace) {
+      const legacy = join(options.migrateFromWorkspace, '.xopcbot', 'outbound-pending.json');
+      migrateFileIfMissing(this.filePath, legacy);
+    }
     this.load();
   }
 

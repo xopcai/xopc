@@ -6,13 +6,16 @@ import {
 } from '../inbound-persist.js';
 
 describe('inbound-persist', () => {
-  const ws = '/home/user/ws';
+  const legacyWs = '/home/user/ws';
+  const agentHome = '/home/user/.xopcbot/agents/main';
+  const roots = { agentHome, legacyWorkspace: legacyWs };
 
   it('resolveSafeInboundFilePath rejects traversal and non-inbound paths', () => {
-    expect(resolveSafeInboundFilePath(ws, '.xopcbot/inbound/s/doc.txt')).toBeTruthy();
-    expect(resolveSafeInboundFilePath(ws, '../.xopcbot/inbound/s/doc.txt')).toBeNull();
-    expect(resolveSafeInboundFilePath(ws, 'other/file.txt')).toBeNull();
-    expect(resolveSafeInboundFilePath(ws, '.xopcbot/other/file.txt')).toBeNull();
+    expect(resolveSafeInboundFilePath(roots, 'inbound/s/doc.txt')).toBeTruthy();
+    expect(resolveSafeInboundFilePath(roots, '.xopcbot/inbound/s/doc.txt')).toBeTruthy();
+    expect(resolveSafeInboundFilePath(roots, '../inbound/s/doc.txt')).toBeNull();
+    expect(resolveSafeInboundFilePath(roots, 'other/file.txt')).toBeNull();
+    expect(resolveSafeInboundFilePath(roots, '.xopcbot/other/file.txt')).toBeNull();
   });
 
   it('formatInboundFileTextBlock includes abs path when persisted', () => {
@@ -22,12 +25,12 @@ describe('inbound-persist', () => {
         mimeType: 'text/plain',
         name: 'a.md',
         size: 10,
-        workspaceRelativePath: '.xopcbot/inbound/k/a.md',
+        workspaceRelativePath: 'inbound/k/a.md',
       },
-      ws,
+      agentHome,
     );
     expect(text).toContain('[File: a.md (text/plain, 10 bytes)]');
-    expect(text).toContain('xopcbot-path:rel:.xopcbot/inbound/k/a.md');
+    expect(text).toContain('xopcbot-path:rel:inbound/k/a.md');
     expect(text).toContain('xopcbot-path:abs:');
   });
 
@@ -38,9 +41,9 @@ describe('inbound-persist', () => {
         mimeType: 'text/plain',
         name: 'design-system.md',
         size: 34298,
-        workspaceRelativePath: '.xopcbot/inbound/k/f.md',
+        workspaceRelativePath: 'inbound/k/f.md',
       },
-      ws,
+      agentHome,
     );
     const joined = `分析 ${block}`;
     expect(stripInboundFileMetadataFromText(joined)).toBe('分析');

@@ -54,7 +54,11 @@ import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 import { extractAgentUserPlainText } from './memory/user-message-text.js';
 
-import { resolveDefaultAgentId } from '../agents/agent-scope.js';
+import {
+  resolveAgentHomeDir,
+  resolveDefaultAgentId,
+} from '../agents/agent-scope.js';
+import { extractProfileAgentId } from '../config/agent-profile.js';
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
 import { cleanTrailingErrors, sanitizeMessages } from './memory/message-sanitizer.js';
@@ -65,15 +69,26 @@ import {
 import {
   persistInboundAttachmentsToWorkspace,
   formatInboundFileTextBlock,
+  migrateLegacyInboundTree,
+  type InternalAttachmentRoots,
 } from '../channels/attachments/inbound-persist.js';
 import {
   mergeVoiceTranscriptsIntoUserText,
   mergeSttConfigFromAppConfig,
 } from '../channels/attachments/voice-stt-webchat.js';
-import { persistOutboundTtsAudio } from '../channels/attachments/outbound-tts-persist.js';
+import {
+  migrateLegacyTtsTree,
+  persistOutboundTtsAudio,
+} from '../channels/attachments/outbound-tts-persist.js';
 import { compressAudio } from '../tts/audio.js';
 import { speak } from '../tts/index.js';
 import { mergeTtsConfigFromAppConfig } from '../tts/merge-config.js';
+import { migrateFileIfMissing, migrateTreeIfTargetMissing } from '../config/migrate-internal-state.js';
+import {
+  FILENAMES,
+  resolveAgentDir,
+  resolveWorkspaceStateDir,
+} from '../config/paths.js';
 import { shouldUseTTS, getChannelOutputFormat } from '../tts/service.js';
 import { isTTSAvailable } from '../tts/factory.js';
 
@@ -192,8 +207,15 @@ export class AgentService {
     log.debug('Command system initialized');
 
     this.sessionStore = this.createSessionStore();
-    this.sessionConfigStore = new SessionConfigStore(this.workspaceDir);
-    mkdirSync(join(this.workspaceDir, '.sessions', 'config'), { recursive: true });
+    const appCfgForPaths = this.config.config;
+    if (!appCfgForPaths) {
+      throw new Error('AgentService requires config.config for session paths');
+    }
+    const defaultAid = resolveDefaultAgentId(appCfgForPaths);
+    const defaultAgentHome = resolveAgentHomeDir(appCfgForPaths, defaultAid);
+    this.sessionConfigStore = new SessionConfigStore(defaultAgentHome, {
+      migrateSessionConfigsFrom: this.workspaceDir,
+    });
 
     this.hookRunner = this.createHookRunner();
     this.hookHandler = new HookHandler({
@@ -256,6 +278,8 @@ export class AgentService {
       workspaceRoot: this.workspaceDir,
       getWorkspaceRootForSession: (sessionKey: string) =>
         this.agentManager.getResolvedWorkspaceForSession(sessionKey),
+      getAgentInternalStorageRootForSession: (sessionKey: string) =>
+        resolveAgentHomeDir(this.config.config!, extractProfileAgentId(sessionKey, this.config.config!)),
       enqueueAutoTitle: (sessionKey: string) => this.enqueueMaybeAutoTitleAfterPersist(sessionKey),
     });
 
@@ -295,6 +319,35 @@ export class AgentService {
     }
 
     log.info('AgentService initialized');
+  }
+
+  /** Best-effort one-time migration from markdown workspace `.xopcbot/` / `.state` for the configured default agent. */
+  private migrateDefaultAgentInternalStateFromWorkspace(): void {
+    const cfg = this.config.config;
+    if (!cfg) {
+      return;
+    }
+    const aid = resolveDefaultAgentId(cfg);
+    const home = resolveAgentHomeDir(cfg, aid);
+    migrateLegacyInboundTree(home, this.workspaceDir);
+    migrateLegacyTtsTree(home, this.workspaceDir);
+    const stateDir = resolveWorkspaceStateDir(cfg, aid);
+    mkdirSync(stateDir, { recursive: true });
+    const legacyState = join(this.workspaceDir, '.state');
+    migrateFileIfMissing(join(stateDir, FILENAMES.WORKSPACE_STATE), join(legacyState, FILENAMES.WORKSPACE_STATE));
+    migrateFileIfMissing(join(stateDir, FILENAMES.SKILLS_CACHE), join(legacyState, FILENAMES.SKILLS_CACHE));
+    migrateTreeIfTargetMissing(
+      join(resolveAgentDir(cfg, aid), 'extensions'),
+      join(this.workspaceDir, '.extensions'),
+    );
+  }
+
+  private attachmentRootsForSession(sessionKey: string): InternalAttachmentRoots {
+    const cfg = this.config.config!;
+    return {
+      agentHome: resolveAgentHomeDir(cfg, extractProfileAgentId(sessionKey, cfg)),
+      legacyWorkspace: this.workspaceDir,
+    };
   }
 
   private createSessionStore(): SessionStore {
@@ -506,6 +559,7 @@ export class AgentService {
 
   async start(): Promise<void> {
     this.running = true;
+    this.migrateDefaultAgentInternalStateFromWorkspace();
     await this.sessionConfigStore.initialize();
     await this.hookHandler.trigger('gateway_start', { port: 0, host: 'cli' });
     log.debug('Agent service started');
@@ -660,6 +714,7 @@ export class AgentService {
       size?: number;
       workspaceRelativePath?: string;
     }>,
+    sessionKey?: string,
   ): Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> {
     const messageContent: Array<
       { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
@@ -678,7 +733,17 @@ export class AgentService {
             mimeType: att.mimeType || 'image/png',
           });
         } else {
-          const fileBlock = formatInboundFileTextBlock(att, this.workspaceDir);
+          const storageRoot =
+            sessionKey != null && sessionKey !== ''
+              ? resolveAgentHomeDir(
+                  this.config.config!,
+                  extractProfileAgentId(sessionKey, this.config.config!),
+                )
+              : resolveAgentHomeDir(
+                  this.config.config!,
+                  resolveDefaultAgentId(this.config.config!),
+                );
+          const fileBlock = formatInboundFileTextBlock(att, storageRoot);
           messageContent.push({ type: 'text', text: fileBlock });
         }
       }
@@ -712,7 +777,9 @@ export class AgentService {
       }>
     | undefined
   > {
-    return persistInboundAttachmentsToWorkspace(this.workspaceDir, sessionKey, attachments);
+    const cfg = this.config.config!;
+    const storageRoot = resolveAgentHomeDir(cfg, extractProfileAgentId(sessionKey, cfg));
+    return persistInboundAttachmentsToWorkspace(storageRoot, sessionKey, attachments);
   }
 
   private endDirectRequestContext(): void {
@@ -969,7 +1036,7 @@ export class AgentService {
 
       const sttCfg = mergeSttConfigFromAppConfig(this.config.config?.stt);
       const { text: mergedUserText, inboundVoice } = await mergeVoiceTranscriptsIntoUserText(
-        this.workspaceDir,
+        this.attachmentRootsForSession(sessionKey),
         prepared,
         content,
         sttCfg,
@@ -1022,7 +1089,7 @@ export class AgentService {
         const textForAgent = mergedUserText.trimStart().startsWith('/skill:')
           ? this.agentManager.expandSkillUserText(mergedUserText)
           : mergedUserText;
-        messageContent = this.buildMessageContent(textForAgent, prepared);
+        messageContent = this.buildMessageContent(textForAgent, prepared, sessionKey);
       }
 
       if (!abortHandled && !ranSlashCommand && messageContent !== undefined) {
@@ -1137,7 +1204,12 @@ export class AgentService {
             : format === 'wav'
               ? 'audio/wav'
               : `audio/${format}`;
-      const persisted = await persistOutboundTtsAudio(this.workspaceDir, sessionKey, buffer, format);
+      const persisted = await persistOutboundTtsAudio(
+        resolveAgentHomeDir(this.config.config!, extractProfileAgentId(sessionKey, this.config.config!)),
+        sessionKey,
+        buffer,
+        format,
+      );
       await this.appendAttachmentToLastAssistant(sessionKey, {
         type: 'audio',
         mimeType: normalizedMime,
@@ -1229,7 +1301,7 @@ export class AgentService {
       const textForDirect = content.trimStart().startsWith('/skill:')
         ? this.agentManager.expandSkillUserText(content)
         : content;
-      const messageContent = this.buildMessageContent(textForDirect, prepared);
+      const messageContent = this.buildMessageContent(textForDirect, prepared, sessionKey);
 
       const userMessage = {
         role: 'user' as const,
