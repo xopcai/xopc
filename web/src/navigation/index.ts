@@ -59,7 +59,8 @@ export type SettingsNavGroupId =
   | 'agentAndModels'
   | 'channelsAndVoice'
   | 'gateway'
-  | 'data';
+  | 'data'
+  | 'management';
 
 export type SettingsShellNavGroup = {
   id: SettingsNavGroupId;
@@ -67,8 +68,8 @@ export type SettingsShellNavGroup = {
 };
 
 /**
- * Priority: connection → AI (keys → model → agent) → common ops (sessions/logs) →
- * UI prefs → integrations. See `settingsNavGroups` copy in i18n.
+ * Priority: connection → AI (keys → model → agent) → scheduled tasks & skills →
+ * data (sessions/logs) → UI prefs → integrations. See `settingsNavGroups` copy in i18n.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat'] },
@@ -76,15 +77,16 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
     id: 'agentAndModels',
     tabs: ['settingsProviders', 'settingsModels', 'settingsAgents', 'settingsSearch'],
   },
+  { id: 'management', tabs: ['cron', 'skills'] },
   { id: 'data', tabs: ['sessions', 'logs'] },
   { id: 'interface', tabs: ['settingsAppearance'] },
   { id: 'channelsAndVoice', tabs: ['settingsChannels', 'settingsVoice'] },
 ] as const;
 
 /** Flat order: settings routes only (excludes sessions/logs). */
-export const SETTINGS_NAV_TABS: readonly Tab[] = SETTINGS_SHELL_NAV_GROUPS.filter((g) => g.id !== 'data').flatMap(
-  (g) => [...g.tabs],
-);
+export const SETTINGS_NAV_TABS: readonly Tab[] = SETTINGS_SHELL_NAV_GROUPS.filter(
+  (g) => g.id !== 'data',
+).flatMap((g) => [...g.tabs]);
 
 /** Settings shell: full left rail including sessions + logs. */
 export const SETTINGS_SHELL_NAV_TABS: readonly Tab[] = SETTINGS_SHELL_NAV_GROUPS.flatMap((g) => [...g.tabs]);
@@ -164,6 +166,14 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'chat') return '/chat';
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
-  if (tab === 'sessions' || tab === 'logs') return `/settings/${tab}`;
+  if (
+    tab === 'sessions' ||
+    tab === 'logs' ||
+    tab === 'cron' ||
+    tab === 'skills' ||
+    tab === 'channels'
+  ) {
+    return `/settings/${tab}`;
+  }
   return `/${tab}`;
 }

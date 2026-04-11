@@ -2,6 +2,7 @@ import { Clock, Layers, Plug, Plus } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
+import { pathForTab } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
 
@@ -55,7 +56,7 @@ export function SidebarNav({
             </Link>
           ) : null}
           <NavLink
-            to="/skills"
+            to={pathForTab('skills')}
             className={(props) => secondaryNavClass(props, collapsed)}
             title={m.nav.skills}
             onClick={() => onNavigate?.()}
@@ -64,7 +65,7 @@ export function SidebarNav({
             {!collapsed ? <span className="truncate">{m.nav.skills}</span> : null}
           </NavLink>
           <NavLink
-            to="/cron"
+            to={pathForTab('cron')}
             className={(props) => secondaryNavClass(props, collapsed)}
             title={m.nav.cron}
             onClick={() => onNavigate?.()}
@@ -73,7 +74,7 @@ export function SidebarNav({
             {!collapsed ? <span className="truncate">{m.nav.cron}</span> : null}
           </NavLink>
           <NavLink
-            to="/channels"
+            to={pathForTab('channels')}
             className={(props) => secondaryNavClass(props, collapsed)}
             title={m.nav.channels}
             onClick={() => onNavigate?.()}

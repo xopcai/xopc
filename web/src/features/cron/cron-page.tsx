@@ -10,6 +10,7 @@ import {
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
+import { useLocation } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import {
@@ -551,6 +552,8 @@ export function CronPage() {
 
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
+  const { pathname } = useLocation();
+  const inSettingsShell = pathname.startsWith('/settings/');
 
   const cronHeaderEnd = useMemo(
     () => (
@@ -579,9 +582,9 @@ export function CronPage() {
   );
 
   useLayoutEffect(() => {
-    if (!hasToken) {
+    if (!hasToken || inSettingsShell) {
       clearPageHeader();
-      return;
+      return () => clearPageHeader();
     }
     setPageHeader({
       startExtra: null,
@@ -589,7 +592,7 @@ export function CronPage() {
       end: cronHeaderEnd,
     });
     return () => clearPageHeader();
-  }, [clearPageHeader, cronHeaderEnd, hasToken, setPageHeader]);
+  }, [clearPageHeader, cronHeaderEnd, hasToken, inSettingsShell, setPageHeader]);
 
   if (!hasToken) {
     return (
@@ -615,6 +618,12 @@ export function CronPage() {
             <p className="mt-1 max-w-2xl text-sm text-fg-muted">{c.subtitle}</p>
           </div>
         </header>
+
+        {inSettingsShell ? (
+          <div className="flex flex-wrap items-center justify-end gap-2 border-b border-edge-subtle pb-3 dark:border-edge-subtle">
+            {cronHeaderEnd}
+          </div>
+        ) : null}
 
         <div className="flex flex-col gap-3 border-b border-edge-subtle pb-3 sm:flex-row sm:items-center sm:justify-between dark:border-edge-subtle">
           <div className="flex gap-1" role="tablist" aria-label={c.title}>
