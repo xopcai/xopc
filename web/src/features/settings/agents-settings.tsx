@@ -235,7 +235,7 @@ export function AgentsSettingsPanel() {
     }
     setEditWorkspace(selected.workspace);
     setEditModel(selected.model?.primary ?? '');
-    setEditName(selected.name ?? '');
+    setEditName(selected.name?.trim() ? selected.name.trim() : selected.id);
   }, [selected]);
 
   useEffect(() => {
@@ -659,10 +659,10 @@ export function AgentsSettingsPanel() {
         </div>
         {data && !loading ? (
           <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-end sm:gap-3">
-            <label className="flex min-w-0 flex-col gap-1 text-sm sm:min-w-[12rem] sm:max-w-[22rem]">
-              <span className="text-fg-muted">{a.agent}</span>
+            <div className="w-full max-w-[9rem] shrink-0 sm:w-[9rem]">
               <select
-                className={inputClass()}
+                className={cn(inputClass(), 'w-full')}
+                aria-label={a.agent}
                 value={selectedId ?? ''}
                 onChange={(e) => setSelectedId(e.target.value)}
               >
@@ -673,7 +673,7 @@ export function AgentsSettingsPanel() {
                   </option>
                 ))}
               </select>
-            </label>
+            </div>
             <Button
               type="button"
               variant="secondary"
