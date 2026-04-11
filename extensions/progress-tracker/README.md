@@ -1,6 +1,6 @@
 # Progress Tracker Extension
 
-**演示功能:** Phase 2 Enhanced Tool - 流式更新
+**演示功能:** 增强工具 — 流式更新
 
 **核心特性:**
 - ✅ `onUpdate` 回调实现进度报告

@@ -66,7 +66,7 @@ export interface SystemPromptOptions {
   channels?: string[];
   /** Frozen curated memory from agent home `memories/` (session start only). */
   curatedMemorySnapshot?: MemorySnapshot;
-  /** External memory provider static instructions (Phase 2). */
+  /** External memory provider static instructions. */
   externalMemoryInstructions?: string;
   /** How skill instructions are surfaced (metadata-only → use skills_list / skill_view). */
   skillsPromptMode?: 'metadata-only' | 'legacy-with-paths';
@@ -518,7 +518,7 @@ export function buildSystemPrompt(
     sections.push(buildCuratedMemorySection(curatedMemorySnapshot));
   }
 
-  // 2b. External memory provider (Phase 2)
+  // 2b. External memory provider
   if (!isMinimal) {
     sections.push(buildExternalMemorySection(externalMemoryInstructions));
   }
