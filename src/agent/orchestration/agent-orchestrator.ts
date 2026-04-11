@@ -6,6 +6,7 @@
  */
 
 import type { Agent, AgentMessage } from '@mariozechner/pi-agent-core';
+import type { Config } from '../../config/schema.js';
 import type { InboundMessage } from '../../infra/bus/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
 import { resolveEffectiveThinkingLevel } from '../../session/thinking-resolve.js';
@@ -48,6 +49,8 @@ export interface AgentOrchestratorConfig {
   getAgentInternalStorageRootForSession?: (sessionKey: string) => string;
   /** Fire-and-forget after full session persist (e.g. LLM session title); not called from mid-turn snapshots. */
   enqueueAutoTitle?: (sessionKey: string) => void;
+  /** For per-turn timeout via `agents.defaults.maxTaskDurationMs`. */
+  getConfig?: () => Config | undefined;
 }
 
 export class AgentOrchestrator {
@@ -63,6 +66,7 @@ export class AgentOrchestrator {
   private getWorkspaceRootForSession?: (sessionKey: string) => string;
   private getAgentInternalStorageRootForSession: (sessionKey: string) => string;
   private enqueueAutoTitle?: (sessionKey: string) => void;
+  private getConfig?: () => Config | undefined;
 
   constructor(config: AgentOrchestratorConfig) {
     this.agentManager = config.agentManager;
@@ -79,6 +83,7 @@ export class AgentOrchestrator {
       config.getAgentInternalStorageRootForSession ??
       ((sk) => this.getWorkspaceRootForSession?.(sk) ?? this.workspaceRoot);
     this.enqueueAutoTitle = config.enqueueAutoTitle;
+    this.getConfig = config.getConfig;
   }
 
   private async hydrateSessionModelFromStore(sessionKey: string): Promise<void> {
@@ -211,6 +216,7 @@ export class AgentOrchestrator {
       modelManager: this.modelManager,
       userMessage,
       log,
+      getConfig: this.getConfig,
       afterUserPrompt: async () => {
         try {
           const { messages: sanitizedTurn } = sanitizeMessages(agent.state.messages);
