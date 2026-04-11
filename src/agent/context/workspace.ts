@@ -3,7 +3,7 @@
  * small helpers for message content extraction.
  */
 
-import { copyFileSync, mkdirSync, readFileSync, existsSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { join, resolve } from 'path';
 import { createLogger } from '../../utils/logger.js';
 import { parseFrontmatter } from '../../markdown/frontmatter.js';
@@ -134,57 +134,16 @@ export function toWorkspaceBootstrapFile(file: BootstrapFile, workspace: string)
   };
 }
 
-export interface LoadBootstrapFilesOptions {
-  /** Legacy markdown workspace root; if a file is missing under `bootstrapDir`, load (and best-effort copy) from here. */
-  legacyWorkspaceDir?: string;
-}
-
-function tryMigrateFromLegacy(
-  bootstrapDir: string,
-  legacyWorkspaceDir: string | undefined,
-  filename: WorkspaceBootstrapFileName,
-): string | null {
-  if (!legacyWorkspaceDir) {
-    return null;
-  }
-  const primary = join(bootstrapDir, filename);
-  if (existsSync(primary)) {
-    return primary;
-  }
-  const legacyPath = join(legacyWorkspaceDir, filename);
-  if (!existsSync(legacyPath)) {
-    return null;
-  }
-  try {
-    mkdirSync(bootstrapDir, { recursive: true });
-    copyFileSync(legacyPath, primary);
-    return primary;
-  } catch (err) {
-    log.warn({ err, filename }, 'Bootstrap copy from legacy workspace failed; reading from legacy only');
-    return legacyPath;
-  }
-}
-
 /**
- * Load bootstrap persona Markdown from `bootstrapDir` (agent home `bootstrap/`), with optional legacy workspace fallback.
+ * Load bootstrap persona Markdown from `bootstrapDir` (agent home `bootstrap/`).
  */
-export function loadBootstrapFiles(
-  bootstrapDir: string,
-  options?: LoadBootstrapFilesOptions,
-): BootstrapFile[] {
-  const legacy = options?.legacyWorkspaceDir;
+export function loadBootstrapFiles(bootstrapDir: string): BootstrapFile[] {
   const files: BootstrapFile[] = [];
   let loadedCount = 0;
   let missingCount = 0;
 
   for (const filename of BOOTSTRAP_FILES) {
-    let filePath = join(bootstrapDir, filename);
-    if (!existsSync(filePath)) {
-      const migratedOrLegacy = tryMigrateFromLegacy(bootstrapDir, legacy, filename);
-      if (migratedOrLegacy) {
-        filePath = migratedOrLegacy;
-      }
-    }
+    const filePath = join(bootstrapDir, filename);
 
     if (existsSync(filePath)) {
       try {
