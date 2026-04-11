@@ -37,6 +37,7 @@ export function ModelSelector({
   contentSide = 'bottom',
   contentAlign = 'end',
   className,
+  popoverContentClassName,
   onChange,
 }: {
   value: string;
@@ -52,6 +53,8 @@ export function ModelSelector({
   contentAlign?: 'start' | 'center' | 'end';
   /** Merged onto the trigger button (e.g. full width in wide forms). */
   className?: string;
+  /** Merged onto `Popover.Content` — use e.g. `z-[70]` when the trigger sits inside a `z-[60]` dialog. */
+  popoverContentClassName?: string;
   onChange: (modelId: string) => void;
 }) {
   const [open, setOpen] = useState(false);
@@ -94,7 +97,10 @@ export function ModelSelector({
       </Popover.Trigger>
       <Popover.Portal>
         <Popover.Content
-          className="z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge-subtle bg-surface-panel p-1 shadow-elevated dark:border-edge-subtle"
+          className={cn(
+            'z-50 w-[min(22rem,calc(100vw-2rem))] rounded-xl border border-edge-subtle bg-surface-panel p-1 shadow-elevated dark:border-edge-subtle',
+            popoverContentClassName,
+          )}
           side={contentSide}
           sideOffset={4}
           align={contentAlign}
