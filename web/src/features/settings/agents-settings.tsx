@@ -35,6 +35,7 @@ import {
   type GatewayConfigBinding,
   type SkillCatalogRow,
 } from '@/features/settings/agents-admin-api';
+import { suggestWorkspaceFromAgentName } from '@/features/settings/suggest-agent-workspace';
 import { ModelSelector } from '@/features/chat/model-selector';
 import { cronJobBodyText, listJobs, updateJob, type CronJob } from '@/features/cron/cron-api';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
@@ -87,6 +88,7 @@ export function AgentsSettingsPanel() {
   const [createWorkspace, setCreateWorkspace] = useState('');
   const [createModel, setCreateModel] = useState('');
   const [addAgentModalOpen, setAddAgentModalOpen] = useState(false);
+  const createWorkspaceSuggestedRef = useRef('');
   const [busy, setBusy] = useState(false);
 
   const [editWorkspace, setEditWorkspace] = useState('');
@@ -130,6 +132,15 @@ export function AgentsSettingsPanel() {
       try {
         await saveAgentBootstrapFileContent(sid, name, draft);
         bootstrapSyncedRef.current = draft;
+        setFiles((prev) => {
+          if (!prev || prev.agentId !== sid) {
+            return prev;
+          }
+          return {
+            ...prev,
+            files: prev.files.map((f) => (f.name === name ? { ...f, missing: false } : f)),
+          };
+        });
       } catch (err) {
         setError(err instanceof Error ? err.message : a.saveError);
       } finally {
@@ -411,7 +422,19 @@ export function AgentsSettingsPanel() {
     setBootstrapViewMode('edit');
   }, [activeFile, selectedId]);
 
+  const applyCreateWorkspaceSuggestion = useCallback(() => {
+    const next = suggestWorkspaceFromAgentName(createName);
+    setCreateWorkspace((prev) => {
+      if (prev === '' || prev === createWorkspaceSuggestedRef.current) {
+        createWorkspaceSuggestedRef.current = next;
+        return next;
+      }
+      return prev;
+    });
+  }, [createName]);
+
   function openAddAgentModal() {
+    createWorkspaceSuggestedRef.current = '';
     setCreateName('');
     setCreateWorkspace('');
     setCreateModel('');
@@ -420,15 +443,21 @@ export function AgentsSettingsPanel() {
 
   async function onCreate(e: React.FormEvent) {
     e.preventDefault();
-    if (!createName.trim() || !createWorkspace.trim()) {
+    const name = createName.trim();
+    if (!name) {
+      return;
+    }
+    const wsInput = createWorkspace.trim();
+    const workspace = wsInput || suggestWorkspaceFromAgentName(name);
+    if (!workspace) {
       return;
     }
     setBusy(true);
     setError(null);
     try {
       const next = await createGatewayAgent({
-        name: createName.trim(),
-        workspace: createWorkspace.trim(),
+        name,
+        workspace,
         ...(createModel.trim() ? { model: createModel.trim() } : {}),
       });
       setData(next);
@@ -830,28 +859,30 @@ export function AgentsSettingsPanel() {
             {filesLoading ? (
               <p className="text-sm text-fg-muted">{a.filesLoading}</p>
             ) : files ? (
-              <div className="grid gap-4 md:grid-cols-[12rem_minmax(0,1fr)]">
-                <ul className="flex flex-col gap-1 rounded-lg border border-edge bg-surface-panel p-2 text-sm">
+              <div className="flex min-h-0 flex-col gap-3">
+                <nav
+                  className="flex flex-row flex-wrap gap-x-0.5 gap-y-0 border-b border-edge-subtle"
+                  aria-label={a.tabFiles}
+                >
                   {files.files.map((f) => (
-                    <li key={f.name}>
-                      <button
-                        type="button"
-                        className={cn(
-                          'w-full rounded-md px-2 py-1.5 text-left font-mono text-xs',
-                          activeFile === f.name
-                            ? 'bg-accent-soft text-accent-fg'
-                            : 'hover:bg-surface-hover',
-                          f.missing && 'opacity-60',
-                        )}
-                        onClick={() => setActiveFile(f.name)}
-                      >
-                        {f.name}
-                        {f.missing ? ` (${a.missing})` : ''}
-                      </button>
-                    </li>
+                    <button
+                      key={f.name}
+                      type="button"
+                      className={cn(
+                        '-mb-px shrink-0 border-b-2 border-transparent px-3 py-2 text-left font-mono text-xs whitespace-nowrap transition-colors',
+                        activeFile === f.name
+                          ? 'border-accent text-fg'
+                          : 'text-fg-muted hover:border-edge-subtle hover:text-fg',
+                        f.missing && 'opacity-60',
+                      )}
+                      onClick={() => setActiveFile(f.name)}
+                    >
+                      {f.name}
+                      {f.missing ? ` (${a.missing})` : ''}
+                    </button>
                   ))}
-                </ul>
-                <div className="flex min-h-0 flex-col gap-2">
+                </nav>
+                <div className="flex min-h-0 min-w-0 flex-col gap-2">
                   {activeFile ? (
                     <>
                       <div className="flex flex-wrap items-center justify-between gap-2">
@@ -894,7 +925,10 @@ export function AgentsSettingsPanel() {
                       </div>
                       {bootstrapViewMode === 'edit' ? (
                         <textarea
-                          className={cn(inputClass(), 'min-h-[20rem] flex-1 font-mono text-xs')}
+                          className={cn(
+                            inputClass(),
+                            'min-h-[min(36rem,65vh)] flex-1 font-mono text-xs sm:min-h-[40rem]',
+                          )}
                           value={fileDraft}
                           disabled={bootstrapFileLoading}
                           onChange={(e) => setFileDraft(e.target.value)}
@@ -903,7 +937,7 @@ export function AgentsSettingsPanel() {
                         <div
                           className={cn(
                             inputClass(),
-                            'min-h-[20rem] flex-1 overflow-auto text-sm',
+                            'min-h-[min(36rem,65vh)] flex-1 overflow-auto text-sm sm:min-h-[40rem]',
                             bootstrapFileLoading && 'pointer-events-none opacity-60',
                           )}
                         >
@@ -1210,6 +1244,7 @@ export function AgentsSettingsPanel() {
         onOpenChange={(open) => {
           setAddAgentModalOpen(open);
           if (!open) {
+            createWorkspaceSuggestedRef.current = '';
             setCreateName('');
             setCreateWorkspace('');
             setCreateModel('');
@@ -1248,6 +1283,7 @@ export function AgentsSettingsPanel() {
                   className={inputClass()}
                   value={createName}
                   onChange={(e) => setCreateName(e.target.value)}
+                  onBlur={() => applyCreateWorkspaceSuggestion()}
                   required
                   autoComplete="off"
                 />
@@ -1267,6 +1303,7 @@ export function AgentsSettingsPanel() {
                 <div className="flex flex-wrap items-stretch gap-2">
                   <ModelSelector
                     className="min-w-0 flex-1"
+                    popoverContentClassName="z-[70]"
                     value={createModel}
                     disabled={busy}
                     placeholder={chat.modelPlaceholder}
