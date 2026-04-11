@@ -8,6 +8,7 @@ import { createLogger } from '../utils/logger.js';
 
 import { extractTextContent } from './context/workspace.js';
 import { runAgentTurnWithTimeout } from './orchestration/run-agent-turn-with-timeout.js';
+import type { ToolExecutorConfig } from './tools/executor.js';
 import { AgentToolsFactory } from './tools/factory.js';
 
 const log = createLogger('delegate-child');

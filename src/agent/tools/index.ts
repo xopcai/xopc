@@ -57,6 +57,12 @@ export {
   DELEGATE_BLOCKED_TOOLS,
 } from './delegate-tool.js';
 
+export {
+  createExecuteCodeTool,
+  buildSandboxToolMap,
+  SANDBOX_ALLOWED_TOOLS,
+} from './execute-code-tool.js';
+
 export { createImageTool, resolveImageModelConfigForTool } from './image-tool.js';
 export { createImageGenerateTool, resolveImageGenerationModelConfigForTool } from './image-generate-tool.js';
 

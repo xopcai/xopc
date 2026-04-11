@@ -115,6 +115,12 @@ export const AgentDefaultsSchema = z.object({
       enabled: z.boolean().optional(),
     })
     .optional(),
+  /** Sandboxed `execute_code` (programmatic tool calls). Opt-in. */
+  executeCode: z
+    .object({
+      enabled: z.boolean().optional(),
+    })
+    .optional(),
   /** Optional full system prompt replacement (merged with per-agent entry; entry wins). */
   systemPromptOverride: z.string().optional(),
   /** Optional allowlist of skill names for `<available_skills>`; when set, replaces unfiltered list. */
