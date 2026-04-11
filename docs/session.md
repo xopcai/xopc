@@ -23,10 +23,11 @@ xopcbot provides comprehensive session management for conversation history via C
 
 | Property | Value |
 |----------|-------|
-| Storage directory | `workspace/.sessions/` |
-| Index file | `workspace/.sessions/index.json` |
+| Storage directory | `agents/<agentId>/sessions/` (under the state directory; sharded transcript files) |
+| Index file | `agents/<agentId>/sessions/index.json` |
 | File format | JSON |
-| Archive directory | `workspace/.sessions/archive/` |
+| Archive directory | `agents/<agentId>/sessions/archive/` |
+| Session overrides | `agents/<agentId>/sessions/config/<sanitized-session-key>.json` |
 
 ---
 
@@ -285,8 +286,8 @@ To prevent memory issues:
 The index will be automatically rebuilt on next access. To force rebuild:
 
 ```bash
-# Delete index file
-rm workspace/.sessions/index.json
+# Delete index file (replace <agentId> with your agent id, e.g. main)
+rm ~/.xopcbot/agents/<agentId>/sessions/index.json
 
 # It will be rebuilt on next session list
 xopcbot session list
@@ -294,10 +295,10 @@ xopcbot session list
 
 ### Missing Sessions
 
-If sessions exist in `.sessions/` but don't appear:
+If sessions exist on disk under `agents/<agentId>/sessions/` but don't appear:
 
 ```bash
-# Force index rebuild via migration
+# Force index rebuild
 xopcbot session list --limit 1000
 ```
 

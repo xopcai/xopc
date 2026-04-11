@@ -16,7 +16,7 @@ export type MessagingCallbacks = {
   onToolStart: (toolName: string, args?: unknown) => void;
   onToolEnd: (toolName: string, isError: boolean, result?: string) => void;
   onProgress: (progress: ProgressState) => void;
-  /** Assistant TTS audio persisted under workspace `.xopcbot/tts/` (before `result`). */
+  /** Assistant TTS audio persisted under agent home `tts/` (before `result`). */
   onTtsAudio?: (payload: { workspaceRelativePath: string; mimeType: string; name: string }) => void;
   onResult: () => void;
   onError: (msg: string) => void;

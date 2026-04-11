@@ -63,7 +63,7 @@ export const AgentDefaultsSchema = z.object({
     tailKeepRatio: z.number().default(0.3),
   }).optional(),
   /**
-   * Curated memory (`.xopcbot/memories/`) + pluggable external provider (Phase 2–4).
+   * Curated memory (`agents/<id>/memories/`) + pluggable external provider (Phase 2–4).
    * Only one external provider at a time.
    */
   memory: z

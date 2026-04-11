@@ -131,7 +131,7 @@ xopcbot onboard
 | `default` | boolean | 可选。为 `true` 时，在**未**设置顶层 **`agents.default`** 的情况下将该条目标记为默认 agent（OpenClaw 风格）。 |
 | `name` | string | 显示名称。 |
 | `enabled` | boolean | 默认 `true`。为 `false` 时该 id 不参与路由默认，且有效配置解析会回退到默认 agent。 |
-| `workspace` | string | 可选。该 agent 的工作区根路径（支持 `~`）。引导文件、入站附件、`.xopcbot/memories/` 均相对此路径。 |
+| `workspace` | string | 可选。该 agent 的 **Markdown 工作区**根路径（支持 `~`）。工具 `cwd`、按日的 `memory/` 与用户文件在此。引导 Markdown、入站/TTS 与托管 `memories/` 解析在 **`agents/<id>/`**（agent 主目录），不在此目录内。 |
 | `agentDir` | string | 可选。覆盖 **内部** agent 状态目录（凭证、`agent.json`、收件箱、pid 等），默认 `<stateDir>/agents/<id>/agent`。 |
 | `model` | string \| object | 同 `agents.defaults.model`（字符串或 `{ primary, fallbacks }`）。 |
 | `thinkingDefault` | string | 可选：`off`、`minimal`、`low`、`medium`、`high`、`xhigh`、`adaptive`。 |
@@ -181,7 +181,7 @@ xopcbot onboard
 
 #### agents.defaults.memory
 
-**`<workspace>/.xopcbot/memories/`** 下的托管长期记忆（`MEMORY.md` / `USER.md`）、可选的 **stub** 外部记忆后端（用于接线测试），以及用户轮次上 **prefetch** 注入（在用户消息前加 `<memory-context>` 围栏）的控制项。目录与迁移说明见 [托管记忆](zh/workspace.md#curated-memory)。
+**`agents/<agentId>/memories/`** 下的托管长期记忆（`MEMORY.md` / `USER.md`）、可选的 **stub** 外部记忆后端（用于接线测试），以及用户轮次上 **prefetch** 注入（在用户消息前加 `<memory-context>` 围栏）的控制项。目录说明见 [托管记忆](workspace.md#curated-memory)。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
@@ -195,7 +195,7 @@ xopcbot onboard
 | `contextCadence` | number | `1` | 当 `injectionFrequency` 为 `every-turn` 时，在第 1、1+N、1+2N… 轮注入 prefetch（最小为 `1`）。 |
 | `dialecticCadence` | number | — | 预留字段，供将来外部 dialectic 同步节奏使用（尚未接线）。 |
 
-**迁移**：将工作区根目录的 `MEMORY.md` 一次性复制到 curated 路径：
+**迁移**：将某工作区根目录的 `MEMORY.md` 一次性复制到 **默认 agent** 的 `memories/MEMORY.md`（需能读取 `config.json` 以解析 agent 主目录）：
 
 ```bash
 pnpm run migrate:memory [workspaceDir]
