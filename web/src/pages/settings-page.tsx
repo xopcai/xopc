@@ -31,7 +31,7 @@ export function SettingsPage() {
   const m = messages(language);
 
   if (section === 'agent') {
-    return <Navigate to="/settings/agents?panel=defaults" replace />;
+    return <Navigate to="/settings/agents" replace />;
   }
 
   if (!section || !SECTIONS.includes(section as SettingsSectionId)) {
