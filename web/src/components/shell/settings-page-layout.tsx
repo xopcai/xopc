@@ -111,9 +111,6 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
 
       {/* Right: surface-panel — elevated vs left rail */}
       <div className="min-h-0 min-w-0 flex-1 overflow-y-auto overflow-x-hidden overscroll-contain bg-surface-panel [scrollbar-gutter:stable]">
-        <p className="mx-auto max-w-app-main px-4 pb-1 pt-4 text-xs leading-relaxed text-fg-muted sm:px-6">
-          {m.settingsConfigNote}
-        </p>
         <Outlet />
       </div>
     </div>

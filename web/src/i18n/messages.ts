@@ -46,8 +46,6 @@ const bundles: Record<
       'interface' | 'agentAndModels' | 'voice' | 'gateway' | 'data',
       string
     >;
-    /** Muted one-liner: not all options are editable in the console. */
-    settingsConfigNote: string;
     token: {
       title: string;
       description: string;
@@ -1172,8 +1170,6 @@ const bundles: Record<
       interface: 'General',
       voice: 'Voice',
     },
-    settingsConfigNote:
-      'Not every server option is available here; some require the CLI or editing the config file on disk.',
     token: {
       title: 'Authentication required',
       description: 'Enter your gateway token to continue.',
@@ -2030,7 +2026,7 @@ const bundles: Record<
       weixinQuickStartTitle: 'Quick start',
       weixinStepLogin:
         'Use “Sign in with WeChat (QR)” below in this console, or on the gateway host run: xopcbot channels login --channel weixin (repo: pnpm run dev -- channels login --channel weixin).',
-      weixinStepEnable: 'Turn on Weixin below and save. Restart the gateway process if it was already running.',
+      weixinStepEnable: 'Turn on Weixin below and save.',
       weixinStepPairing:
         'After QR login, DMs work immediately. Use allowlist DM policy only if you want to restrict who can message the bot.',
       weixinAdvancedHint: 'Optional: allowlist, route tag, streaming, and per-account JSON—only if you need them.',
@@ -2063,7 +2059,7 @@ const bundles: Record<
       telegramCliConfigHint:
         'CLI (same config file as this gateway; override path with XOPCBOT_CONFIG or --config):\n• Interactive: xopcbot onboard --channels\n• Or set TELEGRAM_BOT_TOKEN in the environment and/or edit channels.telegram in the JSON file.',
       weixinCliConfigHint:
-        'CLI on the host that should hold credentials (override config path with XOPCBOT_CONFIG or --config):\n• xopcbot channels login --channel weixin\n• Optional: --account <id>, --timeout <ms>, --credentials-only (save token files without merging config JSON).\nRestart the gateway after login if it was already running.',
+        'CLI on the host that should hold credentials (override config path with XOPCBOT_CONFIG or --config):\n• xopcbot channels login --channel weixin\n• Optional: --account <id>, --timeout <ms>, --credentials-only (save token files without merging config JSON).',
       agentRoutingTitle: 'Agent routing',
       agentRoutingHint:
         'Maps each channel account to an agent via config `bindings`. Inbound messages use a session key for that agent.',
@@ -2356,7 +2352,6 @@ const bundles: Record<
       interface: '通用',
       voice: '语音',
     },
-    settingsConfigNote: '并非所有服务器选项都在此界面提供；部分需通过 CLI 或编辑本地配置文件完成。',
     token: {
       title: '需要身份验证',
       description: '请输入网关 Token 以继续。',
@@ -3200,7 +3195,7 @@ const bundles: Record<
       weixinQuickStartTitle: '最简步骤',
       weixinStepLogin:
         '在本页使用下方「微信扫码登录」，或在网关所在机器执行：xopcbot channels login --channel weixin（源码目录：pnpm run dev -- channels login --channel weixin）。',
-      weixinStepEnable: '下方打开「启用微信」并保存。若网关已在运行，请重启网关进程。',
+      weixinStepEnable: '下方打开「启用微信」并保存。',
       weixinStepPairing: '扫码登录后即可正常收发；仅在需要限制谁可私聊时，将私聊策略改为白名单并配置允许来源。',
       weixinAdvancedHint: '可选：白名单、路由标签、流式与分账号 JSON——仅在需要时展开。',
       weixinAllowFrom: '允许来源',
@@ -3230,7 +3225,7 @@ const bundles: Record<
       telegramCliConfigHint:
         '命令行配置（与网关使用同一配置文件；路径可用 XOPCBOT_CONFIG 或全局 --config 覆盖）：\n• 交互向导：xopcbot onboard --channels\n• 或在环境中设置 TELEGRAM_BOT_TOKEN，并直接编辑 JSON 中的 channels.telegram。',
       weixinCliConfigHint:
-        '在应保存凭据的机器上使用命令行（配置文件路径同上）：\n• xopcbot channels login --channel weixin\n• 可选：--account <id>、--timeout <ms>、--credentials-only（仅写 token 文件，不合并主配置 JSON）。\n若网关已在运行，登录后请重启网关进程。',
+        '在应保存凭据的机器上使用命令行（配置文件路径同上）：\n• xopcbot channels login --channel weixin\n• 可选：--account <id>、--timeout <ms>、--credentials-only（仅写 token 文件，不合并主配置 JSON）。',
       agentRoutingTitle: '智能体路由',
       agentRoutingHint:
         '在配置 `bindings` 中为每个频道账号指定智能体；入站消息会使用对应智能体的会话键。',
