@@ -33,6 +33,7 @@ import {
   listManagedSkillDirs,
 } from '../agent/skills/managed-store.js';
 import { createSkillConfigManager } from '../agent/skills/config.js';
+import { removeSkillsLockEntry } from '../agent/skills/hub-lock.js';
 import type { SkillCatalogEntry } from '../agent/agent-manager.js';
 import type { ManagedSkillListItem } from '../agent/skills/managed-store.js';
 
@@ -988,6 +989,7 @@ export class GatewayService {
   }
 
   deleteManagedSkill(skillId: string): void {
+    removeSkillsLockEntry(skillId);
     deleteManagedSkillDir(skillId);
     this.agentService.refreshSkillsAfterDiskChange();
   }
@@ -997,6 +999,7 @@ export class GatewayService {
     opts: { skillId?: string; overwrite?: boolean },
   ): { skillId: string; path: string } {
     const result = installSkillFromZip(buffer, opts);
+    removeSkillsLockEntry(result.skillId);
     this.agentService.refreshSkillsAfterDiskChange();
     return result;
   }
