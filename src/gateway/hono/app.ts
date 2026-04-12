@@ -6,6 +6,7 @@ import { readFileSync } from 'node:fs';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
 import { dirname, extname, join, resolve } from 'node:path';
+import { logContextMiddleware } from './middleware/log-context.js';
 import { logger } from './middleware/logger.js';
 import { auth } from './middleware/auth.js';
 import { createAgentSSEHandler, createAgentResumeHandler, createSendHandler, createEventsSSEHandler } from './sse.js';
@@ -305,7 +306,8 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     maxAge: 86400,
   };
 
-  // Global middleware
+  // Global middleware — ALS log context must wrap the rest of the stack
+  app.use(logContextMiddleware());
   app.use(logger());
   app.use(cors(CORS_OPTIONS));
 
