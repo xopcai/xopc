@@ -1,17 +1,38 @@
-# xopc
+<p align="center">
+  <a href="README.md">English</a> |
+  <a href="README.zh-CN.md">简体中文</a>
+</p>
 
-**Ultra-lightweight personal AI assistant.** A **Node.js** + **TypeScript** AI stack that runs locally—a **platform for super individuals**: your keys, your gateway, your skills.
-
-**CLI**, **HTTP/WebSocket gateway** with a **React** console, bundled **Telegram** & **WeChat (Weixin)** channel plugins (plus web console). Other chat surfaces: custom `ChannelPlugin` extensions. **20+ LLM providers** via [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai), plus **extensions** and **SKILL.md** skills—extend without forking core.
-
-[GitHub](https://github.com/xopcai/xopc) · [Documentation](https://xopcai.github.io/xopc/) · [Models](https://xopcai.github.io/xopc/models) · [Configuration](https://xopcai.github.io/xopc/configuration) · [CLI](https://xopcai.github.io/xopc/cli)
+<h1 align="center">xopc</h1>
 
 <p align="center">
-  <a href="https://github.com/xopcai/xopc"><img src="https://img.shields.io/badge/GitHub-xopcai/xopc-blue" alt="GitHub"></a>
-  <a href="https://xopcai.github.io/xopc/"><img src="https://img.shields.io/badge/Docs-Documentation-brightgreen" alt="Docs"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Node-%3E%3D22.0.0-brightgreen" alt="Node"></a>
-  <a href="#"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
+  <strong>Ultra-lightweight personal AI assistant.</strong><br />
+  A <strong>Node.js</strong> + <strong>TypeScript</strong> based AI agent that runs locally—for <strong>super individuals</strong>.
 </p>
+
+<p align="center">
+  <a href="https://github.com/xopcai/xopc"><img src="https://img.shields.io/badge/GitHub-xopcai%2Fxopc-181717?style=for-the-badge&amp;logo=github" alt="GitHub"></a>
+  <a href="https://xopcai.github.io/xopc/"><img src="https://img.shields.io/badge/Docs-Documentation-228B22?style=for-the-badge" alt="Documentation"></a>
+  <a href="#quick-start-tldr"><img src="https://img.shields.io/badge/Quick_Start-CLI-blue?style=for-the-badge" alt="Quick Start"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License"></a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/node.js-%E2%89%A522-339933?logo=nodedotjs&amp;logoColor=white" alt="Node.js">
+  <img src="https://img.shields.io/badge/pnpm-package_manager-F69220?logo=pnpm&amp;logoColor=white" alt="pnpm">
+  <img src="https://img.shields.io/badge/LLM_providers-20%2B-5865F2" alt="LLM providers">
+  <a href="https://www.npmjs.com/package/@xopcai/xopc"><img src="https://img.shields.io/npm/v/@xopcai/xopc?label=npm&amp;color=teal" alt="npm version"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/xopcai/xopc">GitHub</a> ·
+  <a href="https://xopcai.github.io/xopc/">Documentation</a> ·
+  <a href="https://xopcai.github.io/xopc/models">Models</a> ·
+  <a href="https://xopcai.github.io/xopc/configuration">Configuration</a> ·
+  <a href="https://xopcai.github.io/xopc/cli">CLI</a>
+</p>
+
+**CLI**, **HTTP/WebSocket gateway** with a **React** console, bundled **Telegram** & **WeChat (Weixin)** channel plugins (plus web console). Other chat surfaces: custom `ChannelPlugin` extensions. **20+ LLM providers** via [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai), plus **extensions** and **SKILL.md** skills—extend without forking core.
 
 ---
 
@@ -48,6 +69,8 @@ xopc onboard
 Then chat in the terminal or start the gateway for the Web UI and channel bots.
 
 ---
+
+<a id="quick-start-tldr"></a>
 
 ## Quick start (TL;DR)
 
