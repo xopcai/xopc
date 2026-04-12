@@ -142,7 +142,7 @@ export class ConfigHotReloader {
       
     } catch (err) {
       const error = err instanceof Error ? err.message : String(err);
-      log.error({ err }, 'Failed to reload config');
+      log.error({ err, configPath: this.configPath, errorMessage: error }, `Config hot reload failed: ${error}`);
       return { success: false, error };
     }
   }

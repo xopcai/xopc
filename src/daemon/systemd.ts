@@ -162,7 +162,10 @@ export async function enableLinger(): Promise<void> {
     log.info('Enabled user lingering');
   } catch {
     // If sudo fails, try without sudo (may work on some systems)
-    log.warn('Failed to enable linger with sudo, service may not start after logout');
+    log.warn(
+      { command: `sudo loginctl enable-linger ${getUsername()}` },
+      'Failed to enable systemd user linger (sudo/loginctl); gateway may not survive logout',
+    );
     throw new Error(
       'Failed to enable user lingering. Run: sudo loginctl enable-linger ' + getUsername()
     );

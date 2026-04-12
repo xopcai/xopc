@@ -99,7 +99,17 @@ You do NOT need to manage TTS - just send the message normally.`,
           details: {},
         };
       } catch (error) {
-        log.error({ error }, 'Error sending message');
+        const em = error instanceof Error ? error.message : String(error);
+        log.error(
+          {
+            err: error,
+            errorMessage: em,
+            channel: ctx.channel,
+            chatId: ctx.chatId,
+            contentPreview: params.content.slice(0, 100),
+          },
+          `send_message: outbound publish failed (${ctx.channel}/${ctx.chatId}): ${em}`,
+        );
         return {
           content: [{ type: 'text', text: `❌ Send error: ${error instanceof Error ? error.message : String(error)}` }],
           details: {},
