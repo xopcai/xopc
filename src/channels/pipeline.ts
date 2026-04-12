@@ -7,13 +7,31 @@
  * - Delivery: Send to Agent
  */
 
-import { createLogger } from '../utils/logger.js';
+import { randomUUID } from 'node:crypto';
+
+import { createLogger, runWithLogContext, updateAsyncLogContext } from '../utils/logger.js';
 import type { AgentResponse } from './plugin-types.js';
 
 // Re-export for convenience
 export type { AgentResponse } from './plugin-types.js';
 
 const log = createLogger('Pipeline');
+
+function pipelineLogRequestId(ctx: PipelineMessageContext): string {
+  const raw = ctx.metadata?.requestId;
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    return raw.trim();
+  }
+  return randomUUID();
+}
+
+function pipelineLogSessionId(ctx: PipelineMessageContext): string {
+  const sk = ctx.metadata?.sessionKey;
+  if (typeof sk === 'string' && sk.trim().length > 0) {
+    return sk.trim();
+  }
+  return `${ctx.channel}:${ctx.chatId}`;
+}
 
 // ============================================
 // Types
@@ -120,45 +138,59 @@ export class MessagePipeline {
    */
   async handleMessage(ctx: PipelineMessageContext): Promise<void> {
     const channel = this.channel;
-    
-    // 1. Preflight stage
-    let processedCtx = await this.runPreflight(ctx);
-    if (!processedCtx) {
-      log.debug({ channel, chatId: ctx.chatId }, 'Message filtered in preflight');
-      return;
-    }
+    const requestId = pipelineLogRequestId(ctx);
 
-    // 2. Process stage
-    try {
-      processedCtx = await this.runProcess(processedCtx);
-    } catch (err) {
-      log.error({ channel, err }, 'Process handler error');
-      this.onError?.(err, processedCtx);
-      return;
-    }
+    await runWithLogContext(
+      {
+        requestId,
+        sessionId: pipelineLogSessionId(ctx),
+      },
+      async () => {
+        // 1. Preflight stage
+        let processedCtx = await this.runPreflight(ctx);
+        if (!processedCtx) {
+          log.debug({ channel, chatId: ctx.chatId }, 'Message filtered in preflight');
+          return;
+        }
 
-    // 3. Deliver to Agent
-    if (!this.agentInvoke) {
-      log.warn({ channel }, 'No agentInvoke configured');
-      return;
-    }
+        // 2. Process stage
+        try {
+          processedCtx = await this.runProcess(processedCtx);
+        } catch (err) {
+          log.error({ channel, err }, 'Process handler error');
+          this.onError?.(err, processedCtx);
+          return;
+        }
 
-    let response: AgentResponse;
-    try {
-      response = await this.agentInvoke(processedCtx);
-    } catch (err) {
-      log.error({ channel, err }, 'Agent invocation error');
-      this.onError?.(err, processedCtx);
-      return;
-    }
+        const resolvedSk = processedCtx.metadata?.sessionKey;
+        if (typeof resolvedSk === 'string' && resolvedSk.trim().length > 0) {
+          updateAsyncLogContext({ sessionId: resolvedSk.trim() });
+        }
 
-    // 4. Delivery stage
-    try {
-      await this.runDelivery(processedCtx, response);
-    } catch (err) {
-      log.error({ channel, err }, 'Delivery handler error');
-      this.onError?.(err, processedCtx);
-    }
+        // 3. Deliver to Agent
+        if (!this.agentInvoke) {
+          log.warn({ channel }, 'No agentInvoke configured');
+          return;
+        }
+
+        let response: AgentResponse;
+        try {
+          response = await this.agentInvoke(processedCtx);
+        } catch (err) {
+          log.error({ channel, err }, 'Agent invocation error');
+          this.onError?.(err, processedCtx);
+          return;
+        }
+
+        // 4. Delivery stage
+        try {
+          await this.runDelivery(processedCtx, response);
+        } catch (err) {
+          log.error({ channel, err }, 'Delivery handler error');
+          this.onError?.(err, processedCtx);
+        }
+      },
+    );
   }
 
   private async runPreflight(ctx: PipelineMessageContext): Promise<PipelineMessageContext | null> {
