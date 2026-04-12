@@ -16,7 +16,12 @@ import type { Config } from '../config/schema.js';
 import type { SessionListQuery, ExportFormat } from '../session/types.js';
 import { resolveGatewayAuth, assertGatewayAuthConfigured, validateToken, extractToken, type ResolvedGatewayAuth } from './auth.js';
 import { getModelRegistry } from '../providers/index.js';
-import { getLogDir, getLogStats, createLogger } from '../utils/logger.js';
+import {
+  createLogger,
+  getLogDir,
+  getLogStats,
+  inboundCorrelationMetadataFromAsyncLogContext,
+} from '../utils/logger.js';
 import {
   resolveConfigPath,
   resolveCronJobsPath,
@@ -707,11 +712,13 @@ export class GatewayService {
       }
 
       // Send message through bus for other channels (telegram, etc.)
+      const correlationMeta = inboundCorrelationMetadataFromAsyncLogContext();
       await this.bus.publishInbound({
         channel,
         sender_id: 'gateway',
         chat_id: chatId,
         content: message,
+        ...(correlationMeta ? { metadata: correlationMeta } : {}),
       });
 
       // Wait for and collect response
