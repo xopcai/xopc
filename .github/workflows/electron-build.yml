@@ -18,7 +18,13 @@
 # (see GitHub docs: “Standard GitHub-hosted runners for private repositories”).
 #
 # Optional secrets (macOS signing / notarization):
-#   - CSC_LINK, CSC_KEY_PASSWORD, APPLE_ID, APPLE_APP_SPECIFIC_PASSWORD, APPLE_TEAM_ID
+#   - CSC_LINK: base64 of exported "Developer ID Application" .p12 (or file:// URL — see electron-builder docs)
+#   - CSC_KEY_PASSWORD: password for that .p12
+#   - APPLE_ID: Apple ID email for notarytool
+#   - APPLE_APP_SPECIFIC_PASSWORD: app-specific password (appleid.apple.com), not your Apple ID password
+#   - APPLE_TEAM_ID: 10-character Team ID (Membership details in developer.apple.com)
+# Alternative notarization auth: APPLE_API_KEY (base64 .p8), APPLE_API_KEY_ID, APPLE_API_ISSUER
+# Enable notarization in electron-builder.yml: mac.notarize: true
 #
 # Inspect runs locally (after `gh auth login`):
 #   ./scripts/gh-electron-build-runs.sh
@@ -99,6 +105,12 @@ jobs:
         env:
           # Avoid hard-link issues on some Windows runners when packaging.
           USE_HARD_LINKS: false
+          # macOS: when set + mac.notarize true in electron-builder.yml, produces signed + notarized artifacts.
+          CSC_LINK: ${{ secrets.CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
           pnpm run electron:vite:build
           # Same as local `pnpm run electron:build`: bundle gateway CLI to out/server/index.js for packaged apps.
