@@ -67,14 +67,19 @@ export function ChatAgentSelector({
           title={selected ? `${selected.name ? `${selected.name} · ` : ''}${selected.id}` : placeholder}
           className={cn(
             comboboxTriggerLayoutClass,
+            'items-center gap-2 rounded-lg border border-edge-subtle bg-surface-panel px-3 py-2 text-left text-sm font-normal text-fg',
+            interaction.transition,
+            'hover:border-edge hover:bg-surface-hover/45',
             formControlBorderFocusClass,
             selectComboboxTriggerFocusClass,
-            compact && 'h-8 min-h-8 py-0 text-sm',
+            'disabled:cursor-not-allowed disabled:opacity-50',
+            'dark:border-edge-subtle dark:hover:bg-surface-hover/55',
+            compact && 'min-w-[8rem] py-1.5 text-[13px]',
             className,
           )}
         >
           <span className="min-w-0 flex-1 truncate text-left">{label}</span>
-          <ChevronsUpDown className="size-4 shrink-0 opacity-50" aria-hidden />
+          <ChevronsUpDown className="h-4 w-4 shrink-0 text-fg-subtle opacity-70" aria-hidden />
         </button>
       </Popover.Trigger>
       <Popover.Portal>
