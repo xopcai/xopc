@@ -1,19 +1,38 @@
-# xopc
+<p align="center">
+  <a href="README.md">English</a> |
+  <a href="README.zh-CN.md">简体中文</a>
+</p>
 
-[English README](README.md) | **简体中文**
-
-**超轻量级个人 AI 助手。**基于 **Node.js** 与 **TypeScript**、**本地运行**的 AI 栈—面向**超级个体**的平台：自管密钥、网关与技能。
-
-**CLI**、**HTTP/WebSocket 网关**与 **React** 控制台，核心自带 **Telegram**、**微信（Weixin）** 频道插件（含网页控制台）。飞书、Slack、Discord 等走自定义 `ChannelPlugin` 扩展。通过 [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai) 支持 **20+** 大模型厂商，并提供**扩展**与 **SKILL.md** 技能，**无需改核心**即可扩展。
-
-[GitHub](https://github.com/xopcai/xopc) · [中文文档](https://xopcai.github.io/xopc/zh/) · [模型](https://xopcai.github.io/xopc/zh/models) · [配置](https://xopcai.github.io/xopc/zh/configuration) · [CLI](https://xopcai.github.io/xopc/zh/cli)
+<h1 align="center">xopc</h1>
 
 <p align="center">
-  <a href="https://github.com/xopcai/xopc"><img src="https://img.shields.io/badge/GitHub-xopcai/xopc-blue" alt="GitHub"></a>
-  <a href="https://xopcai.github.io/xopc/zh/"><img src="https://img.shields.io/badge/Docs-文档-brightgreen" alt="Docs"></a>
-  <a href="#"><img src="https://img.shields.io/badge/Node-%3E%3D22.0.0-brightgreen" alt="Node"></a>
-  <a href="#"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
+  <strong>超轻量级个人 AI 助手。</strong><br />
+  基于 <strong>Node.js</strong> 与 <strong>TypeScript</strong>、在本地运行的 AI 助手—面向<strong>超级个体</strong>的平台。
 </p>
+
+<p align="center">
+  <a href="https://github.com/xopcai/xopc"><img src="https://img.shields.io/badge/GitHub-xopcai%2Fxopc-181717?style=for-the-badge&amp;logo=github" alt="GitHub"></a>
+  <a href="https://xopcai.github.io/xopc/zh/"><img src="https://img.shields.io/badge/Docs-中文文档-228B22?style=for-the-badge" alt="中文文档"></a>
+  <a href="#quick-start-tldr"><img src="https://img.shields.io/badge/快速开始-CLI-blue?style=for-the-badge" alt="快速开始"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/License-MIT-yellow?style=for-the-badge" alt="License"></a>
+</p>
+
+<p align="center">
+  <img src="https://img.shields.io/badge/node.js-%E2%89%A522-339933?logo=nodedotjs&amp;logoColor=white" alt="Node.js">
+  <img src="https://img.shields.io/badge/pnpm-包管理器-F69220?logo=pnpm&amp;logoColor=white" alt="pnpm">
+  <img src="https://img.shields.io/badge/大模型厂商-20%2B-5865F2" alt="大模型厂商">
+  <a href="https://www.npmjs.com/package/@xopcai/xopc"><img src="https://img.shields.io/npm/v/@xopcai/xopc?label=npm&amp;color=teal" alt="npm version"></a>
+</p>
+
+<p align="center">
+  <a href="https://github.com/xopcai/xopc">GitHub</a> ·
+  <a href="https://xopcai.github.io/xopc/zh/">中文文档</a> ·
+  <a href="https://xopcai.github.io/xopc/zh/models">模型</a> ·
+  <a href="https://xopcai.github.io/xopc/zh/configuration">配置</a> ·
+  <a href="https://xopcai.github.io/xopc/zh/cli">CLI</a>
+</p>
+
+**CLI**、**HTTP/WebSocket 网关**与 **React** 控制台，核心自带 **Telegram**、**微信（Weixin）** 频道插件（含网页控制台）。飞书、Slack、Discord 等走自定义 `ChannelPlugin` 扩展。通过 [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai) 支持 **20+** 大模型厂商，并提供**扩展**与 **SKILL.md** 技能，**无需改核心**即可扩展。
 
 ---
 
@@ -50,6 +69,8 @@ xopc onboard
 然后在终端聊天，或启动网关以使用网页控制台与 IM 机器人。
 
 ---
+
+<a id="quick-start-tldr"></a>
 
 ## 快速上手（TL;DR）
 

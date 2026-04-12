@@ -1,14 +1,17 @@
 import { defineConfig } from 'vitepress'
 
+/** GitHub Pages project site: static assets must include this prefix in raw `head` tags. */
+const base = '/xopc/'
+
 export default defineConfig({
   title: 'xopc',
   description: 'Ultra-Lightweight Personal AI Assistant',
-  base: '/xopc/',
+  base,
   cleanUrls: true,
   ignoreDeadLinks: true,
   head: [
-    ['link', { rel: 'icon', type: 'image/svg+xml', href: '/logo.svg' }],
-    ['link', { rel: 'apple-touch-icon', href: '/logo.svg' }],
+    ['link', { rel: 'icon', type: 'image/svg+xml', href: `${base}logo.svg` }],
+    ['link', { rel: 'apple-touch-icon', href: `${base}logo.svg` }],
   ],
   locales: {
     root: {
