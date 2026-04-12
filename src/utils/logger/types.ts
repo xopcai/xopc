@@ -59,6 +59,8 @@ export interface LogContext {
   requestId?: string;
   /** Session ID for user tracking */
   sessionId?: string;
+  /** Cross-service trace id when distinct from requestId */
+  correlationId?: string;
   /** User ID */
   userId?: string;
   /** Module/component name */
