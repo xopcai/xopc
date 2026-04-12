@@ -30,6 +30,8 @@ export async function runAgentTurnWithModelFallbacks(params: {
   modelManager: ModelManager;
   userMessage: AgentMessage;
   log: FallbackLog;
+  /** Before `prompt` adds the user message (e.g. background-review nudge counters). */
+  beforeUserPrompt?: () => void | Promise<void>;
   /** After `prompt` adds the user message; before `waitForIdle`. */
   afterUserPrompt?: () => Promise<void>;
   /** Overrides {@link resolveAgentTurnTimeoutMs} when set. */
@@ -39,6 +41,7 @@ export async function runAgentTurnWithModelFallbacks(params: {
 }): Promise<void> {
   const { agent, sessionKey, modelManager, userMessage, log } = params;
   const timeoutMs = params.timeoutMs ?? resolveAgentTurnTimeoutMs(params.getConfig?.());
+  const beforeUserPrompt = params.beforeUserPrompt ?? (async () => {});
   const afterUserPrompt = params.afterUserPrompt ?? (async () => {});
 
   const candidates = modelManager.getFallbackCandidatesForSession(sessionKey);
@@ -74,6 +77,7 @@ export async function runAgentTurnWithModelFallbacks(params: {
       );
 
       const runTurn = async () => {
+        await beforeUserPrompt();
         await agent.prompt(userMessage);
         await afterUserPrompt();
         await agent.waitForIdle();

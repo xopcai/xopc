@@ -1,8 +1,6 @@
 /**
- * Skill Security Scanner
- * 
- * Scans skill directories for potentially dangerous code patterns.
- *
+ * Skill security scanner — scans skill directories for potentially dangerous code patterns.
+ * Used after hub installs and after agent-driven `skill_manage` writes (parity with Hermes-style guardrails).
  */
 
 import { readdir, readFile } from 'fs/promises';

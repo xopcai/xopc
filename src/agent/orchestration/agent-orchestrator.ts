@@ -162,6 +162,7 @@ export class AgentOrchestrator {
       await this.executeAgent(agent, userMessageForModel, context);
 
       this.agentManager.afterAgentTurn(sessionKey, userPlainForMemory);
+      this.agentManager.scheduleBackgroundReviewAfterUserTurn(sessionKey);
 
       // 6. Sanitize messages before saving (remove error messages, empty content)
       const rawMessages = agent.state.messages;
@@ -217,6 +218,7 @@ export class AgentOrchestrator {
       userMessage,
       log,
       getConfig: this.getConfig,
+      beforeUserPrompt: () => this.agentManager.beginBackgroundReviewUserTurn(sessionKey),
       afterUserPrompt: async () => {
         try {
           const { messages: sanitizedTurn } = sanitizeMessages(agent.state.messages);
