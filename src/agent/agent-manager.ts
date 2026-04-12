@@ -21,6 +21,7 @@ import {
 import { expandWorkspacePathString } from '../config/workspace-path.js';
 import type { ModelManager } from './models/manager.js';
 import { createLogger } from '../utils/logger.js';
+import { resolveProviderApiKeySync } from '../auth/sync-provider-auth.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
 import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
@@ -597,8 +598,13 @@ export class AgentManager {
   async warmCredentialCache(): Promise<void> {
     const profiles = await this.credentialResolver.listProfiles();
     for (const profile of profiles) {
-      if (profile.key) {
-        this.credentialCache.set(profile.provider, profile.key);
+      const secret = profile.key?.trim()
+        ? profile.key.trim()
+        : profile.envVar
+          ? process.env[profile.envVar]?.trim()
+          : undefined;
+      if (secret) {
+        this.credentialCache.set(profile.provider.toLowerCase(), secret);
       }
     }
     log.debug({ count: this.credentialCache.size }, 'Credential cache warmed');
@@ -610,9 +616,22 @@ export class AgentManager {
   }
 
   private resolveApiKeyWithCache(provider: string): string | undefined {
-    const cached = this.credentialCache.get(provider);
+    const key = provider.toLowerCase();
+    const cached = this.credentialCache.get(key);
     if (cached) return cached;
-    return getApiKeySync(provider);
+
+    const fromDisk = resolveProviderApiKeySync(provider);
+    if (fromDisk) {
+      this.credentialCache.set(key, fromDisk);
+      return fromDisk;
+    }
+
+    const fromRegistryOrEnv = getApiKeySync(provider);
+    if (fromRegistryOrEnv) {
+      this.credentialCache.set(key, fromRegistryOrEnv);
+      return fromRegistryOrEnv;
+    }
+    return undefined;
   }
 
   private createAgentForProfile(
