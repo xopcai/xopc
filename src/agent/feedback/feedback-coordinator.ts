@@ -174,7 +174,13 @@ export class FeedbackCoordinator {
    */
   async sendMessage(content: string): Promise<void> {
     if (!this.currentContext) {
-      log.warn('No context available for sending message');
+      log.warn(
+        {
+          hasStreamHandle: Boolean(this.currentStreamHandle),
+          contentPreview: content.slice(0, 80),
+        },
+        'Outbound message skipped: no session context (setContext not called or cleared)',
+      );
       return;
     }
 

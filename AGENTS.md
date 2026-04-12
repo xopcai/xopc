@@ -12,6 +12,7 @@
 - [Project Structure](#project-structure)
 - [Model Registry](#model-registry-architecture)
 - [Code Style](#code-style-guidelines)
+- [Logging conventions](#logging-conventions)
 - [Key Patterns](#key-patterns)
 - [Common Tasks](#common-tasks)
 - [Configuration](#configuration)
@@ -106,6 +107,47 @@ Details: [docs/models.md](./docs/models.md).
 - **Naming:** `camelCase` (code), `PascalCase` (types/classes), `UPPER_SNAKE_CASE` (constants), `_unused` for unused params, `_privateMethod` for private helpers.
 - **Imports:** external deps → internal absolute → relative (blank lines between groups). Example in repo: `src/agent/tools/*.ts`.
 - **Files:** `camelCase.ts` sources; `*.test.ts` tests; `*.types.ts` for dedicated type modules.
+
+---
+
+## Logging conventions
+
+Use **`createLogger('Prefix')`** from `src/utils/logger.ts` (Pino under the hood). Prefer a **stable module prefix** (e.g. `AgentService`, `Hono:Auth`) so gateway **Log Manager** and file logs filter cleanly.
+
+### Shape: object first, message second
+
+```typescript
+const log = createLogger('MyModule');
+
+log.info({ sessionKey, durationMs }, 'Session saved');
+log.warn({ path, errorMessage: em }, `Config read failed: ${em}`);
+log.error({ err, requestId, phase: 'outbound_consume' }, `Outbound pipeline failed: ${em}`);
+```
+
+- **First argument:** structured fields (`err`, `sessionKey`, `path`, `tool`, `phase`, counts, ids). Pass **`Error` instances as `err`** so the formatter keeps **name / message / stack**.
+- **Second argument (`msg`):** a **short, scannable sentence** for humans and UIs that mostly show the message column. Repeat the **one-line outcome** there (e.g. failure reason), not only in fields.
+- For non-`Error` throws, add **`errorMessage: String(x)`** (and/or embed the text in `msg`) so logs stay grep-friendly.
+
+### What to include for debugging
+
+- **Identity:** `sessionKey`, `channel`, `chatId`, `requestId` (often injected via async context—see below), file **`path`**, **`tool` / `toolName`**, **`modelRef`** or `provider` + `modelId`.
+- **Operation:** a **`phase`** or verb in `msg` (`inbound_consume`, `publishOutbound`, `lifecycle emit llm_request`, …).
+- **Bounded previews:** long strings as **`contentPreview` / `linePreview` / `goalPreview`** (truncated), not full payloads.
+
+### What to avoid
+
+- **Vague `msg` only** (`'failed'`, `'Error'`) with no structured context.
+- **Spam:** do not emit the same **warn/error on every iteration** once a condition is true (e.g. “approaching limit” on each LLM call). Log **once** when crossing the threshold or once per logical phase.
+- **Secrets:** avoid logging raw tokens, API keys, or full `Authorization` headers. Structured redaction runs in `src/utils/logger/redact.ts`; disable only with care via **`XOPC_LOG_REDACTION=false`**.
+
+### Request correlation (gateway / agent)
+
+HTTP and SSE paths attach context via **`runWithLogContext` / `updateAsyncLogContext`** (`src/utils/logger/context.ts`) and gateway middleware (`src/gateway/hono/middleware/log-context.ts`). Prefer keeping **`requestId`** (and related keys) in async context so logs tie to a single API call without threading an argument through every function.
+
+### Reference
+
+- Implementation: `src/utils/logger/` (`index.ts`, `context.ts`, `log-store.ts`, `redact.ts`, …).
+- Longer notes: `src/utils/README.logger.md`.
 
 ---
 
@@ -275,6 +317,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 - **CLI:** `pnpm run dev -- config --show` · `config --validate`.
 - **Code:** `createRequestLogger` / `clearRequestContext` in `src/utils/logger/context.ts` (re-exported via `src/utils/logger.ts`); `queryLogs` / `getLogStats` in `src/utils/logger/log-store.ts`.
 - **Console logs:** gateway + Log Manager tab (default dev URL is project-specific—use your configured gateway port).
+- **New logs:** follow [Logging conventions](#logging-conventions).
 
 ---
 
@@ -308,10 +351,10 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 | Models & providers | `src/providers/index.ts` |
 | Channels | `src/channels/` (+ `extensions/telegram`, `extensions/weixin` sources → `dist/extensions/`) |
 | Gateway console (React) | `web/src/`, [ui-design-system.md](./docs/design/ui-design-system.md) |
-| Logging | `src/utils/logger.ts` (barrel) → `src/utils/logger/` (`index.ts`, `context.ts`, `log-store.ts`, `log-stream.ts`, …) |
+| Logging | `src/utils/logger.ts` (barrel) → `src/utils/logger/`; conventions: [Logging conventions](#logging-conventions) |
 | Log Manager | `web/src/` (logs feature / pages) |
 | Tests | Colocated `__tests__` |
 
 ---
 
-_Last updated: 2026-04-11_
+_Last updated: 2026-04-12_

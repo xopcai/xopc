@@ -454,11 +454,16 @@ export class ProgressFeedbackManager {
     };
 
     this.callbacks.onProgress?.(progressMsg);
-    
-    log.warn(
-      { toolName, failureCount, maxFailures, remaining },
-      'Tool error accumulated'
-    );
+
+    const atCap = maxFailures > 0 && failureCount >= maxFailures;
+    const summary = atCap
+      ? `Tool "${toolName}" reached max failures (${failureCount}/${maxFailures})`
+      : `Tool "${toolName}" failures ${failureCount}/${maxFailures} (${remaining} attempt(s) left)`;
+    if (atCap) {
+      log.error({ toolName, failureCount, maxFailures, remaining }, summary);
+    } else {
+      log.warn({ toolName, failureCount, maxFailures, remaining }, summary);
+    }
   }
 
   /**
@@ -499,11 +504,15 @@ export class ProgressFeedbackManager {
     };
 
     this.callbacks.onProgress?.(progressMsg);
-    
-    log.warn(
-      { count, limit, remaining, shouldStop },
-      'Request limit status'
-    );
+
+    const summary = shouldStop
+      ? `LLM request limit reached (${count}/${limit}); stopping turn`
+      : `LLM request budget ${count}/${limit} (${remaining} left)`;
+    if (shouldStop) {
+      log.error({ count, limit, remaining, shouldStop }, summary);
+    } else {
+      log.warn({ count, limit, remaining, shouldStop }, summary);
+    }
   }
 }
 

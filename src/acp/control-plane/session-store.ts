@@ -163,7 +163,11 @@ export class AcpSessionStore {
         }
       }
     } catch (error) {
-      log.warn({ error }, 'Failed to load ACP session index, starting fresh');
+      const em = error instanceof Error ? error.message : String(error);
+      log.warn(
+        { err: error, path: this.indexFile, errorMessage: em },
+        `ACP session index load failed (starting empty): ${em}`,
+      );
       this.indexCache = new Map();
     }
   }
@@ -182,7 +186,8 @@ export class AcpSessionStore {
       await writeFile(this.indexFile, JSON.stringify(obj, null, 2), 'utf-8');
       this.indexDirty = false;
     } catch (error) {
-      log.error({ error }, 'Failed to save ACP session index');
+      const em = error instanceof Error ? error.message : String(error);
+      log.error({ err: error, path: this.indexFile, errorMessage: em }, `Failed to save ACP session index: ${em}`);
       throw error;
     }
   }

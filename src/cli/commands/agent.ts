@@ -88,7 +88,8 @@ function createAgentCommand(_ctx: CLIContext): Command {
           }
         }
       } catch (error) {
-        log.warn({ err: error }, 'Failed to load extensions');
+        const em = error instanceof Error ? error.message : String(error);
+        log.warn({ err: error, errorMessage: em }, `CLI agent: failed to load extensions: ${em}`);
       }
 
       const { createCliReadlineClarifyRequestFn } = await import('../../agent/tools/cli-clarify.js');
@@ -105,7 +106,8 @@ function createAgentCommand(_ctx: CLIContext): Command {
 
       // Start agent service in background
       agent.start().catch((err) => {
-        log.error({ err }, 'Agent service error');
+        const em = err instanceof Error ? err.message : String(err);
+        log.error({ err, errorMessage: em }, `CLI agent service exited: ${em}`);
       });
 
       // Start outbound message processor for CLI mode
@@ -119,7 +121,8 @@ function createAgentCommand(_ctx: CLIContext): Command {
             if (error instanceof MessageBusShutdownError) {
               break;
             }
-            log.error({ err: error }, 'Error in outbound processor');
+            const em = error instanceof Error ? error.message : String(error);
+            log.error({ err: error, errorMessage: em }, `CLI outbound processor failed: ${em}`);
             await new Promise((resolve) => setTimeout(resolve, 1000));
           }
         }

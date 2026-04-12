@@ -76,6 +76,7 @@ async function summarizeSession(
   query: string,
   getConfig: (() => Config | undefined) | undefined,
   signal: AbortSignal | undefined,
+  logMeta?: { summarizingSessionKey: string },
 ): Promise<string> {
   if (messages.length === 0) {
     return 'No messages in session.';
@@ -112,7 +113,15 @@ ${formatted}`;
     return text.trim() || '[Empty summary]';
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
-    log.warn({ err }, 'session_search summarization failed');
+    log.warn(
+      {
+        err,
+        summarizingSessionKey: logMeta?.summarizingSessionKey,
+        queryLength: query.length,
+        messageCount: messages.length,
+      },
+      `session_search LLM summarization failed${logMeta?.summarizingSessionKey ? ` (session ${logMeta.summarizingSessionKey})` : ''}: ${msg}`,
+    );
     return `[Summarization failed: ${msg}]`;
   }
 }
@@ -212,7 +221,9 @@ export function createSessionSearchTool(deps: SessionSearchToolDeps): AgentTool<
               messages = messages.filter((m) => m.role === params.roleFilter);
             }
 
-            const summary = await summarizeSession(messages, query, deps.getConfig, signal);
+            const summary = await summarizeSession(messages, query, deps.getConfig, signal, {
+              summarizingSessionKey: key,
+            });
             return { sessionKey: key, score, summary };
           }),
         );

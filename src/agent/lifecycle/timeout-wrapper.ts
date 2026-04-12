@@ -94,6 +94,7 @@ export async function executeWithTimeout<T>(
       isSettled = true;
       
       const executionTime = Date.now() - startTime;
+      const desc = config.description ? ` (${config.description})` : '';
       log.error(
         {
           toolName: config.toolName,
@@ -101,7 +102,7 @@ export async function executeWithTimeout<T>(
           executionTimeMs: executionTime,
           description: config.description,
         },
-        'Tool execution timed out'
+        `Tool "${config.toolName}" timed out after ${timeoutMs}ms (elapsed ${executionTime}ms)${desc}`,
       );
 
       reject(

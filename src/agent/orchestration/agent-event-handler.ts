@@ -67,7 +67,10 @@ export class AgentEventHandler {
   handle(event: AgentEvent, context: SessionContext | null): void {
     if (!context) {
       if (event.type !== 'message_update') {
-        log.warn({ eventType: event.type }, 'No context available for event');
+        log.warn(
+          { eventType: event.type },
+          `Agent event ignored (no SessionContext): ${event.type}`,
+        );
       }
       return;
     }
@@ -119,7 +122,11 @@ export class AgentEventHandler {
       requestNumber: result.count,
       maxRequests: result.limit,
     }, context).catch((err) => {
-      log.warn({ err }, 'Failed to emit llm_request lifecycle event');
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn(
+        { err, errorMessage: em, sessionKey: context.sessionKey, requestNumber: result.count, maxRequests: result.limit },
+        `Lifecycle emit llm_request failed: ${em}`,
+      );
     });
 
     this.progressManager.onRequestLimitStatus(
@@ -131,7 +138,10 @@ export class AgentEventHandler {
     );
 
     if (result.shouldStop) {
-      log.error({ count: result.count, limit: result.limit }, 'Request limit reached');
+      log.error(
+        { count: result.count, limit: result.limit, sessionKey: context.sessionKey },
+        `Request limit reached (${result.count}/${result.limit}) for session`,
+      );
     }
   }
 
@@ -162,7 +172,11 @@ export class AgentEventHandler {
         response: text,
         usage: (msgEvent.message as any).usage,
       }, context).catch((err) => {
-        log.warn({ err }, 'Failed to emit llm_response lifecycle event');
+        const em = err instanceof Error ? err.message : String(err);
+        log.warn(
+          { err, errorMessage: em, sessionKey: context.sessionKey, responseChars: text.length },
+          `Lifecycle emit llm_response failed: ${em}`,
+        );
       });
     }
   }
@@ -178,7 +192,11 @@ export class AgentEventHandler {
       attemptNumber: 1,
       maxAttempts: 3,
     }, context).catch((err) => {
-      log.warn({ err }, 'Failed to emit tool_call_start lifecycle event');
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn(
+        { err, errorMessage: em, sessionKey: context.sessionKey, tool: toolEvent.toolName },
+        `Lifecycle emit tool_call_start failed: ${em}`,
+      );
     });
 
     this.toolChainTracker.recordCall(
@@ -211,7 +229,11 @@ export class AgentEventHandler {
       error: toolEvent.isError ? String(toolEvent.result) : undefined,
       durationMs,
     }, context).catch((err) => {
-      log.warn({ err }, 'Failed to emit tool_call_end lifecycle event');
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn(
+        { err, errorMessage: em, sessionKey: context.sessionKey, tool: toolEvent.toolName },
+        `Lifecycle hook tool_call_end failed: ${em}`,
+      );
     });
 
     // System reminder
@@ -231,9 +253,10 @@ export class AgentEventHandler {
       // Match error pattern
       const errorMatch = this.errorPatternMatcher.matchError(errorText);
       if (errorMatch.matched && errorMatch.pattern) {
+        const preview = errorText.length > 120 ? `${errorText.slice(0, 120)}…` : errorText;
         log.warn(
-          { tool: toolEvent.toolName, pattern: errorMatch.pattern.name },
-          'Matched error pattern'
+          { tool: toolEvent.toolName, pattern: errorMatch.pattern.name, errorPreview: preview },
+          `Tool error matched pattern "${errorMatch.pattern.name}" (${toolEvent.toolName}): ${preview}`,
         );
       }
     }
