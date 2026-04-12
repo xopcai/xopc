@@ -3,6 +3,7 @@ import type { Api, Model } from '@mariozechner/pi-ai';
 
 import type { Config } from '../config/schema.js';
 import type { MessageBus } from '../infra/bus/index.js';
+import { resolveProviderApiKeySync } from '../auth/sync-provider-auth.js';
 import { getApiKeySync } from '../providers/index.js';
 import { createLogger } from '../utils/logger.js';
 
@@ -111,7 +112,8 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
       tools: filteredTools,
       messages: [],
     },
-    getApiKey: (provider: string) => getApiKeySync(provider) ?? '',
+    getApiKey: (provider: string) =>
+      resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',
     beforeToolCall: async () => {
       if (aborted) {
         return { block: true, reason: 'Sub-agent aborted.' };
