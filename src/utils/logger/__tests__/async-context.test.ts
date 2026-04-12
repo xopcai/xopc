@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 
 import {
   getAsyncLogContext,
+  inboundCorrelationMetadataFromAsyncLogContext,
   runWithLogContext,
   updateAsyncLogContext,
 } from '../context.js';
@@ -45,5 +46,24 @@ describe('async log context (AsyncLocalStorage)', () => {
   it('updateAsyncLogContext is no-op outside runWithLogContext', () => {
     updateAsyncLogContext({ sessionId: 'orphan' });
     expect(getAsyncLogContext()).toBeUndefined();
+  });
+
+  it('inboundCorrelationMetadataFromAsyncLogContext copies safe keys only', () => {
+    expect(inboundCorrelationMetadataFromAsyncLogContext()).toBeUndefined();
+    runWithLogContext(
+      {
+        requestId: 'req-x',
+        sessionId: 'should-not-propagate',
+        correlationId: 'corr-1',
+        userId: 'u-9',
+      },
+      () => {
+        expect(inboundCorrelationMetadataFromAsyncLogContext()).toEqual({
+          requestId: 'req-x',
+          correlationId: 'corr-1',
+          userId: 'u-9',
+        });
+      },
+    );
   });
 });

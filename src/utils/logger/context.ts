@@ -48,6 +48,30 @@ export function getAsyncLogCorrelationKeys(): readonly AsyncLogCorrelationKey[] 
 }
 
 /**
+ * Fields to copy from ALS onto {@link InboundMessage.metadata} when the gateway enqueues
+ * a message for the agent bus. Omits `sessionId` so channel routing / sessionKey stays
+ * authoritative; the agent sets log sessionId after `routeMessage`.
+ */
+const INBOUND_METADATA_FROM_ASYNC: readonly (keyof LogContext)[] = [
+  'requestId',
+  'correlationId',
+  'userId',
+];
+
+export function inboundCorrelationMetadataFromAsyncLogContext(): Record<string, unknown> | undefined {
+  const ctx = getAsyncLogContext();
+  if (!ctx) return undefined;
+  const meta: Record<string, unknown> = {};
+  for (const key of INBOUND_METADATA_FROM_ASYNC) {
+    const v = ctx[key];
+    if (v !== undefined && v !== '') {
+      meta[key] = v;
+    }
+  }
+  return Object.keys(meta).length > 0 ? meta : undefined;
+}
+
+/**
  * Merge two contexts
  */
 export function mergeContext(base: LogContext, additional: LogContext): LogContext {

@@ -4,6 +4,7 @@ import { type Config, type AgentDefaults, getAgentDefaultModelRef } from '../con
 import { maybeAutoTitleSessionStore } from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
 import { INTERNAL_OUTBOUND_DROP_CHANNEL } from '../channels/internal-outbound.js';
+import { randomUUID } from 'node:crypto';
 import { join } from 'path';
 
 import {
@@ -20,7 +21,7 @@ import {
   type ThinkLevel,
   type ReasoningLevel,
 } from './transcript/thinking-types.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger, runWithLogContext, updateAsyncLogContext } from '../utils/logger.js';
 import { ExtensionRegistryImpl as ExtensionRegistry, ExtensionHookRunner } from '../extensions/index.js';
 import {
   loadBootstrapFiles,
@@ -85,6 +86,14 @@ import { shouldUseTTS, getChannelOutputFormat } from '../tts/service.js';
 import { isTTSAvailable } from '../tts/factory.js';
 
 const log = createLogger('AgentService');
+
+function inboundMessageLogRequestId(msg: InboundMessage): string {
+  const raw = msg.metadata?.requestId;
+  if (typeof raw === 'string' && raw.trim().length > 0) {
+    return raw.trim();
+  }
+  return randomUUID();
+}
 
 /** Cap tool result size in SSE `tool_end` events (pi-agent passes structured objects, not only strings). */
 const SSE_TOOL_RESULT_MAX_CHARS = 100_000;
@@ -1367,115 +1376,120 @@ export class AgentService {
   }
 
   private async handleInboundMessage(msg: InboundMessage): Promise<void> {
-    const routing = await this.messageRouter.routeMessage(msg);
-    const { context, isCommand, command, commandArgs } = routing;
+    const requestId = inboundMessageLogRequestId(msg);
 
-    const sessionContext: SessionContext = {
-      sessionKey: context.sessionKey,
-      channel: context.channel,
-      chatId: context.chatId,
-      senderId: context.senderId || '',
-      isGroup: context.isGroup || false,
-      metadata: {
-        transcribedVoice: msg.metadata?.transcribedVoice === true,
-      },
-    };
+    await runWithLogContext({ requestId }, async () => {
+      const routing = await this.messageRouter.routeMessage(msg);
+      const { context, isCommand, command, commandArgs } = routing;
 
-    this.sessionContextManager.setContext(sessionContext);
-    this.feedbackCoordinator.setContext(sessionContext);
+      const sessionContext: SessionContext = {
+        sessionKey: context.sessionKey,
+        channel: context.channel,
+        chatId: context.chatId,
+        senderId: context.senderId || '',
+        isGroup: context.isGroup || false,
+        metadata: {
+          transcribedVoice: msg.metadata?.transcribedVoice === true,
+        },
+      };
 
-    // Setup event handling for this session
-    this.setupSessionEventHandling(sessionContext.sessionKey);
+      updateAsyncLogContext({ sessionId: sessionContext.sessionKey });
 
-    await this.sessionLifecycleManager.startSession(sessionContext);
+      this.sessionContextManager.setContext(sessionContext);
+      this.feedbackCoordinator.setContext(sessionContext);
 
-    /** Declared on the function so `finally` can clear typing after outbound (TTS + send). */
-    let typingController: TypingController | null = null;
+      // Setup event handling for this session
+      this.setupSessionEventHandling(sessionContext.sessionKey);
 
-    try {
-      if (msg.channel === 'system') {
-        await this.handleSystemMessage(msg, sessionContext);
-        return;
-      }
+      await this.sessionLifecycleManager.startSession(sessionContext);
 
-      if (isCommand && command) {
-        const handled = await this.commandHandler.executeCommand(command, commandArgs || '', {
-          sessionKey: sessionContext.sessionKey,
-          channel: sessionContext.channel,
-          chatId: sessionContext.chatId,
-          senderId: sessionContext.senderId,
-          isGroup: sessionContext.isGroup,
-        });
+      /** Declared on the function so `finally` can clear typing after outbound (TTS + send). */
+      let typingController: TypingController | null = null;
 
-        if (handled) {
+      try {
+        if (msg.channel === 'system') {
+          await this.handleSystemMessage(msg, sessionContext);
           return;
         }
-      }
 
-      // Start continuous typing indicator (renews every 5 seconds)
-      if (msg.channel !== 'cli') {
-        typingController = createTypingController({
-          intervalSeconds: 5,
-          onStart: async () => {
-            await this.bus.publishOutbound({
-              channel: msg.channel,
-              chat_id: msg.chat_id,
-              content: '',
-              type: 'typing_on',
-              metadata: {
-                accountId: msg.metadata?.accountId,
-                threadId: msg.metadata?.threadId,
-              },
-            });
-          },
-          onStop: async () => {
-            await this.bus.publishOutbound({
-              channel: msg.channel,
-              chat_id: msg.chat_id,
-              content: '',
-              type: 'typing_off',
-              metadata: {
-                accountId: msg.metadata?.accountId,
-                threadId: msg.metadata?.threadId,
-              },
-            });
-          },
-        });
-        typingController.start();
-      }
+        if (isCommand && command) {
+          const handled = await this.commandHandler.executeCommand(command, commandArgs || '', {
+            sessionKey: sessionContext.sessionKey,
+            channel: sessionContext.channel,
+            chatId: sessionContext.chatId,
+            senderId: sessionContext.senderId,
+            isGroup: sessionContext.isGroup,
+          });
 
-      if (this.channelManagerRef && msg.channel !== 'cli') {
-        const meta = msg.metadata as Record<string, unknown> | undefined;
-        const streamHandle = this.channelManagerRef.startStream(
-          msg.channel,
-          msg.chat_id,
-          meta?.accountId as string | undefined,
-          {
-            threadId: meta?.threadId as string | undefined,
-            replyToMessageId: meta?.messageId as string | undefined,
-          },
-        );
-
-        if (streamHandle) {
-          this.setStreamHandle(streamHandle as StreamHandle);
+          if (handled) {
+            return;
+          }
         }
-      }
 
-      await this.agentOrchestrator.process(msg, sessionContext);
+        // Start continuous typing indicator (renews every 5 seconds)
+        if (msg.channel !== 'cli') {
+          typingController = createTypingController({
+            intervalSeconds: 5,
+            onStart: async () => {
+              await this.bus.publishOutbound({
+                channel: msg.channel,
+                chat_id: msg.chat_id,
+                content: '',
+                type: 'typing_on',
+                metadata: {
+                  accountId: msg.metadata?.accountId,
+                  threadId: msg.metadata?.threadId,
+                },
+              });
+            },
+            onStop: async () => {
+              await this.bus.publishOutbound({
+                channel: msg.channel,
+                chat_id: msg.chat_id,
+                content: '',
+                type: 'typing_off',
+                metadata: {
+                  accountId: msg.metadata?.accountId,
+                  threadId: msg.metadata?.threadId,
+                },
+              });
+            },
+          });
+          typingController.start();
+        }
 
-    } finally {
-      await this.sessionLifecycleManager.endSession(sessionContext);
-      await this.streamManager.end();
-      try {
-        await this.sendFinalResponse(msg, sessionContext);
+        if (this.channelManagerRef && msg.channel !== 'cli') {
+          const meta = msg.metadata as Record<string, unknown> | undefined;
+          const streamHandle = this.channelManagerRef.startStream(
+            msg.channel,
+            msg.chat_id,
+            meta?.accountId as string | undefined,
+            {
+              threadId: meta?.threadId as string | undefined,
+              replyToMessageId: meta?.messageId as string | undefined,
+            },
+          );
+
+          if (streamHandle) {
+            this.setStreamHandle(streamHandle as StreamHandle);
+          }
+        }
+
+        await this.agentOrchestrator.process(msg, sessionContext);
       } finally {
-        // After outbound (incl. TTS); previously we cleared typing right after LLM finished, so Weixin showed typing_off before the message.
-        await typingController?.stop();
+        await this.sessionLifecycleManager.endSession(sessionContext);
+        await this.streamManager.end();
+        try {
+          await this.sendFinalResponse(msg, sessionContext);
+        } finally {
+          // After outbound (incl. TTS); previously we cleared typing right after LLM finished, so Weixin showed typing_off before the message.
+          await typingController?.stop();
+        }
+        this.feedbackCoordinator.endTask();
+        this.sessionContextManager.clearContext();
+        this.feedbackCoordinator.clearContext();
       }
-      this.feedbackCoordinator.endTask();
-      this.sessionContextManager.clearContext();
-      this.feedbackCoordinator.clearContext();
-    }
+    });
   }
 
   private async handleSystemMessage(msg: InboundMessage, context: SessionContext): Promise<void> {

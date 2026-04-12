@@ -301,6 +301,7 @@ export {
   runWithLogContext,
   getAsyncLogContext,
   updateAsyncLogContext,
+  inboundCorrelationMetadataFromAsyncLogContext,
   setRequestContext as setRequestLogger,
   clearRequestContext as clearRequestLogger,
 } from './context.js';
