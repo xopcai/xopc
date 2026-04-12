@@ -3,7 +3,7 @@
  * 
  * Features:
  * - Loads built-in models from @mariozechner/pi-ai
- * - Loads custom models from ~/.xopcbot/models.json
+ * - Loads custom models from ~/.xopc/models.json
  * - Supports provider baseUrl/headers overrides
  * - Supports per-model overrides (modelOverrides)
  * - API key resolution with shell commands, env vars, and literals

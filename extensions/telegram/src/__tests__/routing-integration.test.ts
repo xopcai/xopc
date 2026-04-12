@@ -3,7 +3,7 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import type { Config } from '@xopcai/xopcbot/config/schema.js';
+import type { Config } from '@xopcai/xopc/config/schema.js';
 import { generateSessionKeyWithRouting, extractMemberRoleIds } from '../routing-integration.js';
 
 describe('TelegramRouting', () => {

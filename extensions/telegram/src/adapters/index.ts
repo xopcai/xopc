@@ -6,7 +6,7 @@ import type {
   ChannelConfigAdapter,
   ChannelSecurityAdapter,
   ChannelStatusAdapter,
-} from '@xopcai/xopcbot/channels/plugin-types.js';
+} from '@xopcai/xopc/channels/plugin-types.js';
 import type { TelegramAccountManager } from '../account-manager.js';
 import type { TelegramResolvedAccount } from './types.js';
 import { createTelegramConfigAdapter } from './config-adapter.js';

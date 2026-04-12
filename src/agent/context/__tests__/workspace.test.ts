@@ -7,7 +7,7 @@ import { loadBootstrapFiles, DEFAULT_SOUL_FILENAME } from '../workspace.js';
 
 describe('loadBootstrapFiles', () => {
   it('reads from bootstrap dir and sets absolute path', () => {
-    const root = mkdtempSync(join(tmpdir(), 'xopcbot-bs-'));
+    const root = mkdtempSync(join(tmpdir(), 'xopc-bs-'));
     try {
       writeFileSync(join(root, DEFAULT_SOUL_FILENAME), '# soul\nhello');
       const files = loadBootstrapFiles(root);

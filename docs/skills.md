@@ -1,6 +1,6 @@
 # Skills System Guide
 
-xopcbot's skills system is file-based: add domain-specific capabilities and knowledge to your assistant through `SKILL.md` files in the workspace.
+xopc's skills system is file-based: add domain-specific capabilities and knowledge to your assistant through `SKILL.md` files in the workspace.
 
 ## Table of Contents
 
@@ -41,7 +41,7 @@ name: skill-name
 description: Short description of the skill
 homepage: https://example.com
 metadata:
-  xopcbot:
+  xopc:
     emoji: 📦
     os: [darwin, linux]
     requires:
@@ -66,12 +66,12 @@ Detailed explanation of how to use this skill...
 | `name` | string | Skill name (unique identifier) |
 | `description` | string | Short description of the skill |
 | `homepage` | string | Project homepage URL |
-| `metadata.xopcbot.emoji` | string | Icon displayed in UI |
-| `metadata.xopcbot.os` | string[] | Supported operating systems: `darwin`, `linux`, `win32` |
-| `metadata.xopcbot.requires` | object | Dependency requirements |
-| `metadata.xopcbot.requires.bins` | string[] | Required binaries |
-| `metadata.xopcbot.requires.anyBins` | string[] | Any one of the binaries must be available |
-| `metadata.xopcbot.install` | array | List of installation options |
+| `metadata.xopc.emoji` | string | Icon displayed in UI |
+| `metadata.xopc.os` | string[] | Supported operating systems: `darwin`, `linux`, `win32` |
+| `metadata.xopc.requires` | object | Dependency requirements |
+| `metadata.xopc.requires.bins` | string[] | Required binaries |
+| `metadata.xopc.requires.anyBins` | string[] | Any one of the binaries must be available |
+| `metadata.xopc.install` | array | List of installation options |
 
 ### Installer Types
 
@@ -118,7 +118,7 @@ install:
 
 Skills can be loaded from these locations:
 
-1. **Bundled** - Skills built into xopcbot
+1. **Bundled** - Skills built into xopc
    - Location: `src/agent/skills/bundled/`
    
 2. **Workspace** - Workspace-specific skills
@@ -126,7 +126,7 @@ Skills can be loaded from these locations:
    - Highest priority
 
 3. **Global** - Global skills
-   - Location: `~/.xopcbot/skills/`
+   - Location: `~/.xopc/skills/`
 
 4. **Extra** - Extra configured skill directories
    - Specified via config file
@@ -139,21 +139,21 @@ Skills loaded later will override earlier ones with the same name.
 
 ## Skills Hub (git / archives)
 
-Install or refresh skills from a remote Git repository or a local/remote archive (zip/tar.gz) into **`~/.xopcbot/skills`**. Provenance and content hashes are recorded in **`skills-lock.json`** next to the skills directory so you can update deterministically.
+Install or refresh skills from a remote Git repository or a local/remote archive (zip/tar.gz) into **`~/.xopc/skills`**. Provenance and content hashes are recorded in **`skills-lock.json`** next to the skills directory so you can update deterministically.
 
 ```bash
 # Shallow clone or unpack; optional --ref, --path (subdir with SKILL.md), --id (folder name), --force, --strict-scan
-xopcbot skills hub pull https://github.com/org/repo.git
+xopc skills hub pull https://github.com/org/repo.git
 
 # Re-fetch a managed skill using the lock file
-xopcbot skills hub update my-skill
+xopc skills hub update my-skill
 
 # Inspect lock entries
-xopcbot skills hub lock
-xopcbot skills hub lock --json
+xopc skills hub lock
+xopc skills hub lock --json
 ```
 
-Hub-installed skills behave like **global** skills (same load rules as `~/.xopcbot/skills/`). Use `skills enable` / `skills disable` and `~/.xopcbot/skills.json` entries as usual.
+Hub-installed skills behave like **global** skills (same load rules as `~/.xopc/skills/`). Use `skills enable` / `skills disable` and `~/.xopc/skills.json` entries as usual.
 
 ## Agent runtime: tools & prompt style
 
@@ -186,7 +186,7 @@ Declare API keys or other env vars the skill needs so the runtime can register *
 
 - Hermes-style **`required_environment_variables`** array with `{ name: "VAR" }` entries
 - **`prerequisites.env_vars`** (list of names)
-- **`requires.env`** or **`metadata.xopcbot.requires.env`**
+- **`requires.env`** or **`metadata.xopc.requires.env`**
 
 After a successful **`skill_view`**, declared names are registered for the session; the **`shell`** tool may forward matching variables from the process environment.
 
@@ -196,109 +196,109 @@ After a successful **`skill_view`**, declared names are registered for the sessi
 
 ```bash
 # List all available skills
-xopcbot skills list
+xopc skills list
 
 # Show detailed information
-xopcbot skills list -v
+xopc skills list -v
 
 # JSON format output
-xopcbot skills list --json
+xopc skills list --json
 ```
 
 ### Install Skill Dependencies
 
 ```bash
 # Install default dependencies
-xopcbot skills install weather
+xopc skills install weather
 
 # Specify installer
-xopcbot skills install weather -i brew-curl
+xopc skills install weather -i brew-curl
 
 # Dry run (don't actually execute)
-xopcbot skills install weather --dry-run
+xopc skills install weather --dry-run
 ```
 
 ### Enable/Disable Skills
 
 ```bash
 # Enable skill
-xopcbot skills enable weather
+xopc skills enable weather
 
 # Disable skill
-xopcbot skills disable weather
+xopc skills disable weather
 ```
 
 ### View Skill Status
 
 ```bash
 # View all skills status
-xopcbot skills status
+xopc skills status
 
 # View specific skill details
-xopcbot skills status weather
+xopc skills status weather
 
 # JSON format
-xopcbot skills status --json
+xopc skills status --json
 ```
 
 ### Security Audit
 
 ```bash
 # Audit all skills
-xopcbot skills audit
+xopc skills audit
 
 # Audit specific skill
-xopcbot skills audit weather
+xopc skills audit weather
 
 # Show detailed findings
-xopcbot skills audit weather --deep
+xopc skills audit weather --deep
 ```
 
 ### Configure Skill
 
 ```bash
 # Show current configuration
-xopcbot skills config weather --show
+xopc skills config weather --show
 
 # Set API key
-xopcbot skills config weather --api-key=YOUR_API_KEY
+xopc skills config weather --api-key=YOUR_API_KEY
 
 # Set environment variables
-xopcbot skills config weather --env API_KEY=value --env DEBUG=true
+xopc skills config weather --env API_KEY=value --env DEBUG=true
 ```
 
 ### Test Skill
 
 ```bash
 # Test all skills
-xopcbot skills test
+xopc skills test
 
 # Test specific skill
-xopcbot skills test weather
+xopc skills test weather
 
 # Verbose output
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # JSON format
-xopcbot skills test --format json
+xopc skills test --format json
 
 # Skip specific tests
-xopcbot skills test --skip-security
-xopcbot skills test --skip-examples
+xopc skills test --skip-security
+xopc skills test --skip-examples
 
 # Validate SKILL.md file
-xopcbot skills test validate ./skills/weather/SKILL.md
+xopc skills test validate ./skills/weather/SKILL.md
 
 # Check dependencies
-xopcbot skills test check-deps
+xopc skills test check-deps
 
 # Security audit
-xopcbot skills test security --deep
+xopc skills test security --deep
 ```
 
 ## Configure Skills
 
-Skill configuration file is located at `~/.xopcbot/skills.json`. Optional **top-level** keys control loading and agent behaviour (see [Agent runtime](#agent-runtime-tools--prompt-style)); **`entries`** hold per-skill overrides:
+Skill configuration file is located at `~/.xopc/skills.json`. Optional **top-level** keys control loading and agent behaviour (see [Agent runtime](#agent-runtime-tools--prompt-style)); **`entries`** hold per-skill overrides:
 
 ```json
 {
@@ -330,13 +330,13 @@ You can override skill configuration using environment variables:
 
 ```bash
 # Enable/disable
-export XOPCBOT_SKILL_WEATHER_ENABLED=true
+export XOPC_SKILL_WEATHER_ENABLED=true
 
 # API key
-export XOPCBOT_SKILL_WEATHER_API_KEY=your-key
+export XOPC_SKILL_WEATHER_API_KEY=your-key
 
 # Environment variables
-export XOPCBOT_SKILL_WEATHER_ENV_WTTR_LANG=en
+export XOPC_SKILL_WEATHER_ENV_WTTR_LANG=en
 ```
 
 ## Install Skill Dependencies
@@ -345,10 +345,10 @@ Skills may depend on external tools. Use `skills install` command to install:
 
 ```bash
 # View skill dependencies
-xopcbot skills status weather
+xopc skills status weather
 
 # Install dependencies
-xopcbot skills install weather
+xopc skills install weather
 ```
 
 Supported installers:
@@ -390,10 +390,10 @@ All skills undergo security scanning during installation and loading.
 
 ```bash
 # Quick audit
-xopcbot skills audit weather
+xopc skills audit weather
 
 # Detailed report
-xopcbot skills audit weather --deep
+xopc skills audit weather --deep
 ```
 
 ### Example Scan Output
@@ -411,7 +411,7 @@ Findings:
 
 ## Skill Testing
 
-xopcbot provides a complete skill testing framework to verify skill quality, safety, and functionality.
+xopc provides a complete skill testing framework to verify skill quality, safety, and functionality.
 
 ### Test Types
 
@@ -427,22 +427,22 @@ xopcbot provides a complete skill testing framework to verify skill quality, saf
 
 ```bash
 # Test all skills
-xopcbot skills test
+xopc skills test
 
 # Test specific skill
-xopcbot skills test weather
+xopc skills test weather
 
 # Verbose output
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # JSON format (for CI/CD)
-xopcbot skills test --format json
+xopc skills test --format json
 
 # TAP format (for CI/CD)
-xopcbot skills test --format tap
+xopc skills test --format tap
 
 # Strict mode (warnings are also treated as failures)
-xopcbot skills test --strict
+xopc skills test --strict
 ```
 
 ### Example Test Output
@@ -482,7 +482,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: npm install
       - run: npm run build
-      - run: xopcbot skills test --format tap --strict
+      - run: xopc skills test --format tap --strict
 ```
 
 ## Example Skills
@@ -495,7 +495,7 @@ name: weather
 description: Get weather information using wttr.in
 homepage: https://github.com/chubin/wttr.in
 metadata:
-  xopcbot:
+  xopc:
     emoji: 🌤️
     requires:
       anyBins: [curl, wget]
@@ -530,7 +530,7 @@ name: github
 description: Interact with GitHub via CLI
 homepage: https://cli.github.com
 metadata:
-  xopcbot:
+  xopc:
     emoji: 🐙
     requires:
       bins: [gh]
@@ -605,7 +605,7 @@ gh run list
 
 1. Check if SKILL.md file format is correct
 2. Confirm skill directory name matches `name` field
-3. Check `xopcbot skills list` output
+3. Check `xopc skills list` output
 4. Check for naming conflicts
 
 ### Dependency Installation Failed
@@ -617,22 +617,22 @@ gh run list
 
 ### Skill Not Working
 
-1. Check if required binaries are available: `xopcbot skills status <name>`
-2. Confirm skill is enabled: `xopcbot skills enable <name>`
-3. Check configuration: `xopcbot skills config <name> --show`
-4. Check verbose logs: `XOPCBOT_LOG_LEVEL=debug xopcbot ...`
+1. Check if required binaries are available: `xopc skills status <name>`
+2. Confirm skill is enabled: `xopc skills enable <name>`
+3. Check configuration: `xopc skills config <name> --show`
+4. Check verbose logs: `XOPC_LOG_LEVEL=debug xopc ...`
 
 ### Test Failures
 
 ```bash
 # View verbose output
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # Skip specific tests
-xopcbot skills test --skip-security
+xopc skills test --skip-security
 
 # Only run failed tests (future support)
-xopcbot skills test --bail
+xopc skills test --bail
 ```
 
 ## References

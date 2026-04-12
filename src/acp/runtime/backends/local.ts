@@ -1,7 +1,7 @@
 /**
  * Local ACP Runtime Backend
  *
- * A simple ACP runtime that runs directly in xopcbot's process,
+ * A simple ACP runtime that runs directly in xopc's process,
  * using the existing agent system for turn execution.
  */
 
@@ -72,7 +72,7 @@ interface LocalSessionState {
 /**
  * Local ACP Runtime
  *
- * Implements AcpRuntime by directly using xopcbot's AgentCore,
+ * Implements AcpRuntime by directly using xopc's AgentCore,
  * with its own session management.
  */
 export class LocalAcpRuntime implements AcpRuntime {

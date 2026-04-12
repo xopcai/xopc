@@ -1,13 +1,13 @@
 # Cron Jobs
 
-xopcbot has a built-in Cron service that supports scheduled message sending with two execution modes: **Direct** and **AI Agent**.
+xopc has a built-in Cron service that supports scheduled message sending with two execution modes: **Direct** and **AI Agent**.
 
 ## Usage
 
 ### List Tasks
 
 ```bash
-xopcbot cron list
+xopc cron list
 ```
 
 Output example:
@@ -22,7 +22,7 @@ def67890 | 0 10 * * *   | isolated | true    | 2026-02-21T10:00
 ### Add Task
 
 ```bash
-xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
+xopc cron add --schedule "0 9 * * *" --message "Good morning!"
 ```
 
 **Parameters:**
@@ -40,20 +40,20 @@ xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
 ### Remove Task
 
 ```bash
-xopcbot cron remove <task-id>
+xopc cron remove <task-id>
 ```
 
 ### Enable/Disable Task
 
 ```bash
-xopcbot cron enable <task-id>
-xopcbot cron disable <task-id>
+xopc cron enable <task-id>
+xopc cron disable <task-id>
 ```
 
 ### Run Now
 
 ```bash
-xopcbot cron run <task-id>
+xopc cron run <task-id>
 ```
 
 ## Execution Modes
@@ -63,7 +63,7 @@ xopcbot cron run <task-id>
 Sends messages directly to the specified channel without AI processing.
 
 ```bash
-xopcbot cron add "0 9 * *" "Good morning!" \
+xopc cron add "0 9 * *" "Good morning!" \
   --name "Morning" \
   --target main \
   --channel telegram \
@@ -75,7 +75,7 @@ xopcbot cron add "0 9 * *" "Good morning!" \
 Uses AI agent to process the message, then sends the response to the channel.
 
 ```bash
-xopcbot cron add "0 10 * * *" "What's the weather today?" \
+xopc cron add "0 10 * * *" "What's the weather today?" \
   --name "Weather" \
   --target isolated \
   --model minimax/minimax-m2.5 \
@@ -108,7 +108,7 @@ xopcbot cron add "0 10 * * *" "What's the weather today?" \
 
 ## Task Storage
 
-Tasks are saved in `~/.xopcbot/cron-jobs.json`:
+Tasks are saved in `~/.xopc/cron-jobs.json`:
 
 ```json
 {
@@ -155,7 +155,7 @@ Tasks are saved in `~/.xopcbot/cron-jobs.json`:
 import { CronService } from '../cron/index.js';
 
 const cronService = new CronService({
-  filePath: '~/.xopcbot/cron-jobs.json',
+  filePath: '~/.xopc/cron-jobs.json',
   agentService: agentServiceInstance,
   messageBus: messageBusInstance,
 });

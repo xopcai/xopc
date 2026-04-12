@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 
-const STORAGE_KEY = 'xopcbot-web-sidebar-collapsed';
+const STORAGE_KEY = 'xopc-web-sidebar-collapsed';
 
 function readCollapsed(): boolean {
   try {

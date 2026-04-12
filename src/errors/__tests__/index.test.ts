@@ -1,12 +1,12 @@
 import { describe, it, expect } from 'vitest';
 import {
-  XopcbotError,
+  XopcError,
   UserError,
   ConfigError,
   SystemError,
   NetworkError,
   ProviderError,
-  isXopcbotError,
+  isXopcError,
   isUserError,
   isConfigError,
   isProviderError,
@@ -16,9 +16,9 @@ import {
   formatErrorForLog,
 } from '../index.js';
 
-describe('XopcbotError', () => {
+describe('XopcError', () => {
   it('should create base error with all properties', () => {
-    const error = new XopcbotError({
+    const error = new XopcError({
       code: 'TEST_001',
       category: 'system',
       message: 'Test error',
@@ -34,7 +34,7 @@ describe('XopcbotError', () => {
   });
 
   it('should format user message', () => {
-    const error = new XopcbotError({
+    const error = new XopcError({
       code: 'TEST',
       category: 'user',
       message: 'Something went wrong',
@@ -49,7 +49,7 @@ describe('XopcbotError', () => {
   });
 
   it('should format log object', () => {
-    const error = new XopcbotError({
+    const error = new XopcError({
       code: 'TEST',
       category: 'system',
       message: 'Error',
@@ -245,11 +245,11 @@ describe('ProviderError', () => {
 });
 
 describe('Type guards', () => {
-  it('isXopcbotError should return true for XopcbotError', () => {
-    expect(isXopcbotError(new UserError('TEST', 'test'))).toBe(true);
-    expect(isXopcbotError(new Error())).toBe(false);
-    expect(isXopcbotError('string')).toBe(false);
-    expect(isXopcbotError(null)).toBe(false);
+  it('isXopcError should return true for XopcError', () => {
+    expect(isXopcError(new UserError('TEST', 'test'))).toBe(true);
+    expect(isXopcError(new Error())).toBe(false);
+    expect(isXopcError('string')).toBe(false);
+    expect(isXopcError(null)).toBe(false);
   });
 
   it('isUserError should return true only for UserError', () => {
@@ -270,7 +270,7 @@ describe('Type guards', () => {
 });
 
 describe('isRetryable', () => {
-  it('should return retryable for XopcbotError', () => {
+  it('should return retryable for XopcError', () => {
     const retryable = new SystemError('TEST', 'test', true);
     const notRetryable = new UserError('TEST', 'test');
     
@@ -293,7 +293,7 @@ describe('isRetryable', () => {
 });
 
 describe('wrapError', () => {
-  it('should return XopcbotError as-is', () => {
+  it('should return XopcError as-is', () => {
     const original = new UserError('TEST', 'test');
     const wrapped = wrapError(original);
     
@@ -346,7 +346,7 @@ describe('wrapError', () => {
 });
 
 describe('formatErrorForUser', () => {
-  it('should format XopcbotError with suggestion', () => {
+  it('should format XopcError with suggestion', () => {
     const error = new UserError('TEST', 'Something wrong', 'Do this');
     const formatted = formatErrorForUser(error);
     
@@ -373,7 +373,7 @@ describe('formatErrorForUser', () => {
 });
 
 describe('formatErrorForLog', () => {
-  it('should format XopcbotError', () => {
+  it('should format XopcError', () => {
     const error = new UserError('TEST', 'message');
     const formatted = formatErrorForLog(error);
     

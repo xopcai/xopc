@@ -1,6 +1,6 @@
 # Gateway API
 
-REST API gateway for external programs to interact with xopcbot.
+REST API gateway for external programs to interact with xopc.
 
 ---
 
@@ -9,7 +9,7 @@ REST API gateway for external programs to interact with xopcbot.
 ### Foreground Mode (Recommended)
 
 ```bash
-xopcbot gateway --port 18790
+xopc gateway --port 18790
 ```
 
 Default port: `18790`
@@ -21,7 +21,7 @@ The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 If the port is already in use:
 
 ```bash
-xopcbot gateway --force
+xopc gateway --force
 ```
 
 This will:
@@ -37,7 +37,7 @@ This will:
 ### Check Status
 
 ```bash
-xopcbot gateway status
+xopc gateway status
 ```
 
 **Example output:**
@@ -51,53 +51,53 @@ xopcbot gateway status
    Token: abc12345...xyz67890
 
 📝 Management:
-   xopcbot gateway stop      # Stop gateway
-   xopcbot gateway restart   # Restart gateway
+   xopc gateway stop      # Stop gateway
+   xopc gateway restart   # Restart gateway
 ```
 
 ### Stop Gateway
 
 ```bash
 # Graceful stop (SIGTERM with 5 second timeout)
-xopcbot gateway stop
+xopc gateway stop
 
 # Force stop (SIGKILL immediately)
-xopcbot gateway stop --force
+xopc gateway stop --force
 
 # Custom timeout (milliseconds)
-xopcbot gateway stop --timeout 3000
+xopc gateway stop --timeout 3000
 ```
 
 ### Restart Gateway
 
 ```bash
 # Send SIGUSR1 signal to trigger graceful restart
-xopcbot gateway restart
+xopc gateway restart
 
 # Force restart (kill and start new)
-xopcbot gateway restart --force
+xopc gateway restart --force
 ```
 
-> **Note:** SIGUSR1 restart requires `XOPCBOT_ALLOW_SIGUSR1_RESTART=1` environment variable.
+> **Note:** SIGUSR1 restart requires `XOPC_ALLOW_SIGUSR1_RESTART=1` environment variable.
 
 ### View Logs
 
 ```bash
 # View last 50 lines
-xopcbot gateway logs
+xopc gateway logs
 
 # View specific number of lines
-xopcbot gateway logs --lines 100
+xopc gateway logs --lines 100
 
 # Follow logs in real-time (like tail -f)
-xopcbot gateway logs --follow
+xopc gateway logs --follow
 ```
 
 ---
 
 ## System Service Management
 
-xopcbot supports running the gateway as a system service for automatic startup.
+xopc supports running the gateway as a system service for automatic startup.
 
 ### Supported Platforms
 
@@ -110,7 +110,7 @@ xopcbot supports running the gateway as a system service for automatic startup.
 ### Install as System Service
 
 ```bash
-xopcbot gateway install
+xopc gateway install
 ```
 
 **Options:**
@@ -124,7 +124,7 @@ xopcbot gateway install
 
 **Example:**
 ```bash
-xopcbot gateway install --port 8080 --token my-secret-token
+xopc gateway install --port 8080 --token my-secret-token
 ```
 
 After installation, the gateway will start automatically when you log in.
@@ -133,13 +133,13 @@ After installation, the gateway will start automatically when you log in.
 
 ```bash
 # Start via system service
-xopcbot gateway service-start
+xopc gateway service-start
 
 # Check service status
-xopcbot gateway service-status
+xopc gateway service-status
 
 # Uninstall system service
-xopcbot gateway uninstall
+xopc gateway uninstall
 ```
 
 ---
@@ -150,7 +150,7 @@ xopcbot gateway uninstall
 
 Uses file-based locking instead of PID files:
 
-- **Location**: `~/.xopcbot/locks/gateway.{hash}.lock`
+- **Location**: `~/.xopc/locks/gateway.{hash}.lock`
 - **Hash**: SHA256 of config path (supports multiple configs)
 - **Content**: `{ pid, createdAt, configPath, startTime }`
 
@@ -185,7 +185,7 @@ On restart:
 lsof -i :18790
 
 # Force free port (SIGTERM -> SIGKILL)
-xopcbot gateway --force
+xopc gateway --force
 ```
 
 ---
@@ -492,7 +492,7 @@ Gateway supports graceful shutdown:
 Timeout can be customized:
 
 ```bash
-xopcbot gateway stop --timeout 10000  # 10 second timeout
+xopc gateway stop --timeout 10000  # 10 second timeout
 ```
 
 ---
@@ -501,9 +501,9 @@ xopcbot gateway stop --timeout 10000  # 10 second timeout
 
 | Variable | Description |
 |----------|-------------|
-| `XOPCBOT_NO_RESPAWN` | Disable process respawn |
-| `XOPCBOT_ALLOW_SIGUSR1_RESTART` | Allow SIGUSR1 to trigger restart |
-| `XOPCBOT_SERVICE_MARKER` | Mark running under supervisor |
+| `XOPC_NO_RESPAWN` | Disable process respawn |
+| `XOPC_ALLOW_SIGUSR1_RESTART` | Allow SIGUSR1 to trigger restart |
+| `XOPC_SERVICE_MARKER` | Mark running under supervisor |
 
 ---
 
@@ -531,7 +531,7 @@ The gateway serves the Web UI at `/` (hash-router SPA; assets under `/assets/*`)
 
 ```bash
 # Start gateway
-xopcbot gateway
+xopc gateway
 
 # Open in browser
 open http://localhost:18790/
@@ -556,19 +556,19 @@ open http://localhost:18790/
 lsof -i :18790
 
 # Force start (kills existing process)
-xopcbot gateway --force
+xopc gateway --force
 ```
 
 ### Gateway Won't Start
 
-1. Check logs: `xopcbot gateway logs`
+1. Check logs: `xopc gateway logs`
 2. Verify config is valid JSON
-3. Check if lock file exists: `~/.xopcbot/locks/`
+3. Check if lock file exists: `~/.xopc/locks/`
 4. Remove stale lock file if needed
 
 ### API Not Responding
 
-1. Check gateway status: `xopcbot gateway status`
+1. Check gateway status: `xopc gateway status`
 2. Verify port is correct
 3. Check firewall settings
 4. Review gateway logs for errors

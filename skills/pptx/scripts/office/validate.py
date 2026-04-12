@@ -47,8 +47,8 @@ def main():
     )
     parser.add_argument(
         "--author",
-        default="xopcbot",
-        help="Author name for redlining validation (default: xopcbot)",
+        default="xopc",
+        help="Author name for redlining validation (default: xopc)",
     )
     args = parser.parse_args()
 

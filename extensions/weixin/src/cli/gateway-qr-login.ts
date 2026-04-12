@@ -2,8 +2,8 @@
  * Gateway / web UI: start Weixin QR login, poll status, persist credentials (same as CLI).
  */
 
-import type { Config } from "@xopcai/xopcbot/config/schema.js";
-import { loadConfig, saveConfig } from "@xopcai/xopcbot/config/loader.js";
+import type { Config } from "@xopcai/xopc/config/schema.js";
+import { loadConfig, saveConfig } from "@xopcai/xopc/config/loader.js";
 
 import {
   clearStaleAccountsForUserId,
@@ -83,7 +83,7 @@ export type WeixinGatewayQrLoginStartOptions = {
 export async function startWeixinGatewayQrLogin(
   opts: WeixinGatewayQrLoginStartOptions,
 ): Promise<{ ok: true; sessionKey: string; qrcodeUrl: string } | { ok: false; message: string }> {
-  const configPath = opts.configPath ?? process.env.XOPCBOT_CONFIG_PATH;
+  const configPath = opts.configPath ?? process.env.XOPC_CONFIG_PATH;
   const cfg = loadConfig(configPath);
   const { baseUrl, routeTag } = getWeixinLoginApiContext(cfg, opts.account);
   const timeoutMs = opts.timeoutMs ?? 480_000;

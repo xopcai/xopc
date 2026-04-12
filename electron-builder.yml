@@ -1,11 +1,11 @@
-appId: com.xopcai.xopcbot
-productName: xopcbot
+appId: com.xopcai.xopc
+productName: xopc
 
 # Workaround for electron-builder 26.x + pnpm compatibility
 npmRebuild: false
 nodeGypRebuild: false
 
-# Scoped npm name (@xopcai/xopcbot) would otherwise produce paths like dist/release/@xopcai/*.deb (parent dir missing).
+# Scoped npm name (@xopcai/xopc) would otherwise produce paths like dist/release/@xopcai/*.deb (parent dir missing).
 artifactName: ${productName}-${version}-${arch}.${ext}
 
 # Do not auto-publish to GitHub Releases (CI sets CI=true). Artifacts are uploaded via Actions.

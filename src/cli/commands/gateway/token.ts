@@ -38,10 +38,10 @@ export function createTokenCommand(): Command {
           console.log(`   ${newToken}`);
           console.log('');
           console.log('📝 Saved to config file. Use this token in the X-Api-Key header or as:');
-          console.log(`   xopcbot gateway --token ${newToken}`);
+          console.log(`   xopc gateway --token ${newToken}`);
           console.log('');
           console.log('Or set environment variable:');
-          console.log(`   export XOPCBOT_GATEWAY_TOKEN=${newToken}`);
+          console.log(`   export XOPC_GATEWAY_TOKEN=${newToken}`);
           process.exit(0);
         } else {
           const currentToken = config.gateway?.auth?.token;
@@ -51,7 +51,7 @@ export function createTokenCommand(): Command {
             console.log('⚠️  Gateway authentication is disabled (mode: none)');
             console.log('');
             console.log('To enable authentication, run:');
-            console.log('   xopcbot gateway token --generate');
+            console.log('   xopc gateway token --generate');
           } else if (currentToken) {
             const tokenPreview = `${currentToken.slice(0, 8)}...${currentToken.slice(-8)}`;
             console.log('🔑 Current gateway token:');
@@ -61,15 +61,15 @@ export function createTokenCommand(): Command {
             console.log(`Preview: ${tokenPreview}`);
             console.log('');
             console.log('Usage:');
-            console.log(`   xopcbot gateway --token ${currentToken}`);
+            console.log(`   xopc gateway --token ${currentToken}`);
             console.log('');
             console.log('Or set environment variable:');
-            console.log(`   export XOPCBOT_GATEWAY_TOKEN=${currentToken}`);
+            console.log(`   export XOPC_GATEWAY_TOKEN=${currentToken}`);
           } else {
             console.log('⚠️  No token configured. A token will be auto-generated on startup.');
             console.log('');
             console.log('To set a persistent token, run:');
-            console.log('   xopcbot gateway token --generate');
+            console.log('   xopc gateway token --generate');
           }
           process.exit(0);
         }

@@ -1,13 +1,13 @@
 # 定时任务
 
-xopcbot 内置 Cron 服务，支持定时发送消息，支持两种执行模式：**直接发送** 和 **AI Agent**。
+xopc 内置 Cron 服务，支持定时发送消息，支持两种执行模式：**直接发送** 和 **AI Agent**。
 
 ## 使用方法
 
 ### 查看任务列表
 
 ```bash
-xopcbot cron list
+xopc cron list
 ```
 
 输出示例：
@@ -22,7 +22,7 @@ def67890 | 0 10 * * *   | isolated | true    | 2026-02-21T10:00
 ### 添加任务
 
 ```bash
-xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
+xopc cron add --schedule "0 9 * * *" --message "Good morning!"
 ```
 
 参数：
@@ -40,20 +40,20 @@ xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
 ### 删除任务
 
 ```bash
-xopcbot cron remove <task-id>
+xopc cron remove <task-id>
 ```
 
 ### 启用/禁用任务
 
 ```bash
-xopcbot cron enable <task-id>
-xopcbot cron disable <task-id>
+xopc cron enable <task-id>
+xopc cron disable <task-id>
 ```
 
 ### 立即运行
 
 ```bash
-xopcbot cron run <task-id>
+xopc cron run <task-id>
 ```
 
 ## 执行模式
@@ -63,7 +63,7 @@ xopcbot cron run <task-id>
 不经过 AI 处理，直接向指定渠道发送消息。
 
 ```bash
-xopcbot cron add "0 9 * * *" "早安！" \
+xopc cron add "0 9 * * *" "早安！" \
   --name "早安提醒" \
   --target main \
   --channel telegram \
@@ -75,7 +75,7 @@ xopcbot cron add "0 9 * * *" "早安！" \
 使用 AI Agent 处理消息，然后将回复发送到指定渠道。
 
 ```bash
-xopcbot cron add "0 10 * * *" "今天天气怎么样？" \
+xopc cron add "0 10 * * *" "今天天气怎么样？" \
   --name "天气查询" \
   --target isolated \
   --model minimax/minimax-m2.5 \
@@ -108,7 +108,7 @@ xopcbot cron add "0 10 * * *" "今天天气怎么样？" \
 
 ## 任务存储
 
-任务保存在 `~/.xopcbot/cron-jobs.json`：
+任务保存在 `~/.xopc/cron-jobs.json`：
 
 ```json
 {
@@ -155,7 +155,7 @@ xopcbot cron add "0 10 * * *" "今天天气怎么样？" \
 import { CronService } from '../cron/index.js';
 
 const cronService = new CronService({
-  filePath: '~/.xopcbot/cron-jobs.json',
+  filePath: '~/.xopc/cron-jobs.json',
   agentService: agentServiceInstance,
   messageBus: messageBusInstance,
 });

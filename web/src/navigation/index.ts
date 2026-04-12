@@ -90,8 +90,8 @@ export const SETTINGS_NAV_TABS: readonly Tab[] = SETTINGS_SHELL_NAV_GROUPS.filte
 /** Settings shell: full left rail including sessions + logs. */
 export const SETTINGS_SHELL_NAV_TABS: readonly Tab[] = SETTINGS_SHELL_NAV_GROUPS.flatMap((g) => [...g.tabs]);
 
-/** Official docs site (VitePress `base: /xopcbot/`). */
-export const HELP_DOCS_BASE_URL = 'https://xopcai.github.io/xopcbot';
+/** Official docs site (VitePress `base: /xopc/`). */
+export const HELP_DOCS_BASE_URL = 'https://xopcai.github.io/xopc';
 
 /** Sidebar “Documentation” — English root vs `zh/` locale home. */
 export function helpDocsHomeUrl(language: StoredLanguage): string {

@@ -16,7 +16,7 @@
     "allowSyntheticDefaultImports": true,
     "forceConsistentCasingInFileNames": true,
     "paths": {
-      "@xopcai/xopcbot/*": ["../../src/*"]
+      "@xopcai/xopc/*": ["../../src/*"]
     }
   },
   "include": ["src/**/*.ts"],

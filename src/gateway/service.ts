@@ -917,7 +917,7 @@ export class GatewayService {
 
     return {
       status: 'ok',
-      service: 'xopcbot-gateway',
+      service: 'xopc-gateway',
       version: '0.1.0',
       uptime: Math.floor((Date.now() - this.startTime) / 1000),
       channels: {

@@ -15,7 +15,7 @@ const AUTH_STORE_FILENAME = 'auth-profiles.json';
 
 /** Get the auth profiles file path */
 export function resolveAuthStorePath(dataDir?: string): string {
-	const dir = dataDir ?? path.join(homedir(), '.xopcbot');
+	const dir = dataDir ?? path.join(homedir(), '.xopc');
 	return path.join(dir, AUTH_STORE_FILENAME);
 }
 

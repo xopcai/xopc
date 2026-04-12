@@ -58,7 +58,7 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
     if (respawn.mode === "failed") {
       console.warn(`[GatewayRunLoop] Full process restart failed: ${respawn.detail ?? "unknown error"}`);
     } else {
-      console.log("[GatewayRunLoop] Restart mode: in-process restart (XOPCBOT_NO_RESPAWN)");
+      console.log("[GatewayRunLoop] Restart mode: in-process restart (XOPC_NO_RESPAWN)");
     }
 
     // In-process restart: reacquire lock
@@ -145,8 +145,8 @@ export async function runGatewayLoop(opts: RunGatewayLoopOptions): Promise<void>
   const onSigusr1 = () => {
     console.log("[GatewayRunLoop] SIGUSR1 received");
     // Check if external restart is allowed
-    if (process.env.XOPCBOT_ALLOW_SIGUSR1_RESTART !== "1") {
-      console.warn("[GatewayRunLoop] SIGUSR1 restart ignored (set XOPCBOT_ALLOW_SIGUSR1_RESTART=1 to enable)");
+    if (process.env.XOPC_ALLOW_SIGUSR1_RESTART !== "1") {
+      console.warn("[GatewayRunLoop] SIGUSR1 restart ignored (set XOPC_ALLOW_SIGUSR1_RESTART=1 to enable)");
       return;
     }
     requestShutdown("restart", "SIGUSR1");

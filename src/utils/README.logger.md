@@ -7,7 +7,7 @@ The optimized logger module provides:
 - ✅ Automatic log rotation and cleanup
 - ✅ Sampling for high-frequency debug logs
 - ✅ Graceful shutdown with log flushing
-- ✅ Unified configuration via `XOPCBOT_*` environment variables
+- ✅ Unified configuration via `XOPC_*` environment variables
 - ✅ Support for compressed log files
 
 ---
@@ -91,26 +91,26 @@ logger.fatal('Cannot start without config');
 
 | Variable | Default | Description |
 |----------|---------|-------------|
-| `XOPCBOT_LOG_LEVEL` | `info` | Minimum log level |
-| `XOPCBOT_LOG_DIR` | `~/.xopcbot/logs` | Log directory |
-| `XOPCBOT_LOG_CONSOLE` | `true` | Enable console output |
-| `XOPCBOT_LOG_FILE` | `true` | Enable file output |
-| `XOPCBOT_LOG_RETENTION_DAYS` | `7` | Days to keep logs |
-| `XOPCBOT_PRETTY_LOGS` | `false` | Pretty print (dev) |
+| `XOPC_LOG_LEVEL` | `info` | Minimum log level |
+| `XOPC_LOG_DIR` | `~/.xopc/logs` | Log directory |
+| `XOPC_LOG_CONSOLE` | `true` | Enable console output |
+| `XOPC_LOG_FILE` | `true` | Enable file output |
+| `XOPC_LOG_RETENTION_DAYS` | `7` | Days to keep logs |
+| `XOPC_PRETTY_LOGS` | `false` | Pretty print (dev) |
 
 ### Example Configuration
 
 ```bash
 # Development with verbose logging
-export XOPCBOT_LOG_LEVEL=debug
-export XOPCBOT_PRETTY_LOGS=true
+export XOPC_LOG_LEVEL=debug
+export XOPC_PRETTY_LOGS=true
 
 # Production with minimal logging
-export XOPCBOT_LOG_LEVEL=warn
-export XOPCBOT_LOG_RETENTION_DAYS=14
+export XOPC_LOG_LEVEL=warn
+export XOPC_LOG_RETENTION_DAYS=14
 
 # Custom log directory
-export XOPCBOT_LOG_DIR=/var/log/xopcbot
+export XOPC_LOG_DIR=/var/log/xopc
 ```
 
 ---
@@ -299,13 +299,13 @@ log.withContext({ requestId: '123' }).info('Message with context');
 ### Logs Not Appearing
 
 1. Check log level: `getLogLevel()`
-2. Verify environment: `echo $XOPCBOT_LOG_LEVEL`
+2. Verify environment: `echo $XOPC_LOG_LEVEL`
 3. Check output streams: console vs file
 
 ### Log Files Growing Too Large
 
 1. Enable rotation: `await rotateLogs()`
-2. Set retention: `XOPCBOT_LOG_RETENTION_DAYS=7`
+2. Set retention: `XOPC_LOG_RETENTION_DAYS=7`
 3. Use sampling for debug logs
 
 ### Missing Context in Logs

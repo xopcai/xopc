@@ -24,20 +24,20 @@ const _log = createLogger('GatewayCommand');
 
 function createGatewayCommand(_ctx: CLIContext): Command {
   const cmd = new Command('gateway')
-    .description('Start the xopcbot gateway server')
+    .description('Start the xopc gateway server')
     .addHelpText(
       'after',
       formatExamples([
-        'xopcbot gateway                   # Start gateway (foreground, default)',
-        'xopcbot gateway --background      # Start gateway in background',
-        'xopcbot gateway --port 8080       # Custom port',
-        'xopcbot gateway --force           # Force kill existing process',
-        'xopcbot gateway stop             # Stop gateway',
-        'xopcbot gateway restart          # Restart gateway',
-        'xopcbot gateway status           # Check gateway status',
-        'xopcbot gateway logs             # View recent logs',
-        'xopcbot gateway token            # Show current token',
-        'xopcbot gateway token --generate # Generate new token',
+        'xopc gateway                   # Start gateway (foreground, default)',
+        'xopc gateway --background      # Start gateway in background',
+        'xopc gateway --port 8080       # Custom port',
+        'xopc gateway --force           # Force kill existing process',
+        'xopc gateway stop             # Stop gateway',
+        'xopc gateway restart          # Restart gateway',
+        'xopc gateway status           # Check gateway status',
+        'xopc gateway logs             # View recent logs',
+        'xopc gateway token            # Show current token',
+        'xopc gateway token --generate # Generate new token',
       ])
     )
     .option('--host <address>', 'Host to bind to', '127.0.0.1')
@@ -93,7 +93,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
 
       // Background mode: spawn detached process
       if (isBackground) {
-        console.log('🚀 Starting xopcbot gateway in background...');
+        console.log('🚀 Starting xopc gateway in background...');
         console.log(`   Host: ${host}`);
         console.log(`   Port: ${port}`);
         console.log('');
@@ -126,9 +126,9 @@ function createGatewayCommand(_ctx: CLIContext): Command {
           }
           console.log('');
           console.log('📝 Management commands:');
-          console.log(`   xopcbot gateway status     # Check status`);
-          console.log(`   xopcbot gateway stop       # Stop gateway`);
-          console.log(`   xopcbot gateway restart    # Restart gateway`);
+          console.log(`   xopc gateway status     # Check status`);
+          console.log(`   xopc gateway stop       # Stop gateway`);
+          console.log(`   xopc gateway restart    # Restart gateway`);
           process.exit(0);
         } else {
           console.error('❌ Failed to start gateway in background');
@@ -138,7 +138,7 @@ function createGatewayCommand(_ctx: CLIContext): Command {
       }
 
       // Foreground mode: Start gateway with run loop
-      console.log('🚀 Starting xopcbot gateway...');
+      console.log('🚀 Starting xopc gateway...');
       console.log(`   Host: ${host}`);
       console.log(`   Port: ${port}`);
       console.log('');
@@ -179,14 +179,14 @@ function createGatewayCommand(_ctx: CLIContext): Command {
 register({
   id: 'gateway',
   name: 'gateway',
-  description: 'Start the xopcbot gateway server',
+  description: 'Start the xopc gateway server',
   factory: createGatewayCommand,
   metadata: {
     category: 'runtime',
     examples: [
-      'xopcbot gateway',
-      'xopcbot gateway --background',
-      'xopcbot gateway --port 8080',
+      'xopc gateway',
+      'xopc gateway --background',
+      'xopc gateway --port 8080',
     ],
   },
 });

@@ -1,14 +1,14 @@
-# xopcbot
+# xopc
 
-**xopcbot** is a personal AI assistant you run yourself: a **CLI**, an **HTTP/WebSocket gateway** with a **React console**, and **bundled channel plugins** for **Telegram** and **WeChat (Weixin)** so the same agent reaches you in those apps (plus the browser console). Other chat platforms are not shipped in core—you can add them with a custom `ChannelPlugin` extension. It is built on **Node.js 22+** and **TypeScript**, with **20+ LLM providers** via [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai) and an **extension** + **skills** (SKILL.md) model for growing capabilities without forking core.
+**xopc** is a personal AI assistant you run yourself: a **CLI**, an **HTTP/WebSocket gateway** with a **React console**, and **bundled channel plugins** for **Telegram** and **WeChat (Weixin)** so the same agent reaches you in those apps (plus the browser console). Other chat platforms are not shipped in core—you can add them with a custom `ChannelPlugin` extension. It is built on **Node.js 22+** and **TypeScript**, with **20+ LLM providers** via [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai) and an **extension** + **skills** (SKILL.md) model for growing capabilities without forking core.
 
 If you want something **lightweight**, **local-first**, and easy to script from the terminal or wire to a small always-on gateway, this is it.
 
-[GitHub](https://github.com/xopcai/xopcbot) · [Documentation](https://xopcai.github.io/xopcbot/) · [Models](https://xopcai.github.io/xopcbot/models) · [Configuration](https://xopcai.github.io/xopcbot/configuration) · [CLI](https://xopcai.github.io/xopcbot/cli)
+[GitHub](https://github.com/xopcai/xopc) · [Documentation](https://xopcai.github.io/xopc/) · [Models](https://xopcai.github.io/xopc/models) · [Configuration](https://xopcai.github.io/xopc/configuration) · [CLI](https://xopcai.github.io/xopc/cli)
 
 <p align="center">
-  <a href="https://github.com/xopcai/xopcbot"><img src="https://img.shields.io/badge/GitHub-xopcai/xopcbot-blue" alt="GitHub"></a>
-  <a href="https://xopcai.github.io/xopcbot/"><img src="https://img.shields.io/badge/Docs-Documentation-brightgreen" alt="Docs"></a>
+  <a href="https://github.com/xopcai/xopc"><img src="https://img.shields.io/badge/GitHub-xopcai/xopc-blue" alt="GitHub"></a>
+  <a href="https://xopcai.github.io/xopc/"><img src="https://img.shields.io/badge/Docs-Documentation-brightgreen" alt="Docs"></a>
   <a href="#"><img src="https://img.shields.io/badge/Node-%3E%3D22.0.0-brightgreen" alt="Node"></a>
   <a href="#"><img src="https://img.shields.io/badge/License-MIT-green" alt="License"></a>
 </p>
@@ -33,15 +33,15 @@ If you want something **lightweight**, **local-first**, and easy to script from 
 **Runtime:** Node.js **≥ 22**.
 
 ```bash
-npm install -g @xopcai/xopcbot
-# or: pnpm add -g @xopcai/xopcbot
+npm install -g @xopcai/xopc
+# or: pnpm add -g @xopcai/xopc
 ```
 
 **Recommended first run:** interactive onboarding (models, keys, channels).
 
 ```bash
-xopcbot onboard
-# quick path: xopcbot onboard --quick
+xopc onboard
+# quick path: xopc onboard --quick
 ```
 
 Then chat in the terminal or start the gateway for the Web UI and channel bots.
@@ -52,13 +52,13 @@ Then chat in the terminal or start the gateway for the Web UI and channel bots.
 
 ```bash
 # Interactive CLI chat
-xopcbot agent -i
+xopc agent -i
 
 # One message
-xopcbot agent -m "Summarize the last 5 commits"
+xopc agent -m "Summarize the last 5 commits"
 
 # Gateway (REST/SSE + static console); default dev URL depends on config
-xopcbot gateway
+xopc gateway
 
 # From a dev clone (TypeScript entry, no prior build)
 pnpm install && pnpm run dev -- agent -i
@@ -72,13 +72,13 @@ From source builds use **pnpm** (`pnpm run build`). See [AGENTS.md](./AGENTS.md)
 
 | Goal | Command / flow |
 | --- | --- |
-| Chat in the terminal | `xopcbot agent -i` or `xopcbot agent -m "…"` |
-| Open the Web console | Run `xopcbot gateway`, open the URL from logs or your `gateway` config |
-| Use Telegram / WeChat | Configure `channels.telegram` / `channels.weixin` in `~/.xopcbot/config.json`, run gateway; WeChat: `xopcbot channels login --channel weixin` on the gateway host |
-| Onboarding / model setup | `xopcbot onboard` |
-| Scheduled jobs | Enable `cron` in config; see [docs](https://xopcai.github.io/xopcbot/) |
+| Chat in the terminal | `xopc agent -i` or `xopc agent -m "…"` |
+| Open the Web console | Run `xopc gateway`, open the URL from logs or your `gateway` config |
+| Use Telegram / WeChat | Configure `channels.telegram` / `channels.weixin` in `~/.xopc/xopc.json`, run gateway; WeChat: `xopc channels login --channel weixin` on the gateway host |
+| Onboarding / model setup | `xopc onboard` |
+| Scheduled jobs | Enable `cron` in config; see [docs](https://xopcai.github.io/xopc/) |
 
-Full flags and subcommands: [CLI reference](https://xopcai.github.io/xopcbot/cli).
+Full flags and subcommands: [CLI reference](https://xopcai.github.io/xopc/cli).
 
 ---
 
@@ -86,7 +86,7 @@ Full flags and subcommands: [CLI reference](https://xopcai.github.io/xopcbot/cli
 
 Inbound messages from chat apps are **untrusted input**. Prefer **pairing** or **allowlist** policies for DMs and restrict who can trigger the bot in groups until you understand the risk surface.
 
-- Defaults and options: [Channels](https://xopcai.github.io/xopcbot/channels) and configuration docs.
+- Defaults and options: [Channels](https://xopcai.github.io/xopc/channels) and configuration docs.
 - Gateway token and network exposure: treat the gateway like any admin API — bind appropriately and keep tokens secret.
 
 ---
@@ -95,14 +95,14 @@ Inbound messages from chat apps are **untrusted input**. Prefer **pairing** or *
 
 | Guide | Description |
 | --- | --- |
-| [Getting started](https://xopcai.github.io/xopcbot/getting-started) | Install, onboard, first chat |
-| [Configuration](https://xopcai.github.io/xopcbot/configuration) | `config.json` reference |
-| [CLI](https://xopcai.github.io/xopcbot/cli) | Commands and flags |
-| [Channels](https://xopcai.github.io/xopcbot/channels) | Telegram, WeChat (Weixin), policies |
-| [Extensions](https://xopcai.github.io/xopcbot/extensions) | Extension system |
-| [Tools](https://xopcai.github.io/xopcbot/tools) | Built-in tools |
-| [Skills](https://xopcai.github.io/xopcbot/skills) | Skills and SKILL.md |
-| [Architecture](https://xopcai.github.io/xopcbot/architecture) | How pieces fit together |
+| [Getting started](https://xopcai.github.io/xopc/getting-started) | Install, onboard, first chat |
+| [Configuration](https://xopcai.github.io/xopc/configuration) | Main JSON config (`xopc.json`) reference |
+| [CLI](https://xopcai.github.io/xopc/cli) | Commands and flags |
+| [Channels](https://xopcai.github.io/xopc/channels) | Telegram, WeChat (Weixin), policies |
+| [Extensions](https://xopcai.github.io/xopc/extensions) | Extension system |
+| [Tools](https://xopcai.github.io/xopc/tools) | Built-in tools |
+| [Skills](https://xopcai.github.io/xopc/skills) | Skills and SKILL.md |
+| [Architecture](https://xopcai.github.io/xopc/architecture) | How pieces fit together |
 
 ---
 
@@ -122,15 +122,15 @@ There is **no** bundled Feishu, Slack, Discord, etc.; those would be separate ex
 
 ## Supported LLM providers (overview)
 
-Powered by **pi-ai** — common (OpenAI, Anthropic, Google, Groq, DeepSeek, …), specialty (OpenRouter, Mistral, xAI, …), enterprise (Bedrock, Azure, Vertex, Vercel AI Gateway), OAuth (e.g. Copilot, Codex), and local (Ollama, LM Studio, vLLM). Details: [Models](https://xopcai.github.io/xopcbot/models).
+Powered by **pi-ai** — common (OpenAI, Anthropic, Google, Groq, DeepSeek, …), specialty (OpenRouter, Mistral, xAI, …), enterprise (Bedrock, Azure, Vertex, Vercel AI Gateway), OAuth (e.g. Copilot, Codex), and local (Ollama, LM Studio, vLLM). Details: [Models](https://xopcai.github.io/xopc/models).
 
 ---
 
 ## Development
 
 ```bash
-git clone https://github.com/xopcai/xopcbot.git
-cd xopcbot
+git clone https://github.com/xopcai/xopc.git
+cd xopc
 pnpm install
 pnpm run dev          # CLI via tsx
 pnpm run build        # Node + web console → dist
@@ -161,30 +161,30 @@ web/             # Gateway console (React + Vite)
 ### Extensions
 
 ```bash
-xopcbot extension install xopcbot-extension-weather
-xopcbot extension create my-extension --kind tool
+xopc extension install xopc-extension-weather
+xopc extension create my-extension --kind tool
 ```
 
-[Extensions guide](https://xopcai.github.io/xopcbot/extensions)
+[Extensions guide](https://xopcai.github.io/xopc/extensions)
 
 ### Skills
 
 ```bash
-xopcbot skills list
-xopcbot skills install <name>
+xopc skills list
+xopc skills install <name>
 ```
 
-[Skills guide](https://xopcai.github.io/xopcbot/skills)
+[Skills guide](https://xopcai.github.io/xopc/skills)
 
 ### Voice (e.g. Telegram)
 
-Configure `stt` / `tts` in `config.json`. [Voice docs](https://xopcai.github.io/xopcbot/voice).
+Configure `stt` / `tts` in your main config (`xopc.json` by default). [Voice docs](https://xopcai.github.io/xopc/voice).
 
 ---
 
 ## Configuration
 
-Default config path: **`~/.xopcbot/config.json`** (override with `XOPCBOT_CONFIG`).
+Default config path: **`~/.xopc/xopc.json`** (override with `XOPC_CONFIG`).
 
 Minimal example:
 
@@ -212,7 +212,7 @@ Minimal example:
 }
 ```
 
-[Full configuration reference](https://xopcai.github.io/xopcbot/configuration)
+[Full configuration reference](https://xopcai.github.io/xopc/configuration)
 
 ---
 

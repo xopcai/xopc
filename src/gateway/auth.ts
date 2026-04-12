@@ -21,8 +21,8 @@ export function resolveGatewayAuth(params: {
   const config: GatewayAuthConfig = params.authConfig ?? { mode: 'token' };
 
   // Environment variables take precedence
-  const envMode = env.XOPCBOT_GATEWAY_AUTH_MODE;
-  const envToken = env.XOPCBOT_GATEWAY_TOKEN;
+  const envMode = env.XOPC_GATEWAY_AUTH_MODE;
+  const envToken = env.XOPC_GATEWAY_TOKEN;
 
   // Resolve mode
   let mode: ResolvedGatewayAuth['mode'] = 'token';
@@ -53,7 +53,7 @@ export function assertGatewayAuthConfigured(auth: ResolvedGatewayAuth): void {
   if (auth.mode === 'token' && !auth.token) {
     throw new Error(
       'Gateway auth mode is token, but no token was configured. ' +
-      'Set gateway.auth.token in config or XOPCBOT_GATEWAY_TOKEN environment variable.'
+      'Set gateway.auth.token in config or XOPC_GATEWAY_TOKEN environment variable.'
     );
   }
 }

@@ -1,5 +1,5 @@
 /**
- * Skills hub lock (~/.xopcbot/skills-lock.json): records install source + tree hash per managed skill id.
+ * Skills hub lock (~/.xopc/skills-lock.json): records install source + tree hash per managed skill id.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -53,7 +53,7 @@ export function saveSkillsLock(lock: SkillsLockFile): void {
   writeFileSync(p, `${JSON.stringify(lock, null, 2)}\n`, 'utf-8');
 }
 
-/** Record or replace hub metadata for a managed skill directory id (folder name under ~/.xopcbot/skills). */
+/** Record or replace hub metadata for a managed skill directory id (folder name under ~/.xopc/skills). */
 export function recordSkillsHubInstall(
   skillId: string,
   meta: Pick<SkillHubLockEntry, 'kind' | 'source' | 'ref' | 'subpath'>,

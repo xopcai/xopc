@@ -1,13 +1,13 @@
 # 配置参考
 
-xopcbot 所有配置集中在 `~/.xopcbot/config.json` 文件中。
+xopc 所有配置集中在 `~/.xopc/xopc.json` 文件中。
 
 ## 快速开始
 
 运行交互式设置向导：
 
 ```bash
-xopcbot onboard
+xopc onboard
 ```
 
 或手动创建：
@@ -35,7 +35,7 @@ xopcbot onboard
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.xopcbot/workspace",
+      "workspace": "~/.xopc/workspace",
       "model": {
         "primary": "anthropic/claude-sonnet-4-5",
         "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
@@ -144,13 +144,13 @@ xopcbot onboard
 
 同类可选字段也可写在 **`agents.defaults`** 里作为全局默认（例如 `agents.defaults.tools.disable` 会与每条 list 的 disable **合并**）。
 
-**说明：** 磁盘路径（`~/.xopcbot/agents/<id>/` 下的会话与内部状态、以及各 agent 的 Markdown 工作区）均按 **`config.json`** 解析（`agents.list`、`agents.defaults`、可选的 `agentDir`）。请使用 **`xopcbot agents add`** / **`agents delete`** 管理列表与目录；**不存在**独立于配置之外的 agent「注册表」。
+**说明：** 磁盘路径（`~/.xopc/agents/<id>/` 下的会话与内部状态、以及各 agent 的 Markdown 工作区）均按 **`config.json`** 解析（`agents.list`、`agents.defaults`、可选的 `agentDir`）。请使用 **`xopc agents add`** / **`agents delete`** 管理列表与目录；**不存在**独立于配置之外的 agent「注册表」。
 
 #### agents.defaults
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
-| `workspace` | string | `~/.xopcbot/workspace` | 工作目录 |
+| `workspace` | string | `~/.xopc/workspace` | 工作目录 |
 | `model` | string/object | `anthropic/claude-sonnet-4-5` | 默认模型 |
 | `max_tokens` | number | `8192` | 最大输出 tokens |
 | `temperature` | number | `0.7` | 温度参数 (0-2) |
@@ -201,7 +201,7 @@ xopcbot onboard
 
 | 字段 | 类型 | 默认值 | 说明 |
 |------|------|--------|------|
-| `summaryModel` | string | — | 按会话摘要所用模型（如 `openai/gpt-4o-mini`）。设置后优先于环境变量 `XOPCBOT_SESSION_SEARCH_MODEL`。 |
+| `summaryModel` | string | — | 按会话摘要所用模型（如 `openai/gpt-4o-mini`）。设置后优先于环境变量 `XOPC_SESSION_SEARCH_MODEL`。 |
 
 ---
 
@@ -514,7 +514,7 @@ HTTP API 网关配置。
 
 ## 环境变量
 
-xopcbot 支持环境变量存储敏感数据：
+xopc 支持环境变量存储敏感数据：
 
 | 变量 | 说明 |
 |------|------|
@@ -526,15 +526,15 @@ xopcbot 支持环境变量存储敏感数据：
 | `MINIMAX_API_KEY` | MiniMax API 密钥 |
 | `DASHSCOPE_API_KEY` | 阿里云 DashScope API 密钥（STT/TTS） |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
-| `XOPCBOT_CONFIG` | 自定义配置文件路径 |
-| `XOPCBOT_WORKSPACE` | 自定义工作区目录 |
-| `XOPCBOT_SESSION_SEARCH_MODEL` | 未设置 `agents.defaults.sessionSearch.summaryModel` 时，`session_search` 摘要使用的默认模型 |
-| `XOPCBOT_LOG_LEVEL` | 日志级别（trace/debug/info/warn/error/fatal） |
-| `XOPCBOT_LOG_DIR` | 日志目录路径 |
-| `XOPCBOT_LOG_CONSOLE` | 启用控制台输出（true/false） |
-| `XOPCBOT_LOG_FILE` | 启用文件输出（true/false） |
-| `XOPCBOT_LOG_RETENTION_DAYS` | 日志文件保留天数 |
-| `XOPCBOT_PRETTY_LOGS` | 开发环境美化日志输出 |
+| `XOPC_CONFIG` | 自定义配置文件路径 |
+| `XOPC_WORKSPACE` | 自定义工作区目录 |
+| `XOPC_SESSION_SEARCH_MODEL` | 未设置 `agents.defaults.sessionSearch.summaryModel` 时，`session_search` 摘要使用的默认模型 |
+| `XOPC_LOG_LEVEL` | 日志级别（trace/debug/info/warn/error/fatal） |
+| `XOPC_LOG_DIR` | 日志目录路径 |
+| `XOPC_LOG_CONSOLE` | 启用控制台输出（true/false） |
+| `XOPC_LOG_FILE` | 启用文件输出（true/false） |
+| `XOPC_LOG_RETENTION_DAYS` | 日志文件保留天数 |
+| `XOPC_PRETTY_LOGS` | 开发环境美化日志输出 |
 
 环境变量优先于配置文件中的值。
 
@@ -545,19 +545,19 @@ xopcbot 支持环境变量存储敏感数据：
 ### 验证配置
 
 ```bash
-xopcbot config --validate
+xopc config --validate
 ```
 
 ### 查看配置
 
 ```bash
-xopcbot config --show
+xopc config --show
 ```
 
 ### 编辑配置
 
 ```bash
-xopcbot config --edit
+xopc config --edit
 ```
 
 ---
@@ -584,7 +584,7 @@ xopcbot config --edit
 
 ### Q: 如何使用 Ollama（本地模型）？
 
-在 `~/.xopcbot/models.json` 中配置自定义提供商：
+在 `~/.xopc/models.json` 中配置自定义提供商：
 
 ```json
 {
@@ -605,7 +605,7 @@ xopcbot config --edit
 
 ### Q: 如何配置 OAuth？
 
-xopcbot 支持某些提供商的 OAuth 认证：
+xopc 支持某些提供商的 OAuth 认证：
 
 **Kimi（设备码流程）：**
 ```json

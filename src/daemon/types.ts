@@ -8,10 +8,10 @@ import type { Writable } from 'node:stream';
  * Service runtime environment
  */
 export interface GatewayServiceEnv {
-  XOPCBOT_CONFIG?: string;
-  XOPCBOT_WORKSPACE?: string;
-  XOPCBOT_LOG_LEVEL?: string;
-  XOPCBOT_GATEWAY_TOKEN?: string;
+  XOPC_CONFIG?: string;
+  XOPC_WORKSPACE?: string;
+  XOPC_LOG_LEVEL?: string;
+  XOPC_GATEWAY_TOKEN?: string;
   [key: string]: string | undefined;
 }
 

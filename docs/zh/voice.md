@@ -1,6 +1,6 @@
 # 语音功能 (STT/TTS)
 
-xopcbot 支持语音消息处理，包括：
+xopc 支持语音消息处理，包括：
 - **STT** (Speech-to-Text): 语音转文字
 - **TTS** (Text-to-Speech): 文字转语音
 
@@ -14,7 +14,7 @@ xopcbot 支持语音消息处理，包括：
 
 ## 快速开始
 
-在 `~/.xopcbot/config.json` 中添加配置：
+在 `~/.xopc/xopc.json` 中添加配置：
 
 ```json
 {
@@ -196,7 +196,7 @@ xopcbot 支持语音消息处理，包括：
 ### 语音转文字失败
 
 1. 检查 API key 是否正确
-2. 查看日志：`tail -f ~/.xopcbot/logs/xopcbot.log`
+2. 查看日志：`tail -f ~/.xopc/logs/xopc.log`
 3. 确认语音时长在 60 秒以内
 
 ### 没有收到语音回复

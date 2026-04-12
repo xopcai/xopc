@@ -41,20 +41,20 @@ export interface InitOptions {
 }
 
 /**
- * Initialize xopcbot state directory structure
+ * Initialize xopc state directory structure
  * Creates all necessary directories and initial config files
  */
 export async function initCommand(options: InitOptions = {}): Promise<void> {
   const stateDir = resolveStateDir();
   const agentId = options.agentId || 'main';
 
-  log.info({ stateDir, agentId }, 'Initializing xopcbot Agent OS');
+  log.info({ stateDir, agentId }, 'Initializing xopc Agent OS');
 
   // Check if already initialized
   if (existsSync(stateDir) && !options.force) {
     const configPath = resolveConfigPath();
     if (existsSync(configPath)) {
-      log.info('xopcbot is already initialized. Use --force to reinitialize.');
+      log.info('xopc is already initialized. Use --force to reinitialize.');
       return;
     }
   }
@@ -135,7 +135,7 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
     await createWorkspaceFiles(cfg, agentId);
   }
 
-  log.info({ stateDir, agentId }, 'xopcbot Agent OS initialized successfully');
+  log.info({ stateDir, agentId }, 'xopc Agent OS initialized successfully');
 }
 
 /**
@@ -365,7 +365,7 @@ _Review and update this periodically from daily memory files._
 
 ## Available
 
-Run \`xopcbot skills list\` to see all available skills.
+Run \`xopc skills list\` to see all available skills.
 `;
     await writeFile(skillsPath, skillsContent, 'utf-8');
     log.info({ path: skillsPath }, 'Created SKILLS.md');

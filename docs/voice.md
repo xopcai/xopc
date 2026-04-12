@@ -1,6 +1,6 @@
 # Voice Messages (STT/TTS)
 
-xopcbot supports voice message processing via Telegram:
+xopc supports voice message processing via Telegram:
 - **STT** (Speech-to-Text): Convert voice to text
 - **TTS** (Text-to-Speech): Convert text to voice
 
@@ -18,7 +18,7 @@ When a user sends a voice message via Telegram:
 
 ## Quick Start
 
-Add to `~/.xopcbot/config.json`:
+Add to `~/.xopc/xopc.json`:
 
 ```json
 {
@@ -275,7 +275,7 @@ User sends voice message (Telegram)
 
 1. **Check API key**: Verify API key is correct and has credits
 2. **Check audio length**: Must be < 60 seconds
-3. **View logs**: `tail -f ~/.xopcbot/logs/xopcbot.log`
+3. **View logs**: `tail -f ~/.xopc/logs/xopc.log`
 4. **Test fallback**: Ensure fallback is configured
 
 ### No Voice Reply

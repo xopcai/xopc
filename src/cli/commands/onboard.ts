@@ -39,21 +39,21 @@ function isInteractive(): boolean {
 async function setupNonInteractive(_configPath: string, existingConfig: Config | null): Promise<Config | null> {
   console.log('\n🤖 AI Model Configuration (Non-Interactive Mode)\n');
   console.log('Current config:', JSON.stringify(existingConfig?.agents?.defaults?.model, null, 2));
-  console.log('\n💡 To configure in interactive mode, run: xopcbot onboard');
+  console.log('\n💡 To configure in interactive mode, run: xopc onboard');
   console.log('💡 Or set up manually in:', _configPath);
   return existingConfig;
 }
 
 function createOnboardCommand(ctx: CLIContext): Command {
   const cmd = new Command('onboard')
-    .description('Interactive setup wizard for xopcbot')
+    .description('Interactive setup wizard for xopc')
     .addHelpText(
       'after',
       formatExamples([
-        'xopcbot onboard              # Full interactive setup',
-        'xopcbot onboard --model      # Configure LLM model only',
-        'xopcbot onboard --channels   # Configure channels only',
-        'xopcbot onboard --gateway    # Configure gateway only',
+        'xopc onboard              # Full interactive setup',
+        'xopc onboard --model      # Configure LLM model only',
+        'xopc onboard --channels   # Configure channels only',
+        'xopc onboard --gateway    # Configure gateway only',
       ])
     )
     .option('--model', 'Configure LLM provider and model')
@@ -80,7 +80,7 @@ async function runOnboard(
   options: { model?: boolean; channels?: boolean; gateway?: boolean; all?: boolean },
   ctx: CLIContext
 ): Promise<void> {
-  console.log(colors.cyan('\n🚀 Welcome to xopcbot setup!\n'));
+  console.log(colors.cyan('\n🚀 Welcome to xopc setup!\n'));
   console.log('═'.repeat(50));
 
   const workspacePath = ctx.workspacePath;
@@ -167,11 +167,11 @@ async function runOnboard(
     console.log('🚀 Next steps:');
     if (gatewayConfigured) {
       console.log('  1. Open the Web console in your browser (URL above; start the gateway below if needed)');
-      console.log('  2. Or chat in the terminal: xopcbot agent -i');
+      console.log('  2. Or chat in the terminal: xopc agent -i');
       console.log('  3. Optional: read BOOTSTRAP.md in your workspace for workspace tips');
     } else {
-      console.log('  1. Chat in the terminal: xopcbot agent -i');
-      console.log('  2. Optional: add the Web console: xopcbot onboard --gateway');
+      console.log('  1. Chat in the terminal: xopc agent -i');
+      console.log('  2. Optional: add the Web console: xopc onboard --gateway');
       console.log('  3. Optional: read BOOTSTRAP.md in your workspace');
     }
     console.log('');
@@ -182,10 +182,10 @@ async function runOnboard(
   }
 
   console.log('📝 Usage:');
-  console.log('  xopcbot agent -m "Hello"    # Chat with AI');
-  console.log('  xopcbot agent -i            # Interactive mode');
-  console.log('  xopcbot models list         # List models');
-  console.log('  xopcbot auth list           # View authentication');
+  console.log('  xopc agent -m "Hello"    # Chat with AI');
+  console.log('  xopc agent -i            # Interactive mode');
+  console.log('  xopc models list         # List models');
+  console.log('  xopc auth list           # View authentication');
 
   console.log('\n📁 Files:');
   console.log('  Config:', configPath);
@@ -221,7 +221,7 @@ async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
     console.log(`   URL: http://${displayHost}:${port}`);
     console.log('');
     console.log('📝 To apply the new configuration, restart gateway:');
-    console.log('   xopcbot gateway restart');
+    console.log('   xopc gateway restart');
   } else {
     if (isInteractive()) {
       const shouldStart = await confirm({
@@ -264,18 +264,18 @@ async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
         } else {
           console.log('⚠️  Failed to start gateway automatically.');
           console.log('   You can start it manually with:');
-          console.log(`   xopcbot gateway --background`);
+          console.log(`   xopc gateway --background`);
         }
       } else {
         console.log('\n⏭️  Skipping gateway startup.');
         console.log('   You can start it later with:');
-        console.log(`   xopcbot gateway --background`);
+        console.log(`   xopc gateway --background`);
       }
     } else {
       console.log('\n🚀 Gateway is configured but not running.');
       console.log('');
       console.log('📝 To start the gateway in background:');
-      console.log(`   xopcbot gateway --background`);
+      console.log(`   xopc gateway --background`);
       console.log('');
       console.log('📝 To start in foreground (development mode):');
       console.log(`   pnpm run dev -- gateway --host ${host} --port ${port}`);
@@ -284,10 +284,10 @@ async function startGatewayNow(config: Config, ctx: CLIContext): Promise<void> {
 
   console.log('');
   console.log('📚 Other useful commands:');
-  console.log('   xopcbot gateway status    # Check gateway status');
-  console.log('   xopcbot gateway stop      # Stop gateway');
-  console.log('   xopcbot gateway restart   # Restart gateway');
-  console.log('   xopcbot gateway logs      # View logs');
+  console.log('   xopc gateway status    # Check gateway status');
+  console.log('   xopc gateway stop      # Stop gateway');
+  console.log('   xopc gateway restart   # Restart gateway');
+  console.log('   xopc gateway logs      # View logs');
 }
 
 async function setupGateway(config: Config): Promise<Config> {
@@ -373,9 +373,9 @@ register({
   metadata: {
     category: 'setup',
     examples: [
-      'xopcbot onboard',
-      'xopcbot onboard --model',
-      'xopcbot onboard --channels',
+      'xopc onboard',
+      'xopc onboard --model',
+      'xopc onboard --channels',
     ],
   },
 });

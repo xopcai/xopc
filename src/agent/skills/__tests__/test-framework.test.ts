@@ -128,7 +128,7 @@ Hi
       const metadata = {
         name: 'test',
         description: 'test',
-        xopcbot: {
+        xopc: {
           requires: {
             bins: ['node'], // node should exist
           },
@@ -145,7 +145,7 @@ Hi
       const metadata = {
         name: 'test',
         description: 'test',
-        xopcbot: {
+        xopc: {
           requires: {
             bins: ['nonexistent-binary-xyz123'],
           },
@@ -163,7 +163,7 @@ Hi
       const metadata = {
         name: 'test',
         description: 'test',
-        xopcbot: {
+        xopc: {
           requires: {
             anyBins: ['nonexistent-abc', 'node'],
           },
@@ -182,7 +182,7 @@ Hi
       const metadata = {
         name: 'test',
         description: 'test',
-        xopcbot: {
+        xopc: {
           emoji: '🧪',
         },
         homepage: 'https://example.com',

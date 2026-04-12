@@ -1,6 +1,6 @@
 # On-disk layout
 
-This page is a **concise map** of where xopcbot reads and writes on disk. Config remains the source of truth; resolution is implemented in `src/agent/agent-scope.ts`, `src/config/paths-state.ts`, `src/config/paths.ts`, and related modules.
+This page is a **concise map** of where xopc reads and writes on disk. Config remains the source of truth; resolution is implemented in `src/agent/agent-scope.ts`, `src/config/paths-state.ts`, `src/config/paths.ts`, and related modules.
 
 For narrative setup (init, templates, env vars), see [State directory & workspace layout](workspace.md).
 
@@ -13,20 +13,20 @@ For narrative setup (init, templates, env vars), see [State directory & workspac
 | **Agent dir** `…/agents/<agentId>/agent/` | Process state: `agent.json`, per-agent credentials, IPC inbox, pid/socket, small machine state, extension installs, outbound crash-recovery queue. |
 | **Markdown workspace** | User project tree: tool `cwd`, daily `memory/*.md`, `media/generated`, user `skills/`, arbitrary files. **Not** the primary home for persona files or internal agent state. |
 
-Paths below use `~/.xopcbot` as the default state root; override with `XOPCBOT_STATE_DIR`, `XOPCBOT_PROFILE`, or `XOPCBOT_HOME` (see [workspace.md](workspace.md#environment-variables-quick-reference)).
+Paths below use `~/.xopc` as the default state root; override with `XOPC_STATE_DIR`, `XOPC_PROFILE`, or `XOPC_HOME` (see [workspace.md](workspace.md#environment-variables-quick-reference)).
 
 ## State directory (global)
 
-Default: `~/.xopcbot/`
+Default: `~/.xopc/`
 
 | Path | Purpose |
 |------|---------|
-| `xopcbot.json` | Main application config (unless `XOPCBOT_CONFIG` / `XOPCBOT_CONFIG_PATH` points elsewhere). |
+| `xopc.json` | Main application config (unless `XOPC_CONFIG` / `XOPC_CONFIG_PATH` points elsewhere). |
 | `credentials/` | Global secrets: `auth-profiles.json`, `oauth/<provider>.json`. |
 | `extensions/` | Installed extension packages, `extensions-lock.json`. |
 | `skills/` | Globally managed skill packages (`<id>/SKILL.md`). |
 | `cron/` | `jobs.json`, `logs/`, `runs/`. |
-| `logs/` | Application logs (overridable via `XOPCBOT_LOG_DIR`). |
+| `logs/` | Application logs (overridable via `XOPC_LOG_DIR`). |
 | `bin/`, `tools/` | Managed CLI shim and tool runtimes. |
 | `models.json` | Optional custom model registry data. |
 
@@ -43,7 +43,7 @@ Resolved by `resolveAgentHomeDir(config, agentId)`. Typical layout:
 | `tts/` | Cached outbound TTS audio per session. |
 | `agent/` | See **Agent dir** below. |
 
-Seeding: `xopcbot init` / `xopcbot agents add` create `bootstrap/` files and workspace layout; templates live under `src/agent/context/workspace-templates/` (see [Workspace templates](reference/templates.md)).
+Seeding: `xopc init` / `xopc agents add` create `bootstrap/` files and workspace layout; templates live under `src/agent/context/workspace-templates/` (see [Workspace templates](reference/templates.md)).
 
 ## Agent dir: `agents/<agentId>/agent/`
 
@@ -72,7 +72,7 @@ Resolved by `resolveAgentWorkspaceDir(config, agentId)` — often `<stateDir>/wo
 | `skills/` | User-authored skills. |
 | *arbitrary files* | `read` / `write` / `edit` tool targets. |
 
-Internal state is **not** written here on new installs. This tree is the only supported layout: persona and machine state live under `agents/<id>/` (see table at top). There is **no** automatic import from older “everything under the markdown workspace” layouts—use `xopcbot setup` / `xopcbot onboard` for bootstrap templates, and move any old data yourself if you are upgrading from another fork.
+Internal state is **not** written here on new installs. This tree is the only supported layout: persona and machine state live under `agents/<id>/` (see table at top). There is **no** automatic import from older “everything under the markdown workspace” layouts—use `xopc setup` / `xopc onboard` for bootstrap templates, and move any old data yourself if you are upgrading from another fork.
 
 Inbound / TTS attachments in transcripts use relative paths under `inbound/` and `tts/` **only** (resolved from agent home).
 

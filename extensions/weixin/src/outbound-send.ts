@@ -1,12 +1,12 @@
 import path from 'node:path';
 
-import type { Config } from '@xopcai/xopcbot/config/schema.js';
+import type { Config } from '@xopcai/xopc/config/schema.js';
 import type {
   ChannelOutboundContext,
   ChannelOutboundPayloadContext,
   OutboundDeliveryResult,
-} from '@xopcai/xopcbot/channels/plugin-types.js';
-import type { OutboundMessage } from '@xopcai/xopcbot/channels/transport-types.js';
+} from '@xopcai/xopc/channels/plugin-types.js';
+import type { OutboundMessage } from '@xopcai/xopc/channels/transport-types.js';
 
 import { toRawIlinkUserIdForApi } from './auth/weixin-account-id.js';
 import { sendTyping } from './api/api.js';

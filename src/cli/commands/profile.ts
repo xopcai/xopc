@@ -30,7 +30,7 @@ export function createProfileListCommand(): Command {
         }
 
         if (profiles.length === 0) {
-          console.log('No profiles found. Create one with: xopcbot profile:create <name>');
+          console.log('No profiles found. Create one with: xopc profile:create <name>');
           return;
         }
 
@@ -83,9 +83,9 @@ export function createProfileCreateCommand(): Command {
         console.log(colors.green('✓'), `Created profile "${profile.name}"`);
         console.log(`\n  Directory: ${profile.stateDir}`);
         console.log(`\nTo use this profile:`);
-        console.log(`  export XOPCBOT_PROFILE=${profile.name}`);
+        console.log(`  export XOPC_PROFILE=${profile.name}`);
         console.log(`\nOr add to your shell profile:`);
-        console.log(`  echo 'export XOPCBOT_PROFILE=${profile.name}' >> ~/.bashrc`);
+        console.log(`  echo 'export XOPC_PROFILE=${profile.name}' >> ~/.bashrc`);
       } catch (error) {
         log.error({ error }, 'Failed to create profile');
         console.error(
@@ -140,16 +140,16 @@ export function createProfileSwitchCommand(): Command {
 
         if (!exists) {
           console.error(colors.red('Error:'), `Profile "${name}" not found`);
-          console.log(`\nCreate it with: xopcbot profile:create ${name}`);
+          console.log(`\nCreate it with: xopc profile:create ${name}`);
           process.exit(1);
         }
 
         console.log(colors.cyan('Run this command to switch to this profile:'));
         console.log();
-        console.log(`  export XOPCBOT_PROFILE=${name}`);
+        console.log(`  export XOPC_PROFILE=${name}`);
         console.log();
         console.log('Or add to your shell profile:');
-        console.log(`  echo 'export XOPCBOT_PROFILE=${name}' >> ~/.bashrc`);
+        console.log(`  echo 'export XOPC_PROFILE=${name}' >> ~/.bashrc`);
         console.log();
         console.log(`State directory: ${stateDir}`);
       } catch (error) {

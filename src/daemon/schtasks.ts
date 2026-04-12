@@ -15,7 +15,7 @@ import {
 
 const log = createLogger('SchtasksService');
 
-const TASK_NAME = 'xopcbot_gateway';
+const TASK_NAME = 'xopc_gateway';
 
 /**
  * Execute schtasks command

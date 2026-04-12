@@ -55,7 +55,7 @@ const startCommand: CommandDefinition = {
   scope: ['global', 'private', 'group'],
   handler: async (_ctx: CommandContext) => {
     const content =
-      '👋 *Welcome to xopcbot!*\n\n' +
+      '👋 *Welcome to xopc!*\n\n' +
       'I am your AI assistant. Here\'s what I can do:\n\n' +
       '🤖 *AI Chat* - Just send a message to start chatting\n' +
       '📊 *Session Management* - Use /new, /list, /usage\n' +

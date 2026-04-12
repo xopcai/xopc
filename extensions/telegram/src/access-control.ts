@@ -12,7 +12,7 @@ import type {
   TelegramGroupConfig,
   TelegramTopicConfig,
   GroupPolicy,
-} from '@xopcai/xopcbot/channels/channel-domain.js';
+} from '@xopcai/xopc/channels/channel-domain.js';
 
 // ============================================
 // AllowFrom Normalization

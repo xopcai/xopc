@@ -37,7 +37,7 @@ const customLevels = {
 const pinoOptions: pino.LoggerOptions = {
   level: config.level,
   base: {
-    service: 'xopcbot',
+    service: 'xopc',
     version: process.env.npm_package_version || '0.1.0',
   },
   timestamp: pino.stdTimeFunctions.isoTime,

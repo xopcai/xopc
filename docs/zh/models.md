@@ -1,6 +1,6 @@
 # 自定义模型配置
 
-xopcbot 通过 `~/.xopcbot/models.json` 支持自定义模型提供商。
+xopc 通过 `~/.xopc/models.json` 支持自定义模型提供商。
 
 ## 目录
 
@@ -18,7 +18,7 @@ xopcbot 通过 `~/.xopcbot/models.json` 支持自定义模型提供商。
 
 ## 快速开始
 
-创建 `~/.xopcbot/models.json`：
+创建 `~/.xopc/models.json`：
 
 ```json
 {
@@ -42,7 +42,7 @@ xopcbot 通过 `~/.xopcbot/models.json` 支持自定义模型提供商。
 
 ### 文件位置
 
-`~/.xopcbot/models.json`（或通过 `XOPCBOT_MODELS_JSON` 环境变量设置）
+`~/.xopc/models.json`（或通过 `XOPC_MODELS_JSON` 环境变量设置）
 
 ### 最小配置示例
 

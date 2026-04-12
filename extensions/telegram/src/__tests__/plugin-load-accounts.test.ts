@@ -3,8 +3,8 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
-import { MessageBus } from '@xopcai/xopcbot/infra/bus/index.js';
-import type { Config } from '@xopcai/xopcbot/config/schema.js';
+import { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
+import type { Config } from '@xopcai/xopc/config/schema.js';
 
 import { TelegramChannelPlugin } from '../plugin.js';
 

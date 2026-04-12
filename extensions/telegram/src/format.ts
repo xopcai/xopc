@@ -12,8 +12,8 @@ import {
   type MarkdownIR,
   type MarkdownLinkSpan,
   type RenderStyleMap,
-} from "@xopcai/xopcbot/markdown/index.js";
-import type { MarkdownTableMode } from "@xopcai/xopcbot/config/types.base.js";
+} from "@xopcai/xopc/markdown/index.js";
+import type { MarkdownTableMode } from "@xopcai/xopc/config/types.base.js";
 
 // Telegram HTML style markers
 const TELEGRAM_STYLE_MARKERS: RenderStyleMap = {

@@ -132,7 +132,7 @@ export function formatInboundFileTextBlock(
   }
   const rel = att.workspaceRelativePath.replace(/\\/g, '/');
   const abs = resolve(storageRootAbs, ...rel.split('/').filter(Boolean));
-  return `${head}\nxopcbot-path:rel:${rel}\nxopcbot-path:abs:${abs}`;
+  return `${head}\nxopc-path:rel:${rel}\nxopc-path:abs:${abs}`;
 }
 
 /**
@@ -140,14 +140,14 @@ export function formatInboundFileTextBlock(
  * Matches Web UI `stripInboundFileMachineText`, plus bare `[File: …]` lines when paths are absent.
  */
 export function stripInboundFileMetadataFromText(text: string): string {
-  if (!text.includes('[File:') && !text.includes('xopcbot-path:')) return text;
+  if (!text.includes('[File:') && !text.includes('xopc-path:')) return text;
   let out = text;
   out = out.replace(
-    /\s*\[File:[^\]]+\]\s*\r?\nxopcbot-path:rel:[^\r\n]+\r?\n\s*xopcbot-path:abs:[^\r\n]+/g,
+    /\s*\[File:[^\]]+\]\s*\r?\nxopc-path:rel:[^\r\n]+\r?\n\s*xopc-path:abs:[^\r\n]+/g,
     '',
   );
-  out = out.replace(/\s*\[File:[^\]]+\]\s+xopcbot-path:rel:\S+\s+xopcbot-path:abs:\S+/g, '');
-  out = out.replace(/\s*\[File:[^\]]+\]\s*xopcbot-path:rel:\S+\s*xopcbot-path:abs:\S+/g, '');
+  out = out.replace(/\s*\[File:[^\]]+\]\s+xopc-path:rel:\S+\s+xopc-path:abs:\S+/g, '');
+  out = out.replace(/\s*\[File:[^\]]+\]\s*xopc-path:rel:\S+\s*xopc-path:abs:\S+/g, '');
   out = out.replace(/\s*\[File:[^\]]+\]\s*/g, ' ');
   return out.replace(/\n{3,}/g, '\n\n').replace(/\s{2,}/g, ' ').trim();
 }

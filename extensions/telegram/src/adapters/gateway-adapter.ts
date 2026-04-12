@@ -1,7 +1,7 @@
 import type {
   ChannelGatewayAdapter,
   ChannelGatewayContext,
-} from '@xopcai/xopcbot/channels/plugin-types.js';
+} from '@xopcai/xopc/channels/plugin-types.js';
 import type { TelegramResolvedAccount } from './types.js';
 
 export function createTelegramGatewayAdapter(handlers: {

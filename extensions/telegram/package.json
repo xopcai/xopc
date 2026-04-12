@@ -1,5 +1,5 @@
 {
-  "name": "@xopcai/xopcbot-extension-telegram",
+  "name": "@xopcai/xopc-extension-telegram",
   "version": "0.2.2",
   "private": true,
   "description": "Bundled Telegram channel sources (compiled with core into dist/extensions/; not published to npm).",
@@ -26,14 +26,14 @@
     "typescript": "^5.9.3"
   },
   "peerDependencies": {
-    "@xopcai/xopcbot": "workspace:*"
+    "@xopcai/xopc": "workspace:*"
   },
-  "xopcbot": {
+  "xopc": {
     "bundledChannel": {
       "export": "telegramPlugin",
       "order": 10
     }
   },
-  "keywords": ["xopcbot", "xopcbot-extension", "telegram"],
+  "keywords": ["xopc", "xopc-extension", "telegram"],
   "license": "MIT"
 }

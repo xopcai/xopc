@@ -39,10 +39,10 @@ describe('parseRequiredEnvVarNames', () => {
     expect(parseRequiredEnvVarNames({ requires: { env: 'SINGLE' } })).toEqual(['SINGLE']);
   });
 
-  it('parses metadata.xopcbot.requires.env', () => {
+  it('parses metadata.xopc.requires.env', () => {
     expect(
       parseRequiredEnvVarNames({
-        metadata: { xopcbot: { requires: { env: ['X', 'Y'] } } },
+        metadata: { xopc: { requires: { env: ['X', 'Y'] } } },
       }).sort(),
     ).toEqual(['X', 'Y']);
   });

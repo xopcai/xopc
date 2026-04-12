@@ -25,10 +25,10 @@ function createAgentCommand(_ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
-        'xopcbot agent -m "Hello"                       # Single message',
-        'xopcbot agent -i                                # Interactive chat mode',
-        'xopcbot agent -i --session telegram:dm:123456  # Continue existing session',
-        'xopcbot agent --list                            # List available sessions',
+        'xopc agent -m "Hello"                       # Single message',
+        'xopc agent -i                                # Interactive chat mode',
+        'xopc agent -i --session telegram:dm:123456  # Continue existing session',
+        'xopc agent --list                            # List available sessions',
       ])
     )
     .option('-m, --message <text>', 'Single message to send')
@@ -161,8 +161,8 @@ register({
   metadata: {
     category: 'runtime',
     examples: [
-      'xopcbot agent -m "Hello"',
-      'xopcbot agent -i',
+      'xopc agent -m "Hello"',
+      'xopc agent -i',
     ],
   },
 });

@@ -1153,7 +1153,7 @@ const bundles: Record<
   }
 > = {
   en: {
-    appBrand: 'XOPCBOT',
+    appBrand: 'XOPC',
     sidebarCollapse: 'Collapse sidebar',
     sidebarExpand: 'Expand sidebar',
     closeMenu: 'Close menu',
@@ -1212,7 +1212,7 @@ const bundles: Record<
       subline:
         'The Web console needs the same token your server uses. Get it from setup or your config file, then paste it below.',
       sessionExpired: 'Your session expired or the token was rejected. Enter a valid gateway token to continue.',
-      stepOnboard: 'Run xopcbot onboard (or onboard --gateway) and enable the Web console — the token is printed there.',
+      stepOnboard: 'Run xopc onboard (or onboard --gateway) and enable the Web console — the token is printed there.',
       stepPaste: 'Paste the token here and save. You can also open a link that ends with ?token=… from onboarding.',
       stepUrlHint: 'Opening a bookmark with ?token= in the URL saves it automatically (the address bar is cleaned afterward).',
       docsGatewayLink: 'Gateway guide',
@@ -1282,7 +1282,7 @@ const bundles: Record<
       agentNoMatches: 'No matching agents',
       thinkingLevel: 'Thinking',
       newSession: 'New chat',
-      welcomeTitle: 'Welcome to xopcbot',
+      welcomeTitle: 'Welcome to xopc',
       welcomeDescription: 'Send a message to get started',
       you: 'You',
       assistant: 'Assistant',
@@ -1592,7 +1592,7 @@ const bundles: Record<
       title: 'Skills',
       needToken: 'Save a gateway token to manage skills.',
       tagline:
-        'Install and manage skills to extend xopcbot in conversation. Managed skills live under ~/.xopcbot/skills.',
+        'Install and manage skills to extend xopc in conversation. Managed skills live under ~/.xopc/skills.',
       refresh: 'Refresh list',
       reloadRuntime: 'Reload from disk',
       reloadDiskAria: 'Reload skills from disk',
@@ -1774,7 +1774,7 @@ const bundles: Record<
       tabChannels: 'Channels',
       tabCron: 'Cron',
       selectAgent: 'Agent',
-      selectAgentHint: 'Choose an entry to edit or inspect bootstrap Markdown under ~/.xopcbot/agents/<id>/bootstrap/.',
+      selectAgentHint: 'Choose an entry to edit or inspect bootstrap Markdown under ~/.xopc/agents/<id>/bootstrap/.',
       agent: 'Agent',
       defaultBadge: 'default',
       setDefault: 'Set as default',
@@ -1809,7 +1809,7 @@ const bundles: Record<
       missing: 'missing',
       confirmDelete: 'Remove this agent from config? Bindings referencing it will be stripped.',
       confirmDeletePurge:
-        'Remove this agent and delete its workspace + ~/.xopcbot/agents/<id> data? This cannot be undone.',
+        'Remove this agent and delete its workspace + ~/.xopc/agents/<id> data? This cannot be undone.',
       toolsTitle: 'Built-in tools',
       toolsHint:
         'Per-agent tool disables (merged with agents.defaults). Tools already disabled in defaults cannot be re-enabled here.',
@@ -2080,7 +2080,7 @@ const bundles: Record<
         'Optional. Per-account botToken or tokenFile, policies, and groups. Empty {} uses the single token above only.',
       weixinQuickStartTitle: 'Quick start',
       weixinStepLogin:
-        'Use “Sign in with WeChat (QR)” below in this console, or on the gateway host run: xopcbot channels login --channel weixin (repo: pnpm run dev -- channels login --channel weixin).',
+        'Use “Sign in with WeChat (QR)” below in this console, or on the gateway host run: xopc channels login --channel weixin (repo: pnpm run dev -- channels login --channel weixin).',
       weixinStepEnable: 'Turn on Weixin below and save.',
       weixinStepPairing:
         'After QR login, DMs work immediately. Use allowlist DM policy only if you want to restrict who can message the bot.',
@@ -2112,9 +2112,9 @@ const bundles: Record<
       weixinQrRegenerate: 'Regenerate QR code',
       weixinQrModalCloseAria: 'Close',
       telegramCliConfigHint:
-        'CLI (same config file as this gateway; override path with XOPCBOT_CONFIG or --config):\n• Interactive: xopcbot onboard --channels\n• Or set TELEGRAM_BOT_TOKEN in the environment and/or edit channels.telegram in the JSON file.',
+        'CLI (same config file as this gateway; override path with XOPC_CONFIG or --config):\n• Interactive: xopc onboard --channels\n• Or set TELEGRAM_BOT_TOKEN in the environment and/or edit channels.telegram in the JSON file.',
       weixinCliConfigHint:
-        'CLI on the host that should hold credentials (override config path with XOPCBOT_CONFIG or --config):\n• xopcbot channels login --channel weixin\n• Optional: --account <id>, --timeout <ms>, --credentials-only (save token files without merging config JSON).',
+        'CLI on the host that should hold credentials (override config path with XOPC_CONFIG or --config):\n• xopc channels login --channel weixin\n• Optional: --account <id>, --timeout <ms>, --credentials-only (save token files without merging config JSON).',
       agentRoutingTitle: 'Agent routing',
       agentRoutingHint:
         'Maps each channel account to an agent via config `bindings`. Inbound messages use a session key for that agent.',
@@ -2219,7 +2219,7 @@ const bundles: Record<
       changeToken: 'Open token dialog',
       accessToken: 'Gateway access token',
       tokenPlaceholder: 'Token stored in config (optional if using env)',
-      tokenHelp: 'Used to authenticate HTTP/WebSocket API requests. You can also set XOPCBOT_GATEWAY_TOKEN.',
+      tokenHelp: 'Used to authenticate HTTP/WebSocket API requests. You can also set XOPC_GATEWAY_TOKEN.',
       copy: 'Copy',
       copied: 'Copied',
       show: 'Show',
@@ -2363,7 +2363,7 @@ const bundles: Record<
     },
   },
   zh: {
-    appBrand: 'XOPCBOT',
+    appBrand: 'XOPC',
     sidebarCollapse: '收起侧边栏',
     sidebarExpand: '展开侧边栏',
     closeMenu: '关闭菜单',
@@ -2421,7 +2421,7 @@ const bundles: Record<
       headline: '连接网关',
       subline: '网页控制台需要使用与网关相同的 Token。请从初始化向导或配置文件中获取，并在下方粘贴。',
       sessionExpired: '登录已失效或 Token 被拒绝，请重新输入有效的网关 Token。',
-      stepOnboard: '在终端运行 xopcbot onboard（或 xopcbot onboard --gateway）并启用网页控制台，向导会打印 Token。',
+      stepOnboard: '在终端运行 xopc onboard（或 xopc onboard --gateway）并启用网页控制台，向导会打印 Token。',
       stepPaste: '将 Token 粘贴到下方并保存。也可直接打开向导给出的带 ?token= 的链接。',
       stepUrlHint: '若使用带 ?token= 的链接打开，Token 会自动保存（随后地址栏会去掉参数）。',
       docsGatewayLink: '网关说明',
@@ -2490,7 +2490,7 @@ const bundles: Record<
       agentNoMatches: '没有匹配的智能体',
       thinkingLevel: '思考级别',
       newSession: '新对话',
-      welcomeTitle: '欢迎使用 xopcbot',
+      welcomeTitle: '欢迎使用 xopc',
       welcomeDescription: '在下方输入消息开始对话',
       you: '你',
       assistant: '助手',
@@ -2799,7 +2799,7 @@ const bundles: Record<
     skills: {
       title: '技能',
       needToken: '请先保存网关 Token 后再管理技能。',
-      tagline: '安装与管理技能，在对话中扩展 xopcbot 的能力。技能保存在 ~/.xopcbot/skills。',
+      tagline: '安装与管理技能，在对话中扩展 xopc 的能力。技能保存在 ~/.xopc/skills。',
       refresh: '刷新列表',
       reloadRuntime: '从磁盘重载',
       reloadDiskAria: '从磁盘重载技能',
@@ -2979,7 +2979,7 @@ const bundles: Record<
       tabChannels: '通道',
       tabCron: '定时',
       selectAgent: '代理',
-      selectAgentHint: '选择要编辑的条目；人设 Markdown 位于 ~/.xopcbot/agents/<id>/bootstrap/。',
+      selectAgentHint: '选择要编辑的条目；人设 Markdown 位于 ~/.xopc/agents/<id>/bootstrap/。',
       agent: '代理',
       defaultBadge: '默认',
       setDefault: '设为默认',
@@ -3014,7 +3014,7 @@ const bundles: Record<
       missing: '缺失',
       confirmDelete: '从配置中移除此代理？相关路由绑定会被清除。',
       confirmDeletePurge:
-        '移除此代理并删除其工作区与 ~/.xopcbot/agents/<id> 数据？此操作不可恢复。',
+        '移除此代理并删除其工作区与 ~/.xopc/agents/<id> 数据？此操作不可恢复。',
       toolsTitle: '内置工具',
       toolsHint:
         '按代理禁用工具（与 agents.defaults 合并）。已在默认配置中禁用的工具不能在此处单独启用。',
@@ -3277,7 +3277,7 @@ const bundles: Record<
         '可选。每账号可配置 botToken 或 tokenFile、策略与群组。留空 {} 则仅使用上方单一 Token。',
       weixinQuickStartTitle: '最简步骤',
       weixinStepLogin:
-        '在本页使用下方「微信扫码登录」，或在网关所在机器执行：xopcbot channels login --channel weixin（源码目录：pnpm run dev -- channels login --channel weixin）。',
+        '在本页使用下方「微信扫码登录」，或在网关所在机器执行：xopc channels login --channel weixin（源码目录：pnpm run dev -- channels login --channel weixin）。',
       weixinStepEnable: '下方打开「启用微信」并保存。',
       weixinStepPairing: '扫码登录后即可正常收发；仅在需要限制谁可私聊时，将私聊策略改为白名单并配置允许来源。',
       weixinAdvancedHint: '可选：白名单、路由标签、流式与分账号 JSON——仅在需要时展开。',
@@ -3306,9 +3306,9 @@ const bundles: Record<
       weixinQrRegenerate: '重新生成',
       weixinQrModalCloseAria: '关闭',
       telegramCliConfigHint:
-        '命令行配置（与网关使用同一配置文件；路径可用 XOPCBOT_CONFIG 或全局 --config 覆盖）：\n• 交互向导：xopcbot onboard --channels\n• 或在环境中设置 TELEGRAM_BOT_TOKEN，并直接编辑 JSON 中的 channels.telegram。',
+        '命令行配置（与网关使用同一配置文件；路径可用 XOPC_CONFIG 或全局 --config 覆盖）：\n• 交互向导：xopc onboard --channels\n• 或在环境中设置 TELEGRAM_BOT_TOKEN，并直接编辑 JSON 中的 channels.telegram。',
       weixinCliConfigHint:
-        '在应保存凭据的机器上使用命令行（配置文件路径同上）：\n• xopcbot channels login --channel weixin\n• 可选：--account <id>、--timeout <ms>、--credentials-only（仅写 token 文件，不合并主配置 JSON）。',
+        '在应保存凭据的机器上使用命令行（配置文件路径同上）：\n• xopc channels login --channel weixin\n• 可选：--account <id>、--timeout <ms>、--credentials-only（仅写 token 文件，不合并主配置 JSON）。',
       agentRoutingTitle: '智能体路由',
       agentRoutingHint:
         '在配置 `bindings` 中为每个频道账号指定智能体；入站消息会使用对应智能体的会话键。',
@@ -3413,7 +3413,7 @@ const bundles: Record<
       changeToken: '打开 Token 对话框',
       accessToken: '网关访问令牌',
       tokenPlaceholder: '保存在配置中的令牌（若使用环境变量可留空）',
-      tokenHelp: '用于 HTTP/WebSocket API 鉴权。也可通过环境变量 XOPCBOT_GATEWAY_TOKEN 提供。',
+      tokenHelp: '用于 HTTP/WebSocket API 鉴权。也可通过环境变量 XOPC_GATEWAY_TOKEN 提供。',
       copy: '复制',
       copied: '已复制',
       show: '显示',

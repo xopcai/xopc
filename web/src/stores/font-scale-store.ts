@@ -12,7 +12,7 @@ function applyDomFontScale(pref: FontScalePreference) {
 /** Sync DOM from localStorage before React paint (zustand persist hydrates async). */
 export function bootstrapFontScale() {
   try {
-    const raw = localStorage.getItem('xopcbot-web-font-scale');
+    const raw = localStorage.getItem('xopc-web-font-scale');
     let pref: FontScalePreference = 'default';
     if (raw) {
       const parsed = JSON.parse(raw) as { state?: { preference?: FontScalePreference } };
@@ -41,7 +41,7 @@ export const useFontScaleStore = create(
       },
     }),
     {
-      name: 'xopcbot-web-font-scale',
+      name: 'xopc-web-font-scale',
     },
   ),
 );

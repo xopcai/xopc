@@ -8,7 +8,7 @@ import type { LoggerConfig, LogLevel } from './types.js';
 
 const DEFAULT_CONFIG: LoggerConfig = {
   level: 'info',
-  logDir: path.join(process.env.HOME || '.', '.xopcbot', 'logs'),
+  logDir: path.join(process.env.HOME || '.', '.xopc', 'logs'),
   consoleOutput: true,
   fileOutput: true,
   errorFileOutput: true,
@@ -26,7 +26,7 @@ export function loadConfig(): LoggerConfig {
   const config: LoggerConfig = { ...DEFAULT_CONFIG };
 
   // Log level - unified environment variable
-  const logLevel = process.env.XOPCBOT_LOG_LEVEL || process.env.LOG_LEVEL;
+  const logLevel = process.env.XOPC_LOG_LEVEL || process.env.LOG_LEVEL;
   if (logLevel) {
     config.level = logLevel.toLowerCase() as LogLevel;
   } else if (process.env.DEBUG) {
@@ -34,25 +34,25 @@ export function loadConfig(): LoggerConfig {
   }
 
   // Log directory
-  if (process.env.XOPCBOT_LOG_DIR) {
-    config.logDir = process.env.XOPCBOT_LOG_DIR;
+  if (process.env.XOPC_LOG_DIR) {
+    config.logDir = process.env.XOPC_LOG_DIR;
   }
 
   // Output options
-  if (process.env.XOPCBOT_LOG_CONSOLE === 'false') {
+  if (process.env.XOPC_LOG_CONSOLE === 'false') {
     config.consoleOutput = false;
   }
-  if (process.env.XOPCBOT_LOG_FILE === 'false') {
+  if (process.env.XOPC_LOG_FILE === 'false') {
     config.fileOutput = false;
   }
 
   // Retention
-  if (process.env.XOPCBOT_LOG_RETENTION_DAYS) {
-    config.retentionDays = parseInt(process.env.XOPCBOT_LOG_RETENTION_DAYS, 10);
+  if (process.env.XOPC_LOG_RETENTION_DAYS) {
+    config.retentionDays = parseInt(process.env.XOPC_LOG_RETENTION_DAYS, 10);
   }
 
   // Pretty print for development
-  if (process.env.NODE_ENV === 'development' || process.env.XOPCBOT_PRETTY_LOGS === 'true') {
+  if (process.env.NODE_ENV === 'development' || process.env.XOPC_PRETTY_LOGS === 'true') {
     config.prettyPrint = true;
   }
 

@@ -10,8 +10,8 @@ function createSetupCommand(ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
-        'xopcbot setup                    # Create config + workspace',
-        'xopcbot setup --workspace /path  # Custom workspace path',
+        'xopc setup                    # Create config + workspace',
+        'xopc setup --workspace /path  # Custom workspace path',
       ])
     )
     .option('--workspace <path>', 'Workspace directory path', ctx.workspacePath)
@@ -19,7 +19,7 @@ function createSetupCommand(ctx: CLIContext): Command {
       const workspacePath = options.workspace || ctx.workspacePath;
       const configPath = ctx.configPath;
 
-      console.log('🔧 xopcbot Setup\n');
+      console.log('🔧 xopc Setup\n');
       console.log('═'.repeat(40));
 
       // Check current status
@@ -55,9 +55,9 @@ function createSetupCommand(ctx: CLIContext): Command {
       console.log('   Workspace:', workspacePath);
 
       console.log('\n🚀 Next Steps:');
-      console.log('   xopcbot onboard              # Run full setup wizard');
-      console.log('   xopcbot onboard --model      # Configure model only');
-      console.log('   xopcbot onboard --channels  # Configure channels only');
+      console.log('   xopc onboard              # Run full setup wizard');
+      console.log('   xopc onboard --model      # Configure model only');
+      console.log('   xopc onboard --channels  # Configure channels only');
     });
 
   return cmd;
@@ -71,8 +71,8 @@ register({
   metadata: {
     category: 'setup',
     examples: [
-      'xopcbot setup',
-      'xopcbot setup --workspace ~/.my-workspace',
+      'xopc setup',
+      'xopc setup --workspace ~/.my-workspace',
     ],
   },
 });

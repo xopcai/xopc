@@ -1,8 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { createInboundProcessor, type InboundProcessorDeps } from '../inbound-processor.js';
 import { TelegramAccountManager } from '../account-manager.js';
-import type { Config } from '@xopcai/xopcbot/config/schema.js';
-import type { MessageBus } from '@xopcai/xopcbot/infra/bus/index.js';
+import type { Config } from '@xopcai/xopc/config/schema.js';
+import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import type { Bot, Context } from 'grammy';
 import type { Message } from '@grammyjs/types';
 

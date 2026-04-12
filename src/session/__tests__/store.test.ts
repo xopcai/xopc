@@ -13,7 +13,7 @@ describe('SessionStore', () => {
   let store: SessionStore;
 
   beforeEach(async () => {
-    tempDir = await mkdtemp(join(tmpdir(), 'xopcbot-session-test-'));
+    tempDir = await mkdtemp(join(tmpdir(), 'xopc-session-test-'));
     store = new SessionStore({ config: testConfig, sessionsDir: join(tempDir, '.sessions') });
     await store.initialize();
   });

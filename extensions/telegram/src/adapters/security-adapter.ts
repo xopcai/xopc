@@ -1,10 +1,10 @@
-import type { Config } from '@xopcai/xopcbot/config/index.js';
+import type { Config } from '@xopcai/xopc/config/index.js';
 import type {
   ChannelSecurityAdapter,
   ChannelSecurityContext,
-} from '@xopcai/xopcbot/channels/plugin-types.js';
-import { evaluateAccess, resolveDmPolicy, resolveGroupPolicy } from '@xopcai/xopcbot/channels/security.js';
-import type { DmPolicy, GroupPolicy } from '@xopcai/xopcbot/channels/channel-domain.js';
+} from '@xopcai/xopc/channels/plugin-types.js';
+import { evaluateAccess, resolveDmPolicy, resolveGroupPolicy } from '@xopcai/xopc/channels/security.js';
+import type { DmPolicy, GroupPolicy } from '@xopcai/xopc/channels/channel-domain.js';
 import type { TelegramResolvedAccount } from './types.js';
 
 export function createTelegramSecurityAdapter(): ChannelSecurityAdapter<TelegramResolvedAccount> {

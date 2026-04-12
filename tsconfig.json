@@ -16,9 +16,9 @@
     "allowSyntheticDefaultImports": true,
     "baseUrl": ".",
     "paths": {
-      "@xopcai/xopcbot/extension-sdk": ["./src/extensions/sdk/index.ts"],
-      "@xopcai/xopcbot/extension-sdk/*": ["./src/extensions/sdk/*"],
-      "@xopcai/xopcbot/*": ["./src/*"],
+      "@xopcai/xopc/extension-sdk": ["./src/extensions/sdk/index.ts"],
+      "@xopcai/xopc/extension-sdk/*": ["./src/extensions/sdk/*"],
+      "@xopcai/xopc/*": ["./src/*"],
       "*": ["node_modules/*"]
     }
   },

@@ -43,7 +43,7 @@ export class GatewayLockError extends Error {
 
 // Get lock file directory
 function resolveLockDir(): string {
-  return path.join(homedir(), ".xopcbot", "locks");
+  return path.join(homedir(), ".xopc", "locks");
 }
 
 // Generate lock file path based on config path

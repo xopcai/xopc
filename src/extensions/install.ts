@@ -74,7 +74,7 @@ export async function installFromNpm(
   extensionsDir: string,
   timeoutMs = 120000,
 ): Promise<InstallResult> {
-  const tmpDir = join(tmpdir(), `xopcbot-install-${Date.now()}`);
+  const tmpDir = join(tmpdir(), `xopc-install-${Date.now()}`);
 
   try {
     console.log(`📦 Downloading ${packageSpec} from npm...`);
@@ -150,19 +150,19 @@ async function installFromDirectory(
   extensionsDir: string,
 ): Promise<InstallResult> {
   // Validate manifest
-  const manifestPath = join(sourceDir, 'xopcbot.extension.json');
+  const manifestPath = join(sourceDir, 'xopc.extension.json');
   const packagePath = join(sourceDir, 'package.json');
 
   let manifest: ExtensionManifest | null = null;
   let packageJson: { name?: string; version?: string; dependencies?: Record<string, string> } | null =
     null;
 
-  // Try to load xopcbot.extension.json first
+  // Try to load xopc.extension.json first
   if (existsSync(manifestPath)) {
     try {
       manifest = JSON.parse(readFileSync(manifestPath, 'utf-8')) as ExtensionManifest;
     } catch {
-      return { ok: false, error: 'Invalid xopcbot.extension.json manifest file' };
+      return { ok: false, error: 'Invalid xopc.extension.json manifest file' };
     }
   }
 
@@ -180,7 +180,7 @@ async function installFromDirectory(
   if (!extensionId) {
     return {
       ok: false,
-      error: 'Extension must have an id in xopcbot.extension.json or name in package.json',
+      error: 'Extension must have an id in xopc.extension.json or name in package.json',
     };
   }
 
@@ -233,7 +233,7 @@ async function installFromDirectory(
     }
   }
 
-  const origin = extensionsDir.includes('.xopcbot/extensions') ? 'global' : 'workspace';
+  const origin = extensionsDir.includes('.xopc/extensions') ? 'global' : 'workspace';
 
   console.log(`✅ Extension ${extensionId} installed successfully!`);
   console.log(`\nTo enable the extension, add to your config:`);
@@ -365,7 +365,7 @@ export function listAllExtensions(workspaceDir: string): ListedExtension[] {
 }
 
 function readManifest(extensionDir: string): ExtensionManifest | null {
-  const manifestPath = join(extensionDir, 'xopcbot.extension.json');
+  const manifestPath = join(extensionDir, 'xopc.extension.json');
 
   if (!existsSync(manifestPath)) {
     // Try package.json
@@ -375,7 +375,7 @@ function readManifest(extensionDir: string): ExtensionManifest | null {
         const pkg = JSON.parse(readFileSync(packagePath, 'utf-8'));
         return {
           id: pkg.name,
-          name: pkg.xopcbot?.extension?.name || pkg.name,
+          name: pkg.xopc?.extension?.name || pkg.name,
           version: pkg.version,
         };
       } catch {

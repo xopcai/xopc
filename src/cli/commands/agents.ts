@@ -120,7 +120,7 @@ export function registerAgentsCli(program: Command): void {
     .command('delete')
     .description('Remove an agent from config (optional on-disk cleanup)')
     .argument('<id>', 'Agent id')
-    .option('--purge', 'Also delete workspace and ~/.xopcbot/agents/<id> data', false)
+    .option('--purge', 'Also delete workspace and ~/.xopc/agents/<id> data', false)
     .option('--json', 'Output JSON summary')
     .action(async (id: string, opts: { purge?: boolean; json?: boolean }) => {
       const cfg = loadConfig();

@@ -40,7 +40,7 @@ interface ParsedLogEntry extends LogEntry {
 // Configuration
 // ============================================
 
-const LOG_DIR = process.env.XOPCBOT_LOG_DIR || join(process.env.HOME || '.', '.xopcbot', 'logs');
+const LOG_DIR = process.env.XOPC_LOG_DIR || join(process.env.HOME || '.', '.xopc', 'logs');
 
 function ensureLogDir(): void {
   if (!existsSync(LOG_DIR)) {

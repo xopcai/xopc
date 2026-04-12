@@ -37,7 +37,7 @@ await esbuild.build({
   format: 'esm',
   // Alias avoids duplicate `createRequire` binding when bundled code also imports from node:module.
   banner: {
-    js: "import { createRequire as __xopcbotCreateRequire } from 'module'; globalThis.require = __xopcbotCreateRequire(import.meta.url);",
+    js: "import { createRequire as __xopcCreateRequire } from 'module'; globalThis.require = __xopcCreateRequire(import.meta.url);",
   },
   minify: false,
   sourcemap: false,

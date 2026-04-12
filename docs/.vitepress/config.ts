@@ -1,9 +1,9 @@
 import { defineConfig } from 'vitepress'
 
 export default defineConfig({
-  title: 'xopcbot',
+  title: 'xopc',
   description: 'Ultra-Lightweight Personal AI Assistant',
-  base: '/xopcbot/',
+  base: '/xopc/',
   cleanUrls: true,
   ignoreDeadLinks: true,
   head: [
@@ -15,7 +15,7 @@ export default defineConfig({
       label: 'English',
       lang: 'en',
       themeConfig: {
-        siteTitle: 'xopcbot',
+        siteTitle: 'xopc',
         logo: '/logo.svg',
         nav: [
           { text: 'Home', link: '/' },
@@ -69,7 +69,7 @@ export default defineConfig({
         ],
         footer: {
           message: 'Released under the MIT License.',
-          copyright: 'Copyright © 2026-present xopcbot'
+          copyright: 'Copyright © 2026-present xopc'
         }
       }
     },
@@ -78,7 +78,7 @@ export default defineConfig({
       lang: 'zh-CN',
       link: '/zh/',
       themeConfig: {
-        siteTitle: 'xopcbot',
+        siteTitle: 'xopc',
         logo: '/logo.svg',
         nav: [
           { text: '首页', link: '/zh/' },
@@ -132,14 +132,14 @@ export default defineConfig({
         ],
         footer: {
           message: '基于 MIT 许可证发布',
-          copyright: '版权所有 © 2026-present xopcbot'
+          copyright: '版权所有 © 2026-present xopc'
         }
       }
     }
   },
   themeConfig: {
     socialLinks: [
-      { icon: 'github', link: 'https://github.com/xopcai/xopcbot' }
+      { icon: 'github', link: 'https://github.com/xopcai/xopc' }
     ],
     search: {
       provider: 'local'

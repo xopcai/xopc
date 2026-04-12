@@ -27,14 +27,14 @@ function createAuthCommand(_ctx: CLIContext): Command {
 		.addHelpText(
 			'after',
 			formatExamples([
-				'xopcbot auth list',
-				'xopcbot auth set openai sk-xxx',
-				'xopcbot auth set anthropic sk-ant-api-xxx',
-				'xopcbot auth login anthropic',
-				'xopcbot auth login qwen',
-				'xopcbot auth logout anthropic',
-				'xopcbot auth remove anthropic',
-				'xopcbot auth profiles list',
+				'xopc auth list',
+				'xopc auth set openai sk-xxx',
+				'xopc auth set anthropic sk-ant-api-xxx',
+				'xopc auth login anthropic',
+				'xopc auth login qwen',
+				'xopc auth logout anthropic',
+				'xopc auth remove anthropic',
+				'xopc auth profiles list',
 			])
 		);
 
@@ -127,7 +127,7 @@ function createAuthCommand(_ctx: CLIContext): Command {
 			if (!oauthConfig) {
 				log.error(`OAuth not supported for provider: ${provider}`);
 				log.info(`Supported OAuth providers: ${getSupportedOAuthProviders().join(', ')}`);
-				log.info('Alternatively, set an API key: xopcbot auth set <provider> <key>');
+				log.info('Alternatively, set an API key: xopc auth set <provider> <key>');
 				process.exit(1);
 			}
 
@@ -235,7 +235,7 @@ function createAuthCommand(_ctx: CLIContext): Command {
 				}
 				credential = { type: 'token', provider: profile.split(':')[0], token: key, email };
 			} else {
-				log.error('OAuth credentials must be added via "xopcbot auth login"');
+				log.error('OAuth credentials must be added via "xopc auth login"');
 				process.exit(1);
 			}
 			
@@ -270,7 +270,7 @@ function createAuthCommand(_ctx: CLIContext): Command {
 				console.log(`  ${id}`);
 			}
 			
-			console.log('\nSet API key: xopcbot auth set <provider> <key>');
+			console.log('\nSet API key: xopc auth set <provider> <key>');
 			console.log('Environment variables: PROVIDER_API_KEY\n');
 		});
 
@@ -282,8 +282,8 @@ function listAuthProfiles(): void {
 	
 	if (profiles.length === 0) {
 		log.info('No auth profiles configured.');
-		log.info('Set an API key: xopcbot auth set <provider> <key>');
-		log.info('Or login with OAuth: xopcbot auth login <provider>');
+		log.info('Set an API key: xopc auth set <provider> <key>');
+		log.info('Or login with OAuth: xopc auth login <provider>');
 		return;
 	}
 
@@ -317,12 +317,12 @@ register({
 	metadata: { 
 		category: 'setup',
 		examples: [
-			'xopcbot auth list',
-			'xopcbot auth providers',
-			'xopcbot auth set openai sk-xxx',
-			'xopcbot auth login anthropic',
-			'xopcbot auth login qwen',
-			'xopcbot auth profiles list',
+			'xopc auth list',
+			'xopc auth providers',
+			'xopc auth set openai sk-xxx',
+			'xopc auth login anthropic',
+			'xopc auth login qwen',
+			'xopc auth profiles list',
 		],
 	},
 });

@@ -143,7 +143,7 @@ function makeMissingToolResult(params: {
     content: [
       {
         type: "text",
-        text: "[xopcbot] missing tool result in session history; inserted synthetic error result for transcript repair.",
+        text: "[xopc] missing tool result in session history; inserted synthetic error result for transcript repair.",
       },
     ],
     isError: true,

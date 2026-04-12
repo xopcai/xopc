@@ -875,10 +875,10 @@ export function SkillsPage() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
           <Dialog.Content
             className={cn(
-              'xopcbot-dialog-content fixed left-1/2 top-1/2 z-[60] flex max-h-[min(90vh,56rem)] w-[min(100%-2rem,min(92vw,56rem))] -translate-x-1/2 -translate-y-1/2 flex-col',
+              'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] flex max-h-[min(90vh,56rem)] w-[min(100%-2rem,min(92vw,56rem))] -translate-x-1/2 -translate-y-1/2 flex-col',
               'rounded-2xl border border-edge bg-surface-panel shadow-float dark:border-edge',
             )}
           >
@@ -949,10 +949,10 @@ export function SkillsPage() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
           <Dialog.Content
             className={cn(
-              'xopcbot-dialog-content fixed left-1/2 top-1/2 z-[60] max-h-[min(100vh-2rem,44rem)] w-[min(100%-2rem,min(92vw,48rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto',
+              'xopc-dialog-content fixed left-1/2 top-1/2 z-[60] max-h-[min(100vh-2rem,44rem)] w-[min(100%-2rem,min(92vw,48rem))] -translate-x-1/2 -translate-y-1/2 overflow-y-auto',
               'rounded-2xl border border-edge bg-surface-panel p-6 shadow-float dark:border-edge',
             )}
           >
@@ -1034,8 +1034,8 @@ export function SkillsPage() {
         }}
       >
         <Dialog.Portal>
-          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
-          <Dialog.Content className="xopcbot-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge">
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim" />
+          <Dialog.Content className="xopc-dialog-content fixed left-1/2 top-1/2 z-[60] w-[min(100%-2rem,24rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge">
             <Dialog.Title className="text-base font-semibold text-fg">{sk.deleteTitle}</Dialog.Title>
             <p className="mt-2 text-sm text-fg-muted">
               {confirmId ? interpolate(sk.deleteMessage, { id: confirmId }) : ''}

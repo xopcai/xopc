@@ -22,7 +22,7 @@ const SUPERVISOR_HINT_ENV_VARS = [
   "INVOCATION_ID",         // Linux systemd
   "SYSTEMD_EXEC_PID",
   "JOURNAL_STREAM",
-  "XOPCBOT_SERVICE_MARKER", // Custom marker
+  "XOPC_SERVICE_MARKER", // Custom marker
 ];
 
 function isTruthy(value: string | undefined): boolean {
@@ -41,13 +41,13 @@ function hasSupervisorHint(env: NodeJS.ProcessEnv = process.env): boolean {
 /**
  * Restart gateway process
  * - Supervised environment: exit and let supervisor restart
- * - XOPCBOT_NO_RESPAWN=1: in-process restart
+ * - XOPC_NO_RESPAWN=1: in-process restart
  * - Otherwise: spawn detached child, then exit
  */
 export function restartGatewayProcessWithFreshPid(): GatewayRespawnResult {
   // Respawn disabled, use in-process restart
-  if (isTruthy(process.env.XOPCBOT_NO_RESPAWN)) {
-    log.info("Respawn disabled (XOPCBOT_NO_RESPAWN)");
+  if (isTruthy(process.env.XOPC_NO_RESPAWN)) {
+    log.info("Respawn disabled (XOPC_NO_RESPAWN)");
     return { mode: "disabled" };
   }
 

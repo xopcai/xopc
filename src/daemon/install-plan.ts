@@ -19,18 +19,18 @@ export interface InstallPlan {
  * Resolve default config path
  */
 function resolveDefaultConfigPath(): string {
-  const envConfig = process.env.XOPCBOT_CONFIG;
+  const envConfig = process.env.XOPC_CONFIG;
   if (envConfig) return envConfig;
-  return path.join(homedir(), '.xopcbot', 'config.json');
+  return path.join(homedir(), '.xopc', 'config.json');
 }
 
 /**
  * Resolve default workspace
  */
 function resolveDefaultWorkspace(): string {
-  const envWorkspace = process.env.XOPCBOT_WORKSPACE;
+  const envWorkspace = process.env.XOPC_WORKSPACE;
   if (envWorkspace) return envWorkspace;
-  return path.join(homedir(), '.xopcbot', 'workspace');
+  return path.join(homedir(), '.xopc', 'workspace');
 }
 
 /**
@@ -51,8 +51,8 @@ export function buildGatewayInstallPlan(params: {
   if (params.runtime === 'binary') {
     // Try to find bundled binary
     const possiblePaths = [
-      path.join(process.execPath, '..', 'xopcbot'),
-      path.join(process.execPath, '..', 'xopcbot.exe'),
+      path.join(process.execPath, '..', 'xopc'),
+      path.join(process.execPath, '..', 'xopc.exe'),
       process.execPath, // Fallback to current node
     ];
 
@@ -85,15 +85,15 @@ export function buildGatewayInstallPlan(params: {
 
   // Build environment
   const env: Record<string, string> = {
-    XOPCBOT_CONFIG: configPath,
-    XOPCBOT_WORKSPACE: workspace,
-    XOPCBOT_LOG_LEVEL: process.env.XOPCBOT_LOG_LEVEL || 'info',
-    XOPCBOT_LOG_FILE: 'true',
-    XOPCBOT_LOG_CONSOLE: 'false',
+    XOPC_CONFIG: configPath,
+    XOPC_WORKSPACE: workspace,
+    XOPC_LOG_LEVEL: process.env.XOPC_LOG_LEVEL || 'info',
+    XOPC_LOG_FILE: 'true',
+    XOPC_LOG_CONSOLE: 'false',
   };
 
   if (params.token) {
-    env.XOPCBOT_GATEWAY_TOKEN = params.token;
+    env.XOPC_GATEWAY_TOKEN = params.token;
   }
 
   // Copy over other relevant env vars
@@ -102,7 +102,7 @@ export function buildGatewayInstallPlan(params: {
     'ANTHROPIC_API_KEY',
     'GOOGLE_API_KEY',
     'BRAVE_API_KEY',
-    'XOPCBOT_LOG_RETENTION_DAYS',
+    'XOPC_LOG_RETENTION_DAYS',
   ];
 
   for (const key of relevantEnvVars) {
@@ -114,7 +114,7 @@ export function buildGatewayInstallPlan(params: {
   // Add custom env from params
   if (params.env) {
     for (const [key, value] of Object.entries(params.env)) {
-      if (value !== undefined && !key.startsWith('XOPCBOT_')) {
+      if (value !== undefined && !key.startsWith('XOPC_')) {
         env[key] = value;
       }
     }

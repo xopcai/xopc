@@ -224,7 +224,7 @@ const __dirname = dirname(__filename);
  * Dev (`tsx` from `src/gateway/hono/`): use `dist/gateway/static/root` under the repo root.
  */
 function resolveUiStaticRoot(): string {
-  const env = process.env['XOPCBOT_UI_STATIC_ROOT']?.trim();
+  const env = process.env['XOPC_UI_STATIC_ROOT']?.trim();
   if (env) return resolve(env);
 
   const here = __dirname;
@@ -361,7 +361,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   // API info (no auth required for basic info)
   app.get('/api', (c) => {
     return c.json({
-      service: 'xopcbot-gateway',
+      service: 'xopc-gateway',
       version: '0.1.0',
       transport: 'streamable-http',
       endpoints: [
@@ -1109,7 +1109,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     
     // Update agent defaults
     if (body.agents?.defaults) {
-      if (!config.agents) config.agents = { defaults: { workspace: '~/.xopcbot/workspace', model: 'anthropic/claude-sonnet-4-5', maxTokens: 8192, temperature: 0.7, maxToolIterations: 20, maxRequestsPerTurn: 50, maxToolFailuresPerTurn: 3, thinkingDefault: 'medium', reasoningDefault: 'off', verboseDefault: 'off' } };
+      if (!config.agents) config.agents = { defaults: { workspace: '~/.xopc/workspace', model: 'anthropic/claude-sonnet-4-5', maxTokens: 8192, temperature: 0.7, maxToolIterations: 20, maxRequestsPerTurn: 50, maxToolFailuresPerTurn: 3, thinkingDefault: 'medium', reasoningDefault: 'off', verboseDefault: 'off' } };
       if (!config.agents.defaults) config.agents.defaults = {} as any;
       
       if (body.agents.defaults.model !== undefined) {
@@ -1712,7 +1712,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ ok: true, payload: { commands } });
   });
 
-  // ========== Skills (managed global skills under ~/.xopcbot/skills) ==========
+  // ========== Skills (managed global skills under ~/.xopc/skills) ==========
 
   authenticated.get('/api/skills', (c) => {
     const payload = service.getSkillsApi();

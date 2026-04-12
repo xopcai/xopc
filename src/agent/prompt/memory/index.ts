@@ -41,7 +41,7 @@ function getLongTermMemoryPath(baseDir: string): string {
 }
 
 function getCuratedMemoryPaths(baseDir: string): string[] {
-  const memDir = join(baseDir, '.xopcbot', 'memories');
+  const memDir = join(baseDir, '.xopc', 'memories');
   const curated = [join(memDir, 'MEMORY.md'), join(memDir, 'USER.md')];
   return curated.filter((p) => existsSync(p));
 }

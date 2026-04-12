@@ -70,7 +70,7 @@ class LokiExporter implements LogExporter {
 
   constructor(cfg: LokiConfig) {
     this.url = cfg.url;
-    this.labels = cfg.labels || { service: 'xopcbot' };
+    this.labels = cfg.labels || { service: 'xopc' };
     this.batchSize = cfg.batchSize || 100;
     this.batchTimeoutMs = cfg.batchTimeoutMs || 5000;
   }
@@ -142,7 +142,7 @@ class ElkExporter implements LogExporter {
 
   constructor(cfg: ElkConfig) {
     this.url = cfg.url;
-    this.index = cfg.index || 'xopcbot-logs';
+    this.index = cfg.index || 'xopc-logs';
     this.apiKey = cfg.apiKey;
     this.batchSize = cfg.batchSize || 100;
   }
@@ -205,7 +205,7 @@ class DatadogExporter implements LogExporter {
   constructor(cfg: DatadogConfig) {
     this.apiKey = cfg.apiKey;
     this.site = cfg.site || 'datadoghq.com';
-    this.service = cfg.service || 'xopcbot';
+    this.service = cfg.service || 'xopc';
     this.batchSize = cfg.batchSize || 100;
   }
 

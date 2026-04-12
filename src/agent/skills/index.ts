@@ -136,27 +136,27 @@ function discoverSkills(dir: string, source: 'builtin' | 'workspace' | 'global')
 }
 
 function parseSkillMetadata(frontmatter: Record<string, unknown>): SkillMetadata {
-  // Only support metadata.xopcbot nested structure
+  // Only support metadata.xopc nested structure
   const meta = frontmatter.metadata as Record<string, unknown> | undefined;
-  const xopcbotMeta = meta?.xopcbot as Record<string, unknown> | undefined;
+  const xopcMeta = meta?.xopc as Record<string, unknown> | undefined;
   
   const metadata: SkillMetadata = {
     name: frontmatter.name as string || '',
     description: frontmatter.description as string || '',
-    emoji: xopcbotMeta?.emoji as string || frontmatter.emoji as string || undefined,
+    emoji: xopcMeta?.emoji as string || frontmatter.emoji as string || undefined,
     homepage: frontmatter.homepage as string || undefined,
-    os: xopcbotMeta?.os as Array<'darwin' | 'linux' | 'win32'> || frontmatter.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
-    requires: xopcbotMeta?.requires as SkillRequires || frontmatter.requires as SkillRequires || undefined,
-    install: xopcbotMeta?.install as SkillInstallSpec[] || frontmatter.install as SkillInstallSpec[] || undefined,
+    os: xopcMeta?.os as Array<'darwin' | 'linux' | 'win32'> || frontmatter.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
+    requires: xopcMeta?.requires as SkillRequires || frontmatter.requires as SkillRequires || undefined,
+    install: xopcMeta?.install as SkillInstallSpec[] || frontmatter.install as SkillInstallSpec[] || undefined,
   };
 
-  // Store xopcbot metadata for reference
-  if (xopcbotMeta) {
-    metadata.xopcbot = {
-      emoji: xopcbotMeta.emoji as string || undefined,
-      requires: xopcbotMeta.requires as SkillRequires || undefined,
-      install: xopcbotMeta.install as SkillInstallSpec[] || undefined,
-      os: xopcbotMeta.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
+  // Store xopc metadata for reference
+  if (xopcMeta) {
+    metadata.xopc = {
+      emoji: xopcMeta.emoji as string || undefined,
+      requires: xopcMeta.requires as SkillRequires || undefined,
+      install: xopcMeta.install as SkillInstallSpec[] || undefined,
+      os: xopcMeta.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
     };
   }
 
@@ -292,7 +292,7 @@ export interface SkillLoader {
   init: (workspace: string, builtin: string | null) => LoadSkillsResult;
   load: () => LoadSkillsResult;
   reload: () => LoadSkillsResult;
-  /** Recompute `<available_skills>` from disk-loaded skills and current ~/.xopcbot/skills.json (no filesystem rescan). */
+  /** Recompute `<available_skills>` from disk-loaded skills and current ~/.xopc/skills.json (no filesystem rescan). */
   refreshPromptFromConfig: () => void;
   getSkills: () => Skill[];
   getPrompt: () => string;

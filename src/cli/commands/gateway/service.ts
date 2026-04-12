@@ -33,7 +33,7 @@ export function createInstallCommand(): Command {
         console.log(`   Platform: ${getPlatformName()}`);
         console.log('');
         console.log('💡 You can still run gateway manually:');
-        console.log('   xopcbot gateway --background');
+        console.log('   xopc gateway --background');
         process.exit(1);
       }
 
@@ -66,27 +66,27 @@ export function createInstallCommand(): Command {
           console.log('🐧 Installing systemd service...');
           console.log('');
           console.log('To install manually, create a systemd service file:');
-          console.log('   sudo nano /etc/systemd/system/xopcbot-gateway.service');
+          console.log('   sudo nano /etc/systemd/system/xopc-gateway.service');
           console.log('');
           console.log('Then run:');
           console.log('   sudo systemctl daemon-reload');
-          console.log('   sudo systemctl enable xopcbot-gateway');
-          console.log('   sudo systemctl start xopcbot-gateway');
+          console.log('   sudo systemctl enable xopc-gateway');
+          console.log('   sudo systemctl start xopc-gateway');
         } else if (platform === 'darwin') {
           console.log('🍎 Installing launchd service...');
           console.log('');
           console.log('To install manually, create a launchd plist file:');
-          console.log('   sudo nano /Library/LaunchDaemons/com.xopcai.xopcbot.gateway.plist');
+          console.log('   sudo nano /Library/LaunchDaemons/com.xopcai.xopc.gateway.plist');
           console.log('');
           console.log('Then run:');
-          console.log('   sudo launchctl load /Library/LaunchDaemons/com.xopcai.xopcbot.gateway.plist');
-          console.log('   sudo launchctl start com.xopcai.xopcbot.gateway');
+          console.log('   sudo launchctl load /Library/LaunchDaemons/com.xopcai.xopc.gateway.plist');
+          console.log('   sudo launchctl start com.xopcai.xopc.gateway');
         } else if (platform === 'win32') {
           console.log('🪟 Installing Windows service...');
           console.log('');
           console.log('To install manually, run as Administrator:');
-          console.log('   sc create xopcbot-gateway binPath= "..."');
-          console.log('   sc start xopcbot-gateway');
+          console.log('   sc create xopc-gateway binPath= "..."');
+          console.log('   sc start xopc-gateway');
         }
 
         console.log('');
@@ -119,9 +119,9 @@ export function createUninstallCommand(): Command {
         console.log(`   Service: ${service.label}`);
         console.log('');
         console.log('To uninstall manually:');
-        console.log('   Linux: sudo systemctl stop xopcbot-gateway && sudo systemctl disable xopcbot-gateway');
-        console.log('   macOS: sudo launchctl unload /Library/LaunchDaemons/com.xopcai.xopcbot.gateway.plist');
-        console.log('   Windows: sc stop xopcbot-gateway && sc delete xopcbot-gateway');
+        console.log('   Linux: sudo systemctl stop xopc-gateway && sudo systemctl disable xopc-gateway');
+        console.log('   macOS: sudo launchctl unload /Library/LaunchDaemons/com.xopcai.xopc.gateway.plist');
+        console.log('   Windows: sc stop xopc-gateway && sc delete xopc-gateway');
         process.exit(0);
       } catch (err) {
         log.error({ err }, 'Failed to uninstall service');
@@ -147,9 +147,9 @@ export function createServiceStartCommand(): Command {
       console.log(`   Port: ${port}`);
       console.log('');
       console.log('To start manually:');
-      console.log('   Linux: sudo systemctl start xopcbot-gateway');
-      console.log('   macOS: sudo launchctl start com.xopcai.xopcbot.gateway');
-      console.log('   Windows: sc start xopcbot-gateway');
+      console.log('   Linux: sudo systemctl start xopc-gateway');
+      console.log('   macOS: sudo launchctl start com.xopcai.xopc.gateway');
+      console.log('   Windows: sc start xopc-gateway');
       process.exit(0);
     });
 }
@@ -164,9 +164,9 @@ export function createServiceStatusCommand(): Command {
       console.log('📊 Gateway service status');
       console.log('');
       console.log('To check manually:');
-      console.log('   Linux: sudo systemctl status xopcbot-gateway');
-      console.log('   macOS: sudo launchctl list | grep xopcbot');
-      console.log('   Windows: sc query xopcbot-gateway');
+      console.log('   Linux: sudo systemctl status xopc-gateway');
+      console.log('   macOS: sudo launchctl list | grep xopc');
+      console.log('   Windows: sc query xopc-gateway');
       process.exit(0);
     });
 }

@@ -16,7 +16,7 @@ const MAX_SUMMARY_CHARS = 20_000;
 export { invalidateSessionSearchIndexCache } from '../../session/search-index-cache.js';
 
 function resolveSummaryModel(getConfig?: () => Config | undefined) {
-  const envRef = process.env.XOPCBOT_SESSION_SEARCH_MODEL?.trim();
+  const envRef = process.env.XOPC_SESSION_SEARCH_MODEL?.trim();
   const configRef = getConfig?.()?.agents?.defaults?.sessionSearch?.summaryModel?.trim();
   const ref = envRef || configRef;
   if (ref) {

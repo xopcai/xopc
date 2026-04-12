@@ -1,5 +1,5 @@
 {
-  "name": "@xopcai/xopcbot",
+  "name": "@xopcai/xopc",
   "version": "0.2.2",
   "description": "Personal AI assistant: CLI, gateway (HTTP/WebSocket + React console), Telegram and WeChat (Weixin) channels — TypeScript, 20+ LLM providers via pi-ai, extensions and skills.",
   "type": "module",
@@ -20,7 +20,7 @@
     "./*": "./dist/src/*"
   },
   "bin": {
-    "xopcbot": "./dist/src/cli/index.js"
+    "xopc": "./dist/src/cli/index.js"
   },
   "files": [
     "dist",
@@ -72,12 +72,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "https://github.com/xopcai/xopcbot.git"
+    "url": "https://github.com/xopcai/xopc.git"
   },
   "bugs": {
-    "url": "https://github.com/xopcai/xopcbot/issues"
+    "url": "https://github.com/xopcai/xopc/issues"
   },
-  "homepage": "https://github.com/xopcai/xopcbot#readme",
+  "homepage": "https://github.com/xopcai/xopc#readme",
   "engines": {
     "node": ">=22.0.0"
   },

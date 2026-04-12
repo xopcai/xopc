@@ -23,7 +23,7 @@ describe('classifyHubSource', () => {
 
 describe('findSkillRoot', () => {
   it('finds SKILL.md at root', () => {
-    const root = join(tmpdir(), `xopcbot-find-skill-${Date.now()}`);
+    const root = join(tmpdir(), `xopc-find-skill-${Date.now()}`);
     mkdirSync(root, { recursive: true });
     writeFileSync(join(root, 'SKILL.md'), '---\nname: t\ndescription: d\n---\n');
     try {
@@ -34,7 +34,7 @@ describe('findSkillRoot', () => {
   });
 
   it('finds SKILL.md in single child folder', () => {
-    const root = join(tmpdir(), `xopcbot-find-skill-nested-${Date.now()}`);
+    const root = join(tmpdir(), `xopc-find-skill-nested-${Date.now()}`);
     mkdirSync(join(root, 'pkg'), { recursive: true });
     writeFileSync(join(root, 'pkg', 'SKILL.md'), '---\nname: t\ndescription: d\n---\n');
     try {
@@ -45,7 +45,7 @@ describe('findSkillRoot', () => {
   });
 
   it('respects subpath', () => {
-    const base = join(tmpdir(), `xopcbot-sub-${Date.now()}`);
+    const base = join(tmpdir(), `xopc-sub-${Date.now()}`);
     mkdirSync(join(base, 'nested', 's'), { recursive: true });
     writeFileSync(join(base, 'nested', 's', 'SKILL.md'), '---\nname: t\ndescription: d\n---\n');
     try {

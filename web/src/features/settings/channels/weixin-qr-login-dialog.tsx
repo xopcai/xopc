@@ -153,7 +153,7 @@ export function WeixinQrLoginDialog({
   return (
     <Dialog.Root open={open} onOpenChange={onOpenChange}>
       <Dialog.Portal>
-        <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim backdrop-blur-[1px]" />
+        <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim backdrop-blur-[1px]" />
         <Dialog.Content
           className={cn(
             'fixed left-1/2 top-1/2 z-[60] max-h-[min(90vh,52rem)] w-[min(100%-2rem,32rem)] -translate-x-1/2 -translate-y-1/2',

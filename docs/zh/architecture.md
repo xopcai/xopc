@@ -1,12 +1,12 @@
 # 架构
 
-本文页说明 xopcbot 的整体结构与主要模块之间的关系。
+本文页说明 xopc 的整体结构与主要模块之间的关系。
 
 ## 系统架构
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      xopcbot                                │
+│                      xopc                                │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐   │
@@ -63,12 +63,12 @@ src/
 │   │   ├── registry.ts #   插件注册表 / 查询
 │   │   └── types.*.ts  #   注册表类型辅助
 │   ├── telegram/
-│   │   └── index.ts    #   从 @xopcai/xopcbot-extension-telegram 再导出（兼容路径）
+│   │   └── index.ts    #   从 @xopcai/xopc-extension-telegram 再导出（兼容路径）
 │   ├── outbound/       #   出站投递 pipeline
 │   ├── security.ts     #   访问控制辅助
 │   ├── draft-stream.ts #   流式消息预览
 │   └── format.ts       #   Markdown 到 HTML 格式化
-├── extensions/         # 扩展运行时（loader、hooks）；`sdk/` → @xopcai/xopcbot/extension-sdk
+├── extensions/         # 扩展运行时（loader、hooks）；`sdk/` → @xopcai/xopc/extension-sdk
 ├── routing/            # Session key、bindings、路由解析
 ├── acp/                # Agent Control Protocol（可选多运行时桥接）
 ├── cli/                # CLI 命令（自注册）
@@ -90,12 +90,12 @@ web/                    # 网关控制台 SPA（React + Vite + Tailwind v4）
 └── src/                #   应用源码；生产构建输出至 dist/gateway/static/root
 
 extensions/
-└── telegram/           # 工作区包：Telegram 通道（@xopcai/xopcbot-extension-telegram）
+└── telegram/           # 工作区包：Telegram 通道（@xopcai/xopc-extension-telegram）
 ```
 
 ## 磁盘上的状态目录与工作空间
 
-运行时数据（配置、凭据、按 Agent 的会话、作为工具 cwd 与用户内容的 Markdown **工作空间**、以及位于 `agents/<id>/bootstrap/` 的人格 Markdown）位于仓库之外的 **状态目录**（默认 `~/.xopcbot`）。路径总览（bootstrap、agent 主目录、迁移）见 [磁盘与目录布局](disk-layout.md)。初始化、环境变量与默认路径说明见 [状态目录与工作空间布局](workspace.md)。
+运行时数据（配置、凭据、按 Agent 的会话、作为工具 cwd 与用户内容的 Markdown **工作空间**、以及位于 `agents/<id>/bootstrap/` 的人格 Markdown）位于仓库之外的 **状态目录**（默认 `~/.xopc`）。路径总览（bootstrap、agent 主目录、迁移）见 [磁盘与目录布局](disk-layout.md)。初始化、环境变量与默认路径说明见 [状态目录与工作空间布局](workspace.md)。
 
 ## 核心模块
 
@@ -126,8 +126,8 @@ src/agent/prompt/
 
 | Section | 描述 |
 |---------|------|
-| Identity | "You are a personal assistant running in xopcbot" |
-| Version | xopcbot 版本信息 |
+| Identity | "You are a personal assistant running in xopc" |
+| Version | xopc 版本信息 |
 | Tool Call Style | 工具调用风格 (verbose/brief/minimal) |
 | Safety | 安全原则 |
 | Memory | memory_search/memory_get 使用指南 |
@@ -214,7 +214,7 @@ src/agent/memory/
 **导入示例**（扩展或核心代码）：
 
 ```typescript
-import { telegramPlugin } from '@xopcai/xopcbot-extension-telegram';
+import { telegramPlugin } from '@xopcai/xopc-extension-telegram';
 // 稳定路径再导出：import { telegramPlugin } from './channels/telegram/index.js';
 ```
 
@@ -238,8 +238,8 @@ before_tool_call → after_tool_call → message_sending → session_end
 
 **三级存储**：
 1. **Workspace** (`workspace/.extensions/`) - 项目私有
-2. **Global** (`~/.xopcbot/extensions/`) - 用户级共享
-3. **Bundled** (`xopcbot/extensions/`) - 内置
+2. **Global** (`~/.xopc/extensions/`) - 用户级共享
+3. **Bundled** (`xopc/extensions/`) - 内置
 
 ## 数据流
 
@@ -285,7 +285,7 @@ before_tool_call → after_tool_call → message_sending → session_end
 
 ## CLI 命令注册
 
-xopcbot 使用自注册模式：
+xopc 使用自注册模式：
 
 ```typescript
 // src/cli/commands/mycommand.ts
@@ -340,6 +340,6 @@ api.registerHook('before_tool_call', async (event, ctx) => {
 
 ### 添加通道插件
 
-1. 在包或 `extensions/<name>/` 下实现 `ChannelPlugin`（见 `src/channels/plugin-types.ts` 与 `@xopcai/xopcbot/extension-sdk` 中的 `defineChannelPluginEntry`）。
+1. 在包或 `extensions/<name>/` 下实现 `ChannelPlugin`（见 `src/channels/plugin-types.ts` 与 `@xopcai/xopc/extension-sdk` 中的 `defineChannelPluginEntry`）。
 2. 导出插件对象；若需随核心二进制发布，将其加入 `src/channels/plugins/bundled.ts` 的 `bundledChannelPlugins`。
 3. 确保启动时加载该插件（`bundled.ts` 中列出的内置插件会由管理器自动注册）。

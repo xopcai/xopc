@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Scans each extensions/<name>/package.json for `xopcbot.bundledChannel` and writes
+ * Scans each extensions/<name>/package.json for `xopc.bundledChannel` and writes
  * src/generated/bundled-channel-plugins.ts (single module: re-exports +
  * bundledChannelPlugins array so tsc emits dist/extensions/).
  */
@@ -33,7 +33,7 @@ function readBundledEntries() {
       console.warn('Skipping invalid JSON:', pkgPath);
       continue;
     }
-    const bc = pkg.xopcbot?.bundledChannel;
+    const bc = pkg.xopc?.bundledChannel;
     if (!bc || typeof bc.export !== 'string' || !bc.export.trim()) {
       continue;
     }

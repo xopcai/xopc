@@ -1,6 +1,6 @@
-# xopcbot 扩展系统
+# xopc 扩展系统
 
-xopcbot 提供了一个轻量级但功能强大的扩展系统。
+xopc 提供了一个轻量级但功能强大的扩展系统。
 
 ## 特性
 
@@ -17,26 +17,26 @@ xopcbot 提供了一个轻量级但功能强大的扩展系统。
 
 ```bash
 # 从 npm 安装到 workspace
-xopcbot extension install xopcbot-extension-hello
+xopc extension install xopc-extension-hello
 
 # 安装到 global（跨项目共享）
-xopcbot extension install xopcbot-extension-hello --global
+xopc extension install xopc-extension-hello --global
 
 # 从本地目录安装
-xopcbot extension install ./my-local-extension
+xopc extension install ./my-local-extension
 
 # 查看已安装扩展
-xopcbot extension list
+xopc extension list
 
 # 移除扩展
-xopcbot extension remove hello
+xopc extension remove hello
 ```
 
 **方式二：手动安装**
 
 ```bash
 # Global 目录
-cd ~/.xopcbot/extensions
+cd ~/.xopc/extensions
 git clone https://github.com/your/extension.git
 
 # 或 Workspace 目录
@@ -46,7 +46,7 @@ git clone https://github.com/your/extension.git
 
 ### 启用扩展
 
-在 `~/.xopcbot/config.json` 中配置：
+在 `~/.xopc/xopc.json` 中配置：
 
 ```json
 {
@@ -94,28 +94,28 @@ git clone https://github.com/your/extension.git
 
 ```bash
 # 创建扩展脚手架
-xopcbot extension create my-extension --name "My Extension" --kind utility
+xopc extension create my-extension --name "My Extension" --kind utility
 
 # 支持的 kind: channel|provider|memory|tool|utility
 ```
 
 这将创建：
 - `package.json` - npm 配置
-- `index.ts` - 扩展入口（TypeScript，推荐使用 `@xopcai/xopcbot/extension-sdk`）
-- `xopcbot.extension.json` - 扩展清单
+- `index.ts` - 扩展入口（TypeScript，推荐使用 `@xopcai/xopc/extension-sdk`）
+- `xopc.extension.json` - 扩展清单
 - `README.md` - 文档模板
 
 ---
 
 ## 三级存储架构
 
-xopcbot 支持三级扩展存储，按优先级从高到低：
+xopc 支持三级扩展存储，按优先级从高到低：
 
 | 级别 | 路径 | 用途 | 优先级 |
 |------|------|------|--------|
 | **Workspace** | `workspace/.extensions/` | 项目私有扩展 | ⭐⭐⭐ 最高 |
-| **Global** | `~/.xopcbot/extensions/` | 用户级共享扩展 | ⭐⭐ 中 |
-| **Bundled** | `xopcbot/extensions/` | 内置扩展 | ⭐ 最低 |
+| **Global** | `~/.xopc/extensions/` | 用户级共享扩展 | ⭐⭐ 中 |
+| **Bundled** | `xopc/extensions/` | 内置扩展 | ⭐ 最低 |
 
 ### 优先级规则
 
@@ -124,34 +124,34 @@ xopcbot 支持三级扩展存储，按优先级从高到低：
 - 适合场景：
   - Workspace：项目特定的定制扩展
   - Global：常用的共享扩展（如 telegram-channel）
-  - Bundled：随 xopcbot 发布的官方扩展
+  - Bundled：随 xopc 发布的官方扩展
 
-**Monorepo 说明：** Telegram 通道是仓库内 **`extensions/telegram`** 工作区包（`@xopcai/xopcbot-extension-telegram`），由核心通过 `src/channels/plugins/bundled.ts` 接入；与上表中 **Bundled** 扩展目录 `xopcbot/extensions/` 不是同一条加载路径。
+**Monorepo 说明：** Telegram 通道是仓库内 **`extensions/telegram`** 工作区包（`@xopcai/xopc-extension-telegram`），由核心通过 `src/channels/plugins/bundled.ts` 接入；与上表中 **Bundled** 扩展目录 `xopc/extensions/` 不是同一条加载路径。
 
 ### Global 扩展目录
 
 ```bash
 # 默认位置
-~/.xopcbot/extensions/
+~/.xopc/extensions/
 
 # 自定义位置（环境变量）
-export XOPCBOT_GLOBAL_EXTENSIONS=/path/to/global/extensions
+export XOPC_GLOBAL_EXTENSIONS=/path/to/global/extensions
 ```
 
 ---
 
 ## Extension SDK
 
-xopcbot 提供官方 Extension SDK。发布包名为 **`@xopcai/xopcbot`**，请通过子路径 **`@xopcai/xopcbot/extension-sdk`** 导入。
+xopc 提供官方 Extension SDK。发布包名为 **`@xopcai/xopc`**，请通过子路径 **`@xopcai/xopc/extension-sdk`** 导入。
 
 ### 使用 SDK
 
 ```typescript
 // 推荐：与 npm 发布包一致
-import type { ExtensionApi, ExtensionDefinition } from '@xopcai/xopcbot/extension-sdk';
+import type { ExtensionApi, ExtensionDefinition } from '@xopcai/xopc/extension-sdk';
 
 // 不推荐直接依赖内部路径
-// import type { ... } from 'xopcbot/extensions';  ❌
+// import type { ... } from 'xopc/extensions';  ❌
 ```
 
 ### 导出的类型
@@ -162,43 +162,43 @@ import type {
   ExtensionDefinition,      // 扩展定义
   ExtensionApi,             // 扩展 API
   ExtensionLogger,          // 日志接口
-} from '@xopcai/xopcbot/extension-sdk';
+} from '@xopcai/xopc/extension-sdk';
 
 // 工具（由 pi-agent-core 再导出）
 import type {
   AgentTool,
   AgentToolResult,
-} from '@xopcai/xopcbot/extension-sdk';
+} from '@xopcai/xopc/extension-sdk';
 
 // 钩子
 import type {
   ExtensionHookEvent,       // 钩子事件类型
   ExtensionHookHandler,     // 钩子处理器
   HookOptions,              // 钩子选项
-} from '@xopcai/xopcbot/extension-sdk';
+} from '@xopcai/xopc/extension-sdk';
 
 // 通道（ChannelPlugin）
 import type {
   ChannelPlugin,
   ChannelPluginInitOptions,
   ChannelPluginStartOptions,
-} from '@xopcai/xopcbot/extension-sdk';
+} from '@xopcai/xopc/extension-sdk';
 
 import {
   defineChannelPluginEntry,
   registerExtensionCliProgram,
-} from '@xopcai/xopcbot/extension-sdk';
+} from '@xopcai/xopc/extension-sdk';
 
 // 命令
-import type { ExtensionCommand } from '@xopcai/xopcbot/extension-sdk';
+import type { ExtensionCommand } from '@xopcai/xopc/extension-sdk';
 
 // 服务
-import type { ExtensionService } from '@xopcai/xopcbot/extension-sdk';
+import type { ExtensionService } from '@xopcai/xopc/extension-sdk';
 ```
 
 ### SDK 路径解析
 
-在本地开发时，xopcbot 可通过 jiti 将别名 `xopcbot/extension-sdk` 解析到 `src/extension-sdk/index.ts`，便于不依赖发布包路径。使用已安装的 **`@xopcai/xopcbot`** 时，请优先使用 **`@xopcai/xopcbot/extension-sdk`**。
+在本地开发时，xopc 可通过 jiti 将别名 `xopc/extension-sdk` 解析到 `src/extension-sdk/index.ts`，便于不依赖发布包路径。使用已安装的 **`@xopcai/xopc`** 时，请优先使用 **`@xopcai/xopc/extension-sdk`**。
 
 ---
 
@@ -210,22 +210,22 @@ import type { ExtensionService } from '@xopcai/xopcbot/extension-sdk';
 
 ```bash
 # 从 npm 安装
-xopcbot extension install <package-name>
+xopc extension install <package-name>
 
 # 安装特定版本
-xopcbot extension install my-extension@1.0.0
+xopc extension install my-extension@1.0.0
 
 # 从本地目录安装
-xopcbot extension install ./local-extension-dir
-xopcbot extension install /absolute/path/to/extension
+xopc extension install ./local-extension-dir
+xopc extension install /absolute/path/to/extension
 
 # 设置超时时间（默认 120 秒）
-xopcbot extension install slow-extension --timeout 300000
+xopc extension install slow-extension --timeout 300000
 ```
 
 **安装流程**：
 1. 下载/复制扩展文件
-2. 验证 `xopcbot.extension.json` 清单
+2. 验证 `xopc.extension.json` 清单
 3. 安装依赖（如有 `package.json` 依赖）
 4. 复制到工作区 `.extensions/` 目录
 
@@ -234,7 +234,7 @@ xopcbot extension install slow-extension --timeout 300000
 列出所有已安装扩展。
 
 ```bash
-xopcbot extension list
+xopc extension list
 ```
 
 **输出示例**：
@@ -246,12 +246,12 @@ xopcbot extension list
   📁 Telegram Channel
      ID: telegram-channel
      Version: 1.2.0
-     Path: /home/user/.xopcbot/workspace/.extensions/telegram-channel
+     Path: /home/user/.xopc/workspace/.extensions/telegram-channel
 
   📁 My Custom Extension
      ID: my-custom-extension
      Version: 0.1.0
-     Path: /home/user/.xopcbot/workspace/.extensions/my-custom-extension
+     Path: /home/user/.xopc/workspace/.extensions/my-custom-extension
 ```
 
 ### extension remove / uninstall
@@ -259,8 +259,8 @@ xopcbot extension list
 移除已安装扩展。
 
 ```bash
-xopcbot extension remove <extension-id>
-xopcbot extension uninstall <extension-id>
+xopc extension remove <extension-id>
+xopc extension uninstall <extension-id>
 ```
 
 **注意**：移除扩展后，如果已启用，还需要从配置文件中删除。
@@ -270,7 +270,7 @@ xopcbot extension uninstall <extension-id>
 查看扩展详情。
 
 ```bash
-xopcbot extension info <extension-id>
+xopc extension info <extension-id>
 ```
 
 ### extension create
@@ -278,7 +278,7 @@ xopcbot extension info <extension-id>
 创建新扩展脚手架。
 
 ```bash
-xopcbot extension create <extension-id> [options]
+xopc extension create <extension-id> [options]
 
 Options:
   --name <name>           扩展显示名称
@@ -289,17 +289,17 @@ Options:
 **示例**：
 ```bash
 # 创建一个工具类扩展
-xopcbot extension create weather-tool --name "Weather Tool" --kind tool
+xopc extension create weather-tool --name "Weather Tool" --kind tool
 
 # 创建一个通道类扩展
-xopcbot extension create discord-channel --name "Discord Channel" --kind channel
+xopc extension create discord-channel --name "Discord Channel" --kind channel
 ```
 
 ## 扩展结构
 
 ### Manifest 文件
 
-每个扩展必须包含一个 `xopcbot.extension.json` 文件：
+每个扩展必须包含一个 `xopc.extension.json` 文件：
 
 ```json
 {
@@ -324,7 +324,7 @@ xopcbot extension create discord-channel --name "Discord Channel" --kind channel
 
 ```javascript
 // index.js
-import type { ExtensionApi } from '@xopcai/xopcbot/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 
 const extension = {
   id: 'my-extension',
@@ -575,7 +575,7 @@ api.off('my-event', handler);
 ## 完整示例
 
 ```javascript
-import type { ExtensionApi } from '@xopcai/xopcbot/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 
 const extension = {
   id: 'example',
@@ -633,7 +633,7 @@ export default extension;
 
 ## 发布扩展
 
-1. 创建 `xopcbot.extension.json` manifest
+1. 创建 `xopc.extension.json` manifest
 2. 创建 `index.js` 入口文件
 3. 推送到 GitHub 或发布到 npm
 
@@ -642,7 +642,7 @@ export default extension;
 npm publish --access public
 
 # 如果使用 scoped 包名（推荐）
-# package.json: { "name": "@yourname/xopcbot-extension-name" }
+# package.json: { "name": "@yourname/xopc-extension-name" }
 npm publish --access public
 ```
 
@@ -675,7 +675,7 @@ npm publish --access public
       "hello": true,
       "echo": false
     },
-    "allow": ["hello", "echo", "xopcbot-feishu"],
+    "allow": ["hello", "echo", "xopc-feishu"],
     "security": {
       "checkPermissions": true,
       "allowUntrusted": false,
@@ -757,7 +757,7 @@ Slot 确保独占能力只有一个活动实现。配置哪个扩展应该声明
 
 ### 安全
 
-默认情况下，xopcbot 对扩展执行安全检查：
+默认情况下，xopc 对扩展执行安全检查：
 - 路径安全（无 symlink 逃逸）
 - 所有权验证
 - Hardlink 检测

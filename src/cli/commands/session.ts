@@ -11,15 +11,15 @@ function createSessionCommand(_ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
-        'xopcbot session list                    # List all sessions',
-        'xopcbot session info <key>              # Show session details',
-        'xopcbot session delete <key>            # Delete a session',
-        'xopcbot session rename <key> <name>     # Rename a session',
-        'xopcbot session tag <key> <tag1> <tag2>  # Add tags',
-        'xopcbot session archive <key>           # Archive session',
-        'xopcbot session search <query>          # Search sessions',
-        'xopcbot session export <key>            # Export session',
-        'xopcbot session stats                   # Show statistics',
+        'xopc session list                    # List all sessions',
+        'xopc session info <key>              # Show session details',
+        'xopc session delete <key>            # Delete a session',
+        'xopc session rename <key> <name>     # Rename a session',
+        'xopc session tag <key> <tag1> <tag2>  # Add tags',
+        'xopc session archive <key>           # Archive session',
+        'xopc session search <query>          # Search sessions',
+        'xopc session export <key>            # Export session',
+        'xopc session stats                   # Show statistics',
       ])
     );
 
@@ -242,10 +242,10 @@ register({
   metadata: {
     category: 'maintenance',
     examples: [
-      'xopcbot session list',
-      'xopcbot session info telegram:dm:123456',
-      'xopcbot session delete telegram:g:-100123456',
-      'xopcbot session export telegram:dm:123456 --format markdown',
+      'xopc session list',
+      'xopc session info telegram:dm:123456',
+      'xopc session delete telegram:g:-100123456',
+      'xopc session export telegram:dm:123456 --format markdown',
     ],
   },
 });

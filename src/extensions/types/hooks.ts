@@ -367,7 +367,7 @@ export type HookHandlerMap = {
     ctx: HookAgentContext,
   ) => Promise<void> | void;
   
-  // Enhanced (xopcbot-specific)
+  // Enhanced (xopc-specific)
   context: (
     event: ContextEvent,
     ctx: HookAgentContext,

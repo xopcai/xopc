@@ -37,7 +37,7 @@ async function fetchPageContent(url: string, signal?: AbortSignal): Promise<stri
   const response = await fetch(url, {
     signal,
     headers: {
-      'User-Agent': 'Mozilla/5.0 (compatible; xopcbot/1.0)',
+      'User-Agent': 'Mozilla/5.0 (compatible; xopc/1.0)',
       Accept: 'text/html,application/xhtml+xml,text/plain,application/json',
     },
     redirect: 'follow',
@@ -77,7 +77,7 @@ export function stripHtmlBoilerplate(
 }
 
 function resolveExtractionModel(config?: Config) {
-  const envRef = process.env.XOPCBOT_WEB_EXTRACT_MODEL?.trim();
+  const envRef = process.env.XOPC_WEB_EXTRACT_MODEL?.trim();
   const configRef =
     typeof config?.agents?.defaults?.webExtract?.model === 'string'
       ? config.agents.defaults.webExtract.model.trim()

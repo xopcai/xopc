@@ -16,7 +16,7 @@ describe('MessageRouter', () => {
   const router = new MessageRouter();
 
   it('treats /new@BotName as command new', async () => {
-    const r = await router.routeMessage(makeInbound('/new@xopcbot_bot'));
+    const r = await router.routeMessage(makeInbound('/new@xopc_bot'));
     expect(r.isCommand).toBe(true);
     expect(r.command).toBe('new');
     expect(r.commandArgs).toBe('');

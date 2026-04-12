@@ -1,6 +1,6 @@
 # 磁盘与目录布局
 
-本文是 xopcbot **读写路径的简明对照表**。配置仍是唯一事实来源；具体解析见 `src/agent/agent-scope.ts`、`src/config/paths-state.ts`、`src/config/paths.ts` 及相关模块。
+本文是 xopc **读写路径的简明对照表**。配置仍是唯一事实来源；具体解析见 `src/agent/agent-scope.ts`、`src/config/paths-state.ts`、`src/config/paths.ts` 及相关模块。
 
 初始化步骤、模板说明与环境变量详见 [状态目录与工作空间布局](workspace.md)。
 
@@ -13,20 +13,20 @@
 | **Agent 状态目录** `…/agents/<agentId>/agent/` | 进程状态：`agent.json`、每 Agent 凭据、IPC 收件箱、pid/socket、小型机器状态、扩展安装、出站崩溃恢复队列。 |
 | **Markdown 工作空间** | 用户项目树：工具 **cwd**、每日 `memory/*.md`、`media/generated`、用户 `skills/`、任意用户文件。**不再**作为人格文件或内部状态的主存放位置。 |
 
-下文默认状态根为 `~/.xopcbot/`；可用 `XOPCBOT_STATE_DIR`、`XOPCBOT_PROFILE`、`XOPCBOT_HOME` 覆盖（见 [workspace.md 环境变量](workspace.md#环境变量速查)）。
+下文默认状态根为 `~/.xopc/`；可用 `XOPC_STATE_DIR`、`XOPC_PROFILE`、`XOPC_HOME` 覆盖（见 [workspace.md 环境变量](workspace.md#环境变量速查)）。
 
 ## 状态目录（全局）
 
-默认：`~/.xopcbot/`
+默认：`~/.xopc/`
 
 | 路径 | 用途 |
 |------|------|
-| `xopcbot.json` | 主配置（若未用 `XOPCBOT_CONFIG` / `XOPCBOT_CONFIG_PATH` 指向他处）。 |
+| `xopc.json` | 主配置（若未用 `XOPC_CONFIG` / `XOPC_CONFIG_PATH` 指向他处）。 |
 | `credentials/` | 全局密钥：`auth-profiles.json`、`oauth/<provider>.json`。 |
 | `extensions/` | 已安装扩展、`extensions-lock.json`。 |
 | `skills/` | 全局托管技能包（`<id>/SKILL.md`）。 |
 | `cron/` | `jobs.json`、`logs/`、`runs/`。 |
-| `logs/` | 应用日志（可用 `XOPCBOT_LOG_DIR` 覆盖）。 |
+| `logs/` | 应用日志（可用 `XOPC_LOG_DIR` 覆盖）。 |
 | `bin/`、`tools/` | CLI 包装与工具运行时。 |
 | `models.json` | 可选的自定义模型注册数据。 |
 
@@ -43,7 +43,7 @@
 | `tts/` | 按会话缓存的出站 TTS 音频。 |
 | `agent/` | 见下节 **Agent 状态目录**。 |
 
-种子目录：`xopcbot init` / `xopcbot agents add` 会创建 `bootstrap/` 与工作区骨架；模板位于 `src/agent/context/workspace-templates/`（参见 [工作区模板](/zh/reference/templates)）。
+种子目录：`xopc init` / `xopc agents add` 会创建 `bootstrap/` 与工作区骨架；模板位于 `src/agent/context/workspace-templates/`（参见 [工作区模板](/zh/reference/templates)）。
 
 ## Agent 状态目录：`agents/<agentId>/agent/`
 
@@ -72,7 +72,7 @@
 | `skills/` | 用户自建技能。 |
 | *任意文件* | `read` / `write` / `edit` 等工具操作对象。 |
 
-新安装不会把内部状态写回 Markdown 工作区。本版本只支持文首表格中的 **单一目录树**：人设与机器状态均在 `agents/<id>/` 下，**不会**从「全部堆在 Markdown 工作区里」的旧布局自动迁移；bootstrap 请用 `xopcbot setup` / `xopcbot onboard`，其他数据需自行搬迁。
+新安装不会把内部状态写回 Markdown 工作区。本版本只支持文首表格中的 **单一目录树**：人设与机器状态均在 `agents/<id>/` 下，**不会**从「全部堆在 Markdown 工作区里」的旧布局自动迁移；bootstrap 请用 `xopc setup` / `xopc onboard`，其他数据需自行搬迁。
 
 会话里引用的入站附件 / TTS 路径仅支持相对 `inbound/`、`tts/`（相对 agent home解析）。
 

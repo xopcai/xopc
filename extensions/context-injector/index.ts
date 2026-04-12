@@ -3,10 +3,10 @@
  *
  * Demonstrates: Context hook to inject system messages before LLM
  *
- * Usage: xopcbot extension install ./examples/extensions/context-injector
+ * Usage: xopc extension install ./examples/extensions/context-injector
  */
 
-import type { ExtensionApi } from 'xopcbot/extension-sdk';
+import type { ExtensionApi } from 'xopc/extension-sdk';
 
 export default function(api: ExtensionApi) {
   const config = api.extensionConfig;

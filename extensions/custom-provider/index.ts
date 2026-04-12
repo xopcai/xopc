@@ -3,10 +3,10 @@
  *
  * Demonstrates: Provider registration, CLI flags, and shortcuts
  *
- * Usage: xopcbot extension install ./examples/extensions/custom-provider
+ * Usage: xopc extension install ./examples/extensions/custom-provider
  */
 
-import type { ExtensionApi } from 'xopcbot/extension-sdk';
+import type { ExtensionApi } from 'xopc/extension-sdk';
 
 export default function(api: ExtensionApi) {
   api.logger.info('Custom Provider extension registered!');

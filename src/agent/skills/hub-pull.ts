@@ -1,5 +1,5 @@
 /**
- * CLI / hub: install or update skills from git or archive (zip / tar.gz) into ~/.xopcbot/skills.
+ * CLI / hub: install or update skills from git or archive (zip / tar.gz) into ~/.xopc/skills.
  */
 
 import { execFileSync } from 'node:child_process';
@@ -214,7 +214,7 @@ async function pullSkillFromTarFile(
   sourceLabel: string,
   options: HubPullOptions,
 ): Promise<HubPullResult> {
-  const tmpRoot = mkdtempSync(join(tmpdir(), 'xopcbot-tar-'));
+  const tmpRoot = mkdtempSync(join(tmpdir(), 'xopc-tar-'));
   try {
     execFileSync('tar', ['-xzf', archivePath, '-C', tmpRoot], {
       stdio: 'pipe',
@@ -248,7 +248,7 @@ async function pullSkillFromLocalPath(absPath: string, options: HubPullOptions):
 }
 
 async function pullSkillFromGit(url: string, options: HubPullOptions): Promise<HubPullResult> {
-  const tmpRoot = mkdtempSync(join(tmpdir(), 'xopcbot-hub-'));
+  const tmpRoot = mkdtempSync(join(tmpdir(), 'xopc-hub-'));
   const cloneDir = join(tmpRoot, 'clone');
   try {
     const args = ['clone', '--depth', '1'];
@@ -312,7 +312,7 @@ export async function pullSkillFromSource(
     const buf = Buffer.from(await res.arrayBuffer());
     const lower = trimmed.toLowerCase();
     if (lower.endsWith('.tar.gz') || lower.endsWith('.tgz')) {
-      const tmpRoot = mkdtempSync(join(tmpdir(), 'xopcbot-fetch-tar-'));
+      const tmpRoot = mkdtempSync(join(tmpdir(), 'xopc-fetch-tar-'));
       const f = join(tmpRoot, 'archive.tgz');
       try {
         mkdirSync(tmpRoot, { recursive: true });
@@ -328,7 +328,7 @@ export async function pullSkillFromSource(
   return pullSkillFromGit(trimmed, options);
 }
 
-/** Re-install from the source recorded in ~/.xopcbot/skills-lock.json for this skill id. */
+/** Re-install from the source recorded in ~/.xopc/skills-lock.json for this skill id. */
 export async function updateSkillFromLock(
   skillId: string,
   options: Pick<HubPullOptions, 'strictScan'> = {},
@@ -336,7 +336,7 @@ export async function updateSkillFromLock(
   const e = getSkillsLockEntry(skillId);
   if (!e) {
     throw new Error(
-      `No hub lock entry for "${skillId}". Install with: xopcbot skills pull <git-or-archive-url>`,
+      `No hub lock entry for "${skillId}". Install with: xopc skills pull <git-or-archive-url>`,
     );
   }
   return pullSkillFromSource(e.source, {

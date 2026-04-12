@@ -14,15 +14,15 @@
 
 import type { Bot } from 'grammy';
 import { InputFile } from 'grammy';
-import type { Config } from '@xopcai/xopcbot/config/schema.js';
-import type { ChannelSendOptions, ChannelSendResult } from '@xopcai/xopcbot/channels/channel-domain.js';
+import type { Config } from '@xopcai/xopc/config/schema.js';
+import type { ChannelSendOptions, ChannelSendResult } from '@xopcai/xopc/channels/channel-domain.js';
 import type { TelegramAccountManager } from './account-manager.js';
 import { buildSendOptions, parseDataUrl, resolveMediaMethod } from './send-options.js';
 import { splitTelegramCaption } from './caption.js';
 import { renderTelegramHtmlText, markdownToTelegramChunks } from './format.js';
 import { sentMessageCache } from './sent-cache.js';
-import { createRetryRunner, isRecoverableNetworkError } from '@xopcai/xopcbot/infra/retry.js';
-import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
+import { createRetryRunner, isRecoverableNetworkError } from '@xopcai/xopc/infra/retry.js';
+import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { isTelegramHtmlParseError } from './errors.js';
 
 const log = createLogger('TelegramOutboundSender');

@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 
-import type { Config } from '@xopcai/xopcbot/config/schema.js';
+import type { Config } from '@xopcai/xopc/config/schema.js';
 
 import { clearContextTokensForAccount } from '../messaging/inbound.js';
 import { resolveWeixinRootDir } from '../storage/state-dir.js';
@@ -244,11 +244,11 @@ export function resolveWeixinAccount(cfg: Config, accountId?: string | null): Re
 }
 
 export function resolveFrameworkAllowFromPath(accountId: string): string {
-  const base = 'xopcbot-weixin'.replace(/[\\/:*?"<>|]/g, '_');
+  const base = 'xopc-weixin'.replace(/[\\/:*?"<>|]/g, '_');
   const safeAccount = accountId.trim().toLowerCase().replace(/[\\/:*?"<>|]/g, '_').replace(/\.\./g, '_');
   const { join } = path;
-  const credRoot = process.env.XOPCBOT_CREDENTIALS_DIR?.trim()
-    ? process.env.XOPCBOT_CREDENTIALS_DIR!
+  const credRoot = process.env.XOPC_CREDENTIALS_DIR?.trim()
+    ? process.env.XOPC_CREDENTIALS_DIR!
     : join(resolveWeixinRootDir(), 'credentials');
   return join(credRoot, `${base}-${safeAccount}-allowFrom.json`);
 }

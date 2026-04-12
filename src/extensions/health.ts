@@ -71,7 +71,7 @@ export class ExtensionHealthChecker {
     }
 
     // Check required files
-    const requiredFiles = ['package.json', 'xopcbot.extension.json'];
+    const requiredFiles = ['package.json', 'xopc.extension.json'];
     for (const file of requiredFiles) {
       const filePath = join(extDir, file);
       if (!existsSync(filePath)) {
@@ -113,28 +113,28 @@ export class ExtensionHealthChecker {
       status = 'error';
     }
 
-    // Load and validate xopcbot.extension.json
+    // Load and validate xopc.extension.json
     try {
-      const extConfigPath = join(extDir, 'xopcbot.extension.json');
+      const extConfigPath = join(extDir, 'xopc.extension.json');
       if (existsSync(extConfigPath)) {
         const extContent = await readFile(extConfigPath, 'utf-8');
         const extConfig = JSON.parse(extContent);
 
         if (!extConfig.id) {
-          issues.push('xopcbot.extension.json missing id field');
+          issues.push('xopc.extension.json missing id field');
           status = 'error';
         }
         if (!extConfig.name) {
-          issues.push('xopcbot.extension.json missing name field');
+          issues.push('xopc.extension.json missing name field');
           status = 'warning';
         }
         if (!extConfig.version) {
-          issues.push('xopcbot.extension.json missing version field');
+          issues.push('xopc.extension.json missing version field');
           status = 'warning';
         }
       }
     } catch {
-      issues.push('Failed to parse xopcbot.extension.json');
+      issues.push('Failed to parse xopc.extension.json');
       status = status === 'error' ? 'error' : 'warning';
     }
 

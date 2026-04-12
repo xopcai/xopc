@@ -1,6 +1,6 @@
 /**
  * Seed bootstrap persona Markdown files under `…/agents/<id>/bootstrap/` (ensure workspace + write-if-missing).
- * Resolution order per file: `XOPCBOT_TEMPLATE_PATH` or repo `docs/reference/templates`, then bundled `./workspace-templates/`.
+ * Resolution order per file: `XOPC_TEMPLATE_PATH` or repo `docs/reference/templates`, then bundled `./workspace-templates/`.
  */
 
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
@@ -41,7 +41,7 @@ function resolveDocsTemplatesDirFromWalk(): string | null {
 
 /** Same convention as CLI `templates.ts`: env override, then docs tree, else null. */
 function resolvePrimaryTemplatesBaseDir(): string | null {
-  const envPath = process.env.XOPCBOT_TEMPLATE_PATH?.trim();
+  const envPath = process.env.XOPC_TEMPLATE_PATH?.trim();
   if (envPath && existsSync(envPath)) {
     return envPath;
   }

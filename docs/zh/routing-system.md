@@ -27,7 +27,7 @@ main:cli:default:direct:cli
 
 ## 配置
 
-路由写在 **`~/.xopcbot/config.json`** 中（可用环境变量 `XOPCBOT_CONFIG` 覆盖路径）。请使用 **JSON**，不要使用 YAML。
+路由写在 **`~/.xopc/xopc.json`** 中（可用环境变量 `XOPC_CONFIG` 覆盖路径）。请使用 **JSON**，不要使用 YAML。
 
 ### Agent 与 bindings
 
@@ -35,7 +35,7 @@ main:cli:default:direct:cli
 
 ### 运行时有效配置（effective profile）
 
-Session key 的第一段为 `agentId` 时，运行时会将 **`agents.defaults`** 与该 id 在 **`agents.list`** 中**已启用**的条目合并（可覆盖 `workspace`、`model`、`agentDir`、`tools.disable`、`systemPromptOverride`、`skills`、思考默认值等）。若 `agentId` 在列表中不存在或已禁用，则按上面的**默认 agent** 解析配置。磁盘上的 `~/.xopcbot/agents/<id>/` 等路径与上述配置一致解析；**网关/运行时以 `config.json` 为准**。
+Session key 的第一段为 `agentId` 时，运行时会将 **`agents.defaults`** 与该 id 在 **`agents.list`** 中**已启用**的条目合并（可覆盖 `workspace`、`model`、`agentDir`、`tools.disable`、`systemPromptOverride`、`skills`、思考默认值等）。若 `agentId` 在列表中不存在或已禁用，则按上面的**默认 agent** 解析配置。磁盘上的 `~/.xopc/agents/<id>/` 等路径与上述配置一致解析；**网关/运行时以 `config.json` 为准**。
 
 `match.peerId` 支持简单的 `*` 通配（例如 Telegram 超级群 `-100*`）。
 
@@ -78,7 +78,7 @@ Session key 的第一段为 `agentId` 时，运行时会将 **`agents.defaults`*
 ### 生成 Session Key
 
 ```typescript
-import { buildSessionKey } from '@xopcai/xopcbot/routing/index.js';
+import { buildSessionKey } from '@xopcai/xopc/routing/index.js';
 
 const sessionKey = buildSessionKey({
   agentId: 'main',
@@ -92,7 +92,7 @@ const sessionKey = buildSessionKey({
 ### 路由决策
 
 ```typescript
-import { resolveRoute } from '@xopcai/xopcbot/routing/index.js';
+import { resolveRoute } from '@xopcai/xopc/routing/index.js';
 
 const route = resolveRoute({
   config,
@@ -109,5 +109,5 @@ console.log(route.agentId); // 无匹配规则时的默认 Agent（例如 main�
 ## 相关文件
 
 - `src/routing/` - 路由系统核心
-- `extensions/telegram/src/routing-integration.ts` - Telegram 集成（工作区包 `@xopcai/xopcbot-extension-telegram`）
+- `extensions/telegram/src/routing-integration.ts` - Telegram 集成（工作区包 `@xopcai/xopc-extension-telegram`）
 - `src/acp/routing-integration.ts` - ACP 集成

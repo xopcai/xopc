@@ -3,10 +3,10 @@
  *
  * Demonstrates: Input hook for content moderation and quick commands
  *
- * Usage: xopcbot extension install ./examples/extensions/input-guard
+ * Usage: xopc extension install ./examples/extensions/input-guard
  */
 
-import type { ExtensionApi } from 'xopcbot/extension-sdk';
+import type { ExtensionApi } from 'xopc/extension-sdk';
 
 export default function(api: ExtensionApi) {
   const config = api.extensionConfig;

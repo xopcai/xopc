@@ -1,12 +1,12 @@
 # Architecture
 
-This page describes how xopcbot is structured and how the main pieces fit together.
+This page describes how xopc is structured and how the main pieces fit together.
 
 ## System Architecture
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
-│                      xopcbot                                │
+│                      xopc                                │
 ├─────────────────────────────────────────────────────────────┤
 │                                                             │
 │  ┌─────────────────────────────────────────────────────┐   │
@@ -63,12 +63,12 @@ src/
 │   │   ├── registry.ts #   Plugin registry / lookup
 │   │   └── types.*.ts  #   Registry type helpers
 │   ├── telegram/
-│   │   └── index.ts    #   Re-exports from @xopcai/xopcbot-extension-telegram (compat)
+│   │   └── index.ts    #   Re-exports from @xopcai/xopc-extension-telegram (compat)
 │   ├── outbound/       #   Outbound delivery pipeline
 │   ├── security.ts     #   Access control helpers
 │   ├── draft-stream.ts #   Streaming message preview
 │   └── format.ts       #   Markdown to HTML formatter
-├── extensions/         # Extension runtime (loader, hooks); `sdk/` → @xopcai/xopcbot/extension-sdk
+├── extensions/         # Extension runtime (loader, hooks); `sdk/` → @xopcai/xopc/extension-sdk
 ├── routing/            # Session keys, bindings, route resolution
 ├── acp/                # Agent Control Protocol (optional multi-runtime bridge)
 ├── cli/                # CLI commands with self-registration
@@ -90,12 +90,12 @@ web/                    # Gateway console SPA (React + Vite + Tailwind v4)
 └── src/                #   App source; production build → dist/gateway/static/root
 
 extensions/
-└── telegram/           # Workspace package: Telegram channel (@xopcai/xopcbot-extension-telegram)
+└── telegram/           # Workspace package: Telegram channel (@xopcai/xopc-extension-telegram)
 ```
 
 ## State directory & workspace on disk
 
-Runtime data (config, credentials, per-agent sessions, the Markdown **workspace** used as tool cwd and user content, and per-agent **bootstrap** persona Markdown under `agents/<id>/bootstrap/`) lives outside the git repo under the **state directory** (default `~/.xopcbot`). For a filesystem map (bootstrap, agent home, Markdown workspace), see [On-disk layout](disk-layout.md). For setup, env overrides, and how `agents.defaults.workspace` relates to default paths, see [State directory & workspace layout](workspace.md).
+Runtime data (config, credentials, per-agent sessions, the Markdown **workspace** used as tool cwd and user content, and per-agent **bootstrap** persona Markdown under `agents/<id>/bootstrap/`) lives outside the git repo under the **state directory** (default `~/.xopc`). For a filesystem map (bootstrap, agent home, Markdown workspace), see [On-disk layout](disk-layout.md). For setup, env overrides, and how `agents.defaults.workspace` relates to default paths, see [State directory & workspace layout](workspace.md).
 
 ## Core Modules
 
@@ -126,8 +126,8 @@ src/agent/prompt/
 
 | Section | Description |
 |---------|-------------|
-| Identity | "You are a personal assistant running in xopcbot" |
-| Version | xopcbot version info |
+| Identity | "You are a personal assistant running in xopc" |
+| Version | xopc version info |
 | Tool Call Style | Tool calling style (verbose/brief/minimal) |
 | Safety | Safety principles |
 | Memory | memory_search/memory_get usage guide |
@@ -214,7 +214,7 @@ Channels are implemented as **`ChannelPlugin`** instances. The core **`ChannelMa
 **Imports** (extension or core code):
 
 ```typescript
-import { telegramPlugin } from '@xopcai/xopcbot-extension-telegram';
+import { telegramPlugin } from '@xopcai/xopc-extension-telegram';
 // Re-exported for stable paths: import { telegramPlugin } from './channels/telegram/index.js';
 ```
 
@@ -238,8 +238,8 @@ before_tool_call → after_tool_call → message_sending → session_end
 
 **Three-tier Storage**:
 1. **Workspace** (`workspace/.extensions/`) - Project-private
-2. **Global** (`~/.xopcbot/extensions/`) - User-level shared
-3. **Bundled** (`xopcbot/extensions/`) - Built-in
+2. **Global** (`~/.xopc/extensions/`) - User-level shared
+3. **Bundled** (`xopc/extensions/`) - Built-in
 
 ## Data Flow
 
@@ -285,7 +285,7 @@ User Reply / Channel Response
 
 ## CLI Command Registration
 
-xopcbot uses self-registration pattern:
+xopc uses self-registration pattern:
 
 ```typescript
 // src/cli/commands/mycommand.ts
@@ -340,6 +340,6 @@ api.registerHook('before_tool_call', async (event, ctx) => {
 
 ### Adding channel plugins
 
-1. Implement `ChannelPlugin` in a package or under `extensions/<name>/` (see `src/channels/plugin-types.ts` and `defineChannelPluginEntry` in `@xopcai/xopcbot/extension-sdk`).
+1. Implement `ChannelPlugin` in a package or under `extensions/<name>/` (see `src/channels/plugin-types.ts` and `defineChannelPluginEntry` in `@xopcai/xopc/extension-sdk`).
 2. Export the plugin object and add it to `bundledChannelPlugins` in `src/channels/plugins/bundled.ts` if it should ship with the core binary.
 3. Ensure `ChannelManager` startup loads your plugin (bundled plugins are registered automatically when listed in `bundled.ts`).

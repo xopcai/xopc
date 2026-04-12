@@ -9,7 +9,7 @@ import { BOOTSTRAP_FILES } from '../workspace.js';
 
 describe('workspace-seed', () => {
   it('creates missing bootstrap files from templates', () => {
-    const dir = mkdtempSync(join(tmpdir(), 'xopcbot-ws-'));
+    const dir = mkdtempSync(join(tmpdir(), 'xopc-ws-'));
     try {
       seedWorkspaceBootstrapFiles(dir);
       const expected = [...BOOTSTRAP_FILES, WORKSPACE_FILES.BOOTSTRAP];

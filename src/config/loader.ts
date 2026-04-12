@@ -12,7 +12,7 @@ const CONFIG_BACKUP_COUNT = 10;
 
 /**
  * Rotate config backups before writing new config.
- * Creates a backup chain: xopcbot.json.bak, xopcbot.json.bak.1, xopcbot.json.bak.2, etc.
+ * Creates a backup chain: xopc.json.bak, xopc.json.bak.1, xopc.json.bak.2, etc.
  */
 async function rotateConfigBackups(configPath: string): Promise<void> {
   if (CONFIG_BACKUP_COUNT <= 1) {
@@ -48,12 +48,12 @@ async function rotateConfigBackups(configPath: string): Promise<void> {
 
 /**
  * Load configuration from file
- * @param configPath Optional custom config path, defaults to XOPCBOT_CONFIG_PATH or ~/.xopcbot/xopcbot.json
+ * @param configPath Optional custom config path, defaults to XOPC_CONFIG_PATH or ~/.xopc/xopc.json
  */
 export function loadConfig(configPath?: string): Config {
   config();
 
-  const path = configPath || process.env.XOPCBOT_CONFIG_PATH || resolveConfigPath();
+  const path = configPath || process.env.XOPC_CONFIG_PATH || resolveConfigPath();
 
   if (existsSync(path)) {
     try {
@@ -75,7 +75,7 @@ export function loadConfig(configPath?: string): Config {
  * @param configPath Optional custom config path
  */
 export async function saveConfig(config: Config, configPath?: string): Promise<void> {
-  const path = configPath || process.env.XOPCBOT_CONFIG_PATH || resolveConfigPath();
+  const path = configPath || process.env.XOPC_CONFIG_PATH || resolveConfigPath();
 
   const dir = dirname(path);
   if (!existsSync(dir)) {

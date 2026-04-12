@@ -1,6 +1,6 @@
 # Skills 系统使用指南
 
-xopcbot 的技能系统基于工作区中的文件：通过 `SKILL.md` 等为 AI 助手添加领域能力与知识。
+xopc 的技能系统基于工作区中的文件：通过 `SKILL.md` 等为 AI 助手添加领域能力与知识。
 
 ## 目录
 
@@ -41,7 +41,7 @@ name: skill-name
 description: 技能的简短描述
 homepage: https://example.com
 metadata:
-  xopcbot:
+  xopc:
     emoji: 📦
     os: [darwin, linux]
     requires:
@@ -66,12 +66,12 @@ metadata:
 | `name` | string | 技能名称（唯一标识符） |
 | `description` | string | 技能的简短描述 |
 | `homepage` | string | 项目主页 URL |
-| `metadata.xopcbot.emoji` | string | UI 中显示的图标 |
-| `metadata.xopcbot.os` | string[] | 支持的操作系统：`darwin`, `linux`, `win32` |
-| `metadata.xopcbot.requires` | object | 依赖要求 |
-| `metadata.xopcbot.requires.bins` | string[] | 必需的二进制文件 |
-| `metadata.xopcbot.requires.anyBins` | string[] | 任一可用的二进制文件 |
-| `metadata.xopcbot.install` | array | 安装选项列表 |
+| `metadata.xopc.emoji` | string | UI 中显示的图标 |
+| `metadata.xopc.os` | string[] | 支持的操作系统：`darwin`, `linux`, `win32` |
+| `metadata.xopc.requires` | object | 依赖要求 |
+| `metadata.xopc.requires.bins` | string[] | 必需的二进制文件 |
+| `metadata.xopc.requires.anyBins` | string[] | 任一可用的二进制文件 |
+| `metadata.xopc.install` | array | 安装选项列表 |
 
 ### 安装器类型
 
@@ -118,7 +118,7 @@ install:
 
 技能可以从以下位置加载：
 
-1. **Bundled** - 内置于 xopcbot 的技能
+1. **Bundled** - 内置于 xopc 的技能
    - 位置：`src/agent/skills/bundled/`
    
 2. **Workspace** - 工作区特定的技能
@@ -126,7 +126,7 @@ install:
    - 优先级最高
 
 3. **Global** - 全局技能
-   - 位置：`~/.xopcbot/skills/`
+   - 位置：`~/.xopc/skills/`
 
 4. **Extra** - 额外配置的技能目录
    - 通过配置文件指定
@@ -139,16 +139,16 @@ Workspace > Global > Bundled
 
 ## Skills Hub（Git / 压缩包）
 
-从 **Git 仓库** 或 **本地/远程压缩包**（zip、tar.gz 等）安装或更新技能到 **`~/.xopcbot/skills`**。安装记录在 **`skills-lock.json`**（与 skills 目录同级），便于按哈希与来源做 **`hub update`**。
+从 **Git 仓库** 或 **本地/远程压缩包**（zip、tar.gz 等）安装或更新技能到 **`~/.xopc/skills`**。安装记录在 **`skills-lock.json`**（与 skills 目录同级），便于按哈希与来源做 **`hub update`**。
 
 ```bash
-xopcbot skills hub pull https://github.com/org/repo.git   # 可选 --ref、--path、--id、--force、--strict-scan
-xopcbot skills hub update my-skill
-xopcbot skills hub lock
-xopcbot skills hub lock --json
+xopc skills hub pull https://github.com/org/repo.git   # 可选 --ref、--path、--id、--force、--strict-scan
+xopc skills hub update my-skill
+xopc skills hub lock
+xopc skills hub lock --json
 ```
 
-Hub 安装的技能与全局 `~/.xopcbot/skills/` 规则一致，仍可用 `skills enable` / `disable` 与 `skills.json` 条目控制。
+Hub 安装的技能与全局 `~/.xopc/skills/` 规则一致，仍可用 `skills enable` / `disable` 与 `skills.json` 条目控制。
 
 ## Agent 运行时：工具与提示风格
 
@@ -160,7 +160,7 @@ Agent 在接入 SkillManager 时注册与技能相关的工具：
 | `skill_view` | 读取 `SKILL.md` 或 `references/` 等允许子路径下的文件 |
 | `skill_manage` | 在 `skills.agentWritePolicy` 允许范围内增删改用户技能 |
 
-**`~/.xopcbot/skills.json` 顶层字段**（除 `entries` 外）示例含义：
+**`~/.xopc/skills.json` 顶层字段**（除 `entries` 外）示例含义：
 
 | 字段 | 含义 |
 |------|------|
@@ -179,7 +179,7 @@ Agent 在接入 SkillManager 时注册与技能相关的工具：
 
 - Hermes 风格 **`required_environment_variables`**（`{ name: "VAR" }` 数组）
 - **`prerequisites.env_vars`**
-- **`requires.env`** 或 **`metadata.xopcbot.requires.env`**
+- **`requires.env`** 或 **`metadata.xopc.requires.env`**
 
 ## CLI 命令
 
@@ -187,109 +187,109 @@ Agent 在接入 SkillManager 时注册与技能相关的工具：
 
 ```bash
 # 列出所有可用技能
-xopcbot skills list
+xopc skills list
 
 # 显示详细信息
-xopcbot skills list -v
+xopc skills list -v
 
 # JSON 格式输出
-xopcbot skills list --json
+xopc skills list --json
 ```
 
 ### 安装技能依赖
 
 ```bash
 # 安装默认依赖
-xopcbot skills install weather
+xopc skills install weather
 
 # 指定安装器
-xopcbot skills install weather -i brew-curl
+xopc skills install weather -i brew-curl
 
 # 预演（不实际执行）
-xopcbot skills install weather --dry-run
+xopc skills install weather --dry-run
 ```
 
 ### 启用/禁用技能
 
 ```bash
 # 启用技能
-xopcbot skills enable weather
+xopc skills enable weather
 
 # 禁用技能
-xopcbot skills disable weather
+xopc skills disable weather
 ```
 
 ### 查看技能状态
 
 ```bash
 # 查看所有技能状态
-xopcbot skills status
+xopc skills status
 
 # 查看特定技能详情
-xopcbot skills status weather
+xopc skills status weather
 
 # JSON 格式
-xopcbot skills status --json
+xopc skills status --json
 ```
 
 ### 安全审计
 
 ```bash
 # 审计所有技能
-xopcbot skills audit
+xopc skills audit
 
 # 审计特定技能
-xopcbot skills audit weather
+xopc skills audit weather
 
 # 显示详细发现
-xopcbot skills audit weather --deep
+xopc skills audit weather --deep
 ```
 
 ### 配置技能
 
 ```bash
 # 显示当前配置
-xopcbot skills config weather --show
+xopc skills config weather --show
 
 # 设置 API 密钥
-xopcbot skills config weather --api-key=YOUR_API_KEY
+xopc skills config weather --api-key=YOUR_API_KEY
 
 # 设置环境变量
-xopcbot skills config weather --env API_KEY=value --env DEBUG=true
+xopc skills config weather --env API_KEY=value --env DEBUG=true
 ```
 
 ### 测试技能
 
 ```bash
 # 测试所有技能
-xopcbot skills test
+xopc skills test
 
 # 测试特定技能
-xopcbot skills test weather
+xopc skills test weather
 
 # 详细输出
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # JSON 格式
-xopcbot skills test --format json
+xopc skills test --format json
 
 # 跳过特定测试
-xopcbot skills test --skip-security
-xopcbot skills test --skip-examples
+xopc skills test --skip-security
+xopc skills test --skip-examples
 
 # 验证 SKILL.md 文件
-xopcbot skills test validate ./skills/weather/SKILL.md
+xopc skills test validate ./skills/weather/SKILL.md
 
 # 检查依赖
-xopcbot skills test check-deps
+xopc skills test check-deps
 
 # 安全审计
-xopcbot skills test security --deep
+xopc skills test security --deep
 ```
 
 ## 配置技能
 
-技能配置文件位于 `~/.xopcbot/skills.json`。除 **`entries`** 外可配置全局加载行为（见 [Agent 运行时](#agent-运行时工具与提示风格)）：
+技能配置文件位于 `~/.xopc/skills.json`。除 **`entries`** 外可配置全局加载行为（见 [Agent 运行时](#agent-运行时工具与提示风格)）：
 
 ```json
 {
@@ -321,13 +321,13 @@ xopcbot skills test security --deep
 
 ```bash
 # 启用/禁用
-export XOPCBOT_SKILL_WEATHER_ENABLED=true
+export XOPC_SKILL_WEATHER_ENABLED=true
 
 # API 密钥
-export XOPCBOT_SKILL_WEATHER_API_KEY=your-key
+export XOPC_SKILL_WEATHER_API_KEY=your-key
 
 # 环境变量
-export XOPCBOT_SKILL_WEATHER_ENV_WTTR_LANG=zh
+export XOPC_SKILL_WEATHER_ENV_WTTR_LANG=zh
 ```
 
 ## 安装技能依赖
@@ -336,10 +336,10 @@ export XOPCBOT_SKILL_WEATHER_ENV_WTTR_LANG=zh
 
 ```bash
 # 查看技能需要的依赖
-xopcbot skills status weather
+xopc skills status weather
 
 # 安装依赖
-xopcbot skills install weather
+xopc skills install weather
 ```
 
 安装器支持：
@@ -381,10 +381,10 @@ xopcbot skills install weather
 
 ```bash
 # 快速审计
-xopcbot skills audit weather
+xopc skills audit weather
 
 # 详细报告
-xopcbot skills audit weather --deep
+xopc skills audit weather --deep
 ```
 
 ### 扫描输出示例
@@ -402,7 +402,7 @@ Findings:
 
 ## 技能测试
 
-xopcbot 提供完整的技能测试框架，用于验证技能的质量、安全性和功能性。
+xopc 提供完整的技能测试框架，用于验证技能的质量、安全性和功能性。
 
 ### 测试类型
 
@@ -418,22 +418,22 @@ xopcbot 提供完整的技能测试框架，用于验证技能的质量、安全
 
 ```bash
 # 测试所有技能
-xopcbot skills test
+xopc skills test
 
 # 测试特定技能
-xopcbot skills test weather
+xopc skills test weather
 
 # 详细输出
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # JSON 格式（用于 CI/CD）
-xopcbot skills test --format json
+xopc skills test --format json
 
 # TAP 格式（用于 CI/CD）
-xopcbot skills test --format tap
+xopc skills test --format tap
 
 # 严格模式（警告也视为失败）
-xopcbot skills test --strict
+xopc skills test --strict
 ```
 
 ### 测试输出示例
@@ -473,7 +473,7 @@ jobs:
       - uses: actions/checkout@v4
       - run: npm install
       - run: npm run build
-      - run: xopcbot skills test --format tap --strict
+      - run: xopc skills test --format tap --strict
 ```
 
 ## 示例技能
@@ -486,7 +486,7 @@ name: weather
 description: Get weather information using wttr.in
 homepage: https://github.com/chubin/wttr.in
 metadata:
-  xopcbot:
+  xopc:
     emoji: 🌤️
     requires:
       anyBins: [curl, wget]
@@ -521,7 +521,7 @@ name: github
 description: Interact with GitHub via CLI
 homepage: https://cli.github.com
 metadata:
-  xopcbot:
+  xopc:
     emoji: 🐙
     requires:
       bins: [gh]
@@ -596,7 +596,7 @@ gh run list
 
 1. 检查 SKILL.md 文件格式是否正确
 2. 确认技能目录名称与 `name` 字段匹配
-3. 查看 `xopcbot skills list` 输出
+3. 查看 `xopc skills list` 输出
 4. 检查是否有命名冲突
 
 ### 依赖安装失败
@@ -608,22 +608,22 @@ gh run list
 
 ### 技能不工作
 
-1. 检查依赖的二进制文件是否可用：`xopcbot skills status <name>`
-2. 确认技能已启用：`xopcbot skills enable <name>`
-3. 检查配置文件：`xopcbot skills config <name> --show`
-4. 查看详细日志：`XOPCBOT_LOG_LEVEL=debug xopcbot ...`
+1. 检查依赖的二进制文件是否可用：`xopc skills status <name>`
+2. 确认技能已启用：`xopc skills enable <name>`
+3. 检查配置文件：`xopc skills config <name> --show`
+4. 查看详细日志：`XOPC_LOG_LEVEL=debug xopc ...`
 
 ### 测试失败
 
 ```bash
 # 查看详细输出
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # 跳过特定测试
-xopcbot skills test --skip-security
+xopc skills test --skip-security
 
 # 只运行失败的测试（未来支持）
-xopcbot skills test --bail
+xopc skills test --bail
 ```
 
 ## 参考资料

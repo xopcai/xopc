@@ -1,4 +1,4 @@
-// Memory search tools for xopcbot agent
+// Memory search tools for xopc agent
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { memorySearch, memoryGet } from '../prompt/memory/index.js';

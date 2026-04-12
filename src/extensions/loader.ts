@@ -3,8 +3,8 @@
  * 
  * Supports three-tier extension storage:
  * 1. Workspace level (workspace/.extensions/) - highest priority
- * 2. Global level (~/.xopcbot/extensions/) - shared across workspaces
- * 3. Bundled level (xopcbot/extensions/) - shipped with xopcbot
+ * 2. Global level (~/.xopc/extensions/) - shared across workspaces
+ * 3. Bundled level (xopc/extensions/) - shipped with xopc
  */
 
 import { existsSync, readFileSync, readdirSync } from 'fs';
@@ -74,7 +74,7 @@ import {
   type ExtensionDiagnostics,
 } from './diagnostics.js';
 
-const EXTENSION_MANIFEST_FILE = 'xopcbot.extension.json';
+const EXTENSION_MANIFEST_FILE = 'xopc.extension.json';
 
 const log = createLogger('ExtensionLoader');
 
@@ -276,7 +276,7 @@ export class ExtensionLoader {
     const alias: Record<string, string> = {};
     const sdkPath = resolveExtensionSdkPath();
     if (sdkPath) {
-      alias['xopcbot/extension-sdk'] = sdkPath;
+      alias['xopc/extension-sdk'] = sdkPath;
     }
 
     // Initialize jiti with TypeScript support and SDK alias
@@ -363,8 +363,8 @@ export class ExtensionLoader {
   /**
    * Discover extensions from all three tiers:
    * 1. Workspace (.extensions/) - highest priority
-   * 2. Global (~/.xopcbot/extensions/) - shared
-   * 3. Bundled (xopcbot/extensions/) - lowest priority
+   * 2. Global (~/.xopc/extensions/) - shared
+   * 3. Bundled (xopc/extensions/) - lowest priority
    */
   discoverExtensions(): DiscoveredExtension[] {
     const discovered = new Map<string, DiscoveredExtension>();
@@ -687,7 +687,7 @@ export class ExtensionLoader {
   loadManifest(extensionPath: string): ExtensionManifest | null {
     const manifestPath = join(extensionPath, EXTENSION_MANIFEST_FILE);
 
-    // First try to load xopcbot.extension.json
+    // First try to load xopc.extension.json
     if (existsSync(manifestPath)) {
       try {
         const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
@@ -704,23 +704,23 @@ export class ExtensionLoader {
       try {
         const packageJson = JSON.parse(readFileSync(packagePath, 'utf-8'));
         
-        // Check for xopcbot.extension marker
-        if (packageJson.xopcbot?.extension) {
-          const xopcbotConfig = packageJson.xopcbot;
+        // Check for xopc.extension marker
+        if (packageJson.xopc?.extension) {
+          const xopcConfig = packageJson.xopc;
           return {
-            id: xopcbotConfig.id || packageJson.name,
-            name: xopcbotConfig.name || packageJson.name,
-            description: xopcbotConfig.description || packageJson.description,
-            version: xopcbotConfig.version || packageJson.version || '1.0.0',
-            kind: xopcbotConfig.kind || 'utility',
-            main: xopcbotConfig.main || packageJson.main || 'index.js',
-            configSchema: xopcbotConfig.configSchema,
+            id: xopcConfig.id || packageJson.name,
+            name: xopcConfig.name || packageJson.name,
+            description: xopcConfig.description || packageJson.description,
+            version: xopcConfig.version || packageJson.version || '1.0.0',
+            kind: xopcConfig.kind || 'utility',
+            main: xopcConfig.main || packageJson.main || 'index.js',
+            configSchema: xopcConfig.configSchema,
           };
         }
         
-        // Also support xopcbot-extension-* naming convention
-        if (packageJson.name?.startsWith('xopcbot-extension-')) {
-          const id = packageJson.name.replace('xopcbot-extension-', '');
+        // Also support xopc-extension-* naming convention
+        if (packageJson.name?.startsWith('xopc-extension-')) {
+          const id = packageJson.name.replace('xopc-extension-', '');
           return {
             id,
             name: packageJson.name,

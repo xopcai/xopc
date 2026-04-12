@@ -1,6 +1,6 @@
 # 技能测试框架使用指南
 
-xopcbot 提供了一套完整的技能测试框架，用于验证技能的质量、安全性和功能性。
+xopc 提供了一套完整的技能测试框架，用于验证技能的质量、安全性和功能性。
 
 ## 目录
 
@@ -131,60 +131,60 @@ pnpm test src/agent/skills/__tests__/test-framework.test.ts
 
 ```bash
 # 测试所有技能
-xopcbot skills test
+xopc skills test
 
 # 测试特定技能
-xopcbot skills test <skill-name>
+xopc skills test <skill-name>
 
 # 指定技能目录
-xopcbot skills test --skills-dir ./my-skills
+xopc skills test --skills-dir ./my-skills
 
 # 输出格式（text/json/tap）
-xopcbot skills test --format json
+xopc skills test --format json
 
 # 详细输出
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # 严格模式（警告也视为失败）
-xopcbot skills test --strict
+xopc skills test --strict
 
 # 跳过特定测试
-xopcbot skills test --skip-security
-xopcbot skills test --skip-deps
-xopcbot skills test --skip-examples
+xopc skills test --skip-security
+xopc skills test --skip-deps
+xopc skills test --skip-examples
 ```
 
 ### 验证命令
 
 ```bash
 # 验证单个 SKILL.md 文件
-xopcbot skills test validate ./skills/weather/SKILL.md
+xopc skills test validate ./skills/weather/SKILL.md
 
 # 严格模式
-xopcbot skills test validate ./skills/weather/SKILL.md --strict
+xopc skills test validate ./skills/weather/SKILL.md --strict
 ```
 
 ### 依赖检查命令
 
 ```bash
 # 检查所有技能的依赖
-xopcbot skills test check-deps
+xopc skills test check-deps
 
 # 检查特定技能
-xopcbot skills test check-deps weather
+xopc skills test check-deps weather
 ```
 
 ### 安全审计命令
 
 ```bash
 # 审计所有技能
-xopcbot skills test security
+xopc skills test security
 
 # 审计特定技能
-xopcbot skills test security weather
+xopc skills test security weather
 
 # 详细输出
-xopcbot skills test security --deep
+xopc skills test security --deep
 ```
 
 ## 测试框架 API
@@ -341,7 +341,7 @@ jobs:
       - uses: actions/setup-node@v4
       - run: pnpm install
       - run: pnpm run build
-      - run: xopcbot skills test --verbose
+      - run: xopc skills test --verbose
 ```
 
 ### 自定义 CI 配置
@@ -370,13 +370,13 @@ jobs:
       
       - name: Run skill tests
         run: |
-          xopcbot skills test \
+          xopc skills test \
             --format tap \
             --skip-examples \
             --strict
       
       - name: Security audit
-        run: xopcbot skills test security --deep
+        run: xopc skills test security --deep
 ```
 
 ### 本地回归测试
@@ -393,10 +393,10 @@ echo "Running local skill regression tests..."
 pnpm test src/agent/skills/__tests__/test-framework.test.ts
 
 # Run integration tests
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # Run security audit
-xopcbot skills test security --deep
+xopc skills test security --deep
 
 echo "All tests passed!"
 ```
@@ -427,13 +427,13 @@ echo "All tests passed!"
 
 ```bash
 # 快速验证格式
-xopcbot skills test validate ./skills/my-skill/SKILL.md
+xopc skills test validate ./skills/my-skill/SKILL.md
 
 # 检查依赖
-xopcbot skills test check-deps my-skill
+xopc skills test check-deps my-skill
 
 # 完整测试
-xopcbot skills test my-skill --verbose
+xopc skills test my-skill --verbose
 ```
 
 ### 4. 性能优化
@@ -442,10 +442,10 @@ xopcbot skills test my-skill --verbose
 
 ```bash
 # 跳过慢速测试
-xopcbot skills test --skip-examples
+xopc skills test --skip-examples
 
 # 只测试变更的技能（未来支持）
-xopcbot skills test --changed-since HEAD~1
+xopc skills test --changed-since HEAD~1
 ```
 
 ### 5. 测试报告
@@ -454,13 +454,13 @@ xopcbot skills test --changed-since HEAD~1
 
 ```bash
 # JSON 格式（用于机器读取）
-xopcbot skills test --format json > test-results.json
+xopc skills test --format json > test-results.json
 
 # TAP 格式（用于 CI/CD）
-xopcbot skills test --format tap > test-results.tap
+xopc skills test --format tap > test-results.tap
 
 # 详细文本（用于人工阅读）
-xopcbot skills test --verbose > test-results.txt
+xopc skills test --verbose > test-results.txt
 ```
 
 ## 故障排除
@@ -469,30 +469,30 @@ xopcbot skills test --verbose > test-results.txt
 
 ```bash
 # 查看详细输出
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # 跳过特定测试
-xopcbot skills test --skip-security
+xopc skills test --skip-security
 ```
 
 ### 依赖问题
 
 ```bash
 # 检查所有依赖
-xopcbot skills test check-deps
+xopc skills test check-deps
 
 # 安装缺失的依赖
-xopcbot skills install <skill-name>
+xopc skills install <skill-name>
 ```
 
 ### 安全问题
 
 ```bash
 # 详细安全审计
-xopcbot skills test security --deep
+xopc skills test security --deep
 
 # 查看具体发现
-xopcbot skills audit <skill-name> --deep
+xopc skills audit <skill-name> --deep
 ```
 
 ## 测试输出格式

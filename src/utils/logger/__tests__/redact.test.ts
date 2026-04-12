@@ -9,10 +9,10 @@ import {
 
 describe('redact', () => {
   beforeEach(() => {
-    delete process.env.XOPCBOT_LOG_REDACTION;
+    delete process.env.XOPC_LOG_REDACTION;
   });
   afterEach(() => {
-    delete process.env.XOPCBOT_LOG_REDACTION;
+    delete process.env.XOPC_LOG_REDACTION;
   });
 
   it('redacts long secrets', () => {
@@ -39,8 +39,8 @@ describe('redact', () => {
     expect(String(o.apiKey)).toContain('…');
   });
 
-  it('respects XOPCBOT_LOG_REDACTION=false', () => {
-    process.env.XOPCBOT_LOG_REDACTION = 'false';
+  it('respects XOPC_LOG_REDACTION=false', () => {
+    process.env.XOPC_LOG_REDACTION = 'false';
     expect(isLogRedactionEnabled()).toBe(false);
     const raw = 'sk-12345678901234567890123456789012';
     expect(redactSensitiveInfo(raw)).toBe(raw);

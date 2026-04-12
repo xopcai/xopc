@@ -15,8 +15,8 @@ function resolveConfigPathFromCommand(command: Command): string {
     : {}) as { config?: string };
   return (
     globalOpts.config?.trim() ||
-    process.env.XOPCBOT_CONFIG_PATH?.trim() ||
-    process.env.XOPCBOT_CONFIG?.trim() ||
+    process.env.XOPC_CONFIG_PATH?.trim() ||
+    process.env.XOPC_CONFIG?.trim() ||
     resolveConfigPath()
   );
 }
@@ -27,9 +27,9 @@ function createChannelsCommand(ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
-        'xopcbot channels login',
-        'xopcbot channels login --channel weixin',
-        'xopcbot channels login --account my-bot-id',
+        'xopc channels login',
+        'xopc channels login --channel weixin',
+        'xopc channels login --account my-bot-id',
       ]),
     );
 
@@ -39,7 +39,7 @@ function createChannelsCommand(ctx: CLIContext): Command {
     .option('--channel <id>', 'Channel id', 'weixin')
     .option('--account <id>', 'Optional account id when re-logging an existing bot')
     .option('--timeout <ms>', 'Max wait for scan (default 480000)', '480000')
-    .option('--credentials-only', 'Only save token files; do not update xopcbot.json')
+    .option('--credentials-only', 'Only save token files; do not update xopc.json')
     .action(async (options, command) => {
       if (options.channel !== 'weixin') {
         console.error(`Only --channel weixin is supported (got "${options.channel}").`);
@@ -78,8 +78,8 @@ register({
   metadata: {
     category: 'setup',
     examples: [
-      'xopcbot channels login',
-      'xopcbot channels login --account my-account-id',
+      'xopc channels login',
+      'xopc channels login --account my-account-id',
     ],
   },
 });
