@@ -127,7 +127,7 @@ xopc onboard
 
 | 字段 | 类型 | 说明 |
 |------|------|------|
-| `id` | string | Agent id（也是 session key 的第一段）。 |
+| `id` | string | 智能体 id（`agentId`，也是 session key 的第一段）。 |
 | `default` | boolean | 可选。为 `true` 时，在**未**设置顶层 **`agents.default`** 的情况下将该条目标记为默认 agent。 |
 | `name` | string | 显示名称。 |
 | `enabled` | boolean | 默认 `true`。为 `false` 时该 id 不参与路由默认，且有效配置解析会回退到默认 agent。 |
@@ -207,7 +207,7 @@ xopc onboard
 
 ### providers
 
-配置 LLM 提供商 API 密钥。使用环境变量引用：
+配置 LLM 服务商 API 密钥。使用环境变量引用：
 
 ```json
 {
@@ -220,9 +220,9 @@ xopc onboard
 }
 ```
 
-**支持的提供商：**
+**支持的服务商：**
 
-| 提供商 | 环境变量 |
+| 服务商 | 环境变量 |
 |--------|----------|
 | `openai` | `OPENAI_API_KEY` |
 | `anthropic` | `ANTHROPIC_API_KEY` |
@@ -238,7 +238,7 @@ xopc onboard
 
 > **注意:** 环境变量优先于配置文件中的值。
 
-查看 [模型文档](/zh/models) 了解自定义提供商配置。
+查看 [模型文档](/zh/models) 了解自定义服务商配置。
 
 ---
 
@@ -381,7 +381,7 @@ HTTP API 网关配置。
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `enabled` | boolean | `false` | 启用 STT |
-| `provider` | string | `alibaba` | 提供商：`alibaba`, `openai` |
+| `provider` | string | `alibaba` | 服务商：`alibaba`, `openai` |
 | `alibaba` | object | - | 阿里云 DashScope 配置 |
 | `openai` | object | - | OpenAI Whisper 配置 |
 | `fallback` | object | - | 回退配置 |
@@ -434,7 +434,7 @@ HTTP API 网关配置。
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `enabled` | boolean | `false` | 启用 TTS |
-| `provider` | string | `openai` | 提供商：`openai`, `alibaba` |
+| `provider` | string | `openai` | 服务商：`openai`, `alibaba` |
 | `trigger` | string | `auto` | 触发：`auto`, `never` |
 | `openai` | object | - | OpenAI TTS 配置 |
 | `alibaba` | object | - | 阿里云 CosyVoice 配置 |
@@ -456,7 +456,7 @@ HTTP API 网关配置。
 | `voice` | string | - | 音色 ID |
 
 **触发模式：**
-- `auto`: 用户发语音时，Agent 用语音回复
+- `auto`: 用户发语音时，智能体以语音回复
 - `never`: 禁用 TTS，只发送文字
 
 ---
@@ -564,9 +564,9 @@ xopc config --edit
 
 ## 常见问题
 
-### Q: 如何使用多个提供商？
+### Q: 如何使用多个服务商？
 
-使用 `providers` 配置定义多个 API 密钥。Agent 根据模型 ID 自动选择合适的提供商：
+使用 `providers` 配置定义多个 API 密钥。运行时将根据模型 ID 自动选择合适的服务商：
 
 ```json
 {
@@ -584,7 +584,7 @@ xopc config --edit
 
 ### Q: 如何使用 Ollama（本地模型）？
 
-在 `~/.xopc/models.json` 中配置自定义提供商：
+在 `~/.xopc/models.json` 中配置自定义服务商：
 
 ```json
 {
@@ -605,7 +605,7 @@ xopc config --edit
 
 ### Q: 如何配置 OAuth？
 
-xopc 支持某些提供商的 OAuth 认证：
+xopc 支持某些服务商的 OAuth 认证：
 
 **Kimi（设备码流程）：**
 ```json

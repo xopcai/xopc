@@ -33,7 +33,7 @@ features:
     details: 文件操作、网页搜索、Shell 执行等
     link: /zh/tools
   - title: 🎯 技能系统
-    details: 通过 SKILL.md 文件教授代理新技能
+    details: 通过 SKILL.md 文件为智能体扩展新技能
     link: /zh/skills
   - title: 🔐 OAuth 支持
     details: 支持 Kimi、Anthropic 等安全认证
@@ -44,7 +44,7 @@ features:
   - title: 🎤 语音消息
     details: 支持通过 Telegram 收发语音消息（STT/TTS）
     link: /zh/voice
-  - title: 🤖 多提供商
-    details: 20+ LLM 提供商：OpenAI、Anthropic、Google、Groq、DeepSeek、Ollama 等
+  - title: 🤖 多服务商
+    details: 20+ 家 LLM 服务商：OpenAI、Anthropic、Google、Groq、DeepSeek、Ollama 等
     link: /zh/models
 ---

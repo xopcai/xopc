@@ -1,10 +1,10 @@
 # 心跳机制
 
-心跳服务用于主动监控和唤醒 Agent。
+心跳服务用于主动监控和唤醒智能体。
 
 ## 概述
 
-心跳机制定期检查系统状态，并在满足条件时主动触发 Agent。
+心跳机制定期检查系统状态，并在满足条件时主动触发智能体。
 
 ## 工作原理
 
@@ -65,7 +65,7 @@ interface HeartbeatConfig {
 // 检查是否有待处理的 cron 任务
 const pendingJobs = cronService.getPendingJobs();
 if (pendingJobs.length > 0) {
-  // 触发 Agent 处理
+  // 触发智能体处理
 }
 ```
 

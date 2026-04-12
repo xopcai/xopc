@@ -1,6 +1,6 @@
 # Agent Control Protocol（ACP）
 
-> ACP 是运行时抽象层，为不同 Agent 运行时提供统一的会话生命周期与多轮对话接口。
+> ACP 是运行时抽象层，为不同智能体运行时提供统一的会话生命周期与多轮对话接口。
 
 ## 概述
 
@@ -62,7 +62,7 @@
 |------|------|------|
 | `enabled` | `boolean` | 总开关 |
 | `backend` | `string` | 默认后端 ID |
-| `defaultAgent` | `string` | 新会话默认 Agent |
+| `defaultAgent` | `string` | 新会话默认智能体（`agentId`） |
 | `maxConcurrentSessions` | `number` | 最大并发会话数 |
 | `dispatch.enabled` | `boolean` | 是否启用调度 |
 | `stream.coalesceIdleMs` | `number` | 流式合并空闲窗口（毫秒） |

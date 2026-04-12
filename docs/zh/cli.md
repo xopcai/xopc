@@ -36,8 +36,8 @@ pnpm run dev -- <command>
 |------|------|
 | `setup` | 初始化配置文件和工作区目录 |
 | `onboard` | 交互式设置向导（LLM、渠道、Gateway） |
-| `agents` | 管理 `config.json` 中的多 Agent（`agents.list`：列出、添加、删除） |
-| `agent` | 与 Agent 对话 |
+| `agents` | 管理 `config.json` 中的多个智能体（`agents.list`：列出、添加、删除） |
+| `agent` | 与智能体对话 |
 | `gateway` | 启动 REST 网关 |
 | `cron` | 管理定时任务 |
 | `extension` | 管理扩展 |
@@ -89,7 +89,7 @@ xopc onboard
 
 | 选项 | 描述 |
 |------|------|
-| `--model` | 仅配置 LLM 提供商和模型 |
+| `--model` | 仅配置 LLM 服务商和模型 |
 | `--channels` | 仅配置消息渠道 |
 | `--gateway` | 仅配置 Gateway WebUI |
 | `--all` | 配置所有内容（默认） |
@@ -112,9 +112,9 @@ xopc onboard --gateway
 
 **功能**（不带选项时）：
 - 自动检测是否需要设置工作区
-- 配置 LLM 提供商和模型
+- 配置 LLM 服务商和模型
 - 配置消息渠道（Telegram）
-- 配置 Gateway WebUI 并自动生成 Token
+- 配置 Gateway WebUI 并自动生成访问令牌
 - 完成后显示启动网关的命令
 
 ---
@@ -140,7 +140,7 @@ xopc agents delete coder --purge
 
 **Onboard 完成后**会显示：
 - Gateway 访问 URL
-- Token 信息
+- 访问令牌信息
 - 启动网关的命令
 
 **注意**：Gateway 默认在前台运行。按 `Ctrl+C` 停止，或使用 `xopc gateway stop` 从另一个终端停止。
@@ -149,7 +149,7 @@ xopc agents delete coder --purge
 
 ## agent
 
-与 Agent 对话。
+与智能体对话。
 
 ### 单次对话
 

@@ -31,18 +31,18 @@ xopc 通过 `AgentToolsFactory`（`src/agent/tools/factory.ts`）组装内置工
 6. **`todo`**：按会话维护待办，支持按 `id` 合并或整表替换。
 7. **`image` / `image_generate`**：在模型与密钥可用时做视觉理解与文生图。
 8. **浏览器工具**：`agents.defaults.browser.enabled` 时启用 Playwright（需 `npx playwright install chromium`）。
-9. **`delegate_task`**：子 Agent 独立上下文、受限工具集、仅返回摘要（`agents.defaults.delegate.enabled`）。
+9. **`delegate_task`**：子智能体独立上下文、受限工具集、仅返回摘要（`agents.defaults.delegate.enabled`）。
 10. **`execute_code`**：沙箱 JS 以编程方式调用部分工具（`agents.defaults.executeCode.enabled`）；非强安全边界，仅可信模型场景使用。
-11. **`cronjob`**：网关提供 `CronService` 时管理定时 Agent 轮次，带简单提示注入扫描。
+11. **`cronjob`**：网关提供 `CronService` 时管理定时智能体轮次，带简单提示注入扫描。
 12. **`session_search`**：跨会话 transcript 检索（可选会话级摘要）。
 13. **`curated_memory`**：操作 agent 主目录 `memories/` 的实时内容，系统提示中保留会话开始时的快照。
 14. **Skill 工具门控**：`skills.toolGating` 与技能元数据可要求「已注册工具」后才出现在 `<available_skills>`。
 15. **`disable-model-invocation`**：技能仍安装，但对模型隐藏列表项。
 16. **Skills Hub CLI**：`xopc skills hub pull|update|lock`，安装至 `~/.xopc/skills` 并维护 `skills-lock.json`。
-17. **`web_search`**：`tools.web.search.providers` 多提供商链 + 按地区 HTML 兜底。
+17. **`web_search`**：`tools.web.search.providers` 多服务商链 + 按地区 HTML 兜底。
 18. **`skills.limits.maxSkillFileBytes`**：限制 `skill_view` 单次读取体积。
 19. **Memory 插件**：`MemoryManager.getAdditionalTools()` 可注入额外记忆相关工具。
-20. **多提供商图像路径**：图像工具与 Agent 其他模型共用解析与密钥体系。
+20. **多服务商图像路径**：图像工具与其它模型共用解析与密钥体系。
 
 ---
 
@@ -191,7 +191,7 @@ xopc 通过 `AgentToolsFactory`（`src/agent/tools/factory.ts`）组装内置工
 
 ## 🔎 session_search
 
-检索 **其他会话** 的 transcript（关键词或带可选的按会话摘要）。需要会话持久化与 Agent 侧接入；摘要模型由 `agents.defaults.sessionSearch.summaryModel` 或环境变量 `XOPC_SESSION_SEARCH_MODEL` 指定。
+检索 **其他会话** 的 transcript（关键词或带可选的按会话摘要）。需要会话持久化与智能体侧接入；摘要模型由 `agents.defaults.sessionSearch.summaryModel` 或环境变量 `XOPC_SESSION_SEARCH_MODEL` 指定。
 
 详见 [配置参考](zh/configuration.md) 中的 **agents.defaults.sessionSearch**。
 
@@ -259,7 +259,7 @@ xopc 通过 `AgentToolsFactory`（`src/agent/tools/factory.ts`）组装内置工
 
 ### 🤖 `delegate_task`
 
-子 Agent 独立执行，仅返回摘要；工具集受限，不可嵌套委托或使用 clarify/消息/记忆/todo/cronjob/Skills 管理类工具。
+子智能体独立执行，仅返回摘要；工具集受限，不可嵌套委托或使用 clarify/消息/记忆/todo/cronjob/Skills 管理类工具。
 
 ### 💾 `execute_code`
 

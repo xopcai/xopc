@@ -44,7 +44,7 @@ xopc gateway status
 
 🌐 Access:
    URL: http://localhost:18790
-   Token: abc12345...xyz67890
+   Token: abc12345...xyz67890（网关访问令牌）
 
 📝 Management:
    xopc gateway stop      # 停止网关
@@ -259,7 +259,7 @@ Content-Type: application/json
 }
 ```
 
-### Agent 对话
+### 智能体对话
 
 ```http
 POST /api/agent
@@ -332,7 +332,7 @@ GET /health
 |------|------|------|
 | POST | `/api/message` | 发送消息 (异步) |
 | POST | `/api/message/sync` | 发送消息 (同步) |
-| POST | `/api/agent` | Agent 对话 |
+| POST | `/api/agent` | 智能体对话 |
 | POST | `/api/sessions` | 创建或复用会话（JSON 可含 `agentId`） |
 | GET | `/api/sessions` | 列出会话 |
 | GET | `/api/sessions/:key` | 获取会话 |
@@ -365,7 +365,7 @@ GET /health
 | `INVALID_REQUEST` | 请求参数错误 |
 | `CHANNEL_NOT_FOUND` | 通道不存在 |
 | `SESSION_NOT_FOUND` | 会话不存在 |
-| `AGENT_ERROR` | Agent 处理错误 |
+| `AGENT_ERROR` | 智能体处理错误 |
 | `INTERNAL_ERROR` | 内部错误 |
 
 ## 使用示例
@@ -397,7 +397,7 @@ curl -X POST http://localhost:18790/api/message \
   -H "Content-Type: application/json" \
   -d '{"channel": "telegram", "chat_id": "123", "content": "Hello!"}'
 
-# Agent 对话
+# 智能体对话
 curl -X POST http://localhost:18790/api/agent \
   -H "Content-Type: application/json" \
   -d '{"message": "What is 2+2?"}'
@@ -548,7 +548,7 @@ xopc gateway stop --timeout 10000  # 10 秒超时
 
 ## CORS 配置
 
-如需从浏览器访问，添加 CORS 头（通过代理或中间件）。
+如需从浏览器访问，添加 CORS 头（可经由反向代理或中间件注入）。
 
 ## 从旧版本迁移
 

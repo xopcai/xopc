@@ -1,6 +1,6 @@
 # 快速开始
 
-安装 **xopc**、配置至少一个 LLM 提供商密钥后，即可使用 CLI 或网关。本页从零开始说明首次安装与基本使用。
+安装 **xopc**、配置至少一家 LLM 服务商的 API 密钥后，即可使用 CLI 或网关。本页从零开始说明首次安装与基本使用。
 
 ## 1. 环境要求
 
@@ -42,7 +42,7 @@ xopc onboard
 向导将引导您完成：
 1. 创建工作区目录 (`~/.xopc/workspace/`)
 2. 生成默认 `config.json`
-3. 选择 LLM 提供商并输入 API 密钥
+3. 选择 LLM 服务商并输入 API 密钥
 4. 配置消息通道（Telegram）
 5. 设置 Gateway WebUI
 
@@ -143,8 +143,8 @@ xopc gateway
 | [技能](/zh/skills) | 添加领域特定知识 |
 | [工具](/zh/tools) | 内置工具参考 |
 | [通道](/zh/channels) | 多通道设置 |
-| [路由](/zh/routing-system) | Session key 与 Agent 绑定 |
-| [模型](/zh/models) | LLM 提供商配置 |
+| [路由](/zh/routing-system) | Session key 与智能体绑定 |
+| [模型](/zh/models) | LLM 服务商配置 |
 
 ## 故障排除
 
