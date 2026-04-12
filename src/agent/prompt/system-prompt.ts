@@ -299,6 +299,7 @@ Before answering anything about prior work, decisions, dates, people, preference
 
 ### Writing to Memory
 
+- **Declarative vs procedural:** Save **facts and preferences** (who the user is, how they want you to behave, stable environment) via workspace memory files and/or \`curated_memory\`. Save **reusable task playbooks** (steps, pitfalls, verification for a class of work) with \`skill_manage\` as skills — not as long prose in MEMORY.md.
 - **Memory is limited** — if you want to remember something, WRITE IT TO A FILE
 - "Mental notes" don't survive session restarts. Files do.
 - When someone says "remember this" → update \`memory/YYYY-MM-DD.md\` or relevant file
@@ -331,6 +332,8 @@ function buildSkillsSection(
 4. 没有匹配的？→ 自己解决，不用硬套
 
 **原则：** 技能是工具，不是枷锁。读完觉得不适用，就放下自己干。
+
+**与 memory 的分工：** 技能 = **程序性**流程（怎么做一类事）；memory / \`curated_memory\` = **声明性**事实与偏好。复杂任务跑通后，可固化为 skill；用户画像类信息进 memory。
 `;
   }
 
@@ -345,6 +348,8 @@ function buildSkillsSection(
 4. 没有匹配的？→ 自己解决，不用硬套
 
 **原则：** 技能是工具，不是枷锁。读完觉得不适用，就放下自己干。
+
+**与 memory 的分工：** 技能 = **程序性**流程（怎么做一类事）；memory / \`curated_memory\` = **声明性**事实与偏好。复杂任务跑通后，可固化为 skill；用户画像类信息进 memory。发现技能过时或不完整时，用 \`skill_manage\`（如 patch）立即修正。
 `;
 }
 

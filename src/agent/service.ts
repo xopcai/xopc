@@ -1102,8 +1102,10 @@ export class AgentService {
             userMessage: userMessageForModel,
             log,
             getConfig: () => this.config.config,
+            beforeUserPrompt: () => this.agentManager.beginBackgroundReviewUserTurn(sessionKey),
           });
           this.agentManager.afterAgentTurn(sessionKey, userPlain);
+          this.agentManager.scheduleBackgroundReviewAfterUserTurn(sessionKey);
         })();
 
         agentPromise
@@ -1348,9 +1350,11 @@ export class AgentService {
         userMessage: userMessageForModel,
         log,
         getConfig: () => this.config.config,
+        beforeUserPrompt: () => this.agentManager.beginBackgroundReviewUserTurn(sessionKey),
       });
 
       this.agentManager.afterAgentTurn(sessionKey, userPlain);
+      this.agentManager.scheduleBackgroundReviewAfterUserTurn(sessionKey);
 
       const response = this.agentManager.getLastAssistantContent(sessionKey) || '';
       await this.persistAgentSessionMessages(sessionKey);

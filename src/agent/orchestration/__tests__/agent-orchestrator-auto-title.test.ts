@@ -45,6 +45,8 @@ describe('AgentOrchestrator enqueueAutoTitle', () => {
       setThinkingLevel: vi.fn(),
       applyMemoryPrefetchToUserMessage: vi.fn().mockImplementation(async (m) => m),
       afterAgentTurn: vi.fn(),
+      beginBackgroundReviewUserTurn: vi.fn(),
+      scheduleBackgroundReviewAfterUserTurn: vi.fn(),
     };
 
     mockSessionStore = {

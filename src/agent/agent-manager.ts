@@ -55,8 +55,22 @@ import {
 import type { MemoryManager } from './memory/manager.js';
 import type { MemorySnapshot } from './memory/types.js';
 import { extractAgentUserPlainText } from './memory/user-message-text.js';
+import { resolveBackgroundReviewSettings } from './background-review/settings.js';
+import { runBackgroundReviewTurn } from './background-review/run-background-review.js';
+import {
+  isAssistantTurnAborted,
+  isAssistantTurnFailed,
+} from './orchestration/llm-turn-retry.js';
 
 const log = createLogger('AgentManager');
+
+/** Counters for optional post-turn memory/skill review (see `agents.defaults.backgroundReview`). */
+export interface BackgroundNudgeState {
+  turnsSinceMemory: number;
+  itersSinceSkill: number;
+  pendingMemoryReview: boolean;
+  unsubscribe?: () => void;
+}
 
 export interface SkillCatalogEntry {
   directoryId: string;
@@ -106,6 +120,7 @@ export interface AgentInstance {
   registeredToolNames: string[];
   /** Declared env var names from skill_view; shell reads values from process.env at spawn time. */
   skillEnvPassthroughKeys: Set<string>;
+  backgroundNudge: BackgroundNudgeState;
 }
 
 interface WorkspaceRuntime {
@@ -363,6 +378,96 @@ export class AgentManager {
   }
 
   /**
+   * Call once per user turn before the main `agent.prompt` (via {@link runAgentTurnWithModelFallbacks} `beforeUserPrompt`).
+   */
+  beginBackgroundReviewUserTurn(sessionKey: string): void {
+    const inst = this.agents.get(sessionKey);
+    if (!inst?.backgroundNudge) return;
+    const cfg = resolveBackgroundReviewSettings(this.config.config);
+    if (!cfg.enabled || cfg.memoryNudgeInterval <= 0) return;
+    if (!inst.registeredToolNames.includes('curated_memory')) return;
+    inst.backgroundNudge.turnsSinceMemory += 1;
+    if (inst.backgroundNudge.turnsSinceMemory >= cfg.memoryNudgeInterval) {
+      inst.backgroundNudge.pendingMemoryReview = true;
+      inst.backgroundNudge.turnsSinceMemory = 0;
+    }
+  }
+
+  /**
+   * After a successful main turn (after memory sync via `afterAgentTurn`), may run a quiet follow-up for memory/skills.
+   */
+  scheduleBackgroundReviewAfterUserTurn(sessionKey: string): void {
+    void this.runBackgroundReviewIfNeeded(sessionKey).catch((err) => {
+      log.warn({ err, sessionKey }, 'Background review failed');
+    });
+  }
+
+  private async runBackgroundReviewIfNeeded(sessionKey: string): Promise<void> {
+    const inst = this.agents.get(sessionKey);
+    if (!inst?.backgroundNudge) return;
+    const settings = resolveBackgroundReviewSettings(this.config.config);
+    if (!settings.enabled) return;
+    if (isAssistantTurnAborted(inst.agent) || isAssistantTurnFailed(inst.agent)) return;
+    const last = this.getLastAssistantContent(sessionKey);
+    if (!last?.trim()) return;
+
+    const reviewMemory = inst.backgroundNudge.pendingMemoryReview;
+    inst.backgroundNudge.pendingMemoryReview = false;
+
+    let reviewSkills = false;
+    if (settings.skillNudgeInterval > 0 && inst.registeredToolNames.includes('skill_manage')) {
+      if (inst.backgroundNudge.itersSinceSkill >= settings.skillNudgeInterval) {
+        reviewSkills = true;
+        inst.backgroundNudge.itersSinceSkill = 0;
+      }
+    }
+
+    if (!reviewMemory && !reviewSkills) return;
+
+    const rt = this.getWorkspaceRuntime(inst.resolvedWorkspacePath);
+    await runBackgroundReviewTurn({
+      sessionKey,
+      mainAgent: inst.agent,
+      settings,
+      reviewMemory,
+      reviewSkills,
+      registeredToolNames: inst.registeredToolNames,
+      skillAllowlist: inst.effectiveProfile.skillsAllowlist,
+      workspacePath: inst.resolvedWorkspacePath,
+      skillManager: rt.skillManager,
+      builtinMemoryStore: rt.builtinMemoryStore,
+      memoryManager: rt.memoryManager,
+      getConfig: () => this.config.config,
+      onSkillsFilesystemMutate: () => this.refreshSkillsAfterDiskChange(),
+    });
+  }
+
+  private attachBackgroundNudgeListeners(sessionKey: string): void {
+    const inst = this.agents.get(sessionKey);
+    if (!inst?.backgroundNudge) return;
+    inst.backgroundNudge.unsubscribe?.();
+    const unsub = inst.agent.subscribe((ev: AgentEvent) => {
+      const cfg = resolveBackgroundReviewSettings(this.config.config);
+      if (!cfg.enabled || cfg.skillNudgeInterval <= 0) return;
+      if (!inst.registeredToolNames.includes('skill_manage')) return;
+      if (ev.type === 'turn_start') {
+        inst.backgroundNudge.itersSinceSkill += 1;
+      }
+      if (ev.type === 'tool_execution_end') {
+        const te = ev as Extract<AgentEvent, { type: 'tool_execution_end' }>;
+        if (
+          !te.isError &&
+          typeof te.toolName === 'string' &&
+          te.toolName.trim() === 'skill_manage'
+        ) {
+          inst.backgroundNudge.itersSinceSkill = 0;
+        }
+      }
+    });
+    inst.backgroundNudge.unsubscribe = unsub;
+  }
+
+  /**
    * Expand `/skill:name` user text into the full skill block for the current turn (WebChat, channels).
    */
   expandSkillUserText(text: string): string {
@@ -474,6 +579,14 @@ export class AgentManager {
     const existing = this.agents.get(sessionKey);
     if (existing) {
       existing.lastUsedAt = Date.now();
+      if (!existing.backgroundNudge) {
+        existing.backgroundNudge = {
+          turnsSinceMemory: 0,
+          itersSinceSkill: 0,
+          pendingMemoryReview: false,
+        };
+        this.attachBackgroundNudgeListeners(sessionKey);
+      }
       log.debug({ sessionKey }, 'Reusing existing agent instance');
       return existing.agent;
     }
@@ -513,7 +626,14 @@ export class AgentManager {
       resolvedWorkspacePath: resolvedPath,
       registeredToolNames,
       skillEnvPassthroughKeys: new Set<string>(),
+      backgroundNudge: {
+        turnsSinceMemory: 0,
+        itersSinceSkill: 0,
+        pendingMemoryReview: false,
+      },
     });
+
+    this.attachBackgroundNudgeListeners(sessionKey);
 
     const modelRef = profile.primaryModelRef?.trim() || this.defaultModel;
     this.config.getModelManager?.().setSessionProfileDefault(sessionKey, modelRef);
@@ -542,6 +662,7 @@ export class AgentManager {
   removeAgent(sessionKey: string): boolean {
     const instance = this.agents.get(sessionKey);
     if (instance) {
+      instance.backgroundNudge?.unsubscribe?.();
       void this.toolsFactory.closeBrowserPageForSession(sessionKey);
       instance.agent.abort();
       this.agents.delete(sessionKey);
@@ -584,6 +705,7 @@ export class AgentManager {
   dispose(): void {
     void this.toolsFactory.shutdownBrowser();
     for (const instance of this.agents.values()) {
+      instance.backgroundNudge?.unsubscribe?.();
       instance.agent.abort();
     }
     this.agents.clear();

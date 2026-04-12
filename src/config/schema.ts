@@ -92,6 +92,27 @@ export const AgentDefaultsSchema = z.object({
       summaryModel: z.string().optional(),
     })
     .optional(),
+  /**
+   * Post-turn background review (Hermes-style): optional quiet follow-up that may call
+   * `curated_memory` / `skill_manage` so durable facts and reusable workflows persist
+   * without bloating the main user-visible turn.
+   */
+  backgroundReview: z
+    .object({
+      /** When true, nudges may run after successful turns. Default false (opt-in). */
+      enabled: z.boolean().optional(),
+      /** User-turn cadence for memory review. 0 disables the memory channel. Default 10. */
+      memoryNudgeInterval: z.number().int().min(0).optional(),
+      /** LLM rounds without `skill_manage` before a skill review. 0 disables the skill channel. Default 10. */
+      skillNudgeInterval: z.number().int().min(0).optional(),
+      /** Max tool executions for the review agent. Default 8. */
+      maxToolRounds: z.number().int().min(1).max(32).optional(),
+      /** Max prior messages passed into the review context (tail). Default 80. */
+      maxHistoryMessages: z.number().int().min(10).max(200).optional(),
+      /** Wall-clock cap for the review run (ms). Default 120000. */
+      maxDurationMs: z.number().int().min(30_000).max(600_000).optional(),
+    })
+    .optional(),
   /** LLM pass for `web_extract` (markdown-focused extraction). */
   webExtract: z
     .object({

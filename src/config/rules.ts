@@ -44,6 +44,11 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'agents.defaults.browser', kind: 'hot', description: 'Browser automation (Playwright) tools' },
   { prefix: 'agents.defaults.delegate', kind: 'hot', description: 'delegate_task sub-agent tool' },
   { prefix: 'agents.defaults.executeCode', kind: 'hot', description: 'execute_code sandbox tool' },
+  {
+    prefix: 'agents.defaults.backgroundReview',
+    kind: 'hot',
+    description: 'Post-turn memory/skill nudge + background review',
+  },
   { prefix: 'agents.defaults.workspace', kind: 'none', description: 'Workspace path - no runtime effect' },
   
   // Gateway - restart required
