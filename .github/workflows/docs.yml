@@ -1,5 +1,8 @@
 name: Deploy Docs
 
+# Publishes built VitePress output to branch `gh-pages`.
+# One-time repo setup: Settings → Pages → Build and deployment → Deploy from a branch → Branch `gh-pages` / folder `/`.
+
 on:
   push:
     branches: [main]
@@ -9,11 +12,6 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
-
-env:
-  GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
 concurrency:
   group: pages
@@ -48,18 +46,28 @@ jobs:
       - name: Build Docs
         run: pnpm exec vitepress build docs
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+      - name: Upload site artifact
+        uses: actions/upload-artifact@v4
         with:
+          name: vitepress-site
           path: docs/.vitepress/dist
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
+    permissions:
+      contents: write
     steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+      - name: Download site artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: vitepress-site
+          path: site
+
+      - name: Push to gh-pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          branch: gh-pages
+          folder: site
+          clean: true
+          single-commit: true
