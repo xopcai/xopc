@@ -1,7 +1,9 @@
 name: Deploy Docs
 
-# Publishes built VitePress output to branch `gh-pages`.
-# One-time repo setup: Settings → Pages → Build and deployment → Deploy from a branch → Branch `gh-pages` / folder `/`.
+# GitHub Pages with build_type "workflow": upload static output, then actions/deploy-pages.
+# Repo setting must use "GitHub Actions" as the Pages source (not "Deploy from a branch").
+# If the site was previously on legacy + gh-pages, switch once (admin):
+#   gh api --method PUT repos/xopcai/xopc/pages -f build_type=workflow
 
 on:
   push:
@@ -12,6 +14,8 @@ on:
 
 permissions:
   contents: read
+  pages: write
+  id-token: write
 
 concurrency:
   group: pages
@@ -46,31 +50,18 @@ jobs:
       - name: Build Docs
         run: pnpm exec vitepress build docs
 
-      - name: Upload site artifact
-        uses: actions/upload-artifact@v4
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
-          name: vitepress-site
           path: docs/.vitepress/dist
 
   deploy:
     needs: build
     runs-on: ubuntu-latest
-    permissions:
-      contents: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-
-      - name: Download site artifact
-        uses: actions/download-artifact@v4
-        with:
-          name: vitepress-site
-          path: site
-
-      - name: Push to gh-pages
-        uses: JamesIves/github-pages-deploy-action@v4
-        with:
-          branch: gh-pages
-          folder: site
-          clean: true
-          single-commit: true
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
