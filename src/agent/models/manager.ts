@@ -185,7 +185,7 @@ export class ModelManager {
       return;
     }
 
-    agent.setModel(found);
+    agent.state.model = found;
     this.currentModelName = targetModelId;
     this.currentProvider = found.provider || 'unknown';
 
@@ -212,7 +212,7 @@ export class ModelManager {
    * Apply a resolved pi-ai model and sync {@link currentModelName} / {@link currentProvider}.
    */
   applyResolvedModel(agent: Agent, model: Model<Api>, modelRef: string): void {
-    agent.setModel(model);
+    agent.state.model = model;
     this.currentModelName = modelRef;
     this.currentProvider = model.provider || 'unknown';
   }
@@ -306,7 +306,7 @@ export class ModelManager {
         }
       }
 
-      agent.replaceMessages(agent.state.messages.slice(0, beforeLen));
+      agent.state.messages = agent.state.messages.slice(0, beforeLen);
     }
 
     if (lastError) {

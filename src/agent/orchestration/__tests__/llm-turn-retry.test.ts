@@ -41,12 +41,18 @@ describe('llm-turn-retry', () => {
     const continueFn = vi.fn().mockResolvedValue(undefined);
     const waitForIdle = vi.fn().mockResolvedValue(undefined);
     const replaceMessages = vi.fn();
+    let transcript: AgentMessage[] = [user, errAssistant];
 
     const agent = {
       state: {
-        messages: [user, errAssistant] as AgentMessage[],
+        get messages() {
+          return transcript;
+        },
+        set messages(next: AgentMessage[]) {
+          replaceMessages(next);
+          transcript = next;
+        },
       },
-      replaceMessages,
       continue: continueFn,
       waitForIdle,
     } as unknown as import('@mariozechner/pi-agent-core').Agent;

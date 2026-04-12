@@ -123,7 +123,7 @@ export async function maybeRetryTurnAfterTransientLlmFailure(
     );
 
     const trimmed = stripTrailingErrorAssistantMessages(agent.state.messages);
-    agent.replaceMessages(trimmed);
+    agent.state.messages = trimmed;
     await agent.continue();
     await agent.waitForIdle();
   }
