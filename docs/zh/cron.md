@@ -1,6 +1,6 @@
 # 定时任务
 
-xopc 内置 Cron 服务，支持定时发送消息，支持两种执行模式：**直接发送** 和 **AI Agent**。
+xopc 内置 Cron 服务，支持定时发送消息，支持两种执行模式：**直接发送** 与 **AI 智能体**。
 
 ## 使用方法
 
@@ -32,10 +32,10 @@ xopc cron add --schedule "0 9 * * *" --message "Good morning!"
 | `--schedule` | Cron 表达式 |
 | `--message` | 定时发送的消息 |
 | `--name` | (可选) 任务名称 |
-| `--target` | 执行模式：`main`（直接发送）或 `isolated`（AI Agent） |
-| `--model` | (可选) AI Agent 模式使用的模型 |
+| `--target` | 执行模式：`main`（直接发送）或 `isolated`（AI 智能体） |
+| `--model` | (可选) AI 智能体模式使用的模型 |
 | `--channel` | (可选) 目标渠道：`telegram`、`cli` |
-| `--to` | (可选) 接收者 Chat ID |
+| `--to` | (可选) 接收方会话 ID（如 Telegram 的 chat id） |
 
 ### 删除任务
 
@@ -70,9 +70,9 @@ xopc cron add "0 9 * * *" "早安！" \
   --to 123456789
 ```
 
-### 2. AI Agent 模式 (`isolated`)
+### 2. AI 智能体模式 (`isolated`)
 
-使用 AI Agent 处理消息，然后将回复发送到指定渠道。
+由 AI 智能体处理消息，再将回复发送到指定渠道。
 
 ```bash
 xopc cron add "0 10 * * *" "今天天气怎么样？" \
@@ -174,7 +174,7 @@ await cronService.addJob('0 9 * * *', '早安！', {
   },
 });
 
-// 添加任务 - AI Agent 模式
+// 添加任务 - AI 智能体模式
 await cronService.addJob('0 10 * * *', '查询天气', {
   name: '天气查询',
   sessionTarget: 'isolated',

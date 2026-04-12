@@ -4,13 +4,13 @@
 
 ## 概述
 
-进度反馈系统为长时间运行的代理任务提供实时更新。它帮助用户了解代理正在做什么，减少在复杂操作期间的"卡住"或"无响应"感知。
+进度反馈系统为长时间运行的智能体任务提供实时更新，帮助用户了解智能体正在做什么，减少在复杂操作期间的「卡住」或「无响应」感。
 
 ## 功能特性
 
 ### 1. 工具执行反馈
 
-当代理执行工具（读取、写入、执行命令、搜索等）时，用户会收到实时状态更新：
+当智能体执行工具（读取、写入、执行命令、搜索等）时，用户会收到实时状态更新：
 
 | 阶段 | Emoji | 说明 |
 |------|-------|------|
@@ -50,7 +50,7 @@ edit               → writing
 
 ### 4. 流式集成
 
-对于 Telegram 频道，进度指示器与流式消息一起显示：
+在 Telegram 对话中，进度指示器与流式消息一起显示：
 
 ```
 🔍 搜索中
@@ -117,7 +117,7 @@ const config = {
 ```
 用户消息
     ↓
-代理处理
+智能体处理
     ↓
 ┌─────────────────────────────────────────────┐
 │ 1. tool_execution_start                     │
@@ -145,7 +145,7 @@ const config = {
 |------|------|------|
 | `ProgressFeedbackManager` | `src/agent/progress.ts` | 核心进度跟踪和回调 |
 | `DraftStream` | `src/channels/draft-stream.ts` | 带进度的 Telegram 消息流式传输 |
-| `AgentService` | `src/agent/service.ts` | 将进度与代理事件集成 |
+| `AgentService` | `src/agent/service.ts` | 将进度与智能体事件集成 |
 
 ## API 参考
 
@@ -196,7 +196,7 @@ type ProgressStage = 'thinking' | 'searching' | 'reading' | 'writing' | 'executi
 
 1. **检查流模式**: 确保在配置中 `streamMode` 设置为 `partial` 或 `block`
 2. **检查日志**: 查找 `ProgressFeedback` 或 `DraftStream` 日志
-3. **检查频道支持**: 进度更新仅适用于 Telegram（目前）
+3. **检查通道支持**：进度更新目前仅适用于 Telegram
 
 ### 更新太多
 
@@ -212,5 +212,5 @@ const manager = new ProgressFeedbackManager({
 
 ## 相关文档
 
-- [频道配置](channels.md) - Telegram 频道配置
+- [即时通讯配置](channels.md) — Telegram 等通道配置
 - [架构设计](architecture.md) - 系统架构概述

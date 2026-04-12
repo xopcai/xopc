@@ -365,7 +365,7 @@ export default extension;
 
 ### 工具 (Tools)
 
-扩展可以注册自定义工具供 Agent 使用：
+扩展可以注册自定义工具供智能体使用：
 
 ```javascript
 api.registerTool({
@@ -392,8 +392,8 @@ api.registerTool({
 
 | 钩子 | 时机 | 用途 |
 |------|------|------|
-| `before_agent_start` | Agent 启动前 | 修改系统提示 |
-| `agent_end` | Agent 完成后 | 后处理结果 |
+| `before_agent_start` | 智能体启动前 | 修改系统提示 |
+| `agent_end` | 智能体结束后 | 后处理结果 |
 | `message_received` | 收到消息时 | 消息预处理 |
 | `message_sending` | 发送消息前 | 拦截/修改消息内容 |
 | `message_sent` | 消息发送后 | 发送日志 |
@@ -699,7 +699,7 @@ npm publish --access public
 | `security.trackProvenance` | `boolean` | 追踪扩展安装来源 |
 | `security.allowPromptInjection` | `boolean` | 允许扩展注入 system prompt |
 | `slots.memory` | `string` | 首选 memory 后端扩展 |
-| `slots.tts` | `string` | 首选 TTS 提供商扩展 |
+| `slots.tts` | `string` | 首选 TTS 服务商扩展 |
 | `slots.imageGeneration` | `string` | 首选图像生成扩展 |
 | `slots.webSearch` | `string` | 首选网页搜索扩展 |
 
