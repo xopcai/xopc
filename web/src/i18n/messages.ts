@@ -532,9 +532,37 @@ const bundles: Record<
       metadata: string;
       statsRegion: string;
       statsHint: string;
+      statsDetailTitle: string;
       logDir: string;
       requestId: string;
       sessionId: string;
+      presetAll: string;
+      presetErrors: string;
+      presetWarnPlus: string;
+      presetInfoPlus: string;
+      presetVerbose: string;
+      presetOther: string;
+      levelPresetAria: string;
+      refreshModeAria: string;
+      refreshManual: string;
+      refreshLive: string;
+      filtersMore: string;
+      filtersDialogTitle: string;
+      filtersDialogDesc: string;
+      filtersDone: string;
+      levelCustom: string;
+      levelCustomHint: string;
+      copyMessage: string;
+      copyJson: string;
+      copied: string;
+      levelNames: {
+        trace: string;
+        debug: string;
+        info: string;
+        warn: string;
+        error: string;
+        fatal: string;
+      };
     };
     agentSettings: {
       subtitle: string;
@@ -1690,9 +1718,37 @@ const bundles: Record<
       metadata: 'Metadata',
       statsRegion: 'Sample (recent files)',
       statsHint: 'Counts are sampled from recent log files, not totals.',
+      statsDetailTitle: 'Level breakdown',
       logDir: 'Directory',
       requestId: 'Request ID',
       sessionId: 'Session ID',
+      presetAll: 'All',
+      presetErrors: 'Errors',
+      presetWarnPlus: 'Warn+',
+      presetInfoPlus: 'Info+',
+      presetVerbose: 'Debug',
+      presetOther: 'More',
+      levelPresetAria: 'Filter by log level',
+      refreshModeAria: 'Log refresh mode',
+      refreshManual: 'Manual',
+      refreshLive: 'Live',
+      filtersMore: 'More filters',
+      filtersDialogTitle: 'More filters',
+      filtersDialogDesc: 'Time range and custom log levels.',
+      filtersDone: 'Done',
+      levelCustom: 'Custom levels',
+      levelCustomHint: 'Toggle to include or exclude. No selection means all levels.',
+      copyMessage: 'Copy message',
+      copyJson: 'Copy JSON',
+      copied: 'Copied',
+      levelNames: {
+        trace: 'trace',
+        debug: 'debug',
+        info: 'info',
+        warn: 'warn',
+        error: 'error',
+        fatal: 'fatal',
+      },
     },
     agentSettings: {
       subtitle: 'Defaults for models, workspace, sampling, and how responses are shown.',
@@ -2897,9 +2953,37 @@ const bundles: Record<
       metadata: '元数据',
       statsRegion: '抽样（近期文件）',
       statsHint: '数量为近期日志文件抽样统计，非全量。',
+      statsDetailTitle: '各级别数量',
       logDir: '目录',
       requestId: '请求 ID',
       sessionId: '会话 ID',
+      presetAll: '全部',
+      presetErrors: '错误',
+      presetWarnPlus: '警告+',
+      presetInfoPlus: '信息+',
+      presetVerbose: '调试',
+      presetOther: '更多',
+      levelPresetAria: '按日志级别筛选',
+      refreshModeAria: '日志刷新方式',
+      refreshManual: '手动',
+      refreshLive: '实时',
+      filtersMore: '更多筛选',
+      filtersDialogTitle: '更多筛选',
+      filtersDialogDesc: '时间范围与自定义日志级别。',
+      filtersDone: '完成',
+      levelCustom: '自定义级别',
+      levelCustomHint: '点选以包含或排除；全部不选表示所有级别。',
+      copyMessage: '复制消息',
+      copyJson: '复制 JSON',
+      copied: '已复制',
+      levelNames: {
+        trace: 'trace',
+        debug: 'debug',
+        info: 'info',
+        warn: 'warn',
+        error: 'error',
+        fatal: 'fatal',
+      },
     },
     agentSettings: {
       subtitle: '模型、工作区、采样与输出方式的默认配置。',
