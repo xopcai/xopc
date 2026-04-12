@@ -1,6 +1,8 @@
 # Workspace Templates
 
-xopc uses workspace template files to customize agent behavior and knowledge. These files are automatically created during the `onboard` process in the `~/.xopc/workspace/` directory.
+xopc uses bootstrap Markdown templates to customize agent behavior and knowledge. During `onboard`, `setup`, or `agents add`, missing files are **copied** (never overwritten) into **`~/.xopc/agents/<agentId>/bootstrap/`** — the same set ships as `src/agent/context/workspace-templates/*.md` and is published under `docs/reference/templates/` for reading in the docs site.
+
+Template resolution at runtime: `XOPC_TEMPLATE_PATH` (if set), else a walk to `docs/reference/templates` from the running install, else the bundled `workspace-templates` directory next to the compiled `workspace-seed` module.
 
 ## Template Files
 
@@ -15,14 +17,21 @@ xopc uses workspace template files to customize agent behavior and knowledge. Th
 | [HEARTBEAT.md](/reference/templates/HEARTBEAT) | Proactive monitoring configuration |
 | [BOOTSTRAP.md](/reference/templates/BOOTSTRAP) | Bootstrap configuration |
 
-## Auto-Loading
+## System prompt load order
 
-These files are automatically loaded into the agent's system prompt for each conversation:
+These files are read from `bootstrap/` (when present) and assembled into the agent system prompt **in this order** (see `BOOTSTRAP_FILES` in `src/agent/context/workspace.ts`):
 
-1. **SOUL.md** - Defines who the agent is, how it behaves
-2. **USER.md** - What the agent knows about you
-3. **TOOLS.md** - Tool usage guidelines
-4. **AGENTS.md** - Multi-agent collaboration rules
+1. **SOUL.md**
+2. **IDENTITY.md**
+3. **USER.md**
+4. **TOOLS.md**
+5. **AGENTS.md**
+6. **HEARTBEAT.md**
+7. **MEMORY.md**
+
+**BOOTSTRAP.md** is also copied when seeding a new agent; it is **not** part of that load list (first-run / manual guidance only).
+
+**CONTEXT.md** and **SKILLS.md** are **not** in `BOOTSTRAP_FILES`, so they are **not** injected into the default system prompt. The `xopc init` flow can still **create** them under `bootstrap/` (see `src/cli/commands/init.ts`). The template **seed** used by `onboard` / `agents add` (`workspace-seed.ts`) only copies the files listed above plus `BOOTSTRAP.md` — it does **not** ship `CONTEXT.md` / `SKILLS.md` from `docs/reference/templates`.
 
 ## Memory System
 

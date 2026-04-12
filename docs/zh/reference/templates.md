@@ -1,6 +1,8 @@
 # 工作区模板
 
-xopc 使用工作区模板文件来自定义智能体的行为与知识。这些文件在 `onboard` 过程中自动创建，位于 `~/.xopc/workspace/` 目录。
+xopc 使用 **bootstrap** 目录下的 Markdown 模板定义智能体行为与知识。执行 `onboard`、`setup` 或 `agents add` 时，会将缺失的模板 **复制** 到 **`~/.xopc/agents/<agentId>/bootstrap/`**（已存在则**不会**覆盖）。内容与 `src/agent/context/workspace-templates/*.md` 一致，并发布在 `docs/reference/templates/` 供文档站阅读。
+
+运行时选取模板的顺序：`XOPC_TEMPLATE_PATH`（若设置且存在）→ 从安装目录向上查找 `docs/reference/templates` → 否则使用与 `workspace-seed` 同目录打包的 `workspace-templates/`。**文档站中的 `docs/zh/reference/templates/*.md` 仅用于中文路由展示，与运行时种子无直接关系**（正文目前与英文模板相同）。
 
 ## 模板文件列表
 
@@ -15,14 +17,21 @@ xopc 使用工作区模板文件来自定义智能体的行为与知识。这些
 | [HEARTBEAT.md](/zh/reference/templates/HEARTBEAT) | 主动监控配置 |
 | [BOOTSTRAP.md](/zh/reference/templates/BOOTSTRAP) | 启动引导配置 |
 
-## 自动加载
+## 系统提示加载顺序
 
-这些文件会在每次对话时自动加载到智能体的系统提示中，提供上下文：
+以下文件从 `bootstrap/` 读取（若存在），并按此顺序写入智能体系统提示（见 `src/agent/context/workspace.ts` 中的 `BOOTSTRAP_FILES`）：
 
-1. **SOUL.md** - 定义智能体是谁、如何行事
-2. **USER.md** - 智能体所了解的、关于你的信息
-3. **TOOLS.md** - 工具使用指南
-4. **AGENTS.md** - 多智能体协作规则
+1. **SOUL.md**
+2. **IDENTITY.md**
+3. **USER.md**
+4. **TOOLS.md**
+5. **AGENTS.md**
+6. **HEARTBEAT.md**
+7. **MEMORY.md**
+
+**BOOTSTRAP.md** 也会在新建智能体时一并复制，但**不在**上述系统提示链中（仅作首次运行 / 人工说明）。
+
+**CONTEXT.md**、**SKILLS.md** **不在** `BOOTSTRAP_FILES` 中，因此**不会**进入默认系统提示。`xopc init` 仍可能在 `bootstrap/` 下**生成**这两个文件（见 `src/cli/commands/init.ts`）。而 `onboard` / `agents add` 使用的模板种子（`workspace-seed.ts`）只复制上文列表 + **BOOTSTRAP.md**，**不会**从 `docs/reference/templates` 提供 `CONTEXT.md` / `SKILLS.md`。
 
 ## 记忆系统
 
