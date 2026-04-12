@@ -8,7 +8,7 @@ xopc 的技能系统基于工作区中的文件：通过 `SKILL.md` 等为 AI �
 - [SKILL.md 文件格式](#skillmd-文件格式)
 - [技能来源](#技能来源)
 - [Skills Hub（Git / 压缩包）](#skills-hubgit--压缩包)
-- [Agent 运行时：工具与提示风格](#agent-运行时工具与提示风格)
+- [智能体运行时：工具与提示风格](#agent-运行时工具与提示风格)
 - [声明环境变量](#声明环境变量)
 - [CLI 命令](#cli-命令)
 - [配置技能](#配置技能)
@@ -150,9 +150,9 @@ xopc skills hub lock --json
 
 Hub 安装的技能与全局 `~/.xopc/skills/` 规则一致，仍可用 `skills enable` / `disable` 与 `skills.json` 条目控制。
 
-## Agent 运行时：工具与提示风格
+## 智能体运行时：工具与提示风格 {#agent-运行时工具与提示风格}
 
-Agent 在接入 SkillManager 时注册与技能相关的工具：
+智能体在接入 SkillManager 时注册与技能相关的工具：
 
 | 工具 | 作用 |
 |------|------|
@@ -289,7 +289,7 @@ xopc skills test security --deep
 
 ## 配置技能
 
-技能配置文件位于 `~/.xopc/skills.json`。除 **`entries`** 外可配置全局加载行为（见 [Agent 运行时](#agent-运行时工具与提示风格)）：
+技能配置文件位于 `~/.xopc/skills.json`。除 **`entries`** 外可配置全局加载行为（见 [智能体运行时](#agent-运行时工具与提示风格)）：
 
 ```json
 {

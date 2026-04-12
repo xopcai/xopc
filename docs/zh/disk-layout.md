@@ -9,8 +9,8 @@
 | 区域 | 作用 |
 |------|------|
 | **状态目录** | 全局配置、凭据、日志、cron、全局 skills/extensions、托管工具链等。 |
-| **Agent 主目录** `<stateDir>/agents/<agentId>/` | 按 Agent 隔离的运行时数据：会话 transcript、bootstrap 人格 Markdown、托管记忆、入站/TTS 落盘、会话级配置、ACP 索引等。 |
-| **Agent 状态目录** `…/agents/<agentId>/agent/` | 进程状态：`agent.json`、每 Agent 凭据、IPC 收件箱、pid/socket、小型机器状态、扩展安装、出站崩溃恢复队列。 |
+| **智能体主目录** `<stateDir>/agents/<agentId>/` | 按 `agentId` 隔离的运行时数据：会话 transcript、bootstrap 人格 Markdown、托管记忆、入站/TTS 落盘、会话级配置、ACP 索引等。 |
+| **智能体状态目录** `…/agents/<agentId>/agent/` | 进程状态：`agent.json`、各智能体凭据、IPC 收件箱、pid/socket、小型机器状态、扩展安装、出站崩溃恢复队列。 |
 | **Markdown 工作空间** | 用户项目树：工具 **cwd**、每日 `memory/*.md`、`media/generated`、用户 `skills/`、任意用户文件。**不再**作为人格文件或内部状态的主存放位置。 |
 
 下文默认状态根为 `~/.xopc/`；可用 `XOPC_STATE_DIR`、`XOPC_PROFILE`、`XOPC_HOME` 覆盖（见 [workspace.md 环境变量](workspace.md#环境变量速查)）。
@@ -30,7 +30,7 @@
 | `bin/`、`tools/` | CLI 包装与工具运行时。 |
 | `models.json` | 可选的自定义模型注册数据。 |
 
-## Agent 主目录：`agents/<agentId>/`
+## 智能体主目录：`agents/<agentId>/`
 
 由 `resolveAgentHomeDir(config, agentId)` 解析。常见结构：
 
@@ -41,27 +41,27 @@
 | `memories/` | 托管结构化存储（`MEMORY.md`、`USER.md`，条目以固定分隔符分段 — `BuiltinMemoryStore`）。 |
 | `inbound/` | 入站附件（非图片二进制）落盘；transcript 中相对路径为相对 agent home 的 `inbound/...`。 |
 | `tts/` | 按会话缓存的出站 TTS 音频。 |
-| `agent/` | 见下节 **Agent 状态目录**。 |
+| `agent/` | 见下节 **智能体状态目录**。 |
 
 种子目录：`xopc init` / `xopc agents add` 会创建 `bootstrap/` 与工作区骨架；模板位于 `src/agent/context/workspace-templates/`（参见 [工作区模板](/zh/reference/templates)）。
 
-## Agent 状态目录：`agents/<agentId>/agent/`
+## 智能体状态目录：`agents/<agentId>/agent/`
 
 由 `resolveAgentDir(config, agentId)` 解析。
 
 | 路径 | 用途 |
 |------|------|
-| `agent.json` | Agent 元数据。 |
-| `credentials/` | 每 Agent API 配置（如使用）。 |
+| `agent.json` | 智能体运行时元数据。 |
+| `credentials/` | 各智能体 API 配置（如使用）。 |
 | `inbox/pending/`、`inbox/processed/` | 基于文件的 IPC 收件箱。 |
 | `pid`、`status.json`、`agent.sock` | 进程协调。 |
 | `state/` | 机器状态（如 workspace 元数据、skills 扫描缓存）——**不是** Markdown 工作区下的 `.state/`。 |
-| `extensions/` | 每 Agent 扩展安装根目录。 |
+| `extensions/` | 各智能体扩展安装根目录。 |
 | `outbound-pending.json` | 出站消息崩溃恢复队列。 |
 
 ## Markdown 工作空间
 
-由 `resolveAgentWorkspaceDir(config, agentId)` 解析：默认 Agent 常为 `<stateDir>/workspace`，其它 id 常为 `<stateDir>/workspace-<id>`，或由 `agents.defaults.workspace` / 列表项 `workspace` 指定。
+由 `resolveAgentWorkspaceDir(config, agentId)` 解析：默认智能体常为 `<stateDir>/workspace`，其它 id 常为 `<stateDir>/workspace-<id>`，或由 `agents.defaults.workspace` / 列表项 `workspace` 指定。
 
 **预期内容**（用户可见 / 工具面向）：
 
@@ -78,7 +78,7 @@
 
 ## 运维辅助 API
 
-- `listAgentWorkspaceDirs(config)` — 列出配置中所有 Agent 的 Markdown 根（`src/config/workspace-dirs.ts`）。
+- `listAgentWorkspaceDirs(config)` — 列出配置中所有智能体的 Markdown 根（`src/config/workspace-dirs.ts`）。
 - `listAgentBootstrapDirs(config)` — 列出所有 `bootstrap/` 根，便于备份或外部编辑器挂载。
 
 ## 另见

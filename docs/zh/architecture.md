@@ -47,7 +47,7 @@
 
 ```
 src/
-├── agent/              # 核心代理逻辑（基于 pi-agent-core）
+├── agent/              # 智能体核心逻辑（基于 pi-agent-core）
 │   ├── service.ts      #   主 AgentService 类
 │   ├── memory/         #   托管记忆、MemoryManager、prefetch；会话 transcript 在 session/ 下
 │   ├── prompt/         #   Prompt 构建系统
@@ -79,7 +79,7 @@ src/
 ├── cron/               # 定时任务
 ├── gateway/            # HTTP/WebSocket gateway 服务器
 ├── heartbeat/          # 主动监控
-├── providers/          # LLM 提供商注册表（pi-ai 包装）
+├── providers/          # LLM 服务商注册表（pi-ai 包装）
 ├── session/            # 对话会话管理
 ├── types/              # 共享 TypeScript 类型
 └── utils/              # 共享工具
@@ -95,7 +95,7 @@ extensions/
 
 ## 磁盘上的状态目录与工作空间
 
-运行时数据（配置、凭据、按 Agent 的会话、作为工具 cwd 与用户内容的 Markdown **工作空间**、以及位于 `agents/<id>/bootstrap/` 的人格 Markdown）位于仓库之外的 **状态目录**（默认 `~/.xopc`）。路径总览（bootstrap、agent 主目录、迁移）见 [磁盘与目录布局](disk-layout.md)。初始化、环境变量与默认路径说明见 [状态目录与工作空间布局](workspace.md)。
+运行时数据（配置、凭据、按智能体划分的会话、作为工具 cwd 与用户内容的 Markdown **工作空间**、以及位于 `agents/<id>/bootstrap/` 的人格 Markdown）位于仓库之外的 **状态目录**（默认 `~/.xopc`）。路径总览（bootstrap、智能体主目录、迁移）见 [磁盘与目录布局](disk-layout.md)。初始化、环境变量与默认路径说明见 [状态目录与工作空间布局](workspace.md)。
 
 ## 核心模块
 
@@ -311,7 +311,7 @@ register({
 | 运行时 | Node.js 22+ |
 | 语言 | TypeScript 5.x |
 | LLM SDK | @mariozechner/pi-ai |
-| Agent 框架 | @mariozechner/pi-agent-core |
+| 智能体框架（pi-agent-core） | @mariozechner/pi-agent-core |
 | CLI | Commander.js |
 | 验证 | Zod (配置) + TypeBox (工具) |
 | 日志 | Pino |
