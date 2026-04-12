@@ -51,7 +51,8 @@ async function rotateConfigBackups(configPath: string): Promise<void> {
  * @param configPath Optional custom config path, defaults to XOPC_CONFIG_PATH or ~/.xopc/xopc.json
  */
 export function loadConfig(configPath?: string): Config {
-  config();
+  // dotenv ≥17 logs to stdout on every `config()` unless quiet; `loadConfig` runs from many call sites.
+  config({ quiet: true });
 
   const path = configPath || process.env.XOPC_CONFIG_PATH || resolveConfigPath();
 
