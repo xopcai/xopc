@@ -1,10 +1,11 @@
 import * as Dialog from '@radix-ui/react-dialog';
+import * as Popover from '@radix-ui/react-popover';
 import {
   ChevronDown,
+  ClipboardCopy,
   FileText,
   Folder,
-  Pause,
-  Play,
+  ListFilter,
   RefreshCw,
   Search,
   Terminal,
@@ -13,8 +14,9 @@ import {
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 
+import { SlidingSegmented } from '@/components/ui/sliding-segmented';
 import { Button } from '@/components/ui/button';
-import { bareInputFocusClass, nativeSelectMaxWidthClass, selectControlBaseClass } from '@/lib/form-field-width';
+import { bareInputFocusClass, selectControlBaseClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import {
   getLogDir,
@@ -33,6 +35,13 @@ const PAGE_LIMIT = 50;
 const REFRESH_MS = 5000;
 const LOG_LEVEL_SET = new Set<LogLevel>(LOG_LEVELS);
 
+type LevelPreset = 'all' | 'errors' | 'warnPlus' | 'infoPlus' | 'verbose' | 'custom';
+type LevelSegmentValue = Exclude<LevelPreset, 'custom'> | 'other';
+
+const PRESET_ERRORS: LogLevel[] = ['error', 'fatal'];
+const PRESET_WARN_PLUS: LogLevel[] = ['warn', 'error', 'fatal'];
+const PRESET_INFO_PLUS: LogLevel[] = ['info', 'warn', 'error', 'fatal'];
+
 function parseLogLevelsParam(raw: string | null): Set<LogLevel> {
   if (!raw) return new Set<LogLevel>();
   const out = new Set<LogLevel>();
@@ -49,6 +58,40 @@ function isSameLogLevelSet(a: Set<LogLevel>, b: Set<LogLevel>): boolean {
     if (!b.has(level)) return false;
   }
   return true;
+}
+
+function setMatchesLevels(s: Set<LogLevel>, levels: readonly LogLevel[]): boolean {
+  if (s.size !== levels.length) return false;
+  return levels.every((l) => s.has(l));
+}
+
+function derivePreset(levels: Set<LogLevel>): LevelPreset {
+  if (levels.size === 0) return 'all';
+  if (setMatchesLevels(levels, PRESET_ERRORS)) return 'errors';
+  if (setMatchesLevels(levels, PRESET_WARN_PLUS)) return 'warnPlus';
+  if (setMatchesLevels(levels, PRESET_INFO_PLUS)) return 'infoPlus';
+  if (levels.size === LOG_LEVELS.length && LOG_LEVELS.every((l) => levels.has(l))) return 'verbose';
+  return 'custom';
+}
+
+function segmentValueFromLevels(levels: Set<LogLevel>): LevelSegmentValue {
+  const p = derivePreset(levels);
+  return p === 'custom' ? 'other' : p;
+}
+
+function levelsForPreset(preset: Exclude<LevelPreset, 'custom'>): Set<LogLevel> {
+  switch (preset) {
+    case 'all':
+      return new Set();
+    case 'errors':
+      return new Set(PRESET_ERRORS);
+    case 'warnPlus':
+      return new Set(PRESET_WARN_PLUS);
+    case 'infoPlus':
+      return new Set(PRESET_INFO_PLUS);
+    case 'verbose':
+      return new Set(LOG_LEVELS);
+  }
 }
 
 function interpolate(template: string, params: Record<string, string | number>): string {
@@ -96,46 +139,26 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
-function levelChipClasses(level: LogLevel, active: boolean): string {
-  const base =
-    'rounded-md border px-2 py-1 text-xs font-medium capitalize transition-colors duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel';
-  if (!active) {
-    return cn(
-      base,
-      'border-edge bg-surface-panel text-fg-muted hover:bg-surface-hover dark:border-edge',
-    );
-  }
-  switch (level) {
-    case 'error':
-    case 'fatal':
-      return cn(
-        base,
-        'border-red-200 bg-red-50 text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-400',
-      );
-    case 'warn':
-      return cn(
-        base,
-        'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-900/50 dark:bg-amber-950/50 dark:text-amber-400',
-      );
-    default:
-      return cn(base, 'border-edge bg-surface-active text-fg dark:border-edge');
-  }
+function requestIdPreview(id: string): string {
+  const t = id.trim();
+  if (t.length <= 10) return t;
+  return `${t.slice(0, 8)}…`;
 }
 
-function lineLevelBadgeClass(level: LogLevel | string): string {
-  const l = String(level).toLowerCase();
-  const base =
-    'shrink-0 rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide';
-  if (l === 'error' || l === 'fatal') {
-    return cn(base, 'bg-red-50 text-red-700 dark:bg-red-950/50 dark:text-red-400');
+function levelLabel(level: string): string {
+  return String(level).toLowerCase();
+}
+
+function formatStatsLine(
+  byLevel: Partial<Record<LogLevel | 'silent', number>>,
+  labels: Record<LogLevel, string>,
+): string {
+  const parts: string[] = [];
+  for (const lv of LOG_LEVELS) {
+    const n = byLevel[lv] ?? 0;
+    if (n > 0) parts.push(`${labels[lv]} ${n}`);
   }
-  if (l === 'warn') {
-    return cn(base, 'bg-amber-50 text-amber-800 dark:bg-amber-950/50 dark:text-amber-400');
-  }
-  if (l === 'debug' || l === 'trace') {
-    return cn(base, 'bg-surface-hover text-fg-subtle');
-  }
-  return cn(base, 'bg-surface-hover text-fg-muted');
+  return parts.join(' · ');
 }
 
 export function LogsPage() {
@@ -171,8 +194,25 @@ export function LogsPage() {
 
   const [selectedLog, setSelectedLog] = useState<LogEntry | null>(null);
   const [filesOpen, setFilesOpen] = useState(false);
+  const [filtersOpen, setFiltersOpen] = useState(false);
   const [logDir, setLogDir] = useState<string | null>(null);
   const [autoRefresh, setAutoRefresh] = useState(initialAutoRefresh);
+  const [copiedDetail, setCopiedDetail] = useState<'json' | 'message' | null>(null);
+
+  const levelSegment = useMemo(() => segmentValueFromLevels(selectedLevels), [selectedLevels]);
+
+  const hasActiveFilters =
+    debouncedSearch.length > 0 ||
+    selectedLevels.size > 0 ||
+    Boolean(moduleFilter) ||
+    Boolean(dateFrom) ||
+    Boolean(dateTo);
+
+  const activeFilterCount =
+    (debouncedSearch.length > 0 ? 1 : 0) +
+    (selectedLevels.size > 0 ? 1 : 0) +
+    (moduleFilter ? 1 : 0) +
+    (dateFrom || dateTo ? 1 : 0);
 
   useEffect(() => {
     const t = setTimeout(() => setDebouncedSearch(searchInput.trim()), 300);
@@ -204,8 +244,7 @@ export function LogsPage() {
     else params.delete('q');
 
     if (selectedLevels.size > 0) {
-      const serializedLevels = Array.from(selectedLevels).sort().join(',');
-      params.set('level', serializedLevels);
+      params.set('level', Array.from(selectedLevels).sort().join(','));
     } else {
       params.delete('level');
     }
@@ -246,7 +285,6 @@ export function LogsPage() {
     [debouncedSearch, selectedLevels, moduleFilter, dateFrom, dateTo],
   );
 
-  // Initial + filter/search changes: reload from start
   useEffect(() => {
     if (!hasToken) return;
     let cancelled = false;
@@ -255,10 +293,7 @@ export function LogsPage() {
       setError(null);
       setLogs([]);
       try {
-        const result = await queryLogs({
-          ...queryParams,
-          offset: 0,
-        });
+        const result = await queryLogs({ ...queryParams, offset: 0 });
         if (cancelled) return;
         setLogs(result.logs);
         setHasMore(result.logs.length === PAGE_LIMIT);
@@ -334,14 +369,11 @@ export function LogsPage() {
     return () => clearInterval(id);
   }, [autoRefresh, hasToken, queryParams]);
 
-  const toggleLevel = (level: LogLevel) => {
-    setSelectedLevels((prev) => {
-      const next = new Set(prev);
-      if (next.has(level)) next.delete(level);
-      else next.add(level);
-      return next;
-    });
-  };
+  useEffect(() => {
+    if (!copiedDetail) return;
+    const t = window.setTimeout(() => setCopiedDetail(null), 2000);
+    return () => clearTimeout(t);
+  }, [copiedDetail]);
 
   const clearFilters = () => {
     setSearchInput('');
@@ -350,6 +382,23 @@ export function LogsPage() {
     setModuleFilter('');
     setDateFrom('');
     setDateTo('');
+  };
+
+  const handleLevelSegment = (value: LevelSegmentValue) => {
+    if (value === 'other') {
+      setFiltersOpen(true);
+      return;
+    }
+    setSelectedLevels(levelsForPreset(value));
+  };
+
+  const toggleDialogLevel = (level: LogLevel) => {
+    setSelectedLevels((prev) => {
+      const next = new Set(prev);
+      if (next.has(level)) next.delete(level);
+      else next.add(level);
+      return next;
+    });
   };
 
   const handleLoadMore = () => {
@@ -369,14 +418,35 @@ export function LogsPage() {
     })();
   };
 
+  const refreshAll = () => {
+    void (async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const result = await queryLogs({ ...queryParams, offset: 0 });
+        setLogs(result.logs);
+        setHasMore(result.logs.length === PAGE_LIMIT);
+        const [st, fileList] = await Promise.all([getLogStats(), getLogFiles()]);
+        setStats(st);
+        setFiles(fileList);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : L.loadError);
+      } finally {
+        setLoading(false);
+      }
+    })();
+  };
+
+  const statsLine = stats ? formatStatsLine(stats.byLevel ?? {}, L.levelNames) : '';
+
   if (!hasToken) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-10">
-        <div className="flex items-start gap-3 rounded-2xl bg-surface-base p-6">
-          <Terminal className="mt-0.5 size-5 shrink-0 text-fg-subtle" strokeWidth={1.75} />
+        <div className="flex items-start gap-3 rounded-2xl border border-edge-subtle bg-surface-base p-6 dark:border-edge">
+          <Terminal className="mt-0.5 size-5 shrink-0 text-fg-subtle" strokeWidth={1.75} aria-hidden />
           <div>
-            <h1 className="text-base font-semibold text-fg">{L.title}</h1>
-            <p className="mt-1 text-sm text-fg-muted">{L.needToken}</p>
+            <h1 className="text-base font-semibold tracking-tight text-fg">{L.title}</h1>
+            <p className="mt-1 text-sm leading-relaxed text-fg-muted">{L.needToken}</p>
           </div>
         </div>
       </div>
@@ -384,259 +454,233 @@ export function LogsPage() {
   }
 
   return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-5 px-4 py-6">
-      {/* Header */}
-      <header className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between">
+    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-6">
+      <header className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div className="flex min-w-0 items-start gap-3">
           <div
-            className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-surface-hover/80 dark:bg-surface-hover/50"
+            className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-edge-subtle bg-surface-base dark:border-edge"
             aria-hidden
           >
             <Terminal className="size-5 text-fg-muted" strokeWidth={1.75} />
           </div>
           <div className="min-w-0">
-            <h1 className="text-lg font-semibold tracking-tight text-fg">{L.title}</h1>
-            <p className="mt-0.5 text-sm text-fg-muted">{L.subtitle}</p>
+            <h1 className="text-xl font-semibold tracking-tight text-fg">{L.title}</h1>
+            <p className="mt-0.5 text-sm leading-relaxed text-fg-muted">{L.subtitle}</p>
           </div>
         </div>
-        <div className="flex shrink-0 items-center gap-2 self-start sm:self-center">
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-9 px-2"
-            title={L.logFiles}
-            aria-label={L.logFiles}
-            onClick={() => setFilesOpen(true)}
-          >
-            <Folder className="size-4" strokeWidth={1.75} />
-            {files.length > 0 ? (
-              <span className="rounded-full bg-surface-hover px-1.5 text-xs text-fg-muted">{files.length}</span>
-            ) : null}
-          </Button>
-          <Button
-            type="button"
-            variant={autoRefresh ? 'secondary' : 'ghost'}
-            className="h-9 px-2"
-            title={autoRefresh ? L.pause : L.autoRefresh}
-            aria-label={autoRefresh ? L.pause : L.autoRefresh}
-            onClick={() => setAutoRefresh((v) => !v)}
-          >
-            {autoRefresh ? (
-              <Pause className="size-4" strokeWidth={1.75} />
-            ) : (
-              <Play className="size-4" strokeWidth={1.75} />
-            )}
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            className="h-9 px-2"
-            title={L.refresh}
-            aria-label={L.refresh}
-            onClick={() => {
-              void (async () => {
-                setLoading(true);
-                setError(null);
-                try {
-                  const result = await queryLogs({ ...queryParams, offset: 0 });
-                  setLogs(result.logs);
-                  setHasMore(result.logs.length === PAGE_LIMIT);
-                  const [st, fileList] = await Promise.all([getLogStats(), getLogFiles()]);
-                  setStats(st);
-                  setFiles(fileList);
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : L.loadError);
-                } finally {
-                  setLoading(false);
-                }
-              })();
-            }}
-          >
-            <RefreshCw className={cn('size-4', loading && 'animate-spin')} strokeWidth={1.75} />
-          </Button>
+        <div className="flex w-full shrink-0 flex-col gap-2 sm:w-auto sm:max-w-md sm:flex-row sm:items-center sm:justify-end">
+          <div className="w-full sm:w-48">
+            <SlidingSegmented
+              aria-label={L.refreshModeAria}
+              value={autoRefresh ? 'live' : 'paused'}
+              onChange={(v) => setAutoRefresh(v === 'live')}
+              options={[
+                { value: 'paused', label: L.refreshManual },
+                { value: 'live', label: L.refreshLive },
+              ]}
+              buttonClassName="h-8"
+            />
+          </div>
+          <div className="flex items-center gap-1 self-end sm:self-center">
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-9 min-h-[44px] min-w-[44px] px-2 sm:min-h-9 sm:min-w-0"
+              title={L.logFiles}
+              aria-label={L.logFiles}
+              onClick={() => setFilesOpen(true)}
+            >
+              <Folder className="size-4" strokeWidth={1.75} />
+              {files.length > 0 ? (
+                <span className="rounded-full bg-surface-hover px-1.5 text-xs text-fg-muted">{files.length}</span>
+              ) : null}
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="h-9 min-h-[44px] min-w-[44px] px-2 sm:min-h-9 sm:min-w-0"
+              title={L.refresh}
+              aria-label={L.refresh}
+              onClick={refreshAll}
+            >
+              <RefreshCw
+                className={cn(
+                  'size-4 transition-transform duration-150 ease-out motion-reduce:transition-none',
+                  loading && 'animate-spin motion-reduce:animate-none',
+                )}
+                strokeWidth={1.75}
+              />
+            </Button>
+          </div>
         </div>
       </header>
 
       {error ? (
         <div
-          className="rounded-md border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900/50 dark:bg-red-950/50 dark:text-red-400"
+          className="rounded-xl border border-edge bg-surface-base px-3 py-2 text-sm text-fg dark:border-edge"
           role="alert"
         >
           {error}
         </div>
       ) : null}
 
-      {/* Sample stats */}
-      {stats ? (
-        <section
-          className="rounded-lg border border-edge-subtle bg-surface-base px-3 py-2.5 dark:border-edge"
-          aria-label={L.statsRegion}
-        >
-          <p className="text-[11px] font-medium uppercase tracking-wide text-fg-subtle">{L.statsRegion}</p>
-          <p className="mt-1 text-xs text-fg-subtle">{L.statsHint}</p>
-          <div className="mt-2 flex flex-wrap gap-2">
-            {LOG_LEVELS.map((lv) => {
-              const byLevel = stats.byLevel ?? {};
-              const n = byLevel[lv] ?? 0;
-              if (n === 0) return null;
-              return (
-                <span
-                  key={lv}
-                  className="inline-flex items-center gap-1 rounded-md border border-edge bg-surface-panel px-2 py-0.5 text-xs text-fg-muted dark:border-edge"
-                >
-                  <span className="font-medium capitalize text-fg">{lv}</span>
-                  <span className="tabular-nums">{n}</span>
-                </span>
-              );
-            })}
-          </div>
-        </section>
+      {stats && statsLine ? (
+        <div className="flex flex-wrap items-center gap-2">
+          <Popover.Root>
+            <Popover.Trigger asChild>
+              <button
+                type="button"
+                className="max-w-full truncate rounded-lg border border-transparent px-1 py-0.5 text-left text-xs leading-5 text-fg-subtle transition-colors duration-150 ease-out hover:border-edge-subtle hover:bg-surface-hover hover:text-fg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel dark:hover:border-edge"
+              >
+                <span className="font-medium text-fg-muted">{L.statsRegion}</span>
+                <span className="mx-1.5 text-fg-subtle">·</span>
+                <span className="tabular-nums">{statsLine}</span>
+              </button>
+            </Popover.Trigger>
+            <Popover.Portal>
+              <Popover.Content
+                side="bottom"
+                align="start"
+                sideOffset={6}
+                className={cn(
+                  'z-50 w-[min(calc(100vw-2rem),20rem)] rounded-xl border border-edge bg-surface-panel p-3 shadow-popover outline-none',
+                  'dark:border-edge',
+                )}
+              >
+                <p className="text-xs font-medium text-fg">{L.statsDetailTitle}</p>
+                <p className="mt-1 text-xs leading-5 text-fg-muted">{L.statsHint}</p>
+                <ul className="mt-3 flex flex-col gap-1.5" role="list">
+                  {LOG_LEVELS.map((lv) => {
+                    const n = stats.byLevel?.[lv] ?? 0;
+                    if (n === 0) return null;
+                    return (
+                      <li
+                        key={lv}
+                        className="flex items-center justify-between gap-2 rounded-md border border-edge-subtle bg-surface-base px-2 py-1 text-xs dark:border-edge"
+                      >
+                        <span className="font-medium capitalize text-fg">{L.levelNames[lv]}</span>
+                        <span className="tabular-nums text-fg-muted">{n}</span>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </Popover.Content>
+            </Popover.Portal>
+          </Popover.Root>
+        </div>
       ) : null}
 
-      {/* Filters */}
-      <section className="flex flex-col gap-4" aria-label={L.filters}>
-        <label className="relative block">
-          <span className="sr-only">{L.searchPlaceholder}</span>
-          <Search
-            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle"
-            strokeWidth={1.75}
-            aria-hidden
-          />
-          <input
-            type="search"
-            value={searchInput}
-            onChange={(e) => setSearchInput(e.target.value)}
-            placeholder={L.searchPlaceholder}
-            autoComplete="off"
-            spellCheck={false}
-            className={cn(
-              'w-full rounded-lg bg-surface-base py-2 pl-10 pr-3 text-sm text-fg placeholder:text-fg-subtle',
-              bareInputFocusClass,
-              'dark:bg-surface-hover/35',
-            )}
-          />
-        </label>
-
-        <div className="flex flex-wrap gap-2" role="group" aria-label={L.level}>
-          {LOG_LEVELS.map((level) => (
-            <button
-              key={level}
-              type="button"
-              className={levelChipClasses(level, selectedLevels.has(level))}
-              onClick={() => toggleLevel(level)}
-            >
-              {level}
-            </button>
-          ))}
-        </div>
-
-        <div className="flex flex-col gap-3 sm:flex-row sm:flex-wrap sm:items-end">
-          <div className="min-w-[12rem] flex-1">
-            <label htmlFor="log-module" className="mb-1 block text-xs font-medium text-fg-muted">
-              {L.module}
-            </label>
-            <select
-              id="log-module"
-              value={moduleFilter}
-              onChange={(e) => setModuleFilter(e.target.value)}
-              className={cn(selectControlBaseClass, nativeSelectMaxWidthClass)}
-            >
-              <option value="">{L.allModules}</option>
-              {modules.map((mod) => (
-                <option key={mod} value={mod}>
-                  {mod}
-                </option>
-              ))}
-            </select>
+      <section className="flex flex-col gap-3" aria-label={L.filters}>
+        <div className="overflow-x-auto pb-1 [-ms-overflow-style:none] [scrollbar-width:none] [&::-webkit-scrollbar]:hidden">
+          <div className="min-w-[min(100%,36rem)]">
+            <SlidingSegmented<LevelSegmentValue>
+              aria-label={L.levelPresetAria}
+              value={levelSegment}
+              onChange={handleLevelSegment}
+              options={[
+                { value: 'all', label: L.presetAll },
+                { value: 'errors', label: L.presetErrors },
+                { value: 'warnPlus', label: L.presetWarnPlus },
+                { value: 'infoPlus', label: L.presetInfoPlus },
+                { value: 'verbose', label: L.presetVerbose },
+                { value: 'other', label: L.presetOther },
+              ]}
+              buttonClassName="h-8 px-1.5 text-[11px] sm:px-2 sm:text-xs"
+            />
           </div>
-
-          <details className="min-w-[14rem] flex-1 rounded-lg bg-surface-base open:pb-3 dark:bg-surface-hover/30">
-            <summary className="cursor-pointer select-none px-3 py-2 text-sm font-medium text-fg hover:bg-surface-hover/70">
-              {L.timeRange}
-            </summary>
-            <div className="flex flex-col gap-3 border-t border-edge-subtle px-3 pt-3 dark:border-edge-subtle sm:flex-row">
-              <div className="min-w-0 flex-1">
-                <label htmlFor="log-from" className="mb-1 block text-xs text-fg-muted">
-                  {L.from}
-                </label>
-                <input
-                  id="log-from"
-                  type="datetime-local"
-                  value={dateFrom}
-                  onChange={(e) => setDateFrom(e.target.value)}
-                  className="w-full rounded-md border border-edge bg-surface-panel px-2 py-1.5 text-sm text-fg dark:border-edge"
-                />
-              </div>
-              <div className="min-w-0 flex-1">
-                <label htmlFor="log-to" className="mb-1 block text-xs text-fg-muted">
-                  {L.to}
-                </label>
-                <input
-                  id="log-to"
-                  type="datetime-local"
-                  value={dateTo}
-                  onChange={(e) => setDateTo(e.target.value)}
-                  className="w-full rounded-md border border-edge bg-surface-panel px-2 py-1.5 text-sm text-fg dark:border-edge"
-                />
-              </div>
-            </div>
-          </details>
-
-          <Button type="button" variant="ghost" className="shrink-0 gap-1 self-end sm:self-end" onClick={clearFilters}>
-            <X className="size-4" strokeWidth={1.75} />
-            {L.clear}
-          </Button>
         </div>
 
-        {autoRefresh ? <p className="text-xs text-fg-subtle">{L.liveHint}</p> : null}
+        <div className="flex flex-col gap-2 sm:flex-row sm:flex-wrap sm:items-center">
+          <label className="relative min-w-0 flex-1 sm:min-w-[12rem]">
+            <span className="sr-only">{L.searchPlaceholder}</span>
+            <Search
+              className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-subtle"
+              strokeWidth={1.75}
+              aria-hidden
+            />
+            <input
+              type="search"
+              value={searchInput}
+              onChange={(e) => setSearchInput(e.target.value)}
+              placeholder={L.searchPlaceholder}
+              autoComplete="off"
+              spellCheck={false}
+              className={cn(
+                'h-10 w-full rounded-md border border-edge bg-surface-panel py-0 pl-10 pr-3 text-sm leading-5 text-fg placeholder:text-fg-subtle dark:border-edge',
+                bareInputFocusClass,
+              )}
+            />
+          </label>
+
+          <select
+            id="log-module"
+            value={moduleFilter}
+            onChange={(e) => setModuleFilter(e.target.value)}
+            aria-label={L.module}
+            title={L.module}
+            className={cn(
+              selectControlBaseClass,
+              'h-10 w-full min-w-0 rounded-md py-0 sm:w-[min(100%,14rem)] sm:shrink-0',
+            )}
+          >
+            <option value="">{L.allModules}</option>
+            {modules.map((mod) => (
+              <option key={mod} value={mod}>
+                {mod}
+              </option>
+            ))}
+          </select>
+
+          <div className="flex min-w-0 shrink-0 items-center gap-2">
+            <Button
+              type="button"
+              variant="secondary"
+              className="h-10 min-h-[44px] gap-2 rounded-md sm:min-h-10"
+              onClick={() => setFiltersOpen(true)}
+            >
+              <ListFilter className="size-4" strokeWidth={1.75} />
+              {L.filtersMore}
+              {activeFilterCount > 0 ? (
+                <span className="rounded-md bg-surface-hover px-1.5 text-xs tabular-nums text-fg-muted">
+                  {activeFilterCount}
+                </span>
+              ) : null}
+            </Button>
+            {hasActiveFilters ? (
+              <Button type="button" variant="ghost" className="h-10 min-h-[44px] gap-1 sm:min-h-10" onClick={clearFilters}>
+                <X className="size-4" strokeWidth={1.75} />
+                {L.clear}
+              </Button>
+            ) : null}
+          </div>
+        </div>
+
+        {autoRefresh ? <p className="text-xs leading-5 text-fg-subtle">{L.liveHint}</p> : null}
       </section>
 
-      {/* Feed */}
       {loading && logs.length === 0 ? (
-        <div className="flex flex-col gap-2" aria-busy="true">
-          {Array.from({ length: 10 }).map((_, i) => (
-            <div
-              key={i}
-              className="flex gap-3 rounded-md bg-surface-base p-3 dark:bg-surface-hover/25"
-            >
-              <div className="h-4 w-16 animate-pulse rounded bg-surface-hover" />
-              <div className="h-4 w-12 animate-pulse rounded bg-surface-hover" />
-              <div className="h-4 w-24 animate-pulse rounded bg-surface-hover" />
-              <div className="h-4 min-w-0 flex-1 animate-pulse rounded bg-surface-hover" />
+        <div
+          className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-panel dark:divide-edge dark:border-edge"
+          aria-busy="true"
+        >
+          {Array.from({ length: 8 }).map((_, i) => (
+            <div key={i} className="flex gap-3 px-3 py-2.5">
+              <div className="h-4 w-16 shrink-0 bg-surface-hover motion-reduce:animate-none animate-pulse" />
+              <div className="h-4 w-12 shrink-0 bg-surface-hover motion-reduce:animate-none animate-pulse" />
+              <div className="h-4 w-20 shrink-0 bg-surface-hover motion-reduce:animate-none animate-pulse" />
+              <div className="h-4 min-w-0 flex-1 bg-surface-hover motion-reduce:animate-none animate-pulse" />
             </div>
           ))}
         </div>
       ) : null}
 
       {!loading && logs.length === 0 ? (
-        <div className="flex flex-col items-center justify-center gap-2 rounded-2xl bg-surface-base py-16 text-center dark:bg-surface-hover/25">
-          <FileText className="size-8 text-fg-subtle" strokeWidth={1.5} aria-hidden />
-          <h2 className="text-base font-medium text-fg">{L.noLogs}</h2>
-          <p className="max-w-sm text-sm text-fg-muted">{L.noLogsDescription}</p>
-          <Button
-            type="button"
-            variant="secondary"
-            className="mt-6 gap-1"
-            onClick={() => {
-              void (async () => {
-                setLoading(true);
-                setError(null);
-                try {
-                  const result = await queryLogs({ ...queryParams, offset: 0 });
-                  setLogs(result.logs);
-                  setHasMore(result.logs.length === PAGE_LIMIT);
-                  const [st, fileList] = await Promise.all([getLogStats(), getLogFiles()]);
-                  setStats(st);
-                  setFiles(fileList);
-                } catch (e) {
-                  setError(e instanceof Error ? e.message : L.loadError);
-                } finally {
-                  setLoading(false);
-                }
-              })();
-            }}
-          >
-            <RefreshCw className="size-4" />
+        <div className="flex flex-col items-center justify-center gap-2 rounded-xl border border-edge-subtle bg-surface-base py-16 text-center dark:border-edge">
+          <FileText className="size-12 text-fg-subtle" strokeWidth={1.5} aria-hidden />
+          <h2 className="text-base font-semibold tracking-tight text-fg">{L.noLogs}</h2>
+          <p className="max-w-sm text-sm leading-relaxed text-fg-muted">{L.noLogsDescription}</p>
+          <Button type="button" variant="secondary" className="mt-4 gap-2" onClick={refreshAll}>
+            <RefreshCw className="size-4" strokeWidth={1.75} />
             {L.refresh}
           </Button>
         </div>
@@ -644,29 +688,41 @@ export function LogsPage() {
 
       {logs.length > 0 ? (
         <div className="flex flex-col gap-2">
-          <div className="flex flex-wrap items-baseline justify-between gap-2 text-xs text-fg-muted">
-            <span>{interpolate(L.showingCount, { count: String(logs.length) })}</span>
-            {hasMore ? <span>{L.moreAvailable}</span> : null}
-          </div>
-          <ul className="flex flex-col gap-1" role="list">
+          <p className="text-xs leading-5 text-fg-muted">
+            {interpolate(L.showingCount, { count: String(logs.length) })}
+            {hasMore ? <span className="text-fg-subtle"> · {L.moreAvailable}</span> : null}
+          </p>
+          <ul
+            className="divide-y divide-edge-subtle overflow-hidden rounded-xl border border-edge bg-surface-panel font-mono text-sm leading-6 dark:divide-edge dark:border-edge"
+            role="list"
+          >
             {logs.map((log, idx) => {
               const lv = log.level ?? 'info';
+              const rid = typeof log.requestId === 'string' ? log.requestId.trim() : '';
               return (
                 <li key={`${log.timestamp}-${idx}`}>
                   <button
                     type="button"
                     onClick={() => setSelectedLog(log)}
                     className={cn(
-                      'flex w-full min-w-0 gap-2 rounded-md px-2 py-2 text-left text-sm transition-colors duration-150 ease-out active:scale-[0.99]',
+                      'flex w-full min-w-0 items-center gap-3 px-3 py-2.5 text-left transition-colors duration-150 ease-out',
                       'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
                     )}
                   >
-                    <span className="shrink-0 font-mono text-xs tabular-nums text-fg-subtle">
+                    <span className="w-[5.25rem] shrink-0 tabular-nums text-fg-subtle">
                       {formatTimeCompact(log.timestamp)}
                     </span>
-                    <span className={lineLevelBadgeClass(lv)}>{lv}</span>
+                    <span className="w-[4.5rem] shrink-0 truncate text-fg-muted" title={lv}>
+                      {levelLabel(lv)}
+                    </span>
                     <span
-                      className="hidden max-w-[8rem] shrink-0 truncate font-mono text-xs text-fg-muted sm:inline"
+                      className="w-[4.5rem] shrink-0 truncate text-fg-subtle sm:w-[5.25rem]"
+                      title={rid ? `${L.requestId}: ${rid}` : undefined}
+                    >
+                      {rid ? requestIdPreview(rid) : '—'}
+                    </span>
+                    <span
+                      className="hidden max-w-[7rem] shrink-0 truncate text-fg-muted lg:inline"
                       title={moduleLabel(log)}
                     >
                       {moduleLabel(log)}
@@ -678,7 +734,7 @@ export function LogsPage() {
             })}
           </ul>
           {hasMore ? (
-            <div className="flex justify-center pt-2">
+            <div className="flex justify-center pt-1">
               <Button
                 type="button"
                 variant="secondary"
@@ -687,7 +743,7 @@ export function LogsPage() {
                 onClick={handleLoadMore}
               >
                 {loading ? (
-                  <RefreshCw className="size-4 animate-spin" strokeWidth={1.75} />
+                  <RefreshCw className="size-4 animate-spin motion-reduce:animate-none" strokeWidth={1.75} />
                 ) : (
                   <ChevronDown className="size-4" strokeWidth={1.75} />
                 )}
@@ -698,7 +754,87 @@ export function LogsPage() {
         </div>
       ) : null}
 
-      {/* Detail drawer */}
+      <Dialog.Root open={filtersOpen} onOpenChange={setFiltersOpen}>
+        <Dialog.Portal>
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim" />
+          <Dialog.Content
+            className={cn(
+              'xopc-dialog-content fixed left-1/2 top-1/2 z-50 flex max-h-[min(32rem,90vh)] w-[min(100%-2rem,22rem)] -translate-x-1/2 -translate-y-1/2 flex-col rounded-xl border border-edge bg-surface-panel shadow-popover outline-none',
+              'dark:border-edge',
+            )}
+            aria-describedby="log-filters-desc"
+          >
+            <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3 dark:border-edge">
+              <Dialog.Title className="text-base font-semibold tracking-tight text-fg">{L.filtersDialogTitle}</Dialog.Title>
+              <Dialog.Close asChild>
+                <Button type="button" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={L.close}>
+                  <X className="size-5" strokeWidth={1.75} />
+                </Button>
+              </Dialog.Close>
+            </div>
+            <div id="log-filters-desc" className="sr-only">
+              {L.filtersDialogDesc}
+            </div>
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
+              <p className="text-xs font-medium text-fg-muted">{L.timeRange}</p>
+              <div className="mt-2 flex flex-col gap-3">
+                <div>
+                  <label htmlFor="log-from-d" className="mb-1 block text-xs text-fg-muted">
+                    {L.from}
+                  </label>
+                  <input
+                    id="log-from-d"
+                    type="datetime-local"
+                    value={dateFrom}
+                    onChange={(e) => setDateFrom(e.target.value)}
+                    className="w-full rounded-xl border border-edge bg-surface-base px-2 py-2 text-sm text-fg dark:border-edge"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="log-to-d" className="mb-1 block text-xs text-fg-muted">
+                    {L.to}
+                  </label>
+                  <input
+                    id="log-to-d"
+                    type="datetime-local"
+                    value={dateTo}
+                    onChange={(e) => setDateTo(e.target.value)}
+                    className="w-full rounded-xl border border-edge bg-surface-base px-2 py-2 text-sm text-fg dark:border-edge"
+                  />
+                </div>
+              </div>
+              <p className="mt-6 text-xs font-medium text-fg-muted">{L.levelCustom}</p>
+              <p className="mt-1 text-xs leading-5 text-fg-subtle">{L.levelCustomHint}</p>
+              <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label={L.level}>
+                {LOG_LEVELS.map((level) => {
+                  const active = selectedLevels.has(level);
+                  return (
+                    <button
+                      key={level}
+                      type="button"
+                      className={cn(
+                        'rounded-full border px-3 py-1.5 text-xs font-medium capitalize transition-[color,background-color,border-color] duration-150 ease-out focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
+                        active
+                          ? 'border-edge bg-surface-active text-fg dark:border-edge'
+                          : 'border-edge-subtle bg-surface-base text-fg-muted hover:bg-surface-hover dark:border-edge',
+                      )}
+                      onClick={() => toggleDialogLevel(level)}
+                    >
+                      {L.levelNames[level]}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+            <div className="shrink-0 border-t border-edge-subtle px-4 py-3 dark:border-edge">
+              <Button type="button" className="w-full rounded-xl" onClick={() => setFiltersOpen(false)}>
+                {L.filtersDone}
+              </Button>
+            </div>
+          </Dialog.Content>
+        </Dialog.Portal>
+      </Dialog.Root>
+
       <Dialog.Root open={selectedLog !== null} onOpenChange={(o) => !o && setSelectedLog(null)}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim" />
@@ -710,14 +846,45 @@ export function LogsPage() {
             aria-describedby={undefined}
           >
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3 dark:border-edge">
-              <Dialog.Title className="text-base font-semibold text-fg">{L.details}</Dialog.Title>
-              <Dialog.Close asChild>
-                <Button type="button" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={L.close}>
-                  <X className="size-5" strokeWidth={1.75} />
-                </Button>
-              </Dialog.Close>
+              <Dialog.Title className="text-base font-semibold tracking-tight text-fg">{L.details}</Dialog.Title>
+              <div className="flex min-w-0 items-center gap-1">
+                {selectedLog ? (
+                  <>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-9 shrink-0 gap-1 px-2 text-xs"
+                      onClick={() => {
+                        const text = typeof selectedLog.message === 'string' ? selectedLog.message : '';
+                        void navigator.clipboard.writeText(text).then(() => setCopiedDetail('message'));
+                      }}
+                    >
+                      <ClipboardCopy className="size-3.5 shrink-0" strokeWidth={1.75} />
+                      <span className="hidden sm:inline">{copiedDetail === 'message' ? L.copied : L.copyMessage}</span>
+                    </Button>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      className="h-9 shrink-0 gap-1 px-2 text-xs"
+                      onClick={() => {
+                        void navigator.clipboard
+                          .writeText(JSON.stringify(selectedLog, null, 2))
+                          .then(() => setCopiedDetail('json'));
+                      }}
+                    >
+                      <ClipboardCopy className="size-3.5 shrink-0" strokeWidth={1.75} />
+                      <span className="hidden sm:inline">{copiedDetail === 'json' ? L.copied : L.copyJson}</span>
+                    </Button>
+                  </>
+                ) : null}
+                <Dialog.Close asChild>
+                  <Button type="button" variant="ghost" className="h-9 w-9 shrink-0 p-0" aria-label={L.close}>
+                    <X className="size-5" strokeWidth={1.75} />
+                  </Button>
+                </Dialog.Close>
+              </div>
             </div>
-            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 text-sm">
+            <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4 font-mono text-sm leading-relaxed">
               {selectedLog ? (
                 <LogDetailBody
                   log={selectedLog}
@@ -737,7 +904,6 @@ export function LogsPage() {
         </Dialog.Portal>
       </Dialog.Root>
 
-      {/* Files dialog */}
       <Dialog.Root open={filesOpen} onOpenChange={setFilesOpen}>
         <Dialog.Portal>
           <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-50 bg-scrim" />
@@ -748,7 +914,7 @@ export function LogsPage() {
             )}
           >
             <div className="flex shrink-0 items-center justify-between gap-2 border-b border-edge px-4 py-3 dark:border-edge">
-              <Dialog.Title className="flex items-center gap-2 text-base font-semibold text-fg">
+              <Dialog.Title className="flex items-center gap-2 text-base font-semibold tracking-tight text-fg">
                 <Folder className="size-4 text-fg-muted" strokeWidth={1.75} />
                 {L.logFiles}
               </Dialog.Title>
@@ -766,7 +932,7 @@ export function LogsPage() {
                   {files.map((f) => (
                     <li
                       key={f.name}
-                      className="flex flex-col gap-1 rounded-md bg-surface-hover/50 px-3 py-2 dark:bg-surface-hover/35"
+                      className="flex flex-col gap-1 rounded-lg border border-edge-subtle bg-surface-base px-3 py-2 dark:border-edge"
                     >
                       <span className="break-all font-mono text-xs text-fg">{f.name}</span>
                       <span className="flex flex-wrap gap-x-2 text-xs text-fg-subtle">
@@ -810,37 +976,37 @@ function LogDetailBody({
   const rid = typeof log.requestId === 'string' ? log.requestId : '';
   const sid = typeof log.sessionId === 'string' ? log.sessionId : '';
   return (
-    <div className="flex flex-col gap-4">
-      <div className="grid grid-cols-[6rem_1fr] gap-x-3 gap-y-2 text-sm">
-        <span className="text-fg-muted">{labels.time}</span>
-        <code className="break-all font-mono text-xs text-fg">{log.timestamp}</code>
-        <span className="text-fg-muted">{labels.level}</span>
-        <span className={lineLevelBadgeClass(lv)}>{lv}</span>
-        <span className="text-fg-muted">{labels.module}</span>
-        <code className="break-all font-mono text-xs text-fg">{moduleLabel(log)}</code>
+    <div className="flex flex-col gap-8">
+      <div>
+        <span className="text-xs font-sans font-medium text-fg-muted">{labels.message}</span>
+        <pre className="mt-2 whitespace-pre-wrap break-words border border-edge bg-surface-base p-3 text-xs leading-relaxed text-fg dark:border-edge">
+          {log.message || '—'}
+        </pre>
+      </div>
+      <div className="grid grid-cols-[5.5rem_1fr] gap-x-3 gap-y-2 text-xs">
+        <span className="font-sans text-fg-muted">{labels.time}</span>
+        <code className="break-all text-fg">{log.timestamp}</code>
+        <span className="font-sans text-fg-muted">{labels.level}</span>
+        <span className="text-fg">{levelLabel(lv)}</span>
+        <span className="font-sans text-fg-muted">{labels.module}</span>
+        <code className="break-all text-fg">{moduleLabel(log)}</code>
         {rid ? (
           <>
-            <span className="text-fg-muted">{labels.requestId}</span>
-            <code className="break-all font-mono text-xs text-fg">{rid}</code>
+            <span className="font-sans text-fg-muted">{labels.requestId}</span>
+            <code className="break-all text-fg">{rid}</code>
           </>
         ) : null}
         {sid ? (
           <>
-            <span className="text-fg-muted">{labels.sessionId}</span>
-            <code className="break-all font-mono text-xs text-fg">{sid}</code>
+            <span className="font-sans text-fg-muted">{labels.sessionId}</span>
+            <code className="break-all text-fg">{sid}</code>
           </>
         ) : null}
       </div>
-      <div>
-        <span className="text-xs font-medium text-fg-muted">{labels.message}</span>
-        <pre className="mt-1 whitespace-pre-wrap break-words rounded-md bg-surface-hover/60 p-3 font-mono text-xs text-fg dark:bg-surface-hover/40">
-          {log.message || '—'}
-        </pre>
-      </div>
       {log.meta && Object.keys(log.meta).length > 0 ? (
         <div>
-          <span className="text-xs font-medium text-fg-muted">{labels.metadata}</span>
-          <pre className="mt-1 overflow-x-auto whitespace-pre-wrap break-words rounded-md bg-surface-hover/60 p-3 font-mono text-xs text-fg dark:bg-surface-hover/40">
+          <span className="text-xs font-sans font-medium text-fg-muted">{labels.metadata}</span>
+          <pre className="mt-2 overflow-x-auto whitespace-pre-wrap break-words border border-edge bg-surface-base p-3 text-xs leading-relaxed text-fg dark:border-edge">
             {JSON.stringify(log.meta, null, 2)}
           </pre>
         </div>
