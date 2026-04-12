@@ -1,6 +1,6 @@
 # Channel Configuration
 
-xopcbot supports multiple communication channels with an extension-based architecture. The **core config schema** (`src/config/schema.ts`) defines **`channels.telegram`** and **`channels.weixin`**; unknown keys are preserved via **`.passthrough()`** so extensions can add more channel ids.
+xopc supports multiple communication channels with an extension-based architecture. The **core config schema** (`src/config/schema.ts`) defines **`channels.telegram`** and **`channels.weixin`**; unknown keys are preserved via **`.passthrough()`** so extensions can add more channel ids.
 
 ## Overview
 
@@ -35,18 +35,18 @@ When the gateway is running, the React console includes a dedicated **IM channel
 
 ### CLI configuration (same config file as the gateway)
 
-The gateway reads the same JSON as the CLI (default `~/.xopcbot/config.json`; override with `XOPCBOT_CONFIG` or the global `--config` flag on commands). You can configure channels without the browser console:
+The gateway reads the same JSON as the CLI (default `~/.xopc/xopc.json`; override with `XOPC_CONFIG` or the global `--config` flag on commands). You can configure channels without the browser console:
 
 **Telegram**
 
-- **Interactive wizard:** `xopcbot onboard --channels` — prompts for bot token, DM/group policies, and allowlists, then writes `channels.telegram`.
+- **Interactive wizard:** `xopc onboard --channels` — prompts for bot token, DM/group policies, and allowlists, then writes `channels.telegram`.
 - **Manual / env:** set `TELEGRAM_BOT_TOKEN` in the environment, or edit `channels.telegram` in the config file directly (including `accounts` for multi-bot setups).
 
 **Weixin (WeChat ilink)**
 
-- **QR login in the terminal:** `xopcbot channels login --channel weixin` — scan with WeChat; credentials are stored on **that host** (under the extension state directory; the command can also merge `channels.weixin` into the config unless `--credentials-only` is used).
+- **QR login in the terminal:** `xopc channels login --channel weixin` — scan with WeChat; credentials are stored on **that host** (under the extension state directory; the command can also merge `channels.weixin` into the config unless `--credentials-only` is used).
 - **Useful options:** `--account <id>` when re-logging an existing bot, `--timeout <ms>` (default 480000), `--credentials-only` to save token files without updating the main config JSON.
-- Run `xopcbot channels login --help` for details.
+- Run `xopc channels login --help` for details.
 
 After changing credentials or enabled flags via CLI, **restart or reload the gateway** if it is already running so the channel runtime picks up the new settings.
 
@@ -54,7 +54,7 @@ After changing credentials or enabled flags via CLI, **restart or reload the gat
 
 Once a channel is considered **configured** (e.g. Telegram: token or `accounts`; Weixin: enabled, accounts, or allowlist), the list row shows **Connected**, a **⋯** menu (**Edit configuration** / **Remove configuration**), and an **enable** switch that persists immediately via the same config patch. **Remove** resets that channel block to defaults and saves.
 
-Configuration is stored in the **gateway config file** (default `~/.xopcbot/config.json` or `XOPCBOT_CONFIG`).
+Configuration is stored in the **gateway config file** (default `~/.xopc/xopc.json` or `XOPC_CONFIG`).
 
 ## Weixin (WeChat) channel
 
@@ -223,7 +223,7 @@ Connection is automatically verified on startup.
 
 ## Implementation note (developers)
 
-The Telegram channel is shipped as a **pnpm workspace package** at `extensions/telegram` (`@xopcai/xopcbot-extension-telegram`). The core registers it through `src/channels/plugins/bundled.ts`. For stable imports from core code, `src/channels/telegram/index.ts` re-exports the plugin and related symbols from that package. The Weixin channel follows the same pattern (`extensions/weixin`, private workspace package). Channels use the **`ChannelPlugin`** model (see `src/channels/plugin-types.ts`), not the legacy `telegramExtension` API.
+The Telegram channel is shipped as a **pnpm workspace package** at `extensions/telegram` (`@xopcai/xopc-extension-telegram`). The core registers it through `src/channels/plugins/bundled.ts`. For stable imports from core code, `src/channels/telegram/index.ts` re-exports the plugin and related symbols from that package. The Weixin channel follows the same pattern (`extensions/weixin`, private workspace package). Channels use the **`ChannelPlugin`** model (see `src/channels/plugin-types.ts`), not the legacy `telegramExtension` API.
 
 ---
 
@@ -234,7 +234,7 @@ The Web UI provides a browser-based chat interface served as static assets from 
 ### Start Gateway
 
 ```bash
-xopcbot gateway --port 18790
+xopc gateway --port 18790
 ```
 
 ### Access
@@ -299,7 +299,7 @@ Some deployments add extra channel plugins (Feishu/Lark, Discord, etc.). Those m
 
 ```bash
 # Send message to Telegram
-xopcbot agent -m "Hello from CLI"
+xopc agent -m "Hello from CLI"
 ```
 
 ### Via Gateway API

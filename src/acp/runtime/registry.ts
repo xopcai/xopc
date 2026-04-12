@@ -20,7 +20,7 @@ type AcpRuntimeRegistryGlobalState = {
   backendsById: Map<string, AcpRuntimeBackend>;
 };
 
-const ACP_RUNTIME_REGISTRY_STATE_KEY = Symbol.for("xopcbot.acpRuntimeRegistryState");
+const ACP_RUNTIME_REGISTRY_STATE_KEY = Symbol.for("xopc.acpRuntimeRegistryState");
 
 function createAcpRuntimeRegistryGlobalState(): AcpRuntimeRegistryGlobalState {
   return {

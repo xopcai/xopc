@@ -455,7 +455,7 @@ export function ChannelsSettingsPanel() {
 
       <Dialog.Root open={telegramModalOpen} onOpenChange={setTelegramModalOpen}>
         <Dialog.Portal>
-          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[60] bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[60] bg-scrim backdrop-blur-[1px]" />
           <Dialog.Content
             className={cn(
               'fixed left-1/2 top-1/2 z-[60] max-h-[min(90vh,48rem)] w-[min(100%-2rem,36rem)] -translate-x-1/2 -translate-y-1/2',
@@ -597,7 +597,7 @@ export function ChannelsSettingsPanel() {
 
       <Dialog.Root open={removeTarget !== null} onOpenChange={(o) => !o && setRemoveTarget(null)}>
         <Dialog.Portal>
-          <Dialog.Overlay className="xopcbot-dialog-overlay fixed inset-0 z-[70] bg-scrim backdrop-blur-[1px]" />
+          <Dialog.Overlay className="xopc-dialog-overlay fixed inset-0 z-[70] bg-scrim backdrop-blur-[1px]" />
           <Dialog.Content
             className={cn(
               'fixed left-1/2 top-1/2 z-[70] w-[min(100%-2rem,28rem)] -translate-x-1/2 -translate-y-1/2',

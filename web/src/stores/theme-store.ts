@@ -11,12 +11,12 @@ const THEME_META_COLOR = {
 function syncThemeColorMeta(mode: 'light' | 'dark') {
   const head = document.head;
   if (!head) return;
-  const selector = 'meta[name="theme-color"][data-xopcbot-theme-color="true"]';
+  const selector = 'meta[name="theme-color"][data-xopc-theme-color="true"]';
   let meta = head.querySelector<HTMLMetaElement>(selector);
   if (!meta) {
     meta = document.createElement('meta');
     meta.setAttribute('name', 'theme-color');
-    meta.setAttribute('data-xopcbot-theme-color', 'true');
+    meta.setAttribute('data-xopc-theme-color', 'true');
     head.appendChild(meta);
   }
   meta.setAttribute('content', THEME_META_COLOR[mode]);
@@ -64,7 +64,7 @@ function applyDomTheme(mode: 'light' | 'dark', useViewTransition: boolean) {
 /** Sync DOM from localStorage before React paint (zustand persist hydrates async). */
 export function bootstrapTheme() {
   try {
-    const raw = localStorage.getItem('xopcbot-web-theme');
+    const raw = localStorage.getItem('xopc-web-theme');
     let pref: ThemePreference = 'system';
     if (raw) {
       const parsed = JSON.parse(raw) as { state?: { preference?: ThemePreference } };
@@ -96,7 +96,7 @@ export const useThemeStore = create(
       },
     }),
     {
-      name: 'xopcbot-web-theme',
+      name: 'xopc-web-theme',
     },
   ),
 );

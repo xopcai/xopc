@@ -6,14 +6,14 @@ import {
 } from '../inbound-persist.js';
 
 describe('inbound-persist', () => {
-  const agentHome = '/home/user/.xopcbot/agents/main';
+  const agentHome = '/home/user/.xopc/agents/main';
   const roots = { agentHome };
 
   it('resolveSafeInboundFilePath rejects traversal and non-inbound paths', () => {
     expect(resolveSafeInboundFilePath(roots, 'inbound/s/doc.txt')).toBeTruthy();
     expect(resolveSafeInboundFilePath(roots, '../inbound/s/doc.txt')).toBeNull();
     expect(resolveSafeInboundFilePath(roots, 'other/file.txt')).toBeNull();
-    expect(resolveSafeInboundFilePath(roots, '.xopcbot/inbound/s/doc.txt')).toBeNull();
+    expect(resolveSafeInboundFilePath(roots, '.xopc/inbound/s/doc.txt')).toBeNull();
   });
 
   it('formatInboundFileTextBlock includes abs path when persisted', () => {
@@ -28,8 +28,8 @@ describe('inbound-persist', () => {
       agentHome,
     );
     expect(text).toContain('[File: a.md (text/plain, 10 bytes)]');
-    expect(text).toContain('xopcbot-path:rel:inbound/k/a.md');
-    expect(text).toContain('xopcbot-path:abs:');
+    expect(text).toContain('xopc-path:rel:inbound/k/a.md');
+    expect(text).toContain('xopc-path:abs:');
   });
 
   it('stripInboundFileMetadataFromText removes file blocks for session titles', () => {

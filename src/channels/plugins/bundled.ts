@@ -1,6 +1,6 @@
 /**
  * Built-in channel plugins shipped with the core binary.
- * Manifest: each extensions/<name>/package.json field `xopcbot.bundledChannel`.
+ * Manifest: each extensions/<name>/package.json field `xopc.bundledChannel`.
  * Generated: src/generated/bundled-channel-plugins.ts (pnpm run generate:bundled-channels).
  */
 

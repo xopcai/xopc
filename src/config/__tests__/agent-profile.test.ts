@@ -11,7 +11,7 @@ function minimalConfig(overrides: Partial<Config> = {}): Config {
   return {
     agents: {
       defaults: {
-        workspace: '~/.xopcbot/workspace',
+        workspace: '~/.xopc/workspace',
         model: '',
         maxTokens: 8192,
         temperature: 0.7,

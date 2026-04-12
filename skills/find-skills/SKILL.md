@@ -1,12 +1,12 @@
 ---
 name: find-skills
-description: Helps users discover, install, and manage agent skills in xopcbot workspace
+description: Helps users discover, install, and manage agent skills in xopc workspace
 license: MIT
 ---
 
 # Find Skills
 
-This skill helps you discover, install, and manage skills in the xopcbot ecosystem.
+This skill helps you discover, install, and manage skills in the xopc ecosystem.
 
 ## When to Use This Skill
 
@@ -19,21 +19,21 @@ Use this skill when the user:
 - Needs to manage installed skills (enable, disable, configure)
 - Wants to browse available skills
 
-## xopcbot Skills CLI Commands
+## xopc Skills CLI Commands
 
-xopcbot provides built-in commands for skill management:
+xopc provides built-in commands for skill management:
 
 ### List Available Skills
 
 ```bash
 # List all skills (builtin + workspace + global)
-xopcbot skills list
+xopc skills list
 
 # Show detailed information
-xopcbot skills list -v
+xopc skills list -v
 
 # JSON format
-xopcbot skills list --json
+xopc skills list --json
 ```
 
 ### Install Skills
@@ -42,77 +42,77 @@ xopcbot skills list --json
 
 ```bash
 # Clone a skill repository to workspace
-git clone <repo-url> ~/.xopcbot/workspace/skills/<skill-name>
+git clone <repo-url> ~/.xopc/workspace/skills/<skill-name>
 
 # Example: Install vercel-react-best-practices
-git clone https://github.com/vercel-labs/agent-skills.git ~/.xopcbot/workspace/skills/vercel-react-best-practices-temp
-mv ~/.xopcbot/workspace/skills/vercel-react-best-practices-temp/SKILL.md ~/.xopcbot/workspace/skills/vercel-react-best-practices/SKILL.md
-rm -rf ~/.xopcbot/workspace/skills/vercel-react-best-practices-temp
+git clone https://github.com/vercel-labs/agent-skills.git ~/.xopc/workspace/skills/vercel-react-best-practices-temp
+mv ~/.xopc/workspace/skills/vercel-react-best-practices-temp/SKILL.md ~/.xopc/workspace/skills/vercel-react-best-practices/SKILL.md
+rm -rf ~/.xopc/workspace/skills/vercel-react-best-practices-temp
 ```
 
-**Using xopcbot skills install (for skills with install specs):**
+**Using xopc skills install (for skills with install specs):**
 
 ```bash
 # Install skill dependencies
-xopcbot skills install <skill-name>
+xopc skills install <skill-name>
 
 # Specify install method
-xopcbot skills install <skill-name> -i <install-id>
+xopc skills install <skill-name> -i <install-id>
 
 # Dry run (preview)
-xopcbot skills install <skill-name> --dry-run
+xopc skills install <skill-name> --dry-run
 ```
 
 ### Enable/Disable Skills
 
 ```bash
 # Enable a skill
-xopcbot skills enable <skill-name>
+xopc skills enable <skill-name>
 
 # Disable a skill
-xopcbot skills disable <skill-name>
+xopc skills disable <skill-name>
 ```
 
 ### Check Skill Status
 
 ```bash
 # Show all skills status
-xopcbot skills status
+xopc skills status
 
 # Show specific skill details
-xopcbot skills status <skill-name>
+xopc skills status <skill-name>
 
 # JSON format
-xopcbot skills status --json
+xopc skills status --json
 ```
 
 ### Configure Skills
 
 ```bash
 # Show current configuration
-xopcbot skills config <skill-name> --show
+xopc skills config <skill-name> --show
 
 # Set API key
-xopcbot skills config <skill-name> --api-key=YOUR_API_KEY
+xopc skills config <skill-name> --api-key=YOUR_API_KEY
 
 # Set environment variables
-xopcbot skills config <skill-name> --env API_KEY=value --env DEBUG=true
+xopc skills config <skill-name> --env API_KEY=value --env DEBUG=true
 ```
 
 ### Test Skills
 
 ```bash
 # Test all skills
-xopcbot skills test
+xopc skills test
 
 # Test specific skill
-xopcbot skills test <skill-name>
+xopc skills test <skill-name>
 
 # Validate SKILL.md file
-xopcbot skills test validate ./skills/weather/SKILL.md
+xopc skills test validate ./skills/weather/SKILL.md
 
 # Security audit
-xopcbot skills test security --deep
+xopc skills test security --deep
 ```
 
 ## How to Help Users Find and Install Skills
@@ -130,7 +130,7 @@ When a user asks for help with something, identify:
 **Option A: Check installed skills first**
 
 ```bash
-xopcbot skills list -v
+xopc skills list -v
 ```
 
 **Option B: Search online skill repositories**
@@ -144,40 +144,40 @@ Use your browsing capabilities to search:
 
 ### Step 3: Install the Skill
 
-**For xopcbot-compatible skills:**
+**For xopc-compatible skills:**
 
 1. **Check if skill has install specs** in SKILL.md:
    ```bash
-   xopcbot skills status <skill-name>
+   xopc skills status <skill-name>
    ```
 
 2. **Install dependencies** (if any):
    ```bash
-   xopcbot skills install <skill-name>
+   xopc skills install <skill-name>
    ```
 
 **For GitHub skills (manual installation):**
 
 1. **Create skill directory** in workspace:
    ```bash
-   mkdir -p ~/.xopcbot/workspace/skills/<skill-name>
+   mkdir -p ~/.xopc/workspace/skills/<skill-name>
    ```
 
 2. **Download SKILL.md**:
    ```bash
    # From GitHub
    curl -L https://raw.githubusercontent.com/<owner>/<repo>/main/skills/<skill-name>/SKILL.md \
-     -o ~/.xopcbot/workspace/skills/<skill-name>/SKILL.md
+     -o ~/.xopc/workspace/skills/<skill-name>/SKILL.md
    
    # Or clone and copy
    git clone <repo-url> /tmp/skill-temp
-   cp /tmp/skill-temp/skills/<skill-name>/SKILL.md ~/.xopcbot/workspace/skills/<skill-name>/
+   cp /tmp/skill-temp/skills/<skill-name>/SKILL.md ~/.xopc/workspace/skills/<skill-name>/
    rm -rf /tmp/skill-temp
    ```
 
 3. **Verify installation**:
    ```bash
-   xopcbot skills list | grep <skill-name>
+   xopc skills list | grep <skill-name>
    ```
 
 ### Step 4: Present Results to User
@@ -211,12 +211,12 @@ I found a skill that might help!
    React and Next.js performance optimization guidelines from Vercel Engineering.
 
 To install it, run:
-  xopcbot skills install vercel-react-best-practices
+  xopc skills install vercel-react-best-practices
 
 Or manually:
-  mkdir -p ~/.xopcbot/workspace/skills/vercel-react-best-practices
+  mkdir -p ~/.xopc/workspace/skills/vercel-react-best-practices
   curl -L https://raw.githubusercontent.com/vercel-labs/agent-skills/main/skills/vercel-react-best-practices/SKILL.md \
-    -o ~/.xopcbot/workspace/skills/vercel-react-best-practices/SKILL.md
+    -o ~/.xopc/workspace/skills/vercel-react-best-practices/SKILL.md
 
 Learn more: https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practices
 ```
@@ -226,12 +226,12 @@ Learn more: https://skills.sh/vercel-labs/agent-skills/vercel-react-best-practic
 If the user wants to proceed, you can help them install:
 
 ```bash
-# For xopcbot skills with install specs
-xopcbot skills install <skill-name> -y
+# For xopc skills with install specs
+xopc skills install <skill-name> -y
 
 # For GitHub skills (automated)
-mkdir -p ~/.xopcbot/workspace/skills/<skill-name>
-curl -L <skill-url>/SKILL.md -o ~/.xopcbot/workspace/skills/<skill-name>/SKILL.md
+mkdir -p ~/.xopc/workspace/skills/<skill-name>
+curl -L <skill-url>/SKILL.md -o ~/.xopc/workspace/skills/<skill-name>/SKILL.md
 ```
 
 ## Common Skill Categories
@@ -251,7 +251,7 @@ curl -L <skill-url>/SKILL.md -o ~/.xopcbot/workspace/skills/<skill-name>/SKILL.m
 Skills must be installed in the correct directory structure:
 
 ```
-~/.xopcbot/workspace/skills/
+~/.xopc/workspace/skills/
 ├── <skill-name>/           ← Each skill needs its own directory
 │   ├── SKILL.md            ← Required: Skill metadata and instructions
 │   ├── config.json         ← Optional: Default configuration
@@ -265,26 +265,26 @@ Skills must be installed in the correct directory structure:
 
 **Correct:**
 ```
-~/.xopcbot/workspace/skills/my-skill/SKILL.md
+~/.xopc/workspace/skills/my-skill/SKILL.md
 ```
 
 **Incorrect:**
 ```
-~/.xopcbot/workspace/skills/SKILL.md  ← Won't be loaded!
+~/.xopc/workspace/skills/SKILL.md  ← Won't be loaded!
 ```
 
 ## Skill Installation Methods
 
-### Method 1: xopcbot Built-in Install (Recommended)
+### Method 1: xopc Built-in Install (Recommended)
 
 For skills that declare install dependencies:
 
 ```bash
 # Check what will be installed
-xopcbot skills install <skill-name> --dry-run
+xopc skills install <skill-name> --dry-run
 
 # Install
-xopcbot skills install <skill-name>
+xopc skills install <skill-name>
 ```
 
 This method:
@@ -299,14 +299,14 @@ For skills without install specs:
 
 ```bash
 # 1. Create directory
-mkdir -p ~/.xopcbot/workspace/skills/<skill-name>
+mkdir -p ~/.xopc/workspace/skills/<skill-name>
 
 # 2. Download SKILL.md
 curl -L https://raw.githubusercontent.com/<owner>/<repo>/main/skills/<skill-name>/SKILL.md \
-  -o ~/.xopcbot/workspace/skills/<skill-name>/SKILL.md
+  -o ~/.xopc/workspace/skills/<skill-name>/SKILL.md
 
 # 3. Verify
-xopcbot skills list | grep <skill-name>
+xopc skills list | grep <skill-name>
 ```
 
 ### Method 3: Git Clone
@@ -318,13 +318,13 @@ For complex skills with multiple files:
 git clone <repo-url> /tmp/skill-clone
 
 # Copy skill directory
-cp -r /tmp/skill-clone/skills/<skill-name> ~/.xopcbot/workspace/skills/
+cp -r /tmp/skill-clone/skills/<skill-name> ~/.xopc/workspace/skills/
 
 # Clean up
 rm -rf /tmp/skill-clone
 
 # Verify
-xopcbot skills status <skill-name>
+xopc skills status <skill-name>
 ```
 
 ## Troubleshooting
@@ -334,24 +334,24 @@ xopcbot skills status <skill-name>
 **Check directory structure:**
 ```bash
 # Should show SKILL.md in a subdirectory
-ls -la ~/.xopcbot/workspace/skills/<skill-name>/
+ls -la ~/.xopc/workspace/skills/<skill-name>/
 ```
 
 **Validate SKILL.md format:**
 ```bash
-xopcbot skills test validate ~/.xopcbot/workspace/skills/<skill-name>/SKILL.md
+xopc skills test validate ~/.xopc/workspace/skills/<skill-name>/SKILL.md
 ```
 
 **Check for errors:**
 ```bash
-xopcbot skills list --json | jq '.diagnostics'
+xopc skills list --json | jq '.diagnostics'
 ```
 
 ### Installation Failed
 
 **Check dependencies:**
 ```bash
-xopcbot skills status <skill-name>
+xopc skills status <skill-name>
 ```
 
 **Manual installation:**
@@ -363,29 +363,29 @@ sudo apt-get install curl  # Linux
 
 **Retry:**
 ```bash
-xopcbot skills install <skill-name>
+xopc skills install <skill-name>
 ```
 
 ### Skill Not Working
 
 1. **Check if enabled:**
    ```bash
-   xopcbot skills status <skill-name>
+   xopc skills status <skill-name>
    ```
 
 2. **Enable if needed:**
    ```bash
-   xopcbot skills enable <skill-name>
+   xopc skills enable <skill-name>
    ```
 
 3. **Check configuration:**
    ```bash
-   xopcbot skills config <skill-name> --show
+   xopc skills config <skill-name> --show
    ```
 
 4. **Set API key if required:**
    ```bash
-   xopcbot skills config <skill-name> --api-key=YOUR_KEY
+   xopc skills config <skill-name> --api-key=YOUR_KEY
    ```
 
 ## Examples
@@ -395,7 +395,7 @@ xopcbot skills install <skill-name>
 **User:** "How can I make my React app faster?"
 
 **You:**
-1. Check installed skills: `xopcbot skills list | grep -i react`
+1. Check installed skills: `xopc skills list | grep -i react`
 2. If found: "You have the vercel-react-best-practices skill installed!"
 3. If not found: Offer to install it
 
@@ -408,10 +408,10 @@ xopcbot skills install <skill-name>
 2. Found: `playwright-testing`
 3. Install:
    ```bash
-   mkdir -p ~/.xopcbot/workspace/skills/playwright-testing
-   curl -L <url>/SKILL.md -o ~/.xopcbot/workspace/skills/playwright-testing/SKILL.md
+   mkdir -p ~/.xopc/workspace/skills/playwright-testing
+   curl -L <url>/SKILL.md -o ~/.xopc/workspace/skills/playwright-testing/SKILL.md
    ```
-4. Verify: `xopcbot skills status playwright-testing`
+4. Verify: `xopc skills status playwright-testing`
 
 ### Example 3: User wants to browse all skills
 
@@ -419,22 +419,22 @@ xopcbot skills install <skill-name>
 
 **You:**
 ```bash
-xopcbot skills list -v
+xopc skills list -v
 ```
 
 Then present the list with descriptions.
 
 ## Tips for Effective Skill Management
 
-1. **Always verify installation**: Run `xopcbot skills list` after installing
-2. **Check skill status**: Use `xopcbot skills status <name>` for details
+1. **Always verify installation**: Run `xopc skills list` after installing
+2. **Check skill status**: Use `xopc skills status <name>` for details
 3. **Keep skills updated**: Periodically check for skill updates
-4. **Review security**: Run `xopcbot skills test security` for audits
+4. **Review security**: Run `xopc skills test security` for audits
 5. **Organize workspace**: Keep only needed skills to reduce clutter
 
 ## References
 
 - **Skills Marketplace**: https://skills.sh/
-- **xopcbot Skills CLI**: `xopcbot skills --help`
+- **xopc Skills CLI**: `xopc skills --help`
 - **Skill Format**: SKILL.md frontmatter specification
 - **GitHub Skills**: Search "agent-skills" on GitHub

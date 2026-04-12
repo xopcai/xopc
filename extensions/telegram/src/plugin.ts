@@ -10,7 +10,7 @@ import { isDeepStrictEqual } from 'node:util';
 import { Bot, type Context } from 'grammy';
 import { run } from '@grammyjs/runner';
 
-import type { Config } from '@xopcai/xopcbot/config/index.js';
+import type { Config } from '@xopcai/xopc/config/index.js';
 import type {
   ChannelPlugin,
   ChannelPluginDefaults,
@@ -23,16 +23,16 @@ import type {
   ChannelGatewayAdapter,
   ChannelStreamingAdapter,
   ChannelCommandAdapter,
-} from '@xopcai/xopcbot/channels/plugin-types.js';
-import { generateSessionKey } from '@xopcai/xopcbot/chat-commands/session-key.js';
-import { submitClarifyChoiceFromChannel } from '@xopcai/xopcbot/gateway/clarify-runtime.js';
+} from '@xopcai/xopc/channels/plugin-types.js';
+import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
+import { submitClarifyChoiceFromChannel } from '@xopcai/xopc/gateway/clarify-runtime.js';
 
-import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
-import { createInboundDebouncer } from '@xopcai/xopcbot/infra/debounce.js';
-import { getChatChannelMeta } from '@xopcai/xopcbot/channels/registry.js';
-import { getMimeType } from '@xopcai/xopcbot/channels/media.js';
-import { transcribe as sttTranscribe, isSTTAvailable } from '@xopcai/xopcbot/stt/index.js';
-import type { STTConfig } from '@xopcai/xopcbot/stt/types.js';
+import { createLogger } from '@xopcai/xopc/utils/logger.js';
+import { createInboundDebouncer } from '@xopcai/xopc/infra/debounce.js';
+import { getChatChannelMeta } from '@xopcai/xopc/channels/registry.js';
+import { getMimeType } from '@xopcai/xopc/channels/media.js';
+import { transcribe as sttTranscribe, isSTTAvailable } from '@xopcai/xopc/stt/index.js';
+import type { STTConfig } from '@xopcai/xopc/stt/types.js';
 
 import { TelegramAccountManager } from './account-manager.js';
 import { createOutboundSender } from './outbound-sender.js';
@@ -97,9 +97,9 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   private inboundProcessor!: ReturnType<typeof createInboundProcessor>;
   private sessionModelHooks?: ChannelPluginSessionModelHooks;
 
-  config!: import('@xopcai/xopcbot/channels/plugin-types.js').ChannelConfigAdapter<TelegramResolvedAccount>;
-  security!: import('@xopcai/xopcbot/channels/plugin-types.js').ChannelSecurityAdapter<TelegramResolvedAccount>;
-  status!: import('@xopcai/xopcbot/channels/plugin-types.js').ChannelStatusAdapter<TelegramResolvedAccount>;
+  config!: import('@xopcai/xopc/channels/plugin-types.js').ChannelConfigAdapter<TelegramResolvedAccount>;
+  security!: import('@xopcai/xopc/channels/plugin-types.js').ChannelSecurityAdapter<TelegramResolvedAccount>;
+  status!: import('@xopcai/xopc/channels/plugin-types.js').ChannelStatusAdapter<TelegramResolvedAccount>;
 
   outbound!: ChannelOutboundAdapter;
 

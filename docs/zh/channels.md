@@ -1,6 +1,6 @@
 # 通道配置
 
-xopcbot 支持多种通信通道，采用基于扩展的架构。**核心配置**（`src/config/schema.ts`）在 `channels` 下明确定义 **`telegram`** 与 **`weixin`**；其余键名可通过 **`.passthrough()`** 保留，供扩展写入。
+xopc 支持多种通信通道，采用基于扩展的架构。**核心配置**（`src/config/schema.ts`）在 `channels` 下明确定义 **`telegram`** 与 **`weixin`**；其余键名可通过 **`.passthrough()`** 保留，供扩展写入。
 
 ## 概述
 
@@ -35,18 +35,18 @@ xopcbot 支持多种通信通道，采用基于扩展的架构。**核心配置*
 
 ### 命令行配置（与网关共用配置文件）
 
-网关与 CLI 使用同一份 JSON（默认 `~/.xopcbot/config.json`；也可用环境变量 `XOPCBOT_CONFIG` 或命令行全局参数 `--config` 指定）。可在不使用浏览器控制台的情况下配置频道：
+网关与 CLI 使用同一份 JSON（默认 `~/.xopc/xopc.json`；也可用环境变量 `XOPC_CONFIG` 或命令行全局参数 `--config` 指定）。可在不使用浏览器控制台的情况下配置频道：
 
 **Telegram**
 
-- **交互向导：** `xopcbot onboard --channels` — 引导填写 Bot Token、私聊/群组策略与白名单等，并写入 `channels.telegram`。
+- **交互向导：** `xopc onboard --channels` — 引导填写 Bot Token、私聊/群组策略与白名单等，并写入 `channels.telegram`。
 - **手动 / 环境变量：** 在环境中设置 `TELEGRAM_BOT_TOKEN`，或直接编辑配置文件中的 `channels.telegram`（含多机器人时的 `accounts`）。
 
 **微信（Weixin / ilink）**
 
-- **终端扫码登录：** `xopcbot channels login --channel weixin` — 使用微信扫码；凭据保存在 **执行命令的本机**（扩展状态目录；默认也会合并 `channels.weixin`，除非使用 `--credentials-only`）。
+- **终端扫码登录：** `xopc channels login --channel weixin` — 使用微信扫码；凭据保存在 **执行命令的本机**（扩展状态目录；默认也会合并 `channels.weixin`，除非使用 `--credentials-only`）。
 - **常用参数：** `--account <id>` 用于已有机器人重新登录，`--timeout <ms>`（默认 480000），`--credentials-only` 仅保存 token 相关文件、不合并主配置 JSON。
-- 详见 `xopcbot channels login --help`。
+- 详见 `xopc channels login --help`。
 
 通过 CLI 修改凭据或启用状态后，若网关已在运行，请 **重启或热加载网关**，以便频道进程加载新配置。
 
@@ -54,7 +54,7 @@ xopcbot 支持多种通信通道，采用基于扩展的架构。**核心配置*
 
 当通道被视为 **已配置**（例如 Telegram：已填 Token 或有 `accounts`；微信：已启用、或有 `accounts`、或 `allowFrom` 非空等），卡片展示 **已连接**、**⋯** 菜单（**编辑配置** / **移除配置**）以及 **开关**（立即通过同一配置接口持久化）。**移除配置** 会将该通道块恢复为默认值并保存。
 
-配置写入 **网关配置文件**（默认 `~/.xopcbot/config.json`，或由 `XOPCBOT_CONFIG` 指定）。
+配置写入 **网关配置文件**（默认 `~/.xopc/xopc.json`，或由 `XOPC_CONFIG` 指定）。
 
 ## 微信（Weixin）通道
 
@@ -223,7 +223,7 @@ xopcbot 支持多种通信通道，采用基于扩展的架构。**核心配置*
 
 ## 实现说明（开发者）
 
-Telegram 通道以 **pnpm 工作区包** 形式位于 `extensions/telegram`（`@xopcai/xopcbot-extension-telegram`）。核心在 `src/channels/plugins/bundled.ts` 中注册该插件。为保持从核心代码导入路径稳定，`src/channels/telegram/index.ts` 会从该包再导出插件及相关类型。微信通道同理（`extensions/weixin`，私有工作区包）。通道采用 **`ChannelPlugin`** 模型（见 `src/channels/plugin-types.ts`），不再使用旧的 `telegramExtension` API。
+Telegram 通道以 **pnpm 工作区包** 形式位于 `extensions/telegram`（`@xopcai/xopc-extension-telegram`）。核心在 `src/channels/plugins/bundled.ts` 中注册该插件。为保持从核心代码导入路径稳定，`src/channels/telegram/index.ts` 会从该包再导出插件及相关类型。微信通道同理（`extensions/weixin`，私有工作区包）。通道采用 **`ChannelPlugin`** 模型（见 `src/channels/plugin-types.ts`），不再使用旧的 `telegramExtension` API。
 
 ---
 
@@ -234,7 +234,7 @@ Web UI 由网关提供静态资源（`web/` 的 Vite 构建产物，与网关静
 ### 启动 Gateway
 
 ```bash
-xopcbot gateway --port 18790
+xopc gateway --port 18790
 ```
 
 ### 访问
@@ -299,7 +299,7 @@ xopcbot gateway --port 18790
 
 ```bash
 # 发送消息到 Telegram
-xopcbot agent -m "Hello from CLI"
+xopc agent -m "Hello from CLI"
 ```
 
 ### 通过 Gateway API

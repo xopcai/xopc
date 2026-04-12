@@ -199,7 +199,7 @@ importers:
       '@grammyjs/types':
         specifier: ^3.25.0
         version: 3.25.0
-      '@xopcai/xopcbot':
+      '@xopcai/xopc':
         specifier: workspace:*
         version: link:../..
       grammy:
@@ -212,7 +212,7 @@ importers:
 
   extensions/weixin:
     dependencies:
-      '@xopcai/xopcbot':
+      '@xopcai/xopc':
         specifier: workspace:*
         version: link:../..
     devDependencies:

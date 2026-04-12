@@ -11,7 +11,7 @@
 
 import type { Bot, Context } from 'grammy';
 import { run } from '@grammyjs/runner';
-import type { TelegramAccountConfig, ChannelStatus } from '@xopcai/xopcbot/channels/channel-domain.js';
+import type { TelegramAccountConfig, ChannelStatus } from '@xopcai/xopc/channels/channel-domain.js';
 
 export class TelegramAccountManager {
   private accounts = new Map<string, TelegramAccountConfig>();

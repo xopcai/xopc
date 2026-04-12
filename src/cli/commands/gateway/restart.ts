@@ -111,7 +111,7 @@ export function createRestartCommand(): Command {
       for (const proc of listeners) {
         try {
           // Enable SIGUSR1 restart temporarily
-          process.env.XOPCBOT_ALLOW_SIGUSR1_RESTART = '1';
+          process.env.XOPC_ALLOW_SIGUSR1_RESTART = '1';
           process.kill(proc.pid, 'SIGUSR1');
           console.log(`✅ Restart signal sent to gateway (pid ${proc.pid})`);
           console.log('   Gateway will restart gracefully...');

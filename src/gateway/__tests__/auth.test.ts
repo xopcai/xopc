@@ -27,7 +27,7 @@ describe('Gateway Auth', () => {
     it('should use token from environment variable', () => {
       const result = resolveGatewayAuth({
         authConfig: { mode: 'token', token: 'config-token' },
-        env: { XOPCBOT_GATEWAY_TOKEN: 'env-token' },
+        env: { XOPC_GATEWAY_TOKEN: 'env-token' },
       });
       expect(result.mode).toBe('token');
       expect(result.token).toBe('env-token');
@@ -44,7 +44,7 @@ describe('Gateway Auth', () => {
     it('should use none mode from environment variable', () => {
       const result = resolveGatewayAuth({
         authConfig: { mode: 'token', token: 'config-token' },
-        env: { XOPCBOT_GATEWAY_AUTH_MODE: 'none' },
+        env: { XOPC_GATEWAY_AUTH_MODE: 'none' },
       });
       expect(result.mode).toBe('none');
     });

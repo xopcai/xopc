@@ -9,7 +9,7 @@ import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-const SESSION_DISMISS_KEY = 'xopcbot-electron-setup-banner-dismissed-session';
+const SESSION_DISMISS_KEY = 'xopc-electron-setup-banner-dismissed-session';
 
 type ConfigGet = {
   ok: true;

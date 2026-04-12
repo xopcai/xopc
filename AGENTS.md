@@ -1,4 +1,4 @@
-# AGENTS.md - xopcbot Development Guide
+# AGENTS.md - xopc Development Guide
 
 > Guide for AI assistants working on this repository.
 
@@ -26,7 +26,7 @@
 
 ## Project Overview
 
-**xopcbot** (`@xopcai/xopcbot`) is a personal AI assistant on Node.js + TypeScript: CLI, HTTP/WebSocket **gateway**, and a **React** gateway console (`web/`). Channels (e.g. Telegram) load as extensions; additional backends appear in config/registry as the project evolves.
+**xopc** (`@xopcai/xopc`) is a personal AI assistant on Node.js + TypeScript: CLI, HTTP/WebSocket **gateway**, and a **React** gateway console (`web/`). Channels (e.g. Telegram) load as extensions; additional backends appear in config/registry as the project evolves.
 
 | Metric | Value |
 |--------|-------|
@@ -76,7 +76,7 @@ Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 | `providers/` | `resolveModel`, API keys, pi-ai bridge |
 | `session/` | Conversation session store |
 | `infra/` | Infrastructure primitives (`retry`, rate-limit, `bus/` message bus) |
-| `extensions/` | Extension runtime; `extensions/sdk/` re-exports `@xopcai/xopcbot/extension-sdk` |
+| `extensions/` | Extension runtime; `extensions/sdk/` re-exports `@xopcai/xopc/extension-sdk` |
 
 Also present (follow local patterns): `acp/`, `auth/`, `chat-commands/` (in-chat slash commands), `cron/`, `daemon/`, `routing/`, `stt/`, `tts/`, `utils/` (`logger.ts` barrel → `logger/` implementation + `helpers.ts`), `markdown/`, `errors/`, etc.
 
@@ -143,7 +143,7 @@ Implement `ChannelPlugin` (`src/channels/plugin-types.ts`). Bundled list: `src/c
 ### Telegram draft streaming
 
 ```typescript
-import { DraftStreamManager } from '@xopcai/xopcbot/channels/telegram/draft-stream.js';
+import { DraftStreamManager } from '@xopcai/xopc/channels/telegram/draft-stream.js';
 ```
 
 ---
@@ -163,7 +163,7 @@ import { DraftStreamManager } from '@xopcai/xopcbot/channels/telegram/draft-stre
 
 ## Configuration
 
-**Default path:** `~/.xopcbot/config.json` (override with `XOPCBOT_CONFIG`).
+**Default path:** `~/.xopc/xopc.json` (override with `XOPC_CONFIG` or `XOPC_CONFIG_PATH`).
 
 | Section | Purpose |
 |---------|---------|
@@ -176,9 +176,9 @@ import { DraftStreamManager } from '@xopcai/xopcbot/channels/telegram/draft-stre
 
 ### Multiple agents (`agents.list`)
 
-Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by **`config.json`** — `agents.defaults` merged with the matching entry in **`agents.list`**. Default agent id: **`agents.default`**, else a `list` entry with **`default: true`**, else the first enabled entry, else **`main`**. On-disk paths (`~/.xopcbot/agents/<id>/`, Markdown workspace roots) resolve from the same config via **`src/agent/agent-scope.ts`**.
+Runtime behavior (model, workspace, tools, prompts per **session key** agent id) is driven by the main config file (`xopc.json` by default) — `agents.defaults` merged with the matching entry in **`agents.list`**. Default agent id: **`agents.default`**, else a `list` entry with **`default: true`**, else the first enabled entry, else **`main`**. On-disk paths (`~/.xopc/agents/<id>/`, Markdown workspace roots) resolve from the same config via **`src/agent/agent-scope.ts`**.
 
-Use **`xopcbot agents list`**, **`xopcbot agents add`**, **`xopcbot agents delete`** to manage `agents.list` and initialize directories — there is no separate agent registry outside config.
+Use **`xopc agents list`**, **`xopc agents add`**, **`xopc agents delete`** to manage `agents.list` and initialize directories — there is no separate agent registry outside config.
 
 ### Telegram (multi-account sketch)
 
@@ -211,11 +211,11 @@ Use **`xopcbot agents list`**, **`xopcbot agents add`**, **`xopcbot agents delet
 |----------|---------|
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, … | Provider keys (at least one LLM key needed to run agents) |
 | `TELEGRAM_BOT_TOKEN` | Telegram (if not only in config) |
-| `XOPCBOT_CONFIG` | Config file path |
-| `XOPCBOT_WORKSPACE` | Workspace directory |
-| `XOPCBOT_LOG_LEVEL` | `trace` … `fatal` (default `info`) |
-| `XOPCBOT_LOG_DIR`, `XOPCBOT_LOG_CONSOLE`, `XOPCBOT_LOG_FILE`, `XOPCBOT_LOG_RETENTION_DAYS` | Logging |
-| `XOPCBOT_PRETTY_LOGS` | Dev-friendly log formatting |
+| `XOPC_CONFIG`, `XOPC_CONFIG_PATH` | Config file path |
+| `XOPC_WORKSPACE` | Workspace directory |
+| `XOPC_LOG_LEVEL` | `trace` … `fatal` (default `info`) |
+| `XOPC_LOG_DIR`, `XOPC_LOG_CONSOLE`, `XOPC_LOG_FILE`, `XOPC_LOG_RETENTION_DAYS` | Logging |
+| `XOPC_PRETTY_LOGS` | Dev-friendly log formatting |
 
 ---
 
@@ -271,7 +271,7 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 
 ## Debugging
 
-- **Level:** `XOPCBOT_LOG_LEVEL=debug` (or `trace`).
+- **Level:** `XOPC_LOG_LEVEL=debug` (or `trace`).
 - **CLI:** `pnpm run dev -- config --show` · `config --validate`.
 - **Code:** `createRequestLogger` / `clearRequestContext` in `src/utils/logger/context.ts` (re-exported via `src/utils/logger.ts`); `queryLogs` / `getLogStats` in `src/utils/logger/log-store.ts`.
 - **Console logs:** gateway + Log Manager tab (default dev URL is project-specific—use your configured gateway port).
@@ -284,13 +284,13 @@ cd web && pnpm run build                  # → ../dist/gateway/static/root (gat
 |---------|--------|
 | `ERR_MODULE_NOT_FOUND` | `pnpm install` |
 | `@vscode/ripgrep` missing at runtime | Allow install scripts: `pnpm approve-builds` (ships the `rg` binary) |
-| `@xopcbot/...` not found | `pnpm run build` |
+| `@xopc/...` not found | `pnpm run build` |
 | Tests timeout | API keys / network for live calls |
-| Bad config | JSON syntax of `~/.xopcbot/config.json` |
+| Bad config | JSON syntax of `~/.xopc/xopc.json` |
 | Console unreachable | Gateway running; browser origin matches gateway URL (REST/SSE) |
 | `package-lock.json` | Remove; use pnpm only |
 | Telegram silent | Token, BotFather, policies |
-| No logs in console | `XOPCBOT_LOG_LEVEL`, file logging flags |
+| No logs in console | `XOPC_LOG_LEVEL`, file logging flags |
 | Cron idle | `cron.enabled` in config |
 | Browser / `browser_*` tools error at first use | Enable `agents.defaults.browser.enabled`; install Chromium once with `npx playwright install chromium` (`playwright-core` does not ship browsers) |
 

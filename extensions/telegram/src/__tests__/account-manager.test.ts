@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { TelegramAccountManager } from '../account-manager.js';
-import type { TelegramAccountConfig, ChannelStatus } from '@xopcai/xopcbot/channels/channel-domain.js';
+import type { TelegramAccountConfig, ChannelStatus } from '@xopcai/xopc/channels/channel-domain.js';
 import type { Bot } from 'grammy';
 import type { run } from '@grammyjs/runner';
 

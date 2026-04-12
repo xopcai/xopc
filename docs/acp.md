@@ -4,7 +4,7 @@
 
 ## Overview
 
-The Agent Control Protocol (ACP) enables xopcbot to work with different agent runtimes through a common interface. It handles:
+The Agent Control Protocol (ACP) enables xopc to work with different agent runtimes through a common interface. It handles:
 
 - **Session lifecycle**: Create, resume, and close agent sessions
 - **Turn execution**: Send messages and receive streaming responses
@@ -255,7 +255,7 @@ To create a custom ACP runtime backend:
 ### 1. Implement the AcpRuntime Interface
 
 ```typescript
-import type { AcpRuntime, AcpRuntimeHandle, AcpRuntimeEvent } from "xopcbot/acp";
+import type { AcpRuntime, AcpRuntimeHandle, AcpRuntimeEvent } from "xopc/acp";
 
 export class MyCustomRuntime implements AcpRuntime {
   async ensureSession(input: AcpRuntimeEnsureInput): Promise<AcpRuntimeHandle> {
@@ -326,7 +326,7 @@ export class MyCustomRuntime implements AcpRuntime {
 ### 2. Register Your Backend
 
 ```typescript
-import { registerAcpRuntimeBackend } from "xopcbot/acp";
+import { registerAcpRuntimeBackend } from "xopc/acp";
 
 const runtime = new MyCustomRuntime();
 
@@ -341,8 +341,8 @@ registerAcpRuntimeBackend({
 
 ```bash
 # Via CLI
-xopcbot acp status
-xopcbot acp doctor
+xopc acp status
+xopc acp doctor
 
 # Via config
 {
@@ -358,47 +358,47 @@ xopcbot acp doctor
 
 ```bash
 # Show global status
-xopcbot acp status
+xopc acp status
 
 # Show specific session status
-xopcbot acp status -s <session-key>
+xopc acp status -s <session-key>
 
 # JSON output
-xopcbot acp status --json
+xopc acp status --json
 ```
 
 ### Doctor
 
 ```bash
 # Run diagnostics on all backends
-xopcbot acp doctor
+xopc acp doctor
 ```
 
 ### Runtime Mode
 
 ```bash
 # Set runtime mode
-xopcbot acp set-mode <mode> -s <session-key>
+xopc acp set-mode <mode> -s <session-key>
 ```
 
 ### Config Options
 
 ```bash
 # Set config option
-xopcbot acp set-config <key> <value> -s <session-key>
+xopc acp set-config <key> <value> -s <session-key>
 ```
 
 ### Session Management
 
 ```bash
 # List sessions
-xopcbot acp list
+xopc acp list
 
 # Close session
-xopcbot acp close -s <session-key>
+xopc acp close -s <session-key>
 
 # Cancel active turn
-xopcbot acp cancel -s <session-key>
+xopc acp cancel -s <session-key>
 ```
 
 ## Error Handling
@@ -450,6 +450,6 @@ Get runtime metrics via `getObservabilitySnapshot()`:
 
 ## See Also
 
-- [Source: `src/acp/`](https://github.com/xopcai/xopcbot/tree/main/src/acp) — runtime, control plane, types
-- [CLI `acp` commands](https://github.com/xopcai/xopcbot/tree/main/src/cli/commands/acp) — command implementations
+- [Source: `src/acp/`](https://github.com/xopcai/xopc/tree/main/src/acp) — runtime, control plane, types
+- [CLI `acp` commands](https://github.com/xopcai/xopc/tree/main/src/cli/commands/acp) — command implementations
 - [Session routing](/routing-system) — how ACP integrates with session keys

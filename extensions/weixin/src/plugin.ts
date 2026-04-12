@@ -4,8 +4,8 @@
 
 import { isDeepStrictEqual } from 'node:util';
 
-import type { Config } from '@xopcai/xopcbot/config/schema.js';
-import type { MessageBus } from '@xopcai/xopcbot/infra/bus/index.js';
+import type { Config } from '@xopcai/xopc/config/schema.js';
+import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 import type {
   ChannelCapabilities,
   ChannelPlugin,
@@ -16,9 +16,9 @@ import type {
   ChannelSecurityContext,
   ChannelStreamingAdapter,
   ChatType,
-} from '@xopcai/xopcbot/channels/plugin-types.js';
-import { evaluateAccess, resolveDmPolicy } from '@xopcai/xopcbot/channels/security.js';
-import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
+} from '@xopcai/xopc/channels/plugin-types.js';
+import { evaluateAccess, resolveDmPolicy } from '@xopcai/xopc/channels/security.js';
+import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import { restoreContextTokens } from './messaging/inbound.js';
 import { monitorWeixinProvider } from './monitor/monitor.js';

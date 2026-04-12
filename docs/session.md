@@ -1,6 +1,6 @@
 # Session Management
 
-xopcbot provides comprehensive session management for conversation history via CLI and Web UI.
+xopc provides comprehensive session management for conversation history via CLI and Web UI.
 
 ---
 
@@ -47,59 +47,59 @@ xopcbot provides comprehensive session management for conversation history via C
 
 ```bash
 # List all sessions
-xopcbot session list
+xopc session list
 
 # Filter by status
-xopcbot session list --status active
-xopcbot session list --status archived
-xopcbot session list --status pinned
+xopc session list --status active
+xopc session list --status archived
+xopc session list --status pinned
 
 # Search by name or content
-xopcbot session list --query "project"
+xopc session list --query "project"
 
 # Sort and limit
-xopcbot session list --sort updatedAt --order desc --limit 50
+xopc session list --sort updatedAt --order desc --limit 50
 ```
 
 ### View Session Details
 
 ```bash
 # Show session info and recent messages
-xopcbot session info telegram:123456
+xopc session info telegram:123456
 
 # Search within a session
-xopcbot session grep telegram:123456 "API design"
+xopc session grep telegram:123456 "API design"
 ```
 
 ### Manage Sessions
 
 ```bash
 # Rename a session
-xopcbot session rename telegram:123456 "Project Discussion"
+xopc session rename telegram:123456 "Project Discussion"
 
 # Add tags
-xopcbot session tag telegram:123456 work important
+xopc session tag telegram:123456 work important
 
 # Remove tags
-xopcbot session untag telegram:123456 important
+xopc session untag telegram:123456 important
 
 # Archive a session
-xopcbot session archive telegram:123456
+xopc session archive telegram:123456
 
 # Unarchive a session
-xopcbot session unarchive telegram:123456
+xopc session unarchive telegram:123456
 
 # Pin a session
-xopcbot session pin telegram:123456
+xopc session pin telegram:123456
 
 # Unpin a session
-xopcbot session unpin telegram:123456
+xopc session unpin telegram:123456
 
 # Delete a session
-xopcbot session delete telegram:123456
+xopc session delete telegram:123456
 
 # Export session to JSON
-xopcbot session export telegram:123456 \
+xopc session export telegram:123456 \
   --format json \
   --output backup.json
 ```
@@ -108,16 +108,16 @@ xopcbot session export telegram:123456 \
 
 ```bash
 # Delete multiple sessions by filter
-xopcbot session delete-many --status archived --force
+xopc session delete-many --status archived --force
 
 # Archive old sessions (30+ days inactive)
-xopcbot session cleanup --days 30
+xopc session cleanup --days 30
 ```
 
 ### Statistics
 
 ```bash
-xopcbot session stats
+xopc session stats
 ```
 
 **Sample output:**
@@ -158,7 +158,7 @@ The Web UI provides a visual interface for session management at the gateway roo
 
 ```bash
 # Start the gateway
-xopcbot gateway start
+xopc gateway start
 
 # Open in browser
 open http://localhost:18790/#/sessions
@@ -277,7 +277,7 @@ To prevent memory issues:
 
 ### Sessions Not Loading in Web UI
 
-1. Check gateway is running: `xopcbot gateway status`
+1. Check gateway is running: `xopc gateway status`
 2. Verify WebSocket connection in browser console
 3. Check for errors in gateway logs
 
@@ -287,10 +287,10 @@ The index will be automatically rebuilt on next access. To force rebuild:
 
 ```bash
 # Delete index file (replace <agentId> with your agent id, e.g. main)
-rm ~/.xopcbot/agents/<agentId>/sessions/index.json
+rm ~/.xopc/agents/<agentId>/sessions/index.json
 
 # It will be rebuilt on next session list
-xopcbot session list
+xopc session list
 ```
 
 ### Missing Sessions
@@ -299,7 +299,7 @@ If sessions exist on disk under `agents/<agentId>/sessions/` but don't appear:
 
 ```bash
 # Force index rebuild
-xopcbot session list --limit 1000
+xopc session list --limit 1000
 ```
 
 ---

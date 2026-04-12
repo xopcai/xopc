@@ -41,7 +41,7 @@ import { MAX_PENDING_FOLLOW_UPS, type PendingFollowUp } from '@/features/chat/pe
 const DEFAULT_THINKING = 'medium';
 const DEFAULT_REASONING: ReasoningLevel = 'off';
 
-const WEBCHAT_AGENT_STORAGE_KEY = 'xopcbot.webchat.agentId';
+const WEBCHAT_AGENT_STORAGE_KEY = 'xopc.webchat.agentId';
 
 function readStoredWebchatAgentId(): string | null {
   if (typeof globalThis.localStorage === 'undefined') return null;

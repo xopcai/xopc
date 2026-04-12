@@ -1,3 +1,3 @@
-import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
+import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 export const logger = createLogger('Weixin');

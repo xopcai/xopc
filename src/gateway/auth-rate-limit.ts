@@ -38,7 +38,7 @@ export function resolveAuthRateLimitConfig(
 }
 
 export function isAuthRateLimitGloballyDisabled(): boolean {
-  return process.env.XOPCBOT_AUTH_RATE_LIMIT === 'false';
+  return process.env.XOPC_AUTH_RATE_LIMIT === 'false';
 }
 
 type IpState = {

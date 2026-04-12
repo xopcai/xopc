@@ -2,9 +2,9 @@
  * CLI: Weixin QR login — start poll, show terminal QR, persist token + optional config merge.
  */
 
-import type { Config } from '@xopcai/xopcbot/config/schema.js';
-import { ConfigSchema } from '@xopcai/xopcbot/config/schema.js';
-import { loadConfig, saveConfig } from '@xopcai/xopcbot/config/loader.js';
+import type { Config } from '@xopcai/xopc/config/schema.js';
+import { ConfigSchema } from '@xopcai/xopc/config/schema.js';
+import { loadConfig, saveConfig } from '@xopcai/xopc/config/loader.js';
 
 import {
   clearStaleAccountsForUserId,
@@ -23,7 +23,7 @@ import {
 import { logger } from '../util/logger.js';
 
 export type WeixinQrLoginCliOptions = {
-  /** Config file path (same as CLI --config / XOPCBOT_CONFIG). */
+  /** Config file path (same as CLI --config / XOPC_CONFIG). */
   configPath?: string;
   verbose?: boolean;
   /** Client wait for scan (ms). */
@@ -86,7 +86,7 @@ export async function runWeixinQrLoginCli(opts: WeixinQrLoginCliOptions): Promis
   accountId?: string;
   message: string;
 }> {
-  const configPath = opts.configPath ?? process.env.XOPCBOT_CONFIG_PATH;
+  const configPath = opts.configPath ?? process.env.XOPC_CONFIG_PATH;
   const cfg = loadConfig(configPath);
   const { baseUrl, routeTag } = getWeixinLoginApiContext(cfg, opts.account);
   const timeoutMs = opts.timeoutMs ?? 480_000;

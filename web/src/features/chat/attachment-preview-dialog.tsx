@@ -344,7 +344,7 @@ export function AttachmentPreviewDialog({
       <Dialog.Portal>
         <Dialog.Content
           className={cn(
-            'xopcbot-dialog-content-fullscreen fixed inset-0 z-[81] flex h-[100dvh] w-full flex-row overflow-hidden',
+            'xopc-dialog-content-fullscreen fixed inset-0 z-[81] flex h-[100dvh] w-full flex-row overflow-hidden',
             'border-0 bg-transparent p-0 shadow-none outline-none',
           )}
         >

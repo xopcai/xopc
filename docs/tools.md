@@ -1,6 +1,6 @@
 # Built-in Tools Reference
 
-xopcbot provides a comprehensive set of built-in tools for the Agent to use.
+xopc provides a comprehensive set of built-in tools for the Agent to use.
 
 ## Tools Overview
 
@@ -26,8 +26,8 @@ Extension packages may append more tools when an extension registry is present.
 ### Recent capability additions (tools + skill runtime)
 
 1. **`skills_list`**, **`skill_view`**, **`skill_manage`** — discover skills, read `SKILL.md` or files under `references/`, `templates/`, `scripts/`, `assets/`, and create/edit/patch/delete user skills subject to `skills.agentWritePolicy` (see [Skills](skills.md)).
-2. **Skill env passthrough** — after **`skill_view`**, declared variable **names** from SKILL.md (`required_environment_variables`, `prerequisites.env_vars`, `requires.env`, `metadata.xopcbot.requires.env`) are registered for the session; the **`shell`** tool may expose matching variables from the process (values are never shown to the model).
-3. **`web_extract`** — fetches a page and runs an LLM pass for markdown-oriented extraction (`agents.defaults.webExtract.model` or `XOPCBOT_WEB_EXTRACT_MODEL`).
+2. **Skill env passthrough** — after **`skill_view`**, declared variable **names** from SKILL.md (`required_environment_variables`, `prerequisites.env_vars`, `requires.env`, `metadata.xopc.requires.env`) are registered for the session; the **`shell`** tool may expose matching variables from the process (values are never shown to the model).
+3. **`web_extract`** — fetches a page and runs an LLM pass for markdown-oriented extraction (`agents.defaults.webExtract.model` or `XOPC_WEB_EXTRACT_MODEL`).
 4. **`send_media`** — sends a local file as photo/video/audio/document to the current channel context.
 5. **`clarify`** — asks the user a question (optional multiple choice) and waits for an answer on **web**, **Telegram**, or **CLI** when wired; otherwise returns a message and uses `default` if provided.
 6. **`todo`** — per-session todo list with merge or full replace.
@@ -40,7 +40,7 @@ Extension packages may append more tools when an extension registry is present.
 13. **`curated_memory`** — live read/write to agent-home `memories/` while the system prompt keeps a frozen snapshot from session start.
 14. **Skill tool gating** — skills can be omitted from `<available_skills>` unless required tools exist (`skills.toolGating` and skill metadata).
 15. **`disable-model-invocation`** in SKILL.md — skill stays on disk but is hidden from model-facing lists.
-16. **Skills Hub CLI** — `xopcbot skills hub pull|update|lock` for git/archive installs under `~/.xopcbot/skills` with `skills-lock.json` (see [Skills](skills.md)).
+16. **Skills Hub CLI** — `xopc skills hub pull|update|lock` for git/archive installs under `~/.xopc/skills` with `skills-lock.json` (see [Skills](skills.md)).
 17. **Web search** — configurable provider list in `tools.web.search.providers` plus regional HTML fallback.
 18. **Skill file limits** — `skills.limits.maxSkillFileBytes` caps reads in `skill_view`.
 19. **Memory plugins** — `MemoryManager.getAdditionalTools()` can register extra memory-related tools.
@@ -397,7 +397,7 @@ See [Configuration](configuration.md) (**agents.defaults.memory**) and [Curated 
 
 ### 🔎 session_search
 
-Search **other sessions’** transcripts (keyword or semantic-style query with optional LLM summaries per session). Requires session persistence and agent wiring; model for summaries: `agents.defaults.sessionSearch.summaryModel` or `XOPCBOT_SESSION_SEARCH_MODEL`.
+Search **other sessions’** transcripts (keyword or semantic-style query with optional LLM summaries per session). Requires session persistence and agent wiring; model for summaries: `agents.defaults.sessionSearch.summaryModel` or `XOPC_SESSION_SEARCH_MODEL`.
 
 See [Configuration](configuration.md) (**agents.defaults.sessionSearch**).
 
@@ -445,7 +445,7 @@ Create, edit, patch, delete skills, or `write_file` / `remove_file` under allowe
 
 Fetches `url` (HTML or JSON), strips boilerplate, and runs an LLM extraction pass. Optional `instruction` (what to focus on) and `maxLength` (default from config or 15000 characters).
 
-**Configuration:** `agents.defaults.webExtract.model` or `XOPCBOT_WEB_EXTRACT_MODEL`.
+**Configuration:** `agents.defaults.webExtract.model` or `XOPC_WEB_EXTRACT_MODEL`.
 
 ---
 

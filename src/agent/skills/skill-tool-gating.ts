@@ -4,7 +4,7 @@
 
 import type { Skill, SkillToolConditions } from './types.js';
 
-/** Maps logical toolset ids to xopcbot {@link AgentTool} names (all must be present for the toolset to count as available). */
+/** Maps logical toolset ids to xopc {@link AgentTool} names (all must be present for the toolset to count as available). */
 export const SKILL_TOOLSET_TOOLS: Record<string, readonly string[]> = {
   web: ['web_search', 'web_fetch', 'web_extract'],
   browser: [
@@ -91,13 +91,13 @@ export function normalizeStringList(value: unknown): string[] {
 }
 
 /**
- * Read `metadata.hermes` and `metadata.xopcbot` for tool gating keys (YAML snake_case).
+ * Read `metadata.hermes` and `metadata.xopc` for tool gating keys (YAML snake_case).
  * Later sources extend earlier (merge unique order).
  */
 export function parseSkillToolConditions(frontmatter: Record<string, unknown>): SkillToolConditions | undefined {
   const meta = frontmatter.metadata as Record<string, unknown> | undefined;
   const hermes = meta?.hermes as Record<string, unknown> | undefined;
-  const xopcbot = meta?.xopcbot as Record<string, unknown> | undefined;
+  const xopc = meta?.xopc as Record<string, unknown> | undefined;
 
   const merge = (a: string[], b: string[]) => [...new Set([...a, ...b])];
 
@@ -106,10 +106,10 @@ export function parseSkillToolConditions(frontmatter: Record<string, unknown>): 
   let fallbackForTools = normalizeStringList(hermes?.fallback_for_tools);
   let fallbackForToolsets = normalizeStringList(hermes?.fallback_for_toolsets);
 
-  requiresTools = merge(requiresTools, normalizeStringList(xopcbot?.requires_tools));
-  requiresToolsets = merge(requiresToolsets, normalizeStringList(xopcbot?.requires_toolsets));
-  fallbackForTools = merge(fallbackForTools, normalizeStringList(xopcbot?.fallback_for_tools));
-  fallbackForToolsets = merge(fallbackForToolsets, normalizeStringList(xopcbot?.fallback_for_toolsets));
+  requiresTools = merge(requiresTools, normalizeStringList(xopc?.requires_tools));
+  requiresToolsets = merge(requiresToolsets, normalizeStringList(xopc?.requires_toolsets));
+  fallbackForTools = merge(fallbackForTools, normalizeStringList(xopc?.fallback_for_tools));
+  fallbackForToolsets = merge(fallbackForToolsets, normalizeStringList(xopc?.fallback_for_toolsets));
 
   const out: SkillToolConditions = {
     requiresTools,

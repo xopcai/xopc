@@ -28,8 +28,8 @@ vi.mock('../../../../config/index.js', () => ({
 
 vi.mock('../../index.js', () => ({
   getContextWithOpts: vi.fn(() => ({
-    configPath: '/root/.xopcbot/config.json',
-    workspacePath: '/root/.xopcbot/workspace',
+    configPath: '/root/.xopc/xopc.json',
+    workspacePath: '/root/.xopc/workspace',
     isVerbose: false,
   })),
 }));
@@ -90,11 +90,11 @@ describe('Gateway Service Commands', () => {
       vi.mocked(loadConfig).mockReturnValue(mockConfig as any);
       vi.mocked(isDaemonAvailableAsync).mockResolvedValue(true);
       vi.mocked(resolveGatewayService).mockResolvedValue({
-        label: 'xopcbot-gateway',
+        label: 'xopc-gateway',
       } as any);
       vi.mocked(buildGatewayInstallPlan).mockReturnValue({
         workingDirectory: '/test',
-        programArguments: ['node', 'xopcbot', 'gateway'],
+        programArguments: ['node', 'xopc', 'gateway'],
       } as any);
 
       // Mock Linux platform
@@ -121,11 +121,11 @@ describe('Gateway Service Commands', () => {
       vi.mocked(loadConfig).mockReturnValue(mockConfig as any);
       vi.mocked(isDaemonAvailableAsync).mockResolvedValue(true);
       vi.mocked(resolveGatewayService).mockResolvedValue({
-        label: 'xopcbot-gateway',
+        label: 'xopc-gateway',
       } as any);
       vi.mocked(buildGatewayInstallPlan).mockReturnValue({
         workingDirectory: '/test',
-        programArguments: ['node', 'xopcbot', 'gateway'],
+        programArguments: ['node', 'xopc', 'gateway'],
       } as any);
 
       Object.defineProperty(process, 'platform', {
@@ -149,11 +149,11 @@ describe('Gateway Service Commands', () => {
       vi.mocked(loadConfig).mockReturnValue(mockConfig as any);
       vi.mocked(isDaemonAvailableAsync).mockResolvedValue(true);
       vi.mocked(resolveGatewayService).mockResolvedValue({
-        label: 'xopcbot-gateway',
+        label: 'xopc-gateway',
       } as any);
       vi.mocked(buildGatewayInstallPlan).mockReturnValue({
         workingDirectory: '/test',
-        programArguments: ['node', 'xopcbot', 'gateway'],
+        programArguments: ['node', 'xopc', 'gateway'],
       } as any);
 
       Object.defineProperty(process, 'platform', {
@@ -177,7 +177,7 @@ describe('Gateway Service Commands', () => {
 
     it('should show uninstall instructions', async () => {
       vi.mocked(resolveGatewayService).mockResolvedValue({
-        label: 'xopcbot-gateway',
+        label: 'xopc-gateway',
       } as any);
 
       const cmd = createUninstallCommand();

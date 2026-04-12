@@ -3,7 +3,7 @@
  * 
  * Supports custom providers and models (Ollama, vLLM, LM Studio, proxies)
  * 
- * File location: ~/.xopcbot/models.json (or XOPCBOT_MODELS_JSON env var)
+ * File location: ~/.xopc/models.json (or XOPC_MODELS_JSON env var)
  */
 
 import { z } from 'zod';

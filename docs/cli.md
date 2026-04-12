@@ -1,27 +1,27 @@
 # CLI Command Reference
 
-xopcbot provides a rich set of CLI commands for management, conversation, and configuration.
+xopc provides a rich set of CLI commands for management, conversation, and configuration.
 
 ## Usage
 
 ### Install from npm (recommended)
 
 ```bash
-npm install -g @xopcai/xopcbot
-xopcbot <command>
+npm install -g @xopcai/xopc
+xopc <command>
 ```
 
 ### Run from source (development)
 
 ```bash
-git clone https://github.com/xopcai/xopcbot.git
-cd xopcbot
+git clone https://github.com/xopcai/xopc.git
+cd xopc
 pnpm install
 
 pnpm run dev -- <command>
 ```
 
-> **Note:** Examples in this document use `xopcbot`. If running from source, replace with `pnpm run dev --`.
+> **Note:** Examples in this document use `xopc`. If running from source, replace with `pnpm run dev --`.
 
 ---
 
@@ -47,7 +47,7 @@ pnpm run dev -- <command>
 Initialize config file and workspace directory only.
 
 ```bash
-xopcbot setup
+xopc setup
 ```
 
 **Parameters:**
@@ -60,24 +60,24 @@ xopcbot setup
 
 ```bash
 # Create default config and workspace
-xopcbot setup
+xopc setup
 
 # Custom workspace path
-xopcbot setup --workspace ~/my-workspace
+xopc setup --workspace ~/my-workspace
 ```
 
 **What it does:**
-- Creates `~/.xopcbot/config.json` (if not exists)
+- Creates `~/.xopc/xopc.json` (if not exists)
 - Creates workspace directory with bootstrap files
 
 ---
 
 ## onboard
 
-Interactive setup wizard for xopcbot.
+Interactive setup wizard for xopc.
 
 ```bash
-xopcbot onboard
+xopc onboard
 ```
 
 **Options:**
@@ -93,13 +93,13 @@ xopcbot onboard
 
 ```bash
 # Full interactive setup (default)
-xopcbot onboard
+xopc onboard
 
 # Configure LLM model only
-xopcbot onboard --model
+xopc onboard --model
 
 # Configure channels only
-xopcbot onboard --channels
+xopc onboard --channels
 ```
 
 **Features:**
@@ -112,7 +112,7 @@ xopcbot onboard --channels
 
 ## agents
 
-Manage **`agents.list`** in `config.json`. Paths for workspace and `~/.xopcbot/agents/<id>/` follow the merged config — there is no separate env-based agent registry.
+Manage **`agents.list`** in `config.json`. Paths for workspace and `~/.xopc/agents/<id>/` follow the merged config — there is no separate env-based agent registry.
 
 | Subcommand | Description |
 |------------|-------------|
@@ -123,10 +123,10 @@ Manage **`agents.list`** in `config.json`. Paths for workspace and `~/.xopcbot/a
 Examples:
 
 ```bash
-xopcbot agents list
-xopcbot agents add coder --workspace ~/xopcbot-workspaces/coder --model anthropic/claude-sonnet-4-5
-xopcbot agents delete coder
-xopcbot agents delete coder --purge
+xopc agents list
+xopc agents add coder --workspace ~/xopc-workspaces/coder --model anthropic/claude-sonnet-4-5
+xopc agents delete coder
+xopc agents delete coder --purge
 ```
 
 ---
@@ -138,7 +138,7 @@ Chat with Agent.
 ### Single Message
 
 ```bash
-xopcbot agent -m "Hello, world!"
+xopc agent -m "Hello, world!"
 ```
 
 **Parameters:**
@@ -152,7 +152,7 @@ xopcbot agent -m "Hello, world!"
 ### Interactive Mode
 
 ```bash
-xopcbot agent -i
+xopc agent -i
 ```
 
 **Usage:**
@@ -169,7 +169,7 @@ Bot: File listing...
 ### Specify Session
 
 ```bash
-xopcbot agent -m "Continue our discussion" -s my-session
+xopc agent -m "Continue our discussion" -s my-session
 ```
 
 ---
@@ -181,7 +181,7 @@ Start REST API gateway.
 ### Foreground Mode (Default)
 
 ```bash
-xopcbot gateway --port 18790
+xopc gateway --port 18790
 ```
 
 The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
@@ -202,7 +202,7 @@ The gateway runs in foreground mode by default. Press `Ctrl+C` to stop.
 If port is already in use:
 
 ```bash
-xopcbot gateway --force
+xopc gateway --force
 ```
 
 This will:
@@ -229,31 +229,31 @@ This will:
 
 ```bash
 # Check status
-xopcbot gateway status
+xopc gateway status
 
 # Stop gateway (graceful)
-xopcbot gateway stop
+xopc gateway stop
 
 # Force stop
-xopcbot gateway stop --force
+xopc gateway stop --force
 
 # Restart gateway
-xopcbot gateway restart
+xopc gateway restart
 
 # View last 50 lines
-xopcbot gateway logs
+xopc gateway logs
 
 # Follow logs in real-time
-xopcbot gateway logs --follow
+xopc gateway logs --follow
 
 # Generate new token
-xopcbot gateway token --generate
+xopc gateway token --generate
 
 # Install as system service
-xopcbot gateway install
+xopc gateway install
 
 # Uninstall system service
-xopcbot gateway uninstall
+xopc gateway uninstall
 ```
 
 ---
@@ -265,7 +265,7 @@ Manage scheduled tasks.
 ### Add Task
 
 ```bash
-xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
+xopc cron add --schedule "0 9 * * *" --message "Good morning!"
 ```
 
 **Parameters:**
@@ -280,32 +280,32 @@ xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
 
 ```bash
 # Daily at 9am
-xopcbot cron add --schedule "0 9 * * *" --message "Daily update"
+xopc cron add --schedule "0 9 * * *" --message "Daily update"
 
 # Weekdays at 6pm
-xopcbot cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!"
+xopc cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!"
 
 # Hourly reminder
-xopcbot cron add --schedule "0 * * * *" --message "Hourly reminder" --name hourly
+xopc cron add --schedule "0 * * * *" --message "Hourly reminder" --name hourly
 ```
 
 ### Remove Task
 
 ```bash
-xopcbot cron remove <task-id>
+xopc cron remove <task-id>
 ```
 
 ### Enable/Disable
 
 ```bash
-xopcbot cron enable <task-id>
-xopcbot cron disable <task-id>
+xopc cron enable <task-id>
+xopc cron disable <task-id>
 ```
 
 ### Trigger Task
 
 ```bash
-xopcbot cron trigger <task-id>
+xopc cron trigger <task-id>
 ```
 
 ---
@@ -317,23 +317,23 @@ Manage extensions. Supports three-tier storage: workspace → global → bundled
 ### List Extensions
 
 ```bash
-xopcbot extension list
+xopc extension list
 ```
 
 ### Install Extension
 
 ```bash
 # Install from npm to workspace (default)
-xopcbot extension install xopcbot-extension-telegram
+xopc extension install xopc-extension-telegram
 
 # Install to global (shared across projects)
-xopcbot extension install xopcbot-extension-telegram --global
+xopc extension install xopc-extension-telegram --global
 
 # Install from local directory
-xopcbot extension install ./my-local-extension
+xopc extension install ./my-local-extension
 
 # Set timeout (default 120 seconds)
-xopcbot extension install slow-extension --timeout 300000
+xopc extension install slow-extension --timeout 300000
 ```
 
 **Parameters:**
@@ -346,21 +346,21 @@ xopcbot extension install slow-extension --timeout 300000
 ### Remove Extension
 
 ```bash
-xopcbot extension remove <extension-id>
+xopc extension remove <extension-id>
 # Or
-xopcbot extension uninstall <extension-id>
+xopc extension uninstall <extension-id>
 ```
 
 ### View Extension Details
 
 ```bash
-xopcbot extension info <extension-id>
+xopc extension info <extension-id>
 ```
 
 ### Create Extension
 
 ```bash
-xopcbot extension create <extension-id> [options]
+xopc extension create <extension-id> [options]
 ```
 
 **Parameters:**
@@ -375,10 +375,10 @@ xopcbot extension create <extension-id> [options]
 
 ```bash
 # Create a tool extension
-xopcbot extension create weather-tool --name "Weather Tool" --kind tool
+xopc extension create weather-tool --name "Weather Tool" --kind tool
 
 # Create a channel extension
-xopcbot extension create discord-channel --name "Discord Channel" --kind channel
+xopc extension create discord-channel --name "Discord Channel" --kind channel
 ```
 
 ---
@@ -390,68 +390,68 @@ Manage skills (install, enable, configure, test).
 ### List Skills
 
 ```bash
-xopcbot skills list
-xopcbot skills list -v          # Verbose output
-xopcbot skills list --json      # JSON format
+xopc skills list
+xopc skills list -v          # Verbose output
+xopc skills list --json      # JSON format
 ```
 
 ### Install Skill Dependencies
 
 ```bash
-xopcbot skills install <skill-name>
-xopcbot skills install <skill-name> -i <install-id>   # Specify installer
-xopcbot skills install <skill-name> --dry-run         # Dry run
+xopc skills install <skill-name>
+xopc skills install <skill-name> -i <install-id>   # Specify installer
+xopc skills install <skill-name> --dry-run         # Dry run
 ```
 
 ### Enable/Disable Skills
 
 ```bash
-xopcbot skills enable <skill-name>
-xopcbot skills disable <skill-name>
+xopc skills enable <skill-name>
+xopc skills disable <skill-name>
 ```
 
 ### View Skill Status
 
 ```bash
-xopcbot skills status
-xopcbot skills status <skill-name>
-xopcbot skills status --json
+xopc skills status
+xopc skills status <skill-name>
+xopc skills status --json
 ```
 
 ### Security Audit
 
 ```bash
-xopcbot skills audit
-xopcbot skills audit <skill-name>
-xopcbot skills audit <skill-name> --deep    # Verbose output
+xopc skills audit
+xopc skills audit <skill-name>
+xopc skills audit <skill-name> --deep    # Verbose output
 ```
 
 ### Configure Skill
 
 ```bash
-xopcbot skills config <skill-name> --show
-xopcbot skills config <skill-name> --api-key=KEY
-xopcbot skills config <skill-name> --env KEY=value
+xopc skills config <skill-name> --show
+xopc skills config <skill-name> --api-key=KEY
+xopc skills config <skill-name> --env KEY=value
 ```
 
 ### Test Skill
 
 ```bash
 # Test all skills
-xopcbot skills test
+xopc skills test
 
 # Test specific skill
-xopcbot skills test <skill-name>
+xopc skills test <skill-name>
 
 # Verbose output
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # JSON format
-xopcbot skills test --format json
+xopc skills test --format json
 
 # Skip specific tests
-xopcbot skills test --skip-security
-xopcbot skills test --skip-examples
+xopc skills test --skip-security
+xopc skills test --skip-examples
 ```
 
 ---
@@ -464,65 +464,65 @@ Manage conversation sessions.
 
 ```bash
 # List all sessions
-xopcbot session list
+xopc session list
 
 # Filter by status
-xopcbot session list --status active
-xopcbot session list --status archived
-xopcbot session list --status pinned
+xopc session list --status active
+xopc session list --status archived
+xopc session list --status pinned
 
 # Search by name or content
-xopcbot session list --query "project"
+xopc session list --query "project"
 
 # Sort and limit
-xopcbot session list --sort updatedAt --order desc --limit 50
+xopc session list --sort updatedAt --order desc --limit 50
 ```
 
 ### View Session Details
 
 ```bash
 # Show session info and recent messages
-xopcbot session info telegram:123456
+xopc session info telegram:123456
 
 # Search within a session
-xopcbot session grep telegram:123456 "API design"
+xopc session grep telegram:123456 "API design"
 ```
 
 ### Manage Sessions
 
 ```bash
 # Rename a session
-xopcbot session rename telegram:123456 "Project Discussion"
+xopc session rename telegram:123456 "Project Discussion"
 
 # Add tags
-xopcbot session tag telegram:123456 work important
+xopc session tag telegram:123456 work important
 
 # Remove tags
-xopcbot session untag telegram:123456 important
+xopc session untag telegram:123456 important
 
 # Archive a session
-xopcbot session archive telegram:123456
+xopc session archive telegram:123456
 
 # Unarchive a session
-xopcbot session unarchive telegram:123456
+xopc session unarchive telegram:123456
 
 # Pin a session
-xopcbot session pin telegram:123456
+xopc session pin telegram:123456
 
 # Unpin a session
-xopcbot session unpin telegram:123456
+xopc session unpin telegram:123456
 
 # Delete a session
-xopcbot session delete telegram:123456
+xopc session delete telegram:123456
 
 # Export session to JSON
-xopcbot session export telegram:123456 --format json --output backup.json
+xopc session export telegram:123456 --format json --output backup.json
 ```
 
 ### Statistics
 
 ```bash
-xopcbot session stats
+xopc session stats
 ```
 
 ---
@@ -534,19 +534,19 @@ View and edit configuration (non-interactive).
 ### Show Configuration
 
 ```bash
-xopcbot config --show
+xopc config --show
 ```
 
 ### Validate Configuration
 
 ```bash
-xopcbot config --validate
+xopc config --validate
 ```
 
 ### Edit Configuration
 
 ```bash
-xopcbot config --edit
+xopc config --edit
 ```
 
 ---
@@ -574,9 +574,9 @@ xopcbot config --edit
 ### Help
 
 ```bash
-xopcbot --help
-xopcbot agent --help
-xopcbot gateway --help
+xopc --help
+xopc agent --help
+xopc gateway --help
 ```
 
 ---
@@ -601,29 +601,29 @@ Create a quick script `bot`:
 
 case "$1" in
   chat)
-    xopcbot agent -m "${*:2}"
+    xopc agent -m "${*:2}"
     ;;
   shell)
-    xopcbot agent -i
+    xopc agent -i
     ;;
   start)
-    xopcbot gateway --port 18790
+    xopc gateway --port 18790
     ;;
   cron)
     shift
-    xopcbot cron "$@"
+    xopc cron "$@"
     ;;
   extension)
     shift
-    xopcbot extension "$@"
+    xopc extension "$@"
     ;;
   skills)
     shift
-    xopcbot skills "$@"
+    xopc skills "$@"
     ;;
   session)
     shift
-    xopcbot session "$@"
+    xopc session "$@"
     ;;
   *)
     echo "Usage: bot {chat|shell|start|cron|extension|skills|session}"

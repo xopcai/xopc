@@ -4,7 +4,7 @@
 #
 # Usage:
 #   ./scripts/gh-electron-build-runs.sh
-#   ./scripts/gh-electron-build-runs.sh xopcai/xopcbot
+#   ./scripts/gh-electron-build-runs.sh xopcai/xopc
 set -euo pipefail
 
 if ! command -v gh >/dev/null 2>&1; then

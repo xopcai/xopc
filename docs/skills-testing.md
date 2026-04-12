@@ -1,6 +1,6 @@
 # Skill Testing Framework Guide
 
-xopcbot provides a complete skill testing framework to verify skill quality, safety, and functionality.
+xopc provides a complete skill testing framework to verify skill quality, safety, and functionality.
 
 ## Table of Contents
 
@@ -131,60 +131,60 @@ Validates code examples in SKILL.md:
 
 ```bash
 # Test all skills
-xopcbot skills test
+xopc skills test
 
 # Test specific skill
-xopcbot skills test <skill-name>
+xopc skills test <skill-name>
 
 # Specify skills directory
-xopcbot skills test --skills-dir ./my-skills
+xopc skills test --skills-dir ./my-skills
 
 # Output format (text/json/tap)
-xopcbot skills test --format json
+xopc skills test --format json
 
 # Verbose output
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # Strict mode (warnings are also treated as failures)
-xopcbot skills test --strict
+xopc skills test --strict
 
 # Skip specific tests
-xopcbot skills test --skip-security
-xopcbot skills test --skip-deps
-xopcbot skills test --skip-examples
+xopc skills test --skip-security
+xopc skills test --skip-deps
+xopc skills test --skip-examples
 ```
 
 ### Validate Command
 
 ```bash
 # Validate single SKILL.md file
-xopcbot skills test validate ./skills/weather/SKILL.md
+xopc skills test validate ./skills/weather/SKILL.md
 
 # Strict mode
-xopcbot skills test validate ./skills/weather/SKILL.md --strict
+xopc skills test validate ./skills/weather/SKILL.md --strict
 ```
 
 ### Dependency Check Command
 
 ```bash
 # Check all skills dependencies
-xopcbot skills test check-deps
+xopc skills test check-deps
 
 # Check specific skill
-xopcbot skills test check-deps weather
+xopc skills test check-deps weather
 ```
 
 ### Security Audit Command
 
 ```bash
 # Audit all skills
-xopcbot skills test security
+xopc skills test security
 
 # Audit specific skill
-xopcbot skills test security weather
+xopc skills test security weather
 
 # Verbose output
-xopcbot skills test security --deep
+xopc skills test security --deep
 ```
 
 ## Test Framework API
@@ -341,7 +341,7 @@ jobs:
       - uses: actions/setup-node@v4
       - run: npm install
       - run: npm run build
-      - run: xopcbot skills test --verbose
+      - run: xopc skills test --verbose
 ```
 
 ### Custom CI Configuration
@@ -370,13 +370,13 @@ jobs:
       
       - name: Run skill tests
         run: |
-          xopcbot skills test \
+          xopc skills test \
             --format tap \
             --skip-examples \
             --strict
       
       - name: Security audit
-        run: xopcbot skills test security --deep
+        run: xopc skills test security --deep
 ```
 
 ### Local Regression Testing
@@ -393,10 +393,10 @@ echo "Running local skill regression tests..."
 npm test src/agent/skills/__tests__/test-framework.test.ts
 
 # Run integration tests
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # Run security audit
-xopcbot skills test security --deep
+xopc skills test security --deep
 
 echo "All tests passed!"
 ```
@@ -427,13 +427,13 @@ When developing skills locally:
 
 ```bash
 # Quick format validation
-xopcbot skills test validate ./skills/my-skill/SKILL.md
+xopc skills test validate ./skills/my-skill/SKILL.md
 
 # Check dependencies
-xopcbot skills test check-deps my-skill
+xopc skills test check-deps my-skill
 
 # Full test
-xopcbot skills test my-skill --verbose
+xopc skills test my-skill --verbose
 ```
 
 ### 4. Performance Optimization
@@ -442,10 +442,10 @@ For large number of skills:
 
 ```bash
 # Skip slow tests
-xopcbot skills test --skip-examples
+xopc skills test --skip-examples
 
 # Only test changed skills (future support)
-xopcbot skills test --changed-since HEAD~1
+xopc skills test --changed-since HEAD~1
 ```
 
 ### 5. Test Reports
@@ -454,13 +454,13 @@ Generate test reports:
 
 ```bash
 # JSON format (for machine parsing)
-xopcbot skills test --format json > test-results.json
+xopc skills test --format json > test-results.json
 
 # TAP format (for CI/CD)
-xopcbot skills test --format tap > test-results.tap
+xopc skills test --format tap > test-results.tap
 
 # Verbose text (for human reading)
-xopcbot skills test --verbose > test-results.txt
+xopc skills test --verbose > test-results.txt
 ```
 
 ## Troubleshooting
@@ -469,30 +469,30 @@ xopcbot skills test --verbose > test-results.txt
 
 ```bash
 # View verbose output
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # Skip specific tests
-xopcbot skills test --skip-security
+xopc skills test --skip-security
 ```
 
 ### Dependency Issues
 
 ```bash
 # Check all dependencies
-xopcbot skills test check-deps
+xopc skills test check-deps
 
 # Install missing dependencies
-xopcbot skills install <skill-name>
+xopc skills install <skill-name>
 ```
 
 ### Security Issues
 
 ```bash
 # Detailed security audit
-xopcbot skills test security --deep
+xopc skills test security --deep
 
 # View specific findings
-xopcbot skills audit <skill-name> --deep
+xopc skills audit <skill-name> --deep
 ```
 
 ## Test Output Formats

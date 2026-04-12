@@ -1,6 +1,6 @@
 # 内置工具参考
 
-xopcbot 通过 `AgentToolsFactory`（`src/agent/tools/factory.ts`）组装内置工具。部分工具始终注册；部分依赖 **配置**、**会话**（例如存在 `SessionStore` 时的 `session_search`）或 **网关**（例如接入用户交互的 `clarify`、提供 `CronService` 的 `cronjob`）。
+xopc 通过 `AgentToolsFactory`（`src/agent/tools/factory.ts`）组装内置工具。部分工具始终注册；部分依赖 **配置**、**会话**（例如存在 `SessionStore` 时的 `session_search`）或 **网关**（例如接入用户交互的 `clarify`、提供 `CronService` 的 `cronjob`）。
 
 ## 工具列表
 
@@ -25,7 +25,7 @@ xopcbot 通过 `AgentToolsFactory`（`src/agent/tools/factory.ts`）组装内置
 
 1. **`skills_list` / `skill_view` / `skill_manage`**：发现技能、读取 `SKILL.md` 或 `references/` 等子目录文件、在策略允许下增删改用户技能（见 [Skills 指南](./skills.md)）。
 2. **Skill 环境变量透传**：`skill_view` 后根据 SKILL.md 声明注册变量**名**；**`shell`** 可将进程中已存在的同名变量带入子进程（模型永不看到变量值）。
-3. **`web_extract`**：拉取页面后用 LLM 做面向 Markdown 的抽取（`agents.defaults.webExtract.model` 或 `XOPCBOT_WEB_EXTRACT_MODEL`）。
+3. **`web_extract`**：拉取页面后用 LLM 做面向 Markdown 的抽取（`agents.defaults.webExtract.model` 或 `XOPC_WEB_EXTRACT_MODEL`）。
 4. **`send_media`**：向当前会话通道发送本地图片/视频/音频/文档。
 5. **`clarify`**：在 **Web / Telegram / CLI** 等已接线环境可阻塞等待用户作答；否则返回说明并尽量使用 `default`。
 6. **`todo`**：按会话维护待办，支持按 `id` 合并或整表替换。
@@ -38,7 +38,7 @@ xopcbot 通过 `AgentToolsFactory`（`src/agent/tools/factory.ts`）组装内置
 13. **`curated_memory`**：操作 agent 主目录 `memories/` 的实时内容，系统提示中保留会话开始时的快照。
 14. **Skill 工具门控**：`skills.toolGating` 与技能元数据可要求「已注册工具」后才出现在 `<available_skills>`。
 15. **`disable-model-invocation`**：技能仍安装，但对模型隐藏列表项。
-16. **Skills Hub CLI**：`xopcbot skills hub pull|update|lock`，安装至 `~/.xopcbot/skills` 并维护 `skills-lock.json`。
+16. **Skills Hub CLI**：`xopc skills hub pull|update|lock`，安装至 `~/.xopc/skills` 并维护 `skills-lock.json`。
 17. **`web_search`**：`tools.web.search.providers` 多提供商链 + 按地区 HTML 兜底。
 18. **`skills.limits.maxSkillFileBytes`**：限制 `skill_view` 单次读取体积。
 19. **Memory 插件**：`MemoryManager.getAdditionalTools()` 可注入额外记忆相关工具。
@@ -191,7 +191,7 @@ xopcbot 通过 `AgentToolsFactory`（`src/agent/tools/factory.ts`）组装内置
 
 ## 🔎 session_search
 
-检索 **其他会话** 的 transcript（关键词或带可选的按会话摘要）。需要会话持久化与 Agent 侧接入；摘要模型由 `agents.defaults.sessionSearch.summaryModel` 或环境变量 `XOPCBOT_SESSION_SEARCH_MODEL` 指定。
+检索 **其他会话** 的 transcript（关键词或带可选的按会话摘要）。需要会话持久化与 Agent 侧接入；摘要模型由 `agents.defaults.sessionSearch.summaryModel` 或环境变量 `XOPC_SESSION_SEARCH_MODEL` 指定。
 
 详见 [配置参考](zh/configuration.md) 中的 **agents.defaults.sessionSearch**。
 
@@ -229,7 +229,7 @@ xopcbot 通过 `AgentToolsFactory`（`src/agent/tools/factory.ts`）组装内置
 
 ### 🧾 `web_extract`
 
-抓取 `url`，可选 `instruction`（关注点）、`maxLength`。模型由 `agents.defaults.webExtract.model` 或 `XOPCBOT_WEB_EXTRACT_MODEL` 指定。
+抓取 `url`，可选 `instruction`（关注点）、`maxLength`。模型由 `agents.defaults.webExtract.model` 或 `XOPC_WEB_EXTRACT_MODEL` 指定。
 
 ---
 

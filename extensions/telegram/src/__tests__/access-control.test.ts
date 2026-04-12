@@ -17,7 +17,7 @@ import {
   removeBotMention,
 } from '../access-control.js';
 
-import type { NormalizedAllowFrom } from '@xopcai/xopcbot/channels/channel-domain.js';
+import type { NormalizedAllowFrom } from '@xopcai/xopc/channels/channel-domain.js';
 
 describe('normalizeAllowFrom', () => {
   it('should return empty normalized when input is undefined', () => {

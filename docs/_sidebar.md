@@ -1,4 +1,4 @@
-- **xopcbot**
+- **xopc**
   - [Getting Started](getting-started.md)
   - [Configuration](configuration.md)
 

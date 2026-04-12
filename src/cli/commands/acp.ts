@@ -26,14 +26,14 @@ function createAcpCommand(_ctx: CLIContext): Command {
     .addHelpText(
       "after",
       formatExamples([
-        "xopcbot acp status                 # Show ACP runtime status",
-        "xopcbot acp status -s <session>    # Show specific session status",
-        "xopcbot acp doctor                 # Run ACP diagnostics",
-        "xopcbot acp set-mode <mode> -s <session>  # Set runtime mode",
-        "xopcbot acp set-config <key> <value> -s <session>  # Set config option",
-        "xopcbot acp list                   # List ACP sessions",
-        "xopcbot acp close -s <session>     # Close ACP session",
-        "xopcbot acp cancel -s <session>    # Cancel active turn",
+        "xopc acp status                 # Show ACP runtime status",
+        "xopc acp status -s <session>    # Show specific session status",
+        "xopc acp doctor                 # Run ACP diagnostics",
+        "xopc acp set-mode <mode> -s <session>  # Set runtime mode",
+        "xopc acp set-config <key> <value> -s <session>  # Set config option",
+        "xopc acp list                   # List ACP sessions",
+        "xopc acp close -s <session>     # Close ACP session",
+        "xopc acp cancel -s <session>    # Cancel active turn",
       ])
     );
 

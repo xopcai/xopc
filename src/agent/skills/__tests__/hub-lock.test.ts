@@ -4,7 +4,7 @@ import { afterEach, describe, expect, it, vi } from 'vitest';
 const { lockPath } = vi.hoisted(() => {
   const { join } = require('node:path') as typeof import('node:path');
   const { tmpdir } = require('node:os') as typeof import('node:os');
-  return { lockPath: join(tmpdir(), `xopcbot-skills-lock-test-${process.pid}.json`) };
+  return { lockPath: join(tmpdir(), `xopc-skills-lock-test-${process.pid}.json`) };
 });
 
 vi.mock('../../../config/paths.js', async (importOriginal) => {

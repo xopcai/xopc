@@ -23,7 +23,7 @@ export function listAgentWorkspaceDirs(config: Config): string[] {
   return [...dirs];
 }
 
-/** Per-agent bootstrap (persona Markdown) roots under `~/.xopcbot/agents/<id>/bootstrap`. */
+/** Per-agent bootstrap (persona Markdown) roots under `~/.xopc/agents/<id>/bootstrap`. */
 export function listAgentBootstrapDirs(config: Config): string[] {
   const dirs = new Set<string>();
   const list = config.agents?.list;

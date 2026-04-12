@@ -33,7 +33,7 @@ const templateCache = new Map<TemplateFile, string>();
  */
 function getTemplatePath(): string {
   // Use environment to determine path
-  const envPath = process.env.XOPCBOT_TEMPLATE_PATH;
+  const envPath = process.env.XOPC_TEMPLATE_PATH;
   if (envPath && existsSync(envPath)) {
     return envPath;
   }

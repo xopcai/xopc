@@ -8,13 +8,13 @@
  * - Configuration usage
  * 
  * Installation:
- *   xopcbot extension install ./examples/extensions/hello
+ *   xopc extension install ./examples/extensions/hello
  * 
  * Or copy to your workspace:
  *   cp -r examples/extensions/hello workspace/.extensions/
  */
 
-import type { ExtensionApi } from 'xopcbot/extension-sdk';
+import type { ExtensionApi } from 'xopc/extension-sdk';
 
 // Extension definition
 const extension = {

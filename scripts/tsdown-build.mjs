@@ -4,7 +4,7 @@ import { cpSync, existsSync, mkdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-const logLevel = process.env.XOPCBOT_BUILD_VERBOSE === '1' ? 'info' : 'warn';
+const logLevel = process.env.XOPC_BUILD_VERBOSE === '1' ? 'info' : 'warn';
 const extraArgs = process.argv.slice(2);
 
 const result = spawnSync(

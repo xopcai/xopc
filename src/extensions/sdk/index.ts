@@ -1,11 +1,11 @@
 /**
- * xopcbot Extension SDK
+ * xopc Extension SDK
  * 
- * Official SDK for developing xopcbot extensions.
+ * Official SDK for developing xopc extensions.
  * Import types and utilities from this module:
  * 
  * @example
- * import type { ExtensionApi, ExtensionDefinition } from 'xopcbot/extension-sdk';
+ * import type { ExtensionApi, ExtensionDefinition } from 'xopc/extension-sdk';
  */
 
 // ============================================================================

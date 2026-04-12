@@ -16,9 +16,9 @@ function createModelsCommand(_ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
-        'xopcbot models list              # List all available models',
-        'xopcbot models list --all        # Show all built-in models',
-        'xopcbot models list --json       # Output as JSON',
+        'xopc models list              # List all available models',
+        'xopc models list --all        # Show all built-in models',
+        'xopc models list --json       # Output as JSON',
       ])
     )
     .option('--json', 'Output as JSON', false)
@@ -83,8 +83,8 @@ function createModelsCommand(_ctx: CLIContext): Command {
 
       console.log('\n📝 Usage:');
       console.log('   export OPENAI_API_KEY="sk-..."           # Set API key via env');
-      console.log('   xopcbot agent -m "Hello"                # Use default model');
-      console.log('   xopcbot agent -m "Hello" --model qwen/qwen-plus  # Specify model');
+      console.log('   xopc agent -m "Hello"                # Use default model');
+      console.log('   xopc agent -m "Hello" --model qwen/qwen-plus  # Specify model');
     });
 
   return cmd;
@@ -98,8 +98,8 @@ register({
   metadata: {
     category: 'utility',
     examples: [
-      'xopcbot models list',
-      'xopcbot models list --all',
+      'xopc models list',
+      'xopc models list --all',
     ],
   },
 });

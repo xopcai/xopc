@@ -3,10 +3,10 @@
  *
  * Demonstrates: Event bus for inter-extension communication (RPC pattern)
  *
- * Usage: xopcbot extension install ./examples/extensions/cross-extension-comm
+ * Usage: xopc extension install ./examples/extensions/cross-extension-comm
  */
 
-import type { ExtensionApi } from 'xopcbot/extension-sdk';
+import type { ExtensionApi } from 'xopc/extension-sdk';
 
 // Mock weather data
 const weatherData: Record<string, { temp: number; humidity: number }> = {

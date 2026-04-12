@@ -1,5 +1,5 @@
 /**
- * Daemon - Cross-platform service management for xopcbot gateway
+ * Daemon - Cross-platform service management for xopc gateway
  *
  * Provides unified interface for:
  * - Linux: systemd user service

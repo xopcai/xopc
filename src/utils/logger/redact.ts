@@ -35,7 +35,7 @@ const SENSITIVE_KEYS = new Set([
 ]);
 
 export function isLogRedactionEnabled(): boolean {
-  return process.env.XOPCBOT_LOG_REDACTION !== 'false';
+  return process.env.XOPC_LOG_REDACTION !== 'false';
 }
 
 export function redactSecret(secret: string): string {

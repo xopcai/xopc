@@ -2,7 +2,7 @@ import { mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
-const tmpRoot = join(process.cwd(), 'node_modules/.cache/xopcbot-sync-auth-test');
+const tmpRoot = join(process.cwd(), 'node_modules/.cache/xopc-sync-auth-test');
 
 vi.mock('../../config/loader.js', () => ({
   loadConfig: () => ({}),

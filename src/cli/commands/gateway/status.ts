@@ -24,7 +24,7 @@ export function createStatusCommand(): Command {
         const lock = await acquireGatewayLock(configPath, { timeoutMs: 100, port });
         await lock.release();
         console.log('⚠️  Gateway is not running');
-        console.log('\n💡 Start with: xopcbot gateway');
+        console.log('\n💡 Start with: xopc gateway');
         process.exit(0);
       } catch (err) {
         if (err instanceof GatewayLockError) {
@@ -45,8 +45,8 @@ export function createStatusCommand(): Command {
 
           console.log('');
           console.log('📝 Management:');
-          console.log('   xopcbot gateway stop      # Stop gateway');
-          console.log('   xopcbot gateway restart   # Restart gateway');
+          console.log('   xopc gateway stop      # Stop gateway');
+          console.log('   xopc gateway restart   # Restart gateway');
           process.exit(0);
         } else {
           console.error('❌ Failed to check status:', err);

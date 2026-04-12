@@ -4,8 +4,8 @@ import { existsSync, unlinkSync, mkdirSync } from 'fs';
 import { join } from 'path';
 import { homedir } from 'os';
 
-const TEST_CONFIG_PATH = join(homedir(), '.xopcbot', 'test-config.json');
-const LOCKS_DIR = join(homedir(), '.xopcbot', 'locks');
+const TEST_CONFIG_PATH = join(homedir(), '.xopc', 'test-config.json');
+const LOCKS_DIR = join(homedir(), '.xopc', 'locks');
 
 describe('GatewayLock', () => {
   beforeEach(() => {

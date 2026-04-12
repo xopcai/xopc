@@ -5,7 +5,7 @@ import { formatApiHttpError } from '@/lib/http-error-message';
 import { apiUrl } from '@/lib/url';
 
 export function pendingAgentRunStorageKey(chatId: string): string {
-  return `xopcbot:pendingRun:${chatId}`;
+  return `xopc:pendingRun:${chatId}`;
 }
 
 export type MessagingCallbacks = {

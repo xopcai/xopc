@@ -1,5 +1,5 @@
 /**
- * Managed skills live under ~/.xopcbot/skills (see resolveSkillsDir).
+ * Managed skills live under ~/.xopc/skills (see resolveSkillsDir).
  * Install/update/delete via zip or folder operations; used by gateway API.
  */
 

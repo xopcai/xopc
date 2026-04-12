@@ -261,7 +261,7 @@ describe('CommandRegistry', () => {
 
     it('should pass context to factory', () => {
       const program = new Command();
-      const ctx = createDefaultContext(['node', 'xopcbot', '--verbose']);
+      const ctx = createDefaultContext(['node', 'xopc', '--verbose']);
       const factorySpy = vi.fn(() => new Command('test'));
 
       registry.register({
@@ -383,18 +383,18 @@ describe('register helper', () => {
 
 describe('formatExamples', () => {
   it('should format single example', () => {
-    const result = formatExamples(['xopcbot test']);
+    const result = formatExamples(['xopc test']);
     expect(result).toContain('Examples:');
-    expect(result).toContain('$ xopcbot test');
+    expect(result).toContain('$ xopc test');
   });
 
   it('should format multiple examples', () => {
     const result = formatExamples([
-      'xopcbot test',
-      'xopcbot test --option',
+      'xopc test',
+      'xopc test --option',
     ]);
-    expect(result).toContain('$ xopcbot test');
-    expect(result).toContain('$ xopcbot test --option');
+    expect(result).toContain('$ xopc test');
+    expect(result).toContain('$ xopc test --option');
   });
 
   it('should return empty string for empty array', () => {
@@ -405,42 +405,42 @@ describe('formatExamples', () => {
 
 describe('createDefaultContext', () => {
   beforeEach(() => {
-    delete process.env.XOPCBOT_WORKSPACE;
-    delete process.env.XOPCBOT_CONFIG;
-    delete process.env.XOPCBOT_STATE_DIR;
-    delete process.env.XOPCBOT_PROFILE;
+    delete process.env.XOPC_WORKSPACE;
+    delete process.env.XOPC_CONFIG;
+    delete process.env.XOPC_STATE_DIR;
+    delete process.env.XOPC_PROFILE;
   });
 
   it('should create context with defaults', () => {
     const ctx = createDefaultContext();
 
-    expect(ctx.configPath).toContain('.xopcbot/xopcbot.json');
+    expect(ctx.configPath).toContain('.xopc/xopc.json');
     expect(ctx.workspacePath).toContain('workspace');
-    expect(ctx.workspacePath).toMatch(/\.xopcbot\/workspace$/);
+    expect(ctx.workspacePath).toMatch(/\.xopc\/workspace$/);
     expect(ctx.isVerbose).toBe(false);
     expect(ctx.argv).toEqual(process.argv);
   });
 
   it('should detect verbose flag', () => {
-    const ctx = createDefaultContext(['node', 'xopcbot', '--verbose']);
+    const ctx = createDefaultContext(['node', 'xopc', '--verbose']);
     expect(ctx.isVerbose).toBe(true);
   });
 
   it('should detect short verbose flag', () => {
-    const ctx = createDefaultContext(['node', 'xopcbot', '-v']);
+    const ctx = createDefaultContext(['node', 'xopc', '-v']);
     expect(ctx.isVerbose).toBe(true);
   });
 
   it('should use env vars when set', () => {
-    process.env.XOPCBOT_CONFIG = '/custom/config.json';
-    process.env.XOPCBOT_WORKSPACE = '/custom/workspace';
+    process.env.XOPC_CONFIG = '/custom/config.json';
+    process.env.XOPC_WORKSPACE = '/custom/workspace';
 
     const ctx = createDefaultContext();
 
     expect(ctx.configPath).toBe('/custom/config.json');
     expect(ctx.workspacePath).toBe('/custom/workspace');
 
-    delete process.env.XOPCBOT_CONFIG;
-    delete process.env.XOPCBOT_WORKSPACE;
+    delete process.env.XOPC_CONFIG;
+    delete process.env.XOPC_WORKSPACE;
   });
 });

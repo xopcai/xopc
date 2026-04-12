@@ -8,12 +8,12 @@
 import type { Context } from 'grammy';
 
 import type { TelegramAccountManager } from './account-manager.js';
-import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
-import type { Config } from '@xopcai/xopcbot/config/index.js';
-import { isProviderConfiguredSync } from '@xopcai/xopcbot/providers/index.js';
+import { createLogger } from '@xopcai/xopc/utils/logger.js';
+import type { Config } from '@xopcai/xopc/config/index.js';
+import { isProviderConfiguredSync } from '@xopcai/xopc/providers/index.js';
 import { TelegramInlineKeyboards, type ProviderInfo } from './inline-keyboards.js';
-import { getProviderDisplayName, getModelsByProvider, getDefaultModelSync, getAllProviders } from '@xopcai/xopcbot/providers/index.js';
-import { generateSessionKey } from '@xopcai/xopcbot/chat-commands/session-key.js';
+import { getProviderDisplayName, getModelsByProvider, getDefaultModelSync, getAllProviders } from '@xopcai/xopc/providers/index.js';
+import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
 
 const log = createLogger('TelegramCommandHandler');
 
@@ -100,7 +100,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
       const hasProviders = providers.length > 0;
 
       await ctx.reply(
-        '👋 *Welcome to xopcbot!*\n\n' +
+        '👋 *Welcome to xopc!*\n\n' +
         'I am your AI assistant. Here are the available commands:\n\n' +
         '🤖 *Model Selection*\n' +
         '/models - Select a model to use\n' +

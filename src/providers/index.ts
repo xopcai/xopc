@@ -209,7 +209,7 @@ export const PROVIDER_META: Record<string, ProviderMeta> = {
   'minimax': { name: 'MiniMax', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'minimax-cn': { name: 'MiniMax CN', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'kimi-coding': { name: 'Kimi For Coding', category: 'common', supportsApiKey: true, supportsOAuth: true },
-  /** DashScope / Qwen Portal; OAuth via gateway UI or `xopcbot auth login qwen`. */
+  /** DashScope / Qwen Portal; OAuth via gateway UI or `xopc auth login qwen`. */
   'qwen': { name: 'Qwen (DashScope / Portal)', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'xai': { name: 'xAI (Grok)', category: 'specialty', supportsApiKey: true },
   'mistral': { name: 'Mistral AI', category: 'specialty', supportsApiKey: true },

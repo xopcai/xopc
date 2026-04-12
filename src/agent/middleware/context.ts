@@ -45,7 +45,7 @@ export class ContextMiddleware {
       sessionId: this.extractSessionId(context.sessionKey),
       userId: context.userId,
       module: context.channel,
-      service: 'xopcbot',
+      service: 'xopc',
       ...context.metadata,
     };
 

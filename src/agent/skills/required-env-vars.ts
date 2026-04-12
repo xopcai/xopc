@@ -1,5 +1,5 @@
 /**
- * Parse Hermes-style `required_environment_variables` and legacy / xopcbot `requires.env` into a deduped name list.
+ * Parse Hermes-style `required_environment_variables` and legacy / xopc `requires.env` into a deduped name list.
  */
 
 import { normalizeStringList } from './skill-tool-gating.js';
@@ -40,7 +40,7 @@ export function parseRequiredEnvVarNames(frontmatter: Record<string, unknown>): 
   }
 
   const meta = frontmatter.metadata as Record<string, unknown> | undefined;
-  const xo = meta?.xopcbot as { requires?: { env?: unknown } } | undefined;
+  const xo = meta?.xopc as { requires?: { env?: unknown } } | undefined;
   if (xo?.requires?.env !== undefined) {
     for (const s of normalizeStringList(xo.requires.env)) {
       if (isValidSkillEnvVarName(s)) out.add(s);

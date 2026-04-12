@@ -40,7 +40,7 @@ export interface SkillRequires {
   anyBins?: string[];
 }
 
-/** Parsed from `metadata.hermes` / `metadata.xopcbot` (Hermes-compatible tool gating). */
+/** Parsed from `metadata.hermes` / `metadata.xopc` (Hermes-compatible tool gating). */
 export interface SkillToolConditions {
   requiresTools: string[];
   requiresToolsets: string[];
@@ -63,8 +63,8 @@ export interface SkillMetadata {
   requires?: SkillRequires;
   /** Installation specs */
   install?: SkillInstallSpec[];
-  /** xopcbot-specific metadata (for future extensions) */
-  xopcbot?: {
+  /** xopc-specific metadata (for future extensions) */
+  xopc?: {
     emoji?: string;
     requires?: SkillRequires;
     install?: SkillInstallSpec[];
@@ -139,7 +139,7 @@ export interface SkillsConfig {
    */
   toolGating?: boolean;
   /**
-   * Where `skill_manage` may create or edit skills: global `~/.xopcbot/skills`, workspace `skills/`, or both.
+   * Where `skill_manage` may create or edit skills: global `~/.xopc/skills`, workspace `skills/`, or both.
    * Default `global`.
    */
   agentWritePolicy?: 'global' | 'workspace' | 'both';

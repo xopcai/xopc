@@ -1,7 +1,7 @@
 /**
  * ACP Gateway Server - Full Implementation
  * 
- * CLI server that bridges ACP protocol to xopcbot's AgentService.
+ * CLI server that bridges ACP protocol to xopc's AgentService.
  * Implements the Agent interface from @agentclientprotocol/sdk.
  */
 
@@ -85,14 +85,14 @@ class AcpServer implements Agent {
         envVars: true,
       },
       agentInfo: {
-        name: "xopcbot-acp",
+        name: "xopc-acp",
         version: "1.0.0",
       },
     };
   }
 
   async authenticate(_params: any): Promise<any> {
-    // xopcbot uses Gateway-level auth, ACP layer is always authenticated
+    // xopc uses Gateway-level auth, ACP layer is always authenticated
     return { authenticated: true };
   }
 
@@ -365,7 +365,7 @@ function parseArgs(args: string[]): AcpServerOptions {
  * Print help message
  */
 function printHelp(): void {
-  console.log(`Usage: xopcbot acp serve [options]
+  console.log(`Usage: xopc acp serve [options]
 
 ACP server for IDE integration.
 

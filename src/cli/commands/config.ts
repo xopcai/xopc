@@ -34,13 +34,13 @@ function createConfigCommand(ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
-        'xopcbot config get agents.defaults.model',
-        'xopcbot config set agents.defaults.temperature 0.8',
-        'xopcbot config unset agents.defaults.max_tokens',
-        'xopcbot config show',
-        'xopcbot config token              # Show gateway token info',
-        'xopcbot config token --show       # Show full token',
-        'xopcbot config token --generate   # Generate new token',
+        'xopc config get agents.defaults.model',
+        'xopc config set agents.defaults.temperature 0.8',
+        'xopc config unset agents.defaults.max_tokens',
+        'xopc config show',
+        'xopc config token              # Show gateway token info',
+        'xopc config token --show       # Show full token',
+        'xopc config token --generate   # Generate new token',
       ])
     );
 
@@ -49,7 +49,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .description('Get a config value by dot path')
     .action((path: string) => {
       if (!existsSync(ctx.configPath)) {
-        log.error('Config file not found. Run: xopcbot onboard');
+        log.error('Config file not found. Run: xopc onboard');
         process.exit(1);
       }
 
@@ -69,7 +69,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .description('Set a config value by dot path')
     .action((path: string, value: string) => {
       if (!existsSync(ctx.configPath)) {
-        log.error('Config file not found. Run: xopcbot onboard');
+        log.error('Config file not found. Run: xopc onboard');
         process.exit(1);
       }
 
@@ -93,7 +93,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .description('Remove a config value by dot path')
     .action((path: string) => {
       if (!existsSync(ctx.configPath)) {
-        log.error('Config file not found. Run: xopcbot onboard');
+        log.error('Config file not found. Run: xopc onboard');
         process.exit(1);
       }
 
@@ -119,7 +119,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .description('Show full configuration (sensitive values masked)')
     .action(() => {
       if (!existsSync(ctx.configPath)) {
-        log.warn('No config file found. Run: xopcbot onboard');
+        log.warn('No config file found. Run: xopc onboard');
         return;
       }
 
@@ -142,7 +142,7 @@ function createConfigCommand(ctx: CLIContext): Command {
     .option('--show', 'Show the current token (unmasked)')
     .action(async (options) => {
       if (!existsSync(ctx.configPath)) {
-        log.error('Config file not found. Run: xopcbot onboard');
+        log.error('Config file not found. Run: xopc onboard');
         process.exit(1);
       }
 
@@ -171,7 +171,7 @@ function createConfigCommand(ctx: CLIContext): Command {
         writeFileSync(ctx.configPath, JSON.stringify(config, null, 2));
         log.info('New gateway token generated');
         console.log(`Token: ${newToken.slice(0, 8)}...${newToken.slice(-8)}`);
-        console.log('\nUse "xopcbot config token --show" to view the full token');
+        console.log('\nUse "xopc config token --show" to view the full token');
         return;
       }
 
@@ -187,8 +187,8 @@ function createConfigCommand(ctx: CLIContext): Command {
       console.log(`  Auth Mode: ${mode || 'not set'}`);
       if (token) {
         console.log(`  Token: ${token.slice(0, 8)}...${token.slice(-8)}`);
-        console.log('\nUse "xopcbot config token --show" to view the full token');
-        console.log('Use "xopcbot config token --generate" to generate a new token');
+        console.log('\nUse "xopc config token --show" to view the full token');
+        console.log('Use "xopc config token --generate" to generate a new token');
       } else if (mode === 'token') {
         console.log('  Token: not set (will be auto-generated on first gateway start)');
       }
@@ -212,12 +212,12 @@ register({
   metadata: {
     category: 'utility',
     examples: [
-      'xopcbot config get agents.defaults.model',
-      'xopcbot config set agents.defaults.temperature 0.8',
-      'xopcbot config show',
-      'xopcbot config token',
-      'xopcbot config token --show',
-      'xopcbot config token --generate',
+      'xopc config get agents.defaults.model',
+      'xopc config set agents.defaults.temperature 0.8',
+      'xopc config show',
+      'xopc config token',
+      'xopc config token --show',
+      'xopc config token --generate',
     ],
   },
 });

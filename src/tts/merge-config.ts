@@ -41,7 +41,7 @@ export function mergeTtsConfigFromAppConfig(tts: Config['tts'] | undefined): TTS
 export function formatTtsSetupHint(): string {
   return (
     `⚠️ *TTS is on, but no provider can run yet.*\n\n` +
-    `Configure one of the following in \`~/.xopcbot/config.json\` (or env):\n` +
+    `Configure one of the following in \`~/.xopc/xopc.json\` (or env):\n` +
     `• *OpenAI*: \`OPENAI_API_KEY\` or \`tts.openai.apiKey\` (and optional \`tts.openai.model\` / \`tts.openai.voice\`)\n` +
     `• *Alibaba*: \`DASHSCOPE_API_KEY\` or \`tts.alibaba.apiKey\`\n` +
     `• *Edge* (no key): \`/tts provider edge\` — ensure \`tts.edge.enabled\` is not \`false\`\n\n` +
