@@ -218,7 +218,12 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool<any,
       const page = await pageFor();
       const amount = params.amount ?? 500;
       const dy = params.direction === 'down' ? amount : -amount;
-      await page.evaluate(({ deltaY }) => window.scrollBy(0, deltaY), { deltaY: dy });
+      await page.evaluate(
+        ({ deltaY }) => {
+          (globalThis as unknown as { scrollBy: (x: number, y: number) => void }).scrollBy(0, deltaY);
+        },
+        { deltaY: dy },
+      );
       return {
         content: [{ type: 'text', text: `Scrolled ${params.direction} by ${amount}px.` }],
         details: { ok: true },

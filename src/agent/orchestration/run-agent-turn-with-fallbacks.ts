@@ -107,7 +107,7 @@ export async function runAgentTurnWithModelFallbacks(params: {
       log.warn({ err, sessionKey, attempt: i + 1, modelRef }, 'Model call threw, trying fallback');
     }
 
-    agent.replaceMessages(agent.state.messages.slice(0, beforeLen));
+    agent.state.messages = agent.state.messages.slice(0, beforeLen);
   }
 
   if (lastError instanceof Error) {

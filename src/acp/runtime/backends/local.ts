@@ -145,7 +145,7 @@ export class LocalAcpRuntime implements AcpRuntime {
       config: agentConfig,
       skillManager: this.skillManager,
     }).build(bootstrapFiles, { registeredToolNames: this.registeredToolNames });
-    this.agent.setSystemPrompt(sp);
+    this.agent.state.systemPrompt = sp;
   }
 
   private initializeTools(): void {
@@ -350,7 +350,7 @@ export class LocalAcpRuntime implements AcpRuntime {
       // Load session messages into agent (transcript hygiene aligned with main AgentService)
       let loaded = cleanTrailingErrors(session.messages);
       loaded = tryApplySessionTranscriptHygiene(loaded, this.agentModel);
-      this.agent.replaceMessages(loaded);
+      this.agent.state.messages = loaded;
 
       // Yield initial status
       yield {
@@ -760,7 +760,7 @@ export class LocalAcpRuntime implements AcpRuntime {
     session.messages = [];
     
     // Clear agent messages
-    this.agent.replaceMessages([]);
+    this.agent.state.messages = [];
 
     // Delete from session store
     try {

@@ -543,7 +543,7 @@ export class AgentManager {
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
       });
-      instance.agent.setSystemPrompt(newPrompt);
+      instance.agent.state.systemPrompt = newPrompt;
     }
     log.info({ agents: this.agents.size }, 'Skill toggles applied; system prompt updated');
   }
@@ -567,7 +567,7 @@ export class AgentManager {
         skillAllowlist: instance.effectiveProfile.skillsAllowlist,
         registeredToolNames: instance.registeredToolNames,
       });
-      instance.agent.setSystemPrompt(newPrompt);
+      instance.agent.state.systemPrompt = newPrompt;
     }
     log.info({ agents: this.agents.size }, 'Skills refreshed; system prompt updated');
   }
@@ -694,7 +694,7 @@ export class AgentManager {
   setThinkingLevel(sessionKey: string, level: ThinkingLevel): void {
     const instance = this.agents.get(sessionKey);
     if (instance) {
-      instance.agent.setThinkingLevel(level);
+      instance.agent.state.thinkingLevel = level;
       log.debug({ sessionKey, thinkingLevel: level }, 'Set thinking level for agent');
     }
   }
@@ -811,7 +811,7 @@ export class AgentManager {
 
     try {
       const model = resolveModel(modelId);
-      instance.agent.setModel(model);
+      instance.agent.state.model = model;
       log.info({ sessionKey, modelId }, 'Model set for session');
       return true;
     } catch (err) {
@@ -852,7 +852,7 @@ export class AgentManager {
       return false;
     }
 
-    instance.agent.replaceMessages(messages);
+    instance.agent.state.messages = messages;
     return true;
   }
 

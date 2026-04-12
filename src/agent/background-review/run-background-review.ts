@@ -149,7 +149,7 @@ export async function runBackgroundReviewTurn(params: RunBackgroundReviewParams)
     },
   });
 
-  reviewAgent.replaceMessages(cloneMessageTail(mainAgent.state.messages, settings.maxHistoryMessages));
+  reviewAgent.state.messages = cloneMessageTail(mainAgent.state.messages, settings.maxHistoryMessages);
 
   const timeoutMs = Math.min(settings.maxDurationMs, resolveAgentTurnTimeoutMs(getConfig()));
 
