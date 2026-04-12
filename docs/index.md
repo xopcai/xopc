@@ -4,7 +4,7 @@ layout: home
 hero:
   name: xopc
   text: Ultra-Lightweight Personal AI Assistant
-  tagline: A Node.js + TypeScript based AI agent that runs locally
+  tagline: A Node.js + TypeScript based AI agent that runs locally—for super individuals.
   image:
     src: /logo.svg
     alt: xopc
@@ -24,10 +24,10 @@ features:
     details: Extend functionality with a powerful extension architecture
     link: /extensions
   - title: 🌐 Multi-Channel
-    details: Supports Telegram, Feishu, and Web UI with multi-account support
+    details: Bundled Telegram & WeChat (Weixin) plugins and web console via the gateway; more channels via extensions.
     link: /channels
   - title: 💻 Local First
-    details: Run your AI assistant locally with full control
+    details: Run locally with full control—built for super individuals who own their stack
     link: /configuration
   - title: 🔧 Built-in Tools
     details: File operations, web search, shell execution, and more
