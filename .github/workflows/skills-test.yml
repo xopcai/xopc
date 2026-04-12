@@ -62,15 +62,14 @@ jobs:
         run: |
           echo "Testing skills on ${{ matrix.os }}"
           if [[ "${{ matrix.os }}" == "windows-latest" ]]; then
-            # Windows doesn't support bash script, run CLI directly
             pnpm run dev -- skills test --format json --skip-examples
           else
-            ./scripts/test-skills.sh --verbose || echo "Skill tests completed with warnings"
+            ./scripts/test-skills.sh --verbose
           fi
       
       - name: Run unit tests for test framework
         timeout-minutes: 5
-        run: pnpm vitest run src/agent/skills/__tests__/test-framework.test.ts || echo "Unit tests completed with warnings"
+        run: pnpm vitest run src/agent/skills/__tests__/test-framework.test.ts
       
       - name: Upload test results
         if: always()
@@ -120,10 +119,8 @@ jobs:
         timeout-minutes: 10
         run: |
           echo "Running security audit on all skills..."
-          pnpm run dev -- skills test security --deep || echo "Security audit completed with warnings"
-          
-          # Also run pnpm audit for dependencies
-          pnpm audit --audit-level=moderate || echo "pnpm audit completed with warnings"
+          pnpm run dev -- skills test security --deep
+          pnpm audit --audit-level=moderate
 
   validate-skill-format:
     name: Validate SKILL.md Format
@@ -166,7 +163,7 @@ jobs:
           for skill_dir in skills/*/; do
             if [ -f "$skill_dir/SKILL.md" ]; then
               echo "Validating $skill_dir"
-              pnpm run dev -- skills test validate "$skill_dir/SKILL.md" || echo "Validation failed for $skill_dir"
+              pnpm run dev -- skills test validate "$skill_dir/SKILL.md"
             fi
           done
 
@@ -203,13 +200,13 @@ jobs:
       
       - name: Build
         timeout-minutes: 10
-        run: pnpm run build || echo "Build completed with warnings"
+        run: pnpm run build
       
       - name: Check skill dependencies
         timeout-minutes: 10
         run: |
           echo "Checking skill dependencies..."
-          pnpm run dev -- skills test check-deps || echo "Dependency check completed with warnings"
+          pnpm run dev -- skills test check-deps
 
   report:
     name: Test Report
@@ -231,10 +228,14 @@ jobs:
           echo "  - Dependency Check: ${{ needs.check-dependencies.result }}"
           echo ""
           
-          # Overall status
-          if [[ "${{ needs.test-skills.result }}" == "success" ]]; then
-            echo "✅ All skill tests passed!"
+          # Overall status (all matrix legs and follow-up jobs must succeed)
+          TS="${{ needs.test-skills.result }}"
+          SA="${{ needs.security-audit.result }}"
+          VF="${{ needs.validate-skill-format.result }}"
+          CD="${{ needs.check-dependencies.result }}"
+          if [[ "$TS" == "success" && "$SA" == "success" && "$VF" == "success" && "$CD" == "success" ]]; then
+            echo "✅ All skill test jobs passed!"
           else
-            echo "❌ Some skill tests failed"
+            echo "❌ One or more jobs did not succeed (test-skills=$TS security-audit=$SA validate=$VF check-deps=$CD)"
             exit 1
           fi
