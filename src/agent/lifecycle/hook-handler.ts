@@ -37,7 +37,11 @@ export class HookHandler {
     try {
       await this.deps.hookRunner.runHooks(event as any, eventData, ctx);
     } catch (error) {
-      log.warn({ event, err: error }, 'Hook execution failed');
+      const em = error instanceof Error ? error.message : String(error);
+      log.warn(
+        { event, err: error, errorMessage: em, sessionKey: this.deps.sessionKey, agentId: this.deps.agentId },
+        `Extension hook "${event}" failed: ${em}`,
+      );
     }
   }
 

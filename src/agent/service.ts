@@ -569,7 +569,11 @@ export class AgentService {
         if (error instanceof MessageBusShutdownError) {
           break;
         }
-        log.error({ err: error }, 'Error in agent loop');
+        const em = error instanceof Error ? error.message : String(error);
+        log.error(
+          { err: error, errorMessage: em, phase: 'inbound_consume' },
+          `Agent loop failed (will retry in 1s): ${em}`,
+        );
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
@@ -1532,7 +1536,18 @@ export class AgentService {
 
       await this.persistAgentSessionMessages(context.sessionKey);
     } catch (error) {
-      log.error({ err: error, sessionKey: context.sessionKey }, 'Error processing system message');
+      const em = error instanceof Error ? error.message : String(error);
+      log.error(
+        {
+          err: error,
+          errorMessage: em,
+          sessionKey: context.sessionKey,
+          channel: context.channel,
+          chatId: context.chatId,
+          senderId: msg.sender_id,
+        },
+        `System message handling failed: ${em}`,
+      );
       await this.bus.publishOutbound({
         channel: context.channel,
         chat_id: context.chatId,

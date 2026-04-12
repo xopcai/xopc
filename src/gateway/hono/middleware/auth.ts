@@ -103,7 +103,10 @@ export function auth(config?: AuthConfig) {
       if (rateLimitActive) {
         limiter.recordFailure(clientIp, rlCfg);
       }
-      log.warn('Missing authorization');
+      log.warn(
+        { path: c.req.path, method: c.req.method, clientIp, reason: 'missing_token' },
+        'HTTP auth rejected: no Bearer or ?token=',
+      );
       return c.json({ error: 'Unauthorized', message: 'Missing authentication token' }, 401);
     }
 
@@ -111,7 +114,10 @@ export function auth(config?: AuthConfig) {
       if (rateLimitActive) {
         limiter.recordFailure(clientIp, rlCfg);
       }
-      log.warn('Invalid token');
+      log.warn(
+        { path: c.req.path, method: c.req.method, clientIp, reason: 'invalid_token' },
+        'HTTP auth rejected: token mismatch',
+      );
       return c.json({ error: 'Unauthorized', message: 'Invalid authentication token' }, 401);
     }
   });
@@ -142,12 +148,15 @@ export function validateWebSocketAuth(
   const providedToken = queryToken || headerToken;
 
   if (!providedToken) {
-    log.warn('WebSocket missing authorization');
+    log.warn(
+      { path: url.pathname, reason: 'missing_token', hasHeaderToken: Boolean(headerToken) },
+      'WebSocket auth rejected: no token in query or Authorization',
+    );
     return { valid: false, error: 'Missing authentication token' };
   }
 
   if (!validateToken(providedToken, expectedToken)) {
-    log.warn('WebSocket invalid token');
+    log.warn({ path: url.pathname, reason: 'invalid_token' }, 'WebSocket auth rejected: token mismatch');
     return { valid: false, error: 'Invalid authentication token' };
   }
 

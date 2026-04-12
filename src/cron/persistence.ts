@@ -65,7 +65,7 @@ export class CronPersistence {
       
       // Validate basic structure
       if (!data.jobs || !Array.isArray(data.jobs)) {
-        log.warn('Invalid jobs file structure, resetting');
+        log.warn({ path: this.filePath }, 'Cron jobs file invalid (missing jobs[]), resetting to empty');
         this.cache = DEFAULT_JOBS_FILE;
         return this.cache;
       }
@@ -97,7 +97,8 @@ export class CronPersistence {
       log.debug({ jobCount: data.jobs.length }, 'Loaded jobs from disk');
       return data;
     } catch (error) {
-      log.error({ err: error }, 'Failed to load jobs, returning empty');
+      const em = error instanceof Error ? error.message : String(error);
+      log.error({ err: error, path: this.filePath, errorMessage: em }, `Failed to load cron jobs file: ${em}`);
       this.cache = DEFAULT_JOBS_FILE;
       return this.cache;
     }
@@ -238,7 +239,8 @@ export class CronPersistence {
 
     this.saveTimeout = setTimeout(() => {
       this.flush().catch((err) => {
-        log.error({ err }, 'Failed to save jobs');
+        const em = err instanceof Error ? err.message : String(err);
+        log.error({ err, path: this.filePath, errorMessage: em }, `Failed to save cron jobs file: ${em}`);
       });
     }, this.debounceMs);
   }

@@ -310,13 +310,17 @@ export class ModelManager {
     }
 
     if (lastError) {
+      const em = lastError instanceof Error ? lastError.message : String(lastError);
+      const attemptedModelRefs = candidates.map((c) => `${c.provider}/${c.model}`);
       log.error(
         {
-          lastError: lastError instanceof Error ? lastError.message : String(lastError),
+          err: lastError instanceof Error ? lastError : undefined,
+          errorMessage: em,
           attemptedCandidates: candidates.length,
+          attemptedModelRefs,
           sessionKey,
         },
-        'All model candidates failed',
+        `All model candidates failed (${candidates.length} refs): ${em}`,
       );
       throw lastError instanceof Error ? lastError : new Error(String(lastError));
     }

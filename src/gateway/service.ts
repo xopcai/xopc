@@ -405,7 +405,11 @@ export class GatewayService {
         if (error instanceof MessageBusShutdownError) {
           break;
         }
-        log.error({ error }, 'Error processing outbound message');
+        const em = error instanceof Error ? error.message : String(error);
+        log.error(
+          { err: error, errorMessage: em, phase: 'outbound_consume' },
+          `Outbound pipeline failed (will retry in 1s): ${em}`,
+        );
         await new Promise((resolve) => setTimeout(resolve, 1000));
       }
     }
@@ -426,7 +430,10 @@ export class GatewayService {
         onHeartbeatReload: (newConfig) => this.handleHeartbeatReload(newConfig),
         onToolsReload: (newConfig) => this.handleToolsReload(newConfig),
         onFullRestart: (newConfig) => {
-          log.warn('Config changed requires full restart - please restart the gateway');
+          log.warn(
+            { requiresProcessRestart: true, hint: 'Restart the gateway process (hot reload cannot apply this change).' },
+            'Config reload: full gateway restart required — see prior "restartPaths" info log',
+          );
           this.config = newConfig;
           this.emit('config.reload', { section: 'full', requiresRestart: true });
         },

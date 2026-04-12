@@ -176,7 +176,19 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
         };
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
-        log.warn({ err: msg }, 'Delegate child run failed');
+        const m = options.model as { model?: string; id?: string };
+        const modelId = m?.model ?? m?.id;
+        log.warn(
+          {
+            err: e,
+            errorMessage: msg,
+            goalPreview: options.goal.slice(0, 120),
+            maxIterations: options.maxIterations,
+            allowedToolCount: options.allowedToolNames.length,
+            modelId,
+          },
+          `Delegate child run failed: ${msg}`,
+        );
         return {
           summary: `Sub-agent error: ${msg}`,
           toolIterations,

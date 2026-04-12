@@ -40,7 +40,8 @@ export class AgentSocketServer {
       });
 
       this.server.on('error', (err) => {
-        log.error({ err }, 'Socket server error');
+        const em = err instanceof Error ? err.message : String(err);
+        log.error({ err, socketPath: this.socketPath, errorMessage: em }, `Agent IPC socket server error: ${em}`);
         reject(err);
       });
 
@@ -107,7 +108,10 @@ export class AgentSocketServer {
           const msg = JSON.parse(line) as AgentIPCMessage;
 
           if (!isValidIPCMessage(msg)) {
-            log.warn({ line }, 'Invalid IPC message received');
+            log.warn(
+              { linePreview: line.length > 200 ? `${line.slice(0, 200)}…` : line, lineLength: line.length },
+              'IPC: JSON line failed schema validation (not a valid AgentIPCMessage)',
+            );
             continue;
           }
 
@@ -115,7 +119,11 @@ export class AgentSocketServer {
             socket.write(JSON.stringify(response) + '\n');
           });
         } catch (error) {
-          log.warn({ line, error }, 'Failed to parse socket message');
+          const em = error instanceof Error ? error.message : String(error);
+          log.warn(
+            { err: error, errorMessage: em, linePreview: line.length > 160 ? `${line.slice(0, 160)}…` : line },
+            `IPC: failed to parse JSON line: ${em}`,
+          );
         }
       }
     });
@@ -136,14 +144,28 @@ export class AgentSocketServer {
     reply: (response: AgentIPCMessage) => void
   ): Promise<void> {
     if (!this.messageHandler) {
-      log.warn('No message handler set');
+      log.warn(
+        { socketPath: this.socketPath, messageType: msg.type, messageId: msg.id, from: msg.from, to: msg.to },
+        'IPC message dropped: no handler (server start() without handler?)',
+      );
       return;
     }
 
     try {
       await this.messageHandler(msg, reply);
     } catch (error) {
-      log.error({ messageId: msg.id, error }, 'Error handling message');
+      const em = error instanceof Error ? error.message : String(error);
+      log.error(
+        {
+          err: error,
+          errorMessage: em,
+          messageId: msg.id,
+          messageType: msg.type,
+          from: msg.from,
+          to: msg.to,
+        },
+        `IPC message handler threw: ${em}`,
+      );
     }
   }
 }

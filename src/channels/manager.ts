@@ -123,7 +123,7 @@ export class ChannelManager {
   
   async initialize(): Promise<void> {
     if (this.initialized) {
-      log.warn('Channels already initialized');
+      log.warn({ pluginCount: this.plugins.size }, 'initialize() called again; channels already initialized — skipping');
       return;
     }
     
@@ -180,7 +180,7 @@ export class ChannelManager {
     }
     
     if (this.running) {
-      log.warn('Channels already running');
+      log.warn({ pluginCount: this.plugins.size }, 'start() called while channels already running — skipping');
       return;
     }
     

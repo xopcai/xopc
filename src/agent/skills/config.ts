@@ -139,7 +139,8 @@ export function createSkillConfigManager(configDir: string): SkillConfigFile {
       const content = readFileSync(configPath, 'utf-8');
       return JSON.parse(content);
     } catch (err) {
-      log.warn({ error: err }, 'Failed to load skills config, using defaults');
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ error: err, errorMessage: em, path: configPath }, `Skills config load failed, using defaults: ${em}`);
       return {};
     }
   }
@@ -149,7 +150,8 @@ export function createSkillConfigManager(configDir: string): SkillConfigFile {
       writeFileSync(configPath, JSON.stringify(config, null, 2), 'utf-8');
       log.info('Saved skills config');
     } catch (err) {
-      log.error({ error: err }, 'Failed to save skills config');
+      const em = err instanceof Error ? err.message : String(err);
+      log.error({ error: err, errorMessage: em, path: configPath }, `Failed to save skills config: ${em}`);
     }
   }
 

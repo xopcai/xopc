@@ -195,7 +195,8 @@ export class AgentManager {
 
     this.credentialResolver = new CredentialResolver();
     this.warmCredentialCache().catch((err) => {
-      log.warn({ err }, 'Failed to pre-warm credential cache');
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, errorMessage: em }, `Credential cache pre-warm failed: ${em}`);
     });
   }
 
@@ -805,7 +806,10 @@ export class AgentManager {
   setModelForSession(sessionKey: string, modelId: string): boolean {
     const instance = this.agents.get(sessionKey);
     if (!instance) {
-      log.warn({ sessionKey }, 'Cannot set model: agent instance not found');
+      log.warn(
+        { sessionKey, modelId, activeSessionCount: this.agents.size },
+        `setModelForSession: no agent instance for session (create session / run turn first); modelId=${modelId}`,
+      );
       return false;
     }
 

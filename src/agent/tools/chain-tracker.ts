@@ -101,13 +101,16 @@ export class ToolChainTracker {
 
     const chainId = this.currentChainId.get(sessionKey);
     if (!chainId) {
-      log.warn({ sessionKey }, 'No active chain for session');
+      log.warn(
+        { sessionKey, toolName },
+        `Tool chain: recordCall skipped — no active chain for session (missing turn_start?); tool=${toolName}`,
+      );
       return '';
     }
 
     const chain = this.chains.get(chainId);
     if (!chain) {
-      log.warn({ chainId }, 'Chain not found');
+      log.warn({ chainId, sessionKey, toolName }, `Tool chain: id ${chainId} missing from store; tool=${toolName}`);
       return '';
     }
 
@@ -157,7 +160,10 @@ export class ToolChainTracker {
 
     const node = chain.nodes.find(n => n.id === nodeId);
     if (!node) {
-      log.warn({ nodeId }, 'Tool call node not found');
+      log.warn(
+        { nodeId, chainId, sessionKey, chainNodeCount: chain.nodes.length },
+        `Tool chain: recordResult skipped — node ${nodeId} not in chain`,
+      );
       return;
     }
 

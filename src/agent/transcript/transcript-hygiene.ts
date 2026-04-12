@@ -76,7 +76,11 @@ export function tryApplySessionTranscriptHygiene(
   try {
     return applySessionTranscriptHygiene(messages, model);
   } catch (err) {
-    log.warn({ err }, 'Transcript hygiene failed; using unmodified messages');
+    const em = err instanceof Error ? err.message : String(err);
+    log.warn(
+      { err, errorMessage: em, provider: model.provider, modelId: model.id, modelApi: model.api, messageCount: messages.length },
+      `Transcript hygiene failed for ${model.provider}/${model.id}: ${em} (using raw messages)`,
+    );
     return messages;
   }
 }
@@ -106,7 +110,11 @@ export function tryApplySessionTranscriptHygieneForPersistence(
   try {
     return applySessionTranscriptHygieneForPersistence(messages, model);
   } catch (err) {
-    log.warn({ err }, 'Persistence transcript hygiene failed; using unmodified messages');
+    const em = err instanceof Error ? err.message : String(err);
+    log.warn(
+      { err, errorMessage: em, provider: model.provider, modelId: model.id, messageCount: messages.length },
+      `Persistence transcript hygiene failed for ${model.provider}/${model.id}: ${em} (using raw messages)`,
+    );
     return messages;
   }
 }
