@@ -18,7 +18,7 @@ import { initializeStreams } from './streams.js';
 import { incrementStats, getLogStats } from './stats.js';
 import { isLoggerShuttingDown, flushAndClose, setShuttingDown } from './shutdown.js';
 import { rotateLogs, cleanOldLogs } from './rotation.js';
-import { mergeContext } from './context.js';
+import { getAsyncLogContext, getAsyncLogCorrelationKeys, mergeContext } from './context.js';
 import { redactLogRecord } from './redact.js';
 
 // ============================================
@@ -41,6 +41,24 @@ const pinoOptions: pino.LoggerOptions = {
     version: process.env.npm_package_version || '0.1.0',
   },
   timestamp: pino.stdTimeFunctions.isoTime,
+  mixin(mergeObject, _level, logger) {
+    const ctx = getAsyncLogContext();
+    if (!ctx) return {};
+    const bindings =
+      logger && typeof logger.bindings === 'function'
+        ? (logger.bindings() as Record<string, unknown>)
+        : {};
+    const mo = mergeObject as Record<string, unknown>;
+    const out: Record<string, unknown> = {};
+    for (const key of getAsyncLogCorrelationKeys()) {
+      const v = ctx[key];
+      if (v === undefined || v === '') continue;
+      if (mo[key] !== undefined) continue;
+      if (bindings[key] !== undefined) continue;
+      out[key] = v;
+    }
+    return out;
+  },
   formatters: {
     level: (label) => ({ level: label }),
     bindings: (bindings) => ({
@@ -280,6 +298,9 @@ export { pino as Pino };
 export function registerShutdownHandler(): void {}
 
 export {
+  runWithLogContext,
+  getAsyncLogContext,
+  updateAsyncLogContext,
   setRequestContext as setRequestLogger,
   clearRequestContext as clearRequestLogger,
 } from './context.js';

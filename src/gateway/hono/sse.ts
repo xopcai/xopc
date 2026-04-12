@@ -2,7 +2,7 @@ import { streamSSE } from 'hono/streaming';
 import type { Context } from 'hono';
 import type { GatewayService } from '../service.js';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../chat-limits.js';
-import { createLogger } from '../../utils/logger.js';
+import { createLogger, updateAsyncLogContext } from '../../utils/logger.js';
 import { stringifySSEData } from './sse-json.js';
 
 const log = createLogger('Hono:SSE');
@@ -72,6 +72,8 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
     }
 
     const { message, channel = 'webchat', chatId = 'default', attachments, thinking } = body;
+
+    updateAsyncLogContext({ sessionId: String(chatId) });
 
     if (Array.isArray(attachments)) {
       const maxDataChars = maxBase64CharsForBinary(MAX_WEBCHAT_ATTACHMENT_FILE_BYTES);
@@ -217,7 +219,10 @@ export function createAgentResumeHandler(config: SSEHandlerConfig) {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Invalid JSON body' } }, 400);
     }
 
-    const { runId } = body as { runId?: string; chatId?: string };
+    const { runId, chatId: resumeChatId } = body as { runId?: string; chatId?: string };
+    if (typeof resumeChatId === 'string' && resumeChatId.trim()) {
+      updateAsyncLogContext({ sessionId: resumeChatId.trim() });
+    }
     if (!runId || typeof runId !== 'string') {
       return c.json({ ok: false, error: { code: 'BAD_REQUEST', message: 'Missing required field: runId' } }, 400);
     }
@@ -277,6 +282,8 @@ export function createSendHandler(config: SSEHandlerConfig) {
       );
     }
 
+    updateAsyncLogContext({ sessionId: String(chatId) });
+
     try {
       const result = await service.sendMessage(channel, chatId, content);
       return c.json({ ok: true, payload: result });
@@ -320,6 +327,8 @@ export function createEventsSSEHandler(config: SSEHandlerConfig) {
     const sessionId = c.req.header('X-Session-Id')
       || c.req.query('sessionId')
       || crypto.randomUUID();
+
+    updateAsyncLogContext({ sessionId: String(sessionId) });
 
     const abortController = new AbortController();
     activeConnections.set(sessionId, abortController);
