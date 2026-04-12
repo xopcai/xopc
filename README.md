@@ -1,8 +1,8 @@
 # xopc
 
-**xopc** is a personal AI assistant you run yourself: a **CLI**, an **HTTP/WebSocket gateway** with a **React console**, and **bundled channel plugins** for **Telegram** and **WeChat (Weixin)** so the same agent reaches you in those apps (plus the browser console). Other chat platforms are not shipped in core—you can add them with a custom `ChannelPlugin` extension. It is built on **Node.js 22+** and **TypeScript**, with **20+ LLM providers** via [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai) and an **extension** + **skills** (SKILL.md) model for growing capabilities without forking core.
+**Ultra-lightweight personal AI assistant.** A **Node.js** + **TypeScript** AI stack that runs locally—a **platform for super individuals**: your keys, your gateway, your skills.
 
-If you want something **lightweight**, **local-first**, and easy to script from the terminal or wire to a small always-on gateway, this is it.
+**CLI**, **HTTP/WebSocket gateway** with a **React** console, bundled **Telegram** & **WeChat (Weixin)** channel plugins (plus web console). Other chat surfaces: custom `ChannelPlugin` extensions. **20+ LLM providers** via [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai), plus **extensions** and **SKILL.md** skills—extend without forking core.
 
 [GitHub](https://github.com/xopcai/xopc) · [Documentation](https://xopcai.github.io/xopc/) · [Models](https://xopcai.github.io/xopc/models) · [Configuration](https://xopcai.github.io/xopc/configuration) · [CLI](https://xopcai.github.io/xopc/cli)
 
@@ -19,6 +19,7 @@ If you want something **lightweight**, **local-first**, and easy to script from 
 
 | | |
 | --- | --- |
+| **Super-individual stack** | One platform you own: terminal, gateway, IM, cron, skills—compose your workflow without a hosted black box. |
 | **Terminal-first** | Interactive `agent` mode, one-shot `-m` messages, cron-backed automations. |
 | **Gateway + Web UI** | REST, SSE, and WebSocket APIs; React console (Vite + Tailwind v4) for chat and ops. |
 | **Channels** | **Telegram** (multi-account, streaming, voice, documents) and **WeChat (Weixin)** (QR login, policies); **Web** console with the gateway. |

@@ -4,7 +4,7 @@ layout: home
 hero:
   name: xopc
   text: 超轻量级个人 AI 助手
-  tagline: 基于 Node.js + TypeScript 的本地运行 AI 代理
+  tagline: 基于 Node.js + TypeScript、在本地运行的 AI 助手—面向超级个体的平台。
   image:
     src: /logo.svg
     alt: xopc
@@ -24,10 +24,10 @@ features:
     details: 通过强大的扩展架构扩展功能
     link: /zh/extensions
   - title: 🌐 多通道支持
-    details: 支持 Telegram、Feishu 和 Web UI，支持多账户
+    details: 核心自带 Telegram、微信（Weixin）与网关网页控制台；更多通道可通过扩展接入。
     link: /zh/channels
   - title: 💻 本地优先
-    details: 在本地运行 AI 助手，完全掌控
+    details: 本地运行、完全掌控—为自管栈的超级个体而设计
     link: /zh/configuration
   - title: 🔧 内置工具
     details: 文件操作、网页搜索、Shell 执行等

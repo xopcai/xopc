@@ -2,9 +2,9 @@
 
 [English README](README.md) | **简体中文**
 
-**xopc** 是运行在您自己环境里的**个人 AI 助手**：**命令行**、带 **React 控制台**的 **HTTP/WebSocket 网关**，以及核心内置的 **Telegram** 与**微信（Weixin）** 两个频道插件，让同一套 Agent 在 IM 与浏览器里都能对话。基于 **Node.js 22+** 与 **TypeScript**，通过 [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai) 接入 **20+** 大模型厂商，并支持**扩展**与 **SKILL.md 技能**。
+**超轻量级个人 AI 助手。**基于 **Node.js** 与 **TypeScript**、**本地运行**的 AI 栈—面向**超级个体**的平台：自管密钥、网关与技能。
 
-当前**开箱即用的即时通讯频道只有 Telegram 与微信**；飞书、Slack、Discord 等**不在核心仓库内**，需要自行实现 `ChannelPlugin` 扩展。
+**CLI**、**HTTP/WebSocket 网关**与 **React** 控制台，核心自带 **Telegram**、**微信（Weixin）** 频道插件（含网页控制台）。飞书、Slack、Discord 等走自定义 `ChannelPlugin` 扩展。通过 [@mariozechner/pi-ai](https://github.com/mariozechner/pi-ai) 支持 **20+** 大模型厂商，并提供**扩展**与 **SKILL.md** 技能，**无需改核心**即可扩展。
 
 [GitHub](https://github.com/xopcai/xopc) · [中文文档](https://xopcai.github.io/xopc/zh/) · [模型](https://xopcai.github.io/xopc/zh/models) · [配置](https://xopcai.github.io/xopc/zh/configuration) · [CLI](https://xopcai.github.io/xopc/zh/cli)
 
@@ -21,6 +21,7 @@
 
 | | |
 | --- | --- |
+| **超级个体栈** | 自管一体化平台：终端、网关、即时通讯、cron、技能—拼装工作流，而非依赖托管黑盒。 |
 | **终端优先** | `agent` 交互模式、`-m` 单次提问、结合 cron 的定时任务。 |
 | **网关 + Web 控制台** | REST、SSE、WebSocket；React 控制台（Vite + Tailwind v4）。 |
 | **频道** | **Telegram**（多账号、流式、语音、文件、策略）；**微信**（网关所在机扫码登录、`channels.weixin`）；另含网关自带的 **网页** 对话界面。 |
