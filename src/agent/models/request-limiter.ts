@@ -36,6 +36,9 @@ export class RequestLimiter {
   private requestCount = 0;
   private config: RequestLimiterConfig;
   private turnStartTime: number = Date.now();
+  /** Avoid spamming logs: `recordRequest` runs every LLM round while above the warn threshold. */
+  private approachWarningLogged = false;
+  private limitReachedLogged = false;
 
   constructor(config: Partial<RequestLimiterConfig> = {}) {
     this.config = { ...DEFAULT_CONFIG, ...config };
@@ -60,14 +63,16 @@ export class RequestLimiter {
       shouldStop,
     };
 
-    if (isWarning) {
+    if (isWarning && !this.approachWarningLogged) {
+      this.approachWarningLogged = true;
       log.warn(
         { count: this.requestCount, limit: this.config.maxRequestsPerTurn, remaining },
         'Approaching request limit'
       );
     }
 
-    if (shouldStop) {
+    if (shouldStop && !this.limitReachedLogged) {
+      this.limitReachedLogged = true;
       log.error(
         { count: this.requestCount, limit: this.config.maxRequestsPerTurn },
         'Request limit reached'
@@ -163,6 +168,8 @@ export class RequestLimiter {
     }
     this.requestCount = 0;
     this.turnStartTime = Date.now();
+    this.approachWarningLogged = false;
+    this.limitReachedLogged = false;
   }
 
   /**
