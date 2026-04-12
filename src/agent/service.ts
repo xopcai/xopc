@@ -1016,7 +1016,7 @@ export class AgentService {
       if (lastMsg?.role === 'user' && lastMsg.webchatEarlySave === true) {
         loaded = loaded.slice(0, -1);
       }
-      agent.replaceMessages(this.prepareLoadedSessionMessages(sessionKey, loaded));
+      agent.state.messages = this.prepareLoadedSessionMessages(sessionKey, loaded);
 
       await this.modelManager.applyModelForSession(agent, sessionKey);
       await this.applyResolvedThinkingLevel(sessionKey, thinking);
@@ -1307,7 +1307,7 @@ export class AgentService {
       await this.hydrateSessionModelFromStore(sessionKey);
 
       const loaded = await this.sessionStore.load(sessionKey);
-      agent.replaceMessages(this.prepareLoadedSessionMessages(sessionKey, loaded));
+      agent.state.messages = this.prepareLoadedSessionMessages(sessionKey, loaded);
 
       await this.modelManager.applyModelForSession(agent, sessionKey);
       await this.applyResolvedThinkingLevel(sessionKey, thinking);
@@ -1487,7 +1487,7 @@ export class AgentService {
     const messages = await this.sessionStore.load(context.sessionKey);
     await this.checkAndCompact(context.sessionKey, messages);
     const refreshedMessages = await this.sessionStore.load(context.sessionKey);
-    agent.replaceMessages(this.prepareLoadedSessionMessages(context.sessionKey, refreshedMessages));
+    agent.state.messages = this.prepareLoadedSessionMessages(context.sessionKey, refreshedMessages);
 
     const systemMessage: AgentMessage = {
       role: 'user',

@@ -19,11 +19,11 @@
   },
   "dependencies": {
     "@grammyjs/runner": "^2.0.3",
-    "@grammyjs/types": "^3.25.0",
-    "grammy": "^1.40.0"
+    "@grammyjs/types": "^3.26.0",
+    "grammy": "^1.42.0"
   },
   "devDependencies": {
-    "typescript": "^5.9.3"
+    "typescript": "^6.0.2"
   },
   "peerDependencies": {
     "@xopcai/xopc": "workspace:*"

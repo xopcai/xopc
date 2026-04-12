@@ -120,7 +120,7 @@ export class AgentOrchestrator {
         log.warn({ err, sessionKey }, 'Transcript hygiene skipped (model resolve failed)');
       }
 
-      agent.replaceMessages(messages);
+      agent.state.messages = messages;
 
       // 2. Apply model configuration for session
       await this.modelManager.applyModelForSession(agent, sessionKey);

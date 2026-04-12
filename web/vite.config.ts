@@ -21,9 +21,17 @@ export default defineConfig({
     target: 'es2022',
     rollupOptions: {
       output: {
-        manualChunks: {
-          'vendor-react': ['react', 'react-dom', 'react-router-dom'],
-          'vendor-swr': ['swr'],
+        manualChunks(id) {
+          if (
+            /node_modules[/\\]react[/\\]/.test(id) ||
+            /node_modules[/\\]react-dom[/\\]/.test(id) ||
+            /node_modules[/\\]react-router-dom[/\\]/.test(id)
+          ) {
+            return 'vendor-react';
+          }
+          if (/node_modules[/\\]swr[/\\]/.test(id)) {
+            return 'vendor-swr';
+          }
         },
       },
     },
