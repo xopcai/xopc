@@ -27,7 +27,7 @@ main:cli:default:direct:cli
 
 ## Configuration
 
-Routing is configured in **`~/.xopcbot/config.json`** (override path with `XOPCBOT_CONFIG`). Use JSON — not YAML.
+Routing is configured in **`~/.xopc/xopc.json`** (override path with `XOPC_CONFIG`). Use JSON — not YAML.
 
 ### Agents and bindings
 
@@ -35,7 +35,7 @@ Register agents under `agents.list`. **Binding rules** (`bindings`) are evaluate
 
 ### Effective runtime profile
 
-For a session key `agentId:…`, the agent runtime merges **`agents.defaults`** with the matching **enabled** row in **`agents.list`** (per-agent `workspace`, `model`, `agentDir`, `tools.disable`, `systemPromptOverride`, `skills`, thinking defaults, etc.). If `agentId` is unknown or disabled in `list`, profile resolution falls back to the **default agent** id above. On-disk layout under `~/.xopcbot/agents/<id>/` follows the same config-driven resolution — gateway behavior is **`config.json`** only.
+For a session key `agentId:…`, the agent runtime merges **`agents.defaults`** with the matching **enabled** row in **`agents.list`** (per-agent `workspace`, `model`, `agentDir`, `tools.disable`, `systemPromptOverride`, `skills`, thinking defaults, etc.). If `agentId` is unknown or disabled in `list`, profile resolution falls back to the **default agent** id above. On-disk layout under `~/.xopc/agents/<id>/` follows the same config-driven resolution — gateway behavior is **`config.json`** only.
 
 `match.peerId` supports simple `*` glob patterns (e.g. `-100*` for Telegram supergroups).
 
@@ -78,7 +78,7 @@ For a session key `agentId:…`, the agent runtime merges **`agents.defaults`** 
 ### Generate Session Key
 
 ```typescript
-import { buildSessionKey } from '@xopcai/xopcbot/routing/index.js';
+import { buildSessionKey } from '@xopcai/xopc/routing/index.js';
 
 const sessionKey = buildSessionKey({
   agentId: 'main',
@@ -92,7 +92,7 @@ const sessionKey = buildSessionKey({
 ### Route Resolution
 
 ```typescript
-import { resolveRoute } from '@xopcai/xopcbot/routing/index.js';
+import { resolveRoute } from '@xopcai/xopc/routing/index.js';
 
 const route = resolveRoute({
   config,
@@ -109,5 +109,5 @@ console.log(route.agentId); // default agent when no binding matches (e.g. main)
 ## Related Files
 
 - `src/routing/` - Routing system core
-- `extensions/telegram/src/routing-integration.ts` - Telegram integration (workspace package `@xopcai/xopcbot-extension-telegram`)
+- `extensions/telegram/src/routing-integration.ts` - Telegram integration (workspace package `@xopcai/xopc-extension-telegram`)
 - `src/acp/routing-integration.ts` - ACP integration

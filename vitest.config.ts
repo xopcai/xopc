@@ -7,7 +7,7 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   resolve: {
     alias: {
-      '@xopcai/xopcbot': path.resolve(__dirname, 'src'),
+      '@xopcai/xopc': path.resolve(__dirname, 'src'),
       '@': path.resolve(__dirname, 'web/src'),
     },
   },

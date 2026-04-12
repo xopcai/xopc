@@ -1,12 +1,12 @@
 # Custom Models Configuration
 
-xopcbot supports custom model providers via `~/.xopcbot/models.json`.
+xopc supports custom model providers via `~/.xopc/models.json`.
 
 ---
 
 ## Quick Start
 
-Create `~/.xopcbot/models.json`:
+Create `~/.xopc/models.json`:
 
 ```json
 {
@@ -32,7 +32,7 @@ Create `~/.xopcbot/models.json`:
 
 ### File Location
 
-`~/.xopcbot/models.json` (or set `XOPCBOT_MODELS_JSON` environment variable)
+`~/.xopc/models.json` (or set `XOPC_MODELS_JSON` environment variable)
 
 ### Minimal Example
 

@@ -297,16 +297,16 @@ export function collapseExpandedSkillBlockForDisplay(text: string): string {
 
 /** Remove persisted inbound machine lines from bubble text (attachments show separately). */
 export function stripInboundFileMachineText(text: string): string {
-  if (!text.includes('xopcbot-path:')) return text;
+  if (!text.includes('xopc-path:')) return text;
   let out = text;
   // Multiline (canonical persist format)
   out = out.replace(
-    /\s*\[File:[^\]]+\]\s*\r?\nxopcbot-path:rel:[^\r\n]+\r?\n\s*xopcbot-path:abs:[^\r\n]+/g,
+    /\s*\[File:[^\]]+\]\s*\r?\nxopc-path:rel:[^\r\n]+\r?\n\s*xopc-path:abs:[^\r\n]+/g,
     '',
   );
   // Single line (e.g. markdown collapsed whitespace)
-  out = out.replace(/\s*\[File:[^\]]+\]\s+xopcbot-path:rel:\S+\s+xopcbot-path:abs:\S+/g, '');
-  out = out.replace(/\s*\[File:[^\]]+\]\s*xopcbot-path:rel:\S+\s*xopcbot-path:abs:\S+/g, '');
+  out = out.replace(/\s*\[File:[^\]]+\]\s+xopc-path:rel:\S+\s+xopc-path:abs:\S+/g, '');
+  out = out.replace(/\s*\[File:[^\]]+\]\s*xopc-path:rel:\S+\s*xopc-path:abs:\S+/g, '');
   return out.replace(/\n{3,}/g, '\n\n').trim();
 }
 
@@ -332,13 +332,13 @@ function extractAttachmentsFromUserContent(raw: unknown): Message['attachments']
     }
   }
   const text = chunks.join('\n');
-  if (!text.includes('xopcbot-path:rel:')) return undefined;
+  if (!text.includes('xopc-path:rel:')) return undefined;
 
   const out: NonNullable<Message['attachments']> = [];
   const seen = new Set<string>();
 
-  // Single line: rel is \S+ so it stops before " xopcbot-path:abs:" (fixes greedy [^\n]+ bug)
-  const reSingle = /\[File: ([^\]]+)\]\s*xopcbot-path:rel:(\S+)\s*xopcbot-path:abs:\S+/g;
+  // Single line: rel is \S+ so it stops before " xopc-path:abs:" (fixes greedy [^\n]+ bug)
+  const reSingle = /\[File: ([^\]]+)\]\s*xopc-path:rel:(\S+)\s*xopc-path:abs:\S+/g;
   let m: RegExpExecArray | null;
   while ((m = reSingle.exec(text)) !== null) {
     const rel = m[2].trim();
@@ -355,7 +355,7 @@ function extractAttachmentsFromUserContent(raw: unknown): Message['attachments']
   }
 
   const reMulti =
-    /\[File: ([^\]]+)\]\s*\r?\nxopcbot-path:rel:([^\r\n]+)\r?\n\s*xopcbot-path:abs:[^\r\n]+/g;
+    /\[File: ([^\]]+)\]\s*\r?\nxopc-path:rel:([^\r\n]+)\r?\n\s*xopc-path:abs:[^\r\n]+/g;
   while ((m = reMulti.exec(text)) !== null) {
     const rel = m[2].trim();
     if (seen.has(rel)) continue;

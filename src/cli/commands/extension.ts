@@ -175,7 +175,7 @@ export function createExtensionAuditCommand(): Command {
           }
           console.log();
           console.log('These extensions are installed but not in the lockfile.');
-          console.log('Run `xopcbot extension:freeze` to add them.');
+          console.log('Run `xopc extension:freeze` to add them.');
         } else {
           console.log(colors.green('✓'), 'No orphaned extensions found');
         }

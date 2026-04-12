@@ -1,6 +1,6 @@
 # Getting Started
 
-Install **xopcbot**, add at least one LLM provider key, then run the CLI or gateway. This page covers a first-time setup from scratch.
+Install **xopc**, add at least one LLM provider key, then run the CLI or gateway. This page covers a first-time setup from scratch.
 
 ## 1. Prerequisites
 
@@ -16,14 +16,14 @@ Before you begin, ensure you have:
 ### Option 1: Install from npm (Recommended)
 
 ```bash
-npm install -g @xopcai/xopcbot
+npm install -g @xopcai/xopc
 ```
 
 ### Option 2: Build from source
 
 ```bash
-git clone https://github.com/xopcai/xopcbot.git
-cd xopcbot
+git clone https://github.com/xopcai/xopc.git
+cd xopc
 pnpm install
 pnpm run build
 ```
@@ -35,12 +35,12 @@ pnpm run build
 Use the `onboard` wizard for guided setup:
 
 ```bash
-xopcbot onboard
+xopc onboard
 # or: pnpm run dev -- onboard
 ```
 
 The wizard will guide you through:
-1. Creating workspace directory (`~/.xopcbot/workspace/`)
+1. Creating workspace directory (`~/.xopc/workspace/`)
 2. Generating default `config.json`
 3. Selecting an LLM provider and entering API key
 4. Configuring messaging channels (Telegram)
@@ -51,14 +51,14 @@ The wizard will guide you through:
 For minimal setup without interactive prompts:
 
 ```bash
-xopcbot setup
+xopc setup
 ```
 
 This creates basic config and workspace files only.
 
 ### Manual Configuration
 
-Edit `~/.xopcbot/config.json` directly:
+Edit `~/.xopc/xopc.json` directly:
 
 ```json
 {
@@ -84,7 +84,7 @@ Edit `~/.xopcbot/config.json` directly:
 Send a single message and get a response:
 
 ```bash
-xopcbot agent -m "Explain what an LLM is in one sentence."
+xopc agent -m "Explain what an LLM is in one sentence."
 # or: pnpm run dev -- agent -m "Explain what an LLM is"
 ```
 
@@ -93,7 +93,7 @@ xopcbot agent -m "Explain what an LLM is in one sentence."
 Start a continuous conversation:
 
 ```bash
-xopcbot agent -i
+xopc agent -i
 # or: pnpm run dev -- agent -i
 ```
 
@@ -105,7 +105,7 @@ You'll see a `You:` prompt. Type messages and press Enter. Exit with `Ctrl+C`.
 
 1. **Get Bot Token**: Open Telegram, search [@BotFather](https://t.me/BotFather), send `/newbot`
 
-2. **Configure** in `~/.xopcbot/config.json`:
+2. **Configure** in `~/.xopc/xopc.json`:
 
 ```json
 {
@@ -123,7 +123,7 @@ You'll see a `You:` prompt. Type messages and press Enter. Exit with `Ctrl+C`.
 3. **Start Gateway**:
 
 ```bash
-xopcbot gateway
+xopc gateway
 # or: pnpm run dev -- gateway
 ```
 
@@ -156,12 +156,12 @@ Explore these guides to unlock more features:
 |-------|----------|
 | `ERR_MODULE_NOT_FOUND` | Run `pnpm install` |
 | `Cannot find module '@xopcai/...'` | Run `pnpm run build` |
-| Config not loading | Verify `~/.xopcbot/config.json` is valid JSON |
+| Config not loading | Verify `~/.xopc/xopc.json` is valid JSON |
 | Bot not responding | Check `TELEGRAM_BOT_TOKEN` and bot status |
 | API key errors | Verify environment variables are set |
 
 ### Getting Help
 
 - Check [Documentation](/) for detailed guides
-- Review [AGENTS.md](https://github.com/xopcai/xopcbot/blob/main/AGENTS.md) for development guide
-- View logs: `xopcbot gateway logs --follow`
+- Review [AGENTS.md](https://github.com/xopcai/xopc/blob/main/AGENTS.md) for development guide
+- View logs: `xopc gateway logs --follow`

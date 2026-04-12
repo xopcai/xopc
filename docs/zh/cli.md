@@ -1,6 +1,6 @@
 # CLI 命令参考
 
-xopcbot 提供丰富的 CLI 命令用于管理、对话和配置。
+xopc 提供丰富的 CLI 命令用于管理、对话和配置。
 
 ## 使用方式
 
@@ -8,25 +8,25 @@ xopcbot 提供丰富的 CLI 命令用于管理、对话和配置。
 
 ```bash
 # 全局安装
-npm install -g @xopcai/xopcbot
+npm install -g @xopcai/xopc
 
 # 直接使用命令
-xopcbot <command>
+xopc <command>
 ```
 
 ### 从源码运行（开发）
 
 ```bash
 # 克隆并安装
-git clone https://github.com/xopcai/xopcbot.git
-cd xopcbot
+git clone https://github.com/xopcai/xopc.git
+cd xopc
 pnpm install
 
 # 使用 pnpm run dev -- 前缀
 pnpm run dev -- <command>
 ```
 
-**本文档中的命令示例默认使用 `xopcbot` 命令。** 如果你从源码运行，请将 `xopcbot` 替换为 `pnpm run dev --`。
+**本文档中的命令示例默认使用 `xopc` 命令。** 如果你从源码运行，请将 `xopc` 替换为 `pnpm run dev --`。
 
 ---
 
@@ -52,37 +52,37 @@ pnpm run dev -- <command>
 仅初始化配置文件和工作区目录（无交互式提示）。
 
 ```bash
-xopcbot setup
+xopc setup
 ```
 
 **参数**：
 
 | 参数 | 描述 |
 |------|------|
-| `--workspace <path>` | 工作区目录路径（默认：~/.xopcbot/workspace） |
+| `--workspace <path>` | 工作区目录路径（默认：~/.xopc/workspace） |
 
 **示例**：
 
 ```bash
 # 创建默认配置和工作区
-xopcbot setup
+xopc setup
 
 # 自定义工作区路径
-xopcbot setup --workspace ~/my-workspace
+xopc setup --workspace ~/my-workspace
 ```
 
 **功能**：
-- 创建 `~/.xopcbot/config.json`（如果不存在）
+- 创建 `~/.xopc/xopc.json`（如果不存在）
 - 创建工作区目录并生成引导文件（AGENTS.md、BOOTSTRAP.md 等）
 
 ---
 
 ## onboard
 
-xopcbot 的交互式设置向导。这是设置 xopcbot 的推荐方式。
+xopc 的交互式设置向导。这是设置 xopc 的推荐方式。
 
 ```bash
-xopcbot onboard
+xopc onboard
 ```
 
 **选项**：
@@ -98,16 +98,16 @@ xopcbot onboard
 
 ```bash
 # 完整交互式设置（默认）
-xopcbot onboard
+xopc onboard
 
 # 仅配置 LLM 模型
-xopcbot onboard --model
+xopc onboard --model
 
 # 仅配置渠道
-xopcbot onboard --channels
+xopc onboard --channels
 
 # 仅配置 Gateway
-xopcbot onboard --gateway
+xopc onboard --gateway
 ```
 
 **功能**（不带选项时）：
@@ -121,7 +121,7 @@ xopcbot onboard --gateway
 
 ## agents
 
-管理 **`agents.list`**。工作区与 `~/.xopcbot/agents/<id>/` 等路径均由 **配置合并结果** 决定，**不再**使用独立于配置之外的 agent 注册表或 `XOPCBOT_AGENT_ID` 环境变量。
+管理 **`agents.list`**。工作区与 `~/.xopc/agents/<id>/` 等路径均由 **配置合并结果** 决定，**不再**使用独立于配置之外的 agent 注册表或 `XOPC_AGENT_ID` 环境变量。
 
 | 子命令 | 说明 |
 |--------|------|
@@ -132,10 +132,10 @@ xopcbot onboard --gateway
 示例：
 
 ```bash
-xopcbot agents list
-xopcbot agents add coder --workspace ~/xopcbot-workspaces/coder --model anthropic/claude-sonnet-4-5
-xopcbot agents delete coder
-xopcbot agents delete coder --purge
+xopc agents list
+xopc agents add coder --workspace ~/xopc-workspaces/coder --model anthropic/claude-sonnet-4-5
+xopc agents delete coder
+xopc agents delete coder --purge
 ```
 
 **Onboard 完成后**会显示：
@@ -143,7 +143,7 @@ xopcbot agents delete coder --purge
 - Token 信息
 - 启动网关的命令
 
-**注意**：Gateway 默认在前台运行。按 `Ctrl+C` 停止，或使用 `xopcbot gateway stop` 从另一个终端停止。
+**注意**：Gateway 默认在前台运行。按 `Ctrl+C` 停止，或使用 `xopc gateway stop` 从另一个终端停止。
 
 ---
 
@@ -154,7 +154,7 @@ xopcbot agents delete coder --purge
 ### 单次对话
 
 ```bash
-xopcbot agent -m "Hello, world!"
+xopc agent -m "Hello, world!"
 ```
 
 **参数**：
@@ -168,7 +168,7 @@ xopcbot agent -m "Hello, world!"
 ### 交互模式
 
 ```bash
-xopcbot agent -i
+xopc agent -i
 ```
 
 **使用**：
@@ -186,7 +186,7 @@ Bot: File listing...
 ### 指定会话
 
 ```bash
-xopcbot agent -m "Continue our discussion" -s my-session
+xopc agent -m "Continue our discussion" -s my-session
 ```
 
 ---
@@ -198,7 +198,7 @@ xopcbot agent -m "Continue our discussion" -s my-session
 ### 前台模式（默认）
 
 ```bash
-xopcbot gateway --port 18790
+xopc gateway --port 18790
 ```
 
 网关默认在前台运行，按 `Ctrl+C` 停止。
@@ -219,7 +219,7 @@ xopcbot gateway --port 18790
 如果端口已被占用，使用 `--force` 自动终止现有进程：
 
 ```bash
-xopcbot gateway --force
+xopc gateway --force
 ```
 
 这将发送 SIGTERM，等待 700ms，然后如需要发送 SIGKILL。
@@ -242,45 +242,45 @@ xopcbot gateway --force
 
 ```bash
 # 查看状态
-xopcbot gateway status
+xopc gateway status
 
 # 停止网关（SIGTERM，5秒超时）
-xopcbot gateway stop
+xopc gateway stop
 
 # 强制停止（立即 SIGKILL）
-xopcbot gateway stop --force
+xopc gateway stop --force
 
 # 重启网关（SIGUSR1 信号）
-xopcbot gateway restart
+xopc gateway restart
 
 # 强制重启（终止并重新启动）
-xopcbot gateway restart --force
+xopc gateway restart --force
 
 # 查看最近 50 行日志
-xopcbot gateway logs
+xopc gateway logs
 
 # 实时跟踪日志
-xopcbot gateway logs --follow
+xopc gateway logs --follow
 
 # 生成新令牌
-xopcbot gateway token --generate
+xopc gateway token --generate
 
 # 安装为系统服务
-xopcbot gateway install
+xopc gateway install
 
 # 卸载系统服务
-xopcbot gateway uninstall
+xopc gateway uninstall
 
 # 通过系统服务启动
-xopcbot gateway service-start
+xopc gateway service-start
 
 # 查看服务状态
-xopcbot gateway service-status
+xopc gateway service-status
 ```
 
 ### 进程管理
 
-- **锁文件**：`~/.xopcbot/locks/gateway.{hash}.lock`（替代 PID 文件）
+- **锁文件**：`~/.xopc/locks/gateway.{hash}.lock`（替代 PID 文件）
 - **信号**：SIGTERM/SIGINT=停止，SIGUSR1=重启
 - **端口管理**：自动冲突检测和解决
 
@@ -288,16 +288,16 @@ xopcbot gateway service-status
 
 | 变量 | 描述 |
 |------|------|
-| `XOPCBOT_NO_RESPAWN` | 禁用进程重生 |
-| `XOPCBOT_ALLOW_SIGUSR1_RESTART` | 允许 SIGUSR1 重启 |
-| `XOPCBOT_SERVICE_MARKER` | 标记受监督环境 |
+| `XOPC_NO_RESPAWN` | 禁用进程重生 |
+| `XOPC_ALLOW_SIGUSR1_RESTART` | 允许 SIGUSR1 重启 |
+| `XOPC_SERVICE_MARKER` | 标记受监督环境 |
 
 ---
 
 ### 添加任务
 
 ```bash
-xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
+xopc cron add --schedule "0 9 * * *" --message "Good morning!"
 ```
 
 **参数**：
@@ -312,50 +312,50 @@ xopcbot cron add --schedule "0 9 * * *" --message "Good morning!"
 
 ```bash
 # 每天 9 点
-xopcbot cron add --schedule "0 9 * * *" --message "Daily update"
+xopc cron add --schedule "0 9 * * *" --message "Daily update"
 
 # 工作日 18 点
-xopcbot cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!"
+xopc cron add --schedule "0 18 * * 1-5" --message "Time to wrap up!"
 
 # 每小时提醒
-xopcbot cron add --schedule "0 * * * *" --message "Hourly reminder" --name hourly
+xopc cron add --schedule "0 * * * *" --message "Hourly reminder" --name hourly
 ```
 
 ### 删除任务
 
 ```bash
-xopcbot cron remove <task-id>
+xopc cron remove <task-id>
 ```
 
 **示例**：
 
 ```bash
-xopcbot cron remove abc1
+xopc cron remove abc1
 ```
 
 ### 启用/禁用
 
 ```bash
-xopcbot cron enable <task-id>
-xopcbot cron disable <task-id>
+xopc cron enable <task-id>
+xopc cron disable <task-id>
 ```
 
 ### 触发任务
 
 ```bash
-xopcbot cron trigger <task-id>
+xopc cron trigger <task-id>
 ```
 
 ---
 
 ## extension
 
-管理扩展。支持三级存储：workspace (./.extensions/) → global (~/.xopcbot/extensions/) → bundled。
+管理扩展。支持三级存储：workspace (./.extensions/) → global (~/.xopc/extensions/) → bundled。
 
 ### 列出扩展
 
 ```bash
-xopcbot extension list
+xopc extension list
 ```
 
 **输出示例**：
@@ -368,7 +368,7 @@ xopcbot extension list
     • My Custom Extension @ 0.1.0
       ID: my-custom-extension
 
-  🌐 Global (~/.xopcbot/extensions/)
+  🌐 Global (~/.xopc/extensions/)
     • Telegram Channel @ 1.2.0
       ID: telegram-channel
 
@@ -381,60 +381,60 @@ xopcbot extension list
 
 **从 npm 安装到 workspace**（默认）：
 ```bash
-xopcbot extension install <package-name>
+xopc extension install <package-name>
 
 # 示例
-xopcbot extension install xopcbot-extension-telegram
-xopcbot extension install @scope/my-extension
-xopcbot extension install my-extension@1.0.0
+xopc extension install xopc-extension-telegram
+xopc extension install @scope/my-extension
+xopc extension install my-extension@1.0.0
 ```
 
 **安装到 global**（跨项目共享）：
 ```bash
-xopcbot extension install <package-name> --global
+xopc extension install <package-name> --global
 
 # 示例
-xopcbot extension install xopcbot-extension-telegram --global
+xopc extension install xopc-extension-telegram --global
 ```
 
 **从本地目录安装**：
 ```bash
 # 安装到 workspace
-xopcbot extension install ./my-local-extension
+xopc extension install ./my-local-extension
 
 # 安装到 global
-xopcbot extension install ./my-local-extension --global
+xopc extension install ./my-local-extension --global
 ```
 
 **参数**：
 
 | 参数 | 描述 |
 |------|------|
-| `--global` | 安装到全局目录 (~/.xopcbot/extensions/) |
+| `--global` | 安装到全局目录 (~/.xopc/extensions/) |
 | `--timeout <ms>` | 安装超时时间（默认 120000ms） |
 
 **安装流程**：
 1. 下载/复制扩展文件
-2. 验证 `xopcbot.extension.json` 清单
+2. 验证 `xopc.extension.json` 清单
 3. 安装依赖（如有 `package.json` 依赖）
-4. 复制到目标目录 (workspace/.extensions/ 或 ~/.xopcbot/extensions/)
+4. 复制到目标目录 (workspace/.extensions/ 或 ~/.xopc/extensions/)
 
 **三级存储说明**：
 - Workspace (./.extensions/)：项目私有，优先级最高
-- Global (~/.xopcbot/extensions/)：用户级共享
+- Global (~/.xopc/extensions/)：用户级共享
 - Bundled：内置扩展，优先级最低
 
 ### 移除扩展
 
 ```bash
-xopcbot extension remove <extension-id>
+xopc extension remove <extension-id>
 # 或
-xopcbot extension uninstall <extension-id>
+xopc extension uninstall <extension-id>
 ```
 
 **示例**：
 ```bash
-xopcbot extension remove telegram-channel
+xopc extension remove telegram-channel
 ```
 
 **注意**：
@@ -444,12 +444,12 @@ xopcbot extension remove telegram-channel
 ### 查看扩展详情
 
 ```bash
-xopcbot extension info <extension-id>
+xopc extension info <extension-id>
 ```
 
 **示例**：
 ```bash
-xopcbot extension info telegram-channel
+xopc extension info telegram-channel
 ```
 
 **输出**：
@@ -460,7 +460,7 @@ xopcbot extension info telegram-channel
   Version: 1.2.0
   Kind: channel
   Description: Telegram channel integration
-  Path: /home/user/.xopcbot/workspace/.extensions/telegram-channel
+  Path: /home/user/.xopc/workspace/.extensions/telegram-channel
 ```
 
 ### 创建扩展
@@ -468,7 +468,7 @@ xopcbot extension info telegram-channel
 创建新插件脚手架。
 
 ```bash
-xopcbot extension create <extension-id> [options]
+xopc extension create <extension-id> [options]
 ```
 
 **参数**：
@@ -483,13 +483,13 @@ xopcbot extension create <extension-id> [options]
 
 ```bash
 # 创建工具类插件
-xopcbot extension create weather-tool --name "Weather Tool" --kind tool
+xopc extension create weather-tool --name "Weather Tool" --kind tool
 
 # 创建通道类插件
-xopcbot extension create discord-channel --name "Discord Channel" --kind channel
+xopc extension create discord-channel --name "Discord Channel" --kind channel
 
 # 创建内存类插件
-xopcbot extension create redis-memory --name "Redis Memory" --kind memory
+xopc extension create redis-memory --name "Redis Memory" --kind memory
 ```
 
 **生成的文件**：
@@ -498,7 +498,7 @@ xopcbot extension create redis-memory --name "Redis Memory" --kind memory
 └── my-extension/
     ├── package.json          # npm 配置
     ├── index.ts              # 扩展入口（TypeScript）
-    ├── xopcbot.extension.json   # 扩展清单
+    ├── xopc.extension.json   # 扩展清单
     └── README.md             # 文档模板
 ```
 
@@ -529,10 +529,10 @@ xopcbot extension create redis-memory --name "Redis Memory" --kind memory
 ### 帮助信息
 
 ```bash
-xopcbot --help
-xopcbot agent --help
-xopcbot gateway --help
-xopcbot extension --help
+xopc --help
+xopc agent --help
+xopc gateway --help
+xopc extension --help
 ```
 
 ---
@@ -544,77 +544,77 @@ xopcbot extension --help
 ### 列出技能
 
 ```bash
-xopcbot skills list
-xopcbot skills list -v          # 详细信息
-xopcbot skills list --json      # JSON 格式
+xopc skills list
+xopc skills list -v          # 详细信息
+xopc skills list --json      # JSON 格式
 ```
 
 ### 安装技能依赖
 
 ```bash
-xopcbot skills install <skill-name>
-xopcbot skills install <skill-name> -i <install-id>   # 指定安装器
-xopcbot skills install <skill-name> --dry-run         # 预演
+xopc skills install <skill-name>
+xopc skills install <skill-name> -i <install-id>   # 指定安装器
+xopc skills install <skill-name> --dry-run         # 预演
 ```
 
 ### 启用/禁用技能
 
 ```bash
-xopcbot skills enable <skill-name>
-xopcbot skills disable <skill-name>
+xopc skills enable <skill-name>
+xopc skills disable <skill-name>
 ```
 
 ### 查看技能状态
 
 ```bash
-xopcbot skills status
-xopcbot skills status <skill-name>
-xopcbot skills status --json
+xopc skills status
+xopc skills status <skill-name>
+xopc skills status --json
 ```
 
 ### 安全审计
 
 ```bash
-xopcbot skills audit
-xopcbot skills audit <skill-name>
-xopcbot skills audit <skill-name> --deep    # 详细输出
+xopc skills audit
+xopc skills audit <skill-name>
+xopc skills audit <skill-name> --deep    # 详细输出
 ```
 
 ### 配置技能
 
 ```bash
-xopcbot skills config <skill-name> --show
-xopcbot skills config <skill-name> --api-key=KEY
-xopcbot skills config <skill-name> --env KEY=value
+xopc skills config <skill-name> --show
+xopc skills config <skill-name> --api-key=KEY
+xopc skills config <skill-name> --env KEY=value
 ```
 
 ### 测试技能
 
 ```bash
 # 测试所有技能
-xopcbot skills test
+xopc skills test
 
 # 测试特定技能
-xopcbot skills test <skill-name>
+xopc skills test <skill-name>
 
 # 详细输出
-xopcbot skills test --verbose
+xopc skills test --verbose
 
 # JSON 格式
-xopcbot skills test --format json
+xopc skills test --format json
 
 # 跳过特定测试
-xopcbot skills test --skip-security
-xopcbot skills test --skip-examples
+xopc skills test --skip-security
+xopc skills test --skip-examples
 
 # 验证 SKILL.md 文件
-xopcbot skills test validate ./skills/weather/SKILL.md
+xopc skills test validate ./skills/weather/SKILL.md
 
 # 检查依赖
-xopcbot skills test check-deps
+xopc skills test check-deps
 
 # 安全审计
-xopcbot skills test security --deep
+xopc skills test security --deep
 ```
 
 **测试输出格式**：
@@ -646,25 +646,25 @@ xopcbot skills test security --deep
 
 case "$1" in
   chat)
-    xopcbot agent -m "${*:2}"
+    xopc agent -m "${*:2}"
     ;;
   shell)
-    xopcbot agent -i
+    xopc agent -i
     ;;
   start)
-    xopcbot gateway --port 18790
+    xopc gateway --port 18790
     ;;
   cron)
     shift
-    xopcbot cron "$@"
+    xopc cron "$@"
     ;;
   extension)
     shift
-    xopcbot extension "$@"
+    xopc extension "$@"
     ;;
   skills)
     shift
-    xopcbot skills "$@"
+    xopc skills "$@"
     ;;
   *)
     echo "Usage: bot {chat|shell|start|cron|extension|skills}"
@@ -679,7 +679,7 @@ bot chat Hello!
 bot start
 bot cron list
 bot extension list
-bot extension install xopcbot-extension-telegram
+bot extension install xopc-extension-telegram
 bot skills list
 bot skills test weather
 ```

@@ -28,7 +28,7 @@ export async function sendWeixinMediaFile(params: {
   const { filePath, to, text, opts, cdnBaseUrl } = params;
   const apiTo = params.toUserIdForApi?.trim() || toRawIlinkUserIdForApi(to);
   const mime = getMimeFromFilename(filePath);
-  /** `{ baseUrl, token }` only; xopcbot adds `routeTag` for `SKRouteTag` on getUploadUrl. */
+  /** `{ baseUrl, token }` only; xopc adds `routeTag` for `SKRouteTag` on getUploadUrl. */
   const uploadOpts: WeixinApiOptions = { baseUrl: opts.baseUrl, token: opts.token };
   if (opts.routeTag?.trim()) {
     uploadOpts.routeTag = opts.routeTag;

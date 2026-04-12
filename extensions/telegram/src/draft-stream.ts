@@ -6,8 +6,8 @@
  */
 
 import type { Bot } from 'grammy';
-import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
-import type { ProgressStage } from '@xopcai/xopcbot/agent/lifecycle/progress.js';
+import { createLogger } from '@xopcai/xopc/utils/logger.js';
+import type { ProgressStage } from '@xopcai/xopc/agent/lifecycle/progress.js';
 import { createFinalizableDraftLifecycle } from './draft-stream-lifecycle.js';
 import {
   isSafeToRetrySendError,
@@ -23,7 +23,7 @@ const TELEGRAM_STREAM_MAX_CHARS = 4096;
 const DEFAULT_THROTTLE_MS = 1000;
 const TELEGRAM_DRAFT_ID_MAX = 2_147_483_647;
 
-const TELEGRAM_DRAFT_STREAM_STATE_KEY = Symbol.for('xopcbot.telegramDraftStreamState');
+const TELEGRAM_DRAFT_STREAM_STATE_KEY = Symbol.for('xopc.telegramDraftStreamState');
 
 let draftStreamState: { nextDraftId: number } | undefined;
 

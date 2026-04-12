@@ -1,4 +1,4 @@
-import type { ChannelCommandAdapter, ChannelCommandSpec } from '@xopcai/xopcbot/channels/plugin-types.js';
+import type { ChannelCommandAdapter, ChannelCommandSpec } from '@xopcai/xopc/channels/plugin-types.js';
 
 /**
  * Declarative list of BotFather-style commands handled in `command-handler.ts` / `plugin.ts` message routing.

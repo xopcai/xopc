@@ -99,7 +99,7 @@ export async function startGatewayNow(config: Config, ctx: CLIContext): Promise<
     console.log(`   URL: http://${displayHost}:${port}`);
     console.log('');
     console.log('📝 To apply the new configuration, restart gateway:');
-    console.log('   xopcbot gateway restart');
+    console.log('   xopc gateway restart');
   } else {
     // Gateway is not running
     if (isInteractive()) {
@@ -144,20 +144,20 @@ export async function startGatewayNow(config: Config, ctx: CLIContext): Promise<
         } else {
           console.log('⚠️  Failed to start gateway automatically.');
           console.log('   You can start it manually with:');
-          console.log(`   xopcbot gateway --background`);
+          console.log(`   xopc gateway --background`);
         }
       } else {
         // User chose not to start
         console.log('\n⏭️  Skipping gateway startup.');
         console.log('   You can start it later with:');
-        console.log(`   xopcbot gateway --background`);
+        console.log(`   xopc gateway --background`);
       }
     } else {
       // Non-interactive mode: provide guidance
       console.log('\n🚀 Gateway is configured but not running.');
       console.log('');
       console.log('📝 To start the gateway in background:');
-      console.log(`   xopcbot gateway --background`);
+      console.log(`   xopc gateway --background`);
       console.log('');
       console.log('📝 To start in foreground (development mode):');
       console.log(`   pnpm run dev -- gateway --host ${host} --port ${port}`);
@@ -166,8 +166,8 @@ export async function startGatewayNow(config: Config, ctx: CLIContext): Promise<
 
   console.log('');
   console.log('📚 Other useful commands:');
-  console.log('   xopcbot gateway status    # Check gateway status');
-  console.log('   xopcbot gateway stop      # Stop gateway');
-  console.log('   xopcbot gateway restart   # Restart gateway');
-  console.log('   xopcbot gateway logs      # View logs');
+  console.log('   xopc gateway status    # Check gateway status');
+  console.log('   xopc gateway stop      # Stop gateway');
+  console.log('   xopc gateway restart   # Restart gateway');
+  console.log('   xopc gateway logs      # View logs');
 }

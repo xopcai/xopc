@@ -1,5 +1,5 @@
 /**
- * xopcbot Extension System
+ * xopc Extension System
  * 
  * @module extensions
  */

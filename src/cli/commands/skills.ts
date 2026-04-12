@@ -68,7 +68,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
       console.log(`\nFound ${result.skills.length} skill(s):\n`);
 
       for (const skill of result.skills) {
-        const emoji = skill.metadata.xopcbot?.emoji || '📦';
+        const emoji = skill.metadata.xopc?.emoji || '📦';
         const source = `[${skill.source}]`;
         console.log(`${emoji} ${skill.name} ${source}`);
         console.log(`   ${skill.description}`);
@@ -76,7 +76,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
         if (options.verbose) {
           console.log(`   Path: ${skill.filePath}`);
           
-          const requires = skill.metadata.xopcbot?.requires;
+          const requires = skill.metadata.xopc?.requires;
           if (requires?.bins) {
             const binsStatus = requires.bins.map(bin => {
               const available = hasBinary(bin);
@@ -85,7 +85,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
             console.log(`   Requires: ${binsStatus}`);
           }
           
-          const install = skill.metadata.xopcbot?.install;
+          const install = skill.metadata.xopc?.install;
           if (install && install.length > 0) {
             console.log(`   Install options: ${install.map(i => i.label || i.kind).join(', ')}`);
           }
@@ -128,7 +128,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
         process.exit(1);
       }
 
-      const installSpecs = entry.metadata.xopcbot?.install || entry.metadata.install || [];
+      const installSpecs = entry.metadata.xopc?.install || entry.metadata.install || [];
       if (installSpecs.length === 0) {
         console.log(`Skill "${skillName}" has no install specs`);
         process.exit(0);
@@ -258,7 +258,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
           return;
         }
 
-        const emoji = skill.metadata.xopcbot?.emoji || skill.metadata.emoji || '📦';
+        const emoji = skill.metadata.xopc?.emoji || skill.metadata.emoji || '📦';
         console.log(`\n${emoji} ${skill.name}`);
         console.log(`   Description: ${skill.description}`);
         console.log(`   Enabled: ${enabled ? '✓' : '✗'}`);
@@ -269,7 +269,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
           console.log(`   API Key: ${skillConfig.apiKey.slice(0, 8)}...`);
         }
 
-        const requires = skill.metadata.xopcbot?.requires;
+        const requires = skill.metadata.xopc?.requires;
         if (requires) {
           if (requires.bins) {
             console.log(`   Required binaries: ${requires.bins.join(', ')}`);
@@ -409,7 +409,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
     });
 
   const hub = new Command('hub').description(
-    'Install or update skills from git or archives (writes ~/.xopcbot/skills + skills-lock.json)',
+    'Install or update skills from git or archives (writes ~/.xopc/skills + skills-lock.json)',
   );
 
   hub
@@ -417,7 +417,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
     .argument('<source>', 'Git URL, https(s) .zip/.tar.gz, file:// URL, or local archive path')
     .option('--ref <ref>', 'Git branch or tag (optional)')
     .option('--path <dir>', 'Subdirectory inside the cloned repo containing SKILL.md')
-    .option('--id <skillId>', 'Target folder name under ~/.xopcbot/skills (default: SKILL.md name or repo folder)')
+    .option('--id <skillId>', 'Target folder name under ~/.xopc/skills (default: SKILL.md name or repo folder)')
     .option('--force', 'Replace existing managed skill directory', false)
     .option('--strict-scan', 'Fail install if security scanner reports critical findings', false)
     .action(async (source: string, opts: { ref?: string; path?: string; id?: string; force?: boolean; strictScan?: boolean }) => {
@@ -441,7 +441,7 @@ function createSkillsCommand(ctx: CLIContext): Command {
 
   hub
     .command('update')
-    .argument('<skillId>', 'Managed skill id (folder name under ~/.xopcbot/skills)')
+    .argument('<skillId>', 'Managed skill id (folder name under ~/.xopc/skills)')
     .option('--strict-scan', 'Fail if security scanner reports critical findings', false)
     .action(async (skillId: string, opts: { strictScan?: boolean }) => {
       try {
@@ -502,26 +502,26 @@ register({
   metadata: {
     category: 'utility',
     examples: [
-      'xopcbot skills hub pull https://github.com/org/repo.git   # Shallow-clone skill into ~/.xopcbot/skills',
-      'xopcbot skills hub pull ./pack.zip --force               # Install or replace from local zip',
-      'xopcbot skills hub update my-skill                       # Re-fetch using skills-lock.json',
-      'xopcbot skills hub lock --json                           # Show hub lock file',
-      'xopcbot skills list                        # List all available skills',
-      'xopcbot skills list -v                     # List with detailed information',
-      'xopcbot skills install weather             # Install weather skill dependencies',
-      'xopcbot skills enable weather              # Enable a skill',
-      'xopcbot skills disable weather             # Disable a skill',
-      'xopcbot skills status                      # Show skill status summary',
-      'xopcbot skills status weather              # Show detailed skill status',
-      'xopcbot skills audit                       # Security audit all skills',
-      'xopcbot skills audit weather --deep        # Detailed security audit',
-      'xopcbot skills config weather --show       # Show skill configuration',
-      'xopcbot skills config weather --api-key=KEY  # Set API key',
-      'xopcbot skills test                        # Test all skills',
-      'xopcbot skills test weather                # Test specific skill',
-      'xopcbot skills test validate ./skills/weather/SKILL.md  # Validate SKILL.md file',
-      'xopcbot skills test check-deps             # Check dependencies',
-      'xopcbot skills test security --deep        # Security audit',
+      'xopc skills hub pull https://github.com/org/repo.git   # Shallow-clone skill into ~/.xopc/skills',
+      'xopc skills hub pull ./pack.zip --force               # Install or replace from local zip',
+      'xopc skills hub update my-skill                       # Re-fetch using skills-lock.json',
+      'xopc skills hub lock --json                           # Show hub lock file',
+      'xopc skills list                        # List all available skills',
+      'xopc skills list -v                     # List with detailed information',
+      'xopc skills install weather             # Install weather skill dependencies',
+      'xopc skills enable weather              # Enable a skill',
+      'xopc skills disable weather             # Disable a skill',
+      'xopc skills status                      # Show skill status summary',
+      'xopc skills status weather              # Show detailed skill status',
+      'xopc skills audit                       # Security audit all skills',
+      'xopc skills audit weather --deep        # Detailed security audit',
+      'xopc skills config weather --show       # Show skill configuration',
+      'xopc skills config weather --api-key=KEY  # Set API key',
+      'xopc skills test                        # Test all skills',
+      'xopc skills test weather                # Test specific skill',
+      'xopc skills test validate ./skills/weather/SKILL.md  # Validate SKILL.md file',
+      'xopc skills test check-deps             # Check dependencies',
+      'xopc skills test security --deep        # Security audit',
     ],
   },
 });

@@ -1,13 +1,13 @@
 # Configuration Reference
 
-All xopcbot configuration is centralized in `~/.xopcbot/config.json`.
+All xopc configuration is centralized in `~/.xopc/xopc.json`.
 
 ## Quick Start
 
 Run the interactive setup wizard:
 
 ```bash
-xopcbot onboard
+xopc onboard
 ```
 
 Or create manually:
@@ -35,7 +35,7 @@ Or create manually:
 {
   "agents": {
     "defaults": {
-      "workspace": "~/.xopcbot/workspace",
+      "workspace": "~/.xopc/workspace",
       "model": {
         "primary": "anthropic/claude-sonnet-4-5",
         "fallbacks": ["openai/gpt-4o", "minimax/minimax-m2.1"]
@@ -144,13 +144,13 @@ Each entry must include **`id`**. Other fields are optional overrides (same shap
 
 The same optional keys can appear under **`agents.defaults`** for global defaults (e.g. `agents.defaults.tools.disable` merged with per-agent disables).
 
-**Note:** On-disk paths (`~/.xopcbot/agents/<id>/` for sessions and internal state, per-agent Markdown workspace beside state) are **derived from `config.json`** (`agents.list`, `agents.defaults`, optional `agentDir` overrides). Use **`xopcbot agents add`** / **`agents delete`** to manage entries and directories; there is no separate agent “registry” outside config.
+**Note:** On-disk paths (`~/.xopc/agents/<id>/` for sessions and internal state, per-agent Markdown workspace beside state) are **derived from `config.json`** (`agents.list`, `agents.defaults`, optional `agentDir` overrides). Use **`xopc agents add`** / **`agents delete`** to manage entries and directories; there is no separate agent “registry” outside config.
 
 #### agents.defaults
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `workspace` | string | `~/.xopcbot/workspace` | Workspace directory |
+| `workspace` | string | `~/.xopc/workspace` | Workspace directory |
 | `model` | string/object | `anthropic/claude-sonnet-4-5` | Default model |
 | `max_tokens` | number | `8192` | Maximum output tokens |
 | `temperature` | number | `0.7` | Temperature (0-2) |
@@ -201,7 +201,7 @@ Cross-session transcript search via the `session_search` tool (when session pers
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `summaryModel` | string | — | Model ref for per-session summaries (e.g. `openai/gpt-4o-mini`). Overrides env `XOPCBOT_SESSION_SEARCH_MODEL` when set. |
+| `summaryModel` | string | — | Model ref for per-session summaries (e.g. `openai/gpt-4o-mini`). Overrides env `XOPC_SESSION_SEARCH_MODEL` when set. |
 
 ---
 
@@ -514,7 +514,7 @@ See [Extensions Documentation](/extensions) for details.
 
 ## Environment Variables
 
-xopcbot supports environment variables for sensitive data:
+xopc supports environment variables for sensitive data:
 
 | Variable | Description |
 |----------|-------------|
@@ -526,15 +526,15 @@ xopcbot supports environment variables for sensitive data:
 | `MINIMAX_API_KEY` | MiniMax API key |
 | `DASHSCOPE_API_KEY` | Alibaba DashScope API key (STT/TTS) |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
-| `XOPCBOT_CONFIG` | Custom config file path |
-| `XOPCBOT_WORKSPACE` | Custom workspace directory |
-| `XOPCBOT_SESSION_SEARCH_MODEL` | Default model for `session_search` summaries when `agents.defaults.sessionSearch.summaryModel` is unset |
-| `XOPCBOT_LOG_LEVEL` | Log level (trace/debug/info/warn/error/fatal) |
-| `XOPCBOT_LOG_DIR` | Log directory path |
-| `XOPCBOT_LOG_CONSOLE` | Enable console output (true/false) |
-| `XOPCBOT_LOG_FILE` | Enable file output (true/false) |
-| `XOPCBOT_LOG_RETENTION_DAYS` | Days to retain log files |
-| `XOPCBOT_PRETTY_LOGS` | Pretty print logs for development |
+| `XOPC_CONFIG` | Custom config file path |
+| `XOPC_WORKSPACE` | Custom workspace directory |
+| `XOPC_SESSION_SEARCH_MODEL` | Default model for `session_search` summaries when `agents.defaults.sessionSearch.summaryModel` is unset |
+| `XOPC_LOG_LEVEL` | Log level (trace/debug/info/warn/error/fatal) |
+| `XOPC_LOG_DIR` | Log directory path |
+| `XOPC_LOG_CONSOLE` | Enable console output (true/false) |
+| `XOPC_LOG_FILE` | Enable file output (true/false) |
+| `XOPC_LOG_RETENTION_DAYS` | Days to retain log files |
+| `XOPC_PRETTY_LOGS` | Pretty print logs for development |
 
 Environment variables take priority over config file values.
 
@@ -545,19 +545,19 @@ Environment variables take priority over config file values.
 ### Validate Configuration
 
 ```bash
-xopcbot config --validate
+xopc config --validate
 ```
 
 ### View Configuration
 
 ```bash
-xopcbot config --show
+xopc config --show
 ```
 
 ### Edit Configuration
 
 ```bash
-xopcbot config --edit
+xopc config --edit
 ```
 
 ---
@@ -584,7 +584,7 @@ Use the `providers` configuration to define multiple API keys. The agent automat
 
 ### Q: How to use Ollama (local models)?
 
-Configure custom provider in `~/.xopcbot/models.json`:
+Configure custom provider in `~/.xopc/models.json`:
 
 ```json
 {
@@ -605,7 +605,7 @@ See [Models Documentation](/models) for details.
 
 ### Q: How to configure OAuth?
 
-xopcbot supports OAuth authentication for certain providers:
+xopc supports OAuth authentication for certain providers:
 
 **Kimi (Device Code Flow):**
 ```json

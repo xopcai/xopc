@@ -1,5 +1,5 @@
 /**
- * Error classification system for xopcbot
+ * Error classification system for xopc
  * 
  * Provides structured error types for better handling and user feedback.
  */
@@ -7,12 +7,12 @@
 export type ErrorCategory = 'user' | 'config' | 'system' | 'network' | 'provider';
 
 // Symbol markers for reliable type identification
-const XOPCBOT_ERROR_MARKER = Symbol.for('xopcbot.error');
-const USER_ERROR_MARKER = Symbol.for('xopcbot.error.user');
-const CONFIG_ERROR_MARKER = Symbol.for('xopcbot.error.config');
-const SYSTEM_ERROR_MARKER = Symbol.for('xopcbot.error.system');
-const NETWORK_ERROR_MARKER = Symbol.for('xopcbot.error.network');
-const PROVIDER_ERROR_MARKER = Symbol.for('xopcbot.error.provider');
+const XOPC_ERROR_MARKER = Symbol.for('xopc.error');
+const USER_ERROR_MARKER = Symbol.for('xopc.error.user');
+const CONFIG_ERROR_MARKER = Symbol.for('xopc.error.config');
+const SYSTEM_ERROR_MARKER = Symbol.for('xopc.error.system');
+const NETWORK_ERROR_MARKER = Symbol.for('xopc.error.network');
+const PROVIDER_ERROR_MARKER = Symbol.for('xopc.error.provider');
 
 export interface ErrorDetails {
   code: string;
@@ -23,10 +23,10 @@ export interface ErrorDetails {
 }
 
 /**
- * Base error class for all xopcbot errors
+ * Base error class for all xopc errors
  */
-export class XopcbotError extends Error {
-  public readonly [XOPCBOT_ERROR_MARKER] = true;
+export class XopcError extends Error {
+  public readonly [XOPC_ERROR_MARKER] = true;
   public readonly code: string;
   public readonly category: ErrorCategory;
   public readonly retryable: boolean;
@@ -35,7 +35,7 @@ export class XopcbotError extends Error {
 
   constructor(details: ErrorDetails, cause?: Error) {
     super(details.message);
-    this.name = 'XopcbotError';
+    this.name = 'XopcError';
     this.code = details.code;
     this.category = details.category;
     this.retryable = details.retryable ?? false;
@@ -43,7 +43,7 @@ export class XopcbotError extends Error {
     this.cause = cause;
     
     // Fix prototype chain
-    Object.setPrototypeOf(this, XopcbotError.prototype);
+    Object.setPrototypeOf(this, XopcError.prototype);
   }
 
   /**
@@ -75,7 +75,7 @@ export class XopcbotError extends Error {
 /**
  * User input/operation errors - caused by user actions
  */
-export class UserError extends XopcbotError {
+export class UserError extends XopcError {
   public readonly [USER_ERROR_MARKER] = true;
 
   constructor(code: string, message: string, suggestion?: string, cause?: Error) {
@@ -109,7 +109,7 @@ export class UserError extends XopcbotError {
 /**
  * Configuration errors - caused by invalid/missing config
  */
-export class ConfigError extends XopcbotError {
+export class ConfigError extends XopcError {
   public readonly [CONFIG_ERROR_MARKER] = true;
 
   constructor(code: string, message: string, suggestion?: string, cause?: Error) {
@@ -127,7 +127,7 @@ export class ConfigError extends XopcbotError {
     return new ConfigError(
       'MISSING_API_KEY',
       `API key not configured for provider: ${provider}`,
-      `Set ${provider.toUpperCase().replace(/-/g, '_')}_API_KEY environment variable or run 'xopcbot configure'`
+      `Set ${provider.toUpperCase().replace(/-/g, '_')}_API_KEY environment variable or run 'xopc configure'`
     );
   }
 
@@ -135,7 +135,7 @@ export class ConfigError extends XopcbotError {
     return new ConfigError(
       'INVALID_CONFIG',
       `Invalid configuration at ${path}: ${reason}`,
-      'Check your config.json or run xopcbot configure'
+      'Check your config.json or run xopc configure'
     );
   }
 
@@ -143,7 +143,7 @@ export class ConfigError extends XopcbotError {
     return new ConfigError(
       'MISSING_CONFIG',
       `Missing required configuration: ${key}`,
-      'Run xopcbot configure to set up your configuration'
+      'Run xopc configure to set up your configuration'
     );
   }
 }
@@ -151,7 +151,7 @@ export class ConfigError extends XopcbotError {
 /**
  * System errors - internal/system-level failures
  */
-export class SystemError extends XopcbotError {
+export class SystemError extends XopcError {
   public readonly [SYSTEM_ERROR_MARKER] = true;
 
   constructor(code: string, message: string, retryable = false, suggestion?: string, cause?: Error) {
@@ -192,7 +192,7 @@ export class SystemError extends XopcbotError {
 /**
  * Network errors - connectivity/timeout issues
  */
-export class NetworkError extends XopcbotError {
+export class NetworkError extends XopcError {
   public readonly [NETWORK_ERROR_MARKER] = true;
 
   constructor(code: string, message: string, retryable = true, suggestion?: string, cause?: Error) {
@@ -230,7 +230,7 @@ export class NetworkError extends XopcbotError {
 /**
  * LLM Provider errors - model/API failures
  */
-export class ProviderError extends XopcbotError {
+export class ProviderError extends XopcError {
   public readonly [PROVIDER_ERROR_MARKER] = true;
   public readonly provider: string;
   public readonly model?: string;
@@ -325,9 +325,9 @@ export class ProviderError extends XopcbotError {
 /**
  * Error handling utilities
  */
-export function isXopcbotError(error: unknown): error is XopcbotError {
-  return error instanceof XopcbotError || 
-    (error != null && typeof error === 'object' && XOPCBOT_ERROR_MARKER in error);
+export function isXopcError(error: unknown): error is XopcError {
+  return error instanceof XopcError || 
+    (error != null && typeof error === 'object' && XOPC_ERROR_MARKER in error);
 }
 
 export function isUserError(error: unknown): error is UserError {
@@ -346,7 +346,7 @@ export function isProviderError(error: unknown): error is ProviderError {
 }
 
 export function isRetryable(error: unknown): boolean {
-  if (isXopcbotError(error)) {
+  if (isXopcError(error)) {
     return error.retryable;
   }
   // Default: network errors are retryable
@@ -361,10 +361,10 @@ export function isRetryable(error: unknown): boolean {
 }
 
 /**
- * Wrap unknown error into XopcbotError
+ * Wrap unknown error into XopcError
  */
-export function wrapError(error: unknown, context?: string): XopcbotError {
-  if (isXopcbotError(error)) {
+export function wrapError(error: unknown, context?: string): XopcError {
+  if (isXopcError(error)) {
     return error;
   }
 
@@ -393,7 +393,7 @@ export function wrapError(error: unknown, context?: string): XopcbotError {
  * Format error for user display
  */
 export function formatErrorForUser(error: unknown): string {
-  if (isXopcbotError(error)) {
+  if (isXopcError(error)) {
     return error.toUserMessage();
   }
   
@@ -408,7 +408,7 @@ export function formatErrorForUser(error: unknown): string {
  * Format error for logging
  */
 export function formatErrorForLog(error: unknown): Record<string, unknown> {
-  if (isXopcbotError(error)) {
+  if (isXopcError(error)) {
     return error.toLogObject();
   }
   

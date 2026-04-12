@@ -4,7 +4,7 @@
 
 ## 概述
 
-通过 ACP，xopcbot 可以用同一套接口对接多种后端（例如各类 coding agent 运行时）。主要职责包括：
+通过 ACP，xopc 可以用同一套接口对接多种后端（例如各类 coding agent 运行时）。主要职责包括：
 
 - **会话生命周期**：创建、恢复、关闭会话  
 - **轮次执行**：发送用户消息并消费流式事件  
@@ -35,7 +35,7 @@
 
 ## 配置
 
-在 `~/.xopcbot/config.json` 中增加 `acp` 段（完整字段以 [配置参考](/zh/configuration) 与运行时为准）：
+在 `~/.xopc/xopc.json` 中增加 `acp` 段（完整字段以 [配置参考](/zh/configuration) 与运行时为准）：
 
 ```json
 {
@@ -74,12 +74,12 @@
 ## CLI
 
 ```bash
-xopcbot acp status
-xopcbot acp status -s <session-key>
-xopcbot acp doctor
-xopcbot acp list
-xopcbot acp close -s <session-key>
-xopcbot acp cancel -s <session-key>
+xopc acp status
+xopc acp status -s <session-key>
+xopc acp doctor
+xopc acp list
+xopc acp close -s <session-key>
+xopc acp cancel -s <session-key>
 ```
 
 ## 错误码（节选）

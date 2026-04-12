@@ -2,8 +2,8 @@
  * Telegram ChannelSetupWizard factory (onboard / tooling).
  */
 
-import type { Config } from '@xopcai/xopcbot/config/index.js';
-import type { ChannelSetupWizard } from '@xopcai/xopcbot/channels/plugins/types.adapters.js';
+import type { Config } from '@xopcai/xopc/config/index.js';
+import type { ChannelSetupWizard } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 
 function resolveTelegramToken(cfg: Config, _accountId?: string): string | undefined {
   const tg = cfg.channels?.telegram as Record<string, unknown> | undefined;

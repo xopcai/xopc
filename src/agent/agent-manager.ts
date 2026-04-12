@@ -65,11 +65,11 @@ export interface SkillCatalogEntry {
   source: Skill['source'];
   path: string;
   managed: boolean;
-  /** User toggle in ~/.xopcbot/skills.json (`entries[name].enabled`). Default true. */
+  /** User toggle in ~/.xopc/skills.json (`entries[name].enabled`). Default true. */
   enabled: boolean;
   /** When true, skill is never injected into `<available_skills>` (SKILL.md frontmatter). */
   disableModelInvocation: boolean;
-  /** Hub install provenance when under ~/.xopcbot/skills and listed in skills-lock.json. */
+  /** Hub install provenance when under ~/.xopc/skills and listed in skills-lock.json. */
   hub?: SkillHubLockEntry;
 }
 
@@ -419,7 +419,7 @@ export class AgentManager {
   }
 
   /**
-   * After ~/.xopcbot/skills.json changes (enable/disable), refresh `<available_skills>` on active agents.
+   * After ~/.xopc/skills.json changes (enable/disable), refresh `<available_skills>` on active agents.
    */
   refreshSkillsAfterSkillConfigChange(): void {
     const touched = new Set<string>();

@@ -6,14 +6,14 @@
  */
 
 import type { Context } from 'grammy';
-import type { Config } from '@xopcai/xopcbot/config/schema.js';
+import type { Config } from '@xopcai/xopc/config/schema.js';
 import {
   buildSessionKey,
   resolveRoute,
   applyIdentityLinks,
   type RouteContext,
-} from '@xopcai/xopcbot/routing/index.js';
-import { createLogger } from '@xopcai/xopcbot/utils/logger.js';
+} from '@xopcai/xopc/routing/index.js';
+import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 const log = createLogger('TelegramRouting');
 

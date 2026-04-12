@@ -2,19 +2,19 @@
 layout: home
 
 hero:
-  name: xopcbot
+  name: xopc
   text: Ultra-Lightweight Personal AI Assistant
   tagline: A Node.js + TypeScript based AI agent that runs locally
   image:
     src: /logo.svg
-    alt: xopcbot
+    alt: xopc
   actions:
     - theme: brand
       text: Get Started
       link: /getting-started
     - theme: alt
       text: View on GitHub
-      link: https://github.com/xopcai/xopcbot
+      link: https://github.com/xopcai/xopc
 
 features:
   - title: 🚀 Lightweight & Fast

@@ -1,5 +1,5 @@
-import type { Config } from '@xopcai/xopcbot/config/schema.js';
-import type { MessageBus } from '@xopcai/xopcbot/infra/bus/index.js';
+import type { Config } from '@xopcai/xopc/config/schema.js';
+import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
 
 import { getUpdates } from '../api/api.js';
 import { WeixinConfigManager } from '../api/config-cache.js';

@@ -2,19 +2,19 @@
 layout: home
 
 hero:
-  name: xopcbot
+  name: xopc
   text: 超轻量级个人 AI 助手
   tagline: 基于 Node.js + TypeScript 的本地运行 AI 代理
   image:
     src: /logo.svg
-    alt: xopcbot
+    alt: xopc
   actions:
     - theme: brand
       text: 快速开始
       link: /zh/getting-started
     - theme: alt
       text: GitHub
-      link: https://github.com/xopcai/xopcbot
+      link: https://github.com/xopcai/xopc
 
 features:
   - title: 🚀 轻量快速

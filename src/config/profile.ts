@@ -33,8 +33,8 @@ export interface ProfileInfo {
 export function resolveProfileStateDir(profile: string): string {
   const home = resolveHomeDir();
   return profile === 'default'
-    ? join(home, '.xopcbot')
-    : join(home, `.xopcbot-${profile}`);
+    ? join(home, '.xopc')
+    : join(home, `.xopc-${profile}`);
 }
 
 /**
@@ -44,11 +44,11 @@ export function getProfileNameFromDir(stateDir: string): string {
   const home = resolveHomeDir();
   const relative = stateDir.replace(home, '').replace(/^\//, '');
 
-  if (relative === '.xopcbot') {
+  if (relative === '.xopc') {
     return 'default';
   }
 
-  const match = relative.match(/^\.xopcbot-(.+)$/);
+  const match = relative.match(/^\.xopc-(.+)$/);
   return match ? match[1] : 'default';
 }
 
@@ -56,12 +56,12 @@ export function getProfileNameFromDir(stateDir: string): string {
  * Get the currently active profile name from environment
  */
 export function getCurrentProfile(): string {
-  // Check XOPCBOT_PROFILE first
+  // Check XOPC_PROFILE first
   if (process.env[ENV_VARS.PROFILE]) {
     return process.env[ENV_VARS.PROFILE]!;
   }
 
-  // Infer from XOPCBOT_STATE_DIR
+  // Infer from XOPC_STATE_DIR
   if (process.env[ENV_VARS.STATE_DIR]) {
     return getProfileNameFromDir(process.env[ENV_VARS.STATE_DIR]!);
   }
@@ -88,7 +88,7 @@ export class ProfileManager {
     const currentProfile = getCurrentProfile();
 
     // Check for default profile
-    const defaultDir = join(this.homeDir, '.xopcbot');
+    const defaultDir = join(this.homeDir, '.xopc');
     if (existsSync(defaultDir)) {
       profiles.push(await this.getProfileInfo('default', currentProfile === 'default'));
     }
@@ -99,12 +99,12 @@ export class ProfileManager {
       const profileDirs = entries.filter(
         (entry) =>
           entry.isDirectory() &&
-          entry.name.startsWith('.xopcbot-') &&
-          entry.name !== '.xopcbot'
+          entry.name.startsWith('.xopc-') &&
+          entry.name !== '.xopc'
       );
 
       for (const dir of profileDirs) {
-        const name = dir.name.replace('.xopcbot-', '');
+        const name = dir.name.replace('.xopc-', '');
         profiles.push(await this.getProfileInfo(name, currentProfile === name));
       }
     } catch (error) {

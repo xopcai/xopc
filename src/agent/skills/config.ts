@@ -16,7 +16,7 @@ const log = createLogger('SkillConfig');
  * Resolve skill configuration from multiple sources
  * 
  * Priority (highest to lowest):
- * 1. Environment variable overrides (XOPCBOT_SKILL_<NAME>_<KEY>)
+ * 1. Environment variable overrides (XOPC_SKILL_<NAME>_<KEY>)
  * 2. Config file entries
  * 3. Skill defaults
  */
@@ -36,7 +36,7 @@ export function resolveSkillConfig(
   }
 
   // Apply environment variable overrides
-  const envPrefix = `XOPCBOT_SKILL_${skill.name.toUpperCase().replace(/-/g, '_')}`;
+  const envPrefix = `XOPC_SKILL_${skill.name.toUpperCase().replace(/-/g, '_')}`;
   
   // Check for enabled override
   const enabledEnv = process.env[`${envPrefix}_ENABLED`];
@@ -82,7 +82,7 @@ export function applySkillEnvOverrides(
   }
 
   // Apply environment variable overrides
-  const envPrefix = `XOPCBOT_SKILL_${skill.name.toUpperCase().replace(/-/g, '_')}`;
+  const envPrefix = `XOPC_SKILL_${skill.name.toUpperCase().replace(/-/g, '_')}`;
   for (const [key, value] of Object.entries(process.env)) {
     if (key.startsWith(`${envPrefix}_ENV_`)) {
       const envKey = key.slice(`${envPrefix}_ENV_`.length);
@@ -232,7 +232,7 @@ export function isSkillEnabled(
   }
 
   // Check if skill has requirements that are not met
-  const requires = skill.metadata.xopcbot?.requires || skill.metadata.requires;
+  const requires = skill.metadata.xopc?.requires || skill.metadata.requires;
   if (requires?.bins) {
     const { hasBinary } = require('./installer.js');
     for (const bin of requires.bins) {

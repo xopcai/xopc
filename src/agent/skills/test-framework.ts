@@ -229,7 +229,7 @@ export class SkillTestFramework {
     let hasWarnings = false;
     let hasFailures = false;
 
-    const requires = metadata.xopcbot?.requires;
+    const requires = metadata.xopc?.requires;
 
     if (!requires) {
       return {
@@ -265,7 +265,7 @@ export class SkillTestFramework {
     }
 
     // Check install specs
-    const installSpecs = metadata.xopcbot?.install;
+    const installSpecs = metadata.xopc?.install;
     if (installSpecs && installSpecs.length > 0) {
       details.push(`Available installers: ${installSpecs.map(s => s.kind).join(', ')}`);
       
@@ -359,7 +359,7 @@ export class SkillTestFramework {
     let hasWarnings = false;
 
     // Check for emoji
-    const emoji = metadata.xopcbot?.emoji;
+    const emoji = metadata.xopc?.emoji;
     if (emoji) {
       details.push(`Emoji: ${emoji}`);
     } else {
@@ -376,13 +376,13 @@ export class SkillTestFramework {
     }
 
     // Check for OS restrictions
-    const os = metadata.xopcbot?.os;
+    const os = metadata.xopc?.os;
     if (os) {
       details.push(`Supported OS: ${os.join(', ')}`);
     }
 
     // Check for install specs
-    const installSpecs = metadata.xopcbot?.install;
+    const installSpecs = metadata.xopc?.install;
     if (installSpecs && installSpecs.length > 0) {
       details.push(`Installers: ${installSpecs.length} defined`);
     }
@@ -452,27 +452,27 @@ export class SkillTestFramework {
   // ============================================================================
 
   private extractMetadata(frontmatter: Record<string, unknown>): SkillMetadata {
-    // Only support metadata.xopcbot nested structure
+    // Only support metadata.xopc nested structure
     const meta = frontmatter.metadata as Record<string, unknown> | undefined;
-    const xopcbotMeta = meta?.xopcbot as Record<string, unknown> | undefined;
+    const xopcMeta = meta?.xopc as Record<string, unknown> | undefined;
     
     const metadata: SkillMetadata = {
       name: frontmatter.name as string || '',
       description: frontmatter.description as string || '',
-      emoji: xopcbotMeta?.emoji as string || frontmatter.emoji as string || undefined,
+      emoji: xopcMeta?.emoji as string || frontmatter.emoji as string || undefined,
       homepage: frontmatter.homepage as string || undefined,
-      os: xopcbotMeta?.os as Array<'darwin' | 'linux' | 'win32'> || frontmatter.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
-      requires: xopcbotMeta?.requires as SkillRequires || frontmatter.requires as SkillRequires || undefined,
-      install: xopcbotMeta?.install as SkillInstallSpec[] || frontmatter.install as SkillInstallSpec[] || undefined,
+      os: xopcMeta?.os as Array<'darwin' | 'linux' | 'win32'> || frontmatter.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
+      requires: xopcMeta?.requires as SkillRequires || frontmatter.requires as SkillRequires || undefined,
+      install: xopcMeta?.install as SkillInstallSpec[] || frontmatter.install as SkillInstallSpec[] || undefined,
     };
 
-    // Store xopcbot metadata for reference
-    if (xopcbotMeta) {
-      metadata.xopcbot = {
-        emoji: xopcbotMeta.emoji as string || undefined,
-        requires: xopcbotMeta.requires as SkillRequires || undefined,
-        install: xopcbotMeta.install as SkillInstallSpec[] || undefined,
-        os: xopcbotMeta.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
+    // Store xopc metadata for reference
+    if (xopcMeta) {
+      metadata.xopc = {
+        emoji: xopcMeta.emoji as string || undefined,
+        requires: xopcMeta.requires as SkillRequires || undefined,
+        install: xopcMeta.install as SkillInstallSpec[] || undefined,
+        os: xopcMeta.os as Array<'darwin' | 'linux' | 'win32'> || undefined,
       };
     }
 

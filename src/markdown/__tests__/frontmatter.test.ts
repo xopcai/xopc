@@ -19,7 +19,7 @@ description: |
     const content = `---
 name: session-memory
 metadata:
-  xopcbot:
+  xopc:
     emoji: disk
     events:
       - command:new
@@ -29,17 +29,17 @@ metadata:
     expect(result.metadata).toBeDefined();
 
     const parsed = JSON.parse(result.metadata ?? "");
-    expect(parsed.xopcbot?.emoji).toBe("disk");
+    expect(parsed.xopc?.emoji).toBe("disk");
   });
 
   it("preserves inline JSON values", () => {
     const content = `---
 name: inline-json
-metadata: {"xopcbot": {"events": ["test"]}}
+metadata: {"xopc": {"events": ["test"]}}
 ---
 `;
     const result = parseFrontmatterBlock(content);
-    expect(result.metadata).toBe('{"xopcbot": {"events": ["test"]}}');
+    expect(result.metadata).toBe('{"xopc": {"events": ["test"]}}');
   });
 
   it("stringifies YAML objects and arrays", () => {
@@ -51,7 +51,7 @@ tags:
   - alpha
   - beta
 metadata:
-  xopcbot:
+  xopc:
     events:
       - command:new
 ---
@@ -61,7 +61,7 @@ metadata:
     expect(result.retries).toBe("3");
     expect(JSON.parse(result.tags ?? "[]")).toEqual(["alpha", "beta"]);
     const parsed = JSON.parse(result.metadata ?? "");
-    expect(parsed.xopcbot?.events).toEqual(["command:new"]);
+    expect(parsed.xopc?.events).toEqual(["command:new"]);
   });
 
   it("returns empty when frontmatter is missing", () => {

@@ -1,6 +1,6 @@
 # Workspace Templates
 
-xopcbot uses workspace template files to customize agent behavior and knowledge. These files are automatically created during the `onboard` process in the `~/.xopcbot/workspace/` directory.
+xopc uses workspace template files to customize agent behavior and knowledge. These files are automatically created during the `onboard` process in the `~/.xopc/workspace/` directory.
 
 ## Template Files
 

@@ -27,7 +27,7 @@ export {
 // File Names
 // ============================================
 export const FILENAMES = {
-  CONFIG: 'xopcbot.json',
+  CONFIG: 'xopc.json',
   MODELS_JSON: 'models.json',
   AGENT_JSON: 'agent.json',
   SESSIONS_INDEX: 'index.json',
@@ -36,7 +36,7 @@ export const FILENAMES = {
   CRON_JOBS: 'jobs.json',
   WORKSPACE_STATE: 'workspace.json',
   SKILLS_CACHE: 'skills-cache.json',
-  /** Hub / CLI install provenance for ~/.xopcbot/skills/<id>. */
+  /** Hub / CLI install provenance for ~/.xopc/skills/<id>. */
   SKILLS_LOCK: 'skills-lock.json',
   PID: 'pid',
   STATUS: 'status.json',
@@ -284,7 +284,7 @@ export function resolveSkillPath(skillId: string): string {
 }
 
 /**
- * Skills hub lock file (~/.xopcbot/skills-lock.json): install source + content hash per managed skill id.
+ * Skills hub lock file (~/.xopc/skills-lock.json): install source + content hash per managed skill id.
  */
 export function resolveSkillsLockPath(): string {
   return join(resolveStateDir(), FILENAMES.SKILLS_LOCK);
@@ -336,7 +336,7 @@ export function resolveLogsDir(): string {
  * Resolve a specific log file path
  */
 export function resolveLogPath(date: string): string {
-  return join(resolveLogsDir(), `xopcbot-${date}.log`);
+  return join(resolveLogsDir(), `xopc-${date}.log`);
 }
 
 /**
@@ -347,10 +347,10 @@ export function resolveBinDir(): string {
 }
 
 /**
- * Resolve the xopcbot CLI path
+ * Resolve the xopc CLI path
  */
-export function resolveXopcbotBinPath(): string {
-  return join(resolveBinDir(), 'xopcbot');
+export function resolveXopcBinPath(): string {
+  return join(resolveBinDir(), 'xopc');
 }
 
 /**
@@ -438,7 +438,7 @@ export function resolveMemoryPath(config: Config, date: string, agentId: string)
 }
 
 /**
- * Resolve the bundled extensions directory (shipped with xopcbot)
+ * Resolve the bundled extensions directory (shipped with xopc)
  */
 export function resolveBundledExtensionsDir(): string | null {
   try {
@@ -452,7 +452,7 @@ export function resolveBundledExtensionsDir(): string | null {
 }
 
 /**
- * Resolve the bundled skills directory (shipped with xopcbot)
+ * Resolve the bundled skills directory (shipped with xopc)
  */
 export function resolveBundledSkillsDir(): string | null {
   try {

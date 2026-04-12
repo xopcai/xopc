@@ -1,6 +1,6 @@
 # 会话管理
 
-xopcbot 提供全面的会话管理功能，支持通过 CLI 和 Web UI 管理对话历史。
+xopc 提供全面的会话管理功能，支持通过 CLI 和 Web UI 管理对话历史。
 
 ---
 
@@ -47,59 +47,59 @@ xopcbot 提供全面的会话管理功能，支持通过 CLI 和 Web UI 管理�
 
 ```bash
 # 列出所有会话
-xopcbot session list
+xopc session list
 
 # 按状态筛选
-xopcbot session list --status active
-xopcbot session list --status archived
-xopcbot session list --status pinned
+xopc session list --status active
+xopc session list --status archived
+xopc session list --status pinned
 
 # 按名称或内容搜索
-xopcbot session list --query "project"
+xopc session list --query "project"
 
 # 排序和限制
-xopcbot session list --sort updatedAt --order desc --limit 50
+xopc session list --sort updatedAt --order desc --limit 50
 ```
 
 ### 查看会话详情
 
 ```bash
 # 显示会话信息和最近消息
-xopcbot session info telegram:123456
+xopc session info telegram:123456
 
 # 在会话内搜索
-xopcbot session grep telegram:123456 "API design"
+xopc session grep telegram:123456 "API design"
 ```
 
 ### 管理会话
 
 ```bash
 # 重命名会话
-xopcbot session rename telegram:123456 "Project Discussion"
+xopc session rename telegram:123456 "Project Discussion"
 
 # 添加标签
-xopcbot session tag telegram:123456 work important
+xopc session tag telegram:123456 work important
 
 # 移除标签
-xopcbot session untag telegram:123456 important
+xopc session untag telegram:123456 important
 
 # 归档会话
-xopcbot session archive telegram:123456
+xopc session archive telegram:123456
 
 # 取消归档
-xopcbot session unarchive telegram:123456
+xopc session unarchive telegram:123456
 
 # 置顶会话
-xopcbot session pin telegram:123456
+xopc session pin telegram:123456
 
 # 取消置顶
-xopcbot session unpin telegram:123456
+xopc session unpin telegram:123456
 
 # 删除会话
-xopcbot session delete telegram:123456
+xopc session delete telegram:123456
 
 # 导出会话为 JSON
-xopcbot session export telegram:123456 \
+xopc session export telegram:123456 \
   --format json \
   --output backup.json
 ```
@@ -108,16 +108,16 @@ xopcbot session export telegram:123456 \
 
 ```bash
 # 按筛选条件删除多个会话
-xopcbot session delete-many --status archived --force
+xopc session delete-many --status archived --force
 
 # 归档旧会话（30+ 天未活动）
-xopcbot session cleanup --days 30
+xopc session cleanup --days 30
 ```
 
 ### 统计信息
 
 ```bash
-xopcbot session stats
+xopc session stats
 ```
 
 **示例输出：**
@@ -158,7 +158,7 @@ Web UI 在网关根路径提供可视化会话管理（hash 路由，会话列�
 
 ```bash
 # 启动 gateway
-xopcbot gateway start
+xopc gateway start
 
 # 在浏览器中打开
 open http://localhost:18790/#/sessions
@@ -277,7 +277,7 @@ interface Message {
 
 ### Web UI 无法加载会话
 
-1. 检查 gateway 是否运行：`xopcbot gateway status`
+1. 检查 gateway 是否运行：`xopc gateway status`
 2. 在浏览器控制台验证 WebSocket 连接
 3. 检查 gateway 日志中的错误
 
@@ -287,10 +287,10 @@ interface Message {
 
 ```bash
 # 删除索引文件（将 <agentId> 换成你的 agent id，例如 main）
-rm ~/.xopcbot/agents/<agentId>/sessions/index.json
+rm ~/.xopc/agents/<agentId>/sessions/index.json
 
 # 下次列出会话时会重建
-xopcbot session list
+xopc session list
 ```
 
 ### 会话丢失
@@ -299,7 +299,7 @@ xopcbot session list
 
 ```bash
 # 强制重建索引
-xopcbot session list --limit 1000
+xopc session list --limit 1000
 ```
 
 ---

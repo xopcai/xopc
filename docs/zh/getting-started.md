@@ -1,6 +1,6 @@
 # 快速开始
 
-安装 **xopcbot**、配置至少一个 LLM 提供商密钥后，即可使用 CLI 或网关。本页从零开始说明首次安装与基本使用。
+安装 **xopc**、配置至少一个 LLM 提供商密钥后，即可使用 CLI 或网关。本页从零开始说明首次安装与基本使用。
 
 ## 1. 环境要求
 
@@ -16,14 +16,14 @@
 ### 方式一：从 npm 安装（推荐）
 
 ```bash
-npm install -g @xopcai/xopcbot
+npm install -g @xopcai/xopc
 ```
 
 ### 方式二：从源码构建
 
 ```bash
-git clone https://github.com/xopcai/xopcbot.git
-cd xopcbot
+git clone https://github.com/xopcai/xopc.git
+cd xopc
 pnpm install
 pnpm run build
 ```
@@ -35,12 +35,12 @@ pnpm run build
 使用 `onboard` 向导进行引导式设置：
 
 ```bash
-xopcbot onboard
+xopc onboard
 # 或：pnpm run dev -- onboard
 ```
 
 向导将引导您完成：
-1. 创建工作区目录 (`~/.xopcbot/workspace/`)
+1. 创建工作区目录 (`~/.xopc/workspace/`)
 2. 生成默认 `config.json`
 3. 选择 LLM 提供商并输入 API 密钥
 4. 配置消息通道（Telegram）
@@ -51,12 +51,12 @@ xopcbot onboard
 仅需基本文件而不需要交互式提示：
 
 ```bash
-xopcbot setup
+xopc setup
 ```
 
 ### 手动配置
 
-直接编辑 `~/.xopcbot/config.json`：
+直接编辑 `~/.xopc/xopc.json`：
 
 ```json
 {
@@ -82,7 +82,7 @@ xopcbot setup
 发送单条消息并获取回复：
 
 ```bash
-xopcbot agent -m "用一句话解释什么是 LLM。"
+xopc agent -m "用一句话解释什么是 LLM。"
 # 或：pnpm run dev -- agent -m "用一句话解释什么是 LLM。"
 ```
 
@@ -91,7 +91,7 @@ xopcbot agent -m "用一句话解释什么是 LLM。"
 开始连续对话：
 
 ```bash
-xopcbot agent -i
+xopc agent -i
 # 或：pnpm run dev -- agent -i
 ```
 
@@ -103,7 +103,7 @@ xopcbot agent -i
 
 1. **获取 Bot Token**: 打开 Telegram，搜索 [@BotFather](https://t.me/BotFather)，发送 `/newbot`
 
-2. **配置** `~/.xopcbot/config.json`：
+2. **配置** `~/.xopc/xopc.json`：
 
 ```json
 {
@@ -121,7 +121,7 @@ xopcbot agent -i
 3. **启动 Gateway**：
 
 ```bash
-xopcbot gateway
+xopc gateway
 # 或：pnpm run dev -- gateway
 ```
 
@@ -154,12 +154,12 @@ xopcbot gateway
 |------|----------|
 | `ERR_MODULE_NOT_FOUND` | 运行 `pnpm install` |
 | `Cannot find module '@xopcai/...'` | 运行 `pnpm run build` |
-| 配置未加载 | 验证 `~/.xopcbot/config.json` 是有效 JSON |
+| 配置未加载 | 验证 `~/.xopc/xopc.json` 是有效 JSON |
 | 机器人无响应 | 检查 `TELEGRAM_BOT_TOKEN` 和机器人状态 |
 | API 密钥错误 | 确认环境变量已设置 |
 
 ### 获取帮助
 
 - 查看 [简体中文文档](/zh/) 获取详细指南
-- 查看 [AGENTS.md](https://github.com/xopcai/xopcbot/blob/main/AGENTS.md) 获取开发指南
-- 查看日志：`xopcbot gateway logs --follow`
+- 查看 [AGENTS.md](https://github.com/xopcai/xopc/blob/main/AGENTS.md) 获取开发指南
+- 查看日志：`xopc gateway logs --follow`

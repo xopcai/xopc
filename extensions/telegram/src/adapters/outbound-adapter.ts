@@ -6,9 +6,9 @@ import type {
   ChannelOutboundContext,
   ChannelOutboundPayloadContext,
   OutboundDeliveryResult,
-} from '@xopcai/xopcbot/channels/plugin-types.js';
-import type { ChannelSendOptions, ChannelSendResult } from '@xopcai/xopcbot/channels/channel-domain.js';
-import type { OutboundMessage } from '@xopcai/xopcbot/channels/transport-types.js';
+} from '@xopcai/xopc/channels/plugin-types.js';
+import type { ChannelSendOptions, ChannelSendResult } from '@xopcai/xopc/channels/channel-domain.js';
+import type { OutboundMessage } from '@xopcai/xopc/channels/transport-types.js';
 import { TELEGRAM_CHANNEL_DEFAULTS } from '../plugin-defaults.js';
 
 export function telegramTextChunker(text: string, limit: number): string[] {

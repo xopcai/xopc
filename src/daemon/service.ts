@@ -124,5 +124,5 @@ export function getPlatformName(): string {
  * Get service label for display
  */
 export function getServiceLabel(): string {
-  return 'xopcbot-gateway';
+  return 'xopc-gateway';
 }

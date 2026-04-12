@@ -2,10 +2,10 @@ import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import path from 'node:path';
 import { randomBytes } from 'node:crypto';
 
-import type { Config } from '@xopcai/xopcbot/config/schema.js';
-import type { MessageBus } from '@xopcai/xopcbot/infra/bus/index.js';
-import { generateSessionKey } from '@xopcai/xopcbot/chat-commands/session-key.js';
-import { evaluateAccess } from '@xopcai/xopcbot/channels/security.js';
+import type { Config } from '@xopcai/xopc/config/schema.js';
+import type { MessageBus } from '@xopcai/xopc/infra/bus/index.js';
+import { generateSessionKey } from '@xopcai/xopc/chat-commands/session-key.js';
+import { evaluateAccess } from '@xopcai/xopc/channels/security.js';
 import type { WeixinMessage } from '../api/types.js';
 import { MessageItemType } from '../api/types.js';
 import type { ResolvedWeixinAccount } from '../auth/accounts.js';

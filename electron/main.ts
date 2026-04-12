@@ -37,7 +37,7 @@ function shouldEmbedGateway(): boolean {
 function buildStartupFailureMessage(detail: string): string {
   return (
     `Failed to start the local gateway.\n\n${detail}\n\n` +
-    'The app picks a free port starting at 18790 when possible. If startup still fails, quit other xopcbot or gateway processes, then restart.\n\n' +
+    'The app picks a free port starting at 18790 when possible. If startup still fails, quit other xopc or gateway processes, then restart.\n\n' +
     '(Developers: pnpm run build && pnpm run electron:vite:build && pnpm run electron:server:build)'
   );
 }
@@ -66,7 +66,7 @@ async function resolveWindowLoad(): Promise<
             mainWindow.webContents.send('gateway:exited', { code, signal });
           } else {
             void dialog.showErrorBox(
-              'xopcbot - Gateway stopped',
+              'xopc - Gateway stopped',
               `The gateway process stopped (exit code: ${code ?? 'unknown'}, signal: ${signal ?? 'none'}).\n\n` +
                 'Restart the application.',
             );
@@ -137,7 +137,7 @@ function createWindow(): void {
       if (embed && !win.isDestroyed()) {
         win.webContents.send('startup:failed', { message: msg });
       }
-      void dialog.showErrorBox('xopcbot', buildStartupFailureMessage(msg));
+      void dialog.showErrorBox('xopc', buildStartupFailureMessage(msg));
       app.quit();
     }
   })();

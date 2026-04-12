@@ -33,7 +33,7 @@ export function getContextWithOpts(argv: string[] = process.argv): CLIContext {
 const LONG_RUNNING_COMMANDS = new Set(['gateway', 'agent']);
 
 const program = new Command()
-  .name('xopcbot')
+  .name('xopc')
   .description('Ultra-Lightweight Personal AI Assistant')
   .version(pkg.version)
   .option('--verbose', 'Enable verbose logging', false)

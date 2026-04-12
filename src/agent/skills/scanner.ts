@@ -306,13 +306,13 @@ export async function collectSkillInstallWarnings(skillDir: string, skillName: s
     } else if (summary.warn > 0) {
       warnings.push(
         `Skill "${skillName}" has ${summary.warn} suspicious code pattern(s). ` +
-        `Run "xopcbot security audit --deep" for details.`
+        `Run "xopc security audit --deep" for details.`
       );
     }
   } catch (err) {
     warnings.push(
       `Skill "${skillName}" code safety scan failed (${String(err)}). ` +
-      `Installation continues; run "xopcbot security audit --deep" after install.`
+      `Installation continues; run "xopc security audit --deep" after install.`
     );
   }
 

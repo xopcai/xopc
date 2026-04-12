@@ -98,7 +98,7 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
     maxTokens: typeof d.maxTokens === 'number' ? d.maxTokens : 8192,
     temperature: typeof d.temperature === 'number' ? d.temperature : 0.7,
     maxToolIterations: typeof d.maxToolIterations === 'number' ? d.maxToolIterations : 20,
-    workspace: typeof d.workspace === 'string' ? d.workspace : '~/.xopcbot/workspace',
+    workspace: typeof d.workspace === 'string' ? d.workspace : '~/.xopc/workspace',
     browserEnabled,
     browserHeadless,
     thinkingDefault: typeof d.thinkingDefault === 'string' ? d.thinkingDefault : 'medium',

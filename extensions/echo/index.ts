@@ -4,10 +4,10 @@
  * Demonstrates message modification hooks and message processing.
  * 
  * Installation:
- *   xopcbot extension install ./examples/extensions/echo
+ *   xopc extension install ./examples/extensions/echo
  */
 
-import type { ExtensionApi } from 'xopcbot/extension-sdk';
+import type { ExtensionApi } from 'xopc/extension-sdk';
 
 const extension = {
   id: 'echo',

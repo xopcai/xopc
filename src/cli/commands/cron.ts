@@ -8,9 +8,9 @@ function createCronCommand(_ctx: CLIContext): Command {
     .addHelpText(
       'after',
       formatExamples([
-        'xopcbot cron list                              # List all tasks',
-        'xopcbot cron add --schedule "0 9 * * *" --message "Good morning"',
-        'xopcbot cron remove <job-id>                   # Remove a task',
+        'xopc cron list                              # List all tasks',
+        'xopc cron add --schedule "0 9 * * *" --message "Good morning"',
+        'xopc cron remove <job-id>                   # Remove a task',
       ])
     );
 
@@ -104,8 +104,8 @@ register({
   metadata: {
     category: 'utility',
     examples: [
-      'xopcbot cron list',
-      'xopcbot cron add --schedule "0 9 * * *" --message "Hello"',
+      'xopc cron list',
+      'xopc cron add --schedule "0 9 * * *" --message "Hello"',
     ],
   },
 });

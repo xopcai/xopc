@@ -3,10 +3,10 @@
  *
  * Demonstrates: EnhancedTool with streaming updates (onUpdate callback)
  *
- * Usage: xopcbot extension install ./examples/extensions/progress-tracker
+ * Usage: xopc extension install ./examples/extensions/progress-tracker
  */
 
-import type { ExtensionApi, EnhancedTool } from 'xopcbot/extension-sdk';
+import type { ExtensionApi, EnhancedTool } from 'xopc/extension-sdk';
 
 export default function(api: ExtensionApi) {
   api.logger.info('Progress Tracker extension registered!');

@@ -2,17 +2,17 @@ import { homedir } from 'node:os';
 import { join } from 'node:path';
 
 export const ENV_VARS = {
-  STATE_DIR: 'XOPCBOT_STATE_DIR',
-  PROFILE: 'XOPCBOT_PROFILE',
-  HOME: 'XOPCBOT_HOME',
-  CONFIG_PATH: 'XOPCBOT_CONFIG_PATH',
-  CREDENTIALS_DIR: 'XOPCBOT_CREDENTIALS_DIR',
-  LOG_LEVEL: 'XOPCBOT_LOG_LEVEL',
-  LOG_DIR: 'XOPCBOT_LOG_DIR',
-  LOG_CONSOLE: 'XOPCBOT_LOG_CONSOLE',
-  LOG_FILE: 'XOPCBOT_LOG_FILE',
-  LOG_RETENTION_DAYS: 'XOPCBOT_LOG_RETENTION_DAYS',
-  PRETTY_LOGS: 'XOPCBOT_PRETTY_LOGS',
+  STATE_DIR: 'XOPC_STATE_DIR',
+  PROFILE: 'XOPC_PROFILE',
+  HOME: 'XOPC_HOME',
+  CONFIG_PATH: 'XOPC_CONFIG_PATH',
+  CREDENTIALS_DIR: 'XOPC_CREDENTIALS_DIR',
+  LOG_LEVEL: 'XOPC_LOG_LEVEL',
+  LOG_DIR: 'XOPC_LOG_DIR',
+  LOG_CONSOLE: 'XOPC_LOG_CONSOLE',
+  LOG_FILE: 'XOPC_LOG_FILE',
+  LOG_RETENTION_DAYS: 'XOPC_LOG_RETENTION_DAYS',
+  PRETTY_LOGS: 'XOPC_PRETTY_LOGS',
 } as const;
 
 export function resolveHomeDir(env: NodeJS.ProcessEnv = process.env): string {
@@ -28,8 +28,8 @@ export function resolveStateDir(env: NodeJS.ProcessEnv = process.env): string {
   const home = resolveHomeDir(env);
 
   if (profile && profile !== 'default') {
-    return join(home, `.xopcbot-${profile}`);
+    return join(home, `.xopc-${profile}`);
   }
 
-  return join(home, '.xopcbot');
+  return join(home, '.xopc');
 }

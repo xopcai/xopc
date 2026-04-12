@@ -1,8 +1,8 @@
-# xopcbot · Design Language
+# xopc · Design Language
 
 ## 1. Visual theme & atmosphere
 
-xopcbot 是长时间驻留的 **AI 助手与工作台**：CLI、HTTP/WebSocket 网关，以及 **React Gateway 控制台**。界面气质 **克制、清晰、以内容为中心**——不是营销页，而是可持续使用的工具面。
+xopc 是长时间驻留的 **AI 助手与工作台**：CLI、HTTP/WebSocket 网关，以及 **React Gateway 控制台**。界面气质 **克制、清晰、以内容为中心**——不是营销页，而是可持续使用的工具面。
 
 **核心取向**：每一个像素都应为「用户任务与内容」服务；装饰不抢逻辑，信息不淹操作。工具型界面同样追求 **受控的留白与层级**：密的地方足够密（列表、工具栏），疏的地方足够疏（阅读区、空状态）。
 

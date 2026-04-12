@@ -1,6 +1,6 @@
-# xopcbot Extension System
+# xopc Extension System
 
-xopcbot provides a lightweight but powerful extension system for customizing and extending functionality.
+xopc provides a lightweight but powerful extension system for customizing and extending functionality.
 
 ## Features
 
@@ -19,24 +19,24 @@ xopcbot provides a lightweight but powerful extension system for customizing and
 
 ```bash
 # Install from npm to workspace
-xopcbot extension install xopcbot-extension-hello
+xopc extension install xopc-extension-hello
 
 # Install to global (shared across projects)
-xopcbot extension install xopcbot-extension-hello --global
+xopc extension install xopc-extension-hello --global
 
 # Install from local directory
-xopcbot extension install ./my-local-extension
+xopc extension install ./my-local-extension
 
 # View installed extensions
-xopcbot extension list
+xopc extension list
 
 # Remove extension
-xopcbot extension remove hello
+xopc extension remove hello
 ```
 
 ### Enable Extension
 
-Configure in `~/.xopcbot/config.json`:
+Configure in `~/.xopc/xopc.json`:
 
 ```json
 {
@@ -59,7 +59,7 @@ Configure in `~/.xopcbot/config.json`:
 ### Create New Extension
 
 ```bash
-xopcbot extension create my-extension --name "My Extension" --kind utility
+xopc extension create my-extension --name "My Extension" --kind utility
 ```
 
 **Supported kinds:** `channel` | `provider` | `memory` | `tool` | `utility`
@@ -67,20 +67,20 @@ xopcbot extension create my-extension --name "My Extension" --kind utility
 This creates:
 - `package.json` - npm config
 - `index.ts` - Extension entry (TypeScript)
-- `xopcbot.extension.json` - Extension manifest
+- `xopc.extension.json` - Extension manifest
 - `README.md` - Documentation template
 
 ---
 
 ## Three-tier Storage Architecture
 
-xopcbot supports three-tier extension storage:
+xopc supports three-tier extension storage:
 
 | Level | Path | Use Case | Priority |
 |-------|------|----------|----------|
 | **Workspace** | `workspace/.extensions/` | Project-private extensions | ⭐⭐⭐ Highest |
-| **Global** | `~/.xopcbot/extensions/` | User-level shared extensions | ⭐⭐ Medium |
-| **Bundled** | `xopcbot/extensions/` | Built-in extensions | ⭐ Lowest |
+| **Global** | `~/.xopc/extensions/` | User-level shared extensions | ⭐⭐ Medium |
+| **Bundled** | `xopc/extensions/` | Built-in extensions | ⭐ Lowest |
 
 ### Priority Rules
 
@@ -90,22 +90,22 @@ xopcbot supports three-tier extension storage:
 **Use cases:**
 - Workspace: Project-specific custom extensions
 - Global: Commonly used shared extensions (like telegram-channel)
-- Bundled: Official extensions shipped with xopcbot
+- Bundled: Official extensions shipped with xopc
 
-**Monorepo note:** The Telegram channel is a **workspace package** under `extensions/telegram` (`@xopcai/xopcbot-extension-telegram`) and is wired into the core via `src/channels/plugins/bundled.ts`. It is not loaded from `xopcbot/extensions/` at runtime; that path refers to other bundled extension assets.
+**Monorepo note:** The Telegram channel is a **workspace package** under `extensions/telegram` (`@xopcai/xopc-extension-telegram`) and is wired into the core via `src/channels/plugins/bundled.ts`. It is not loaded from `xopc/extensions/` at runtime; that path refers to other bundled extension assets.
 
 ---
 
 ## Extension SDK
 
-The npm package name is **`@xopcai/xopcbot`**. Import the SDK through the published subpath:
+The npm package name is **`@xopcai/xopc`**. Import the SDK through the published subpath:
 
 ```typescript
 // Recommended: published package subpath
-import type { ExtensionApi, ExtensionDefinition } from '@xopcai/xopcbot/extension-sdk';
+import type { ExtensionApi, ExtensionDefinition } from '@xopcai/xopc/extension-sdk';
 ```
 
-When developing extensions against a local checkout, the loader may still resolve the legacy alias `xopcbot/extension-sdk` to `src/extension-sdk/index.ts`.
+When developing extensions against a local checkout, the loader may still resolve the legacy alias `xopc/extension-sdk` to `src/extension-sdk/index.ts`.
 
 ### Exported Types
 
@@ -115,38 +115,38 @@ import type {
   ExtensionDefinition,      // Extension definition
   ExtensionApi,             // Extension API
   ExtensionLogger,          // Logger interface
-} from '@xopcai/xopcbot/extension-sdk';
+} from '@xopcai/xopc/extension-sdk';
 
 // Tools (re-exported from pi-agent-core)
 import type {
   AgentTool,
   AgentToolResult,
-} from '@xopcai/xopcbot/extension-sdk';
+} from '@xopcai/xopc/extension-sdk';
 
 // Hooks
 import type {
   ExtensionHookEvent,       // Hook event type
   ExtensionHookHandler,     // Hook handler
   HookOptions,              // Hook options
-} from '@xopcai/xopcbot/extension-sdk';
+} from '@xopcai/xopc/extension-sdk';
 
 // Channels (ChannelPlugin registry)
 import type {
   ChannelPlugin,
   ChannelPluginInitOptions,
   ChannelPluginStartOptions,
-} from '@xopcai/xopcbot/extension-sdk';
+} from '@xopcai/xopc/extension-sdk';
 
 import {
   defineChannelPluginEntry,
   registerExtensionCliProgram,
-} from '@xopcai/xopcbot/extension-sdk';
+} from '@xopcai/xopc/extension-sdk';
 
 // Commands
-import type { ExtensionCommand } from '@xopcai/xopcbot/extension-sdk';
+import type { ExtensionCommand } from '@xopcai/xopc/extension-sdk';
 
 // Services
-import type { ExtensionService } from '@xopcai/xopcbot/extension-sdk';
+import type { ExtensionService } from '@xopcai/xopc/extension-sdk';
 ```
 
 ---
@@ -155,7 +155,7 @@ import type { ExtensionService } from '@xopcai/xopcbot/extension-sdk';
 
 ### Manifest File
 
-Each extension must include `xopcbot.extension.json`:
+Each extension must include `xopc.extension.json`:
 
 ```json
 {
@@ -180,7 +180,7 @@ Each extension must include `xopcbot.extension.json`:
 ### Extension Entry File
 
 ```typescript
-import type { ExtensionApi } from '@xopcai/xopcbot/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 
 const extension = {
   id: 'my-extension',
@@ -437,7 +437,7 @@ api.off('my-event', handler);
 ## Complete Example
 
 ```typescript
-import type { ExtensionApi } from '@xopcai/xopcbot/extension-sdk';
+import type { ExtensionApi } from '@xopcai/xopc/extension-sdk';
 
 const extension = {
   id: 'example',
@@ -498,7 +498,7 @@ export default extension;
 
 ## Publishing Extensions
 
-1. Create `xopcbot.extension.json` manifest
+1. Create `xopc.extension.json` manifest
 2. Create `index.ts` entry file
 3. Push to GitHub or publish to npm
 
@@ -507,7 +507,7 @@ export default extension;
 npm publish --access public
 
 # If using scoped package name (recommended)
-# package.json: { "name": "@yourname/xopcbot-extension-name" }
+# package.json: { "name": "@yourname/xopc-extension-name" }
 npm publish --access public
 ```
 
@@ -531,41 +531,41 @@ npm publish --access public
 
 ```bash
 # Install from npm
-xopcbot extension install <package-name>
+xopc extension install <package-name>
 
 # Install specific version
-xopcbot extension install my-extension@1.0.0
+xopc extension install my-extension@1.0.0
 
 # Install from local directory
-xopcbot extension install ./local-extension-dir
+xopc extension install ./local-extension-dir
 
 # Set timeout (default 120 seconds)
-xopcbot extension install slow-extension --timeout 300000
+xopc extension install slow-extension --timeout 300000
 ```
 
 ### extension list
 
 ```bash
-xopcbot extension list
+xopc extension list
 ```
 
 ### extension remove / uninstall
 
 ```bash
-xopcbot extension remove <extension-id>
-xopcbot extension uninstall <extension-id>
+xopc extension remove <extension-id>
+xopc extension uninstall <extension-id>
 ```
 
 ### extension info
 
 ```bash
-xopcbot extension info <extension-id>
+xopc extension info <extension-id>
 ```
 
 ### extension create
 
 ```bash
-xopcbot extension create <extension-id> [options]
+xopc extension create <extension-id> [options]
 
 Options:
   --name <name>           Extension display name
@@ -580,7 +580,7 @@ Options:
 ### Extension Not Loading
 
 1. Check if extension is in `enabled` array
-2. Verify `xopcbot.extension.json` manifest is valid
+2. Verify `xopc.extension.json` manifest is valid
 3. Check logs for loading errors
 
 ### Installation Failed
@@ -610,7 +610,7 @@ The `extensions` section in `config.json` supports the following global options:
       "hello": true,
       "echo": false
     },
-    "allow": ["hello", "echo", "xopcbot-feishu"],
+    "allow": ["hello", "echo", "xopc-feishu"],
     "security": {
       "checkPermissions": true,
       "allowUntrusted": false,
@@ -692,7 +692,7 @@ When a slot has a preferred plugin, other extensions requesting that slot will b
 
 ### Security
 
-By default, xopcbot performs security checks on extensions:
+By default, xopc performs security checks on extensions:
 - Path safety (no symlink escape)
 - Ownership validation
 - Hardlink detection

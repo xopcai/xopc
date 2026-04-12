@@ -17,7 +17,7 @@ export function createLogsCommand(): Command {
       const ctx = getContextWithOpts();
       
       // Determine log directory from environment or default
-      const logDir = process.env.XOPCBOT_LOG_DIR || 
+      const logDir = process.env.XOPC_LOG_DIR || 
         `${ctx.configPath.replace('/config.json', '')}/logs`;
 
       try {

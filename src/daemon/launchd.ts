@@ -34,7 +34,7 @@ function resolveGuiDomain(): string {
 function resolveLaunchAgentPlistPath(env: GatewayServiceEnv): string {
   const home = os.homedir();
   const libraryPath = path.join(home, 'Library', 'LaunchAgents');
-  const label = env.XOPCBOT_PROFILE ? `ai.xopcbot.gateway.${env.XOPCBOT_PROFILE}` : 'ai.xopcbot.gateway';
+  const label = env.XOPC_PROFILE ? `ai.xopc.gateway.${env.XOPC_PROFILE}` : 'ai.xopc.gateway';
   return path.join(libraryPath, `${label}.plist`);
 }
 
@@ -42,7 +42,7 @@ function resolveLaunchAgentPlistPath(env: GatewayServiceEnv): string {
  * Resolve log directory
  */
 function resolveLogDir(): string {
-  return path.join(os.homedir(), '.xopcbot', 'logs');
+  return path.join(os.homedir(), '.xopc', 'logs');
 }
 
 /**
@@ -185,16 +185,16 @@ export function isLaunchdAvailable(): boolean {
  * LaunchAgent service implementation
  */
 export const launchdService: GatewayService = {
-  label: 'ai.xopcbot.gateway',
-  loadedText: 'ai.xopcbot.gateway',
-  notLoadedText: 'ai.xopcbot.gateway',
+  label: 'ai.xopc.gateway',
+  loadedText: 'ai.xopc.gateway',
+  notLoadedText: 'ai.xopc.gateway',
 
   async install(args: GatewayServiceInstallArgs): Promise<void> {
     const plistPath = resolveLaunchAgentPlistPath(args.env);
     const logDir = resolveLogDir();
-    const label = args.env.XOPCBOT_PROFILE
-      ? `ai.xopcbot.gateway.${args.env.XOPCBOT_PROFILE}`
-      : 'ai.xopcbot.gateway';
+    const label = args.env.XOPC_PROFILE
+      ? `ai.xopc.gateway.${args.env.XOPC_PROFILE}`
+      : 'ai.xopc.gateway';
 
     // Ensure directories exist
     await mkdir(path.dirname(plistPath), { recursive: true });
@@ -203,14 +203,14 @@ export const launchdService: GatewayService = {
     // Build environment
     const environment: Record<string, string> = {
       ...args.environment,
-      XOPCBOT_CONFIG: args.env.XOPCBOT_CONFIG || '',
-      XOPCBOT_WORKSPACE: args.env.XOPCBOT_WORKSPACE || '',
-      XOPCBOT_LOG_LEVEL: args.env.XOPCBOT_LOG_LEVEL || 'info',
-      XOPCBOT_LOG_FILE: 'true',
+      XOPC_CONFIG: args.env.XOPC_CONFIG || '',
+      XOPC_WORKSPACE: args.env.XOPC_WORKSPACE || '',
+      XOPC_LOG_LEVEL: args.env.XOPC_LOG_LEVEL || 'info',
+      XOPC_LOG_FILE: 'true',
     };
 
-    if (args.env.XOPCBOT_GATEWAY_TOKEN) {
-      environment.XOPCBOT_GATEWAY_TOKEN = args.env.XOPCBOT_GATEWAY_TOKEN;
+    if (args.env.XOPC_GATEWAY_TOKEN) {
+      environment.XOPC_GATEWAY_TOKEN = args.env.XOPC_GATEWAY_TOKEN;
     }
 
     // Build plist

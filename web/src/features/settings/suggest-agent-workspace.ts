@@ -26,12 +26,12 @@ function normalizeAgentId(value: string): string {
   );
 }
 
-/** Empty string if `name` is blank; else `~/.xopcbot/workspace-<agentId>`. */
+/** Empty string if `name` is blank; else `~/.xopc/workspace-<agentId>`. */
 export function suggestWorkspaceFromAgentName(name: string): string {
   const t = name.trim();
   if (!t) {
     return '';
   }
   const id = normalizeAgentId(t);
-  return `~/.xopcbot/workspace-${id}`;
+  return `~/.xopc/workspace-${id}`;
 }

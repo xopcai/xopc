@@ -1,13 +1,13 @@
 # Gateway API
 
-REST API 网关，用于外部程序与 xopcbot 交互。
+REST API 网关，用于外部程序与 xopc 交互。
 
 ## 启动网关
 
 ### 前台模式（推荐）
 
 ```bash
-xopcbot gateway --port 18790
+xopc gateway --port 18790
 ```
 
 默认端口：`18790`
@@ -19,7 +19,7 @@ xopcbot gateway --port 18790
 如果端口已被占用，使用 `--force` 自动终止现有进程：
 
 ```bash
-xopcbot gateway --force
+xopc gateway --force
 ```
 
 这将：
@@ -33,7 +33,7 @@ xopcbot gateway --force
 ### 查看状态
 
 ```bash
-xopcbot gateway status
+xopc gateway status
 ```
 
 输出示例：
@@ -47,51 +47,51 @@ xopcbot gateway status
    Token: abc12345...xyz67890
 
 📝 Management:
-   xopcbot gateway stop      # 停止网关
-   xopcbot gateway restart   # 重启网关
+   xopc gateway stop      # 停止网关
+   xopc gateway restart   # 重启网关
 ```
 
 ### 停止网关
 
 ```bash
 # 优雅停止（SIGTERM，5秒超时）
-xopcbot gateway stop
+xopc gateway stop
 
 # 强制停止（立即 SIGKILL）
-xopcbot gateway stop --force
+xopc gateway stop --force
 
 # 自定义超时（毫秒）
-xopcbot gateway stop --timeout 3000
+xopc gateway stop --timeout 3000
 ```
 
 ### 重启网关
 
 ```bash
 # 发送 SIGUSR1 信号触发优雅重启
-xopcbot gateway restart
+xopc gateway restart
 
 # 强制重启（终止并重新启动）
-xopcbot gateway restart --force
+xopc gateway restart --force
 ```
 
-**注意**：SIGUSR1 重启需要设置环境变量 `XOPCBOT_ALLOW_SIGUSR1_RESTART=1`。
+**注意**：SIGUSR1 重启需要设置环境变量 `XOPC_ALLOW_SIGUSR1_RESTART=1`。
 
 ### 查看日志
 
 ```bash
 # 查看最近 50 行
-xopcbot gateway logs
+xopc gateway logs
 
 # 查看指定行数
-xopcbot gateway logs --lines 100
+xopc gateway logs --lines 100
 
 # 实时跟踪日志（类似 tail -f）
-xopcbot gateway logs --follow
+xopc gateway logs --follow
 ```
 
 ## 系统服务管理
 
-xopcbot 支持将网关作为系统服务运行，实现开机自动启动。
+xopc 支持将网关作为系统服务运行，实现开机自动启动。
 
 ### 支持的平台
 
@@ -104,7 +104,7 @@ xopcbot 支持将网关作为系统服务运行，实现开机自动启动。
 ### 安装为系统服务
 
 ```bash
-xopcbot gateway install
+xopc gateway install
 ```
 
 **选项**：
@@ -119,7 +119,7 @@ xopcbot gateway install
 **示例**：
 
 ```bash
-xopcbot gateway install --port 8080 --token my-secret-token
+xopc gateway install --port 8080 --token my-secret-token
 ```
 
 安装后，网关将在登录时自动启动。
@@ -128,19 +128,19 @@ xopcbot gateway install --port 8080 --token my-secret-token
 
 ```bash
 # 通过系统服务启动
-xopcbot gateway service-start
+xopc gateway service-start
 
 # 查看服务状态
-xopcbot gateway service-status
+xopc gateway service-status
 
 # 卸载系统服务
-xopcbot gateway uninstall
+xopc gateway uninstall
 ```
 
 ### 服务状态输出
 
 ```bash
-xopcbot gateway service-status
+xopc gateway service-status
 ```
 
 示例输出：
@@ -154,7 +154,7 @@ PID: 12345
 📝 Configuration
 ────────────────
 Program: node
-Args: /path/to/xopcbot gateway --port 18790
+Args: /path/to/xopc gateway --port 18790
 Working Dir: /home/user
 
 🌐 Access
@@ -163,10 +163,10 @@ URL: http://localhost:18790
 
 📝 Commands
 ───────────
-  xopcbot gateway service-start   # 启动服务
-  xopcbot gateway stop            # 停止（进程）
-  xopcbot gateway restart         # 重启（进程）
-  xopcbot gateway uninstall      # 移除服务
+  xopc gateway service-start   # 启动服务
+  xopc gateway stop            # 停止（进程）
+  xopc gateway restart         # 重启（进程）
+  xopc gateway uninstall      # 移除服务
 ```
 
 ## 进程架构
@@ -175,7 +175,7 @@ URL: http://localhost:18790
 
 使用文件锁替代 PID 文件：
 
-- **位置**：`~/.xopcbot/locks/gateway.{hash}.lock`
+- **位置**：`~/.xopc/locks/gateway.{hash}.lock`
 - **哈希**：配置路径的 SHA256（支持多配置）
 - **内容**：`{ pid, createdAt, configPath, startTime }`
 
@@ -210,7 +210,7 @@ URL: http://localhost:18790
 lsof -i :18790
 
 # 强制释放端口（SIGTERM -> SIGKILL）
-xopcbot gateway --force
+xopc gateway --force
 ```
 
 ## API 端点
@@ -374,19 +374,19 @@ GET /health
 
 ```bash
 # 启动网关（前台）
-xopcbot gateway
+xopc gateway
 
 # 检查状态
-xopcbot gateway status
+xopc gateway status
 
 # 查看日志
-xopcbot gateway logs --lines 20
+xopc gateway logs --lines 20
 
 # 重启网关
-xopcbot gateway restart
+xopc gateway restart
 
 # 停止网关
-xopcbot gateway stop
+xopc gateway stop
 ```
 
 ### cURL
@@ -507,7 +507,7 @@ Content-Type: application/json
 
 ## 锁文件
 
-网关锁文件位置：`~/.xopcbot/locks/gateway.{hash}.lock`
+网关锁文件位置：`~/.xopc/locks/gateway.{hash}.lock`
 
 哈希基于配置文件路径，允许不同配置运行多个网关。
 
@@ -522,7 +522,7 @@ Content-Type: application/json
 使用 `--force` 自动终止现有进程：
 
 ```bash
-xopcbot gateway --force
+xopc gateway --force
 ```
 
 ### 优雅关闭
@@ -535,16 +535,16 @@ xopcbot gateway --force
 可通过 `--timeout` 参数自定义超时时间：
 
 ```bash
-xopcbot gateway stop --timeout 10000  # 10 秒超时
+xopc gateway stop --timeout 10000  # 10 秒超时
 ```
 
 ## 环境变量
 
 | 变量 | 描述 |
 |------|------|
-| `XOPCBOT_NO_RESPAWN` | 禁用进程重生，使用进程内重启 |
-| `XOPCBOT_ALLOW_SIGUSR1_RESTART` | 允许 SIGUSR1 触发重启 |
-| `XOPCBOT_SERVICE_MARKER` | 标记在监督器下运行（systemd/launchd） |
+| `XOPC_NO_RESPAWN` | 禁用进程重生，使用进程内重启 |
+| `XOPC_ALLOW_SIGUSR1_RESTART` | 允许 SIGUSR1 触发重启 |
+| `XOPC_SERVICE_MARKER` | 标记在监督器下运行（systemd/launchd） |
 
 ## CORS 配置
 
@@ -556,14 +556,14 @@ xopcbot gateway stop --timeout 10000  # 10 秒超时
 
 1. 停止旧网关：
    ```bash
-   ps aux | grep xopcbot
+   ps aux | grep xopc
    kill -9 <PID>
-   rm ~/.xopcbot/gateway.pid
+   rm ~/.xopc/gateway.pid
    ```
 
 2. 启动新网关：
    ```bash
-   xopcbot gateway
+   xopc gateway
    ```
 
-3. 使用 `Ctrl+C` 停止，或从另一个终端运行 `xopcbot gateway stop`。
+3. 使用 `Ctrl+C` 停止，或从另一个终端运行 `xopc gateway stop`。

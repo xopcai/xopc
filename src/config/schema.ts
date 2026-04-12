@@ -19,7 +19,7 @@ export const AgentModelRefSchema = z.union([
 export type AgentModelConfig = z.infer<typeof AgentModelRefSchema>;
 
 export const AgentDefaultsSchema = z.object({
-  workspace: z.string().default('~/.xopcbot/workspace'),
+  workspace: z.string().default('~/.xopc/workspace'),
   model: z.union([
     z.string(),
     z.object({
@@ -169,7 +169,7 @@ export const AgentsConfigSchema = z.object({
   list: z.array(AgentConfigSchema).optional(),
 }).default({
   defaults: {
-    workspace: '~/.xopcbot/workspace',
+    workspace: '~/.xopc/workspace',
     model: '', // Empty default - will be resolved dynamically at runtime
     maxTokens: 8192,
     temperature: 0.7,
@@ -668,7 +668,7 @@ export const ConfigSchema = z.object({
 }).default({
   agents: {
     defaults: {
-      workspace: '~/.xopcbot/workspace',
+      workspace: '~/.xopc/workspace',
       model: '', // Empty default - will be resolved dynamically at runtime
       maxTokens: 8192,
       temperature: 0.7,

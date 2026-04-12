@@ -1,5 +1,5 @@
 {
-  "name": "@xopcai/xopcbot-extension-weixin",
+  "name": "@xopcai/xopc-extension-weixin",
   "version": "0.1.0",
   "private": true,
   "description": "Bundled Weixin channel sources (compiled with core into dist/extensions/; not published to npm).",
@@ -18,18 +18,18 @@
     "build": "tsc -p tsconfig.json"
   },
   "peerDependencies": {
-    "@xopcai/xopcbot": "workspace:*"
+    "@xopcai/xopc": "workspace:*"
   },
   "devDependencies": {
     "typescript": "^5.9.3"
   },
-  "xopcbot": {
+  "xopc": {
     "bundledChannel": {
       "export": "weixinPlugin",
       "order": 20
     }
   },
-  "keywords": ["xopcbot", "weixin", "wechat"],
+  "keywords": ["xopc", "weixin", "wechat"],
   "license": "MIT",
   "ilink_appid": "bot"
 }

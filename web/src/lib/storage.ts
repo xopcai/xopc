@@ -2,8 +2,8 @@
  * LocalStorage keys for gateway token and UI locale.
  */
 
-const TOKEN_KEY = 'xopcbot.token';
-const LANGUAGE_KEY = 'xopcbot.language';
+const TOKEN_KEY = 'xopc.token';
+const LANGUAGE_KEY = 'xopc.language';
 
 export type StoredLanguage = 'en' | 'zh';
 

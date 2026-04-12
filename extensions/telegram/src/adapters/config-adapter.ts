@@ -1,4 +1,4 @@
-import type { ChannelAccountSnapshot, ChannelConfigAdapter } from '@xopcai/xopcbot/channels/plugin-types.js';
+import type { ChannelAccountSnapshot, ChannelConfigAdapter } from '@xopcai/xopc/channels/plugin-types.js';
 import type { TelegramAccountManager } from '../account-manager.js';
 import type { TelegramResolvedAccount } from './types.js';
 

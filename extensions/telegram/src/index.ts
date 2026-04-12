@@ -4,4 +4,4 @@
 
 export { telegramPlugin } from './plugin.js';
 export type { TelegramAccount } from './plugin.js';
-export { defineChannelPluginEntry } from '@xopcai/xopcbot/extensions/sdk/channel-entry.js';
+export { defineChannelPluginEntry } from '@xopcai/xopc/extensions/sdk/channel-entry.js';

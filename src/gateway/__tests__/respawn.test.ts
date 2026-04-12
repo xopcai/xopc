@@ -2,18 +2,18 @@ import { describe, it, expect } from 'vitest';
 import { restartGatewayProcessWithFreshPid } from '../respawn.js';
 
 describe('ProcessRespawn', () => {
-  it('should return disabled when XOPCBOT_NO_RESPAWN is set', () => {
-    const originalValue = process.env.XOPCBOT_NO_RESPAWN;
-    process.env.XOPCBOT_NO_RESPAWN = '1';
+  it('should return disabled when XOPC_NO_RESPAWN is set', () => {
+    const originalValue = process.env.XOPC_NO_RESPAWN;
+    process.env.XOPC_NO_RESPAWN = '1';
     
     try {
       const result = restartGatewayProcessWithFreshPid();
       expect(result.mode).toBe('disabled');
     } finally {
       if (originalValue !== undefined) {
-        process.env.XOPCBOT_NO_RESPAWN = originalValue;
+        process.env.XOPC_NO_RESPAWN = originalValue;
       } else {
-        delete process.env.XOPCBOT_NO_RESPAWN;
+        delete process.env.XOPC_NO_RESPAWN;
       }
     }
   });

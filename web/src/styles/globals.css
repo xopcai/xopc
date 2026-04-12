@@ -455,7 +455,7 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 }
 
 /* Mobile nav drawer: push-in from left (Radix Dialog sets data-state on overlay + content). */
-@keyframes xopcbot-overlay-in {
+@keyframes xopc-overlay-in {
   from {
     opacity: 0;
   }
@@ -464,7 +464,7 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
   }
 }
 
-@keyframes xopcbot-drawer-in {
+@keyframes xopc-drawer-in {
   from {
     transform: translate3d(-100%, 0, 0);
   }
@@ -474,11 +474,11 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 }
 
 /* Dialog overlay and content animations */
-@keyframes xopcbot-dialog-overlay-in {
+@keyframes xopc-dialog-overlay-in {
   from { opacity: 0; }
   to { opacity: 1; }
 }
-@keyframes xopcbot-dialog-overlay-out {
+@keyframes xopc-dialog-overlay-out {
   from { opacity: 1; }
   to { opacity: 0; }
 }
@@ -486,7 +486,7 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 /* Opacity only — do not animate `transform` here: it overrides Tailwind centering
  * (`left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2`) and causes the modal to jump
  * (e.g. drift to a corner) when the animation ends. */
-@keyframes xopcbot-dialog-content-in {
+@keyframes xopc-dialog-content-in {
   from {
     opacity: 0;
   }
@@ -494,7 +494,7 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
     opacity: 1;
   }
 }
-@keyframes xopcbot-dialog-content-out {
+@keyframes xopc-dialog-content-out {
   from {
     opacity: 1;
   }
@@ -504,7 +504,7 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 }
 
 /* Fullscreen dialog (e.g. chat attachment preview): never translate — `inset-0` + translate drifts off-screen */
-@keyframes xopcbot-dialog-fullscreen-in {
+@keyframes xopc-dialog-fullscreen-in {
   from {
     opacity: 0;
   }
@@ -512,7 +512,7 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
     opacity: 1;
   }
 }
-@keyframes xopcbot-dialog-fullscreen-out {
+@keyframes xopc-dialog-fullscreen-out {
   from {
     opacity: 1;
   }
@@ -522,7 +522,7 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 }
 
 /* Flex-centered pane: parent handles position; animation must not apply translate(-50%,-50%) */
-@keyframes xopcbot-dialog-pane-in {
+@keyframes xopc-dialog-pane-in {
   from {
     opacity: 0;
     transform: scale(0.96);
@@ -532,7 +532,7 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
     transform: scale(1);
   }
 }
-@keyframes xopcbot-dialog-pane-out {
+@keyframes xopc-dialog-pane-out {
   from {
     opacity: 1;
     transform: scale(1);
@@ -544,60 +544,60 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 }
 
 /* Drawer (right-side panel) animations */
-@keyframes xopcbot-drawer-right-in {
+@keyframes xopc-drawer-right-in {
   from { transform: translate3d(100%, 0, 0); }
   to { transform: translate3d(0, 0, 0); }
 }
-@keyframes xopcbot-drawer-right-out {
+@keyframes xopc-drawer-right-out {
   from { transform: translate3d(0, 0, 0); }
   to { transform: translate3d(100%, 0, 0); }
 }
 
 /* Animation classes for Radix Dialog */
-.xopcbot-dialog-overlay[data-state='open'] {
-  animation: xopcbot-dialog-overlay-in 0.2s ease-out both;
+.xopc-dialog-overlay[data-state='open'] {
+  animation: xopc-dialog-overlay-in 0.2s ease-out both;
 }
-.xopcbot-dialog-overlay[data-state='closed'] {
-  animation: xopcbot-dialog-overlay-out 0.15s ease-in both;
-}
-
-.xopcbot-dialog-content[data-state='open'] {
-  animation: xopcbot-dialog-content-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
-}
-.xopcbot-dialog-content[data-state='closed'] {
-  animation: xopcbot-dialog-content-out 0.2s ease-in both;
+.xopc-dialog-overlay[data-state='closed'] {
+  animation: xopc-dialog-overlay-out 0.15s ease-in both;
 }
 
-.xopcbot-dialog-content-fullscreen[data-state='open'] {
-  animation: xopcbot-dialog-fullscreen-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
+.xopc-dialog-content[data-state='open'] {
+  animation: xopc-dialog-content-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
-.xopcbot-dialog-content-fullscreen[data-state='closed'] {
-  animation: xopcbot-dialog-fullscreen-out 0.2s ease-in both;
-}
-
-.xopcbot-dialog-content-pane[data-state='open'] {
-  animation: xopcbot-dialog-pane-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
-}
-.xopcbot-dialog-content-pane[data-state='closed'] {
-  animation: xopcbot-dialog-pane-out 0.2s ease-in both;
+.xopc-dialog-content[data-state='closed'] {
+  animation: xopc-dialog-content-out 0.2s ease-in both;
 }
 
-.xopcbot-drawer-right[data-state='open'] {
-  animation: xopcbot-drawer-right-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+.xopc-dialog-content-fullscreen[data-state='open'] {
+  animation: xopc-dialog-fullscreen-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
-.xopcbot-drawer-right[data-state='closed'] {
-  animation: xopcbot-drawer-right-out 0.2s ease-in both;
-}
-
-.xopcbot-mobile-nav-overlay[data-state='open'] {
-  animation: xopcbot-overlay-in 0.2s ease-out both;
-}
-.xopcbot-mobile-nav-overlay[data-state='closed'] {
-  animation: xopcbot-dialog-overlay-out 0.15s ease-in both;
+.xopc-dialog-content-fullscreen[data-state='closed'] {
+  animation: xopc-dialog-fullscreen-out 0.2s ease-in both;
 }
 
-.xopcbot-mobile-nav-content[data-state='open'] {
-  animation: xopcbot-drawer-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+.xopc-dialog-content-pane[data-state='open'] {
+  animation: xopc-dialog-pane-in 0.25s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.xopc-dialog-content-pane[data-state='closed'] {
+  animation: xopc-dialog-pane-out 0.2s ease-in both;
+}
+
+.xopc-drawer-right[data-state='open'] {
+  animation: xopc-drawer-right-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.xopc-drawer-right[data-state='closed'] {
+  animation: xopc-drawer-right-out 0.2s ease-in both;
+}
+
+.xopc-mobile-nav-overlay[data-state='open'] {
+  animation: xopc-overlay-in 0.2s ease-out both;
+}
+.xopc-mobile-nav-overlay[data-state='closed'] {
+  animation: xopc-dialog-overlay-out 0.15s ease-in both;
+}
+
+.xopc-mobile-nav-content[data-state='open'] {
+  animation: xopc-drawer-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 
 @media (prefers-reduced-motion: reduce) {

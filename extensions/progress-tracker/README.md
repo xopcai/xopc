@@ -9,7 +9,7 @@
 
 **使用方法:**
 ```bash
-xopcbot extension install ./examples/extensions/progress-tracker
+xopc extension install ./examples/extensions/progress-tracker
 ```
 
 **代码量:** ~80 行（精简前 217 行）

@@ -66,7 +66,7 @@ export function createSkillManageTool(deps: SkillManageToolDeps): AgentTool<type
     name: 'skill_manage',
     label: '🛠️ Skill',
     description:
-      'Create, edit, patch, or delete user skills under ~/.xopcbot/skills and/or workspace skills/ (see skills.agentWritePolicy). ' +
+      'Create, edit, patch, or delete user skills under ~/.xopc/skills and/or workspace skills/ (see skills.agentWritePolicy). ' +
       'Also write_file / remove_file under references/, templates/, scripts/, assets/. ' +
       'Bundled and extra-dir skills cannot be modified. Runs a security scan after writes.',
     parameters: SkillManageSchema,

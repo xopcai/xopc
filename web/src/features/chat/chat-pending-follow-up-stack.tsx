@@ -29,7 +29,7 @@ export const ChatPendingFollowUpStack = memo(function ChatPendingFollowUpStack({
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
 
-  const DT_PREFIX = 'xopcbot-followup:';
+  const DT_PREFIX = 'xopc-followup:';
 
   const onDragOver = useCallback((e: React.DragEvent) => {
     e.preventDefault();

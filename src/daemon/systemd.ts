@@ -32,15 +32,15 @@ function getUsername(): string {
  */
 function resolveSystemdUnitPath(_env: NodeJS.ProcessEnv): string {
   const home = os.homedir();
-  const xopcbotDir = path.join(home, '.config', 'systemd', 'user');
-  return path.join(xopcbotDir, 'xopcbot-gateway.service');
+  const xopcDir = path.join(home, '.config', 'systemd', 'user');
+  return path.join(xopcDir, 'xopc-gateway.service');
 }
 
 /**
  * Resolve log directory
  */
 function resolveLogDir(): string {
-  return path.join(os.homedir(), '.xopcbot', 'logs');
+  return path.join(os.homedir(), '.xopc', 'logs');
 }
 
 /**
@@ -173,9 +173,9 @@ export async function enableLinger(): Promise<void> {
  * Systemd service implementation
  */
 export const systemdService: GatewayService = {
-  label: 'xopcbot-gateway',
-  loadedText: 'xopcbot-gateway.service',
-  notLoadedText: 'xopcbot-gateway.service',
+  label: 'xopc-gateway',
+  loadedText: 'xopc-gateway.service',
+  notLoadedText: 'xopc-gateway.service',
 
   async install(args: GatewayServiceInstallArgs): Promise<void> {
     const unitPath = resolveSystemdUnitPath(args.env);
@@ -188,19 +188,19 @@ export const systemdService: GatewayService = {
     // Build environment
     const environment: Record<string, string> = {
       ...args.environment,
-      XOPCBOT_CONFIG: args.env.XOPCBOT_CONFIG || '',
-      XOPCBOT_WORKSPACE: args.env.XOPCBOT_WORKSPACE || '',
-      XOPCBOT_LOG_LEVEL: args.env.XOPCBOT_LOG_LEVEL || 'info',
-      XOPCBOT_LOG_FILE: 'true',
+      XOPC_CONFIG: args.env.XOPC_CONFIG || '',
+      XOPC_WORKSPACE: args.env.XOPC_WORKSPACE || '',
+      XOPC_LOG_LEVEL: args.env.XOPC_LOG_LEVEL || 'info',
+      XOPC_LOG_FILE: 'true',
     };
 
-    if (args.env.XOPCBOT_GATEWAY_TOKEN) {
-      environment.XOPCBOT_GATEWAY_TOKEN = args.env.XOPCBOT_GATEWAY_TOKEN;
+    if (args.env.XOPC_GATEWAY_TOKEN) {
+      environment.XOPC_GATEWAY_TOKEN = args.env.XOPC_GATEWAY_TOKEN;
     }
 
     // Build unit content
     const unit = buildSystemdUnit({
-      description: 'xopcbot Gateway Server',
+      description: 'xopc Gateway Server',
       execStart: args.programArguments.join(' '),
       workingDirectory: args.workingDirectory,
       environment,
@@ -216,7 +216,7 @@ export const systemdService: GatewayService = {
     await systemctl(['daemon-reload'], args.stdout, args.stderr);
 
     // Enable service
-    await systemctl(['enable', 'xopcbot-gateway'], args.stdout, args.stderr);
+    await systemctl(['enable', 'xopc-gateway'], args.stdout, args.stderr);
     log.info('Systemd service installed');
   },
 
@@ -232,7 +232,7 @@ export const systemdService: GatewayService = {
 
     // Disable service
     try {
-      await systemctl(['disable', 'xopcbot-gateway'], args.stdout, args.stderr);
+      await systemctl(['disable', 'xopc-gateway'], args.stdout, args.stderr);
     } catch {
       // Ignore errors
     }
@@ -249,23 +249,23 @@ export const systemdService: GatewayService = {
   },
 
   async start(args: GatewayServiceControlArgs): Promise<void> {
-    await systemctl(['start', 'xopcbot-gateway'], args.stdout, args.stderr);
+    await systemctl(['start', 'xopc-gateway'], args.stdout, args.stderr);
     log.info('Systemd service started');
   },
 
   async stop(args: GatewayServiceControlArgs): Promise<void> {
-    await systemctl(['stop', 'xopcbot-gateway'], args.stdout, args.stderr);
+    await systemctl(['stop', 'xopc-gateway'], args.stdout, args.stderr);
     log.info('Systemd service stopped');
   },
 
   async restart(args: GatewayServiceControlArgs): Promise<void> {
-    await systemctl(['restart', 'xopcbot-gateway'], args.stdout, args.stderr);
+    await systemctl(['restart', 'xopc-gateway'], args.stdout, args.stderr);
     log.info('Systemd service restarted');
   },
 
   async isLoaded(_args: GatewayServiceEnvArgs): Promise<boolean> {
     try {
-      execSync('systemctl --user is-enabled xopcbot-gateway', { stdio: 'ignore' });
+      execSync('systemctl --user is-enabled xopc-gateway', { stdio: 'ignore' });
       return true;
     } catch {
       return false;
@@ -274,7 +274,7 @@ export const systemdService: GatewayService = {
 
   async getRuntime(_args: GatewayServiceEnvArgs): Promise<GatewayServiceRuntime> {
     try {
-      const stdout = execSync('systemctl --user show xopcbot-gateway --property=ActiveState,MainPID,ExecMainStatus', { encoding: 'utf-8' });
+      const stdout = execSync('systemctl --user show xopc-gateway --property=ActiveState,MainPID,ExecMainStatus', { encoding: 'utf-8' });
       const lines = stdout.trim().split('\n');
       let status: 'running' | 'stopped' | 'unknown' = 'unknown';
       let pid: number | undefined;

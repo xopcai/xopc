@@ -1,4 +1,4 @@
-/** Skills catalog — managed global skills (~/.xopcbot/skills). */
+/** Skills catalog — managed global skills (~/.xopc/skills). */
 
 export interface SkillHubProvenance {
   kind: 'git' | 'archive';

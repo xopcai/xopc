@@ -1,4 +1,4 @@
-import { sanitizeSegment } from "@xopcai/xopcbot/routing/session-key.js";
+import { sanitizeSegment } from "@xopcai/xopc/routing/session-key.js";
 
 /**
  * Canonical Weixin bot account id (ilink / state paths).

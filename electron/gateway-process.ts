@@ -30,7 +30,7 @@ export async function pickAvailablePort(
     if (free) return port;
   }
   throw new Error(
-    `No free TCP port on ${hostname} in range ${startPort}–${startPort + maxAttempts - 1} (try closing other xopcbot gateway instances)`,
+    `No free TCP port on ${hostname} in range ${startPort}–${startPort + maxAttempts - 1} (try closing other xopc gateway instances)`,
   );
 }
 
@@ -101,11 +101,11 @@ export function spawnGatewayProcess(opts: GatewayProcessOptions): ChildProcess {
       env: {
         ...process.env,
         ELECTRON_RUN_AS_NODE: '1',
-        XOPCBOT_STATE_DIR: dirname(opts.configPath),
-        XOPCBOT_CONFIG_PATH: opts.configPath,
-        XOPCBOT_WORKSPACE: opts.workspacePath,
+        XOPC_STATE_DIR: dirname(opts.configPath),
+        XOPC_CONFIG_PATH: opts.configPath,
+        XOPC_WORKSPACE: opts.workspacePath,
         ...(isPackaged
-          ? { XOPCBOT_UI_STATIC_ROOT: join(app.getAppPath(), 'dist/gateway/static/root') }
+          ? { XOPC_UI_STATIC_ROOT: join(app.getAppPath(), 'dist/gateway/static/root') }
           : {}),
       },
       // app.getAppPath() is the app.asar archive — not a real directory; using it as cwd causes spawn ENOTDIR.
