@@ -43,6 +43,7 @@ pnpm run dev -- <command>
 | `extension` | 管理扩展 |
 | `skills` | 管理技能（安装、启用、配置、测试） |
 | `config` | 查看和编辑配置（非交互式） |
+| `image` | 图像理解 / 文生图默认项（`status`、`set-understanding`、`set-generation`、备用链、`providers` 等） |
 | `session` | 管理会话 |
 
 ---
@@ -503,6 +504,26 @@ xopc extension create redis-memory --name "Redis Memory" --kind memory
 ```
 
 **注意**：创建的扩展使用 TypeScript，通过 [jiti](https://github.com/unjs/jiti) 即时加载，无需预编译。
+
+---
+
+## image
+
+维护 **`agents.defaults.imageModel`**、**`imageGenerationModel`**、**`mediaMaxMb`** 及备用模型列表，无需手写长配置路径。
+
+```bash
+xopc image status
+xopc image status --json
+xopc image set-understanding openai/gpt-4o
+xopc image set-generation openai/gpt-image-1
+xopc image add-fallback understanding anthropic/claude-sonnet-4-5
+xopc image add-fallback generation qwen/wan2.6-t2i
+xopc image remove-fallback understanding 0
+xopc image providers
+xopc image set-max-size 10
+```
+
+详见 [图像与视觉](image-multimodal.md)。
 
 ---
 

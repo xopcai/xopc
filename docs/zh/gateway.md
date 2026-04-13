@@ -344,6 +344,10 @@ GET /health
 | POST | `/api/cron/create` | 创建定时任务 |
 | DELETE | `/api/cron/:id` | 删除定时任务 |
 | POST | `/api/cron/:id/toggle` | 启用/禁用定时任务 |
+| GET | `/api/image/capabilities` | 图像生成 / 视觉能力快照（需认证） |
+| POST | `/api/image/validate-model` | 校验 `provider/model` 引用（需认证） |
+
+`GET` / `PATCH` **`/api/config`**（需认证）会返回智能体默认项，其中包括 **`imageModel`**、**`imageGenerationModel`** 以及 **`imageModelFallbacks`**、**`imageGenerationModelFallbacks`**；`PATCH` 对图像字段支持与对话 **`model`** 相同的 **`{ primary, fallbacks }`** 对象形式。详见 [图像与视觉](image-multimodal.md)。
 
 ## 错误响应
 

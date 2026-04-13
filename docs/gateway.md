@@ -323,6 +323,10 @@ Creates a webchat-scoped session (or returns an existing empty one). JSON body (
 | GET | `/api/models` | List available models |
 | GET | `/api/models-json` | Get models.json config |
 | PATCH | `/api/models-json` | Save models.json |
+| GET | `/api/image/capabilities` | Image generation / vision capability snapshot (auth) |
+| POST | `/api/image/validate-model` | Validate a `provider/model` ref for image flows (auth) |
+
+`GET` / `PATCH` **`/api/config`** (auth) expose agent defaults including **`imageModel`**, **`imageGenerationModel`**, and their **`imageModelFallbacks`** / **`imageGenerationModelFallbacks`** arrays; `PATCH` accepts the same `{ primary, fallbacks }` object shape as the chat `model` field. See [Image & vision](image-multimodal.md).
 
 ---
 
