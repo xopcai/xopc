@@ -12,6 +12,10 @@ xopc 支持多种通信通道，采用基于扩展的架构。**核心配置**�
 
 其它第三方或实验性通道可作为**扩展**接入，仍可能出现在 `channels.<id>` 中（视构建与扩展而定）。
 
+### 扩展加载（Telegram / 微信）
+
+网关与 **`xopc agent`** 使用 **manifest-first 激活**（详见 [扩展系统 — Manifest-first 控制平面](./extensions.md#manifest-first-control-plane)）。仓库内 `extensions/telegram`、`extensions/weixin` 在 `xopc.extension.json` 中声明了 `channels` 与 `activation.onChannels`，因此当 **`channels.telegram`** 或 **`channels.weixin`** 被视为已配置（Token、`accounts`、`enabled` 等）时，对应扩展可以加载，**不一定**要在 `extensions.enabled` 中写出扩展 id；若需强制关闭，请使用 **`extensions.disabled`**。CLI 在解析子命令前仅在 `extensions.enabled` 非空、通道配置会触发通道扩展、或存在 manifest 索引的环境变量时才加载扩展——详见扩展文档。
+
 ## 网关控制台 — 即时通讯
 
 网关运行时可使用 React 控制台中的 **即时通讯** 专页：
