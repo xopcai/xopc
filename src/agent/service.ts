@@ -73,6 +73,8 @@ import {
   formatInboundFileTextBlock,
   type InternalAttachmentRoots,
 } from '../channels/attachments/inbound-persist.js';
+import { resolveInboundImageContentParts } from './image/inbound-image-handling.js';
+import { getDefaultModelSync } from '../providers/index.js';
 import {
   mergeVoiceTranscriptsIntoUserText,
   mergeSttConfigFromAppConfig,
@@ -704,7 +706,7 @@ export class AgentService {
     return context;
   }
 
-  private buildMessageContent(
+  private async buildMessageContent(
     content: string,
     attachments?: Array<{
       type: string;
@@ -715,7 +717,7 @@ export class AgentService {
       workspaceRelativePath?: string;
     }>,
     sessionKey?: string,
-  ): Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> {
+  ): Promise<Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>> {
     const messageContent: Array<
       { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
     > = [];
@@ -724,28 +726,59 @@ export class AgentService {
       messageContent.push({ type: 'text', text: content });
     }
 
-    if (attachments && attachments.length > 0) {
-      for (const att of attachments) {
-        if (att.type === 'image' || att.mimeType?.startsWith('image/')) {
-          messageContent.push({
-            type: 'image',
-            data: att.data || '',
-            mimeType: att.mimeType || 'image/png',
-          });
-        } else {
-          const storageRoot =
-            sessionKey != null && sessionKey !== ''
-              ? resolveAgentHomeDir(
-                  this.config.config!,
-                  extractProfileAgentId(sessionKey, this.config.config!),
-                )
-              : resolveAgentHomeDir(
-                  this.config.config!,
-                  resolveDefaultAgentId(this.config.config!),
-                );
-          const fileBlock = formatInboundFileTextBlock(att, storageRoot);
-          messageContent.push({ type: 'text', text: fileBlock });
+    if (!attachments?.length) {
+      return messageContent;
+    }
+
+    const sk = sessionKey ?? '';
+    const modelRef =
+      sk !== ''
+        ? this.modelManager.getModelForSession(sk)
+        : getAgentDefaultModelRef(this.config.config!) ?? getDefaultModelSync(this.config.config);
+    const cfg = this.config.config;
+
+    const storageRoot =
+      sk !== ''
+        ? resolveAgentHomeDir(this.config.config!, extractProfileAgentId(sk, this.config.config!))
+        : resolveAgentHomeDir(this.config.config!, resolveDefaultAgentId(this.config.config!));
+
+    let i = 0;
+    while (i < attachments.length) {
+      const att = attachments[i]!;
+      const isImage =
+        att.type === 'image' ||
+        att.type === 'photo' ||
+        Boolean(att.mimeType?.startsWith('image/'));
+
+      if (isImage) {
+        const group: Array<{ data: string; mimeType: string }> = [];
+        while (i < attachments.length) {
+          const a = attachments[i]!;
+          const img =
+            a.type === 'image' || a.type === 'photo' || Boolean(a.mimeType?.startsWith('image/'));
+          if (!img) {
+            break;
+          }
+          if (!a.data || a.data.length === 0) {
+            i += 1;
+            continue;
+          }
+          group.push({ data: a.data, mimeType: a.mimeType || 'image/png' });
+          i += 1;
         }
+        if (group.length > 0) {
+          const parts = await resolveInboundImageContentParts({
+            modelRef: modelRef || getDefaultModelSync(cfg),
+            cfg,
+            userTextForContext: content.trim() ? content : '',
+            images: group,
+          });
+          messageContent.push(...parts);
+        }
+      } else {
+        const fileBlock = formatInboundFileTextBlock(att, storageRoot);
+        messageContent.push({ type: 'text', text: fileBlock });
+        i += 1;
       }
     }
 
@@ -1093,7 +1126,7 @@ export class AgentService {
         const textForAgent = mergedUserText.trimStart().startsWith('/skill:')
           ? this.agentManager.expandSkillUserText(mergedUserText)
           : mergedUserText;
-        messageContent = this.buildMessageContent(textForAgent, prepared, sessionKey);
+        messageContent = await this.buildMessageContent(textForAgent, prepared, sessionKey);
       }
 
       if (!abortHandled && !ranSlashCommand && messageContent !== undefined) {
@@ -1343,7 +1376,7 @@ export class AgentService {
       const textForDirect = content.trimStart().startsWith('/skill:')
         ? this.agentManager.expandSkillUserText(content)
         : content;
-      const messageContent = this.buildMessageContent(textForDirect, prepared, sessionKey);
+      const messageContent = await this.buildMessageContent(textForDirect, prepared, sessionKey);
 
       const userMessage = {
         role: 'user' as const,

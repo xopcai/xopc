@@ -155,6 +155,9 @@ xopc onboard
 | `max_tokens` | number | `8192` | 最大输出 tokens |
 | `temperature` | number | `0.7` | 温度参数 (0-2) |
 | `max_tool_iterations` | number | `20` | 最大工具调用次数 |
+| `imageModel` | string \| object | — | `image` 工具及**主模型不支持视觉**时对入站图做描述的视觉模型。格式与 `model` 相同（字符串或 `{ primary, fallbacks }`）。详见 [图像与视觉](image-multimodal.md)。 |
+| `imageGenerationModel` | string \| object | — | `image_generate` 的文生图模型链（如 `openai/gpt-image-1`、`qwen/wan2.6-t2i`）。格式与 `model` 相同。详见 [图像与视觉](image-multimodal.md)。 |
+| `mediaMaxMb` | number | — | 可选。`image` 工具从路径或 URL 加载单张图片时的最大体积（**MB**）。 |
 
 #### agents.defaults.model
 
@@ -178,6 +181,8 @@ xopc onboard
 ```
 
 模型 ID 格式：`provider/model-id`（如 `anthropic/claude-opus-4-5`）。
+
+**`imageModel`**、**`imageGenerationModel`** 也可使用与 **`model`** 相同的 **`{ primary, fallbacks }`** 对象，以配置视觉或文生图的有序降级链。
 
 #### agents.defaults.memory
 

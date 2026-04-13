@@ -459,19 +459,23 @@ Sends a local file to the current conversation. Parameters: `filePath`, optional
 
 ## Vision & image generation
 
+Inbound photos (channels / webchat) are handled in two ways: if the **session model** supports vision (pi-ai metadata or a conservative id heuristic), images are sent **natively** in the user message; otherwise a **vision model** (from `imageModel`, with fallbacks) describes them as text before the main model runs. See [Image & vision](image-multimodal.md).
+
 ### 🖼️ image
 
-Analyzes one or more images (paths or URLs) with the resolved vision model. Optional `prompt`. Omit when the user message already contains the images and the session model is multimodal.
+Analyzes one or more images (paths or URLs) with the resolved vision model. Optional `prompt`. Prefer **not** calling it when the user message already includes images **and** the session model is multimodal.
 
-**Configuration:** `agents.defaults.imageModel`, `agents.defaults.mediaMaxMb`.
+**Configuration:** `agents.defaults.imageModel` (string or `{ primary, fallbacks }`), `agents.defaults.mediaMaxMb`.
 
 ---
 
 ### 🎨 image_generate
 
-Generates an image via the configured generation model and saves under the workspace when successful.
+Generates an image via the configured generation model and saves under `workspace/media/generated/` when successful. Use `action: "list"` to print registered generation providers and model ids.
 
-**Configuration:** `agents.defaults.imageGenerationModel`.
+**Configuration:** `agents.defaults.imageGenerationModel` (string or `{ primary, fallbacks }`).
+
+Programmatic generation supports optional **reference images** (`inputImages`) for OpenAI **edits**; the `image_generate` tool does not expose that parameter yet.
 
 ---
 

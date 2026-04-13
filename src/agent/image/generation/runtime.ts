@@ -4,11 +4,15 @@ import {
   resolveAgentModelFallbackValues,
   resolveAgentModelPrimaryValue,
 } from '../../../config/model-input.js';
-import { getApiKey } from '../../../providers/index.js';
-import { OPENAI_DEFAULT_IMAGE_MODEL, QWEN_DEFAULT_IMAGE_MODEL } from './constants.js';
-import { runDashScopeImageGeneration } from './dashscope-generate.js';
-import { runOpenAiImageGeneration } from './openai-generate.js';
-import type { ImageGenFallbackAttempt, ImageGenerationResult } from './types.js';
+import {
+  getImageGenerationProvider,
+  listImageGenerationProvidersSummary as listProvidersSummaryFromRegistry,
+} from './provider-registry.js';
+import { OPENAI_DEFAULT_IMAGE_MODEL } from './constants.js';
+import type { ImageGenFallbackAttempt, ImageGenerationResult, ImageGenerationSourceImage } from './types.js';
+
+import './openai-generate.js';
+import './dashscope-generate.js';
 
 export type GenerateImageParams = {
   cfg?: Config;
@@ -17,6 +21,7 @@ export type GenerateImageParams = {
   count?: number;
   size?: string;
   signal?: AbortSignal;
+  inputImages?: ImageGenerationSourceImage[];
 };
 
 export type GenerateImageRuntimeResult = {
@@ -68,69 +73,54 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
     );
   }
 
+  const wantsEdit = Boolean(params.inputImages?.length);
   const attempts: ImageGenFallbackAttempt[] = [];
   let lastError: unknown;
 
   for (const candidate of candidates) {
-    try {
-      if (candidate.provider === 'openai') {
-        const apiKey = await getApiKey('openai');
-        if (!apiKey) {
-          throw new Error('OpenAI API key missing');
-        }
-        const result = await runOpenAiImageGeneration({
-          provider: 'openai',
-          model: candidate.model,
-          prompt: params.prompt,
-          cfg: params.cfg,
-          apiKey,
-          count: params.count,
-          size: params.size,
-          signal: params.signal,
-        });
-        if (!result.images?.length) {
-          throw new Error('Image generation returned no images');
-        }
-        return {
-          images: result.images,
-          provider: 'openai',
-          model: result.model ?? candidate.model,
-          attempts,
-        };
-      }
-
-      if (candidate.provider === 'qwen') {
-        const apiKey = await getApiKey('qwen');
-        if (!apiKey) {
-          throw new Error('Qwen/DashScope API key missing (DASHSCOPE_API_KEY or QWEN_API_KEY)');
-        }
-        const result = await runDashScopeImageGeneration({
-          provider: 'qwen',
-          model: candidate.model,
-          prompt: params.prompt,
-          cfg: params.cfg,
-          apiKey,
-          count: params.count,
-          size: params.size,
-          signal: params.signal,
-        });
-        if (!result.images?.length) {
-          throw new Error('Image generation returned no images');
-        }
-        return {
-          images: result.images,
-          provider: 'qwen',
-          model: result.model ?? candidate.model,
-          attempts,
-        };
-      }
-
+    const provider = getImageGenerationProvider(candidate.provider);
+    if (!provider) {
+      const errorMessage = `Image generation provider not registered: ${candidate.provider}`;
       attempts.push({
         provider: candidate.provider,
         model: candidate.model,
-        error: `Image generation provider not supported: ${candidate.provider}`,
+        error: errorMessage,
       });
-      lastError = new Error('unsupported provider');
+      lastError = new Error(errorMessage);
+      continue;
+    }
+
+    if (wantsEdit && provider.capabilities?.supportsEdit === false) {
+      const errorMessage = `Image-to-image not supported for provider: ${candidate.provider}`;
+      attempts.push({
+        provider: candidate.provider,
+        model: candidate.model,
+        error: errorMessage,
+      });
+      lastError = new Error(errorMessage);
+      continue;
+    }
+
+    try {
+      const result = await provider.generateImage({
+        provider: candidate.provider,
+        model: candidate.model,
+        prompt: params.prompt,
+        cfg: params.cfg,
+        count: params.count,
+        size: params.size,
+        signal: params.signal,
+        inputImages: params.inputImages,
+      });
+      if (!result.images?.length) {
+        throw new Error('Image generation returned no images');
+      }
+      return {
+        images: result.images,
+        provider: candidate.provider,
+        model: result.model ?? candidate.model,
+        attempts,
+      };
     } catch (err) {
       lastError = err;
       attempts.push({
@@ -147,21 +137,8 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   });
 }
 
-export function listImageGenerationProvidersSummary(): Array<{
-  id: string;
-  defaultModel?: string;
-  models: string[];
-}> {
-  return [
-    {
-      id: 'openai',
-      defaultModel: OPENAI_DEFAULT_IMAGE_MODEL,
-      models: [OPENAI_DEFAULT_IMAGE_MODEL, 'dall-e-3', 'dall-e-2'],
-    },
-    {
-      id: 'qwen',
-      defaultModel: QWEN_DEFAULT_IMAGE_MODEL,
-      models: [QWEN_DEFAULT_IMAGE_MODEL],
-    },
-  ];
+export function listImageGenerationProvidersSummary(): ReturnType<
+  typeof listProvidersSummaryFromRegistry
+> {
+  return listProvidersSummaryFromRegistry();
 }

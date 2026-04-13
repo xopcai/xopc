@@ -68,12 +68,40 @@ function createModelsCommand(_ctx: CLIContext): Command {
         byProvider.set(model.provider, list);
       }
 
+      const IMAGE_GENERATION_IDS = new Set([
+        'gpt-image-1',
+        'dall-e-3',
+        'dall-e-2',
+        'wan2.6-t2i',
+        'wan2.1-t2i-turbo',
+        'wan2.1-t2i-plus',
+      ]);
+      const VISION_IDS = new Set([
+        'gpt-4o',
+        'gpt-4o-mini',
+        'gpt-4-turbo',
+        'claude-sonnet-4-5',
+        'claude-haiku-3-5',
+        'gemini-2.0-flash',
+        'gemini-1.5-pro',
+        'qwen-vl-max',
+        'qwen2.5-vl-72b-instruct',
+      ]);
+
       for (const [provider, providerModels] of byProvider) {
         console.log(`  [${provider}]`);
         for (const model of providerModels) {
           const available = await isProviderConfigured(provider);
           const status = available ? '✓' : '○';
-          console.log(`    ${status} ${model.name}`);
+          const badges: string[] = [];
+          if (IMAGE_GENERATION_IDS.has(model.id)) {
+            badges.push('gen');
+          }
+          if (model.input?.includes('image') || VISION_IDS.has(model.id)) {
+            badges.push('vision');
+          }
+          const badgeStr = badges.length > 0 ? ` [${badges.join(', ')}]` : '';
+          console.log(`    ${status} ${model.name}${badgeStr}`);
         }
       }
       console.log('');

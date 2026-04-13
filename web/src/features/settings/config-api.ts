@@ -7,7 +7,9 @@ export interface AgentDefaultsState {
   /** provider/model refs tried when the primary fails (stored as `agents.defaults.model.fallbacks`). */
   modelFallbacks: string[];
   imageModel: string;
+  imageModelFallbacks: string[];
   imageGenerationModel: string;
+  imageGenerationModelFallbacks: string[];
   mediaMaxMb: number | undefined;
   maxTokens: number;
   temperature: number;
@@ -88,12 +90,24 @@ export function parseAgentDefaultsFromConfig(cfg: unknown): AgentDefaultsState {
   const mf = d.modelFallbacks;
   const modelFallbacksFromApi =
     Array.isArray(mf) && mf.every((x) => typeof x === 'string') ? mf : normalizeModelFallbacks(d.model);
+  const imf = d.imageModelFallbacks;
+  const imageModelFallbacksFromApi =
+    Array.isArray(imf) && imf.every((x) => typeof x === 'string')
+      ? imf
+      : normalizeModelFallbacks(d.imageModel);
+  const igf = d.imageGenerationModelFallbacks;
+  const imageGenerationModelFallbacksFromApi =
+    Array.isArray(igf) && igf.every((x) => typeof x === 'string')
+      ? igf
+      : normalizeModelFallbacks(d.imageGenerationModel);
   const { browserEnabled, browserHeadless } = parseBrowserFromDefaults(d);
   return {
     model: normalizeModelRef(d.model),
     modelFallbacks: modelFallbacksFromApi,
     imageModel: normalizeModelRef(d.imageModel),
+    imageModelFallbacks: imageModelFallbacksFromApi,
     imageGenerationModel: normalizeModelRef(d.imageGenerationModel),
+    imageGenerationModelFallbacks: imageGenerationModelFallbacksFromApi,
     mediaMaxMb: typeof d.mediaMaxMb === 'number' && !Number.isNaN(d.mediaMaxMb) ? d.mediaMaxMb : undefined,
     maxTokens: typeof d.maxTokens === 'number' ? d.maxTokens : 8192,
     temperature: typeof d.temperature === 'number' ? d.temperature : 0.7,
@@ -118,14 +132,26 @@ export async function patchAgentDefaults(state: AgentDefaultsState): Promise<voi
   const modelField =
     fallbacks.length > 0 ? { primary: state.model, fallbacks } : state.model;
 
+  const imageFbs = state.imageModelFallbacks.map((s) => s.trim()).filter(Boolean);
+  const imageModelField =
+    imageFbs.length > 0 && state.imageModel.trim()
+      ? { primary: state.imageModel.trim(), fallbacks: imageFbs }
+      : state.imageModel || '';
+
+  const imageGenFbs = state.imageGenerationModelFallbacks.map((s) => s.trim()).filter(Boolean);
+  const imageGenerationModelField =
+    imageGenFbs.length > 0 && state.imageGenerationModel.trim()
+      ? { primary: state.imageGenerationModel.trim(), fallbacks: imageGenFbs }
+      : state.imageGenerationModel || '';
+
   await fetchJson(apiUrl('/api/config'), {
     method: 'PATCH',
     body: JSON.stringify({
       agents: {
         defaults: {
           model: modelField,
-          imageModel: state.imageModel || '',
-          imageGenerationModel: state.imageGenerationModel || '',
+          imageModel: imageModelField,
+          imageGenerationModel: imageGenerationModelField,
           mediaMaxMb: state.mediaMaxMb ?? null,
           maxTokens: state.maxTokens,
           temperature: state.temperature,

@@ -18,6 +18,19 @@ export type ImageGenFallbackAttempt = {
   error: string;
 };
 
+export type ImageGenerationSourceImage = {
+  buffer: Buffer;
+  mimeType: string;
+  fileName?: string;
+};
+
+export type ImageGenerationCapabilities = {
+  supportsEdit: boolean;
+  maxInputImages?: number;
+  maxOutputImages?: number;
+  supportedSizes?: string[];
+};
+
 export type ImageGenerationRequest = {
   provider: string;
   model: string;
@@ -26,4 +39,5 @@ export type ImageGenerationRequest = {
   count?: number;
   size?: string;
   signal?: AbortSignal;
+  inputImages?: ImageGenerationSourceImage[];
 };

@@ -53,6 +53,7 @@ export default defineConfig({
             items: [
               { text: 'Channels', link: '/channels' },
               { text: 'Voice (STT/TTS)', link: '/voice' },
+              { text: 'Image & vision', link: '/image-multimodal' },
               { text: 'Progress Feedback', link: '/progress' },
               { text: 'Gateway', link: '/gateway' },
               { text: 'Session', link: '/session' },
@@ -116,6 +117,7 @@ export default defineConfig({
             items: [
               { text: '消息通道', link: '/zh/channels' },
               { text: '语音（STT/TTS）', link: '/zh/voice' },
+              { text: '图像与视觉', link: '/zh/image-multimodal' },
               { text: '进度反馈', link: '/zh/progress' },
               { text: '网关服务', link: '/zh/gateway' },
               { text: '会话管理', link: '/zh/session' },

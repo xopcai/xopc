@@ -589,7 +589,9 @@ const bundles: Record<
         model: string;
         modelFallbacks: string;
         imageModel: string;
+        imageModelFallbacks: string;
         imageGenerationModel: string;
+        imageGenerationModelFallbacks: string;
         mediaMaxMb: string;
         workspace: string;
         browserEnabled: string;
@@ -605,7 +607,9 @@ const bundles: Record<
         model: string;
         modelFallbacks: string;
         imageModel: string;
+        imageModelFallbacks: string;
         imageGenerationModel: string;
+        imageGenerationModelFallbacks: string;
         mediaMaxMb: string;
         workspace: string;
         browserEnabled: string;
@@ -1776,7 +1780,9 @@ const bundles: Record<
         model: 'Model',
         modelFallbacks: 'Fallback models',
         imageModel: 'Image model',
+        imageModelFallbacks: 'Image understanding fallbacks',
         imageGenerationModel: 'Image generation model',
+        imageGenerationModelFallbacks: 'Image generation fallbacks',
         mediaMaxMb: 'Image load limit (MB)',
         workspace: 'Workspace',
         browserEnabled: 'Browser tools',
@@ -1793,7 +1799,11 @@ const bundles: Record<
         modelFallbacks:
           'Tried in order when the primary model returns an error after transient retries. Requires API keys for each provider.',
         imageModel: 'Optional. Used for image understanding / vision.',
+        imageModelFallbacks:
+          'When the chat model has no vision, these vision models describe inbound images (and for the image tool). Tried in order.',
         imageGenerationModel: 'Optional. For image_generate (e.g. openai/gpt-image-1).',
+        imageGenerationModelFallbacks:
+          'Tried in order when the primary image generation model fails (e.g. quota or provider error).',
         mediaMaxMb: 'Max size when loading images in the image tool.',
         workspace: 'Working directory for agent files.',
         browserEnabled:
@@ -3010,7 +3020,9 @@ const bundles: Record<
         model: '模型',
         modelFallbacks: '备用模型',
         imageModel: '图像理解模型',
+        imageModelFallbacks: '图像理解备用模型',
         imageGenerationModel: '图像生成模型',
+        imageGenerationModelFallbacks: '图像生成备用模型',
         mediaMaxMb: '图像加载上限 (MB)',
         workspace: '工作区',
         browserEnabled: '浏览器工具',
@@ -3027,7 +3039,10 @@ const bundles: Record<
         modelFallbacks:
           '主模型在瞬时重试后仍失败时，按顺序尝试。各服务商均需配置 API Key。',
         imageModel: '可选，用于图像理解 / 视觉。',
+        imageModelFallbacks:
+          '当对话模型不支持视觉时，按顺序用这些视觉模型描述入站图片（也用于图像工具）。',
         imageGenerationModel: '可选，用于 image_generate（如 openai/gpt-image-1）。',
+        imageGenerationModelFallbacks: '主图像生成模型失败时按顺序尝试（如配额或服务商错误）。',
         mediaMaxMb: '图像工具加载单张图片时的最大体积。',
         workspace: '智能体读写文件的工作目录。',
         browserEnabled:

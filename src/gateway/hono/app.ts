@@ -11,7 +11,7 @@ import { logger } from './middleware/logger.js';
 import { auth } from './middleware/auth.js';
 import { createAgentSSEHandler, createAgentResumeHandler, createSendHandler, createEventsSSEHandler } from './sse.js';
 import type { GatewayService } from '../service.js';
-import type { Config } from '../../config/schema.js';
+import { type Config, parseModelRef } from '../../config/schema.js';
 import { BindingsConfigSchema } from '../../config/schema.js';
 import { getWorkspacePath } from '../../config/schema.js';
 import { resolveHeartbeatMdPath } from '../workspace-heartbeat-path.js';
@@ -33,6 +33,7 @@ import {
   getAllProviders,
   getProviderActiveKeySource,
   isProviderConfigured,
+  resolveModel,
   PROVIDER_META,
   getModelRegistry,
   type Model,
@@ -50,6 +51,10 @@ import {
   resolveDefaultAgentId,
 } from '../../agent/agent-scope.js';
 import { maxWebchatAgentRequestBodyBytes } from '../chat-limits.js';
+import {
+  resolveImageGenerationCapabilities,
+  resolveImageUnderstandingCapabilities,
+} from '../image-capabilities.js';
 import { 
   getModelsJsonPath,
   loadModelsJson,
@@ -135,8 +140,12 @@ async function buildSafeWebConfigPayload(service: GatewayService) {
       defaults: {
         model: agentModelRefToString(config.agents?.defaults?.model) ?? '',
         modelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.model),
-        imageModel: agentModelRefToString(config.agents?.defaults?.imageModel),
-        imageGenerationModel: agentModelRefToString(config.agents?.defaults?.imageGenerationModel),
+        imageModel: agentModelRefToString(config.agents?.defaults?.imageModel) ?? null,
+        imageModelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.imageModel),
+        imageGenerationModel: agentModelRefToString(config.agents?.defaults?.imageGenerationModel) ?? null,
+        imageGenerationModelFallbacks: agentModelFallbacksToArray(
+          config.agents?.defaults?.imageGenerationModel,
+        ),
         mediaMaxMb: config.agents?.defaults?.mediaMaxMb,
         maxTokens: config.agents?.defaults?.maxTokens,
         temperature: config.agents?.defaults?.temperature,
@@ -1101,6 +1110,90 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     return c.json({ ok: true, payload: { models } });
   });
 
+  authenticated.get('/api/image/capabilities', async (c) => {
+    const config = service.currentConfig as Config;
+    const imageGenerationProviders = await resolveImageGenerationCapabilities(config);
+    const imageUnderstandingProviders = await resolveImageUnderstandingCapabilities(config);
+    return c.json({
+      ok: true,
+      payload: {
+        current: {
+          imageModel: agentModelRefToString(config.agents?.defaults?.imageModel) ?? null,
+          imageModelFallbacks: agentModelFallbacksToArray(config.agents?.defaults?.imageModel),
+          imageGenerationModel: agentModelRefToString(config.agents?.defaults?.imageGenerationModel) ?? null,
+          imageGenerationModelFallbacks: agentModelFallbacksToArray(
+            config.agents?.defaults?.imageGenerationModel,
+          ),
+          mediaMaxMb: config.agents?.defaults?.mediaMaxMb ?? null,
+        },
+        imageGeneration: { providers: imageGenerationProviders },
+        imageUnderstanding: { providers: imageUnderstandingProviders },
+      },
+    });
+  });
+
+  authenticated.post('/api/image/validate-model', strictRateLimitMiddleware, async (c) => {
+    let body: { modelRef?: unknown };
+    try {
+      body = (await c.req.json()) as { modelRef?: unknown };
+    } catch {
+      return c.json({ ok: false, error: 'Invalid JSON' }, 400);
+    }
+    const modelRef = body.modelRef;
+    if (!modelRef || typeof modelRef !== 'string') {
+      return c.json({ ok: false, error: 'modelRef is required' }, 400);
+    }
+
+    const parsed = parseModelRef(modelRef);
+    if (!parsed) {
+      return c.json({
+        ok: true,
+        payload: {
+          valid: false,
+          reason: 'invalid_format',
+          message: 'Model reference must be in "provider/model" format',
+        },
+      });
+    }
+
+    const configured = await isProviderConfigured(parsed.provider);
+    if (!configured) {
+      return c.json({
+        ok: true,
+        payload: {
+          valid: false,
+          reason: 'provider_not_configured',
+          message: `Provider "${parsed.provider}" is not configured. Set the API key first.`,
+          provider: parsed.provider,
+        },
+      });
+    }
+
+    try {
+      resolveModel(modelRef);
+    } catch {
+      return c.json({
+        ok: true,
+        payload: {
+          valid: false,
+          reason: 'model_not_found',
+          message: `Model not found in registry: ${modelRef}`,
+          provider: parsed.provider,
+          model: parsed.model,
+        },
+      });
+    }
+
+    return c.json({
+      ok: true,
+      payload: {
+        valid: true,
+        provider: parsed.provider,
+        model: parsed.model,
+      },
+    });
+  });
+
   // PATCH /api/config - Update partial config
   // Apply strict rate limit: 10 req/min (prevents config abuse)
   authenticated.patch('/api/config', strictRateLimitMiddleware, async (c) => {
@@ -1143,7 +1236,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         if (v === '' || v === null) {
           delete (config.agents.defaults as Record<string, unknown>).imageModel;
         } else {
-          config.agents.defaults.imageModel = v as string;
+          config.agents.defaults.imageModel = normalizePatchAgentModel(v) as Config['agents']['defaults']['imageModel'];
         }
       }
       if (body.agents.defaults.imageGenerationModel !== undefined) {
@@ -1151,7 +1244,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         if (v === '' || v === null) {
           delete (config.agents.defaults as Record<string, unknown>).imageGenerationModel;
         } else {
-          config.agents.defaults.imageGenerationModel = v as string;
+          config.agents.defaults.imageGenerationModel = normalizePatchAgentModel(
+            v,
+          ) as Config['agents']['defaults']['imageGenerationModel'];
         }
       }
       if (body.agents.defaults.mediaMaxMb !== undefined) {

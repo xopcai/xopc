@@ -16,6 +16,7 @@
 - **Features**
   - [CLI Reference](cli.md)
   - [LLM Models](models.md)
+  - [Image & vision](image-multimodal.md)
   - [Voice (STT/TTS)](voice.md)
   - [UI Design System](design/ui-design-system.md)
   - [Channels (Telegram)](channels.md)

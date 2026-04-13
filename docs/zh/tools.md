@@ -243,9 +243,14 @@ xopc 通过 `AgentToolsFactory`（`src/agent/tools/factory.ts`）组装内置工
 
 ## 图像
 
+通道 / 网页入站的图片：若**会话主模型**支持视觉，则**原样**作为多模态内容传入；否则会先用 **`imageModel`**（可带 `fallbacks`）上的视觉模型**描述**为文本再交给主模型。详见 [图像与视觉](image-multimodal.md)。
+
 ### 🖼️ `image` / 🎨 `image_generate`
 
-视觉理解与图像生成；依赖 `agents.defaults.imageModel`、`imageGenerationModel` 及对应密钥。大图受 `agents.defaults.mediaMaxMb` 等限制。
+- **`image`**：从路径或 URL 加载一张或多张图做视觉理解；依赖 `agents.defaults.imageModel`（字符串或 `{ primary, fallbacks }`）、`mediaMaxMb` 与对应 API Key。
+- **`image_generate`**：按 `imageGenerationModel` 链文生图，成功时写入工作区 `media/generated/`；`action: "list"` 可列出已注册的文生图 Provider 摘要。
+
+程序内的 `generateImage()` 支持 OpenAI **图生图/编辑**（`inputImages`，当前取第一张参考图）；`image_generate` 工具尚未暴露该参数。
 
 ---
 

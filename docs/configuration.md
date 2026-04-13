@@ -155,6 +155,9 @@ The same optional keys can appear under **`agents.defaults`** for global default
 | `max_tokens` | number | `8192` | Maximum output tokens |
 | `temperature` | number | `0.7` | Temperature (0-2) |
 | `max_tool_iterations` | number | `20` | Max tool call iterations |
+| `imageModel` | string \| object | — | Vision model for the `image` tool and for **describing** inbound images when the session model does not support vision. Same formats as `model` (string or `{ primary, fallbacks }`). See [Image & vision](image-multimodal.md). |
+| `imageGenerationModel` | string \| object | — | Image generation chain for `image_generate` (e.g. `openai/gpt-image-1`, `qwen/wan2.6-t2i`). Same formats as `model`. See [Image & vision](image-multimodal.md). |
+| `mediaMaxMb` | number | — | Optional. Max size in **MB** when the `image` tool loads files from disk or URLs. |
 
 #### agents.defaults.model
 
@@ -178,6 +181,8 @@ Model configuration supports two formats:
 ```
 
 Model ID format: `provider/model-id` (e.g., `anthropic/claude-opus-4-5`).
+
+The same **`{ primary, fallbacks }`** object shape applies to **`imageModel`** and **`imageGenerationModel`** when you want ordered fallbacks for vision or image generation.
 
 #### agents.defaults.memory
 

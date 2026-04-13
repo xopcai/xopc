@@ -38,6 +38,7 @@ pnpm run dev -- <command>
 | `extension` | Manage extensions |
 | `skills` | Manage skills |
 | `config` | View/edit configuration |
+| `image` | Image understanding / generation defaults (`status`, `set-understanding`, `set-generation`, fallbacks, `providers`) |
 | `session` | Manage sessions |
 
 ---
@@ -548,6 +549,26 @@ xopc config --validate
 ```bash
 xopc config --edit
 ```
+
+---
+
+## image
+
+Manage **`agents.defaults.imageModel`**, **`imageGenerationModel`**, **`mediaMaxMb`**, and their fallback lists without editing JSON paths by hand.
+
+```bash
+xopc image status
+xopc image status --json
+xopc image set-understanding openai/gpt-4o
+xopc image set-generation openai/gpt-image-1
+xopc image add-fallback understanding anthropic/claude-sonnet-4-5
+xopc image add-fallback generation qwen/wan2.6-t2i
+xopc image remove-fallback understanding 0
+xopc image providers
+xopc image set-max-size 10
+```
+
+See [Image & vision](image-multimodal.md).
 
 ---
 

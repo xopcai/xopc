@@ -2,63 +2,18 @@ import { Type } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { Config } from '../../config/schema.js';
 import { describeImagesWithPiAi } from '../image/describe-images.js';
-import {
-  buildImageToolTextResult,
-  coerceImageModelConfig,
-  resolvePromptAndModelOverride,
-} from '../image/image-helpers.js';
+import { buildImageToolTextResult, resolvePromptAndModelOverride } from '../image/image-helpers.js';
 import { runWithImageModelFallback } from '../image/image-model-fallback.js';
 import { loadImageForToolInput } from '../image/load-image-media.js';
 import {
-  buildToolModelConfigFromCandidates,
-  hasToolModelConfig,
-  resolveDefaultModelRef,
+  resolveImageModelConfigForTool,
   type ToolModelConfig,
 } from '../image/tool-model-config.js';
-import { getModelsByProvider } from '../../providers/index.js';
 
 const DEFAULT_PROMPT = 'Describe the image.';
 const DEFAULT_MAX_IMAGES = 20;
 
-function firstVisionModelRef(provider: string): string | undefined {
-  const m = getModelsByProvider(provider).find((x) => x.input?.includes('image'));
-  return m ? `${provider}/${m.id}` : undefined;
-}
-
-/**
- * Effective image model config: explicit `agents.defaults.imageModel`, else inferred from provider credentials.
- */
-export function resolveImageModelConfigForTool(params: { cfg?: Config }): ToolModelConfig | null {
-  const explicit = coerceImageModelConfig(params.cfg);
-  if (hasToolModelConfig(explicit)) {
-    return explicit;
-  }
-
-  const primary = resolveDefaultModelRef(params.cfg);
-  const primaryCandidates: string[] = [];
-  const vision = firstVisionModelRef(primary.provider);
-  if (vision) {
-    primaryCandidates.push(vision);
-  }
-  if (primary.provider === 'openai') {
-    primaryCandidates.push('openai/gpt-4o-mini');
-  }
-  if (primary.provider === 'anthropic') {
-    primaryCandidates.push('anthropic/claude-sonnet-4-5');
-  }
-  if (primary.provider === 'google') {
-    primaryCandidates.push('google/gemini-2.0-flash');
-  }
-
-  return buildToolModelConfigFromCandidates({
-    explicit,
-    candidates: [
-      ...primaryCandidates,
-      firstVisionModelRef('openai') ?? 'openai/gpt-4o-mini',
-      firstVisionModelRef('anthropic') ?? 'anthropic/claude-sonnet-4-5',
-    ],
-  });
-}
+export { resolveImageModelConfigForTool } from '../image/tool-model-config.js';
 
 function pickMaxBytes(cfg?: Config, maxBytesMb?: number): number {
   if (typeof maxBytesMb === 'number' && Number.isFinite(maxBytesMb) && maxBytesMb > 0) {

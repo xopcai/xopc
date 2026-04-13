@@ -28,6 +28,7 @@ import {
   persistInboundAttachmentsToWorkspace,
   formatInboundFileTextBlock,
 } from '../../channels/attachments/inbound-persist.js';
+import { resolveInboundImageContentParts } from '../image/inbound-image-handling.js';
 
 const log = createLogger('AgentOrchestrator');
 
@@ -142,7 +143,7 @@ export class AgentOrchestrator {
         sessionKey,
         msg.attachments,
       );
-      const userMessage = this.buildUserMessage(
+      const userMessage = await this.buildUserMessage(
         {
           ...msg,
           attachments: persistedAttachments ?? msg.attachments,
@@ -234,75 +235,101 @@ export class AgentOrchestrator {
   /**
    * Build an agent message from an inbound message
    */
-  private buildUserMessage(msg: InboundMessage, sessionKey: string): AgentMessage {
+  private async buildUserMessage(msg: InboundMessage, sessionKey: string): Promise<AgentMessage> {
     const storageRootAbs = this.getAgentInternalStorageRootForSession(sessionKey);
     const textBody = msg.content.trimStart().startsWith('/skill:')
       ? this.agentManager.expandSkillUserText(msg.content)
       : msg.content;
 
-    // If there are attachments, build array content with text and images
-    if (msg.attachments && msg.attachments.length > 0) {
-      const messageContent: Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }> = [];
-
-      // Add text content if present
-      if (msg.content.trim()) {
-        messageContent.push({ type: 'text', text: textBody });
-      }
-
-      // Add image attachments
-      for (const att of msg.attachments) {
-        if (att.type === 'image' || att.type === 'photo' || att.mimeType?.startsWith('image/')) {
-          // Skip empty image data
-          if (!att.data || att.data.length === 0) {
-            log.warn({ type: att.type, name: att.name }, 'Empty image data, skipping');
-            continue;
-          }
-          const mimeType = att.mimeType || 'image/jpeg';  // Fixed: JPEG is Telegram's default
-          messageContent.push({ type: 'image', data: att.data, mimeType });
-        } else {
-          const fileBlock = formatInboundFileTextBlock(
-            {
-              type: att.type,
-              mimeType: att.mimeType,
-              name: att.name,
-              size: att.size,
-              workspaceRelativePath: att.workspaceRelativePath,
-            },
-            storageRootAbs,
-          );
-          messageContent.push({ type: 'text', text: fileBlock });
-        }
-      }
-
-      // If only images were added with no text, add a default prompt so the LLM
-      // knows it should describe or analyze the image(s).
-      const hasText = messageContent.some((item) => item.type === 'text');
-      const hasImage = messageContent.some((item) => item.type === 'image');
-      if (hasImage && !hasText) {
-        messageContent.unshift({ type: 'text', text: 'Please analyze the image(s) I sent.' });
-      }
-
-      // If messageContent is still empty (all attachments were skipped), fall back to text
-      if (messageContent.length === 0) {
-        log.warn({ attachmentCount: msg.attachments.length }, 'All attachments were skipped, falling back to text message');
-        return {
-          role: 'user',
-          content: textBody || '[Image attachment could not be processed]',
-          timestamp: Date.now(),
-        };
-      }
-
+    if (!msg.attachments || msg.attachments.length === 0) {
       return {
         role: 'user',
-        content: messageContent,
+        content: textBody,
         timestamp: Date.now(),
       };
     }
 
-    // No attachments — plain string user content
+    const modelRef = this.modelManager.getModelForSession(sessionKey);
+    const cfg = this.getConfig?.();
+
+    const messageContent: Array<
+      { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
+    > = [];
+
+    if (msg.content.trim()) {
+      messageContent.push({ type: 'text', text: textBody });
+    }
+
+    const attachments = msg.attachments;
+    let i = 0;
+    while (i < attachments.length) {
+      const att = attachments[i]!;
+      const isImage =
+        att.type === 'image' || att.type === 'photo' || Boolean(att.mimeType?.startsWith('image/'));
+
+      if (isImage) {
+        const group: Array<{ data: string; mimeType: string }> = [];
+        while (i < attachments.length) {
+          const a = attachments[i]!;
+          const img =
+            a.type === 'image' || a.type === 'photo' || Boolean(a.mimeType?.startsWith('image/'));
+          if (!img) {
+            break;
+          }
+          if (!a.data || a.data.length === 0) {
+            log.warn({ type: a.type, name: a.name }, 'Empty image data, skipping');
+            i += 1;
+            continue;
+          }
+          group.push({ data: a.data, mimeType: a.mimeType || 'image/jpeg' });
+          i += 1;
+        }
+        if (group.length > 0) {
+          const parts = await resolveInboundImageContentParts({
+            modelRef,
+            cfg,
+            userTextForContext: msg.content.trim() ? textBody : '',
+            images: group,
+          });
+          messageContent.push(...parts);
+        }
+      } else {
+        const fileBlock = formatInboundFileTextBlock(
+          {
+            type: att.type,
+            mimeType: att.mimeType,
+            name: att.name,
+            size: att.size,
+            workspaceRelativePath: att.workspaceRelativePath,
+          },
+          storageRootAbs,
+        );
+        messageContent.push({ type: 'text', text: fileBlock });
+        i += 1;
+      }
+    }
+
+    const hasText = messageContent.some((item) => item.type === 'text');
+    const hasImage = messageContent.some((item) => item.type === 'image');
+    if (hasImage && !hasText) {
+      messageContent.unshift({ type: 'text', text: 'Please analyze the image(s) I sent.' });
+    }
+
+    if (messageContent.length === 0) {
+      log.warn(
+        { attachmentCount: msg.attachments.length },
+        'All attachments were skipped, falling back to text message',
+      );
+      return {
+        role: 'user',
+        content: textBody || '[Image attachment could not be processed]',
+        timestamp: Date.now(),
+      };
+    }
+
     return {
       role: 'user',
-      content: textBody,
+      content: messageContent,
       timestamp: Date.now(),
     };
   }
