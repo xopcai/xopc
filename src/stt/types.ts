@@ -46,6 +46,30 @@ export interface STTConfig {
   };
 }
 
+export type STTProviderAttemptOutcome = 'success' | 'skipped' | 'failed';
+
+export type STTProviderFailureReason =
+  | 'success'
+  | 'not_configured'
+  | 'timeout'
+  | 'provider_error'
+  | 'unsupported_format'
+  | 'unknown';
+
+export interface STTProviderAttempt {
+  provider: string;
+  outcome: STTProviderAttemptOutcome;
+  reasonCode: STTProviderFailureReason;
+  latencyMs: number;
+  error?: string;
+}
+
+export interface STTResultWithTracking extends STTResult {
+  attempts: STTProviderAttempt[];
+  fallbackFrom?: string;
+  attemptedProviders: string[];
+}
+
 /**
  * Default STT configuration
  */

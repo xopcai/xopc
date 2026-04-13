@@ -91,7 +91,7 @@ xopc onboard
   "tts": {
     "enabled": true,
     "provider": "openai",
-    "trigger": "auto",
+    "trigger": "inbound",
     "openai": {
       "apiKey": "${OPENAI_API_KEY}",
       "model": "tts-1",
@@ -412,6 +412,8 @@ HTTP API 网关配置。
 | `enabled` | boolean | `true` | 启用回退 |
 | `order` | array | `["alibaba", "openai"]` | 回退顺序 |
 
+失败时会按顺序尝试各 provider，并记录结构化 **attempts**（provider、结果、耗时、原因）便于诊断。
+
 **示例：**
 ```json
 {
@@ -434,15 +436,21 @@ HTTP API 网关配置。
 
 ### tts
 
-文字转语音（TTS）配置。
+文字转语音（TTS）配置；启用时还会注册智能体工具 **`text_to_speech`**。
 
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `enabled` | boolean | `false` | 启用 TTS |
-| `provider` | string | `openai` | 服务商：`openai`, `alibaba` |
-| `trigger` | string | `auto` | 触发：`auto`, `never` |
-| `openai` | object | - | OpenAI TTS 配置 |
-| `alibaba` | object | - | 阿里云 CosyVoice 配置 |
+| `provider` | string | `openai` | 主服务商：`openai`, `alibaba`, `edge` |
+| `trigger` | string | `always` | `off`, `always`, `inbound`, `tagged`（历史值 `auto` 会当作 `inbound`） |
+| `maxTextLength` | number | `512` | 送入各 TTS 提供方的最大字符数（可按 provider 上限调高） |
+| `timeoutMs` | number | `30000` | 单次请求超时（毫秒） |
+| `fallback` | object | - | 失败时的回退顺序 |
+| `summarization` | object | - | 超长文本在 TTS 前经 LLM 摘要 |
+| `modelOverrides` | object | - | 是否允许模型使用 `[[tts:...]]` 指令 |
+| `openai` | object | - | OpenAI TTS |
+| `alibaba` | object | - | 阿里云 DashScope TTS |
+| `edge` | object | - | Edge TTS（无需 API Key） |
 
 #### tts.openai
 
@@ -457,12 +465,43 @@ HTTP API 网关配置。
 | 字段 | 类型 | 默认值 | 说明 |
 |-------|------|---------|------|
 | `apiKey` | string | - | DashScope API 密钥 |
-| `model` | string | `cosyvoice-v1` | 模型：`cosyvoice-v1` |
-| `voice` | string | - | 音色 ID |
+| `model` | string | `qwen-tts` | TTS 模型 id |
+| `voice` | string | `Cherry` | 音色 id |
+
+#### tts.edge
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `true` | 为 `false` 时从链中排除 Edge |
+| `voice` | string | `en-US-MichelleNeural` | Edge 音色 |
+| `lang` | string | `en-US` | BCP-47 语言 |
+| `outputFormat` | string | 见 schema | Edge 输出格式字符串 |
+| `proxy` | string | - | 可选 HTTP(S) 代理 |
+| `timeoutMs` | number | - | 仅针对 Edge 的超时覆盖 |
+
+#### tts.fallback
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `true` | 启用回退 |
+| `order` | array | `["openai","alibaba","edge"]` | 顺序（会与主 provider 去重） |
+
+#### tts.summarization
+
+| 字段 | 类型 | 默认值 | 说明 |
+|-------|------|---------|------|
+| `enabled` | boolean | `true` | 超长时先摘要再 TTS |
+| `threshold` | number | 同 `maxTextLength` | 超过此长度触发摘要 |
+| `targetLength` | number | 同 `maxTextLength` | 摘要目标长度 |
+| `model` | string | - | 摘要用模型引用；未设可用环境变量 `XOPC_TTS_SUMMARIZE_MODEL` |
 
 **触发模式：**
-- `auto`: 用户发语音时，智能体以语音回复
-- `never`: 禁用 TTS，只发送文字
+- `off`：不对出站自动 TTS
+- `always`：满足管道条件时尽量 TTS
+- `inbound`：仅当用户本轮带语音入站时 TTS
+- `tagged`：仅当助手文本含 `[[tts]]` 时 TTS
+
+详见 [语音功能 (STT/TTS)](/zh/voice)（含 Telegram 群语音 @、`/tts status`、通道格式）。
 
 ---
 
@@ -530,6 +569,7 @@ xopc 支持环境变量存储敏感数据：
 | `DEEPSEEK_API_KEY` | DeepSeek API 密钥 |
 | `MINIMAX_API_KEY` | MiniMax API 密钥 |
 | `DASHSCOPE_API_KEY` | 阿里云 DashScope API 密钥（STT/TTS） |
+| `XOPC_TTS_SUMMARIZE_MODEL` | 未配置 `tts.summarization.model` 时，TTS 长文本摘要使用的模型引用 |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `XOPC_CONFIG` | 自定义配置文件路径 |
 | `XOPC_WORKSPACE` | 自定义工作区目录 |

@@ -1,4 +1,5 @@
 import type { TTSProviderInterface, TTSOptions, TTSResult } from '../types.js';
+import { truncateAtSentenceBoundary } from '../sentence-boundary.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('TTS:Base');
@@ -36,8 +37,11 @@ export abstract class BaseTTSProvider implements TTSProviderInterface {
 
     const maxLength = this.getMaxTextLength();
     if (text.length > maxLength) {
-      log.warn({ textLength: text.length, maxLength }, 'Text too long, truncating');
-      text = text.slice(0, maxLength - 3) + '...';
+      log.warn(
+        { textLength: text.length, maxLength },
+        'Text still too long after preprocessing, truncating at sentence boundary',
+      );
+      text = truncateAtSentenceBoundary(text, maxLength);
     }
 
     if (!this.isConfigured()) {

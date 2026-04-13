@@ -493,7 +493,12 @@ export class ChannelManager {
     if (!ttsConfig.enabled) return msg;
 
     const inboundAudio = msg.metadata?.transcribedVoice === true;
-    return maybeApplyTtsToPayload(msg, { config: ttsConfig, channel: msg.channel, inboundAudio });
+    return maybeApplyTtsToPayload(msg, {
+      config: ttsConfig,
+      channel: msg.channel,
+      inboundAudio,
+      appConfig: this.config,
+    });
   }
   
   /**

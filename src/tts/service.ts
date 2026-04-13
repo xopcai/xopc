@@ -1,17 +1,31 @@
-import type { TTSConfig, TTSAutoMode, TTSResult } from './types.js';
+import type { TTSConfig, TTSAutoMode, TTSResultWithTracking } from './types.js';
 
-const CHANNEL_OUTPUT_FORMATS: Record<string, { format: string; voiceCompatible: boolean }> = {
+export interface ChannelAudioFormat {
+  format: string;
+  voiceCompatible: boolean;
+}
+
+/** Per-channel encoding for outbound TTS. Only ids that xopc actually delivers on are listed; anything else uses `default`. */
+const CHANNEL_OUTPUT_FORMATS: Record<string, ChannelAudioFormat> = {
   telegram: { format: 'opus', voiceCompatible: true },
   /** Weixin ilink: VoiceItem encode_type 7 = MP3 per API types. */
   weixin: { format: 'mp3', voiceCompatible: true },
-  /** Web UI: MP3 plays in all major browsers without extra codecs. */
   webchat: { format: 'mp3', voiceCompatible: false },
+  cli: { format: 'mp3', voiceCompatible: false },
   default: { format: 'mp3', voiceCompatible: false },
 };
 
-export function getChannelOutputFormat(channel?: string): { format: string; voiceCompatible: boolean } {
+export function getChannelOutputFormat(channel?: string): ChannelAudioFormat {
   if (!channel) return CHANNEL_OUTPUT_FORMATS.default;
   return CHANNEL_OUTPUT_FORMATS[channel.toLowerCase()] || CHANNEL_OUTPUT_FORMATS.default;
+}
+
+export function getSupportedChannels(): string[] {
+  return Object.keys(CHANNEL_OUTPUT_FORMATS).filter((k) => k !== 'default');
+}
+
+export function isVoiceCompatibleChannel(channel: string): boolean {
+  return getChannelOutputFormat(channel).voiceCompatible;
 }
 
 export interface TTSContext {
@@ -59,7 +73,7 @@ export class TTSService {
     return this.config.trigger;
   }
 
-  async speak(text: string, context?: TTSContext): Promise<TTSResult> {
+  async speak(text: string, context?: TTSContext): Promise<TTSResultWithTracking> {
     const { speak } = await import('./index.js');
     return speak(text, this.config, {
       tts: {

@@ -19,6 +19,7 @@ import { telegramUpdateDedupe, buildTelegramUpdateKey } from './dedupe.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { normalizeTelegramCommandName, parseSlashCommand } from '@xopcai/xopc/chat-commands/command-parse.js';
 import { tryConsumeTelegramClarifyFreeText } from '@xopcai/xopc/gateway/clarify-runtime.js';
+import { checkMentionInTranscription } from '@xopcai/xopc/stt/preflight.js';
 
 const log = createLogger('TelegramInboundProcessor');
 
@@ -146,6 +147,45 @@ function extractMediaItems(message: Message): MediaItem[] {
 }
 
 /**
+ * Download + STT a Telegram voice message (for mention probe or media pipeline).
+ */
+async function downloadAndTranscribeTelegramVoice(params: {
+  voice: NonNullable<Message['voice']>;
+  bot: Bot;
+  botToken: string;
+  accountApiRoot: string;
+  sttService: STTService;
+  sttConfig: unknown;
+}): Promise<string> {
+  const { voice, bot, botToken, accountApiRoot, sttService, sttConfig } = params;
+  const voiceDuration = voice.duration || 0;
+  if (voiceDuration > STT_MAX_VOICE_DURATION_SECONDS) {
+    return '';
+  }
+  if (!sttService.isSTTAvailable(sttConfig)) {
+    return '';
+  }
+  try {
+    const file = await bot.api.getFile(voice.file_id);
+    const downloadUrl = `${accountApiRoot}/file/bot${botToken}/${file.file_path}`;
+    const response = await fetch(downloadUrl);
+    if (!response.ok) {
+      return '';
+    }
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (buffer.length === 0) {
+      return '';
+    }
+    const sttResult = await sttService.transcribe(buffer, sttConfig, {
+      language: (sttConfig as { provider?: string })?.provider === 'alibaba' ? 'zh' : undefined,
+    });
+    return sttResult.text?.trim() ?? '';
+  } catch {
+    return '';
+  }
+}
+
+/**
  * Process a single media item (download + optional STT)
  */
 async function processMediaItem(
@@ -156,7 +196,8 @@ async function processMediaItem(
   message: Message,
   sttService: STTService,
   mediaUtils: MediaUtils,
-  sttConfig: unknown
+  sttConfig: unknown,
+  reuseVoiceTranscript?: string,
 ): Promise<{ attachment: ProcessedAttachment | null; transcribedText: string }> {
   try {
     const file = await bot.api.getFile(item.fileId);
@@ -196,19 +237,23 @@ async function processMediaItem(
 
     // Handle voice messages with STT
     if (item.type === 'voice' && sttService.isSTTAvailable(sttConfig)) {
-      const voiceDuration = message.voice?.duration || 0;
-      if (voiceDuration <= STT_MAX_VOICE_DURATION_SECONDS) {
-        try {
-          const sttResult = await sttService.transcribe(Buffer.from(buffer), sttConfig, {
-            language: (sttConfig as { provider?: string })?.provider === 'alibaba' ? 'zh' : undefined,
-          });
-          transcribedText = sttResult.text;
-        } catch (sttError) {
-          log.error({ sttError }, 'STT transcription failed');
-          transcribedText = '[STT failed]';
-        }
+      if (reuseVoiceTranscript !== undefined && reuseVoiceTranscript !== '') {
+        transcribedText = reuseVoiceTranscript;
       } else {
-        transcribedText = `[Voice message too long (>${STT_MAX_VOICE_DURATION_SECONDS}s)]`;
+        const voiceDuration = message.voice?.duration || 0;
+        if (voiceDuration <= STT_MAX_VOICE_DURATION_SECONDS) {
+          try {
+            const sttResult = await sttService.transcribe(Buffer.from(buffer), sttConfig, {
+              language: (sttConfig as { provider?: string })?.provider === 'alibaba' ? 'zh' : undefined,
+            });
+            transcribedText = sttResult.text;
+          } catch (sttError) {
+            log.error({ sttError }, 'STT transcription failed');
+            transcribedText = '[STT failed]';
+          }
+        } else {
+          transcribedText = `[Voice message too long (>${STT_MAX_VOICE_DURATION_SECONDS}s)]`;
+        }
       }
     }
 
@@ -251,12 +296,21 @@ async function processAllMedia(
   message: Message,
   sttService: STTService,
   mediaUtils: MediaUtils,
-  sttConfig: unknown
+  sttConfig: unknown,
+  reuseVoiceTranscript?: string,
 ): Promise<{ attachments: ProcessedAttachment[]; transcribedText: string }> {
   const attachments: ProcessedAttachment[] = [];
   let transcribedText = '';
+  let voiceReuseConsumed = false;
 
   for (const item of media) {
+    const reuse =
+      item.type === 'voice' && reuseVoiceTranscript && !voiceReuseConsumed
+        ? reuseVoiceTranscript
+        : undefined;
+    if (reuse) {
+      voiceReuseConsumed = true;
+    }
     const result = await processMediaItem(
       item,
       bot,
@@ -265,7 +319,8 @@ async function processAllMedia(
       message,
       sttService,
       mediaUtils,
-      sttConfig
+      sttConfig,
+      reuse,
     );
     
     if (result.attachment) {
@@ -383,6 +438,28 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
       return;
     }
 
+    const botEarly = accountManager.getBot(accountId);
+    const botTokenEarly = account.botToken;
+    const accountApiRootEarly = account.apiRoot?.replace(/\/$/, '') || 'https://api.telegram.org';
+
+    let voiceProbeText = '';
+    if (
+      isGroup &&
+      message.voice &&
+      botEarly &&
+      botTokenEarly &&
+      sttService.isSTTAvailable(config?.stt)
+    ) {
+      voiceProbeText = await downloadAndTranscribeTelegramVoice({
+        voice: message.voice,
+        bot: botEarly,
+        botToken: botTokenEarly,
+        accountApiRoot: accountApiRootEarly,
+        sttService,
+        sttConfig: config?.stt,
+      });
+    }
+
     if (isGroup) {
       const requireMention = accessControl.resolveRequireMention({
         topicConfig: threadId ? account.groups?.[chatId]?.topics?.[String(threadId)] : undefined,
@@ -390,13 +467,36 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
         defaultRequireMention: true,
       });
 
-      // For media messages (photo, video, etc.) without caption, check caption entities too.
       const hasMedia = !!(message.photo || message.document || message.video || message.audio || message.voice);
       const captionEntities = (message as any).caption_entities;
-      const hasMention = accessControl.hasBotMention({ botUsername, text: content, entities: message.entities }) ||
-        (hasMedia && accessControl.hasBotMention({ botUsername, text: message.caption ?? '', entities: captionEntities }));
+      const voiceMention = voiceProbeText.trim();
+      const hasMention =
+        accessControl.hasBotMention({ botUsername, text: content, entities: message.entities }) ||
+        (hasMedia &&
+          accessControl.hasBotMention({
+            botUsername,
+            text: message.caption ?? '',
+            entities: captionEntities,
+          })) ||
+        (voiceMention.length > 0 &&
+          (accessControl.hasBotMention({ botUsername, text: voiceMention }) ||
+            checkMentionInTranscription(voiceMention, [botUsername])));
 
       if (requireMention && !hasMention) {
+        const isVoiceOnly =
+          !!message.voice &&
+          !message.photo &&
+          !message.document &&
+          !message.video &&
+          !message.audio &&
+          !(message.caption ?? '').trim() &&
+          !content.trim();
+
+        if (isVoiceOnly) {
+          log.debug({ accountId, chatId }, 'Group voice without mention after STT probe, ignored');
+          return;
+        }
+
         if (!hasMedia || content.trim().length > 0) {
           log.debug({ accountId, chatId }, 'Group message without mention ignored');
           return;
@@ -435,7 +535,8 @@ export function createInboundProcessor(deps: InboundProcessorDeps) {
         message,
         sttService,
         mediaUtils,
-        config?.stt
+        config?.stt,
+        voiceProbeText || undefined,
       );
       attachments = mediaResult.attachments;
       transcribedText = mediaResult.transcribedText;

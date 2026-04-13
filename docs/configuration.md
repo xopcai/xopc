@@ -91,7 +91,7 @@ Or create manually:
   "tts": {
     "enabled": true,
     "provider": "openai",
-    "trigger": "auto",
+    "trigger": "inbound",
     "openai": {
       "apiKey": "${OPENAI_API_KEY}",
       "model": "tts-1",
@@ -412,6 +412,8 @@ Speech-to-Text configuration for voice messages.
 | `enabled` | boolean | `true` | Enable fallback |
 | `order` | array | `["alibaba", "openai"]` | Fallback order |
 
+On failure, the runtime tries each provider in order and records structured **attempts** (provider, outcome, latency, reason) for diagnostics.
+
 **Example:**
 ```json
 {
@@ -434,15 +436,21 @@ Speech-to-Text configuration for voice messages.
 
 ### tts
 
-Text-to-Speech configuration for voice replies.
+Text-to-Speech configuration for voice replies and the optional agent `text_to_speech` tool.
 
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
-| `enabled` | boolean | `false` | Enable TTS |
-| `provider` | string | `openai` | Provider: `openai`, `alibaba` |
-| `trigger` | string | `auto` | Trigger: `auto`, `never` |
+| `enabled` | boolean | `false` | Enable TTS (and registration of `text_to_speech` when true) |
+| `provider` | string | `openai` | Primary provider: `openai`, `alibaba`, `edge` |
+| `trigger` | string | `always` | `off`, `always`, `inbound`, `tagged` (legacy `auto` → `inbound`) |
+| `maxTextLength` | number | `512` | Max characters sent to TTS providers (raise if your provider allows more) |
+| `timeoutMs` | number | `30000` | Per-request timeout (ms) |
+| `fallback` | object | - | Provider fallback order |
+| `summarization` | object | - | LLM summarization before TTS when text exceeds threshold |
+| `modelOverrides` | object | - | Allow `[[tts:...]]` directives from the model |
 | `openai` | object | - | OpenAI TTS config |
-| `alibaba` | object | - | Alibaba CosyVoice config |
+| `alibaba` | object | - | Alibaba DashScope TTS config |
+| `edge` | object | - | Microsoft Edge TTS (no API key) |
 
 #### tts.openai
 
@@ -457,12 +465,44 @@ Text-to-Speech configuration for voice replies.
 | Field | Type | Default | Description |
 |-------|------|---------|-------------|
 | `apiKey` | string | - | DashScope API key |
-| `model` | string | `cosyvoice-v1` | Model: `cosyvoice-v1` |
-| `voice` | string | - | Voice ID |
+| `model` | string | `qwen-tts` | TTS model id |
+| `voice` | string | `Cherry` | Voice id |
+
+#### tts.edge
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | When `false`, Edge is excluded from the provider chain |
+| `voice` | string | `en-US-MichelleNeural` | Edge voice |
+| `lang` | string | `en-US` | BCP-47 language |
+| `outputFormat` | string | (see schema) | Edge output format string |
+| `proxy` | string | - | Optional HTTP(S) proxy for Edge |
+| `timeoutMs` | number | - | Override timeout for Edge only |
+
+#### tts.fallback
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Try other providers on failure |
+| `order` | array | `["openai","alibaba","edge"]` | Order after deduplicating primary |
+
+#### tts.summarization
+
+| Field | Type | Default | Description |
+|-------|------|---------|-------------|
+| `enabled` | boolean | `true` | Summarize long text via LLM before TTS |
+| `threshold` | number | same as `maxTextLength` | Min length to trigger summarization |
+| `targetLength` | number | same as `maxTextLength` | Target length after summarization |
+| `model` | string | - | Model ref for summarization; env `XOPC_TTS_SUMMARIZE_MODEL` if unset |
 
 **Trigger modes:**
-- `auto`: Send voice reply when user sends voice message
-- `never`: Disable TTS, only send text
+- `off`: No automatic TTS on outbound
+- `always`: TTS when outbound rules pass
+- `inbound`: TTS only when the user message carried voice (`transcribedVoice`)
+- `tagged`: TTS only when assistant text contains `[[tts]]`
+- Legacy `auto` in JSON is normalized to `inbound`
+
+See [Voice (STT/TTS)](/voice) for Telegram group voice + mention behavior, `/tts status`, and channel formats.
 
 ---
 
@@ -530,6 +570,7 @@ xopc supports environment variables for sensitive data:
 | `DEEPSEEK_API_KEY` | DeepSeek API key |
 | `MINIMAX_API_KEY` | MiniMax API key |
 | `DASHSCOPE_API_KEY` | Alibaba DashScope API key (STT/TTS) |
+| `XOPC_TTS_SUMMARIZE_MODEL` | Model ref for TTS long-text summarization when `tts.summarization.model` is unset |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `XOPC_CONFIG` | Custom config file path |
 | `XOPC_WORKSPACE` | Custom workspace directory |

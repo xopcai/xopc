@@ -38,6 +38,7 @@ export async function mergeVoiceTranscriptsIntoUserText(
   prepared: InboundAttachmentInput[] | undefined,
   userText: string,
   sttConfig: STTConfig,
+  opts?: { skipVoiceTranscription?: boolean },
 ): Promise<{ text: string; inboundVoice: boolean }> {
   if (!prepared?.length) {
     return { text: userText, inboundVoice: false };
@@ -46,6 +47,10 @@ export async function mergeVoiceTranscriptsIntoUserText(
   const hasVoice = prepared.some(isVoiceLikeAttachment);
   if (!hasVoice) {
     return { text: userText, inboundVoice: false };
+  }
+
+  if (opts?.skipVoiceTranscription === true) {
+    return { text: userText, inboundVoice: true };
   }
 
   if (!isSTTAvailable(sttConfig)) {

@@ -70,6 +70,8 @@ export interface SystemPromptOptions {
   externalMemoryInstructions?: string;
   /** How skill instructions are surfaced (metadata-only → use skills_list / skill_view). */
   skillsPromptMode?: 'metadata-only' | 'legacy-with-paths';
+  /** Optional TTS / voice output guidance (when TTS is enabled). */
+  ttsSystemHint?: string;
 }
 
 // =============================================================================
@@ -503,6 +505,7 @@ export function buildSystemPrompt(
     curatedMemorySnapshot,
     externalMemoryInstructions,
     skillsPromptMode = 'metadata-only',
+    ttsSystemHint,
   } = options;
 
   const curatedUserFrozen = !!(curatedMemorySnapshot?.user?.trim());
@@ -572,6 +575,11 @@ export function buildSystemPrompt(
 
   // 13. Messaging
   sections.push(buildMessagingSection(channels, isMinimal));
+
+  // 13b. Voice (TTS)
+  if (!isMinimal && ttsSystemHint?.trim()) {
+    sections.push(`## Voice (TTS)\n\n${ttsSystemHint.trim()}`);
+  }
 
   // 14. Runtime info
   sections.push(buildRuntimeSection(runtime));

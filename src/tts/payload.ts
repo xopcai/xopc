@@ -1,8 +1,10 @@
 import type { OutboundMessage } from '../channels/transport-types.js';
+import type { Config } from '../config/schema.js';
 import type { TTSConfig, TTSAutoMode } from './types.js';
 import { shouldUseTTS, getChannelOutputFormat } from './service.js';
-import { speak } from './index.js';
+import { speak } from './speak-core.js';
 import { compressAudio } from './audio.js';
+import { recordTtsSuccess, recordTtsFailure } from './status-tracker.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('TTS/Payload');
@@ -11,6 +13,8 @@ export interface TTSApplyOptions {
   config: TTSConfig | undefined;
   channel: string;
   inboundAudio: boolean;
+  /** Resolves summarization LLM when enabled */
+  appConfig?: Config;
 }
 
 export async function maybeApplyTtsToPayload(
@@ -40,9 +44,12 @@ export async function maybeApplyTtsToPayload(
     };
   }
 
+  const startTime = Date.now();
+
   try {
     const outFmt = getChannelOutputFormat(channel);
     const ttsResult = await speak(msg.content, config, {
+      appConfig: options.appConfig,
       tts: {
         format: outFmt.format as 'opus' | 'mp3' | 'wav',
       },
@@ -64,6 +71,17 @@ export async function maybeApplyTtsToPayload(
     const base64 = compressedAudio.toString('base64');
     const dataUrl = `data:${mimeType};base64,${base64}`;
 
+    const latencyMs = Date.now() - startTime;
+    recordTtsSuccess({
+      provider: ttsResult.provider,
+      latencyMs,
+      textLength: msg.content.length,
+      audioSize: compressedAudio.length,
+      audioFormat: compressedFormat,
+      usedFallback: Boolean(ttsResult.fallbackFrom),
+      wasSummarized: Boolean(ttsResult.wasSummarized),
+    });
+
     log.info({ channel, provider: ttsResult.provider, format: compressedFormat }, 'TTS generated');
 
     return {
@@ -73,6 +91,12 @@ export async function maybeApplyTtsToPayload(
       audioAsVoice: outFmt.voiceCompatible,
     };
   } catch (error) {
+    const latencyMs = Date.now() - startTime;
+    recordTtsFailure({
+      latencyMs,
+      textLength: msg.content?.length ?? 0,
+      error: error instanceof Error ? error.message : String(error),
+    });
     log.warn({ error }, 'TTS failed, sending text');
     return msg;
   }

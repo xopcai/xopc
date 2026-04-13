@@ -15,6 +15,8 @@ import { selectSkillsVisibleInPrompt } from '../skills/format-skills-prompt.js';
 import { resolveStateDir } from '../../config/paths.js';
 import type { BootstrapFile } from '../context/workspace.js';
 import { buildSystemPrompt as buildBaseSystemPrompt } from './system-prompt.js';
+import { mergeTtsConfigFromAppConfig } from '../../tts/merge-config.js';
+import { buildTtsSystemPromptHint } from '../../tts/directives.js';
 import { toWorkspaceBootstrapFile, DEFAULT_USER_FILENAME } from '../context/workspace.js';
 import type { MemorySnapshot } from '../memory/types.js';
 import { createLogger } from '../../utils/logger.js';
@@ -75,7 +77,19 @@ export class SystemPromptBuilder {
               options.registeredToolNames,
             );
       const trimmed = options.systemPromptOverride.trim();
-      const fullPrompt = skillPrompt.trim() ? `${trimmed}\n\n${skillPrompt}` : trimmed;
+      let fullPrompt = skillPrompt.trim() ? `${trimmed}\n\n${skillPrompt}` : trimmed;
+      const ttsMerged = mergeTtsConfigFromAppConfig(this.config.tts);
+      const reg = options.registeredToolNames ?? [];
+      const ttsHint = buildTtsSystemPromptHint({
+        enabled: ttsMerged.enabled,
+        trigger: ttsMerged.trigger,
+        maxTextLength: ttsMerged.maxTextLength,
+        modelOverrides: ttsMerged.modelOverrides,
+        textToSpeechTool: ttsMerged.enabled && reg.includes('text_to_speech'),
+      });
+      if (ttsHint?.trim()) {
+        fullPrompt = `${fullPrompt}\n\n## Voice (TTS)\n\n${ttsHint.trim()}`;
+      }
       log.debug({ baseLength: trimmed.length, skillLength: skillPrompt.length, totalLength: fullPrompt.length }, 'System prompt built (override)');
       return fullPrompt;
     }
@@ -92,6 +106,16 @@ export class SystemPromptBuilder {
     const skillsPromptMode =
       skillsCfg.promptStyle === 'legacy-with-paths' ? 'legacy-with-paths' : 'metadata-only';
 
+    const ttsMerged = mergeTtsConfigFromAppConfig(this.config.tts);
+    const reg = options?.registeredToolNames ?? [];
+    const ttsSystemHint = buildTtsSystemPromptHint({
+      enabled: ttsMerged.enabled,
+      trigger: ttsMerged.trigger,
+      maxTextLength: ttsMerged.maxTextLength,
+      modelOverrides: ttsMerged.modelOverrides,
+      textToSpeechTool: ttsMerged.enabled && reg.includes('text_to_speech'),
+    });
+
     const basePrompt = buildBaseSystemPrompt(ws, {
       bootstrapFiles: workspaceBootstrapFiles,
       heartbeatEnabled,
@@ -103,6 +127,7 @@ export class SystemPromptBuilder {
       curatedMemorySnapshot,
       externalMemoryInstructions,
       skillsPromptMode,
+      ttsSystemHint,
     });
 
     const skillPrompt =
