@@ -3,12 +3,28 @@ import { persist } from 'zustand/middleware';
 
 export type ThemePreference = 'light' | 'dark' | 'system';
 
-const THEME_META_COLOR = {
-  light: '#f5f5f7',
-  dark: '#1c1c1e',
-} as const;
+/** Visual color scheme — orthogonal to light/dark mode. */
+export type ColorScheme = 'default' | 'emerald';
 
-function syncThemeColorMeta(mode: 'light' | 'dark') {
+export const COLOR_SCHEMES: { value: ColorScheme; labelEn: string; labelZh: string }[] = [
+  { value: 'default', labelEn: 'Default', labelZh: '默认' },
+  { value: 'emerald', labelEn: 'Light green', labelZh: '浅绿' },
+];
+
+const DEFAULT_COLOR_SCHEME: ColorScheme = 'default';
+
+const THEME_META_COLOR: Record<'light' | 'dark', Record<ColorScheme, string>> = {
+  light: {
+    default: '#f5f5f7',
+    emerald: '#f0fdf4',
+  },
+  dark: {
+    default: '#1c1c1e',
+    emerald: '#000000',
+  },
+};
+
+function syncThemeColorMeta(mode: 'light' | 'dark', scheme: ColorScheme) {
   const head = document.head;
   if (!head) return;
   const selector = 'meta[name="theme-color"][data-xopc-theme-color="true"]';
@@ -19,7 +35,7 @@ function syncThemeColorMeta(mode: 'light' | 'dark') {
     meta.setAttribute('data-xopc-theme-color', 'true');
     head.appendChild(meta);
   }
-  meta.setAttribute('content', THEME_META_COLOR[mode]);
+  meta.setAttribute('content', THEME_META_COLOR[mode][scheme]);
 }
 
 function getSystemDark(): boolean {
@@ -37,13 +53,18 @@ function prefersReducedMotion(): boolean {
   return globalThis.matchMedia?.('(prefers-reduced-motion: reduce)').matches ?? false;
 }
 
-/** Apply light/dark on `<html>`. Uses View Transitions when available for a softer cross-fade (not instant snap). */
-function applyDomTheme(mode: 'light' | 'dark', useViewTransition: boolean) {
+function normalizeColorScheme(value: unknown): ColorScheme {
+  return value === 'default' || value === 'emerald' ? value : DEFAULT_COLOR_SCHEME;
+}
+
+/** Apply light/dark + color scheme on `<html>`. Uses View Transitions when available for a softer cross-fade. */
+function applyDomTheme(mode: 'light' | 'dark', scheme: ColorScheme, useViewTransition: boolean) {
   const root = document.documentElement;
   const run = () => {
     root.classList.toggle('dark', mode === 'dark');
     root.dataset.theme = mode;
-    syncThemeColorMeta(mode);
+    root.dataset.colorScheme = scheme;
+    syncThemeColorMeta(mode, scheme);
   };
 
   const doc = document as Document & {
@@ -66,45 +87,68 @@ export function bootstrapTheme() {
   try {
     const raw = localStorage.getItem('xopc-web-theme');
     let pref: ThemePreference = 'system';
+    let scheme: ColorScheme = DEFAULT_COLOR_SCHEME;
     if (raw) {
-      const parsed = JSON.parse(raw) as { state?: { preference?: ThemePreference } };
+      const parsed = JSON.parse(raw) as {
+        state?: { preference?: ThemePreference; colorScheme?: ColorScheme };
+      };
       if (parsed.state?.preference) pref = parsed.state.preference;
+      if (parsed.state && 'colorScheme' in parsed.state) {
+        scheme = normalizeColorScheme(parsed.state.colorScheme);
+      }
     }
-    applyDomTheme(resolveTheme(pref), false);
+    applyDomTheme(resolveTheme(pref), scheme, false);
   } catch {
-    applyDomTheme(resolveTheme('system'), false);
+    applyDomTheme(resolveTheme('system'), 'default', false);
   }
 }
 
 type ThemeState = {
   preference: ThemePreference;
-  setPreference: (p: ThemePreference) => void;
+  colorScheme: ColorScheme;
   resolved: 'light' | 'dark';
+  setPreference: (p: ThemePreference) => void;
+  setColorScheme: (scheme: ColorScheme) => void;
 };
 
 export const useThemeStore = create(
   persist<ThemeState>(
-    (set) => ({
+    (set, get) => ({
       preference: 'system',
+      colorScheme: DEFAULT_COLOR_SCHEME,
       resolved: resolveTheme('system'),
 
       setPreference: (preference) => {
         const resolved = resolveTheme(preference);
-        const prevResolved = useThemeStore.getState().resolved;
-        applyDomTheme(resolved, resolved !== prevResolved);
+        const { resolved: prevResolved, colorScheme } = get();
+        applyDomTheme(resolved, colorScheme, resolved !== prevResolved);
         set({ preference, resolved });
+      },
+
+      setColorScheme: (scheme) => {
+        const { resolved } = get();
+        applyDomTheme(resolved, scheme, true);
+        set({ colorScheme: scheme });
       },
     }),
     {
       name: 'xopc-web-theme',
+      merge: (persisted, current) => {
+        const p = (persisted ?? {}) as Partial<ThemeState>;
+        return {
+          ...current,
+          ...p,
+          colorScheme: normalizeColorScheme(p.colorScheme),
+        };
+      },
     },
   ),
 );
 
 export function syncThemeAfterHydration() {
-  const { preference } = useThemeStore.getState();
+  const { preference, colorScheme } = useThemeStore.getState();
   const resolved = resolveTheme(preference);
-  applyDomTheme(resolved, false);
+  applyDomTheme(resolved, colorScheme, false);
   useThemeStore.setState({ resolved });
 }
 
@@ -113,11 +157,11 @@ export function subscribeSystemTheme() {
   if (!mq) return () => {};
 
   const handler = () => {
-    const { preference } = useThemeStore.getState();
+    const { preference, colorScheme } = useThemeStore.getState();
     if (preference !== 'system') return;
     const resolved = resolveTheme('system');
     const prevResolved = useThemeStore.getState().resolved;
-    applyDomTheme(resolved, resolved !== prevResolved);
+    applyDomTheme(resolved, colorScheme, resolved !== prevResolved);
     useThemeStore.setState({ resolved });
   };
 

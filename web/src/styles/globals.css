@@ -341,6 +341,87 @@ html.dark {
   }
 }
 
+/*
+ * Light-green palette (internal id: emerald) — void-black canvas, green accent, terminal-native radii.
+ * Applied via html[data-color-scheme="emerald"] (light) and html.dark[data-color-scheme="emerald"] (dark).
+ */
+html[data-color-scheme='emerald'] {
+  --color-surface-base: #f0fdf4;
+  --color-surface-panel: #ffffff;
+  --color-surface-hover: #dcfce7;
+  --color-surface-active: #bbf7d0;
+
+  --color-fg: #052e16;
+  --color-fg-muted: #166534;
+  --color-fg-subtle: #15803d;
+  --color-fg-disabled: #86efac;
+
+  --color-edge-subtle: #bbf7d0;
+  --color-edge: #86efac;
+  --color-edge-strong: #4ade80;
+
+  --color-accent: #059669;
+  --color-accent-hover: #047857;
+  --color-accent-soft: #d1fae5;
+  --color-accent-fg: #047857;
+
+  --color-checkbox-accent: #059669;
+
+  --color-success: #059669;
+  --color-success-soft: #d1fae5;
+  --color-danger: #dc2626;
+  --color-danger-soft: #fee2e2;
+  --color-warning: #d97706;
+  --color-warning-soft: #fef3c7;
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+}
+
+html.dark[data-color-scheme='emerald'] {
+  --color-surface-base: #000000;
+  --color-surface-panel: #0a0a0a;
+  --color-surface-hover: #111111;
+  --color-surface-active: #1a1a1a;
+
+  --color-fg: #d1fae5;
+  --color-fg-muted: #6ee7b7;
+  --color-fg-subtle: #34d399;
+  --color-fg-disabled: #065f46;
+
+  --color-edge-subtle: #0d2818;
+  --color-edge: #134e2a;
+  --color-edge-strong: #166534;
+
+  --color-accent: #10b981;
+  --color-accent-hover: #34d399;
+  --color-accent-soft: rgb(6 78 59 / 0.6);
+  --color-accent-fg: #34d399;
+
+  --color-checkbox-accent: #10b981;
+
+  --color-success: #34d399;
+  --color-success-soft: rgb(6 78 59 / 0.5);
+  --color-danger: #f87171;
+  --color-danger-soft: rgb(127 29 29 / 0.5);
+  --color-warning: #fbbf24;
+  --color-warning-soft: rgb(113 63 18 / 0.5);
+
+  --color-scrim: rgb(0 0 0 / 0.72);
+
+  --shadow-surface: 0 0 0 1px rgb(16 185 129 / 0.1);
+  --shadow-elevated: 0 8px 32px rgb(0 0 0 / 0.8), 0 0 0 1px rgb(16 185 129 / 0.07);
+  --shadow-float: 0 12px 48px rgb(0 0 0 / 0.9), 0 0 0 1px rgb(16 185 129 / 0.06);
+  --shadow-popover: 0 16px 48px rgb(0 0 0 / 0.85), 0 0 0 1px rgb(16 185 129 / 0.12);
+
+  --radius-sm: 0.25rem;
+  --radius-md: 0.375rem;
+  --radius-lg: 0.5rem;
+  --radius-xl: 0.75rem;
+}
+
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
