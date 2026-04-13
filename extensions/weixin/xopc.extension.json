@@ -1,8 +1,17 @@
 {
   "id": "weixin",
-  "name": "Weixin Channel",
+  "name": "WeChat (Weixin) Channel",
   "description": "WeChat ilink channel (private workspace sources; ships inside @xopcai/xopc dist/)",
   "version": "0.1.0",
   "kind": "channel",
-  "main": "dist/index.js"
+  "main": "dist/index.js",
+  "channels": ["weixin"],
+  "activation": {
+    "onChannels": ["weixin"],
+    "onCapabilities": ["channel"]
+  },
+  "setup": {
+    "providers": [],
+    "requiresRuntime": true
+  }
 }

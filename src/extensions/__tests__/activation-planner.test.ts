@@ -1,0 +1,73 @@
+import { describe, expect, it } from 'vitest';
+import { ActivationPlanner } from '../activation-planner.js';
+import { ManifestRegistry } from '../manifest-registry.js';
+import type { DiscoveredExtension } from '../types/loader.js';
+
+function regFrom(manifests: DiscoveredExtension[]): ManifestRegistry {
+  return ManifestRegistry.fromDiscovered(manifests);
+}
+
+describe('ActivationPlanner', () => {
+  it('respects explicit enabled and disabled', () => {
+    const planner = new ActivationPlanner(
+      regFrom([
+        {
+          id: 'a',
+          path: '/a',
+          source: 'bundled',
+          manifest: { id: 'a', name: 'A' },
+        },
+        {
+          id: 'b',
+          path: '/b',
+          source: 'bundled',
+          manifest: { id: 'b', name: 'B' },
+        },
+      ]),
+    );
+    const ids = planner.getActivatedIds({
+      enabledIds: ['a'],
+      disabledIds: ['b'],
+      env: {},
+    });
+    expect(ids).toContain('a');
+    expect(ids).not.toContain('b');
+  });
+
+  it('activates on channel trigger', () => {
+    const planner = new ActivationPlanner(
+      regFrom([
+        {
+          id: 'telegram',
+          path: '/t',
+          source: 'bundled',
+          manifest: {
+            id: 'telegram',
+            name: 'T',
+            channels: ['telegram'],
+            activation: { onChannels: ['telegram'] },
+          },
+        },
+      ]),
+    );
+    const ids = planner.getActivatedIds({
+      configuredChannelIds: ['telegram'],
+      env: {},
+    });
+    expect(ids).toContain('telegram');
+  });
+
+  it('activates enabledByDefault', () => {
+    const planner = new ActivationPlanner(
+      regFrom([
+        {
+          id: 'x',
+          path: '/x',
+          source: 'bundled',
+          manifest: { id: 'x', name: 'X', enabledByDefault: true },
+        },
+      ]),
+    );
+    expect(planner.getActivatedIds({ env: {} })).toContain('x');
+  });
+});

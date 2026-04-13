@@ -6,6 +6,7 @@
 
 // Re-export everything from submodules
 export * from './core.js';
+export * from './manifest.js';
 export * from './tools.js';
 export * from './hooks.js';
 export * from './events.js';

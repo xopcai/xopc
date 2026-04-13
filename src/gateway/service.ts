@@ -7,8 +7,7 @@ import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/schema.js';
 import { CronService } from '../cron/index.js';
-import { ExtensionLoader, normalizeExtensionConfig } from '../extensions/index.js';
-import type { ResolvedExtensionConfig } from '../extensions/types/index.js';
+import { ExtensionLoader } from '../extensions/index.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { ConfigHotReloader } from '../config/reload.js';
 import { SessionManager } from '../session/index.js';
@@ -74,7 +73,6 @@ export class GatewayService {
   private channelManager: ChannelManager;
   private cronService: CronService;
   private extensionLoader: ExtensionLoader | null = null;
-  private resolvedExtensionConfigs: ResolvedExtensionConfig[] = [];
   private heartbeatService: HeartbeatService;
   private sessionManager: SessionManager;
   private running = false;
@@ -224,17 +222,6 @@ export class GatewayService {
         extensionsDir: resolveWorkspaceExtensionsDir(this.config, aid),
       });
       this.extensionLoader.setConfig(this.config as Parameters<ExtensionLoader['setConfig']>[0]);
-
-      const extensionsConfig = (this.config as Record<string, unknown>).extensions as
-        | Record<string, unknown>
-        | undefined;
-      if (!extensionsConfig) {
-        log.debug('No extensions config block; built-in channel plugins only');
-        this.resolvedExtensionConfigs = [];
-        return;
-      }
-
-      this.resolvedExtensionConfigs = normalizeExtensionConfig(extensionsConfig).filter((c) => c.enabled);
     } catch (error) {
       log.warn({ error }, 'Failed to initialize extension loader');
     }
@@ -248,16 +235,14 @@ export class GatewayService {
       return;
     }
     try {
-      if (this.resolvedExtensionConfigs.length > 0) {
-        await this.extensionLoader.loadExtensions(this.resolvedExtensionConfigs);
-      }
+      await this.extensionLoader.loadByActivationPlan();
       const reg = this.extensionLoader.getRegistry();
       for (const plugin of reg.channelPlugins) {
         this.channelManager.registerPlugin(plugin);
       }
       log.debug(
         {
-          extensions: this.resolvedExtensionConfigs.length,
+          extensionRecords: reg.extensions.size,
           channelPlugins: reg.channelPlugins.length,
         },
         'Extensions loaded and channel plugins registered',

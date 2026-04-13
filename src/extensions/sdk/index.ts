@@ -279,3 +279,6 @@ export {
 // ============================================================================
 
 export type { Config } from '../../config/config-surface.js';
+
+// Subpath barrels (also available as `xopc/extension-sdk/<name>`)
+export { lazyModule, lazyFunction } from './lazy.js';

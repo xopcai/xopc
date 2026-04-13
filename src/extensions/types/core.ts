@@ -39,7 +39,15 @@ export interface ExtensionDefinition {
   deactivate?: (api: ExtensionApi) => void | Promise<void>;
 }
 
-export type ExtensionKind = 'channel' | 'provider' | 'memory' | 'tool' | 'utility';
+export type ExtensionKind =
+  | 'channel'
+  | 'provider'
+  | 'memory'
+  | 'tool'
+  | 'utility'
+  | 'tts'
+  | 'image-generation'
+  | 'web-search';
 
 export type ExtensionModule = ExtensionDefinition | ((api: ExtensionApi) => void | Promise<void>);
 

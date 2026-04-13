@@ -5,9 +5,12 @@ xopc provides a lightweight but powerful extension system for customizing and ex
 ## Features
 
 - 🏗️ **Three-tier Storage** - Workspace / Global / Bundled
-- 🔌 **Extension SDK** - Official SDK with unified imports
+- 📋 **Manifest-first activation** - Discover and plan extension loads from `xopc.extension.json` before executing extension code; gateway and `xopc agent` use an activation plan (config, channels, model id, env vars declared in manifests)
+- 🔌 **Extension SDK** - Official SDK with unified imports and optional **subpath** imports (`extension-sdk/core`, `extension-sdk/lazy`, …)
 - ⚡ **Native TypeScript** - Instant loading via jiti, no compilation
 - 📦 **Multi-source Installation** - npm, local directory, Git repository
+
+**Design reference (repository):** the internal RFC set under [`.docs/channel/`](../.docs/channel/00-overview.md) describes the full target architecture (aligned with ideas from OpenClaw). User-facing behavior is summarized below; Phase 3 items not yet in code are omitted.
 
 ---
 
@@ -56,13 +59,15 @@ Configure in `~/.xopc/xopc.json`:
 | `disabled` | `string[]` | (Optional) List of extension IDs to disable |
 | `[extension-id]` | `object \| boolean` | Extension-specific configuration |
 
+**Activation vs `enabled`:** The **gateway** and **`xopc agent`** resolve extensions with a **manifest-first activation plan**. You do **not** have to list every channel extension under `extensions.enabled` if activation is triggered elsewhere—for example, configuring **`channels.telegram`** / **`channels.weixin`** or setting an env var named in the extension manifest (e.g. `TELEGRAM_BOT_TOKEN` for the bundled Telegram extension). To **force-disable** an extension, add its id to **`extensions.disabled`**.
+
 ### Create New Extension
 
 ```bash
 xopc extension create my-extension --name "My Extension" --kind utility
 ```
 
-**Supported kinds:** `channel` | `provider` | `memory` | `tool` | `utility`
+**Supported kinds:** `channel` | `provider` | `memory` | `tool` | `utility` | `tts` | `image-generation` | `web-search`
 
 This creates:
 - `package.json` - npm config
@@ -96,6 +101,58 @@ xopc supports three-tier extension storage:
 
 ---
 
+## Manifest-first control plane
+
+xopc separates **reading manifests** (control plane) from **importing extension code** (runtime), following the RFC under `.docs/channel/`.
+
+### Phases
+
+| Phase | What happens | API / module |
+|-------|----------------|--------------|
+| **1 — Discovery + registry** | Scan extension directories and parse `xopc.extension.json` only (no `register()` yet) | `ExtensionLoader.buildManifestRegistry()`, `getManifestRegistry()` → `ManifestRegistry` |
+| **2 — Activation planning** | Decide which extension ids should load, from merged **config + env + manifest metadata** | `ActivationPlanner` via `ExtensionLoader.planActivation()` |
+| **3 — Runtime load** | Import entry module and run the extension | `ExtensionLoader.loadByActivationPlan()` (also still: `loadExtension`, `loadExtensions`, `loadAllExtensions`) |
+
+### Activation decision order (high → low)
+
+1. **`extensions.enabled` / `extensions.disabled`** in config (explicit allow/deny; enabled wins if both appear for the same id—avoid configuring both).
+2. **Default agent model id** — if it matches `modelSupport.modelPrefixes` / `modelSupport.modelPatterns` on a manifest.
+3. **Environment variables** — any name listed under `providerAuthEnvVars` or `channelEnvVars` on a manifest, if set in `process.env`.
+4. **`autoEnableWhenConfiguredProviders`** — when `configuredProviderIds` derived from config includes a listed provider id.
+5. **`activation.onProviders` / `activation.onChannels`** — when config-derived provider or channel ids match.
+6. **`enabledByDefault: true`** on the manifest.
+
+Loaded extension ids are sorted **lexicographically** for stable ordering.
+
+### Where activation runs
+
+| Entry | Behavior |
+|-------|----------|
+| **Gateway** | Calls `loadByActivationPlan()` when starting extensions (not limited to ids listed only in `extensions.enabled`). |
+| **`xopc agent`** | Same: `loadByActivationPlan()` with current config. |
+| **CLI (`registerExtensionCliCommands`)** | Skips loading entirely unless **at least one** of: non-empty `extensions.enabled`, configured channels that imply a channel extension, or an env var indexed by any discovered manifest—keeps plain CLI commands fast. |
+
+### Optional manifest fields (`xopc.extension.json`)
+
+All of these are **optional**; old manifests without them keep working.
+
+| Field | Purpose |
+|-------|---------|
+| `enabledByDefault` | Auto-activate when no higher-priority rule applies |
+| `providers`, `channels` | Declare ids this extension implements (indexed for lookup) |
+| `providerAuthEnvVars`, `channelEnvVars` | Map logical id → env var names (for detection + onboarding) |
+| `providerAuthChoices` | UI / CLI oriented auth metadata |
+| `modelSupport` | `modelPrefixes`, `modelPatterns` for model-driven activation |
+| `autoEnableWhenConfiguredProviders` | Provider ids that trigger activation when present in config |
+| `activation` | `onProviders`, `onChannels`, `onCommands`, `onCapabilities` |
+| `contracts`, `setup` | Declarative capability / setup hints |
+
+### Onboarding helpers (advanced)
+
+For tools or UI that need provider/channel lists **without** loading extension JS, the implementation exposes helpers over a `ManifestRegistry` (see `src/extensions/onboard-helpers.ts` in the repo): `listOnboardProviders`, `listOnboardChannels`, `resolveProviderForModel`.
+
+---
+
 ## Extension SDK
 
 The npm package name is **`@xopcai/xopc`**. Import the SDK through the published subpath:
@@ -105,7 +162,7 @@ The npm package name is **`@xopcai/xopc`**. Import the SDK through the published
 import type { ExtensionApi, ExtensionDefinition } from '@xopcai/xopc/extension-sdk';
 ```
 
-When developing extensions against a local checkout, the loader may still resolve the legacy alias `xopc/extension-sdk` to `src/extension-sdk/index.ts`.
+When developing extensions against a local checkout, the loader resolves the alias `xopc/extension-sdk` to `src/extensions/sdk/index.ts` (jiti), including subpaths such as `xopc/extension-sdk/core` and `xopc/extension-sdk/lazy`.
 
 ### Exported Types
 
@@ -142,6 +199,10 @@ import {
   registerExtensionCliProgram,
 } from '@xopcai/xopc/extension-sdk';
 
+// Optional subpaths (smaller surface / tree-shaking), e.g.:
+// import type { ExtensionApi } from '@xopcai/xopc/extension-sdk/core';
+// import { lazyModule } from '@xopcai/xopc/extension-sdk/lazy';
+
 // Commands
 import type { ExtensionCommand } from '@xopcai/xopc/extension-sdk';
 
@@ -155,7 +216,7 @@ import type { ExtensionService } from '@xopcai/xopc/extension-sdk';
 
 ### Manifest File
 
-Each extension must include `xopc.extension.json`:
+Each extension must include `xopc.extension.json`. Minimal example:
 
 ```json
 {
@@ -176,6 +237,8 @@ Each extension must include `xopc.extension.json`:
   }
 }
 ```
+
+Channel / provider extensions can add the **optional** declaration fields described in [Manifest-first control plane](#manifest-first-control-plane) (see bundled `extensions/telegram/xopc.extension.json` and `extensions/custom-provider/xopc.extension.json` in the repo).
 
 ### Extension Entry File
 
@@ -579,9 +642,11 @@ Options:
 
 ### Extension Not Loading
 
-1. Check if extension is in `enabled` array
-2. Verify `xopc.extension.json` manifest is valid
-3. Check logs for loading errors
+1. Check **`extensions.disabled`** does not include the extension id
+2. For gateway / agent: confirm an **activation trigger** applies (`extensions.enabled`, matching `channels.*`, env vars declared in the manifest, model prefix, `enabledByDefault`, etc.)
+3. For **CLI-only** commands: remember extension code may be skipped unless `extensions.enabled` is non-empty, channels are configured, or a manifest-indexed env var is set
+4. Verify `xopc.extension.json` is valid JSON and the extension is discoverable under workspace / global / bundled paths
+5. Check logs for loading errors
 
 ### Installation Failed
 

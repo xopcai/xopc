@@ -12,6 +12,10 @@ xopc supports multiple communication channels with an extension-based architectu
 
 Third-party or experimental channel types may ship as **extensions** and still persist under `channels.<id>` when valid for your build.
 
+### Extension loading (Telegram / Weixin)
+
+The gateway and **`xopc agent`** use **manifest-first activation** (see [Extensions — Manifest-first control plane](./extensions.md#manifest-first-control-plane)). Bundled channel packages under `extensions/telegram` and `extensions/weixin` declare `channels` and `activation.onChannels` in `xopc.extension.json`, so when **`channels.telegram`** or **`channels.weixin`** is considered configured (token, `accounts`, `enabled`, etc.), the matching extension can load **without** listing its id under `extensions.enabled`. Set **`extensions.disabled`** to force an extension off. The CLI pre-parse path only loads extensions when `extensions.enabled` is non-empty, channels imply a channel extension, or a manifest-indexed env var is set—see the extensions doc for details.
+
 ## Gateway console — IM channels
 
 When the gateway is running, the React console includes a dedicated **IM channels** screen:
