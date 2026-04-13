@@ -3,10 +3,8 @@
  *
  * Centralizes tool creation logic to keep service.ts focused on orchestration.
  *
- * TTS Architecture Note:
- * TTS is NOT handled by tools anymore.
- * TTS is applied at the ChannelManager dispatch layer via maybeApplyTtsToPayload().
- * This prevents duplicate voice messages.
+ * TTS: auto TTS is applied at the ChannelManager via maybeApplyTtsToPayload().
+ * Optional \`text_to_speech\` tool sends explicit voice when TTS is enabled.
  */
 
 import type { AgentTool } from '@mariozechner/pi-agent-core';
@@ -51,6 +49,8 @@ import type { SkillManager } from '../skills/skill-manager.js';
 import { wrapToolsWithProtection, type ToolExecutorConfig } from './executor.js';
 import { createSkillsListTool, createSkillViewTool } from './skills-tools.js';
 import { createSkillManageTool } from './skill-manage-tool.js';
+import { createTextToSpeechTool } from './tts-tool.js';
+import { mergeTtsConfigFromAppConfig } from '../../tts/merge-config.js';
 
 const log = createLogger('AgentToolsFactory');
 
@@ -95,7 +95,6 @@ export interface ToolFactoryDeps {
   getSkillPassthroughEnvVarNames?: () => string[];
   /** Add declared env names for the current session (no values stored). */
   registerSkillEnvPassthrough?: (names: string[]) => void;
-  // TTS config removed - handled at dispatch layer
 }
 
 export interface CreateCoreToolsOptions {
@@ -213,6 +212,15 @@ export class AgentToolsFactory {
       // Note: TTS is NOT handled by send_message tool anymore
       // TTS is applied at the ChannelManager dispatch layer
       createMessageTool(bus, () => this.deps.getCurrentContext()),
+      ...(mergeTtsConfigFromAppConfig(cfg?.tts).enabled
+        ? [
+            createTextToSpeechTool({
+              bus,
+              getContext: () => this.deps.getCurrentContext(),
+              getConfig: () => this.deps.getConfig?.(),
+            }),
+          ]
+        : []),
       createSendMediaTool(bus, () => this.deps.getCurrentContext()),
       createMemorySearchTool(workspace),
       createMemoryGetTool(workspace),

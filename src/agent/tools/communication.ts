@@ -57,7 +57,7 @@ TTS (Text-to-Speech) is handled automatically by the system based on configurati
 - trigger=inbound: Only reply to voice messages with voice
 - trigger=tagged: Only use voice when [[tts]] directive is present
 
-You do NOT need to manage TTS - just send the message normally.`,
+When TTS is enabled, you may also use the \`text_to_speech\` tool to send a standalone voice message (e.g. read-aloud). Prefer \`send_message\` for normal replies; use \`text_to_speech\` only when voice is explicitly appropriate.`,
 
     parameters: MessageSendSchema,
     label: '💬 Send Message',

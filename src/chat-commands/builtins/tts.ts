@@ -22,6 +22,7 @@ import {
   isTTSAvailable,
   mergeTtsConfigFromAppConfig,
 } from '../../tts/index.js';
+import { ttsStatusTracker } from '../../tts/status-tracker.js';
 
 const ttsCommand: CommandDefinition = {
   id: 'tts.manage',
@@ -39,6 +40,7 @@ const ttsCommand: CommandDefinition = {
     '/tts tagged',
     '/tts provider openai',
     '/tts voice alloy',
+    '/tts status',
   ],
   handler: async (ctx: CommandContext, args: string) => {
     const config = ctx.getConfig?.();
@@ -57,6 +59,20 @@ const ttsCommand: CommandDefinition = {
 
     // Parse arguments
     const arg = args.trim().toLowerCase();
+
+    const formatTimeAgo = (timestamp: number): string => {
+      const seconds = Math.floor((Date.now() - timestamp) / 1000);
+      if (seconds < 60) return `${seconds}s ago`;
+      if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
+      if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
+      return `${Math.floor(seconds / 86400)}d ago`;
+    };
+
+    const formatBytes = (bytes: number): string => {
+      if (bytes < 1024) return `${bytes}B`;
+      if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)}KB`;
+      return `${(bytes / (1024 * 1024)).toFixed(1)}MB`;
+    };
 
     if (!arg) {
       // Show current status
@@ -108,6 +124,8 @@ const ttsCommand: CommandDefinition = {
           `/tts inbound - Only reply to voice with voice
 ` +
           `/tts tagged - Only use TTS with [[tts]] directive
+` +
+          `/tts status - Runtime TTS diagnostics (last call + stats)
 ` +
           `/tts provider <openai|alibaba|edge> - Set provider
 ` +
@@ -166,6 +184,51 @@ const ttsCommand: CommandDefinition = {
             ? '✅ TTS trigger mode set to *off*.'
             : '❌ Failed to set TTS trigger mode.',
           success: !!success,
+        };
+      }
+
+      case 'status': {
+        const status = ttsStatusTracker.getStatus();
+        const lines: string[] = ['📊 *TTS Status*', ''];
+
+        if (status.lastAttempt) {
+          const last = status.lastAttempt;
+          const timeAgo = formatTimeAgo(last.timestamp);
+          const statusIcon = last.success ? '✅' : '❌';
+
+          lines.push(`*Last attempt*: ${statusIcon} ${timeAgo}`);
+
+          if (last.success) {
+            lines.push(`  Provider: ${last.provider ?? '—'}`);
+            lines.push(`  Latency: ${last.latencyMs ?? '—'}ms`);
+            lines.push(
+              `  Text: ${last.textLength ?? '—'} chars → Audio: ${formatBytes(last.audioSize || 0)}`,
+            );
+            if (last.usedFallback) lines.push(`  ⚠️ Used fallback provider`);
+            if (last.wasSummarized) lines.push(`  📝 Text was summarized`);
+          } else {
+            lines.push(`  Error: ${last.error ?? '—'}`);
+            if (last.provider) lines.push(`  Provider: ${last.provider}`);
+            lines.push(`  Latency: ${last.latencyMs ?? '—'}ms`);
+          }
+        } else {
+          lines.push('No TTS calls recorded yet.');
+        }
+
+        lines.push('');
+        lines.push(
+          `*Statistics*: ${status.totalCalls} calls, ${status.totalSuccesses} success, ${status.totalFailures} failed`,
+        );
+
+        if (status.recentSuccessRate !== undefined && status.totalCalls > 0) {
+          const rate = (status.recentSuccessRate * 100).toFixed(0);
+          const window = Math.min(status.totalCalls, 20);
+          lines.push(`*Recent success rate*: ${rate}% (last ${window} calls)`);
+        }
+
+        return {
+          content: lines.join('\n'),
+          success: true,
         };
       }
 

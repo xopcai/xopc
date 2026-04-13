@@ -164,6 +164,14 @@ export function buildTtsSystemPromptHint(config: {
   trigger: string;
   maxTextLength?: number;
   modelOverrides?: TTSModelOverrideConfig;
+  /** Current channel id (e.g. telegram) for output format hint */
+  channel?: string;
+  /** Preferred audio format for this channel when known */
+  channelAudioFormat?: string;
+  /** Whether voice-note style delivery is supported */
+  channelVoiceBubble?: boolean;
+  /** `text_to_speech` tool is registered */
+  textToSpeechTool?: boolean;
 }): string | undefined {
   if (!config.enabled) {
     return undefined;
@@ -187,6 +195,23 @@ export function buildTtsSystemPromptHint(config: {
 
   const maxLength = config.maxTextLength || 4096;
   hints.push(`Keep spoken text ≤${maxLength} chars.`);
+
+  if (config.channel && (config.channelAudioFormat || config.channelVoiceBubble !== undefined)) {
+    const fmt = config.channelAudioFormat ?? 'mp3';
+    const bubble =
+      config.channelVoiceBubble === true
+        ? 'voice-note compatible'
+        : config.channelVoiceBubble === false
+          ? 'attachment / inline audio only'
+          : 'channel default';
+    hints.push(`Channel ${config.channel}: prefer ${fmt}; ${bubble}.`);
+  }
+
+  if (config.textToSpeechTool) {
+    hints.push(
+      'You may call `text_to_speech` to generate speech when the user asks you to read aloud or voice fits better than text. Do not use it on every reply.',
+    );
+  }
 
   if (config.modelOverrides?.enabled) {
     const allowed: string[] = [];

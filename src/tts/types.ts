@@ -72,6 +72,8 @@ export interface TTSConfig {
   maxTextLength?: number;
   /** API request timeout (ms) */
   timeoutMs?: number;
+  /** Long-text summarization before TTS */
+  summarization?: TTSSummarizationConfig;
   /** Allow model to override TTS parameters */
   modelOverrides?: TTSModelOverrideConfig;
   alibaba?: {
@@ -97,6 +99,14 @@ export interface TTSConfig {
   };
 }
 
+export interface TTSSummarizationConfig {
+  /** When true (default), long text is summarized via LLM before TTS */
+  enabled?: boolean;
+  targetLength?: number;
+  threshold?: number;
+  model?: string;
+}
+
 export const DEFAULT_TTS_CONFIG: TTSConfig = {
   enabled: false,
   provider: 'openai',
@@ -107,6 +117,9 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
   },
   maxTextLength: 512, // Conservative default to accommodate all providers (Alibaba limit is 512)
   timeoutMs: 30000,
+  summarization: {
+    enabled: true,
+  },
   modelOverrides: {
     enabled: true,
     allowText: true,
@@ -157,4 +170,57 @@ export interface TtsDirectiveOverrides {
   edge?: {
     voice?: string;
   };
+}
+
+/** Provider attempt result (TTS fallback chain) */
+export type ProviderAttemptOutcome = 'success' | 'skipped' | 'failed';
+
+/** Provider failure reason classification */
+export type ProviderFailureReason =
+  | 'success'
+  | 'not_configured'
+  | 'timeout'
+  | 'provider_error'
+  | 'text_too_long'
+  | 'unknown';
+
+/** Single provider attempt in a TTS fallback chain */
+export interface ProviderAttempt {
+  provider: string;
+  outcome: ProviderAttemptOutcome;
+  reasonCode: ProviderFailureReason;
+  latencyMs: number;
+  error?: string;
+}
+
+/** TTS result including fallback / preprocessing metadata */
+export interface TTSResultWithTracking extends TTSResult {
+  attempts: ProviderAttempt[];
+  fallbackFrom?: string;
+  attemptedProviders: string[];
+  wasPreprocessed?: boolean;
+  ttsText?: string;
+  wasSummarized?: boolean;
+}
+
+/** Last TTS call diagnostics (memory-only) */
+export interface TtsStatusEntry {
+  timestamp: number;
+  success: boolean;
+  provider?: string;
+  latencyMs?: number;
+  error?: string;
+  textLength?: number;
+  audioSize?: number;
+  audioFormat?: string;
+  usedFallback?: boolean;
+  wasSummarized?: boolean;
+}
+
+export interface TtsRuntimeStatus {
+  lastAttempt?: TtsStatusEntry;
+  recentSuccessRate?: number;
+  totalCalls: number;
+  totalSuccesses: number;
+  totalFailures: number;
 }
