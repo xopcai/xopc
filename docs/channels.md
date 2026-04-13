@@ -196,6 +196,8 @@ Configure voice message support:
 
 See [Voice Documentation](/voice) for details.
 
+In **Telegram supergroups/groups** where the bot requires an @mention, **voice-only** messages are transcribed *before* mention filtering so spoken bot names (and STT-friendly variants) can count as mentions; see [Voice (STT/TTS)](/voice).
+
 ### Reverse Proxy Configuration
 
 For restricted network environments:
@@ -222,8 +224,8 @@ Connection is automatically verified on startup.
 
 - **Groups and private chats only**: Channels (broadcast) not supported
 - **Polling mode**: Uses long polling, ~1-2 second delay
-- **Voice messages**: 60 second limit for STT
-- **TTS text**: 4000 character limit
+- **Voice messages**: 60 second limit for STT (Telegram)
+- **TTS text**: limited by `tts.maxTextLength` (schema default 512; configurable) with optional LLM summarization — see [Voice](/voice)
 
 ## Implementation note (developers)
 

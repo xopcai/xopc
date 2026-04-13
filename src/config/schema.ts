@@ -562,6 +562,13 @@ export const TTSEdgeConfigSchema = z.object({
   timeoutMs: z.number().int().min(1000).max(120000).optional(),
 });
 
+export const TTSSummarizationConfigSchema = z.object({
+  enabled: z.boolean().optional(),
+  targetLength: z.number().int().min(1).optional(),
+  threshold: z.number().int().min(1).optional(),
+  model: z.string().optional(),
+});
+
 export const TTSConfigSchema = z.object({
   enabled: z.boolean().default(false),
   provider: z.enum(['openai', 'alibaba', 'edge']).default('openai'),
@@ -573,6 +580,7 @@ export const TTSConfigSchema = z.object({
   fallback: TTSFallbackConfigSchema.optional(),
   maxTextLength: z.number().int().min(1).default(512), // Conservative default to accommodate all providers (Alibaba limit is 512)
   timeoutMs: z.number().int().min(1000).max(120000).default(30000),
+  summarization: TTSSummarizationConfigSchema.optional(),
   modelOverrides: TTSModelOverridesConfigSchema.optional(),
   alibaba: TTSProviderConfigSchema.optional(),
   openai: TTSProviderConfigSchema.optional(),

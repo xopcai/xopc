@@ -69,3 +69,27 @@ export function createFallbackProviders(config: STTConfig): STTProvider[] {
 
   return providers;
 }
+
+export function resolveSTTProviderOrder(
+  primary: STTConfig['provider'],
+  fallback?: STTConfig['fallback'],
+): STTConfig['provider'][] {
+  if (!fallback?.enabled) {
+    return [primary];
+  }
+  const order: STTConfig['provider'][] = [primary];
+  for (const p of fallback.order) {
+    if (p !== primary && !order.includes(p)) {
+      order.push(p);
+    }
+  }
+  return order;
+}
+
+export function tryCreateSTTProvider(config: STTConfig): STTProvider | null {
+  try {
+    return createSTTProvider(config);
+  } catch {
+    return null;
+  }
+}

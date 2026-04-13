@@ -32,6 +32,10 @@ export function mergeTtsConfigFromAppConfig(tts: Config['tts'] | undefined): TTS
     alibaba: { ...DEFAULT_TTS_CONFIG.alibaba, ...p.alibaba },
     openai: { ...DEFAULT_TTS_CONFIG.openai, ...p.openai },
     edge: { ...DEFAULT_TTS_CONFIG.edge, ...p.edge },
+    summarization: {
+      ...DEFAULT_TTS_CONFIG.summarization,
+      ...p.summarization,
+    },
   };
 }
 

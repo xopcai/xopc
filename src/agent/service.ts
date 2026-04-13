@@ -1264,6 +1264,7 @@ export class AgentService {
       const webOut = getChannelOutputFormat('webchat');
       const fmt = webOut.format as 'opus' | 'mp3' | 'wav';
       const ttsResult = await speak(text, ttsConfig, {
+        appConfig: this.config.config,
         tts: { format: fmt },
       });
       const { buffer, format } = await compressAudio(
