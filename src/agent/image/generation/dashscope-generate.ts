@@ -1,4 +1,8 @@
 import { QWEN_DEFAULT_IMAGE_MODEL } from './constants.js';
+import {
+  registerImageGenerationProvider,
+  type ImageGenerationProvider,
+} from './provider-registry.js';
 import type { ImageGenerationRequest, ImageGenerationResult } from './types.js';
 
 /**
@@ -125,7 +129,11 @@ export async function generateDashScopeImages(params: {
   count?: number;
   size?: string;
   signal?: AbortSignal;
+  inputImages?: ImageGenerationRequest['inputImages'];
 }): Promise<ImageGenerationResult> {
+  if (params.inputImages && params.inputImages.length > 0) {
+    throw new Error('Image-to-image is not supported for Qwen/DashScope in this build');
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 180_000);
   const signal =
@@ -214,5 +222,36 @@ export async function runDashScopeImageGeneration(req: ImageGenerationRequest & 
     count: req.count,
     size: req.size,
     signal: req.signal,
+    inputImages: req.inputImages,
   });
 }
+
+export function buildQwenImageGenerationProvider(): ImageGenerationProvider {
+  return {
+    id: 'qwen',
+    label: 'Qwen (DashScope)',
+    defaultModel: QWEN_DEFAULT_IMAGE_MODEL,
+    models: [QWEN_DEFAULT_IMAGE_MODEL],
+    capabilities: {
+      supportsEdit: false,
+      maxOutputImages: 4,
+    },
+    async isConfigured() {
+      const { getApiKey } = await import('../../../providers/index.js');
+      return Boolean(await getApiKey('qwen'));
+    },
+    async generateImage(req) {
+      const { getApiKey } = await import('../../../providers/index.js');
+      const apiKey = await getApiKey('qwen');
+      if (!apiKey) {
+        throw new Error('Qwen/DashScope API key missing (DASHSCOPE_API_KEY or QWEN_API_KEY)');
+      }
+      return runDashScopeImageGeneration({
+        ...req,
+        apiKey,
+      });
+    },
+  };
+}
+
+registerImageGenerationProvider(buildQwenImageGenerationProvider());

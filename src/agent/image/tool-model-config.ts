@@ -4,7 +4,7 @@ import {
   resolveAgentModelFallbackValues,
   resolveAgentModelPrimaryValue,
 } from '../../config/model-input.js';
-import { getDefaultModelSync, isProviderConfiguredSync } from '../../providers/index.js';
+import { getDefaultModelSync, getModelsByProvider, isProviderConfiguredSync } from '../../providers/index.js';
 
 export type ToolModelConfig = { primary?: string; fallbacks?: string[] };
 
@@ -70,4 +70,44 @@ export function buildToolModelConfigFromCandidates(params: {
     primary: deduped[0],
     ...(deduped.length > 1 ? { fallbacks: deduped.slice(1) } : {}),
   };
+}
+
+function firstVisionModelRef(provider: string): string | undefined {
+  const m = getModelsByProvider(provider).find((x) => x.input?.includes('image'));
+  return m ? `${provider}/${m.id}` : undefined;
+}
+
+/**
+ * Effective image understanding model: explicit `agents.defaults.imageModel`, else inferred from configured providers.
+ */
+export function resolveImageModelConfigForTool(params: { cfg?: Config }): ToolModelConfig | null {
+  const explicit = coerceToolModelConfig(params.cfg?.agents?.defaults?.imageModel);
+  if (hasToolModelConfig(explicit)) {
+    return explicit;
+  }
+
+  const primary = resolveDefaultModelRef(params.cfg);
+  const primaryCandidates: string[] = [];
+  const vision = firstVisionModelRef(primary.provider);
+  if (vision) {
+    primaryCandidates.push(vision);
+  }
+  if (primary.provider === 'openai') {
+    primaryCandidates.push('openai/gpt-4o-mini');
+  }
+  if (primary.provider === 'anthropic') {
+    primaryCandidates.push('anthropic/claude-sonnet-4-5');
+  }
+  if (primary.provider === 'google') {
+    primaryCandidates.push('google/gemini-2.0-flash');
+  }
+
+  return buildToolModelConfigFromCandidates({
+    explicit,
+    candidates: [
+      ...primaryCandidates,
+      firstVisionModelRef('openai') ?? 'openai/gpt-4o-mini',
+      firstVisionModelRef('anthropic') ?? 'anthropic/claude-sonnet-4-5',
+    ],
+  });
 }
