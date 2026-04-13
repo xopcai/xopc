@@ -1040,6 +1040,10 @@ const bundles: Record<
       languageDescription: string;
       themeTitle: string;
       themeDescription: string;
+      colorSchemeTitle: string;
+      colorSchemeDescription: string;
+      colorSchemeDefault: string;
+      colorSchemeLightGreen: string;
       fontScaleTitle: string;
       fontScaleDescription: string;
       fontScaleCompact: string;
@@ -2414,6 +2418,10 @@ const bundles: Record<
       languageDescription: 'Choose the interface language.',
       themeTitle: 'Theme',
       themeDescription: 'Light, dark, or follow your system setting.',
+      colorSchemeTitle: 'Color scheme',
+      colorSchemeDescription: 'Visual style of the interface.',
+      colorSchemeDefault: 'Default',
+      colorSchemeLightGreen: 'Light green',
       fontScaleTitle: 'Conversation text size',
       fontScaleDescription: 'Adjust text size in chat and reading areas.',
       fontScaleCompact: 'Small',
@@ -3638,6 +3646,10 @@ const bundles: Record<
       languageDescription: '选择界面语言。',
       themeTitle: '主题亮暗',
       themeDescription: '浅色、深色，或跟随系统。',
+      colorSchemeTitle: '配色方案',
+      colorSchemeDescription: '界面的视觉风格。',
+      colorSchemeDefault: '默认',
+      colorSchemeLightGreen: '浅绿',
       fontScaleTitle: '对话字号',
       fontScaleDescription: '调整对话与阅读区域的文字大小。',
       fontScaleCompact: '小',
