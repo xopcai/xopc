@@ -39,7 +39,13 @@ import type {
   ExtensionManifest,
   ExtensionRecord,
   ResolvedExtensionConfig,
+  DiscoveredExtension,
 } from './types/index.js';
+import type { ActivationContext } from './activation-planner.js';
+import { ActivationPlanner } from './activation-planner.js';
+import { mergeActivationContext } from './activation-context.js';
+import { ManifestRegistry } from './manifest-registry.js';
+import { normalizeExtensionManifest } from './normalize-manifest.js';
 import type { ChannelPlugin } from '../channels/plugin-types.js';
 import { bundledChannelPlugins } from '../channels/plugins/bundled.js';
 import { ExtensionApiImpl, createExtensionLogger, createPathResolver } from './api.js';
@@ -80,13 +86,6 @@ const log = createLogger('ExtensionLoader');
 
 // Extension source origin for debugging
 export type ExtensionSourceOrigin = 'workspace' | 'global' | 'bundled' | 'config';
-
-interface DiscoveredExtension {
-  id: string;
-  path: string;
-  source: ExtensionSourceOrigin;
-  manifest: ExtensionManifest;
-}
 
 // ============================================================================
 // Extension Registry
@@ -245,6 +244,9 @@ export class ExtensionLoader {
   private cache: ExtensionLoaderCache;
   private diagnostics: ExtensionDiagnostics;
 
+  /** Manifest-only registry cache (no runtime module load). */
+  private manifestRegistry: ManifestRegistry | null = null;
+
   constructor(options?: ExtensionLoaderOptions) {
     this.registry = new ExtensionRegistryImpl();
     for (const p of bundledChannelPlugins) {
@@ -272,11 +274,19 @@ export class ExtensionLoader {
     this.cache = getExtensionCache();
     this.diagnostics = getExtensionDiagnostics();
 
-    // Build jiti alias for extension-sdk
+    // Build jiti alias for extension-sdk (+ subpath entry points)
     const alias: Record<string, string> = {};
     const sdkPath = resolveExtensionSdkPath();
     if (sdkPath) {
       alias['xopc/extension-sdk'] = sdkPath;
+      const sdkDir = dirname(sdkPath);
+      alias['xopc/extension-sdk/core'] = join(sdkDir, 'core.ts');
+      alias['xopc/extension-sdk/lazy'] = join(sdkDir, 'lazy.ts');
+      alias['xopc/extension-sdk/provider'] = join(sdkDir, 'provider.ts');
+      alias['xopc/extension-sdk/channel'] = join(sdkDir, 'channel.ts');
+      alias['xopc/extension-sdk/hooks'] = join(sdkDir, 'hooks.ts');
+      alias['xopc/extension-sdk/tools'] = join(sdkDir, 'tools.ts');
+      alias['xopc/extension-sdk/testing'] = join(sdkDir, 'testing.ts');
     }
 
     // Initialize jiti with TypeScript support and SDK alias
@@ -358,6 +368,79 @@ export class ExtensionLoader {
 
   getRegistry(): ExtensionRegistryImpl {
     return this.registry;
+  }
+
+  /**
+   * Phase 1: build manifest registry (filesystem manifests only, no extension code load).
+   */
+  buildManifestRegistry(): ManifestRegistry {
+    if (this.manifestRegistry) {
+      return this.manifestRegistry;
+    }
+    const discovered = this.discoverExtensions();
+    this.manifestRegistry = ManifestRegistry.fromDiscovered(discovered);
+    return this.manifestRegistry;
+  }
+
+  /**
+   * Phase 2: activation planner over the manifest registry (pure logic).
+   */
+  planActivation(_context?: Partial<ActivationContext>): ActivationPlanner {
+    return new ActivationPlanner(this.buildManifestRegistry());
+  }
+
+  /**
+   * Phase 3: load only extensions selected by the activation plan.
+   */
+  async loadByActivationPlan(context?: Partial<ActivationContext>): Promise<void> {
+    const registry = this.buildManifestRegistry();
+    const planner = new ActivationPlanner(registry);
+    const fullContext = mergeActivationContext(this._appConfig, context);
+    const activatedIds = planner.getActivatedIds(fullContext).sort((a, b) => a.localeCompare(b));
+
+    for (const extensionId of activatedIds) {
+      if (this.extensionInstances.has(extensionId)) continue;
+      const entry = registry.getEntry(extensionId);
+      if (!entry) {
+        log.debug(
+          { extensionId },
+          'Activation plan references extension id that was not discovered on disk',
+        );
+        continue;
+      }
+
+      const config: ResolvedExtensionConfig = {
+        id: extensionId,
+        name: entry.manifest.name || extensionId,
+        source: entry.source,
+        path: entry.path,
+        enabled: true,
+        config: this.resolveExtensionConfig(extensionId),
+      };
+
+      await this.loadExtension(config);
+    }
+  }
+
+  getManifestRegistry(): ManifestRegistry {
+    return this.buildManifestRegistry();
+  }
+
+  invalidateManifestCache(): void {
+    this.manifestRegistry = null;
+  }
+
+  private resolveExtensionConfig(extensionId: string): Record<string, unknown> {
+    if (!this._appConfig) return {};
+    const extensionsConfig = (this._appConfig as Record<string, unknown>).extensions as
+      | Record<string, unknown>
+      | undefined;
+    if (!extensionsConfig || typeof extensionsConfig !== 'object') return {};
+    const raw = extensionsConfig[extensionId];
+    if (raw && typeof raw === 'object' && !Array.isArray(raw)) {
+      return raw as Record<string, unknown>;
+    }
+    return {};
   }
 
   /**
@@ -690,8 +773,12 @@ export class ExtensionLoader {
     // First try to load xopc.extension.json
     if (existsSync(manifestPath)) {
       try {
-        const manifest = JSON.parse(readFileSync(manifestPath, 'utf-8'));
-        return manifest as ExtensionManifest;
+        const raw = JSON.parse(readFileSync(manifestPath, 'utf-8'));
+        if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
+          log.error({ manifestPath }, 'Manifest root must be a JSON object');
+          return null;
+        }
+        return normalizeExtensionManifest(raw as Record<string, unknown>);
       } catch (error) {
         log.error({ err: error, manifestPath }, `Failed to parse manifest`);
         return null;
@@ -707,7 +794,7 @@ export class ExtensionLoader {
         // Check for xopc.extension marker
         if (packageJson.xopc?.extension) {
           const xopcConfig = packageJson.xopc;
-          return {
+          return normalizeExtensionManifest({
             id: xopcConfig.id || packageJson.name,
             name: xopcConfig.name || packageJson.name,
             description: xopcConfig.description || packageJson.description,
@@ -715,20 +802,20 @@ export class ExtensionLoader {
             kind: xopcConfig.kind || 'utility',
             main: xopcConfig.main || packageJson.main || 'index.js',
             configSchema: xopcConfig.configSchema,
-          };
+          });
         }
-        
+
         // Also support xopc-extension-* naming convention
         if (packageJson.name?.startsWith('xopc-extension-')) {
           const id = packageJson.name.replace('xopc-extension-', '');
-          return {
+          return normalizeExtensionManifest({
             id,
             name: packageJson.name,
             description: packageJson.description,
             version: packageJson.version || '1.0.0',
             kind: 'utility',
             main: packageJson.main || 'index.js',
-          };
+          });
         }
       } catch (error) {
         log.error({ err: error, packagePath }, `Failed to parse package.json`);

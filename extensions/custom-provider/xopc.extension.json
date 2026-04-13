@@ -3,8 +3,16 @@
   "name": "Custom Provider Example",
   "description": "Demonstrates provider registration with custom models",
   "version": "1.0.0",
-  "kind": "utility",
+  "kind": "provider",
   "main": "index.ts",
+  "providers": ["custom"],
+  "providerAuthEnvVars": {
+    "custom": ["CUSTOM_API_KEY"]
+  },
+  "modelSupport": {
+    "modelPrefixes": ["custom/"]
+  },
+  "autoEnableWhenConfiguredProviders": ["custom"],
   "configSchema": {
     "type": "object",
     "properties": {

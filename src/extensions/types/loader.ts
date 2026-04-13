@@ -1,10 +1,13 @@
 /**
  * Extension System - Loader Types
- * 
+ *
  * Extension loading, manifest, and registry types.
  */
 
 import type { ExtensionModule } from './core.js';
+import type { ExtensionManifest } from './manifest.js';
+
+export type { ExtensionManifest } from './manifest.js';
 
 // ============================================================================
 // Extension Discovery & Loading
@@ -21,15 +24,11 @@ export interface ExtensionRecord {
   source: 'workspace' | 'global' | 'bundled' | 'config';
 }
 
-export interface ExtensionManifest {
+export interface DiscoveredExtension {
   id: string;
-  name: string;
-  version?: string;
-  description?: string;
-  kind?: string;
-  main?: string;
-  configSchema?: Record<string, unknown>;
-  dependencies?: Record<string, string>;
+  path: string;
+  source: 'workspace' | 'global' | 'bundled' | 'config';
+  manifest: ExtensionManifest;
 }
 
 export interface ResolvedExtensionConfig {

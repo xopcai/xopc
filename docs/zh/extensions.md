@@ -5,9 +5,12 @@ xopc 提供了一个轻量级但功能强大的扩展系统。
 ## 特性
 
 - 🏗️ **三级存储架构** - Workspace / Global / Bundled
-- 🔌 **Extension SDK** - 官方 SDK，统一导入路径
+- 📋 **Manifest-first 激活** - 先读 `xopc.extension.json` 再按需加载扩展代码；网关与 `xopc agent` 按激活计划（配置、`channels.*`、模型 id、manifest 声明的环境变量等）决定加载哪些扩展
+- 🔌 **Extension SDK** - 官方 SDK；除总入口外可选用 **子路径**（`extension-sdk/core`、`extension-sdk/lazy` 等）
 - ⚡ **TypeScript 原生** - 通过 jiti 即时加载，无需编译
 - 📦 **多源安装** - 支持 npm、本地目录、Git 仓库
+
+**设计方案（仓库内 RFC）：** [`.docs/channel/`](../.docs/channel/00-overview.md) 描述与 OpenClaw 思路对齐的完整目标架构；下文概括**当前已实现**的用户可见行为。
 
 ## 快速开始
 
@@ -66,6 +69,8 @@ git clone https://github.com/your/extension.git
 | `disabled` | `string[]` | （可选）禁用的扩展 ID 列表 |
 | `[extension-id]` | `object \| boolean` | 扩展特定配置 |
 
+**激活与 `enabled`：** **网关** 与 **`xopc agent`** 使用 **基于 manifest 的激活计划**。只要满足 manifest 中的触发条件，**不一定**要把通道扩展写进 `extensions.enabled`——例如已配置 **`channels.telegram`** / **`channels.weixin`**，或环境中存在 manifest 声明的变量（如 bundled Telegram 的 `TELEGRAM_BOT_TOKEN`）。若要 **强制不加载** 某扩展，请把其 id 写入 **`extensions.disabled`**。
+
 **示例配置：**
 
 ```json
@@ -96,7 +101,7 @@ git clone https://github.com/your/extension.git
 # 创建扩展脚手架
 xopc extension create my-extension --name "My Extension" --kind utility
 
-# 支持的 kind: channel|provider|memory|tool|utility
+# 支持的 kind: channel|provider|memory|tool|utility|tts|image-generation|web-search
 ```
 
 这将创建：
@@ -127,6 +132,60 @@ xopc 支持三级扩展存储，按优先级从高到低：
   - Bundled：随 xopc 发布的官方扩展
 
 **Monorepo 说明：** Telegram 通道是仓库内 **`extensions/telegram`** 工作区包（`@xopcai/xopc-extension-telegram`），由核心通过 `src/channels/plugins/bundled.ts` 接入；与上表中 **Bundled** 扩展目录 `xopc/extensions/` 不是同一条加载路径。
+
+---
+
+## Manifest-first 控制平面 {#manifest-first-control-plane}
+
+实现上将 **只读 manifest**（控制面）与 **加载并执行扩展代码**（运行时）分开，对应 `.docs/channel` 中 RFC-01 / RFC-02。
+
+### 三阶段
+
+| 阶段 | 作用 | API / 模块 |
+|------|------|------------|
+| **1 — 发现与注册表** | 扫描扩展目录，仅解析 `xopc.extension.json`，不执行 `register()` | `ExtensionLoader.buildManifestRegistry()`、`getManifestRegistry()` → `ManifestRegistry` |
+| **2 — 激活规划** | 根据 **配置 + 环境变量 + manifest 元数据** 计算应加载的扩展 id | `ActivationPlanner`，`ExtensionLoader.planActivation()` |
+| **3 — 运行时加载** | 按入口加载模块并注册 | `ExtensionLoader.loadByActivationPlan()`（仍保留 `loadExtension` / `loadExtensions` / `loadAllExtensions`） |
+
+### 激活判定优先级（高 → 低）
+
+1. 配置中的 **`extensions.enabled` / `extensions.disabled`**（同一 id 同时出现时以 enabled 为先——应避免这样配置）。
+2. **默认智能体模型 id** — 匹配 manifest 中 `modelSupport.modelPrefixes` / `modelPatterns`。
+3. **环境变量** — manifest 中 `providerAuthEnvVars`、`channelEnvVars` 列出的变量名在 `process.env` 中有值。
+4. **`autoEnableWhenConfiguredProviders`** — 与从配置推导的 `configuredProviderIds` 相交。
+5. **`activation.onProviders` / `activation.onChannels`** — 与配置中的 provider / channel 引用匹配。
+6. **`enabledByDefault: true`**。
+
+最终待加载的扩展 id 按 **字典序** 排序，保证顺序稳定。
+
+### 各入口行为
+
+| 入口 | 行为 |
+|------|------|
+| **网关** | 启动扩展时调用 `loadByActivationPlan()`，**不仅依赖** `extensions.enabled` 列表。 |
+| **`xopc agent`** | 同样使用 `loadByActivationPlan()`。 |
+| **CLI（`registerExtensionCliCommands`）** | 仅当 **`extensions.enabled` 非空**、或 **已配置会触发通道扩展的 channels**、或 **任意 manifest 索引到的环境变量已设置** 时才加载扩展并注册 CLI，避免每个子命令都扫描加载。 |
+
+### `xopc.extension.json` 可选声明字段
+
+均为 **可选**，旧 manifest 不加字段仍可工作。常用字段：
+
+| 字段 | 用途 |
+|------|------|
+| `enabledByDefault` | 无更高优先级规则时默认激活 |
+| `providers`、`channels` | 声明实现的逻辑 id（供索引与查询） |
+| `providerAuthEnvVars`、`channelEnvVars` | 逻辑 id → 环境变量名（检测与 onboarding） |
+| `providerAuthChoices` | 认证方式等展示/CLI 元数据 |
+| `modelSupport` | `modelPrefixes`、`modelPatterns`，按模型激活 |
+| `autoEnableWhenConfiguredProviders` | 配置中出现对应 provider 时自动激活 |
+| `activation` | `onProviders`、`onChannels`、`onCommands`、`onCapabilities` |
+| `contracts`、`setup` | 能力与 setup 提示 |
+
+示例见仓库内 `extensions/telegram/xopc.extension.json`、`extensions/custom-provider/xopc.extension.json`。
+
+### Onboarding 辅助（进阶）
+
+在不加载扩展 JS 的情况下枚举 provider/channel 等信息，可使用 `src/extensions/onboard-helpers.ts` 中的 `listOnboardProviders`、`listOnboardChannels`、`resolveProviderForModel`（需先构造 `ManifestRegistry`）。
 
 ### Global 扩展目录
 
@@ -189,6 +248,10 @@ import {
   registerExtensionCliProgram,
 } from '@xopcai/xopc/extension-sdk';
 
+// 可选子路径（更小的导入面），例如：
+// import type { ExtensionApi } from '@xopcai/xopc/extension-sdk/core';
+// import { lazyModule } from '@xopcai/xopc/extension-sdk/lazy';
+
 // 命令
 import type { ExtensionCommand } from '@xopcai/xopc/extension-sdk';
 
@@ -198,7 +261,7 @@ import type { ExtensionService } from '@xopcai/xopc/extension-sdk';
 
 ### SDK 路径解析
 
-在本地开发时，xopc 可通过 jiti 将别名 `xopc/extension-sdk` 解析到 `src/extension-sdk/index.ts`，便于不依赖发布包路径。使用已安装的 **`@xopcai/xopc`** 时，请优先使用 **`@xopcai/xopc/extension-sdk`**。
+在本地开发时，xopc 通过 jiti 将 `xopc/extension-sdk` 解析到 `src/extensions/sdk/index.ts`，并支持子路径别名（如 `xopc/extension-sdk/core`、`xopc/extension-sdk/lazy`）。使用已安装的 **`@xopcai/xopc`** 时，请优先使用 **`@xopcai/xopc/extension-sdk`** 或对应子路径。
 
 ---
 
@@ -299,7 +362,7 @@ xopc extension create discord-channel --name "Discord Channel" --kind channel
 
 ### Manifest 文件
 
-每个扩展必须包含一个 `xopc.extension.json` 文件：
+每个扩展必须包含一个 `xopc.extension.json` 文件。最小示例见下。通道类 / 提供方类扩展可增加 [Manifest-first 控制平面](#manifest-first-控制平面) 一节中的 **可选声明字段**（参考仓库内 `extensions/telegram`、`extensions/custom-provider` 的 manifest）。
 
 ```json
 {
@@ -630,6 +693,14 @@ const extension = {
 
 export default extension;
 ```
+
+## 故障排查（扩展未加载）
+
+1. 确认 **`extensions.disabled`** 未包含该扩展 id。
+2. 网关 / agent：检查是否存在 **激活条件**（`extensions.enabled`、匹配的 `channels.*`、manifest 声明的环境变量、模型前缀、`enabledByDefault` 等）。
+3. **纯 CLI 子命令**：若 `extensions.enabled` 为空、未配置通道、且无 manifest 索引到的环境变量，扩展可能 **故意不加载**（避免每个子命令都扫盘）。
+4. 确认 `xopc.extension.json` 为合法 JSON，且扩展位于 workspace / global / bundled 发现路径下。
+5. 查看日志中的加载错误。
 
 ## 发布扩展
 

@@ -5,7 +5,7 @@ import { MessageBus, MessageBusShutdownError } from '../../infra/bus/index.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
-import { ExtensionLoader, normalizeExtensionConfig } from '../../extensions/index.js';
+import { ExtensionLoader } from '../../extensions/index.js';
 import { join } from 'path';
 import { listSessions } from './agent/sessions.js';
 import { startInteractiveChat } from './agent/interactive.js';
@@ -68,24 +68,19 @@ function createAgentCommand(_ctx: CLIContext): Command {
         console.log(`📂 Continuing session: ${options.session} (${session.messageCount} messages)\n`);
       }
 
-      // Initialize extension loader
+      // Initialize extension loader (manifest-first activation: env, channels, model, extensions.*)
       let extensionLoader: ExtensionLoader | null = null;
       try {
-        const extensionsConfig = (config as any).extensions;
-        if (extensionsConfig) {
-          const resolvedConfigs = normalizeExtensionConfig(extensionsConfig);
-          const enabledExtensions = resolvedConfigs.filter(c => c.enabled);
-          
-          if (enabledExtensions.length > 0) {
-            extensionLoader = new ExtensionLoader({
-              workspaceDir: workspace,
-              extensionsDir: join(workspace, '.extensions'),
-            });
-            extensionLoader.setConfig(config as Parameters<ExtensionLoader['setConfig']>[0]);
-            extensionLoader.setRuntimeContext({ bus });
-            await extensionLoader.loadExtensions(enabledExtensions);
-            log.info({ count: enabledExtensions.length }, 'Extensions loaded');
-          }
+        extensionLoader = new ExtensionLoader({
+          workspaceDir: workspace,
+          extensionsDir: join(workspace, '.extensions'),
+        });
+        extensionLoader.setConfig(config as Parameters<ExtensionLoader['setConfig']>[0]);
+        extensionLoader.setRuntimeContext({ bus });
+        await extensionLoader.loadByActivationPlan();
+        const n = extensionLoader.getRegistry().extensions.size;
+        if (n > 0) {
+          log.info({ count: n }, 'Extensions loaded');
         }
       } catch (error) {
         const em = error instanceof Error ? error.message : String(error);
