@@ -457,6 +457,7 @@ const bundles: Record<
       emptyDir: string;
       loadError: string;
       close: string;
+      lastModified: string;
     };
     skills: {
       title: string;
@@ -1655,6 +1656,7 @@ const bundles: Record<
       emptyDir: 'No files',
       loadError: 'Failed to load',
       close: 'Close',
+      lastModified: 'Modified',
     },
     skills: {
       title: 'Skills',
@@ -2917,6 +2919,7 @@ const bundles: Record<
       emptyDir: '暂无文件',
       loadError: '加载失败',
       close: '关闭',
+      lastModified: '修改时间',
     },
     skills: {
       title: '技能',

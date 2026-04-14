@@ -652,7 +652,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       return c.json({ ok: false, error: { message: 'Not a directory' } }, 400);
     }
     const dirents = await readdir(absDir, { withFileTypes: true });
-    const entries: { name: string; path: string; isDirectory: boolean }[] = [];
+    const entries: { name: string; path: string; absolutePath: string; isDirectory: boolean }[] = [];
     for (const entry of dirents) {
       if (entry.name.startsWith('.')) continue;
       const fullPath = join(absDir, entry.name);
@@ -660,12 +660,14 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         entries.push({
           name: entry.name,
           path: toWorkspaceRelativePosix(workspaceRoot, fullPath),
+          absolutePath: fullPath,
           isDirectory: true,
         });
       } else {
         entries.push({
           name: entry.name,
           path: toWorkspaceRelativePosix(workspaceRoot, fullPath),
+          absolutePath: fullPath,
           isDirectory: false,
         });
       }
@@ -704,7 +706,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       const content = await readFile(abs, 'utf-8');
       return c.json({
         ok: true,
-        payload: { content, path: toWorkspaceRelativePosix(workspaceRoot, abs) },
+        payload: {
+          content,
+          path: toWorkspaceRelativePosix(workspaceRoot, abs),
+          mtimeMs: st.mtimeMs,
+        },
       });
     } catch {
       return c.json({ ok: false, error: { message: 'Read failed' } }, 500);
@@ -755,7 +761,16 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
     try {
       await writeFile(abs, content, 'utf-8');
-      return c.json({ ok: true, payload: { path: toWorkspaceRelativePosix(workspaceRoot, abs) } });
+      let mtimeMs: number;
+      try {
+        mtimeMs = (await stat(abs)).mtimeMs;
+      } catch {
+        mtimeMs = Date.now();
+      }
+      return c.json({
+        ok: true,
+        payload: { path: toWorkspaceRelativePosix(workspaceRoot, abs), mtimeMs },
+      });
     } catch (err) {
       log.error({ err, path: abs }, 'workspace editor write failed');
       return c.json({ ok: false, error: { message: 'Write failed' } }, 500);
