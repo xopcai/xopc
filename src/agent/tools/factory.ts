@@ -60,8 +60,9 @@ const CLARIFY_SUPPORTED_CHANNELS = new Set(['webchat', 'telegram', 'cli']);
 function clarifyTransportSource(sessionKey: string): string | undefined {
   const parsed = parseRoutingSessionKey(sessionKey);
   if (parsed) return parsed.source;
+  // Fallback for simple `<channel>:<chatId>` keys used by webchat and CLI.
   const first = sessionKey.split(':').filter(Boolean)[0] ?? '';
-  if (first === 'cli') return 'cli';
+  if (first === 'cli' || first === 'webchat') return first;
   return undefined;
 }
 

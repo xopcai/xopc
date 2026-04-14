@@ -295,9 +295,16 @@ export class MessageSender {
       case 'message_end':
         cb?.onThinkingEnd();
         break;
-      case 'tool_start':
-        cb?.onToolStart(String(parsed.toolName || 'unknown'), parsed.args);
+      case 'tool_start': {
+        const toolName = String(parsed.toolName || 'unknown');
+        // The `clarify` tool suspends the agent turn and will be followed by a
+        // `clarify_request` SSE event carrying the real requestId from the backend.
+        // Skip the tool card here so the UI does not show a permanently-pending
+        // tool call; the clarify prompt will appear when `clarify_request` arrives.
+        if (toolName === 'clarify') break;
+        cb?.onToolStart(toolName, parsed.args);
         break;
+      }
       case 'tool_end':
         cb?.onToolEnd(
           typeof parsed.toolName === 'string' && parsed.toolName ? parsed.toolName : 'unknown',
