@@ -8,7 +8,10 @@ import { oneDark } from '@codemirror/theme-one-dark';
 import { EditorView, keymap, highlightActiveLine, lineNumbers } from '@codemirror/view';
 
 export interface MarkdownEditorProps {
-  /** Initial document; when this changes the editor is recreated (e.g. switch file). */
+  /**
+   * Seed document on mount (and when `isDark` toggles, the view is recreated with the current prop).
+   * To load different files, remount the editor (e.g. `key` on the parent) instead of relying on prop updates.
+   */
   initialContent: string;
   /** Fires on every doc change; debounce in the parent if needed. */
   onChange: (content: string) => void;
@@ -26,12 +29,14 @@ export function MarkdownEditor({
   const editorRef = useRef<EditorView | null>(null);
   const onChangeRef = useRef(onChange);
   onChangeRef.current = onChange;
+  const seedRef = useRef(initialContent);
+  seedRef.current = initialContent;
 
   useEffect(() => {
     if (!containerRef.current) return;
 
     const state = EditorState.create({
-      doc: initialContent,
+      doc: seedRef.current,
       extensions: [
         markdown({ base: markdownLanguage, codeLanguages: languages }),
         lineNumbers(),
@@ -63,7 +68,7 @@ export function MarkdownEditor({
       editorRef.current?.destroy();
       editorRef.current = null;
     };
-  }, [initialContent, isDark]);
+  }, [isDark]);
 
   return <div ref={containerRef} className={`h-full w-full overflow-hidden ${className ?? ''}`} />;
 }

@@ -816,7 +816,7 @@ export const ChatComposer = memo(function ChatComposer({
 
         <div
           className={cn(
-            'relative px-4 pb-0 pt-3',
+            'relative px-4 pb-0 pt-1',
             attachments.length > 0 && 'pt-2',
           )}
         >
