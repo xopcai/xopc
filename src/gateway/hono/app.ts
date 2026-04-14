@@ -48,6 +48,7 @@ import {
   listAgentEntries,
   normalizeAgentId,
   resolveAgentHomeDir,
+  resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
 } from '../../agent/agent-scope.js';
 import { maxWebchatAgentRequestBodyBytes } from '../chat-limits.js';
@@ -607,12 +608,37 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   const EDITOR_FILE_EXTENSIONS = new Set(['.md', '.txt', '.json', '.ts', '.js']);
 
+  function isKnownEditorAgentId(cfg: Config, id: string): boolean {
+    const n = normalizeAgentId(id);
+    if (n === resolveDefaultAgentId(cfg)) return true;
+    return listAgentEntries(cfg).some((e) => normalizeAgentId(e.id) === n);
+  }
+
+  /** Resolve Markdown workspace root for gateway editor APIs (`agentId` query = chat agent). */
+  function resolveEditorWorkspaceRoot(
+    cfg: Config,
+    agentIdRaw: string | undefined,
+  ): { ok: true; root: string } | { ok: false; message: string } {
+    const trimmed = typeof agentIdRaw === 'string' ? agentIdRaw.trim() : '';
+    if (!trimmed) {
+      const root = getWorkspacePath(cfg);
+      if (!root) return { ok: false, message: 'Workspace not configured' };
+      return { ok: true, root };
+    }
+    const id = normalizeAgentId(trimmed);
+    if (!isKnownEditorAgentId(cfg, id)) {
+      return { ok: false, message: 'Unknown agent' };
+    }
+    return { ok: true, root: resolveAgentWorkspaceDir(cfg, id) };
+  }
+
   /** List directory under workspace (dir = relative path, default ""). */
   authenticated.get('/api/workspace/editor/list', async (c) => {
-    const workspaceRoot = getWorkspacePath(service.currentConfig);
-    if (!workspaceRoot) {
-      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { message: ws.message } }, 400);
     }
+    const workspaceRoot = ws.root;
     const dirRel = typeof c.req.query('dir') === 'string' ? c.req.query('dir')! : '';
     const absDir = resolveWorkspaceSafePath(workspaceRoot, dirRel);
     if (!absDir) {
@@ -658,10 +684,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     if (!pathRel.trim()) {
       return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
     }
-    const workspaceRoot = getWorkspacePath(service.currentConfig);
-    if (!workspaceRoot) {
-      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { message: ws.message } }, 400);
     }
+    const workspaceRoot = ws.root;
     const abs = resolveWorkspaceSafePath(workspaceRoot, pathRel);
     if (!abs) {
       return c.json({ ok: false, error: { message: 'Invalid path' } }, 400);
@@ -687,10 +714,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   authenticated.put('/api/workspace/editor/write', async (c) => {
-    const workspaceRoot = getWorkspacePath(service.currentConfig);
-    if (!workspaceRoot) {
-      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { message: ws.message } }, 400);
     }
+    const workspaceRoot = ws.root;
     let body: unknown;
     try {
       body = await c.req.json();
@@ -742,10 +770,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     if (!q) {
       return c.json({ ok: true, payload: { results: [] as { filePath: string; lineNumber: number; lineContent: string; matchStart: number; matchEnd: number }[] } });
     }
-    const workspaceRoot = getWorkspacePath(service.currentConfig);
-    if (!workspaceRoot) {
-      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { message: ws.message } }, 400);
     }
+    const workspaceRoot = ws.root;
     const absDir = resolveWorkspaceSafePath(workspaceRoot, dirRel);
     if (!absDir) {
       return c.json({ ok: false, error: { message: 'Invalid path' } }, 400);

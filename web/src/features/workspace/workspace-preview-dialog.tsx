@@ -5,6 +5,7 @@ import { useLocation } from 'react-router-dom';
 import { WorkspaceFilePreviewPanel, getFileName } from '@/features/workspace/workspace-file-preview-dialog';
 import { cn } from '@/lib/cn';
 import { useSidebarStore } from '@/stores/sidebar-store';
+import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
@@ -43,6 +44,7 @@ export const WorkspacePreviewDialog = memo(function WorkspacePreviewDialog() {
   const { pathname } = useLocation();
   const path = useWorkspacePreviewStore((s) => s.path);
   const setPath = useWorkspacePreviewStore((s) => s.setPath);
+  const editorAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
   const inset = usePreviewDialogInset();
   const open = Boolean(path);
 
@@ -69,7 +71,11 @@ export const WorkspacePreviewDialog = memo(function WorkspacePreviewDialog() {
           <Dialog.Title className="sr-only">
             {path ? getFileName(path) : 'Preview'}
           </Dialog.Title>
-          <WorkspaceFilePreviewPanel filePath={path} onClose={() => setPath(null)} />
+          <WorkspaceFilePreviewPanel
+            filePath={path}
+            agentId={editorAgentId.trim() || undefined}
+            onClose={() => setPath(null)}
+          />
         </Dialog.Content>
       </Dialog.Portal>
     </Dialog.Root>

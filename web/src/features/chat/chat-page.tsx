@@ -12,6 +12,7 @@ import { ClarifyPrompt } from '@/features/chat/clarify-prompt';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 
 export function ChatPage() {
   const language = useLocaleStore((s) => s.language);
@@ -79,6 +80,14 @@ export function ChatPage() {
     showChatAgentSelector,
     onChatAgentChange,
   } = useChatSession();
+
+  const setWorkspaceEditorAgentId = useWorkspaceEditorAgentStore((s) => s.setAgentId);
+
+  useEffect(() => {
+    if (!hasToken) return;
+    setWorkspaceEditorAgentId(displayAgentId);
+    return () => setWorkspaceEditorAgentId('');
+  }, [hasToken, displayAgentId, setWorkspaceEditorAgentId]);
 
   const chatHeadline = useMemo(() => {
     const titleKey = sessionRoutePending && decodedKey ? decodedKey : sessionKey;

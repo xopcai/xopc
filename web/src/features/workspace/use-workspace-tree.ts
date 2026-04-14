@@ -30,18 +30,21 @@ function mergeChildren(
   });
 }
 
-export function useWorkspaceTree() {
+export function useWorkspaceTree(agentId: string) {
   const [tree, setTree] = useState<TreeEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadedDirsRef = useRef<Set<string>>(new Set());
+  const trimmedAgentId = agentId.trim();
+  const editorOptsLazy = () =>
+    trimmedAgentId ? ({ agentId: trimmedAgentId } as const) : undefined;
 
   const loadRoot = useCallback(async () => {
     setLoading(true);
     setError(null);
     loadedDirsRef.current.clear();
     try {
-      const entries = await listWorkspaceDir('');
+      const entries = await listWorkspaceDir('', editorOptsLazy());
       setTree(toTreeEntries(entries));
       loadedDirsRef.current.add('');
     } catch (err) {
@@ -49,19 +52,22 @@ export function useWorkspaceTree() {
     } finally {
       setLoading(false);
     }
-  }, []);
+  }, [trimmedAgentId]);
 
-  const loadChildren = useCallback(async (dirPath: string) => {
-    if (loadedDirsRef.current.has(dirPath)) return;
-    loadedDirsRef.current.add(dirPath);
-    try {
-      const entries = await listWorkspaceDir(dirPath);
-      const children = toTreeEntries(entries);
-      setTree((prev) => mergeChildren(prev, dirPath, children));
-    } catch {
-      loadedDirsRef.current.delete(dirPath);
-    }
-  }, []);
+  const loadChildren = useCallback(
+    async (dirPath: string) => {
+      if (loadedDirsRef.current.has(dirPath)) return;
+      loadedDirsRef.current.add(dirPath);
+      try {
+        const entries = await listWorkspaceDir(dirPath, editorOptsLazy());
+        const children = toTreeEntries(entries);
+        setTree((prev) => mergeChildren(prev, dirPath, children));
+      } catch {
+        loadedDirsRef.current.delete(dirPath);
+      }
+    },
+    [trimmedAgentId],
+  );
 
   const reset = useCallback(() => {
     setTree([]);

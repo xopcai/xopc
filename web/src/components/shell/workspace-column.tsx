@@ -17,6 +17,7 @@ import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
 import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
@@ -29,8 +30,9 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
   const setOpen = useWorkspacePanelStore((s) => s.setOpen);
   const previewPath = useWorkspacePreviewStore((s) => s.path);
   const setPreviewPath = useWorkspacePreviewStore((s) => s.setPath);
+  const workspaceAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
 
-  const { tree, loading, error, loadRoot, loadChildren, reset } = useWorkspaceTree();
+  const { tree, loading, error, loadRoot, loadChildren, reset } = useWorkspaceTree(workspaceAgentId);
   const [pathCopiedFlash, setPathCopiedFlash] = useState(false);
 
   useEffect(() => {
@@ -46,8 +48,9 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
       setPathCopiedFlash(false);
       return;
     }
+    setPreviewPath(null);
     void loadRoot();
-  }, [open, loadRoot, reset, setPreviewPath]);
+  }, [open, workspaceAgentId, loadRoot, reset, setPreviewPath]);
 
   useEffect(() => {
     if (!open) return;
@@ -87,7 +90,10 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
           break;
         case 'download':
           try {
-            const { content } = await readWorkspaceFile(entry.path);
+            const { content } = await readWorkspaceFile(
+              entry.path,
+              workspaceAgentId.trim() ? { agentId: workspaceAgentId.trim() } : undefined,
+            );
             downloadTextFile(getFileName(entry.path), content);
           } catch {
             /* ignore */
@@ -106,7 +112,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
           break;
       }
     },
-    [setPreviewPath],
+    [setPreviewPath, workspaceAgentId],
   );
 
   return (

@@ -22,26 +22,54 @@ interface WriteResponse {
   payload: { path: string };
 }
 
+export type WorkspaceEditorRequestOptions = {
+  /** When set, lists/reads/writes that agent's Markdown workspace (`resolveAgentWorkspaceDir`). */
+  agentId?: string;
+};
+
+function editorQuery(dir: string, options?: WorkspaceEditorRequestOptions): string {
+  const params = new URLSearchParams();
+  if (dir) params.set('dir', dir);
+  const aid = options?.agentId?.trim();
+  if (aid) params.set('agentId', aid);
+  const qs = params.toString();
+  return qs ? `?${qs}` : '';
+}
+
 /** List a single directory level under the workspace. */
-export async function listWorkspaceDir(dir = ''): Promise<WorkspaceEntry[]> {
-  const params = dir ? `?dir=${encodeURIComponent(dir)}` : '';
-  const res = await fetchJson<ListResponse>(apiUrl(`/api/workspace/editor/list${params}`));
+export async function listWorkspaceDir(
+  dir = '',
+  options?: WorkspaceEditorRequestOptions,
+): Promise<WorkspaceEntry[]> {
+  const res = await fetchJson<ListResponse>(
+    apiUrl(`/api/workspace/editor/list${editorQuery(dir, options)}`),
+  );
   return res.payload.entries;
 }
 
 /** Read a workspace file's text content. */
 export async function readWorkspaceFile(
   path: string,
+  options?: WorkspaceEditorRequestOptions,
 ): Promise<{ content: string; path: string }> {
+  const params = new URLSearchParams({ path });
+  const aid = options?.agentId?.trim();
+  if (aid) params.set('agentId', aid);
   const res = await fetchJson<ReadResponse>(
-    apiUrl(`/api/workspace/editor/read?path=${encodeURIComponent(path)}`),
+    apiUrl(`/api/workspace/editor/read?${params.toString()}`),
   );
   return res.payload;
 }
 
 /** Write (overwrite) a workspace file. */
-export async function writeWorkspaceFile(path: string, content: string): Promise<void> {
-  await fetchJson<WriteResponse>(apiUrl('/api/workspace/editor/write'), {
+export async function writeWorkspaceFile(
+  path: string,
+  content: string,
+  options?: WorkspaceEditorRequestOptions,
+): Promise<void> {
+  const aid = options?.agentId?.trim();
+  const qs = aid ? `?agentId=${encodeURIComponent(aid)}` : '';
+  await fetchJson<WriteResponse>(apiUrl(`/api/workspace/editor/write${qs}`), {
     method: 'PUT',
     body: JSON.stringify({ path, content }),
   });
