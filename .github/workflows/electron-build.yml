@@ -105,13 +105,22 @@ jobs:
         env:
           # Avoid hard-link issues on some Windows runners when packaging.
           USE_HARD_LINKS: false
-          # macOS: when set + mac.notarize true in electron-builder.yml, produces signed + notarized artifacts.
-          CSC_LINK: ${{ secrets.CSC_LINK }}
-          CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # macOS signing: only export CSC_* when BOTH secrets are set. Partial config (e.g. CSC_LINK
+          # without CSC_KEY_PASSWORD) makes electron-builder attempt import and fail with
+          # "empty password" and ".../xopc not a file" on the workspace path.
+          _EB_CSC_LINK: ${{ secrets.CSC_LINK }}
+          _EB_CSC_KEY_PASSWORD: ${{ secrets.CSC_KEY_PASSWORD }}
+          # Notarization (used when mac.notarize is true in electron-builder.yml)
           APPLE_ID: ${{ secrets.APPLE_ID }}
           APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
           APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
         run: |
+          if [[ -n "${_EB_CSC_LINK:-}" && -n "${_EB_CSC_KEY_PASSWORD:-}" ]]; then
+            export CSC_LINK="$_EB_CSC_LINK"
+            export CSC_KEY_PASSWORD="$_EB_CSC_KEY_PASSWORD"
+          fi
+          unset _EB_CSC_LINK _EB_CSC_KEY_PASSWORD
+
           pnpm run electron:vite:build
           # Same as local `pnpm run electron:build`: bundle gateway CLI to out/server/index.js for packaged apps.
           pnpm run electron:server:build
