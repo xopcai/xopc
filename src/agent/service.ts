@@ -60,6 +60,7 @@ import {
   resolveAgentHomeDir,
   resolveDefaultAgentId,
 } from './agent-scope.js';
+import { parseSessionKey as parseRoutingSessionKey } from '../routing/session-key.js';
 import { extractProfileAgentId, resolveAgentBootstrapDir } from '../config/agent-profile.js';
 import { DEFAULT_ACK_MAX_CHARS, NO_REPLY, shouldSilence } from '../heartbeat/tokens.js';
 import { createTypingController, type TypingController } from './lifecycle/typing.js';
@@ -670,6 +671,13 @@ export class AgentService {
     // Cron `processDirect` uses `cron:<jobId>` — not a channel plugin id.
     if (first === 'cron') {
       return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: parts.slice(1).join(':') || 'cron' };
+    }
+
+    // Full routing session keys use `{agentId}:{source}:{accountId}:{peerKind}:{peerId}` format.
+    // The `source` field (second segment) is the real channel (e.g. 'webchat', 'telegram').
+    const parsed = parseRoutingSessionKey(sessionKey);
+    if (parsed) {
+      return { channel: parsed.source, chatId: parsed.peerId };
     }
 
     return {

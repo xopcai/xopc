@@ -336,6 +336,10 @@ export function useChatSession() {
       if (offset === 0 && key === sessionKeyRef.current && (sendingRef.current || streamingRef.current)) {
         return;
       }
+      // Dismiss any clarify prompt from the previous session.
+      if (offset === 0) {
+        setClarifyPrompt(null);
+      }
       if (loadingSessionRef.current) return;
       loadingSessionRef.current = true;
 
@@ -431,6 +435,7 @@ export function useChatSession() {
   );
 
   const createNewSession = useCallback(async () => {
+    setClarifyPrompt(null);
     try {
       const sessions = await sessionMgrRef.current.loadSessions();
       const aid = resolveAgentIdForPost();
@@ -596,6 +601,13 @@ export function useChatSession() {
         },
         onClarifyRequest: (payload) => {
           if (!shouldApplyStreamUpdate(chatId)) return;
+          // Pause the "AI is running" UI state so the composer shows the clarify prompt
+          // instead of the stop button. The SSE stream stays open waiting for the answer.
+          sendingRef.current = false;
+          streamingRef.current = false;
+          setSending(false);
+          setStreaming(false);
+          setProgress(null);
           setClarifyPrompt(payload);
         },
         onResult: () => {
@@ -826,6 +838,9 @@ export function useChatSession() {
       activeStreamSessionKeyRef.current = chatId;
       setSending(true);
       setError(null);
+      // Clear any stale clarify prompt from a previous turn so its requestId
+      // cannot be accidentally re-submitted against the new run.
+      setClarifyPrompt(null);
       setMessages((m) => [
         ...m,
         {
@@ -913,6 +928,13 @@ export function useChatSession() {
           },
           onClarifyRequest: (payload) => {
             if (!shouldApplyStreamUpdate(chatId)) return;
+            // Pause the "AI is running" UI state so the composer shows the clarify prompt
+            // instead of the stop button. The SSE stream stays open waiting for the answer.
+            sendingRef.current = false;
+            streamingRef.current = false;
+            setSending(false);
+            setStreaming(false);
+            setProgress(null);
             setClarifyPrompt(payload);
           },
           onResult: () => {
@@ -1021,8 +1043,13 @@ export function useChatSession() {
 
   useEffect(() => {
     const active = activeStreamSessionKeyRef.current;
-    if (!active) return;
-    if (!decodedKey || decodedKey === active) return;
+    if (!decodedKey) return;
+    // Always clear clarify prompt when navigating to a different session,
+    // even if there is no active stream — the prompt is session-scoped.
+    if (decodedKey !== sessionKeyRef.current) {
+      setClarifyPrompt(null);
+    }
+    if (!active || decodedKey === active) return;
     setStreamingMsg(null);
     setProgress(null);
     setStreaming(false);

@@ -1,5 +1,7 @@
 import { useCallback, useState } from 'react';
 
+import { MarkdownView } from '@/features/chat/markdown/markdown-view';
+
 export type ClarifyPromptState = {
   requestId: string;
   question: string;
@@ -35,7 +37,7 @@ export function ClarifyPrompt({ prompt, submitting, onSubmit }: ClarifyPromptPro
       aria-label="Clarification"
       className="mb-4 rounded-lg border border-edge bg-surface-elevated px-4 py-3 text-sm text-fg shadow-sm"
     >
-      <p className="mb-3 font-medium text-fg">{prompt.question}</p>
+      <MarkdownView content={prompt.question} compact className="mb-3" />
       {hasChoices ? (
         <div className="flex flex-wrap gap-2">
           {prompt.choices!.map((c) => (
