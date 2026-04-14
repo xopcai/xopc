@@ -5,7 +5,7 @@ import { bodyLimit } from 'hono/body-limit';
 import { readFileSync } from 'node:fs';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, extname, join, resolve } from 'node:path';
+import { dirname, join, resolve } from 'node:path';
 import { logContextMiddleware } from './middleware/log-context.js';
 import { logger } from './middleware/logger.js';
 import { auth } from './middleware/auth.js';
@@ -606,8 +606,6 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     }
   });
 
-  const EDITOR_FILE_EXTENSIONS = new Set(['.md', '.txt', '.json', '.ts', '.js']);
-
   function isKnownEditorAgentId(cfg: Config, id: string): boolean {
     const n = normalizeAgentId(id);
     if (n === resolveDefaultAgentId(cfg)) return true;
@@ -664,7 +662,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
           path: toWorkspaceRelativePosix(workspaceRoot, fullPath),
           isDirectory: true,
         });
-      } else if (EDITOR_FILE_EXTENSIONS.has(extname(entry.name).toLowerCase())) {
+      } else {
         entries.push({
           name: entry.name,
           path: toWorkspaceRelativePosix(workspaceRoot, fullPath),
