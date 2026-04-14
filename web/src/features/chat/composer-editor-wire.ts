@@ -36,6 +36,41 @@ export function serializeEditorToWire(root: HTMLElement): string {
   return parts.join('').replaceAll(CARET_PROBE, '');
 }
 
+/** Collapsed selection at the start of the composer (empty or first text node). */
+export function placeCaretAtStartOfComposer(root: HTMLElement): void {
+  const sel = window.getSelection();
+  if (!sel) return;
+  const range = document.createRange();
+  const first = root.firstChild;
+  if (!first) {
+    range.setStart(root, 0);
+    range.collapse(true);
+  } else if (first.nodeType === Node.TEXT_NODE) {
+    range.setStart(first, 0);
+    range.collapse(true);
+  } else {
+    range.setStart(root, 0);
+    range.collapse(true);
+  }
+  sel.removeAllRanges();
+  sel.addRange(range);
+}
+
+/**
+ * Clear DOM debris that serializes to an empty wire (e.g. ZWSP-only text, empty wrappers) so the
+ * `::before` placeholder (`composer-input-empty`) does not show on top of invisible nodes.
+ * Whitespace and `<br>` are kept — they produce a non-empty wire and hide the placeholder via class logic.
+ */
+export function normalizeOrphanComposerDom(root: HTMLElement): string {
+  const wire = serializeEditorToWire(root);
+  if (wire.length > 0 || root.childNodes.length === 0) {
+    return wire;
+  }
+  applyWireToEditor(root, '');
+  placeCaretAtStartOfComposer(root);
+  return '';
+}
+
 /** All `/skill:name` tokens in wire (for palette dedup). */
 export function listSkillNamesInWire(wire: string): Set<string> {
   const out = new Set<string>();
