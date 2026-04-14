@@ -568,6 +568,11 @@ export function useChatSession() {
         },
         onToolEnd: (toolName, isErr, result) => {
           if (!shouldApplyStreamUpdate(chatId)) return;
+          // Resume replays buffered SSE from the start, including `clarify_request` events for
+          // clarifications already answered — only `tool_end(clarify)` reflects completion.
+          if (toolName === 'clarify') {
+            setClarifyPrompt(null);
+          }
           hydrateResumeTailAssistant();
           setStreamingMsg((prev) => {
             const msg = ensureAssistantMessage(prev, Date.now());
@@ -896,6 +901,9 @@ export function useChatSession() {
           },
           onToolEnd: (toolName, isErr, result) => {
             if (!shouldApplyStreamUpdate(chatId)) return;
+            if (toolName === 'clarify') {
+              setClarifyPrompt(null);
+            }
             setStreamingMsg((prev) => {
               const msg = ensureAssistantMessage(prev, Date.now());
               completeTool(msg.content, toolName, isErr, result);
@@ -1013,8 +1021,8 @@ export function useChatSession() {
       if (!res.ok) {
         const j = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
         setError(j.error?.message ?? res.statusText ?? 'Clarify failed');
-        return;
       }
+      // Always dismiss after a response so 4xx/5xx (e.g. stale requestId) cannot block the composer.
       setClarifyPrompt(null);
     } finally {
       setClarifySubmitting(false);
