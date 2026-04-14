@@ -10,6 +10,7 @@ import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 import { useWorkspacePreviewStore } from '@/stores/workspace-preview-store';
 
 const MD_MIN = '(min-width: 768px)';
+const LG_MIN = '(min-width: 1024px)';
 
 function usePreviewDialogInset() {
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
@@ -17,28 +18,43 @@ function usePreviewDialogInset() {
   const [isMd, setIsMd] = useState(() =>
     typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia(MD_MIN).matches : true,
   );
+  const [isLg, setIsLg] = useState(() =>
+    typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia(LG_MIN).matches : true,
+  );
 
   useEffect(() => {
-    const mq = globalThis.matchMedia(MD_MIN);
-    const onChange = () => setIsMd(mq.matches);
-    onChange();
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
+    const mqMd = globalThis.matchMedia(MD_MIN);
+    const mqLg = globalThis.matchMedia(LG_MIN);
+    const onMd = () => setIsMd(mqMd.matches);
+    const onLg = () => setIsLg(mqLg.matches);
+    onMd();
+    onLg();
+    mqMd.addEventListener('change', onMd);
+    mqLg.addEventListener('change', onLg);
+    return () => {
+      mqMd.removeEventListener('change', onMd);
+      mqLg.removeEventListener('change', onLg);
+    };
   }, []);
 
   return useMemo(() => {
-    if (isMd) {
-      const left = sidebarCollapsed ? '4.5rem' : '16rem';
-      const right = workspaceOpen ? '20rem' : '0';
-      return { top: '0', left, right, bottom: '0' } as const;
+    if (!isMd) {
+      return { top: '0', left: '0', right: '0', bottom: '0' } as const;
     }
-    return { top: '0', left: '0', right: '0', bottom: '0' } as const;
-  }, [isMd, sidebarCollapsed, workspaceOpen]);
+    const right = workspaceOpen ? '20rem' : '0';
+    if (!isLg) {
+      // Tablet: viewport minus project-files rail only (matches “whole width − 右侧项目文件”).
+      return { top: '0', left: '0', right, bottom: '0' } as const;
+    }
+    const left = sidebarCollapsed ? '4.5rem' : '16rem';
+    return { top: '0', left, right, bottom: '0' } as const;
+  }, [isMd, isLg, sidebarCollapsed, workspaceOpen]);
 }
 
 /**
- * Full workspace file preview: full viewport height; width excludes left app-sidebar and
- * right project-files panel (md+). Small viewports use full width.
+ * Full workspace file preview: full viewport height. Below `md`, full bleed. From `md` to
+ * below `lg`, inset only the project-files rail. At `lg+`, inset left app-sidebar and the
+ * project-files rail.
  */
 export const WorkspacePreviewDialog = memo(function WorkspacePreviewDialog() {
   const { pathname } = useLocation();
