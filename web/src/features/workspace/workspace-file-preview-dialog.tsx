@@ -36,9 +36,15 @@ function wrapInCodeFence(content: string, extension: string): string {
 export interface WorkspaceFilePreviewPanelProps {
   filePath: string | null;
   onClose: () => void;
+  /** Chat agent workspace; omit to use gateway default agent root. */
+  agentId?: string;
 }
 
-export function WorkspaceFilePreviewPanel({ filePath, onClose }: WorkspaceFilePreviewPanelProps) {
+export function WorkspaceFilePreviewPanel({
+  filePath,
+  onClose,
+  agentId,
+}: WorkspaceFilePreviewPanelProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const resolvedTheme = useThemeStore((s) => s.resolved);
@@ -67,7 +73,8 @@ export function WorkspaceFilePreviewPanel({ filePath, onClose }: WorkspaceFilePr
     setLoadError(null);
     setContent(null);
 
-    void readWorkspaceFile(filePath)
+    const readOpts = agentId?.trim() ? { agentId: agentId.trim() } : undefined;
+    void readWorkspaceFile(filePath, readOpts)
       .then(({ content: text }) => {
         if (!cancelled) {
           setContent(text);
@@ -85,7 +92,7 @@ export function WorkspaceFilePreviewPanel({ filePath, onClose }: WorkspaceFilePr
     return () => {
       cancelled = true;
     };
-  }, [filePath]);
+  }, [filePath, agentId]);
 
   const handleMarkdownSave = useCallback(
     async (newContent: string) => {
@@ -96,7 +103,11 @@ export function WorkspaceFilePreviewPanel({ filePath, onClose }: WorkspaceFilePr
       }
       setSaveStatus('saving');
       try {
-        await writeWorkspaceFile(filePath, newContent);
+        await writeWorkspaceFile(
+          filePath,
+          newContent,
+          agentId?.trim() ? { agentId: agentId.trim() } : undefined,
+        );
         setSaveStatus('saved');
         saveStatusClearRef.current = setTimeout(() => {
           setSaveStatus('idle');
@@ -106,7 +117,7 @@ export function WorkspaceFilePreviewPanel({ filePath, onClose }: WorkspaceFilePr
         setSaveStatus('idle');
       }
     },
-    [filePath],
+    [filePath, agentId],
   );
 
   const ext = filePath ? getFileExtension(filePath) : '';
