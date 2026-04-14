@@ -82,6 +82,7 @@ export function WorkspaceDrawer({ open, onClose }: WorkspaceDrawerProps) {
   }, []);
 
   const drawerWidth = sidebarCollapsed ? '4.5rem' : '16rem';
+  const splitDrawerWidth = `calc(100vw - ${drawerWidth})`;
 
   return (
     <Dialog.Root open={open} onOpenChange={(v) => !v && onClose()}>
@@ -94,16 +95,21 @@ export function WorkspaceDrawer({ open, onClose }: WorkspaceDrawerProps) {
         />
         <Dialog.Content
           className={cn(
-            'xopc-drawer-right fixed inset-y-0 right-0 z-[71] flex h-full flex-row items-stretch border-l border-edge bg-surface-panel shadow-popover outline-none',
+            'xopc-drawer-right xopc-workspace-drawer fixed inset-y-0 right-0 z-[71] flex h-full flex-row items-stretch overflow-hidden border-l border-edge bg-surface-panel shadow-popover outline-none',
             'dark:border-edge',
+            /* Single column: keep tree flush-right so width shrink does not sweep the panel; avoids flex min-content widening the column mid-transition */
+            !previewFilePath && 'w-80 max-w-full justify-end',
           )}
-          style={{ width: `calc(100vw - ${drawerWidth})` }}
+          style={previewFilePath ? { width: splitDrawerWidth } : undefined}
           aria-describedby={undefined}
           onInteractOutside={(e) => e.preventDefault()}
           onPointerDownOutside={(e) => e.preventDefault()}
         >
           {previewFilePath ? (
-            <div className="flex min-h-0 min-w-0 flex-1 flex-col border-r border-edge dark:border-edge">
+            <div
+              key={previewFilePath}
+              className="xopc-workspace-preview-pane flex min-h-0 min-w-0 flex-1 flex-col border-r border-edge dark:border-edge"
+            >
               <WorkspaceFilePreviewPanel
                 filePath={previewFilePath}
                 onClose={() => setPreviewFilePath(null)}
@@ -111,15 +117,15 @@ export function WorkspaceDrawer({ open, onClose }: WorkspaceDrawerProps) {
             </div>
           ) : null}
 
-          <div className="ml-auto flex h-full w-80 shrink-0 flex-col bg-surface-panel">
-            <div className="flex shrink-0 items-center gap-2 border-b border-edge px-4 py-3 dark:border-edge">
+          <div className="flex h-full min-h-0 w-80 min-w-0 max-w-80 shrink-0 grow-0 flex-col overflow-x-hidden bg-surface-panel">
+            <div className="flex h-11 shrink-0 items-center gap-2 border-b border-edge px-4 dark:border-edge">
               <FolderOpen className="size-4 shrink-0 text-fg-muted" aria-hidden />
-              <Dialog.Title className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-fg">
+              <Dialog.Title className="min-w-0 flex-1 truncate text-base font-semibold leading-tight tracking-tight text-fg">
                 {m.workspace.title}
               </Dialog.Title>
               <button
                 type="button"
-                className="rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
+                className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
                 title={m.cron.refresh}
                 aria-label={m.cron.refresh}
                 disabled={loading}
@@ -131,10 +137,10 @@ export function WorkspaceDrawer({ open, onClose }: WorkspaceDrawerProps) {
                 <Button
                   type="button"
                   variant="ghost"
-                  className="h-9 w-9 shrink-0 p-0"
+                  className="size-9 shrink-0 rounded-md p-0"
                   aria-label={m.workspace.close}
                 >
-                  <X className="size-5" strokeWidth={1.75} />
+                  <X className="size-4" strokeWidth={1.75} />
                 </Button>
               </Dialog.Close>
             </div>

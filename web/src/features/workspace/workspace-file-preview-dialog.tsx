@@ -178,19 +178,22 @@ export function WorkspaceFilePreviewPanel({ filePath, onClose }: WorkspaceFilePr
 
   return (
     <div className="flex h-full min-h-0 flex-col bg-surface-panel">
-      <div className="flex min-h-0 shrink-0 items-center gap-2 border-b border-edge px-4 py-3 dark:border-edge">
-        <h2 className="min-w-0 flex-1 truncate text-base font-semibold tracking-tight text-fg" title={name}>
+      <div className="flex h-11 shrink-0 items-center gap-2 border-b border-edge px-4 dark:border-edge">
+        <h2
+          className="min-w-0 flex-1 truncate text-base font-semibold leading-tight tracking-tight text-fg"
+          title={name}
+        >
           {name}
         </h2>
         {isMd && saveStatus !== 'idle' ? (
-          <span className="shrink-0 text-xs text-fg-muted">
+          <span className="shrink-0 text-xs leading-tight text-fg-muted">
             {saveStatus === 'saving' ? m.workspace.saving : m.workspace.saved}
           </span>
         ) : null}
         {isMd ? (
           <button
             type="button"
-            className="rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+            className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
             title={markdownEditMode ? m.workspace.viewing : m.workspace.edit}
             aria-label={markdownEditMode ? m.workspace.viewing : m.workspace.edit}
             onClick={() => setMarkdownEditMode((v) => !v)}
@@ -200,7 +203,7 @@ export function WorkspaceFilePreviewPanel({ filePath, onClose }: WorkspaceFilePr
         ) : null}
         <button
           type="button"
-          className="rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+          className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg disabled:opacity-50"
           title={m.workspace.download}
           aria-label={m.workspace.download}
           onClick={handleDownload}
@@ -210,12 +213,12 @@ export function WorkspaceFilePreviewPanel({ filePath, onClose }: WorkspaceFilePr
         </button>
         <button
           type="button"
-          className="rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+          className="inline-flex size-9 shrink-0 items-center justify-center rounded-md text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
           title={m.workspace.close}
           aria-label={m.workspace.close}
           onClick={onClose}
         >
-          <X className="size-4" />
+          <X className="size-4" strokeWidth={1.75} />
         </button>
       </div>
       <div className="flex min-h-0 flex-1 flex-col">{body}</div>
