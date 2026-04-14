@@ -1,6 +1,5 @@
 import { Ban, File as FileIcon, Mic, Send, Sparkles, Square } from 'lucide-react';
-import type { MutableRefObject } from 'react';
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from 'react';
 
 import type { Attachment } from '@/features/chat/attachment-utils';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment-utils';
@@ -13,6 +12,7 @@ import {
   applyWireToEditor,
   getWireCaretOffset,
   handleComposerBackspace,
+  normalizeOrphanComposerDom,
   serializeEditorToWire,
 } from '@/features/chat/composer-editor-wire';
 import { useCommandPalette } from '@/features/chat/use-command-palette';
@@ -89,7 +89,7 @@ function thinkingIcon(level: ThinkingLevel) {
 }
 
 function syncComposerPlaceholderClass(el: HTMLElement, wire: string): void {
-  el.classList.toggle('composer-input-empty', wire.trim().length === 0);
+  el.classList.toggle('composer-input-empty', wire.length === 0);
 }
 
 function wireFollowUpAttachmentsToComposer(
@@ -145,6 +145,7 @@ const ChatComposerInput = memo(function ChatComposerInput({
   setIsComposing: (v: boolean) => void;
   kbdRef: MutableRefObject<ComposerKbdContext>;
 }) {
+  const isComposingRef = useRef(false);
   return (
     <div
       ref={editorRef}
@@ -161,13 +162,27 @@ const ChatComposerInput = memo(function ChatComposerInput({
       data-placeholder={placeholder}
       onInput={(e) => {
         const el = e.currentTarget;
-        const wire = serializeEditorToWire(el);
+        const wire = isComposingRef.current ? serializeEditorToWire(el) : normalizeOrphanComposerDom(el);
         syncComposerPlaceholderClass(el, wire);
         onWireInput(wire, getWireCaretOffset(el));
         adjustHeight();
       }}
-      onCompositionStart={() => setIsComposing(true)}
-      onCompositionEnd={() => setIsComposing(false)}
+      onCompositionStart={() => {
+        isComposingRef.current = true;
+        setIsComposing(true);
+      }}
+      onCompositionEnd={() => {
+        isComposingRef.current = false;
+        setIsComposing(false);
+        queueMicrotask(() => {
+          const el = editorRef.current;
+          if (!el || isComposingRef.current) return;
+          const wire = normalizeOrphanComposerDom(el);
+          syncComposerPlaceholderClass(el, wire);
+          onWireInput(wire, getWireCaretOffset(el));
+          adjustHeight();
+        });
+      }}
       onPaste={async (e) => {
         const cd = e.clipboardData;
         const collected = collectClipboardFiles(cd ?? null);

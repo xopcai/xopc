@@ -1,8 +1,11 @@
+// @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
 import {
   listSkillNamesInWire,
+  normalizeOrphanComposerDom,
   removeSkillTokenAtOrBeforeCaret,
   removeTrailingSkillTokenBeforeCaret,
+  serializeEditorToWire,
 } from '@/features/chat/composer-editor-wire';
 
 describe('removeSkillTokenAtOrBeforeCaret', () => {
@@ -51,5 +54,36 @@ describe('removeTrailingSkillTokenBeforeCaret', () => {
     const w = '/skill:foo bar';
     // Caret immediately after the space between skill and "bar"
     expect(removeTrailingSkillTokenBeforeCaret(w, '/skill:foo '.length)).toBeNull();
+  });
+});
+
+describe('normalizeOrphanComposerDom', () => {
+  it('preserves space-only content (wire non-empty; placeholder class stays off)', () => {
+    const root = document.createElement('div');
+    root.appendChild(document.createTextNode(' '));
+    expect(normalizeOrphanComposerDom(root)).toBe(' ');
+    expect(serializeEditorToWire(root)).toBe(' ');
+    expect(root.childNodes.length).toBe(1);
+  });
+
+  it('clears ZWSP-only DOM (wire strips ZWSP but nodes could remain)', () => {
+    const root = document.createElement('div');
+    root.appendChild(document.createTextNode('\u200b'));
+    expect(normalizeOrphanComposerDom(root)).toBe('');
+    expect(root.childNodes.length).toBe(0);
+  });
+
+  it('preserves a lone BR (wire is newline; not an orphan)', () => {
+    const root = document.createElement('div');
+    root.appendChild(document.createElement('br'));
+    expect(normalizeOrphanComposerDom(root)).toBe('\n');
+    expect(serializeEditorToWire(root)).toBe('\n');
+  });
+
+  it('preserves text with non-whitespace characters', () => {
+    const root = document.createElement('div');
+    root.appendChild(document.createTextNode(' hi '));
+    expect(normalizeOrphanComposerDom(root)).toBe(' hi ');
+    expect(root.childNodes.length).toBe(1);
   });
 });
