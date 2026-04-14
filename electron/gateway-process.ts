@@ -6,7 +6,8 @@ import { fileURLToPath } from 'node:url';
 
 import { app } from 'electron';
 
-const DEFAULT_PORT = 18790;
+/** Default listen port for the gateway subprocess when started by Electron (not CLI). Kept separate from CLI default (18790) so desktop + `xopc gateway` can run side by side. */
+const DEFAULT_PORT = 28790;
 
 let gatewayChild: ChildProcess | null = null;
 let gatewayExitHandler: ((code: number | null, signal: string | null) => void) | null = null;

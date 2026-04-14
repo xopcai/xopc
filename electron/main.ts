@@ -37,7 +37,7 @@ function shouldEmbedGateway(): boolean {
 function buildStartupFailureMessage(detail: string): string {
   return (
     `Failed to start the local gateway.\n\n${detail}\n\n` +
-    'The app picks a free port starting at 18790 when possible. If startup still fails, quit other xopc or gateway processes, then restart.\n\n' +
+    'The app picks a free port starting at 28790 when possible (CLI default is 18790). If startup still fails, quit other xopc or gateway processes, then restart.\n\n' +
     '(Developers: pnpm run build && pnpm run electron:vite:build && pnpm run electron:server:build)'
   );
 }

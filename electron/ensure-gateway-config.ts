@@ -8,7 +8,7 @@ import { loadConfig, saveConfig } from '../src/config/loader.js';
 import type { Config } from '../src/config/schema.js';
 import { ConfigSchema } from '../src/config/schema.js';
 
-import { pickAvailablePort } from './gateway-process.js';
+import { getDefaultGatewayPort, pickAvailablePort } from './gateway-process.js';
 
 export type ElectronUserPaths = {
   userData: string;
@@ -40,6 +40,14 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
     cfg = loadConfig(paths.configPath);
   } else {
     cfg = ConfigSchema.parse(undefined);
+    // Avoid schema default 18790 (CLI); Electron-first installs should not collide with `xopc gateway`.
+    cfg = {
+      ...cfg,
+      gateway: {
+        ...cfg.gateway,
+        port: getDefaultGatewayPort(),
+      },
+    };
   }
 
   let token = cfg.gateway?.auth?.token;
@@ -47,7 +55,7 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
     token = randomBytes(24).toString('hex');
   }
 
-  const preferredPort = cfg.gateway?.port ?? 18790;
+  const preferredPort = cfg.gateway?.port ?? getDefaultGatewayPort();
   const host = '127.0.0.1';
   const port = await pickAvailablePort(host, preferredPort, 40);
 
