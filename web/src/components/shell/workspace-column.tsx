@@ -101,7 +101,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
           break;
         case 'copyPath':
           try {
-            await navigator.clipboard.writeText(entry.path);
+            await navigator.clipboard.writeText(entry.absolutePath ?? entry.path);
             setPathCopiedFlash(true);
             window.setTimeout(() => setPathCopiedFlash(false), 2000);
           } catch {

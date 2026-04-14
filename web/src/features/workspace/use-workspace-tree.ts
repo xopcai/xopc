@@ -8,6 +8,7 @@ function toTreeEntries(entries: WorkspaceEntry[]): TreeEntry[] {
   return entries.map((entry) => ({
     name: entry.name,
     path: entry.path,
+    absolutePath: entry.absolutePath,
     isDirectory: entry.isDirectory,
     children: entry.isDirectory ? [] : undefined,
   }));

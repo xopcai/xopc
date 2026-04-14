@@ -6,6 +6,8 @@ import { cn } from '@/lib/cn';
 export interface TreeEntry {
   name: string;
   path: string;
+  /** Host absolute path when provided by the gateway (copy path). */
+  absolutePath?: string;
   isDirectory: boolean;
   children?: TreeEntry[];
 }
@@ -128,7 +130,8 @@ function TreeRow({
   onAction?: (action: FileTreeAction, entry: TreeEntry) => void;
   actionLabels?: { preview: string; download: string; copyPath: string };
 }) {
-  const [open, setOpen] = useState(depth < 1);
+  /** Collapsed by default; chevron must match visibility of children (incl. lazy-loaded empty → []). */
+  const [open, setOpen] = useState(false);
   const isSel = selectedPath === entry.path;
 
   if (entry.isDirectory) {
@@ -136,6 +139,7 @@ function TreeRow({
       <div className="select-none">
         <button
           type="button"
+          aria-expanded={open}
           className={cn(
             'flex w-full items-center gap-1 rounded-md py-1 pr-2 text-left text-sm',
             'hover:bg-surface-hover',

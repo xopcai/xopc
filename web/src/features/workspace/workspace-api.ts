@@ -4,6 +4,8 @@ import { apiUrl } from '@/lib/url';
 export interface WorkspaceEntry {
   name: string;
   path: string;
+  /** Host absolute path (gateway ≥ this change). Used for copy-path; `path` stays workspace-relative. */
+  absolutePath?: string;
   isDirectory: boolean;
 }
 
@@ -14,12 +16,12 @@ interface ListResponse {
 
 interface ReadResponse {
   ok: boolean;
-  payload: { content: string; path: string };
+  payload: { content: string; path: string; mtimeMs?: number };
 }
 
 interface WriteResponse {
   ok: boolean;
-  payload: { path: string };
+  payload: { path: string; mtimeMs?: number };
 }
 
 export type WorkspaceEditorRequestOptions = {
@@ -51,7 +53,7 @@ export async function listWorkspaceDir(
 export async function readWorkspaceFile(
   path: string,
   options?: WorkspaceEditorRequestOptions,
-): Promise<{ content: string; path: string }> {
+): Promise<{ content: string; path: string; mtimeMs?: number }> {
   const params = new URLSearchParams({ path });
   const aid = options?.agentId?.trim();
   if (aid) params.set('agentId', aid);
@@ -66,13 +68,14 @@ export async function writeWorkspaceFile(
   path: string,
   content: string,
   options?: WorkspaceEditorRequestOptions,
-): Promise<void> {
+): Promise<{ path: string; mtimeMs?: number }> {
   const aid = options?.agentId?.trim();
   const qs = aid ? `?agentId=${encodeURIComponent(aid)}` : '';
-  await fetchJson<WriteResponse>(apiUrl(`/api/workspace/editor/write${qs}`), {
+  const res = await fetchJson<WriteResponse>(apiUrl(`/api/workspace/editor/write${qs}`), {
     method: 'PUT',
     body: JSON.stringify({ path, content }),
   });
+  return res.payload;
 }
 
 /** Trigger a browser download for a text file read from the workspace. */
