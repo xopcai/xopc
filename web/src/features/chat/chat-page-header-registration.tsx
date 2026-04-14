@@ -1,4 +1,4 @@
-import { Plus } from 'lucide-react';
+import { FolderOpen, Plus } from 'lucide-react';
 import { memo, useEffect, useLayoutEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 
@@ -26,6 +26,7 @@ type ChatPageHeaderRegistrationProps = {
   chatAgentId: string;
   onChatAgentChange: (agentId: string) => void;
   chatAgentDisabled: boolean;
+  onToggleWorkspaceDrawer?: () => void;
 };
 
 /**
@@ -42,6 +43,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   chatAgentId,
   onChatAgentChange,
   chatAgentDisabled,
+  onToggleWorkspaceDrawer,
 }: ChatPageHeaderRegistrationProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -92,52 +94,58 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
           </h1>
         </div>
       ),
-      end:
-        showChatAgentSelector || showModelSelector ? (
-          <div
-            className={cn(
-              'flex min-w-0 max-w-[min(28rem,calc(100vw-8rem))] shrink-0 items-center justify-end gap-2',
-              APP_CHROME_NO_DRAG_CLASS,
-            )}
-          >
-            {showChatAgentSelector ? (
-              <div className="min-w-0 w-fit max-w-[min(10rem,calc(100vw-12rem))] shrink-0">
-                <ChatAgentSelector
-                  items={chatAgents}
-                  value={chatAgentId}
-                  disabled={chatAgentDisabled}
-                  placeholder={m.chat.agentPlaceholder}
-                  searchPlaceholder={m.chat.agentSearchPlaceholder}
-                  noMatches={m.chat.agentNoMatches}
-                  compact
-                  contentSide="bottom"
-                  contentAlign="end"
-                  onChange={onChatAgentChange}
-                />
-              </div>
-            ) : null}
-            {showModelSelector ? (
-              <div
-                className={cn(
-                  'min-w-0 w-fit max-w-[min(20rem,calc(100vw-10rem))] shrink-0',
-                )}
-              >
-                <ModelSelector
-                  value={sessionModel}
-                  disabled={modelDisabled}
-                  placeholder={m.chat.modelPlaceholder}
-                  searchPlaceholder={m.chat.modelSearchPlaceholder}
-                  noMatches={m.chat.modelNoMatches}
-                  compact
-                  showProviderInTrigger={false}
-                  contentSide="bottom"
-                  contentAlign="end"
-                  onChange={onModelChange}
-                />
-              </div>
-            ) : null}
-          </div>
-        ) : null,
+      end: (
+        <div
+          className={cn(
+            'flex min-w-0 max-w-[min(32rem,calc(100vw-8rem))] shrink-0 items-center justify-end gap-2',
+            APP_CHROME_NO_DRAG_CLASS,
+          )}
+        >
+          {showChatAgentSelector ? (
+            <div className="min-w-0 w-fit max-w-[min(10rem,calc(100vw-12rem))] shrink-0">
+              <ChatAgentSelector
+                items={chatAgents}
+                value={chatAgentId}
+                disabled={chatAgentDisabled}
+                placeholder={m.chat.agentPlaceholder}
+                searchPlaceholder={m.chat.agentSearchPlaceholder}
+                noMatches={m.chat.agentNoMatches}
+                compact
+                contentSide="bottom"
+                contentAlign="end"
+                onChange={onChatAgentChange}
+              />
+            </div>
+          ) : null}
+          {showModelSelector ? (
+            <div className={cn('min-w-0 w-fit max-w-[min(20rem,calc(100vw-10rem))] shrink-0')}>
+              <ModelSelector
+                value={sessionModel}
+                disabled={modelDisabled}
+                placeholder={m.chat.modelPlaceholder}
+                searchPlaceholder={m.chat.modelSearchPlaceholder}
+                noMatches={m.chat.modelNoMatches}
+                compact
+                showProviderInTrigger={false}
+                contentSide="bottom"
+                contentAlign="end"
+                onChange={onModelChange}
+              />
+            </div>
+          ) : null}
+          {onToggleWorkspaceDrawer ? (
+            <button
+              type="button"
+              className="rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
+              title={m.workspace.openFiles}
+              aria-label={m.workspace.openFiles}
+              onClick={onToggleWorkspaceDrawer}
+            >
+              <FolderOpen className="size-4" />
+            </button>
+          ) : null}
+        </div>
+      ),
     });
     return () => clearPageHeader();
   }, [
@@ -159,6 +167,8 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.agentSearchPlaceholder,
     m.chat.agentNoMatches,
     m.sidebar.newTask,
+    m.workspace.openFiles,
+    onToggleWorkspaceDrawer,
     setPageHeader,
     clearPageHeader,
   ]);

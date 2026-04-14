@@ -8,6 +8,7 @@ import { ChatSseStatus } from '@/features/chat/chat-sse-status';
 import { MessageList } from '@/features/chat/message-list';
 import { ScrollToBottomButton } from '@/features/chat/scroll-to-bottom-button';
 import { useChatSession } from '@/features/chat/use-chat-session';
+import { WorkspaceDrawer } from '@/features/workspace/workspace-drawer';
 import { ClarifyPrompt } from '@/features/chat/clarify-prompt';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -25,6 +26,7 @@ export function ChatPage() {
   const lastClientHeightRef = useRef(0);
   /** Tracks loading→idle so we scroll to bottom once after refresh / session load. */
   const prevLoadingRef = useRef(true);
+  const [workspaceDrawerOpen, setWorkspaceDrawerOpen] = useState(false);
 
   /** After prepending older messages, preserve viewport (virtual + non-virtual lists). */
   const listScrollMetricsRef = useRef<{
@@ -202,6 +204,7 @@ export function ChatPage() {
         chatAgentId={displayAgentId}
         onChatAgentChange={onChatAgentChange}
         chatAgentDisabled={showSessionLoading || sessionRoutePending || streaming}
+        onToggleWorkspaceDrawer={() => setWorkspaceDrawerOpen((prev) => !prev)}
       />
 
       <div className="mx-auto flex min-h-0 w-full max-w-[var(--max-width-chat)] flex-1 flex-col">
@@ -285,6 +288,11 @@ export function ChatPage() {
       <ScrollToBottomButton
         visible={!showSessionLoading && !atBottom}
         onClick={() => scrollToBottom(true)}
+      />
+
+      <WorkspaceDrawer
+        open={workspaceDrawerOpen}
+        onClose={() => setWorkspaceDrawerOpen(false)}
       />
     </div>
   );
