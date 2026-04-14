@@ -442,6 +442,22 @@ const bundles: Record<
         daysAgo: string;
       };
     };
+    workspace: {
+      title: string;
+      currentWorkspace: string;
+      openFiles: string;
+      preview: string;
+      download: string;
+      copyPath: string;
+      pathCopied: string;
+      edit: string;
+      viewing: string;
+      saved: string;
+      saving: string;
+      emptyDir: string;
+      loadError: string;
+      close: string;
+    };
     skills: {
       title: string;
       needToken: string;
@@ -1623,6 +1639,22 @@ const bundles: Record<
         hoursAgo: '{{count}}h ago',
         daysAgo: '{{count}}d ago',
       },
+    },
+    workspace: {
+      title: 'Project Files',
+      currentWorkspace: 'Current Workspace',
+      openFiles: 'Project Files',
+      preview: 'Preview',
+      download: 'Download',
+      copyPath: 'Copy Path',
+      pathCopied: 'Path copied',
+      edit: 'Edit',
+      viewing: 'Viewing',
+      saved: 'Saved',
+      saving: 'Saving…',
+      emptyDir: 'No files',
+      loadError: 'Failed to load',
+      close: 'Close',
     },
     skills: {
       title: 'Skills',
@@ -2869,6 +2901,22 @@ const bundles: Record<
         hoursAgo: '{{count}} 小时前',
         daysAgo: '{{count}} 天前',
       },
+    },
+    workspace: {
+      title: '项目文件',
+      currentWorkspace: '当前工作区',
+      openFiles: '项目文件',
+      preview: '预览',
+      download: '下载',
+      copyPath: '复制路径',
+      pathCopied: '路径已复制',
+      edit: '编辑',
+      viewing: '查看中',
+      saved: '已保存',
+      saving: '保存中…',
+      emptyDir: '暂无文件',
+      loadError: '加载失败',
+      close: '关闭',
     },
     skills: {
       title: '技能',

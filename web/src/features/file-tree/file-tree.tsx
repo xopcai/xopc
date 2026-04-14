@@ -1,4 +1,4 @@
-import { ChevronRight, FileText, Folder } from 'lucide-react';
+import { ChevronRight, FileText, Folder, MoreHorizontal } from 'lucide-react';
 import { useState } from 'react';
 
 import { cn } from '@/lib/cn';
@@ -10,18 +10,125 @@ export interface TreeEntry {
   children?: TreeEntry[];
 }
 
+export type FileTreeAction = 'preview' | 'download' | 'copyPath';
+
+function fileExtColor(name: string): string {
+  const lower = name.toLowerCase();
+  if (lower.endsWith('.md')) return 'text-green-600 dark:text-green-400';
+  if (lower.endsWith('.json')) return 'text-yellow-600 dark:text-yellow-400';
+  if (lower.endsWith('.ts') || lower.endsWith('.js')) return 'text-blue-600 dark:text-blue-400';
+  return 'text-fg-muted';
+}
+
+function ActionMenu({
+  entry,
+  labels,
+  onAction,
+}: {
+  entry: TreeEntry;
+  labels: { preview: string; download: string; copyPath: string };
+  onAction: (action: FileTreeAction, entry: TreeEntry) => void;
+}) {
+  const [menuOpen, setMenuOpen] = useState(false);
+  const close = () => setMenuOpen(false);
+
+  return (
+    <>
+      {menuOpen ? (
+        <button
+          type="button"
+          className="fixed inset-0 z-40 cursor-default bg-transparent"
+          aria-hidden
+          tabIndex={-1}
+          onPointerDown={(e) => {
+            e.preventDefault();
+            close();
+          }}
+        />
+      ) : null}
+      <div className="relative shrink-0">
+        <button
+          type="button"
+          className={cn(
+            'rounded-md p-1 text-fg-muted opacity-0 transition-opacity hover:bg-surface-hover hover:text-fg',
+            'group-hover:opacity-100',
+            menuOpen && 'opacity-100',
+          )}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          aria-label="More"
+          onPointerDown={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            setMenuOpen((v) => !v);
+          }}
+        >
+          <MoreHorizontal className="size-3.5" aria-hidden />
+        </button>
+        {menuOpen ? (
+          <div
+            role="menu"
+            className="absolute right-0 top-full z-50 mt-0.5 min-w-[9rem] rounded-md border border-edge bg-surface-panel py-1 shadow-popover"
+            onPointerDown={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              role="menuitem"
+              className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+              onClick={() => {
+                onAction('preview', entry);
+                close();
+              }}
+            >
+              {labels.preview}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+              onClick={() => {
+                onAction('download', entry);
+                close();
+              }}
+            >
+              {labels.download}
+            </button>
+            <button
+              type="button"
+              role="menuitem"
+              className="block w-full px-3 py-1.5 text-left text-sm text-fg hover:bg-surface-hover"
+              onClick={() => {
+                onAction('copyPath', entry);
+                close();
+              }}
+            >
+              {labels.copyPath}
+            </button>
+          </div>
+        ) : null}
+      </div>
+    </>
+  );
+}
+
 function TreeRow({
   entry,
   depth,
   selectedPath,
   onSelect,
+  onExpandDir,
+  onAction,
+  actionLabels,
 }: {
   entry: TreeEntry;
   depth: number;
   selectedPath: string | null;
   onSelect: (path: string, isDir: boolean) => void;
+  onExpandDir?: (dirPath: string) => void;
+  onAction?: (action: FileTreeAction, entry: TreeEntry) => void;
+  actionLabels?: { preview: string; download: string; copyPath: string };
 }) {
-  const [open, setOpen] = useState(depth < 2);
+  const [open, setOpen] = useState(depth < 1);
   const isSel = selectedPath === entry.path;
 
   if (entry.isDirectory) {
@@ -36,7 +143,9 @@ function TreeRow({
           )}
           style={{ paddingLeft: 8 + depth * 12 }}
           onClick={() => {
-            setOpen(!open);
+            const next = !open;
+            setOpen(next);
+            if (next) onExpandDir?.(entry.path);
             onSelect(entry.path, true);
           }}
         >
@@ -56,6 +165,9 @@ function TreeRow({
                 depth={depth + 1}
                 selectedPath={selectedPath}
                 onSelect={onSelect}
+                onExpandDir={onExpandDir}
+                onAction={onAction}
+                actionLabels={actionLabels}
               />
             ))}
           </div>
@@ -65,19 +177,24 @@ function TreeRow({
   }
 
   return (
-    <button
-      type="button"
-      className={cn(
-        'flex w-full items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm',
-        'hover:bg-surface-hover',
-        isSel && 'bg-accent-soft text-accent-fg',
-      )}
-      style={{ paddingLeft: 8 + depth * 12 }}
-      onClick={() => onSelect(entry.path, false)}
-    >
-      <FileText className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
-      <span className="truncate">{entry.name}</span>
-    </button>
+    <div className="group flex w-full items-stretch gap-0.5">
+      <button
+        type="button"
+        className={cn(
+          'flex min-w-0 flex-1 items-center gap-1.5 rounded-md py-1 pr-2 text-left text-sm',
+          'hover:bg-surface-hover',
+          isSel && 'bg-accent-soft text-accent-fg',
+        )}
+        style={{ paddingLeft: 8 + depth * 12 }}
+        onClick={() => onSelect(entry.path, false)}
+      >
+        <FileText className={cn('size-3.5 shrink-0', fileExtColor(entry.name))} aria-hidden />
+        <span className="truncate">{entry.name}</span>
+      </button>
+      {onAction && actionLabels ? (
+        <ActionMenu entry={entry} labels={actionLabels} onAction={onAction} />
+      ) : null}
+    </div>
   );
 }
 
@@ -85,11 +202,17 @@ export function FileTree({
   tree,
   selectedPath,
   onSelectFile,
+  onExpandDir,
+  onAction,
+  actionLabels,
   emptyHint,
 }: {
   tree: TreeEntry[];
   selectedPath: string | null;
   onSelectFile: (path: string) => void;
+  onExpandDir?: (dirPath: string) => void;
+  onAction?: (action: FileTreeAction, entry: TreeEntry) => void;
+  actionLabels?: { preview: string; download: string; copyPath: string };
   emptyHint: string;
 }) {
   const handleSelect = (path: string, isDir: boolean) => {
@@ -109,6 +232,9 @@ export function FileTree({
           depth={0}
           selectedPath={selectedPath}
           onSelect={handleSelect}
+          onExpandDir={onExpandDir}
+          onAction={onAction}
+          actionLabels={actionLabels}
         />
       ))}
     </div>
