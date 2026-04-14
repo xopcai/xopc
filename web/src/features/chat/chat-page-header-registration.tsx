@@ -12,6 +12,7 @@ import { useAppShellStore } from '@/stores/app-shell-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
+import { useWorkspacePanelStore } from '@/stores/workspace-panel-store';
 
 const MAX_MD = '(max-width: 767px)';
 
@@ -26,7 +27,6 @@ type ChatPageHeaderRegistrationProps = {
   chatAgentId: string;
   onChatAgentChange: (agentId: string) => void;
   chatAgentDisabled: boolean;
-  onToggleWorkspaceDrawer?: () => void;
 };
 
 /**
@@ -43,11 +43,12 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
   chatAgentId,
   onChatAgentChange,
   chatAgentDisabled,
-  onToggleWorkspaceDrawer,
 }: ChatPageHeaderRegistrationProps) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
+  const workspacePanelOpen = useWorkspacePanelStore((s) => s.open);
+  const toggleWorkspacePanel = useWorkspacePanelStore((s) => s.toggleOpen);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
   const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
@@ -133,17 +134,19 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
               />
             </div>
           ) : null}
-          {onToggleWorkspaceDrawer ? (
-            <button
-              type="button"
-              className="rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg"
-              title={m.workspace.openFiles}
-              aria-label={m.workspace.openFiles}
-              onClick={onToggleWorkspaceDrawer}
-            >
-              <FolderOpen className="size-4" />
-            </button>
-          ) : null}
+          <button
+            type="button"
+            className={cn(
+              'rounded-md p-2 text-fg-muted transition-colors hover:bg-surface-hover hover:text-fg',
+              workspacePanelOpen && 'bg-surface-hover text-fg',
+            )}
+            title={m.workspace.openFiles}
+            aria-label={m.workspace.openFiles}
+            aria-pressed={workspacePanelOpen}
+            onClick={toggleWorkspacePanel}
+          >
+            <FolderOpen className="size-4" />
+          </button>
         </div>
       ),
     });
@@ -168,7 +171,8 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.agentNoMatches,
     m.sidebar.newTask,
     m.workspace.openFiles,
-    onToggleWorkspaceDrawer,
+    workspacePanelOpen,
+    toggleWorkspacePanel,
     setPageHeader,
     clearPageHeader,
   ]);

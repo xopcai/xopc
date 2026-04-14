@@ -646,18 +646,6 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
   }
 }
 
-/** Workspace file drawer: preview column enters after width expands */
-@keyframes xopc-workspace-preview-in {
-  from {
-    opacity: 0;
-    transform: translate3d(-0.5rem, 0, 0);
-  }
-  to {
-    opacity: 1;
-    transform: translate3d(0, 0, 0);
-  }
-}
-
 /* Animation classes for Radix Dialog */
 .xopc-dialog-overlay[data-state='open'] {
   animation: xopc-dialog-overlay-in 0.2s ease-out both;
@@ -692,15 +680,6 @@ html.dark .chat-messages::-webkit-scrollbar-thumb:hover {
 }
 .xopc-drawer-right[data-state='closed'] {
   animation: xopc-drawer-right-out 0.24s cubic-bezier(0.4, 0, 1, 1) both;
-}
-
-/** Smooth width when toggling file preview (narrow tree-only vs split) */
-.xopc-workspace-drawer[data-state='open'] {
-  transition: width 0.4s cubic-bezier(0.22, 1, 0.36, 1);
-}
-
-.xopc-workspace-preview-pane {
-  animation: xopc-workspace-preview-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 
 .xopc-mobile-nav-overlay[data-state='open'] {
