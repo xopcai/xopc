@@ -6,7 +6,7 @@
 
 # Interface: ExtensionClient
 
-Defined in: [types.ts:64](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L64)
+Defined in: [types.ts:64](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L64)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [types.ts:64](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **agent**: `object`
 
-Defined in: [types.ts:70](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L70)
+Defined in: [types.ts:70](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L70)
 
 #### onStreamEvent()
 
@@ -64,7 +64,7 @@ Defined in: [types.ts:70](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **config**: `object`
 
-Defined in: [types.ts:81](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L81)
+Defined in: [types.ts:81](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L81)
 
 #### getExtensionConfig()
 
@@ -100,7 +100,7 @@ Defined in: [types.ts:81](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **events**: `object`
 
-Defined in: [types.ts:101](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L101)
+Defined in: [types.ts:103](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L103)
 
 #### emit()
 
@@ -144,7 +144,7 @@ Defined in: [types.ts:101](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca63
 
 > **session**: `object`
 
-Defined in: [types.ts:77](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L77)
+Defined in: [types.ts:77](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L77)
 
 #### listSessions()
 
@@ -174,7 +174,7 @@ Defined in: [types.ts:77](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **storage**: `object`
 
-Defined in: [types.ts:85](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L85)
+Defined in: [types.ts:85](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L85)
 
 #### get()
 
@@ -242,7 +242,7 @@ Defined in: [types.ts:85](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **theme**: `object`
 
-Defined in: [types.ts:66](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L66)
+Defined in: [types.ts:66](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L66)
 
 #### getTheme()
 
@@ -272,7 +272,7 @@ Defined in: [types.ts:66](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **ui**: `object`
 
-Defined in: [types.ts:91](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L91)
+Defined in: [types.ts:91](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L91)
 
 #### closePanel()
 
@@ -295,6 +295,22 @@ Defined in: [types.ts:91](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 ##### Returns
 
 `Promise`\<`void`\>
+
+#### onWidgetResult()
+
+> **onWidgetResult**(`handler`): () => `void`
+
+Chat/tool widget iframe: host sends the tool result via `widget.data` after load.
+
+##### Parameters
+
+###### handler
+
+(`data`) => `void`
+
+##### Returns
+
+() => `void`
 
 #### resize()
 
@@ -340,7 +356,7 @@ Defined in: [types.ts:91](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **onDidChangeVisibility**(`handler`): () => `void`
 
-Defined in: [types.ts:106](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L106)
+Defined in: [types.ts:108](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L108)
 
 #### Parameters
 
@@ -358,7 +374,7 @@ Defined in: [types.ts:106](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca63
 
 > **onDispose**(`handler`): () => `void`
 
-Defined in: [types.ts:105](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L105)
+Defined in: [types.ts:107](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L107)
 
 #### Parameters
 
@@ -376,7 +392,7 @@ Defined in: [types.ts:105](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca63
 
 > **whenReady**(): `Promise`\<`void`\>
 
-Defined in: [types.ts:65](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L65)
+Defined in: [types.ts:65](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L65)
 
 #### Returns
 

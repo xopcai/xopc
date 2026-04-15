@@ -6,7 +6,7 @@
 
 # Interface: HostInit
 
-Defined in: [types.ts:35](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L35)
+Defined in: [types.ts:35](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L35)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [types.ts:35](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **extensionId**: `string`
 
-Defined in: [types.ts:38](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L38)
+Defined in: [types.ts:38](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L38)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [types.ts:38](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **locale**: `string`
 
-Defined in: [types.ts:41](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L41)
+Defined in: [types.ts:41](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L41)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [types.ts:41](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **permissions**: `string`[]
 
-Defined in: [types.ts:39](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L39)
+Defined in: [types.ts:39](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L39)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [types.ts:39](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **source**: `"xopc-host"`
 
-Defined in: [types.ts:36](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L36)
+Defined in: [types.ts:36](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L36)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [types.ts:36](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **theme**: [`ThemeInfo`](ThemeInfo.md)
 
-Defined in: [types.ts:40](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L40)
+Defined in: [types.ts:40](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L40)
 
 ***
 
@@ -54,4 +54,4 @@ Defined in: [types.ts:40](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **type**: `"init"`
 
-Defined in: [types.ts:37](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L37)
+Defined in: [types.ts:37](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L37)

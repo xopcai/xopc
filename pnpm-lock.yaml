@@ -189,7 +189,18 @@ importers:
 
   extensions/echo: {}
 
-  extensions/hello: {}
+  extensions/hello:
+    dependencies:
+      '@xopcai/extension-ui-sdk':
+        specifier: workspace:*
+        version: link:../../packages/extension-ui-sdk
+    devDependencies:
+      esbuild:
+        specifier: ^0.28.0
+        version: 0.28.0
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
 
   extensions/telegram:
     dependencies:

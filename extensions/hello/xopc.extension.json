@@ -1,7 +1,7 @@
 {
   "id": "hello",
   "name": "Hello World",
-  "description": "A simple example extension that demonstrates the extension system",
+  "description": "Sample extension: bundled iframe UI demonstrates every @xopcai/extension-ui-sdk API (run pnpm run build:hello-ui after SDK changes).",
   "version": "1.0.0",
   "kind": "utility",
   "main": "index.ts",
