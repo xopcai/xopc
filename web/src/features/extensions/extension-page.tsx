@@ -5,11 +5,13 @@
  */
 
 import { useParams } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import { ExtensionIframeHost } from './extension-iframe-host';
 import { useUiExtensions } from './extension-provider';
 
 export function ExtensionPage() {
+  const { t } = useTranslation();
   const { extensionId, pageId } = useParams<{ extensionId: string; pageId?: string }>();
   const uiExtensions = useUiExtensions();
 
@@ -41,8 +43,16 @@ export function ExtensionPage() {
     );
   }
 
+  const pendingRestart =
+    !extension.active && extension.activationEligible === true;
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
+      {pendingRestart ? (
+        <p className="shrink-0 border-b border-edge-subtle bg-surface-hover/50 px-4 py-2 text-center text-xs text-fg-muted">
+          {t('appsPage.runStatePendingOn')}
+        </p>
+      ) : null}
       <ExtensionIframeHost
         extensionId={extensionId}
         extensionName={extension.name}
