@@ -1,10 +1,10 @@
-import { randomBytes } from 'node:crypto';
-import { existsSync, mkdirSync } from 'node:fs';
-import { dirname, join } from 'node:path';
+import { mkdirSync } from 'node:fs';
+import { join } from 'node:path';
 
 import { app } from 'electron';
 
-import { loadConfig, saveConfig } from '../src/config/loader.js';
+import { initWorkspace } from '../src/cli/utils/init-workspace.js';
+import { saveConfig } from '../src/config/loader.js';
 import type { Config } from '../src/config/schema.js';
 import { ConfigSchema } from '../src/config/schema.js';
 
@@ -32,53 +32,36 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
   token: string;
 }> {
   mkdirSync(paths.userData, { recursive: true });
-  mkdirSync(paths.workspacePath, { recursive: true });
 
-  let cfg: Config;
-
-  if (existsSync(paths.configPath)) {
-    cfg = loadConfig(paths.configPath);
-  } else {
-    cfg = ConfigSchema.parse(undefined);
-    // Avoid schema default 18790 (CLI); Electron-first installs should not collide with `xopc gateway`.
-    cfg = {
-      ...cfg,
-      gateway: {
-        ...cfg.gateway,
-        port: getDefaultGatewayPort(),
-      },
-    };
-  }
-
-  let token = cfg.gateway?.auth?.token;
-  if (!token || cfg.gateway?.auth?.mode !== 'token') {
-    token = randomBytes(24).toString('hex');
-  }
-
-  const preferredPort = cfg.gateway?.port ?? getDefaultGatewayPort();
-  const host = '127.0.0.1';
-  const port = await pickAvailablePort(host, preferredPort, 40);
-
-  const next: Config = ConfigSchema.parse({
-    ...cfg,
-    agents: {
-      ...cfg.agents,
-      defaults: {
-        ...cfg.agents.defaults,
-        workspace: paths.workspacePath,
-      },
-    },
-    gateway: {
-      ...cfg.gateway,
-      host,
-      port,
-      auth: {
-        mode: 'token',
-        token,
-      },
-    },
+  const initResult = await initWorkspace({
+    configPath: paths.configPath,
+    workspacePath: paths.workspacePath,
+    gatewayHost: '127.0.0.1',
+    gatewayPort: getDefaultGatewayPort(),
+    persistWorkspacePath: true,
   });
 
-  await saveConfig(next, paths.configPath);
-  return { port, token };
+  const host = '127.0.0.1';
+  const preferredPort = initResult.config.gateway?.port ?? getDefaultGatewayPort();
+  const resolvedPort = await pickAvailablePort(host, preferredPort, 40);
+
+  let finalConfig: Config = initResult.config;
+  if (resolvedPort !== initResult.config.gateway?.port) {
+    finalConfig = ConfigSchema.parse({
+      ...initResult.config,
+      gateway: {
+        ...initResult.config.gateway,
+        port: resolvedPort,
+      },
+    });
+    await saveConfig(finalConfig, paths.configPath);
+  }
+
+  const token =
+    finalConfig.gateway?.auth?.mode === 'token' &&
+    typeof finalConfig.gateway?.auth?.token === 'string'
+      ? finalConfig.gateway.auth.token
+      : initResult.token;
+
+  return { port: resolvedPort, token };
 }

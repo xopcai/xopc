@@ -1,14 +1,15 @@
-import { randomBytes } from 'crypto';
 import { Command } from 'commander';
 import { spawn } from 'child_process';
 import { GatewayServer } from '../../gateway/index.js';
-import { loadConfig, saveConfig } from '../../config/index.js';
+import { loadConfig } from '../../config/index.js';
 import { resolveConfigPath } from '../../config/paths.js';
 import { createLogger } from '../../utils/logger.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { getContextWithOpts } from '../index.js';
 import { runGatewayLoop } from '../../gateway/run-loop.js';
 import { forceFreePortAndWait, checkPortAvailable } from '../../gateway/ports.js';
+import { seedMainAgentBootstrap } from '../../agent/context/workspace-seed.js';
+import { initWorkspace } from '../utils/init-workspace.js';
 import {
   createTokenCommand,
   createStatusCommand,
@@ -20,7 +21,6 @@ import {
   createServiceStartCommand,
   createServiceStatusCommand,
 } from './gateway/index.js';
-import { isConfigSetup, isWorkspaceSetup, setupConfig, setupWorkspace } from '../utils/workspace.js';
 
 const _log = createLogger('GatewayCommand');
 
@@ -30,58 +30,25 @@ async function ensureGatewayReady(
   gatewayHost: string,
   gatewayPort: number,
 ): Promise<void> {
-  const configMissing = !isConfigSetup(configPath);
-  const workspaceMissing = !isWorkspaceSetup(workspacePath);
+  const result = await initWorkspace({
+    configPath,
+    workspacePath,
+    gatewayHost,
+    gatewayPort,
+  });
 
-  if (!configMissing && !workspaceMissing) {
-    const existingConfig = loadConfig(configPath);
-    if (existingConfig?.gateway?.auth?.token) {
-      return;
-    }
-  }
-
-  const isFirstRun = configMissing || workspaceMissing;
-
-  if (isFirstRun) {
+  if (result.configCreated || result.workspaceCreated) {
     console.log('');
     console.log('👋 Welcome to xopc! Running first-time setup before starting the gateway...');
     console.log('');
-  }
-
-  if (configMissing) setupConfig(configPath);
-  if (workspaceMissing) setupWorkspace(workspacePath);
-
-  const config = loadConfig(configPath);
-  const hasToken =
-    config?.gateway?.auth?.mode === 'token' &&
-    typeof config?.gateway?.auth?.token === 'string';
-
-  if (!hasToken) {
-    const token = randomBytes(24).toString('hex');
-    const updatedConfig = {
-      ...config,
-      gateway: {
-        ...config.gateway,
-        host: config.gateway?.host ?? gatewayHost,
-        port: config.gateway?.port ?? gatewayPort,
-        auth: {
-          ...config.gateway?.auth,
-          mode: 'token' as const,
-          token,
-        },
-      },
-    };
-    await saveConfig(updatedConfig, configPath);
-
-    if (isFirstRun) {
-      console.log('✅ First-time setup complete!');
-      console.log(`   Config:    ${configPath}`);
-      console.log(`   Workspace: ${workspacePath}`);
-      console.log(`   Token:     ${token.slice(0, 8)}...${token.slice(-8)}`);
-      console.log('');
-      console.log('💡 Tip: run `xopc onboard` anytime to configure models, channels, and more.');
-      console.log('');
-    }
+    console.log('✅ First-time setup complete!');
+    console.log(`   Config:    ${configPath}`);
+    console.log(`   Workspace: ${workspacePath}`);
+    console.log(`   Token:     ${result.token.slice(0, 8)}...${result.token.slice(-8)}`);
+    console.log('');
+    console.log('💡 Tip: run `xopc onboard` anytime to configure models, channels, and more.');
+    console.log('');
+    seedMainAgentBootstrap(result.config);
   }
 }
 
