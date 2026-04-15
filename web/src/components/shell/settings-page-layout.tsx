@@ -91,9 +91,11 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
                       </NavLink>
                     ))}
                   </div>
+                  {groupIndex === 0 ? (
+                    <ExtensionSettingsNav navLinkClassName={settingsNavLinkClass} />
+                  ) : null}
                 </div>
               ))}
-              <ExtensionSettingsNav navLinkClassName={settingsNavLinkClass} />
             </div>
           </nav>
           <div className="shrink-0 border-t border-edge-subtle px-4 pb-3 pt-3 dark:border-edge-subtle md:pb-4">

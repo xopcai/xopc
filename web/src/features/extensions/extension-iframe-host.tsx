@@ -2,6 +2,7 @@ import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react'
 import { useTranslation } from 'react-i18next';
 
 import { useLocaleStore } from '@/stores/locale-store';
+import { useGatewayStore } from '@/stores/gateway-store';
 import { useThemeStore } from '@/stores/theme-store';
 import { apiUrl } from '@/lib/url';
 
@@ -53,6 +54,7 @@ export function ExtensionIframeHost({
   const { t } = useTranslation();
   const router = useExtensionRouter();
   const iframeRef = useRef<HTMLIFrameElement>(null);
+  const gatewayToken = useGatewayStore((s) => s.token);
   const resolved = useThemeStore((s) => s.resolved);
   const permList = permissions ?? [];
   const displayName = extensionName?.trim() || extensionId;
@@ -79,8 +81,14 @@ export function ExtensionIframeHost({
 
   const src = useMemo(() => {
     const rel = encodeAssetPath(entrypoint);
-    return apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/assets/${rel}`);
-  }, [extensionId, entrypoint]);
+    const base = apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/assets/${rel}`);
+    if (!gatewayToken?.trim()) {
+      return base;
+    }
+    const u = new URL(base);
+    u.searchParams.set('token', gatewayToken.trim());
+    return u.toString();
+  }, [extensionId, entrypoint, gatewayToken]);
 
   useEffect(() => {
     if (!allowed) return;
@@ -158,6 +166,7 @@ export function ExtensionIframeHost({
       {loadError ? (
         <div className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-fg">
           <p>{t('extensionUi.loadFailed')}</p>
+          <p className="mt-2 text-xs text-fg-muted">{t('extensionUi.loadFailedConnectionHint')}</p>
           <button
             type="button"
             className="mt-2 font-medium text-accent underline-offset-2 hover:underline"

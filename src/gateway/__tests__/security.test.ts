@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { createHonoApp } from '../hono/app.js';
+import { createHonoApp, isExtensionGatewayUiAssetPath } from '../hono/app.js';
 import type { GatewayService } from '../service.js';
 import { GatewayConfigSchema } from '../../config/schema.js';
 import { getAuthFailureRateLimiter } from '../auth-rate-limit.js';
@@ -37,6 +37,18 @@ function createMockService(config: any = {}): GatewayService {
 }
 
 describe('Gateway Security Fixes', () => {
+  describe('extension UI asset paths', () => {
+    it('detects extension sandbox static URLs so global anti-framing headers are skipped', () => {
+      expect(isExtensionGatewayUiAssetPath('/api/extensions/hello/assets/ui/panel.html')).toBe(true);
+      expect(isExtensionGatewayUiAssetPath('/api/extensions/hello/assets/ui/panel.bundle.js')).toBe(
+        true,
+      );
+      expect(isExtensionGatewayUiAssetPath('/api/extensions/hello/storage')).toBe(false);
+      expect(isExtensionGatewayUiAssetPath('/api/extensions')).toBe(false);
+      expect(isExtensionGatewayUiAssetPath('/health')).toBe(false);
+    });
+  });
+
   describe('FIX-1: HTTP Security Headers', () => {
     it('should include X-Frame-Options: DENY', async () => {
       const service = createMockService();

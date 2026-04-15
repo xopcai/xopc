@@ -14,6 +14,7 @@ import { Link } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 
 import {
+  extensionExposesGatewayShellUi,
   useExtensions,
   useExtensionsLoading,
 } from '@/features/extensions/extension-provider';
@@ -442,7 +443,7 @@ function ExtensionDetailDialog({
               </section>
             ) : null}
 
-            {ext.hasUi && ext.active && (openPath || settingsPath) ? (
+            {extensionExposesGatewayShellUi(ext) && (openPath || settingsPath) ? (
               <div className="mt-6 flex flex-wrap gap-2 border-t border-edge-subtle pt-4">
                 {openPath ? (
                   <Link

@@ -20,6 +20,15 @@ export interface HonoAppConfig {
   token?: string;
 }
 
+/**
+ * Extension sandbox HTML under `/api/extensions/:id/assets/*` ships its own CSP
+ * (`frame-ancestors 'self'`). The global gateway middleware must not overwrite it
+ * with `frame-ancestors 'none'` / `X-Frame-Options: DENY`, or the console cannot embed iframes.
+ */
+export function isExtensionGatewayUiAssetPath(path: string): boolean {
+  return /^\/api\/extensions\/[^/]+\/assets\//.test(path);
+}
+
 export function createHonoApp(config: HonoAppConfig): Hono {
   const { service, token } = config;
   const app = new Hono();
@@ -53,6 +62,9 @@ export function createHonoApp(config: HonoAppConfig): Hono {
 
   app.use(createMiddleware(async (c, next) => {
     await next();
+    if (isExtensionGatewayUiAssetPath(c.req.path)) {
+      return;
+    }
     c.header('X-Frame-Options', 'DENY');
     c.header('X-Content-Type-Options', 'nosniff');
     c.header('Referrer-Policy', 'strict-origin-when-cross-origin');
