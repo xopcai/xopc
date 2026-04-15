@@ -4,9 +4,11 @@ import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
 import { CHAT_CHANNEL_ORDER } from '../channels/registry.js';
 import { MessageBus, MessageBusShutdownError } from '../infra/bus/index.js';
+import type { Config as SurfaceConfig } from '../config/config-surface.js';
 import { loadConfig, saveConfig as writeConfigToDisk } from '../config/index.js';
 import { getWorkspacePath } from '../config/schema.js';
 import { CronService } from '../cron/index.js';
+import { computeBundledExtensionExtensionsPatch } from '../extensions/bundled-extension-activation.js';
 import { ExtensionLoader } from '../extensions/index.js';
 import { HeartbeatService, heartbeatRunnerConfigFromConfig } from './heartbeat/index.js';
 import { ConfigHotReloader } from '../config/reload.js';
@@ -561,6 +563,35 @@ export class GatewayService {
       log.error({ error }, 'Failed to save config');
       return { saved: false, error };
     }
+  }
+
+  /**
+   * App store (phase 1): persist `extensions.enabled` / `extensions.disabled` for a bundled extension.
+   * Extension modules are loaded at gateway startup; restart the gateway process to fully apply load/unload.
+   */
+  async setBundledExtensionActivationTarget(
+    extensionId: string,
+    wanted: boolean,
+  ): Promise<{ ok: boolean; error?: string; requiresGatewayRestart: boolean }> {
+    const loader = this.extensionLoader;
+    if (!loader) {
+      return { ok: false, error: 'Extension loader unavailable', requiresGatewayRestart: false };
+    }
+    const id = extensionId.trim();
+    if (!id) {
+      return { ok: false, error: 'Invalid extension id', requiresGatewayRestart: false };
+    }
+    const patch = computeBundledExtensionExtensionsPatch(loader, this.config, id, wanted);
+    if (patch.ok === false) {
+      return { ok: false, error: patch.error, requiresGatewayRestart: false };
+    }
+    const newConfig = { ...this.config, extensions: patch.extensions } as Config;
+    const saved = await this.saveConfig(newConfig);
+    if (!saved.saved) {
+      return { ok: false, error: saved.error ?? 'Failed to save config', requiresGatewayRestart: false };
+    }
+    loader.setConfig(this.config as unknown as SurfaceConfig);
+    return { ok: true, requiresGatewayRestart: true };
   }
 
   /**

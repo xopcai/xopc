@@ -56,6 +56,8 @@ export type ExtensionApiRow = {
   kind?: string;
   source: string;
   active: boolean;
+  /** True if current config + activation rules would load this extension after a gateway restart. */
+  activationEligible?: boolean;
   hasUi: boolean;
   ui?: {
     icon?: string;
