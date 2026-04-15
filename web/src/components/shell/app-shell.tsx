@@ -30,6 +30,23 @@ function NavigateToChatListener() {
   return null;
 }
 
+/** Extension iframe `ui.navigate` — navigate within hash router. */
+function ExtensionNavigateListener() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent<{ path?: string }>).detail;
+      const path = typeof d?.path === 'string' ? d.path.trim() : '';
+      if (path) {
+        navigate(path.startsWith('/') ? path : `/${path}`);
+      }
+    };
+    window.addEventListener('extension-navigate', handler as EventListener);
+    return () => window.removeEventListener('extension-navigate', handler as EventListener);
+  }, [navigate]);
+  return null;
+}
+
 export function AppShell() {
   const token = useGatewayStore((s) => s.token);
   const { pathname } = useLocation();
@@ -58,6 +75,7 @@ export function AppShell() {
       </a>
       <GatewaySseBridge />
       <NavigateToChatListener />
+      <ExtensionNavigateListener />
       <TokenDialog />
       <ElectronGatewayExitBanner />
       <ElectronSetupBanner />

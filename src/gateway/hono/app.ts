@@ -2,10 +2,10 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { bodyLimit } from 'hono/body-limit';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync, statSync } from 'node:fs';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { fileURLToPath } from 'node:url';
-import { dirname, join, resolve } from 'node:path';
+import { dirname, join, relative, resolve } from 'node:path';
 import { logContextMiddleware } from './middleware/log-context.js';
 import { logger } from './middleware/logger.js';
 import { auth } from './middleware/auth.js';
@@ -124,6 +124,30 @@ function normalizePatchAgentModel(v: unknown): unknown {
     }
   }
   return v;
+}
+
+function extensionAssetMimeType(filePath: string): string {
+  const ext = filePath.split('.').pop()?.toLowerCase();
+  const mimeTypes: Record<string, string> = {
+    html: 'text/html; charset=utf-8',
+    js: 'application/javascript; charset=utf-8',
+    mjs: 'application/javascript; charset=utf-8',
+    css: 'text/css; charset=utf-8',
+    json: 'application/json; charset=utf-8',
+    svg: 'image/svg+xml',
+    png: 'image/png',
+    jpg: 'image/jpeg',
+    jpeg: 'image/jpeg',
+    gif: 'image/gif',
+    webp: 'image/webp',
+    ico: 'image/x-icon',
+    woff: 'font/woff',
+    woff2: 'font/woff2',
+    ttf: 'font/ttf',
+    txt: 'text/plain; charset=utf-8',
+    map: 'application/json; charset=utf-8',
+  };
+  return mimeTypes[ext ?? ''] ?? 'application/octet-stream';
 }
 
 /** Sanitized config snapshot for GET/PATCH `/api/config` (matches persisted `service.currentConfig`). */
@@ -1630,6 +1654,126 @@ export function createHonoApp(config: HonoAppConfig): Hono {
             available: configured.has(`${m.provider}/${m.id}`),
           })),
         })),
+      },
+    });
+  });
+
+  // ========== Extension UI (manifest discovery + static assets) ==========
+
+  authenticated.get('/api/extensions', async (c) => {
+    const loader = service.getExtensionLoader();
+    if (!loader) {
+      return c.json({ extensions: [] });
+    }
+
+    const registry = loader.getRegistry();
+    const discovered = loader.discoverExtensions();
+    const activeIds = new Set<string>();
+    for (const [id] of registry.extensions) {
+      activeIds.add(id);
+    }
+
+    const extensions = discovered.map((ext) => ({
+      id: ext.manifest.id,
+      name: ext.manifest.name,
+      description: ext.manifest.description,
+      version: ext.manifest.version,
+      kind: ext.manifest.kind,
+      source: ext.source,
+      active: activeIds.has(ext.id),
+      hasUi: Boolean(ext.manifest.ui),
+      ui: ext.manifest.ui
+        ? {
+            icon: ext.manifest.ui.icon,
+            permissions: ext.manifest.ui.permissions,
+            contributions: ext.manifest.ui.contributions,
+          }
+        : undefined,
+    }));
+    return c.json({ extensions });
+  });
+
+  authenticated.get('/api/extensions/:id', async (c) => {
+    const extensionId = c.req.param('id');
+    const loader = service.getExtensionLoader();
+    if (!loader) {
+      return c.json({ error: 'Extensions unavailable' }, 503);
+    }
+    const discovered = loader.discoverExtensions();
+    const ext = discovered.find((e) => e.id === extensionId);
+    if (!ext) {
+      return c.json({ error: 'Extension not found' }, 404);
+    }
+    const registry = loader.getRegistry();
+    return c.json({
+      id: ext.manifest.id,
+      name: ext.manifest.name,
+      description: ext.manifest.description,
+      version: ext.manifest.version,
+      kind: ext.manifest.kind,
+      source: ext.source,
+      path: ext.path,
+      active: registry.extensions.has(ext.id),
+      manifest: ext.manifest,
+    });
+  });
+
+  authenticated.get('/api/extensions/:id/assets/*', async (c) => {
+    const extensionId = c.req.param('id');
+    const loader = service.getExtensionLoader();
+    if (!loader) {
+      return c.json({ error: 'Extensions unavailable' }, 503);
+    }
+
+    const discovered = loader.discoverExtensions();
+    const ext = discovered.find((e) => e.id === extensionId);
+    if (!ext || !ext.manifest.ui) {
+      return c.json({ error: 'Extension not found or has no UI' }, 404);
+    }
+
+    const prefix = `/api/extensions/${extensionId}/assets/`;
+    const assetPathEncoded =
+      c.req.path.startsWith(prefix) ? c.req.path.slice(prefix.length) : '';
+    let assetPath = assetPathEncoded;
+    try {
+      assetPath = decodeURIComponent(assetPathEncoded);
+    } catch {
+      return c.json({ error: 'Invalid asset path' }, 400);
+    }
+
+    if (!assetPath || assetPath.includes('..')) {
+      return c.json({ error: 'Invalid asset path' }, 400);
+    }
+
+    const root = resolve(ext.path);
+    const fullPath = resolve(root, assetPath);
+    const rel = relative(root, fullPath);
+    if (rel.startsWith('..') || rel === '') {
+      return c.json({ error: 'Path traversal denied' }, 403);
+    }
+
+    if (!existsSync(fullPath) || !statSync(fullPath).isFile()) {
+      return c.json({ error: 'Not found' }, 404);
+    }
+
+    const content = readFileSync(fullPath);
+    const mimeType = extensionAssetMimeType(assetPath);
+
+    const cspHeader =
+      "default-src 'self'; " +
+      "script-src 'self' 'unsafe-inline'; " +
+      "style-src 'self' 'unsafe-inline'; " +
+      "img-src 'self' data: blob:; " +
+      "connect-src 'self'; " +
+      "frame-ancestors 'self'";
+
+    return new Response(content, {
+      status: 200,
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Security-Policy': cspHeader,
+        'Cache-Control': 'public, max-age=3600',
+        'X-Content-Type-Options': 'nosniff',
       },
     });
   });

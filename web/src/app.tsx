@@ -7,6 +7,7 @@ import { AppShell } from '@/components/shell/app-shell';
 import { SettingsPageLayout } from '@/components/shell/settings-page-layout';
 import { ChatPage } from '@/features/chat/chat-page';
 import { ChatRouteLayout } from '@/features/chat/chat-route-layout';
+import { ExtensionProvider } from '@/features/extensions/extension-provider';
 import { SwrProvider } from '@/providers/swr-provider';
 import { syncFontScaleAfterHydration, useFontScaleStore } from '@/stores/font-scale-store';
 import { subscribeSystemTheme, syncThemeAfterHydration, useThemeStore } from '@/stores/theme-store';
@@ -26,6 +27,14 @@ const AgentsSettingsDetailPage = lazy(() =>
 const ChannelsPage = lazy(() =>
   import('@/features/settings/channels-settings').then((m) => ({
     default: m.ChannelsSettingsPanel,
+  })),
+);
+const ExtensionPage = lazy(() =>
+  import('@/features/extensions/extension-page').then((m) => ({ default: m.ExtensionPage })),
+);
+const ExtensionSettingsPage = lazy(() =>
+  import('@/features/extensions/extension-settings-page').then((m) => ({
+    default: m.ExtensionSettingsPage,
   })),
 );
 
@@ -101,6 +110,22 @@ const router = createHashRouter([
         ),
       },
       {
+        path: 'apps/:extensionId',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <ExtensionPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'apps/:extensionId/:pageId',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <ExtensionPage />
+          </Suspense>
+        ),
+      },
+      {
         path: 'settings',
         element: <SettingsPageLayout />,
         children: [
@@ -132,6 +157,22 @@ const router = createHashRouter([
           {
             path: 'channels',
             element: <Navigate to="/channels" replace />,
+          },
+          {
+            path: 'ext/:extensionId',
+            element: (
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <ExtensionSettingsPage />
+              </Suspense>
+            ),
+          },
+          {
+            path: 'ext/:extensionId/:panelId',
+            element: (
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <ExtensionSettingsPage />
+              </Suspense>
+            ),
           },
           {
             path: 'agents/:agentId',
@@ -178,12 +219,14 @@ export function App() {
   return (
     <I18nextProvider i18n={i18n}>
       <SwrProvider>
-        <div className="flex min-h-0 flex-1 flex-col">
-          <ThemeEffects />
-          <div className="flex min-h-0 flex-1 flex-col [&>*]:min-h-0 [&>*]:flex-1">
-            <RouterProvider router={router} />
+        <ExtensionProvider>
+          <div className="flex min-h-0 flex-1 flex-col">
+            <ThemeEffects />
+            <div className="flex min-h-0 flex-1 flex-col [&>*]:min-h-0 [&>*]:flex-1">
+              <RouterProvider router={router} />
+            </div>
           </div>
-        </div>
+        </ExtensionProvider>
       </SwrProvider>
     </I18nextProvider>
   );

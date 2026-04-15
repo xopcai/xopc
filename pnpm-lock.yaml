@@ -220,6 +220,12 @@ importers:
         specifier: ^6.0.2
         version: 6.0.2
 
+  packages/extension-ui-sdk:
+    devDependencies:
+      typescript:
+        specifier: ^6.0.2
+        version: 6.0.2
+
   web:
     dependencies:
       '@codemirror/commands':
@@ -258,6 +264,9 @@ importers:
       '@tanstack/react-virtual':
         specifier: ^3.13.23
         version: 3.13.23(react-dom@19.2.5(react@19.2.5))(react@19.2.5)
+      '@xopcai/extension-ui-sdk':
+        specifier: workspace:*
+        version: link:../packages/extension-ui-sdk
       clsx:
         specifier: ^2.1.1
         version: 2.1.1

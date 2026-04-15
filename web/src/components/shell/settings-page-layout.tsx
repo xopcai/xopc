@@ -6,6 +6,7 @@ import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/sh
 import { TabIcon } from '@/components/shell/tab-icons';
 import { messages, tabLabel } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
+import { ExtensionSettingsNav } from '@/features/extensions/extension-settings-nav';
 import { helpDocsHomeUrl, pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -92,6 +93,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
                   </div>
                 </div>
               ))}
+              <ExtensionSettingsNav navLinkClassName={settingsNavLinkClass} />
             </div>
           </nav>
           <div className="shrink-0 border-t border-edge-subtle px-4 pb-3 pt-3 dark:border-edge-subtle md:pb-4">

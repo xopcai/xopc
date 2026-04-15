@@ -1,0 +1,47 @@
+/** Page contribution (manifest `ui.contributions.pages`). */
+export type PageContribution = {
+  id: string;
+  title: string;
+  path: string;
+  entrypoint: string;
+  showInNav?: boolean;
+  navIcon?: string;
+};
+
+/** Settings panel contribution (manifest `ui.contributions.settingsPanels`). */
+export type SettingsPanelContribution = {
+  id: string;
+  title: string;
+  entrypoint: string;
+  order?: number;
+};
+
+export type ExtensionUiContributions = {
+  pages?: PageContribution[];
+  settingsPanels?: SettingsPanelContribution[];
+};
+
+/** Serialized extension list row from `GET /api/extensions`. */
+export type ExtensionApiRow = {
+  id: string;
+  name: string;
+  description?: string;
+  version?: string;
+  kind?: string;
+  source: string;
+  active: boolean;
+  hasUi: boolean;
+  ui?: {
+    icon?: string;
+    permissions?: string[];
+    contributions?: ExtensionUiContributions & Record<string, unknown>;
+  };
+};
+
+/** UI-enabled extension info (alias for list row; used by extension navigators). */
+export type ExtensionUiInfo = ExtensionApiRow;
+
+/** `GET /api/extensions` response body. */
+export type ExtensionsListResponse = {
+  extensions: ExtensionApiRow[];
+};

@@ -1,10 +1,20 @@
 import type {
   ActivationDeclaration,
+  ChatWidgetContribution,
+  ChatWidgetMatch,
+  CommandContribution,
   ContractDeclaration,
   ExtensionManifest,
+  ExtensionUiContributions,
+  ExtensionUiManifest,
+  ExtensionUiPermission,
   ModelSupportDeclaration,
+  PageContribution,
   ProviderAuthChoice,
+  SettingsPanelContribution,
   SetupDeclaration,
+  SidebarPanelContribution,
+  StatusBarItemContribution,
 } from './types/manifest.js';
 import type { ExtensionKind } from './types/core.js';
 
@@ -50,7 +60,211 @@ export function normalizeExtensionManifest(raw: Record<string, unknown>): Extens
     activation: normalizeActivation(raw.activation),
     contracts: normalizeContracts(raw.contracts),
     setup: normalizeSetup(raw.setup),
+    ui: normalizeUiManifest(raw.ui),
   };
+}
+
+const VALID_UI_PERMISSIONS = new Set<ExtensionUiPermission>([
+  'agent.send',
+  'agent.subscribe',
+  'session.read',
+  'session.write',
+  'config.read',
+  'config.write',
+  'storage',
+  'notification',
+  'clipboard',
+  'theme',
+  'workspace.read',
+  'workspace.write',
+]);
+
+export function normalizeUiManifest(raw: unknown): ExtensionUiManifest | undefined {
+  if (raw === undefined || raw === null) return undefined;
+  if (!isRecord(raw)) return undefined;
+  const main = typeof raw.main === 'string' && raw.main.length > 0 ? raw.main : undefined;
+  const icon = typeof raw.icon === 'string' && raw.icon.length > 0 ? raw.icon : undefined;
+  let permissions: ExtensionUiPermission[] | undefined;
+  if (Array.isArray(raw.permissions)) {
+    const p = raw.permissions.filter(
+      (x): x is ExtensionUiPermission =>
+        typeof x === 'string' && VALID_UI_PERMISSIONS.has(x as ExtensionUiPermission),
+    );
+    permissions = p.length ? p : undefined;
+  }
+  const contributions = normalizeUiContributions(raw.contributions);
+  if (!main && !icon && !permissions && !contributions) return undefined;
+  return {
+    ...(main !== undefined ? { main } : {}),
+    ...(icon !== undefined ? { icon } : {}),
+    ...(permissions !== undefined ? { permissions } : {}),
+    ...(contributions !== undefined ? { contributions } : {}),
+  };
+}
+
+function normalizeUiContributions(raw: unknown): ExtensionUiContributions | undefined {
+  if (!isRecord(raw)) return undefined;
+  const sidebarPanels = normalizeSidebarPanels(raw.sidebarPanels);
+  const settingsPanels = normalizeSettingsPanels(raw.settingsPanels);
+  const chatWidgets = normalizeChatWidgets(raw.chatWidgets);
+  const pages = normalizePages(raw.pages);
+  const commands = normalizeCommands(raw.commands);
+  const statusBarItems = normalizeStatusBarItems(raw.statusBarItems);
+  const out: ExtensionUiContributions = {
+    ...(sidebarPanels ? { sidebarPanels } : {}),
+    ...(settingsPanels ? { settingsPanels } : {}),
+    ...(chatWidgets ? { chatWidgets } : {}),
+    ...(pages ? { pages } : {}),
+    ...(commands ? { commands } : {}),
+    ...(statusBarItems ? { statusBarItems } : {}),
+  };
+  return Object.keys(out).length ? out : undefined;
+}
+
+function normalizeSidebarPanels(raw: unknown): SidebarPanelContribution[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: SidebarPanelContribution[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) continue;
+    const id = item.id;
+    const title = item.title;
+    const entrypoint = item.entrypoint;
+    if (typeof id !== 'string' || typeof title !== 'string' || typeof entrypoint !== 'string') {
+      continue;
+    }
+    out.push({
+      id,
+      title,
+      entrypoint,
+      icon: typeof item.icon === 'string' ? item.icon : undefined,
+      defaultVisible: typeof item.defaultVisible === 'boolean' ? item.defaultVisible : undefined,
+    });
+  }
+  return out.length ? out : undefined;
+}
+
+function normalizeSettingsPanels(raw: unknown): SettingsPanelContribution[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: SettingsPanelContribution[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) continue;
+    const id = item.id;
+    const title = item.title;
+    const entrypoint = item.entrypoint;
+    if (typeof id !== 'string' || typeof title !== 'string' || typeof entrypoint !== 'string') {
+      continue;
+    }
+    out.push({
+      id,
+      title,
+      entrypoint,
+      order: typeof item.order === 'number' ? item.order : undefined,
+    });
+  }
+  return out.length ? out : undefined;
+}
+
+function normalizeChatWidgetMatch(raw: unknown): ChatWidgetMatch | undefined {
+  if (!isRecord(raw)) return undefined;
+  const toolName = typeof raw.toolName === 'string' ? raw.toolName : undefined;
+  const contentType = typeof raw.contentType === 'string' ? raw.contentType : undefined;
+  let metadata: Record<string, unknown> | undefined;
+  if (isRecord(raw.metadata)) {
+    metadata = { ...raw.metadata };
+  }
+  if (!toolName && !contentType && !metadata) return undefined;
+  return { toolName, contentType, metadata };
+}
+
+function normalizeChatWidgets(raw: unknown): ChatWidgetContribution[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: ChatWidgetContribution[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) continue;
+    const id = item.id;
+    const title = item.title;
+    const entrypoint = item.entrypoint;
+    if (typeof id !== 'string' || typeof title !== 'string' || typeof entrypoint !== 'string') {
+      continue;
+    }
+    const match = normalizeChatWidgetMatch(item.match);
+    if (!match) continue;
+    out.push({
+      id,
+      title,
+      entrypoint,
+      match,
+      maxHeight: typeof item.maxHeight === 'number' ? item.maxHeight : undefined,
+      interactive: typeof item.interactive === 'boolean' ? item.interactive : undefined,
+    });
+  }
+  return out.length ? out : undefined;
+}
+
+function normalizePages(raw: unknown): PageContribution[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: PageContribution[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) continue;
+    const id = item.id;
+    const title = item.title;
+    const path = item.path;
+    const entrypoint = item.entrypoint;
+    if (
+      typeof id !== 'string' ||
+      typeof title !== 'string' ||
+      typeof path !== 'string' ||
+      typeof entrypoint !== 'string'
+    ) {
+      continue;
+    }
+    out.push({
+      id,
+      title,
+      path,
+      entrypoint,
+      showInNav: typeof item.showInNav === 'boolean' ? item.showInNav : undefined,
+      navIcon: typeof item.navIcon === 'string' ? item.navIcon : undefined,
+    });
+  }
+  return out.length ? out : undefined;
+}
+
+function normalizeCommands(raw: unknown): CommandContribution[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: CommandContribution[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) continue;
+    const id = item.id;
+    const title = item.title;
+    if (typeof id !== 'string' || typeof title !== 'string') continue;
+    out.push({
+      id,
+      title,
+      shortcut: typeof item.shortcut === 'string' ? item.shortcut : undefined,
+      opensPanel: typeof item.opensPanel === 'string' ? item.opensPanel : undefined,
+    });
+  }
+  return out.length ? out : undefined;
+}
+
+function normalizeStatusBarItems(raw: unknown): StatusBarItemContribution[] | undefined {
+  if (!Array.isArray(raw)) return undefined;
+  const out: StatusBarItemContribution[] = [];
+  for (const item of raw) {
+    if (!isRecord(item)) continue;
+    const id = item.id;
+    const entrypoint = item.entrypoint;
+    if (typeof id !== 'string' || typeof entrypoint !== 'string') continue;
+    const position = item.position;
+    out.push({
+      id,
+      entrypoint,
+      position: position === 'left' || position === 'right' ? position : undefined,
+      width: typeof item.width === 'number' ? item.width : undefined,
+    });
+  }
+  return out.length ? out : undefined;
 }
 
 function normalizeStringArrayMap(
