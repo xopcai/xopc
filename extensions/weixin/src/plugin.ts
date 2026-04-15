@@ -22,6 +22,7 @@ import { createLogger } from '@xopcai/xopc/utils/logger.js';
 
 import { restoreContextTokens } from './messaging/inbound.js';
 import { monitorWeixinProvider } from './monitor/monitor.js';
+import type { ChannelCliLoginAdapter, ChannelCronDeliveryAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
 import {
   listWeixinAccountIds,
   resolveWeixinAccount,
@@ -29,6 +30,9 @@ import {
 } from './auth/accounts.js';
 import { readFrameworkAllowFromList } from './auth/pairing.js';
 import { createWeixinOutboundHandlers, weixinTextChunker } from './outbound-send.js';
+import { normalizeWeixinCronDeliveryToResolved } from './delivery-to.js';
+import { weixinConfigSurface } from './config-surface.js';
+import { WeixinConfigSchema } from './config-schema.js';
 
 const log = createLogger('WeixinPlugin');
 
@@ -45,7 +49,7 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
     selectionLabel: 'Weixin (ilink)',
     docsPath: '/channels/weixin',
     blurb: 'WeChat via Tencent ilink bot API (QR login, direct chat).',
-    order: 5,
+    order: 3,
   } as const;
 
   readonly capabilities: ChannelCapabilities = {
@@ -57,6 +61,36 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
     nativeCommands: false,
     blockStreaming: true,
   };
+
+  readonly configSchema = {
+    schema: {},
+    validate: (raw: unknown) => {
+      const r = WeixinConfigSchema.safeParse(raw);
+      return r.success ? { ok: true as const } : { ok: false as const, errors: [r.error.message] };
+    },
+  };
+
+  readonly cronDelivery: ChannelCronDeliveryAdapter = {
+    async normalizeDeliveryTarget(to, sessionStore) {
+      const { chatId, accountId } = await normalizeWeixinCronDeliveryToResolved(to, sessionStore);
+      return { chatId, accountId };
+    },
+  };
+
+  readonly cliLogin: ChannelCliLoginAdapter = {
+    async runLogin(params) {
+      const { runWeixinQrLoginCli } = await import('./cli/qr-login.js');
+      return runWeixinQrLoginCli({
+        configPath: params.configPath,
+        verbose: params.verbose,
+        timeoutMs: params.timeoutMs,
+        account: params.accountId,
+        writeConfig: params.writeConfig,
+      });
+    },
+  };
+
+  readonly configSurface = weixinConfigSurface;
 
   readonly defaults: ChannelPluginDefaults = {
     queue: { debounceMs: 0 },
@@ -184,8 +218,8 @@ export class WeixinChannelPlugin implements ChannelPlugin<ResolvedWeixinAccount>
   }
 
   async onConfigUpdated(cfg: Config): Promise<void> {
-    const prevWx = this.cfg.channels?.weixin;
-    const nextWx = cfg.channels?.weixin;
+    const prevWx = this.cfg.channels?.weixin as unknown;
+    const nextWx = cfg.channels?.weixin as { enabled?: boolean } | undefined;
     const channelOff = !nextWx || nextWx.enabled !== true;
 
     if (channelOff) {

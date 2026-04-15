@@ -1,5 +1,5 @@
-import { parseSessionKey } from '../routing/session-key.js';
-import type { SessionStore } from '../session/store.js';
+import { parseSessionKey } from '@xopcai/xopc/routing/session-key.js';
+import type { SessionStore } from '@xopcai/xopc/session/store.js';
 
 export type NormalizedWeixinCronDelivery = {
   chatId: string;
@@ -9,8 +9,6 @@ export type NormalizedWeixinCronDelivery = {
 
 /**
  * Resolves Weixin ilink `chat_id` and optional `accountId` from cron / UI `delivery.to`.
- * Accepts a full session key (`main:weixin:{accountId}:dm:{peerId}`) or shorthand
- * `{accountId}:dm:{peerId}` (same shape as Telegram delivery suffix).
  */
 export function normalizeWeixinCronDeliveryTo(to: string): NormalizedWeixinCronDelivery {
   const trimmed = to.trim();
@@ -34,7 +32,6 @@ export function normalizeWeixinCronDeliveryTo(to: string): NormalizedWeixinCronD
 
 /**
  * If exactly one indexed weixin DM session matches `ilinkPeerId`, return that session's accountId.
- * Used when cron `delivery.to` is only the peer id (no `{accountId}:dm:…` suffix).
  */
 export async function resolveWeixinAccountIdFromSessions(
   store: SessionStore,

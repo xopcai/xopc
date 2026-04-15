@@ -1,7 +1,19 @@
 import { Command } from 'commander';
 
 import { resolveConfigPath } from '../../config/paths.js';
+import {
+  getChannelPlugin,
+  listChannelPlugins,
+  syncChannelPluginsFromManager,
+} from '../../channels/plugins/registry.js';
+import { bundledChannelPlugins } from '../../generated/bundled-channel-plugins.js';
 import { register, formatExamples, type CLIContext } from '../registry.js';
+
+function ensureChannelRegistryForCli(): void {
+  if (listChannelPlugins().length === 0) {
+    syncChannelPluginsFromManager(bundledChannelPlugins);
+  }
+}
 
 function resolveConfigPathFromCommand(command: Command): string {
   const root =
@@ -35,14 +47,23 @@ function createChannelsCommand(ctx: CLIContext): Command {
 
   cmd
     .command('login')
-    .description('Log in with QR code (Weixin / WeChat ilink)')
+    .description('Log in with QR code or channel-specific credentials flow')
     .option('--channel <id>', 'Channel id', 'weixin')
     .option('--account <id>', 'Optional account id when re-logging an existing bot')
     .option('--timeout <ms>', 'Max wait for scan (default 480000)', '480000')
     .option('--credentials-only', 'Only save token files; do not update xopc.json')
     .action(async (options, command) => {
-      if (options.channel !== 'weixin') {
-        console.error(`Only --channel weixin is supported (got "${options.channel}").`);
+      ensureChannelRegistryForCli();
+      const channelId = String(options.channel || '').trim() || 'weixin';
+      const plugin = getChannelPlugin(channelId);
+      if (!plugin?.cliLogin) {
+        console.error(`Channel "${channelId}" does not support CLI login.`);
+        const capable = listChannelPlugins()
+          .filter((p) => p.cliLogin)
+          .map((p) => p.id);
+        if (capable.length > 0) {
+          console.error(`Channels with login support: ${capable.join(', ')}`);
+        }
         process.exitCode = 1;
         return;
       }
@@ -51,13 +72,11 @@ function createChannelsCommand(ctx: CLIContext): Command {
       const timeoutMs = Math.max(60_000, Number.parseInt(String(options.timeout), 10) || 480_000);
       const verbose = ctx.isVerbose;
 
-      const { runWeixinQrLoginCli } = await import('../../channels/weixin/index.js');
-
-      const result = await runWeixinQrLoginCli({
+      const result = await plugin.cliLogin.runLogin({
         configPath,
         verbose,
         timeoutMs,
-        account: options.account?.trim() || undefined,
+        accountId: options.account?.trim() || undefined,
         writeConfig: !options.credentialsOnly,
       });
 

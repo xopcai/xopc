@@ -8,9 +8,13 @@ import type {
   JobExecutorDeps,
 } from './types.js';
 import type { OutboundMessage } from '../channels/transport-types.js';
-import { normalizeWeixinCronDeliveryToResolved } from '../channels/weixin-delivery-to.js';
 import { createLogger } from '../utils/logger.js';
-import { normalizeTelegramDeliveryChatId } from '../channels/telegram-delivery-chat-id.js';
+import {
+  getChannelPlugin,
+  listChannelPlugins,
+  syncChannelPluginsFromManager,
+} from '../channels/plugins/registry.js';
+import { bundledChannelPlugins } from '../generated/bundled-channel-plugins.js';
 import { getCronPayloadText } from './job-content.js';
 import type { SessionStore } from '../session/store.js';
 import type { CronRunLogStore } from './run-log-store.js';
@@ -76,22 +80,25 @@ export class DefaultJobExecutor implements JobExecutor {
     to: string,
     content: string,
   ): Promise<OutboundMessage> {
-    if (channel === 'telegram') {
-      return {
-        channel,
-        chat_id: normalizeTelegramDeliveryChatId(to),
-        content,
-        type: 'message',
-      };
+    if (listChannelPlugins().length === 0) {
+      syncChannelPluginsFromManager(bundledChannelPlugins);
     }
-    if (channel === 'weixin') {
-      const { chatId, accountId } = await normalizeWeixinCronDeliveryToResolved(to, this.sessionStore);
+    const plugin = getChannelPlugin(channel);
+    if (plugin?.cronDelivery) {
+      const { chatId, accountId, metadata } = await plugin.cronDelivery.normalizeDeliveryTarget(
+        to,
+        this.sessionStore,
+      );
+      const meta =
+        accountId || metadata
+          ? { ...(metadata ?? {}), ...(accountId ? { accountId } : {}) }
+          : undefined;
       return {
         channel,
         chat_id: chatId,
         content,
         type: 'message',
-        ...(accountId ? { metadata: { accountId } } : {}),
+        ...(meta && Object.keys(meta).length > 0 ? { metadata: meta } : {}),
       };
     }
     return {
@@ -261,7 +268,11 @@ export class DefaultJobExecutor implements JobExecutor {
       const hasAtLeastThreeParts = parts.length >= 3;
       
       // Check if first part looks like a known channel
-      const knownChannels = ['telegram', 'cli', 'gateway', 'local'];
+      if (listChannelPlugins().length === 0) {
+        syncChannelPluginsFromManager(bundledChannelPlugins);
+      }
+      const registeredChannelIds = listChannelPlugins().map((p) => p.id);
+      const knownChannels = [...new Set([...registeredChannelIds, 'cli', 'gateway', 'local'])];
       const firstPartIsChannel = knownChannels.includes(parts[0]);
       
       if (hasAtLeastThreeParts && firstPartIsChannel) {

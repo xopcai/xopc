@@ -18,6 +18,8 @@
     "build": "tsc -p tsconfig.json"
   },
   "dependencies": {
+    "@inquirer/prompts": "^8.4.1",
+    "zod": "^3.25.76",
     "@grammyjs/runner": "^2.0.3",
     "@grammyjs/types": "^3.26.0",
     "grammy": "^1.42.0"

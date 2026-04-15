@@ -3,7 +3,7 @@ import {
   normalizeWeixinCronDeliveryTo,
   normalizeWeixinCronDeliveryToResolved,
   resolveWeixinAccountIdFromSessions,
-} from '../weixin-delivery-to.js';
+} from '../weixin/index.js';
 
 describe('normalizeWeixinCronDeliveryTo', () => {
   it('passes through plain ilink peer id', () => {

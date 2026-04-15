@@ -1,4 +1,4 @@
-import { parseSessionKey } from '../routing/session-key.js';
+import { parseSessionKey } from '@xopcai/xopc/routing/session-key.js';
 
 /**
  * Resolves Telegram Bot API `chat_id` from config/UI `to` / `targetChatId`.
@@ -17,11 +17,7 @@ export function normalizeTelegramDeliveryChatId(to: string): string {
   }
 
   const parts = trimmed.split(':');
-  if (
-    parts.length === 3 &&
-    (parts[1] === 'dm' || parts[1] === 'group') &&
-    parts[2] !== ''
-  ) {
+  if (parts.length === 3 && (parts[1] === 'dm' || parts[1] === 'group') && parts[2] !== '') {
     return parts[2];
   }
 

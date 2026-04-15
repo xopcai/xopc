@@ -9,13 +9,12 @@ let sorted: ChannelPlugin[] = [];
 const byId = new Map<string, ChannelPlugin>();
 let lastPluginIdSignature = '';
 
-const CHANNEL_ORDER = ['telegram', 'feishu', 'web'] as const;
-
 function sortPlugins(plugins: ChannelPlugin[]): ChannelPlugin[] {
   return plugins.toSorted((a, b) => {
-    const orderA = a.meta.order ?? CHANNEL_ORDER.indexOf(a.id as (typeof CHANNEL_ORDER)[number]);
-    const orderB = b.meta.order ?? CHANNEL_ORDER.indexOf(b.id as (typeof CHANNEL_ORDER)[number]);
-    return (orderA === -1 ? 999 : orderA) - (orderB === -1 ? 999 : orderB);
+    const orderA = a.meta.order ?? 999;
+    const orderB = b.meta.order ?? 999;
+    if (orderA !== orderB) return orderA - orderB;
+    return a.id.localeCompare(b.id);
   });
 }
 

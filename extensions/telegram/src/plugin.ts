@@ -55,6 +55,11 @@ import {
   createTelegramCommandAdapter,
 } from './channel.js';
 import type { TelegramResolvedAccount } from './adapters/index.js';
+import type { ChannelCronDeliveryAdapter } from '@xopcai/xopc/channels/plugins/types.adapters.js';
+import { normalizeTelegramDeliveryChatId } from './delivery-chat-id.js';
+import { telegramConfigSurface } from './adapters/config-surface.js';
+import { telegramOnboardAdapter } from './adapters/onboard-cli.js';
+import { TelegramConfigSchema } from './config-schema.js';
 
 const log = createLogger('TelegramPlugin');
 
@@ -75,7 +80,7 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
     selectionLabel: 'Telegram Bot',
     docsPath: '/channels/telegram',
     blurb: TELEGRAM_REGISTRY_META.description,
-    order: 1,
+    order: 0,
   } as const;
 
   readonly capabilities = TELEGRAM_REGISTRY_META.capabilities;
@@ -86,6 +91,24 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   };
 
   readonly setupWizard = createTelegramSetupWizard();
+
+  readonly configSchema = {
+    schema: {},
+    validate: (raw: unknown) => {
+      const r = TelegramConfigSchema.safeParse(raw);
+      return r.success ? { ok: true as const } : { ok: false as const, errors: [r.error.message] };
+    },
+  };
+
+  readonly cronDelivery: ChannelCronDeliveryAdapter = {
+    async normalizeDeliveryTarget(to) {
+      return { chatId: normalizeTelegramDeliveryChatId(to) };
+    },
+  };
+
+  readonly configSurface = telegramConfigSurface;
+
+  readonly onboard = telegramOnboardAdapter;
 
   private bus!: NonNullable<ChannelPluginInitOptions['bus']>;
   private cfg!: NonNullable<ChannelPluginInitOptions['config']>;
@@ -204,8 +227,8 @@ export class TelegramChannelPlugin implements ChannelPlugin<TelegramResolvedAcco
   }
 
   async onConfigUpdated(cfg: Config): Promise<void> {
-    const prevTg = this.cfg.channels?.telegram;
-    const nextTg = cfg.channels?.telegram;
+    const prevTg = this.cfg.channels?.telegram as unknown;
+    const nextTg = cfg.channels?.telegram as { enabled?: boolean } | undefined;
     // Match Weixin: only `enabled === true` keeps inbound (polling). Stops immediately on disable / missing section.
     const channelOff = !nextTg || nextTg.enabled !== true;
     if (channelOff) {

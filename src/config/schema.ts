@@ -217,101 +217,18 @@ export const AgentsConfigSchema = z.object({
 } as any);
 
 // ============================================
-// Channel Configs
+// Channel Configs (per-channel Zod lives in bundled extensions; root schema is open)
 // ============================================
 
-export const TelegramTopicConfigSchema = z.object({
-  topicId: z.string(),
-  requireMention: z.boolean().optional(),
-  enabled: z.boolean().optional(),
-  allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
-  systemPrompt: z.string().optional(),
-});
-
-export const TelegramGroupConfigSchema = z.object({
-  groupId: z.string(),
-  requireMention: z.boolean().optional(),
-  enabled: z.boolean().optional(),
-  allowFrom: z.array(z.union([z.string(), z.number()])).optional(),
-  systemPrompt: z.string().optional(),
-  topics: z.record(z.string(), TelegramTopicConfigSchema).optional(),
-});
-
-export const TelegramAccountConfigSchema = z.object({
-  accountId: z.string(),
-  name: z.string().optional(),
-  enabled: z.boolean().default(true),
-  botToken: z.string().default(''),
-  tokenFile: z.string().optional(),
-  allowFrom: z.array(z.union([z.string(), z.number()])).default([]),
-  groupAllowFrom: z.array(z.union([z.string(), z.number()])).optional(),
-  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing'),
-  groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('open'),
-  replyToMode: z.enum(['off', 'first', 'all']).default('off'),
-  groups: z.record(z.string(), TelegramGroupConfigSchema).optional(),
-  historyLimit: z.number().default(50),
-  textChunkLimit: z.number().default(4000),
-  streamMode: z.enum(['off', 'partial', 'block']).default('partial'),
-  proxy: z.string().optional(),
-  apiRoot: z.string().optional(),
-});
-
-/** Implicit enable when `botToken` is set. */
-function preprocessTelegramConfigInput(raw: unknown): unknown {
-  if (raw === null || raw === undefined) return raw;
-  if (typeof raw !== 'object' || Array.isArray(raw)) return raw;
-  const o = { ...(raw as Record<string, unknown>) };
-  const botToken = typeof o.botToken === 'string' ? o.botToken : '';
-  if (o.enabled === undefined && botToken.trim().length > 0) {
-    o.enabled = true;
-  }
-  return o;
-}
-
-const TelegramConfigSchemaInner = z.object({
-  enabled: z.boolean().default(false),
-  botToken: z.string().default(''),
-  allowFrom: z.array(z.union([z.string(), z.number()])).default([]),
-  groupAllowFrom: z.array(z.union([z.string(), z.number()])).default([]),
-  apiRoot: z.string().optional(),
-  debug: z.boolean().default(false),
-  accounts: z.record(z.string(), TelegramAccountConfigSchema).optional(),
-  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing'),
-  groupPolicy: z.enum(['open', 'disabled', 'allowlist']).default('open'),
-  replyToMode: z.enum(['off', 'first', 'all']).default('off'),
-  streamMode: z.enum(['off', 'partial', 'block']).optional(),
-  historyLimit: z.number().default(50),
-  textChunkLimit: z.number().default(4000),
-  proxy: z.string().optional(),
-});
-
-export const TelegramConfigSchema = z.preprocess(
-  preprocessTelegramConfigInput,
-  TelegramConfigSchemaInner
-);
-
-const WeixinAccountConfigSchema = z.object({
-  name: z.string().optional(),
-  enabled: z.boolean().optional(),
-  cdnBaseUrl: z.string().optional(),
-  routeTag: z.union([z.string(), z.number()]).optional(),
-  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing'),
-  allowFrom: z.array(z.string()).default([]),
-  streamMode: z.enum(['off', 'partial', 'block']).optional(),
-  debug: z.boolean().optional(),
-});
-
-export const WeixinConfigSchema = z.object({
-  enabled: z.boolean().default(false),
-  dmPolicy: z.enum(['pairing', 'allowlist', 'open', 'disabled']).default('pairing'),
-  allowFrom: z.array(z.string()).default([]),
-  debug: z.boolean().default(false),
-  streamMode: z.enum(['off', 'partial', 'block']).optional(),
-  historyLimit: z.number().default(50),
-  textChunkLimit: z.number().default(4000),
-  routeTag: z.union([z.string(), z.number()]).optional(),
-  accounts: z.record(z.string(), WeixinAccountConfigSchema).optional(),
-});
+export {
+  TelegramTopicConfigSchema,
+  TelegramGroupConfigSchema,
+  TelegramAccountConfigSchema,
+  TelegramConfigSchema,
+} from '../../extensions/telegram/src/config-schema.js';
+export type { TelegramConfig } from '../../extensions/telegram/src/config-schema.js';
+export { WeixinAccountConfigSchema, WeixinConfigSchema } from '../../extensions/weixin/src/config-schema.js';
+export type { WeixinConfig } from '../../extensions/weixin/src/config-schema.js';
 
 // ============================================
 // Session Routing Configuration
@@ -357,27 +274,21 @@ export const SessionConfigSchema = z.object({
   dmScope: 'main',
 });
 
-/** Known channel entries; `.passthrough()` keeps extension-defined channel ids on save. */
-export const ChannelsConfigSchema = z
-  .object({
-    telegram: TelegramConfigSchema.optional(),
-    weixin: WeixinConfigSchema.optional(),
-  })
-  .passthrough()
-  .default({
-    telegram: {
-      enabled: false,
-      botToken: '',
-      allowFrom: [],
-      groupAllowFrom: [],
-      debug: false,
-      dmPolicy: 'pairing' as const,
-      groupPolicy: 'open' as const,
-      replyToMode: 'off' as const,
-      historyLimit: 50,
-      textChunkLimit: 4000,
-    },
-  });
+/** Channel buckets — shapes validated post-parse by registered channel plugins. */
+export const ChannelsConfigSchema = z.record(z.string(), z.unknown()).default({
+  telegram: {
+    enabled: false,
+    botToken: '',
+    allowFrom: [],
+    groupAllowFrom: [],
+    debug: false,
+    dmPolicy: 'pairing' as const,
+    groupPolicy: 'open' as const,
+    replyToMode: 'off' as const,
+    historyLimit: 50,
+    textChunkLimit: 4000,
+  },
+});
 
 export const SearchProviderEntrySchema = z.object({
   type: z.enum(['brave', 'tavily', 'bing', 'searxng']),
@@ -840,8 +751,6 @@ export type Config = z.infer<typeof ConfigSchema>;
 export type AgentDefaults = z.infer<typeof AgentDefaultsSchema>;
 export type GatewayAuthConfig = z.infer<typeof GatewayAuthSchema>;
 export type GatewayAuthRateLimitConfig = z.infer<typeof GatewayAuthRateLimitSchema>;
-export type TelegramConfig = z.infer<typeof TelegramConfigSchema>;
-export type WeixinConfig = z.infer<typeof WeixinConfigSchema>;
 export type STTConfig = z.infer<typeof STTConfigSchema>;
 export type TTSConfig = z.infer<typeof TTSConfigSchema>;
 export type AcpConfig = z.infer<typeof AcpConfigSchema>;

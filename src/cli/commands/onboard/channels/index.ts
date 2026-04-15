@@ -77,7 +77,6 @@ export async function setupChannels(config: Config): Promise<Config> {
 }
 
 export type { ChannelConfigurator, ChannelStatus, DmPolicy, GroupPolicy } from './types.js';
-export { telegramConfigurator } from './telegram.js';
 export { getChannelConfigurators } from './registry.js';
 
-export { setupTelegramOnboard } from './telegram.js';
+export { setupTelegramOnboard } from '../../../../../extensions/telegram/src/adapters/onboard-cli.js';

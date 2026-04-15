@@ -8,7 +8,11 @@ export {
   runWeixinQrLoginCli,
   getWeixinGatewayQrLoginStatus,
   startWeixinGatewayQrLogin,
+  normalizeWeixinCronDeliveryTo,
+  normalizeWeixinCronDeliveryToResolved,
+  resolveWeixinAccountIdFromSessions,
 } from '../../../extensions/weixin/src/index.js';
+export type { NormalizedWeixinCronDelivery } from '../../../extensions/weixin/src/index.js';
 export type {
   WeixinQrLoginCliOptions,
   WeixinGatewayQrLoginStartOptions,

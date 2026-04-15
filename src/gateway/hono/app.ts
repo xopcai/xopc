@@ -78,6 +78,11 @@ import {
   runAfterDeletePurge,
   writeAgentBootstrapFile,
 } from '../agents-admin.js';
+import {
+  listChannelPlugins,
+  syncChannelPluginsFromManager,
+} from '../../channels/plugins/registry.js';
+import { bundledChannelPlugins } from '../../generated/bundled-channel-plugins.js';
 
 const log = createLogger('HonoApp');
 
@@ -154,6 +159,24 @@ function extensionAssetMimeType(filePath: string): string {
 /** Sanitized config snapshot for GET/PATCH `/api/config` (matches persisted `service.currentConfig`). */
 async function buildSafeWebConfigPayload(service: GatewayService) {
   const config = service.currentConfig;
+  if (listChannelPlugins().length === 0) {
+    syncChannelPluginsFromManager(bundledChannelPlugins);
+  }
+  const channelsPayload = Object.fromEntries(
+    listChannelPlugins().map((plugin) => {
+      if (plugin.configSurface) {
+        return [plugin.id, plugin.configSurface.buildConfigSurface(config)];
+      }
+      const channelCfg = config.channels?.[plugin.id] as Record<string, unknown> | undefined;
+      return [
+        plugin.id,
+        {
+          enabled: channelCfg?.enabled ?? false,
+          configured: plugin.config.listAccountIds(config).length > 0,
+        },
+      ];
+    }),
+  );
   return {
     agents: {
       defaultId: resolveDefaultAgentId(config),
@@ -188,35 +211,7 @@ async function buildSafeWebConfigPayload(service: GatewayService) {
         pruning: config.agents?.defaults?.pruning,
       },
     },
-    channels: {
-      telegram: {
-        enabled: config.channels?.telegram?.enabled,
-        botToken: config.channels?.telegram?.botToken || '',
-        allowFrom: config.channels?.telegram?.allowFrom || [],
-        groupAllowFrom: config.channels?.telegram?.groupAllowFrom || [],
-        apiRoot: config.channels?.telegram?.apiRoot || '',
-        debug: config.channels?.telegram?.debug || false,
-        dmPolicy: config.channels?.telegram?.dmPolicy || 'pairing',
-        groupPolicy: config.channels?.telegram?.groupPolicy || 'open',
-        replyToMode: config.channels?.telegram?.replyToMode || 'off',
-        streamMode: config.channels?.telegram?.streamMode || 'partial',
-        historyLimit: config.channels?.telegram?.historyLimit || 50,
-        textChunkLimit: config.channels?.telegram?.textChunkLimit || 4000,
-        proxy: config.channels?.telegram?.proxy || '',
-        accounts: config.channels?.telegram?.accounts || {},
-      },
-      weixin: {
-        enabled: config.channels?.weixin?.enabled ?? false,
-        dmPolicy: config.channels?.weixin?.dmPolicy || 'pairing',
-        allowFrom: config.channels?.weixin?.allowFrom || [],
-        debug: config.channels?.weixin?.debug ?? false,
-        streamMode: config.channels?.weixin?.streamMode ?? 'partial',
-        historyLimit: config.channels?.weixin?.historyLimit ?? 50,
-        textChunkLimit: config.channels?.weixin?.textChunkLimit ?? 4000,
-        routeTag: config.channels?.weixin?.routeTag,
-        accounts: config.channels?.weixin?.accounts || {},
-      },
-    },
+    channels: channelsPayload,
     providers: Object.fromEntries(
       await Promise.all(
         getAllProviders().map(async (provider) => [
@@ -1387,51 +1382,52 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         if (tgRaw === null) {
           if (config.channels) delete config.channels.telegram;
         } else if (typeof tgRaw === 'object' && !Array.isArray(tgRaw)) {
-          const bodyTg = tgRaw as NonNullable<typeof body.channels>['telegram'];
+          const bodyTg = tgRaw as Record<string, unknown>;
           if (!config.channels) config.channels = { telegram: { enabled: false, botToken: '', allowFrom: [], groupAllowFrom: [], debug: false, dmPolicy: 'pairing' as const, groupPolicy: 'open' as const, replyToMode: 'off' as const, historyLimit: 50, textChunkLimit: 4000 } };
           if (!config.channels.telegram) config.channels.telegram = {} as any;
+          const tg = config.channels.telegram as Record<string, unknown>;
 
           if (bodyTg.enabled !== undefined) {
-            config.channels.telegram.enabled = bodyTg.enabled;
+            tg.enabled = bodyTg.enabled;
           }
           if (bodyTg.botToken !== undefined) {
-            config.channels.telegram.botToken = bodyTg.botToken;
+            tg.botToken = bodyTg.botToken;
           }
           if (bodyTg.allowFrom !== undefined) {
-            config.channels.telegram.allowFrom = bodyTg.allowFrom;
+            tg.allowFrom = bodyTg.allowFrom;
           }
           if (bodyTg.apiRoot !== undefined) {
-            config.channels.telegram.apiRoot = bodyTg.apiRoot;
+            tg.apiRoot = bodyTg.apiRoot;
           }
           if (bodyTg.debug !== undefined) {
-            config.channels.telegram.debug = bodyTg.debug;
+            tg.debug = bodyTg.debug;
           }
           if (bodyTg.streamMode !== undefined) {
-            config.channels.telegram.streamMode = bodyTg.streamMode;
+            tg.streamMode = bodyTg.streamMode;
           }
           if (bodyTg.groupAllowFrom !== undefined) {
-            config.channels.telegram.groupAllowFrom = bodyTg.groupAllowFrom;
+            tg.groupAllowFrom = bodyTg.groupAllowFrom;
           }
           if (bodyTg.dmPolicy !== undefined) {
-            config.channels.telegram.dmPolicy = bodyTg.dmPolicy;
+            tg.dmPolicy = bodyTg.dmPolicy;
           }
           if (bodyTg.groupPolicy !== undefined) {
-            config.channels.telegram.groupPolicy = bodyTg.groupPolicy;
+            tg.groupPolicy = bodyTg.groupPolicy;
           }
           if (bodyTg.replyToMode !== undefined) {
-            config.channels.telegram.replyToMode = bodyTg.replyToMode;
+            tg.replyToMode = bodyTg.replyToMode;
           }
           if (bodyTg.historyLimit !== undefined) {
-            config.channels.telegram.historyLimit = bodyTg.historyLimit;
+            tg.historyLimit = bodyTg.historyLimit;
           }
           if (bodyTg.textChunkLimit !== undefined) {
-            config.channels.telegram.textChunkLimit = bodyTg.textChunkLimit;
+            tg.textChunkLimit = bodyTg.textChunkLimit;
           }
           if (bodyTg.proxy !== undefined) {
-            config.channels.telegram.proxy = bodyTg.proxy;
+            tg.proxy = bodyTg.proxy;
           }
           if (bodyTg.accounts !== undefined) {
-            config.channels.telegram.accounts = bodyTg.accounts;
+            tg.accounts = bodyTg.accounts;
           }
         }
       }
@@ -1441,7 +1437,7 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         if (wxRaw === null) {
           if (config.channels) delete config.channels.weixin;
         } else if (typeof wxRaw === 'object' && !Array.isArray(wxRaw)) {
-          const wx = wxRaw as NonNullable<typeof body.channels>['weixin'];
+          const wx = wxRaw as Record<string, unknown>;
           if (!config.channels) config.channels = {} as any;
           if (!config.channels.weixin) {
             config.channels.weixin = {
@@ -1453,21 +1449,23 @@ export function createHonoApp(config: HonoAppConfig): Hono {
               textChunkLimit: 4000,
             };
           }
-          if (wx.enabled !== undefined) config.channels.weixin.enabled = wx.enabled;
-          if (wx.dmPolicy !== undefined) config.channels.weixin.dmPolicy = wx.dmPolicy;
-          if (wx.allowFrom !== undefined) config.channels.weixin.allowFrom = wx.allowFrom;
-          if (wx.debug !== undefined) config.channels.weixin.debug = wx.debug;
-          if (wx.streamMode !== undefined) config.channels.weixin.streamMode = wx.streamMode;
-          if (wx.historyLimit !== undefined) config.channels.weixin.historyLimit = wx.historyLimit;
-          if (wx.textChunkLimit !== undefined) config.channels.weixin.textChunkLimit = wx.textChunkLimit;
+          const wxTarget = config.channels.weixin as Record<string, unknown>;
+          if (wx.enabled !== undefined) wxTarget.enabled = wx.enabled;
+          if (wx.dmPolicy !== undefined) wxTarget.dmPolicy = wx.dmPolicy;
+          if (wx.allowFrom !== undefined) wxTarget.allowFrom = wx.allowFrom;
+          if (wx.debug !== undefined) wxTarget.debug = wx.debug;
+          if (wx.streamMode !== undefined) wxTarget.streamMode = wx.streamMode;
+          if (wx.historyLimit !== undefined) wxTarget.historyLimit = wx.historyLimit;
+          if (wx.textChunkLimit !== undefined) wxTarget.textChunkLimit = wx.textChunkLimit;
           if ('routeTag' in wx) {
-            if (wx.routeTag === null || wx.routeTag === undefined || wx.routeTag === '') {
-              delete config.channels.weixin.routeTag;
+            const rt = wx.routeTag;
+            if (rt === null || rt === undefined || rt === '') {
+              delete wxTarget.routeTag;
             } else {
-              config.channels.weixin.routeTag = wx.routeTag as string | number;
+              wxTarget.routeTag = rt as string | number;
             }
           }
-          if (wx.accounts !== undefined) config.channels.weixin.accounts = wx.accounts;
+          if (wx.accounts !== undefined) wxTarget.accounts = wx.accounts;
         }
       }
     }

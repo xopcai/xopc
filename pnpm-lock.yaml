@@ -210,12 +210,18 @@ importers:
       '@grammyjs/types':
         specifier: ^3.26.0
         version: 3.26.0
+      '@inquirer/prompts':
+        specifier: ^8.4.1
+        version: 8.4.1(@types/node@25.6.0)
       '@xopcai/xopc':
         specifier: workspace:*
         version: link:../..
       grammy:
         specifier: ^1.42.0
         version: 1.42.0(encoding@0.1.13)
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^6.0.2
@@ -226,6 +232,9 @@ importers:
       '@xopcai/xopc':
         specifier: workspace:*
         version: link:../..
+      zod:
+        specifier: ^3.25.76
+        version: 3.25.76
     devDependencies:
       typescript:
         specifier: ^6.0.2
