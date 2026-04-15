@@ -40,6 +40,31 @@
     "open": "打开",
     "openSettings": "设置"
   },
+  "extensionUi": {
+    "permissionTitle": "是否允许「{{name}}」？",
+    "permissionSubtitle": "在扩展界面打开期间，它可能使用以下能力。",
+    "permissionsNone": "清单中未声明额外权限。",
+    "allow": "允许",
+    "deny": "暂不",
+    "deniedHint": "在你批准之前，此浏览器将不显示该扩展的界面。",
+    "reviewPermissions": "查看权限",
+    "loadFailed": "扩展面板加载失败。",
+    "retryLoad": "重新加载"
+  },
+  "extensionDebug": {
+    "nav": "扩展调试",
+    "title": "扩展调试",
+    "subtitle": "查看网关发现的扩展、声明的权限，以及本机浏览器中对界面授权的存储。",
+    "grantsHeading": "界面授权存储",
+    "grantsHint": "localStorage 键 `xopc.extensionUiGrants.v1` — 已同意的权限列表指纹（按扩展）。",
+    "refresh": "刷新",
+    "listHeading": "网关返回的扩展",
+    "colId": "标识",
+    "colName": "名称",
+    "colPermissions": "清单权限",
+    "futureHeading": "后续计划",
+    "futureBody": "后续将支持 postMessage 捕获、按扩展查看存储，以及更细的权限调试。"
+  },
   "settingsSections": {
     "appearance": "偏好设置",
     "agent": "智能体",

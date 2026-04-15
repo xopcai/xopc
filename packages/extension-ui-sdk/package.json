@@ -15,10 +15,13 @@
     "src"
   ],
   "scripts": {
-    "typecheck": "tsc --noEmit -p tsconfig.json"
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "docs": "typedoc --options typedoc.json"
   },
   "license": "MIT",
   "devDependencies": {
+    "typedoc": "^0.28.19",
+    "typedoc-plugin-markdown": "^4.11.0",
     "typescript": "^6.0.2"
   }
 }

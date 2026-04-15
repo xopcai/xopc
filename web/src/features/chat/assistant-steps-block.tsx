@@ -401,6 +401,7 @@ function ToolUseWidgetSlot({
   return (
     <ExtensionChatWidget
       extensionId={widgetMatch.extensionId}
+      extensionName={extensionInfo?.name ?? widgetMatch.extensionId}
       widgetId={widgetMatch.id}
       entrypoint={widgetMatch.entrypoint}
       title={widgetMatch.title}

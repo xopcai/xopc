@@ -2,8 +2,9 @@
  * ExtensionSettingsNav — settings left-rail links for `settingsPanels` contributions.
  */
 
-import { Puzzle } from 'lucide-react';
+import { Bug, Puzzle } from 'lucide-react';
 import { NavLink } from 'react-router-dom';
+import { useTranslation } from 'react-i18next';
 
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -16,12 +17,12 @@ interface ExtensionSettingsNavProps {
 }
 
 export function ExtensionSettingsNav({ navLinkClassName }: ExtensionSettingsNavProps) {
+  const { t } = useTranslation();
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const uiExtensions = useUiExtensions();
 
   const settingsPanels = collectSettingsPanels(uiExtensions);
-  if (settingsPanels.length === 0) return null;
 
   return (
     <div>
@@ -29,6 +30,10 @@ export function ExtensionSettingsNav({ navLinkClassName }: ExtensionSettingsNavP
         {m.settingsNavGroups.extensions}
       </p>
       <div className="flex flex-col gap-0.5">
+        <NavLink to="/settings/extensions/debug" className={navLinkClassName}>
+          <Bug className="size-5 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+          <span className="min-w-0 flex-1 truncate">{t('extensionDebug.nav')}</span>
+        </NavLink>
         {settingsPanels.map(({ extension, panel }) => {
           const path = `/settings/ext/${extension.id}/${panel.id}`;
           return (

@@ -6,6 +6,7 @@ import { ExtensionIframeHost } from './extension-iframe-host';
 
 type ExtensionChatWidgetProps = {
   extensionId: string;
+  extensionName?: string;
   widgetId: string;
   entrypoint: string;
   title: string;
@@ -17,6 +18,7 @@ type ExtensionChatWidgetProps = {
 
 export function ExtensionChatWidget({
   extensionId,
+  extensionName,
   widgetId: _widgetId,
   entrypoint,
   title,
@@ -29,6 +31,7 @@ export function ExtensionChatWidget({
     <div className="mt-2 w-full min-w-0 overflow-hidden rounded-xl border border-edge bg-surface-base">
       <ExtensionIframeHost
         extensionId={extensionId}
+        extensionName={extensionName}
         entrypoint={entrypoint}
         permissions={permissions}
         title={title}

@@ -1797,8 +1797,12 @@ export function createHonoApp(config: HonoAppConfig): Hono {
       "script-src 'self' 'unsafe-inline'; " +
       "style-src 'self' 'unsafe-inline'; " +
       "img-src 'self' data: blob:; " +
-      "connect-src 'self'; " +
-      "frame-ancestors 'self'";
+      "connect-src 'none'; " +
+      "frame-ancestors 'self'; " +
+      "frame-src 'none'; " +
+      "base-uri 'none'; " +
+      "object-src 'none'; " +
+      "form-action 'none'";
 
     return new Response(content, {
       status: 200,

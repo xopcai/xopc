@@ -1,17 +1,25 @@
 import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
+import { useTranslation } from 'react-i18next';
 
 import { useLocaleStore } from '@/stores/locale-store';
 import { useThemeStore } from '@/stores/theme-store';
 import { apiUrl } from '@/lib/url';
 
+import { ExtensionPermissionDialog } from './extension-permission-dialog';
+import { hasUiGrant, saveUiGrant } from './extension-permission-grants';
 import { useExtensionRouter } from './extension-provider';
 import { buildThemeInfo } from './theme-bridge';
 
 const DEFAULT_MIN = 48;
 const DEFAULT_MAX = 2000;
 
+/** Sandboxed extension UI: no `allow-same-origin` so the document is opaque-isolated from the host origin. */
+const EXTENSION_IFRAME_SANDBOX = 'allow-scripts allow-forms allow-popups';
+
 export type ExtensionIframeHostProps = {
   extensionId: string;
+  /** Display name for the permission dialog; falls back to `extensionId`. */
+  extensionName?: string;
   entrypoint: string;
   permissions?: string[];
   title?: string;
@@ -32,6 +40,7 @@ function encodeAssetPath(entrypoint: string): string {
 
 export function ExtensionIframeHost({
   extensionId,
+  extensionName,
   entrypoint,
   permissions,
   title,
@@ -41,9 +50,29 @@ export function ExtensionIframeHost({
   minHeight = DEFAULT_MIN,
   initialData,
 }: ExtensionIframeHostProps) {
+  const { t } = useTranslation();
   const router = useExtensionRouter();
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const resolved = useThemeStore((s) => s.resolved);
+  const permList = permissions ?? [];
+  const displayName = extensionName?.trim() || extensionId;
+  const permsKey = useMemo(
+    () => JSON.stringify([...(permissions ?? [])].sort()),
+    [permissions],
+  );
+
+  const [allowed, setAllowed] = useState(() => hasUiGrant(extensionId, permList));
+  const [dialogOpen, setDialogOpen] = useState(() => !hasUiGrant(extensionId, permList));
+
+  useEffect(() => {
+    const list = permissions ?? [];
+    const ok = hasUiGrant(extensionId, list);
+    setAllowed(ok);
+    setDialogOpen(!ok);
+  }, [extensionId, permsKey]);
+  const [reloadKey, setReloadKey] = useState(0);
+  const [loadError, setLoadError] = useState(false);
+
   const [dynamicHeight, setDynamicHeight] = useState(
     fixedHeight ?? Math.min(maxHeight, Math.max(minHeight, 320)),
   );
@@ -54,13 +83,15 @@ export function ExtensionIframeHost({
   }, [extensionId, entrypoint]);
 
   useEffect(() => {
+    if (!allowed) return;
     const el = iframeRef.current;
     if (!el) return;
-    router.registerIframe(extensionId, el, permissions ?? []);
+    router.registerIframe(extensionId, el, permList);
     return () => router.unregisterIframe(extensionId);
-  }, [extensionId, permissions, router]);
+  }, [allowed, extensionId, permList, router]);
 
   useEffect(() => {
+    if (!allowed) return;
     return router.subscribeExtensionEvents(extensionId, (msg) => {
       if (msg.event !== 'ui.resize') return;
       if (!msg.data || typeof msg.data !== 'object' || msg.data === null) return;
@@ -71,34 +102,93 @@ export function ExtensionIframeHost({
         setDynamicHeight(clamped);
       }
     });
-  }, [extensionId, fixedHeight, maxHeight, minHeight, router]);
+  }, [allowed, extensionId, fixedHeight, maxHeight, minHeight, router]);
 
   useEffect(() => {
-    const t = buildThemeInfo(resolved);
-    router.sendEvent(extensionId, 'theme.changed', t);
-  }, [extensionId, resolved, router]);
+    if (!allowed) return;
+    const th = buildThemeInfo(resolved);
+    router.sendEvent(extensionId, 'theme.changed', th);
+  }, [allowed, extensionId, resolved, router]);
 
   const style: CSSProperties =
     fixedHeight !== undefined
       ? { width: '100%', height: fixedHeight, border: 'none' }
       : { width: '100%', height: dynamicHeight, border: 'none' };
 
+  const handleConfirmGrant = () => {
+    saveUiGrant(extensionId, permList);
+    setAllowed(true);
+  };
+
+  if (!allowed) {
+    return (
+      <>
+        <ExtensionPermissionDialog
+          open={dialogOpen}
+          onOpenChange={setDialogOpen}
+          extensionId={extensionId}
+          extensionName={displayName}
+          permissions={permList}
+          onConfirm={handleConfirmGrant}
+        />
+        {!dialogOpen ? (
+          <div
+            className={
+              className
+                ? `${className} rounded-lg border border-edge border-dashed bg-surface-base p-4 text-sm text-fg-muted`
+                : 'rounded-lg border border-edge border-dashed bg-surface-base p-4 text-sm text-fg-muted'
+            }
+          >
+            <p>{t('extensionUi.deniedHint')}</p>
+            <button
+              type="button"
+              className="mt-2 text-sm font-medium text-accent underline-offset-2 hover:underline"
+              onClick={() => setDialogOpen(true)}
+            >
+              {t('extensionUi.reviewPermissions')}
+            </button>
+          </div>
+        ) : null}
+      </>
+    );
+  }
+
   return (
-    <iframe
-      ref={iframeRef}
-      className={className}
-      title={title ?? `Extension ${extensionId}`}
-      src={src}
-      style={style}
-      sandbox="allow-scripts allow-forms allow-popups allow-same-origin"
-      referrerPolicy="no-referrer"
-      onLoad={() => {
-        const locale = useLocaleStore.getState().language;
-        router.sendInit(extensionId, buildThemeInfo(useThemeStore.getState().resolved), locale);
-        if (initialData !== undefined) {
-          router.sendEvent(extensionId, 'widget.data', initialData);
-        }
-      }}
-    />
+    <div className="flex min-h-0 min-w-0 flex-col">
+      {loadError ? (
+        <div className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-fg">
+          <p>{t('extensionUi.loadFailed')}</p>
+          <button
+            type="button"
+            className="mt-2 font-medium text-accent underline-offset-2 hover:underline"
+            onClick={() => {
+              setLoadError(false);
+              setReloadKey((k) => k + 1);
+            }}
+          >
+            {t('extensionUi.retryLoad')}
+          </button>
+        </div>
+      ) : null}
+      <iframe
+        key={`${extensionId}-${entrypoint}-${reloadKey}`}
+        ref={iframeRef}
+        className={className}
+        title={title ?? `Extension ${extensionId}`}
+        src={src}
+        style={style}
+        sandbox={EXTENSION_IFRAME_SANDBOX}
+        referrerPolicy="no-referrer"
+        onError={() => setLoadError(true)}
+        onLoad={() => {
+          setLoadError(false);
+          const locale = useLocaleStore.getState().language;
+          router.sendInit(extensionId, buildThemeInfo(useThemeStore.getState().resolved), locale);
+          if (initialData !== undefined) {
+            router.sendEvent(extensionId, 'widget.data', initialData);
+          }
+        }}
+      />
+    </div>
   );
 }
