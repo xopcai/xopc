@@ -437,6 +437,7 @@ export class GatewayService {
   private handleModelsReload(newConfig: Config): void {
     log.debug('Reloading models config...');
     this.config = newConfig;
+    getModelRegistry().refresh();
     this.emit('config.reload', { section: 'models' });
     log.debug('Models config reloaded');
   }

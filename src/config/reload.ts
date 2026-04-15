@@ -7,6 +7,7 @@ import { loadConfig } from './loader.js';
 import type { Config } from './schema.js';
 import { diffConfigPaths } from './diff.js';
 import { buildReloadPlan, type ReloadPlan } from './rules.js';
+import { resolveModelsJsonPath } from './paths.js';
 import { logger as log } from '../utils/logger.js';
 
 export interface HotReloadConfig {
@@ -43,6 +44,7 @@ export class ConfigHotReloader {
   private configPath: string;
   private callbacks: ReloadCallbacks;
   private watcher: FSWatcher | null = null;
+  private modelsJsonWatcher: FSWatcher | null = null;
   private debounceTimer: ReturnType<typeof setTimeout> | null = null;
   private currentConfig: Config;
   private debounceMs: number;
@@ -80,6 +82,8 @@ export class ConfigHotReloader {
     } catch (err) {
       log.error({ err }, 'Failed to setup config watcher');
     }
+
+    this.startModelsJsonWatcher();
   }
 
   /**
@@ -89,6 +93,10 @@ export class ConfigHotReloader {
     if (this.watcher) {
       this.watcher.close();
       this.watcher = null;
+    }
+    if (this.modelsJsonWatcher) {
+      this.modelsJsonWatcher.close();
+      this.modelsJsonWatcher = null;
     }
     if (this.debounceTimer) {
       clearTimeout(this.debounceTimer);
@@ -106,6 +114,40 @@ export class ConfigHotReloader {
     }
     this.debounceTimer = setTimeout(() => {
       void this.reload();
+    }, this.debounceMs);
+  }
+
+  /**
+   * Watch models.json independently so direct file edits are picked up without restarting.
+   * The watcher is best-effort: if the file does not exist yet, it will not be watched.
+   */
+  private startModelsJsonWatcher(): void {
+    const modelsJsonPath = resolveModelsJsonPath();
+    try {
+      this.modelsJsonWatcher = watch(modelsJsonPath, (eventType) => {
+        if (eventType === 'change') {
+          this.scheduleModelsJsonReload();
+        }
+      });
+      log.info({ path: modelsJsonPath }, 'models.json hot reload enabled');
+    } catch {
+      log.debug({ path: modelsJsonPath }, 'models.json not found, skipping watcher');
+    }
+  }
+
+  /**
+   * Debounced handler for models.json changes.
+   * Calls onModelsReload with the current config so the registry is refreshed.
+   */
+  private scheduleModelsJsonReload(): void {
+    if (this.debounceTimer) {
+      clearTimeout(this.debounceTimer);
+    }
+    this.debounceTimer = setTimeout(() => {
+      log.info('models.json changed on disk — refreshing ModelRegistry');
+      if (this.callbacks.onModelsReload) {
+        void Promise.resolve(this.callbacks.onModelsReload(this.currentConfig));
+      }
     }, this.debounceMs);
   }
 
