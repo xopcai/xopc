@@ -29,6 +29,9 @@ const ChannelsPage = lazy(() =>
     default: m.ChannelsSettingsPanel,
   })),
 );
+const AppsPage = lazy(() =>
+  import('@/pages/apps-page').then((m) => ({ default: m.AppsPage })),
+);
 const ExtensionPage = lazy(() =>
   import('@/features/extensions/extension-page').then((m) => ({ default: m.ExtensionPage })),
 );
@@ -106,6 +109,14 @@ const router = createHashRouter([
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
             <ChannelsPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'apps',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <AppsPage />
           </Suspense>
         ),
       },

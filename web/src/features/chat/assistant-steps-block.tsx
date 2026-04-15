@@ -8,6 +8,9 @@ import type {
   ToolUseContent,
 } from '@/features/chat/messages.types';
 import { stringToToolResultMessage } from '@/features/chat/tool-result';
+import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
+import { useUiExtensions } from '@/features/extensions/extension-provider';
+import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 
@@ -381,6 +384,34 @@ export function AssistantStepsTimeline({
   );
 }
 
+function ToolUseWidgetSlot({
+  toolName,
+  toolResult,
+}: {
+  toolName: string;
+  toolResult: unknown;
+}) {
+  const uiExtensions = useUiExtensions();
+  const widgetMatch = useChatWidgetMatch(toolName);
+
+  if (!widgetMatch || uiExtensions.length === 0) return null;
+
+  const extensionInfo = uiExtensions.find((ext) => ext.id === widgetMatch.extensionId);
+
+  return (
+    <ExtensionChatWidget
+      extensionId={widgetMatch.extensionId}
+      widgetId={widgetMatch.id}
+      entrypoint={widgetMatch.entrypoint}
+      title={widgetMatch.title}
+      toolResult={toolResult}
+      maxHeight={widgetMatch.maxHeight ?? 400}
+      interactive={widgetMatch.interactive ?? false}
+      permissions={extensionInfo?.ui?.permissions}
+    />
+  );
+}
+
 function StepRow({
   block,
   toolLabels,
@@ -501,6 +532,9 @@ function StepRow({
               </div>
             </div>
           </details>
+        ) : null}
+        {!isStreaming && !isError ? (
+          <ToolUseWidgetSlot toolName={block.name} toolResult={block.result} />
         ) : null}
       </div>
     </div>

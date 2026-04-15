@@ -13,6 +13,7 @@
     "cron": "定时任务",
     "skills": "技能",
     "channels": "即时通讯",
+    "apps": "应用",
     "logs": "日志",
     "settingsAppearance": "偏好设置",
     "settingsProviders": "服务商",
@@ -23,6 +24,21 @@
     "settingsHeartbeat": "心跳",
     "settingsSearch": "网络搜索",
     "settingsAgents": "智能体"
+  },
+  "appsPage": {
+    "title": "应用",
+    "subtitle": "已安装的扩展（含界面与工具）。",
+    "empty": "未发现扩展。",
+    "sectionWithUi": "带界面扩展（{{count}}）",
+    "sectionBackend": "仅后端扩展（{{count}}）",
+    "inactive": "未启用",
+    "backendOnlyHint": "该扩展无网关控制台界面；启用后工具与钩子仍会运行。",
+    "badgePages": "{{count}} 个页面",
+    "badgeSettings": "{{count}} 个设置",
+    "badgeWidgets": "{{count}} 个聊天挂件",
+    "badgeSidebar": "{{count}} 个侧栏",
+    "open": "打开",
+    "openSettings": "设置"
   },
   "settingsSections": {
     "appearance": "偏好设置",

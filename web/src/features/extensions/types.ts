@@ -16,9 +16,26 @@ export type SettingsPanelContribution = {
   order?: number;
 };
 
+export type ChatWidgetMatchSpec = {
+  toolName?: string;
+  contentType?: string;
+  metadata?: Record<string, unknown>;
+};
+
+export type ChatWidgetContribution = {
+  id: string;
+  title: string;
+  match: ChatWidgetMatchSpec;
+  entrypoint: string;
+  maxHeight?: number;
+  interactive?: boolean;
+};
+
 export type ExtensionUiContributions = {
   pages?: PageContribution[];
   settingsPanels?: SettingsPanelContribution[];
+  chatWidgets?: ChatWidgetContribution[];
+  sidebarPanels?: unknown[];
 };
 
 /** Serialized extension list row from `GET /api/extensions`. */
