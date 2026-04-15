@@ -21,10 +21,10 @@ features:
     details: 基于 Node.js + TypeScript 构建，依赖最少
     link: /zh/getting-started
   - title: 🔌 扩展系统
-    details: 通过强大的扩展架构扩展功能
+    details: 后端钩子与扩展能力；可选 manifest ui，在网关网页控制台沙箱 iframe 中运行（@xopcai/extension-ui-sdk）
     link: /zh/extensions
   - title: 🌐 多通道支持
-    details: 核心自带 Telegram、微信（Weixin）与网关网页控制台；更多通道可通过扩展接入。
+    details: 核心自带 Telegram、微信（Weixin）与网关网页聊天/控制台，并可在控制台中加载扩展的 manifest ui 面板；更多通道可通过扩展接入。
     link: /zh/channels
   - title: 💻 本地优先
     details: 本地运行、完全掌控—为自管栈的超级个体而设计
