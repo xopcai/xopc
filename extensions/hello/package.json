@@ -1,7 +1,7 @@
 {
   "name": "xopc-extension-hello",
   "version": "1.0.0",
-  "description": "A simple example extension that demonstrates the extension system",
+  "description": "Sample extension demonstrating @xopcai/extension-ui-sdk (bundled iframe UI).",
   "main": "index.ts",
   "xopc": {
     "extension": true,
@@ -9,9 +9,16 @@
     "name": "Hello World",
     "kind": "utility"
   },
-  "keywords": [
-    "xopc",
-    "xopc-extension"
-  ],
-  "license": "MIT"
+  "keywords": ["xopc", "xopc-extension"],
+  "license": "MIT",
+  "dependencies": {
+    "@xopcai/extension-ui-sdk": "workspace:*"
+  },
+  "devDependencies": {
+    "esbuild": "^0.28.0",
+    "typescript": "^6.0.2"
+  },
+  "scripts": {
+    "build:ui": "node scripts/build-ui.mjs"
+  }
 }
