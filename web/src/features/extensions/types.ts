@@ -31,11 +31,20 @@ export type ChatWidgetContribution = {
   interactive?: boolean;
 };
 
+export type ExtensionCommandContribution = {
+  id: string;
+  title: string;
+  shortcut?: string;
+  /** When set, run navigates to `/apps/{extensionId}` for this extension. */
+  opensPanel?: string;
+};
+
 export type ExtensionUiContributions = {
   pages?: PageContribution[];
   settingsPanels?: SettingsPanelContribution[];
   chatWidgets?: ChatWidgetContribution[];
   sidebarPanels?: unknown[];
+  commands?: ExtensionCommandContribution[];
 };
 
 /** Serialized extension list row from `GET /api/extensions`. */

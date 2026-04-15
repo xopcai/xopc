@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
+import { createContext, useCallback, useContext, useEffect, useMemo, useRef } from 'react';
 import useSWR from 'swr';
 
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -37,6 +37,22 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
 
   const extensions = data?.extensions ?? [];
   const resolved = useThemeStore((s) => s.resolved);
+
+  const handleAgentStreamEvent = useCallback(
+    (event: Event) => {
+      const detail = (event as CustomEvent<{ sessionKey?: string; event?: unknown }>).detail;
+      if (!detail?.sessionKey) return;
+      router.forwardAgentStreamEvent(detail.sessionKey, detail.event ?? detail);
+    },
+    [router],
+  );
+
+  useEffect(() => {
+    window.addEventListener('agent-stream-event', handleAgentStreamEvent as EventListener);
+    return () => {
+      window.removeEventListener('agent-stream-event', handleAgentStreamEvent as EventListener);
+    };
+  }, [handleAgentStreamEvent]);
 
   useEffect(() => {
     const theme = buildThemeInfo(resolved);

@@ -28,6 +28,7 @@
       "notification",
       "session.read",
       "agent.send",
+      "agent.subscribe",
       "config.read",
       "config.write",
       "storage"
@@ -60,6 +61,18 @@
           "entrypoint": "ui/widget.html",
           "maxHeight": 200,
           "interactive": false
+        }
+      ],
+      "commands": [
+        {
+          "id": "hello.greet",
+          "title": "Hello: Send Greeting",
+          "shortcut": "⌘⇧H"
+        },
+        {
+          "id": "hello.open-panel",
+          "title": "Hello: Open Panel",
+          "opensPanel": "hello.main-panel"
         }
       ]
     }

@@ -1,4 +1,4 @@
-import { ExtensionErrorCode } from '@xopcai/extension-ui-sdk';
+import { ExtensionErrorCode, type ThemeInfo } from '@xopcai/extension-ui-sdk';
 
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
@@ -10,7 +10,6 @@ export type MethodHandler = (extensionId: string, params: unknown) => Promise<un
 
 const METHOD_PERMISSION_MAP: Record<string, string | undefined> = {
   'agent.sendMessage': 'agent.send',
-  'agent.subscribe': 'agent.subscribe',
   'session.list': 'session.read',
   'session.navigate': 'session.read',
   'config.get': 'config.read',
@@ -46,6 +45,8 @@ export class ExtensionMessageRouter {
   private handlers = new Map<string, MethodHandler>();
   private extensionPermissions = new Map<string, Set<string>>();
   private eventSubscribers = new Map<string, Set<(e: { event: string; data?: unknown }) => void>>();
+  /** extensionId → sessionKeys subscribed for agent stream forwarding */
+  private agentStreamSubscriptions = new Map<string, Set<string>>();
   private boundListener = (ev: MessageEvent) => {
     void this.onWindowMessage(ev);
   };
@@ -60,6 +61,7 @@ export class ExtensionMessageRouter {
     this.handlers.clear();
     this.extensionPermissions.clear();
     this.eventSubscribers.clear();
+    this.agentStreamSubscriptions.clear();
   }
 
   registerIframe(extensionId: string, iframe: HTMLIFrameElement, permissions: string[]): void {
@@ -70,6 +72,57 @@ export class ExtensionMessageRouter {
   unregisterIframe(extensionId: string): void {
     this.iframes.delete(extensionId);
     this.extensionPermissions.delete(extensionId);
+    this.agentStreamSubscriptions.delete(extensionId);
+  }
+
+  subscribeAgentStream(extensionId: string, sessionKey: string): void {
+    let sessions = this.agentStreamSubscriptions.get(extensionId);
+    if (!sessions) {
+      sessions = new Set();
+      this.agentStreamSubscriptions.set(extensionId, sessions);
+    }
+    sessions.add(sessionKey);
+  }
+
+  unsubscribeAgentStream(extensionId: string, sessionKey: string): void {
+    this.agentStreamSubscriptions.get(extensionId)?.delete(sessionKey);
+  }
+
+  forwardAgentStreamEvent(sessionKey: string, event: unknown): void {
+    for (const [extensionId, sessions] of this.agentStreamSubscriptions) {
+      if (sessions.has(sessionKey)) {
+        this.sendEvent(extensionId, `agent.stream.${sessionKey}`, event);
+      }
+    }
+  }
+
+  /**
+   * Broadcast a fire-and-forget event from one extension to all others (`ext.{name}` on the wire).
+   */
+  broadcastExtensionEvent(sourceExtensionId: string, bareName: string, data?: unknown): void {
+    const outbound = bareName.startsWith('ext.') ? bareName : `ext.${bareName}`;
+    for (const [extensionId] of this.iframes) {
+      if (extensionId !== sourceExtensionId) {
+        this.sendEvent(extensionId, outbound, data);
+      }
+    }
+  }
+
+  private handleExtensionEvent(extensionId: string, event: string, data: unknown): void {
+    if (event.startsWith('ext.')) {
+      const rest = event.slice(4);
+      this.broadcastExtensionEvent(extensionId, rest, data);
+      return;
+    }
+    if (event === 'agent.subscribe' || event === 'agent.unsubscribe') {
+      const perms = this.extensionPermissions.get(extensionId) ?? new Set<string>();
+      if (!perms.has('agent.subscribe')) return;
+      const { sessionKey } = (data ?? {}) as { sessionKey?: string };
+      if (typeof sessionKey !== 'string' || !sessionKey.trim()) return;
+      const sk = sessionKey.trim();
+      if (event === 'agent.subscribe') this.subscribeAgentStream(extensionId, sk);
+      else this.unsubscribeAgentStream(extensionId, sk);
+    }
   }
 
   registerMethod(method: string, handler: MethodHandler): void {
@@ -167,6 +220,7 @@ export class ExtensionMessageRouter {
     }
 
     if (msg.type === 'event') {
+      this.handleExtensionEvent(msg.extensionId, msg.event, msg.data);
       const subs = this.eventSubscribers.get(msg.extensionId);
       if (subs) {
         const payload = { event: msg.event, data: msg.data };

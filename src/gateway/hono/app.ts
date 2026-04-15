@@ -3,7 +3,8 @@ import { cors } from 'hono/cors';
 import { createMiddleware } from 'hono/factory';
 import { bodyLimit } from 'hono/body-limit';
 import { existsSync, readFileSync, statSync } from 'node:fs';
-import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { homedir } from 'node:os';
 import { fileURLToPath } from 'node:url';
 import { dirname, join, relative, resolve } from 'node:path';
 import { logContextMiddleware } from './middleware/log-context.js';
@@ -308,16 +309,36 @@ export interface HonoAppConfig {
   token?: string; 
 }
 
-// Extension UI: in-memory KV per extension (and pseudo-ids for per-extension config).
-const extensionStores = new Map<string, Map<string, unknown>>();
+/** Extension UI: write-through JSON KV per namespace under ~/.xopc/extensions/{namespace}/storage.json */
+const extensionStoreCache = new Map<string, Record<string, unknown>>();
 
-function getExtensionStore(extensionId: string): Map<string, unknown> {
-  let store = extensionStores.get(extensionId);
-  if (!store) {
-    store = new Map();
-    extensionStores.set(extensionId, store);
+function getExtensionStorePath(namespace: string): string {
+  const safeNamespace = namespace.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return join(homedir(), '.xopc', 'extensions', safeNamespace, 'storage.json');
+}
+
+async function loadExtensionStore(namespace: string): Promise<Record<string, unknown>> {
+  const cached = extensionStoreCache.get(namespace);
+  if (cached) return cached;
+
+  const filePath = getExtensionStorePath(namespace);
+  try {
+    const raw = await readFile(filePath, 'utf-8');
+    const data = JSON.parse(raw) as Record<string, unknown>;
+    extensionStoreCache.set(namespace, data);
+    return data;
+  } catch {
+    const empty: Record<string, unknown> = {};
+    extensionStoreCache.set(namespace, empty);
+    return empty;
   }
-  return store;
+}
+
+async function saveExtensionStore(namespace: string, data: Record<string, unknown>): Promise<void> {
+  const filePath = getExtensionStorePath(namespace);
+  await mkdir(join(filePath, '..'), { recursive: true });
+  await writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
+  extensionStoreCache.set(namespace, data);
 }
 
 export function createHonoApp(config: HonoAppConfig): Hono {
@@ -1790,20 +1811,20 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     });
   });
 
-  authenticated.get('/api/extensions/:id/storage', (c) => {
+  authenticated.get('/api/extensions/:id/storage', async (c) => {
     const extensionId = c.req.param('id');
-    const store = getExtensionStore(extensionId);
-    return c.json({ keys: Array.from(store.keys()) });
+    const store = await loadExtensionStore(extensionId);
+    return c.json({ keys: Object.keys(store) });
   });
 
-  authenticated.get('/api/extensions/:id/storage/:key', (c) => {
+  authenticated.get('/api/extensions/:id/storage/:key', async (c) => {
     const extensionId = c.req.param('id');
     const key = decodeURIComponent(c.req.param('key'));
-    const store = getExtensionStore(extensionId);
-    if (!store.has(key)) {
+    const store = await loadExtensionStore(extensionId);
+    if (!(key in store)) {
       return c.json({ error: 'Key not found' }, 404);
     }
-    return c.json({ value: store.get(key) });
+    return c.json({ value: store[key] });
   });
 
   authenticated.put('/api/extensions/:id/storage/:key', async (c) => {
@@ -1813,27 +1834,24 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     if (body === null || !('value' in body)) {
       return c.json({ error: 'Request body must contain a "value" field' }, 400);
     }
-    const store = getExtensionStore(extensionId);
-    store.set(key, body.value);
+    const store = await loadExtensionStore(extensionId);
+    store[key] = body.value;
+    await saveExtensionStore(extensionId, store);
     return c.json({ ok: true });
   });
 
-  authenticated.delete('/api/extensions/:id/storage/:key', (c) => {
+  authenticated.delete('/api/extensions/:id/storage/:key', async (c) => {
     const extensionId = c.req.param('id');
     const key = decodeURIComponent(c.req.param('key'));
-    const store = getExtensionStore(extensionId);
-    store.delete(key);
+    const store = await loadExtensionStore(extensionId);
+    delete store[key];
+    await saveExtensionStore(extensionId, store);
     return c.json({ ok: true });
   });
 
-  authenticated.get('/api/extensions/:id/config', (c) => {
+  authenticated.get('/api/extensions/:id/config', async (c) => {
     const extensionId = c.req.param('id');
-    const store = getExtensionStore(`__config__${extensionId}`);
-    const out: Record<string, unknown> = {};
-    for (const [key, value] of store) {
-      out[key] = value;
-    }
-    return c.json(out);
+    return c.json(await loadExtensionStore(`__config__${extensionId}`));
   });
 
   authenticated.patch('/api/extensions/:id/config', async (c) => {
@@ -1842,10 +1860,10 @@ export function createHonoApp(config: HonoAppConfig): Hono {
     if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
       return c.json({ error: 'Request body must be a JSON object' }, 400);
     }
-    const store = getExtensionStore(`__config__${extensionId}`);
-    for (const [key, value] of Object.entries(patch)) {
-      store.set(key, value);
-    }
+    const namespace = `__config__${extensionId}`;
+    const config = await loadExtensionStore(namespace);
+    Object.assign(config, patch);
+    await saveExtensionStore(namespace, config);
     return c.json({ ok: true });
   });
 
