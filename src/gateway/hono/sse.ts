@@ -1,9 +1,12 @@
+import { randomUUID } from 'node:crypto';
 import { streamSSE } from 'hono/streaming';
 import type { Context } from 'hono';
 import type { GatewayService } from '../service.js';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '../chat-limits.js';
 import { createLogger, updateAsyncLogContext } from '../../utils/logger.js';
 import { stringifySSEData } from './sse-json.js';
+import { buildSessionKey, parseSessionKey } from '../../routing/session-key.js';
+import { getDefaultAgentId } from '../../routing/resolve-route.js';
 
 const log = createLogger('Hono:SSE');
 
@@ -20,6 +23,10 @@ interface AgentRequestBody {
   message: string;
   channel?: string;
   chatId?: string;
+  /** Alias for `chatId` (gateway console + extension clients). */
+  sessionKey?: string;
+  /** When true and `channel` is `webchat`, start a new peer id (new session). */
+  newSession?: boolean;
   thinking?: string;
   attachments?: Array<{
     type: string;
@@ -71,7 +78,16 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
       }, 400);
     }
 
-    const { message, channel = 'webchat', chatId = 'default', attachments, thinking } = body;
+    const { message, channel = 'webchat', attachments, thinking } = body;
+    const newSession = Boolean(body.newSession);
+    let chatId = 'default';
+    if (newSession && channel === 'webchat') {
+      chatId = `chat_${randomUUID()}`;
+    } else {
+      const sk = typeof body.sessionKey === 'string' && body.sessionKey.trim() ? body.sessionKey.trim() : '';
+      const cid = typeof body.chatId === 'string' && body.chatId.trim() ? body.chatId.trim() : '';
+      chatId = sk || cid || 'default';
+    }
 
     updateAsyncLogContext({ sessionId: String(chatId) });
 
@@ -113,6 +129,21 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
 
     // --- Non-streaming fallback: collect everything, return JSON ---
     if (!wantSSE) {
+      let jsonSessionKey: string | undefined;
+      if (channel === 'webchat') {
+        const cfg = service.currentConfig;
+        const parsedKey = parseSessionKey(chatId);
+        jsonSessionKey = parsedKey
+          ? chatId
+          : buildSessionKey({
+              agentId: getDefaultAgentId(cfg),
+              source: 'webchat',
+              accountId: 'default',
+              peerKind: 'direct',
+              peerId: chatId,
+            });
+      }
+
       const generator = service.runAgent(message, channel, chatId, attachments, thinking, {
         signal: clientAbort.signal,
       });
@@ -137,6 +168,9 @@ export function createAgentSSEHandler(config: SSEHandlerConfig) {
           payload: {
             ...finalResult,
             content: tokens.join(''),
+            ...(jsonSessionKey !== undefined
+              ? { sessionKey: jsonSessionKey, key: jsonSessionKey }
+              : {}),
           },
         });
       } catch (error) {

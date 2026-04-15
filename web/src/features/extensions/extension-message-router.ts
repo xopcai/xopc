@@ -1,4 +1,10 @@
-import { ExtensionErrorCode, type ThemeInfo } from '@xopcai/extension-ui-sdk';
+import { ExtensionErrorCode } from '@xopcai/extension-ui-sdk';
+
+import { apiFetch } from '@/lib/fetch';
+import { apiUrl } from '@/lib/url';
+import { useThemeStore } from '@/stores/theme-store';
+
+import { buildThemeInfo } from './theme-bridge';
 
 export type MethodHandler = (extensionId: string, params: unknown) => Promise<unknown>;
 
@@ -210,11 +216,10 @@ export class ExtensionMessageRouter {
   }
 }
 
-export function registerBuiltinMethods(
-  router: ExtensionMessageRouter,
-  getThemeInfo: () => ThemeInfo,
-): void {
-  router.registerMethod('theme.get', async () => getThemeInfo());
+export function registerBuiltinMethods(router: ExtensionMessageRouter): void {
+  router.registerMethod('theme.get', async () =>
+    buildThemeInfo(useThemeStore.getState().resolved),
+  );
 
   router.registerMethod('ui.navigate', async (_extensionId, params) => {
     const path =
@@ -224,6 +229,10 @@ export function registerBuiltinMethods(
     if (path) {
       window.dispatchEvent(new CustomEvent('extension-navigate', { detail: { path } }));
     }
+  });
+
+  router.registerMethod('ui.notification', async (_extensionId, params) => {
+    window.dispatchEvent(new CustomEvent('extension-notification', { detail: params }));
   });
 
   router.registerMethod('session.navigate', async (_extensionId, params) => {
@@ -236,5 +245,112 @@ export function registerBuiltinMethods(
         new CustomEvent('navigate-to-chat', { detail: { sessionKey }, bubbles: true }),
       );
     }
+  });
+
+  router.registerMethod('session.list', async () => {
+    const response = await apiFetch(apiUrl('/api/sessions'));
+    if (!response.ok) throw new Error(`Failed to list sessions: ${response.status}`);
+    const data = (await response.json()) as {
+      items?: Array<{
+        key: string;
+        name?: string;
+        updatedAt?: string;
+        lastAccessedAt?: string;
+        messageCount?: number;
+      }>;
+    };
+    return (data.items ?? []).map((s) => ({
+      sessionKey: s.key,
+      title: s.name,
+      lastMessageAt: s.updatedAt ?? s.lastAccessedAt,
+      messageCount: s.messageCount,
+    }));
+  });
+
+  router.registerMethod('agent.sendMessage', async (_extensionId, params) => {
+    const { message, sessionKey, newSession } = params as {
+      message: string;
+      sessionKey?: string;
+      newSession?: boolean;
+    };
+    const response = await apiFetch(apiUrl('/api/agent'), {
+      method: 'POST',
+      headers: { Accept: 'application/json' },
+      body: JSON.stringify({
+        message,
+        channel: 'webchat',
+        sessionKey: newSession ? undefined : sessionKey,
+        newSession: Boolean(newSession),
+      }),
+    });
+    if (!response.ok) throw new Error(`Agent request failed: ${response.status}`);
+    const data = (await response.json()) as {
+      payload?: { sessionKey?: string; key?: string };
+      sessionKey?: string;
+    };
+    const fromPayload = data.payload?.sessionKey ?? data.payload?.key;
+    return { sessionKey: fromPayload ?? data.sessionKey ?? sessionKey ?? '' };
+  });
+
+  router.registerMethod('config.get', async (extensionId) => {
+    const response = await apiFetch(apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/config`));
+    if (!response.ok) throw new Error(`Failed to get config: ${response.status}`);
+    return response.json();
+  });
+
+  router.registerMethod('config.set', async (extensionId, params) => {
+    const patch =
+      params && typeof params === 'object' && params !== null && !Array.isArray(params)
+        ? (params as Record<string, unknown>)
+        : {};
+    const response = await apiFetch(apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/config`), {
+      method: 'PATCH',
+      body: JSON.stringify(patch),
+    });
+    if (!response.ok) throw new Error(`Failed to set config: ${response.status}`);
+  });
+
+  router.registerMethod('storage.get', async (extensionId, params) => {
+    const key =
+      params && typeof params === 'object' && params !== null && 'key' in params
+        ? String((params as { key?: string }).key ?? '')
+        : '';
+    const response = await apiFetch(
+      apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/storage/${encodeURIComponent(key)}`),
+    );
+    if (response.status === 404) return undefined;
+    if (!response.ok) throw new Error(`Failed to get storage key: ${response.status}`);
+    const data = (await response.json()) as { value: unknown };
+    return data.value;
+  });
+
+  router.registerMethod('storage.set', async (extensionId, params) => {
+    const raw = params as { key?: string; value?: unknown } | undefined;
+    const key = raw && typeof raw.key === 'string' ? raw.key : '';
+    const response = await apiFetch(
+      apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/storage/${encodeURIComponent(key)}`),
+      { method: 'PUT', body: JSON.stringify({ value: raw?.value }) },
+    );
+    if (!response.ok) throw new Error(`Failed to set storage key: ${response.status}`);
+  });
+
+  router.registerMethod('storage.remove', async (extensionId, params) => {
+    const key =
+      params && typeof params === 'object' && params !== null && 'key' in params
+        ? String((params as { key?: string }).key ?? '')
+        : '';
+    const response = await apiFetch(
+      apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/storage/${encodeURIComponent(key)}`),
+      { method: 'DELETE' },
+    );
+    if (response.status === 404) return;
+    if (!response.ok) throw new Error(`Failed to remove storage key: ${response.status}`);
+  });
+
+  router.registerMethod('storage.keys', async (extensionId) => {
+    const response = await apiFetch(apiUrl(`/api/extensions/${encodeURIComponent(extensionId)}/storage`));
+    if (!response.ok) throw new Error(`Failed to list storage keys: ${response.status}`);
+    const data = (await response.json()) as { keys?: string[] };
+    return data.keys ?? [];
   });
 }
