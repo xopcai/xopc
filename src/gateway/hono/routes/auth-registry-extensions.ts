@@ -2,6 +2,9 @@ import type { Hono } from 'hono';
 import { existsSync, readFileSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
+import type { Config as SurfaceConfig } from '../../../config/config-surface.js';
+import { mergeActivationContext } from '../../../extensions/activation-context.js';
+import { ActivationPlanner } from '../../../extensions/activation-planner.js';
 import { getAllModels, getAvailableModels, type Model, type Api } from '../../../providers/index.js';
 import { createOAuthHandler, loadOAuthCredentialsToCache } from '../oauth.js';
 import { createOAuthAsyncHandler } from '../oauth-async.js';
@@ -10,7 +13,7 @@ import { loadExtensionStore, saveExtensionStore } from '../lib/extension-store.j
 import type { AuthenticatedRouteDeps } from './deps.js';
 
 export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
-  const { service } = deps;
+  const { service, strictRateLimitMiddleware } = deps;
 
   // ========== Auth API (/api/auth) ==========
 
@@ -113,6 +116,17 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
       activeIds.add(id);
     }
 
+    loader.setConfig(service.currentConfig as unknown as SurfaceConfig);
+    let activationEligibleIds: Set<string> = new Set();
+    try {
+      const planner = new ActivationPlanner(loader.buildManifestRegistry());
+      activationEligibleIds = new Set(
+        planner.getActivatedIds(mergeActivationContext(service.currentConfig as unknown as SurfaceConfig)),
+      );
+    } catch {
+      activationEligibleIds = new Set();
+    }
+
     const extensions = discovered.map((ext) => ({
       id: ext.manifest.id,
       name: ext.manifest.name,
@@ -121,6 +135,7 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
       kind: ext.manifest.kind,
       source: ext.source,
       active: activeIds.has(ext.id),
+      activationEligible: activationEligibleIds.has(ext.id),
       hasUi: Boolean(ext.manifest.ui),
       ui: ext.manifest.ui
         ? {
@@ -131,6 +146,32 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
         : undefined,
     }));
     return c.json({ extensions });
+  });
+
+  /**
+   * Built-in (bundled) extension enable/disable — persists `extensions.enabled` / `extensions.disabled`.
+   * Body: `{ extensionId: string, enabled: boolean }`
+   */
+  authenticated.post('/api/extensions/bundled/activation', strictRateLimitMiddleware, async (c) => {
+    const body = (await c.req.json().catch(() => null)) as
+      | { extensionId?: unknown; enabled?: unknown }
+      | null;
+    const extensionId =
+      typeof body?.extensionId === 'string' ? body.extensionId.trim() : '';
+    if (!extensionId) {
+      return c.json({ ok: false, error: { message: 'extensionId is required' } }, 400);
+    }
+    if (typeof body?.enabled !== 'boolean') {
+      return c.json({ ok: false, error: { message: 'enabled must be a boolean' } }, 400);
+    }
+    const result = await service.setBundledExtensionActivationTarget(extensionId, body.enabled);
+    if (!result.ok) {
+      return c.json({ ok: false, error: { message: result.error ?? 'Request failed' } }, 400);
+    }
+    return c.json({
+      ok: true,
+      payload: { requiresGatewayRestart: result.requiresGatewayRestart },
+    });
   });
 
   authenticated.get('/api/extensions/:id', async (c) => {
