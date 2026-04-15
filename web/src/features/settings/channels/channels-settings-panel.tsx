@@ -467,7 +467,6 @@ export function ChannelsSettingsPanel() {
               <div>
                 <Dialog.Title className="text-lg font-semibold tracking-tight text-fg">{ch.telegramTitle}</Dialog.Title>
                 <Dialog.Description className="mt-1 text-sm text-fg-muted">{ch.telegramSubtitle}</Dialog.Description>
-                <p className="mt-3 text-xs leading-relaxed text-fg-subtle whitespace-pre-line">{ch.telegramCliConfigHint}</p>
               </div>
               <Dialog.Close asChild>
                 <button

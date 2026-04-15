@@ -977,9 +977,6 @@ const bundles: Record<
       weixinQrModalSubtitle: string;
       weixinQrRegenerate: string;
       weixinQrModalCloseAria: string;
-      /** How to configure this channel via CLI (same config file as the gateway). */
-      telegramCliConfigHint: string;
-      weixinCliConfigHint: string;
       /** `bindings`: which agent handles inbound for each channel account */
       agentRoutingTitle: string;
       agentRoutingHint: string;
@@ -2184,7 +2181,7 @@ const bundles: Record<
         'Optional. Per-account botToken or tokenFile, policies, and groups. Empty {} uses the single token above only.',
       weixinQuickStartTitle: 'Quick start',
       weixinStepLogin:
-        'Use “Sign in with WeChat (QR)” below in this console, or on the gateway host run: xopc channels login --channel weixin (repo: pnpm run dev -- channels login --channel weixin).',
+        'Use “Sign in with WeChat (QR)” below in this console, or see Channel documentation for CLI login.',
       weixinStepEnable: 'Turn on Weixin below and save.',
       weixinStepPairing:
         'After QR login, DMs work immediately. Use allowlist DM policy only if you want to restrict who can message the bot.',
@@ -2215,10 +2212,6 @@ const bundles: Record<
       weixinQrModalSubtitle: 'Use WeChat to scan the QR code below to connect.',
       weixinQrRegenerate: 'Regenerate QR code',
       weixinQrModalCloseAria: 'Close',
-      telegramCliConfigHint:
-        'CLI (same config file as this gateway; override path with XOPC_CONFIG or --config):\n• Interactive: xopc onboard --channels\n• Or set TELEGRAM_BOT_TOKEN in the environment and/or edit channels.telegram in the JSON file.',
-      weixinCliConfigHint:
-        'CLI on the host that should hold credentials (override config path with XOPC_CONFIG or --config):\n• xopc channels login --channel weixin\n• Optional: --account <id>, --timeout <ms>, --credentials-only (save token files without merging config JSON).',
       agentRoutingTitle: 'Agent routing',
       agentRoutingHint:
         'Maps each channel account to an agent via config `bindings`. Inbound messages use a session key for that agent.',
@@ -3435,7 +3428,7 @@ const bundles: Record<
         '可选。每账号可配置 botToken 或 tokenFile、策略与群组。留空 {} 则仅使用上方单一 Token。',
       weixinQuickStartTitle: '最简步骤',
       weixinStepLogin:
-        '在本页使用下方「微信扫码登录」，或在网关所在机器执行：xopc channels login --channel weixin（源码目录：pnpm run dev -- channels login --channel weixin）。',
+        '在本页使用下方「微信扫码登录」，命令行方式请见即时通讯文档。',
       weixinStepEnable: '下方打开「启用微信」并保存。',
       weixinStepPairing: '扫码登录后即可正常收发；仅在需要限制谁可私聊时，将私聊策略改为白名单并配置允许来源。',
       weixinAdvancedHint: '可选：白名单、路由标签、流式与分账号 JSON——仅在需要时展开。',
@@ -3463,10 +3456,6 @@ const bundles: Record<
       weixinQrModalSubtitle: '请使用微信扫描下方二维码完成连接',
       weixinQrRegenerate: '重新生成',
       weixinQrModalCloseAria: '关闭',
-      telegramCliConfigHint:
-        '命令行配置（与网关使用同一配置文件；路径可用 XOPC_CONFIG 或全局 --config 覆盖）：\n• 交互向导：xopc onboard --channels\n• 或在环境中设置 TELEGRAM_BOT_TOKEN，并直接编辑 JSON 中的 channels.telegram。',
-      weixinCliConfigHint:
-        '在应保存凭据的机器上使用命令行（配置文件路径同上）：\n• xopc channels login --channel weixin\n• 可选：--account <id>、--timeout <ms>、--credentials-only（仅写 token 文件，不合并主配置 JSON）。',
       agentRoutingTitle: '智能体路由',
       agentRoutingHint:
         '在配置 `bindings` 中为每个即时通讯账号指定智能体；入站消息会使用对应智能体的会话键。',
