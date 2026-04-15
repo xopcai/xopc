@@ -1,6 +1,6 @@
 # Workspace Templates
 
-xopc uses bootstrap Markdown templates to customize agent behavior and knowledge. During `onboard`, `setup`, or `agents add`, missing files are **copied** (never overwritten) into **`~/.xopc/agents/<agentId>/bootstrap/`** — the same set ships as `src/agent/context/workspace-templates/*.md` and is published under `docs/reference/templates/` for reading in the docs site.
+xopc uses bootstrap Markdown templates to customize agent behavior and knowledge. During `onboard`, `setup`, or `agents add`, missing files are **copied** (never overwritten) into **`~/.xopc/agents/<agentId>/bootstrap/`**. The same filenames are documented here for reference.
 
 Template resolution at runtime: `XOPC_TEMPLATE_PATH` (if set), else a walk to `docs/reference/templates` from the running install, else the bundled `workspace-templates` directory next to the compiled `workspace-seed` module.
 
@@ -19,7 +19,7 @@ Template resolution at runtime: `XOPC_TEMPLATE_PATH` (if set), else a walk to `d
 
 ## System prompt load order
 
-These files are read from `bootstrap/` (when present) and assembled into the agent system prompt **in this order** (see `BOOTSTRAP_FILES` in `src/agent/context/workspace.ts`):
+These files are read from `bootstrap/` (when present) and assembled into the agent system prompt **in this order**:
 
 1. **SOUL.md**
 2. **IDENTITY.md**
@@ -31,7 +31,7 @@ These files are read from `bootstrap/` (when present) and assembled into the age
 
 **BOOTSTRAP.md** is also copied when seeding a new agent; it is **not** part of that load list (first-run / manual guidance only).
 
-**CONTEXT.md** and **SKILLS.md** are **not** in `BOOTSTRAP_FILES`, so they are **not** injected into the default system prompt. The `xopc init` flow can still **create** them under `bootstrap/` (see `src/cli/commands/init.ts`). The template **seed** used by `onboard` / `agents add` (`workspace-seed.ts`) only copies the files listed above plus `BOOTSTRAP.md` — it does **not** ship `CONTEXT.md` / `SKILLS.md` from `docs/reference/templates`.
+**CONTEXT.md** and **SKILLS.md** are **not** part of the default system-prompt bootstrap list, so they are **not** injected automatically. `xopc init` may still **create** them under `bootstrap/`. The seed used by `onboard` / `agents add` copies the files listed above plus **`BOOTSTRAP.md`** only—it does **not** add `CONTEXT.md` / `SKILLS.md` from this docs folder unless you place them yourself.
 
 ## Memory System
 

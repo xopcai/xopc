@@ -4,14 +4,12 @@ xopc provides a lightweight but powerful extension system for customizing and ex
 
 ## Features
 
-- 🏗️ **Three-tier Storage** - Workspace / Global / Bundled
-- 📋 **Manifest-first activation** - Discover and plan extension loads from `xopc.extension.json` before executing extension code; gateway and `xopc agent` use an activation plan (config, channels, model id, env vars declared in manifests)
-- 🔌 **Extension SDK** - Official SDK with unified imports and optional **subpath** imports (`extension-sdk/core`, `extension-sdk/lazy`, …)
-- ⚡ **Native TypeScript** - Instant loading via jiti, no compilation
-- 📦 **Multi-source Installation** - npm, local directory, Git repository
-- 🖥️ **Gateway console UI (optional)** — Extensions may declare a **`ui`** manifest and ship HTML panels for the React Web console; the host loads assets via HTTPS and embeds them in sandboxed iframes using **`@xopcai/extension-ui-sdk`** (see [Gateway console: Extension UI](#gateway-console-extension-ui-iframe)).
-
-**Design reference (repository):** the internal RFC set under [`.docs/channel/`](../.docs/channel/00-overview.md) describes the full target architecture (aligned with ideas from OpenClaw). User-facing behavior is summarized below; Phase 3 items not yet in code are omitted. **Web UI extension** implementation notes live under [`.docs/ext/`](../.docs/ext/) (phased docs alongside `AGENTS.md`).
+- **Three-tier storage** — workspace-only, user-global, or bundled with the install (see below).
+- **Activation from config** — extensions load when you enable them, configure related channels or providers, or satisfy rules declared in each extension’s `xopc.extension.json` (see [When extensions load](#when-extensions-load)).
+- **Extension SDK** — `@xopcai/xopc/extension-sdk` (and optional subpaths such as `extension-sdk/core`, `extension-sdk/lazy`).
+- **TypeScript** — extensions are plain TypeScript/JavaScript modules; no separate compile step for the loader.
+- **Install sources** — npm package, local folder, or Git URL via `xopc extension install`.
+- **Gateway console UI (optional)** — a `ui` block in the manifest can add panels in the Web console; iframe code uses **`@xopcai/extension-ui-sdk`** (see [Gateway console: Extension UI](#gateway-console-extension-ui-iframe)).
 
 ---
 
@@ -60,7 +58,7 @@ Configure in `~/.xopc/xopc.json`:
 | `disabled` | `string[]` | (Optional) List of extension IDs to disable |
 | `[extension-id]` | `object \| boolean` | Extension-specific configuration |
 
-**Activation vs `enabled`:** The **gateway** and **`xopc agent`** resolve extensions with a **manifest-first activation plan**. You do **not** have to list every channel extension under `extensions.enabled` if activation is triggered elsewhere—for example, configuring **`channels.telegram`** / **`channels.weixin`** or setting an env var named in the extension manifest (e.g. `TELEGRAM_BOT_TOKEN` for the bundled Telegram extension). To **force-disable** an extension, add its id to **`extensions.disabled`**.
+**Activation vs `enabled`:** The **gateway** and **`xopc agent`** load extensions using the rules in [When extensions load](#when-extensions-load). You do **not** have to list every channel extension under `extensions.enabled` if activation is already triggered by **`channels.telegram`** / **`channels.weixin`**, or by an env var named in the extension manifest (for example `TELEGRAM_BOT_TOKEN`). To **force-disable** an extension, add its id to **`extensions.disabled`**.
 
 ### Create New Extension
 
@@ -86,71 +84,49 @@ xopc supports three-tier extension storage:
 |-------|------|----------|----------|
 | **Workspace** | `workspace/.extensions/` | Project-private extensions | ⭐⭐⭐ Highest |
 | **Global** | `~/.xopc/extensions/` | User-level shared extensions | ⭐⭐ Medium |
-| **Bundled** | `xopc/extensions/` | Built-in extensions | ⭐ Lowest |
+| **Bundled** | Inside the xopc install | Extensions that ship with your package | ⭐ Lowest |
 
 ### Priority Rules
 
-- **Workspace** extensions override **Global** and **Bundled** extensions with same name
-- **Global** extensions override **Bundled** extensions with same name
+- **Workspace** overrides **Global** and **Bundled** when the same extension id appears in more than one place.
+- **Global** overrides **Bundled**.
 
-**Use cases:**
-- Workspace: Project-specific custom extensions
-- Global: Commonly used shared extensions (like telegram-channel)
-- Bundled: Official extensions shipped with xopc
-
-**Monorepo note:** The Telegram channel is a **workspace package** under `extensions/telegram` (`@xopcai/xopc-extension-telegram`) and is wired into the core via `src/channels/plugins/bundled.ts`. It is not loaded from `xopc/extensions/` at runtime; that path refers to other bundled extension assets.
+Typical use: project-specific extensions under the workspace; shared extensions under `~/.xopc/extensions/`; built-in behaviour from the install.
 
 ---
 
-## Manifest-first control plane
+## When extensions load {#when-extensions-load}
 
-xopc separates **reading manifests** (control plane) from **importing extension code** (runtime), following the RFC under `.docs/channel/`.
+The runtime first reads each discovered extension’s **`xopc.extension.json`**, then decides which ids to load from your **config and environment**. You do **not** always need every channel-related extension listed under `extensions.enabled`—for example, configuring **`channels.telegram`** or **`channels.weixin`** is often enough for the matching channel extension to load.
 
-### Phases
+**Rough priority (highest wins first):**
 
-| Phase | What happens | API / module |
-|-------|----------------|--------------|
-| **1 — Discovery + registry** | Scan extension directories and parse `xopc.extension.json` only (no `register()` yet) | `ExtensionLoader.buildManifestRegistry()`, `getManifestRegistry()` → `ManifestRegistry` |
-| **2 — Activation planning** | Decide which extension ids should load, from merged **config + env + manifest metadata** | `ActivationPlanner` via `ExtensionLoader.planActivation()` |
-| **3 — Runtime load** | Import entry module and run the extension | `ExtensionLoader.loadByActivationPlan()` (also still: `loadExtension`, `loadExtensions`, `loadAllExtensions`) |
-
-### Activation decision order (high → low)
-
-1. **`extensions.enabled` / `extensions.disabled`** in config (explicit allow/deny; enabled wins if both appear for the same id—avoid configuring both).
-2. **Default agent model id** — if it matches `modelSupport.modelPrefixes` / `modelSupport.modelPatterns` on a manifest.
-3. **Environment variables** — any name listed under `providerAuthEnvVars` or `channelEnvVars` on a manifest, if set in `process.env`.
-4. **`autoEnableWhenConfiguredProviders`** — when `configuredProviderIds` derived from config includes a listed provider id.
-5. **`activation.onProviders` / `activation.onChannels`** — when config-derived provider or channel ids match.
+1. **`extensions.enabled`** / **`extensions.disabled`** — explicit lists; avoid putting the same id in both.
+2. **Default agent model** — if it matches optional `modelSupport` patterns on the manifest.
+3. **Environment variables** — names listed under `providerAuthEnvVars` or `channelEnvVars` on the manifest when they are set.
+4. **`autoEnableWhenConfiguredProviders`** — when your `providers` block matches declared provider ids.
+5. **`activation.onProviders` / `activation.onChannels`** — when configured providers or channels match.
 6. **`enabledByDefault: true`** on the manifest.
 
-Loaded extension ids are sorted **lexicographically** for stable ordering.
+**Where this applies**
 
-### Where activation runs
-
-| Entry | Behavior |
-|-------|----------|
-| **Gateway** | Calls `loadByActivationPlan()` when starting extensions (not limited to ids listed only in `extensions.enabled`). |
-| **`xopc agent`** | Same: `loadByActivationPlan()` with current config. |
-| **CLI (`registerExtensionCliCommands`)** | Skips loading entirely unless **at least one** of: non-empty `extensions.enabled`, configured channels that imply a channel extension, or an env var indexed by any discovered manifest—keeps plain CLI commands fast. |
+- **Gateway** and **`xopc agent`** evaluate the full plan when they start extensions.
+- **Other CLI commands** may skip loading extensions unless `extensions.enabled` is non-empty, you have channel (or similar) configuration that implies an extension, or a manifest-indexed env var is set—so simple commands stay fast.
 
 ### Optional manifest fields (`xopc.extension.json`)
 
-All of these are **optional**; old manifests without them keep working.
+All are optional. Common fields:
 
 | Field | Purpose |
 |-------|---------|
-| `enabledByDefault` | Auto-activate when no higher-priority rule applies |
-| `providers`, `channels` | Declare ids this extension implements (indexed for lookup) |
-| `providerAuthEnvVars`, `channelEnvVars` | Map logical id → env var names (for detection + onboarding) |
-| `providerAuthChoices` | UI / CLI oriented auth metadata |
-| `modelSupport` | `modelPrefixes`, `modelPatterns` for model-driven activation |
-| `autoEnableWhenConfiguredProviders` | Provider ids that trigger activation when present in config |
+| `enabledByDefault` | Turn on when nothing above overrides |
+| `providers`, `channels` | Logical ids this extension implements |
+| `providerAuthEnvVars`, `channelEnvVars` | Map ids to env var names for detection |
+| `providerAuthChoices` | Hints for UI/CLI auth flows |
+| `modelSupport` | `modelPrefixes`, `modelPatterns` for model-based activation |
+| `autoEnableWhenConfiguredProviders` | Auto-enable when listed providers appear in config |
 | `activation` | `onProviders`, `onChannels`, `onCommands`, `onCapabilities` |
-| `contracts`, `setup` | Declarative capability / setup hints |
-
-### Onboarding helpers (advanced)
-
-For tools or UI that need provider/channel lists **without** loading extension JS, the implementation exposes helpers over a `ManifestRegistry` (see `src/extensions/onboard-helpers.ts` in the repo): `listOnboardProviders`, `listOnboardChannels`, `resolveProviderForModel`.
+| `contracts`, `setup` | Capability and setup hints |
 
 ---
 
@@ -162,8 +138,6 @@ The npm package name is **`@xopcai/xopc`**. Import the SDK through the published
 // Recommended: published package subpath
 import type { ExtensionApi, ExtensionDefinition } from '@xopcai/xopc/extension-sdk';
 ```
-
-When developing extensions against a local checkout, the loader resolves the alias `xopc/extension-sdk` to `src/extensions/sdk/index.ts` (jiti), including subpaths such as `xopc/extension-sdk/core` and `xopc/extension-sdk/lazy`.
 
 ### Exported Types
 
@@ -240,14 +214,6 @@ Import **`createExtensionClient()`** and use **`await client.whenReady()`** afte
 - **events** — `emit` / `on` use the `ext.*` namespace for **cross-extension** fan-out between iframes
 - **onDispose**, **onDidChangeVisibility**
 
-**Generated API docs (Markdown)** — from the repo root:
-
-```bash
-pnpm run docs:extension-sdk
-```
-
-Output directory: **`packages/extension-ui-sdk/docs/api/`**.
-
 ### Gateway REST (Bearer auth)
 
 Same **`Authorization: Bearer <token>`** as the rest of the console API.
@@ -274,15 +240,9 @@ Same **`Authorization: Bearer <token>`** as the rest of the console API.
 - **Command palette** — **⌘K / Ctrl+K** (or `open-command-palette` on `window`) lists **`contributions.commands`**; commands with **`opensPanel`** navigate to **`/apps/{extensionId}`**.
 - **Debug** — **Settings → Extensions → Extension debug** lists gateway extensions and the raw **UI grants** JSON.
 
-### Sample: `extensions/hello`
+### Sample: Hello extension
 
-The bundled **Hello** extension demonstrates the SDK end-to-end. UI bundles are produced with **esbuild**:
-
-```bash
-pnpm run build:hello-ui
-```
-
-Rebuild after upgrading **`@xopcai/extension-ui-sdk`**. Sources: `extensions/hello/ui/*-entry.ts`, output: `ui/*.bundle.js` referenced from the HTML entrypoints.
+The **Hello** sample extension in the xopc repository demonstrates extension UI end-to-end. If you ship a `ui` panel, bundle its browser code (for example with esbuild) and point `manifest.ui` at the built assets.
 
 ---
 
@@ -312,7 +272,7 @@ Each extension must include `xopc.extension.json`. Minimal example:
 }
 ```
 
-Channel / provider extensions can add the **optional** declaration fields described in [Manifest-first control plane](#manifest-first-control-plane) (see bundled `extensions/telegram/xopc.extension.json` and `extensions/custom-provider/xopc.extension.json` in the repo).
+Channel / provider extensions can add the **optional** declaration fields described in [When extensions load](#when-extensions-load); use the manifests of built-in extensions as examples when authoring your own.
 
 ### Extension Entry File
 
@@ -738,21 +698,19 @@ Options:
 
 ## Extension Configuration
 
-### Global Configuration
+### Global options
 
-The `extensions` section in `config.json` supports the following global options:
+Common keys under `extensions` in `~/.xopc/xopc.json`:
 
 ```json
 {
   "extensions": {
-    "enabled": {
-      "hello": true,
-      "echo": false
-    },
-    "allow": ["hello", "echo", "xopc-feishu"],
+    "enabled": ["hello", "echo"],
+    "disabled": [],
     "security": {
       "checkPermissions": true,
       "allowUntrusted": false,
+      "allow": ["hello", "echo", "xopc-feishu"],
       "trackProvenance": true,
       "allowPromptInjection": false
     },
@@ -766,16 +724,17 @@ The `extensions` section in `config.json` supports the following global options:
 
 | Option | Type | Description |
 |--------|------|-------------|
-| `enabled` | `Record<string, boolean>` | Enable/disable specific extensions |
-| `allow` | `string[]` | Allowlist of permitted extensions |
-| `security.checkPermissions` | `boolean` | Enable path safety checks |
-| `security.allowUntrusted` | `boolean` | Allow loading extensions not in allowlist |
-| `security.trackProvenance` | `boolean` | Track extension install source |
-| `security.allowPromptInjection` | `boolean` | Allow extensions to inject system prompts |
-| `slots.memory` | `string` | Preferred memory backend extension |
-| `slots.tts` | `string` | Preferred TTS provider extension |
-| `slots.imageGeneration` | `string` | Preferred image generation extension |
-| `slots.webSearch` | `string` | Preferred web search extension |
+| `enabled` | `string[]` | Extension ids to allow when combined with activation rules |
+| `disabled` | `string[]` | Extension ids that must not load |
+| `security.checkPermissions` | `boolean` | Path and install safety checks |
+| `security.allowUntrusted` | `boolean` | Allow extensions outside `security.allow` |
+| `security.allow` | `string[]` | Optional allowlist of extension ids |
+| `security.trackProvenance` | `boolean` | Record where an extension was installed from |
+| `security.allowPromptInjection` | `boolean` | Allow hooks to alter system prompts |
+| `slots.memory` | `string` | Preferred memory backend extension id |
+| `slots.tts` | `string` | Preferred TTS extension id |
+| `slots.imageGeneration` | `string` | Preferred image generation extension id |
+| `slots.webSearch` | `string` | Preferred web search extension id |
 
 ### Extension-Specific Configuration
 

@@ -119,7 +119,7 @@ install:
 技能可以从以下位置加载：
 
 1. **Bundled** - 内置于 xopc 的技能
-   - 位置：`src/agent/skills/bundled/`
+   - 内置技能随 xopc 安装提供。
    
 2. **Workspace** - 工作区特定的技能
    - 位置：`<workspace>/skills/`

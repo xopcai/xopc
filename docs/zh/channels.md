@@ -1,6 +1,6 @@
 # 通道配置
 
-xopc 支持多种通信通道，采用基于扩展的架构。根配置中 **`channels`** 在 `src/config/schema.ts` 里解析为**开放映射**（`Record<string, unknown>`），新增通道 id 不必再改核心 Zod 树。**内置** Telegram、微信 的分字段 Zod 与校验位于 `extensions/telegram/src/config-schema.ts`、`extensions/weixin/src/config-schema.ts`（部分符号再从 `src/config/schema.ts` **再导出** 给 CLI/工具使用）。加载后还会按各已注册插件的 `configSchema.validate` 做通道级校验。网关 **`GET /api/config`** 中的 `channels` 由各 **`ChannelPlugin.configSurface`**（及插件元数据）组装，而不是在 core 里写死 Telegram/微信字段。
+xopc 可将助手接入 **Telegram**、**微信（Weixin）** 以及 **网关 Web 聊天**。若安装第三方扩展，还可能出现其它 `channels.<id>` 配置块。所有通道相关设置都在 `~/.xopc/xopc.json`（或由 `XOPC_CONFIG` 指定的文件）的 **`channels`** 下。
 
 ## 概述
 
@@ -10,11 +10,11 @@ xopc 支持多种通信通道，采用基于扩展的架构。根配置中 **`ch
 | **微信（Weixin）** | ✅ | 在网关所在机扫码登录、私聊策略、可选按账号 JSON |
 | **网页（Web UI）** | ✅ | 网关控制台内嵌聊天，与其它客户端共用 HTTP API |
 
-其它第三方或实验性通道可作为**扩展**接入，仍可能出现在 `channels.<id>` 中（视构建与扩展而定）。
+其它通道类型若由扩展提供，同样使用 `channels.<id>`，具体字段以扩展说明为准。
 
-### 扩展加载（Telegram / 微信）
+### 扩展与 Telegram / 微信
 
-网关与 **`xopc agent`** 使用 **manifest-first 激活**（详见 [扩展系统 — Manifest-first 控制平面](./extensions.md#manifest-first-control-plane)）。仓库内 `extensions/telegram`、`extensions/weixin` 在 `xopc.extension.json` 中声明了 `channels` 与 `activation.onChannels`，因此当 **`channels.telegram`** 或 **`channels.weixin`** 被视为已配置（Token、`accounts`、`enabled` 等）时，对应扩展可以加载，**不一定**要在 `extensions.enabled` 中写出扩展 id；若需强制关闭，请使用 **`extensions.disabled`**。CLI 在解析子命令前仅在 `extensions.enabled` 非空、通道配置会触发通道扩展、或存在 manifest 索引的环境变量时才加载扩展——详见扩展文档。
+一般只需配置 **`channels.telegram`** 或 **`channels.weixin`**，相关能力会随配置自动加载。若要 **禁止** 某个扩展 id，将其加入 **`extensions.disabled`**。其它 CLI 命令与扩展加载的关系见 [扩展系统 — 何时加载扩展](./extensions.md#何时加载扩展)。
 
 ## 网关控制台 — 即时通讯
 
@@ -83,7 +83,7 @@ xopc 支持多种通信通道，采用基于扩展的架构。根配置中 **`ch
 
 - **`dmPolicy`**：与 Telegram 同一套（`pairing`、`allowlist`、`open`、`disabled`）。
 - **`allowFrom`**：在需要白名单式私聊策略时，填写允许的 wxid / openid。
-- **`accounts`**：可选，按账号覆盖（名称、`cdnBaseUrl`、`routeTag`、策略等），详见 `extensions/weixin/src/config-schema.ts` 中的 `WeixinConfigSchema` / `WeixinAccountConfigSchema`（亦从 `src/config/schema.ts` 再导出）。
+- **`accounts`**：可选，按账号覆盖（名称、`cdnBaseUrl`、`routeTag`、策略等）；复杂字段建议在网关 **即时通讯** 表单中编辑，或对照扩展文档修改 JSON。
 
 修改凭据后若网关已在运行，请按你的部署方式**重启或热加载**。
 
@@ -227,17 +227,9 @@ xopc 支持多种通信通道，采用基于扩展的架构。根配置中 **`ch
 - **语音消息**: Telegram STT 限制 60 秒
 - **TTS 文本**: 受 `tts.maxTextLength` 约束（schema 默认 512，可配置），可选 LLM 摘要 — 见 [语音](/zh/voice)
 
-## 实现说明（开发者）
-
-Telegram 通道以 **pnpm 工作区包** 形式位于 `extensions/telegram`（`@xopcai/xopc-extension-telegram`）。核心在 `src/channels/plugins/bundled.ts` 中注册该插件。为保持从核心代码导入路径稳定，`src/channels/telegram/index.ts` 会从该包再导出插件及相关类型。微信通道同理（`extensions/weixin`，私有工作区包）。通道采用 **`ChannelPlugin`** 模型（见 `src/channels/plugin-types.ts`），不再使用旧的 `telegramExtension` API。
-
-`ChannelPlugin` 上的可选 **adapter 字段**（见 `src/channels/plugins/types.adapters.ts`）把通道特有逻辑放在扩展侧，避免 core 写死分支，例如：**`cronDelivery`**（计划任务 `delivery.to` 解析）、**`cliLogin`**（`xopc channels login --channel <id>`）、**`configSurface`**（网关配置快照）、**`onboard`**（`xopc onboard --channels` 交互流程，与 **`setupWizard`** 二选一或并存）、以及 **`reload.configPrefixes`**（与 `src/config/rules.ts` 中的热更新规则合并）。通道列表顺序由 **`meta.order`** 与 `src/channels/plugins/registry.ts`（`listChannelPlugins()`）决定。
-
----
-
 ## 网页（Web UI）通道
 
-Web UI 由网关提供静态资源（`web/` 的 Vite 构建产物，与网关静态根目录一并发布）。
+Web UI 指网关自带的浏览器聊天界面（与网关一同提供的静态页面）。
 
 ### 启动 Gateway
 
@@ -269,7 +261,7 @@ xopc gateway --port 18790
 
 ## 其它通道类型（扩展）
 
-部分部署会通过扩展增加飞书/钉钉/Discord 等通道，可能在 `channels.<id>` 中增加字段并由运行时加载；请参阅对应扩展说明及 `src/channels/plugins/bundled.ts`、生成的 bundled 插件列表。**控制台即时通讯** 页目前只提供 **Telegram** 与 **微信** 的产品化配置入口。
+部分扩展会新增飞书、Discord 等通道及其 `channels.<id>` 配置，请阅读各扩展文档。网关 **即时通讯** 页默认只提供 **Telegram** 与 **微信** 的配置入口。
 
 ---
 

@@ -503,7 +503,7 @@ xopc extension create redis-memory --name "Redis Memory" --kind memory
     └── README.md             # 文档模板
 ```
 
-**注意**：创建的扩展使用 TypeScript，通过 [jiti](https://github.com/unjs/jiti) 即时加载，无需预编译。
+**注意**：脚手架生成的扩展入口为 TypeScript，安装后由 xopc 运行时直接加载，无需单独编译扩展包。
 
 ---
 

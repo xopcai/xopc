@@ -1,6 +1,6 @@
 # On-disk layout
 
-This page is a **concise map** of where xopc reads and writes on disk. Config remains the source of truth; resolution is implemented in `src/agent/agent-scope.ts`, `src/config/paths-state.ts`, `src/config/paths.ts`, and related modules.
+This page lists where xopc reads and writes on disk. Effective paths always come from your **config file** (default `~/.xopc/xopc.json`) and environment variables such as `XOPC_CONFIG` and `XOPC_WORKSPACE`.
 
 For narrative setup (init, templates, env vars), see [State directory & workspace layout](workspace.md).
 
@@ -36,14 +36,14 @@ Resolved by `resolveAgentHomeDir(config, agentId)`. Typical layout:
 
 | Path | Purpose |
 |------|---------|
-| `bootstrap/` | Persona and bootstrap Markdown: `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (prompt bootstrap, distinct from curated store), `CONTEXT.md`, `SKILLS.md`, `BOOTSTRAP.md`. Loaded via `loadBootstrapFiles` (`src/agent/context/workspace.ts`). Gateway heartbeat file: `resolveHeartbeatMdPath` → `bootstrap/HEARTBEAT.md`. |
+| `bootstrap/` | Persona and bootstrap Markdown: `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (system-prompt bootstrap, separate from curated `memories/`), `CONTEXT.md`, `SKILLS.md`, `BOOTSTRAP.md`. Used when building the agent system prompt. Gateway heartbeat text defaults to `bootstrap/HEARTBEAT.md` when present. |
 | `sessions/` | Transcript store (shards, `index.json`, `archive/`), per-session overrides under `sessions/config/`, ACP metadata index `sessions/acp-sessions.json`. |
 | `memories/` | Curated structured store (`MEMORY.md`, `USER.md`; entries separated by a fixed delimiter — `BuiltinMemoryStore`). |
 | `inbound/` | Persisted inbound attachments (non-image binaries); transcript paths use `inbound/...` relative to agent home. |
 | `tts/` | Cached outbound TTS audio per session. |
 | `agent/` | See **Agent dir** below. |
 
-Seeding: `xopc init` / `xopc agents add` create `bootstrap/` files and workspace layout; templates live under `src/agent/context/workspace-templates/` (see [Workspace templates](reference/templates.md)).
+Seeding: `xopc init` / `xopc agents add` create `bootstrap/` files and workspace layout from built-in templates (see [Workspace templates](reference/templates.md)).
 
 ## Agent dir: `agents/<agentId>/agent/`
 
@@ -78,7 +78,7 @@ Inbound / TTS attachments in transcripts use relative paths under `inbound/` and
 
 ## Operations helpers
 
-- `listAgentWorkspaceDirs(config)` — all markdown roots for listed agents (`src/config/workspace-dirs.ts`).
+- `listAgentWorkspaceDirs(config)` — all Markdown workspace roots for agents listed in config (CLI / advanced use).
 - `listAgentBootstrapDirs(config)` — all `bootstrap/` roots for backup or editors.
 
 ## See also

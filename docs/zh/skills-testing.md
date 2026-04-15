@@ -41,7 +41,7 @@ pnpm run dev -- skills test weather --verbose
 
 ```bash
 # 运行测试框架单元测试
-pnpm test src/agent/skills/__tests__/test-framework.test.ts
+pnpm test
 ```
 
 ## 测试类型
@@ -328,7 +328,7 @@ on:
   push:
     paths:
       - 'skills/**'
-      - 'src/agent/skills/**'
+      - 'src/**/skills/**'
   pull_request:
     paths:
       - 'skills/**'
@@ -390,7 +390,7 @@ set -e
 echo "Running local skill regression tests..."
 
 # Run unit tests
-pnpm test src/agent/skills/__tests__/test-framework.test.ts
+pnpm test
 
 # Run integration tests
 xopc skills test --verbose
@@ -555,8 +555,7 @@ ok 2 - weather/Dependencies
 ## 参考资料
 
 - [技能系统使用指南](./skills.md)
-- [测试框架源码](../src/agent/skills/test-framework.ts)
-- [测试示例](../src/agent/skills/__tests__/test-framework.test.ts)
+- 技能测试框架与示例位于 xopc 源码仓库中，与 `skills test` 等 CLI 实现相邻。
 
 ---
 

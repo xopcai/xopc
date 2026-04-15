@@ -143,9 +143,9 @@ const config = {
 
 | 组件 | 文件 | 说明 |
 |------|------|------|
-| `ProgressFeedbackManager` | `src/agent/progress.ts` | 核心进度跟踪和回调 |
-| `DraftStream` | `src/channels/draft-stream.ts` | 带进度的 Telegram 消息流式传输 |
-| `AgentService` | `src/agent/service.ts` | 将进度与智能体事件集成 |
+| `ProgressFeedbackManager` | 核心进度跟踪与回调 |
+| `DraftStream` | Telegram 草稿 / 流式展示 |
+| `AgentService` | 将进度并入智能体事件流 |
 
 ## API 参考
 

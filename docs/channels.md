@@ -1,6 +1,6 @@
 # Channel Configuration
 
-xopc supports multiple communication channels with an extension-based architecture. At parse time, the root **`channels`** object in `src/config/schema.ts` is an **open map** (`Record<string, unknown>`), so new channel ids do not require edits to the core Zod tree. **Bundled** Telegram and Weixin ship field-level Zod schemas and optional runtime checks under `extensions/telegram/src/config-schema.ts` and `extensions/weixin/src/config-schema.ts` (symbols are **re-exported** from `src/config/schema.ts` for consumers). After load, channel-specific validation runs through each registered plugin’s `configSchema.validate`. The gateway **`GET /api/config`** builds the `channels` JSON from each **`ChannelPlugin.configSurface`** (and plugin metadata), not from hard-coded Telegram/Weixin fields in core.
+xopc can connect assistants to **Telegram**, **Weixin (WeChat)**, and the **gateway Web chat**. Other channel types may appear if you install extensions that register them. All channel settings live under the **`channels`** object in `~/.xopc/xopc.json` (or the file pointed to by `XOPC_CONFIG`).
 
 ## Overview
 
@@ -10,11 +10,11 @@ xopc supports multiple communication channels with an extension-based architectu
 | **Weixin (WeChat)** | ✅ | QR login on the gateway host, DM policies, optional per-account JSON |
 | **Web UI** | ✅ | Gateway console chat (browser), same HTTP API as other clients |
 
-Third-party or experimental channel types may ship as **extensions** and still persist under `channels.<id>` when valid for your build.
+Third-party channel types from extensions also use `channels.<id>` blocks when their README says so.
 
-### Extension loading (Telegram / Weixin)
+### Extensions and Telegram / Weixin
 
-The gateway and **`xopc agent`** use **manifest-first activation** (see [Extensions — Manifest-first control plane](./extensions.md#manifest-first-control-plane)). Bundled channel packages under `extensions/telegram` and `extensions/weixin` declare `channels` and `activation.onChannels` in `xopc.extension.json`, so when **`channels.telegram`** or **`channels.weixin`** is considered configured (token, `accounts`, `enabled`, etc.), the matching extension can load **without** listing its id under `extensions.enabled`. Set **`extensions.disabled`** to force an extension off. The CLI pre-parse path only loads extensions when `extensions.enabled` is non-empty, channels imply a channel extension, or a manifest-indexed env var is set—see the extensions doc for details.
+Usually you only configure **`channels.telegram`** or **`channels.weixin`**; the matching pieces load automatically. To **block** a specific extension id, add it under **`extensions.disabled`**. For how extension loading interacts with other CLI commands, see [Extensions — When extensions load](./extensions.md#when-extensions-load).
 
 ## Gateway console — IM channels
 
@@ -83,7 +83,7 @@ Configuration is stored in the **gateway config file** (default `~/.xopc/xopc.js
 
 - **`dmPolicy`**: same family as Telegram (`pairing`, `allowlist`, `open`, `disabled`).
 - **`allowFrom`**: when using allowlist-style DM policy, list allowed wxid / openid strings.
-- **`accounts`**: optional per-account overrides (name, `cdnBaseUrl`, `routeTag`, policies, etc.) — see `WeixinConfigSchema` / `WeixinAccountConfigSchema` in `extensions/weixin/src/config-schema.ts` (re-exported from `src/config/schema.ts`).
+- **`accounts`**: optional per-account overrides (name, `cdnBaseUrl`, `routeTag`, policies, and more — use the gateway **IM channels** form or edit JSON carefully).
 
 Restart or reload the gateway after changing credentials if your deployment requires it.
 
@@ -227,17 +227,9 @@ Connection is automatically verified on startup.
 - **Voice messages**: 60 second limit for STT (Telegram)
 - **TTS text**: limited by `tts.maxTextLength` (schema default 512; configurable) with optional LLM summarization — see [Voice](/voice)
 
-## Implementation note (developers)
-
-The Telegram channel is shipped as a **pnpm workspace package** at `extensions/telegram` (`@xopcai/xopc-extension-telegram`). The core registers it through `src/channels/plugins/bundled.ts`. For stable imports from core code, `src/channels/telegram/index.ts` re-exports the plugin and related symbols from that package. The Weixin channel follows the same pattern (`extensions/weixin`, private workspace package). Channels use the **`ChannelPlugin`** model (see `src/channels/plugin-types.ts`), not the legacy `telegramExtension` API.
-
-Optional **adapter fields** on `ChannelPlugin` (see `src/channels/plugins/types.adapters.ts`) let extensions own behavior without core branching, for example: **`cronDelivery`** (cron `delivery.to` resolution), **`cliLogin`** (`xopc channels login --channel <id>`), **`configSurface`** (gateway config snapshot), **`onboard`** (CLI `xopc onboard --channels` flow, alongside **`setupWizard`**), and **`reload.configPrefixes`** (hot-reload hints merged in `src/config/rules.ts`). Channel list ordering uses **`meta.order`** via `src/channels/plugins/registry.ts` (`listChannelPlugins()`).
-
----
-
 ## Web UI channel
 
-The Web UI provides a browser-based chat interface served as static assets from the gateway (Vite build under `web/`, output co-located with the gateway static root).
+The Web UI is the gateway’s built-in browser chat (static files served together with the gateway).
 
 ### Start Gateway
 
@@ -269,7 +261,7 @@ The sidebar session list can show **Web** / **Telegram** / **Weixin** sessions:
 
 ## Other channel types (extensions)
 
-Some deployments add extra channel plugins (Feishu/Lark, Discord, etc.). Those may introduce additional `channels.<id>` blocks and runtime wiring; refer to the extension’s own README and to `src/channels/plugins/bundled.ts` / generated bundled plugins. The core UI **IM channels** page only surfaces **Telegram** and **Weixin** from the product console.
+Some extensions add more channel plugins and their own `channels.<id>` keys. Follow each extension’s README. The gateway **IM channels** screen only covers **Telegram** and **Weixin** out of the box.
 
 ---
 

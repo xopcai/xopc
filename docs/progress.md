@@ -155,9 +155,9 @@ Task Complete
 
 | Component | File | Description |
 |-----------|------|-------------|
-| `ProgressFeedbackManager` | `src/agent/progress.ts` | Core progress tracking |
-| `DraftStream` | `src/channels/draft-stream.ts` | Telegram streaming |
-| `AgentService` | `src/agent/service.ts` | Event integration |
+| `ProgressFeedbackManager` | Core progress tracking and callbacks |
+| `DraftStream` | Telegram draft / streaming UX |
+| `AgentService` | Wires progress into the agent event stream |
 
 ---
 

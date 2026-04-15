@@ -40,8 +40,8 @@ npm run dev -- skills test weather --verbose
 ### Run Unit Tests
 
 ```bash
-# Run test framework unit tests
-npm test src/agent/skills/__tests__/test-framework.test.ts
+# From the xopc repository root (after pnpm install)
+pnpm test
 ```
 
 ## Test Types
@@ -328,7 +328,7 @@ on:
   push:
     paths:
       - 'skills/**'
-      - 'src/agent/skills/**'
+      - 'src/**/skills/**'
   pull_request:
     paths:
       - 'skills/**'
@@ -389,8 +389,8 @@ set -e
 
 echo "Running local skill regression tests..."
 
-# Run unit tests
-npm test src/agent/skills/__tests__/test-framework.test.ts
+# Run unit tests (full suite from repo root)
+pnpm test
 
 # Run integration tests
 xopc skills test --verbose
@@ -555,8 +555,7 @@ ok 2 - weather/Dependencies
 ## References
 
 - [Skills System Guide](./skills.md)
-- [Test Framework Source](../src/agent/skills/test-framework.ts)
-- [Test Examples](../src/agent/skills/__tests__/test-framework.test.ts)
+- Skill test framework and examples live in the xopc source tree next to the `skills test` CLI implementation.
 
 ---
 

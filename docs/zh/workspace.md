@@ -4,7 +4,7 @@
 
 xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；其下有 **按智能体划分** 的目录树（会话、收件箱、入站/TTS、托管记忆、运行时文件等）。**工作空间（workspace）** 是 Markdown 根目录：工具 `cwd`、按日的 `memory/` 笔记、用户文件，以及其下的扩展安装路径。
 
-路径以 **`config.json` 为唯一事实来源**：`src/agent/agent-scope.ts`（workspace / agentDir 解析），以及 `src/config/paths-state.ts`、`src/config/workspace-defaults.ts`、`src/config/paths.ts`。目录骨架由 **`xopc init`**（`src/cli/commands/init.ts`）与 **`xopc agents add`** 创建/更新。**Markdown 工作区**不在 `agents/<id>/` 下（默认在状态根旁的 `workspace` / `workspace-<id>`，或配置为 `agents.defaults.workspace/<id>`）。
+路径由 **主配置文件**（默认 `<状态目录>/xopc.json`）及环境变量决定。**`xopc init`** 与 **`xopc agents add`** 会创建目录并写入模板。**Markdown 工作区**（工具 `cwd` 与项目文件）与 **`agents/<id>/` 状态目录** 不是同一棵树：默认在状态根旁的 `workspace` / `workspace-<id>`，或按 **`agents.defaults.workspace/<id>`** 解析。
 
 ## 状态目录根
 
@@ -48,13 +48,13 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 
 ## 工作空间目录（Markdown 根）
 
-无配置中逐条 `workspace` 覆盖时的启发式路径：默认智能体 → `<stateDir>/workspace`；其它 id → `<stateDir>/workspace-<id>`（未设置 `agents.defaults.workspace` 时）。载入 **`config.json`** 时，以合并后的 `resolveAgentWorkspaceDir` / 有效智能体配置为准：显式 `workspace`、`join(agents.defaults.workspace, id)`，或回退到 `workspace-<id>`。
+在常规配置下，每个智能体可有显式 **`workspace`**，或继承 **`agents.defaults.workspace/<agentId>`**，否则回退到状态目录旁的 `workspace` / `workspace-<id>`。
 
-未加载配置时，CLI 默认使用 **`resolveDefaultAgentWorkspaceDir()`**（`src/config/workspace-defaults.ts`）：若设置 `XOPC_WORKSPACE` 则用之，否则对主工作区启发式为 `~/.xopc/workspace`。**`xopc init`** 会加载配置（或 schema 默认值），创建 **`agents/<id>/`** 与解析得到的 Markdown 工作区，并按内置模板**种子化**标准引导 Markdown（与 [工作区模板](/zh/reference/templates) 一致：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md` 及模板包中的 `BOOTSTRAP.md`）。仅当目标文件尚不存在时才写入。**`xopc agents add`** 会更新 **`agents.list`**、创建目录并种子化新工作区，用于新增多 Agent（见 [CLI](cli.md#agents)）。
+CLI **未**加载到配置文件时，优先 **`XOPC_WORKSPACE`**；否则主 Markdown 树默认可用 **`~/.xopc/workspace`**。**`xopc init`** 会创建 **`agents/<id>/`**、Markdown 工作区，并按 [工作区模板](/zh/reference/templates) 中的文件名种子化引导文件（仅当文件尚不存在时写入）。**`xopc agents add`** 更新 **`agents.list`** 并初始化新工作区（见 [CLI](cli.md#agents)）。
 
 ### 引导用 Markdown（人格与记忆索引）
 
-这些文件会进入系统提示（加载顺序与长度限制见 `src/agent/context/workspace.ts`）。文件名常量见 `WORKSPACE_FILES`（`src/config/paths.ts`）。
+这些文件按 **固定顺序** 进入系统提示（有长度限制），在各智能体的 `bootstrap/` 下编辑。
 
 | 文件 | 作用 |
 |------|------|
@@ -87,9 +87,9 @@ xopc 在单一 **状态目录**（“Agent OS” 根）下保存本机状态；�
 
 相关但不同来源的两套逻辑：
 
-1. **合并后的默认 agent 工作区** — **网关** 与 `getWorkspacePath(config)`（`src/config/schema.ts`）根据配置解析**默认 agent id**，再通过 `resolveAgentWorkspaceDir` / 有效 profile 得到 Markdown 根路径。网关扩展目录为 `<该 workspace>/.extensions`。
+1. **网关** — 使用配置中的 **默认智能体** 及其解析后的 Markdown 工作区；该工作区下的 **`.extensions`** 供工作区级扩展使用（若存在）。
 
-2. **CLI 默认上下文**（根命令未显式传 `--workspace` 时）— 若设置 `XOPC_WORKSPACE` 则用之，否则 **`resolveDefaultAgentWorkspaceDir()`** → 在状态目录启发式下为 `~/.xopc/workspace`（`src/cli/registry.ts`、`src/config/workspace-defaults.ts`）。
+2. **CLI**（根命令未传 `--workspace` 时）— 优先 **`XOPC_WORKSPACE`**，否则与上相同的 **`~/.xopc/workspace`** 启发式默认。
 
 `xopc init` 后，`main` 的引导文件默认在 `~/.xopc/workspace/`；若希望网关与 CLI 使用同一套 Markdown，请将 **`agents.defaults.workspace`**（及任意 **`agents.list[].workspace`**）指向同一路径。
 
