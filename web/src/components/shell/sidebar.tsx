@@ -1,4 +1,4 @@
-import { Clock, Layers, Plug, Plus } from 'lucide-react';
+import { Clock, Layers, LayoutGrid, Plug, Plus } from 'lucide-react';
 import { Link, NavLink } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
@@ -83,6 +83,15 @@ export function SidebarNav({
           >
             <Plug className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
             {!collapsed ? <span className="truncate">{m.nav.channels}</span> : null}
+          </NavLink>
+          <NavLink
+            to="/apps"
+            className={(props) => secondaryNavClass(props, collapsed)}
+            title={m.nav.apps}
+            onClick={() => onNavigate?.()}
+          >
+            <LayoutGrid className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+            {!collapsed ? <span className="truncate">{m.nav.apps}</span> : null}
           </NavLink>
           <ExtensionNavItems
             collapsed={collapsed}

@@ -13,6 +13,7 @@
     "cron": "Scheduled Tasks",
     "skills": "Skills",
     "channels": "Channels",
+    "apps": "Apps",
     "logs": "Logs",
     "settingsAppearance": "Preferences",
     "settingsProviders": "Providers",
@@ -23,6 +24,21 @@
     "settingsHeartbeat": "Heartbeat",
     "settingsSearch": "Web search",
     "settingsAgents": "Agents"
+  },
+  "appsPage": {
+    "title": "Apps",
+    "subtitle": "Installed extensions that provide UI interfaces and tools.",
+    "empty": "No extensions discovered.",
+    "sectionWithUi": "Apps with UI ({{count}})",
+    "sectionBackend": "Backend extensions ({{count}})",
+    "inactive": "Inactive",
+    "backendOnlyHint": "This extension has no Gateway UI; tools and hooks still run when enabled.",
+    "badgePages": "{{count}} page(s)",
+    "badgeSettings": "{{count}} settings",
+    "badgeWidgets": "{{count}} widget(s)",
+    "badgeSidebar": "{{count}} sidebar",
+    "open": "Open",
+    "openSettings": "Settings"
   },
   "settingsSections": {
     "appearance": "Preferences",

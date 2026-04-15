@@ -7,6 +7,7 @@ import type { ForwardRefExoticComponent, RefAttributes, SVGProps } from 'react';
 import { NavLink } from 'react-router-dom';
 
 import { useUiExtensions } from './extension-provider';
+import { extensionPagePath } from './extension-paths';
 import type { ExtensionUiInfo, PageContribution } from './types';
 
 type LucideIcon = ForwardRefExoticComponent<
@@ -84,15 +85,4 @@ function collectNavPages(
     }
   }
   return result;
-}
-
-/** Router path for an extension page (matches ExtensionPage resolution). */
-function extensionPagePath(extensionId: string, page: PageContribution): string {
-  if (page.path.startsWith('/apps/')) {
-    return page.path;
-  }
-  const short = page.id.startsWith(`${extensionId}.`)
-    ? page.id.slice(extensionId.length + 1)
-    : page.id;
-  return `/apps/${extensionId}/${short}`;
 }

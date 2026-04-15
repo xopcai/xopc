@@ -41,6 +41,18 @@
           "showInNav": true,
           "navIcon": "hand-metal"
         }
+      ],
+      "chatWidgets": [
+        {
+          "id": "hello.result-widget",
+          "title": "Hello Result",
+          "match": {
+            "toolName": "hello"
+          },
+          "entrypoint": "ui/widget.html",
+          "maxHeight": 200,
+          "interactive": false
+        }
       ]
     }
   }
