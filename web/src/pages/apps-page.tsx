@@ -25,56 +25,60 @@ export function AppsPage() {
   }
 
   return (
-    <div className="mx-auto w-full max-w-app-main px-4 py-8">
-      <div className="mb-6">
-        <h1 className="text-xl font-semibold text-fg">{m.appsPage.title}</h1>
-        <p className="mt-1 text-sm text-fg-muted">{m.appsPage.subtitle}</p>
-      </div>
-
-      {extensions.length === 0 ? (
-        <EmptyAppsState message={m.appsPage.empty} />
-      ) : (
-        <div className="flex flex-col gap-8">
-          {uiExtensions.length > 0 ? (
-            <section>
-              <h2 className="mb-3 text-sm font-semibold text-fg">
-                {m.appsPage.sectionWithUi.replace('{{count}}', String(uiExtensions.length))}
-              </h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {uiExtensions.map((ext) => (
-                  <ExtensionCard key={ext.id} extension={ext} />
-                ))}
-              </div>
-            </section>
-          ) : null}
-
-          {backendOnlyExtensions.length > 0 ? (
-            <section>
-              <h2 className="mb-3 text-sm font-semibold text-fg">
-                {m.appsPage.sectionBackend.replace('{{count}}', String(backendOnlyExtensions.length))}
-              </h2>
-              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                {backendOnlyExtensions.map((ext) => (
-                  <ExtensionCard key={ext.id} extension={ext} />
-                ))}
-              </div>
-            </section>
-          ) : null}
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
+      <div className="mx-auto w-full max-w-app-main px-4 py-8">
+        <div className="mb-6">
+          <h1 className="text-xl font-semibold text-fg">{m.appsPage.title}</h1>
+          <p className="mt-1 text-sm text-fg-muted">{m.appsPage.subtitle}</p>
         </div>
-      )}
+
+        {extensions.length === 0 ? (
+          <EmptyAppsState message={m.appsPage.empty} />
+        ) : (
+          <div className="flex flex-col gap-8">
+            {uiExtensions.length > 0 ? (
+              <section>
+                <h2 className="mb-3 text-sm font-semibold text-fg">
+                  {m.appsPage.sectionWithUi.replace('{{count}}', String(uiExtensions.length))}
+                </h2>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {uiExtensions.map((ext) => (
+                    <ExtensionCard key={ext.id} extension={ext} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+
+            {backendOnlyExtensions.length > 0 ? (
+              <section>
+                <h2 className="mb-3 text-sm font-semibold text-fg">
+                  {m.appsPage.sectionBackend.replace('{{count}}', String(backendOnlyExtensions.length))}
+                </h2>
+                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {backendOnlyExtensions.map((ext) => (
+                    <ExtensionCard key={ext.id} extension={ext} />
+                  ))}
+                </div>
+              </section>
+            ) : null}
+          </div>
+        )}
+      </div>
     </div>
   );
 }
 
 function AppsPageSkeleton() {
   return (
-    <div className="mx-auto w-full max-w-app-main px-4 py-8">
-      <div className="mb-6 h-8 w-40 max-w-full animate-pulse rounded-md bg-surface-hover" />
-      <div className="mb-2 h-4 w-full max-w-md animate-pulse rounded bg-surface-hover" />
-      <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {[0, 1, 2].map((i) => (
-          <div key={i} className="h-40 animate-pulse rounded-xl border border-edge bg-surface-base" />
-        ))}
+    <div className="flex min-h-0 flex-1 flex-col overflow-y-auto bg-surface-panel">
+      <div className="mx-auto w-full max-w-app-main px-4 py-8">
+        <div className="mb-6 h-8 w-40 max-w-full animate-pulse rounded-md bg-surface-hover" />
+        <div className="mb-2 h-4 w-full max-w-md animate-pulse rounded bg-surface-hover" />
+        <div className="mt-8 grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+          {[0, 1, 2].map((i) => (
+            <div key={i} className="h-40 animate-pulse rounded-xl border border-edge bg-surface-base" />
+          ))}
+        </div>
       </div>
     </div>
   );
