@@ -9,8 +9,9 @@ xopc provides a lightweight but powerful extension system for customizing and ex
 - 🔌 **Extension SDK** - Official SDK with unified imports and optional **subpath** imports (`extension-sdk/core`, `extension-sdk/lazy`, …)
 - ⚡ **Native TypeScript** - Instant loading via jiti, no compilation
 - 📦 **Multi-source Installation** - npm, local directory, Git repository
+- 🖥️ **Gateway console UI (optional)** — Extensions may declare a **`ui`** manifest and ship HTML panels for the React Web console; the host loads assets via HTTPS and embeds them in sandboxed iframes using **`@xopcai/extension-ui-sdk`** (see [Gateway console: Extension UI](#gateway-console-extension-ui-iframe)).
 
-**Design reference (repository):** the internal RFC set under [`.docs/channel/`](../.docs/channel/00-overview.md) describes the full target architecture (aligned with ideas from OpenClaw). User-facing behavior is summarized below; Phase 3 items not yet in code are omitted.
+**Design reference (repository):** the internal RFC set under [`.docs/channel/`](../.docs/channel/00-overview.md) describes the full target architecture (aligned with ideas from OpenClaw). User-facing behavior is summarized below; Phase 3 items not yet in code are omitted. **Web UI extension** implementation notes live under [`.docs/ext/`](../.docs/ext/) (phased docs alongside `AGENTS.md`).
 
 ---
 
@@ -209,6 +210,79 @@ import type { ExtensionCommand } from '@xopcai/xopc/extension-sdk';
 // Services
 import type { ExtensionService } from '@xopcai/xopc/extension-sdk';
 ```
+
+---
+
+## Gateway console: Extension UI (iframe) {#gateway-console-extension-ui-iframe}
+
+Extensions can ship a **Gateway Web console** front-end that runs **inside sandboxed iframes** in the React app (`web/`). This is **orthogonal** to the Node **[Extension SDK](#extension-sdk)** above: iframe code does **not** call `register()` on the gateway; it uses **`postMessage`**, wrapped by **`@xopcai/extension-ui-sdk`**.
+
+### `manifest.ui` (optional)
+
+| Field | Role |
+|-------|------|
+| `main` | Default panel entry (path relative to the extension package) |
+| `icon` | Icon asset path |
+| `permissions` | Strings gating SDK calls on the host (`theme`, `agent.send`, `agent.subscribe`, `storage`, …) |
+| `contributions` | `pages`, `settingsPanels`, `chatWidgets`, `commands` — Apps routes, settings sidebar, chat widgets, and **⌘/Ctrl+K** command palette entries |
+
+If `ui` is absent, the extension may still be a **backend-only** extension (tools, hooks, channels).
+
+### Package: `@xopcai/extension-ui-sdk`
+
+Import **`createExtensionClient()`** and use **`await client.whenReady()`** after the host sends the `init` message.
+
+- **theme** — `getTheme()`, `onThemeChange`
+- **agent** — `sendMessage` (JSON mode to the gateway), `onStreamEvent` (relies on **`GET /api/events`** SSE + host forwarding)
+- **session** — `listSessions`, `navigateToSession`
+- **config** / **storage** — backed by gateway REST (see below); storage is a JSON KV on disk per extension namespace
+- **ui** — `showNotification`, `navigate`, `resize`, `closePanel`, **`onWidgetResult`** (tool/chat widget iframes receive tool output via the host `widget.data` event)
+- **events** — `emit` / `on` use the `ext.*` namespace for **cross-extension** fan-out between iframes
+- **onDispose**, **onDidChangeVisibility**
+
+**Generated API docs (Markdown)** — from the repo root:
+
+```bash
+pnpm run docs:extension-sdk
+```
+
+Output directory: **`packages/extension-ui-sdk/docs/api/`**.
+
+### Gateway REST (Bearer auth)
+
+Same **`Authorization: Bearer <token>`** as the rest of the console API.
+
+| Method | Path | Description |
+|--------|------|-------------|
+| GET | `/api/extensions` | List discovered extensions and summarized `ui` |
+| GET | `/api/extensions/:id` | Detail + full manifest |
+| GET | `/api/extensions/:id/assets/*` | Serve static UI assets (HTML/JS/CSS/SVG); response includes a strict **Content-Security-Policy** |
+| GET | `/api/extensions/:id/storage` | List storage keys |
+| GET | `/api/extensions/:id/storage/:key` | Read `{ value }` |
+| PUT | `/api/extensions/:id/storage/:key` | Body `{ value }` — write KV |
+| DELETE | `/api/extensions/:id/storage/:key` | Remove key |
+| GET | `/api/extensions/:id/config` | Read extension-scoped config object |
+| PATCH | `/api/extensions/:id/config` | Merge JSON patch into that config |
+
+**Persistence:** KV and config are stored as JSON under **`~/.xopc/extensions/<sanitized_namespace>/storage.json`**. Config uses a dedicated namespace **`__config__<extensionId>`**.
+
+### Web shell behaviour
+
+- **First-load permission prompt** — Before mounting an iframe, the shell may show a dialog listing **`ui.permissions`**; approval is stored under **`localStorage`** key **`xopc.extensionUiGrants.v1`** (keyed by extension id + permission-set fingerprint).
+- **iframe `sandbox`** — Typically `allow-scripts allow-forms allow-popups` **without** `allow-same-origin` for stronger isolation (host communication uses `postMessage`, not same-origin cookie access).
+- **Agent stream** — Webchat runs emit **`agent.stream`** on the gateway event bus; clients subscribed to **`GET /api/events`** receive them; the shell forwards matching chunks to iframes that subscribed via **`agent.subscribe`** for that **`sessionKey`**.
+- **Command palette** — **⌘K / Ctrl+K** (or `open-command-palette` on `window`) lists **`contributions.commands`**; commands with **`opensPanel`** navigate to **`/apps/{extensionId}`**.
+- **Debug** — **Settings → Extensions → Extension debug** lists gateway extensions and the raw **UI grants** JSON.
+
+### Sample: `extensions/hello`
+
+The bundled **Hello** extension demonstrates the SDK end-to-end. UI bundles are produced with **esbuild**:
+
+```bash
+pnpm run build:hello-ui
+```
+
+Rebuild after upgrading **`@xopcai/extension-ui-sdk`**. Sources: `extensions/hello/ui/*-entry.ts`, output: `ui/*.bundle.js` referenced from the HTML entrypoints.
 
 ---
 
