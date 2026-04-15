@@ -1,8 +1,8 @@
 import { Command } from 'commander';
 import { register, formatExamples, type CLIContext } from '../registry.js';
 import { seedMainAgentBootstrap } from '../../agent/context/workspace-seed.js';
-import { loadConfig } from '../../config/loader.js';
-import { getWorkspaceStatus, setupWorkspace, setupConfig } from '../utils/workspace.js';
+import { getWorkspaceStatus } from '../utils/workspace.js';
+import { initWorkspace } from '../utils/init-workspace.js';
 
 function createSetupCommand(ctx: CLIContext): Command {
   const cmd = new Command('setup')
@@ -29,23 +29,21 @@ function createSetupCommand(ctx: CLIContext): Command {
       console.log(`   Config: ${status.configExists ? '✅ exists' : '❌ not found'}`);
       console.log(`   Workspace: ${status.workspaceSetup ? '✅ setup' : '❌ not found'}`);
 
-      // Setup config
-      if (!status.configExists) {
-        console.log('\n📝 Creating config file...');
-        setupConfig(configPath);
+      const result = await initWorkspace({ configPath, workspacePath });
+
+      if (result.configCreated) {
+        console.log('\n📝 Created config file.');
       } else {
-        console.log('\n📝 Config already exists, skipping...');
+        console.log('\n📝 Config already present (verified).');
       }
 
-      // Setup workspace
-      if (!status.workspaceSetup) {
-        console.log('\n📁 Creating workspace...');
-        setupWorkspace(workspacePath);
+      if (result.workspaceCreated) {
+        console.log('\n📁 Created workspace + memory/.');
       } else {
-        console.log('\n📁 Workspace already setup, skipping...');
+        console.log('\n📁 Workspace already present (verified).');
       }
 
-      seedMainAgentBootstrap(loadConfig(configPath));
+      seedMainAgentBootstrap(result.config);
 
       console.log('\n' + '═'.repeat(40));
       console.log('\n✅ Setup complete!\n');
