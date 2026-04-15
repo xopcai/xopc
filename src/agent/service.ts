@@ -1,10 +1,9 @@
 import type { AgentEvent, AgentMessage, ThinkingLevel } from '@mariozechner/pi-agent-core';
 import { MessageBusShutdownError, type MessageBus, type InboundMessage } from '../infra/bus/index.js';
-import { type Config, type AgentDefaults, getAgentDefaultModelRef } from '../config/schema.js';
+import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { maybeAutoTitleSessionStore } from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
 import { INTERNAL_OUTBOUND_DROP_CHANNEL } from '../channels/internal-outbound.js';
-import { randomUUID } from 'node:crypto';
 import { join } from 'path';
 
 import {
@@ -23,17 +22,12 @@ import {
 } from './transcript/thinking-types.js';
 import { createLogger, runWithLogContext, updateAsyncLogContext } from '../utils/logger.js';
 import { ExtensionRegistryImpl as ExtensionRegistry, ExtensionHookRunner } from '../extensions/index.js';
-import {
-  loadBootstrapFiles,
-  extractTextContent,
-  extractThinkingContent,
-  extractThinkingFromAssistantMessage,
-} from './context/workspace.js';
+import { loadBootstrapFiles, extractTextContent } from './context/workspace.js';
 import { SessionTracker } from './session/tracker.js';
 import { ModelManager } from './models/index.js';
 import { commandRegistry, initializeCommands } from '../chat-commands/index.js';
 import { parseSlashCommand } from '../chat-commands/command-parse.js';
-import { ProgressFeedbackManager, type ProgressStage } from './lifecycle/progress.js';
+import { ProgressFeedbackManager } from './lifecycle/progress.js';
 import { HookHandler } from './lifecycle/hook-handler.js';
 import { ToolErrorTracker } from './tools/error-tracker.js';
 import { RequestLimiter } from './models/request-limiter.js';
@@ -49,12 +43,15 @@ import { MessageRouter, CommandHandler, StreamManager } from './messaging/index.
 import { SessionContextManager, SessionLifecycleManager, type SessionContext } from './session/index.js';
 import { AgentOrchestrator, AgentEventHandler } from './orchestration/index.js';
 import { runAgentTurnWithModelFallbacks } from './orchestration/run-agent-turn-with-fallbacks.js';
-import { applyReasoningVisibilityToSseEvent } from './streaming/reasoning-visibility-sse.js';
 import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
-import type { GatewayClarifyRequestFn } from './tools/clarify-tool.js';
-import type { CronService } from '../cron/index.js';
 import { extractAgentUserPlainText } from './memory/user-message-text.js';
+import { inboundMessageLogRequestId } from './service-inbound-utils.js';
+import type { AgentServiceConfig, AgentContext, StreamHandle } from './service.types.js';
+import {
+  runProcessDirectStreaming,
+  type ProcessDirectStreamingDeps,
+} from './service/process-direct-streaming.js';
 
 import {
   resolveAgentHomeDir,
@@ -76,10 +73,6 @@ import {
 } from '../channels/attachments/inbound-persist.js';
 import { resolveInboundImageContentParts } from './image/inbound-image-handling.js';
 import { getDefaultModelSync } from '../providers/index.js';
-import {
-  mergeVoiceTranscriptsIntoUserText,
-  mergeSttConfigFromAppConfig,
-} from '../channels/attachments/voice-stt-webchat.js';
 import { persistOutboundTtsAudio } from '../channels/attachments/outbound-tts-persist.js';
 import { compressAudio } from '../tts/audio.js';
 import { speak } from '../tts/index.js';
@@ -88,78 +81,9 @@ import { resolveAgentDir } from '../config/paths.js';
 import { shouldUseTTS, getChannelOutputFormat } from '../tts/service.js';
 import { isTTSAvailable } from '../tts/factory.js';
 
+export type { AgentServiceConfig, AgentContext, StreamHandle } from './service.types.js';
+
 const log = createLogger('AgentService');
-
-function inboundMessageLogRequestId(msg: InboundMessage): string {
-  const raw = msg.metadata?.requestId;
-  if (typeof raw === 'string' && raw.trim().length > 0) {
-    return raw.trim();
-  }
-  return randomUUID();
-}
-
-/** Cap tool result size in SSE `tool_end` events (pi-agent passes structured objects, not only strings). */
-const SSE_TOOL_RESULT_MAX_CHARS = 100_000;
-
-function serializeAgentToolResultForSse(result: unknown): string | undefined {
-  if (result === undefined || result === null) return undefined;
-  if (typeof result === 'string') {
-    return result.length > SSE_TOOL_RESULT_MAX_CHARS
-      ? `${result.slice(0, SSE_TOOL_RESULT_MAX_CHARS)}\n…(truncated)`
-      : result;
-  }
-  try {
-    const s = JSON.stringify(result, null, 2);
-    return s.length > SSE_TOOL_RESULT_MAX_CHARS
-      ? `${s.slice(0, SSE_TOOL_RESULT_MAX_CHARS)}\n…(truncated)`
-      : s;
-  } catch {
-    try {
-      return String(result);
-    } catch {
-      return undefined;
-    }
-  }
-}
-
-export interface AgentServiceConfig {
-  workspace: string;
-  model?: string;
-  config?: Config;
-  agentDefaults?: AgentDefaults;
-  extensionRegistry?: ExtensionRegistry;
-  maxRequestsPerTurn?: number;
-  maxToolFailuresPerTurn?: number;
-  maxTaskDurationMs?: number;
-  // Thinking configuration
-  thinkingLevel?: ThinkingLevel;
-  reasoningLevel?: 'off' | 'on' | 'stream';
-  verboseLevel?: 'off' | 'on' | 'full';
-  /**
-   * Gateway-only: blocks the `clarify` tool until the user answers via the web UI.
-   */
-  gatewayClarify?: {
-    requestClarification: GatewayClarifyRequestFn;
-  };
-  getCronService?: () => CronService | undefined;
-}
-
-export interface AgentContext {
-  channel: string;
-  chatId: string;
-  sessionKey: string;
-  senderId?: string;
-  isGroup?: boolean;
-}
-
-export interface StreamHandle {
-  update: (text: string) => void;
-  updateProgress?: (text: string, stage: ProgressStage, detail?: string) => void;
-  setProgress?: (stage: ProgressStage, detail?: string) => void;
-  end: () => Promise<void>;
-  abort: () => Promise<void>;
-  messageId: () => number | undefined;
-}
 
 export class AgentService {
   private sessionStore: SessionStore;
@@ -924,297 +848,44 @@ export class AgentService {
     thinking?: string,
     options?: { signal?: AbortSignal },
   ): AsyncGenerator<{ type: string; [key: string]: unknown }, void, unknown> {
-    const { channel, chatId } = this.parseSessionKey(sessionKey);
-    const context = this.initSessionContext(sessionKey, channel, chatId);
-
-    const eventQueue: Array<{ type: string; [key: string]: unknown }> = [];
-    let resolveWaiting: (() => void) | null = null;
-    let agentDone = false;
-
-    // Track last sent content for delta calculation (incremental push optimization)
-    let lastSentContent = '';
-    let lastSentThinking = '';
-    /** Resolved before the agent runs; used only by outbound SSE visibility filter. */
-    let reasoningLevel: ReasoningLevel = 'off';
-
-    const enqueueSseEvent = (event: { type: string; [key: string]: unknown }) => {
-      eventQueue.push(event);
-      if (resolveWaiting) {
-        resolveWaiting();
-        resolveWaiting = null;
-      }
-    };
-
-    const pushEvent = (event: { type: string; [key: string]: unknown }) => {
-      const visible = applyReasoningVisibilityToSseEvent(event, reasoningLevel);
-      if (visible !== null) {
-        enqueueSseEvent(visible);
-      }
-    };
-
-    if (channel === 'webchat') {
-      this.webchatSseEnqueueBySession.set(sessionKey, (e) => pushEvent(e));
-    }
-
-    const signal = options?.signal;
-    let userAborted = false;
-    let abortHandled = false;
-
-    const agent = this.agentManager.getOrCreateAgent(sessionKey);
-    await this.hydrateSessionModelFromStore(sessionKey);
-    const unsubscribeStreaming = agent.subscribe((event: AgentEvent) => {
-      this.agentEventHandler.handle(event, context);
-
-      switch (event.type) {
-        case 'tool_execution_start': {
-          const toolEvent = event as Extract<AgentEvent, { type: 'tool_execution_start' }>;
-          const toolName =
-            typeof toolEvent.toolName === 'string' && toolEvent.toolName.trim()
-              ? toolEvent.toolName.trim()
-              : 'unknown';
-          pushEvent({
-            type: 'tool_start',
-            toolName,
-            args: toolEvent.args,
-          });
-          break;
-        }
-        case 'tool_execution_end': {
-          const toolEvent = event as Extract<AgentEvent, { type: 'tool_execution_end' }>;
-          const toolName =
-            typeof toolEvent.toolName === 'string' && toolEvent.toolName.trim()
-              ? toolEvent.toolName.trim()
-              : 'unknown';
-          pushEvent({
-            type: 'tool_end',
-            toolName,
-            isError: toolEvent.isError,
-            result: serializeAgentToolResultForSse(toolEvent.result),
-          });
-          break;
-        }
-        case 'message_update': {
-          const msgEvent = event as Extract<AgentEvent, { type: 'message_update' }>;
-          if (msgEvent.message?.role === 'assistant') {
-            const msgContent = msgEvent.message.content;
-            const blocks = Array.isArray(msgContent)
-              ? (msgContent as Array<{ type: string; text?: string }>)
-              : undefined;
-            const fullText = blocks
-              ? extractTextContent(blocks)
-              : String(msgContent);
-            const thinkingFromBlocks = blocks ? extractThinkingContent(blocks) : '';
-            const thinkingFromReasoning = extractThinkingFromAssistantMessage(msgEvent.message);
-            const thinkingText =
-              thinkingFromReasoning.length >= thinkingFromBlocks.length
-                ? thinkingFromReasoning
-                : thinkingFromBlocks;
-
-            // Main answer text (type: text)
-            if (fullText.length > lastSentContent.length) {
-              const delta = fullText.slice(lastSentContent.length);
-              if (delta) {
-                pushEvent({ type: 'token', content: delta });
-                lastSentContent = fullText;
-              }
-            } else if (fullText.length < lastSentContent.length) {
-              pushEvent({ type: 'token', content: fullText });
-              lastSentContent = fullText;
-            }
-
-            // Reasoning / thinking blocks (some models stream here instead of main text)
-            if (thinkingText.length > lastSentThinking.length) {
-              const thDelta = thinkingText.slice(lastSentThinking.length);
-              if (thDelta) {
-                pushEvent({ type: 'thinking', content: thDelta, delta: true });
-                lastSentThinking = thinkingText;
-              }
-            } else if (thinkingText.length < lastSentThinking.length) {
-              pushEvent({ type: 'thinking', content: thinkingText, delta: false });
-              lastSentThinking = thinkingText;
-            }
-          }
-          break;
-        }
-        case 'message_start': {
-          const msgEvent = event as Extract<AgentEvent, { type: 'message_start' }>;
-          if (msgEvent.message?.role === 'assistant') {
-            // Reset incremental tracking
-            lastSentContent = '';
-            lastSentThinking = '';
-            pushEvent({ type: 'thinking', status: 'started' });
-          }
-          break;
-        }
-        case 'message_end': {
-          pushEvent({ type: 'message_end' });
-          break;
-        }
-        case 'agent_start': {
-          pushEvent({ type: 'progress', stage: 'thinking', message: 'Thinking...' });
-          break;
-        }
-        case 'agent_end': {
-          pushEvent({ type: 'progress', stage: 'idle', message: 'Done' });
-          break;
-        }
-        default:
-          break;
-      }
+    yield* runProcessDirectStreaming(this.createProcessDirectStreamingDeps(), {
+      content,
+      sessionKey,
+      attachments,
+      thinking,
+      signal: options?.signal,
     });
+  }
 
-    try {
-      const prepared = await this.prepareInboundAttachments(sessionKey, attachments);
-      let loaded = await this.sessionStore.load(sessionKey);
-      const lastMsg = loaded[loaded.length - 1] as { role?: string; webchatEarlySave?: boolean } | undefined;
-      if (lastMsg?.role === 'user' && lastMsg.webchatEarlySave === true) {
-        loaded = loaded.slice(0, -1);
-      }
-      agent.state.messages = this.prepareLoadedSessionMessages(sessionKey, loaded);
-
-      await this.modelManager.applyModelForSession(agent, sessionKey);
-      await this.applyResolvedThinkingLevel(sessionKey, thinking);
-      {
-        const defReason = (this.config.config?.agents?.defaults?.reasoningDefault ?? 'off') as ReasoningLevel;
-        reasoningLevel = await resolveEffectiveReasoningLevel(this.sessionConfigStore, sessionKey, defReason);
-      }
-
-      const sttCfg = mergeSttConfigFromAppConfig(this.config.config?.stt);
-      const { text: mergedUserText, inboundVoice } = await mergeVoiceTranscriptsIntoUserText(
-        this.attachmentRootsForSession(sessionKey),
-        prepared,
-        content,
-        sttCfg,
-      );
-
-      const armAbort = () => {
-        if (abortHandled) {
-          return;
-        }
-        abortHandled = true;
-        userAborted = true;
-        this.agentOrchestrator.abort(sessionKey);
-        agentDone = true;
-        pushEvent({ type: '__done__' });
-      };
-      if (signal) {
-        if (signal.aborted) {
-          armAbort();
-        } else {
-          signal.addEventListener('abort', armAbort, { once: true });
-        }
-      }
-
-      const commandInfo = parseSlashCommand(mergedUserText);
-      let ranSlashCommand = false;
-      if (!abortHandled && commandInfo && commandRegistry.has(commandInfo.command)) {
-        ranSlashCommand = true;
-        const { aggregatedText } = await this.commandHandler.executeCommandAndAggregateReply(
-          commandInfo.command,
-          commandInfo.args,
-          {
-            sessionKey,
-            channel,
-            chatId,
-            senderId: context.senderId,
-            isGroup: context.isGroup,
-          },
-        );
-        if (aggregatedText) {
-          pushEvent({ type: 'token', content: aggregatedText });
-        }
-        pushEvent({ type: '__done__' });
-        agentDone = true;
-      }
-
-      let messageContent:
-        | Array<{ type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }>
-        | undefined;
-      if (!abortHandled && !ranSlashCommand) {
-        const textForAgent = mergedUserText.trimStart().startsWith('/skill:')
-          ? this.agentManager.expandSkillUserText(mergedUserText)
-          : mergedUserText;
-        messageContent = await this.buildMessageContent(textForAgent, prepared, sessionKey);
-      }
-
-      if (!abortHandled && !ranSlashCommand && messageContent !== undefined) {
-        const agentPromise = (async () => {
-          const userMessage = {
-            role: 'user' as const,
-            content: messageContent,
-            timestamp: Date.now(),
-          };
-          const userPlain = extractAgentUserPlainText(userMessage);
-          const userMessageForModel = await this.agentManager.applyMemoryPrefetchToUserMessage(
-            userMessage,
-            sessionKey,
-          );
-          await runAgentTurnWithModelFallbacks({
-            agent,
-            sessionKey,
-            modelManager: this.modelManager,
-            userMessage: userMessageForModel,
-            log,
-            getConfig: () => this.config.config,
-            beforeUserPrompt: () => this.agentManager.beginBackgroundReviewUserTurn(sessionKey),
-          });
-          this.agentManager.afterAgentTurn(sessionKey, userPlain);
-          this.agentManager.scheduleBackgroundReviewAfterUserTurn(sessionKey);
-        })();
-
-        agentPromise
-          .then(() => {
-            if (abortHandled) {
-              return;
-            }
-            agentDone = true;
-            pushEvent({ type: '__done__' });
-          })
-          .catch((err) => {
-            if (abortHandled) {
-              return;
-            }
-            agentDone = true;
-            pushEvent({ type: 'error', content: err instanceof Error ? err.message : String(err) });
-            pushEvent({ type: '__done__' });
-          });
-      }
-
-      while (true) {
-        if (eventQueue.length > 0) {
-          const event = eventQueue.shift()!;
-          if (event.type === '__done__') break;
-          yield event;
-        } else if (agentDone) {
-          break;
-        } else {
-          await new Promise<void>((resolve) => {
-            resolveWaiting = resolve;
-          });
-        }
-      }
-
-      while (eventQueue.length > 0) {
-        const event = eventQueue.shift()!;
-        if (event.type === '__done__') continue;
-        yield event;
-      }
-
-      await this.persistAgentSessionMessages(sessionKey);
-
-      if (!userAborted) {
-        const ttsAudioEvent = await this.maybeEmitWebchatTts(sessionKey, inboundVoice);
-        if (ttsAudioEvent) {
-          yield ttsAudioEvent;
-        }
-      }
-    } finally {
-      if (channel === 'webchat') {
-        this.webchatSseEnqueueBySession.delete(sessionKey);
-      }
-      unsubscribeStreaming();
-      this.endDirectRequestContext();
-    }
+  private createProcessDirectStreamingDeps(): ProcessDirectStreamingDeps {
+    return {
+      log,
+      parseSessionKey: (sk) => this.parseSessionKey(sk),
+      initDirectStreamingSession: (sk, channel, chatId) => this.initSessionContext(sk, channel, chatId),
+      registerWebchatSsePublisher: (sk, publisher) => {
+        this.webchatSseEnqueueBySession.set(sk, publisher);
+      },
+      unregisterWebchatSsePublisher: (sk) => {
+        this.webchatSseEnqueueBySession.delete(sk);
+      },
+      agentManager: this.agentManager,
+      hydrateSessionModelFromStore: (sk) => this.hydrateSessionModelFromStore(sk),
+      agentEventHandler: this.agentEventHandler,
+      sessionStore: this.sessionStore,
+      prepareLoadedSessionMessages: (sk, msgs) => this.prepareLoadedSessionMessages(sk, msgs),
+      modelManager: this.modelManager,
+      applyResolvedThinkingLevel: (sk, t) => this.applyResolvedThinkingLevel(sk, t),
+      getConfig: () => this.config.config,
+      sessionConfigStore: this.sessionConfigStore,
+      attachmentRootsForSession: (sk) => this.attachmentRootsForSession(sk),
+      agentOrchestrator: this.agentOrchestrator,
+      commandHandler: this.commandHandler,
+      prepareInboundAttachments: (sk, att) => this.prepareInboundAttachments(sk, att),
+      buildMessageContent: (text, prepared, sk) => this.buildMessageContent(text, prepared, sk),
+      persistAgentSessionMessages: (sk) => this.persistAgentSessionMessages(sk),
+      maybeEmitWebchatTts: (sk, hadVoice) => this.maybeEmitWebchatTts(sk, hadVoice),
+      endDirectRequestContext: () => this.endDirectRequestContext(),
+    };
   }
 
   /**
