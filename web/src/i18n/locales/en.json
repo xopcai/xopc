@@ -40,6 +40,31 @@
     "open": "Open",
     "openSettings": "Settings"
   },
+  "extensionUi": {
+    "permissionTitle": "Allow “{{name}}”?",
+    "permissionSubtitle": "This extension may use the following capabilities while its UI is open.",
+    "permissionsNone": "No additional permissions are declared in the manifest.",
+    "allow": "Allow",
+    "deny": "Not now",
+    "deniedHint": "The extension UI stays hidden until you approve it for this browser.",
+    "reviewPermissions": "Review permissions",
+    "loadFailed": "The extension panel failed to load.",
+    "retryLoad": "Reload panel"
+  },
+  "extensionDebug": {
+    "nav": "Extension debug",
+    "title": "Extension debug",
+    "subtitle": "Inspect discovered extensions, declared permissions, and browser UI approval state.",
+    "grantsHeading": "UI approval storage",
+    "grantsHint": "Key `xopc.extensionUiGrants.v1` in localStorage — fingerprints of permission lists you approved per extension.",
+    "refresh": "Refresh",
+    "listHeading": "Extensions from gateway",
+    "colId": "Id",
+    "colName": "Name",
+    "colPermissions": "Manifest permissions",
+    "futureHeading": "Coming later",
+    "futureBody": "PostMessage capture, per-extension storage preview, and live permission overrides are planned for a future iteration."
+  },
   "settingsSections": {
     "appearance": "Preferences",
     "agent": "Agent",

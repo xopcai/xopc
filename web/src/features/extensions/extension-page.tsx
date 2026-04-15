@@ -45,6 +45,7 @@ export function ExtensionPage() {
     <div className="flex min-h-0 flex-1 flex-col">
       <ExtensionIframeHost
         extensionId={extensionId}
+        extensionName={extension.name}
         entrypoint={page.entrypoint}
         permissions={extension.ui?.permissions}
         title={page.title}
