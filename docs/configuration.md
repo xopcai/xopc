@@ -269,6 +269,8 @@ Details and examples: [Session Routing System](/routing-system).
 
 Communication channels configuration.
 
+The top-level `channels` map is **open**: core Zod does not enumerate every channel id. **Bundled** Telegram and Weixin document their field-level schemas under `extensions/telegram/src/config-schema.ts` and `extensions/weixin/src/config-schema.ts` (types/schemas are also **re-exported** from `src/config/schema.ts`). Runtime validation uses each registered plugin’s `configSchema.validate`. For architecture and gateway snapshots, see [Channel configuration](/channels) (implementation note).
+
 #### channels.telegram
 
 Multi-account Telegram configuration:

@@ -202,7 +202,7 @@ Configured under **`agents.defaults.memory`** ([Configuration](configuration.md)
 
 ### Channel plugins (`src/channels/`)
 
-Channels are implemented as **`ChannelPlugin`** instances. The core **`ChannelManager`** loads plugins from `bundledChannelPlugins` in `src/channels/plugins/bundled.ts` (Telegram is provided by the workspace package `extensions/telegram`). Each plugin exposes `init` / `start` / outbound delivery and optional adapters (config, security, streaming, gateway, etc.).
+Channels are implemented as **`ChannelPlugin`** instances. The core **`ChannelManager`** loads plugins from `bundledChannelPlugins` in `src/channels/plugins/bundled.ts` (Telegram is provided by the workspace package `extensions/telegram`). Each plugin exposes `init` / `start` / outbound delivery and optional adapters (config, security, streaming, gateway, plus **`cronDelivery`**, **`cliLogin`**, **`configSurface`**, **`onboard`**, etc.; contracts in `src/channels/plugins/types.adapters.ts`). The root **`channels`** object in config is an open map at parse time; bundled Telegram/Weixin field schemas live under `extensions/*/src/config-schema.ts` (see [Channel configuration](channels.md)).
 
 **Features** (Telegram):
 - Multi-account support
