@@ -26,13 +26,7 @@ export interface Config {
       };
     };
   };
-  channels?: {
-    telegram?: {
-      enabled?: boolean;
-      token?: string;
-      allowFrom?: string[];
-    };
-  };
+  channels?: Record<string, unknown>;
   gateway?: {
     host?: string;
     port?: number;

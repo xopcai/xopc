@@ -21,6 +21,10 @@ import type {
   ChannelExecApprovalAdapter,
   ChannelAgentPromptAdapter,
   ChannelSetupWizard,
+  ChannelCronDeliveryAdapter,
+  ChannelCliLoginAdapter,
+  ChannelConfigSurfaceAdapter,
+  ChannelOnboardAdapter,
 } from './plugins/types.adapters.js';
 
 export type { ChannelId, ChatType, ChannelMeta, ChannelCapabilities } from './plugins/types.core.js';
@@ -48,6 +52,7 @@ export interface ChannelConfigUiHint {
 export interface ChannelConfigSchema {
   schema: Record<string, unknown>;
   uiHints?: Record<string, ChannelConfigUiHint>;
+  validate?: (raw: unknown) => { ok: boolean; errors?: string[] };
 }
 
 // ============================================
@@ -131,6 +136,18 @@ export interface ChannelPlugin<ResolvedAccount = any> {
   config: ChannelConfigAdapter<ResolvedAccount>;
 
   configSchema?: ChannelConfigSchema;
+
+  /** Cron delivery target normalization (replaces core channel name branching). */
+  cronDelivery?: ChannelCronDeliveryAdapter;
+
+  /** Optional interactive login for messaging credentials (e.g. QR login). */
+  cliLogin?: ChannelCliLoginAdapter;
+
+  /** Gateway `/api/config` channel subsection (redact secrets in implementations). */
+  configSurface?: ChannelConfigSurfaceAdapter;
+
+  /** CLI onboard flow when finer control than `setupWizard` is needed. */
+  onboard?: ChannelOnboardAdapter;
 
   setup?: ChannelSetupAdapter;
 

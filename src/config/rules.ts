@@ -7,6 +7,10 @@
  * - none: Ignore changes (no action needed)
  */
 
+import type { ChannelPlugin } from '../channels/plugin-types.js';
+import { bundledChannelPlugins } from '../generated/bundled-channel-plugins.js';
+import { listChannelPlugins } from '../channels/plugins/registry.js';
+
 export type ReloadKind = 'hot' | 'restart' | 'none';
 
 export interface ReloadRule {
@@ -58,9 +62,7 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'gateway.cors', kind: 'restart', description: 'CORS settings' },
   { prefix: 'gateway.enableHotReload', kind: 'hot', description: 'Hot reload toggle' },
   
-  // Channels - hot reload (longest specific matches first via matchReloadRule order)
-  { prefix: 'channels.telegram', kind: 'hot', description: 'Telegram settings' },
-  { prefix: 'channels.weixin', kind: 'hot', description: 'Weixin settings' },
+  // Channels - hot reload (channel-specific prefixes are registered by channel plugins)
   { prefix: 'channels', kind: 'hot', description: 'Any channel subtree (e.g. future extensions)' },
   
   // Cron - hot reload
@@ -80,20 +82,36 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'tools', kind: 'hot', description: 'Tools configuration' },
 ];
 
-// Map for O(1) exact prefix lookup
-const rulesMap = new Map(BASE_RELOAD_RULES.map((r) => [r.prefix, r]));
+function pluginsForReloadRules(): ChannelPlugin[] {
+  const listed = listChannelPlugins();
+  return listed.length > 0 ? [...listed] : [...bundledChannelPlugins];
+}
 
-/** Longest prefix wins so `channels.telegram` beats `channels`. */
-const RULES_BY_PREFIX_LENGTH = [...BASE_RELOAD_RULES].sort((a, b) => b.prefix.length - a.prefix.length);
+function getChannelReloadRules(): ReloadRule[] {
+  return pluginsForReloadRules()
+    .filter((plugin) => plugin.reload?.configPrefixes?.length)
+    .flatMap((plugin) =>
+      plugin.reload!.configPrefixes.map((prefix) => ({
+        prefix,
+        kind: 'hot' as const,
+        description: `${plugin.meta.label} settings`,
+      })),
+    );
+}
+
+function mergedReloadRules(): ReloadRule[] {
+  return [...BASE_RELOAD_RULES, ...getChannelReloadRules()];
+}
 
 /**
  * Find matching rule for a config path
  */
 export function matchReloadRule(path: string): ReloadRule | null {
-  if (rulesMap.has(path)) {
-    return rulesMap.get(path)!;
-  }
-  for (const rule of RULES_BY_PREFIX_LENGTH) {
+  const merged = mergedReloadRules();
+  const exact = merged.find((r) => r.prefix === path);
+  if (exact) return exact;
+  const sorted = [...merged].sort((a, b) => b.prefix.length - a.prefix.length);
+  for (const rule of sorted) {
     if (path === rule.prefix || path.startsWith(`${rule.prefix}.`)) {
       return rule;
     }
