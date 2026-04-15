@@ -202,7 +202,7 @@ src/agent/memory/
 
 ### 通道插件 (`src/channels/`)
 
-通道以 **`ChannelPlugin`** 实例实现。核心 **`ChannelManager`** 从 `src/channels/plugins/bundled.ts` 中的 `bundledChannelPlugins` 加载插件（Telegram 由工作区包 `extensions/telegram` 提供）。每个插件在生命周期中暴露 `init` / `start`、出站投递与可选适配器（配置、安全、流式、网关等）。
+通道以 **`ChannelPlugin`** 实例实现。核心 **`ChannelManager`** 从 `src/channels/plugins/bundled.ts` 中的 `bundledChannelPlugins` 加载插件（Telegram 由工作区包 `extensions/telegram` 提供）。每个插件在生命周期中暴露 `init` / `start`、出站投递与可选适配器（配置、安全、流式、网关，以及 **`cronDelivery`**、**`cliLogin`**、**`configSurface`**、**`onboard`** 等，合约见 `src/channels/plugins/types.adapters.ts`）。配置里的根 **`channels`** 在解析阶段为开放映射；内置 Telegram/微信 的字段级 schema 位于 `extensions/*/src/config-schema.ts`（详见 [通道配置](zh/channels.md)）。
 
 **功能**（Telegram）：
 - 多账户支持

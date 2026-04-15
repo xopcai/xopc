@@ -1,6 +1,6 @@
 # Channel Configuration
 
-xopc supports multiple communication channels with an extension-based architecture. The **core config schema** (`src/config/schema.ts`) defines **`channels.telegram`** and **`channels.weixin`**; unknown keys are preserved via **`.passthrough()`** so extensions can add more channel ids.
+xopc supports multiple communication channels with an extension-based architecture. At parse time, the root **`channels`** object in `src/config/schema.ts` is an **open map** (`Record<string, unknown>`), so new channel ids do not require edits to the core Zod tree. **Bundled** Telegram and Weixin ship field-level Zod schemas and optional runtime checks under `extensions/telegram/src/config-schema.ts` and `extensions/weixin/src/config-schema.ts` (symbols are **re-exported** from `src/config/schema.ts` for consumers). After load, channel-specific validation runs through each registered plugin’s `configSchema.validate`. The gateway **`GET /api/config`** builds the `channels` JSON from each **`ChannelPlugin.configSurface`** (and plugin metadata), not from hard-coded Telegram/Weixin fields in core.
 
 ## Overview
 
@@ -22,7 +22,7 @@ When the gateway is running, the React console includes a dedicated **IM channel
 
 - **Route:** `#/channels` (sidebar: **IM 频道** / *IM channels*).
 - **Requires:** a saved **gateway token** (settings) so the UI can call authenticated APIs.
-- **Supported here:** **Weixin** and **Telegram** only (aligned with the first-class `channels` schema).
+- **Supported here:** **Weixin** and **Telegram** only (product UI matches the bundled plugins and the dynamic `/api/config` channel snapshot).
 
 ### Weixin
 
@@ -83,7 +83,7 @@ Configuration is stored in the **gateway config file** (default `~/.xopc/xopc.js
 
 - **`dmPolicy`**: same family as Telegram (`pairing`, `allowlist`, `open`, `disabled`).
 - **`allowFrom`**: when using allowlist-style DM policy, list allowed wxid / openid strings.
-- **`accounts`**: optional per-account overrides (name, `cdnBaseUrl`, `routeTag`, policies, etc.) — see schema `WeixinConfigSchema` / `WeixinAccountConfigSchema` in `src/config/schema.ts`.
+- **`accounts`**: optional per-account overrides (name, `cdnBaseUrl`, `routeTag`, policies, etc.) — see `WeixinConfigSchema` / `WeixinAccountConfigSchema` in `extensions/weixin/src/config-schema.ts` (re-exported from `src/config/schema.ts`).
 
 Restart or reload the gateway after changing credentials if your deployment requires it.
 
@@ -230,6 +230,8 @@ Connection is automatically verified on startup.
 ## Implementation note (developers)
 
 The Telegram channel is shipped as a **pnpm workspace package** at `extensions/telegram` (`@xopcai/xopc-extension-telegram`). The core registers it through `src/channels/plugins/bundled.ts`. For stable imports from core code, `src/channels/telegram/index.ts` re-exports the plugin and related symbols from that package. The Weixin channel follows the same pattern (`extensions/weixin`, private workspace package). Channels use the **`ChannelPlugin`** model (see `src/channels/plugin-types.ts`), not the legacy `telegramExtension` API.
+
+Optional **adapter fields** on `ChannelPlugin` (see `src/channels/plugins/types.adapters.ts`) let extensions own behavior without core branching, for example: **`cronDelivery`** (cron `delivery.to` resolution), **`cliLogin`** (`xopc channels login --channel <id>`), **`configSurface`** (gateway config snapshot), **`onboard`** (CLI `xopc onboard --channels` flow, alongside **`setupWizard`**), and **`reload.configPrefixes`** (hot-reload hints merged in `src/config/rules.ts`). Channel list ordering uses **`meta.order`** via `src/channels/plugins/registry.ts` (`listChannelPlugins()`).
 
 ---
 

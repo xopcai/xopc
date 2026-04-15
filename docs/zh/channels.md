@@ -1,6 +1,6 @@
 # 通道配置
 
-xopc 支持多种通信通道，采用基于扩展的架构。**核心配置**（`src/config/schema.ts`）在 `channels` 下明确定义 **`telegram`** 与 **`weixin`**；其余键名可通过 **`.passthrough()`** 保留，供扩展写入。
+xopc 支持多种通信通道，采用基于扩展的架构。根配置中 **`channels`** 在 `src/config/schema.ts` 里解析为**开放映射**（`Record<string, unknown>`），新增通道 id 不必再改核心 Zod 树。**内置** Telegram、微信 的分字段 Zod 与校验位于 `extensions/telegram/src/config-schema.ts`、`extensions/weixin/src/config-schema.ts`（部分符号再从 `src/config/schema.ts` **再导出** 给 CLI/工具使用）。加载后还会按各已注册插件的 `configSchema.validate` 做通道级校验。网关 **`GET /api/config`** 中的 `channels` 由各 **`ChannelPlugin.configSurface`**（及插件元数据）组装，而不是在 core 里写死 Telegram/微信字段。
 
 ## 概述
 
@@ -22,7 +22,7 @@ xopc 支持多种通信通道，采用基于扩展的架构。**核心配置**�
 
 - **路由：** `#/channels`（侧栏 **即时通讯**）。
 - **前提：** 已在设置中保存 **网关访问令牌**，以便调用需鉴权的 API。
-- **当前产品界面：** 仅配置 **微信** 与 **Telegram**（与核心 `channels` 结构一致）。
+- **当前产品界面：** 仅配置 **微信** 与 **Telegram**（与当前内置插件及动态 `/api/config` 中的通道快照一致）。
 
 ### 微信
 
@@ -83,7 +83,7 @@ xopc 支持多种通信通道，采用基于扩展的架构。**核心配置**�
 
 - **`dmPolicy`**：与 Telegram 同一套（`pairing`、`allowlist`、`open`、`disabled`）。
 - **`allowFrom`**：在需要白名单式私聊策略时，填写允许的 wxid / openid。
-- **`accounts`**：可选，按账号覆盖（名称、`cdnBaseUrl`、`routeTag`、策略等），详见 `src/config/schema.ts` 中 `WeixinConfigSchema` / `WeixinAccountConfigSchema`。
+- **`accounts`**：可选，按账号覆盖（名称、`cdnBaseUrl`、`routeTag`、策略等），详见 `extensions/weixin/src/config-schema.ts` 中的 `WeixinConfigSchema` / `WeixinAccountConfigSchema`（亦从 `src/config/schema.ts` 再导出）。
 
 修改凭据后若网关已在运行，请按你的部署方式**重启或热加载**。
 
@@ -230,6 +230,8 @@ xopc 支持多种通信通道，采用基于扩展的架构。**核心配置**�
 ## 实现说明（开发者）
 
 Telegram 通道以 **pnpm 工作区包** 形式位于 `extensions/telegram`（`@xopcai/xopc-extension-telegram`）。核心在 `src/channels/plugins/bundled.ts` 中注册该插件。为保持从核心代码导入路径稳定，`src/channels/telegram/index.ts` 会从该包再导出插件及相关类型。微信通道同理（`extensions/weixin`，私有工作区包）。通道采用 **`ChannelPlugin`** 模型（见 `src/channels/plugin-types.ts`），不再使用旧的 `telegramExtension` API。
+
+`ChannelPlugin` 上的可选 **adapter 字段**（见 `src/channels/plugins/types.adapters.ts`）把通道特有逻辑放在扩展侧，避免 core 写死分支，例如：**`cronDelivery`**（计划任务 `delivery.to` 解析）、**`cliLogin`**（`xopc channels login --channel <id>`）、**`configSurface`**（网关配置快照）、**`onboard`**（`xopc onboard --channels` 交互流程，与 **`setupWizard`** 二选一或并存）、以及 **`reload.configPrefixes`**（与 `src/config/rules.ts` 中的热更新规则合并）。通道列表顺序由 **`meta.order`** 与 `src/channels/plugins/registry.ts`（`listChannelPlugins()`）决定。
 
 ---
 
