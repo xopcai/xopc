@@ -44,7 +44,7 @@ The Agent Control Protocol (ACP) enables xopc to work with different agent runti
 
 ## Core Components
 
-### 1. Runtime Layer (`src/acp/runtime/`)
+### 1. Runtime layer
 
 The runtime layer defines the interface that all ACP backends must implement.
 
@@ -96,7 +96,7 @@ type SessionIdentity = {
 };
 ```
 
-### 2. Control Plane (`src/acp/control-plane/`)
+### 2. Control plane
 
 The control plane manages session lifecycle and coordinates between components.
 
@@ -450,6 +450,5 @@ Get runtime metrics via `getObservabilitySnapshot()`:
 
 ## See Also
 
-- [Source: `src/acp/`](https://github.com/xopcai/xopc/tree/main/src/acp) — runtime, control plane, types
-- [CLI `acp` commands](https://github.com/xopcai/xopc/tree/main/src/cli/commands/acp) — command implementations
+- [xopc repository](https://github.com/xopcai/xopc) — source for ACP runtime, control plane, and CLI `acp` commands
 - [Session routing](/routing-system) — how ACP integrates with session keys

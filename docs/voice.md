@@ -20,10 +20,8 @@ xopc supports voice in multiple transports:
 
 **Web UI (webchat)**
 
-1. Voice attachments are transcribed in the agent service (`mergeVoiceTranscriptsIntoUserText`) when STT is enabled.
-2. TTS for replies can follow the same trigger rules as other channels; webchat prefers **MP3** for broad browser support.
-
-Internal design notes for contributors live in the repository under **`.docs/tts/`** (not part of the published doc site; implementation checklist vs OpenClaw-style enhancements).
+1. When STT is enabled, voice attachments are transcribed before the model sees the message.
+2. TTS for replies follows the same trigger rules as other channels; the browser player uses **MP3**.
 
 ---
 
@@ -108,9 +106,7 @@ If the primary provider errors, xopc tries other providers in `fallback.order`. 
 
 ### Audio preflight (Telegram groups)
 
-When the bot requires an @mention in a **supergroup/group**, **voice-only** messages are transcribed **before** mention filtering so the transcript can contain the bot name (or STT-friendly variants). Implementation: `extensions/telegram/src/inbound-processor.ts` (reuses the same transcript for the later media pipeline when possible).
-
-Shared helpers: `src/stt/preflight.ts` (`audioPreflightTranscribe`, `checkMentionInTranscription`).
+When the bot requires an @mention in a **supergroup/group**, **voice-only** messages are transcribed **before** mention filtering so the transcript can contain the bot name (or STT-friendly variants).
 
 ---
 
@@ -202,7 +198,7 @@ Failed attempts are logged with per-provider latency and reason; successful synt
 ### Long text and `maxTextLength`
 
 - **`maxTextLength`**: hard cap for text passed into providers (default in schema is **512** to stay within conservative provider limits; raise if your primary provider allows more).
-- **`summarization`**: when enabled (default **on**), text longer than the threshold is condensed with a **small LLM** pass (`src/tts/summarize.ts`) before TTS. Override model via `tts.summarization.model` or env **`XOPC_TTS_SUMMARIZE_MODEL`**.
+- **`summarization`**: when enabled (default **on**), text longer than the threshold is shortened with a **small LLM** pass before TTS. Set the model in `tts.summarization.model` or with env **`XOPC_TTS_SUMMARIZE_MODEL`**.
 
 ```json
 {
@@ -219,13 +215,13 @@ Failed attempts are logged with per-provider latency and reason; successful synt
 
 ### Directives (`[[tts:...]]`)
 
-When `modelOverrides` is enabled (default), the model may use directives such as `[[tts:text]]...[[/tts:text]]` and voice/model hints. See `src/tts/directives.ts`.
+When `modelOverrides` is enabled (default), the model may use directives such as `[[tts:text]]...[[/tts:text]]` and voice/model hints. See your installed xopc version’s docs or schema for the full directive list.
 
 ---
 
 ## Agent tool: `text_to_speech`
 
-When **`tts.enabled`** is true, the agent may register the **`text_to_speech`** tool (`src/agent/tools/tts-tool.ts`). It synthesizes audio and **publishes an outbound voice message** for the current session (in addition to normal auto-TTS, which is applied at channel dispatch).
+When **`tts.enabled`** is true, the agent may register the **`text_to_speech`** tool. It synthesizes audio and **publishes an outbound voice message** for the current session (in addition to normal auto-TTS on the outbound path).
 
 Use for explicit read-aloud requests; avoid spamming voice on every reply. Normal replies still go through **`send_message`**; the tool description and system **Voice (TTS)** section explain the split.
 
@@ -233,7 +229,7 @@ Use for explicit read-aloud requests; avoid spamming voice on every reply. Norma
 
 ## In-chat commands: `/tts`
 
-Built-in commands (`src/chat-commands/builtins/tts.ts`) include:
+Built-in commands include:
 
 - `/tts` — show trigger, provider, voice, readiness
 - `/tts on` | `/tts off` — enable/disable TTS
@@ -245,7 +241,7 @@ Built-in commands (`src/chat-commands/builtins/tts.ts`) include:
 
 ## Channel audio formats
 
-Outbound encoding is chosen per channel (e.g. Telegram **Opus** voice notes, Weixin **MP3**, webchat / CLI **MP3**). Unlisted channel ids use the same defaults as `default` in `CHANNEL_OUTPUT_FORMATS`. See `getChannelOutputFormat` in `src/tts/service.ts` and `.docs/tts/05-channel-aware-output.md`.
+Outbound encoding is chosen per channel (for example Telegram **Opus** voice notes, Weixin and webchat **MP3**). Other channel ids follow the same defaults as the built-in “generic” profile unless an extension documents otherwise.
 
 ---
 
@@ -255,7 +251,7 @@ Outbound encoding is chosen per channel (e.g. Telegram **Opus** voice notes, Wei
 |-------|-------|
 | Telegram voice STT | **60 s** (longer → skipped / placeholder) |
 | TTS text | **`maxTextLength`** (configurable; schema default **512**) + optional LLM summarization |
-| Web STT attachment size | Guard in `voice-stt-webchat` (large files rejected with a placeholder) |
+| Web STT attachment size | Very large uploads may be rejected with a placeholder message |
 
 ---
 
@@ -339,7 +335,7 @@ interface STTConfig {
 }
 ```
 
-Transcribe results may include **`attempts`**, **`fallbackFrom`**, **`attemptedProviders`** (see `src/stt/types.ts`).
+Transcribe results may include **`attempts`**, **`fallbackFrom`**, **`attemptedProviders`** metadata for diagnostics.
 
 ### TTS
 
@@ -364,9 +360,9 @@ interface TTSConfig {
 }
 ```
 
-Speak results include **`attempts`**, optional **`fallbackFrom`**, **`wasSummarized`**, etc. (`src/tts/types.ts`).
+Speak results may include **`attempts`**, **`fallbackFrom`**, **`wasSummarized`**, and similar fields for diagnostics.
 
-Full Zod schema: `src/config/schema.ts` (`TTSConfigSchema`, `TTSSummarizationConfigSchema`).
+For the full `stt` / `tts` field reference, see [Configuration](configuration.md). After editing JSON, run `xopc config show` or start the gateway to confirm the file loads.
 
 ---
 

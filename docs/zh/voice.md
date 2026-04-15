@@ -20,10 +20,8 @@ xopc 在多种通道上支持语音能力：
 
 **Web UI（webchat）**
 
-1. 在 STT 启用时，由 agent 路径中的 `mergeVoiceTranscriptsIntoUserText` 合并语音转写。  
-2. TTS 触发规则与其他通道一致；webchat 侧优先 **MP3** 以兼容浏览器播放。
-
-设计与实现对照见仓库根目录下的 **`.docs/tts/`**（不随本站发布；贡献者向）。
+1. STT 启用时，语音附件会先转写再进入模型上下文。  
+2. TTS 触发规则与其他通道一致；浏览器侧一般使用 **MP3** 便于播放。
 
 ---
 
@@ -51,7 +49,7 @@ xopc 在多种通道上支持语音能力：
 }
 ```
 
-**说明：** 配置里的 `trigger` 取值为 `off` | `always` | `inbound` | `tagged`。历史值 **`auto` 会按 `inbound` 归一化** 加载。
+**说明：** `tts.trigger` 取值为 `off`、`always`、`inbound`、`tagged`（见下表）。
 
 ---
 
@@ -108,9 +106,7 @@ xopc 在多种通道上支持语音能力：
 
 ### 群聊语音与 @mention（Telegram）
 
-在需要 @ 的群聊里，**仅语音、无文字** 的消息会先转写再做过滤，以便识别口播中的昵称或 `checkMentionInTranscription` 支持的模糊说法。实现：`extensions/telegram/src/inbound-processor.ts`（并尽量复用同一段转写避免对同一语音 STT 两次）。
-
-通用工具：`src/stt/preflight.ts`。
+在需要 @ 的群聊里，**仅语音、无文字** 的消息会先转写再做过滤，以便识别口播中的机器人名或类似说法。
 
 ---
 
@@ -124,8 +120,6 @@ xopc 在多种通道上支持语音能力：
 | `always` | 满足管道条件时尽量对文本回复做 TTS |
 | `inbound` | 仅当用户本轮带语音入站（`transcribedVoice`）时 TTS |
 | `tagged` | 仅当助手文本含 `[[tts]]` 时 TTS（发送前去掉标记） |
-
-配置中的 **`auto` 会当作 `inbound`**。
 
 ### OpenAI TTS
 
@@ -199,7 +193,7 @@ xopc 在多种通道上支持语音能力：
 ### 长文本与 `maxTextLength`
 
 - **`maxTextLength`**：送入各 TTS 提供方的硬上限（schema 默认 **512**，可按主用 provider 调高）。  
-- **`summarization`**：默认开启时，超过 **threshold**（默认同 `maxTextLength`）会先经 **LLM 摘要**（`src/tts/summarize.ts`）。模型可用 `tts.summarization.model` 或环境变量 **`XOPC_TTS_SUMMARIZE_MODEL`** 指定。
+- **`summarization`**：默认开启时，超过 **threshold**（默认同 `maxTextLength`）会先经 **LLM 摘要** 再送 TTS。模型用 `tts.summarization.model` 或环境变量 **`XOPC_TTS_SUMMARIZE_MODEL`** 指定。
 
 ```json
 {
@@ -216,19 +210,19 @@ xopc 在多种通道上支持语音能力：
 
 ### 指令 `[[tts:...]]`
 
-在 `modelOverrides` 默认开启时，可使用 `[[tts:text]]` 等指令；详见 `src/tts/directives.ts`。
+在 `modelOverrides` 默认开启时，可使用 `[[tts:text]]` 等指令；完整列表以当前版本的配置说明为准。
 
 ---
 
 ## 智能体工具：`text_to_speech`
 
-当 **`tts.enabled`** 为 true 时，可注册 **`text_to_speech`** 工具（`src/agent/tools/tts-tool.ts`）：主动合成语音并通过总线发出**独立语音消息**。与通道派发层上的**自动 TTS** 并存；系统提示中的 **Voice (TTS)** 一节会说明不要每条消息都调用。
+当 **`tts.enabled`** 为 true 时，可注册 **`text_to_speech`** 工具：主动合成语音并发出**独立语音消息**。与出站路径上的**自动 TTS** 并存；系统提示中的 **Voice (TTS)** 一节会说明不要每条消息都调用。
 
 ---
 
 ## 聊天命令：`/tts`
 
-内置命令（`src/chat-commands/builtins/tts.ts`）包括：
+内置命令包括：
 
 - `/tts` — 当前开关、trigger、provider、音色、就绪状态  
 - `/tts on` | `/tts off`  
@@ -240,7 +234,7 @@ xopc 在多种通道上支持语音能力：
 
 ## 通道音频格式
 
-出站编码按通道选择（如 Telegram Opus 语音条、微信 / 网页 / CLI 为 MP3）。未在表中列出的 channel id 与 `default` 相同（MP3、非语音条）。实现见 `src/tts/service.ts` 中 `CHANNEL_OUTPUT_FORMATS`，说明见 `.docs/tts/05-channel-aware-output.md`。
+出站编码按通道选择（例如 Telegram 常用 Opus 语音条，微信 / 网页 / CLI 常用 MP3）。其它通道 id 一般与内置默认一致（多为 MP3），除非扩展另有说明。
 
 ---
 
@@ -250,7 +244,7 @@ xopc 在多种通道上支持语音能力：
 |------|------|
 | Telegram 语音 STT | **60 秒**，超出会跳过或占位 |
 | TTS 文本 | 受 **`maxTextLength`**（默认 512）约束，可配 **摘要** |
-| Web 语音附件 | 有大小上限与错误占位（见 `voice-stt-webchat`） |
+| Web 语音附件 | 过大文件可能被拒绝并返回占位说明 |
 
 ---
 
@@ -299,7 +293,7 @@ interface STTConfig {
 }
 ```
 
-转写结果可带 **`attempts`**、**`fallbackFrom`**、**`attemptedProviders`**（`src/stt/types.ts`）。
+转写结果可带 **`attempts`**、**`fallbackFrom`**、**`attemptedProviders`** 等诊断字段。
 
 ### TTS
 
@@ -324,9 +318,9 @@ interface TTSConfig {
 }
 ```
 
-合成结果可带 **`attempts`**、**`fallbackFrom`**、**`wasSummarized`** 等（`src/tts/types.ts`）。
+合成结果可带 **`attempts`**、**`fallbackFrom`**、**`wasSummarized`** 等诊断字段。
 
-完整校验模式：`src/config/schema.ts`（`TTSConfigSchema`、`TTSSummarizationConfigSchema`）。
+完整字段说明见 [配置参考](configuration.md)。编辑 JSON 后可运行 `xopc config show` 或启动网关，确认配置能被正常加载。
 
 ---
 

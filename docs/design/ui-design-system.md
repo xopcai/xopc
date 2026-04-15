@@ -3,7 +3,7 @@
 > **版本**: v1.2 · **建立时间**: 2026-03 · **修订**: 2026-03-29（§9.2.1 列表/网格刷新反馈：骨架屏 + 行内状态，避免成功 Toast；此前 2026-03-26：Vercel Web Interface Guidelines 对齐等）
 > 本文档是 xopc 所有产品的设计宪法，所有 UI 决策应以此为准。
 >
-> **工程实现（Gateway 控制台）**：`web/src/styles/globals.css`（Tailwind v4 `@theme`）为语义 token 的单一来源；本文数值与其保持一致。
+> **工程实现：** 网关 Web 应用中的 **`globals.css`**（Tailwind v4 `@theme`）为语义 token 的单一来源；本文数值与其保持一致。
 
 ---
 
@@ -48,7 +48,7 @@ xopc 的色彩体系遵循**"灰色是主角，蓝色是信号"**的原则。界
 
 通过灰度色阶的微妙变化来表达界面层级；小组件可辅以柔和阴影（见 §5.2）。
 
-**语义 Token（Tailwind / CSS 变量）** — 实现名称以 `web/src/styles/globals.css` 为准：
+**语义 Token（Tailwind / CSS 变量）** — 实现名称以 **网关控制台的 `globals.css`** 为准：
 
 | 层级语义 | Utility / 变量 | Light Hex | Dark Hex |
 |----------|----------------|-----------|----------|
@@ -118,7 +118,7 @@ xopc 的色彩体系遵循**"灰色是主角，蓝色是信号"**的原则。界
 
 ### 2.5 完整 CSS Variables 参考（推荐实现方式）
 
-Gateway 控制台将所有语义 token 写在 **`web/src/styles/globals.css`** 的 `@theme` 与 `html.dark` 中，通过根节点 `.dark` 切换。下列为核心变量名（与代码一致）；完整列表（含语义色 success / danger 等、阴影、圆角）以源文件为准。
+Gateway 控制台将所有语义 token 写在 **网关控制台的 `globals.css`** 的 `@theme` 与 `html.dark` 中，通过根节点 `.dark` 切换。下列为核心变量名（与代码一致）；完整列表（含语义色 success / danger 等、阴影、圆角）以源文件为准。
 
 ```css
 /* Light — @theme 内 */
@@ -190,7 +190,7 @@ xopc 是知识工作者长时间使用的工具，排版必须服务于**长时�
 
 ### 3.1 字体家族 (Font Family)
 
-**Gateway Web** 在 `web/src/styles/globals.css` 的 `@theme` 中定义 `--font-sans` / `--font-mono`，与 Tailwind `font-sans`、`font-mono` 对齐。
+**Gateway Web** 在 **网关控制台的 `globals.css`** 的 `@theme` 中定义 `--font-sans` / `--font-mono`，与 Tailwind `font-sans`、`font-mono` 对齐。
 
 ```css
 /* 与 globals.css 一致 */
@@ -231,7 +231,7 @@ xopc 是知识工作者长时间使用的工具，排版必须服务于**长时�
 
 ### 3.4 字间距 (Letter Spacing)
 - 大标题必须加 `tracking-tight`（-0.025em），避免标题字母间距过松显得廉价
-- 正文和 UI 文字：全局可对 `body` 使用极轻负字距（Gateway Web 为 `-0.006em`），与系统 UI 气质一致；**Markdown 正文**可用约 `-0.011em`（见 `web/src/features/chat/markdown/markdown.css`）
+- 正文和 UI 文字：全局可对 `body` 使用极轻负字距（Gateway Web 为 `-0.006em`），与系统 UI 气质一致；**Markdown 正文**可用约 `-0.011em`（见 `markdown.css`（聊天 Markdown 样式））
 - 全大写文字（如标签、状态文字）加 `tracking-wide`（0.025em）
 
 ---
@@ -295,7 +295,7 @@ Gateway 控制台等工作台界面采用 **左侧导航 + 右侧主内容** 结
 | 小型标签、Badge | `rounded-lg` | 映射 `--radius-lg`（14px） | 微小元素 |
 | 头像、图标容器 | `rounded-full` | 50% | 完全圆形，用于人物和品牌标识 |
 
-**分段控件实现约定（Gateway / Web）**：轨道与每项使用同一套 class，避免顶栏各开关风格漂移。共享常量见 `web/src/components/ui/segmented-styles.ts`（`segmentedTrackClassName`、`segmentedThumbBaseClassName`、`segmentedThumbActiveClassName`）。选中项需要强调色时在外层追加 `text-accent-fg`（如主题、图标型分段）。
+**分段控件实现约定（Gateway / Web）**：轨道与每项使用同一套 class，避免顶栏各开关风格漂移。共享常量见 分段控件共享样式常量（网关 Web 源码中的 `segmented-styles` 模块）（`segmentedTrackClassName`、`segmentedThumbBaseClassName`、`segmentedThumbActiveClassName`）。选中项需要强调色时在外层追加 `text-accent-fg`（如主题、图标型分段）。
 
 > **有机感原则**：圆角应该让人感觉"柔软"，而不是"锋利"。当你不确定用多大圆角时，选更大的那个。
 
@@ -438,7 +438,7 @@ disabled:bg-surface-hover disabled:text-fg-disabled disabled:cursor-not-allowed
 **复选框（原生 `<input type="checkbox">`）**
 
 - **不要用品牌蓝作选中填充**：`text-accent` / 误用会把勾选块做成高饱和主色块，和「表面中性 + 蓝仅用于主按钮/链接」冲突，易显花哨。
-- **做法**：用语义变量 `--color-checkbox-accent`（浅灰黑 / 深灰白）控制 `accent-color`，Web 侧统一类名 `ui-checkbox`（见 `web/src/styles/globals.css`）。未选：与输入框一致的 `border-edge` + `bg-surface-panel`；选：中性填充，键盘聚焦仍跟全局 `focus-visible` 环。
+- **做法**：用语义变量 `--color-checkbox-accent`（浅灰黑 / 深灰白）控制 `accent-color`，Web 侧统一类名 `ui-checkbox`（见 **网关控制台的 `globals.css`**）。未选：与输入框一致的 `border-edge` + `bg-surface-panel`；选：中性填充，键盘聚焦仍跟全局 `focus-visible` 环。
 - **质感**：克制、偏系统设置类控件；需要强确认的勾选仍靠文案与布局，不靠彩色块。
 
 ---
@@ -551,7 +551,7 @@ focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-
 | ❌ **成功 Toast / 顶栏成功条** | **不要**在页面顶部弹出「已刷新」「已从磁盘重载并更新列表」等成功提示——成功由**内容区被新数据替换**即可感知，额外文案是噪音。 |
 | ✅ **失败** | 仍使用**内联错误**（页面内 `role="alert"` 或简短错误条）或必要时的错误说明；失败需要用户知晓原因。 |
 
-**参考实现**：`web/src/features/skills/skills-page.tsx`（刷新时网格骨架 + 无成功 Toast）。
+**参考实现**：技能列表页（网关 Web）（刷新时网格骨架 + 无成功 Toast）。
 
 ---
 
@@ -718,7 +718,7 @@ xopc 工作站优先覆盖三个端：**Web（浏览器）**、**PC 客户端（
 
 #### 设计 Token 与静态资源
 
-- **单一来源**：颜色、圆角、阴影、字体栈以 `web/src/styles/globals.css` 为准；`index.html` 已声明 `<meta name="color-scheme" content="light dark" />`，便于表单控件与系统主题协调。
+- **单一来源**：颜色、圆角、阴影、字体栈以 **网关控制台的 `globals.css`** 为准；`index.html` 已声明 `<meta name="color-scheme" content="light dark" />`，便于表单控件与系统主题协调。
 
 #### Web 端特有规范
 - **键盘快捷键**：所有核心操作必须有快捷键，并在 Tooltip 中显示（如 `⌘&nbsp;K` 打开命令面板）
@@ -791,7 +791,7 @@ xopc 工作站优先覆盖三个端：**Web（浏览器）**、**PC 客户端（
 | 小屏 iPhone (SE) | 375×667pt | 基准尺寸，所有设计以此为准 |
 | 标准 iPhone | 390×844pt | 内容区自然延伸 |
 | 大屏 iPhone Pro Max | 430×932pt | 底部安全区加高，内容区加宽 |
-| Android 标准 | 360×800dp | 与 iPhone 标准接近，兼容处理 |
+| Android 标准 | 360×800dp | 与 iPhone 标准接近，按同一套断点与间距规则适配 |
 
 #### 导航结构
 
@@ -840,7 +840,7 @@ xopc 工作站优先覆盖三个端：**Web（浏览器）**、**PC 客户端（
 
 | 规范项 | 统一标准 |
 |--------|----------|
-| **色彩系统** | 完全共享第 2 章；Gateway Web 以 `web/src/styles/globals.css` 语义色为准，Light/Dark 双模式 |
+| **色彩系统** | 完全共享第 2 章；Gateway 控制台以全局 CSS 语义色为准，含 Light / Dark |
 | **字体家族** | 完全共享第 3 章的系统字体栈 |
 | **圆角风格** | 有机感大圆角；Web 以 `@theme` `--radius-*` 为准（如 `rounded-xl` 对应 18px 档），Phone 与 Web 保持同一套比例关系 |
 | **语义色彩** | 成功/错误/警告/信息的颜色完全一致 |
@@ -850,27 +850,9 @@ xopc 工作站优先覆盖三个端：**Web（浏览器）**、**PC 客户端（
 
 ---
 
-### 13.5 三端设计交付规范
-
-在设计和开发协作时，每个功能需要交付以下内容：
-
-| 交付物 | Web | PC | Phone |
-|--------|-----|----|-------|
-| Light 模式设计稿 | ✅ 必须 | ✅ 必须 | ✅ 必须 |
-| Dark 模式设计稿 | ✅ 必须 | ✅ 必须 | ✅ 必须 |
-| 空状态设计 | ✅ 必须 | ✅ 必须 | ✅ 必须 |
-| 加载态设计 | ✅ 必须 | ✅ 必须 | ✅ 必须 |
-| 错误态设计 | ✅ 必须 | ✅ 必须 | ✅ 必须 |
-| 键盘快捷键说明 | ✅ 必须 | ✅ 必须 | ➖ 不适用 |
-| 手势交互说明 | ➖ 不适用 | ➖ 不适用 | ✅ 必须 |
-
----
-
----
-
 ## 14. 工程合规规范 (Engineering Compliance)
 
-> 本章是 Vercel Web Interface Guidelines 与 xopc 设计系统的对齐层，将行业最佳实践转化为 xopc 工程团队的强制执行规范。所有 PR 在 Code Review 时应对照本章进行检查。
+> 本章将常见 Web 界面无障碍与焦点等实践，整理为 Gateway 控制台实现时的自查清单。贡献者可在 Code Review 时对照执行。
 
 ### 14.1 无障碍合规 (Accessibility)
 

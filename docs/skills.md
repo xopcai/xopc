@@ -119,7 +119,7 @@ install:
 Skills can be loaded from these locations:
 
 1. **Bundled** - Skills built into xopc
-   - Location: `src/agent/skills/bundled/`
+   - Bundled skills ship with the xopc install.
    
 2. **Workspace** - Workspace-specific skills
    - Location: `<workspace>/skills/`

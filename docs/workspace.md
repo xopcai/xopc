@@ -4,7 +4,7 @@ For a concise map of **bootstrap**, **agent home**, and the **Markdown workspace
 
 xopc keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for transcripts, inbox, inbound/TTS blobs, curated memory, and runtime files. Separately, the **agent workspace** is the Markdown root the runtime uses as tool `cwd`, for daily `memory/` notes, user files, and extensions under that tree.
 
-Path resolution uses **`config.json`** as the source of truth: `src/agent/agent-scope.ts` (workspace and agent-dir resolution), plus `src/config/paths-state.ts`, `src/config/workspace-defaults.ts`, and `src/config/paths.ts`. Workspace bootstrap is seeded by **`xopc init`** (`src/cli/commands/init.ts`) and by **`xopc agents add`**. The **Markdown workspace** is **not** under `agents/<id>/` (it lives beside the state root as `workspace` / `workspace-<id>` or under `agents.defaults.workspace/<id>` when configured).
+Paths come from your **main config file** (default `<stateDir>/xopc.json`) and optional env overrides. **`xopc init`** and **`xopc agents add`** create directories and seed templates. The **Markdown workspace** (tool `cwd` and project files) is **not** the same folder as `agents/<id>/` state: by default it is `<stateDir>/workspace` for the default agent, `<stateDir>/workspace-<id>` for others, or a path derived from **`agents.defaults.workspace`** when you set it.
 
 ## State directory root
 
@@ -48,13 +48,13 @@ Session storage is **not** under the Markdown workspace directory; it always use
 
 ## Agent workspace directory (Markdown root)
 
-Heuristic paths (no per-list `workspace` override in config): default agent id → `<stateDir>/workspace`; other ids → `<stateDir>/workspace-<id>` when `agents.defaults.workspace` is unset. With **`config.json`**, use merged resolution via `resolveAgentWorkspaceDir` / effective agent profile: explicit `workspace`, or `join(<agents.defaults.workspace>, <id>)` for a listed agent, or the `workspace-<id>` fallback.
+With a normal config, each agent gets an explicit **`workspace`** path or inherits **`agents.defaults.workspace/<agentId>`**, or falls back to `workspace` / `workspace-<id>` next to the state directory.
 
-When no **`config.json`** is loaded, CLI defaults use **`resolveDefaultAgentWorkspaceDir()`** (`src/config/workspace-defaults.ts`): `XOPC_WORKSPACE` if set, otherwise `~/.xopc/workspace` for the primary tree. **`xopc init`** loads config (or schema defaults), creates **`agents/<id>/`** and the resolved Markdown workspace, and **seeds** the standard bootstrap set from built-in templates (same filenames as [Workspace templates](/reference/templates): `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md`, plus `BOOTSTRAP.md` from the template pack). Files are only written when missing. **`xopc agents add`** updates **`agents.list`**, creates directories, and seeds the new workspace — use that to add additional agents (see [CLI](cli.md#agents)).
+When the CLI runs **without** a loaded config file, **`XOPC_WORKSPACE`** wins if set; otherwise the primary Markdown tree defaults to **`~/.xopc/workspace`**. **`xopc init`** creates **`agents/<id>/`**, the Markdown workspace, and seeds bootstrap files from built-in templates (filenames in [Workspace templates](/reference/templates)) only when missing. **`xopc agents add`** updates **`agents.list`**, creates directories, and seeds a new workspace (see [CLI](cli.md#agents)).
 
 ### Bootstrap Markdown (persona & memory index)
 
-These files are loaded into the system prompt (see `src/agent/context/workspace.ts` for order and limits). Names are constants in `WORKSPACE_FILES` (`src/config/paths.ts`).
+These files are loaded into the system prompt in a **fixed order** with length limits; edit them under each agent’s `bootstrap/` folder.
 
 | File | Role |
 |------|------|
@@ -87,9 +87,9 @@ Separate from bootstrap `MEMORY.md` (under `agents/<id>/bootstrap/`) and from wo
 
 Two related ideas:
 
-1. **Merged default agent workspace** — the **gateway** and `getWorkspacePath(config)` (`src/config/schema.ts`) resolve the **default** agent id from config, then the Markdown root via `resolveAgentWorkspaceDir` / effective profile. Extensions for the gateway use `<that workspace>/.extensions`.
+1. **Gateway** — uses the **default agent** from config and that agent’s resolved Markdown workspace. Per-workspace extensions use `<that workspace>/.extensions` when present.
 
-2. **CLI default context** (no explicit `--workspace` on the root program) — `XOPC_WORKSPACE` if set, else **`resolveDefaultAgentWorkspaceDir()`** → `~/.xopc/workspace` when using state-dir heuristics (`src/cli/registry.ts`, `src/config/workspace-defaults.ts`).
+2. **CLI** (no explicit `--workspace` on the root command) — **`XOPC_WORKSPACE`** if set, otherwise the same primary `~/.xopc/workspace` heuristic as above.
 
 After `xopc init`, bootstrap files for `main` live under `~/.xopc/workspace/` by default; ensure **`agents.defaults.workspace`** (and any **`agents.list[].workspace`**) point at the same tree if you want the gateway and CLI to load identical Markdown without duplication.
 

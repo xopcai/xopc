@@ -4,7 +4,7 @@ xopc provides a comprehensive set of built-in tools for the Agent to use.
 
 ## Tools Overview
 
-Tools are assembled in `AgentToolsFactory` (`src/agent/tools/factory.ts`). Some are always registered; others need **config**, **session** (for example `session_search` when a `SessionStore` exists), or **gateway** wiring (for example `clarify` with a live user channel, `cronjob` when `CronService` is available).
+Built-in tools are registered according to your setup: some are always available; others require **config**, a **session store** (for example `session_search`), or a running **gateway** (for example `clarify` for interactive prompts, `cronjob` when scheduling is wired).
 
 | Category | Tools |
 |----------|-------|

@@ -1,6 +1,6 @@
 # 磁盘与目录布局
 
-本文是 xopc **读写路径的简明对照表**。配置仍是唯一事实来源；具体解析见 `src/agent/agent-scope.ts`、`src/config/paths-state.ts`、`src/config/paths.ts` 及相关模块。
+本文列出 xopc 在磁盘上的主要读写位置。实际路径以 **配置文件**（默认 `~/.xopc/xopc.json`）及环境变量（如 `XOPC_CONFIG`、`XOPC_WORKSPACE`）为准。
 
 初始化步骤、模板说明与环境变量详见 [状态目录与工作空间布局](workspace.md)。
 
@@ -36,14 +36,14 @@
 
 | 路径 | 用途 |
 |------|------|
-| `bootstrap/` | 人格与引导 Markdown：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（系统提示用引导文件，与托管 `memories/` 不同）、`CONTEXT.md`、`SKILLS.md`、`BOOTSTRAP.md`。由 `loadBootstrapFiles`（`src/agent/context/workspace.ts`）加载。网关心跳文件通过 `resolveHeartbeatMdPath` 指向 `bootstrap/HEARTBEAT.md`。 |
+| `bootstrap/` | 人格与引导 Markdown：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（写入系统提示的引导文件，与托管 `memories/` 不同）、`CONTEXT.md`、`SKILLS.md`、`BOOTSTRAP.md`。用于组装智能体系统提示；网关心跳文案默认读取 `bootstrap/HEARTBEAT.md`（若存在）。 |
 | `sessions/` | 会话 transcript（分片、`index.json`、`archive/`）、`sessions/config/` 下按会话配置、`sessions/acp-sessions.json`（ACP 元数据索引）。 |
 | `memories/` | 托管结构化存储（`MEMORY.md`、`USER.md`，条目以固定分隔符分段 — `BuiltinMemoryStore`）。 |
 | `inbound/` | 入站附件（非图片二进制）落盘；transcript 中相对路径为相对 agent home 的 `inbound/...`。 |
 | `tts/` | 按会话缓存的出站 TTS 音频。 |
 | `agent/` | 见下节 **智能体状态目录**。 |
 
-种子目录：`xopc init` / `xopc agents add` 会创建 `bootstrap/` 与工作区骨架；模板位于 `src/agent/context/workspace-templates/`（参见 [工作区模板](/zh/reference/templates)）。
+种子目录：`xopc init` / `xopc agents add` 会按内置模板创建 `bootstrap/` 与工作区骨架（参见 [工作区模板](/zh/reference/templates)）。
 
 ## 智能体状态目录：`agents/<agentId>/agent/`
 
@@ -78,7 +78,7 @@
 
 ## 运维辅助 API
 
-- `listAgentWorkspaceDirs(config)` — 列出配置中所有智能体的 Markdown 根（`src/config/workspace-dirs.ts`）。
+- `listAgentWorkspaceDirs(config)` — 列出配置中各智能体的 Markdown 工作区根路径（CLI / 进阶用法）。
 - `listAgentBootstrapDirs(config)` — 列出所有 `bootstrap/` 根，便于备份或外部编辑器挂载。
 
 ## 另见
