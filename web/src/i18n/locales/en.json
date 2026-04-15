@@ -41,7 +41,8 @@
     "agentAndModels": "Providers & models",
     "data": "Sessions & logs",
     "interface": "General",
-    "voice": "Voice"
+    "voice": "Voice",
+    "extensions": "Extensions"
   },
   "token": {
     "title": "Authentication required",
