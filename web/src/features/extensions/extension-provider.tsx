@@ -109,7 +109,12 @@ function manifestDeclaresGatewayContributions(e: ExtensionApiRow): boolean {
 /** Used by Apps detail links and {@link useUiExtensions}. */
 export function extensionExposesGatewayShellUi(e: ExtensionApiRow): boolean {
   if (!e.hasUi) return false;
-  return extensionUiUnlocked(e) || manifestDeclaresGatewayContributions(e);
+  // Extension must be enabled (active or scheduled to activate after restart) before
+  // its UI contributions appear in the shell. `manifestDeclaresGatewayContributions`
+  // only determines whether the iframe surfaces are shown *while* the Node-side is still
+  // starting up — it must not override a deliberate disable action by the user.
+  if (!extensionUiUnlocked(e)) return false;
+  return manifestDeclaresGatewayContributions(e);
 }
 
 export function useUiExtensions(): ExtensionApiRow[] {

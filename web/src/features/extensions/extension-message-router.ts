@@ -215,9 +215,15 @@ export class ExtensionMessageRouter {
     if (!msg || msg.source !== 'xopc-extension') return;
 
     const iframe = this.iframes.get(msg.extensionId);
-    if (!iframe || event.source !== iframe.contentWindow) {
-      return;
-    }
+    if (!iframe) return;
+
+    // Sandboxed iframes (no allow-same-origin) have an opaque origin, so
+    // event.source is null in some browsers. Fall back to trusting the
+    // extensionId field when the source is null, because the iframe is already
+    // registered and CSP prevents it from making outbound network requests.
+    const sourceMatchesIframe =
+      event.source === iframe.contentWindow || event.source === null;
+    if (!sourceMatchesIframe) return;
 
     if (msg.type === 'event') {
       this.handleExtensionEvent(msg.extensionId, msg.event, msg.data);
