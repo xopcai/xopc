@@ -19,5 +19,29 @@
         "description": "Enable verbose logging"
       }
     }
+  },
+  "ui": {
+    "main": "ui/panel.html",
+    "icon": "ui/icon.svg",
+    "permissions": ["theme", "config.read", "notification"],
+    "contributions": {
+      "settingsPanels": [
+        {
+          "id": "hello.settings",
+          "title": "Hello World Settings",
+          "entrypoint": "ui/settings.html"
+        }
+      ],
+      "pages": [
+        {
+          "id": "hello.dashboard",
+          "title": "Hello",
+          "path": "/apps/hello",
+          "entrypoint": "ui/panel.html",
+          "showInNav": true,
+          "navIcon": "hand-metal"
+        }
+      ]
+    }
   }
 }

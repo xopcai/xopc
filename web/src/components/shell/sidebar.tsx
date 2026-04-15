@@ -6,6 +6,8 @@ import { pathForTab } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 import { cn } from '@/lib/cn';
 
+import { ExtensionNavItems } from '@/features/extensions/extension-nav-items';
+
 import { SidebarFooter } from '@/components/shell/sidebar-footer';
 import { SidebarTaskList } from '@/components/shell/sidebar-task-list';
 
@@ -82,6 +84,11 @@ export function SidebarNav({
             <Plug className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
             {!collapsed ? <span className="truncate">{m.nav.channels}</span> : null}
           </NavLink>
+          <ExtensionNavItems
+            collapsed={collapsed}
+            onNavigate={onNavigate}
+            navLinkClassName={secondaryNavClass}
+          />
         </div>
       </nav>
 

@@ -944,6 +944,11 @@ export class GatewayService {
     return this.extensionLoader?.getRegistry();
   }
 
+  /** Extension loader for discovery and frontend asset APIs (may be null if extensions failed to init). */
+  getExtensionLoader(): ExtensionLoader | null {
+    return this.extensionLoader;
+  }
+
   /**
    * Get model registry for external access (HTTP routes)
    */

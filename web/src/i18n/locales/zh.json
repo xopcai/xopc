@@ -41,7 +41,8 @@
     "agentAndModels": "服务商与模型",
     "data": "会话与日志",
     "interface": "通用",
-    "voice": "语音"
+    "voice": "语音",
+    "extensions": "扩展"
   },
   "token": {
     "title": "需要身份验证",
