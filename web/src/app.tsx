@@ -40,6 +40,11 @@ const ExtensionSettingsPage = lazy(() =>
     default: m.ExtensionSettingsPage,
   })),
 );
+const ExtensionDebugPage = lazy(() =>
+  import('@/features/extensions/extension-debug-page').then((m) => ({
+    default: m.ExtensionDebugPage,
+  })),
+);
 
 function SecondaryRouteFallback() {
   return (
@@ -168,6 +173,14 @@ const router = createHashRouter([
           {
             path: 'channels',
             element: <Navigate to="/channels" replace />,
+          },
+          {
+            path: 'extensions/debug',
+            element: (
+              <Suspense fallback={<SettingsRouteFallback />}>
+                <ExtensionDebugPage />
+              </Suspense>
+            ),
           },
           {
             path: 'ext/:extensionId',

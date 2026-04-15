@@ -45,6 +45,7 @@ export function ExtensionSettingsPage() {
       <div className="overflow-hidden rounded-xl border border-edge bg-surface-base">
         <ExtensionIframeHost
           extensionId={extensionId}
+          extensionName={extension.name}
           entrypoint={panel.entrypoint}
           permissions={extension.ui?.permissions}
           title={panel.title}
