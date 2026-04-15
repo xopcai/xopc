@@ -25,14 +25,20 @@ export function createExtensionClient(options?: CreateExtensionClientOptions): E
     },
 
     agent: {
-      async sendMessage(message: string, opts?: { sessionKey?: string }) {
+      async sendMessage(message: string, opts?: { sessionKey?: string; newSession?: boolean }) {
         return transport.request<{ sessionKey: string }>('agent.sendMessage', {
           message,
           sessionKey: opts?.sessionKey,
+          newSession: opts?.newSession,
         });
       },
-      onStreamEvent(_sessionKey: string, handler: StreamHandler) {
-        return transport.on('agent.stream', handler);
+      onStreamEvent(sessionKey: string, handler: StreamHandler) {
+        transport.emit('agent.subscribe', { sessionKey });
+        const unsub = transport.on(`agent.stream.${sessionKey}`, handler);
+        return () => {
+          transport.emit('agent.unsubscribe', { sessionKey });
+          unsub();
+        };
       },
     },
 
@@ -86,10 +92,10 @@ export function createExtensionClient(options?: CreateExtensionClientOptions): E
 
     events: {
       emit(event: string, data?: unknown) {
-        transport.emit(event, data);
+        transport.emit(`ext.${event}`, data);
       },
       on(event: string, handler: (data: unknown) => void) {
-        return transport.on(event, handler);
+        return transport.on(`ext.${event}`, handler);
       },
     },
 

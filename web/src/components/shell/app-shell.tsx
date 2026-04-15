@@ -8,6 +8,7 @@ import { WorkspaceColumn } from '@/components/shell/workspace-column';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
 import { ElectronSetupBanner } from '@/features/electron/electron-setup-banner';
+import { ExtensionCommandPaletteHost } from '@/features/extensions/extension-command-palette';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { WorkspacePreviewDialog } from '@/features/workspace/workspace-preview-dialog';
 import { cn } from '@/lib/cn';
@@ -127,6 +128,7 @@ export function AppShell() {
       <GatewaySseBridge />
       <NavigateToChatListener />
       <ExtensionNavigateListener />
+      <ExtensionCommandPaletteHost />
       <ExtensionNotificationListener />
       <TokenDialog />
       <ElectronGatewayExitBanner />

@@ -68,7 +68,10 @@ export interface ExtensionClient {
     onThemeChange(handler: (t: ThemeInfo) => void): () => void;
   };
   agent: {
-    sendMessage(message: string, options?: { sessionKey?: string }): Promise<{ sessionKey: string }>;
+    sendMessage(
+      message: string,
+      options?: { sessionKey?: string; newSession?: boolean },
+    ): Promise<{ sessionKey: string }>;
     onStreamEvent(sessionKey: string, handler: StreamHandler): () => void;
   };
   session: {
