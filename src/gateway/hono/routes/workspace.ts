@@ -1,0 +1,355 @@
+import type { Hono } from 'hono';
+import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
+import { join, resolve } from 'node:path';
+
+import { type Config, getWorkspacePath } from '../../../config/schema.js';
+import { resolveSafeInboundFilePath } from '../../../channels/attachments/inbound-persist.js';
+import { resolveSafeTtsFilePath } from '../../../channels/attachments/outbound-tts-persist.js';
+import {
+  listAgentEntries,
+  normalizeAgentId,
+  resolveAgentHomeDir,
+  resolveAgentWorkspaceDir,
+  resolveDefaultAgentId,
+} from '../../../agent/agent-scope.js';
+import { createLogger } from '../../../utils/logger.js';
+import { resolveHeartbeatMdPath } from '../../workspace-heartbeat-path.js';
+import {
+  isPathUnderWorkspace,
+  resolveWorkspaceSafePath,
+  toWorkspaceRelativePosix,
+} from '../../workspace-editor-path.js';
+import { runRipgrepInDirectory } from '../../workspace-ripgrep.js';
+import type { AuthenticatedRouteDeps } from './deps.js';
+
+const log = createLogger('HonoApp');
+
+function isKnownEditorAgentId(cfg: Config, id: string): boolean {
+  const n = normalizeAgentId(id);
+  if (n === resolveDefaultAgentId(cfg)) return true;
+  return listAgentEntries(cfg).some((e) => normalizeAgentId(e.id) === n);
+}
+
+function resolveEditorWorkspaceRoot(
+  cfg: Config,
+  agentIdRaw: string | undefined,
+): { ok: true; root: string } | { ok: false; message: string } {
+  const trimmed = typeof agentIdRaw === 'string' ? agentIdRaw.trim() : '';
+  if (!trimmed) {
+    const root = getWorkspacePath(cfg);
+    if (!root) return { ok: false, message: 'Workspace not configured' };
+    return { ok: true, root };
+  }
+  const id = normalizeAgentId(trimmed);
+  if (!isKnownEditorAgentId(cfg, id)) {
+    return { ok: false, message: 'Unknown agent' };
+  }
+  return { ok: true, root: resolveAgentWorkspaceDir(cfg, id) };
+}
+
+export function registerWorkspaceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
+  const { service } = deps;
+
+  authenticated.get('/api/workspace/inbound-file', async (c) => {
+    const rel = c.req.query('rel');
+    if (!rel || typeof rel !== 'string') {
+      return c.json({ ok: false, error: { message: 'Missing rel' } }, 400);
+    }
+    const cfg = service.currentConfig;
+    const agentHome = resolveAgentHomeDir(cfg, resolveDefaultAgentId(cfg));
+    const abs = resolveSafeInboundFilePath({ agentHome }, rel);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Forbidden' } }, 403);
+    }
+    try {
+      const buf = await readFile(abs);
+      const ext = rel.split('.').pop()?.toLowerCase() ?? '';
+      const mimeByExt: Record<string, string> = {
+        pdf: 'application/pdf',
+        png: 'image/png',
+        jpg: 'image/jpeg',
+        jpeg: 'image/jpeg',
+        webp: 'image/webp',
+        gif: 'image/gif',
+        md: 'text/markdown',
+        txt: 'text/plain',
+        json: 'application/json',
+        html: 'text/html',
+        css: 'text/css',
+        js: 'text/javascript',
+        ts: 'text/typescript',
+        webm: 'audio/webm',
+        ogg: 'audio/ogg',
+        opus: 'audio/ogg',
+        mp3: 'audio/mpeg',
+        wav: 'audio/wav',
+        m4a: 'audio/mp4',
+      };
+      const contentType = mimeByExt[ext] || 'application/octet-stream';
+      return new Response(buf, {
+        headers: {
+          'Content-Type': contentType,
+          'Cache-Control': 'private, max-age=3600',
+        },
+      });
+    } catch {
+      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    }
+  });
+
+  authenticated.get('/api/workspace/tts-file', async (c) => {
+    const rel = c.req.query('rel');
+    if (!rel || typeof rel !== 'string') {
+      return c.json({ ok: false, error: { message: 'Missing rel' } }, 400);
+    }
+    const cfg = service.currentConfig;
+    const agentHome = resolveAgentHomeDir(cfg, resolveDefaultAgentId(cfg));
+    const abs = resolveSafeTtsFilePath({ agentHome }, rel);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Forbidden' } }, 403);
+    }
+    try {
+      const buf = await readFile(abs);
+      const ext = rel.split('.').pop()?.toLowerCase() ?? '';
+      const mimeByExt: Record<string, string> = {
+        ogg: 'audio/ogg',
+        opus: 'audio/ogg',
+        mp3: 'audio/mpeg',
+        wav: 'audio/wav',
+        m4a: 'audio/mp4',
+      };
+      const contentType = mimeByExt[ext] || 'application/octet-stream';
+      return new Response(buf, {
+        headers: {
+          'Content-Type': contentType,
+          'Cache-Control': 'private, max-age=3600',
+        },
+      });
+    } catch {
+      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    }
+  });
+
+  authenticated.get('/api/workspace/heartbeat-md', async (c) => {
+    const abs = resolveHeartbeatMdPath(service.currentConfig);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    }
+    try {
+      const content = await readFile(abs, 'utf-8');
+      return c.json({ ok: true, payload: { content: content, file: 'HEARTBEAT.md' } });
+    } catch {
+      return c.json({ ok: true, payload: { content: '', file: 'HEARTBEAT.md' } });
+    }
+  });
+
+  authenticated.put('/api/workspace/heartbeat-md', async (c) => {
+    const abs = resolveHeartbeatMdPath(service.currentConfig);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Workspace not configured' } }, 400);
+    }
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const content =
+      typeof body === 'object' &&
+      body !== null &&
+      'content' in body &&
+      typeof (body as { content: unknown }).content === 'string'
+        ? (body as { content: string }).content
+        : '';
+    try {
+      await writeFile(abs, content, 'utf-8');
+      return c.json({ ok: true, payload: { file: 'HEARTBEAT.md' } });
+    } catch (err) {
+      log.error({ err, path: abs }, 'Failed to write HEARTBEAT.md');
+      return c.json({ ok: false, error: { message: 'Write failed' } }, 500);
+    }
+  });
+
+  authenticated.get('/api/workspace/editor/list', async (c) => {
+    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { message: ws.message } }, 400);
+    }
+    const workspaceRoot = ws.root;
+    const dirRel = typeof c.req.query('dir') === 'string' ? c.req.query('dir')! : '';
+    const absDir = resolveWorkspaceSafePath(workspaceRoot, dirRel);
+    if (!absDir) {
+      return c.json({ ok: false, error: { message: 'Invalid path' } }, 400);
+    }
+    let st: Awaited<ReturnType<typeof stat>>;
+    try {
+      st = await stat(absDir);
+    } catch {
+      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    }
+    if (!st.isDirectory()) {
+      return c.json({ ok: false, error: { message: 'Not a directory' } }, 400);
+    }
+    const dirents = await readdir(absDir, { withFileTypes: true });
+    const entries: { name: string; path: string; absolutePath: string; isDirectory: boolean }[] = [];
+    for (const entry of dirents) {
+      if (entry.name.startsWith('.')) continue;
+      const fullPath = join(absDir, entry.name);
+      if (entry.isDirectory()) {
+        entries.push({
+          name: entry.name,
+          path: toWorkspaceRelativePosix(workspaceRoot, fullPath),
+          absolutePath: fullPath,
+          isDirectory: true,
+        });
+      } else {
+        entries.push({
+          name: entry.name,
+          path: toWorkspaceRelativePosix(workspaceRoot, fullPath),
+          absolutePath: fullPath,
+          isDirectory: false,
+        });
+      }
+    }
+    entries.sort((a, b) => {
+      if (a.isDirectory !== b.isDirectory) return a.isDirectory ? -1 : 1;
+      return a.name.localeCompare(b.name);
+    });
+    return c.json({ ok: true, payload: { entries } });
+  });
+
+  authenticated.get('/api/workspace/editor/read', async (c) => {
+    const pathRel = typeof c.req.query('path') === 'string' ? c.req.query('path')! : '';
+    if (!pathRel.trim()) {
+      return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
+    }
+    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { message: ws.message } }, 400);
+    }
+    const workspaceRoot = ws.root;
+    const abs = resolveWorkspaceSafePath(workspaceRoot, pathRel);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Invalid path' } }, 400);
+    }
+    let st: Awaited<ReturnType<typeof stat>>;
+    try {
+      st = await stat(abs);
+    } catch {
+      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    }
+    if (!st.isFile()) {
+      return c.json({ ok: false, error: { message: 'Not a file' } }, 400);
+    }
+    try {
+      const content = await readFile(abs, 'utf-8');
+      return c.json({
+        ok: true,
+        payload: {
+          content,
+          path: toWorkspaceRelativePosix(workspaceRoot, abs),
+          mtimeMs: st.mtimeMs,
+        },
+      });
+    } catch {
+      return c.json({ ok: false, error: { message: 'Read failed' } }, 500);
+    }
+  });
+
+  authenticated.put('/api/workspace/editor/write', async (c) => {
+    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { message: ws.message } }, 400);
+    }
+    const workspaceRoot = ws.root;
+    let body: unknown;
+    try {
+      body = await c.req.json();
+    } catch {
+      return c.json({ ok: false, error: { message: 'Invalid JSON' } }, 400);
+    }
+    const pathRel =
+      typeof body === 'object' &&
+      body !== null &&
+      'path' in body &&
+      typeof (body as { path: unknown }).path === 'string'
+        ? (body as { path: string }).path
+        : '';
+    const content =
+      typeof body === 'object' &&
+      body !== null &&
+      'content' in body &&
+      typeof (body as { content: unknown }).content === 'string'
+        ? (body as { content: string }).content
+        : '';
+    if (!pathRel.trim()) {
+      return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
+    }
+    const abs = resolveWorkspaceSafePath(workspaceRoot, pathRel);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Invalid path' } }, 400);
+    }
+    let st: Awaited<ReturnType<typeof stat>> | undefined;
+    try {
+      st = await stat(abs);
+    } catch {
+      st = undefined;
+    }
+    if (st && !st.isFile()) {
+      return c.json({ ok: false, error: { message: 'Not a file' } }, 400);
+    }
+    try {
+      await writeFile(abs, content, 'utf-8');
+      let mtimeMs: number;
+      try {
+        mtimeMs = (await stat(abs)).mtimeMs;
+      } catch {
+        mtimeMs = Date.now();
+      }
+      return c.json({
+        ok: true,
+        payload: { path: toWorkspaceRelativePosix(workspaceRoot, abs), mtimeMs },
+      });
+    } catch (err) {
+      log.error({ err, path: abs }, 'workspace editor write failed');
+      return c.json({ ok: false, error: { message: 'Write failed' } }, 500);
+    }
+  });
+
+  authenticated.get('/api/workspace/editor/search', async (c) => {
+    const q = typeof c.req.query('q') === 'string' ? c.req.query('q')!.trim() : '';
+    const dirRel = typeof c.req.query('dir') === 'string' ? c.req.query('dir')! : '';
+    if (!q) {
+      return c.json({
+        ok: true,
+        payload: { results: [] as { filePath: string; lineNumber: number; lineContent: string; matchStart: number; matchEnd: number }[] },
+      });
+    }
+    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { message: ws.message } }, 400);
+    }
+    const workspaceRoot = ws.root;
+    const absDir = resolveWorkspaceSafePath(workspaceRoot, dirRel);
+    if (!absDir) {
+      return c.json({ ok: false, error: { message: 'Invalid path' } }, 400);
+    }
+    let st: Awaited<ReturnType<typeof stat>>;
+    try {
+      st = await stat(absDir);
+    } catch {
+      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    }
+    if (!st.isDirectory()) {
+      return c.json({ ok: false, error: { message: 'Not a directory' } }, 400);
+    }
+    const raw = await runRipgrepInDirectory(q, absDir);
+    const results = raw
+      .filter((r) => isPathUnderWorkspace(workspaceRoot, r.filePath))
+      .map((r) => ({
+        ...r,
+        filePath: toWorkspaceRelativePosix(workspaceRoot, resolve(r.filePath)),
+      }));
+    return c.json({ ok: true, payload: { results } });
+  });
+}
