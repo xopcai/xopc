@@ -23,7 +23,15 @@
   "ui": {
     "main": "ui/panel.html",
     "icon": "ui/icon.svg",
-    "permissions": ["theme", "config.read", "notification"],
+    "permissions": [
+      "theme",
+      "notification",
+      "session.read",
+      "agent.send",
+      "config.read",
+      "config.write",
+      "storage"
+    ],
     "contributions": {
       "settingsPanels": [
         {

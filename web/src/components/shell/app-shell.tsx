@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Outlet, useLocation, useNavigate } from 'react-router-dom';
 
 import { GatewayConnectLanding } from '@/components/shell/gateway-connect-landing';
@@ -47,6 +47,57 @@ function ExtensionNavigateListener() {
   return null;
 }
 
+type ExtensionNotificationDetail = {
+  type?: 'info' | 'success' | 'warning' | 'error';
+  title?: string;
+  message?: string;
+  duration?: number;
+};
+
+function ExtensionNotificationListener() {
+  const [toast, setToast] = useState<ExtensionNotificationDetail | null>(null);
+
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const d = (e as CustomEvent<ExtensionNotificationDetail>).detail;
+      if (!d || typeof d.title !== 'string' || !d.title.trim()) return;
+      setToast({
+        type: d.type ?? 'info',
+        title: d.title.trim(),
+        message: typeof d.message === 'string' ? d.message : undefined,
+        duration: d.duration,
+      });
+      const ms = d.duration === 0 ? 0 : (d.duration ?? 5000);
+      if (ms > 0) {
+        window.setTimeout(() => setToast(null), ms);
+      }
+    };
+    window.addEventListener('extension-notification', handler as EventListener);
+    return () => window.removeEventListener('extension-notification', handler as EventListener);
+  }, []);
+
+  if (!toast) return null;
+  const accent =
+    toast.type === 'error'
+      ? 'border-red-500/40 bg-red-500/10'
+      : toast.type === 'warning'
+        ? 'border-amber-500/40 bg-amber-500/10'
+        : toast.type === 'success'
+          ? 'border-emerald-500/40 bg-emerald-500/10'
+          : 'border-edge bg-surface-panel';
+
+  return (
+    <div
+      className={`pointer-events-none fixed bottom-4 right-4 z-[100] flex max-w-sm flex-col gap-1 rounded-lg border px-4 py-3 text-sm shadow-elevated ${accent}`}
+      role="status"
+      aria-live="polite"
+    >
+      <div className="pointer-events-auto font-medium text-fg">{toast.title}</div>
+      {toast.message ? <div className="pointer-events-auto text-fg-muted">{toast.message}</div> : null}
+    </div>
+  );
+}
+
 export function AppShell() {
   const token = useGatewayStore((s) => s.token);
   const { pathname } = useLocation();
@@ -76,6 +127,7 @@ export function AppShell() {
       <GatewaySseBridge />
       <NavigateToChatListener />
       <ExtensionNavigateListener />
+      <ExtensionNotificationListener />
       <TokenDialog />
       <ElectronGatewayExitBanner />
       <ElectronSetupBanner />
