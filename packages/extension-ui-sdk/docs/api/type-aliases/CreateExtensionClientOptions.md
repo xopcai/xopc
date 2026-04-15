@@ -8,7 +8,7 @@
 
 > **CreateExtensionClientOptions** = `object`
 
-Defined in: [client.ts:4](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/client.ts#L4)
+Defined in: [client.ts:4](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/client.ts#L4)
 
 ## Properties
 
@@ -16,4 +16,4 @@ Defined in: [client.ts:4](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > `optional` **transport?**: [`Transport`](../classes/Transport.md)
 
-Defined in: [client.ts:5](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/client.ts#L5)
+Defined in: [client.ts:5](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/client.ts#L5)
