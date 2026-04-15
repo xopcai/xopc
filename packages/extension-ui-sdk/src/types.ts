@@ -97,6 +97,8 @@ export interface ExtensionClient {
     }): Promise<void>;
     closePanel(): void;
     navigate(path: string): Promise<void>;
+    /** Chat/tool widget iframe: host sends the tool result via `widget.data` after load. */
+    onWidgetResult(handler: (data: unknown) => void): () => void;
   };
   events: {
     emit(event: string, data?: unknown): void;
