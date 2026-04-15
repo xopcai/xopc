@@ -3,79 +3,10 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hello extension</title>
-    <style>
-      body {
-        font-family: system-ui, sans-serif;
-        margin: 0;
-        padding: 12px;
-        background: var(--page-bg, #f5f5f7);
-        color: var(--text, #111);
-      }
-      .dark body {
-        background: #1c1c1e;
-        color: #f5f5f7;
-      }
-      pre {
-        font-size: 12px;
-        overflow: auto;
-        padding: 8px;
-        border-radius: 8px;
-        background: rgba(0, 0, 0, 0.05);
-      }
-    </style>
+    <title>Hello — SDK demo</title>
   </head>
   <body>
-    <h1 id="title">Hello extension</h1>
-    <p id="status">Connecting…</p>
-    <h2>Permissions</h2>
-    <pre id="perms">—</pre>
-    <h2>Theme</h2>
-    <pre id="theme">—</pre>
-    <script>
-      let extensionId = '';
-      const statusEl = document.getElementById('status');
-      const permsEl = document.getElementById('perms');
-      const themeEl = document.getElementById('theme');
-
-      function applyTheme(t) {
-        if (!t || typeof t !== 'object') return;
-        const mode = t.mode === 'dark' ? 'dark' : 'light';
-        document.documentElement.dataset.mode = mode;
-        document.documentElement.classList.toggle('dark', mode === 'dark');
-        themeEl.textContent = JSON.stringify(t, null, 2);
-      }
-
-      function sendEvent(event, data) {
-        window.parent.postMessage(
-          {
-            source: 'xopc-extension',
-            extensionId,
-            type: 'event',
-            event,
-            data,
-          },
-          '*',
-        );
-      }
-
-      window.addEventListener('message', (event) => {
-        const msg = event.data;
-        if (!msg || msg.source !== 'xopc-host') return;
-
-        if (msg.type === 'init') {
-          extensionId = msg.extensionId;
-          statusEl.textContent = 'Connected';
-          permsEl.textContent = (msg.permissions || []).join(', ') || '(none)';
-          applyTheme(msg.theme);
-          sendEvent('ui.resize', { height: document.body.scrollHeight + 32 });
-        }
-
-        if (msg.type === 'event' && msg.event === 'theme.changed') {
-          applyTheme(msg.data);
-          sendEvent('ui.resize', { height: document.body.scrollHeight + 32 });
-        }
-      });
-    </script>
+    <!-- Bundled from ui/panel-entry.ts via: pnpm -C extensions/hello run build:ui -->
+    <script src="./panel.bundle.js"></script>
   </body>
 </html>

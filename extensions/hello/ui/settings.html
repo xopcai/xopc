@@ -3,39 +3,9 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Hello settings</title>
-    <style>
-      body {
-        font-family: system-ui, sans-serif;
-        margin: 0;
-        padding: 12px;
-      }
-    </style>
+    <title>Hello — Settings</title>
   </head>
   <body>
-    <p>Hello World extension — settings UI placeholder (Phase 2 will embed this in Gateway settings).</p>
-    <script>
-      let extensionId = '';
-      function sendEvent(event, data) {
-        window.parent.postMessage(
-          {
-            source: 'xopc-extension',
-            extensionId,
-            type: 'event',
-            event,
-            data,
-          },
-          '*',
-        );
-      }
-      window.addEventListener('message', (event) => {
-        const msg = event.data;
-        if (!msg || msg.source !== 'xopc-host') return;
-        if (msg.type === 'init') {
-          extensionId = msg.extensionId;
-          sendEvent('ui.resize', { height: document.body.scrollHeight + 24 });
-        }
-      });
-    </script>
+    <script src="./settings.bundle.js"></script>
   </body>
 </html>

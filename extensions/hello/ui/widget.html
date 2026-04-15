@@ -45,75 +45,10 @@
     <div class="widget">
       <div class="icon" aria-hidden>👋</div>
       <div class="content">
-        <div class="label">Hello Result</div>
+        <div class="label">Hello Result (SDK)</div>
         <div class="result" id="result-text">Loading…</div>
       </div>
     </div>
-    <script>
-      window.__extensionId = '';
-
-      function applyThemeTokens(tokens) {
-        if (!tokens || typeof tokens !== 'object') return;
-        for (const [key, value] of Object.entries(tokens)) {
-          if (typeof value === 'string' && value.trim()) {
-            const k = key.startsWith('--') ? key : '--' + key;
-            document.documentElement.style.setProperty(k, value);
-          }
-        }
-      }
-
-      function formatResult(data) {
-        if (data == null || data === '') return '(empty)';
-        if (typeof data === 'string') {
-          const t = data.trim();
-          try {
-            const o = JSON.parse(t);
-            if (o && typeof o === 'object') {
-              if ('message' in o) return String(o.message);
-              if ('result' in o) return String(o.result);
-              if ('greeting' in o) return String(o.greeting);
-            }
-          } catch (_e) {
-            /* plain string */
-          }
-          return data;
-        }
-        return String(data);
-      }
-
-      function renderResult(data) {
-        const el = document.getElementById('result-text');
-        el.textContent = formatResult(data);
-        notifyResize();
-      }
-
-      function notifyResize() {
-        requestAnimationFrame(function () {
-          window.parent.postMessage(
-            {
-              source: 'xopc-extension',
-              extensionId: window.__extensionId,
-              type: 'event',
-              event: 'ui.resize',
-              data: { height: document.body.scrollHeight + 4 },
-            },
-            '*',
-          );
-        });
-      }
-
-      window.addEventListener('message', function (event) {
-        const msg = event.data;
-        if (!msg || msg.source !== 'xopc-host') return;
-        if (msg.type === 'init') {
-          window.__extensionId = msg.extensionId;
-          applyThemeTokens(msg.theme && msg.theme.tokens);
-        } else if (msg.type === 'event' && msg.event === 'widget.data') {
-          renderResult(msg.data);
-        } else if (msg.type === 'event' && msg.event === 'theme.changed') {
-          applyThemeTokens(msg.data && msg.data.tokens);
-        }
-      });
-    </script>
+    <script src="./widget.bundle.js"></script>
   </body>
 </html>

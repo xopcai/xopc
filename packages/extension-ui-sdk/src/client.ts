@@ -88,6 +88,9 @@ export function createExtensionClient(options?: CreateExtensionClientOptions): E
       async navigate(path: string) {
         await transport.request('ui.navigate', { path });
       },
+      onWidgetResult(handler: (data: unknown) => void) {
+        return transport.on('widget.data', handler);
+      },
     },
 
     events: {
