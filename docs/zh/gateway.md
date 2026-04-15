@@ -344,10 +344,26 @@ GET /health
 | POST | `/api/cron/create` | 创建定时任务 |
 | DELETE | `/api/cron/:id` | 删除定时任务 |
 | POST | `/api/cron/:id/toggle` | 启用/禁用定时任务 |
+| GET | `/api/providers` | 列出 LLM 提供方 |
+| GET | `/api/models` | 列出可用模型 |
+| GET | `/api/models-json` | 读取 models.json |
+| PATCH | `/api/models-json` | 保存 models.json |
 | GET | `/api/image/capabilities` | 图像生成 / 视觉能力快照（需认证） |
 | POST | `/api/image/validate-model` | 校验 `provider/model` 引用（需认证） |
+| GET | `/api/events` | Server-Sent Events 广播（需认证），包含 **`agent.stream`** 等事件，供网页控制台与扩展 iframe 消费 |
+| GET | `/api/extensions` | 列出已发现扩展（含可选 `ui` 摘要）（需认证） |
+| GET | `/api/extensions/:id` | 扩展详情与完整 manifest（需认证） |
+| GET | `/api/extensions/:id/assets/*` | 扩展 UI 静态资源（HTML/JS/CSS；严格 CSP）（需认证） |
+| GET | `/api/extensions/:id/storage` | 列出扩展 KV 存储键（需认证） |
+| GET | `/api/extensions/:id/storage/:key` | 读取存储值（需认证） |
+| PUT | `/api/extensions/:id/storage/:key` | 写入存储值（需认证） |
+| DELETE | `/api/extensions/:id/storage/:key` | 删除存储键（需认证） |
+| GET | `/api/extensions/:id/config` | 读取扩展作用域配置对象（需认证） |
+| PATCH | `/api/extensions/:id/config` | 合并写入扩展作用域配置（需认证） |
 
 `GET` / `PATCH` **`/api/config`**（需认证）会返回智能体默认项，其中包括 **`imageModel`**、**`imageGenerationModel`** 以及 **`imageModelFallbacks`**、**`imageGenerationModelFallbacks`**；`PATCH` 对图像字段支持与对话 **`model`** 相同的 **`{ primary, fallbacks }`** 对象形式。详见 [图像与视觉](image-multimodal.md)。
+
+**扩展 UI：** manifest **`ui`**、**`@xopcai/extension-ui-sdk`**、`/api/events` 转发与权限说明见 [扩展系统 — 网关控制台：扩展 UI](zh/extensions.md#gateway-extension-ui)。
 
 ## 错误响应
 

@@ -325,8 +325,20 @@ Creates a webchat-scoped session (or returns an existing empty one). JSON body (
 | PATCH | `/api/models-json` | Save models.json |
 | GET | `/api/image/capabilities` | Image generation / vision capability snapshot (auth) |
 | POST | `/api/image/validate-model` | Validate a `provider/model` ref for image flows (auth) |
+| GET | `/api/events` | Server-Sent Events stream (auth); broadcast events including **`agent.stream`** for the web console and Gateway extension iframes |
+| GET | `/api/extensions` | List discovered extensions (includes optional `ui` summary) (auth) |
+| GET | `/api/extensions/:id` | Extension detail and full manifest (auth) |
+| GET | `/api/extensions/:id/assets/*` | Static assets for extension UI (HTML/JS/CSS; strict CSP) (auth) |
+| GET | `/api/extensions/:id/storage` | List extension KV storage keys (auth) |
+| GET | `/api/extensions/:id/storage/:key` | Read a storage value (auth) |
+| PUT | `/api/extensions/:id/storage/:key` | Write a storage value (auth) |
+| DELETE | `/api/extensions/:id/storage/:key` | Delete a storage key (auth) |
+| GET | `/api/extensions/:id/config` | Read extension-scoped config object (auth) |
+| PATCH | `/api/extensions/:id/config` | Merge extension-scoped config (auth) |
 
 `GET` / `PATCH` **`/api/config`** (auth) expose agent defaults including **`imageModel`**, **`imageGenerationModel`**, and their **`imageModelFallbacks`** / **`imageGenerationModelFallbacks`** arrays; `PATCH` accepts the same `{ primary, fallbacks }` object shape as the chat `model` field. See [Image & vision](image-multimodal.md).
+
+**Extension UI:** manifest **`ui`**, **`@xopcai/extension-ui-sdk`**, `/api/events` forwarding, and permissions are documented in [Extensions — Gateway console: Extension UI](extensions.md#gateway-console-extension-ui-iframe).
 
 ---
 

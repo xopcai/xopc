@@ -21,10 +21,10 @@ features:
     details: Built on Node.js + TypeScript with minimal dependencies
     link: /getting-started
   - title: 🔌 Extension System
-    details: Extend functionality with a powerful extension architecture
+    details: Backend hooks plus optional Gateway Web UI in sandboxed iframes via manifest ui and @xopcai/extension-ui-sdk
     link: /extensions
   - title: 🌐 Multi-Channel
-    details: Bundled Telegram & WeChat (Weixin) plugins and web console via the gateway; more channels via extensions.
+    details: Bundled Telegram & WeChat (Weixin), gateway web chat and console, plus optional extension UI panels (manifest ui); more channels via extensions.
     link: /channels
   - title: 💻 Local First
     details: Run locally with full control—built for super individuals who own their stack

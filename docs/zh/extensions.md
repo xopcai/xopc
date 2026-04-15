@@ -9,8 +9,9 @@ xopc 提供了一个轻量级但功能强大的扩展系统。
 - 🔌 **Extension SDK** - 官方 SDK；除总入口外可选用 **子路径**（`extension-sdk/core`、`extension-sdk/lazy` 等）
 - ⚡ **TypeScript 原生** - 通过 jiti 即时加载，无需编译
 - 📦 **多源安装** - 支持 npm、本地目录、Git 仓库
+- 🖥️ **网关 Web 控制台 UI（可选）** — 扩展可在 manifest 中声明 **`ui`**，由 React 控制台通过 HTTPS 加载静态资源并在沙箱 iframe 中运行；iframe 侧使用 **`@xopcai/extension-ui-sdk`**（见 [网关控制台：扩展 UI](#gateway-extension-ui)）。
 
-**设计方案（仓库内 RFC）：** [`.docs/channel/`](../.docs/channel/00-overview.md) 描述与 OpenClaw 思路对齐的完整目标架构；下文概括**当前已实现**的用户可见行为。
+**设计方案（仓库内 RFC）：** [`.docs/channel/`](../.docs/channel/00-overview.md) 描述与 OpenClaw 思路对齐的完整目标架构；下文概括**当前已实现**的用户可见行为。**浏览器端扩展 UI** 的分阶段说明见仓库内 [`.docs/ext/`](../.docs/ext/)（与 `AGENTS.md` 配套）。
 
 ## 快速开始
 
@@ -262,6 +263,79 @@ import type { ExtensionService } from '@xopcai/xopc/extension-sdk';
 ### SDK 路径解析
 
 在本地开发时，xopc 通过 jiti 将 `xopc/extension-sdk` 解析到 `src/extensions/sdk/index.ts`，并支持子路径别名（如 `xopc/extension-sdk/core`、`xopc/extension-sdk/lazy`）。使用已安装的 **`@xopcai/xopc`** 时，请优先使用 **`@xopcai/xopc/extension-sdk`** 或对应子路径。
+
+---
+
+## 网关控制台：扩展 UI（iframe） {#gateway-extension-ui}
+
+扩展除了可在 Node 侧用上面的 **Extension SDK** 注册工具/钩子外，还可为 **Gateway Web 控制台**（`web/`）提供在 **沙箱 iframe** 中运行的页面。iframe **不会**在网关进程里调用 `register()`；它通过 **`postMessage`** 与宿主通信，由 **`@xopcai/extension-ui-sdk`** 封装。
+
+### Manifest：`ui`（可选）
+
+| 字段 | 作用 |
+|------|------|
+| `main` | 默认面板入口路径（相对扩展包根目录） |
+| `icon` | 图标资源路径 |
+| `permissions` | 声明所需能力字符串；宿主据此做 **运行时校验** 与 **首次授权对话框**（如 `theme`、`agent.send`、`agent.subscribe`、`storage` 等） |
+| `contributions` | `pages`、`settingsPanels`、`chatWidgets`、`commands` — 应用页、设置侧栏、聊天流挂件与 **⌘/Ctrl+K** 命令面板 |
+
+未声明 `ui` 时，扩展仍可仅作为 **纯后端扩展**（工具、通道、钩子等）。
+
+### npm 包：`@xopcai/extension-ui-sdk`
+
+使用 **`createExtensionClient()`**，在宿主下发 **`init`**（含 theme、locale、permissions）后 **`await client.whenReady()`**。
+
+- **theme** — `getTheme`、`onThemeChange`
+- **agent** — `sendMessage`（走网关 JSON 模式的 `/api/agent`）、`onStreamEvent`（依赖 **`GET /api/events`** 的 SSE 与宿主转发）
+- **session** — `listSessions`、`navigateToSession`
+- **config** / **storage** — 对应下文 **Gateway REST**；存储为按扩展命名空间持久化的 JSON KV（进程内带缓存）
+- **ui** — `showNotification`、`navigate`、`resize`、`closePanel`；**聊天挂件**可用 **`onWidgetResult`** 接收宿主下发的工具结果（`widget.data`）
+- **events** — `emit` / `on` 使用 **`ext.*`** 前缀在扩展 iframe 之间 **广播**（跨扩展通信）
+- **onDispose**、**onDidChangeVisibility**
+
+**Markdown API 文档生成**（仓库根目录执行）：
+
+```bash
+pnpm run docs:extension-sdk
+```
+
+生成目录：**`packages/extension-ui-sdk/docs/api/`**。
+
+### Gateway REST（需 Bearer）
+
+与控制台其它接口相同，携带 **`Authorization: Bearer <网关 token>`**。
+
+| 方法 | 路径 | 说明 |
+|------|------|------|
+| GET | `/api/extensions` | 列出已发现扩展及 `ui` 摘要 |
+| GET | `/api/extensions/:id` | 详情 + 完整 manifest |
+| GET | `/api/extensions/:id/assets/*` | 静态资源（HTML/JS/CSS 等），响应附带严格 **CSP** |
+| GET | `/api/extensions/:id/storage` | 列出 storage 键 |
+| GET | `/api/extensions/:id/storage/:key` | 读取 `{ value }` |
+| PUT | `/api/extensions/:id/storage/:key` | 请求体 `{ value }` 写入 |
+| DELETE | `/api/extensions/:id/storage/:key` | 删除键 |
+| GET | `/api/extensions/:id/config` | 读取扩展配置对象 |
+| PATCH | `/api/extensions/:id/config` | JSON 合并写入配置 |
+
+**持久化路径：** **`~/.xopc/extensions/<经过净化的命名空间>/storage.json`**；配置使用独立命名空间 **`__config__<extensionId>`**。
+
+### Web 宿主行为摘要
+
+- **首次权限确认** — 展示 manifest **`ui.permissions`**；用户同意后写入 **`localStorage`** 键 **`xopc.extensionUiGrants.v1`**（按扩展 id + 权限集合指纹）。
+- **iframe `sandbox`** — 一般为 `allow-scripts allow-forms allow-popups`，**不启用 `allow-same-origin`** 以降低与宿主同源混用风险（通信依赖 `postMessage`）。
+- **Agent 流式事件** — 网关在 webchat 场景广播 **`agent.stream`**；控制台 **`/api/events`** SSE 收到后，由宿主转发给已通过 **`agent.subscribe`** 订阅对应 **`sessionKey`** 的 iframe。
+- **命令面板** — **⌘K / Ctrl+K**（或 `window` 上的 `open-command-palette`）列出 **`contributions.commands`**；带 **`opensPanel`** 的命令会导航到 **`/apps/{extensionId}`**。
+- **调试** — **设置 → Extensions → 扩展调试** 可查看网关返回的扩展列表与 **UI 授权** JSON。
+
+### 示例扩展：`extensions/hello`
+
+仓库内 **Hello** 示例使用 **esbuild** 将 TS 入口打成 **`ui/*.bundle.js`**，在 HTML 中引用：
+
+```bash
+pnpm run build:hello-ui
+```
+
+升级 **`@xopcai/extension-ui-sdk`** 后请重新打包。入口源文件：`extensions/hello/ui/*-entry.ts`。
 
 ---
 
