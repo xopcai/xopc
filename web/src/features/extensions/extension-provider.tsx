@@ -1,4 +1,4 @@
-import { createContext, useContext, useEffect, useMemo } from 'react';
+import { createContext, useContext, useEffect, useMemo, useRef } from 'react';
 import useSWR from 'swr';
 
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -19,7 +19,15 @@ type Ctx = {
 const ExtensionContext = createContext<Ctx | null>(null);
 
 export function ExtensionProvider({ children }: { children: React.ReactNode }) {
-  const router = useMemo(() => new ExtensionMessageRouter(), []);
+  const routerRef = useRef<ExtensionMessageRouter | undefined>(undefined);
+  if (!routerRef.current) {
+    routerRef.current = new ExtensionMessageRouter();
+    registerBuiltinMethods(routerRef.current);
+  }
+  const router = routerRef.current;
+  if (!router) {
+    throw new Error('ExtensionMessageRouter init failed');
+  }
   const hasToken = useGatewayStore((s) => Boolean(s.token));
   const { data, isLoading } = useSWR(
     hasToken ? 'gateway-extensions-list' : null,
@@ -29,10 +37,6 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
 
   const extensions = data?.extensions ?? [];
   const resolved = useThemeStore((s) => s.resolved);
-
-  useEffect(() => {
-    registerBuiltinMethods(router, () => buildThemeInfo(resolved));
-  }, [router, resolved]);
 
   useEffect(() => {
     const theme = buildThemeInfo(resolved);

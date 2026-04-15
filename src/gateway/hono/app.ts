@@ -308,6 +308,18 @@ export interface HonoAppConfig {
   token?: string; 
 }
 
+// Extension UI: in-memory KV per extension (and pseudo-ids for per-extension config).
+const extensionStores = new Map<string, Map<string, unknown>>();
+
+function getExtensionStore(extensionId: string): Map<string, unknown> {
+  let store = extensionStores.get(extensionId);
+  if (!store) {
+    store = new Map();
+    extensionStores.set(extensionId, store);
+  }
+  return store;
+}
+
 export function createHonoApp(config: HonoAppConfig): Hono {
   const { service, token } = config;
   const app = new Hono();
@@ -1776,6 +1788,65 @@ export function createHonoApp(config: HonoAppConfig): Hono {
         'X-Content-Type-Options': 'nosniff',
       },
     });
+  });
+
+  authenticated.get('/api/extensions/:id/storage', (c) => {
+    const extensionId = c.req.param('id');
+    const store = getExtensionStore(extensionId);
+    return c.json({ keys: Array.from(store.keys()) });
+  });
+
+  authenticated.get('/api/extensions/:id/storage/:key', (c) => {
+    const extensionId = c.req.param('id');
+    const key = decodeURIComponent(c.req.param('key'));
+    const store = getExtensionStore(extensionId);
+    if (!store.has(key)) {
+      return c.json({ error: 'Key not found' }, 404);
+    }
+    return c.json({ value: store.get(key) });
+  });
+
+  authenticated.put('/api/extensions/:id/storage/:key', async (c) => {
+    const extensionId = c.req.param('id');
+    const key = decodeURIComponent(c.req.param('key'));
+    const body = (await c.req.json().catch(() => null)) as { value?: unknown } | null;
+    if (body === null || !('value' in body)) {
+      return c.json({ error: 'Request body must contain a "value" field' }, 400);
+    }
+    const store = getExtensionStore(extensionId);
+    store.set(key, body.value);
+    return c.json({ ok: true });
+  });
+
+  authenticated.delete('/api/extensions/:id/storage/:key', (c) => {
+    const extensionId = c.req.param('id');
+    const key = decodeURIComponent(c.req.param('key'));
+    const store = getExtensionStore(extensionId);
+    store.delete(key);
+    return c.json({ ok: true });
+  });
+
+  authenticated.get('/api/extensions/:id/config', (c) => {
+    const extensionId = c.req.param('id');
+    const store = getExtensionStore(`__config__${extensionId}`);
+    const out: Record<string, unknown> = {};
+    for (const [key, value] of store) {
+      out[key] = value;
+    }
+    return c.json(out);
+  });
+
+  authenticated.patch('/api/extensions/:id/config', async (c) => {
+    const extensionId = c.req.param('id');
+    const patch = (await c.req.json().catch(() => null)) as Record<string, unknown> | null;
+    if (!patch || typeof patch !== 'object' || Array.isArray(patch)) {
+      return c.json({ error: 'Request body must be a JSON object' }, 400);
+    }
+    const store = getExtensionStore(`__config__${extensionId}`);
+    for (const [key, value] of Object.entries(patch)) {
+      store.set(key, value);
+    }
+    return c.json({ ok: true });
   });
 
   // POST /api/registry/reload — reload gateway config and refresh model list for clients
