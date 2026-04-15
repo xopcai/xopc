@@ -4,7 +4,6 @@ import { join } from 'path';
 import { input, select, confirm } from '@inquirer/prompts';
 import { saveConfig } from '../../config/index.js';
 import { register, formatExamples } from '../registry.js';
-import { getFallbackTemplate as _getFallbackTemplate, TEMPLATE_FILES as _TEMPLATE_FILES } from '../templates.js';
 import type { CLIContext } from '../registry.js';
 import type { Config } from '../../config/schema.js';
 import { setupModel as runModelSetup } from './onboard/model.js';

@@ -10,19 +10,38 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
-/** Template file names */
+/** All template file names (for loading / caching). */
 export const TEMPLATE_FILES = [
-  'BOOTSTRAP.md',
-  'AGENTS.md',
   'SOUL.md',
   'IDENTITY.md',
   'USER.md',
   'TOOLS.md',
+  'AGENTS.md',
   'HEARTBEAT.md',
   'MEMORY.md',
+  'BOOTSTRAP.md',
 ] as const;
 
-export type TemplateFile = typeof TEMPLATE_FILES[number];
+export type TemplateFile = (typeof TEMPLATE_FILES)[number];
+
+/**
+ * Files that belong in …/agents/<id>/bootstrap/.
+ * Seeded by seedWorkspaceBootstrapFiles / seedMainAgentBootstrap.
+ */
+export const BOOTSTRAP_TEMPLATE_FILES: readonly TemplateFile[] = [
+  'SOUL.md',
+  'IDENTITY.md',
+  'USER.md',
+  'TOOLS.md',
+  'AGENTS.md',
+  'HEARTBEAT.md',
+  'MEMORY.md',
+];
+
+/**
+ * Onboarding guide template (seeded under bootstrap/, not the markdown workspace root).
+ */
+export const WORKSPACE_TEMPLATE_FILES: readonly TemplateFile[] = ['BOOTSTRAP.md'];
 
 /** Template content cache */
 const templateCache = new Map<TemplateFile, string>();

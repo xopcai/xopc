@@ -216,7 +216,7 @@ export class AgentService {
       const aid = resolveDefaultAgentId(config.config);
       this.bootstrapFiles = loadBootstrapFiles(resolveAgentBootstrapDir(config.config, aid));
     } else {
-      this.bootstrapFiles = loadBootstrapFiles(this.workspaceDir);
+      this.bootstrapFiles = [];
     }
 
     this.sessionTracker = new SessionTracker();
