@@ -6,7 +6,7 @@
 
 # Interface: HostEventMessage
 
-Defined in: [types.ts:52](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L52)
+Defined in: [types.ts:52](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L52)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [types.ts:52](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > `optional` **data?**: `unknown`
 
-Defined in: [types.ts:56](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L56)
+Defined in: [types.ts:56](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L56)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [types.ts:56](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **event**: `string`
 
-Defined in: [types.ts:55](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L55)
+Defined in: [types.ts:55](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L55)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [types.ts:55](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **source**: `"xopc-host"`
 
-Defined in: [types.ts:53](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L53)
+Defined in: [types.ts:53](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L53)
 
 ***
 
@@ -38,4 +38,4 @@ Defined in: [types.ts:53](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **type**: `"event"`
 
-Defined in: [types.ts:54](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L54)
+Defined in: [types.ts:54](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L54)

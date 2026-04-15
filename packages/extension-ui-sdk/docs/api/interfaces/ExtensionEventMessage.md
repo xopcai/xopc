@@ -6,7 +6,7 @@
 
 # Interface: ExtensionEventMessage
 
-Defined in: [types.ts:27](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L27)
+Defined in: [types.ts:27](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L27)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [types.ts:27](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > `optional` **data?**: `unknown`
 
-Defined in: [types.ts:32](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L32)
+Defined in: [types.ts:32](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L32)
 
 ***
 
@@ -22,7 +22,7 @@ Defined in: [types.ts:32](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **event**: `string`
 
-Defined in: [types.ts:31](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L31)
+Defined in: [types.ts:31](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L31)
 
 ***
 
@@ -30,7 +30,7 @@ Defined in: [types.ts:31](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **extensionId**: `string`
 
-Defined in: [types.ts:29](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L29)
+Defined in: [types.ts:29](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L29)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [types.ts:29](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **source**: `"xopc-extension"`
 
-Defined in: [types.ts:28](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L28)
+Defined in: [types.ts:28](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L28)
 
 ***
 
@@ -46,4 +46,4 @@ Defined in: [types.ts:28](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **type**: `"event"`
 
-Defined in: [types.ts:30](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L30)
+Defined in: [types.ts:30](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L30)

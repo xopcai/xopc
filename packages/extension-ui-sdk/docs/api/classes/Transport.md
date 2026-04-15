@@ -6,7 +6,7 @@
 
 # Class: Transport
 
-Defined in: [transport.ts:19](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/transport.ts#L19)
+Defined in: [transport.ts:19](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/transport.ts#L19)
 
 ## Constructors
 
@@ -14,7 +14,7 @@ Defined in: [transport.ts:19](https://github.com/xopcai/xopc/blob/9aec9ce966eaac
 
 > **new Transport**(`options?`): `Transport`
 
-Defined in: [transport.ts:29](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/transport.ts#L29)
+Defined in: [transport.ts:29](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/transport.ts#L29)
 
 #### Parameters
 
@@ -34,7 +34,7 @@ Defined in: [transport.ts:29](https://github.com/xopcai/xopc/blob/9aec9ce966eaac
 
 > **get** **id**(): `string`
 
-Defined in: [transport.ts:41](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/transport.ts#L41)
+Defined in: [transport.ts:41](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/transport.ts#L41)
 
 ##### Returns
 
@@ -48,7 +48,7 @@ Defined in: [transport.ts:41](https://github.com/xopcai/xopc/blob/9aec9ce966eaac
 
 > **get** **ready**(): `Promise`\<[`HostInit`](../interfaces/HostInit.md)\>
 
-Defined in: [transport.ts:37](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/transport.ts#L37)
+Defined in: [transport.ts:37](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/transport.ts#L37)
 
 ##### Returns
 
@@ -60,7 +60,7 @@ Defined in: [transport.ts:37](https://github.com/xopcai/xopc/blob/9aec9ce966eaac
 
 > **dispose**(): `void`
 
-Defined in: [transport.ts:45](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/transport.ts#L45)
+Defined in: [transport.ts:45](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/transport.ts#L45)
 
 #### Returns
 
@@ -72,7 +72,7 @@ Defined in: [transport.ts:45](https://github.com/xopcai/xopc/blob/9aec9ce966eaac
 
 > **emit**(`event`, `data?`): `void`
 
-Defined in: [transport.ts:85](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/transport.ts#L85)
+Defined in: [transport.ts:85](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/transport.ts#L85)
 
 #### Parameters
 
@@ -94,7 +94,7 @@ Defined in: [transport.ts:85](https://github.com/xopcai/xopc/blob/9aec9ce966eaac
 
 > **on**(`event`, `handler`): () => `void`
 
-Defined in: [transport.ts:97](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/transport.ts#L97)
+Defined in: [transport.ts:97](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/transport.ts#L97)
 
 #### Parameters
 
@@ -116,7 +116,7 @@ Defined in: [transport.ts:97](https://github.com/xopcai/xopc/blob/9aec9ce966eaac
 
 > **request**\<`T`\>(`method`, `params?`): `Promise`\<`T`\>
 
-Defined in: [transport.ts:57](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/transport.ts#L57)
+Defined in: [transport.ts:57](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/transport.ts#L57)
 
 #### Type Parameters
 

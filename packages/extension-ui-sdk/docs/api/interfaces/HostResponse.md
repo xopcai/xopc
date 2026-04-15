@@ -6,7 +6,7 @@
 
 # Interface: HostResponse
 
-Defined in: [types.ts:44](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L44)
+Defined in: [types.ts:44](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L44)
 
 ## Properties
 
@@ -14,7 +14,7 @@ Defined in: [types.ts:44](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > `optional` **error?**: `object`
 
-Defined in: [types.ts:49](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L49)
+Defined in: [types.ts:49](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L49)
 
 #### code
 
@@ -30,7 +30,7 @@ Defined in: [types.ts:49](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **requestId**: `string`
 
-Defined in: [types.ts:47](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L47)
+Defined in: [types.ts:47](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L47)
 
 ***
 
@@ -38,7 +38,7 @@ Defined in: [types.ts:47](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > `optional` **result?**: `unknown`
 
-Defined in: [types.ts:48](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L48)
+Defined in: [types.ts:48](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L48)
 
 ***
 
@@ -46,7 +46,7 @@ Defined in: [types.ts:48](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **source**: `"xopc-host"`
 
-Defined in: [types.ts:45](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L45)
+Defined in: [types.ts:45](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L45)
 
 ***
 
@@ -54,4 +54,4 @@ Defined in: [types.ts:45](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634
 
 > **type**: `"response"`
 
-Defined in: [types.ts:46](https://github.com/xopcai/xopc/blob/9aec9ce966eaaca634c69c3a5930c9e2d390439d/packages/extension-ui-sdk/src/types.ts#L46)
+Defined in: [types.ts:46](https://github.com/xopcai/xopc/blob/bf6c4f6be661a835975caa62a635aff95b7a0d32/packages/extension-ui-sdk/src/types.ts#L46)
