@@ -3,6 +3,7 @@ import { existsSync, readFileSync, statSync } from 'node:fs';
 import { relative, resolve } from 'node:path';
 
 import type { Config as SurfaceConfig } from '../../../config/config-surface.js';
+import type { GatewayService } from '../../service.js';
 import { mergeActivationContext } from '../../../extensions/activation-context.js';
 import { ActivationPlanner } from '../../../extensions/activation-planner.js';
 import { getAllModels, getAvailableModels, type Model, type Api } from '../../../providers/index.js';
@@ -11,6 +12,107 @@ import { createOAuthAsyncHandler } from '../oauth-async.js';
 import { extensionAssetMimeType } from '../lib/extension-assets.js';
 import { loadExtensionStore, saveExtensionStore } from '../lib/extension-store.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+
+const EXTENSION_ASSET_CSP =
+  "default-src 'self'; " +
+  "script-src 'self' 'unsafe-inline'; " +
+  "style-src 'self' 'unsafe-inline'; " +
+  "img-src 'self' data: blob:; " +
+  "connect-src 'none'; " +
+  "frame-ancestors 'self'; " +
+  "frame-src 'none'; " +
+  "base-uri 'none'; " +
+  "object-src 'none'; " +
+  "form-action 'none'";
+
+function rewriteExtensionAssetHtml(html: string, extensionId: string, assetPath: string): string {
+  const assetDir = assetPath.includes('/') ? assetPath.slice(0, assetPath.lastIndexOf('/') + 1) : '';
+  const assetBase = `/api/extensions/${extensionId}/assets/${assetDir}`;
+
+  return html
+    .replace(/(<script\b[^>]*?\ssrc=)(["'])(\.\/)?([^"']+)\2/gi, (_match, tag, quote, _dot, file) => {
+      const isAbsolute =
+        file.startsWith('/') || file.startsWith('http://') || file.startsWith('https://');
+      const resolvedSrc = isAbsolute ? file : `${assetBase}${file}`;
+      return `${tag}${quote}${resolvedSrc}${quote} crossorigin="anonymous"`;
+    })
+    .replace(/(<link\b[^>]*?\shref=)(["'])(\.\/)?([^"']+)\2/gi, (_match, tag, quote, _dot, file) => {
+      const isAbsolute =
+        file.startsWith('/') || file.startsWith('http://') || file.startsWith('https://');
+      const resolvedHref = isAbsolute ? file : `${assetBase}${file}`;
+      return `${tag}${quote}${resolvedHref}${quote}`;
+    });
+}
+
+/**
+ * Register extension UI asset routes on the public (unauthenticated) app.
+ *
+ * Sandboxed iframes (`sandbox="allow-scripts …"` without `allow-same-origin`) have an
+ * opaque origin of `null`, so sub-resource requests from inside the iframe cannot
+ * carry the `?token=` query parameter that was on the parent HTML URL. Putting these
+ * routes behind the auth middleware therefore causes every JS/CSS asset to return 401.
+ *
+ * Security is maintained by the strict Content-Security-Policy returned with every
+ * asset (`frame-ancestors 'self'`), which prevents any page other than the gateway
+ * console itself from embedding the extension iframes.
+ */
+export function registerPublicExtensionAssetRoutes(app: Hono, service: GatewayService): void {
+  app.get('/api/extensions/:id/assets/*', async (c) => {
+    const extensionId = c.req.param('id');
+    const loader = service.getExtensionLoader();
+    if (!loader) {
+      return c.json({ error: 'Extensions unavailable' }, 503);
+    }
+
+    const discovered = loader.discoverExtensions();
+    const ext = discovered.find((e) => e.id === extensionId);
+    if (!ext || !ext.manifest.ui) {
+      return c.json({ error: 'Extension not found or has no UI' }, 404);
+    }
+
+    const prefix = `/api/extensions/${extensionId}/assets/`;
+    const assetPathEncoded = c.req.path.startsWith(prefix) ? c.req.path.slice(prefix.length) : '';
+    let assetPath = assetPathEncoded;
+    try {
+      assetPath = decodeURIComponent(assetPathEncoded);
+    } catch {
+      return c.json({ error: 'Invalid asset path' }, 400);
+    }
+
+    if (!assetPath || assetPath.includes('..')) {
+      return c.json({ error: 'Invalid asset path' }, 400);
+    }
+
+    const root = resolve(ext.path);
+    const fullPath = resolve(root, assetPath);
+    const rel = relative(root, fullPath);
+    if (rel.startsWith('..') || rel === '') {
+      return c.json({ error: 'Path traversal denied' }, 403);
+    }
+
+    if (!existsSync(fullPath) || !statSync(fullPath).isFile()) {
+      return c.json({ error: 'Not found' }, 404);
+    }
+
+    const rawContent = readFileSync(fullPath);
+    const mimeType = extensionAssetMimeType(assetPath);
+
+    const body: BodyInit = mimeType.startsWith('text/html')
+      ? rewriteExtensionAssetHtml(rawContent.toString('utf-8'), extensionId, assetPath)
+      : new Uint8Array(rawContent);
+
+    return new Response(body, {
+      status: 200,
+      headers: {
+        'Content-Type': mimeType,
+        'Content-Security-Policy': EXTENSION_ASSET_CSP,
+        'Cache-Control': 'no-store',
+        'X-Content-Type-Options': 'nosniff',
+        'Access-Control-Allow-Origin': 'null',
+      },
+    });
+  });
+}
 
 export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   const { service, strictRateLimitMiddleware } = deps;
@@ -196,70 +298,6 @@ export function registerAuthRegistryExtensionsRoutes(authenticated: Hono, deps: 
       path: ext.path,
       active: registry.extensions.has(ext.id),
       manifest: ext.manifest,
-    });
-  });
-
-  authenticated.get('/api/extensions/:id/assets/*', async (c) => {
-    const extensionId = c.req.param('id');
-    const loader = service.getExtensionLoader();
-    if (!loader) {
-      return c.json({ error: 'Extensions unavailable' }, 503);
-    }
-
-    const discovered = loader.discoverExtensions();
-    const ext = discovered.find((e) => e.id === extensionId);
-    if (!ext || !ext.manifest.ui) {
-      return c.json({ error: 'Extension not found or has no UI' }, 404);
-    }
-
-    const prefix = `/api/extensions/${extensionId}/assets/`;
-    const assetPathEncoded =
-      c.req.path.startsWith(prefix) ? c.req.path.slice(prefix.length) : '';
-    let assetPath = assetPathEncoded;
-    try {
-      assetPath = decodeURIComponent(assetPathEncoded);
-    } catch {
-      return c.json({ error: 'Invalid asset path' }, 400);
-    }
-
-    if (!assetPath || assetPath.includes('..')) {
-      return c.json({ error: 'Invalid asset path' }, 400);
-    }
-
-    const root = resolve(ext.path);
-    const fullPath = resolve(root, assetPath);
-    const rel = relative(root, fullPath);
-    if (rel.startsWith('..') || rel === '') {
-      return c.json({ error: 'Path traversal denied' }, 403);
-    }
-
-    if (!existsSync(fullPath) || !statSync(fullPath).isFile()) {
-      return c.json({ error: 'Not found' }, 404);
-    }
-
-    const content = readFileSync(fullPath);
-    const mimeType = extensionAssetMimeType(assetPath);
-
-    const cspHeader =
-      "default-src 'self'; " +
-      "script-src 'self' 'unsafe-inline'; " +
-      "style-src 'self' 'unsafe-inline'; " +
-      "img-src 'self' data: blob:; " +
-      "connect-src 'none'; " +
-      "frame-ancestors 'self'; " +
-      "frame-src 'none'; " +
-      "base-uri 'none'; " +
-      "object-src 'none'; " +
-      "form-action 'none'";
-
-    return new Response(content, {
-      status: 200,
-      headers: {
-        'Content-Type': mimeType,
-        'Content-Security-Policy': cspHeader,
-        'Cache-Control': 'public, max-age=3600',
-        'X-Content-Type-Options': 'nosniff',
-      },
     });
   });
 
