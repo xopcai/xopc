@@ -1,5 +1,6 @@
 import { create } from 'zustand';
 
+import { i18n } from '@/i18n/i18n';
 import { getLanguage, type StoredLanguage, setLanguage as persistLanguage } from '@/lib/storage';
 
 type LocaleState = {
@@ -11,6 +12,7 @@ export const useLocaleStore = create<LocaleState>((set) => ({
   language: getLanguage(),
   setLanguage: (language) => {
     persistLanguage(language);
+    void i18n.changeLanguage(language);
     set({ language });
   },
 }));

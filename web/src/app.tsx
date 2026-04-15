@@ -1,6 +1,8 @@
 import { lazy, Suspense, useEffect } from 'react';
+import { I18nextProvider } from 'react-i18next';
 import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
 
+import { i18n } from '@/i18n/i18n';
 import { AppShell } from '@/components/shell/app-shell';
 import { SettingsPageLayout } from '@/components/shell/settings-page-layout';
 import { ChatPage } from '@/features/chat/chat-page';
@@ -174,13 +176,15 @@ function ThemeEffects() {
 
 export function App() {
   return (
-    <SwrProvider>
-      <div className="flex min-h-0 flex-1 flex-col">
-        <ThemeEffects />
-        <div className="flex min-h-0 flex-1 flex-col [&>*]:min-h-0 [&>*]:flex-1">
-          <RouterProvider router={router} />
+    <I18nextProvider i18n={i18n}>
+      <SwrProvider>
+        <div className="flex min-h-0 flex-1 flex-col">
+          <ThemeEffects />
+          <div className="flex min-h-0 flex-1 flex-col [&>*]:min-h-0 [&>*]:flex-1">
+            <RouterProvider router={router} />
+          </div>
         </div>
-      </div>
-    </SwrProvider>
+      </SwrProvider>
+    </I18nextProvider>
   );
 }
