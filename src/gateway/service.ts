@@ -669,12 +669,14 @@ export class GatewayService {
 
         this.activeWebchatRunBySession.set(sessionKey, runId);
         try {
+          this.emit('agent.stream', { sessionKey, event: statusEvent });
           const eventStream = this.agentService.processDirectStreaming(message, sessionKey, prepared, thinking, {
             signal: mergedSignal,
           });
 
           for await (const event of eventStream) {
             this.runRelay.publish(runId, event);
+            this.emit('agent.stream', { sessionKey, event });
             yield event as { type: string; content?: string; status?: string; runId?: string };
           }
 
@@ -695,6 +697,7 @@ export class GatewayService {
           log.error({ error }, 'Agent processing failed');
           const errorEvent = { type: 'error', content: `Error: ${error instanceof Error ? error.message : 'Unknown error'}` };
           this.runRelay.publish(runId, errorEvent);
+          this.emit('agent.stream', { sessionKey, event: errorEvent });
           this.runRelay.complete(runId);
           yield errorEvent;
           return { status: 'error', summary: error instanceof Error ? error.message : 'Unknown error' };
