@@ -2,9 +2,8 @@
  * Workspace utilities - shared between setup and onboard commands
  */
 
-import { existsSync, mkdirSync, writeFileSync, readFileSync } from 'fs';
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'fs';
 import { join } from 'path';
-import { loadAllTemplates, TEMPLATE_FILES } from '../templates.js';
 
 export interface WorkspaceStatus {
   configExists: boolean;
@@ -15,10 +14,10 @@ export interface WorkspaceStatus {
 }
 
 /**
- * Check if workspace is properly set up
+ * Check if workspace directory exists (markdown root + memory/ are created by setupWorkspace).
  */
 export function isWorkspaceSetup(workspacePath: string): boolean {
-  return existsSync(workspacePath) && existsSync(join(workspacePath, 'AGENTS.md'));
+  return existsSync(workspacePath);
 }
 
 /**
@@ -42,7 +41,8 @@ export function getWorkspaceStatus(configPath: string, workspacePath: string): W
 }
 
 /**
- * Setup workspace directory and bootstrap files
+ * Create markdown workspace root and memory/ only.
+ * Persona Markdown is seeded under …/agents/<id>/bootstrap/ via seedMainAgentBootstrap.
  */
 export function setupWorkspace(workspacePath: string): void {
   if (!existsSync(workspacePath)) {
@@ -52,23 +52,10 @@ export function setupWorkspace(workspacePath: string): void {
     console.log('ℹ️  Workspace already exists:', workspacePath);
   }
 
-  // Load templates
-  const templates = loadAllTemplates();
-
   const memoryDir = join(workspacePath, 'memory');
   if (!existsSync(memoryDir)) {
     mkdirSync(memoryDir, { recursive: true });
     console.log('✅ Created memory/ directory');
-  }
-
-  for (const filename of TEMPLATE_FILES) {
-    const filePath = join(workspacePath, filename);
-    if (!existsSync(filePath)) {
-      writeFileSync(filePath, templates[filename], 'utf-8');
-      console.log('✅ Created', filename);
-    } else {
-      console.log('ℹ️ ', filename, 'already exists (skipped)');
-    }
   }
 }
 

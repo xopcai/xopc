@@ -1,20 +1,22 @@
 /**
  * Workspace Setup for Onboarding
+ *
+ * Mirrors `src/cli/utils/workspace.ts`: workspace root + memory/ only.
+ * Bootstrap Markdown is seeded via seedMainAgentBootstrap.
  */
 
-import { existsSync, mkdirSync, writeFileSync } from 'fs';
+import { existsSync, mkdirSync } from 'fs';
 import { join } from 'path';
-import { getFallbackTemplate, TEMPLATE_FILES } from '../../templates.js';
 
 /**
- * Check if workspace is properly set up
+ * Check if workspace directory exists
  */
 export function isWorkspaceSetup(workspacePath: string): boolean {
-  return existsSync(workspacePath) && existsSync(join(workspacePath, 'AGENTS.md'));
+  return existsSync(workspacePath);
 }
 
 /**
- * Setup workspace directory and bootstrap files
+ * Create markdown workspace root and memory/ only
  */
 export function setupWorkspace(workspacePath: string): void {
   if (!existsSync(workspacePath)) {
@@ -24,19 +26,9 @@ export function setupWorkspace(workspacePath: string): void {
     console.log('ℹ️  Workspace already exists:', workspacePath);
   }
 
-  // Use built-in templates (no frontmatter)
   const memoryDir = join(workspacePath, 'memory');
   if (!existsSync(memoryDir)) {
     mkdirSync(memoryDir, { recursive: true });
     console.log('✅ Created memory/ directory');
-  }
-
-  for (const filename of TEMPLATE_FILES) {
-    const filePath = join(workspacePath, filename);
-    if (!existsSync(filePath)) {
-      const content = getFallbackTemplate(filename);
-      writeFileSync(filePath, content, 'utf-8');
-      console.log('✅ Created', filename);
-    }
   }
 }
