@@ -269,6 +269,8 @@ xopc onboard
 
 通信通道配置。
 
+顶层 **`channels`** 为**开放映射**：核心 Zod 不会枚举每一个通道 id。**内置** Telegram、微信 的分字段 schema 见 `extensions/telegram/src/config-schema.ts`、`extensions/weixin/src/config-schema.ts`（亦可从 `src/config/schema.ts` **再导出**）。加载后会按各插件的 `configSchema.validate` 做校验。架构说明与网关快照见 [通道配置](/zh/channels)（实现说明）。
+
 #### channels.telegram
 
 多账户 Telegram 配置：
