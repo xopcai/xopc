@@ -4,6 +4,7 @@
 
 import type { Config } from '../../config/index.js';
 import type { BindingRule } from '../../routing/bindings.js';
+import type { SessionStore } from '../../session/store.js';
 
 export interface ChannelPairingAdapter {
   generatePairingCode(params: { cfg: Config; accountId?: string }): string;
@@ -62,6 +63,38 @@ export interface ChannelExecApprovalAdapter {
 
 export interface ChannelAgentPromptAdapter {
   augmentSystemPrompt?(params: { cfg: Config; accountId?: string }): string | undefined;
+}
+
+/**
+ * Resolves a cron job `delivery.to` string into a normalized chat target for outbound.
+ */
+export interface ChannelCronDeliveryAdapter {
+  normalizeDeliveryTarget(
+    to: string,
+    sessionStore?: SessionStore,
+  ): Promise<{ chatId: string; accountId?: string; metadata?: Record<string, unknown> }>;
+}
+
+/** CLI `xopc channels login --channel` for channels that support interactive login. */
+export interface ChannelCliLoginAdapter {
+  runLogin(params: {
+    configPath: string;
+    verbose?: boolean;
+    timeoutMs?: number;
+    accountId?: string;
+    writeConfig?: boolean;
+  }): Promise<{ ok: boolean; message?: string; accountId?: string }>;
+}
+
+/** Snapshot of channel-specific settings for gateway `/api/config` (implementations should redact secrets). */
+export interface ChannelConfigSurfaceAdapter {
+  buildConfigSurface(cfg: Config): Record<string, unknown>;
+}
+
+/** Interactive onboarding entry for a channel (alternative to declarative {@link ChannelSetupWizard}). */
+export interface ChannelOnboardAdapter {
+  isConfigured(config: Config): boolean;
+  configure(config: Config): Promise<Config>;
 }
 
 export interface SetupStatus {

@@ -9,7 +9,7 @@ import type {
   OutboundDeliveryResult,
 } from '../plugin-types.js';
 import type { OutboundMessage } from '../transport-types.js';
-import { normalizeTelegramDeliveryChatId } from '../telegram-delivery-chat-id.js';
+import { normalizeTelegramDeliveryChatId } from '../telegram/index.js';
 import { normalizePayloadForPlugin } from './normalize.js';
 
 export interface DeliverOutboundMessageParams {

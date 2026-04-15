@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, mkdirSync, promises as fsPromises } from 'fs';
 import { dirname } from 'path';
 import { type Config, ConfigSchema } from './schema.js';
+import { assertChannelPluginConfigs } from './validate-channel-configs.js';
 import { resolveConfigPath } from './paths.js';
 import { config } from 'dotenv';
 import { createLogger } from '../utils/logger.js';
@@ -60,14 +61,20 @@ export function loadConfig(configPath?: string): Config {
     try {
       const content = readFileSync(path, 'utf-8');
       const json = JSON.parse(content);
-      return ConfigSchema.parse(json);
+      const cfg = ConfigSchema.parse(json);
+      assertChannelPluginConfigs(cfg);
+      return cfg;
     } catch (error) {
       log.error({ err: error, path }, `Failed to load config`);
-      return ConfigSchema.parse(undefined);
+      const cfg = ConfigSchema.parse(undefined);
+      assertChannelPluginConfigs(cfg);
+      return cfg;
     }
   }
 
-  return ConfigSchema.parse(undefined);
+  const cfg = ConfigSchema.parse(undefined);
+  assertChannelPluginConfigs(cfg);
+  return cfg;
 }
 
 /**
@@ -84,6 +91,7 @@ export async function saveConfig(config: Config, configPath?: string): Promise<v
   }
 
   const validated = ConfigSchema.parse(config);
+  assertChannelPluginConfigs(validated);
   const content = JSON.stringify(validated, null, 2);
 
   // Backup existing config before writing
