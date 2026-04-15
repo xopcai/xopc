@@ -19,15 +19,13 @@ type Ctx = {
 const ExtensionContext = createContext<Ctx | null>(null);
 
 export function ExtensionProvider({ children }: { children: React.ReactNode }) {
-  const routerRef = useRef<ExtensionMessageRouter | undefined>(undefined);
+  const routerRef = useRef<ExtensionMessageRouter | null>(null);
   if (!routerRef.current) {
-    routerRef.current = new ExtensionMessageRouter();
-    registerBuiltinMethods(routerRef.current);
+    const newRouter = new ExtensionMessageRouter();
+    registerBuiltinMethods(newRouter);
+    routerRef.current = newRouter;
   }
   const router = routerRef.current;
-  if (!router) {
-    throw new Error('ExtensionMessageRouter init failed');
-  }
   const hasToken = useGatewayStore((s) => Boolean(s.token));
   const { data, isLoading } = useSWR(
     hasToken ? 'gateway-extensions-list' : null,
@@ -59,11 +57,15 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
     router.broadcastEvent('theme.changed', theme);
   }, [resolved, router]);
 
+  const routerForCleanupRef = useRef(router);
+  routerForCleanupRef.current = router;
   useEffect(
     () => () => {
-      router.dispose();
+      routerForCleanupRef.current.dispose();
     },
-    [router],
+    // Empty deps: run cleanup only on true unmount, not on StrictMode remount.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [],
   );
 
   const value = useMemo(
