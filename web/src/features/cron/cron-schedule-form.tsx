@@ -34,7 +34,8 @@ export type CronSchedulePickerLabels = {
   hourUnit: string;
   dayOfMonth: string;
   customCronHint: string;
-  weekdays: [string, string, string, string, string, string, string];
+  /** Seven labels (Sun–Sat); JSON locales use `string[]` at compile time. */
+  weekdays: readonly string[];
 };
 
 const pickerSelectClass = cn(
