@@ -86,6 +86,7 @@ export function SidebarNav({
           </NavLink>
           <NavLink
             to="/apps"
+            end
             className={(props) => secondaryNavClass(props, collapsed)}
             title={m.nav.apps}
             onClick={() => onNavigate?.()}
