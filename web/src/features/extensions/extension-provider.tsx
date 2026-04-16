@@ -90,9 +90,31 @@ export function useExtensions(): ExtensionApiRow[] {
   return ctx.extensions;
 }
 
+/** Loaded in the gateway process (tools/hooks) or marked to load after restart. */
+function extensionUiUnlocked(e: ExtensionApiRow): boolean {
+  return e.active || e.activationEligible === true;
+}
+
+/** Manifest declares iframe surfaces (served from disk); show nav/routes even when Node side is not active yet. */
+function manifestDeclaresGatewayContributions(e: ExtensionApiRow): boolean {
+  const c = e.ui?.contributions;
+  if (!c) return false;
+  return (
+    (Array.isArray(c.pages) && c.pages.length > 0) ||
+    (Array.isArray(c.settingsPanels) && c.settingsPanels.length > 0) ||
+    (Array.isArray(c.chatWidgets) && c.chatWidgets.length > 0)
+  );
+}
+
+/** Used by Apps detail links and {@link useUiExtensions}. */
+export function extensionExposesGatewayShellUi(e: ExtensionApiRow): boolean {
+  if (!e.hasUi) return false;
+  return extensionUiUnlocked(e) || manifestDeclaresGatewayContributions(e);
+}
+
 export function useUiExtensions(): ExtensionApiRow[] {
   const list = useExtensions();
-  return useMemo(() => list.filter((e) => e.active && e.hasUi), [list]);
+  return useMemo(() => list.filter(extensionExposesGatewayShellUi), [list]);
 }
 
 export function useExtensionsLoading(): boolean {

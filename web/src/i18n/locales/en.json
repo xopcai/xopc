@@ -76,6 +76,7 @@
     "deniedHint": "The extension UI stays hidden until you approve it for this browser.",
     "reviewPermissions": "Review permissions",
     "loadFailed": "The extension panel failed to load.",
+    "loadFailedConnectionHint": "If the frame shows “connection refused”, start the xopc gateway (and if you use Vite for web/, match the proxy target in web/vite.config.ts).",
     "retryLoad": "Reload panel"
   },
   "extensionDebug": {

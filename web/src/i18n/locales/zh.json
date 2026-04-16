@@ -76,6 +76,7 @@
     "deniedHint": "在你批准之前，此浏览器将不显示该扩展的界面。",
     "reviewPermissions": "查看权限",
     "loadFailed": "扩展面板加载失败。",
+    "loadFailedConnectionHint": "若内嵌区域提示无法连接 localhost，请先启动 xopc 网关；若用 Vite 单独跑 web/，请确认 web/vite.config.ts 里代理的网关端口与正在运行的网关一致。",
     "retryLoad": "重新加载"
   },
   "extensionDebug": {
