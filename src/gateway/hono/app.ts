@@ -10,6 +10,7 @@ import { maxWebchatAgentRequestBodyBytes } from '../chat-limits.js';
 import { auth } from './middleware/auth.js';
 import { logContextMiddleware } from './middleware/log-context.js';
 import { logger } from './middleware/logger.js';
+import { registerPublicExtensionAssetRoutes } from './routes/auth-registry-extensions.js';
 import { registerAuthenticatedRoutes } from './routes/index.js';
 import { registerPublicGatewayRoutes } from './routes/public-gateway.js';
 
@@ -97,6 +98,11 @@ export function createHonoApp(config: HonoAppConfig): Hono {
   });
 
   registerPublicGatewayRoutes(app, service);
+
+  // Extension UI assets are served without auth: sandboxed iframes (no allow-same-origin)
+  // have an opaque origin of `null` and cannot forward the ?token= from the parent HTML URL.
+  // Security is enforced by the strict CSP (frame-ancestors 'self') on every response.
+  registerPublicExtensionAssetRoutes(app, service);
 
   const authenticated = new Hono();
   authenticated.use(
