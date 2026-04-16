@@ -1,5 +1,4 @@
 import { Command } from 'commander';
-import { existsSync, readFileSync } from 'fs';
 import { join } from 'path';
 import { input, select, confirm } from '@inquirer/prompts';
 import { saveConfig } from '../../config/index.js';
@@ -11,33 +10,15 @@ import { colors } from '../utils/colors.js';
 import { acquireGatewayLock, GatewayLockError } from '../../gateway/lock.js';
 import { setupChannels as runChannelOnboard, getChannelConfigurators } from './onboard/channels/index.js';
 import { seedMainAgentBootstrap } from '../../agent/context/workspace-seed.js';
-
-// Import workspace utilities
-import { isWorkspaceSetup, setupWorkspace, isConfigSetup as _isConfigSetup, setupConfig as _setupConfig } from '../utils/workspace.js';
-
-/**
- * Load raw config without schema parsing to avoid default values being added.
- * This preserves the user's original config structure during onboard.
- */
-function loadRawConfig(configPath: string): Config | null {
-  if (!existsSync(configPath)) {
-    return null;
-  }
-  try {
-    const content = readFileSync(configPath, 'utf-8');
-    return JSON.parse(content) as Config;
-  } catch {
-    return null;
-  }
-}
+import { initWorkspace } from '../utils/init-workspace.js';
 
 function isInteractive(): boolean {
   return process.stdin.isTTY && process.stdout.isTTY;
 }
 
-async function setupNonInteractive(_configPath: string, existingConfig: Config | null): Promise<Config | null> {
+async function setupNonInteractive(_configPath: string, existingConfig: Config): Promise<Config> {
   console.log('\n🤖 AI Model Configuration (Non-Interactive Mode)\n');
-  console.log('Current config:', JSON.stringify(existingConfig?.agents?.defaults?.model, null, 2));
+  console.log('Current config:', JSON.stringify(existingConfig.agents?.defaults?.model, null, 2));
   console.log('\n💡 To configure in interactive mode, run: xopc onboard');
   console.log('💡 Or set up manually in:', _configPath);
   return existingConfig;
@@ -85,22 +66,14 @@ async function runOnboard(
   const workspacePath = ctx.workspacePath;
   const configPath = ctx.configPath;
 
-  // Use raw config loading to avoid schema defaults being added
-  let config = loadRawConfig(configPath) || ({} as Config);
+  const initResult = await initWorkspace({ configPath, workspacePath });
+  let config = initResult.config;
 
   // Determine what to configure based on options
   const doModel = options.model || options.all || (!options.channels && !options.gateway);
   const doChannels = options.channels || options.all || (!options.model && !options.gateway);
   const doGateway = options.gateway || options.all || (!options.model && !options.channels);
   const runFullWizard = !options.model && !options.channels && !options.gateway;
-
-  // Auto-detect if setup is needed (for full wizard only)
-  const needsSetup = !isWorkspaceSetup(workspacePath);
-
-  if (runFullWizard && needsSetup) {
-    console.log('\n📁 Step 1: Workspace Setup\n');
-    setupWorkspace(workspacePath);
-  }
 
   if (!isInteractive()) {
     // Non-interactive mode
