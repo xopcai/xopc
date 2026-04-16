@@ -61,8 +61,8 @@
     "open": "Open",
     "openSettings": "Settings",
     "runStateLive": "Running",
-    "runStatePendingOn": "Enabled in config — restart the gateway to load.",
-    "runStatePendingOff": "Disabled in config — restart the gateway to unload.",
+    "runStatePendingOn": "Enabled in config",
+    "runStatePendingOff": "Disabled in config",
     "runStateOff": "Off",
     "toggleSaving": "Saving…",
     "toggleError": "Could not update this extension."
