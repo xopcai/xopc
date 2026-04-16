@@ -9,7 +9,7 @@ import {
   Settings,
   X,
 } from 'lucide-react';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useLayoutEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { useSWRConfig } from 'swr';
 
@@ -25,6 +25,7 @@ import type { MessageBundle } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 type AppsPageCopy = MessageBundle['appsPage'];
@@ -33,6 +34,8 @@ type AppsTab = 'all' | 'ui' | 'backend';
 export function AppsPage() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
   const extensions = useExtensions();
   const loading = useExtensionsLoading();
   const { mutate } = useSWRConfig();
@@ -71,6 +74,19 @@ export function AppsPage() {
       return next;
     });
   }, [extensions]);
+
+  useLayoutEffect(() => {
+    setPageHeader({
+      startExtra: null,
+      main: (
+        <div className="w-full min-w-0 px-3 sm:px-5 xl:px-6">
+          <h1 className="min-w-0 truncate text-base font-semibold tracking-tight text-fg">{m.appsPage.title}</h1>
+        </div>
+      ),
+      end: null,
+    });
+    return () => clearPageHeader();
+  }, [clearPageHeader, m.appsPage.title, setPageHeader]);
 
   if (loading) {
     return <AppsPageSkeleton />;

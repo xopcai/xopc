@@ -58,15 +58,6 @@ export function SidebarNav({
             </Link>
           ) : null}
           <NavLink
-            to={pathForTab('skills')}
-            className={(props) => secondaryNavClass(props, collapsed)}
-            title={m.nav.skills}
-            onClick={() => onNavigate?.()}
-          >
-            <Layers className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
-            {!collapsed ? <span className="truncate">{m.nav.skills}</span> : null}
-          </NavLink>
-          <NavLink
             to={pathForTab('cron')}
             className={(props) => secondaryNavClass(props, collapsed)}
             title={m.nav.cron}
@@ -83,6 +74,15 @@ export function SidebarNav({
           >
             <Plug className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
             {!collapsed ? <span className="truncate">{m.nav.channels}</span> : null}
+          </NavLink>
+          <NavLink
+            to={pathForTab('skills')}
+            className={(props) => secondaryNavClass(props, collapsed)}
+            title={m.nav.skills}
+            onClick={() => onNavigate?.()}
+          >
+            <Layers className="size-4 shrink-0 opacity-90" strokeWidth={1.75} aria-hidden />
+            {!collapsed ? <span className="truncate">{m.nav.skills}</span> : null}
           </NavLink>
           <NavLink
             to="/apps"
