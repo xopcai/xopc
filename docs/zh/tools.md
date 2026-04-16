@@ -1,151 +1,195 @@
-# 内置工具参考
+# 内置工具
 
-内置工具按当前环境注册：部分始终可用；部分依赖 **配置**、**会话存储**（例如 `session_search`）或正在运行的 **网关**（例如交互式 `clarify`、已接入计划任务的 `cronjob`）。
-
-## 工具列表
-
-| 类别 | 工具名 |
-|------|--------|
-| **规划与交互** | `clarify`, `todo` |
-| **Skills 运行时** | `skills_list`, `skill_view`, `skill_manage` |
-| **文件系统** | `read_file`, `write_file`, `edit_file`, `list_dir` |
-| **搜索** | `grep`, `find` |
-| **Shell** | `shell` |
-| **网页** | `web_search`, `web_fetch`, `web_extract` |
-| **消息与媒体** | `send_message`, `send_media` |
-| **记忆** | `memory_search`, `memory_get`, `curated_memory`（可选）, `session_search`（可选） |
-| **图像** | `image`（可选）, `image_generate`（可选） |
-| **浏览器** | `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_scroll`, `browser_screenshot`（可选） |
-| **委托与代码** | `delegate_task`（可选）, `execute_code`（可选） |
-| **定时任务** | `cronjob`（可选） |
-
-扩展包在存在扩展注册表时还可追加工具。
-
-### 近期能力增强（工具 + Skill 运行时，约 20 项）
-
-1. **`skills_list` / `skill_view` / `skill_manage`**：发现技能、读取 `SKILL.md` 或 `references/` 等子目录文件、在策略允许下增删改用户技能（见 [Skills 指南](./skills.md)）。
-2. **Skill 环境变量透传**：`skill_view` 后根据 SKILL.md 声明注册变量**名**；**`shell`** 可将进程中已存在的同名变量带入子进程（模型永不看到变量值）。
-3. **`web_extract`**：拉取页面后用 LLM 做面向 Markdown 的抽取（`agents.defaults.webExtract.model` 或 `XOPC_WEB_EXTRACT_MODEL`）。
-4. **`send_media`**：向当前会话通道发送本地图片/视频/音频/文档。
-5. **`clarify`**：在 **Web / Telegram / CLI** 等已接线环境可阻塞等待用户作答；否则返回说明并尽量使用 `default`。
-6. **`todo`**：按会话维护待办，支持按 `id` 合并或整表替换。
-7. **`image` / `image_generate`**：在模型与密钥可用时做视觉理解与文生图。
-8. **浏览器工具**：`agents.defaults.browser.enabled` 时启用 Playwright（需 `npx playwright install chromium`）。
-9. **`delegate_task`**：子智能体独立上下文、受限工具集、仅返回摘要（`agents.defaults.delegate.enabled`）。
-10. **`execute_code`**：沙箱 JS 以编程方式调用部分工具（`agents.defaults.executeCode.enabled`）；非强安全边界，仅可信模型场景使用。
-11. **`cronjob`**：网关提供 `CronService` 时管理定时智能体轮次，带简单提示注入扫描。
-12. **`session_search`**：跨会话 transcript 检索（可选会话级摘要）。
-13. **`curated_memory`**：操作 agent 主目录 `memories/` 的实时内容，系统提示中保留会话开始时的快照。
-14. **Skill 工具门控**：`skills.toolGating` 与技能元数据可要求「已注册工具」后才出现在 `<available_skills>`。
-15. **`disable-model-invocation`**：技能仍安装，但对模型隐藏列表项。
-16. **Skills Hub CLI**：`xopc skills hub pull|update|lock`，安装至 `~/.xopc/skills` 并维护 `skills-lock.json`。
-17. **`web_search`**：`tools.web.search.providers` 多服务商链 + 按地区 HTML 兜底。
-18. **`skills.limits.maxSkillFileBytes`**：限制 `skill_view` 单次读取体积。
-19. **Memory 插件**：`MemoryManager.getAdditionalTools()` 可注入额外记忆相关工具。
-20. **多服务商图像路径**：图像工具与其它模型共用解析与密钥体系。
+本文说明 xopc 智能体可调用的内置能力：读写工作区、执行命令、检索与浏览网页、对接通道与技能等。实际注册哪些工具取决于 **配置**、可选 **能力**（记忆、浏览器、TTS）、是否接入 **网关**（例如交互式 `clarify`、计划任务 `cronjob`），以及是否加载 **扩展**（扩展可向注册表追加工具）。
 
 ---
 
+## 一览
 
-## 📄 read_file
+| 类别 | 工具 |
+|------|------|
+| 规划与澄清 | `clarify`, `todo` |
+| Skills | `skills_list`, `skill_view`, `skill_manage` |
+| 工作区文件 | `read_file`, `write_file`, `edit_file`, `list_dir` |
+| 仓库内搜索 | `grep`, `find` |
+| Shell | `shell` |
+| 网页 | `web_search`, `web_fetch`, `web_extract` |
+| 消息与媒体 | `send_message`, `send_media` |
+| 语音（可选） | `text_to_speech` — 在配置中启用 TTS 时注册 |
+| 记忆（可选） | `memory_search`, `memory_get`；配置后可含 `curated_memory`、`session_search` |
+| 图像（可选） | `image`, `image_generate` — 需模型与密钥 |
+| 浏览器（可选） | `browser_*` — 启用浏览器自动化时 |
+| 委托与代码（可选） | `delegate_task`, `execute_code` |
+| 定时任务（可选） | `cronjob` — 运行时提供 Cron（常见为网关） |
 
-读取文件内容。输出自动截断至前 500 行或 50KB。
+扩展也可追加工具。
 
-### 参数
+**条件注册举例：** `session_search` 依赖会话持久化；`web_extract` 使用 `agents.defaults.webExtract.model` 或 `XOPC_WEB_EXTRACT_MODEL`；技能写入受 `skills.agentWritePolicy` 约束；技能发现可通过 `skills.toolGating` 与元数据门控。Skills Hub CLI：`xopc skills hub pull|update|lock`，见 [Skills 指南](./skills.md)。
 
-| 参数 | 类型 | 必填 | 描述 |
+---
+
+## 文件系统
+
+### `read_file`
+
+读取文件；输出有上限（默认约前 500 行 / 50KB）。
+
+| 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `path` | string | ✅ | 文件路径 |
-| `limit` | number | ❌ | 最大行数 (默认 500) |
+| `path` | string | 是 | 文件路径 |
+| `limit` | number | 否 | 最大行数（默认 500） |
 
----
+```json
+{
+  "name": "read_file",
+  "arguments": { "path": "src/index.ts", "limit": 100 }
+}
+```
 
-## ✍️ write_file
+### `write_file`
 
-创建或覆盖文件。
+新建或整文件覆盖。
 
-### 参数
-
-| 参数 | 类型 | 必填 | 描述 |
+| 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `path` | string | ✅ | 文件路径 |
-| `content` | string | ✅ | 文件内容 |
+| `path` | string | 是 | 文件路径 |
+| `content` | string | 是 | 完整内容 |
 
----
+```json
+{
+  "name": "write_file",
+  "arguments": {
+    "path": "src/new-file.ts",
+    "content": "export const hello = 'world';"
+  }
+}
+```
 
-## ✏️ edit_file
+### `edit_file`
 
-替换文件中的指定文本。
+用精确匹配的 `oldText` 替换为 `newText`（含空白须完全一致）。
 
-### 参数
-
-| 参数 | 类型 | 必填 | 描述 |
+| 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `path` | string | ✅ | 文件路径 |
-| `oldText` | string | ✅ | 要替换的文本 |
-| `newText` | string | ✅ | 替换文本 |
+| `path` | string | 是 | 文件路径 |
+| `oldText` | string | 是 | 待替换片段 |
+| `newText` | string | 是 | 替换为 |
 
----
+```json
+{
+  "name": "edit_file",
+  "arguments": {
+    "path": "src/index.ts",
+    "oldText": "const x = 1;",
+    "newText": "const x = 2;"
+  }
+}
+```
 
-## 📂 list_dir
+### `list_dir`
 
-列出目录内容。
+列出目录项（默认从工作区根开始）。
 
----
-
-## 💻 shell
-
-执行 Shell 命令。输出自动截断至最后 50KB。
-
-### 限制
-
-- 超时: 5 分钟
-- 输出截断: 50KB
-
----
-
-## 🔍 grep
-
-在文件中搜索文本。
-
-### 参数
-
-| 参数 | 类型 | 必填 | 描述 |
+| 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `pattern` | string | ✅ | 搜索模式 (支持正则) |
-| `glob` | string | ❌ | 文件匹配模式 |
-| `path` | string | ❌ | 搜索目录 |
-| `ignoreCase` | boolean | ❌ | 忽略大小写 |
-| `literal` | boolean | ❌ | 纯文本匹配 |
-| `context` | number | ❌ | 上下文行数 |
-| `limit` | number | ❌ | 最大结果数 (默认 100) |
+| `path` | string | 否 | 目录路径 |
+
+```json
+{
+  "name": "list_dir",
+  "arguments": { "path": "src/components" }
+}
+```
 
 ---
 
-## 📄 find
+## 搜索（`grep`、`find`）
 
-按条件查找文件。
+### `grep`
 
-### 参数
+使用 ripgrep 做文本检索。
 
-| 参数 | 类型 | 必填 | 描述 |
+| 参数 | 类型 | 必填 | 说明 |
 |------|------|------|------|
-| `pattern` | string | ✅ | 文件名匹配模式 |
-| `path` | string | ❌ | 搜索目录 |
-| `limit` | number | ❌ | 最大结果数 |
+| `pattern` | string | 是 | 模式（`literal` 未开则为正则） |
+| `glob` | string | 否 | 如 `*.ts` |
+| `path` | string | 否 | 起始目录 |
+| `ignoreCase` | boolean | 否 | 忽略大小写 |
+| `literal` | boolean | 否 | 纯文本 |
+| `context` | number | 否 | 上下文行数 |
+| `limit` | number | 否 | 最大命中数（默认 100） |
+
+```json
+{
+  "name": "grep",
+  "arguments": {
+    "pattern": "function.*test",
+    "glob": "*.ts",
+    "path": "src",
+    "ignoreCase": true,
+    "limit": 50
+  }
+}
+```
+
+### `find`
+
+按文件名模式查找文件。
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `pattern` | string | 是 | 类 glob 的文件名模式 |
+| `path` | string | 否 | 起始目录 |
+| `limit` | number | 否 | 最大结果数 |
+
+```json
+{
+  "name": "find",
+  "arguments": { "pattern": "*.test.ts", "path": "src", "limit": 20 }
+}
+```
 
 ---
 
-## 🔍 web_search
+## `shell`
 
-按 `tools.web.search.providers` 配置依次尝试搜索；全部失败则按地区使用 HTML 兜底。
+在工作区约束下执行 shell；标准输出/错误会截断（例如保留末尾约 50KB）。
 
-### 配置示例
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `command` | string | 是 | 命令行 |
+| `timeout` | number | 否 | 超时秒数（默认 300） |
+| `cwd` | string | 否 | 工作目录 |
+
+默认最长约 5 分钟；执行范围限制在工作区内。
+
+```json
+{
+  "name": "shell",
+  "arguments": { "command": "git log --oneline -10", "timeout": 60 }
+}
+```
+
+在成功执行 **`skill_view`** 后，SKILL 中声明的环境变量**名**可注册到本会话；**`shell`** 子进程可带上进程中已存在的同名变量（**值**不会暴露给模型）。
+
+---
+
+## 网页
+
+### `web_search`
+
+按 `tools.web.search.providers` 依次尝试；均失败时按地区走 HTML 兜底。
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `query` | string | 是 | 检索词 |
+| `count` | number | 否 | 最大条数（默认见 `tools.web.search.maxResults`） |
 
 ```json
 {
   "tools": {
     "web": {
+      "region": "global",
       "search": {
         "maxResults": 5,
         "providers": [{ "type": "brave", "apiKey": "BSA_your_key_here" }]
@@ -155,148 +199,209 @@
 }
 ```
 
----
+### `web_fetch`
 
-## 📄 web_fetch
+请求 URL 并返回页面内容供模型使用（HTTP 客户端，有超时）。
 
-获取网页内容。
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `url` | string | 是 | 地址 |
+| `timeout` | number | 否 | 超时秒数（默认 30） |
 
----
+### `web_extract`
 
-## 📨 send_message
+抓取 HTML 或 JSON、去掉明显噪声后，用配置的抽取模型生成偏 Markdown 的结果。可选 `instruction`、`maxLength`（默认来自配置或约 15000 字符）。
 
-发送消息到配置的通道。
-
----
-
-## 🔍 memory_search
-
-搜索记忆文件。在回答关于之前工作、决定等问题前必须调用。
+**配置：** `agents.defaults.webExtract.model` 或 `XOPC_WEB_EXTRACT_MODEL`。
 
 ---
 
-## 📄 memory_get
+## 消息
 
-从记忆文件读取片段。
+### `send_message`
+
+向已配置的通道发消息。
+
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `channel` | string | 是 | 如 `telegram` |
+| `chat_id` | string | 是 | 目标会话 |
+| `content` | string | 是 | 正文 |
+| `accountId` | string | 否 | 多账号 id |
+
+### `send_media`
+
+向**当前会话**发送**本地**文件：`filePath`，可选 `mediaType`（`photo` | `video` | `audio` | `document`）、`caption`。类型可按扩展名推断。
+
+### `text_to_speech`（可选）
+
+TTS 开启时注册。用于需要语音播报的场景；一般仍以文字回复为主。详见 [配置 — tts](./configuration.md#tts) 与 [语音（STT/TTS）](./voice.md)。
 
 ---
 
-## 🧠 curated_memory
+## 记忆
 
-读取或编辑 **`agents/<agentId>/memories/`** 下的 **`MEMORY.md`** 与 **`USER.md`**（条目以 § 分隔，有总字数上限）。系统提示里包含会话开始时的 **冻结快照**；本工具操作的是磁盘上的 **实时** 内容。当 `agents.defaults.memory.enabled` 为 `false` 或 `useEnhancedSystem` 为 `false` 时不注册。若 `userProfileEnabled` 为 `false`，对 user 画像的写入会被拒绝（读仍允许）。
+### `memory_search`
 
-详见 [配置参考](zh/configuration.md) 中的 **agents.defaults.memory** 与 [托管记忆](zh/workspace.md#curated-memory)。
+在工作区 `memory/` 下检索。当回答需要依据已落盘的笔记、既有结论时使用。
 
----
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `query` | string | 是 | 检索词 |
+| `limit` | number | 否 | 最大条数（默认 10） |
 
-## 🔎 session_search
+### `memory_get`
 
-检索 **其他会话** 的 transcript（关键词或带可选的按会话摘要）。需要会话持久化与智能体侧接入；摘要模型由 `agents.defaults.sessionSearch.summaryModel` 或环境变量 `XOPC_SESSION_SEARCH_MODEL` 指定。
+按文件与片段 id 读取记忆片段。
 
-详见 [配置参考](zh/configuration.md) 中的 **agents.defaults.sessionSearch**。
+| 参数 | 类型 | 必填 | 说明 |
+|------|------|------|------|
+| `file` | string | 是 | 记忆文件名 |
+| `snippet` | string | 是 | 片段标识 |
+
+### `curated_memory`
+
+读写 **`agents/<agentId>/memories/`** 下的 **`MEMORY.md`**、**`USER.md`**（章节边界按格式约定）。系统提示里保留会话开始时的**快照**；本工具读写磁盘上的**实时**状态。`agents.defaults.memory.enabled` 为 false 或 `useEnhancedSystem` 为 false 时不注册。`userProfileEnabled` 为 false 时，对用户画像的写入会被拒绝（读可能仍可用）。
+
+详见 [配置参考](./configuration.md) 与 [托管记忆](./workspace.md#curated-memory)。
+
+### `session_search`
+
+检索**其它会话**的 transcript（关键词或类语义检索；可按会话生成摘要）。需持久化与接入；摘要模型：`agents.defaults.sessionSearch.summaryModel` 或 `XOPC_SESSION_SEARCH_MODEL`。
+
+详见 [配置参考](./configuration.md) 中 `agents.defaults.sessionSearch`。
 
 ---
 
 ## 规划与澄清
 
-### ❓ `clarify`
+### `clarify`
 
-向用户提问并等待回答；可选 `choices`（2–10 项选择题）、可选 `default`。在已接线的 Web/Telegram/CLI 会话中走交互；否则返回提示并尽量使用 `default`。
+向用户提问并等待回复；可选 `choices`（2–10 项）、可选 `default`。在已接线的 **网页**、**Telegram**、**CLI** 上可走交互；否则返回说明并可能使用 `default`。
 
-### ✅ `todo`
+### `todo`
 
-会话级待办列表。传入 `todos`（含 `id`、`content`、`status`）；`merge: true` 时按 `id` 合并，否则替换整张表。省略 `todos` 为读取当前列表。
-
----
-
-## Skills 工具
-
-### 📚 `skills_list`
-
-列出当前会话可见的已启用技能（受 allowlist 与工具门控影响）。可选 `query` 按名称/描述子串过滤。
-
-### 📖 `skill_view`
-
-读取 `SKILL.md` 或 `references/`、`templates/`、`scripts/`、`assets/` 下文件。参数：`name`、可选 `path`、可选 `limit`（行数，默认 500）。成功读取后注册声明的环境变量**名**供透传。
-
-### 🛠️ `skill_manage`
-
-`create` / `edit` / `patch` / `delete` / `write_file` / `remove_file`，受 `skills.agentWritePolicy` 约束；内置技能不可写；写入后做安全扫描。
+会话级待办：`id`、`content`、`status`（`pending` | `in_progress` | `completed` | `cancelled`）。`merge: true` 按 `id` 合并；`merge: false` 或省略则整表替换。省略 `todos` 为读取当前列表。
 
 ---
 
-## 网页抽取
+## Skills
 
-### 🧾 `web_extract`
+### `skills_list`
 
-抓取 `url`，可选 `instruction`（关注点）、`maxLength`。模型由 `agents.defaults.webExtract.model` 或 `XOPC_WEB_EXTRACT_MODEL` 指定。
+列出当前会话可用技能（名称、描述、来源），受允许列表与工具门控影响。可选 `query` 在名称/描述中做子串过滤。
 
----
+### `skill_view`
 
-## 媒体消息
+加载 `SKILL.md` 或 `references/`、`templates/`、`scripts/`、`assets/` 下路径。参数：`name`、可选 `path`、可选 `limit`（行数，默认 500）。注册 SKILL 声明的环境变量**名**供 `shell` 透传。遵守 `skills.limits.maxSkillFileBytes` 与被禁用/门控技能。
 
-### 📎 `send_media`
+默认 `skills.promptStyle` 为 `metadata-only` 时，优先用 `skills_list` / `skill_view`，不要硬读技能路径。
 
-参数：`filePath`、可选 `mediaType`、`caption`。可根据扩展名推断类型。
+### `skill_manage`
 
----
+`create` / `edit` / `patch` / `delete` / `write_file` / `remove_file`；受 `skills.agentWritePolicy`（`global` | `workspace` | `both`）约束；内置技能不可写；写入经安全扫描。
 
-## 图像
-
-通道 / 网页入站的图片：若**会话主模型**支持视觉，则**原样**作为多模态内容传入；否则会先用 **`imageModel`**（可带 `fallbacks`）上的视觉模型**描述**为文本再交给主模型。详见 [图像与视觉](image-multimodal.md)。
-
-### 🖼️ `image` / 🎨 `image_generate`
-
-- **`image`**：从路径或 URL 加载一张或多张图做视觉理解；依赖 `agents.defaults.imageModel`（字符串或 `{ primary, fallbacks }`）、`mediaMaxMb` 与对应 API Key。
-- **`image_generate`**：按 `imageGenerationModel` 链文生图，成功时写入工作区 `media/generated/`；`action: "list"` 可列出已注册的文生图 Provider 摘要。
-
-程序内的 `generateImage()` 支持 OpenAI **图生图/编辑**（`inputImages`，当前取第一张参考图）；`image_generate` 工具尚未暴露该参数。
+技能可设 `disable-model-invocation`，文件仍在磁盘但对模型隐藏。Hub：`xopc skills hub pull|update|lock`，见 [Skills 指南](./skills.md)。
 
 ---
 
-## 浏览器工具（可选）
+## 图像与文生图
 
-`agents.defaults.browser.enabled` 时注册：`browser_navigate`、`browser_snapshot`、`browser_click`、`browser_type`、`browser_scroll`、`browser_screenshot`。默认禁止 localhost/内网 URL；会话级标签页。
+入站图片：若**会话主模型**支持视觉，则随用户消息传入；否则可能先用 **`imageModel`（含回退）** 转成文字描述。详见 [图像与视觉](./image-multimodal.md)。
+
+### `image`
+
+对路径或 URL 上的图片做视觉理解；可选 `prompt`。用户已附图且主模型多模态时，往往不必再调。
+
+**配置：** `agents.defaults.imageModel`（字符串或 `{ primary, fallbacks }`）、`agents.defaults.mediaMaxMb`。
+
+### `image_generate`
+
+文生图；成功时保存到工作区 `media/generated/`。`action: "list"` 可列出已注册的文生图提供方与模型。
+
+**配置：** `agents.defaults.imageGenerationModel`（字符串或 `{ primary, fallbacks }`）。
+
+程序化接口可能对部分厂商支持参考图；`image_generate` 工具未必暴露全部参数。
 
 ---
 
-## 委托与沙箱代码
+## 浏览器（可选）
 
-### 🤖 `delegate_task`
+`agents.defaults.browser.enabled` 为 true 时注册。若需本机浏览器，可执行如：`npx playwright install chromium`。
 
-子智能体独立执行，仅返回摘要；工具集受限，不可嵌套委托或使用 clarify/消息/记忆/todo/cronjob/Skills 管理类工具。
+| 工具 | 作用 |
+|------|------|
+| `browser_navigate` | 打开 http(s)（默认拦 localhost/内网段） |
+| `browser_snapshot` | 页面或选择器的无障碍快照 |
+| `browser_click` | 通过 `selector` / `text` / `role` 点击 |
+| `browser_type` | 向输入框输入 |
+| `browser_scroll` | 页面或元素滚动 |
+| `browser_screenshot` | 视口或元素截图（有大小限制） |
 
-### 💾 `execute_code`
+每会话独立标签；`agents.defaults.browser.headless` 在启用时默认可为 true。
 
-VM 内 JS，暴露受限 `tools.*` 与 `console.log`；有执行时间、工具调用次数与输出长度上限。`node:vm` 非强隔离。
+---
+
+## 委托与沙箱代码（可选）
+
+### `delegate_task`
+
+子智能体**独立上下文**（无父会话 transcript），仅返回**文字摘要**。含 `goal`、`context`、`toolset`、`maxIterations`（默认 30）等。子智能体不能嵌套 `delegate_task`，也不能用 `clarify`、外发消息、记忆、`todo`、`cronjob`、Skills 管理类工具。
+
+**配置：** `agents.defaults.delegate.enabled`。
+
+### `execute_code`
+
+在 VM 中执行 JavaScript，暴露白名单内的 `tools.*`（如 `web_search`、`web_fetch`、`read_file`、`write_file`、`grep`、`find`、`shell`、`skills_list`、`skill_view`）及 `console.log`。执行时间、工具调用次数、输出体量均有上限。
+
+**配置：** `agents.defaults.executeCode.enabled`。`node:vm` **不是**强隔离边界；仅建议在可信模型与环境开启；也可通过 `disabledTools` 禁用 `execute_code`。
 
 ---
 
 ## 定时任务（网关）
 
-### ⏰ `cronjob`
+### `cronjob`
 
-`list` / `create` / `update` / `remove` / `enable` / `disable` / `history`。需运行时注入 `CronService`（典型为网关）。
+`list` / `create` / `update` / `remove` / `enable` / `disable` / `history`。创建/更新需计划表达式与消息；可选 `timezone`、`sessionTarget`（`main` | `isolated`）、`name`、`jobId` 等。
+
+仅当运行时提供 `CronService` 时注册（网关部署常见）。创建/更新带简单提示安全检查。
 
 ---
 
-## 安全限制
+## 典型限制
 
 | 操作 | 限制 |
 |------|------|
-| 文件路径 | 限制在 workspace 目录内 |
-| Shell 命令 | 超时 5 分钟 |
-| 文件读取 | 500 行或 50KB |
-| Shell 输出 | 50KB |
-| 文件大小 | 最大 10MB |
+| 文件路径 | 限制在工作区内 |
+| Shell | 约 5 分钟超时；输出截断（约末尾 50KB） |
+| 文件读取 | 行数/字节上限（如约 500 行 / 50KB） |
+| 单文件大小 | 过大读取会拒绝（如约 10MB 量级） |
+
+具体数值可能随版本微调，本表作数量级参考。
 
 ---
 
-## 使用建议
+## 进度反馈
 
-- 在 `skills.promptStyle` 为 `metadata-only`（默认）时，优先用 `skills_list` / `skill_view` 读技能，而非直接 `read_file` 技能路径。
-- 谨慎开启 `execute_code`、浏览器与 `delegate_task` 等高能力工具。
+耗时步骤会触发进度阶段，便于控制台、Telegram 等展示状态。示例映射：
+
+| 工具 | 阶段（概念） | 界面图标 |
+|------|----------------|----------|
+| `read_file` | 读取中 | 📖 |
+| `write_file` / `edit_file` | 写入中 | ✍️ |
+| `grep` / `find` / `web_*` | 检索中 | 🔍 |
+| `shell` / 浏览器 / `delegate_task` / `execute_code` / `cronjob` | 执行中 | ⚙️ |
+
+在配置的 `progress` 下可调整如 `level`、`streamToolProgress`、`heartbeatEnabled`。详见 [进度反馈](./progress.md)。
 
 ---
 
-_最后更新：2026-04-11_
+## 运维说明
+
+- **高权限工具：** 将 `execute_code`、`delegate_task`、浏览器相关能力视为强能力，按需开启。
+- **Skills：** 写入遵循 `skills.agentWritePolicy`；`skill_view` 受 `skills.limits.maxSkillFileBytes` 限制。
+- **记忆插件：** 实现可通过 `MemoryManager.getAdditionalTools()` 注入额外记忆类工具。
+
+---
+
+_最后更新：2026-04-17_
