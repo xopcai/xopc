@@ -1,4 +1,4 @@
-import { type CSSProperties, useEffect, useMemo, useRef, useState } from 'react';
+import { type CSSProperties, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useTranslation } from 'react-i18next';
 
 import { useLocaleStore } from '@/stores/locale-store';
@@ -56,12 +56,13 @@ export function ExtensionIframeHost({
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const gatewayToken = useGatewayStore((s) => s.token);
   const resolved = useThemeStore((s) => s.resolved);
-  const permList = permissions ?? [];
   const displayName = extensionName?.trim() || extensionId;
   const permsKey = useMemo(
     () => JSON.stringify([...(permissions ?? [])].sort()),
     [permissions],
   );
+  /** Stable list so registerIframe effect does not churn every render (permissions ?? [] is a new []). */
+  const permList = useMemo(() => JSON.parse(permsKey) as string[], [permsKey]);
 
   const [allowed, setAllowed] = useState(() => hasUiGrant(extensionId, permList));
   const [dialogOpen, setDialogOpen] = useState(() => !hasUiGrant(extensionId, permList));
@@ -90,7 +91,7 @@ export function ExtensionIframeHost({
     return u.toString();
   }, [extensionId, entrypoint, gatewayToken]);
 
-  useEffect(() => {
+  useLayoutEffect(() => {
     if (!allowed) return;
     const el = iframeRef.current;
     if (!el) return;

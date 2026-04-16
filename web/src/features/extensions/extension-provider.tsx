@@ -62,9 +62,11 @@ export function ExtensionProvider({ children }: { children: React.ReactNode }) {
   useEffect(
     () => () => {
       routerForCleanupRef.current.dispose();
+      // React StrictMode (dev) invokes this cleanup, then remounts. `useRef` survives,
+      // so we must clear the ref or the next render would reuse a disposed router
+      // (no `window` message listener — extension requests time out).
+      routerRef.current = null;
     },
-    // Empty deps: run cleanup only on true unmount, not on StrictMode remount.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
     [],
   );
 

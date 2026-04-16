@@ -42,6 +42,11 @@ type ExtensionHostMessage =
 
 export class ExtensionMessageRouter {
   private iframes = new Map<string, HTMLIFrameElement>();
+  /** Incoming iframe → extensionId (handles contentWindow ready after first register; also disambiguates identity). */
+  private byContentWindow = new WeakMap<
+    Window,
+    { extensionId: string; iframe: HTMLIFrameElement }
+  >();
   private handlers = new Map<string, MethodHandler>();
   private extensionPermissions = new Map<string, Set<string>>();
   private eventSubscribers = new Map<string, Set<(e: { event: string; data?: unknown }) => void>>();
@@ -65,14 +70,30 @@ export class ExtensionMessageRouter {
   }
 
   registerIframe(extensionId: string, iframe: HTMLIFrameElement, permissions: string[]): void {
+    const prev = this.iframes.get(extensionId);
+    if (prev && prev !== iframe && prev.contentWindow) {
+      this.byContentWindow.delete(prev.contentWindow);
+    }
     this.iframes.set(extensionId, iframe);
     this.extensionPermissions.set(extensionId, new Set(permissions));
+    this.rememberIframeWindow(extensionId, iframe);
   }
 
   unregisterIframe(extensionId: string): void {
+    const iframe = this.iframes.get(extensionId);
+    if (iframe?.contentWindow) {
+      this.byContentWindow.delete(iframe.contentWindow);
+    }
     this.iframes.delete(extensionId);
     this.extensionPermissions.delete(extensionId);
     this.agentStreamSubscriptions.delete(extensionId);
+  }
+
+  private rememberIframeWindow(extensionId: string, iframe: HTMLIFrameElement): void {
+    const cw = iframe.contentWindow;
+    if (cw) {
+      this.byContentWindow.set(cw, { extensionId, iframe });
+    }
   }
 
   subscribeAgentStream(extensionId: string, sessionKey: string): void {
@@ -150,6 +171,7 @@ export class ExtensionMessageRouter {
   sendInit(extensionId: string, theme: ThemeInfo, locale: string): void {
     const iframe = this.iframes.get(extensionId);
     if (!iframe?.contentWindow) return;
+    this.rememberIframeWindow(extensionId, iframe);
     const permissions = [...(this.extensionPermissions.get(extensionId) ?? [])];
     iframe.contentWindow.postMessage(
       {
@@ -192,42 +214,85 @@ export class ExtensionMessageRouter {
     }
   }
 
+  /** Prefer `iframe.contentWindow`; if null (rare), fall back to the request's `event.source`. */
   private postResponse(
     iframe: HTMLIFrameElement,
+    event: MessageEvent | undefined,
     requestId: string,
     result?: unknown,
     error?: { code: number; message: string },
   ): void {
-    iframe.contentWindow?.postMessage(
-      {
-        source: 'xopc-host',
-        type: 'response',
-        requestId,
-        result,
-        error,
-      },
-      '*',
-    );
+    const target =
+      iframe.contentWindow ??
+      (event?.source instanceof Window ? event.source : null);
+    const payload = {
+      source: 'xopc-host' as const,
+      type: 'response' as const,
+      requestId,
+      result,
+      error,
+    };
+    if (!target) {
+      return;
+    }
+    target.postMessage(payload, '*');
+  }
+
+  private isTrustedExtensionSource(iframe: HTMLIFrameElement, ev: MessageEvent): boolean {
+    if (ev.source === null) {
+      // Sandboxed iframes (no allow-same-origin) may report a null source.
+      return true;
+    }
+    const cw = iframe.contentWindow;
+    if (ev.source === cw) {
+      return true;
+    }
+    // Some environments do not keep `===` identity between postMessage `source`
+    // and `iframe.contentWindow`; `frameElement` still ties the window to this iframe.
+    if (cw && typeof Window !== 'undefined' && ev.source instanceof Window) {
+      try {
+        return ev.source.frameElement === iframe;
+      } catch {
+        /* cross-origin access */
+      }
+    }
+    return false;
   }
 
   private async onWindowMessage(event: MessageEvent) {
     const msg = event.data as ExtensionHostMessage | undefined;
     if (!msg || msg.source !== 'xopc-extension') return;
 
-    const iframe = this.iframes.get(msg.extensionId);
-    if (!iframe) return;
+    let iframe: HTMLIFrameElement | undefined;
+    let effectiveExtensionId = msg.extensionId;
 
-    // Sandboxed iframes (no allow-same-origin) have an opaque origin, so
-    // event.source is null in some browsers. Fall back to trusting the
-    // extensionId field when the source is null, because the iframe is already
-    // registered and CSP prevents it from making outbound network requests.
-    const sourceMatchesIframe =
-      event.source === iframe.contentWindow || event.source === null;
-    if (!sourceMatchesIframe) return;
+    if (event.source instanceof Window) {
+      const reg = this.byContentWindow.get(event.source);
+      if (reg) {
+        iframe = reg.iframe;
+        effectiveExtensionId = reg.extensionId;
+      }
+    }
+
+    if (!iframe) {
+      iframe = this.iframes.get(msg.extensionId);
+      effectiveExtensionId = msg.extensionId;
+    }
+
+    if (!iframe) {
+      return;
+    }
+
+    const trustedByWindow =
+      event.source instanceof Window && this.byContentWindow.has(event.source);
+
+    if (!trustedByWindow && !this.isTrustedExtensionSource(iframe, event)) {
+      return;
+    }
 
     if (msg.type === 'event') {
-      this.handleExtensionEvent(msg.extensionId, msg.event, msg.data);
-      const subs = this.eventSubscribers.get(msg.extensionId);
+      this.handleExtensionEvent(effectiveExtensionId, msg.event, msg.data);
+      const subs = this.eventSubscribers.get(effectiveExtensionId);
       if (subs) {
         const payload = { event: msg.event, data: msg.data };
         for (const fn of subs) {
@@ -244,9 +309,10 @@ export class ExtensionMessageRouter {
     if (msg.type !== 'request') return;
 
     const { requestId, method, params } = msg;
+
     const handler = this.handlers.get(method);
     if (!handler) {
-      this.postResponse(iframe, requestId, undefined, {
+      this.postResponse(iframe, event, requestId, undefined, {
         code: ExtensionErrorCode.MethodNotFound,
         message: `Unknown method: ${method}`,
       });
@@ -254,9 +320,9 @@ export class ExtensionMessageRouter {
     }
 
     const required = METHOD_PERMISSION_MAP[method];
-    const perms = this.extensionPermissions.get(msg.extensionId) ?? new Set<string>();
+    const perms = this.extensionPermissions.get(effectiveExtensionId) ?? new Set<string>();
     if (required && !perms.has(required)) {
-      this.postResponse(iframe, requestId, undefined, {
+      this.postResponse(iframe, event, requestId, undefined, {
         code: ExtensionErrorCode.PermissionDenied,
         message: `Missing permission: ${required}`,
       });
@@ -264,11 +330,11 @@ export class ExtensionMessageRouter {
     }
 
     try {
-      const result = await handler(msg.extensionId, params);
-      this.postResponse(iframe, requestId, result);
+      const result = await handler(effectiveExtensionId, params);
+      this.postResponse(iframe, event, requestId, result);
     } catch (e) {
       const message = e instanceof Error ? e.message : String(e);
-      this.postResponse(iframe, requestId, undefined, {
+      this.postResponse(iframe, event, requestId, undefined, {
         code: ExtensionErrorCode.InternalError,
         message,
       });
