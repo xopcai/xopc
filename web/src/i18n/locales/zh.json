@@ -61,8 +61,8 @@
     "open": "打开",
     "openSettings": "设置",
     "runStateLive": "运行中",
-    "runStatePendingOn": "配置已启用 — 重启网关后加载。",
-    "runStatePendingOff": "配置已停用 — 重启网关后卸载。",
+    "runStatePendingOn": "配置已启用",
+    "runStatePendingOff": "配置已停用",
     "runStateOff": "已关闭",
     "toggleSaving": "保存中…",
     "toggleError": "无法更新该扩展。"
