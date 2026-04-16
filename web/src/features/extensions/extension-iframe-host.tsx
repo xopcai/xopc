@@ -163,7 +163,7 @@ export function ExtensionIframeHost({
   }
 
   return (
-    <div className="flex min-h-0 min-w-0 flex-col">
+    <div className="flex flex-1 min-h-0 min-w-0 flex-col">
       {loadError ? (
         <div className="mb-2 rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-sm text-fg">
           <p>{t('extensionUi.loadFailed')}</p>
