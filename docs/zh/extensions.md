@@ -4,14 +4,12 @@ xopc 提供了一个轻量级但功能强大的扩展系统。
 
 ## 特性
 
-- 🏗️ **三级存储架构** - Workspace / Global / Bundled
-- 📋 **Manifest-first 激活** - 先读 `xopc.extension.json` 再按需加载扩展代码；网关与 `xopc agent` 按激活计划（配置、`channels.*`、模型 id、manifest 声明的环境变量等）决定加载哪些扩展
-- 🔌 **Extension SDK** - 官方 SDK；除总入口外可选用 **子路径**（`extension-sdk/core`、`extension-sdk/lazy` 等）
-- ⚡ **TypeScript 原生** - 通过 jiti 即时加载，无需编译
-- 📦 **多源安装** - 支持 npm、本地目录、Git 仓库
-- 🖥️ **网关 Web 控制台 UI（可选）** — 扩展可在 manifest 中声明 **`ui`**，由 React 控制台通过 HTTPS 加载静态资源并在沙箱 iframe 中运行；iframe 侧使用 **`@xopcai/extension-ui-sdk`**（见 [网关控制台：扩展 UI](#gateway-extension-ui)）。
-
-**设计方案（仓库内 RFC）：** [`.docs/channel/`](../.docs/channel/00-overview.md) 描述与 OpenClaw 思路对齐的完整目标架构；下文概括**当前已实现**的用户可见行为。**浏览器端扩展 UI** 的分阶段说明见仓库内 [`.docs/ext/`](../.docs/ext/)（与 `AGENTS.md` 配套）。
+- **三级存储** — 仅工作区、用户全局目录、或与安装包一并提供的内置扩展（见下表）。
+- **按配置激活** — 根据 `xopc.extension.json` 与当前 **配置 / 环境** 决定加载哪些扩展（见 [何时加载扩展](#何时加载扩展)）。
+- **Extension SDK** — 使用 `@xopcai/xopc/extension-sdk`（可选用 `extension-sdk/core`、`extension-sdk/lazy` 等子路径）。
+- **TypeScript** — 扩展为普通 TS/JS 模块，由运行时直接加载，无需单独编译步骤。
+- **安装来源** — 通过 `xopc extension install` 支持 npm 包、本地目录或 Git 地址。
+- **网关控制台 UI（可选）** — manifest 中可声明 **`ui`**，在 Web 控制台沙箱 iframe 中运行；iframe 侧使用 **`@xopcai/extension-ui-sdk`**（见 [网关控制台：扩展 UI](#gateway-extension-ui)）。
 
 ## 快速开始
 
@@ -70,7 +68,7 @@ git clone https://github.com/your/extension.git
 | `disabled` | `string[]` | （可选）禁用的扩展 ID 列表 |
 | `[extension-id]` | `object \| boolean` | 扩展特定配置 |
 
-**激活与 `enabled`：** **网关** 与 **`xopc agent`** 使用 **基于 manifest 的激活计划**。只要满足 manifest 中的触发条件，**不一定**要把通道扩展写进 `extensions.enabled`——例如已配置 **`channels.telegram`** / **`channels.weixin`**，或环境中存在 manifest 声明的变量（如 bundled Telegram 的 `TELEGRAM_BOT_TOKEN`）。若要 **强制不加载** 某扩展，请把其 id 写入 **`extensions.disabled`**。
+**激活与 `enabled`：** **网关** 与 **`xopc agent`** 按 [何时加载扩展](#何时加载扩展) 中的规则加载扩展。已配置 **`channels.telegram`** / **`channels.weixin`**，或环境中存在 manifest 声明的变量（例如 `TELEGRAM_BOT_TOKEN`）时，**不一定**要把对应扩展写进 `extensions.enabled`。若要 **强制不加载**，把扩展 id 写入 **`extensions.disabled`**。
 
 **示例配置：**
 
@@ -121,72 +119,51 @@ xopc 支持三级扩展存储，按优先级从高到低：
 |------|------|------|--------|
 | **Workspace** | `workspace/.extensions/` | 项目私有扩展 | ⭐⭐⭐ 最高 |
 | **Global** | `~/.xopc/extensions/` | 用户级共享扩展 | ⭐⭐ 中 |
-| **Bundled** | `xopc/extensions/` | 内置扩展 | ⭐ 最低 |
+| **Bundled** | 与 xopc 安装包同目录的内置扩展 | 随安装提供 | ⭐ 最低 |
 
 ### 优先级规则
 
-- **Workspace** 扩展可以覆盖 **Global** 和 **Bundled** 同名扩展
-- **Global** 扩展可以覆盖 **Bundled** 同名扩展
-- 适合场景：
-  - Workspace：项目特定的定制扩展
-  - Global：常用的共享扩展（如 telegram-channel）
-  - Bundled：随 xopc 发布的官方扩展
+- **Workspace** 优先于 **Global** 与 **Bundled**（同名扩展 id 时）。
+- **Global** 优先于 **Bundled**。
 
-**Monorepo 说明：** Telegram 通道是仓库内 **`extensions/telegram`** 工作区包（`@xopcai/xopc-extension-telegram`），由核心通过 `src/channels/plugins/bundled.ts` 接入；与上表中 **Bundled** 扩展目录 `xopc/extensions/` 不是同一条加载路径。
+常见用法：项目专用扩展放在工作区；多项目共用的放在 `~/.xopc/extensions/`；安装包自带的为内置能力。
 
 ---
 
-## Manifest-first 控制平面 {#manifest-first-control-plane}
+## 何时加载扩展 {#何时加载扩展}
 
-实现上将 **只读 manifest**（控制面）与 **加载并执行扩展代码**（运行时）分开，对应 `.docs/channel` 中 RFC-01 / RFC-02。
+运行时先读取各扩展的 **`xopc.extension.json`**，再结合 **配置文件与环境变量** 决定要加载的扩展 id。多数情况下，**只要配好 `channels.telegram` / `channels.weixin`**，就不必再把对应通道扩展写进 `extensions.enabled`。
 
-### 三阶段
+**判定优先级（高者优先）：**
 
-| 阶段 | 作用 | API / 模块 |
-|------|------|------------|
-| **1 — 发现与注册表** | 扫描扩展目录，仅解析 `xopc.extension.json`，不执行 `register()` | `ExtensionLoader.buildManifestRegistry()`、`getManifestRegistry()` → `ManifestRegistry` |
-| **2 — 激活规划** | 根据 **配置 + 环境变量 + manifest 元数据** 计算应加载的扩展 id | `ActivationPlanner`，`ExtensionLoader.planActivation()` |
-| **3 — 运行时加载** | 按入口加载模块并注册 | `ExtensionLoader.loadByActivationPlan()`（仍保留 `loadExtension` / `loadExtensions` / `loadAllExtensions`） |
-
-### 激活判定优先级（高 → 低）
-
-1. 配置中的 **`extensions.enabled` / `extensions.disabled`**（同一 id 同时出现时以 enabled 为先——应避免这样配置）。
-2. **默认智能体模型 id** — 匹配 manifest 中 `modelSupport.modelPrefixes` / `modelPatterns`。
-3. **环境变量** — manifest 中 `providerAuthEnvVars`、`channelEnvVars` 列出的变量名在 `process.env` 中有值。
-4. **`autoEnableWhenConfiguredProviders`** — 与从配置推导的 `configuredProviderIds` 相交。
-5. **`activation.onProviders` / `activation.onChannels`** — 与配置中的 provider / channel 引用匹配。
+1. **`extensions.enabled` / `extensions.disabled`** — 显式列表；同一 id 不要同时出现在两边。
+2. **默认智能体所用模型** — 若匹配 manifest 中的 `modelSupport` 模式。
+3. **环境变量** — manifest 中 `providerAuthEnvVars`、`channelEnvVars` 所列名称已设置时。
+4. **`autoEnableWhenConfiguredProviders`** — 与配置中的 provider 匹配时。
+5. **`activation.onProviders` / `activation.onChannels`** — 与已配置的 provider / channel 匹配时。
 6. **`enabledByDefault: true`**。
 
-最终待加载的扩展 id 按 **字典序** 排序，保证顺序稳定。
+**各入口：**
 
-### 各入口行为
+- **网关**、**`xopc agent`**：启动扩展时使用完整规则。
+- **其它 CLI 子命令**：若 `extensions.enabled` 为空、无会触发扩展的通道类配置、且无 manifest 索引到的环境变量，则可能 **不加载** 扩展，以加快冷启动。
 
-| 入口 | 行为 |
-|------|------|
-| **网关** | 启动扩展时调用 `loadByActivationPlan()`，**不仅依赖** `extensions.enabled` 列表。 |
-| **`xopc agent`** | 同样使用 `loadByActivationPlan()`。 |
-| **CLI（`registerExtensionCliCommands`）** | 仅当 **`extensions.enabled` 非空**、或 **已配置会触发通道扩展的 channels**、或 **任意 manifest 索引到的环境变量已设置** 时才加载扩展并注册 CLI，避免每个子命令都扫描加载。 |
+### `xopc.extension.json` 常用可选字段
 
-### `xopc.extension.json` 可选声明字段
-
-均为 **可选**，旧 manifest 不加字段仍可工作。常用字段：
+均为可选。
 
 | 字段 | 用途 |
 |------|------|
-| `enabledByDefault` | 无更高优先级规则时默认激活 |
-| `providers`、`channels` | 声明实现的逻辑 id（供索引与查询） |
-| `providerAuthEnvVars`、`channelEnvVars` | 逻辑 id → 环境变量名（检测与 onboarding） |
-| `providerAuthChoices` | 认证方式等展示/CLI 元数据 |
-| `modelSupport` | `modelPrefixes`、`modelPatterns`，按模型激活 |
-| `autoEnableWhenConfiguredProviders` | 配置中出现对应 provider 时自动激活 |
+| `enabledByDefault` | 无更高优先级规则时默认启用 |
+| `providers`、`channels` | 声明实现的逻辑 id |
+| `providerAuthEnvVars`、`channelEnvVars` | 逻辑 id 与环境变量名的对应 |
+| `providerAuthChoices` | 认证方式等 UI/CLI 元数据 |
+| `modelSupport` | 按模型 id 激活 |
+| `autoEnableWhenConfiguredProviders` | 配置中出现对应 provider 时自动启用 |
 | `activation` | `onProviders`、`onChannels`、`onCommands`、`onCapabilities` |
-| `contracts`、`setup` | 能力与 setup 提示 |
+| `contracts`、`setup` | 能力与安装提示 |
 
-示例见仓库内 `extensions/telegram/xopc.extension.json`、`extensions/custom-provider/xopc.extension.json`。
-
-### Onboarding 辅助（进阶）
-
-在不加载扩展 JS 的情况下枚举 provider/channel 等信息，可使用 `src/extensions/onboard-helpers.ts` 中的 `listOnboardProviders`、`listOnboardChannels`、`resolveProviderForModel`（需先构造 `ManifestRegistry`）。
+编写自己的扩展时，可参考内置扩展的 manifest。
 
 ### Global 扩展目录
 
@@ -260,10 +237,6 @@ import type { ExtensionCommand } from '@xopcai/xopc/extension-sdk';
 import type { ExtensionService } from '@xopcai/xopc/extension-sdk';
 ```
 
-### SDK 路径解析
-
-在本地开发时，xopc 通过 jiti 将 `xopc/extension-sdk` 解析到 `src/extensions/sdk/index.ts`，并支持子路径别名（如 `xopc/extension-sdk/core`、`xopc/extension-sdk/lazy`）。使用已安装的 **`@xopcai/xopc`** 时，请优先使用 **`@xopcai/xopc/extension-sdk`** 或对应子路径。
-
 ---
 
 ## 网关控制台：扩展 UI（iframe） {#gateway-extension-ui}
@@ -293,14 +266,6 @@ import type { ExtensionService } from '@xopcai/xopc/extension-sdk';
 - **events** — `emit` / `on` 使用 **`ext.*`** 前缀在扩展 iframe 之间 **广播**（跨扩展通信）
 - **onDispose**、**onDidChangeVisibility**
 
-**Markdown API 文档生成**（仓库根目录执行）：
-
-```bash
-pnpm run docs:extension-sdk
-```
-
-生成目录：**`packages/extension-ui-sdk/docs/api/`**。
-
 ### Gateway REST（需 Bearer）
 
 与控制台其它接口相同，携带 **`Authorization: Bearer <网关 token>`**。
@@ -327,15 +292,9 @@ pnpm run docs:extension-sdk
 - **命令面板** — **⌘K / Ctrl+K**（或 `window` 上的 `open-command-palette`）列出 **`contributions.commands`**；带 **`opensPanel`** 的命令会导航到 **`/apps/{extensionId}`**。
 - **调试** — **设置 → Extensions → 扩展调试** 可查看网关返回的扩展列表与 **UI 授权** JSON。
 
-### 示例扩展：`extensions/hello`
+### 示例：Hello 扩展
 
-仓库内 **Hello** 示例使用 **esbuild** 将 TS 入口打成 **`ui/*.bundle.js`**，在 HTML 中引用：
-
-```bash
-pnpm run build:hello-ui
-```
-
-升级 **`@xopcai/extension-ui-sdk`** 后请重新打包。入口源文件：`extensions/hello/ui/*-entry.ts`。
+xopc 仓库中的 **Hello** 示例演示了扩展 UI 的完整链路。若你提供 `ui` 面板，请把浏览器端脚本打包（例如用 esbuild），并在 manifest 中指向构建产物。
 
 ---
 
@@ -436,7 +395,7 @@ xopc extension create discord-channel --name "Discord Channel" --kind channel
 
 ### Manifest 文件
 
-每个扩展必须包含一个 `xopc.extension.json` 文件。最小示例见下。通道类 / 提供方类扩展可增加 [Manifest-first 控制平面](#manifest-first-控制平面) 一节中的 **可选声明字段**（参考仓库内 `extensions/telegram`、`extensions/custom-provider` 的 manifest）。
+每个扩展必须包含一个 `xopc.extension.json` 文件。最小示例见下。通道类 / 提供方类扩展可增加 [何时加载扩展](#何时加载扩展) 中的 **可选声明字段**；可参考内置扩展的 manifest。
 
 ```json
 {
@@ -771,9 +730,9 @@ export default extension;
 ## 故障排查（扩展未加载）
 
 1. 确认 **`extensions.disabled`** 未包含该扩展 id。
-2. 网关 / agent：检查是否存在 **激活条件**（`extensions.enabled`、匹配的 `channels.*`、manifest 声明的环境变量、模型前缀、`enabledByDefault` 等）。
-3. **纯 CLI 子命令**：若 `extensions.enabled` 为空、未配置通道、且无 manifest 索引到的环境变量，扩展可能 **故意不加载**（避免每个子命令都扫盘）。
-4. 确认 `xopc.extension.json` 为合法 JSON，且扩展位于 workspace / global / bundled 发现路径下。
+2. 网关 / agent：对照 [何时加载扩展](#何时加载扩展) 检查 `extensions.enabled`、`channels.*`、环境变量、模型、`enabledByDefault` 等条件。
+3. **其它 CLI 子命令**：若 `extensions.enabled` 为空、无通道类触发配置、且无 manifest 索引到的环境变量，扩展可能 **不会加载**。
+4. 确认 `xopc.extension.json` 为合法 JSON，且扩展位于 workspace / global / 安装包发现路径下。
 5. 查看日志中的加载错误。
 
 ## 发布扩展
@@ -809,21 +768,19 @@ npm publish --access public
 
 ## 扩展配置
 
-### 全局配置
+### 全局选项
 
-`config.json` 中的 `extensions` 部分支持以下全局选项：
+`~/.xopc/xopc.json` 中 `extensions` 下常见字段：
 
 ```json
 {
   "extensions": {
-    "enabled": {
-      "hello": true,
-      "echo": false
-    },
-    "allow": ["hello", "echo", "xopc-feishu"],
+    "enabled": ["hello", "echo"],
+    "disabled": [],
     "security": {
       "checkPermissions": true,
       "allowUntrusted": false,
+      "allow": ["hello", "echo", "xopc-feishu"],
       "trackProvenance": true,
       "allowPromptInjection": false
     },
@@ -837,16 +794,17 @@ npm publish --access public
 
 | 选项 | 类型 | 说明 |
 |------|------|------|
-| `enabled` | `Record<string, boolean>` | 启用/禁用特定扩展 |
-| `allow` | `string[]` | 允许的扩展白名单 |
-| `security.checkPermissions` | `boolean` | 启用路径安全检查 |
-| `security.allowUntrusted` | `boolean` | 允许加载不在白名单中的扩展 |
-| `security.trackProvenance` | `boolean` | 追踪扩展安装来源 |
-| `security.allowPromptInjection` | `boolean` | 允许扩展注入 system prompt |
-| `slots.memory` | `string` | 首选 memory 后端扩展 |
-| `slots.tts` | `string` | 首选 TTS 服务商扩展 |
-| `slots.imageGeneration` | `string` | 首选图像生成扩展 |
-| `slots.webSearch` | `string` | 首选网页搜索扩展 |
+| `enabled` | `string[]` | 与激活规则一起使用的扩展 id 列表 |
+| `disabled` | `string[]` | 禁止加载的扩展 id |
+| `security.checkPermissions` | `boolean` | 路径与安装安全检查 |
+| `security.allowUntrusted` | `boolean` | 是否允许加载不在 `security.allow` 中的扩展 |
+| `security.allow` | `string[]` | 可选扩展 id 白名单 |
+| `security.trackProvenance` | `boolean` | 记录扩展安装来源 |
+| `security.allowPromptInjection` | `boolean` | 是否允许钩子修改系统提示 |
+| `slots.memory` | `string` | 首选 memory 后端扩展 id |
+| `slots.tts` | `string` | 首选 TTS 扩展 id |
+| `slots.imageGeneration` | `string` | 首选图像生成扩展 id |
+| `slots.webSearch` | `string` | 首选网页搜索扩展 id |
 
 ### 扩展自定义配置
 

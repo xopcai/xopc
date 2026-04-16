@@ -43,203 +43,60 @@ This page describes how xopc is structured and how the main pieces fit together.
   └──────────┘        └──────────┘        └──────────┘
 ```
 
-## Project Structure
+## Major components
 
-```
-src/
-├── agent/              # Core agent logic (pi-agent-core based)
-│   ├── service.ts      #   Main AgentService class
-│   ├── memory/         #   Curated store, MemoryManager, prefetch; session transcripts live under session/
-│   ├── prompt/         #   Prompt builder system
-│   ├── tools/          #   Built-in tools (Typebox schemas)
-│   └── progress.ts     #   Progress feedback system
-├── infra/
-│   └── bus/            # Message bus primitives (queue, etc.)
-├── channels/           # Channel integrations (ChannelPlugin + manager)
-│   ├── plugin-types.ts #   ChannelPlugin interface & adapters
-│   ├── manager.ts      #   Channel lifecycle manager
-│   ├── plugins/
-│   │   ├── bundled.ts  #   Built-in workspace plugins (Telegram)
-│   │   ├── registry.ts #   Plugin registry / lookup
-│   │   └── types.*.ts  #   Registry type helpers
-│   ├── telegram/
-│   │   └── index.ts    #   Re-exports from @xopcai/xopc-extension-telegram (compat)
-│   ├── outbound/       #   Outbound delivery pipeline
-│   ├── security.ts     #   Access control helpers
-│   ├── draft-stream.ts #   Streaming message preview
-│   └── format.ts       #   Markdown to HTML formatter
-├── extensions/         # Extension runtime (loader, hooks); `sdk/` → @xopcai/xopc/extension-sdk
-├── routing/            # Session keys, bindings, route resolution
-├── acp/                # Agent Control Protocol (optional multi-runtime bridge)
-├── cli/                # CLI commands with self-registration
-│   ├── commands/       #   Individual command modules
-│   ├── registry.ts     #   Command registration system
-│   └── index.ts        #   CLI entry point
-├── config/             # Configuration management (Zod schemas)
-├── cron/               # Scheduled tasks
-├── gateway/            # HTTP/WebSocket gateway server
-├── heartbeat/          # Proactive monitoring
-├── providers/          # LLM provider registry (pi-ai wrapper)
-├── session/            # Conversation session management
-├── types/              # Shared TypeScript types
-└── utils/              # Shared utilities
-    ├── logger.ts       #   Logging barrel → `logger/` (context, log-store, …)
-    └── helpers.ts      #   Misc helpers
-
-web/                    # Gateway console SPA (React + Vite + Tailwind v4)
-└── src/                #   App source; production build → dist/gateway/static/root
-
-extensions/
-└── telegram/           # Workspace package: Telegram channel (@xopcai/xopc-extension-telegram)
-```
+| Area | Role |
+|------|------|
+| **CLI** | Commands such as `agent`, `gateway`, `config`, `onboard`, and extension management. |
+| **Agent** | Runs the model, tools, memory, skills, and session handling for each conversation. |
+| **Gateway** | HTTP server and static **Web console** (chat, settings, logs, channels, cron, …). |
+| **Channels** | Telegram, Weixin, and the in-browser chat share one outbound pipeline. |
+| **Extensions** | Optional add-ons (tools, hooks, channels, console panels) from your workspace, `~/.xopc/extensions/`, or the install bundle. |
+| **Config** | Single JSON file (default `~/.xopc/xopc.json`) plus environment variables for secrets. |
 
 ## State directory & workspace on disk
 
 Runtime data (config, credentials, per-agent sessions, the Markdown **workspace** used as tool cwd and user content, and per-agent **bootstrap** persona Markdown under `agents/<id>/bootstrap/`) lives outside the git repo under the **state directory** (default `~/.xopc`). For a filesystem map (bootstrap, agent home, Markdown workspace), see [On-disk layout](disk-layout.md). For setup, env overrides, and how `agents.defaults.workspace` relates to default paths, see [State directory & workspace layout](workspace.md).
 
-## Core Modules
+## Agent and prompt
 
-### Agent Service (`src/agent/service.ts`)
+**AgentService** is the runtime that:
 
-AgentService is the core orchestrator responsible for:
+1. Accepts user messages from channels or the Web console.
+2. Builds the system prompt from **bootstrap** Markdown under each agent’s directory (`SOUL.md`, `USER.md`, `AGENTS.md`, `TOOLS.md`, …) plus optional memory snippets.
+3. Persists **session** transcripts and runs **compaction** when configured.
+4. Runs **built-in and extension tools** with progress feedback for long steps.
 
-1. **Message Processing** - Receive user messages, call LLM, handle tool calls
-2. **Prompt Building** - Build system prompt from SOUL.md/USER.md/AGENTS.md/TOOLS.md
-3. **Memory** - Session message storage and compaction (`src/session/`); curated agent-home `memories/`, pluggable memory providers, and tools (`src/agent/memory/`)
-4. **Tool Execution** - Unified execution of built-in tools + extension tools
-5. **Progress Feedback** - Real-time updates for long-running tasks
+**Prompt sections** (conceptual): identity, tool style, safety, workspace path, skills, messaging, heartbeats, and runtime hints—see [Workspace](workspace.md) and [Templates](reference/templates.md).
 
-### Prompt Builder (`src/agent/prompt/`)
+## Built-in tools (overview)
 
-Modular prompt building system:
+| Tool | Purpose |
+|------|---------|
+| `read_file` / `write_file` / `edit_file` | Workspace file operations |
+| `list_dir`, `grep`, `find` | Navigate and search the workspace |
+| `shell` | Run shell commands (time-limited) |
+| `web_search`, `web_fetch` | Web search and fetch (when configured) |
+| `send_message` | Send outbound chat on the current channel |
+| `memory_search`, `memory_get` | Search/read `memory/*.md` in the workspace |
+| `curated_memory` | Edit bounded entries in the agent home `memories/` tree when enabled |
+| `session_search` | Search other sessions when the session store is available |
 
-```
-src/agent/prompt/
-├── index.ts         # PromptBuilder - main builder
-├── modes.ts         # Prompt modes (full/minimal/none)
-├── memory/
-│   └── index.ts     # memory_search, memory_get tools
-└── skills.ts        # Skills loading system
-```
+Exact availability depends on [Configuration](configuration.md) and extensions.
 
-**Prompt Sections**:
+## Progress feedback
 
-| Section | Description |
-|---------|-------------|
-| Identity | "You are a personal assistant running in xopc" |
-| Version | xopc version info |
-| Tool Call Style | Tool calling style (verbose/brief/minimal) |
-| Safety | Safety principles |
-| Memory | memory_search/memory_get usage guide |
-| Workspace | Working directory |
-| Skills | Skills system |
-| Messaging | Message sending |
-| Heartbeats | Heartbeat monitoring |
-| Runtime | Runtime info |
+Long-running tool work emits short status lines (reading, searching, shell, …) so clients can show activity before the final reply.
 
-### Built-in Tools (`src/agent/tools/`)
+## Memory and sessions
 
-| Tool | Name | Description |
-|------|------|-------------|
-| 📄 Read | `read_file` | Read file content (truncated to 50KB/500 lines) |
-| ✍️ Write | `write_file` | Create or overwrite file |
-| ✏️ Edit | `edit_file` | Replace text in file |
-| 📂 List | `list_dir` | List directory contents |
-| 💻 Shell | `shell` | Execute shell commands (5min timeout) |
-| 🔍 Search | `grep` | Text search in files |
-| 📄 Find | `find` | Find files by pattern |
-| 🔍 Web Search | `web_search` | Web search via Brave Search |
-| 📄 Web Fetch | `web_fetch` | Fetch web page content |
-| 📤 Message | `send_message` | Send messages to channels |
-| 🔍 Memory Search | `memory_search` | Search `memory/*.md` snippets in the workspace |
-| 📄 Memory Get | `memory_get` | Read memory snippets |
-| 🧠 Curated memory | `curated_memory` | Edit bounded entries in agent-home `memories/` (when enabled) |
-| 🔎 Session search | `session_search` | Search other sessions’ transcripts (when session store is wired) |
+- **Sessions** — per-agent conversation history on disk (not the same folder as Markdown “workspace” project files).
+- **Curated memory** — optional `memories/` store and tools; tuned under `agents.defaults.memory`.
+- **Compaction** — context window management under `agents.defaults.compaction` / pruning.
 
-### Progress Feedback (`src/agent/progress.ts`)
+## Channels and extensions
 
-Real-time progress tracking for long-running tasks:
-
-```typescript
-// Tool execution feedback
-manager.onToolStart('read_file', { path: '/file.txt' });
-// → e.g. 📖 Reading...
-
-// Heartbeat for tasks > 30s
-manager.onHeartbeat(elapsed, stage);
-// → e.g. ⏱️ Running for 45s
-```
-
-**Progress Stages**:
-
-| Stage | Emoji | Trigger |
-|-------|-------|---------|
-| thinking | 🤔 | LLM reasoning |
-| searching | 🔍 | web_search, grep |
-| reading | 📖 | read_file |
-| writing | ✍️ | write_file, edit_file |
-| executing | ⚙️ | shell commands |
-| analyzing | 📊 | Data analysis |
-
-### Session transcripts & compaction (`src/session/`)
-
-Session message persistence, search index helpers for `session_search`, and compaction live under **`src/session/`** (on disk: `agents/<id>/sessions/`, not the Markdown workspace tree).
-
-### Curated & pluggable memory (`src/agent/memory/`)
-
-```
-src/agent/memory/
-├── builtin-memory-store.ts  # agent home memories/MEMORY.md + USER.md (bounded, §-delimited)
-├── manager.ts               # MemoryManager — providers, prefetch, sync, onMemoryWrite
-├── create-memory-manager.ts # Wires builtin + optional stub from config
-├── inject-prefetch.ts       # Prefix user message with <memory-context> when configured
-└── …                        # context-fence, providers, plugin discovery
-```
-
-Configured under **`agents.defaults.memory`** ([Configuration](configuration.md)). When the whole subsystem is disabled, curated tools and external prefetch are off.
-
-**Compaction** (conversation context) is configured under **`agents.defaults.compaction`** / pruning in the same defaults object—not the curated memory files above.
-
-### Channel plugins (`src/channels/`)
-
-Channels are implemented as **`ChannelPlugin`** instances. The core **`ChannelManager`** loads plugins from `bundledChannelPlugins` in `src/channels/plugins/bundled.ts` (Telegram is provided by the workspace package `extensions/telegram`). Each plugin exposes `init` / `start` / outbound delivery and optional adapters (config, security, streaming, gateway, plus **`cronDelivery`**, **`cliLogin`**, **`configSurface`**, **`onboard`**, etc.; contracts in `src/channels/plugins/types.adapters.ts`). The root **`channels`** object in config is an open map at parse time; bundled Telegram/Weixin field schemas live under `extensions/*/src/config-schema.ts` (see [Channel configuration](channels.md)).
-
-**Features** (Telegram):
-- Multi-account support
-- Access control (allowlist, group policies)
-- Streaming message preview
-- Voice messages (STT/TTS)
-- Document/file support
-
-**Imports** (extension or core code):
-
-```typescript
-import { telegramPlugin } from '@xopcai/xopc-extension-telegram';
-// Re-exported for stable paths: import { telegramPlugin } from './channels/telegram/index.js';
-```
-
-### Extension System (`src/extensions/`)
-
-```
-src/extensions/
-├── types.ts       # Extension type definitions
-├── api.ts         # Extension API
-├── loader.ts      # Extension loader
-├── hooks.ts       # Hook system
-└── index.ts       # Exports
-```
-
-**Hook Lifecycle**:
-
-```
-before_agent_start → agent_end → message_received → 
-before_tool_call → after_tool_call → message_sending → session_end
-```
-
-**Three-tier Storage**:
-1. **Workspace** (`workspace/.extensions/`) - Project-private
-2. **Global** (`~/.xopc/extensions/`) - User-level shared
-3. **Bundled** (`xopc/extensions/`) - Built-in
+Channels (Telegram, Weixin, Web chat, and extension-provided types) share the same message bus into the agent. Configure them under `channels.*` in your config file; see [Channel configuration](channels.md). Extensions add tools, hooks, optional channel plugins, and optional Web-console UI—see [Extensions](extensions.md).
 
 ## Data Flow
 
@@ -283,27 +140,6 @@ User (Telegram/Gateway/CLI)
 User Reply / Channel Response
 ```
 
-## CLI Command Registration
-
-xopc uses self-registration pattern:
-
-```typescript
-// src/cli/commands/mycommand.ts
-import { register } from '../registry.js';
-
-function createMyCommand(ctx: CLIContext): Command {
-  return new Command('mycommand')
-    .description('My command')
-    .action(async () => { ... });
-}
-
-register({
-  id: 'mycommand',
-  factory: createMyCommand,
-  metadata: { category: 'utility' },
-});
-```
-
 ## Tech Stack
 
 | Layer | Technology |
@@ -317,29 +153,9 @@ register({
 | Logging | Pino |
 | Cron | node-cron |
 | HTTP Server | Hono |
-| Web UI | React + Vite + Tailwind v4 (gateway console in `web/`) |
+| Web UI | React + Vite + Tailwind v4 (gateway console) |
 | Testing | Vitest |
 
-## Extension Points
+## Changing xopc itself
 
-### Adding New Tools
-
-1. Create `src/agent/tools/<name>.ts`
-2. Implement `AgentTool` interface with Typebox schema
-3. Export from `src/agent/tools/index.ts`
-4. Add to tools array in `AgentService`
-
-### Adding Hooks
-
-```typescript
-api.registerHook('before_tool_call', async (event, ctx) => {
-  // Intercept tool calls
-  return { modified: true };
-});
-```
-
-### Adding channel plugins
-
-1. Implement `ChannelPlugin` in a package or under `extensions/<name>/` (see `src/channels/plugin-types.ts` and `defineChannelPluginEntry` in `@xopcai/xopc/extension-sdk`).
-2. Export the plugin object and add it to `bundledChannelPlugins` in `src/channels/plugins/bundled.ts` if it should ship with the core binary.
-3. Ensure `ChannelManager` startup loads your plugin (bundled plugins are registered automatically when listed in `bundled.ts`).
+To add core tools, channels, or CLI commands, work in the xopc source tree and follow the contributor guide **`AGENTS.md`** in the repository. Extensions are the supported way to customize behaviour without forking—see [Extensions](extensions.md).

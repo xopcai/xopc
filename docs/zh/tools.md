@@ -1,6 +1,6 @@
 # 内置工具参考
 
-xopc 通过 `AgentToolsFactory`（`src/agent/tools/factory.ts`）组装内置工具。部分工具始终注册；部分依赖 **配置**、**会话**（例如存在 `SessionStore` 时的 `session_search`）或 **网关**（例如接入用户交互的 `clarify`、提供 `CronService` 的 `cronjob`）。
+内置工具按当前环境注册：部分始终可用；部分依赖 **配置**、**会话存储**（例如 `session_search`）或正在运行的 **网关**（例如交互式 `clarify`、已接入计划任务的 `cronjob`）。
 
 ## 工具列表
 
