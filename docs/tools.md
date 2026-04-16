@@ -1,92 +1,60 @@
-# Built-in Tools Reference
+# Built-in tools
 
-xopc provides a comprehensive set of built-in tools for the Agent to use.
-
-## Tools Overview
-
-Built-in tools are registered according to your setup: some are always available; others require **config**, a **session store** (for example `session_search`), or a running **gateway** (for example `clarify` for interactive prompts, `cronjob` when scheduling is wired).
-
-| Category | Tools |
-|----------|-------|
-| **Planning & UX** | `clarify`, `todo` |
-| **Skills (runtime)** | `skills_list`, `skill_view`, `skill_manage` |
-| **Filesystem** | `read_file`, `write_file`, `edit_file`, `list_dir` |
-| **Search** | `grep`, `find` |
-| **Shell** | `shell` |
-| **Web** | `web_search`, `web_fetch`, `web_extract` |
-| **Communication** | `send_message`, `send_media` |
-| **Memory** | `memory_search`, `memory_get`, `curated_memory` (optional), `session_search` (optional) |
-| **Vision / images** | `image` (optional), `image_generate` (optional) |
-| **Browser** | `browser_navigate`, `browser_snapshot`, `browser_click`, `browser_type`, `browser_scroll`, `browser_screenshot` (optional) |
-| **Delegation & code** | `delegate_task` (optional), `execute_code` (optional) |
-| **Scheduling** | `cronjob` (optional) |
-
-Extension packages may append more tools when an extension registry is present.
-
-### Recent capability additions (tools + skill runtime)
-
-1. **`skills_list`**, **`skill_view`**, **`skill_manage`** — discover skills, read `SKILL.md` or files under `references/`, `templates/`, `scripts/`, `assets/`, and create/edit/patch/delete user skills subject to `skills.agentWritePolicy` (see [Skills](skills.md)).
-2. **Skill env passthrough** — after **`skill_view`**, declared variable **names** from SKILL.md (`required_environment_variables`, `prerequisites.env_vars`, `requires.env`, `metadata.xopc.requires.env`) are registered for the session; the **`shell`** tool may expose matching variables from the process (values are never shown to the model).
-3. **`web_extract`** — fetches a page and runs an LLM pass for markdown-oriented extraction (`agents.defaults.webExtract.model` or `XOPC_WEB_EXTRACT_MODEL`).
-4. **`send_media`** — sends a local file as photo/video/audio/document to the current channel context.
-5. **`clarify`** — asks the user a question (optional multiple choice) and waits for an answer on **web**, **Telegram**, or **CLI** when wired; otherwise returns a message and uses `default` if provided.
-6. **`todo`** — per-session todo list with merge or full replace.
-7. **`image`** / **`image_generate`** — vision analysis and image generation when `agents.defaults.imageModel` / `imageGenerationModel` (and keys) resolve.
-8. **Browser tools** — Playwright-backed automation when `agents.defaults.browser.enabled` is true (install browsers once: `npx playwright install chromium`).
-9. **`delegate_task`** — spawns a sub-agent with a restricted toolset and returns a text summary only (`agents.defaults.delegate.enabled`).
-10. **`execute_code`** — sandboxed JavaScript that calls a subset of tools programmatically (`agents.defaults.executeCode.enabled`); `node:vm` is not a strong security boundary — use only with trusted models.
-11. **`cronjob`** — manage scheduled agent turns via gateway `CronService`; includes basic prompt threat scanning.
-12. **`session_search`** — search other sessions’ transcripts when persistence is enabled; optional per-session summaries.
-13. **`curated_memory`** — live read/write to agent-home `memories/` while the system prompt keeps a frozen snapshot from session start.
-14. **Skill tool gating** — skills can be omitted from `<available_skills>` unless required tools exist (`skills.toolGating` and skill metadata).
-15. **`disable-model-invocation`** in SKILL.md — skill stays on disk but is hidden from model-facing lists.
-16. **Skills Hub CLI** — `xopc skills hub pull|update|lock` for git/archive installs under `~/.xopc/skills` with `skills-lock.json` (see [Skills](skills.md)).
-17. **Web search** — configurable provider list in `tools.web.search.providers` plus regional HTML fallback.
-18. **Skill file limits** — `skills.limits.maxSkillFileBytes` caps reads in `skill_view`.
-19. **Memory plugins** — `MemoryManager.getAdditionalTools()` can register extra memory-related tools.
-20. **DashScope / multi-provider image paths** — image tooling follows the same provider resolution stack as other agent models.
+This page lists tools the xopc agent can call: read and edit files, run commands, search the web, talk to channels, manage skills, and more. Which tools are registered depends on your **config**, optional **features** (memory, browser, TTS), whether a **gateway** is running (e.g. `clarify`, `cronjob`), and **extensions** (extra tools from installed extensions).
 
 ---
 
+## Availability at a glance
 
-## Filesystem Tools
+| Area | Tools |
+|------|-------|
+| Planning & clarification | `clarify`, `todo` |
+| Skills | `skills_list`, `skill_view`, `skill_manage` |
+| Workspace files | `read_file`, `write_file`, `edit_file`, `list_dir` |
+| Search in repo | `grep`, `find` |
+| Shell | `shell` |
+| Web | `web_search`, `web_fetch`, `web_extract` |
+| Messaging & media | `send_message`, `send_media` |
+| Voice (optional) | `text_to_speech` — when TTS is enabled in config |
+| Memory (optional) | `memory_search`, `memory_get`; `curated_memory`, `session_search` when configured |
+| Images (optional) | `image`, `image_generate` when models and keys are set |
+| Browser (optional) | `browser_*` when browser automation is enabled |
+| Delegation & code (optional) | `delegate_task`, `execute_code` |
+| Scheduling (optional) | `cronjob` — when the runtime exposes cron (typical gateway setup) |
 
-### 📄 read_file
+Extensions may add further tools.
 
-Read file content. Output automatically truncated to first 500 lines or 50KB.
+**Conditionally enabled:** Some capabilities need explicit settings: e.g. `session_search` needs session persistence; `web_extract` uses `agents.defaults.webExtract.model` or `XOPC_WEB_EXTRACT_MODEL`; skills write policy is `skills.agentWritePolicy`; skill discovery can be gated with `skills.toolGating` and metadata. For skills CLI (`xopc skills hub …`), see [Skills](skills.md).
 
-**Parameters:**
+---
+
+## Filesystem
+
+### `read_file`
+
+Reads a file. Output is capped (default up to 500 lines / 50KB).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `path` | string | ✅ | File path |
-| `limit` | number | ❌ | Maximum lines (default: 500) |
+| `path` | string | yes | File path |
+| `limit` | number | no | Max lines (default: 500) |
 
-**Example:**
 ```json
 {
   "name": "read_file",
-  "arguments": {
-    "path": "src/index.ts",
-    "limit": 100
-  }
+  "arguments": { "path": "src/index.ts", "limit": 100 }
 }
 ```
 
----
+### `write_file`
 
-### ✍️ write_file
-
-Create or overwrite a file.
-
-**Parameters:**
+Creates or overwrites a file.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `path` | string | ✅ | File path |
-| `content` | string | ✅ | File content |
+| `path` | string | yes | File path |
+| `content` | string | yes | Full file content |
 
-**Example:**
 ```json
 {
   "name": "write_file",
@@ -97,21 +65,16 @@ Create or overwrite a file.
 }
 ```
 
----
+### `edit_file`
 
-### ✏️ edit_file
-
-Replace specified text in a file.
-
-**Parameters:**
+Replaces an exact substring. `oldText` must match the file exactly (including whitespace).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `path` | string | ✅ | File path |
-| `oldText` | string | ✅ | Text to replace (must match exactly) |
-| `newText` | string | ✅ | Replacement text |
+| `path` | string | yes | File path |
+| `oldText` | string | yes | Text to replace |
+| `newText` | string | yes | Replacement |
 
-**Example:**
 ```json
 {
   "name": "edit_file",
@@ -123,51 +86,39 @@ Replace specified text in a file.
 }
 ```
 
-> **Note:** `oldText` must match exactly, including whitespace.
+### `list_dir`
 
----
-
-### 📂 list_dir
-
-List directory contents.
-
-**Parameters:**
+Lists entries in a directory (default: workspace root).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `path` | string | ❌ | Directory path (default: workspace root) |
+| `path` | string | no | Directory path |
 
-**Example:**
 ```json
 {
   "name": "list_dir",
-  "arguments": {
-    "path": "src/components"
-  }
+  "arguments": { "path": "src/components" }
 }
 ```
 
 ---
 
-## Search Tools
+## Search (`grep`, `find`)
 
-### 🔍 grep
+### `grep`
 
-Search text in files using ripgrep.
-
-**Parameters:**
+Text search using ripgrep.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `pattern` | string | ✅ | Search pattern (supports regex) |
-| `glob` | string | ❌ | File matching pattern (e.g., `*.ts`) |
-| `path` | string | ❌ | Search directory |
-| `ignoreCase` | boolean | ❌ | Ignore case |
-| `literal` | boolean | ❌ | Plain text matching |
-| `context` | number | ❌ | Number of context lines |
-| `limit` | number | ❌ | Maximum results (default: 100) |
+| `pattern` | string | yes | Pattern (regex unless `literal`) |
+| `glob` | string | no | e.g. `*.ts` |
+| `path` | string | no | Root directory |
+| `ignoreCase` | boolean | no | Case-insensitive |
+| `literal` | boolean | no | Plain text |
+| `context` | number | no | Context lines |
+| `limit` | number | no | Max hits (default: 100) |
 
-**Example:**
 ```json
 {
   "name": "grep",
@@ -181,80 +132,58 @@ Search text in files using ripgrep.
 }
 ```
 
----
+### `find`
 
-### 📄 find
-
-Find files by pattern.
-
-**Parameters:**
+Finds files by name pattern.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `pattern` | string | ✅ | Filename matching pattern |
-| `path` | string | ❌ | Search directory |
-| `limit` | number | ❌ | Maximum results |
+| `pattern` | string | yes | Glob-style filename pattern |
+| `path` | string | no | Search root |
+| `limit` | number | no | Max results |
 
-**Example:**
 ```json
 {
   "name": "find",
-  "arguments": {
-    "pattern": "*.test.ts",
-    "path": "src",
-    "limit": 20
-  }
+  "arguments": { "pattern": "*.test.ts", "path": "src", "limit": 20 }
 }
 ```
 
 ---
 
-## Shell Tool
+## `shell`
 
-### 💻 shell
-
-Execute shell command. Output automatically truncated to last 50KB.
-
-**Parameters:**
+Runs a shell command under workspace constraints. Stdout/stderr are truncated (e.g. last 50KB).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `command` | string | ✅ | Shell command to execute |
-| `timeout` | number | ❌ | Timeout in seconds (default: 300) |
-| `cwd` | string | ❌ | Working directory |
+| `command` | string | yes | Command line |
+| `timeout` | number | no | Seconds (default: 300) |
+| `cwd` | string | no | Working directory |
 
-**Limits:**
-- Timeout: 5 minutes (300 seconds)
-- Output truncation: 50KB
-- Restricted to workspace directory
+Default timeout 5 minutes; execution is restricted to the workspace.
 
-**Example:**
 ```json
 {
   "name": "shell",
-  "arguments": {
-    "command": "git log --oneline -10",
-    "timeout": 60
-  }
+  "arguments": { "command": "git log --oneline -10", "timeout": 60 }
 }
 ```
 
+After **`skill_view`**, environment variable **names** declared in the skill can be registered for the session; **`shell`** may expose matching variables from the process (values are not shown to the model).
+
 ---
 
-## Web Tools
+## Web
 
-### 🔍 web_search
+### `web_search`
 
-Search the web using configured providers (`tools.web.search.providers`), then region-based HTML fallback if none succeed.
-
-**Parameters:**
+Uses configured providers (`tools.web.search.providers`), then falls back to region-based HTML search if needed.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `query` | string | ✅ | Search query |
-| `count` | number | ❌ | Maximum results (default: `tools.web.search.maxResults`) |
-
-**Configuration:**
+| `query` | string | yes | Search query |
+| `count` | number | no | Max results (default from `tools.web.search.maxResults`) |
 
 ```json
 {
@@ -270,351 +199,211 @@ Search the web using configured providers (`tools.web.search.providers`), then r
 }
 ```
 
-**Example:**
-```json
-{
-  "name": "web_search",
-  "arguments": {
-    "query": "TypeScript best practices 2026",
-    "count": 10
-  }
-}
-```
+### `web_fetch`
 
----
-
-### 📄 web_fetch
-
-Fetch web page content.
-
-**Parameters:**
+Fetches a URL and returns page content for the agent (HTTP client; timeouts apply).
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `url` | string | ✅ | URL to fetch |
-| `timeout` | number | ❌ | Timeout in seconds (default: 30) |
+| `url` | string | yes | URL |
+| `timeout` | number | no | Seconds (default: 30) |
 
-**Example:**
-```json
-{
-  "name": "web_fetch",
-  "arguments": {
-    "url": "https://example.com/article",
-    "timeout": 60
-  }
-}
-```
+### `web_extract`
+
+Fetches HTML or JSON, reduces boilerplate, then runs a configured extraction model to return markdown-oriented output. Optional `instruction` and `maxLength` (default from config or about 15000 characters).
+
+**Config:** `agents.defaults.webExtract.model` or `XOPC_WEB_EXTRACT_MODEL`.
 
 ---
 
-## Communication Tools
+## Messaging
 
-### 📤 send_message
+### `send_message`
 
-Send message to configured channel.
-
-**Parameters:**
+Sends a message on a configured channel.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `channel` | string | ✅ | Channel name (e.g., `telegram`) |
-| `chat_id` | string | ✅ | Chat ID |
-| `content` | string | ✅ | Message content |
-| `accountId` | string | ❌ | Account ID (for multi-account) |
+| `channel` | string | yes | e.g. `telegram` |
+| `chat_id` | string | yes | Target chat |
+| `content` | string | yes | Message body |
+| `accountId` | string | no | Multi-account id |
 
-**Example:**
-```json
-{
-  "name": "send_message",
-  "arguments": {
-    "channel": "telegram",
-    "chat_id": "123456789",
-    "content": "Hello from agent!",
-    "accountId": "personal"
-  }
-}
-```
+### `send_media`
+
+Sends a **local** file to the current conversation context: `filePath`, optional `mediaType` (`photo` | `video` | `audio` | `document`), optional `caption`. Type may be inferred from the extension.
+
+### `text_to_speech` (optional)
+
+Present when TTS is enabled. Sends synthesized voice suitable for read-aloud; prefer normal text replies unless voice is appropriate. See [tts](configuration.md#tts) in the configuration reference and [Voice (STT/TTS)](voice.md) for channel behavior.
 
 ---
 
-## Memory Tools
+## Memory
 
-### 🔍 memory_search
+### `memory_search`
 
-Search memory files. Must be called before answering questions about previous work, decisions, etc.
-
-**Parameters:**
+Searches content under workspace `memory/`. Use it when answers should use stored notes or prior decisions in those files.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `query` | string | ✅ | Search query |
-| `limit` | number | ❌ | Maximum results (default: 10) |
+| `query` | string | yes | Search query |
+| `limit` | number | no | Max results (default: 10) |
 
-**Example:**
-```json
-{
-  "name": "memory_search",
-  "arguments": {
-    "query": "API design decisions",
-    "limit": 5
-  }
-}
-```
+### `memory_get`
 
----
-
-### 📄 memory_get
-
-Read snippets from memory files.
-
-**Parameters:**
+Loads a labeled snippet from a memory file.
 
 | Parameter | Type | Required | Description |
 |-----------|------|----------|-------------|
-| `file` | string | ✅ | Memory file name |
-| `snippet` | string | ✅ | Snippet identifier |
+| `file` | string | yes | Memory file name |
+| `snippet` | string | yes | Snippet id |
 
-**Example:**
-```json
-{
-  "name": "memory_get",
-  "arguments": {
-    "file": "project-notes.md",
-    "snippet": "api-design"
-  }
-}
-```
+### `curated_memory`
 
----
+Read/write curated files under **`agents/<agentId>/memories/`** (`MEMORY.md`, `USER.md`, section boundaries per format). The system prompt holds a **snapshot from session start**; this tool reads and writes **live** disk state. Disabled when `agents.defaults.memory.enabled` is false or `useEnhancedSystem` is false. If `userProfileEnabled` is false, profile writes are rejected (reads may still work).
 
-### 🧠 curated_memory
+See [Configuration](configuration.md) and [Curated memory](workspace.md#curated-memory).
 
-Read or edit **bounded** curated memory under **`agents/<agentId>/memories/`** (`MEMORY.md` and `USER.md`), with entries separated by a section-sign delimiter. The system prompt includes a **frozen snapshot** from session start; this tool reads and writes **live** state on disk. Disabled when `agents.defaults.memory.enabled` is `false` or `useEnhancedSystem` is `false`. If `userProfileEnabled` is `false`, mutations targeting the user profile are rejected (reads still work).
+### `session_search`
 
-See [Configuration](configuration.md) (**agents.defaults.memory**) and [Curated memory](workspace.md#curated-memory).
+Searches other sessions’ transcripts (keyword or semantic-style query; optional per-session summaries). Requires persistence and wiring; summary model: `agents.defaults.sessionSearch.summaryModel` or `XOPC_SESSION_SEARCH_MODEL`.
 
----
-
-### 🔎 session_search
-
-Search **other sessions’** transcripts (keyword or semantic-style query with optional LLM summaries per session). Requires session persistence and agent wiring; model for summaries: `agents.defaults.sessionSearch.summaryModel` or `XOPC_SESSION_SEARCH_MODEL`.
-
-See [Configuration](configuration.md) (**agents.defaults.sessionSearch**).
+See [Configuration](configuration.md) for `agents.defaults.sessionSearch`.
 
 ---
 
 ## Planning & clarification
 
-### ❓ clarify
+### `clarify`
 
-Ask the user a clarifying question and wait for a reply. Optional `choices` (2–10) for multiple choice; optional `default` when the user does not answer or clarification is unavailable.
+Asks the user a question and waits for a reply. Optional `choices` (2–10) for multiple choice; optional `default` if the user does not answer or the UI cannot prompt.
 
-**Transports:** interactive flow when the session is **webchat**, **Telegram**, or **CLI** with clarification wired; otherwise the tool returns guidance and uses `default` if set.
+Works interactively on **web** chat, **Telegram**, or **CLI** when wired; otherwise returns guidance and may use `default`.
 
----
+### `todo`
 
-### ✅ todo
-
-Per-session task list. Pass `todos` (items with `id`, `content`, `status`: `pending` \| `in_progress` \| `completed` \| `cancelled`). Use `merge: true` to upsert by `id`; omit or set `merge: false` to replace the whole list. Omit `todos` to read the current list.
+Per-session task list: items with `id`, `content`, `status` (`pending` | `in_progress` | `completed` | `cancelled`). `merge: true` upserts by `id`; `merge: false` or omit replaces the list. Omit `todos` to read the current list.
 
 ---
 
-## Skills tools
+## Skills
 
-### 📚 skills_list
+### `skills_list`
 
-Lists enabled skills (name, description, source) for the current session, respecting skill allowlists and tool gating. Optional `query` filters by substring on name/description.
+Lists skills available for the session (name, description, source), respecting allowlists and tool gating. Optional `query` filters by substring on name/description.
 
----
+### `skill_view`
 
-### 📖 skill_view
+Loads `SKILL.md` or a path under `references/`, `templates/`, `scripts/`, or `assets/`. Parameters: `name`, optional `path`, optional `limit` (lines, default 500). Registers declared env var **names** for passthrough into `shell`. Respects `skills.limits.maxSkillFileBytes` and disabled/gated skills.
 
-Loads `SKILL.md` or a file under `references/`, `templates/`, `scripts/`, or `assets/`. Parameters: `name`, optional `path`, optional `limit` (lines, default 500). Registers declared env var **names** for passthrough (see overview). Respects `skills.limits.maxSkillFileBytes` and disabled / gated skills.
+When `skills.promptStyle` is `metadata-only` (default), use `skills_list` / `skill_view` instead of opening skill paths manually.
 
----
+### `skill_manage`
 
-### 🛠️ skill_manage
+Creates, edits, patches, deletes skills, or `write_file` / `remove_file` under allowed directories. Actions include `create`, `edit`, `patch`, `delete`, `write_file`, `remove_file`. Controlled by `skills.agentWritePolicy` (`global` | `workspace` | `both`). Bundled skills are not mutable. Writes are scanned.
 
-Create, edit, patch, delete skills, or `write_file` / `remove_file` under allowed subdirs. Actions: `create`, `edit`, `patch`, `delete`, `write_file`, `remove_file`. Uses `skills.agentWritePolicy` (`global` \| `workspace` \| `both`). Bundled skills are not mutable. Writes run through security scanning.
-
----
-
-## Web extraction
-
-### 🧾 web_extract
-
-Fetches `url` (HTML or JSON), strips boilerplate, and runs an LLM extraction pass. Optional `instruction` (what to focus on) and `maxLength` (default from config or 15000 characters).
-
-**Configuration:** `agents.defaults.webExtract.model` or `XOPC_WEB_EXTRACT_MODEL`.
-
----
-
-## Communication (media)
-
-### 📎 send_media
-
-Sends a local file to the current conversation. Parameters: `filePath`, optional `mediaType` (`photo` \| `video` \| `audio` \| `document`), optional `caption`. Type may be inferred from the extension.
+Skills can include `disable-model-invocation` so the skill stays on disk but is omitted from model-facing lists. Hub installs: `xopc skills hub pull|update|lock` — see [Skills](skills.md).
 
 ---
 
 ## Vision & image generation
 
-Inbound photos (channels / webchat) are handled in two ways: if the **session model** supports vision (pi-ai metadata or a conservative id heuristic), images are sent **natively** in the user message; otherwise a **vision model** (from `imageModel`, with fallbacks) describes them as text before the main model runs. See [Image & vision](image-multimodal.md).
+Inbound images: if the **session model** supports vision, images are passed in the user message; otherwise a **vision** model (`imageModel`, with fallbacks) may describe them as text first. See [Image & vision](image-multimodal.md).
 
-### 🖼️ image
+### `image`
 
-Analyzes one or more images (paths or URLs) with the resolved vision model. Optional `prompt`. Prefer **not** calling it when the user message already includes images **and** the session model is multimodal.
+Analyzes images (paths or URLs) with the resolved vision model. Optional `prompt`. Often unnecessary when the user already attached images and the session model is multimodal.
 
-**Configuration:** `agents.defaults.imageModel` (string or `{ primary, fallbacks }`), `agents.defaults.mediaMaxMb`.
+**Config:** `agents.defaults.imageModel` (string or `{ primary, fallbacks }`), `agents.defaults.mediaMaxMb`.
 
----
+### `image_generate`
 
-### 🎨 image_generate
+Generates an image and saves under `workspace/media/generated/` on success. `action: "list"` lists available generation providers/models.
 
-Generates an image via the configured generation model and saves under `workspace/media/generated/` when successful. Use `action: "list"` to print registered generation providers and model ids.
+**Config:** `agents.defaults.imageGenerationModel` (string or `{ primary, fallbacks }`).
 
-**Configuration:** `agents.defaults.imageGenerationModel` (string or `{ primary, fallbacks }`).
-
-Programmatic generation supports optional **reference images** (`inputImages`) for OpenAI **edits**; the `image_generate` tool does not expose that parameter yet.
+Programmatic generation may support reference images for some providers; the `image_generate` tool surface may not expose every option.
 
 ---
 
-## Browser tools (optional)
+## Browser (optional)
 
-Registered when `agents.defaults.browser.enabled` is `true`.
+Registered when `agents.defaults.browser.enabled` is true. Install browsers once if required, e.g. `npx playwright install chromium`.
 
-| Tool | Role |
-|------|------|
-| `browser_navigate` | Open an http(s) URL (localhost/private IPs blocked). |
-| `browser_snapshot` | ARIA snapshot for the page or a selector. |
-| `browser_click` | Click via `selector`, `text`, or `role`. |
-| `browser_type` | Type into a field via `selector` or `label`. |
-| `browser_scroll` | Scroll the page or element. |
-| `browser_screenshot` | Capture viewport or element (size-capped). |
+| Tool | Purpose |
+|------|---------|
+| `browser_navigate` | Open http(s) URL (localhost/private ranges blocked) |
+| `browser_snapshot` | Accessibility-oriented snapshot (page or selector) |
+| `browser_click` | Click by `selector`, `text`, or `role` |
+| `browser_type` | Type into a field |
+| `browser_scroll` | Scroll page or element |
+| `browser_screenshot` | Viewport or element (size-limited) |
 
 Uses a per-session tab; `agents.defaults.browser.headless` defaults to true when enabled.
 
 ---
 
-## Delegation & sandboxed code
+## Delegation & sandboxed code (optional)
 
-### 🤖 delegate_task
+### `delegate_task`
 
-Runs a **sub-agent** with a fresh context (no parent transcript) and returns a **summary** only. Parameters: `goal`, optional `context`, optional `toolset` (subset of safe tools), optional `maxIterations` (default 30). Sub-agents cannot use `delegate_task`, `clarify`, messaging, memory tools, `todo`, `cronjob`, or skill management tools.
+Runs a **sub-agent** with a fresh context (no parent transcript) and returns a **text summary** only. Parameters include `goal`, optional `context`, optional `toolset` (subset of allowed tools), optional `maxIterations` (default 30). Sub-agents cannot use nested `delegate_task`, `clarify`, outbound messaging, memory tools, `todo`, `cronjob`, or skill management.
 
-**Configuration:** `agents.defaults.delegate.enabled`.
+**Config:** `agents.defaults.delegate.enabled`.
 
----
+### `execute_code`
 
-### 💾 execute_code
+Runs JavaScript in a VM with `tools.*` wrappers for an allowlisted set (`web_search`, `web_fetch`, `read_file`, `write_file`, `grep`, `find`, `shell`, `skills_list`, `skill_view`) plus `console.log`. Wall clock, tool-call count, and stdout/stderr sizes are capped.
 
-Runs JavaScript in a VM with async `tools.*` wrappers for a fixed allowlist (`web_search`, `web_fetch`, `read_file`, `write_file`, `grep`, `find`, `shell`, `skills_list`, `skill_view`) plus `console.log`. Hard limits on wall time (default 30 minutes, max 4 hours), tool calls (50), and stdout/stderr size.
-
-**Configuration:** `agents.defaults.executeCode.enabled`. Disable via `disabledTools` including `execute_code` if needed.
+**Config:** `agents.defaults.executeCode.enabled`. Not a strong security boundary (`node:vm`); enable only with trusted models and environments; you can disable via `disabledTools` including `execute_code`.
 
 ---
 
 ## Scheduling (gateway)
 
-### ⏰ cronjob
+### `cronjob`
 
-Manage cron jobs that trigger agent turns: `list`, `create`, `update`, `remove`, `enable`, `disable`, `history`. Create/update require schedule and message; optional `timezone`, `sessionTarget` (`main` \| `isolated`), `name`, `jobId` where applicable.
+Lists and manages scheduled agent runs: `list`, `create`, `update`, `remove`, `enable`, `disable`, `history`. Create/update need schedule and message; optional `timezone`, `sessionTarget` (`main` | `isolated`), `name`, `jobId` as applicable.
 
-Only registered when the runtime provides `CronService` (typical gateway deployment).
+Only registered when the runtime provides `CronService` (normal for gateway deployments). Includes basic prompt checks on create/update.
 
 ---
 
-## Security Limits
+## Limits (typical)
 
 | Operation | Limit |
 |-----------|-------|
-| File path | Restricted to workspace directory |
-| Shell command | 5 minute timeout |
-| File read | 500 lines or 50KB |
-| Shell output | 50KB |
-| File size | Maximum 10MB |
+| File paths | Workspace-scoped |
+| Shell | 5 min timeout; output truncated (~50KB) |
+| File read | Lines/bytes capped (e.g. 500 lines / 50KB) |
+| File size | Large reads rejected (e.g. max ~10MB) |
+
+Exact numbers can vary slightly by version; treat this table as order-of-magnitude.
 
 ---
 
-## Tool Execution Flow
+## Progress feedback
 
-```
-User Message
-    ↓
-Agent processes
-    ↓
-┌─────────────────────────┐
-│  Tool Call Decision     │
-└───────────┬─────────────┘
-            │
-            ▼
-┌─────────────────────────┐
-│  Progress Feedback      │
-│  → e.g. 🔍 Searching…   │
-└───────────┬─────────────┘
-            │
-            ▼
-┌─────────────────────────┐
-│  Execute Tool           │
-│  → Apply security limits│
-└───────────┬─────────────┘
-            │
-            ▼
-┌─────────────────────────┐
-│  Return Result          │
-│  → Clear progress       │
-└─────────────────────────┘
-```
+Long-running tools emit progress stages so UIs and channels (e.g. Telegram) can show status. Example mapping:
 
----
-
-## Progress Feedback
-
-Tools automatically trigger progress feedback:
-
-| Tool | Progress Stage | Emoji |
-|------|---------------|-------|
+| Tool | Stage label (concept) | Icon (UI) |
+|------|------------------------|-----------|
 | `read_file` | reading | 📖 |
-| `write_file` | writing | ✍️ |
-| `edit_file` | writing | ✍️ |
-| `grep` | searching | 🔍 |
-| `web_search` | searching | 🔍 |
-| `web_extract` | searching | 🔍 |
-| `shell` | executing | ⚙️ |
-| `find` | searching | 🔍 |
-| `web_fetch` | searching | 🔍 |
-| `image` / `image_generate` | searching | 🔍 |
-| `browser_navigate` | executing | ⚙️ |
-| `delegate_task` | executing | ⚙️ |
-| `execute_code` | executing | ⚙️ |
-| `cronjob` | executing | ⚙️ |
+| `write_file` / `edit_file` | writing | ✍️ |
+| `grep` / `find` / `web_*` | searching | 🔍 |
+| `shell` / browser / `delegate_task` / `execute_code` / `cronjob` | executing | ⚙️ |
 
-Configure feedback verbosity in `config.json`:
-
-```json
-{
-  "progress": {
-    "level": "normal",
-    "showThinking": true,
-    "streamToolProgress": true,
-    "heartbeatEnabled": true
-  }
-}
-```
-
-See [Progress Documentation](/progress) for details.
+Configure verbosity under `progress` in config (e.g. `level`, `streamToolProgress`, `heartbeatEnabled`). Details: [Progress feedback](progress.md).
 
 ---
 
-## Best Practices
+## Notes for operators
 
-1. **Use memory tools when relevant**: Call `memory_search` / `memory_get` for workspace `memory/` files; use `session_search` for cross-session history when available; use `curated_memory` only when enhanced curated memory is enabled
-2. **Skills discovery**: Prefer `skills_list` and `skill_view` over reading skill paths directly when `skills.promptStyle` is `metadata-only` (default)
-3. **Respect limits**: Be aware of truncation limits for large files/outputs
-4. **Error handling**: Tools return errors gracefully - agent should handle them
-5. **Progress feedback**: Long-running tools automatically show progress
-6. **Privileged tools**: Enable `execute_code`, `delegate_task`, and browser tools only when needed; `execute_code` is not a strong sandbox
+- **Privileged tools:** Treat `execute_code`, `delegate_task`, and browser tools as elevated capability; enable only where appropriate.
+- **Skills:** Writes follow `skills.agentWritePolicy`; `skill_view` respects `skills.limits.maxSkillFileBytes`.
+- **Memory plugins:** Implementations may register extra tools via `MemoryManager.getAdditionalTools()`.
 
 ---
 
-_Last updated: 2026-04-11_
+_Last updated: 2026-04-17_
