@@ -97,8 +97,10 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build project (node + web)
-        run: pnpm run build
+      - name: Build node (no DTS — Electron does not need type declarations)
+        run: pnpm run generate:bundled-channels && XOPC_SKIP_DTS=1 pnpm run build:node
+        env:
+          XOPC_SKIP_DTS: '1'
 
       - name: Build Electron app
         shell: bash
