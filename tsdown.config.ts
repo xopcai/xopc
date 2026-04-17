@@ -1,6 +1,11 @@
+/// <reference types="node" />
 import { defineConfig } from 'tsdown';
 
 const env = { NODE_ENV: 'production' } as const;
+
+// Skip .d.ts generation in CI environments that don't need type declarations (e.g. Electron builds).
+// Set XOPC_SKIP_DTS=1 to disable — saves significant time on low-core runners (2-core GitHub Actions).
+const shouldEmitDts = process.env.XOPC_SKIP_DTS !== '1';
 
 export default defineConfig({
   entry: [
@@ -20,7 +25,7 @@ export default defineConfig({
   fixedExtension: false,
   sourcemap: true,
   clean: true,
-  dts: true,
+  dts: shouldEmitDts,
   tsconfig: './tsconfig.json',
   env,
   minify: 'dce-only',
