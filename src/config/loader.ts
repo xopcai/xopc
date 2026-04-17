@@ -1,12 +1,29 @@
 import { readFileSync, existsSync, mkdirSync, promises as fsPromises } from 'fs';
 import { dirname } from 'path';
 import { type Config, ConfigSchema } from './schema.js';
-import { assertChannelPluginConfigs } from './validate-channel-configs.js';
 import { resolveConfigPath } from './paths.js';
 import { config } from 'dotenv';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('ConfigLoader');
+
+/**
+ * Optional channel config validator injected at startup to avoid a circular
+ * dependency: loader → validate-channel-configs → bundled-channel-plugins →
+ * telegram/command-handler → providers → sync-provider-auth → loader.
+ *
+ * Call {@link registerChannelConfigValidator} once during app bootstrap
+ * (after all channel plugins are loaded) to enable validation.
+ */
+let channelConfigValidator: ((cfg: Config) => void) | null = null;
+
+export function registerChannelConfigValidator(fn: (cfg: Config) => void): void {
+  channelConfigValidator = fn;
+}
+
+function assertChannelPluginConfigs(cfg: Config): void {
+  channelConfigValidator?.(cfg);
+}
 
 /** Number of backup files to keep */
 const CONFIG_BACKUP_COUNT = 10;
