@@ -239,6 +239,7 @@
     "currentModel": "Model used for this conversation",
     "modelSearchPlaceholder": "Search by name, provider, or ID…",
     "modelNoMatches": "No models match your search",
+    "modelProviderSettingsLink": "Configure providers…",
     "dropFiles": "Drop files here to attach",
     "voiceRecording": "Record voice",
     "voiceRecordingStop": "Stop recording",
