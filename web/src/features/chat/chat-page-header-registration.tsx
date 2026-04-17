@@ -130,6 +130,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
                 showProviderInTrigger={false}
                 contentSide="bottom"
                 contentAlign="end"
+                showProviderSettingsFooter
                 onChange={onModelChange}
               />
             </div>
@@ -166,6 +167,7 @@ export const ChatPageHeaderRegistration = memo(function ChatPageHeaderRegistrati
     m.chat.modelPlaceholder,
     m.chat.modelSearchPlaceholder,
     m.chat.modelNoMatches,
+    m.chat.modelProviderSettingsLink,
     m.chat.agentPlaceholder,
     m.chat.agentSearchPlaceholder,
     m.chat.agentNoMatches,
