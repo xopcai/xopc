@@ -137,7 +137,7 @@
     "setupBannerBody": "Add at least one model provider API key and choose a default model. You can change this anytime in Settings.",
     "setupBannerLinkProviders": "Provider keys",
     "setupBannerLinkModels": "Default model",
-    "setupBannerDismiss": "Dismiss for this session",
+    "setupBannerDismiss": "Don't show again",
     "gatewayExitTitle": "Local gateway stopped",
     "gatewayExitBody": "The assistant backend exited unexpectedly. Restart the app to continue."
   },
