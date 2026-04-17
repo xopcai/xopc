@@ -239,6 +239,7 @@
     "currentModel": "当前对话使用的模型",
     "modelSearchPlaceholder": "按名称、服务商或 ID 搜索…",
     "modelNoMatches": "没有匹配的模型",
+    "modelProviderSettingsLink": "配置服务商…",
     "dropFiles": "将文件拖放到此处添加",
     "voiceRecording": "录制语音",
     "voiceRecordingStop": "停止录音",

@@ -1,6 +1,7 @@
 import * as Popover from '@radix-ui/react-popover';
-import { Check, ChevronsUpDown } from 'lucide-react';
+import { Check, ChevronsUpDown, Settings2 } from 'lucide-react';
 import { useMemo, useState } from 'react';
+import { useNavigate } from 'react-router-dom';
 import useSWR from 'swr';
 
 import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
@@ -11,6 +12,8 @@ import {
 } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import { messages } from '@/i18n/messages';
+import { useLocaleStore } from '@/stores/locale-store';
 
 function haystack(m: ConfiguredModel): string {
   return `${m.id} ${m.name} ${m.provider}`.toLowerCase();
@@ -38,6 +41,8 @@ export function ModelSelector({
   contentAlign = 'end',
   className,
   popoverContentClassName,
+  /** Chat header: footer link to provider (API key) settings. */
+  showProviderSettingsFooter,
   onChange,
 }: {
   value: string;
@@ -55,8 +60,13 @@ export function ModelSelector({
   className?: string;
   /** Merged onto `Popover.Content` — use e.g. `z-[70]` when the trigger sits inside a `z-[60]` dialog. */
   popoverContentClassName?: string;
+  showProviderSettingsFooter?: boolean;
   onChange: (modelId: string) => void;
 }) {
+  const navigate = useNavigate();
+  const language = useLocaleStore((s) => s.language);
+  const m = messages(language).chat;
+
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState('');
 
@@ -125,28 +135,48 @@ export function ModelSelector({
             {!error && filtered.length === 0 ? (
               <div className="px-2 py-3 text-center text-xs text-fg-muted">{noMatches}</div>
             ) : null}
-            {filtered.map((m) => (
+            {filtered.map((model) => (
               <button
-                key={m.id}
+                key={model.id}
                 type="button"
                 className={cn(
                   'flex w-full items-center gap-2 rounded-md px-2 py-1.5 text-left text-sm text-fg hover:bg-surface-hover',
-                  m.id === value && 'bg-surface-hover/90 font-medium dark:bg-surface-hover/70',
+                  model.id === value && 'bg-surface-hover/90 font-medium dark:bg-surface-hover/70',
                 )}
                 onClick={() => {
-                  onChange(m.id);
+                  onChange(model.id);
                   setOpen(false);
                   setQuery('');
                 }}
               >
-                <Check className={cn('h-4 w-4 shrink-0', m.id !== value && 'invisible')} aria-hidden />
+                <Check className={cn('h-4 w-4 shrink-0', model.id !== value && 'invisible')} aria-hidden />
                 <span className="min-w-0 flex-1 truncate">
-                  <span className="font-medium">{m.name}</span>{' '}
-                  <span className="text-fg-muted">({m.provider})</span>
+                  <span className="font-medium">{model.name}</span>{' '}
+                  <span className="text-fg-muted">({model.provider})</span>
                 </span>
               </button>
             ))}
           </div>
+          {showProviderSettingsFooter ? (
+            <div className="mt-1 border-t border-edge-subtle pt-1">
+              <button
+                type="button"
+                className={cn(
+                  'flex w-full items-center gap-2 rounded-md px-2 py-2 text-left text-sm font-medium text-accent',
+                  interaction.transition,
+                  'hover:bg-surface-hover focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
+                )}
+                onClick={() => {
+                  navigate('/settings/providers');
+                  setOpen(false);
+                  setQuery('');
+                }}
+              >
+                <Settings2 className="h-4 w-4 shrink-0 opacity-90" aria-hidden />
+                <span className="min-w-0">{m.modelProviderSettingsLink}</span>
+              </button>
+            </div>
+          ) : null}
         </Popover.Content>
       </Popover.Portal>
     </Popover.Root>
