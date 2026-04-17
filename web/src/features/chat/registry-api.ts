@@ -34,7 +34,14 @@ export async function fetchConfiguredModelsCached(forceRefresh = false): Promise
   if (!forceRefresh && _modelsCache && now < _modelsCacheExpiry) {
     return _modelsCache;
   }
-  if (_modelsInflight) return _modelsInflight; // Deduplicate concurrent requests
+  // Bypass shared in-flight dedupe so callers that pass `true` always get a fresh list (e.g. onboarding).
+  if (forceRefresh) {
+    const models = await fetchConfiguredModels();
+    _modelsCache = models;
+    _modelsCacheExpiry = Date.now() + MODELS_CACHE_TTL_MS;
+    return models;
+  }
+  if (_modelsInflight) return _modelsInflight;
 
   _modelsInflight = fetchConfiguredModels()
     .then((models) => {

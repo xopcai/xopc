@@ -137,7 +137,7 @@
     "setupBannerBody": "请至少配置一家模型服务商的 API 密钥，并选择默认模型。之后可随时在设置中修改。",
     "setupBannerLinkProviders": "服务商与密钥",
     "setupBannerLinkModels": "默认模型",
-    "setupBannerDismiss": "本次会话不再提示",
+    "setupBannerDismiss": "不再提示",
     "gatewayExitTitle": "本地网关已停止",
     "gatewayExitBody": "助手后端进程异常退出，请重启应用后再试。"
   },
