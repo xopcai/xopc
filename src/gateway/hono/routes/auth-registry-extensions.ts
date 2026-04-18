@@ -97,7 +97,7 @@ export function registerPublicExtensionAssetRoutes(app: Hono, service: GatewaySe
     const rawContent = readFileSync(fullPath);
     const mimeType = extensionAssetMimeType(assetPath);
 
-    const body: BodyInit = mimeType.startsWith('text/html')
+    const body: string | Uint8Array = mimeType.startsWith('text/html')
       ? rewriteExtensionAssetHtml(rawContent.toString('utf-8'), extensionId, assetPath)
       : new Uint8Array(rawContent);
 
