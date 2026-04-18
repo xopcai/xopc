@@ -27,7 +27,7 @@ import {
   startAsyncOAuthLogin,
   submitOAuthCode,
 } from '@/features/settings/oauth-api';
-import { fetchConfiguredModelsCached } from '@/features/chat/registry-api';
+import { fetchConfiguredModelsCached, type ConfiguredModel } from '@/features/chat/registry-api';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   isMaskedKey,
@@ -40,11 +40,19 @@ import {
   type ProviderMeta,
   type ProviderRowModel,
 } from '@/features/settings/providers-api';
+import {
+  getOrderedApiKeyLinks,
+  PROVIDER_ENRICHMENT,
+  providerApiKeyLinkLabel,
+} from '@/features/settings/provider-enrichment';
+import { ProviderInfoPopover } from '@/features/settings/provider-info-popover';
+import { ProvidersOnboardingBanner } from '@/features/settings/providers-onboarding-banner';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
+import type { StoredLanguage } from '@/lib/storage';
 import { messages, type ProvidersSettingsMessages } from '@/i18n/messages';
 import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
@@ -100,6 +108,10 @@ export function ProvidersSettingsPanel() {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(() => new Set(['common']));
   const [searchQuery, setSearchQuery] = useState('');
   const [unconfiguredOnly, setUnconfiguredOnly] = useState(false);
+  const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(
+    () => localStorage.getItem('xopc:providers-onboarding-dismissed') === '1',
+  );
+  const [savedProviderIds, setSavedProviderIds] = useState<Set<string>>(() => new Set());
   const prevSearchRef = useRef('');
 
   const metaUrl = apiUrl('/api/providers/meta');
@@ -120,9 +132,11 @@ export function ProvidersSettingsPanel() {
     isLoading: metaLoading,
     mutate: mutMeta,
   } = useSWR(hasToken ? metaUrl : null, fetchMetaList, { revalidateOnFocus: false });
-  const { data: models } = useSWR(hasToken ? 'gateway-configured-models' : null, () => fetchConfiguredModelsCached(), {
-    revalidateOnFocus: false,
-  });
+  const { data: models, mutate: mutModels } = useSWR(
+    hasToken ? 'gateway-configured-models' : null,
+    () => fetchConfiguredModelsCached(),
+    { revalidateOnFocus: false },
+  );
 
   const mergedRows = useMemo((): ProviderRowModel[] | null => {
     if (!metaList || cfgData === undefined) return null;
@@ -172,11 +186,37 @@ export function ProvidersSettingsPanel() {
 
   const metaRows = mergedRows ?? [];
 
+  const isFirstRun =
+    mergedRows !== null && mergedRows.length > 0 && mergedRows.every((row) => !row.configured);
+  const showOnboarding = isFirstRun && !onboardingDismissed;
+
+  const scrollToProvider = useCallback(
+    (providerId: string) => {
+      const targetRow = metaRows.find((r) => r.id === providerId);
+      if (targetRow) {
+        setExpandedCats((prev) => new Set([...prev, targetRow.category]));
+      }
+      window.setTimeout(() => {
+        const el = document.getElementById(`provider-row-${providerId}`);
+        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      }, 80);
+    },
+    [metaRows],
+  );
+
   const filteredRows = useMemo(() => {
     let rows = metaRows;
     const q = searchQuery.trim().toLowerCase();
     if (q) {
-      rows = rows.filter((r) => r.id.toLowerCase().includes(q) || r.name.toLowerCase().includes(q));
+      rows = rows.filter((r) => {
+        const enrichment = PROVIDER_ENRICHMENT[r.id];
+        const aliases = enrichment?.aliases ?? [];
+        return (
+          r.id.toLowerCase().includes(q) ||
+          r.name.toLowerCase().includes(q) ||
+          aliases.some((alias) => alias.toLowerCase().includes(q))
+        );
+      });
     }
     if (unconfiguredOnly) {
       rows = rows.filter((r) => !r.configured);
@@ -221,12 +261,14 @@ export function ProvidersSettingsPanel() {
     setSaveNotice(null);
     try {
       await patchProviderApiKeys(toPatch);
+      setSavedProviderIds(new Set(Object.keys(toPatch)));
+      const freshModels = (await mutModels(fetchConfiguredModelsCached(true))) ?? models ?? [];
       const [nextCfg, nextMeta] = await Promise.all([mutCfg(), mutMeta()]);
       const list = Array.isArray(nextMeta) ? nextMeta : metaList ?? [];
       const cfg = nextCfg ?? cfgData;
       if (cfg?.payload) {
         const keys = providersKeysFromConfigRoot(cfg.payload.config);
-        const rows = mergeProviderRows(list, keys, models ?? []);
+        const rows = mergeProviderRows(list, keys, freshModels);
         const d: Record<string, string> = {};
         for (const r of rows) d[r.id] = r.apiKey;
         setDraft(d);
@@ -239,12 +281,13 @@ export function ProvidersSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [cfgData, draft, metaList, models, mutCfg, mutMeta, p.saveError, saving]);
+  }, [cfgData, draft, metaList, models, mutCfg, mutMeta, mutModels, p.saveError, saving]);
 
   const discard = useCallback(() => {
     setDraft({ ...baseline });
     setError(null);
     setSaveNotice(null);
+    setSavedProviderIds(new Set());
   }, [baseline]);
 
   const toggleCat = (cat: string) => {
@@ -327,6 +370,17 @@ export function ProvidersSettingsPanel() {
           </Button>
         </div>
       </header>
+
+      {showOnboarding ? (
+        <ProvidersOnboardingBanner
+          language={language}
+          onDismiss={() => {
+            localStorage.setItem('xopc:providers-onboarding-dismissed', '1');
+            setOnboardingDismissed(true);
+          }}
+          onScrollToProvider={scrollToProvider}
+        />
+      ) : null}
 
       {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{p.unsavedHint}</p> : null}
 
@@ -458,15 +512,19 @@ export function ProvidersSettingsPanel() {
                 {expanded ? (
                   <div id={panelId} role="region" aria-labelledby={`${panelId}-trigger`} className="divide-y divide-edge-subtle">
                     {list.map((row) => (
-                      <ProviderCredentialRow
-                        key={row.id}
-                        row={row}
-                        value={draft[row.id] ?? ''}
-                        rowDirty={(draft[row.id] ?? '') !== (baseline[row.id] ?? '')}
-                        labels={p}
-                        onChange={(id, v) => setDraft((d) => ({ ...d, [id]: v }))}
-                        onReload={refreshProviders}
-                      />
+                      <div id={`provider-row-${row.id}`} key={row.id}>
+                        <ProviderCredentialRow
+                          row={row}
+                          value={draft[row.id] ?? ''}
+                          rowDirty={(draft[row.id] ?? '') !== (baseline[row.id] ?? '')}
+                          labels={p}
+                          language={language}
+                          onChange={(id, v) => setDraft((d) => ({ ...d, [id]: v }))}
+                          onReload={refreshProviders}
+                          justSaved={savedProviderIds.has(row.id)}
+                          availableModels={models ?? []}
+                        />
+                      </div>
                     ))}
                   </div>
                 ) : null}
@@ -479,20 +537,65 @@ export function ProvidersSettingsPanel() {
   );
 }
 
+function EnvVarCopyRow({
+  envVar,
+  labels,
+}: {
+  envVar: string;
+  labels: ProvidersSettingsMessages;
+}) {
+  const [copied, setCopied] = useState(false);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(envVar);
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 2000);
+    } catch {
+      /* ignore clipboard errors */
+    }
+  };
+
+  return (
+    <div className="flex items-center gap-2">
+      <code className="rounded bg-surface-hover px-1.5 py-0.5 font-mono text-[11px] text-fg-muted">{envVar}</code>
+      <button
+        type="button"
+        onClick={() => void handleCopy()}
+        className="rounded p-0.5 text-fg-subtle hover:bg-surface-hover hover:text-fg"
+        title={copied ? labels.copied : labels.copy}
+        aria-label={copied ? labels.copied : labels.copy}
+      >
+        {copied ? (
+          <CheckCircle2 className="size-3.5 text-emerald-600 dark:text-emerald-400" aria-hidden />
+        ) : (
+          <Copy className="size-3.5" aria-hidden />
+        )}
+      </button>
+    </div>
+  );
+}
+
 function ProviderCredentialRow({
   row,
   value,
   rowDirty,
   labels,
+  language,
   onChange,
   onReload,
+  justSaved,
+  availableModels,
 }: {
   row: ProviderRowModel;
   value: string;
   rowDirty: boolean;
   labels: ProvidersSettingsMessages;
+  language: StoredLanguage;
   onChange: (id: string, v: string) => void;
   onReload: () => void;
+  justSaved: boolean;
+  availableModels: ConfiguredModel[];
 }) {
   const [expanded, setExpanded] = useState(false);
   const [showKey, setShowKey] = useState(false);
@@ -517,6 +620,8 @@ function ProviderCredentialRow({
   const [testOk, setTestOk] = useState<boolean | null>(null);
 
   const activeSrc = row.activeKeySource ?? 'none';
+
+  const apiKeyLinks = useMemo(() => getOrderedApiKeyLinks(row.id, language), [row.id, language]);
 
   useEffect(() => {
     return () => {
@@ -669,6 +774,7 @@ function ProviderCredentialRow({
         <div className="min-w-0 flex-1">
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-sm font-semibold text-fg">{row.name}</span>
+            <ProviderInfoPopover providerId={row.id} language={language} />
             <span className="rounded bg-surface-hover px-1.5 py-0.5 font-mono text-[10px] font-medium uppercase tracking-wide text-fg-subtle">
               {row.id}
             </span>
@@ -800,6 +906,25 @@ function ProviderCredentialRow({
                   {testMessage}
                 </p>
               ) : null}
+              {apiKeyLinks.length > 0 ? (
+                <div className="flex flex-col gap-1">
+                  {apiKeyLinks.map((link) => (
+                    <a
+                      key={`${link.kind}-${link.href}`}
+                      href={link.href}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex w-fit items-center gap-1 text-xs font-medium text-accent-fg hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                    >
+                      {providerApiKeyLinkLabel(link.kind, labels)}
+                      <ExternalLink className="size-3" aria-hidden />
+                    </a>
+                  ))}
+                  {row.id === 'qwen' ? (
+                    <p className="text-xs leading-relaxed text-fg-subtle">{labels.qwenKeyRegionHint}</p>
+                  ) : null}
+                </div>
+              ) : null}
             </div>
           ) : null}
 
@@ -889,6 +1014,37 @@ function ProviderCredentialRow({
 
           {row.supportsOAuth && !masked && !isOAuthConfigured ? (
             <p className="text-xs text-fg-subtle">{labels.oauthHint}</p>
+          ) : null}
+
+          {justSaved ? (
+            <div className="flex items-start gap-2 rounded-md bg-surface-hover/60 px-3 py-2 text-xs text-fg-muted dark:bg-surface-hover/40">
+              <CheckCircle2 className="mt-0.5 size-3.5 shrink-0 text-emerald-600 dark:text-emerald-400" aria-hidden />
+              <span>
+                {(() => {
+                  const providerModels = availableModels.filter((m) => m.provider === row.id);
+                  if (providerModels.length === 0) return labels.savedNoModels;
+                  const preview = providerModels
+                    .slice(0, 3)
+                    .map((m) => m.name || m.id)
+                    .join(', ');
+                  const suffix = providerModels.length > 3 ? `… (+${providerModels.length - 3})` : '';
+                  return `${providerModels.length} ${labels.savedModelsAvailable}: ${preview}${suffix}`;
+                })()}
+              </span>
+            </div>
+          ) : null}
+
+          {(PROVIDER_ENRICHMENT[row.id]?.envVars ?? []).length > 0 ? (
+            <details>
+              <summary className="cursor-pointer select-none list-none text-xs text-fg-subtle hover:text-fg-muted">
+                {labels.envVarAlt}
+              </summary>
+              <div className="mt-1.5 flex flex-col gap-1">
+                {(PROVIDER_ENRICHMENT[row.id]?.envVars ?? []).map((envVar) => (
+                  <EnvVarCopyRow key={envVar} envVar={envVar} labels={labels} />
+                ))}
+              </div>
+            </details>
           ) : null}
         </div>
       ) : null}
