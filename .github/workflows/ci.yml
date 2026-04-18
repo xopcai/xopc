@@ -66,8 +66,9 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
+      # Skip build:types — lint-and-typecheck already runs tsc --noEmit; CI only needs JS + web.
       - name: Build
-        run: pnpm run build
+        run: pnpm run build:ci
 
       - name: Run tests
         run: pnpm test
@@ -95,7 +96,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Build project
-        run: pnpm run build
+        run: pnpm run build:ci
 
       - name: Verify build output
         run: |
