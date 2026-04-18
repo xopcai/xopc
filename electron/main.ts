@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BrowserWindow, app, dialog, ipcMain } from 'electron';
+import { BrowserWindow, app, dialog, ipcMain, session } from 'electron';
 
 import { ensureGatewayConfigForElectron, getElectronUserPaths } from './ensure-gateway-config.js';
 import {
@@ -144,6 +144,12 @@ function createWindow(): void {
 }
 
 app.whenReady().then(() => {
+  // getUserMedia / MediaRecorder need Chromium "media" permission; without a handler some Electron
+  // builds deny it for packaged apps (browser tabs are unaffected).
+  session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
+    callback(permission === 'media');
+  });
+
   registerFileIpc(ipcMain);
   registerSearchIpc(ipcMain);
   registerAgentIpc(ipcMain);
