@@ -434,16 +434,22 @@ export const ChatComposer = memo(function ChatComposer({
     [attachments.length, m.chat.attachmentFileTooLarge, m.chat.maxAttachmentsReached, m.chat.maxAttachmentsTruncated],
   );
 
+  /** Stop mic tracks only after MediaRecorder has finished (`onstop`); stopping tracks right after `stop()` can flush silence or truncate audio on some engines. */
+  const stopVoiceMediaStreamTracks = useCallback(() => {
+    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
+    mediaStreamRef.current = null;
+  }, []);
+
   const stopVoiceRecording = useCallback(() => {
     const rec = mediaRecorderRef.current;
     if (rec && rec.state !== 'inactive') {
       rec.stop();
+    } else {
+      stopVoiceMediaStreamTracks();
     }
     mediaRecorderRef.current = null;
-    mediaStreamRef.current?.getTracks().forEach((t) => t.stop());
-    mediaStreamRef.current = null;
     setVoiceRecording(false);
-  }, []);
+  }, [stopVoiceMediaStreamTracks]);
 
   const attachmentToWire = useCallback((a: Attachment) => {
     return {
@@ -482,37 +488,43 @@ export const ChatComposer = memo(function ChatComposer({
         if (e.data.size > 0) mediaChunksRef.current.push(e.data);
       };
       rec.onstop = async () => {
-        if (voiceSkipAutoSendRef.current) {
-          voiceSkipAutoSendRef.current = false;
-          return;
-        }
-        if (busyRef.current) return;
-        const chunks = mediaChunksRef.current;
-        mediaChunksRef.current = [];
-        const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
-        if (blob.size < 32) return;
-        const ext = blob.type.includes('webm') ? 'webm' : 'ogg';
-        const { loadAttachment } = await import('@/features/chat/attachment-load');
-        const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: blob.type });
-        const att = await loadAttachment(file, file.name);
-        const payload = [...attachmentsRef.current.map(attachmentToWire), attachmentToWire(att)];
-        onSendRef.current(valueRef.current, payload, thinkingLevelRef.current);
-        setValue('');
-        valueRef.current = '';
-        setAttachments([]);
-        requestAnimationFrame(() => {
-          const ed = editorRef.current;
-          if (ed) {
-            applyWireToEditor(ed, '');
-            syncComposerPlaceholderClass(ed, '');
+        try {
+          if (voiceSkipAutoSendRef.current) {
+            voiceSkipAutoSendRef.current = false;
+            return;
           }
-          adjustHeight();
-        });
+          if (busyRef.current) return;
+          const chunks = mediaChunksRef.current;
+          mediaChunksRef.current = [];
+          const blob = new Blob(chunks, { type: rec.mimeType || 'audio/webm' });
+          if (blob.size < 32) return;
+          const ext = blob.type.includes('webm') ? 'webm' : 'ogg';
+          const { loadAttachment } = await import('@/features/chat/attachment-load');
+          const file = new File([blob], `voice-${Date.now()}.${ext}`, { type: blob.type });
+          const att = await loadAttachment(file, file.name);
+          const payload = [...attachmentsRef.current.map(attachmentToWire), attachmentToWire(att)];
+          onSendRef.current(valueRef.current, payload, thinkingLevelRef.current);
+          setValue('');
+          valueRef.current = '';
+          setAttachments([]);
+          requestAnimationFrame(() => {
+            const ed = editorRef.current;
+            if (ed) {
+              applyWireToEditor(ed, '');
+              syncComposerPlaceholderClass(ed, '');
+            }
+            adjustHeight();
+          });
+        } finally {
+          stopVoiceMediaStreamTracks();
+        }
       };
       mediaRecorderRef.current = rec;
       rec.start(250);
       setVoiceRecording(true);
     } catch (e) {
+      stopVoiceMediaStreamTracks();
+      mediaRecorderRef.current = null;
       console.warn(m.chat.voiceMicDenied, e);
     }
   }, [
@@ -522,6 +534,7 @@ export const ChatComposer = memo(function ChatComposer({
     disabled,
     m.chat.maxAttachmentsReached,
     m.chat.voiceMicDenied,
+    stopVoiceMediaStreamTracks,
     stopVoiceRecording,
     voiceRecording,
     adjustHeight,

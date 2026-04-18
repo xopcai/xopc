@@ -97,11 +97,14 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Build node (no DTS — Electron does not need type declarations)
+      - name: Build node + gateway web UI
         shell: bash
-        run: pnpm run generate:bundled-channels && pnpm run build:node
-        env:
-          XOPC_SKIP_DTS: '1'
+        # `build:web` → dist/gateway/static/root (required for gateway `/` and `/assets/*`; without it users see "UI not found").
+        run: pnpm run build:ci
+
+      - name: Verify gateway UI static files
+        shell: bash
+        run: test -f dist/gateway/static/root/index.html
 
       - name: Build Electron app
         shell: bash

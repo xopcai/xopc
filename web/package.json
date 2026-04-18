@@ -29,7 +29,7 @@
     "clsx": "^2.1.1",
     "cron-parser": "^5.5.0",
     "docx-preview": "^0.3.7",
-    "dompurify": "^3.3.3",
+    "dompurify": "^3.4.0",
     "highlight.js": "^11.11.1",
     "i18next": "^26.0.4",
     "jszip": "^3.10.1",

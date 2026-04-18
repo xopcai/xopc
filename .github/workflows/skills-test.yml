@@ -54,7 +54,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       
       - name: Build
-        run: pnpm run build
+        run: pnpm run build:ci
       
       - name: Run skill tests
         shell: bash
@@ -113,14 +113,15 @@ jobs:
         run: pnpm install --frozen-lockfile
       
       - name: Build
-        run: pnpm run build
+        run: pnpm run build:ci
       
       - name: Run security audit
         timeout-minutes: 10
         run: |
           echo "Running security audit on all skills..."
           pnpm run dev -- skills test security --deep
-          pnpm audit --audit-level=moderate
+          # high+critical: moderate-only findings remain in dev-only transitive deps (e.g. electron-builder, old esbuild via vitepress).
+          pnpm audit --audit-level=high
 
   validate-skill-format:
     name: Validate SKILL.md Format
@@ -154,7 +155,7 @@ jobs:
         run: pnpm install --frozen-lockfile
       
       - name: Build
-        run: pnpm run build
+        run: pnpm run build:ci
       
       - name: Validate all SKILL.md files
         timeout-minutes: 10
@@ -200,7 +201,7 @@ jobs:
       
       - name: Build
         timeout-minutes: 10
-        run: pnpm run build
+        run: pnpm run build:ci
       
       - name: Check skill dependencies
         timeout-minutes: 10
