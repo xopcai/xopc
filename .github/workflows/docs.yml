@@ -6,6 +6,7 @@ name: Deploy Docs
 #   gh api --method PUT repos/xopcai/xopc/pages -f build_type=workflow
 
 on:
+  workflow_dispatch:
   push:
     branches: [main]
     paths:
