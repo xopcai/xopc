@@ -1,6 +1,13 @@
 /** Max files per chat message (keep in sync with `src/gateway/chat-limits.ts`). */
 export const MAX_CHAT_ATTACHMENTS = 10;
 
+/** Excel preview row/column caps — keep in sync with `attachment-preview-renderer` table builder. */
+export const EXCEL_PREVIEW_MAX_ROWS = 500;
+export const EXCEL_PREVIEW_MAX_COLS = 64;
+
+/** PPTX: cap text shown in preview dialog to avoid freezing the browser on huge decks. */
+export const PPTX_PREVIEW_MAX_CHARS = 300_000;
+
 /** Path for gateway `GET` (inbound vs TTS); `rel` is relative to agent home (`inbound/…`, `tts/…`). */
 export function workspaceRelativePathToApiPath(rel: string): string {
   const norm = rel.replace(/\\/g, '/');
@@ -178,6 +185,100 @@ export function formatFileSize(bytes: number): string {
  */
 export function isImageFile(mimeType: string): boolean {
   return Boolean(mimeType?.startsWith('image/'));
+}
+
+/** View kind for the attachment preview dialog — mirrors `loadAttachment` detection (MIME + extension). */
+export type AttachmentPreviewFileType =
+  | 'image'
+  | 'pdf'
+  | 'docx'
+  | 'pptx'
+  | 'excel'
+  | 'text';
+
+/**
+ * Infer how to preview an attachment (wire payloads often use `application/octet-stream`).
+ * Order matches [`loadAttachment`](./attachment-load.ts): office types before generic image extension fallback.
+ */
+export function inferAttachmentFileType(att: {
+  name?: string;
+  mimeType?: string;
+  type?: string;
+}): AttachmentPreviewFileType {
+  const rawMime = att.mimeType ?? '';
+  const mime = rawMime.toLowerCase();
+  const baseMime = mime.split(';')[0]?.trim() ?? '';
+  const name = att.name?.toLowerCase() ?? '';
+
+  if (att.type === 'image' || baseMime.startsWith('image/')) {
+    return 'image';
+  }
+
+  if (baseMime === 'application/pdf' || mime.includes('application/pdf') || name.endsWith('.pdf')) {
+    return 'pdf';
+  }
+
+  if (
+    baseMime === 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+    mime.includes('wordprocessingml') ||
+    name.endsWith('.docx')
+  ) {
+    return 'docx';
+  }
+
+  if (
+    baseMime === 'application/vnd.openxmlformats-officedocument.presentationml.presentation' ||
+    mime.includes('presentationml') ||
+    name.endsWith('.pptx')
+  ) {
+    return 'pptx';
+  }
+
+  const excelMimeTypes = [
+    'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+    'application/vnd.ms-excel',
+  ];
+  if (
+    excelMimeTypes.includes(baseMime) ||
+    mime.includes('spreadsheetml') ||
+    mime.includes('ms-excel') ||
+    name.endsWith('.xlsx') ||
+    name.endsWith('.xls')
+  ) {
+    return 'excel';
+  }
+
+  const imageExt = ['.jpg', '.jpeg', '.png', '.gif', '.webp', '.bmp', '.svg'];
+  if (imageExt.some((ext) => name.endsWith(ext))) {
+    return 'image';
+  }
+
+  return 'text';
+}
+
+/**
+ * When MIME is missing or generic, infer a concrete type from the file name (for session wire normalization).
+ */
+export function inferMimeTypeFromFileName(fileName: string): string | undefined {
+  const lower = fileName.toLowerCase();
+  const map: Array<[string, string]> = [
+    ['.pdf', 'application/pdf'],
+    ['.docx', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'],
+    ['.pptx', 'application/vnd.openxmlformats-officedocument.presentationml.presentation'],
+    ['.xlsx', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'],
+    ['.xls', 'application/vnd.ms-excel'],
+    ['.png', 'image/png'],
+    ['.jpg', 'image/jpeg'],
+    ['.jpeg', 'image/jpeg'],
+    ['.gif', 'image/gif'],
+    ['.webp', 'image/webp'],
+    ['.bmp', 'image/bmp'],
+    ['.svg', 'image/svg+xml'],
+  ];
+  for (const [ext, mime] of map) {
+    if (lower.endsWith(ext)) return mime;
+  }
+  return undefined;
 }
 
 /**

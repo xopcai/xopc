@@ -166,6 +166,47 @@ function extractTextFromElement(element: unknown): string {
   return text.trim();
 }
 
+/** Bounds for PPTX text extraction (upload path) — avoids multi‑MB strings and long main-thread stalls. */
+const PPTX_EXTRACT_MAX_SLIDES = 120;
+const PPTX_EXTRACT_MAX_CHARS = 1_200_000;
+
+function extractTextNodesFromSlideXml(slideXml: string): string[] {
+  const out: string[] = [];
+  try {
+    if (typeof DOMParser === 'undefined') {
+      const re = /<a:t[^>]*>([^<]*)<\/a:t>/g;
+      let m: RegExpExecArray | null;
+      while ((m = re.exec(slideXml)) !== null) {
+        const t = m[1]?.trim();
+        if (t) out.push(t);
+      }
+      return out;
+    }
+    const doc = new DOMParser().parseFromString(slideXml, 'text/xml');
+    const parserErr = doc.querySelector('parsererror');
+    if (parserErr) {
+      return out;
+    }
+    const ns = 'http://schemas.openxmlformats.org/drawingml/2006/main';
+    const primary = doc.getElementsByTagNameNS(ns, 't');
+    if (primary.length > 0) {
+      for (let i = 0; i < primary.length; i++) {
+        const t = primary[i]?.textContent?.trim();
+        if (t) out.push(t);
+      }
+      return out;
+    }
+    const anyT = doc.querySelectorAll('*|t');
+    for (let i = 0; i < anyT.length; i++) {
+      const t = anyT[i]?.textContent?.trim();
+      if (t) out.push(t);
+    }
+  } catch {
+    /* ignore */
+  }
+  return out;
+}
+
 export async function processPptx(
   arrayBuffer: ArrayBuffer,
   name: string,
@@ -183,26 +224,34 @@ export async function processPptx(
         return numA - numB;
       });
 
-    for (let i = 0; i < slideFiles.length; i++) {
+    const maxSlides = Math.min(slideFiles.length, PPTX_EXTRACT_MAX_SLIDES);
+    if (slideFiles.length > PPTX_EXTRACT_MAX_SLIDES) {
+      extractedText += `\n<!-- truncated: ${slideFiles.length} slides, processing first ${PPTX_EXTRACT_MAX_SLIDES} -->`;
+    }
+
+    for (let i = 0; i < maxSlides; i++) {
+      if (extractedText.length >= PPTX_EXTRACT_MAX_CHARS) {
+        extractedText += `\n<!-- extraction stopped: size limit ${PPTX_EXTRACT_MAX_CHARS} chars -->`;
+        break;
+      }
+
       const slideFile = zip.file(slideFiles[i]);
       if (slideFile) {
         const slideXml = await slideFile.async('text');
-        const textMatches = slideXml.match(/<a:t[^>]*>([^<]+)<\/a:t>/g);
+        const slideTexts = extractTextNodesFromSlideXml(slideXml);
 
-        if (textMatches) {
+        if (slideTexts.length > 0) {
           extractedText += `\n<slide number="${i + 1}">`;
-          const slideTexts = textMatches
-            .map((match) => {
-              const textMatch = match.match(/<a:t[^>]*>([^<]+)<\/a:t>/);
-              return textMatch ? textMatch[1] : '';
-            })
-            .filter((t) => t.trim());
-
-          if (slideTexts.length > 0) {
-            extractedText += `\n${slideTexts.join('\n')}`;
-          }
+          const block = slideTexts.join('\n');
+          const room = PPTX_EXTRACT_MAX_CHARS - extractedText.length - 32;
+          extractedText +=
+            room >= block.length ? `\n${block}` : `\n${block.slice(0, Math.max(0, room))}`;
           extractedText += '\n</slide>';
         }
+      }
+
+      if (i % 4 === 3) {
+        await new Promise<void>((r) => setTimeout(r, 0));
       }
     }
 
