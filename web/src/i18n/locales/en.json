@@ -180,7 +180,8 @@
     "helpDocs": "Documentation",
     "sessionChannelFilterAria": "Filter tasks: web app or IM channels",
     "sessionTasksTab": "Tasks",
-    "sessionChannelsTab": "Channels"
+    "sessionChannelsTab": "Channels",
+    "resizeHandleAria": "Resize sidebar"
   },
   "chat": {
     "typeMessage": "Type a message…",
