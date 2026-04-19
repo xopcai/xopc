@@ -292,6 +292,8 @@
     "attachmentPreviewPdfLoadMore": "向下滚动以加载更多页",
     "attachmentPreviewExcelTruncated": "预览仅显示前 {rows} 行 × {cols} 列。请下载文件查看完整表格。",
     "attachmentPreviewPptxTruncated": "为保护性能，文本预览已截断。请下载文件查看完整演示文稿。",
+    "attachmentPreviewPptxSlide": "第 {n} 页",
+    "attachmentPreviewPptxEmptySlide": "（本页无文本）",
     "attachmentPreviewOpenElsewhereHint": "请下载文件后，使用本机上的其他应用打开。",
     "attachmentPreviewOpenElsewhereTruncated": "此处仅显示部分内容。请下载完整文件后在本机其他应用中打开。",
     "attachmentPreviewDownloadFull": "下载文件",

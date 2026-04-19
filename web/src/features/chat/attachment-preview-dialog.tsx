@@ -2,6 +2,7 @@ import * as Dialog from '@radix-ui/react-dialog';
 import { Download, X } from 'lucide-react';
 
 import { PreviewOpenAlternativesBar } from '@/features/preview/preview-open-alternatives';
+import { PptxPreviewView } from '@/features/preview/pptx-preview-view';
 import { useEffect, useRef, useState } from 'react';
 
 import type { MessageAttachment } from '@/features/chat/messages.types';
@@ -262,7 +263,11 @@ function PreviewBody({
                 {labels.attachmentPreviewPptxTruncated}
               </p>
             ) : null}
-            <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-fg">{text}</pre>
+            <PptxPreviewView
+              text={text}
+              slideLabel={(n) => fillTemplate(labels.attachmentPreviewPptxSlide, { n })}
+              emptySlideLabel={labels.attachmentPreviewPptxEmptySlide}
+            />
           </div>
         </div>
       );
