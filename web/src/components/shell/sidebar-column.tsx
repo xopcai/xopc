@@ -1,5 +1,5 @@
 import { X } from 'lucide-react';
-import { memo, useEffect } from 'react';
+import { memo, useCallback, useEffect, useState, type CSSProperties } from 'react';
 
 import { APP_CHROME_NO_DRAG_CLASS, APP_TOP_HEADER_BAR_CLASS } from '@/components/shell/app-chrome';
 import { SidebarRailToggleButton } from '@/components/shell/sidebar-rail-toggle-button';
@@ -24,9 +24,43 @@ export const SidebarColumn = memo(function SidebarColumn() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
+  const expandedWidthPx = useSidebarStore((s) => s.expandedWidthPx);
+  const setExpandedWidthPx = useSidebarStore((s) => s.setExpandedWidthPx);
   const mobileNavOpen = useAppShellStore((s) => s.mobileNavOpen);
   const setMobileNavOpen = useAppShellStore((s) => s.setMobileNavOpen);
   const navCollapsed = sidebarCollapsed && !mobileNavOpen;
+  const [widthResizing, setWidthResizing] = useState(false);
+
+  const onSidebarResizePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      if (sidebarCollapsed) return;
+      e.preventDefault();
+      const el = e.currentTarget;
+      el.setPointerCapture(e.pointerId);
+      setWidthResizing(true);
+      const startX = e.clientX;
+      const startW = useSidebarStore.getState().expandedWidthPx;
+      const pid = e.pointerId;
+      const onMove = (ev: PointerEvent) => {
+        setExpandedWidthPx(startW + (ev.clientX - startX));
+      };
+      const onDone = () => {
+        try {
+          el.releasePointerCapture(pid);
+        } catch {
+          /* ignore */
+        }
+        setWidthResizing(false);
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onDone);
+        window.removeEventListener('pointercancel', onDone);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onDone);
+      window.addEventListener('pointercancel', onDone);
+    },
+    [sidebarCollapsed, setExpandedWidthPx],
+  );
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -71,6 +105,7 @@ export const SidebarColumn = memo(function SidebarColumn() {
         id="app-sidebar"
         className={cn(
           'app-sidebar-push flex min-h-0 shrink-0 flex-col overflow-hidden bg-surface-base',
+          widthResizing && 'sidebar-width-resizing',
           // Mobile: overlay; animate with transform only (no main-column width reflow).
           'max-md:fixed max-md:left-0 max-md:top-0 max-md:z-50 max-md:h-[100dvh] max-md:w-[min(16rem,85vw)]',
           'max-md:transition-transform max-md:duration-200 max-md:ease-out',
@@ -78,8 +113,15 @@ export const SidebarColumn = memo(function SidebarColumn() {
           mobileNavOpen ? 'max-md:translate-x-0' : 'max-md:-translate-x-full',
           // Tablet+: in-flow rail
           'md:relative md:h-full md:translate-x-0',
-          sidebarCollapsed ? 'md:w-[4.5rem]' : 'md:w-64',
+          sidebarCollapsed ? 'md:w-[4.5rem]' : 'app-sidebar-expanded-width',
         )}
+        style={
+          !sidebarCollapsed
+            ? ({
+                '--sidebar-expanded-px': `${expandedWidthPx}px`,
+              } as CSSProperties)
+            : undefined
+        }
       >
         <div
           className={cn(
@@ -104,6 +146,24 @@ export const SidebarColumn = memo(function SidebarColumn() {
           {!sidebarCollapsed ? <SidebarRailToggleButton variant="sidebar" /> : null}
         </div>
         <SidebarNav collapsed={navCollapsed} onNavigate={() => setMobileNavOpen(false)} />
+        {!sidebarCollapsed ? (
+          <div
+            role="separator"
+            aria-orientation="vertical"
+            aria-label={m.sidebar.resizeHandleAria}
+            onPointerDown={onSidebarResizePointerDown}
+            className={cn(
+              'group pointer-events-auto absolute right-0 top-0 z-10 hidden h-full w-2 shrink-0 cursor-col-resize md:block',
+              'touch-none select-none hover:bg-accent/10',
+              APP_CHROME_NO_DRAG_CLASS,
+            )}
+          >
+            <span
+              className="pointer-events-none absolute inset-y-0 right-1/2 w-px translate-x-1/2 bg-accent/40 opacity-0 transition-opacity group-hover:opacity-100"
+              aria-hidden
+            />
+          </div>
+        ) : null}
       </aside>
     </>
   );

@@ -180,7 +180,8 @@
     "helpDocs": "帮助文档",
     "sessionChannelFilterAria": "按来源筛选：网页对话或即时通讯",
     "sessionTasksTab": "对话",
-    "sessionChannelsTab": "即时通讯"
+    "sessionChannelsTab": "即时通讯",
+    "resizeHandleAria": "调整左侧导航宽度"
   },
   "chat": {
     "typeMessage": "输入消息…",
