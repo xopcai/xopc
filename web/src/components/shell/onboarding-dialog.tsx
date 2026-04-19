@@ -43,7 +43,9 @@ function OnboardingModelSetupStep() {
   const [ready, setReady] = useState(false);
 
   const onSettingsModelsOrProviders =
-    pathname.startsWith('/settings/models') || pathname.startsWith('/settings/providers');
+    pathname.startsWith('/settings/agents') ||
+    pathname.startsWith('/settings/models') ||
+    pathname.startsWith('/settings/providers');
 
   const refresh = useCallback(async () => {
     if (!token) {
@@ -119,7 +121,7 @@ function OnboardingModelSetupStep() {
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
           onPointerDownOutside={() => {
-            if (pathname.startsWith('/settings/models') || pathname.startsWith('/settings/providers')) return;
+            if (onSettingsModelsOrProviders) return;
             dismissGuidePermanently();
           }}
           onEscapeKeyDown={() => dismissGuidePermanently()}
@@ -139,7 +141,7 @@ function OnboardingModelSetupStep() {
             <Button
               type="button"
               className="bg-accent text-white hover:bg-accent/90 sm:min-w-0"
-              onClick={() => navigate('/settings/models')}
+              onClick={() => navigate('/settings/agents')}
             >
               {t.setupBannerLinkModels}
             </Button>
