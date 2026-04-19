@@ -46,7 +46,6 @@ import {
   providerApiKeyLinkLabel,
 } from '@/features/settings/provider-enrichment';
 import { ProviderInfoPopover } from '@/features/settings/provider-info-popover';
-import { ProvidersOnboardingBanner } from '@/features/settings/providers-onboarding-banner';
 import { fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { settingsInputFocusClass } from '@/lib/form-field-width';
@@ -108,9 +107,6 @@ export function ProvidersSettingsPanel() {
   const [expandedCats, setExpandedCats] = useState<Set<string>>(() => new Set(['common']));
   const [searchQuery, setSearchQuery] = useState('');
   const [unconfiguredOnly, setUnconfiguredOnly] = useState(false);
-  const [onboardingDismissed, setOnboardingDismissed] = useState<boolean>(
-    () => localStorage.getItem('xopc:providers-onboarding-dismissed') === '1',
-  );
   const [savedProviderIds, setSavedProviderIds] = useState<Set<string>>(() => new Set());
   const prevSearchRef = useRef('');
 
@@ -185,24 +181,6 @@ export function ProvidersSettingsPanel() {
   }, [hasToken, mergedRows, dirty]);
 
   const metaRows = mergedRows ?? [];
-
-  const isFirstRun =
-    mergedRows !== null && mergedRows.length > 0 && mergedRows.every((row) => !row.configured);
-  const showOnboarding = isFirstRun && !onboardingDismissed;
-
-  const scrollToProvider = useCallback(
-    (providerId: string) => {
-      const targetRow = metaRows.find((r) => r.id === providerId);
-      if (targetRow) {
-        setExpandedCats((prev) => new Set([...prev, targetRow.category]));
-      }
-      window.setTimeout(() => {
-        const el = document.getElementById(`provider-row-${providerId}`);
-        el?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-      }, 80);
-    },
-    [metaRows],
-  );
 
   const filteredRows = useMemo(() => {
     let rows = metaRows;
@@ -370,17 +348,6 @@ export function ProvidersSettingsPanel() {
           </Button>
         </div>
       </header>
-
-      {showOnboarding ? (
-        <ProvidersOnboardingBanner
-          language={language}
-          onDismiss={() => {
-            localStorage.setItem('xopc:providers-onboarding-dismissed', '1');
-            setOnboardingDismissed(true);
-          }}
-          onScrollToProvider={scrollToProvider}
-        />
-      ) : null}
 
       {dirty ? <p className="text-xs text-amber-800 dark:text-amber-200">{p.unsavedHint}</p> : null}
 
