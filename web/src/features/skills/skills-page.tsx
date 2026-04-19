@@ -4,6 +4,8 @@ import type { LucideIcon } from 'lucide-react';
 import {
   BookOpen,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   FileArchive,
   FileText,
   FileType,
@@ -30,13 +32,15 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import {
   deleteSkill,
+  getMarketplaceSkills,
   getSkillMarkdown,
   getSkills,
+  installMarketplaceSkill,
   patchSkillEnabled,
   reloadSkills,
   uploadSkillZip,
 } from '@/features/skills/skill-api';
-import type { SkillCatalogEntry } from '@/features/skills/skill.types';
+import type { MarketplacePackageItem, SkillCatalogEntry } from '@/features/skills/skill.types';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -205,6 +209,16 @@ export function SkillsPage() {
   const [detailLoading, setDetailLoading] = useState(false);
   const [detailError, setDetailError] = useState<string | null>(null);
 
+  const [marketSort, setMarketSort] = useState<'downloads' | 'newest'>('downloads');
+  const [marketPage, setMarketPage] = useState(1);
+  const [mpLoading, setMpLoading] = useState(false);
+  const [mpError, setMpError] = useState<string | null>(null);
+  const [mpPayload, setMpPayload] = useState<{
+    items: MarketplacePackageItem[];
+    meta: { page: number; pageSize: number; total: number; totalPages: number };
+  } | null>(null);
+  const [installingMarketName, setInstallingMarketName] = useState<string | null>(null);
+
   const load = useCallback(
     async (opts?: { silent?: boolean }): Promise<{ ok: true } | { ok: false; message: string }> => {
       const silent = opts?.silent === true;
@@ -248,6 +262,39 @@ export function SkillsPage() {
     setMainTab((prev) => (prev === nextTab ? prev : nextTab));
     setSourceFilter((prev) => (prev === nextSource ? prev : nextSource));
   }, [searchParams]);
+
+  useEffect(() => {
+    if (mainTab !== 'marketplace') return;
+    setMarketPage(1);
+  }, [searchQuery, marketSort, mainTab]);
+
+  useEffect(() => {
+    if (!hasToken || mainTab !== 'marketplace') return;
+    let cancelled = false;
+    setMpLoading(true);
+    setMpError(null);
+    void getMarketplaceSkills({
+      q: searchQuery.trim() || undefined,
+      page: marketPage,
+      pageSize: 20,
+      sort: marketSort,
+    })
+      .then((payload) => {
+        if (!cancelled) setMpPayload(payload);
+      })
+      .catch((e) => {
+        if (!cancelled) {
+          setMpError(e instanceof Error ? e.message : sk.marketplaceLoadFailed);
+          setMpPayload(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setMpLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [hasToken, mainTab, marketPage, marketSort, searchQuery, sk.marketplaceLoadFailed]);
 
   useEffect(() => {
     const params = new URLSearchParams(searchParams);
@@ -358,9 +405,6 @@ export function SkillsPage() {
       : (enabledOverride[detailTitle] ?? detailFromCatalog.enabled);
 
   const filteredCatalog = useMemo(() => {
-    if (mainTab === 'marketplace') {
-      return [];
-    }
     const q = searchQuery.trim().toLowerCase();
     let rows = catalog;
 
@@ -480,6 +524,34 @@ export function SkillsPage() {
       setError(e instanceof Error ? e.message : sk.deleteFailed);
     }
   };
+
+  const isSkillInstalledByName = useCallback(
+    (name: string) => catalog.some((r) => r.name === name),
+    [catalog],
+  );
+
+  const onMarketInstall = useCallback(
+    async (name: string) => {
+      const installed = isSkillInstalledByName(name);
+      if (installed) {
+        const ok = window.confirm(sk.marketplaceReinstallConfirm);
+        if (!ok) return;
+      }
+      setActionFeedback(null);
+      setInstallingMarketName(name);
+      try {
+        await installMarketplaceSkill({ name, overwrite: installed });
+        await load({ silent: true });
+        showFeedback('success', sk.installSuccess);
+        setMainTab('user');
+      } catch (e) {
+        showFeedback('error', e instanceof Error ? e.message : sk.uploadFailed);
+      } finally {
+        setInstallingMarketName(null);
+      }
+    },
+    [isSkillInstalledByName, load, showFeedback, sk.installSuccess, sk.marketplaceReinstallConfirm, sk.uploadFailed],
+  );
 
   const filterLabel =
     sourceFilter === 'all'
@@ -718,13 +790,180 @@ export function SkillsPage() {
                   </DropdownMenu.Portal>
                 </DropdownMenu.Root>
               ) : null}
+              {mainTab === 'marketplace' ? (
+                <DropdownMenu.Root>
+                  <DropdownMenu.Trigger asChild>
+                    <button
+                      type="button"
+                      className={cn(
+                        'inline-flex h-9 min-h-9 min-w-[9rem] shrink-0 items-center gap-1.5 rounded-lg border border-edge bg-surface-panel px-2.5 text-xs font-medium text-fg shadow-surface',
+                        interaction.transition,
+                        interaction.focusRingPanel,
+                      )}
+                    >
+                      <Funnel className="size-3.5 text-fg-muted" strokeWidth={1.75} aria-hidden />
+                      <span>
+                        {marketSort === 'newest' ? sk.marketplaceSortNewest : sk.marketplaceSortDownloads}
+                      </span>
+                      <ChevronDown className="size-3.5 text-fg-subtle" strokeWidth={1.75} aria-hidden />
+                    </button>
+                  </DropdownMenu.Trigger>
+                  <DropdownMenu.Portal>
+                    <DropdownMenu.Content
+                      className="z-50 min-w-[10rem] rounded-xl border border-edge bg-surface-panel p-1 shadow-popover dark:border-edge"
+                      sideOffset={6}
+                      align="end"
+                    >
+                      <DropdownMenu.Item
+                        className={cn(
+                          'cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none',
+                          'hover:bg-surface-hover data-[highlighted]:bg-surface-hover',
+                        )}
+                        onSelect={() => setMarketSort('downloads')}
+                      >
+                        {sk.marketplaceSortDownloads}
+                      </DropdownMenu.Item>
+                      <DropdownMenu.Item
+                        className={cn(
+                          'cursor-pointer rounded-lg px-3 py-2 text-sm text-fg outline-none',
+                          'hover:bg-surface-hover data-[highlighted]:bg-surface-hover',
+                        )}
+                        onSelect={() => setMarketSort('newest')}
+                      >
+                        {sk.marketplaceSortNewest}
+                      </DropdownMenu.Item>
+                    </DropdownMenu.Content>
+                  </DropdownMenu.Portal>
+                </DropdownMenu.Root>
+              ) : null}
             </div>
           </div>
 
           {mainTab === 'marketplace' ? (
-            <div className="rounded-2xl border border-dashed border-edge bg-surface-base/40 px-6 py-16 text-center text-sm text-fg-muted">
-              {sk.marketplacePlaceholder}
-            </div>
+            <>
+              <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">
+                {sk.sectionMarketplace}
+              </p>
+              {mpLoading ? (
+                <div
+                  className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle"
+                  aria-busy="true"
+                  aria-label={sk.loading}
+                >
+                  {Array.from({ length: SKILL_LIST_SKELETON_COUNT }, (_, i) => (
+                    <SkillListRowSkeleton key={i} />
+                  ))}
+                </div>
+              ) : mpError ? (
+                <div
+                  className="rounded-xl border border-edge bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-edge dark:bg-red-950/40 dark:text-red-300"
+                  role="alert"
+                >
+                  {mpError}
+                </div>
+              ) : !mpPayload || mpPayload.items.length === 0 ? (
+                <div className="rounded-2xl border border-dashed border-edge py-16 text-center text-sm text-fg-muted">
+                  {sk.marketplaceEmpty}
+                </div>
+              ) : (
+                <>
+                  <div className="overflow-hidden rounded-2xl border border-edge-subtle bg-surface-base dark:border-edge-subtle">
+                    {mpPayload.items.map((row) => {
+                      const installed = isSkillInstalledByName(row.name);
+                      const busy = installingMarketName === row.name;
+                      return (
+                        <article
+                          key={row.id}
+                          className={cn(
+                            'group relative flex flex-col gap-3 border-b border-edge-subtle px-4 py-3.5 last:border-b-0 sm:flex-row sm:items-center',
+                            'transition-colors hover:bg-surface-hover/50 dark:hover:bg-surface-hover/25',
+                          )}
+                        >
+                          <div className="flex min-w-0 flex-1 items-start gap-4">
+                            <SkillCardIcon name={row.name} />
+                            <div className="min-w-0 flex-1 pr-2">
+                              <h3 className="text-[15px] font-semibold leading-snug tracking-tight text-fg">
+                                {row.name}
+                              </h3>
+                              <p
+                                className="mt-0.5 line-clamp-2 text-sm leading-relaxed text-fg-muted"
+                                title={row.description || undefined}
+                              >
+                                {row.description || '—'}
+                              </p>
+                              <div className="mt-1.5 flex flex-wrap gap-1.5 text-[11px] text-fg-subtle">
+                                <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
+                                  {sk.marketplaceAuthor}: {row.author.username}
+                                </span>
+                                <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 dark:bg-surface-active/50">
+                                  {sk.marketplaceDownloads}: {row.downloads}
+                                </span>
+                                {row.latestVersion ? (
+                                  <span className="rounded-md bg-surface-hover/60 px-2 py-0.5 font-mono text-[10px] dark:bg-surface-active/50">
+                                    {sk.marketplaceVersion}: {row.latestVersion}
+                                  </span>
+                                ) : null}
+                                {installed ? (
+                                  <span className="rounded-md bg-emerald-500/15 px-2 py-0.5 text-emerald-800 dark:text-emerald-200">
+                                    {sk.marketplaceInstalled}
+                                  </span>
+                                ) : null}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex shrink-0 justify-end sm:pl-2">
+                            <Button
+                              type="button"
+                              variant={installed ? 'secondary' : 'primary'}
+                              className="min-w-[6.5rem]"
+                              disabled={busy || mpLoading}
+                              onClick={() => void onMarketInstall(row.name)}
+                            >
+                              {busy ? sk.uploading : installed ? sk.marketplaceReinstall : sk.marketplaceInstall}
+                            </Button>
+                          </div>
+                        </article>
+                      );
+                    })}
+                  </div>
+                  <div className="flex flex-col items-center justify-between gap-3 sm:flex-row">
+                    <p className="text-center text-xs text-fg-muted sm:text-left">
+                      {interpolate(sk.marketplacePageStatus, {
+                        page: mpPayload.meta.page,
+                        totalPages: mpPayload.meta.totalPages,
+                        total: mpPayload.meta.total,
+                      })}
+                    </p>
+                    <div className="flex items-center gap-2">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-9 gap-1 px-2"
+                        disabled={mpLoading || marketPage <= 1}
+                        aria-label={sk.marketplacePagePrev}
+                        onClick={() => setMarketPage((p) => Math.max(1, p - 1))}
+                      >
+                        <ChevronLeft className="size-4" strokeWidth={1.75} aria-hidden />
+                        <span className="sr-only sm:not-sr-only">{sk.marketplacePagePrev}</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        className="h-9 gap-1 px-2"
+                        disabled={mpLoading || marketPage >= mpPayload.meta.totalPages}
+                        aria-label={sk.marketplacePageNext}
+                        onClick={() =>
+                          setMarketPage((p) => Math.min(mpPayload.meta.totalPages, p + 1))
+                        }
+                      >
+                        <span className="sr-only sm:not-sr-only">{sk.marketplacePageNext}</span>
+                        <ChevronRight className="size-4" strokeWidth={1.75} aria-hidden />
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              )}
+            </>
           ) : (
             <>
               <p className="text-xs font-medium uppercase tracking-wide text-fg-subtle">

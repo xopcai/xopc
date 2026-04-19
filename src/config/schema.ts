@@ -379,6 +379,8 @@ export const GatewayConfigSchema = z.object({
   heartbeat: HeartbeatConfigSchema.optional(),
   maxSseConnections: z.number().optional(),
   corsOrigins: z.array(z.string()).optional(),
+  /** Base URL for the xopc skills marketplace (public REST API). */
+  skillsStoreBaseUrl: z.string().url().optional(),
 }).default({
   host: '127.0.0.1',
   port: 18790,
@@ -391,6 +393,7 @@ export const GatewayConfigSchema = z.object({
   },
   maxSseConnections: 100,
   corsOrigins: [],
+  skillsStoreBaseUrl: 'https://store.xopc.ai',
 });
 
 export const CronConfigSchema = z.object({
@@ -666,6 +669,7 @@ export const ConfigSchema = z.object({
     },
     maxSseConnections: 100,
     corsOrigins: [],
+    skillsStoreBaseUrl: 'https://store.xopc.ai',
   },
   tools: {
     web: {

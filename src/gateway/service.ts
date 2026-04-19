@@ -38,6 +38,15 @@ import {
   installSkillFromZip,
   listManagedSkillDirs,
 } from '../agent/skills/managed-store.js';
+import {
+  downloadSkillZipBuffer,
+  listSkillPackages,
+  resolveSkillZipDownloadUrl,
+  resolveSkillsStoreBaseUrl,
+  skillIdForMarketplaceInstall,
+  type SkillsStoreListParams,
+  type SkillsStoreListResponse,
+} from '../agent/skills/skills-store-client.js';
 import { createSkillConfigManager } from '../agent/skills/config.js';
 import { removeSkillsLockEntry } from '../agent/skills/hub-lock.js';
 import type { SkillCatalogEntry } from '../agent/agent-manager.js';
@@ -1041,6 +1050,23 @@ export class GatewayService {
     removeSkillsLockEntry(result.skillId);
     this.agentService.refreshSkillsAfterDiskChange();
     return result;
+  }
+
+  async fetchSkillsMarketplaceCatalog(params: SkillsStoreListParams): Promise<SkillsStoreListResponse> {
+    const base = resolveSkillsStoreBaseUrl(this.config);
+    return listSkillPackages(base, params);
+  }
+
+  async installSkillFromMarketplace(opts: {
+    name: string;
+    version?: string;
+    overwrite?: boolean;
+  }): Promise<{ skillId: string; path: string }> {
+    const base = resolveSkillsStoreBaseUrl(this.config);
+    const { downloadUrl } = await resolveSkillZipDownloadUrl(base, opts.name, opts.version);
+    const buf = await downloadSkillZipBuffer(base, downloadUrl);
+    const skillId = skillIdForMarketplaceInstall(opts.name);
+    return this.installManagedSkillZip(buf, { skillId, overwrite: opts.overwrite ?? false });
   }
 
   reloadSkillsFromDisk(): void {

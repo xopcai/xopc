@@ -60,6 +60,11 @@ export const BASE_RELOAD_RULES: ReloadRule[] = [
   { prefix: 'gateway.port', kind: 'restart', description: 'Port number' },
   { prefix: 'gateway.auth', kind: 'restart', description: 'Authentication settings' },
   { prefix: 'gateway.cors', kind: 'restart', description: 'CORS settings' },
+  {
+    prefix: 'gateway.skillsStoreBaseUrl',
+    kind: 'restart',
+    description: 'Skills marketplace API base URL',
+  },
   { prefix: 'gateway.enableHotReload', kind: 'hot', description: 'Hot reload toggle' },
   
   // Channels - hot reload (channel-specific prefixes are registered by channel plugins)
