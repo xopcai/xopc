@@ -5,7 +5,6 @@ import { dirname, join } from 'node:path';
 import type { Config } from '../../config/schema.js';
 import { ConfigSchema } from '../../config/schema.js';
 import { loadConfig, saveConfig } from '../../config/loader.js';
-import { assertChannelPluginConfigs } from '../../config/validate-channel-configs.js';
 
 export interface InitWorkspaceOptions {
   configPath: string;
@@ -19,6 +18,14 @@ export interface InitWorkspaceOptions {
    * Electron-specific: CLI derives the path from context at runtime.
    */
   persistWorkspacePath?: boolean;
+  /**
+   * When true, only {@link ConfigSchema} (Zod) runs; bundled channel plugins are not loaded and
+   * their `configSchema.validate` hooks are skipped. Use from the Electron main process so the
+   * desktop shell does not import the full channel graph (e.g. Telegram → providers → pi-ai).
+   * CLI / gateway should leave this false so plugin rules run here; the gateway still validates
+   * on startup after the channel config validator is registered.
+   */
+  skipChannelPluginValidation?: boolean;
 }
 
 export interface InitWorkspaceResult {
@@ -30,17 +37,26 @@ export interface InitWorkspaceResult {
   workspaceCreated: boolean;
 }
 
-function serializeConfig(cfg: Config): string {
+async function assertChannelPluginsIfNeeded(cfg: Config, skip: boolean): Promise<void> {
+  if (skip) return;
+  const { assertChannelPluginConfigs } = await import('../../config/validate-channel-configs.js');
+  assertChannelPluginConfigs(cfg);
+}
+
+async function serializeConfig(cfg: Config, skipChannelPluginValidation: boolean): Promise<string> {
   const validated = ConfigSchema.parse(cfg);
-  assertChannelPluginConfigs(validated);
+  await assertChannelPluginsIfNeeded(validated, skipChannelPluginValidation);
   return JSON.stringify(validated, null, 2);
 }
 
-function tryReadDiskConfig(configPath: string): Config | null {
+async function tryReadDiskConfig(
+  configPath: string,
+  skipChannelPluginValidation: boolean,
+): Promise<Config | null> {
   try {
     const raw = readFileSync(configPath, 'utf-8');
     const cfg = ConfigSchema.parse(JSON.parse(raw) as unknown);
-    assertChannelPluginConfigs(cfg);
+    await assertChannelPluginsIfNeeded(cfg, skipChannelPluginValidation);
     return cfg;
   } catch {
     return null;
@@ -55,6 +71,7 @@ export async function initWorkspace(options: InitWorkspaceOptions): Promise<Init
   const gatewayHost = options.gatewayHost ?? '127.0.0.1';
   const gatewayPortDefaulted = options.gatewayPort ?? 18790;
   const persistWorkspacePath = options.persistWorkspacePath ?? false;
+  const skipChannelPluginValidation = options.skipChannelPluginValidation ?? false;
   const { configPath, workspacePath } = options;
 
   mkdirSync(dirname(configPath), { recursive: true });
@@ -67,7 +84,7 @@ export async function initWorkspace(options: InitWorkspaceOptions): Promise<Init
     config = loadConfig(configPath);
   } else {
     config = ConfigSchema.parse(undefined);
-    assertChannelPluginConfigs(config);
+    await assertChannelPluginsIfNeeded(config, skipChannelPluginValidation);
   }
 
   mkdirSync(workspacePath, { recursive: true });
@@ -115,15 +132,17 @@ export async function initWorkspace(options: InitWorkspaceOptions): Promise<Init
   };
 
   const nextFinal = ConfigSchema.parse(nextConfig);
-  assertChannelPluginConfigs(nextFinal);
+  await assertChannelPluginsIfNeeded(nextFinal, skipChannelPluginValidation);
 
   let needsWrite = configCreated;
   if (!needsWrite) {
-    const disk = tryReadDiskConfig(configPath);
+    const disk = await tryReadDiskConfig(configPath, skipChannelPluginValidation);
     if (!disk) {
       needsWrite = true;
     } else {
-      needsWrite = serializeConfig(disk) !== serializeConfig(nextFinal);
+      needsWrite =
+        (await serializeConfig(disk, skipChannelPluginValidation)) !==
+        (await serializeConfig(nextFinal, skipChannelPluginValidation));
     }
   }
 

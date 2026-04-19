@@ -39,6 +39,7 @@ export async function ensureGatewayConfigForElectron(paths: ElectronUserPaths): 
     gatewayHost: '127.0.0.1',
     gatewayPort: getDefaultGatewayPort(),
     persistWorkspacePath: true,
+    skipChannelPluginValidation: true,
   });
 
   const host = '127.0.0.1';
