@@ -124,7 +124,7 @@ export function CronPage() {
   const chatM = m.chat;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
-  const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
+  const resolvedTheme = useThemeStore((s) => s.resolved);
   const isDark = resolvedTheme === 'dark';
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
 
@@ -511,8 +511,11 @@ export function CronPage() {
       if (formMode === 'edit' && formJobId) {
         await updateJob(formJobId, jobData);
       } else {
-        const { schedule: sched, ...rest } = jobData;
-        await addJob(sched, rest);
+        const { schedule: sched, agentId, ...rest } = jobData;
+        await addJob(sched, {
+          ...rest,
+          ...(agentId != null ? { agentId } : {}),
+        });
       }
       closeForm();
       await loadJobs();
