@@ -1,14 +1,21 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { Download, X } from 'lucide-react';
+
+import { PreviewOpenAlternativesBar } from '@/features/preview/preview-open-alternatives';
 import { useEffect, useRef, useState } from 'react';
 
 import type { MessageAttachment } from '@/features/chat/messages.types';
 import {
   arrayBufferToBase64,
   base64ToArrayBuffer,
+  EXCEL_PREVIEW_MAX_COLS,
+  EXCEL_PREVIEW_MAX_ROWS,
   extractTextForPreview,
   getAttachmentBinaryPayload,
+  inferAttachmentFileType,
+  PPTX_PREVIEW_MAX_CHARS,
   resolveDataUrlForDisplay,
+  type AttachmentPreviewFileType,
 } from '@/features/chat/attachment-utils-core';
 import { apiFetch } from '@/lib/fetch';
 import { cn } from '@/lib/cn';
@@ -18,29 +25,28 @@ import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
 
-type FileType = 'image' | 'pdf' | 'docx' | 'pptx' | 'excel' | 'text';
-
-function getFileType(att: MessageAttachment | undefined): FileType {
-  if (!att) return 'text';
-  if (att.mimeType?.startsWith('image/')) return 'image';
-  if (att.type === 'image') return 'image';
-  if (att.mimeType === 'application/pdf') return 'pdf';
-  if (att.mimeType?.includes('wordprocessingml')) return 'docx';
-  if (att.mimeType?.includes('presentationml') || att.name?.toLowerCase().endsWith('.pptx')) {
-    return 'pptx';
+function fillTemplate(template: string, params: Record<string, string | number>): string {
+  let s = template;
+  for (const [k, v] of Object.entries(params)) {
+    s = s.replaceAll(`{${k}}`, String(v));
   }
-  if (
-    att.mimeType?.includes('spreadsheetml') ||
-    att.mimeType?.includes('ms-excel') ||
-    att.name?.toLowerCase().endsWith('.xlsx') ||
-    att.name?.toLowerCase().endsWith('.xls')
-  ) {
-    return 'excel';
-  }
-  return 'text';
+  return s;
 }
 
-function fileTypeLabel(ft: FileType, labels: ReturnType<typeof messages>['chat']): string {
+/** PPTX extracted text can be huge — cap DOM size to keep the tab responsive. */
+function previewBodyPrimaryText(
+  attachment: MessageAttachment,
+  fileType: AttachmentPreviewFileType,
+  labels: ReturnType<typeof messages>['chat'],
+): { text: string; truncated: boolean } {
+  const raw = extractTextForPreview(attachment) || labels.attachmentPreviewNoText;
+  if (fileType === 'pptx' && raw.length > PPTX_PREVIEW_MAX_CHARS) {
+    return { text: raw.slice(0, PPTX_PREVIEW_MAX_CHARS), truncated: true };
+  }
+  return { text: raw, truncated: false };
+}
+
+function fileTypeLabel(ft: AttachmentPreviewFileType, labels: ReturnType<typeof messages>['chat']): string {
   switch (ft) {
     case 'pdf':
       return labels.attachmentPreviewPdf;
@@ -62,23 +68,27 @@ function PreviewBody({
   loadingGateway,
   fetchError,
   language,
+  onDownloadFull,
 }: {
   attachment: MessageAttachment;
-  fileType: FileType;
+  fileType: AttachmentPreviewFileType;
   showExtractedText: boolean;
   loadingGateway: boolean;
   fetchError: string | null;
   language: StoredLanguage;
+  onDownloadFull: () => void;
 }) {
   const labels = messages(language).chat;
   const containerRef = useRef<HTMLDivElement>(null);
   const cleanupRef = useRef<(() => void) | null>(null);
   const [renderError, setRenderError] = useState<string | null>(null);
+  const [excelTruncated, setExcelTruncated] = useState(false);
 
   useEffect(() => {
     cleanupRef.current?.();
     cleanupRef.current = null;
     setRenderError(null);
+    setExcelTruncated(false);
   }, [attachment, fileType, showExtractedText, fetchError]);
 
   useEffect(() => {
@@ -102,7 +112,11 @@ function PreviewBody({
           const buf = base64ToArrayBuffer(payload);
           const mod = await import('@/features/chat/attachment-preview-renderer');
           if (cancelled) return;
-          const { cleanup } = await mod.renderPdfInContainer(el, buf);
+          const L = messages(language).chat;
+          const { cleanup } = await mod.renderPdfInContainer(el, buf, {
+            loadingText: L.attachmentPreviewPdfRendering,
+            loadMoreHint: L.attachmentPreviewPdfLoadMore,
+          });
           cleanupRef.current = cleanup;
         } catch (e) {
           if (!cancelled) {
@@ -134,8 +148,15 @@ function PreviewBody({
           const buf = base64ToArrayBuffer(payload);
           const mod = await import('@/features/chat/attachment-preview-renderer');
           if (cancelled) return;
-          const { cleanup } = await mod.renderExcelInContainer(el, buf);
+          const L = messages(language).chat;
+          const { cleanup, truncated } = await mod.renderExcelInContainer(el, buf, {
+            truncationNotice: fillTemplate(L.attachmentPreviewExcelTruncated, {
+              rows: EXCEL_PREVIEW_MAX_ROWS,
+              cols: EXCEL_PREVIEW_MAX_COLS,
+            }),
+          });
           cleanupRef.current = cleanup;
+          if (!cancelled) setExcelTruncated(truncated);
         } catch (e) {
           if (!cancelled) {
             const L = messages(language).chat;
@@ -163,20 +184,41 @@ function PreviewBody({
   const err = fetchError || renderError;
   if (err) {
     return (
-      <div className="flex min-h-0 flex-1 flex-col items-center justify-center gap-2 px-4 text-center">
-        <div className="text-sm font-medium text-fg">{labels.attachmentPreviewLoadError}</div>
-        <div className="max-w-lg text-xs text-fg-muted">{err}</div>
+      <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-auto px-1">
+        <PreviewOpenAlternativesBar
+          message={labels.attachmentPreviewOpenElsewhereHint}
+          downloadLabel={labels.attachmentPreviewDownloadFull}
+          onDownload={onDownloadFull}
+        />
+        <div className="flex flex-col items-center justify-center gap-2 px-2 text-center">
+          <div className="text-sm font-medium text-fg">{labels.attachmentPreviewLoadError}</div>
+          <div className="max-w-lg text-xs text-fg-muted">{err}</div>
+        </div>
       </div>
     );
   }
 
   if (showExtractedText && fileType !== 'image') {
-    const text = extractTextForPreview(attachment) || labels.attachmentPreviewNoText;
+    const { text, truncated } = previewBodyPrimaryText(attachment, fileType, labels);
     return (
-      <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle bg-surface-hover/40 p-4 dark:border-edge">
-        <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-fg-muted">
-          {text}
-        </pre>
+      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+        {truncated && fileType === 'pptx' ? (
+          <PreviewOpenAlternativesBar
+            message={labels.attachmentPreviewOpenElsewhereTruncated}
+            downloadLabel={labels.attachmentPreviewDownloadFull}
+            onDownload={onDownloadFull}
+          />
+        ) : null}
+        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle bg-surface-hover/40 p-4 dark:border-edge">
+          {truncated && fileType === 'pptx' ? (
+            <p className="mb-2 border-b border-edge-subtle pb-2 text-xs text-fg-muted dark:border-edge">
+              {labels.attachmentPreviewPptxTruncated}
+            </p>
+          ) : null}
+          <pre className="whitespace-pre-wrap break-words font-mono text-xs leading-relaxed text-fg-muted">
+            {text}
+          </pre>
+        </div>
       </div>
     );
   }
@@ -204,22 +246,52 @@ function PreviewBody({
     }
 
     case 'pptx': {
-      const text = extractTextForPreview(attachment) || labels.attachmentPreviewNoText;
+      const { text, truncated } = previewBodyPrimaryText(attachment, fileType, labels);
       return (
-        <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle p-4 dark:border-edge">
-          <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-fg">{text}</pre>
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+          {truncated ? (
+            <PreviewOpenAlternativesBar
+              message={labels.attachmentPreviewOpenElsewhereTruncated}
+              downloadLabel={labels.attachmentPreviewDownloadFull}
+              onDownload={onDownloadFull}
+            />
+          ) : null}
+          <div className="min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle p-4 dark:border-edge">
+            {truncated ? (
+              <p className="mb-2 border-b border-edge-subtle pb-2 text-xs text-fg-muted dark:border-edge">
+                {labels.attachmentPreviewPptxTruncated}
+              </p>
+            ) : null}
+            <pre className="whitespace-pre-wrap font-mono text-xs leading-relaxed text-fg">{text}</pre>
+          </div>
         </div>
       );
     }
 
     case 'pdf':
     case 'docx':
-    case 'excel':
       return (
         <div
           ref={containerRef}
           className="docx-preview-host min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle bg-surface-panel p-2 dark:border-edge"
         />
+      );
+
+    case 'excel':
+      return (
+        <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-hidden">
+          {excelTruncated ? (
+            <PreviewOpenAlternativesBar
+              message={labels.attachmentPreviewOpenElsewhereTruncated}
+              downloadLabel={labels.attachmentPreviewDownloadFull}
+              onDownload={onDownloadFull}
+            />
+          ) : null}
+          <div
+            ref={containerRef}
+            className="docx-preview-host min-h-0 flex-1 overflow-auto rounded-lg border border-edge-subtle bg-surface-panel p-2 dark:border-edge"
+          />
+        </div>
       );
 
     default: {
@@ -306,7 +378,7 @@ export function AttachmentPreviewDialog({
     };
   }, [open, preview?.workspaceRelativePath, authToken, language]);
 
-  const fileType = getFileType(preview ?? undefined);
+  const fileType = preview ? inferAttachmentFileType(preview) : 'text';
   const hasExtractedText = Boolean(preview?.extractedText);
   const showToggle =
     fileType !== 'image' && fileType !== 'text' && fileType !== 'pptx' && hasExtractedText;
@@ -432,6 +504,7 @@ export function AttachmentPreviewDialog({
                   loadingGateway={loadingGateway}
                   fetchError={fetchError}
                   language={language}
+                  onDownloadFull={handleDownload}
                 />
               ) : null}
             </div>

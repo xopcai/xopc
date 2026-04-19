@@ -36,7 +36,12 @@ export interface ElectronGatewayShellAPI {
   onExited(callback: (detail: { code: number | null; signal: string | null }) => void): () => void;
 }
 
+export interface ElectronShellAPI {
+  openPath(filePath: string): Promise<{ error?: string }>;
+}
+
 export interface ElectronAPI {
+  shell?: ElectronShellAPI;
   file: ElectronFileAPI;
   search: ElectronSearchAPI;
   agent: ElectronAgentAPI;

@@ -3,9 +3,17 @@
  * Kept separate from the dialog shell so Vite can split this into async chunks.
  */
 
+import {
+  EXCEL_PREVIEW_MAX_COLS,
+  EXCEL_PREVIEW_MAX_ROWS,
+} from '@/features/chat/attachment-utils-core';
 import { isRenderableWorksheet } from '@/features/chat/excel-worksheet-utils';
 
 let pdfWorkerConfigured = false;
+
+/** First paint: render this many pages, then lazy-load the rest when the viewport nears the sentinel. */
+const PDF_INITIAL_PAGE_COUNT = 5;
+const PDF_LAZY_PAGE_BATCH = 5;
 
 async function ensurePdfWorker(): Promise<typeof import('pdfjs-dist')> {
   const pdfjsLib = await import('pdfjs-dist');
@@ -19,19 +27,50 @@ async function ensurePdfWorker(): Promise<typeof import('pdfjs-dist')> {
   return pdfjsLib;
 }
 
+function yieldToBrowser(): Promise<void> {
+  return new Promise((resolve) => requestAnimationFrame(() => resolve()));
+}
+
+export type RenderPdfInContainerOptions = {
+  loadingText?: string;
+  loadMoreHint?: string;
+};
+
 export async function renderPdfInContainer(
   container: HTMLDivElement,
   arrayBuffer: ArrayBuffer,
+  options?: RenderPdfInContainerOptions,
 ): Promise<{ cleanup: () => void }> {
   const pdfjsLib = await ensurePdfWorker();
   const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-  const pdf = await loadingTask.promise;
+  let pendingLoadTask: { destroy: () => void } | null = loadingTask;
+
+  container.innerHTML = '';
+  const loadingEl = document.createElement('p');
+  loadingEl.className = 'p-4 text-sm text-fg-muted';
+  loadingEl.textContent = options?.loadingText ?? '…';
+  container.appendChild(loadingEl);
+
+  let pdf: import('pdfjs-dist').PDFDocumentProxy | null = null;
+  let observer: IntersectionObserver | null = null;
+
+  try {
+    pdf = await loadingTask.promise;
+  } catch (e) {
+    pendingLoadTask?.destroy();
+    pendingLoadTask = null;
+    throw e;
+  }
+  pendingLoadTask = null;
 
   container.innerHTML = '';
   const wrapper = document.createElement('div');
   container.appendChild(wrapper);
+  const pagesHost = document.createElement('div');
+  wrapper.appendChild(pagesHost);
 
-  for (let pageNum = 1; pageNum <= pdf.numPages; pageNum++) {
+  const renderPageToHost = async (pageNum: number, numPagesTotal: number) => {
+    if (!pdf) return;
     const page = await pdf.getPage(pageNum);
 
     const pageContainer = document.createElement('div');
@@ -62,18 +101,79 @@ export async function renderPdfInContainer(
 
     pageContainer.appendChild(canvas);
 
-    if (pageNum < pdf.numPages) {
+    if (pageNum < numPagesTotal) {
       const separator = document.createElement('div');
       separator.className = 'my-4 h-px bg-edge';
       pageContainer.appendChild(separator);
     }
 
-    wrapper.appendChild(pageContainer);
+    pagesHost.appendChild(pageContainer);
+  };
+
+  const numPages = pdf.numPages;
+  const initialEnd = Math.min(PDF_INITIAL_PAGE_COUNT, numPages);
+
+  for (let pageNum = 1; pageNum <= initialEnd; pageNum++) {
+    await renderPageToHost(pageNum, numPages);
+    await yieldToBrowser();
+  }
+
+  let nextPage = initialEnd + 1;
+
+  if (nextPage <= numPages) {
+    const hint = document.createElement('p');
+    hint.className = 'py-2 text-center text-xs text-fg-muted';
+    hint.textContent = options?.loadMoreHint ?? '';
+    wrapper.appendChild(hint);
+
+    const sentinel = document.createElement('div');
+    sentinel.className = 'pdf-lazy-sentinel h-12 w-full shrink-0';
+    sentinel.setAttribute('aria-hidden', 'true');
+    wrapper.appendChild(sentinel);
+
+    let loadingMore = false;
+    observer = new IntersectionObserver(
+      async (entries) => {
+        if (!entries[0]?.isIntersecting || loadingMore || !pdf) return;
+        loadingMore = true;
+        try {
+          const batchEnd = Math.min(nextPage + PDF_LAZY_PAGE_BATCH - 1, numPages);
+          for (let p = nextPage; p <= batchEnd; p++) {
+            await renderPageToHost(p, numPages);
+            await yieldToBrowser();
+          }
+          nextPage = batchEnd + 1;
+          if (nextPage > numPages) {
+            observer?.disconnect();
+            observer = null;
+            hint.remove();
+            sentinel.remove();
+          }
+        } finally {
+          loadingMore = false;
+        }
+      },
+      { root: container, rootMargin: '320px', threshold: 0 },
+    );
+    observer.observe(sentinel);
   }
 
   return {
     cleanup: () => {
-      pdf.destroy();
+      observer?.disconnect();
+      observer = null;
+      if (pendingLoadTask) {
+        try {
+          pendingLoadTask.destroy();
+        } catch {
+          /* ignore */
+        }
+        pendingLoadTask = null;
+      }
+      if (pdf) {
+        pdf.destroy();
+        pdf = null;
+      }
       container.innerHTML = '';
     },
   };
@@ -96,7 +196,8 @@ export async function renderDocxInContainer(
     inWrapper: true,
     ignoreWidth: true,
     ignoreHeight: false,
-    ignoreFonts: false,
+    // Embedded Word fonts often fail to load in the browser; ignoring them uses system fonts so CJK/Latin render correctly.
+    ignoreFonts: true,
     breakPages: true,
     ignoreLastRenderedPageBreak: true,
     experimental: false,
@@ -113,10 +214,10 @@ export async function renderDocxInContainer(
     .docx-preview-host { padding: 0; }
     .docx-preview-host .docx-wrapper-custom { max-width: 100%; overflow-x: auto; }
     .docx-preview-host .docx-wrapper { max-width: 100% !important; margin: 0 !important; background: transparent !important; padding: 0em !important; }
-    .docx-preview-host .docx-wrapper > section.docx { box-shadow: none !important; border: none !important; border-radius: 0 !important; margin: 0 !important; padding: 2em !important; background: white !important; color: black !important; max-width: 100% !important; width: 100% !important; min-width: 0 !important; overflow-x: auto !important; }
-    .docx-preview-host table { max-width: 100% !important; width: auto !important; overflow-x: auto !important; display: block !important; }
+    .docx-preview-host .docx-wrapper > section.docx { box-shadow: none !important; border: none !important; border-radius: 0 !important; margin: 0 !important; padding: 2em !important; background: white !important; color: black !important; max-width: 100% !important; width: 100% !important; min-width: 0 !important; overflow-x: auto !important; font-family: system-ui, -apple-system, "Segoe UI", "PingFang SC", "Hiragino Sans GB", "Microsoft YaHei", "Noto Sans CJK SC", "Noto Sans CJK JP", sans-serif !important; }
+    .docx-preview-host table { max-width: 100% !important; width: auto !important; overflow-x: auto !important; display: block !important; font-family: inherit !important; }
     .docx-preview-host img { max-width: 100% !important; height: auto !important; }
-    .docx-preview-host p, .docx-preview-host span, .docx-preview-host div { max-width: 100% !important; word-wrap: break-word !important; overflow-wrap: break-word !important; }
+    .docx-preview-host p, .docx-preview-host span, .docx-preview-host div, .docx-preview-host td, .docx-preview-host th { max-width: 100% !important; word-wrap: break-word !important; overflow-wrap: break-word !important; font-family: inherit !important; }
     .docx-preview-host .docx-page-break { display: none !important; }
   `;
   container.classList.add('docx-preview-host');
@@ -130,10 +231,15 @@ export async function renderDocxInContainer(
   };
 }
 
+export type RenderExcelInContainerOptions = {
+  truncationNotice?: string;
+};
+
 export async function renderExcelInContainer(
   container: HTMLDivElement,
   arrayBuffer: ArrayBuffer,
-): Promise<{ cleanup: () => void }> {
+  options?: RenderExcelInContainerOptions,
+): Promise<{ cleanup: () => void; truncated: boolean }> {
   const XLSX = await import('xlsx');
   const workbook = XLSX.read(arrayBuffer, { type: 'array' });
 
@@ -149,11 +255,14 @@ export async function renderExcelInContainer(
     empty.textContent = '(No sheets in workbook.)';
     wrapper.appendChild(empty);
     return {
+      truncated: false,
       cleanup: () => {
         container.innerHTML = '';
       },
     };
   }
+
+  let anyTruncated = false;
 
   if (names.length > 1) {
     const tabContainer = document.createElement('div');
@@ -174,7 +283,14 @@ export async function renderExcelInContainer(
       const sheetDiv = document.createElement('div');
       sheetDiv.style.display = index === 0 ? 'flex' : 'none';
       sheetDiv.className = 'min-h-0 flex-1 overflow-auto';
-      sheetDiv.appendChild(buildExcelSheetDomWithXlsx(XLSX, workbook.Sheets[sheetName], sheetName));
+      const built = buildExcelSheetDomWithXlsx(
+        XLSX,
+        workbook.Sheets[sheetName],
+        sheetName,
+        options?.truncationNotice,
+      );
+      if (built.truncated) anyTruncated = true;
+      sheetDiv.appendChild(built.element);
       sheetContents.push(sheetDiv);
 
       tab.onclick = () => {
@@ -201,10 +317,18 @@ export async function renderExcelInContainer(
     });
   } else {
     const sheetName = names[0];
-    wrapper.appendChild(buildExcelSheetDomWithXlsx(XLSX, workbook.Sheets[sheetName], sheetName));
+    const built = buildExcelSheetDomWithXlsx(
+      XLSX,
+      workbook.Sheets[sheetName],
+      sheetName,
+      options?.truncationNotice,
+    );
+    anyTruncated = built.truncated;
+    wrapper.appendChild(built.element);
   }
 
   return {
+    truncated: anyTruncated,
     cleanup: () => {
       container.innerHTML = '';
     },
@@ -215,7 +339,8 @@ function buildExcelSheetDomWithXlsx(
   XLSX: typeof import('xlsx'),
   worksheet: import('xlsx').WorkSheet | undefined,
   sheetName: string,
-): HTMLElement {
+  truncationNotice?: string,
+): { element: HTMLElement; truncated: boolean } {
   const sheetDiv = document.createElement('div');
 
   if (!worksheet) {
@@ -223,7 +348,7 @@ function buildExcelSheetDomWithXlsx(
     p.className = 'p-4 text-sm text-fg-muted';
     p.textContent = `Sheet "${sheetName}" is missing from the workbook.`;
     sheetDiv.appendChild(p);
-    return sheetDiv;
+    return { element: sheetDiv, truncated: false };
   }
 
   if (!isRenderableWorksheet(worksheet)) {
@@ -231,53 +356,54 @@ function buildExcelSheetDomWithXlsx(
     p.className = 'p-4 text-sm text-fg-muted';
     p.textContent = '(Empty sheet — no cell range.)';
     sheetDiv.appendChild(p);
-    return sheetDiv;
+    return { element: sheetDiv, truncated: false };
   }
 
-  let htmlTable: string;
   try {
-    htmlTable = XLSX.utils.sheet_to_html(worksheet, { id: `sheet-${sheetName}` });
+    const rows: string[][] = XLSX.utils.sheet_to_json(worksheet, {
+      header: 1,
+      defval: '',
+    });
+
+    const rawMaxCol = rows.reduce((m, r) => Math.max(m, r.length), 0);
+    const truncated =
+      rows.length > EXCEL_PREVIEW_MAX_ROWS || rawMaxCol > EXCEL_PREVIEW_MAX_COLS;
+
+    if (truncated && truncationNotice) {
+      const note = document.createElement('p');
+      note.className = 'mb-2 border-b border-edge-subtle px-1 pb-2 text-xs text-fg-muted dark:border-edge';
+      note.textContent = truncationNotice;
+      sheetDiv.appendChild(note);
+    }
+
+    const sliced = rows
+      .slice(0, EXCEL_PREVIEW_MAX_ROWS)
+      .map((row) => row.slice(0, EXCEL_PREVIEW_MAX_COLS));
+
+    const table = document.createElement('table');
+    table.className = 'w-full border-collapse text-fg';
+
+    sliced.forEach((row, ri) => {
+      const tr = document.createElement('tr');
+      if (ri % 2 === 1) {
+        tr.className = 'bg-surface-hover/40';
+      }
+      row.forEach((cell) => {
+        const td = document.createElement('td');
+        td.className = 'border border-edge px-3 py-2 text-left text-sm dark:border-edge';
+        td.textContent = cell === null || cell === undefined ? '' : String(cell);
+        tr.appendChild(td);
+      });
+      table.appendChild(tr);
+    });
+
+    sheetDiv.appendChild(table);
+    return { element: sheetDiv, truncated };
   } catch (e) {
     const p = document.createElement('p');
     p.className = 'p-4 text-sm text-red-600 dark:text-red-400';
     p.textContent = e instanceof Error ? e.message : String(e);
     sheetDiv.appendChild(p);
-    return sheetDiv;
+    return { element: sheetDiv, truncated: false };
   }
-
-  const tempDiv = document.createElement('div');
-  tempDiv.innerHTML = htmlTable;
-
-  const table = tempDiv.querySelector('table');
-  if (table) {
-    table.className = 'w-full border-collapse text-fg';
-
-    table.querySelectorAll('td, th').forEach((cell) => {
-      const cellEl = cell as HTMLElement;
-      cellEl.className = 'border border-edge px-3 py-2 text-left text-sm dark:border-edge';
-    });
-
-    const headerCells = table.querySelectorAll('thead th, tr:first-child td');
-    if (headerCells.length > 0) {
-      headerCells.forEach((th) => {
-        const thEl = th as HTMLElement;
-        thEl.className =
-          'sticky top-0 border border-edge bg-surface-hover px-3 py-2 text-sm font-semibold text-fg dark:border-edge';
-      });
-    }
-
-    table.querySelectorAll('tbody tr:nth-child(even)').forEach((row) => {
-      const rowEl = row as HTMLElement;
-      rowEl.className = 'bg-surface-hover/40';
-    });
-
-    sheetDiv.appendChild(table);
-  } else {
-    const p = document.createElement('p');
-    p.className = 'p-4 text-sm text-fg-muted';
-    p.textContent = '(Could not build table for this sheet.)';
-    sheetDiv.appendChild(p);
-  }
-
-  return sheetDiv;
 }

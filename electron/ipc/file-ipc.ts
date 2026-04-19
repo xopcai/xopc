@@ -2,7 +2,7 @@ import { readdir, readFile, writeFile } from 'node:fs/promises';
 import { watch as fsWatch } from 'node:fs';
 import { extname, join } from 'node:path';
 
-import { type IpcMain, dialog } from 'electron';
+import { type IpcMain, dialog, shell } from 'electron';
 
 const SUPPORTED_EXTENSIONS = new Set(['.md', '.txt', '.json', '.ts', '.js']);
 
@@ -47,6 +47,11 @@ export function registerFileIpc(ipcMain: IpcMain): void {
   ipcMain.handle('file:open-dir-dialog', async () => {
     const res = await dialog.showOpenDialog({ properties: ['openDirectory'] });
     return res.canceled ? null : res.filePaths[0] ?? null;
+  });
+
+  ipcMain.handle('shell:open-path', async (_, filePath: string) => {
+    const err = await shell.openPath(filePath);
+    return { error: err || undefined };
   });
 
   ipcMain.handle('file:watch', async (event, filePath: string) => {

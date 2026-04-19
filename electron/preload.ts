@@ -1,6 +1,10 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
 contextBridge.exposeInMainWorld('electronAPI', {
+  shell: {
+    openPath: (filePath: string) =>
+      ipcRenderer.invoke('shell:open-path', filePath) as Promise<{ error?: string }>,
+  },
   file: {
     readFile: (filePath: string) => ipcRenderer.invoke('file:read', filePath) as Promise<string>,
     writeFile: (filePath: string, content: string) =>
