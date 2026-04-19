@@ -256,6 +256,47 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
     }
   });
 
+  /** Read file as raw bytes and return base64 (for PDF/images in workspace preview — avoids UTF-8 corruption). */
+  authenticated.get('/api/workspace/editor/read-base64', async (c) => {
+    const pathRel = typeof c.req.query('path') === 'string' ? c.req.query('path')! : '';
+    if (!pathRel.trim()) {
+      return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
+    }
+    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { message: ws.message } }, 400);
+    }
+    const workspaceRoot = ws.root;
+    const abs = resolveWorkspaceSafePath(workspaceRoot, pathRel);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Invalid path' } }, 400);
+    }
+    let st: Awaited<ReturnType<typeof stat>>;
+    try {
+      st = await stat(abs);
+    } catch {
+      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    }
+    if (!st.isFile()) {
+      return c.json({ ok: false, error: { message: 'Not a file' } }, 400);
+    }
+    try {
+      const buf = await readFile(abs);
+      return c.json({
+        ok: true,
+        payload: {
+          contentBase64: buf.toString('base64'),
+          path: toWorkspaceRelativePosix(workspaceRoot, abs),
+          /** Host absolute path — Electron can open with the default app (shell.openPath). */
+          absolutePath: abs,
+          mtimeMs: st.mtimeMs,
+        },
+      });
+    } catch {
+      return c.json({ ok: false, error: { message: 'Read failed' } }, 500);
+    }
+  });
+
   authenticated.put('/api/workspace/editor/write', async (c) => {
     const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
     if (ws.ok === false) {

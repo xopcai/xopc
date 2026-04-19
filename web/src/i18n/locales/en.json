@@ -288,6 +288,13 @@
     "attachmentPreviewFailedPdf": "Failed to load PDF",
     "attachmentPreviewFailedDocx": "Failed to load document",
     "attachmentPreviewFailedExcel": "Failed to load spreadsheet",
+    "attachmentPreviewPdfRendering": "Rendering PDF…",
+    "attachmentPreviewPdfLoadMore": "Scroll to load more pages",
+    "attachmentPreviewExcelTruncated": "Preview limited to {rows} rows × {cols} columns. Download the file to see the full sheet.",
+    "attachmentPreviewPptxTruncated": "Text preview truncated for performance. Download the file to see the full deck.",
+    "attachmentPreviewOpenElsewhereHint": "Download the file to open it in another application on your computer.",
+    "attachmentPreviewOpenElsewhereTruncated": "Only part of this file is shown here. Download the full file to open it elsewhere.",
+    "attachmentPreviewDownloadFull": "Download file",
     "attachmentPreviewImage": "Preview image",
     "stepTimelineThinkingStreaming": "Thinking…",
     "stepTimelineThinkingDone": "Thinking complete",
@@ -523,7 +530,11 @@
     "emptyDir": "No files",
     "loadError": "Failed to load",
     "close": "Close",
-    "lastModified": "Modified"
+    "lastModified": "Modified",
+    "openElsewhereHint": "Preview may be limited or unavailable. Download the file or open it with another app.",
+    "cannotPreviewType": "This file type can't be previewed here.",
+    "openSystemApp": "Open with default app",
+    "copyPath": "Copy path"
   },
   "skills": {
     "title": "Skills",

@@ -1,3 +1,4 @@
+import { inferMimeTypeFromFileName } from '@/features/chat/attachment-utils-core';
 import type { Message, MessageAttachment, MessageContent, ThinkingContent, ToolUseContent } from '@/features/chat/messages.types';
 
 // =============================================================================
@@ -248,6 +249,13 @@ function normalizeOneAttachment(item: unknown): MessageAttachment {
   }
   if (!mimeType) {
     mimeType = 'application/octet-stream';
+  }
+  const baseMime = mimeType.split(';')[0]?.trim().toLowerCase() ?? '';
+  if (baseMime === 'application/octet-stream' || baseMime === '') {
+    const inferred = inferMimeTypeFromFileName(name);
+    if (inferred) {
+      mimeType = inferred;
+    }
   }
   const preview =
     typeof a.preview === 'string' && a.preview.length > 0

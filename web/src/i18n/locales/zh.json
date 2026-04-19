@@ -288,6 +288,13 @@
     "attachmentPreviewFailedPdf": "无法加载 PDF",
     "attachmentPreviewFailedDocx": "无法加载文档",
     "attachmentPreviewFailedExcel": "无法加载表格",
+    "attachmentPreviewPdfRendering": "正在渲染 PDF…",
+    "attachmentPreviewPdfLoadMore": "向下滚动以加载更多页",
+    "attachmentPreviewExcelTruncated": "预览仅显示前 {rows} 行 × {cols} 列。请下载文件查看完整表格。",
+    "attachmentPreviewPptxTruncated": "为保护性能，文本预览已截断。请下载文件查看完整演示文稿。",
+    "attachmentPreviewOpenElsewhereHint": "请下载文件后，使用本机上的其他应用打开。",
+    "attachmentPreviewOpenElsewhereTruncated": "此处仅显示部分内容。请下载完整文件后在本机其他应用中打开。",
+    "attachmentPreviewDownloadFull": "下载文件",
     "attachmentPreviewImage": "预览图片",
     "stepTimelineThinkingStreaming": "正在思考…",
     "stepTimelineThinkingDone": "思考完成",
@@ -523,7 +530,11 @@
     "emptyDir": "暂无文件",
     "loadError": "加载失败",
     "close": "关闭",
-    "lastModified": "修改时间"
+    "lastModified": "修改时间",
+    "openElsewhereHint": "预览可能受限或不可用。请下载文件或使用其他应用打开。",
+    "cannotPreviewType": "无法在预览中打开此类型的文件。",
+    "openSystemApp": "用默认应用打开",
+    "copyPath": "复制路径"
   },
   "skills": {
     "title": "技能",

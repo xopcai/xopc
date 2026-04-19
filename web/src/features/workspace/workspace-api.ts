@@ -19,6 +19,11 @@ interface ReadResponse {
   payload: { content: string; path: string; mtimeMs?: number };
 }
 
+interface ReadBase64Response {
+  ok: boolean;
+  payload: { contentBase64: string; path: string; absolutePath?: string; mtimeMs?: number };
+}
+
 interface WriteResponse {
   ok: boolean;
   payload: { path: string; mtimeMs?: number };
@@ -63,6 +68,20 @@ export async function readWorkspaceFile(
   return res.payload;
 }
 
+/** Read a workspace file as base64 (binary-safe; use for PDF preview). */
+export async function readWorkspaceFileBase64(
+  path: string,
+  options?: WorkspaceEditorRequestOptions,
+): Promise<{ contentBase64: string; path: string; absolutePath?: string; mtimeMs?: number }> {
+  const params = new URLSearchParams({ path });
+  const aid = options?.agentId?.trim();
+  if (aid) params.set('agentId', aid);
+  const res = await fetchJson<ReadBase64Response>(
+    apiUrl(`/api/workspace/editor/read-base64?${params.toString()}`),
+  );
+  return res.payload;
+}
+
 /** Write (overwrite) a workspace file. */
 export async function writeWorkspaceFile(
   path: string,
@@ -81,6 +100,19 @@ export async function writeWorkspaceFile(
 /** Trigger a browser download for a text file read from the workspace. */
 export function downloadTextFile(fileName: string, content: string): void {
   const blob = new Blob([content], { type: 'text/plain;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const anchor = document.createElement('a');
+  anchor.href = url;
+  anchor.download = fileName;
+  document.body.appendChild(anchor);
+  anchor.click();
+  document.body.removeChild(anchor);
+  URL.revokeObjectURL(url);
+}
+
+/** Download binary data (e.g. PDF from workspace preview). */
+export function downloadBinaryFile(fileName: string, data: ArrayBuffer, mimeType: string): void {
+  const blob = new Blob([data], { type: mimeType });
   const url = URL.createObjectURL(blob);
   const anchor = document.createElement('a');
   anchor.href = url;
