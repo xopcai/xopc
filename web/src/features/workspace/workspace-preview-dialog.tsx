@@ -14,6 +14,7 @@ const LG_MIN = '(min-width: 1024px)';
 
 function usePreviewDialogInset() {
   const sidebarCollapsed = useSidebarStore((s) => s.collapsed);
+  const expandedWidthPx = useSidebarStore((s) => s.expandedWidthPx);
   const workspaceOpen = useWorkspacePanelStore((s) => s.open);
   const [isMd, setIsMd] = useState(() =>
     typeof globalThis.matchMedia === 'function' ? globalThis.matchMedia(MD_MIN).matches : true,
@@ -46,9 +47,9 @@ function usePreviewDialogInset() {
       // Tablet: viewport minus project-files rail only (matches “whole width − 右侧项目文件”).
       return { top: '0', left: '0', right, bottom: '0' } as const;
     }
-    const left = sidebarCollapsed ? '4.5rem' : '16rem';
+    const left = sidebarCollapsed ? '4.5rem' : `${expandedWidthPx}px`;
     return { top: '0', left, right, bottom: '0' } as const;
-  }, [isMd, isLg, sidebarCollapsed, workspaceOpen]);
+  }, [isMd, isLg, sidebarCollapsed, expandedWidthPx, workspaceOpen]);
 }
 
 /**
