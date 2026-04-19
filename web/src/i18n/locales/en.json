@@ -423,8 +423,6 @@
     "scheduleLabel": "Schedule",
     "messageLabel": "Message",
     "totalJobs": "Total jobs",
-    "emptyStateTitle": "No scheduled jobs yet",
-    "emptyStateHint": "Create a job to send on a cron schedule—directly or via the agent.",
     "emptyStateCta": "Create your first job",
     "channel": "Channel",
     "channelLocal": "Local (no outbound)",
@@ -515,6 +513,97 @@
       "minutesAgo": "{{count}}m ago",
       "hoursAgo": "{{count}}h ago",
       "daysAgo": "{{count}}d ago"
+    },
+    "templateFilterAll": "All",
+    "fromTemplate": "From template",
+    "templatesEmptyHint": "No templates match this filter.",
+    "templateCategories": {
+      "daily": "Daily",
+      "monitoring": "Monitoring",
+      "reports": "Reports",
+      "automation": "Automation"
+    },
+    "templates": {
+      "morning_briefing": {
+        "title": "Morning briefing",
+        "description": "Weather-style day snapshot, headlines in your topics, and top priorities—edit the topic list in the prompt.",
+        "prompt": "Build a **morning briefing** I can read in a few minutes.\n- **Weather / day shape**: if you cannot access a real forecast API, say so and give **one** practical clothing or commute tip based only on season/region I name below, or skip this bullet.\n- **Headlines**: topics I care about (edit): **(e.g. local news, macro, tech policy, sports)**—if web search works, 4–6 bullets from the last ~24h with source type; if not, give a **manual check order** instead of inventing stories.\n- **Top 3 priorities today** from workspace notes/todos if visible; else ask me to paste them once.\n- **No fake URLs or quotes**."
+      },
+      "standup_prep": {
+        "title": "Standup prep",
+        "description": "Draft a standup-style update from recent git activity and notable file changes in the workspace.",
+        "prompt": "Prepare a **standup update** for me:\n- If Git is available: **yesterday / since last standup** themes from `git log` (no wall of SHAs), risky paths if obvious from messages.\n- If not: give **commands** I should run locally next time.\n- **Files touched**: infer from workspace if you can (recent edits, open PR-style hints); mark uncertain.\n- **Blockers**: max 3, honest \"unknown\" allowed.\n- **Today intent**: one sentence.\n- Keep it speakable aloud in under ~90 seconds."
+      },
+      "end_of_day_wrap_up": {
+        "title": "End-of-day wrap-up",
+        "description": "Summarize progress, open items, and tomorrow's priorities from workspace context when possible.",
+        "prompt": "**End-of-day wrap** (weekday):\n- **Done**: up to 5 bullets (mark inferred items).\n- **Open / parked**: up to 4 bullets.\n- **Tomorrow**: first concrete task after login—single bullet.\n- Pull from task docs, changelogs, or notes in the workspace when present; otherwise say what is missing.\n- Neutral tone, no guilt."
+      },
+      "inbox_triage": {
+        "title": "Inbox triage",
+        "description": "Surface urgent follow-ups first—uses any mail/export notes in the workspace; no mailbox access implied.",
+        "prompt": "Help me **triage inbox-style work** (no live email unless I paste content):\n- If I have exported snippets, `*.eml`, or notes about mail in the workspace, summarize **urgent follow-ups first** with suggested next action each.\n- If nothing mail-related exists, output a **5-step triage routine** (folders/labels, oldest-first, VIP senders I list below) and ask me to paste 3 subject lines next run.\n- **VIP / domains to watch** (edit): **(add yours)**.\n- Do not claim you read my real inbox."
+      },
+      "competitor_watch": {
+        "title": "Competitor watch",
+        "description": "Track competitor news, product updates, and pricing signals you name—web search when available.",
+        "prompt": "Competitors or alternatives to watch (edit names/topics): **(list here)**.\n- If web search works: summarize **news, product/changelog moves, pricing or packaging signals** from roughly the past week; separate **fact** vs **rumor**.\n- If search is unavailable: give **official domains + what to check** (pricing page, changelog, press) without fabricating updates.\n- **Never invent press quotes, numbers, or URLs**."
+      },
+      "trending_topics_monitor": {
+        "title": "Trending topics",
+        "description": "Track trending discussions and news in industries or communities you list.",
+        "prompt": "Industries, communities, or hashtags I track (edit): **(e.g. fintech, indie games, city subreddit, AI tools)**.\n- If web search works: **5–7** bullets on what is **trending or unusually active** this week; note platform (news, Reddit-style, HN-style) at a high level.\n- If not: suggest **where to look** and **search phrases**—no made-up threads.\n- Flag **controversy or misinformation risk** briefly when relevant."
+      },
+      "tech_radar_stack": {
+        "title": "Tech radar",
+        "description": "Monitor new releases and security advisories for stacks you name (frameworks, runtimes, cloud).",
+        "prompt": "Stacks I use (edit): **(e.g. Node LTS, Postgres, AWS service X, Android SDK)**.\n- List **notable releases or deprecations** from the past ~14 days using **official blogs, registries, or changelogs** only.\n- Security: point to **official advisory channels**; **do not invent CVE IDs**.\n- If the workspace has lockfiles, you may mention ecosystem at a high level; if unsure, say what file you need."
+      },
+      "dependency_check_audit": {
+        "title": "Dependency check",
+        "description": "Audit-style nudge for outdated packages and known issues—suggests commands, does not fabricate CVEs.",
+        "prompt": "From the repo in the workspace, infer package managers (`package.json`, `go.mod`, `pyproject.toml`, etc.).\n- Suggest **one concrete audit command** per ecosystem if documented (npm/pnpm audit, pip-audit, etc.).\n- Summarize **what I should look for** (majors, yanked packages, EOL runtimes) without claiming scan results you did not run.\n- **Never fabricate CVE numbers** or vulnerable versions."
+      },
+      "weekly_review": {
+        "title": "Weekly review",
+        "description": "Summarize the week's commits, open items, and next-week priorities.",
+        "prompt": "**Weekly review** (assume end of week):\n- **Shipped themes** from git + workspace notes (or say git unavailable).\n- **Open items** still worrying (max 6).\n- **Next week**: 3 headline priorities.\n- **One thing to stop or delegate** if overload is visible.\n- Short, executive-summary tone."
+      },
+      "code_quality_report": {
+        "title": "Code quality report",
+        "description": "Outline how to run lint/type-check and what to look for in output—does not pretend CI already ran.",
+        "prompt": "Inspect the workspace for **lint / typecheck / format** scripts (package.json, Makefile, CI YAML).\n- Propose **commands** I should run locally and in what order.\n- Describe **how to skim output**: error categories, flaky tests, type debt hotspots—without inventing numbers.\n- If no scripts found, suggest a **minimal** starter for the detected language with caveats."
+      },
+      "git_activity_summary": {
+        "title": "Git activity summary",
+        "description": "Summarize recent commits, active branches, and hotspot files when git is available.",
+        "prompt": "Summarize **recent Git activity** (last ~7 days if possible):\n- Commit **themes**, **active branches** worth naming, **hotspot files** touched often.\n- If git is not callable here, output **commands** to reproduce the summary locally.\n- Avoid dumping hashes; keep it scannable."
+      },
+      "user_feedback_digest": {
+        "title": "User feedback digest",
+        "description": "Summarize recurring feedback and pain points from notes, issues exports, or docs you keep in the workspace.",
+        "prompt": "I store feedback in (edit paths or patterns): **`feedback/`, issues export, Notion export, etc.`**\n- From readable workspace text, cluster **recurring themes**, **sentiment (rough)**, and **top pain points** (max 5).\n- If no material: give a **template** for how I should paste feedback next time.\n- No PII beyond what is already in files; redact if needed in summary."
+      },
+      "stale_todo_or_issue_sweep": {
+        "title": "Stale todo / issue sweep",
+        "description": "Find aging TODOs or issue-like markers in the repo and suggest keep / close / split.",
+        "prompt": "Scan the workspace for **TODO/FIXME/HACK** comments or lightweight issue lists in markdown.\n- List up to **10 stale candidates** (old by file churn or vague wording) with **suggested next action**: close, split, or schedule.\n- Do not delete anything—recommendations only.\n- If scan is incomplete, say why."
+      },
+      "release_notes_or_changelog_draft": {
+        "title": "Release notes draft",
+        "description": "Draft changelog bullets from recent commits and version files—human must verify before ship.",
+        "prompt": "Draft **release notes / changelog** candidate for the **next** version bump:\n- Read `CHANGELOG`, version in `package.json`/`Cargo.toml`/similar if present.\n- Summarize **user-visible** changes from recent commits since last tag if inferable; else since last week.\n- Mark **uncertain** items; I will edit before publishing.\n- No marketing exaggeration."
+      },
+      "workspace_cleanup_suggestions": {
+        "title": "Workspace cleanup",
+        "description": "List large artifacts, caches, or generated files to review before the weekend—never auto-delete.",
+        "prompt": "Suggest **workspace cleanup** before the weekend:\n- Large **build outputs, caches, logs** if discoverable.\n- Table: path | why it might be safe to trim | risk | suggested action (review only).\n- **Never delete**; if you cannot see disk usage, say so and give generic patterns."
+      },
+      "smoke_or_ci_health_reminder": {
+        "title": "Smoke / CI health",
+        "description": "Remind which smoke tests or CI checks matter this week and how to run them locally.",
+        "prompt": "From CI config and package scripts, list **smoke or health checks** worth running this week.\n- For each: **command**, **expected green signal**, **when to run** (before release, daily, etc.).\n- If CI files are missing, propose a **minimal** manual smoke path for this repo type.\n- Do not claim CI passed without evidence."
+      }
     }
   },
   "workspace": {
