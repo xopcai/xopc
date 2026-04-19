@@ -2,17 +2,21 @@ import * as Dialog from '@radix-ui/react-dialog';
 import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {
   Clock,
+  Eye,
   Info,
   LayoutTemplate,
   Loader2,
   MoreVertical,
   Plus,
   RefreshCw,
+  SquarePen,
   X,
 } from 'lucide-react';
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { useLocation } from 'react-router-dom';
 
+import { MarkdownEditor } from '@/components/markdown/markdown-editor';
+import { MarkdownView } from '@/components/markdown/markdown-view';
 import { Button } from '@/components/ui/button';
 import {
   segmentedThumbActiveClassName,
@@ -65,6 +69,7 @@ import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { usePageHeaderStore } from '@/stores/page-header-store';
+import { useThemeStore } from '@/stores/theme-store';
 
 const RUN_HISTORY_FETCH_LIMIT = 400;
 
@@ -119,6 +124,8 @@ export function CronPage() {
   const chatM = m.chat;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
+  const resolvedTheme = useThemeStore((s) => s.resolvedTheme);
+  const isDark = resolvedTheme === 'dark';
   const localeTag = language === 'zh' ? 'zh-CN' : 'en-US';
 
   const [jobs, setJobs] = useState<CronJob[]>([]);
@@ -150,6 +157,8 @@ export function CronPage() {
   const [formChannel, setFormChannel] = useState('local');
   const [formChatId, setFormChatId] = useState('');
   const [formMessage, setFormMessage] = useState('');
+  const [formMessageMdMode, setFormMessageMdMode] = useState<'edit' | 'preview'>('edit');
+  const [messageEditorNonce, setMessageEditorNonce] = useState(0);
   const [formSessionTarget, setFormSessionTarget] = useState<'main' | 'isolated'>('main');
   const [formAgentId, setFormAgentId] = useState('');
   const [formAgentLocalOnly, setFormAgentLocalOnly] = useState(false);
@@ -390,9 +399,18 @@ export function CronPage() {
         setFormAgentLocalOnly(false);
         setFormModel(defaultModelForForm());
       }
+      setFormMessageMdMode('edit');
+      setMessageEditorNonce((n) => n + 1);
     },
     [defaultModelForForm],
   );
+
+  const setMessageMdMode = useCallback((mode: 'edit' | 'preview') => {
+    setFormMessageMdMode(mode);
+    if (mode === 'edit') {
+      setMessageEditorNonce((n) => n + 1);
+    }
+  }, []);
 
   const applyCronTemplate = useCallback(
     (templateId: string) => {
@@ -411,6 +429,8 @@ export function CronPage() {
       setFormAgentLocalOnly(false);
       setFormAgentId('');
       setFormModel(defaultModelForForm());
+      setFormMessageMdMode('edit');
+      setMessageEditorNonce((n) => n + 1);
       setTemplatePickerOpen(false);
       setFormOpen(true);
     },
@@ -430,6 +450,7 @@ export function CronPage() {
     setFormAgentId('');
     setFormAgentLocalOnly(false);
     setFormModel('');
+    setFormMessageMdMode('edit');
     formModelUserTouched.current = false;
   }, []);
 
@@ -954,9 +975,12 @@ export function CronPage() {
                     </div>
                     <div className="flex flex-1 flex-col gap-2 px-4 pb-3 pt-2">
                       <h3 className="line-clamp-2 font-semibold text-fg">{job.name || job.id}</h3>
-                      <p className="line-clamp-3 text-sm text-fg-muted" title={cronJobBodyText(job)}>
-                        {truncate(cronJobBodyText(job), 180)}
-                      </p>
+                      <div
+                        className="max-h-[4.5rem] overflow-hidden text-sm text-fg-muted [&_.markdown-body]:text-sm [&_.markdown-body]:leading-snug"
+                        title={cronJobBodyText(job)}
+                      >
+                        <MarkdownView content={cronJobBodyText(job)} compact />
+                      </div>
                     </div>
                     <div className="flex items-center gap-1.5 border-t border-edge-subtle/90 px-4 py-2.5 text-xs text-fg-muted dark:border-edge-subtle">
                       <Clock className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
@@ -1248,16 +1272,64 @@ export function CronPage() {
                     ) : null}
                   </>
                 ) : null}
-                <label className="flex flex-col gap-1">
-                  <span className="text-xs font-medium text-fg-muted">{c.message}</span>
-                  <textarea
-                    className={cn(inputClassName(), 'min-h-[5rem] resize-y')}
-                    value={formMessage}
-                    onChange={(e) => setFormMessage(e.target.value)}
-                    placeholder={c.messagePlaceholder}
-                    rows={4}
-                  />
-                </label>
+                <div className="flex flex-col gap-1">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <span className="text-xs font-medium text-fg-muted">{c.message}</span>
+                    <div className="inline-flex rounded-lg border border-edge bg-surface-base p-0.5 dark:border-edge">
+                      <button
+                        type="button"
+                        className={cn(
+                          'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium',
+                          formMessageMdMode === 'edit'
+                            ? 'bg-accent-soft text-accent-fg'
+                            : 'text-fg-muted hover:bg-surface-hover',
+                        )}
+                        onClick={() => setMessageMdMode('edit')}
+                      >
+                        <SquarePen className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                        {c.messageEdit}
+                      </button>
+                      <button
+                        type="button"
+                        className={cn(
+                          'inline-flex items-center gap-1.5 rounded-md px-2.5 py-1.5 text-xs font-medium',
+                          formMessageMdMode === 'preview'
+                            ? 'bg-accent-soft text-accent-fg'
+                            : 'text-fg-muted hover:bg-surface-hover',
+                        )}
+                        onClick={() => setMessageMdMode('preview')}
+                      >
+                        <Eye className="size-3.5 shrink-0" strokeWidth={1.75} aria-hidden />
+                        {c.messagePreview}
+                      </button>
+                    </div>
+                  </div>
+                  <div
+                    className={cn(
+                      'overflow-hidden rounded-md border border-edge bg-surface-base dark:border-edge',
+                      formSubmitting && 'pointer-events-none opacity-60',
+                    )}
+                  >
+                    {formMessageMdMode === 'edit' ? (
+                      <MarkdownEditor
+                        key={`cron-msg-${formJobId ?? 'new'}-${messageEditorNonce}`}
+                        initialContent={formMessage}
+                        onChange={setFormMessage}
+                        isDark={isDark}
+                        className="h-[min(18rem,40vh)] min-h-[12rem]"
+                      />
+                    ) : (
+                      <div className="h-[min(18rem,40vh)] min-h-[12rem] max-h-[min(24rem,50vh)] overflow-y-auto px-3 py-2">
+                        {formMessage.trim() ? (
+                          <MarkdownView content={formMessage} compact className="text-sm" />
+                        ) : (
+                          <p className="text-sm text-fg-muted">{c.messagePlaceholder}</p>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  <p className="text-xs text-fg-muted">{c.messageMarkdownHint}</p>
+                </div>
               </div>
             </div>
             <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-4 py-3">
@@ -1361,7 +1433,9 @@ export function CronPage() {
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-fg-muted">{c.messageLabel}</dt>
-                      <dd className="mt-1 break-words text-fg">{cronJobBodyText(detailJob)}</dd>
+                      <dd className="mt-1 min-w-0 break-words text-fg">
+                        <MarkdownView content={cronJobBodyText(detailJob)} compact className="text-sm" />
+                      </dd>
                     </div>
                     <div>
                       <dt className="text-xs font-medium text-fg-muted">{c.mode}</dt>
