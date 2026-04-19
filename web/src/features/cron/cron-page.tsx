@@ -19,6 +19,7 @@ import {
   segmentedThumbBaseClassName,
   segmentedTrackClassName,
 } from '@/components/ui/segmented-styles';
+import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/chat-agents-api';
 import { ModelSelector } from '@/features/chat/model-selector';
 import type { CronDelivery, CronJob, CronJobExecution, CronRunHistoryRow } from '@/features/cron/cron-api';
 import {
@@ -135,6 +136,7 @@ export function CronPage() {
   const [availableModels, setAvailableModels] = useState<{ id: string; name: string; provider: string }[]>([]);
   const [defaultModel, setDefaultModel] = useState('');
   const [sessionChatIds, setSessionChatIds] = useState<SessionChatId[]>([]);
+  const [chatAgents, setChatAgents] = useState<ChatAgentOption[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [runHistory, setRunHistory] = useState<CronRunHistoryRow[]>([]);
@@ -149,6 +151,7 @@ export function CronPage() {
   const [formChatId, setFormChatId] = useState('');
   const [formMessage, setFormMessage] = useState('');
   const [formSessionTarget, setFormSessionTarget] = useState<'main' | 'isolated'>('main');
+  const [formAgentId, setFormAgentId] = useState('');
   const [formAgentLocalOnly, setFormAgentLocalOnly] = useState(false);
   const [formModel, setFormModel] = useState('');
   const [formSubmitting, setFormSubmitting] = useState(false);
@@ -181,6 +184,16 @@ export function CronPage() {
   const defaultModelForForm = useCallback(() => {
     return defaultModel || (availableModels.length > 0 ? availableModels[0].id : '');
   }, [defaultModel, availableModels]);
+
+  const cronAgentSelectOptions = useMemo(() => {
+    const ids = new Set(chatAgents.map((a) => a.id));
+    const out: ChatAgentOption[] = [...chatAgents];
+    const extra = formAgentId.trim().toLowerCase();
+    if (extra && !ids.has(extra)) {
+      out.push({ id: extra });
+    }
+    return out;
+  }, [chatAgents, formAgentId]);
 
   const needsDeliveryChat =
     formChannel !== 'local' && (formSessionTarget === 'main' || (formSessionTarget === 'isolated' && !formAgentLocalOnly));
@@ -221,10 +234,18 @@ export function CronPage() {
 
   const loadAux = useCallback(async () => {
     try {
-      const [ch, mods, cfg] = await Promise.all([getChannels(), getModels(), getConfig()]);
+      const [ch, mods, cfg, agentsPayload] = await Promise.all([
+        getChannels(),
+        getModels(),
+        getConfig(),
+        fetchChatAgents().catch(() => null),
+      ]);
       setChannels(ch);
       setAvailableModels(mods);
       setDefaultModel(cfg.model || '');
+      if (agentsPayload) {
+        setChatAgents(agentsPayload.items);
+      }
     } catch {
       /* non-fatal */
     }
@@ -321,6 +342,11 @@ export function CronPage() {
         const bodyText = cronJobBodyText(job);
         setFormMessage(bodyText ?? '');
         setFormSessionTarget(job.sessionTarget || 'main');
+        setFormAgentId(
+          (job.sessionTarget || 'main') === 'isolated' && job.agentId?.trim()
+            ? job.agentId.trim().toLowerCase()
+            : '',
+        );
         const fromPayload =
           job.payload?.kind === 'agentTurn' && job.payload.model?.trim() ? job.payload.model.trim() : '';
         const stored = job.model?.trim() || fromPayload;
@@ -360,6 +386,7 @@ export function CronPage() {
         setFormChatId('');
         setFormMessage('');
         setFormSessionTarget('main');
+        setFormAgentId('');
         setFormAgentLocalOnly(false);
         setFormModel(defaultModelForForm());
       }
@@ -382,6 +409,7 @@ export function CronPage() {
       setFormChannel('local');
       setFormChatId('');
       setFormAgentLocalOnly(false);
+      setFormAgentId('');
       setFormModel(defaultModelForForm());
       setTemplatePickerOpen(false);
       setFormOpen(true);
@@ -399,6 +427,7 @@ export function CronPage() {
     setFormChatId('');
     setFormMessage('');
     setFormSessionTarget('main');
+    setFormAgentId('');
     setFormAgentLocalOnly(false);
     setFormModel('');
     formModelUserTouched.current = false;
@@ -441,6 +470,9 @@ export function CronPage() {
           : { kind: 'systemEvent', text: message };
 
       const modelTrimmed = formModel.trim();
+      const agentIdTrim = formAgentId.trim().toLowerCase();
+      const agentIdForEdit =
+        formSessionTarget === 'main' ? null : agentIdTrim || null;
       const jobData = {
         name: formName.trim(),
         schedule: formSchedule.trim(),
@@ -448,6 +480,11 @@ export function CronPage() {
         model: formSessionTarget === 'isolated' && modelTrimmed ? modelTrimmed : undefined,
         delivery,
         payload,
+        ...(formMode === 'edit'
+          ? { agentId: agentIdForEdit }
+          : formSessionTarget === 'isolated' && agentIdTrim
+            ? { agentId: agentIdTrim }
+            : {}),
       };
 
       if (formMode === 'edit' && formJobId) {
@@ -1076,8 +1113,10 @@ export function CronPage() {
                     onChange={(e) => {
                       const v = e.target.value as 'main' | 'isolated';
                       setFormSessionTarget(v);
-                      if (v === 'main') setFormAgentLocalOnly(false);
-                      else if (v === 'isolated' && !formModel.trim()) setFormModel(defaultModelForForm());
+                      if (v === 'main') {
+                        setFormAgentLocalOnly(false);
+                        setFormAgentId('');
+                      } else if (v === 'isolated' && !formModel.trim()) setFormModel(defaultModelForForm());
                     }}
                   >
                     <option value="main">{c.modeDirectOption}</option>
@@ -1097,12 +1136,30 @@ export function CronPage() {
                         searchPlaceholder={chatM.modelSearchPlaceholder}
                         noMatches={chatM.modelNoMatches}
                         className="w-full max-w-none min-w-0"
+                        popoverContentClassName="z-[70]"
                         onChange={(id) => {
                           formModelUserTouched.current = true;
                           setFormModel(id);
                         }}
                       />
                     </div>
+                    <label className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-fg-muted">{c.agentProfile}</span>
+                      <select
+                        className={selectClassName()}
+                        value={formAgentId}
+                        disabled={formSubmitting}
+                        onChange={(e) => setFormAgentId(e.target.value)}
+                      >
+                        <option value="">{c.agentProfileDefault}</option>
+                        {cronAgentSelectOptions.map((ag) => (
+                          <option key={ag.id} value={ag.id}>
+                            {ag.name ? `${ag.id} — ${ag.name}` : ag.id}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="text-xs text-fg-muted">{c.agentProfileHint}</p>
+                    </label>
                     <label className="flex cursor-pointer items-start gap-2 rounded-md bg-surface-hover/45 px-3 py-2 dark:bg-surface-hover/30">
                       <input
                         type="checkbox"
@@ -1312,6 +1369,14 @@ export function CronPage() {
                         {detailJob.sessionTarget === 'isolated' ? c.modeAgentOption : c.modeDirectOption}
                       </dd>
                     </div>
+                    {detailJob.sessionTarget === 'isolated' ? (
+                      <div>
+                        <dt className="text-xs font-medium text-fg-muted">{c.agentProfile}</dt>
+                        <dd className="mt-1 font-mono text-sm text-fg">
+                          {detailJob.agentId?.trim() ? detailJob.agentId.trim() : c.agentProfileDefault}
+                        </dd>
+                      </div>
+                    ) : null}
                     {detailJob.delivery?.channel === 'local' ||
                     (detailJob.sessionTarget === 'isolated' && !detailJob.delivery?.to) ? (
                       <div>
