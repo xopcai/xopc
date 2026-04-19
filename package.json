@@ -1,6 +1,6 @@
 {
   "name": "@xopcai/xopc",
-  "version": "0.0.1",
+  "version": "0.0.2",
   "description": "Personal AI assistant: CLI, gateway (HTTP/WebSocket + React console), Telegram and WeChat (Weixin) channels — TypeScript, 20+ LLM providers via pi-ai, extensions and skills.",
   "type": "module",
   "main": "dist/src/index.js",
