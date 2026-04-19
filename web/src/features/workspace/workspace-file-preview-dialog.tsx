@@ -13,6 +13,7 @@ import {
   PPTX_PREVIEW_MAX_CHARS,
 } from '@/features/chat/attachment-utils-core';
 import { PreviewOpenAlternativesBar } from '@/features/preview/preview-open-alternatives';
+import { PptxPreviewView } from '@/features/preview/pptx-preview-view';
 import {
   downloadBinaryFile,
   downloadTextFile,
@@ -448,9 +449,13 @@ export function WorkspaceFilePreviewPanel({
               canOpenWithSystemApp={showSystemOpen}
             />
           ) : null}
-          <pre className="min-h-0 flex-1 overflow-auto whitespace-pre-wrap break-words px-2 py-2 font-mono text-xs text-fg">
-            {pptxPreviewText ?? ''}
-          </pre>
+          <div className="min-h-0 flex-1 overflow-auto px-2 py-2">
+            <PptxPreviewView
+              text={pptxPreviewText ?? ''}
+              slideLabel={(n) => fillTemplate(m.chat.attachmentPreviewPptxSlide, { n })}
+              emptySlideLabel={m.chat.attachmentPreviewPptxEmptySlide}
+            />
+          </div>
         </div>
       );
     }

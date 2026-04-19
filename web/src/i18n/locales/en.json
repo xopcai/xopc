@@ -292,6 +292,8 @@
     "attachmentPreviewPdfLoadMore": "Scroll to load more pages",
     "attachmentPreviewExcelTruncated": "Preview limited to {rows} rows × {cols} columns. Download the file to see the full sheet.",
     "attachmentPreviewPptxTruncated": "Text preview truncated for performance. Download the file to see the full deck.",
+    "attachmentPreviewPptxSlide": "Slide {n}",
+    "attachmentPreviewPptxEmptySlide": "(No text on this slide)",
     "attachmentPreviewOpenElsewhereHint": "Download the file to open it in another application on your computer.",
     "attachmentPreviewOpenElsewhereTruncated": "Only part of this file is shown here. Download the full file to open it elsewhere.",
     "attachmentPreviewDownloadFull": "Download file",
