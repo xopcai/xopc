@@ -37,3 +37,20 @@ export interface SkillsPayload {
   catalog: SkillCatalogEntry[];
   managed: ManagedSkillDir[];
 }
+
+/** GET /api/skills/marketplace — proxied xopc-store package list (type=skill). */
+export interface MarketplacePackageItem {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  downloads: number;
+  author: { username: string; avatarUrl: string | null };
+  latestVersion?: string;
+  updatedAt: string;
+}
+
+export interface SkillsMarketplacePayload {
+  items: MarketplacePackageItem[];
+  meta: { page: number; pageSize: number; total: number; totalPages: number };
+}

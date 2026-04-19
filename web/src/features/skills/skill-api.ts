@@ -2,7 +2,7 @@ import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 
-import type { SkillsPayload } from '@/features/skills/skill.types';
+import type { SkillsMarketplacePayload, SkillsPayload } from '@/features/skills/skill.types';
 
 async function readErrorMessage(res: Response): Promise<string> {
   const j = (await res.json().catch(() => ({}))) as { error?: unknown };
@@ -96,6 +96,55 @@ export async function patchSkillEnabled(skillName: string, enabled: boolean): Pr
   if (!res.ok) {
     throw new Error(await readErrorMessage(res));
   }
+}
+
+export async function getMarketplaceSkills(params: {
+  q?: string;
+  page?: number;
+  pageSize?: number;
+  sort?: 'downloads' | 'newest';
+}): Promise<SkillsMarketplacePayload> {
+  const sp = new URLSearchParams();
+  if (params.q?.trim()) sp.set('q', params.q.trim());
+  if (params.page != null) sp.set('page', String(params.page));
+  if (params.pageSize != null) sp.set('pageSize', String(params.pageSize));
+  if (params.sort) sp.set('sort', params.sort);
+  const qs = sp.toString();
+  const res = await apiFetch(apiUrl(`/api/skills/marketplace${qs ? `?${qs}` : ''}`), {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  const data = (await res.json()) as { ok?: boolean; payload?: SkillsMarketplacePayload };
+  if (!data.payload?.items || !data.payload.meta) {
+    throw new Error('Invalid response');
+  }
+  return data.payload;
+}
+
+export async function installMarketplaceSkill(opts: {
+  name: string;
+  version?: string;
+  overwrite?: boolean;
+}): Promise<{ skillId: string; path: string }> {
+  const res = await apiFetch(apiUrl('/api/skills/marketplace/install'), {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(opts),
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  const data = (await res.json()) as {
+    ok?: boolean;
+    error?: string;
+    payload?: { skillId: string; path: string };
+  };
+  if (!data.payload?.skillId) {
+    throw new Error(data.error || 'Invalid response');
+  }
+  return data.payload;
 }
 
 export async function getSkillMarkdown(skillName: string): Promise<{ name: string; markdown: string }> {

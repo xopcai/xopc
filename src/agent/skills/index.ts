@@ -234,12 +234,12 @@ export function loadSkills(options: {
         diagnostics.push({
           type: 'collision',
           skillName: skill.name,
-          message: `Skill "${skill.name}" collision: ${existing.source} overrides ${skill.source}`,
+          message: `Skill "${skill.name}" collision: ${skill.source} overrides ${existing.source}`,
           path: skill.filePath,
         });
-      } else {
-        skillMap.set(skill.name, skill);
       }
+      // Global must win over bundled when names match (Workspace > Global > Bundled).
+      skillMap.set(skill.name, skill);
     }
   }
 
