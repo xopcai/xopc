@@ -120,6 +120,31 @@ export async function listSkillPackages(
   return fetchJson<SkillsStoreListResponse>(url);
 }
 
+/** GET /api/v1/packages/:name — published skill package (public). */
+export interface MarketplacePackageDetail {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  readme: string | null;
+  downloads: number;
+  author: { username: string; avatarUrl: string | null };
+  latestVersion: {
+    version: string;
+    changelog: string | null;
+    publishedAt: string;
+  };
+}
+
+export async function fetchMarketplacePackageDetail(
+  storeBaseUrl: string,
+  packageName: string,
+): Promise<MarketplacePackageDetail> {
+  const base = normalizeBaseUrl(storeBaseUrl);
+  const enc = encodeURIComponent(packageName.trim());
+  return fetchJson<MarketplacePackageDetail>(`${base}/api/v1/packages/${enc}`);
+}
+
 export async function resolveSkillZipDownloadUrl(
   storeBaseUrl: string,
   packageName: string,

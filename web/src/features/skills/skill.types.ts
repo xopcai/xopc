@@ -54,3 +54,19 @@ export interface SkillsMarketplacePayload {
   items: MarketplacePackageItem[];
   meta: { page: number; pageSize: number; total: number; totalPages: number };
 }
+
+/** GET /api/skills/marketplace/packages/:name — store package detail for preview. */
+export interface MarketplacePackageDetailPayload {
+  id: string;
+  name: string;
+  type: string;
+  description: string;
+  readme: string | null;
+  downloads: number;
+  author: { username: string; avatarUrl: string | null };
+  latestVersion: {
+    version: string;
+    changelog: string | null;
+    publishedAt: string;
+  };
+}

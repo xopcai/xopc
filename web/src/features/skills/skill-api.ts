@@ -2,7 +2,11 @@ import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 import { useGatewayStore } from '@/stores/gateway-store';
 
-import type { SkillsMarketplacePayload, SkillsPayload } from '@/features/skills/skill.types';
+import type {
+  MarketplacePackageDetailPayload,
+  SkillsMarketplacePayload,
+  SkillsPayload,
+} from '@/features/skills/skill.types';
 
 async function readErrorMessage(res: Response): Promise<string> {
   const j = (await res.json().catch(() => ({}))) as { error?: unknown };
@@ -118,6 +122,23 @@ export async function getMarketplaceSkills(params: {
   }
   const data = (await res.json()) as { ok?: boolean; payload?: SkillsMarketplacePayload };
   if (!data.payload?.items || !data.payload.meta) {
+    throw new Error('Invalid response');
+  }
+  return data.payload;
+}
+
+export async function getMarketplacePackageDetail(
+  packageName: string,
+): Promise<MarketplacePackageDetailPayload> {
+  const enc = encodeURIComponent(packageName);
+  const res = await apiFetch(apiUrl(`/api/skills/marketplace/packages/${enc}`), {
+    cache: 'no-store',
+  });
+  if (!res.ok) {
+    throw new Error(await readErrorMessage(res));
+  }
+  const data = (await res.json()) as { ok?: boolean; payload?: MarketplacePackageDetailPayload };
+  if (!data.payload?.name) {
     throw new Error('Invalid response');
   }
   return data.payload;

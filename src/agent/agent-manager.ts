@@ -553,6 +553,13 @@ export class AgentManager {
    * Reload skills from disk and refresh system prompt on all active Agent instances.
    */
   refreshSkillsAfterDiskChange(): void {
+    // Reload every workspace SkillManager first. When there are no active agent sessions
+    // (e.g. gateway UI only), the loop below runs zero times — without this, `getSkillCatalog()`
+    // and delete flows still see stale in-memory skills after ~/.xopc/skills changes.
+    for (const rt of this.workspaceRuntimes.values()) {
+      rt.skillManager.reload();
+    }
+
     const touched = new Set<string>();
     for (const instance of this.agents.values()) {
       const rt = this.getWorkspaceRuntime(instance.resolvedWorkspacePath);
