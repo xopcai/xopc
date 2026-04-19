@@ -77,6 +77,61 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     }
   });
 
+  authenticated.get('/api/skills/marketplace', async (c) => {
+    const q = c.req.query('q')?.trim() ?? '';
+    const pageRaw = c.req.query('page');
+    const pageSizeRaw = c.req.query('pageSize');
+    const sortRaw = c.req.query('sort');
+    const page = pageRaw != null && pageRaw !== '' ? Math.max(1, Number(pageRaw) || 1) : undefined;
+    const pageSize =
+      pageSizeRaw != null && pageSizeRaw !== ''
+        ? Math.min(50, Math.max(1, Number(pageSizeRaw) || 20))
+        : undefined;
+    const sort =
+      sortRaw === 'newest' || sortRaw === 'downloads' ? sortRaw : undefined;
+    try {
+      const payload = await service.fetchSkillsMarketplaceCatalog({
+        q: q || undefined,
+        page,
+        pageSize,
+        sort,
+      });
+      return c.json({ ok: true, payload });
+    } catch (err) {
+      return c.json(
+        { ok: false, error: err instanceof Error ? err.message : 'Marketplace request failed' },
+        502,
+      );
+    }
+  });
+
+  authenticated.post('/api/skills/marketplace/install', async (c) => {
+    let body: { name?: unknown; version?: unknown; overwrite?: unknown };
+    try {
+      body = (await c.req.json()) as typeof body;
+    } catch {
+      return c.json({ ok: false, error: 'Invalid JSON' }, 400);
+    }
+    const name = typeof body.name === 'string' ? body.name.trim() : '';
+    const version = typeof body.version === 'string' ? body.version.trim() : undefined;
+    const overwrite =
+      body.overwrite === true ||
+      body.overwrite === 'true' ||
+      body.overwrite === '1';
+    if (!name) {
+      return c.json({ ok: false, error: 'Expected { name: string, version?: string, overwrite?: boolean }' }, 400);
+    }
+    try {
+      const payload = await service.installSkillFromMarketplace({ name, version, overwrite });
+      return c.json({ ok: true, payload });
+    } catch (err) {
+      return c.json(
+        { ok: false, error: err instanceof Error ? err.message : 'Install failed' },
+        400,
+      );
+    }
+  });
+
   authenticated.post('/api/skills/upload', async (c) => {
     let body: Record<string, unknown>;
     try {

@@ -255,6 +255,7 @@ Use **`xopc agents list`**, **`xopc agents add`**, **`xopc agents delete`** to m
 | `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, … | Provider keys (at least one LLM key needed to run agents) |
 | `TELEGRAM_BOT_TOKEN` | Telegram (if not only in config) |
 | `XOPC_CONFIG`, `XOPC_CONFIG_PATH` | Config file path |
+| `XOPC_SKILLS_STORE_URL` | Overrides `gateway.skillsStoreBaseUrl` (skills marketplace REST base) |
 | `XOPC_WORKSPACE` | Workspace directory |
 | `XOPC_LOG_LEVEL` | `trace` … `fatal` (default `info`) |
 | `XOPC_LOG_DIR`, `XOPC_LOG_CONSOLE`, `XOPC_LOG_FILE`, `XOPC_LOG_RETENTION_DAYS` | Logging |
