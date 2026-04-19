@@ -32,6 +32,7 @@ import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
 import {
   deleteSkill,
+  getMarketplacePackageDetail,
   getMarketplaceSkills,
   getSkillMarkdown,
   getSkills,
@@ -204,6 +205,7 @@ export function SkillsPage() {
   const [enabledOverride, setEnabledOverride] = useState<Record<string, boolean>>({});
 
   const [detailOpen, setDetailOpen] = useState(false);
+  const [detailSource, setDetailSource] = useState<'catalog' | 'store'>('catalog');
   const [detailTitle, setDetailTitle] = useState('');
   const [detailMarkdown, setDetailMarkdown] = useState('');
   const [detailLoading, setDetailLoading] = useState(false);
@@ -318,6 +320,7 @@ export function SkillsPage() {
 
   const openSkillDetail = useCallback(
     async (row: SkillCatalogEntry) => {
+      setDetailSource('catalog');
       setDetailOpen(true);
       setDetailTitle(row.name);
       setDetailMarkdown('');
@@ -334,6 +337,34 @@ export function SkillsPage() {
       }
     },
     [sk.detailLoadFailed],
+  );
+
+  const openMarketplaceDetail = useCallback(
+    async (name: string) => {
+      setDetailSource('store');
+      setDetailOpen(true);
+      setDetailTitle(name);
+      setDetailMarkdown('');
+      setDetailError(null);
+      setDetailLoading(true);
+      try {
+        const pkg = await getMarketplacePackageDetail(name);
+        setDetailTitle(pkg.name);
+        const readme = pkg.readme?.trim();
+        if (readme) {
+          setDetailMarkdown(readme);
+        } else if (pkg.description?.trim()) {
+          setDetailMarkdown(`## ${pkg.name}\n\n${pkg.description.trim()}`);
+        } else {
+          setDetailMarkdown(`*${sk.marketplaceNoReadme}*`);
+        }
+      } catch (e) {
+        setDetailError(e instanceof Error ? e.message : sk.detailLoadFailed);
+      } finally {
+        setDetailLoading(false);
+      }
+    },
+    [sk.detailLoadFailed, sk.marketplaceNoReadme],
   );
 
   const onSkillToggle = useCallback(
@@ -543,6 +574,7 @@ export function SkillsPage() {
         await installMarketplaceSkill({ name, overwrite: installed });
         await load({ silent: true });
         showFeedback('success', sk.installSuccess);
+        setDetailOpen(false);
         setMainTab('user');
       } catch (e) {
         showFeedback('error', e instanceof Error ? e.message : sk.uploadFailed);
@@ -550,7 +582,14 @@ export function SkillsPage() {
         setInstallingMarketName(null);
       }
     },
-    [isSkillInstalledByName, load, showFeedback, sk.installSuccess, sk.marketplaceReinstallConfirm, sk.uploadFailed],
+    [
+      isSkillInstalledByName,
+      load,
+      showFeedback,
+      sk.installSuccess,
+      sk.marketplaceReinstallConfirm,
+      sk.uploadFailed,
+    ],
   );
 
   const filterLabel =
@@ -879,7 +918,14 @@ export function SkillsPage() {
                             'transition-colors hover:bg-surface-hover/50 dark:hover:bg-surface-hover/25',
                           )}
                         >
-                          <div className="flex min-w-0 flex-1 items-start gap-4">
+                          <button
+                            type="button"
+                            className={cn(
+                              'flex min-w-0 flex-1 cursor-pointer items-start gap-4 rounded-xl text-left outline-none',
+                              interaction.focusRingPanel,
+                            )}
+                            onClick={() => void openMarketplaceDetail(row.name)}
+                          >
                             <SkillCardIcon name={row.name} />
                             <div className="min-w-0 flex-1 pr-2">
                               <h3 className="text-[15px] font-semibold leading-snug tracking-tight text-fg">
@@ -910,7 +956,7 @@ export function SkillsPage() {
                                 ) : null}
                               </div>
                             </div>
-                          </div>
+                          </button>
                           <div className="flex shrink-0 justify-end sm:pl-2">
                             <Button
                               type="button"
@@ -1107,6 +1153,7 @@ export function SkillsPage() {
         onOpenChange={(open) => {
           setDetailOpen(open);
           if (!open) {
+            setDetailSource('catalog');
             setDetailMarkdown('');
             setDetailError(null);
             setDetailTitle('');
@@ -1141,7 +1188,9 @@ export function SkillsPage() {
             </div>
             <div className="flex shrink-0 items-start gap-2 border-b border-blue-200/80 bg-blue-50/95 px-4 py-2.5 text-sm text-fg dark:border-blue-900/50 dark:bg-blue-950/45">
               <Info className="mt-0.5 size-4 shrink-0 text-blue-600 dark:text-blue-400" strokeWidth={1.75} aria-hidden />
-              <p className="leading-relaxed">{sk.detailModalBanner}</p>
+              <p className="leading-relaxed">
+                {detailSource === 'store' ? sk.detailModalBannerStore : sk.detailModalBanner}
+              </p>
             </div>
             <div className="min-h-0 flex-1 overflow-y-auto px-4 py-4">
               {detailLoading ? (
@@ -1158,19 +1207,42 @@ export function SkillsPage() {
                 </div>
               )}
             </div>
-            <div className="flex shrink-0 justify-end border-t border-edge px-4 py-3">
-              <Button
-                type="button"
-                variant="primary"
-                disabled={!detailTitle || togglingSkillName === detailTitle}
-                onClick={async () => {
-                  if (!detailTitle) return;
-                  const ok = await onSkillToggle(detailTitle, !detailEnabled);
-                  if (ok) setDetailOpen(false);
-                }}
-              >
-                {detailEnabled ? sk.detailModalDisable : sk.detailModalEnable}
-              </Button>
+            <div className="flex shrink-0 justify-end gap-2 border-t border-edge px-4 py-3">
+              {detailSource === 'store' ? (
+                <>
+                  <Button type="button" variant="ghost" onClick={() => setDetailOpen(false)}>
+                    {sk.cancel}
+                  </Button>
+                  <Button
+                    type="button"
+                    variant={isSkillInstalledByName(detailTitle) ? 'secondary' : 'primary'}
+                    disabled={!detailTitle || installingMarketName === detailTitle}
+                    onClick={() => {
+                      if (!detailTitle) return;
+                      void onMarketInstall(detailTitle);
+                    }}
+                  >
+                    {installingMarketName === detailTitle
+                      ? sk.uploading
+                      : isSkillInstalledByName(detailTitle)
+                        ? sk.marketplaceReinstall
+                        : sk.marketplaceInstall}
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  type="button"
+                  variant="primary"
+                  disabled={!detailTitle || togglingSkillName === detailTitle}
+                  onClick={async () => {
+                    if (!detailTitle) return;
+                    const ok = await onSkillToggle(detailTitle, !detailEnabled);
+                    if (ok) setDetailOpen(false);
+                  }}
+                >
+                  {detailEnabled ? sk.detailModalDisable : sk.detailModalEnable}
+                </Button>
+              )}
             </div>
           </Dialog.Content>
         </Dialog.Portal>

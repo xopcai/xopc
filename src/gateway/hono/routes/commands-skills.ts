@@ -105,6 +105,28 @@ export function registerCommandsSkillsRoutes(authenticated: Hono, deps: Authenti
     }
   });
 
+  authenticated.get('/api/skills/marketplace/packages/:pkgName', async (c) => {
+    const raw = c.req.param('pkgName');
+    if (!raw) {
+      return c.json({ ok: false, error: 'Missing package name' }, 400);
+    }
+    let pkgName: string;
+    try {
+      pkgName = decodeURIComponent(raw);
+    } catch {
+      return c.json({ ok: false, error: 'Invalid package name' }, 400);
+    }
+    try {
+      const payload = await service.fetchSkillsMarketplacePackageDetail(pkgName);
+      return c.json({ ok: true, payload });
+    } catch (err) {
+      return c.json(
+        { ok: false, error: err instanceof Error ? err.message : 'Marketplace request failed' },
+        502,
+      );
+    }
+  });
+
   authenticated.post('/api/skills/marketplace/install', async (c) => {
     let body: { name?: unknown; version?: unknown; overwrite?: unknown };
     try {

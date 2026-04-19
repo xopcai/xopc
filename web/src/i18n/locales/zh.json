@@ -709,6 +709,8 @@
       "actions": "操作"
     },
     "detailModalBanner": "以下内容来自该技能的 SKILL.md 原文",
+    "detailModalBannerStore": "以下为技能商店中该包发布的 Markdown 正文（与商店中的包说明一致）。",
+    "marketplaceNoReadme": "该包暂无说明正文。",
     "detailModalEnable": "启用",
     "detailModalDisable": "停用",
     "detailLoadFailed": "无法加载 SKILL.md",

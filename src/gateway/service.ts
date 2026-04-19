@@ -40,10 +40,12 @@ import {
 } from '../agent/skills/managed-store.js';
 import {
   downloadSkillZipBuffer,
+  fetchMarketplacePackageDetail,
   listSkillPackages,
   resolveSkillZipDownloadUrl,
   resolveSkillsStoreBaseUrl,
   skillIdForMarketplaceInstall,
+  type MarketplacePackageDetail,
   type SkillsStoreListParams,
   type SkillsStoreListResponse,
 } from '../agent/skills/skills-store-client.js';
@@ -1055,6 +1057,11 @@ export class GatewayService {
   async fetchSkillsMarketplaceCatalog(params: SkillsStoreListParams): Promise<SkillsStoreListResponse> {
     const base = resolveSkillsStoreBaseUrl(this.config);
     return listSkillPackages(base, params);
+  }
+
+  async fetchSkillsMarketplacePackageDetail(packageName: string): Promise<MarketplacePackageDetail> {
+    const base = resolveSkillsStoreBaseUrl(this.config);
+    return fetchMarketplacePackageDetail(base, packageName);
   }
 
   async installSkillFromMarketplace(opts: {

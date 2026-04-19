@@ -709,6 +709,8 @@
       "actions": "Actions"
     },
     "detailModalBanner": "The following is the original SKILL.md for this skill.",
+    "detailModalBannerStore": "Preview below is the markdown published with this package on the skill store (same content as the package readme).",
+    "marketplaceNoReadme": "No readme text is available for this package.",
     "detailModalEnable": "Enable",
     "detailModalDisable": "Disable",
     "detailLoadFailed": "Failed to load SKILL.md",
