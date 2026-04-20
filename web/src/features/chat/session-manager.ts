@@ -30,21 +30,40 @@ export class SessionManager {
     thinkingLevel: string;
     model: string;
     reasoningLevel: string;
+    effectiveWorkspacePath: string;
+    workingDirectoryLocked: boolean;
   }> {
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`));
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data = (await res.json()) as {
-      payload?: { thinkingLevel?: string; model?: string; reasoningLevel?: string };
+      payload?: {
+        thinkingLevel?: string;
+        model?: string;
+        reasoningLevel?: string;
+        effectiveWorkspacePath?: string;
+        workingDirectoryLocked?: boolean;
+      };
     };
     const thinkingLevel = data.payload?.thinkingLevel ?? 'medium';
     const model = typeof data.payload?.model === 'string' ? data.payload.model : '';
     const reasoningLevel = data.payload?.reasoningLevel ?? 'off';
-    return { thinkingLevel, model, reasoningLevel };
+    const effectiveWorkspacePath =
+      typeof data.payload?.effectiveWorkspacePath === 'string'
+        ? data.payload.effectiveWorkspacePath
+        : '';
+    const workingDirectoryLocked = Boolean(data.payload?.workingDirectoryLocked);
+    return {
+      thinkingLevel,
+      model,
+      reasoningLevel,
+      effectiveWorkspacePath,
+      workingDirectoryLocked,
+    };
   }
 
   async patchSessionAgentConfig(
     sessionKey: string,
-    patch: { thinkingLevel?: string; model?: string | null; reasoningLevel?: string },
+    patch: { thinkingLevel?: string; model?: string | null; reasoningLevel?: string; workingDirectory?: string },
   ): Promise<void> {
     const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`), {
       method: 'PATCH',

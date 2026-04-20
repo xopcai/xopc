@@ -64,6 +64,7 @@ export interface ProcessDirectStreamingDeps {
   ) => void;
   unregisterWebchatSsePublisher: (sessionKey: string) => void;
   agentManager: AgentManager;
+  hydrateSessionWorkspaceFromStore: (sessionKey: string) => Promise<void>;
   hydrateSessionModelFromStore: (sessionKey: string) => Promise<void>;
   agentEventHandler: AgentEventHandler;
   sessionStore: SessionStore;
@@ -113,6 +114,7 @@ export async function* runProcessDirectStreaming(
     registerWebchatSsePublisher,
     unregisterWebchatSsePublisher,
     agentManager,
+    hydrateSessionWorkspaceFromStore,
     hydrateSessionModelFromStore,
     agentEventHandler,
     sessionStore,
@@ -166,6 +168,7 @@ export async function* runProcessDirectStreaming(
   let userAborted = false;
   let abortHandled = false;
 
+  await hydrateSessionWorkspaceFromStore(sessionKey);
   const agent = agentManager.getOrCreateAgent(sessionKey);
   await hydrateSessionModelFromStore(sessionKey);
   const unsubscribeStreaming = agent.subscribe((event: AgentEvent) => {
