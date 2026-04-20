@@ -153,16 +153,11 @@ export const SidebarColumn = memo(function SidebarColumn() {
             aria-label={m.sidebar.resizeHandleAria}
             onPointerDown={onSidebarResizePointerDown}
             className={cn(
-              'group pointer-events-auto absolute right-0 top-0 z-10 hidden h-full w-2 shrink-0 cursor-col-resize md:block',
-              'touch-none select-none hover:bg-accent/10',
+              'pointer-events-auto absolute right-0 top-0 z-10 hidden h-full w-2 shrink-0 cursor-col-resize md:block',
+              'touch-none select-none',
               APP_CHROME_NO_DRAG_CLASS,
             )}
-          >
-            <span
-              className="pointer-events-none absolute inset-y-0 right-1/2 w-px translate-x-1/2 bg-accent/40 opacity-0 transition-opacity group-hover:opacity-100"
-              aria-hidden
-            />
-          </div>
+          ></div>
         ) : null}
       </aside>
     </>
