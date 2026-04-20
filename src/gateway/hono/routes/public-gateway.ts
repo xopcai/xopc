@@ -1,5 +1,6 @@
 import type { Hono } from 'hono';
 
+import { PACKAGE_VERSION } from '../../../package-version.js';
 import type { GatewayService } from '../../service.js';
 import { serveStaticFile } from '../lib/static-ui.js';
 
@@ -11,7 +12,7 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
   app.get('/api', (c) => {
     return c.json({
       service: 'xopc-gateway',
-      version: '0.1.0',
+      version: PACKAGE_VERSION,
       transport: 'streamable-http',
       endpoints: [
         'GET  /health',

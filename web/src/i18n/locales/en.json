@@ -1431,6 +1431,21 @@
     "themeOptionDark": "Dark",
     "themeOptionSystem": "System",
     "openFullPreferences": "Open all settings",
-    "quickMenuHint": "Language, theme, and text size"
+    "quickMenuHint": "Language, theme, and text size",
+    "aboutApp": "About"
+  },
+  "aboutDialog": {
+    "windowTitle": "About this application",
+    "close": "Close",
+    "versionLabel": "Version",
+    "commitLabel": "Commit",
+    "buildDateLabel": "Date",
+    "gatewayVersionLabel": "Gateway",
+    "consoleBuildHint": "Console UI build (this browser bundle). Gateway is the running xopc service.",
+    "checkUpdates": "Check for updates",
+    "gatewayUnavailable": "—",
+    "openSourceLead": "This software is made possible by ",
+    "openSourceLink": "open source software",
+    "copyright": "Copyright © {year} xopcai"
   }
 }
