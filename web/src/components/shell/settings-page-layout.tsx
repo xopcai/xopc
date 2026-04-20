@@ -126,11 +126,9 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
                       </NavLink>
                     ))}
                   </div>
-                  {groupIndex === 0 ? (
-                    <ExtensionSettingsNav navLinkClassName={settingsNavLinkClass} />
-                  ) : null}
                 </div>
               ))}
+              <ExtensionSettingsNav navLinkClassName={settingsNavLinkClass} />
             </div>
           </nav>
         </div>

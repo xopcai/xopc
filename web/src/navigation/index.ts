@@ -67,19 +67,20 @@ export type SettingsShellNavGroup = {
 };
 
 /**
- * Priority: connection → AI (keys → model → agent) → data (sessions/logs) → UI prefs → voice.
+ * Priority: general UX → history → AI (providers → models → agent → search) → voice →
+ * connection/heartbeat → extensions (rendered last in settings shell).
  * Cron, skills, and IM channels live under the main app shell (`/cron`, `/skills`, `/channels`), not here.
  * See `settingsNavGroups` copy in i18n.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
-  { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat'] },
+  { id: 'interface', tabs: ['settingsAppearance'] },
+  { id: 'data', tabs: ['sessions', 'logs'] },
   {
     id: 'agentAndModels',
     tabs: ['settingsProviders', 'settingsModels', 'settingsAgents', 'settingsSearch'],
   },
-  { id: 'data', tabs: ['sessions', 'logs'] },
-  { id: 'interface', tabs: ['settingsAppearance'] },
   { id: 'voice', tabs: ['settingsVoice'] },
+  { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat'] },
 ] as const;
 
 /** Flat order: settings routes only (excludes sessions/logs). */
@@ -115,13 +116,13 @@ export function parseSettingsHash(hash: string): SettingsSectionId | null {
   let h = hash.startsWith('#') ? hash.slice(1) : hash;
   if (h.startsWith('/')) h = h.slice(1);
   if (h === 'settings' || h === 'settings/') {
-    return 'gateway';
+    return 'appearance';
   }
   if (!h.startsWith('settings/')) return null;
   const rest = h.slice('settings/'.length);
   const parts = rest.split('/').filter(Boolean);
   const section = parts[0];
-  if (!section) return 'gateway';
+  if (!section) return 'appearance';
   if (section === 'agents' && parts.length > 1) {
     return 'agents';
   }
