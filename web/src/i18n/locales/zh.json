@@ -1431,6 +1431,21 @@
     "themeOptionDark": "深色",
     "themeOptionSystem": "跟随系统",
     "openFullPreferences": "打开全部设置",
-    "quickMenuHint": "语言、主题与字号"
+    "quickMenuHint": "语言、主题与字号",
+    "aboutApp": "关于"
+  },
+  "aboutDialog": {
+    "windowTitle": "关于本应用",
+    "close": "关闭",
+    "versionLabel": "版本",
+    "commitLabel": "提交",
+    "buildDateLabel": "时间",
+    "gatewayVersionLabel": "网关",
+    "consoleBuildHint": "以上为控制台界面构建信息；网关为当前运行的 xopc 服务版本。",
+    "checkUpdates": "检查更新",
+    "gatewayUnavailable": "—",
+    "openSourceLead": "本软件离不开 ",
+    "openSourceLink": "开源软件",
+    "copyright": "版权所有 © {year} xopcai"
   }
 }

@@ -20,6 +20,7 @@ import { isLoggerShuttingDown, flushAndClose, setShuttingDown } from './shutdown
 import { rotateLogs, cleanOldLogs } from './rotation.js';
 import { getAsyncLogContext, getAsyncLogCorrelationKeys, mergeContext } from './context.js';
 import { redactLogRecord } from './redact.js';
+import { PACKAGE_VERSION } from '../../package-version.js';
 
 // ============================================
 // Base Logger Creation
@@ -38,7 +39,7 @@ const pinoOptions: pino.LoggerOptions = {
   level: config.level,
   base: {
     service: 'xopc',
-    version: process.env.npm_package_version || '0.1.0',
+    version: process.env.npm_package_version || PACKAGE_VERSION,
   },
   timestamp: pino.stdTimeFunctions.isoTime,
   mixin(mergeObject, _level, logger) {

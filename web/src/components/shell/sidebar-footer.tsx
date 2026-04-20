@@ -1,12 +1,11 @@
 import * as Popover from '@radix-ui/react-popover';
 import { Settings } from 'lucide-react';
 import { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
 
+import { AboutDialog } from '@/components/shell/about-dialog';
 import { BrandLogo } from '@/components/shell/brand-logo';
-import { PreferenceSelectFields } from '@/components/shell/preference-select-fields';
+import { SidebarAppMenu } from '@/components/shell/sidebar-app-menu';
 import { messages } from '@/i18n/messages';
-import { pathForTab } from '@/navigation';
 import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
@@ -21,6 +20,7 @@ export function SidebarFooter({
   const m = messages(language);
   const a = m.appearanceSettings;
   const [open, setOpen] = useState(false);
+  const [aboutOpen, setAboutOpen] = useState(false);
 
   useEffect(() => {
     void import('@/pages/settings-page');
@@ -96,37 +96,31 @@ export function SidebarFooter({
         <Popover.Portal>
           <Popover.Content
             className={cn(
-              'z-50 max-h-[min(70vh,28rem)] w-[min(calc(100vw-1.5rem),16rem)] overflow-y-auto overflow-x-hidden',
-              'rounded-xl border border-edge bg-surface-panel p-4 shadow-popover dark:border-edge',
+              'z-50 w-max max-w-[min(calc(100vw-1rem),28rem)] overflow-visible',
+              'rounded-xl border border-edge bg-surface-panel p-2 shadow-popover dark:border-edge',
             )}
             side="top"
             align={collapsed ? 'center' : 'start'}
             sideOffset={8}
             collisionPadding={12}
+            onOpenAutoFocus={(e) => e.preventDefault()}
             onCloseAutoFocus={(e) => e.preventDefault()}
           >
-            <div className="flex flex-col gap-4">
-              <PreferenceSelectFields variant="sidebar" />
-              <div className="h-px bg-edge-subtle" role="separator" />
-              <Link
-                to={pathForTab('settingsGateway')}
-                className={cn(
-                  'inline-flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-medium text-accent-fg',
-                  'bg-accent-soft transition-colors hover:bg-accent-soft/90',
-                  'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-2 focus-visible:ring-offset-surface-panel',
-                )}
-                onClick={() => {
-                  setOpen(false);
-                  onNavigate?.();
-                }}
-              >
-                <Settings className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
-                {a.openFullPreferences}
-              </Link>
-            </div>
+            <SidebarAppMenu
+              onOpenFullSettings={() => {
+                setOpen(false);
+                onNavigate?.();
+              }}
+              onAboutClick={() => {
+                setAboutOpen(true);
+                setOpen(false);
+              }}
+            />
           </Popover.Content>
         </Popover.Portal>
       </Popover.Root>
+
+      <AboutDialog open={aboutOpen} onOpenChange={setAboutOpen} />
     </div>
   );
 }

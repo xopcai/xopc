@@ -57,6 +57,7 @@ import type { ManagedSkillListItem } from '../agent/skills/managed-store.js';
 const log = createLogger('GatewayService');
 import { registerAcpRuntimeBackend } from '../acp/runtime/registry.js';
 import { createLocalAcpRuntimeBackend } from '../acp/runtime/backends/local.js';
+import { PACKAGE_VERSION } from '../package-version.js';
 import { buildSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
 import { MAX_CHAT_ATTACHMENTS } from './chat-limits.js';
@@ -963,7 +964,7 @@ export class GatewayService {
     return {
       status: 'ok',
       service: 'xopc-gateway',
-      version: '0.1.0',
+      version: PACKAGE_VERSION,
       uptime: Math.floor((Date.now() - this.startTime) / 1000),
       channels: {
         running: runningChannels.length,

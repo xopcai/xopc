@@ -1,3 +1,4 @@
+import { execSync } from 'node:child_process';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -5,9 +6,25 @@ import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react-swc';
 import { defineConfig } from 'vite';
 
+import webPkg from './package.json' with { type: 'json' };
+
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+const repoRoot = path.resolve(__dirname, '..');
+
+function tryGitSha(): string {
+  try {
+    return execSync('git rev-parse HEAD', { cwd: repoRoot, encoding: 'utf8' }).trim();
+  } catch {
+    return 'unknown';
+  }
+}
 
 export default defineConfig({
+  define: {
+    __XOPC_WEB_VERSION__: JSON.stringify(webPkg.version),
+    __XOPC_WEB_COMMIT__: JSON.stringify(process.env.VITE_XOPC_WEB_COMMIT ?? tryGitSha()),
+    __XOPC_WEB_BUILD_TIME__: JSON.stringify(process.env.VITE_XOPC_WEB_BUILD_TIME ?? new Date().toISOString()),
+  },
   plugins: [react(), tailwindcss()],
   resolve: {
     alias: {
