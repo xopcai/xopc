@@ -300,6 +300,25 @@ html.dark {
   }
 }
 
+/* Settings full-page left rail: shares `--sidebar-expanded-px` with app sidebar (md+). */
+@media (min-width: 768px) {
+  .settings-page-rail {
+    transform: translateZ(0);
+    width: var(--sidebar-expanded-px, 16rem);
+    transition: width 200ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+}
+
+.settings-page-rail.settings-page-rail-resizing {
+  transition: none !important;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .settings-page-rail {
+    transition: none;
+  }
+}
+
 /*
  * Page-level enter animation — triggered when the top-level route segment changes
  * (AppShell re-keys the Outlet wrapper on routeKey). Keeps the shell layout stable

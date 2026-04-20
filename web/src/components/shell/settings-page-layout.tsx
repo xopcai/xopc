@@ -1,5 +1,5 @@
 import { ArrowLeft } from 'lucide-react';
-import { memo } from 'react';
+import { memo, useCallback, useState, type CSSProperties } from 'react';
 import { Link, NavLink, Outlet } from 'react-router-dom';
 
 import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
@@ -9,6 +9,7 @@ import { cn } from '@/lib/cn';
 import { ExtensionSettingsNav } from '@/features/extensions/extension-settings-nav';
 import { pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
+import { useSidebarStore } from '@/stores/sidebar-store';
 
 /** Aligned with `SidebarNav` secondary links (§4.3 — same rail rhythm as main app sidebar). */
 function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
@@ -33,6 +34,39 @@ const backLinkClass = cn(
 export const SettingsPageLayout = memo(function SettingsPageLayout() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
+  const expandedWidthPx = useSidebarStore((s) => s.expandedWidthPx);
+  const setExpandedWidthPx = useSidebarStore((s) => s.setExpandedWidthPx);
+  const [widthResizing, setWidthResizing] = useState(false);
+
+  const onSettingsRailResizePointerDown = useCallback(
+    (e: React.PointerEvent<HTMLDivElement>) => {
+      e.preventDefault();
+      const el = e.currentTarget;
+      el.setPointerCapture(e.pointerId);
+      setWidthResizing(true);
+      const startX = e.clientX;
+      const startW = useSidebarStore.getState().expandedWidthPx;
+      const pid = e.pointerId;
+      const onMove = (ev: PointerEvent) => {
+        setExpandedWidthPx(startW + (ev.clientX - startX));
+      };
+      const onDone = () => {
+        try {
+          el.releasePointerCapture(pid);
+        } catch {
+          /* ignore */
+        }
+        setWidthResizing(false);
+        window.removeEventListener('pointermove', onMove);
+        window.removeEventListener('pointerup', onDone);
+        window.removeEventListener('pointercancel', onDone);
+      };
+      window.addEventListener('pointermove', onMove);
+      window.addEventListener('pointerup', onDone);
+      window.addEventListener('pointercancel', onDone);
+    },
+    [setExpandedWidthPx],
+  );
 
   const backControl = (
     <Link
@@ -51,9 +85,16 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
       {/* Left: surface-base — no border vs right; §2.1 */}
       <div
         className={cn(
-          'flex shrink-0 flex-col bg-surface-base',
-          'md:h-full md:min-h-0 md:w-[min(15rem,40vw)] md:shrink-0 md:overflow-hidden',
+          'relative flex shrink-0 flex-col bg-surface-base',
+          'md:h-full md:min-h-0 md:shrink-0 md:overflow-hidden',
+          'settings-page-rail',
+          widthResizing && 'settings-page-rail-resizing',
         )}
+        style={
+          {
+            '--sidebar-expanded-px': `${expandedWidthPx}px`,
+          } as CSSProperties
+        }
       >
         <div className={cn('shrink-0 px-4 pb-2 pt-4', APP_CHROME_DRAG_CLASS)}>{backControl}</div>
 
@@ -92,6 +133,23 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
               ))}
             </div>
           </nav>
+        </div>
+
+        <div
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={m.sidebar.resizeHandleAria}
+          onPointerDown={onSettingsRailResizePointerDown}
+          className={cn(
+            'group pointer-events-auto absolute right-0 top-0 z-10 hidden h-full w-2 shrink-0 cursor-col-resize md:block',
+            'touch-none select-none hover:bg-accent/10',
+            APP_CHROME_NO_DRAG_CLASS,
+          )}
+        >
+          <span
+            className="pointer-events-none absolute inset-y-0 right-1/2 w-px translate-x-1/2 bg-accent/40 opacity-0 transition-opacity group-hover:opacity-100"
+            aria-hidden
+          />
         </div>
       </div>
 
