@@ -1,11 +1,11 @@
-import { ChevronRight, Globe, Info, Palette, Settings, Type } from 'lucide-react';
+import { BookOpen, ChevronRight, ExternalLink, Globe, Info, Palette, Settings, Type } from 'lucide-react';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 
 import { messages } from '@/i18n/messages';
 import type { StoredLanguage } from '@/lib/storage';
 import { cn } from '@/lib/cn';
-import { pathForTab } from '@/navigation';
+import { helpDocsHomeUrl, pathForTab } from '@/navigation';
 import { useLocaleStore } from '@/stores/locale-store';
 import { type FontScalePreference, useFontScaleStore } from '@/stores/font-scale-store';
 import { type ThemePreference, useThemeStore } from '@/stores/theme-store';
@@ -201,6 +201,19 @@ export function SidebarAppMenu({
         <Info className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
         <span className="min-w-0 flex-1 text-left">{a.aboutApp}</span>
       </button>
+
+      <a
+        href={helpDocsHomeUrl(language)}
+        target="_blank"
+        rel="noopener noreferrer"
+        className={rowClass}
+        onMouseEnter={() => setOpenFlyout(null)}
+        onFocus={() => setOpenFlyout(null)}
+      >
+        <BookOpen className="size-4 shrink-0 text-fg-muted" strokeWidth={1.75} aria-hidden />
+        <span className="min-w-0 flex-1 text-left">{m.sidebar.helpDocs}</span>
+        <ExternalLink className="size-3.5 shrink-0 text-fg-subtle" strokeWidth={2} aria-hidden />
+      </a>
 
       <Link
         to={pathForTab('settingsGateway')}
