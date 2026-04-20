@@ -4,6 +4,28 @@ import { memo, useMemo } from 'react';
 import { parseMarkdown } from './parse-markdown';
 import './markdown.css';
 
+let externalLinkHookRegistered = false;
+
+function registerExternalMarkdownLinkHook(): void {
+  if (externalLinkHookRegistered || typeof window === 'undefined') return;
+  externalLinkHookRegistered = true;
+  DOMPurify.addHook('afterSanitizeAttributes', (node) => {
+    if (node.tagName !== 'A' || !node.hasAttribute('href')) return;
+    const href = node.getAttribute('href') ?? '';
+    try {
+      const resolved = new URL(href, window.location.href);
+      if (resolved.protocol !== 'http:' && resolved.protocol !== 'https:') return;
+      if (resolved.origin === window.location.origin) return;
+      node.setAttribute('target', '_blank');
+      node.setAttribute('rel', 'noopener noreferrer');
+    } catch {
+      /* invalid URL */
+    }
+  });
+}
+
+registerExternalMarkdownLinkHook();
+
 export interface MarkdownViewProps {
   content: string;
   /** Tighter heading/paragraph spacing for chat bubbles */
