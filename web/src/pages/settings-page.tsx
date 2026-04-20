@@ -33,7 +33,7 @@ export function SettingsPage() {
   }
 
   if (!section || !SECTIONS.includes(section as SettingsSectionId)) {
-    return <Navigate to="/settings/gateway" replace />;
+    return <Navigate to="/settings/appearance" replace />;
   }
 
   const id = section as SettingsSectionId;
