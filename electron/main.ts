@@ -2,7 +2,7 @@ import { existsSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { BrowserWindow, app, dialog, ipcMain, session } from 'electron';
+import { BrowserWindow, app, dialog, ipcMain, session, shell } from 'electron';
 
 import { ensureGatewayConfigForElectron, getElectronUserPaths } from './ensure-gateway-config.js';
 import {
@@ -27,6 +27,51 @@ let gatewayExitedUnexpectedly = false;
 
 /** Dev / unpackaged: window icon (Linux/Windows). Packaged apps use the bundle icon from electron-builder. */
 const devWindowIcon = join(__dirname, '../../electron/resources/icon.png');
+
+/**
+ * Open off-origin http(s) links in the system browser instead of replacing the app window /
+ * spawning an in-app BrowserWindow (e.g. chat markdown with target=_blank).
+ */
+function attachExternalUrlHandlers(win: BrowserWindow): void {
+  const wc = win.webContents;
+
+  wc.setWindowOpenHandler((details) => {
+    try {
+      const next = new URL(details.url);
+      if (next.protocol !== 'http:' && next.protocol !== 'https:') {
+        return { action: 'allow' };
+      }
+      const curHref = wc.getURL();
+      if (!curHref || curHref === 'about:blank') {
+        return { action: 'allow' };
+      }
+      const cur = new URL(curHref);
+      if (next.origin !== cur.origin) {
+        void shell.openExternal(details.url);
+        return { action: 'deny' };
+      }
+    } catch {
+      /* ignore */
+    }
+    return { action: 'allow' };
+  });
+
+  wc.on('will-navigate', (event, navigationUrl) => {
+    try {
+      const next = new URL(navigationUrl);
+      if (next.protocol !== 'http:' && next.protocol !== 'https:') return;
+      const curHref = wc.getURL();
+      if (!curHref || curHref === 'about:blank') return;
+      const cur = new URL(curHref);
+      if (next.origin !== cur.origin) {
+        event.preventDefault();
+        void shell.openExternal(navigationUrl);
+      }
+    } catch {
+      /* ignore */
+    }
+  });
+}
 
 function shouldEmbedGateway(): boolean {
   if (process.env['ELECTRON_RENDERER_URL']) return false;
@@ -109,6 +154,8 @@ function createWindow(): void {
   });
 
   mainWindow = win;
+
+  attachExternalUrlHandlers(win);
 
   win.on('closed', () => {
     mainWindow = null;
