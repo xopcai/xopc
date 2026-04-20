@@ -796,10 +796,10 @@ export class GatewayService {
    * Queue steering text for an active webchat run (`Agent.steer` / tool-boundary injection).
    * `chatId` is the same as `POST /api/agent` body (`sessionKey` or legacy peer id).
    */
-  steerWebchatAgent(
+  async steerWebchatAgent(
     chatId: string,
     message: string,
-  ): { ok: true } | { ok: false; code: 'BAD_REQUEST' | 'NO_ACTIVE_RUN' | 'STEER_FAILED' } {
+  ): Promise<{ ok: true } | { ok: false; code: 'BAD_REQUEST' | 'NO_ACTIVE_RUN' | 'STEER_FAILED' }> {
     const trimmed = message.trim();
     if (!trimmed) {
       return { ok: false, code: 'BAD_REQUEST' };
@@ -817,7 +817,7 @@ export class GatewayService {
     if (!this.activeWebchatRunBySession.has(sessionKey)) {
       return { ok: false, code: 'NO_ACTIVE_RUN' };
     }
-    const steered = this.agentService.steerWebchatSession(sessionKey, trimmed);
+    const steered = await this.agentService.steerWebchatSession(sessionKey, trimmed);
     if (!steered) {
       return { ok: false, code: 'STEER_FAILED' };
     }
@@ -1094,10 +1094,16 @@ export class GatewayService {
     return this.agentService.getSessionAgentConfig(sessionKey);
   }
 
+  /** Resolved markdown workspace for a session (after hydration / mkdir). Used by workspace file API when `sessionKey` is passed. */
+  async getEffectiveWorkspacePathForSession(sessionKey: string): Promise<string> {
+    return this.agentService.getEffectiveWorkspacePathForSession(sessionKey);
+  }
+
   async patchSessionAgentConfig(sessionKey: string, body: {
     thinkingLevel?: string;
     model?: string | null;
     reasoningLevel?: string;
+    workingDirectory?: string;
   }) {
     return this.agentService.patchSessionAgentConfig(sessionKey, body);
   }

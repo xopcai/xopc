@@ -136,6 +136,8 @@ export class AgentManager {
   private toolsFactory: AgentToolsFactory;
   /** Default agent workspace (effective profile for `getDefaultAgentId`). */
   private baseWorkspacePath: string;
+  /** Per-session absolute markdown workspace when `SessionAgentConfig.workingDirectoryOverride` is set. */
+  private sessionWorkspaceOverrides = new Map<string, string>();
   private defaultModel: string;
   private credentialCache = new Map<string, string>();
   private credentialResolver: CredentialResolver;
@@ -210,10 +212,27 @@ export class AgentManager {
 
   /**
    * Workspace root for inbound attachments / side effects for this session's agent id.
+   * Uses in-memory session workspace overrides when the session has a persisted `workingDirectoryOverride`.
    */
   getResolvedWorkspaceForSession(sessionKey: string): string {
     const cfg = this.config.config!;
+    const fromMap = this.sessionWorkspaceOverrides.get(sessionKey);
+    if (fromMap !== undefined) {
+      return fromMap;
+    }
     return resolveEffectiveAgentProfileForSession(cfg, sessionKey).resolvedWorkspacePath;
+  }
+
+  /**
+   * Sync in-memory workspace override from session config (after load or PATCH).
+   * Pass `null` to clear when the session has no `workingDirectoryOverride` on disk.
+   */
+  setSessionWorkspaceOverride(sessionKey: string, absolutePath: string | null): void {
+    if (absolutePath === null || absolutePath === '') {
+      this.sessionWorkspaceOverrides.delete(sessionKey);
+    } else {
+      this.sessionWorkspaceOverrides.set(sessionKey, absolutePath);
+    }
   }
 
   /** Merged `thinkingDefault` for this session's agent id (defaults + `agents.list`). */
@@ -336,8 +355,7 @@ export class AgentManager {
   }
 
   private getMemoryManagerForSession(sessionKey: string): MemoryManager {
-    const cfg = this.config.config!;
-    const path = resolveEffectiveAgentProfileForSession(cfg, sessionKey).resolvedWorkspacePath;
+    const path = this.getResolvedWorkspaceForSession(sessionKey);
     return this.getWorkspaceRuntime(path).memoryManager;
   }
 
@@ -584,24 +602,29 @@ export class AgentManager {
    * Get or create an Agent instance for a session
    */
   getOrCreateAgent(sessionKey: string): Agent {
+    const cfg = this.config.config!;
+    const targetPath = this.getResolvedWorkspaceForSession(sessionKey);
     const existing = this.agents.get(sessionKey);
     if (existing) {
-      existing.lastUsedAt = Date.now();
-      if (!existing.backgroundNudge) {
-        existing.backgroundNudge = {
-          turnsSinceMemory: 0,
-          itersSinceSkill: 0,
-          pendingMemoryReview: false,
-        };
-        this.attachBackgroundNudgeListeners(sessionKey);
+      if (existing.resolvedWorkspacePath !== targetPath) {
+        this.removeAgent(sessionKey);
+      } else {
+        existing.lastUsedAt = Date.now();
+        if (!existing.backgroundNudge) {
+          existing.backgroundNudge = {
+            turnsSinceMemory: 0,
+            itersSinceSkill: 0,
+            pendingMemoryReview: false,
+          };
+          this.attachBackgroundNudgeListeners(sessionKey);
+        }
+        log.debug({ sessionKey }, 'Reusing existing agent instance');
+        return existing.agent;
       }
-      log.debug({ sessionKey }, 'Reusing existing agent instance');
-      return existing.agent;
     }
 
-    const cfg = this.config.config!;
     const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
-    const resolvedPath = profile.resolvedWorkspacePath;
+    const resolvedPath = targetPath;
     const rt = this.getWorkspaceRuntime(resolvedPath);
 
     if (isMemorySubsystemEnabled(cfg)) {
@@ -620,6 +643,7 @@ export class AgentManager {
     const { agent, registeredToolNames } = this.createAgentForProfile(
       sessionKey,
       profile,
+      resolvedPath,
       rt,
       curatedMemorySnapshot,
     );
@@ -718,6 +742,7 @@ export class AgentManager {
     }
     this.agents.clear();
     this.memoryPrefetchUserTurn.clear();
+    this.sessionWorkspaceOverrides.clear();
     for (const rt of this.workspaceRuntimes.values()) {
       void rt.memoryManager.shutdownAll().catch(() => {});
     }
@@ -767,6 +792,7 @@ export class AgentManager {
   private createAgentForProfile(
     _sessionKey: string,
     profile: EffectiveAgentProfile,
+    resolvedWorkspacePath: string,
     rt: WorkspaceRuntime,
     curatedMemorySnapshot: MemorySnapshot,
   ): { agent: Agent; registeredToolNames: string[] } {
@@ -775,7 +801,7 @@ export class AgentManager {
 
     const bootstrapFiles = this.loadBootstrapForProfile(profile);
     const tools = this.toolsFactory.createAllTools({
-      workspace: profile.resolvedWorkspacePath,
+      workspace: resolvedWorkspacePath,
       disabledTools: profile.tools.disable,
       getPrimaryModel: () => this.resolveModelStringToModel(modelRef),
       getBuiltinMemoryStore: () => rt.builtinMemoryStore,
@@ -792,7 +818,7 @@ export class AgentManager {
         systemPrompt: rt.systemPromptBuilder.build(bootstrapFiles, {
           curatedMemorySnapshot,
           externalMemoryInstructions: rt.memoryManager.buildExternalSystemPrompt(),
-          workspaceOverride: profile.resolvedWorkspacePath,
+          workspaceOverride: resolvedWorkspacePath,
           systemPromptOverride: profile.systemPromptOverride,
           skillAllowlist: profile.skillsAllowlist,
           registeredToolNames,

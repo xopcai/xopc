@@ -1,6 +1,6 @@
 import * as Dialog from '@radix-ui/react-dialog';
 import { memo, useEffect, useMemo, useState } from 'react';
-import { useLocation } from 'react-router-dom';
+import { useLocation, useParams } from 'react-router-dom';
 
 import { WorkspaceFilePreviewPanel, getFileName } from '@/features/workspace/workspace-file-preview-dialog';
 import { cn } from '@/lib/cn';
@@ -59,6 +59,11 @@ function usePreviewDialogInset() {
  */
 export const WorkspacePreviewDialog = memo(function WorkspacePreviewDialog() {
   const { pathname } = useLocation();
+  const { sessionKey: sessionKeyParam } = useParams();
+  const chatSessionKey =
+    pathname.startsWith('/chat') && sessionKeyParam
+      ? decodeURIComponent(sessionKeyParam)
+      : undefined;
   const path = useWorkspacePreviewStore((s) => s.path);
   const setPath = useWorkspacePreviewStore((s) => s.setPath);
   const editorAgentId = useWorkspaceEditorAgentStore((s) => s.agentId);
@@ -90,6 +95,7 @@ export const WorkspacePreviewDialog = memo(function WorkspacePreviewDialog() {
           </Dialog.Title>
           <WorkspaceFilePreviewPanel
             filePath={path}
+            sessionKey={chatSessionKey}
             agentId={editorAgentId.trim() || undefined}
             onClose={() => setPath(null)}
           />

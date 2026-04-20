@@ -79,7 +79,17 @@ export function ChatPage() {
     displayAgentId,
     showChatAgentSelector,
     onChatAgentChange,
+    sessionManager,
   } = useChatSession();
+
+  const canSelectWorkingDirectory = useMemo(
+    () =>
+      Boolean(sessionKey) &&
+      !showSessionLoading &&
+      !sessionRoutePending &&
+      chatMessages.length === 0,
+    [sessionKey, showSessionLoading, sessionRoutePending, chatMessages.length],
+  );
 
   const setWorkspaceEditorAgentId = useWorkspaceEditorAgentStore((s) => s.setAgentId);
 
@@ -271,6 +281,9 @@ export function ChatPage() {
                 disabled={showSessionLoading || sessionRoutePending || Boolean(clarifyPrompt)}
                 sending={sending}
                 streaming={streaming}
+                sessionKey={sessionKey}
+                sessionManager={sessionManager}
+                canSelectWorkingDirectory={canSelectWorkingDirectory}
                 thinkingLevel={thinkingLevel}
                 showThinkingSelector={modelSupportsThinking}
                 onThinkingChange={setThinkingLevel}

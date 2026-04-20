@@ -21,6 +21,7 @@ import {
 } from '../../workspace-editor-path.js';
 import { runRipgrepInDirectory } from '../../workspace-ripgrep.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
+import type { GatewayService } from '../../service.js';
 
 const log = createLogger('HonoApp');
 
@@ -45,6 +46,27 @@ function resolveEditorWorkspaceRoot(
     return { ok: false, message: 'Unknown agent' };
   }
   return { ok: true, root: resolveAgentWorkspaceDir(cfg, id) };
+}
+
+/** Prefer `sessionKey` (per-session workspace override) over `agentId`. */
+async function resolveEditorWorkspaceRootAsync(
+  service: GatewayService,
+  cfg: Config,
+  sessionKeyRaw: string | undefined,
+  agentIdRaw: string | undefined,
+): Promise<{ ok: true; root: string } | { ok: false; message: string }> {
+  const sk = typeof sessionKeyRaw === 'string' ? sessionKeyRaw.trim() : '';
+  if (sk) {
+    try {
+      const root = await service.getEffectiveWorkspacePathForSession(sk);
+      return { ok: true, root };
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, sessionKey: sk }, 'Session workspace root resolution failed');
+      return { ok: false, message: em || 'Session workspace resolution failed' };
+    }
+  }
+  return resolveEditorWorkspaceRoot(cfg, agentIdRaw);
 }
 
 export function registerWorkspaceRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -171,7 +193,12 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
   });
 
   authenticated.get('/api/workspace/editor/list', async (c) => {
-    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    const ws = await resolveEditorWorkspaceRootAsync(
+      service,
+      service.currentConfig,
+      c.req.query('sessionKey'),
+      c.req.query('agentId'),
+    );
     if (ws.ok === false) {
       return c.json({ ok: false, error: { message: ws.message } }, 400);
     }
@@ -223,7 +250,12 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
     if (!pathRel.trim()) {
       return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
     }
-    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    const ws = await resolveEditorWorkspaceRootAsync(
+      service,
+      service.currentConfig,
+      c.req.query('sessionKey'),
+      c.req.query('agentId'),
+    );
     if (ws.ok === false) {
       return c.json({ ok: false, error: { message: ws.message } }, 400);
     }
@@ -262,7 +294,12 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
     if (!pathRel.trim()) {
       return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
     }
-    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    const ws = await resolveEditorWorkspaceRootAsync(
+      service,
+      service.currentConfig,
+      c.req.query('sessionKey'),
+      c.req.query('agentId'),
+    );
     if (ws.ok === false) {
       return c.json({ ok: false, error: { message: ws.message } }, 400);
     }
@@ -298,7 +335,12 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
   });
 
   authenticated.put('/api/workspace/editor/write', async (c) => {
-    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    const ws = await resolveEditorWorkspaceRootAsync(
+      service,
+      service.currentConfig,
+      c.req.query('sessionKey'),
+      c.req.query('agentId'),
+    );
     if (ws.ok === false) {
       return c.json({ ok: false, error: { message: ws.message } }, 400);
     }
@@ -366,7 +408,12 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
         payload: { results: [] as { filePath: string; lineNumber: number; lineContent: string; matchStart: number; matchEnd: number }[] },
       });
     }
-    const ws = resolveEditorWorkspaceRoot(service.currentConfig, c.req.query('agentId'));
+    const ws = await resolveEditorWorkspaceRootAsync(
+      service,
+      service.currentConfig,
+      c.req.query('sessionKey'),
+      c.req.query('agentId'),
+    );
     if (ws.ok === false) {
       return c.json({ ok: false, error: { message: ws.message } }, 400);
     }

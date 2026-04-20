@@ -31,6 +31,8 @@ export interface SessionAgentConfig {
   modelOverride?: string;
   /** Provider override for this session */
   providerOverride?: string;
+  /** Absolute markdown workspace root for this session (set once; immutable after save). */
+  workingDirectoryOverride?: string;
   /** Last updated timestamp */
   updatedAt?: number;
 }
