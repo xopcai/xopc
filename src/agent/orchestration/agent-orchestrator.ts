@@ -39,6 +39,8 @@ export interface AgentOrchestratorConfig {
   eventHandler: AgentEventHandler;
   feedbackCoordinator: FeedbackCoordinator;
   sessionConfigStore: SessionConfigStore;
+  /** Load per-session workspace override and mkdir before creating the agent. */
+  hydrateSessionWorkspaceFromStore?: (sessionKey: string) => Promise<void>;
   getThinkingDefault: () => ThinkLevel | undefined;
   /** Per-session default from merged `agents.list` / defaults (optional). */
   getThinkingDefaultForSession?: (sessionKey: string) => ThinkLevel | undefined;
@@ -61,6 +63,7 @@ export class AgentOrchestrator {
   private eventHandler: AgentEventHandler;
   private feedbackCoordinator: FeedbackCoordinator;
   private sessionConfigStore: SessionConfigStore;
+  private hydrateSessionWorkspaceFromStore?: (sessionKey: string) => Promise<void>;
   private getThinkingDefault: () => ThinkLevel | undefined;
   private getThinkingDefaultForSession?: (sessionKey: string) => ThinkLevel | undefined;
   private workspaceRoot: string;
@@ -76,6 +79,7 @@ export class AgentOrchestrator {
     this.eventHandler = config.eventHandler;
     this.feedbackCoordinator = config.feedbackCoordinator;
     this.sessionConfigStore = config.sessionConfigStore;
+    this.hydrateSessionWorkspaceFromStore = config.hydrateSessionWorkspaceFromStore;
     this.getThinkingDefault = config.getThinkingDefault;
     this.getThinkingDefaultForSession = config.getThinkingDefaultForSession;
     this.workspaceRoot = config.workspaceRoot;
@@ -101,6 +105,8 @@ export class AgentOrchestrator {
     const { sessionKey } = context;
 
     log.debug({ sessionKey }, 'Processing message through agent orchestrator');
+
+    await this.hydrateSessionWorkspaceFromStore?.(sessionKey);
 
     // Get or create agent for this session
     const agent = this.agentManager.getOrCreateAgent(sessionKey);

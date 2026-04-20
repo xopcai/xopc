@@ -89,6 +89,8 @@ type BinaryPreviewKind = 'pdf' | 'excel' | 'docx' | 'pptx' | 'binaryOnly';
 export interface WorkspaceFilePreviewPanelProps {
   filePath: string | null;
   onClose: () => void;
+  /** Per-chat session workspace (takes priority over `agentId`). */
+  sessionKey?: string;
   /** Chat agent workspace; omit to use gateway default agent root. */
   agentId?: string;
 }
@@ -96,6 +98,7 @@ export interface WorkspaceFilePreviewPanelProps {
 export function WorkspaceFilePreviewPanel({
   filePath,
   onClose,
+  sessionKey,
   agentId,
 }: WorkspaceFilePreviewPanelProps) {
   const language = useLocaleStore((s) => s.language);
@@ -122,10 +125,12 @@ export function WorkspaceFilePreviewPanel({
   const binaryPreviewRef = useRef<HTMLDivElement>(null);
   const binaryCleanupRef = useRef<(() => void) | null>(null);
 
-  const readOpts = useMemo(
-    () => (agentId?.trim() ? { agentId: agentId.trim() } : undefined),
-    [agentId],
-  );
+  const readOpts = useMemo(() => {
+    const sk = sessionKey?.trim();
+    if (sk) return { sessionKey: sk };
+    const aid = agentId?.trim();
+    return aid ? { agentId: aid } : undefined;
+  }, [sessionKey, agentId]);
 
   useEffect(() => {
     setMarkdownEditMode(false);

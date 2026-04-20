@@ -31,14 +31,19 @@ function mergeChildren(
   });
 }
 
-export function useWorkspaceTree(agentId: string) {
+export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
   const [tree, setTree] = useState<TreeEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const loadedDirsRef = useRef<Set<string>>(new Set());
   const trimmedAgentId = agentId.trim();
-  const editorOptsLazy = () =>
-    trimmedAgentId ? ({ agentId: trimmedAgentId } as const) : undefined;
+  const trimmedSessionKey = sessionKey?.trim() ?? '';
+  const editorOptsLazy = () => {
+    if (trimmedSessionKey) {
+      return { sessionKey: trimmedSessionKey } as const;
+    }
+    return trimmedAgentId ? ({ agentId: trimmedAgentId } as const) : undefined;
+  };
 
   const loadRoot = useCallback(async () => {
     setLoading(true);
@@ -53,7 +58,7 @@ export function useWorkspaceTree(agentId: string) {
     } finally {
       setLoading(false);
     }
-  }, [trimmedAgentId]);
+  }, [trimmedAgentId, trimmedSessionKey]);
 
   const loadChildren = useCallback(
     async (dirPath: string) => {
@@ -67,7 +72,7 @@ export function useWorkspaceTree(agentId: string) {
         loadedDirsRef.current.delete(dirPath);
       }
     },
-    [trimmedAgentId],
+    [trimmedAgentId, trimmedSessionKey],
   );
 
   const reset = useCallback(() => {

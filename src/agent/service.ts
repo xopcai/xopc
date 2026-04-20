@@ -6,11 +6,15 @@ import type { ChannelManager } from '../channels/manager.js';
 import { INTERNAL_OUTBOUND_DROP_CHANNEL } from '../channels/internal-outbound.js';
 import { join } from 'path';
 
+import { mkdir } from 'node:fs/promises';
+
 import {
   SessionStore,
   SessionConfigStore,
   resolveEffectiveThinkingLevel,
   resolveEffectiveReasoningLevel,
+  effectiveWorkspacePathForSession,
+  normalizeWorkingDirectoryInput,
   type CompactionConfig,
   type WindowConfig,
 } from '../session/index.js';
@@ -218,6 +222,7 @@ export class AgentService {
       eventHandler: this.agentEventHandler,
       feedbackCoordinator: this.feedbackCoordinator,
       sessionConfigStore: this.sessionConfigStore,
+      hydrateSessionWorkspaceFromStore: (sessionKey) => this.hydrateSessionWorkspaceFromStore(sessionKey),
       getConfig: () => this.config.config,
       getThinkingDefault: () => this.config.config?.agents?.defaults?.thinkingDefault,
       getThinkingDefaultForSession: (sessionKey: string) =>
@@ -787,19 +792,67 @@ export class AgentService {
     thinkingLevel: ThinkingLevel;
     model: string;
     reasoningLevel: ReasoningLevel;
+    effectiveWorkspacePath: string;
+    workingDirectoryLocked: boolean;
   }> {
     await this.hydrateSessionModelFromStore(sessionKey);
-    const defThink = this.config.config?.agents?.defaults?.thinkingDefault ?? 'medium';
+    const cfg = this.config.config!;
+    const sc = await this.sessionConfigStore.get(sessionKey);
+    const defThink = cfg.agents?.defaults?.thinkingDefault ?? 'medium';
     const level = await resolveEffectiveThinkingLevel(this.sessionConfigStore, sessionKey, null, defThink);
-    const defReason = (this.config.config?.agents?.defaults?.reasoningDefault ?? 'off') as ReasoningLevel;
+    const defReason = (cfg.agents?.defaults?.reasoningDefault ?? 'off') as ReasoningLevel;
     const reasoningLevel = await resolveEffectiveReasoningLevel(this.sessionConfigStore, sessionKey, defReason);
     const model = this.modelManager.getModelForSession(sessionKey);
-    return { thinkingLevel: level, model, reasoningLevel };
+    return {
+      thinkingLevel: level,
+      model,
+      reasoningLevel,
+      effectiveWorkspacePath: effectiveWorkspacePathForSession(cfg, sessionKey, sc),
+      workingDirectoryLocked: Boolean(sc?.workingDirectoryOverride?.trim()),
+    };
+  }
+
+  /**
+   * Load session working directory override into AgentManager, ensure directory exists.
+   * Call before AgentManager.getOrCreateAgent for this session.
+   */
+  async hydrateSessionWorkspaceFromStore(sessionKey: string): Promise<void> {
+    const cfg = this.config.config;
+    if (!cfg) {
+      return;
+    }
+    const loaded = await this.sessionConfigStore.get(sessionKey);
+    if (loaded?.workingDirectoryOverride?.trim()) {
+      const wdStored = normalizeWorkingDirectoryInput(loaded.workingDirectoryOverride);
+      if (wdStored.ok) {
+        this.agentManager.setSessionWorkspaceOverride(sessionKey, wdStored.path);
+      } else {
+        log.warn({ sessionKey }, 'Invalid stored workingDirectoryOverride; ignoring');
+        this.agentManager.setSessionWorkspaceOverride(sessionKey, null);
+      }
+    } else {
+      this.agentManager.setSessionWorkspaceOverride(sessionKey, null);
+    }
+    const effective = effectiveWorkspacePathForSession(cfg, sessionKey, loaded);
+    await mkdir(effective, { recursive: true });
+  }
+
+  /** Workspace root for UI file tree / editor (same as agent tools after hydration). */
+  async getEffectiveWorkspacePathForSession(sessionKey: string): Promise<string> {
+    await this.hydrateSessionWorkspaceFromStore(sessionKey);
+    const cfg = this.config.config!;
+    const sc = await this.sessionConfigStore.get(sessionKey);
+    return effectiveWorkspacePathForSession(cfg, sessionKey, sc);
   }
 
   async patchSessionAgentConfig(
     sessionKey: string,
-    partial: { thinkingLevel?: string; model?: string | null; reasoningLevel?: string },
+    partial: {
+      thinkingLevel?: string;
+      model?: string | null;
+      reasoningLevel?: string;
+      workingDirectory?: string;
+    },
   ): Promise<{ ok: boolean; error?: string }> {
     if (partial.model !== undefined) {
       if (partial.model === null || partial.model === '') {
@@ -829,6 +882,50 @@ export class AgentService {
         return { ok: false, error: 'Invalid reasoning level' };
       }
       await this.sessionConfigStore.update(sessionKey, { reasoningLevel: normalized });
+    }
+
+    if (partial.workingDirectory !== undefined) {
+      const cfg = this.config.config;
+      if (!cfg) {
+        return { ok: false, error: 'Config not loaded' };
+      }
+      const existing = await this.sessionConfigStore.get(sessionKey);
+      const existingRaw = existing?.workingDirectoryOverride?.trim();
+      const incoming = partial.workingDirectory.trim();
+
+      if (existingRaw) {
+        const prev = normalizeWorkingDirectoryInput(existingRaw);
+        const next = normalizeWorkingDirectoryInput(incoming);
+        if (prev.ok && next.ok && prev.path === next.path) {
+          /* idempotent */
+        } else {
+          return { ok: false, error: 'Working directory is already set for this session' };
+        }
+      } else {
+        const priorMessages = await this.sessionStore.load(sessionKey);
+        if (priorMessages.length > 0) {
+          return {
+            ok: false,
+            error: 'Working directory can only be set before the first message in this conversation',
+          };
+        }
+        if (!incoming) {
+          return { ok: false, error: 'workingDirectory is empty' };
+        }
+        const wdNorm = normalizeWorkingDirectoryInput(incoming);
+        switch (wdNorm.ok) {
+          case true:
+            await mkdir(wdNorm.path, { recursive: true });
+            await this.sessionConfigStore.update(sessionKey, { workingDirectoryOverride: wdNorm.path });
+            this.agentManager.setSessionWorkspaceOverride(sessionKey, wdNorm.path);
+            this.agentManager.removeAgent(sessionKey);
+            break;
+          case false:
+            return { ok: false, error: wdNorm.error };
+          default:
+            return { ok: false, error: 'Invalid working directory' };
+        }
+      }
     }
 
     return { ok: true };
@@ -869,6 +966,7 @@ export class AgentService {
         this.webchatSseEnqueueBySession.delete(sk);
       },
       agentManager: this.agentManager,
+      hydrateSessionWorkspaceFromStore: (sk) => this.hydrateSessionWorkspaceFromStore(sk),
       hydrateSessionModelFromStore: (sk) => this.hydrateSessionModelFromStore(sk),
       agentEventHandler: this.agentEventHandler,
       sessionStore: this.sessionStore,
@@ -902,10 +1000,11 @@ export class AgentService {
    * Queue a steering user message into pi-agent's in-flight run (delivered after current tool work, before the next LLM call).
    * See `Agent.steer` in `@mariozechner/pi-agent-core`.
    */
-  steerWebchatSession(sessionKey: string, text: string): boolean {
+  async steerWebchatSession(sessionKey: string, text: string): Promise<boolean> {
     const trimmed = text.trim();
     if (!trimmed) return false;
     try {
+      await this.hydrateSessionWorkspaceFromStore(sessionKey);
       const agent = this.agentManager.getOrCreateAgent(sessionKey);
       const msg: AgentMessage = {
         role: 'user',
@@ -1027,6 +1126,7 @@ export class AgentService {
     this.initSessionContext(sessionKey, channel, chatId);
 
     try {
+      await this.hydrateSessionWorkspaceFromStore(sessionKey);
       // Get or create agent for this session
       const agent = this.agentManager.getOrCreateAgent(sessionKey);
 
@@ -1211,6 +1311,8 @@ export class AgentService {
 
   private async handleSystemMessage(msg: InboundMessage, context: SessionContext): Promise<void> {
     log.debug({ sessionKey: context.sessionKey }, 'Processing system message');
+
+    await this.hydrateSessionWorkspaceFromStore(context.sessionKey);
 
     // Get or create agent for this session
     const agent = this.agentManager.getOrCreateAgent(context.sessionKey);

@@ -5,6 +5,8 @@ import type { Attachment } from '@/features/chat/attachment-utils';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment-utils';
 import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '@/features/chat/constants';
 import { ChatPendingFollowUpStack } from '@/features/chat/chat-pending-follow-up-stack';
+import { SessionWorkingDirectoryControl } from '@/features/chat/session-working-directory-control';
+import type { SessionManager } from '@/features/chat/session-manager';
 import { CommandPalette } from '@/features/chat/command-palette';
 import { MAX_PENDING_FOLLOW_UPS, type PendingFollowUp } from '@/features/chat/pending-follow-up.types';
 import type { PaletteItem } from '@/features/chat/command-palette.types';
@@ -280,6 +282,9 @@ export const ChatComposer = memo(function ChatComposer({
   disabled,
   sending,
   streaming,
+  sessionKey,
+  sessionManager,
+  canSelectWorkingDirectory,
   thinkingLevel,
   showThinkingSelector,
   onThinkingChange,
@@ -298,6 +303,10 @@ export const ChatComposer = memo(function ChatComposer({
   disabled: boolean;
   sending: boolean;
   streaming: boolean;
+  sessionKey: string | null;
+  sessionManager: SessionManager;
+  /** Allow choosing workspace only for a new conversation (no messages yet). */
+  canSelectWorkingDirectory: boolean;
   thinkingLevel: string;
   showThinkingSelector: boolean;
   onThinkingChange: (level: string) => void;
@@ -858,6 +867,12 @@ export const ChatComposer = memo(function ChatComposer({
             'flex flex-wrap items-center gap-2 border-t border-edge-subtle/90 px-4 py-2.5 dark:border-edge-subtle',
           )}
         >
+            <SessionWorkingDirectoryControl
+              sessionKey={sessionKey}
+              sessionMgr={sessionManager}
+              canSelectWorkingDirectory={canSelectWorkingDirectory}
+              disabled={disabled || runBusy}
+            />
             <button
               type="button"
               className={cn(

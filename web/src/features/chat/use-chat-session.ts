@@ -1283,5 +1283,6 @@ export function useChatSession() {
     displayAgentId,
     showChatAgentSelector,
     onChatAgentChange,
+    sessionManager: sessionMgrRef.current,
   };
 }

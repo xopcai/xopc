@@ -53,7 +53,7 @@ export function registerAgentStreamRoutes(authenticated: Hono, deps: Authenticat
         400,
       );
     }
-    const result = service.steerWebchatAgent(chatId, message);
+    const result = await service.steerWebchatAgent(chatId, message);
     if (result.ok === false) {
       const code = result.code;
       const status = code === 'BAD_REQUEST' ? 400 : code === 'NO_ACTIVE_RUN' ? 409 : 500;

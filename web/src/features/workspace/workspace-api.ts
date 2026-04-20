@@ -30,6 +30,8 @@ interface WriteResponse {
 }
 
 export type WorkspaceEditorRequestOptions = {
+  /** When set, uses that chat session's effective workspace (override or agent default). Takes priority over `agentId`. */
+  sessionKey?: string;
   /** When set, lists/reads/writes that agent's Markdown workspace (`resolveAgentWorkspaceDir`). */
   agentId?: string;
 };
@@ -37,8 +39,13 @@ export type WorkspaceEditorRequestOptions = {
 function editorQuery(dir: string, options?: WorkspaceEditorRequestOptions): string {
   const params = new URLSearchParams();
   if (dir) params.set('dir', dir);
-  const aid = options?.agentId?.trim();
-  if (aid) params.set('agentId', aid);
+  const sk = options?.sessionKey?.trim();
+  if (sk) {
+    params.set('sessionKey', sk);
+  } else {
+    const aid = options?.agentId?.trim();
+    if (aid) params.set('agentId', aid);
+  }
   const qs = params.toString();
   return qs ? `?${qs}` : '';
 }
@@ -60,8 +67,13 @@ export async function readWorkspaceFile(
   options?: WorkspaceEditorRequestOptions,
 ): Promise<{ content: string; path: string; mtimeMs?: number }> {
   const params = new URLSearchParams({ path });
-  const aid = options?.agentId?.trim();
-  if (aid) params.set('agentId', aid);
+  const sk = options?.sessionKey?.trim();
+  if (sk) {
+    params.set('sessionKey', sk);
+  } else {
+    const aid = options?.agentId?.trim();
+    if (aid) params.set('agentId', aid);
+  }
   const res = await fetchJson<ReadResponse>(
     apiUrl(`/api/workspace/editor/read?${params.toString()}`),
   );
@@ -74,8 +86,13 @@ export async function readWorkspaceFileBase64(
   options?: WorkspaceEditorRequestOptions,
 ): Promise<{ contentBase64: string; path: string; absolutePath?: string; mtimeMs?: number }> {
   const params = new URLSearchParams({ path });
-  const aid = options?.agentId?.trim();
-  if (aid) params.set('agentId', aid);
+  const sk = options?.sessionKey?.trim();
+  if (sk) {
+    params.set('sessionKey', sk);
+  } else {
+    const aid = options?.agentId?.trim();
+    if (aid) params.set('agentId', aid);
+  }
   const res = await fetchJson<ReadBase64Response>(
     apiUrl(`/api/workspace/editor/read-base64?${params.toString()}`),
   );
@@ -88,8 +105,12 @@ export async function writeWorkspaceFile(
   content: string,
   options?: WorkspaceEditorRequestOptions,
 ): Promise<{ path: string; mtimeMs?: number }> {
-  const aid = options?.agentId?.trim();
-  const qs = aid ? `?agentId=${encodeURIComponent(aid)}` : '';
+  const sk = options?.sessionKey?.trim();
+  const qs = sk
+    ? `?sessionKey=${encodeURIComponent(sk)}`
+    : options?.agentId?.trim()
+      ? `?agentId=${encodeURIComponent(options.agentId.trim())}`
+      : '';
   const res = await fetchJson<WriteResponse>(apiUrl(`/api/workspace/editor/write${qs}`), {
     method: 'PUT',
     body: JSON.stringify({ path, content }),
