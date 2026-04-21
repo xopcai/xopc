@@ -116,7 +116,9 @@ function pushRecentWorkspaceDirForCron(path: string): void {
   try {
     const raw = localStorage.getItem(RECENT_WD_STORAGE_KEY);
     const parsed = raw ? (JSON.parse(raw) as unknown) : [];
-    const prev = Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string' && x.trim()) : [];
+    const prev = Array.isArray(parsed)
+      ? parsed.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+      : [];
     const next = [t, ...prev.filter((p) => p !== t)].slice(0, RECENT_WD_MAX);
     localStorage.setItem(RECENT_WD_STORAGE_KEY, JSON.stringify(next));
   } catch {
