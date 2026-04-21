@@ -128,7 +128,7 @@ export function resolveAgentAuthProfilesPath(config: Config, agentId: string): s
 }
 
 /**
- * Agent session store root. Transcript files are stored in subfolders (users/…, system/cron, …), not as a flat list.
+ * Agent session store root. Transcript files are stored in subfolders (users/…, system/heartbeat, …), not as a flat list.
  */
 export function resolveSessionsDir(config: Config, agentId: string): string {
   return resolveSessionsDirScoped(config, agentId);

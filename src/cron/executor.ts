@@ -24,7 +24,7 @@ import {
   shouldSilence,
   stripHeartbeatToken,
 } from '../heartbeat/tokens.js';
-import { normalizeAgentId } from '../agent/agent-scope.js';
+import { DEFAULT_AGENT_ID, normalizeAgentId } from '../agent/agent-scope.js';
 import { buildSessionKey } from '../routing/session-key.js';
 
 const log = createLogger('CronExecutor');
@@ -61,6 +61,7 @@ export class DefaultJobExecutor implements JobExecutor {
   private heartbeatService: HeartbeatWakeSink | null = null;
   private sessionStore: SessionStore | undefined;
   private runLogStore: CronRunLogStore | null = null;
+  private getDefaultCronAgentId: (() => string) | null = null;
 
   setRunLogStore(store: CronRunLogStore | null): void {
     this.runLogStore = store;
@@ -73,6 +74,7 @@ export class DefaultJobExecutor implements JobExecutor {
     if (deps.sessionStore !== undefined) {
       this.sessionStore = deps.sessionStore;
     }
+    this.getDefaultCronAgentId = deps.getDefaultCronAgentId ?? null;
   }
 
   private async buildCronOutboundMessage(
@@ -352,15 +354,14 @@ export class DefaultJobExecutor implements JobExecutor {
     }
 
     const aid = job.agentId?.trim();
-    const sessionKey = aid
-      ? buildSessionKey({
-          agentId: normalizeAgentId(aid),
-          source: 'cron',
-          accountId: 'default',
-          peerKind: 'dm',
-          peerId: job.id,
-        })
-      : `cron:${job.id}`;
+    const fallbackAgentId = this.getDefaultCronAgentId?.() ?? DEFAULT_AGENT_ID;
+    const sessionKey = buildSessionKey({
+      agentId: normalizeAgentId(aid || fallbackAgentId),
+      source: 'cron',
+      accountId: 'default',
+      peerKind: 'dm',
+      peerId: job.id,
+    });
 
     // Create timeout promise
     const timeoutPromise = new Promise<never>((_, reject) => {
