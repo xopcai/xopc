@@ -23,7 +23,8 @@
     "settingsGateway": "Gateway",
     "settingsHeartbeat": "Heartbeat",
     "settingsSearch": "Web search",
-    "settingsAgents": "Agents"
+    "settingsAgentDefaults": "Agent defaults",
+    "settingsAgents": "Agent management"
   },
   "appsPage": {
     "title": "Apps",
@@ -96,6 +97,7 @@
   "settingsSections": {
     "appearance": "Preferences",
     "agent": "Agent",
+    "agent-defaults": "Agent defaults",
     "providers": "Providers",
     "models": "Models",
     "channels": "Channels",
@@ -103,7 +105,7 @@
     "gateway": "Gateway",
     "heartbeat": "Heartbeat",
     "search": "Web search",
-    "agents": "Agents"
+    "agents": "Agent management"
   },
   "settingsNavGroups": {
     "gateway": "Connection & service",

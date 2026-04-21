@@ -23,7 +23,8 @@
     "settingsGateway": "网关",
     "settingsHeartbeat": "心跳",
     "settingsSearch": "网络搜索",
-    "settingsAgents": "智能体"
+    "settingsAgentDefaults": "全局默认",
+    "settingsAgents": "智能体管理"
   },
   "appsPage": {
     "title": "应用",
@@ -96,6 +97,7 @@
   "settingsSections": {
     "appearance": "偏好设置",
     "agent": "智能体",
+    "agent-defaults": "全局默认",
     "providers": "服务商",
     "models": "模型",
     "channels": "即时通讯",
@@ -103,7 +105,7 @@
     "gateway": "网关",
     "heartbeat": "心跳",
     "search": "网络搜索",
-    "agents": "智能体"
+    "agents": "智能体管理"
   },
   "settingsNavGroups": {
     "gateway": "连接与服务",

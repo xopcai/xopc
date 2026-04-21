@@ -43,6 +43,7 @@ function OnboardingModelSetupStep() {
   const [ready, setReady] = useState(false);
 
   const onSettingsModelsOrProviders =
+    pathname.startsWith('/settings/agent-defaults') ||
     pathname.startsWith('/settings/agents') ||
     pathname.startsWith('/settings/models') ||
     pathname.startsWith('/settings/providers');
