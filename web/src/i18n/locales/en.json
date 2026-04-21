@@ -994,7 +994,20 @@
     "cronColSession": "Session",
     "cronColAgent": "Agent",
     "cronAgentDefault": "Default agent",
-    "cronAgentClear": "Reset to default"
+    "cronAgentClear": "Reset to default",
+    "navIdentity": "Identity",
+    "navTools": "Tools",
+    "navSkills": "Skills",
+    "navCoreFiles": "Core files",
+    "navAdvanced": "Advanced",
+    "listSearchPlaceholder": "Search by name, id, or workspace",
+    "listEmpty": "No agents match your search.",
+    "listNoAgentsYet": "No agents yet. Create one to get started.",
+    "listNewAgentCard": "New agent",
+    "listOpenEditor": "Configure",
+    "editorNavAria": "Agent editor sections",
+    "skillsLibraryLink": "Skill library",
+    "footerSaveNotApplicable": "Use actions in this section; the bar Save applies to Identity, Tools, Skills, and Core files."
   },
   "providersSettings": {
     "subtitle": "Provider API keys and OAuth. Keys you save here go to the gateway credential store.",

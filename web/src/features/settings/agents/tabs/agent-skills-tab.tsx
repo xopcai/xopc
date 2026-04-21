@@ -1,5 +1,6 @@
 import { BookOpen } from 'lucide-react';
 import type { Dispatch, SetStateAction } from 'react';
+import { Link } from 'react-router-dom';
 
 import { Button } from '@/components/ui/button';
 import type { GatewayAgentRow, SkillCatalogRow } from '@/features/settings/agents-admin-api';
@@ -18,6 +19,7 @@ export function AgentSkillsTab(props: {
   skillsPick: Set<string>;
   setSkillsPick: Dispatch<SetStateAction<Set<string>>>;
   onSaveSkills: () => void;
+  hideInlineSave?: boolean;
 }) {
   const {
     a,
@@ -30,57 +32,85 @@ export function AgentSkillsTab(props: {
     skillsPick,
     setSkillsPick,
     onSaveSkills,
+    hideInlineSave,
   } = props;
 
+  /** When inheriting defaults, checkboxes reflect the effective allowlist (undefined = all catalog skills). */
+  function isCheckedInheritMode(id: string): boolean {
+    const eff = selected.skills.effectiveAllowlist;
+    if (eff === undefined) {
+      return true;
+    }
+    if (eff.length === 0) {
+      return false;
+    }
+    return eff.includes(id);
+  }
+
+  function initialPickForCustomize(): Set<string> {
+    const eff = selected.skills.effectiveAllowlist;
+    if (eff !== undefined) {
+      return new Set(eff);
+    }
+    return new Set(catalogForPick.map((s) => s.name || s.directoryId));
+  }
+
   return (
-    <SettingsFormSection>
-      <SettingsFormSectionHeader icon={BookOpen} title={a.skillsTitle} subtitle={a.skillsHint} />
-      <div className="flex flex-wrap gap-2">
-        <Button type="button" variant="secondary" disabled={busy} onClick={() => setSkillsInherit(true)}>
-          {a.skillsInherit}
-        </Button>
-        <Button
-          type="button"
-          variant="secondary"
-          disabled={busy}
-          onClick={() => {
-            setSkillsInherit(false);
-            setSkillsPick(
-              new Set(
-                selected.skills.effectiveAllowlist?.length
-                  ? selected.skills.effectiveAllowlist
-                  : selected.skills.defaults,
-              ),
-            );
-          }}
+    <SettingsFormSection className="flex min-h-0 flex-1 flex-col">
+      <SettingsFormSectionHeader
+        className="shrink-0"
+        icon={BookOpen}
+        title={a.skillsTitle}
+        subtitle={a.skillsHint}
+      />
+      <div className="flex shrink-0 flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap gap-2">
+          <Button type="button" variant="secondary" disabled={busy} onClick={() => setSkillsInherit(true)}>
+            {a.skillsInherit}
+          </Button>
+          <Button
+            type="button"
+            variant="secondary"
+            disabled={busy}
+            onClick={() => {
+              setSkillsInherit(false);
+              setSkillsPick(initialPickForCustomize());
+            }}
+          >
+            {a.skillsCustomize}
+          </Button>
+        </div>
+        <Link
+          to="/skills"
+          className="shrink-0 text-xs font-medium text-accent-fg hover:underline"
         >
-          {a.skillsCustomize}
-        </Button>
+          {a.skillsLibraryLink}
+        </Link>
       </div>
-      <p className="mt-2 text-xs text-fg-muted">
+      <p className="mt-2 shrink-0 text-xs text-fg-muted">
         {a.skillsDefaultsLabel} {selected.skills.defaults.length ? selected.skills.defaults.join(', ') : '—'}
       </p>
-      <p className="text-xs text-fg-muted">
+      <p className="shrink-0 text-xs text-fg-muted">
         {a.skillsEffectiveLabel}{' '}
         {selected.skills.effectiveAllowlist?.length
           ? selected.skills.effectiveAllowlist.join(', ')
           : a.skillsAllFromCatalog}
       </p>
       {skillsCatalogLoading ? (
-        <p className="text-sm text-fg-muted">{a.skillsCatalogLoading}</p>
+        <p className="shrink-0 text-sm text-fg-muted">{a.skillsCatalogLoading}</p>
       ) : catalogForPick.length === 0 ? (
-        <p className="text-sm text-fg-muted">{a.skillsEmptyCatalog}</p>
+        <p className="shrink-0 text-sm text-fg-muted">{a.skillsEmptyCatalog}</p>
       ) : (
         <div
           className={cn(
-            'mt-3 h-[20rem] min-h-0 overflow-y-auto overscroll-contain pr-0.5',
+            'mt-3 min-h-0 flex-1 overflow-y-auto overscroll-contain pr-0.5',
             skillsInherit && 'opacity-50',
           )}
         >
           <ul className="flex flex-col gap-2.5 text-sm" role="list">
             {catalogForPick.map((s) => {
               const id = s.name || s.directoryId;
-              const on = skillsPick.has(id);
+              const on = skillsInherit ? isCheckedInheritMode(id) : skillsPick.has(id);
               const desc = typeof s.description === 'string' ? s.description.trim() : '';
               const descLine = desc || a.skillsNoDescription;
               return (
@@ -127,11 +157,13 @@ export function AgentSkillsTab(props: {
           </ul>
         </div>
       )}
-      <div className="mt-4">
-        <Button type="button" disabled={busy} onClick={() => void onSaveSkills()}>
-          {a.skillsSave}
-        </Button>
-      </div>
+      {!hideInlineSave ? (
+        <div className="mt-4 shrink-0">
+          <Button type="button" disabled={busy} onClick={() => void onSaveSkills()}>
+            {a.skillsSave}
+          </Button>
+        </div>
+      ) : null}
     </SettingsFormSection>
   );
 }

@@ -16,13 +16,29 @@ export function AgentToolsTab(props: {
   setToolEntryDisable: Dispatch<SetStateAction<Set<string>>>;
   onSaveTools: () => void;
   onClearToolsEntry: () => void;
+  hideInlineSave?: boolean;
 }) {
-  const { a, data, selected, busy, toolEntryDisable, setToolEntryDisable, onSaveTools, onClearToolsEntry } = props;
+  const {
+    a,
+    data,
+    selected,
+    busy,
+    toolEntryDisable,
+    setToolEntryDisable,
+    onSaveTools,
+    onClearToolsEntry,
+    hideInlineSave,
+  } = props;
 
   return (
-    <SettingsFormSection>
-      <SettingsFormSectionHeader icon={Wrench} title={a.toolsTitle} subtitle={a.toolsHint} />
-      <div className="h-[20rem] min-h-0 overflow-y-auto overscroll-contain">
+    <SettingsFormSection className="flex min-h-0 flex-1 flex-col">
+      <SettingsFormSectionHeader
+        className="shrink-0"
+        icon={Wrench}
+        title={a.toolsTitle}
+        subtitle={a.toolsHint}
+      />
+      <div className="min-h-0 flex-1 overflow-y-auto overscroll-contain">
         <ul className="flex flex-col gap-2.5 pr-1" role="list">
           {(data.builtinToolIds.length ? data.builtinToolIds : []).map((tid) => {
             const disabledByDefault = selected.tools.defaultsDisable.includes(tid);
@@ -75,10 +91,12 @@ export function AgentToolsTab(props: {
           })}
         </ul>
       </div>
-      <div className="mt-4 flex flex-wrap gap-2">
-        <Button type="button" disabled={busy} onClick={() => void onSaveTools()}>
-          {a.toolsSave}
-        </Button>
+      <div className="mt-4 flex shrink-0 flex-wrap gap-2">
+        {!hideInlineSave ? (
+          <Button type="button" disabled={busy} onClick={() => void onSaveTools()}>
+            {a.toolsSave}
+          </Button>
+        ) : null}
         <Button type="button" variant="secondary" disabled={busy} onClick={() => void onClearToolsEntry()}>
           {a.toolsClearEntry}
         </Button>
