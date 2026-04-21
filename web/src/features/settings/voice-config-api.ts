@@ -26,6 +26,7 @@ function defaultTts(): TtsSettings {
     alibaba: { model: 'qwen-tts', voice: 'Cherry' },
     openai: { model: 'tts-1', voice: 'alloy' },
     edge: { voice: 'zh-CN-XiaoxiaoNeural' },
+    minimax: { model: 'speech-2.8-hd', voice: 'male-qn-qingse' },
   };
 }
 
@@ -59,11 +60,14 @@ function mergeStt(raw: unknown): SttSettings {
   };
 }
 
+function isTtsProviderId(v: unknown): v is TtsSettings['provider'] {
+  return v === 'openai' || v === 'alibaba' || v === 'edge' || v === 'minimax';
+}
+
 function mergeTts(raw: unknown): TtsSettings {
   const d = defaultTts();
   if (!isRecord(raw)) return d;
-  const provider =
-    raw.provider === 'alibaba' || raw.provider === 'edge' ? raw.provider : 'openai';
+  const provider = isTtsProviderId(raw.provider) ? raw.provider : 'openai';
   const trigger =
     raw.trigger === 'off' ||
     raw.trigger === 'always' ||
@@ -84,6 +88,7 @@ function mergeTts(raw: unknown): TtsSettings {
     alibaba: isRecord(raw.alibaba) ? { ...d.alibaba, ...raw.alibaba } : d.alibaba,
     openai: isRecord(raw.openai) ? { ...d.openai, ...raw.openai } : d.openai,
     edge: isRecord(raw.edge) ? { ...d.edge, ...raw.edge } : d.edge,
+    minimax: isRecord(raw.minimax) ? { ...d.minimax, ...raw.minimax } : d.minimax,
   };
 }
 

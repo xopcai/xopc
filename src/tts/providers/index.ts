@@ -20,3 +20,9 @@ export {
   type EdgeProviderConfig,
   inferEdgeExtension,
 } from './edge.js';
+export {
+  MinimaxProvider,
+  type MinimaxProviderConfig,
+  MINIMAX_TTS_MODELS,
+  MINIMAX_TTS_VOICES,
+} from './minimax.js';

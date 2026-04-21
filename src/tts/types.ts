@@ -2,7 +2,7 @@
  * TTS (Text-to-Speech) Types
  */
 
-export type TTSProvider = 'openai' | 'alibaba' | 'edge';
+export type TTSProvider = 'openai' | 'alibaba' | 'edge' | 'minimax';
 
 export type TTSAutoMode = 'off' | 'always' | 'inbound' | 'tagged';
 
@@ -97,6 +97,11 @@ export interface TTSConfig {
     proxy?: string;
     timeoutMs?: number;
   };
+  minimax?: {
+    apiKey?: string;
+    model?: string;
+    voice?: string;
+  };
 }
 
 export interface TTSSummarizationConfig {
@@ -113,7 +118,7 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
   trigger: 'always',
   fallback: {
     enabled: true,
-    order: ['openai', 'alibaba', 'edge'],
+    order: ['openai', 'alibaba', 'minimax', 'edge'],
   },
   maxTextLength: 512, // Conservative default to accommodate all providers (Alibaba limit is 512)
   timeoutMs: 30000,
@@ -144,6 +149,10 @@ export const DEFAULT_TTS_CONFIG: TTSConfig = {
     lang: 'en-US',
     outputFormat: 'audio-24khz-48kbitrate-mono-mp3',
   },
+  minimax: {
+    model: 'speech-2.8-hd',
+    voice: 'male-qn-qingse',
+  },
 };
 
 /** TTS directive parse result */
@@ -169,6 +178,10 @@ export interface TtsDirectiveOverrides {
   };
   edge?: {
     voice?: string;
+  };
+  minimax?: {
+    voice?: string;
+    model?: string;
   };
 }
 

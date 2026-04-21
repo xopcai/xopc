@@ -75,6 +75,12 @@ export async function speak(
       if (directiveResult.overrides.edge?.voice) {
         options.tts!.voice = directiveResult.overrides.edge.voice;
       }
+      if (directiveResult.overrides.minimax?.voice) {
+        options.tts!.voice = directiveResult.overrides.minimax.voice;
+      }
+      if (directiveResult.overrides.minimax?.model) {
+        options.tts!.model = directiveResult.overrides.minimax.model;
+      }
     }
   }
 

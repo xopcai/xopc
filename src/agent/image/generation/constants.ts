@@ -6,3 +6,5 @@ export const OPENAI_DEFAULT_IMAGE_MODEL = 'gpt-image-1';
  * @see https://www.alibabacloud.com/help/zh/model-studio/text-to-image-v2-api-reference
  */
 export const QWEN_DEFAULT_IMAGE_MODEL = 'wan2.6-t2i';
+
+export const MINIMAX_DEFAULT_IMAGE_MODEL = 'image-01';
