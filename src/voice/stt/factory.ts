@@ -5,7 +5,7 @@
 import type { STTProvider, STTConfig } from './types.js';
 import { OpenAIProvider } from './openai.js';
 import { AlibabaProvider } from './alibaba.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('STT:Factory');
 

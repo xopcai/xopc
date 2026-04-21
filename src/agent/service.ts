@@ -78,12 +78,12 @@ import {
 import { resolveInboundImageContentParts } from './image/inbound-image-handling.js';
 import { getDefaultModelSync } from '../providers/index.js';
 import { persistOutboundTtsAudio } from '../channels/attachments/outbound-tts-persist.js';
-import { compressAudio } from '../tts/audio.js';
-import { speak } from '../tts/index.js';
-import { mergeTtsConfigFromAppConfig } from '../tts/merge-config.js';
+import { compressAudio } from '../voice/tts/audio.js';
+import { speak } from '../voice/tts/index.js';
+import { mergeTtsConfigFromAppConfig } from '../voice/tts/merge-config.js';
 import { resolveAgentDir } from '../config/paths.js';
-import { shouldUseTTS, getChannelOutputFormat } from '../tts/service.js';
-import { isTTSAvailable } from '../tts/factory.js';
+import { shouldUseTTS, getChannelOutputFormat } from '../voice/tts/service.js';
+import { isTTSAvailable } from '../voice/tts/factory.js';
 
 export type { AgentServiceConfig, AgentContext, StreamHandle } from './service.types.js';
 

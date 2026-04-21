@@ -1,5 +1,5 @@
 import type { TTSProvider, TtsDirectiveParseResult, TtsDirectiveOverrides, TTSModelOverrideConfig } from './types.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('TTS:Directives');
 
