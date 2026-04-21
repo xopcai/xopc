@@ -3,10 +3,10 @@ import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 
 import type { Config } from '../../config/schema.js';
 import type { MessageBus, OutboundMessage } from '../../infra/bus/index.js';
-import { speak } from '../../tts/speak-core.js';
-import { mergeTtsConfigFromAppConfig } from '../../tts/merge-config.js';
-import { getChannelOutputFormat } from '../../tts/service.js';
-import { compressAudio } from '../../tts/audio.js';
+import { speak } from '../../voice/tts/speak-core.js';
+import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
+import { getChannelOutputFormat } from '../../voice/tts/service.js';
+import { compressAudio } from '../../voice/tts/audio.js';
 import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('Agent:TTSTool');

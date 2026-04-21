@@ -15,14 +15,14 @@
 
 import type { CommandDefinition, CommandContext } from '../types.js';
 import { commandRegistry } from '../registry.js';
-import type { TTSAutoMode, TTSProvider } from '../../tts/types.js';
+import type { TTSAutoMode, TTSProvider } from '../../voice/tts/types.js';
 import {
   appendTtsReadinessNote,
   formatTtsSetupHint,
   isTTSAvailable,
   mergeTtsConfigFromAppConfig,
-} from '../../tts/index.js';
-import { ttsStatusTracker } from '../../tts/status-tracker.js';
+} from '../../voice/tts/index.js';
+import { ttsStatusTracker } from '../../voice/tts/status-tracker.js';
 
 function defaultTtsVoiceForProvider(provider: string): string {
   switch (provider) {

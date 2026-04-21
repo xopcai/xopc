@@ -4,7 +4,7 @@
 
 import OpenAI from 'openai';
 import type { STTProvider, STTResult, STTOptions } from './types.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('STT:OpenAI');
 

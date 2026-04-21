@@ -1,6 +1,6 @@
 import type { TTSProviderInterface, TTSOptions, TTSResult } from '../types.js';
 import { truncateAtSentenceBoundary } from '../sentence-boundary.js';
-import { createLogger } from '../../utils/logger.js';
+import { createLogger } from '../../../utils/logger.js';
 
 const log = createLogger('TTS:Base');
 

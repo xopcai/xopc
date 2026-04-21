@@ -4,9 +4,9 @@
 
 import { readFile } from 'fs/promises';
 
-import type { STTConfig } from '../../stt/types.js';
-import { DEFAULT_STT_CONFIG } from '../../stt/types.js';
-import { isSTTAvailable, transcribe } from '../../stt/index.js';
+import type { STTConfig } from '../../voice/stt/types.js';
+import { DEFAULT_STT_CONFIG } from '../../voice/stt/types.js';
+import { isSTTAvailable, transcribe } from '../../voice/stt/index.js';
 import {
   resolveSafeInboundFilePath,
   type InboundAttachmentInput,

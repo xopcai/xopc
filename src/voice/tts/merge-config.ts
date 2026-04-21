@@ -1,4 +1,4 @@
-import type { Config } from '../config/schema.js';
+import type { Config } from '../../config/schema.js';
 import { DEFAULT_TTS_CONFIG, type TTSConfig } from './types.js';
 import { isTTSAvailable } from './factory.js';
 

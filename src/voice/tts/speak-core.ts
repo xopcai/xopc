@@ -11,8 +11,8 @@ import { createSingleProvider, resolveProviderOrder } from './factory.js';
 import { preprocessText, type PreprocessOptions, type PreprocessResult } from './preprocess.js';
 import { parseTtsDirectives } from './directives.js';
 import { summarizeForTts } from './summarize.js';
-import { createLogger } from '../utils/logger.js';
-import type { Config } from '../config/schema.js';
+import { createLogger } from '../../utils/logger.js';
+import type { Config } from '../../config/schema.js';
 
 const log = createLogger('TTS');
 

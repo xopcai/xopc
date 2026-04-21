@@ -1,5 +1,5 @@
 import type { TtsRuntimeStatus, TtsStatusEntry } from './types.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('TTS:StatusTracker');
 

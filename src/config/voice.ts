@@ -5,7 +5,7 @@
  * Models can be extended via config file or environment variables.
  */
 
-import { OPENAI_TTS_MODELS, OPENAI_TTS_VOICES } from '../tts/index.js';
+import { OPENAI_TTS_MODELS, OPENAI_TTS_VOICES } from '../voice/tts/index.js';
 
 export interface VoiceModel {
   id: string;

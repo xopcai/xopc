@@ -19,7 +19,7 @@ import { telegramUpdateDedupe, buildTelegramUpdateKey } from './dedupe.js';
 import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { normalizeTelegramCommandName, parseSlashCommand } from '@xopcai/xopc/chat-commands/command-parse.js';
 import { tryConsumeTelegramClarifyFreeText } from '@xopcai/xopc/gateway/clarify-runtime.js';
-import { checkMentionInTranscription } from '@xopcai/xopc/stt/preflight.js';
+import { checkMentionInTranscription } from '@xopcai/xopc/voice/stt/preflight.js';
 
 const log = createLogger('TelegramInboundProcessor');
 

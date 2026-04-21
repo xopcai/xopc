@@ -50,7 +50,7 @@ import { wrapToolsWithProtection, type ToolExecutorConfig } from './executor.js'
 import { createSkillsListTool, createSkillViewTool } from './skills-tools.js';
 import { createSkillManageTool } from './skill-manage-tool.js';
 import { createTextToSpeechTool } from './tts-tool.js';
-import { mergeTtsConfigFromAppConfig } from '../../tts/merge-config.js';
+import { mergeTtsConfigFromAppConfig } from '../../voice/tts/merge-config.js';
 
 const log = createLogger('AgentToolsFactory');
 

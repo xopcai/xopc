@@ -1,11 +1,11 @@
-import type { OutboundMessage } from '../channels/transport-types.js';
-import type { Config } from '../config/schema.js';
+import type { OutboundMessage } from '../../channels/transport-types.js';
+import type { Config } from '../../config/schema.js';
 import type { TTSConfig, TTSAutoMode } from './types.js';
 import { shouldUseTTS, getChannelOutputFormat } from './service.js';
 import { speak } from './speak-core.js';
 import { compressAudio } from './audio.js';
 import { recordTtsSuccess, recordTtsFailure } from './status-tracker.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('TTS/Payload');
 

@@ -1,9 +1,9 @@
 import { complete, type UserMessage } from '@mariozechner/pi-ai';
 import type { Api, Model } from '@mariozechner/pi-ai';
 
-import type { Config } from '../config/schema.js';
-import { getDefaultModelSync, resolveModel } from '../providers/index.js';
-import { createLogger } from '../utils/logger.js';
+import type { Config } from '../../config/schema.js';
+import { getDefaultModelSync, resolveModel } from '../../providers/index.js';
+import { createLogger } from '../../utils/logger.js';
 import { truncateAtSentenceBoundary } from './sentence-boundary.js';
 
 const log = createLogger('TTS:Summarize');

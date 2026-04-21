@@ -15,8 +15,8 @@ import type {
 
 import { createLogger } from '../utils/logger.js';
 import { INTERNAL_OUTBOUND_DROP_CHANNEL } from './internal-outbound.js';
-import { mergeTtsConfigFromAppConfig } from '../tts/merge-config.js';
-import { maybeApplyTtsToPayload } from '../tts/payload.js';
+import { mergeTtsConfigFromAppConfig } from '../voice/tts/merge-config.js';
+import { maybeApplyTtsToPayload } from '../voice/tts/payload.js';
 import { deliverOutboundMessage } from './outbound/deliver.js';
 import { OutboundPersistStore } from './outbound/persist-store.js';
 import { syncChannelPluginsFromManager } from './plugins/registry.js';

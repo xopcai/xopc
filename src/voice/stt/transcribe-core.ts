@@ -6,7 +6,7 @@ import type {
   STTProviderFailureReason,
 } from './types.js';
 import { resolveSTTProviderOrder, tryCreateSTTProvider } from './factory.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('STT');
 

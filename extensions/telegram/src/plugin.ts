@@ -31,8 +31,8 @@ import { createLogger } from '@xopcai/xopc/utils/logger.js';
 import { createInboundDebouncer } from '@xopcai/xopc/infra/debounce.js';
 import { getChatChannelMeta } from '@xopcai/xopc/channels/registry.js';
 import { getMimeType } from '@xopcai/xopc/channels/media.js';
-import { transcribe as sttTranscribe, isSTTAvailable } from '@xopcai/xopc/stt/index.js';
-import type { STTConfig } from '@xopcai/xopc/stt/types.js';
+import { transcribe as sttTranscribe, isSTTAvailable } from '@xopcai/xopc/voice/stt/index.js';
+import type { STTConfig } from '@xopcai/xopc/voice/stt/types.js';
 
 import { TelegramAccountManager } from './account-manager.js';
 import { createOutboundSender } from './outbound-sender.js';

@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { mergeTtsConfigFromAppConfig, appendTtsReadinessNote } from '../merge-config.js';
-import type { Config } from '../../config/schema.js';
+import type { Config } from '../../../config/schema.js';
 
 describe('mergeTtsConfigFromAppConfig', () => {
   it('fills defaults when tts is undefined', () => {

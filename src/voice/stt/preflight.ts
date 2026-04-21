@@ -1,7 +1,7 @@
 import type { STTConfig, STTResult } from './types.js';
 import { transcribe } from './transcribe-core.js';
 import { isSTTAvailable } from './availability.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('STT:Preflight');
 
