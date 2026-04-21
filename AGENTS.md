@@ -79,7 +79,7 @@ Examples: `pnpm run dev -- agent -i` · `pnpm run dev -- agent -m "Hello"`
 | `infra/` | Infrastructure primitives (`retry`, rate-limit, `bus/` message bus) |
 | `extensions/` | Extension runtime; `extensions/sdk/` re-exports `@xopcai/xopc/extension-sdk` |
 
-Also present (follow local patterns): `acp/`, `auth/`, `chat-commands/` (in-chat slash commands), `cron/`, `daemon/`, `routing/`, `stt/`, `tts/`, `utils/` (`logger.ts` barrel → `logger/` implementation + `helpers.ts`), `markdown/`, `errors/`, etc.
+Also present (follow local patterns): `acp/`, `auth/`, `chat-commands/` (in-chat slash commands), `cron/`, `daemon/`, `routing/`, `voice/stt/`, `voice/tts/`, `utils/` (`logger.ts` barrel → `logger/` implementation + `helpers.ts`), `markdown/`, `errors/`, etc.
 
 **Gateway console (`web/`)** — React SPA (Vite + Tailwind v4): hash router, REST + SSE to the gateway, Zustand + SWR. Production build outputs to `dist/gateway/static/root` (same static root the gateway serves).
 

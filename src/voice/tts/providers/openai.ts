@@ -1,6 +1,6 @@
 import { BaseTTSProvider, type BaseProviderConfig } from './base.js';
 import type { TTSOptions, TTSResult } from '../types.js';
-import { createLogger } from '../../utils/logger.js';
+import { createLogger } from '../../../utils/logger.js';
 
 const log = createLogger('TTS:OpenAI');
 

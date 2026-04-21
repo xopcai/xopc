@@ -1,6 +1,6 @@
 import type { TTSProviderInterface, TTSConfig, TTSProvider } from './types.js';
 import { OpenAIProvider, AlibabaProvider, EdgeProvider, MinimaxProvider } from './providers/index.js';
-import { createLogger } from '../utils/logger.js';
+import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('TTS:Factory');
 
