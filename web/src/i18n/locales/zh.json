@@ -246,7 +246,12 @@
       "clickToCopyFullPath": "点击复制完整路径",
       "copied": "已复制",
       "openWorkspaceMenu": "工作区选项",
-      "folderPickerRequiresDesktop": "文件夹选择需要使用桌面版（Electron）。请使用桌面端 xopc，或通过其他方式配置路径。"
+      "folderPickerRequiresDesktop": "文件夹选择需要使用桌面版（Electron）。请使用桌面端 xopc，或通过其他方式配置路径。",
+      "pathModalTitle": "工作目录",
+      "pathModalDescription": "请输入网关所在机器上的绝对路径（作为本会话的工作区文件夹）。",
+      "pathInputPlaceholder": "/绝对路径/到/文件夹",
+      "pathModalConfirm": "确定",
+      "pathModalCancel": "取消"
     },
     "maxAttachmentsReached": "每条消息最多 {{max}} 个文件，请先移除部分附件。",
     "maxAttachmentsTruncated": "已忽略 {{dropped}} 个文件（每条最多 {{max}} 个）。",
