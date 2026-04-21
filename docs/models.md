@@ -2,6 +2,8 @@
 
 xopc supports custom model providers via `~/.xopc/models.json`.
 
+**Built-in catalog:** First-class provider IDs match **`@mariozechner/pi-ai` `KnownProvider`** (the same set the CLI and gateway UI surface for API keys). Other vendors (e.g. DeepSeek, or DashScope-compatible chat with provider id **`dashscope`**) are configured with a **`providers.<id>`** block: `baseUrl`, `apiKey`, and `api` (often `openai-completions`). See `.docs/provider-alignment-plan.md` for examples.
+
 ---
 
 ## Quick Start

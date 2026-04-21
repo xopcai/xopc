@@ -45,7 +45,7 @@ export function createTelegramCommandHandler(deps: TelegramCommandHandlerDeps) {
     }
 
     if (available.length === 0) {
-      available.push({ id: 'minimax', name: 'MiniMax' }, { id: 'kimi', name: 'Kimi' });
+      available.push({ id: 'minimax', name: 'MiniMax' });
     }
 
     return available;

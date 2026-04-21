@@ -16,7 +16,7 @@ export type ModelCompatConfig = {
   supportsUsageInStreaming?: boolean;
   supportsStrictMode?: boolean;
   maxTokensField?: "max_completion_tokens" | "max_tokens";
-  thinkingFormat?: "openai" | "zai" | "qwen";
+  thinkingFormat?: "openai" | "zai" | "dashscope";
   requiresToolResultName?: boolean;
   requiresAssistantAfterToolResult?: boolean;
   requiresThinkingAsText?: boolean;

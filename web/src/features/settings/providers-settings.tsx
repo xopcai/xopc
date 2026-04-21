@@ -887,9 +887,6 @@ function ProviderCredentialRow({
                       <ExternalLink className="size-3" aria-hidden />
                     </a>
                   ))}
-                  {row.id === 'qwen' ? (
-                    <p className="text-xs leading-relaxed text-fg-subtle">{labels.qwenKeyRegionHint}</p>
-                  ) : null}
                 </div>
               ) : null}
             </div>

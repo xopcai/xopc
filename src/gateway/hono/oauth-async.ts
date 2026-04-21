@@ -13,9 +13,8 @@ import {
   type OAuthLoginCallbacks,
   type OAuthCredentials 
 } from '../../auth/oauth/types.js';
-import { 
-  kimiOAuthProvider, 
-  qwenPortalOAuthProvider, 
+import {
+  kimiCodingOAuthProvider,
   minimaxOAuthProvider,
   minimaxCnOAuthProvider,
   anthropicOAuthProvider,
@@ -51,10 +50,7 @@ function formatOAuthAsyncError(err: unknown): string {
 
 // Static OAuth providers map
 const OAUTH_PROVIDERS: Record<string, OAuthProviderInterface> = {
-  'kimi': kimiOAuthProvider,
-  'kimi-coding': kimiOAuthProvider,
-  'qwen': qwenPortalOAuthProvider,
-  'qwen-portal': qwenPortalOAuthProvider,
+  'kimi-coding': kimiCodingOAuthProvider,
   'minimax': minimaxOAuthProvider,
   'minimax-cn': minimaxCnOAuthProvider,
   'anthropic': anthropicOAuthProvider,

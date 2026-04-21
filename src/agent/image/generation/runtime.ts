@@ -70,7 +70,7 @@ export async function generateImage(params: GenerateImageParams): Promise<Genera
   const candidates = parseCandidates({ cfg: params.cfg, modelOverride: params.modelOverride });
   if (candidates.length === 0) {
     throw new Error(
-      'No image-generation model configured. Set agents.defaults.imageGenerationModel.primary or fallbacks (e.g. openai/gpt-image-1 or qwen/wan2.6-t2i).',
+      'No image-generation model configured. Set agents.defaults.imageGenerationModel.primary or fallbacks (e.g. openai/gpt-image-1 or dashscope/wan2.6-t2i).',
     );
   }
 

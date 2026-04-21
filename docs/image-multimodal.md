@@ -9,7 +9,7 @@ xopc can **receive images** in chat, run **vision / image understanding** with t
 | Field | Type | Purpose |
 |-------|------|---------|
 | `imageModel` | `string` or `{ primary, fallbacks? }` | Model used for the **`image`** tool and for **describing** inbound images when the main chat model does not support vision. |
-| `imageGenerationModel` | `string` or `{ primary, fallbacks? }` | Model chain for **`image_generate`** (for example `openai/gpt-image-1`, `qwen/wan2.6-t2i`). |
+| `imageGenerationModel` | `string` or `{ primary, fallbacks? }` | Model chain for **`image_generate`** (for example `openai/gpt-image-1`, `dashscope/wan2.6-t2i`). |
 | `mediaMaxMb` | `number` (optional) | Maximum image size (MB) when loading images for the **`image`** tool. |
 
 If `imageModel` or `imageGenerationModel` is omitted, xopc **infers** sensible defaults from the providers you have configured.

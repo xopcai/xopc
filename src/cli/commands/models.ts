@@ -112,7 +112,7 @@ function createModelsCommand(_ctx: CLIContext): Command {
       console.log('\n📝 Usage:');
       console.log('   export OPENAI_API_KEY="sk-..."           # Set API key via env');
       console.log('   xopc agent -m "Hello"                # Use default model');
-      console.log('   xopc agent -m "Hello" --model qwen/qwen-plus  # Specify model');
+      console.log('   xopc agent -m "Hello" --model openai/gpt-4o  # Specify model');
     });
 
   return cmd;

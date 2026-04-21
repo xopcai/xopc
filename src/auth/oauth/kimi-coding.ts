@@ -1,9 +1,6 @@
 /**
- * Kimi (Moonshot AI) OAuth Provider
- *
- * OAuth 2.0 authentication for Kimi Platform.
- * Uses Device Code Flow per Kimi's official implementation.
- * https://auth.kimi.com for OAuth endpoints.
+ * Kimi Coding (Moonshot AI) OAuth — device code flow for pi-ai `kimi-coding` provider.
+ * @see https://auth.kimi.com
  */
 
 import type { OAuthCredentials, OAuthProviderInterface, OAuthLoginCallbacks } from './types.js';
@@ -13,14 +10,12 @@ const KIMI_OAUTH_DEVICE_URL = `${KIMI_OAUTH_BASE_URL}/api/oauth/device_authoriza
 const KIMI_OAUTH_TOKEN_URL = `${KIMI_OAUTH_BASE_URL}/api/oauth/token`;
 const KIMI_OAUTH_CLIENT_ID = '17e5f671-d194-4dfb-9706-5516cb48c098';
 
-export const kimiOAuthProvider: OAuthProviderInterface = {
-	id: 'kimi',
-	name: 'Kimi (月之暗面)',
+export const kimiCodingOAuthProvider: OAuthProviderInterface = {
+	id: 'kimi-coding',
+	name: 'Kimi For Coding (月之暗面)',
 	usesCallbackServer: true,
 
 	async login(callbacks: OAuthLoginCallbacks): Promise<OAuthCredentials> {
-		// Kimi uses Device Code Flow (not Authorization Code)
-		// First, request device code
 		const deviceResponse = await fetch(KIMI_OAUTH_DEVICE_URL, {
 			method: 'POST',
 			headers: {
@@ -37,7 +32,7 @@ export const kimiOAuthProvider: OAuthProviderInterface = {
 			throw new Error(`Device code request failed: ${error}`);
 		}
 
-		const deviceData = await deviceResponse.json() as {
+		const deviceData = (await deviceResponse.json()) as {
 			device_code: string;
 			user_code: string;
 			verification_uri: string;
@@ -46,18 +41,16 @@ export const kimiOAuthProvider: OAuthProviderInterface = {
 			expires_in: number;
 		};
 
-		// Prompt user to auth
 		callbacks.onAuth({
 			url: deviceData.verification_uri_complete || deviceData.verification_uri,
 			instructions: `Please visit ${deviceData.verification_uri} and enter code: ${deviceData.user_code}`,
 		});
 
-		// Poll for token
 		const expiresAt = Date.now() + deviceData.expires_in * 1000;
 		const pollInterval = (deviceData.interval || 5) * 1000;
 
 		while (Date.now() < expiresAt) {
-			await new Promise(resolve => setTimeout(resolve, pollInterval));
+			await new Promise((resolve) => setTimeout(resolve, pollInterval));
 
 			const tokenResponse = await fetch(KIMI_OAUTH_TOKEN_URL, {
 				method: 'POST',
@@ -72,7 +65,7 @@ export const kimiOAuthProvider: OAuthProviderInterface = {
 			});
 
 			if (tokenResponse.ok) {
-				const tokenData = await tokenResponse.json() as {
+				const tokenData = (await tokenResponse.json()) as {
 					access_token: string;
 					refresh_token: string;
 					expires_in: number;
@@ -85,11 +78,10 @@ export const kimiOAuthProvider: OAuthProviderInterface = {
 				};
 			}
 
-			const errorData = await tokenResponse.json() as { error?: string };
+			const errorData = (await tokenResponse.json()) as { error?: string };
 			if (errorData.error === 'expired_token') {
 				throw new Error('Device code expired. Please try again.');
 			}
-			// authorization_pending - continue polling
 		}
 
 		throw new Error('Device code expired. Please try again.');
@@ -117,7 +109,7 @@ export const kimiOAuthProvider: OAuthProviderInterface = {
 			throw new Error(`Kimi OAuth refresh failed: ${text}`);
 		}
 
-		const payload = await response.json() as {
+		const payload = (await response.json()) as {
 			access_token: string;
 			refresh_token: string;
 			expires_in: number;
@@ -135,9 +127,3 @@ export const kimiOAuthProvider: OAuthProviderInterface = {
 		return credentials.access;
 	},
 };
-
-function _base64UrlEncode(buffer: Uint8Array): string {
-	let str = '';
-	buffer.forEach(b => str += String.fromCharCode(b));
-	return btoa(str).replace(/\+/g, '-').replace(/\//g, '_').replace(/=/g, '');
-}

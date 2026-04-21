@@ -48,7 +48,6 @@ Or create manually:
   "providers": {
     "openai": "${OPENAI_API_KEY}",
     "anthropic": "${ANTHROPIC_API_KEY}",
-    "deepseek": "${DEEPSEEK_API_KEY}",
     "groq": "${GROQ_API_KEY}",
     "google": "${GOOGLE_API_KEY}",
     "minimax": "${MINIMAX_API_KEY}"
@@ -156,7 +155,7 @@ The same optional keys can appear under **`agents.defaults`** for global default
 | `temperature` | number | `0.7` | Temperature (0-2) |
 | `max_tool_iterations` | number | `20` | Max tool call iterations |
 | `imageModel` | string \| object | — | Vision model for the `image` tool and for **describing** inbound images when the session model does not support vision. Same formats as `model` (string or `{ primary, fallbacks }`). See [Image & vision](image-multimodal.md). |
-| `imageGenerationModel` | string \| object | — | Image generation chain for `image_generate` (e.g. `openai/gpt-image-1`, `qwen/wan2.6-t2i`). Same formats as `model`. See [Image & vision](image-multimodal.md). |
+| `imageGenerationModel` | string \| object | — | Image generation chain for `image_generate` (e.g. `openai/gpt-image-1`, `dashscope/wan2.6-t2i`). Same formats as `model`. See [Image & vision](image-multimodal.md). |
 | `mediaMaxMb` | number | — | Optional. Max size in **MB** when the `image` tool loads files from disk or URLs. |
 
 #### agents.defaults.model
@@ -219,27 +218,27 @@ Configure LLM provider API keys. Use environment variable references:
   "providers": {
     "openai": "${OPENAI_API_KEY}",
     "anthropic": "${ANTHROPIC_API_KEY}",
-    "deepseek": "sk-...",
     "groq": "${GROQ_API_KEY}"
   }
 }
 ```
 
-**Supported Providers:**
+**Built-in provider ids** match **`@mariozechner/pi-ai` KnownProvider** (see `src/providers/env-keys.ts` **`PROVIDER_ENV_MAP`** for env var names). Other vendors (e.g. DeepSeek, DashScope chat) belong in **`models.json`**, not as built-in keys here.
 
-| Provider | Environment Variable |
-|----------|---------------------|
+| Provider (examples) | Environment variables |
+|---------------------|------------------------|
 | `openai` | `OPENAI_API_KEY` |
-| `anthropic` | `ANTHROPIC_API_KEY` |
+| `anthropic` | `ANTHROPIC_OAUTH_TOKEN`, `ANTHROPIC_API_KEY` |
 | `google` | `GOOGLE_API_KEY` or `GEMINI_API_KEY` |
 | `groq` | `GROQ_API_KEY` |
-| `deepseek` | `DEEPSEEK_API_KEY` |
 | `minimax` | `MINIMAX_API_KEY` |
+| `minimax-cn` | `MINIMAX_CN_API_KEY`, `MINIMAX_API_KEY` |
 | `xai` | `XAI_API_KEY` |
 | `mistral` | `MISTRAL_API_KEY` |
 | `cerebras` | `CEREBRAS_API_KEY` |
 | `openrouter` | `OPENROUTER_API_KEY` |
 | `huggingface` | `HF_TOKEN` or `HUGGINGFACE_TOKEN` |
+| `vercel-ai-gateway` | `AI_GATEWAY_API_KEY`, `VERCEL_AI_GATEWAY_API_KEY` |
 
 > **Note:** Environment variables take priority over config file values.
 
@@ -567,11 +566,12 @@ xopc supports environment variables for sensitive data:
 |----------|-------------|
 | `OPENAI_API_KEY` | OpenAI API key |
 | `ANTHROPIC_API_KEY` | Anthropic API key |
+| `ANTHROPIC_OAUTH_TOKEN` | Anthropic OAuth token (when used) |
 | `GOOGLE_API_KEY` | Google AI API key |
 | `GROQ_API_KEY` | Groq API key |
-| `DEEPSEEK_API_KEY` | DeepSeek API key |
 | `MINIMAX_API_KEY` | MiniMax API key |
-| `DASHSCOPE_API_KEY` | Alibaba DashScope API key (STT/TTS) |
+| `AI_GATEWAY_API_KEY` | Vercel AI Gateway (primary name in pi-ai) |
+| `DASHSCOPE_API_KEY` | Alibaba DashScope (STT/TTS, image gen) |
 | `XOPC_TTS_SUMMARIZE_MODEL` | Model ref for TTS long-text summarization when `tts.summarization.model` is unset |
 | `TELEGRAM_BOT_TOKEN` | Telegram bot token |
 | `XOPC_CONFIG` | Custom config file path |
