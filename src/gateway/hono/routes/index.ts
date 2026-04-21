@@ -9,6 +9,7 @@ import { registerConfigRoutes } from './config.js';
 import { registerCronRoutes } from './cron.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { registerExtensionGatewayRoutes } from './extension-gateway.js';
+import { registerHostFsRoutes } from './host-fs.js';
 import { registerLogsRoutes } from './logs.js';
 import { registerModelsRoutes } from './models.js';
 import { registerSessionsRoutes } from './sessions.js';
@@ -18,6 +19,7 @@ import { registerWorkspaceRoutes } from './workspace.js';
 export function registerAuthenticatedRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
   registerStatusRoutes(authenticated, deps);
   registerWorkspaceRoutes(authenticated, deps);
+  registerHostFsRoutes(authenticated, deps);
   registerAgentStreamRoutes(authenticated, deps);
   registerChannelRoutes(authenticated, deps);
   registerConfigRoutes(authenticated, deps);
