@@ -102,6 +102,14 @@ const DEFAULT_SCHEDULE = '*/5 * * * *';
 const RECENT_WD_STORAGE_KEY = 'xopc.recentWorkspaceDirs.v1';
 const RECENT_WD_MAX = 10;
 
+function navigateToSessionChat(sessionKey: string | undefined | null): void {
+  const sk = sessionKey?.trim();
+  if (!sk) return;
+  window.dispatchEvent(
+    new CustomEvent('navigate-to-chat', { detail: { sessionKey: sk }, bubbles: true }),
+  );
+}
+
 function pushRecentWorkspaceDirForCron(path: string): void {
   const t = path.trim();
   if (!t) return;
@@ -1089,7 +1097,7 @@ export function CronPage() {
               </div>
             ) : (
               <div className="overflow-x-auto rounded-xl border border-edge-subtle bg-surface-base dark:border-edge-subtle">
-                <table className="w-full min-w-[640px] border-collapse text-left text-sm">
+                <table className="w-full min-w-[700px] border-collapse text-left text-sm">
                   <thead>
                     <tr className="border-b border-edge text-xs font-medium text-fg-muted">
                       <th className="px-3 py-2.5 font-medium">{c.colStarted}</th>
@@ -1097,6 +1105,7 @@ export function CronPage() {
                       <th className="px-3 py-2.5 font-medium">{c.status}</th>
                       <th className="px-3 py-2.5 font-medium">{c.colDuration}</th>
                       <th className="px-3 py-2.5 font-medium">{c.colDetail}</th>
+                      <th className="px-3 py-2.5 font-medium">{c.colChat}</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -1142,6 +1151,21 @@ export function CronPage() {
                           title={row.summary || row.error || ''}
                         >
                           {truncate(row.summary || row.error, 96)}
+                        </td>
+                        <td className="whitespace-nowrap px-3 py-2.5">
+                          {row.sessionKey?.trim() ? (
+                            <button
+                              type="button"
+                              className="text-xs font-medium text-accent hover:underline"
+                              title={c.openChatTitle}
+                              aria-label={c.openChatTitle}
+                              onClick={() => navigateToSessionChat(row.sessionKey)}
+                            >
+                              {c.openChat}
+                            </button>
+                          ) : (
+                            <span className="text-fg-disabled">—</span>
+                          )}
                         </td>
                       </tr>
                     ))}
@@ -1630,7 +1654,8 @@ export function CronPage() {
                             <th className="py-1.5 pr-2 font-medium">{c.colStarted}</th>
                             <th className="py-1.5 pr-2 font-medium">{c.status}</th>
                             <th className="py-1.5 pr-2 font-medium">{c.colDuration}</th>
-                            <th className="py-1.5 font-medium">{c.colDetail}</th>
+                            <th className="py-1.5 pr-2 font-medium">{c.colDetail}</th>
+                            <th className="py-1.5 font-medium">{c.colChat}</th>
                           </tr>
                         </thead>
                         <tbody>
@@ -1653,10 +1678,25 @@ export function CronPage() {
                               </td>
                               <td className="py-1.5 pr-2 text-fg-muted">{formatDuration(row.duration)}</td>
                               <td
-                                className="max-w-[8rem] truncate py-1.5 text-fg-muted"
+                                className="max-w-[8rem] truncate py-1.5 pr-2 text-fg-muted"
                                 title={row.summary || row.error || ''}
                               >
                                 {truncate(row.summary || row.error, 120)}
+                              </td>
+                              <td className="whitespace-nowrap py-1.5">
+                                {row.sessionKey?.trim() ? (
+                                  <button
+                                    type="button"
+                                    className="text-xs font-medium text-accent hover:underline"
+                                    title={c.openChatTitle}
+                                    aria-label={c.openChatTitle}
+                                    onClick={() => navigateToSessionChat(row.sessionKey)}
+                                  >
+                                    {c.openChat}
+                                  </button>
+                                ) : (
+                                  <span className="text-fg-disabled">—</span>
+                                )}
                               </td>
                             </tr>
                           ))}
