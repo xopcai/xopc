@@ -4,8 +4,10 @@ import { join } from 'path';
 import { resolveSessionShardRelativePath } from '../shard-path.js';
 
 describe('resolveSessionShardRelativePath', () => {
-  it('places cron sessions under system/cron', () => {
-    expect(resolveSessionShardRelativePath('cron:job-1')).toBe(join('system', 'cron'));
+  it('places cron routing sessions under users/{agent}/cron/…', () => {
+    expect(resolveSessionShardRelativePath('main:cron:default:dm:job-1')).toBe(
+      join('users', 'main', 'cron', 'default', 'dm', 'job-1'),
+    );
   });
 
   it('places heartbeat sessions under system/heartbeat', () => {

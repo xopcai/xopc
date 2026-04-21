@@ -88,8 +88,8 @@ describe('SessionStore', () => {
         { role: 'assistant', content: 'Done.' },
       ];
 
-      await store.saveMessages('cron:abc12def', messages);
-      const metadata = await store.getMetadata('cron:abc12def');
+      await store.saveMessages('main:cron:default:dm:abc12def', messages);
+      const metadata = await store.getMetadata('main:cron:default:dm:abc12def');
 
       expect(metadata?.sourceChannel).toBe('cron');
       expect(metadata?.sourceChatId).toBe('abc12def');
@@ -113,10 +113,24 @@ describe('SessionStore', () => {
     });
 
     it('stores cron and routing sessions in separate shard directories', async () => {
-      await store.saveMessages('cron:job1', [{ role: 'user', content: 'c' }]);
+      await store.saveMessages('main:cron:default:dm:job1', [{ role: 'user', content: 'c' }]);
       await store.saveMessages('main:webchat:default:direct:u1', [{ role: 'user', content: 'w' }]);
 
-      expect(existsSync(join(tempDir, '.sessions', 'system', 'cron', 'cron_job1.json'))).toBe(true);
+      expect(
+        existsSync(
+          join(
+            tempDir,
+            '.sessions',
+            'users',
+            'main',
+            'cron',
+            'default',
+            'dm',
+            'job1',
+            'main_cron_default_dm_job1.json',
+          ),
+        ),
+      ).toBe(true);
       expect(
         existsSync(
           join(tempDir, '.sessions', 'users', 'main', 'web', 'u1', 'main_webchat_default_direct_u1.json')
