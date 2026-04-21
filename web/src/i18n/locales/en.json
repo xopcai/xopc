@@ -13,6 +13,7 @@
     "cron": "Scheduled Tasks",
     "skills": "Skills",
     "channels": "Channels",
+    "agents": "Agents",
     "apps": "Apps",
     "logs": "Logs",
     "settingsAppearance": "Preferences",
@@ -24,7 +25,7 @@
     "settingsHeartbeat": "Heartbeat",
     "settingsSearch": "Web search",
     "settingsAgentDefaults": "Agent defaults",
-    "settingsAgents": "Agent management"
+    "settingsAgents": "Agents"
   },
   "appsPage": {
     "title": "Apps",
@@ -105,7 +106,7 @@
     "gateway": "Gateway",
     "heartbeat": "Heartbeat",
     "search": "Web search",
-    "agents": "Agent management"
+    "agents": "Agents"
   },
   "settingsNavGroups": {
     "gateway": "Connection & service",
@@ -1004,7 +1005,7 @@
     "listEmpty": "No agents match your search.",
     "listNoAgentsYet": "No agents yet. Create one to get started.",
     "listNewAgentCard": "New agent",
-    "listOpenEditor": "Configure",
+    "listChatWithAgent": "Chat",
     "editorNavAria": "Agent editor sections",
     "skillsLibraryLink": "Skill library",
     "footerSaveNotApplicable": "Use actions in this section; the bar Save applies to Identity, Tools, Skills, and Core files."

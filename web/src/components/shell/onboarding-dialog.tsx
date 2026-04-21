@@ -44,7 +44,7 @@ function OnboardingModelSetupStep() {
 
   const onSettingsModelsOrProviders =
     pathname.startsWith('/settings/agent-defaults') ||
-    pathname.startsWith('/settings/agents') ||
+    pathname.startsWith('/agents') ||
     pathname.startsWith('/settings/models') ||
     pathname.startsWith('/settings/providers');
 
@@ -142,7 +142,7 @@ function OnboardingModelSetupStep() {
             <Button
               type="button"
               className="bg-accent text-white hover:bg-accent/90 sm:min-w-0"
-              onClick={() => navigate('/settings/agents')}
+              onClick={() => navigate('/agents')}
             >
               {t.setupBannerLinkModels}
             </Button>

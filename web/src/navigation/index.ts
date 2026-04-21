@@ -72,7 +72,7 @@ export type SettingsShellNavGroup = {
 /**
  * Priority: general UX → history → AI (providers → models → agent → search) → voice →
  * connection/heartbeat → extensions (rendered last in settings shell).
- * Cron, skills, and IM channels live under the main app shell (`/cron`, `/skills`, `/channels`), not here.
+ * Cron, skills, IM channels, and agents live under the main app shell (`/cron`, `/skills`, `/channels`, `/agents`), not here.
  * See `settingsNavGroups` copy in i18n.
  */
 export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
@@ -80,7 +80,7 @@ export const SETTINGS_SHELL_NAV_GROUPS: readonly SettingsShellNavGroup[] = [
   { id: 'data', tabs: ['sessions', 'logs'] },
   {
     id: 'agentAndModels',
-    tabs: ['settingsProviders', 'settingsModels', 'settingsAgentDefaults', 'settingsAgents', 'settingsSearch'],
+    tabs: ['settingsProviders', 'settingsModels', 'settingsAgentDefaults', 'settingsSearch'],
   },
   { id: 'voice', tabs: ['settingsVoice'] },
   { id: 'gateway', tabs: ['settingsGateway', 'settingsHeartbeat'] },
@@ -174,6 +174,7 @@ export function pathForTab(tab: Tab): string {
   if (tab === 'cron') return '/cron';
   if (tab === 'skills') return '/skills';
   if (tab === 'channels' || tab === 'settingsChannels') return '/channels';
+  if (tab === 'agents' || tab === 'settingsAgents') return '/agents';
   const section = tabToSettingsSection(tab);
   if (section) return `/settings/${section}`;
   if (tab === 'sessions' || tab === 'logs') {
