@@ -994,7 +994,20 @@
     "cronColSession": "会话",
     "cronColAgent": "智能体",
     "cronAgentDefault": "默认智能体",
-    "cronAgentClear": "恢复默认"
+    "cronAgentClear": "恢复默认",
+    "navIdentity": "身份",
+    "navTools": "工具",
+    "navSkills": "技能",
+    "navCoreFiles": "核心文件",
+    "navAdvanced": "高级",
+    "listSearchPlaceholder": "按名称、ID 或工作区搜索",
+    "listEmpty": "没有匹配的智能体。",
+    "listNoAgentsYet": "暂无智能体，请先创建一个。",
+    "listNewAgentCard": "新建智能体",
+    "listOpenEditor": "配置",
+    "editorNavAria": "智能体编辑器分区",
+    "skillsLibraryLink": "技能库",
+    "footerSaveNotApplicable": "请在本页直接操作；底部「保存」用于身份、工具、技能与核心文件。"
   },
   "providersSettings": {
     "subtitle": "服务商 API Key 与 OAuth。在此保存的密钥写入网关凭据存储。",
