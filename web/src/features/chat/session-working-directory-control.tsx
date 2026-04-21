@@ -1,11 +1,9 @@
-import * as Dialog from '@radix-ui/react-dialog';
 import { FolderInput } from 'lucide-react';
-import { memo, useCallback, useEffect, useId, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useState } from 'react';
 
-import { Button } from '@/components/ui/button';
 import { SessionManager } from '@/features/chat/session-manager';
+import { WorkingDirectoryPickerModal } from '@/features/chat/working-directory-picker-modal';
 import { cn } from '@/lib/cn';
-import { settingsInputFocusClass } from '@/lib/form-field-width';
 import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -36,15 +34,6 @@ function pushRecentDir(path: string): void {
   }
 }
 
-function inputClassName(): string {
-  return cn(
-    'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 font-mono text-sm text-fg',
-    'placeholder:text-fg-subtle',
-    settingsInputFocusClass,
-    'dark:border-edge',
-  );
-}
-
 /** Last path segment for display (folder name only). */
 export function folderDisplayName(absPath: string): string {
   const t = absPath.trim().replace(/[/\\]+$/, '');
@@ -71,13 +60,9 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
   const m = messages(language);
   const wd = m.chat.workingDirectory;
 
-  const pathInputId = useId();
-  const pathInputRef = useRef<HTMLInputElement>(null);
-
   const [effectivePath, setEffectivePath] = useState('');
   const [loading, setLoading] = useState(false);
   const [pathModalOpen, setPathModalOpen] = useState(false);
-  const [draftPath, setDraftPath] = useState('');
 
   const refresh = useCallback(async () => {
     if (!sessionKey) {
@@ -99,12 +84,6 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
     void refresh();
   }, [refresh]);
 
-  useEffect(() => {
-    if (pathModalOpen) {
-      setDraftPath(effectivePath.trim());
-    }
-  }, [pathModalOpen, effectivePath]);
-
   const applyPath = useCallback(
     async (path: string) => {
       if (!sessionKey?.trim() || !path.trim()) return;
@@ -115,6 +94,7 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
       } catch (e) {
         const msg = e instanceof Error ? e.message : String(e);
         window.alert(msg);
+        throw e;
       }
     },
     [sessionKey, sessionMgr, refresh],
@@ -129,13 +109,6 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
 
   const hasElectronFolderPicker =
     typeof window !== 'undefined' && Boolean(window.electronAPI?.file?.openDirectory);
-
-  const onConfirmPathModal = useCallback(async () => {
-    const t = draftPath.trim();
-    if (!t) return;
-    await applyPath(t);
-    setPathModalOpen(false);
-  }, [applyPath, draftPath]);
 
   const onSelectWorkingDirectoryClick = useCallback(() => {
     if (hasElectronFolderPicker) {
@@ -250,62 +223,13 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
       </div>
 
       {!hasElectronFolderPicker ? (
-        <Dialog.Root open={pathModalOpen} onOpenChange={setPathModalOpen}>
-          <Dialog.Portal>
-            <Dialog.Overlay className="fixed inset-0 z-[80] bg-scrim backdrop-blur-[2px]" />
-            <Dialog.Content
-              className={cn(
-                'fixed left-1/2 top-1/2 z-[81] w-[min(100%-2rem,26rem)] -translate-x-1/2 -translate-y-1/2 rounded-xl border border-edge bg-surface-panel p-4 shadow-popover',
-                'dark:border-edge',
-              )}
-              onOpenAutoFocus={(e) => {
-                e.preventDefault();
-                queueMicrotask(() => pathInputRef.current?.focus());
-              }}
-            >
-            <Dialog.Title className="text-base font-semibold text-fg">{wd.pathModalTitle}</Dialog.Title>
-            <Dialog.Description className="mt-1 text-sm leading-relaxed text-fg-muted">
-              {wd.pathModalDescription}
-            </Dialog.Description>
-
-            <div className="mt-4 space-y-2">
-              <label htmlFor={pathInputId} className="sr-only">
-                {wd.pathModalTitle}
-              </label>
-              <input
-                id={pathInputId}
-                ref={pathInputRef}
-                type="text"
-                value={draftPath}
-                onChange={(e) => setDraftPath(e.target.value)}
-                placeholder={wd.pathInputPlaceholder}
-                className={inputClassName()}
-                autoComplete="off"
-                spellCheck={false}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && draftPath.trim()) {
-                    e.preventDefault();
-                    void onConfirmPathModal();
-                  }
-                }}
-              />
-            </div>
-
-            <div className="mt-4 flex flex-wrap items-center justify-end gap-2">
-              <Button type="button" variant="ghost" onClick={() => setPathModalOpen(false)}>
-                {wd.pathModalCancel}
-              </Button>
-              <Button
-                type="button"
-                disabled={!draftPath.trim() || loading}
-                onClick={() => void onConfirmPathModal()}
-              >
-                {wd.pathModalConfirm}
-              </Button>
-            </div>
-          </Dialog.Content>
-        </Dialog.Portal>
-        </Dialog.Root>
+        <WorkingDirectoryPickerModal
+          open={pathModalOpen}
+          onOpenChange={setPathModalOpen}
+          initialAbsolutePath={fullPath || undefined}
+          onConfirm={applyPath}
+          wd={wd}
+        />
       ) : null}
     </>
   );

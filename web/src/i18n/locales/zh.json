@@ -251,7 +251,16 @@
       "pathModalDescription": "请输入网关所在机器上的绝对路径（作为本会话的工作区文件夹）。",
       "pathInputPlaceholder": "/绝对路径/到/文件夹",
       "pathModalConfirm": "确定",
-      "pathModalCancel": "取消"
+      "pathModalCancel": "取消",
+      "pickerHostHint": "网关所在主机上的目录：{{hostname}}",
+      "pickerLoading": "加载中…",
+      "pickerUp": "上级",
+      "pickerUseThisFolder": "使用此文件夹",
+      "pickerManualPath": "或手动输入绝对路径",
+      "pickerApplyManual": "应用路径",
+      "pickerListError": "无法读取该位置。",
+      "pickerEmptyFolder": "空文件夹",
+      "pickerDrives": "驱动器"
     },
     "maxAttachmentsReached": "每条消息最多 {{max}} 个文件，请先移除部分附件。",
     "maxAttachmentsTruncated": "已忽略 {{dropped}} 个文件（每条最多 {{max}} 个）。",

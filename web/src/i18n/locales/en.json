@@ -251,7 +251,16 @@
       "pathModalDescription": "Enter an absolute path on the machine running the gateway (folder for the session workspace).",
       "pathInputPlaceholder": "/absolute/path/to/folder",
       "pathModalConfirm": "Apply",
-      "pathModalCancel": "Cancel"
+      "pathModalCancel": "Cancel",
+      "pickerHostHint": "Directories on gateway host: {{hostname}}",
+      "pickerLoading": "Loading…",
+      "pickerUp": "Up",
+      "pickerUseThisFolder": "Use this folder",
+      "pickerManualPath": "Or type an absolute path",
+      "pickerApplyManual": "Apply path",
+      "pickerListError": "Could not read this location.",
+      "pickerEmptyFolder": "Empty folder",
+      "pickerDrives": "Drives"
     },
     "maxAttachmentsReached": "Maximum {{max}} files per message. Remove some to add more.",
     "maxAttachmentsTruncated": "{{dropped}} file(s) not added (limit {{max}} per message).",

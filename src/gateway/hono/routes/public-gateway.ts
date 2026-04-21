@@ -37,6 +37,8 @@ export function registerPublicGatewayRoutes(app: Hono, service: GatewayService):
         '...  /api/cron/*',
         'GET/PATCH /api/sessions/:key/agent-config',
         '...  /api/sessions/*',
+        'GET  /api/host/fs/meta',
+        'GET  /api/host/fs/list',
       ],
     });
   });
