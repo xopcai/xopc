@@ -13,6 +13,7 @@ import type { ImageGenFallbackAttempt, ImageGenerationResult, ImageGenerationSou
 
 import './openai-generate.js';
 import './dashscope-generate.js';
+import './minimax-generate.js';
 
 export type GenerateImageParams = {
   cfg?: Config;

@@ -32,6 +32,7 @@ export function mergeTtsConfigFromAppConfig(tts: Config['tts'] | undefined): TTS
     alibaba: { ...DEFAULT_TTS_CONFIG.alibaba, ...p.alibaba },
     openai: { ...DEFAULT_TTS_CONFIG.openai, ...p.openai },
     edge: { ...DEFAULT_TTS_CONFIG.edge, ...p.edge },
+    minimax: { ...DEFAULT_TTS_CONFIG.minimax, ...p.minimax },
     summarization: {
       ...DEFAULT_TTS_CONFIG.summarization,
       ...p.summarization,
@@ -48,6 +49,7 @@ export function formatTtsSetupHint(): string {
     `Configure one of the following in \`~/.xopc/xopc.json\` (or env):\n` +
     `• *OpenAI*: \`OPENAI_API_KEY\` or \`tts.openai.apiKey\` (and optional \`tts.openai.model\` / \`tts.openai.voice\`)\n` +
     `• *Alibaba*: \`DASHSCOPE_API_KEY\` or \`tts.alibaba.apiKey\`\n` +
+    `• *MiniMax*: \`MINIMAX_API_KEY\` or \`tts.minimax.apiKey\` (and optional \`tts.minimax.model\` / \`tts.minimax.voice\`)\n` +
     `• *Edge* (no key): \`/tts provider edge\` — ensure \`tts.edge.enabled\` is not \`false\`\n\n` +
     `You can also use the gateway Web UI → Settings → Voice.`
   );

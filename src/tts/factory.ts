@@ -1,5 +1,5 @@
 import type { TTSProviderInterface, TTSConfig, TTSProvider } from './types.js';
-import { OpenAIProvider, AlibabaProvider, EdgeProvider } from './providers/index.js';
+import { OpenAIProvider, AlibabaProvider, EdgeProvider, MinimaxProvider } from './providers/index.js';
 import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('TTS:Factory');
@@ -53,6 +53,21 @@ export function createSingleProvider(
         volume: config.edge?.volume,
         proxy: config.edge?.proxy,
         timeoutMs: config.edge?.timeoutMs || config.timeoutMs,
+        maxTextLength: config.maxTextLength,
+      });
+    }
+
+    case 'minimax': {
+      const apiKey = config.minimax?.apiKey || process.env.MINIMAX_API_KEY;
+      if (!apiKey) {
+        log.debug('MiniMax API key not configured');
+        return null;
+      }
+      return new MinimaxProvider({
+        apiKey,
+        model: config.minimax?.model,
+        voice: config.minimax?.voice,
+        timeoutMs: config.timeoutMs,
         maxTextLength: config.maxTextLength,
       });
     }
@@ -141,7 +156,7 @@ export function isProviderConfigured(provider: TTSProvider, config: TTSConfig): 
 
 export function getAvailableProviders(config: TTSConfig): TTSProvider[] {
   const available: TTSProvider[] = [];
-  const allProviders: TTSProvider[] = ['openai', 'alibaba', 'edge'];
+  const allProviders: TTSProvider[] = ['openai', 'alibaba', 'minimax', 'edge'];
 
   for (const provider of allProviders) {
     if (isProviderConfigured(provider, config)) {

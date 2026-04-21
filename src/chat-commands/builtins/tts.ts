@@ -24,6 +24,21 @@ import {
 } from '../../tts/index.js';
 import { ttsStatusTracker } from '../../tts/status-tracker.js';
 
+function defaultTtsVoiceForProvider(provider: string): string {
+  switch (provider) {
+    case 'openai':
+      return 'alloy';
+    case 'alibaba':
+      return 'Cherry';
+    case 'edge':
+      return 'en-US-MichelleNeural';
+    case 'minimax':
+      return 'male-qn-qingse';
+    default:
+      return 'alloy';
+  }
+}
+
 const ttsCommand: CommandDefinition = {
   id: 'tts.manage',
   name: 'tts',
@@ -39,6 +54,7 @@ const ttsCommand: CommandDefinition = {
     '/tts inbound',
     '/tts tagged',
     '/tts provider openai',
+    '/tts provider minimax',
     '/tts voice alloy',
     '/tts status',
   ],
@@ -50,9 +66,24 @@ const ttsCommand: CommandDefinition = {
     const isEnabled = ttsConfig?.enabled ?? false;
     const currentTrigger = ttsConfig?.trigger ?? 'off';
     const currentProvider = ttsConfig?.provider ?? 'openai';
+    const voicePack = ttsConfig as
+      | {
+          openai?: { voice?: string };
+          alibaba?: { voice?: string };
+          edge?: { voice?: string };
+          minimax?: { voice?: string };
+        }
+      | undefined;
     const currentVoice =
-      ttsConfig?.[currentProvider]?.voice ??
-      (currentProvider === 'openai' ? 'alloy' : 'Cherry');
+      (currentProvider === 'openai'
+        ? voicePack?.openai?.voice
+        : currentProvider === 'alibaba'
+          ? voicePack?.alibaba?.voice
+          : currentProvider === 'edge'
+            ? voicePack?.edge?.voice
+            : currentProvider === 'minimax'
+              ? voicePack?.minimax?.voice
+              : undefined) ?? defaultTtsVoiceForProvider(currentProvider);
 
     const effectiveTts = mergeTtsConfigFromAppConfig(ttsConfig);
     const ttsRuntimeOk = isTTSAvailable(effectiveTts);
@@ -127,7 +158,7 @@ const ttsCommand: CommandDefinition = {
 ` +
           `/tts status - Runtime TTS diagnostics (last call + stats)
 ` +
-          `/tts provider <openai|alibaba|edge> - Set provider
+          `/tts provider <openai|alibaba|minimax|edge> - Set provider
 ` +
           `/tts voice <voice-id> - Set voice`,
         success: true,
@@ -240,9 +271,9 @@ const ttsCommand: CommandDefinition = {
 
         if (subcommand === 'provider' && subarg) {
           const provider = subarg as TTSProvider;
-          if (!['openai', 'alibaba', 'edge'].includes(provider)) {
+          if (!['openai', 'alibaba', 'minimax', 'edge'].includes(provider)) {
             return {
-              content: `❌ Invalid provider: ${provider}\nValid providers: openai, alibaba, edge`,
+              content: `❌ Invalid provider: ${provider}\nValid providers: openai, alibaba, minimax, edge`,
               success: false,
             };
           }

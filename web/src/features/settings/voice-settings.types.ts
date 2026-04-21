@@ -15,11 +15,13 @@ export interface VoiceModelsPayload {
     alibaba: VoiceModel[];
     openai: VoiceModel[];
     edge: VoiceModel[];
+    minimax: VoiceModel[];
   };
   ttsVoices: {
     alibaba: VoiceModel[];
     openai: VoiceModel[];
     edge: VoiceModel[];
+    minimax: VoiceModel[];
   };
 }
 
@@ -33,13 +35,14 @@ export interface SttSettings {
 
 export interface TtsSettings {
   enabled: boolean;
-  provider: 'openai' | 'alibaba' | 'edge';
+  provider: 'openai' | 'alibaba' | 'edge' | 'minimax';
   trigger: 'off' | 'always' | 'inbound' | 'tagged';
   maxTextLength?: number;
   timeoutMs?: number;
   alibaba?: { apiKey?: string; model?: string; voice?: string };
   openai?: { apiKey?: string; model?: string; voice?: string };
   edge?: { voice?: string; lang?: string };
+  minimax?: { apiKey?: string; model?: string; voice?: string };
 }
 
 export interface VoiceSettingsState {

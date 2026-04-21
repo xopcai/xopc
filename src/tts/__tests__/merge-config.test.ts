@@ -19,6 +19,14 @@ describe('mergeTtsConfigFromAppConfig', () => {
     expect(merged.provider).toBe('alibaba');
     expect(merged.alibaba?.model).toBe('qwen-tts');
   });
+
+  it('merges minimax defaults and overrides', () => {
+    const merged = mergeTtsConfigFromAppConfig({
+      minimax: { voice: 'female-shaonv' },
+    });
+    expect(merged.minimax?.model).toBe('speech-2.8-hd');
+    expect(merged.minimax?.voice).toBe('female-shaonv');
+  });
 });
 
 describe('appendTtsReadinessNote', () => {
@@ -44,7 +52,7 @@ describe('appendTtsReadinessNote', () => {
         provider: 'openai' as const,
         trigger: 'always' as const,
         edge: { enabled: false },
-        fallback: { enabled: false, order: [] as ('openai' | 'alibaba' | 'edge')[] },
+        fallback: { enabled: false, order: [] as ('openai' | 'alibaba' | 'edge' | 'minimax')[] },
       },
     } as unknown as Config;
 

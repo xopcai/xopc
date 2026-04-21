@@ -22,11 +22,13 @@ export interface VoiceModelsConfig {
     alibaba: VoiceModel[];
     openai: VoiceModel[];
     edge: VoiceModel[];
+    minimax: VoiceModel[];
   };
   ttsVoices: {
     alibaba: VoiceModel[];
     openai: VoiceModel[];
     edge: VoiceModel[];
+    minimax: VoiceModel[];
   };
 }
 
@@ -62,6 +64,15 @@ const DEFAULT_TTS_EDGE: VoiceModel[] = [
   { id: 'edge-default', name: 'Edge TTS (Free)' },
 ];
 
+const DEFAULT_TTS_MINIMAX: VoiceModel[] = [
+  { id: 'speech-2.8-hd', name: 'Speech 2.8 HD (Recommended)' },
+  { id: 'speech-2.8-turbo', name: 'Speech 2.8 Turbo (Fast)' },
+  { id: 'speech-2.6-hd', name: 'Speech 2.6 HD' },
+  { id: 'speech-2.6-turbo', name: 'Speech 2.6 Turbo' },
+  { id: 'speech-02-hd', name: 'Speech 02 HD' },
+  { id: 'speech-02-turbo', name: 'Speech 02 Turbo' },
+];
+
 // Default TTS voices
 const DEFAULT_TTS_VOICES_ALIBABA: VoiceModel[] = [
   { id: 'Cherry', name: 'Cherry' },
@@ -77,6 +88,23 @@ const DEFAULT_TTS_VOICES_OPENAI: VoiceModel[] = OPENAI_TTS_VOICES.map(id => ({
 }));
 
 // Edge TTS popular voices
+const DEFAULT_TTS_VOICES_MINIMAX: VoiceModel[] = [
+  { id: 'male-qn-qingse', name: 'Male Qingse (青涩男声)' },
+  { id: 'male-qn-jingying', name: 'Male Jingying (精英男声)' },
+  { id: 'male-qn-badao', name: 'Male Badao (霸道男声)' },
+  { id: 'male-qn-daxuesheng', name: 'Male Daxuesheng (大学生男声)' },
+  { id: 'female-shaonv', name: 'Female Shaonv (少女音)' },
+  { id: 'female-yujie', name: 'Female Yujie (御姐音)' },
+  { id: 'female-chengshu', name: 'Female Chengshu (成熟女声)' },
+  { id: 'female-tianmei', name: 'Female Tianmei (甜美女声)' },
+  { id: 'audiobook_male_1', name: 'Audiobook Male 1' },
+  { id: 'audiobook_male_2', name: 'Audiobook Male 2' },
+  { id: 'audiobook_female_1', name: 'Audiobook Female 1' },
+  { id: 'audiobook_female_2', name: 'Audiobook Female 2' },
+  { id: 'presenter_male', name: 'Presenter Male' },
+  { id: 'presenter_female', name: 'Presenter Female' },
+];
+
 const DEFAULT_TTS_VOICES_EDGE: VoiceModel[] = [
   { id: 'en-US-MichelleNeural', name: 'Michelle (US English, Female)' },
   { id: 'en-US-JennyNeural', name: 'Jenny (US English, Female)' },
@@ -102,11 +130,13 @@ export function getVoiceModelsConfig(): VoiceModelsConfig {
       alibaba: DEFAULT_TTS_ALIBABA,
       openai: DEFAULT_TTS_OPENAI,
       edge: DEFAULT_TTS_EDGE,
+      minimax: DEFAULT_TTS_MINIMAX,
     },
     ttsVoices: {
       alibaba: DEFAULT_TTS_VOICES_ALIBABA,
       openai: DEFAULT_TTS_VOICES_OPENAI,
       edge: DEFAULT_TTS_VOICES_EDGE,
+      minimax: DEFAULT_TTS_VOICES_MINIMAX,
     },
   };
 }
@@ -118,6 +148,7 @@ export function getTTSProviders(): Array<{ id: string; name: string; description
   return [
     { id: 'openai', name: 'OpenAI', description: 'High quality, multiple voices' },
     { id: 'alibaba', name: 'Alibaba', description: 'Qwen TTS, good for Chinese' },
+    { id: 'minimax', name: 'MiniMax', description: 'High quality, 40+ languages' },
     { id: 'edge', name: 'Microsoft Edge', description: 'Free, 100+ voices, multi-language' },
   ];
 }
