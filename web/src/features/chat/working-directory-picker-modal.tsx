@@ -192,8 +192,7 @@ export function WorkingDirectoryPickerModal({
               <Button
                 type="button"
                 variant="secondary"
-                size="sm"
-                className="shrink-0 gap-1 px-2"
+                className="shrink-0 gap-1 px-2 py-1.5 text-xs"
                 disabled={listLoading || !canGoUp(listState) || Boolean(listError)}
                 onClick={() => goUp()}
                 title={wd.pickerUp}
