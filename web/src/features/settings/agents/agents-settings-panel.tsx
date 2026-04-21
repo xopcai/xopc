@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useParams, useSearchParams } from 'react-router-dom';
+import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { useDebouncedCallback } from 'use-debounce';
 
@@ -29,7 +29,6 @@ import { useLocaleStore } from '@/stores/locale-store';
 import { AgentsSettingsHeader } from './agents-settings-header';
 import { AgentsTabBar } from './agents-tab-bar';
 import { CreateAgentDialog } from './create-agent-dialog';
-import { AgentSettingsPanel } from './defaults-panel';
 import { AgentChannelsTab } from './tabs/agent-channels-tab';
 import { AgentCronTab } from './tabs/agent-cron-tab';
 import { AgentFilesTab } from './tabs/agent-files-tab';
@@ -46,7 +45,8 @@ export function AgentsSettingsPanel() {
   const chat = m.chat;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
-  const [searchParams, setSearchParams] = useSearchParams();
+  const [searchParams] = useSearchParams();
+  const navigate = useNavigate();
   const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
 
   const agentsSwrKey = hasToken ? 'settings-gateway-agents' : null;
@@ -72,7 +72,7 @@ export function AgentsSettingsPanel() {
   const displayError = error ?? loadError;
 
   const [selectedId, setSelectedId] = useState<string | null>(null);
-  const [panel, setPanel] = useState<AgentPanel>('defaults');
+  const [panel, setPanel] = useState<AgentPanel>('overview');
 
   const [createName, setCreateName] = useState('');
   const [createWorkspace, setCreateWorkspace] = useState('');
@@ -184,11 +184,8 @@ export function AgentsSettingsPanel() {
     if (searchParams.get('panel') !== 'defaults') {
       return;
     }
-    setPanel('defaults');
-    const next = new URLSearchParams(searchParams);
-    next.delete('panel');
-    setSearchParams(next, { replace: true });
-  }, [searchParams, setSearchParams]);
+    navigate('/settings/agent-defaults', { replace: true });
+  }, [searchParams, navigate]);
 
   const selected = useMemo(
     () => data?.agents.find((x) => x.id === selectedId) ?? null,
@@ -628,7 +625,6 @@ export function AgentsSettingsPanel() {
         a={a}
         data={data}
         loading={loading}
-        panel={panel}
         selectedId={selectedId}
         busy={busy}
         onSelectedIdChange={setSelectedId}
@@ -643,9 +639,7 @@ export function AgentsSettingsPanel() {
 
       <AgentsTabBar a={a} panel={panel} onPanelChange={setPanel} />
 
-      {panel === 'defaults' ? (
-        <AgentSettingsPanel embedded />
-      ) : loading ? (
+      {loading ? (
         <p className="text-sm text-fg-muted">{a.loading}</p>
       ) : data ? (
         panel === 'overview' ? (

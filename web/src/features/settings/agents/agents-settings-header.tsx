@@ -11,13 +11,12 @@ export function AgentsSettingsHeader(props: {
   a: AgentsSettingsMessages;
   data: { agents: GatewayAgentRow[] } | null;
   loading: boolean;
-  panel: string;
   selectedId: string | null;
   busy: boolean;
   onSelectedIdChange: (id: string) => void;
   onOpenAddAgent: () => void;
 }) {
-  const { a, data, loading, panel, selectedId, busy, onSelectedIdChange, onOpenAddAgent } = props;
+  const { a, data, loading, selectedId, busy, onSelectedIdChange, onOpenAddAgent } = props;
 
   return (
     <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between sm:gap-3">
@@ -25,7 +24,7 @@ export function AgentsSettingsHeader(props: {
         <h1 className="text-lg font-semibold text-fg">{a.title}</h1>
         <p className="mt-1 text-sm text-fg-muted">{a.subtitle}</p>
       </div>
-      {data && !loading && panel !== 'defaults' ? (
+      {data && !loading ? (
         <div className="flex flex-col gap-2 sm:flex-row sm:items-end sm:justify-end sm:gap-3">
           <div className="w-full max-w-[9rem] shrink-0 sm:w-[9rem]">
             <select

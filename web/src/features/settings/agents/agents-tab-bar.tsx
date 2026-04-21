@@ -26,7 +26,6 @@ export function AgentsTabBar(props: {
 
   return (
     <div className="flex flex-wrap gap-2 border-b border-edge-subtle pb-2">
-      {tab('defaults', a.tabDefaults)}
       {tab('overview', a.tabOverview)}
       {tab('files', a.tabFiles)}
       {tab('tools', a.tabTools)}
