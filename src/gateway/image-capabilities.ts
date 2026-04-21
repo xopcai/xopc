@@ -26,7 +26,7 @@ const VISION_MODELS: Record<string, Array<{ id: string; name: string }>> = {
     { id: 'gemini-2.0-flash', name: 'Gemini 2.0 Flash' },
     { id: 'gemini-1.5-pro', name: 'Gemini 1.5 Pro' },
   ],
-  qwen: [
+  dashscope: [
     { id: 'qwen-vl-max', name: 'Qwen VL Max' },
     { id: 'qwen2.5-vl-72b-instruct', name: 'Qwen 2.5 VL 72B' },
   ],

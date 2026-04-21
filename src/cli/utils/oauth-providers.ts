@@ -1,6 +1,6 @@
 /**
  * OAuth Provider Configuration
- * 
+ *
  * Centralized OAuth provider definitions for CLI commands.
  * Used by both auth.ts and onboard.ts to avoid duplication.
  */
@@ -9,8 +9,7 @@ import {
   anthropicOAuthProvider,
   minimaxOAuthProvider,
   minimaxCnOAuthProvider,
-  kimiOAuthProvider,
-  qwenPortalOAuthProvider,
+  kimiCodingOAuthProvider,
   githubCopilotOAuthProvider,
   googleGeminiCliOAuthProvider,
   googleAntigravityOAuthProvider,
@@ -47,16 +46,10 @@ export const OAUTH_PROVIDERS: Record<string, OAuthProviderConfig> = {
     profileId: 'minimax-cn:default',
     urlPrompt: '🌐 请在浏览器中打开以下 URL:\n',
   },
-  kimi: {
-    displayName: 'Kimi (月之暗面)',
-    provider: kimiOAuthProvider,
-    profileId: 'kimi:default',
-    urlPrompt: '🌐 Please open this URL in your browser:\n',
-  },
-  qwen: {
-    displayName: 'Qwen (DashScope / Portal)',
-    provider: qwenPortalOAuthProvider,
-    profileId: 'qwen:default',
+  'kimi-coding': {
+    displayName: 'Kimi For Coding (月之暗面)',
+    provider: kimiCodingOAuthProvider,
+    profileId: 'kimi-coding:default',
     urlPrompt: '🌐 Please open this URL in your browser:\n',
   },
   'github-copilot': {

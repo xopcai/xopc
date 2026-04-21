@@ -562,7 +562,7 @@ xopc image status --json
 xopc image set-understanding openai/gpt-4o
 xopc image set-generation openai/gpt-image-1
 xopc image add-fallback understanding anthropic/claude-sonnet-4-5
-xopc image add-fallback generation qwen/wan2.6-t2i
+xopc image add-fallback generation dashscope/wan2.6-t2i
 xopc image remove-fallback understanding 0
 xopc image providers
 xopc image set-max-size 10

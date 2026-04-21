@@ -4,7 +4,7 @@ import type { StoredLanguage } from '@/lib/storage';
 export interface ProviderEnrichment {
   /**
    * API key console for **this** provider id’s region.
-   * When the codebase uses separate ids for intl vs China (e.g. `minimax` / `minimax-cn`, `zai` / `zhipu-cn`),
+   * When the codebase uses separate ids for intl vs China (e.g. `minimax` / `minimax-cn`),
    * only set this field — do not add {@link apiKeyUrlCn} on those rows.
    */
   apiKeyUrl?: string;
@@ -74,7 +74,7 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     bestFor: ['long context', 'coding', 'reasoning'],
     freeTier: false,
     aliases: ['claude', 'claude 3', 'claude sonnet', 'claude opus', 'claude haiku'],
-    envVars: ['ANTHROPIC_API_KEY'],
+    envVars: ['ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'],
   },
   google: {
     apiKeyUrl: 'https://aistudio.google.com/app/apikey',
@@ -133,18 +133,6 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     freeTierNote: 'Generous free tier with rate limits.',
     aliases: ['groq', 'llama on groq', 'mixtral on groq'],
     envVars: ['GROQ_API_KEY'],
-  },
-  deepseek: {
-    apiKeyUrl: 'https://platform.deepseek.com/api_keys',
-    pricingUrl: 'https://platform.deepseek.com/api-docs/pricing',
-    docsUrl: 'https://platform.deepseek.com/api-docs',
-    description: 'High-performance Chinese model. Excellent reasoning at very low cost.',
-    descriptionZh: '国产高性能模型，推理能力强，价格极具竞争力，国内可直连。',
-    bestFor: ['reasoning', 'coding', 'cheap'],
-    freeTier: true,
-    freeTierNote: 'Free credits on signup.',
-    aliases: ['deepseek', 'deep seek'],
-    envVars: ['DEEPSEEK_API_KEY'],
   },
   xai: {
     apiKeyUrl: 'https://console.x.ai/',
@@ -236,7 +224,7 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     freeTier: true,
     freeTierNote: '注册赠送免费额度。',
     aliases: ['minimax cn', 'minimax china', 'abab'],
-    envVars: ['MINIMAX_API_KEY'],
+    envVars: ['MINIMAX_CN_API_KEY', 'MINIMAX_API_KEY'],
   },
   'kimi-coding': {
     apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys',
@@ -249,19 +237,6 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     freeTier: true,
     freeTierNote: '注册赠送免费额度。',
     aliases: ['kimi coding', 'moonshot coding', 'kimi code'],
-    envVars: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'],
-  },
-  kimi: {
-    apiKeyUrl: 'https://platform.moonshot.ai/console/api-keys',
-    apiKeyUrlCn: 'https://platform.moonshot.cn/console/api-keys',
-    pricingUrl: 'https://platform.moonshot.ai/docs/pricing/chat',
-    docsUrl: 'https://platform.moonshot.ai/docs',
-    description: 'Moonshot Kimi — excellent long-context support, domestic access.',
-    descriptionZh: 'Moonshot Kimi，超长上下文，国内直连。',
-    bestFor: ['long context', 'chinese'],
-    freeTier: true,
-    freeTierNote: '注册赠送免费额度。',
-    aliases: ['kimi', 'moonshot', '月之暗面'],
     envVars: ['KIMI_API_KEY', 'MOONSHOT_API_KEY'],
   },
   huggingface: {
@@ -287,6 +262,17 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     aliases: ['opencode', 'open code'],
     envVars: ['OPENCODE_API_KEY'],
   },
+  'opencode-go': {
+    apiKeyUrl: 'https://opencode.ai/auth',
+    pricingUrl: 'https://opencode.ai/docs',
+    docsUrl: 'https://opencode.ai/docs/providers/',
+    description: 'OpenCode Go — AI coding assistant provider (Go variant).',
+    descriptionZh: 'OpenCode Go，AI 代码助手服务商（Go 版本）。',
+    bestFor: ['coding'],
+    freeTier: false,
+    aliases: ['opencode go', 'opencode-go'],
+    envVars: ['OPENCODE_API_KEY'],
+  },
   zai: {
     apiKeyUrl: 'https://z.ai/manage-apikey/apikey-list',
     pricingUrl: 'https://z.ai/manage-apikey/billing',
@@ -298,53 +284,18 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     aliases: ['yi', '01.ai', 'zero one', '零一万物'],
     envVars: ['ZAI_API_KEY'],
   },
-  'zhipu-cn': {
-    apiKeyUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
-    pricingUrl: 'https://open.bigmodel.cn/pricing',
-    docsUrl: 'https://open.bigmodel.cn/dev/api',
-    description: 'Zhipu AI (BigModel) — strong Chinese model, domestic access.',
-    descriptionZh: '智谱 AI（BigModel），国内直连，中文能力强。',
-    bestFor: ['chinese', 'general'],
-    freeTier: true,
-    freeTierNote: '注册赠送免费额度。',
-    aliases: ['智谱', 'zhipu', 'bigmodel', 'chatglm', 'glm'],
-    envVars: ['ZHIPU_CN_API_KEY', 'ZHIPU_API_KEY', 'BIGMODEL_API_KEY'],
-  },
-  zhipu: {
-    apiKeyUrl: 'https://open.bigmodel.cn/usercenter/apikeys',
-    pricingUrl: 'https://open.bigmodel.cn/pricing',
-    docsUrl: 'https://open.bigmodel.cn/dev/api',
-    description: 'Zhipu AI (legacy alias) — same as zhipu-cn.',
-    descriptionZh: '智谱 AI（旧版别名），与 zhipu-cn 相同。',
-    bestFor: ['chinese', 'general'],
-    freeTier: true,
-    freeTierNote: '注册赠送免费额度。',
-    aliases: ['智谱', 'zhipu', 'bigmodel', 'chatglm', 'glm'],
-    envVars: ['ZHIPU_CN_API_KEY', 'ZHIPU_API_KEY', 'BIGMODEL_API_KEY'],
-  },
-  qwen: {
+  dashscope: {
     apiKeyUrl: 'https://modelstudio.console.alibabacloud.com/',
     apiKeyUrlCn: 'https://dashscope.console.aliyun.com/apiKey',
     pricingUrl: 'https://help.aliyun.com/zh/dashscope/developer-reference/tongyi-thousand-questions-metering-and-billing',
     docsUrl: 'https://help.aliyun.com/zh/dashscope/',
-    description: 'Alibaba Qwen models — strong Chinese language support, generous free tier.',
-    descriptionZh: '阿里通义千问，中文能力强，免费额度充足，国内直连无需代理。',
-    bestFor: ['chinese', 'general', 'cheap'],
+    description:
+      'Alibaba DashScope — image generation, speech, and STT HTTP APIs (service id `dashscope`, not a pi-ai LLM provider).',
+    descriptionZh: '阿里 DashScope：文生图、语音等 HTTP API（服务 id 为 dashscope，非 pi-ai 内置 LLM）。',
+    bestFor: ['image', 'speech', 'chinese'],
     freeTier: true,
-    freeTierNote: '新用户赠送大量免费 Token。',
-    aliases: ['通义', '通义千问', 'dashscope', 'alibaba', 'qianwen'],
-    envVars: ['QWEN_API_KEY', 'DASHSCOPE_API_KEY'],
-  },
-  vercel: {
-    apiKeyUrl: 'https://vercel.com/account/tokens',
-    pricingUrl: 'https://vercel.com/pricing',
-    docsUrl: 'https://vercel.com/docs/ai',
-    description: 'Vercel AI Gateway — unified access to multiple providers.',
-    descriptionZh: 'Vercel AI 网关，统一访问多个模型服务商。',
-    bestFor: ['flexibility'],
-    freeTier: false,
-    aliases: ['vercel'],
-    envVars: ['VERCEL_TOKEN'],
+    aliases: ['dash scope', 'alibaba dashscope'],
+    envVars: ['DASHSCOPE_API_KEY'],
   },
   'vercel-ai-gateway': {
     apiKeyUrl: 'https://vercel.com/account/tokens',
@@ -355,7 +306,7 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     bestFor: ['flexibility', 'enterprise'],
     freeTier: false,
     aliases: ['vercel gateway', 'vercel ai gateway'],
-    envVars: ['VERCEL_AI_GATEWAY_API_KEY'],
+    envVars: ['AI_GATEWAY_API_KEY', 'VERCEL_AI_GATEWAY_API_KEY'],
   },
   'github-copilot': {
     apiKeyUrl: 'https://github.com/settings/tokens',
@@ -367,7 +318,7 @@ export const PROVIDER_ENRICHMENT: Record<string, ProviderEnrichment> = {
     freeTier: true,
     freeTierNote: 'Free for verified students and open-source maintainers.',
     aliases: ['github copilot', 'copilot', 'github'],
-    envVars: ['GITHUB_TOKEN', 'GITHUB_COPILOT_TOKEN'],
+    envVars: ['COPILOT_GITHUB_TOKEN', 'GH_TOKEN', 'GITHUB_TOKEN', 'GITHUB_COPILOT_TOKEN'],
   },
 };
 

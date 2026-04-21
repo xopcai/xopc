@@ -92,6 +92,6 @@ export function buildPiAiImageUnderstandingProvider(providerId: string): ImageUn
   };
 }
 
-for (const providerId of ['openai', 'anthropic', 'google', 'qwen']) {
+for (const providerId of ['openai', 'anthropic', 'google']) {
   registerImageUnderstandingProvider(buildPiAiImageUnderstandingProvider(providerId));
 }

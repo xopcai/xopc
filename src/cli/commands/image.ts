@@ -31,7 +31,7 @@ function createImageCommand(_ctx: CLIContext): Command {
         'xopc image set-understanding openai/gpt-4o     # Set image understanding model',
         'xopc image set-generation openai/gpt-image-1   # Set image generation model',
         'xopc image add-fallback understanding anthropic/claude-sonnet-4-5',
-        'xopc image add-fallback generation qwen/wan2.6-t2i',
+        'xopc image add-fallback generation dashscope/wan2.6-t2i',
         'xopc image remove-fallback understanding 0     # Remove first fallback',
         'xopc image providers                           # List available providers',
       ]),
@@ -339,7 +339,7 @@ function createImageCommand(_ctx: CLIContext): Command {
           generation: [],
           understanding: ['gemini-2.0-flash', 'gemini-1.5-pro'],
         },
-        qwen: {
+        dashscope: {
           generation: ['wan2.6-t2i'],
           understanding: ['qwen-vl-max', 'qwen2.5-vl-72b-instruct'],
         },

@@ -1,6 +1,6 @@
 /**
  * Unified image stack: understanding (pi-ai multimodal) under this folder;
- * generation (OpenAI Images API; DashScope Beijing wan2.6-t2i via `qwen/`) under `./generation/`.
+ * generation (OpenAI Images API; DashScope Beijing wan2.6-t2i via `dashscope/`) under `./generation/`.
  */
 export { describeImagesWithPiAi } from './describe-images.js';
 export {
@@ -43,7 +43,7 @@ export type {
   ImageGenerationSourceImage,
   ImageGenerationCapabilities,
 } from './generation/types.js';
-export { OPENAI_DEFAULT_IMAGE_MODEL, QWEN_DEFAULT_IMAGE_MODEL } from './generation/constants.js';
+export { DASHSCOPE_DEFAULT_IMAGE_MODEL, OPENAI_DEFAULT_IMAGE_MODEL } from './generation/constants.js';
 export {
   modelSupportsVision,
   resolveImageHandlingStrategy,

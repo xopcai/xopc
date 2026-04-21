@@ -4,17 +4,11 @@
 
 export function normalizeProviderId(provider: string): string {
   const normalized = provider.trim().toLowerCase();
-  if (normalized === 'zhipu-cn' || normalized === 'zhipu') {
-    return 'zhipu-cn';
-  }
   if (normalized === "z.ai" || normalized === "z-ai") {
     return "zai";
   }
   if (normalized === "opencode-zen") {
     return "opencode";
-  }
-  if (normalized === "qwen") {
-    return "qwen-portal";
   }
   if (normalized === "kimi-code") {
     return "kimi-coding";
