@@ -23,6 +23,8 @@ export function AgentOverviewTab(props: {
   onSetDefault: () => void;
   onSaveAgentEdits: () => void;
   onDelete: (purge: boolean) => void;
+  /** When true, hide the primary Save row (e.g. modal footer provides Save). */
+  hideInlineSave?: boolean;
 }) {
   const {
     a,
@@ -38,10 +40,11 @@ export function AgentOverviewTab(props: {
     onSetDefault,
     onSaveAgentEdits,
     onDelete,
+    hideInlineSave,
   } = props;
 
   return (
-    <div className="flex flex-col gap-8">
+    <div className="flex min-h-0 flex-1 flex-col gap-8 overflow-y-auto">
       <SettingsFormSection>
         <SettingsFormSectionHeader icon={Users} title={a.selectAgent} subtitle={a.selectAgentHint} />
         <div className="flex flex-wrap gap-2">
@@ -93,9 +96,11 @@ export function AgentOverviewTab(props: {
             </div>
           </div>
           <div className="mt-4 flex flex-wrap gap-2">
-            <Button type="button" disabled={busy} onClick={() => void onSaveAgentEdits()}>
-              {a.save}
-            </Button>
+            {!hideInlineSave ? (
+              <Button type="button" disabled={busy} onClick={() => void onSaveAgentEdits()}>
+                {a.save}
+              </Button>
+            ) : null}
             {selected.id !== 'main' ? (
               <>
                 <Button type="button" variant="secondary" disabled={busy} onClick={() => void onDelete(false)}>

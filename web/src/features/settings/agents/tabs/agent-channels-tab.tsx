@@ -32,8 +32,13 @@ export function AgentChannelsTab(props: {
   } = props;
 
   return (
-    <SettingsFormSection>
-      <SettingsFormSectionHeader icon={Link2} title={a.channelsTitle} subtitle={a.channelsHint} />
+    <SettingsFormSection className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <SettingsFormSectionHeader
+        className="shrink-0"
+        icon={Link2}
+        title={a.channelsTitle}
+        subtitle={a.channelsHint}
+      />
       {bindingsLoading ? (
         <p className="text-sm text-fg-muted">{a.channelsLoading}</p>
       ) : agentBindings.length === 0 ? (

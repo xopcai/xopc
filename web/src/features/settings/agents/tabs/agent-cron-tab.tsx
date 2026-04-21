@@ -20,8 +20,13 @@ export function AgentCronTab(props: {
   const { a, data, busy, cronLoading, agentCronJobs, onSetCronJobAgent } = props;
 
   return (
-    <SettingsFormSection>
-      <SettingsFormSectionHeader icon={AlarmClock} title={a.cronTitle} subtitle={a.cronHint} />
+    <SettingsFormSection className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+      <SettingsFormSectionHeader
+        className="shrink-0"
+        icon={AlarmClock}
+        title={a.cronTitle}
+        subtitle={a.cronHint}
+      />
       {cronLoading ? (
         <p className="text-sm text-fg-muted">{a.cronLoading}</p>
       ) : agentCronJobs.length === 0 ? (

@@ -41,14 +41,14 @@ export function AgentFilesTab(props: {
   const isDark = useThemeStore((s) => s.resolved === 'dark');
 
   return (
-    <div className="flex flex-col gap-4">
-      <p className="text-sm text-fg-muted">{a.filesHint}</p>
+    <div className="flex min-h-0 flex-1 flex-col gap-4 overflow-hidden">
+      <p className="shrink-0 text-sm text-fg-muted">{a.filesHint}</p>
       {filesLoading ? (
-        <p className="text-sm text-fg-muted">{a.filesLoading}</p>
+        <p className="shrink-0 text-sm text-fg-muted">{a.filesLoading}</p>
       ) : files ? (
-        <div className="flex min-h-0 flex-col gap-3">
+        <div className="flex min-h-0 flex-1 flex-col gap-3 overflow-hidden">
           <nav
-            className="flex flex-row flex-wrap gap-x-0.5 gap-y-0 border-b border-edge-subtle"
+            className="flex shrink-0 flex-row flex-wrap gap-x-0.5 gap-y-0 border-b border-edge-subtle"
             aria-label={a.tabFiles}
           >
             {files.files.map((f) => (
@@ -69,10 +69,10 @@ export function AgentFilesTab(props: {
               </button>
             ))}
           </nav>
-          <div className="flex min-h-0 min-w-0 flex-col gap-2">
+          <div className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden">
             {activeFile ? (
               <>
-                <div className="flex flex-wrap items-center justify-between gap-2">
+                <div className="flex shrink-0 flex-wrap items-center justify-between gap-2">
                   <div
                     className="inline-flex rounded-lg border border-edge bg-surface-panel p-0.5"
                     role="group"
@@ -114,7 +114,7 @@ export function AgentFilesTab(props: {
                   <div
                     className={cn(
                       agentsSettingsInputClass(),
-                      'min-h-[min(36rem,65vh)] flex-1 overflow-hidden p-0 sm:min-h-[40rem]',
+                      'flex min-h-0 flex-1 flex-col overflow-hidden p-0',
                       bootstrapFileLoading && 'pointer-events-none opacity-60',
                     )}
                   >
@@ -123,14 +123,14 @@ export function AgentFilesTab(props: {
                       initialContent={fileDraft}
                       onChange={setFileDraft}
                       isDark={isDark}
-                      className="min-h-[min(36rem,65vh)] sm:min-h-[40rem]"
+                      className="min-h-0 flex-1"
                     />
                   </div>
                 ) : (
                   <div
                     className={cn(
                       agentsSettingsInputClass(),
-                      'min-h-[min(36rem,65vh)] flex-1 overflow-auto text-sm sm:min-h-[40rem]',
+                      'min-h-0 flex-1 overflow-y-auto text-sm',
                       bootstrapFileLoading && 'pointer-events-none opacity-60',
                     )}
                   >
@@ -139,12 +139,12 @@ export function AgentFilesTab(props: {
                 )}
               </>
             ) : (
-              <p className="text-sm text-fg-muted">{a.pickFile}</p>
+              <p className="shrink-0 text-sm text-fg-muted">{a.pickFile}</p>
             )}
           </div>
         </div>
       ) : (
-        <p className="text-sm text-fg-muted">{a.filesEmpty}</p>
+        <p className="shrink-0 text-sm text-fg-muted">{a.filesEmpty}</p>
       )}
     </div>
   );

@@ -26,8 +26,9 @@ import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
+import { AgentsEditorModal } from './agents-editor-modal';
+import { AgentsListGrid } from './agents-list-grid';
 import { AgentsSettingsHeader } from './agents-settings-header';
-import { AgentsTabBar } from './agents-tab-bar';
 import { CreateAgentDialog } from './create-agent-dialog';
 import { AgentChannelsTab } from './tabs/agent-channels-tab';
 import { AgentCronTab } from './tabs/agent-cron-tab';
@@ -80,6 +81,7 @@ export function AgentsSettingsPanel() {
   const [addAgentModalOpen, setAddAgentModalOpen] = useState(false);
   const createWorkspaceSuggestedRef = useRef('');
   const [busy, setBusy] = useState(false);
+  const [listSearchQuery, setListSearchQuery] = useState('');
 
   const [editWorkspace, setEditWorkspace] = useState('');
   const [editModel, setEditModel] = useState('');
@@ -179,6 +181,21 @@ export function AgentsSettingsPanel() {
       return data.defaultId;
     });
   }, [data, routeAgentId]);
+
+  useEffect(() => {
+    if (!data || !routeAgentId) {
+      return;
+    }
+    if (!data.agents.some((x) => x.id === routeAgentId)) {
+      navigate('/settings/agents', { replace: true });
+    }
+  }, [data, routeAgentId, navigate]);
+
+  useEffect(() => {
+    if (routeAgentId) {
+      setPanel('overview');
+    }
+  }, [routeAgentId]);
 
   useEffect(() => {
     if (searchParams.get('panel') !== 'defaults') {
@@ -437,6 +454,7 @@ export function AgentsSettingsPanel() {
       const id = next.agents[next.agents.length - 1]?.id;
       if (id) {
         setSelectedId(id);
+        navigate(`/settings/agents/${id}`);
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
@@ -493,6 +511,9 @@ export function AgentsSettingsPanel() {
       void mutateAgents(next, { revalidate: false });
       setSelectedId(next.defaultId);
       setPanel('overview');
+      if (routeAgentId === agent.id) {
+        navigate('/settings/agents', { replace: true });
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
     } finally {
@@ -610,6 +631,38 @@ export function AgentsSettingsPanel() {
     }
   }
 
+  const footerSaveDisabled = panel === 'channels' || panel === 'cron';
+
+  function handleModalFooterSave() {
+    switch (panel) {
+      case 'overview':
+        void onSaveAgentEdits();
+        break;
+      case 'tools':
+        void onSaveTools();
+        break;
+      case 'skills':
+        void onSaveSkills();
+        break;
+      case 'files':
+        saveBootstrapDebounced.flush();
+        break;
+      default:
+        break;
+    }
+  }
+
+  function onAgentModalOpenChange(open: boolean) {
+    if (!open) {
+      navigate('/settings/agents');
+    }
+  }
+
+  const modalTitle = selected
+    ? editName.trim() || selected.name?.trim() || selected.id
+    : (routeAgentId ?? '');
+  const modalSubtitle = selected?.id ?? routeAgentId ?? '';
+
   if (!hasToken) {
     return (
       <div className="mx-auto flex w-full max-w-app-main flex-col gap-3 px-4 py-8">
@@ -619,17 +672,97 @@ export function AgentsSettingsPanel() {
     );
   }
 
-  return (
-    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
-      <AgentsSettingsHeader
+  const editorPanelContent =
+    !selected ? (
+      <p className="text-sm text-fg-muted">{a.selectAgentHint}</p>
+    ) : panel === 'overview' ? (
+      <AgentOverviewTab
+        a={a}
+        chat={chat}
+        selected={selected}
+        busy={busy}
+        editName={editName}
+        setEditName={setEditName}
+        editWorkspace={editWorkspace}
+        setEditWorkspace={setEditWorkspace}
+        editModel={editModel}
+        setEditModel={setEditModel}
+        onSetDefault={() => void onSetDefault(selected)}
+        onSaveAgentEdits={() => void onSaveAgentEdits()}
+        onDelete={(purge) => void onDelete(selected, purge)}
+        hideInlineSave
+      />
+    ) : panel === 'files' ? (
+      <AgentFilesTab
+        a={a}
+        filesLoading={filesLoading}
+        files={files}
+        activeFile={activeFile}
+        setActiveFile={setActiveFile}
+        bootstrapViewMode={bootstrapViewMode}
+        setBootstrapViewMode={setBootstrapViewMode}
+        fileDraft={fileDraft}
+        setFileDraft={setFileDraft}
+        fileSaving={fileSaving}
+        bootstrapFileLoading={bootstrapFileLoading}
+        bootstrapEditorNonce={bootstrapEditorNonce}
+      />
+    ) : panel === 'tools' ? (
+      <AgentToolsTab
+        a={a}
+        data={data!}
+        selected={selected}
+        busy={busy}
+        toolEntryDisable={toolEntryDisable}
+        setToolEntryDisable={setToolEntryDisable}
+        onSaveTools={() => void onSaveTools()}
+        onClearToolsEntry={() => void onClearToolsEntry()}
+        hideInlineSave
+      />
+    ) : panel === 'skills' ? (
+      <AgentSkillsTab
+        a={a}
+        selected={selected}
+        busy={busy}
+        skillsCatalogLoading={skillsCatalogLoading}
+        catalogForPick={catalogForPick}
+        skillsInherit={skillsInherit}
+        setSkillsInherit={setSkillsInherit}
+        skillsPick={skillsPick}
+        setSkillsPick={setSkillsPick}
+        onSaveSkills={() => void onSaveSkills()}
+        hideInlineSave
+      />
+    ) : panel === 'channels' ? (
+      <AgentChannelsTab
+        a={a}
+        busy={busy}
+        bindingsLoading={bindingsLoading}
+        agentBindings={agentBindings}
+        newBindChannel={newBindChannel}
+        setNewBindChannel={setNewBindChannel}
+        newBindPeerId={newBindPeerId}
+        setNewBindPeerId={setNewBindPeerId}
+        onRemoveBinding={(rule) => void onRemoveBinding(rule)}
+        onAddBinding={onAddBinding}
+      />
+    ) : panel === 'cron' && data ? (
+      <AgentCronTab
         a={a}
         data={data}
-        loading={loading}
-        selectedId={selectedId}
+        selected={selected}
         busy={busy}
-        onSelectedIdChange={setSelectedId}
-        onOpenAddAgent={openAddAgentModal}
+        cronLoading={cronLoading}
+        agentCronJobs={agentCronJobs}
+        onSetCronJobAgent={(job, key) => void onSetCronJobAgent(job, key)}
       />
+    ) : (
+      <p className="text-sm text-fg-muted">{a.selectAgentHint}</p>
+    );
+
+  return (
+    <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
+      <AgentsSettingsHeader a={a} data={data} loading={loading} busy={busy} onOpenAddAgent={openAddAgentModal} />
 
       {displayError ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
@@ -637,92 +770,39 @@ export function AgentsSettingsPanel() {
         </div>
       ) : null}
 
-      <AgentsTabBar a={a} panel={panel} onPanelChange={setPanel} />
-
       {loading ? (
         <p className="text-sm text-fg-muted">{a.loading}</p>
       ) : data ? (
-        panel === 'overview' ? (
-          <AgentOverviewTab
-            a={a}
-            chat={chat}
-            selected={selected}
-            busy={busy}
-            editName={editName}
-            setEditName={setEditName}
-            editWorkspace={editWorkspace}
-            setEditWorkspace={setEditWorkspace}
-            editModel={editModel}
-            setEditModel={setEditModel}
-            onSetDefault={() => selected && void onSetDefault(selected)}
-            onSaveAgentEdits={() => void onSaveAgentEdits()}
-            onDelete={(purge) => selected && void onDelete(selected, purge)}
-          />
-        ) : panel === 'files' ? (
-          <AgentFilesTab
-            a={a}
-            filesLoading={filesLoading}
-            files={files}
-            activeFile={activeFile}
-            setActiveFile={setActiveFile}
-            bootstrapViewMode={bootstrapViewMode}
-            setBootstrapViewMode={setBootstrapViewMode}
-            fileDraft={fileDraft}
-            setFileDraft={setFileDraft}
-            fileSaving={fileSaving}
-            bootstrapFileLoading={bootstrapFileLoading}
-            bootstrapEditorNonce={bootstrapEditorNonce}
-          />
-        ) : panel === 'tools' && selected ? (
-          <AgentToolsTab
-            a={a}
-            data={data}
-            selected={selected}
-            busy={busy}
-            toolEntryDisable={toolEntryDisable}
-            setToolEntryDisable={setToolEntryDisable}
-            onSaveTools={() => void onSaveTools()}
-            onClearToolsEntry={() => void onClearToolsEntry()}
-          />
-        ) : panel === 'skills' && selected ? (
-          <AgentSkillsTab
-            a={a}
-            selected={selected}
-            busy={busy}
-            skillsCatalogLoading={skillsCatalogLoading}
-            catalogForPick={catalogForPick}
-            skillsInherit={skillsInherit}
-            setSkillsInherit={setSkillsInherit}
-            skillsPick={skillsPick}
-            setSkillsPick={setSkillsPick}
-            onSaveSkills={() => void onSaveSkills()}
-          />
-        ) : panel === 'channels' && selected ? (
-          <AgentChannelsTab
-            a={a}
-            busy={busy}
-            bindingsLoading={bindingsLoading}
-            agentBindings={agentBindings}
-            newBindChannel={newBindChannel}
-            setNewBindChannel={setNewBindChannel}
-            newBindPeerId={newBindPeerId}
-            setNewBindPeerId={setNewBindPeerId}
-            onRemoveBinding={(rule) => void onRemoveBinding(rule)}
-            onAddBinding={onAddBinding}
-          />
-        ) : panel === 'cron' && selected && data ? (
-          <AgentCronTab
-            a={a}
-            data={data}
-            selected={selected}
-            busy={busy}
-            cronLoading={cronLoading}
-            agentCronJobs={agentCronJobs}
-            onSetCronJobAgent={(job, key) => void onSetCronJobAgent(job, key)}
-          />
-        ) : (
-          <p className="text-sm text-fg-muted">{a.selectAgentHint}</p>
-        )
+        <AgentsListGrid
+          a={a}
+          agents={data.agents}
+          searchQuery={listSearchQuery}
+          onSearchQueryChange={setListSearchQuery}
+          onOpenAgent={(id) => navigate(`/settings/agents/${id}`)}
+          onNewAgent={openAddAgentModal}
+          busy={busy}
+        />
+      ) : null}
+
+      {routeAgentId && hasToken ? (
+        <AgentsEditorModal
+          open={Boolean(routeAgentId)}
+          onOpenChange={onAgentModalOpenChange}
+          a={a}
+          title={modalTitle}
+          subtitle={modalSubtitle}
+          panel={panel}
+          onPanelChange={setPanel}
+          onFooterSave={handleModalFooterSave}
+          footerSaveDisabled={footerSaveDisabled}
+          busy={busy}
+        >
+          {loading || !data ? (
+            <p className="text-sm text-fg-muted">{a.loading}</p>
+          ) : (
+            editorPanelContent
+          )}
+        </AgentsEditorModal>
       ) : null}
 
       <CreateAgentDialog
