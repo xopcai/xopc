@@ -3,7 +3,7 @@ import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('TTS:Directives');
 
-const VALID_PROVIDERS: TTSProvider[] = ['openai', 'alibaba', 'edge'];
+const VALID_PROVIDERS: TTSProvider[] = ['openai', 'alibaba', 'edge', 'minimax'];
 
 function isValidProvider(value: string): value is TTSProvider {
   return VALID_PROVIDERS.includes(value as TTSProvider);
@@ -114,6 +114,20 @@ export function parseTtsDirectives(
           case 'edgevoice':
             if (policy.allowVoice) {
               overrides.edge = { ...overrides.edge, voice: value };
+            }
+            break;
+
+          case 'minimax_voice':
+          case 'minimaxvoice':
+            if (policy.allowVoice) {
+              overrides.minimax = { ...overrides.minimax, voice: value };
+            }
+            break;
+
+          case 'minimax_model':
+          case 'minimaxmodel':
+            if (policy.allowModelId) {
+              overrides.minimax = { ...overrides.minimax, model: value };
             }
             break;
 

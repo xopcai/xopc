@@ -450,7 +450,9 @@ export const TTSProviderConfigSchema = z.object({
 
 export const TTSFallbackConfigSchema = z.object({
   enabled: z.boolean().default(true),
-  order: z.array(z.enum(['openai', 'alibaba', 'edge'])).default(['openai', 'alibaba', 'edge']),
+  order: z
+    .array(z.enum(['openai', 'alibaba', 'edge', 'minimax']))
+    .default(['openai', 'alibaba', 'minimax', 'edge']),
 });
 
 export const TTSModelOverridesConfigSchema = z.object({
@@ -485,7 +487,7 @@ export const TTSSummarizationConfigSchema = z.object({
 
 export const TTSConfigSchema = z.object({
   enabled: z.boolean().default(false),
-  provider: z.enum(['openai', 'alibaba', 'edge']).default('openai'),
+  provider: z.enum(['openai', 'alibaba', 'edge', 'minimax']).default('openai'),
   trigger: z
     .preprocess(
       (v) => (v === 'auto' ? 'inbound' : v),
@@ -493,12 +495,13 @@ export const TTSConfigSchema = z.object({
     ),
   fallback: TTSFallbackConfigSchema.optional(),
   maxTextLength: z.number().int().min(1).default(512), // Conservative default to accommodate all providers (Alibaba limit is 512)
-  timeoutMs: z.number().int().min(1000).max(120000).default(30000),
+  timeoutMs: z.number().int().min(1000).max(180000).default(30000),
   summarization: TTSSummarizationConfigSchema.optional(),
   modelOverrides: TTSModelOverridesConfigSchema.optional(),
   alibaba: TTSProviderConfigSchema.optional(),
   openai: TTSProviderConfigSchema.optional(),
   edge: TTSEdgeConfigSchema.optional(),
+  minimax: TTSProviderConfigSchema.optional(),
 });
 
 // ============================================
@@ -720,7 +723,7 @@ export const ConfigSchema = z.object({
     trigger: 'always',
     fallback: {
       enabled: true,
-      order: ['openai', 'alibaba', 'edge'],
+      order: ['openai', 'alibaba', 'minimax', 'edge'],
     },
     maxTextLength: 4096,
     timeoutMs: 30000,
@@ -747,6 +750,10 @@ export const ConfigSchema = z.object({
       voice: 'en-US-MichelleNeural',
       lang: 'en-US',
       outputFormat: 'audio-24khz-48kbitrate-mono-mp3',
+    },
+    minimax: {
+      model: 'speech-2.8-hd',
+      voice: 'male-qn-qingse',
     },
   },
 });

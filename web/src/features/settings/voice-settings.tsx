@@ -57,6 +57,14 @@ const TTS_EDGE_VOICES_FALLBACK = [
   { id: 'en-US-MichelleNeural', name: 'Michelle (US English)' },
   { id: 'zh-CN-XiaoxiaoNeural', name: 'Xiaoxiao (Chinese)' },
 ];
+const TTS_MINIMAX_MODELS_FALLBACK = [
+  { id: 'speech-2.8-hd', name: 'Speech 2.8 HD (Recommended)' },
+  { id: 'speech-2.8-turbo', name: 'Speech 2.8 Turbo (Fast)' },
+];
+const TTS_MINIMAX_VOICES_FALLBACK = [
+  { id: 'male-qn-qingse', name: 'Male Qingse (青涩男声)' },
+  { id: 'female-shaonv', name: 'Female Shaonv (少女音)' },
+];
 
 export function VoiceSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
@@ -207,6 +215,15 @@ export function VoiceSettingsPanel() {
     );
   }, []);
 
+  const updateTtsMinimax = useCallback(
+    (patch: Partial<NonNullable<VoiceSettingsState['tts']['minimax']>>) => {
+      setForm((f) =>
+        f ? { ...f, tts: { ...f.tts, minimax: { ...f.tts.minimax, ...patch } } } : null,
+      );
+    },
+    [],
+  );
+
   const save = useCallback(async () => {
     if (!form || saving) return;
     setSaving(true);
@@ -313,6 +330,7 @@ export function VoiceSettingsPanel() {
           updateTtsAlibaba={updateTtsAlibaba}
           updateTtsOpenai={updateTtsOpenai}
           updateTtsEdge={updateTtsEdge}
+          updateTtsMinimax={updateTtsMinimax}
         />
       </div>
 
@@ -476,6 +494,7 @@ function TtsSection({
   updateTtsAlibaba,
   updateTtsOpenai,
   updateTtsEdge,
+  updateTtsMinimax,
 }: {
   v: VoiceSettingsMessages;
   tts: VoiceSettingsState['tts'];
@@ -484,6 +503,7 @@ function TtsSection({
   updateTtsAlibaba: (p: Partial<NonNullable<VoiceSettingsState['tts']['alibaba']>>) => void;
   updateTtsOpenai: (p: Partial<NonNullable<VoiceSettingsState['tts']['openai']>>) => void;
   updateTtsEdge: (p: Partial<NonNullable<VoiceSettingsState['tts']['edge']>>) => void;
+  updateTtsMinimax: (p: Partial<NonNullable<VoiceSettingsState['tts']['minimax']>>) => void;
 }) {
   const triggerDesc = (t: string) => {
     if (t === 'off') return v.tts.triggerDescOff;
@@ -498,6 +518,10 @@ function TtsSection({
   const ttsAlibaba = models?.tts?.alibaba?.length ? models.tts.alibaba : TTS_ALIBABA_MODELS_FALLBACK;
   const ttsVoicesAlibaba = models?.ttsVoices?.alibaba?.length ? models.ttsVoices.alibaba : TTS_ALIBABA_VOICES_FALLBACK;
   const ttsVoicesEdge = models?.ttsVoices?.edge?.length ? models.ttsVoices.edge : TTS_EDGE_VOICES_FALLBACK;
+  const ttsMinimax = models?.tts?.minimax?.length ? models.tts.minimax : TTS_MINIMAX_MODELS_FALLBACK;
+  const ttsVoicesMinimax = models?.ttsVoices?.minimax?.length
+    ? models.ttsVoices.minimax
+    : TTS_MINIMAX_VOICES_FALLBACK;
 
   return (
     <section className="rounded-2xl bg-surface-base px-4 py-5 sm:px-5">
@@ -552,6 +576,7 @@ function TtsSection({
                 >
                   <option value="openai">{v.tts.providerOpenai}</option>
                   <option value="alibaba">{v.stt.alibaba}</option>
+                  <option value="minimax">MiniMax</option>
                   <option value="edge">{v.tts.providerEdge}</option>
                 </select>
               </div>
@@ -642,6 +667,51 @@ function TtsSection({
                     onChange={(e) => updateTtsAlibaba({ voice: e.target.value })}
                   >
                     {ttsVoicesAlibaba.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              </div>
+            ) : null}
+
+            {tts.provider === 'minimax' ? (
+              <div className="grid gap-3 sm:grid-cols-2">
+                <div className="flex flex-col gap-1.5 sm:col-span-2">
+                  <FieldLabel>{v.stt.apiKey}</FieldLabel>
+                  <input
+                    className={cn(inputClassName(), 'font-mono text-xs')}
+                    type="password"
+                    autoComplete="off"
+                    value={tts.minimax?.apiKey ?? ''}
+                    onChange={(e) => updateTtsMinimax({ apiKey: e.target.value })}
+                    placeholder="eyJ..."
+                  />
+                  <p className="text-xs text-fg-subtle">{v.stt.apiKeyDesc} (MINIMAX_API_KEY)</p>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>{v.stt.model}</FieldLabel>
+                  <select
+                    className={selectClassName()}
+                    value={tts.minimax?.model ?? ''}
+                    onChange={(e) => updateTtsMinimax({ model: e.target.value })}
+                  >
+                    {ttsMinimax.map((m) => (
+                      <option key={m.id} value={m.id}>
+                        {m.name}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+                <div className="flex flex-col gap-1.5">
+                  <FieldLabel>{v.tts.voice}</FieldLabel>
+                  <select
+                    className={selectClassName()}
+                    value={tts.minimax?.voice ?? ''}
+                    onChange={(e) => updateTtsMinimax({ voice: e.target.value })}
+                  >
+                    {ttsVoicesMinimax.map((m) => (
                       <option key={m.id} value={m.id}>
                         {m.name}
                       </option>
