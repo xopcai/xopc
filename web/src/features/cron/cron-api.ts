@@ -31,6 +31,8 @@ export interface CronJob {
   sessionTarget?: 'main' | 'isolated';
   /** Isolated jobs: agent profile for session key; omit uses the default agent. */
   agentId?: string;
+  /** Isolated jobs: absolute workspace on gateway host; omit uses the agent default workspace. */
+  workingDirectory?: string;
   payload: CronPayload;
   delivery?: CronDelivery;
   model?: string;
@@ -41,6 +43,7 @@ export interface AddJobOptions {
   timezone?: string;
   sessionTarget?: 'main' | 'isolated';
   agentId?: string;
+  workingDirectory?: string;
   model?: string;
   delivery?: CronDelivery;
   payload: CronPayload;
@@ -132,6 +135,7 @@ export interface CronJobUpdate {
   timeout?: number;
   sessionTarget?: 'main' | 'isolated';
   agentId?: string | null;
+  workingDirectory?: string | null;
   model?: string;
   delivery?: CronDelivery;
   payload?: CronPayload;
