@@ -20,6 +20,7 @@ import {
   type GatewayConfigBinding,
   type SkillCatalogRow,
 } from '@/features/settings/agents-admin-api';
+import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { suggestWorkspaceFromAgentName } from '@/features/settings/suggest-agent-workspace';
 import { listJobs, updateJob, type CronJob } from '@/features/cron/cron-api';
 import { messages } from '@/i18n/messages';
@@ -187,7 +188,7 @@ export function AgentsSettingsPanel() {
       return;
     }
     if (!data.agents.some((x) => x.id === routeAgentId)) {
-      navigate('/settings/agents', { replace: true });
+      navigate(AGENTS_APP_LIST_PATH, { replace: true });
     }
   }, [data, routeAgentId, navigate]);
 
@@ -454,7 +455,7 @@ export function AgentsSettingsPanel() {
       const id = next.agents[next.agents.length - 1]?.id;
       if (id) {
         setSelectedId(id);
-        navigate(`/settings/agents/${id}`);
+        navigate(agentsAppDetailPath(id));
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
@@ -512,7 +513,7 @@ export function AgentsSettingsPanel() {
       setSelectedId(next.defaultId);
       setPanel('overview');
       if (routeAgentId === agent.id) {
-        navigate('/settings/agents', { replace: true });
+        navigate(AGENTS_APP_LIST_PATH, { replace: true });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
@@ -654,7 +655,7 @@ export function AgentsSettingsPanel() {
 
   function onAgentModalOpenChange(open: boolean) {
     if (!open) {
-      navigate('/settings/agents');
+      navigate(AGENTS_APP_LIST_PATH);
     }
   }
 
@@ -778,7 +779,10 @@ export function AgentsSettingsPanel() {
           agents={data.agents}
           searchQuery={listSearchQuery}
           onSearchQueryChange={setListSearchQuery}
-          onOpenAgent={(id) => navigate(`/settings/agents/${id}`)}
+          onOpenAgent={(id) => navigate(agentsAppDetailPath(id))}
+          onChatWithAgent={(id) =>
+            navigate('/chat/new', { state: { agentId: id.trim().toLowerCase() } })
+          }
           onNewAgent={openAddAgentModal}
           busy={busy}
         />
