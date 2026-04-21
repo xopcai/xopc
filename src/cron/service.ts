@@ -114,6 +114,7 @@ export class CronService {
       updated_at: now,
       sessionTarget,
       ...(data.agentId ? { agentId: data.agentId } : {}),
+      ...(data.workingDirectory ? { workingDirectory: data.workingDirectory } : {}),
       payload: data.payload,
       delivery: data.delivery,
       model: data.model,
@@ -158,6 +159,7 @@ export class CronService {
         timeout: job.timeout,
         sessionTarget: job.sessionTarget,
         ...(job.agentId ? { agentId: job.agentId } : {}),
+        ...(job.workingDirectory ? { workingDirectory: job.workingDirectory } : {}),
         payload: job.payload,
         delivery: job.delivery,
         model: job.model,
@@ -188,7 +190,7 @@ export class CronService {
     if (!job) return false;
 
     const validated = validationResult.data;
-    const { agentId: agentIdPatch, ...rest } = validated;
+    const { agentId: agentIdPatch, workingDirectory: workingDirectoryPatch, ...rest } = validated;
     const patch: Partial<JobData> = { ...rest };
     let clearAgentId = false;
     if (agentIdPatch === null) {
@@ -197,13 +199,20 @@ export class CronService {
       patch.agentId = agentIdPatch;
     }
 
+    let clearWorkingDirectory = false;
+    if (workingDirectoryPatch === null) {
+      clearWorkingDirectory = true;
+    } else if (workingDirectoryPatch !== undefined) {
+      patch.workingDirectory = workingDirectoryPatch;
+    }
+
     // Cancel existing task if schedule changes
     if (patch.schedule && patch.schedule !== job.schedule) {
       this.cancelTask(id);
     }
 
     // Update persistence
-    await this.persistence.updateJob(id, patch, { clearAgentId });
+    await this.persistence.updateJob(id, patch, { clearAgentId, clearWorkingDirectory });
 
     // Re-schedule if needed
     const updated = await this.persistence.getJob(id);

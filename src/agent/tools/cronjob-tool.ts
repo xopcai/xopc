@@ -75,6 +75,12 @@ const CronjobSchema = Type.Object({
         'Agent profile id for isolated jobs (session key). Omit to use the configured default agent (usually `main`).',
     }),
   ),
+  workingDirectory: Type.Optional(
+    Type.String({
+      description:
+        'Absolute workspace path on the gateway host for isolated jobs. Omit to use the agent default workspace.',
+    }),
+  ),
 
   jobId: Type.Optional(Type.String({ description: 'Job ID (from list output)' })),
 });
@@ -104,6 +110,7 @@ function formatJob(job: JobWithNextRun): string {
     `  Next run: ${job.next_run ?? 'N/A'}`,
     `  Session: ${job.sessionTarget ?? 'main'}`,
     `  Agent: ${job.agentId?.trim() || '(default)'}`,
+    `  Workspace: ${job.workingDirectory?.trim() || '(agent default)'}`,
   ].join('\n');
 }
 
@@ -128,8 +135,8 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool<typeof Cronj
       'Each job has a cron schedule and a message the agent runs when triggered (agent turn).\n\n' +
       'ACTIONS:\n' +
       '- list: Show all scheduled jobs with status and next run time\n' +
-      '- create: Create a job (requires schedule and message; optional name, timezone, sessionTarget, agentId)\n' +
-      '- update: Change schedule, message, name, timezone, sessionTarget, or agentId (requires jobId)\n' +
+      '- create: Create a job (requires schedule and message; optional name, timezone, sessionTarget, agentId, workingDirectory)\n' +
+      '- update: Change schedule, message, name, timezone, sessionTarget, agentId, or workingDirectory (requires jobId)\n' +
       '- remove: Delete a job (requires jobId)\n' +
       '- enable / disable: Toggle a job (requires jobId)\n' +
       '- history: Recent executions for a job (requires jobId)',
@@ -172,6 +179,9 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool<typeof Cronj
               timezone: params.timezone?.trim() || undefined,
               sessionTarget: params.sessionTarget ?? 'isolated',
               ...(params.agentId?.trim() ? { agentId: params.agentId.trim() } : {}),
+              ...(params.workingDirectory?.trim()
+                ? { workingDirectory: params.workingDirectory.trim() }
+                : {}),
               payload,
             });
 
@@ -210,10 +220,14 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool<typeof Cronj
               const t = params.agentId.trim();
               updates.agentId = t || null;
             }
+            if (params.workingDirectory !== undefined) {
+              const t = params.workingDirectory.trim();
+              updates.workingDirectory = t || null;
+            }
 
             if (Object.keys(updates).length === 0) {
               return textResult(
-                'Error: update requires at least one of schedule, message, name, timezone, sessionTarget, agentId.',
+                'Error: update requires at least one of schedule, message, name, timezone, sessionTarget, agentId, workingDirectory.',
               );
             }
 

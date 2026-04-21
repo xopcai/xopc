@@ -834,6 +834,36 @@ export class AgentService {
     await mkdir(effective, { recursive: true });
   }
 
+  /**
+   * Sync persisted session workspace override for an isolated cron run (runs may change when the job is edited).
+   * Omit or pass empty `workingDirectory` to use the effective agent default workspace for this session key.
+   */
+  async applyCronJobWorkingDirectory(sessionKey: string, workingDirectory: string | undefined): Promise<void> {
+    const raw = workingDirectory?.trim();
+    if (raw) {
+      const wdNorm = normalizeWorkingDirectoryInput(raw);
+      if (wdNorm.ok === false) {
+        log.warn({ sessionKey, error: wdNorm.error }, 'Cron job working directory invalid; using agent default');
+        await this.clearCronSessionWorkingDirectoryOverride(sessionKey);
+        return;
+      }
+      await mkdir(wdNorm.path, { recursive: true });
+      await this.sessionConfigStore.update(sessionKey, { workingDirectoryOverride: wdNorm.path });
+      this.agentManager.setSessionWorkspaceOverride(sessionKey, wdNorm.path);
+      return;
+    }
+    await this.clearCronSessionWorkingDirectoryOverride(sessionKey);
+  }
+
+  private async clearCronSessionWorkingDirectoryOverride(sessionKey: string): Promise<void> {
+    const existing = await this.sessionConfigStore.get(sessionKey);
+    if (existing?.workingDirectoryOverride) {
+      const { workingDirectoryOverride: _removed, ...rest } = existing;
+      await this.sessionConfigStore.set(sessionKey, rest);
+    }
+    this.agentManager.setSessionWorkspaceOverride(sessionKey, null);
+  }
+
   /** Workspace root for UI file tree / editor (same as agent tools after hydration). */
   async getEffectiveWorkspacePathForSession(sessionKey: string): Promise<string> {
     await this.hydrateSessionWorkspaceFromStore(sessionKey);

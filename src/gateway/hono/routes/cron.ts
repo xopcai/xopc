@@ -16,7 +16,7 @@ export function registerCronRoutes(authenticated: Hono, deps: AuthenticatedRoute
   // POST /api/cron - Add new job
   authenticated.post('/api/cron', async (c) => {
     const body = await c.req.json();
-    const { schedule, name, timezone, sessionTarget, agentId, model, delivery, payload } = body;
+    const { schedule, name, timezone, sessionTarget, agentId, workingDirectory, model, delivery, payload } = body;
 
     if (!schedule || !payload) {
       return c.json({ error: 'Missing required fields: schedule, payload' }, 400);
@@ -28,6 +28,9 @@ export function registerCronRoutes(authenticated: Hono, deps: AuthenticatedRoute
         timezone,
         sessionTarget,
         ...(typeof agentId === 'string' && agentId.trim() ? { agentId: agentId.trim() } : {}),
+        ...(typeof workingDirectory === 'string' && workingDirectory.trim()
+          ? { workingDirectory: workingDirectory.trim() }
+          : {}),
         model,
         delivery,
         payload,

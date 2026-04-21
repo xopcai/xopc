@@ -3,6 +3,7 @@ import * as DropdownMenu from '@radix-ui/react-dropdown-menu';
 import {
   Clock,
   Eye,
+  FolderInput,
   Info,
   LayoutTemplate,
   Loader2,
@@ -25,6 +26,8 @@ import {
 } from '@/components/ui/segmented-styles';
 import { fetchChatAgents, type ChatAgentOption } from '@/features/chat/chat-agents-api';
 import { ModelSelector } from '@/features/chat/model-selector';
+import { folderDisplayName } from '@/features/chat/session-working-directory-control';
+import { WorkingDirectoryPickerModal } from '@/features/chat/working-directory-picker-modal';
 import type { CronDelivery, CronJob, CronJobExecution, CronRunHistoryRow } from '@/features/cron/cron-api';
 import {
   addJob,
@@ -65,6 +68,7 @@ import {
   selectControlBaseClass,
 } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
+import { interaction } from '@/lib/interaction';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -93,6 +97,24 @@ function startOfLocalMonth(d: Date): Date {
 }
 
 const DEFAULT_SCHEDULE = '*/5 * * * *';
+
+/** Same storage key as chat composer so recent folders stay in sync. */
+const RECENT_WD_STORAGE_KEY = 'xopc.recentWorkspaceDirs.v1';
+const RECENT_WD_MAX = 10;
+
+function pushRecentWorkspaceDirForCron(path: string): void {
+  const t = path.trim();
+  if (!t) return;
+  try {
+    const raw = localStorage.getItem(RECENT_WD_STORAGE_KEY);
+    const parsed = raw ? (JSON.parse(raw) as unknown) : [];
+    const prev = Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string' && x.trim()) : [];
+    const next = [t, ...prev.filter((p) => p !== t)].slice(0, RECENT_WD_MAX);
+    localStorage.setItem(RECENT_WD_STORAGE_KEY, JSON.stringify(next));
+  } catch {
+    /* ignore */
+  }
+}
 
 function inputClassName(disabled?: boolean): string {
   return cn(
@@ -162,6 +184,8 @@ export function CronPage() {
   const [formSessionTarget, setFormSessionTarget] = useState<'main' | 'isolated'>('main');
   const [formAgentId, setFormAgentId] = useState('');
   const [formAgentLocalOnly, setFormAgentLocalOnly] = useState(false);
+  const [formWorkingDirectory, setFormWorkingDirectory] = useState('');
+  const [formWdModalOpen, setFormWdModalOpen] = useState(false);
   const [formModel, setFormModel] = useState('');
   const [formSubmitting, setFormSubmitting] = useState(false);
   const formModelUserTouched = useRef(false);
@@ -193,6 +217,25 @@ export function CronPage() {
   const defaultModelForForm = useCallback(() => {
     return defaultModel || (availableModels.length > 0 ? availableModels[0].id : '');
   }, [defaultModel, availableModels]);
+
+  const hasElectronFolderPicker =
+    typeof window !== 'undefined' && Boolean(window.electronAPI?.file?.openDirectory);
+
+  const openNativeFolderPickerCron = useCallback(async (): Promise<string | null> => {
+    const api = typeof window !== 'undefined' ? window.electronAPI?.file?.openDirectory : undefined;
+    if (api) return api();
+    return null;
+  }, []);
+
+  const applyCronWorkingDirectory = useCallback(
+    async (path: string) => {
+      const t = path.trim();
+      if (!t) return;
+      pushRecentWorkspaceDirForCron(t);
+      setFormWorkingDirectory(t);
+    },
+    [],
+  );
 
   const cronAgentSelectOptions = useMemo(() => {
     const ids = new Set(chatAgents.map((a) => a.id));
@@ -356,6 +399,11 @@ export function CronPage() {
             ? job.agentId.trim().toLowerCase()
             : '',
         );
+        setFormWorkingDirectory(
+          (job.sessionTarget || 'main') === 'isolated' && job.workingDirectory?.trim()
+            ? job.workingDirectory.trim()
+            : '',
+        );
         const fromPayload =
           job.payload?.kind === 'agentTurn' && job.payload.model?.trim() ? job.payload.model.trim() : '';
         const stored = job.model?.trim() || fromPayload;
@@ -396,6 +444,7 @@ export function CronPage() {
         setFormMessage('');
         setFormSessionTarget('main');
         setFormAgentId('');
+        setFormWorkingDirectory('');
         setFormAgentLocalOnly(false);
         setFormModel(defaultModelForForm());
       }
@@ -428,6 +477,7 @@ export function CronPage() {
       setFormChatId('');
       setFormAgentLocalOnly(false);
       setFormAgentId('');
+      setFormWorkingDirectory('');
       setFormModel(defaultModelForForm());
       setFormMessageMdMode('edit');
       setMessageEditorNonce((n) => n + 1);
@@ -448,6 +498,8 @@ export function CronPage() {
     setFormMessage('');
     setFormSessionTarget('main');
     setFormAgentId('');
+    setFormWorkingDirectory('');
+    setFormWdModalOpen(false);
     setFormAgentLocalOnly(false);
     setFormModel('');
     setFormMessageMdMode('edit');
@@ -494,6 +546,7 @@ export function CronPage() {
       const agentIdTrim = formAgentId.trim().toLowerCase();
       const agentIdForEdit =
         formSessionTarget === 'main' ? null : agentIdTrim || null;
+      const wdTrim = formWorkingDirectory.trim();
       const jobData = {
         name: formName.trim(),
         schedule: formSchedule.trim(),
@@ -502,19 +555,24 @@ export function CronPage() {
         delivery,
         payload,
         ...(formMode === 'edit'
-          ? { agentId: agentIdForEdit }
-          : formSessionTarget === 'isolated' && agentIdTrim
-            ? { agentId: agentIdTrim }
-            : {}),
+          ? {
+              agentId: agentIdForEdit,
+              workingDirectory: formSessionTarget === 'isolated' ? wdTrim || null : null,
+            }
+          : {
+              ...(formSessionTarget === 'isolated' && agentIdTrim ? { agentId: agentIdTrim } : {}),
+              ...(formSessionTarget === 'isolated' && wdTrim ? { workingDirectory: wdTrim } : {}),
+            }),
       };
 
       if (formMode === 'edit' && formJobId) {
         await updateJob(formJobId, jobData);
       } else {
-        const { schedule: sched, agentId, ...rest } = jobData;
+        const { schedule: sched, agentId, workingDirectory, ...rest } = jobData;
         await addJob(sched, {
           ...rest,
           ...(agentId != null ? { agentId } : {}),
+          ...(workingDirectory ? { workingDirectory } : {}),
         });
       }
       closeForm();
@@ -1143,6 +1201,7 @@ export function CronPage() {
                       if (v === 'main') {
                         setFormAgentLocalOnly(false);
                         setFormAgentId('');
+                        setFormWorkingDirectory('');
                       } else if (v === 'isolated' && !formModel.trim()) setFormModel(defaultModelForForm());
                     }}
                   >
@@ -1187,6 +1246,58 @@ export function CronPage() {
                       </select>
                       <p className="text-xs text-fg-muted">{c.agentProfileHint}</p>
                     </label>
+                    <div className="flex flex-col gap-1">
+                      <span className="text-xs font-medium text-fg-muted">{c.workingDirectoryLabel}</span>
+                      <div className="flex flex-wrap items-center gap-2">
+                        <button
+                          type="button"
+                          disabled={formSubmitting}
+                          className={cn(
+                            'inline-flex min-h-8 max-w-[min(16rem,48vw)] min-w-0 shrink-0 items-center gap-1 rounded-lg px-2 py-1 text-xs',
+                            'border border-edge-subtle/80 bg-surface-hover/40 dark:border-edge-subtle',
+                            interaction.transition,
+                            interaction.focusRingPanel,
+                            'cursor-pointer hover:bg-surface-hover/70 dark:hover:bg-surface-hover/50',
+                            formSubmitting && 'cursor-not-allowed opacity-60',
+                          )}
+                          title={
+                            formWorkingDirectory.trim()
+                              ? `${formWorkingDirectory.trim()}\n${chatM.workingDirectory.chooseFolder}`
+                              : `${c.workingDirectoryHint}\n${chatM.workingDirectory.selectWorkingDirectory}`
+                          }
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            if (formSubmitting) return;
+                            if (hasElectronFolderPicker) {
+                              void (async () => {
+                                const picked = await openNativeFolderPickerCron();
+                                if (picked) void applyCronWorkingDirectory(picked);
+                              })();
+                            } else {
+                              setFormWdModalOpen(true);
+                            }
+                          }}
+                        >
+                          <FolderInput className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
+                          <span className="min-w-0 truncate text-left font-medium text-fg">
+                            {formWorkingDirectory.trim()
+                              ? folderDisplayName(formWorkingDirectory.trim())
+                              : chatM.workingDirectory.notSet}
+                          </span>
+                        </button>
+                        {formWorkingDirectory.trim() ? (
+                          <button
+                            type="button"
+                            disabled={formSubmitting}
+                            className="text-xs font-medium text-accent hover:underline disabled:opacity-50"
+                            onClick={() => setFormWorkingDirectory('')}
+                          >
+                            {c.workingDirectoryReset}
+                          </button>
+                        ) : null}
+                      </div>
+                      <p className="text-xs text-fg-muted">{c.workingDirectoryHint}</p>
+                    </div>
                     <label className="flex cursor-pointer items-start gap-2 rounded-md bg-surface-hover/45 px-3 py-2 dark:bg-surface-hover/30">
                       <input
                         type="checkbox"
@@ -1353,6 +1464,19 @@ export function CronPage() {
         </Dialog.Portal>
       </Dialog.Root>
 
+      {!hasElectronFolderPicker ? (
+        <WorkingDirectoryPickerModal
+          open={formWdModalOpen}
+          onOpenChange={setFormWdModalOpen}
+          initialAbsolutePath={formWorkingDirectory.trim() || undefined}
+          onConfirm={async (p) => {
+            await applyCronWorkingDirectory(p);
+            setFormWdModalOpen(false);
+          }}
+          wd={chatM.workingDirectory}
+        />
+      ) : null}
+
       {/* Template picker (when jobs already exist) */}
       <Dialog.Root
         open={templatePickerOpen}
@@ -1451,6 +1575,16 @@ export function CronPage() {
                         <dt className="text-xs font-medium text-fg-muted">{c.agentProfile}</dt>
                         <dd className="mt-1 font-mono text-sm text-fg">
                           {detailJob.agentId?.trim() ? detailJob.agentId.trim() : c.agentProfileDefault}
+                        </dd>
+                      </div>
+                    ) : null}
+                    {detailJob.sessionTarget === 'isolated' ? (
+                      <div>
+                        <dt className="text-xs font-medium text-fg-muted">{c.workingDirectoryLabel}</dt>
+                        <dd className="mt-1 break-all font-mono text-xs text-fg">
+                          {detailJob.workingDirectory?.trim()
+                            ? detailJob.workingDirectory.trim()
+                            : chatM.workingDirectory.notSet}
                         </dd>
                       </div>
                     ) : null}
