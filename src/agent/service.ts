@@ -893,7 +893,18 @@ export class AgentService {
       const existingRaw = existing?.workingDirectoryOverride?.trim();
       const incoming = partial.workingDirectory.trim();
 
-      if (existingRaw) {
+      const priorMessages = await this.sessionStore.load(sessionKey);
+
+      if (priorMessages.length > 0) {
+        if (!incoming) {
+          return { ok: false, error: 'workingDirectory is empty' };
+        }
+        if (!existingRaw) {
+          return {
+            ok: false,
+            error: 'Working directory can only be set before the first message in this conversation',
+          };
+        }
         const prev = normalizeWorkingDirectoryInput(existingRaw);
         const next = normalizeWorkingDirectoryInput(incoming);
         if (prev.ok && next.ok && prev.path === next.path) {
@@ -902,19 +913,18 @@ export class AgentService {
           return { ok: false, error: 'Working directory is already set for this session' };
         }
       } else {
-        const priorMessages = await this.sessionStore.load(sessionKey);
-        if (priorMessages.length > 0) {
-          return {
-            ok: false,
-            error: 'Working directory can only be set before the first message in this conversation',
-          };
-        }
         if (!incoming) {
           return { ok: false, error: 'workingDirectory is empty' };
         }
         const wdNorm = normalizeWorkingDirectoryInput(incoming);
         switch (wdNorm.ok) {
           case true:
+            if (existingRaw) {
+              const prev = normalizeWorkingDirectoryInput(existingRaw);
+              if (prev.ok && prev.path === wdNorm.path) {
+                break;
+              }
+            }
             await mkdir(wdNorm.path, { recursive: true });
             await this.sessionConfigStore.update(sessionKey, { workingDirectoryOverride: wdNorm.path });
             this.agentManager.setSessionWorkspaceOverride(sessionKey, wdNorm.path);

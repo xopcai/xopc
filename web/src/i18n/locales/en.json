@@ -246,7 +246,12 @@
       "clickToCopyFullPath": "Click to copy full path",
       "copied": "Copied",
       "openWorkspaceMenu": "Workspace options",
-      "folderPickerRequiresDesktop": "Folder selection requires the desktop app (Electron). Open xopc from the desktop app, or configure the path another way."
+      "folderPickerRequiresDesktop": "Folder selection requires the desktop app (Electron). Open xopc from the desktop app, or configure the path another way.",
+      "pathModalTitle": "Working directory",
+      "pathModalDescription": "Enter an absolute path on the machine running the gateway (folder for the session workspace).",
+      "pathInputPlaceholder": "/absolute/path/to/folder",
+      "pathModalConfirm": "Apply",
+      "pathModalCancel": "Cancel"
     },
     "maxAttachmentsReached": "Maximum {{max}} files per message. Remove some to add more.",
     "maxAttachmentsTruncated": "{{dropped}} file(s) not added (limit {{max}} per message).",
