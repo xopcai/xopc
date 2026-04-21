@@ -222,6 +222,7 @@ export class GatewayService {
       agentService: this.agentService,
       messageBus: this.bus,
       heartbeatService: this.heartbeatService,
+      getDefaultCronAgentId: () => getDefaultAgentId(this.config),
     });
   }
 
@@ -327,6 +328,7 @@ export class GatewayService {
       messageBus: this.bus,
       heartbeatService: this.heartbeatService,
       sessionStore: this.sessionManager.getStore(),
+      getDefaultCronAgentId: () => getDefaultAgentId(this.config),
     });
 
     this.sessionManager.on('sessionUpdated', (data: { key: string; name?: string; tags?: string[] }) => {

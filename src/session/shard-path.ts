@@ -1,6 +1,6 @@
 /**
  * Maps a session key to a relative directory under the agent sessions root.
- * Routing keys → `users/{agent}/{source}/{account}/{peerKind}/{peerId}/…`; cron & heartbeat → `system/…`.
+ * Routing keys → `users/{agent}/{source}/{account}/{peerKind}/{peerId}/…`; heartbeat → `system/heartbeat`.
  * Web UI (`webchat` / `gateway`) + `direct` peers use a shorter `users/{agent}/web/…` layout (no redundant
  * `default`/`direct` segments).
  */
@@ -30,10 +30,6 @@ export function resolveSessionShardRelativePath(sessionKey: string): string {
   }
 
   const parts = raw.split(':').filter(Boolean);
-
-  if (parts.length >= 2 && parts[0] === 'cron') {
-    return join('system', 'cron');
-  }
 
   if (parts.length >= 2 && parts[0] === 'heartbeat') {
     return join('system', 'heartbeat');

@@ -128,6 +128,11 @@ export interface JobExecutorDeps {
   heartbeatService?: HeartbeatWakeSink;
   /** When set, weixin cron `delivery.to` may be a bare ilink user id; accountId is inferred from sessions. */
   sessionStore?: SessionStore;
+  /**
+   * When a job has no `agentId`, isolated cron runs use this id for the session key
+   * (same as {@link JobData.agentId} set to the default agent). Typically `getDefaultAgentId(config)`.
+   */
+  getDefaultCronAgentId?: () => string;
 }
 
 export interface JobExecutor {

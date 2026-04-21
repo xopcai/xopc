@@ -597,16 +597,13 @@ export class AgentService {
       return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: parts.slice(1).join(':') || 'heartbeat' };
     }
 
-    // Cron `processDirect` uses `cron:<jobId>` — not a channel plugin id.
-    if (first === 'cron') {
-      return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: parts.slice(1).join(':') || 'cron' };
-    }
-
-    // Full routing session keys use `{agentId}:{source}:{accountId}:{peerKind}:{peerId}` format.
-    // The `source` field (second segment) is the real channel (e.g. 'webchat', 'telegram').
     const parsed = parseRoutingSessionKey(sessionKey);
     if (parsed) {
       return { channel: parsed.source, chatId: parsed.peerId };
+    }
+
+    if (first === 'cron') {
+      return { channel: INTERNAL_OUTBOUND_DROP_CHANNEL, chatId: parts.slice(1).join(':') || 'cron' };
     }
 
     return {

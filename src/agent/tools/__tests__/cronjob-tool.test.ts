@@ -57,6 +57,7 @@ describe('cronjob tool', () => {
     expect(text).toContain('Daily');
     expect(text).toContain('abc');
     expect(text).toContain('Next run:');
+    expect(text).toContain('Agent: (default)');
   });
 
   it('create requires schedule and message', async () => {
@@ -84,6 +85,26 @@ describe('cronjob tool', () => {
       payload: { kind: 'agentTurn', message: 'Check calendar' },
     });
     expect((r.content[0] as { text: string }).text).toContain('x1');
+  });
+
+  it('create passes agentId when set', async () => {
+    const cron = mockCron({
+      addJob: vi.fn().mockResolvedValue({ id: 'x2', schedule: '0 9 * * *' }),
+    });
+    const tool = createCronjobTool({ getCronService: () => cron });
+    await tool.execute('t4b', {
+      action: 'create',
+      schedule: '0 9 * * *',
+      message: 'Hi',
+      agentId: 'research',
+    });
+    expect(cron.addJob).toHaveBeenCalledWith('0 9 * * *', {
+      name: undefined,
+      timezone: undefined,
+      sessionTarget: 'isolated',
+      agentId: 'research',
+      payload: { kind: 'agentTurn', message: 'Hi' },
+    });
   });
 
   it('create rejects scanned prompts', async () => {

@@ -69,6 +69,12 @@ const CronjobSchema = Type.Object({
         '"main" uses the main session context; "isolated" (default on create) uses a separate session per run.',
     }),
   ),
+  agentId: Type.Optional(
+    Type.String({
+      description:
+        'Agent profile id for isolated jobs (session key). Omit to use the configured default agent (usually `main`).',
+    }),
+  ),
 
   jobId: Type.Optional(Type.String({ description: 'Job ID (from list output)' })),
 });
@@ -97,6 +103,7 @@ function formatJob(job: JobWithNextRun): string {
     `  Message: ${truncatedPayload}`,
     `  Next run: ${job.next_run ?? 'N/A'}`,
     `  Session: ${job.sessionTarget ?? 'main'}`,
+    `  Agent: ${job.agentId?.trim() || '(default)'}`,
   ].join('\n');
 }
 
@@ -121,8 +128,8 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool<typeof Cronj
       'Each job has a cron schedule and a message the agent runs when triggered (agent turn).\n\n' +
       'ACTIONS:\n' +
       '- list: Show all scheduled jobs with status and next run time\n' +
-      '- create: Create a job (requires schedule and message; optional name, timezone, sessionTarget)\n' +
-      '- update: Change schedule, message, name, timezone, or sessionTarget (requires jobId)\n' +
+      '- create: Create a job (requires schedule and message; optional name, timezone, sessionTarget, agentId)\n' +
+      '- update: Change schedule, message, name, timezone, sessionTarget, or agentId (requires jobId)\n' +
       '- remove: Delete a job (requires jobId)\n' +
       '- enable / disable: Toggle a job (requires jobId)\n' +
       '- history: Recent executions for a job (requires jobId)',
@@ -164,6 +171,7 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool<typeof Cronj
               name: params.name?.trim() || undefined,
               timezone: params.timezone?.trim() || undefined,
               sessionTarget: params.sessionTarget ?? 'isolated',
+              ...(params.agentId?.trim() ? { agentId: params.agentId.trim() } : {}),
               payload,
             });
 
@@ -198,9 +206,15 @@ export function createCronjobTool(deps: CronjobToolDeps): AgentTool<typeof Cronj
             if (params.sessionTarget !== undefined) {
               updates.sessionTarget = params.sessionTarget;
             }
+            if (params.agentId !== undefined) {
+              const t = params.agentId.trim();
+              updates.agentId = t || null;
+            }
 
             if (Object.keys(updates).length === 0) {
-              return textResult('Error: update requires at least one of schedule, message, name, timezone, sessionTarget.');
+              return textResult(
+                'Error: update requires at least one of schedule, message, name, timezone, sessionTarget, agentId.',
+              );
             }
 
             const success = await cron.updateJob(params.jobId.trim(), updates);

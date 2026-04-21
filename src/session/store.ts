@@ -7,6 +7,7 @@ import { resolveSessionsDir, FILENAMES } from '../config/paths.js';
 import { resolveDefaultAgentId } from '../agent/agent-scope.js';
 import type { Config } from '../config/schema.js';
 import { resolveSessionShardRelativePath } from './shard-path.js';
+import { parseSessionKey as parseRoutingSessionKey } from '../routing/session-key.js';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
 import { createLogger } from '../utils/logger.js';
 import type {
@@ -33,7 +34,7 @@ const DEFAULT_LIMIT = 50;
 
 /**
  * Session files live under `resolveSessionsDir(config, agentId)` (ADR-003), sharded by
- * `resolveSessionShardRelativePath(sessionKey)` (users/… vs system/cron, system/heartbeat; web UI uses
+ * `resolveSessionShardRelativePath(sessionKey)` (users/… vs system/heartbeat; web UI uses
  * compact `users/{agent}/web/{peerId}` for gateway/webchat direct sessions).
  */
 export interface SessionStoreOptions {
@@ -961,15 +962,15 @@ export class SessionStore {
     const parts = key.split(':');
     // Session key format: {agentId}:{source}:{accountId}:{peerKind}:{peerId}
     if (parts.length >= 5) {
+      const parsed = parseRoutingSessionKey(key);
+      if (parsed?.source === 'cron') {
+        return { channel: 'cron', chatId: parsed.peerId };
+      }
       return { channel: parts[1], chatId: parts.slice(2).join(':') };
     }
     // ACP session key format: {agentId}:acp:{uuid}
     if (parts.length === 3 && parts[1] === 'acp') {
       return { channel: 'acp', chatId: parts[2] };
-    }
-    // Cron isolated jobs: `cron:<jobId>` (transcript + metadata under agent sessions dir)
-    if (parts.length >= 2 && parts[0] === 'cron') {
-      return { channel: 'cron', chatId: parts.slice(1).join(':') };
     }
     // Gateway heartbeat: `heartbeat:main` / `heartbeat:isolated:<ts>`
     if (parts.length >= 2 && parts[0] === 'heartbeat') {
