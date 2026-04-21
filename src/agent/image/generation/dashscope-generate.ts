@@ -1,4 +1,4 @@
-import { QWEN_DEFAULT_IMAGE_MODEL } from './constants.js';
+import { DASHSCOPE_DEFAULT_IMAGE_MODEL } from './constants.js';
 import {
   registerImageGenerationProvider,
   type ImageGenerationProvider,
@@ -143,7 +143,7 @@ export async function generateDashScopeImages(params: {
 
   try {
     const n = Math.min(4, Math.max(1, params.count ?? 1));
-    const model = params.model?.trim() || QWEN_DEFAULT_IMAGE_MODEL;
+    const model = params.model?.trim() || DASHSCOPE_DEFAULT_IMAGE_MODEL;
     const body = {
       model,
       input: {
@@ -212,7 +212,7 @@ export async function generateDashScopeImages(params: {
 }
 
 export async function runDashScopeImageGeneration(req: ImageGenerationRequest & { apiKey: string }) {
-  if (req.provider !== 'qwen') {
+  if (req.provider !== 'dashscope') {
     throw new Error(`Unsupported image generation provider: ${req.provider}`);
   }
   return generateDashScopeImages({
@@ -226,25 +226,25 @@ export async function runDashScopeImageGeneration(req: ImageGenerationRequest & 
   });
 }
 
-export function buildQwenImageGenerationProvider(): ImageGenerationProvider {
+export function buildDashScopeImageGenerationProvider(): ImageGenerationProvider {
   return {
-    id: 'qwen',
-    label: 'Qwen (DashScope)',
-    defaultModel: QWEN_DEFAULT_IMAGE_MODEL,
-    models: [QWEN_DEFAULT_IMAGE_MODEL],
+    id: 'dashscope',
+    label: 'DashScope (Alibaba)',
+    defaultModel: DASHSCOPE_DEFAULT_IMAGE_MODEL,
+    models: [DASHSCOPE_DEFAULT_IMAGE_MODEL],
     capabilities: {
       supportsEdit: false,
       maxOutputImages: 4,
     },
     async isConfigured() {
       const { getApiKey } = await import('../../../providers/index.js');
-      return Boolean(await getApiKey('qwen'));
+      return Boolean(await getApiKey('dashscope'));
     },
     async generateImage(req) {
       const { getApiKey } = await import('../../../providers/index.js');
-      const apiKey = await getApiKey('qwen');
+      const apiKey = await getApiKey('dashscope');
       if (!apiKey) {
-        throw new Error('Qwen/DashScope API key missing (DASHSCOPE_API_KEY or QWEN_API_KEY)');
+        throw new Error('DashScope API key missing (set DASHSCOPE_API_KEY or providers.dashscope in models.json)');
       }
       return runDashScopeImageGeneration({
         ...req,
@@ -254,4 +254,4 @@ export function buildQwenImageGenerationProvider(): ImageGenerationProvider {
   };
 }
 
-registerImageGenerationProvider(buildQwenImageGenerationProvider());
+registerImageGenerationProvider(buildDashScopeImageGenerationProvider());

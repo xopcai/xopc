@@ -71,27 +71,20 @@ export function getModelsByProvider(provider: string): readonly Model<Api>[] {
 	return registry.getAll().filter(m => m.provider === provider);
 }
 
-/** Credential/UI providers not always present in pi-ai's static model table. */
-const ADDITIONAL_MANAGED_PROVIDER_IDS: readonly string[] = ['zhipu-cn', 'qwen'];
-
 export function getAllProviders(): string[] {
 	const registry = getModelRegistry();
 	const providers = new Set<string>();
-	
+
 	// Add built-in providers
 	for (const p of getPiAiProviders()) {
 		providers.add(p);
 	}
-	
+
 	// Add custom providers from registry
 	for (const m of registry.getAll()) {
 		providers.add(m.provider);
 	}
 
-	for (const id of ADDITIONAL_MANAGED_PROVIDER_IDS) {
-		providers.add(id);
-	}
-	
 	return Array.from(providers);
 }
 
@@ -205,22 +198,20 @@ export const PROVIDER_META: Record<string, ProviderMeta> = {
   'anthropic': { name: 'Anthropic Claude', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'google': { name: 'Google Gemini', category: 'common', supportsApiKey: true },
   'groq': { name: 'Groq (Fast Inference)', category: 'common', supportsApiKey: true },
-  'deepseek': { name: 'DeepSeek', category: 'common', supportsApiKey: true },
   'minimax': { name: 'MiniMax', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'minimax-cn': { name: 'MiniMax CN', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'kimi-coding': { name: 'Kimi For Coding', category: 'common', supportsApiKey: true, supportsOAuth: true },
-  /** DashScope / Qwen Portal; OAuth via gateway UI or `xopc auth login qwen`. */
-  'qwen': { name: 'Qwen (DashScope / Portal)', category: 'common', supportsApiKey: true, supportsOAuth: true },
   'xai': { name: 'xAI (Grok)', category: 'specialty', supportsApiKey: true },
   'mistral': { name: 'Mistral AI', category: 'specialty', supportsApiKey: true },
   'cerebras': { name: 'Cerebras', category: 'specialty', supportsApiKey: true },
   'openrouter': { name: 'OpenRouter (Multi-provider)', category: 'specialty', supportsApiKey: true },
   'huggingface': { name: 'Hugging Face', category: 'specialty', supportsApiKey: true },
   'opencode': { name: 'OpenCode', category: 'specialty', supportsApiKey: true },
+  'opencode-go': { name: 'OpenCode Go', category: 'specialty', supportsApiKey: true },
+  /** DashScope (Alibaba) — image, speech, STT; not an LLM KnownProvider. */
+  'dashscope': { name: 'DashScope (Alibaba)', category: 'specialty', supportsApiKey: true },
   /** International GLM (api.z.ai). Auth: API key (ZAI_API_KEY); no published OAuth for this HTTP API. */
   'zai': { name: 'Zhipu GLM (International · z.ai)', category: 'common', supportsApiKey: true },
-  /** China GLM (open.bigmodel.cn). Add models under this id in models.json; auth: ZHIPU_* / gateway key. */
-  'zhipu-cn': { name: 'Zhipu GLM (China · open.bigmodel.cn)', category: 'common', supportsApiKey: true },
   'amazon-bedrock': { name: 'Amazon Bedrock', category: 'enterprise', supportsApiKey: true },
   'azure-openai-responses': { name: 'Azure OpenAI', category: 'enterprise', supportsApiKey: true },
   'google-vertex': { name: 'Google Vertex AI', category: 'enterprise', supportsApiKey: true },

@@ -32,7 +32,7 @@
 | Metric | Value |
 |--------|-------|
 | Core | TypeScript on Node.js **>= 22** |
-| LLM layer | **20+** providers via `@mariozechner/pi-ai` |
+| LLM layer | **~23** built-in providers via `@mariozechner/pi-ai` (`KnownProvider`); more via `models.json` |
 | Tests | **vitest** (`src/**/__tests__/*.test.ts`) |
 
 ---
@@ -89,7 +89,7 @@ Also present (follow local patterns): `acp/`, `auth/`, `chat-commands/` (in-chat
 
 ## Model Registry Architecture
 
-`src/providers/index.ts` sits on **`@mariozechner/pi-ai`**: resolve models, map API keys from config/env, expose provider lists to CLI/UI. Provider list and categories live in **`PROVIDER_META`** (e.g. common / specialty / enterprise / oauth). Keys load at process start—restart after credential changes.
+`src/providers/index.ts` sits on **`@mariozechner/pi-ai`**: resolve models, map API keys from config/env, expose provider lists to CLI/UI. The built-in provider id set matches upstream **`KnownProvider`**; **`PROVIDER_META`** adds display names and categories (common / specialty / enterprise / oauth). Extra vendors are added only when present in `models.json`. Keys load at process start—restart after credential changes.
 
 | Function | Purpose |
 |----------|---------|
@@ -252,7 +252,7 @@ Use **`xopc agents list`**, **`xopc agents add`**, **`xopc agents delete`** to m
 
 | Variable | Purpose |
 |----------|---------|
-| `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`, … | Provider keys (at least one LLM key needed to run agents) |
+| Per-provider env vars | See `src/providers/env-keys.ts` **`PROVIDER_ENV_MAP`** (aligned with pi-ai, e.g. `OPENAI_API_KEY`, `ANTHROPIC_OAUTH_TOKEN` / `ANTHROPIC_API_KEY`, `AI_GATEWAY_API_KEY` / `VERCEL_AI_GATEWAY_API_KEY`, …). DashScope (image, speech, STT): `DASHSCOPE_API_KEY` (`dashscope` service id). Custom OpenAI-compatible vendors: configure in `models.json`. |
 | `TELEGRAM_BOT_TOKEN` | Telegram (if not only in config) |
 | `XOPC_CONFIG`, `XOPC_CONFIG_PATH` | Config file path |
 | `XOPC_SKILLS_STORE_URL` | Overrides `gateway.skillsStoreBaseUrl` (skills marketplace REST base) |

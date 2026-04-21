@@ -9,7 +9,7 @@ xopc 支持在对话中**接收图片**、通过 **`image` 工具**做**图像�
 | 字段 | 类型 | 作用 |
 |------|------|------|
 | `imageModel` | `string` 或 `{ primary, fallbacks? }` | **`image` 工具**及**主对话模型不支持视觉**时对入站图片做描述的模型链。 |
-| `imageGenerationModel` | `string` 或 `{ primary, fallbacks? }` | **`image_generate`** 使用的文生图模型链（如 `openai/gpt-image-1`、`qwen/wan2.6-t2i`）。 |
+| `imageGenerationModel` | `string` 或 `{ primary, fallbacks? }` | **`image_generate`** 使用的文生图模型链（如 `openai/gpt-image-1`、`dashscope/wan2.6-t2i`）。 |
 | `mediaMaxMb` | `number`（可选） | **`image` 工具**加载单张图片时的体积上限（MB）。 |
 
 若未填写 `imageModel` / `imageGenerationModel`，运行时会根据已配置的 Provider **自动推断**合理候选。

@@ -38,7 +38,7 @@ export const OpenAICompletionsCompatSchema = z.object({
 	requiresAssistantAfterToolResult: z.boolean().optional(),
 	requiresThinkingAsText: z.boolean().optional(),
 	requiresMistralToolIds: z.boolean().optional(),
-	thinkingFormat: z.enum(['openai', 'zai', 'qwen']).optional(),
+	thinkingFormat: z.enum(['openai', 'zai', 'dashscope']).optional(),
 	openRouterRouting: OpenRouterRoutingSchema.optional(),
 	vercelGatewayRouting: VercelGatewayRoutingSchema.optional(),
 	supportsStrictMode: z.boolean().optional(),
@@ -169,11 +169,13 @@ export interface ValidationResult {
 // ============================================
 
 const PROVIDER_ID_REGEX = /^[a-z0-9]([a-z0-9-_]*[a-z0-9])?$/;
+/** pi-ai KnownProvider ids — overriding in models.json requires baseUrl (see validation below). */
 const RESERVED_PROVIDER_IDS = new Set([
-	'openai', 'anthropic', 'google', 'groq', 'deepseek', 'minimax', 'mistral',
-	'xai', 'cerebras', 'openrouter', 'huggingface', 'opencode', 'zai', 'zhipu-cn',
-	'amazon-bedrock', 'azure-openai-responses', 'google-vertex', 'vercel-ai-gateway',
-	'github-copilot', 'openai-codex', 'google-gemini-cli', 'google-antigravity'
+	'amazon-bedrock', 'anthropic', 'azure-openai-responses', 'cerebras', 'github-copilot',
+	'google', 'google-antigravity', 'google-gemini-cli', 'google-vertex', 'groq',
+	'huggingface', 'kimi-coding', 'minimax', 'minimax-cn', 'mistral',
+	'openai', 'openai-codex', 'opencode', 'opencode-go', 'openrouter',
+	'vercel-ai-gateway', 'xai', 'zai',
 ]);
 
 // ============================================
