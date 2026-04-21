@@ -13,6 +13,7 @@ import {
   Palette,
   Plug,
   Search,
+  SlidersHorizontal,
   Users,
 } from 'lucide-react';
 
@@ -26,6 +27,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   channels: Plug,
   logs: FileText,
   settingsAppearance: Palette,
+  settingsAgentDefaults: SlidersHorizontal,
   settingsAgents: Users,
   settingsProviders: Cloud,
   settingsModels: Cpu,

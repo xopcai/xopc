@@ -18,11 +18,13 @@ export type Tab =
   | 'settingsGateway'
   | 'settingsHeartbeat'
   | 'settingsSearch'
+  | 'settingsAgentDefaults'
   | 'settingsAgents';
 
 export type SettingsSectionId =
   | 'appearance'
   | 'agent'
+  | 'agent-defaults'
   | 'providers'
   | 'models'
   | 'channels'

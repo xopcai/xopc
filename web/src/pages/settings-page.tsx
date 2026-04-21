@@ -6,7 +6,7 @@ import { HeartbeatSettingsPanel } from '@/features/settings/heartbeat-settings';
 import { ModelsSettingsPanel } from '@/features/settings/models-settings';
 import { VoiceSettingsPanel } from '@/features/settings/voice-settings';
 import { WebSearchSettingsPanel } from '@/features/settings/web-search-settings';
-import { AgentsSettingsPanel } from '@/features/settings/agents-settings';
+import { AgentSettingsPanel, AgentsSettingsPanel } from '@/features/settings/agents';
 import { ProvidersSettingsPanel } from '@/features/settings/providers-settings';
 import { messages } from '@/i18n/messages';
 import type { SettingsSectionId } from '@/navigation';
@@ -14,6 +14,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 
 const SECTIONS: SettingsSectionId[] = [
   'appearance',
+  'agent-defaults',
   'agents',
   'providers',
   'models',
@@ -41,6 +42,10 @@ export function SettingsPage() {
 
   if (id === 'appearance') {
     return <AppearanceSettingsPanel />;
+  }
+
+  if (id === 'agent-defaults') {
+    return <AgentSettingsPanel />;
   }
 
   if (id === 'agents') {
