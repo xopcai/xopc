@@ -16,7 +16,9 @@ function readRecentDirs(): string[] {
     const raw = localStorage.getItem(RECENT_DIRS_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as unknown;
-    return Array.isArray(parsed) ? parsed.filter((x): x is string => typeof x === 'string' && x.trim()) : [];
+    return Array.isArray(parsed)
+      ? parsed.filter((x): x is string => typeof x === 'string' && x.trim().length > 0)
+      : [];
   } catch {
     return [];
   }
