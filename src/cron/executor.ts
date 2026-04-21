@@ -375,6 +375,8 @@ export class DefaultJobExecutor implements JobExecutor {
         throw new Error('Job was aborted');
       }
 
+      await this.agentService.applyCronJobWorkingDirectory(sessionKey, job.workingDirectory);
+
       const jobModel = resolveIsolatedCronJobModel(job);
       if (jobModel) {
         const ok = await this.agentService.switchModelForSession(sessionKey, jobModel);

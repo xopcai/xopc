@@ -46,6 +46,11 @@ export interface JobData {
   sessionTarget?: CronSessionTarget;
   /** When set, isolated agent runs use this agent id in the session key (multi-agent). */
   agentId?: string;
+  /**
+   * Optional absolute workspace root for isolated agent runs (same semantics as chat working directory).
+   * Omit to use the effective agent profile default workspace.
+   */
+  workingDirectory?: string;
   payload: CronPayload;
   delivery?: CronDelivery;
   model?: string;
@@ -173,6 +178,7 @@ export interface AddJobOptions {
   timeout?: number;
   sessionTarget?: CronSessionTarget;
   agentId?: string;
+  workingDirectory?: string;
   payload: CronPayload;
   delivery?: CronDelivery;
   model?: string;

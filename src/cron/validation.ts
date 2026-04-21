@@ -50,6 +50,20 @@ function optionalTrimmedString(max: number, min = 1) {
 /** Optional agent id on create; empty string → undefined. */
 const optionalJobAgentId = optionalTrimmedString(64, 1);
 
+/** Optional absolute workspace path on create; empty string → undefined. */
+const optionalJobWorkingDirectory = optionalTrimmedString(4096, 1);
+
+/**
+ * PATCH: set string, or `null` / empty to clear `workingDirectory` on the job.
+ */
+const patchJobWorkingDirectory = z.preprocess((v) => {
+  if (v === null) return null;
+  if (v === undefined) return undefined;
+  if (typeof v !== 'string') return v;
+  const t = v.trim();
+  return t.length === 0 ? null : t;
+}, z.union([z.string().min(1).max(4096), z.null()]).optional());
+
 /**
  * PATCH: set string, or `null` / empty to clear `agentId` on the job.
  */
@@ -110,6 +124,7 @@ export const JobDataSchema = z
     updated_at: z.string().datetime(),
     sessionTarget: z.enum(['main', 'isolated']).optional(),
     agentId: optionalTrimmedString(64, 1),
+    workingDirectory: optionalJobWorkingDirectory,
     payload: CronPayloadSchema,
     delivery: CronDeliverySchema.optional(),
     model: optionalTrimmedString(100, 1),
@@ -125,6 +140,7 @@ export const AddJobRequestSchema = z.object({
   timeout: z.number().int().min(1000).max(300000).optional(),
   sessionTarget: z.enum(['main', 'isolated']).optional(),
   agentId: optionalJobAgentId,
+  workingDirectory: optionalJobWorkingDirectory,
   payload: CronPayloadSchema,
   delivery: CronDeliverySchema.optional(),
   model: optionalTrimmedString(100, 1),
@@ -139,6 +155,7 @@ export const UpdateJobRequestSchema = z.object({
   enabled: z.boolean().optional(),
   sessionTarget: z.enum(['main', 'isolated']).optional(),
   agentId: patchJobAgentId,
+  workingDirectory: patchJobWorkingDirectory,
   payload: CronPayloadSchema.optional(),
   delivery: CronDeliverySchema.optional(),
   model: optionalTrimmedString(100, 1),
