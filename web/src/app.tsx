@@ -1,6 +1,6 @@
 import { lazy, Suspense, useEffect } from 'react';
 import { I18nextProvider } from 'react-i18next';
-import { createHashRouter, Navigate, RouterProvider } from 'react-router-dom';
+import { createHashRouter, Navigate, RouterProvider, useParams } from 'react-router-dom';
 
 import { i18n } from '@/i18n/i18n';
 import { AppShell } from '@/components/shell/app-shell';
@@ -55,6 +55,12 @@ function SecondaryRouteFallback() {
       Loading…
     </div>
   );
+}
+
+function RedirectLegacySettingsAgentsDetail() {
+  const { agentId } = useParams();
+  const raw = typeof agentId === 'string' ? agentId.trim() : '';
+  return <Navigate to={raw ? `/agents/${encodeURIComponent(raw)}` : '/agents'} replace />;
 }
 
 function SettingsRouteFallback() {
@@ -118,6 +124,22 @@ const router = createHashRouter([
         ),
       },
       {
+        path: 'agents',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <AgentsSettingsDetailPage />
+          </Suspense>
+        ),
+      },
+      {
+        path: 'agents/:agentId',
+        element: (
+          <Suspense fallback={<SecondaryRouteFallback />}>
+            <AgentsSettingsDetailPage />
+          </Suspense>
+        ),
+      },
+      {
         path: 'apps',
         element: (
           <Suspense fallback={<SecondaryRouteFallback />}>
@@ -175,6 +197,14 @@ const router = createHashRouter([
             element: <Navigate to="/channels" replace />,
           },
           {
+            path: 'agents',
+            element: <Navigate to="/agents" replace />,
+          },
+          {
+            path: 'agents/:agentId',
+            element: <RedirectLegacySettingsAgentsDetail />,
+          },
+          {
             path: 'extensions/debug',
             element: (
               <Suspense fallback={<SettingsRouteFallback />}>
@@ -195,14 +225,6 @@ const router = createHashRouter([
             element: (
               <Suspense fallback={<SettingsRouteFallback />}>
                 <ExtensionSettingsPage />
-              </Suspense>
-            ),
-          },
-          {
-            path: 'agents/:agentId',
-            element: (
-              <Suspense fallback={<SettingsRouteFallback />}>
-                <AgentsSettingsDetailPage />
               </Suspense>
             ),
           },

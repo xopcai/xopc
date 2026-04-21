@@ -9,6 +9,7 @@ export type Tab =
   | 'cron'
   | 'skills'
   | 'channels'
+  | 'agents'
   | 'logs'
   | 'settingsAppearance'
   | 'settingsProviders'
@@ -54,5 +55,8 @@ export function messages(lang: StoredLanguage) {
 
 export function tabLabel(lang: StoredLanguage, tab: Tab): string {
   const m = messages(lang);
+  if (tab === 'settingsAgents') {
+    return m.nav.agents;
+  }
   return m.nav[tab];
 }

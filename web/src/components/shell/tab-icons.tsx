@@ -25,6 +25,7 @@ const TAB_ICONS: Record<Tab, LucideIcon> = {
   cron: Clock,
   skills: Layers,
   channels: Plug,
+  agents: Users,
   logs: FileText,
   settingsAppearance: Palette,
   settingsAgentDefaults: SlidersHorizontal,

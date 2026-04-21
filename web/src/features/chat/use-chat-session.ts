@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { flushSync } from 'react-dom';
 import { useLocation, useNavigate, useParams } from 'react-router-dom';
 import useSWR from 'swr';
@@ -224,6 +224,21 @@ export function useChatSession() {
 
   const isNewRoute = location.pathname.endsWith('/new');
   const decodedKey = sessionKeyParam ? decodeURIComponent(sessionKeyParam) : undefined;
+
+  /** `navigate('/chat/new', { state: { agentId } })` from the agents screen — set before session init runs. */
+  useLayoutEffect(() => {
+    if (!isNewRoute) return;
+    const st = location.state as { agentId?: string } | null | undefined;
+    const aid = typeof st?.agentId === 'string' ? st.agentId.trim().toLowerCase() : '';
+    if (!aid) return;
+    preferredAgentIdRef.current = aid;
+    setPreferredAgentId(aid);
+    try {
+      globalThis.localStorage?.setItem(WEBCHAT_AGENT_STORAGE_KEY, aid);
+    } catch {
+      /* noop */
+    }
+  }, [isNewRoute, location.state]);
   // Keep route key in sync during render so refresh-time resume callbacks are not gated
   // by effect scheduling order.
   routeSessionKeyRef.current = decodedKey ?? null;

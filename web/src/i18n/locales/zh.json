@@ -13,6 +13,7 @@
     "cron": "定时任务",
     "skills": "技能",
     "channels": "即时通讯",
+    "agents": "智能体",
     "apps": "应用",
     "logs": "日志",
     "settingsAppearance": "偏好设置",
@@ -24,7 +25,7 @@
     "settingsHeartbeat": "心跳",
     "settingsSearch": "网络搜索",
     "settingsAgentDefaults": "全局默认",
-    "settingsAgents": "智能体管理"
+    "settingsAgents": "智能体"
   },
   "appsPage": {
     "title": "应用",
@@ -105,7 +106,7 @@
     "gateway": "网关",
     "heartbeat": "心跳",
     "search": "网络搜索",
-    "agents": "智能体管理"
+    "agents": "智能体"
   },
   "settingsNavGroups": {
     "gateway": "连接与服务",
@@ -893,7 +894,7 @@
     }
   },
   "agentsSettings": {
-    "title": "智能体管理",
+    "title": "智能体",
     "subtitle": "管理 agents.list：工作区、默认路由与 Bootstrap 人设文件。",
     "needToken": "请先保存网关访问令牌后再管理智能体。",
     "loadError": "加载智能体列表失败",
@@ -1004,7 +1005,7 @@
     "listEmpty": "没有匹配的智能体。",
     "listNoAgentsYet": "暂无智能体，请先创建一个。",
     "listNewAgentCard": "新建智能体",
-    "listOpenEditor": "配置",
+    "listChatWithAgent": "聊天",
     "editorNavAria": "智能体编辑器分区",
     "skillsLibraryLink": "技能库",
     "footerSaveNotApplicable": "请在本页直接操作；底部「保存」用于身份、工具、技能与核心文件。"
