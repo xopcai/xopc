@@ -10,6 +10,7 @@ import { ScrollToBottomButton } from '@/features/chat/scroll-to-bottom-button';
 import { useChatSession } from '@/features/chat/use-chat-session';
 import { ClarifyPrompt } from '@/features/chat/clarify-prompt';
 import { messages } from '@/i18n/messages';
+import { cn } from '@/lib/cn';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useWorkspaceEditorAgentStore } from '@/stores/workspace-editor-agent-store';
@@ -20,6 +21,8 @@ export function ChatPage() {
   const token = useGatewayStore((s) => s.token);
 
   const scrollRef = useRef<HTMLDivElement>(null);
+  const welcomeDraftSeq = useRef(0);
+  const [welcomeDraftSeed, setWelcomeDraftSeed] = useState<{ id: number; text: string } | null>(null);
   const [atBottom, setAtBottom] = useState(true);
   const atBottomRef = useRef(true);
   const lastScrollTopRef = useRef(0);
@@ -82,6 +85,15 @@ export function ChatPage() {
     sessionManager,
   } = useChatSession();
 
+  useEffect(() => {
+    setWelcomeDraftSeed(null);
+  }, [sessionKey]);
+
+  const onPickWelcomePrompt = useCallback((text: string) => {
+    welcomeDraftSeq.current += 1;
+    setWelcomeDraftSeed({ id: welcomeDraftSeq.current, text });
+  }, []);
+
   const canSelectWorkingDirectory = useMemo(
     () =>
       Boolean(sessionKey) &&
@@ -98,6 +110,9 @@ export function ChatPage() {
     setWorkspaceEditorAgentId(displayAgentId);
     return () => setWorkspaceEditorAgentId('');
   }, [hasToken, displayAgentId, setWorkspaceEditorAgentId]);
+
+  /** Match `MessageList` empty welcome: tighter vertical padding so the first screen fits without scrolling. */
+  const compactWelcomeLayout = !showSessionLoading && chatMessages.length === 0 && !streaming;
 
   const chatHeadline = useMemo(() => {
     const titleKey = sessionRoutePending && decodedKey ? decodedKey : sessionKey;
@@ -228,7 +243,10 @@ export function ChatPage() {
           <div className="flex min-h-0 flex-1 flex-col">
             <div
               ref={scrollRef}
-              className="chat-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden py-4 [scrollbar-gutter:stable]"
+              className={cn(
+                'chat-messages min-h-0 flex-1 overflow-y-auto overflow-x-hidden [scrollbar-gutter:stable]',
+                compactWelcomeLayout ? 'pt-5 pb-2' : 'py-4',
+              )}
               onScroll={onScroll}
             >
               {showSessionLoading ? (
@@ -254,12 +272,18 @@ export function ChatPage() {
                     reasoningLevel={reasoningLevel}
                     scrollElementRef={scrollRef}
                     pinToBottom={atBottom}
+                    onPickWelcomePrompt={onPickWelcomePrompt}
                   />
                 </>
               )}
             </div>
 
-            <div className="sticky bottom-0 z-10 shrink-0 bg-surface-panel py-4">
+            <div
+              className={cn(
+                'sticky bottom-0 z-10 shrink-0 bg-surface-panel',
+                compactWelcomeLayout ? 'py-2.5' : 'py-4',
+              )}
+            >
               <ClarifyPrompt
                 prompt={clarifyPrompt}
                 submitting={clarifySubmitting}
@@ -284,6 +308,7 @@ export function ChatPage() {
                 streaming={streaming}
                 sessionKey={sessionKey}
                 sessionManager={sessionManager}
+                welcomeDraftSeed={welcomeDraftSeed}
                 canSelectWorkingDirectory={canSelectWorkingDirectory}
                 thinkingLevel={thinkingLevel}
                 showThinkingSelector={modelSupportsThinking}
