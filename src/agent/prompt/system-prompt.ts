@@ -22,6 +22,8 @@ import {
   stripFrontMatter,
 } from '../context/workspace.js';
 import type { MemorySnapshot } from '../memory/types.js';
+import { PROMPT_CACHE_BOUNDARY } from './cache-boundary.js';
+import type { PromptMode } from './types.js';
 
 // =============================================================================
 // Configuration (Internal)
@@ -44,8 +46,8 @@ export type MemoryCitationsMode = 'on' | 'off' | 'source-only';
 export interface SystemPromptOptions {
   /** Workspace bootstrap files */
   bootstrapFiles: WorkspaceBootstrapFile[];
-  /** Whether this is a subagent or cron job (reduced context) */
-  isMinimal?: boolean;
+  /** Which sections to include. Defaults to "full". */
+  promptMode?: PromptMode;
   /** Whether heartbeat is enabled */
   heartbeatEnabled?: boolean;
   /** Custom heartbeat prompt */
@@ -355,6 +357,14 @@ function buildSkillsSection(
 `;
 }
 
+function buildSafetySection(): string {
+  return `## Safety
+
+- You have no independent goals: do not pursue self-preservation, replication, resource acquisition, or power-seeking; avoid long-term plans beyond the user's request.
+- Prioritize safety and human oversight over completion; if instructions conflict, pause and ask; comply with stop/pause/audit requests and never bypass safeguards.
+- Do not manipulate or persuade anyone to expand access or disable safeguards. Do not copy yourself or change system prompts, safety rules, or tool policies unless explicitly requested.`;
+}
+
 /**
  * Build Problem Solving Workflow section
  *
@@ -494,7 +504,7 @@ export function buildSystemPrompt(
 ): string {
   const {
     bootstrapFiles,
-    isMinimal = false,
+    promptMode = 'full',
     heartbeatEnabled = false,
     heartbeatPrompt,
     availableTools = [],
@@ -507,6 +517,12 @@ export function buildSystemPrompt(
     skillsPromptMode = 'metadata-only',
     ttsSystemHint,
   } = options;
+
+  if (promptMode === 'none') {
+    return 'You are a personal AI assistant running inside xopc.';
+  }
+
+  const isMinimal = promptMode === 'minimal';
 
   const curatedUserFrozen = !!(curatedMemorySnapshot?.user?.trim());
   const hasCuratedSnapshot = !!(
@@ -549,6 +565,11 @@ export function buildSystemPrompt(
   // 6. Skills
   sections.push(buildSkillsSection(availableTools, skillsPromptMode));
 
+  // 6b. Safety (non-minimal only)
+  if (!isMinimal) {
+    sections.push(buildSafetySection());
+  }
+
   // 7. Problem Solving Workflow (non-minimal only) - Harness Engineering
   if (!isMinimal) {
     sections.push(buildProblemSolvingSection());
@@ -558,6 +579,9 @@ export function buildSystemPrompt(
   if (!isMinimal) {
     sections.push(buildAestheticSection());
   }
+
+  // Cache boundary — stable content above is a better prompt-cache prefix for supported providers
+  sections.push(PROMPT_CACHE_BOUNDARY);
 
   // 9. Heartbeat
   sections.push(buildHeartbeatSection(bootstrapFiles, heartbeatEnabled, heartbeatPrompt, userTimezone));
@@ -597,7 +621,7 @@ function _buildMinimalSystemPrompt(
 ): string {
   return buildSystemPrompt(workspaceDir, {
     bootstrapFiles,
-    isMinimal: true,
+    promptMode: 'minimal',
     heartbeatEnabled: false,
   });
 }

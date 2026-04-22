@@ -149,12 +149,14 @@ export class HeartbeatService {
       log.debug({ reasons: reasonSummary }, 'Heartbeat: skip (no HEARTBEAT path)');
       return;
     }
+    let heartbeatContent: string | undefined;
     try {
       const raw = await readFile(heartbeatPath, 'utf-8');
       if (isHeartbeatContentEmpty(raw)) {
         log.debug({ path: heartbeatPath, reasons: reasonSummary }, 'Heartbeat: skip (HEARTBEAT.md empty)');
         return;
       }
+      heartbeatContent = raw.trim();
     } catch {
       log.debug({ path: heartbeatPath, reasons: reasonSummary }, 'Heartbeat: HEARTBEAT.md missing; continuing');
     }
@@ -164,6 +166,9 @@ export class HeartbeatService {
       : 'heartbeat:main';
 
     let basePrompt = (cfg.prompt?.trim() || DEFAULT_PROMPT).trim();
+    if (heartbeatContent) {
+      basePrompt = `${basePrompt}\n\n---\nHEARTBEAT.md:\n${heartbeatContent}\n---`;
+    }
     basePrompt = appendCronEventLines(basePrompt, reasons);
     const prompt = `${basePrompt}\n\nCurrent time: ${new Date().toISOString()}`;
 
