@@ -13,7 +13,8 @@ function filterAgents(agents: GatewayAgentRow[], query: string): GatewayAgentRow
     const name = (ag.name ?? '').toLowerCase();
     const id = ag.id.toLowerCase();
     const ws = ag.workspace.toLowerCase();
-    return name.includes(q) || id.includes(q) || ws.includes(q);
+    const desc = (ag.description ?? '').toLowerCase();
+    return name.includes(q) || id.includes(q) || ws.includes(q) || desc.includes(q);
   });
 }
 
@@ -73,17 +74,18 @@ export function AgentsListGrid(props: {
         className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3"
         role="list"
       >
-        <li>
+        <li className="h-full min-h-0">
           <NewAgentCard a={a} busy={busy} onNewAgent={onNewAgent} />
         </li>
         {filtered.map((ag) => {
           const title = ag.name?.trim() ? ag.name.trim() : ag.id;
           const monoId = ag.id;
+          const descTrim = ag.description?.trim() ?? '';
           return (
-            <li key={ag.id}>
+            <li key={ag.id} className="h-full min-h-0">
               <div
                 className={cn(
-                  'flex h-full flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-panel p-4 shadow-sm transition-colors',
+                  'flex h-full min-h-0 flex-col gap-3 rounded-xl border border-edge-subtle bg-surface-panel p-4 shadow-sm transition-colors',
                   'hover:border-edge',
                 )}
               >
@@ -92,7 +94,7 @@ export function AgentsListGrid(props: {
                   disabled={busy}
                   onClick={() => onOpenAgent(ag.id)}
                   className={cn(
-                    'flex w-full flex-col gap-2 text-left transition-colors',
+                    'flex shrink-0 w-full flex-col gap-2 text-left transition-colors',
                     'rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',
                     'disabled:pointer-events-none disabled:opacity-50',
                   )}
@@ -118,16 +120,23 @@ export function AgentsListGrid(props: {
                       </p>
                     </div>
                   </div>
-                  <p className="line-clamp-2 text-xs leading-relaxed text-fg-muted" title={ag.workspace}>
-                    {ag.workspace}
+                  <p
+                    className={cn(
+                      'line-clamp-1 min-h-[1.3125rem] text-xs leading-relaxed',
+                      descTrim ? 'text-fg' : 'text-fg-muted/25',
+                    )}
+                    title={descTrim || undefined}
+                  >
+                    {descTrim || '\u00A0'}
                   </p>
                 </button>
+                <div className="min-h-0 min-w-0 flex-1" aria-hidden />
                 <button
                   type="button"
                   disabled={busy}
                   onClick={() => onChatWithAgent(ag.id)}
                   className={cn(
-                    'flex w-full items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold',
+                    'flex w-full shrink-0 items-center justify-center gap-2 rounded-full px-4 py-2.5 text-sm font-semibold',
                     'bg-accent-soft text-accent-fg transition-colors',
                     'hover:bg-accent/15',
                     'focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40',

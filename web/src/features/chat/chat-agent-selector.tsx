@@ -13,7 +13,7 @@ import { interaction } from '@/lib/interaction';
 import type { ChatAgentOption } from '@/features/chat/chat-agents-api';
 
 function haystack(a: ChatAgentOption): string {
-  return `${a.id} ${a.name ?? ''}`.toLowerCase();
+  return `${a.id} ${a.name ?? ''} ${a.description ?? ''}`.toLowerCase();
 }
 
 function agentsMatchingQuery(agents: ChatAgentOption[], query: string): ChatAgentOption[] {
@@ -128,10 +128,15 @@ export function ChatAgentSelector({
                       }}
                     >
                       <Check className={cn('size-4 shrink-0', isSel ? 'opacity-100' : 'opacity-0')} aria-hidden />
-                      <span className="min-w-0 flex-1 truncate">
-                        <span className="font-medium">{a.name?.trim() || a.id}</span>
+                      <span className="min-w-0 flex-1">
+                        <span className="block truncate font-medium">{a.name?.trim() || a.id}</span>
                         {a.name?.trim() ? (
-                          <span className="block text-xs text-fg-muted">{a.id}</span>
+                          <span className="block truncate font-mono text-xs text-fg-muted">{a.id}</span>
+                        ) : null}
+                        {a.description?.trim() ? (
+                          <span className="mt-0.5 line-clamp-2 text-xs leading-snug text-fg-muted">
+                            {a.description.trim()}
+                          </span>
                         ) : null}
                       </span>
                     </button>

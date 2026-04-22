@@ -1038,6 +1038,8 @@
     "editAgent": "编辑条目",
     "editAgentHint": "将更新网关配置中的 agents.list；路径会展开 ~ 为用户目录。",
     "displayName": "显示名称",
+    "agentDescription": "描述",
+    "agentDescriptionPlaceholder": "简短说明，会显示在智能体卡片和选择器中（可选）。",
     "workspacePath": "Markdown 工作区",
     "modelPrimary": "模型（主）",
     "modelClear": "清除",

@@ -39,6 +39,7 @@ const EDITABLE_BOOTSTRAP_NAMES = new Set<string>([
 export type GatewayAgentRow = {
   id: string;
   name?: string;
+  description?: string;
   workspace: string;
   bootstrapDir: string;
   model?: { primary?: string; fallbacks?: string[] };
@@ -95,6 +96,7 @@ export function listGatewayAgents(cfg: Config): GatewayAgentsListResponse {
     agents.push({
       id,
       ...(entry?.name?.trim() ? { name: entry.name.trim() } : {}),
+      ...(entry?.description?.trim() ? { description: entry.description.trim() } : {}),
       workspace: profile.resolvedWorkspacePath,
       bootstrapDir: resolveAgentBootstrapDir(cfg, id),
       ...(model ? { model } : {}),
@@ -122,6 +124,7 @@ export type CreateAgentBody = {
   workspace: string;
   model?: string;
   agentDir?: string;
+  description?: string;
 };
 
 export type AgentAdminHttpStatus = 400 | 404 | 409;
@@ -164,6 +167,7 @@ export function prepareCreateAgent(
     workspace: wsAbs,
     ...(body.model?.trim() ? { model: body.model.trim() } : {}),
     ...(body.agentDir?.trim() ? { agentDir: body.agentDir.trim() } : {}),
+    ...(body.description?.trim() ? { description: body.description.trim() } : {}),
   });
   return { ok: true, data: { nextConfig: next, agentId, workspace: wsAbs } };
 }
@@ -181,6 +185,7 @@ export async function finalizeCreateAgentDirs(cfg: Config, agentId: string): Pro
 
 export type UpdateAgentBody = {
   name?: string;
+  description?: string | null;
   workspace?: string;
   model?: string | null;
   agentDir?: string | null;
@@ -214,6 +219,13 @@ export function prepareUpdateAgent(
     const n = body.name.trim();
     if (n) {
       entry.name = n;
+    }
+  }
+  if (body.description !== undefined) {
+    if (body.description === null || String(body.description).trim() === '') {
+      delete entry.description;
+    } else {
+      entry.description = String(body.description).trim();
     }
   }
   if (body.workspace !== undefined) {

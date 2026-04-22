@@ -47,11 +47,13 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     const workspace = typeof body.workspace === 'string' ? body.workspace : '';
     const model = typeof body.model === 'string' ? body.model : undefined;
     const agentDir = typeof body.agentDir === 'string' ? body.agentDir : undefined;
+    const description = typeof body.description === 'string' ? body.description : undefined;
     const prep = prepareCreateAgent(service.currentConfig as Config, {
       name,
       workspace,
       model,
       agentDir,
+      ...(description !== undefined ? { description } : {}),
     });
     if (prep.ok === false) {
       return c.json({ ok: false, error: { message: prep.error } }, prep.status ?? 400);
@@ -92,8 +94,17 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
           ? body.toolsDisable.map((x: unknown) => String(x).trim()).filter(Boolean)
           : undefined;
 
+    const descriptionPatch: string | null | undefined = Object.hasOwn(body, 'description')
+      ? body.description === null
+        ? null
+        : typeof body.description === 'string'
+          ? body.description
+          : undefined
+      : undefined;
+
     const prep = prepareUpdateAgent(service.currentConfig as Config, id, {
       name: typeof body.name === 'string' ? body.name : undefined,
+      ...(descriptionPatch !== undefined ? { description: descriptionPatch } : {}),
       workspace: typeof body.workspace === 'string' ? body.workspace : undefined,
       model:
         body.model === null

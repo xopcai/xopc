@@ -13,6 +13,7 @@ export type GatewayAgentToolsInfo = {
 export type GatewayAgentRow = {
   id: string;
   name?: string;
+  description?: string;
   workspace: string;
   bootstrapDir: string;
   model?: { primary?: string; fallbacks?: string[] };

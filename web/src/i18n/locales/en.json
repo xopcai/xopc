@@ -1038,6 +1038,8 @@
     "editAgent": "Edit entry",
     "editAgentHint": "Updates agents.list on the gateway. Paths are expanded (~ → home).",
     "displayName": "Display name",
+    "agentDescription": "Description",
+    "agentDescriptionPlaceholder": "Short summary shown on agent cards and in pickers (optional).",
     "workspacePath": "Markdown workspace",
     "modelPrimary": "Model (primary)",
     "modelClear": "Clear",

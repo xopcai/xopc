@@ -75,6 +75,7 @@ export async function updateGatewayAgent(
   id: string,
   body: {
     name?: string;
+    description?: string | null;
     workspace?: string;
     model?: string | null;
     agentDir?: string | null;

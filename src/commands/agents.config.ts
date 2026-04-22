@@ -29,6 +29,7 @@ export function applyAgentConfig(
   params: {
     agentId: string;
     name?: string;
+    description?: string;
     workspace?: string;
     agentDir?: string;
     model?: string;
@@ -43,6 +44,7 @@ export function applyAgentConfig(
     ...base,
     enabled: base.enabled ?? true,
     ...(name ? { name } : {}),
+    ...(params.description?.trim() ? { description: params.description.trim() } : {}),
     ...(params.workspace ? { workspace: params.workspace } : {}),
     ...(params.agentDir ? { agentDir: params.agentDir } : {}),
     ...(params.model ? { model: params.model } : {}),
