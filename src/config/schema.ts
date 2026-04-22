@@ -161,6 +161,8 @@ export const AgentConfigSchema = z.object({
   /** When true, this entry is the default routing agent. */
   default: z.boolean().optional(),
   name: z.string().optional(),
+  /** Short human-readable summary for UIs (gateway console, pickers). */
+  description: z.string().max(4000).optional(),
   enabled: z.boolean().default(true),
   /** Per-agent workspace root (`~` expanded at runtime). */
   workspace: z.string().optional(),
