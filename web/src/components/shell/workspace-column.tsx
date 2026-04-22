@@ -8,11 +8,17 @@ import {
   type FileTreeAction,
   type TreeEntry,
 } from '@/features/file-tree/file-tree';
+import { base64ToArrayBuffer, inferMimeTypeFromFileName } from '@/features/chat/attachment-utils-core';
 import {
+  downloadBinaryFile,
   downloadTextFile,
   readWorkspaceFile,
+  readWorkspaceFileBase64,
 } from '@/features/workspace/workspace-api';
-import { getFileName } from '@/features/workspace/workspace-file-preview-dialog';
+import {
+  getFileName,
+  shouldReadWorkspaceFileAsBase64Path,
+} from '@/features/workspace/workspace-file-preview-dialog';
 import { useWorkspaceTree } from '@/features/workspace/use-workspace-tree';
 import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
@@ -105,8 +111,16 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
           break;
         case 'download':
           try {
-            const { content } = await readWorkspaceFile(entry.path, workspaceReadOpts);
-            downloadTextFile(getFileName(entry.path), content);
+            const fileName = getFileName(entry.path);
+            if (shouldReadWorkspaceFileAsBase64Path(entry.path)) {
+              const { contentBase64 } = await readWorkspaceFileBase64(entry.path, workspaceReadOpts);
+              const buf = base64ToArrayBuffer(contentBase64);
+              const mime = inferMimeTypeFromFileName(fileName) ?? 'application/octet-stream';
+              downloadBinaryFile(fileName, buf, mime);
+            } else {
+              const { content } = await readWorkspaceFile(entry.path, workspaceReadOpts);
+              downloadTextFile(fileName, content);
+            }
           } catch {
             /* ignore */
           }

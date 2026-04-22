@@ -6,6 +6,7 @@ import { HtmlWorkspaceEditor } from '@/components/html/html-workspace-editor';
 import { MarkdownSplit } from '@/components/markdown/markdown-split';
 import { MarkdownView } from '@/components/markdown/markdown-view';
 import {
+  arrayBufferToBase64,
   base64ToArrayBuffer,
   EXCEL_PREVIEW_MAX_COLS,
   EXCEL_PREVIEW_MAX_ROWS,
@@ -59,6 +60,55 @@ const WORKSPACE_PREVIEW_BINARY_ONLY = new Set([
   '.wav',
 ]);
 
+/** Raster / binary image: must use read-workspace base64, not UTF-8 text (use plain read for .svg in download). */
+const WORKSPACE_RASTER_IMAGE_EXTS = new Set([
+  '.png',
+  '.jpg',
+  '.jpeg',
+  '.gif',
+  '.webp',
+  '.bmp',
+  '.ico',
+  '.tif',
+  '.tiff',
+  '.avif',
+  '.heic',
+  '.heif',
+  '.jxl',
+]);
+
+function isRasterImageExt(ext: string): boolean {
+  return WORKSPACE_RASTER_IMAGE_EXTS.has(ext.toLowerCase());
+}
+
+/** In-panel preview: show as <img> (incl. SVG and HEIC; HEIC may not decode in all browsers). */
+function isImagePreviewExt(ext: string): boolean {
+  const l = ext.toLowerCase();
+  if (l === '.svg' || l === '.svgz') {
+    return true;
+  }
+  return isRasterImageExt(l);
+}
+
+/**
+ * `readWorkspaceFile` (UTF-8) corrupts binary; use base64 for download and image preview load.
+ * SVG (UTF-8 XML) is listed under {@link isImagePreviewExt} for <img> preview but is **not** included
+ * here so the project-files menu can still download via a single text read.
+ */
+export function shouldReadWorkspaceFileAsBase64Path(path: string): boolean {
+  const ext = getFileExtension(path);
+  if (isRasterImageExt(ext)) {
+    return true;
+  }
+  if (ext === '.pdf' || ext === '.xlsx' || ext === '.xls' || ext === '.docx' || ext === '.pptx') {
+    return true;
+  }
+  if (WORKSPACE_PREVIEW_BINARY_ONLY.has(ext)) {
+    return true;
+  }
+  return false;
+}
+
 function formatWorkspaceFileMtime(mtimeMs: number, language: 'en' | 'zh'): string {
   return new Intl.DateTimeFormat(language === 'zh' ? 'zh-CN' : 'en', {
     dateStyle: 'medium',
@@ -84,7 +134,7 @@ function fillTemplate(template: string, params: Record<string, string | number>)
   return s;
 }
 
-type BinaryPreviewKind = 'pdf' | 'excel' | 'docx' | 'pptx' | 'binaryOnly';
+type BinaryPreviewKind = 'pdf' | 'excel' | 'docx' | 'pptx' | 'binaryOnly' | 'image';
 
 export interface WorkspaceFilePreviewPanelProps {
   filePath: string | null;
@@ -197,6 +247,8 @@ export function WorkspaceFilePreviewPanel({
       loadBinary('pptx');
     } else if (WORKSPACE_PREVIEW_BINARY_ONLY.has(ext)) {
       loadBinary('binaryOnly');
+    } else if (isImagePreviewExt(ext)) {
+      loadBinary('image');
     } else {
       void readWorkspaceFile(filePath, readOpts)
         .then(({ content: text, mtimeMs: mt }) => {
@@ -260,7 +312,9 @@ export function WorkspaceFilePreviewPanel({
     setExcelTruncated(false);
 
     if (!binaryBuffer || !filePath || !previewKind) return;
-    if (previewKind === 'binaryOnly' || previewKind === 'text' || previewKind === 'pptx') return;
+    if (previewKind === 'binaryOnly' || previewKind === 'text' || previewKind === 'pptx' || previewKind === 'image') {
+      return;
+    }
 
     const el = binaryPreviewRef.current;
     if (!el) return;
@@ -419,6 +473,18 @@ export function WorkspaceFilePreviewPanel({
           openSystemLabel={m.workspace.openSystemApp}
           onOpenWithSystemApp={() => void handleOpenWithSystemApp()}
           canOpenWithSystemApp={showSystemOpen}
+        />
+      </div>
+    );
+  } else if (binaryBuffer && previewKind === 'image') {
+    const mime = inferMimeTypeFromFileName(name) ?? 'image/png';
+    const src = `data:${mime};base64,${arrayBufferToBase64(binaryBuffer)}`;
+    body = (
+      <div className="flex min-h-0 flex-1 items-center justify-center overflow-auto bg-surface-base px-3 py-4 dark:bg-surface-hover/20">
+        <img
+          src={src}
+          alt=""
+          className="max-h-[min(100%,calc(100dvh-9rem))] w-auto max-w-full object-contain"
         />
       </div>
     );
