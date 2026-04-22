@@ -130,7 +130,6 @@ export function AgentsListGrid(props: {
                     {descTrim || '\u00A0'}
                   </p>
                 </button>
-                <div className="min-h-0 min-w-0 flex-1" aria-hidden />
                 <button
                   type="button"
                   disabled={busy}
