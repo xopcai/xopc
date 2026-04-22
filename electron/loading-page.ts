@@ -1,10 +1,28 @@
 /**
  * Minimal startup screen shown while the embedded gateway process becomes healthy.
  * Loaded as a data: URL so no extra asset packaging is required.
+ *
+ * Copy mirrors web default-locale rule: `en` / `en-*` → English UI; otherwise Chinese.
  */
-export function getLoadingPageDataUrl(): string {
+
+function uiLangFromAppLocale(locale: string): 'en' | 'zh' {
+  const t = locale.trim().toLowerCase().replace(/_/g, '-');
+  if (!t || t === 'en' || t.startsWith('en-')) return 'en';
+  return 'zh';
+}
+
+export function getLoadingPageDataUrl(appLocale: string): string {
+  const lang = uiLangFromAppLocale(appLocale || 'en');
+  const isEn = lang === 'en';
+  const htmlLang = isEn ? 'en' : 'zh-CN';
+  const title = isEn ? 'Starting local gateway…' : '正在启动本地网关…';
+  const hint = isEn ? 'This may take a few seconds on first launch.' : '首次启动可能需要几秒钟。';
+  const failTitle = isEn ? 'Could not start' : '无法启动';
+  const failSub = isEn ? 'The app will close. You can restart after fixing the issue.' : '应用将退出。处理问题后可重新打开。';
+  const unknownErr = isEn ? 'Unknown error' : '未知错误';
+
   const html = `<!DOCTYPE html>
-<html lang="en">
+<html lang="${htmlLang}">
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -19,7 +37,7 @@ export function getLoadingPageDataUrl(): string {
       align-items: center;
       justify-content: center;
       padding: 2rem;
-      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+      font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, "PingFang SC", "Microsoft YaHei", sans-serif;
       background: #0f172a;
       color: #e2e8f0;
     }
@@ -68,28 +86,31 @@ export function getLoadingPageDataUrl(): string {
 <body>
   <div class="card">
     <div class="spinner" aria-hidden="true"></div>
-    <h1 id="title">Starting local gateway…</h1>
-    <p id="hint">This may take a few seconds on first launch.</p>
+    <h1 id="title">${title}</h1>
+    <p id="hint">${hint}</p>
     <p id="status" style="display:none"></p>
     <p id="sub" style="display:none"></p>
   </div>
   <script>
     (function () {
+      var failTitle = ${JSON.stringify(failTitle)};
+      var failSub = ${JSON.stringify(failSub)};
+      var unknownErr = ${JSON.stringify(unknownErr)};
       if (!window.electronAPI || !window.electronAPI.startup || typeof window.electronAPI.startup.onFailed !== 'function') return;
       window.electronAPI.startup.onFailed(function (d) {
         var st = document.getElementById('status');
         var sub = document.getElementById('sub');
-        var title = document.getElementById('title');
+        var titleEl = document.getElementById('title');
         var hint = document.getElementById('hint');
-        if (title) title.textContent = 'Could not start';
+        if (titleEl) titleEl.textContent = failTitle;
         if (hint) hint.style.display = 'none';
         if (st) {
           st.style.display = 'block';
-          st.textContent = d && d.message ? d.message : 'Unknown error';
+          st.textContent = d && d.message ? d.message : unknownErr;
         }
         if (sub) {
           sub.style.display = 'block';
-          sub.textContent = 'The app will close. You can restart after fixing the issue.';
+          sub.textContent = failSub;
         }
       });
     })();

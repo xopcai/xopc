@@ -165,7 +165,7 @@ function createWindow(): void {
     const embed = shouldEmbedGateway();
     try {
       if (embed) {
-        void win.loadURL(getLoadingPageDataUrl());
+        void win.loadURL(getLoadingPageDataUrl(app.getLocale()));
       }
       const load = await resolveWindowLoad();
       if (gatewayExitedUnexpectedly) {
