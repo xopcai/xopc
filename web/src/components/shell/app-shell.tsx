@@ -145,7 +145,7 @@ export function AppShell() {
               <div
                 key={routeKey}
                 className={cn(
-                  'page-enter flex min-h-0 flex-1 flex-col',
+                  'page-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]',
                   routeKey === 'settings' && 'page-enter--gentle',
                 )}
               >

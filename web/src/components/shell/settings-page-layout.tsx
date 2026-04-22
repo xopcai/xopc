@@ -1,6 +1,6 @@
 import { ArrowLeft } from 'lucide-react';
 import { memo, useCallback, useState, type CSSProperties } from 'react';
-import { Link, NavLink, Outlet } from 'react-router-dom';
+import { Link, NavLink, Outlet, useLocation } from 'react-router-dom';
 
 import { APP_CHROME_DRAG_CLASS, APP_CHROME_NO_DRAG_CLASS } from '@/components/shell/app-chrome';
 import { TabIcon } from '@/components/shell/tab-icons';
@@ -8,8 +8,25 @@ import { messages, tabLabel } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ExtensionSettingsNav } from '@/features/extensions/extension-settings-nav';
 import { pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
+import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path';
+import { SETTINGS_BACK_PATH_STATE_KEY } from '@/features/settings/settings-nav-state';
 import { useLocaleStore } from '@/stores/locale-store';
 import { useSidebarStore } from '@/stores/sidebar-store';
+
+function resolveSettingsBackTarget(state: unknown): string {
+  if (!state || typeof state !== 'object') {
+    return '/chat';
+  }
+  const raw = (state as Record<string, unknown>)[SETTINGS_BACK_PATH_STATE_KEY];
+  if (typeof raw !== 'string') {
+    return '/chat';
+  }
+  const path = raw.trim();
+  if (!path.startsWith('/') || path.startsWith('//')) {
+    return '/chat';
+  }
+  return path;
+}
 
 /** Aligned with `SidebarNav` secondary links (§4.3 — same rail rhythm as main app sidebar). */
 function settingsNavLinkClass({ isActive }: { isActive: boolean }) {
@@ -34,6 +51,7 @@ const backLinkClass = cn(
 export const SettingsPageLayout = memo(function SettingsPageLayout() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
+  const location = useLocation();
   const expandedWidthPx = useSidebarStore((s) => s.expandedWidthPx);
   const setExpandedWidthPx = useSidebarStore((s) => s.setExpandedWidthPx);
   const [widthResizing, setWidthResizing] = useState(false);
@@ -68,15 +86,23 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
     [setExpandedWidthPx],
   );
 
+  const backTo = resolveSettingsBackTarget(location.state);
+  const backLabel =
+    backTo === '/chat'
+      ? m.sidebar.backToApp
+      : backTo === AGENTS_APP_LIST_PATH
+        ? m.sidebar.backToAgents
+        : m.sidebar.back;
+
   const backControl = (
     <Link
-      to="/chat"
+      to={backTo}
       replace={false}
       className={cn(backLinkClass, APP_CHROME_NO_DRAG_CLASS)}
-      title={m.sidebar.backToApp}
+      title={backLabel}
     >
       <ArrowLeft className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
-      <span>{m.sidebar.backToApp}</span>
+      <span>{backLabel}</span>
     </Link>
   );
 

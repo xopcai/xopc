@@ -1,8 +1,10 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
-import { useNavigate, useParams, useSearchParams } from 'react-router-dom';
+import { Plus, Search, SlidersHorizontal } from 'lucide-react';
+import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import useSWR from 'swr';
 import { useDebouncedCallback } from 'use-debounce';
 
+import { Button } from '@/components/ui/button';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
 import {
   createGatewayAgent,
@@ -21,11 +23,13 @@ import {
   type SkillCatalogRow,
 } from '@/features/settings/agents-admin-api';
 import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
+import { SETTINGS_BACK_PATH_STATE_KEY } from '@/features/settings/settings-nav-state';
 import { suggestWorkspaceFromAgentName } from '@/features/settings/suggest-agent-workspace';
 import { listJobs, updateJob, type CronJob } from '@/features/cron/cron-api';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+import { usePageHeaderStore } from '@/stores/page-header-store';
 
 import { AgentsEditorModal } from './agents-editor-modal';
 import { AgentsListGrid } from './agents-list-grid';
@@ -50,6 +54,8 @@ export function AgentsSettingsPanel() {
   const [searchParams] = useSearchParams();
   const navigate = useNavigate();
   const { agentId: routeAgentId } = useParams<{ agentId?: string }>();
+  const setPageHeader = usePageHeaderStore((s) => s.setPageHeader);
+  const clearPageHeader = usePageHeaderStore((s) => s.clearPageHeader);
 
   const agentsSwrKey = hasToken ? 'settings-gateway-agents' : null;
   const {
@@ -202,7 +208,10 @@ export function AgentsSettingsPanel() {
     if (searchParams.get('panel') !== 'defaults') {
       return;
     }
-    navigate('/settings/agent-defaults', { replace: true });
+    navigate('/settings/agent-defaults', {
+      replace: true,
+      state: { [SETTINGS_BACK_PATH_STATE_KEY]: AGENTS_APP_LIST_PATH },
+    });
   }, [searchParams, navigate]);
 
   const selected = useMemo(
@@ -420,13 +429,84 @@ export function AgentsSettingsPanel() {
     });
   }, [createName]);
 
-  function openAddAgentModal() {
+  const openAddAgentModal = useCallback(() => {
     createWorkspaceSuggestedRef.current = '';
     setCreateName('');
     setCreateWorkspace('');
     setCreateModel('');
     setAddAgentModalOpen(true);
-  }
+  }, []);
+
+  const globalDefaultsTitle = m.settingsSections['agent-defaults'];
+
+  const agentsHeaderEnd = useMemo(
+    () => (
+      <div className="flex min-w-0 flex-1 flex-wrap items-center justify-end gap-2">
+        <Button asChild variant="secondary" className="shrink-0 gap-2">
+          <Link
+            to="/settings/agent-defaults"
+            title={globalDefaultsTitle}
+            state={{ [SETTINGS_BACK_PATH_STATE_KEY]: AGENTS_APP_LIST_PATH }}
+          >
+            <SlidersHorizontal className="size-4 shrink-0" strokeWidth={1.75} aria-hidden />
+            {globalDefaultsTitle}
+          </Link>
+        </Button>
+        <label className="relative flex min-h-9 min-w-0 max-w-sm cursor-text items-center rounded-pill border border-edge bg-surface-base py-1.5 pl-9 pr-3 shadow-surface dark:bg-surface-hover/40 sm:max-w-md">
+          <Search
+            className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-fg-disabled"
+            strokeWidth={1.75}
+            aria-hidden
+          />
+          <input
+            type="search"
+            role="searchbox"
+            enterKeyHint="search"
+            value={listSearchQuery}
+            onChange={(e) => setListSearchQuery(e.target.value)}
+            placeholder={a.listSearchPlaceholder}
+            autoComplete="off"
+            spellCheck={false}
+            aria-label={a.listSearchPlaceholder}
+            className="min-w-0 flex-1 appearance-none border-0 bg-transparent py-0.5 text-sm leading-normal text-fg caret-current placeholder:text-fg-disabled focus:border-0 focus:shadow-none focus:outline-none focus:ring-0 focus-visible:outline-none"
+          />
+        </label>
+        <Button
+          type="button"
+          variant="primary"
+          className="shrink-0 gap-2"
+          aria-label={a.addAgentAria}
+          disabled={busy}
+          onClick={() => openAddAgentModal()}
+        >
+          <Plus className="size-4" strokeWidth={1.75} aria-hidden />
+          {a.addAgent}
+        </Button>
+      </div>
+    ),
+    [
+      a.addAgent,
+      a.addAgentAria,
+      a.listSearchPlaceholder,
+      busy,
+      globalDefaultsTitle,
+      listSearchQuery,
+      openAddAgentModal,
+    ],
+  );
+
+  useLayoutEffect(() => {
+    if (!hasToken) {
+      clearPageHeader();
+      return () => clearPageHeader();
+    }
+    setPageHeader({
+      startExtra: null,
+      main: null,
+      end: agentsHeaderEnd,
+    });
+    return () => clearPageHeader();
+  }, [agentsHeaderEnd, clearPageHeader, hasToken, setPageHeader]);
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
@@ -761,7 +841,7 @@ export function AgentsSettingsPanel() {
 
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
-      <AgentsSettingsHeader a={a} data={data} loading={loading} busy={busy} onOpenAddAgent={openAddAgentModal} />
+      <AgentsSettingsHeader a={a} />
 
       {displayError ? (
         <div className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200">
@@ -776,7 +856,6 @@ export function AgentsSettingsPanel() {
           a={a}
           agents={data.agents}
           searchQuery={listSearchQuery}
-          onSearchQueryChange={setListSearchQuery}
           onOpenAgent={(id) => navigate(agentsAppDetailPath(id))}
           onChatWithAgent={(id) =>
             navigate('/chat/new', { state: { agentId: id.trim().toLowerCase() } })

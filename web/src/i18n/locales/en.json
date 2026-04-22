@@ -180,6 +180,8 @@
     "taskRenameSave": "Save",
     "taskRenameCancel": "Cancel",
     "backToApp": "Back to app",
+    "backToAgents": "Back to agents",
+    "back": "Back",
     "helpDocs": "Documentation",
     "sessionChannelFilterAria": "Filter tasks: web app or IM channels",
     "sessionTasksTab": "Tasks",
