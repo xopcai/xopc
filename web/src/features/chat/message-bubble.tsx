@@ -359,10 +359,11 @@ export const MessageBubble = memo(function MessageBubble({
         ) : null}
 
         <div
+          dir={isUser ? 'ltr' : undefined}
           className={cn(
             'min-w-0 text-sm leading-relaxed text-fg',
             isUser &&
-              'rounded-xl bg-accent-soft/55 px-4 py-3 text-right dark:bg-accent-soft/35',
+              'rounded-xl bg-accent-soft/55 px-4 py-3 text-left dark:bg-accent-soft/35',
             isUser && message.attachments?.length
               ? 'min-w-[min(16rem,90vw)] max-w-[min(85%,var(--max-width-chat))]'
               : '',
