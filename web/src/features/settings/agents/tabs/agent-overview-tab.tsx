@@ -80,6 +80,7 @@ export function AgentOverviewTab(props: {
               <div className="flex flex-wrap items-stretch gap-2">
                 <ModelSelector
                   className="min-w-0 flex-1"
+                  popoverContentClassName="z-[70]"
                   value={editModel}
                   disabled={busy}
                   placeholder={chat.modelPlaceholder}
