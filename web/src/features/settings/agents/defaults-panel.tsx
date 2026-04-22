@@ -4,13 +4,19 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import { Button } from '@/components/ui/button';
 import { ModelSelector } from '@/features/chat/model-selector';
 import { useGatewayConfigSwr } from '@/features/gateway/gateway-config-swr';
-import { parseAgentDefaultsFromConfig, patchAgentDefaults, type AgentDefaultsState } from '@/features/settings/config-api';
+import {
+  parseAgentDefaultsFromConfig,
+  parseParamsJsonForSave,
+  patchAgentDefaults,
+  type AgentDefaultsState,
+} from '@/features/settings/config-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
-import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
-import { cn } from '@/lib/cn';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
+
+import { AgentDefaultsExtraFields } from './agent-defaults-extra';
+import { inputClassName, selectClassName } from './defaults-field-styles';
 
 const THINKING_KEYS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive'] as const;
 
@@ -30,19 +36,6 @@ function Field({
       <p className="text-xs leading-relaxed text-fg-subtle">{description}</p>
     </div>
   );
-}
-
-function inputClassName(): string {
-  return cn(
-    'w-full rounded-lg border border-edge bg-surface-panel px-3 py-2 text-sm text-fg',
-    'placeholder:text-fg-subtle',
-    settingsInputFocusClass,
-    'dark:border-edge',
-  );
-}
-
-function selectClassName(): string {
-  return cn(selectControlBaseClass, nativeSelectMaxWidthClass);
 }
 
 export function AgentSettingsPanel() {
@@ -102,6 +95,18 @@ export function AgentSettingsPanel() {
     setError(null);
     setSaveOk(false);
     try {
+      try {
+        void parseParamsJsonForSave(form.paramsJson);
+      } catch (e) {
+        setError(
+          e instanceof SyntaxError
+            ? a.advanced.paramsInvalidJson
+            : e instanceof Error
+              ? e.message
+              : a.advanced.paramsInvalidJson,
+        );
+        return;
+      }
       await patchAgentDefaults(form);
       dirtyRef.current = false;
       setSaveOk(true);
@@ -111,7 +116,7 @@ export function AgentSettingsPanel() {
     } finally {
       setSaving(false);
     }
-  }, [form, saving, a.saveError]);
+  }, [form, saving, a.saveError, a.advanced]);
 
   const pageTitle = m.settingsSections['agent-defaults'];
 
@@ -481,6 +486,8 @@ export function AgentSettingsPanel() {
           </Field>
           </div>
         </SettingsFormSection>
+
+        <AgentDefaultsExtraFields a={a} chat={chat} form={form} update={update} />
       </div>
     </div>
   );

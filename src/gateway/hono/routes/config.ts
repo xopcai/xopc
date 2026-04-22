@@ -117,6 +117,335 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
           }
         }
       }
+
+      const dPatch = body.agents.defaults as Record<string, unknown>;
+      const def = config.agents.defaults as Record<string, unknown>;
+
+      if (dPatch.maxTaskDurationMs !== undefined) {
+        const v = dPatch.maxTaskDurationMs;
+        if (v === null) {
+          delete def.maxTaskDurationMs;
+        } else if (typeof v === 'number' && Number.isFinite(v)) {
+          const ms = Math.floor(v);
+          if (ms >= 60_000 && ms <= 14_400_000) {
+            def.maxTaskDurationMs = ms;
+          }
+        }
+      }
+      if (dPatch.maxRequestsPerTurn !== undefined) {
+        const v = dPatch.maxRequestsPerTurn;
+        if (v === null) {
+          delete def.maxRequestsPerTurn;
+        } else if (typeof v === 'number' && Number.isFinite(v)) {
+          const n = Math.floor(v);
+          if (n >= 10 && n <= 200) {
+            def.maxRequestsPerTurn = n;
+          }
+        }
+      }
+      if (dPatch.maxToolFailuresPerTurn !== undefined) {
+        const v = dPatch.maxToolFailuresPerTurn;
+        if (v === null) {
+          delete def.maxToolFailuresPerTurn;
+        } else if (typeof v === 'number' && Number.isFinite(v)) {
+          const n = Math.floor(v);
+          if (n >= 1 && n <= 20) {
+            def.maxToolFailuresPerTurn = n;
+          }
+        }
+      }
+
+      if (dPatch.compaction !== undefined) {
+        const c = dPatch.compaction;
+        if (c === null) {
+          delete def.compaction;
+        } else if (typeof c === 'object' && !Array.isArray(c)) {
+          const p = c as Record<string, unknown>;
+          if (!def.compaction || typeof def.compaction !== 'object') {
+            def.compaction = {};
+          }
+          const t = def.compaction as Record<string, unknown>;
+          if (p.enabled !== undefined) t.enabled = Boolean(p.enabled);
+          if (p.mode === 'default' || p.mode === 'safeguard') t.mode = p.mode;
+          if (typeof p.reserveTokens === 'number' && Number.isFinite(p.reserveTokens)) {
+            t.reserveTokens = Math.floor(p.reserveTokens);
+          }
+          if (typeof p.triggerThreshold === 'number' && Number.isFinite(p.triggerThreshold)) {
+            const x = p.triggerThreshold;
+            if (x >= 0.5 && x <= 0.95) t.triggerThreshold = x;
+          }
+          if (typeof p.minMessagesBeforeCompact === 'number' && Number.isFinite(p.minMessagesBeforeCompact)) {
+            t.minMessagesBeforeCompact = Math.floor(p.minMessagesBeforeCompact);
+          }
+          if (typeof p.keepRecentMessages === 'number' && Number.isFinite(p.keepRecentMessages)) {
+            t.keepRecentMessages = Math.floor(p.keepRecentMessages);
+          }
+          if (typeof p.evictionWindow === 'number' && Number.isFinite(p.evictionWindow)) {
+            const x = p.evictionWindow;
+            if (x >= 0.1 && x <= 0.5) t.evictionWindow = x;
+          }
+          if (typeof p.retentionWindow === 'number' && Number.isFinite(p.retentionWindow)) {
+            const n = Math.floor(p.retentionWindow);
+            if (n >= 3 && n <= 20) t.retentionWindow = n;
+          }
+        }
+      }
+
+      if (dPatch.pruning !== undefined) {
+        const c = dPatch.pruning;
+        if (c === null) {
+          delete def.pruning;
+        } else if (typeof c === 'object' && !Array.isArray(c)) {
+          const p = c as Record<string, unknown>;
+          if (!def.pruning || typeof def.pruning !== 'object') {
+            def.pruning = {};
+          }
+          const t = def.pruning as Record<string, unknown>;
+          if (p.enabled !== undefined) t.enabled = Boolean(p.enabled);
+          if (typeof p.maxToolResultChars === 'number' && Number.isFinite(p.maxToolResultChars)) {
+            t.maxToolResultChars = Math.floor(p.maxToolResultChars);
+          }
+          if (typeof p.headKeepRatio === 'number' && Number.isFinite(p.headKeepRatio)) {
+            t.headKeepRatio = p.headKeepRatio;
+          }
+          if (typeof p.tailKeepRatio === 'number' && Number.isFinite(p.tailKeepRatio)) {
+            t.tailKeepRatio = p.tailKeepRatio;
+          }
+        }
+      }
+
+      if (dPatch.memory !== undefined) {
+        const c = dPatch.memory;
+        if (c === null) {
+          delete def.memory;
+        } else if (typeof c === 'object' && !Array.isArray(c)) {
+          const p = c as Record<string, unknown>;
+          if (!def.memory || typeof def.memory !== 'object') {
+            def.memory = {};
+          }
+          const t = def.memory as Record<string, unknown>;
+          if (p.enabled !== undefined) {
+            if (p.enabled === null) delete t.enabled;
+            else t.enabled = Boolean(p.enabled);
+          }
+          if (p.useEnhancedSystem !== undefined) {
+            if (p.useEnhancedSystem === null) delete t.useEnhancedSystem;
+            else t.useEnhancedSystem = Boolean(p.useEnhancedSystem);
+          }
+          if (p.userProfileEnabled !== undefined) {
+            if (p.userProfileEnabled === null) delete t.userProfileEnabled;
+            else t.userProfileEnabled = Boolean(p.userProfileEnabled);
+          }
+          if (p.memoryCharLimit !== undefined) {
+            if (p.memoryCharLimit === null) delete t.memoryCharLimit;
+            else if (typeof p.memoryCharLimit === 'number' && p.memoryCharLimit > 0) {
+              t.memoryCharLimit = Math.floor(p.memoryCharLimit);
+            }
+          }
+          if (p.userCharLimit !== undefined) {
+            if (p.userCharLimit === null) delete t.userCharLimit;
+            else if (typeof p.userCharLimit === 'number' && p.userCharLimit > 0) {
+              t.userCharLimit = Math.floor(p.userCharLimit);
+            }
+          }
+          if (p.provider === 'none' || p.provider === 'stub') {
+            t.provider = p.provider;
+          } else if (p.provider === null) {
+            delete t.provider;
+          }
+          if (p.injectionFrequency === 'every-turn' || p.injectionFrequency === 'first-turn') {
+            t.injectionFrequency = p.injectionFrequency;
+          } else if (p.injectionFrequency === null) {
+            delete t.injectionFrequency;
+          }
+          if (p.contextCadence !== undefined) {
+            if (p.contextCadence === null) delete t.contextCadence;
+            else if (typeof p.contextCadence === 'number' && p.contextCadence >= 1) {
+              t.contextCadence = Math.floor(p.contextCadence);
+            }
+          }
+          if (p.dialecticCadence !== undefined) {
+            if (p.dialecticCadence === null) delete t.dialecticCadence;
+            else if (typeof p.dialecticCadence === 'number' && p.dialecticCadence >= 1) {
+              t.dialecticCadence = Math.floor(p.dialecticCadence);
+            }
+          }
+        }
+      }
+
+      if (dPatch.sessionSearch !== undefined) {
+        const c = dPatch.sessionSearch;
+        if (c === null) {
+          delete def.sessionSearch;
+        } else if (typeof c === 'object' && !Array.isArray(c)) {
+          const p = c as Record<string, unknown>;
+          if (!def.sessionSearch || typeof def.sessionSearch !== 'object') {
+            def.sessionSearch = {};
+          }
+          const t = def.sessionSearch as Record<string, unknown>;
+          if (p.summaryModel !== undefined) {
+            if (p.summaryModel === null || p.summaryModel === '') {
+              delete t.summaryModel;
+            } else if (typeof p.summaryModel === 'string') {
+              t.summaryModel = p.summaryModel;
+            }
+          }
+        }
+      }
+
+      if (dPatch.backgroundReview !== undefined) {
+        const c = dPatch.backgroundReview;
+        if (c === null) {
+          delete def.backgroundReview;
+        } else if (typeof c === 'object' && !Array.isArray(c)) {
+          const p = c as Record<string, unknown>;
+          if (!def.backgroundReview || typeof def.backgroundReview !== 'object') {
+            def.backgroundReview = {};
+          }
+          const t = def.backgroundReview as Record<string, unknown>;
+          if (p.enabled !== undefined) {
+            if (p.enabled === null) delete t.enabled;
+            else t.enabled = Boolean(p.enabled);
+          }
+          if (p.memoryNudgeInterval !== undefined) {
+            if (p.memoryNudgeInterval === null) delete t.memoryNudgeInterval;
+            else if (typeof p.memoryNudgeInterval === 'number' && p.memoryNudgeInterval >= 0) {
+              t.memoryNudgeInterval = Math.floor(p.memoryNudgeInterval);
+            }
+          }
+          if (p.skillNudgeInterval !== undefined) {
+            if (p.skillNudgeInterval === null) delete t.skillNudgeInterval;
+            else if (typeof p.skillNudgeInterval === 'number' && p.skillNudgeInterval >= 0) {
+              t.skillNudgeInterval = Math.floor(p.skillNudgeInterval);
+            }
+          }
+          if (p.maxToolRounds !== undefined) {
+            if (p.maxToolRounds === null) delete t.maxToolRounds;
+            else if (typeof p.maxToolRounds === 'number' && p.maxToolRounds >= 1 && p.maxToolRounds <= 32) {
+              t.maxToolRounds = Math.floor(p.maxToolRounds);
+            }
+          }
+          if (p.maxHistoryMessages !== undefined) {
+            if (p.maxHistoryMessages === null) delete t.maxHistoryMessages;
+            else if (typeof p.maxHistoryMessages === 'number' && p.maxHistoryMessages >= 10 && p.maxHistoryMessages <= 200) {
+              t.maxHistoryMessages = Math.floor(p.maxHistoryMessages);
+            }
+          }
+          if (p.maxDurationMs !== undefined) {
+            if (p.maxDurationMs === null) delete t.maxDurationMs;
+            else if (typeof p.maxDurationMs === 'number' && p.maxDurationMs >= 30_000 && p.maxDurationMs <= 600_000) {
+              t.maxDurationMs = Math.floor(p.maxDurationMs);
+            }
+          }
+        }
+      }
+
+      if (dPatch.webExtract !== undefined) {
+        const c = dPatch.webExtract;
+        if (c === null) {
+          delete def.webExtract;
+        } else if (typeof c === 'object' && !Array.isArray(c)) {
+          const p = c as Record<string, unknown>;
+          if (!def.webExtract || typeof def.webExtract !== 'object') {
+            def.webExtract = {};
+          }
+          const t = def.webExtract as Record<string, unknown>;
+          if (p.model !== undefined) {
+            if (p.model === null || p.model === '') {
+              delete t.model;
+            } else if (typeof p.model === 'string') {
+              t.model = p.model;
+            }
+          }
+          if (p.maxLength !== undefined) {
+            if (p.maxLength === null) delete t.maxLength;
+            else if (typeof p.maxLength === 'number' && p.maxLength > 0) {
+              t.maxLength = p.maxLength;
+            }
+          }
+        }
+      }
+
+      if (dPatch.delegate !== undefined) {
+        const c = dPatch.delegate;
+        if (c === null) {
+          delete def.delegate;
+        } else if (typeof c === 'object' && !Array.isArray(c)) {
+          const p = c as Record<string, unknown>;
+          if (!def.delegate || typeof def.delegate !== 'object') {
+            def.delegate = {};
+          }
+          const t = def.delegate as Record<string, unknown>;
+          if (p.enabled !== undefined) {
+            if (p.enabled === null) delete t.enabled;
+            else t.enabled = Boolean(p.enabled);
+          }
+        }
+      }
+
+      if (dPatch.executeCode !== undefined) {
+        const c = dPatch.executeCode;
+        if (c === null) {
+          delete def.executeCode;
+        } else if (typeof c === 'object' && !Array.isArray(c)) {
+          const p = c as Record<string, unknown>;
+          if (!def.executeCode || typeof def.executeCode !== 'object') {
+            def.executeCode = {};
+          }
+          const t = def.executeCode as Record<string, unknown>;
+          if (p.enabled !== undefined) {
+            if (p.enabled === null) delete t.enabled;
+            else t.enabled = Boolean(p.enabled);
+          }
+        }
+      }
+
+      if (dPatch.systemPromptOverride !== undefined) {
+        const v = dPatch.systemPromptOverride;
+        if (v === null || v === '') {
+          delete def.systemPromptOverride;
+        } else if (typeof v === 'string') {
+          def.systemPromptOverride = v;
+        }
+      }
+
+      if (dPatch.skills !== undefined) {
+        const v = dPatch.skills;
+        if (v === null) {
+          delete def.skills;
+        } else if (Array.isArray(v) && v.every((x) => typeof x === 'string')) {
+          def.skills = v;
+        }
+      }
+
+      if (dPatch.tools !== undefined) {
+        const t0 = dPatch.tools;
+        if (t0 === null) {
+          delete def.tools;
+        } else if (typeof t0 === 'object' && !Array.isArray(t0)) {
+          const p = t0 as { disable?: unknown };
+          if (!def.tools || typeof def.tools !== 'object') {
+            def.tools = {};
+          }
+          const t = def.tools as { disable?: string[] };
+          if (p.disable !== undefined) {
+            if (p.disable === null || (Array.isArray(p.disable) && p.disable.length === 0)) {
+              delete t.disable;
+            } else if (Array.isArray(p.disable) && p.disable.every((x) => typeof x === 'string')) {
+              t.disable = p.disable;
+            }
+          }
+        }
+      }
+
+      if (dPatch.params !== undefined) {
+        const v = dPatch.params;
+        if (v === null) {
+          delete def.params;
+        } else if (typeof v === 'object' && !Array.isArray(v) && v !== null) {
+          def.params = v as Record<string, unknown>;
+        }
+      }
     }
     
     // Update channels — use `in` / null so `weixin: null` removes the block; avoid `if (ch.weixin)` missing null.
