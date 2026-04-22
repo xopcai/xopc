@@ -1,11 +1,17 @@
 // Send media tool - allows sending local files as media
 import { Type, type Static } from '@sinclair/typebox';
 import { readFile } from 'fs/promises';
+import { basename } from 'node:path';
 import { AgentTool, type AgentToolResult } from '@mariozechner/pi-agent-core';
+import { checkFileSafety } from '../prompt/safety.js';
+import { resolvePathUnderWorkspace } from './tool-paths.js';
 import type { MessageBus, OutboundMessage } from '../../infra/bus/index.js';
 
 const SendMediaSchema = Type.Object({
-  filePath: Type.String({ description: 'Local file path to send' }),
+  filePath: Type.String({
+    description:
+      'File to send. Relative paths are under the current agent workspace; absolute paths are used as given.',
+  }),
   mediaType: Type.Optional(Type.Enum({
     photo: 'photo',
     video: 'video',
@@ -64,19 +70,21 @@ function detectMimeType(filePath: string): string {
 }
 
 export function createSendMediaTool(
+  workspace: string,
   bus: MessageBus,
-  getContext: () => MessageContext | null
+  getContext: () => MessageContext | null,
 ): AgentTool<typeof SendMediaSchema, {}> {
   return {
     name: 'send_media',
-    description: 'Send a media file (photo, video, audio, document) from local filesystem to the current conversation.',
+    description:
+      'Send a media file (photo, video, audio, document) to the current conversation. Relative paths resolve to the current agent workspace (same as read_file).',
     parameters: SendMediaSchema,
     label: '📎 Send Media',
 
     async execute(
-      toolCallId: string,
+      _toolCallId: string,
       params: Static<typeof SendMediaSchema>,
-      _signal?: AbortSignal
+      _signal?: AbortSignal,
     ): Promise<AgentToolResult<{}>> {
       const ctx = getContext();
       if (!ctx) {
@@ -86,14 +94,20 @@ export function createSendMediaTool(
         };
       }
 
-      try {
-        // Read the local file
-        const fileBuffer = await readFile(params.filePath);
-        const base64 = fileBuffer.toString('base64');
-        const mimeType = detectMimeType(params.filePath);
+      const resolved = resolvePathUnderWorkspace(params.filePath, workspace);
+      const safety = checkFileSafety('read', resolved);
+      if (!safety.allowed) {
+        return {
+          content: [{ type: 'text', text: `🚫 ${safety.message}` }],
+          details: {},
+        };
+      }
 
-        // Determine media type
-        const mediaType = params.mediaType || detectMediaType(params.filePath);
+      try {
+        const fileBuffer = await readFile(resolved);
+        const base64 = fileBuffer.toString('base64');
+        const mimeType = detectMimeType(resolved);
+        const mediaType = params.mediaType || detectMediaType(resolved);
 
         // Create data URL
         const dataUrl = `data:${mimeType};base64,${base64}`;
@@ -108,10 +122,10 @@ export function createSendMediaTool(
 
         await bus.publishOutbound(msg);
 
-        const fileName = params.filePath.split('/').pop() || params.filePath;
+        const fileName = basename(resolved);
         return {
           content: [{ type: 'text', text: `✅ Media sent: ${fileName} (${mediaType})` }],
-          details: { filePath: params.filePath, mediaType },
+          details: { filePath: resolved, mediaType },
         };
       } catch (error) {
         const errorMessage = error instanceof Error ? error.message : String(error);
