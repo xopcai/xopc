@@ -47,6 +47,8 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
     workspaceAgentId,
     chatSessionKey,
   );
+  /** When the tree is session-scoped, agent id from the store is irrelevant — avoid re-fetching on agent sync. */
+  const treeScopeKey = chatSessionKey ?? workspaceAgentId;
 
   const workspaceReadOpts =
     chatSessionKey != null
@@ -71,7 +73,7 @@ export const WorkspaceColumn = memo(function WorkspaceColumn() {
     }
     setPreviewPath(null);
     void loadRoot();
-  }, [open, workspaceAgentId, chatSessionKey, loadRoot, reset, setPreviewPath]);
+  }, [open, treeScopeKey, loadRoot, reset, setPreviewPath]);
 
   useEffect(() => {
     if (!open) return;

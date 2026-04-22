@@ -1,4 +1,4 @@
-import { useCallback, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 
 import type { TreeEntry } from '@/features/file-tree/file-tree';
 import { listWorkspaceDir, type WorkspaceEntry } from '@/features/workspace/workspace-api';
@@ -38,19 +38,22 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
   const loadedDirsRef = useRef<Set<string>>(new Set());
   const trimmedAgentId = agentId.trim();
   const trimmedSessionKey = sessionKey?.trim() ?? '';
-  const editorOptsLazy = () => {
-    if (trimmedSessionKey) {
-      return { sessionKey: trimmedSessionKey } as const;
-    }
-    return trimmedAgentId ? ({ agentId: trimmedAgentId } as const) : undefined;
-  };
+  /** List API is session-scoped when sessionKey is set; do not key callbacks on agent id in that case. */
+  const sessionPart = trimmedSessionKey;
+  const agentWhenNoSession = !trimmedSessionKey ? trimmedAgentId : '';
+
+  const editorOpts = useMemo((): { sessionKey: string } | { agentId: string } | undefined => {
+    if (sessionPart) return { sessionKey: sessionPart };
+    if (agentWhenNoSession) return { agentId: agentWhenNoSession };
+    return undefined;
+  }, [sessionPart, agentWhenNoSession]);
 
   const loadRoot = useCallback(async () => {
     setLoading(true);
     setError(null);
     loadedDirsRef.current.clear();
     try {
-      const entries = await listWorkspaceDir('', editorOptsLazy());
+      const entries = await listWorkspaceDir('', editorOpts);
       setTree(toTreeEntries(entries));
       loadedDirsRef.current.add('');
     } catch (err) {
@@ -58,21 +61,21 @@ export function useWorkspaceTree(agentId: string, sessionKey?: string | null) {
     } finally {
       setLoading(false);
     }
-  }, [trimmedAgentId, trimmedSessionKey]);
+  }, [editorOpts]);
 
   const loadChildren = useCallback(
     async (dirPath: string) => {
       if (loadedDirsRef.current.has(dirPath)) return;
       loadedDirsRef.current.add(dirPath);
       try {
-        const entries = await listWorkspaceDir(dirPath, editorOptsLazy());
+        const entries = await listWorkspaceDir(dirPath, editorOpts);
         const children = toTreeEntries(entries);
         setTree((prev) => mergeChildren(prev, dirPath, children));
       } catch {
         loadedDirsRef.current.delete(dirPath);
       }
     },
-    [trimmedAgentId, trimmedSessionKey],
+    [editorOpts],
   );
 
   const reset = useCallback(() => {

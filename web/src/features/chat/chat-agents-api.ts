@@ -1,3 +1,4 @@
+import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
 import { apiFetch } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
@@ -31,9 +32,7 @@ export async function fetchChatAgents(): Promise<ChatAgentsPayload> {
     }
   }
 
-  const res = await apiFetch(apiUrl('/api/config'));
-  if (!res.ok) throw new Error(`Config: HTTP ${res.status}`);
-  const data = (await res.json()) as {
+  const data = (await fetchGatewayConfigSwrResponse()) as {
     payload?: {
       config?: {
         agents?: { defaultId?: string; list?: Array<{ id?: string; name?: string }> };
