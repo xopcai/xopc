@@ -100,6 +100,57 @@ export async function readWorkspaceFileBase64(
 }
 
 /** Write (overwrite) a workspace file. */
+/** Map a host absolute path to workspace-relative path (auth; 403 if not under session workspace). */
+export async function resolveWorkspaceAbsoluteToRelative(
+  absolutePath: string,
+  options?: WorkspaceEditorRequestOptions,
+): Promise<string | null> {
+  const params = new URLSearchParams({ absolutePath });
+  const sk = options?.sessionKey?.trim();
+  if (sk) {
+    params.set('sessionKey', sk);
+  } else {
+    const aid = options?.agentId?.trim();
+    if (aid) params.set('agentId', aid);
+  }
+  const res = await apiFetch(apiUrl(`/api/workspace/editor/resolve-path?${params.toString()}`));
+  if (res.status === 403 || res.status === 400) {
+    return null;
+  }
+  if (!res.ok) {
+    return null;
+  }
+  const data = (await res.json()) as { ok?: boolean; payload?: { workspaceRelativePath?: string } };
+  if (!data.ok || typeof data.payload?.workspaceRelativePath !== 'string') {
+    return null;
+  }
+  return data.payload.workspaceRelativePath;
+}
+
+/** Fetch raw file bytes from the workspace (authenticated; use blob / object URL for images). */
+export async function fetchWorkspaceFileBlob(
+  path: string,
+  options?: WorkspaceEditorRequestOptions,
+): Promise<Blob> {
+  const params = new URLSearchParams({ path });
+  const sk = options?.sessionKey?.trim();
+  if (sk) {
+    params.set('sessionKey', sk);
+  } else {
+    const aid = options?.agentId?.trim();
+    if (aid) params.set('agentId', aid);
+  }
+  const res = await apiFetch(apiUrl(`/api/workspace/editor/raw?${params.toString()}`), {
+    headers: { Accept: '*/*' },
+  });
+  if (!res.ok) {
+    const err = (await res.json().catch(() => ({}))) as { error?: { message?: string } };
+    const msg = err.error?.message ?? `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+  return res.blob();
+}
+
 export async function writeWorkspaceFile(
   path: string,
   content: string,

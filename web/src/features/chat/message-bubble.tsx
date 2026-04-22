@@ -131,7 +131,8 @@ function renderChunkedContent(
     stepDetails: string;
   },
   imagePreviewLabel: string,
-  onImagePreview?: (block: ImageContent, index: number) => void,
+  onImagePreview: ((block: ImageContent, index: number) => void) | undefined,
+  sessionKey: string | null | undefined,
 ) {
   const nodes: ReactNode[] = [];
   let i = 0;
@@ -151,6 +152,7 @@ function renderChunkedContent(
             blocks={slice}
             toolLabels={toolLabels}
             stepLabels={stepLabels}
+            sessionKey={sessionKey}
           />,
         );
       }
@@ -381,6 +383,7 @@ export const MessageBubble = memo(function MessageBubble({
                   stepLabels,
                   m.chat.attachmentPreviewImage,
                   openInlineImagePreview,
+                  sessionKey,
                 )}
                 {isStreaming ? (
                   <span className="inline-block h-3 w-0.5 animate-pulse bg-accent align-middle" />
