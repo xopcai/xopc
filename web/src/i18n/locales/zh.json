@@ -1051,6 +1051,7 @@
     "newAgentLabel": "显示名称",
     "newAgentIdOptional": "Agent ID（可选）",
     "newAgentIdPlaceholder": "留空则根据显示名称生成",
+    "newAgentIdRules": "1–64 个字符：字母、数字、下划线、连字符；须以字母或数字开头。勿使用保留 id（如 main、con）。",
     "newWorkspace": "工作区目录（必填）",
     "newModelOptional": "模型（可选）",
     "create": "创建智能体",

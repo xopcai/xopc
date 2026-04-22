@@ -14,6 +14,7 @@ import {
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
   resolveUserPath,
+  validateAgentIdForNewAgent,
 } from '../agent/agent-scope.js';
 import { BOOTSTRAP_FILES } from '../agent/context/workspace.js';
 import { seedWorkspaceBootstrapFiles } from '../agent/context/workspace-seed.js';
@@ -155,12 +156,11 @@ export function prepareCreateAgent(
   if (!workspace) {
     return { ok: false, error: 'workspace is required', status: 400 };
   }
-  const idSeed = body.id?.trim() || name;
-  const agentId = normalizeAgentId(idSeed);
-  const reserved = requireNonMain(agentId);
-  if (reserved) {
-    return reserved;
+  const idRes = validateAgentIdForNewAgent(body.id, name);
+  if (idRes.ok === false) {
+    return { ok: false, error: idRes.error, status: 400 };
   }
+  const agentId = idRes.agentId;
   if (findAgentEntryIndex(listAgentEntries(cfg), agentId) >= 0) {
     return { ok: false, error: `agent "${agentId}" already exists`, status: 409 };
   }

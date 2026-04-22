@@ -14,6 +14,7 @@ import {
   resolveAgentWorkspaceDir,
   resolveDefaultAgentId,
   DEFAULT_AGENT_ID,
+  validateAgentIdForNewAgent,
 } from '../../agent/agent-scope.js';
 import {
   applyAgentConfig,
@@ -81,8 +82,12 @@ export function registerAgentsCli(program: Command): void {
         opts: { workspace?: string; model?: string; agentDir?: string; json?: boolean },
       ) => {
         const cfg = loadConfig();
-        const agentId = normalizeAgentId(name);
-        requireNonMain(agentId);
+        const idRes = validateAgentIdForNewAgent(undefined, name);
+        if (idRes.ok === false) {
+          console.error(colors.red('Error:'), idRes.error);
+          process.exit(1);
+        }
+        const agentId = idRes.agentId;
 
         const workspace = opts.workspace!.trim();
         const next = applyAgentConfig(cfg, {

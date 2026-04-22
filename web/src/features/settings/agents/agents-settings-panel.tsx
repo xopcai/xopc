@@ -25,6 +25,7 @@ import {
 import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { SETTINGS_BACK_PATH_STATE_KEY } from '@/features/settings/settings-nav-state';
 import { suggestWorkspaceFromAgentName } from '@/features/settings/suggest-agent-workspace';
+import { validateAgentIdForNewAgent } from '@/lib/agent-id';
 import {
   getChannels,
   getSessionChatIds,
@@ -630,6 +631,11 @@ export function AgentsSettingsPanel() {
     e.preventDefault();
     const name = createDisplayName.trim();
     if (!name) {
+      return;
+    }
+    const idRes = validateAgentIdForNewAgent(createAgentId, name);
+    if (idRes.ok === false) {
+      setCreateModalError(idRes.error);
       return;
     }
     const wsInput = createWorkspace.trim();

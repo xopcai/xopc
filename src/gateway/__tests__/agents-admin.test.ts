@@ -98,6 +98,33 @@ describe('agents-admin', () => {
     expect(e?.name).toBe('Nice Label');
   });
 
+  it('prepareCreateAgent rejects invalid explicit agent id', () => {
+    const cfg = minimalConfig();
+    const r = prepareCreateAgent(cfg, { name: 'Label', id: 'bad id', workspace: '/tmp/w' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(400);
+    }
+  });
+
+  it('prepareCreateAgent rejects Windows reserved explicit id', () => {
+    const cfg = minimalConfig();
+    const r = prepareCreateAgent(cfg, { name: 'Label', id: 'con', workspace: '/tmp/w' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(400);
+    }
+  });
+
+  it('prepareCreateAgent rejects display name that cannot yield a folder-safe id', () => {
+    const cfg = minimalConfig();
+    const r = prepareCreateAgent(cfg, { name: '!!!', workspace: '/tmp/w' });
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.status).toBe(400);
+    }
+  });
+
   it('prepareCreateAgent rejects duplicate id', () => {
     const cfg = minimalConfig({
       agents: {

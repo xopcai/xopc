@@ -107,7 +107,11 @@ export function CreateAgentDialog(props: {
                 placeholder={a.newAgentIdPlaceholder}
                 autoComplete="off"
                 spellCheck={false}
+                maxLength={64}
+                pattern="[A-Za-z0-9][A-Za-z0-9_-]{0,63}"
+                title={a.newAgentIdRules}
               />
+              <span className="text-xs text-fg-muted">{a.newAgentIdRules}</span>
             </label>
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-fg-muted">{a.agentDescription}</span>

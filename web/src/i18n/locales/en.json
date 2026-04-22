@@ -1051,6 +1051,7 @@
     "newAgentLabel": "Display name",
     "newAgentIdOptional": "Agent ID (optional)",
     "newAgentIdPlaceholder": "Leave empty to derive from display name",
+    "newAgentIdRules": "1–64 characters: letters, digits, underscores, hyphens; must start with a letter or digit. Avoid reserved ids (e.g. main, con).",
     "newWorkspace": "Workspace directory (required)",
     "newModelOptional": "Model (optional)",
     "create": "Create agent",
