@@ -43,9 +43,9 @@ export function AgentsEditorModal(props: {
         <Dialog.Content
           className={cn(
             'xopc-dialog-content fixed z-[60] flex flex-col overflow-hidden rounded-xl border border-edge bg-surface-panel shadow-popover dark:border-edge',
-            /* Fixed height so tab switches do not resize the shell (flicker). */
-            'inset-3 h-[calc(100dvh-1.5rem)] max-h-[calc(100dvh-1.5rem)] min-h-0',
-            'sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(92vh,56rem)] sm:max-h-[min(92vh,56rem)] sm:min-h-[min(92vh,56rem)] sm:w-[min(100%-2rem,72rem)] sm:-translate-x-1/2 sm:-translate-y-1/2',
+            /* Desktop: roomy editor; inner panels scroll. Small viewports stay inset. */
+            'inset-4 h-[calc(100dvh-2rem)] max-h-[calc(100dvh-2rem)] min-h-0',
+            'sm:inset-auto sm:left-1/2 sm:top-1/2 sm:h-[min(88vh,48rem)] sm:max-h-[min(88vh,48rem)] sm:min-h-[32rem] sm:w-[min(100%-2rem,58rem)] sm:-translate-x-1/2 sm:-translate-y-1/2',
           )}
           onOpenAutoFocus={(e) => e.preventDefault()}
         >
