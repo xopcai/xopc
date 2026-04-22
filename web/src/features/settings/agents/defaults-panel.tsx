@@ -16,6 +16,7 @@ import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
 import { AgentDefaultsExtraFields } from './agent-defaults-extra';
+import { ImageGenerationModelInput } from './image-generation-model-input';
 import { inputClassName, selectClassName } from './defaults-field-styles';
 
 const THINKING_KEYS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'adaptive'] as const;
@@ -291,7 +292,7 @@ export function AgentSettingsPanel() {
             </div>
           </Field>
           <Field label={a.label.imageGenerationModel} description={a.desc.imageGenerationModel}>
-            <ModelSelector
+            <ImageGenerationModelInput
               value={form.imageGenerationModel}
               placeholder={chat.modelPlaceholder}
               searchPlaceholder={chat.modelSearchPlaceholder}
@@ -307,7 +308,7 @@ export function AgentSettingsPanel() {
               {form.imageGenerationModelFallbacks.map((fb, idx) => (
                 <div key={idx} className="flex items-start gap-2">
                   <div className="min-w-0 flex-1">
-                    <ModelSelector
+                    <ImageGenerationModelInput
                       value={fb}
                       placeholder={chat.modelPlaceholder}
                       searchPlaceholder={chat.modelSearchPlaceholder}
