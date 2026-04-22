@@ -14,6 +14,7 @@ const MESSAGE_LIST_PADDING_END_PX = 32;
 export const MessageList = memo(function MessageList({
   messages: list,
   authToken,
+  sessionKey,
   streaming,
   progress,
   reasoningLevel,
@@ -22,6 +23,7 @@ export const MessageList = memo(function MessageList({
 }: {
   messages: Message[];
   authToken?: string;
+  sessionKey?: string | null;
   streaming: boolean;
   progress: ProgressState | null;
   reasoningLevel: ReasoningLevel;
@@ -120,6 +122,7 @@ export const MessageList = memo(function MessageList({
             <MessageBubble
               message={msg}
               authToken={authToken}
+              sessionKey={sessionKey}
               isStreaming={isStreamRow}
               progress={isStreamRow ? progress : null}
               reasoningLevel={reasoningLevel}

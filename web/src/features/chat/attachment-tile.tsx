@@ -18,6 +18,7 @@ import { useLocaleStore } from '@/stores/locale-store';
 type AttachmentTileProps = {
   attachment: MessageAttachment;
   authToken?: string;
+  sessionKey?: string | null;
   showDelete?: boolean;
   onDelete?: () => void;
   onOpen: (att: MessageAttachment) => void;
@@ -26,6 +27,7 @@ type AttachmentTileProps = {
 export function AttachmentTile({
   attachment,
   authToken,
+  sessionKey,
   showDelete = false,
   onDelete,
   onOpen,
@@ -50,7 +52,9 @@ export function AttachmentTile({
     let cancelled = false;
     void (async () => {
       try {
-        const url = apiUrl(workspaceRelativePathToApiPath(base.workspaceRelativePath!));
+        const url = apiUrl(
+          workspaceRelativePathToApiPath(base.workspaceRelativePath!, { sessionKey }),
+        );
         const res = await apiFetch(url);
         if (!res.ok || cancelled) return;
         const buf = await res.arrayBuffer();
@@ -71,7 +75,7 @@ export function AttachmentTile({
     return () => {
       cancelled = true;
     };
-  }, [attachment, authToken]);
+  }, [attachment, authToken, sessionKey]);
 
   const previewBase64 = effective.preview ?? getAttachmentBinaryPayload(effective);
   const isImageMime = effective.mimeType?.startsWith('image/') || effective.type === 'image';

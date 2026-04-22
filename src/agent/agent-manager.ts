@@ -802,6 +802,7 @@ export class AgentManager {
     const bootstrapFiles = this.loadBootstrapForProfile(profile);
     const tools = this.toolsFactory.createAllTools({
       workspace: resolvedWorkspacePath,
+      bootstrapDir: resolveAgentBootstrapDir(this.config.config!, profile.agentId),
       disabledTools: profile.tools.disable,
       getPrimaryModel: () => this.resolveModelStringToModel(modelRef),
       getBuiltinMemoryStore: () => rt.builtinMemoryStore,

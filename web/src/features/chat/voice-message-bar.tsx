@@ -27,11 +27,14 @@ export function VoiceMessageBar({
   att,
   align = 'start',
   variant = 'default',
+  sessionKey,
 }: {
   att: MessageAttachment;
   align?: 'start' | 'end';
   /** `compact` = one play button + duration only (user messages). */
   variant?: 'default' | 'compact';
+  /** Resolves correct agent home for `tts/` and `inbound/` gateway paths. */
+  sessionKey?: string | null;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -56,7 +59,9 @@ export function VoiceMessageBar({
       }
       if (!att.workspaceRelativePath) return;
       try {
-        const res = await apiFetch(apiUrl(workspaceRelativePathToApiPath(att.workspaceRelativePath)));
+        const res = await apiFetch(
+          apiUrl(workspaceRelativePathToApiPath(att.workspaceRelativePath, { sessionKey })),
+        );
         if (!res.ok || cancelled) return;
         const blob = await res.blob();
         const u = URL.createObjectURL(blob);
@@ -71,7 +76,7 @@ export function VoiceMessageBar({
       cancelled = true;
       if (revoke) URL.revokeObjectURL(revoke);
     };
-  }, [att]);
+  }, [att, sessionKey]);
 
   const toggle = useCallback(() => {
     const el = audioRef.current;

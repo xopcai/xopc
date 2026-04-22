@@ -12,12 +12,12 @@ import type { Model, Api } from '@mariozechner/pi-ai';
 import type { Config } from '../../config/schema.js';
 import type { MessageBus } from '../../infra/bus/index.js';
 import {
-  readFileTool,
-  writeFileTool,
-  editFileTool,
-  listDirTool,
-  grepTool,
-  findTool,
+  createReadFileTool,
+  createWriteFileTool,
+  createEditFileTool,
+  createListDirTool,
+  createGrepTool,
+  createFindTool,
   createShellTool,
   createWebSearchTool,
   webFetchTool,
@@ -101,6 +101,8 @@ export interface ToolFactoryDeps {
 export interface CreateCoreToolsOptions {
   /** Workspace root for file/shell tools (defaults to factory workspace). */
   workspace?: string;
+  /** `…/agents/<id>/bootstrap` — used so `read_file` can find SOUL.md etc. by filename. */
+  bootstrapDir?: string;
   /** Tool `name` values to omit (e.g. `shell`, `extensions` for extension tools). */
   disabledTools?: Set<string>;
   /** Optional primary model for image tool heuristics. */
@@ -165,6 +167,13 @@ export class AgentToolsFactory {
       (t): t is AgentTool<any, any> => t != null,
     );
 
+    const readTool = createReadFileTool(workspace, { bootstrapDir: options?.bootstrapDir });
+    const writeTool = createWriteFileTool(workspace);
+    const editTool = createEditFileTool(workspace);
+    const listDir = createListDirTool(workspace);
+    const grep = createGrepTool(workspace);
+    const find = createFindTool(workspace);
+
     const core: AgentTool<any, any>[] = [
       createClarifyTool({
         resolveAskUser: () => {
@@ -198,12 +207,12 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      readFileTool,
-      writeFileTool,
-      editFileTool,
-      listDirTool,
-      grepTool,
-      findTool,
+      readTool,
+      writeTool,
+      editTool,
+      listDir,
+      grep,
+      find,
       createShellTool(workspace, {
         getSkillPassthroughEnvVarNames: this.deps.getSkillPassthroughEnvVarNames,
       }),
