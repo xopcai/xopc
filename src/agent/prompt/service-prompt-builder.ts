@@ -94,7 +94,7 @@ export class SystemPromptBuilder {
       return fullPrompt;
     }
 
-    const heartbeatEnabled = this.config.gateway?.heartbeat?.enabled ?? false;
+    const heartbeatEnabled = this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false;
 
     const curatedMemorySnapshot = options?.curatedMemorySnapshot;
     const externalMemoryInstructions = options?.externalMemoryInstructions;
@@ -232,7 +232,7 @@ export class SystemPromptBuilder {
     const snap = options?.curatedMemorySnapshot;
     return buildBaseSystemPrompt(ws, {
       bootstrapFiles: workspaceBootstrapFiles,
-      heartbeatEnabled: this.config.gateway?.heartbeat?.enabled ?? false,
+      heartbeatEnabled: this.config.gateway?.heartbeat?.includeSystemPromptSection ?? false,
       userTimezone: this.extractTimezone(bootstrapFiles, snap?.user, ws),
       curatedMemorySnapshot: snap,
       externalMemoryInstructions: options?.externalMemoryInstructions,

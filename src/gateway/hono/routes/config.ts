@@ -550,17 +550,22 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
         config.gateway = {
           host: '0.0.0.0',
           port: 18790,
-          heartbeat: { enabled: true, intervalMs: 1_800_000 },
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
           maxSseConnections: 100,
           corsOrigins: ['*'],
         };
       }
-      if (!config.gateway.heartbeat) config.gateway.heartbeat = { enabled: true, intervalMs: 1_800_000 };
+      if (!config.gateway.heartbeat) {
+        config.gateway.heartbeat = { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false };
+      }
       const h = config.gateway.heartbeat;
       const p = body.gateway.heartbeat as Record<string, unknown>;
       if (p.enabled !== undefined) h.enabled = Boolean(p.enabled);
       if (p.intervalMs !== undefined && typeof p.intervalMs === 'number' && Number.isFinite(p.intervalMs)) {
         h.intervalMs = p.intervalMs;
+      }
+      if (p.includeSystemPromptSection !== undefined) {
+        h.includeSystemPromptSection = Boolean(p.includeSystemPromptSection);
       }
       if (p.target !== undefined) {
         if (p.target === null || p.target === '') delete (h as { target?: string }).target;
@@ -607,7 +612,15 @@ export function registerConfigRoutes(authenticated: Hono, deps: AuthenticatedRou
       }
     }
     if (body.gateway?.auth !== undefined) {
-      if (!config.gateway) config.gateway = { host: '0.0.0.0', port: 18790, heartbeat: { enabled: true, intervalMs: 1_800_000 }, maxSseConnections: 100, corsOrigins: ['*'] };
+      if (!config.gateway) {
+        config.gateway = {
+          host: '0.0.0.0',
+          port: 18790,
+          heartbeat: { enabled: true, intervalMs: 1_800_000, includeSystemPromptSection: false },
+          maxSseConnections: 100,
+          corsOrigins: ['*'],
+        };
+      }
       if (!config.gateway.auth) config.gateway.auth = { mode: 'token' };
       const a = body.gateway.auth;
       if (a.mode !== undefined) {

@@ -354,6 +354,8 @@ export const HeartbeatConfigSchema = z
   .object({
     enabled: z.boolean(),
     intervalMs: z.number(),
+    /** When false, heartbeat instructions are only sent during heartbeat polling turns (not in every chat system prompt). */
+    includeSystemPromptSection: z.boolean().optional().default(false),
     target: z.string().optional(),
     targetChatId: z.string().optional(),
     prompt: z.string().optional(),
@@ -370,6 +372,7 @@ export const HeartbeatConfigSchema = z
   .default({
     enabled: true,
     intervalMs: 1_800_000,
+    includeSystemPromptSection: false,
   });
 
 export const GatewayConfigSchema = z.object({
@@ -390,6 +393,7 @@ export const GatewayConfigSchema = z.object({
   heartbeat: {
     enabled: true,
     intervalMs: 1_800_000,
+    includeSystemPromptSection: false,
   },
   maxSseConnections: 100,
   corsOrigins: [],
@@ -669,6 +673,7 @@ export const ConfigSchema = z.object({
     heartbeat: {
       enabled: true,
       intervalMs: 1_800_000,
+      includeSystemPromptSection: false,
     },
     maxSseConnections: 100,
     corsOrigins: [],
