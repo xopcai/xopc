@@ -11,9 +11,12 @@ interface SearchSource {
 function extractSearchSources(blocks: ToolUseContent[]): SearchSource[] {
   const sources: SearchSource[] = [];
   for (const block of blocks) {
-    if (!block.name.toLowerCase().includes('search') || !block.result) continue;
+    if (!block.name.toLowerCase().includes('search') || block.result == null) continue;
     try {
-      const parsed = JSON.parse(block.result);
+      const parsed =
+        typeof block.result === 'string'
+          ? JSON.parse(block.result)
+          : (block.result as Record<string, unknown>);
       const results: Array<{ url?: string; title?: string; snippet?: string }> = Array.isArray(parsed)
         ? parsed
         : (parsed?.results ?? []);

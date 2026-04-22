@@ -1,4 +1,4 @@
-import { fetchJson } from '@/lib/fetch';
+import { apiFetch, fetchJson } from '@/lib/fetch';
 import { apiUrl } from '@/lib/url';
 
 export interface WorkspaceEntry {

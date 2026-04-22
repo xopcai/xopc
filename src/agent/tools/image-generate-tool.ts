@@ -150,6 +150,10 @@ export function createImageGenerateTool(options: {
           filenameHint: filename,
         });
 
+        const workspaceRelativePaths = paths.map((p) =>
+          path.relative(options.workspace, p).split(path.sep).join('/'),
+        );
+
         const lines = [
           `Generated ${paths.length} image(s) with ${result.provider}/${result.model}.`,
           ...paths.map((p) => `Saved: ${p}`),
@@ -161,6 +165,7 @@ export function createImageGenerateTool(options: {
             provider: result.provider,
             model: result.model,
             paths,
+            workspaceRelativePaths,
             attempts: result.attempts,
           },
         };
