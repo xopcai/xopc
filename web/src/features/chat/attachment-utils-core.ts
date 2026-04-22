@@ -279,6 +279,12 @@ export function inferMimeTypeFromFileName(fileName: string): string | undefined 
     ['.webp', 'image/webp'],
     ['.bmp', 'image/bmp'],
     ['.svg', 'image/svg+xml'],
+    ['.svgz', 'image/svg+xml'],
+    ['.ico', 'image/x-icon'],
+    ['.tif', 'image/tiff'],
+    ['.tiff', 'image/tiff'],
+    ['.avif', 'image/avif'],
+    ['.jxl', 'image/jxl'],
   ];
   for (const [ext, mime] of map) {
     if (lower.endsWith(ext)) return mime;
