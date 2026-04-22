@@ -248,6 +248,7 @@ export function ChatPage() {
                   <MessageList
                     messages={chatMessages}
                     authToken={token ?? undefined}
+                    sessionKey={sessionKey}
                     streaming={streaming}
                     progress={progress}
                     reasoningLevel={reasoningLevel}

@@ -2,8 +2,8 @@
 import { Type, type Static } from '@sinclair/typebox';
 import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import { readFile, writeFile, stat } from 'fs/promises';
-import { normalize } from 'path';
 import { checkFileSafety } from '../prompt/safety.js';
+import { resolvePathUnderWorkspace } from './tool-paths.js';
 import { normalizeToLF, restoreLineEndings, normalizeForFuzzyMatch, fuzzyFindText, stripBom, generateDiffString } from './edit-diff.js';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024;
@@ -20,18 +20,19 @@ export interface EditToolDetails {
   fuzzyMatchUsed?: boolean;
 }
 
-export const editFileTool: AgentTool<typeof EditFileSchema, EditToolDetails> = {
+export function createEditFileTool(workspace: string): AgentTool<typeof EditFileSchema, EditToolDetails> {
+  return {
   name: 'edit_file',
-  description: 'Edit file by replacing text.',
+  description: 'Edit file by replacing text. Relative paths are under the current agent workspace.',
   parameters: EditFileSchema,
   label: '✏️ Edit',
 
-  async execute(toolCallId: string, params: Static<typeof EditFileSchema>, _signal?: AbortSignal): Promise<AgentToolResult<EditToolDetails>> {
+  async execute(_toolCallId: string, params: Static<typeof EditFileSchema>, _signal?: AbortSignal): Promise<AgentToolResult<EditToolDetails>> {
     try {
       const safety = checkFileSafety('write', params.path);
       if (!safety.allowed) return { content: [{ type: 'text', text: `🚫 ${safety.message}` }], details: {} };
 
-      const normalized = normalize(params.path);
+      const normalized = resolvePathUnderWorkspace(params.path, workspace);
       const stats = await stat(normalized);
       if (stats.size > MAX_FILE_SIZE) return { content: [{ type: 'text', text: `🚫 File too large` }], details: {} };
 
@@ -58,15 +59,18 @@ export const editFileTool: AgentTool<typeof EditFileSchema, EditToolDetails> = {
 
       if (originalWithReplacement === finalContent) return { content: [{ type: 'text', text: `Error: No changes` }], details: {} };
 
-      const diffResult = generateDiffString(originalWithReplacement, finalContent, params.path);
-      await writeFile(params.path, finalContent, 'utf-8');
+      const diffResult = generateDiffString(originalWithReplacement, finalContent, normalized);
+      await writeFile(normalized, finalContent, 'utf-8');
 
-      return { content: [{ type: 'text', text: `File edited: ${params.path}` }], details: { diff: diffResult, fuzzyMatchUsed: matchResult.usedFuzzyMatch } };
+      return { content: [{ type: 'text', text: `File edited: ${normalized}` }], details: { diff: diffResult, fuzzyMatchUsed: matchResult.usedFuzzyMatch } };
     } catch (error) {
       return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: {} };
     }
   },
-};
+  };
+}
+
+export const editFileTool: AgentTool<typeof EditFileSchema, EditToolDetails> = createEditFileTool(process.cwd());
 
 function detectLineEnding(content: string): '\r\n' | '\n' {
   const crlfIdx = content.indexOf('\r\n');

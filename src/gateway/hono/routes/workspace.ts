@@ -2,6 +2,7 @@ import type { Hono } from 'hono';
 import { readdir, readFile, stat, writeFile } from 'node:fs/promises';
 import { join, resolve } from 'node:path';
 
+import { extractProfileAgentId } from '../../../config/agent-profile.js';
 import { type Config, getWorkspacePath } from '../../../config/schema.js';
 import { resolveSafeInboundFilePath } from '../../../channels/attachments/inbound-persist.js';
 import { resolveSafeTtsFilePath } from '../../../channels/attachments/outbound-tts-persist.js';
@@ -24,6 +25,13 @@ import type { AuthenticatedRouteDeps } from './deps.js';
 import type { GatewayService } from '../../service.js';
 
 const log = createLogger('HonoApp');
+
+/** Agent home for persisted `inbound/` and `tts/` attachments (matches `persistOutboundTtsAudio` / `prepareInboundAttachments`). */
+function resolvePersistedAttachmentAgentHome(cfg: Config, sessionKeyRaw: string | undefined): string {
+  const sk = typeof sessionKeyRaw === 'string' ? sessionKeyRaw.trim() : '';
+  const agentId = sk ? extractProfileAgentId(sk, cfg) : resolveDefaultAgentId(cfg);
+  return resolveAgentHomeDir(cfg, agentId);
+}
 
 function isKnownEditorAgentId(cfg: Config, id: string): boolean {
   const n = normalizeAgentId(id);
@@ -78,7 +86,7 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
       return c.json({ ok: false, error: { message: 'Missing rel' } }, 400);
     }
     const cfg = service.currentConfig;
-    const agentHome = resolveAgentHomeDir(cfg, resolveDefaultAgentId(cfg));
+    const agentHome = resolvePersistedAttachmentAgentHome(cfg, c.req.query('sessionKey'));
     const abs = resolveSafeInboundFilePath({ agentHome }, rel);
     if (!abs) {
       return c.json({ ok: false, error: { message: 'Forbidden' } }, 403);
@@ -125,7 +133,7 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
       return c.json({ ok: false, error: { message: 'Missing rel' } }, 400);
     }
     const cfg = service.currentConfig;
-    const agentHome = resolveAgentHomeDir(cfg, resolveDefaultAgentId(cfg));
+    const agentHome = resolvePersistedAttachmentAgentHome(cfg, c.req.query('sessionKey'));
     const abs = resolveSafeTtsFilePath({ agentHome }, rel);
     if (!abs) {
       return c.json({ ok: false, error: { message: 'Forbidden' } }, 403);

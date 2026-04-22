@@ -217,12 +217,14 @@ const messageActionIconButton = cn(
 export const MessageBubble = memo(function MessageBubble({
   message,
   authToken,
+  sessionKey,
   isStreaming,
   progress,
   reasoningLevel = 'off',
 }: {
   message: Message;
   authToken?: string;
+  sessionKey?: string | null;
   isStreaming: boolean;
   progress: ProgressState | null;
   reasoningLevel?: ReasoningLevel;
@@ -396,6 +398,7 @@ export const MessageBubble = memo(function MessageBubble({
               <AttachmentRenderer
                 attachments={message.attachments}
                 authToken={authToken}
+                sessionKey={sessionKey}
                 layout={isUser ? 'user' : 'assistant'}
               />
             ) : null}
@@ -445,6 +448,7 @@ export const MessageBubble = memo(function MessageBubble({
         open={inlineImagePreview !== null}
         attachment={inlineImagePreview}
         authToken={authToken}
+        sessionKey={sessionKey}
         onClose={() => setInlineImagePreview(null)}
       />
     </article>
