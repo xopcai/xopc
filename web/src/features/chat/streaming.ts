@@ -34,9 +34,19 @@ export function hasRenderableAssistantContent(msg: Message): boolean {
   return false;
 }
 
+/**
+ * Return an assistant message suitable for in-place streaming mutations.
+ *
+ * **Important:** the returned message always owns a *fresh* `content` array
+ * (shallow-copied from the previous one when reusing an existing message).
+ * React StrictMode (dev) invokes `setState` updaters twice with the *same*
+ * `prev` reference; without this copy the second invocation would mutate the
+ * array that was already pushed-to by the first invocation, duplicating
+ * tool_use / thinking / text blocks.
+ */
 export function ensureAssistantMessage(msg: Message | null | undefined, timestamp: number): Message {
   if (msg && msg.role === 'assistant') {
-    return msg;
+    return { ...msg, content: [...msg.content] };
   }
   return { role: 'assistant', content: [], timestamp };
 }
