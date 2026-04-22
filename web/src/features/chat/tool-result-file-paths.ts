@@ -1,5 +1,5 @@
 /** Extension list for files we offer preview links for. */
-const KNOWN_FILE_EXT = String.raw`png|jpe?g|gif|webp|bmp|svg|pdf|docx?|xlsx?|pptx?|txt|md|json|html?|css|mjs?|cjs|js|ts|mp3|wav|ogg|m4a|mp4|mov|webm` as const;
+const KNOWN_FILE_EXT = String.raw`png|jpe?g|gif|webp|bmp|svg|pdf|docx?|xlsx?|pptx?|txt|md|json|html?|css|mjs?|cjs|js|ts|mp3|wav|ogg|m4a|mp4|mov|webm`;
 
 function extensionPattern(): string {
   return `(?:${KNOWN_FILE_EXT})`;
@@ -24,6 +24,11 @@ export interface ExtractedFilePath {
   mimeType: string;
   startIndex: number;
   endIndex: number;
+  /**
+   * When the tool result includes workspace-relative paths (e.g. `media/generated/...`),
+   * use this for `raw` + preview without calling `resolve-path` (avoids 403 if host paths differ from session root).
+   */
+  workspaceRelativePath?: string;
 }
 
 const EXT_TO_MIME: Record<string, string> = {
@@ -99,7 +104,7 @@ function getFileName(path: string): string {
 function pushPath(
   absolutePath: string,
   out: ExtractedFilePath[],
-  fullText: string,
+  _fullText: string,
   startIndex: number,
   endIndex: number,
 ): void {
@@ -118,9 +123,34 @@ function pushPath(
   });
 }
 
+function looksLikeWorkspaceRelativeFilePath(s: string): boolean {
+  const t = s.trim().replace(/\\/g, '/');
+  if (t.length < 4 || t.includes('..')) return false;
+  if (t.startsWith('/') || /^[A-Za-z]:/i.test(t) || t.startsWith('\\\\')) return false;
+  return /\.(png|jpe?g|gif|webp|bmp|svg|pdf|docx?|xlsx?|pptx?|txt|md|json|html?|css|mjs?|cjs|js|ts|mp3|wav|ogg|m4a|mp4|mov|webm)$/i.test(
+    t,
+  );
+}
+
+function pushWorkspaceRelativePath(rel: string, out: ExtractedFilePath[], _fullText: string): void {
+  const t = rel.trim().replace(/\\/g, '/');
+  if (!looksLikeWorkspaceRelativeFilePath(t)) return;
+  const fileName = getFileName(t);
+  out.push({
+    absolutePath: `rel:${t}`,
+    fileName,
+    mimeType: mimeTypeFromFileName(fileName),
+    workspaceRelativePath: t,
+    startIndex: 0,
+    endIndex: 0,
+  });
+}
+
 function collectPathsFromJson(obj: unknown, out: ExtractedFilePath[], fullText: string): void {
   if (typeof obj === 'string') {
-    if (looksLikeAbsoluteFilePath(obj) && /.\.[a-z0-9]+$/i.test(obj.trim())) {
+    if (looksLikeWorkspaceRelativeFilePath(obj)) {
+      pushWorkspaceRelativePath(obj, out, fullText);
+    } else if (looksLikeAbsoluteFilePath(obj) && /\.[a-z0-9]+$/i.test(obj.trim())) {
       const i = fullText.indexOf(obj);
       if (i >= 0) {
         pushPath(obj, out, fullText, i, i + obj.length);
@@ -137,7 +167,19 @@ function collectPathsFromJson(obj: unknown, out: ExtractedFilePath[], fullText: 
     return;
   }
   if (obj && typeof obj === 'object') {
-    for (const val of Object.values(obj as Record<string, unknown>)) {
+    const rec = obj as Record<string, unknown>;
+    const relArr = rec.workspaceRelativePaths;
+    const hasRel =
+      Array.isArray(relArr) && relArr.length > 0 && relArr.every((x) => typeof x === 'string');
+    if (hasRel) {
+      for (const s of relArr) {
+        pushWorkspaceRelativePath(s, out, fullText);
+      }
+    }
+    for (const [k, val] of Object.entries(rec)) {
+      if (hasRel && k === 'paths') {
+        continue;
+      }
       collectPathsFromJson(val, out, fullText);
     }
   }
@@ -157,6 +199,28 @@ function scanTextForPaths(text: string, out: ExtractedFilePath[]): void {
   }
 }
 
+/** True if `abs` is the on-disk file for workspace-relative `rel` (dedupe "Saved: /.../a.png" vs "media/.../a.png"). */
+function absolutePathSameAsWorkspaceRelative(abs: string, rel: string): boolean {
+  const a = abs.trim().replace(/\\/g, '/');
+  const r = rel.trim().replace(/\\/g, '/').replace(/^\/+/, '');
+  if (!r || a.length < r.length) return false;
+  return a === r || a.endsWith(`/${r}`);
+}
+
+/**
+ * When `workspaceRelativePath` is present, drop absolute-path entries that refer to the same file
+ * (e.g. JSON has both `details.workspaceRelativePaths` and `content[].text` with "Saved: /abs/...").
+ */
+function dropAbsolutePathDupesCoveredByRel(paths: ExtractedFilePath[]): ExtractedFilePath[] {
+  const rels = paths.map((p) => p.workspaceRelativePath).filter((x): x is string => Boolean(x));
+  if (rels.length === 0) return paths;
+  return paths.filter((p) => {
+    if (p.workspaceRelativePath) return true;
+    if (!looksLikeAbsoluteFilePath(p.absolutePath)) return true;
+    return !rels.some((r) => absolutePathSameAsWorkspaceRelative(p.absolutePath, r));
+  });
+}
+
 /**
  * Find absolute file system paths in tool result text (JSON or plain) for workspace preview links.
  */
@@ -173,10 +237,15 @@ export function extractFilePathsFromToolResult(resultText: string): ExtractedFil
     // not valid JSON
   }
 
-  scanTextForPaths(resultText, paths);
+  const jsonHadWorkspaceRels = paths.some((p) => p.workspaceRelativePath);
+  if (!jsonHadWorkspaceRels) {
+    scanTextForPaths(resultText, paths);
+  }
+
+  const dedupedRel = dropAbsolutePathDupesCoveredByRel(paths);
 
   const seen = new Set<string>();
-  return paths.filter((p) => {
+  return dedupedRel.filter((p) => {
     const key = p.absolutePath;
     if (seen.has(key)) return false;
     seen.add(key);

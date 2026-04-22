@@ -89,6 +89,12 @@ export function ToolResultFileLinks({
       const next: Record<string, string | null> = {};
       await Promise.all(
         paths.map(async (p) => {
+          if (p.workspaceRelativePath) {
+            if (!cancelled) {
+              next[p.absolutePath] = p.workspaceRelativePath.replace(/\\/g, '/').replace(/^\/+/, '');
+            }
+            return;
+          }
           const rel = await resolveWorkspaceAbsoluteToRelative(p.absolutePath, {
             sessionKey: sessionKey?.trim() || undefined,
           });

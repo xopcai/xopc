@@ -16,7 +16,8 @@ export type ToolUseContent = {
   name: string;
   input?: unknown;
   status: 'running' | 'done' | 'error';
-  result?: string;
+  /** Serialized tool output; may be an object in edge cases (normalize before parsing). */
+  result?: string | unknown;
 };
 
 /** Reasoning / thinking segment; order in `content` matches model execution (vs tools & text). */

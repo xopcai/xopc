@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { ModelSelector } from '@/features/chat/model-selector';
 import type { AgentDefaultsState } from '@/features/settings/config-api';
 import { SettingsFormSection, SettingsFormSectionHeader } from '@/features/settings/settings-form-section';
-import { nativeSelectMaxWidthClass, selectControlBaseClass, settingsInputFocusClass } from '@/lib/form-field-width';
 import { cn } from '@/lib/cn';
 import type { MessageBundle } from '@/i18n/messages';
 

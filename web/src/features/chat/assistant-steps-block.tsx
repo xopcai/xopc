@@ -7,7 +7,6 @@ import type {
   ThinkingContent,
   ToolUseContent,
 } from '@/features/chat/messages.types';
-import { stringToToolResultMessage } from '@/features/chat/tool-result';
 import { ToolResultFileLinks } from '@/features/chat/tool-result-file-links';
 import { extractFilePathsFromToolResult } from '@/features/chat/tool-result-file-paths';
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
@@ -449,13 +448,18 @@ function StepRow({
     if (block.status === 'running') {
       return '';
     }
-    const isError = block.status === 'error';
-    const resultMsg = stringToToolResultMessage(block.result, isError);
-    return resultMsg?.content
-      .filter((c) => c.type === 'text')
-      .map((c) => c.text ?? '')
-      .join('\n')
-      .trim() ?? '';
+    const r = block.result;
+    if (r == null) {
+      return '';
+    }
+    if (typeof r === 'string') {
+      return r.trim();
+    }
+    try {
+      return JSON.stringify(r, null, 2);
+    } catch {
+      return String(r);
+    }
   }, [block]);
 
   const extractedFilePaths = useMemo(() => {
