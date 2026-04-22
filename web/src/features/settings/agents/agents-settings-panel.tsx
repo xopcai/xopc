@@ -25,7 +25,15 @@ import {
 import { AGENTS_APP_LIST_PATH, agentsAppDetailPath } from '@/features/settings/agents/agents-app-path';
 import { SETTINGS_BACK_PATH_STATE_KEY } from '@/features/settings/settings-nav-state';
 import { suggestWorkspaceFromAgentName } from '@/features/settings/suggest-agent-workspace';
-import { listJobs, updateJob, type CronJob } from '@/features/cron/cron-api';
+import {
+  getChannels,
+  getSessionChatIds,
+  listJobs,
+  updateJob,
+  type ChannelStatus,
+  type CronJob,
+  type SessionChatId,
+} from '@/features/cron/cron-api';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -42,12 +50,13 @@ import { AgentOverviewTab } from './tabs/agent-overview-tab';
 import { AgentSkillsTab } from './tabs/agent-skills-tab';
 import { AgentToolsTab } from './tabs/agent-tools-tab';
 import type { AgentPanel } from './utils';
-import { jobMatchesAgent } from './utils';
+import { buildNewBindingMatch, jobMatchesAgent } from './utils';
 
 export function AgentsSettingsPanel() {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
   const a = m.agentsSettings;
+  const cCron = m.cron;
   const chat = m.chat;
   const token = useGatewayStore((st) => st.token);
   const hasToken = Boolean(token);
@@ -165,7 +174,12 @@ export function AgentsSettingsPanel() {
 
   const [allBindings, setAllBindings] = useState<GatewayConfigBinding[]>([]);
   const [newBindChannel, setNewBindChannel] = useState('');
-  const [newBindPeerId, setNewBindPeerId] = useState('');
+  const [bindChannelStatuses, setBindChannelStatuses] = useState<ChannelStatus[]>([]);
+  const [bindChannelsLoading, setBindChannelsLoading] = useState(false);
+  const [bindSessionChats, setBindSessionChats] = useState<SessionChatId[]>([]);
+  const [bindSessionsLoading, setBindSessionsLoading] = useState(false);
+  const [newBindSessionIdx, setNewBindSessionIdx] = useState<number | null>(null);
+  const [newBindCustomPeer, setNewBindCustomPeer] = useState('');
 
   const [cronJobs, setCronJobs] = useState<CronJob[]>([]);
   const [cronLoading, setCronLoading] = useState(false);
@@ -304,6 +318,101 @@ export function AgentsSettingsPanel() {
     }
     setAllBindings(bindingsFromConfig);
   }, [panel, hasToken, bindingsFromConfig]);
+
+  useEffect(() => {
+    if (panel !== 'channels' || !hasToken) {
+      return;
+    }
+    let cancelled = false;
+    setBindChannelsLoading(true);
+    void getChannels()
+      .then((list) => {
+        if (!cancelled) {
+          setBindChannelStatuses(list);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBindChannelStatuses([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBindChannelsLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [panel, hasToken]);
+
+  useEffect(() => {
+    if (bindChannelsLoading || panel !== 'channels' || bindChannelStatuses.length === 0) {
+      return;
+    }
+    setNewBindChannel((prev) => {
+      const valid = Boolean(prev) && bindChannelStatuses.some((c) => c.name === prev);
+      if (valid) {
+        return prev;
+      }
+      return bindChannelStatuses[0]!.name;
+    });
+  }, [bindChannelsLoading, panel, bindChannelStatuses]);
+
+  useEffect(() => {
+    if (panel !== 'channels' || !hasToken) {
+      return;
+    }
+    const ch = newBindChannel.trim();
+    if (!ch) {
+      setBindSessionChats([]);
+      return;
+    }
+    let cancelled = false;
+    setNewBindSessionIdx(null);
+    setBindSessionsLoading(true);
+    void getSessionChatIds(ch)
+      .then((ids) => {
+        if (!cancelled) {
+          setBindSessionChats(ids);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setBindSessionChats([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setBindSessionsLoading(false);
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [panel, hasToken, newBindChannel]);
+
+  const refreshBindSessions = useCallback(() => {
+    const ch = newBindChannel.trim();
+    if (!ch) {
+      return;
+    }
+    setBindSessionsLoading(true);
+    void getSessionChatIds(ch)
+      .then((ids) => {
+        setBindSessionChats(ids);
+        setNewBindSessionIdx((i) => (i != null && i < ids.length ? i : null));
+      })
+      .catch(() => {
+        setBindSessionChats([]);
+        setNewBindSessionIdx(null);
+      })
+      .finally(() => {
+        setBindSessionsLoading(false);
+      });
+  }, [newBindChannel]);
+
+  const useManualChannel = !bindChannelsLoading && bindChannelStatuses.length === 0;
 
   const bindingsLoading = panel === 'channels' && hasToken && gatewayCfgData === undefined;
 
@@ -671,16 +780,19 @@ export function AgentsSettingsPanel() {
     if (!selected || !newBindChannel.trim()) {
       return;
     }
+    const match = buildNewBindingMatch(
+      newBindChannel,
+      newBindCustomPeer,
+      newBindSessionIdx,
+      bindSessionChats,
+    );
     const nextList = [
       ...allBindings,
       {
         agentId: selected.id,
         priority: 100,
         enabled: true,
-        match: {
-          channel: newBindChannel.trim(),
-          ...(newBindPeerId.trim() ? { peerId: newBindPeerId.trim() } : {}),
-        },
+        match,
       },
     ];
     setBusy(true);
@@ -688,8 +800,8 @@ export function AgentsSettingsPanel() {
     try {
       await patchGatewayBindings(nextList);
       setAllBindings(nextList);
-      setNewBindChannel('');
-      setNewBindPeerId('');
+      setNewBindSessionIdx(null);
+      setNewBindCustomPeer('');
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
     } finally {
@@ -818,10 +930,20 @@ export function AgentsSettingsPanel() {
         busy={busy}
         bindingsLoading={bindingsLoading}
         agentBindings={agentBindings}
+        channelStatuses={bindChannelStatuses}
+        channelsStatusLoading={bindChannelsLoading}
+        useManualChannel={useManualChannel}
         newBindChannel={newBindChannel}
         setNewBindChannel={setNewBindChannel}
-        newBindPeerId={newBindPeerId}
-        setNewBindPeerId={setNewBindPeerId}
+        bindSessionChats={bindSessionChats}
+        sessionsLoading={bindSessionsLoading}
+        newBindSessionIdx={newBindSessionIdx}
+        setNewBindSessionIdx={setNewBindSessionIdx}
+        newBindCustomPeer={newBindCustomPeer}
+        setNewBindCustomPeer={setNewBindCustomPeer}
+        onRefreshSessions={refreshBindSessions}
+        lastActiveLabels={cCron.lastActiveLabels}
+        selectRecipient={cCron.selectRecipient}
         onRemoveBinding={(rule) => void onRemoveBinding(rule)}
         onAddBinding={onAddBinding}
       />
