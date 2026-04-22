@@ -4,8 +4,6 @@ import type { GatewayAgentRow } from '@/features/settings/agents-admin-api';
 import { cn } from '@/lib/cn';
 import type { AgentsSettingsMessages } from '@/i18n/messages';
 
-import { agentsSettingsInputClass } from './utils';
-
 function filterAgents(agents: GatewayAgentRow[], query: string): GatewayAgentRow[] {
   const q = query.trim().toLowerCase();
   if (!q) {
@@ -47,14 +45,12 @@ export function AgentsListGrid(props: {
   a: AgentsSettingsMessages;
   agents: GatewayAgentRow[];
   searchQuery: string;
-  onSearchQueryChange: (q: string) => void;
   onOpenAgent: (id: string) => void;
   onChatWithAgent: (id: string) => void;
   onNewAgent: () => void;
   busy: boolean;
 }) {
-  const { a, agents, searchQuery, onSearchQueryChange, onOpenAgent, onChatWithAgent, onNewAgent, busy } =
-    props;
+  const { a, agents, searchQuery, onOpenAgent, onChatWithAgent, onNewAgent, busy } = props;
   const filtered = filterAgents(agents, searchQuery);
   const searchMiss = agents.length > 0 && filtered.length === 0 && searchQuery.trim().length > 0;
 
@@ -71,18 +67,6 @@ export function AgentsListGrid(props: {
 
   return (
     <div className="flex flex-col gap-4">
-      <label className="flex flex-col gap-1.5 text-sm sm:max-w-md">
-        <span className="text-fg-muted">{a.listSearchPlaceholder}</span>
-        <input
-          type="search"
-          className={agentsSettingsInputClass()}
-          value={searchQuery}
-          onChange={(e) => onSearchQueryChange(e.target.value)}
-          autoComplete="off"
-          aria-label={a.listSearchPlaceholder}
-        />
-      </label>
-
       {searchMiss ? <p className="text-sm text-fg-muted">{a.listEmpty}</p> : null}
 
       <ul

@@ -24,7 +24,7 @@
     "settingsGateway": "网关",
     "settingsHeartbeat": "心跳",
     "settingsSearch": "网络搜索",
-    "settingsAgentDefaults": "全局默认",
+    "settingsAgentDefaults": "智能体默认配置",
     "settingsAgents": "智能体"
   },
   "appsPage": {
@@ -98,7 +98,7 @@
   "settingsSections": {
     "appearance": "偏好设置",
     "agent": "智能体",
-    "agent-defaults": "全局默认",
+    "agent-defaults": "智能体默认配置",
     "providers": "服务商",
     "models": "模型",
     "channels": "即时通讯",
@@ -180,6 +180,8 @@
     "taskRenameSave": "保存",
     "taskRenameCancel": "取消",
     "backToApp": "返回应用",
+    "backToAgents": "返回智能体",
+    "back": "返回",
     "helpDocs": "帮助文档",
     "sessionChannelFilterAria": "按来源筛选：网页对话或即时通讯",
     "sessionTasksTab": "对话",
@@ -901,7 +903,7 @@
     "saveError": "请求失败",
     "loading": "加载中…",
     "tabOverview": "智能体列表",
-    "tabDefaults": "全局默认",
+    "tabDefaults": "智能体默认配置",
     "tabFiles": "Bootstrap 人设",
     "tabTools": "工具",
     "tabSkills": "技能",
