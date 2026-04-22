@@ -2,6 +2,8 @@
  * LocalStorage keys for gateway token and UI locale.
  */
 
+import { inferDefaultLanguageFromEnvironment } from './locale-default';
+
 const TOKEN_KEY = 'xopc.token';
 const LANGUAGE_KEY = 'xopc.language';
 
@@ -34,9 +36,12 @@ export function clearToken(): void {
 export function getLanguage(): StoredLanguage {
   try {
     const lang = localStorage.getItem(LANGUAGE_KEY) as StoredLanguage;
-    return lang === 'en' || lang === 'zh' ? lang : 'en';
+    if (lang === 'en' || lang === 'zh') {
+      return lang;
+    }
+    return inferDefaultLanguageFromEnvironment();
   } catch {
-    return 'en';
+    return inferDefaultLanguageFromEnvironment();
   }
 }
 
