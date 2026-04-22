@@ -342,6 +342,104 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
     }
   });
 
+  /** Map an absolute host path to a workspace-relative path (if under this session’s workspace). */
+  authenticated.get('/api/workspace/editor/resolve-path', async (c) => {
+    const raw = c.req.query('absolutePath');
+    if (!raw || typeof raw !== 'string' || !raw.trim()) {
+      return c.json({ ok: false, error: { message: 'Missing absolutePath' } }, 400);
+    }
+    const absolutePath = raw.trim();
+    const ws = await resolveEditorWorkspaceRootAsync(
+      service,
+      service.currentConfig,
+      c.req.query('sessionKey'),
+      c.req.query('agentId'),
+    );
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { message: ws.message } }, 400);
+    }
+    const workspaceRoot = ws.root;
+    const normalized = resolve(absolutePath);
+    if (!isPathUnderWorkspace(workspaceRoot, normalized)) {
+      return c.json({ ok: false, error: { message: 'Path not under workspace' } }, 403);
+    }
+    const rel = toWorkspaceRelativePosix(workspaceRoot, normalized);
+    return c.json({ ok: true, payload: { workspaceRelativePath: rel } });
+  });
+
+  /**
+   * Serve a workspace file as raw bytes (e.g. <img> after auth fetch + blob URL).
+   * Path is workspace-relative; scope via sessionKey / agentId like other editor routes.
+   */
+  authenticated.get('/api/workspace/editor/raw', async (c) => {
+    const pathRel = typeof c.req.query('path') === 'string' ? c.req.query('path')! : '';
+    if (!pathRel.trim()) {
+      return c.json({ ok: false, error: { message: 'Missing path' } }, 400);
+    }
+    const ws = await resolveEditorWorkspaceRootAsync(
+      service,
+      service.currentConfig,
+      c.req.query('sessionKey'),
+      c.req.query('agentId'),
+    );
+    if (ws.ok === false) {
+      return c.json({ ok: false, error: { message: ws.message } }, 400);
+    }
+    const workspaceRoot = ws.root;
+    const abs = resolveWorkspaceSafePath(workspaceRoot, pathRel);
+    if (!abs) {
+      return c.json({ ok: false, error: { message: 'Invalid path' } }, 400);
+    }
+    let st: Awaited<ReturnType<typeof stat>>;
+    try {
+      st = await stat(abs);
+    } catch {
+      return c.json({ ok: false, error: { message: 'Not found' } }, 404);
+    }
+    if (!st.isFile()) {
+      return c.json({ ok: false, error: { message: 'Not a file' } }, 400);
+    }
+    const ext = pathRel.split('.').pop()?.toLowerCase() ?? '';
+    const mimeByExt: Record<string, string> = {
+      png: 'image/png',
+      jpg: 'image/jpeg',
+      jpeg: 'image/jpeg',
+      gif: 'image/gif',
+      webp: 'image/webp',
+      bmp: 'image/bmp',
+      svg: 'image/svg+xml',
+      pdf: 'application/pdf',
+      docx: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
+      xlsx: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
+      pptx: 'application/vnd.openxmlformats-officedocument.presentationml.presentation',
+      txt: 'text/plain',
+      md: 'text/markdown',
+      json: 'application/json',
+      html: 'text/html',
+      css: 'text/css',
+      js: 'text/javascript',
+      ts: 'text/typescript',
+      mp3: 'audio/mpeg',
+      wav: 'audio/wav',
+      ogg: 'audio/ogg',
+      webm: 'video/webm',
+      mp4: 'video/mp4',
+      mov: 'video/quicktime',
+    };
+    const contentType = mimeByExt[ext] || 'application/octet-stream';
+    try {
+      const buf = await readFile(abs);
+      return new Response(buf, {
+        headers: {
+          'Content-Type': contentType,
+          'Cache-Control': 'private, max-age=3600',
+        },
+      });
+    } catch {
+      return c.json({ ok: false, error: { message: 'Read failed' } }, 500);
+    }
+  });
+
   authenticated.put('/api/workspace/editor/write', async (c) => {
     const ws = await resolveEditorWorkspaceRootAsync(
       service,

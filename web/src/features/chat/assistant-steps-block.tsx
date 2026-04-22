@@ -8,6 +8,8 @@ import type {
   ToolUseContent,
 } from '@/features/chat/messages.types';
 import { stringToToolResultMessage } from '@/features/chat/tool-result';
+import { ToolResultFileLinks } from '@/features/chat/tool-result-file-links';
+import { extractFilePathsFromToolResult } from '@/features/chat/tool-result-file-paths';
 import { ExtensionChatWidget } from '@/features/extensions/extension-chat-widget';
 import { useUiExtensions } from '@/features/extensions/extension-provider';
 import { useChatWidgetMatch } from '@/features/extensions/use-chat-widget-match';
@@ -132,6 +134,7 @@ export function AssistantStepsBlock({
   blocks,
   toolLabels,
   stepLabels,
+  sessionKey,
 }: {
   blocks: Array<ThinkingContent | ToolUseContent>;
   toolLabels: { input: string; output: string; noOutput: string };
@@ -144,6 +147,7 @@ export function AssistantStepsBlock({
     readFile: string;
     stepDetails: string;
   };
+  sessionKey?: string | null;
 }) {
   const visibleBlocks = useMemo(() => filterVisibleSteps(blocks), [blocks]);
   const stepCount = visibleBlocks.length;
@@ -199,7 +203,12 @@ export function AssistantStepsBlock({
       </button>
       {expanded ? (
         <div className="border-t border-edge-subtle/90 px-3 pb-3 pt-2 dark:border-edge-subtle">
-          <AssistantStepsTimeline blocks={blocks} toolLabels={toolLabels} stepLabels={timelineLabels} />
+          <AssistantStepsTimeline
+            blocks={blocks}
+            toolLabels={toolLabels}
+            stepLabels={timelineLabels}
+            sessionKey={sessionKey}
+          />
         </div>
       ) : null}
     </div>
@@ -351,6 +360,7 @@ export function AssistantStepsTimeline({
   toolLabels,
   stepLabels,
   className,
+  sessionKey,
 }: {
   blocks: Array<ThinkingContent | ToolUseContent>;
   toolLabels: { input: string; output: string; noOutput: string };
@@ -362,6 +372,7 @@ export function AssistantStepsTimeline({
     stepDetails: string;
   };
   className?: string;
+  sessionKey?: string | null;
 }) {
   const visibleBlocks = filterVisibleSteps(blocks);
   if (visibleBlocks.length === 0) {
@@ -377,6 +388,7 @@ export function AssistantStepsTimeline({
             block={b}
             toolLabels={toolLabels}
             stepLabels={stepLabels}
+            sessionKey={sessionKey}
           />
         ))}
       </div>
@@ -417,6 +429,7 @@ function StepRow({
   block,
   toolLabels,
   stepLabels,
+  sessionKey,
 }: {
   block: ThinkingContent | ToolUseContent;
   toolLabels: { input: string; output: string; noOutput: string };
@@ -427,7 +440,34 @@ function StepRow({
     readFile: string;
     stepDetails: string;
   };
+  sessionKey?: string | null;
 }) {
+  const toolResultText = useMemo(() => {
+    if (block.type !== 'tool_use') {
+      return '';
+    }
+    if (block.status === 'running') {
+      return '';
+    }
+    const isError = block.status === 'error';
+    const resultMsg = stringToToolResultMessage(block.result, isError);
+    return resultMsg?.content
+      .filter((c) => c.type === 'text')
+      .map((c) => c.text ?? '')
+      .join('\n')
+      .trim() ?? '';
+  }, [block]);
+
+  const extractedFilePaths = useMemo(() => {
+    if (block.type !== 'tool_use' || block.status === 'running' || block.status === 'error') {
+      return [];
+    }
+    if (!toolResultText) {
+      return [];
+    }
+    return extractFilePathsFromToolResult(toolResultText);
+  }, [block, toolResultText]);
+
   if (block.type === 'thinking') {
     const streaming = Boolean(block.streaming);
     const text = block.text?.trim() ?? '';
@@ -460,12 +500,7 @@ function StepRow({
 
   const isStreaming = block.status === 'running';
   const isError = block.status === 'error';
-  const resultMsg = !isStreaming ? stringToToolResultMessage(block.result, isError) : undefined;
-  const resultText = resultMsg?.content
-    .filter((c) => c.type === 'text')
-    .map((c) => c.text ?? '')
-    .join('\n')
-    .trim();
+  const resultText = toolResultText;
 
   let outputPreview = resultText ?? '';
   if (outputPreview) {
@@ -536,6 +571,9 @@ function StepRow({
         ) : null}
         {!isStreaming && !isError ? (
           <ToolUseWidgetSlot toolName={block.name} toolResult={block.result} />
+        ) : null}
+        {!isStreaming && !isError && extractedFilePaths.length > 0 ? (
+          <ToolResultFileLinks paths={extractedFilePaths} sessionKey={sessionKey} />
         ) : null}
       </div>
     </div>
