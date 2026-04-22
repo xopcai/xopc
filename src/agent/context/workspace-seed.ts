@@ -15,6 +15,14 @@ import { createLogger } from '../../utils/logger.js';
 
 const log = createLogger('WorkspaceSeed');
 
+/** Marker in bundled/reference `IDENTITY.md` templates; replaced on agent creation when a display name is known. */
+export const IDENTITY_NAME_PLACEHOLDER = '_(pick something you like)_';
+
+export type SeedWorkspaceBootstrapOptions = {
+  /** Fills the **Name** line in `IDENTITY.md` when the template still contains the placeholder. */
+  displayName?: string;
+};
+
 /** Files to copy when seeding a new agent workspace (includes `BOOTSTRAP.md`, not part of system-prompt load order). */
 const SEED_FILENAMES: readonly string[] = [...BOOTSTRAP_FILES, WORKSPACE_FILES.BOOTSTRAP];
 
@@ -71,11 +79,22 @@ function writeFileIfMissing(targetPath: string, content: string): boolean {
   return true;
 }
 
+function personalizeIdentityTemplate(content: string, displayName?: string): string {
+  const n = displayName?.trim();
+  if (!n || !content.includes(IDENTITY_NAME_PLACEHOLDER)) {
+    return content;
+  }
+  return content.replaceAll(IDENTITY_NAME_PLACEHOLDER, n);
+}
+
 /**
  * Create `bootstrapDir` and copy any missing bootstrap Markdown files from built-in templates.
  * Does not overwrite existing files (per-agent persona stays independent after first edit).
  */
-export function seedWorkspaceBootstrapFiles(bootstrapDir: string): void {
+export function seedWorkspaceBootstrapFiles(
+  bootstrapDir: string,
+  options?: SeedWorkspaceBootstrapOptions,
+): void {
   mkdirSync(bootstrapDir, { recursive: true });
 
   let seeded = 0;
@@ -86,7 +105,9 @@ export function seedWorkspaceBootstrapFiles(bootstrapDir: string): void {
       log.warn({ name }, 'Missing workspace template file; skip seeding');
       continue;
     }
-    if (writeFileIfMissing(targetPath, tpl)) {
+    const body =
+      name === WORKSPACE_FILES.IDENTITY ? personalizeIdentityTemplate(tpl, options?.displayName) : tpl;
+    if (writeFileIfMissing(targetPath, body)) {
       seeded++;
     }
   }

@@ -91,9 +91,12 @@ export function AgentsSettingsPanel() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [panel, setPanel] = useState<AgentPanel>('overview');
 
-  const [createName, setCreateName] = useState('');
+  const [createDisplayName, setCreateDisplayName] = useState('');
+  const [createAgentId, setCreateAgentId] = useState('');
+  const [createDescription, setCreateDescription] = useState('');
   const [createWorkspace, setCreateWorkspace] = useState('');
   const [createModel, setCreateModel] = useState('');
+  const [createModalError, setCreateModalError] = useState<string | null>(null);
   const [addAgentModalOpen, setAddAgentModalOpen] = useState(false);
   const createWorkspaceSuggestedRef = useRef('');
   const [busy, setBusy] = useState(false);
@@ -531,7 +534,7 @@ export function AgentsSettingsPanel() {
   }, [activeFile, selectedId]);
 
   const applyCreateWorkspaceSuggestion = useCallback(() => {
-    const next = suggestWorkspaceFromAgentName(createName);
+    const next = suggestWorkspaceFromAgentName(createAgentId.trim() || createDisplayName);
     setCreateWorkspace((prev) => {
       if (prev === '' || prev === createWorkspaceSuggestedRef.current) {
         createWorkspaceSuggestedRef.current = next;
@@ -539,13 +542,16 @@ export function AgentsSettingsPanel() {
       }
       return prev;
     });
-  }, [createName]);
+  }, [createAgentId, createDisplayName]);
 
   const openAddAgentModal = useCallback(() => {
     createWorkspaceSuggestedRef.current = '';
-    setCreateName('');
+    setCreateDisplayName('');
+    setCreateAgentId('');
+    setCreateDescription('');
     setCreateWorkspace('');
     setCreateModel('');
+    setCreateModalError(null);
     setAddAgentModalOpen(true);
   }, []);
 
@@ -622,33 +628,39 @@ export function AgentsSettingsPanel() {
 
   async function onCreate(e: FormEvent) {
     e.preventDefault();
-    const name = createName.trim();
+    const name = createDisplayName.trim();
     if (!name) {
       return;
     }
     const wsInput = createWorkspace.trim();
-    const workspace = wsInput || suggestWorkspaceFromAgentName(name);
+    const workspace = wsInput || suggestWorkspaceFromAgentName(createAgentId.trim() || name);
     if (!workspace) {
       return;
     }
     setBusy(true);
-    setError(null);
+    setCreateModalError(null);
     try {
+      const desc = createDescription.trim();
       const next = await createGatewayAgent({
         name,
         workspace,
+        ...(createAgentId.trim() ? { id: createAgentId.trim() } : {}),
         ...(createModel.trim() ? { model: createModel.trim() } : {}),
+        ...(desc ? { description: desc } : {}),
       });
       const { createdAgentId, ...agentsPayload } = next;
       void mutateAgents(agentsPayload, { revalidate: false });
-      setCreateName('');
+      setCreateDisplayName('');
+      setCreateAgentId('');
+      setCreateDescription('');
       setCreateWorkspace('');
       setCreateModel('');
+      setCreateModalError(null);
       setAddAgentModalOpen(false);
       setSelectedId(createdAgentId);
       navigate(agentsAppDetailPath(createdAgentId));
     } catch (err) {
-      setError(err instanceof Error ? err.message : a.saveError);
+      setCreateModalError(err instanceof Error ? err.message : a.saveError);
     } finally {
       setBusy(false);
     }
@@ -1021,22 +1033,30 @@ export function AgentsSettingsPanel() {
           setAddAgentModalOpen(open);
           if (!open) {
             createWorkspaceSuggestedRef.current = '';
-            setCreateName('');
+            setCreateDisplayName('');
+            setCreateAgentId('');
+            setCreateDescription('');
             setCreateWorkspace('');
             setCreateModel('');
+            setCreateModalError(null);
           }
         }}
         a={a}
         chat={chat}
         busy={busy}
-        createName={createName}
-        setCreateName={setCreateName}
+        modalError={createModalError}
+        createDisplayName={createDisplayName}
+        setCreateDisplayName={setCreateDisplayName}
+        createAgentId={createAgentId}
+        setCreateAgentId={setCreateAgentId}
+        createDescription={createDescription}
+        setCreateDescription={setCreateDescription}
         createWorkspace={createWorkspace}
         setCreateWorkspace={setCreateWorkspace}
         createModel={createModel}
         setCreateModel={setCreateModel}
         onCreate={onCreate}
-        onNameBlur={() => applyCreateWorkspaceSuggestion()}
+        onSuggestWorkspace={() => applyCreateWorkspaceSuggestion()}
       />
     </div>
   );

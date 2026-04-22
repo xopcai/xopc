@@ -15,14 +15,19 @@ export function CreateAgentDialog(props: {
   a: AgentsSettingsMessages;
   chat: ChatMessages;
   busy: boolean;
-  createName: string;
-  setCreateName: (v: string) => void;
+  modalError: string | null;
+  createDisplayName: string;
+  setCreateDisplayName: (v: string) => void;
+  createAgentId: string;
+  setCreateAgentId: (v: string) => void;
+  createDescription: string;
+  setCreateDescription: (v: string) => void;
   createWorkspace: string;
   setCreateWorkspace: (v: string) => void;
   createModel: string;
   setCreateModel: (v: string) => void;
   onCreate: (e: FormEvent) => void;
-  onNameBlur: () => void;
+  onSuggestWorkspace: () => void;
 }) {
   const {
     open,
@@ -30,14 +35,19 @@ export function CreateAgentDialog(props: {
     a,
     chat,
     busy,
-    createName,
-    setCreateName,
+    modalError,
+    createDisplayName,
+    setCreateDisplayName,
+    createAgentId,
+    setCreateAgentId,
+    createDescription,
+    setCreateDescription,
     createWorkspace,
     setCreateWorkspace,
     createModel,
     setCreateModel,
     onCreate,
-    onNameBlur,
+    onSuggestWorkspace,
   } = props;
 
   return (
@@ -68,15 +78,47 @@ export function CreateAgentDialog(props: {
           </div>
 
           <form className="grid gap-3" onSubmit={onCreate}>
+            {modalError ? (
+              <div
+                role="alert"
+                className="rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-800 dark:border-red-900/50 dark:bg-red-950/40 dark:text-red-200"
+              >
+                {modalError}
+              </div>
+            ) : null}
             <label className="flex flex-col gap-1 text-sm">
-              <span className="text-fg-muted">{a.newName}</span>
+              <span className="text-fg-muted">{a.newAgentLabel}</span>
               <input
                 className={agentsSettingsInputClass()}
-                value={createName}
-                onChange={(e) => setCreateName(e.target.value)}
-                onBlur={() => onNameBlur()}
+                value={createDisplayName}
+                onChange={(e) => setCreateDisplayName(e.target.value)}
+                onBlur={() => onSuggestWorkspace()}
                 required
                 autoComplete="off"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-fg-muted">{a.newAgentIdOptional}</span>
+              <input
+                className={cn(agentsSettingsInputClass(), 'font-mono text-xs')}
+                value={createAgentId}
+                onChange={(e) => setCreateAgentId(e.target.value)}
+                onBlur={() => onSuggestWorkspace()}
+                placeholder={a.newAgentIdPlaceholder}
+                autoComplete="off"
+                spellCheck={false}
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-sm">
+              <span className="text-fg-muted">{a.agentDescription}</span>
+              <textarea
+                className={cn(agentsSettingsInputClass(), 'min-h-[4.5rem] resize-y font-sans text-sm leading-relaxed')}
+                value={createDescription}
+                onChange={(e) => setCreateDescription(e.target.value)}
+                placeholder={a.agentDescriptionPlaceholder}
+                maxLength={4000}
+                rows={3}
+                spellCheck
               />
             </label>
             <label className="flex flex-col gap-1 text-sm">

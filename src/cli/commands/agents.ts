@@ -103,7 +103,7 @@ export function registerAgentsCli(program: Command): void {
         await mkdir(adPath, { recursive: true });
         await mkdir(join(adPath, 'credentials'), { recursive: true });
         await mkdir(bootstrapPath, { recursive: true });
-        seedWorkspaceBootstrapFiles(bootstrapPath);
+        seedWorkspaceBootstrapFiles(bootstrapPath, { displayName: name.trim() });
 
         const payload = { agentId, workspace: wsPath, agentDir: adPath, model: opts.model };
         if (opts.json) {
