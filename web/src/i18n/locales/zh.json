@@ -248,6 +248,8 @@
       "defaultWorkspace": "会话工作区",
       "copyPath": "复制路径",
       "selectionOnlyAtNewChat": "仅可在发送首条消息前选择工作区。",
+      "lockedTapTitle": "本会话无法更改工作区",
+      "lockedTapBody": "要选择项目文件夹，请先新建对话，在发送第一条消息前点击此处选择路径。也可在「设置 → 智能体」中配置默认工作空间。",
       "clickToCopyFullPath": "点击复制完整路径",
       "copied": "已复制",
       "openWorkspaceMenu": "工作区选项",

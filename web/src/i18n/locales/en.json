@@ -248,6 +248,8 @@
       "defaultWorkspace": "Session workspace",
       "copyPath": "Copy path",
       "selectionOnlyAtNewChat": "Workspace can only be chosen before the first message.",
+      "lockedTapTitle": "Workspace is locked for this chat",
+      "lockedTapBody": "To pick a folder for the agent, open New chat and click this control before you send the first message. You can also set a default workspace under Settings → Agents.",
       "clickToCopyFullPath": "Click to copy full path",
       "copied": "Copied",
       "openWorkspaceMenu": "Workspace options",
