@@ -204,6 +204,63 @@
     "newSession": "New chat",
     "welcomeTitle": "Welcome to xopc",
     "welcomeDescription": "Send a message to get started",
+    "welcomeSpotlight": {
+      "headline": "The solo operator's AI execution console",
+      "tagline": "Runs on your machine: takes tasks, breaks them down, and executes — you keep the decisions.",
+      "categories": [
+        {
+          "id": "files",
+          "icon": "folder",
+          "title": "File organization",
+          "description": "Downloads, photos, attachments",
+          "scenarios": [
+            {
+              "prompt": "Scan my Downloads folder for duplicates by content hash; list paths and modified times per group and recommend keeping only the newest copy."
+            },
+            {
+              "prompt": "Inspect files on my Desktop and propose a subfolder layout by type (docs, images, audio/video, archives, spreadsheets). Outline safe steps before moving anything."
+            },
+            {
+              "prompt": "Read EXIF from photos under my album path in the workspace (date, GPS or place fields) and propose a rename pattern \"YY-MM-DD Place-Index\"; flag files missing EXIF."
+            }
+          ]
+        },
+        {
+          "id": "content",
+          "icon": "content",
+          "title": "Content creation",
+          "description": "Notes, briefs, copy",
+          "scenarios": [
+            {
+              "prompt": "Read my latest meeting notes (Markdown or TXT in the workspace), extract decisions, action items, and owners; format todos as a checklist and mark gaps."
+            },
+            {
+              "prompt": "From rough notes in my workspace notes folder, draft a \"today / this week\" brief: schedule highlights, follow-ups, risks and blockers — tone for me or my team."
+            },
+            {
+              "prompt": "Rewrite one long article or technical note from the workspace into five short social posts (hook, bullet takeaways, quote, poll question, resource drop) with length suited to threads."
+            }
+          ]
+        },
+        {
+          "id": "documents",
+          "icon": "documents",
+          "title": "Document processing",
+          "description": "Summaries, diffs, tables",
+          "scenarios": [
+            {
+              "prompt": "Open the PDF or long Markdown I specify in the workspace and return: executive summary, three key takeaways, risks and assumptions; say what you read if it is partial."
+            },
+            {
+              "prompt": "Diff two versions of a config or API doc (paths I give) in a table: added, removed, renamed items, and call out anything deployment-sensitive."
+            },
+            {
+              "prompt": "Inventory all CSV and XLSX files: path, sheet or column preview, rough row counts; which schemas look merge-compatible and what to watch for when combining."
+            }
+          ]
+        }
+      ]
+    },
     "you": "You",
     "assistant": "Assistant",
     "tool": "Tool",
