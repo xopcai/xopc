@@ -231,7 +231,7 @@ export class AgentToolsFactory {
             }),
           ]
         : []),
-      createSendMediaTool(bus, () => this.deps.getCurrentContext()),
+      createSendMediaTool(workspace, bus, () => this.deps.getCurrentContext()),
       createMemorySearchTool(workspace),
       createMemoryGetTool(workspace),
       ...(getBuiltin && shouldRegisterCuratedMemoryTool(this.deps.getConfig?.())
