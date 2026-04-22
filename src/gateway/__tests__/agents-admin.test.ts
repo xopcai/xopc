@@ -84,6 +84,20 @@ describe('agents-admin', () => {
     expect(e?.tools?.disable).toEqual(['shell']);
   });
 
+  it('prepareCreateAgent uses explicit id seed for agent id and keeps display name', () => {
+    const cfg = minimalConfig();
+    const r = prepareCreateAgent(cfg, {
+      name: 'Nice Label',
+      id: 'nice-bot',
+      workspace: '/tmp/ws-nice',
+    });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const list = r.data.nextConfig.agents?.list ?? [];
+    const e = list.find((x) => x.id === 'nice-bot');
+    expect(e?.name).toBe('Nice Label');
+  });
+
   it('prepareCreateAgent rejects duplicate id', () => {
     const cfg = minimalConfig({
       agents: {

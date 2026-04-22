@@ -120,7 +120,10 @@ export function listGatewayAgents(cfg: Config): GatewayAgentsListResponse {
 }
 
 export type CreateAgentBody = {
+  /** Display name stored on the agent entry. */
   name: string;
+  /** Optional id seed; normalized agent id defaults from `name` when omitted. */
+  id?: string;
   workspace: string;
   model?: string;
   agentDir?: string;
@@ -152,7 +155,8 @@ export function prepareCreateAgent(
   if (!workspace) {
     return { ok: false, error: 'workspace is required', status: 400 };
   }
-  const agentId = normalizeAgentId(name);
+  const idSeed = body.id?.trim() || name;
+  const agentId = normalizeAgentId(idSeed);
   const reserved = requireNonMain(agentId);
   if (reserved) {
     return reserved;
@@ -180,7 +184,10 @@ export async function finalizeCreateAgentDirs(cfg: Config, agentId: string): Pro
   await mkdir(adPath, { recursive: true });
   await mkdir(join(adPath, 'credentials'), { recursive: true });
   await mkdir(bootstrapPath, { recursive: true });
-  seedWorkspaceBootstrapFiles(bootstrapPath);
+  const id = normalizeAgentId(agentId);
+  const entry = listAgentEntries(cfg).find((e) => normalizeAgentId(e.id) === id);
+  const displayName = entry?.name?.trim() || id;
+  seedWorkspaceBootstrapFiles(bootstrapPath, { displayName });
 }
 
 export type UpdateAgentBody = {
