@@ -16,6 +16,7 @@ import {
   inferAttachmentFileType,
   PPTX_PREVIEW_MAX_CHARS,
   resolveDataUrlForDisplay,
+  workspaceRelativePathToApiPath,
   type AttachmentPreviewFileType,
 } from '@/features/chat/attachment-utils-core';
 import { apiFetch } from '@/lib/fetch';
@@ -314,11 +315,13 @@ export function AttachmentPreviewDialog({
   open,
   attachment,
   authToken,
+  sessionKey,
   onClose,
 }: {
   open: boolean;
   attachment: MessageAttachment | null;
   authToken?: string;
+  sessionKey?: string | null;
   onClose: () => void;
 }) {
   const language = useLocaleStore((s) => s.language);
@@ -357,7 +360,7 @@ export function AttachmentPreviewDialog({
 
     void (async () => {
       try {
-        const url = apiUrl(`/api/workspace/inbound-file?rel=${encodeURIComponent(path)}`);
+        const url = apiUrl(workspaceRelativePathToApiPath(path, { sessionKey }));
         const res = await apiFetch(url);
         if (cancelled) return;
         if (!res.ok) {
@@ -381,7 +384,7 @@ export function AttachmentPreviewDialog({
     return () => {
       cancelled = true;
     };
-  }, [open, preview?.workspaceRelativePath, authToken, language]);
+  }, [open, preview?.workspaceRelativePath, authToken, language, sessionKey]);
 
   const fileType = preview ? inferAttachmentFileType(preview) : 'text';
   const hasExtractedText = Boolean(preview?.extractedText);

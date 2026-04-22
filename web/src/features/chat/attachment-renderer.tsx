@@ -17,10 +17,12 @@ function isAudioAttachment(att: MessageAttachment): boolean {
 export function AttachmentRenderer({
   attachments,
   authToken,
+  sessionKey,
   layout = 'assistant',
 }: {
   attachments: MessageAttachment[];
   authToken?: string;
+  sessionKey?: string | null;
   /** User bubbles align voice pills to the right (WeChat-style). */
   layout?: 'user' | 'assistant';
 }) {
@@ -57,6 +59,7 @@ export function AttachmentRenderer({
                 key={img.id ?? `${img.name}-${i}`}
                 attachment={img}
                 authToken={authToken}
+                sessionKey={sessionKey}
                 onOpen={(att) => {
                   setActive(att);
                   setOpen(true);
@@ -71,6 +74,7 @@ export function AttachmentRenderer({
               <VoiceMessageBar
                 key={a.id ?? `${a.name}-${i}`}
                 att={a}
+                sessionKey={sessionKey}
                 align={layout === 'user' ? 'end' : 'start'}
                 variant={layout === 'user' ? 'compact' : 'default'}
               />
@@ -84,6 +88,7 @@ export function AttachmentRenderer({
                 key={doc.id ?? `${doc.name}-${i}`}
                 attachment={doc}
                 authToken={authToken}
+                sessionKey={sessionKey}
                 onOpen={(att) => {
                   setActive(att);
                   setOpen(true);
@@ -98,6 +103,7 @@ export function AttachmentRenderer({
         open={open}
         attachment={active}
         authToken={authToken}
+        sessionKey={sessionKey}
         onClose={() => {
           setOpen(false);
           setActive(null);
