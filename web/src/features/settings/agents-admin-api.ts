@@ -46,9 +46,11 @@ export type CreateGatewayAgentResult = GatewayAgentsPayload & { createdAgentId: 
 
 export async function createGatewayAgent(body: {
   name: string;
+  id?: string;
   workspace: string;
   model?: string;
   agentDir?: string;
+  description?: string;
 }): Promise<CreateGatewayAgentResult> {
   const res = await fetchJson<{
     ok?: boolean;

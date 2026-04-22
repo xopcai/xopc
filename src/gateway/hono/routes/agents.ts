@@ -48,11 +48,13 @@ export function registerAgentsRoutes(authenticated: Hono, deps: AuthenticatedRou
     const model = typeof body.model === 'string' ? body.model : undefined;
     const agentDir = typeof body.agentDir === 'string' ? body.agentDir : undefined;
     const description = typeof body.description === 'string' ? body.description : undefined;
+    const id = typeof body.id === 'string' ? body.id : undefined;
     const prep = prepareCreateAgent(service.currentConfig as Config, {
       name,
       workspace,
       model,
       agentDir,
+      ...(id !== undefined ? { id } : {}),
       ...(description !== undefined ? { description } : {}),
     });
     if (prep.ok === false) {

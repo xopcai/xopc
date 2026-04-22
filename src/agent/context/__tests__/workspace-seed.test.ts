@@ -23,4 +23,16 @@ describe('workspace-seed', () => {
     }
   });
 
+  it('replaces IDENTITY name placeholder when displayName is provided', () => {
+    const dir = mkdtempSync(join(tmpdir(), 'xopc-ws-'));
+    try {
+      seedWorkspaceBootstrapFiles(dir, { displayName: 'Research Buddy' });
+      const raw = readFileSync(join(dir, WORKSPACE_FILES.IDENTITY), 'utf-8');
+      expect(raw).toContain('Research Buddy');
+      expect(raw).not.toContain('_(pick something you like)_');
+    } finally {
+      rmSync(dir, { recursive: true, force: true });
+    }
+  });
+
 });
