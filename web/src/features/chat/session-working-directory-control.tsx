@@ -123,20 +123,40 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
     }
   }, [applyPath, hasElectronFolderPicker, openNativeFolderPicker]);
 
-  const copyFullPath = useCallback(async () => {
-    const full = effectivePath.trim();
-    if (!full) return;
-    try {
-      await navigator.clipboard.writeText(full);
-      window.dispatchEvent(
-        new CustomEvent('extension-notification', {
-          detail: { type: 'success' as const, title: wd.copied, duration: 2500 },
-        }),
-      );
-    } catch {
-      /* ignore */
-    }
-  }, [effectivePath, wd.copied]);
+  const copyFullPath = useCallback(
+    async (opts?: { includeWorkspaceLockHint?: boolean }) => {
+      const full = effectivePath.trim();
+      if (!full) return;
+      try {
+        await navigator.clipboard.writeText(full);
+        window.dispatchEvent(
+          new CustomEvent('extension-notification', {
+            detail: {
+              type: 'success' as const,
+              title: wd.copied,
+              ...(opts?.includeWorkspaceLockHint ? { message: wd.selectionOnlyAtNewChat, duration: 4500 } : { duration: 2500 }),
+            },
+          }),
+        );
+      } catch {
+        /* ignore */
+      }
+    },
+    [effectivePath, wd.copied, wd.selectionOnlyAtNewChat],
+  );
+
+  const showWorkspaceLockedReminder = useCallback(() => {
+    window.dispatchEvent(
+      new CustomEvent('extension-notification', {
+        detail: {
+          type: 'info' as const,
+          title: wd.lockedTapTitle,
+          message: wd.lockedTapBody,
+          duration: 6500,
+        },
+      }),
+    );
+  }, [wd.lockedTapBody, wd.lockedTapTitle]);
 
   if (!sessionKey) {
     return null;
@@ -154,13 +174,23 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
   );
 
   const readOnlyChip = (title: string) => (
-    <div
-      className={cn(chipClass, !hasPath && 'cursor-default text-fg-muted')}
+    <button
+      type="button"
+      className={cn(
+        chipClass,
+        'cursor-pointer text-left hover:bg-surface-hover/70 dark:hover:bg-surface-hover/50',
+        !hasPath && 'text-fg-muted',
+      )}
       title={title}
+      aria-label={title}
+      onClick={(e) => {
+        e.stopPropagation();
+        showWorkspaceLockedReminder();
+      }}
     >
       <FolderInput className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
       <span className="min-w-0 truncate text-left font-medium text-fg">{label}</span>
-    </div>
+    </button>
   );
 
   const copyPathChip = (title: string) => (
@@ -176,7 +206,7 @@ export const SessionWorkingDirectoryControl = memo(function SessionWorkingDirect
       aria-label={title}
       onClick={(e) => {
         e.stopPropagation();
-        if (hasPath && !disabled && !loading) void copyFullPath();
+        if (hasPath && !disabled && !loading) void copyFullPath({ includeWorkspaceLockHint: true });
       }}
     >
       <FolderInput className="size-3.5 shrink-0 text-fg-muted" aria-hidden />
