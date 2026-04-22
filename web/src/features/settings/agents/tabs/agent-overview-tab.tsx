@@ -16,6 +16,8 @@ export function AgentOverviewTab(props: {
   busy: boolean;
   editName: string;
   setEditName: (v: string) => void;
+  editDescription: string;
+  setEditDescription: (v: string) => void;
   editWorkspace: string;
   setEditWorkspace: (v: string) => void;
   editModel: string;
@@ -33,6 +35,8 @@ export function AgentOverviewTab(props: {
     busy,
     editName,
     setEditName,
+    editDescription,
+    setEditDescription,
     editWorkspace,
     setEditWorkspace,
     editModel,
@@ -66,6 +70,18 @@ export function AgentOverviewTab(props: {
             <label className="flex flex-col gap-1 text-sm">
               <span className="text-fg-muted">{a.displayName}</span>
               <input className={agentsSettingsInputClass()} value={editName} onChange={(e) => setEditName(e.target.value)} />
+            </label>
+            <label className="flex flex-col gap-1 text-sm sm:col-span-2">
+              <span className="text-fg-muted">{a.agentDescription}</span>
+              <textarea
+                className={cn(agentsSettingsInputClass(), 'min-h-[5.5rem] resize-y font-sans text-sm leading-relaxed')}
+                value={editDescription}
+                onChange={(e) => setEditDescription(e.target.value)}
+                placeholder={a.agentDescriptionPlaceholder}
+                maxLength={4000}
+                rows={4}
+                spellCheck
+              />
             </label>
             <label className="flex flex-col gap-1 text-sm sm:col-span-2">
               <span className="text-fg-muted">{a.workspacePath}</span>

@@ -102,6 +102,7 @@ export function AgentsSettingsPanel() {
   const [editWorkspace, setEditWorkspace] = useState('');
   const [editModel, setEditModel] = useState('');
   const [editName, setEditName] = useState('');
+  const [editDescription, setEditDescription] = useState('');
 
   const [files, setFiles] = useState<Awaited<ReturnType<typeof fetchAgentBootstrapFiles>> | null>(null);
   const [filesLoading, setFilesLoading] = useState(false);
@@ -257,11 +258,13 @@ export function AgentsSettingsPanel() {
       setEditWorkspace('');
       setEditModel('');
       setEditName('');
+      setEditDescription('');
       return;
     }
     setEditWorkspace(selected.workspace);
     setEditModel(selected.model?.primary ?? '');
     setEditName(selected.name?.trim() ? selected.name.trim() : selected.id);
+    setEditDescription(selected.description?.trim() ?? '');
   }, [selected]);
 
   useEffect(() => {
@@ -658,8 +661,10 @@ export function AgentsSettingsPanel() {
     setBusy(true);
     setError(null);
     try {
+      const descTrim = editDescription.trim();
       const next = await updateGatewayAgent(selected.id, {
         name: editName.trim() || undefined,
+        description: descTrim.length > 0 ? descTrim : null,
         workspace: editWorkspace.trim() || undefined,
         model: editModel.trim() || null,
       });
@@ -874,6 +879,8 @@ export function AgentsSettingsPanel() {
         busy={busy}
         editName={editName}
         setEditName={setEditName}
+        editDescription={editDescription}
+        setEditDescription={setEditDescription}
         editWorkspace={editWorkspace}
         setEditWorkspace={setEditWorkspace}
         editModel={editModel}

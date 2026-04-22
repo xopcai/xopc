@@ -45,6 +45,26 @@ describe('agents-admin', () => {
     expect(agents[0]?.tools.effectiveDisable).toEqual([]);
   });
 
+  it('prepareUpdateAgent sets description and can clear it', () => {
+    const cfg = minimalConfig({
+      agents: {
+        ...minimalConfig().agents,
+        list: [{ id: 'coder', enabled: true, workspace: '/tmp/c', description: 'old' }],
+      },
+    } as Partial<Config>);
+    const set = prepareUpdateAgent(cfg, 'coder', { description: 'Builds features' });
+    expect(set.ok).toBe(true);
+    if (!set.ok) return;
+    const e = set.data.nextConfig.agents?.list?.find((x) => x.id === 'coder');
+    expect(e?.description).toBe('Builds features');
+
+    const cleared = prepareUpdateAgent(set.data.nextConfig, 'coder', { description: null });
+    expect(cleared.ok).toBe(true);
+    if (!cleared.ok) return;
+    const e2 = cleared.data.nextConfig.agents?.list?.find((x) => x.id === 'coder');
+    expect(e2?.description).toBeUndefined();
+  });
+
   it('prepareUpdateAgent sets skills and tools.disable on list entry', () => {
     const cfg = minimalConfig({
       agents: {
