@@ -5,9 +5,8 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { Button } from '@/components/ui/button';
 import { fetchConfiguredModelsCached } from '@/features/chat/registry-api';
 import { needsModelOrProviders } from '@/features/gateway/model-setup-state';
-import { fetchJson } from '@/lib/fetch';
+import { fetchGatewayConfigSwrResponse } from '@/features/gateway/gateway-config-swr';
 import { cn } from '@/lib/cn';
-import { apiUrl } from '@/lib/url';
 import { messages } from '@/i18n/messages';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -56,8 +55,8 @@ function OnboardingModelSetupStep() {
     }
     try {
       const [j, models] = await Promise.all([
-        fetchJson<ConfigGet>(apiUrl('/api/config')),
-        fetchConfiguredModelsCached(true).catch(() => null),
+        fetchGatewayConfigSwrResponse() as Promise<ConfigGet>,
+        fetchConfiguredModelsCached().catch(() => null),
       ]);
       const configNeeds = needsModelOrProviders(j.payload?.config);
       const noUsableModels = Array.isArray(models) && models.length === 0;

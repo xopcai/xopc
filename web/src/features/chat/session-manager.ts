@@ -10,6 +10,16 @@ export function isWebUiSessionKey(key: string): boolean {
   return key.startsWith('gateway:') || key.includes(':gateway:') || key.includes(':webchat:');
 }
 
+type SessionAgentConfig = {
+  thinkingLevel: string;
+  model: string;
+  reasoningLevel: string;
+  effectiveWorkspacePath: string;
+  workingDirectoryLocked: boolean;
+};
+
+const _agentConfigInflight = new Map<string, Promise<SessionAgentConfig>>();
+
 /** Session list + history via REST; auth from `apiFetch` (gateway token store). */
 export class SessionManager {
   /** Same first page as sidebar (`limit=20&offset=0`) so `listSessions` in-flight dedupe applies. */
@@ -26,39 +36,45 @@ export class SessionManager {
       .sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
   }
 
-  async loadSessionAgentConfig(sessionKey: string): Promise<{
-    thinkingLevel: string;
-    model: string;
-    reasoningLevel: string;
-    effectiveWorkspacePath: string;
-    workingDirectoryLocked: boolean;
-  }> {
-    const res = await apiFetch(apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`));
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    const data = (await res.json()) as {
-      payload?: {
-        thinkingLevel?: string;
-        model?: string;
-        reasoningLevel?: string;
-        effectiveWorkspacePath?: string;
-        workingDirectoryLocked?: boolean;
+  async loadSessionAgentConfig(sessionKey: string): Promise<SessionAgentConfig> {
+    const existing = _agentConfigInflight.get(sessionKey);
+    if (existing) return existing;
+
+    const pending = (async () => {
+      const res = await apiFetch(
+        apiUrl(`/api/sessions/${encodeURIComponent(sessionKey)}/agent-config`),
+      );
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const data = (await res.json()) as {
+        payload?: {
+          thinkingLevel?: string;
+          model?: string;
+          reasoningLevel?: string;
+          effectiveWorkspacePath?: string;
+          workingDirectoryLocked?: boolean;
+        };
       };
-    };
-    const thinkingLevel = data.payload?.thinkingLevel ?? 'medium';
-    const model = typeof data.payload?.model === 'string' ? data.payload.model : '';
-    const reasoningLevel = data.payload?.reasoningLevel ?? 'off';
-    const effectiveWorkspacePath =
-      typeof data.payload?.effectiveWorkspacePath === 'string'
-        ? data.payload.effectiveWorkspacePath
-        : '';
-    const workingDirectoryLocked = Boolean(data.payload?.workingDirectoryLocked);
-    return {
-      thinkingLevel,
-      model,
-      reasoningLevel,
-      effectiveWorkspacePath,
-      workingDirectoryLocked,
-    };
+      const thinkingLevel = data.payload?.thinkingLevel ?? 'medium';
+      const model = typeof data.payload?.model === 'string' ? data.payload.model : '';
+      const reasoningLevel = data.payload?.reasoningLevel ?? 'off';
+      const effectiveWorkspacePath =
+        typeof data.payload?.effectiveWorkspacePath === 'string'
+          ? data.payload.effectiveWorkspacePath
+          : '';
+      const workingDirectoryLocked = Boolean(data.payload?.workingDirectoryLocked);
+      return {
+        thinkingLevel,
+        model,
+        reasoningLevel,
+        effectiveWorkspacePath,
+        workingDirectoryLocked,
+      };
+    })().finally(() => {
+      _agentConfigInflight.delete(sessionKey);
+    });
+
+    _agentConfigInflight.set(sessionKey, pending);
+    return pending;
   }
 
   async patchSessionAgentConfig(

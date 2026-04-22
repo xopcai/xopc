@@ -13,8 +13,21 @@ export function gatewayConfigSwrKey(): string {
   return apiUrl('/api/config');
 }
 
+let _gatewayConfigInflight: Promise<GatewayConfigApiResponse> | null = null;
+
+/**
+ * GET /api/config. Concurrent in-flight calls share one HTTP request (e.g. onboarding + SWR
+ * on settings, or chat bootstrap + `fetchChatAgents` fallback) so a full refresh does not
+ * duplicate the same payload fetch.
+ */
 export async function fetchGatewayConfigSwrResponse(): Promise<GatewayConfigApiResponse> {
-  return fetchJson<GatewayConfigApiResponse>(gatewayConfigSwrKey());
+  if (_gatewayConfigInflight) return _gatewayConfigInflight;
+  _gatewayConfigInflight = fetchJson<GatewayConfigApiResponse>(gatewayConfigSwrKey()).finally(
+    () => {
+      _gatewayConfigInflight = null;
+    },
+  );
+  return _gatewayConfigInflight;
 }
 
 /**
