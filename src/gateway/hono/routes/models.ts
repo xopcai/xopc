@@ -7,6 +7,7 @@ import {
   validateModelsConfig,
 } from '../../../config/models-json.js';
 import { testApiKeyResolution } from '../../../config/resolve-config-value.js';
+import { listImageGenerationProvidersSummary } from '../../../agent/image/generation/runtime.js';
 import {
   getAllModels,
   getAvailableModels,
@@ -139,6 +140,12 @@ export function registerModelsRoutes(authenticated: Hono, deps: AuthenticatedRou
     });
 
     return c.json({ ok: true, payload: { models } });
+  });
+
+  // GET /api/image/providers — registered image generation providers and models (not in LLM model registry)
+  authenticated.get('/api/image/providers', (c) => {
+    const providers = listImageGenerationProvidersSummary();
+    return c.json({ ok: true, payload: { providers } });
   });
 
   // GET /api/providers - Get ALL available providers and models
