@@ -299,12 +299,15 @@ export const ChatComposer = memo(function ChatComposer({
   onPendingFollowUpReorder,
   onPendingFollowUpSteer,
   steeringFollowUpId,
+  welcomeDraftSeed,
 }: {
   disabled: boolean;
   sending: boolean;
   streaming: boolean;
   sessionKey: string | null;
   sessionManager: SessionManager;
+  /** Fills the composer when the user picks an empty-state scenario (id must change per pick). */
+  welcomeDraftSeed?: { id: number; text: string } | null;
   /** Allow choosing workspace only for a new conversation (no messages yet). */
   canSelectWorkingDirectory: boolean;
   thinkingLevel: string;
@@ -356,6 +359,7 @@ export const ChatComposer = memo(function ChatComposer({
   const thinkingLevelRef = useRef(thinkingLevel);
   const busyRef = useRef(false);
   const onSendRef = useRef(onSend);
+  const lastWelcomeDraftIdRef = useRef(0);
 
   const runBusy = sending || streaming;
 
@@ -381,6 +385,24 @@ export const ChatComposer = memo(function ChatComposer({
   useEffect(() => {
     adjustHeight();
   }, [value, adjustHeight]);
+
+  useEffect(() => {
+    if (!welcomeDraftSeed || welcomeDraftSeed.id === lastWelcomeDraftIdRef.current) return;
+    lastWelcomeDraftIdRef.current = welcomeDraftSeed.id;
+    const nextText = welcomeDraftSeed.text;
+    setValue(nextText);
+    valueRef.current = nextText;
+    setAttachments([]);
+    requestAnimationFrame(() => {
+      const el = editorRef.current;
+      if (el) {
+        applyWireToEditor(el, nextText, nextText.length);
+        syncComposerPlaceholderClass(el, nextText);
+        el.focus({ preventScroll: true });
+      }
+      adjustHeight();
+    });
+  }, [welcomeDraftSeed, adjustHeight]);
 
   useLayoutEffect(() => {
     if (disabled) {

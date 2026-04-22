@@ -1,6 +1,7 @@
 import { measureElement, useVirtualizer } from '@tanstack/react-virtual';
 import { memo, useCallback, useEffect, useLayoutEffect, useRef, type RefObject } from 'react';
 
+import { ChatWelcomeSpotlight } from '@/features/chat/chat-welcome-spotlight';
 import { MessageBubble } from '@/features/chat/message-bubble';
 import type { Message, ProgressState, ReasoningLevel } from '@/features/chat/messages.types';
 import { messageRowKey } from '@/features/chat/thinking-blocks';
@@ -20,6 +21,7 @@ export const MessageList = memo(function MessageList({
   reasoningLevel,
   scrollElementRef,
   pinToBottom,
+  onPickWelcomePrompt,
 }: {
   messages: Message[];
   authToken?: string;
@@ -31,6 +33,8 @@ export const MessageList = memo(function MessageList({
   scrollElementRef: RefObject<HTMLDivElement | null>;
   /** When true, keep the last row aligned to the bottom as virtual row heights are measured. */
   pinToBottom: boolean;
+  /** Empty-state quick prompts — fills the composer when chosen. */
+  onPickWelcomePrompt?: (text: string) => void;
 }) {
   const language = useLocaleStore((s) => s.language);
   const m = messages(language);
@@ -87,6 +91,13 @@ export const MessageList = memo(function MessageList({
   }, [pinToBottom, list.length, scrollLastToEnd]);
 
   if (showWelcome) {
+    if (onPickWelcomePrompt && m.chat.welcomeSpotlight) {
+      return (
+        <div className="pb-1.5">
+          <ChatWelcomeSpotlight chat={m.chat} onPickPrompt={onPickWelcomePrompt} />
+        </div>
+      );
+    }
     return (
       <div className="flex flex-col gap-10 pb-8">
         <div className="flex flex-col items-center justify-center gap-3 py-20 text-center">
