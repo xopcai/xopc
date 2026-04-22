@@ -447,16 +447,14 @@ export function AgentsSettingsPanel() {
         workspace,
         ...(createModel.trim() ? { model: createModel.trim() } : {}),
       });
-      void mutateAgents(next, { revalidate: false });
+      const { createdAgentId, ...agentsPayload } = next;
+      void mutateAgents(agentsPayload, { revalidate: false });
       setCreateName('');
       setCreateWorkspace('');
       setCreateModel('');
       setAddAgentModalOpen(false);
-      const id = next.agents[next.agents.length - 1]?.id;
-      if (id) {
-        setSelectedId(id);
-        navigate(agentsAppDetailPath(id));
-      }
+      setSelectedId(createdAgentId);
+      navigate(agentsAppDetailPath(createdAgentId));
     } catch (err) {
       setError(err instanceof Error ? err.message : a.saveError);
     } finally {

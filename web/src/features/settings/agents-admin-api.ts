@@ -42,12 +42,14 @@ export async function fetchGatewayAgents(): Promise<GatewayAgentsPayload> {
   };
 }
 
+export type CreateGatewayAgentResult = GatewayAgentsPayload & { createdAgentId: string };
+
 export async function createGatewayAgent(body: {
   name: string;
   workspace: string;
   model?: string;
   agentDir?: string;
-}): Promise<GatewayAgentsPayload> {
+}): Promise<CreateGatewayAgentResult> {
   const res = await fetchJson<{
     ok?: boolean;
     payload?: { agentId?: string; agents: GatewayAgentsPayload };
@@ -56,11 +58,13 @@ export async function createGatewayAgent(body: {
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
   });
+  const createdAgentId = typeof res.payload?.agentId === 'string' ? res.payload.agentId.trim() : '';
   const agents = res.payload?.agents;
-  if (!agents?.defaultId || !Array.isArray(agents.agents)) {
+  if (!createdAgentId || !agents?.defaultId || !Array.isArray(agents.agents)) {
     throw new Error('Invalid create agent response');
   }
   return {
+    createdAgentId,
     defaultId: agents.defaultId,
     agents: agents.agents.map(normalizeAgentRow),
     builtinToolIds: Array.isArray(agents.builtinToolIds) ? agents.builtinToolIds : [],
