@@ -111,6 +111,18 @@ export interface ChannelPluginReloadMeta {
   configPrefixes: string[];
 }
 
+export interface ChannelDoctorCheckResult {
+  id: string;
+  label: string;
+  status: 'pass' | 'warn' | 'fail' | 'skip';
+  message: string;
+  hints: string[];
+}
+
+export interface ChannelDoctorAdapter {
+  check(params: { cfg: Config }): Promise<ChannelDoctorCheckResult[]>;
+}
+
 export interface ChannelPlugin<ResolvedAccount = any> {
   id: ChannelId;
   meta: ChannelMeta;
@@ -198,6 +210,9 @@ export interface ChannelPlugin<ResolvedAccount = any> {
   agentPrompt?: ChannelAgentPromptAdapter;
 
   agentTools?: ChannelAgentTool[];
+
+  /** Optional doctor health-check contributed by this channel plugin. */
+  doctor?: ChannelDoctorAdapter;
 }
 
 // ============================================
