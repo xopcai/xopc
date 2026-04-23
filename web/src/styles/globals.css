@@ -257,6 +257,22 @@ html.dark {
     color: rgb(196 196 122);
   }
 
+  .chat-file-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 0.125rem;
+    padding: 0.0625rem 0.375rem;
+    border-radius: 0.25rem;
+    background: var(--color-accent-soft);
+    color: var(--color-accent-fg);
+    font-size: 0.8125rem;
+    font-weight: 500;
+    white-space: nowrap;
+    user-select: none;
+    cursor: default;
+    vertical-align: baseline;
+  }
+
   .composer-input {
     position: relative;
     white-space: pre-wrap;

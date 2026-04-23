@@ -474,6 +474,14 @@
     "commandPalette": {
       "noResults": "没有匹配的命令或技能",
       "placeholder": "搜索技能与命令…"
+    },
+    "atMention": {
+      "noResults": "未找到文件",
+      "placeholder": "搜索文件…",
+      "searchError": "搜索工作区失败",
+      "files": "文件",
+      "folders": "文件夹",
+      "recentFiles": "最近"
     }
   },
   "sessions": {
