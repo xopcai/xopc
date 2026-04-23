@@ -1,6 +1,6 @@
 {
   "name": "@xopcai/xopc-extension-telegram",
-  "version": "0.0.8",
+  "version": "0.0.9",
   "private": true,
   "description": "Bundled Telegram channel sources (compiled with core into dist/extensions/; not published to npm).",
   "type": "module",
