@@ -1,4 +1,4 @@
-const FILE_PATH_CHARS = 'a-zA-Z0-9_./-';
+export const FILE_PATH_CHARS = 'a-zA-Z0-9_./-';
 
 /** Characters allowed in workspace-relative POSIX paths in wire text. */
 export const FILE_PATH_IN_WIRE = `[${FILE_PATH_CHARS}]+`;

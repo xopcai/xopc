@@ -9,6 +9,17 @@ describe('parseMessageSegments', () => {
       { kind: 'text', text: ' y' },
     ]);
   });
+
+  it('parses @doc:, @url:, and @symbol:', () => {
+    expect(parseMessageSegments('a @doc:notes/x.md b @url:https://ex.com c @symbol:Foo')).toEqual([
+      { kind: 'text', text: 'a ' },
+      { kind: 'doc', path: 'notes/x.md' },
+      { kind: 'text', text: ' b ' },
+      { kind: 'url', href: 'https://ex.com' },
+      { kind: 'text', text: ' c ' },
+      { kind: 'symbol', name: 'Foo' },
+    ]);
+  });
 });
 
 describe('parseSkillWireSegments', () => {

@@ -8,6 +8,7 @@ import { ChatPendingFollowUpStack } from '@/features/chat/chat-pending-follow-up
 import { SessionWorkingDirectoryControl } from '@/features/chat/session-working-directory-control';
 import type { SessionManager } from '@/features/chat/session-manager';
 import type { AtMentionItem } from '@/features/chat/at-mention-api';
+import { recordRecentAtPath } from '@/features/chat/at-mention-recent';
 import { AtMentionPicker } from '@/features/chat/at-mention-picker';
 import { CommandPalette } from '@/features/chat/command-palette';
 import { MAX_PENDING_FOLLOW_UPS, type PendingFollowUp } from '@/features/chat/pending-follow-up.types';
@@ -19,7 +20,12 @@ import {
   normalizeOrphanComposerDom,
   serializeEditorToWire,
 } from '@/features/chat/composer-editor-wire';
-import { detectAtRange, useAtMentionPicker } from '@/features/chat/use-at-mention-picker';
+import {
+  browseDirFromQuery,
+  browseParentDir,
+  detectAtRange,
+  useAtMentionPicker,
+} from '@/features/chat/use-at-mention-picker';
 import { detectSlashRange, useCommandPalette } from '@/features/chat/use-command-palette';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
@@ -119,7 +125,7 @@ type ComposerKbdContext = {
   atPicker: ReturnType<typeof useAtMentionPicker>;
   replaceRange: (text: string, start: number, end: number, insert: string) => string;
   applyPaletteItem: (item: PaletteItem) => void;
-  applyAtMentionItem: (item: AtMentionItem) => void;
+  applyAtMentionItem: (item: AtMentionItem, opts?: { stayOpen?: boolean }) => void;
   send: () => void;
   runBusy: boolean;
   flushSteeringDraft?: () => void | Promise<void>;
@@ -249,10 +255,10 @@ const ChatComposerInput = memo(function ChatComposerInput({
               atPicker.onNavigate('up');
               return;
             }
-            if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey && !k.isComposing) {
+            if ((e.key === 'Enter' || e.key === 'Tab') && !k.isComposing) {
               e.preventDefault();
               const item = atPicker.items[atPicker.selectedIndex];
-              if (item) k.applyAtMentionItem(item);
+              if (item) k.applyAtMentionItem(item, { stayOpen: e.shiftKey });
               return;
             }
           }
@@ -696,12 +702,60 @@ export const ChatComposer = memo(function ChatComposer({
     });
   };
 
-  const applyAtMentionItem = (item: AtMentionItem) => {
+  const applyAtMentionItem = (item: AtMentionItem, opts?: { stayOpen?: boolean }) => {
     const range = atPicker.atRange;
     if (!range) return;
+    if (item.isBrowseUp) {
+      const dir = browseDirFromQuery(range.query);
+      const parentDir = browseParentDir(dir);
+      const newQuery = parentDir ? `${parentDir}/` : '';
+      const insert = `@${newQuery}`;
+      const next = replaceRange(valueRef.current, range.start, range.end, insert);
+      setValue(next);
+      valueRef.current = next;
+      const pos = range.start + insert.length;
+      requestAnimationFrame(() => {
+        const el = editorRef.current;
+        if (el) {
+          applyWireToEditor(el, next, pos);
+          syncComposerPlaceholderClass(el, next);
+          setCursor(pos);
+          el.focus();
+        }
+        adjustHeight();
+      });
+      return;
+    }
+
     const path =
-      item.isDirectory && !item.relativePath.endsWith('/') ? `${item.relativePath}/` : item.relativePath;
-    const insert = `@file:${path}`;
+      item.pickKind !== 'url' &&
+      item.pickKind !== 'symbol' &&
+      item.isDirectory &&
+      !item.relativePath.endsWith('/')
+        ? `${item.relativePath}/`
+        : item.relativePath;
+
+    let wire: string;
+    switch (item.pickKind) {
+      case 'doc':
+        wire = `@doc:${path}`;
+        break;
+      case 'url':
+        wire = `@url:${item.relativePath}`;
+        break;
+      case 'symbol':
+        wire = `@symbol:${item.name}`;
+        break;
+      default:
+        wire = `@file:${path}`;
+    }
+
+    if (sessionKey && (item.pickKind === 'file' || item.pickKind === 'doc') && !item.isDirectory) {
+      recordRecentAtPath(sessionKey, path.replace(/\/$/, ''));
+    }
+
+    const suffix = opts?.stayOpen ? ' @' : '';
+    const insert = wire + suffix;
     const next = replaceRange(valueRef.current, range.start, range.end, insert);
     setValue(next);
     valueRef.current = next;
@@ -941,12 +995,18 @@ export const ChatComposer = memo(function ChatComposer({
             <AtMentionPicker
               open={atPicker.open}
               anchorRef={editorRef}
+              category={atPicker.category}
+              onCategoryChange={atPicker.setCategory}
+              tabLabels={m.chat.atMention.tabs}
               items={atPicker.items}
               selectedIndex={atPicker.selectedIndex}
               loading={atPicker.loading}
               query={atPicker.query}
               noResults={atPicker.error ?? m.chat.atMention.noResults}
-              onSelectItem={applyAtMentionItem}
+              sessionKey={sessionKey}
+              recentLabel={m.chat.atMention.recentBadge}
+              shiftHint={m.chat.atMention.shiftHint}
+              onSelectItem={(it, meta) => applyAtMentionItem(it, { stayOpen: meta?.shiftKey === true })}
             />
             <CommandPalette
               open={palette.open}

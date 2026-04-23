@@ -476,12 +476,20 @@
       "placeholder": "搜索技能与命令…"
     },
     "atMention": {
-      "noResults": "未找到文件",
+      "noResults": "无匹配项",
       "placeholder": "搜索文件…",
       "searchError": "搜索工作区失败",
       "files": "文件",
       "folders": "文件夹",
-      "recentFiles": "最近"
+      "recentFiles": "最近",
+      "recentBadge": "最近",
+      "shiftHint": "Shift+Enter 或 Shift+点击：继续添加 @ 引用。",
+      "tabs": {
+        "files": "文件",
+        "docs": "文档",
+        "symbols": "符号",
+        "urls": "链接"
+      }
     }
   },
   "sessions": {
