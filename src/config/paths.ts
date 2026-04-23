@@ -10,8 +10,7 @@ import {
   resolveAgentWorkspaceDir,
   resolveSessionsDir as resolveSessionsDirScoped,
 } from '../agent/agent-scope.js';
-import { ENV_VARS, resolveHomeDir, resolveStateDir } from './paths-state.js';
-import { resolveDefaultAgentWorkspaceDir } from './workspace-defaults.js';
+import { ENV_VARS, resolveStateDir } from './paths-state.js';
 
 export { ENV_VARS, resolveHomeDir, resolveStateDir } from './paths-state.js';
 export { resolveDefaultAgentWorkspaceDir } from './workspace-defaults.js';

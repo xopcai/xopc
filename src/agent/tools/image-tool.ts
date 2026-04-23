@@ -5,10 +5,7 @@ import { describeImages } from '../image/understanding/runtime.js';
 import { buildImageToolTextResult, resolvePromptAndModelOverride } from '../image/image-helpers.js';
 import { runWithImageModelFallback } from '../image/image-model-fallback.js';
 import { loadImageForToolInput } from '../image/load-image-media.js';
-import {
-  resolveImageModelConfigForTool,
-  type ToolModelConfig,
-} from '../image/tool-model-config.js';
+import { resolveImageModelConfigForTool } from '../image/tool-model-config.js';
 
 const DEFAULT_PROMPT = 'Describe the image.';
 const DEFAULT_MAX_IMAGES = 20;

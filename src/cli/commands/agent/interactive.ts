@@ -20,7 +20,7 @@ export async function startInteractiveChat(
   agent: AgentService,
   options: InteractiveOptions
 ): Promise<void> {
-  const { workspace, sessionKey: initialSessionKey, continuingSession } = options;
+  const { sessionKey: initialSessionKey, continuingSession } = options;
   
   let sessionKey = initialSessionKey;
 

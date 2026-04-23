@@ -24,7 +24,6 @@ import {
   resolveWorkspaceStateDir,
   resolveWorkspaceStatePath,
   WORKSPACE_FILES,
-  FILENAMES,
 } from '../../config/paths.js';
 import { loadConfig, saveConfig } from '../../config/loader.js';
 import type { Config } from '../../config/schema.js';
@@ -142,7 +141,6 @@ export async function initCommand(options: InitOptions = {}): Promise<void> {
  * Create default workspace files for an agent
  */
 async function createWorkspaceFiles(cfg: Config, agentId: string): Promise<void> {
-  const workspaceDir = resolveAgentWorkspaceDir(cfg, agentId);
   const bootstrapDir = resolveAgentBootstrapDir(cfg, agentId);
   await mkdir(bootstrapDir, { recursive: true });
 

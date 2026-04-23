@@ -5,7 +5,7 @@
  */
 
 import { Command } from 'commander';
-import { anthropicOAuthProvider, type OAuthLoginCallbacks } from '../../auth/index.js';
+import { type OAuthLoginCallbacks } from '../../auth/index.js';
 import {
 	listProfilesForProvider,
 	listAllProfiles,

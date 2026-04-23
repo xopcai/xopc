@@ -10,7 +10,7 @@ import type { SessionManager } from '../../../session/index.js';
  * Get initialized session manager
  */
 export async function getManager(): Promise<SessionManager> {
-  const ctx = getContextWithOpts();
+  getContextWithOpts();
   return getSessionManager();
 }
 

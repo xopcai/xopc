@@ -2,9 +2,9 @@
  * Shared logic for the skill_manage agent tool (create / edit / patch / delete / write_file / remove_file).
  */
 
-import { existsSync, realpathSync, rmSync } from 'fs';
+import { existsSync, realpathSync } from 'fs';
 import { join, resolve, sep } from 'path';
-import { mkdir, readFile, rm, writeFile } from 'fs/promises';
+import { mkdir, writeFile } from 'fs/promises';
 
 import { parseFrontmatter } from '../../markdown/frontmatter.js';
 import { resolveSkillsDir } from '../../config/paths.js';

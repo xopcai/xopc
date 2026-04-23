@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
 import { effectiveSkillsPromptStyle, formatSkillsForPrompt } from '../format-skills-prompt.js';
-import type { Skill, SkillsConfig } from '../types.js';
+import type { Skill } from '../types.js';
 
 const baseSkill: Skill = {
   name: 'alpha',
