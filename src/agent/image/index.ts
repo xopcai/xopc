@@ -2,7 +2,6 @@
  * Unified image stack: understanding (pi-ai multimodal) under this folder;
  * generation (OpenAI Images API; DashScope Beijing wan2.6-t2i via `dashscope/`) under `./generation/`.
  */
-export { describeImagesWithPiAi } from './describe-images.js';
 export {
   describeImages,
   describeImagesWithFallback,

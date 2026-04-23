@@ -3,7 +3,7 @@ import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
 import type { Locator, Page } from 'playwright-core';
 
 import type { Config } from '../../../config/schema.js';
-import { describeImagesWithPiAi } from '../../image/describe-images.js';
+import { describeImages } from '../../image/understanding/runtime.js';
 import { buildImageToolTextResult } from '../../image/image-helpers.js';
 import { runWithImageModelFallback } from '../../image/image-model-fallback.js';
 import { resolveImageModelConfigForTool } from '../image-tool.js';
@@ -296,7 +296,7 @@ export function createBrowserTools(deps: CreateBrowserToolsDeps): AgentTool<any,
           toolConfig: imageModelConfig,
           modelOverride: undefined,
           run: async (modelRef) => {
-            const { text, provider, model } = await describeImagesWithPiAi({
+            const { text, provider, model } = await describeImages({
               modelRef,
               prompt,
               images: [{ buffer: buf, mimeType: 'image/png' }],
