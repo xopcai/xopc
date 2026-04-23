@@ -4,6 +4,8 @@ import { spawn } from 'node:child_process';
 import { access } from 'node:fs/promises';
 import { join } from 'node:path';
 
+import type { UpdateChannel } from './update-channels.js';
+
 const AUTO_UPDATE_TIMEOUT_MS = 45 * 60 * 1000; // 45 minutes
 
 export type AutoUpdateResult = {
@@ -20,7 +22,7 @@ export type AutoUpdateResult = {
  * ensure the correct Node.js version and binary path are used.
  */
 export async function runAutoUpdateCommand(params: {
-  channel: 'stable' | 'beta';
+  channel: UpdateChannel;
   root?: string | null;
   timeoutMs?: number;
 }): Promise<AutoUpdateResult> {
