@@ -301,6 +301,10 @@ export class CommandContextImpl implements CommandContext {
     this.deps.applySessionThinkingLevel?.(this.sessionKey, level);
   }
 
+  syncAgentThinkingLevel(level: ThinkLevel): void {
+    this.deps.applySessionThinkingLevel?.(this.sessionKey, level);
+  }
+
   /**
    * Get current reasoning level (session override or default)
    */

@@ -83,6 +83,7 @@ import { compressAudio } from '../voice/tts/audio.js';
 import { speak } from '../voice/tts/index.js';
 import { mergeTtsConfigFromAppConfig } from '../voice/tts/merge-config.js';
 import { resolveAgentDir } from '../config/paths.js';
+import { applyConfigOverrides } from '../config/runtime-overrides.js';
 import { shouldUseTTS, getChannelOutputFormat } from '../voice/tts/service.js';
 import { isTTSAvailable } from '../voice/tts/factory.js';
 
@@ -134,6 +135,11 @@ export class AgentService {
 
   // Track event unsubscribers per session
   private sessionUnsubscribers: Map<string, () => void> = new Map();
+
+  private effectiveAppConfig(): Config | undefined {
+    const base = this.config.config;
+    return base ? applyConfigOverrides(base) : undefined;
+  }
 
   constructor(bus: MessageBus, config: AgentServiceConfig) {
     this.bus = bus;
@@ -224,8 +230,8 @@ export class AgentService {
       feedbackCoordinator: this.feedbackCoordinator,
       sessionConfigStore: this.sessionConfigStore,
       hydrateSessionWorkspaceFromStore: (sessionKey) => this.hydrateSessionWorkspaceFromStore(sessionKey),
-      getConfig: () => this.config.config,
-      getThinkingDefault: () => this.config.config?.agents?.defaults?.thinkingDefault,
+      getConfig: () => this.effectiveAppConfig(),
+      getThinkingDefault: () => this.effectiveAppConfig()?.agents?.defaults?.thinkingDefault,
       getThinkingDefaultForSession: (sessionKey: string) =>
         this.agentManager.getThinkingDefaultForSession(sessionKey),
       workspaceRoot: this.workspaceDir,
@@ -782,7 +788,7 @@ export class AgentService {
   }
 
   private async applyResolvedThinkingLevel(sessionKey: string, requestOverride?: string | null): Promise<void> {
-    const def = this.config.config?.agents?.defaults?.thinkingDefault;
+    const def = this.effectiveAppConfig()?.agents?.defaults?.thinkingDefault;
     const level = await resolveEffectiveThinkingLevel(
       this.sessionConfigStore,
       sessionKey,
@@ -801,7 +807,7 @@ export class AgentService {
     workingDirectoryLocked: boolean;
   }> {
     await this.hydrateSessionModelFromStore(sessionKey);
-    const cfg = this.config.config!;
+    const cfg = this.effectiveAppConfig()!;
     const sc = await this.sessionConfigStore.get(sessionKey);
     const defThink = cfg.agents?.defaults?.thinkingDefault ?? 'medium';
     const level = await resolveEffectiveThinkingLevel(this.sessionConfigStore, sessionKey, null, defThink);
@@ -1018,7 +1024,7 @@ export class AgentService {
       prepareLoadedSessionMessages: (sk, msgs) => this.prepareLoadedSessionMessages(sk, msgs),
       modelManager: this.modelManager,
       applyResolvedThinkingLevel: (sk, t) => this.applyResolvedThinkingLevel(sk, t),
-      getConfig: () => this.config.config,
+      getConfig: () => this.effectiveAppConfig(),
       sessionConfigStore: this.sessionConfigStore,
       attachmentRootsForSession: (sk) => this.attachmentRootsForSession(sk),
       agentOrchestrator: this.agentOrchestrator,

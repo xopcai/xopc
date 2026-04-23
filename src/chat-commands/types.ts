@@ -7,7 +7,12 @@
 
 import type { Config } from '../config/schema.js';
 import type { AgentMessage } from '@mariozechner/pi-agent-core';
-import type { ThinkLevel } from '../agent/transcript/thinking-types.js';
+import type {
+  ThinkLevel,
+  ReasoningLevel,
+  VerboseLevel,
+} from '../agent/transcript/thinking-types.js';
+import type { SessionConfigStore } from '../session/index.js';
 
 // ============================================================================
 // Unified Message Format (Platform Agnostic)
@@ -181,6 +186,18 @@ export interface CommandContext {
 
   /** Persist session thinking level and sync in-memory agent (when wired) */
   setThinkingLevel?(level: ThinkLevel): Promise<void>;
+
+  /**
+   * Update pi-agent thinking level in memory only (used with runtime config overrides so session
+   * store does not mask merged defaults).
+   */
+  syncAgentThinkingLevel?(level: ThinkLevel): void;
+
+  getSessionConfigStore?(): SessionConfigStore | undefined;
+
+  getThinkingLevel?(): Promise<ThinkLevel | undefined>;
+  getReasoningLevel?(): Promise<ReasoningLevel | undefined>;
+  getVerboseLevel?(): Promise<VerboseLevel | undefined>;
 
   /** Abort in-flight assistant generation and channel streaming for this session (e.g. /abort) */
   abortCurrentTurn?(): Promise<void>;
