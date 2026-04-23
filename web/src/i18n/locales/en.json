@@ -1762,6 +1762,14 @@
     "quickMenuHint": "Language, theme, and text size",
     "aboutApp": "About"
   },
+  "updatePanel": {
+    "restartToUpdate": "Restart to update",
+    "dismissAria": "Dismiss",
+    "dismissHint": "Do not show this reminder again for this version",
+    "reminderElectronReady": "Update v{{version}} is ready. Restart the app to install.",
+    "reminderDownloading": "Downloading update… {{percent}}%",
+    "reminderNpm": "A new version v{{version}} is available for the gateway."
+  },
   "aboutDialog": {
     "windowTitle": "About this application",
     "close": "Close",
