@@ -14,6 +14,7 @@ import type {
   UsageStats,
   PlatformFeature,
   MessageSource,
+  CompactSessionResult,
 } from './types.js';
 import { getSessionDisplayName } from './session-key.js';
 import type { Config } from '../config/schema.js';
@@ -24,6 +25,11 @@ import { createLogger } from '../utils/logger.js';
 import { getRoutingInfo } from './session-key.js';
 import { saveConfig } from '../config/loader.js';
 import type { ThinkLevel, ReasoningLevel, VerboseLevel } from '../agent/transcript/thinking-types.js';
+import { mkdir, writeFile } from 'fs/promises';
+import { join } from 'path';
+import { effectiveWorkspacePathForSession } from '../session/session-workspace.js';
+import { wrapMarkdownExportAsHtml } from '../session/chat-export.js';
+import type { CompactionResult } from '../agent/memory/compaction.js';
 
 const log = createLogger('CommandContext');
 
@@ -54,6 +60,18 @@ export interface CommandContextDeps {
   getUsage?: () => Promise<UsageStats>;
   /** Stop current LLM turn and clear channel preview stream (Telegram draft, etc.) */
   abortCurrentTurn?: () => Promise<void>;
+
+  compactSession?: (
+    sessionKey: string,
+    options?: { instructions?: string; force?: boolean },
+  ) => Promise<CompactionResult>;
+
+  btwQuery?: (sessionKey: string, question: string) => Promise<{ text: string; error?: string }>;
+
+  getSessionContextReport?: (
+    sessionKey: string,
+    mode: 'list' | 'detail' | 'json',
+  ) => Promise<string>;
 }
 
 export class CommandContextImpl implements CommandContext {
@@ -303,6 +321,53 @@ export class CommandContextImpl implements CommandContext {
 
   syncAgentThinkingLevel(level: ThinkLevel): void {
     this.deps.applySessionThinkingLevel?.(this.sessionKey, level);
+  }
+
+  async compactSession(options?: { instructions?: string; force?: boolean }): Promise<CompactSessionResult | null> {
+    if (!this.deps.compactSession) {
+      return null;
+    }
+    const r = await this.deps.compactSession(this.sessionKey, options);
+    return {
+      compacted: r.compacted,
+      tokensBefore: r.tokensBefore,
+      tokensAfter: r.tokensAfter,
+      summary: r.summary,
+    };
+  }
+
+  async btwQuery(question: string): Promise<{ text: string; error?: string }> {
+    if (!this.deps.btwQuery) {
+      return { text: '', error: 'Side questions are not available in this environment.' };
+    }
+    return this.deps.btwQuery(this.sessionKey, question);
+  }
+
+  async exportSessionToWorkspace(format: 'markdown' | 'html' | 'json'): Promise<{ path: string }> {
+    const exportFmt = format === 'json' ? 'json' : 'markdown';
+    let body = await this.deps.sessionStore.exportSession(this.sessionKey, exportFmt);
+    if (format === 'html') {
+      body = wrapMarkdownExportAsHtml(`Session ${this.sessionKey}`, body);
+    }
+    const sc = this.deps.sessionConfigStore
+      ? await this.deps.sessionConfigStore.get(this.sessionKey)
+      : null;
+    const root = effectiveWorkspacePathForSession(this.config, this.sessionKey, sc);
+    const dir = join(root, 'exports');
+    await mkdir(dir, { recursive: true });
+    const safe = this.sessionKey.replace(/[^a-zA-Z0-9._-]+/g, '_').slice(0, 96);
+    const ext = format === 'json' ? 'json' : format === 'html' ? 'html' : 'md';
+    const name = `session-${safe}-${Date.now()}.${ext}`;
+    const outPath = join(dir, name);
+    await writeFile(outPath, body, 'utf-8');
+    return { path: outPath };
+  }
+
+  async agentContextReport(mode: 'list' | 'detail' | 'json' = 'list'): Promise<string> {
+    if (!this.deps.getSessionContextReport) {
+      return 'Context report is not available in this environment.';
+    }
+    return this.deps.getSessionContextReport(this.sessionKey, mode);
   }
 
   /**

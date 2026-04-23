@@ -780,9 +780,10 @@ export class SessionStore {
     key: string,
     messages: AgentMessage[],
     contextWindow: number,
-    instructions?: string
+    instructions?: string,
+    force?: boolean,
   ): Promise<CompactionResult> {
-    const result = await this.compactor.compact(messages, instructions);
+    const result = await this.compactor.compact(messages, instructions, force);
     
     if (result.compacted) {
       await this.applyCompaction(key, messages, result);
