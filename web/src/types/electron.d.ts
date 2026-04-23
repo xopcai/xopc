@@ -42,7 +42,7 @@ export interface ElectronShellAPI {
 
 export type TccTriState = 'granted' | 'denied' | 'unknown';
 
-export type MacosPermissionSnapshot = {
+export type ShellPermissionSnapshot = {
   fullDisk: TccTriState;
   screen: TccTriState;
   microphone: TccTriState;
@@ -52,7 +52,7 @@ export type MacosPermissionSnapshot = {
   location: TccTriState;
 };
 
-export type MacosPrivacyPaneKind =
+export type PrivacyPaneKind =
   | 'fullDisk'
   | 'screen'
   | 'microphone'
@@ -81,10 +81,10 @@ export interface ElectronSystemSettingsAPI {
     notifyEnabled?: boolean;
     notifySoundEnabled?: boolean;
   }): Promise<{ ok: true; behavior: SystemSettingsBehavior }>;
-  getMacosPermissions(): Promise<MacosPermissionSnapshot>;
-  openMacosPrivacy(kind: MacosPrivacyPaneKind): Promise<
-    { ok: true } | { ok: false; error: string }
-  >;
+  getPermissions(): Promise<ShellPermissionSnapshot>;
+  openPrivacy(
+    kind: PrivacyPaneKind,
+  ): Promise<{ ok: true } | { ok: false; error: string }>;
   requestMicrophone(): Promise<{ status: TccTriState }>;
 }
 

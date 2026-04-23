@@ -6,14 +6,9 @@ import { isElectron } from '@/lib/electron-env';
 import type { StoredLanguage } from '@/lib/storage';
 import { messages } from '@/i18n/messages';
 import { useLocaleStore } from '@/stores/locale-store';
-import type {
-  MacosPermissionSnapshot,
-  MacosPrivacyPaneKind,
-  SystemSettingsBehavior,
-  TccTriState,
-} from '@/types/electron';
+import type { PrivacyPaneKind, ShellPermissionSnapshot, SystemSettingsBehavior, TccTriState } from '@/types/electron';
 
-const PERM_ROWS: { key: keyof MacosPermissionSnapshot; pane: MacosPrivacyPaneKind }[] = [
+const PERM_ROWS: { key: keyof ShellPermissionSnapshot; pane: PrivacyPaneKind }[] = [
   { key: 'fullDisk', pane: 'fullDisk' },
   { key: 'screen', pane: 'screen' },
   { key: 'microphone', pane: 'microphone' },
@@ -43,7 +38,7 @@ export function SystemSettingsPanel() {
   const t = m.systemSettings;
 
   const [behavior, setBehavior] = useState<SystemSettingsBehavior | null>(null);
-  const [mac, setMac] = useState<MacosPermissionSnapshot | null>(null);
+  const [perms, setPerms] = useState<ShellPermissionSnapshot | null>(null);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const api = typeof window !== 'undefined' ? window.electronAPI?.system : undefined;
@@ -56,11 +51,7 @@ export function SystemSettingsPanel() {
     try {
       const b = await api.getBehavior();
       setBehavior(b);
-      if (b.platform === 'darwin') {
-        setMac(await api.getMacosPermissions());
-      } else {
-        setMac(null);
-      }
+      setPerms(await api.getPermissions());
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
     }
@@ -98,16 +89,32 @@ export function SystemSettingsPanel() {
     }
   };
 
-  const openMacos = async (kind: MacosPrivacyPaneKind) => {
+  const openPrivacy = async (kind: PrivacyPaneKind) => {
     try {
-      const r = await api.openMacosPrivacy(kind);
+      const r = await api.openPrivacy(kind);
       if (!r.ok) {
-        setLoadError('open_macos_privacy failed');
+        setLoadError('open_privacy failed');
       }
     } catch (e) {
       setLoadError(e instanceof Error ? e.message : String(e));
     }
   };
+
+  const permissionsHint = (() => {
+    if (!behavior) {
+      return t.permissionsHint;
+    }
+    if (behavior.platform === 'win32') {
+      return t.permissionsHintWin;
+    }
+    if (behavior.platform === 'linux') {
+      return t.permissionsHintLinux;
+    }
+    if (behavior.platform === 'darwin') {
+      return t.permissionsHintDarwin;
+    }
+    return t.permissionsHint;
+  })();
 
   return (
     <div className="mx-auto flex w-full max-w-app-main flex-col gap-6 px-4 py-8">
@@ -191,16 +198,12 @@ export function SystemSettingsPanel() {
         </div>
       </SettingsFormSection>
 
-      {behavior && behavior.platform !== 'darwin' ? (
-        <p className="text-sm text-fg-muted">{t.onlyMacos}</p>
-      ) : null}
-
-      {behavior?.platform === 'darwin' && mac ? (
+      {behavior && perms ? (
         <section className={settingsFormSectionClassName()}>
           <div className="mb-4 flex flex-col gap-1 sm:flex-row sm:items-center sm:justify-between">
             <div>
               <h2 className="text-sm font-semibold text-fg">{t.permissionsTitle}</h2>
-              <p className="mt-0.5 text-xs text-fg-muted">{t.permissionsHint}</p>
+              <p className="mt-0.5 text-xs text-fg-muted">{permissionsHint}</p>
             </div>
             <button
               type="button"
@@ -212,7 +215,7 @@ export function SystemSettingsPanel() {
           </div>
           <ul className="space-y-3">
             {PERM_ROWS.map(({ key, pane }) => {
-              const st = triStateFromMessages(language, mac[key]);
+              const st = triStateFromMessages(language, perms[key]);
               const permLabel = t.perm[key as keyof typeof t.perm];
               if (!permLabel) {
                 return null;
@@ -228,7 +231,7 @@ export function SystemSettingsPanel() {
                     <p className={`mt-1 text-xs font-medium ${st.className}`}>{st.label}</p>
                   </div>
                   <div className="flex shrink-0 flex-wrap items-center gap-2">
-                    {key === 'microphone' ? (
+                    {key === 'microphone' && behavior?.platform === 'darwin' ? (
                       <button
                         type="button"
                         className="inline-flex items-center gap-1 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover"
@@ -236,9 +239,7 @@ export function SystemSettingsPanel() {
                           void (async () => {
                             try {
                               await api.requestMicrophone();
-                              if (behavior.platform === 'darwin') {
-                                setMac(await api.getMacosPermissions());
-                              }
+                              setPerms(await api.getPermissions());
                             } catch (e) {
                               setLoadError(e instanceof Error ? e.message : String(e));
                             }
@@ -251,7 +252,7 @@ export function SystemSettingsPanel() {
                     <button
                       type="button"
                       className="inline-flex items-center gap-1.5 rounded-lg border border-edge bg-surface-base px-2.5 py-1.5 text-xs font-medium text-fg hover:bg-surface-hover"
-                      onClick={() => void openMacos(pane)}
+                      onClick={() => void openPrivacy(pane)}
                     >
                       {t.openSettings}
                       <ExternalLink className="size-3.5" strokeWidth={1.75} aria-hidden />
