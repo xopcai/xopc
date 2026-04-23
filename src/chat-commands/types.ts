@@ -110,6 +110,13 @@ export type CommandHandler = (
   args: string
 ) => Promise<CommandResult | void>;
 
+export interface CompactSessionResult {
+  compacted: boolean;
+  tokensBefore: number;
+  tokensAfter: number;
+  summary?: string;
+}
+
 export interface CommandResult {
   /** Response text */
   content: string;
@@ -198,6 +205,18 @@ export interface CommandContext {
   getThinkingLevel?(): Promise<ThinkLevel | undefined>;
   getReasoningLevel?(): Promise<ReasoningLevel | undefined>;
   getVerboseLevel?(): Promise<VerboseLevel | undefined>;
+
+  /** Summarize older turns into a memory line; optional focus text for the summarizer. */
+  compactSession?(options?: { instructions?: string; force?: boolean }): Promise<CompactSessionResult | null>;
+
+  /** Side question: LLM answer without appending to the session transcript. */
+  btwQuery?(question: string): Promise<{ text: string; error?: string }>;
+
+  /** Write session transcript to workspace `exports/` (markdown, html, or json). */
+  exportSessionToWorkspace?(format: 'markdown' | 'html' | 'json'): Promise<{ path: string }>;
+
+  /** Debug view: config + transcript stats (`list` | `detail` | `json`). */
+  agentContextReport?(mode?: 'list' | 'detail' | 'json'): Promise<string>;
 
   /** Abort in-flight assistant generation and channel streaming for this session (e.g. /abort) */
   abortCurrentTurn?(): Promise<void>;

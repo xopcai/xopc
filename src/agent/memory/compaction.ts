@@ -224,11 +224,23 @@ export class SessionCompactor {
 
   async compact(
     messages: AgentMessage[],
-    _instructions?: string
+    instructions?: string,
+    force?: boolean,
   ): Promise<CompactionResult> {
     const effectiveMessages = filterDroppableMessages(messages);
-    
-    if (effectiveMessages.length < this.config.minMessagesBeforeCompact) {
+
+    const minRequired = this.config.minMessagesBeforeCompact;
+    if (!force && effectiveMessages.length < minRequired) {
+      return {
+        summary: '',
+        firstKeptIndex: 0,
+        tokensBefore: this.estimateTotalTokens(effectiveMessages),
+        tokensAfter: this.estimateTotalTokens(effectiveMessages),
+        compacted: false,
+      };
+    }
+
+    if (force && effectiveMessages.length < 2) {
       return {
         summary: '',
         firstKeptIndex: 0,
@@ -239,13 +251,34 @@ export class SessionCompactor {
     }
 
     const range = calculateCompactionRange(effectiveMessages, this.config);
-    const keepRecent = range ? effectiveMessages.length - range.end : this.config.keepRecentMessages;
-    const messagesToSummarize = range 
-      ? effectiveMessages.slice(0, range.end)
-      : effectiveMessages.slice(0, -keepRecent);
-    const keptMessages = range 
-      ? effectiveMessages.slice(range.end)
-      : effectiveMessages.slice(-keepRecent);
+    let messagesToSummarize: AgentMessage[];
+    let keptMessages: AgentMessage[];
+
+    if (range) {
+      messagesToSummarize = effectiveMessages.slice(0, range.end);
+      keptMessages = effectiveMessages.slice(range.end);
+    } else if (force) {
+      const keep = Math.min(
+        this.config.keepRecentMessages,
+        Math.max(1, effectiveMessages.length - 1),
+      );
+      messagesToSummarize = effectiveMessages.slice(0, effectiveMessages.length - keep);
+      keptMessages = effectiveMessages.slice(-keep);
+    } else {
+      const keepRecent = this.config.keepRecentMessages;
+      messagesToSummarize = effectiveMessages.slice(0, -keepRecent);
+      keptMessages = effectiveMessages.slice(-keepRecent);
+    }
+
+    if (messagesToSummarize.length === 0) {
+      return {
+        summary: '',
+        firstKeptIndex: 0,
+        tokensBefore: this.estimateTotalTokens(effectiveMessages),
+        tokensAfter: this.estimateTotalTokens(effectiveMessages),
+        compacted: false,
+      };
+    }
 
     let preservedReasoning: ReasoningDetails | null = null;
     if (this.config.preserveReasoning) {
@@ -255,7 +288,7 @@ export class SessionCompactor {
       }
     }
 
-    const summary = await this.generateSummary(messagesToSummarize);
+    const summary = await this.generateSummary(messagesToSummarize, instructions);
     const structuredSummary = this.config.mode === 'structured' 
       ? generateStructuredSummary(messagesToSummarize)
       : undefined;
@@ -281,14 +314,14 @@ export class SessionCompactor {
     };
   }
 
-  private async generateSummary(messages: AgentMessage[]): Promise<string> {
+  private async generateSummary(messages: AgentMessage[], instructions?: string): Promise<string> {
     if (this.model && (this.config.mode === 'abstractive' || this.config.mode === 'structured')) {
       try {
         if (this.config.mode === 'structured') {
           const structured = generateStructuredSummary(messages);
           return formatSummaryAsText(structured, true);
         } else {
-          return await this.llmAbstractiveSummary(messages);
+          return await this.llmAbstractiveSummary(messages, instructions);
         }
       } catch (err) {
         console.warn('[Compactor] LLM summarization failed, falling back to extractive', err);
@@ -298,17 +331,20 @@ export class SessionCompactor {
     return this.extractiveSummary(messages);
   }
 
-  private async llmAbstractiveSummary(messages: AgentMessage[]): Promise<string> {
+  private async llmAbstractiveSummary(messages: AgentMessage[], instructions?: string): Promise<string> {
     if (!this.model) {
       throw new Error('Model not available');
     }
 
     const conversation = this.formatMessages(messages);
+    const extra = instructions?.trim()
+      ? `\nAdditional focus from the user:\n${instructions.trim()}\n`
+      : '';
     const prompt = `Summarize the following conversation in 2-3 concise sentences. Focus on:
 1. What the user was trying to accomplish
 2. Key decisions, outcomes, or solutions
 3. Any important context that should be preserved
-
+${extra}
 Conversation:
 ${conversation}
 

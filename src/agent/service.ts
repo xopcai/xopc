@@ -77,7 +77,10 @@ import {
 } from '../channels/attachments/inbound-persist.js';
 import { expandAllContextMentionsInPlainText } from './context/expand-context-mentions.js';
 import { resolveInboundImageContentParts } from './image/inbound-image-handling.js';
-import { getDefaultModelSync } from '../providers/index.js';
+import { getDefaultModelSync, resolveModel } from '../providers/index.js';
+import { complete, type UserMessage } from '@mariozechner/pi-ai';
+import { resolveEffectiveAgentProfileForSession } from '../config/agent-profile.js';
+import type { CompactionResult } from './memory/compaction.js';
 import { persistOutboundTtsAudio } from '../channels/attachments/outbound-tts-persist.js';
 import { compressAudio } from '../voice/tts/audio.js';
 import { speak } from '../voice/tts/index.js';
@@ -261,6 +264,9 @@ export class AgentService {
         await this.streamManager.abort();
         this.agentOrchestrator.abort(sessionKey);
       },
+      compactSession: (sessionKey, options) => this.compactSession(sessionKey, options),
+      btwQuery: (sessionKey, question) => this.btwQuery(sessionKey, question),
+      getSessionContextReport: (sessionKey, mode) => this.getSessionContextReport(sessionKey, mode),
     });
 
     this.sessionLifecycleManager = new SessionLifecycleManager(
@@ -769,14 +775,190 @@ export class AgentService {
     this.contextMiddleware.onResponse();
   }
 
-  async compactSession(sessionKey: string, instructions?: string): Promise<void> {
+  async compactSession(
+    sessionKey: string,
+    options?: { instructions?: string; force?: boolean },
+  ): Promise<CompactionResult> {
     const messages = await this.sessionStore.load(sessionKey);
     const contextWindow = this.getContextWindow();
-    const result = await this.sessionStore.compact(sessionKey, messages, contextWindow, instructions);
+    const result = await this.sessionStore.compact(
+      sessionKey,
+      messages,
+      contextWindow,
+      options?.instructions,
+      options?.force ?? true,
+    );
     if (result.compacted) {
       await this.sessionStore.save(sessionKey, await this.sessionStore.load(sessionKey));
+      this.agentManager.removeAgent(sessionKey);
     }
     log.info({ sessionKey, result }, 'Manual compaction complete');
+    return result;
+  }
+
+  /**
+   * One-shot LLM answer for /btw: uses transcript as background only; does not persist to session.
+   */
+  async btwQuery(sessionKey: string, question: string): Promise<{ text: string; error?: string }> {
+    const q = question.trim();
+    if (!q) {
+      return { text: '', error: 'Empty question.' };
+    }
+    const messages = await this.sessionStore.load(sessionKey);
+    const modelRef = this.modelManager.getModelForSession(sessionKey);
+    let model;
+    try {
+      model = resolveModel(modelRef);
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, modelRef, errorMessage: em }, 'btwQuery: model resolve failed');
+      return { text: '', error: `Could not resolve model: ${modelRef}` };
+    }
+
+    const background = this.formatMessagesForBtw(messages.slice(-40));
+    const systemBlock = [
+      'You are answering an ephemeral /btw side question about the current conversation.',
+      'Use the conversation only as background context.',
+      'Answer only the side question. Do not continue or complete any unfinished task from the conversation.',
+      'Do not use tools, shell, or file writes unless the question explicitly requires a tiny code snippet.',
+      'If the question can be answered briefly, answer briefly.',
+    ].join('\n');
+
+    const userPrompt = [
+      systemBlock,
+      '',
+      '---',
+      'Conversation background (read-only):',
+      background || '(empty)',
+      '',
+      '---',
+      'Side question:',
+      q,
+    ].join('\n');
+
+    const userMessage: UserMessage = { role: 'user', content: userPrompt, timestamp: Date.now() };
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 90_000);
+    try {
+      const out = await complete(model, { messages: [userMessage] }, {
+        maxTokens: 2048,
+        temperature: 0.4,
+        signal: controller.signal as AbortSignal,
+      });
+      const text = Array.isArray(out.content)
+        ? out.content
+            .filter((c): c is { type: 'text'; text: string } => c.type === 'text' && typeof (c as { text?: unknown }).text === 'string')
+            .map((c) => c.text || '')
+            .join('')
+        : '';
+      return { text: text.trim() };
+    } catch (err) {
+      const em = err instanceof Error ? err.message : String(err);
+      log.warn({ err, sessionKey, errorMessage: em }, 'btwQuery failed');
+      return { text: '', error: em };
+    } finally {
+      clearTimeout(timeoutId);
+    }
+  }
+
+  private formatMessagesForBtw(messages: AgentMessage[]): string {
+    return messages
+      .map((m) => {
+        const role = m.role;
+        let body = '';
+        if (typeof m.content === 'string') {
+          body = m.content;
+        } else if (Array.isArray(m.content)) {
+          body = m.content
+            .filter((c): c is { type: 'text'; text: string } => c.type === 'text')
+            .map((c) => c.text || '')
+            .join('\n');
+        }
+        const line = `[${role}]: ${body}`;
+        return line.length > 4000 ? `${line.slice(0, 4000)}…` : line;
+      })
+      .join('\n\n');
+  }
+
+  /** Markdown or JSON summary for /context (prompt assembly is approximated from config + transcript stats). */
+  async getSessionContextReport(
+    sessionKey: string,
+    mode: 'list' | 'detail' | 'json',
+  ): Promise<string> {
+    const messages = await this.sessionStore.load(sessionKey);
+    const cw = this.getContextWindow();
+    const stats = this.getSessionStats(sessionKey, messages);
+    const cfg = this.effectiveAppConfig() ?? this.config.config!;
+    const model = this.modelManager.getModelForSession(sessionKey);
+    const sc = await this.sessionConfigStore.get(sessionKey);
+    const workspace = effectiveWorkspacePathForSession(cfg, sessionKey, sc);
+    const estTokens = await this.sessionStore.estimateTokenUsage(sessionKey, messages);
+    const profile = resolveEffectiveAgentProfileForSession(cfg, sessionKey);
+    const defaults = cfg.agents?.defaults;
+    const compaction = defaults?.compaction;
+    const tools = defaults?.tools;
+
+    const toolsSummary =
+      tools && typeof tools === 'object'
+        ? Object.entries(tools as Record<string, unknown>)
+            .filter(([, v]) => v === true)
+            .map(([k]) => k)
+            .slice(0, 16)
+            .join(', ') || '(none explicitly true)'
+        : '(see agents.defaults.tools in config)';
+
+    const payload: Record<string, unknown> = {
+      sessionKey,
+      model,
+      workspacePath: workspace,
+      agentId: profile.agentId,
+      messageCount: messages.length,
+      contextWindowNominal: cw,
+      estimatedTranscriptTokens: estTokens,
+      approxWindowUsage: cw > 0 ? estTokens / cw : null,
+      thinkingDefault: defaults?.thinkingDefault,
+      reasoningDefault: defaults?.reasoningDefault,
+      verboseDefault: defaults?.verboseDefault,
+      compaction,
+      toolsFlagsOn: toolsSummary,
+      windowStats: stats.windowStats,
+      compactionRunStats: stats.compactionStats,
+    };
+
+    if (mode === 'json') {
+      return JSON.stringify(payload, null, 2);
+    }
+
+    const lines: string[] = [
+      '📎 *Context overview*',
+      '',
+      `• Session: \`${sessionKey}\``,
+      `• Model: \`${model}\``,
+      `• Agent profile: \`${profile.agentId}\``,
+      `• Workspace: \`${workspace}\``,
+      `• Messages: ${messages.length}`,
+      `• Est. transcript tokens (rough): ${estTokens}`,
+      `• Nominal context budget (4× maxTokens): ${cw}`,
+    ];
+    if (cw > 0) {
+      lines.push(`• Approx. usage vs budget: ${((estTokens / cw) * 100).toFixed(1)}%`);
+    }
+    lines.push(
+      `• Thinking / reasoning / verbose defaults: ${defaults?.thinkingDefault ?? '—'} / ${defaults?.reasoningDefault ?? '—'} / ${defaults?.verboseDefault ?? '—'}`,
+      `• Tools (true flags): ${toolsSummary}`,
+      '',
+      '_Full system prompt, skills, and memory blocks are assembled at agent runtime; use Web settings or logs for deep inspection._',
+    );
+
+    if (mode === 'detail') {
+      lines.push('', '*Compaction config (agents.defaults.compaction):*', '```json');
+      lines.push(JSON.stringify(compaction ?? {}, null, 2));
+      lines.push('```', '', '*Window stats:*', '```json');
+      lines.push(JSON.stringify(stats.windowStats ?? {}, null, 2));
+      lines.push('```');
+    }
+
+    return lines.join('\n');
   }
 
   getSessionStats(sessionKey: string, messages: AgentMessage[]) {
@@ -1480,7 +1662,7 @@ export class AgentService {
 
     log.info({ sessionKey, reason: prep.stats?.reason, usagePercent: prep.stats?.usagePercent }, 'Session needs compaction');
 
-    const result = await this.sessionStore.compact(sessionKey, messages, contextWindow);
+    const result = await this.sessionStore.compact(sessionKey, messages, contextWindow, undefined, false);
     await this.hookHandler.trigger('after_compaction', {
       messageCount: messages.length,
       tokenCount: result.tokensBefore,
