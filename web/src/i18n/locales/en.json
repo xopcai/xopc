@@ -113,7 +113,7 @@
   "systemSettings": {
     "title": "System",
     "behaviorGroup": "App behavior",
-    "subtitle": "Desktop app start-up, power, notification preferences, and macOS permissions.",
+    "subtitle": "Desktop (Windows, macOS, Linux) start-up, power, and notification preferences; per-OS settings links for system access.",
     "desktopOnlyTitle": "Desktop app only",
     "desktopOnlyBody": "System integration is available in the xopc Electron app. In the browser, use your OS settings instead.",
     "toggles": {
@@ -127,8 +127,10 @@
       "notifySoundDesc": "Play a sound when a notification is shown (when notification sound is implemented)."
     },
     "permissionsTitle": "System permissions",
-    "permissionsHint": "Status is best-effort. After changing settings, use refresh or return to this page.",
-    "onlyMacos": "The permission list below applies to macOS. On this platform, use the relevant Windows or Linux settings for privacy and access.",
+    "permissionsHint": "Status is best-effort. After changing system settings, refresh or revisit this page.",
+    "permissionsHintDarwin": "macOS privacy (TCC) and media status are best-effort. Use Refresh after you change System Settings.",
+    "permissionsHintWin": "On Windows, microphone and (where reported) screen access follow system-wide toggles. Each link opens a relevant page in the Settings app.",
+    "permissionsHintLinux": "Linux does not report these states here. We try to open your desktop’s Settings; otherwise a documentation page opens. Grant access in your distro, Flatpak, or portal as needed.",
     "status": {
       "granted": "Allowed",
       "denied": "Not allowed",
@@ -138,8 +140,8 @@
     "refresh": "Refresh status",
     "perm": {
       "fullDisk": {
-        "title": "Full Disk Access",
-        "desc": "Read and write project files in protected locations when required."
+        "title": "Files & storage",
+        "desc": "Read and write workspace and user data when the OS or sandbox allows (wording and paths vary by system)."
       },
       "screen": {
         "title": "Screen Recording",
@@ -154,12 +156,12 @@
         "desc": "Use global shortcuts and accessibility-related integrations."
       },
       "automation": {
-        "title": "Automation",
-        "desc": "Control other apps via Apple Events (e.g. Calendar, Reminders) when supported."
+        "title": "Automation & app integration",
+        "desc": "Control or integrate with other apps and services (e.g. Apple Events on macOS, default apps on Windows, or desktop portals on Linux)."
       },
       "notifications": {
         "title": "Notifications",
-        "desc": "Allow the app in System Settings → Notifications so alerts can appear."
+        "desc": "Allow the app in your OS notification settings so alerts can appear."
       },
       "location": {
         "title": "Location",

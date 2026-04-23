@@ -65,8 +65,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
       notifyEnabled?: boolean;
       notifySoundEnabled?: boolean;
     }) => ipcRenderer.invoke('system-settings:set-behavior', patch),
-    getMacosPermissions: () => ipcRenderer.invoke('system-settings:get-macos-permissions'),
-    openMacosPrivacy: (
+    getPermissions: () => ipcRenderer.invoke('system-settings:get-permissions'),
+    openPrivacy: (
       kind:
         | 'fullDisk'
         | 'screen'
@@ -76,7 +76,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
         | 'notifications'
         | 'location'
         | 'camera',
-    ) => ipcRenderer.invoke('system-settings:open-macos-privacy', kind),
+    ) => ipcRenderer.invoke('system-settings:open-privacy', kind),
     requestMicrophone: () => ipcRenderer.invoke('system-settings:request-microphone'),
   },
 });
