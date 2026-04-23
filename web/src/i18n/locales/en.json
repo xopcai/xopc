@@ -476,12 +476,20 @@
       "placeholder": "Search skills and commands…"
     },
     "atMention": {
-      "noResults": "No files found",
+      "noResults": "No matches",
       "placeholder": "Search files…",
       "searchError": "Failed to search workspace",
       "files": "Files",
       "folders": "Folders",
-      "recentFiles": "Recent"
+      "recentFiles": "Recent",
+      "recentBadge": "Recent",
+      "shiftHint": "Shift+Enter or Shift+click: add another @ mention.",
+      "tabs": {
+        "files": "Files",
+        "docs": "Docs",
+        "symbols": "Symbols",
+        "urls": "URLs"
+      }
     }
   },
   "sessions": {
