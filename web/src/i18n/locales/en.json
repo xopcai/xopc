@@ -1768,7 +1768,14 @@
     "dismissHint": "Do not show this reminder again for this version",
     "reminderElectronReady": "Update v{{version}} is ready. Restart the app to install.",
     "reminderDownloading": "Downloading update… {{percent}}%",
-    "reminderNpm": "A new version v{{version}} is available for the gateway."
+    "reminderNpm": "A new version v{{version}} is available for the gateway.",
+    "updateNow": "Update now",
+    "updateRunning": "Updating…",
+    "updateSuccess": "Update installed",
+    "updateSuccessDetail": "Restart the gateway to use the new version (for example: xopc gateway restart).",
+    "updateErrorGit": "One-click update unavailable",
+    "updateErrorBusy": "An update is already in progress",
+    "updateErrorFailed": "Update failed"
   },
   "aboutDialog": {
     "windowTitle": "About this application",

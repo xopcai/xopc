@@ -1,4 +1,5 @@
-import { Download, RefreshCw, X } from 'lucide-react';
+import { Download, Loader2, RefreshCw, X } from 'lucide-react';
+import { useCallback } from 'react';
 
 import type { UpdateReminderController } from '@/features/updater/use-update-reminder';
 import { messages } from '@/i18n/messages';
@@ -6,7 +7,7 @@ import { cn } from '@/lib/cn';
 import { useLocaleStore } from '@/stores/locale-store';
 
 /**
- * Full-width top strip: main copy is centered; actions stay on the right.
+ * Full-width top strip: main copy is centered; optional actions (dismiss) on the far right; npm CTA sits after the text.
  */
 export function UpdateReminderBar({
   reminder,
@@ -17,7 +18,35 @@ export function UpdateReminderBar({
 }) {
   const language = useLocaleStore((s) => s.language);
   const t = messages(language).updatePanel;
-  const { show, dismiss, electronQuitAndInstall } = reminder;
+  const { show, dismiss, electronQuitAndInstall, runNpmUpdate, npmUpdateRunning } = reminder;
+
+  const onNpmUpdateClick = useCallback(async () => {
+    const tp = messages(language).updatePanel;
+    const r = await runNpmUpdate();
+    if (r.ok) {
+      window.dispatchEvent(
+        new CustomEvent('extension-notification', {
+          detail: {
+            type: 'success',
+            title: tp.updateSuccess,
+            message: tp.updateSuccessDetail,
+          },
+        }),
+      );
+      return;
+    }
+    const title =
+      r.error === 'git-checkout'
+        ? tp.updateErrorGit
+        : r.error === 'busy'
+          ? tp.updateErrorBusy
+          : tp.updateErrorFailed;
+    window.dispatchEvent(
+      new CustomEvent('extension-notification', {
+        detail: { type: 'error' as const, title, message: r.message },
+      }),
+    );
+  }, [runNpmUpdate, language]);
 
   if (show.kind === 'none') {
     return null;
@@ -98,23 +127,32 @@ export function UpdateReminderBar({
     return (
       <div
         className={cn(
-          'relative flex min-h-10 w-full min-w-0 items-center justify-center border-b border-accent/20 bg-accent/10 px-10 py-2 text-sm sm:px-12',
+          'relative flex min-h-10 w-full min-w-0 items-center justify-center border-b border-accent/20 bg-accent/10 py-2 text-sm',
           compact && 'text-xs',
         )}
       >
-        <div className="flex max-w-[min(100%,52rem)] flex-wrap items-center justify-center gap-x-2 gap-y-1 text-center">
-          <span className="inline-flex items-center gap-2">
-            <Download className="h-4 w-4 shrink-0 text-accent" aria-hidden />
-            <span>
-              {t.reminderNpm.replace('{{version}}', show.version)}
-              {show.channel && show.channel !== 'latest' ? ` (${show.channel})` : ''}
-            </span>
+        <div
+          className={cn(
+            'mx-auto flex max-w-[min(100%,52rem)] flex-wrap items-center justify-center gap-x-2 gap-y-1 px-10 pr-14 text-center sm:px-12 sm:pr-16',
+          )}
+        >
+          <span>
+            {t.reminderNpm.replace('{{version}}', show.version)}
+            {show.channel && show.channel !== 'latest' ? ` (${show.channel})` : ''}
           </span>
-          {!compact ? (
-            <code className="rounded bg-surface-secondary px-1.5 py-0.5 font-mono text-[11px] text-fg-muted">
-              xopc update
-            </code>
-          ) : null}
+          <button
+            type="button"
+            onClick={onNpmUpdateClick}
+            disabled={npmUpdateRunning}
+            className="inline-flex shrink-0 items-center gap-1 rounded bg-accent px-2.5 py-1 text-xs font-medium text-white hover:bg-accent/90 disabled:cursor-not-allowed disabled:opacity-60"
+          >
+            {npmUpdateRunning ? (
+              <Loader2 className="h-3 w-3 shrink-0 animate-spin" aria-hidden />
+            ) : (
+              <RefreshCw className="h-3 w-3 shrink-0" aria-hidden />
+            )}
+            {npmUpdateRunning ? t.updateRunning : t.updateNow}
+          </button>
         </div>
         <button
           type="button"

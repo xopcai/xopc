@@ -34,7 +34,8 @@ export type UpdateReminderView =
  * Dismiss persists in localStorage per version so the same build is not nagged again.
  */
 export function useUpdateReminder() {
-  const { npm, electron, isElectron, electronQuitAndInstall } = useUpdateStatus();
+  const { npm, electron, isElectron, electronQuitAndInstall, runNpmUpdate, npmUpdateRunning } =
+    useUpdateStatus();
   const [dismissed, setDismissed] = useState<Dismissed>(readDismissed);
   const [hideDownloading, setHideDownloading] = useState(false);
 
@@ -43,6 +44,25 @@ export function useUpdateReminder() {
       setHideDownloading(false);
     }
   }, [electron?.state]);
+
+  /** After one-click npm install, hide the bar for the installed version until the next check. */
+  useEffect(() => {
+    const handler = (e: Event) => {
+      const v = (e as CustomEvent<{ version?: string }>).detail?.version?.trim();
+      if (!v) return;
+      setDismissed((prev) => {
+        const next: Dismissed = { ...prev, npm: v };
+        try {
+          localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+        } catch {
+          /* ignore */
+        }
+        return next;
+      });
+    };
+    window.addEventListener('xopc:npm-update-installed', handler as EventListener);
+    return () => window.removeEventListener('xopc:npm-update-installed', handler as EventListener);
+  }, []);
 
   const show: UpdateReminderView = useMemo(() => {
     if (isElectron && electron?.state === 'downloaded' && electron.version) {
@@ -87,6 +107,8 @@ export function useUpdateReminder() {
     show,
     dismiss,
     electronQuitAndInstall,
+    runNpmUpdate,
+    npmUpdateRunning,
   };
 }
 

@@ -38,15 +38,22 @@ export type UpdateStatus = {
   isElectron: boolean;
 };
 
+export type NpmUpdateRunResult =
+  | { ok: true; result: Record<string, unknown> | null }
+  | { ok: false; error: string; message: string; status: number; result?: Record<string, unknown> | null };
+
 const isElectronEnv =
   typeof window !== 'undefined' && (window as unknown as { electronAPI?: { updater?: unknown } }).electronAPI?.updater !== undefined;
 
 export function useUpdateStatus(): UpdateStatus & {
   checkNow: () => Promise<void>;
+  runNpmUpdate: () => Promise<NpmUpdateRunResult>;
+  npmUpdateRunning: boolean;
   electronCheck: () => void;
   electronQuitAndInstall: () => void;
 } {
   const [npm, setNpm] = useState<NpmUpdateStatus | null>(null);
+  const [npmUpdateRunning, setNpmUpdateRunning] = useState(false);
   const [electron, setElectron] = useState<ElectronUpdateStatus | null>(
     isElectronEnv ? { state: 'idle' } : null,
   );
@@ -99,6 +106,53 @@ export function useUpdateStatus(): UpdateStatus & {
     }
   }, []);
 
+  const runNpmUpdate = useCallback(async (): Promise<NpmUpdateRunResult> => {
+    setNpmUpdateRunning(true);
+    try {
+      const res = await apiFetch(apiUrl('/api/update/run'), { method: 'POST' });
+      const json = (await res.json()) as {
+        ok?: boolean;
+        error?: string;
+        message?: string;
+        result?: Record<string, unknown> | null;
+      };
+      if (json.ok) {
+        const r = json.result ?? null;
+        if (r && typeof r === 'object' && r.status === 'ok' && typeof r.installedVersion === 'string') {
+          window.dispatchEvent(
+            new CustomEvent('xopc:npm-update-installed', { detail: { version: r.installedVersion } }),
+          );
+        } else if (
+          r &&
+          typeof r === 'object' &&
+          r.status === 'up-to-date' &&
+          typeof r.latestVersion === 'string'
+        ) {
+          window.dispatchEvent(
+            new CustomEvent('xopc:npm-update-installed', { detail: { version: r.latestVersion } }),
+          );
+        }
+        return { ok: true, result: r };
+      }
+      return {
+        ok: false,
+        error: String(json.error ?? 'unknown'),
+        message: String(json.message ?? (res.ok ? 'Update failed' : `HTTP ${res.status}`)),
+        status: res.status,
+        result: json.result ?? null,
+      };
+    } catch (err) {
+      return {
+        ok: false,
+        error: 'network',
+        message: err instanceof Error ? err.message : String(err),
+        status: 0,
+      };
+    } finally {
+      setNpmUpdateRunning(false);
+    }
+  }, []);
+
   const electronCheck = useCallback(() => {
     if (isElectronEnv) {
       void (window as unknown as { electronAPI: { updater: { check: () => void } } }).electronAPI.updater.check();
@@ -116,6 +170,8 @@ export function useUpdateStatus(): UpdateStatus & {
     electron,
     isElectron: isElectronEnv,
     checkNow,
+    runNpmUpdate,
+    npmUpdateRunning,
     electronCheck,
     electronQuitAndInstall,
   };
