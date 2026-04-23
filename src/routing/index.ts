@@ -11,7 +11,6 @@ export {
   sanitizeSegment,
   isValidSegment,
   isSubagentSessionKey,
-  isAcpSessionKey,
   isCronSessionKey,
   getSubagentDepth,
   buildSubagentSessionKey,

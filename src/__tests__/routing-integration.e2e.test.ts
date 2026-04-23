@@ -13,14 +13,8 @@
 
 import { describe, it, expect } from 'vitest';
 import type { Config } from '../config/schema.js';
-import {
-  buildSessionKey,
-  parseSessionKey,
-  type BindingRule,
-} from '../routing/index.js';
+import { parseSessionKey, type BindingRule } from '../routing/index.js';
 import { generateSessionKeyWithRouting } from '../channels/telegram/index.js';
-import { buildAcpSessionKey } from '../acp/routing-integration.js';
-
 describe('Complete Routing E2E Flow', () => {
 
   describe('Scenario 1: Simple DM Message Flow', () => {
@@ -344,34 +338,6 @@ describe('Complete Routing E2E Flow', () => {
 
       expect(parentGroupKey).not.toContain(':thread:');
       expect(parentGroupKey).not.toBe(sessionKey);
-    });
-  });
-
-  describe('Scenario 6: ACP Session Flow', () => {
-    it('should create and route ACP sessions', () => {
-      const acpId = '550e8400-e29b-41d4-a716-446655440000';
-      
-      const acpSessionKey = buildAcpSessionKey({
-        agentId: 'main',
-        acpId,
-      });
-
-      expect(acpSessionKey).toBe(`main:acp:${acpId}`);
-
-      const parsed = parseSessionKey(acpSessionKey);
-      expect(parsed?.source).toBe('acp');
-      expect(parsed?.agentId).toBe('main');
-
-      // Verify ACP sessions are isolated from regular sessions
-      const regularKey = buildSessionKey({
-        agentId: 'main',
-        source: 'telegram',
-        accountId: 'acc_default',
-        peerKind: 'dm',
-        peerId: '123456',
-      });
-
-      expect(regularKey).not.toBe(acpSessionKey);
     });
   });
 

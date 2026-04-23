@@ -5,7 +5,6 @@ import {
   sanitizeSegment,
   isValidSegment,
   isSubagentSessionKey,
-  isAcpSessionKey,
   isCronSessionKey,
   getSubagentDepth,
   buildSubagentSessionKey,
@@ -199,16 +198,6 @@ describe('session-key', () => {
 
     it('should return false for non-subagent keys', () => {
       expect(isSubagentSessionKey('main:telegram:default:dm:123456')).toBe(false);
-    });
-  });
-
-  describe('isAcpSessionKey', () => {
-    it('should return true for acp keys', () => {
-      expect(isAcpSessionKey('main:acp:default:dm:uuid-123')).toBe(true);
-    });
-
-    it('should return false for non-acp keys', () => {
-      expect(isAcpSessionKey('main:telegram:default:dm:123456')).toBe(false);
     });
   });
 

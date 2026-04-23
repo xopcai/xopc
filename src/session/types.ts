@@ -49,15 +49,6 @@ export interface SessionRoutingMeta {
   lastRoutePolicy?: 'main' | 'session';
 }
 
-/** Session ACP metadata */
-export interface SessionAcpMeta {
-  backend?: string;
-  runtimeSessionName?: string;
-  mode?: 'persistent' | 'oneshot';
-  state?: 'idle' | 'running' | 'error';
-  lastActivityAt?: number;
-}
-
 /** Session-level statistics (per session) */
 export interface SessionStats {
   messageCount: number;
@@ -96,8 +87,6 @@ export interface SessionMetadata {
   customData?: Record<string, unknown>;
   /** Routing metadata */
   routing?: SessionRoutingMeta;
-  /** ACP metadata */
-  acp?: SessionAcpMeta;
   /** Session statistics */
   stats?: SessionStats;
   /**

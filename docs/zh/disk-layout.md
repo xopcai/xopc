@@ -9,7 +9,7 @@
 | 区域 | 作用 |
 |------|------|
 | **状态目录** | 全局配置、凭据、日志、cron、全局 skills/extensions、托管工具链等。 |
-| **智能体主目录** `<stateDir>/agents/<agentId>/` | 按 `agentId` 隔离的运行时数据：会话 transcript、bootstrap 人格 Markdown、托管记忆、入站/TTS 落盘、会话级配置、ACP 索引等。 |
+| **智能体主目录** `<stateDir>/agents/<agentId>/` | 按 `agentId` 隔离的运行时数据：会话 transcript、bootstrap 人格 Markdown、托管记忆、入站/TTS 落盘、会话级配置等。 |
 | **智能体状态目录** `…/agents/<agentId>/agent/` | 进程状态：`agent.json`、各智能体凭据、IPC 收件箱、pid/socket、小型机器状态、扩展安装、出站崩溃恢复队列。 |
 | **Markdown 工作空间** | 用户项目树：工具 **cwd**、每日 `memory/*.md`、`media/generated`、用户 `skills/`、任意用户文件。**不再**作为人格文件或内部状态的主存放位置。 |
 
@@ -37,7 +37,7 @@
 | 路径 | 用途 |
 |------|------|
 | `bootstrap/` | 人格与引导 Markdown：`SOUL.md`、`IDENTITY.md`、`USER.md`、`TOOLS.md`、`AGENTS.md`、`HEARTBEAT.md`、`MEMORY.md`（写入系统提示的引导文件，与托管 `memories/` 不同）、`CONTEXT.md`、`SKILLS.md`、`BOOTSTRAP.md`。用于组装智能体系统提示；网关心跳文案默认读取 `bootstrap/HEARTBEAT.md`（若存在）。 |
-| `sessions/` | 会话 transcript（分片、`index.json`、`archive/`）、`sessions/config/` 下按会话配置、`sessions/acp-sessions.json`（ACP 元数据索引）。 |
+| `sessions/` | 会话 transcript（分片、`index.json`、`archive/`）、`sessions/config/` 下按会话配置。 |
 | `memories/` | 托管结构化存储（`MEMORY.md`、`USER.md`，条目以固定分隔符分段 — `BuiltinMemoryStore`）。 |
 | `inbound/` | 入站附件（非图片二进制）落盘；transcript 中相对路径为相对 agent home 的 `inbound/...`。 |
 | `tts/` | 按会话缓存的出站 TTS 音频。 |
