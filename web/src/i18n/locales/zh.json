@@ -25,7 +25,8 @@
     "settingsHeartbeat": "心跳",
     "settingsSearch": "网络搜索",
     "settingsAgentDefaults": "智能体默认配置",
-    "settingsAgents": "智能体"
+    "settingsAgents": "智能体",
+    "settingsSystem": "系统设置"
   },
   "appsPage": {
     "title": "应用",
@@ -106,7 +107,65 @@
     "gateway": "网关",
     "heartbeat": "心跳",
     "search": "网络搜索",
-    "agents": "智能体"
+    "agents": "智能体",
+    "system": "系统设置"
+  },
+  "systemSettings": {
+    "title": "系统设置",
+    "behaviorGroup": "应用行为",
+    "subtitle": "桌面端自启动、防睡眠、通知偏好，以及 macOS 系统权限。",
+    "desktopOnlyTitle": "仅桌面端",
+    "desktopOnlyBody": "系统集成功能仅在 xopc Electron 桌面版中可用。在浏览器中请通过操作系统设置管理。",
+    "toggles": {
+      "openAtLogin": "开机自动启动",
+      "openAtLoginDesc": "登录本机用户时自动启动 xopc。",
+      "keepAwake": "保持系统唤醒",
+      "keepAwakeDesc": "开启后请求系统保持唤醒，减少因空闲睡眠中断长时间任务。",
+      "notifyDesktop": "桌面通知",
+      "notifyDesktopDesc": "在后续版本接入系统通知时生效（当前仅保存偏好）。",
+      "notifySound": "声音通知",
+      "notifySoundDesc": "在实现通知时是否播放提示音（需同时启用桌面通知相关实现）。"
+    },
+    "permissionsTitle": "系统权限",
+    "permissionsHint": "状态为尽量检测，修改系统设置后请刷新或重新进入本页。",
+    "onlyMacos": "下列权限项适用于 macOS；在本机请通过 Windows 或 Linux 的相应设置管理隐私与访问。",
+    "status": {
+      "granted": "已授权",
+      "denied": "未授权",
+      "unknown": "未知"
+    },
+    "openSettings": "去设置",
+    "refresh": "刷新状态",
+    "perm": {
+      "fullDisk": {
+        "title": "完全磁盘访问权限",
+        "desc": "在需要时读取或写入受保护位置的项目文件。"
+      },
+      "screen": {
+        "title": "录屏",
+        "desc": "在应用内浏览器外进行整屏/窗口采集、供视觉类能力使用。"
+      },
+      "microphone": {
+        "title": "麦克风",
+        "desc": "在对话和语音能力中录音。"
+      },
+      "accessibility": {
+        "title": "辅助功能",
+        "desc": "使用全局快捷键及辅助功能相关能力。"
+      },
+      "automation": {
+        "title": "自动化",
+        "desc": "通过 Apple 事件等控制其他应用（如日历、提醒）——视功能而定。"
+      },
+      "notifications": {
+        "title": "通知",
+        "desc": "在「系统设置 → 通知」中允许本应用，以便系统通知能正常显示。"
+      },
+      "location": {
+        "title": "位置",
+        "desc": "在提供地理位置相关任务时获取位置信息。"
+      }
+    }
   },
   "settingsNavGroups": {
     "gateway": "连接与服务",

@@ -15,6 +15,7 @@ import {
 import { registerAgentIpc } from './ipc/agent-ipc.js';
 import { registerFileIpc } from './ipc/file-ipc.js';
 import { registerSearchIpc } from './ipc/search-ipc.js';
+import { initElectronShellPreferences, registerSystemSettingsIpc, stopAllPowerSaveBlockers } from './ipc/system-settings-ipc.js';
 import { getLoadingPageDataUrl } from './loading-page.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
@@ -190,20 +191,23 @@ function createWindow(): void {
   })();
 }
 
-app.whenReady().then(() => {
+app.whenReady().then(async () => {
   // getUserMedia / MediaRecorder need Chromium "media" permission; without a handler some Electron
   // builds deny it for packaged apps (browser tabs are unaffected).
   session.defaultSession.setPermissionRequestHandler((_webContents, permission, callback) => {
     callback(permission === 'media');
   });
 
+  await initElectronShellPreferences();
   registerFileIpc(ipcMain);
   registerSearchIpc(ipcMain);
   registerAgentIpc(ipcMain);
+  registerSystemSettingsIpc(ipcMain);
   createWindow();
 });
 
 app.on('before-quit', () => {
+  stopAllPowerSaveBlockers();
   stopGatewayProcess();
 });
 

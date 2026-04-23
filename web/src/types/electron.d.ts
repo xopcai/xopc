@@ -40,6 +40,54 @@ export interface ElectronShellAPI {
   openPath(filePath: string): Promise<{ error?: string }>;
 }
 
+export type TccTriState = 'granted' | 'denied' | 'unknown';
+
+export type MacosPermissionSnapshot = {
+  fullDisk: TccTriState;
+  screen: TccTriState;
+  microphone: TccTriState;
+  accessibility: TccTriState;
+  automation: TccTriState;
+  notifications: TccTriState;
+  location: TccTriState;
+};
+
+export type MacosPrivacyPaneKind =
+  | 'fullDisk'
+  | 'screen'
+  | 'microphone'
+  | 'accessibility'
+  | 'automation'
+  | 'notifications'
+  | 'location'
+  | 'camera';
+
+export type SystemSettingsBehavior = {
+  platform: 'darwin' | 'win32' | 'linux';
+  openAtLogin: boolean;
+  openAsHidden: boolean;
+  keepAwakeEnabled: boolean;
+  keepAwakePreferred: boolean;
+  notifyEnabled: boolean;
+  notifySoundEnabled: boolean;
+};
+
+export interface ElectronSystemSettingsAPI {
+  getBehavior(): Promise<SystemSettingsBehavior>;
+  setBehavior(patch: {
+    openAtLogin?: boolean;
+    openAsHidden?: boolean;
+    keepAwakePreferred?: boolean;
+    notifyEnabled?: boolean;
+    notifySoundEnabled?: boolean;
+  }): Promise<{ ok: true; behavior: SystemSettingsBehavior }>;
+  getMacosPermissions(): Promise<MacosPermissionSnapshot>;
+  openMacosPrivacy(kind: MacosPrivacyPaneKind): Promise<
+    { ok: true } | { ok: false; error: string }
+  >;
+  requestMicrophone(): Promise<{ status: TccTriState }>;
+}
+
 export interface ElectronAPI {
   shell?: ElectronShellAPI;
   file: ElectronFileAPI;
@@ -48,6 +96,7 @@ export interface ElectronAPI {
   startup?: ElectronStartupAPI;
   gateway?: ElectronGatewayShellAPI;
   platform: 'darwin' | 'win32' | 'linux';
+  system?: ElectronSystemSettingsAPI;
 }
 
 declare global {
