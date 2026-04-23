@@ -14,14 +14,43 @@ import { getModelRegistry } from './model-registry.js';
 import { CredentialResolver, resolveApiKey, hasCredentials } from '../auth/credentials.js';
 import { hasProviderAuthOnDiskSync } from '../auth/sync-provider-auth.js';
 import { getApiKeyFromEnv } from './env-keys.js';
+import { getProviderRegistry } from './plugin-registry.js';
+import type { ProviderModelDefinition } from '../extensions/types/providers.js';
 
 export { getApiKeyFromEnv, PROVIDER_ENV_MAP } from './env-keys.js';
+
+/** Sentinel base URL: model is served by an extension {@link ProviderPluginRegistry} provider. */
+export const EXTENSION_PROVIDER_BASE_URL = 'extension://provider-plugin';
+
+/** Map a plugin registry model to the pi-ai {@link Model} shape. */
+export function pluginModelToModel(providerId: string, definition: ProviderModelDefinition): Model<Api> {
+	return {
+		provider: providerId,
+		id: definition.id,
+		name: definition.name,
+		api: 'openai-completions' as Api,
+		baseUrl: EXTENSION_PROVIDER_BASE_URL,
+		reasoning: false,
+		input: definition.supportsImages ? (['text', 'image'] as ('text' | 'image')[]) : (['text'] as ('text' | 'image')[]),
+		contextWindow: definition.contextWindow ?? 128000,
+		maxTokens: definition.maxOutputTokens ?? 4096,
+		cost: {
+			input: definition.pricing?.input ?? 0,
+			output: definition.pricing?.output ?? 0,
+			cacheRead: 0,
+			cacheWrite: 0,
+		},
+	} as Model<Api>;
+}
 
 /**
  * Get API key synchronously: checks registry (models.json) first, then environment variables.
  * Use this for Agent's getApiKey callback which must be synchronous.
  */
 export function getApiKeySync(provider: string): string | undefined {
+  const pluginRegistry = getProviderRegistry();
+  if (pluginRegistry.has(provider)) return 'extension-managed';
+
   const registry = getModelRegistry();
   const registryKey = registry.getApiKey(provider);
   if (registryKey) {
@@ -44,12 +73,18 @@ export function resolveModel(ref: string): Model<Api> {
 		return customModel;
 	}
 
-	// Fall back to built-in models
 	if (ref.includes('/')) {
 		const [provider, modelId] = ref.split('/');
-		const model = getPiAiModel(provider as any, modelId as any);
-		if (!model) throw new Error(`Model not found: ${ref}`);
-		return model as Model<Api>;
+		const piAiModel = getPiAiModel(provider as any, modelId as any);
+		if (piAiModel) return piAiModel as Model<Api>;
+
+		const pluginRegistry = getProviderRegistry();
+		const plugin = pluginRegistry.get(provider);
+		if (plugin) {
+			const pluginModel = plugin.models.find(m => m.id === modelId);
+			if (pluginModel) return pluginModelToModel(provider, pluginModel);
+		}
+		throw new Error(`Model not found: ${ref}`);
 	}
 
 	for (const provider of getPiAiProviders()) {
@@ -62,13 +97,22 @@ export function resolveModel(ref: string): Model<Api> {
 		}
 	}
 
+	const pluginRegistry = getProviderRegistry();
+	for (const plugin of pluginRegistry.listAll()) {
+		const found = plugin.models.find(m => m.id === ref);
+		if (found) return pluginModelToModel(plugin.id, found);
+	}
+
 	throw new Error(`Model not found: ${ref}. Use format: provider/model-id`);
 }
 
 export function getModelsByProvider(provider: string): readonly Model<Api>[] {
-	// Get from registry (includes custom models)
 	const registry = getModelRegistry();
-	return registry.getAll().filter(m => m.provider === provider);
+	const fromRegistry = registry.getAll().filter(m => m.provider === provider);
+	const plugin = getProviderRegistry().get(provider);
+	if (!plugin) return fromRegistry;
+	const pluginModels = plugin.models.map(m => pluginModelToModel(provider, m));
+	return [...fromRegistry, ...pluginModels];
 }
 
 export function getAllProviders(): string[] {
@@ -85,10 +129,16 @@ export function getAllProviders(): string[] {
 		providers.add(m.provider);
 	}
 
+	for (const plugin of getProviderRegistry().listAll()) {
+		providers.add(plugin.id);
+	}
+
 	return Array.from(providers);
 }
 
 export async function getApiKey(provider: string): Promise<string | undefined> {
+	if (getProviderRegistry().has(provider)) return 'extension-managed';
+
 	// Use new credential resolver first (checks: agent private > global > oauth > env)
 	const credentialKey = await resolveApiKey(provider);
 	if (credentialKey) {
@@ -111,6 +161,8 @@ export async function getApiKey(provider: string): Promise<string | undefined> {
  * Only checks environment variables and registry, not credential system
  */
 export function isProviderConfiguredSync(provider: string): boolean {
+	if (getProviderRegistry().has(provider)) return true;
+
 	// Check registry for custom providers
 	const registry = getModelRegistry();
 	if (registry.getApiKey(provider)) {
@@ -125,6 +177,8 @@ export function isProviderConfiguredSync(provider: string): boolean {
 }
 
 export async function isProviderConfigured(provider: string): Promise<boolean> {
+  if (getProviderRegistry().has(provider)) return true;
+
   // Check registry first for custom providers (from models.json)
   const registry = getModelRegistry();
   if (registry.getApiKey(provider)) {
@@ -134,9 +188,11 @@ export async function isProviderConfigured(provider: string): Promise<boolean> {
 }
 
 /** Where runtime {@link getApiKey} resolves the key from (no secret values). */
-export type ProviderActiveKeySource = 'none' | 'agent' | 'gateway' | 'oauth' | 'env' | 'models_json';
+export type ProviderActiveKeySource = 'none' | 'agent' | 'gateway' | 'oauth' | 'env' | 'models_json' | 'extension';
 
 export async function getProviderActiveKeySource(provider: string): Promise<ProviderActiveKeySource> {
+  if (getProviderRegistry().has(provider)) return 'extension';
+
   const resolver = new CredentialResolver();
   const fromCredentials = await resolver.resolveApiKeySource(provider);
   if (fromCredentials === 'agent') return 'agent';
@@ -165,17 +221,33 @@ export async function getConfiguredProviders(): Promise<string[]> {
 
 export function getAllModels(): readonly Model<Api>[] {
 	const registry = getModelRegistry();
-	return registry.getAll();
+	const registryModels = registry.getAll();
+	const pluginProviders = getProviderRegistry().listAll();
+	if (pluginProviders.length === 0) return registryModels;
+
+	const existingIds = new Set(registryModels.map(m => `${m.provider}/${m.id}`));
+	const merged: Model<Api>[] = [...registryModels];
+	for (const plugin of pluginProviders) {
+		for (const model of plugin.models) {
+			const compositeId = `${plugin.id}/${model.id}`;
+			if (!existingIds.has(compositeId)) {
+				merged.push(pluginModelToModel(plugin.id, model));
+				existingIds.add(compositeId);
+			}
+		}
+	}
+	return merged;
 }
 
 export async function getAvailableModels(): Promise<readonly Model<Api>[]> {
-	const registry = getModelRegistry();
-	const allModels = registry.getAll();
-	
-	// Filter models by checking if provider has auth configured
+	const allModels = getAllModels();
+	const pluginRegistry = getProviderRegistry();
 	const available: Model<Api>[] = [];
+
 	for (const model of allModels) {
-		if (await isProviderConfigured(model.provider)) {
+		if (pluginRegistry.has(model.provider)) {
+			available.push(model);
+		} else if (await isProviderConfigured(model.provider)) {
 			available.push(model);
 		}
 	}
@@ -184,7 +256,7 @@ export async function getAvailableModels(): Promise<readonly Model<Api>[]> {
 
 export type { Model, Api } from '@mariozechner/pi-ai';
 
-export type ProviderCategory = 'common' | 'specialty' | 'oauth' | 'enterprise';
+export type ProviderCategory = 'common' | 'specialty' | 'oauth' | 'enterprise' | 'extension';
 
 export interface ProviderMeta {
   name: string;
@@ -224,11 +296,12 @@ export const PROVIDER_META: Record<string, ProviderMeta> = {
 
 export function getSortedProviders(): string[] {
   const all = getAllProviders();
-  const catOrder: Record<ProviderCategory, number> = { common: 0, specialty: 1, enterprise: 2, oauth: 3 };
-  
+  const catOrder: Record<ProviderCategory, number> = { common: 0, specialty: 1, enterprise: 2, oauth: 3, extension: 4 };
+  const pluginRegistry = getProviderRegistry();
+
   return [...all].sort((a, b) => {
-    const catA = PROVIDER_META[a]?.category ?? 'specialty';
-    const catB = PROVIDER_META[b]?.category ?? 'specialty';
+    const catA = pluginRegistry.has(a) ? 'extension' : (PROVIDER_META[a]?.category ?? 'specialty');
+    const catB = pluginRegistry.has(b) ? 'extension' : (PROVIDER_META[b]?.category ?? 'specialty');
     if (catOrder[catA] !== catOrder[catB]) {
       return catOrder[catA] - catOrder[catB];
     }
@@ -237,6 +310,8 @@ export function getSortedProviders(): string[] {
 }
 
 export function getProviderDisplayName(provider: string): string {
+  const plugin = getProviderRegistry().get(provider);
+  if (plugin) return plugin.name;
   return PROVIDER_META[provider]?.name || provider;
 }
 
