@@ -12,6 +12,7 @@ export * from './defaults.js';
 export * from './integration.js';
 export * from './models-json.js';
 export * from './resolve-config-value.js';
+export * from './runtime-overrides.js';
 
 // Re-export thinking types
 export type {

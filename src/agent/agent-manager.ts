@@ -13,6 +13,7 @@ import {
 } from '@mariozechner/pi-agent-core';
 import type { Model, Api } from '@mariozechner/pi-ai';
 import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
+import { applyConfigOverrides } from '../config/runtime-overrides.js';
 import {
   type EffectiveAgentProfile,
   resolveAgentBootstrapDir,
@@ -135,6 +136,11 @@ export class AgentManager {
   private agents = new Map<string, AgentInstance>();
   private config: AgentManagerConfig;
   private toolsFactory: AgentToolsFactory;
+
+  private mergedConfig(): Config | undefined {
+    const base = this.config.config;
+    return base ? applyConfigOverrides(base) : undefined;
+  }
   /** Default agent workspace (effective profile for `getDefaultAgentId`). */
   private baseWorkspacePath: string;
   /** Per-session absolute markdown workspace when `SessionAgentConfig.workingDirectoryOverride` is set. */
@@ -156,7 +162,7 @@ export class AgentManager {
       extensionRegistry: config.extensionRegistry,
       getCurrentContext: config.getCurrentContext,
       bus: config.bus,
-      getConfig: () => this.config.config,
+      getConfig: () => this.mergedConfig(),
       getPrimaryModel: () => this.resolveModelStringToModel(this.pickDefaultModelRef()),
       getBuiltinMemoryStore: () => baseRt.builtinMemoryStore,
       getMemoryManager: () => baseRt.memoryManager,
@@ -240,7 +246,7 @@ export class AgentManager {
   getThinkingDefaultForSession(
     sessionKey: string,
   ): import('./transcript/thinking-types.js').ThinkLevel | undefined {
-    const cfg = this.config.config;
+    const cfg = this.mergedConfig();
     if (!cfg) {
       return undefined;
     }
@@ -279,15 +285,16 @@ export class AgentManager {
   }
 
   private pickDefaultModelRef(): string {
-    const ref = getAgentDefaultModelRef(this.config.config);
-    return ref?.trim() || getDefaultModelSync(this.config.config);
+    const cfg = this.mergedConfig();
+    const ref = getAgentDefaultModelRef(cfg);
+    return ref?.trim() || getDefaultModelSync(cfg);
   }
 
   private resolveModelStringToModel(modelRef: string): Model<Api> {
     try {
       return resolveModel(modelRef);
     } catch {
-      const fallback = getDefaultModelSync(this.config.config);
+      const fallback = getDefaultModelSync(this.mergedConfig());
       log.warn({ modelRef, fallback }, 'Model not found, using default');
       return resolveModel(fallback);
     }
@@ -312,7 +319,7 @@ export class AgentManager {
       extensionRegistry: this.config.extensionRegistry,
       getCurrentContext: this.config.getCurrentContext,
       bus: this.config.bus,
-      getConfig: () => this.config.config,
+      getConfig: () => this.mergedConfig(),
       getPrimaryModel: () => this.resolveModelStringToModel(this.pickDefaultModelRef()),
       getBuiltinMemoryStore: () => this.getWorkspaceRuntime(this.baseWorkspacePath).builtinMemoryStore,
       getMemoryManager: () => this.getWorkspaceRuntime(this.baseWorkspacePath).memoryManager,
@@ -457,7 +464,7 @@ export class AgentManager {
       skillManager: rt.skillManager,
       builtinMemoryStore: rt.builtinMemoryStore,
       memoryManager: rt.memoryManager,
-      getConfig: () => this.config.config,
+      getConfig: () => this.mergedConfig(),
       onSkillsFilesystemMutate: () => this.refreshSkillsAfterDiskChange(),
     });
   }
