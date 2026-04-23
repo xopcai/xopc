@@ -7,7 +7,6 @@
   - [On-disk layout](disk-layout.md)
   - [State & workspace layout](workspace.md)
   - [Routing System](routing-system.md)
-  - [Agent Control Protocol (ACP)](acp.md)
   - [Session Management](session.md)
   - [Skills System](skills.md)
   - [Skills Testing](skills-testing.md)

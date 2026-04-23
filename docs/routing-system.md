@@ -110,4 +110,3 @@ console.log(route.agentId); // default agent when no binding matches (e.g. main)
 
 - **Core routing** — session keys, bindings, and rule evaluation inside xopc.
 - **Telegram** — contributes channel-specific routing hooks when the Telegram channel is enabled.
-- **ACP** — optional Agent Control Protocol bridge may register additional routing behaviour when enabled.

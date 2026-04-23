@@ -20,9 +20,6 @@ importers:
 
   .:
     dependencies:
-      '@agentclientprotocol/sdk':
-        specifier: ^0.18.2
-        version: 0.18.2(zod@4.3.6)
       '@grammyjs/runner':
         specifier: ^2.0.3
         version: 2.0.3(grammy@1.42.0(encoding@0.1.13))
@@ -410,11 +407,6 @@ packages:
 
   7zip-bin@5.2.0:
     resolution: {integrity: sha512-ukTPVhqG4jNzMro2qA9HSCSSVJN3aN7tlb+hfqYCt3ER0yWroeA2VR38MNrOHLQ/cVj+DaIMad0kFCtWWowh/A==}
-
-  '@agentclientprotocol/sdk@0.18.2':
-    resolution: {integrity: sha512-l/o9NKvUc00GPa6RFJ4AccQq2O/PAf83xQ75mThHuL3H571iN4+PEdwnTBez67sS8Nv2aSA373xCZ5CbTXEwzA==}
-    peerDependencies:
-      zod: ^3.25.0 || ^4.0.0
 
   '@algolia/abtesting@1.15.1':
     resolution: {integrity: sha512-2yuIC48rUuHGhU1U5qJ9kJHaxYpJ0jpDHJVI5ekOxSMYXlH4+HP+pA31G820lsAznfmu2nzDV7n5RO44zIY1zw==}
@@ -6327,10 +6319,6 @@ packages:
 snapshots:
 
   7zip-bin@5.2.0: {}
-
-  '@agentclientprotocol/sdk@0.18.2(zod@4.3.6)':
-    dependencies:
-      zod: 4.3.6
 
   '@algolia/abtesting@1.15.1':
     dependencies:

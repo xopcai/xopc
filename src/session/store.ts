@@ -968,10 +968,6 @@ export class SessionStore {
       }
       return { channel: parts[1], chatId: parts.slice(2).join(':') };
     }
-    // ACP session key format: {agentId}:acp:{uuid}
-    if (parts.length === 3 && parts[1] === 'acp') {
-      return { channel: 'acp', chatId: parts[2] };
-    }
     // Gateway heartbeat: `heartbeat:main` / `heartbeat:isolated:<ts>`
     if (parts.length >= 2 && parts[0] === 'heartbeat') {
       return { channel: 'heartbeat', chatId: parts.slice(1).join(':') };

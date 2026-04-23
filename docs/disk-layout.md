@@ -9,7 +9,7 @@ For narrative setup (init, templates, env vars), see [State directory & workspac
 | Area | Role |
 |------|------|
 | **State directory** | Global config, credentials, logs, cron, global skills/extensions cache, managed tooling. |
-| **Agent home** `<stateDir>/agents/<agentId>/` | Per-agent runtime: transcripts, bootstrap persona Markdown, curated memory, inbound/TTS blobs, session tooling config, ACP index. |
+| **Agent home** `<stateDir>/agents/<agentId>/` | Per-agent runtime: transcripts, bootstrap persona Markdown, curated memory, inbound/TTS blobs, session tooling config. |
 | **Agent dir** `…/agents/<agentId>/agent/` | Process state: `agent.json`, per-agent credentials, IPC inbox, pid/socket, small machine state, extension installs, outbound crash-recovery queue. |
 | **Markdown workspace** | User project tree: tool `cwd`, daily `memory/*.md`, `media/generated`, user `skills/`, arbitrary files. **Not** the primary home for persona files or internal agent state. |
 
@@ -37,7 +37,7 @@ Resolved by `resolveAgentHomeDir(config, agentId)`. Typical layout:
 | Path | Purpose |
 |------|---------|
 | `bootstrap/` | Persona and bootstrap Markdown: `SOUL.md`, `IDENTITY.md`, `USER.md`, `TOOLS.md`, `AGENTS.md`, `HEARTBEAT.md`, `MEMORY.md` (system-prompt bootstrap, separate from curated `memories/`), `CONTEXT.md`, `SKILLS.md`, `BOOTSTRAP.md`. Used when building the agent system prompt. Gateway heartbeat text defaults to `bootstrap/HEARTBEAT.md` when present. |
-| `sessions/` | Transcript store (shards, `index.json`, `archive/`), per-session overrides under `sessions/config/`, ACP metadata index `sessions/acp-sessions.json`. |
+| `sessions/` | Transcript store (shards, `index.json`, `archive/`), per-session overrides under `sessions/config/`. |
 | `memories/` | Curated structured store (`MEMORY.md`, `USER.md`; entries separated by a fixed delimiter — `BuiltinMemoryStore`). |
 | `inbound/` | Persisted inbound attachments (non-image binaries); transcript paths use `inbound/...` relative to agent home. |
 | `tts/` | Cached outbound TTS audio per session. |
