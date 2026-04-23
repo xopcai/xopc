@@ -1,9 +1,5 @@
 // Export all agent tools
-export {
-  createReadFileTool,
-  readFileTool,
-  type CreateReadFileToolOptions,
-} from './read.js';
+export { createReadFileTool, type CreateReadFileToolOptions } from './read.js';
 export { createWriteFileTool, writeFileTool } from './write.js';
 export { createEditFileTool, editFileTool, type EditToolDetails } from './edit.js';
 export { createListDirTool, listDirTool } from './list-dir.js';
