@@ -5,6 +5,7 @@ import type { Config } from '../config/schema.js';
 import type { MessageBus } from '../infra/bus/index.js';
 import { resolveProviderApiKeySync } from '../auth/sync-provider-auth.js';
 import { getApiKeySync } from '../providers/index.js';
+import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
 import { createLogger } from '../utils/logger.js';
 
 import { extractTextContent } from './context/workspace.js';
@@ -112,6 +113,7 @@ export function createDelegateChildHandle(options: DelegateChildHandleOptions): 
       tools: filteredTools,
       messages: [],
     },
+    streamFn: createExtensionAwareStreamFn(),
     getApiKey: (provider: string) =>
       resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',
     beforeToolCall: async () => {

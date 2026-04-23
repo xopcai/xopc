@@ -9,9 +9,16 @@ export function isMaskedKey(value: string): boolean {
   return value === '***' || value === '••••••••••••';
 }
 
-export type ProviderCategory = 'common' | 'specialty' | 'enterprise' | 'oauth';
+export type ProviderCategory = 'common' | 'specialty' | 'enterprise' | 'oauth' | 'extension';
 
-export type ProviderActiveKeySource = 'none' | 'agent' | 'gateway' | 'oauth' | 'env' | 'models_json';
+export type ProviderActiveKeySource =
+  | 'none'
+  | 'agent'
+  | 'gateway'
+  | 'oauth'
+  | 'env'
+  | 'models_json'
+  | 'extension';
 
 export interface ProviderMeta {
   id: string;

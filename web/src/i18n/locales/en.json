@@ -1302,6 +1302,7 @@
     "sourceOauth": "OAuth token",
     "sourceEnv": "environment variable",
     "sourceModelsJson": "models.json",
+    "sourceExtension": "extension provider",
     "sourceNone": "none",
     "testKey": "Test value",
     "testingKey": "Testing…",
@@ -1315,7 +1316,8 @@
       "common": "Common providers",
       "specialty": "Specialty providers",
       "enterprise": "Enterprise / cloud",
-      "oauth": "OAuth only"
+      "oauth": "OAuth only",
+      "extension": "Extensions"
     },
     "configuredCount": "{{count}} configured",
     "metaMasked": "Credential on file — enter a new key to replace.",
