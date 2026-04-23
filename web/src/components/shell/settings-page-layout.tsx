@@ -8,6 +8,7 @@ import { messages, tabLabel } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { ExtensionSettingsNav } from '@/features/extensions/extension-settings-nav';
 import { pathForTab, SETTINGS_SHELL_NAV_GROUPS } from '@/navigation';
+import { isElectron } from '@/lib/electron-env';
 import { AGENTS_APP_LIST_PATH } from '@/features/settings/agents/agents-app-path';
 import { SETTINGS_BACK_PATH_STATE_KEY } from '@/features/settings/settings-nav-state';
 import { useLocaleStore } from '@/stores/locale-store';
@@ -134,7 +135,12 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
             aria-label={m.nav.settings}
           >
             <div className="flex flex-col gap-1">
-              {SETTINGS_SHELL_NAV_GROUPS.map((group, groupIndex) => (
+              {SETTINGS_SHELL_NAV_GROUPS.map((group, groupIndex) => {
+                const tabs = group.tabs.filter((tab) => tab !== 'settingsSystem' || isElectron());
+                if (tabs.length === 0) {
+                  return null;
+                }
+                return (
                 <div key={group.id}>
                   <p
                     className={cn(
@@ -145,7 +151,7 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
                     {m.settingsNavGroups[group.id]}
                   </p>
                   <div className="flex flex-col gap-0.5">
-                    {group.tabs.map((tab) => (
+                    {tabs.map((tab) => (
                       <NavLink key={tab} to={pathForTab(tab)} className={settingsNavLinkClass}>
                         <TabIcon tab={tab} className="size-5 shrink-0 opacity-90" />
                         <span className="min-w-0 flex-1 truncate">{tabLabel(language, tab)}</span>
@@ -153,7 +159,8 @@ export const SettingsPageLayout = memo(function SettingsPageLayout() {
                     ))}
                   </div>
                 </div>
-              ))}
+                );
+              })}
               <ExtensionSettingsNav navLinkClassName={settingsNavLinkClass} />
             </div>
           </nav>

@@ -56,4 +56,27 @@ contextBridge.exposeInMainWorld('electronAPI', {
     },
   },
   platform: process.platform as 'darwin' | 'win32' | 'linux',
+  system: {
+    getBehavior: () => ipcRenderer.invoke('system-settings:get-behavior'),
+    setBehavior: (patch: {
+      openAtLogin?: boolean;
+      openAsHidden?: boolean;
+      keepAwakePreferred?: boolean;
+      notifyEnabled?: boolean;
+      notifySoundEnabled?: boolean;
+    }) => ipcRenderer.invoke('system-settings:set-behavior', patch),
+    getMacosPermissions: () => ipcRenderer.invoke('system-settings:get-macos-permissions'),
+    openMacosPrivacy: (
+      kind:
+        | 'fullDisk'
+        | 'screen'
+        | 'microphone'
+        | 'accessibility'
+        | 'automation'
+        | 'notifications'
+        | 'location'
+        | 'camera',
+    ) => ipcRenderer.invoke('system-settings:open-macos-privacy', kind),
+    requestMicrophone: () => ipcRenderer.invoke('system-settings:request-microphone'),
+  },
 });

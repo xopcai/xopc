@@ -20,7 +20,8 @@ export type Tab =
   | 'settingsHeartbeat'
   | 'settingsSearch'
   | 'settingsAgentDefaults'
-  | 'settingsAgents';
+  | 'settingsAgents'
+  | 'settingsSystem';
 
 export type SettingsSectionId =
   | 'appearance'
@@ -33,7 +34,8 @@ export type SettingsSectionId =
   | 'gateway'
   | 'heartbeat'
   | 'search'
-  | 'agents';
+  | 'agents'
+  | 'system';
 
 export type MessageBundle = typeof en;
 

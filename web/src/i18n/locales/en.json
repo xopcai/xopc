@@ -25,7 +25,8 @@
     "settingsHeartbeat": "Heartbeat",
     "settingsSearch": "Web search",
     "settingsAgentDefaults": "Agent defaults",
-    "settingsAgents": "Agents"
+    "settingsAgents": "Agents",
+    "settingsSystem": "System"
   },
   "appsPage": {
     "title": "Apps",
@@ -106,7 +107,65 @@
     "gateway": "Gateway",
     "heartbeat": "Heartbeat",
     "search": "Web search",
-    "agents": "Agents"
+    "agents": "Agents",
+    "system": "System"
+  },
+  "systemSettings": {
+    "title": "System",
+    "behaviorGroup": "App behavior",
+    "subtitle": "Desktop app start-up, power, notification preferences, and macOS permissions.",
+    "desktopOnlyTitle": "Desktop app only",
+    "desktopOnlyBody": "System integration is available in the xopc Electron app. In the browser, use your OS settings instead.",
+    "toggles": {
+      "openAtLogin": "Open at login",
+      "openAtLoginDesc": "Start xopc when you sign in to this user account.",
+      "keepAwake": "Keep system awake",
+      "keepAwakeDesc": "While enabled, the app requests that the system stay awake (agent work may not be interrupted by idle sleep).",
+      "notifyDesktop": "Desktop notifications",
+      "notifyDesktopDesc": "Allow the app to show system notifications when you wire them in a future update (preference is saved now).",
+      "notifySound": "Sound notifications",
+      "notifySoundDesc": "Play a sound when a notification is shown (when notification sound is implemented)."
+    },
+    "permissionsTitle": "System permissions",
+    "permissionsHint": "Status is best-effort. After changing settings, use refresh or return to this page.",
+    "onlyMacos": "The permission list below applies to macOS. On this platform, use the relevant Windows or Linux settings for privacy and access.",
+    "status": {
+      "granted": "Allowed",
+      "denied": "Not allowed",
+      "unknown": "Unknown"
+    },
+    "openSettings": "Open settings",
+    "refresh": "Refresh status",
+    "perm": {
+      "fullDisk": {
+        "title": "Full Disk Access",
+        "desc": "Read and write project files in protected locations when required."
+      },
+      "screen": {
+        "title": "Screen Recording",
+        "desc": "Capture the screen for vision features outside the in-app browser."
+      },
+      "microphone": {
+        "title": "Microphone",
+        "desc": "Record voice in chat and voice features."
+      },
+      "accessibility": {
+        "title": "Accessibility",
+        "desc": "Use global shortcuts and accessibility-related integrations."
+      },
+      "automation": {
+        "title": "Automation",
+        "desc": "Control other apps via Apple Events (e.g. Calendar, Reminders) when supported."
+      },
+      "notifications": {
+        "title": "Notifications",
+        "desc": "Allow the app in System Settings → Notifications so alerts can appear."
+      },
+      "location": {
+        "title": "Location",
+        "desc": "Location-based tasks when the product uses location."
+      }
+    }
   },
   "settingsNavGroups": {
     "gateway": "Connection & service",
