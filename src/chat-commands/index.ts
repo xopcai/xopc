@@ -12,6 +12,7 @@ import { registerSystemCommands } from './builtins/system.js';
 import { registerTTSCommands } from './builtins/tts.js';
 import { registerThinkingCommands } from './builtins/thinking.js';
 import { registerConfigCommand } from './builtins/config.js';
+import { registerContextCommands } from './builtins/context.js';
 
 // Types
 export type {
@@ -69,6 +70,7 @@ export { registerSystemCommands } from './builtins/system.js';
 export { registerTTSCommands } from './builtins/tts.js';
 export { registerThinkingCommands } from './builtins/thinking.js';
 export { registerConfigCommand } from './builtins/config.js';
+export { registerContextCommands } from './builtins/context.js';
 
 /**
  * Initialize the command system with all built-in commands
@@ -78,6 +80,7 @@ export function initializeCommands(): void {
   registerModelCommands();
   registerSystemCommands();
   registerConfigCommand();
+  registerContextCommands();
   registerTTSCommands();
   registerThinkingCommands();
 }

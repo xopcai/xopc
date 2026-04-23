@@ -270,8 +270,14 @@ export class SessionManager extends EventEmitter {
   }
 
   /** Compact session messages */
-  compact(key: string, messages: any[], contextWindow: number, instructions?: string): Promise<CompactionResult> {
-    return this.store.compact(key, messages, contextWindow, instructions);
+  compact(
+    key: string,
+    messages: any[],
+    contextWindow: number,
+    instructions?: string,
+    force?: boolean,
+  ): Promise<CompactionResult> {
+    return this.store.compact(key, messages, contextWindow, instructions, force);
   }
 
   /** Compaction stats for a session */

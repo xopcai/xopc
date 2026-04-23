@@ -132,6 +132,110 @@ const abortCommand: CommandDefinition = {
   },
 };
 
+const compactCommand: CommandDefinition = {
+  id: 'session.compact',
+  name: 'compact',
+  description: 'Compact session history (LLM summary + keep recent turns) to save context',
+  category: 'session',
+  scope: ['global', 'private', 'group'],
+  acceptsArgs: true,
+  examples: ['/compact', '/compact focus on API design'],
+  handler: async (ctx: CommandContext, args: string) => {
+    await ctx.setTyping(true);
+    const instructions = args.trim() || undefined;
+    const result = await ctx.compactSession?.({ instructions, force: true });
+    if (result === null || result === undefined) {
+      return {
+        content: '⚠️ Session compaction is not available in this environment.',
+        success: false,
+      };
+    }
+    if (!result.compacted) {
+      return {
+        content:
+          'ℹ️ Nothing to compact yet. Need at least two messages, or the session is already small.\n' +
+          'Tip: add optional focus text, e.g. `/compact emphasize decisions about auth`.',
+        success: true,
+      };
+    }
+    const preview =
+      result.summary && result.summary.length > 600
+        ? `${result.summary.slice(0, 600)}…`
+        : result.summary || '';
+    return {
+      content:
+        `🗜️ *Session compacted*\n\n` +
+        `Tokens (approx): ${result.tokensBefore} → ${result.tokensAfter}\n\n` +
+        (preview ? `*Summary:*\n${preview}` : ''),
+      success: true,
+    };
+  },
+};
+
+const btwCommand: CommandDefinition = {
+  id: 'session.btw',
+  name: 'btw',
+  aliases: ['aside'],
+  description: 'Ask a side question without adding to the session transcript',
+  category: 'session',
+  scope: ['global', 'private', 'group'],
+  acceptsArgs: true,
+  examples: ['/btw What does that error code mean?', '/aside Summarize the last topic in one line'],
+  handler: async (ctx: CommandContext, args: string) => {
+    await ctx.setTyping(true);
+    const q = args.trim();
+    if (!q) {
+      return {
+        content:
+          '💬 *Side question*\n\n' +
+          'Usage: `/btw <question>`\n' +
+          'Answers use your current chat as background only; the reply is not saved to the session.',
+        success: true,
+      };
+    }
+    const out = await ctx.btwQuery?.(q);
+    if (!out) {
+      return { content: '⚠️ /btw is not available here.', success: false };
+    }
+    if (out.error) {
+      return { content: `⚠️ ${out.error}`, success: false };
+    }
+    return { content: `💬 *BTW*\n\n${out.text}`, success: true };
+  },
+};
+
+const exportSessionCommand: CommandDefinition = {
+  id: 'session.export',
+  name: 'export-session',
+  aliases: ['export'],
+  description: 'Export this session to workspace exports/ (markdown, html, or json)',
+  category: 'session',
+  scope: ['global', 'private', 'group'],
+  acceptsArgs: true,
+  examples: ['/export-session', '/export-session html', '/export json'],
+  handler: async (ctx: CommandContext, args: string) => {
+    await ctx.setTyping(true);
+    const raw = args.trim().toLowerCase();
+    const fmt =
+      raw === 'json' || raw === 'html' || raw === 'markdown'
+        ? (raw as 'json' | 'html' | 'markdown')
+        : 'markdown';
+    if (!ctx.exportSessionToWorkspace) {
+      return { content: '⚠️ Export is not available in this environment.', success: false };
+    }
+    try {
+      const { path } = await ctx.exportSessionToWorkspace(fmt);
+      return {
+        content: `📄 Exported (${fmt}) to:\n\`${path}\``,
+        success: true,
+      };
+    } catch (e) {
+      const em = e instanceof Error ? e.message : String(e);
+      return { content: `⚠️ Export failed: ${em}`, success: false };
+    }
+  },
+};
+
 const archiveCommand: CommandDefinition = {
   id: 'session.archive',
   name: 'archive',
@@ -156,5 +260,8 @@ export function registerSessionCommands(): void {
   commandRegistry.register(listCommand);
   commandRegistry.register(clearCommand);
   commandRegistry.register(abortCommand);
+  commandRegistry.register(compactCommand);
+  commandRegistry.register(btwCommand);
+  commandRegistry.register(exportSessionCommand);
   commandRegistry.register(archiveCommand);
 }

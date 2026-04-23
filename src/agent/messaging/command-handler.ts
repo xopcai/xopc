@@ -9,6 +9,7 @@ import type { Config } from '../../config/schema.js';
 import { isProviderConfiguredSync } from '../../providers/index.js';
 import type { SessionConfigStore, SessionStore } from '../../session/index.js';
 import type { ThinkLevel } from '../transcript/thinking-types.js';
+import type { CompactionResult } from '../memory/compaction.js';
 import { createLogger } from '../../utils/logger.js';
 import { commandRegistry, createCommandContext } from '../../chat-commands/index.js';
 import { getAllProviders, getModelsByProvider, getProviderDisplayName } from '../../providers/index.js';
@@ -36,6 +37,18 @@ export interface CommandHandlerConfig {
   invalidateAgentSession?: (sessionKey: string) => void;
   /** Cancel streaming preview + in-flight LLM work for this session (e.g. /abort) */
   abortSessionTurn?: (sessionKey: string) => Promise<void>;
+
+  compactSession?: (
+    sessionKey: string,
+    options?: { instructions?: string; force?: boolean },
+  ) => Promise<CompactionResult>;
+
+  btwQuery?: (sessionKey: string, question: string) => Promise<{ text: string; error?: string }>;
+
+  getSessionContextReport?: (
+    sessionKey: string,
+    mode: 'list' | 'detail' | 'json',
+  ) => Promise<string>;
 }
 
 export class CommandHandler {
@@ -48,6 +61,9 @@ export class CommandHandler {
   private switchModelForSession: (sessionKey: string, modelId: string) => Promise<boolean>;
   private invalidateAgentSession?: (sessionKey: string) => void;
   private abortSessionTurn?: (sessionKey: string) => Promise<void>;
+  private compactSession?: CommandHandlerConfig['compactSession'];
+  private btwQuery?: CommandHandlerConfig['btwQuery'];
+  private getSessionContextReport?: CommandHandlerConfig['getSessionContextReport'];
 
   constructor(handlerConfig: CommandHandlerConfig) {
     this.config = handlerConfig.config;
@@ -59,6 +75,9 @@ export class CommandHandler {
     this.switchModelForSession = handlerConfig.switchModelForSession;
     this.invalidateAgentSession = handlerConfig.invalidateAgentSession;
     this.abortSessionTurn = handlerConfig.abortSessionTurn;
+    this.compactSession = handlerConfig.compactSession;
+    this.btwQuery = handlerConfig.btwQuery;
+    this.getSessionContextReport = handlerConfig.getSessionContextReport;
   }
 
   /** Replace config reference after hot reload or gateway PATCH so commands see current defaults. */
@@ -168,6 +187,10 @@ export class CommandHandler {
             await this.abortSessionTurn!(context.sessionKey);
           }
         : undefined,
+
+      compactSession: this.compactSession,
+      btwQuery: this.btwQuery,
+      getSessionContextReport: this.getSessionContextReport,
     });
 
     const result = await commandRegistry.execute(commandName, cmdCtx, args);
@@ -298,6 +321,10 @@ export class CommandHandler {
             await this.abortSessionTurn!(context.sessionKey);
           }
         : undefined,
+
+      compactSession: this.compactSession,
+      btwQuery: this.btwQuery,
+      getSessionContextReport: this.getSessionContextReport,
     });
 
     const result = await commandRegistry.execute(commandName, wrapped, args);
