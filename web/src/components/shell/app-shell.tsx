@@ -8,7 +8,8 @@ import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
-import { UpdateBanner } from '@/features/updater/update-banner';
+import { UpdateReminderBar } from '@/features/updater/update-reminder-bar';
+import { useUpdateReminder } from '@/features/updater/use-update-reminder';
 import { ExtensionCommandPaletteHost } from '@/features/extensions/extension-command-palette';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { WorkspacePreviewDialog } from '@/features/workspace/workspace-preview-dialog';
@@ -105,6 +106,7 @@ export function AppShell() {
   const { pathname } = useLocation();
   const isSettingsRoute = pathname.startsWith('/settings');
   const language = useLocaleStore((s) => s.language);
+  const updateReminder = useUpdateReminder();
 
   if (!token) {
     return (
@@ -133,29 +135,33 @@ export function AppShell() {
       <ExtensionNotificationListener />
       <TokenDialog />
       <ElectronGatewayExitBanner />
-      <UpdateBanner />
       <OnboardingDialog />
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
-        {!isSettingsRoute ? <SidebarColumn /> : null}
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+        {!isSettingsRoute ? <UpdateReminderBar reminder={updateReminder} /> : null}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
+          {!isSettingsRoute ? <SidebarColumn /> : null}
 
-        {/* Main + workspace: workspace is a right rail sibling (not a dialog), like app-sidebar */}
-        <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden bg-surface-panel">
-          <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
-            {!isSettingsRoute ? <PrimaryAppHeader /> : null}
-            <main id="app-main-content" className="flex min-h-0 flex-1 flex-col overflow-hidden">
-              <div
-                key={routeKey}
-                className={cn(
-                  'page-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]',
-                  routeKey === 'settings' && 'page-enter--gentle',
-                )}
-              >
-                <Outlet />
+          {/* Main + workspace: workspace is a right rail sibling (not a dialog), like app-sidebar */}
+          <div className="flex min-h-0 min-w-0 flex-1 min-w-0 flex-col overflow-hidden bg-surface-panel">
+            <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">
+              <div className="flex min-h-0 min-w-0 flex-1 flex-col overflow-hidden">
+                {!isSettingsRoute ? <PrimaryAppHeader /> : null}
+                <main id="app-main-content" className="flex min-h-0 flex-1 flex-col overflow-hidden">
+                  <div
+                    key={routeKey}
+                    className={cn(
+                      'page-enter flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto overflow-x-hidden overscroll-contain [scrollbar-gutter:stable]',
+                      routeKey === 'settings' && 'page-enter--gentle',
+                    )}
+                  >
+                    <Outlet />
+                  </div>
+                </main>
               </div>
-            </main>
+              {!isSettingsRoute ? <WorkspaceColumn /> : null}
+            </div>
           </div>
-          {!isSettingsRoute ? <WorkspaceColumn /> : null}
         </div>
       </div>
       {!isSettingsRoute ? <WorkspacePreviewDialog /> : null}
