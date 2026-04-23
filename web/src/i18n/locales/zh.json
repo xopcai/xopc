@@ -113,7 +113,7 @@
   "systemSettings": {
     "title": "系统设置",
     "behaviorGroup": "应用行为",
-    "subtitle": "桌面端自启动、防睡眠、通知偏好，以及 macOS 系统权限。",
+    "subtitle": "支持 Windows、macOS、Linux 桌面：自启动、防睡眠、通知偏好，以及各系统的相关设置入口。",
     "desktopOnlyTitle": "仅桌面端",
     "desktopOnlyBody": "系统集成功能仅在 xopc Electron 桌面版中可用。在浏览器中请通过操作系统设置管理。",
     "toggles": {
@@ -128,7 +128,9 @@
     },
     "permissionsTitle": "系统权限",
     "permissionsHint": "状态为尽量检测，修改系统设置后请刷新或重新进入本页。",
-    "onlyMacos": "下列权限项适用于 macOS；在本机请通过 Windows 或 Linux 的相应设置管理隐私与访问。",
+    "permissionsHintDarwin": "macOS 的隐私/媒体状态为尽量检测。修改系统设置后请用「刷新状态」或再次进入本页。",
+    "permissionsHintWin": "在 Windows 上，麦克风和（如系统可报告）录屏等能力受系统级开关影响；每个按钮会打开系统「设置」中的相关页面。",
+    "permissionsHintLinux": "Linux 上此处不显示各权限的准确状态。会尝试打开桌面环境设置，失败时打开说明文档。请在发行版/Flatpak/ portal 中授予「文件、麦克风、通知」等。",
     "status": {
       "granted": "已授权",
       "denied": "未授权",
@@ -138,8 +140,8 @@
     "refresh": "刷新状态",
     "perm": {
       "fullDisk": {
-        "title": "完全磁盘访问权限",
-        "desc": "在需要时读取或写入受保护位置的项目文件。"
+        "title": "文件与磁盘访问",
+        "desc": "在需要时访问工作区、用户目录等（具体名称因系统而异）。"
       },
       "screen": {
         "title": "录屏",
@@ -154,12 +156,12 @@
         "desc": "使用全局快捷键及辅助功能相关能力。"
       },
       "automation": {
-        "title": "自动化",
-        "desc": "通过 Apple 事件等控制其他应用（如日历、提醒）——视功能而定。"
+        "title": "自动操作 / 与系统集成",
+        "desc": "与其他应用或系统能力协作（在 macOS 上对应自动化与隐私；在 Windows 上为默认应用等；Linux 为桌面/portal 能力）。"
       },
       "notifications": {
         "title": "通知",
-        "desc": "在「系统设置 → 通知」中允许本应用，以便系统通知能正常显示。"
+        "desc": "在系统「通知」或本应用项中允许通知，以便任务完成时提示。"
       },
       "location": {
         "title": "位置",

@@ -1,21 +1,23 @@
 /**
  * Electron shell: login item, power save blocker, notification preferences (userData),
- * and macOS privacy helpers (TCC / System Settings).
+ * and OS-specific privacy / settings helpers (TCC on macOS, getMediaAccessStatus on win32/darwin,
+ * deep links on Windows, GNOME on Linux with documentation fallback).
  */
 
+import { execFile } from 'node:child_process';
 import { constants as fsConstants, access, readFile, writeFile } from 'node:fs/promises';
+import { promisify } from 'node:util';
 import { join } from 'node:path';
 
 import { type IpcMain, type IpcMainInvokeEvent, app, powerSaveBlocker, shell, systemPreferences } from 'electron';
 
-import type {
-  MacosPermissionSnapshot,
-  MacosPrivacyPaneKind,
-  SystemSettingsBehavior,
-  TccTriState,
-} from './system-settings-types.js';
+import type { PrivacyPaneKind, ShellPermissionSnapshot, SystemSettingsBehavior, TccTriState } from './system-settings-types.js';
+
+const execFileAsync = promisify(execFile);
 
 const PREFS_NAME = 'electron-shell-prefs.json';
+
+const LINUX_HELP_URL = 'https://xopcai.github.io/xopc/';
 
 type ElectronShellPreferences = {
   keepAwakePreferred: boolean;
@@ -90,7 +92,7 @@ export function stopAllPowerSaveBlockers(): void {
   }
 }
 
-function tccToTriState(s: 'not-determined' | 'granted' | 'denied' | 'restricted' | 'unknown' | string): TccTriState {
+function tccToTriState(s: string): TccTriState {
   if (s === 'granted') {
     return 'granted';
   }
@@ -100,7 +102,10 @@ function tccToTriState(s: 'not-determined' | 'granted' | 'denied' | 'restricted'
   return 'unknown';
 }
 
-function mapMediaStatus(type: 'microphone' | 'screen' | 'camera'): TccTriState {
+function mapMediaStatusWhenAvailable(type: 'microphone' | 'screen' | 'camera'): TccTriState {
+  if (process.platform !== 'win32' && process.platform !== 'darwin') {
+    return 'unknown';
+  }
   try {
     const s = systemPreferences.getMediaAccessStatus(type);
     return tccToTriState(s);
@@ -127,6 +132,9 @@ async function probeFullDiskAccess(): Promise<TccTriState> {
 }
 
 function accessibilityState(): TccTriState {
+  if (process.platform !== 'darwin') {
+    return 'unknown';
+  }
   try {
     if (systemPreferences.isTrustedAccessibilityClient(false)) {
       return 'granted';
@@ -137,7 +145,7 @@ function accessibilityState(): TccTriState {
   }
 }
 
-function unknownMacos(): MacosPermissionSnapshot {
+function unknownAll(): ShellPermissionSnapshot {
   return {
     fullDisk: 'unknown',
     screen: 'unknown',
@@ -149,17 +157,12 @@ function unknownMacos(): MacosPermissionSnapshot {
   };
 }
 
-async function buildMacosSnapshot(): Promise<MacosPermissionSnapshot> {
-  if (process.platform !== 'darwin') {
-    return unknownMacos();
-  }
+async function buildSnapshotDarwin(): Promise<ShellPermissionSnapshot> {
   const fullDisk = await probeFullDiskAccess();
-  const screen = mapMediaStatus('screen');
-  const microphone = mapMediaStatus('microphone');
   return {
     fullDisk,
-    screen,
-    microphone,
+    screen: mapMediaStatusWhenAvailable('screen'),
+    microphone: mapMediaStatusWhenAvailable('microphone'),
     accessibility: accessibilityState(),
     automation: 'unknown',
     notifications: 'unknown',
@@ -168,10 +171,44 @@ async function buildMacosSnapshot(): Promise<MacosPermissionSnapshot> {
 }
 
 /**
- * System Settings / System Preferences deep links. Behavior can differ by macOS version.
- * @see https://github.com/sindresorhus/preferences-urls
+ * getMediaAccessStatus is documented for win32,darwin. Screen often reports granted on Windows; mic/camera reflect privacy toggles.
  */
-const MACOS_PRIVACY_URLS: Record<MacosPrivacyPaneKind, string> = {
+function buildSnapshotWin32(): ShellPermissionSnapshot {
+  return {
+    fullDisk: 'unknown',
+    screen: mapMediaStatusWhenAvailable('screen'),
+    microphone: mapMediaStatusWhenAvailable('microphone'),
+    /** Win32: no TCC; global accessibility policies differ. */
+    accessibility: 'unknown',
+    automation: 'unknown',
+    notifications: 'unknown',
+    location: 'unknown',
+  };
+}
+
+function buildSnapshotLinux(): ShellPermissionSnapshot {
+  const base = unknownAll();
+  /** Electron documents getMediaAccessStatus for win32/darwin; some Linux builds may still expose it. */
+  try {
+    base.microphone = tccToTriState(systemPreferences.getMediaAccessStatus('microphone'));
+    base.screen = tccToTriState(systemPreferences.getMediaAccessStatus('screen'));
+  } catch {
+    /* leave unknown */
+  }
+  return base;
+}
+
+async function getPermissionSnapshot(): Promise<ShellPermissionSnapshot> {
+  if (process.platform === 'darwin') {
+    return buildSnapshotDarwin();
+  }
+  if (process.platform === 'win32') {
+    return buildSnapshotWin32();
+  }
+  return buildSnapshotLinux();
+}
+
+const MACOS_PRIVACY_URLS: Record<PrivacyPaneKind, string> = {
   fullDisk: 'x-apple.systempreferences:com.apple.preference.security?Privacy_AllFiles',
   screen: 'x-apple.systempreferences:com.apple.preference.security?Privacy_ScreenCapture',
   microphone: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Microphone',
@@ -181,6 +218,64 @@ const MACOS_PRIVACY_URLS: Record<MacosPrivacyPaneKind, string> = {
   location: 'x-apple.systempreferences:com.apple.preference.security?Privacy_LocationServices',
   camera: 'x-apple.systempreferences:com.apple.preference.security?Privacy_Camera',
 };
+
+/** @see https://learn.microsoft.com/en-us/windows/uwp/launch-resume/launch-app-for-settings */
+const WIN_SETTINGS_URLS: Record<PrivacyPaneKind, string> = {
+  fullDisk: 'ms-settings:storage',
+  screen: 'ms-settings:display',
+  microphone: 'ms-settings:privacy-microphone',
+  accessibility: 'ms-settings:accessibility',
+  automation: 'ms-settings:defaultapps',
+  notifications: 'ms-settings:notifications',
+  location: 'ms-settings:privacy-location',
+  camera: 'ms-settings:privacy-webcam',
+};
+
+/** `gnome-control-center` (first arg = panel) — best effort across distros. */
+const LINUX_GNOME_ARGS: Record<PrivacyPaneKind, [string, ...string[]] | [string]> = {
+  fullDisk: ['privacy'],
+  screen: ['display'],
+  microphone: ['sound'],
+  accessibility: ['universal-access'],
+  automation: ['keyboard'],
+  notifications: ['notifications'],
+  location: ['location'],
+  camera: ['privacy'],
+};
+
+async function openLinuxPrivacyPanel(kind: PrivacyPaneKind): Promise<void> {
+  const args = LINUX_GNOME_ARGS[kind] ?? (['privacy'] as [string]);
+  const primary = args[0];
+  try {
+    await execFileAsync('gnome-control-center', [primary, ...args.slice(1)], { windowsHide: true, timeout: 5_000 });
+  } catch {
+    try {
+      void (await execFileAsync('unity-control-center', [primary, ...args.slice(1)], { windowsHide: true, timeout: 3_000 }));
+    } catch {
+      void shell.openExternal(LINUX_HELP_URL);
+    }
+  }
+}
+
+function openPrivacyForPlatform(kind: PrivacyPaneKind): void {
+  if (process.platform === 'darwin') {
+    const u = MACOS_PRIVACY_URLS[kind];
+    if (u) {
+      void shell.openExternal(u);
+    }
+    return;
+  }
+  if (process.platform === 'win32') {
+    const u = WIN_SETTINGS_URLS[kind];
+    if (u) {
+      void shell.openExternal(u);
+    }
+    return;
+  }
+  if (process.platform === 'linux') {
+    void openLinuxPrivacyPanel(kind);
+  }
+}
 
 function getBehaviorState(): SystemSettingsBehavior {
   const login = app.getLoginItemSettings();
@@ -234,34 +329,40 @@ export function registerSystemSettingsIpc(ipcMain: IpcMain): void {
     },
   );
 
-  ipcMain.handle('system-settings:get-macos-permissions', async (): Promise<MacosPermissionSnapshot> => {
-    if (process.platform !== 'darwin') {
-      return unknownMacos();
+  const permissionsHandler = async (): Promise<ShellPermissionSnapshot> => {
+    if (process.platform === 'linux') {
+      return buildSnapshotLinux();
     }
-    return buildMacosSnapshot();
-  });
+    if (process.platform === 'win32') {
+      return buildSnapshotWin32();
+    }
+    if (process.platform === 'darwin') {
+      return await buildSnapshotDarwin();
+    }
+    return unknownAll();
+  };
 
-  ipcMain.handle('system-settings:open-macos-privacy', (_e: IpcMainInvokeEvent, kind: MacosPrivacyPaneKind) => {
-    if (process.platform !== 'darwin') {
-      return { ok: false as const, error: 'not_darwin' };
-    }
-    const u = MACOS_PRIVACY_URLS[kind];
-    if (!u) {
-      return { ok: false as const, error: 'unknown_kind' };
-    }
-    void shell.openExternal(u);
+  ipcMain.handle('system-settings:get-permissions', permissionsHandler);
+
+  const openHandler = (_e: IpcMainInvokeEvent, kind: PrivacyPaneKind) => {
+    openPrivacyForPlatform(kind);
     return { ok: true as const };
-  });
+  };
+
+  ipcMain.handle('system-settings:open-privacy', openHandler);
 
   ipcMain.handle('system-settings:request-microphone', async (): Promise<{ status: TccTriState }> => {
-    if (process.platform !== 'darwin') {
-      return { status: 'unknown' };
+    if (process.platform === 'darwin') {
+      try {
+        const granted = await systemPreferences.askForMediaAccess('microphone');
+        return { status: granted ? 'granted' : 'denied' };
+      } catch {
+        return { status: mapMediaStatusWhenAvailable('microphone') };
+      }
     }
-    try {
-      const granted = await systemPreferences.askForMediaAccess('microphone');
-      return { status: granted ? 'granted' : 'denied' };
-    } catch {
-      return { status: mapMediaStatus('microphone') };
+    if (process.platform === 'win32' || process.platform === 'linux') {
+      return { status: mapMediaStatusWhenAvailable('microphone') };
     }
+    return { status: 'unknown' };
   });
 }

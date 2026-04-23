@@ -4,18 +4,19 @@
 
 export type TccTriState = 'granted' | 'denied' | 'unknown';
 
-export type MacosPermissionSnapshot = {
+/** Best-effort permission / consent flags (TCC on macOS, where supported on win32, else unknown on linux). */
+export type ShellPermissionSnapshot = {
   fullDisk: TccTriState;
   screen: TccTriState;
   microphone: TccTriState;
   accessibility: TccTriState;
-  /** No reliable TCC read; best-effort or unknown. */
+  /** No reliable read on most systems; use open-privacy. */
   automation: TccTriState;
   notifications: TccTriState;
   location: TccTriState;
 };
 
-export type MacosPrivacyPaneKind =
+export type PrivacyPaneKind =
   | 'fullDisk'
   | 'screen'
   | 'microphone'
