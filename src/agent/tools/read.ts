@@ -99,6 +99,3 @@ async function executeReadFile(
     return { content: [{ type: 'text', text: `Error: ${error instanceof Error ? error.message : String(error)}` }], details: {} };
   }
 }
-
-/** @deprecated Use {@link createReadFileTool}(process.cwd()) — default cwd; prefer factory with workspace. */
-export const readFileTool: AgentTool<typeof ReadFileSchema, {}> = createReadFileTool(process.cwd());
