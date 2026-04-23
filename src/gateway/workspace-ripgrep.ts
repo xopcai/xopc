@@ -85,3 +85,37 @@ export function runRipgrepInDirectory(query: string, dirAbsPath: string): Promis
     });
   })();
 }
+
+/**
+ * List workspace-relative file paths via ripgrep `--files` (respects .gitignore; fast on large trees).
+ * Returns POSIX paths relative to `dirAbsPath`.
+ */
+export function runRipgrepListFiles(dirAbsPath: string): Promise<string[]> {
+  return (async () => {
+    const rgExecutable = await resolveRipgrepBinary();
+
+    return await new Promise<string[]>((resolve) => {
+      const args = ['--files', '--glob', '!**/node_modules/**', '--glob', '!.git/**', '.'];
+      const rg = spawn(rgExecutable, args, { shell: false, cwd: dirAbsPath });
+      const lines: string[] = [];
+      let buffer = '';
+
+      rg.stdout.on('data', (data: Buffer) => {
+        buffer += data.toString();
+        const parts = buffer.split(/\r?\n/);
+        buffer = parts.pop() ?? '';
+        for (const line of parts) {
+          const t = line.trim();
+          if (t) lines.push(t.replace(/\\/g, '/'));
+        }
+      });
+
+      rg.on('close', () => {
+        const tail = buffer.trim();
+        if (tail) lines.push(tail.replace(/\\/g, '/'));
+        resolve(lines);
+      });
+      rg.on('error', () => resolve([]));
+    });
+  })();
+}

@@ -79,13 +79,13 @@ export function paletteItemMatchRank(item: PaletteItem, q: string): number | nul
   return null;
 }
 
-export function useCommandPalette(value: string, cursor: number) {
+export function useCommandPalette(value: string, cursor: number, options?: { suppress?: boolean }) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [allItems, setAllItems] = useState<PaletteItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
   const slashRange = useMemo(() => detectSlashRange(value, cursor), [value, cursor]);
-  const paletteActive = !!slashRange;
+  const paletteActive = Boolean(slashRange && !options?.suppress);
 
   useEffect(() => {
     if (!slashRange) {
