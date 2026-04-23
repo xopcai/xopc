@@ -538,6 +538,38 @@ export const ExtensionSlotsConfigSchema = z.object({
 export const ExtensionsConfigSchema: z.ZodType<Record<string, unknown>> = z.record(z.string(), z.unknown());
 
 // ============================================
+// Update Config
+// ============================================
+
+export const UpdateAutoConfigSchema = z
+  .object({
+    /** Enable automatic update installation. Default false. */
+    enabled: z.boolean().default(false),
+    /** Hours to wait before applying a stable update after first detection. */
+    stableDelayHours: z.number().min(0).default(6),
+    /** Additional random jitter hours for stable rollout (avoids thundering herd). */
+    stableJitterHours: z.number().min(0).default(12),
+    /** How often to re-check for beta updates (hours). Min 0.25. */
+    betaCheckIntervalHours: z.number().min(0.25).default(1),
+  })
+  .strict()
+  .optional();
+
+export const UpdateConfigSchema = z
+  .object({
+    /** Check for updates on gateway startup. Default true. */
+    checkOnStart: z.boolean().default(true),
+    /** Update channel: stable (default), beta, or dev. */
+    channel: z.enum(['stable', 'beta', 'dev']).default('stable'),
+    /** Automatic update policy. */
+    auto: UpdateAutoConfigSchema,
+  })
+  .strict()
+  .optional();
+
+export type UpdateConfig = z.infer<typeof UpdateConfigSchema>;
+
+// ============================================
 // Root Config
 // ============================================
 
@@ -553,6 +585,7 @@ export const ConfigSchema = z.object({
   modelsDev: ModelsDevConfigSchema,
   stt: STTConfigSchema.optional(),
   tts: TTSConfigSchema.optional(),
+  update: UpdateConfigSchema,
 }).default({
   agents: {
     defaults: {

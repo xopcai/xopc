@@ -55,6 +55,37 @@ contextBridge.exposeInMainWorld('electronAPI', {
       return () => ipcRenderer.removeListener('gateway:exited', handler);
     },
   },
+  updater: {
+    getStatus: () =>
+      ipcRenderer.invoke('updater:get-status') as Promise<{
+        state: string;
+        version?: string;
+        releaseNotes?: string;
+        percent?: number;
+        bytesPerSecond?: number;
+        transferred?: number;
+        total?: number;
+        message?: string;
+      }>,
+    check: () => ipcRenderer.invoke('updater:check') as Promise<{ ok: boolean }>,
+    quitAndInstall: () => ipcRenderer.invoke('updater:quit-and-install') as Promise<{ ok: boolean }>,
+    onStatusChanged: (
+      callback: (status: {
+        state: string;
+        version?: string;
+        releaseNotes?: string;
+        percent?: number;
+        bytesPerSecond?: number;
+        transferred?: number;
+        total?: number;
+        message?: string;
+      }) => void,
+    ) => {
+      const handler = (_: unknown, status: Record<string, unknown>) => callback(status as never);
+      ipcRenderer.on('updater:status-changed', handler);
+      return () => ipcRenderer.removeListener('updater:status-changed', handler);
+    },
+  },
   platform: process.platform as 'darwin' | 'win32' | 'linux',
   system: {
     getBehavior: () => ipcRenderer.invoke('system-settings:get-behavior'),
