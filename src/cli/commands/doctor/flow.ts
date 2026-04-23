@@ -1,0 +1,60 @@
+import { printJsonResults, printResults } from './format.js';
+import type { CheckResult, DoctorCheck, DoctorContext } from './types.js';
+import { checkNodeVersion } from './checks/node-version.js';
+import { checkConfigHealth } from './checks/config-health.js';
+import { checkStateIntegrity } from './checks/state-integrity.js';
+import { checkProviderAuth } from './checks/provider-auth.js';
+import { checkChannelConfig } from './checks/channel-config.js';
+import { checkGatewayHealth } from './checks/gateway-health.js';
+import { checkSessionIntegrity } from './checks/session-integrity.js';
+import { checkGatewayService } from './checks/gateway-service.js';
+import { checkSecurityAudit } from './checks/security-audit.js';
+import { checkWorkspaceStatus } from './checks/workspace-status.js';
+import { checkCronHealth } from './checks/cron-health.js';
+import { checkVersionUpdate } from './checks/version-check.js';
+import { checkChannelPlugins } from './checks/channel-plugins.js';
+
+const DOCTOR_CHECKS: DoctorCheck[] = [
+  checkVersionUpdate,
+  checkNodeVersion,
+  checkConfigHealth,
+  checkStateIntegrity,
+  checkProviderAuth,
+  checkChannelConfig,
+  checkSecurityAudit,
+  checkWorkspaceStatus,
+  checkGatewayService,
+  checkGatewayHealth,
+  checkCronHealth,
+  checkSessionIntegrity,
+];
+
+/**
+ * Headless data collection — used by both CLI and gateway API.
+ */
+export async function collectDoctorResults(ctx: DoctorContext): Promise<CheckResult[]> {
+  const results: CheckResult[] = [];
+
+  for (const check of DOCTOR_CHECKS) {
+    results.push(await check(ctx));
+  }
+
+  results.push(...(await checkChannelPlugins(ctx)));
+
+  return results;
+}
+
+/**
+ * CLI entry point — collect and print.
+ */
+export async function runDoctor(ctx: DoctorContext): Promise<CheckResult[]> {
+  const results = await collectDoctorResults(ctx);
+
+  if (ctx.options.json) {
+    printJsonResults(results);
+  } else {
+    printResults(results);
+  }
+
+  return results;
+}

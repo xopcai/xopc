@@ -6,6 +6,7 @@ import { registerAuthRegistryExtensionsRoutes } from './auth-registry-extensions
 import { registerChannelRoutes } from './channels.js';
 import { registerCommandsSkillsRoutes } from './commands-skills.js';
 import { registerConfigRoutes } from './config.js';
+import { registerDoctorRoutes } from './doctor.js';
 import { registerCronRoutes } from './cron.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import { registerExtensionGatewayRoutes } from './extension-gateway.js';
@@ -23,6 +24,7 @@ export function registerAuthenticatedRoutes(authenticated: Hono, deps: Authentic
   registerAgentStreamRoutes(authenticated, deps);
   registerChannelRoutes(authenticated, deps);
   registerConfigRoutes(authenticated, deps);
+  registerDoctorRoutes(authenticated, deps);
   registerAgentsRoutes(authenticated, deps);
   registerAuthRegistryExtensionsRoutes(authenticated, deps);
   registerModelsRoutes(authenticated, deps);
