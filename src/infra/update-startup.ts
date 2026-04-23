@@ -15,6 +15,7 @@ import {
   resolveNpmChannelTag,
   detectInstallKind,
   resolvePackageRoot,
+  type InstallKind,
   type UpdateAvailable,
 } from './update-check.js';
 
@@ -27,6 +28,8 @@ const CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // 24 hours
 const ONE_HOUR_MS = 60 * 60 * 1000;
 
 type UpdateCheckState = {
+  /** `package.json` version at the last successful registry check (used to bypass 24h throttle when you bump the local version). */
+  lastCheckPackageVersion?: string;
   lastCheckedAt?: string;
   lastAvailableVersion?: string;
   lastAvailableTag?: string;
@@ -132,8 +135,12 @@ export async function runGatewayUpdateCheck(params: {
   }
 
   const checkIntervalMs = resolveCheckIntervalMs(config);
+  // Re-check npm when the local package version changed (e.g. after editing package.json) even within 24h.
+  const shouldBypassThrottleForVersion =
+    state.lastCheckPackageVersion === undefined || state.lastCheckPackageVersion !== PACKAGE_VERSION;
   if (
     !force &&
+    !shouldBypassThrottleForVersion &&
     lastCheckedAt &&
     Number.isFinite(lastCheckedAt) &&
     now - lastCheckedAt < checkIntervalMs
@@ -141,15 +148,14 @@ export async function runGatewayUpdateCheck(params: {
     return; // Within throttle window
   }
 
-  // Detect install kind — only auto-update npm packages, not git checkouts
+  // Install kind: auto-install only for npm global installs, but we still query npm in git
+  // so the Web UI / CLI can show "newer on registry" and the top reminder bar.
   const root = await resolvePackageRoot();
+  let installKind: InstallKind = 'unknown';
   if (root) {
-    const installKind = await detectInstallKind(root);
+    installKind = await detectInstallKind(root);
     if (installKind === 'git') {
-      if (!force) {
-        log.info('Skipping update check: running from git checkout');
-        return;
-      }
+      log.info('Update check: git checkout (hint-only; use git pull to update, no auto npm install)');
     }
   }
 
@@ -163,6 +169,7 @@ export async function runGatewayUpdateCheck(params: {
   };
 
   if (!resolved.version) {
+    nextState.lastCheckPackageVersion = PACKAGE_VERSION;
     await writeState(statePath, nextState);
     return;
   }
@@ -196,8 +203,12 @@ export async function runGatewayUpdateCheck(params: {
       nextState.lastNotifiedTag = resolved.tag;
     }
 
-    // Auto-update logic
-    if (autoEnabled && (channel === 'stable' || channel === 'beta')) {
+    // Auto-update logic (never from a git worktree)
+    if (
+      autoEnabled &&
+      (channel === 'stable' || channel === 'beta') &&
+      installKind !== 'git'
+    ) {
       await handleAutoUpdate({
         channel,
         version: resolved.version,
@@ -217,6 +228,7 @@ export async function runGatewayUpdateCheck(params: {
     params.onUpdateAvailableChange?.(null);
   }
 
+  nextState.lastCheckPackageVersion = PACKAGE_VERSION;
   await writeState(statePath, nextState);
 }
 

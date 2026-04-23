@@ -1762,6 +1762,14 @@
     "quickMenuHint": "语言、主题与字号",
     "aboutApp": "关于"
   },
+  "updatePanel": {
+    "restartToUpdate": "重启以更新",
+    "dismissAria": "关闭",
+    "dismissHint": "不再提醒此版本",
+    "reminderElectronReady": "新版本 v{{version}} 已就绪，重启应用以安装。",
+    "reminderDownloading": "正在下载更新… {{percent}}%",
+    "reminderNpm": "网关有新版本 v{{version}} 可用。"
+  },
   "aboutDialog": {
     "windowTitle": "关于本应用",
     "close": "关闭",
