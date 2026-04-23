@@ -150,7 +150,7 @@ jobs:
           fi
           
           # Count actual artifact files (not directories)
-          artifact_count=$(find dist/release -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.snap" \) | wc -l)
+          artifact_count=$(find dist/release -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.snap" -o -name "latest*.yml" \) | wc -l)
           if [ "$artifact_count" -eq 0 ]; then
             echo "❌ No installable artifacts found in dist/release!"
             echo "Contents of dist/release:"
@@ -159,7 +159,7 @@ jobs:
           fi
           
           echo "✅ Found $artifact_count artifact(s):"
-          find dist/release -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.snap" \)
+          find dist/release -type f \( -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" -o -name "*.snap" -o -name "latest*.yml" \)
 
       - name: Upload release artifacts
         uses: actions/upload-artifact@v7
@@ -202,8 +202,9 @@ jobs:
             -name "*.AppImage" -o \
             -name "*.deb" -o \
             -name "*.rpm" -o \
-            -name "*.snap" \
-          \) ! -name "elevate.exe" ! -name "rg.exe" | sort)
+            -name "*.snap" -o \
+            -name "latest*.yml" \
+          \) ! -name "elevate.exe" ! -name "rg.exe" ! -name "builder-*.yml" | sort)
           if [ ${#FILES[@]} -eq 0 ]; then
             echo "No installable artifacts found under release-assets"
             exit 1

@@ -15,6 +15,7 @@ import { registerLogsRoutes } from './logs.js';
 import { registerModelsRoutes } from './models.js';
 import { registerSessionsRoutes } from './sessions.js';
 import { registerStatusRoutes } from './status.js';
+import { registerUpdateRoutes } from './update.js';
 import { registerWorkspaceRoutes } from './workspace.js';
 
 export function registerAuthenticatedRoutes(authenticated: Hono, deps: AuthenticatedRouteDeps): void {
@@ -33,6 +34,7 @@ export function registerAuthenticatedRoutes(authenticated: Hono, deps: Authentic
   registerSessionsRoutes(authenticated, deps);
   registerLogsRoutes(authenticated, deps);
   registerExtensionGatewayRoutes(authenticated, deps);
+  registerUpdateRoutes(authenticated, deps);
 }
 
 export type { AuthenticatedRouteDeps } from './deps.js';

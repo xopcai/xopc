@@ -16,7 +16,9 @@ import { registerAgentIpc } from './ipc/agent-ipc.js';
 import { registerFileIpc } from './ipc/file-ipc.js';
 import { registerSearchIpc } from './ipc/search-ipc.js';
 import { initElectronShellPreferences, registerSystemSettingsIpc, stopAllPowerSaveBlockers } from './ipc/system-settings-ipc.js';
+import { registerUpdaterIpc } from './ipc/updater-ipc.js';
 import { getLoadingPageDataUrl } from './loading-page.js';
+import { initAutoUpdater, stopAutoUpdater } from './auto-updater.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 
@@ -156,6 +158,8 @@ function createWindow(): void {
 
   mainWindow = win;
 
+  initAutoUpdater(win);
+
   attachExternalUrlHandlers(win);
 
   win.on('closed', () => {
@@ -203,12 +207,14 @@ app.whenReady().then(async () => {
   registerSearchIpc(ipcMain);
   registerAgentIpc(ipcMain);
   registerSystemSettingsIpc(ipcMain);
+  registerUpdaterIpc(ipcMain);
   createWindow();
 });
 
 app.on('before-quit', () => {
   stopAllPowerSaveBlockers();
   stopGatewayProcess();
+  stopAutoUpdater();
 });
 
 app.on('window-all-closed', () => {
