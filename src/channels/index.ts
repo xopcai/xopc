@@ -56,6 +56,7 @@ export {
 export {
   MessagePipeline,
   createPipeline,
+  createEnvelopeTimestampHandler,
   createFilterSelfHandler,
   createFilterEmptyHandler,
   createFilterCommandsHandler,
