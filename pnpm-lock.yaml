@@ -196,6 +196,12 @@ importers:
         specifier: ^3.5.32
         version: 3.5.32(typescript@6.0.2)
 
+  extensions/demo-provider:
+    dependencies:
+      '@xopcai/xopc':
+        specifier: workspace:*
+        version: link:../..
+
   extensions/echo: {}
 
   extensions/hello:

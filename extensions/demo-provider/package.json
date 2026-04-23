@@ -1,0 +1,13 @@
+{
+  "name": "@xopcai/xopc-extension-demo-provider",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "main": "index.ts",
+  "description": "Bundled demo LLM provider extension (mock streaming, no network).",
+  "peerDependencies": {
+    "@xopcai/xopc": "workspace:*"
+  },
+  "keywords": ["xopc", "xopc-extension", "provider"],
+  "license": "MIT"
+}
