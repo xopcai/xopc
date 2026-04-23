@@ -14,6 +14,7 @@ const log = createLogger('AgentCommand');
 
 interface AgentCommandOptions {
   message?: string;
+  model?: string;
   interactive?: boolean;
   session?: string;
   list?: boolean;
@@ -26,11 +27,13 @@ function createAgentCommand(_ctx: CLIContext): Command {
       'after',
       formatExamples([
         'xopc agent -m "Hello"                       # Single message',
+        'xopc agent --model demo/demo-chat-7b -m "Hi"  # Override model for one shot',
         'xopc agent -i                                # Interactive chat mode',
         'xopc agent -i --session telegram:dm:123456  # Continue existing session',
         'xopc agent --list                            # List available sessions',
       ])
     )
+    .option('--model <id>', 'Model ref for this run (e.g. demo/demo-chat-7b, anthropic/claude-sonnet-4-5)')
     .option('-m, --message <text>', 'Single message to send')
     .option('-i, --interactive', 'Interactive chat mode')
     .option('-s, --session <key>', 'Continue an existing session (use --list to see available sessions)')
@@ -47,7 +50,8 @@ function createAgentCommand(_ctx: CLIContext): Command {
       }
 
       const modelConfig = config.agents?.defaults?.model;
-      const modelId = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
+      const modelFromConfig = typeof modelConfig === 'string' ? modelConfig : modelConfig?.primary;
+      const modelId = (options.model?.trim() || modelFromConfig) as string | undefined;
       const bus = new MessageBus();
 
       if (ctx.isVerbose) {
@@ -133,10 +137,21 @@ function createAgentCommand(_ctx: CLIContext): Command {
       process.on('SIGTERM', shutdown);
 
       if (options.message) {
+        const oneShotModel = options.model?.trim();
+        if (oneShotModel) {
+          await agent.switchModelForSession(sessionKey, oneShotModel);
+        }
         const response = await agent.processDirect(options.message, sessionKey);
         console.log('\n🤖:', response);
+        if (oneShotModel) {
+          await agent.resetSessionModelToAgentDefault(sessionKey);
+        }
         await shutdown();
       } else if (options.interactive) {
+        const interactiveModel = options.model?.trim();
+        if (interactiveModel) {
+          await agent.switchModelForSession(sessionKey, interactiveModel);
+        }
         await startInteractiveChat(agent, {
           workspace,
           sessionKey,
@@ -160,6 +175,7 @@ register({
     category: 'runtime',
     examples: [
       'xopc agent -m "Hello"',
+      'xopc agent --model demo/demo-chat-7b -m "Hello demo!"',
       'xopc agent -i',
     ],
   },

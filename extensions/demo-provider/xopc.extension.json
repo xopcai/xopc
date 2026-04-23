@@ -1,0 +1,36 @@
+{
+  "id": "demo-provider",
+  "name": "Demo Provider",
+  "description": "Bundled example: mock streaming LLM provider for extension developer docs.",
+  "version": "1.0.0",
+  "kind": "provider",
+  "main": "index.ts",
+  "enabledByDefault": true,
+  "providers": ["demo"],
+  "providerAuthEnvVars": {
+    "demo": ["DEMO_API_KEY"]
+  },
+  "modelSupport": {
+    "modelPrefixes": ["demo/"]
+  },
+  "autoEnableWhenConfiguredProviders": ["demo"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "baseUrl": {
+        "type": "string",
+        "default": "https://api.demo-llm.example.com/v1",
+        "description": "LLM API base URL (ignored by mock stream; for real integrations)"
+      },
+      "apiKey": {
+        "type": "string",
+        "description": "API key (optional for this mock provider)"
+      },
+      "defaultModel": {
+        "type": "string",
+        "default": "demo-chat-7b",
+        "description": "Default model id"
+      }
+    }
+  }
+}
