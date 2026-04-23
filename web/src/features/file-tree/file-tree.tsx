@@ -14,7 +14,7 @@ export interface TreeEntry {
 
 export type FileTreeAction = 'preview' | 'download' | 'copyPath';
 
-function fileExtColor(name: string): string {
+export function fileExtColor(name: string): string {
   const lower = name.toLowerCase();
   if (lower.endsWith('.md')) return 'text-green-600 dark:text-green-400';
   if (lower.endsWith('.json')) return 'text-yellow-600 dark:text-yellow-400';

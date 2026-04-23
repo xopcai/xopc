@@ -1,5 +1,5 @@
 import { Ban, File as FileIcon, Mic, Send, Sparkles, Square } from 'lucide-react';
-import { memo, useCallback, useEffect, useLayoutEffect, useRef, useState, type MutableRefObject } from 'react';
+import { memo, useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 
 import type { Attachment } from '@/features/chat/attachment-utils';
 import { formatFileSize, MAX_CHAT_ATTACHMENTS } from '@/features/chat/attachment-utils';
@@ -7,6 +7,8 @@ import { MAX_WEBCHAT_ATTACHMENT_FILE_BYTES } from '@/features/chat/constants';
 import { ChatPendingFollowUpStack } from '@/features/chat/chat-pending-follow-up-stack';
 import { SessionWorkingDirectoryControl } from '@/features/chat/session-working-directory-control';
 import type { SessionManager } from '@/features/chat/session-manager';
+import type { AtMentionItem } from '@/features/chat/at-mention-api';
+import { AtMentionPicker } from '@/features/chat/at-mention-picker';
 import { CommandPalette } from '@/features/chat/command-palette';
 import { MAX_PENDING_FOLLOW_UPS, type PendingFollowUp } from '@/features/chat/pending-follow-up.types';
 import type { PaletteItem } from '@/features/chat/command-palette.types';
@@ -17,7 +19,8 @@ import {
   normalizeOrphanComposerDom,
   serializeEditorToWire,
 } from '@/features/chat/composer-editor-wire';
-import { useCommandPalette } from '@/features/chat/use-command-palette';
+import { detectAtRange, useAtMentionPicker } from '@/features/chat/use-at-mention-picker';
+import { detectSlashRange, useCommandPalette } from '@/features/chat/use-command-palette';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -113,8 +116,10 @@ function wireFollowUpAttachmentsToComposer(
 
 type ComposerKbdContext = {
   palette: ReturnType<typeof useCommandPalette>;
+  atPicker: ReturnType<typeof useAtMentionPicker>;
   replaceRange: (text: string, start: number, end: number, insert: string) => string;
   applyPaletteItem: (item: PaletteItem) => void;
+  applyAtMentionItem: (item: AtMentionItem) => void;
   send: () => void;
   runBusy: boolean;
   flushSteeringDraft?: () => void | Promise<void>;
@@ -213,7 +218,45 @@ const ChatComposerInput = memo(function ChatComposerInput({
             return;
           }
         }
-        const { palette } = k;
+        const { atPicker, palette } = k;
+        if (atPicker.open && atPicker.atRange) {
+          if (e.key === 'Escape') {
+            e.preventDefault();
+            const range = atPicker.atRange;
+            const v = k.valueRef.current;
+            const next = k.replaceRange(v, range.start, range.end, '');
+            k.valueRef.current = next;
+            k.setValue(next);
+            k.setCursor(range.start);
+            requestAnimationFrame(() => {
+              const el = k.editorRef.current;
+              if (el) {
+                applyWireToEditor(el, next, range.start);
+                syncComposerPlaceholderClass(el, next);
+              }
+              k.adjustHeight();
+            });
+            return;
+          }
+          if (atPicker.items.length > 0) {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              atPicker.onNavigate('down');
+              return;
+            }
+            if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              atPicker.onNavigate('up');
+              return;
+            }
+            if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey && !k.isComposing) {
+              e.preventDefault();
+              const item = atPicker.items[atPicker.selectedIndex];
+              if (item) k.applyAtMentionItem(item);
+              return;
+            }
+          }
+        }
         if (palette.open && palette.items.length > 0) {
           if (e.key === 'ArrowDown') {
             e.preventDefault();
@@ -366,7 +409,14 @@ export const ChatComposer = memo(function ChatComposer({
   /** Focus input when the composer becomes interactive (enter chat / session finished loading). */
   const pendingFocusAfterEnableRef = useRef(true);
 
-  const palette = useCommandPalette(value, cursor);
+  const atRangeForSuppress = useMemo(() => detectAtRange(value, cursor), [value, cursor]);
+  const slashRangeRaw = useMemo(() => detectSlashRange(value, cursor), [value, cursor]);
+  const suppressSlash = Boolean(atRangeForSuppress && !slashRangeRaw);
+  const palette = useCommandPalette(value, cursor, { suppress: suppressSlash });
+  const atPicker = useAtMentionPicker(value, cursor, {
+    sessionKey,
+    slashPaletteOpen: palette.open,
+  });
 
   valueRef.current = value;
   attachmentsRef.current = attachments;
@@ -646,6 +696,28 @@ export const ChatComposer = memo(function ChatComposer({
     });
   };
 
+  const applyAtMentionItem = (item: AtMentionItem) => {
+    const range = atPicker.atRange;
+    if (!range) return;
+    const path =
+      item.isDirectory && !item.relativePath.endsWith('/') ? `${item.relativePath}/` : item.relativePath;
+    const insert = `@file:${path}`;
+    const next = replaceRange(valueRef.current, range.start, range.end, insert);
+    setValue(next);
+    valueRef.current = next;
+    const pos = range.start + insert.length;
+    requestAnimationFrame(() => {
+      const el = editorRef.current;
+      if (el) {
+        applyWireToEditor(el, next, pos);
+        syncComposerPlaceholderClass(el, next);
+        setCursor(pos);
+        el.focus();
+      }
+      adjustHeight();
+    });
+  };
+
   const wireAttachmentsPayload = () =>
     attachments.map((a) => ({
       type: a.type === 'voice' ? 'voice' : a.type || 'file',
@@ -754,8 +826,10 @@ export const ChatComposer = memo(function ChatComposer({
 
   kbdRef.current = {
     palette,
+    atPicker,
     replaceRange,
     applyPaletteItem,
+    applyAtMentionItem,
     send,
     runBusy,
     flushSteeringDraft,
@@ -864,6 +938,16 @@ export const ChatComposer = memo(function ChatComposer({
             attachments.length > 0 && 'pt-2',
           )}
         >
+            <AtMentionPicker
+              open={atPicker.open}
+              anchorRef={editorRef}
+              items={atPicker.items}
+              selectedIndex={atPicker.selectedIndex}
+              loading={atPicker.loading}
+              query={atPicker.query}
+              noResults={atPicker.error ?? m.chat.atMention.noResults}
+              onSelectItem={applyAtMentionItem}
+            />
             <CommandPalette
               open={palette.open}
               anchorRef={editorRef}

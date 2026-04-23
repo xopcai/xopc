@@ -1,6 +1,13 @@
-/** Wire format: `/skill:name` for API. DOM shows pills with visible `/name` only. */
+/** Wire format: `/skill:name` and `@file:path` for API. DOM shows pills. */
 
 import {
+  FILE_PATH_IN_WIRE,
+  FILE_WIRE_TRAILING_EOW_WS_RE,
+  FILE_WIRE_TRAILING_PLAIN_RE,
+  fileWireTokenRe,
+} from '@/features/chat/file-wire-pattern';
+import {
+  SKILL_ID_IN_WIRE,
   SKILL_WIRE_TRAILING_EOW_WS_RE,
   SKILL_WIRE_TRAILING_PLAIN_RE,
   skillWireTokenRe,
@@ -9,8 +16,21 @@ import {
 const ZWSP = '\u200b';
 const CARET_PROBE = '\u2060'; // word joiner — not used in skill names / user text
 
+const SKILL_HEAD_RE = new RegExp(`^\\/skill:(${SKILL_ID_IN_WIRE})`);
+const FILE_HEAD_RE = new RegExp(`^@file:(${FILE_PATH_IN_WIRE})`);
+
 function isSkillPill(el: HTMLElement): boolean {
   return Boolean(el.dataset.skill);
+}
+
+function isFilePill(el: HTMLElement): boolean {
+  return Boolean(el.dataset.file);
+}
+
+function filePillLabel(relativePath: string): string {
+  const trimmed = relativePath.replace(/\/$/, '');
+  const base = trimmed.split('/').pop() ?? trimmed;
+  return `@${base}`;
 }
 
 function serializeWalk(node: Node, out: string[]): void {
@@ -21,10 +41,12 @@ function serializeWalk(node: Node, out: string[]): void {
     if (isSkillPill(el)) {
       const name = el.dataset.skill ?? '';
       if (name) out.push(`/skill:${name}`);
+    } else if (isFilePill(el)) {
+      const filePath = el.dataset.file ?? '';
+      if (filePath) out.push(`@file:${filePath}`);
     } else if (el.tagName === 'BR') {
       out.push('\n');
     } else {
-      // Nested wrappers (paste / browser quirks) — flatten to wire without extra newlines here.
       el.childNodes.forEach((c) => serializeWalk(c, out));
     }
   }
@@ -93,7 +115,6 @@ export function getWireCaretOffset(root: HTMLElement): number {
   try {
     range.insertNode(marker);
   } catch {
-    // Collapsed range at container end / next to uneditable nodes often throws — treat as caret at EOD.
     return serializeEditorToWire(root).length;
   }
 
@@ -116,29 +137,46 @@ function appendSkillPill(root: HTMLElement, name: string): void {
   root.appendChild(document.createTextNode(ZWSP));
 }
 
+function appendFilePill(root: HTMLElement, relativePath: string): void {
+  const span = document.createElement('span');
+  span.contentEditable = 'false';
+  span.dataset.file = relativePath;
+  span.className = 'chat-file-pill';
+  span.textContent = filePillLabel(relativePath);
+  root.appendChild(span);
+  root.appendChild(document.createTextNode(ZWSP));
+}
+
+function collectWireTokenRanges(wire: string): Array<{ start: number; end: number }> {
+  const ranges: Array<{ start: number; end: number }> = [];
+  const reS = skillWireTokenRe();
+  let m: RegExpExecArray | null;
+  while ((m = reS.exec(wire)) !== null) {
+    ranges.push({ start: m.index, end: m.index + m[0].length });
+  }
+  const reF = fileWireTokenRe();
+  while ((m = reF.exec(wire)) !== null) {
+    ranges.push({ start: m.index, end: m.index + m[0].length });
+  }
+  ranges.sort((a, b) => a.start - b.start);
+  return ranges;
+}
+
 /**
- * When the caret is inside or at the end of a `/skill:name` token (wire coordinates),
+ * When the caret is inside or at the end of a `/skill:name` or `@file:path` token (wire coordinates),
  * remove the whole token on Backspace (contenteditable=false pills are not deleted natively).
  */
 export function removeSkillTokenAtOrBeforeCaret(wire: string, caret: number): { wire: string; caret: number } | null {
-  const re = skillWireTokenRe();
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(wire)) !== null) {
-    const start = m.index;
-    const end = start + m[0].length;
+  for (const { start, end } of collectWireTokenRanges(wire)) {
     if (caret > start && caret <= end) {
-      const newWire = wire.slice(0, start) + wire.slice(end);
-      return { wire: newWire, caret: start };
+      return { wire: wire.slice(0, start) + wire.slice(end), caret: start };
     }
   }
   return null;
 }
 
 /**
- * If the text before the caret ends with a full `/skill:name`, remove it (handles caret one past token end).
- * When the caret is at end-of-wire, also treats ASCII / common whitespace after the token as part of the
- * removable suffix so a palette-inserted trailing space does not require an extra Backspace before the pill
- * handler runs (see {@link appendSkillPill} ZWSP).
+ * If the text before the caret ends with a full `/skill:name` or `@file:path`, remove it (caret one past token end).
  */
 export function removeTrailingSkillTokenBeforeCaret(wire: string, caret: number): { wire: string; caret: number } | null {
   if (caret <= 0) {
@@ -153,9 +191,21 @@ export function removeTrailingSkillTokenBeforeCaret(wire: string, caret: number)
     return { wire: wire.slice(0, start) + wire.slice(caret), caret: start };
   }
 
-  // Caret at EOW only: remove last `/skill:name` plus any trailing whitespace (not `\n` — new paragraph is real content).
+  m = head.match(FILE_WIRE_TRAILING_PLAIN_RE);
+  if (m?.[1]) {
+    const tok = m[1];
+    const start = head.length - tok.length;
+    return { wire: wire.slice(0, start) + wire.slice(caret), caret: start };
+  }
+
   if (caret === wire.length) {
     m = head.match(SKILL_WIRE_TRAILING_EOW_WS_RE);
+    if (m?.[1]) {
+      const full = m[0];
+      const start = head.length - full.length;
+      return { wire: wire.slice(0, start) + wire.slice(caret), caret: start };
+    }
+    m = head.match(FILE_WIRE_TRAILING_EOW_WS_RE);
     if (m?.[1]) {
       const full = m[0];
       const start = head.length - full.length;
@@ -167,7 +217,7 @@ export function removeTrailingSkillTokenBeforeCaret(wire: string, caret: number)
 }
 
 /**
- * Handle Backspace for skill pills + ZWSP boundaries. Returns true if the event was handled (caller should preventDefault).
+ * Handle Backspace for skill / file pills + ZWSP boundaries. Returns true if the event was handled (caller should preventDefault).
  */
 export function handleComposerBackspace(root: HTMLElement): boolean {
   const sel = window.getSelection();
@@ -179,7 +229,6 @@ export function handleComposerBackspace(root: HTMLElement): boolean {
   const wire = serializeEditorToWire(root);
   let caret = getWireCaretOffset(root);
 
-  // Selection collapsed at end of editor but probe failed → was 0; use EOW.
   if (
     caret === 0 &&
     wire.length > 0 &&
@@ -211,17 +260,31 @@ export function applyWireToEditor(root: HTMLElement, wire: string, caretWireOffs
     w = wire.slice(0, o) + CARET_PROBE + wire.slice(o);
   }
 
-  const re = skillWireTokenRe();
-  let last = 0;
-  let m: RegExpExecArray | null;
-  while ((m = re.exec(w)) !== null) {
-    const chunk = w.slice(last, m.index);
+  let i = 0;
+  while (i < w.length) {
+    const rest = w.slice(i);
+    const skillM = rest.match(SKILL_HEAD_RE);
+    const fileM = rest.match(FILE_HEAD_RE);
+    if (skillM?.[0] && (!fileM?.[0] || skillM[0].length <= fileM[0].length)) {
+      appendSkillPill(root, skillM[1] ?? '');
+      i += skillM[0].length;
+      continue;
+    }
+    if (fileM?.[0]) {
+      appendFilePill(root, fileM[1] ?? '');
+      i += fileM[0].length;
+      continue;
+    }
+    let j = i + 1;
+    while (j < w.length) {
+      const tail = w.slice(j);
+      if (tail.match(/^(?:\/skill:|@file:)/)) break;
+      j++;
+    }
+    const chunk = w.slice(i, j);
     if (chunk) root.appendChild(document.createTextNode(chunk));
-    appendSkillPill(root, m[1] ?? '');
-    last = m.index + m[0].length;
+    i = j;
   }
-  const rest = w.slice(last);
-  if (rest) root.appendChild(document.createTextNode(rest));
 
   if (caretWireOffset === undefined) return;
 
@@ -229,13 +292,13 @@ export function applyWireToEditor(root: HTMLElement, wire: string, caretWireOffs
   let n: Node | null;
   while ((n = walker.nextNode())) {
     const t = n.textContent ?? '';
-    const i = t.indexOf(CARET_PROBE);
-    if (i >= 0) {
+    const idx = t.indexOf(CARET_PROBE);
+    if (idx >= 0) {
       const tn = n as Text;
-      tn.textContent = t.slice(0, i) + t.slice(i + CARET_PROBE.length);
+      tn.textContent = t.slice(0, idx) + t.slice(idx + CARET_PROBE.length);
       const sel = window.getSelection();
       const range = document.createRange();
-      range.setStart(tn, i);
+      range.setStart(tn, idx);
       range.collapse(true);
       sel?.removeAllRanges();
       sel?.addRange(range);

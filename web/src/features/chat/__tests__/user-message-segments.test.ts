@@ -1,5 +1,15 @@
 import { describe, it, expect } from 'vitest';
-import { parseSkillWireSegments } from '@/features/chat/user-message-segments';
+import { parseMessageSegments, parseSkillWireSegments } from '@/features/chat/user-message-segments';
+
+describe('parseMessageSegments', () => {
+  it('parses @file: tokens', () => {
+    expect(parseMessageSegments('x @file:src/a.ts y')).toEqual([
+      { kind: 'text', text: 'x ' },
+      { kind: 'file', path: 'src/a.ts' },
+      { kind: 'text', text: ' y' },
+    ]);
+  });
+});
 
 describe('parseSkillWireSegments', () => {
   it('splits skill tokens and surrounding text', () => {

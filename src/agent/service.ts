@@ -75,6 +75,7 @@ import {
   formatInboundFileTextBlock,
   type InternalAttachmentRoots,
 } from '../channels/attachments/inbound-persist.js';
+import { expandAtFileMentionsInPlainText } from './context/expand-at-file-mentions.js';
 import { resolveInboundImageContentParts } from './image/inbound-image-handling.js';
 import { getDefaultModelSync } from '../providers/index.js';
 import { persistOutboundTtsAudio } from '../channels/attachments/outbound-tts-persist.js';
@@ -656,15 +657,22 @@ export class AgentService {
       { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string }
     > = [];
 
+    const sk = sessionKey ?? '';
+
     if (content.trim()) {
-      messageContent.push({ type: 'text', text: content });
+      let textPart = content;
+      if (textPart.includes('@file:')) {
+        const wsKey = sk !== '' ? sk : 'cli:direct';
+        const root = this.agentManager.getResolvedWorkspaceForSession(wsKey);
+        textPart = await expandAtFileMentionsInPlainText(textPart, root);
+      }
+      messageContent.push({ type: 'text', text: textPart });
     }
 
     if (!attachments?.length) {
       return messageContent;
     }
 
-    const sk = sessionKey ?? '';
     const modelRef =
       sk !== ''
         ? this.modelManager.getModelForSession(sk)

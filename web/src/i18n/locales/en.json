@@ -474,6 +474,14 @@
     "commandPalette": {
       "noResults": "No matching commands or skills",
       "placeholder": "Search skills and commands…"
+    },
+    "atMention": {
+      "noResults": "No files found",
+      "placeholder": "Search files…",
+      "searchError": "Failed to search workspace",
+      "files": "Files",
+      "folders": "Folders",
+      "recentFiles": "Recent"
     }
   },
   "sessions": {
