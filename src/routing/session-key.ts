@@ -7,7 +7,6 @@
  * - main:telegram:acc_default:dm:123456
  * - main:discord:acc_work:channel:987654:thread:789
  * - subagent:main:abc123:telegram:acc_default:dm:123456
- * - main:acp:{uuid}
  */
 
 // Precompiled regexes for segment validation
@@ -117,31 +116,7 @@ export function parseSessionKey(sessionKey: string | undefined | null): ParsedSe
   }
   
   const parts = raw.split(':').filter(Boolean);
-  
-  // Handle ACP session key format: {agentId}:acp:{uuid}
-  if (parts.length === 3 && parts[1]?.toLowerCase() === 'acp') {
-    const [agentId, source, acpId] = parts;
-    return {
-      agentId: agentId.toLowerCase(),
-      source: source.toLowerCase(),
-      accountId: '_',
-      peerKind: 'direct',
-      peerId: acpId.toLowerCase(),
-    };
-  }
-  
-  // Handle subagent ACP session key format: subagent:{parentId}:{parentSessionId}:acp:{uuid}
-  if (parts.length === 5 && parts[0]?.toLowerCase() === 'subagent' && parts[3]?.toLowerCase() === 'acp') {
-    const [_subagent, parentId, parentSessionId, source, acpId] = parts;
-    return {
-      agentId: `subagent:${parentId.toLowerCase()}:${parentSessionId.toLowerCase()}`,
-      source: source.toLowerCase(),
-      accountId: '_',
-      peerKind: 'direct',
-      peerId: acpId.toLowerCase(),
-    };
-  }
-  
+
   if (parts.length < 5) {
     return null;
   }
@@ -186,14 +161,6 @@ export function parseSessionKey(sessionKey: string | undefined | null): ParsedSe
 export function isSubagentSessionKey(sessionKey: string | undefined | null): boolean {
   const parsed = parseSessionKey(sessionKey);
   return parsed?.agentId === 'subagent';
-}
-
-/**
- * Whether the key is an ACP session.
- */
-export function isAcpSessionKey(sessionKey: string | undefined | null): boolean {
-  const parsed = parseSessionKey(sessionKey);
-  return parsed?.source === 'acp';
 }
 
 /**

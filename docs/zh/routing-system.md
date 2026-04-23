@@ -110,4 +110,3 @@ console.log(route.agentId); // 无匹配规则时的默认 Agent（例如 main�
 
 - **核心路由** — 会话 key、bindings 与规则求值。  
 - **Telegram** — 启用 Telegram 通道时提供与通道相关的路由钩子。  
-- **ACP** — 启用 Agent Control Protocol 桥接时可注册额外路由行为。

@@ -74,7 +74,6 @@ describe('Routing Benchmarks', () => {
   describe('Session Key Parsing', () => {
     const simpleKey = 'main:telegram:acc_default:dm:123456';
     const complexKey = 'main:telegram:acc_default:group:-1001234567:thread:999:scope:project-a';
-    const acpKey = 'main:acp:550e8400-e29b-41d4-a716-446655440000';
 
     bench('parseSessionKey - simple', () => {
       parseSessionKey(simpleKey);
@@ -82,10 +81,6 @@ describe('Routing Benchmarks', () => {
 
     bench('parseSessionKey - complex', () => {
       parseSessionKey(complexKey);
-    });
-
-    bench('parseSessionKey - ACP', () => {
-      parseSessionKey(acpKey);
     });
 
     bench('parseSessionKey - invalid', () => {

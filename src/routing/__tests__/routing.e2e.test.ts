@@ -15,8 +15,6 @@ import {
   type RouteContext,
 } from '../index.js';
 import { generateSessionKeyWithRouting } from '../../channels/telegram/index.js';
-import { buildAcpSessionKey, isAcpSessionKey } from '../../acp/routing-integration.js';
-
 describe('Routing E2E', () => {
   describe('Complete Message Flow', () => {
     it('should route Telegram DM message correctly', () => {
@@ -329,37 +327,6 @@ describe('Routing E2E', () => {
 
       const routeWithoutRole = resolveBindingRoute(contextWithoutRole, bindings, 'main');
       expect(routeWithoutRole.agentId).toBe('main');
-    });
-  });
-
-  describe('ACP Session Integration', () => {
-    it('should create and validate ACP session', () => {
-      const acpKey = buildAcpSessionKey({
-        agentId: 'main',
-        acpId: '550e8400-e29b-41d4-a716-446655440000',
-      });
-
-      expect(acpKey).toBe('main:acp:550e8400-e29b-41d4-a716-446655440000');
-      expect(isAcpSessionKey(acpKey)).toBe(true);
-
-      const parsed = parseSessionKey(acpKey);
-      expect(parsed?.agentId).toBe('main');
-      expect(parsed?.source).toBe('acp');
-    });
-
-    it('should handle subagent ACP sessions', () => {
-      const subagentAcpKey = buildSessionKey({
-        agentId: 'subagent:main:parent-123',
-        source: 'acp',
-        accountId: '_',
-        peerKind: 'direct',
-        peerId: 'child-456',
-      });
-
-      const parsed = parseSessionKey(subagentAcpKey);
-      // sanitizeSegment replaces : with -, so agentId becomes 'subagent-main-parent-123'
-      expect(parsed?.agentId).toBe('subagent-main-parent-123');
-      expect(parsed?.source).toBe('acp');
     });
   });
 

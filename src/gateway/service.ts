@@ -55,8 +55,6 @@ import type { SkillCatalogEntry } from '../agent/agent-manager.js';
 import type { ManagedSkillListItem } from '../agent/skills/managed-store.js';
 
 const log = createLogger('GatewayService');
-import { registerAcpRuntimeBackend } from '../acp/runtime/registry.js';
-import { createLocalAcpRuntimeBackend } from '../acp/runtime/backends/local.js';
 import { PACKAGE_VERSION } from '../package-version.js';
 import { buildSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
@@ -267,27 +265,6 @@ export class GatewayService {
     }
   }
 
-  /**
-   * Initialize ACP runtime backend
-   */
-  private async initializeAcpRuntime(): Promise<void> {
-    try {
-      // Check if ACP is enabled in config
-      if (!this.config.acp?.enabled) {
-        log.debug('ACP runtime disabled in config');
-        return;
-      }
-
-      // Create and register local ACP runtime backend
-      const backend = createLocalAcpRuntimeBackend(this.bus);
-      registerAcpRuntimeBackend(backend);
-      
-      log.debug({ backendId: backend.id }, 'ACP runtime backend registered');
-    } catch (error) {
-      log.warn({ error }, 'Failed to initialize ACP runtime');
-    }
-  }
-
   async start(): Promise<void> {
     if (this.running) return;
 
@@ -334,9 +311,6 @@ export class GatewayService {
     this.sessionManager.on('sessionUpdated', (data: { key: string; name?: string; tags?: string[] }) => {
       this.emit('session.updated', { key: data.key, name: data.name, tags: data.tags });
     });
-
-    // Initialize ACP runtime backend
-    await this.initializeAcpRuntime();
 
     // Start cron service
     if (this.config.cron?.enabled !== false) {

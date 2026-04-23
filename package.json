@@ -100,7 +100,6 @@
     }
   },
   "dependencies": {
-    "@agentclientprotocol/sdk": "^0.18.2",
     "@grammyjs/runner": "^2.0.3",
     "@grammyjs/types": "^3.26.0",
     "@hono/node-server": "^1.19.13",

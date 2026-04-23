@@ -21,7 +21,6 @@ import './commands/extension.js';
 import './commands/auth.js';
 import './commands/skills.js';
 import './commands/logs.js';
-import './commands/acp.js';
 import { registerAgentsCli } from './commands/agents.js';
 
 // Global parsed options - updated before each command
