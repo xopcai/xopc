@@ -23,6 +23,12 @@ describe('detectAtRange', () => {
     expect(detectAtRange(text, cursor)).toBeNull();
   });
 
+  it('returns null inside @doc: wire token', () => {
+    const text = 'read @doc:README.md thanks';
+    const cursor = text.indexOf('thanks');
+    expect(detectAtRange(text, cursor)).toBeNull();
+  });
+
   it('returns null when no @ before caret', () => {
     expect(detectAtRange('plain', 5)).toBeNull();
   });

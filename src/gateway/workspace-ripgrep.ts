@@ -119,3 +119,98 @@ export function runRipgrepListFiles(dirAbsPath: string): Promise<string[]> {
     });
   })();
 }
+
+export interface SymbolWorkspaceHit {
+  filePath: string;
+  lineNumber: number;
+  lineContent: string;
+}
+
+/** Word-boundary search for a symbol name in common source extensions (relative paths vs `workspaceRootAbs`). */
+export function runRipgrepSymbolHits(
+  workspaceRootAbs: string,
+  rawSymbol: string,
+  limit: number,
+): Promise<SymbolWorkspaceHit[]> {
+  return (async () => {
+    const trimmed = rawSymbol.trim();
+    if (!trimmed || trimmed.length > 80) return [];
+
+    const rgExecutable = await resolveRipgrepBinary();
+    const escaped = trimmed.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const pattern = `\\b${escaped}\\b`;
+
+    return await new Promise<SymbolWorkspaceHit[]>((resolve) => {
+      const cap = Math.min(Math.max(limit, 1), 40);
+      const args = [
+        '--json',
+        '--smart-case',
+        '--max-count',
+        String(cap),
+        '--glob',
+        '*.ts',
+        '--glob',
+        '*.tsx',
+        '--glob',
+        '*.mts',
+        '--glob',
+        '*.cts',
+        '--glob',
+        '*.js',
+        '--glob',
+        '*.jsx',
+        '--glob',
+        '*.mjs',
+        '--glob',
+        '*.cjs',
+        '--glob',
+        '*.vue',
+        '--glob',
+        '*.svelte',
+        pattern,
+        '.',
+      ];
+
+      const rg = spawn(rgExecutable, args, { shell: false, cwd: workspaceRootAbs });
+      const results: SymbolWorkspaceHit[] = [];
+      let buffer = '';
+
+      rg.stdout.on('data', (data: Buffer) => {
+        buffer += data.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line) as {
+              type?: string;
+              data?: {
+                path?: { text?: string };
+                lines?: { text?: string };
+                line_number?: number;
+              };
+            };
+            if (parsed.type === 'match' && parsed.data) {
+              const d = parsed.data;
+              const pathText = d.path?.text ?? '';
+              const lineContent = d.lines?.text ?? '';
+              const lineNumber = d.line_number ?? 0;
+              results.push({
+                filePath: pathText,
+                lineNumber,
+                lineContent: lineContent.trimEnd(),
+              });
+              if (results.length >= cap) break;
+            }
+          } catch {
+            /* skip */
+          }
+        }
+      });
+
+      rg.on('close', () => resolve(results));
+      rg.on('error', () => resolve([]));
+    });
+  })();
+}
