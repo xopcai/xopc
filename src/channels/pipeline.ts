@@ -298,11 +298,69 @@ export function standardPreflightHandlers(botId: string): PreflightHandler[] {
   ];
 }
 
+function formatEnvelopeTimestamp(timezone?: string): string {
+  const now = new Date();
+  try {
+    const resolvedTimezone =
+      timezone?.trim() || Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC';
+    const parts = new Intl.DateTimeFormat('en-US', {
+      timeZone: resolvedTimezone,
+      year: 'numeric',
+      month: '2-digit',
+      day: '2-digit',
+      hour: '2-digit',
+      minute: '2-digit',
+      hour12: false,
+      timeZoneName: 'short',
+    }).formatToParts(now);
+
+    const map: Record<string, string> = {};
+    for (const part of parts) {
+      if (part.type !== 'literal') {
+        map[part.type] = part.value;
+      }
+    }
+
+    const year = map.year ?? '';
+    const month = map.month ?? '';
+    const day = map.day ?? '';
+    const hour = map.hour ?? '';
+    const minute = map.minute ?? '';
+    const tzName = map.timeZoneName ?? '';
+
+    if (!year || !month || !day || !hour || !minute) {
+      return `${now.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+    }
+
+    return `${year}-${month}-${day} ${hour}:${minute}${tzName ? ` ${tzName}` : ''}`;
+  } catch {
+    return `${now.toISOString().slice(0, 16).replace('T', ' ')} UTC`;
+  }
+}
+
+/**
+ * Prepends a per-turn `[YYYY-MM-DD HH:MM TZ]` prefix to inbound text so the model has
+ * a stable "now" without changing the system prompt (prompt-cache friendly).
+ */
+export function createEnvelopeTimestampHandler(timezone?: string): ProcessHandler {
+  return {
+    name: 'envelopeTimestamp',
+    process: async (ctx) => {
+      const text = ctx.content?.trim();
+      if (!text) {
+        return ctx;
+      }
+      const timestamp = formatEnvelopeTimestamp(timezone);
+      return { ...ctx, content: `[${timestamp}] ${ctx.content}` };
+    },
+  };
+}
+
 /**
  * Create standard process handlers
  */
-export function standardProcessHandlers(): ProcessHandler[] {
-  return [];
+export function standardProcessHandlers(timezone?: string): ProcessHandler[] {
+  return [createEnvelopeTimestampHandler(timezone)];
 }
 
 // ============================================
@@ -314,6 +372,8 @@ export interface CreatePipelineParams {
   botId: string;
   agentInvoke: PipelineOptions['agentInvoke'];
   onError?: PipelineOptions['onError'];
+  /** IANA timezone — matches userTimezone from agent config / USER.md */
+  timezone?: string;
 }
 
 /**
@@ -323,7 +383,7 @@ export function createPipeline(params: CreatePipelineParams): MessagePipeline {
   return new MessagePipeline({
     channel: params.channel,
     preflightHandlers: standardPreflightHandlers(params.botId),
-    processHandlers: standardProcessHandlers(),
+    processHandlers: standardProcessHandlers(params.timezone),
     agentInvoke: params.agentInvoke,
     onError: params.onError,
   });
