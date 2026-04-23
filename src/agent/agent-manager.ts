@@ -23,6 +23,7 @@ import type { ModelManager } from './models/manager.js';
 import { createLogger } from '../utils/logger.js';
 import { resolveProviderApiKeySync } from '../auth/sync-provider-auth.js';
 import { resolveModel, getDefaultModelSync, getApiKeySync } from '../providers/index.js';
+import { createExtensionAwareStreamFn } from '../providers/extension-stream-bridge.js';
 import { CredentialResolver } from '../auth/credentials.js';
 import { resolveBundledSkillsDir, resolveStateDir } from '../config/paths.js';
 import { loadBootstrapFiles, extractTextContent, type BootstrapFile } from './context/workspace.js';
@@ -829,6 +830,7 @@ export class AgentManager {
         tools,
         messages: [],
       },
+      streamFn: createExtensionAwareStreamFn(),
       getApiKey: (provider: string) => this.resolveApiKeyWithCache(provider),
     });
     return { agent, registeredToolNames };

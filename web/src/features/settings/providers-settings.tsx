@@ -57,7 +57,7 @@ import { docsGuidePageUrl } from '@/navigation';
 import { useGatewayStore } from '@/stores/gateway-store';
 import { useLocaleStore } from '@/stores/locale-store';
 
-const CATEGORY_ORDER: ProviderCategory[] = ['common', 'specialty', 'enterprise', 'oauth'];
+const CATEGORY_ORDER: ProviderCategory[] = ['common', 'specialty', 'enterprise', 'oauth', 'extension'];
 
 function groupByCategory(rows: ProviderRowModel[]): Map<ProviderCategory, ProviderRowModel[]> {
   const map = new Map<ProviderCategory, ProviderRowModel[]>();
@@ -87,6 +87,8 @@ function activeSourceLabel(labels: ProvidersSettingsMessages, src: ProviderActiv
       return labels.sourceEnv;
     case 'models_json':
       return labels.sourceModelsJson;
+    case 'extension':
+      return labels.sourceExtension;
     default:
       return labels.sourceNone;
   }

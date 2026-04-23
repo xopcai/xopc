@@ -4,6 +4,7 @@ import type { Api, Model } from '@mariozechner/pi-ai';
 import type { Config } from '../../config/schema.js';
 import { resolveProviderApiKeySync } from '../../auth/sync-provider-auth.js';
 import { getApiKeySync } from '../../providers/index.js';
+import { createExtensionAwareStreamFn } from '../../providers/extension-stream-bridge.js';
 import { createLogger } from '../../utils/logger.js';
 
 import { extractTextContent } from '../context/workspace.js';
@@ -129,6 +130,7 @@ export async function runBackgroundReviewTurn(params: RunBackgroundReviewParams)
       tools,
       messages: [],
     },
+    streamFn: createExtensionAwareStreamFn(),
     getApiKey: (provider: string) =>
       resolveProviderApiKeySync(provider) ?? getApiKeySync(provider) ?? '',
     beforeToolCall: async () => {
