@@ -3,6 +3,7 @@
  */
 
 import { execFileSync } from "node:child_process";
+import fs from "node:fs";
 import net from "node:net";
 import { createLogger } from "../utils/logger.js";
 
@@ -40,8 +41,116 @@ export function parseLsofOutput(output: string): PortProcess[] {
   return results;
 }
 
+/**
+ * Parse `ss -tlnp` output to find PIDs listening on a given port.
+ * Example line:
+ *   LISTEN 0 128 0.0.0.0:3000 0.0.0.0:* users:(("node",pid=1234,fd=18))
+ */
+function listPortListenersViaSs(port: number): PortProcess[] {
+  let out: string;
+  try {
+    out = execFileSync("ss", ["-tlnp", `sport = :${port}`], { encoding: "utf-8" });
+  } catch (err: unknown) {
+    const execErr = err as { status?: number; code?: string };
+    if (execErr.status === 1) {
+      return []; // No matching sockets
+    }
+    throw err instanceof Error ? err : new Error(String(err));
+  }
+  const results: PortProcess[] = [];
+
+  for (const line of out.split(/\r?\n/)) {
+    if (!line.includes("LISTEN")) continue;
+    for (const match of line.matchAll(/pid=(\d+)/g)) {
+      const pid = parseInt(match[1], 10);
+      if (!results.some((p) => p.pid === pid)) {
+        results.push({ pid });
+      }
+    }
+  }
+
+  return results;
+}
+
+/**
+ * Read /proc/net/tcp (and /proc/net/tcp6) to find PIDs listening on a given port.
+ * Falls back to an empty list if /proc is unavailable (non-Linux).
+ */
+function listPortListenersViaProc(port: number): PortProcess[] {
+  const hexPort = port.toString(16).toUpperCase().padStart(4, "0");
+  const results: PortProcess[] = [];
+  const inodeSet = new Set<string>();
+
+  for (const procFile of ["/proc/net/tcp", "/proc/net/tcp6"]) {
+    let content: string;
+    try {
+      content = fs.readFileSync(procFile, "utf-8");
+    } catch {
+      continue;
+    }
+
+    for (const line of content.split("\n").slice(1)) {
+      const parts = line.trim().split(/\s+/);
+      // state 0A = TCP_LISTEN
+      if (parts.length < 10 || parts[3] !== "0A") continue;
+      const localAddress = parts[1];
+      const portHex = localAddress.split(":")[1];
+      if (portHex?.toUpperCase() !== hexPort) continue;
+      inodeSet.add(parts[9]);
+    }
+  }
+
+  if (inodeSet.size === 0) return results;
+
+  // Walk /proc/<pid>/fd to match socket inodes to PIDs
+  let pidDirs: string[];
+  try {
+    pidDirs = fs.readdirSync("/proc").filter((name) => /^\d+$/.test(name));
+  } catch {
+    return results;
+  }
+
+  for (const pidStr of pidDirs) {
+    const fdDir = `/proc/${pidStr}/fd`;
+    let fds: string[];
+    try {
+      fds = fs.readdirSync(fdDir);
+    } catch {
+      continue;
+    }
+
+    for (const fd of fds) {
+      let target: string;
+      try {
+        target = fs.readlinkSync(`${fdDir}/${fd}`);
+      } catch {
+        continue;
+      }
+
+      // symlink target looks like "socket:[12345]"
+      const inodeMatch = /^socket:\[(\d+)\]$/.exec(target);
+      if (!inodeMatch || !inodeSet.has(inodeMatch[1])) continue;
+
+      const pid = parseInt(pidStr, 10);
+      if (!results.some((p) => p.pid === pid)) {
+        let command: string | undefined;
+        try {
+          command = fs.readFileSync(`/proc/${pidStr}/comm`, "utf-8").trim();
+        } catch {
+          // comm not readable — leave undefined
+        }
+        results.push({ pid, command });
+      }
+      break;
+    }
+  }
+
+  return results;
+}
+
 // List processes listening on port
 export function listPortListeners(port: number): PortProcess[] {
+  // Try lsof first (macOS + most Linux distros)
   try {
     const out = execFileSync("lsof", ["-nP", `-iTCP:${port}`, "-sTCP:LISTEN", "-FpFc"], {
       encoding: "utf-8",
@@ -50,14 +159,27 @@ export function listPortListeners(port: number): PortProcess[] {
   } catch (err: unknown) {
     const execErr = err as { status?: number; code?: string };
 
-    if (execErr.code === "ENOENT") {
-      throw new Error("lsof not found; required for port inspection");
+    if (execErr.code !== "ENOENT") {
+      if (execErr.status === 1) return []; // No listeners
+      throw err instanceof Error ? err : new Error(String(err));
     }
-    if (execErr.status === 1) {
-      return []; // No listeners
-    }
-    throw err instanceof Error ? err : new Error(String(err));
+    // lsof not available — fall through to Linux alternatives
+    log.debug({ port }, "lsof not found; trying ss fallback");
   }
+
+  // Try ss (iproute2, available on most modern Linux systems)
+  try {
+    return listPortListenersViaSs(port);
+  } catch (err: unknown) {
+    const execErr = err as { code?: string };
+    if (execErr.code !== "ENOENT") {
+      throw err instanceof Error ? err : new Error(String(err));
+    }
+    log.debug({ port }, "ss not found; trying /proc/net/tcp fallback");
+  }
+
+  // Last resort: parse /proc/net/tcp directly (no external tools required)
+  return listPortListenersViaProc(port);
 }
 
 // Force free port
