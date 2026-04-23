@@ -8,9 +8,16 @@ nodeGypRebuild: false
 # Scoped npm name (@xopcai/xopc) would otherwise produce paths like dist/release/@xopcai/*.deb (parent dir missing).
 artifactName: ${productName}-${version}-${arch}.${ext}
 
-# Do not auto-publish to GitHub Releases (CI sets CI=true). Artifacts are uploaded via Actions.
-# Prevents implicit GH upload + temp .dmg ENOENT when release is missing or multi-arch build overlaps.
-publish: null
+# electron-updater reads release metadata (latest.yml / latest-mac.yml / latest-linux.yml)
+# from GitHub Releases. The CI workflow uploads these files alongside build artifacts.
+# Note: electron-builder does NOT auto-publish during CI (--publish never is passed by
+# scripts/electron-builder.mjs unless ELECTRON_PUBLISH=1). These settings only configure
+# where electron-updater checks for updates at runtime.
+publish:
+  provider: github
+  owner: xopcai
+  repo: xopc
+  releaseType: release
 
 directories:
   output: dist/release

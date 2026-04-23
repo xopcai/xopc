@@ -8,6 +8,7 @@ import { SidebarColumn } from '@/components/shell/sidebar-column';
 import { WorkspaceColumn } from '@/components/shell/workspace-column';
 import { TokenDialog } from '@/components/shell/token-dialog';
 import { ElectronGatewayExitBanner } from '@/features/electron/electron-gateway-exit-banner';
+import { UpdateBanner } from '@/features/updater/update-banner';
 import { ExtensionCommandPaletteHost } from '@/features/extensions/extension-command-palette';
 import { GatewaySseBridge } from '@/features/gateway/gateway-sse-bridge';
 import { WorkspacePreviewDialog } from '@/features/workspace/workspace-preview-dialog';
@@ -132,6 +133,7 @@ export function AppShell() {
       <ExtensionNotificationListener />
       <TokenDialog />
       <ElectronGatewayExitBanner />
+      <UpdateBanner />
       <OnboardingDialog />
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-row overflow-hidden">

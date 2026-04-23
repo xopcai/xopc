@@ -20,6 +20,7 @@ import './commands/models.js';
 import { registerExtensionCommands } from './commands/extension.js';
 import './commands/auth.js';
 import './commands/skills.js';
+import './commands/update.js';
 import './commands/logs.js';
 import { registerAgentsCli } from './commands/agents.js';
 

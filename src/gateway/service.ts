@@ -58,6 +58,7 @@ const log = createLogger('GatewayService');
 import { PACKAGE_VERSION } from '../package-version.js';
 import { buildSessionKey, parseSessionKey } from '../routing/session-key.js';
 import { getDefaultAgentId } from '../routing/resolve-route.js';
+import { scheduleGatewayUpdateCheck } from '../infra/update-startup.js';
 import { MAX_CHAT_ATTACHMENTS } from './chat-limits.js';
 
 // ========== SSE Event System ==========
@@ -105,6 +106,8 @@ export class GatewayService {
 
   /** Per-run abort for webchat (POST /api/agent/abort or client disconnect). */
   private runAbortControllers = new Map<string, AbortController>();
+
+  private stopGatewayUpdateCheck: (() => void) | null = null;
 
   private readonly clarifyBridge = new ClarifyBridge();
 
@@ -334,6 +337,13 @@ export class GatewayService {
       this.setupConfigReloader();
     }
 
+    this.stopGatewayUpdateCheck = scheduleGatewayUpdateCheck({
+      config: this.config,
+      onUpdateAvailableChange: (update) => {
+        this.emit('update.available', update);
+      },
+    });
+
     log.debug('Gateway service started');
   }
 
@@ -341,6 +351,11 @@ export class GatewayService {
     if (!this.running) return;
 
     log.debug('Stopping gateway service...');
+
+    if (this.stopGatewayUpdateCheck) {
+      this.stopGatewayUpdateCheck();
+      this.stopGatewayUpdateCheck = null;
+    }
 
     // Stop config reloader
     if (this.configReloader) {
