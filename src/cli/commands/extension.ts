@@ -202,6 +202,24 @@ export function createExtensionAuditCommand(): Command {
 // ============================================
 
 export function registerExtensionCommands(program: Command): void {
+  program.addCommand(
+    new Command('extension')
+      .description('Extension lockfile and health tools')
+      .addHelpText(
+        'after',
+        `
+Related commands:
+  xopc extension:list     List installed extensions  (alias: ext:list)
+  xopc extension:freeze   Lock extension versions    (alias: ext:freeze)
+  xopc extension:health   Health check               (alias: ext:health)
+  xopc extension:verify   Verify integrity           (alias: ext:verify)
+  xopc extension:audit    Security audit             (alias: ext:audit)
+`
+      )
+      .action((_opts, cmd) => {
+        cmd.help();
+      })
+  );
   program.addCommand(createExtensionListCommand());
   program.addCommand(createExtensionFreezeCommand());
   program.addCommand(createExtensionHealthCommand());

@@ -17,7 +17,7 @@ import './commands/doctor/index.js';
 import './commands/image.js';
 import './commands/channels.js';
 import './commands/models.js';
-import './commands/extension.js';
+import { registerExtensionCommands } from './commands/extension.js';
 import './commands/auth.js';
 import './commands/skills.js';
 import './commands/logs.js';
@@ -75,6 +75,7 @@ program.hook('postAction', async (thisCommand) => {
 const ctx = getContextWithOpts(process.argv);
 registry.install(program, ctx);
 registerAgentsCli(program);
+registerExtensionCommands(program);
 
 // Only parse if this is the main module being executed directly
 // Skip parsing when imported as module (e.g., in tests)
