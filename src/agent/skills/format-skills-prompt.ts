@@ -2,7 +2,7 @@
  * Build `<available_skills>` XML block for the system prompt.
  */
 
-import { createSkillConfigManager, isSkillEnabled } from './config.js';
+import { isSkillEnabled } from './config.js';
 import { skillVisibleForRegisteredTools } from './skill-tool-gating.js';
 import type { Skill } from './types.js';
 import type { SkillsConfig } from './types.js';

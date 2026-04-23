@@ -362,7 +362,7 @@ export function AgentsSettingsPanel() {
       if (valid) {
         return prev;
       }
-      return bindChannelStatuses[0]!.name;
+      return bindChannelStatuses[0].name;
     });
   }, [bindChannelsLoading, panel, bindChannelStatuses]);
 

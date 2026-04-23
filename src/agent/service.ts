@@ -4,7 +4,6 @@ import { type Config, getAgentDefaultModelRef } from '../config/schema.js';
 import { maybeAutoTitleSessionStore } from '../session/session-title.js';
 import type { ChannelManager } from '../channels/manager.js';
 import { INTERNAL_OUTBOUND_DROP_CHANNEL } from '../channels/internal-outbound.js';
-import { join } from 'path';
 
 import { mkdir } from 'node:fs/promises';
 
@@ -25,7 +24,7 @@ import {
   type ReasoningLevel,
 } from './transcript/thinking-types.js';
 import { createLogger, runWithLogContext, updateAsyncLogContext } from '../utils/logger.js';
-import { ExtensionRegistryImpl as ExtensionRegistry, ExtensionHookRunner } from '../extensions/index.js';
+import { ExtensionHookRunner } from '../extensions/index.js';
 import { loadBootstrapFiles, extractTextContent } from './context/workspace.js';
 import { SessionTracker } from './session/tracker.js';
 import { ModelManager } from './models/index.js';
@@ -51,7 +50,7 @@ import { FeedbackCoordinator } from './feedback/index.js';
 import { AgentManager, type SkillCatalogEntry } from './agent-manager.js';
 import { extractAgentUserPlainText } from './memory/user-message-text.js';
 import { inboundMessageLogRequestId } from './service-inbound-utils.js';
-import type { AgentServiceConfig, AgentContext, StreamHandle } from './service.types.js';
+import type { AgentServiceConfig, StreamHandle } from './service.types.js';
 import {
   runProcessDirectStreaming,
   type ProcessDirectStreamingDeps,
@@ -85,7 +84,6 @@ import { persistOutboundTtsAudio } from '../channels/attachments/outbound-tts-pe
 import { compressAudio } from '../voice/tts/audio.js';
 import { speak } from '../voice/tts/index.js';
 import { mergeTtsConfigFromAppConfig } from '../voice/tts/merge-config.js';
-import { resolveAgentDir } from '../config/paths.js';
 import { applyConfigOverrides } from '../config/runtime-overrides.js';
 import { shouldUseTTS, getChannelOutputFormat } from '../voice/tts/service.js';
 import { isTTSAvailable } from '../voice/tts/factory.js';

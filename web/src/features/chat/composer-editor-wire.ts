@@ -380,8 +380,8 @@ function consumeNextToken(root: HTMLElement, w: string, i: number): number {
   }
 
   cands.sort((a, b) => b.len - a.len);
-  cands[0]!.apply();
-  return i + cands[0]!.len;
+  cands[0].apply();
+  return i + cands[0].len;
 }
 
 export function applyWireToEditor(root: HTMLElement, wire: string, caretWireOffset?: number): void {

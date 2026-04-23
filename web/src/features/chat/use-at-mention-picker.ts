@@ -49,7 +49,7 @@ export function detectAtRange(text: string, cursor: number): AtRange | null {
   const match = before.match(/@([^\s]*)$/);
   if (!match || match.index === undefined) return null;
   const start = match.index;
-  if (start > 0 && /[a-zA-Z0-9_]/.test(text[start - 1]!)) {
+  if (start > 0 && /[a-zA-Z0-9_]/.test(text[start - 1])) {
     return null;
   }
   const tail = before.slice(start);

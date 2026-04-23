@@ -51,7 +51,7 @@ function collectContextTokens(text: string): TokenHit[] {
   return pruned;
 }
 
-async function workspacePathSnippet(rel: string, workspaceRoot: string, kind: 'file' | 'doc'): Promise<string> {
+async function workspacePathSnippet(rel: string, workspaceRoot: string, _kind: 'file' | 'doc'): Promise<string> {
   const abs = resolveWorkspaceSafePath(workspaceRoot, rel);
   if (!abs) return '[invalid path]';
   try {

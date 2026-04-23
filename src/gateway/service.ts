@@ -1,5 +1,4 @@
 import crypto from 'crypto';
-import { join } from 'path';
 import { AgentService } from '../agent/service.js';
 import { ChannelManager } from '../channels/manager.js';
 import { CHAT_CHANNEL_ORDER } from '../channels/registry.js';

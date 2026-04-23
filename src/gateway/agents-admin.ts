@@ -2,7 +2,7 @@
  * Gateway REST helpers for multi-agent management.
  */
 
-import { mkdir, readdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, realpath, stat, writeFile } from 'node:fs/promises';
 import { join, resolve as pathResolve } from 'node:path';
 
 import {

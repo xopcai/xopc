@@ -1,5 +1,5 @@
 import type { Static } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { AgentTool } from '@mariozechner/pi-agent-core';
 import type { Locator, Page } from 'playwright-core';
 
 import type { Config } from '../../../config/schema.js';

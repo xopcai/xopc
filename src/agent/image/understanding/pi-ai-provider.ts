@@ -2,11 +2,7 @@ import { complete, type Api, type Context, type Model } from '@mariozechner/pi-a
 import { resolveModel, getApiKey } from '../../../providers/index.js';
 import { coerceImageAssistantText } from '../image-helpers.js';
 import { registerImageUnderstandingProvider } from './provider-registry.js';
-import type {
-  ImageUnderstandingProvider,
-  ImageUnderstandingRequest,
-  ImageUnderstandingResult,
-} from './types.js';
+import type { ImageUnderstandingProvider } from './types.js';
 
 function resolveMaxTokens(modelMaxTokens: number | undefined, requestedMaxTokens = 4096): number {
   if (

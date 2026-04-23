@@ -465,7 +465,6 @@ export class ExtensionLoader {
     // Priority 1: Workspace extensions (highest, can override)
     const c = loadConfig();
     const aid = resolveDefaultAgentId(c);
-    const workspaceDir = this.options.workspaceDir || resolveAgentWorkspaceDir(c, aid);
     const workspaceExtensionsDir = resolveWorkspaceExtensionsDir(c, aid);
     this.discoverInDirectory(workspaceExtensionsDir, 'workspace', discovered);
 
@@ -956,11 +955,10 @@ export class ExtensionLoader {
 // Utility Functions
 // ============================================================================
 
-export function resolveExtensionPath(id: string, options: ExtensionLoaderOptions): string | null {
+export function resolveExtensionPath(id: string, _options: ExtensionLoaderOptions): string | null {
   const c = loadConfig();
   const aid = resolveDefaultAgentId(c);
   // Priority 1: Workspace
-  const workspaceDir = options.workspaceDir || resolveAgentWorkspaceDir(c, aid);
   const workspacePath = join(resolveWorkspaceExtensionsDir(c, aid), id);
   if (existsSync(workspacePath)) return workspacePath;
 
