@@ -87,11 +87,19 @@ export function looksLikeAbsoluteFilePath(s: string): boolean {
     return false;
   }
   if (t.startsWith('/')) {
-    return /^\/(?:Users|usr|var|opt|tmp|home|root|System|private|dev|media|mnt|Volumes|data)[\\/\s]/i.test(
-      t + '/',
-    ) || /^\//.test(t);
+    // Only treat as a host filesystem path when it uses a common Unix root prefix.
+    // Do not use a bare `/^/` match: URL path segments like `/86683.html` inside
+    // `https://…/86683.html` are extracted by the path scanner and must not open workspace preview.
+    return /^\/(?:Users|usr|var|opt|tmp|home|root|System|private|dev|media|mnt|Volumes|data)(?:\/|[\s]|$)/i.test(
+      t,
+    );
   }
-  if (/^[A-Za-z]:[\\/]/.test(t)) return true;
+  if (/^[A-Za-z]:[\\/]/.test(t)) {
+    const norm = t.replace(/\\/g, '/');
+    // Reject `s://…` produced when WIN_FILE_PATH_RE matches inside `https://host/…` (`s:` + `/` + `/host…`).
+    if (/^[A-Za-z]:\/{2,}/.test(norm)) return false;
+    return true;
+  }
   if (t.startsWith('\\\\')) return true; // UNC
   return false;
 }
@@ -127,6 +135,8 @@ function looksLikeWorkspaceRelativeFilePath(s: string): boolean {
   const t = s.trim().replace(/\\/g, '/');
   if (t.length < 4 || t.includes('..')) return false;
   if (t.startsWith('/') || /^[A-Za-z]:/i.test(t) || t.startsWith('\\\\')) return false;
+  // `https://site.com/page.html` is a URL, not `media/foo.html`
+  if (/^[a-z][a-z0-9+.-]*:/i.test(t)) return false;
   return /\.(png|jpe?g|gif|webp|bmp|svg|pdf|docx?|xlsx?|pptx?|txt|md|json|html?|css|mjs?|cjs|js|ts|mp3|wav|ogg|m4a|mp4|mov|webm)$/i.test(
     t,
   );

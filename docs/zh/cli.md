@@ -60,7 +60,7 @@ xopc setup
 
 | 参数 | 描述 |
 |------|------|
-| `--workspace <path>` | 工作区目录路径（默认：~/.xopc/workspace） |
+| `--workspace <path>` | 主智能体 Markdown 根路径（无配置时默认：`~/.xopc/workspace/main`） |
 
 **示例**：
 

@@ -165,17 +165,14 @@ export function resolveAgentWorkspaceDir(cfg: Config, agentId: string): string {
   }
   const defaultAgentId = resolveDefaultAgentId(cfg);
   const fallback = cfg.agents?.defaults?.workspace?.trim();
-  if (id === defaultAgentId) {
-    if (fallback) {
-      return resolveUserPath(fallback);
-    }
-    return resolveDefaultAgentWorkspaceDir(process.env);
-  }
   if (fallback) {
     return join(resolveUserPath(fallback), id);
   }
+  if (id === defaultAgentId) {
+    return resolveDefaultAgentWorkspaceDir(process.env);
+  }
   const stateDir = resolveStateDir(process.env);
-  return join(stateDir, `workspace-${id}`);
+  return join(stateDir, 'workspace', id);
 }
 
 /**

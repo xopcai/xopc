@@ -4,7 +4,7 @@ For a concise map of **bootstrap**, **agent home**, and the **Markdown workspace
 
 xopc keeps **machine-local state** under a single **state directory** (the “Agent OS” root) and, inside it, **per-agent** trees for transcripts, inbox, inbound/TTS blobs, curated memory, and runtime files. Separately, the **agent workspace** is the Markdown root the runtime uses as tool `cwd`, for daily `memory/` notes, user files, and extensions under that tree.
 
-Paths come from your **main config file** (default `<stateDir>/xopc.json`) and optional env overrides. **`xopc init`** and **`xopc agents add`** create directories and seed templates. The **Markdown workspace** (tool `cwd` and project files) is **not** the same folder as `agents/<id>/` state: by default it is `<stateDir>/workspace` for the default agent, `<stateDir>/workspace-<id>` for others, or a path derived from **`agents.defaults.workspace`** when you set it.
+Paths come from your **main config file** (default `<stateDir>/xopc.json`) and optional env overrides. **`xopc init`** and **`xopc agents add`** create directories and seed templates. The **Markdown workspace** (tool `cwd` and project files) is **not** the same folder as `agents/<id>/` state: by default each agent id uses `<stateDir>/workspace/<agentId>/` (the default agent id is `main`), or under **`agents.defaults.workspace`** as a **parent** directory (`<expanded>/<agentId>/`), or an explicit per-list **`workspace`** path.
 
 ## State directory root
 
@@ -48,9 +48,9 @@ Session storage is **not** under the Markdown workspace directory; it always use
 
 ## Agent workspace directory (Markdown root)
 
-With a normal config, each agent gets an explicit **`workspace`** path or inherits **`agents.defaults.workspace/<agentId>`**, or falls back to `workspace` / `workspace-<id>` next to the state directory.
+With a normal config, each agent gets an explicit **`workspace`** path or inherits **`join(agents.defaults.workspace, <agentId>)`**, or falls back to **`<stateDir>/workspace/<agentId>`** when `agents.defaults.workspace` is unset.
 
-When the CLI runs **without** a loaded config file, **`XOPC_WORKSPACE`** wins if set; otherwise the primary Markdown tree defaults to **`~/.xopc/workspace`**. **`xopc init`** creates **`agents/<id>/`**, the Markdown workspace, and seeds bootstrap files from built-in templates (filenames in [Workspace templates](/reference/templates)) only when missing. **`xopc agents add`** updates **`agents.list`**, creates directories, and seeds a new workspace (see [CLI](cli.md#agents)).
+When the CLI runs **without** a loaded config file, **`XOPC_WORKSPACE`** wins if set (full path to the primary agent’s Markdown root); otherwise the primary Markdown tree defaults to **`<stateDir>/workspace/main`**. **`xopc init`** creates **`agents/<id>/`**, the Markdown workspace, and seeds bootstrap files from built-in templates (filenames in [Workspace templates](/reference/templates)) only when missing. **`xopc agents add`** updates **`agents.list`**, creates directories, and seeds a new workspace (see [CLI](cli.md#agents)).
 
 ### Bootstrap Markdown (persona & memory index)
 
@@ -89,9 +89,9 @@ Two related ideas:
 
 1. **Gateway** — uses the **default agent** from config and that agent’s resolved Markdown workspace. Per-workspace extensions use `<that workspace>/.extensions` when present.
 
-2. **CLI** (no explicit `--workspace` on the root command) — **`XOPC_WORKSPACE`** if set, otherwise the same primary `~/.xopc/workspace` heuristic as above.
+2. **CLI** (no explicit `--workspace` on the root command) — **`XOPC_WORKSPACE`** if set, otherwise **`<stateDir>/workspace/main`** (or your profile/state dir equivalent).
 
-After `xopc init`, bootstrap files for `main` live under `~/.xopc/workspace/` by default; ensure **`agents.defaults.workspace`** (and any **`agents.list[].workspace`**) point at the same tree if you want the gateway and CLI to load identical Markdown without duplication.
+After `xopc init`, bootstrap files for `main` live under **`agents.defaults.workspace/main`** when that parent is set (schema default `~/.xopc/workspace` → `~/.xopc/workspace/main`), or under **`<stateDir>/workspace/main`** when it is not. Per-list **`agents.list[].workspace`** overrides the derived path for that agent.
 
 ## Environment variables (quick reference)
 
@@ -101,7 +101,7 @@ After `xopc init`, bootstrap files for `main` live under `~/.xopc/workspace/` by
 | `XOPC_PROFILE` | Profile-specific state directory |
 | `XOPC_HOME` | Home override for default state path |
 | `XOPC_CONFIG` / `XOPC_CONFIG_PATH` | Config file location |
-| `XOPC_WORKSPACE` | Default Markdown workspace for CLI context when no `--workspace` |
+| `XOPC_WORKSPACE` | Primary agent Markdown root when no `--workspace` (full path; not the `agents.defaults.workspace` parent) |
 | `XOPC_CREDENTIALS_DIR` | Global credentials directory |
 | `XOPC_LOG_DIR` | Log file directory |
 

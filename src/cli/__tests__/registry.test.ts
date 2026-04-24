@@ -416,7 +416,7 @@ describe('createDefaultContext', () => {
 
     expect(ctx.configPath).toContain('.xopc/xopc.json');
     expect(ctx.workspacePath).toContain('workspace');
-    expect(ctx.workspacePath).toMatch(/\.xopc\/workspace$/);
+    expect(ctx.workspacePath).toMatch(/\.xopc\/workspace\/main$/);
     expect(ctx.isVerbose).toBe(false);
     expect(ctx.argv).toEqual(process.argv);
   });

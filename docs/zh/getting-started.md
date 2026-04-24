@@ -40,7 +40,7 @@ xopc onboard
 ```
 
 向导将引导您完成：
-1. 创建工作区目录 (`~/.xopc/workspace/`)
+1. 创建主 Markdown 工作区目录（使用默认配置时一般为 `~/.xopc/workspace/main/`）
 2. 生成默认 `config.json`
 3. 选择 LLM 服务商并输入 API 密钥
 4. 配置消息通道（Telegram）

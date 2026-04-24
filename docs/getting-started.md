@@ -40,7 +40,7 @@ xopc onboard
 ```
 
 The wizard will guide you through:
-1. Creating workspace directory (`~/.xopc/workspace/`)
+1. Creating the primary Markdown workspace directory (typically `~/.xopc/workspace/main/` when using default config)
 2. Generating default `config.json`
 3. Selecting an LLM provider and entering API key
 4. Configuring messaging channels (Telegram)

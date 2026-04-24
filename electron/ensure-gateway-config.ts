@@ -19,7 +19,7 @@ export type ElectronUserPaths = {
 export function getElectronUserPaths(): ElectronUserPaths {
   const userData = app.getPath('userData');
   const configPath = join(userData, 'xopc.json');
-  const workspacePath = join(userData, 'workspace');
+  const workspacePath = join(userData, 'workspace', 'main');
   return { userData, configPath, workspacePath };
 }
 
