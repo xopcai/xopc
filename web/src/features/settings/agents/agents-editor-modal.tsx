@@ -19,6 +19,8 @@ export function AgentsEditorModal(props: {
   onPanelChange: (p: AgentPanel) => void;
   onFooterSave: () => void;
   footerSaveDisabled: boolean;
+  /** Brief "Saved" flash after a successful save. */
+  footerSavedFlash?: boolean;
   busy: boolean;
   children: ReactNode;
 }) {
@@ -32,6 +34,7 @@ export function AgentsEditorModal(props: {
     onPanelChange,
     onFooterSave,
     footerSaveDisabled,
+    footerSavedFlash,
     busy,
     children,
   } = props;
@@ -76,7 +79,11 @@ export function AgentsEditorModal(props: {
                 {children}
               </div>
               <div className="flex shrink-0 flex-col gap-1 border-t border-edge-subtle px-4 py-3 dark:border-edge sm:flex-row sm:items-center sm:justify-end sm:gap-3">
-                {footerSaveDisabled ? (
+                {footerSavedFlash ? (
+                  <p className="order-2 text-center text-xs font-medium text-green-600 sm:order-1 sm:mr-auto sm:text-left dark:text-green-400">
+                    ✓ {a.personaSaved}
+                  </p>
+                ) : footerSaveDisabled ? (
                   <p className="order-2 text-center text-xs text-fg-muted sm:order-1 sm:mr-auto sm:text-left">
                     {a.footerSaveNotApplicable}
                   </p>

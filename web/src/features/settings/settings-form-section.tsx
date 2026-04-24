@@ -25,11 +25,14 @@ export function SettingsFormSectionHeader({
   icon: Icon,
   title,
   subtitle,
+  trailing,
   className,
 }: {
   icon: LucideIcon;
   title: string;
   subtitle: string;
+  /** Optional content rendered at the trailing (right) edge of the header. */
+  trailing?: ReactNode;
   className?: string;
 }) {
   return (
@@ -40,10 +43,11 @@ export function SettingsFormSectionHeader({
       >
         <Icon className="size-4" strokeWidth={1.75} />
       </div>
-      <div className="min-w-0">
+      <div className="min-w-0 flex-1">
         <h2 className="text-sm font-semibold text-fg">{title}</h2>
         <p className="mt-0.5 text-xs text-fg-muted">{subtitle}</p>
       </div>
+      {trailing ? <div className="shrink-0">{trailing}</div> : null}
     </div>
   );
 }
