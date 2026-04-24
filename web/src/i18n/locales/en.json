@@ -483,13 +483,7 @@
       "folders": "Folders",
       "recentFiles": "Recent",
       "recentBadge": "Recent",
-      "shiftHint": "Shift+Enter or Shift+click: add another @ mention.",
-      "tabs": {
-        "files": "Files",
-        "docs": "Docs",
-        "symbols": "Symbols",
-        "urls": "URLs"
-      }
+      "shiftHint": "Shift+Enter or Shift+click: add another @ mention."
     }
   },
   "sessions": {

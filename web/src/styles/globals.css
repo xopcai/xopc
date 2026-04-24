@@ -273,69 +273,6 @@ html.dark {
     vertical-align: baseline;
   }
 
-  .chat-doc-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.125rem;
-    padding: 0.0625rem 0.375rem;
-    border-radius: 0.25rem;
-    background: rgb(16 185 129 / 0.12);
-    color: rgb(4 120 87);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    white-space: nowrap;
-    user-select: none;
-    cursor: default;
-    vertical-align: baseline;
-  }
-
-  html.dark .chat-doc-pill {
-    background: rgb(16 185 129 / 0.15);
-    color: rgb(52 211 153);
-  }
-
-  .chat-url-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.125rem;
-    padding: 0.0625rem 0.375rem;
-    border-radius: 0.25rem;
-    background: rgb(14 165 233 / 0.12);
-    color: rgb(3 105 161);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    white-space: nowrap;
-    user-select: none;
-    cursor: default;
-    vertical-align: baseline;
-  }
-
-  html.dark .chat-url-pill {
-    background: rgb(14 165 233 / 0.15);
-    color: rgb(56 189 248);
-  }
-
-  .chat-symbol-pill {
-    display: inline-flex;
-    align-items: center;
-    gap: 0.125rem;
-    padding: 0.0625rem 0.375rem;
-    border-radius: 0.25rem;
-    background: rgb(139 92 246 / 0.12);
-    color: rgb(91 33 182);
-    font-size: 0.8125rem;
-    font-weight: 500;
-    white-space: nowrap;
-    user-select: none;
-    cursor: default;
-    vertical-align: baseline;
-  }
-
-  html.dark .chat-symbol-pill {
-    background: rgb(139 92 246 / 0.18);
-    color: rgb(196 181 253);
-  }
-
   .composer-input {
     position: relative;
     white-space: pre-wrap;

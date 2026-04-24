@@ -20,13 +20,14 @@ import {
   normalizeOrphanComposerDom,
   serializeEditorToWire,
 } from '@/features/chat/composer-editor-wire';
+import { formatFilePathForWire } from '@/features/chat/file-wire-pattern';
 import {
   browseDirFromQuery,
   browseParentDir,
   detectAtRange,
   useAtMentionPicker,
 } from '@/features/chat/use-at-mention-picker';
-import { detectSlashRange, useCommandPalette } from '@/features/chat/use-command-palette';
+import { useCommandPalette } from '@/features/chat/use-command-palette';
 import { messages } from '@/i18n/messages';
 import { cn } from '@/lib/cn';
 import { interaction } from '@/lib/interaction';
@@ -175,6 +176,7 @@ const ChatComposerInput = memo(function ChatComposerInput({
       data-placeholder={placeholder}
       onInput={(e) => {
         const el = e.currentTarget;
+        /* While composing, avoid DOM normalization that can fight the IME; still sync wire for layout. */
         const wire = isComposingRef.current ? serializeEditorToWire(el) : normalizeOrphanComposerDom(el);
         syncComposerPlaceholderClass(el, wire);
         onWireInput(wire, getWireCaretOffset(el));
@@ -225,7 +227,8 @@ const ChatComposerInput = memo(function ChatComposerInput({
           }
         }
         const { atPicker, palette } = k;
-        if (atPicker.open && atPicker.atRange) {
+        /* During IME (e.g. CJK), do not handle @/slash palettes so Enter/Esc stay with the input method. */
+        if (atPicker.open && atPicker.atRange && !k.isComposing) {
           if (e.key === 'Escape') {
             e.preventDefault();
             const range = atPicker.atRange;
@@ -255,7 +258,7 @@ const ChatComposerInput = memo(function ChatComposerInput({
               atPicker.onNavigate('up');
               return;
             }
-            if ((e.key === 'Enter' || e.key === 'Tab') && !k.isComposing) {
+            if (e.key === 'Enter' || e.key === 'Tab') {
               e.preventDefault();
               const item = atPicker.items[atPicker.selectedIndex];
               if (item) k.applyAtMentionItem(item, { stayOpen: e.shiftKey });
@@ -263,22 +266,24 @@ const ChatComposerInput = memo(function ChatComposerInput({
             }
           }
         }
-        if (palette.open && palette.items.length > 0) {
-          if (e.key === 'ArrowDown') {
-            e.preventDefault();
-            palette.onNavigate('down');
-            return;
-          }
-          if (e.key === 'ArrowUp') {
-            e.preventDefault();
-            palette.onNavigate('up');
-            return;
-          }
-          if (e.key === 'Enter' && !e.shiftKey && !k.isComposing) {
-            e.preventDefault();
-            const item = palette.items[palette.selectedIndex];
-            if (item) k.applyPaletteItem(item);
-            return;
+        if (palette.open && !k.isComposing) {
+          if (palette.items.length > 0) {
+            if (e.key === 'ArrowDown') {
+              e.preventDefault();
+              palette.onNavigate('down');
+              return;
+            }
+            if (e.key === 'ArrowUp') {
+              e.preventDefault();
+              palette.onNavigate('up');
+              return;
+            }
+            if ((e.key === 'Enter' || e.key === 'Tab') && !e.shiftKey) {
+              e.preventDefault();
+              const item = palette.items[palette.selectedIndex];
+              if (item) k.applyPaletteItem(item);
+              return;
+            }
           }
           if (e.key === 'Escape') {
             e.preventDefault();
@@ -416,12 +421,13 @@ export const ChatComposer = memo(function ChatComposer({
   const pendingFocusAfterEnableRef = useRef(true);
 
   const atRangeForSuppress = useMemo(() => detectAtRange(value, cursor), [value, cursor]);
-  const slashRangeRaw = useMemo(() => detectSlashRange(value, cursor), [value, cursor]);
-  const suppressSlash = Boolean(atRangeForSuppress && !slashRangeRaw);
-  const palette = useCommandPalette(value, cursor, { suppress: suppressSlash });
+  /** While the @-file mention range is active, always hide `/` (slash) palette — even if a `/` in the query (e.g. `foo/bar`) is also detected. */
+  const suppressSlash = atRangeForSuppress != null;
+  const palette = useCommandPalette(value, cursor, { suppress: suppressSlash, isComposing });
   const atPicker = useAtMentionPicker(value, cursor, {
     sessionKey,
     slashPaletteOpen: palette.open,
+    isComposing,
   });
 
   valueRef.current = value;
@@ -645,7 +651,7 @@ export const ChatComposer = memo(function ChatComposer({
     }
 
     if (item.kind === 'skill') {
-      const insert = `/skill:${item.name}`;
+      const insert = `/skill:${item.name} `;
       const next = replaceRange(valueRef.current, range.start, range.end, insert);
       setValue(next);
       valueRef.current = next;
@@ -728,33 +734,15 @@ export const ChatComposer = memo(function ChatComposer({
     }
 
     const path =
-      item.pickKind !== 'url' &&
-      item.pickKind !== 'symbol' &&
-      item.isDirectory &&
-      !item.relativePath.endsWith('/')
-        ? `${item.relativePath}/`
-        : item.relativePath;
+      item.isDirectory && !item.relativePath.endsWith('/') ? `${item.relativePath}/` : item.relativePath;
 
-    let wire: string;
-    switch (item.pickKind) {
-      case 'doc':
-        wire = `@doc:${path}`;
-        break;
-      case 'url':
-        wire = `@url:${item.relativePath}`;
-        break;
-      case 'symbol':
-        wire = `@symbol:${item.name}`;
-        break;
-      default:
-        wire = `@file:${path}`;
-    }
+    const wire = `@file:${formatFilePathForWire(path)}`;
 
-    if (sessionKey && (item.pickKind === 'file' || item.pickKind === 'doc') && !item.isDirectory) {
+    if (sessionKey && !item.isDirectory) {
       recordRecentAtPath(sessionKey, path.replace(/\/$/, ''));
     }
 
-    const suffix = opts?.stayOpen ? ' @' : '';
+    const suffix = opts?.stayOpen ? ' @' : ' ';
     const insert = wire + suffix;
     const next = replaceRange(valueRef.current, range.start, range.end, insert);
     setValue(next);
@@ -995,9 +983,6 @@ export const ChatComposer = memo(function ChatComposer({
             <AtMentionPicker
               open={atPicker.open}
               anchorRef={editorRef}
-              category={atPicker.category}
-              onCategoryChange={atPicker.setCategory}
-              tabLabels={m.chat.atMention.tabs}
               items={atPicker.items}
               selectedIndex={atPicker.selectedIndex}
               loading={atPicker.loading}
@@ -1005,6 +990,7 @@ export const ChatComposer = memo(function ChatComposer({
               noResults={atPicker.error ?? m.chat.atMention.noResults}
               sessionKey={sessionKey}
               recentLabel={m.chat.atMention.recentBadge}
+              ariaLabel={m.chat.atMention.placeholder}
               shiftHint={m.chat.atMention.shiftHint}
               onSelectItem={(it, meta) => applyAtMentionItem(it, { stayOpen: meta?.shiftKey === true })}
             />

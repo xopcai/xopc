@@ -35,6 +35,18 @@ describe('detectSlashRange', () => {
     const mid = 'prefix /skill:foo';
     expect(detectSlashRange(mid, mid.length)).toBeNull();
   });
+
+  it('returns null when slash is inside @file: path (not command palette)', () => {
+    const t = '@file:demo-file/月度预算.xlsx';
+    expect(detectSlashRange(t, t.length)).toBeNull();
+    const ascii = '@file:src/components/Button.tsx';
+    expect(detectSlashRange(ascii, ascii.length)).toBeNull();
+  });
+
+  it('returns null for slash inside quoted @file: path', () => {
+    const t = '@file:"a/b Meeting Notes.docx"';
+    expect(detectSlashRange(t, t.length)).toBeNull();
+  });
 });
 
 describe('paletteItemMatchRank', () => {
