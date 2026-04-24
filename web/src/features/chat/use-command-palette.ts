@@ -3,7 +3,31 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { listSkillNamesInWire } from '@/features/chat/composer-editor-wire';
 import { fetchCommandsCached, getSkillsCached } from '@/features/chat/command-palette-api';
 import type { PaletteItem, SlashRange } from '@/features/chat/command-palette.types';
+import { FILE_WIRE_TAIL_BODY } from '@/features/chat/file-wire-pattern';
 import { paletteDefaultTiebreak } from '@/features/chat/palette-default-order';
+
+/** Same boundary as `@file:` wire tokens (quoted or unquoted); path `/` is not slash-palette. */
+const AT_FILE_TOKEN_AT_INDEX = new RegExp(`^@file:${FILE_WIRE_TAIL_BODY}`, 'u');
+
+function atFileTokenSpanContainingIndex(text: string, index: number): { start: number; end: number } | null {
+  let from = 0;
+  while (from < text.length) {
+    const at = text.indexOf('@file:', from);
+    if (at === -1) return null;
+    const slice = text.slice(at);
+    const m = slice.match(AT_FILE_TOKEN_AT_INDEX);
+    if (!m) {
+      from = at + 1;
+      continue;
+    }
+    const end = at + m[0].length;
+    if (index >= at && index < end) {
+      return { start: at, end };
+    }
+    from = end;
+  }
+  return null;
+}
 
 /** Max rows in the flat palette (skills and commands mixed, sorted by match then name). */
 const MAX_PALETTE_ITEMS = 20;
@@ -19,6 +43,10 @@ export function detectSlashRange(text: string, cursor: number): SlashRange | nul
   const before = text.slice(0, c);
   const match = before.match(/\/[^\s]*$/);
   if (!match || match.index === undefined) return null;
+  // Path segments in `@file:dir/name` contain `/`; do not treat them as `/skill`-style slash palette input.
+  if (atFileTokenSpanContainingIndex(text, match.index)) {
+    return null;
+  }
   const token = match[0];
   // Wire `/skill:name` is rendered as a pill, not an active slash palette — otherwise the list stays open with no matches and blocks typing.
   if (token.startsWith('/skill:')) {
@@ -79,12 +107,19 @@ export function paletteItemMatchRank(item: PaletteItem, q: string): number | nul
   return null;
 }
 
-export function useCommandPalette(value: string, cursor: number, options?: { suppress?: boolean }) {
+export function useCommandPalette(
+  value: string,
+  cursor: number,
+  options?: { suppress?: boolean; isComposing?: boolean },
+) {
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [allItems, setAllItems] = useState<PaletteItem[]>([]);
   const [loadError, setLoadError] = useState<string | null>(null);
 
-  const slashRange = useMemo(() => detectSlashRange(value, cursor), [value, cursor]);
+  const slashRange = useMemo(
+    () => (options?.isComposing ? null : detectSlashRange(value, cursor)),
+    [value, cursor, options?.isComposing],
+  );
   const paletteActive = Boolean(slashRange && !options?.suppress);
 
   useEffect(() => {

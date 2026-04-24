@@ -483,13 +483,7 @@
       "folders": "文件夹",
       "recentFiles": "最近",
       "recentBadge": "最近",
-      "shiftHint": "Shift+Enter 或 Shift+点击：继续添加 @ 引用。",
-      "tabs": {
-        "files": "文件",
-        "docs": "文档",
-        "symbols": "符号",
-        "urls": "链接"
-      }
+      "shiftHint": "Shift+Enter 或 Shift+点击：继续添加 @ 引用。"
     }
   },
   "sessions": {

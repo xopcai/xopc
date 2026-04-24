@@ -1,6 +1,8 @@
 // @vitest-environment jsdom
 import { describe, it, expect } from 'vitest';
+import { formatFilePathForWire } from '@/features/chat/file-wire-pattern';
 import {
+  applyWireToEditor,
   listSkillNamesInWire,
   normalizeOrphanComposerDom,
   removeSkillTokenAtOrBeforeCaret,
@@ -54,6 +56,23 @@ describe('removeTrailingSkillTokenBeforeCaret', () => {
     const w = '/skill:foo bar';
     // Caret immediately after the space between skill and "bar"
     expect(removeTrailingSkillTokenBeforeCaret(w, '/skill:foo '.length)).toBeNull();
+  });
+});
+
+describe('serializeEditorToWire', () => {
+  it('inserts space between file pill and following text so wire does not merge path with typed CJK', () => {
+    const root = document.createElement('div');
+    applyWireToEditor(root, '@file:您的重要创意.pptx');
+    const afterPill = root.childNodes[root.childNodes.length - 1];
+    expect(afterPill?.nodeType).toBe(Node.TEXT_NODE);
+    afterPill.textContent = (afterPill.textContent ?? '') + '分析';
+    expect(serializeEditorToWire(root)).toBe('@file:您的重要创意.pptx 分析');
+  });
+
+  it('serializes file paths with spaces as quoted @file wire', () => {
+    const root = document.createElement('div');
+    applyWireToEditor(root, `@file:${formatFilePathForWire('Meeting Notes.docx')}`);
+    expect(serializeEditorToWire(root)).toBe('@file:"Meeting Notes.docx"');
   });
 });
 

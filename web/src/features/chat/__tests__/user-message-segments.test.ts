@@ -10,15 +10,24 @@ describe('parseMessageSegments', () => {
     ]);
   });
 
-  it('parses @doc:, @url:, and @symbol:', () => {
-    expect(parseMessageSegments('a @doc:notes/x.md b @url:https://ex.com c @symbol:Foo')).toEqual([
-      { kind: 'text', text: 'a ' },
-      { kind: 'doc', path: 'notes/x.md' },
-      { kind: 'text', text: ' b ' },
-      { kind: 'url', href: 'https://ex.com' },
-      { kind: 'text', text: ' c ' },
-      { kind: 'symbol', name: 'Foo' },
+  it('parses @file: with CJK filename as one segment', () => {
+    expect(parseMessageSegments('x @file:demo-file/月度预算.xlsx y')).toEqual([
+      { kind: 'text', text: 'x ' },
+      { kind: 'file', path: 'demo-file/月度预算.xlsx' },
+      { kind: 'text', text: ' y' },
     ]);
+  });
+
+  it('parses quoted @file: paths with spaces', () => {
+    expect(parseMessageSegments('x @file:"Meeting Notes.docx" y')).toEqual([
+      { kind: 'text', text: 'x ' },
+      { kind: 'file', path: 'Meeting Notes.docx' },
+      { kind: 'text', text: ' y' },
+    ]);
+  });
+
+  it('treats removed wire prefixes as plain text', () => {
+    expect(parseMessageSegments('a @doc:notes/x.md b')).toEqual([{ kind: 'text', text: 'a @doc:notes/x.md b' }]);
   });
 });
 

@@ -28,7 +28,7 @@ import {
   persistInboundAttachmentsToWorkspace,
   formatInboundFileTextBlock,
 } from '../../channels/attachments/inbound-persist.js';
-import { expandAllContextMentionsInPlainText } from '../context/expand-context-mentions.js';
+import { expandAtFileMentionsInPlainText } from '../context/expand-at-file-mentions.js';
 import { resolveInboundImageContentParts } from '../image/inbound-image-handling.js';
 
 const log = createLogger('AgentOrchestrator');
@@ -248,9 +248,9 @@ export class AgentOrchestrator {
       ? this.agentManager.expandSkillUserText(msg.content)
       : msg.content;
 
-    if (/@(file|doc|url|symbol):/.test(textBody)) {
+    if (/@file:/.test(textBody)) {
       const root = this.agentManager.getResolvedWorkspaceForSession(sessionKey);
-      textBody = await expandAllContextMentionsInPlainText(textBody, root);
+      textBody = await expandAtFileMentionsInPlainText(textBody, root);
     }
 
     if (!msg.attachments || msg.attachments.length === 0) {

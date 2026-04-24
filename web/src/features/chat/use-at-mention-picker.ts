@@ -1,35 +1,10 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 
-import {
-  fetchWorkspaceBrowseEntries,
-  isValidHttpUrl,
-  searchWorkspaceFiles,
-  searchWorkspaceSymbols,
-  urlMentionItem,
-  type AtCategory,
-  type AtMentionItem,
-  type AtPickKind,
-} from '@/features/chat/at-mention-api';
+import { fetchWorkspaceBrowseEntries, searchWorkspaceFiles, type AtMentionItem } from '@/features/chat/at-mention-api';
 import { getRecentAtPaths } from '@/features/chat/at-mention-recent';
 
 const DEBOUNCE_MS = 150;
 const MAX_ITEMS = 15;
-const CATEGORY_KEY = 'xopc.atMention.category';
-
-function loadStoredCategory(): AtCategory {
-  if (typeof sessionStorage === 'undefined') return 'files';
-  const v = sessionStorage.getItem(CATEGORY_KEY);
-  if (v === 'docs' || v === 'symbols' || v === 'urls' || v === 'files') return v;
-  return 'files';
-}
-
-function saveCategory(c: AtCategory): void {
-  try {
-    sessionStorage.setItem(CATEGORY_KEY, c);
-  } catch {
-    /* ignore */
-  }
-}
 
 export interface AtRange {
   start: number;
@@ -38,8 +13,10 @@ export interface AtRange {
 }
 
 /**
- * Active `@…` mention for context picker: last `@` before caret, query is non-whitespace tail, not an email
- * fragment and not inside a serialized `@(file|doc|url|symbol):` token.
+ * Active `@…` mention for file picker: last `@` before caret, query is non-whitespace tail, not an email
+ * local-part character (ASCII alnum+_) right before `@`, and not already inside a serialized
+ * `@(file|doc|url|symbol):` token. The composer always suppresses the `/` (slash) palette while this
+ * range is active so path queries like `sub/dir` never open both menus.
  */
 export function detectAtRange(text: string, cursor: number): AtRange | null {
   const len = text.length;
@@ -63,8 +40,7 @@ export function detectAtRange(text: string, cursor: number): AtRange | null {
   };
 }
 
-export function isBrowseModeQuery(query: string, category: AtCategory): boolean {
-  if (category !== 'files' && category !== 'docs') return false;
+export function isBrowseModeQuery(query: string): boolean {
   const q = query.trim();
   return q.length > 0 && q.endsWith('/') && !/^https?:\/\//i.test(q);
 }
@@ -83,14 +59,8 @@ export function browseParentDir(dir: string): string {
 export function useAtMentionPicker(
   value: string,
   cursor: number,
-  options: { sessionKey: string | null; slashPaletteOpen: boolean },
+  options: { sessionKey: string | null; slashPaletteOpen: boolean; isComposing?: boolean },
 ) {
-  const [category, setCategoryState] = useState<AtCategory>(() => loadStoredCategory());
-  const setCategory = useCallback((next: AtCategory) => {
-    setCategoryState(next);
-    saveCategory(next);
-  }, []);
-
   const [selectedIndex, setSelectedIndex] = useState(0);
   const [items, setItems] = useState<AtMentionItem[]>([]);
   const [loading, setLoading] = useState(false);
@@ -99,9 +69,10 @@ export function useAtMentionPicker(
   const requestIdRef = useRef(0);
 
   const atRange = useMemo(() => {
+    if (options.isComposing) return null;
     if (options.slashPaletteOpen) return null;
     return detectAtRange(value, cursor);
-  }, [value, cursor, options.slashPaletteOpen]);
+  }, [value, cursor, options.slashPaletteOpen, options.isComposing]);
 
   const pickerActive = atRange !== null;
   const [debouncedQuery, setDebouncedQuery] = useState('');
@@ -152,30 +123,15 @@ export function useAtMentionPicker(
       try {
         let next: AtMentionItem[] = [];
 
-        if (category === 'urls') {
-          const q = debouncedQuery.trim();
-          if (isValidHttpUrl(q)) {
-            next = [urlMentionItem(q)];
-          }
-        } else if (category === 'symbols') {
-          if (debouncedQuery.trim()) {
-            next = await searchWorkspaceSymbols(debouncedQuery, { sessionKey: sk, limit: MAX_ITEMS });
-          }
-        } else if (isBrowseModeQuery(debouncedQuery, category)) {
+        if (isBrowseModeQuery(debouncedQuery)) {
           const dir = browseDirFromQuery(debouncedQuery);
           const entries = await fetchWorkspaceBrowseEntries(dir, { sessionKey: sk });
-          const browsePick: AtPickKind = category === 'docs' ? 'doc' : 'file';
           let mapped = entries.map((e) => ({
-            pickKind: browsePick,
             name: e.name,
             relativePath: e.path,
             isDirectory: e.isDirectory,
           }));
-          if (category === 'docs') {
-            mapped = mapped.filter((e) => e.isDirectory || e.name.toLowerCase().endsWith('.md'));
-          }
           const browseUp: AtMentionItem = {
-            pickKind: browsePick,
             name: '..',
             relativePath: '',
             isDirectory: true,
@@ -186,18 +142,15 @@ export function useAtMentionPicker(
           const raw = await searchWorkspaceFiles(debouncedQuery, {
             sessionKey: sk,
             limit: MAX_ITEMS,
-            onlyMarkdown: category === 'docs',
           });
           const recentPaths = getRecentAtPaths(sk);
           const recentItems: AtMentionItem[] = [];
           const seen = new Set(raw.map((r) => r.relativePath));
           for (const p of recentPaths) {
-            if (category === 'docs' && !p.toLowerCase().endsWith('.md')) continue;
             if (seen.has(p)) continue;
             seen.add(p);
             const base = p.replace(/\/$/, '').split('/').pop() ?? p;
             recentItems.push({
-              pickKind: category === 'docs' ? 'doc' : 'file',
               name: base,
               relativePath: p,
               isDirectory: p.endsWith('/'),
@@ -224,11 +177,11 @@ export function useAtMentionPicker(
     return () => {
       cancelled = true;
     };
-  }, [pickerActive, debouncedQuery, options.sessionKey, category]);
+  }, [pickerActive, debouncedQuery, options.sessionKey]);
 
   useEffect(() => {
     setSelectedIndex(0);
-  }, [atRange?.start, atRange?.end, debouncedQuery, category]);
+  }, [atRange?.start, atRange?.end, debouncedQuery]);
 
   useEffect(() => {
     if (selectedIndex >= items.length) {
@@ -250,8 +203,6 @@ export function useAtMentionPicker(
   return {
     open: pickerActive,
     atRange,
-    category,
-    setCategory,
     items,
     selectedIndex,
     query: atRange?.query ?? '',

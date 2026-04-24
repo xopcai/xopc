@@ -1,17 +1,13 @@
 import { memo, useMemo } from 'react';
 
-import { docWireTokenRe, symbolWireTokenRe, urlWireTokenRe } from '@/features/chat/context-pill-wire-pattern';
-import { fileWireTokenRe } from '@/features/chat/file-wire-pattern';
+import { fileWireTokenRe, formatFilePathForWire, pathFromFileWireMatch } from '@/features/chat/file-wire-pattern';
 import { MarkdownView } from '@/features/chat/markdown/markdown-view';
 import { skillWireTokenRe } from '@/features/chat/skill-wire-pattern';
 
 export type MessageSegment =
   | { kind: 'text'; text: string }
   | { kind: 'skill'; name: string }
-  | { kind: 'file'; path: string }
-  | { kind: 'doc'; path: string }
-  | { kind: 'url'; href: string }
-  | { kind: 'symbol'; name: string };
+  | { kind: 'file'; path: string };
 
 export type SkillWireSegment = { kind: 'text'; text: string } | { kind: 'skill'; name: string };
 
@@ -21,30 +17,19 @@ function fileBubbleLabel(path: string): string {
   return `@${base}`;
 }
 
-function urlBubbleLabel(href: string): string {
-  try {
-    return `@${new URL(href).hostname}`;
-  } catch {
-    return '@link';
-  }
-}
-
-/** Parse `/skill:`, `@file:`, `@doc:`, `@url:`, and `@symbol:` wire tokens. */
+/** Parse `/skill:` and `@file:` wire tokens. */
 export function parseMessageSegments(text: string): MessageSegment[] {
   type Hit = { start: number; end: number; seg: MessageSegment };
   const hits: Hit[] = [];
   const add = (re: RegExp, map: (m: RegExpExecArray) => MessageSegment) => {
-    const r = new RegExp(re.source, 'g');
+    const r = new RegExp(re.source, re.flags);
     let m: RegExpExecArray | null;
     while ((m = r.exec(text)) !== null) {
       hits.push({ start: m.index, end: m.index + m[0].length, seg: map(m) });
     }
   };
   add(skillWireTokenRe(), (m) => ({ kind: 'skill', name: m[1] ?? '' }));
-  add(fileWireTokenRe(), (m) => ({ kind: 'file', path: m[1] ?? '' }));
-  add(docWireTokenRe(), (m) => ({ kind: 'doc', path: m[1] ?? '' }));
-  add(urlWireTokenRe(), (m) => ({ kind: 'url', href: m[1] ?? '' }));
-  add(symbolWireTokenRe(), (m) => ({ kind: 'symbol', name: m[1] ?? '' }));
+  add(fileWireTokenRe(), (m) => ({ kind: 'file', path: pathFromFileWireMatch(m) }));
 
   hits.sort((a, b) => a.start - b.start);
   const out: MessageSegment[] = [];
@@ -77,11 +62,7 @@ export function parseSkillWireSegments(text: string): SkillWireSegment[] {
       if (prev?.kind === 'text') prev.text += p.text;
       else merged.push(p);
     } else {
-      let chunk = '';
-      if (p.kind === 'file') chunk = `@file:${p.path}`;
-      else if (p.kind === 'doc') chunk = `@doc:${p.path}`;
-      else if (p.kind === 'url') chunk = `@url:${p.href}`;
-      else chunk = `@symbol:${p.name}`;
+      const chunk = `@file:${formatFilePathForWire(p.path)}`;
       const prev = merged[merged.length - 1];
       if (prev?.kind === 'text') prev.text += chunk;
       else merged.push({ kind: 'text', text: chunk });
@@ -112,18 +93,6 @@ export const UserMessageSegments = memo(function UserMessageSegments({ text }: {
         ) : p.kind === 'file' ? (
           <span key={`file-${i}-${p.path}`} className="chat-file-pill max-w-full shrink-0" data-file={p.path}>
             {fileBubbleLabel(p.path)}
-          </span>
-        ) : p.kind === 'doc' ? (
-          <span key={`doc-${i}-${p.path}`} className="chat-doc-pill max-w-full shrink-0" data-doc={p.path}>
-            {fileBubbleLabel(p.path)}
-          </span>
-        ) : p.kind === 'url' ? (
-          <span key={`url-${i}-${p.href}`} className="chat-url-pill max-w-full shrink-0" data-url={p.href}>
-            {urlBubbleLabel(p.href)}
-          </span>
-        ) : p.kind === 'symbol' ? (
-          <span key={`sym-${i}-${p.name}`} className="chat-symbol-pill max-w-full shrink-0" data-symbol={p.name}>
-            @{p.name}
           </span>
         ) : p.text ? (
           <span key={`txt-${i}`} className="min-w-0 whitespace-pre-wrap break-words text-fg">

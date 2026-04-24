@@ -20,7 +20,8 @@ import {
   resolveWorkspaceSafePath,
   toWorkspaceRelativePosix,
 } from '../../workspace-editor-path.js';
-import { runRipgrepInDirectory, runRipgrepListFiles, runRipgrepSymbolHits } from '../../workspace-ripgrep.js';
+import { listWorkspaceRelativeFilesFsFallback } from '../../workspace-fs-file-list.js';
+import { runRipgrepInDirectory, runRipgrepListFiles } from '../../workspace-ripgrep.js';
 import type { AuthenticatedRouteDeps } from './deps.js';
 import type { GatewayService } from '../../service.js';
 
@@ -59,11 +60,16 @@ async function fuzzySearchWorkspaceFiles(
   workspaceRoot: string,
   query: string,
   limit: number,
-  options?: { onlyMarkdown?: boolean },
 ): Promise<Array<{ name: string; path: string; isDirectory: boolean }>> {
   let files = await runRipgrepListFiles(workspaceRoot);
-  if (options?.onlyMarkdown) {
-    files = files.filter((f) => f.toLowerCase().endsWith('.md'));
+  if (files.length === 0) {
+    files = await listWorkspaceRelativeFilesFsFallback(workspaceRoot, 120_000);
+    if (files.length > 0) {
+      log.warn(
+        { workspaceRoot, fileCount: files.length },
+        'workspace files/search: ripgrep listed no files; using fs tree walk fallback',
+      );
+    }
   }
   const q = query.trim();
   const capped = Math.min(Math.max(limit, 1), FILE_SEARCH_MAX_LIMIT);
@@ -626,48 +632,7 @@ export function registerWorkspaceRoutes(authenticated: Hono, deps: Authenticated
       return c.json({ ok: false, error: { message: ws.message } }, 400);
     }
 
-    const onlyMd =
-      c.req.query('onlyMarkdown') === '1' ||
-      c.req.query('onlyMarkdown') === 'true' ||
-      c.req.query('onlyMarkdown') === 'yes';
-    const entries = await fuzzySearchWorkspaceFiles(ws.root, q, limit, { onlyMarkdown: onlyMd });
-    return c.json({ ok: true, payload: { entries } });
-  });
-
-  /** Ripgrep word-boundary symbol hits in source files (relative paths + line preview). */
-  authenticated.get('/api/workspace/editor/symbols/search', async (c) => {
-    const q = typeof c.req.query('q') === 'string' ? c.req.query('q')!.trim() : '';
-    const limitRaw = c.req.query('limit');
-    const limit = Math.min(
-      Math.max(parseInt(typeof limitRaw === 'string' ? limitRaw : '15', 10) || 15, 1),
-      FILE_SEARCH_MAX_LIMIT,
-    );
-
-    const ws = await resolveEditorWorkspaceRootAsync(
-      service,
-      service.currentConfig,
-      c.req.query('sessionKey'),
-      c.req.query('agentId'),
-    );
-    if (ws.ok === false) {
-      return c.json({ ok: false, error: { message: ws.message } }, 400);
-    }
-
-    const workspaceRoot = ws.root;
-    if (!q) {
-      return c.json({ ok: true, payload: { entries: [] as { symbol: string; path: string; line: number; preview: string }[] } });
-    }
-
-    const raw = await runRipgrepSymbolHits(workspaceRoot, q, limit);
-    const entries = raw.map((r) => {
-      const abs = join(workspaceRoot, r.filePath.replace(/^\.\//, ''));
-      return {
-        symbol: q,
-        path: toWorkspaceRelativePosix(workspaceRoot, abs),
-        line: r.lineNumber,
-        preview: r.lineContent,
-      };
-    });
+    const entries = await fuzzySearchWorkspaceFiles(ws.root, q, limit);
     return c.json({ ok: true, payload: { entries } });
   });
 }
