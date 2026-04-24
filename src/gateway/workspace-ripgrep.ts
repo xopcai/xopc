@@ -5,6 +5,10 @@ import { createLogger } from '../utils/logger.js';
 
 const log = createLogger('WorkspaceRipgrep');
 
+function isEnoent(err: unknown): boolean {
+  return err !== null && typeof err === 'object' && (err as NodeJS.ErrnoException).code === 'ENOENT';
+}
+
 let cachedRipgrepBin: string | undefined;
 
 /**
@@ -19,7 +23,7 @@ async function resolveRipgrepBinary(): Promise<string> {
     if (typeof rgPath === 'string' && rgPath.length > 0 && existsSync(rgPath)) {
       bin = rgPath;
     } else if (typeof rgPath === 'string' && rgPath.length > 0) {
-      log.warn({ rgPath }, '@vscode/ripgrep path missing on disk; falling back to rg on PATH');
+      log.debug({ rgPath }, '@vscode/ripgrep binary not on disk; will try rg on PATH');
     }
   } catch {
     // pnpm may skip @vscode/ripgrep postinstall; package dir can be missing.
@@ -97,7 +101,14 @@ export function runRipgrepInDirectory(query: string, dirAbsPath: string): Promis
       });
 
       rg.on('close', () => resolve(results));
-      rg.on('error', () => resolve([]));
+      rg.on('error', (err) => {
+        if (!isEnoent(err)) {
+          log.warn({ err, query, dir: dirAbsPath, rg: rgExecutable }, 'ripgrep in-directory: spawn failed');
+        } else {
+          log.debug({ dir: dirAbsPath, rg: rgExecutable }, 'ripgrep not on PATH; skipping in-directory search');
+        }
+        resolve([]);
+      });
     });
   })();
 }
@@ -130,12 +141,19 @@ export function runRipgrepListFiles(dirAbsPath: string): Promise<string[]> {
         const tail = buffer.trim();
         if (tail) lines.push(tail.replace(/\\/g, '/'));
         if (code !== 0 && lines.length === 0) {
-          log.warn({ code, cwd: dirAbsPath, rg: rgExecutable }, 'ripgrep --files exited with no output');
+          log.debug({ code, cwd: dirAbsPath, rg: rgExecutable }, 'ripgrep --files: non-zero exit, no output (using fs fallback if any)');
         }
         resolve(lines);
       });
       rg.on('error', (err) => {
-        log.warn({ err, cwd: dirAbsPath, rg: rgExecutable }, 'ripgrep --files failed to start');
+        if (isEnoent(err)) {
+          log.debug(
+            { cwd: dirAbsPath, rg: rgExecutable },
+            'ripgrep binary not found; workspace file search will use fs fallback when needed',
+          );
+        } else {
+          log.warn({ err, cwd: dirAbsPath, rg: rgExecutable }, 'ripgrep --files failed to start');
+        }
         resolve([]);
       });
     });

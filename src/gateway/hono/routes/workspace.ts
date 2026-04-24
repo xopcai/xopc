@@ -65,9 +65,9 @@ async function fuzzySearchWorkspaceFiles(
   if (files.length === 0) {
     files = await listWorkspaceRelativeFilesFsFallback(workspaceRoot, 120_000);
     if (files.length > 0) {
-      log.warn(
+      log.debug(
         { workspaceRoot, fileCount: files.length },
-        'workspace files/search: ripgrep listed no files; using fs tree walk fallback',
+        'workspace files/search: file list from fs walk (ripgrep unavailable or returned empty)',
       );
     }
   }
